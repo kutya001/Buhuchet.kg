@@ -5,9 +5,8 @@ import { asOwner, newContractor } from './reports';
 // «Проекты контрагентов» (задача 2.26, #82, часть 1) через настоящий сайт. Демо-организация: владелец
 // erkin, главный бухгалтер meerim (право «Вести проекты и разовые услуги», без «Отката статусов»).
 // Проекты демо-данных: «Восстановление учёта 2024–2025» у ОсОО «Ала-Тоо Трейд» (в работе), «Переход на
-// единый налог» у ОсОО «Манас Авто Плюс», «Подготовка к налоговой проверке» у ОсОО «Тянь-Шань Фарм»
-// (завершён: «Планируется» → «В работе» → «Завершён»). Свои проекты и задачи — со своим словом на
-// каждый запуск и проект (ПК и телефон).
+// единый налог» у ОсОО «Манас Авто Плюс». Свои контрагенты, проекты и задачи — со своим словом на каждый
+// запуск и проект (ПК и телефон).
 
 /** Слово из кириллицы, своё на каждый запуск: по нему поиск находит только запись теста. */
 const uniqueWord = (prefix: string) =>
@@ -96,12 +95,49 @@ test.describe('Этап 2: проекты контрагентов', () => {
     baseURL,
     isMobile,
   }) => {
-    await asOwner(page.request, baseURL);
-    const card = await openProject(page, isMobile, 'Подготовка к налоговой проверке');
+    // Свой проект: создан «В работе» и завершён — две записи «Истории статусов» (у демо-проектов, как в
+    // прототипе, одна: «Проект создан»).
+    const origin = await asOwner(page.request, baseURL);
+    const word = uniqueWord('Проверка');
+    const cp = await newContractor(page.request, origin, {
+      name: `ОсОО «${word}»`,
+      tariffAmount: 0,
+    });
+    const me = (await (await page.request.get('/api/auth/me')).json()) as {
+      employee: { id: string } | null;
+    };
+    const name = `Подготовка к налоговой проверке ${word}`;
+    const created = await page.request.post('/api/projects', {
+      headers: { origin },
+      data: {
+        contractorId: cp.id,
+        status: 'in_progress',
+        name,
+        startsOn: '2026-10-01',
+        endsOn: '2026-12-31',
+        description: '',
+        plan: null,
+        members: [me.employee!.id],
+        lead: me.employee!.id,
+        works: [],
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+    const { version } = (await (await page.request.get(`/api/projects/${id}`)).json()) as {
+      version: number;
+    };
+    const done = await page.request.post(`/api/projects/${id}/status`, {
+      headers: { origin },
+      data: { to: 'done', version },
+    });
+    expect(done.status()).toBe(200);
+
+    const card = await openProject(page, isMobile, name);
     const steps = card.locator('ol[data-status-scale] > li > button');
     await expect(steps).toHaveCount(3);
     const rows = card.locator('[data-status-history] tbody > tr');
-    await expect(rows).toHaveCount(3);
+    await expect(rows).toHaveCount(2);
     const boxes = await Promise.all([0, 1].map(async (i) => (await steps.nth(i).boundingBox())!));
     if (isMobile) {
       expect(Math.abs(boxes[1]!.x - boxes[0]!.x)).toBeLessThanOrEqual(1);

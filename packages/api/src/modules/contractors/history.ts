@@ -17,7 +17,7 @@ import { serviceReadScope, servicesVisible } from '../finance/services';
 import { finScopeOf } from '../money/common';
 import { reportScopeOf } from '../reports/common';
 import { notFound } from './card';
-import { projectWhere } from '../projects/common';
+import { projectMoneyVisible, projectWhere } from '../projects/common';
 import { error, scopeSqlOf, subjectOf, translateOf } from './common';
 
 export const contractorHistoryRoute = createRoute({
@@ -64,6 +64,7 @@ async function historyAccess(
     services: features.finops && servicesVisible(subject, features) && serviceReadScope(subject),
     // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — записи проектов тому, кто видит проекты, по их видимости.
     projects: features.projects && can('projView') && projectWhere(subject),
+    projectMoney: projectMoneyVisible(subject, features),
   };
 }
 

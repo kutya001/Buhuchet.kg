@@ -227,7 +227,7 @@ describe.skipIf(!databaseAvailable())(
         fail: { key: 'kbadm.err.kb_title_required', col: 'kbadm.col.title' },
       });
       // ОТКЛОНЕНИЕ: docs/deviations.md#Д-25 — у нового шага событие, которое ещё не отмечает шаги.
-      const notWorking = await save('kbsteps', row(value, { data: { evk: 'p.new' } }));
+      const notWorking = await save('kbsteps', row(value, { data: { evk: 'p.pay' } }));
       expect(notWorking).toEqual({
         ok: false,
         fail: { key: 'kbadm.io.err.step_event', col: 'kbadm.col.evk' },

@@ -90,6 +90,11 @@ const fields = (patch: Partial<ContractorFields> = {}): ContractorFields => ({
   ...patch,
 });
 
+/** Отказ политики RLS (`WITH CHECK`): строка не своей организации. */
+const RLS_DENIED = {
+  cause: expect.objectContaining({ message: expect.stringMatching(/row-level security/) }),
+};
+
 describe.skipIf(!databaseAvailable())('Проекты контрагентов', () => {
   let db: TestDatabase;
   let a: CreatedOrganization;
@@ -466,12 +471,27 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     await inA(async (tx) =>
       setProjectStatus(tx, await projectOf(tx, cancelled, undefined, true), 'cancelled', {}),
     );
-    const offered = await inA((tx) => projectsForTask(tx, cpA, null));
+    const offered = await inA((tx) => projectsForTask(tx, cpA, null, undefined));
     expect(offered.map((p) => p.id)).toContain(id);
     expect(offered.map((p) => p.id)).not.toContain(cancelled);
-    expect(await inA((tx) => taskProjectAllowed(tx, id, cpA, null))).toBe(true);
-    expect(await inA((tx) => taskProjectAllowed(tx, id, cpOther, null))).toBe(false);
-    expect(await inA((tx) => taskProjectAllowed(tx, cancelled, cpA, null))).toBe(false);
+    expect(await inA((tx) => taskProjectAllowed(tx, id, cpA, null, undefined))).toBe(true);
+    expect(await inA((tx) => taskProjectAllowed(tx, id, cpOther, null, undefined))).toBe(false);
+    expect(await inA((tx) => taskProjectAllowed(tx, cancelled, cpA, null, undefined))).toBe(false);
+    // Мээрим (область «Свои», не ответственная ни за контрагента, ни в проекте) проекта не видит: его
+    // нет в поле «Проект» и к задаче его не привязать; уже выбранный у задачи — остаётся.
+    const hidden = projectVisibility(viewer(meerim));
+    expect(
+      (await inA((tx) => projectsForTask(tx, cpA, null, hidden))).map((p) => p.id),
+    ).not.toContain(id);
+    expect(await inA((tx) => taskProjectAllowed(tx, id, cpA, null, hidden))).toBe(false);
+    expect((await inA((tx) => projectsForTask(tx, cpA, id, hidden))).map((p) => p.id)).toContain(
+      id,
+    );
+    expect(await inA((tx) => taskProjectAllowed(tx, id, cpA, id, hidden))).toBe(true);
+    const seen = projectVisibility(viewer(alisher));
+    expect((await inA((tx) => projectsForTask(tx, cpA, null, seen))).map((p) => p.id)).toContain(
+      id,
+    );
     const task = {
       title: 'Подготовить акт',
       description: '',
@@ -557,7 +577,7 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
     expect(await inB((tx) => tx.select().from(projectWorks))).toEqual([]);
     expect(await inB((tx) => projectCard(tx, id, undefined))).toBeNull();
     expect(await inB((tx) => contractorProjects(tx, cpA))).toEqual([]);
-    expect(await inB((tx) => projectsForTask(tx, cpA, null))).toEqual([]);
+    expect(await inB((tx) => projectsForTask(tx, cpA, null, undefined))).toEqual([]);
     const page = await inB((tx) =>
       listProjectsPage(tx, query(), {
         t: texts,
@@ -580,10 +600,28 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов',
         }),
       ),
     ).rejects.toThrow();
+    // Строку с явным org_id чужой организации не даёт политика RLS (`WITH CHECK`).
+    await expect(
+      inB((tx) =>
+        tx.insert(projects).values({
+          orgId: a.orgId,
+          contractorId: cpA,
+          name: 'Чужой с org_id',
+          startsOn: TODAY,
+          endsOn: TODAY,
+          leadEmployeeId: alisher,
+        }),
+      ),
+    ).rejects.toMatchObject(RLS_DENIED);
     // Ответственного и работу к чужому проекту — тоже.
     await expect(
       inB((tx) => tx.insert(projectMembers).values({ projectId: id, employeeId: alisher })),
     ).rejects.toThrow();
+    await expect(
+      inB((tx) =>
+        tx.insert(projectMembers).values({ orgId: a.orgId, projectId: id, employeeId: alisher }),
+      ),
+    ).rejects.toMatchObject(RLS_DENIED);
     await expect(
       inB((tx) =>
         tx

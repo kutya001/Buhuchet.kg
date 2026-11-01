@@ -8,6 +8,7 @@ import {
   type ProjectCard as ProjectCardRecord,
 } from '@buhuchet/db';
 import {
+  canSeeContractor,
   hasPermission,
   projectOverdue,
   projectWorkOverdue,
@@ -19,6 +20,7 @@ import {
   type IsoDate,
   type ProjectStatus,
   type TaskStatus,
+  scopeOf,
 } from '@buhuchet/domain';
 import {
   ContractorProjects,
@@ -54,9 +56,22 @@ import {
  * modules/projects.js `openProject`, `projectDlg`; modules/contractor-card.js).
  */
 
-/** Блок «Файлы» карточки: «Файлы в карточках» включены и есть право «Просматривать файлы». */
-const filesBlock = (subject: AccessSubject, features: Readonly<Record<Feature, boolean>>) =>
-  features.files && hasPermission(subject, 'filesView');
+/**
+ * Блок «Файлы» карточки и записи о файлах в её истории: «Файлы в карточках» включены, право
+ * «Просматривать файлы» и контрагент проекта в области группы «Файловый менеджер» (как файлы задач и
+ * услуг, п. Г-9, В-34).
+ */
+const filesBlock = (
+  subject: AccessSubject,
+  features: Readonly<Record<Feature, boolean>>,
+  contractor: { responsibleEmployeeId: string | null },
+) =>
+  features.files &&
+  hasPermission(subject, 'filesView') &&
+  canSeeContractor(subject, 'files', contractor);
+
+/** Деньги в истории проекта: планируемая стоимость (транши — часть 2 задачи 2.26). */
+const PROJECT_MONEY_FIELDS: ReadonlySet<string> = new Set(['plan']);
 
 /** Карточка для ответа API: деньги и задачи — тому, кто их видит. */
 export async function cardBody(
@@ -67,7 +82,8 @@ export async function cardBody(
   const { subject, features, today } = ctx;
   const p = card.project;
   const status = p.status as ProjectStatus;
-  const files = filesBlock(subject, features);
+  const files = filesBlock(subject, features, card.contractor);
+  const money = projectMoneyVisible(subject, features);
   const statuses = await readStatusHistory(tx, 'project', p.id);
   const viewer = { ...projectViewerOf(subject), canKeep: canKeepProjects(subject) };
   return {
@@ -86,9 +102,7 @@ export async function cardBody(
     overdue: projectOverdue({ status, endsOn: p.endsOn }, today),
     lead: { id: p.leadEmployeeId, name: card.leadName },
     members: card.memberNames,
-    money: projectMoneyVisible(subject, features)
-      ? { plan: p.plan == null ? null : Number(p.plan), paid: card.paid }
-      : null,
+    money: money ? { plan: p.plan == null ? null : Number(p.plan), paid: card.paid } : null,
     works: card.works.map((w) => ({
       ...w,
       overdue: projectWorkOverdue({ done: w.done, due: w.due }, today),
@@ -106,17 +120,25 @@ export async function cardBody(
       : null,
     files,
     statusHistory: statuses.map((h) => ({ ...h, at: h.at.toISOString(), file: null })),
-    // Записи о файлах — тому, кто видит файлы.
+    // Записи о файлах — тому, кто видит файлы; «было → стало» стоимости — тому, кто видит деньги
+    // (запись только о стоимости не показывается).
     history: card.history
       .filter((h) => files || (h.action !== 'file_attach' && h.action !== 'file_delete'))
-      .map((h) => ({
-        id: h.id,
-        at: h.at.toISOString(),
-        actor: h.actorName,
-        action: h.action as HistoryAction,
-        changes: (h.changes as { field: string; from?: unknown; to?: unknown }[]) ?? [],
-        reason: h.reason,
-      })),
+      .flatMap((h) => {
+        const all = (h.changes as { field: string; from?: unknown; to?: unknown }[]) ?? [];
+        const changes = money ? all : all.filter((c) => !PROJECT_MONEY_FIELDS.has(c.field));
+        if (all.length && !changes.length) return [];
+        return [
+          {
+            id: h.id,
+            at: h.at.toISOString(),
+            actor: h.actorName,
+            action: h.action as HistoryAction,
+            changes,
+            reason: h.reason,
+          },
+        ];
+      }),
     names: card.names,
     audit: {
       createdAt: p.createdAt.toISOString(),
@@ -248,7 +270,12 @@ export function contractorProjectsHandler(
           leadName: p.leadName,
           money: money ? { plan: p.plan, paid: p.paid } : null,
         })),
-        canCreate: canKeepProjects(subject) && !cp.archived,
+        // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — «Новый проект» у контрагента области группы «Проекты».
+        canCreate:
+          canKeepProjects(subject) &&
+          !cp.archived &&
+          (scopeOf(subject, 'projects') === 'all' ||
+            cp.responsibleEmployeeId === subject.employeeId),
         money,
       };
     });

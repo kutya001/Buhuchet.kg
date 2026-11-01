@@ -23,6 +23,7 @@ import {
   taskConfirmEditable,
   taskStatusAfterEdit,
   type AccessSubject,
+  type Feature,
 } from '@buhuchet/domain';
 import { CreateTaskRequest, Task, UpdateTaskRequest, Uuid } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -30,6 +31,7 @@ import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { projectWhere, taskProjectsOn } from '../projects/common';
 import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
 import { taskOut } from './card';
@@ -70,7 +72,7 @@ async function fieldsOf(
   body: Body,
   filesOn: boolean,
   before: Before | null,
-  projectsOn: boolean,
+  features: Readonly<Record<Feature, boolean>>,
 ): Promise<TaskFields> {
   const category = await taskCategoryActive(tx, body.categoryCode);
   if (category === null) {
@@ -108,7 +110,7 @@ async function fieldsOf(
     description: body.description,
     categoryCode: body.categoryCode,
     contractorId: body.contractorId,
-    projectId: await projectOf(tx, body, before, projectsOn),
+    projectId: await projectOf(tx, subject, body, before, features),
     executorEmployeeId: body.executorEmployeeId,
     term: body.term,
     dueDate: body.term === 'month' ? monthLastDay(body.dueDate.slice(0, 7)) : body.dueDate,
@@ -120,24 +122,26 @@ async function fieldsOf(
 
 /**
  * «Проект» задачи (задача 2.26; прототип `taskDlg`, `projsOf`): только у задачи по контрагенту, проект
- * этого контрагента — не отменённый и не завершённый (уже выбранный остаётся). «Проекты контрагентов»
- * выключены — галочки в форме нет: проект задачи не меняется, пока не сменился контрагент.
+ * этого контрагента, который сотрудник видит, — не отменённый и не завершённый (уже выбранный остаётся).
+ * Поля «Проект» в форме нет (выключены «Проекты контрагентов» или нет права «Просматривать проекты») —
+ * проект задачи не меняется, пока не сменился контрагент.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10
 async function projectOf(
   tx: Tx,
+  subject: AccessSubject,
   body: Body,
   before: Before | null,
-  projectsOn: boolean,
+  features: Readonly<Record<Feature, boolean>>,
 ): Promise<string | null> {
   const was = before?.lock.projectId ?? null;
-  if (!projectsOn) {
+  if (!taskProjectsOn(subject, features)) {
     return was && before?.lock.contractorId === body.contractorId ? was : null;
   }
   if (!body.projectId) return null;
   if (
     !body.contractorId ||
-    !(await taskProjectAllowed(tx, body.projectId, body.contractorId, was))
+    !(await taskProjectAllowed(tx, body.projectId, body.contractorId, was, projectWhere(subject)))
   ) {
     bad('task_project_invalid', 'Выберите проект или снимите галочку «Проект»', 'projectId');
   }
@@ -181,7 +185,7 @@ export function createTaskHandler(deps: ApiDeps): RouteHandler<typeof createTask
     const out = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
       const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
-      const fields = await fieldsOf(tx, subject, body, settings.files, null, features.projects);
+      const fields = await fieldsOf(tx, subject, body, settings.files, null, features);
       const id = await createTask(tx, fields, subject.employeeId);
       const task = (await getTask(tx, id, undefined))!;
       queued = await queueTelegramEvents(deps, tx, [newTaskEvent(task, subject.employeeId, t)]);
@@ -248,7 +252,7 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
         body,
         settings.files,
         { lock, categoryCode: visible.category.code },
-        features.projects,
+        features,
       );
       const to = taskStatusAfterEdit(lock.status, lock.confirm, fields.confirm);
       await updateTask(

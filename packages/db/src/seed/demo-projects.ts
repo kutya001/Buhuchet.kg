@@ -52,14 +52,6 @@ const DemoProject = z.object({
 
 const DemoProjectsFile = z.object({ projects: z.array(DemoProject.passthrough()).default([]) });
 
-/** Путь статусов демо-проекта: «Планируется» → … → текущий (как `statusHist('proj', …)` прототипа). */
-const PATH: Readonly<Record<string, readonly string[]>> = {
-  planned: ['planned'],
-  in_progress: ['planned', 'in_progress'],
-  done: ['planned', 'in_progress', 'done'],
-  cancelled: ['planned', 'cancelled'],
-};
-
 export async function seedDemoProjects(
   db: Db,
   file: unknown,
@@ -125,25 +117,17 @@ export async function seedDemoProjects(
     })),
   );
   if (works.length) await db.insert(projectWorks).values(works);
-  // «История статусов»: создан «Планируется» автором, дальше шаги до текущего — главным ответственным
-  // в день начала (переход в работу) и в день окончания (завершение, отмена).
+  // «История статусов» — как `statusHist('proj', …)` прототипа: в demoDB.json смен статуса нет, поэтому
+  // одна запись — проект создан сразу в текущем статусе автором (или главным) в день создания.
   await db.insert(statusHistory).values(
-    fresh.flatMap((p) => {
-      const path = PATH[STATUS_OF[p.status]]!;
-      return path.map((to, i) => ({
-        orgId,
-        scale: 'project' as const,
-        entityId: demoId('project', p.id),
-        fromStatus: i === 0 ? null : path[i - 1]!,
-        toStatus: to,
-        actorUserId: i === 0 ? user(p._cb) : user(p.lead),
-        at:
-          i === 0
-            ? stampOf(p._ca, p.from)
-            : to === 'in_progress'
-              ? stampOf(undefined, p.from)
-              : stampOf(undefined, p.to),
-      }));
-    }),
+    fresh.map((p) => ({
+      orgId,
+      scale: 'project' as const,
+      entityId: demoId('project', p.id),
+      fromStatus: null,
+      toStatus: STATUS_OF[p.status],
+      actorUserId: user(p._cb) ?? user(p.lead),
+      at: stampOf(p._ca, p.from),
+    })),
   );
 }

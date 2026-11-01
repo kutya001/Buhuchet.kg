@@ -150,8 +150,10 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
     primary: true,
     onClick,
   });
+  // Прототип (`grid` → `firstEmpty`): в организации ещё нет проектов — подсказка первого входа на
+  // любой вкладке.
   const empty =
-    s && !s.any && tab !== 'mine' ? (
+    s && !s.any ? (
       <EmptyState
         icon="briefcase"
         title={t('proj.empty.first')}

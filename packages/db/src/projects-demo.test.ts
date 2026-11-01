@@ -46,7 +46,8 @@ describe.skipIf(!databaseAvailable())('Проекты демо-организа�
     expect((await card('p4'))!.project.plan).toBeNull();
     expect((await card('p4'))!.tasks.map((x) => x.id)).toEqual([demoId('task', 't16')]);
     const p3 = await inDemo((tx) => readStatusHistory(tx, 'project', demoId('project', 'p3')));
-    expect(p3.map((h) => h.to)).toEqual(['planned', 'in_progress', 'done']);
+    // Как `statusHist('proj', …)` прототипа: одна запись — проект создан сразу в текущем статусе.
+    expect(p3.map((h) => [h.from, h.to])).toEqual([[null, 'done']]);
   });
 
   it('бухгалтер Алишер (область «Свои») видит проекты своего контрагента и где он ответственный', async () => {

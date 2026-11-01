@@ -15,7 +15,7 @@ import {
   TaskFormOptions,
   TaskProjects,
 } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 
@@ -273,6 +273,44 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
     });
     expect(after.history[0]).toMatchObject({ action: 'update' });
     expect(after.names[employee('chief-a')]).toBe('chief-a');
+    // Стоимость «было → стало» — только тому, кто видит деньги: «Бухгалтер» (ответственный
+    // контрагента) видит запись без неё, а запись только о стоимости не видит совсем.
+    const plans = (items: readonly { changes: readonly { field: string }[] }[]) =>
+      items.flatMap((e) => e.changes.map((x) => x.field)).filter((x) => x === 'plan');
+    const cpHistory = async (cookie: string) =>
+      (
+        await get(cookie, `/api/contractors/${cpAcc}/history`, (x) => ContractorHistory.parse(x))
+      ).items.filter((e) => e.entity === 'project');
+    expect(plans(after.history)).toEqual(['plan']);
+    expect(plans((await card(acc, id)).history)).toEqual([]);
+    expect(plans(await cpHistory(chief))).toContain('plan');
+    expect(plans(await cpHistory(acc))).toEqual([]);
+    const accBefore = (await card(acc, id)).history.length;
+    const accCpBefore = (await cpHistory(acc)).length;
+    await expectStatus(
+      await call('PUT', `/api/projects/${id}`, chief, {
+        version: after.version,
+        name: after.name,
+        startsOn: after.startsOn,
+        endsOn: after.endsOn,
+        description: '',
+        plan: som(70_000),
+        members: after.members.map((m) => m.id),
+        lead: after.lead.id,
+        works: after.works.map((w) => ({
+          id: w.id,
+          name: w.name,
+          executorId: w.executor.id,
+          due: w.due,
+        })),
+      }),
+      200,
+    );
+    expect((await card(chief, id)).history[0]!.changes).toEqual([
+      { field: 'plan', from: som(60_000), to: som(70_000) },
+    ]);
+    expect((await card(acc, id)).history).toHaveLength(accBefore);
+    expect(await cpHistory(acc)).toHaveLength(accCpBefore);
   });
 
   it('шкала статусов: шаги с правом «Вести проекты», откат — с «Откатом статусов» и причиной', async () => {
@@ -421,6 +459,68 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
         )
       ).items.map((p) => p.id),
     ).not.toContain(id);
+  });
+
+  it('поле «Проект» задачи — только проекты, которые сотрудник видит; без «Просматривать проекты» поля нет', async () => {
+    const id = await create(chief, {
+      contractorId: cpChief,
+      name: 'Проект только главного',
+      members: [employee('chief-a')],
+      lead: employee('chief-a'),
+    });
+    // «Кадры» с «Ставить задачи», контрагенты — «Все», проекты — «Свои»: контрагента главного видят,
+    // его проект — нет.
+    const hrCps = and(
+      eq(schema.roleScopes.roleId, f.roleIds.hr),
+      eq(schema.roleScopes.permGroup, 'cps'),
+    );
+    const hrPermission = (permissionId: string) =>
+      and(
+        eq(schema.rolePermissions.roleId, f.roleIds.hr),
+        eq(schema.rolePermissions.permissionId, permissionId),
+      );
+    await f.t.admin.db.update(schema.roleScopes).set({ scope: 'all' }).where(hrCps);
+    await f.t.admin.db
+      .insert(schema.rolePermissions)
+      .values({ orgId: f.a.orgId, roleId: f.roleIds.hr, permissionId: 'tasksCreate' });
+    try {
+      const offered = await get(hr, `/api/tasks/form-projects?contractorId=${cpChief}`, (x) =>
+        TaskProjects.parse(x),
+      );
+      expect(offered.items.map((p) => p.id)).not.toContain(id);
+      const res = await call('POST', '/api/tasks', hr, {
+        title: 'Задача по чужому проекту',
+        description: '',
+        categoryCode: 'КАТ-001',
+        contractorId: cpChief,
+        projectId: id,
+        executorEmployeeId: employee('hr-a'),
+        term: 'day',
+        dueDate: '2026-10-25',
+        needFile: false,
+        confirm: false,
+      });
+      expect(await refused(res, 400)).toBe('task_project_invalid');
+      // Без «Просматривать проекты»: в форме поля «Проект» нет, список проектов — 403.
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projView'));
+      const options = TaskFormOptions.parse(
+        await (await expectStatus(await call('GET', '/api/tasks/form-options', hr), 200)).json(),
+      );
+      expect(options.projectsOn).toBe(false);
+      expect(
+        await refused(
+          await call('GET', `/api/tasks/form-projects?contractorId=${cpChief}`, hr),
+          403,
+        ),
+      ).toBe('forbidden');
+    } finally {
+      await f.t.admin.db.update(schema.roleScopes).set({ scope: 'own' }).where(hrCps);
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('tasksCreate'));
+      await f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: f.roleIds.hr, permissionId: 'projView' })
+        .onConflictDoNothing();
+    }
   });
 
   it('файлы проекта: прикрепляет ответственный; история проекта видна в истории контрагента', async () => {

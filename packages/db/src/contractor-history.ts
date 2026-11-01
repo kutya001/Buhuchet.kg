@@ -220,6 +220,8 @@ export interface ContractorHistoryAccess {
    * проекты»; условие — какие проекты видны (`projectVisibility`, как вкладка «Проекты» карточки).
    */
   projects: SQL | undefined | false;
+  /** Деньги проектов видны (`projectMoneyVisible`): иначе «было → стало» стоимости проекта убирается. */
+  projectMoney?: boolean;
 }
 
 /**
@@ -334,11 +336,30 @@ async function visibleEntries(
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }
 
-/** Запись без полей платы; запись только о плате — null целиком, с причиной (в ней может быть сумма). */
-function withoutFee<T extends { changes: HistoryChange[] }>(r: T): T | null {
-  const changes = r.changes.filter((c) => !FEE_FIELDS.has(c.field));
+/** Запись без полей `fields`; запись только о них — null целиком, с причиной (в ней может быть сумма). */
+function withoutFields<T extends { changes: HistoryChange[] }>(
+  r: T,
+  fields: ReadonlySet<string>,
+): T | null {
+  const changes = r.changes.filter((c) => !fields.has(c.field));
   if (changes.length === r.changes.length) return r;
   return changes.length ? { ...r, changes } : null;
+}
+
+/** Деньги проекта в его истории: планируемая стоимость (транши — часть 2 задачи 2.26). */
+const PROJECT_MONEY_FIELDS: ReadonlySet<string> = new Set(['plan']);
+
+/**
+ * Записи, которые видит сотрудник: без полей платы без права «Видеть плату», без стоимости проекта —
+ * тому, кто не видит деньги проектов.
+ */
+function visibleChanges<T extends { entity: string; changes: HistoryChange[] }>(
+  r: T,
+  access: ContractorHistoryAccess,
+): T | null {
+  const fee = access.fee ? r : withoutFields(r, FEE_FIELDS);
+  if (!fee || fee.entity !== 'project' || access.projectMoney) return fee;
+  return withoutFields(fee, PROJECT_MONEY_FIELDS);
 }
 
 /** История контрагента в области `scope`; null — нет такого или он вне области. */
@@ -371,7 +392,7 @@ export async function contractorHistory(
     .where(and(eq(auditLog.contractorId, id), visible))
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(o.limit ?? 200)
-    .then((list) => (o.access.fee ? list : list.flatMap((r) => withoutFee(r) ?? [])));
+    .then((list) => list.flatMap((r) => visibleChanges(r, o.access) ?? []));
   const [names, subjects] = await Promise.all([
     namesOf(tx, referencesOf(rows)),
     subjectsOf(tx, id, rows, o.t),

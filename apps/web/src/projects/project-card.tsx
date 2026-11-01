@@ -250,7 +250,7 @@ function WorksBox({ t, p, me }: { t: Translate; p: ProjectCard; me: string | nul
       ) : (
         <span className="text-faint">{t('proj.card.works_none')}</span>
       )}
-      {p.can.works && p.status !== 'cancelled' ? (
+      {p.can.works ? (
         <div className="flex flex-nowrap items-center gap-2 max-md:flex-wrap" data-pj-work-add="">
           <input
             type="text"
@@ -328,6 +328,7 @@ export function ProjectCardDialog({
 }) {
   const t = useT();
   const errorText = useErrorText();
+  const toast = useToast();
   const { employeeId } = useShell();
   const query = useQuery(projectCardQuery(id));
   const [more, setMore] = useState<HTMLElement | null>(null);
@@ -381,7 +382,11 @@ export function ProjectCardDialog({
             t={t}
             p={p}
             me={employeeId}
-            onStep={(to) => onStep(p, to)}
+            onStep={(to) =>
+              p.can.keep
+                ? onStep(p, to)
+                : toast(t('proj.status.no_right'), { bad: true, icon: 'alert' })
+            }
             onBack={(to) => onBack(p, to)}
             onTask={() => onTask(p)}
             onOpenTask={onOpenTask}
@@ -422,7 +427,9 @@ function CardBody({
     scale: 'project',
     status: p.status,
     history: events,
-    next: p.can.keep ? scaleNext('project', p.status) : [],
+    // Прототип (`scaleFull`, `stepTo`): шаг вперёд нажимается всегда, без права — уведомление.
+    next: scaleNext('project', p.status),
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — откат со шкалы с «Вести проекты» и «Откатом статусов».
     back: p.can.keep && p.can.rollback ? scaleBack('project', p.status) : null,
   });
   const history = historyView(t, 'project', events, new Date());

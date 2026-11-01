@@ -51,6 +51,16 @@ export function projectViewerOf(subject: AccessSubject): ProjectViewer {
 export const projectWhere = (subject: AccessSubject): SQL | undefined =>
   projectVisibility(projectViewerOf(subject));
 
+/**
+ * Поле «Проект» в форме задачи: «Проекты контрагентов» включены и есть право «Просматривать проекты»
+ * (в прототипе — только функция). Иначе проект задачи не меняется, пока не сменили контрагента.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-10
+export const taskProjectsOn = (
+  subject: AccessSubject,
+  features: Readonly<Record<Feature, boolean>>,
+): boolean => features.projects && hasPermission(subject, 'projView');
+
 /** Где сотрудник создаёт проект: контрагенты области группы «Проекты контрагентов». */
 export const projectCreateScope = projScopeOf;
 

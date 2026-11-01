@@ -21,7 +21,7 @@ import {
   type ListQuery,
   type Tyiyn,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import type { FileListPart } from './files';
@@ -824,7 +824,8 @@ export async function setProjectStatus(
       ? projectCancelable(from)
       : scaleNext('project', from).includes(to);
   if (!ok) throw refuse('project_status_invalid', 409, 'status');
-  const reason = opts.reason?.trim() || null;
+  // Причина — только у отката (шаг вперёд и «Отменить проект» её не пишут).
+  const reason = opts.rollback ? opts.reason?.trim() || null : null;
   if (opts.rollback && !reason) throw refuse('project_status_invalid', 400, 'reason');
   await tx
     .update(projects)
@@ -1175,20 +1176,28 @@ export async function contractorProjectCount(tx: Tx, contractorId: string): Prom
 
 /* ───────────── Задачи по проекту ───────────── */
 
+/** Проект, видимый сотруднику (`where` — `projectVisibility`), или уже выбранный у задачи. */
+const seenOrCurrent = (where: SQL | undefined, current: string | null): SQL | undefined =>
+  where && current && UUID.test(current) ? or(where, eq(projects.id, current)) : where;
+
 /**
- * Проекты для поля «Проект» формы задачи (прототип `taskDlg`, `projsOf`): проекты контрагента, кроме
- * «Отменён» и «Завершён» (уже выбранный у задачи остаётся), по названию.
+ * Проекты для поля «Проект» формы задачи (прототип `taskDlg`, `projsOf`): проекты контрагента, которые
+ * сотрудник видит (`where` — `projectVisibility`), кроме «Отменён» и «Завершён»; уже выбранный у задачи
+ * остаётся. По названию.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-10
 export async function projectsForTask(
   tx: Tx,
   contractorId: string,
   current: string | null,
+  where: SQL | undefined,
 ): Promise<{ id: string; name: string; status: ProjectStatus }[]> {
   if (!UUID.test(contractorId)) return [];
   const rows = await tx
     .select({ id: projects.id, name: projects.name, status: projects.status })
     .from(projects)
-    .where(eq(projects.contractorId, contractorId))
+    .innerJoin(contractors, eq(contractors.id, projects.contractorId))
+    .where(and(eq(projects.contractorId, contractorId), seenOrCurrent(where, current)))
     .orderBy(asc(projects.name), asc(projects.id));
   return rows
     .map((r) => ({ ...r, status: r.status as ProjectStatus }))
@@ -1196,20 +1205,29 @@ export async function projectsForTask(
 }
 
 /**
- * Проект для задачи: проект этого контрагента, который можно выбрать (`projectOfferedForTask`); иначе
- * false. Ссылку задачи на проект другого контрагента не даёт и база (`tasks_project_fk`).
+ * Проект для задачи: проект этого контрагента, который сотрудник видит (`where`) или уже выбранный у
+ * задачи, и который можно выбрать (`projectOfferedForTask`); иначе false. Ссылку задачи на проект
+ * другого контрагента не даёт и база (`tasks_project_fk`).
  */
 export async function taskProjectAllowed(
   tx: Tx,
   projectId: string,
   contractorId: string,
   current: string | null,
+  where: SQL | undefined,
 ): Promise<boolean> {
   if (!UUID.test(projectId)) return false;
   const [row] = await tx
     .select({ id: projects.id, status: projects.status })
     .from(projects)
-    .where(and(eq(projects.id, projectId), eq(projects.contractorId, contractorId)));
+    .innerJoin(contractors, eq(contractors.id, projects.contractorId))
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.contractorId, contractorId),
+        seenOrCurrent(where, current),
+      ),
+    );
   return (
     !!row && projectOfferedForTask({ id: row.id, status: row.status as ProjectStatus }, current)
   );

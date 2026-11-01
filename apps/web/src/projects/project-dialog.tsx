@@ -302,7 +302,9 @@ function ProjectModal({
     if (isRecordChanged(res.error)) return setChanged(true);
     const field = fieldOf((res.error as { details?: unknown }).details);
     const message = errorText(res.error);
-    if (field) return setErrors({ [field]: message });
+    // Поля «Контрагент» нет (окно из карточки контрагента или «Изменить») — отказ уведомлением.
+    const hidden = field === 'contractor' && (!!preset || !!edit);
+    if (field && !hidden) return setErrors({ [field]: message });
     toast(message, { bad: true });
   };
 
@@ -386,15 +388,10 @@ function ProjectModal({
                     className={`${inputClass()} cursor-pointer`}
                     value={cp}
                     onChange={(e) => {
+                      // Прототип: выбор контрагента ответственных не меняет (у окна из карточки
+                      // контрагента ответственный — его ответственный, иначе — тот, кто создаёт).
                       setCp(e.target.value);
                       clear('contractor');
-                      // Прототип: у нового проекта ответственный — ответственный контрагента.
-                      const resp =
-                        form.contractors.find((c) => c.id === e.target.value)?.responsible ?? null;
-                      if (resp && members.length <= 1) {
-                        setMembers([resp]);
-                        setLead(resp);
-                      }
                     }}
                   >
                     <option value="">{t('proj.dlg.cp_pick')}</option>
@@ -407,7 +404,7 @@ function ProjectModal({
                 )}
               </Field>
             )}
-            <Field id={`${id}-from`} label={t('proj.dlg.from')} required error={errors.dates}>
+            <Field id={`${id}-from`} label={t('proj.dlg.from')} required>
               {(control) => (
                 <input
                   {...control}
@@ -415,6 +412,7 @@ function ProjectModal({
                   data-pd-from=""
                   className={inputClass()}
                   value={from}
+                  aria-invalid={errors.dates ? true : undefined}
                   onChange={(e) => {
                     setFrom(e.target.value);
                     clear('dates');
@@ -422,7 +420,8 @@ function ProjectModal({
                 />
               )}
             </Field>
-            <Field id={`${id}-to`} label={t('proj.dlg.to')} required>
+            {/* Прототип: ошибка дат — под «Срок по» (`setErr(el, 'pd-to', …)`). */}
+            <Field id={`${id}-to`} label={t('proj.dlg.to')} required error={errors.dates}>
               {(control) => (
                 <input
                   {...control}
@@ -430,7 +429,6 @@ function ProjectModal({
                   data-pd-to=""
                   className={inputClass()}
                   value={to}
-                  aria-invalid={errors.dates ? true : undefined}
                   onChange={(e) => {
                     setTo(e.target.value);
                     clear('dates');

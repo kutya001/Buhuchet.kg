@@ -240,6 +240,8 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'projects',
     done: { kind: 'history', entity: 'project', actions: ['work_add'] },
   },
+  // «Статусы проекта и откат» — шаг «Посмотреть» вкладки «Все» (шкала — в карточке проекта).
+  pstat: { module: 'projects' },
   // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента»
   // (`kcard`) — с карточкой контрагента (2.11), ниже по порядку шагов.
   kset: {

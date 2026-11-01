@@ -93,8 +93,10 @@ export function initialTaskForm({
       month: task.dueDate.slice(0, 7),
       needFile: task.needFile,
       confirm: task.confirm,
-      withProject: !!task.project,
-      projectId: task.project?.id ?? '',
+      // Без поля «Проект» (функция выключена или нет права «Просматривать проекты») проект задачи не
+      // отправляется — сервер оставляет его, пока не сменили контрагента.
+      withProject: options.projectsOn && !!task.project,
+      projectId: options.projectsOn ? (task.project?.id ?? '') : '',
     };
   }
   const contractorId = preset?.contractorId ?? '';
@@ -114,8 +116,8 @@ export function initialTaskForm({
     month: today.slice(0, 7),
     needFile: false,
     confirm: options.confirmDefault,
-    withProject: !!(contractorId && preset?.projectId),
-    projectId: contractorId ? (preset?.projectId ?? '') : '',
+    withProject: options.projectsOn && !!(contractorId && preset?.projectId),
+    projectId: options.projectsOn && contractorId ? (preset?.projectId ?? '') : '',
   };
 }
 

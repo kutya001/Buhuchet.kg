@@ -34,6 +34,7 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { projectWhere, taskProjectsOn } from '../projects/common';
 import {
   cpScopeOf,
   error,
@@ -177,7 +178,7 @@ export function taskFormOptionsHandler(
         ...options,
         confirmDefault: settings.confirmDefault,
         filesOn: settings.files,
-        projectsOn: menu.features.projects,
+        projectsOn: taskProjectsOn(subject, menu.features),
       };
     });
     return c.json(body, 200);
@@ -208,7 +209,8 @@ export const taskProjectsRoute = createRoute({
 
 /**
  * Проекты для поля «Проект» (задача 2.26; прототип `taskDlg`, `projsOf`): контрагент — в области
- * группы «Контрагенты», как поле «Контрагент» формы.
+ * группы «Контрагенты», как поле «Контрагент» формы; проекты — те, что сотрудник видит (и уже
+ * выбранный у задачи).
  */
 export function taskProjectsHandler(deps: ApiDeps): RouteHandler<typeof taskProjectsRoute, AppEnv> {
   return async (c) => {
@@ -218,10 +220,14 @@ export function taskProjectsHandler(deps: ApiDeps): RouteHandler<typeof taskProj
       await requireTasks(tx, orgContextOf(c).orgId);
       const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
       if (!features.projects) apiFail(403, 'projects_off', 'Проекты контрагентов выключены');
+      if (!taskProjectsOn(subject, features)) {
+        apiFail(403, 'forbidden', 'Нет права «Просматривать проекты»');
+      }
       if (!(await taskContractorOf(tx, contractorId, cpScopeOf(subject)))) {
         apiFail(404, 'contractor_not_found', 'Контрагент не найден');
       }
-      const items = await projectsForTask(tx, contractorId, current ?? null);
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — только проекты, которые сотрудник видит.
+      const items = await projectsForTask(tx, contractorId, current ?? null, projectWhere(subject));
       return { items: items.map(({ id, name }) => ({ id, name })) };
     });
     c.header('Cache-Control', 'no-store');
