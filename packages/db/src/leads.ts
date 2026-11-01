@@ -39,6 +39,8 @@ export const adminLeadsView = app
     fromStand: boolean('from_stand').notNull(),
     version: integer('version').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+    /** Кто изменил последним (администратор платформы); null — гость с лендинга. */
+    updatedBy: uuid('updated_by'),
   })
   .existing();
 
@@ -139,6 +141,8 @@ export async function setLeadStatus(
     version: number | null;
     to: LeadStatus;
     before: LeadStatus | null;
+    /** Откат с причиной: в истории — «Откат». */
+    rollback?: boolean;
     orgId?: string | null;
     text?: string | null;
     now: Date;
@@ -146,7 +150,8 @@ export async function setLeadStatus(
 ): Promise<number | null> {
   const rows = await tx.execute<{ v: number | null }>(sql`
     select app.admin_lead_status(${p.id}::uuid, ${p.version}::integer, ${p.to}, ${p.before},
-      ${p.orgId ?? null}::uuid, ${p.text ?? null}, ${p.now.toISOString()}::timestamptz) as v`);
+      ${p.rollback ?? false}, ${p.orgId ?? null}::uuid, ${p.text ?? null},
+      ${p.now.toISOString()}::timestamptz) as v`);
   return rows[0]?.v ?? null;
 }
 

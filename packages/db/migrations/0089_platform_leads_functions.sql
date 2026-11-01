@@ -97,7 +97,8 @@ CREATE VIEW app.admin_leads WITH (security_barrier = true) AS
     l.admin_note,
     l.from_stand,
     l.version,
-    l.updated_at
+    l.updated_at,
+    l.updated_by
   FROM public.platform_leads l
   LEFT JOIN public.organizations g ON g.id = l.created_org_id
   WHERE (SELECT app.is_platform_admin());
@@ -132,11 +133,13 @@ GRANT SELECT ON TABLE app.admin_leads, app.admin_lead_events TO buhuchet_app;
 -- Смена статуса заявки (шаг шкалы, «Отказ» с причиной, откат с причиной, «Снять «Отказ»»,
 -- «Подключена» после «Создать организацию»): допустимость шага проверяет приложение (правила домена),
 -- функция — что меняет администратор платформы и запись не изменилась (p_version; пусто — не сверять,
--- так её вызывает создание организации в той же транзакции). p_org — созданная по заявке организация:
--- тогда в историю пишется «Создана организация» (p_text — её название). Отвечает новой версией; null —
--- не администратор, заявки нет или её уже изменили.
+-- так её вызывает создание организации в той же транзакции). p_rollback — откат: в истории — «Откат».
+-- p_org — созданная по заявке организация: тогда в историю пишется «Создана организация» (p_text — её
+-- название); у заявки, по которой организация уже создана, вторую не привязать. Отвечает новой
+-- версией; null — не администратор, заявки нет, её уже изменили или организация уже создана.
 CREATE FUNCTION app.admin_lead_status(
-  p_id uuid, p_version integer, p_to text, p_before text, p_org uuid, p_text text, p_now timestamptz
+  p_id uuid, p_version integer, p_to text, p_before text, p_rollback boolean, p_org uuid,
+  p_text text, p_now timestamptz
 )
   RETURNS integer
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -144,15 +147,16 @@ CREATE FUNCTION app.admin_lead_status(
   AS $$
   DECLARE
     v_from text;
+    v_org uuid;
     v_version integer;
   BEGIN
     IF NOT app.is_platform_admin() THEN
       RETURN NULL;
     END IF;
-    SELECT l.status INTO v_from FROM public.platform_leads l
+    SELECT l.status, l.created_org_id INTO v_from, v_org FROM public.platform_leads l
       WHERE l.id = p_id AND (p_version IS NULL OR l.version = p_version)
       FOR UPDATE;
-    IF NOT FOUND THEN
+    IF NOT FOUND OR (p_org IS NOT NULL AND v_org IS NOT NULL) THEN
       RETURN NULL;
     END IF;
     UPDATE public.platform_leads l
@@ -173,7 +177,8 @@ CREATE FUNCTION app.admin_lead_status(
     ELSIF v_from <> p_to THEN
       INSERT INTO public.platform_lead_events
           (lead_id, at, actor_user_id, kind, from_status, to_status, text)
-        VALUES (p_id, p_now, app.current_user_id(), 'status', v_from, p_to, p_text);
+        VALUES (p_id, p_now, app.current_user_id(),
+                CASE WHEN p_rollback THEN 'rollback' ELSE 'status' END, v_from, p_to, p_text);
     END IF;
     RETURN v_version;
   END
@@ -231,7 +236,7 @@ CREATE FUNCTION app.admin_lead_delete(p_id uuid)
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.lead_submit(text, text, text, text, text, text, text, boolean, boolean, text, timestamptz, integer, integer, integer, integer) FROM PUBLIC;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION app.admin_lead_status(uuid, integer, text, text, uuid, text, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.admin_lead_status(uuid, integer, text, text, boolean, uuid, text, timestamptz) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.admin_lead_note(uuid, integer, text, timestamptz) FROM PUBLIC;
 --> statement-breakpoint
@@ -239,6 +244,6 @@ REVOKE ALL ON FUNCTION app.admin_lead_delete(uuid) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION
   app.lead_submit(text, text, text, text, text, text, text, boolean, boolean, text, timestamptz, integer, integer, integer, integer),
-  app.admin_lead_status(uuid, integer, text, text, uuid, text, timestamptz),
+  app.admin_lead_status(uuid, integer, text, text, boolean, uuid, text, timestamptz),
   app.admin_lead_note(uuid, integer, text, timestamptz),
   app.admin_lead_delete(uuid) TO buhuchet_app;

@@ -272,12 +272,31 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
     );
     expect(v3).toBe(3);
     const lead3 = await asAdmin((tx) => adminLeadById(tx, id));
-    expect(lead3).toMatchObject({ status: 'rejected', statusBefore: 'in_progress', version: 3 });
+    expect(lead3).toMatchObject({
+      status: 'rejected',
+      statusBefore: 'in_progress',
+      version: 3,
+      updatedBy: adminId,
+    });
+    // «Снять «Отказ»» — откат с причиной: в истории — «Откат».
+    const v4 = await asAdmin((tx) =>
+      setLeadStatus(tx, {
+        id,
+        version: 3,
+        to: 'in_progress',
+        before: null,
+        rollback: true,
+        text: 'Перезвонили, передумали',
+        now: later(3),
+      }),
+    );
+    expect(v4).toBe(4);
     const events = await asAdmin((tx) => adminLeadEvents(tx, id));
     expect(events.map((e) => [e.kind, e.fromStatus, e.toStatus, e.text, e.actorLogin])).toEqual([
       ['created', null, 'new', null, null],
       ['status', 'new', 'in_progress', null, 'platform'],
       ['status', 'in_progress', 'rejected', 'Нужна программа с проводками', 'platform'],
+      ['rollback', 'rejected', 'in_progress', 'Перезвонили, передумали', 'platform'],
     ]);
   });
 
@@ -308,6 +327,21 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       toStatus: 'connected',
       text: 'ОсОО «Альфа»',
     });
+    // Вторую организацию к той же заявке не привязать (две вкладки, два администратора).
+    expect(
+      await asAdmin((tx) =>
+        setLeadStatus(tx, {
+          id,
+          version: null,
+          to: 'connected',
+          before: null,
+          orgId: org.orgId,
+          text: 'ОсОО «Альфа»',
+          now: later(2),
+        }),
+      ),
+    ).toBeNull();
+    expect(await asAdmin((tx) => adminLeadEvents(tx, id))).toHaveLength(events.length);
   });
 
   it('заметка администратора пишется в историю; «Удалить» стирает заявку с историей и сообщением в журнале Telegram', async () => {

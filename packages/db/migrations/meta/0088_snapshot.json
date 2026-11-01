@@ -1,5 +1,5 @@
 {
-  "id": "964f1e60-38da-4dc3-b5de-9828d00e8f87",
+  "id": "375c1d32-9db0-4775-9aa3-456bcec12c29",
   "prevId": "a34f2fb5-680d-43b9-8c9b-00e9c0162526",
   "version": "7",
   "dialect": "postgresql",
@@ -308,7 +308,7 @@
       "checkConstraints": {
         "platform_lead_events_kind_check": {
           "name": "platform_lead_events_kind_check",
-          "value": "\"platform_lead_events\".\"kind\" in ('created', 'repeat', 'status', 'note', 'org')"
+          "value": "\"platform_lead_events\".\"kind\" in ('created', 'repeat', 'status', 'rollback', 'note', 'org')"
         }
       },
       "isRLSEnabled": true

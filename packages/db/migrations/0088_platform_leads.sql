@@ -7,7 +7,7 @@ CREATE TABLE "platform_lead_events" (
 	"from_status" text,
 	"to_status" text,
 	"text" text,
-	CONSTRAINT "platform_lead_events_kind_check" CHECK ("platform_lead_events"."kind" in ('created', 'repeat', 'status', 'note', 'org'))
+	CONSTRAINT "platform_lead_events_kind_check" CHECK ("platform_lead_events"."kind" in ('created', 'repeat', 'status', 'rollback', 'note', 'org'))
 );
 --> statement-breakpoint
 ALTER TABLE "platform_lead_events" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

@@ -7,8 +7,11 @@ import { users } from './users';
 
 const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
 
-/** Что записано в историю заявки. */
-export const LEAD_EVENT_KINDS = ['created', 'repeat', 'status', 'note', 'org'] as const;
+/**
+ * Что записано в историю заявки: заявка с сайта, повтор с того же телефона, смена статуса, откат
+ * статуса с причиной (в «Истории статусов» — с пометкой «Откат»), заметка, создана организация.
+ */
+export const LEAD_EVENT_KINDS = ['created', 'repeat', 'status', 'rollback', 'note', 'org'] as const;
 export type LeadEventKind = (typeof LEAD_EVENT_KINDS)[number];
 
 /**

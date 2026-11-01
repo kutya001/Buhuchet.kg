@@ -1,6 +1,6 @@
 {
-  "id": "696227b8-baf3-4a4b-ab27-8a075a0fb406",
-  "prevId": "964f1e60-38da-4dc3-b5de-9828d00e8f87",
+  "id": "b8114b40-4bbb-4d89-9890-3b2bdca3716e",
+  "prevId": "375c1d32-9db0-4775-9aa3-456bcec12c29",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -308,7 +308,7 @@
       "checkConstraints": {
         "platform_lead_events_kind_check": {
           "name": "platform_lead_events_kind_check",
-          "value": "\"platform_lead_events\".\"kind\" in ('created', 'repeat', 'status', 'note', 'org')"
+          "value": "\"platform_lead_events\".\"kind\" in ('created', 'repeat', 'status', 'rollback', 'note', 'org')"
         }
       },
       "isRLSEnabled": true
