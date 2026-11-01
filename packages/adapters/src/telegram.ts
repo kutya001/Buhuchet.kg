@@ -27,6 +27,17 @@ export interface TelegramSendOptions {
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+/**
+ * Состояние вебхука по ответу Telegram (getWebhookInfo): адрес, куда Telegram шлёт обновления (пусто —
+ * вебхук не поставлен), последняя ошибка доставки и сколько обновлений ждут доставки.
+ */
+export interface TelegramWebhookInfo {
+  url: string;
+  pendingUpdates: number;
+  lastErrorAt: Date | null;
+  lastError: string | null;
+}
+
 export interface Telegram {
   sendMessage(
     chatId: string | number,
@@ -34,6 +45,8 @@ export interface Telegram {
     options?: TelegramSendOptions,
   ): Promise<TelegramSendResult>;
   setWebhook(url: string, secretToken: string): Promise<void>;
+  /** Состояние вебхука (Админка → «Телеграм» → «Проверить вебхук»); ошибка Bot API — исключение. */
+  getWebhookInfo(): Promise<TelegramWebhookInfo>;
 }
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -100,12 +113,32 @@ export function createTelegramBotApi(options: {
       });
       if (!data.ok) throw new Error(`Telegram setWebhook: ${data.description ?? data.error_code}`);
     },
+    async getWebhookInfo() {
+      const data = await call<{
+        url?: string;
+        pending_update_count?: number;
+        last_error_date?: number;
+        last_error_message?: string;
+      }>('getWebhookInfo', {});
+      if (!data.ok || !data.result) {
+        throw new Error(`Telegram getWebhookInfo: ${data.description ?? data.error_code}`);
+      }
+      const r = data.result;
+      return {
+        url: r.url ?? '',
+        pendingUpdates: r.pending_update_count ?? 0,
+        lastErrorAt: r.last_error_date ? new Date(r.last_error_date * 1000) : null,
+        lastError: r.last_error_message ?? null,
+      };
+    },
   };
 }
 
 export interface FakeTelegram extends Telegram {
   readonly sent: Array<{ chatId: string | number; text: string; options: TelegramSendOptions }>;
   webhook?: { url: string; secretToken: string };
+  /** Что ответит getWebhookInfo: по умолчанию — поставленный адрес без ошибок; `Error` — исключение. */
+  webhookInfo?: Partial<TelegramWebhookInfo> | Error;
   /** Следующие отправки вернут эти ответы (по очереди), затем — успех. */
   failNext(...results: Extract<TelegramSendResult, { ok: false }>[]): void;
 }
@@ -124,6 +157,16 @@ export function createFakeTelegram(): FakeTelegram {
     },
     async setWebhook(url, secretToken) {
       fake.webhook = { url, secretToken };
+    },
+    async getWebhookInfo() {
+      if (fake.webhookInfo instanceof Error) throw fake.webhookInfo;
+      return {
+        url: fake.webhook?.url ?? '',
+        pendingUpdates: 0,
+        lastErrorAt: null,
+        lastError: null,
+        ...fake.webhookInfo,
+      };
     },
     failNext(...results) {
       failures.push(...results);

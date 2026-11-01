@@ -25,6 +25,7 @@ import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
 import { TASKS_TEXTS } from './tasks-texts';
 import { TELEGRAM_TEXTS } from './telegram-texts';
+import { TELEGRAM_ADMIN_TEXTS } from './telegram-admin-texts';
 
 /**
  * Языки интерфейса (ТЗ, Админка → «Локализация»). Сейчас язык один — русский; добавление языка
@@ -79,7 +80,7 @@ const SYSTEM_TEXTS = {
  * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
  * уведомлений в Telegram и блока «Уведомления в Telegram» профиля — `telegram-texts.ts`,
  * Админки → «Справочники платформы» — `platform-dicts-texts.ts`, Админки → «База знаний (содержимое)» —
- * `kb-admin-texts.ts`.
+ * `kb-admin-texts.ts`, Админки → «Телеграм» — `telegram-admin-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -113,6 +114,7 @@ export const UI_TEXTS = {
   ...TELEGRAM_TEXTS,
   ...PLATFORM_DICTS_TEXTS,
   ...KB_ADMIN_TEXTS,
+  ...TELEGRAM_ADMIN_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 
 /** Ключ текста интерфейса: только из `UI_TEXTS`, поэтому опечатка в ключе — ошибка типов. */

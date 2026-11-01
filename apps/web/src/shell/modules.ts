@@ -473,7 +473,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     desc: 'nav.desc.tg',
     tabs: [
       { id: 'log', icon: 'list', label: 'tab.tg.log' },
-      { id: 'bot', icon: 'sliders', label: 'tab.tg.bot' },
+      { id: 'bot', icon: 'tg', label: 'tab.tg.bot' },
       { id: 'cast', icon: 'send', label: 'tab.tg.cast' },
     ],
     add: [{ id: 'cast', icon: 'send', label: 'add.tg.cast' }],

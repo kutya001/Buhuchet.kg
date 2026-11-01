@@ -526,6 +526,8 @@ export const GRID_KEYS = [
   'pdicts.perms',
   'pdicts.loads',
   'pdicts.requests',
+  // Админка → «Телеграм» → «Журнал» (прототип `'tg-log'`).
+  'tg.log',
 ] as const;
 export type GridKey = (typeof GRID_KEYS)[number];
 
