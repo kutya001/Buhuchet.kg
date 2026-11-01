@@ -9,6 +9,11 @@ name: Migrate test
 # зависимостей.
 on:
   workflow_dispatch:
+    inputs:
+      reset_admin_password:
+        description: 'Сбросить пароль администратора платформы (TEST_ADMIN_LOGIN) на временный из TEST_ADMIN_PASSWORD'
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
@@ -70,7 +75,7 @@ jobs:
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
       - name: Справочники, ГКЭД и демо-организация (изменившиеся разделы обновляются)
         if: steps.ready.outputs.ok == 'true'
-        run: pnpm db:seed --update
+        run: pnpm db:seed --update ${RESET_ADMIN_PASSWORD:+--reset-admin-password}
         env:
           DATABASE_ADMIN_URL: ${{ secrets.TEST_DATABASE_ADMIN_URL }}
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
@@ -81,6 +86,10 @@ jobs:
           # входе); уже созданного наполнение не трогает. Без секретов — не создаётся.
           PLATFORM_ADMIN_LOGIN: ${{ secrets.TEST_ADMIN_LOGIN }}
           PLATFORM_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+          # Забытый пароль: ручной запуск (Actions → Migrate test → Run workflow) с отметкой «Сбросить
+          # пароль администратора» снова делает пароль администратора TEST_ADMIN_LOGIN временным из
+          # TEST_ADMIN_PASSWORD и завершает его сеансы. Запуск после слияния PR отметки не ставит.
+          RESET_ADMIN_PASSWORD: ${{ inputs.reset_admin_password && '1' || '' }}
       - name: Корзина файлов
         if: steps.ready.outputs.ok == 'true'
         run: pnpm storage:init
