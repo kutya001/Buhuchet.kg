@@ -6,6 +6,7 @@ import {
   orgHasNoContractors,
   orgMenuSettings,
   revenueSource,
+  visibleProjectIds,
   withOrgContext,
   type RevenueListInput,
   type Tx,
@@ -35,6 +36,7 @@ import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { scopeSqlOf, subjectOf, todayOf } from '../contractors/common';
 import { feeFail } from '../fees/common';
+import { projectViewerOf } from '../projects/common';
 import { error } from '../reports/common';
 
 /*
@@ -70,11 +72,18 @@ function inAnalytics<T>(
   });
 }
 
-/** Выручка за год и прошлый год в области сотрудника. */
+/**
+ * Выручка за год и прошлый год в области сотрудника; транши — проектов, которые он видит в модуле
+ * «Проекты контрагентов» (прототип — всех проектов контрагентов области, как в «Финансовых операциях»).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-12
 async function revenueOf(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, year: number) {
   const today: IsoDate = todayOf(deps);
+  const subject = subjectOf(c);
+  const viewer = projectViewerOf(subject);
   const source = await revenueSource(tx, {
-    scope: scopeSqlOf(subjectOf(c)),
+    scope: scopeSqlOf(subject),
+    projects: viewer.seeAll ? undefined : visibleProjectIds(viewer),
     today,
     from: year - 1,
     to: year,

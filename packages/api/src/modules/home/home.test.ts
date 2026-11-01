@@ -11,7 +11,7 @@ import {
   Task,
   TaskList,
 } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
 
@@ -497,6 +497,9 @@ describe.skipIf(!databaseAvailable())('Главная: «Сводка» и «А�
 
     const only = encodeURIComponent(JSON.stringify({ kind: { type: 'enum', vals: ['oneoff'] } }));
     expect((await revenue(owner, `&filters=${only}`)).items.map((r) => r.id)).toEqual([cpOne]);
+    // «Доля» — процент: «от 50» — только ИП Ала-Тоо Трейд (52,6 %).
+    const half = encodeURIComponent(JSON.stringify({ share: { type: 'num', from: 50 } }));
+    expect((await revenue(owner, `&filters=${half}`)).items.map((r) => r.id)).toEqual([cpA]);
     const sorted = await revenue(owner, '&sort=change.desc');
     expect(sorted.items[0]!.id).toBe(cpChief);
 
@@ -514,13 +517,15 @@ describe.skipIf(!databaseAvailable())('Главная: «Сводка» и «А�
     ]);
 
     const file = await expectStatus(
-      await call('GET', '/api/home/analytics/export?year=2026&cols=cp,total,prev', owner),
+      await call('GET', '/api/home/analytics/export?year=2026&cols=cp,total,prev,share', owner),
       200,
     );
     const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))['xl/worksheets/sheet1.xml']!;
     expect((sheet.match(/<row /g) ?? []).length).toBe(1 + 3);
     expect(sheet).toContain('Ала-Тоо Трейд');
     expect(sheet).toContain('2025 год');
+    // Доля — число 52,6, а не сумма.
+    expect(sheet).toContain('<v>52.6</v>');
   });
 
   it('«Аналитика»: право «Видеть плату за обслуживание», функция, область «Свои», неверный год', async () => {
@@ -547,6 +552,34 @@ describe.skipIf(!databaseAvailable())('Главная: «Сводка» и «А�
     expect(own.total).toBe(som(4_000));
     expect(own.top.map((t) => t.id)).toEqual([cpOne]);
     expect((await revenue(hr)).items.map((r) => r.id)).toEqual([cpOne]);
+    // «Должники по обслуживанию» — тоже только свои контрагенты: у разового контрагента долга нет.
+    expect((await summary(hr)).debtors).toEqual({ count: 0, sum: 0 });
+
+    // Область «Все» в «Контрагентах» и «Свои» в «Проектах»: обслуживание и разовые услуги всех
+    // контрагентов, транши — только видимых проектов (проект ИП Садыков ведёт главный бухгалтер).
+    const scope = (permGroup: 'cps' | 'projects', value: 'own' | 'all') =>
+      f.t.admin.db
+        .update(schema.roleScopes)
+        .set({ scope: value })
+        .where(
+          and(
+            eq(schema.roleScopes.roleId, f.roleIds.hr),
+            eq(schema.roleScopes.permGroup, permGroup),
+          ),
+        );
+    await scope('cps', 'all');
+    try {
+      const wide = await overview(hr);
+      expect(wide).toMatchObject({ fee: som(60_000), proj: 0, svc: som(4_000) });
+      // У ИП Садыков других поступлений нет — в списке его нет.
+      expect((await revenue(hr)).items.map((r) => r.id)).toEqual([cpA, cpOne]);
+      expect((await summary(hr)).debtors).toEqual({ count: 1, sum: som(60_000) });
+      await scope('projects', 'all');
+      expect((await overview(hr)).proj).toBe(som(50_000));
+    } finally {
+      await scope('cps', 'own');
+      await scope('projects', 'own');
+    }
 
     await features(f.a.orgId, { ...ALL_ON, fee: false });
     try {

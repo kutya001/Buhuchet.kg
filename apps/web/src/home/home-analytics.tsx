@@ -46,7 +46,10 @@ const GRID_KEY = 'home.analytics';
 /** По умолчанию — по «Итого получено», от больших (прототип `sort: {key: 'total', dir: -1}`). */
 const REVENUE_SORT: ListSort = { key: 'total', dir: 'desc' };
 
-/** Видимые по умолчанию — все, кроме «Тип» (прототип: `hide: true`). */
+/**
+ * Видимые по умолчанию — все, кроме «Тип» (прототип: `hide: true`); прошлый год и «Изменение» — при
+ * «Сравнить с …», без него скрыты и включаются в «Столбцах» (прототип: `hide: !a.cmp`).
+ */
 const REVENUE_VISIBLE = [
   'cp',
   'resp',
@@ -60,6 +63,7 @@ const REVENUE_VISIBLE = [
   'prev',
   'change',
 ];
+const REVENUE_VISIBLE_ALONE = REVENUE_VISIBLE.filter((k) => k !== 'prev' && k !== 'change');
 
 /**
  * Год «Аналитики» и «Сравнить с …» (прототип `S.an`): один на страницу до её перезагрузки — вернувшись
@@ -70,8 +74,8 @@ let chosen: { year: number; compare: boolean } | null = null;
 /** Доля — «52,6 %», изменение — «+150 %» (прототип `share`, `ch`). */
 const shareText = (v: number) => `${String(v).replace('.', ',')} %`;
 
-/** Столбцы списка (прототип: сетка `an-cps`); прошлый год и изменение — при «Сравнить с …». */
-function revenueColumns(t: Translate, year: number, compare: boolean): GridColumn<RevenueRow>[] {
+/** Столбцы списка (прототип: сетка `an-cps`). */
+function revenueColumns(t: Translate, year: number): GridColumn<RevenueRow>[] {
   const som = (v: number) => formatSom(v);
   const money = (key: 'feeCh' | 'fee' | 'proj' | 'svc', label: Parameters<Translate>[0]) => ({
     key,
@@ -81,7 +85,7 @@ function revenueColumns(t: Translate, year: number, compare: boolean): GridColum
     text: (r: RevenueRow) => som(r[key]),
     total: som,
   });
-  const cols: GridColumn<RevenueRow>[] = [
+  return [
     {
       key: 'cp',
       label: t('home.an.col.cp'),
@@ -134,15 +138,11 @@ function revenueColumns(t: Translate, year: number, compare: boolean): GridColum
     {
       key: 'share',
       label: t('home.an.col.share'),
-      // Доля хранится в сотых процента: фильтр «от … до …» — как у сумм.
-      type: 'money',
+      // Процент с десятыми: фильтр «от … до …» — целыми процентами.
+      type: 'int',
       width: 90,
       text: (r) => shareText(r.share),
     },
-  ];
-  if (!compare) return cols;
-  return [
-    ...cols,
     {
       key: 'prev',
       label: t('home.an.year', { y: year - 1 }),
@@ -172,7 +172,8 @@ function revenueColumns(t: Translate, year: number, compare: boolean): GridColum
 /** Плашки «Аналитики» (прототип `renderAnalytics`): только итоги, не нажимаются. */
 function RevenuePlates({ t, v, shown }: { t: Translate; v: RevenueOverview; shown: boolean }) {
   const som = t('home.an.som');
-  const value = (x: number) => formatSom(x, 'auto');
+  // Целые сомы (прототип `fmtM(v, false)`).
+  const value = (x: number) => formatSom(Math.round(x / 100) * 100, 'auto');
   const change =
     v.change === null
       ? undefined
@@ -277,7 +278,8 @@ function RevenueGrid({
 }) {
   const { search, clearSearch, access } = useShell();
   const labels = useGridLabels('cp.count');
-  const columns = useMemo(() => revenueColumns(t, year, compare), [t, year, compare]);
+  const columns = useMemo(() => revenueColumns(t, year), [t, year]);
+  const defaultVisible = compare ? REVENUE_VISIBLE : REVENUE_VISIBLE_ALONE;
   const view = useViewSettings(GRID_KEY);
   const extra = useMemo(() => ({ year: String(year) }), [year]);
   const fetchPage = useCallback<FetchListPage<RevenueRow>>(async (params) => {
@@ -301,7 +303,7 @@ function RevenueGrid({
     gridKey: GRID_KEY,
     columns,
     audit: false,
-    defaultVisible: REVENUE_VISIBLE,
+    defaultVisible,
     settings: view.settings,
     defaultSort: REVENUE_SORT,
     search,
@@ -331,7 +333,7 @@ function RevenueGrid({
     <div data-home-revenue="">
       <DataGrid
         columns={columns}
-        defaultVisible={REVENUE_VISIBLE}
+        defaultVisible={defaultVisible}
         defaultSort={REVENUE_SORT}
         settings={view.settings}
         onSettingsChange={view.save}

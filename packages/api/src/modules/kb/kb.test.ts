@@ -78,9 +78,10 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'reports',
       'tasks',
       'files',
+      'home',
       'lists',
     ]);
-    expect(own.progress).toMatchObject({ total: 41, done: 0, pct: 0, level: 0, next: 1, need: 11 });
+    expect(own.progress).toMatchObject({ total: 42, done: 0, pct: 0, level: 0, next: 1, need: 11 });
     expect(own.progress.levels.map((l) => l.name)).toEqual([
       'Новичок',
       'Ученик',
@@ -117,7 +118,10 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     });
 
     const mine = await state(acc);
+    // У сотрудника урок «Главная и аналитика» — первым (прототип `ckGroups`); «Аналитика выручки» — с
+    // правом и функцией «Плата за обслуживание», их нет.
     expect(mine.lessons.map((l) => l.id)).toEqual([
+      'home',
       'me',
       'dicts',
       'cps',
@@ -127,6 +131,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       'lists',
     ]);
     expect(steps(mine).map((s) => s.id)).toEqual([
+      'today',
       'tg',
       'theme',
       'pdicts',
@@ -328,6 +333,9 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
   });
 
   it('«Пропустить» и «Вернуть»: следующий шаг идёт мимо пропущенного; выполненный не пропускается', async () => {
+    // Первым у сотрудника идёт «Сводка на сегодня» (урок «Главная и аналитика»).
+    const first = KbState.parse(await ok(await call('POST', '/api/kb/steps/today/skip', acc)));
+    expect(first.nextStepId).toBe('tg');
     const skipped = KbState.parse(await ok(await call('POST', '/api/kb/steps/tg/skip', acc)));
     expect(step(skipped, 'tg')?.skipped).toBe(true);
     expect(skipped.nextStepId).toBe('theme');
@@ -336,6 +344,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const back = KbState.parse(await ok(await call('DELETE', '/api/kb/steps/tg/skip', acc)));
     expect(step(back, 'tg')?.skipped).toBe(false);
     expect(back.nextStepId).toBe('tg');
+    await ok(await call('DELETE', '/api/kb/steps/today/skip', acc));
     expect((await call('POST', '/api/kb/steps/roles/skip', acc)).status).toBe(404);
   });
 
@@ -389,11 +398,11 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
       levelName: 'Ученик',
       of: 5,
       done: 12,
-      total: 41,
+      total: 42,
       levelAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
     });
     const accRow = team.items.find((r) => r.fullName === 'Сотрудник acc-a');
-    expect(accRow).toMatchObject({ level: 0, done: 1, total: 22, pct: 4 });
+    expect(accRow).toMatchObject({ level: 0, done: 1, total: 23, pct: 4 });
     const values = ListValues.parse(
       await ok(await call('GET', '/api/kb/team/values?col=level', owner)),
     );
@@ -419,8 +428,9 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     const self = KbMemberProgress.parse(
       await ok(await call('GET', `/api/kb/employees/${id}`, acc)),
     );
-    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 22 } });
+    expect(self).toMatchObject({ employeeId: id, progress: { done: 1, total: 23 } });
     expect(self.progress.groups.map((g) => g.id)).toEqual([
+      'home',
       'me',
       'dicts',
       'cps',
@@ -444,7 +454,7 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     expect(own.items.find((e) => e.login === 'owner-a')?.kb).toEqual({
       level: 1,
       name: 'Ученик',
-      pct: 29,
+      pct: 28,
       of: 5,
     });
     const sorted = await staff(

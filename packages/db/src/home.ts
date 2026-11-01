@@ -117,10 +117,18 @@ export interface RevenueSource {
  * `revenueData`: `visCps(true)`): оплаты за обслуживание, по проектам (транши) и за разовые услуги за
  * годы `from`–`to` (удалённые не считаются, у разовой услуги — и оплаты удалённой услуги), начисления за
  * обслуживание по месяцам и долг сейчас — за обслуживание и недоплата неудалённых разовых услуг.
+ * Транши — только проектов, которые сотрудник видит (`projects`: `visibleProjectIds`; undefined — все).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-12
 export async function revenueSource(
   tx: Tx,
-  o: { scope: SQL | undefined; today: IsoDate; from: number; to: number },
+  o: {
+    scope: SQL | undefined;
+    projects?: SQL | undefined;
+    today: IsoDate;
+    from: number;
+    to: number;
+  },
 ): Promise<RevenueSource> {
   const years = (col: SQL) =>
     sql`${col} between ${dateLiteral(`${o.from}-01-01`)} and ${dateLiteral(`${o.to}-12-31`)}`;
@@ -157,7 +165,12 @@ export async function revenueSource(
       .innerJoin(projects, eq(projects.id, projectPayments.projectId))
       .innerJoin(contractors, eq(contractors.id, projects.contractorId))
       .where(
-        and(isNull(projectPayments.deletedAt), years(sql`${projectPayments.paidOn}`), o.scope),
+        and(
+          isNull(projectPayments.deletedAt),
+          years(sql`${projectPayments.paidOn}`),
+          o.scope,
+          o.projects ? sql`${projects.id} in ${o.projects}` : undefined,
+        ),
       ),
     tx
       .select({
@@ -238,8 +251,8 @@ function revenueRecordset(rows: readonly RevenueGridRow[], t: ListTexts): SQL {
     svc: r.svc,
     total: r.total,
     debt: r.debt,
-    // Доля — в сотых процента, чтобы фильтр «от … до …» работал как у сумм.
-    share: Math.round(r.share * 100),
+    // Доля — процент с десятыми (52,6), как `type: 'num'` прототипа: в Excel — число.
+    share: r.share,
     share_t: `${String(r.share).replace('.', ',')} %`,
     prev: r.prev,
     change: r.change,
@@ -253,7 +266,7 @@ function revenueRecordset(rows: readonly RevenueGridRow[], t: ListTexts): SQL {
     ['kind', 'text'],
     ['kind_t', 'text'],
     ...MONEY_KEYS.map((k) => [k, 'bigint']),
-    ['share', 'bigint'],
+    ['share', 'numeric'],
     ['share_t', 'text'],
     ['change', 'integer'],
     ['change_t', 'text'],
@@ -285,7 +298,7 @@ function revenueColumns(prevLabel: string): ListColumns {
     total: { type: 'money', label: 'home.an.col.total', value: field('total'), total: true },
     debt: { type: 'money', label: 'home.an.col.debt', value: field('debt'), total: true },
     share: {
-      type: 'money',
+      type: 'int',
       label: 'home.an.col.share',
       value: field('share'),
       display: field('share_t'),
