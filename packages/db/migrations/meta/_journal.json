@@ -610,6 +610,13 @@
       "when": 1793506969074,
       "tag": "0086_project_payments_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1793551624202,
+      "tag": "0087_lead_status_scale",
+      "breakpoints": true
     }
   ]
 }

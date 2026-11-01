@@ -8,7 +8,10 @@
 import { pluralForm } from './list';
 import type { UiTextKey } from '../l10n/texts';
 
-/** Шкалы: сдача отчёта, оплата налога, задача, обслуживание контрагента, проект, месяц показателей. */
+/**
+ * Шкалы: сдача отчёта, оплата налога, задача, обслуживание контрагента, проект, месяц показателей,
+ * заявка с сайта (лендинг, прототип v65: `lead`, admin/leads.js).
+ */
 export const STATUS_SCALES = [
   'report',
   'payment',
@@ -16,8 +19,16 @@ export const STATUS_SCALES = [
   'service',
   'project',
   'indicator',
+  'lead',
 ] as const;
 export type StatusScaleKey = (typeof STATUS_SCALES)[number];
+
+/**
+ * Шкалы записей организации — их смены пишутся в `status_history` (таблица организации, RLS). Заявка
+ * с сайта — данные платформы без организации: её история хранится у самой заявки (прототип
+ * admin/leads.js, `leadLog`) и стирается вместе с ней.
+ */
+export const ORG_STATUS_SCALES = STATUS_SCALES.filter((s) => s !== 'lead');
 
 /** Цвета статусов справочника «Статусы» (прототип `.sc-<цвет>`, `.pill.<цвет>`). */
 export const STATUS_TONES = [
@@ -133,6 +144,17 @@ export const STATUS_SCALE_DEFS: Readonly<Record<StatusScaleKey, StatusScaleDef>>
       checked: { tone: 'green', icon: 'ok' },
     },
   },
+  // «Отказ» — конечная отметка вне шкалы, ставится с причиной (прототип `SCALES.lead.none`).
+  lead: {
+    steps: ['new', 'in_progress', 'connected'],
+    none: ['rejected'],
+    look: {
+      new: { tone: 'blue', icon: 'send' },
+      in_progress: { tone: 'yellow', icon: 'hourglass' },
+      connected: { tone: 'green', icon: 'check' },
+      rejected: { tone: 'faint', icon: 'ban' },
+    },
+  },
 };
 
 /** Все статусы шкалы (шаги, боковые, нейтральные, отметки) — по порядку справочника. */
@@ -232,6 +254,9 @@ export function scaleNext(
       return status === 'in_progress' ? ['done'] : [];
     case 'indicator':
       return status === 'filled' ? ['checked'] : [];
+    case 'lead':
+      if (status === 'new') return ['in_progress'];
+      return status === 'in_progress' ? ['connected'] : [];
   }
 }
 
@@ -243,6 +268,8 @@ export interface BackOptions {
    * отмена записи об оплате (ТЗ «Последствия отката»).
    */
   paidRest?: number | null;
+  /** Заявка с «Отказом»: в каком статусе она была до отказа (прототип `prevSt`); нет — «Новая». */
+  beforeReject?: 'new' | 'in_progress' | null;
 }
 
 /**
@@ -273,6 +300,11 @@ export function scaleBack(
       return status === 'in_progress' ? 'planned' : null;
     case 'indicator':
       return status === 'checked' ? 'filled' : null;
+    // «Подключена» с созданной организацией не откатывается — запрет у модуля заявок.
+    case 'lead':
+      if (status === 'rejected') return options.beforeReject ?? 'new';
+      if (status === 'connected') return 'in_progress';
+      return status === 'in_progress' ? 'new' : null;
   }
 }
 

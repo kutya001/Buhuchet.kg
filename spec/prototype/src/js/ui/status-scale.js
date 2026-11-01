@@ -7,13 +7,16 @@ const SCALES={
  task:{map:()=>TST,steps:['К выполнению','В работе','Выполнена'],stepsC:['К выполнению','В работе','На подтверждении','Подтверждена'],side:{'На доработке':{at:1,cls:'red'},'Не выполнена':{at:-1,cls:'red'},'Отменена':{at:-1,cls:'faint'}}},
  svc:{map:()=>SVST,steps:['Обслуживается','Приостановлен','В архиве']},
  proj:{map:()=>PRS,steps:['Планируется','В работе','Завершён'],side:{'Отменён':{at:2,cls:'faint'}}},
- ind:{map:()=>KST,steps:['Не заполнено','Заполнено','Проверено']}};
-const SC_NAME={rep:'Сдача',pay:'Оплата',task:'Задача',svc:'Обслуживание',proj:'Проект',ind:'Заполнение месяца'};
+ ind:{map:()=>KST,steps:['Не заполнено','Заполнено','Проверено']},
+ // Заявки с лендинга (ТЗ «Заявки» в Админке, 01.11.2026): «Отказ» — конечная отметка вне шкалы, ставится с причиной
+ lead:{map:()=>LDST,steps:['Новая','В работе','Подключена'],none:['Отказ']}};
+const SC_NAME={rep:'Сдача',pay:'Оплата',task:'Задача',svc:'Обслуживание',proj:'Проект',ind:'Заполнение месяца',lead:'Заявка'};
 // Подтверждение сдачи (решение заказчика 24.10.2026): «Сдан» — последний шаг, «Принят» нет; старший бухгалтер (право «Подтверждать сдачу отчётов») подтверждает сдачу или возвращает «На исправление».
 // Отметка на шаге «Сдан»: «Ждёт подтверждения» или «Подтверждено»; при выключенной «Сдача отчётов требует подтверждения» отметки нет и «Сдан» окончательный
 const REP_MK={wait:'Ждёт подтверждения',ok:'Подтверждено'};
 const repConfOn=()=>ORG.repConfirm!==false;
-const repWait=r=>!!r&&r.status==='Сдан'&&repConfOn()&&!r.confAt&&!tR(r).payOnly;
+const REP_OLD='Прежняя версия отчёта не меняется: к ней можно только прикрепить файл';
+const repWait=r=>!!r&&r.status==='Сдан'&&repConfOn()&&!r.confAt&&!tR(r).payOnly&&!r.superseded;
 const repFin=r=>!!r&&r.status==='Сдан'&&!repWait(r);
 const repMark=r=>!r||r.status!=='Сдан'||tR(r).payOnly||!repConfOn()?'':r.confAt?REP_MK.ok:REP_MK.wait;
 const repWaitDays=r=>Math.max(0,diffDays(TODAY,(r.subAt||r.subDate||TODAY).slice(0,10)));
@@ -36,7 +39,7 @@ const taskConfSt=new Set(['На подтверждении','Подтвержд�
 function scSteps(k,o,st){const D=SCALES[k];return D.stepsC&&((o&&o.confirm)||taskConfSt.has(st))?D.stepsC:D.steps}
 function scPos(k,st,o){const D=SCALES[k];const S=scSteps(k,o,st);let i=S.indexOf(st),side=null;if(i<0&&D.side&&D.side[st]){side=D.side[st];i=side.at<0?S.length+side.at:side.at}return {i,side,n:S.length,steps:S}}
 const scCol=(k,st)=>((SCALES[k].map()[st])||['gray'])[0];
-const objOf=(k,id)=>k==='rep'||k==='pay'?REPORTS.find(x=>x.id===+id):k==='task'?TASKS.find(x=>x.id===id):k==='svc'?CPM[+id]:k==='proj'?PROJECTS.find(x=>x.id===id):k==='ind'?KMI[id]:null;
+const objOf=(k,id)=>k==='rep'||k==='pay'?REPORTS.find(x=>x.id===+id):k==='task'?TASKS.find(x=>x.id===id):k==='svc'?CPM[+id]:k==='proj'?PROJECTS.find(x=>x.id===id):k==='ind'?KMI[id]:k==='lead'?LEADS.find(x=>x.id===id):null;
 function stSince(k,o){if(!o)return null;const h=statusHist(k,o);return h.length?h[h.length-1]:null}
 function scaleMini(k,st,o){const h=scaleMini0(k,st,o);const e=o&&stSince(k,o);return e?`<span class="scm-w" title="Установлен ${fmtDT(e.at)}${e.who?', '+esc(whoName(e.who)):''}">${h}<small>${fmtDT(e.at)}</small></span>`:h}
 function scaleMini0(k,st,o){const D=SCALES[k];if(!st)return '<span class="faint">—</span>';if((D.none||[]).includes(st))return `<span class="scm none" title="${esc(st)}: шкала не ведётся">${ic('ban','sm')}${esc(st)}</span>`;
@@ -48,7 +51,8 @@ function scNext(k,st,o){
   if(k==='task'){const c=o&&o.confirm;return st==='К выполнению'?['В работе']:st==='В работе'||st==='На доработке'?[c?'На подтверждении':'Выполнена']:st==='На подтверждении'?['Подтверждена']:[]}
   if(k==='svc')return st==='Обслуживается'?(o&&o.kind==='oneoff'?['В архиве']:['Приостановлен','В архиве']):st==='Приостановлен'?['В архиве']:st==='В архиве'?['Обслуживается']:[];
   if(k==='proj')return st==='Планируется'?['В работе']:st==='В работе'?['Завершён']:[];
-  if(k==='ind')return st==='Заполнено'?['Проверено']:[];return []}
+  if(k==='ind')return st==='Заполнено'?['Проверено']:[];
+  if(k==='lead')return st==='Новая'?['В работе']:st==='В работе'?['Подключена']:[];return []}
 function scBack(k,st,o){
   if(k==='rep')return o&&o.superseded&&st!=='Не требуется'?{no:'Сначала откатите уточнённую версию отчёта'}:st==='Сдан'?(o&&o.confAt&&repConfOn()&&!tR(o).payOnly?REP_MK.wait:'В работе'):st==='Требует исправления'?'Сдан':st==='В работе'?'К сдаче':st==='Не требуется'?'К сдаче':null;
   if(k==='pay'&&o){const l0=OPS.filter(x=>x.kind==='pay'&&x.report===o.id).sort((a,b)=>a.date<b.date?1:-1)[0];if(l0&&CLOSED.has(ym(l0.date)))return {no:`${ymLabel(ym(l0.date))} закрыт отчётом о списаниях: отменить оплату нельзя, нужна корректирующая запись`}}
@@ -56,9 +60,10 @@ function scBack(k,st,o){
   if(k==='task')return st==='Подтверждена'?'На подтверждении':['Выполнена','Не выполнена','Отменена','На подтверждении'].includes(st)?'В работе':st==='В работе'?'К выполнению':null;
   if(k==='svc')return st==='Приостановлен'?'Обслуживается':null;
   if(k==='proj')return st==='Завершён'||st==='Отменён'?'В работе':st==='В работе'?'Планируется':null;
-  if(k==='ind')return st==='Проверено'?'Заполнено':null;return null}
+  if(k==='ind')return st==='Проверено'?'Заполнено':null;
+  if(k==='lead')return st==='Отказ'?(o&&o.prevSt)||'Новая':st==='Подключена'?(o&&o.org?{no:'По заявке создана организация: статус «Подключена» не откатывается'}:'В работе'):st==='В работе'?'Новая':null;return null}
 function scaleFull(k,st,id){const D=SCALES[k];const o=objOf(k,id);const H=o?statusHist(k,o):[];const when=x=>{for(let q=H.length-1;q>=0;q--)if(H[q].to===x)return H[q].at;return null};
-  const bk=can('rollback')?scBack(k,st,o):null;const bkT=typeof bk==='string'?bk:null;
+  const bk=(k==='lead'?isAdmin():can('rollback'))?scBack(k,st,o):null;const bkT=typeof bk==='string'?bk:null;
   if((D.none||[]).includes(st))return `<div class="scf-wrap"><span class="scf-t">${SC_NAME[k]}</span><div class="scf" data-sk="${k}" data-sid="${esc(String(id))}"><span class="scf-none">${ic('ban','sm')}${esc(st)} — шкала не ведётся${when(st)?` <small>с ${fmtDT(when(st))}</small>`:''}</span>${bkT?`<button type="button" class="btn sm" data-back="${esc(bkT)}" style="margin-left:10px">${ic('history','sm')}Снять «${esc(st)}»</button>`:''}</div></div>`;
   const {i,side,steps}=scPos(k,st,o);const nx=scNext(k,st,o);const mk=k==='rep'&&o?repMark(o):'';const col=scCol(k,mk||st);
   return `<div class="scf-wrap"><span class="scf-t">${SC_NAME[k]}</span><div class="scf" data-sk="${k}" data-sid="${esc(String(id))}" role="list">${steps.map((x,j)=>{const cls=j<i?'p':j===i?'c sc-'+(side?side.cls==='red'?'red':'faint':col):'f';const blk=k==='rep'&&x==='Сдан'&&nx.includes(x)&&subPayWhy(o);const go=nx.includes(x)&&!blk;const back=!go&&bkT===x&&(j<i||(j===i&&side));const w=j<=i?when(j===i&&side?st:x):null;
@@ -83,10 +88,11 @@ function rollbackDlg(k,id,to){const o=objOf(k,id);if(!o)return;const st=k==='pay
     title='Отменить запись об оплате';cons=`Оплата ${som(l.amount)} от ${fmtD(l.date)} будет отменена: сумма вернётся в свободный остаток контрагента на счёте, статус оплаты станет «${esc(to)}».`}
   if(k==='task')cons=to==='На подтверждении'?'Подтверждение будет снято: задача снова будет ждать подтверждения.':to==='В работе'?'Задача снова станет открытой у исполнителя. Приложенный файл останется.':'Задача вернётся в «К выполнению».';
   if(k==='ind')cons='Месяц снова будет ждать проверки. Внесённые значения не меняются.';
+  if(k==='lead')cons=st==='Отказ'?`Отметка «Отказ» будет снята: заявка вернётся в «${esc(to)}».`:`Заявка вернётся в «${esc(to)}».`;
   if(k==='proj')cons=to==='В работе'?'Проект снова станет активным, по нему можно вести работы и принимать оплаты.':'Проект вернётся в план.';
   if(k==='svc'){if(o.archived)cons='Контрагент вернётся из архива, обслуживание продолжится с текущего месяца.';else{const ms=pauseMissed(o);
     cons=ms.length?'Приостановка будет отменена, обслуживание продолжится с текущего месяца. Отмеченные пропущенные месяцы станут месяцами обслуживания: за них досоздадутся начисления за обслуживание и отчёты. Неотмеченные останутся перерывом.':'Приостановка будет отменена, обслуживание продолжится с текущего месяца.';if(ms.length)extra=`<div class="lbl" style="margin-top:10px">Пропущенные месяцы — что досоздать</div>${ms.map(x=>`<label class="check-row"><input type="checkbox" class="rb-m" value="${x}" checked><span class="grow">${esc(ymLabel(x))}: начисление за обслуживание и отчёты</span></label>`).join('')}`}}
-  openModal({form:true,render:()=>({title,sub:esc(k==='rep'||k==='pay'?`${T[o.t].short} · ${CPM[o.cp].name} · ${o.phuman}`:o.name||o.title||''),
+  openModal({form:true,render:()=>({title,sub:esc(k==='lead'?`${o.firm} · ${o.name}`:k==='rep'||k==='pay'?`${T[o.t].short} · ${CPM[o.cp].name} · ${o.phuman}`:o.name||o.title||''),
     body:`<div class="note">${ic('history')}<span>${cons}</span></div>${extra}${fld('Причина отката',`<textarea class="inp" id="rb-why" style="min-height:64px" placeholder="Например: статус поставили по ошибке"></textarea>`,{req:true,full:true,id:'rb-why'})}<div class="hint">Откат делается на один шаг и попадает в историю статусов с пометкой «Откат».</div>`,
     foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="rb-ok">${ic('history','sm')}Откатить</button>`,
     mount(el,m){$('#rb-ok',el).onclick=()=>{const why=val(el,'rb-why');if(!setErr(el,'rb-why',why?'':'Укажите причину'))return;const tag=`(откат: ${why})`;
@@ -96,14 +102,15 @@ function rollbackDlg(k,id,to){const o=objOf(k,id);if(!o)return;const st=k==='pay
       if(k==='task'){o.status=to;if(to!=='Выполнена'&&to!=='На подтверждении')o.doneAt=null;if(st==='Подтверждена'){o.confAt=null;o.confBy=null}log('t',o.id,`Статус: ${st} → ${to} ${tag}`)}
       if(k==='proj'){o.status=to;log('p',o.id,`Статус: ${st} → ${to} ${tag}`,o.cp)}
       if(k==='ind'){o.status=to;log('km',o.id,`Статус: ${st} → ${to} ${tag}`,o.cp)}
+      if(k==='lead')leadSet(o,to,' '+tag);
       if(k==='svc'){if(o.archived){o.archived=false;const l=lastPeriod(o);if(l&&l.to&&l.to>=ym(TODAY))l.to=null;else o.periods.push({from:ym(TODAY),to:null});applyService(o);log('cp',o.id,`Возвращён из архива ${tag}`,o.id)}
         else{const ms=$$('.rb-m',el).filter(x=>x.checked).map(x=>x.value).sort();unpauseActive(o,ms);applyService(o);const nf=fillServiceMonths(o,ms);
           log('cp',o.id,`Приостановка отменена ${tag}${ms.length?'; досоздано за: '+ms.map(ymLabel).join(', ')+(nf?` (отчётов: ${nf})`:''):''}`,o.id)}}
       m.close();refreshAll();toast('Откат выполнен','history')}}})})}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.scf [data-back],[data-unpause]');if(!b)return;e.stopPropagation();
-  if(b.dataset.unpause)return unpauseCp(CPM[+b.dataset.unpause]);const w=b.closest('.scf');if(!can('rollback'))return toast('Нет права «Откат статусов»','alert',true);rollbackDlg(w.dataset.sk,w.dataset.sid,b.dataset.back)},true);
+  if(b.dataset.unpause)return unpauseCp(CPM[+b.dataset.unpause]);const w=b.closest('.scf');if(w.dataset.sk!=='lead'&&!can('rollback'))return toast('Нет права «Откат статусов»','alert',true);rollbackDlg(w.dataset.sk,w.dataset.sid,b.dataset.back)},true);
 function stepTo(k,id,to){
-  if(k==='rep'||k==='pay'){const r=REPORTS.find(x=>x.id===+id);if(!r)return;
+  if(k==='rep'||k==='pay'){const r=REPORTS.find(x=>x.id===+id);if(!r)return;if(r.superseded)return toast(REP_OLD,'lock',true);
     if(k==='pay'){if(!can('money'))return toast('Нет права на учёт денег','alert',true);return payDlg(r)}
     if(!can('changeStatus'))return toast('Нет права менять статус','alert',true);
     if(to==='В работе')return setStatus(r,to);if(to==='Сдан'){const w=subPayWhy(r);if(w)return toast(w,'lock',true);return submitDlg([r])}return}
@@ -117,6 +124,7 @@ function stepTo(k,id,to){
     return confirmDlg({title:'Отметить месяц проверенным?',text:`${esc(o.name)}: значения проверены. Если потом изменить значение, месяц вернётся в «Заполнено» и потребует повторной проверки.`,ok:'Проверено',run:()=>{log('km',o.id,'Статус: Заполнено → Проверено',o.cp);o.status='Проверено';refreshAll();toast('Месяц отмечен проверенным')}})}
   if(k==='proj'){const p=PROJECTS.find(x=>x.id===id);if(!p)return;if(!can('projects'))return toast('Нет права менять проекты','alert',true);
     return confirmDlg({title:`Перевести проект в «${to}»?`,text:`Проект «${esc(p.name)}»: ${esc(p.status)} → ${esc(to)}. Это попадёт в историю статусов.`,ok:to==='Завершён'?'Завершить':'В работу',run:()=>setProjStatus(p,to)})}
+  if(k==='lead'){const o=LEADS.find(x=>x.id===id);if(o)leadStep(o,to);return}
 }
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('.scf [data-step]');if(!b)return;e.stopPropagation();const w=b.closest('.scf');stepTo(w.dataset.sk,w.dataset.sid,b.dataset.step)},true);
 /* История статусов: записи не редактируются; длительность — до следующей смены статуса или до сейчас */
@@ -133,6 +141,7 @@ function statusHist(k,o){const out=[];const add=(at,from,to,who,note,file)=>{if(
   if(k==='task'){let cur='К выполнению';add(o._ca||o.created,'',cur,o.by,'Задача поставлена');if(o._st0){add(o.doneAt?o.doneAt+' 17:30':(o._ca||o.created),cur,o._st0,o.exec,'');cur=o._st0}parse('t',o.id).forEach(h=>{let to=null,note='',f='';const m=h.what.match(rx);if(m){to=m[2].trim();note=[m[3],m[4]].filter(Boolean).join(', ');const fm=note.match(/,?\s*файл:\s*(.+)$/);if(fm){f=fm[1];note=note.slice(0,fm.index)}}else if(/^Задача выполнена/.test(h.what)){to='Выполнена';f=(h.what.match(/файл: (.+)$/)||[])[1]||''}else if(/^Не выполнена: /.test(h.what)){to='Не выполнена';note=h.what.slice(14)}else if(/^Задача отменена/.test(h.what)){to='Отменена'}if(to){add(h.at,cur,to,h.who,note,f);cur=to}});if(cur!==o.status)add(o._ua||o._ca,cur,o.status,o._ub||o.by,'')}
   if(k==='svc'){let cur='Обслуживается';add(o._ca||o.start,'',cur,o._cb||'system','Начало обслуживания');parse('cp',o.id).forEach(h=>{let to=/приостановлено/.test(h.what)?'Приостановлен':/возобновлено|Возвращён из архива|Приостановка отменена/.test(h.what)?'Обслуживается':/Отправлен в архив/.test(h.what)?'В архиве':null;if(to){const rb=h.what.match(/\(откат: (.*?)\)/);add(h.at,cur,to,h.who,rb?'откат: '+rb[1]:h.what.replace(/^Обслуживание приостановлено\s*/,'').replace(/^\.\s*/,''));cur=to}});if(cur!==o.status)add(o._ua||o._ca,cur,o.status,o._ub||'system','')}
   if(k==='ind'){let cur='Не заполнено';add(o._ca,'',cur,o._cb||'system','Месяц открыт для заполнения');parse('km',o.id).forEach(h=>{const m=h.what.match(rx);if(!m)return;const to=m[2].trim();add(h.at,cur,to,h.who,[m[3],m[4]].filter(Boolean).join(', '));cur=to})}
+  if(k==='lead'){let cur='Новая';add(o.at,'',cur,'guest','Заявка с сайта');(o.hist||[]).forEach(h=>{const m=h.what.match(rx);if(!m)return;const to=m[2].trim();add(h.at,cur,to,h.who,[m[3],m[4]].filter(Boolean).join(', '));cur=to})}
   if(k==='proj'){const hs=parse('p',o.id).map(h=>[h,h.what.match(rx)]).filter(x=>x[1]);let cur=hs.length?hs[0][1][1]:o.status;add(o._ca||o.from,'',cur,o._cb||o.lead,'Проект создан');hs.forEach(([h,m])=>{add(h.at,cur,m[2].trim(),h.who,[m[3],m[4]].filter(Boolean).join(', '));cur=m[2].trim()})}
   out.forEach((e,i)=>{const nx=out[i+1];e.ms=(nx?stAt(nx.at):stAt(nowStamp()))-stAt(e.at);e.now=!nx});return out}
 function statusHistHtml(k,o,title){const h=statusHist(k,o);if(!h.length)return '';if(k==='rep'||k==='pay'||k==='r')ckHit('hist');const map=SCALES[k].map();const tot={};h.forEach(e=>tot[e.to]=(tot[e.to]||0)+e.ms);
@@ -274,6 +283,6 @@ function waDlg({r,cp,fee,page}){
       a.onclick=e=>{if(noPhone||noReq){e.preventDefault();return}if(r)log('r',r.id,'Напоминание в WhatsApp отправлено контрагенту',c.id);else if(page)log('cp',c.id,'Ссылка на страницу контрагента с кодом отправлена в WhatsApp',c.id);else log('cp',c.id,'Напоминание в WhatsApp о долге за обслуживание',c.id);setTimeout(()=>{mm.close();toast('Записано в историю','chat')},150)}}};
   }});
 }
-const TPL_VARS={waTax:['контрагент','отчёт','период','срок','сумма','дата','реквизиты'],waFee:['контрагент','месяц','сумма','дата','реквизиты'],waPage:['контрагент','ссылка','код'],tgConfWait:['дней','список'],tgFix:['отчёт','причина','автор'],tgBefore:['дней','список'],tgToday:['список'],tgOver:['список'],tgPay:['дней','список'],tgWeek:['даты','n1','n2','n3'],tgCode:['код'],tgTask:['автор','задача','срок'],tgLinked:['логин'],tgPassChanged:['логин'],tgPassReset:['логин','кто'],tgRelinked:['логин','телеграм'],tgUnlinked:['логин'],tgLinkInvalid:[],tgStart:[]};
+const TPL_VARS={waTax:['контрагент','отчёт','период','срок','сумма','дата','реквизиты'],waFee:['контрагент','месяц','сумма','дата','реквизиты'],waPage:['контрагент','ссылка','код'],tgConfWait:['дней','список'],tgFix:['отчёт','причина','автор'],tgBefore:['дней','список'],tgToday:['список'],tgOver:['список'],tgPay:['дней','список'],tgWeek:['даты','n1','n2','n3'],tgCode:['код'],tgTask:['автор','задача','срок'],tgLinked:['логин'],tgPassChanged:['логин'],tgPassReset:['логин','кто'],tgRelinked:['логин','телеграм'],tgUnlinked:['логин'],tgLinkInvalid:[],tgStart:[],tgLead:['фирма','имя','телефон','клиентов']};
 const TPL=DB.ref.messageTemplates;
 

@@ -14,6 +14,7 @@ export const STATUS_TEXTS = {
   'status.scale.service': { ru: 'Обслуживание', section: 'Статусы' },
   'status.scale.project': { ru: 'Проект', section: 'Статусы' },
   'status.scale.indicator': { ru: 'Заполнение месяца', section: 'Статусы' },
+  'status.scale.lead': { ru: 'Заявка', section: 'Статусы' },
   'status.report.todo': { ru: 'К сдаче', section: 'Статусы' },
   'status.report.in_progress': { ru: 'В работе', section: 'Статусы' },
   'status.report.submitted': { ru: 'Сдан', section: 'Статусы' },
@@ -43,6 +44,10 @@ export const STATUS_TEXTS = {
   'status.indicator.empty': { ru: 'Не заполнено', section: 'Статусы' },
   'status.indicator.filled': { ru: 'Заполнено', section: 'Статусы' },
   'status.indicator.checked': { ru: 'Проверено', section: 'Статусы' },
+  'status.lead.new': { ru: 'Новая', section: 'Статусы' },
+  'status.lead.in_progress': { ru: 'В работе', section: 'Статусы' },
+  'status.lead.connected': { ru: 'Подключена', section: 'Статусы' },
+  'status.lead.rejected': { ru: 'Отказ', section: 'Статусы' },
   'status.step_of': { ru: 'Этап {i} из {n}: {name}', section: 'Статусы' },
   'status.set_at_by': { ru: 'Установлен {at}, {who}', section: 'Статусы' },
   'status.no_scale': { ru: '{name}: шкала не ведётся', section: 'Статусы' },
@@ -115,6 +120,8 @@ export const STATUS_TEXTS = {
     ru: 'Месяц снова будет ждать проверки. Внесённые значения не меняются.',
     section: 'Статусы',
   },
+  // Заявка: {name} — статус, в который она вернётся (прототип `rollbackDlg`, k === 'lead').
+  'status.rollback_effect.lead': { ru: 'Заявка вернётся в «{name}».', section: 'Статусы' },
   'samples.title': { ru: 'Образцы компонентов', section: 'Образцы' },
   'samples.hint': {
     ru: 'Демо-данные для проверки общих компонентов; ничего не сохраняется. На рабочем сайте этой страницы нет.',

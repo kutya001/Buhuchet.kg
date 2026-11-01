@@ -1,0 +1,2 @@
+ALTER TABLE "status_tones" DROP CONSTRAINT "status_tones_scale_check";--> statement-breakpoint
+ALTER TABLE "status_tones" ADD CONSTRAINT "status_tones_scale_check" CHECK ("status_tones"."scale" in ('report', 'payment', 'task', 'service', 'project', 'indicator', 'lead'));

@@ -28,7 +28,7 @@ const source = picked.join('\n');
 const context = vm.createContext({ REF: ref.statuses, OPS: [], CLOSED: new Set() });
 vm.runInContext(
   `'use strict';
-  const ST = REF.report, PST = REF.payment, TST = REF.task, SVST = REF.service, PRS = REF.project, KST = REF.indicator;
+  const ST = REF.report, PST = REF.payment, TST = REF.task, SVST = REF.service, PRS = REF.project, KST = REF.indicator, LDST = REF.lead;
   const ORG = { repConfirm: true };
   const tR = () => ({ payOnly: false });
   const ym = (d) => d.slice(0, 7);
@@ -48,6 +48,7 @@ const SCALES = {
   svc: ['service', 'service'],
   proj: ['project', 'project'],
   ind: ['indicator', 'indicator'],
+  lead: ['lead', 'lead'],
 };
 
 const position = [];

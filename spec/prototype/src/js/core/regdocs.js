@@ -11,6 +11,7 @@ function pdfjsScript(id,file){const ok=()=>id==='vendor-pdf'?!!window.pdfjsLib:!
   const tag=src=>new Promise(res=>{const s=document.createElement('script');s.src=src;s.onload=()=>res(ok());s.onerror=()=>res(false);document.head.appendChild(s)});
   return (async()=>{if(ok())return true;const t=document.getElementById(id);
     if(t){try{const s=document.createElement('script');s.textContent=t.textContent;document.head.appendChild(s)}catch(e){}if(ok())return true}
+    if(BU_P!=='bu.')return false;// демо-версия: только встроенная копия, без внешних запросов
     if(location.protocol!=='file:'||!t){if(await tag('vendor/pdfjs/'+file))return true}
     return tag(PDFJS_CDN+file)})()}
 function pdfjsLoad(){

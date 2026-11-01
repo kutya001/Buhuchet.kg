@@ -28,6 +28,7 @@ describe('Админка → «Статусы»: место статуса на 
       'service',
       'project',
       'indicator',
+      'lead',
     ]);
     expect(isAdminSystemDict('statuses')).toBe(true);
     expect(isAdminSystemDict('types')).toBe(false);

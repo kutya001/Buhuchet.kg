@@ -37,12 +37,17 @@ const SYSTEM_TEXTS = {
   'pdicts.status.scale.service': { ru: 'Статусы обслуживания контрагента', section: S },
   'pdicts.status.scale.project': { ru: 'Статусы проектов', section: S },
   'pdicts.status.scale.indicator': { ru: 'Статусы показателей', section: S },
+  'pdicts.status.scale.lead': { ru: 'Статусы заявок с сайта', section: S },
   'pdicts.status.note.report': {
     ru: '1 К сдаче → 2 В работе → 3 Сдан. Отметки «Ждёт подтверждения» и «Подтверждено» стоят на шаге «Сдан», если в учётной политике организации включено подтверждение сдачи.',
     section: S,
   },
   'pdicts.status.note.task': {
     ru: 'Только для ручных задач. Регулярная задача показывает статус своего отчёта. Без подтверждения: 1 К выполнению → 2 В работе → 3 Выполнена; с подтверждением: 1 → 2 → 3 На подтверждении → 4 Подтверждена; «На доработке» — отметка на шаге 2.',
+    section: S,
+  },
+  'pdicts.status.note.lead': {
+    ru: '1 Новая → 2 В работе → 3 Подключена; «Отказ» — конечная отметка вне шкалы, ставится с причиной.',
     section: S,
   },
   'pdicts.status.step': { ru: 'Этап {n}', section: S },
@@ -148,6 +153,7 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_unlinked': { ru: 'Telegram: отвязан', section: S },
   'pdicts.tpl.label.tg_link_invalid': { ru: 'Telegram: ссылка устарела', section: S },
   'pdicts.tpl.label.tg_start': { ru: 'Telegram: ответ на /start', section: S },
+  'pdicts.tpl.label.tg_lead': { ru: 'Telegram: новая заявка с сайта', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
   'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },

@@ -10,9 +10,9 @@ const obNew=()=>!!ORG.onboard;
 const obQuiz=()=>obNew()&&can('org')&&!ORG.onboard.done&&!ORG.onboard.later;
 // При входе: владельцу новой организации — приветствие с опросником вместо «Что нового»; сотрудникам новой организации — приветствие при самом первом входе
 function firstLogin(how){if(navigator.webdriver&&!store.get('wntest',false))return;if(isAdmin())return whatsNew(how);
-  let seen=null;if(how==='open')try{seen=sessionStorage.getItem('bu.wn.'+S.me)}catch(e){}
+  let seen=null;if(how==='open')try{seen=sessionStorage.getItem(BU_P+'wn.'+S.me)}catch(e){}
   const first=!store.get('kbw.'+S.me,false);
-  if(!seen&&obNew()&&(obQuiz()||first)){try{sessionStorage.setItem('bu.wn.'+S.me,'1')}catch(e){}store.set('kbw.'+S.me,true);setTimeout(()=>welcomeOpen({}),350);return}
+  if(!seen&&obNew()&&(obQuiz()||first)){try{sessionStorage.setItem(BU_P+'wn.'+S.me,'1')}catch(e){}store.set('kbw.'+S.me,true);setTimeout(()=>welcomeOpen({}),350);return}
   whatsNew(how)}
 // o.again — открыть снова из «Базы знаний» (без опросника); o.quiz — «Пройти опросник заново» из учётной политики
 function welcomeOpen(o={}){const quiz=o.quiz||(!o.again&&obQuiz());

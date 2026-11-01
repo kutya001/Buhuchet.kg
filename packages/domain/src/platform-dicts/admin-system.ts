@@ -39,7 +39,7 @@ export function isAdminSystemDict(value: string): value is AdminSystemDict {
 
 /**
  * Шкалы во вкладке «Статусы» — все шкалы системы, по порядку ТЗ: сдача отчётов, оплата, задачи,
- * обслуживание контрагента, проекты, показатели.
+ * обслуживание контрагента, проекты, показатели, заявки с сайта.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-12
 export const ADMIN_STATUS_SCALES: readonly StatusScaleKey[] = STATUS_SCALES;
@@ -222,6 +222,7 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgUnlinked: ['логин'],
   tgLinkInvalid: [],
   tgStart: [],
+  tgLead: ['фирма', 'имя', 'телефон', 'клиентов'],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -253,6 +254,7 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgUnlinked',
   'tgLinkInvalid',
   'tgStart',
+  'tgLead',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */
