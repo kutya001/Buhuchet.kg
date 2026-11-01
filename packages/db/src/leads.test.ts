@@ -1,19 +1,34 @@
 import { eq, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
+import { UI_TEXTS, type ListQuery } from '@buhuchet/domain';
 import {
   adminLeadById,
   adminLeadEvents,
   adminLeadList,
   adminNewLeadCount,
   deleteLead,
+  exportAdminLeads,
+  LeadLinkError,
+  listAdminLeadsPage,
+  listAdminLeadValues,
   setLeadAdminNote,
   setLeadStatus,
   submitLead,
   type LeadSubmission,
 } from './leads';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { platformLeadEvents, platformLeads, telegramLinks, telegramOutbox, users } from './schema';
+import { demoId } from './seed';
+import { seedDemoLeads } from './seed/demo-leads';
+import { readSpecJson } from './spec-data';
+import {
+  organizations,
+  platformLeadEvents,
+  platformLeads,
+  telegramLinks,
+  telegramOutbox,
+  users,
+} from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -23,6 +38,15 @@ import {
 
 const NOW = new Date('2026-11-01T04:00:00Z');
 const later = (hours: number) => new Date(NOW.getTime() + hours * 3_600_000);
+
+const t = (key: string) => (UI_TEXTS as Record<string, { ru: string }>)[key]?.ru ?? key;
+const query = (over: Partial<ListQuery> = {}): ListQuery => ({
+  page: 1,
+  size: 50,
+  sort: { key: 'at', dir: 'desc' },
+  filters: {},
+  ...over,
+});
 
 const noRights = expect.objectContaining({
   cause: expect.objectContaining({ message: expect.stringMatching(/permission denied/) }),
@@ -391,5 +415,149 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
     // Имя и телефон не остаются в журнале Telegram; сообщение о другой заявке — на месте.
     expect(await leadMessages(id)).toEqual([]);
     expect(await leadMessages(other.leadId!)).toHaveLength(1);
+  });
+
+  it('вкладка «Заявки» на сервере: поиск по телефону без «+», сортировка по шкале, фильтр статуса, «Изменил», выгрузка', async () => {
+    const { leadId } = await submitLead(
+      db.app.db,
+      lead({ phone: '+996777123987', firm: 'ОсОО «Поиск»', now: later(5) }),
+    );
+    const found = await asAdmin((tx) =>
+      listAdminLeadsPage(tx, query({ search: { q: '777 123 987', keys: ['phone'] } }), t),
+    );
+    expect(found.rows.map((r) => r.id)).toEqual([leadId]);
+    expect(found.rows[0]).toMatchObject({ status: 'new', updatedByGuest: true });
+    await asAdmin((tx) =>
+      setLeadStatus(tx, {
+        id: leadId!,
+        version: 1,
+        to: 'in_progress',
+        before: null,
+        now: later(6),
+      }),
+    );
+    const sorted = await asAdmin((tx) =>
+      listAdminLeadsPage(tx, query({ sort: { key: 'status', dir: 'asc' }, size: 'all' }), t),
+    );
+    const order = ['new', 'in_progress', 'connected', 'rejected'];
+    const ranks = sorted.rows.map((r) => order.indexOf(r.status));
+    expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+    const values = await asAdmin((tx) => listAdminLeadValues(tx, 'status', t));
+    expect(values.items.find((x) => x.value === 'in_progress')).toMatchObject({
+      label: 'В работе',
+    });
+    const byAdmin = await asAdmin((tx) =>
+      listAdminLeadsPage(
+        tx,
+        query({ filters: { updatedBy: { type: 'enum', vals: ['Администратор платформы'] } } }),
+        t,
+      ),
+    );
+    expect(byAdmin.rows.map((r) => r.id)).toContain(leadId);
+    expect(byAdmin.rows.every((r) => !r.updatedByGuest)).toBe(true);
+    const file = await asAdmin((tx) =>
+      exportAdminLeads(
+        tx,
+        query({ search: { q: 'Поиск', keys: ['firm'] } }),
+        ['firm', 'status'],
+        t,
+      ),
+    );
+    expect(file.rows).toEqual([['ОсОО «Поиск»', 'В работе']]);
+    // Сотруднику организации — пусто.
+    const none = await withUserContext(db.app.db, org.ownerUserId, (tx) =>
+      listAdminLeadsPage(tx, query(), t),
+    );
+    expect(none).toMatchObject({ rows: [], total: 0 });
+  });
+
+  it('«Создать организацию» по заявке: в той же транзакции «Подключена» и ссылка; вторая — отказ, организация не создаётся', async () => {
+    const { leadId } = await submitLead(db.app.db, lead({ firm: 'ОсОО «Бета»' }));
+    const id = leadId!;
+    await asAdmin((tx) =>
+      setLeadStatus(tx, {
+        id,
+        version: 1,
+        to: 'rejected',
+        before: 'new',
+        text: 'дорого',
+        now: later(1),
+      }),
+    );
+    const created = await createOrganization(db.app.db, {
+      name: 'ОсОО «Бета»',
+      inn: '01811201810457',
+      slug: 'beta',
+      owner: { fullName: 'Бекова Бермет', login: 'bekova', passwordHash: 'h' },
+      createdBy: adminId,
+      lead: { id, now: later(2) },
+    });
+    expect(await asAdmin((tx) => adminLeadById(tx, id))).toMatchObject({
+      status: 'connected',
+      statusBefore: null,
+      createdOrgId: created.orgId,
+      orgName: 'ОсОО «Бета»',
+      updatedBy: adminId,
+      updatedByGuest: false,
+    });
+    expect((await asAdmin((tx) => adminLeadEvents(tx, id))).at(-1)).toMatchObject({
+      kind: 'org',
+      fromStatus: 'rejected',
+      toStatus: 'connected',
+      text: 'ОсОО «Бета»',
+      actorLogin: 'platform',
+    });
+    const again = createOrganization(db.app.db, {
+      name: 'ОсОО «Бета-2»',
+      inn: '01811201810458',
+      slug: 'beta-2',
+      owner: { fullName: 'Бекова Бермет', login: 'bekova2', passwordHash: 'h' },
+      createdBy: adminId,
+      lead: { id, now: later(3) },
+    });
+    await expect(again).rejects.toEqual(new LeadLinkError('org_exists'));
+    expect(await db.admin.db.$count(organizations, eq(organizations.slug, 'beta-2'))).toBe(0);
+    // Заявки нет (её удалили, пока открыта форма) — организация не создаётся.
+    await expect(
+      createOrganization(db.app.db, {
+        name: 'ОсОО «Гамма»',
+        inn: '01811201810459',
+        slug: 'gamma',
+        owner: { fullName: 'Гаврилов Глеб', login: 'gavrilov', passwordHash: 'h' },
+        createdBy: adminId,
+        lead: { id: '00000000-0000-4000-8000-000000000000', now: later(3) },
+      }),
+    ).rejects.toEqual(new LeadLinkError('not_found'));
+    expect(await db.admin.db.$count(organizations, eq(organizations.slug, 'gamma'))).toBe(0);
+  });
+
+  it('демо-заявки из demoDB.json: статусы, «Отказ» со статусом до отказа, история; повтор не дублирует', async () => {
+    const file = await readSpecJson('data/demoDB.json');
+    await seedDemoLeads(db.admin.db, file, demoId);
+    await seedDemoLeads(db.admin.db, file, demoId);
+    const l2 = await asAdmin((tx) => adminLeadById(tx, demoId('lead', 'L2')));
+    expect(l2).toMatchObject({
+      name: 'Гульнара Асанова',
+      phone: '+996555432198',
+      status: 'in_progress',
+      telegram: null,
+      adminNote: 'Позвонили 31.10, показ программы в понедельник в 11:00',
+      updatedByGuest: false,
+    });
+    const l3 = await asAdmin((tx) => adminLeadById(tx, demoId('lead', 'L3')));
+    expect(l3).toMatchObject({ status: 'rejected', statusBefore: 'in_progress' });
+    const events = await asAdmin((tx) => adminLeadEvents(tx, demoId('lead', 'L3')));
+    expect(events.map((e) => [e.kind, e.fromStatus, e.toStatus, e.text])).toEqual([
+      ['created', null, 'new', null],
+      ['status', 'new', 'in_progress', null],
+      [
+        'status',
+        'in_progress',
+        'rejected',
+        'нужна программа бухгалтерского учёта с проводками, а не учёт отчётов',
+      ],
+    ]);
+    const l1 = await asAdmin((tx) => adminLeadById(tx, demoId('lead', 'L1')));
+    expect(l1).toMatchObject({ status: 'new', updatedByGuest: true });
   });
 });

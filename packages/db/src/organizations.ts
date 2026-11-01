@@ -20,6 +20,7 @@ import type { Db, Tx } from './client';
 import { withOrgContext } from './context';
 import { uniqueViolation } from './errors';
 import { writeHistory } from './history';
+import { connectLeadToOrganization } from './leads';
 import { startOnboarding } from './onboarding';
 import {
   employees,
@@ -50,6 +51,12 @@ export interface CreateOrganizationInput {
   createdBy?: string | null;
   /** Сегодня по Бишкеку — «Вести с» показателей-примеров; без него — по часам сервера. */
   today?: IsoDate;
+  /**
+   * «Создать организацию» по заявке с сайта (прототип addOrgDlg с `lead`): в той же транзакции заявка
+   * получает «Подключена» и ссылку на организацию; заявки нет или по ней уже создана организация —
+   * `LeadLinkError`, и организация не создаётся.
+   */
+  lead?: { id: string; now: Date } | null;
 }
 
 export interface CreatedOrganization {
@@ -249,6 +256,10 @@ async function insertOrganization(
       changes: [{ field: 'name', to: i.name }],
     })),
   );
+
+  if (input.lead) {
+    await connectLeadToOrganization(tx, { ...input.lead, orgId, orgName: input.name });
+  }
 
   return { orgId, ownerUserId: user!.id, ownerEmployeeId: employee!.id, roles: created };
 }

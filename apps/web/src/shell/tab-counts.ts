@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { missingSummaryQuery } from '../kpi/kpi-data';
 import { contractorTabCountsQuery } from '../contractors/contractor-data';
 import { finSummaryQuery } from '../finance/journal-data';
+import { leadSummaryQuery } from '../admin/leads-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { newsDraftsCountQuery } from '../news/news-data';
@@ -24,7 +25,7 @@ export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, Shel
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
  * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Контрагентов», «Отчетов для сдачи»,
  * «Сотрудников», «Задач», «Проектов и услуг» в «Финансовых операциях», «Проектов контрагентов», «Показателей контрагентов» («Не заполнено»), у «Запросов» «Справочников
- * платформы» и черновики «Новостей» в Админке; у остальных их добавят их экраны. Запрос — только для
+ * платформы», черновики «Новостей» и новые «Заявки» в Админке; у остальных их добавят их экраны. Запрос — только для
  * модулей, доступных пользователю; пока ответа нет или запрос не удался — вкладки без чисел.
  */
 export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
@@ -38,6 +39,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const kpi = useQuery({ ...missingSummaryQuery, enabled: modules.includes('kpi') });
   const pdicts = useQuery({ ...pdictsTabCountsQuery, enabled: modules.includes('pdicts') });
   const kbadm = useQuery({ ...newsDraftsCountQuery, enabled: modules.includes('kbadm') });
+  const leads = useQuery({ ...leadSummaryQuery, enabled: modules.includes('orgs') });
   return useMemo(
     () => ({
       ...(cps.data ? { cps: cps.data } : {}),
@@ -50,6 +52,8 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
       ...(kbadm.data ? { kbadm: kbadm.data } : {}),
+      // «Заявки» — новых заявок с сайта (прототип registry.js: `count: leadNew()`).
+      ...(leads.data ? { orgs: { leads: { value: leads.data.fresh } } } : {}),
     }),
     [
       cps.data,
@@ -61,6 +65,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       kpi.data,
       pdicts.data,
       kbadm.data,
+      leads.data,
       t,
     ],
   );

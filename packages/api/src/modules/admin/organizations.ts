@@ -4,8 +4,10 @@ import {
   adminGetOrganization,
   adminOrgSlugs,
   adminOrgSummary,
+  adminLeadById,
   adminSetOrganizationStatus,
   exportAdminOrgs,
+  LeadLinkError,
   listAdminOrgsPage,
   listAdminOrgValues,
   withOrgContext,
@@ -17,6 +19,7 @@ import {
   bishkekDate,
   isValidLogin,
   isValidOrgInn,
+  LEAD_MESSAGES,
   normalizeLogin,
   ORG_PROFILE_MESSAGES,
   RecordChangedError,
@@ -244,8 +247,17 @@ export const createOrganizationRoute = createRoute({
     },
     400: { description: 'Неверные данные, ИНН или логин заняты', content: error },
     ...denied,
+    404: { description: 'Заявки, по которой создаётся организация, нет', content: error },
+    409: { description: 'По заявке уже создана организация', content: error },
   },
 });
+
+/** Отказ по заявке, по которой создаётся организация. */
+function leadFail(reason: LeadLinkError['reason']): never {
+  return reason === 'not_found'
+    ? apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found)
+    : apiFail(409, 'lead_org_exists', LEAD_MESSAGES.lead_org_exists);
+}
 
 /** Отказ в данных новой организации: код и текст для поля формы. */
 function inputFail(err: OrganizationInputError): never {
@@ -277,7 +289,9 @@ function inputFail(err: OrganizationInputError): never {
  * (уникален на платформе), временный пароль — при первом входе владелец его меняет. Организация
  * получает копии шаблонов ролей и учётную политику по умолчанию (`createOrganization`); адрес страницы
  * — первый свободный по названию (прототип slugFree). Создание пишется в историю организации от имени
- * администратора.
+ * администратора. По заявке с сайта (`leadId`, прототип addOrgDlg с `lead`) заявка в той же транзакции
+ * получает «Подключена» и ссылку на организацию; заявки нет или по ней уже создана организация —
+ * организация не создаётся.
  */
 export function createOrganizationHandler(
   deps: ApiDeps,
@@ -290,6 +304,12 @@ export function createOrganizationHandler(
     if (!isValidLogin(login)) {
       apiFail(400, 'invalid_login', 'Латиница, цифры, точка, дефис; от 3 символов');
     }
+    if (body.leadId) {
+      const leadId = body.leadId;
+      const lead = await withUserContext(deps.db, adminId, (tx) => adminLeadById(tx, leadId));
+      if (!lead) leadFail('not_found');
+      if (lead.createdOrgId) leadFail('org_exists');
+    }
     const taken = await withUserContext(deps.db, adminId, (tx) => adminOrgSlugs(tx));
     const passwordHash = await hashPassword(body.temporaryPassword);
     let orgId: string;
@@ -301,9 +321,11 @@ export function createOrganizationHandler(
         owner: { fullName: body.ownerFullName, login, passwordHash },
         createdBy: adminId,
         today: bishkekDate(deps.clock.now()),
+        lead: body.leadId ? { id: body.leadId, now: deps.clock.now() } : null,
       }));
     } catch (err) {
       if (err instanceof OrganizationInputError) inputFail(err);
+      if (err instanceof LeadLinkError) leadFail(err.reason);
       throw err;
     }
     const organization = await withUserContext(deps.db, adminId, (tx) =>

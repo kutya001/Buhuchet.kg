@@ -39,6 +39,7 @@ import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
+import { leadSummaryQuery } from './leads-data';
 import { NewOrganizationDialog } from './new-org-dialog';
 import { orgMenu } from './orgs-menu';
 
@@ -174,8 +175,11 @@ function useOrgsRefresh() {
   }, [client]);
 }
 
-/** «+ Добавить» → «Организация» (прототип core/registry.js, ADM orgs → addOrgDlg). */
-function useOrgsAddRequest(run: () => void) {
+/**
+ * «+ Добавить» → «Организация» (прототип core/registry.js, ADM orgs → addOrgDlg) — на обеих вкладках
+ * модуля: «Организации» и «Заявки».
+ */
+export function useOrgsAddRequest(run: () => void) {
   const { addRequest, clearAddRequest } = useShell();
   const request = addRequest?.moduleId === 'orgs' ? addRequest : null;
   const start = useEffectEvent((actionId: string) => {
@@ -191,7 +195,8 @@ function useOrgsAddRequest(run: () => void) {
 /**
  * Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; прототип admin/accounts-orgs.js,
  * renderOrgs): плашки — активных организаций, контрагентов на платформе, пользователей организаций,
- * запросов на добавление в справочники (нажатие открывает «Справочники платформы» → «Запросы»).
+ * запросов на добавление в справочники (нажатие открывает «Справочники платформы» → «Запросы»),
+ * новых заявок с сайта (нажатие открывает вкладку «Заявки»).
  * Список всех организаций платформы с поиском, фильтрами, группировкой и «В Excel»; заблокированные —
  * приглушённо, причина — подсказкой у метки «Заблокирована». Действия — «Заблокировать» после вопроса
  * (демо-организацию стенда не блокируют) и «Разблокировать» сразу; «+ Добавить» — «Новая организация».
@@ -206,6 +211,7 @@ export function OrgsList() {
   const view = useViewSettings('orgs.list');
   const stats = useModuleStats('orgs');
   const summary = useQuery(summaryQuery);
+  const leads = useQuery(leadSummaryQuery);
   const { search, clearSearch } = useShell();
   const refresh = useOrgsRefresh();
   const list = useListPage({
@@ -258,6 +264,7 @@ export function OrgsList() {
   });
   const plate = (n: number | undefined) => (n === undefined ? '' : formatCount(n));
   const requests = summary.data?.requests ?? 0;
+  const fresh = leads.data?.fresh ?? 0;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -292,6 +299,15 @@ export function OrgsList() {
           value={plate(summary.data?.requests)}
           sub={t('orgs.plate.requests_sub')}
           onClick={() => router.push(tabHref('pdicts', 'requests'))}
+        />
+        <Plate
+          id="e"
+          icon="send"
+          color={fresh ? 'blue' : 'green'}
+          label={t('orgs.plate.leads')}
+          value={plate(leads.data?.fresh)}
+          sub={t('orgs.plate.leads_sub')}
+          onClick={() => router.push(tabHref('orgs', 'leads'))}
         />
       </Plates>
       <DataGrid

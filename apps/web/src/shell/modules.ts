@@ -366,6 +366,11 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     title: 'nav.organizations',
     short: 'nav.short.orgs',
     desc: 'nav.desc.orgs',
+    // «Заявки» — заявки с лендинга, счётчик новых (прототип core/registry.js, задача #165).
+    tabs: [
+      { id: 'list', icon: 'building', label: 'tab.orgs.list' },
+      { id: 'leads', icon: 'send', label: 'tab.orgs.leads' },
+    ],
     add: [{ id: 'org', icon: 'building', label: 'add.orgs.org' }],
   },
   // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).

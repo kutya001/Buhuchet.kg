@@ -492,6 +492,8 @@ export const GRID_KEYS = [
   'kbadm.news',
   'accounts.list',
   'orgs.list',
+  // Админка → «Организации» → «Заявки» (задача #165).
+  'orgs.leads',
   'l10n.list',
   'dicts.types',
   // «Справочники платформы»: «Поиск по всем значениям» и окно каждого справочника (ORG_DICT_WINDOW_IDS).
