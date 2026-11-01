@@ -301,19 +301,25 @@ export function PaymentsBox({
                   ),
                 },
               })),
+              // Итог «Получено» — строкой таблицы, как `tr.m-total` прототипа.
+              {
+                key: 'total',
+                total: true,
+                blank: ['note', 'by', 'files', 'menu'],
+                cells: {
+                  date: t('proj.pays.total'),
+                  amount: (
+                    <span className="tabular-nums" data-pj-paid="">
+                      {formatSom(money.paid)}
+                    </span>
+                  ),
+                },
+              },
             ]}
           />
         ) : (
           <span className="text-faint">{t('proj.pays.empty')}</span>
         )}
-        {pays.length ? (
-          <div className="flex items-center justify-between gap-3 px-1 font-semibold">
-            <span>{t('proj.pays.total')}</span>
-            <span className="tabular-nums" data-pj-paid="">
-              {formatSom(money.paid)}
-            </span>
-          </div>
-        ) : null}
       </div>
       <span className="block text-[12.5px] text-muted">{t('proj.pays.hint')}</span>
       {menu ? (

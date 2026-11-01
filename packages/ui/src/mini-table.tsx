@@ -19,6 +19,8 @@ export interface MiniRow {
   wide?: readonly string[];
   /** Пустые ячейки («—»): на телефоне скрыты (прототип `m-empty`). */
   blank?: readonly string[];
+  /** Итоговая строка таблицы-карточек (прототип `tr.m-total`): жирная, на телефоне — серый фон; не открывается. */
+  total?: boolean;
 }
 
 /** Значение длиннее стольких знаков на телефоне занимает всю ширину карточки (прототип `MC_LONG`). */
@@ -113,7 +115,8 @@ export function MiniTable({
             rows.map((row) => (
               <tr
                 key={row.key}
-                {...(onOpen
+                {...(row.total ? { 'data-mini-total': '' } : {})}
+                {...(onOpen && !row.total
                   ? {
                       'data-open': '',
                       tabIndex: 0,
@@ -125,7 +128,7 @@ export function MiniTable({
                       },
                     }
                   : {})}
-                className="data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none md:last:[&>td]:border-b-0 max-md:relative max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0"
+                className="data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none data-mini-total:font-bold md:last:[&>td]:border-b-0 max-md:relative max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0 max-md:data-mini-total:bg-pane-alt"
               >
                 {columns.map((c, i) => (
                   <td
