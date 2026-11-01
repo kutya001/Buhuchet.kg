@@ -83,6 +83,40 @@ describe('createTelegramBotApi', () => {
     });
     await expect(failing.setWebhook('x', 'y')).rejects.toThrow(/bad url/);
   });
+
+  it('getWebhookInfo: адрес, последняя ошибка и её время; ошибка Bot API — исключение', async () => {
+    const fetch = fetchReturning({
+      ok: true,
+      result: {
+        url: 'https://test.buhuchet.kg/api/telegram/webhook',
+        pending_update_count: 2,
+        last_error_date: 1_793_512_800,
+        last_error_message: 'Wrong response from the webhook: 502 Bad Gateway',
+      },
+    });
+    const info = await createTelegramBotApi({
+      token: 't',
+      fetch,
+      apiBase: 'http://tg.local',
+    }).getWebhookInfo();
+    expect(fetch.mock.calls[0]![0]).toBe('http://tg.local/bott/getWebhookInfo');
+    expect(info).toEqual({
+      url: 'https://test.buhuchet.kg/api/telegram/webhook',
+      pendingUpdates: 2,
+      lastErrorAt: new Date(1_793_512_800 * 1000),
+      lastError: 'Wrong response from the webhook: 502 Bad Gateway',
+    });
+    const empty = await createTelegramBotApi({
+      token: 't',
+      fetch: fetchReturning({ ok: true, result: { url: '' } }),
+    }).getWebhookInfo();
+    expect(empty).toEqual({ url: '', pendingUpdates: 0, lastErrorAt: null, lastError: null });
+    const failing = createTelegramBotApi({
+      token: 't',
+      fetch: fetchReturning({ ok: false, error_code: 401, description: 'Unauthorized' }),
+    });
+    await expect(failing.getWebhookInfo()).rejects.toThrow(/Unauthorized/);
+  });
 });
 
 describe('createFakeTelegram', () => {
@@ -100,6 +134,16 @@ describe('createFakeTelegram', () => {
     expect(tg.sent).toEqual([{ chatId: 1, text: 'b', options: {} }]);
     await tg.setWebhook('u', 's');
     expect(tg.webhook).toEqual({ url: 'u', secretToken: 's' });
+    expect(await tg.getWebhookInfo()).toEqual({
+      url: 'u',
+      pendingUpdates: 0,
+      lastErrorAt: null,
+      lastError: null,
+    });
+    tg.webhookInfo = { lastError: 'x' };
+    expect((await tg.getWebhookInfo()).lastError).toBe('x');
+    tg.webhookInfo = new Error('down');
+    await expect(tg.getWebhookInfo()).rejects.toThrow('down');
   });
 });
 

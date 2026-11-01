@@ -194,7 +194,7 @@ export const SHELL_TEXTS = {
   'tab.kbadm.levels': { ru: 'Уровни', section: 'Вкладки' },
   'tab.kbadm.news': { ru: 'Новости', section: 'Вкладки' },
   'tab.tg.log': { ru: 'Журнал', section: 'Вкладки' },
-  'tab.tg.bot': { ru: 'Настройка бота', section: 'Вкладки' },
+  'tab.tg.bot': { ru: 'Бот платформы', section: 'Вкладки' },
   'tab.tg.cast': { ru: 'Рассылка', section: 'Вкладки' },
 
   // «+ Добавить»: способы добавления

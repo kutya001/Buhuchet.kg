@@ -42,6 +42,8 @@ export const HISTORY_ENTITIES = [
   'news',
   'ui_text',
   'platform_dict',
+  // Админка → «Телеграм» → «Рассылка»: кто, когда, кому и с каким текстом поставил объявление (задача 2.41).
+  'telegram_broadcast',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 

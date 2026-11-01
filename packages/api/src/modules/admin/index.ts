@@ -17,6 +17,24 @@ import {
 } from './organizations';
 import { adminResetPasswordHandler, adminResetPasswordRoute } from './password-reset';
 import {
+  telegramBotHandler,
+  telegramBotRoute,
+  telegramBroadcastHandler,
+  telegramBroadcastRoute,
+  telegramLogExportHandler,
+  telegramLogExportRoute,
+  telegramLogHandler,
+  telegramLogRoute,
+  telegramLogValuesHandler,
+  telegramLogValuesRoute,
+  telegramOrgsHandler,
+  telegramOrgsRoute,
+  telegramRetryHandler,
+  telegramRetryRoute,
+  telegramSummaryHandler,
+  telegramSummaryRoute,
+} from './telegram';
+import {
   blockUserRoute,
   exportUsersHandler,
   exportUsersRoute,
@@ -30,8 +48,8 @@ import {
 
 /**
  * Модуль «Админка»: «Учётные записи» — список всех пользователей платформы, сброс пароля (#6),
- * блокировка; «Организации» — список, создание вместе с владельцем, блокировка; остальные разделы —
- * поток Д.
+ * блокировка; «Организации» — список, создание вместе с владельцем, блокировка; «Телеграм» — журнал
+ * отправок с повтором, вебхук бота платформы, рассылка (задача 2.41).
  */
 export function adminModule(deps: ApiDeps) {
   return createModuleApp()
@@ -47,5 +65,13 @@ export function adminModule(deps: ApiDeps) {
     .openapi(organizationSummaryRoute, organizationSummaryHandler(deps))
     .openapi(createOrganizationRoute, createOrganizationHandler(deps))
     .openapi(blockOrganizationRoute, organizationStatusHandler(deps, 'block'))
-    .openapi(unblockOrganizationRoute, organizationStatusHandler(deps, 'unblock'));
+    .openapi(unblockOrganizationRoute, organizationStatusHandler(deps, 'unblock'))
+    .openapi(telegramLogRoute, telegramLogHandler(deps))
+    .openapi(telegramLogValuesRoute, telegramLogValuesHandler(deps))
+    .openapi(telegramLogExportRoute, telegramLogExportHandler(deps))
+    .openapi(telegramSummaryRoute, telegramSummaryHandler(deps))
+    .openapi(telegramRetryRoute, telegramRetryHandler(deps))
+    .openapi(telegramBotRoute, telegramBotHandler(deps))
+    .openapi(telegramOrgsRoute, telegramOrgsHandler(deps))
+    .openapi(telegramBroadcastRoute, telegramBroadcastHandler(deps));
 }
