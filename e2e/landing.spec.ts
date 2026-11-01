@@ -143,7 +143,7 @@ test.describe('Этап 3: лендинг для гостей (задача #165
 
     await form.getByRole('button', { name: 'обработку персональных данных' }).click();
     const consent = page.getByRole('dialog', { name: 'Согласие на обработку персональных данных' });
-    await expect(consent).toContainText('Закону КР «Об информации персонального характера»');
+    await expect(consent).toContainText('Законом КР «Об информации персонального характера»');
     await consent.getByRole('button', { name: 'Понятно' }).click();
     await form.getByLabel(/Согласен на/).check();
 
@@ -227,21 +227,19 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     page.on('request', onRequest);
     // Новый контрагент и отчёт «Сдан» — данными самой демо-версии (как их сохраняют её формы):
     // формы прототипа проверяет его репозиторий, здесь — что всё остаётся в браузере гостя.
+    // Данные демо-версии — переменные её скрипта (`const CPS`, `let TODAY`), а не свойства `window`:
+    // их видит только выражение, выполненное в странице.
     const made = await page
-      .evaluate(() => {
-        const w = window as unknown as {
-          CPS: Record<string, unknown>[];
-          REPORTS: { status: string; superseded?: boolean; subDate?: string }[];
-          TODAY: string;
-          dbSoon: () => void;
-        };
-        w.CPS.push({ ...structuredClone(w.CPS[0]), id: 990001, name: 'ОсОО «Сквозная демо»' });
-        const report = w.REPORTS.find((r) => r.status === 'К сдаче' && !r.superseded)!;
-        report.status = 'Сдан';
-        report.subDate = w.TODAY;
-        w.dbSoon();
-        return true;
-      })
+      .evaluate(
+        `(() => {
+          CPS.push({ ...structuredClone(CPS[0]), id: 990001, name: 'ОсОО «Сквозная демо»' });
+          const report = REPORTS.find((r) => r.status === 'К сдаче' && !r.superseded);
+          report.status = 'Сдан';
+          report.subDate = TODAY;
+          dbSoon();
+          return true;
+        })()`,
+      )
       .catch(() => false);
     expect(made).toBe(true);
     await expect
