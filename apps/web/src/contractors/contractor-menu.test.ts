@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
 import {
   contractorMenuEntries,
+  newProjectMenuEntries,
   oneOffMenuEntries,
   serviceScaleSteps,
   type ContractorRights,
@@ -209,5 +210,43 @@ describe('«Разовая услуга» в меню контрагента', (
       projects,
     });
     expect(item(list, 'one-off')).toBeUndefined();
+  });
+});
+
+describe('«Новый проект» в меню контрагента (задача 2.26)', () => {
+  const FEE: ActionEntry[] = [
+    { id: 'fee-accept', label: 'Принять оплату за обслуживание', icon: 'coins', run: () => {} },
+    { id: 'fee-remind', label: 'Напомнить о долге в WhatsApp', icon: 'chat', run: () => {} },
+  ];
+
+  it('после «Разовой услуги», перед «Напомнить о долге…»; открывает окно проекта', () => {
+    const add = vi.fn();
+    const projects = [
+      ...oneOffMenuEntries({ on: true, inScope: true, t, run: () => {} }),
+      ...newProjectMenuEntries({ on: true, inScope: true, t, run: add }),
+    ];
+    const list = contractorMenuEntries({
+      c: cp(),
+      rights: NONE,
+      t,
+      run: run(),
+      service: [],
+      fee: FEE,
+      projects,
+    });
+    expect(labels(list)).toEqual([
+      'Открыть карточку',
+      'Принять оплату за обслуживание',
+      'Разовая услуга',
+      'Новый проект',
+      'Напомнить о долге в WhatsApp',
+    ]);
+    item(list, 'new-project')!.run?.();
+    expect(add).toHaveBeenCalledOnce();
+  });
+
+  it('без права «Вести проекты», без «Проектов контрагентов» или вне своей области — пункта нет', () => {
+    expect(newProjectMenuEntries({ on: false, inScope: true, t, run: () => {} })).toEqual([]);
+    expect(newProjectMenuEntries({ on: true, inScope: false, t, run: () => {} })).toEqual([]);
   });
 });

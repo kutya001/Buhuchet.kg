@@ -72,5 +72,9 @@ export function useTasksRefresh() {
     for (const tab of ['mine', 'byme', 'all', 'overdue'])
       void client.invalidateQueries({ queryKey: ['list', `tasks.${tab}`] });
     void client.invalidateQueries({ queryKey: ['files', 'task'] });
+    // Задачи проекта — в его карточке и в столбце «Задач открыто» (задача 2.26).
+    void client.invalidateQueries({ queryKey: ['projects'] });
+    for (const tab of ['active', 'all', 'mine'])
+      void client.invalidateQueries({ queryKey: ['list', `projects.${tab}`] });
   }, [client]);
 }

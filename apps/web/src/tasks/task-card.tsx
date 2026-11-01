@@ -35,6 +35,7 @@ import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { ContractorLink } from '../contractors/contractor-link';
 import { RecordFiles } from '../files/record-files';
+import { ProjectLink } from '../projects/project-link';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { historyLabels, historyView, scaleView, statusEvents } from '../status/status-view';
@@ -48,13 +49,20 @@ const date = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
 /** Строки «подпись — значение» карточки (прототип `openTask`, `.kv`). */
 function cardItems(t: Translate, task: Task): KeyValueItem[] {
   const items: KeyValueItem[] = [];
-  if (task.contractor)
+  if (task.contractor) {
     items.push({
       id: 'cp',
       label: t('task.kv.cp'),
       value: <ContractorLink id={task.contractor.id} name={task.contractor.name} />,
     });
-  else items.push({ id: 'scope', label: t('task.kv.scope'), value: t('task.kv.general') });
+    // Проект задачи (задача 2.26; прототип `openTask`: «Проект» ссылкой на карточку проекта).
+    if (task.project)
+      items.push({
+        id: 'project',
+        label: t('task.card.project'),
+        value: <ProjectLink id={task.project.id} name={task.project.name} />,
+      });
+  } else items.push({ id: 'scope', label: t('task.kv.scope'), value: t('task.kv.general') });
   items.push(
     {
       id: 'created',

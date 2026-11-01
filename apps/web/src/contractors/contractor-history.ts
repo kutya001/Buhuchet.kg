@@ -21,6 +21,7 @@ import {
   serviceHistoryText,
 } from '../finance/finance-history';
 import type { Translate } from '../l10n/translate';
+import { projectHistoryText } from '../projects/project-history';
 import { reportHistoryText } from '../reports/report-history';
 
 type Entry = ContractorHistory['items'][number];
@@ -381,6 +382,10 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     case 'one_off_service':
     case 'one_off_service_payment':
       return serviceHistoryText(t, e, () => reportHistoryText(t, { ...e, reason: null }, 0));
+    // Проект (задача 2.26): тексты — как в карточке проекта (прототип `log('p', …)`: «Проект «…» создан»,
+    // «Сделано: …»), без названия проекта перед записью.
+    case 'project':
+      return projectHistoryText(t, e, names);
     default:
       lines = [];
   }

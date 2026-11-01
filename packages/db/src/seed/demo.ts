@@ -18,6 +18,7 @@ import { seedDemoFees } from './demo-fees';
 import { seedDemoMoney } from './demo-money';
 import { seedDemoMoneyTax } from './demo-money-tax';
 import { seedDemoKpi } from './demo-kpi';
+import { seedDemoProjects } from './demo-projects';
 import { seedDemoReports } from './demo-reports';
 import { seedDemoServices } from './demo-services';
 import { seedDemoTasks } from './demo-tasks';
@@ -52,6 +53,8 @@ export type DemoKind =
   | 'fee_payment'
   | 'one_off_service'
   | 'one_off_service_payment'
+  | 'project'
+  | 'project_work'
   | 'indicator'
   | 'indicator_value'
   | 'indicator_month'
@@ -316,6 +319,8 @@ export async function seedDemoOrganization(
   await seedDemoContractorPages(db, file, { orgId, demoId, employees: employeeIds });
   // Назначения и отчёты (задача 2.06).
   await seedDemoReports(db, file, { orgId, demoId, employees: employeeIds });
+  // Проекты (задача 2.26) — раньше задач: задача ссылается на проект своего контрагента.
+  await seedDemoProjects(db, file, { orgId, demoId, employees: employeeIds });
   // Ручные задачи (задача 2.23).
   await seedDemoTasks(db, file, { orgId, demoId, employees: employeeIds });
   await seedDemoDictRequests(db, file, orgId, {

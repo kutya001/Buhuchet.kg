@@ -25,6 +25,7 @@ import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
 import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
+import { ProjectsList, type ProjectTab } from '../projects/projects-list';
 import { ReportCalendarTab } from '../reports/report-calendar';
 import { ReportMatrixTab } from '../reports/report-matrix';
 import { REPORT_LIST_TABS, type ReportListTab } from '../reports/reports-data';
@@ -82,6 +83,11 @@ export function ModuleScreen({
   if (moduleId === 'tasks') {
     const tab = (tabId ?? 'mine') as TaskTab;
     return <TasksList key={tab} tab={TASK_TABS.includes(tab) ? tab : 'mine'} />;
+  }
+  // «Проекты контрагентов»: «Активные», «Все», «Мои» (задача 2.26).
+  if (moduleId === 'projects') {
+    const tab = (tabId ?? 'active') as ProjectTab;
+    return <ProjectsList key={tab} tab={PROJECT_TABS.includes(tab) ? tab : 'active'} />;
   }
   if (moduleId === 'dicts') {
     const tab = tabId ?? 'types';
@@ -143,6 +149,10 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'fin/tax',
   'fin/fee',
   'fin/wo',
+  'projects/',
+  'projects/active',
+  'projects/all',
+  'projects/mine',
   'files/',
   'orgs/',
   'l10n/',
@@ -151,6 +161,7 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
 ]);
 
 const TASK_TABS: readonly TaskTab[] = ['mine', 'byme', 'all', 'overdue'];
+const PROJECT_TABS: readonly ProjectTab[] = ['active', 'all', 'mine'];
 
 export function screenHasPlates(moduleId: MenuModuleId, tabId: string | null): boolean {
   return SCREENS_WITH_PLATES.has(`${moduleId}/${tabId ?? ''}`);

@@ -190,8 +190,8 @@ function FileCell({ t, task }: { t: Translate; task: TaskListRow }) {
 /**
  * Столбцы списка задач — как в прототипе (modules/tasks.js, `taskCols`), ключи — как на сервере.
  * «Контрагент» у общей задачи — серым «Общая» (ТЗ «Общие задачи в списке»). У регулярной задачи —
- * метка «регулярная», шкала её отчёта с меткой «отчёт», «Поставил» — «Система» (задача 2.24). «Проект»
- * добавит задача 2.26. Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список
+ * метка «регулярная», шкала её отчёта с меткой «отчёт», «Поставил» — «Система» (задача 2.24). «Проект» —
+ * название проекта задачи, скрыт по умолчанию (задача 2.26). Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список
  * (`TASK_AUDIT`).
  */
 export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
@@ -226,6 +226,13 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
         ) : (
           <span className="text-faint">{t('task.cp.general')}</span>
         ),
+    },
+    {
+      key: 'proj',
+      label: t('task.col.proj'),
+      type: 'enum',
+      width: 200,
+      text: (r) => (r.kind === 'manual' ? (r.project?.name ?? '') : ''),
     },
     {
       key: 'cat',

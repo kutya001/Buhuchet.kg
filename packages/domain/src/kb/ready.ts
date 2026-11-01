@@ -233,6 +233,15 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     module: 'tasks',
     done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
   },
+  // 10. Проекты контрагентов (задача 2.26): проект создан; работа добавлена в карточке проекта
+  // (прототип `KB_EV['p.work']`: «Добавлена работа…»). «Принять транш» — со второй частью задачи.
+  proj: { module: 'projects', done: { kind: 'history', entity: 'project', actions: ['create'] } },
+  works: {
+    module: 'projects',
+    done: { kind: 'history', entity: 'project', actions: ['work_add'] },
+  },
+  // «Статусы проекта и откат» — шаг «Посмотреть» вкладки «Все» (шкала — в карточке проекта).
+  pstat: { module: 'projects' },
   // 11. Показатели контрагентов (задачи 2.27, 2.28). «Вкладка «Показатели» в карточке контрагента»
   // (`kcard`) — с карточкой контрагента (2.11), ниже по порядку шагов.
   kset: {
@@ -301,6 +310,8 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'tasks',
   // «Контрагенты»: форма создания (2.09), список и карточка (2.10, 2.11).
   'cps',
+  // «Проекты контрагентов» (2.26).
+  'projects',
   // «Показатели контрагентов» (2.27).
   'kpi',
   // «Файловый менеджер» (2.29).

@@ -12,6 +12,8 @@ const FIELD_LABEL: Readonly<Record<string, UiTextKey>> = {
   description: 'task.field.description',
   categoryCode: 'task.field.category',
   contractorId: 'task.field.contractor',
+  // Проект задачи (задача 2.26): названия проектов «было → стало» подставляет сервер.
+  projectId: 'task.card.project',
   executorEmployeeId: 'task.field.executor',
   term: 'task.field.term',
   dueDate: 'task.field.due_date',

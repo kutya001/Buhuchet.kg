@@ -4,6 +4,9 @@ import {
   getTask,
   listTaskCategories,
   listTaskComments,
+  orgMenuSettings,
+  projectOfSeenTask,
+  projectsForTask,
   readStatusHistory,
   taskContractorOf,
   taskFormOptions,
@@ -22,6 +25,8 @@ import {
   ContractorTasks,
   Task,
   TaskFormOptions,
+  TaskProjects,
+  TaskProjectsQuery,
   Uuid,
   type Task as TaskBody,
 } from '@buhuchet/shared';
@@ -30,6 +35,7 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { projectWhere, taskProjectsOn } from '../projects/common';
 import {
   cpScopeOf,
   error,
@@ -163,17 +169,72 @@ export function taskFormOptionsHandler(
     const subject = subjectOf(c);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
       const settings = await requireTasks(tx, orgContextOf(c).orgId);
-      const [categories, options] = await Promise.all([
+      const [categories, options, menu] = await Promise.all([
         listTaskCategories(tx),
         taskFormOptions(tx, cpScopeOf(subject)),
+        orgMenuSettings(tx, orgContextOf(c).orgId),
       ]);
       return {
         categories: categories.map(({ code, name }) => ({ code, name })),
         ...options,
         confirmDefault: settings.confirmDefault,
         filesOn: settings.files,
+        projectsOn: taskProjectsOn(subject, menu.features),
       };
     });
+    return c.json(body, 200);
+  };
+}
+
+export const taskProjectsRoute = createRoute({
+  method: 'get',
+  path: '/tasks/form-projects',
+  tags: ['tasks'],
+  summary: 'Поле «Проект» формы задачи',
+  middleware: [requirePermission('tasksCreate')] as const,
+  request: { query: TaskProjectsQuery },
+  responses: {
+    200: {
+      description:
+        'Проекты контрагента, кроме отменённых и завершённых (уже выбранный у задачи — тоже); по названию',
+      content: { 'application/json': { schema: TaskProjects } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: {
+      description: `Нет права «Ставить задачи», ${off.toLowerCase()} или выключены «Проекты контрагентов»`,
+      content: error,
+    },
+    404: { description: 'Нет такого контрагента или он вне области сотрудника', content: error },
+  },
+});
+
+/**
+ * Проекты для поля «Проект» (задача 2.26; прототип `taskDlg`, `projsOf`): контрагент — в области
+ * группы «Контрагенты», как поле «Контрагент» формы; проекты — те, что сотрудник видит (и уже
+ * выбранный у задачи).
+ */
+export function taskProjectsHandler(deps: ApiDeps): RouteHandler<typeof taskProjectsRoute, AppEnv> {
+  return async (c) => {
+    const { contractorId, current } = c.req.valid('query');
+    const subject = subjectOf(c);
+    const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      await requireTasks(tx, orgContextOf(c).orgId);
+      const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
+      if (!features.projects) apiFail(403, 'projects_off', 'Проекты контрагентов выключены');
+      if (!taskProjectsOn(subject, features)) {
+        apiFail(403, 'forbidden', 'Нет права «Просматривать проекты»');
+      }
+      if (!(await taskContractorOf(tx, contractorId, cpScopeOf(subject)))) {
+        apiFail(404, 'contractor_not_found', 'Контрагент не найден');
+      }
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — только проекты, которые сотрудник видит; «уже
+      // выбранный» — только проект видимой ему задачи.
+      const chosen =
+        current && (await projectOfSeenTask(tx, current, taskAccessOf(subject))) ? current : null;
+      const items = await projectsForTask(tx, contractorId, chosen, projectWhere(subject));
+      return { items: items.map(({ id, name }) => ({ id, name })) };
+    });
+    c.header('Cache-Control', 'no-store');
     return c.json(body, 200);
   };
 }

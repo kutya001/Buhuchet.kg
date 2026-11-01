@@ -34,6 +34,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { ContractorCardHost } from '../contractors/contractor-actions';
+import { ProjectCardHost } from '../projects/project-actions';
 import { kbStateQuery } from '../kb/kb-data';
 import { KbContext, useKb, useKbRuntime, type KbControls } from '../kb/kb-provider';
 import { useT } from '../l10n/provider';
@@ -663,6 +664,7 @@ function ShellPage({
         {news.overlays}
         {welcome.overlays}
         {me.organization ? <ContractorCardHost /> : null}
+        {me.organization ? <ProjectCardHost /> : null}
         {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
         <Modal
           open={helpOpen}
