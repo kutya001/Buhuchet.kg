@@ -140,7 +140,10 @@ export const telegramLogExportRoute = createRoute({
   middleware: [requirePlatformAdmin] as const,
   request: { query: ListExportParams },
   responses: {
-    200: { description: 'Файл Excel со всеми записями под поиском и фильтрами', content: xlsxContent },
+    200: {
+      description: 'Файл Excel со всеми записями под поиском и фильтрами',
+      content: xlsxContent,
+    },
     ...listQueryResponses,
     ...exportRateResponses,
     ...denied,
@@ -308,7 +311,10 @@ export const telegramBroadcastRoute = createRoute({
   middleware: [requirePlatformAdmin] as const,
   request: { body: { required: true, content: json(AdminTelegramBroadcastRequest) } },
   responses: {
-    200: { description: 'Сколько сообщений поставлено в очередь', content: json(AdminTelegramBroadcastResult) },
+    200: {
+      description: 'Сколько сообщений поставлено в очередь',
+      content: json(AdminTelegramBroadcastResult),
+    },
     400: { description: 'Неверные данные: пустой или слишком длинный текст', content: error },
     409: { description: 'Организация не найдена или заблокирована', content: error },
     ...denied,

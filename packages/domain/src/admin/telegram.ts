@@ -35,10 +35,7 @@ export interface WebhookState {
  * `WEBHOOK_ERROR_FRESH_MS`. `info` — null, если бот не подключён; `'unreachable'` — Telegram не ответил.
  */
 export function webhookState(
-  info:
-    | { url: string; lastErrorAt: Date | null; lastError: string | null }
-    | null
-    | 'unreachable',
+  info: { url: string; lastErrorAt: Date | null; lastError: string | null } | null | 'unreachable',
   expectedUrl: string,
   now: Date,
 ): WebhookState {

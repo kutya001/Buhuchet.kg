@@ -71,7 +71,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     a = await org('ОсОО «Альфа»', '01811201810456', 'alfa', 'Асанов Асан Асанович', 'asanov');
     b = await org('ОсОО «Бета»', '02811201810457', 'beta', 'Бекова Бермет', 'bekova');
     c = await org('ОсОО «Гамма»', '03811201810458', 'gamma', 'Гусев Глеб', 'gusev');
-    await db.admin.db.execute(sql`update organizations set status = 'blocked' where id = ${c.orgId}`);
+    await db.admin.db.execute(
+      sql`update organizations set status = 'blocked' where id = ${c.orgId}`,
+    );
     // В «Альфе» ещё двое с Telegram: заблокированная учётная запись и неактивный сотрудник.
     const extra = await db.admin.db
       .insert(users)
@@ -84,7 +86,13 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     inactiveUserId = extra[1]!.id;
     const roleId = a.roles[0]!.id;
     await db.admin.db.insert(employees).values([
-      { orgId: a.orgId, userId: blockedUserId, fullName: 'Блоков Б', shortName: 'Блоков Б.', roleId },
+      {
+        orgId: a.orgId,
+        userId: blockedUserId,
+        fullName: 'Блоков Б',
+        shortName: 'Блоков Б.',
+        roleId,
+      },
       {
         orgId: a.orgId,
         userId: inactiveUserId,
@@ -201,9 +209,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     withUserContext(db.app.db, adminId, fn);
 
   it('администратор видит журнал всех организаций и платформы: получатель, организация, без текста', async () => {
-    const page = await asAdmin((tx) =>
-      listAdminTelegramLogPage(tx, query(), t),
-    );
+    const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t));
     expect(page.total).toBe(7);
     expect(page.rows.map((r) => r.id)).toEqual([
       ids.sent,
@@ -256,7 +262,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       ]),
     );
     const errors = await asAdmin((tx) =>
-      listAdminTelegramLogPage(tx, query({ filters: { st: { type: 'enum', vals: ['error'] } } }), t),
+      listAdminTelegramLogPage(
+        tx,
+        query({ filters: { st: { type: 'enum', vals: ['error'] } } }),
+        t,
+      ),
     );
     expect(errors.total).toBe(4);
     // Поиск — по тому, что видно: подпись вида и подпись кода «recipient_unlinked».
@@ -265,7 +275,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     );
     expect(found.rows.map((r) => r.id)).toEqual([ids.unlinked]);
     const kinds = await asAdmin((tx) =>
-      listAdminTelegramLogPage(tx, query({ search: { q: 'telegram.kind.pass_changed', keys: KEYS } }), t),
+      listAdminTelegramLogPage(
+        tx,
+        query({ search: { q: 'telegram.kind.pass_changed', keys: KEYS } }),
+        t,
+      ),
     );
     expect(kinds.rows.map((r) => r.id)).toEqual([ids.platform]);
 
@@ -273,7 +287,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       exportAdminTelegramLog(tx, query(), ['kind', 'st', 'err'], t),
     );
     expect(file.total).toBe(7);
-    expect(file.rows[2]).toEqual(['telegram.kind.broadcast', 'tgadm.st.error', 'tgadm.err.unlinked']);
+    expect(file.rows[2]).toEqual([
+      'telegram.kind.broadcast',
+      'tgadm.st.error',
+      'tgadm.err.unlinked',
+    ]);
 
     expect(await asAdmin((tx) => adminTelegramSummary(tx, TODAY))).toEqual({
       pending: 1,
@@ -335,7 +353,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       nextAt: NOW,
     });
     expect(byId.get(ids.platform!)).toMatchObject({ status: 'pending', tries: 0 });
-    expect(byId.get(ids.code!)).toMatchObject({ status: 'error', lastError: '400: chat not found' });
+    expect(byId.get(ids.code!)).toMatchObject({
+      status: 'error',
+      lastError: '400: chat not found',
+    });
     expect(byId.get(ids.pending!)).toMatchObject({ status: 'pending', tries: 1 });
     expect(byId.get(ids.sent!)).toMatchObject({ status: 'sent' });
     // Повтор уже повторённой строки ничего не делает.
@@ -346,14 +367,18 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
   });
 
   it('строки без организации отправляет задача: берёт, засчитывает попытку, пишет итог; отвязанный — «recipient_unlinked»', async () => {
-    const claimed = await claimPlatformOutbox(db.app.db, { now: NOW, limit: 25, leaseSeconds: 120 });
+    const claimed = await claimPlatformOutbox(db.app.db, {
+      now: NOW,
+      limit: 25,
+      leaseSeconds: 120,
+    });
     expect(claimed).toEqual([
       { id: ids.platform, chatId: 1006, kind: 'pass_changed', text: 'Пароль изменён', tries: 1 },
     ]);
     // До конца аренды строку не берёт другой запуск; строки организаций сюда не попадают.
-    expect(await claimPlatformOutbox(db.app.db, { now: NOW, limit: 25, leaseSeconds: 120 })).toEqual(
-      [],
-    );
+    expect(
+      await claimPlatformOutbox(db.app.db, { now: NOW, limit: 25, leaseSeconds: 120 }),
+    ).toEqual([]);
     await finishPlatformOutbox(db.app.db, [{ id: ids.platform!, result: 'sent', at: NOW }]);
     const [sent] = await db.admin.db
       .select()
@@ -373,7 +398,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       .update(telegramOutbox)
       .set({ status: 'pending', nextAt: NOW, sentAt: null })
       .where(eq(telegramOutbox.id, ids.platform!));
-    const [again] = await claimPlatformOutbox(db.app.db, { now: NOW, limit: 25, leaseSeconds: 120 });
+    const [again] = await claimPlatformOutbox(db.app.db, {
+      now: NOW,
+      limit: 25,
+      leaseSeconds: 120,
+    });
     const later = new Date(NOW.getTime() + 60_000);
     await finishPlatformOutbox(db.app.db, [
       { id: again!.id, result: 'retry', at: later, error: '429: Too Many Requests' },
@@ -406,7 +435,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     );
     // Владельцы «Альфы» и «Беты»; без заблокированных, неактивных, «Гаммы» и администратора платформы.
     expect(all).toBe(2);
-    const added = (await db.admin.db.select().from(telegramOutbox)).filter((r) => !before.has(r.id));
+    const added = (await db.admin.db.select().from(telegramOutbox)).filter(
+      (r) => !before.has(r.id),
+    );
     expect(
       added.map((r) => [r.orgId, r.userId, r.chatId, r.kind, r.text, r.status, r.tries]).sort(),
     ).toEqual(
@@ -431,7 +462,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       await asAdmin((tx) => adminTelegramBroadcast(tx, { orgId: b.orgId, text: 'Бете', now: NOW })),
     ).toBe(1);
     expect(
-      await asAdmin((tx) => adminTelegramBroadcast(tx, { orgId: c.orgId, text: 'Гамме', now: NOW })),
+      await asAdmin((tx) =>
+        adminTelegramBroadcast(tx, { orgId: c.orgId, text: 'Гамме', now: NOW }),
+      ),
     ).toBeNull();
     expect(
       await asAdmin((tx) =>
@@ -444,7 +477,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     ).toBeNull();
     // Сообщения рассылки видит своя организация в своём журнале, чужая — нет.
     const own = await withOrgContext(db.app.db, { orgId: b.orgId, userId: b.ownerUserId }, (tx) =>
-      tx.select({ text: telegramOutbox.text }).from(telegramOutbox).where(eq(telegramOutbox.kind, 'broadcast')),
+      tx
+        .select({ text: telegramOutbox.text })
+        .from(telegramOutbox)
+        .where(eq(telegramOutbox.kind, 'broadcast')),
     );
     expect(own.map((r) => r.text).sort()).toEqual(['Бете', 'Плановые работы']);
   });

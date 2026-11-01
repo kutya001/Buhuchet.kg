@@ -86,7 +86,8 @@ export function TgAdmBot() {
     const now = res.data;
     if (!now) return toast(t('err.unknown'), { bad: true });
     const hm = bishkekTime(new Date(now.checkedAt));
-    if (now.ok) toast(t(was ? 'tgadm.bot.check_ok' : 'tgadm.bot.check_again', { hm }), { icon: 'check' });
+    if (now.ok)
+      toast(t(was ? 'tgadm.bot.check_ok' : 'tgadm.bot.check_again', { hm }), { icon: 'check' });
     else toast(t('tgadm.bot.check_bad', { hm }), { bad: true });
   };
 

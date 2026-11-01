@@ -214,7 +214,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
 
     tg().sent.length = 0;
     await telegramSendJob(noPause).run(f.deps, f.deps.clock.now());
-    expect(tg().sent.map((m) => [m.chatId, m.text]).sort()).toEqual(
+    expect(
+      tg()
+        .sent.map((m) => [m.chatId, m.text])
+        .sort(),
+    ).toEqual(
       [
         [2002, 'Новая задача'],
         [2003, 'Пароль изменён'],
@@ -260,7 +264,9 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     });
     tg().webhookInfo = { url: '' };
     expect(await check()).toMatchObject({ ok: false, problem: 'not_set' });
-    tg().webhookInfo = new Error('fetch failed: https://api.telegram.org/bot123:SECRET/getWebhookInfo');
+    tg().webhookInfo = new Error(
+      'fetch failed: https://api.telegram.org/bot123:SECRET/getWebhookInfo',
+    );
     const unreachable = await get('/api/admin/telegram/bot');
     const text = await unreachable.text();
     expect(text).not.toContain('SECRET');
@@ -306,15 +312,23 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     const one = await post('/api/admin/telegram/broadcast', { org: f.b.orgId, text: 'Только Б' });
     expect(AdminTelegramBroadcastResult.parse(await one.json())).toEqual({ queued: 1 });
 
-    await f.t.admin.db.execute(sql`update organizations set status = 'blocked' where id = ${f.b.orgId}`);
+    await f.t.admin.db.execute(
+      sql`update organizations set status = 'blocked' where id = ${f.b.orgId}`,
+    );
     const blocked = await post('/api/admin/telegram/broadcast', { org: f.b.orgId, text: 'Б' });
     expect(blocked.status).toBe(409);
     expect(ApiError.parse(await blocked.json()).error.code).toBe('broadcast_org');
-    await f.t.admin.db.execute(sql`update organizations set status = 'active' where id = ${f.b.orgId}`);
+    await f.t.admin.db.execute(
+      sql`update organizations set status = 'active' where id = ${f.b.orgId}`,
+    );
 
     tg().sent.length = 0;
     await telegramSendJob(noPause).run(f.deps, f.deps.clock.now());
-    expect(tg().sent.map((m) => [m.chatId, m.text]).sort()).toEqual(
+    expect(
+      tg()
+        .sent.map((m) => [m.chatId, m.text])
+        .sort(),
+    ).toEqual(
       [
         [2001, '15 ноября с 22:00 до 23:00 плановые работы'],
         [2002, '15 ноября с 22:00 до 23:00 плановые работы'],

@@ -40,7 +40,9 @@ createServer((req, res) => {
     );
   }
   const method =
-    url.pathname === '/webhook-info' ? 'webhookInfo' : /^\/bot[^/]+\/(\w+)$/.exec(url.pathname)?.[1];
+    url.pathname === '/webhook-info'
+      ? 'webhookInfo'
+      : /^\/bot[^/]+\/(\w+)$/.exec(url.pathname)?.[1];
   if (req.method !== 'POST' || !method) return reply(res, 404, notFound);
   let body = '';
   req.setEncoding('utf8');
