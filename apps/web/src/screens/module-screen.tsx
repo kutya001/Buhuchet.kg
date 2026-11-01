@@ -34,6 +34,7 @@ import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
 import { TasksList, type TaskTab } from '../tasks/tasks-list';
+import { TgAdmScreen } from '../tgadm/tgadm-screen';
 
 /**
  * Экран модуля на вкладке. Экраны — клиентские компоненты (данные — из API через TanStack Query),
@@ -116,6 +117,7 @@ export function ModuleScreen({
   if (moduleId === 'orgs') return <OrgsList />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
+  if (moduleId === 'tg') return <TgAdmScreen tab={tabId ?? 'log'} />;
   return <ModuleStub moduleId={moduleId} />;
 }
 
@@ -154,6 +156,8 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'files/',
   'orgs/',
   'l10n/',
+  'tg/',
+  'tg/log',
 ]);
 
 const TASK_TABS: readonly TaskTab[] = ['mine', 'byme', 'all', 'overdue'];

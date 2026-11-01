@@ -52,6 +52,7 @@ export * from './admin-gked';
 export * from './admin-io-sections';
 export * from './admin-kb';
 export * from './admin-system-dicts';
+export * from './admin-telegram';
 export * from './rate-limits';
 export * from './dicts';
 export * from './taxes';

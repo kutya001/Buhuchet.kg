@@ -1,7 +1,9 @@
 import {
   claimOutbox,
+  claimPlatformOutbox,
   enqueueTelegram,
   finishOutbox,
+  finishPlatformOutbox,
   telegramOutboxOrgs,
   withOrgContext,
   type ClaimedOutbox,
@@ -58,37 +60,34 @@ async function sendOne(
 }
 
 /**
- * Разобрать очередь организации: пачки по 25 строк, между пачками — пауза. Строку сначала берут
- * (попытка засчитана, другой запуск её не возьмёт), отправляют вне транзакции и записывают итог.
- * `ids` — только эти строки (сразу после действия). Возвращает число отправленных.
+ * Разобрать очередь пачками по 25 строк, между пачками — пауза. Строку сначала берут (попытка засчитана,
+ * другой запуск её не возьмёт), отправляют вне транзакции и записывают итог. Возвращает число
+ * отправленных.
  */
-export async function sendOrgOutbox(
+async function sendBatches(
   ctx: JobContext,
-  orgId: string,
-  o: { ids?: readonly string[]; pause?: Pause; maxBatches?: number } = {},
+  q: {
+    claim: (now: Date) => Promise<ClaimedOutbox[]>;
+    finish: (outcomes: OutboxOutcome[]) => Promise<void>;
+    orgId: string | null;
+  },
+  o: { pause?: Pause; maxBatches?: number },
 ): Promise<number> {
   const pause = o.pause ?? realPause;
   const now = () => ctx.clock.now();
   let sent = 0;
   for (let batch = 0; batch < (o.maxBatches ?? OUTBOX_MAX_BATCHES); batch++) {
     if (batch > 0) await pause(OUTBOX_PAUSE_MS);
-    const rows = await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) =>
-      claimOutbox(tx, {
-        now: now(),
-        limit: OUTBOX_BATCH,
-        leaseSeconds: OUTBOX_LEASE_SECONDS,
-        ...(o.ids ? { ids: o.ids } : {}),
-      }),
-    );
+    const rows = await q.claim(now());
     if (!rows.length) break;
     const outcomes: OutboxOutcome[] = [];
     for (const row of rows) outcomes.push(await sendOne(ctx, row, now));
-    await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) => finishOutbox(tx, outcomes));
+    await q.finish(outcomes);
     sent += outcomes.filter((x) => x.result === 'sent').length;
     for (const x of outcomes) {
       if (x.result !== 'sent') {
         ctx.logger.warn(
-          { job: 'telegram.send', orgId, id: x.id, result: x.result, error: x.error },
+          { job: 'telegram.send', orgId: q.orgId, id: x.id, result: x.result, error: x.error },
           'Telegram: сообщение не отправлено',
         );
       }
@@ -98,7 +97,64 @@ export async function sendOrgOutbox(
   return sent;
 }
 
-/** Отправка очереди каждую минуту: по организациям, у которых есть что отправить. */
+/**
+ * Разобрать очередь организации (`sendBatches`). `ids` — только эти строки (сразу после действия).
+ * Возвращает число отправленных.
+ */
+export function sendOrgOutbox(
+  ctx: JobContext,
+  orgId: string,
+  o: { ids?: readonly string[]; pause?: Pause; maxBatches?: number } = {},
+): Promise<number> {
+  return sendBatches(
+    ctx,
+    {
+      orgId,
+      claim: (now) =>
+        withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) =>
+          claimOutbox(tx, {
+            now,
+            limit: OUTBOX_BATCH,
+            leaseSeconds: OUTBOX_LEASE_SECONDS,
+            ...(o.ids ? { ids: o.ids } : {}),
+          }),
+        ),
+      finish: (outcomes) =>
+        withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) => finishOutbox(tx, outcomes)),
+    },
+    o,
+  );
+}
+
+/**
+ * Строки без организации — сообщения администраторам платформы, которые Админка → «Телеграм» снова
+ * поставила в очередь «Повторить отправку» (задача 2.41): под RLS их не видно ни в одной организации,
+ * поэтому их берут и отмечают функции базы.
+ */
+export function sendPlatformOutbox(
+  ctx: JobContext,
+  o: { pause?: Pause; maxBatches?: number } = {},
+): Promise<number> {
+  return sendBatches(
+    ctx,
+    {
+      orgId: null,
+      claim: (now) =>
+        claimPlatformOutbox(ctx.db, {
+          now,
+          limit: OUTBOX_BATCH,
+          leaseSeconds: OUTBOX_LEASE_SECONDS,
+        }),
+      finish: (outcomes) => finishPlatformOutbox(ctx.db, outcomes),
+    },
+    o,
+  );
+}
+
+/**
+ * Отправка очереди каждую минуту: по организациям, у которых есть что отправить, затем строки без
+ * организации (администраторам платформы).
+ */
 export function telegramSendJob(pause?: Pause): Job {
   return {
     name: 'telegram.send',
@@ -117,6 +173,12 @@ export function telegramSendJob(pause?: Pause): Job {
             'очередь организации не разобрана',
           );
         }
+      }
+      try {
+        await sendPlatformOutbox(ctx, pause ? { pause } : {});
+      } catch (err) {
+        failed.push('platform');
+        ctx.logger.error({ job: 'telegram.send', err }, 'очередь платформы не разобрана');
       }
       if (failed.length)
         throw new Error(`telegram.send: не разобрана очередь организаций: ${failed.length}`);

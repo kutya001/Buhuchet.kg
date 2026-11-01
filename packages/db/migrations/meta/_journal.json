@@ -589,6 +589,13 @@
       "when": 1793493129969,
       "tag": "0083_projects_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793502379932,
+      "tag": "0084_admin_telegram",
+      "breakpoints": true
     }
   ]
 }

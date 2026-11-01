@@ -264,27 +264,26 @@ test.describe('Этап 1: окна и уведомления', () => {
     baseURL,
     isMobile,
   }) => {
-    // Модуль без своего экрана есть пока только в Админке — «Telegram» с одним способом «Объявление».
+    // Уведомление без последствий, которое можно вызывать подряд: «Проверить вебхук» в Админке →
+    // «Телеграм» → «Бот платформы» («Вебхук … · проверено ЧЧ:ММ»). Модулей без своего экрана, у которых
+    // «+ Добавить» давал уведомление-заглушку, больше нет (последним был «Телеграм», задача 2.41).
     await platformAdmin(page.request, new URL(baseURL!).origin);
-    await page.goto('/app/tg/log');
+    await page.goto('/app/tg/bot');
     const view = page.viewportSize()!;
-    // Один способ добавления — «+ Добавить» срабатывает сразу, без меню.
     const add = async () => {
-      await page.getByRole('button', { name: 'Добавить', exact: true }).click();
+      await page.getByRole('button', { name: 'Проверить вебхук' }).click();
     };
     const toasts = page.getByRole('status');
 
-    // Уведомление даёт способ добавления модуля без своего экрана — «Объявление» в «Telegram»
-    // (у модулей организации все способы уже открывают окна). Одинаковые уведомления встают столбиком.
-    const stub = 'Объявление';
+    // Одинаковые уведомления встают столбиком.
     await add();
-    const first = toasts.filter({ hasText: `«${stub}» появится вместе с экраном модуля.` }).first();
+    const first = toasts.filter({ hasText: /Вебхук .* · проверено \d\d:\d\d/ }).first();
     const box = await settledBox(first);
     // По центру внизу экрана; на телефоне — над нижней панелью.
     expect(box.x + box.width / 2).toBeCloseTo(view.width / 2, 0);
     expect(view.height - (box.y + box.height)).toBeCloseTo(isMobile ? 84 : 22, 0);
     if (!isMobile) {
-      // Второе уведомление встаёт под первым. На телефоне уведомление закрывает часть круглой «+»
+      // Второе уведомление встаёт под первым. На телефоне уведомление закрывает часть нижней панели
       // (как в прототипе), поэтому второе там вызывается, когда первое уже исчезло.
       await add();
       const second = toasts.nth(1);
@@ -326,7 +325,7 @@ test.describe('Этап 1: окна и уведомления', () => {
       expect((await first.boundingBox())!.x).toBeCloseTo(toast.x, 0);
       await swipe.drag(from, { x: from.x - toast.width / 3 - 30, y: from.y });
       await expect(toasts).toHaveCount(0, { timeout: 1000 });
-      await expect(page).toHaveURL(/\/app\/tg\/log$/);
+      await expect(page).toHaveURL(/\/app\/tg\/bot$/);
     });
   });
 });
