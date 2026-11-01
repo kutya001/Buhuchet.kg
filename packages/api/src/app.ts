@@ -11,6 +11,7 @@ import { adminModule } from './modules/admin';
 import { authModule } from './modules/auth';
 import { contractorPageModule } from './modules/contractor-page';
 import { contractorsModule } from './modules/contractors';
+import { homeModule } from './modules/home';
 import { kbModule } from './modules/kb';
 import { kpiModule } from './modules/kpi';
 import { KPI_IMPORT_UPLOAD_PATHS } from './modules/kpi/import';
@@ -95,6 +96,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', telegramModule(deps))
     .route('/', staffModule(deps))
     .route('/', rolesModule(deps))
+    .route('/', homeModule(deps))
     .route('/', contractorsModule(deps))
     .route('/', contractorPageModule(deps))
     .route('/', reportsModule(deps))

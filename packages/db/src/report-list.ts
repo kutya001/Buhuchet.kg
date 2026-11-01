@@ -1109,6 +1109,29 @@ export async function reportSummary(
   };
 }
 
+/**
+ * «Ближайшие сроки сдачи» на «Главной» (задача 2.34; прототип renderHome, `upcoming`): несданные отчёты со
+ * сдачей в области сотрудника, срок — сегодня или позже, контрагент не приостановлен; по сроку, первые
+ * `limit`. Строки — как в списке отчётов (карточка открывается по строке).
+ */
+export async function upcomingReports(
+  tx: Tx,
+  o: { t: ListTexts; today: IsoDate; scope: SQL | undefined; taxpay: boolean; limit: number },
+): Promise<ReportRow[]> {
+  const texts = await listTexts(tx, o.t, o.today);
+  const rows = await fromReports(tx, rowFields(o.today, o.taxpay), texts)
+    .where(
+      and(
+        eq(reports.superseded, false),
+        o.scope,
+        sql`${contractors.serviceStatus} <> 'paused' and ${reports.act} <> 'pay' and ${OPEN} and ${reports.dueDate} >= ${dateLiteral(o.today)}`,
+      ),
+    )
+    .orderBy(asc(reports.dueDate), asc(reports.createdAt), asc(reports.id))
+    .limit(o.limit);
+  return rows.map((r) => toRow(r as RowData));
+}
+
 /** Числа дня календаря: отчётов к сдаче, сданных (и остальных со сроком в этот день) и оплат. */
 export interface ReportCalendarCounts {
   todo: number;

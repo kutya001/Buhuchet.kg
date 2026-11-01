@@ -43,6 +43,7 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
@@ -320,6 +321,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
   const { search, clearSearch, access } = useShell();
   const deleted = useShowDeleted();
   const gridKey = `fin.${tab}` as const;
+  const preset = usePresetFilters('fin', tab);
   const labels = useGridLabels('fin.j.count');
   const columns = useMemo(() => journalColumns(t), [t]);
   const view = useViewSettings(gridKey);
@@ -338,6 +340,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
     enabled: view.ready,
     fetchPage: fetchJournal,
     extra,
+    initialFilters: preset,
   });
   const { params, visible } = list;
   const sendExport = useCallback(
