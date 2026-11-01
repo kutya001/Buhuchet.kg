@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useRef } from 'react';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { TgAdmBot } from './tgadm-bot';
@@ -17,19 +17,19 @@ export function TgAdmScreen({ tab }: { tab: string }) {
   const { addRequest, clearAddRequest } = useShell();
   const router = useRouter();
   const request = addRequest?.moduleId === 'tg' ? addRequest : null;
-  const [focusKey, setFocusKey] = useState<number | undefined>(undefined);
-  const start = useEffectEvent((actionId: string, n: number) => {
+  const castText = useRef<HTMLTextAreaElement>(null);
+  const start = useEffectEvent((actionId: string) => {
     if (actionId !== 'cast') return;
-    if (tab === 'cast') setFocusKey(n);
+    if (tab === 'cast') castText.current?.focus();
     else router.push(tabHref('tg', 'cast'));
   });
   useEffect(() => {
     if (!request) return;
-    start(request.actionId, request.n);
+    start(request.actionId);
     clearAddRequest();
   }, [request, clearAddRequest]);
 
   if (tab === 'bot') return <TgAdmBot />;
-  if (tab === 'cast') return <TgAdmCast focusKey={focusKey} />;
+  if (tab === 'cast') return <TgAdmCast textRef={castText} />;
   return <TgAdmLog />;
 }

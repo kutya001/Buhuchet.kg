@@ -16,7 +16,7 @@ import {
   AdminTelegramBroadcastRequest,
   AdminTelegramBroadcastResult,
   AdminTelegramLogList,
-  AdminTelegramLogRow,
+  type AdminTelegramLogRow,
   AdminTelegramOrgs,
   AdminTelegramRetryRequest,
   AdminTelegramRetryResult,

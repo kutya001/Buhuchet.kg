@@ -4,7 +4,7 @@ import { BROADCAST_TEXT_MAX, pluralForm } from '@buhuchet/domain';
 import { AdminTelegramBroadcastResult, AdminTelegramOrgs } from '@buhuchet/shared';
 import { Box, buttonClass, Field, Hint, Icon, inputClass, useToast } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useRef, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent, type RefObject } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -33,7 +33,7 @@ export function castTextError(t: Translate, text: string): string | undefined {
  * организации, «Текст объявления», «Поставить в очередь» — сообщение каждому сотруднику с привязанным
  * Telegram; уведомление «В очереди: N сообщений», поле очищается.
  */
-export function TgAdmCast({ focusKey }: { focusKey?: number }) {
+export function TgAdmCast({ textRef }: { textRef: RefObject<HTMLTextAreaElement | null> }) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -44,13 +44,6 @@ export function TgAdmCast({ focusKey }: { focusKey?: number }) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [sending, setSending] = useState(false);
-  const textRef = useRef<HTMLTextAreaElement>(null);
-  const [focused, setFocused] = useState<number | undefined>(undefined);
-  // «+ Добавить» → «Объявление» на этой вкладке — курсор в текст.
-  if (focusKey !== undefined && focused !== focusKey) {
-    setFocused(focusKey);
-    queueMicrotask(() => textRef.current?.focus());
-  }
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
