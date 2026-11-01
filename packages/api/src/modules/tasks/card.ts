@@ -5,6 +5,7 @@ import {
   listTaskCategories,
   listTaskComments,
   orgMenuSettings,
+  projectOfSeenTask,
   projectsForTask,
   readStatusHistory,
   taskContractorOf,
@@ -226,8 +227,11 @@ export function taskProjectsHandler(deps: ApiDeps): RouteHandler<typeof taskProj
       if (!(await taskContractorOf(tx, contractorId, cpScopeOf(subject)))) {
         apiFail(404, 'contractor_not_found', 'Контрагент не найден');
       }
-      // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — только проекты, которые сотрудник видит.
-      const items = await projectsForTask(tx, contractorId, current ?? null, projectWhere(subject));
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — только проекты, которые сотрудник видит; «уже
+      // выбранный» — только проект видимой ему задачи.
+      const chosen =
+        current && (await projectOfSeenTask(tx, current, taskAccessOf(subject))) ? current : null;
+      const items = await projectsForTask(tx, contractorId, chosen, projectWhere(subject));
       return { items: items.map(({ id, name }) => ({ id, name })) };
     });
     c.header('Cache-Control', 'no-store');

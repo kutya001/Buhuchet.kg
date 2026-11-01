@@ -1176,6 +1176,24 @@ export async function contractorProjectCount(tx: Tx, contractorId: string): Prom
 
 /* ───────────── Задачи по проекту ───────────── */
 
+/**
+ * Проект `projectId` стоит у задачи, которую сотрудник видит (`access` — `taskAccessOf`): только тогда
+ * он «уже выбранный» в поле «Проект» формы — номер из запроса не открывает названия невидимых проектов.
+ */
+export async function projectOfSeenTask(
+  tx: Tx,
+  projectId: string,
+  access: SQL | undefined,
+): Promise<boolean> {
+  if (!UUID.test(projectId)) return false;
+  const [row] = await tx
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(and(eq(tasks.projectId, projectId), access))
+    .limit(1);
+  return !!row;
+}
+
 /** Проект, видимый сотруднику (`where` — `projectVisibility`), или уже выбранный у задачи. */
 const seenOrCurrent = (where: SQL | undefined, current: string | null): SQL | undefined =>
   where && current && UUID.test(current) ? or(where, eq(projects.id, current)) : where;

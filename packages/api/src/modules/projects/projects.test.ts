@@ -488,6 +488,13 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
         TaskProjects.parse(x),
       );
       expect(offered.items.map((p) => p.id)).not.toContain(id);
+      // Номер проекта в «current» не открывает его названия: у видимых задач такого проекта нет.
+      const asCurrent = await get(
+        hr,
+        `/api/tasks/form-projects?contractorId=${cpChief}&current=${id}`,
+        (x) => TaskProjects.parse(x),
+      );
+      expect(asCurrent.items.map((p) => p.id)).not.toContain(id);
       const res = await call('POST', '/api/tasks', hr, {
         title: 'Задача по чужому проекту',
         description: '',
