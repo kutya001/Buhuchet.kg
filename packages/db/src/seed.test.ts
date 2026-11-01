@@ -1,19 +1,23 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { withOrgContext } from './context';
-import { verifyPassword } from '@buhuchet/adapters/password';
+import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import { eq } from 'drizzle-orm';
 import {
   banks,
   dictChangeRequests,
   employees,
   gkedItems,
+  loginAttempts,
   organizations,
+  passwordResetCodes,
   platformReference,
   reportTypes,
   roles,
   sessions,
   taskCategories,
+  telegramLinks,
+  telegramOutbox,
   users,
 } from './schema';
 import {
@@ -292,6 +296,109 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
         platformAdmin: { login: 'ERKIN', password: '12345678' },
       }),
     ).rejects.toThrow(/занят сотрудником организации/);
+  });
+
+  it('администратор платформы: забытый пароль сбрасывается только явной отметкой — временный пароль, сеансы завершены, блокировка входа снята', async () => {
+    await seedAll(t.admin.db, {
+      update: true,
+      demo: false,
+      platformAdmin: { login: 'resetadmin', password: '12345678' },
+    });
+    const adminOf = async () =>
+      (await t.admin.db.select().from(users).where(eq(users.login, 'resetadmin')))[0]!;
+    // Администратор сменил временный пароль, вошёл и потом пять раз ошибся паролем.
+    const { id } = await adminOf();
+    await t.admin.db
+      .update(users)
+      .set({ passwordHash: await hashPassword('мой-пароль-1'), mustChangePassword: false })
+      .where(eq(users.id, id));
+    await t.admin.db.insert(sessions).values({
+      userId: id,
+      tokenHash: 'reset-admin-session',
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    await t.admin.db
+      .insert(loginAttempts)
+      .values({ login: 'resetadmin', failures: 5, lockedUntil: new Date(Date.now() + 900_000) });
+    // У администратора привязан Telegram и есть действующий код «Забыли пароль?».
+    await t.admin.db.insert(telegramLinks).values({ userId: id, chatId: 777_001 });
+    await t.admin.db.insert(passwordResetCodes).values({
+      userId: id,
+      codeHash: 'reset-admin-code',
+      expiresAt: new Date(Date.now() + 600_000),
+    });
+    const before = await adminOf();
+    const sessionsOf = async () =>
+      (await t.admin.db.select().from(sessions).where(eq(sessions.userId, id))).length;
+    const attemptsOf = async () =>
+      (await t.admin.db.select().from(loginAttempts).where(eq(loginAttempts.login, 'resetadmin')))
+        .length;
+
+    // Без отметки — ничего не меняется.
+    const plain = await seedAll(t.admin.db, {
+      update: true,
+      demo: false,
+      platformAdmin: { login: 'resetadmin', password: 'новый-временный' },
+    });
+    expect(plain.platformAdmin).toEqual({ login: 'resetadmin', created: false });
+    expect(await adminOf()).toMatchObject({
+      passwordHash: before.passwordHash,
+      version: before.version,
+    });
+    expect(await sessionsOf()).toBe(1);
+    expect(
+      await t.admin.db.select().from(telegramOutbox).where(eq(telegramOutbox.userId, id)),
+    ).toEqual([]);
+
+    // С отметкой — пароль снова временный из настроек, сеансов нет, вход открыт.
+    const reset = await seedAll(t.admin.db, {
+      update: true,
+      demo: false,
+      platformAdmin: { login: ' ResetAdmin ', password: 'новый-временный', resetPassword: true },
+    });
+    expect(reset.platformAdmin).toEqual({ login: 'resetadmin', created: false, reset: true });
+    expect(JSON.stringify(reset)).not.toContain('новый-временный');
+    const after = await adminOf();
+    expect(after).toMatchObject({ isPlatformAdmin: true, mustChangePassword: true, orgId: null });
+    expect(after.version).toBe(before.version + 1);
+    expect(await verifyPassword(after.passwordHash, 'новый-временный')).toBe(true);
+    expect(await verifyPassword(after.passwordHash, 'мой-пароль-1')).toBe(false);
+    expect(await sessionsOf()).toBe(0);
+    expect(await attemptsOf()).toBe(0);
+    const [code] = await t.admin.db
+      .select()
+      .from(passwordResetCodes)
+      .where(eq(passwordResetCodes.userId, id));
+    expect(code!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+    // Бот сообщит о сбросе: сообщение в очереди отправки администратору (без организации).
+    const queued = await t.admin.db
+      .select()
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.userId, id));
+    expect(queued).toEqual([
+      expect.objectContaining({
+        orgId: null,
+        chatId: 777_001,
+        kind: 'pass_reset',
+        status: 'pending',
+        text: expect.stringMatching(
+          /^🔑 Пароль учётной записи resetadmin сброшен: .*Сбросил: ручной запуск «Migrate test» в GitHub\.$/,
+        ),
+      }),
+    ]);
+    expect(queued[0]!.text).not.toContain('новый-временный');
+
+    // Пароль сотрудника организации отметка не сбрасывает.
+    const [erkin] = await t.admin.db.select().from(users).where(eq(users.login, 'erkin'));
+    await expect(
+      seedAll(t.admin.db, {
+        update: false,
+        demo: false,
+        platformAdmin: { login: 'erkin', password: '12345678', resetPassword: true },
+      }),
+    ).rejects.toThrow(/занят сотрудником организации/);
+    const [erkinAfter] = await t.admin.db.select().from(users).where(eq(users.login, 'erkin'));
+    expect(erkinAfter?.passwordHash).toBe(erkin?.passwordHash);
   });
 
   it('каталог прав из refDB.json должен совпадать с системным', async () => {

@@ -10,7 +10,9 @@ const file = (name: string) =>
 const words = (pages: { items: { str: string }[] }[]) =>
   pages.flatMap((p) => p.items.map((i) => i.str));
 
-describe('чтение PDF на сервере', () => {
+// Первое чтение загружает pdf.js; при общем прогоне всех пакетов это бывает дольше 5 секунд по
+// умолчанию (01.11 в контейнере), поэтому у чтения предел 30 секунд (у сканов — свой, больше).
+describe('чтение PDF на сервере', { timeout: 30_000 }, () => {
   const reader = createDocumentReader();
 
   it('PDF с текстом — текстовый слой с положением на странице и дата создания', async () => {
