@@ -215,7 +215,8 @@ export async function contractorPageBody(
 
   return {
     today,
-    orgPhone: people.orgPhone,
+    // Телефон организации — в «Контактах» и в «Бухгалтер пока не назначен»; иначе не передаётся.
+    orgPhone: has('contacts') || !responsible ? people.orgPhone : null,
     issues: {
       late,
       short: moneyBody?.verdict === 'short' ? moneyBody.amount : 0,

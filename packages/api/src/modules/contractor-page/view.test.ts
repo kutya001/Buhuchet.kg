@@ -331,7 +331,10 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
   });
 
   it('п. 74: просрочек нет, есть долг — жёлтая строка; отчёт просрочен — красная', async () => {
+    // Только долг за обслуживание: «Деньги на налоги» скрыты — нехватки на налоги в строке нет.
+    await hide(uks, ['money']);
     const before = await view(uks, uksCookie);
+    expect(before.issues.short).toBe(0);
     expect(before.issues.late).toBe(0);
     expect(before.issues.feeDebt).toBeGreaterThan(0);
     expect(before.issues.feeDebt).toBe(before.fee!.debt);
@@ -351,6 +354,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(after.issues.late).toBe(1);
     expect(pageStateTone(after.issues)).toBe('bad');
     await f.t.admin.db.delete(schema.reports).where(eq(schema.reports.id, ids.t1Sep!));
+    await hide(uks, []);
   });
 
   it('скрытые разделы сервер не передаёт вовсе; «Ваш бухгалтер» — всегда', async () => {
@@ -425,11 +429,24 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
   });
 
   it('«Контакты»: ответственный с видами отчётов, данные контрагента', async () => {
+    await f.t.admin.db
+      .update(schema.organizations)
+      .set({ phone: '+996312900100' })
+      .where(eq(schema.organizations.id, f.a.orgId));
     const page = await view(uks, uksCookie);
     expect(page.contacts).toMatchObject({
       people: [{ name: 'Сотрудник acc-a', responsible: true }],
       phone: expect.stringContaining('505'),
     });
+    expect(page.org.phone?.digits).toBe('996312900100');
+    // Телефон организации — только в «Контактах» или при «Бухгалтер пока не назначен».
+    await hide(uks, ['contacts']);
+    expect((await view(uks, uksCookie)).org.phone).toBeNull();
+    await hide(uks, []);
+    await f.t.admin.db
+      .update(schema.organizations)
+      .set({ phone: null })
+      .where(eq(schema.organizations.id, f.a.orgId));
   });
 
   it('файл отчёта: только в браузере с кодом, только свой загруженный файл', async () => {

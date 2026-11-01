@@ -3,6 +3,7 @@ import {
   localPhoneText,
   orgMainAccount,
   type IsoDate,
+  type MoneyOpKind,
   type PaymentPurpose,
   type PaysTo,
   type ReportAct,
@@ -391,12 +392,12 @@ export async function pageYearMoney(
   contractorId: string,
   year: string,
 ): Promise<{ got: Tyiyn; paid: Tyiyn }> {
-  const sum = (kinds: string) =>
-    sql<number>`coalesce(sum(${moneyOperations.amount}) filter (where ${moneyOperations.kind} in (${sql.raw(kinds)})), 0)`.mapWith(
+  const sum = (kinds: MoneyOpKind[]) =>
+    sql<number>`coalesce(sum(${moneyOperations.amount}) filter (where ${inArray(moneyOperations.kind, kinds)}), 0)`.mapWith(
       Number,
     );
   const [row] = await tx
-    .select({ got: sum(`'in', 'back', 'corr'`), paid: sum(`'pay'`) })
+    .select({ got: sum(['in', 'back', 'corr']), paid: sum(['pay']) })
     .from(moneyOperations)
     .where(
       and(

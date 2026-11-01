@@ -1,7 +1,14 @@
 'use client';
 
 import type { PageTipId } from '@buhuchet/domain';
-import { Icon, Popover, iconButtonClass, type IconName } from '@buhuchet/ui';
+import {
+  Icon,
+  PHONE_QUERY,
+  Popover,
+  iconButtonClass,
+  useMediaQuery,
+  type IconName,
+} from '@buhuchet/ui';
 import { createContext, useContext, type ReactNode } from 'react';
 
 /*
@@ -121,6 +128,8 @@ export function PageSection({
   children: ReactNode;
 }) {
   const folded = fold && !open;
+  // Сворачивается только на телефоне; на ПК заголовок не переключает раздел (прототип pubClick, pubSec).
+  const phone = useMediaQuery(PHONE_QUERY);
   const head = (
     <>
       <Icon name={icon} className="text-accent" />
@@ -147,8 +156,8 @@ export function PageSection({
           <button
             type="button"
             data-pub-toggle={id}
-            aria-expanded={!folded}
-            onClick={onToggle}
+            aria-expanded={!(folded && phone)}
+            onClick={phone ? onToggle : undefined}
             className="flex min-w-0 flex-1 cursor-default items-center gap-2 border-0 bg-transparent p-0 text-left font-[inherit] text-inherit max-md:grid max-md:min-h-7 max-md:cursor-pointer max-md:grid-cols-[auto_minmax(0,1fr)_auto] max-md:gap-x-2 max-md:gap-y-px"
           >
             {head}

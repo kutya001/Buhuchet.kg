@@ -5,6 +5,9 @@ import { localApi } from '../../../../../../src/server-api';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** Номер файла — UUID; другой вид не уходит в API. */
+const FILE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Файл отчёта со страницы контрагента (задача 2.43; ТЗ «файлы, приложенные при сдаче, открываются для
  * просмотра и скачивания»). Адрес — под адресом страницы: только сюда браузер отправляет cookie этой
@@ -21,7 +24,7 @@ export async function GET(
   const { slug, inn, id } = await params;
   // Адрес неправильного вида — сразу «не найдено»: части адреса не попадают ни в запрос к API, ни в
   // переход (иначе «//чужой.сайт» в адресе увёл бы на другой сайт).
-  if (!isPageAddress(slug, inn)) {
+  if (!isPageAddress(slug, inn) || !FILE_ID.test(id)) {
     return new NextResponse(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
   }
   const back = () => {

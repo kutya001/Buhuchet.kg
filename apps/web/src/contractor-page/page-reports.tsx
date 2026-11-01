@@ -63,6 +63,15 @@ const PLATES_PHONE = [
   'max-md:[&_[data-plate-label]]:gap-1 max-md:[&_[data-plate-label]]:text-[11px]',
 ].join(' ');
 
+/** Периодичность вида на плитке (прототип `pubPer`). */
+const PER_KEY = {
+  M: 'pub.rep.per.m',
+  Q: 'pub.rep.per.q',
+  H: 'pub.rep.per.h',
+  Y: 'pub.rep.per.y',
+  oneoff: 'pub.rep.per.oneoff',
+} as const;
+
 const flip = (set: ReadonlySet<string>, key: string) => {
   const next = new Set(set);
   if (next.has(key)) next.delete(key);
@@ -246,7 +255,7 @@ export function useReportsSection(
                     {type?.organ ? <Pill size="sm">{type.organ}</Pill> : null}
                     {type ? (
                       <span className="text-[11.5px] text-faint">
-                        {t(`pub.rep.per.${type.periodicity}`)}
+                        {t(PER_KEY[type.periodicity])}
                       </span>
                     ) : null}
                   </TileTitle>

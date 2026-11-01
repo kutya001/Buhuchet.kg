@@ -133,6 +133,7 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
     setFlash(k);
     flashTimer.current = setTimeout(() => setFlash(null), 1400);
   };
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Е-6
   const copy = async (value: string, done: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -223,7 +224,8 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
 
   const H: Partial<Record<string, ReactNode>> = {};
 
-  // «Главное» — плитки-итоги; нажатие открывает раздел.
+  // «Главное» — плитки-итоги; нажатие открывает раздел. Нет плиток — нет раздела, как в прототипе.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Е-5
   const tiles = pageTiles({
     reports: page.main.reports !== null,
     taxes: page.main.taxes !== null,
@@ -642,7 +644,7 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
               'fee.tariff',
               F.tariff ? (
                 <>
-                  {t(`pub.fee.per.${F.tariff.period}`, {
+                  {t(F.tariff.period === 'Y' ? 'pub.fee.per.y' : 'pub.fee.per.m', {
                     amount: formatSomWithUnit(F.tariff.amount),
                   })}
                   <div className="text-[11.5px] text-faint">
