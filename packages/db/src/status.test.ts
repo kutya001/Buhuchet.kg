@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { hashPassword } from '@buhuchet/adapters/password';
 import {
+  ORG_STATUS_SCALES,
   scaleStatuses,
   STATUS_SCALES,
   statusLook,
@@ -221,6 +222,10 @@ describe.skipIf(!databaseAvailable())('история статусов', () => {
     await expect(insert({ scale: 'other' as never })).rejects.toThrow(
       checkViolation('status_history_status_check'),
     );
+    // Заявка с сайта — данные платформы без организации: её история здесь не хранится.
+    await expect(
+      insert({ scale: 'lead', fromStatus: 'new', toStatus: 'in_progress' }),
+    ).rejects.toThrow(checkViolation('status_history_status_check'));
     await expect(insert({ fromStatus: 'todo' })).rejects.toThrow(
       checkViolation('status_history_change_check'),
     );
@@ -235,9 +240,9 @@ describe.skipIf(!databaseAvailable())('история статусов', () => {
     await insert({ reason: 'я'.repeat(500) });
   });
 
-  it('все статусы каждой шкалы записываются', async () => {
+  it('все статусы каждой шкалы записей организации записываются', async () => {
     await withOrgContext(t.app.db, ctxA(), async (tx) => {
-      for (const scale of STATUS_SCALES) {
+      for (const scale of ORG_STATUS_SCALES) {
         const id = randomUUID();
         let from: string | null = null;
         for (const to of scaleStatuses(scale)) {

@@ -23,6 +23,13 @@ export const STATUS_SCALES = [
 ] as const;
 export type StatusScaleKey = (typeof STATUS_SCALES)[number];
 
+/**
+ * Шкалы записей организации — их смены пишутся в `status_history` (таблица организации, RLS). Заявка
+ * с сайта — данные платформы без организации: её история хранится у самой заявки (прототип
+ * admin/leads.js, `leadLog`) и стирается вместе с ней.
+ */
+export const ORG_STATUS_SCALES = STATUS_SCALES.filter((s) => s !== 'lead');
+
 /** Цвета статусов справочника «Статусы» (прототип `.sc-<цвет>`, `.pill.<цвет>`). */
 export const STATUS_TONES = [
   'gray',
@@ -262,7 +269,7 @@ export interface BackOptions {
    */
   paidRest?: number | null;
   /** Заявка с «Отказом»: в каком статусе она была до отказа (прототип `prevSt`); нет — «Новая». */
-  beforeReject?: string | null;
+  beforeReject?: 'new' | 'in_progress' | null;
 }
 
 /**

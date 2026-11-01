@@ -1,4 +1,10 @@
-import { ROLLBACK_REASON_MAX, scaleStatuses, STATUS_CAUSES, STATUS_SCALES } from '@buhuchet/domain';
+import {
+  ORG_STATUS_SCALES,
+  ROLLBACK_REASON_MAX,
+  scaleStatuses,
+  STATUS_CAUSES,
+  STATUS_SCALES,
+} from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -65,7 +71,8 @@ export const statusHistory = pgTable(
     check(
       'status_history_status_check',
       sql.join(
-        STATUS_SCALES.map(
+        // Только шкалы записей организации: история заявок с сайта сюда не пишется.
+        ORG_STATUS_SCALES.map(
           (scale) =>
             sql`(${t.scale} = ${sql.raw(`'${scale}'`)} and ${t.toStatus} in (${codes(scaleStatuses(scale))}) and (${t.fromStatus} is null or ${t.fromStatus} in (${codes(scaleStatuses(scale))})))`,
         ),
