@@ -16,6 +16,7 @@ import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
 import { KPI_TEXTS } from './kpi-texts';
 import { LANDING_PRODUCT_TEXTS, LANDING_TEXTS } from './landing-texts';
+import { LEADS_TEXTS } from './leads-texts';
 import { MONEY_TEXTS, TAX_MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
 import { ONBOARDING_TEXTS } from './onboarding-texts';
@@ -73,7 +74,7 @@ const SYSTEM_TEXTS = {
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
  * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, лендинга для гостей и полосы демо-организации — `landing-texts.ts`, списков — `grid-texts.ts`, «Главной» — `home-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
- * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts`, «Справочников» и сроков
+ * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts` (вкладка «Заявки» — `leads-texts.ts`), «Справочников» и сроков
  * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, загрузки контрагентов из Excel —
  * `contractor-import-texts.ts`, создания контрагента из свидетельства и выписки — `contractor-regdocs-texts.ts`, страницы
  * контрагента по ссылке — `contractor-page-texts.ts`, задач —
@@ -108,6 +109,7 @@ export const UI_TEXTS = {
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,
+  ...LEADS_TEXTS,
   ...DICTS_TEXTS,
   ...MONEY_TEXTS,
   ...TAX_MONEY_TEXTS,

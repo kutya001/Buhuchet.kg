@@ -68,6 +68,8 @@ export const CreateOrganizationRequest = z.object({
   ownerLogin: z.string().trim().min(1).max(LOGIN_MAX_LENGTH),
   // Не короче 8 символов, как у временного пароля сотрудника (docs/deviations.md, п. 17).
   temporaryPassword: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+  /** «Создать организацию» по заявке с сайта: заявка получит «Подключена» и ссылку (задача #165). */
+  leadId: Uuid.optional(),
 });
 export type CreateOrganizationRequest = z.infer<typeof CreateOrganizationRequest>;
 

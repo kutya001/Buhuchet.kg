@@ -7,6 +7,7 @@ import {
   type AdminOrganization,
   type NewOrganizationFormInput,
 } from '@buhuchet/shared';
+import { formatMomentRu } from '@buhuchet/domain';
 import { buttonClass, Field, FormGrid, inputClass, Modal, Note, useToast } from '@buhuchet/ui';
 import { useId, useState, type FormEvent } from 'react';
 import { useForm } from 'react-hook-form';
@@ -25,22 +26,35 @@ const FIELD_OF: Partial<Record<string, keyof NewOrganizationFormInput>> = {
   login_taken: 'ownerLogin',
 };
 
+/** Заявка с сайта, по которой создаётся организация (прототип addOrgDlg с `lead`). */
+export interface OrgFromLead {
+  id: string;
+  /** Когда оставлена — строкой ISO. */
+  at: string;
+  firm: string;
+  name: string;
+}
+
 /**
  * «Новая организация» (ТЗ «Админка» → «Модуль организаций»; прототип admin/accounts-orgs.js,
  * addOrgDlg): название, ИНН (14 цифр), ФИО владельца, логин владельца (уникален на всей платформе),
  * временный пароль — уже подставлен, его можно заменить (как у сотрудника, docs/deviations.md, п. 17).
  * Все поля обязательные. Ошибки — под полями: проверки формы сразу, «Организация с таким ИНН уже
  * есть» и «Такой логин уже занят на платформе» — после «Создать». Адрес страницы подбирает сервер по
- * названию. Окно открывают заново (новый `key`) — пароль новый, поля пустые.
+ * названию. Окно открывают заново (новый `key`) — пароль новый, поля пустые. По заявке с сайта
+ * (`lead`) название фирмы и ФИО уже подставлены, после сохранения заявка сама получает «Подключена» и
+ * ссылку на организацию.
  */
 export function NewOrganizationDialog({
   open,
   onClose,
   onDone,
+  lead = null,
 }: {
   open: boolean;
   onClose: () => void;
   onDone: (organization: AdminOrganization) => void;
+  lead?: OrgFromLead | null;
 }) {
   const t = useT();
   const toast = useToast();
@@ -49,9 +63,9 @@ export function NewOrganizationDialog({
   const [initial] = useState(
     () =>
       ({
-        name: '',
+        name: lead?.firm ?? '',
         inn: '',
-        ownerFullName: '',
+        ownerFullName: lead?.name ?? '',
         ownerLogin: '',
         temporaryPassword: suggestTemporaryPassword(),
       }) satisfies NewOrganizationFormInput,
@@ -76,12 +90,13 @@ export function NewOrganizationDialog({
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async (values) => {
-      const res = await callApi(() => api.api.admin.organizations.$post({ json: values }));
+      const json = lead ? { ...values, leadId: lead.id } : values;
+      const res = await callApi(() => api.api.admin.organizations.$post({ json }));
       if (res.ok) {
         const body = CreatedOrganization.safeParse(res.data);
         if (body.success) onDone(body.data.organization);
         onClose();
-        return toast(t('orgs.new.done'), { icon: 'building' });
+        return toast(t(lead ? 'leads.org.done' : 'orgs.new.done'), { icon: 'building' });
       }
       const message = errorText(res.error);
       const field = FIELD_OF[res.error.code];
@@ -104,7 +119,7 @@ export function NewOrganizationDialog({
       kind="form"
       size="mid"
       title={t('orgs.new.title')}
-      sub={t('orgs.new.sub')}
+      sub={lead ? t('leads.org.sub', { at: formatMomentRu(new Date(lead.at)) }) : t('orgs.new.sub')}
       dirty={isDirty}
       footer={
         <>

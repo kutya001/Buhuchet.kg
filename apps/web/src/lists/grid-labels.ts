@@ -23,6 +23,7 @@ export type CountKey =
   | 'files.count'
   | 'accounts.count'
   | 'orgs.count'
+  | 'leads.count'
   | 'locale.count'
   | 'dicts.count'
   | 'dicts.platform.count'

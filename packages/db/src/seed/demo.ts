@@ -18,6 +18,7 @@ import { seedDemoFees } from './demo-fees';
 import { seedDemoMoney } from './demo-money';
 import { seedDemoMoneyTax } from './demo-money-tax';
 import { seedDemoKpi } from './demo-kpi';
+import { seedDemoLeads } from './demo-leads';
 import { seedDemoProjects } from './demo-projects';
 import { seedDemoReports } from './demo-reports';
 import { seedDemoServices } from './demo-services';
@@ -59,7 +60,8 @@ export type DemoKind =
   | 'indicator'
   | 'indicator_value'
   | 'indicator_month'
-  | 'dict_request';
+  | 'dict_request'
+  | 'lead';
 export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
 
 /**
@@ -338,6 +340,8 @@ export async function seedDemoOrganization(
   await seedDemoServices(db, file, { orgId, demoId, employees: employeeIds });
 
   await seedDemoKpi(db, file, orgId);
+  // Заявки с сайта в Админке (задача #165): данные платформы, как запросы в справочники.
+  await seedDemoLeads(db, file, demoId);
 
   return { orgId, created: created.length > 0, employees: insertedEmployees.length };
 }
