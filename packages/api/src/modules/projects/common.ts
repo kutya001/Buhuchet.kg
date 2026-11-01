@@ -15,13 +15,14 @@ import {
   type Feature,
 } from '@buhuchet/domain';
 import { ApiError } from '@buhuchet/shared';
-import type { SQL } from 'drizzle-orm';
+import { and, type SQL } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf } from '../../middleware/access';
 import { projScopeOf, servicesVisible } from '../finance/services';
+import { finScopeOf } from '../money/common';
 
 /*
  * Общее модуля «Проекты контрагентов» (задача 2.26): кто смотрит, кто видит деньги, транзакция с
@@ -71,11 +72,23 @@ export const projectMoneyVisible = (
 ): boolean => servicesVisible(subject, { fee: features.fee });
 
 /**
- * Транши видны (окно транша, его файлы): деньги проектов видны и сотрудник видит проекты в модуле или
- * журнал «Финансовых операций» — там строки траншей (прототип opWin открывается из обоих мест).
+ * Транши видны (окно транша, его файлы): сотрудник видит проекты в модуле или журнал «Финансовых
+ * операций» — там строки траншей (прототип opWin открывается из обоих мест). Деньги проектов — отдельно
+ * (`projectMoneyVisible`). `finops` — функция «Финансовые операции»; не известна — не проверяется
+ * (её проверяет вызывающий по данным записи).
  */
-export const tranchesSeen = (subject: AccessSubject): boolean =>
-  hasPermission(subject, 'projView') || hasPermission(subject, 'finView');
+export const tranchesSeen = (subject: AccessSubject, finops = true): boolean =>
+  hasPermission(subject, 'projView') || (finops && hasPermission(subject, 'finView'));
+
+/**
+ * Какие транши видны: с «Просматривать проекты» — проекты по области группы «Проекты контрагентов»;
+ * только с журналом — ещё и контрагенты области «Финансовых операций», как строки журнала.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Г-11
+export const trancheWhere = (subject: AccessSubject): SQL | undefined =>
+  hasPermission(subject, 'projView')
+    ? projectWhere(subject)
+    : and(projectWhere(subject), finScopeOf(subject));
 
 /** «Вести проекты и разовые услуги». */
 export const canKeepProjects = (subject: AccessSubject): boolean =>

@@ -686,4 +686,85 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
       await features(f.a.orgId, ON);
     }
   });
+
+  it('транши: область «Свои» — транш чужого проекта «не найден»; без «Просматривать проекты» — по области «Финансовых операций»', async () => {
+    const id = await create(chief, {
+      contractorId: cpChief,
+      name: 'Проект главного с траншем',
+      plan: som(10_000),
+      members: [employee('chief-a')],
+      lead: employee('chief-a'),
+    });
+    const { id: t } = ProjectSaved.parse(
+      await (
+        await expectStatus(
+          await call('POST', `/api/projects/${id}/payments`, chief, {
+            amount: som(1_000),
+            date: '2026-10-18',
+          }),
+          201,
+        )
+      ).json(),
+    );
+    const hrPermission = (permissionId: string) =>
+      and(
+        eq(schema.rolePermissions.roleId, f.roleIds.hr),
+        eq(schema.rolePermissions.permissionId, permissionId),
+      );
+    const hrScope = (group: string) =>
+      and(eq(schema.roleScopes.roleId, f.roleIds.hr), eq(schema.roleScopes.permGroup, group));
+    const grant = (...ids: string[]) =>
+      f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values(
+          ids.map((permissionId) => ({ orgId: f.a.orgId, roleId: f.roleIds.hr, permissionId })),
+        )
+        .onConflictDoNothing();
+    const scope = (group: string, value: 'own' | 'all') =>
+      f.t.admin.db.update(schema.roleScopes).set({ scope: value }).where(hrScope(group));
+    const window = () => call('GET', `/api/project-payments/${t}`, hr);
+    // «Кадры» с «Вести проекты», область «Свои»: транш проекта главного — «не найден» во всех методах.
+    await grant('projects');
+    try {
+      expect((await window()).status).toBe(404);
+      const paid = await call('POST', `/api/projects/${id}/payments`, hr, {
+        amount: 100,
+        date: '2026-10-18',
+      });
+      expect(paid.status).toBe(404);
+      const edited = await call('PUT', `/api/project-payments/${t}`, hr, {
+        version: 1,
+        amount: 100,
+        date: '2026-10-18',
+        reason: 'Ошибка',
+      });
+      expect(edited.status).toBe(404);
+      const deleted = await call('POST', `/api/project-payments/${t}/delete`, hr, {
+        reason: 'Ошибка',
+      });
+      expect(deleted.status).toBe(404);
+      // Только журнал (без «Просматривать проекты»), деньги проектов — правом «Плата за обслуживание»:
+      // область «Проектов» — «Все», «Финансовых операций» — «Свои» — транш контрагента главного не открыть.
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projects'));
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projView'));
+      await grant('fee');
+      await features(f.a.orgId, { ...ON, fee: true, finops: true });
+      await scope('projects', 'all');
+      expect((await window()).status).toBe(404);
+      await scope('fin', 'all');
+      expect(
+        await get(hr, `/api/project-payments/${t}`, (x) => ProjectPaymentWindow.parse(x)),
+      ).toMatchObject({ id: t, amount: som(1_000) });
+      // «Финансовые операции» выключены — без «Просматривать проекты» окна транша нет.
+      await features(f.a.orgId, { ...ON, fee: true, finops: false });
+      expect(await refused(await window(), 403)).toBe('forbidden');
+    } finally {
+      await features(f.a.orgId, ON);
+      await scope('projects', 'own');
+      await scope('fin', 'own');
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projects'));
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('fee'));
+      await grant('projView');
+    }
+  });
 });

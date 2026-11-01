@@ -15,6 +15,7 @@ import {
   opAmountLimit,
   opLock,
   type AccessSubject,
+  type Feature,
   type HistoryAction,
   type Translate,
   type UiTextKey,
@@ -48,6 +49,7 @@ import {
   off,
   projectMoneyVisible,
   projectWhere,
+  trancheWhere,
   tranchesSeen,
   unauthorized,
 } from './common';
@@ -68,8 +70,8 @@ const payNotFound = {
 type Lock = OpLockInfo | null;
 
 /** Транш не виден по правам (нет денег проектов или ни проектов, ни журнала) — 403. */
-function requireSeen(subject: AccessSubject, features: Parameters<typeof projectMoneyVisible>[1]) {
-  if (!tranchesSeen(subject) || !projectMoneyVisible(subject, features))
+function requireSeen(subject: AccessSubject, features: Readonly<Record<Feature, boolean>>) {
+  if (!tranchesSeen(subject, features.finops) || !projectMoneyVisible(subject, features))
     apiFail(403, 'forbidden', 'Нет права на это действие');
 }
 
@@ -215,7 +217,7 @@ export function projectPaymentWindowHandler(
       requireSeen(subject, features);
       // Транш невидимого проекта — «не найден» (прототип открывает окно из любой строки журнала).
       // ОТКЛОНЕНИЕ: docs/deviations.md#Г-11
-      const card = await projectPaymentCard(tx, id, projectWhere(subject));
+      const card = await projectPaymentCard(tx, id, trancheWhere(subject));
       if (!card) return null;
       const { payment: p, project } = card;
       const facts = { deleted: !!p.deletedAt, archived: card.contractor.archived };

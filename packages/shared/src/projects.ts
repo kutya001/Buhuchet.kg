@@ -350,6 +350,6 @@ export const ProjectPaymentEditRequest = z.strictObject({
   amount: PayAmount,
   date: IsoDate,
   note: PayNote.default(''),
-  reason: z.string().max(OP_REASON_MAX).default(''),
+  reason: z.string().max(OP_REASON_MAX).refine(noNul).default(''),
 });
 export type ProjectPaymentEditRequest = z.input<typeof ProjectPaymentEditRequest>;

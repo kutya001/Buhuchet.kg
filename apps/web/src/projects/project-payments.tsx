@@ -667,6 +667,11 @@ export function ProjectPaymentWindowDialog({
           </span>
         ),
       },
+    );
+    // «Примечание» — комментарий транша (прототип opWin: `v.note !== v.what`).
+    if (p.note && p.note !== what)
+      items.push({ id: 'note', label: t('fin.op.note'), value: p.note });
+    items.push(
       {
         id: 'created',
         label: t('fin.op.created'),

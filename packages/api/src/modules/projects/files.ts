@@ -7,11 +7,13 @@ import {
 } from '@buhuchet/db';
 import { hasPermission, projectWorksEditable } from '@buhuchet/domain';
 import type { FileListSource } from '../files/sources';
+import { finScopeOf } from '../money/common';
 import {
   canKeepProjects,
   projectMoneyVisible,
   projectViewerOf,
   projectWhere,
+  trancheWhere,
   tranchesSeen,
 } from './common';
 
@@ -57,8 +59,9 @@ export const projectFiles: FileListSource = {
 export const projectPaymentFiles: FileListSource = {
   async resolve(tx, subject, id) {
     if (id === null || !tranchesSeen(subject)) return null;
-    const p = await projectPaymentFileSource(tx, id, projectWhere(subject));
-    if (!p?.projectsOn || !projectMoneyVisible(subject, { fee: p.feeOn })) return null;
+    const p = await projectPaymentFileSource(tx, id, trancheWhere(subject));
+    if (!p?.projectsOn || !tranchesSeen(subject, p.finopsOn)) return null;
+    if (!projectMoneyVisible(subject, { fee: p.feeOn })) return null;
     const contractor = {
       id: p.contractor.id,
       responsibleEmployeeId: p.contractor.responsibleEmployeeId,
@@ -70,7 +73,12 @@ export const projectPaymentFiles: FileListSource = {
     };
   },
   list: ({ subject, features }) =>
-    features.projects && tranchesSeen(subject) && projectMoneyVisible(subject, features)
-      ? projectPaymentFilesPart(projectViewerOf(subject))
+    features.projects &&
+    tranchesSeen(subject, features.finops) &&
+    projectMoneyVisible(subject, features)
+      ? projectPaymentFilesPart(
+          projectViewerOf(subject),
+          hasPermission(subject, 'projView') ? undefined : finScopeOf(subject),
+        )
       : null,
 };

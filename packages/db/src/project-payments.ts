@@ -385,6 +385,7 @@ export async function projectPaymentFileSource(
   deleted: boolean;
   projectsOn: boolean;
   feeOn: boolean;
+  finopsOn: boolean;
 } | null> {
   try {
     const p = await projectPaymentOf(tx, id, where, false);
@@ -396,6 +397,7 @@ export async function projectPaymentFileSource(
       deleted: !!p.payment.deletedAt,
       projectsOn: features.projects,
       feeOn: features.fee,
+      finopsOn: features.finops,
     };
   } catch (e) {
     if (e instanceof RecordNotFoundError) return null;
@@ -406,12 +408,16 @@ export async function projectPaymentFileSource(
 /**
  * Файлы траншей в Файловом менеджере (прототип `allFiles`: вместе с файлами проекта — вид «Проект»,
  * источник — название проекта, «Перейти к источнику» — карточка проекта): проект, который сотрудник
- * видит (`projectVisibility`); `ref` — номер проекта.
+ * видит (`projectVisibility`), и — если задано — условие над контрагентом (`contractors`); `ref` —
+ * номер проекта.
  */
-export function projectPaymentFilesPart(viewer: ProjectViewer): FileListPart {
+export function projectPaymentFilesPart(
+  viewer: ProjectViewer,
+  contractorWhere?: SQL,
+): FileListPart {
   const projectId = sql`(select ${projectPayments.projectId} from ${projectPayments} where ${projectPayments.id} = ${files.sourceId})`;
   return {
-    visible: sql`exists (select 1 from ${projects} join ${contractors} on ${contractors.id} = ${projects.contractorId} where ${projects.id} = ${projectId} and ${projectVisibility(viewer) ?? sql`true`})`,
+    visible: sql`exists (select 1 from ${projects} join ${contractors} on ${contractors.id} = ${projects.contractorId} where ${projects.id} = ${projectId} and ${projectVisibility(viewer) ?? sql`true`} and ${contractorWhere ?? sql`true`})`,
     source: sql`(select ${projects.name} from ${projects} where ${projects.id} = ${projectId})`,
     ref: sql`(${projectId})::text`,
   };
