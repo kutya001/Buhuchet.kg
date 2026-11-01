@@ -255,7 +255,7 @@ const historyOut = (rows: readonly ServiceHistoryRow[]) =>
   }));
 
 /** Файлы к записи окно загрузит после ответа — значит, загружать их должно быть можно. */
-function checkUpload(
+export function checkUpload(
   subject: AccessSubject,
   features: Record<Feature, boolean>,
   count: number | undefined,

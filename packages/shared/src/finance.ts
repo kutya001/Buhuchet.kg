@@ -228,12 +228,12 @@ export const FinJournalParams = z.object({
 export const ReceiptJournalParams = z.object({ deleted: Flag });
 
 /**
- * Строка журнала (прототип finRows): операция по счёту контрагента, оплата за обслуживание или разовая
- * услуга.
+ * Строка журнала (прототип finRows): операция по счёту контрагента, оплата за обслуживание, разовая
+ * услуга или оплата по проекту — транш (`pt`).
  */
 export const FinJournalRow = z.object({
   key: z.string(),
-  src: z.enum(['op', 'fee', 'svc']),
+  src: z.enum(['op', 'fee', 'svc', 'pt']),
   id: Uuid,
   kind: z.string(),
   self: z.boolean(),
@@ -260,6 +260,8 @@ export const FinJournalRow = z.object({
   service: z
     .object({ status: z.enum(['unpaid', 'partial', 'paid']), paid: Tyiyn, pay: Lock })
     .nullable(),
+  /** Проект транша (столбец «Проект», «Открыть источник» — карточка проекта); у остальных — null. */
+  project: z.object({ id: Uuid, name: z.string() }).nullable(),
   /** «Открыть источник»: отчёт оплаты налога, общее поступление оплаты за обслуживание. */
   reportId: Uuid.nullable(),
   receipt: z.object({ id: Uuid, total: Tyiyn, date: IsoDate }).nullable(),

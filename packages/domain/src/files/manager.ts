@@ -17,16 +17,19 @@ export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   one_off_service: 'coins',
   one_off_service_payment: 'coins',
   project: 'briefcase',
+  project_payment: 'briefcase',
   task: 'task',
   indicator_value: 'gauge',
 };
 
 /**
  * Вид источника в списке, плашках и фильтре «Откуда» (прототип `allFiles`): файлы оплат разовой услуги —
- * вместе с файлами самой услуги, вид «Разовая услуга».
+ * вместе с файлами самой услуги, вид «Разовая услуга»; файлы траншей — вместе с файлами проекта, вид
+ * «Проект».
  */
 export const FILE_LIST_KIND_OF: Readonly<Partial<Record<FileSourceKind, FileSourceKind>>> = {
   one_off_service_payment: 'one_off_service',
+  project_payment: 'project',
 };
 
 /**

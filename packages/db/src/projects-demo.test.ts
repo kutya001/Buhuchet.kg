@@ -2,6 +2,7 @@ import { UI_TEXTS, type ListQuery } from '@buhuchet/domain';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
+import { projectPaymentLines } from './project-payments';
 import { listProjectsPage, projectCard, projectSummary } from './projects';
 import { projects } from './schema';
 import { DEMO_ORG_ID, demoId, seedAll } from './seed';
@@ -66,7 +67,8 @@ describe.skipIf(!databaseAvailable())('Проекты демо-организа�
     const owner = await inDemo((tx) =>
       projectSummary(tx, { employeeId: demoId('employee', 'e1'), seeAll: true }, TODAY, true),
     );
-    // Активные: p1, p2, p4; «Мои» у руководителя — нет; осталось получить — планы p1 и p2 (оплат ещё нет).
+    // Активные: p1, p2, p4; «Мои» у руководителя — нет; осталось получить — p1 (120 000 − два транша по
+    // 40 000) и p2 (оплат нет); у p4 стоимость не задана.
     expect(owner).toMatchObject({
       active: 3,
       mine: 0,
@@ -75,6 +77,18 @@ describe.skipIf(!databaseAvailable())('Проекты демо-организа�
       overdue: 0,
       any: true,
     });
-    expect(owner.left).toBe((120_000 + 50_000) * 100);
+    expect(owner.left).toBe((120_000 - 80_000 + 50_000) * 100);
+  });
+
+  it('транши из `pays`: суммы в тыйынах, дата, комментарий, кто записал; «получено» проекта', async () => {
+    const lines = await inDemo((tx) => projectPaymentLines(tx, demoId('project', 'p1')));
+    expect(lines.map((l) => [l.date, l.amount, l.note, l.by])).toEqual([
+      ['2026-08-19', 40_000 * 100, 'Аванс', 'Алишер Т.'],
+      ['2026-10-08', 40_000 * 100, 'Второй транш', 'Алишер Т.'],
+    ]);
+    expect((await card('p1'))!.paid).toBe(80_000 * 100);
+    expect((await card('p3'))!.paid).toBe(60_000 * 100);
+    expect((await card('p4'))!.paid).toBe(10_000 * 100);
+    expect((await card('p2'))!.paid).toBe(0);
   });
 });

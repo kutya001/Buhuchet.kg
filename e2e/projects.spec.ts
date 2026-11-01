@@ -235,4 +235,88 @@ test.describe('Этап 2: проекты контрагентов', () => {
     };
     expect(saved.items).toEqual([expect.objectContaining({ name, status: 'planned' })]);
   });
+
+  test('(п. 66, транш проекта) транш 50 000 сом, изменённый на 45 000 сом с причиной, уменьшает «получено» проекта; без причины сумма не меняется', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    // Свой проект со стоимостью 60 000 сом: транш записывается в карточке, меняется в окне транша.
+    const origin = await asOwner(page.request, baseURL);
+    const word = uniqueWord('Транш');
+    const cp = await newContractor(page.request, origin, {
+      name: `ОсОО «${word}»`,
+      tariffAmount: 0,
+    });
+    const me = (await (await page.request.get('/api/auth/me')).json()) as {
+      employee: { id: string } | null;
+    };
+    const name = `Аудит запасов ${word}`;
+    const created = await page.request.post('/api/projects', {
+      headers: { origin },
+      data: {
+        contractorId: cp.id,
+        status: 'in_progress',
+        name,
+        startsOn: '2026-10-01',
+        endsOn: '2026-12-31',
+        description: '',
+        plan: 6_000_000,
+        members: [me.employee!.id],
+        lead: me.employee!.id,
+        works: [],
+      },
+    });
+    expect(created.status()).toBe(201);
+    const { id } = (await created.json()) as { id: string };
+
+    const card = await openProject(page, isMobile, name);
+    await expect(card).toContainText('Оплаты (транши) · 0');
+    await expect(card).toContainText('Оплат пока не было');
+    await card.locator('[data-pj-pay]').click();
+    const pay = page.getByRole('dialog').filter({ has: page.locator('[data-pj-pay-dlg]') });
+    await expect(pay).toContainText(/Осталось получить\s*60\s000\sсом/);
+    await pay.locator('[data-pt-amount]').fill('70000');
+    await pay.locator('[data-pt-ok]').click();
+    await expect(pay).toContainText(/Больше остатка: осталось\s*60\s000\sсом/);
+    await pay.locator('[data-pt-amount]').fill('50000');
+    await pay.locator('[data-pt-note]').fill('Аванс');
+    await pay.locator('[data-pt-ok]').click();
+    await expect(pay).toBeHidden();
+    await expect(page.getByRole('status').filter({ hasText: 'Оплата записана' })).toBeVisible();
+    await expect(card).toContainText('Оплаты (транши) · 1');
+    await expect(card.locator('[data-pj-paid]')).toHaveText(/^50\s000/);
+    await expect(card).toContainText(/Получено\s*50\s000\sсом/);
+
+    // Окно транша → «Изменить»: без причины сумма не меняется, с причиной — меняется.
+    await card.locator('[data-pt-row]').click();
+    const win = page.getByRole('dialog').filter({ has: page.locator('[data-pt-window]') });
+    await expect(win.locator('[data-pt-received]')).toHaveText(/^50\s000\sсом из 60\s000\sсом$/);
+    await win.locator('[data-fin-action="edit"]').click();
+    const edit = page.getByRole('dialog').filter({ has: page.locator('[data-pt-edit]') });
+    await edit.locator('[data-pt-amount]').fill('45000');
+    await edit.locator('[data-pt-ok]').click();
+    await expect(edit).toContainText('Укажите причину: меняется сумма');
+    const before = (await (await page.request.get(`/api/projects/${id}`)).json()) as {
+      money: { paid: number } | null;
+    };
+    expect(before.money?.paid).toBe(5_000_000);
+    await edit.locator('[data-pt-reason]').fill('Клиент вернул 5 000 сом');
+    await edit.locator('[data-pt-ok]').click();
+    await expect(edit).toBeHidden();
+    await expect(page.getByRole('status').filter({ hasText: 'Операция изменена' })).toBeVisible();
+    await expect(win).toContainText('Изменена');
+    await expect(win).toContainText('Клиент вернул 5 000 сом');
+    await expect(win.locator('[data-pt-received]')).toHaveText(/^45\s000\sсом из 60\s000\sсом$/);
+    await win.getByRole('button', { name: 'Готово', exact: true }).click();
+    await expect(win).toBeHidden();
+
+    await expect(card.locator('[data-pj-paid]')).toHaveText(/^45\s000/);
+    await expect(card).toContainText(/Получено\s*45\s000\sсом/);
+    await expect(card.locator('[data-pt-row]')).toContainText('изменён');
+    const after = (await (await page.request.get(`/api/projects/${id}`)).json()) as {
+      money: { paid: number } | null;
+    };
+    expect(after.money?.paid).toBe(4_500_000);
+  });
 });

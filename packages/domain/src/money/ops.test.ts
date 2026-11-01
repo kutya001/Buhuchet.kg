@@ -42,6 +42,7 @@ describe('право на изменение операции (opPerm)', () => {
     expect(opRight('fee')).toBe('tariff');
     expect(opRight('sp')).toBe('projects');
     expect(opRight('svc')).toBe('projects');
+    expect(opRight('pt')).toBe('projects');
     for (const k of ['in', 'pay', 'refund', 'back', 'corr', 'xfer'] as const)
       expect(opRight(k)).toBe('money');
   });
@@ -115,6 +116,11 @@ describe('предел суммы при изменении (opMax)', () => {
       opAmountLimit('sp', 40_000, { ...m, service: { amount: 100_000, paid: 70_000 } })?.max,
     ).toBe(70_000);
     expect(opAmountLimit('in', 10_000, m)).toBeNull();
+  });
+  it('транш — не больше планируемой стоимости без остальных траншей; без стоимости — любая сумма', () => {
+    const pt = opAmountLimit('pt', 50_000, { ...m, project: { plan: 120_000, paid: 80_000 } });
+    expect(pt).toMatchObject({ max: 90_000, code: 'op_project_over' });
+    expect(opAmountLimit('pt', 50_000, { ...m, project: { plan: null, paid: 80_000 } })).toBeNull();
   });
 });
 

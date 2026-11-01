@@ -21,7 +21,7 @@ import {
   serviceHistoryText,
 } from '../finance/finance-history';
 import type { Translate } from '../l10n/translate';
-import { projectHistoryText } from '../projects/project-history';
+import { projectHistoryText, projectPaymentHistoryText } from '../projects/project-history';
 import { reportHistoryText } from '../reports/report-history';
 
 type Entry = ContractorHistory['items'][number];
@@ -386,6 +386,9 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     // «Сделано: …»), без названия проекта перед записью.
     case 'project':
       return projectHistoryText(t, e, names);
+    // Транш проекта (часть 2): «Оплата 40 000 сом (аванс)», изменение и удаление — с причиной.
+    case 'project_payment':
+      return projectPaymentHistoryText(t, e);
     default:
       lines = [];
   }

@@ -1,6 +1,8 @@
 import {
   HISTORY_ACTIONS,
   MONEY_AMOUNT_MAX,
+  MONEY_NOTE_MAX,
+  OP_REASON_MAX,
   PROJECT_DESCRIPTION_MAX,
   PROJECT_MEMBERS_MAX,
   PROJECT_NAME_MAX,
@@ -101,12 +103,20 @@ const ProjectHistory = z.array(
     at: z.iso.datetime(),
     actor: z.string().nullable(),
     action: z.enum(HISTORY_ACTIONS),
+    /** Запись о транше (его номер) или о самом проекте (null). */
+    paymentId: Uuid.nullable(),
     changes: z.array(
       z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
     ),
     reason: z.string().nullable(),
   }),
 );
+
+/** Почему «Изменить» или «Удалить» транш нельзя (прототип `opLock` с `pt`): код и текст словаря. */
+const Lock = z.object({ code: z.string(), text: z.string() }).nullable();
+
+/** Кто и когда. */
+const Audit = z.object({ name: z.string().nullable(), at: z.string() });
 
 /** Карточка проекта (прототип `openProject`). */
 export const ProjectCard = z.object({
@@ -123,6 +133,24 @@ export const ProjectCard = z.object({
   members: z.array(Named),
   /** «Деньги по проекту» — тому, кто видит деньги; иначе null. */
   money: z.object({ plan: Tyiyn.nullable(), paid: Tyiyn }).nullable(),
+  /**
+   * «Оплаты (транши)» — тому, кто видит деньги; иначе null. Действующие транши по дате: комментарий, кто
+   * записал, названия файлов (без права смотреть файлы — пусто), сумма, «изменён», замки меню строки.
+   */
+  payments: z
+    .array(
+      z.object({
+        id: Uuid,
+        date: IsoDate,
+        amount: Tyiyn,
+        note: z.string(),
+        edited: z.boolean(),
+        by: z.string().nullable(),
+        files: z.array(z.string()),
+        locks: z.object({ edit: Lock, del: Lock }),
+      }),
+    )
+    .nullable(),
   works: z.array(
     z.object({
       id: Uuid,
@@ -160,6 +188,11 @@ export const ProjectCard = z.object({
     works: z.boolean(),
     rollback: z.boolean(),
     task: z.boolean(),
+    /**
+     * «Записать оплату» (прототип `projActions`): право «Вести проекты», деньги видны, проект не отменён.
+     * Получена вся планируемая стоимость — пункт неактивен (решает экран по `money`).
+     */
+    pay: z.boolean(),
   }),
 });
 export type ProjectCard = z.infer<typeof ProjectCard>;
@@ -268,3 +301,55 @@ export type ContractorProjects = z.infer<typeof ContractorProjects>;
 export const TaskProjectsQuery = z.object({ contractorId: Uuid, current: Uuid.optional() });
 export const TaskProjects = z.object({ items: z.array(Named) });
 export type TaskProjects = z.infer<typeof TaskProjects>;
+
+/* ───────────── Оплаты по проекту — транши ───────────── */
+
+/** Сумма транша: больше нуля и не больше предела. */
+const PayAmount = Tyiyn.refine((v) => v > 0, 'Введите сумму больше нуля').refine(
+  (v) => v <= MONEY_AMOUNT_MAX,
+  'Сумма слишком большая',
+);
+const PayNote = z.string().max(MONEY_NOTE_MAX).refine(noNul);
+
+/** «Записать оплату» (прототип `projPay` → `tranchDlg`): файлы окно загрузит к траншу после ответа. */
+export const ProjectPaymentRequest = z.strictObject({
+  amount: PayAmount,
+  date: IsoDate,
+  note: PayNote.default(''),
+  files: z.number().int().nonnegative().max(50).default(0),
+});
+export type ProjectPaymentRequest = z.input<typeof ProjectPaymentRequest>;
+
+/** Окно транша (прототип opWin с `src: 'pt'`) и данные для «Изменить». */
+export const ProjectPaymentWindow = z.object({
+  id: Uuid,
+  version: RecordVersion,
+  contractor: z.object({ id: Uuid, name: z.string(), archived: z.boolean() }),
+  /** Проект: «Проект: получено X из Y» (без стоимости — только X). */
+  project: z.object({ id: Uuid, name: z.string(), plan: Tyiyn.nullable(), paid: Tyiyn }),
+  date: IsoDate,
+  amount: Tyiyn,
+  note: z.string(),
+  edited: z.boolean(),
+  created: Audit,
+  updated: Audit,
+  deleted: z.object({ name: z.string().nullable(), at: z.string(), reason: z.string() }).nullable(),
+  locks: z.object({ edit: Lock, del: Lock }),
+  /** «Изменить»: сумма не больше этого (прототип `opMax` для `pt`); null — стоимость не задана. */
+  max: Tyiyn.nullable(),
+  /** Сколько файлов уже приложено; null — блока «Файлы» нет. */
+  files: z.number().int().nonnegative().nullable(),
+  today: IsoDate,
+  history: ProjectHistory,
+});
+export type ProjectPaymentWindow = z.infer<typeof ProjectPaymentWindow>;
+
+/** «Сохранить» в окне «Изменить: оплата по проекту»: причина — если меняются сумма или дата. */
+export const ProjectPaymentEditRequest = z.strictObject({
+  version: RecordVersion,
+  amount: PayAmount,
+  date: IsoDate,
+  note: PayNote.default(''),
+  reason: z.string().max(OP_REASON_MAX).refine(noNul).default(''),
+});
+export type ProjectPaymentEditRequest = z.input<typeof ProjectPaymentEditRequest>;

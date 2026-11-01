@@ -20,6 +20,7 @@ import {
   type IsoDate,
   type ProjectStatus,
   type TaskStatus,
+  type Translate,
   scopeOf,
 } from '@buhuchet/domain';
 import {
@@ -34,7 +35,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { requirePermission } from '../../middleware/access';
-import { subjectOf, todayOf } from '../contractors/common';
+import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { cpScopeOf } from '../tasks/common';
 import {
   canKeepProjects,
@@ -50,6 +51,7 @@ import {
   projectWhere,
   unauthorized,
 } from './common';
+import { paymentsOfCard } from './payments';
 
 /*
  * Карточка проекта, окно проекта и вкладка «Проекты» карточки контрагента (задача 2.26; прототип
@@ -70,16 +72,21 @@ const filesBlock = (
   hasPermission(subject, 'filesView') &&
   canSeeContractor(subject, 'files', contractor);
 
-/** Деньги в истории проекта: планируемая стоимость (транши — часть 2 задачи 2.26). */
+/** Деньги в истории проекта: планируемая стоимость (записи траншей видит только тот, кто видит деньги). */
 const PROJECT_MONEY_FIELDS: ReadonlySet<string> = new Set(['plan']);
 
-/** Карточка для ответа API: деньги и задачи — тому, кто их видит. */
+/** Карточка для ответа API: деньги, транши и задачи — тому, кто их видит. */
 export async function cardBody(
   tx: Parameters<typeof readStatusHistory>[0],
   card: ProjectCardRecord,
-  ctx: { subject: AccessSubject; features: Readonly<Record<Feature, boolean>>; today: IsoDate },
+  ctx: {
+    subject: AccessSubject;
+    features: Readonly<Record<Feature, boolean>>;
+    today: IsoDate;
+    t: Translate;
+  },
 ): Promise<ProjectCardBody> {
-  const { subject, features, today } = ctx;
+  const { subject, features, today, t } = ctx;
   const p = card.project;
   const status = p.status as ProjectStatus;
   const files = filesBlock(subject, features, card.contractor);
@@ -103,6 +110,9 @@ export async function cardBody(
     lead: { id: p.leadEmployeeId, name: card.leadName },
     members: card.memberNames,
     money: money ? { plan: p.plan == null ? null : Number(p.plan), paid: card.paid } : null,
+    payments: money
+      ? await paymentsOfCard(tx, t, subject, p.id, { archived: card.contractor.archived, files })
+      : null,
     works: card.works.map((w) => ({
       ...w,
       overdue: projectWorkOverdue({ done: w.done, due: w.due }, today),
@@ -120,10 +130,11 @@ export async function cardBody(
       : null,
     files,
     statusHistory: statuses.map((h) => ({ ...h, at: h.at.toISOString(), file: null })),
-    // Записи о файлах — тому, кто видит файлы; «было → стало» стоимости — тому, кто видит деньги
-    // (запись только о стоимости не показывается).
+    // Записи о файлах — тому, кто видит файлы; «было → стало» стоимости и записи траншей — тому, кто
+    // видит деньги (запись только о стоимости не показывается).
     history: card.history
       .filter((h) => files || (h.action !== 'file_attach' && h.action !== 'file_delete'))
+      .filter((h) => money || h.paymentId === null)
       .flatMap((h) => {
         const all = (h.changes as { field: string; from?: unknown; to?: unknown }[]) ?? [];
         const changes = money ? all : all.filter((c) => !PROJECT_MONEY_FIELDS.has(c.field));
@@ -134,6 +145,7 @@ export async function cardBody(
             at: h.at.toISOString(),
             actor: h.actorName,
             action: h.action as HistoryAction,
+            paymentId: h.paymentId,
             changes,
             reason: h.reason,
           },
@@ -151,6 +163,8 @@ export async function cardBody(
       works: projectWorksEditable(viewer, { members: card.members, status }),
       rollback: hasPermission(subject, 'rollback'),
       task: canTaskProjects(subject, features),
+      // «Записать оплату» (прототип `projActions`: `ed && moneyVis() && p.status !== 'Отменён'`).
+      pay: canKeepProjects(subject) && money && status !== 'cancelled',
     },
   };
 }
@@ -179,10 +193,11 @@ export function projectCardHandler(deps: ApiDeps): RouteHandler<typeof projectCa
   return async (c) => {
     const { id } = c.req.valid('param');
     const subject = subjectOf(c);
+    const t = await translateOf(deps);
     const out = await inProjects(deps, c, async (tx, features) => {
       const card = await projectCard(tx, id, projectWhere(subject));
       if (!card) apiFail(404, 'project_not_found', 'Проект не найден');
-      return cardBody(tx, card, { subject, features, today: todayOf(deps) });
+      return cardBody(tx, card, { subject, features, today: todayOf(deps), t });
     });
     c.header('Cache-Control', 'no-store');
     return c.json(out, 200);

@@ -34,7 +34,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { requirePermission } from '../../middleware/access';
-import { subjectOf, todayOf } from '../contractors/common';
+import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { cardBody } from './card';
 import {
   body,
@@ -214,6 +214,7 @@ export function projectStatusHandler(
     const { id } = c.req.valid('param');
     const { to, version, reason } = c.req.valid('json');
     const subject = subjectOf(c);
+    const t = await translateOf(deps);
     const out = await inProjects(deps, c, async (tx, features) => {
       const l = await locked(tx, subject, id);
       const rollback = scaleBack('project', l.project.status) === to;
@@ -230,7 +231,7 @@ export function projectStatusHandler(
       }
       await setProjectStatus(tx, l, to, { rollback, reason: reason ?? null, version });
       const card = (await projectCard(tx, id, undefined))!;
-      return cardBody(tx, card, { subject, features, today: todayOf(deps) });
+      return cardBody(tx, card, { subject, features, today: todayOf(deps), t });
     });
     return c.json(out, 200);
   };

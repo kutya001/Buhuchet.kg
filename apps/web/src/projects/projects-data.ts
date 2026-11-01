@@ -4,9 +4,12 @@ import {
   ContractorProjects,
   ProjectCard,
   ProjectForm,
+  ProjectPaymentWindow,
   ProjectSummary,
   TaskProjects,
   type ProjectEditRequest,
+  type ProjectPaymentEditRequest,
+  type ProjectPaymentRequest,
   type ProjectRequest,
   type ProjectStatusRequest,
   type ProjectWorkRequest,
@@ -15,6 +18,7 @@ import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
+import { useFinanceRefresh } from '../finance/finance-data';
 
 /**
  * Данные модуля «Проекты контрагентов» (задача 2.26; прототип modules/projects.js): числа вкладок и
@@ -121,6 +125,33 @@ export function setProjectWorkDone(id: string, workId: string, done: boolean) {
   );
 }
 
+/** Окно транша (оплаты по проекту). */
+export const projectPaymentQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['projects', 'payment', id],
+    queryFn: async () =>
+      json(await api.api['project-payments'][':id'].$get({ param: { id } }), (v) =>
+        ProjectPaymentWindow.parse(v),
+      ),
+  });
+
+/** «Записать оплату» по проекту — транш. */
+export function payProject(id: string, json: ProjectPaymentRequest) {
+  return callApi(() => api.api.projects[':id'].payments.$post({ param: { id }, json }));
+}
+
+/** «Сохранить» в окне «Изменить: оплата по проекту». */
+export function editProjectPayment(id: string, json: ProjectPaymentEditRequest) {
+  return callApi(() => api.api['project-payments'][':id'].$put({ param: { id }, json }));
+}
+
+/** «Удалить» транш с причиной. */
+export function deleteProjectPayment(id: string, reason: string) {
+  return callApi(() =>
+    api.api['project-payments'][':id'].delete.$post({ param: { id }, json: { reason } }),
+  );
+}
+
 /**
  * После записи — перечитать всё, что показывает проекты: списки вкладок, числа, карточки, вкладку
  * контрагента и его историю, задачи (столбец и карточка «Проект»), файлы проекта.
@@ -134,4 +165,19 @@ export function useProjectsRefresh() {
     void client.invalidateQueries({ queryKey: ['contractors', 'history'] });
     void client.invalidateQueries({ queryKey: ['files', 'project'] });
   }, [client]);
+}
+
+/**
+ * После записи транша — и проекты (карточка, «получено», плашки), и «Финансовые операции» (строки
+ * журнала, плашка «Проекты и разовые услуги»), и файлы транша.
+ */
+export function usePaymentsRefresh() {
+  const client = useQueryClient();
+  const projects = useProjectsRefresh();
+  const finance = useFinanceRefresh();
+  return useCallback(() => {
+    projects();
+    finance();
+    void client.invalidateQueries({ queryKey: ['files', 'project_payment'] });
+  }, [client, projects, finance]);
 }

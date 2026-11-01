@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import type { Db } from '../client';
-import { projectMembers, projects, projectWorks, statusHistory } from '../schema';
+import { projectMembers, projectPayments, projects, projectWorks, statusHistory } from '../schema';
 import type { DemoIdOf } from './demo';
 
 /*
  * Проекты демо-организации (задача 2.26): `projects` из demoDB.json — контрагент, название, описание,
  * срок, статус, ответственные (первый в списке — как в прототипе), главный, планируемая стоимость и
- * работы. Суммы в прототипе — в сомах, в базе — в тыйынах. Оплаты (`pays`) — вторая часть задачи 2.26;
- * файлы проектов не наполняются: в демо-хранилище их нет (как у разовых услуг). Повторный запуск
- * досоздаёт только недостающее.
+ * работы, оплаты траншами (`pays`). Суммы в прототипе — в сомах, в базе — в тыйынах. Файлы проектов и
+ * траншей не наполняются: в демо-хранилище их нет (как у разовых услуг). Повторный запуск досоздаёт
+ * только недостающее (транши — и у проектов, созданных раньше).
  */
 
 const tyiyn = (som: number) => Math.round(som * 100);
@@ -32,6 +32,14 @@ const DemoWork = z.object({
   due: z.iso.date().nullable().default(null),
 });
 
+const DemoPay = z.object({
+  id: z.union([z.number().int(), z.string()]),
+  date: z.iso.date(),
+  amount: z.number().positive(),
+  by: z.string(),
+  note: z.string().default(''),
+});
+
 const DemoProject = z.object({
   id: z.string(),
   cp: z.number().int(),
@@ -44,6 +52,7 @@ const DemoProject = z.object({
   lead: z.string(),
   plan: z.number().nonnegative().nullable().default(null),
   works: z.array(DemoWork).default([]),
+  pays: z.array(DemoPay).default([]),
   _cb: z.string().optional(),
   _ca: z.string().optional(),
   _ub: z.string().optional(),
@@ -87,6 +96,22 @@ export async function seedDemoProjects(
     )
     .onConflictDoNothing()
     .returning({ id: projects.id });
+  // Транши (прототип `p.pays`): номер транша — внутри проекта, поэтому ключ — «проект:номер».
+  const pays = demo.projects.flatMap((p) =>
+    p.pays.map((t) => ({
+      id: demoId('project_payment', `${p.id}:${t.id}`),
+      orgId,
+      projectId: demoId('project', p.id),
+      amount: tyiyn(t.amount),
+      paidOn: t.date,
+      note: t.note,
+      createdBy: user(t.by),
+      updatedBy: user(t.by),
+      createdAt: stampOf(undefined, t.date),
+      updatedAt: stampOf(undefined, t.date),
+    })),
+  );
+  if (pays.length) await db.insert(projectPayments).values(pays).onConflictDoNothing();
   const created = new Set(inserted.map((r) => r.id));
   const fresh = demo.projects.filter((p) => created.has(demoId('project', p.id)));
   if (!fresh.length) return;

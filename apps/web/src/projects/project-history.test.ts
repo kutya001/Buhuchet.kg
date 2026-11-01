@@ -1,7 +1,11 @@
 import { defaultUiTexts } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { projectHistoryItems, projectHistoryText } from './project-history';
+import {
+  projectHistoryItems,
+  projectHistoryText,
+  projectPaymentHistoryText,
+} from './project-history';
 
 // Строки истории проекта — как в прототипе (modules/projects.js, `log('p', …)`).
 
@@ -63,5 +67,52 @@ describe('история проекта', () => {
     );
     expect(item).toMatchObject({ id: '7', date: '02.11.2026', time: '00:30' });
     expect(item!.who).toBe(t('status.system'));
+  });
+});
+
+describe("история транша (прототип `log('p', …, {sub})`, fin-op.js `opLog`)", () => {
+  const pay = (
+    action: string,
+    changes: { field: string; from?: unknown; to?: unknown }[],
+    reason: string | null = null,
+  ) => ({ action, paymentId: '00000000-0000-4000-8000-000000000301', changes, reason });
+  const nbsp = (s: string) => s.replace(/\s/g, ' ');
+
+  it('«Оплата 5 000 сом (аванс)» — в истории проекта и окне транша', () => {
+    const created = pay('create', [
+      { field: 'amount', to: 500_000 },
+      { field: 'paidOn', to: '2026-10-15' },
+      { field: 'note', to: 'аванс' },
+    ]);
+    expect(nbsp(projectHistoryText(t, created, names))).toBe('Оплата 5 000 сом (аванс)');
+    expect(nbsp(projectPaymentHistoryText(t, pay('create', [{ field: 'amount', to: 100 }])))).toBe(
+      'Оплата 1 сом',
+    );
+  });
+
+  it('изменение с причиной и удаление — как у операции', () => {
+    expect(
+      nbsp(
+        projectPaymentHistoryText(
+          t,
+          pay('update', [{ field: 'amount', from: 5_000_000, to: 4_500_000 }], 'Ошибка в сумме'),
+        ),
+      ),
+    ).toBe('Изменено: сумма 50 000,00 → 45 000,00 сом. Причина: Ошибка в сумме');
+    expect(
+      nbsp(
+        projectPaymentHistoryText(
+          t,
+          pay(
+            'delete',
+            [
+              { field: 'amount', from: 4_500_000 },
+              { field: 'paidOn', from: '2026-10-15' },
+            ],
+            'Дубль',
+          ),
+        ),
+      ),
+    ).toContain('оплата по проекту на 45 000 сом от 15.10.2026');
   });
 });

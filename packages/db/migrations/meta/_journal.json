@@ -596,6 +596,20 @@
       "when": 1793502379932,
       "tag": "0084_admin_telegram",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793506962574,
+      "tag": "0085_project_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793506969074,
+      "tag": "0086_project_payments_guards",
+      "breakpoints": true
     }
   ]
 }

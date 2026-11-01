@@ -6,9 +6,13 @@ import {
   ContractorHistory,
   ContractorProjects,
   FileUploadTicket,
+  FinJournalRow,
+  listPageSchema,
+  OperationEdited,
   ProjectCard,
   ProjectForm,
   ProjectList,
+  ProjectPaymentWindow,
   ProjectSaved,
   ProjectSummary,
   Task,
@@ -562,5 +566,205 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
     const values = await call('GET', '/api/projects/values?tab=all&col=status', chief);
     await expectStatus(values, 200);
     expect((await call('GET', '/api/projects/values?tab=all&col=plan', acc)).status).toBe(400);
+  });
+
+  it('транши: «Записать оплату» не больше остатка, окно, «Изменить» с причиной (п. 66), «Удалить»', async () => {
+    const id = await create(chief, { name: 'Проект с траншами', plan: som(60_000) });
+    const pay = (cookie: string, body: Record<string, unknown>, pid = id) =>
+      call('POST', `/api/projects/${pid}/payments`, cookie, body);
+    const tranche = { amount: som(50_000), date: '2026-10-15', note: 'Аванс' };
+    expect((await apiRequest(f.app, 'POST', `/api/projects/${id}/payments`)).status).toBe(401);
+    // «Бухгалтер» проект видит, но не ведёт; чужая организация проекта не видит.
+    expect((await pay(acc, tranche)).status).toBe(403);
+    expect((await pay(ownerB, tranche)).status).toBe(404);
+    expect((await pay(chief, { ...tranche, extra: 1 })).status).toBe(400);
+    expect(await refused(await pay(chief, { ...tranche, amount: som(60_001) }), 400)).toBe(
+      'project_pay_over',
+    );
+    expect(await refused(await pay(chief, { ...tranche, date: '2026-10-19' }), 400)).toBe(
+      'money_date_future',
+    );
+    const t = ProjectSaved.parse(
+      await (await expectStatus(await pay(chief, tranche), 201)).json(),
+    ).id;
+    // Карточка: «Оплаты (транши)», «получено», «Записать оплату»; бухгалтеру — без денег и траншей.
+    const c = await card(chief, id);
+    expect(c.money).toEqual({ plan: som(60_000), paid: som(50_000) });
+    expect(c.payments).toEqual([
+      expect.objectContaining({ id: t, amount: som(50_000), note: 'Аванс', edited: false }),
+    ]);
+    expect(c.can.pay).toBe(true);
+    expect(c.history[0]).toMatchObject({ action: 'create', paymentId: t });
+    const seen = await card(acc, id);
+    expect(seen.payments).toBeNull();
+    expect(seen.can.pay).toBe(false);
+    expect(seen.history.some((h) => h.paymentId !== null)).toBe(false);
+    // Окно транша: «получено X из Y», предел для «Изменить» — стоимость без остальных траншей.
+    const win = (cookie: string) =>
+      get(cookie, `/api/project-payments/${t}`, (x) => ProjectPaymentWindow.parse(x));
+    expect(await win(chief)).toMatchObject({
+      amount: som(50_000),
+      project: { id, plan: som(60_000), paid: som(50_000) },
+      max: som(60_000),
+      locks: { edit: null, del: null },
+    });
+    expect(await refused(await call('GET', `/api/project-payments/${t}`, acc), 403)).toBe(
+      'forbidden',
+    );
+    expect((await call('GET', `/api/project-payments/${t}`, ownerB)).status).toBe(404);
+    // п. 66: 50 000 → 45 000 с причиной — «получено» уменьшилось; без причины — нельзя.
+    const edit = (body: Record<string, unknown>) =>
+      call('PUT', `/api/project-payments/${t}`, chief, {
+        version: 1,
+        amount: som(50_000),
+        date: '2026-10-15',
+        note: 'Аванс',
+        ...body,
+      });
+    expect(await refused(await edit({ amount: som(45_000) }), 400)).toBe('op_reason_required');
+    expect(await refused(await edit({ amount: som(60_001), reason: 'x' }), 400)).toBe(
+      'op_project_over',
+    );
+    expect(
+      (
+        await call('PUT', `/api/project-payments/${t}`, acc, {
+          version: 1,
+          amount: 1,
+          date: '2026-10-15',
+        })
+      ).status,
+    ).toBe(403);
+    const edited = await edit({ amount: som(45_000), reason: 'Ошибка в сумме платёжки' });
+    expect(OperationEdited.parse(await (await expectStatus(edited, 200)).json())).toEqual({
+      changed: true,
+    });
+    expect((await card(chief, id)).money).toEqual({ plan: som(60_000), paid: som(45_000) });
+    expect(await refused(await edit({ amount: som(44_000), reason: 'x' }), 409)).toBe(
+      'record_changed',
+    );
+    // «Удалить» — с причиной; удалённый — в окне с отметкой, в карточке его нет.
+    const del = (body: Record<string, unknown>) =>
+      call('POST', `/api/project-payments/${t}/delete`, chief, body);
+    expect((await del({ reason: ' ' })).status).toBe(400);
+    await expectStatus(await del({ reason: 'Записали не тому проекту' }), 200);
+    expect(await refused(await del({ reason: 'ещё раз' }), 409)).toBe('op_deleted');
+    expect((await win(chief)).deleted).toMatchObject({ reason: 'Записали не тому проекту' });
+    expect((await card(chief, id)).payments).toEqual([]);
+    expect((await card(chief, id)).money!.paid).toBe(0);
+  });
+
+  it('транши: отменённому проекту и полностью оплаченному — нельзя; строка журнала «Оплата по проекту»', async () => {
+    const full = await create(chief, { name: 'Оплачен целиком', plan: som(1_000) });
+    const pay = (pid: string, amount: number) =>
+      call('POST', `/api/projects/${pid}/payments`, chief, { amount, date: '2026-10-18' });
+    const { id: t } = ProjectSaved.parse(
+      await (await expectStatus(await pay(full, som(1_000)), 201)).json(),
+    );
+    expect(await refused(await pay(full, som(1)), 409)).toBe('project_paid_full');
+    const cancelled = await create(chief, { name: 'Отменённый проект' });
+    await expectStatus(await status(chief, cancelled, { to: 'cancelled', version: 1 }), 200);
+    expect(await refused(await pay(cancelled, som(1)), 409)).toBe('project_pay_cancelled');
+    expect((await card(chief, cancelled)).can.pay).toBe(false);
+    // Журнал «Финансовых операций»: строка транша с проектом; «Проекты» выключены — строк нет.
+    const journal = async () =>
+      (
+        await get(chief, '/api/fin/journal?tab=proj&size=all', (x) =>
+          listPageSchema(FinJournalRow).parse(x),
+        )
+      ).items;
+    await features(f.a.orgId, { ...ON, finops: true });
+    try {
+      expect((await journal()).find((r) => r.id === t)).toMatchObject({
+        src: 'pt',
+        what: 'Оплачен целиком',
+        project: { id: full, name: 'Оплачен целиком' },
+        locks: { edit: null, del: null },
+      });
+      await features(f.a.orgId, { ...ON, finops: true, projects: false });
+      expect((await journal()).some((r) => r.id === t)).toBe(false);
+    } finally {
+      await features(f.a.orgId, ON);
+    }
+  });
+
+  it('транши: область «Свои» — транш чужого проекта «не найден»; без «Просматривать проекты» — по области «Финансовых операций»', async () => {
+    const id = await create(chief, {
+      contractorId: cpChief,
+      name: 'Проект главного с траншем',
+      plan: som(10_000),
+      members: [employee('chief-a')],
+      lead: employee('chief-a'),
+    });
+    const { id: t } = ProjectSaved.parse(
+      await (
+        await expectStatus(
+          await call('POST', `/api/projects/${id}/payments`, chief, {
+            amount: som(1_000),
+            date: '2026-10-18',
+          }),
+          201,
+        )
+      ).json(),
+    );
+    const hrPermission = (permissionId: string) =>
+      and(
+        eq(schema.rolePermissions.roleId, f.roleIds.hr),
+        eq(schema.rolePermissions.permissionId, permissionId),
+      );
+    const hrScope = (group: string) =>
+      and(eq(schema.roleScopes.roleId, f.roleIds.hr), eq(schema.roleScopes.permGroup, group));
+    const grant = (...ids: string[]) =>
+      f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values(
+          ids.map((permissionId) => ({ orgId: f.a.orgId, roleId: f.roleIds.hr, permissionId })),
+        )
+        .onConflictDoNothing();
+    const scope = (group: string, value: 'own' | 'all') =>
+      f.t.admin.db.update(schema.roleScopes).set({ scope: value }).where(hrScope(group));
+    const window = () => call('GET', `/api/project-payments/${t}`, hr);
+    // «Кадры» с «Вести проекты», область «Свои»: транш проекта главного — «не найден» во всех методах.
+    await grant('projects');
+    try {
+      expect((await window()).status).toBe(404);
+      const paid = await call('POST', `/api/projects/${id}/payments`, hr, {
+        amount: 100,
+        date: '2026-10-18',
+      });
+      expect(paid.status).toBe(404);
+      const edited = await call('PUT', `/api/project-payments/${t}`, hr, {
+        version: 1,
+        amount: 100,
+        date: '2026-10-18',
+        reason: 'Ошибка',
+      });
+      expect(edited.status).toBe(404);
+      const deleted = await call('POST', `/api/project-payments/${t}/delete`, hr, {
+        reason: 'Ошибка',
+      });
+      expect(deleted.status).toBe(404);
+      // Только журнал (без «Просматривать проекты»), деньги проектов — правом «Плата за обслуживание»:
+      // область «Проектов» — «Все», «Финансовых операций» — «Свои» — транш контрагента главного не открыть.
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projects'));
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projView'));
+      await grant('fee');
+      await features(f.a.orgId, { ...ON, fee: true, finops: true });
+      await scope('projects', 'all');
+      expect((await window()).status).toBe(404);
+      await scope('fin', 'all');
+      expect(
+        await get(hr, `/api/project-payments/${t}`, (x) => ProjectPaymentWindow.parse(x)),
+      ).toMatchObject({ id: t, amount: som(1_000) });
+      // «Финансовые операции» выключены — без «Просматривать проекты» окна транша нет.
+      await features(f.a.orgId, { ...ON, fee: true, finops: false });
+      expect(await refused(await window(), 403)).toBe('forbidden');
+    } finally {
+      await features(f.a.orgId, ON);
+      await scope('projects', 'own');
+      await scope('fin', 'own');
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('projects'));
+      await f.t.admin.db.delete(schema.rolePermissions).where(hrPermission('fee'));
+      await grant('projView');
+    }
   });
 });

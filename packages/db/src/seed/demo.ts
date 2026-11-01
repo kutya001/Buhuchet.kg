@@ -55,6 +55,7 @@ export type DemoKind =
   | 'one_off_service_payment'
   | 'project'
   | 'project_work'
+  | 'project_payment'
   | 'indicator'
   | 'indicator_value'
   | 'indicator_month'
