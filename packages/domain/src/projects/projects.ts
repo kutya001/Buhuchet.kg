@@ -237,3 +237,34 @@ export const projectWorksEditable = (
   v: ProjectViewer,
   p: { members: readonly string[]; status: ProjectStatus },
 ): boolean => v.canKeep || (v.employeeId !== null && p.members.includes(v.employeeId));
+
+/**
+ * Можно ли записать оплату по проекту (прототип `projActions`: «Записать оплату» — у неотменённого
+ * проекта; при заданной стоимости, полученной целиком, — неактивна с подсказкой «Получена вся
+ * планируемая стоимость»). Null — можно; иначе код отказа `MONEY_MESSAGES`.
+ */
+export function projectPayRefusal(p: {
+  status: ProjectStatus;
+  plan: Tyiyn | null;
+  paid: Tyiyn;
+}): 'project_pay_cancelled' | 'project_paid_full' | null {
+  if (p.status === 'cancelled') return 'project_pay_cancelled';
+  if (p.plan && projectLeft(p.plan, p.paid) <= 0) return 'project_paid_full';
+  return null;
+}
+
+/**
+ * Новый транш (прототип `projPay` → `tranchDlg`): сумма больше нуля; при заданной стоимости — не больше
+ * остатка (`left`), без неё — любая. Дата — не позже сегодняшней (`money_date_future`, проверяет
+ * вызывающий).
+ */
+export function projectPaymentProblem(
+  amount: Tyiyn | null,
+  left: Tyiyn | null,
+): { problem: 'op_amount_required' | 'project_pay_over'; amount?: Tyiyn } | null {
+  if (amount === null || !Number.isInteger(amount) || amount <= 0 || amount > MONEY_AMOUNT_MAX)
+    return { problem: 'op_amount_required' };
+  if (left !== null && amount > left)
+    return { problem: 'project_pay_over', amount: Math.max(0, left) };
+  return null;
+}

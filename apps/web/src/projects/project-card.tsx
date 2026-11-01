@@ -34,6 +34,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ApiFailure } from '../api-client';
 import { ContractorLink } from '../contractors/contractor-link';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { RecordFiles } from '../files/record-files';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -47,6 +48,7 @@ import {
 } from '../status/status-view';
 import { ProjectOverPill } from './project-columns';
 import { projectHistoryItems } from './project-history';
+import { PaymentsBox, ProjectPaymentSlot, type ProjectPaymentAction } from './project-payments';
 import {
   addProjectWork,
   projectCardQuery,
@@ -60,7 +62,8 @@ import {
  * «срок окончания прошёл», «История статусов», контрагент, срок, главный и ответственные, кто создал и
  * изменил, описание; «Деньги по проекту» — тому, кто видит деньги; «Работы · N из M» с полосой и
  * галочками, строка «Добавить работу»; «Задачи · N» с кнопкой «Задача»; файлы; история. Внизу —
- * «Действия» (меню без «Открыть») и «Готово». Оплаты (транши) добавит вторая часть задачи.
+ * «Действия» (меню без «Открыть») и «Готово». «Оплаты (транши)» — после работ, тому, кто видит деньги
+ * (`./project-payments.tsx`).
  */
 
 /** Кто и когда: имя, под ним момент мелким серым (прототип `auditKv`). */
@@ -345,6 +348,7 @@ export function ProjectCardDialog({
   const { employeeId } = useShell();
   const query = useQuery(projectCardQuery(id));
   const [more, setMore] = useState<HTMLElement | null>(null);
+  const [pay, setPay] = useState<DialogSlot<ProjectPaymentAction> | null>(null);
   const p = query.data;
   const failed =
     query.isError && !p
@@ -403,9 +407,11 @@ export function ProjectCardDialog({
             onBack={(to) => onBack(p, to)}
             onTask={() => onTask(p)}
             onOpenTask={onOpenTask}
+            onPay={(a) => setPay(openSlot(a))}
           />
         ) : null}
       </div>
+      <ProjectPaymentSlot slot={pay} onClose={() => setPay(closeSlot)} />
       {more && p ? (
         <ActionMenu
           items={menu(p)}
@@ -426,6 +432,7 @@ function CardBody({
   onBack,
   onTask,
   onOpenTask,
+  onPay,
 }: {
   t: Translate;
   p: ProjectCard;
@@ -434,6 +441,7 @@ function CardBody({
   onBack: (to: string) => void;
   onTask: () => void;
   onOpenTask: (taskId: string) => void;
+  onPay: (a: ProjectPaymentAction) => void;
 }) {
   const events = statusEvents(p.statusHistory);
   const view = scaleView(t, {
@@ -476,6 +484,7 @@ function CardBody({
         {p.money ? <MoneyBox t={t} money={p.money} /> : null}
       </div>
       <WorksBox key={`${p.id}-${p.version}`} t={t} p={p} me={me} />
+      {p.money && p.payments ? <PaymentsBox t={t} p={p} onAction={onPay} /> : null}
       {tasks ? (
         <Box
           title={t('proj.card.tasks', { n: tasks.length })}

@@ -88,6 +88,7 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
     open: { add: 'project' },
   },
   works: { module: 'projects', tab: 'all', flash: LIST },
+  tranche: { module: 'projects', tab: 'all', flash: LIST },
   pstat: { module: 'projects', tab: 'all', flash: LIST },
   // «Показатели контрагентов» (2.27, 2.28): «Кому вести» — нажать переключатель вида.
   kset: { module: 'kpi', tab: 'setup', flash: '[data-kpi-setup-list]' },

@@ -21,7 +21,7 @@ import {
   type ListQuery,
   type Tyiyn,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import type { FileListPart } from './files';
@@ -43,6 +43,7 @@ import {
   files,
   orgSettings,
   projectMembers,
+  projectPayments,
   projects,
   projectWorks,
   tasks,
@@ -129,11 +130,8 @@ const MEMBER_NAMES = sql<string>`coalesce((select string_agg(e.short_name, ', ' 
 const MEMBERS_JSON = sql<
   { id: string; name: string }[]
 >`coalesce((select json_agg(json_build_object('id', e.id, 'name', e.short_name) order by pm.position, e.short_name) from ${projectMembers} pm join ${employees} e on e.id = pm.employee_id where pm.project_id = ${projects.id}), '[]'::json)`;
-/**
- * Получено по проекту — действующие оплаты (транши). Оплаты по проекту добавляет вторая часть задачи
- * 2.26 («Оплаты (транши)», «Финансовые операции»); пока их нет — 0.
- */
-const PAID = sql<number>`0::bigint`;
+/** Получено по проекту — действующие оплаты (транши; прототип `projPaid`: без удалённых). */
+const PAID = sql<number>`(select coalesce(sum(pp.amount), 0)::bigint from ${projectPayments} pp where pp.project_id = ${projects.id} and pp.deleted_at is null)`;
 const LEFT = sql<number>`case when ${projects.plan} is null then null else greatest(0, ${projects.plan} - ${PAID}) end`;
 const worksOverdue = (today: IsoDate) =>
   sql<boolean>`exists (select 1 from ${projectWorks} w where w.project_id = ${projects.id} and not w.done and w.due_date < ${dateLiteral(today)})`;
@@ -655,9 +653,13 @@ export async function createProject(
   return { id };
 }
 
-/** Получено по проекту — действующие оплаты; до второй части задачи 2.26 оплат нет. */
-export async function projectPaid(_tx: Tx, _projectId: string): Promise<Tyiyn> {
-  return 0;
+/** Получено по проекту — действующие оплаты (транши) одного проекта. */
+export async function projectPaid(tx: Tx, projectId: string): Promise<Tyiyn> {
+  const [row] = await tx
+    .select({ paid: sql<string>`coalesce(sum(${projectPayments.amount}), 0)` })
+    .from(projectPayments)
+    .where(and(eq(projectPayments.projectId, projectId), isNull(projectPayments.deletedAt)));
+  return Number(row?.paid ?? 0);
 }
 
 /**
@@ -950,6 +952,8 @@ export interface ProjectHistoryRow {
   id: number;
   at: Date;
   actorName: string | null;
+  /** Транш, к которому относится запись (`project_payment`); у самого проекта — null. */
+  paymentId: string | null;
   action: string;
   changes: unknown;
   reason: string | null;
@@ -1031,13 +1035,24 @@ export async function projectCard(
         at: auditLog.at,
         actorName: histActor.shortName,
         actorUserId: auditLog.actorUserId,
+        entity: auditLog.entity,
+        entityId: auditLog.entityId,
         action: auditLog.action,
         changes: auditLog.changes,
         reason: auditLog.reason,
       })
       .from(auditLog)
       .leftJoin(histActor, eq(histActor.userId, auditLog.actorUserId))
-      .where(and(eq(auditLog.entity, 'project'), eq(auditLog.entityId, id)))
+      // Записи проекта и его траншей (прототип: `log('p', p.id, …, {sub})` — в истории проекта).
+      .where(
+        or(
+          and(eq(auditLog.entity, 'project'), eq(auditLog.entityId, id)),
+          and(
+            eq(auditLog.entity, 'project_payment'),
+            sql`${auditLog.entityId} in (select pp.id::text from ${projectPayments} pp where pp.project_id = ${id})`,
+          ),
+        ),
+      )
       .orderBy(desc(auditLog.at), desc(auditLog.id)),
   ]);
   // Имена из истории: исполнитель добавленной работы, ответственные и главный «было → стало».
@@ -1071,9 +1086,10 @@ export async function projectCard(
     paid: await projectPaid(tx, id),
     createdName: n?.created ?? null,
     updatedName: n?.updated ?? null,
-    history: history.map(({ actorUserId, actorName, ...h }) => ({
+    history: history.map(({ actorUserId, actorName, entity, entityId, ...h }) => ({
       ...h,
       actorName: auditActorName(actorUserId, actorName),
+      paymentId: entity === 'project_payment' ? entityId : null,
     })),
     names: Object.fromEntries(known.map((k) => [k.id, k.name])),
   };
@@ -1289,5 +1305,6 @@ export function projectFilesPart(viewer: ProjectViewer): FileListPart {
   return {
     visible: sql`exists (select 1 from ${projects} join ${contractors} on ${contractors.id} = ${projects.contractorId} where ${projects.id} = ${files.sourceId} and ${projectVisibility(viewer) ?? sql`true`})`,
     source: sql`(select ${projects.name} from ${projects} where ${projects.id} = ${files.sourceId})`,
+    ref: sql`(${files.sourceId})::text`,
   };
 }

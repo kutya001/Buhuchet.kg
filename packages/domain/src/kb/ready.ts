@@ -234,11 +234,15 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
     done: { kind: 'status', scale: 'task', from: ['on_confirm'], to: ['confirmed', 'rework'] },
   },
   // 10. Проекты контрагентов (задача 2.26): проект создан; работа добавлена в карточке проекта
-  // (прототип `KB_EV['p.work']`: «Добавлена работа…»). «Принять транш» — со второй частью задачи.
+  // (прототип `KB_EV['p.work']`: «Добавлена работа…»); транш записан (`KB_EV['p.pay']`: «Оплата …»).
   proj: { module: 'projects', done: { kind: 'history', entity: 'project', actions: ['create'] } },
   works: {
     module: 'projects',
     done: { kind: 'history', entity: 'project', actions: ['work_add'] },
+  },
+  tranche: {
+    module: 'projects',
+    done: { kind: 'history', entity: 'project_payment', actions: ['create'] },
   },
   // «Статусы проекта и откат» — шаг «Посмотреть» вкладки «Все» (шкала — в карточке проекта).
   pstat: { module: 'projects' },

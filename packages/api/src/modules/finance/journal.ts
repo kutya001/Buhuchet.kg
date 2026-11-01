@@ -15,6 +15,7 @@ import {
   listReceiptJournalValues,
   MonthClosedTakenError,
   orgMenuSettings,
+  visibleProjectIds,
   withOrgContext,
   type Tx,
 } from '@buhuchet/db';
@@ -52,6 +53,7 @@ import { orgContextOf, requirePermission } from '../../middleware/access';
 import { subjectOf, todayOf, translateOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { finScopeOf, moneyFail, withMoneyErrors } from '../money/common';
+import { projectViewerOf } from '../projects/common';
 import { journalLocks } from './common';
 import { serviceLocks, servicesVisible, viewOnlyOnce } from './services';
 import { error } from '../reports/common';
@@ -115,10 +117,18 @@ function inFinops<T>(
  * услуги на вкладке «Проекты и услуги»).
  */
 function visibility(subject: AccessSubject, features: Record<Feature, boolean>) {
+  const proj = servicesVisible(subject, features);
+  const viewer = projectViewerOf(subject);
   return {
     tax: features.taxpay && hasPermission(subject, 'money'),
     fee: features.fee && hasPermission(subject, 'fee'),
-    proj: servicesVisible(subject, features),
+    proj,
+    // Транши проектов (задача 2.26; прототип finRows: `feat('projects')`) — проектов, которые сотрудник
+    // видит в модуле «Проекты» (прототип — всех проектов контрагентов области «Финансовых операций»).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Г-11
+    ...(features.projects && proj
+      ? { projects: { visible: viewer.seeAll ? undefined : visibleProjectIds(viewer) } }
+      : {}),
   };
 }
 

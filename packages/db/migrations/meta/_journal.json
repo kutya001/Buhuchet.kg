@@ -589,6 +589,20 @@
       "when": 1793493129969,
       "tag": "0083_projects_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793502505032,
+      "tag": "0084_project_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793502520158,
+      "tag": "0085_project_payments_guards",
+      "breakpoints": true
     }
   ]
 }

@@ -25,7 +25,7 @@ import { operationFiles, serviceFileSources } from '../finance/files';
 import { indicatorValueSource } from '../kpi/card';
 import { kpiScopeOf } from '../kpi/common';
 import { finScopeOf } from '../money/common';
-import { projectFiles } from '../projects/files';
+import { projectFiles, projectPaymentFiles } from '../projects/files';
 import { reportScopeOf } from '../reports/common';
 import { reportFileSource } from '../reports/files';
 import { taskAccessOf } from '../tasks/common';
@@ -223,6 +223,7 @@ export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   money_operation: operationFiles,
   ...serviceFileSources,
   project: projectFiles,
+  project_payment: projectPaymentFiles,
   task: { ...taskFileSource, list: taskFilesList },
   indicator_value: { ...indicatorValueSource, list: indicatorFilesList },
 };

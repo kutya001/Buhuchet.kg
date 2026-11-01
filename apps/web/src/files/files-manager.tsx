@@ -160,9 +160,9 @@ export function FilesManager() {
       const month = file.sourceRef;
       return () => void kpi.open(id, month);
     }
-    // Файл проекта (задача 2.26) — карточка проекта.
-    if (file.kind === 'project' && file.sourceId) {
-      const id = file.sourceId;
+    // Файл проекта и его транша (задача 2.26) — карточка проекта (`sourceRef` — номер проекта).
+    if (file.kind === 'project' && (file.sourceRef ?? file.sourceId)) {
+      const id = (file.sourceRef ?? file.sourceId)!;
       return () => openProjectCard(id);
     }
     if (file.kind === 'one_off_service' && file.sourceRef) {

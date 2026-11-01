@@ -16,6 +16,7 @@ import { taskQuery } from '../tasks/tasks-data';
 import { ProjectCardDialog } from './project-card';
 import { closeProjectCard, openProjectCard, useProjectCardRequest } from './project-card-store';
 import { ProjectDialog, type ProjectContractorPreset } from './project-dialog';
+import { payAction, ProjectPaymentSlot, type ProjectPaymentAction } from './project-payments';
 import { projectCardQuery, setProjectStatus, useProjectsRefresh } from './projects-data';
 
 /** Что нужно меню о проекте: строка списка или карточка. */
@@ -26,7 +27,19 @@ export interface ProjectRef {
   version: number;
   contractor: { id: string; name: string };
   lead: { id: string };
+  /** Деньги проекта: у карточки — `money`, у строки списка — `plan` и `paid` (null — не видны). */
+  money?: { plan: number | null; paid: number } | null;
+  plan?: number | null;
+  paid?: number | null;
 }
+
+/** Стоимость и «получено» проекта меню (строка списка или карточка); null — денег не видно. */
+const moneyOf = (p: ProjectRef): { plan: number | null; paid: number } | null =>
+  p.money !== undefined
+    ? p.money
+    : p.paid === undefined || p.paid === null
+      ? null
+      : { plan: p.plan ?? null, paid: p.paid };
 
 /** Окно проекта: контрагент из его карточки или изменяемый проект. */
 interface FormSlot {
@@ -72,6 +85,7 @@ export function useProjectActions(): {
   const [backBusy, setBackBusy] = useState(false);
   const [backError, setBackError] = useState<string | undefined>();
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
+  const [pay, setPay] = useState<DialogSlot<ProjectPaymentAction> | null>(null);
 
   const once = async <T,>(key: string, send: () => Promise<T>): Promise<T | null> => {
     if (pending.has(key)) return null;
@@ -152,6 +166,18 @@ export function useProjectActions(): {
       });
     if (keep)
       items.push({ id: 'edit', label: t('proj.act.edit'), icon: 'edit', run: () => void edit(p) });
+    // «Записать оплату» (прототип `projActions`: `ed && moneyVis() && p.status !== 'Отменён'`; право
+    // «Вести проекты» само открывает деньги проектов). Получена вся стоимость — пункт неактивен.
+    const money = moneyOf(p);
+    if (keep && money && p.status !== 'cancelled')
+      items.push({
+        id: 'pay',
+        label: t('proj.act.pay'),
+        icon: 'wallet',
+        disabled: !!money.plan && money.plan - money.paid <= 0,
+        reason: t('err.project_paid_full'),
+        run: () => setPay(openSlot(payAction({ ...p, money }))),
+      });
     if (canTask && p.status !== 'cancelled')
       items.push({ id: 'task', label: t('proj.act.task'), icon: 'task', run: () => taskFor(p) });
     if (keep) {
@@ -257,6 +283,7 @@ export function useProjectActions(): {
           }}
         />
       ) : null}
+      <ProjectPaymentSlot slot={pay} onClose={() => setPay(closeSlot)} />
       {tasks.dialogs}
     </>
   );

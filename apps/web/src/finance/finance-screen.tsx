@@ -48,6 +48,8 @@ import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { OP_LOOK } from '../money/contractor-money';
 import { ReceiptDialog } from '../money/tax-dialogs';
+import { openProjectCard } from '../projects/project-card-store';
+import { ProjectPaymentSlot, type ProjectPaymentAction } from '../projects/project-payments';
 import { useReportActions } from '../reports/report-actions';
 import { useShell } from '../shell/context';
 import { ModuleStub } from '../shell/module-stub';
@@ -154,6 +156,7 @@ function accText(t: Translate, acc: FinJournalRow['acc']): string {
 function kindOf(t: Translate, r: FinJournalRow) {
   if (r.src === 'fee') return { label: t('fin.fee.kind'), tone: 'violet' as const };
   if (r.src === 'svc') return { label: t('files.kind.one_off_service'), tone: 'caution' as const };
+  if (r.src === 'pt') return { label: t('fin.pt.kind'), tone: 'info' as const };
   const key = r.self && r.kind === 'pay' ? 'self' : r.kind;
   return {
     label: t(key === 'self' ? 'money.op.self' : `money.op.${r.kind as MoneyOpKind}`),
@@ -166,7 +169,7 @@ function kindOf(t: Translate, r: FinJournalRow) {
  * знака).
  */
 function signOf(r: FinJournalRow): string {
-  if (r.src === 'fee') return '+';
+  if (r.src === 'fee' || r.src === 'pt') return '+';
   if (r.src === 'svc') return '';
   if ((r.self && r.kind === 'pay') || r.kind === 'xfer') return '';
   if (r.kind === 'corr') return r.signed < 0 ? '−' : '+';
@@ -283,6 +286,14 @@ function journalColumns(t: Translate): GridColumn<FinJournalRow>[] {
     },
     { key: 'rep', label: t('fin.j.col.rep'), type: 'text', width: 160, text: (r) => r.rep ?? '' },
     { key: 'per', label: t('fin.j.col.per'), type: 'text', width: 140, text: (r) => r.per ?? '' },
+    // «Проект» (прототип finCols `proj`): название проекта у транша.
+    {
+      key: 'proj',
+      label: t('fin.j.col.proj'),
+      type: 'text',
+      width: 200,
+      text: (r) => r.project?.name ?? '',
+    },
     { key: 'note', label: t('fin.j.col.note'), type: 'text', width: 220, text: (r) => r.note },
   ];
 }
@@ -336,16 +347,69 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
   const exporter = useListExport(sendExport);
   const [action, setAction] = useState<DialogSlot<JournalAction> | null>(null);
   const [svc, setSvc] = useState<DialogSlot<ServiceAction> | null>(null);
+  const [pt, setPt] = useState<DialogSlot<ProjectPaymentAction> | null>(null);
   const [addService, setAddService] = useState<DialogSlot<null> | null>(null);
   const refresh = useFinanceRefresh();
   const run = (a: JournalAction) => setAction(openSlot(a));
   const runSvc = (a: ServiceAction) => setSvc(openSlot(a));
+  const runPt = (a: ProjectPaymentAction) => setPt(openSlot(a));
   const openReport = (id: string) => reports.openCard({ id });
   const canProjects = access.can('projects');
   const openRow = (r: FinJournalRow) =>
     r.src === 'svc'
       ? runSvc({ act: 'card', id: r.id })
-      : run({ act: 'open', src: r.src, id: r.id });
+      : r.src === 'pt'
+        ? runPt({ act: 'payment', id: r.id })
+        : run({ act: 'open', src: r.src, id: r.id });
+
+  // Транш проекта (прототип finActions → opActs с `pt`): «Открыть», «Изменить», «Открыть источник» —
+  // карточка проекта, «Удалить» с замком; удалённый — «Открыть» и «Открыть источник».
+  const paymentActions = (r: FinJournalRow): ActionEntry[] => {
+    const open: ActionEntry = {
+      id: 'open',
+      label: t('fin.op.act_open'),
+      icon: 'list',
+      run: () => runPt({ act: 'payment', id: r.id }),
+    };
+    const source: ActionEntry = {
+      id: 'source',
+      label: t('fin.op.source'),
+      icon: 'link',
+      sub: t('fin.pt.source', { name: r.project?.name ?? '' }),
+      run: () => r.project && openProjectCard(r.project.id),
+    };
+    const card: ActionEntry = {
+      id: 'card',
+      label: t('fin.op.card'),
+      icon: 'building',
+      run: () => openContractorCard({ id: r.contractor.id }),
+    };
+    if (r.deleted) return [open, source, { id: 's1', separator: true }, card];
+    return [
+      open,
+      {
+        id: 'edit',
+        label: t('fin.op.edit'),
+        icon: 'edit',
+        disabled: !!r.locks.edit,
+        reason: r.locks.edit?.text,
+        run: () => runPt({ act: 'payment-edit', id: r.id }),
+      },
+      source,
+      { id: 's1', separator: true },
+      {
+        id: 'delete',
+        label: t('fin.del.ok'),
+        icon: 'trash',
+        danger: true,
+        disabled: !!r.locks.del,
+        reason: r.locks.del?.text,
+        run: () => runPt({ act: 'payment-delete', id: r.id }),
+      },
+      { id: 's2', separator: true },
+      card,
+    ];
+  };
 
   // Разовая услуга (прототип finActions → svcActions): «Открыть», «Записать оплату», «Изменить»,
   // «Карточка контрагента», «Удалить» с замком; удалённая — «Открыть» и карточка контрагента.
@@ -395,6 +459,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
   const actions = (r: FinJournalRow): ActionEntry[] => {
     if (r.src === 'svc' && r.service) return serviceActions(r, r.service);
     if (r.src === 'svc') return [];
+    if (r.src === 'pt') return paymentActions(r);
     const src = r.src;
     const open: ActionEntry = {
       id: 'open',
@@ -604,6 +669,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
           onClose={() => setSvc(closeSlot)}
         />
       ) : null}
+      <ProjectPaymentSlot slot={pt} onClose={() => setPt(closeSlot)} />
       {addService ? (
         <ServiceDialog
           key={`add-${addService.n}`}

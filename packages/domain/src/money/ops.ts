@@ -13,9 +13,10 @@ import { MONEY_OP_KINDS, type MoneyHolderKind, type MoneyOpKind } from './tax';
 
 /**
  * Запись, которую открывает окно операции (прототип `opKind`): операция по счёту контрагента, оплата за
- * обслуживание (`fee`), оплата разовой услуги (`sp`) и сама разовая услуга (`svc`).
+ * обслуживание (`fee`), оплата по проекту — транш (`pt`, задача 2.26), оплата разовой услуги (`sp`) и
+ * сама разовая услуга (`svc`).
  */
-export const FIN_OP_KINDS = [...MONEY_OP_KINDS, 'fee', 'sp', 'svc'] as const;
+export const FIN_OP_KINDS = [...MONEY_OP_KINDS, 'fee', 'pt', 'sp', 'svc'] as const;
 export type FinOpKind = (typeof FIN_OP_KINDS)[number];
 
 /** Право, с которым операцию изменяют и удаляют (прототип `opPerm`, ТЗ «Окно оплаты» → «Права»). */
@@ -24,7 +25,7 @@ export type OpRight = 'money' | 'bonus' | 'tariff' | 'projects';
 export function opRight(kind: FinOpKind): OpRight {
   if (kind === 'bonus') return 'bonus';
   if (kind === 'fee') return 'tariff';
-  if (kind === 'sp' || kind === 'svc') return 'projects';
+  if (kind === 'pt' || kind === 'sp' || kind === 'svc') return 'projects';
   return 'money';
 }
 
@@ -93,12 +94,12 @@ export function opLock(f: OpLockFacts, act: 'edit' | 'del'): OpLock | null {
 /**
  * Предел суммы при изменении (прототип `opMax`): оплата налога — не больше денег контрагента на
  * счетах, списание и возврат — не больше свободного остатка, перевод — не больше денег контрагента на
- * счёте организации, оплата услуги — не больше её стоимости. `current` — сумма операции сейчас; остальные
- * суммы — без неё.
+ * счёте организации, оплата услуги — не больше её стоимости, транш — не больше планируемой стоимости
+ * проекта (без неё — любая сумма). `current` — сумма операции сейчас; остальные суммы — без неё.
  */
 export type OpLimit = {
   max: Tyiyn;
-  code: 'op_pay_over' | 'op_free_over' | 'op_xfer_over' | 'op_service_over';
+  code: 'op_pay_over' | 'op_free_over' | 'op_xfer_over' | 'op_service_over' | 'op_project_over';
   params: Record<string, string>;
 } | null;
 
@@ -115,6 +116,8 @@ export function opAmountLimit(
     self?: boolean;
     /** Разовая услуга: стоимость и получено по ней. */
     service?: { amount: Tyiyn; paid: Tyiyn };
+    /** Проект транша: планируемая стоимость (null — не задана) и получено по нему. */
+    project?: { plan: Tyiyn | null; paid: Tyiyn };
   },
 ): OpLimit {
   const som = formatSomWithUnit;
@@ -133,6 +136,10 @@ export function opAmountLimit(
   if (kind === 'sp' && m.service) {
     const max = m.service.amount - (m.service.paid - current);
     return { max, code: 'op_service_over', params: { max: som(max) } };
+  }
+  if (kind === 'pt' && m.project?.plan) {
+    const max = m.project.plan - (m.project.paid - current);
+    return { max, code: 'op_project_over', params: { max: som(max) } };
   }
   return null;
 }

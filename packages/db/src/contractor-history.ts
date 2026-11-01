@@ -15,6 +15,7 @@ import {
   employees,
   moneyOperations,
   ownershipForms,
+  projectPayments,
   projects,
   reports,
   reportTypes,
@@ -145,7 +146,8 @@ async function subjectsOf(
   const assignmentIds = idsOf('assignment');
   const taskIds = idsOf('task');
   const projectIds = idsOf('project');
-  const [reportRows, assignmentRows, taskRows, projectRows] = await Promise.all([
+  const paymentIds = idsOf('project_payment');
+  const [reportRows, assignmentRows, taskRows, projectRows, paymentRows] = await Promise.all([
     reportIds.length
       ? tx
           .select({
@@ -178,6 +180,16 @@ async function subjectsOf(
           .from(projects)
           .where(and(inArray(projects.id, projectIds), eq(projects.contractorId, contractorId)))
       : [],
+    // Транш — название своего проекта (прототип: запись проекта «Оплата …»).
+    paymentIds.length
+      ? tx
+          .select({ id: projectPayments.id, name: projects.name })
+          .from(projectPayments)
+          .innerJoin(projects, eq(projects.id, projectPayments.projectId))
+          .where(
+            and(inArray(projectPayments.id, paymentIds), eq(projects.contractorId, contractorId)),
+          )
+      : [],
   ]);
   for (const r of reportRows) {
     const label = periodLabel(
@@ -189,6 +201,7 @@ async function subjectsOf(
   for (const r of assignmentRows) out.set(`assignment:${r.id}`, r.name);
   for (const r of taskRows) out.set(`task:${r.id}`, r.name);
   for (const r of projectRows) out.set(`project:${r.id}`, r.name);
+  for (const r of paymentRows) out.set(`project_payment:${r.id}`, r.name);
   return out;
 }
 
@@ -332,6 +345,22 @@ async function visibleEntries(
           )!
         : eq(auditLog.entity, 'project'),
     );
+    // Транши — тех же проектов и только тому, кто видит деньги проектов.
+    if (access.projectMoney)
+      own.push(
+        and(
+          eq(auditLog.entity, 'project_payment'),
+          inArray(
+            auditLog.entityId,
+            tx
+              .select({ id: sql<string>`${projectPayments.id}::text` })
+              .from(projectPayments)
+              .innerJoin(projects, eq(projects.id, projectPayments.projectId))
+              .innerJoin(contractors, eq(contractors.id, projects.contractorId))
+              .where(and(eq(projects.contractorId, id), access.projects || undefined)),
+          ),
+        )!,
+      );
   }
   return and(or(...own), files ? undefined : notInArray(auditLog.action, [...FILE_ACTIONS]));
 }

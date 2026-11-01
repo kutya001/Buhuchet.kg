@@ -1,5 +1,7 @@
 import {
   MONEY_AMOUNT_MAX,
+  MONEY_NOTE_MAX,
+  OP_REASON_MAX,
   PROJECT_DESCRIPTION_MAX,
   PROJECT_NAME_MAX,
   PROJECT_STATUSES,
@@ -17,6 +19,7 @@ import {
   pgTable,
   primaryKey,
   text,
+  timestamp,
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -165,5 +168,54 @@ export const projectWorks = pgTable(
       to: appRole,
       using: sql`not ${t.done}`,
     }),
+  ],
+).enableRLS();
+
+/**
+ * Оплата по проекту — транш (ТЗ «Оплата по проекту траншами»; прототип `p.pays`, `projPay` → `tranchDlg`,
+ * modules/fin-op.js с `src: 'pt'`): сумма, дата, комментарий. При заданной планируемой стоимости сумма
+ * действующих траншей не больше неё (проверяет сервер под блокировкой проекта). Не стирается: «Удалить» —
+ * отметка с причиной (решение заказчика 24.10.2026); удалённый транш не входит в «получено».
+ */
+export const projectPayments = pgTable(
+  'project_payments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: orgColumn(),
+    projectId: uuid('project_id').notNull(),
+    amount: money('amount').notNull(),
+    paidOn: date('paid_on', { mode: 'string' }).notNull(),
+    note: text('note').notNull().default(''),
+    /** Изменены сумма, дата или комментарий (прототип `edited`): отметка «изменён». */
+    edited: boolean('edited').notNull().default(false),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: uuid('deleted_by').references(() => users.id),
+    deleteReason: text('delete_reason'),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    ...timestamps(),
+    version: recordVersion(),
+  },
+  (t) => [
+    unique('project_payments_id_org_unique').on(t.id, t.orgId),
+    foreignKey({
+      name: 'project_payments_project_fk',
+      columns: [t.projectId, t.orgId],
+      foreignColumns: [projects.id, projects.orgId],
+    }).onDelete('restrict'),
+    index('project_payments_project_idx').on(t.projectId, t.paidOn),
+    check(
+      'project_payments_amount_check',
+      sql`${t.amount} > 0 and ${t.amount} <= ${sql.raw(String(MONEY_AMOUNT_MAX))}`,
+    ),
+    check(
+      'project_payments_note_check',
+      sql`char_length(${t.note}) <= ${sql.raw(String(MONEY_NOTE_MAX))}`,
+    ),
+    check(
+      'project_payments_delete_check',
+      sql`(${t.deletedAt} is null) = (${t.deletedBy} is null) and (${t.deletedAt} is null) = (${t.deleteReason} is null) and char_length(coalesce(${t.deleteReason}, '')) <= ${sql.raw(String(OP_REASON_MAX))}`,
+    ),
+    orgIsolation('project_payments_isolation', t.orgId),
   ],
 ).enableRLS();

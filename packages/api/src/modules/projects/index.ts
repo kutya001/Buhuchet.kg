@@ -19,6 +19,16 @@ import {
   projectValuesRoute,
 } from './list';
 import {
+  projectPayHandler,
+  projectPaymentDeleteHandler,
+  projectPaymentDeleteRoute,
+  projectPaymentEditHandler,
+  projectPaymentEditRoute,
+  projectPaymentWindowHandler,
+  projectPaymentWindowRoute,
+  projectPayRoute,
+} from './payments';
+import {
   projectCreateHandler,
   projectCreateRoute,
   projectEditHandler,
@@ -35,8 +45,9 @@ import {
  * Модуль «Проекты контрагентов» (задача 2.26, docs/decisions.md п. Г-7): список с вкладками
  * «Активные», «Все», «Мои» (значения фильтра, выгрузка, плашки), карточка, окно проекта, статусы по
  * шкале с откатом, работы, вкладка «Проекты» карточки контрагента. Файлы проекта — источник `project`
- * модуля файлов (`./files.ts`), проект у задачи — модуль «Задачи». Оплаты (транши) — вторая часть
- * задачи 2.26.
+ * модуля файлов (`./files.ts`), проект у задачи — модуль «Задачи». Оплаты по проекту — транши
+ * (`./payments.ts`): «Записать оплату», окно транша, «Изменить» и «Удалить» с причиной; их строки — в
+ * журнале «Финансовых операций», файлы — источник `project_payment`.
  */
 export function projectsModule(deps: ApiDeps) {
   return (
@@ -53,6 +64,10 @@ export function projectsModule(deps: ApiDeps) {
       .openapi(projectStatusRoute, projectStatusHandler(deps))
       .openapi(projectWorkAddRoute, projectWorkAddHandler(deps))
       .openapi(projectWorkDoneRoute, projectWorkDoneHandler(deps))
+      .openapi(projectPayRoute, projectPayHandler(deps))
+      .openapi(projectPaymentWindowRoute, projectPaymentWindowHandler(deps))
+      .openapi(projectPaymentEditRoute, projectPaymentEditHandler(deps))
+      .openapi(projectPaymentDeleteRoute, projectPaymentDeleteHandler(deps))
       .openapi(contractorProjectsRoute, contractorProjectsHandler(deps))
   );
 }

@@ -66,6 +66,7 @@ export * from './finance-journal';
 export * from './finance-edit';
 export * from './one-off-services';
 export * from './projects';
+export * from './project-payments';
 export * from './kpi';
 export * from './kpi-lists';
 export * from './kpi-import';

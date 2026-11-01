@@ -7,6 +7,8 @@ import {
   projectMemberToggle,
   projectOfferedForTask,
   projectOverdue,
+  projectPaymentProblem,
+  projectPayRefusal,
   projectPercent,
   projectProblems,
   projectVisible,
@@ -186,5 +188,25 @@ describe('поле «Проект» формы задачи', () => {
     expect(projectOfferedForTask({ id: 'p1', status: 'done' }, null)).toBe(false);
     expect(projectOfferedForTask({ id: 'p1', status: 'done' }, 'p1')).toBe(true);
     expect(projectOfferedForTask({ id: 'p1', status: 'cancelled' }, 'p1')).toBe(false);
+  });
+});
+
+describe('оплата по проекту — транш (прототип `projActions`, `projPay` → `tranchDlg`)', () => {
+  it('«Записать оплату»: у отменённого — нельзя; получена вся стоимость — пункт неактивен', () => {
+    expect(projectPayRefusal({ status: 'cancelled', plan: null, paid: 0 })).toBe(
+      'project_pay_cancelled',
+    );
+    expect(projectPayRefusal({ status: 'in_progress', plan: 5_000, paid: 5_000 })).toBe(
+      'project_paid_full',
+    );
+    expect(projectPayRefusal({ status: 'done', plan: 5_000, paid: 4_000 })).toBeNull();
+    expect(projectPayRefusal({ status: 'planned', plan: null, paid: 900_000 })).toBeNull();
+  });
+  it('сумма больше нуля; при стоимости — не больше остатка, без неё — любая', () => {
+    expect(projectPaymentProblem(null, 100)).toEqual({ problem: 'op_amount_required' });
+    expect(projectPaymentProblem(0, 100)).toEqual({ problem: 'op_amount_required' });
+    expect(projectPaymentProblem(101, 100)).toEqual({ problem: 'project_pay_over', amount: 100 });
+    expect(projectPaymentProblem(100, 100)).toBeNull();
+    expect(projectPaymentProblem(1_000_000, null)).toBeNull();
   });
 });

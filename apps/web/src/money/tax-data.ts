@@ -87,7 +87,8 @@ export async function uploadMoneyFiles(
       | 'fee_payment'
       | 'money_operation'
       | 'one_off_service'
-      | 'one_off_service_payment';
+      | 'one_off_service_payment'
+      | 'project_payment';
     id: string;
   },
   picked: readonly File[],

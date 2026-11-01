@@ -151,7 +151,7 @@ export function journalLocks(
   const canMoney = hasPermission(subject, 'money');
   return async (
     r: {
-      src: 'op' | 'fee';
+      src: 'op' | 'fee' | 'pt';
       kind: string;
       deleted: boolean;
       archived: boolean;
@@ -163,7 +163,8 @@ export function journalLocks(
     act: 'edit' | 'del',
   ): Promise<OpLockInfo | null> => {
     const fee = r.src === 'fee';
-    const kind = (fee ? 'fee' : r.kind) as FinOpKind;
+    // Транш проекта (задача 2.26): вид `pt`, право «Вести проекты» (прототип `opPerm`).
+    const kind = (r.src === 'pt' ? 'pt' : fee ? 'fee' : r.kind) as FinOpKind;
     const right = opRight(kind);
     // ОТКЛОНЕНИЕ: docs/deviations.md#В-30 — «Менять журнал тарифов» действует в области «Контрагенты».
     const inCps =

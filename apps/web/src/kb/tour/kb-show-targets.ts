@@ -149,6 +149,8 @@ const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
   // Задачи
   'task.form.new': 'tk',
   'task.form.edit': 'tk',
+  // Проекты контрагентов: «Записать оплату» в карточке проекта.
+  '#pj-pay': '[data-pj-pay]',
   // Показатели контрагентов
   'kpi.indicator.new': 'ki',
   'kpi.indicator.title': 'ki',

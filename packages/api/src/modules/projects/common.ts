@@ -67,8 +67,15 @@ export const projectCreateScope = projScopeOf;
 /** Деньги проектов видны (прототип `moneyVis`). */
 export const projectMoneyVisible = (
   subject: AccessSubject,
-  features: Readonly<Record<Feature, boolean>>,
+  features: Readonly<Pick<Record<Feature, boolean>, 'fee'>>,
 ): boolean => servicesVisible(subject, { fee: features.fee });
+
+/**
+ * Транши видны (окно транша, его файлы): деньги проектов видны и сотрудник видит проекты в модуле или
+ * журнал «Финансовых операций» — там строки траншей (прототип opWin открывается из обоих мест).
+ */
+export const tranchesSeen = (subject: AccessSubject): boolean =>
+  hasPermission(subject, 'projView') || hasPermission(subject, 'finView');
 
 /** «Вести проекты и разовые услуги». */
 export const canKeepProjects = (subject: AccessSubject): boolean =>
