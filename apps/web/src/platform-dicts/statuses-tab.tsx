@@ -139,7 +139,9 @@ export function StatusesTab() {
           const rows = statuses.filter((x) => x.scale === scale);
           if (!rows.length) return null;
           const note =
-            scale === 'report' || scale === 'task' ? t(`pdicts.status.note.${scale}`) : null;
+            scale === 'report' || scale === 'task' || scale === 'lead'
+              ? t(`pdicts.status.note.${scale}`)
+              : null;
           return (
             <div key={scale} data-status-scale={scale} className="contents">
               <Box title={t(`pdicts.status.scale.${scale}`)}>

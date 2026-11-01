@@ -113,6 +113,14 @@ describe('шкалы статусов — как в прототипе (status-s
 });
 
 describe('шкала — мелочи', () => {
+  it('заявка: «Отказ» вне шкалы, снятие возвращает в статус до отказа, иначе — в «Новая»', () => {
+    expect(isNoScale('lead', 'rejected')).toBe(true);
+    expect(scalePosition('lead', 'rejected')).toBeNull();
+    expect(scaleBack('lead', 'rejected', { beforeReject: 'in_progress' })).toBe('in_progress');
+    expect(scaleBack('lead', 'rejected', { beforeReject: null })).toBe('new');
+    expect(scaleBack('lead', 'new')).toBeNull();
+  });
+
   it('задача с подтверждением: шкала из 4 шагов, если включено или статус только из неё', () => {
     expect(scaleSteps('task', 'todo')).toEqual(['todo', 'in_progress', 'done']);
     expect(scaleSteps('task', 'todo', { confirm: true })).toHaveLength(4);

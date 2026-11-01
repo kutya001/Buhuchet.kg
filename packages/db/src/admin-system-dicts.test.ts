@@ -122,7 +122,7 @@ describe.skipIf(!databaseAvailable())(
     it('«Статусы»: все шкалы с местом на шкале; цвет и название — для всех организаций, в историю', async () => {
       const t = await translate();
       const before = await asAdmin((tx) => adminStatuses(tx, t));
-      expect(new Set(before.statuses.map((x) => x.scale)).size).toBe(6);
+      expect(new Set(before.statuses.map((x) => x.scale)).size).toBe(7);
       const todo = before.statuses.find((x) => x.scale === 'report' && x.code === 'todo')!;
       expect(todo).toMatchObject({ name: 'К сдаче', tone: 'gray', place: { kind: 'step', n: 1 } });
       expect(before.periods.map((p) => [p.code, p.perYear, p.name])).toEqual([
