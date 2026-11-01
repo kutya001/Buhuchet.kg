@@ -5,11 +5,15 @@ import {
   contractorPageOrg,
   contractorPageState,
   getContractorPage,
+  pageReportFile,
   tryContractorPageCode,
   withOrgContext,
   writeContractorPageOpen,
 } from '@buhuchet/db';
 import {
+  bishkekDate,
+  filePreviewKind,
+  FILE_LINK_SECONDS,
   isPageAddress,
   pageDevice,
   pageIpSubject,
@@ -23,6 +27,7 @@ import {
   PublicPage,
   PublicPageCodeInput,
   PublicPageCodeOk,
+  PublicPageFileParams,
   PublicPageParams,
   type PublicPage as PublicPageBody,
 } from '@buhuchet/shared';
@@ -32,7 +37,9 @@ import { createHash } from 'node:crypto';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
+import { translateOf } from '../contractors/common';
 import { logoLink } from '../org/logo-link';
+import { contractorPageBody } from './view';
 
 /*
  * Страница контрагента по ссылке без входа (задача 2.42; ТЗ «Страница контрагента по ссылке» →
@@ -40,7 +47,8 @@ import { logoLink } from '../org/logo-link';
  * отдают данные организации (`PUBLIC_PATTERNS` в middleware/session.ts): страницу находит и код сверяет
  * база (`app.contractor_page_*`), данные одного контрагента читаются в контексте его организации уже
  * после этого. Выключенная страница, неизвестный адрес или ИНН, архивный контрагент — одинаково
- * «Страница недоступна». Ответы не кэшируются и не индексируются. Разделы страницы — задача 2.43.
+ * «Страница недоступна». Ответы не кэшируются и не индексируются. Разделы страницы (задача 2.43) —
+ * `contractorPageBody`: скрытые разделы в ответ не попадают.
  */
 
 const error = { 'application/json': { schema: ApiError } };
@@ -133,6 +141,8 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     }
     const { orgId, contractorId } = state;
     const device = pageDevice(c.req.header('user-agent') ?? '');
+    const t = await translateOf(deps);
+    const now = deps.clock.now();
     const page = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {
       const [header, org, own] = await Promise.all([
         contractorPageHeader(tx, contractorId),
@@ -140,12 +150,28 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
         getContractorPage(tx, contractorId),
       ]);
       if (!header || !org || !own) return null;
+      const sections = pageVisibleSections(org.pageSections, org.features, own.hiddenSections);
+      const body = await contractorPageBody(tx, {
+        orgId,
+        contractorId,
+        sections,
+        features: org.features,
+        today: bishkekDate(now),
+        t,
+      });
+      if (!body) return null;
       await writeContractorPageOpen(tx, contractorId, device);
+      const { orgPhone, ...rest } = body;
       return {
-        asOf: deps.clock.now().toISOString(),
+        ...rest,
+        asOf: now.toISOString(),
         contractor: { name: header.name, inn: header.inn, regime: header.regime },
-        org: { name: header.orgName, logo: await logoLink(deps, orgId, header.orgLogoKey) },
-        sections: pageVisibleSections(org.pageSections, org.features, own.hiddenSections),
+        org: {
+          name: header.orgName,
+          logo: await logoLink(deps, orgId, header.orgLogoKey),
+          phone: orgPhone,
+        },
+        sections,
       };
     });
     if (!page) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
@@ -231,5 +257,64 @@ export function publicPageCodeHandler(
       default:
         return unavailable();
     }
+  };
+}
+
+export const publicPageFileRoute = createRoute({
+  method: 'get',
+  path: '/page/{slug}/{inn}/files/{id}',
+  tags: ['contractor-page'],
+  summary: 'Открыть файл отчёта со страницы контрагента (без входа)',
+  request: { params: PublicPageFileParams },
+  responses: {
+    302: {
+      description:
+        'Переход на подписанную ссылку на 15 минут: картинка и PDF открываются в браузере, остальное скачивается',
+    },
+    400: { description: 'Номер файла неверного вида', content: error },
+    404: {
+      description:
+        'Страница не открыта в этом браузере (нет кода), раздел «Отчёты» или «Файлы в карточках» выключены, файла нет у отчётов этого контрагента',
+      content: error,
+    },
+  },
+});
+
+/**
+ * Файл отчёта со страницы (ТЗ «файлы, приложенные при сдаче (отчёт, квитанция), открываются для
+ * просмотра и скачивания»): только в браузере, где страница открыта по коду (cookie этой ссылки),
+ * только при показанном разделе «Отчёты» и включённых «Файлах в карточках», только файл отчёта этого
+ * контрагента, который страница показывает. Всё остальное — одинаково «Страница недоступна».
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Е-4 — файлы только при «Файлах в карточках», ссылка на 15 минут.
+export function publicPageFileHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof publicPageFileRoute, AppEnv> {
+  return async (c) => {
+    const { slug, inn, id } = c.req.valid('param');
+    privateHeaders(c);
+    const unavailable = () =>
+      apiFail(404, 'page_unavailable', 'Страница недоступна. Обратитесь к вашему бухгалтеру.');
+    if (!isPageAddress(slug, inn)) return unavailable();
+    const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
+    if (state.state !== 'open') return unavailable();
+    const { orgId, contractorId } = state;
+    const file = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {
+      const [org, own] = await Promise.all([
+        contractorPageOrg(tx, orgId),
+        getContractorPage(tx, contractorId),
+      ]);
+      if (!org || !own || !org.features.files) return null;
+      const sections = pageVisibleSections(org.pageSections, org.features, own.hiddenSections);
+      if (!sections.includes('reports')) return null;
+      return pageReportFile(tx, contractorId, id);
+    });
+    if (!file) return unavailable();
+    const url = await deps.storage.signedDownloadUrl(file.storageKey, {
+      expiresInSeconds: FILE_LINK_SECONDS,
+      fileName: file.name,
+      ...(filePreviewKind(file.contentType) ? { inline: { contentType: file.contentType } } : {}),
+    });
+    return c.redirect(url, 302);
   };
 }

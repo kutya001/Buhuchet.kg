@@ -287,7 +287,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(open.state).toBe('open');
     if (open.state !== 'open') return;
     expect(open.page.contractor).toMatchObject({ name: 'ОсОО «Ала-Тоо Трейд»', inn: cpAcc.inn });
-    expect(open.page.org).toEqual({ name: 'Организация А', logo: null });
+    expect(open.page.org).toEqual({ name: 'Организация А', logo: null, phone: null });
     // «Оплата за обслуживание» скрыта у этого контрагента.
     expect(open.page.sections).toEqual(['pay', 'reports', 'contacts']);
     const opened = (await history(cpAcc.id)).filter((h) => h.action === 'page_open');
@@ -304,11 +304,13 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(await visited(path, { cookie: `bh_page=${'A'.repeat(43)}` })).toEqual({ state: 'code' });
   });
 
-  it('без сеанса открыты только два пути страницы: другие пути под /api/page/ — 401', async () => {
+  it('без сеанса открыты только три пути страницы: другие пути под /api/page/ — 401', async () => {
     for (const path of [
       `/api/page/org-a/${cpAcc.inn}/code/more`,
       `/api/page/org-a`,
       `/api/page/org-a/${cpAcc.inn}/other`,
+      `/api/page/org-a/${cpAcc.inn}/files`,
+      `/api/page/org-a/${cpAcc.inn}/files/x/y`,
     ]) {
       expect((await f.app.request(path)).status, path).toBe(401);
     }

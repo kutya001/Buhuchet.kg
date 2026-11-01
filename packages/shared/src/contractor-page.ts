@@ -1,12 +1,19 @@
-import { PAGE_SECTIONS } from '@buhuchet/domain';
+import {
+  INDICATOR_TOTALS,
+  INDICATOR_TYPES,
+  PAGE_REPORT_STATUSES,
+  PAGE_SECTIONS,
+  PAGE_TIPS,
+  type PageTipId,
+} from '@buhuchet/domain';
 import { z } from 'zod';
-import { RecordVersion, Uuid } from './common';
+import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
 import { OrgLogoLink, PageSectionSchema } from './org';
 
 /*
  * Схемы страницы контрагента по ссылке (задача 2.42): блок «Страница контрагента» карточки, включение
- * у нескольких контрагентов и страница без входа (ввод кода, «Страница недоступна»). Разделы страницы —
- * задача 2.43. Ошибки сервера — `err.<code>`.
+ * у нескольких контрагентов и страница без входа (ввод кода, «Страница недоступна»); разделы открытой
+ * страницы (задача 2.43). Ошибки сервера — `err.<code>`.
  */
 
 /** Почему действие в блоке недоступно — ключ словаря `err.<код>` (`PAGE_MESSAGES`). */
@@ -84,13 +91,180 @@ export const PublicPageParams = z.object({
   inn: z.string().max(32),
 });
 
-/** Открытая страница: шапка и разделы, которые она показывает (содержимое разделов — задача 2.43). */
+/** Файл отчёта со страницы: адрес страницы и номер файла. */
+export const PublicPageFileParams = PublicPageParams.extend({ id: Uuid });
+
+const YearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+
+/** Телефон: как показать и цифры для «Позвонить» и «WhatsApp». */
+export const PagePhone = z.object({ text: z.string(), digits: z.string() });
+
+/** Сотрудник на странице: ФИО, должность (название роли), телефон. */
+export const PagePerson = z.object({
+  name: z.string(),
+  role: z.string(),
+  phone: PagePhone.nullable(),
+});
+
+/**
+ * Карточка «Как оплатить» (прототип pubPay): перевод по номеру телефона, расчётный счёт организации
+ * или счёт и кошелёк бухгалтера; номер для показа и для «Скопировать», банки номера, БИК, получатель.
+ */
+export const PagePay = z.object({
+  kind: z.enum(['phone', 'account', 'wallet']),
+  bank: z.string(),
+  number: z.string(),
+  copy: z.string(),
+  banks: z.array(z.string()),
+  bik: z.string().nullable(),
+  holder: z.string(),
+});
+export type PagePay = z.infer<typeof PagePay>;
+
+/** Вид отчёта на плитке «Отчётов»: краткое и полное название, орган, периодичность, «что это». */
+export const PageReportType = z.object({
+  code: z.string(),
+  short: z.string(),
+  name: z.string(),
+  organ: z.string(),
+  periodicity: z.enum(['M', 'Q', 'H', 'Y', 'oneoff']),
+  note: z.string(),
+});
+
+/** Файл, приложенный к отчёту: открывается и скачивается по ссылке страницы. */
+export const PageFile = z.object({ id: Uuid, name: z.string() });
+
+/**
+ * Отчёт на странице (без «Не требуется» и прежних версий уточнённых): период полностью, срок, статус
+ * сдачи, дата сдачи, сумма к уплате и статус оплаты (у вида с суммой), файлы.
+ */
+export const PageReport = z.object({
+  id: Uuid,
+  type: z.string(),
+  period: z.string(),
+  due: IsoDate,
+  status: z.enum(PAGE_REPORT_STATUSES),
+  submittedOn: IsoDate.nullable(),
+  hasSum: z.boolean(),
+  sum: Tyiyn.nullable(),
+  /** Только при «Учёте оплаты налогов» и сумме больше 0. */
+  payStatus: z.enum(['unpaid', 'partial', 'paid']).nullable(),
+  files: z.array(PageFile),
+});
+export type PageReport = z.infer<typeof PageReport>;
+
+/** «Главное»: итоги, которые сервер посчитал по показанным разделам. */
+export const PageMain = z.object({
+  /** «Отчёты {год}: сдано» и «Ближайший срок» — при показанных «Отчётах». */
+  reports: z
+    .object({
+      submitted: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
+      next: z.object({ due: IsoDate, type: z.string(), period: z.string() }).nullable(),
+    })
+    .nullable(),
+  /** «Налоги {год}, сом»: «получено» и «оплачено» — при «Учёте оплаты налогов»; куда ведёт плитка. */
+  taxes: z
+    .object({
+      due: Tyiyn,
+      got: Tyiyn.nullable(),
+      paid: Tyiyn.nullable(),
+      go: z.enum(['money', 'reports']),
+    })
+    .nullable(),
+  /** «Обслуживание» — при показанной «Оплате за обслуживание». */
+  fee: z.object({ debt: Tyiyn, paidTill: YearMonth.nullable() }).nullable(),
+});
+
+/** «Деньги на налоги» (прототип pubMoney): сверка за текущий месяц и итоги года. */
+export const PageMoney = z.object({
+  monthEnd: IsoDate,
+  verdict: z.enum(['short', 'enough', 'enough_surplus', 'surplus']),
+  amount: Tyiyn,
+  dueSum: Tyiyn,
+  got: Tyiyn,
+  paid: Tyiyn,
+  due: z.array(
+    z.object({ id: Uuid, type: z.string(), period: z.string(), left: Tyiyn, payDue: IsoDate }),
+  ),
+});
+
+/** «Оплата за обслуживание»: текущая ставка, день оплаты, долг, начисления и оплаты по месяцам. */
+export const PageFee = z.object({
+  tariff: z.object({ amount: Tyiyn, period: z.enum(['M', 'Y']) }).nullable(),
+  feeDay: z.number().int(),
+  debt: Tyiyn,
+  paidTill: YearMonth.nullable(),
+  /** Месяцы с начислением или оплатой, сначала поздние. */
+  months: z.array(
+    z.object({
+      month: YearMonth,
+      charge: Tyiyn,
+      got: Tyiyn,
+      status: z.enum(['unpaid', 'partial', 'paid']),
+    }),
+  ),
+});
+
+/** «Показатели»: показатели контрагента и их значения по месяцам до текущего. */
+export const PageKpi = z.object({
+  /** Годы для выбора: текущий и годы значений контрагента. */
+  years: z.array(z.string()),
+  indicators: z.array(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      unit: z.string(),
+      type: z.enum(INDICATOR_TYPES),
+      total: z.enum(INDICATOR_TOTALS),
+      values: z.array(z.object({ month: YearMonth, value: z.number() })),
+    }),
+  ),
+});
+
+/** «Контакты»: кто ведёт отчёты контрагента и какие, и данные самого контрагента. */
+export const PageContacts = z.object({
+  people: z.array(PagePerson.extend({ responsible: z.boolean(), types: z.array(z.string()) })),
+  head: z.string(),
+  contact: z.string(),
+  phone: z.string(),
+});
+
+const PageTipIdSchema = z.enum(Object.keys(PAGE_TIPS) as [PageTipId, ...PageTipId[]]);
+
+/**
+ * Открытая страница (прототип pubBody): шапка, строка состояния, «Главное», «Ваш бухгалтер» — всегда;
+ * содержимое остальных разделов приходит, только если раздел показан (ТЗ «Разделы, скрытые в учётной
+ * политике или в карточке контрагента, сервер не передаёт на страницу вовсе»), иначе — null.
+ */
 export const PublicPageBody = z.object({
   /** «Данные на <дата и время>». */
   asOf: z.iso.datetime(),
+  /** Сегодня по Бишкеку: просрочки, ближайшие сроки и месяцы показателей. */
+  today: IsoDate,
   contractor: z.object({ name: z.string(), inn: z.string(), regime: z.string().nullable() }),
-  org: z.object({ name: z.string(), logo: OrgLogoLink.nullable() }),
+  org: z.object({
+    name: z.string(),
+    logo: OrgLogoLink.nullable(),
+    phone: PagePhone.nullable(),
+  }),
   sections: z.array(PageSectionSchema),
+  issues: z.object({
+    late: z.number().int().nonnegative(),
+    short: Tyiyn,
+    feeDebt: Tyiyn,
+  }),
+  main: PageMain,
+  accountant: PagePerson.nullable(),
+  pay: z.object({ tax: PagePay.nullable(), fee: PagePay.nullable() }).nullable(),
+  reports: z.object({ types: z.array(PageReportType), items: z.array(PageReport) }).nullable(),
+  money: PageMoney.nullable(),
+  fee: PageFee.nullable(),
+  kpi: PageKpi.nullable(),
+  contacts: PageContacts.nullable(),
+  /** Пояснения страницы из «Текстов элементов экрана» (группа → подпись → текст). */
+  /** Пояснения «ⓘ» по обозначениям страницы (PAGE_TIPS). */
+  texts: z.partialRecord(PageTipIdSchema, z.string()),
 });
 export type PublicPageBody = z.infer<typeof PublicPageBody>;
 
