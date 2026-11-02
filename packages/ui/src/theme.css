@@ -1,8 +1,9 @@
 /*
  * Тема оформления — как в прототипе (spec/prototype/src/css/base.css): тёплая рамка (верхняя и левая
  * панели) вокруг «бумажной» рабочей области; светлая и тёмная тема. Тема выбирается атрибутом
- * data-theme на <html> (light | dark); без атрибута — по настройке устройства. Цвета задаются здесь
- * один раз: компоненты берут их классами Tailwind (bg-pane, text-muted, border-line, shadow-pane …).
+ * data-theme на <html> (light | dark); без атрибута — по настройке устройства, а страница с классом
+ * bu-light-default (лендинг, прототип v72) — светлая. Цвета задаются здесь один раз: компоненты берут
+ * их классами Tailwind (bg-pane, text-muted, border-line, shadow-pane …).
  */
 
 :root {
@@ -97,8 +98,9 @@
 }
 
 /*
- * Тёмная тема: выбрана явно (data-theme="dark") или выбора нет и тёмная включена на устройстве. Два блока
- * с одинаковыми значениями, как в прототипе; одинаковость проверяет тест theme.test.ts.
+ * Тёмная тема: выбрана явно (data-theme="dark") или выбора нет, тёмная включена на устройстве и на
+ * странице нет bu-light-default. Два блока с одинаковыми значениями, как в прототипе; одинаковость
+ * проверяет тест theme.test.ts.
  */
 :root[data-theme='dark'] {
   color-scheme: dark;
@@ -184,7 +186,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
+  :root:not([data-theme='light']):not(:has(.bu-light-default)) {
     color-scheme: dark;
     --bu-frame: hsl(29 16% 12%);
     --bu-frame-hover: hsl(30 17% 15%);
@@ -443,7 +445,8 @@
 
 /*
  * Значок темы: в светлой — «луна» (переключит на тёмную), в тёмной — «солнце». Выбирается стилями, а не
- * скриптом, поэтому и без сохранённого выбора (тема устройства) значок верный с первой отрисовки.
+ * скриптом, поэтому и без сохранённого выбора (тема устройства или светлый лендинг) значок верный с
+ * первой отрисовки.
  */
 .bu-dark-only {
   display: none;
@@ -455,10 +458,10 @@
   display: none;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .bu-dark-only {
+  :root:not([data-theme='light']):not(:has(.bu-light-default)) .bu-dark-only {
     display: inline-grid;
   }
-  :root:not([data-theme='light']) .bu-light-only {
+  :root:not([data-theme='light']):not(:has(.bu-light-default)) .bu-light-only {
     display: none;
   }
 }

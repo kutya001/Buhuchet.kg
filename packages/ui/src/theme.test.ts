@@ -49,7 +49,10 @@ const PROTO_NAME: Readonly<Record<string, string>> = {
 
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
 const dark = vars(blockAfter(theme, ":root[data-theme='dark'] {"), 'bu-');
-const darkAuto = vars(blockAfter(theme, ":root:not([data-theme='light']) {"), 'bu-');
+const darkAuto = vars(
+  blockAfter(theme, ":root:not([data-theme='light']):not(:has(.bu-light-default)) {"),
+  'bu-',
+);
 const protoLight = vars(blockAfter(proto, ':root{'), '');
 const protoDark = vars(blockAfter(proto, ':root[data-theme="dark"]{'), '');
 
@@ -107,6 +110,18 @@ describe('тема оформления', () => {
 
   it('тёмная тема по выбору и по настройке устройства — одни и те же значения', () => {
     expect(darkAuto).toEqual(dark);
+  });
+
+  it('лендинг (bu-light-default) без выбора светлый и при тёмной теме устройства; выбранная тёмная действует (прототип v72)', () => {
+    const auto = [...theme.matchAll(/prefers-color-scheme:\s*dark\)\s*\{([\s\S]*?)\n\}/g)];
+    expect(auto).toHaveLength(2);
+    for (const [, body] of auto) {
+      const heads = [...body!.matchAll(/^\s*(:root[^{]*)\{/gm)].map((m) => m[1]!.trim());
+      expect(heads.length).toBeGreaterThan(0);
+      for (const head of heads) expect(head).toContain(':not(:has(.bu-light-default))');
+    }
+    expect(theme).toContain(":root[data-theme='dark'] {");
+    expect(theme).not.toMatch(/\[data-theme='dark'\][^{]*bu-light-default/);
   });
 
   it('цвета и тени — как в прототипе (css/base.css), в обеих темах', () => {

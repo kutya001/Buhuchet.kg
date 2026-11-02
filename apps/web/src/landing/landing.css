@@ -83,6 +83,10 @@
   border-radius: 8px;
   cursor: pointer;
 }
+.lp-nav button {
+  white-space: nowrap;
+  padding: 8px 10px;
+}
 .lp-nav button:hover,
 .lp-menu nav button:hover {
   background: var(--bu-row-hover);
@@ -981,6 +985,10 @@
   .lp-hero-pic .lsh-ph {
     zoom: 0.68;
   }
+  /* Прототип v72: ссылка «Демо-организация» в шапке — только от 1 280 px */
+  .lp-head-r .lp-demo-l {
+    display: none;
+  }
 }
 @media (max-width: 1023px) {
   .lp-hero-pic .lsh-desk,
@@ -1145,5 +1153,9 @@
   }
   .lp-hero-pic .lsh-ph {
     margin: 44px 0 0 -100px;
+  }
+  /* С кнопкой темы шапка влезает в 320 px */
+  .lp-head-r {
+    gap: 4px;
   }
 }

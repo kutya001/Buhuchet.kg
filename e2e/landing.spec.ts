@@ -119,6 +119,52 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await expect(menu).toBeHidden();
   });
 
+  test('(проверка прототипа v72) кнопка темы: без выбора лендинг светлый и при тёмной теме устройства; выбор запоминается и действует в программе; страница входа без выбора — по устройству', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    const html = page.locator('html');
+    const scheme = () =>
+      page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
+
+    // Страница входа без выбора — тема устройства, как раньше.
+    await page.goto('/login');
+    await expect.poll(scheme).toBe('dark');
+
+    await page.goto('/');
+    await expect.poll(scheme).toBe('light');
+    await expect(html).not.toHaveAttribute('data-theme', /./);
+    const toggle = page.locator('header').getByRole('button', { name: 'Светлая или тёмная тема' });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute('title', 'Светлая или тёмная тема');
+    // Значок: в светлой — луна, в тёмной — солнце.
+    const moon = toggle.locator('.bu-light-only');
+    const sun = toggle.locator('.bu-dark-only');
+    await expect(moon).toBeVisible();
+    await expect(sun).toBeHidden();
+    // Ссылка «Демо-организация» в шапке — только на экранах от 1 280 px.
+    const demo = page.locator('header').getByRole('link', { name: 'Демо-организация' });
+    if (page.viewportSize()!.width >= 1280) await expect(demo).toBeVisible();
+    else await expect(demo).toBeHidden();
+
+    await toggle.click();
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(scheme).toBe('dark');
+    await expect(sun).toBeVisible();
+    await expect(moon).toBeHidden();
+    await toggle.click();
+    await expect(html).toHaveAttribute('data-theme', 'light');
+    await expect.poll(scheme).toBe('light');
+    await toggle.click();
+
+    // Выбор запомнен на этом устройстве: после перезагрузки и на странице входа — тёмная.
+    await page.reload();
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(scheme).toBe('dark');
+    await page.goto('/login');
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+  });
+
   test('(проверка задачи #165) форма заявки: пустая — ошибки под полями, без галочки — «Нужно согласие…»; нет связи — «Не удалось отправить…», введённое не пропадает; с галочкой — «Спасибо!»', async ({
     page,
   }) => {
