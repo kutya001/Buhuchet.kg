@@ -207,15 +207,27 @@
   flex: none;
 }
 .lp-hero-pic {
+  /* Картинка первого экрана (прототип v67): окно ПК и поверх него телефон. Обе миниатюры рисуются в
+     «родном» размере и уменьшаются целиком (zoom), поэтому на узком экране они пропорциональны и текст
+     не обрезается; телефон стоит в сетке, а не поверх текста над картинкой. */
   position: relative;
-  padding: 0 150px 46px 0;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.lp-hero-pic .lsh-desk {
+  grid-area: 1 / 1;
+  min-width: 0;
+  zoom: 0.78;
 }
 .lp-hero-pic .lsh-ph {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 168px;
+  grid-area: 1 / 2;
+  position: relative;
+  z-index: 1;
+  width: 240px;
+  zoom: 0.76;
+  margin: 56px 0 0 -64px;
 }
 /* 3. Полоса цифр */
 .lp-stats {
@@ -431,7 +443,7 @@
   width: min(900px, 100%);
 }
 .lp-slide .lsh-ph {
-  width: 230px;
+  width: 240px;
 }
 /* 8. Как начать */
 .lp-steps {
@@ -842,7 +854,7 @@
 .lsh-t th.num {
   text-align: right;
 }
-.lsh .red {
+.lsh-t .red {
   color: var(--bu-red);
   font-weight: 650;
 }
@@ -962,7 +974,25 @@
     scroll-behavior: auto !important;
   }
 }
+@media (max-width: 1279px) {
+  .lp-hero-pic .lsh-desk {
+    zoom: 0.66;
+  }
+  .lp-hero-pic .lsh-ph {
+    zoom: 0.68;
+  }
+}
 @media (max-width: 1023px) {
+  .lp-hero-pic .lsh-desk,
+  .lp-hero-pic .lsh-ph {
+    zoom: 0.6;
+  }
+  .lp-hero-pic .lsh-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-hero-pic .lsh-side {
+    display: none;
+  }
   .lp-nav {
     display: none;
   }
@@ -1009,15 +1039,19 @@
   .lp-shots-cta > * {
     flex: 1 1 100%;
     justify-content: center;
-  }
-  .lp-hero-pic {
-    padding: 0 100px 36px 0;
+    white-space: normal;
+    text-align: center;
+    min-width: 0;
   }
   .lsh-t .c-sum {
     display: none;
   }
+  .lp-hero-pic .lsh-desk {
+    zoom: 0.62;
+  }
   .lp-hero-pic .lsh-ph {
-    width: 128px;
+    zoom: 0.62;
+    margin: 48px 0 0 -96px;
   }
   .lp-hero-pic .lsh-body,
   .lp-slide .lsh-body {
@@ -1067,7 +1101,7 @@
     gap: 14px;
   }
   .lp-slide .lsh-ph {
-    width: 200px;
+    zoom: 0.85;
   }
   .lp-lead-in {
     grid-template-columns: minmax(0, 1fr);
@@ -1102,5 +1136,14 @@
     min-height: 48px;
     font-size: 15.5px;
     box-shadow: var(--bu-shadow-l);
+  }
+}
+@media (max-width: 374px) {
+  .lp-hero-pic .lsh-desk,
+  .lp-hero-pic .lsh-ph {
+    zoom: 0.54;
+  }
+  .lp-hero-pic .lsh-ph {
+    margin: 44px 0 0 -100px;
   }
 }
