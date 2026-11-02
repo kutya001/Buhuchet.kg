@@ -15,6 +15,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-bs{display:block;font-size:11.5px;color:var(--muted)}
 .lp-nav{display:flex;flex:1;justify-content:center;gap:2px}
 .lp-nav button,.lp-menu nav button{background:none;border:0;font:inherit;font-size:14px;font-weight:560;color:var(--text);padding:8px 12px;border-radius:var(--r-m);cursor:pointer}
+.lp-nav button{white-space:nowrap;padding:8px 10px}
 .lp-nav button:hover,.lp-menu nav button:hover{background:var(--row-hover)}
 .lp-head-r{display:flex;gap:8px;align-items:center;margin-left:auto}
 .lp-burger{display:none}
@@ -41,8 +42,11 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-menu .btn+.btn{margin-top:8px}
 .lp-note{margin:18px 0 0;display:flex;gap:8px;align-items:center;color:var(--muted);font-size:14px}
 .lp-note svg{color:var(--green);flex:none}
-.lp-hero-pic{position:relative;padding:0 150px 46px 0;min-width:0}
-.lp-hero-pic .lsh-ph{position:absolute;right:0;bottom:0;width:168px}
+/* Картинка первого экрана: окно ПК и поверх него телефон. Обе миниатюры рисуются в «родном» размере и уменьшаются целиком (zoom),
+   поэтому на узком экране они пропорциональны и текст не обрезается; телефон стоит в сетке, а не поверх текста над картинкой */
+.lp-hero-pic{position:relative;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center}
+.lp-hero-pic .lsh-desk{grid-area:1/1;min-width:0;zoom:.78}
+.lp-hero-pic .lsh-ph{grid-area:1/2;position:relative;z-index:1;width:240px;zoom:.76;margin:56px 0 0 -64px}
 /* 3. Полоса цифр */
 .lp-stats{border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--pane-alt)}
 .lp-stats-in{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0}
@@ -80,7 +84,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-slide{flex:0 0 100%;scroll-snap-align:start;margin:0;display:flex;flex-direction:column;gap:12px;align-items:center;padding:4px 2px 2px;box-sizing:border-box;min-width:0}
 .lp-slide figcaption{color:var(--muted);font-size:14.5px;text-align:center;max-width:720px}
 .lp-slide .lsh-desk{width:min(900px,100%)}
-.lp-slide .lsh-ph{width:230px}
+.lp-slide .lsh-ph{width:240px}
 /* 8. Как начать */
 .lp-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;counter-reset:st;list-style:none;margin:0;padding:0}
 .lp-steps li{background:var(--raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:20px;display:flex;flex-direction:column;gap:8px}
@@ -165,7 +169,11 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 /* Фокус с клавиатуры */
 .land :focus-visible{outline:2px solid var(--b-blue);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.land *,.land *::before,.land *::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
+@media (max-width:1279px){.lp-hero-pic .lsh-desk{zoom:.66}.lp-hero-pic .lsh-ph{zoom:.68}.lp-head-r .lp-demo-l{display:none}}
 @media (max-width:1023px){
+  .lp-hero-pic .lsh-desk,.lp-hero-pic .lsh-ph{zoom:.6}
+  .lp-hero-pic .lsh-body{grid-template-columns:minmax(0,1fr)}
+  .lp-hero-pic .lsh-side{display:none}
   .lp-nav{display:none}
   .lp-burger{display:inline-grid}
   .lp-head-r .lp-hide-t{display:none}
@@ -183,11 +191,11 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-hero{padding:32px 0 40px}
   .lp-hero-in{grid-template-columns:minmax(0,1fr);gap:28px}
   .lp-hero-p{font-size:15.5px}
-  .lp-cta-row .btn{flex:1 1 100%;justify-content:center}
-  .lp-shots-cta .btn{flex:1 1 100%;justify-content:center}
-  .lp-hero-pic{padding:0 100px 36px 0}
+  .lp-cta-row .btn{flex:1 1 100%;justify-content:center;white-space:normal;text-align:center;min-width:0}
+  .lp-shots-cta .btn{flex:1 1 100%;justify-content:center;white-space:normal;text-align:center;min-width:0}
   .lsh-t .c-sum{display:none}
-  .lp-hero-pic .lsh-ph{width:128px}
+  .lp-hero-pic .lsh-desk{zoom:.62}
+  .lp-hero-pic .lsh-ph{zoom:.62;margin:48px 0 0 -96px}
   .lp-hero-pic .lsh-body{grid-template-columns:minmax(0,1fr)}
   .lp-hero-pic .lsh-side{display:none}
   .lp-stats-in{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -204,7 +212,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-chg{gap:14px}
   .lp-slide .lsh-body{grid-template-columns:minmax(0,1fr)}
   .lp-slide .lsh-side{display:none}
-  .lp-slide .lsh-ph{width:200px}
+  .lp-slide .lsh-ph{zoom:.85}
   .lp-lead-in{grid-template-columns:minmax(0,1fr)}
   .lp-form{grid-template-columns:minmax(0,1fr);padding:18px 16px}
   .lp-send .btn{flex:1 1 100%}
@@ -214,6 +222,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-fab[hidden]{display:none}
   .lp-fab .btn{width:100%;justify-content:center;min-height:48px;font-size:15.5px;box-shadow:var(--shadow-l)}
 }
+@media (max-width:374px){.lp-hero-pic .lsh-desk,.lp-hero-pic .lsh-ph{zoom:.54}.lp-hero-pic .lsh-ph{margin:44px 0 0 -100px}.lp-head-r{gap:4px}}
 .land .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* Демо-организация: полоса «Демо-версия» над программой (ТЗ «Лендинг» → «Демо-организация») */
 .demo-strip{position:fixed;left:0;right:0;top:0;z-index:45;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:7px 12px calc(7px);padding-top:calc(7px + env(safe-area-inset-top,0px));background:var(--pane-alt);border-bottom:1px solid var(--border);font-size:13px;box-sizing:border-box}

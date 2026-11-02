@@ -145,7 +145,9 @@ function grid(host,cfg){
   function filterPop(btn,c){
     const f=s.filters[c.key];const t=ftype(c);let body='',keys=[],on=null,fmatch=null,fvals=null;
     if(t==='text')body=`<input class="inp" id="gf-q" placeholder="Содержит…" value="${esc(f?f.q:'')}">`;
-    if(t==='num')body=`<div class="row" style="flex-wrap:nowrap">${inp('gf-from',f&&f.from!=null?f.from:'','placeholder="От" inputmode="decimal"')}${inp('gf-to',f&&f.to!=null?f.to:'','placeholder="До" inputmode="decimal"')}</div><div class="hint">Границы включительно</div>`;
+    // Счётчики (тип int, например «Просрочено», «Доля» в «Аналитике») фильтруются целыми числами: «от 50» (как на стенде, п. 53 отчёта «Сделано не как в прототипе»)
+    const fim=c.type==='int'?'numeric':'decimal';
+    if(t==='num')body=`<div class="row" style="flex-wrap:nowrap">${inp('gf-from',f&&f.from!=null?f.from:'',`placeholder="От" inputmode="${fim}"`)}${inp('gf-to',f&&f.to!=null?f.to:'',`placeholder="До" inputmode="${fim}"`)}</div><div class="hint">${c.type==='int'?'Целые числа, границы включительно':'Границы включительно'}</div>`;
     if(t==='date')body=`<div class="fld"><label class="lbl" for="gf-from">С даты</label>${inp('gf-from',f?f.from||'':'','type="date"')}</div><div class="fld"><label class="lbl" for="gf-to">По дату</label>${inp('gf-to',f?f.to||'':'','type="date"')}</div>`;
     if(t==='enum'){const all=(typeof cfg.rows==='function'?cfg.rows():cfg.rows);const cnt={};all.forEach(r=>{const v=c.val(r);const k=v==null?'':String(v);cnt[k]=(cnt[k]||0)+1});
       keys=Object.keys(cnt).sort((a,b)=>a===c.pin?-1:b===c.pin?1:a===''?1:b===''?-1:COLL.compare(a,b));on=f?new Set(f.vals):new Set(keys);
@@ -164,7 +166,7 @@ function grid(host,cfg){
         if(fd)fd.oninput=show}
       const apply=()=>{let nf=null;
         if(t==='text'){const q=$('#gf-q',el).value.trim();if(q)nf={type:'text',q}}
-        if(t==='num'){const a=parseNum($('#gf-from',el).value),b=parseNum($('#gf-to',el).value);if(!isNaN(a)||!isNaN(b))nf={type:'num',from:isNaN(a)?null:a,to:isNaN(b)?null:b}}
+        if(t==='num'){const ri=x=>c.type==='int'&&!isNaN(x)?Math.round(x):x;const a=ri(parseNum($('#gf-from',el).value)),b=ri(parseNum($('#gf-to',el).value));if(!isNaN(a)||!isNaN(b))nf={type:'num',from:isNaN(a)?null:a,to:isNaN(b)?null:b}}
         if(t==='date'){const a=$('#gf-from',el).value,b=$('#gf-to',el).value;if(a||b)nf={type:'date',from:a||null,to:b||null}}
         if(t==='enum'){const v=keys.filter(k=>on.has(k));if(v.length<keys.length)nf={type:'enum',vals:v}}
         if(nf)s.filters[c.key]=nf;else delete s.filters[c.key];s.page=0;closePop();refresh()};

@@ -80,7 +80,8 @@ function renderCps(body,tab,fresh){
   </div>`)+`<div id="cg"></div>`;
   const pl=body.querySelector('.plates');if(pl)pl.onclick=e=>{const b=e.target.closest('[data-plate]');if(!b)return;const id=b.dataset.plate;const g=GS[gid];
     if(id==='deb'){go('cps','debtors');return}
-    if(!g)return;g.filters={};if(id==='noresp')g.filters.resp={type:'enum',vals:['']};if(id==='nogk')g.filters.gkno={type:'enum',vals:['Нет']};if(id==='sfq')g.filters.sfq={type:'enum',vals:['Да']};if(id==='kpin')g.filters.kpin={type:'enum',vals:['Да']};if(id==='pau')g.filters.svc={type:'enum',vals:['Приостановлен']};if(id==='one')g.filters.kind={type:'enum',vals:['Разовое']};if(id==='arc')g.filters.svc={type:'enum',vals:['В архиве']};if(id==='over')g.filters.over={type:'num',from:1,to:null};g.page=0;renderPage()};
+    // Повторное нажатие на включённую плашку снимает фильтр (как на стенде, п. 9 отчёта «Сделано не как в прототипе»)
+    if(!g)return;const was=b.classList.contains('on');g.filters={};if(was){g.page=0;renderPage();return}if(id==='noresp')g.filters.resp={type:'enum',vals:['']};if(id==='nogk')g.filters.gkno={type:'enum',vals:['Нет']};if(id==='sfq')g.filters.sfq={type:'enum',vals:['Да']};if(id==='kpin')g.filters.kpin={type:'enum',vals:['Да']};if(id==='pau')g.filters.svc={type:'enum',vals:['Приостановлен']};if(id==='one')g.filters.kind={type:'enum',vals:['Разовое']};if(id==='arc')g.filters.svc={type:'enum',vals:['В архиве']};if(id==='over')g.filters.over={type:'num',from:1,to:null};g.page=0;renderPage()};
   const rows=()=>{const v=visCps(true);const g=GS[gid];const fs=g&&g.filters&&g.filters.svc;if(fs&&fs.vals&&fs.vals.includes('В архиве'))return v;const a=v.filter(c=>!c.archived);if(tab==='mine')return a.filter(c=>c.resp===S.me);if(tab==='debtors')return a.filter(c=>c.feeDebt>0);if(tab==='paused')return a.filter(c=>c.paused);if(tab==='oneoff')return a.filter(c=>c.kind==='oneoff');return a};
   grid($('#cg',body),{id:gid,cols:cpCols(),rows,title:'name',noun:['контрагент','контрагента','контрагентов'],rowClass:c=>!c.resp&&!c.archived?'warn':c.archived||c.paused?'muted':'',
     actions:cpActions,open:openCp,sort:{key:'name',dir:1},preset:S.preset,simulateLoad:fresh,
@@ -89,7 +90,7 @@ function renderCps(body,tab,fresh){
 }
 function respDlg(cs,done){
   openModal({form:true,render:()=>({title:cs.length>1?`Ответственный для ${cs.length} контрагентов`:'Сменить ответственного',sub:cs.length>1?'':esc(cs[0].name),
-    body:`${fld('Ответственный бухгалтер',sel('rs-e',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} · ${ROLES.find(r=>r.id===e.role).name}`]),cs.length===1?cs[0].resp:''),{req:true,id:'rs-e'})}<div class="note">${ic('info')}<span>Новый ответственный получит все незавершённые отчёты (ещё не сданы или налог не оплачен) и открытые задачи этих контрагентов, а также остаток денег на их налоги. Завершённые отчёты остаются за тем, кто их сдал.</span></div>`,
+    body:`${fld('Ответственный бухгалтер',sel('rs-e',EMP.filter(e=>e.active).map(e=>[e.id,e.short]),cs.length===1?cs[0].resp:''),{req:true,id:'rs-e'})}<div class="note">${ic('info')}<span>Новый ответственный получит все незавершённые отчёты (ещё не сданы или налог не оплачен) и открытые задачи этих контрагентов, а также остаток денег на их налоги. Завершённые отчёты остаются за тем, кто их сдал.</span></div>`,
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="rs-ok">Назначить</button>',
     mount(el,m){$('#rs-ok',el).onclick=()=>{const to=val(el,'rs-e');cs.forEach(c=>transferCp(c,to));m.close();done&&done();refreshAll();toast(cs.length>1?`Ответственный назначен: ${cs.length} контрагентов`:'Ответственный изменён','user')}}})});
 }
@@ -179,7 +180,8 @@ function assignDlg(c){
   const cfgOf=id=>st.cfg[id]||(st.cfg[id]={per:T[id].per,day:T[id].day,mo:T[id].per==='Y'?T[id].ym:T[id].after});const before0=JSON.stringify(st.cfg);
   openModal({form:true,size:'mid',render:m=>({title:'Ставки и сроки отчётов',sub:`${esc(c.name)} · ${esc(c.regime||'режим не указан')} · ${esc(c.form)}`,
     body:`<div class="hint">Какие отчёты сдаёт контрагент, меняется кнопкой «Изменить» в блоке «Сдаёт отчёты»: там подбор с описанием каждого отчёта.</div>
-    ${st.sel.size?`<div class="box flat"><h3>Ставки и повторяющиеся суммы</h3>${rateRows(st.sel,st.rates,st.fixed,c)||'<span class="faint">Нет видов со ставкой</span>'}<span class="hint">Повторяющаяся сумма сама подставится в каждый новый отчёт этого вида, например фиксированный патент или Соцфонд. Пусто — сумму вносят при сдаче.</span></div>`:''}
+    ${st.sel.size?`<div class="box flat"><h3>Ставки</h3>${rateRows(st.sel,st.rates,null,c)||'<span class="faint">Нет видов со ставкой</span>'}</div>`:''}
+    ${fixRows(st.sel,st.fixed)}
     ${[...st.sel].some(id=>perOwn(T[id]))?`<div class="box flat"><h3>Периодичность и срок в назначении</h3><span class="hint" style="margin-top:-4px">Внутренняя финансовая отчётность — по требованию контрагента; патент — по сроку патента.</span>${intRows([...st.sel].filter(id=>perOwn(T[id])),cfgOf)}<span class="hint">У каждого контрагента свои периодичность и срок. В каталоге стоят только значения по умолчанию: раз в год, до 1 апреля. При смене периодичности несданные будущие отчёты пересоздаются.</span></div>`:''}
     `,
     foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="as-ok">Сохранить</button>',
@@ -187,9 +189,11 @@ function assignDlg(c){
       $('#as-ok',el).onclick=()=>{const add=[...st.sel].filter(x=>!before.has(x)),rem=[...before].filter(x=>!st.sel.has(x));if(!st.sel.size){toast('Нужен хотя бы один вид отчёта','alert',true);return}
         c.assign.filter(a=>!a.to&&st.sel.has(a.t)).forEach(a=>{const t=T[a.t];const k0=JSON.stringify([a.rate??null,a.en||null,a.add||null]),f0=a.fixed,f1=st.fixed[a.t]??null;
           if(isEnT(t)){const en=enClean(st.rates[a.t]);if(en.length)a.en=en}else{a.rate=st.rates[a.t]||a.rate;const ad=(st.rates['add:'+a.t]||[]).filter(k=>(t.rateAdd||[]).some(x=>x.k===k));if(ad.length)a.add=ad;else delete a.add}
-          if(JSON.stringify([a.rate??null,a.en||null,a.add||null])!==k0||f1!==(f0??null)){a.fixed=f1;
+          const chR=JSON.stringify([a.rate??null,a.en||null,a.add||null])!==k0,chF=f1!==(f0??null);
+          if(chR||chF){a.fixed=f1;
           if(f1!=null)REPORTS.filter(r=>r.cp===c.id&&r.t===a.t&&OPEN.has(r.status)&&(r.sum==null||r.auto)).forEach(r=>{r.sum=f1;r.auto=true;delete r.lines});
-          log('cp',c.id,`${t.short}: ставка ${aRateTxt(a,t)||'—'}, повторяющаяся сумма ${f1!=null?som(f1):'нет'}`,c.id)}});
+          // История — только названия изменённых полей, без значений (как на стенде, п. 5 отчёта «Сделано не как в прототипе»)
+          log('cp',c.id,`Назначение ${t.short}: ${[chR&&'ставка',chF&&'повторяющаяся сумма'].filter(Boolean).join(', ')}`,c.id)}});
         c.assign.filter(a=>!a.to&&st.sel.has(a.t)&&perOwn(T[a.t])&&!add.includes(a.t)).forEach(a=>{const n=cfgOf(a.t);const o=tEff(T[a.t],a);if(n.per===o.per&&n.day===o.day&&n.mo===(o.per==='Y'?o.ym:o.after))return;
           for(let i=REPORTS.length-1;i>=0;i--){const r=REPORTS[i];if(r.cp===c.id&&r.t===a.t&&['К сдаче','В работе'].includes(r.status)&&r.due>=TODAY&&!r.ver)REPORTS.splice(i,1)}
           Object.assign(a,n);assignTypes(c,[a.t],null,null,null,true);log('cp',c.id,`${T[a.t].short}: ${PER_LABEL[n.per].toLowerCase()}, ${ruleText(tEff(T[a.t],a))}`,c.id)});

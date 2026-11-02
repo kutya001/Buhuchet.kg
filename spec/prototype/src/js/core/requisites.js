@@ -18,6 +18,8 @@ const accKey=a=>a.kind==='phone'?'ph:'+a.phone.digits:'acc:'+a.acc;
 function phLocal(ph){if(!ph||!ph.digits)return '';const c=PH[ph.cc]||PH.KG;return c.cc==='KG'?'0'+applyMask(c.mask,ph.digits.slice(c.code.length)):fmtPhone(ph)}
 const rqNum=a=>a.kind==='phone'?phLocal(a.phone):a.bank?a.acc:a.num;
 const rqProv=a=>a.kind==='phone'?(a.banks||[]).join(', '):a.bank||a.prov||'';
+// Банки в порядке справочника «Банковские провайдеры» (страница контрагента, «Как оплатить» — как на стенде, п. 61 отчёта «Сделано не как в прототипе»)
+const rqBanksDict=bs=>{const ix=n=>{const i=DICT.banks.items.findIndex(x=>x.name===n);return i<0?1e9:i};return (bs||[]).map((b,j)=>[b,j]).sort((x,y)=>ix(x[0])-ix(y[0])||x[1]-y[1]).map(x=>x[0])};
 const rqKindL=(a,org)=>a.kind==='phone'?'Перевод по номеру телефона':org?'Расчётный счёт':'Счёт или кошелёк';
 // Текст для сообщения: «M-Bank: 0555 123 456» · «Перевод по номеру 0555 123 456 (M-Bank, Бакай Банк), получатель Асанов А.» · «Optima Bank: р/с …, БИК …, получатель ОсОО …»
 function rqTxt(a){const nm=a.name?`, получатель ${a.name}`:'';
