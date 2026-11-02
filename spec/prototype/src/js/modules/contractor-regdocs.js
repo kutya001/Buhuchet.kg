@@ -12,9 +12,10 @@ function regFields(p,r){r=r||{};return REG_F.map(([k,id,l,full])=>{const fid=`${
   return fld(l,inner,{full:!!full,id:fid})}).join('')}
 function regRead(el,p){const r={};REG_F.forEach(([k,id])=>{const v=val(el,`${p}-${id}`);r[k]=k==='founders'?(v===''?'':Math.max(0,parseInt(v,10)||0)):v});return r}
 function regCheck(el,p){const r=regRead(el,p);return [setErr(el,`${p}-okpo`,r.okpo&&!/^\d{8}$/.test(r.okpo)?'Код ОКПО — 8 цифр':''),setErr(el,`${p}-mail`,r.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email)?'Проверьте адрес почты':'')].every(Boolean)}
+// Обычный шрифт и обычная ширина у всех полей (как на стенде, п. 8 отчёта «Сделано не как в прототипе»)
 function regKvBox(c){const r=c.reg||{};const v=(k,x)=>x==null||x===''?'<span class="faint">—</span>':k==='regDate'||k==='reRegDate'?fmtD(x):k==='foreign'?(x==='yes'?'Есть':'Нет'):esc(String(x));
   return `<div class="box"><h3>Регистрационные данные${(c.regFiles||[]).length?` <span class="faint" style="font-weight:500;font-size:12px">из свидетельства и выписки</span>`:''}</h3>${regEmpty(r)?`<span class="faint">Не заполнены. Их можно указать в «Изменить» или при создании «Из свидетельства и выписки».</span>`:
-    `<div class="kv">${REG_F.map(([k,,l])=>`<div${k==='full'||k==='addr'?' style="grid-column:1/-1"':''}><span class="k">${l}</span><span class="v ${k==='regNo'||k==='okpo'?'mono':''}">${v(k,r[k])}</span></div>`).join('')}</div>`}</div>`}
+    `<div class="kv">${REG_F.map(([k,,l])=>`<div><span class="k">${l}</span><span class="v">${v(k,r[k])}</span></div>`).join('')}</div>`}</div>`}
 
 /* ═════════════ Окно загрузки документов ═════════════ */
 const RD_MAX=10*1048576;

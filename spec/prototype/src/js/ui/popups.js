@@ -107,8 +107,10 @@ function readPhone(root,id){const s=root.querySelector('#'+id+'-cc'),i=root.quer
   return {ok:d.length===max,empty:!d,ph:{cc:c.cc,digits:c.code+d},need:max}}
 const waLink=(ph,text)=>`https://wa.me/${ph.digits}${text?`?text=${encodeURIComponent(text)}`:''}`;
 function phoneHtml(ph){if(!ph)return '<span class="faint">—</span>';return `<span class="mono"><a href="tel:+${ph.digits}" title="Позвонить" style="color:inherit">${esc(fmtPhone(ph))}</a></span> <a class="icon-btn sm" style="display:inline-grid;vertical-align:middle" href="${waLink(ph)}" target="_blank" rel="noopener" title="Написать в WhatsApp" aria-label="WhatsApp">${ic('chat','sm')}</a>`}
-function copyText(text,okMsg){
-  const fb=()=>openModal({render:()=>({title:'Скопируйте данные',sub:'Буфер обмена недоступен в этом окне. Выделите текст и нажмите Ctrl+C, затем вставьте в Excel.',body:`<textarea class="inp mono" id="cp-ta" style="min-height:260px" readonly>${esc(text)}</textarea>`,foot:'<button class="btn cta" data-close>Готово</button>',mount(el){const t=$('#cp-ta',el);t.focus();t.select()}})});
+// quiet — без окна «Скопируйте данные»: если браузер не дал записать в буфер обмена, ничего не всплывает, текст виден на странице и его можно выделить
+// (страница контрагента по ссылке, ссылка страницы в карточке, ссылка Telegram в профиле — как на стенде, п. 60 отчёта «Сделано не как в прототипе»)
+function copyText(text,okMsg,quiet){
+  const fb=quiet?()=>{}:()=>openModal({render:()=>({title:'Скопируйте данные',sub:'Буфер обмена недоступен в этом окне. Выделите текст и нажмите Ctrl+C, затем вставьте в Excel.',body:`<textarea class="inp mono" id="cp-ta" style="min-height:260px" readonly>${esc(text)}</textarea>`,foot:'<button class="btn cta" data-close>Готово</button>',mount(el){const t=$('#cp-ta',el);t.focus();t.select()}})});
   try{navigator.clipboard.writeText(text).then(()=>toast(okMsg,'copy'),fb)}catch(e){fb()}
 }
 

@@ -21,6 +21,7 @@ export const LANDING_TEXTS = {
   'land.btn.more': { ru: 'Посмотреть возможности', section: S },
   'land.btn.demo': { ru: 'Посмотреть на демо-организацию', section: S },
   'land.btn.menu': { ru: 'Меню', section: S },
+  'land.btn.theme': { ru: 'Светлая или тёмная тема', section: S },
   'land.hero.title': {
     ru: 'Отчёты, сроки и деньги клиентов бухгалтерской фирмы — в одной программе',
     section: S,
@@ -172,7 +173,6 @@ export const LANDING_TEXTS = {
   'land.sec.3': { ru: 'Права ролей: бухгалтер видит только своих клиентов', section: S },
   'land.sec.4': { ru: 'История изменений: кто, когда и что поменял', section: S },
   'land.sec.5': { ru: 'Ежедневные резервные копии', section: S },
-  'land.sec.6': { ru: 'Серверы в Европе (Франкфурт), соединение защищено HTTPS', section: S },
   'land.faq.title': { ru: 'Вопросы', section: S },
   'land.faq.1.q': { ru: 'Сколько стоит?', section: S },
   'land.faq.1.a': {
@@ -201,7 +201,7 @@ export const LANDING_TEXTS = {
   },
   'land.faq.6.q': { ru: 'Где хранятся данные?', section: S },
   'land.faq.6.a': {
-    ru: 'На серверах в Европе (Франкфурт) с ежедневными резервными копиями.',
+    ru: 'На серверах платформы, с ежедневными резервными копиями.',
     section: S,
   },
   'land.faq.7.q': { ru: 'Можно попробовать без заявки?', section: S },

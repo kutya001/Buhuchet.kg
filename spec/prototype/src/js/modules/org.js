@@ -21,7 +21,8 @@ function orgAccDlg(a,done){const ed=!!a;const st={k:a?a.kind||'acc':'acc'};const
         Object.assign(x,{name:val(el,'oa-name'),use:val(el,'oa-use')});const mt=$('#oa-mt',el).checked&&accUse(x,'tax'),mf=$('#oa-mf',el).checked&&accUse(x,'fee');if(mt)ORG.accounts.forEach(y=>y.mainTax=false);if(mf)ORG.accounts.forEach(y=>y.mainFee=false);x.mainTax=mt;x.mainFee=mf;delete x.main;
         if(!a)ORG.accounts.push(x);rqMainFix();log('org','accounts',a?`Изменён счёт ${old} → ${rqTxt(x)}`:`Добавлен счёт ${rqTxt(x)}`);m.close();done&&done();toast(a?'Счёт изменён':'Счёт добавлен')}}})})}
 // «Сдача отчётов требует подтверждения»: при выключении ждущие отчёты считаются подтверждёнными (с записью в истории), при включении уже сданные не начинают ждать заново
-function repConfSet(x){const on=x.checked;const w=REPORTS.filter(r=>repWait(r));
+// Выключили подтверждение: «Подтверждено» получают все сданные без отметки, и прежние версии отчётов тоже — их же считает вопрос «Выключить…?» (как на стенде, п. 70 отчёта «Сделано не как в прототипе»)
+function repConfSet(x){const on=x.checked;const w=REPORTS.filter(r=>repWait(r)||(r.superseded&&r.status==='Сдан'&&repConfOn()&&!r.confAt&&!tR(r).payOnly));
   const apply=()=>{if(!on)w.forEach(r=>{Object.assign(r,{confAt:nowStamp(),confBy:S.me,confNote:'Подтверждение выключено в учётной политике'});log('r',r.id,'Сдача подтверждена (Подтверждение выключено в учётной политике)',r.cp)});
     else REPORTS.forEach(r=>{if(r.status==='Сдан'&&!r.confAt&&!tR(r).payOnly)Object.assign(r,{confAt:nowStamp(),confBy:null,confNote:'Сдан, когда подтверждение было выключено'})});
     ORG.repConfirm=on;log('org','policy',`Сдача отчётов требует подтверждения: ${on?'включено':'выключено'}${!on&&w.length?`; считаются подтверждёнными: ${w.length}`:''}`);refreshAll();toast(on?'Сданные отчёты будут ждать подтверждения':'«Сдан» теперь окончательная отметка')};

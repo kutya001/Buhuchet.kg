@@ -27,7 +27,7 @@ function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why
 function pgMount(el,c,redraw){const b=$('#cp-page',el);if(!b)return;
   b.onclick=e=>{const x=e.target.closest('[data-pg]');if(!x)return;if(x.dataset.why){toast(x.dataset.why,'lock',true);return}const k=x.dataset.pg;
     if(k==='on')pgEnable([c],redraw);else if(k==='off')pgOffDlg(c,redraw);else if(k==='code')pgCodeDlg(c,redraw);
-    else if(k==='copy'){copyText('https://'+pgUrl(c),'Ссылка скопирована');log('cp',c.id,'Скопирована ссылка на страницу контрагента',c.id)}else if(k==='wa')waDlg({cp:c,page:true})};
+    else if(k==='copy'){copyText('https://'+pgUrl(c),'Ссылка скопирована',true);log('cp',c.id,'Скопирована ссылка на страницу контрагента',c.id)}else if(k==='wa')waDlg({cp:c,page:true})};
   b.onchange=e=>{const x=e.target.closest('[data-pg-sec]');if(!x)return;const k=x.dataset.pgSec,p=c.page,h=new Set(p.hide||[]);x.checked?h.delete(k):h.add(k);p.hide=[...h];
     log('cp',c.id,`Страница контрагента: раздел «${PG_SECS.find(s=>s[0]===k)[1]}» ${x.checked?'показывается':'скрыт'}`,c.id);toast(x.checked?'Раздел показывается на странице':'Раздел скрыт на странице')}}
 // Включить — у каждого свой код; уже включённые и архивные пропускаются
@@ -83,7 +83,7 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
 function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
 function pubClick(e){const x=e.target.closest('[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy]');if(!x)return;const d=x.dataset;
-  if(d.pubCopy!=null){copyText(d.pubCopy,d.pubOk||'Скопировано');return}
+  if(d.pubCopy!=null){copyText(d.pubCopy,d.pubOk||'Скопировано',true);return}
   if(d.pubMore!=null){x.parentElement.classList.add('all');x.remove();return}
   if(d.pubTg){if(isMobile())pubFold(d.pubTg,!PUB.unf.has(d.pubTg));return}
   if(d.pubGo){pubGo(d.pubGo,d.pubFl);return}
@@ -120,7 +120,7 @@ function pubPay(k,title,icon,a,org){const ph=a.kind==='phone',num=rqNum(a),raw=S
   return `<div class="pub-pay" data-pay="${k}"><div class="pub-pt">${ic(icon)}<b>${esc(title)}</b><span class="hint">${esc(rqKindL(a,org))}</span></div>
     ${ph?'':`<span class="pub-pbn">${esc(a.bank||a.prov||'')}</span>`}
     <div class="pub-pn"><span class="mono">${esc(num)}</span>${cp(raw,ph?'Номер скопирован':'Номер счёта скопирован',ph?'Скопировать номер':'Скопировать счёт')}</div>
-    ${ph?`<div class="pub-pb"><span class="hint">Перевод из</span>${(a.banks||[]).map(b=>`<span class="pill sm">${esc(b)}</span>`).join('')}${PGT('pay','Банки и кошельки')?tipI(PGT('pay','Банки и кошельки')):''}</div>`:''}
+    ${ph?`<div class="pub-pb"><span class="hint">Перевод из</span>${rqBanksDict(a.banks).map(b=>`<span class="pill sm">${esc(b)}</span>`).join('')}${PGT('pay','Банки и кошельки')?tipI(PGT('pay','Банки и кошельки')):''}</div>`:''}
     ${a.bank&&a.bik?`<div class="pub-pk"><span class="hint">БИК</span><span class="mono">${esc(a.bik)}</span>${cp(a.bik,'БИК скопирован','Скопировать БИК')}</div>`:''}
     ${a.name?`<div class="pub-pk"><span class="hint">Получатель</span><b>${esc(a.name)}</b></div>`:''}
     ${PGT('pay',title)?`<p class="pub-what">${esc(PGT('pay',title))}</p>`:''}</div>`}
