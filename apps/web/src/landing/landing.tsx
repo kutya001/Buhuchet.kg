@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { setTheme } from '../shell/browser';
 import { parseMaxPrefs } from '../shell/prefs';
 import { UiProviders } from '../shell/ui-providers';
 import type { DemoScreens } from './landing-data';
@@ -41,6 +42,15 @@ export interface LandingProps {
 /** Адрес демо-версии (ТЗ «Демо-организация»: buhuchet.kg/demo). */
 const DEMO_HREF = '/demo';
 const LOGIN_HREF = '/login';
+
+/**
+ * Кнопка темы в шапке (прототип v72, landThemeToggle): пока тему не выбрали, лендинг светлый (класс
+ * bu-light-default, packages/ui/src/theme.css), поэтому без выбора следующая — тёмная. Выбор
+ * запоминается так же, как кнопкой темы в программе, и действует после входа.
+ */
+function toggleLandingTheme() {
+  setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+}
 
 const CTA = buttonClass('cta');
 const BTN = buttonClass();
@@ -228,7 +238,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
   ];
 
   return (
-    <div className="land" onKeyDown={onKeyDown}>
+    <div className="land bu-light-default" onKeyDown={onKeyDown}>
       {stand ? <div className="lp-test">{t('land.test')}</div> : null}
       {/* 1. Шапка */}
       <header className="lp-head">
@@ -252,6 +262,20 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
             <a href={DEMO_HREF} className={`${linkButtonClass()} lp-demo-l lp-hide-m`}>
               {t('land.nav.demo')}
             </a>
+            <button
+              type="button"
+              className={`${iconButtonClass()} lp-theme`}
+              aria-label={t('land.btn.theme')}
+              title={t('land.btn.theme')}
+              onClick={toggleLandingTheme}
+            >
+              <span className="bu-light-only inline-grid">
+                <Icon name="moon" />
+              </span>
+              <span className="bu-dark-only">
+                <Icon name="sun" />
+              </span>
+            </button>
             <a href={LOGIN_HREF} className={BTN}>
               {t('land.btn.login')}
             </a>
