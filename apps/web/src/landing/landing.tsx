@@ -56,7 +56,6 @@ const NAV = [
 
 const N3 = [1, 2, 3] as const;
 const N4 = [1, 2, 3, 4] as const;
-const N6 = [1, 2, 3, 4, 5, 6] as const;
 const N7 = [1, 2, 3, 4, 5, 6, 7] as const;
 const N12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
@@ -81,13 +80,13 @@ const FEATURE_ICONS: readonly IconName[] = [
   'grad',
 ];
 const FEATURE_TONES = ['', 'g', 'p', '', 'y', 'g', 'p', '', 'y', 'g', 'p', ''];
-const SECURITY_ICONS: readonly IconName[] = [
-  'shield',
-  'key',
-  'users',
-  'history',
-  'archive',
-  'globe',
+/** Пункты «Безопасность и данные» (прототип v70: без «Серверы в Европе…»). */
+const SECURITY: readonly (readonly [1 | 2 | 3 | 4 | 5, IconName])[] = [
+  [1, 'shield'],
+  [2, 'key'],
+  [3, 'users'],
+  [4, 'history'],
+  [5, 'archive'],
 ];
 
 const reducedMotion = () =>
@@ -478,9 +477,9 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
           <div className="lp-wrap">
             <h2>{t('land.sec.title')}</h2>
             <ul className="lp-secl">
-              {N6.map((n, i) => (
+              {SECURITY.map(([n, icon]) => (
                 <li key={n}>
-                  <Icon name={SECURITY_ICONS[i]!} />
+                  <Icon name={icon} />
                   <span>{t(`land.sec.${n}` as const)}</span>
                 </li>
               ))}
