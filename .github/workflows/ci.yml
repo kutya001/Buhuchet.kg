@@ -22,8 +22,55 @@ env:
   NEXT_TELEMETRY_DISABLED: '1'
 
 jobs:
+  # Короткий путь для мелкой правки только лендинга (решение заказчика 02.11.2026, docs/decisions.md
+  # п. О-5): check — типы, линтер, переносимость, форматирование и тесты сайта, docker-e2e — без шагов;
+  # main целиком проверяет ночной прогон. Решение принимается здесь, одно на обе проверки, до установки
+  # пакетов и без кода PR; правило лежит в .github/, поэтому PR, который его меняет, сам не сливается.
+  # Не сработал этот шаг — check и docker-e2e пропущены, не зелёные, и автослияния нет.
+  scope:
+    name: scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      landing_only: ${{ steps.scope.outputs.landing_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Правка только лендинга?
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+        # Только PR в main: итог проверки привязан к коммиту ветки, а не к базе, и после смены базы CI не
+        # перезапускается. Разница с main — `--raw --no-renames`: переименование извне даёт и старый путь,
+        # симлинк и подмодуль — другой режим, необычные имена git берёт в кавычки; всё это — полный путь.
+        # Подходят только файлы лендинга `apps/web/src/landing/<имя>.css|tsx|ts|json` (имя без точек:
+        # не конфиги, не *.d.ts, не тесты) и картинки `apps/web/public/<имя>.png|jpg|jpeg|webp|avif|ico`;
+        # форма заявки и данные страницы с сервера (lead-form.tsx, landing-data.ts), package.json и
+        # tsconfig.json — полным путём.
+        run: |
+          only=false
+          if [ "$EVENT" = pull_request ] && [ "$BASE_REF" = main ]; then
+            raw=$(git diff --raw --no-renames HEAD^1 HEAD)
+            bad=$(printf '%s\n' "$raw" | awk -F'\t' 'NF {
+              split($1, m, " "); old = substr(m[1], 2); new = m[2]; p = $2
+              modes = (old == "100644" || old == "000000") && (new == "100644" || new == "000000")
+              land = p ~ /^apps\/web\/src\/landing\/[a-z0-9-]+\.(css|tsx|ts|json)$/
+              pics = p ~ /^apps\/web\/public\/[a-z0-9-]+\.(png|jpg|jpeg|webp|avif|ico)$/
+              held = p ~ /\/(lead-form\.tsx|landing-data\.ts|package\.json|tsconfig\.json)$/
+              if (!(modes && (land || pics) && !held)) print p
+            }')
+            if [ -n "$raw" ] && [ -z "$bad" ]; then only=true; fi
+            if [ -n "$bad" ]; then printf 'Полный путь из-за:\n%s\n' "$bad" | head -20; fi
+          fi
+          echo "landing_only=$only" >> "$GITHUB_OUTPUT"
+          echo "Короткий путь (только лендинг): $only"
+
   check:
     name: check
+    needs: scope
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -38,24 +85,40 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Короткий путь — типы, линтер, переносимость, форматирование и тесты сайта
+        if: needs.scope.outputs.landing_only == 'true'
+        run: |
+          pnpm exec turbo run typecheck --filter=@buhuchet/web
+          pnpm exec eslint -c eslint.config.mjs apps/web/src/landing --max-warnings=0
+          pnpm check:portability
+          pnpm format:check
+          pnpm --filter @buhuchet/web test
       - name: Окружение как локально (.env из .env.example)
+        if: needs.scope.outputs.landing_only != 'true'
         run: cp .env.example .env
       - name: PostgreSQL и MinIO из docker-compose.yml
+        if: needs.scope.outputs.landing_only != 'true'
         run: docker compose up -d --wait postgres minio
       - name: Типы
+        if: needs.scope.outputs.landing_only != 'true'
         run: pnpm typecheck
       - name: Линтер и форматирование
+        if: needs.scope.outputs.landing_only != 'true'
         run: pnpm lint && pnpm format:check
       - name: Переносимость (без привязки к Vercel и Supabase)
+        if: needs.scope.outputs.landing_only != 'true'
         run: pnpm check:portability
       - name: Карта приёмки и тесты служебных скриптов
+        if: needs.scope.outputs.landing_only != 'true'
         run: pnpm check:acceptance && pnpm test:scripts
       - name: Применённые миграции и spec/ не тронуты
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && needs.scope.outputs.landing_only != 'true'
         run: node scripts/check-protected.mjs HEAD^1
       - name: Миграции и наполнение на чистой базе
+        if: needs.scope.outputs.landing_only != 'true'
         run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
       - name: Миграции не отстали от схемы
+        if: needs.scope.outputs.landing_only != 'true'
         run: |
           pnpm db:generate
           if [ -n "$(git status --porcelain packages/db/migrations)" ]; then
@@ -66,32 +129,46 @@ jobs:
       - name: Тесты и покрытие (domain, api и adapters — не ниже 80 %)
         # Пакеты с порогом покрытия — test:coverage; все остальные (db с RLS и наполнением, web, shared
         # и любые новые) — обычным test, чтобы новый пакет не выпал из проверки.
+        if: needs.scope.outputs.landing_only != 'true'
         run: |
           pnpm test:coverage
           pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
 
   docker-e2e:
     name: docker-e2e
+    needs: scope
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
+      - name: Короткий путь — сквозные тесты не нужны
+        if: needs.scope.outputs.landing_only == 'true'
+        run: echo "Правка только лендинга — сквозные тесты пропущены (docs/decisions.md п. О-5); main проверит ночной прогон."
       - uses: actions/checkout@v4
+        if: needs.scope.outputs.landing_only != 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@v4
+        if: needs.scope.outputs.landing_only != 'true'
       - uses: actions/setup-node@v4
+        if: needs.scope.outputs.landing_only != 'true'
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: cp .env.example .env
+        if: needs.scope.outputs.landing_only != 'true'
       - name: Всё приложение в Docker, как на VPS
+        if: needs.scope.outputs.landing_only != 'true'
         run: docker compose --profile app up -d --build --wait
       - name: Задачи по расписанию с секретом
+        if: needs.scope.outputs.landing_only != 'true'
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env | cut -d= -f2)" http://localhost:3000/api/cron/tick
       - run: pnpm install --frozen-lockfile
+        if: needs.scope.outputs.landing_only != 'true'
       - run: pnpm exec playwright install --with-deps chromium
+        if: needs.scope.outputs.landing_only != 'true'
       - name: Сквозные тесты на ПК и телефоне
+        if: needs.scope.outputs.landing_only != 'true'
         run: pnpm test:e2e
         env:
           E2E_BASE_URL: http://localhost:3000
