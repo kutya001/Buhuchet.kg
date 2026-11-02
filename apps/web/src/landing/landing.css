@@ -854,7 +854,7 @@
 .lsh-t th.num {
   text-align: right;
 }
-.lsh .red {
+.lsh-t .red {
   color: var(--bu-red);
   font-weight: 650;
 }
