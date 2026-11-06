@@ -96,7 +96,8 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
       'user',
       'employee',
       'org_settings',
-      // Показатели-примеры «Выручка» и «Количество сотрудников».
+      // Показатели по умолчанию «Выручка», «Количество сотрудников» и «ФОТ».
+      'indicator',
       'indicator',
       'indicator',
     ]);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import temDB from '../../../../spec/data/TemDB.json';
 import fixture from './__fixtures__/kpi.json';
 import {
   DEFAULT_INDICATORS,
@@ -20,12 +21,21 @@ const hundredths = (v: number) => Math.round(v * 100);
 const revenue: IndicatorInput = { ...DEFAULT_INDICATORS[0]!, start: '2026-10' };
 const ok = { otherNames: ['Количество сотрудников'], currentMonth: '2026-10' };
 
-describe('показатели-примеры новой организации', () => {
-  it('«Выручка» — сом, итог сумма; «Количество сотрудников» — чел., итог среднее', () => {
+describe('показатели по умолчанию новой организации', () => {
+  it('«Выручка» — сом, итог сумма; «Количество сотрудников» — чел., итог среднее; «ФОТ» — сом, итог сумма', () => {
     expect(DEFAULT_INDICATORS.map((i) => [i.name, i.unit, i.type, i.total])).toEqual([
       ['Выручка', 'сом', 'som', 'sum'],
       ['Количество сотрудников', 'чел.', 'int', 'avg'],
+      ['ФОТ', 'сом', 'som', 'sum'],
     ]);
+    // Как пустой шаблон организации в прототипе (TemDB.json, решение заказчика 06.11.2026).
+    expect(
+      DEFAULT_INDICATORS.map((i) => [i.name, i.unit, i.type, i.total, i.description, i.dueDay]),
+    ).toEqual(
+      temDB.indicators
+        .filter((i) => !i.archived)
+        .map((i) => [i.name, i.unit, i.type, i.main, i.desc, i.dueDay]),
+    );
     for (const i of DEFAULT_INDICATORS) {
       expect(i).toMatchObject({ required: true, dueDay: 10, scope: 'all', autoNew: true });
       expect(

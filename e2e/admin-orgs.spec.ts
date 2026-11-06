@@ -73,6 +73,9 @@ test.describe('Админка: организации', () => {
     const form = page.getByRole('dialog', { name: 'Новая организация' });
     await expect(form).toContainText('Создаётся вместе с учётной записью владельца');
     await expect(form).toContainText('копии шаблонов ролей «Главный бухгалтер» и «Бухгалтер»');
+    await expect(form).toContainText(
+      'показатели по умолчанию «Выручка», «Количество сотрудников» и «ФОТ»',
+    );
     const password = form.getByLabel('Временный пароль');
     await expect(password).toHaveValue(/^Bh-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     const temporaryPassword = await password.inputValue();
@@ -118,6 +121,50 @@ test.describe('Админка: организации', () => {
       employee: { roleName: 'Владелец организации' },
     });
     await ownerApi.dispose();
+  });
+
+  test('(прототип v74) администратор платформы создал организацию: на вкладке «Настройка показателей» модуля «Показатели» уже есть «Выручка», «Количество сотрудников» и «ФОТ»', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const owner = uniqueLogin('e2e-kpi');
+    const created = await page.request.post('/api/admin/organizations', {
+      headers: { origin },
+      data: {
+        name: `ОсОО «${uniqueLogin('Показатели')}»`,
+        inn: uniqueInn(),
+        ownerFullName: 'Показателева Сквозная',
+        ownerLogin: owner,
+        temporaryPassword: OWNER_PASSWORD,
+      },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    await page.request.post('/api/auth/logout', { headers: { origin } });
+
+    // Владелец сменил временный пароль и включил «Показатели контрагентов».
+    await signIn(page.request, origin, owner, OWNER_PASSWORD);
+    const changed = await page.request.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: OWNER_PASSWORD, newPassword: ownerPassword() },
+    });
+    expect(changed.status(), await changed.text()).toBe(200);
+    const policy = (await (await page.request.get('/api/org/policy')).json()) as {
+      version: number;
+    };
+    const on = await page.request.patch('/api/org/policy', {
+      headers: { origin },
+      data: { version: policy.version, features: { indicators: true } },
+    });
+    expect(on.status(), await on.text()).toBe(200);
+
+    await page.goto('/app/kpi/setup');
+    const items = page.locator('[data-kpi-indicator]');
+    await expect(items).toHaveCount(3);
+    expect(
+      await items.evaluateAll((l) => l.map((e) => e.getAttribute('data-kpi-indicator'))),
+    ).toEqual(['Выручка', 'Количество сотрудников', 'ФОТ']);
   });
 
   test('блокировка организации: владелец при входе видит сообщение о блокировке; разблокировка возвращает вход', async ({

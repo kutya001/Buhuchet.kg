@@ -216,7 +216,7 @@ async function insertOrganization(
     createdBy,
     updatedBy: createdBy,
   });
-  // Два показателя-примера (ТЗ «Показатели контрагентов»): «Вести с» — месяц создания организации.
+  // Показатели по умолчанию (ТЗ «Показатели контрагентов»): «Вести с» — месяц создания организации.
   const start = monthOf(input.today ?? bishkekDate(new Date()));
   const samples = await tx
     .insert(indicators)
