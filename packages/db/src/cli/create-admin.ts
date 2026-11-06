@@ -10,13 +10,18 @@ import { seedPlatformAdmin } from '../seed/admin';
 // Служебная команда: учётная запись администратора платформы с временным паролем (при входе его нужно
 // сменить). Администратор не принадлежит организации, поэтому запись создаёт владелец схемы
 // (DATABASE_ADMIN_URL).
-// - Без ADMIN_TEMP_PASSWORD (запуск вручную) пароль придумывается и показывается один раз; занятый
+// - Без --password-from-env (запуск вручную) пароль придумывается и показывается один раз; занятый
 //   логин — ошибка.
-// - С ADMIN_TEMP_PASSWORD (первый администратор рабочего сайта при выпуске, release-production.yml:
-//   журнал GitHub Actions открыт) пароль берётся из настройки и не печатается; уже созданного
+// - С --password-from-env (первый администратор рабочего сайта при выпуске, release-production.yml:
+//   журнал GitHub Actions открыт) пароль берётся из ADMIN_TEMP_PASSWORD; без него команда падает, а не
+//   придумывает и печатает пароль. Ни пароль, ни логин не печатаются (GitHub скрывает в журнале только
+//   точное значение секрета, а логин здесь уже приведён к нижнему регистру). Уже созданного
 //   администратора команда не трогает (повторный выпуск с отметкой — не ошибка и пароль не меняет),
 //   логин сотрудника организации — ошибка.
-const { values } = parseArgs({ options: { login: { type: 'string' } } });
+const { values } = parseArgs({
+  options: { login: { type: 'string' }, 'password-from-env': { type: 'boolean' } },
+});
+const fromEnv = values['password-from-env'] === true;
 const login = normalizeLogin(values.login ?? '');
 if (!isValidLogin(login)) {
   console.error(
@@ -27,6 +32,12 @@ if (!isValidLogin(login)) {
 
 const config = loadDatabaseConfig();
 const { ADMIN_TEMP_PASSWORD: givenPassword } = loadAdminPasswordConfig();
+if (fromEnv && !givenPassword) {
+  console.error(
+    'С --password-from-env нужен ADMIN_TEMP_PASSWORD (временный пароль администратора).',
+  );
+  process.exit(1);
+}
 if (!config.DATABASE_ADMIN_URL) {
   console.error('Нужен DATABASE_ADMIN_URL (владелец схемы).');
   process.exit(1);
@@ -36,12 +47,12 @@ const handle = createDb(config.DATABASE_ADMIN_URL, {
   applicationName: 'buhuchet-create-admin',
 });
 try {
-  if (givenPassword) {
+  if (fromEnv && givenPassword) {
     const report = await seedPlatformAdmin(handle.db, { login, password: givenPassword });
     console.log(
       report.created
-        ? `Администратор платформы создан: ${login}. Временный пароль — из ADMIN_TEMP_PASSWORD, при входе его нужно сменить.`
-        : `Администратор платформы ${login} уже есть — не изменён.`,
+        ? 'Администратор платформы создан. Временный пароль — из ADMIN_TEMP_PASSWORD, при входе его нужно сменить.'
+        : 'Администратор платформы с этим логином уже есть — не изменён.',
     );
   } else {
     const password = generateTemporaryPassword();
@@ -66,8 +77,10 @@ try {
   }
 } catch (error) {
   // Текст ошибки запроса Drizzle содержит значения параметров (хеш пароля) — печатаем без них.
+  // С --password-from-env логин в журнал тоже не попадает.
+  const details = JSON.stringify(serializeError(error), null, 2);
   console.error(
-    `Не удалось создать администратора:\n${JSON.stringify(serializeError(error), null, 2)}`,
+    `Не удалось создать администратора:\n${fromEnv ? details.replaceAll(login, '<логин>') : details}`,
   );
   process.exitCode = 1;
 } finally {

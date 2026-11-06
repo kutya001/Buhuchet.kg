@@ -363,7 +363,9 @@ describe('частичные конфигурации', () => {
 describe('временный пароль для db:create-admin без вывода пароля', () => {
   it('не задан или пустой — команда придумывает пароль сама', () => {
     expect(loadAdminPasswordConfig({}).ADMIN_TEMP_PASSWORD).toBeUndefined();
-    expect(loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: '' }).ADMIN_TEMP_PASSWORD).toBeUndefined();
+    expect(
+      loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: '' }).ADMIN_TEMP_PASSWORD,
+    ).toBeUndefined();
   });
 
   it('от 8 символов, без пробелов и переводов строки по краям', () => {
