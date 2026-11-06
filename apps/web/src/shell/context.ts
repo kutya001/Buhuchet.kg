@@ -32,6 +32,8 @@ export interface ShellState {
    * владелец, больше своего не выдают); у администратора — null.
    */
   editor: RoleSaveEditor | null;
+  /** Открыть «Мой профиль» (кнопка в предупреждении над «Заявками» Админки, прототип v74). */
+  openProfile: () => void;
 }
 
 const NO_ACCESS: ShellAccess = {
@@ -51,6 +53,7 @@ export const ShellContext = createContext<ShellState>({
   userId: null,
   employeeId: null,
   editor: null,
+  openProfile: () => {},
 });
 
 /** Состояние рабочей страницы для экранов модулей: поиск, права и выбранный способ добавления. */

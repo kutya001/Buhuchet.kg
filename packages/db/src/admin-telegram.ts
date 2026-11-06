@@ -5,7 +5,7 @@ import {
   type OutboxKind,
   type OutboxStatus,
 } from '@buhuchet/domain';
-import { and, asc, eq, inArray, sql, type SQLWrapper } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { adminOrganizations } from './admin-orgs';
 import type { Db, Tx } from './client';
@@ -52,6 +52,7 @@ export interface AdminTelegramLogRecord {
   id: string;
   /** null — сообщение администратору платформы («Платформа»). */
   orgId: string | null;
+  /** У сообщения о заявке на тестовом стенде — «Тестовый стенд» (подпись словаря). */
   orgName: string | null;
   /** Краткое ФИО сотрудника (у администратора платформы — логин) и «@имя» в Telegram. */
   recipient: string;
@@ -119,12 +120,21 @@ function caseOf(column: SQLWrapper, codes: readonly string[], label: (code: stri
 }
 
 /**
- * Столбцы журнала на сервере (прототип admin/telegram.js, grid 'tg-log'): ключи — как у столбцов
- * экрана. «Организация» у сообщения без организации — «Платформа»; «Ошибка» с кодом
- * `recipient_unlinked` — подпись словаря.
+ * Сообщение о заявке с лендинга на тестовом стенде: «Организация» — «Тестовый стенд», а не
+ * «Платформа» (прототип v74 leadNotify: `org: LAND.test ? 'Тестовый стенд' : 'Платформа'`).
  */
-export function adminTelegramLogColumns(t: ListTexts): ListColumns {
-  const orgValue = sql`coalesce(${v.orgId}::text, 'platform')`;
+function standLead(stand: boolean): SQL {
+  return stand ? sql`(${v.orgId} is null and ${v.kind} = 'lead')` : sql`false`;
+}
+
+/**
+ * Столбцы журнала на сервере (прототип admin/telegram.js, grid 'tg-log'): ключи — как у столбцов
+ * экрана. «Организация» у сообщения без организации — «Платформа», у сообщения о заявке на стенде —
+ * «Тестовый стенд»; «Ошибка» с кодом `recipient_unlinked` — подпись словаря.
+ */
+export function adminTelegramLogColumns(t: ListTexts, stand = false): ListColumns {
+  const lead = standLead(stand);
+  const orgValue = sql`coalesce(${v.orgId}::text, case when ${lead} then 'stand' else 'platform' end)`;
   return {
     at: { type: 'datetime', label: 'tgadm.col.at', value: v.createdAt },
     to: { type: 'text', label: 'tgadm.col.to', value: RECIPIENT },
@@ -132,7 +142,7 @@ export function adminTelegramLogColumns(t: ListTexts): ListColumns {
       type: 'enum',
       label: 'tgadm.col.org',
       value: orgValue,
-      display: sql`coalesce(${v.orgName}, ${t('tgadm.org.platform')})`,
+      display: sql`coalesce(${v.orgName}, case when ${lead} then ${t('tgadm.org.stand')} else ${t('tgadm.org.platform')} end)`,
       sort: { value: sql`coalesce(${v.orgName}, '')`, text: true },
     },
     kind: {
@@ -179,10 +189,11 @@ export async function listAdminTelegramLogPage(
   tx: Tx,
   query: ListQuery,
   t: ListTexts,
+  stand = false,
 ): Promise<ListPageResult<AdminTelegramLogRecord>> {
   const page = await selectListPage({
     query,
-    columns: adminTelegramLogColumns(t),
+    columns: adminTelegramLogColumns(t, stand),
     natural: NATURAL,
     defaultSort: DEFAULT_SORT,
     scope: undefined,
@@ -194,13 +205,28 @@ export async function listAdminTelegramLogPage(
         .offset(offset),
     from: logFrom(tx),
   });
-  return { ...page, rows: page.rows.map((r) => toRecord(r as Row)) };
+  const standOrg = t('tgadm.org.stand');
+  return {
+    ...page,
+    rows: page.rows.map((r) => {
+      const rec = toRecord(r as Row);
+      return stand && rec.orgId === null && rec.kind === 'lead'
+        ? { ...rec, orgName: standOrg }
+        : rec;
+    }),
+  };
 }
 
 /** Значения столбца журнала для фильтра-галочек; `q` — «Найти значение». */
-export function listAdminTelegramLogValues(tx: Tx, key: string, t: ListTexts, q?: string) {
+export function listAdminTelegramLogValues(
+  tx: Tx,
+  key: string,
+  t: ListTexts,
+  q?: string,
+  stand = false,
+) {
   return selectListValues({
-    columns: adminTelegramLogColumns(t),
+    columns: adminTelegramLogColumns(t, stand),
     key,
     scope: undefined,
     from: logFrom(tx),
@@ -214,10 +240,11 @@ export function exportAdminTelegramLog(
   query: ListQuery,
   keys: readonly string[],
   t: ListTexts,
+  stand = false,
 ) {
   return selectListExport({
     query,
-    columns: adminTelegramLogColumns(t),
+    columns: adminTelegramLogColumns(t, stand),
     keys,
     natural: NATURAL,
     defaultSort: DEFAULT_SORT,

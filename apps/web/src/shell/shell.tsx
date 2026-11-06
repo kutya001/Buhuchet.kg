@@ -377,8 +377,9 @@ function ShellPage({
       userId: me.user.id,
       employeeId: me.employee?.id ?? null,
       editor: roleEditorOf(me),
+      openProfile: () => setProfileOpen(true),
     }),
-    [search, addRequest, setAddRequest, access, me],
+    [search, addRequest, setAddRequest, access, me, setProfileOpen],
   );
   // «База знаний»: «Перейти» у шага, полоса урока, отметки шагов (задача 2.30).
   const tabHrefOf = useCallback(

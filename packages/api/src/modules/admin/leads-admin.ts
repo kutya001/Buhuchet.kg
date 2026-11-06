@@ -2,6 +2,7 @@ import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   adminLeadById,
   adminLeadEvents,
+  adminLeadRecipients,
   adminNewLeadCount,
   deleteLead,
   exportAdminLeads,
@@ -270,20 +271,24 @@ export const leadSummaryRoute = createRoute({
   method: 'get',
   path: '/admin/leads/summary',
   tags: ['admin'],
-  summary: 'Новых заявок: счётчик вкладки и плитка «Заявки с сайта»',
+  summary: 'Новых заявок (счётчик вкладки, плитка «Заявки с сайта») и кому сообщить о заявке',
   middleware: [requirePlatformAdmin] as const,
   responses: {
-    200: { description: 'Сколько заявок «Новая»', content: json(AdminLeadSummary) },
+    200: {
+      description: 'Сколько заявок «Новая» и администраторов с привязанным Telegram',
+      content: json(AdminLeadSummary),
+    },
     ...denied,
   },
 });
 
 export function leadSummaryHandler(deps: ApiDeps): RouteHandler<typeof leadSummaryRoute, AppEnv> {
   return async (c) => {
-    const fresh = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      adminNewLeadCount(tx),
-    );
-    return c.json({ fresh }, 200);
+    const body = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => ({
+      fresh: await adminNewLeadCount(tx),
+      recipients: await adminLeadRecipients(tx),
+    }));
+    return c.json(body, 200);
   };
 }
 

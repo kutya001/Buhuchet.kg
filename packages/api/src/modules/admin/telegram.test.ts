@@ -198,6 +198,63 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     expect(sheet).not.toContain('Секретный текст');
   });
 
+  it('тестовый стенд: у сообщения о заявке с сайта «Организация» — «Тестовый стенд» (прототип v74)', async () => {
+    const stand = createApp(
+      createTestDeps({
+        db: f.t.app.db,
+        config: { ...createTestDeps().config, APP_ENV: 'staging' },
+      }),
+    );
+    // На стенде сеанс — в cookie с приставкой `__Host-`.
+    const cookie = `__Host-${admin}`;
+    const [x] = await f.t.admin.db
+      .insert(schema.telegramOutbox)
+      .values({
+        orgId: null,
+        userId: adminId,
+        chatId: 2003,
+        kind: 'lead',
+        text: '🧪 Тестовый стенд 📩 Новая заявка с сайта',
+        status: 'sent',
+        tries: 1,
+        dedupeKey: 'lead:stand-api',
+      })
+      .returning({ id: schema.telegramOutbox.id });
+    try {
+      const list = AdminTelegramLogList.parse(
+        await (await apiRequest(stand, 'GET', '/api/admin/telegram/log', cookie)).json(),
+      );
+      expect(list.items.find((r) => r.id === x!.id)).toMatchObject({
+        orgId: null,
+        orgName: 'Тестовый стенд',
+        kind: 'lead',
+      });
+      expect(list.items.find((r) => r.id === ids.platform)).toMatchObject({ orgName: null });
+      const values = ListValues.parse(
+        await (
+          await apiRequest(stand, 'GET', '/api/admin/telegram/log/values?col=org', cookie)
+        ).json(),
+      );
+      expect(values.items.map((v) => [v.label, v.count])).toEqual(
+        expect.arrayContaining([
+          ['Платформа', 1],
+          ['Тестовый стенд', 1],
+        ]),
+      );
+      const kinds = ListValues.parse(
+        await (
+          await apiRequest(stand, 'GET', '/api/admin/telegram/log/values?col=kind', cookie)
+        ).json(),
+      );
+      expect(kinds.items.map((v) => v.label)).toContain('Заявка с сайта');
+      // На рабочем сайте — «Платформа».
+      const prod = AdminTelegramLogList.parse(await (await get('/api/admin/telegram/log')).json());
+      expect(prod.items.find((r) => r.id === x!.id)).toMatchObject({ orgName: null });
+    } finally {
+      await f.t.admin.db.delete(schema.telegramOutbox).where(eq(schema.telegramOutbox.id, x!.id));
+    }
+  });
+
   it('«Повторить ошибки»: ошибки снова в очереди, коды восстановления — нет; строки без организации отправляет задача', async () => {
     expect((await post('/api/admin/telegram/log/retry', { ids: [] })).status).toBe(400);
     expect((await post('/api/admin/telegram/log/retry', { ids: ['x'] })).status).toBe(400);

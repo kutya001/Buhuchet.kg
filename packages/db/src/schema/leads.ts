@@ -40,7 +40,7 @@ export const platformLeads = pgTable(
     }),
     /** «Заметка администратора» — видит только администратор платформы. */
     adminNote: text('admin_note'),
-    /** Заявка с тестового стенда: в истории «Заявка с сайта (тестовый стенд)», в Telegram не уходит. */
+    /** Заявка с тестового стенда: в истории «Заявка с сайта (тестовый стенд)». */
     fromStand: boolean('from_stand').notNull().default(false),
     version: recordVersion(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

@@ -1,5 +1,5 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
-import { messageTemplates, phoneCodes, submitLead } from '@buhuchet/db';
+import { LEAD_REPEAT_MARKS, messageTemplates, phoneCodes, submitLead } from '@buhuchet/db';
 import {
   fillTemplate,
   formatPhone,
@@ -29,11 +29,20 @@ import { serverTexts } from '../l10n/texts';
 const error = { 'application/json': { schema: ApiError } };
 
 /**
- * Шаблон «Telegram: новая заявка с сайта», пока в справочнике шаблонов его нет (до `db:seed --update`
- * на стенде): тот же текст, что в refDB.json (`messageTemplates.tgLead`).
+ * Шаблоны «Telegram: новая заявка с сайта» и «Telegram: повторная заявка с сайта», пока в справочнике
+ * шаблонов их нет (до `db:seed --update`): тот же текст, что в refDB.json (`messageTemplates.tgLead`,
+ * `tgLeadRep`).
  */
 const TG_LEAD_FALLBACK =
-  '📩 Новая заявка с сайта: {фирма}, {имя}, {телефон}, клиентов: {клиентов}.';
+  '📩 Новая заявка с сайта: {фирма}, {имя}, {телефон}, клиентов: {клиентов}. Открыть: {ссылка}';
+const TG_LEAD_REP_FALLBACK =
+  '🔁 Повторная заявка с сайта: {фирма}, {имя}, {телефон}. Открыть: {ссылка}';
+
+/** {ссылка} — вкладка «Заявки» Админки на этом сайте (прототип v74 leadLink). */
+const LEADS_TAB = '/app/orgs/leads';
+
+/** Пометка в начале сообщения о заявке с тестового стенда (прототип v74 leadTgText). */
+export const STAND_MARK = '🧪 Тестовый стенд ';
 
 /**
  * Чей счёт заявок по адресу — как у страницы контрагента по ссылке: первый адрес X-Forwarded-For (его
@@ -92,17 +101,33 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
     }
     // Поле-ловушка заполнено — так делают боты: заявка засчитывается в предел, но не сохраняется.
     const trap = form.website.trim() !== '';
-    // Заявка со стенда сохраняется только на стенде и в Telegram администратора не уходит (ТЗ).
+    // Заявка со стенда сохраняется только на стенде (своя база): сообщение о ней получают
+    // администраторы стенда от бота стенда, с пометкой в начале (решение заказчика 06.11.2026).
     const fromStand = deps.config.APP_ENV === 'staging';
     let telegramText: string | null = null;
-    if (!trap && !fromStand && deps.telegram) {
+    let telegramRepeatText: string | null = null;
+    if (!trap && deps.telegram) {
+      // Уведомление обязательно (прототип v74 leadNotify): о новой заявке и о повторной за сутки.
       const templates = await messageTemplates(deps.db);
-      telegramText = fillTemplate(templates.tgLead ?? TG_LEAD_FALLBACK, {
+      const vars = {
         фирма: form.firm,
         имя: form.name,
         телефон: formatPhone(form.phone, codes),
         клиентов: form.size,
-      });
+        ссылка: new URL(LEADS_TAB, deps.config.APP_BASE_URL).href,
+      };
+      const mark = fromStand ? STAND_MARK : '';
+      telegramText = mark + fillTemplate(templates.tgLead ?? TG_LEAD_FALLBACK, vars);
+      // О повторе — фирма, имя и «клиентов» сохранённой заявки (прототип leadTgPreview(o.dup ? o.lead : o)):
+      // их подставляет функция базы вместо меток, телефон тот же.
+      telegramRepeatText =
+        mark +
+        fillTemplate(templates.tgLeadRep ?? TG_LEAD_REP_FALLBACK, {
+          ...vars,
+          фирма: LEAD_REPEAT_MARKS.firm,
+          имя: LEAD_REPEAT_MARKS.name,
+          клиентов: LEAD_REPEAT_MARKS.size,
+        });
     }
     const res = await submitLead(deps.db, {
       ipSubject: leadIpSubject(c, deps),
@@ -115,6 +140,7 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
       fromStand,
       trap,
       telegramText,
+      telegramRepeatText,
       now: deps.clock.now(),
     });
     if (res.outcome === 'limited') {

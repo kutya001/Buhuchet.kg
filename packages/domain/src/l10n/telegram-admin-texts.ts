@@ -23,6 +23,7 @@ export const TELEGRAM_ADMIN_TEXTS = {
   'tgadm.col.tries': { ru: 'Попыток', section: S },
   'tgadm.col.err': { ru: 'Ошибка', section: S },
   'tgadm.org.platform': { ru: 'Платформа', section: S },
+  'tgadm.org.stand': { ru: 'Тестовый стенд', section: S },
   'tgadm.st.sent': { ru: 'Отправлено', section: S },
   'tgadm.st.pending': { ru: 'Ожидает', section: S },
   'tgadm.st.error': { ru: 'Ошибка', section: S },

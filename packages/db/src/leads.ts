@@ -89,20 +89,37 @@ export interface LeadSubmission {
   size: string;
   telegram: string;
   note: string;
-  /** Заявка с тестового стенда: в истории — «(тестовый стенд)», в Telegram не уходит. */
+  /** Заявка с тестового стенда: в истории — «(тестовый стенд)». */
   fromStand: boolean;
   /** Заполнено поле-ловушка: засчитывается в предел по адресу, но не сохраняется (`trap`). */
   trap: boolean;
-  /** Сообщение администраторам платформы в Telegram; null — не отправлять. */
+  /** Сообщение администраторам платформы в Telegram о новой заявке; null — не отправлять. */
   telegramText: string | null;
+  /**
+   * Сообщение о повторной заявке с того же телефона за сутки; null — не отправлять. Вместо фирмы, имени
+   * и «клиентов» — метки `LEAD_REPEAT_MARKS`: их заменяют значения сохранённой заявки.
+   */
+  telegramRepeatText: string | null;
   now: Date;
 }
+
+/**
+ * Метки в тексте о повторной заявке: функция базы заменяет их фирмой, именем и «клиентов» сохранённой
+ * заявки, а не второй формы (прототип v74 `leadTgPreview(o.dup ? o.lead : o)`; миграция 0092). Знак
+ * U+0001 в поля формы не пропускает проверка однострочных полей.
+ */
+export const LEAD_REPEAT_MARKS = {
+  firm: '\u0001фирма\u0001',
+  name: '\u0001имя\u0001',
+  size: '\u0001клиентов\u0001',
+} as const;
 
 export type LeadSubmitOutcome = 'created' | 'repeat' | 'trap' | 'limited';
 
 /**
  * Заявка гостя с лендинга: предел по адресу, повтор с того же телефона за сутки, очередь Telegram
- * администраторам платформы — одной функцией базы в одной транзакции (миграция 0089).
+ * администраторам платформы о новой и о повторной заявке — одной функцией базы в одной транзакции
+ * (миграции 0089, 0092).
  */
 export async function submitLead(
   db: Db,
@@ -111,7 +128,8 @@ export async function submitLead(
   const rows = await db.execute<{ outcome: LeadSubmitOutcome; lead_id: string | null }>(sql`
     select outcome, lead_id from app.lead_submit(
       ${s.ipSubject}, ${s.name}, ${s.firm}, ${s.phone}, ${s.size}, ${s.telegram}, ${s.note},
-      ${s.fromStand}, ${s.trap}, ${s.telegramText}, ${s.now.toISOString()}::timestamptz,
+      ${s.fromStand}, ${s.trap}, ${s.telegramText}, ${s.telegramRepeatText},
+      ${s.now.toISOString()}::timestamptz,
       ${LEAD_IP_LIMIT}, ${LEAD_IP_WINDOW_SECONDS}, ${LEAD_REPEAT_HOURS}, ${LEAD_NOTE_TOTAL_MAX}
     )`);
   const row = rows[0];
@@ -301,6 +319,15 @@ export async function adminLeadEvents(tx: Tx, leadId: string): Promise<AdminLead
     .from(adminLeadEventsView)
     .where(eq(adminLeadEventsView.leadId, leadId))
     .orderBy(asc(adminLeadEventsView.at), asc(adminLeadEventsView.id));
+}
+
+/**
+ * Сколько незаблокированных администраторов платформы с привязанным Telegram получат сообщение о
+ * заявке: 0 — предупреждение над вкладкой «Заявки» (прототип v74, миграция 0092). Не администратору — 0.
+ */
+export async function adminLeadRecipients(tx: Tx): Promise<number> {
+  const rows = await tx.execute<{ n: number }>(sql`select app.admin_lead_recipients() as n`);
+  return Number(rows[0]?.n ?? 0);
 }
 
 /** Сколько заявок «Новая»: счётчик на вкладке и плитка «Заявки с сайта». */

@@ -34,6 +34,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Организаци
       fromStand: false,
       trap: false,
       telegramText: null,
+      telegramRepeatText: null,
       // Раньше часов приложения в тестах (18.10.2026 09:00 по Бишкеку): смены статуса — после заявки.
       now: new Date(Date.parse('2026-10-18T02:00:00Z') + 60_000 * n),
       ...over,
@@ -109,6 +110,18 @@ describe.skipIf(!databaseAvailable())('Админка → «Организаци
     });
     const summary = AdminLeadSummary.parse(await (await get('/api/admin/leads/summary')).json());
     expect(summary.fresh).toBe(list.items.filter((x) => x.status === 'new').length);
+    // Telegram ни у одного администратора платформы не привязан — предупреждение «О новых заявках
+    // некому сообщить…» (прототип v74); привязал — сообщение получит он.
+    expect(summary.recipients).toBe(0);
+    const [me] = await f.t.admin.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.login, 'platform-admin'));
+    await f.t.admin.db
+      .insert(schema.telegramLinks)
+      .values({ userId: me!.id, orgId: null, chatId: 4101, username: 'platform' });
+    const linked = AdminLeadSummary.parse(await (await get('/api/admin/leads/summary')).json());
+    expect(linked.recipients).toBe(1);
     const values = ListValues.parse(await (await get('/api/admin/leads/values?col=status')).json());
     expect(values.items).toContainEqual(expect.objectContaining({ value: 'new', label: 'Новая' }));
     const file = await get('/api/admin/leads/export?cols=firm,status&q=Список');
