@@ -22,7 +22,7 @@ function renderSide(){
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v72 · 02.11.2026';
+const PROTO_VER='v74 · 06.11.2026';
 // В демо-режиме — только «Войти как» (без администратора платформы) и «Очистить рабочие данные»
 function demoBox(){if(DEMO.on)return `<div class="demo"><div class="row" style="gap:6px"><b>${LE('land.demo.box')}</b></div><label for="demo-user">Войти как:</label>${sel('demo-user',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),S.me)}<div class="demo-db"><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button></div><span>${LE('land.demo.box.sub')}</span></div>`;
   return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
@@ -66,7 +66,10 @@ function renderPage(fresh){
 function fitTabs(){const t=$('#tabs');if(!t)return;const ab=$('#add-btn');const ax=$$('.add-x');const over=()=>t.scrollWidth>t.clientWidth+2;t.classList.remove('compact','tight','tight2');if(ab)ab.classList.remove('slim');ax.forEach(x=>x.classList.remove('slim'));
   if(isMobile()){if(ab&&over())ab.classList.add('slim');if(over())t.classList.add('compact')}else{if(over())ax.forEach(x=>x.classList.add('slim'));if(over())t.classList.add('tight');if(over())t.classList.add('tight2')}
   // центрируем активную вкладку только по горизонтали: scrollIntoView прокрутил бы и страницу
-  const on=$('.tab.on',t);if(on&&over())t.scrollLeft=Math.max(0,on.offsetLeft-(t.clientWidth-on.offsetWidth)/2)}
+  const on=$('.tab.on',t);if(on&&over())t.scrollLeft=tabsTarget(t,on)}
+// Положение вкладки внутри строки вкладок (не зависит от прокрутки) и прокрутка, при которой вкладка по центру — её же берёт листание вкладок свайпом
+const tabRelL=(t,b)=>b.getBoundingClientRect().left-t.getBoundingClientRect().left-t.clientLeft+t.scrollLeft;
+function tabsTarget(t,on){on=on||$('.tab.on',t);if(!on||t.scrollWidth<=t.clientWidth+2)return 0;return Math.max(0,Math.min(t.scrollWidth-t.clientWidth,tabRelL(t,on)-(t.clientWidth-on.offsetWidth)/2))}
 function renderShell(fresh){$('#app').classList.toggle('nav-hidden',S.navHidden&&!isMobile());renderSide();renderBnav();renderPage(fresh)}
 function refreshAll(){gkIndex();derive();const openForms=MODALS.filter(m=>m.o.live);renderShell();openForms.forEach(m=>m.draw())}
 

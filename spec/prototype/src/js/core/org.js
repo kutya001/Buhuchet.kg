@@ -50,6 +50,18 @@ const EMP=DB.employees;
 const EM=Object.fromEntries(EMP.map(e=>[e.id,e]));
 const PLATFORM_ADMIN={id:'admin',fio:'Администратор платформы',short:'Админ',login:'admin',role:'platform',tg:'@buhuchet_admin'};
 const empName=id=>id&&EM[id]?EM[id].short:'';
+// Отображаемое имя сотрудника (решение заказчика 06.11.2026): автоматически — имя и первая буква фамилии («Мээрим К.»); заданное вручную — любое, 2–40 знаков, без повтора среди активных сотрудников
+const autoShort=fio=>{const p=String(fio||'').trim().split(/\s+/).filter(Boolean);return p.length>1?p[1]+' '+p[0][0]+'.':p[0]||''};
+const shortManual=e=>!!e&&e.short!==autoShort(e.fio);
+function shortErr(v,selfId){v=String(v||'').trim();if(v.length<2||v.length>40)return 'От 2 до 40 знаков';const o=EMP.find(x=>x.id!==selfId&&x.active&&String(x.short||'').trim().toLowerCase()===v.toLowerCase());return o?`Такое имя уже у сотрудника ${o.fio}`:''}
+// Поле «Отображаемое имя»: пока не задано вручную — следует за ФИО; очищенное поле снова получает автоматическое имя
+const shortHint='Как сотрудник называется в программе: в списках, задачах, истории. Пустое поле — имя и первая буква фамилии';
+function bindShort(el,shId,fioOf,manual){const s=el.querySelector('#'+shId);if(!s)return;let man=!!manual;
+  const fi=typeof fioOf==='string'?el.querySelector('#'+fioOf):null,fio=()=>fi?fi.value:fioOf();
+  if(fi)fi.addEventListener('input',()=>{if(!man){s.value=autoShort(fio());setErr(el,shId,'')}});
+  s.addEventListener('input',()=>{man=s.value.trim()!==''});
+  s.addEventListener('blur',()=>{if(!s.value.trim()){s.value=autoShort(fio());man=false}})}
+const readShort=(el,shId,fio)=>val(el,shId).trim().replace(/\s+/g,' ')||autoShort(fio);
 const initials=fio=>fio.split(' ').slice(0,2).map(w=>w[0]).join('');
 
 /* ═════════════ Counterparties & reports ═════════════ */

@@ -154,6 +154,7 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_link_invalid': { ru: 'Telegram: ссылка устарела', section: S },
   'pdicts.tpl.label.tg_start': { ru: 'Telegram: ответ на /start', section: S },
   'pdicts.tpl.label.tg_lead': { ru: 'Telegram: новая заявка с сайта', section: S },
+  'pdicts.tpl.label.tg_lead_rep': { ru: 'Telegram: повторная заявка с сайта', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
   'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },

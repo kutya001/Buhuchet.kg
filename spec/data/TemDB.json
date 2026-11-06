@@ -572,6 +572,26 @@
    "from": {},
    "autoNew": true,
    "seen": []
+  },
+  {
+   "id": "k3",
+   "unit": "сом",
+   "type": "som",
+   "desc": "Фонд оплаты труда: начисленная зарплата всех сотрудников за месяц до удержаний.",
+   "main": "sum",
+   "scope": "all",
+   "cps": [],
+   "req": true,
+   "dueDay": 10,
+   "archived": false,
+   "order": 3,
+   "_cb": "system",
+   "_ca": "2026-10-18 11:00",
+   "name": "ФОТ",
+   "off": {},
+   "from": {},
+   "autoNew": true,
+   "seen": []
   }
  ],
  "indicatorValues": [],

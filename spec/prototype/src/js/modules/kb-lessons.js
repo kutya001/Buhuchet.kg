@@ -170,7 +170,13 @@ const ckDone=i=>!!ckU().done[i.id];
 const ckSkip=i=>!ckDone(i)&&!!ckU().skip[i.id];
 const ckRes=i=>ckDone(i)||ckSkip(i);
 const ckFind=id=>KBS.find(i=>i.id===id);
-function ckMark(i,how){const sc=ckU();if(sc.done[i.id])return false;sc.done[i.id]={how:how==='auto'||!how?'action':how,at:nowStamp()};delete sc.skip[i.id];return true}
+// Шаг, отмеченный вручную, засчитан; если потом условие выполнено (действие, показ, статья), способ меняется на этот без повторного «Готово» (решение заказчика 06.11.2026)
+function ckMark(i,how){const sc=ckU();how=how==='auto'||!how?'action':how;const r=sc.done[i.id];if(r){if(how!=='hand'&&r.how==='hand')sc.done[i.id]={how,at:nowStamp()};return false}sc.done[i.id]={how,at:nowStamp()};delete sc.skip[i.id];return true}
+const ckHand=i=>{const r=ckRec(i);return !!r&&r.how==='hand'};
+// «Отметить выполненным» (решение заказчика 06.11.2026): любой свой невыполненный шаг, в том числе пропущенный и «★», без окна подтверждения; «Отменить» в уведомлении и «Снять отметку» возвращают шаг, полученный уровень не понижается
+function ckHandMark(i){if(!i||ckDone(i))return;const sc=ckU(),sk=!!sc.skip[i.id];ckMark(i,'hand');kbSync(false);renderPage();renderSide();if(typeof renderSheetDot==='function')renderSheetDot();
+  CK.quiet++;toast('Шаг отмечен выполненным','grad',false,{label:'Отменить',run:()=>{if(!ckHand(i))return;delete sc.done[i.id];if(sk)sc.skip[i.id]=1;kbSync(true);renderPage();renderSide()}});CK.quiet--}
+function ckHandOff(i){if(!ckHand(i))return;delete ckU().done[i.id];kbSync(true);renderPage();renderSide();toast('Отметка снята: шаг снова не выполнен','grad')}
 // «Новое»: шаг добавлен администратором или его модуль недавно включён в учётной политике (30 дней)
 const kbFeatOf=i=>i.featk||KB_FEAT[i.g]||'';
 const kbIsNew=i=>!ckDone(i)&&(!!i.isNew||(()=>{const f=kbFeatOf(i);const d=f&&ORG.featOn&&ORG.featOn[f];return !!d&&d>=addDays(TODAY,-30)})());
@@ -183,13 +189,13 @@ const kbLv=()=>isAdmin()?KB_LVA:KB_LVB;
 function kbStat(){const gs=ckGroups();const l=gs.flatMap(g=>g.items);const n=l.length,d=l.filter(ckDone).length;const pct=n?Math.floor(d*100/n):0;const lv=kbLv();let k=0;lv.forEach((x,j)=>{if(pct>=x.p)k=j});
   const u=ckU();const cur=Math.max(k,u.max==null?0:u.max);const nx=lv[cur+1]||null;const need=nx?Math.max(1,Math.ceil(nx.p*n/100)-d):0;
   const al=typeof kbArts==='function'?kbArts():[];
-  return {n,d,pct,k,cur,lv,nx,need,u,gs,mods:gs.map(g=>({id:g.id,t:g.t,d:g.items.filter(ckDone).length,n:g.items.length})),last:(u.got||[]).slice(-1)[0]||null,star:l.filter(i=>i.star).length,stard:l.filter(i=>i.star&&ckDone(i)).length,arts:al.length,artsRead:al.filter(a=>u.arts[a.id]).length}}
+  return {n,d,pct,k,cur,lv,nx,need,u,gs,mods:gs.map(g=>({id:g.id,t:g.t,d:g.items.filter(ckDone).length,n:g.items.length})),last:(u.got||[]).slice(-1)[0]||null,hand:l.filter(i=>ckDone(i)&&ckHand(i)).length,star:l.filter(i=>i.star).length,stard:l.filter(i=>i.star&&ckDone(i)).length,arts:al.length,artsRead:al.filter(a=>u.arts[a.id]).length}}
 function kbSync(silent){const s=kbStat();const u=s.u;
   if(u.max==null){u.max=s.k;u.got=s.lv.slice(0,s.k+1).map((x,j)=>({l:j,at:nowStamp()}));return kbStat()}
   if(s.k>u.max){for(let j=u.max+1;j<=s.k;j++)u.got.push({l:j,at:nowStamp()});u.max=s.k;if(!silent)kbCongrats(s.lv[s.k].n)}
   return kbStat()}
 function asUser(u,f){const o=S.me;S.me=u;try{return f()}finally{S.me=o}}
-function kbFor(u){const key=u+'|'+HIST.length+'|'+KB.ver+'|'+JSON.stringify(ORG.features)+'|'+JSON.stringify(ROLES.map(r=>r.perms.length))+'|'+(EM[u]||{}).role;const m=KB.memo[u];if(m&&m.key===key)return m.s;
+function kbFor(u){const key=u+'|'+HIST.length+'|'+JSON.stringify((CKS.u[u]||{}).done||{}).length+'|'+KB.ver+'|'+JSON.stringify(ORG.features)+'|'+JSON.stringify(ROLES.map(r=>r.perms.length))+'|'+(EM[u]||{}).role;const m=KB.memo[u];if(m&&m.key===key)return m.s;
   const s=u===S.me?kbStat():asUser(u,()=>{ckBase(true);return kbSync(true)});KB.memo[u]={key,s};return s}
 const KB_CL=['faint','blue','green','purple','yellow'];
 function kbBadge(s,o={}){const l=s.lv[s.cur];return `<span class="pill ${o.big?'':'sm'} ${KB_CL[s.cur]||'blue'} kb-lvl" title="Уровень знаний ${s.cur+1} из ${s.lv.length}">${ic('grad')}${esc(l.n)}${o.nopct?'':` · ${s.pct} %`}</span>`}
@@ -200,7 +206,7 @@ function kbCongrats(name){let el=$('#kb-cg');if(!el){el=document.createElement('
 // Called after saves, visits and first-use events.
 let ckT=null;function ckSoon(){clearTimeout(ckT);ckT=setTimeout(ckEval,250)}
 function ckEval(){const fresh=CK.q.splice(0);
-  ckAll().forEach(i=>{if(ckDone(i))return;let ok=false;try{ok=kbOk(i)}catch(e){ok=false}if(ok&&ckMark(i))fresh.push(i)});
+  ckAll().forEach(i=>{if(ckDone(i)){if(ckHand(i)){let ok=false;try{ok=kbOk(i)}catch(e){}if(ok)ckMark(i)}return}let ok=false;try{ok=kbOk(i)}catch(e){ok=false}if(ok&&ckMark(i))fresh.push(i)});
   // Feedback right at the moment of the action: the lesson step first, then other actions; «Посмотреть»-hits only toast.
   const a=CK.active&&ckFind(CK.active);const act=fresh.filter(i=>!i.at);
   const pick=act.find(i=>i===a&&!i.soft&&!i.learn)||act.find(i=>!i.learn&&!i.soft);

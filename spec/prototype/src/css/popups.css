@@ -44,6 +44,9 @@
 .pane.paging{overflow-x:hidden}
 .pg-nb{position:absolute;left:0;right:0;pointer-events:none}
 .pg-nb>.tabrow{visibility:hidden}
+/* Листание вкладок окна свайпом: неподвижная копия прежней вкладки едет рядом с новой */
+.mb.fp-on{position:relative}
+.fp-snap{position:absolute;display:flex;flex-direction:column;pointer-events:none;will-change:transform}
 .modal,.pop{touch-action:pan-y}
 .state.fe b{max-width:520px;text-wrap:balance}
 .state .btn .ic{color:inherit}
@@ -122,7 +125,8 @@
 .ck-t{font-size:13.5px;line-height:1.4}.ck-t .tag{margin-right:2px}
 .ck-star{color:var(--yellow);font-weight:700}
 .ck-act{display:flex;gap:6px;align-items:center;flex:none}
-@media (max-width:767px){.chk .row>.btn{white-space:normal;text-align:left;flex:1 1 100%;justify-content:center}.ck-i{flex-wrap:wrap}.ck-act{width:100%;padding-left:28px}.ck-act .btn{flex:1;justify-content:center}}
+.ck-hand-l{vertical-align:1px}
+@media (max-width:767px){.chk .row>.btn{white-space:normal;text-align:left;flex:1 1 100%;justify-content:center}.ck-i{flex-wrap:wrap}.ck-act{width:100%;padding-left:28px}.ck-act .btn{flex:1;justify-content:center}.ck-act .ck-hand{display:none}}
 /* Показатели: «Кому вести» и «Ввод из Excel» */
 .kw-f{display:grid;grid-template-columns:minmax(180px,1.6fr) repeat(3,minmax(130px,1fr)) minmax(120px,.8fr);gap:8px;margin:8px 0}
 .kw-acts{gap:8px;margin:4px 0 8px}
