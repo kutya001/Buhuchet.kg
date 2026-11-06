@@ -300,6 +300,80 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     });
   });
 
+  it('на тестовом стенде у сообщения о заявке с сайта «Организация» — «Тестовый стенд», у остальных сообщений платформы — «Платформа» (прототип v74)', async () => {
+    const [x] = await db.admin.db
+      .insert(telegramOutbox)
+      .values({
+        orgId: null,
+        userId: adminId,
+        chatId: 1006,
+        kind: 'lead',
+        text: '🧪 Тестовый стенд 📩 Новая заявка с сайта',
+        status: 'sent',
+        tries: 1,
+        dedupeKey: 'lead:stand-test',
+        createdAt: new Date(NOW.getTime() - 360_000),
+      })
+      .returning({ id: telegramOutbox.id });
+    const id = x!.id;
+    try {
+      // Рабочий сайт: «Платформа».
+      const prod = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'org', t));
+      expect(prod.items).toEqual(
+        expect.arrayContaining([{ value: 'platform', label: 'tgadm.org.platform', count: 2 }]),
+      );
+      const prodPage = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t));
+      expect(prodPage.rows.find((r) => r.id === id)).toMatchObject({ orgName: null });
+      // Стенд: «Тестовый стенд» в строке, в фильтре, в поиске и в выгрузке.
+      const values = await asAdmin((tx) =>
+        listAdminTelegramLogValues(tx, 'org', t, undefined, true),
+      );
+      expect(values.items).toEqual(
+        expect.arrayContaining([
+          { value: 'platform', label: 'tgadm.org.platform', count: 1 },
+          { value: 'stand', label: 'tgadm.org.stand', count: 1 },
+        ]),
+      );
+      const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t, true));
+      expect(page.rows.find((r) => r.id === id)).toMatchObject({
+        orgId: null,
+        orgName: 'tgadm.org.stand',
+        kind: 'lead',
+      });
+      expect(page.rows.find((r) => r.id === ids.platform)).toMatchObject({ orgName: null });
+      const stand = await asAdmin((tx) =>
+        listAdminTelegramLogPage(
+          tx,
+          query({ filters: { org: { type: 'enum', vals: ['stand'] } } }),
+          t,
+          true,
+        ),
+      );
+      expect(stand.rows.map((r) => r.id)).toEqual([id]);
+      const found = await asAdmin((tx) =>
+        listAdminTelegramLogPage(
+          tx,
+          query({ search: { q: 'tgadm.org.stand', keys: KEYS } }),
+          t,
+          true,
+        ),
+      );
+      expect(found.rows.map((r) => r.id)).toEqual([id]);
+      const file = await asAdmin((tx) =>
+        exportAdminTelegramLog(
+          tx,
+          query({ filters: { org: { type: 'enum', vals: ['stand'] } } }),
+          ['org', 'kind'],
+          t,
+          true,
+        ),
+      );
+      expect(file.rows).toEqual([['tgadm.org.stand', 'telegram.kind.lead']]);
+    } finally {
+      await db.admin.db.delete(telegramOutbox).where(eq(telegramOutbox.id, id));
+    }
+  });
+
   it('сотрудник организации, заблокированный администратор и запрос без контекста не видят журнал и ничего не меняют', async () => {
     const asOwner = await withOrgContext(
       db.app.db,

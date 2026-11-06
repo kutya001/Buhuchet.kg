@@ -3,8 +3,10 @@
 import { formatMomentRu, formatPhone, type ListSort } from '@buhuchet/domain';
 import type { AdminLead } from '@buhuchet/shared';
 import {
+  buttonClass,
   DataGrid,
   EmptyState,
+  Icon,
   linkButtonClass,
   Note,
   StatusMini,
@@ -30,7 +32,7 @@ import { tabHref } from '../shell/modules';
 import { phoneCodesQuery } from '../staff/staff-data';
 import { miniView, statusName } from '../status/status-view';
 import { useLeadActions } from './lead-actions';
-import { fetchLeadValues, fetchLeads, useLeadsRefresh } from './leads-data';
+import { fetchLeadValues, fetchLeads, leadSummaryQuery, useLeadsRefresh } from './leads-data';
 import { NewOrganizationDialog } from './new-org-dialog';
 import { useOrgsAddRequest } from './orgs-list';
 
@@ -185,7 +187,8 @@ export function LeadsList() {
   const toOrgs = useCallback(() => router.push(tabHref('orgs', 'list')), [router]);
   const columns = useMemo(() => leadColumns(t, phone, toOrgs), [t, phone, toOrgs]);
   const view = useViewSettings('orgs.leads');
-  const { search, clearSearch } = useShell();
+  const { search, clearSearch, openProfile } = useShell();
+  const summary = useQuery(leadSummaryQuery);
   const leads = useLeadActions();
   const list = useListPage({
     gridKey: 'orgs.leads',
@@ -209,6 +212,23 @@ export function LeadsList() {
 
   return (
     <div className="flex flex-col gap-3.5">
+      {summary.data?.recipients === 0 ? (
+        // Ни у одного администратора платформы не привязан Telegram (прототип v74 renderLeads).
+        // Как `.note.warn` прототипа: текст, сразу за ним кнопка в той же строке, по верхнему краю.
+        <Note tone="warn" icon="alert">
+          <div data-leads-notg="" className="flex items-start gap-[9px]">
+            <span className="min-w-0">{t('leads.no_tg')}</span>
+            <button
+              type="button"
+              className={`${buttonClass('default', 'sm')} shrink-0`}
+              onClick={openProfile}
+            >
+              <Icon name="user" size="sm" />
+              {t('profile.title')}
+            </button>
+          </div>
+        </Note>
+      ) : null}
       <Note>{t('leads.note')}</Note>
       <DataGrid
         columns={columns}

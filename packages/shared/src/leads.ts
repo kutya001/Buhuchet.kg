@@ -124,7 +124,11 @@ export const AdminLeadCard = AdminLead.extend({
 export type AdminLeadCard = z.infer<typeof AdminLeadCard>;
 
 /** Плитка «Заявки с сайта» и счётчик вкладки: заявок «Новая». */
-export const AdminLeadSummary = z.object({ fresh: z.number().int().nonnegative() });
+export const AdminLeadSummary = z.object({
+  fresh: z.number().int().nonnegative(),
+  /** Администраторов платформы, кому уйдёт сообщение о заявке; 0 — «О новых заявках некому сообщить…». */
+  recipients: z.number().int().nonnegative(),
+});
 export type AdminLeadSummary = z.infer<typeof AdminLeadSummary>;
 
 /** Причина отказа и отката: не пустая, без NUL. */

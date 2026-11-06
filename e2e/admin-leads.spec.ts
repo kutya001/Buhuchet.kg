@@ -146,6 +146,65 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await page.keyboard.press('Escape');
   });
 
+  test('(прототип v74) гость отправил заявку: администратору с привязанным Telegram пришло «📩 Новая заявка с сайта: …» со ссылкой на «Заявки», повторная с того же телефона — «🔁 Повторная заявка с сайта»; в журнале «Телеграм» записи «Заявка с сайта» со статусом «Отправлено»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    // Ждём отправку очереди Telegram (до минуты) — см. TG_POLL.
+    test.setTimeout(180_000);
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const chat = uniqueChat();
+    await linkTelegram(page.request, origin, chat);
+    // Сквозные тесты идут не на стенде: пометку «🧪 Тестовый стенд», ссылку стенда и «Тестовый стенд»
+    // в журнале проверяют тесты API и базы (docs/deviations.md п. О-6).
+
+    const firm = `ОсОО «${uniqueLogin('Уведомление')}»`;
+    const phone = uniquePhone();
+    expect((await sendLead(page.request, origin, { firm, phone })).status()).toBe(200);
+    expect((await sendLead(page.request, origin, { firm, phone, note: 'Ещё раз' })).status()).toBe(
+      200,
+    );
+    const about = async () =>
+      (await botMessages(page.request, chat)).filter((m) => m.includes(firm));
+    await expect
+      .poll(async () => {
+        await tick(page.request);
+        return (await about()).length;
+      }, TG_POLL)
+      .toBe(2);
+    const [created, repeated] = [
+      (await about()).find((m) => m.includes('📩'))!,
+      (await about()).find((m) => m.includes('🔁'))!,
+    ];
+    const link = `${origin}/app/orgs/leads`;
+    expect(created.startsWith(`📩 Новая заявка с сайта: ${firm}, Сквозная Заявка, +996`)).toBe(
+      true,
+    );
+    expect(created).toContain('клиентов: 21–50');
+    expect(created.endsWith(`Открыть: ${link}`)).toBe(true);
+    expect(repeated.startsWith(`🔁 Повторная заявка с сайта: ${firm}, Сквозная Заявка`)).toBe(true);
+    expect(repeated.endsWith(`Открыть: ${link}`)).toBe(true);
+
+    // Ссылка из сообщения открывает вкладку «Заявки» Админки.
+    await page.goto(link);
+    await expect(page).toHaveURL(/\/app\/orgs\/leads$/);
+    await expect(page.getByText('О каждой новой и повторной заявке бот сразу пишет')).toBeVisible();
+
+    // Журнал «Телеграм»: обе отправки — «Заявка с сайта», «Отправлено».
+    await page.goto('/app/tg/log');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    await search(page, isMobile, `e2e_${chat}`);
+    const rows = page
+      .locator('[data-grid] [data-id]')
+      .filter({ hasText: 'Заявка с сайта' })
+      .filter({ hasText: 'Отправлено' });
+    await expect(rows).toHaveCount(2);
+    // «Организация» (на телефоне карточка её не показывает) — «Платформа».
+    if (!isMobile) await expect(rows.filter({ hasText: 'Платформа' })).toHaveCount(2);
+  });
+
   test('(лендинг, повтор) четвёртая заявка за час с одного адреса не принимается — «Слишком много заявок…»; повторная заявка с тем же телефоном не создаёт вторую строку: комментарий дописан', async ({
     page,
     baseURL,

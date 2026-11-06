@@ -86,7 +86,7 @@ export function telegramLogHandler(deps: ApiDeps): RouteHandler<typeof telegramL
     const query = listQueryOf(c.req.valid('query'));
     const t = await serverTexts(deps);
     const page = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      listAdminTelegramLogPage(tx, query, t),
+      listAdminTelegramLogPage(tx, query, t, deps.config.APP_ENV === 'staging'),
     );
     return c.json(
       {
@@ -126,7 +126,7 @@ export function telegramLogValuesHandler(
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
     const values = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      listAdminTelegramLogValues(tx, col, t, q),
+      listAdminTelegramLogValues(tx, col, t, q, deps.config.APP_ENV === 'staging'),
     );
     return c.json(values, 200);
   };
@@ -163,7 +163,7 @@ export function telegramLogExportHandler(
       const result = await withUserContext(
         deps.db,
         userId,
-        (tx) => exportAdminTelegramLog(tx, query, keys, t),
+        (tx) => exportAdminTelegramLog(tx, query, keys, t, deps.config.APP_ENV === 'staging'),
         'export',
       );
       return xlsxResponse(c, {

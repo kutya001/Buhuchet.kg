@@ -6,9 +6,11 @@ import {
   adminLeadById,
   adminLeadEvents,
   adminLeadList,
+  adminLeadRecipients,
   adminNewLeadCount,
   deleteLead,
   exportAdminLeads,
+  LEAD_REPEAT_MARKS,
   LeadLinkError,
   listAdminLeadsPage,
   listAdminLeadValues,
@@ -73,6 +75,7 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       fromStand: false,
       trap: false,
       telegramText: '📩 Новая заявка с сайта',
+      telegramRepeatText: '🔁 Повторная заявка с сайта',
       now: NOW,
       ...over,
     };
@@ -155,11 +158,16 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
     ]);
   });
 
-  it('заявка со стенда сохраняется с отметкой и в Telegram не уходит', async () => {
+  it('заявка со стенда сохраняется с отметкой, сообщение о ней уходит администраторам стенда (прототип v74)', async () => {
     await db.admin.db.delete(telegramOutbox);
     const res = await submitLead(
       db.app.db,
-      lead({ fromStand: true, telegramText: null, telegram: '  ', note: '' }),
+      lead({
+        fromStand: true,
+        telegramText: '🧪 Тестовый стенд 📩 Новая заявка с сайта',
+        telegram: '  ',
+        note: '',
+      }),
     );
     expect(res.outcome).toBe('created');
     const [row] = await db.admin.db
@@ -167,10 +175,25 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       .from(platformLeads)
       .where(eq(platformLeads.id, res.leadId!));
     expect(row).toMatchObject({ fromStand: true, telegram: null, note: null });
-    expect(await db.admin.db.select().from(telegramOutbox)).toEqual([]);
+    expect(await db.admin.db.select().from(telegramOutbox)).toEqual([
+      expect.objectContaining({
+        userId: adminId,
+        kind: 'lead',
+        text: '🧪 Тестовый стенд 📩 Новая заявка с сайта',
+        dedupeKey: `lead:${res.leadId}:${adminId}`,
+      }),
+    ]);
+    // Без текста (бот не настроен) — заявка сохраняется, сообщения нет.
+    await db.admin.db.delete(telegramOutbox);
+    const quiet = await submitLead(
+      db.app.db,
+      lead({ telegramText: null, telegramRepeatText: null }),
+    );
+    expect(quiet.outcome).toBe('created');
+    expect(await db.admin.db.$count(telegramOutbox)).toBe(0);
   });
 
-  it('повторная заявка с того же телефона за сутки новой не создаётся: комментарий дописан, в истории — повтор', async () => {
+  it('повторная заявка с того же телефона за сутки новой не создаётся: комментарий дописан, в истории — повтор, администраторам — «Повторная заявка с сайта»', async () => {
     await db.admin.db.delete(telegramOutbox);
     const first = await submitLead(db.app.db, lead({ phone: '+996700111222', note: 'Первый' }));
     const again = await submitLead(
@@ -199,24 +222,81 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       { kind: 'repeat', text: 'Второй' },
       { kind: 'repeat', text: null },
     ]);
-    // Повтор не пишет администраторам второй раз: сообщение — только о первой заявке.
+    // О каждом повторе — своё сообщение по шаблону «Telegram: повторная заявка с сайта» (прототип v74):
+    // ключ начинается с заявки и администратора и кончается записью истории.
+    const events = await db.admin.db
+      .select({ id: platformLeadEvents.id })
+      .from(platformLeadEvents)
+      .where(eq(platformLeadEvents.leadId, first.leadId!))
+      .orderBy(platformLeadEvents.id);
+    const sent = await db.admin.db
+      .select({ text: telegramOutbox.text, key: telegramOutbox.dedupeKey })
+      .from(telegramOutbox);
+    expect(sent).toHaveLength(3);
+    expect(sent).toEqual(
+      expect.arrayContaining([
+        { text: '📩 Новая заявка с сайта', key: `lead:${first.leadId}:${adminId}` },
+        ...events.slice(1).map((e) => ({
+          text: '🔁 Повторная заявка с сайта',
+          key: `lead:${first.leadId}:${adminId}:${e.id}`,
+        })),
+      ]),
+    );
+    // Метки фирмы, имени и «клиентов» заменяются значениями сохранённой заявки, а не второй формы.
+    await db.admin.db.delete(telegramOutbox);
+    const marked = await submitLead(
+      db.app.db,
+      lead({
+        phone: '+996700111222',
+        name: 'Другое Имя',
+        firm: 'ОсОО «Другая»',
+        size: '1–20',
+        note: '',
+        now: later(23.6),
+        telegramRepeatText: `🔁 ${LEAD_REPEAT_MARKS.firm}, ${LEAD_REPEAT_MARKS.name}, ${LEAD_REPEAT_MARKS.size}`,
+      }),
+    );
+    expect(marked.outcome).toBe('repeat');
+    expect(await db.admin.db.select({ text: telegramOutbox.text }).from(telegramOutbox)).toEqual([
+      { text: '🔁 ОсОО «Учёт Плюс», Айгуль Садыкова, 21–50' },
+    ]);
+    // Без текста повтора — сообщения о повторе нет.
+    const silent = await submitLead(
+      db.app.db,
+      lead({ phone: '+996700111222', note: '', now: later(23.7), telegramRepeatText: null }),
+    );
+    expect(silent.outcome).toBe('repeat');
     expect(await db.admin.db.$count(telegramOutbox)).toBe(1);
     // Через сутки с того же телефона — уже новая заявка.
     const next = await submitLead(db.app.db, lead({ phone: '+996700111222', now: later(25) }));
     expect(next.outcome).toBe('created');
   });
 
-  it('четвёртая заявка за час с одного адреса не принимается, с другого адреса — принимается', async () => {
+  it('четвёртая заявка за час с одного адреса не принимается и сообщения не даёт, в том числе повтор; с другого адреса — принимается', async () => {
     const ip = 'ip-limit';
+    const phones: string[] = [];
     for (let i = 0; i < 3; i += 1) {
-      expect((await submitLead(db.app.db, lead({ ipSubject: ip }))).outcome).toBe('created');
+      const sent = lead({ ipSubject: ip });
+      phones.push(sent.phone);
+      expect((await submitLead(db.app.db, sent)).outcome).toBe('created');
     }
     const before = await db.admin.db.$count(platformLeads);
+    const messages = await db.admin.db.$count(telegramOutbox);
+    const repeats = () =>
+      db.admin.db.$count(platformLeadEvents, eq(platformLeadEvents.kind, 'repeat'));
+    const repeatsBefore = await repeats();
     expect(await submitLead(db.app.db, lead({ ipSubject: ip }))).toEqual({
       outcome: 'limited',
       leadId: null,
     });
+    // Повтор с того же телефона сверх предела — тоже ни записи в истории, ни сообщения.
+    expect(
+      (await submitLead(db.app.db, lead({ ipSubject: ip, phone: phones[0]!, note: 'Ещё' })))
+        .outcome,
+    ).toBe('limited');
     expect(await db.admin.db.$count(platformLeads)).toBe(before);
+    expect(await db.admin.db.$count(telegramOutbox)).toBe(messages);
+    expect(await repeats()).toBe(repeatsBefore);
     expect((await submitLead(db.app.db, lead({ ipSubject: 'ip-other' }))).outcome).toBe('created');
   });
 
@@ -263,6 +343,25 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
     expect(await withUserContext(db.app.db, blockedAdminId, (tx) => adminLeadList(tx))).toEqual([]);
     expect(await db.app.db.execute(sql`select * from app.admin_leads`)).toEqual([]);
     expect(await asAdmin((tx) => adminNewLeadCount(tx))).toBe(list.length);
+  });
+
+  it('«О новых заявках некому сообщить»: сколько незаблокированных администраторов платформы с Telegram получат сообщение; не администратору — 0', async () => {
+    // Telegram — у администратора и у заблокированного администратора; у третьего его нет.
+    expect(await asAdmin((tx) => adminLeadRecipients(tx))).toBe(1);
+    expect(await withUserContext(db.app.db, org.ownerUserId, (tx) => adminLeadRecipients(tx))).toBe(
+      0,
+    );
+    expect(await withUserContext(db.app.db, blockedAdminId, (tx) => adminLeadRecipients(tx))).toBe(
+      0,
+    );
+    await db.admin.db.delete(telegramLinks).where(eq(telegramLinks.userId, adminId));
+    try {
+      expect(await asAdmin((tx) => adminLeadRecipients(tx))).toBe(0);
+    } finally {
+      await db.admin.db
+        .insert(telegramLinks)
+        .values({ userId: adminId, orgId: null, chatId: 9001, username: 'kutman' });
+    }
   });
 
   it('статус: шаг, отказ с причиной, откат; версия сверяется; история — кто, с какого на какой, причина', async () => {
@@ -404,6 +503,9 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
       adminNote: 'Показ в понедельник',
       version: 2,
     });
+    // Повторная заявка: её сообщение тоже связано с заявкой и стирается вместе с ней.
+    await submitLead(db.app.db, lead({ phone: '+996700333555', note: '', now: later(3) }));
+    expect(await leadMessages(id)).toHaveLength(2);
     expect(await withUserContext(db.app.db, org.ownerUserId, (tx) => deleteLead(tx, id))).toBe(
       false,
     );

@@ -57,7 +57,7 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     await f?.t.drop();
   });
 
-  it('без входа: «Спасибо!», строка «Новая», администратору — сообщение по шаблону с номером по маске', async () => {
+  it('без входа: «Спасибо!», строка «Новая», администратору — сообщение по шаблону с номером по маске и ссылкой на «Заявки»', async () => {
     const res = await send(form());
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
@@ -75,7 +75,7 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
         orgId: null,
         userId: adminId,
         chatId: 4001,
-        text: '📩 Новая заявка с сайта: ОсОО «Учёт Плюс», Айгуль Садыкова, +996 555 100 200, клиентов: 21–50.',
+        text: '📩 Новая заявка с сайта: ОсОО «Учёт Плюс», Айгуль Садыкова, +996 555 100 200, клиентов: 21–50. Открыть: http://localhost:3000/app/orgs/leads',
       }),
     ]);
   });
@@ -143,13 +143,26 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     expect((await send(form({ phone: '+996700000024' }), { ip })).status).toBe(429);
   });
 
-  it('повтор с того же телефона — «Спасибо!» без второй строки; четвёртая за час с адреса — 429', async () => {
+  it('повтор с того же телефона — «Спасибо!» без второй строки, администратору — «Повторная заявка с сайта»; четвёртая за час с адреса — 429', async () => {
     const ip = '198.51.100.9';
     expect((await send(form({ phone: '+996700000003' }), { ip })).status).toBe(200);
-    expect((await send(form({ phone: '+996700000003', note: 'Ещё' }), { ip })).status).toBe(200);
+    // Во второй форме — другие фирма и имя: в сообщении о повторе — данные сохранённой заявки.
+    const second = form({
+      phone: '+996700000003',
+      note: 'Ещё',
+      firm: 'ОсОО «Другая»',
+      name: 'Чужое Имя',
+    });
+    expect((await send(second, { ip })).status).toBe(200);
     const same = (await leads()).filter((l) => l.phone === '+996700000003');
     expect(same).toHaveLength(1);
     expect(same[0]!.note).toBe('Перезвоните после обеда\nЕщё');
+    // Шаблон «Telegram: повторная заявка с сайта» (прототип v74 tgLeadRep).
+    const about = (await outbox()).filter((m) => m.dedupeKey?.startsWith(`lead:${same[0]!.id}:`));
+    expect(about.map((m) => m.text).sort()).toEqual([
+      '📩 Новая заявка с сайта: ОсОО «Учёт Плюс», Айгуль Садыкова, +996 700 000 003, клиентов: 21–50. Открыть: http://localhost:3000/app/orgs/leads',
+      '🔁 Повторная заявка с сайта: ОсОО «Учёт Плюс», Айгуль Садыкова, +996 700 000 003. Открыть: http://localhost:3000/app/orgs/leads',
+    ]);
     expect((await send(form({ phone: '+996700000004' }), { ip })).status).toBe(200);
     const fourth = await send(form({ phone: '+996700000005' }), { ip });
     expect(fourth.status).toBe(429);
@@ -169,19 +182,25 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     expect(res.status).toBe(403);
   });
 
-  it('тестовый стенд: заявка сохраняется с отметкой и в Telegram не уходит', async () => {
+  it('тестовый стенд: заявка сохраняется с отметкой, администраторам стенда — сообщение с пометкой «🧪 Тестовый стенд» и ссылкой стенда (прототип v74)', async () => {
+    const base = createTestDeps().config;
     const stand = createApp(
       createTestDeps({
         db: f.deps.db,
-        config: { ...createTestDeps().config, APP_ENV: 'staging' },
+        config: { ...base, APP_ENV: 'staging', APP_BASE_URL: 'https://test.example' },
       }),
     );
-    const before = (await outbox()).length;
     const res = await send(form({ phone: '+996700000007' }), { app: stand, ip: '192.0.2.1' });
     expect(res.status).toBe(200);
-    expect((await leads()).find((l) => l.phone === '+996700000007')).toMatchObject({
-      fromStand: true,
-    });
-    expect((await outbox()).length).toBe(before);
+    const lead = (await leads()).find((l) => l.phone === '+996700000007');
+    expect(lead).toMatchObject({ fromStand: true });
+    const again = await send(form({ phone: '+996700000007' }), { app: stand, ip: '192.0.2.1' });
+    expect(again.status).toBe(200);
+    const about = (await outbox()).filter((m) => m.dedupeKey?.startsWith(`lead:${lead!.id}:`));
+    expect(about.map((m) => m.text).sort()).toEqual([
+      '🧪 Тестовый стенд 📩 Новая заявка с сайта: ОсОО «Учёт Плюс», Айгуль Садыкова, +996 700 000 007, клиентов: 21–50. Открыть: https://test.example/app/orgs/leads',
+      '🧪 Тестовый стенд 🔁 Повторная заявка с сайта: ОсОО «Учёт Плюс», Айгуль Садыкова, +996 700 000 007. Открыть: https://test.example/app/orgs/leads',
+    ]);
+    expect(about.every((m) => m.userId === adminId && m.orgId === null)).toBe(true);
   });
 });
