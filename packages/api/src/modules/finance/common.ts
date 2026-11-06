@@ -21,7 +21,12 @@ import { apiFail } from '../../errors';
  */
 
 /** Записи модуля файлов в истории записи: в них имя файла. */
-const FILE_ACTIONS: ReadonlySet<string> = new Set(['file_attach', 'file_delete']);
+const FILE_ACTIONS: ReadonlySet<string> = new Set([
+  'file_attach',
+  'file_delete',
+  'file_hide',
+  'file_show',
+]);
 
 /**
  * Видит ли сотрудник файлы записи о деньгах (как модуль файлов, карточки отчёта и задачи): «Файлы в

@@ -2,6 +2,7 @@ import { FILE_MAX_BYTES, FILE_NAME_MAX_LENGTH } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   foreignKey,
   index,
@@ -61,6 +62,12 @@ export const files = pgTable(
     /** Комментарий ручной загрузки (Файловый менеджер). */
     note: text('note'),
     state: text('state', { enum: FILE_STATES }).notNull().default('pending'),
+    /**
+     * Скрыт со страницы контрагента («Скрыть со страницы контрагента», решение заказчика 06.11.2026):
+     * раздел «Файлы» и файлы отчётов страницы его не показывают (прототип v74 хранит скрытые по имени
+     * у контрагента — `c.pgHide`; здесь — у самого файла, чтобы файл с тем же именем не прятался).
+     */
+    pageHidden: boolean('page_hidden').notNull().default(false),
     /** Кто загрузил — пользователь запроса (политика `files_insert_guard`). */
     createdBy: uuid('created_by')
       .notNull()

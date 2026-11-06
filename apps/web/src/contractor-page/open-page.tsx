@@ -47,6 +47,7 @@ import {
   TipPill,
   usePageText,
 } from './page-parts';
+import { usePageFilesSection, usePageFileViewer, type OpenPageFile } from './page-files';
 import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-reports';
 
 /*
@@ -58,7 +59,7 @@ import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-report
  */
 
 type Page = PublicPageBody;
-type SecId = 'main' | 'pay' | 'acc' | 'reports' | 'money' | 'fee' | 'kpi' | 'contacts';
+type SecId = 'main' | 'pay' | 'acc' | 'reports' | 'files' | 'money' | 'fee' | 'kpi' | 'contacts';
 
 const STATE_CLASS = {
   ok: 'bg-ok-bg text-ok font-semibold',
@@ -109,7 +110,10 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
   const [allKpi, setAllKpi] = useState<ReadonlySet<string>>(new Set());
   const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(flashTimer.current), []);
-  const reports = useReportsSectionSafe(page, view, setView, fileHref);
+  // Окно просмотра файлов — одно на страницу: «Файлы» и файлы периодов «Отчётов».
+  const viewer = usePageFileViewer(fileHref);
+  const reports = useReportsSectionSafe(page, view, setView, viewer.openFile);
+  const filesSection = usePageFilesSection(page.files, viewer.openFile);
 
   const open = (k: string) => setUnfolded((s) => new Set([...s, k]));
   const toggle = (k: string) =>
@@ -893,6 +897,13 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
     );
   }
 
+  // «Файлы» (решение заказчика 06.11.2026, прототип v74): на телефоне свёрнут, в заголовке — число файлов.
+  if (filesSection) {
+    H.files = sec('files', 'folder', t('pub.sec.files'), filesSection.body, {
+      sum: filesSection.sum,
+    });
+  }
+
   const nav = pageNav(new Set(Object.keys(H).filter((k): k is PageNavItem => k in NAV_ICON)));
   const col = (ks: string[]) => ks.map((k) => H[k] ?? null);
 
@@ -937,7 +948,7 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
       {state}
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start gap-3.5 max-md:flex max-md:flex-col max-md:items-stretch max-md:gap-2.5">
         <div className="flex min-w-0 flex-col gap-3.5 max-md:contents">
-          {col(['main', 'reports', 'kpi'])}
+          {col(['main', 'reports', 'files', 'kpi'])}
         </div>
         <div className="flex min-w-0 flex-col gap-3.5 max-md:contents">
           {col(['pay', 'acc', 'money', 'fee', 'contacts'])}
@@ -961,6 +972,7 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
           ))}
         </nav>
       ) : null}
+      {viewer.viewer}
     </div>
   );
 }
@@ -970,7 +982,7 @@ function useReportsSectionSafe(
   page: Page,
   view: ReportsView,
   setView: (v: ReportsView) => void,
-  fileHref: (id: string) => string,
+  openFile: OpenPageFile,
 ) {
   const taxpay = page.reports?.items.some((r) => r.payStatus !== null) ?? false;
   return useReportsSection(
@@ -979,6 +991,6 @@ function useReportsSectionSafe(
     taxpay,
     view,
     setView,
-    fileHref,
+    openFile,
   );
 }

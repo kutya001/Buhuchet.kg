@@ -5,6 +5,8 @@ import {
   contractorPageOrg,
   contractorPageState,
   getContractorPage,
+  pageContractorFacts,
+  pageFiles,
   pageReportFile,
   tryContractorPageCode,
   withOrgContext,
@@ -13,9 +15,10 @@ import {
 import {
   bishkekDate,
   filePreviewKind,
-  FILE_LINK_SECONDS,
   isPageAddress,
   pageDevice,
+  pageFileCategories,
+  PAGE_FILE_LINK_SECONDS,
   pageIpSubject,
   pageVisibleSections,
   PAGE_COOKIE,
@@ -28,6 +31,7 @@ import {
   PublicPageCodeInput,
   PublicPageCodeOk,
   PublicPageFileParams,
+  PublicPageFileQuery,
   PublicPageParams,
   type PublicPage as PublicPageBody,
 } from '@buhuchet/shared';
@@ -264,34 +268,37 @@ export const publicPageFileRoute = createRoute({
   method: 'get',
   path: '/page/{slug}/{inn}/files/{id}',
   tags: ['contractor-page'],
-  summary: 'Открыть файл отчёта со страницы контрагента (без входа)',
-  request: { params: PublicPageFileParams },
+  summary: 'Открыть файл со страницы контрагента (без входа)',
+  request: { params: PublicPageFileParams, query: PublicPageFileQuery },
   responses: {
     302: {
       description:
-        'Переход на подписанную ссылку на 15 минут: картинка и PDF открываются в браузере, остальное скачивается',
+        'Переход на подписанную ссылку на 5 минут: картинка и PDF открываются в браузере (с `download=1` — скачиваются), остальное скачивается',
     },
     400: { description: 'Номер файла неверного вида', content: error },
     404: {
       description:
-        'Страница не открыта в этом браузере (нет кода), раздел «Отчёты» или «Файлы в карточках» выключены, файла нет у отчётов этого контрагента',
+        'Страница не открыта в этом браузере (нет кода), «Файлы в карточках» выключены, файла нет у показанных отчётов и в показанном разделе «Файлы» этого контрагента, файл скрыт со страницы',
       content: error,
     },
   },
 });
 
 /**
- * Файл отчёта со страницы (ТЗ «файлы, приложенные при сдаче (отчёт, квитанция), открываются для
- * просмотра и скачивания»): только в браузере, где страница открыта по коду (cookie этой ссылки),
- * только при показанном разделе «Отчёты» и включённых «Файлах в карточках», только файл отчёта этого
- * контрагента, который страница показывает. Всё остальное — одинаково «Страница недоступна».
+ * Файл со страницы (ТЗ «файлы, приложенные при сдаче (отчёт, квитанция), открываются для просмотра и
+ * скачивания»; раздел «Файлы» — решение заказчика 06.11.2026): только в браузере, где страница открыта
+ * по коду (cookie этой ссылки), только при включённых «Файлах в карточках», только файл этого
+ * контрагента, который страница показывает: у отчёта показанного раздела «Отчёты» или в показанном
+ * разделе «Файлы», не скрытый со страницы. Ссылка — на 5 минут (ТЗ «Файлы»). Всё остальное —
+ * одинаково «Страница недоступна».
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#Е-4 — файлы только при «Файлах в карточках», ссылка на 15 минут.
+// ОТКЛОНЕНИЕ: docs/deviations.md#Е-4 — файлы только при «Файлах в карточках».
 export function publicPageFileHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof publicPageFileRoute, AppEnv> {
   return async (c) => {
     const { slug, inn, id } = c.req.valid('param');
+    const { download } = c.req.valid('query');
     privateHeaders(c);
     const unavailable = () =>
       apiFail(404, 'page_unavailable', 'Страница недоступна. Обратитесь к вашему бухгалтеру.');
@@ -300,20 +307,32 @@ export function publicPageFileHandler(
     if (state.state !== 'open') return unavailable();
     const { orgId, contractorId } = state;
     const file = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {
-      const [org, own] = await Promise.all([
+      const [org, own, facts] = await Promise.all([
         contractorPageOrg(tx, orgId),
         getContractorPage(tx, contractorId),
+        pageContractorFacts(tx, contractorId),
       ]);
-      if (!org || !own || !org.features.files) return null;
+      if (!org || !own || !facts || !org.features.files) return null;
       const sections = pageVisibleSections(org.pageSections, org.features, own.hiddenSections);
-      if (!sections.includes('reports')) return null;
-      return pageReportFile(tx, contractorId, id);
+      if (sections.includes('reports')) {
+        const found = await pageReportFile(tx, contractorId, id);
+        if (found) return found;
+      }
+      if (!sections.includes('files')) return null;
+      const categories = pageFileCategories(sections, {
+        projects: org.features.projects,
+        fee: sections.includes('fee') && !facts.oneOff,
+      });
+      const [found] = await pageFiles(tx, contractorId, categories, id);
+      return found ?? null;
     });
     if (!file) return unavailable();
     const url = await deps.storage.signedDownloadUrl(file.storageKey, {
-      expiresInSeconds: FILE_LINK_SECONDS,
+      expiresInSeconds: PAGE_FILE_LINK_SECONDS,
       fileName: file.name,
-      ...(filePreviewKind(file.contentType) ? { inline: { contentType: file.contentType } } : {}),
+      ...(filePreviewKind(file.contentType) && download !== '1'
+        ? { inline: { contentType: file.contentType } }
+        : {}),
     });
     return c.redirect(url, 302);
   };

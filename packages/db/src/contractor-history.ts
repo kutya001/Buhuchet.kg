@@ -252,7 +252,7 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   'feeAllocations',
 ]);
 const KPI_ENTITIES = ['indicator', 'indicator_value'] as const;
-const FILE_ACTIONS = ['file_attach', 'file_delete'] as const;
+const FILE_ACTIONS = ['file_attach', 'file_delete', 'file_hide', 'file_show'] as const;
 
 /**
  * Какие записи истории видны: сам контрагент и его страница — всем, кто видит карточку; остальное —

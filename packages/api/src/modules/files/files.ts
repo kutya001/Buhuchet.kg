@@ -10,6 +10,7 @@ import {
   markFileDeleted,
   markFileReady,
   orgMenuSettings,
+  setFilePageHidden,
   withOrgContext,
   writeHistory,
   type FileRecord,
@@ -27,7 +28,10 @@ import {
   fileDeleteRefusal,
   fileUploadProblem,
   hasPermission,
+  PAGE_MESSAGES,
+  pageFileApplies,
   type AccessSubject,
+  type Feature,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -35,6 +39,8 @@ import {
   FileItem,
   FileLink,
   FileList,
+  FilePage,
+  FilePageInput,
   FileSourceQuery,
   FileUploadStart,
   FileUploadTicket,
@@ -83,10 +89,32 @@ export function subjectOf(c: Context<AppEnv>): AccessSubject {
   return c.get('access')!.subject;
 }
 
-/** Функция «Файлы в карточках» выключена — 403 `files_off`. */
-export async function requireFilesFeature(tx: Tx, orgId: string): Promise<void> {
+/** Функция «Файлы в карточках» выключена — 403 `files_off`; ответ — функции учётной политики. */
+export async function requireFilesFeature(
+  tx: Tx,
+  orgId: string,
+): Promise<Readonly<Record<Feature, boolean>>> {
   const { features } = await orgMenuSettings(tx, orgId);
   if (!features.files) apiFail(403, 'files_off', FILE_MESSAGES.files_off);
+  return features;
+}
+
+/**
+ * Показ файла на странице контрагента (решение заказчика 06.11.2026, прототип v74 `pgFileOk`,
+ * `pgFileAct`): у файла контрагента не задачи при включённой «Странице контрагента по ссылке»;
+ * менять — право «Управлять страницей контрагента» в его области (группа «Контрагенты»).
+ */
+export function filePageOf(
+  file: { sourceKind: string; contractorId: string | null; pageHidden: boolean },
+  contractor: { id: string; responsibleEmployeeId: string | null } | null,
+  subject: AccessSubject,
+  cppage: boolean,
+): FilePage | null {
+  if (!cppage || !contractor || !pageFileApplies(file)) return null;
+  return {
+    hidden: file.pageHidden,
+    canChange: hasPermission(subject, 'cpPage') && canSeeContractor(subject, 'cps', contractor),
+  };
 }
 
 /** Видит ли сотрудник файлы записи: право просмотра и область группы «Файловый менеджер». */
@@ -138,6 +166,7 @@ function itemBody(
   subject: AccessSubject,
   userId: string,
   now: Date,
+  cppage: boolean,
 ): FileItemBody {
   return {
     id: file.id,
@@ -147,6 +176,7 @@ function itemBody(
     uploadedBy: file.uploadedBy,
     uploadedAt: file.createdAt.toISOString(),
     canDelete: deleteRefusal(subject, record, file, userId, now) === null,
+    page: filePageOf(file, record.contractor, subject, cppage),
     version: file.version,
   };
 }
@@ -199,11 +229,11 @@ export function listFilesHandler(deps: ApiDeps): RouteHandler<typeof listFilesRo
     const subject = subjectOf(c);
     const now = realNow();
     const body = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
+      const features = await requireFilesFeature(tx, ctx.orgId);
       const record = await visibleSource(deps, tx, subject, kind, id ?? null);
       const items = await listSourceFiles(tx, kind, id ?? null);
       return {
-        items: items.map((f) => itemBody(f, record, subject, ctx.userId!, now)),
+        items: items.map((f) => itemBody(f, record, subject, ctx.userId!, now, features.cppage)),
         canUpload: canUpload(subject, record),
       };
     });
@@ -247,7 +277,7 @@ export const startUploadRoute = createRoute({
  */
 export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUploadRoute, AppEnv> {
   return async (c) => {
-    const { source, name: rawName, size, contractorId = null, note } = c.req.valid('json');
+    const { source, name: rawName, size, contractorId = null, note, page } = c.req.valid('json');
     const problem = fileUploadProblem({ name: rawName, size });
     if (problem) apiFail(400, problem, FILE_MESSAGES[problem]);
     const name = rawName.trim();
@@ -265,7 +295,7 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
     const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
     if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
+      const features = await requireFilesFeature(tx, ctx.orgId);
       const record = await visibleSource(deps, tx, subject, source.kind, source.id, {
         contractorId,
       });
@@ -280,6 +310,8 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
         sizeBytes: size,
         storageKey,
         note: note || null,
+        // Галочка «Показывать контрагенту на его странице» снята (только при «Странице контрагента»).
+        pageHidden: page === false && features.cppage && record.contractor !== null,
       });
     });
     // Срок — по настоящим часам: подпись хранилища ставит их же, а не часы демо-стенда (FIXED_NOW).
@@ -361,7 +393,7 @@ export function completeUploadHandler(
     const body = await withOrgContext(deps.db, ctx, async (tx) => {
       const file = await getFile(tx, id, { lock: true });
       if (!file || file.state !== 'pending') return notFound();
-      await requireFilesFeature(tx, ctx.orgId);
+      const features = await requireFilesFeature(tx, ctx.orgId);
       const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId, file);
       if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
       await markFileReady(tx, id);
@@ -370,8 +402,16 @@ export function completeUploadHandler(
         action: 'file_attach',
         changes: [{ field: 'file', to: file.name }],
       });
+      // Загружен скрытым со страницы контрагента — и это в истории (прототип v74 uploadDlg → pgFileSet).
+      if (file.pageHidden) {
+        await writeHistory(tx, {
+          ...record.history(id),
+          action: 'file_hide',
+          changes: [{ field: 'file', to: file.name }],
+        });
+      }
       const ready = (await getFile(tx, id))!;
-      return itemBody(ready, record, subject, ctx.userId!, now);
+      return itemBody(ready, record, subject, ctx.userId!, now, features.cppage);
     });
     return c.json(body, 200);
   };
@@ -467,6 +507,80 @@ export function downloadFileHandler(deps: ApiDeps): RouteHandler<typeof download
   return async (c) => {
     const { file } = await visibleFile(deps, c, c.req.valid('param').id);
     return c.redirect((await downloadLink(deps, file)).url, 302);
+  };
+}
+
+export const filePageRoute = createRoute({
+  method: 'post',
+  path: '/files/{id}/page',
+  tags: ['files'],
+  summary: 'Скрыть файл со страницы контрагента или снова показать на ней',
+  middleware: [requirePermission('filesView'), requirePermission('cpPage')] as const,
+  request: {
+    params: FileIdParam,
+    body: { required: true, content: { 'application/json': { schema: FilePageInput } } },
+  },
+  responses: {
+    200: {
+      description:
+        'Отметка файла (в истории записи — «Файл «…» скрыт со страницы контрагента» или «снова показывается на странице контрагента»; уже такая — без записи)',
+      content: { 'application/json': { schema: FilePage } },
+    },
+    400: {
+      description: 'Файл не контрагента или файл задачи — на страницу не попадает',
+      content: error,
+    },
+    401: { description: 'Нет входа', content: error },
+    403: {
+      description:
+        'Нет права «Управлять страницей контрагента» или «Просматривать файлы», контрагент вне области; «Файлы в карточках» или «Страница контрагента по ссылке» выключены',
+      content: error,
+    },
+    404: { description: 'Файла нет, он удалён или вне области', content: error },
+  },
+});
+
+/**
+ * «Скрыть со страницы контрагента» / «Показать на странице контрагента» (решение заказчика 06.11.2026,
+ * прототип v74 `pgFileSet`; ТЗ «Файловый менеджер» → «Показ файла на странице контрагента»): из
+ * Файлового менеджера, блока «Файлы» записи и вкладки «Файлы» карточки; право «Управлять страницей
+ * контрагента» в области группы «Контрагенты»; смена пишется в историю записи файла.
+ */
+export function filePageHandler(deps: ApiDeps): RouteHandler<typeof filePageRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { hidden } = c.req.valid('json');
+    const ctx = orgContextOf(c);
+    const subject = subjectOf(c);
+    const body = await withOrgContext(deps.db, ctx, async (tx) => {
+      const file = await getFile(tx, id, { lock: true });
+      if (!file || file.state !== 'ready') return notFound();
+      const features = await requireFilesFeature(tx, ctx.orgId);
+      if (!features.cppage) {
+        apiFail(
+          403,
+          'cppage_off',
+          'Функция «Страница контрагента по ссылке» выключена в учётной политике',
+        );
+      }
+      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId, file);
+      const page = filePageOf(file, record.contractor, subject, true);
+      if (!page) {
+        apiFail(400, 'validation_failed', 'Этот файл не показывается на странице контрагента', {
+          field: 'id',
+        });
+      }
+      if (!page.canChange) apiFail(403, 'page_manage_right', PAGE_MESSAGES.page_manage_right);
+      if (await setFilePageHidden(tx, id, hidden)) {
+        await writeHistory(tx, {
+          ...record.history(id),
+          action: hidden ? 'file_hide' : 'file_show',
+          changes: [{ field: 'file', to: file.name }],
+        });
+      }
+      return { hidden, canChange: true };
+    });
+    return c.json(body, 200);
   };
 }
 

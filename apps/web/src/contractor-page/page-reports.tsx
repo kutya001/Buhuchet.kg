@@ -31,6 +31,7 @@ import {
   TipPill,
   usePageText,
 } from './page-parts';
+import type { OpenPageFile } from './page-files';
 
 type Reports = NonNullable<PublicPageBody['reports']>;
 type Report = Reports['items'][number];
@@ -91,7 +92,7 @@ export function useReportsSection(
   taxpay: boolean,
   view: ReportsView,
   setView: (v: ReportsView) => void,
-  fileHref: (id: string) => string,
+  openFile: OpenPageFile,
 ) {
   const t = useT();
   const tx = usePageText();
@@ -160,17 +161,18 @@ export function useReportsSection(
         {r.files.length ? (
           <div className="flex flex-wrap gap-x-2.5 gap-y-1">
             {r.files.map((f) => (
-              <a
+              // Прототип v74 `[data-pub-file]` → `pubFileOpen`: картинка и PDF — в окне просмотра.
+              <button
                 key={f.id}
-                href={fileHref(f.id)}
-                data-pub-file=""
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-[12.5px] text-link underline"
+                type="button"
+                data-pub-file={f.id}
+                title={f.preview ? t('pub.files.view') : t('pub.files.download')}
+                onClick={() => openFile(f, t('pub.files.viewer'))}
+                className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left font-[inherit] text-[12.5px] text-link underline"
               >
                 <Icon name="download" size="sm" />
                 {f.name}
-              </a>
+              </button>
             ))}
           </div>
         ) : null}

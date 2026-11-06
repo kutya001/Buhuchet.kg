@@ -140,21 +140,33 @@ export function isDigestTime(value: string): boolean {
 
 /**
  * Разделы страницы контрагента по ссылке (прототип modules/cp-page.js, PG_SECS); у раздела с
- * функцией он виден, только когда функция включена.
+ * функцией он виден, только когда функция включена. «Файлы» — решение заказчика 06.11.2026 (прототип
+ * v74); в продукте — только при «Файлах в карточках» (docs/deviations.md п. О-7).
  */
-export const PAGE_SECTIONS = ['pay', 'reports', 'money', 'fee', 'kpi', 'contacts'] as const;
+export const PAGE_SECTIONS = [
+  'pay',
+  'reports',
+  'files',
+  'money',
+  'fee',
+  'kpi',
+  'contacts',
+] as const;
 export type PageSection = (typeof PAGE_SECTIONS)[number];
 
 export const PAGE_SECTION_TITLES: Record<PageSection, string> = {
   pay: 'Как оплатить',
   reports: 'Отчёты',
+  files: 'Файлы',
   money: 'Деньги на налоги',
   fee: 'Оплата за обслуживание',
   kpi: 'Показатели',
   contacts: 'Контакты',
 };
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-7 — у «Файлов» прототипа функции нет.
 export const PAGE_SECTION_FEATURE: Readonly<Partial<Record<PageSection, Feature>>> = {
+  files: 'files',
   money: 'taxpay',
   fee: 'fee',
   kpi: 'indicators',

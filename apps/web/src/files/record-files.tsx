@@ -14,7 +14,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
-import { fileMeta, filesQuery, pickedFilesProblem, uploadFile } from './files-data';
+import {
+  fileMeta,
+  filesQuery,
+  pickedFilesProblem,
+  uploadFile,
+  useFilePageToggle,
+} from './files-data';
 
 /**
  * Блок «Файлы» карточки записи (задача 2.04; прототип modules/services.js `filesBox`, `bindFiles`):
@@ -30,6 +36,7 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const files = useQuery(query);
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState<{ id: string; name: string; version: number } | null>(null);
+  const togglePage = useFilePageToggle(t, toast, errorText);
 
   const labels = useMemo<FilesBoxLabels>(
     () => ({
@@ -54,6 +61,15 @@ export function RecordFiles({ source }: { source: FileSource }) {
     name: f.name,
     meta: fileMeta(t, f.name, f.size),
     canDelete: f.canDelete,
+    // «Глаз» (прототип v74 `pgFileBtn`): только с правом «Управлять страницей контрагента».
+    ...(f.page?.canChange
+      ? {
+          page: {
+            hidden: f.page.hidden,
+            label: t(f.page.hidden ? 'files.pg.btn_show' : 'files.pg.btn_hide'),
+          },
+        }
+      : {}),
   }));
   const refresh = () => client.invalidateQueries({ queryKey: query.queryKey });
 
@@ -116,6 +132,7 @@ export function RecordFiles({ source }: { source: FileSource }) {
           const file = files.data.items.find((f) => f.id === item.id);
           if (file) setAsk({ id: file.id, name: file.name, version: file.version });
         }}
+        onPage={(item) => item.page && void togglePage(item, !item.page.hidden)}
       />
       <ConfirmDialog
         open={ask !== null}

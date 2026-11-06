@@ -51,7 +51,12 @@ import {
 const off = 'Задачи выключены в учётной политике';
 
 /** Записи истории модуля файлов: в них имя файла. */
-const FILE_ACTIONS: ReadonlySet<string> = new Set(['file_attach', 'file_delete']);
+const FILE_ACTIONS: ReadonlySet<string> = new Set([
+  'file_attach',
+  'file_delete',
+  'file_hide',
+  'file_show',
+]);
 
 /**
  * Видит ли сотрудник файлы задачи (как модуль файлов, `canView`): «Файлы в карточках», право

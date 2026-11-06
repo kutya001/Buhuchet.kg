@@ -10,6 +10,7 @@ import {
   Plates,
   useToast,
   type ActionEntry,
+  type IconName,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
@@ -37,7 +38,13 @@ import {
   fileKindIcon,
 } from './file-columns';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
-import { managerSummaryQuery, pickedFilesProblem, uploadFile, useFilesRefresh } from './files-data';
+import {
+  managerSummaryQuery,
+  pickedFilesProblem,
+  uploadFile,
+  useFilePageToggle,
+  useFilesRefresh,
+} from './files-data';
 
 const GRID_KEY = 'files.list';
 const MANUAL = { kind: 'manual', id: null } as const;
@@ -78,14 +85,16 @@ export function FilesManager() {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
+  const togglePage = useFilePageToggle(t, toast, errorText);
   const client = useQueryClient();
   const refresh = useFilesRefresh();
   const labels = useGridLabels('files.count');
-  const columns = useMemo(() => fileColumns(t), [t]);
+  const { search, clearSearch, access } = useShell();
+  const cppage = access.feature('cppage');
+  const columns = useMemo(() => fileColumns(t, cppage), [t, cppage]);
   const view = useViewSettings(GRID_KEY);
   const stats = useModuleStats('files');
   const summary = useQuery(managerSummaryQuery);
-  const { search, clearSearch, access } = useShell();
   const tasks = useTaskActions();
   const reports = useReportActions();
   const kpi = useKpiEntry();
@@ -197,6 +206,19 @@ export function FilesManager() {
             },
           ]
         : []),
+      // Прототип v74 `pgFileAct`: у файла контрагента не задачи; без права — недоступно с причиной.
+      ...(file.page
+        ? [
+            {
+              id: 'page',
+              label: t(file.page.hidden ? 'files.act.pg_show' : 'files.act.pg_hide'),
+              icon: (file.page.hidden ? 'eye' : 'eyeoff') as IconName,
+              disabled: !file.page.canChange,
+              reason: file.page.canChange ? undefined : t('err.page_manage_right'),
+              run: () => void togglePage(file, !file.page!.hidden),
+            },
+          ]
+        : []),
       { id: 'sep', separator: true as const },
       {
         id: 'delete',
@@ -240,6 +262,7 @@ export function FilesManager() {
       const res = await uploadFile(MANUAL, file, {
         contractorId: choice.contractorId,
         note: choice.note,
+        ...(cppage && choice.contractorId ? { page: choice.page } : {}),
       });
       if (res.ok) done++;
       else
@@ -349,6 +372,7 @@ export function FilesManager() {
           busy={uploading}
           problemOf={problemOf}
           onUpload={(choice) => void send(choice)}
+          cppage={cppage}
         />
       ) : null}
       <ConfirmDialog

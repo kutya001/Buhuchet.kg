@@ -9,6 +9,8 @@ import {
   downloadFileRoute,
   fileLinkHandler,
   fileLinkRoute,
+  filePageHandler,
+  filePageRoute,
   listFilesHandler,
   listFilesRoute,
   startUploadHandler,
@@ -44,6 +46,7 @@ export function filesModule(deps: ApiDeps) {
     .openapi(completeUploadRoute, completeUploadHandler(deps))
     .openapi(fileLinkRoute, fileLinkHandler(deps))
     .openapi(downloadFileRoute, downloadFileHandler(deps))
+    .openapi(filePageRoute, filePageHandler(deps))
     .openapi(deleteFileRoute, deleteFileHandler(deps))
     .openapi(listManagerRoute, listManagerHandler(deps))
     .openapi(managerValuesRoute, managerValuesHandler(deps))

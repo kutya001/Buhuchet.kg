@@ -56,6 +56,23 @@ describe('блок «Файлы» (прототип filesBox)', () => {
     expect(html).not.toContain('type="file"');
   });
 
+  it('«глаз» показа на странице контрагента — только у файла с отметкой и при обработчике', () => {
+    const shown = { hidden: false, label: 'Виден на странице контрагента. Скрыть' };
+    const hidden = { hidden: true, label: 'Скрыт со страницы контрагента. Показать' };
+    const marked = [
+      { ...items[0]!, page: shown },
+      { ...items[1]!, page: hidden },
+      { id: '3', name: 'Задача.pdf', meta: 'PDF · 1 КБ', canDelete: false },
+    ];
+    const html = render({ items: marked, onPage: vi.fn() });
+    expect(html).toContain('data-pgf="on"');
+    expect(html).toContain('data-pgf="off"');
+    expect(html).toContain('aria-label="Виден на странице контрагента. Скрыть: Акт сверки.pdf"');
+    expect(html.match(/data-pgf=/g)).toHaveLength(2);
+    // Без обработчика кнопки нет.
+    expect(render({ items: marked })).not.toContain('data-pgf');
+  });
+
   it('пока файлы загружаются, кнопка недоступна и подписана «Загрузка…»', () => {
     const html = render({ busy: true });
     expect(html).toContain('Загрузка…');

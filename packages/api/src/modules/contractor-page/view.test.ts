@@ -121,10 +121,32 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     });
     ids[key] = id;
   };
-  const fileOf = (c: Contractor, id: string, cookie?: string) =>
-    f.app.request(`/api/page/org-a/${c.inn}/files/${id}`, {
+  const fileOf = (c: Contractor, id: string, cookie?: string, query = '') =>
+    f.app.request(`/api/page/org-a/${c.inn}/files/${id}${query}`, {
       headers: cookie ? { cookie } : {},
     });
+  /** Загруженный файл любого источника (раздел «Файлы»). */
+  const otherFile = async (
+    key: string,
+    c: Contractor,
+    values: Pick<typeof schema.files.$inferInsert, 'sourceKind' | 'name'> &
+      Partial<typeof schema.files.$inferInsert>,
+  ) => {
+    const id = randomUUID();
+    await f.t.admin.db.insert(schema.files).values({
+      id,
+      orgId: f.a.orgId,
+      sourceId: null,
+      contractorId: c.id,
+      contentType: 'application/pdf',
+      sizeBytes: 2048,
+      storageKey: `org/${f.a.orgId}/files/${id}`,
+      createdBy: f.people['acc-a']!.userId,
+      state: 'ready',
+      ...values,
+    });
+    ids[key] = id;
+  };
 
   beforeAll(async () => {
     f = await createStaffFixture();
@@ -238,6 +260,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
         'contacts',
         'contractor',
         'fee',
+        'files',
         'issues',
         'kpi',
         'main',
@@ -250,7 +273,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
         'today',
       ].sort(),
     );
-    expect(page.sections).toEqual(['pay', 'reports', 'money', 'fee', 'kpi', 'contacts']);
+    expect(page.sections).toEqual(['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts']);
     expect(page.today).toBe('2026-10-18');
     const json = JSON.stringify(page);
     for (const hidden of ['task', 'history', 'bonus', 'comment', 'storageKey', 'org/']) {
@@ -301,7 +324,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     ]);
     const nds = items[1]!;
     expect(nds).toMatchObject({ hasSum: true, sum: 125_050, payStatus: 'unpaid' });
-    expect(nds.files).toEqual([{ id: ids.ndsFile, name: 'Декларация НДС.pdf' }]);
+    // PDF открывается в окне просмотра страницы (прототип v74 `pubFileOpen`).
+    expect(nds.files).toEqual([{ id: ids.ndsFile, name: 'Декларация НДС.pdf', preview: 'pdf' }]);
     expect(items[0]).toMatchObject({
       hasSum: false,
       sum: null,
@@ -358,12 +382,13 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
   });
 
   it('скрытые разделы сервер не передаёт вовсе; «Ваш бухгалтер» — всегда', async () => {
-    await hide(uks, ['pay', 'reports', 'money', 'fee', 'kpi', 'contacts']);
+    await hide(uks, ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts']);
     const page = await view(uks, uksCookie);
     expect(page.sections).toEqual([]);
     expect(page).toMatchObject({
       pay: null,
       reports: null,
+      files: null,
       money: null,
       fee: null,
       kpi: null,
@@ -455,15 +480,15 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(ok.headers.get('cache-control')).toBe('no-store');
     const location = ok.headers.get('location') ?? '';
     expect(location).toContain(`org/${f.a.orgId}/files/${ids.ndsFile}`);
-    expect(location).toContain('expires=900');
+    // Ссылка страницы — на 5 минут (ТЗ «Файлы»).
+    expect(location).toContain('expires=300');
     expect(location).toContain('inline=application%2Fpdf');
-    // Без кода, с cookie другой ссылки, чужой, ещё не загруженный и у «Не требуется» — недоступно.
+    // Без кода, с cookie другой ссылки, чужой и ещё не загруженный — недоступно.
     for (const [id, cookie] of [
       [ids.ndsFile!, undefined],
       [ids.ndsFile!, asanovCookie],
       [ids.asanovFile!, uksCookie],
       [ids.pendingFile!, uksCookie],
-      [ids.notRequiredFile!, uksCookie],
       [randomUUID(), uksCookie],
     ] as const) {
       const res = await fileOf(uks, id, cookie);
@@ -486,6 +511,184 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(page.reports!.items.every((r) => r.files.length === 0)).toBe(true);
     await features({ files: true });
     expect((await fileOf(uks, ids.ndsFile!, uksCookie)).status).toBe(302);
+  });
+
+  it('«Файлы»: файлы контрагента по категориям, от новых к старым; скрытые и задачи — нет', async () => {
+    // Оплата НДС за сентябрь 15.10 (её файл — в «Оплатах налогов»), отменённая — не показывается.
+    const [pay, cancelled] = await f.t.admin.db
+      .insert(schema.moneyOperations)
+      .values([
+        {
+          orgId: f.a.orgId,
+          contractorId: uks.id,
+          kind: 'pay' as const,
+          amount: 125_050,
+          opDate: '2026-10-15',
+          holderKind: 'org' as const,
+          reportId: ids.ndsSep!,
+        },
+        {
+          orgId: f.a.orgId,
+          contractorId: uks.id,
+          kind: 'pay' as const,
+          amount: 1_000,
+          opDate: '2026-10-16',
+          holderKind: 'org' as const,
+          reportId: ids.ndsSep!,
+          cancelledAt: new Date('2026-10-17T03:00:00Z'),
+          cancelledBy: f.people['acc-a']!.userId,
+          cancelReason: 'ошибка',
+        },
+      ])
+      .returning({ id: schema.moneyOperations.id });
+    await otherFile('docFile', uks, {
+      sourceKind: 'manual',
+      name: 'Устав.pdf',
+      note: 'Устав в новой редакции',
+      createdAt: new Date('2026-10-05T04:00:00Z'),
+    });
+    await otherFile('regFile', uks, {
+      sourceKind: 'contractor',
+      name: 'Свидетельство.jpg',
+      contentType: 'image/jpeg',
+      createdAt: new Date('2026-09-01T04:00:00Z'),
+    });
+    await otherFile('xlsFile', uks, {
+      sourceKind: 'manual',
+      name: 'Сверка.xlsx',
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      createdAt: new Date('2026-10-10T04:00:00Z'),
+    });
+    await otherFile('payFile', uks, {
+      sourceKind: 'tax_payment',
+      sourceId: pay!.id,
+      name: 'Платёжка НДС.pdf',
+    });
+    await otherFile('cancelledFile', uks, {
+      sourceKind: 'tax_payment',
+      sourceId: cancelled!.id,
+      name: 'Отменённая.pdf',
+    });
+    await otherFile('hiddenFile', uks, {
+      sourceKind: 'manual',
+      name: 'Черновик.pdf',
+      pageHidden: true,
+    });
+    await otherFile('taskFile', uks, {
+      sourceKind: 'task',
+      sourceId: randomUUID(),
+      name: 'Задача.pdf',
+    });
+    await otherFile('asanovDoc', asanov, { sourceKind: 'manual', name: 'Чужой документ.pdf' });
+    await otherFile('deletedFile', uks, {
+      sourceKind: 'manual',
+      name: 'Удалённый.pdf',
+      state: 'deleted',
+      deletedAt: new Date('2026-10-12T04:00:00Z'),
+      deletedBy: f.people['acc-a']!.userId,
+    });
+
+    const page = await view(uks, uksCookie);
+    expect(page.files!.map((x) => [x.name, x.category, x.date])).toEqual([
+      ['Декларация НДС.pdf', 'rep', '2026-10-20'],
+      ['Платёжка НДС.pdf', 'pay', '2026-10-15'],
+      ['Сверка.xlsx', 'doc', '2026-10-10'],
+      ['Устав.pdf', 'doc', '2026-10-05'],
+      ['Свидетельство.jpg', 'doc', '2026-09-01'],
+      ['Не нужен.pdf', 'rep', '2026-08-10'],
+    ]);
+    const byName = Object.fromEntries(page.files!.map((x) => [x.name, x]));
+    expect(byName['Декларация НДС.pdf']).toMatchObject({
+      id: ids.ndsFile,
+      rel: 'НДС · 09.2026',
+      size: 10,
+      preview: 'pdf',
+    });
+    // В суммах — неразрывные пробелы.
+    expect(byName['Платёжка НДС.pdf']!.rel.replace(/\u00a0/g, ' ')).toBe(
+      'НДС · 09.2026, оплата 1 250,50 сом от 15.10.2026',
+    );
+    expect(byName['Устав.pdf']!.rel).toBe('Устав в новой редакции');
+    expect(byName['Свидетельство.jpg']).toMatchObject({
+      rel: 'Из свидетельства и выписки',
+      preview: 'image',
+    });
+    expect(byName['Сверка.xlsx']).toMatchObject({ rel: '', preview: null });
+    const json = JSON.stringify(page.files);
+    for (const hidden of [
+      'Черновик',
+      'Задача',
+      'Отменённая',
+      'Чужой',
+      'Загружается',
+      'Удалённый',
+      'org/',
+    ]) {
+      expect(json, hidden).not.toContain(hidden);
+    }
+    // У отчёта скрытый файл не показывается и в «Отчётах».
+    await f.t.admin.db
+      .update(schema.files)
+      .set({ pageHidden: true })
+      .where(eq(schema.files.id, ids.notRequiredFile!));
+    expect((await view(uks, uksCookie)).files!.map((x) => x.name)).not.toContain('Не нужен.pdf');
+    await f.t.admin.db
+      .update(schema.files)
+      .set({ pageHidden: false })
+      .where(eq(schema.files.id, ids.notRequiredFile!));
+
+    // Скрыты «Отчёты» и «Деньги на налоги» — их категорий в разделе нет.
+    await hide(uks, ['reports', 'money']);
+    const docs = await view(uks, uksCookie);
+    expect([...new Set(docs.files!.map((x) => x.category))]).toEqual(['doc']);
+    await hide(uks, []);
+    // «Файлы в карточках» выключены — раздела нет.
+    await features({ files: false });
+    expect((await view(uks, uksCookie)).files).toBeNull();
+    await features({ files: true });
+  });
+
+  it('«Файлы»: файл открывается по ссылке на 5 минут; «Скачать» — вложением; лишнее — недоступно', async () => {
+    const open = await fileOf(uks, ids.docFile!, uksCookie);
+    expect(open.status).toBe(302);
+    expect(open.headers.get('cache-control')).toBe('no-store');
+    const location = open.headers.get('location') ?? '';
+    expect(location).toContain(`org/${f.a.orgId}/files/${ids.docFile}`);
+    expect(location).toContain('expires=300');
+    expect(location).toContain('inline=application%2Fpdf');
+    // «Скачать» в окне просмотра — без показа в браузере.
+    const download = await fileOf(uks, ids.docFile!, uksCookie, '?download=1');
+    expect(download.status).toBe(302);
+    expect(download.headers.get('location')).not.toContain('inline=');
+    // Не картинка и не PDF — всегда скачивается.
+    const xls = await fileOf(uks, ids.xlsFile!, uksCookie);
+    expect(xls.headers.get('location')).not.toContain('inline=');
+    // Файл «Не требуется» — в разделе «Файлы», открывается.
+    expect((await fileOf(uks, ids.notRequiredFile!, uksCookie)).status).toBe(302);
+    for (const id of [
+      ids.hiddenFile!,
+      ids.taskFile!,
+      ids.cancelledFile!,
+      ids.asanovDoc!,
+      ids.pendingFile!,
+      ids.deletedFile!,
+    ]) {
+      const res = await fileOf(uks, id, uksCookie);
+      expect(res.status, id).toBe(404);
+      expect(((await res.json()) as { error: { code: string } }).error.code).toBe(
+        'page_unavailable',
+      );
+    }
+    expect((await fileOf(uks, ids.docFile!, uksCookie, '?download=2')).status).toBe(400);
+    // Раздел «Файлы» скрыт — его нет в ответе, документ компании недоступен, файл отчёта — по «Отчётам».
+    await hide(uks, ['files']);
+    expect((await view(uks, uksCookie)).files).toBeNull();
+    expect((await fileOf(uks, ids.docFile!, uksCookie)).status).toBe(404);
+    expect((await fileOf(uks, ids.notRequiredFile!, uksCookie)).status).toBe(404);
+    expect((await fileOf(uks, ids.ndsFile!, uksCookie)).status).toBe(302);
+    await hide(uks, []);
+    // Без кода — недоступно.
+    expect((await fileOf(uks, ids.docFile!)).status).toBe(404);
   });
 
   it('п. 60: после «Выключить» ни страница, ни файл не открываются', async () => {

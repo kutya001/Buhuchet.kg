@@ -91,10 +91,11 @@ const ORDER: Record<string, string> = {
   pay: 'max-md:order-2',
   acc: 'max-md:order-3',
   reports: 'max-md:order-4',
-  money: 'max-md:order-5',
-  fee: 'max-md:order-6',
-  kpi: 'max-md:order-7',
-  contacts: 'max-md:order-8',
+  files: 'max-md:order-5',
+  money: 'max-md:order-6',
+  fee: 'max-md:order-7',
+  kpi: 'max-md:order-8',
+  contacts: 'max-md:order-9',
 };
 
 /**

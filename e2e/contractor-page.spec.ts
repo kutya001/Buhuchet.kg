@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { search } from './admin';
 import { DEMO_PASSWORD, defaultResponsible, signIn } from './helpers';
 import { orgWithTypes } from './orgs';
 
@@ -451,5 +452,158 @@ test.describe('Этап 2: страница контрагента по ссыл
     await state.getByRole('button', { name: 'просрочен 1 отчёт' }).click();
     await expect(section(page, 'reports').locator('[data-pub-tile="t1m"]')).toBeVisible();
     await expect(section(page, 'reports').locator('[data-pub-tile]')).toHaveCount(1);
+  });
+});
+
+/** Маленький PDF: браузер показывает его в окне просмотра. */
+const PDF = Buffer.from(
+  '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n',
+);
+
+/** Загрузить файл через API, как это делает браузер: начать, положить в хранилище, закончить. */
+async function apiUpload(
+  api: APIRequestContext,
+  origin: string,
+  data: Record<string, unknown> & { name: string; source: { kind: string; id: string | null } },
+) {
+  const start = await api.post('/api/files/uploads', {
+    headers: { origin },
+    data: { size: PDF.length, ...data },
+  });
+  expect(start.status(), await start.text()).toBe(201);
+  const ticket = (await start.json()) as {
+    id: string;
+    upload: { url: string; headers: Record<string, string> };
+  };
+  const put = await api.put(ticket.upload.url, { headers: ticket.upload.headers, data: PDF });
+  expect(put.status(), await put.text()).toBe(200);
+  const done = await api.post(`/api/files/${ticket.id}/complete`, { headers: { origin } });
+  expect(done.status(), await done.text()).toBe(200);
+  return ticket.id;
+}
+
+test.describe('Этап 3: страница контрагента — раздел «Файлы» (прототип v74)', () => {
+  test.beforeEach(async ({ page }) => {
+    const part = () => Math.floor(Math.random() * 256);
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
+  });
+
+  test('(прототип v74) контрагент открыл свою страницу по ссылке и коду: в разделе «Файлы» плашки «Все», «Отчёты», «Документы компании»; в «Отчётах» — квитанция НДС за 09.2026 с подписью «НДС · 09.2026», PDF открывается на странице; файл, скрытый бухгалтером через «Скрыть со страницы контрагента», и файлы задач не видны', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    const o = await pageOrg(request, baseURL);
+    const tag = Date.now().toString(36);
+    const name = 'ОсОО «Файлы»';
+    const cp = await pageOf(request, o, name, 'org');
+    // Квитанция к НДС за сентябрь 2026, устав и черновик договора в карточке, файл задачи.
+    const nds = await manualReport(request, o.origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: '2026-09-01',
+      due: '2026-10-20',
+    });
+    const receipt = await apiUpload(request, o.origin, {
+      source: { kind: 'report', id: nds },
+      name: `Квитанция НДС ${tag}.pdf`,
+    });
+    const charter = await apiUpload(request, o.origin, {
+      source: { kind: 'manual', id: null },
+      contractorId: cp.id,
+      name: `Устав ${tag}.pdf`,
+    });
+    const draft = await apiUpload(request, o.origin, {
+      source: { kind: 'manual', id: null },
+      contractorId: cp.id,
+      name: `Черновик договора ${tag}.pdf`,
+    });
+    const options = (await (await request.get('/api/tasks/form-options')).json()) as {
+      categories: { code: string }[];
+    };
+    const created = await request.post('/api/tasks', {
+      headers: { origin: o.origin },
+      data: {
+        title: `Собрать первичку ${tag}`,
+        description: '',
+        categoryCode: options.categories[0]!.code,
+        contractorId: cp.id,
+        executorEmployeeId: o.owner,
+        term: 'day',
+        dueDate: '2099-12-30',
+        needFile: false,
+        confirm: false,
+      },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const { id: taskId } = (await created.json()) as { id: string };
+    await apiUpload(request, o.origin, {
+      source: { kind: 'task', id: taskId },
+      name: `Файл задачи ${tag}.pdf`,
+    });
+
+    // Бухгалтер скрывает черновик в Файловом менеджере: «…» → «Скрыть со страницы контрагента».
+    await page.context().addCookies((await request.storageState()).cookies);
+    await page.goto('/app/files');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    await search(page, isMobile, `Черновик договора ${tag}`);
+    const row = page.locator(`[data-grid] [data-id="${draft}"]`);
+    await row.locator('[data-row-menu]').click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Скрыть со страницы контрагента' })
+      .click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Файл скрыт со страницы контрагента' }),
+    ).toBeVisible();
+
+    // Контрагент открывает страницу по коду.
+    await openByCode(page, cp.path, cp.code, name);
+    const files = section(page, 'files');
+    if (isMobile) {
+      // На телефоне раздел свёрнут, в заголовке — число файлов.
+      await expect(files).toHaveAttribute('data-folded', '');
+      await expect(files.locator('[data-pub-toggle]')).toContainText('2 файла');
+      await files.locator('[data-pub-toggle]').click();
+    }
+    const plates = files.locator('[data-pub-ff]');
+    await expect(plates).toHaveCount(3);
+    expect(
+      await plates.evaluateAll((els) => els.map((e) => e.getAttribute('data-pub-ff'))),
+    ).toEqual(['', 'rep', 'doc']);
+    await expect(plates.nth(0)).toContainText('Все');
+    await expect(plates.nth(1)).toContainText('Отчёты');
+    await expect(plates.nth(2)).toContainText('Документы компании');
+    const rows = files.locator('[data-pub-fo]');
+    await expect(rows).toHaveCount(2);
+    await expect(files.locator(`[data-pub-fo="${charter}"]`)).toBeVisible();
+    await expect(files).not.toContainText('Черновик договора');
+    await expect(files).not.toContainText('Файл задачи');
+
+    // «Отчёты»: квитанция НДС с подписью «НДС · 09.2026».
+    await plates.nth(1).click();
+    await expect(rows).toHaveCount(1);
+    const receiptRow = files.locator(`[data-pub-fo="${receipt}"]`);
+    await expect(receiptRow).toContainText(`Квитанция НДС ${tag}.pdf`);
+    await expect(receiptRow).toContainText('НДС · 09.2026');
+
+    // PDF открывается в окне просмотра на странице, рядом — «Скачать».
+    await receiptRow.click();
+    const viewer = page.getByRole('dialog', { name: `Квитанция НДС ${tag}.pdf` });
+    const frame = viewer.locator('iframe');
+    await expect(frame).toHaveAttribute('src', `${cp.path}/files/${receipt}`);
+    await expect(viewer.getByRole('link', { name: 'Скачать' })).toHaveAttribute(
+      'href',
+      `${cp.path}/files/${receipt}?download=1`,
+    );
+    const pdf = await page.request.get(`${cp.path}/files/${receipt}`);
+    expect(pdf.status()).toBe(200);
+    expect(pdf.headers()['content-type']).toContain('application/pdf');
+    // Скрытый файл и файл задачи по ссылке страницы тоже не открываются.
+    // Сайт в таком случае возвращает на саму страницу, без ссылки на хранилище.
+    const hidden = await page.request.get(`${cp.path}/files/${draft}`, { maxRedirects: 0 });
+    expect(hidden.status()).toBe(303);
+    expect(hidden.headers().location?.endsWith(cp.path)).toBe(true);
   });
 });

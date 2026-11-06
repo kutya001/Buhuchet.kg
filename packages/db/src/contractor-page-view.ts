@@ -1,8 +1,12 @@
 import {
+  FILE_SOURCE_KINDS,
   formatPhone,
   localPhoneText,
   orgMainAccount,
+  pageFileCategory,
   type IsoDate,
+  type PageFileCategory,
+  type PageFileSource,
   type MoneyOpKind,
   type PaymentPurpose,
   type PaysTo,
@@ -11,7 +15,8 @@ import {
   type PageReportStatus,
   type Tyiyn,
 } from '@buhuchet/domain';
-import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { bankNamesOf } from './fees';
 import { listEmployeeWallets, listOrgAccounts, type RequisiteFields } from './money';
@@ -20,10 +25,15 @@ import {
   authorities,
   contractors,
   employees,
+  feePayments,
   files,
   moneyOperations,
+  oneOffServicePayments,
+  oneOffServices,
   organizations,
   platformReference,
+  projectPayments,
+  projects,
   reportTypes,
   reports,
   roles,
@@ -198,7 +208,7 @@ export async function pageReports(
 ): Promise<{
   reports: PageReportRecord[];
   types: PageReportTypeRecord[];
-  files: Map<string, { id: string; name: string }[]>;
+  files: Map<string, { id: string; name: string; contentType: string }[]>;
 }> {
   const rows = await tx
     .select({
@@ -246,13 +256,19 @@ export async function pageReports(
       : [],
     withFiles && rows.length
       ? tx
-          .select({ id: files.id, name: files.name, reportId: files.sourceId })
+          .select({
+            id: files.id,
+            name: files.name,
+            contentType: files.contentType,
+            reportId: files.sourceId,
+          })
           .from(files)
           .where(
             and(
               eq(files.sourceKind, 'report'),
               eq(files.contractorId, contractorId),
               eq(files.state, 'ready'),
+              eq(files.pageHidden, false),
               inArray(
                 files.sourceId,
                 rows.map((r) => r.id),
@@ -262,10 +278,10 @@ export async function pageReports(
           .orderBy(asc(files.createdAt), asc(files.id))
       : [],
   ]);
-  const byReport = new Map<string, { id: string; name: string }[]>();
+  const byReport = new Map<string, { id: string; name: string; contentType: string }[]>();
   for (const f of fileRows) {
     const list = byReport.get(f.reportId!) ?? [];
-    list.push({ id: f.id, name: f.name });
+    list.push({ id: f.id, name: f.name, contentType: f.contentType });
     byReport.set(f.reportId!, list);
   }
   return {
@@ -301,6 +317,7 @@ export async function pageReportFile(
         eq(files.id, fileId),
         eq(files.sourceKind, 'report'),
         eq(files.state, 'ready'),
+        eq(files.pageHidden, false),
         eq(files.contractorId, contractorId),
         eq(reports.contractorId, contractorId),
         eq(reports.superseded, false),
@@ -308,6 +325,286 @@ export async function pageReportFile(
       ),
     );
   return row ?? null;
+}
+
+/** Файл раздела «Файлы» страницы: категория, к чему относится, дата добавления по Бишкеку, размер. */
+export interface PageFileRecord {
+  id: string;
+  name: string;
+  contentType: string;
+  size: number;
+  /** Дата строки (прототип `pubFiles`): у отчёта — сдачи или срока, у операции и оплаты — её дата,
+   * у услуги — дата услуги, у проекта — начало, у документов компании — дата загрузки. */
+  date: IsoDate;
+  category: PageFileCategory;
+  source: PageFileSource;
+  storageKey: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Файлы раздела «Файлы» страницы контрагента (решение заказчика 06.11.2026; прототип v74 `pubFiles`;
+ * ТЗ «Страница контрагента по ссылке» → «Файлы»): загруженные файлы этого контрагента показанных
+ * категорий (`pageFileCategories`), не скрытые со страницы, у живых записей — отчёта контрагента,
+ * не отменённой операции, не удалённой оплаты и услуги; сначала новые (по дате строки, как в
+ * прототипе; при равной — позже загруженный). Задачи, списания и показатели
+ * сюда не попадают никогда (`pageFileCategory`). `fileId` — только этот файл (ссылка страницы на файл).
+ */
+export async function pageFiles(
+  tx: Tx,
+  contractorId: string,
+  categories: readonly PageFileCategory[],
+  fileId?: string,
+): Promise<PageFileRecord[]> {
+  if (fileId !== undefined && !UUID_RE.test(fileId)) return [];
+  const kinds = FILE_SOURCE_KINDS.filter((k) => {
+    const c = pageFileCategory(k);
+    return c !== null && categories.includes(c);
+  });
+  if (!kinds.length) return [];
+  const payReport = alias(reports, 'pay_report');
+  const payType = alias(reportTypes, 'pay_report_type');
+  const kind = files.sourceKind;
+  const rows = await tx
+    .select({
+      id: files.id,
+      name: files.name,
+      contentType: files.contentType,
+      size: files.sizeBytes,
+      storageKey: files.storageKey,
+      addedOn: sql<string>`to_char(${files.createdAt} at time zone 'Asia/Bishkek', 'YYYY-MM-DD')`,
+      reportSubmitted: reports.submittedOn,
+      reportDue: reports.dueDate,
+      serviceDate: oneOffServices.serviceDate,
+      projectStart: projects.startsOn,
+      kind,
+      sourceId: files.sourceId,
+      note: files.note,
+      reportType: reportTypes.shortName,
+      reportPeriod: reports.period,
+      reportStart: reports.periodStart,
+      reportEvent: reports.eventDate,
+      opAmount: moneyOperations.amount,
+      opTotal: moneyOperations.total,
+      opDate: moneyOperations.opDate,
+      payType: payType.shortName,
+      payPeriod: payReport.period,
+      payStart: payReport.periodStart,
+      payEvent: payReport.eventDate,
+      feeAmount: feePayments.amount,
+      feeDate: feePayments.paidOn,
+      serviceName: oneOffServices.name,
+      projectName: projects.name,
+    })
+    .from(files)
+    .leftJoin(
+      reports,
+      and(
+        eq(kind, 'report'),
+        eq(reports.id, files.sourceId),
+        eq(reports.contractorId, contractorId),
+      ),
+    )
+    .leftJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
+    .leftJoin(
+      moneyOperations,
+      and(
+        or(
+          and(eq(kind, 'receipt'), eq(moneyOperations.kind, 'in')),
+          and(eq(kind, 'tax_payment'), eq(moneyOperations.kind, 'pay')),
+        ),
+        eq(moneyOperations.id, files.sourceId),
+        eq(moneyOperations.contractorId, contractorId),
+        isNull(moneyOperations.cancelledAt),
+      ),
+    )
+    .leftJoin(payReport, eq(payReport.id, moneyOperations.reportId))
+    .leftJoin(payType, eq(payType.code, payReport.reportTypeCode))
+    .leftJoin(
+      feePayments,
+      and(
+        eq(kind, 'fee_payment'),
+        eq(feePayments.id, files.sourceId),
+        eq(feePayments.contractorId, contractorId),
+        isNull(feePayments.deletedAt),
+      ),
+    )
+    .leftJoin(
+      oneOffServicePayments,
+      and(
+        eq(kind, 'one_off_service_payment'),
+        eq(oneOffServicePayments.id, files.sourceId),
+        isNull(oneOffServicePayments.deletedAt),
+      ),
+    )
+    .leftJoin(
+      oneOffServices,
+      and(
+        or(
+          and(eq(kind, 'one_off_service'), eq(oneOffServices.id, files.sourceId)),
+          eq(oneOffServices.id, oneOffServicePayments.serviceId),
+        ),
+        eq(oneOffServices.contractorId, contractorId),
+        isNull(oneOffServices.deletedAt),
+      ),
+    )
+    .leftJoin(
+      projectPayments,
+      and(
+        eq(kind, 'project_payment'),
+        eq(projectPayments.id, files.sourceId),
+        isNull(projectPayments.deletedAt),
+      ),
+    )
+    .leftJoin(
+      projects,
+      and(
+        or(
+          and(eq(kind, 'project'), eq(projects.id, files.sourceId)),
+          eq(projects.id, projectPayments.projectId),
+        ),
+        eq(projects.contractorId, contractorId),
+      ),
+    )
+    .where(
+      and(
+        eq(files.contractorId, contractorId),
+        eq(files.state, 'ready'),
+        eq(files.pageHidden, false),
+        inArray(kind, kinds),
+        fileId === undefined ? undefined : eq(files.id, fileId),
+        // Запись-источник жива: у вида с записью она нашлась по условиям присоединения.
+        or(
+          inArray(kind, ['manual', 'contractor']),
+          and(eq(kind, 'report'), sql`${reports.id} is not null`),
+          and(inArray(kind, ['receipt', 'tax_payment']), sql`${moneyOperations.id} is not null`),
+          and(eq(kind, 'fee_payment'), sql`${feePayments.id} is not null`),
+          and(
+            inArray(kind, ['one_off_service', 'one_off_service_payment']),
+            sql`${oneOffServices.id} is not null`,
+          ),
+          and(inArray(kind, ['project', 'project_payment']), sql`${projects.id} is not null`),
+        ),
+      ),
+    )
+    .orderBy(desc(files.createdAt), desc(files.id));
+  const found = rows.flatMap((r) => {
+    const category = pageFileCategory(r.kind);
+    const source = pageFileSourceOf(r);
+    return category && source
+      ? [
+          {
+            id: r.id,
+            name: r.name,
+            contentType: r.contentType,
+            size: Number(r.size),
+            date: pageFileDate(r),
+            category,
+            source,
+            storageKey: r.storageKey,
+          },
+        ]
+      : [];
+  });
+  // Сортировка устойчивая: при равной дате остаётся порядок «позже загруженный — выше».
+  return found.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+/** Дата строки раздела (прототип `pubFiles`, аргумент `date` у `add`). */
+function pageFileDate(r: {
+  kind: string;
+  addedOn: string;
+  reportSubmitted: string | null;
+  reportDue: string | null;
+  opDate: string | null;
+  feeDate: string | null;
+  serviceDate: string | null;
+  projectStart: string | null;
+}): IsoDate {
+  const byKind: Record<string, string | null> = {
+    report: r.reportSubmitted ?? r.reportDue,
+    receipt: r.opDate,
+    tax_payment: r.opDate,
+    fee_payment: r.feeDate,
+    one_off_service: r.serviceDate,
+    one_off_service_payment: r.serviceDate,
+    project: r.projectStart,
+    project_payment: r.projectStart,
+  };
+  return (byKind[r.kind] ?? r.addedOn) as IsoDate;
+}
+
+/** К чему относится файл (`pageFileRel` из @buhuchet/domain) по строке запроса `pageFiles`. */
+function pageFileSourceOf(r: {
+  kind: string;
+  sourceId: string | null;
+  note: string | null;
+  reportType: string | null;
+  reportPeriod: string | null;
+  reportStart: string | null;
+  reportEvent: string | null;
+  opAmount: number | string | null;
+  opTotal: number | string | null;
+  opDate: string | null;
+  payType: string | null;
+  payPeriod: string | null;
+  payStart: string | null;
+  payEvent: string | null;
+  feeAmount: number | string | null;
+  feeDate: string | null;
+  serviceName: string | null;
+  projectName: string | null;
+}): PageFileSource | null {
+  switch (r.kind) {
+    case 'report':
+      return r.reportType && r.reportPeriod && r.reportStart
+        ? {
+            kind: 'report',
+            type: r.reportType,
+            period: r.reportPeriod as ReportPeriod,
+            start: r.reportStart,
+            event: r.reportEvent,
+          }
+        : null;
+    case 'contractor':
+      return { kind: 'regdocs' };
+    case 'manual':
+      return { kind: 'manual', note: r.note };
+    case 'tax_payment':
+      return r.opAmount !== null && r.opDate
+        ? {
+            kind: 'tax_payment',
+            report:
+              r.payType && r.payPeriod && r.payStart
+                ? {
+                    type: r.payType,
+                    period: r.payPeriod as ReportPeriod,
+                    start: r.payStart,
+                    event: r.payEvent,
+                  }
+                : null,
+            amount: Number(r.opAmount),
+            date: r.opDate,
+          }
+        : null;
+    case 'receipt':
+      return r.opAmount !== null && r.opDate
+        ? { kind: 'receipt', amount: Number(r.opTotal ?? r.opAmount), date: r.opDate }
+        : null;
+    case 'fee_payment':
+      return r.feeAmount !== null && r.feeDate
+        ? { kind: 'fee_payment', amount: Number(r.feeAmount), date: r.feeDate }
+        : null;
+    case 'one_off_service':
+    case 'one_off_service_payment':
+      return r.serviceName ? { kind: 'service', name: r.serviceName } : null;
+    case 'project':
+    case 'project_payment':
+      return r.projectName ? { kind: 'project', name: r.projectName } : null;
+    default:
+      return null;
+  }
 }
 
 /** Реквизит для «Как оплатить» (прототип pubPay, `rqNum`, `rqKindL`). */

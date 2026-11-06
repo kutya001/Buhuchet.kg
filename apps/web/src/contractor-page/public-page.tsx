@@ -2,11 +2,13 @@
 
 import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
 import { PublicPageCodeInput, type PublicPage } from '@buhuchet/shared';
-import { buttonClass, Field, Icon, inputClass, ToastProvider } from '@buhuchet/ui';
+import { buttonClass, Field, Icon, inputClass } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
-import { useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { parseMaxPrefs } from '../shell/prefs';
+import { UiProviders } from '../shell/ui-providers';
 import { OpenPage } from './open-page';
 
 /** «после 14:35» — время по Бишкеку, как у страницы (прототип pgHm). */
@@ -32,10 +34,6 @@ export function PublicPageScreen({
   state: PublicPage;
 }) {
   const t = useT();
-  const labels = useMemo(
-    () => ({ close: t('toast.close'), closeTitle: t('toast.close_title') }),
-    [t],
-  );
   let main: ReactNode;
   switch (state.state) {
     case 'unavailable':
@@ -65,7 +63,8 @@ export function PublicPageScreen({
   const navPad =
     state.state === 'open' ? 'max-md:pb-[calc(84px+env(safe-area-inset-bottom,0px))]' : '';
   return (
-    <ToastProvider labels={labels}>
+    // Окна (просмотр файла в «Файлах») и уведомления, как на лендинге.
+    <UiProviders initialMax={parseMaxPrefs(undefined)}>
       <main
         data-pub-page=""
         className={`flex min-h-dvh flex-col items-center gap-[18px] bg-frame px-4 pt-6 pb-8 max-md:gap-3.5 max-md:px-3 max-md:pt-3.5 ${navPad}`}
@@ -73,7 +72,7 @@ export function PublicPageScreen({
         {main}
         <footer className="text-center text-[12px] text-faint">{t('pub.foot')}</footer>
       </main>
-    </ToastProvider>
+    </UiProviders>
   );
 }
 

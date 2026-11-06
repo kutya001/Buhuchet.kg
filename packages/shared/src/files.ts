@@ -32,11 +32,29 @@ export const FileUploadStart = z
     size: z.number().int().nonnegative(),
     contractorId: Uuid.nullable().optional(),
     note: z.string().trim().max(FILE_NOTE_MAX).optional(),
+    /**
+     * «Показывать контрагенту на его странице» окна «Загрузить файл» (решение заказчика 06.11.2026):
+     * false — файл контрагента сразу скрыт со страницы; у общего файла не действует.
+     */
+    page: z.boolean().optional(),
   })
-  .refine((b) => b.source.kind === 'manual' || (!b.contractorId && !b.note), {
-    message: 'Контрагент и комментарий — только у ручной загрузки',
-  });
+  .refine(
+    (b) => b.source.kind === 'manual' || (!b.contractorId && !b.note && b.page === undefined),
+    { message: 'Контрагент, комментарий и показ на странице — только у ручной загрузки' },
+  );
 export type FileUploadStart = z.infer<typeof FileUploadStart>;
+
+/**
+ * Показ файла на странице контрагента (решение заказчика 06.11.2026, прототип v74 `pgFileOk`,
+ * `pgFileHid`): только у файла контрагента не задачи при включённой «Странице контрагента по ссылке»,
+ * иначе null; `canChange` — «Скрыть со страницы контрагента» доступно (право «Управлять страницей
+ * контрагента» в его области).
+ */
+export const FilePage = z.object({ hidden: z.boolean(), canChange: z.boolean() });
+export type FilePage = z.infer<typeof FilePage>;
+
+/** «Скрыть со страницы контрагента» (true) и «Показать на странице контрагента» (false). */
+export const FilePageInput = z.strictObject({ hidden: z.boolean() });
 
 /** Файл в блоке «Файлы»: кто и когда загрузил, можно ли его удалить этому пользователю. */
 export const FileItem = z.object({
@@ -47,6 +65,7 @@ export const FileItem = z.object({
   uploadedBy: z.string().nullable(),
   uploadedAt: z.iso.datetime(),
   canDelete: z.boolean(),
+  page: FilePage.nullable(),
   version: RecordVersion,
 });
 export type FileItem = z.infer<typeof FileItem>;
@@ -97,6 +116,7 @@ export const FileManagerRow = z.object({
   uploadedBy: z.string().nullable(),
   uploadedAt: z.iso.datetime(),
   canDelete: z.boolean(),
+  page: FilePage.nullable(),
   audit: z.object({
     createdAt: z.iso.datetime(),
     createdBy: z.string().nullable(),

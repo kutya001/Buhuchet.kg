@@ -10,6 +10,12 @@ export interface FilesBoxItem {
   meta: string;
   /** Можно ли этому пользователю удалить файл: без права кнопки «Удалить» нет. */
   canDelete: boolean;
+  /**
+   * Кнопка «глаз» — показ на странице контрагента (прототип v74 `pgFileBtn`): открытый — файл виден
+   * контрагенту, перечёркнутый — скрыт; `label` — подсказка («Виден на странице контрагента. Скрыть»).
+   * Нет — кнопки нет.
+   */
+  page?: { hidden: boolean; label: string };
 }
 
 export interface FilesBoxLabels {
@@ -36,6 +42,8 @@ export interface FilesBoxProps {
   onDownload: (item: FilesBoxItem) => void;
   /** Удалить — приложение спрашивает подтверждение само. */
   onDelete: (item: FilesBoxItem) => void;
+  /** «Глаз»: скрыть со страницы контрагента или снова показать. */
+  onPage?: (item: FilesBoxItem) => void;
 }
 
 /**
@@ -51,6 +59,7 @@ export function FilesBox({
   onPick,
   onDownload,
   onDelete,
+  onPage,
 }: FilesBoxProps) {
   const input = useRef<HTMLInputElement>(null);
   const picked = (e: ChangeEvent<HTMLInputElement>) => {
@@ -102,6 +111,18 @@ export function FilesBox({
               >
                 <Icon name="download" size="sm" />
               </button>
+              {item.page && onPage ? (
+                <button
+                  type="button"
+                  data-pgf={item.page.hidden ? 'off' : 'on'}
+                  className={`${iconButtonClass('sm')} ${TOUCH_AREA}`}
+                  aria-label={`${item.page.label}: ${item.name}`}
+                  title={item.page.label}
+                  onClick={() => onPage(item)}
+                >
+                  <Icon name={item.page.hidden ? 'eyeoff' : 'eye'} size="sm" />
+                </button>
+              ) : null}
               {item.canDelete ? (
                 <button
                   type="button"
