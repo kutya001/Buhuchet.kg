@@ -11,7 +11,7 @@ import {
   type Scope,
   type ScopeGroupId,
 } from '@buhuchet/domain';
-import { asc, count, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { employeeBalance } from './finance-journal';
@@ -407,6 +407,30 @@ export async function lockEmployee(tx: Tx, id: string): Promise<boolean> {
     .where(eq(employees.id, id))
     .for('update');
   return rows.length > 0;
+}
+
+/**
+ * Чьё это отображаемое имя: ФИО активного сотрудника организации с тем же именем без учёта регистра
+ * (решение заказчика 06.11.2026, прототип v74 shortErr), кроме `exceptId`; null — имя свободно.
+ */
+export async function displayNameOwner(
+  tx: Tx,
+  name: string,
+  exceptId: string | null,
+): Promise<string | null> {
+  const [row] = await tx
+    .select({ fullName: employees.fullName })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.active, true),
+        sql`lower(btrim(${employees.shortName})) = lower(btrim(${name}))`,
+        exceptId ? ne(employees.id, exceptId) : undefined,
+      ),
+    )
+    .orderBy(asc(employees.fullName))
+    .limit(1);
+  return row?.fullName ?? null;
 }
 
 /** Роль организации, её права и область (у роли владельца права не перечисляются, область — «Все»). */

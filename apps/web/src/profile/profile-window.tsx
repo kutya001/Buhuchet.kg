@@ -10,6 +10,7 @@ import {
   Icon,
   inputClass,
   KeyValues,
+  linkButtonClass,
   Modal,
   MONO_CLASS,
   Note,
@@ -29,6 +30,7 @@ import { kbStateQuery } from '../kb/kb-data';
 import { BOX_LINK_CLASS, KbBox } from '../kb/kb-parts';
 import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
+import { DisplayNameDialog } from './display-name-dialog';
 import { MyWalletsBox } from '../money/wallets';
 import { currentTheme, setTheme } from '../shell/browser';
 import { NotifyBox } from '../telegram/notify-box';
@@ -37,7 +39,7 @@ import type { Theme } from '../shell/prefs';
 
 /**
  * «Мой профиль» (ТЗ «Профиль пользователя», прототип modules/profile.js profileDlg): основное
- * (ФИО, логин, телефон, роль), Telegram для уведомлений (привязка по ссылке, «Отвязать»), «Мои реквизиты
+ * (ФИО, отображаемое имя с «Изменить» — у сотрудника организации, прототип v74; логин, телефон, роль), Telegram для уведомлений (привязка по ссылке, «Отвязать»), «Мои реквизиты
  * для переводов» (задача 2.18), тема и смена пароля, вверху — уровень знаний («Открыть Базу знаний»). Окно —
  * карточка; пока в «Смене пароля» что-то введено, протяжка вниз, «Назад» и выход из аккаунта спрашивают.
  * «Уведомления в Telegram» — режим и переключатели (задача 2.25), у сотрудника организации.
@@ -74,6 +76,15 @@ export function ProfileWindow({
         <KeyValues
           items={[
             { id: 'fio', label: t('profile.fio'), value: fullName },
+            ...(me.employee
+              ? [
+                  {
+                    id: 'short',
+                    label: t('profile.display_name'),
+                    value: <DisplayNameValue fullName={fullName} initial={me.employee.shortName} />,
+                  },
+                ]
+              : []),
             { id: 'login', label: t('profile.login'), value: me.user.login, mono: true },
             { id: 'phone', label: t('profile.phone'), value: me.employee?.phone ?? '—' },
             {
@@ -97,6 +108,36 @@ export function ProfileWindow({
       </Box>
       <PasswordBox onDirty={setDirty} />
     </Modal>
+  );
+}
+
+/** «Отображаемое имя» и «Изменить» (прототип v74 profileDlg → `#pf-short`, shortDlg). */
+function DisplayNameValue({ fullName, initial }: { fullName: string; initial: string }) {
+  const t = useT();
+  const [value, setValue] = useState(initial);
+  const [shown, setShown] = useState(initial);
+  // Меню перечитано с сервера (имя сменили на другом устройстве) — показываем новое.
+  if (shown !== initial) {
+    setShown(initial);
+    setValue(initial);
+  }
+  const [open, setOpen] = useState(false);
+  return (
+    <span data-profile-short="" className="flex flex-wrap items-baseline gap-x-2">
+      <span>{value}</span>
+      <button type="button" className={linkButtonClass()} onClick={() => setOpen(true)}>
+        {t('profile.display_name.change')}
+      </button>
+      {open ? (
+        <DisplayNameDialog
+          fullName={fullName}
+          shortName={value}
+          open
+          onClose={() => setOpen(false)}
+          onSaved={setValue}
+        />
+      ) : null}
+    </span>
   );
 }
 

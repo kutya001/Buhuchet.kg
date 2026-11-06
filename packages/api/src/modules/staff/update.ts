@@ -10,6 +10,7 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  displayNameManual,
   RecordChangedError,
   RecordNotFoundError,
   shortName,
@@ -22,7 +23,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
-import { checkFullName, checkPhone } from './create';
+import { checkDisplayName, checkFullName, checkPhone } from './create';
 import { employeeOut, error, refuse, staffActor } from './employees';
 
 const { employees } = schema;
@@ -45,7 +46,7 @@ export const updateEmployeeRoute = createRoute({
   method: 'patch',
   path: '/staff/{id}',
   tags: ['staff'],
-  summary: 'Изменить сотрудника: ФИО, телефон, роль',
+  summary: 'Изменить сотрудника: ФИО, отображаемое имя, телефон, роль',
   middleware: [requirePermission('staff')] as const,
   request: {
     params: z.object({ id: Uuid }),
@@ -56,7 +57,11 @@ export const updateEmployeeRoute = createRoute({
       description: 'Сотрудник после правки',
       content: { 'application/json': { schema: Employee } },
     },
-    400: { description: 'Неверные данные или нет такой роли', content: error },
+    400: {
+      description:
+        'Неверные данные, отображаемое имя не 2–40 знаков или уже у другого сотрудника, нет такой роли',
+      content: error,
+    },
     401: { description: 'Нет входа', content: error },
     403: { description: 'Нет права или правка запрещена правилами ролей', content: error },
     ...versionedSaveResponses,
@@ -64,7 +69,9 @@ export const updateEmployeeRoute = createRoute({
 });
 
 /**
- * Правка сотрудника: ФИО и телефон, «Сменить роль» (прототип modules/staff.js, empActions). Свою роль,
+ * Правка сотрудника: ФИО, отображаемое имя и телефон, «Сменить роль» (прототип modules/staff.js,
+ * empEditDlg и empActions). Отображаемое имя, не заданное вручную, при новом ФИО меняется вместе с
+ * ним, если в запросе его нет (прототип v74 bindShort). Свою роль,
  * роль с правами, которые выдаёт только владелец, и роль шире своей меняет владелец
  * (`staffActionRefusal`). Новая роль действует со следующего запроса сотрудника: права загружаются
  * при каждом запросе.
@@ -81,9 +88,19 @@ export function updateEmployeeHandler(
       const { employee, target } = await employeeForChange(tx, id, body.version);
       const patch: Partial<typeof employees.$inferInsert> = {};
       const changes: HistoryChange[] = [];
-      if (fullName !== undefined && fullName !== employee.fullName) {
-        patch.fullName = fullName;
-        patch.shortName = shortName(fullName);
+      if (fullName !== undefined && fullName !== employee.fullName) patch.fullName = fullName;
+      const newFullName = patch.fullName ?? employee.fullName;
+      const followsFullName =
+        patch.fullName !== undefined && !displayNameManual(employee.shortName, employee.fullName);
+      if (body.shortName !== undefined || followsFullName) {
+        const short = await checkDisplayName(
+          tx,
+          body.shortName ?? shortName(newFullName),
+          newFullName,
+          id,
+          body.shortName !== undefined,
+        );
+        if (short !== employee.shortName) patch.shortName = short;
       }
       if (body.phone !== undefined) {
         const phone = await checkPhone(tx, body.phone);

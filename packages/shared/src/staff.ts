@@ -1,4 +1,7 @@
 import {
+  DISPLAY_NAME_MAX_LENGTH,
+  displayName,
+  displayNameProblem,
   FULL_NAME_MAX_LENGTH,
   isFullName,
   isValidLogin,
@@ -91,11 +94,19 @@ export const StaffTabCounts = z.object({
 export type StaffTabCounts = z.infer<typeof StaffTabCounts>;
 
 /**
+ * «Отображаемое имя» в запросе (решение заказчика 06.11.2026): как ввели в поле; сервер убирает лишние
+ * пробелы, пустое заменяет автоматическим по ФИО и проверяет 2–40 знаков и повтор среди активных.
+ */
+const DisplayNameInput = z.string().max(DISPLAY_NAME_MAX_LENGTH * 4);
+
+/**
  * Новый сотрудник (прототип modules/staff.js, empAddDlg): вход по логину и паролю, без почты.
  * Временный пароль задаёт владелец или, если поле пустое, сервер; при входе его нужно сменить.
  */
 export const CreateEmployeeRequest = z.object({
   fullName: z.string().trim().min(1).max(FULL_NAME_MAX_LENGTH),
+  /** Не передано или пусто — автоматическое: имя и первая буква фамилии. */
+  shortName: DisplayNameInput.optional(),
   login: z.string().trim().min(1).max(LOGIN_MAX_LENGTH),
   // ОТКЛОНЕНИЕ: docs/deviations.md#17 — не короче 8 символов (в прототипе 6).
   temporaryPassword: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH).optional(),
@@ -108,14 +119,27 @@ export type CreateEmployeeRequest = z.infer<typeof CreateEmployeeRequest>;
 export const CreatedEmployee = z.object({ employee: Employee, temporaryPassword: z.string() });
 export type CreatedEmployee = z.infer<typeof CreatedEmployee>;
 
-/** Правка сотрудника: ФИО, телефон, роль («Сменить роль»). Не переданное поле не меняется. */
+/**
+ * Правка сотрудника: ФИО, отображаемое имя, телефон, роль («Сменить роль»). Не переданное поле не
+ * меняется; отображаемое имя, не заданное вручную, при новом ФИО меняется вместе с ним.
+ */
 export const UpdateEmployeeRequest = z.object({
   version: RecordVersion,
   fullName: z.string().trim().min(1).max(FULL_NAME_MAX_LENGTH).optional(),
+  /** Пусто — автоматическое по ФИО. */
+  shortName: DisplayNameInput.optional(),
   phone: Phone.nullable().optional(),
   roleId: Uuid.optional(),
 });
 export type UpdateEmployeeRequest = z.infer<typeof UpdateEmployeeRequest>;
+
+/** «Мой профиль» → «Отображаемое имя» (сам сотрудник): пусто — автоматическое по ФИО. */
+export const DisplayNameRequest = z.object({ shortName: DisplayNameInput });
+export type DisplayNameRequest = z.infer<typeof DisplayNameRequest>;
+
+/** Отображаемое имя сохранено. */
+export const DisplayNameSaved = z.object({ shortName: z.string() });
+export type DisplayNameSaved = z.infer<typeof DisplayNameSaved>;
 
 /** Заблокировать или разблокировать: версия, которую видел пользователь. */
 export const EmployeeVersionRequest = z.object({ version: RecordVersion });
@@ -123,18 +147,20 @@ export type EmployeeVersionRequest = z.infer<typeof EmployeeVersionRequest>;
 
 const message = (key: UiTextKey) => ({ message: key });
 
-/**
- * Форма «Новый сотрудник» (прототип modules/staff.js, empAddDlg; React Hook Form): ФИО — фамилия и
- * имя, логин — латиница, цифры, точка, дефис, от 3 символов (в нижнем регистре), временный пароль —
- * не короче `PASSWORD_MIN_LENGTH` (docs/deviations.md, п. 17), роль. Телефон проверяет поле ввода по
- * маске страны. Сообщения — ключи словаря.
- */
-export const NewEmployeeForm = z.object({
+const employeeFields = z.object({
   fullName: z
     .string()
     .trim()
     .max(FULL_NAME_MAX_LENGTH, message('form.too_long'))
     .refine(isFullName, message('staff.err.full_name')),
+  // Пустое — автоматическое по ФИО, его длину проверяет сервер; введённое — 2–40 знаков (прототип v74 shortErr).
+  shortName: z
+    .string()
+    .max(DISPLAY_NAME_MAX_LENGTH * 4, message('form.too_long'))
+    .refine(
+      (v) => !v.trim() || !displayNameProblem(displayName(v, '')),
+      message('staff.err.display_name'),
+    ),
   login: z
     .string()
     .max(LOGIN_MAX_LENGTH, message('form.too_long'))
@@ -146,10 +172,27 @@ export const NewEmployeeForm = z.object({
     .max(PASSWORD_MAX_LENGTH, message('form.too_long')),
   roleId: z.string().min(1, message('staff.err.role')),
 });
+
+/**
+ * Форма «Новый сотрудник» (прототип modules/staff.js, empAddDlg; React Hook Form): ФИО — фамилия и
+ * имя, отображаемое имя (прототип v74: заполняется по ФИО, пустое — автоматическое), логин — латиница,
+ * цифры, точка, дефис, от 3 символов (в нижнем регистре), временный пароль — не короче
+ * `PASSWORD_MIN_LENGTH` (docs/deviations.md, п. 17), роль. Телефон проверяет поле ввода по маске
+ * страны. Сообщения — ключи словаря.
+ */
+export const NewEmployeeForm = employeeFields;
 export type NewEmployeeFormInput = z.input<typeof NewEmployeeForm>;
 export type NewEmployeeForm = z.output<typeof NewEmployeeForm>;
 
-/** Форма «Изменить сотрудника» (docs/deviations.md, п. 16): ФИО — как у нового; телефон проверяет поле ввода. */
-export const EditEmployeeForm = NewEmployeeForm.pick({ fullName: true });
+/**
+ * Форма «Изменить сотрудника» (docs/deviations.md, п. 16; прототип v74): ФИО и отображаемое имя — как у
+ * нового; телефон проверяет поле ввода.
+ */
+export const EditEmployeeForm = employeeFields.pick({ fullName: true, shortName: true });
 export type EditEmployeeFormInput = z.input<typeof EditEmployeeForm>;
 export type EditEmployeeForm = z.output<typeof EditEmployeeForm>;
+
+/** Форма «Отображаемое имя» в «Мой профиль» (прототип v74 shortDlg): как в карточке сотрудника. */
+export const DisplayNameForm = employeeFields.pick({ shortName: true });
+export type DisplayNameFormInput = z.input<typeof DisplayNameForm>;
+export type DisplayNameForm = z.output<typeof DisplayNameForm>;

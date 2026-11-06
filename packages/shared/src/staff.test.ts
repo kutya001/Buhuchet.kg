@@ -4,6 +4,7 @@ import { NewEmployeeForm, PhoneCodes } from './staff';
 describe('форма «Новый сотрудник»', () => {
   const ok = {
     fullName: '  Асанова Айгуль ',
+    shortName: '',
     login: ' Aigul.A ',
     temporaryPassword: 'Bh-7K4M-Q9TX',
     roleId: 'r1',
@@ -16,6 +17,7 @@ describe('форма «Новый сотрудник»', () => {
   it('ФИО обрезается, логин — в нижнем регистре без пробелов по краям', () => {
     expect(NewEmployeeForm.parse(ok)).toEqual({
       fullName: 'Асанова Айгуль',
+      shortName: '',
       login: 'aigul.a',
       temporaryPassword: 'Bh-7K4M-Q9TX',
       roleId: 'r1',
@@ -24,9 +26,16 @@ describe('форма «Новый сотрудник»', () => {
 
   it('ошибки — ключи словаря: фамилия и имя, логин, пароль от 8 символов, роль', () => {
     expect(
-      messages({ fullName: 'Айгуль', login: 'аа', temporaryPassword: 'Bh-1234', roleId: '' }),
+      messages({
+        fullName: 'Айгуль',
+        shortName: 'А',
+        login: 'аа',
+        temporaryPassword: 'Bh-1234',
+        roleId: '',
+      }),
     ).toEqual([
       'fullName: staff.err.full_name',
+      'shortName: staff.err.display_name',
       'login: staff.err.login',
       'temporaryPassword: staff.err.password',
       'roleId: staff.err.role',
@@ -36,6 +45,16 @@ describe('форма «Новый сотрудник»', () => {
     expect(messages({ ...ok, fullName: `Ф ${'и'.repeat(250)}` })[0]).toBe(
       'fullName: form.too_long',
     );
+  });
+
+  it('отображаемое имя (прототип v74): пустое — автоматическое по ФИО, введённое — от 2 до 40 знаков', () => {
+    expect(messages({ ...ok, shortName: '   ' })).toEqual([]);
+    expect(messages({ ...ok, shortName: ' Айгуль ' })).toEqual([]);
+    expect(messages({ ...ok, shortName: 'а'.repeat(40) })).toEqual([]);
+    expect(messages({ ...ok, shortName: ' А ' })).toEqual(['shortName: staff.err.display_name']);
+    expect(messages({ ...ok, shortName: 'а'.repeat(41) })).toEqual([
+      'shortName: staff.err.display_name',
+    ]);
   });
 });
 

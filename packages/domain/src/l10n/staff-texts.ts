@@ -12,6 +12,13 @@ export const STAFF_TEXTS = {
   'staff.count.few': { ru: '{n} сотрудника', section: 'Сотрудники' },
   'staff.count.many': { ru: '{n} сотрудников', section: 'Сотрудники' },
   'staff.col.full_name': { ru: 'ФИО', section: 'Сотрудники' },
+  // «Отображаемое имя» (решение заказчика 06.11.2026, прототип v74 shortHint).
+  'staff.display_name': { ru: 'Отображаемое имя', section: 'Сотрудники' },
+  'staff.display_name.hint': {
+    ru: 'Как сотрудник называется в программе: в списках, задачах, истории. Пустое поле — имя и первая буква фамилии',
+    section: 'Сотрудники',
+  },
+  'staff.display_name.placeholder': { ru: 'Заполнится по ФИО', section: 'Сотрудники' },
   'staff.col.login': { ru: 'Логин', section: 'Сотрудники' },
   'staff.col.phone': { ru: 'Телефон', section: 'Сотрудники' },
   'staff.col.role': { ru: 'Роль', section: 'Сотрудники' },
@@ -98,6 +105,9 @@ export const STAFF_TEXTS = {
   'staff.err.password': { ru: 'Не короче {min} символов', section: 'Ошибки' },
   'staff.err.phone': { ru: 'Номер — {n} цифр', section: 'Ошибки' },
   'staff.err.role': { ru: 'Выберите роль', section: 'Ошибки' },
+  'staff.err.display_name': { ru: 'От 2 до 40 знаков', section: 'Ошибки' },
+  'err.display_name_length': { ru: 'От 2 до 40 знаков', section: 'Ошибки' },
+  'err.display_name_taken': { ru: 'Такое имя уже у сотрудника {fio}', section: 'Ошибки' },
 
   // Вкладка «Роли», карточка и форма роли.
   'roles.note': {

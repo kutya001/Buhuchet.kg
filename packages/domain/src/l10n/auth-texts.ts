@@ -147,6 +147,10 @@ export const AUTH_TEXTS = {
   'profile.title': { ru: 'Мой профиль', section: 'Профиль' },
   'profile.main': { ru: 'Основное', section: 'Профиль' },
   'profile.fio': { ru: 'ФИО', section: 'Профиль' },
+  // «Отображаемое имя» меняет сам сотрудник (решение заказчика 06.11.2026, прототип v74 shortDlg).
+  'profile.display_name': { ru: 'Отображаемое имя', section: 'Профиль' },
+  'profile.display_name.change': { ru: 'Изменить', section: 'Профиль' },
+  'profile.display_name.done': { ru: 'Отображаемое имя сохранено', section: 'Профиль' },
   'profile.login': { ru: 'Логин', section: 'Профиль' },
   'profile.phone': { ru: 'Телефон', section: 'Профиль' },
   'profile.role': { ru: 'Роль', section: 'Профиль' },

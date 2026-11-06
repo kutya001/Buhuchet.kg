@@ -3,6 +3,7 @@ import { hashPassword } from '@buhuchet/adapters/password';
 import { newTemporaryPassword } from '@buhuchet/adapters/tokens';
 import {
   createEmployee,
+  displayNameOwner,
   getEmployee,
   phoneCodes,
   roleAccess,
@@ -11,12 +12,13 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  displayName,
+  displayNameProblem,
   isFullName,
   isValidLogin,
   newEmployeeRoleRefusal,
   normalizeLogin,
   phoneProblem,
-  shortName,
 } from '@buhuchet/domain';
 import { CreatedEmployee, CreateEmployeeRequest } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -39,7 +41,11 @@ export const createEmployeeRoute = createRoute({
       description: 'Сотрудник создан; временный пароль показывается один раз',
       content: { 'application/json': { schema: CreatedEmployee } },
     },
-    400: { description: 'Неверные данные, логин занят или нет такой роли', content: error },
+    400: {
+      description:
+        'Неверные данные, логин занят, отображаемое имя не 2–40 знаков или уже у другого сотрудника, нет такой роли',
+      content: error,
+    },
     401: { description: 'Нет входа', content: error },
     403: {
       description: 'Нет права «Сотрудники и роли» или роль может назначить только владелец',
@@ -55,6 +61,36 @@ export function checkFullName(fullName: string): string {
   return name;
 }
 
+/**
+ * Отображаемое имя (решение заказчика 06.11.2026, прототип v74 readShort и shortErr): пустое — имя и
+ * первая буква фамилии из ФИО; 2–40 знаков; не как у другого активного сотрудника организации без
+ * учёта регистра — «Такое имя уже у сотрудника <ФИО>». `exceptId` — сам сотрудник при правке.
+ * `fromField` — имя пришло из поля формы (формы присылают его всегда); без поля, запросом не из
+ * формы, — автоматическое по ФИО без проверки повтора.
+ */
+export async function checkDisplayName(
+  tx: Tx,
+  value: string | undefined,
+  fullName: string,
+  exceptId: string | null,
+  fromField = value !== undefined,
+): Promise<string> {
+  const name = displayName(value, fullName);
+  if (displayNameProblem(name)) {
+    apiFail(400, 'display_name_length', 'От 2 до 40 знаков', { field: 'shortName' });
+  }
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-5
+  if (!fromField) return name;
+  const owner = await displayNameOwner(tx, name, exceptId);
+  if (owner) {
+    apiFail(400, 'display_name_taken', `Такое имя уже у сотрудника ${owner}`, {
+      field: 'shortName',
+      fio: owner,
+    });
+  }
+  return name;
+}
+
 /** Телефон по справочнику «Коды телефонов»; пустой — не указан. */
 export async function checkPhone(tx: Tx, phone: string | null | undefined): Promise<string | null> {
   const value = phone?.trim() || null;
@@ -65,8 +101,8 @@ export async function checkPhone(tx: Tx, phone: string | null | undefined): Prom
 }
 
 /**
- * «Новый сотрудник» (прототип modules/staff.js, empAddDlg): ФИО, логин, уникальный на всей
- * платформе, временный пароль, телефон и роль. Временный пароль задаёт владелец или сервер (как при
+ * «Новый сотрудник» (прототип modules/staff.js, empAddDlg): ФИО, отображаемое имя (прототип v74),
+ * логин, уникальный на всей платформе, временный пароль, телефон и роль. Временный пароль задаёт владелец или сервер (как при
  * сбросе, docs/deviations.md, п. 7); при первом входе сотрудник обязан его сменить.
  */
 export function createEmployeeHandler(
@@ -84,6 +120,7 @@ export function createEmployeeHandler(
     const passwordHash = await hashPassword(temporaryPassword);
     try {
       const employee = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+        const short = await checkDisplayName(tx, body.shortName, fullName, null);
         const phone = await checkPhone(tx, body.phone);
         const role = await roleAccess(tx, body.roleId);
         if (!role) apiFail(400, 'role_not_found', 'Нет такой роли');
@@ -91,7 +128,7 @@ export function createEmployeeHandler(
         if (refusal) refuse(refusal, 'create');
         const id = await createEmployee(tx, {
           fullName,
-          shortName: shortName(fullName),
+          shortName: short,
           login,
           passwordHash,
           phone,
