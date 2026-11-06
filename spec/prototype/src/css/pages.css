@@ -165,6 +165,17 @@ img.pub-logo{background:none;border:1px solid var(--border)}
 .pub-people{display:flex;flex-direction:column;gap:10px}
 .pub-person{display:flex;flex-direction:column;gap:2px}.pub-person a{color:var(--link)}
 .pub-file{display:inline-flex;align-items:center;gap:4px;color:var(--link);font-size:12.5px}
+/* «Файлы» страницы контрагента: плашки-категории переносятся, строка файла — кнопка: значок, название и к чему относится, дата и размер */
+.plates.pub-fpl{display:flex;flex-wrap:wrap}.plates.pub-fpl .plate{flex:0 1 auto;min-width:96px}
+.pub-fq{max-width:320px;width:100%}
+.pub-frow{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised);min-width:0;text-align:left;color:inherit;font:inherit;cursor:pointer;width:100%}
+.pub-frow:hover{border-color:var(--b-blue,var(--border-strong,var(--border)))}.pub-frow>.ic{color:var(--muted);flex:none}
+.pub-fm{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.pub-fm b{overflow-wrap:anywhere;font-weight:600}
+.pub-fs{display:flex;flex-direction:column;align-items:flex-end;flex:none;white-space:nowrap;text-align:right}
+.pub-fv{display:flex;align-items:center;justify-content:center;min-height:260px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--pane-alt);color:var(--muted)}
+.pub-fv.img .ic{transform:scale(3)}
+.pub-fvp{display:flex;flex-direction:column;gap:9px;width:min(220px,70%);padding:22px 18px;background:var(--raised);border:1px solid var(--border);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.pub-fvp i{display:block;height:6px;border-radius:3px;background:var(--border)}.pub-fvp i:nth-child(3n){width:62%}.pub-fvp i:first-child{width:45%;height:9px}
 .pub-more{display:none}
 .pub-nav{display:none}
 .pub-foot{color:var(--faint);font-size:12px;text-align:center}
@@ -174,7 +185,8 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
 @media (max-width:767px){.pub-proto span{display:none}.pub-bar{padding:8px 12px}.pub-title h1{font-size:20px}.pub-gate{margin-top:4vh;padding:22px 18px}.pg-pol{margin-left:0}
   .pub-page{padding:14px 12px calc(84px + env(safe-area-inset-bottom,0px));gap:14px}.pub-body{gap:10px}
   .pub-grid{display:flex;flex-direction:column;align-items:stretch;gap:10px}.pub-col{display:contents}
-  .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=money]{order:5}.pub-s[data-sec=fee]{order:6}.pub-s[data-sec=kpi]{order:7}.pub-s[data-sec=contacts]{order:8}
+  .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=files]{order:5}.pub-s[data-sec=money]{order:6}.pub-s[data-sec=fee]{order:7}.pub-s[data-sec=kpi]{order:8}.pub-s[data-sec=contacts]{order:9}
+  .pub-frow{padding:8px 10px;gap:8px}.pub-fq{max-width:none}
   .pub-s{padding:12px 14px}.pub-fd .pub-tg{cursor:pointer;min-height:28px}.pub-tg>.ic:last-child:not(:first-child){display:inline-block}
   .pub-fd:not(.fold) .pub-tg>.ic:last-child{transform:rotate(180deg)}
   .pub-s.fold .pub-sb,.pub-s.fold .pub-ex{display:none}

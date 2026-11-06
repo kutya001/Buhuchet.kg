@@ -157,7 +157,7 @@ function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.met
     // Страница контрагента по ссылке (пункт 2): адрес страницы у организаций платформы — по названию, без повторов; разделы страницы — все; право «Управлять страницей контрагента» у владельца
     // и главного бухгалтера; описание «Менять журнал тарифов», шаг урока, показ и основной набор — из refDB.json; в демо-данных функция включена и у двух контрагентов страницы — как в demoDB.json
     {const o=db.organization,taken=[];(db.platformOrgs||[]).forEach(x=>{if(x.self)return;if(!x.slug)x.slug=slugFree(slugOf(x.name),taken);taken.push(x.slug)});
-      if(o){if(!o.slug)o.slug=slugFree(slugOf(o.name),taken);if(!o.pageSec)o.pageSec=['contacts','reports','money','kpi','fee'];if(o.features&&o.features.cppage==null)o.features.cppage=db.meta.mode==='demo'}
+      if(o){if(!o.slug)o.slug=slugFree(slugOf(o.name),taken);if(!o.pageSec)o.pageSec=['contacts','reports','files','money','kpi','fee'];if(o.features&&o.features.cppage==null)o.features.cppage=db.meta.mode==='demo'}
       const pr=db.ref.permissions||[],fp=(r.permissions||[]).find(x=>x.id==='cpPage');if(fp&&!pr.some(x=>x.id==='cpPage')){const i=pr.findIndex(x=>x.id==='tariff');pr.splice(i<0?pr.length:i+1,0,structuredClone(fp))}
       {const a=pr.find(x=>x.id==='tariff'),b=(r.permissions||[]).find(x=>x.id==='tariff');if(a&&b&&/записывать оплату обслуживания/.test(a.desc||''))a.desc=b.desc}
       const addPg=x=>{if(!x.perms.includes('cpPage')){const i=x.perms.indexOf('tariff');x.perms.splice(i<0?x.perms.length:i+1,0,'cpPage')}};
@@ -291,6 +291,17 @@ function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.met
   if(!db.meta.v71){db.meta.v71=1;const l=db.ref.localization;const n=(r.localization||[]).find(y=>y.key==='land.faq.6.a');if(Array.isArray(l)&&n)l.forEach(x=>{if(x.key==='land.faq.6.a'&&x.ru==='На серверах в Европе (Франкфурт) с ежедневными резервными копиями.'){x.ru=n.ru;x._ua=n._ua;x._ub=n._ub}})}
   // v72 (Кутман 02.11.2026): кнопка темы на лендинге — новый ключ land.btn.theme после того же ключа, что в refDB.json
   if(!db.meta.v72){db.meta.v72=1;const l=db.ref.localization;const rl=r.localization||[];if(Array.isArray(l))['land.btn.theme'].forEach(k=>{if(l.some(y=>y.key===k))return;const i=rl.findIndex(y=>y.key===k);if(i<0)return;const j=i>0?l.findIndex(y=>y.key===rl[i-1].key):-1;l.splice(j<0?l.length:j+1,0,structuredClone(rl[i]))})}
+  // v74 (Кутман 06.11.2026): у организации три показателя по умолчанию — «ФОТ» добавляется, если нет показателя «ФОТ» или «Фонд оплаты труда»; ведётся с текущего месяца, без значений
+  if(!db.meta.v74){db.meta.v74=1;const ks=db.indicators;
+    // раздел «Файлы» страницы контрагента (06.11.2026): по умолчанию показывается, как остальные разделы
+    {const ps=db.ref.kbUi&&db.ref.kbUi.page&&db.ref.kbUi.page.secs,rs=r.kbUi&&r.kbUi.page&&r.kbUi.page.secs;if(ps&&rs&&ps['Файлы']==null)ps['Файлы']=rs['Файлы']}
+    {const o=db.organization;if(o&&Array.isArray(o.pageSec)&&!o.pageSec.includes('files')){const i=o.pageSec.indexOf('reports');o.pageSec.splice(i<0?o.pageSec.length:i+1,0,'files')}}
+const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
+    if(Array.isArray(ks)&&t&&!ks.some(i=>/^(фот|фонд оплаты труда)$/i.test(String(i.name||'').trim()))){const n=Math.max(0,...ks.map(i=>+String(i.id).slice(1)||0))+1;
+      ks.push(Object.assign(structuredClone(t),{id:'k'+n,order:Math.max(0,...ks.map(i=>+i.order||0))+1,_ca:TODAY+' 00:00',start:TODAY.slice(0,7),cps:[],off:{},from:{},seen:[]}))}
+    // уведомление о заявке (06.11.2026): в шаблоне новой заявки — ссылка на «Заявки»; новый шаблон повторной заявки
+    {const a=db.ref.messageTemplates,n=db.ref.templateNotes;if(a&&r.messageTemplates){if(a.tgLead==='📩 Новая заявка с сайта: {фирма}, {имя}, {телефон}, клиентов: {клиентов}.')a.tgLead=r.messageTemplates.tgLead;if(a.tgLeadRep==null)a.tgLeadRep=r.messageTemplates.tgLeadRep}if(n&&r.templateNotes&&n.tgLeadRep==null)n.tgLeadRep=r.templateNotes.tgLeadRep}
+    const st=(db.ref.kbSteps||[]).find(x=>x.id==='kset'),rs=(r.kbSteps||[]).find(x=>x.id==='kset');if(st&&rs&&st.w==='Изменить примеры «Выручка» и «Количество сотрудников» или создать свои.')st.w=rs.w}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

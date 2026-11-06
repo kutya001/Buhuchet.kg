@@ -119,16 +119,15 @@ function landFormBind(el){const f=$('#lp-form',el);if(!f)return;bindPhone(f,'lf-
     setTimeout(()=>{if(!LAND.open)return;
       if(LAND.netErr){btn.disabled=false;btn.textContent=LT('land.f.send');msg.hidden=false;msg.innerHTML=ic('alert','sm')+`<span>${LE('land.e.net')}</span>`;return}
       // Поле-ловушка заполнено (так делают боты): заявка не сохраняется, ответ — обычное «Спасибо!»
-      const o=trap?null:leadAdd(v);LAND.sent=fmtPhone(v.phone);$('#lp-fbox').innerHTML=landOkHtml();if(o&&!o.dup)leadTgPreview(o)},700)}}
+      const o=trap?null:leadAdd(v);LAND.sent=fmtPhone(v.phone);$('#lp-fbox').innerHTML=landOkHtml();if(o)leadTgPreview(o.dup?o.lead:o,!!o.dup)},700)}}
 // Новая заявка: повтор с тем же телефоном в течение суток новой не создаётся — комментарий дописывается к первой заявке
 function leadAdd(v){const day=Date.now()-24*36e5,at=nowStamp();const dup=LEADS.find(x=>x.phone&&x.phone.digits===v.phone.digits&&stAt(x.at)>=day);
-  if(dup){if(v.note)dup.note=(dup.note?dup.note+'\n':'')+v.note;leadLog(dup,'Повторная заявка с того же телефона'+(v.note?': комментарий дописан':''),'guest');dbSoon();return {dup:true}}
+  if(dup){if(v.note)dup.note=(dup.note?dup.note+'\n':'')+v.note;leadLog(dup,'Повторная заявка с того же телефона'+(v.note?': комментарий дописан':''),'guest');leadNotify();dbSoon();return {dup:true,lead:dup}}
   const id='L'+(Math.max(0,...LEADS.map(x=>+String(x.id).slice(1)||0))+1);
   const o={id,at,name:v.name,firm:v.firm,phone:v.phone,size:v.size,tg:v.tg,note:v.note,status:'Новая',org:null,adminNote:'',hist:[{at,who:'guest',what:'Заявка с сайта'+(LAND.test?' (тестовый стенд)':'')}],_cb:'guest',_ca:at,_ub:'guest',_ua:at};
-  LEADS.unshift(o);if(!LAND.test)tgSvc(PLATFORM_ADMIN,'Новая заявка с сайта');dbSoon();return o}
-const leadTgText=o=>(TPL.tgLead||'').replace(/\{([^}]+)\}/g,(m,k)=>({фирма:o.firm,имя:o.name,телефон:fmtPhone(o.phone),клиентов:o.size})[k]??m);
+  LEADS.unshift(o);leadNotify();dbSoon();return o}
 // Сообщение администраторам платформы в Telegram в прототипе показывается окном предпросмотра
-function leadTgPreview(o){openModal({render:()=>({title:'Прототип: сообщение в Telegram',sub:LAND.test?'Тестовый стенд: в рабочий Telegram администратора не уходит':'Администраторам платформы с привязанным Telegram',
-  body:`<div class="lp-tg"><div class="row" style="gap:8px;color:var(--muted);font-size:12.5px">${ic('tg','sm')}<b>Бот платформы</b></div><div class="box" style="white-space:pre-wrap">${esc(leadTgText(o))}</div></div><div class="note">${ic('info')}<span>Шаблон «Telegram: новая заявка с сайта» — Админка → Справочники платформы → Шаблоны.${LAND.test?'':' Отправка записана в журнал Telegram.'} Заявка — в Админке → «Организации» → «Заявки».</span></div>`,
+function leadTgPreview(o,rep){const to=leadAdmins();openModal({render:()=>({title:'Прототип: сообщение в Telegram',sub:LAND.test?'Тестовый стенд: от бота стенда администраторам стенда, в Telegram рабочего сайта не уходит':'Администраторам платформы с привязанным Telegram',
+  body:`${to.length?'':`<div class="note warn">${ic('alert')}<span>Сообщение некому отправить: ни у одного администратора платформы не привязан Telegram. Над вкладкой «Заявки» — предупреждение.</span></div>`}<div class="lp-tg"><div class="row" style="gap:8px;color:var(--muted);font-size:12.5px">${ic('tg','sm')}<b>${LAND.test?'Бот тестового стенда':'Бот платформы'}</b>${to.length?`<span>→ ${to.map(u=>esc(u.tg)).join(', ')}</span>`:''}</div><div class="box" style="white-space:pre-wrap">${esc(leadTgText(o,rep))}</div></div><div class="note">${ic('info')}<span>Шаблон «${rep?'Telegram: повторная заявка с сайта':'Telegram: новая заявка с сайта'}» — Админка → Справочники платформы → Шаблоны.${to.length?' Отправка записана в журнал «Телеграм» с типом «Заявка с сайта».':''} Заявка — в Админке → «Организации» → «Заявки».</span></div>`,
   foot:'<button class="btn ghost" data-close>Закрыть</button><button class="btn cta" id="lp-adm">Открыть «Заявки» в Админке</button>',mount(el,m){$('#lp-adm',el).onclick=()=>{m.close();landToAdmin()}}})})}
 function landToAdmin(){landHide();const lg=$('#login');if(lg)lg.remove();S.loggedIn=true;if(S.me!=='admin')switchUser('admin');go('orgs','leads')}

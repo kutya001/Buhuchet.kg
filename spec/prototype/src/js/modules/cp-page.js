@@ -2,7 +2,7 @@
 // Страница контрагента по ссылке (v56, решение заказчика 24.10.2026): www.buhuchet.kg/<адрес организации>/inn/<ИНН>, вход по коду из 6 цифр, только просмотр
 /* ═════════════ Страница контрагента по ссылке ═════════════ */
 // Разделы страницы: [ключ, название, функция учётной политики, без которой раздела нет]; «Главное» и «Ваш бухгалтер» показываются всегда
-const PG_SECS=[['pay','Как оплатить'],['reports','Отчёты'],['money','Деньги на налоги','taxpay'],['fee','Оплата за обслуживание','fee'],['kpi','Показатели','indicators'],['contacts','Контакты']];
+const PG_SECS=[['pay','Как оплатить'],['reports','Отчёты'],['files','Файлы'],['money','Деньги на налоги','taxpay'],['fee','Оплата за обслуживание','fee'],['kpi','Показатели','indicators'],['contacts','Контакты']];
 const PG_TRY=5,PG_LOCK=15*60e3,PG_KEEP=30*864e5;
 const pgPath=c=>`${ORG.slug}/inn/${c.inn}`;
 const pgUrl=c=>'www.buhuchet.kg/'+pgPath(c);
@@ -45,7 +45,7 @@ function pgCodeDlg(c,done){confirmDlg({title:'Сменить код доступ
 /* Сама страница — как её откроет контрагент по ссылке. В прототипе открывается поверх программы по адресу #/<адрес организации>/inn/<ИНН> */
 const PUB={back:'',open:null};
 // Состояние просмотра: годы «Отчётов» и «Показателей», фильтр-плашка и вид «Отчётов», раскрытые плитки, раскрытые на телефоне разделы
-const pubReset=()=>Object.assign(PUB,{y:null,ky:null,lateY:null,f:'',mode:'type',rt:new Set(),rm:null,ki:new Set(),unf:new Set()});
+const pubReset=()=>Object.assign(PUB,{y:null,ky:null,lateY:null,f:'',mode:'type',rt:new Set(),rm:null,ki:new Set(),unf:new Set(),ff:'',fq:'',fl:[]});
 const pgMem=()=>{const m=store.get('pgmem',{});return m&&typeof m==='object'?m:{}};
 const pgDev=()=>{const u=navigator.userAgent||'';const b=/Edg\//.test(u)?'Edge':/OPR\/|Opera/.test(u)?'Opera':/YaBrowser/.test(u)?'Яндекс Браузер':/Firefox\//.test(u)?'Firefox':/Chrome\//.test(u)?'Chrome':/Safari\//.test(u)?'Safari':'браузер';return (/Mobi|Android|iPhone|iPad/.test(u)||isMobile()?'Телефон':'ПК')+' · '+b};
 const pgHm=ms=>new Date(ms).toLocaleTimeString('ru-RU',{timeZone:'Asia/Bishkek',hour:'2-digit',minute:'2-digit'});
@@ -77,12 +77,18 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
       p.fails=0;const m=pgMem();m[o.slug+'|'+o.inn]={code:p.code,until:Date.now()+PG_KEEP};store.set('pgmem',m);pubDraw()}}
   const y=$('#pub-y',el);if(y)y.onchange=()=>{PUB.y=y.value;PUB.rm=null;pubDraw(true)};const ky=$('#pub-ky',el);if(ky)ky.onchange=()=>{PUB.ky=ky.value;pubDraw(true)};
   const b=$('.pub-body',el);if(b)b.onclick=pubClick;
-  $$('[data-pub-file]',el).forEach(a=>a.onclick=e=>{e.preventDefault();toast(`Файл «${a.dataset.pubFile}» откроется для просмотра и скачивания`,'download')})}
+  $$('[data-pub-file]',el).forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();pubFileOpen(a.dataset.pubFile)});
+  const fq=$('#pub-fq',el);if(fq){fq.oninput=()=>{PUB.fq=fq.value;pubFq(el)};pubFq(el)}}
+// Поиск по названию в «Файлах»: строки скрываются на месте, поле не теряет фокус; при поиске список показывается целиком
+function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)return;let n=0;$$('[data-pub-fo]',l).forEach(r=>{const on=!q||r.dataset.n.includes(q);r.hidden=!on;if(on)n++});
+  l.classList.toggle('all',!!q);const mb=$('.pub-more',l);if(mb)mb.hidden=!!q;const no=$('.pub-fnone',el);if(no)no.hidden=!!n}
 // Каждое открытие — в историю контрагента: дата, время, устройство
 // Обновление страницы в том же браузере в течение минуты новым открытием не считается (решение заказчика 30.10.2026, Е-3)
 function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
-function pubClick(e){const x=e.target.closest('[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy]');if(!x)return;const d=x.dataset;
+function pubClick(e){const x=e.target.closest('[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo]');if(!x)return;const d=x.dataset;
+  if(d.pubFo!=null){const f=PUB.fl[+d.pubFo];if(f)pubFileOpen(f.name,f);return}
+  if(d.pubFf!=null){PUB.ff=PUB.ff===d.pubFf?'':d.pubFf;pubDraw(true);return}
   if(d.pubCopy!=null){copyText(d.pubCopy,d.pubOk||'Скопировано',true);return}
   if(d.pubMore!=null){x.parentElement.classList.add('all');x.remove();return}
   if(d.pubTg){if(isMobile())pubFold(d.pubTg,!PUB.unf.has(d.pubTg));return}
@@ -132,12 +138,34 @@ function pubSec(k,icon,title,sum,body,{extra='',fold=true}={}){const f=fold&&!PU
 // Суммы на странице — без «,00», если копеек нет
 const pubM=v=>fmtM(v,(Math.round(v*100)%100)!==0);
 const pubMore=n=>n>5?`<button type="button" class="linkbtn pub-more" data-pub-more>${ic('down','sm')}Показать ещё ${n-5}</button>`:'';
+// «Файлы» (решение заказчика 06.11.2026): файлы контрагента, которые хранятся у нас, по категориям; категории следуют разделам страницы; файлы задач и скрытые со страницы (c.pgHide) не попадают никогда
+const PG_FCAT=[['rep','Отчёты'],['doc','Документы компании'],['pay','Оплаты налогов'],['in','Ваши переводы'],['prj','Проекты и услуги'],['fee','Оплата за обслуживание'],['oth','Прочие']];
+const PG_FCATL=Object.fromEntries(PG_FCAT);
+function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,rel,date)=>{if(!n||hid.has(n))return;out.push({cat,name:n,rel:rel||'',date:String(date||TODAY).slice(0,10),size:fsize(n)})},tp=has('money');
+  if(has('reports'))REPORTS.forEach(r=>{if(r.cp!==c.id)return;(r.files||[]).forEach(n=>add('rep',n,`${T[r.t].short} · ${r.plabel}`,r.subDate||r.due))});
+  (c.files||[]).forEach(n=>add('doc',n,(c.regFiles||[]).includes(n)?'Из свидетельства и выписки':'',c._ua||c.start));
+  if(tp)OPS.forEach(o=>{if(o.cp!==c.id||o.del||!(o.files||[]).length)return;const r=o.kind==='pay'&&REPORTS.find(y=>y.id===o.report);
+    if(o.kind==='pay')o.files.forEach(n=>add('pay',n,`${r?T[r.t].short+' · '+r.plabel+', ':''}оплата ${som(o.amount)} от ${fmtD(o.date)}`,o.date));
+    else if(o.kind==='in')o.files.forEach(n=>add('in',n,`Поступление ${som(o.total??o.amount)} от ${fmtD(o.date)}`,o.date))});
+  if(feat('projects')){SERVICES.forEach(x=>{if(x.cp!==c.id||x.del)return;[...(x.files||[]),...(x.pays||[]).filter(y=>!y.del).flatMap(y=>y.files||[])].forEach(n=>add('prj',n,`Услуга «${x.name}»`,x.date))});
+    PROJECTS.forEach(x=>{if(x.cp!==c.id||x.del)return;[...(x.files||[]),...(x.pays||[]).filter(y=>!y.del).flatMap(y=>y.files||[])].forEach(n=>add('prj',n,`Проект «${x.name}»`,x.from))})}
+  if(fee)FEEPAYS.forEach(x=>{if(x.cp===c.id&&!x.del)(x.files||[]).forEach(n=>add('fee',n,`Оплата ${som(x.amount)} от ${fmtD(x.date)}`,x.date))});
+  FILES.forEach(f=>{if(f.cp===c.id)add('oth',f.name,f.note||'',f.at)});
+  return out.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0)}
+const pubFIc=n=>/^(JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n))?'image':/^(XLSX?|CSV)$/.test(fext(n))?'table':/^(ZIP|RAR|7Z)$/.test(fext(n))?'folder':'file';
+const pubFView=n=>/^(PDF|JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n));
+// Изображения и PDF открываются в окне просмотра на странице, в окне — «Скачать»; остальные файлы сразу скачиваются. Ссылка на файл в рабочей версии временная — 5 минут
+function pubFileOpen(n,f){if(!pubFView(n)){toast('Скачивание: '+n,'download');return}const img=pubFIc(n)==='image',lines=Array.from({length:7},()=>'<i></i>').join('');
+  openModal({size:'mid',render:()=>({title:esc(n),sub:f?`${esc(PG_FCATL[f.cat]||'')}${f.rel?' · '+esc(f.rel):''}`:'Просмотр файла',
+    body:`<div class="pub-fv${img?' img':''}" aria-label="Просмотр файла">${img?ic('image'):`<span class="pub-fvp">${lines}</span>`}</div><span class="hint">Прототип: в рабочей версии здесь сам файл — ${img?'изображение':'страницы PDF'} с прокруткой и масштабом.</span>`,
+    foot:`<button class="btn" data-close>Закрыть</button><div class="grow"></div><button class="btn cta" id="pf-dl">${ic('download','sm')}Скачать</button>`,
+    mount(el){$('#pf-dl',el).onclick=()=>toast('Скачивание: '+n,'download')}})})}
 function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy=TODAY.slice(0,4),fee=has('fee')&&c.kind!=='oneoff',tp=feat('taxpay');const role=x=>(ROLES.find(r=>r.id===x.role)||{}).name||'';
   const tel=ph=>ph&&ph.digits?`<a class="btn sm" href="tel:+${ph.digits}">${ic('phone','sm')}Позвонить</a><a class="btn sm" href="${waLink(ph)}" target="_blank" rel="noopener">${ic('chat','sm')}WhatsApp</a>`:'';
   const person=(x,sub)=>`<div class="pub-person"><b>${esc(x.fio)}</b><span class="hint">${esc(sub)}</span>${x.phone&&x.phone.digits?`<a class="mono" href="tel:+${x.phone.digits}">${esc(fmtPhone(x.phone))}</a>`:''}</div>`;
   const byDue=(a,b)=>a.due<b.due?-1:a.due>b.due?1:a.id-b.id,isSub=r=>r.status==='Сдан',fk=r=>isSub(r)?'sub':r.due<TODAY?'late':'next';
   const all=REPORTS.filter(r=>r.cp===c.id&&!r.superseded&&r.status!=='Не требуется').sort(byDue),late=all.filter(r=>fk(r)==='late');PUB.lateY=late.length?late[late.length-1].due.slice(0,4):null;
-  const M=has('money')?pubMoney(c):null,H={};
+  const M=has('money')?pubMoney(c):null,H={},hidF=new Set(c.pgHide||[]),rf=r=>(r.files||[]).filter(n=>!hidF.has(n));
   // Строка состояния: каждое замечание — ссылка на свой раздел
   const iss=[];
   if(has('reports')&&late.length)iss.push({go:'reports',fl:'late',red:1,t:`${plural(late.length,'просрочен','просрочено','просрочено')} ${late.length} ${plural(late.length,'отчёт','отчёта','отчётов')}`});
@@ -170,7 +198,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
     const row=(r,wt)=>{const t=T[r.t],st=pubSt(r),lt=fk(r)==='late';
       return `<div class="pub-row${lt?' late':''}"><div class="pub-r1">${wt?`<b title="${esc(t.name)}">${esc(t.short)}</b><span class="faint">·</span>`:''}<span>${esc(r.phuman)}</span><span class="grow"></span>${pubTp(pill(st,ST),PGT('report',st))}</div>
         <div class="pub-r2"><span class="${lt?'red strong':''}">${lt?ic('alert','sm'):''}срок ${fmtD(r.due)}</span>${st==='Сдан'&&r.subDate?`<span>сдан ${fmtD(r.subDate)}</span>`:''}${t.sum?`<span>${r.sum!=null?`к уплате <b class="tnum">${pubM(r.sum)}</b>`:'<span class="faint">сумма ещё не рассчитана</span>'}</span>${tp&&r.sum>0?pubTp(pill(r.payStatus,PST),PGT('taxPay',r.payStatus)):''}`:''}</div>
-        ${(r.files||[]).length?`<div class="pub-files">${r.files.map(n=>`<a href="#" class="pub-file" data-pub-file="${esc(n)}">${ic('download','sm')}${esc(n)}</a>`).join('')}</div>`:''}</div>`};
+        ${rf(r).length?`<div class="pub-files">${rf(r).map(n=>`<a href="#" class="pub-file" data-pub-file="${esc(n)}">${ic('download','sm')}${esc(n)}</a>`).join('')}</div>`:''}</div>`};
     let list;
     if(PUB.mode==='due'){const ms=[...new Set(vis.map(r=>ym(r.due)))].sort(),op=PUB.rm||new Set([ms.find(m=>m>=ym(TODAY))||ms[ms.length-1]]);
       list=ms.map(m=>{const rs=vis.filter(r=>ym(r.due)===m),l=rs.filter(r=>fk(r)==='late').length,o=op.has(m);
@@ -188,6 +216,12 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
       <div class="pub-tools"><div class="chipsel" role="group" aria-label="Как показать отчёты">${[['type','По видам'],['due','По срокам']].map(([k,l])=>`<button type="button" data-pub-mode="${k}" class="${PUB.mode===k?'on':''}" aria-pressed="${PUB.mode===k}">${l}</button>`).join('')}</div>${f?`<button type="button" class="linkbtn" data-pub-f="${f}">${ic('x','sm')}Показать все</button>`:''}</div>
       ${vis.length?list:`<span class="faint">${f?`Отчётов с отметкой «${{sub:'Сдано',next:'Впереди',late:'Просрочено'}[f]}» в ${y} году нет`:`Отчётов со сроком в ${y} году нет`}</span>`}`,
       {extra:sel('pub-y',ys.map(x=>[x,x+' год']),y,'aria-label="Год срока сдачи"')})}
+  if(has('files')){const fs=pubFiles(c,has,fee),cats=PG_FCAT.filter(([k])=>fs.some(f=>f.cat===k)),ff=cats.some(([k])=>k===PUB.ff)?PUB.ff:'',vis=fs.filter(f=>!ff||f.cat===ff);PUB.fl=vis;
+    const pl=(k,l,n)=>`<button type="button" class="plate${ff===k?' on':''}" data-pub-ff="${k}" aria-pressed="${ff===k}"><span class="pl-top">${esc(l)}</span><span class="pl-val">${n}</span></button>`;
+    H.files=pubSec('files','folder','Файлы',fs.length?`${fs.length} ${plural(fs.length,'файл','файла','файлов')}`:'',fs.length?`<div class="plates pub-pl pub-fpl">${pl('','Все',fs.length)}${cats.map(([k,l])=>pl(k,l,fs.filter(f=>f.cat===k).length)).join('')}</div>
+      <div class="pub-tools"><input class="inp pub-fq" id="pub-fq" type="search" placeholder="Поиск по названию" value="${esc(PUB.fq||'')}" aria-label="Поиск файла по названию" autocomplete="off"></div>
+      <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name))}" title="${pubFView(f.name)?'Открыть для просмотра':'Скачать'}">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span></span><span class="pub-fs hint"><span>${fmtD(f.date)}</span><span>${fmtSize(f.size)}</span></span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием нет</span>`
+      :'<span class="faint">Файлов пока нет</span>')}
   if(M){const v=M.diff<0?['short','alert','Недостача',som(-M.diff)]:M.diff===0?['ok','ok','Достаточно',som(0)]:M.needSum?['ok','ok','Достаточно, излишек','+'+som(M.diff)]:['over','info','Излишек','+'+som(M.diff)];
     const kv=(l,key,val)=>`<div><span class="k">${l}${PGT('money',key)?tipI(PGT('money',key)):''}</span><span class="v tnum">${val}</span></div>`;
     H.money=pubSec('money','wallet','Деньги на налоги',M.diff<0?`недостача ${som(-M.diff)}`:v[2].toLowerCase(),
@@ -212,11 +246,11 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
     H.contacts=pubSec('contacts','users','Контакты',ids.length?`${ids.length} ${plural(ids.length,'сотрудник','сотрудника','сотрудников')}`:'',`<div class="pub-people">${ids.map(id=>person(EM[id],`${role(EM[id])} · ${what(id)}`)).join('')}${ORG.phone&&ORG.phone.digits?`<div class="pub-person"><b>${esc(ORG.name)}</b><span class="hint">телефон организации</span><a class="mono" href="tel:+${ORG.phone.digits}">${esc(fmtPhone(ORG.phone))}</a></div>`:''}</div>
       <h4>Ваши данные у нас</h4><div class="kv"><div><span class="k">Руководитель</span><span class="v">${esc(c.head||'—')}</span></div><div><span class="k">Контактное лицо</span><span class="v">${esc(c.contact||'—')}</span></div><div><span class="k">Телефон</span><span class="v mono">${esc(fmtPhone(c.phone)||'—')}</span></div></div><span class="hint">${esc(PGT('contacts','Ваши данные у нас')||'Если что-то устарело, сообщите вашему бухгалтеру.')}</span>`)}
   const logo=ORG.logo?`<img src="${ORG.logo}" alt="" class="pub-logo">`:`<span class="pub-logo">${esc(initials(ORG.name.replace(/^(ОсОО|ИП|ОАО|ЗАО)\s+/,'').replace(/[«»"]/g,'')))}</span>`;
-  // На ПК две колонки; на телефоне разделы идут один под другим в порядке: «Главное», «Как оплатить», «Ваш бухгалтер», «Отчёты», «Деньги на налоги», «Оплата за обслуживание», «Показатели», «Контакты»
+  // На ПК две колонки; на телефоне разделы идут один под другим в порядке: «Главное», «Как оплатить», «Ваш бухгалтер», «Отчёты», «Файлы», «Деньги на налоги», «Оплата за обслуживание», «Показатели», «Контакты»
   const col=ks=>ks.map(k=>H[k]||'').join('');
   const nav=[['main','Главное','home'],['pay','Оплата','wallet'],['reports','Отчёты','file'],['kpi','Показатели','gauge'],['contacts','Контакты','users']].filter(([k])=>H[k]);
   return `<div class="pub-body"><header class="pub-h"><div class="pub-org">${logo}<span><b>${esc(ORG.name)}</b><span class="hint">ваша бухгалтерская компания</span></span></div><span class="hint">Данные на ${fmtD(TODAY)} ${bishkekNow().hm}${PGT('head','Данные на')?tipI(PGT('head','Данные на')):''}</span></header>
     <div class="pub-title"><h1>${esc(c.name)}</h1><span class="muted">ИНН <span class="mono">${c.inn}</span> · ${esc(c.regime?REGIME_FULL[c.regime]||c.regime:'режим налогообложения не указан')}</span></div>
     ${state}
-    <div class="pub-grid"><div class="pub-col">${col(['main','reports','kpi'])}</div><div class="pub-col">${col(['pay','acc','money','fee','contacts'])}</div></div>
+    <div class="pub-grid"><div class="pub-col">${col(['main','reports','files','kpi'])}</div><div class="pub-col">${col(['pay','acc','money','fee','contacts'])}</div></div>
     ${nav.length>1?`<nav class="pub-nav" aria-label="Разделы страницы">${nav.map(([k,l,i])=>`<button type="button" data-pub-go="${k}">${ic(i)}<span>${l}</span></button>`).join('')}</nav>`:''}</div>`}

@@ -222,7 +222,8 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgUnlinked: ['логин'],
   tgLinkInvalid: [],
   tgStart: [],
-  tgLead: ['фирма', 'имя', 'телефон', 'клиентов'],
+  tgLead: ['фирма', 'имя', 'телефон', 'клиентов', 'ссылка'],
+  tgLeadRep: ['фирма', 'имя', 'телефон', 'ссылка'],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -255,6 +256,7 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgLinkInvalid',
   'tgStart',
   'tgLead',
+  'tgLeadRep',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

@@ -89,7 +89,7 @@ input[type=checkbox]:not(.sw){accent-color:var(--accent);width:16px;height:16px;
 .mhead .grow{flex:1}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding:4px 2px 6px;scrollbar-width:none;margin:-2px 0 2px}
 .tabs::-webkit-scrollbar{display:none}
-.tabs>:first-child{margin-left:auto}.tabs>:last-child{margin-right:auto}
+.tabs>:first-child{margin-left:auto}.tabs>:last-child{margin-right:auto}.tabs>.tab-ghost:first-child+*{margin-left:auto}
 .tab{flex:none;display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--pane-alt);font-weight:550;font-size:13px;cursor:pointer;text-decoration:none;transition:background .2s,color .2s,transform .2s}
 .tab:hover{background:var(--raised);color:var(--text);transform:translateY(-1px)}
 .tab.on{background:var(--raised);color:var(--text);border-color:transparent;box-shadow:var(--sh-btn);animation:pop .25s ease-out}

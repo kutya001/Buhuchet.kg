@@ -5,6 +5,11 @@ const LEADS=DB.leads;
 const LDST=DB.ref.statuses.lead;
 STATUS_GROUPS.push(['Статусы заявок с сайта',LDST,'lead','1 Новая → 2 В работе → 3 Подключена; «Отказ» — конечная отметка вне шкалы, ставится с причиной.']);
 const leadNew=()=>LEADS.filter(x=>x.status==='Новая').length;
+// Уведомление о заявке обязательно (решение заказчика 06.11.2026): сразу после сохранения — каждому активному администратору платформы с привязанным Telegram; повторная заявка за сутки — своим шаблоном; на стенде — бот стенда, пометка «🧪 Тестовый стенд» в начале
+const leadAdmins=()=>[PLATFORM_ADMIN].filter(u=>u.tg&&u.active!==false);
+const leadLink=()=>`https://${LAND.test?'test.':''}buhuchet.kg/admin/leads`;
+const leadTgText=(o,rep)=>(LAND.test?'🧪 Тестовый стенд ':'')+((rep?TPL.tgLeadRep:TPL.tgLead)||'').replace(/\{([^}]+)\}/g,(m,k)=>({фирма:o.firm,имя:o.name,телефон:fmtPhone(o.phone),клиентов:o.size,ссылка:leadLink()})[k]??m);
+function leadNotify(){leadAdmins().forEach(u=>tgSvc(u,'Заявка с сайта',{org:LAND.test?'Тестовый стенд':'Платформа'}))}
 // История заявки — внутри самой заявки: «Удалить» стирает её целиком
 function leadLog(o,what,who){const w=who||S.me,at=nowStamp();(o.hist=o.hist||[]).push({at,who:w,what});o._ub=w;o._ua=at}
 // Смена статуса: в историю — кто, когда, с какого статуса на какой, причина или комментарий (suf — « (причина)» или «, комментарий»)
@@ -44,9 +49,10 @@ function openLead(o){openModal({size:'mid',lead:o.id,render:()=>{if(!LEADS.inclu
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-lead-org]');if(!b)return;e.preventDefault();e.stopPropagation();MODALS.slice().forEach(m=>m.close());go('orgs','list')},true);
 // Столбцы — от новых к старым; на вкладке — счётчик новых заявок
 function renderLeads(body,fresh){
-  body.innerHTML=`<div class="note">${ic('info')}<span>Заявки с лендинга buhuchet.kg. О каждой новой заявке бот пишет администраторам платформы в Telegram. Статус ставит и меняет только администратор платформы; «Создать организацию» в меню строки сам ставит «Подключена».</span></div><div id="ldg"></div>`;
+  body.innerHTML=`${leadAdmins().length?'':`<div class="note warn" id="ld-notg">${ic('alert')}<span>О новых заявках некому сообщить: привяжите Telegram в «Мой профиль».</span><button class="btn sm" id="ld-pf">${ic('user','sm')}Мой профиль</button></div>`}<div class="note">${ic('info')}<span>Заявки с лендинга buhuchet.kg. О каждой новой и повторной заявке бот сразу пишет администраторам платформы с привязанным Telegram. Статус ставит и меняет только администратор платформы; «Создать организацию» в меню строки сам ставит «Подключена».</span></div><div id="ldg"></div>`;
   grid($('#ldg',body),{id:'adm-leads',rid:x=>x.id,cols:[{key:'at',label:'Дата',type:'text',w:130,val:x=>x.at,html:x=>`<span class="tnum">${fmtDT(x.at)}</span>`},{key:'name',label:'Имя',type:'text',w:190,val:x=>x.name,html:x=>`<span class="strong">${esc(x.name)}</span>`},{key:'firm',label:'Фирма',type:'text',w:220,val:x=>x.firm},
     {key:'phone',label:'Телефон',type:'text',w:170,val:x=>fmtPhone(x.phone),html:x=>phoneHtml(x.phone)},{key:'size',label:'Клиентов',type:'enum',w:110,val:x=>x.size||''},{key:'tg',label:'Telegram',type:'text',w:130,val:x=>x.tg||''},{key:'note',label:'Комментарий',type:'text',w:240,val:x=>x.note||''},
     {key:'status',label:'Статус',type:'enum',w:170,val:x=>x.status,html:x=>scaleMini('lead',x.status,x)},{key:'org',label:'Организация',type:'text',w:200,val:x=>x.org?orgName(x.org):'',html:leadOrgHtml}],
     rows:()=>LEADS,title:'name',noun:['заявка','заявки','заявок'],sort:{key:'at',dir:-1},simulateLoad:fresh,rowClass:x=>x.status==='Отказ'?'muted':'',open:openLead,actions:leadActions});
+  const pf=$('#ld-pf',body);if(pf)pf.onclick=profileDlg;
 }
