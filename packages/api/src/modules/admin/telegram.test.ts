@@ -28,6 +28,11 @@ type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
 const WEBHOOK = 'http://localhost:3000/api/telegram/webhook';
 const noPause = async () => {};
+/*
+ * Номер чата владельца организации А. Длинный: журнал проверяется на отсутствие номера подстрокой,
+ * а короткое число (было 2001) иногда встречается внутри случайного UUID в том же ответе.
+ */
+const CHAT_A = 700_200_001;
 
 describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (задача 2.41)', () => {
   let f: Fixture;
@@ -48,7 +53,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     adminId = a!.id;
     const now = f.deps.clock.now();
     await f.t.admin.db.insert(schema.telegramLinks).values([
-      { userId: f.a.ownerUserId, orgId: f.a.orgId, chatId: 2001, username: 'owner_a' },
+      { userId: f.a.ownerUserId, orgId: f.a.orgId, chatId: CHAT_A, username: 'owner_a' },
       { userId: f.people['acc-b']!.userId, orgId: f.b.orgId, chatId: 2002, username: 'acc_b' },
       { userId: adminId, orgId: null, chatId: 2003, username: 'platform' },
     ]);
@@ -58,7 +63,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
         {
           orgId: f.a.orgId,
           userId: f.a.ownerUserId,
-          chatId: 2001,
+          chatId: CHAT_A,
           kind: 'reminders',
           text: 'Секретный текст напоминания',
           status: 'sent',
@@ -109,7 +114,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     for (const [key, v] of rows) {
       const [x] = await f.t.admin.db
         .insert(schema.telegramOutbox)
-        .values({ userId: f.a.ownerUserId, chatId: 2001, kind: 'reminders', ...v })
+        .values({ userId: f.a.ownerUserId, chatId: CHAT_A, kind: 'reminders', ...v })
         .returning({ id: schema.telegramOutbox.id });
       ids[key] = x!.id;
     }
@@ -154,7 +159,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).not.toContain('Секретный текст');
-    expect(body).not.toContain('2001');
+    expect(body).not.toContain(String(CHAT_A));
     const list = AdminTelegramLogList.parse(JSON.parse(body));
     expect(list.total).toBe(4);
     expect(list.items.find((r) => r.id === ids.sent)).toMatchObject({
@@ -196,6 +201,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     expect(sheet).toContain('Пароль изменён');
     expect(sheet).toContain('Платформа');
     expect(sheet).not.toContain('Секретный текст');
+    expect(sheet).not.toContain(String(CHAT_A));
   });
 
   it('тестовый стенд: у сообщения о заявке с сайта «Организация» — «Тестовый стенд» (прототип v74)', async () => {
@@ -387,7 +393,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
         .sort(),
     ).toEqual(
       [
-        [2001, '15 ноября с 22:00 до 23:00 плановые работы'],
+        [CHAT_A, '15 ноября с 22:00 до 23:00 плановые работы'],
         [2002, '15 ноября с 22:00 до 23:00 плановые работы'],
         [2002, 'Только Б'],
       ].sort(),

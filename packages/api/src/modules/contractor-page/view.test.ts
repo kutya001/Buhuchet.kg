@@ -399,7 +399,10 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(page.accountant?.name).toBe('Сотрудник acc-a');
     const json = JSON.stringify(page);
     expect(json).not.toContain('Декларация');
-    expect(json).not.toContain('0555');
+    // Номер для перевода — по его 9 цифрам: так ловится и местный вид «0555 123 456», и «+996555123456».
+    // Короткое «0555» искать нельзя: оно иногда встречается внутри случайного UUID в ответе.
+    expect(json).not.toContain('555123456');
+    expect(json).not.toContain('555 123 456');
 
     // Скрыты только «Отчёты»: плитка «Налоги» остаётся при «Деньгах на налоги».
     await hide(uks, ['reports']);
