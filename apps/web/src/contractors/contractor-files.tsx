@@ -1,13 +1,29 @@
 'use client';
 
 import { FileLink, FileManagerList, type FileManagerRow } from '@buhuchet/shared';
-import { Box, buttonClass, EmptyState, Icon, MiniTable, Note, useToast } from '@buhuchet/ui';
+import {
+  Box,
+  buttonClass,
+  EmptyState,
+  Icon,
+  iconButtonClass,
+  MiniTable,
+  Note,
+  useToast,
+} from '@buhuchet/ui';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { FileWindow } from '../files/file-window';
-import { fileSizeText, pickedFilesProblem, uploadFile, useFilesRefresh } from '../files/files-data';
+import { filePageText } from '../files/file-columns';
+import {
+  fileSizeText,
+  pickedFilesProblem,
+  uploadFile,
+  useFilePageToggle,
+  useFilesRefresh,
+} from '../files/files-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 
@@ -62,6 +78,8 @@ export function ContractorFilesTab({
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<DialogSlot<FileManagerRow> | null>(null);
   const canAttach = access.can('filesUpload') && !archived;
+  const cppage = access.feature('cppage');
+  const togglePage = useFilePageToggle(t, toast, errorText);
 
   const download = async (file: FileManagerRow) => {
     const res = await callApi(() => api.api.files[':id'].link.$get({ param: { id: file.id } }));
@@ -148,6 +166,8 @@ export function ContractorFilesTab({
                 { key: 'name', label: t('cp.files.col.name') },
                 { key: 'src', label: t('cp.files.col.src') },
                 { key: 'size', label: t('cp.files.col.size'), numeric: true },
+                // Прототип v74: «На странице» — «глаз» и «Да» / «Скрыт» / «—».
+                ...(cppage ? [{ key: 'page', label: t('cp.files.col.page') }] : []),
               ]}
               rows={data.items.map((f) => ({
                 key: f.id,
@@ -160,6 +180,31 @@ export function ContractorFilesTab({
                   ),
                   src: <span className="text-muted">{f.source}</span>,
                   size: <span className="text-muted">{fileSizeText(t, f.size)}</span>,
+                  page: !f.page ? (
+                    <span className="text-faint">—</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      {f.page.canChange ? (
+                        <button
+                          type="button"
+                          data-pgf={f.page.hidden ? 'off' : 'on'}
+                          className={iconButtonClass('sm')}
+                          title={t(f.page.hidden ? 'files.pg.btn_show' : 'files.pg.btn_hide')}
+                          aria-label={`${t(f.page.hidden ? 'files.pg.btn_show' : 'files.pg.btn_hide')}: ${f.name}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void togglePage(f, !f.page!.hidden);
+                          }}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <Icon name={f.page.hidden ? 'eyeoff' : 'eye'} size="sm" />
+                        </button>
+                      ) : null}
+                      <span className={f.page.hidden ? 'text-muted' : ''}>
+                        {filePageText(t, f.page)}
+                      </span>
+                    </span>
+                  ),
                 },
                 wide: ['name'],
               }))}
@@ -168,7 +213,10 @@ export function ContractorFilesTab({
                 if (file) setOpen(openSlot(file));
               }}
             />
-            <span className="text-[11.5px] leading-[1.4] text-faint">{t('cp.files.hint')}</span>
+            <span className="text-[11.5px] leading-[1.4] text-faint">
+              {t('cp.files.hint')}
+              {cppage ? ` ${t('cp.files.hint_page')}` : ''}
+            </span>
           </Box>
         </>
       )}

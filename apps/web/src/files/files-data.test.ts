@@ -1,6 +1,7 @@
 import { defaultUiTexts, FILE_MAX_BYTES } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
+import { fileColumns, filePageText } from './file-columns';
 import { fileMeta, pickedFilesProblem } from './files-data';
 
 const t = makeTranslate(defaultUiTexts());
@@ -39,5 +40,15 @@ describe('блок «Файлы»: проверка выбранных файл�
       code: 'file_type_forbidden',
       name: 'setup.exe',
     });
+  });
+});
+
+describe('Файловый менеджер: «На странице контрагента» (прототип v74 pgFileTxt)', () => {
+  it('«Да», «Скрыт», «—» у файла, который на страницу не попадает; столбец — только при функции', () => {
+    expect(filePageText(t, { hidden: false, canChange: false })).toBe('Да');
+    expect(filePageText(t, { hidden: true, canChange: true })).toBe('Скрыт');
+    expect(filePageText(t, null)).toBe('—');
+    expect(fileColumns(t).some((c) => c.key === 'pg')).toBe(false);
+    expect(fileColumns(t, true).find((c) => c.key === 'pg')?.label).toBe('На странице контрагента');
   });
 });

@@ -50,6 +50,7 @@ import { serverTexts } from '../l10n/texts';
 import {
   downloadLink,
   error,
+  filePageOf,
   fileReadResponses,
   realNow,
   requireFilesFeature,
@@ -110,8 +111,17 @@ async function listOptions(
   return { t, scope: filesScopeOf(subject), parts: listParts(deps, subject, features, t) };
 }
 
-/** Строка для ответа: можно ли удалить — по праву «Удалять файлы» и суткам для своего файла. */
-function rowBody(r: FileManagerRow, subject: AccessSubject, userId: string, now: Date) {
+/**
+ * Строка для ответа: можно ли удалить — по праву «Удалять файлы» и суткам для своего файла; показ на
+ * странице контрагента — при включённой «Странице контрагента по ссылке» (`cppage`).
+ */
+function rowBody(
+  r: FileManagerRow,
+  subject: AccessSubject,
+  userId: string,
+  now: Date,
+  cppage: boolean,
+) {
   const body: FileManagerRowBody = {
     id: r.id,
     name: r.name,
@@ -122,7 +132,7 @@ function rowBody(r: FileManagerRow, subject: AccessSubject, userId: string, now:
     sourceId: r.sourceId,
     source: r.source,
     sourceRef: r.sourceRef,
-    contractor: r.contractor,
+    contractor: r.contractor ? { id: r.contractor.id, name: r.contractor.name } : null,
     note: r.note,
     uploadedBy: r.uploadedBy,
     uploadedAt: r.createdAt.toISOString(),
@@ -131,6 +141,16 @@ function rowBody(r: FileManagerRow, subject: AccessSubject, userId: string, now:
         { uploadedBy: r.createdBy, uploadedAt: r.createdAt },
         { userId, canDeleteAny: hasPermission(subject, 'filesDelete'), now },
       ) === null,
+    page: filePageOf(
+      {
+        sourceKind: r.sourceKind,
+        contractorId: r.contractor?.id ?? null,
+        pageHidden: r.pageHidden,
+      },
+      r.contractor,
+      subject,
+      cppage,
+    ),
     audit: {
       createdAt: r.createdAt.toISOString(),
       createdBy: r.uploadedBy,
@@ -168,13 +188,16 @@ export function listManagerHandler(deps: ApiDeps): RouteHandler<typeof listManag
     const subject = subjectOf(c);
     const t = await serverTexts(deps);
     const now = realNow();
-    const page = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
-      return listFilesPage(tx, query, await listOptions(deps, tx, c, t));
+    const { page, cppage } = await withOrgContext(deps.db, ctx, async (tx) => {
+      const features = await requireFilesFeature(tx, ctx.orgId);
+      return {
+        page: await listFilesPage(tx, query, await listOptions(deps, tx, c, t)),
+        cppage: features.cppage,
+      };
     });
     return c.json(
       {
-        items: page.rows.map((r) => rowBody(r, subject, ctx.userId!, now)),
+        items: page.rows.map((r) => rowBody(r, subject, ctx.userId!, now, cppage)),
         total: page.total,
         page: page.page,
         size: page.size,

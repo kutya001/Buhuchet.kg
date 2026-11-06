@@ -13,6 +13,7 @@ import {
   FileUsage,
   type FileSource,
 } from '@buhuchet/shared';
+import type { ShowToast } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
@@ -103,6 +104,33 @@ export function useFilesRefresh() {
   );
 }
 
+/**
+ * «Скрыть со страницы контрагента» / «Показать на странице контрагента» (решение заказчика 06.11.2026,
+ * прототип v74 `pgFileSet`): сервер ставит отметку и пишет историю записи; затем списки файлов
+ * перечитываются.
+ */
+export function useFilePageToggle(
+  t: Translate,
+  toast: ShowToast,
+  errorText: (error: ApiErrorLike) => string,
+) {
+  const refresh = useFilesRefresh();
+  return useCallback(
+    async (file: { id: string }, hidden: boolean) => {
+      const res = await callApi(() =>
+        api.api.files[':id'].page.$post({ param: { id: file.id }, json: { hidden } }),
+      );
+      await refresh();
+      if (res.ok)
+        toast(t(hidden ? 'files.pg.hidden_done' : 'files.pg.shown_done'), {
+          icon: hidden ? 'eyeoff' : 'eye',
+        });
+      else toast(errorText(res.error), { bad: true, icon: 'alert' });
+    },
+    [t, toast, errorText, refresh],
+  );
+}
+
 /** «1,2 МБ», «37 КБ» (прототип `fmtSize`). */
 export function fileSizeText(t: Translate, size: number): string {
   const { value, unit } = fileSizeParts(size);
@@ -116,7 +144,7 @@ export function fileSizeText(t: Translate, size: number): string {
 export async function uploadFile(
   source: FileSource,
   file: File,
-  manual?: { contractorId: string | null; note: string },
+  manual?: { contractorId: string | null; note: string; page?: boolean },
 ): Promise<{ ok: true; item: FileItem } | { ok: false; error: ApiErrorLike }> {
   const started = await callApi(() =>
     api.api.files.uploads.$post({

@@ -6,6 +6,7 @@ import {
   loadTargets,
   loadValues,
   pageContractorFacts,
+  pageFiles,
   pagePayRequisites,
   pagePeople,
   pageReports,
@@ -16,6 +17,7 @@ import {
 import {
   contractorFees,
   currentTariff,
+  filePreviewKind,
   formatDateRu,
   hasTaxSum,
   indicatorOn,
@@ -23,6 +25,8 @@ import {
   monthOf,
   monthReconciliation,
   pageFeePaidTill,
+  pageFileCategories,
+  pageFileRel,
   pageKpiYears,
   pagePeriodicity,
   pageReportMark,
@@ -270,10 +274,32 @@ export async function contractorPageBody(
               hasSum: x.hasSum,
               sum: x.r.amount,
               payStatus: x.payStatus,
-              files: rep.files.get(x.r.id) ?? [],
+              // Картинка и PDF открываются в окне просмотра страницы (прототип v74 `pubFileOpen`).
+              files: (rep.files.get(x.r.id) ?? []).map((f) => ({
+                id: f.id,
+                name: f.name,
+                preview: filePreviewKind(f.contentType),
+              })),
             })),
           }
         : null,
+    files: has('files')
+      ? (
+          await pageFiles(
+            tx,
+            contractorId,
+            pageFileCategories(o.sections, { projects: o.features.projects, fee: showFee }),
+          )
+        ).map((f) => ({
+          id: f.id,
+          name: f.name,
+          category: f.category,
+          rel: pageFileRel(f.source, t),
+          date: f.date,
+          size: f.size,
+          preview: filePreviewKind(f.contentType),
+        }))
+      : null,
     money: moneyBody,
     fee: feeBody,
     kpi: has('kpi') ? await pageKpi(tx, contractorId, today) : null,

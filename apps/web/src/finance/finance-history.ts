@@ -330,7 +330,7 @@ export function serviceHistoryText(
   },
   fileText: () => string,
 ): string {
-  if (e.action === 'file_attach' || e.action === 'file_delete') return fileText();
+  if (e.action.startsWith('file_')) return fileText();
   const payment = e.entity === 'one_off_service_payment';
   const amountTo = numberOf(valueOf(e.changes, 'amount', 'to'));
   if (e.action === 'create') {

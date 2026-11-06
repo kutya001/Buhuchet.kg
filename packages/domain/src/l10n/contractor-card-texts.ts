@@ -215,6 +215,11 @@ export const CONTRACTOR_CARD_TEXTS = {
   'cp.files.col.name': { ru: 'Файл', section: C },
   'cp.files.col.src': { ru: 'Откуда', section: C },
   'cp.files.col.size': { ru: 'Размер', section: C },
+  'cp.files.col.page': { ru: 'На странице', section: C },
+  'cp.files.hint_page': {
+    ru: 'Файлы, кроме файлов задач, видны контрагенту в разделе «Файлы» его страницы; «глаз» скрывает файл со страницы.',
+    section: C,
+  },
   'cp.asg.title': { ru: 'Назначение: {name}', section: C },
   'cp.asg.from': { ru: 'С какого периода', section: C },
   'cp.asg.until': { ru: 'До какого периода', section: C },

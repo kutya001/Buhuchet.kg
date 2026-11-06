@@ -67,6 +67,8 @@ export function operationHistoryText(t: Translate, op: OperationWindow, h: Histo
     String(h.changes.find((c) => c.field === 'file')?.[key] ?? '');
   if (h.action === 'file_attach') return t('report.hist.file_attach', { name: file('to') });
   if (h.action === 'file_delete') return t('report.hist.file_delete', { name: file('from') });
+  if (h.action === 'file_hide') return t('files.hist.page_hide', { name: file('to') });
+  if (h.action === 'file_show') return t('files.hist.page_show', { name: file('to') });
   if (h.action === 'delete')
     return (
       operationDeletedText(t, h.changes, h.reason, {

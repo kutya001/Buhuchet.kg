@@ -167,6 +167,13 @@ export function reportHistoryText(
     case 'file_delete':
       text = t('report.hist.file_delete', { name: file('from') });
       break;
+    // Показ файла на странице контрагента (решение заказчика 06.11.2026, прототип v74 `pgFileSet`).
+    case 'file_hide':
+      text = t('files.hist.page_hide', { name: file('to') });
+      break;
+    case 'file_show':
+      text = t('files.hist.page_show', { name: file('to') });
+      break;
     default:
       text =
         entry.changes.flatMap((c) => changeLines(t, c, revision)).join('; ') ||

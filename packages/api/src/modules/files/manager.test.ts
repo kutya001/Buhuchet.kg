@@ -373,6 +373,43 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
     expect(text).not.toContain('Садыков');
   });
 
+  it('«На странице контрагента»: отметка у файлов контрагента не задачи, «Скрыть» — с правом; фильтр по столбцу', async () => {
+    await features({ tasks: true, files: true, cppage: true });
+    try {
+      const rows = new Map((await manager(owner)).items.map((r) => [r.name, r]));
+      expect(rows.get('Договор обслуживания.pdf')!.page).toEqual({
+        hidden: false,
+        canChange: true,
+      });
+      // Общий файл организации и файл задачи на страницу не попадают.
+      expect(rows.get('Устав организации.pdf')!.page).toBeNull();
+      expect(rows.get('Акт сверки.pdf')!.page).toBeNull();
+      // У бухгалтера нет права «Управлять страницей контрагента» — отметку видит, менять нельзя.
+      const mine = new Map((await manager(acc)).items.map((r) => [r.name, r]));
+      expect(mine.get('Договор обслуживания.pdf')!.page).toEqual({
+        hidden: false,
+        canChange: false,
+      });
+      const hide = await call('POST', `/api/files/${ids.manualAcc}/page`, chief, { hidden: true });
+      expect(hide.status).toBe(200);
+      const on = (vals: string[]) =>
+        `filters=${encodeURIComponent(JSON.stringify({ pg: { type: 'enum', vals } }))}`;
+      expect(await names(owner, on(['hidden']))).toEqual(['Договор обслуживания.pdf']);
+      expect(await names(owner, on(['yes']))).toEqual(['Договор Садыкова.docx']);
+      const pg = await call('GET', '/api/files/manager/values?col=pg', owner);
+      expect(pg.status, await pg.clone().text()).toBe(200);
+      const values = ListValues.parse(await pg.json());
+      expect(values.items.map((v) => v.label).sort()).toEqual(['Да', 'Скрыт', '—'].sort());
+      expect(
+        (await call('POST', `/api/files/${ids.manualAcc}/page`, owner, { hidden: false })).status,
+      ).toBe(200);
+    } finally {
+      await features({ tasks: true, files: true });
+    }
+    // Функция выключена — отметки нет.
+    expect((await manager(owner)).items.every((r) => r.page === null)).toBe(true);
+  });
+
   it('фильтр по дате загрузки', async () => {
     const today = bishkekDate(new Date());
     const total = (await manager(owner)).total;

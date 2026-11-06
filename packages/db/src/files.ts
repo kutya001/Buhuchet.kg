@@ -2,6 +2,7 @@ import {
   auditActorName,
   FILE_LIST_KIND_OF,
   FILE_SOURCE_KINDS,
+  pageFileCategory,
   RecordChangedError,
   RecordNotFoundError,
   type FileSourceKind,
@@ -42,6 +43,8 @@ export interface FileRecord {
   sizeBytes: number;
   storageKey: string;
   state: FileState;
+  /** Скрыт со страницы контрагента (решение заказчика 06.11.2026). */
+  pageHidden: boolean;
   /** Пользователь, который загрузил. */
   createdBy: string;
   /** Кто загрузил: краткое ФИО сотрудника. */
@@ -60,6 +63,7 @@ const columns = {
   sizeBytes: files.sizeBytes,
   storageKey: files.storageKey,
   state: files.state,
+  pageHidden: files.pageHidden,
   createdBy: files.createdBy,
   createdByName: employees.shortName,
   createdAt: files.createdAt,
@@ -84,6 +88,8 @@ export interface NewFile {
   storageKey: string;
   /** Комментарий ручной загрузки (Файловый менеджер). */
   note?: string | null;
+  /** Не показывать на странице контрагента (галочка окна «Загрузить файл» снята). */
+  pageHidden?: boolean;
 }
 
 export async function insertPendingFile(tx: Tx, file: NewFile): Promise<void> {
@@ -140,6 +146,27 @@ export async function markFileReady(tx: Tx, id: string): Promise<void> {
     .where(and(eq(files.id, id), eq(files.state, 'pending')))
     .returning({ id: files.id });
   if (rows.length !== 1) throw new RecordNotFoundError('file', id);
+}
+
+/**
+ * «Скрыть со страницы контрагента» и «Показать на странице контрагента» (решение заказчика 06.11.2026,
+ * прототип v74 `pgFileSet`): загруженный файл получает отметку; ответ — изменилась ли она (уже такая —
+ * false, как в прототипе: ни истории, ни сообщения). Нет файла — `RecordNotFoundError`.
+ */
+export async function setFilePageHidden(tx: Tx, id: string, hidden: boolean): Promise<boolean> {
+  const current = await getFile(tx, id, { lock: true });
+  if (!current || current.state !== 'ready') throw new RecordNotFoundError('file', id);
+  if (current.pageHidden === hidden) return false;
+  await tx
+    .update(files)
+    .set({
+      pageHidden: hidden,
+      version: sql`${files.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(eq(files.id, id));
+  return true;
 }
 
 /**
@@ -410,6 +437,22 @@ function sizeText(t: ListTexts): SQL {
 const UPLOADED_BY = auditActorValue(files.createdBy, uploader.shortName);
 
 /**
+ * Показ на странице контрагента: «yes», «hidden» или «none» — файл на страницу не попадает
+ * (`pageFileApplies` из @buhuchet/domain: не файл контрагента, задача, списание, показатель). Без
+ * параметров запроса — значение фильтра группируют `group by`; виды — постоянные из кода.
+ */
+const PAGE_KINDS_SQL = FILE_SOURCE_KINDS.filter((k) => pageFileCategory(k) !== null)
+  .map((k) => {
+    // Страховка: в текст запроса попадают только имена видов из кода.
+    if (!/^[a-z_]+$/.test(k)) throw new Error(`Неверный вид источника файла: ${k}`);
+    return `'${k}'`;
+  })
+  .join(', ');
+const PAGE_STATE = sql.raw(
+  `(case when "files"."contractor_id" is not null and "files"."source_kind" in (${PAGE_KINDS_SQL}) then (case when "files"."page_hidden" then 'hidden' else 'yes' end) else 'none' end)`,
+);
+
+/**
  * Столбцы списка (прототип `renderFiles` → `grid` `files`): ключи — как у столбцов экрана. У общего файла
  * «Контрагент» пуст («(Пусто)» в фильтре), на экране — «общий файл».
  */
@@ -457,6 +500,13 @@ export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListCo
     },
     by: { type: 'enum', label: 'files.col.by', value: UPLOADED_BY },
     desc: { type: 'text', label: 'files.col.desc', value: files.note },
+    // «На странице контрагента» (прототип v74 `pgFileTxt`): «Да», «Скрыт», «—».
+    pg: {
+      type: 'enum',
+      label: 'files.col.pg',
+      value: PAGE_STATE,
+      display: sql`(case ${PAGE_STATE} when 'yes' then ${t('files.pg.yes')} when 'hidden' then ${t('files.pg.hidden')} else '—' end)`,
+    },
     createdAt: { type: 'datetime', label: 'grid.col.created_at', value: files.createdAt },
     updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: files.updatedAt },
     createdBy: { type: 'enum', label: 'grid.col.created_by', value: UPLOADED_BY },
@@ -491,7 +541,9 @@ function rowFields(parts: FileListParts) {
     sourceRef: byKind(parts, (p) => p.ref),
     contractorId: files.contractorId,
     contractorName: contractors.name,
+    contractorResponsible: contractors.responsibleEmployeeId,
     note: files.note,
+    pageHidden: files.pageHidden,
     createdBy: files.createdBy,
     createdByName: uploader.shortName,
     createdAt: files.createdAt,
@@ -527,8 +579,10 @@ export interface FileManagerRow {
   source: string;
   /** Чем ещё найти запись-источник (месяц значения показателя). */
   sourceRef: string | null;
-  contractor: { id: string; name: string } | null;
+  /** Контрагент файла; ответственный — для области «Свои контрагенты» других групп прав. */
+  contractor: { id: string; name: string; responsibleEmployeeId: string | null } | null;
   note: string | null;
+  pageHidden: boolean;
   createdBy: string;
   uploadedBy: string | null;
   createdAt: Date;
@@ -550,9 +604,14 @@ function toRow(r: RowData): FileManagerRow {
     source: (r.source as string | null) ?? '',
     sourceRef: (r.sourceRef as string | null) ?? null,
     contractor: contractorId
-      ? { id: contractorId, name: (r.contractorName as string | null) ?? '' }
+      ? {
+          id: contractorId,
+          name: (r.contractorName as string | null) ?? '',
+          responsibleEmployeeId: (r.contractorResponsible as string | null) ?? null,
+        }
       : null,
     note: (r.note as string | null) ?? null,
+    pageHidden: r.pageHidden === true,
     createdBy: r.createdBy as string,
     uploadedBy: auditActorName(r.createdBy as string, r.createdByName as string | null),
     createdAt: r.createdAt as Date,

@@ -154,6 +154,7 @@ export const ORG_TEXTS = {
   },
   'org.page.section.pay': { ru: 'Как оплатить', section: S },
   'org.page.section.reports': { ru: 'Отчёты', section: S },
+  'org.page.section.files': { ru: 'Файлы', section: S },
   'org.page.section.money': { ru: 'Деньги на налоги', section: S },
   'org.page.section.fee': { ru: 'Оплата за обслуживание', section: S },
   'org.page.section.kpi': { ru: 'Показатели', section: S },

@@ -1,6 +1,7 @@
 import {
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
+  PAGE_FILE_CATEGORIES,
   PAGE_REPORT_STATUSES,
   PAGE_SECTIONS,
   PAGE_TIPS,
@@ -94,6 +95,9 @@ export const PublicPageParams = z.object({
 /** Файл отчёта со страницы: адрес страницы и номер файла. */
 export const PublicPageFileParams = PublicPageParams.extend({ id: Uuid });
 
+/** `download=1` — картинку и PDF скачать, а не открыть («Скачать» окна просмотра раздела «Файлы»). */
+export const PublicPageFileQuery = z.object({ download: z.literal('1').optional() });
+
 const YearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 
 /** Телефон: как показать и цифры для «Позвонить» и «WhatsApp». */
@@ -131,8 +135,16 @@ export const PageReportType = z.object({
   note: z.string(),
 });
 
-/** Файл, приложенный к отчёту: открывается и скачивается по ссылке страницы. */
-export const PageFile = z.object({ id: Uuid, name: z.string() });
+/**
+ * Файл, приложенный к отчёту: открывается и скачивается по ссылке страницы; картинка и PDF
+ * (`preview`) — в окне просмотра на странице (прототип v74 `pubFileOpen`), остальное скачивается.
+ */
+export const PageFile = z.object({
+  id: Uuid,
+  name: z.string(),
+  preview: z.enum(['image', 'pdf']).nullable(),
+});
+export type PageFile = z.infer<typeof PageFile>;
 
 /**
  * Отчёт на странице (без «Не требуется» и прежних версий уточнённых): период полностью, срок, статус
@@ -152,6 +164,22 @@ export const PageReport = z.object({
   files: z.array(PageFile),
 });
 export type PageReport = z.infer<typeof PageReport>;
+
+/**
+ * Файл раздела «Файлы» (решение заказчика 06.11.2026, прототип v74 `pubFiles`): категория, к чему
+ * относится, дата добавления, размер; `preview` — картинка или PDF открываются в окне просмотра на
+ * странице, остальное скачивается. Ссылка — `/<адрес>/inn/<ИНН>/files/<id>`, как у файлов отчётов.
+ */
+export const PageFilesItem = z.object({
+  id: Uuid,
+  name: z.string(),
+  category: z.enum(PAGE_FILE_CATEGORIES),
+  rel: z.string(),
+  date: IsoDate,
+  size: z.number().int().nonnegative(),
+  preview: z.enum(['image', 'pdf']).nullable(),
+});
+export type PageFilesItem = z.infer<typeof PageFilesItem>;
 
 /** «Главное»: итоги, которые сервер посчитал по показанным разделам. */
 export const PageMain = z.object({
@@ -258,6 +286,8 @@ export const PublicPageBody = z.object({
   accountant: PagePerson.nullable(),
   pay: z.object({ tax: PagePay.nullable(), fee: PagePay.nullable() }).nullable(),
   reports: z.object({ types: z.array(PageReportType), items: z.array(PageReport) }).nullable(),
+  /** «Файлы»: сначала новые; только при показанном разделе. */
+  files: z.array(PageFilesItem).nullable(),
   money: PageMoney.nullable(),
   fee: PageFee.nullable(),
   kpi: PageKpi.nullable(),

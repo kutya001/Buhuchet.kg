@@ -439,6 +439,125 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
     });
   });
 
+  describe('показ на странице контрагента (прототип v74)', () => {
+    const C1 = '00000000-0000-4000-8000-0000000000c1';
+    const cppage = (on: boolean) =>
+      f.t.admin.db
+        .update(schema.orgSettings)
+        .set({
+          features: sql`${schema.orgSettings.features} || ${JSON.stringify({ cppage: on })}::jsonb`,
+        })
+        .where(eq(schema.orgSettings.orgId, f.a.orgId));
+    /** Ручная загрузка с контрагентом (Файловый менеджер, вкладка «Файлы» карточки). */
+    async function uploadFor(
+      cookie: string,
+      name: string,
+      extra: { contractorId?: string; page?: boolean } = { contractorId: C1 },
+    ): Promise<FileItem> {
+      const started = await call('POST', '/api/files/uploads', cookie, {
+        source: MANUAL,
+        name,
+        size: 5,
+        ...extra,
+      });
+      expect(started.status, await started.clone().text()).toBe(201);
+      const ticket = FileUploadTicket.parse(await started.json());
+      const key = new URL(ticket.upload.url).host + new URL(ticket.upload.url).pathname;
+      await storage.put(key, new Uint8Array(5), {
+        contentType: ticket.upload.headers['content-type']!,
+      });
+      const done = await call('POST', `/api/files/${ticket.id}/complete`, cookie);
+      expect(done.status).toBe(200);
+      return FileItem.parse(await done.json());
+    }
+    const setPage = (cookie: string, id: string, hidden: boolean) =>
+      call('POST', `/api/files/${id}/page`, cookie, { hidden });
+    const hiddenOf = async (id: string) =>
+      (await f.t.admin.db.select({ v: files.pageHidden }).from(files).where(eq(files.id, id)))[0]!
+        .v;
+
+    beforeAll(async () => {
+      await cppage(true);
+    });
+    afterAll(async () => {
+      await cppage(false);
+    });
+
+    it('«Скрыть со страницы контрагента» и «Показать»: отметка у файла, смена — в истории', async () => {
+      const item = await uploadFor(owner, 'Устав.pdf');
+      expect(item.page).toEqual({ hidden: false, canChange: true });
+      const hide = await setPage(owner, item.id, true);
+      expect(hide.status).toBe(200);
+      expect(await hide.json()).toEqual({ hidden: true, canChange: true });
+      expect(await hiddenOf(item.id)).toBe(true);
+      // Уже скрыт — без новой записи в истории.
+      expect((await setPage(chief, item.id, true)).status).toBe(200);
+      expect((await setPage(chief, item.id, false)).status).toBe(200);
+      expect(await hiddenOf(item.id)).toBe(false);
+      expect((await history(item.id)).map((h) => [h.entity, h.action, h.changes])).toEqual([
+        ['file', 'file_attach', [{ field: 'file', to: 'Устав.pdf' }]],
+        ['file', 'file_hide', [{ field: 'file', to: 'Устав.pdf' }]],
+        ['file', 'file_show', [{ field: 'file', to: 'Устав.pdf' }]],
+      ]);
+    });
+
+    it('загрузка со снятой галочкой «Показывать контрагенту»: файл скрыт, в истории — «скрыт»', async () => {
+      const item = await uploadFor(owner, 'Черновик.pdf', { contractorId: C1, page: false });
+      expect(item.page).toEqual({ hidden: true, canChange: true });
+      expect((await history(item.id)).map((h) => h.action)).toEqual(['file_attach', 'file_hide']);
+      // Без контрагента галочка ничего не меняет: файл на страницу не попадает.
+      const general = await uploadFor(owner, 'Общий.pdf', { page: false });
+      expect(general.page).toBeNull();
+      expect(await hiddenOf(general.id)).toBe(false);
+    });
+
+    it('без права «Управлять страницей контрагента» — 403; файл не контрагента — 400; нет файла — 404', async () => {
+      const item = await uploadFor(owner, 'Договор.pdf');
+      const denied = await setPage(acc, item.id, true);
+      expect(denied.status).toBe(403);
+      expect((await apiErr(denied)).code).toBe('forbidden');
+      expect(await hiddenOf(item.id)).toBe(false);
+      // Общий файл организации и файл записи без страницы (здесь — запись-подделка) не показываются.
+      const general = await uploadFor(owner, 'Приказ.pdf', {});
+      const recordId = crypto.randomUUID();
+      records.set(recordId, { responsible: f.people['chief-a']!.employeeId, editable: true });
+      const recordFile = await upload(chief, 'акт.pdf', undefined, {
+        kind: 'record',
+        id: recordId,
+      });
+      expect(recordFile.page).toBeNull();
+      for (const id of [general.id, recordFile.id]) {
+        const res = await setPage(owner, id, true);
+        expect(res.status, id).toBe(400);
+        expect((await apiErr(res)).code).toBe('validation_failed');
+      }
+      expect((await setPage(owner, crypto.randomUUID(), true)).status).toBe(404);
+      expect((await setPage(accB, item.id, true)).status).toBe(403);
+      // Владелец другой организации (право есть) файла не находит — 404, существование не раскрыто.
+      const ownerB = await signIn(app, 'owner-b', TEST_PASSWORD);
+      expect((await setPage(ownerB, item.id, true)).status).toBe(404);
+      expect(await hiddenOf(item.id)).toBe(false);
+      const bad = await call('POST', `/api/files/${item.id}/page`, owner, { hidden: 'да' });
+      expect(bad.status).toBe(400);
+    });
+
+    it('«Страница контрагента по ссылке» выключена — отметки нет, менять — 403', async () => {
+      const item = await uploadFor(owner, 'Выписка.pdf');
+      await cppage(false);
+      try {
+        const res = await setPage(owner, item.id, true);
+        expect(res.status).toBe(403);
+        expect((await apiErr(res)).code).toBe('cppage_off');
+        // Галочка при выключенной функции файл не скрывает.
+        const quiet = await uploadFor(owner, 'Тихий.pdf', { contractorId: C1, page: false });
+        expect(quiet.page).toBeNull();
+        expect(await hiddenOf(quiet.id)).toBe(false);
+      } finally {
+        await cppage(true);
+      }
+    });
+  });
+
   it('«Файлы в карточках» выключены — 403 с текстом', async () => {
     const policy = async () =>
       OrgPolicy.parse(await (await call('GET', '/api/org/policy', owner)).json());

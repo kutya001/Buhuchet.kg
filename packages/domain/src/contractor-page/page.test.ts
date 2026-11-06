@@ -93,6 +93,15 @@ describe('страница контрагента по ссылке', () => {
     ]);
   });
 
+  it('«Файлы» (прототип v74) — после «Отчётов», только при «Файлах в карточках» (docs/deviations.md п. О-7)', () => {
+    const sections = ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts'] as const;
+    expect(pageOrgSections(sections, { ...all, files: true })).toEqual(sections);
+    expect(pageOrgSections(sections, all)).not.toContain('files');
+    expect(pageVisibleSections(sections, { ...all, files: true }, ['files'])).not.toContain(
+      'files',
+    );
+  });
+
   it('управлять — по праву, не у архивного; отправить — и ответственному, только включённую', () => {
     const manager = { canManage: true, isResponsible: false };
     const responsible = { canManage: false, isResponsible: true };

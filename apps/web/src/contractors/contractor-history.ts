@@ -249,7 +249,7 @@ function assignmentLines(t: Translate, e: Entry): string[] {
  * её в истории не получает.
  */
 function moneyLines(t: Translate, e: Entry): string[] {
-  if (e.action === 'file_attach' || e.action === 'file_delete')
+  if (e.action.startsWith('file_'))
     return [t('cp.hist.receipt_file', { text: reportHistoryText(t, { ...e, reason: null }, 0) })];
   if (e.action !== 'create') return [];
   const total = e.changes.find((c) => c.field === 'total')?.to;
@@ -308,7 +308,7 @@ export function feePaymentHistoryText(t: Translate, e: FeeEntry): string {
  * 16 000,00 сом: октябрь 2026 — 14 000, аванс — 2 000»; файлы оплаты — «Оплата за обслуживание · …».
  */
 function feePaymentLines(t: Translate, e: FeeEntry): string[] {
-  if (e.action === 'file_attach' || e.action === 'file_delete')
+  if (e.action.startsWith('file_'))
     return [t('fee.hist.payment_file', { text: reportHistoryText(t, { ...e, reason: null }, 0) })];
   if (e.action !== 'create') return [];
   const amount = e.changes.find((c) => c.field === 'amount')?.to;

@@ -307,6 +307,7 @@ export const PAGE_TIPS = {
   'secs.pay': ['secs', 'Как оплатить'],
   'secs.acc': ['secs', 'Ваш бухгалтер'],
   'secs.reports': ['secs', 'Отчёты'],
+  'secs.files': ['secs', 'Файлы'],
   'secs.money': ['secs', 'Деньги на налоги'],
   'secs.fee': ['secs', 'Оплата за обслуживание'],
   'secs.kpi': ['secs', 'Показатели'],

@@ -40,11 +40,17 @@ export const fileTypeText = (t: Translate, name: string) =>
 
 const dateOf = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
 
+/** «На странице контрагента» (прототип v74 `pgFileTxt`): «Да», «Скрыт», «—». */
+export function filePageText(t: Translate, page: FileManagerRow['page']): string {
+  return !page ? '—' : page.hidden ? t('files.pg.hidden') : t('files.pg.yes');
+}
+
 /**
  * Столбцы Файлового менеджера — как в прототипе (modules/files.js, `renderFiles`), ключи — как на
- * сервере. У общего файла «Контрагент» — серым «общий файл».
+ * сервере. У общего файла «Контрагент» — серым «общий файл». «На странице контрагента» — только при
+ * включённой «Странице контрагента по ссылке» (`cppage`).
  */
-export function fileColumns(t: Translate): GridColumn<FileManagerRow>[] {
+export function fileColumns(t: Translate, cppage = false): GridColumn<FileManagerRow>[] {
   return [
     {
       key: 'name',
@@ -117,6 +123,31 @@ export function fileColumns(t: Translate): GridColumn<FileManagerRow>[] {
       width: 220,
       text: (r) => r.note ?? '',
     },
+    ...(cppage
+      ? [
+          {
+            key: 'pg',
+            label: t('files.col.pg'),
+            type: 'enum',
+            width: 190,
+            text: (r) => filePageText(t, r.page),
+            cell: (r) =>
+              !r.page ? (
+                <span className="text-faint">—</span>
+              ) : r.page.hidden ? (
+                <span className="inline-flex items-center gap-1 text-muted">
+                  <Icon name="eyeoff" size="sm" />
+                  {t('files.pg.hidden')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="eye" size="sm" />
+                  {t('files.pg.yes')}
+                </span>
+              ),
+          } satisfies GridColumn<FileManagerRow>,
+        ]
+      : []),
   ];
 }
 

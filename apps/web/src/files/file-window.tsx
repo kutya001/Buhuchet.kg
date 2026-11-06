@@ -5,6 +5,7 @@ import { FileLink, FILE_NOTE_MAX, type FileManagerRow } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
+  CheckRow,
   Field,
   FormGrid,
   Hint,
@@ -190,6 +191,8 @@ export interface UploadChoice {
   files: File[];
   contractorId: string | null;
   note: string;
+  /** «Показывать контрагенту на его странице» (решение заказчика 06.11.2026). */
+  page: boolean;
 }
 
 /**
@@ -203,10 +206,13 @@ export function UploadDialog({
   busy,
   problemOf,
   onUpload,
+  cppage = false,
 }: {
   open: boolean;
   onClose: () => void;
   busy: boolean;
+  /** Включена «Страница контрагента по ссылке» — галочка «Показывать контрагенту на его странице». */
+  cppage?: boolean;
   /** Что не так с выбранными файлами (текст под полем) или null. */
   problemOf: (files: File[]) => string | null;
   onUpload: (choice: UploadChoice) => void;
@@ -217,13 +223,14 @@ export function UploadDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [contractorId, setContractorId] = useState('');
   const [note, setNote] = useState('');
+  const [page, setPage] = useState(true);
   const [error, setError] = useState<string | undefined>();
 
   const submit = () => {
     if (!files.length) return setError(t('files.upload.files_required'));
     const problem = problemOf(files);
     if (problem) return setError(problem);
-    onUpload({ files, contractorId: contractorId || null, note: note.trim() });
+    onUpload({ files, contractorId: contractorId || null, note: note.trim(), page });
   };
 
   return (
@@ -297,6 +304,20 @@ export function UploadDialog({
             />
           )}
         </Field>
+        {cppage ? (
+          // Прототип v74 uploadDlg: галочка во всю ширину, по умолчанию включена.
+          <div className="col-span-full">
+            <CheckRow
+              kind="check"
+              data-files-upload-page=""
+              checked={page}
+              onChange={setPage}
+              label={t('files.upload.page')}
+            >
+              <Hint>{t('files.upload.page_hint')}</Hint>
+            </CheckRow>
+          </div>
+        ) : null}
       </FormGrid>
     </Modal>
   );

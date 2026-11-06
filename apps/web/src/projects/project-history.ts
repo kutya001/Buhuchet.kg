@@ -33,6 +33,10 @@ export function projectPaymentHistoryText(t: Translate, e: ProjectHistoryEntry):
     return t('report.hist.file_attach', { name: str(valueOf(e, 'file', 'to')) });
   if (e.action === 'file_delete')
     return t('report.hist.file_delete', { name: str(valueOf(e, 'file', 'from')) });
+  if (e.action === 'file_hide')
+    return t('files.hist.page_hide', { name: str(valueOf(e, 'file', 'to')) });
+  if (e.action === 'file_show')
+    return t('files.hist.page_show', { name: str(valueOf(e, 'file', 'to')) });
   if (e.action === 'create') {
     const amount = formatSomWithUnit(num(valueOf(e, 'amount', 'to')));
     const note = str(valueOf(e, 'note', 'to'));
@@ -106,6 +110,12 @@ export function projectHistoryText(
       break;
     case 'file_delete':
       text = t('report.hist.file_delete', { name: str(valueOf(e, 'file', 'from')) });
+      break;
+    case 'file_hide':
+      text = t('files.hist.page_hide', { name: str(valueOf(e, 'file', 'to')) });
+      break;
+    case 'file_show':
+      text = t('files.hist.page_show', { name: str(valueOf(e, 'file', 'to')) });
       break;
     default:
       text = t('proj.hist.updated');

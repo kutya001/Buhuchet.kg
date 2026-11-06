@@ -133,7 +133,7 @@ export async function cardBody(
     // Записи о файлах — тому, кто видит файлы; «было → стало» стоимости и записи траншей — тому, кто
     // видит деньги (запись только о стоимости не показывается).
     history: card.history
-      .filter((h) => files || (h.action !== 'file_attach' && h.action !== 'file_delete'))
+      .filter((h) => files || !h.action.startsWith('file_'))
       .filter((h) => money || h.paymentId === null)
       .flatMap((h) => {
         const all = (h.changes as { field: string; from?: unknown; to?: unknown }[]) ?? [];

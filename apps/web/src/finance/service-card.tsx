@@ -77,7 +77,11 @@ function historyText(t: Translate, h: HistoryRow): string {
     () =>
       h.action === 'file_attach'
         ? t('report.hist.file_attach', { name: file('to') })
-        : t('report.hist.file_delete', { name: file('from') }),
+        : h.action === 'file_hide'
+          ? t('files.hist.page_hide', { name: file('to') })
+          : h.action === 'file_show'
+            ? t('files.hist.page_show', { name: file('to') })
+            : t('report.hist.file_delete', { name: file('from') }),
   );
 }
 
