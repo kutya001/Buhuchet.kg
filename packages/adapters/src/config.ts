@@ -84,7 +84,8 @@ const SeedFields = z.object({
 const DatabaseEnv = DatabaseFields.extend(SeedFields.partial().shape).superRefine((env, ctx) => {
   checkDemoPassword(env, ctx);
   // Рабочему сайту — нет: наполнение воссоздавало бы удалённого администратора с паролем, который
-  // лежит в секретах; первого администратора рабочего сайта решим вместе с его выпуском.
+  // лежит в секретах. Первого администратора рабочего сайта создаёт `pnpm db:create-admin` с
+  // ADMIN_TEMP_PASSWORD при выпуске (release-production.yml, отметка «Создать администратора»).
   if (env.APP_ENV === 'production' && (env.PLATFORM_ADMIN_LOGIN || env.PLATFORM_ADMIN_PASSWORD)) {
     ctx.addIssue({
       code: 'custom',
@@ -99,6 +100,16 @@ const DatabaseEnv = DatabaseFields.extend(SeedFields.partial().shape).superRefin
       message: 'PLATFORM_ADMIN_LOGIN и PLATFORM_ADMIN_PASSWORD задаются вместе',
     });
   }
+});
+
+/**
+ * Временный пароль для `pnpm db:create-admin` без вывода пароля: так создаётся первый администратор
+ * рабочего сайта при выпуске (release-production.yml, секрет PRODUCTION_ADMIN_PASSWORD) — журнал GitHub
+ * Actions открыт, а придуманный командой пароль она печатает. Правила — как у PLATFORM_ADMIN_PASSWORD.
+ * Только для инструментов базы, не для сайта; не задан — команда придумывает пароль сама.
+ */
+const AdminPasswordEnv = z.object({
+  ADMIN_TEMP_PASSWORD: SeedFields.shape.PLATFORM_ADMIN_PASSWORD.optional(),
 });
 
 // Ключи, регион и корзину вставляют копированием: лишний пробел или перевод строки в конце ломает подпись S3.
@@ -254,6 +265,7 @@ const AppEnv = z
 export type AppConfig = z.infer<typeof AppEnv>;
 export type DatabaseConfig = z.infer<typeof DatabaseEnv>;
 export type StorageConfig = z.infer<typeof StorageEnv>;
+export type AdminPasswordConfig = z.infer<typeof AdminPasswordEnv>;
 
 type Env = Record<string, string | undefined>;
 
@@ -288,6 +300,11 @@ export function loadConfig(env: Env = process.env): AppConfig {
 /** Настройки для инструментов базы (миграции, наполнение, тесты базы). */
 export function loadDatabaseConfig(env: Env = process.env): DatabaseConfig {
   return parse(DatabaseEnv, env);
+}
+
+/** Временный пароль администратора платформы для `pnpm db:create-admin` (без вывода пароля). */
+export function loadAdminPasswordConfig(env: Env = process.env): AdminPasswordConfig {
+  return parse(AdminPasswordEnv, env);
 }
 
 /** Настройки хранилища (тесты хранилища, подготовка корзины). */

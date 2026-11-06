@@ -1,0 +1,161 @@
+name: Release production
+
+# Выпуск на рабочий сайт buhuchet.kg — только по команде заказчика «выпускай» (docs/deploy.md, раздел
+# «Рабочий сайт»). Запуск: Actions → Release production → Run workflow, ветка main. Задание ждёт одобрения
+# окружения `production` (Settings → Environments: Required reviewers — заказчик, Deployment branches —
+# main); секреты рабочего сайта PRODUCTION_* есть только у этого окружения. По шагам:
+# 1. Выпускаемый коммит — из main, по нему зелёный полный CI (ночной прогон или ручной запуск CI на main),
+#    и ветку production можно только сдвинуть вперёд на него (откат версии — Instant Rollback в Vercel).
+# 2. Миграции рабочей базы и роль приложения, справочники без демо-организации, корзина файлов. Миграции
+#    совместимы со старым кодом, поэтому они идут до выкладки.
+# 3. По отметке — администратор платформы из секретов: пароль временный, в журнал не печатается, уже
+#    созданного команда не трогает.
+# 4. Метка версии release-<дата>-<время по Бишкеку> и перенос ветки production на коммит: Vercel (проект
+#    buhuchet) сам собирает и выкладывает рабочий сайт. Метку и ветку двигает токен
+#    PRODUCTION_RELEASE_TOKEN (Contents и Workflows — запись): GITHUB_TOKEN не может сдвинуть ветку на
+#    коммиты, которые меняют .github/workflows.
+# Секреты передаются только в шаги, которым нужны, — не в установку зависимостей.
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'Коммит main для выпуска (пусто — последний коммит main)'
+        type: string
+        required: false
+        default: ''
+      create_admin:
+        description: 'Создать администратора платформы PRODUCTION_ADMIN_LOGIN с временным паролем PRODUCTION_ADMIN_PASSWORD (уже созданного не трогает)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release-production
+    # Только код из main: ручной запуск с другой ветки ничего не делает.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      actions: read # зелёный CI по выпускаемому коммиту
+    env:
+      APP_ENV: production
+      S3_BUCKET: buhuchet
+      S3_FORCE_PATH_STYLE: 'true'
+    steps:
+      - name: Секреты рабочего сайта заданы
+        env:
+          SET: >-
+            ${{ secrets.PRODUCTION_DATABASE_ADMIN_URL != '' && secrets.PRODUCTION_DATABASE_URL != '' &&
+            secrets.PRODUCTION_S3_ENDPOINT != '' && secrets.PRODUCTION_S3_REGION != '' &&
+            secrets.PRODUCTION_S3_ACCESS_KEY_ID != '' && secrets.PRODUCTION_S3_SECRET_ACCESS_KEY != '' &&
+            secrets.PRODUCTION_RELEASE_TOKEN != '' }}
+          ADMIN_SET: ${{ secrets.PRODUCTION_ADMIN_LOGIN != '' && secrets.PRODUCTION_ADMIN_PASSWORD != '' }}
+          CREATE_ADMIN: ${{ inputs.create_admin }}
+        run: |
+          if [ "$SET" != "true" ]; then
+            echo "::error::Секреты окружения production заданы не все (docs/deploy.md, раздел «Рабочий сайт»)."
+            exit 1
+          fi
+          if [ "$CREATE_ADMIN" = "true" ] && [ "$ADMIN_SET" != "true" ]; then
+            echo "::error::Для отметки «Создать администратора» нужны секреты PRODUCTION_ADMIN_LOGIN и PRODUCTION_ADMIN_PASSWORD."
+            exit 1
+          fi
+
+      - name: Выпускаемый коммит
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          want="$(printf '%s' "${INPUT_SHA:-$GITHUB_SHA}" | tr -d '[:space:]')"
+          if ! [[ "$want" =~ ^[0-9a-f]{7,40}$ ]]; then
+            echo "::error::Коммит — от 7 до 40 шестнадцатеричных символов."
+            exit 1
+          fi
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$want" --jq .sha)"
+          # Коммит есть в main: main с ним совпадает или впереди.
+          in_main="$(gh api "repos/$GITHUB_REPOSITORY/compare/$sha...main" --jq .status)"
+          if [ "$in_main" != identical ] && [ "$in_main" != ahead ]; then
+            echo "::error::Коммит $sha не из main."
+            exit 1
+          fi
+          # Ветку production можно только сдвинуть вперёд.
+          forward="$(gh api "repos/$GITHUB_REPOSITORY/compare/production...$sha" --jq .status)"
+          if [ "$forward" != identical ] && [ "$forward" != ahead ]; then
+            echo "::error::Коммит $sha старше выпущенного (production). Откат версии — Instant Rollback в Vercel."
+            exit 1
+          fi
+          # Повтор проверок: полный CI по этому коммиту (ночной прогон или Actions → CI → Run workflow на main).
+          green="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=1" --jq .total_count)"
+          if [ "$green" -lt 1 ]; then
+            echo "::error::По коммиту $sha нет зелёного CI. Запустите Actions → CI → Run workflow (ветка main), дождитесь зелёного и запустите выпуск снова."
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "Выпускается $sha"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Миграции и роль приложения
+        run: pnpm db:migrate
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.PRODUCTION_DATABASE_ADMIN_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Справочники и ГКЭД (без демо-организации; изменившиеся разделы обновляются)
+        run: pnpm db:seed --update
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.PRODUCTION_DATABASE_ADMIN_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Корзина файлов
+        run: pnpm storage:init
+        env:
+          S3_ENDPOINT: ${{ secrets.PRODUCTION_S3_ENDPOINT }}
+          S3_REGION: ${{ secrets.PRODUCTION_S3_REGION }}
+          S3_ACCESS_KEY_ID: ${{ secrets.PRODUCTION_S3_ACCESS_KEY_ID }}
+          S3_SECRET_ACCESS_KEY: ${{ secrets.PRODUCTION_S3_SECRET_ACCESS_KEY }}
+
+      - name: Администратор платформы (пароль в журнал не печатается)
+        if: inputs.create_admin
+        run: pnpm db:create-admin --login "$ADMIN_LOGIN"
+        env:
+          DATABASE_ADMIN_URL: ${{ secrets.PRODUCTION_DATABASE_ADMIN_URL }}
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          ADMIN_LOGIN: ${{ secrets.PRODUCTION_ADMIN_LOGIN }}
+          ADMIN_TEMP_PASSWORD: ${{ secrets.PRODUCTION_ADMIN_PASSWORD }}
+
+      - name: Метка версии и ветка production
+        env:
+          GH_TOKEN: ${{ secrets.PRODUCTION_RELEASE_TOKEN }}
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          tag="release-$(TZ=Asia/Bishkek date +%Y-%m-%d-%H%M)"
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$SHA" > /dev/null
+          # Только вперёд (force=false): GitHub откажет, если production не предок коммита.
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/production" -f sha="$SHA" -F force=false > /dev/null
+          {
+            echo "### Выпуск на рабочий сайт"
+            echo "- Коммит: \`$SHA\`, метка \`$tag\`."
+            echo "- Ветка production перенесена — Vercel (проект buhuchet) собирает и выкладывает рабочий сайт."
+          } >> "$GITHUB_STEP_SUMMARY"
