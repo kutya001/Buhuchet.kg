@@ -76,9 +76,9 @@ test.describe('Этап 3: База знаний — «Отметить выпо
     if (isMobile) {
       // На телефоне — только в «⋯», как в прототипе.
       await expect(hand).toBeHidden();
-      await step.getByRole('button', { name: 'Ещё' }).click();
+      await step.getByRole('button', { name: 'Ещё', exact: true }).click();
       await page
-        .getByRole('menu', { name: 'Ещё' })
+        .getByRole('menu', { name: 'Ещё', exact: true })
         .getByRole('menuitem', { name: /^Отметить выполненным/ })
         .click();
     } else {
@@ -98,9 +98,9 @@ test.describe('Этап 3: База знаний — «Отметить выпо
     expect(marked.progress.pct).toBeGreaterThan(ready.progress.pct);
 
     // «Снять отметку»: шаг снова не выполнен, уровень остаётся «Ученик».
-    await step.getByRole('button', { name: 'Ещё' }).click();
+    await step.getByRole('button', { name: 'Ещё', exact: true }).click();
     await page
-      .getByRole('menu', { name: 'Ещё' })
+      .getByRole('menu', { name: 'Ещё', exact: true })
       .getByRole('menuitem', { name: /^Снять отметку/ })
       .click();
     await expect(
