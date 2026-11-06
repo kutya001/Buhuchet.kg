@@ -28,7 +28,7 @@ import { KbBadge, KbBar, KbBox, KbLadder, KbModules, nextText } from './kb-parts
 
 /** По умолчанию — от высшего уровня (прототип `sort:{key:'lvl',dir:-1}`). */
 const DEFAULT_SORT: ListSort = { key: 'level', dir: 'desc' };
-const DEFAULT_VISIBLE = ['fullName', 'role', 'level', 'pct', 'steps', 'levelAt'];
+const DEFAULT_VISIBLE = ['fullName', 'role', 'level', 'pct', 'steps', 'hand', 'levelAt'];
 
 /** Столбцы «Уровней сотрудников» — как в прототипе (modules/kb.js, вкладка team), ключи — как на сервере. */
 export function teamColumns(t: Translate): GridColumn<KbTeamMember>[] {
@@ -63,6 +63,14 @@ export function teamColumns(t: Translate): GridColumn<KbTeamMember>[] {
       type: 'text',
       width: 150,
       text: (m) => t('kb.team.steps', { done: m.done, total: m.total }),
+    },
+    {
+      // Решение заказчика 06.11.2026, прототип v74.
+      key: 'hand',
+      label: t('kb.team.col.hand'),
+      type: 'int',
+      width: 190,
+      text: (m) => String(m.hand),
     },
     {
       key: 'levelAt',

@@ -84,6 +84,24 @@ export async function kbSkip(id: string, on: boolean): Promise<KbState> {
   return json(await send({ param: { id } }), (v) => KbState.parse(v));
 }
 
+/** «Отметить выполненным» (решение заказчика 06.11.2026, прототип v74 ckHandMark). */
+export async function kbHand(id: string): Promise<KbMarkResult> {
+  return json(await api.api.kb.steps[':id'].hand.$post({ param: { id } }), (v) =>
+    KbMarkResult.parse(v),
+  );
+}
+
+/** «Снять отметку» и «Отменить»; `skipped` — шаг был пропущен до отметки и снова станет пропущенным. */
+export async function kbUnhand(id: string, skipped: boolean): Promise<KbState> {
+  return json(
+    await api.api.kb.steps[':id'].hand.$delete({
+      param: { id },
+      query: { skipped: skipped ? 'true' : 'false' },
+    }),
+    (v) => KbState.parse(v),
+  );
+}
+
 /** Статья дочитана; `stepId` — шаг, из которого её открыли. */
 export async function kbRead(id: string, stepId?: string): Promise<KbArticleReadResult> {
   return json(

@@ -279,7 +279,30 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
       if (e instanceof ApiFailure) toast(errorText(e.error), { bad: true });
     }
   };
+  const byHand = step.done?.how === 'hand';
   const items: ActionEntry[] = [
+    ...(!step.done
+      ? [
+          {
+            id: 'hand',
+            label: t('kb.hand'),
+            icon: 'check' as const,
+            sub: t('kb.hand.sub'),
+            run: () => kb.hand(step.id, true),
+          },
+        ]
+      : []),
+    ...(byHand
+      ? [
+          {
+            id: 'unhand',
+            label: t('kb.hand.off'),
+            icon: 'x' as const,
+            sub: t('kb.hand.off_sub'),
+            run: () => kb.hand(step.id, false),
+          },
+        ]
+      : []),
     ...(!step.done && !step.skipped
       ? [
           {
@@ -352,7 +375,19 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
               </button>
             </>
           ) : null}
-          {step.done ? (
+          {step.done && byHand ? (
+            <>
+              {' · '}
+              <span
+                data-kb-hand=""
+                title={t('kb.step.hand_title')}
+                className={`${pillClass('sm')} bg-info-bg text-info-label`}
+              >
+                <Icon name="check" size="sm" />
+                {`${t('kb.step.hand')} · ${levelDate(step.done.at)}`}
+              </span>
+            </>
+          ) : step.done ? (
             <>
               {' · '}
               <span className="text-ok">{doneText(t, step)}</span>
@@ -390,6 +425,17 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
             >
               <Icon name="play" size="sm" />
               {t('kb.show.how')}
+            </button>
+            {/* На телефоне — только в «⋯»: три кнопки в строку шага не помещаются. */}
+            <button
+              type="button"
+              data-ck-hand={step.id}
+              className={`${buttonClass('ghost', 'sm')} max-md:hidden`}
+              title={t('kb.hand.title')}
+              onClick={() => kb.hand(step.id, true)}
+            >
+              <Icon name="check" size="sm" />
+              {t('kb.hand')}
             </button>
           </>
         )}

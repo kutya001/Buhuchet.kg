@@ -51,6 +51,8 @@ import {
   kbArticlesRoute,
 } from './articles';
 import {
+  kbHandHandler,
+  kbHandRoute,
   kbHitHandler,
   kbHitRoute,
   kbLookHandler,
@@ -61,6 +63,8 @@ import {
   kbStateRoute,
   kbSyncHandler,
   kbSyncRoute,
+  kbUnhandHandler,
+  kbUnhandRoute,
   kbUnskipHandler,
   kbUnskipRoute,
 } from './progress';
@@ -104,6 +108,8 @@ export function kbModule(deps: ApiDeps) {
     .openapi(kbHitRoute, kbHitHandler(deps))
     .openapi(kbSkipRoute, kbSkipHandler(deps))
     .openapi(kbUnskipRoute, kbUnskipHandler(deps))
+    .openapi(kbHandRoute, kbHandHandler(deps))
+    .openapi(kbUnhandRoute, kbUnhandHandler(deps))
     .openapi(kbStepShowRoute, kbStepShowHandler(deps))
     .openapi(kbScreenShowRoute, kbScreenShowHandler(deps))
     .openapi(kbShowsRoute, kbShowsHandler(deps))

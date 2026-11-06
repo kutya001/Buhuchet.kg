@@ -8,6 +8,7 @@ import {
   kbReachedOf,
   kbReadArticles,
   kbRecordLevels,
+  kbReplaceHand,
   kbScreenUi,
   orgMenuSettings,
   type KbReachedLevel,
@@ -248,13 +249,20 @@ export async function markSteps(
   options: { congrats: boolean },
 ): Promise<KbMarkResult> {
   const fresh: KbFreshStep[] = [];
+  let replaced = false;
   for (const { step, how } of marks) {
-    if (ctx.marks.get(step.def.id)?.done) continue;
+    const done = ctx.marks.get(step.def.id)?.done;
+    if (done) {
+      // Отмеченный вручную шаг, условие которого потом выполнено: способ меняется на настоящий,
+      // без нового отклика — шаг уже засчитан (прототип v74 ckMark).
+      if (done.how === 'hand' && (await kbReplaceHand(tx, step.def.id, how))) replaced = true;
+      continue;
+    }
     if (await kbMarkDone(tx, step.def.id, how)) {
       fresh.push({ id: step.def.id, title: step.def.t, learn: step.learn, how });
     }
   }
-  const updated = fresh.length ? await programContext(tx, ctx.learner) : ctx;
+  const updated = fresh.length || replaced ? await programContext(tx, ctx.learner) : ctx;
   const stats = statsOf(updated);
   const record = kbLevelsToRecord(stats, maxReached(updated.reached));
   let final = updated;
@@ -280,9 +288,11 @@ export async function syncSteps(
   now: Date,
   options: { congrats: boolean },
 ): Promise<KbMarkResult> {
-  const open = kbProgramSteps(ctx.program).filter(
-    (s) => s.rule.done && !ctx.marks.get(s.def.id)?.done,
-  );
+  // И шаги, отмеченные вручную: их способ меняется на действие (прототип v74 ckEval).
+  const open = kbProgramSteps(ctx.program).filter((s) => {
+    const done = ctx.marks.get(s.def.id)?.done;
+    return s.rule.done && (!done || done.how === 'hand');
+  });
   const facts = await kbDoneFacts(
     tx,
     ctx.learner.userId,

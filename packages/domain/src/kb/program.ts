@@ -61,8 +61,11 @@ export function kbAdminAccess(): KbAccess {
   };
 }
 
-/** Как засчитан шаг (ТЗ: «с датой и способом»; прототип `CK_HOW`). */
-export const KB_HOWS = ['action', 'data', 'show', 'art', 'use', 'visit'] as const;
+/**
+ * Как засчитан шаг (ТЗ: «с датой и способом»; прототип `CK_HOW`). `hand` — «Отметить выполненным»
+ * (решение заказчика 06.11.2026, прототип v74 ckHandMark): потом выполненное условие меняет способ.
+ */
+export const KB_HOWS = ['action', 'data', 'show', 'art', 'use', 'visit', 'hand'] as const;
 export type KbHow = (typeof KB_HOWS)[number];
 
 export function isKbHow(value: string): value is KbHow {
@@ -188,6 +191,8 @@ export interface KbStats {
   /** Прогресс по модулям (группам). */
   groups: { id: string; title: string; done: number; total: number }[];
   stars: { done: number; total: number };
+  /** Из выполненных — отмечено вручную (прототип v74 kbStat → `hand`). */
+  hand: number;
 }
 
 /**
@@ -229,6 +234,7 @@ export function kbStats(
       total: g.steps.length,
     })),
     stars: { done: stars.filter((s) => isDone(marks, s.def.id)).length, total: stars.length },
+    hand: steps.filter((s) => marks.get(s.def.id)?.done?.how === 'hand').length,
   };
 }
 

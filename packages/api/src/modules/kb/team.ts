@@ -71,6 +71,7 @@ export function kbTeamHandler(deps: ApiDeps): RouteHandler<typeof kbTeamRoute, A
           pct: Number(r.pct),
           done: Number(r.done),
           total: Number(r.total),
+          hand: Number(r.hand),
           levelAt: r.levelAt ?? null,
         })),
         total: page.total,
