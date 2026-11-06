@@ -4,6 +4,7 @@ import {
   hasDatabaseEnv,
   hasStorageEnv,
   integrationTestsRequired,
+  loadAdminPasswordConfig,
   loadConfig,
   loadDatabaseConfig,
   loadStorageConfig,
@@ -356,5 +357,36 @@ describe('частичные конфигурации', () => {
     expect(hasDatabaseEnv({ DATABASE_URL: 'a' })).toBe(false);
     expect(integrationTestsRequired({ REQUIRE_INTEGRATION_TESTS: '1' })).toBe(true);
     expect(integrationTestsRequired({})).toBe(false);
+  });
+});
+
+describe('временный пароль для db:create-admin без вывода пароля', () => {
+  it('не задан или пустой — команда придумывает пароль сама', () => {
+    expect(loadAdminPasswordConfig({}).ADMIN_TEMP_PASSWORD).toBeUndefined();
+    expect(
+      loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: '' }).ADMIN_TEMP_PASSWORD,
+    ).toBeUndefined();
+  });
+
+  it('от 8 символов, без пробелов и переводов строки по краям', () => {
+    expect(loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: '12345678' }).ADMIN_TEMP_PASSWORD).toBe(
+      '12345678',
+    );
+    expect(() => loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: '1234567' })).toThrow(
+      /ADMIN_TEMP_PASSWORD/,
+    );
+    expect(() => loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: '12345678\n' })).toThrow(
+      /ADMIN_TEMP_PASSWORD/,
+    );
+  });
+
+  it('значение пароля в текст ошибки не попадает', () => {
+    try {
+      loadAdminPasswordConfig({ ADMIN_TEMP_PASSWORD: ' secret-pass ' });
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConfigError);
+      expect(String(error)).not.toContain('secret-pass');
+    }
   });
 });

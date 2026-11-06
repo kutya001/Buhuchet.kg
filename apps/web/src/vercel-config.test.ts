@@ -9,7 +9,10 @@ describe('vercel.json', () => {
     expect(config.crons).toEqual(PLATFORM_CRON_ENTRIES);
   });
 
-  it('функции в регионе базы стенда (Supabase eu-west-1 — Дублин)', () => {
-    expect(config.regions).toEqual(['dub1']);
+  // Регион функций — в настройках каждого проекта Vercel (Settings → Functions → Function Region):
+  // стенд buhuchet-kg — dub1 (база в Дублине), рабочий сайт buhuchet — fra1 (база во Франкфурте).
+  // «regions» в vercel.json перекрыл бы обе настройки одним регионом.
+  it('регион функций не задан в vercel.json — у каждого проекта свой', () => {
+    expect(config).not.toHaveProperty('regions');
   });
 });

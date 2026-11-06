@@ -1,4 +1,4 @@
-// Перед командой: запрет опасного — force-push, push в main, drizzle-kit push, команды к рабочей базе,
+// Перед командой: запрет опасного — force-push, push в main и production, drizzle-kit push, команды к рабочей базе,
 // удаление данных, выкладка на рабочий сайт мимо выпуска.
 import { block, readInput } from './lib.mjs';
 
@@ -17,6 +17,12 @@ const rules = [
   [
     new RegExp(`${GIT_PUSH}[^;&|]*(\\s(\\S+:)?(refs\\/heads\\/)?main\\b(?![\\w/-])|\\s--all\\b)`),
     'В main напрямую не пушим: только PR со всеми зелёными проверками.',
+  ],
+  [
+    new RegExp(
+      `${GIT_PUSH}[^;&|]*\\s["']?([^\\s:]*:)?["']?(refs\\/heads\\/)?production\\b(?![\\w/-])|git\\/refs\\/heads\\/production\\b|\\bpending_deployments\\b|\\bapproveDeployments\\b`,
+    ),
+    'Ветку production двигает и выпуск одобряет только workflow «Release production» по команде заказчика «выпускай».',
   ],
   [
     /\bdrizzle-kit\s+push\b|\bdb:push\b/,
