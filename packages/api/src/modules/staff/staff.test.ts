@@ -440,6 +440,193 @@ describe.skipIf(!databaseAvailable())('Сотрудники: API', () => {
     });
   });
 
+  describe('отображаемое имя (прототип v74)', () => {
+    const details = async (res: Response) => ApiError.parse(await res.json()).error;
+
+    it('новый сотрудник: имя из формы без лишних пробелов, пустое — по ФИО; 2–40 знаков', async () => {
+      const own = await hire('short-own-a', { shortName: '  Айгуль   А ' });
+      expect(own.employee.shortName).toBe('Айгуль А');
+      const auto = await hire('short-auto-a', { shortName: '   ' });
+      expect(auto.employee.shortName).toBe('short-auto-a Т.');
+      for (const shortName of ['А', 'а'.repeat(41)]) {
+        const res = await call('POST', '/api/staff', owner, {
+          fullName: 'Тестов Длина',
+          shortName,
+          login: 'short-len-a',
+          roleId: f.templateRole(f.a, 'acc'),
+        });
+        expect(res.status).toBe(400);
+        expect(await details(res)).toMatchObject({
+          code: 'display_name_length',
+          details: { field: 'shortName' },
+        });
+      }
+    });
+
+    it('имя не как у другого активного сотрудника своей организации, без учёта регистра: «Такое имя уже у сотрудника …»', async () => {
+      await hire('short-taken-a', { fullName: 'Кадырова Мээрим Асановна', shortName: 'Мээрим' });
+      const res = await call('POST', '/api/staff', owner, {
+        fullName: 'Тестов Повтор',
+        shortName: ' мЭЭрим ',
+        login: 'short-dup-a',
+        roleId: f.templateRole(f.a, 'acc'),
+      });
+      expect(res.status).toBe(400);
+      expect(await details(res)).toMatchObject({
+        code: 'display_name_taken',
+        message: 'Такое имя уже у сотрудника Кадырова Мээрим Асановна',
+        details: { field: 'shortName', fio: 'Кадырова Мээрим Асановна' },
+      });
+      // Невидимый символ повтор не прячет.
+      const hidden = await call('POST', '/api/staff', owner, {
+        fullName: 'Тестов Невидимка',
+        shortName: 'Мээрим\u200b',
+        login: 'short-hidden-a',
+        roleId: f.templateRole(f.a, 'acc'),
+      });
+      expect(hidden.status).toBe(400);
+      expect((await details(hidden)).code).toBe('display_name_taken');
+      // Имя сотрудника другой организации не мешает.
+      expect((await hire('short-other-org-a', { shortName: 'acc-b' })).employee.shortName).toBe(
+        'acc-b',
+      );
+      // Имя заблокированного сотрудника можно взять.
+      const gone = await hire('short-gone-a', { shortName: 'Уволенный' });
+      const blocked = await call('POST', `/api/staff/${gone.employee.id}/block`, owner, {
+        version: gone.employee.version,
+      });
+      expect(blocked.status).toBe(200);
+      expect((await hire('short-reuse-a', { shortName: 'уволенный' })).employee.shortName).toBe(
+        'уволенный',
+      );
+      // Запрос без поля (не из формы) — автоматическое имя без проверки повтора (docs/deviations.md п. О-5).
+      const twin = { fullName: 'Кадырова Мээрим Асановна' };
+      expect((await hire('short-twin-a', twin)).employee.shortName).toBe('Мээрим К.');
+      expect((await hire('short-twin2-a', twin)).employee.shortName).toBe('Мээрим К.');
+    });
+
+    it('правка: имя по ФИО меняется вместе с ФИО, заданное вручную остаётся; смена — в истории', async () => {
+      const { employee } = await hire('short-edit-a');
+      expect(employee.shortName).toBe('short-edit-a Т.');
+      const patch = async (version: number, body: Record<string, unknown>) => {
+        const res = await call('PATCH', `/api/staff/${employee.id}`, owner, { version, ...body });
+        expect(res.status, await res.clone().text()).toBe(200);
+        return Employee.parse(await res.json());
+      };
+      const renamed = await patch(employee.version, { fullName: 'Асанова Айгерим' });
+      expect(renamed.shortName).toBe('Айгерим А.');
+      const manual = await patch(renamed.version, { shortName: 'Айгерим' });
+      expect(manual.shortName).toBe('Айгерим');
+      const kept = await patch(manual.version, { fullName: 'Асанова-Бекова Айгерим' });
+      expect(kept.shortName).toBe('Айгерим');
+      // Пустое — снова по ФИО; своё же имя в другом регистре — не повтор.
+      const cleared = await patch(kept.version, { shortName: '' });
+      expect(cleared.shortName).toBe('Айгерим А.');
+      expect((await patch(cleared.version, { shortName: 'айгерим а.' })).shortName).toBe(
+        'айгерим а.',
+      );
+      const taken = await call('PATCH', `/api/staff/${employee.id}`, owner, {
+        version: cleared.version + 1,
+        shortName: 'ACC-A',
+      });
+      expect(taken.status).toBe(400);
+      expect(await details(taken)).toMatchObject({
+        code: 'display_name_taken',
+        details: { fio: 'Сотрудник acc-a' },
+      });
+
+      const entries = await f.t.admin.db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.entity, 'employee'),
+            eq(auditLog.entityId, employee.id),
+            eq(auditLog.action, 'update'),
+          ),
+        )
+        .orderBy(auditLog.at);
+      expect(entries.map((e) => e.changes)).toEqual([
+        expect.arrayContaining([
+          { field: 'fullName', from: 'Тестов short-edit-a', to: 'Асанова Айгерим' },
+          { field: 'shortName', from: 'short-edit-a Т.', to: 'Айгерим А.' },
+        ]),
+        [{ field: 'shortName', from: 'Айгерим А.', to: 'Айгерим' }],
+        [{ field: 'fullName', from: 'Асанова Айгерим', to: 'Асанова-Бекова Айгерим' }],
+        [{ field: 'shortName', from: 'Айгерим', to: 'Айгерим А.' }],
+        [{ field: 'shortName', from: 'Айгерим А.', to: 'айгерим а.' }],
+      ]);
+    });
+
+    it('«Мой профиль»: сотрудник меняет своё имя сам, без права «Сотрудники и роли»; запись в истории от его имени', async () => {
+      const path = '/api/profile/display-name';
+      expect((await call('PATCH', path, undefined, { shortName: 'Кто-то' })).status).toBe(401);
+      const admin = await signIn(f.app, 'platform-admin', TEST_PASSWORD);
+      expect((await call('PATCH', path, admin, { shortName: 'Админ' })).status).toBe(403);
+
+      const { employee, temporaryPassword } = await hire('short-self-a', {
+        fullName: 'Кадыров Бакыт',
+      });
+      const first = cookieOf(await loginAs('short-self-a', temporaryPassword));
+      expect(
+        (
+          await call('POST', '/api/auth/password', first, {
+            currentPassword: temporaryPassword,
+            newPassword: 'Свой-пароль-123',
+          })
+        ).status,
+      ).toBe(200);
+      const self = cookieOf(await loginAs('short-self-a', 'Свой-пароль-123'));
+      // Права «Сотрудники и роли» у бухгалтера нет: карточку сотрудника он не правит, своё имя — да.
+      expect(
+        (
+          await call('PATCH', `/api/staff/${employee.id}`, self, {
+            version: employee.version,
+            shortName: 'Бакыт',
+          })
+        ).status,
+      ).toBe(403);
+      const saved = await call('PATCH', path, self, { shortName: '  Бакыт ' });
+      expect(saved.status).toBe(200);
+      expect(await saved.json()).toEqual({ shortName: 'Бакыт' });
+      const me = MeResponse.parse(await (await call('GET', '/api/auth/me', self)).json());
+      expect(me.employee).toMatchObject({ fullName: 'Кадыров Бакыт', shortName: 'Бакыт' });
+      expect((await card(owner, employee.id)).fullName).toBe('Кадыров Бакыт');
+
+      const taken = await call('PATCH', path, self, { shortName: 'acc-a' });
+      expect(taken.status).toBe(400);
+      expect((await details(taken)).code).toBe('display_name_taken');
+      const short = await call('PATCH', path, self, { shortName: 'Б' });
+      expect(short.status).toBe(400);
+      expect((await details(short)).code).toBe('display_name_length');
+      const auto = await call('PATCH', path, self, { shortName: '' });
+      expect(await auto.json()).toEqual({ shortName: 'Бакыт К.' });
+
+      const entries = await f.t.admin.db
+        .select()
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.entity, 'employee'),
+            eq(auditLog.entityId, employee.id),
+            eq(auditLog.action, 'update'),
+          ),
+        )
+        .orderBy(auditLog.at);
+      const [self_] = await f.t.admin.db
+        .select({ userId: schema.employees.userId })
+        .from(schema.employees)
+        .where(eq(schema.employees.id, employee.id));
+      const changes = entries.filter((e) =>
+        (e.changes as { field: string }[]).some((c) => c.field === 'shortName'),
+      );
+      expect(changes.map((e) => [e.actorUserId, e.changes])).toEqual([
+        [self_!.userId, [{ field: 'shortName', from: 'Бакыт К.', to: 'Бакыт' }]],
+        [self_!.userId, [{ field: 'shortName', from: 'Бакыт', to: 'Бакыт К.' }]],
+      ]);
+    });
+  });
+
   describe('блокировка', () => {
     it('заблокированный не входит, его сеансы закрыты; после разблокировки входит', async () => {
       const { employee, temporaryPassword } = await hire('block-me-a', {

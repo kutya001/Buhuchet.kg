@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { joinPhone, splitPhone } from '@buhuchet/domain';
+import { displayName, displayNameManual, joinPhone, splitPhone } from '@buhuchet/domain';
 import {
   CreatedEmployee,
   EditEmployeeForm,
@@ -30,6 +30,7 @@ import { api, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
+import { DISPLAY_NAME_CODES, DisplayNameField, useAutoDisplayName } from './display-name-field';
 import { suggestTemporaryPassword } from './temp-password';
 
 /**
@@ -172,7 +173,8 @@ export function ChangeRoleDialog({
 }
 
 /**
- * «Новый сотрудник» (прототип modules/staff.js, empAddDlg): ФИО, логин (уникален на всей платформе),
+ * «Новый сотрудник» (прототип modules/staff.js, empAddDlg): ФИО, отображаемое имя (заполняется по ФИО,
+ * прототип v74), логин (уникален на всей платформе),
  * временный пароль — уже подставлен, его можно заменить (docs/deviations.md, п. 17), телефон с кодом
  * страны и роль — по умолчанию из учётной политики. Ошибки — под полями: проверки формы сразу,
  * «Такой логин уже занят на платформе» и другие отказы сервера — после «Создать». Окно открывают
@@ -204,6 +206,7 @@ export function NewEmployeeDialog({
     const role = options.find((r) => r.id === defaultRoleId) ?? options[0];
     return {
       fullName: '',
+      shortName: '',
       login: '',
       temporaryPassword: suggestTemporaryPassword(),
       roleId: role?.id ?? '',
@@ -218,14 +221,25 @@ export function NewEmployeeDialog({
     register,
     handleSubmit,
     setError,
+    setValue,
+    getValues,
+    clearErrors,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<NewEmployeeFormInput, unknown, NewEmployeeForm>({
     resolver: zodResolver(NewEmployeeForm),
     defaultValues: initial,
   });
+  const auto = useAutoDisplayName(false, (value) => {
+    setValue('shortName', value, { shouldDirty: true });
+    clearErrors('shortName');
+  });
   // Поля регистрируются по порядку на экране: при ошибках фокус встаёт на первое неверное.
   const fields = {
-    fullName: register('fullName'),
+    fullName: register('fullName', { onChange: (e) => auto.fullNameInput(e.target.value) }),
+    shortName: register('shortName', {
+      onChange: (e) => auto.input(e.target.value),
+      onBlur: (e) => auto.blur(e.target.value, getValues('fullName')),
+    }),
     login: register('login'),
     temporaryPassword: register('temporaryPassword'),
     roleId: register('roleId'),
@@ -251,6 +265,8 @@ export function NewEmployeeDialog({
       const code = res.error.code;
       if (code === 'invalid_full_name')
         return setError('fullName', { type: 'server', message }, { shouldFocus: true });
+      if (DISPLAY_NAME_CODES.has(code))
+        return setError('shortName', { type: 'server', message }, { shouldFocus: true });
       if (code === 'invalid_login' || code === 'login_taken')
         return setError('login', { type: 'server', message }, { shouldFocus: true });
       if (code === 'invalid_phone') {
@@ -302,6 +318,12 @@ export function NewEmployeeDialog({
               <input {...control} {...fields.fullName} type="text" className={inputClass()} />
             )}
           </Field>
+          <DisplayNameField
+            id={`${id}-short`}
+            registration={fields.shortName}
+            error={fieldError(t, errors.shortName)}
+            placeholder
+          />
           <Field
             id={`${id}-login`}
             label={t('staff.col.login')}
@@ -378,8 +400,8 @@ export function NewEmployeeDialog({
 }
 
 /**
- * «Изменить» — ФИО и телефон сотрудника (docs/deviations.md, п. 16, решение А; в прототипе окна нет):
- * поля как в «Новом сотруднике», «Сохранить» отправляет только изменённое. ФИО и телефон владельца
+ * «Изменить» — ФИО, отображаемое имя и телефон сотрудника (docs/deviations.md, п. 16, решение А;
+ * прототип v74 empEditDlg): поля как в «Новом сотруднике», «Сохранить» отправляет только изменённое. ФИО и телефон владельца
  * меняет сам владелец — отказ сервера уведомлением; запись изменили другие — «Запись изменена другим
  * пользователем» и «Перечитать».
  */
@@ -409,13 +431,24 @@ export function EditEmployeeDialog({
     register,
     handleSubmit,
     setError,
+    setValue,
+    getValues,
+    clearErrors,
     reset,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<EditEmployeeFormInput, unknown, EditEmployeeForm>({
     resolver: zodResolver(EditEmployeeForm),
-    defaultValues: { fullName: employee.fullName },
+    defaultValues: { fullName: employee.fullName, shortName: employee.shortName },
   });
-  const fullName = register('fullName');
+  const auto = useAutoDisplayName(displayNameManual(employee.shortName, employee.fullName), (v) => {
+    setValue('shortName', v, { shouldDirty: true });
+    clearErrors('shortName');
+  });
+  const fullName = register('fullName', { onChange: (e) => auto.fullNameInput(e.target.value) });
+  const short = register('shortName', {
+    onChange: (e) => auto.input(e.target.value),
+    onBlur: (e) => auto.blur(e.target.value, getValues('fullName')),
+  });
   const phoneId = `${id}-phone`;
   const typedPhone = joinPhone(phone.cc, phone.local, codes);
   const phoneDirty = typedPhone.phone !== current.phone;
@@ -427,7 +460,8 @@ export function EditEmployeeDialog({
     const fresh = res.ok ? Employee.safeParse(res.data) : null;
     if (!fresh?.success) return toast(t('err.unknown'), { bad: true });
     setCurrent(fresh.data);
-    reset({ fullName: fresh.data.fullName });
+    reset({ fullName: fresh.data.fullName, shortName: fresh.data.shortName });
+    auto.reset(displayNameManual(fresh.data.shortName, fresh.data.fullName));
     setPhone(splitPhone(fresh.data.phone, codes));
     setPhoneError(undefined);
     setChanged(false);
@@ -438,11 +472,17 @@ export function EditEmployeeDialog({
     setPhoneError(bad);
     void handleSubmit(async (values) => {
       if (bad) return document.getElementById(phoneId)?.focus();
+      const changed =
+        values.fullName !== current.fullName ||
+        displayName(values.shortName, values.fullName) !== current.shortName ||
+        phoneDirty;
+      if (!changed) return onClose();
+      // Имя уходит при каждом сохранении: сервер проверяет его повтор, как прототип при «Сохранить».
       const patch = {
         ...(values.fullName !== current.fullName ? { fullName: values.fullName } : {}),
+        shortName: values.shortName,
         ...(phoneDirty ? { phone: typedPhone.phone } : {}),
       };
-      if (Object.keys(patch).length === 0) return onClose();
       const res = await callApi(() =>
         api.api.staff[':id'].$patch({
           param: { id: employee.id },
@@ -460,6 +500,8 @@ export function EditEmployeeDialog({
       const message = errorText(res.error);
       if (code === 'invalid_full_name')
         return setError('fullName', { type: 'server', message }, { shouldFocus: true });
+      if (DISPLAY_NAME_CODES.has(code))
+        return setError('shortName', { type: 'server', message }, { shouldFocus: true });
       if (code === 'invalid_phone') {
         setPhoneError(message);
         return document.getElementById(phoneId)?.focus();
@@ -474,6 +516,7 @@ export function EditEmployeeDialog({
       open={open}
       onClose={onClose}
       kind="form"
+      size="mid"
       title={t('staff.edit.title')}
       sub={current.fullName}
       dirty={isDirty || phoneDirty}
@@ -502,28 +545,37 @@ export function EditEmployeeDialog({
         />
       ) : null}
       <form id={formId} onSubmit={submit} noValidate className="flex flex-col gap-3.5">
-        <Field
-          id={`${id}-fio`}
-          label={t('staff.col.full_name')}
-          required
-          error={fieldError(t, errors.fullName)}
-        >
-          {(control) => <input {...control} {...fullName} type="text" className={inputClass()} />}
-        </Field>
-        <Field id={phoneId} label={t('staff.col.phone')} error={phoneError}>
-          {(control) => (
-            <PhoneInput
-              codes={codes}
-              value={phone}
-              onChange={(next) => {
-                setPhone(next);
-                setPhoneError(undefined);
-              }}
-              control={control}
-              codeLabel={t('staff.phone.code')}
-            />
-          )}
-        </Field>
+        {/* Как в прототипе v74 empEditDlg: ФИО во всю ширину, имя и телефон — рядом. */}
+        <FormGrid>
+          <Field
+            id={`${id}-fio`}
+            label={t('staff.col.full_name')}
+            required
+            full
+            error={fieldError(t, errors.fullName)}
+          >
+            {(control) => <input {...control} {...fullName} type="text" className={inputClass()} />}
+          </Field>
+          <DisplayNameField
+            id={`${id}-short`}
+            registration={short}
+            error={fieldError(t, errors.shortName)}
+          />
+          <Field id={phoneId} label={t('staff.col.phone')} error={phoneError}>
+            {(control) => (
+              <PhoneInput
+                codes={codes}
+                value={phone}
+                onChange={(next) => {
+                  setPhone(next);
+                  setPhoneError(undefined);
+                }}
+                control={control}
+                codeLabel={t('staff.phone.code')}
+              />
+            )}
+          </Field>
+        </FormGrid>
       </form>
     </Modal>
   );

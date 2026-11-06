@@ -1,6 +1,7 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import { createEmployeeHandler, createEmployeeRoute } from './create';
+import { displayNameHandler, displayNameRoute } from './display-name';
 import {
   employeeValuesHandler,
   employeeValuesRoute,
@@ -24,7 +25,7 @@ import {
 } from './update';
 
 /**
- * Модуль «Сотрудники»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка, создание, правка и смена роли, блокировка, сброс пароля.
+ * Модуль «Сотрудники»: список (значения для фильтра, выгрузка в Excel, счётчики вкладок), карточка, создание, правка и смена роли, блокировка, сброс пароля; своё отображаемое имя в «Мой профиль».
  * Роли — модуль `roles`; передача контрагентов, счёт и уровень знаний — их модули.
  */
 export function staffModule(deps: ApiDeps) {
@@ -41,5 +42,6 @@ export function staffModule(deps: ApiDeps) {
       .openapi(blockEmployeeRoute, blockEmployeeHandler(deps))
       .openapi(unblockEmployeeRoute, unblockEmployeeHandler(deps))
       .openapi(resetEmployeePasswordRoute, resetEmployeePasswordHandler(deps))
+      .openapi(displayNameRoute, displayNameHandler(deps))
   );
 }
