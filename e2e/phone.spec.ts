@@ -158,7 +158,18 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       page.getByRole('tab', { name: new RegExp(`^${name}(\\s[\\d\\s]+)?$`) });
 
     await test.step('вкладки: медленно на 60 px — страница возвращается, вкладка та же', async () => {
-      await swipe.drag(left, { x: left.x - 60, y });
+      const firstTab = page.locator('[data-tabrow] [role="tab"]').first();
+      const before = (await firstTab.boundingBox())!;
+      await swipe.drag(left, { x: left.x - 60, y }, async () => {
+        // Прототип v73: рамка-призрак — первым элементом ряда и ровно по размеру вкладки, ряд вкладок
+        // на время листания не съезжает.
+        const ghost = page.locator('[data-tabrow] > [data-tab-ghost]:first-child');
+        await expect(ghost).toHaveCount(1);
+        const g = (await ghost.boundingBox())!;
+        const t = (await firstTab.boundingBox())!;
+        expect(Math.round(g.height)).toBe(Math.round(t.height));
+        expect(Math.round(t.x)).toBe(Math.round(before.x));
+      });
       await page.waitForTimeout(400);
       await expect(page).toHaveURL(/\/app\/reports\/week$/);
       await expect(tab('На неделе')).toHaveAttribute('aria-selected', 'true');
@@ -263,9 +274,19 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       return { x: box.x + box.width * part, y: box.y + box.height * 0.6, width: box.width };
     };
     let from = await at(0.85);
-    await swipe.drag(from, { x: from.x - 60, y: from.y });
+    await swipe.drag(from, { x: from.x - 60, y: from.y }, async () => {
+      // Прототип v73: соседняя вкладка едет рядом с текущей под пальцем, экран не пустеет.
+      await expect(card.getByText('Последний вход')).toBeVisible();
+      const next = (await card.getByText('Закреплено контрагентов:').boundingBox())!;
+      expect(next.x).toBeGreaterThan(from.x - from.width / 2);
+      // Новая вкладка уже видна в окне, у правого края (from.x — 85 % ширины окна).
+      expect(next.x).toBeLessThan(from.x + from.width * 0.15);
+      // Ряд вкладок до конца жеста показывает прежнюю вкладку.
+      await expect(card.locator('[role="tablist"][aria-hidden="true"]')).toContainText('Основное');
+    });
     await page.waitForTimeout(400);
     await expect(current).toContainText('Основное');
+    await expect(card.getByText('Последний вход')).toBeVisible();
     from = await at(0.85);
     await swipe.drag(from, { x: from.x - from.width / 3 - 40, y: from.y });
     await expect(current).toContainText('Контрагенты');

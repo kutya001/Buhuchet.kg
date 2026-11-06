@@ -110,7 +110,7 @@ export function TabRow({
           data-tabrow
           data-fit="full"
           data-swiping="false"
-          className="group/tabs relative -mt-0.5 mb-0.5 flex min-w-0 flex-[0_1_auto] gap-1.5 overflow-x-auto px-0.5 pt-1 pb-1.5 [scrollbar-width:none] data-[fit=tight]:gap-1 data-[fit=labels]:gap-1 max-md:flex-[1_1_auto] [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto"
+          className="group/tabs relative -mt-0.5 mb-0.5 flex min-w-0 flex-[0_1_auto] gap-1.5 overflow-x-auto px-0.5 pt-1 pb-1.5 [scrollbar-width:none] data-[fit=tight]:gap-1 data-[fit=labels]:gap-1 max-md:flex-[1_1_auto] [&::-webkit-scrollbar]:hidden [&>:first-child]:ml-auto [&>:last-child]:mr-auto [&>[data-tab-ghost]:first-child+*]:ml-auto"
         >
           {tabs.map((t, i) => {
             const on = t.id === activeTab;

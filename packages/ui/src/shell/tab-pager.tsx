@@ -38,9 +38,39 @@ export interface TabPagerProps {
 }
 
 const STACK = 'flex min-w-0 flex-col gap-3.5 max-md:gap-3';
-/** Подсветка, которая едет по ряду вкладок за пальцем (прототип `.tab-ghost`). */
-const GHOST =
-  'pointer-events-none absolute top-0 bottom-0 z-[2] rounded-full border-2 border-brand-blue';
+/**
+ * Подсветка, которая едет по ряду вкладок за пальцем (прототип `.tab-ghost`): ровно по размеру
+ * вкладки — положение и размер задаются при листании.
+ */
+const GHOST = 'pointer-events-none absolute z-[2] rounded-full border-2 border-brand-blue';
+
+/** Плавная прокрутка (как в прототипе v73 `scrollAnim`): быстро в начале, мягко в конце. */
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 2.4);
+
+/** Прокрутить ряд вкладок к `to` за `ms` (0 — сразу); новая прокрутка отменяет прежнюю. */
+function scrollRow(row: HTMLElement & { swipeFrame?: number }, to: number, ms: number) {
+  if (row.swipeFrame) cancelAnimationFrame(row.swipeFrame);
+  row.swipeFrame = 0;
+  const from = row.scrollLeft;
+  if (!ms || Math.abs(to - from) < 1) {
+    row.scrollLeft = to;
+    return;
+  }
+  const t0 = performance.now();
+  const step = (now: number) => {
+    const k = Math.min(1, (now - t0) / ms);
+    row.scrollLeft = from + (to - from) * easeOut(k);
+    row.swipeFrame = k < 1 ? requestAnimationFrame(step) : 0;
+  };
+  row.swipeFrame = requestAnimationFrame(step);
+}
+
+/** Прокрутка ряда, при которой вкладка по центру (как подгонка ряда `fitTabs` в tab-row.tsx). */
+function centered(row: HTMLElement, tab: HTMLElement): number {
+  if (row.scrollWidth <= row.clientWidth + 2) return row.scrollLeft;
+  const max = row.scrollWidth - row.clientWidth;
+  return Math.max(0, Math.min(max, tab.offsetLeft - (row.clientWidth - tab.offsetWidth) / 2));
+}
 
 interface Gesture {
   x0: number;
@@ -58,12 +88,17 @@ interface Gesture {
   to: string | null;
   from: HTMLElement | null;
   target: HTMLElement | null;
+  /** Ряд вкладок и его прокрутка: в начале жеста и та, при которой новая вкладка по центру. */
+  row: HTMLElement | null;
+  rowFrom: number;
+  rowTo: number;
 }
 
 /**
  * Свайп влево или вправо по рабочей области листает вкладки модуля (ТЗ «Управление свайпами»,
  * прототип ui/swipes.js pager): текущая вкладка уезжает за пальцем, соседняя въезжает с другой
- * стороны, подсветка в ряду вкладок едет вместе с ними; порог — треть ширины или рывок, недотянутая
+ * стороны, подсветка в ряду вкладок едет вместе с ними, а сам ряд прокручивается к новой вкладке
+ * вместе с листанием, без рывка после него (прототип v73); порог — треть ширины или рывок, недотянутая
  * страница возвращается; на первой и последней вкладке — сопротивление, по кругу не переходит.
  * Не начинается на ряду вкладок, нижней панели, у самого левого края экрана и пока открыто окно,
  * панель или всплывающее окошко (`data-overlay`);
@@ -128,13 +163,22 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
         nb.style.transition = transition;
         nb.style.transform = `translateX(${dx + s.dir * width}px)`;
       }
+      const p = s.to ? Math.min(1, Math.max(0, (-dx * s.dir) / width)) : 0;
       const g = ghost.current;
       if (g && s.from) {
-        const to = s.target ?? s.from;
-        const p = s.to ? Math.min(1, Math.max(0, (-dx * s.dir) / width)) : 0;
-        g.style.transition = ms ? `left ${ms}ms ${SWIPE_EASE},width ${ms}ms ${SWIPE_EASE}` : 'none';
-        g.style.left = `${s.from.offsetLeft + (to.offsetLeft - s.from.offsetLeft) * p}px`;
-        g.style.width = `${s.from.offsetWidth + (to.offsetWidth - s.from.offsetWidth) * p}px`;
+        const a = s.from;
+        const b = s.target ?? s.from;
+        const at = (x: number, y: number) => `${x + (y - x) * p}px`;
+        const ease = `${ms}ms ${SWIPE_EASE}`;
+        g.style.transition = ms ? `left ${ease},width ${ease},top ${ease},height ${ease}` : 'none';
+        g.style.left = at(a.offsetLeft, b.offsetLeft);
+        g.style.width = at(a.offsetWidth, b.offsetWidth);
+        g.style.top = at(a.offsetTop, b.offsetTop);
+        g.style.height = at(a.offsetHeight, b.offsetHeight);
+      }
+      if (s.row) {
+        // Финальная прокрутка ряда идёт чуть быстрее страницы, как в прототипе.
+        scrollRow(s.row, s.rowFrom + (s.rowTo - s.rowFrom) * p, ms ? Math.max(60, ms - 50) : 0);
       }
     };
 
@@ -148,13 +192,21 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
         tablist.dataset.swiping = 'true';
         const g = document.createElement('span');
         g.className = GHOST;
-        tablist.append(g);
+        g.dataset.tabGhost = '';
+        // Первым элементом ряда: последним подсветка ломала центрирование вкладок (у последней
+        // вкладки отступ справа «auto»), и ряд съезжал в сторону на время листания.
+        tablist.prepend(g);
         ghost.current = g;
       }
       const j = s.index + dir;
       if (j >= 0 && j < s.tabs.length) {
         s.to = s.tabs[j]!;
         s.target = els[j] ?? null;
+        if (tablist && s.target) {
+          s.row = tablist;
+          s.rowFrom = tablist.scrollLeft;
+          s.rowTo = centered(tablist, s.target);
+        }
         // Соседняя страница нужна уже на следующем движении пальца.
         flushSync(() => setNext({ tab: s.to!, dir }));
       }
@@ -184,6 +236,9 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
         to: null,
         from: null,
         target: null,
+        row: null,
+        rowFrom: 0,
+        rowTo: 0,
       };
       tracker.reset();
       tracker.add(touch.clientX, touch.clientY, e.timeStamp);
