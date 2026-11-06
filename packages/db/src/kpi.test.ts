@@ -91,6 +91,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
   let b: CreatedOrganization;
   let revenue = '';
   let staff = '';
+  let defaults: Awaited<ReturnType<typeof listIndicators>> = [];
   let cp1 = '';
   let cp2 = '';
   const ctxA = (): OrgContext => ({ orgId: a.orgId, userId: a.ownerUserId });
@@ -139,7 +140,10 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       owner: await owner('kpi-owner-b'),
       today: '2026-01-15',
     });
-    [revenue, staff] = (await inA((tx) => listIndicators(tx))).map((i) => i.id) as [string, string];
+    defaults = await inA((tx) => listIndicators(tx));
+    [revenue, staff] = defaults.map((i) => i.id) as [string, string];
+    // Остальные проверки — на двух показателях: третий по умолчанию, «ФОТ», проверен в первом тесте.
+    await db.admin.db.delete(indicators).where(eq(indicators.name, 'ФОТ'));
     [cp1, cp2] = await inA(async (tx) => [
       await createContractor(tx, a.orgId, contractorFields(), null),
       await createContractor(
@@ -155,13 +159,13 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     await db?.drop();
   });
 
-  it('новой организации — два показателя-примера: «Выручка» (сумма) и «Количество сотрудников» (среднее)', async () => {
-    const list = await inA((tx) => listIndicators(tx));
+  it('новой организации — показатели по умолчанию: «Выручка» (сумма), «Количество сотрудников» (среднее) и «ФОТ» (сумма)', async () => {
     expect(
-      list.map((i) => [i.name, i.unit, i.type, i.total, i.required, i.startMonth, i.scope]),
+      defaults.map((i) => [i.name, i.unit, i.type, i.total, i.required, i.startMonth, i.scope]),
     ).toEqual([
       ['Выручка', 'сом', 'som', 'sum', true, '2026-01', 'all'],
       ['Количество сотрудников', 'чел.', 'int', 'avg', true, '2026-01', 'all'],
+      ['ФОТ', 'сом', 'som', 'sum', true, '2026-01', 'all'],
     ]);
     const [history] = await inA((tx) => readHistory(tx, 'indicator', revenue));
     expect(history).toMatchObject({

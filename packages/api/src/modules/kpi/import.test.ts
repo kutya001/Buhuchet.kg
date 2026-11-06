@@ -169,6 +169,8 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
         { ...contractor(C3, f.a.orgId, 'ОсОО «Ак-Жол»', INN3), responsibleEmployeeId: accA },
         contractor(B1, f.b.orgId, 'ОсОО «Бета»', '03744097401852'),
       ]);
+    // Проверки — на двух показателях: третий по умолчанию, «ФОТ», проверяют тесты базы (kpi.test.ts).
+    await f.t.admin.db.delete(schema.indicators).where(eq(schema.indicators.name, 'ФОТ'));
     await f.t.admin.db.update(schema.indicators).set({ startMonth: '2026-01' });
     await f.t.admin.db
       .update(schema.indicators)

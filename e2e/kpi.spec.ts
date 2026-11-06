@@ -52,7 +52,7 @@ interface KpiOrg {
   origin: string;
   /** Номер контрагента по названию. */
   contractors: Record<string, string>;
-  /** Номер показателя-примера по названию. */
+  /** Номер показателя по названию. */
   indicators: Record<string, string>;
 }
 
@@ -95,8 +95,21 @@ async function addContractor(
 }
 
 /**
- * Организация с включёнными показателями и контрагентами. Показатели-примеры «Выручка» и «Количество
- * сотрудников» новая организация получает сама, «Вести с» — месяц её создания.
+ * Убрать показатель по умолчанию «ФОТ»: проверки здесь — на «Выручке» и «Количестве сотрудников», а
+ * три показателя новой организации проверяет admin-orgs.spec.ts.
+ */
+async function dropPayroll(api: APIRequestContext, origin: string) {
+  const list = (await (await api.get('/api/kpi/indicators')).json()) as { items: Indicator[] };
+  const fot = list.items.find((i) => i.name === 'ФОТ')!;
+  const res = await api.delete(`/api/kpi/indicators/${fot.id}?version=${fot.version}`, {
+    headers: { origin },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
+/**
+ * Организация с включёнными показателями и контрагентами. Показатели по умолчанию новая организация
+ * получает сама, «Вести с» — месяц её создания; здесь остаются «Выручка» и «Количество сотрудников».
  */
 async function kpiOrg(
   api: APIRequestContext,
@@ -106,6 +119,7 @@ async function kpiOrg(
   const origin = new URL(baseURL!).origin;
   await newOrgOwner(api, origin);
   await enableIndicators(api, origin);
+  await dropPayroll(api, origin);
   const ids: Record<string, string> = {};
   for (const [name, regime] of Object.entries(contractors)) {
     ids[name] = await addContractor(api, origin, name, regime);

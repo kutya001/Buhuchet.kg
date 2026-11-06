@@ -631,6 +631,13 @@
       "when": 1793555360830,
       "tag": "0089_platform_leads_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793935402841,
+      "tag": "0090_indicator_fot_default",
+      "breakpoints": true
     }
   ]
 }

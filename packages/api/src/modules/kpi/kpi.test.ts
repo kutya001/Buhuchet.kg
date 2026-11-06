@@ -116,6 +116,8 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     ]);
     // Показатели-примеры создаются месяцем регистрации; для проверки — «Вести с 01.2026», и обязательна
     // только «Выручка».
+    // Проверки — на двух показателях: третий по умолчанию, «ФОТ», проверяют тесты базы (kpi.test.ts).
+    await f.t.admin.db.delete(schema.indicators).where(eq(schema.indicators.name, 'ФОТ'));
     await f.t.admin.db.update(schema.indicators).set({ startMonth: '2026-01' });
     await f.t.admin.db
       .update(schema.indicators)
@@ -148,7 +150,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect((await call(senior, 'GET', '/api/kpi/month')).status).toBe(403);
   });
 
-  it('два показателя-примера; окно показателя проверяет название, создаёт — право «Настраивать показатели»', async () => {
+  it('показатели «Выручка» и «Количество сотрудников»; окно показателя проверяет название, создаёт — право «Настраивать показатели»', async () => {
     const list = await indicators();
     expect(list.items.map((i) => [i.name, i.unit, i.type, i.total])).toEqual([
       ['Выручка', 'сом', 'som', 'sum'],

@@ -55,7 +55,7 @@ interface Org {
 
 /**
  * Организация: показатели включены, бухгалтер ведёт «Альфу» и «Бету», владелец — «Гамму»;
- * «Количество сотрудников» ведётся только у «Гаммы».
+ * «Количество сотрудников» ведётся только у «Гаммы», показателя по умолчанию «ФОТ» нет.
  */
 async function importOrg(api: APIRequestContext, origin: string): Promise<Org> {
   await newOrgOwner(api, origin);
@@ -112,10 +112,17 @@ async function importOrg(api: APIRequestContext, origin: string): Promise<Org> {
     expect(res.status(), await res.text()).toBe(201);
     ids[name] = ((await res.json()) as { id: string }).id;
   }
-  // «Количество сотрудников» — только «Гамме»: у контрагентов бухгалтера этот показатель не ведётся.
   const list = (await (await api.get('/api/kpi/indicators')).json()) as {
-    items: { id: string; name: string }[];
+    items: { id: string; name: string; version: number }[];
   };
+  // Показатель по умолчанию «ФОТ» убран: проверки — на «Выручке», три показателя новой организации
+  // проверяет admin-orgs.spec.ts.
+  const fot = list.items.find((i) => i.name === 'ФОТ')!;
+  const dropped = await api.delete(`/api/kpi/indicators/${fot.id}?version=${fot.version}`, {
+    headers: { origin },
+  });
+  expect(dropped.status(), await dropped.text()).toBe(200);
+  // «Количество сотрудников» — только «Гамме»: у контрагентов бухгалтера этот показатель не ведётся.
   const staffCount = list.items.find((i) => i.name === 'Количество сотрудников')!.id;
   const card = (await (await api.get(`/api/kpi/indicators/${staffCount}`)).json()) as Record<
     string,
