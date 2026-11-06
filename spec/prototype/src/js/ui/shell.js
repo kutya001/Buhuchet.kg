@@ -9,7 +9,7 @@ function counts(){const vr=visReports();const[w0,w1]=weekRange();
 function inWeek(r,w0,w1){if(CPM[r.cp].paused)return false;return (OPEN.has(r.status)&&!tR(r).payOnly&&r.due>=w0&&r.due<=w1)||(feat('taxpay')&&['Не оплачено','Оплачено частично'].includes(r.payStatus)&&r.sum>0&&r.payDue>=w0&&r.payDue<=w1)}
 function renderSide(){
   const l=mods();const u=me();
-  let h=`<div class="brand"><div class="logo" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="brand-name">Buhuchet.kg</div><div class="mode">${isAdmin()?'Admin':'Business'}</div></div></div><nav class="tree">`;
+  let h=`<div class="brand">${logoSvg()}<div><div class="brand-name">Buhuchet.kg</div><div class="mode">${isAdmin()?'Admin':'Business'}</div></div></div><nav class="tree">`;
   const cn=isAdmin()?{}:counts();
   l.filter(m=>!m.hidden).forEach(m=>{const tabs=modTabs(m);const open=S.open.has(m.id);const on=S.mod===m.id;
     const badge=m.id==='reports'&&cn.overdue?`<span class="badge red" title="Просрочено">${cn.overdue}</span>`:m.id==='kpi'?kMissBadge():m.id==='kb'&&newsUnread()?`<span class="badge red" title="Непрочитанные новости">${newsUnread()}</span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':'';
@@ -22,7 +22,7 @@ function renderSide(){
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v74 · 06.11.2026';
+const PROTO_VER='v75 · 06.11.2026';
 // В демо-режиме — только «Войти как» (без администратора платформы) и «Очистить рабочие данные»
 function demoBox(){if(DEMO.on)return `<div class="demo"><div class="row" style="gap:6px"><b>${LE('land.demo.box')}</b></div><label for="demo-user">Войти как:</label>${sel('demo-user',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),S.me)}<div class="demo-db"><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button></div><span>${LE('land.demo.box.sub')}</span></div>`;
   return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
@@ -33,7 +33,7 @@ function renderBnav(){
   const a=$('#bnav .bn.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function renderSheet(){
-  $('#sheet').innerHTML=`<div class="grabber"></div><div class="brand" style="padding:6px 4px 10px"><div class="logo" aria-hidden="true"><i></i><i></i><i></i></div><div><div class="brand-name">Buhuchet.kg</div><div class="mode">${isAdmin()?'Admin':'Business'}</div></div></div>
+  $('#sheet').innerHTML=`<div class="grabber"></div><div class="brand" style="padding:6px 4px 10px">${logoSvg()}<div><div class="brand-name">Buhuchet.kg</div><div class="mode">${isAdmin()?'Admin':'Business'}</div></div></div>
   ${(()=>{const ids=BNAV[isAdmin()?'admin':'business'];const rest=mods().filter(m=>!ids.includes(m.id)&&!m.hidden);return rest.length?`<div class="sheet-mods" role="navigation" aria-label="Другие модули">${rest.map(m=>`<button data-shmod="${m.id}" class="${S.mod===m.id?'on':''}">${ic(m.icon)}<span>${esc(m.title)}</span>${m.id==='kpi'?kMissBadge('margin-left:auto'):m.id==='kb'&&newsUnread()?`<span class="badge red" style="margin-left:auto" title="Непрочитанные новости">${newsUnread()}</span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':''}</button>`).join('')}</div>`:''})()}
   ${isAdmin()?'':`<button class="orgbtn" data-sh="org"><span class="av">${ic('landmark','sm')}</span><span><div class="o-n">${esc(ORG.name)}</div><div class="o-s">Профиль организации</div></span></button>`}
   <button class="orgbtn" data-sh="me"><span class="av round">${initials(me().fio)}</span><span><div class="o-n">Мой профиль</div><div class="o-s">${esc(me().fio)}</div></span></button>

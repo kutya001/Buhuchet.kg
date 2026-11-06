@@ -133,7 +133,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lsh-top span{margin-left:8px;background:var(--field);border:1px solid var(--border);border-radius:999px;padding:1px 10px;color:var(--faint);font-size:10px}
 .lsh-body{display:grid;grid-template-columns:118px minmax(0,1fr);min-height:236px}
 .lsh-side{background:var(--frame);padding:10px 8px;display:flex;flex-direction:column;gap:3px;border-right:1px solid var(--border)}
-.lsh-side .logo{transform:scale(.7);transform-origin:left center;margin-bottom:6px}
+.lsh-side .logo{width:31px;height:24px;margin-bottom:6px}
 .lsh-side span{padding:4px 6px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .lsh-side span.on{background:var(--nav-active);color:var(--text);font-weight:650}
 .lsh-m{padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
