@@ -19,10 +19,12 @@ import {
   kbReachedOf,
   kbReadArticles,
   kbRecordLevels,
+  kbReplaceHand,
   kbResetKnown,
   kbScreenUi,
   kbSetSkipped,
   kbShowContent,
+  kbUnmarkHand,
 } from './kb';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { kbArticleReads, kbKnown, kbLevels, kbProgress, telegramLinks, users } from './schema';
@@ -145,6 +147,31 @@ describe.skipIf(!databaseAvailable())('«База знаний»: прогрес
       skipped: false,
     });
     expect(marks.get('remind')).toEqual({ done: null, skipped: false });
+  });
+
+  it('(прототип v74) шаг, отмеченный вручную: «Отменить» и «Снять отметку», выполненный — меняет способ', async () => {
+    const marksOf = async () =>
+      (await asOwner(a, (tx) => kbMarksOf(tx, [a.ownerUserId]))).get(a.ownerUserId)!;
+    expect(await asOwner(a, (tx) => kbSetSkipped(tx, 'cols', true))).toBe(true);
+    expect(await asOwner(a, (tx) => kbMarkDone(tx, 'cols', 'hand'))).toBe(true);
+    expect((await marksOf()).get('cols')).toEqual({
+      done: { how: 'hand', at: expect.any(String) },
+      skipped: false,
+    });
+    // «Отменить» сразу после отметки пропущенного шага — снова пропущен.
+    expect(await asOwner(a, (tx) => kbUnmarkHand(tx, 'cols', true))).toBe(true);
+    expect((await marksOf()).get('cols')).toEqual({ done: null, skipped: true });
+    expect(await asOwner(a, (tx) => kbUnmarkHand(tx, 'cols', false))).toBe(false);
+    // Отмечен снова и выполнен на самом деле: способ меняется, снять отметку уже нельзя.
+    expect(await asOwner(a, (tx) => kbMarkDone(tx, 'cols', 'hand'))).toBe(true);
+    expect(await asOwner(a, (tx) => kbReplaceHand(tx, 'cols', 'hand'))).toBe(false);
+    expect(await asOwner(a, (tx) => kbReplaceHand(tx, 'cols', 'use'))).toBe(true);
+    expect((await marksOf()).get('cols')?.done?.how).toBe('use');
+    expect(await asOwner(a, (tx) => kbUnmarkHand(tx, 'cols', false))).toBe(false);
+    // Шаг, засчитанный другим способом, не трогается.
+    expect(await asOwner(a, (tx) => kbReplaceHand(tx, 'profile', 'data'))).toBe(false);
+    expect(await asOwner(a, (tx) => kbUnmarkHand(tx, 'profile', false))).toBe(false);
+    expect((await marksOf()).get('profile')?.done?.how).toBe('action');
   });
 
   it('уровни записываются один раз, статья читается один раз', async () => {

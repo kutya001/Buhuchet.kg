@@ -592,4 +592,99 @@ describe.skipIf(!databaseAvailable())('«База знаний»: API', () => {
     // Чужая организация отметки не видит.
     expect(step(await state(ownerB), 'roles')?.done).toBeNull();
   });
+
+  it('(прототип v74) «Отметить выполненным»: шаг засчитан вручную, процент и уровень растут; «Отменить» и «Снять отметку» уровень не понижают', async () => {
+    const accB = await signIn(f.app, 'acc-b', TEST_PASSWORD);
+    const hand = async (id: string, cookie = accB) =>
+      KbMarkResult.parse(await ok(await call('POST', `/api/kb/steps/${id}/hand`, cookie)));
+    const unhand = async (id: string, query = '') =>
+      KbState.parse(await ok(await call('DELETE', `/api/kb/steps/${id}/hand${query}`, accB)));
+    const start = await state(accB);
+    expect(start.progress).toMatchObject({ done: 0, level: 0 });
+    const ids = steps(start)
+      .map((s) => s.id)
+      .filter((id) => id !== 'pdicts' && id !== 'cols');
+    const need = Math.ceil(start.progress.total / 4);
+
+    // Пропущенный шаг тоже отмечается; «Отменить» возвращает его в пропущенные.
+    await ok(await call('POST', `/api/kb/steps/${ids[0]}/skip`, accB));
+    const first = await hand(ids[0]!);
+    expect(first.fresh).toEqual([
+      { id: ids[0], title: expect.any(String), learn: expect.any(Boolean), how: 'hand' },
+    ]);
+    expect(step(first.state, ids[0]!)).toMatchObject({ skipped: false, done: { how: 'hand' } });
+    const undone = await unhand(ids[0]!, '?skipped=true');
+    expect(step(undone, ids[0]!)).toMatchObject({ skipped: true, done: null });
+    expect(undone.progress.done).toBe(0);
+
+    // Четверть шагов — уровень «Ученик» с поздравлением, как у выполненных.
+    let last = first;
+    for (const id of ids.slice(0, need)) {
+      expect(last.congrats).toBeNull();
+      last = await hand(id);
+    }
+    expect(last.congrats).toBe('Ученик');
+    expect(last.state.progress).toMatchObject({ done: need, level: 1 });
+    expect((await hand(ids[0]!)).fresh).toEqual([]);
+
+    // «Снять отметку»: шаг снова не выполнен, процент ниже порога, уровень остаётся.
+    const off = await unhand(ids[need - 1]!);
+    expect(step(off, ids[need - 1]!)?.done).toBeNull();
+    expect(off.progress.done).toBe(need - 1);
+    expect(off.progress.pct).toBeLessThan(25);
+    expect(off.progress.level).toBe(1);
+
+    // Отмеченный вручную шаг, потом выполненный (3 секунды на экране), меняет способ без отклика;
+    // снять отметку у него уже нельзя.
+    await hand('pdicts');
+    const look = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/steps/pdicts/look', accB)),
+    );
+    expect(look.fresh).toEqual([]);
+    expect(step(look.state, 'pdicts')?.done?.how).toBe('visit');
+    expect(step(await unhand('pdicts'), 'pdicts')?.done?.how).toBe('visit');
+
+    // И первое использование: «Столбцы» после ручной отметки — «первым использованием».
+    expect(step(start, 'cols')).toBeDefined();
+    await hand('cols');
+    const used = KbMarkResult.parse(await ok(await call('POST', '/api/kb/hits/cols', accB)));
+    expect(used.fresh).toEqual([]);
+    expect(step(used.state, 'cols')?.done?.how).toBe('use');
+
+    // Сверка с историей тоже меняет способ: «Учётная политика» владельца Б.
+    await hand('policy', ownerB);
+    await withOrgContext(f.t.app.db, { orgId: f.b.orgId, userId: f.b.ownerUserId }, (tx) =>
+      writeHistory(tx, {
+        entity: 'org_settings',
+        entityId: f.b.orgId,
+        action: 'update',
+        changes: [{ field: 'features', from: null, to: 'x' }],
+      }),
+    );
+    const sync = KbMarkResult.parse(
+      await ok(await call('POST', '/api/kb/sync', ownerB, { reason: 'saved' })),
+    );
+    expect(sync.fresh).toEqual([]);
+    expect(step(sync.state, 'policy')?.done?.how).toBe('action');
+
+    // «Уровни сотрудников»: сколько шагов отмечено вручную.
+    const params = new URLSearchParams(
+      listQueryParams({ sort: undefined, page: 1, size: 25, filters: {} }),
+    );
+    const team = KbTeamList.parse(await ok(await call('GET', `/api/kb/team?${params}`, ownerB)));
+    expect(team.items.find((r) => r.fullName === 'Сотрудник acc-b')).toMatchObject({
+      done: need + 1,
+      hand: need - 1,
+    });
+    expect(team.items.find((r) => r.fullName === 'Владелец owner-b')?.hand).toBe(0);
+
+    // Только шаг своей программы; без входа — 401.
+    expect((await call('POST', '/api/kb/steps/roles/hand', accB)).status).toBe(404);
+    expect((await call('DELETE', '/api/kb/steps/roles/hand', accB)).status).toBe(404);
+    expect((await call('POST', '/api/kb/steps/Bad!/hand', accB)).status).toBe(400);
+    expect((await call('DELETE', `/api/kb/steps/${ids[1]}/hand?skipped=x`, accB)).status).toBe(400);
+    expect((await call('POST', `/api/kb/steps/${ids[1]}/hand`)).status).toBe(401);
+    // Чужая организация отметок не видит.
+    expect(steps(await state(acc)).find((s) => s.done?.how === 'hand')).toBeUndefined();
+  });
 });

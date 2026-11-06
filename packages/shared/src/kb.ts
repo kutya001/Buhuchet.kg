@@ -225,6 +225,8 @@ export const KbTeamMember = z.object({
   pct: z.number().int(),
   done: z.number().int(),
   total: z.number().int(),
+  /** Из выполненных — отмечено вручную (решение заказчика 06.11.2026, прототип v74). */
+  hand: z.number().int(),
   /** Дата последнего полученного уровня (по Бишкеку); null — уровней ещё нет. */
   levelAt: IsoDate.nullable(),
 });

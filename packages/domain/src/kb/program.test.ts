@@ -269,6 +269,21 @@ describe('уровень и процент', () => {
     expect(s.stars).toEqual({ done: 2, total: 5 });
   });
 
+  it('отмеченный вручную шаг засчитан, как выполненный любым способом, и считается в «из них вручную» (прототип v74)', () => {
+    const m = new Map<string, KbMark>([
+      ['profile', { done: { how: 'hand', at: '2026-11-06T03:00:00.000Z' }, skipped: false }],
+      ['tg', { done: { how: 'action', at: '2026-11-06T03:00:00.000Z' }, skipped: false }],
+      ['theme', { done: { how: 'hand', at: '2026-11-06T03:00:00.000Z' }, skipped: true }],
+    ]);
+    expect(kbStats(program, m, LEVELS, null)).toMatchObject({
+      done: 3,
+      pct: 27,
+      level: 1,
+      hand: 2,
+    });
+    expect(kbStats(program, marks(['profile']), LEVELS, null).hand).toBe(0);
+  });
+
   it('пропущенный шаг остаётся в знаменателе невыполненным', () => {
     const m = new Map<string, KbMark>([['profile', { done: null, skipped: true }]]);
     expect(kbStats(program, m, LEVELS, null)).toMatchObject({ done: 0, total: 11, pct: 0 });

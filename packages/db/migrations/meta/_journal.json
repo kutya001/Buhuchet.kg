@@ -638,6 +638,13 @@
       "when": 1793935402841,
       "tag": "0090_indicator_fot_default",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793938174116,
+      "tag": "0091_kb_progress_hand",
+      "breakpoints": true
     }
   ]
 }

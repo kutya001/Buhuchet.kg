@@ -15,19 +15,21 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { SAVED_EVENT } from '../api-client';
+import { ApiFailure, SAVED_EVENT } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
-import { useT } from '../l10n/provider';
+import { useErrorText, useT } from '../l10n/provider';
 import { KbArticleDialog, type ArticleScreenInfo, type ArticleView } from './kb-article';
 import {
   kbArticleQuery,
   kbArticlesQuery,
+  kbHand,
   kbHit,
   kbLook,
   kbRead,
   KB_STATE_KEY,
   kbStateQuery,
   kbSync,
+  kbUnhand,
 } from './kb-data';
 import { flashTarget, KB_GO } from './kb-go';
 import type { TourEnv } from './tour/tour-dom';
@@ -64,6 +66,8 @@ export interface KbControls {
   openLesson: (lessonId: string) => void;
   /** «Показать как» шага (задача 2.31). */
   show: (stepId: string) => void;
+  /** «Отметить выполненным» (`on`) и «Снять отметку» своего шага (прототип v74). */
+  hand: (stepId: string, on: boolean) => void;
   /** «Показать экран»: `screen` — «модуль.вкладка», без него — открытый экран. */
   showScreen: (screen?: string | null) => void;
   /** «Показывать всё заново»: спросить и забыть знакомые элементы показов. */
@@ -79,6 +83,7 @@ export const KbContext = createContext<KbControls>({
   help: async () => false,
   openLesson: () => {},
   show: () => {},
+  hand: () => {},
   showScreen: () => {},
   resetKnown: () => {},
   screenOpen: () => false,
@@ -176,6 +181,7 @@ export const onStepScreen = (step: KbStep, screen: string | null): boolean =>
 export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overlays: ReactNode } {
   const t = useT();
   const toast = useToast();
+  const errorText = useErrorText();
   const router = useRouter();
   const client = useQueryClient();
   const state = useQuery(kbStateQuery).data;
@@ -284,10 +290,12 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
   const hit = useCallback(
     (name: string) => {
       // Первое использование отмечает шаг «Работы со списками» с тем же кодом: уже засчитанный или
-      // шаг не своей программы — запрос не нужен; за открытие страницы — один раз.
+      // шаг не своей программы — запрос не нужен; за открытие страницы — один раз. Отмеченный вручную
+      // шаг меняет способ на «первым использованием» (прототип v74 ckMark).
       const current = stateRef.current;
       const step = stepsOf(current).find((s) => s.id === name);
-      if (hits.current.has(name) || (current && (!step || step.done))) return;
+      const counted = !!step?.done && step.done.how !== 'hand';
+      if (hits.current.has(name) || (current && (!step || counted))) return;
       hits.current.add(name);
       kbHit(name)
         .then((r) => apply(r, 'hit'))
@@ -470,6 +478,41 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
     },
   });
 
+  // «Отметить выполненным» и «Снять отметку» (решение заказчика 06.11.2026, прототип v74 ckHandMark,
+  // ckHandOff): без окна «Готово» — уведомление, у отметки — «Отменить»; новый уровень — как обычно,
+  // снятая отметка уровень не понижает (сервер).
+  const hand = useCallback(
+    (stepId: string, on: boolean) => {
+      const fail = (e: unknown) => {
+        if (e instanceof ApiFailure) toast(errorText(e.error), { bad: true });
+      };
+      const unmark = (skipped: boolean, message?: string) =>
+        kbUnhand(stepId, skipped)
+          .then((next) => {
+            client.setQueryData(KB_STATE_KEY, next);
+            void client.invalidateQueries({ queryKey: ['kb', 'member'] });
+            if (message) toast(message, { icon: 'grad' });
+          })
+          .catch(fail);
+      if (!on) return void unmark(false, t('kb.hand.off_done'));
+      // «Отменить» сразу после отметки пропущенного шага возвращает его в пропущенные.
+      const skipped = !!stepsOf(stateRef.current).find((s) => s.id === stepId)?.skipped;
+      kbHand(stepId)
+        .then((result) => {
+          client.setQueryData(KB_STATE_KEY, result.state);
+          if (!result.fresh.some((f) => f.id === stepId)) return;
+          void client.invalidateQueries({ queryKey: ['kb', 'member'] });
+          if (result.congrats) setCongrats((c) => ({ name: result.congrats!, n: (c?.n ?? 0) + 1 }));
+          toast(t('kb.hand.done'), {
+            icon: 'grad',
+            action: { label: t('kb.hand.undo'), run: () => void unmark(skipped) },
+          });
+        })
+        .catch(fail);
+    },
+    [client, errorText, t, toast],
+  );
+
   const screenOpen = useCallback(
     (screen: string) => {
       const [module, tab] = screen.split('.') as [string, string?];
@@ -479,8 +522,8 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
   );
 
   const controls = useMemo(
-    () => ({ go, hit, openArticle, help, openLesson, screenOpen, ...tour.controls }),
-    [go, hit, openArticle, help, openLesson, screenOpen, tour.controls],
+    () => ({ go, hit, openArticle, help, openLesson, hand, screenOpen, ...tour.controls }),
+    [go, hit, openArticle, help, openLesson, hand, screenOpen, tour.controls],
   );
 
   const barStep = lesson ? stepsOf(state).find((s) => s.id === lesson.id) : undefined;

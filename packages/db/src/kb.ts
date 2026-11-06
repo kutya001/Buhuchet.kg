@@ -454,6 +454,46 @@ export async function kbMarkDone(tx: Tx, stepId: string, how: KbHow): Promise<bo
   return rows.length > 0;
 }
 
+/**
+ * Свой шаг, отмеченный вручную, засчитан выполненным условием (прототип v74 ckMark): способ и момент
+ * меняются на настоящие, метка «Отмечено вручную» уходит. true — способ изменился.
+ */
+export async function kbReplaceHand(tx: Tx, stepId: string, how: KbHow): Promise<boolean> {
+  if (how === 'hand') return false;
+  const rows = await tx
+    .update(kbProgress)
+    .set({ doneHow: how, doneAt: sql`now()` })
+    .where(
+      and(
+        eq(kbProgress.userId, sql`app.current_user_id()`),
+        eq(kbProgress.stepId, stepId),
+        eq(kbProgress.doneHow, 'hand'),
+      ),
+    )
+    .returning({ stepId: kbProgress.stepId });
+  return rows.length > 0;
+}
+
+/**
+ * «Снять отметку» и «Отменить» после «Отметить выполненным» (прототип v74 ckHandOff): свой шаг,
+ * отмеченный вручную, снова не выполнен; выполненный другим способом не трогается. `skipped` — шаг
+ * был пропущен до отметки и снова пропущен («Отменить»). true — отметка снята.
+ */
+export async function kbUnmarkHand(tx: Tx, stepId: string, skipped: boolean): Promise<boolean> {
+  const rows = await tx
+    .update(kbProgress)
+    .set({ doneHow: null, doneAt: null, ...(skipped ? { skippedAt: sql`now()` } : {}) })
+    .where(
+      and(
+        eq(kbProgress.userId, sql`app.current_user_id()`),
+        eq(kbProgress.stepId, stepId),
+        eq(kbProgress.doneHow, 'hand'),
+      ),
+    )
+    .returning({ stepId: kbProgress.stepId });
+  return rows.length > 0;
+}
+
 /** «Пропустить» (только не выполненный) и «Вернуть» свой шаг. true — отметка изменилась. */
 export async function kbSetSkipped(tx: Tx, stepId: string, skipped: boolean): Promise<boolean> {
   if (!skipped) {
@@ -661,12 +701,13 @@ function teamSource(team: readonly KbMemberProgress[], t: ListTexts): SQL {
     pct: p.stats.pct,
     done: p.stats.done,
     total: p.stats.total,
+    hand: p.stats.hand,
     steps: t('kb.team.steps')
       .replace('{done}', String(p.stats.done))
       .replace('{total}', String(p.stats.total)),
     level_at: p.lastAt ? bishkekDate(p.lastAt) : null,
   }));
-  return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(id uuid, n integer, full_name text, role text, active boolean, level integer, level_name text, levels integer, pct integer, done integer, total integer, steps text, level_at date)`;
+  return sql`jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) as r(id uuid, n integer, full_name text, role text, active boolean, level integer, level_name text, levels integer, pct integer, done integer, total integer, hand integer, steps text, level_at date)`;
 }
 
 /** Столбец строки из `jsonb_to_recordset`: имена — постоянные, не ввод пользователя. */
@@ -691,6 +732,8 @@ export const KB_TEAM_COLUMNS: ListColumns = {
     value: col('steps'),
     sort: { value: col('done'), text: false },
   },
+  // «Из них отмечено вручную» (решение заказчика 06.11.2026, прототип v74).
+  hand: { type: 'int', label: 'kb.team.col.hand', value: col('hand') },
   levelAt: { type: 'date', label: 'kb.team.col.level_at', value: col('level_at') },
 };
 
@@ -712,6 +755,7 @@ export interface KbTeamRow {
   pct: number;
   done: number;
   total: number;
+  hand: number;
   levelAt: string | null;
 }
 
@@ -737,6 +781,7 @@ export async function listKbTeamPage(tx: Tx, orgId: string, query: ListQuery, t:
           pct: sql<number>`${col('pct')}`,
           done: sql<number>`${col('done')}`,
           total: sql<number>`${col('total')}`,
+          hand: sql<number>`${col('hand')}`,
           levelAt: sql<string | null>`to_char(${col('level_at')}, 'YYYY-MM-DD')`,
           ...window,
         })

@@ -1,5 +1,5 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
-import { kbSetSkipped } from '@buhuchet/db';
+import { kbSetSkipped, kbUnmarkHand } from '@buhuchet/db';
 import { kbHitMark, kbProgramSteps } from '@buhuchet/domain';
 import { ApiError, KbCode, KbHit, KbMarkResult, KbState, KbSyncRequest } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
@@ -191,3 +191,79 @@ function skipHandler(deps: ApiDeps, skipped: boolean): RouteHandler<typeof kbSki
 
 export const kbSkipHandler = (deps: ApiDeps) => skipHandler(deps, true);
 export const kbUnskipHandler = (deps: ApiDeps) => skipHandler(deps, false);
+
+export const kbHandRoute = createRoute({
+  method: 'post',
+  path: '/kb/steps/{id}/hand',
+  tags: ['kb'],
+  summary: '«Отметить выполненным» свой шаг',
+  request: { params: stepParams },
+  responses: {
+    200: {
+      description: 'Шаг засчитан вручную (или был засчитан раньше), новый уровень',
+      content: { 'application/json': { schema: KbMarkResult } },
+    },
+    400: { description: 'Неверный код шага', content: error },
+    ...common,
+    404: { description: 'Шага нет в программе пользователя', content: error },
+  },
+});
+
+/**
+ * «Отметить выполненным» (решение заказчика 06.11.2026, прототип v74 ckHandMark): любой свой
+ * невыполненный шаг, в том числе пропущенный и «★», засчитывается сразу, без перехода и показа, в
+ * процент и уровень. Отметить можно только свой шаг: сотрудник берётся из сеанса.
+ */
+export function kbHandHandler(deps: ApiDeps): RouteHandler<typeof kbHandRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const body = await asLearner(deps, c, async (tx, learner) => {
+      const ctx = await programContext(tx, learner);
+      const step = programStep(ctx, id);
+      return markSteps(tx, ctx, [{ step, how: 'hand' }], deps.clock.now(), { congrats: true });
+    });
+    return c.json(body, 200);
+  };
+}
+
+export const kbUnhandRoute = createRoute({
+  method: 'delete',
+  path: '/kb/steps/{id}/hand',
+  tags: ['kb'],
+  summary: '«Снять отметку» или «Отменить» ручную отметку своего шага',
+  request: {
+    params: stepParams,
+    query: z.object({
+      /** «Отменить» сразу после отметки пропущенного шага: шаг снова пропущен. */
+      skipped: z.enum(['true', 'false']).optional(),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Программа после изменения',
+      content: { 'application/json': { schema: KbState } },
+    },
+    400: { description: 'Неверный код шага или `skipped`', content: error },
+    ...common,
+    404: { description: 'Шага нет в программе пользователя', content: error },
+  },
+});
+
+/**
+ * «Снять отметку» в меню шага и «Отменить» в уведомлении (прототип v74 ckHandOff): шаг, отмеченный
+ * вручную, снова не выполнен, процент пересчитывается, полученный уровень не понижается. Шаг,
+ * засчитанный другим способом, не меняется.
+ */
+export function kbUnhandHandler(deps: ApiDeps): RouteHandler<typeof kbUnhandRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { skipped } = c.req.valid('query');
+    const body = await asLearner(deps, c, async (tx, learner) => {
+      const ctx = await programContext(tx, learner);
+      programStep(ctx, id);
+      const changed = await kbUnmarkHand(tx, id, skipped === 'true');
+      return stateBody(tx, changed ? await programContext(tx, learner) : ctx, deps.clock.now());
+    });
+    return c.json(body, 200);
+  };
+}

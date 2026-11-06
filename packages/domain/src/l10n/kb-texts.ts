@@ -99,6 +99,26 @@ export const KB_TEXTS = {
     section: S,
   },
   'kb.step.unskip': { ru: 'Вернуть', section: S },
+  // «Отметить выполненным» (решение заказчика 06.11.2026, прототип v74 ckHandMark, ckHandOff)
+  'kb.step.hand': { ru: 'Отмечено вручную', section: S },
+  'kb.step.hand_title': {
+    ru: 'Шаг засчитан по вашей отметке, без перехода и показа',
+    section: S,
+  },
+  'kb.hand': { ru: 'Отметить выполненным', section: S },
+  'kb.hand.title': { ru: 'Шаг засчитается сразу, без перехода и показа', section: S },
+  'kb.hand.sub': {
+    ru: 'Шаг засчитается сразу, без перехода и показа: в процент и уровень, как выполненный',
+    section: S,
+  },
+  'kb.hand.off': { ru: 'Снять отметку', section: S },
+  'kb.hand.off_sub': {
+    ru: 'Шаг снова станет невыполненным; полученный уровень не понижается',
+    section: S,
+  },
+  'kb.hand.done': { ru: 'Шаг отмечен выполненным', section: S },
+  'kb.hand.undo': { ru: 'Отменить', section: S },
+  'kb.hand.off_done': { ru: 'Отметка снята: шаг снова не выполнен', section: S },
   'kb.go': { ru: 'Перейти', section: S },
   'kb.how.action': { ru: 'действием', section: S },
   'kb.how.data': { ru: 'действием, сделанным раньше', section: S },
@@ -106,6 +126,7 @@ export const KB_TEXTS = {
   'kb.how.art': { ru: 'чтением статьи', section: S },
   'kb.how.use': { ru: 'первым использованием', section: S },
   'kb.how.visit': { ru: 'открытием экрана', section: S },
+  'kb.how.hand': { ru: 'вручную', section: S },
   'kb.offers.title': { ru: 'Можно включить', section: S },
   'kb.offers.hint_org': {
     ru: 'Эти функции выключены в учётной политике, поэтому их уроков нет в программе. После включения уроки появятся у всех сотрудников с отметкой «Новое».',
@@ -175,6 +196,7 @@ export const KB_TEXTS = {
   'kb.team.col.level': { ru: 'Уровень', section: S },
   'kb.team.col.pct': { ru: 'Прогресс, %', section: S },
   'kb.team.col.steps': { ru: 'Выполнено шагов', section: S },
+  'kb.team.col.hand': { ru: 'Из них отмечено вручную', section: S },
   'kb.team.col.level_at': { ru: 'Дата последнего уровня', section: S },
   'kb.team.steps': { ru: '{done} из {total}', section: S },
   'kb.team.progress': { ru: 'Прогресс по модулям', section: S },
