@@ -393,9 +393,8 @@ function HelloScreen({ content }: { content: OnboardingContent }) {
   return (
     <>
       <div className="flex flex-col gap-2">
-        <span className="mb-1.5 origin-left scale-[1.3] self-start">
-          <BrandMark />
-        </span>
+        {/* Знак крупнее, как `.wl-logo` прототипа v75: 62 × 48. */}
+        <BrandMark className="mb-1.5 h-12 w-[62px] self-start" />
         <ScreenHead title={s.t} lead={s.lead} />
       </div>
       <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">

@@ -10,7 +10,7 @@ import { BottomSheet } from '../sheet';
 import { AppFrame } from './app-frame';
 import { CountBadge } from './badge';
 import { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './phone-nav';
-import { SideFootButton, SideNav, SideOrg } from './side-nav';
+import { Brand, BrandMark, SideFootButton, SideNav, SideOrg } from './side-nav';
 import { TabPager } from './tab-pager';
 import { TabRow, type AddAction } from './tab-row';
 import { TopBar, type TopBarProps } from './top-bar';
@@ -118,6 +118,31 @@ describe('SideNav — панель модулей на ПК', () => {
       <SideNav {...sideNav({ openIds: new Set(['reports']), Link })} />,
     );
     expect(html.match(/data-own/g)).toHaveLength(4);
+  });
+});
+
+describe('знак Buhuchet.kg (логотип 36, прототип v75)', () => {
+  it('спираль цветом бренда, буквы «B» и «u» цветом текста; знак скрыт от экранного диктора', () => {
+    const html = renderToStaticMarkup(<BrandMark />);
+    expect(html).toMatch(
+      /^<svg viewBox="1\.2 11\.1 66 50\.9" aria-hidden="true" focusable="false"/,
+    );
+    expect(html).toContain('class="block flex-none text-ink h-[34px] w-[44px]"');
+    expect(html.match(/<path /g)).toHaveLength(3);
+    expect(html.match(/class="fill-brand-blue"/g)).toHaveLength(1);
+    expect(html.match(/class="fill-current"/g)).toHaveLength(2);
+    expect(html).toContain('transform="translate(16.67 34.34) scale(0.51)"');
+    expect(html).toContain('transform="translate(43.48 38.62) scale(0.51)"');
+  });
+
+  it('размер задаёт место: в приветствии знак крупнее; в левой панели — со словом и режимом', () => {
+    expect(renderToStaticMarkup(<BrandMark className="h-12 w-[62px]" />)).toContain(
+      'class="block flex-none text-ink h-12 w-[62px]"',
+    );
+    const brand = renderToStaticMarkup(<Brand mode="Business" />);
+    expect(brand).toContain('data-brand-mark=""');
+    expect(brand).toContain('Buhuchet.kg');
+    expect(brand).toContain('Business');
   });
 });
 

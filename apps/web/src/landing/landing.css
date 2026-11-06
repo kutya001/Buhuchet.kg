@@ -743,9 +743,10 @@
   gap: 3px;
   border-right: 1px solid var(--bu-border);
 }
+/* Знак в картинке программы — как `.lsh-side .logo` прототипа v75. */
 .lsh-logo {
-  transform: scale(0.7);
-  transform-origin: left center;
+  width: 31px;
+  height: 24px;
   margin-bottom: 6px;
 }
 .lsh-side span {
