@@ -289,6 +289,12 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     await expect(card.getByText('Последний вход')).toBeVisible();
     from = await at(0.85);
     await swipe.drag(from, { x: from.x - from.width / 3 - 40, y: from.y });
+    // Прототип v74: новый свайп, пока прошлый ещё доезжает, сразу доводит его до конца и листает дальше.
+    await swipe.drag(from, { x: from.x - from.width / 3 - 40, y: from.y });
+    await expect(current).toContainText('Счёт');
+    await expect(card.locator('[data-window-body] > [inert]')).toHaveCount(0);
+    from = await at(0.15);
+    await swipe.flick(from, { x: from.x + 80, y: from.y });
     await expect(current).toContainText('Контрагенты');
     await expect(card).toContainText('Закреплено контрагентов:');
     from = await at(0.15);

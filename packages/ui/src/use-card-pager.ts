@@ -44,8 +44,10 @@ interface Gesture {
   /** Прокрутка содержимого до жеста: отмена возвращает её. */
   scroll: number;
   width: number;
-  /** Жест закончен, идёт анимация: новые касания ждут её конца. */
+  /** Жест закончен, идёт анимация. */
   busy: boolean;
+  /** Довести анимацию до конца сразу (один раз): новый свайп начинается с уже открытой вкладки. */
+  fin: (() => void) | null;
 }
 
 /** Неподвижная копия для анимации: без id и имён полей, недоступна диктору, фокусу и касаниям. */
@@ -65,8 +67,9 @@ function still(node: HTMLElement): HTMLElement {
  * Свайп влево и вправо по содержимому окна листает вкладки карточки по порядку (ТЗ «Управление
  * свайпами», прототип v73 ui/swipes.js formPager): соседняя вкладка въезжает рядом с текущей и едет
  * вместе с пальцем, переход — одной анимацией, без пустого экрана между вкладками; порог — треть
- * ширины или рывок, недотянутая протяжка возвращает всё на место. На первой и последней вкладке —
- * сопротивление, по кругу не переходит. Не начинается в полях ввода, на ручке и шапке окна (там
+ * ширины или рывок, недотянутая протяжка возвращает всё на место; новый свайп, пока прошлый ещё
+ * доезжает, сразу доводит прошлый до конца и листает дальше (прототип v74). На первой и последней
+ * вкладке — сопротивление, по кругу не переходит. Не начинается в полях ввода, на ручке и шапке окна (там
  * тянут вниз) и у левого края экрана; широкая таблица сначала прокручивается сама. Направление
  * выбирается по первым 10 px, поэтому свайп вбок не закрывает окно.
  *
@@ -160,14 +163,16 @@ export function useCardPager(
     };
 
     const start = (e: TouchEvent) => {
-      if (st?.busy) return;
-      if (st) {
+      const prev = st;
+      st = null;
+      // Новый свайп во время анимации прошлого: прошлый сразу доводится до конца (прототип v74).
+      if (prev?.busy) prev.fin?.();
+      else if (prev) {
         // Прошлый жест не закончился (касание потерялось): убираем его следы.
-        detach(st);
-        unpin(st);
+        detach(prev);
+        unpin(prev);
         slide(0, 0);
       }
-      st = null;
       const touch = e.touches[0];
       if (e.touches.length > 1 || !touch || touch.clientX < SWIPE_EDGE || !e.target) return;
       const target = e.target as HTMLElement;
@@ -191,6 +196,7 @@ export function useCardPager(
         scroll: 0,
         width: 0,
         busy: false,
+        fin: null,
       };
       target.addEventListener('touchmove', move, { passive: false });
       target.addEventListener('touchend', touchEnd);
@@ -255,7 +261,10 @@ export function useCardPager(
       s.busy = true;
       const snap = s.snap;
       const ms = reducedMotion() ? 0 : fire ? finishMs(width - Math.abs(s.dx), vx) : SWIPE_BACK_MS;
+      let finished = false;
       const done = () => {
+        if (finished) return;
+        finished = true;
         if (st === s) st = null;
         unpin(s);
         if (!fire) {
@@ -267,6 +276,7 @@ export function useCardPager(
         const p = page.current;
         if (p) p.style.transition = '';
       };
+      s.fin = done;
       paint(s, fire ? -s.dir * s.width : 0, ms);
       if (!ms) return done();
       afterTransition(snap, ms, done);

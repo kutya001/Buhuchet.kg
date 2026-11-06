@@ -98,7 +98,8 @@ interface Gesture {
  * Свайп влево или вправо по рабочей области листает вкладки модуля (ТЗ «Управление свайпами»,
  * прототип ui/swipes.js pager): текущая вкладка уезжает за пальцем, соседняя въезжает с другой
  * стороны, подсветка в ряду вкладок едет вместе с ними, а сам ряд прокручивается к новой вкладке
- * вместе с листанием, без рывка после него (прототип v73); порог — треть ширины или рывок, недотянутая
+ * вместе с листанием, без рывка после него (прототип v73); новый свайп, пока прошлый ещё доезжает, сразу
+ * доводит прошлый до конца (прототип v74); порог — треть ширины или рывок, недотянутая
  * страница возвращается; на первой и последней вкладке — сопротивление, по кругу не переходит.
  * Не начинается на ряду вкладок, нижней панели, у самого левого края экрана и пока открыто окно,
  * панель или всплывающее окошко (`data-overlay`);
@@ -147,6 +148,8 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
     if (!el || !pane) return;
     const tracker = createTracker();
     let st: Gesture | null = null;
+    // Анимация прошлого жеста ещё идёт: довести её до конца сразу (один раз).
+    let pend: (() => void) | null = null;
 
     const tabEls = () => [...pane.querySelectorAll<HTMLElement>('[data-tabrow] [role="tab"]')];
 
@@ -213,6 +216,9 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
     };
 
     const start = (e: TouchEvent) => {
+      // Новый свайп во время анимации прошлого: прошлый сразу доводится до конца (прототип v74).
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-4 — пока меняется адрес (pending), новый свайп не начинается.
+      pend?.();
       st = null;
       const touch = e.touches[0];
       if (e.touches.length > 1 || !touch || pending.current) return;
@@ -276,7 +282,13 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
         !cancelled && pagerFires({ dx: s.dx, vx, dir: s.dir, width, hasNext: s.to !== null });
       const target = fire ? -s.dir * width : 0;
       const ms = reducedMotion() ? 0 : fire ? finishMs(width - Math.abs(s.dx), vx) : SWIPE_BACK_MS;
+      let finished = false;
       const finish = () => {
+        if (finished) return;
+        finished = true;
+        pend = null;
+        // Ряд вкладок — сразу в конечное положение, если его прокрутка ещё шла.
+        if (s.row) scrollRow(s.row, fire ? s.rowTo : s.rowFrom, 0);
         if (!fire || !s.to) {
           reset();
           return;
@@ -295,8 +307,10 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
         navigate(s.to);
       };
       paint(s, target, ms);
-      if (ms && current.current) afterTransition(current.current, ms, finish);
-      else finish();
+      if (ms && current.current) {
+        pend = finish;
+        afterTransition(current.current, ms, finish);
+      } else finish();
     };
     const touchEnd = (e: TouchEvent) => end(e, false);
     const touchCancel = (e: TouchEvent) => end(e, true);
