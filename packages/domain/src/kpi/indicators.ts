@@ -91,8 +91,7 @@ export const DEFAULT_INDICATORS: readonly Omit<IndicatorInput, 'start'>[] = [
     unit: 'сом',
     type: 'som',
     total: 'sum',
-    description:
-      'Фонд оплаты труда: начисленная зарплата всех сотрудников за месяц до удержаний.',
+    description: 'Фонд оплаты труда: начисленная зарплата всех сотрудников за месяц до удержаний.',
     required: true,
     dueDay: DUE_DAY_DEFAULT,
     scope: 'all',
