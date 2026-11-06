@@ -37,9 +37,7 @@ function Top({ url }: { url: string }) {
 function Side({ t, on }: { t: Translate; on: string }) {
   return (
     <div className="lsh-side">
-      <div className="lsh-logo">
-        <BrandMark />
-      </div>
+      <BrandMark className="lsh-logo" />
       {SIDE.map(([id, key]) => (
         <span key={id} className={id === on ? 'on' : ''}>
           {t(key)}
