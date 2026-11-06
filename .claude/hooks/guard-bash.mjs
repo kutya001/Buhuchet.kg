@@ -20,7 +20,7 @@ const rules = [
   ],
   [
     new RegExp(
-      `${GIT_PUSH}[^;&|]*\\s(\\S+:)?(refs\\/heads\\/)?production\\b(?![\\w/-])|git\\/refs\\/heads\\/production\\b|\\bpending_deployments\\b`,
+      `${GIT_PUSH}[^;&|]*\\s["']?([^\\s:]*:)?["']?(refs\\/heads\\/)?production\\b(?![\\w/-])|git\\/refs\\/heads\\/production\\b|\\bpending_deployments\\b|\\bapproveDeployments\\b`,
     ),
     'Ветку production двигает и выпуск одобряет только workflow «Release production» по команде заказчика «выпускай».',
   ],

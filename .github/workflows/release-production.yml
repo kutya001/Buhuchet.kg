@@ -98,6 +98,15 @@ jobs:
             echo "::error::Коммит $sha старше выпущенного (production). Откат версии — Instant Rollback в Vercel."
             exit 1
           fi
+          # Ветка production защищена правилом (Ruleset): без него ключ развёртывания сдвинул бы её и без
+          # выпуска, поэтому выпуск без правила не идёт.
+          rules="$(gh api "repos/$GITHUB_REPOSITORY/rules/branches/production" --jq '[.[].type] | join(" ")')"
+          for need in update deletion non_fast_forward; do
+            if [[ " $rules " != *" $need "* ]]; then
+              echo "::error::У ветки production нет правила «$need» (Settings → Rules → Rulesets, docs/deploy.md)."
+              exit 1
+            fi
+          done
           # Повтор проверок: полный CI по этому коммиту (ночной прогон или Actions → CI → Run workflow на main).
           green="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$sha&status=success&per_page=1" --jq .total_count)"
           if [ "$green" -lt 1 ]; then
