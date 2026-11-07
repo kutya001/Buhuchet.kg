@@ -204,3 +204,51 @@ export async function platformAlert(
   );
   return Number(rows[0]?.n ?? 0);
 }
+
+/**
+ * То же, но не чаще раза в `everySeconds` (функция `app.platform_alert_throttled`, миграция 0100;
+ * docs/decisions.md п. О-32): если за это время сообщение с тем же `key` уже ставилось — 0. Проверка и
+ * постановка — одним шагом. `key` — только латинские буквы, цифры и дефис.
+ */
+export async function platformAlertThrottled(
+  db: Db,
+  o: { text: string; key: string; now: Date; everySeconds: number },
+): Promise<number> {
+  const rows = await db.execute<{ n: number }>(
+    sql`select app.platform_alert_throttled(${o.text}, ${o.key}, ${o.now.toISOString()}::timestamptz, ${o.everySeconds}) as n`,
+  );
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** Блокировки входа за окно (`app.login_lock_stats`): только числа. */
+export interface LoginLockStats {
+  /** Логины, закрытые на время после неверных паролей (каждый — один раз). */
+  logins: number;
+  /** Учётные записи, заблокированные после 10 неверных паролей подряд. */
+  accounts: number;
+  /** Сколько раз адреса исчерпали предел попыток входа (адрес — не больше раза за окно предела). */
+  ipBlocks: number;
+}
+
+/**
+ * Сколько блокировок входа началось за последние `windowMinutes` по часам базы (функция
+ * `app.login_lock_stats`, миграция 0100; ревью безопасности Р-8 А, docs/decisions.md п. О-32).
+ * Параметры закрытия логина и предела по адресу — те же, с которыми их ставит вход.
+ */
+export async function loginLockStats(
+  db: Db,
+  o: {
+    windowMinutes: number;
+    lockMinutes: number;
+    ip: { kind: string; max: number; windowSeconds: number };
+  },
+): Promise<LoginLockStats> {
+  const [row] = await db.execute<{ logins: number; accounts: number; ip_blocks: number }>(
+    sql`select * from app.login_lock_stats(${o.windowMinutes}, ${o.lockMinutes}, ${o.ip.kind}, ${o.ip.max}, ${o.ip.windowSeconds})`,
+  );
+  return {
+    logins: Number(row?.logins ?? 0),
+    accounts: Number(row?.accounts ?? 0),
+    ipBlocks: Number(row?.ip_blocks ?? 0),
+  };
+}
