@@ -57,3 +57,36 @@ export const loginAttempts = pgTable(
   },
   (t) => [index('login_attempts_last_attempt_idx').on(t.lastAttemptAt)],
 ).enableRLS();
+
+/**
+ * Код из Telegram при входе администратора платформы (ревью безопасности 06.11.2026, п. Р-2, решение
+ * заказчика 07.11.2026 «А»; docs/deviations.md п. О-13): после верного пароля бот присылает 6 цифр,
+ * сеанс начинается только после кода. В базе — хеш кода (argon2) и SHA-256 токена шага входа; токен
+ * знает только тот, кто ввёл верный пароль. Роль приложения таблицу не видит и не меняет: только
+ * функции app.admin_code_* (миграция 0098).
+ */
+export const adminLoginCodes = pgTable(
+  'admin_login_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    codeHash: text('code_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /**
+     * Отпечаток пароля, после которого выдан код (md5 хеша пароля): сменили пароль — код не действует
+     * и в пределы кодов больше не считается.
+     */
+    passwordTag: text('password_tag').notNull(),
+    /** Сколько раз вводили код; после ADMIN_CODE_MAX_ATTEMPTS он не действует. */
+    attempts: integer('attempts').notNull().default(0),
+    /** Код подошёл или выдан следующий — больше не действует. */
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    /** Код подошёл и начался сеанс: такие коды в суточный предел не считаются. */
+    signedInAt: timestamp('signed_in_at', { withTimezone: true }),
+  },
+  (t) => [index('admin_login_codes_user_idx').on(t.userId, t.createdAt)],
+).enableRLS();

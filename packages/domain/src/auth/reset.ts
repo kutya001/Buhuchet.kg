@@ -43,3 +43,17 @@ export function formatTemporaryPassword(chars: string): string {
   }
   return `Bh-${chars.slice(0, 4)}-${chars.slice(4)}`;
 }
+
+/**
+ * Код из Telegram при входе администратора платформы (ревью безопасности 06.11.2026, п. Р-2): после
+ * верного пароля — 6 цифр на 5 минут, 5 вводов; не больше 3 кодов за 15 минут и 10 кодов без входа за
+ * сутки. Сеанс начинается только после кода. Перебор: не больше 50 вариантов из миллиона в сутки, и
+ * каждый код приходит администратору в Telegram — он сразу видит, что пароль знает кто-то ещё. Новый
+ * пароль снимает оба предела.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-13
+export const ADMIN_CODE_TTL_MINUTES = 5;
+export const ADMIN_CODE_MAX_ATTEMPTS = 5;
+export const ADMIN_CODE_MAX_CODES = 3;
+export const ADMIN_CODE_WINDOW_MINUTES = 15;
+export const ADMIN_CODE_MAX_DAILY = 10;

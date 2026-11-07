@@ -5,10 +5,10 @@ import {
   RESET_CODE_TTL_MINUTES,
   TELEGRAM_LINK_TTL_MINUTES,
 } from '@buhuchet/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { clearLoginAttempts } from './auth';
 import type { Db, Tx } from './client';
-import { messageTemplateTexts, sessions, users } from './schema';
+import { employees, messageTemplateTexts, roles, sessions, users } from './schema';
 
 /**
  * Telegram и «Забыли пароль?» — через функции app.telegram_* и app.auth_reset_* (миграция 0011):
@@ -287,6 +287,33 @@ export async function adminFindUser(
         isPlatformAdmin: row.is_platform_admin,
       }
     : null;
+}
+
+/**
+ * Действующие владельцы организации `orgId` (она же — организация контекста, RLS), кроме
+ * `exceptUserId`: кому сообщить, что администратор платформы сбросил пароль сотрудника (ревью
+ * безопасности 06.11.2026, п. Р-2; docs/deviations.md п. О-13).
+ */
+export async function activeOwnerUserIds(
+  tx: Tx,
+  orgId: string,
+  exceptUserId: string,
+): Promise<string[]> {
+  const rows = await tx
+    .select({ userId: users.id })
+    .from(users)
+    .innerJoin(employees, eq(employees.userId, users.id))
+    .innerJoin(roles, and(eq(roles.id, employees.roleId), eq(roles.orgId, employees.orgId)))
+    .where(
+      and(
+        eq(employees.orgId, orgId),
+        eq(roles.isOwner, true),
+        eq(employees.active, true),
+        eq(users.blocked, false),
+        ne(users.id, exceptUserId),
+      ),
+    );
+  return rows.map((r) => r.userId);
 }
 
 /**

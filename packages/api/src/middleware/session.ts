@@ -15,6 +15,8 @@ const PUBLIC_PATHS = new Set([
   // Словарь текстов нужен уже на странице входа.
   '/api/l10n',
   '/api/auth/login',
+  // Код из Telegram при входе администратора платформы: сеанса ещё нет (docs/deviations.md п. О-13).
+  '/api/auth/login/code',
   '/api/auth/logout',
   '/api/auth/password-reset',
   '/api/auth/password-reset/confirm',

@@ -1,5 +1,10 @@
 import {
   ACCOUNT_LOCK_FAILURES,
+  ADMIN_CODE_MAX_ATTEMPTS,
+  ADMIN_CODE_MAX_CODES,
+  ADMIN_CODE_MAX_DAILY,
+  ADMIN_CODE_TTL_MINUTES,
+  ADMIN_CODE_WINDOW_MINUTES,
   isPermissionId,
   LOGIN_FAILURE_MEMORY_MINUTES,
   LOGIN_LOCK_MINUTES,
@@ -107,6 +112,65 @@ export async function notifyAccountLocked(
   await db.execute(
     sql`select app.auth_lock_notify(${input.userId}, ${input.userText}, ${input.unlockerText}, ${input.now.toISOString()}::timestamptz)`,
   );
+}
+
+/**
+ * Код из Telegram при входе администратора платформы (docs/deviations.md п. О-13, миграция 0098):
+ * новый код отменяет прежние; denied — не администратор или заблокирован, limited — кодов за окно
+ * уже ADMIN_CODE_MAX_CODES, limited_day — за сутки ADMIN_CODE_MAX_DAILY кодов без входа.
+ */
+export type AdminCodeIssue =
+  | { outcome: 'ok'; expiresAt: Date }
+  | { outcome: 'denied' }
+  | { outcome: 'limited' }
+  | { outcome: 'limited_day' };
+
+export async function issueAdminCode(
+  db: Db,
+  input: { userId: string; tokenHash: string; codeHash: string },
+): Promise<AdminCodeIssue> {
+  const [row] = await db.execute<{ outcome: string; expires_at: Date | string | null }>(
+    sql`select * from app.admin_code_issue(${input.userId}, ${input.tokenHash}, ${input.codeHash}, ${ADMIN_CODE_TTL_MINUTES}, ${ADMIN_CODE_MAX_CODES}, ${ADMIN_CODE_WINDOW_MINUTES}, ${ADMIN_CODE_MAX_DAILY})`,
+  );
+  if (row?.outcome === 'ok' && row.expires_at !== null) {
+    return { outcome: 'ok', expiresAt: new Date(row.expires_at) };
+  }
+  if (row?.outcome === 'limited' || row?.outcome === 'limited_day') return { outcome: row.outcome };
+  return { outcome: 'denied' };
+}
+
+/** Занятая попытка ввода кода: чей код и его хеш. */
+export interface AdminCodeAttempt {
+  codeId: string;
+  userId: string;
+  login: string;
+  codeHash: string;
+}
+
+/**
+ * Занять попытку ввода кода до проверки (не больше ADMIN_CODE_MAX_ATTEMPTS на код). null — токена нет,
+ * код истёк, использован, отменён, вводов больше нет или пароль сменили после кода.
+ */
+export async function takeAdminCodeAttempt(
+  db: Db,
+  tokenHash: string,
+): Promise<AdminCodeAttempt | null> {
+  const [row] = await db.execute<{
+    code_id: string;
+    user_id: string;
+    login: string;
+    code_hash: string;
+  }>(sql`select * from app.admin_code_attempt(${tokenHash}, ${ADMIN_CODE_MAX_ATTEMPTS})`);
+  if (!row) return null;
+  return { codeId: row.code_id, userId: row.user_id, login: row.login, codeHash: row.code_hash };
+}
+
+/** Код подошёл: больше не действует, вход засчитан; false — его уже использовали или он истёк. */
+export async function useAdminCode(db: Db, codeId: string): Promise<boolean> {
+  const [row] = await db.execute<{ used: boolean }>(
+    sql`select app.admin_code_use(${codeId}) as used`,
+  );
+  return row?.used === true;
 }
 
 /** Итог `reserveLoginAttempt`. */
