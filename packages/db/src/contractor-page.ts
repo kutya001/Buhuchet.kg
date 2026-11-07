@@ -1,5 +1,7 @@
 import {
   PAGE_CODE_TRIES,
+  PAGE_DAY_MAX_FAILURES,
+  PAGE_DAY_WINDOW_HOURS,
   PAGE_IP_LOCK_MINUTES,
   PAGE_IP_MAX_FAILURES,
   PAGE_IP_WINDOW_MINUTES,
@@ -19,8 +21,10 @@ import {
   auditLog,
   contractorPages,
   contractors,
+  employees,
   orgSettings,
   organizations,
+  roles,
   taxRegimes,
 } from './schema';
 
@@ -39,6 +43,8 @@ export interface ContractorPageRecord {
   hiddenSections: PageSection[];
   /** Ввод кода по ссылке закрыт до этого момента после неверных кодов подряд. */
   lockedUntil: Date | null;
+  /** Страница закрыта после 5 неверных кодов за сутки — до «Сменить код» (docs/deviations.md п. О-21). */
+  closed: boolean;
   version: number;
   /** Последнее открытие контрагентом и с какого устройства (из истории). */
   lastOpenAt: Date | null;
@@ -94,6 +100,7 @@ export async function getContractorPage(
       code: contractorPages.code,
       hiddenSections: contractorPages.hiddenSections,
       lockedUntil: contractorPages.lockedUntil,
+      closedAt: contractorPages.closedAt,
       version: contractorPages.version,
     })
     .from(contractorPages)
@@ -116,8 +123,10 @@ export async function getContractorPage(
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(1);
   const device = deviceOf(open?.changes);
+  const { closedAt, ...rest } = row;
   return {
-    ...row,
+    ...rest,
+    closed: closedAt !== null,
     hiddenSections: row.hiddenSections as PageSection[],
     lastOpenAt: open?.at ?? null,
     lastDevice: device,
@@ -168,12 +177,16 @@ export async function writeContractorPageOpen(
   });
 }
 
-/** Новый код и сброс счёта неверных кодов: при повторном включении и «Сменить код». */
+/**
+ * Новый код и сброс счёта неверных кодов (счёт за сутки ведётся по номеру кода и начинается заново),
+ * закрытая страница открывается: при повторном включении и «Сменить код».
+ */
 const freshCode = (code: string) => ({
   code,
   codeVersion: sql`${contractorPages.codeVersion} + 1`,
   failures: 0,
   lockedUntil: null,
+  closedAt: null,
   version: sql`${contractorPages.version} + 1`,
   updatedBy: sql`app.current_user_id()`,
   updatedAt: sql`now()`,
@@ -337,12 +350,14 @@ export async function setContractorPageHidden(
 export type ContractorPageState =
   | { state: 'unavailable' }
   | { state: 'code' }
+  | { state: 'closed' }
   | { state: 'locked'; lockedUntil: Date }
   | { state: 'open'; orgId: string; contractorId: string };
 
 /**
- * Страница по ссылке: недоступна, ввод кода, ввод закрыт или открыта (браузер с запомненным кодом —
- * `tokenHash` из cookie страницы). Вызывается без контекста организации.
+ * Страница по ссылке: недоступна, ввод кода, ввод закрыт, закрыта до смены кода (для всех, в том
+ * числе для браузера с запомненным кодом) или открыта (браузер с запомненным кодом — `tokenHash` из
+ * cookie страницы). Вызывается без контекста организации.
  */
 export async function contractorPageState(
   db: Db,
@@ -362,6 +377,7 @@ export async function contractorPageState(
   if (row?.state === 'locked' && row.locked_until) {
     return { state: 'locked', lockedUntil: new Date(row.locked_until) };
   }
+  if (row?.state === 'closed') return { state: 'closed' };
   return row?.state === 'code' ? { state: 'code' } : { state: 'unavailable' };
 }
 
@@ -371,14 +387,17 @@ export type ContractorPageTry =
   | { outcome: 'ok' }
   | { outcome: 'wrong'; triesLeft: number }
   | { outcome: 'locked'; lockedUntil: Date }
-  | { outcome: 'ip_locked'; lockedUntil: Date };
+  | { outcome: 'ip_locked'; lockedUntil: Date }
+  /** Страница закрыта; `justClosed` — этим кодом (тогда — чья страница: сообщить ответственному). */
+  | { outcome: 'closed'; justClosed: null | { orgId: string; contractorId: string } };
 
 /**
  * Проверить код страницы: пределы — 5 неверных подряд по ссылке (15 минут; запись в истории
- * контрагента — в той же транзакции) и 3 неверных за час с адреса (час); `triesLeft` — меньший из
- * двух остатков, по ссылке и по адресу (docs/deviations.md п. О-1); верный код запоминает браузер
- * на 30 дней (`tokenHash` — хеш токена новой cookie). Адрес приходит хешем (`ipHash`).
- * Вызывается без контекста организации.
+ * контрагента — в той же транзакции), 3 неверных за час с адреса (час) и 5 неверных за сутки по
+ * ссылке с любых адресов — страница закрыта до «Сменить код» (docs/deviations.md п. О-21); `triesLeft`
+ * — меньший из остатков (docs/deviations.md п. О-1); верный код запоминает браузер на 30 дней
+ * (`tokenHash` — хеш токена новой cookie). Адрес приходит хешем (`ipHash`). Вызывается без контекста
+ * организации.
  */
 export async function tryContractorPageCode(
   db: Db,
@@ -388,8 +407,11 @@ export async function tryContractorPageCode(
     outcome: string;
     tries_left: number | null;
     locked_until: Date | string | null;
+    org_id: string | null;
+    contractor_id: string | null;
+    just_closed: boolean;
   }>(
-    sql`select * from app.contractor_page_try_code(${input.slug}, ${input.inn}, ${input.code}, ${input.ipHash}, ${input.tokenHash}, ${PAGE_CODE_TRIES}, ${PAGE_LOCK_MINUTES}, ${PAGE_IP_MAX_FAILURES}, ${PAGE_IP_WINDOW_MINUTES}, ${PAGE_IP_LOCK_MINUTES}, ${PAGE_REMEMBER_DAYS}, ${PAGE_MAX_GRANTS})`,
+    sql`select * from app.contractor_page_try_code(${input.slug}, ${input.inn}, ${input.code}, ${input.ipHash}, ${input.tokenHash}, ${PAGE_CODE_TRIES}, ${PAGE_LOCK_MINUTES}, ${PAGE_IP_MAX_FAILURES}, ${PAGE_IP_WINDOW_MINUTES}, ${PAGE_IP_LOCK_MINUTES}, ${PAGE_REMEMBER_DAYS}, ${PAGE_MAX_GRANTS}, ${PAGE_DAY_MAX_FAILURES}, ${PAGE_DAY_WINDOW_HOURS})`,
   );
   const until = asDate(row?.locked_until);
   switch (row?.outcome) {
@@ -401,6 +423,14 @@ export async function tryContractorPageCode(
       return { outcome: 'locked', lockedUntil: until! };
     case 'ip_locked':
       return { outcome: 'ip_locked', lockedUntil: until! };
+    case 'closed':
+      return {
+        outcome: 'closed',
+        justClosed:
+          row.just_closed && row.org_id && row.contractor_id
+            ? { orgId: row.org_id, contractorId: row.contractor_id }
+            : null,
+      };
     default:
       return { outcome: 'unavailable' };
   }
@@ -433,4 +463,28 @@ export async function contractorPageHeader(tx: Tx, contractorId: string) {
     .leftJoin(taxRegimes, eq(taxRegimes.code, contractors.regimeCode))
     .where(eq(contractors.id, contractorId));
   return row ?? null;
+}
+
+/**
+ * Кому сообщить, что страница закрыта после неверных кодов (docs/deviations.md п. О-21): ответственный
+ * сотрудник контрагента, затем владелец организации — по порядку; название контрагента. Только в
+ * контексте организации страницы.
+ */
+export async function pageClosedNotice(
+  tx: Tx,
+  contractorId: string,
+): Promise<{ contractor: string; employeeIds: string[] } | null> {
+  const [cp] = await tx
+    .select({ name: contractors.name, responsible: contractors.responsibleEmployeeId })
+    .from(contractors)
+    .where(eq(contractors.id, contractorId));
+  if (!cp) return null;
+  const owners = await tx
+    .select({ id: employees.id })
+    .from(employees)
+    .innerJoin(roles, eq(roles.id, employees.roleId))
+    .where(and(eq(roles.isOwner, true), eq(employees.active, true)))
+    .orderBy(employees.createdAt, employees.id);
+  const ids = [cp.responsible, ...owners.map((o) => o.id)].filter((id): id is string => !!id);
+  return { contractor: cp.name, employeeIds: [...new Set(ids)] };
 }

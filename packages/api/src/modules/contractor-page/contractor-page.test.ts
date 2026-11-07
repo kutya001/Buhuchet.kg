@@ -1,5 +1,7 @@
+import type { FakeTelegram } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
+import { fillTemplate, TELEGRAM_TEMPLATE_DEFAULTS } from '@buhuchet/domain';
 import {
   ApiError,
   Contractor,
@@ -7,9 +9,16 @@ import {
   ContractorPagesEnabled,
   PublicPage,
 } from '@buhuchet/shared';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  linkTelegram,
+  signIn,
+  TEST_ORIGIN,
+  TEST_PASSWORD,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -84,11 +93,23 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       .where(eq(schema.contractorPages.contractorId, contractorId));
     return row!;
   };
-  const resetLock = (contractorId: string) =>
-    f.t.admin.db
+  /** Снять перерыв, отметку «страница закрыта» и счёт неверных кодов за сутки. */
+  const resetLock = async (contractorId: string) => {
+    await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_page_fail'`);
+    await f.t.admin.db
       .update(schema.contractorPages)
-      .set({ failures: 0, lockedUntil: null })
+      .set({ failures: 0, lockedUntil: null, closedAt: null })
       .where(eq(schema.contractorPages.contractorId, contractorId));
+  };
+  /** Сообщение в Telegram о закрытой странице (решение заказчика 07.11.2026, Р-5 А). */
+  const closedMessage = (chatId: number, contractorName: string) => ({
+    chatId,
+    text: `${fillTemplate(TELEGRAM_TEMPLATE_DEFAULTS.tgPageClosed, {
+      контрагент: contractorName,
+      неверных: 5,
+    })}\n\nОткрыть в Buhuchet.kg: http://localhost:3000/app/cps/all`,
+    options: { disableLinkPreview: true },
+  });
 
   /** Страница без входа: без cookie сеанса, со своим cookie страницы, адресом и браузером. */
   const visit = (path: string, options: { cookie?: string; ua?: string } = {}) =>
@@ -332,15 +353,72 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     }
   });
 
-  it('5 неверных кодов подряд — ввод закрыт на 15 минут, запись в истории', async () => {
+  it('5 неверных кодов за сутки с любых адресов — страница закрыта до «Сменить код», ответственному — Telegram', async () => {
+    // Решение заказчика 07.11.2026, Р-5 А (docs/deviations.md п. О-21).
     const path = `org-a/${cpAcc.inn}`;
     const code = (await pageRow(cpAcc.id)).code;
     await resetLock(cpAcc.id);
-    let last: Response | null = null;
+    const tg = f.deps.telegram as FakeTelegram;
+    await linkTelegram(f.app, acc, 7101, 'acc_tg');
+    tg.sent.length = 0;
+    let cookie = '';
+    for (let i = 1; i <= 4; i++) {
+      expect((await enter(path, wrongOf(code), `198.51.100.${10 + i}`)).status).toBe(403);
+      // Верный код между неверными счёт за сутки не сбрасывает; браузер запомнен.
+      if (i === 2) {
+        const ok = await enter(path, code, '198.51.100.30');
+        expect(ok.status).toBe(200);
+        cookie = (ok.headers.get('set-cookie') ?? '').split(';')[0]!;
+      }
+    }
+    const last = await enter(path, wrongOf(code), '198.51.100.15');
+    expect(last.status).toBe(429);
+    expect(await failure(last)).toMatchObject({ code: 'page_closed', message: 'Страница закрыта' });
+    // Закрыта и для верного кода, и для запомненного браузера.
+    const right = await enter(path, code, '198.51.100.2');
+    expect(right.status).toBe(429);
+    expect((await failure(right)).code).toBe('page_closed');
+    expect(await visited(path, { cookie })).toEqual({ state: 'closed' });
+    expect(await visited(path)).toEqual({ state: 'closed' });
+    // Запись в истории и сообщение ответственному — по одному разу.
+    expect((await history(cpAcc.id)).filter((h) => h.action === 'page_close')).toHaveLength(1);
+    expect(tg.sent).toEqual([closedMessage(7101, 'ОсОО «Ала-Тоо Трейд»')]);
+    const card = await block(await page(owner, cpAcc.id));
+    expect(card).toMatchObject({ enabled: true, closed: true });
+
+    // «Сменить код» открывает страницу снова: новый код подходит.
+    const changed = await block(await act(chief, cpAcc.id, 'code'));
+    expect(changed.closed).toBe(false);
+    expect(await visited(path, { cookie })).toEqual({ state: 'code' });
+    expect((await enter(path, changed.code, '198.51.100.31')).status).toBe(200);
+    expect(tg.sent).toHaveLength(1);
+  });
+
+  it('нет ответственного с Telegram — сообщение о закрытой странице получает владелец', async () => {
+    const tg = f.deps.telegram as FakeTelegram;
+    await linkTelegram(f.app, owner, 7102, 'owner_tg');
+    // У главного бухгалтера Telegram не привязан.
+    const cp = await contractor('ИП Абдыкадыров', '03744097401860', employee('chief-a'));
+    const on = await block(await act(owner, cp.id, 'enable'));
+    tg.sent.length = 0;
+    for (let i = 1; i <= 5; i++) await enter(`org-a/${cp.inn}`, wrongOf(on.code!), `192.0.2.${i}`);
+    expect(await visited(`org-a/${cp.inn}`)).toEqual({ state: 'closed' });
+    expect(tg.sent).toEqual([closedMessage(7102, 'ИП Абдыкадыров')]);
+  });
+
+  it('5 неверных подряд дольше суток — ввод закрыт на 15 минут, запись в истории', async () => {
+    const path = `org-a/${cpAcc.inn}`;
+    const code = (await pageRow(cpAcc.id)).code;
+    await resetLock(cpAcc.id);
     // С разных адресов: с одного ввод закрылся бы раньше — на третьем неверном (п. Е-2).
-    for (let i = 1; i <= 5; i++) last = await enter(path, wrongOf(code), `198.51.100.${10 + i}`);
-    expect(last!.status).toBe(429);
-    const locked = await failure(last!);
+    for (let i = 1; i <= 4; i++) await enter(path, wrongOf(code), `198.51.100.${40 + i}`);
+    // Первые четыре — больше суток назад: за сутки неверный один, подряд — пять.
+    await f.t.admin.db.execute(
+      sql`update rate_limits set at = now() - interval '25 hours' where kind = 'cp_page_fail'`,
+    );
+    const last = await enter(path, wrongOf(code), '198.51.100.45');
+    expect(last.status).toBe(429);
+    const locked = await failure(last);
     expect(locked.code).toBe('page_locked');
     const until = new Date((locked.details as { lockedUntil: string }).lockedUntil).getTime();
     expect(until - Date.now()).toBeGreaterThan(14 * 60_000);
@@ -384,6 +462,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect((await visited(path, { cookie })).state).toBe('open');
 
     const before = await pageRow(cpAcc.id);
+    const codesBefore = (await history(cpAcc.id)).filter((h) => h.action === 'page_code').length;
     const changed = await block(await act(chief, cpAcc.id, 'code'));
     const after = await pageRow(cpAcc.id);
     expect(after.codeVersion).toBe(before.codeVersion + 1);
@@ -394,7 +473,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     }
     // Сам код в историю не пишется.
     const log = await history(cpAcc.id);
-    expect(log.filter((h) => h.action === 'page_code')).toHaveLength(1);
+    expect(log.filter((h) => h.action === 'page_code')).toHaveLength(codesBefore + 1);
     expect(JSON.stringify(log)).not.toContain(after.code);
   });
 

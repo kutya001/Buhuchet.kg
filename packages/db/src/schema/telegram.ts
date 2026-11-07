@@ -1,4 +1,10 @@
-import { NOTIFY_KINDS, NOTIFY_MODES, OUTBOX_KINDS, OUTBOX_STATUSES } from '@buhuchet/domain';
+import {
+  CODE_KINDS,
+  NOTIFY_KINDS,
+  NOTIFY_MODES,
+  OUTBOX_KINDS,
+  OUTBOX_STATUSES,
+} from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -108,6 +114,69 @@ export const passwordResetCodes = pgTable(
   ],
 ).enableRLS();
 
+/**
+ * Чем подтверждается следующая привязка Telegram пользователя (решение заказчика 07.11.2026, Р-13 Б;
+ * docs/deviations.md п. О-20). `chat_id` — чат, отвязанный последним: новый чат после «Отвязать»
+ * подтверждается кодом из него, как и замена привязанного. `free_until` — до какого момента Telegram
+ * привязывается без кода (владелец или администратор платформы сбросил пароль: доступа к прежнему
+ * Telegram у пользователя может не быть). Удачная привязка строку удаляет. Меняют строку только
+ * функции app.telegram_* (миграция telegram_relink_functions).
+ */
+export const telegramLinkGuards = pgTable(
+  'telegram_link_guards',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'restrict' }),
+    chatId: bigint('chat_id', { mode: 'number' }),
+    freeUntil: timestamp('free_until', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'telegram_link_guards_user_org_fk',
+      columns: [t.userId, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    orgIsolation('telegram_link_guards_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Коды подтверждения замены Telegram (docs/deviations.md п. О-20): ссылку открыли в новом чате
+ * (`chat_id`, имя — чтобы привязать после кода), бот прислал код в прежний; код вводят в новом чате.
+ * 10 минут, не больше 3 в час на логин, 5 неверных вводов на код и 10 за сутки — поэтому строки
+ * хранятся сутки и после использования. `token_hash` — ссылка, из которой пришёл код (повтор того же
+ * сообщения от Telegram не ответит «ссылка недействительна»). В базе — хеш argon2id кода.
+ */
+export const telegramRelinkCodes = pgTable(
+  'telegram_relink_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ...owner(),
+    tokenHash: text('token_hash').notNull(),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    username: text('username'),
+    firstName: text('first_name'),
+    codeHash: text('code_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+  },
+  (t) => [
+    foreignKey({
+      name: 'telegram_relink_codes_user_org_fk',
+      columns: [t.userId, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    index('telegram_relink_codes_user_idx').on(t.userId, t.createdAt),
+    index('telegram_relink_codes_chat_idx').on(t.chatId, t.createdAt),
+    orgIsolation('telegram_relink_codes_isolation', t.orgId),
+  ],
+).enableRLS();
+
 const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
 
 /**
@@ -156,7 +225,10 @@ export const telegramOutbox = pgTable(
     check('telegram_outbox_kind_check', sql`${t.kind} in (${inList(OUTBOX_KINDS)})`),
     check('telegram_outbox_status_check', sql`${t.status} in (${inList(OUTBOX_STATUSES)})`),
     check('telegram_outbox_tries_check', sql`${t.tries} >= 0`),
-    check('telegram_outbox_code_text_check', sql`${t.kind} <> 'code' or ${t.text} is null`),
+    check(
+      'telegram_outbox_code_text_check',
+      sql`${t.kind} not in (${inList(CODE_KINDS)}) or ${t.text} is null`,
+    ),
     orgIsolation('telegram_outbox_isolation', t.orgId),
   ],
 ).enableRLS();

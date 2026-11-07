@@ -21,8 +21,8 @@ const lockedUntilOf = (details: unknown): string | null => {
 
 /**
  * Страница контрагента по ссылке (прототип modules/cp-page.js, pubDraw): «Страница недоступна», ввод
- * кода, «Ввод кода временно закрыт» или открытая страница (open-page.tsx). Только для просмотра, без
- * входа.
+ * кода, «Ввод кода временно закрыт», «Страница закрыта» (5 неверных кодов за сутки, до смены кода,
+ * docs/deviations.md п. О-21) или открытая страница (open-page.tsx). Только для просмотра, без входа.
  */
 export function PublicPageScreen({
   slug,
@@ -46,6 +46,9 @@ export function PublicPageScreen({
           text={t('pub.locked.text', { time: timeOf(state.lockedUntil) })}
         />
       );
+      break;
+    case 'closed':
+      main = <Gate title={t('pub.closed.title')} text={t('pub.closed.text')} />;
       break;
     case 'code':
       main = <CodeGate slug={slug} inn={inn} />;
@@ -102,7 +105,8 @@ function Gate({ title, text }: { title: string; text: string }) {
  * «Введите код доступа»: 6 цифр (только цифры, не больше шести); верный код — сервер запоминает этот
  * браузер на 30 дней, страница перечитывается; неверный — «Осталось попыток» (меньший из остатков по
  * ссылке и по адресу, docs/deviations.md п. О-1); 5 неверных подряд — перерыв на 15 минут, 3 неверных
- * за час с одного адреса — час (docs/deviations.md п. Е-2).
+ * за час с одного адреса — час (docs/deviations.md п. Е-2); 5 неверных за сутки — страница закрыта до
+ * смены кода (п. О-21).
  */
 function CodeGate({ slug, inn }: { slug: string; inn: string }) {
   const t = useT();
@@ -142,7 +146,11 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
     setBusy(false);
     const until = lockedUntilOf(res.error.details);
     if (res.error.code === 'page_ip_locked' && until) return setIpLockedUntil(until);
-    if (res.error.code === 'page_locked' || res.error.code === 'page_unavailable') {
+    if (
+      res.error.code === 'page_locked' ||
+      res.error.code === 'page_closed' ||
+      res.error.code === 'page_unavailable'
+    ) {
       return router.refresh();
     }
     setError(errorText(res.error));

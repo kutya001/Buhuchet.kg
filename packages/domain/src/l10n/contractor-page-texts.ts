@@ -107,6 +107,15 @@ export const CONTRACTOR_PAGE_TEXTS = {
     ru: 'Страница контрагента: 5 неверных кодов подряд, ввод закрыт на 15 минут',
     section: S,
   },
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-21
+  'cppage.hist.page_close': {
+    ru: 'Страница контрагента: 5 неверных кодов за сутки, страница закрыта до смены кода',
+    section: S,
+  },
+  'cppage.closed': {
+    ru: 'Страница закрыта: за сутки было 5 неверных кодов. Нажмите «Сменить код» (нет права — попросите владельца или главного бухгалтера) и отправьте контрагенту новый код.',
+    section: S,
+  },
   'cppage.hist.shown': { ru: 'Страница контрагента: раздел «{section}» показывается', section: S },
   'cppage.hist.hidden': { ru: 'Страница контрагента: раздел «{section}» скрыт', section: S },
   'cppage.hist.client': { ru: 'Контрагент', section: S },
@@ -123,6 +132,12 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.locked.title': { ru: 'Ввод кода временно закрыт', section: S },
   'pub.locked.text': {
     ru: 'Было 5 неверных кодов подряд. Попробуйте снова после {time} или попросите код у вашего бухгалтера.',
+    section: S,
+  },
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-21
+  'pub.closed.title': { ru: 'Страница закрыта', section: S },
+  'pub.closed.text': {
+    ru: 'Было 5 неверных кодов за сутки. Попросите новый код у вашего бухгалтера.',
     section: S,
   },
   // ОТКЛОНЕНИЕ: docs/deviations.md#Е-2
@@ -309,4 +324,5 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.page_code_wrong': { ru: 'Неверный код. Осталось попыток: {triesLeft}', section: E },
   'err.page_locked': { ru: 'Ввод кода временно закрыт', section: E },
   'err.page_ip_locked': { ru: 'Ввод кода временно закрыт', section: E },
+  'err.page_closed': { ru: 'Страница закрыта', section: E },
 } as const satisfies Record<string, UiTextDefault>;
