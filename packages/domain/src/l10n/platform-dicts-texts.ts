@@ -153,6 +153,20 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_unlinked': { ru: 'Telegram: отвязан', section: S },
   'pdicts.tpl.label.tg_link_invalid': { ru: 'Telegram: ссылка устарела', section: S },
   'pdicts.tpl.label.tg_start': { ru: 'Telegram: ответ на /start', section: S },
+  'pdicts.tpl.label.tg_login_locked': { ru: 'Telegram: вход заблокирован', section: S },
+  'pdicts.tpl.label.tg_login_locked_staff': {
+    ru: 'Telegram: вход сотрудника заблокирован',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_login_locked_owner': {
+    ru: 'Telegram: вход владельца заблокирован',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_admin_code': { ru: 'Telegram: код для входа в Админку', section: S },
+  'pdicts.tpl.label.tg_pass_reset_by_admin': {
+    ru: 'Telegram: пароль сотрудника сброшен администратором',
+    section: S,
+  },
   'pdicts.tpl.label.tg_lead': { ru: 'Telegram: новая заявка с сайта', section: S },
   'pdicts.tpl.label.tg_lead_rep': { ru: 'Telegram: повторная заявка с сайта', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
