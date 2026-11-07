@@ -44,6 +44,7 @@ export const changePasswordRoute = createRoute({
       description: `После ${LOGIN_MAX_FAILURES} неверных паролей вход и смена пароля закрыты на ${LOGIN_LOCK_MINUTES} минут`,
       content: error,
     },
+    503: { description: 'Очередь проверки паролей переполнена (`server_busy`)', content: error },
   },
 });
 

@@ -1,5 +1,10 @@
 import { createFakeTelegram, type FakeTelegram } from '@buhuchet/adapters';
-import { hashPassword } from '@buhuchet/adapters/password';
+import {
+  hashPassword,
+  inPasswordQueue,
+  PASSWORD_CONCURRENCY,
+  PASSWORD_QUEUE_MAX,
+} from '@buhuchet/adapters/password';
 import { schema } from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
 import {
@@ -15,7 +20,7 @@ import {
   PasswordResetRequestedResponse,
   TemporaryPasswordResponse,
 } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
@@ -262,6 +267,39 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     expect((await confirm('acc-a', code)).status).toBe(400);
     expect((await confirm('nobody', code)).status).toBe(400);
     expect(await loginStatus('acc-a', PASSWORD)).toBe(200);
+  });
+
+  it('очередь проверки паролей полна — обычный ответ без 503, попытка ввода кода не тратится', async () => {
+    await forgetCodes(people['acc-a']!.userId);
+    await requestCode('acc-a');
+    const code = sentCode();
+    const attempts = async () =>
+      (
+        await t.admin.db
+          .select({ attempts: passwordResetCodes.attempts })
+          .from(passwordResetCodes)
+          .where(eq(passwordResetCodes.userId, people['acc-a']!.userId))
+          .orderBy(desc(passwordResetCodes.createdAt))
+          .limit(1)
+      )[0]!.attempts;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const held = Array.from({ length: PASSWORD_CONCURRENCY + PASSWORD_QUEUE_MAX }, () =>
+      inPasswordQueue(() => gate),
+    );
+    const sent = tg.sent.length;
+    try {
+      expect((await requestCode('acc-a')).status).toBe(200);
+      expect(tg.sent).toHaveLength(sent);
+      expect((await confirm('acc-a', code)).status).toBe(400);
+    } finally {
+      release();
+      await Promise.all(held);
+    }
+    expect(await attempts()).toBe(0);
+    // Очередь освободилась: тот же верный код подходит.
+    expect((await confirm('acc-a', code)).status).toBe(200);
+    await setPassword(people['acc-a']!.userId);
   });
 
   it('новый пароль по коду снимает блокировку входа после неверных паролей', async () => {

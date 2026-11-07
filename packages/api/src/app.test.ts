@@ -1,3 +1,4 @@
+import { PasswordBusyError } from '@buhuchet/adapters/password';
 import { RecordChangedError, RecordNotFoundError } from '@buhuchet/domain';
 import { ApiError, HealthResponse, isRecordChanged } from '@buhuchet/shared';
 import type { Db } from '@buhuchet/db';
@@ -201,6 +202,17 @@ describe('служебное', () => {
     const body = ApiError.parse(await bad.json());
     expect(body.error.code).toBe('validation_failed');
     expect(Array.isArray(body.error.details)).toBe(true);
+  });
+
+  it('очередь проверки паролей полна — 503 server_busy и Retry-After, а не 500', async () => {
+    const app = signedInApp();
+    app.get('/busy', () => {
+      throw new PasswordBusyError();
+    });
+    const res = await app.request('/api/busy', { headers: signedIn });
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('5');
+    expect(ApiError.parse(await res.json()).error.code).toBe('server_busy');
   });
 
   it('HTTPException отдаёт свой статус', async () => {
