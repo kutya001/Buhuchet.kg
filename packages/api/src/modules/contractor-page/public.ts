@@ -43,6 +43,7 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { translateOf } from '../contractors/common';
 import { logoLink } from '../org/logo-link';
+import { notifyPageClosed } from './closed';
 import { contractorPageBody } from './view';
 
 /*
@@ -117,7 +118,7 @@ export const publicPageRoute = createRoute({
   responses: {
     200: {
       description:
-        '«Страница недоступна», ввод кода, ввод закрыт после неверных кодов или открытая страница (браузер с запомненным кодом)',
+        '«Страница недоступна», ввод кода, ввод закрыт после неверных кодов, «Страница закрыта» после 5 неверных кодов за сутки (до «Сменить код») или открытая страница (браузер с запомненным кодом)',
       content: { 'application/json': { schema: PublicPage } },
     },
   },
@@ -134,7 +135,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     privateHeaders(c);
     if (!isPageAddress(slug, inn)) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
     const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
-    if (state.state === 'unavailable' || state.state === 'code') {
+    if (state.state === 'unavailable' || state.state === 'code' || state.state === 'closed') {
       return c.json({ state: state.state } as PublicPageBody, 200);
     }
     if (state.state === 'locked') {
@@ -205,7 +206,7 @@ export const publicPageCodeRoute = createRoute({
     404: { description: '«Страница недоступна»', content: error },
     429: {
       description:
-        'Ввод закрыт: 5 неверных кодов подряд по ссылке (`page_locked`, 15 минут) или 3 неверных за час с адреса (`page_ip_locked`, час); до какого момента — `details.lockedUntil`',
+        'Ввод закрыт: 5 неверных кодов подряд по ссылке (`page_locked`, 15 минут) или 3 неверных за час с адреса (`page_ip_locked`, час) — до какого момента, в `details.lockedUntil`; 5 неверных кодов за сутки по ссылке с любых адресов — страница закрыта до «Сменить код» (`page_closed`)',
       content: error,
     },
   },
@@ -258,6 +259,11 @@ export function publicPageCodeHandler(
         return apiFail(429, 'page_ip_locked', 'Ввод кода временно закрыт', {
           lockedUntil: timeOf(result.lockedUntil),
         });
+      case 'closed':
+        if (result.justClosed) {
+          await notifyPageClosed(deps, result.justClosed.orgId, result.justClosed.contractorId);
+        }
+        return apiFail(429, 'page_closed', 'Страница закрыта');
       default:
         return unavailable();
     }

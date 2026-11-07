@@ -3,7 +3,9 @@ import {
   botMessages,
   hire,
   pressStart,
+  linkTelegram,
   signIn,
+  tellBot,
   uniqueChat,
   uniqueLogin,
   WEBHOOK_SECRET,
@@ -87,6 +89,54 @@ test.describe('Этап 1: Telegram и «Забыли пароль?» (API)', ()
     const unlink = await request.delete('/api/telegram/link', { headers: { origin } });
     expect(unlink.status()).toBe(200);
     expect((await (await request.get('/api/auth/me')).json()).telegram).toBeNull();
+  });
+
+  test('(решение заказчика 07.11.2026, Р-13 Б) другой Telegram вместо прежнего — только кодом, который бот прислал в прежний чат', async ({
+    request,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const login = uniqueLogin('e2e-relink');
+    const { temporaryPassword } = await hire(request, origin, login);
+    await signIn(request, origin, login, temporaryPassword);
+    await request.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+    });
+    const telegram = async () =>
+      ((await (await request.get('/api/auth/me')).json()) as { telegram: unknown }).telegram;
+    const first = uniqueChat();
+    await linkTelegram(request, origin, first);
+    expect(await telegram()).toMatchObject({ name: `@e2e_${first}` });
+
+    // Ссылку открыли в другом Telegram: чат не сменился, код — в прежний чат, новый просит его.
+    const second = uniqueChat();
+    await linkTelegram(request, origin, second);
+    expect(await telegram()).toMatchObject({ name: `@e2e_${first}` });
+    await expect.poll(() => botMessages(request, first)).toHaveLength(2);
+    const notice = (await botMessages(request, first))[1]!;
+    expect(notice).toContain(`хотят привязать другой Telegram: «@e2e_${second}»`);
+    const code = /код: (\d{6})/.exec(notice)?.[1];
+    expect(code, notice).toBeTruthy();
+    await expect
+      .poll(() => botMessages(request, second))
+      .toEqual([expect.stringContaining('пришлите его сюда')]);
+
+    // Неверный код — «Осталось попыток: 4»; верный из нового чата привязывает его.
+    expect((await tellBot(request, second, code === '000000' ? '111111' : '000000')).status()).toBe(
+      200,
+    );
+    await expect
+      .poll(() => botMessages(request, second))
+      .toEqual([expect.anything(), 'Неверный код. Осталось попыток: 4.']);
+    expect((await tellBot(request, second, code!)).status()).toBe(200);
+    expect(await telegram()).toMatchObject({ name: `@e2e_${second}` });
+    await expect.poll(() => botMessages(request, first)).toHaveLength(3);
+    expect((await botMessages(request, first))[2]).toContain(
+      `привязан другой Telegram: @e2e_${second}`,
+    );
+    await expect.poll(() => botMessages(request, second)).toHaveLength(3);
+    expect((await botMessages(request, second))[2]).toContain(login);
   });
 
   test('вебхук без секрета или с чужим секретом не принимается', async ({ request }) => {

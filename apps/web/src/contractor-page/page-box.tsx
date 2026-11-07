@@ -214,6 +214,12 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
       <div data-cp-page="" className="contents">
         {page.enabled ? (
           <>
+            {page.closed ? (
+              // ОТКЛОНЕНИЕ: docs/deviations.md#О-21
+              <Note tone="bad">
+                <span data-cp-page-closed="">{t('cppage.closed')}</span>
+              </Note>
+            ) : null}
             <KeyValues items={items} />
             {page.sections.length > 0 ? (
               <SectionsRow

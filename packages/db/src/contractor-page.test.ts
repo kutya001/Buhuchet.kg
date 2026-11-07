@@ -1,7 +1,12 @@
 import { createHash } from 'node:crypto';
-import { defaultOrgPolicy, PAGE_IP_MAX_FAILURES } from '@buhuchet/domain';
+import {
+  defaultOrgPolicy,
+  PAGE_DAY_MAX_FAILURES,
+  PAGE_DAY_WINDOW_HOURS,
+  PAGE_IP_MAX_FAILURES,
+} from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import {
   changeContractorPageCode,
@@ -18,6 +23,7 @@ import {
 import { createContractor, type ContractorFields } from './contractors';
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
+import { RATE_LIMIT_KEEP_SECONDS } from './rate-limits';
 import {
   contractorPageGrants,
   contractorPages,
@@ -126,6 +132,14 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
 
   afterAll(async () => {
     await db?.drop();
+  });
+
+  // Каждый тест — с чистым счётом неверных кодов по ссылке (подряд и за сутки) и открытой страницей.
+  beforeEach(async () => {
+    await db.admin.db.execute(sql`delete from rate_limits where kind = 'cp_page_fail'`);
+    await db.admin.db
+      .update(contractorPages)
+      .set({ failures: 0, lockedUntil: null, closedAt: null });
   });
 
   it('включить: код, история; повторно — «уже включена»; выключить и включить снова — новый номер кода', async () => {
@@ -244,34 +258,51 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     expect(await state('page-a')).toEqual({ state: 'code' });
   });
 
-  it('5 неверных кодов подряд — ввод по ссылке закрыт на 15 минут; верный код запоминает браузер до смены кода', async () => {
+  it('5 неверных кодов за сутки с любых адресов — страница закрыта для всех до «Сменить код»; верный код запоминает браузер до смены кода', async () => {
+    // Решение заказчика 07.11.2026 (Р-5 А, docs/deviations.md п. О-21).
+    expect(PAGE_DAY_MAX_FAILURES).toBe(5);
+    // Очистка пределов не удаляет неверные коды, которые ещё считаются за сутки.
+    expect(PAGE_DAY_WINDOW_HOURS * 3600).toBeLessThanOrEqual(RATE_LIMIT_KEEP_SECONDS);
     const right = await code();
     const wrong = wrongOf(right);
+    // Браузер, где код уже запомнен: закрытая страница закрыта и для него.
+    expect(await attempt(right, { token: 'browser-0' })).toEqual({ outcome: 'ok' });
     // Каждый код — с нового адреса: «Осталось попыток» — меньшее из остатков по ссылке и по адресу (у
     // адреса после первого неверного — 2), docs/deviations.md п. О-1.
     for (const left of [2, 2, 2, 1]) {
       expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: left });
     }
-    expect(await attempt(wrong)).toMatchObject({ outcome: 'locked' });
-    // Перерыв — в истории контрагента той же транзакцией, без сотрудника.
-    const locks = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
-      (h) => h.action === 'page_lock',
-    );
-    expect(locks).toHaveLength(1);
-    expect(locks[0]).toMatchObject({ contractorId: cpId, actorUserId: null });
-    // Пока закрыто — и верный код не принимается, счёт не идёт.
-    expect(await attempt(right)).toMatchObject({ outcome: 'locked' });
-    expect(await contractorPageState(db.app.db, 'page-a', INN, null)).toMatchObject({
-      state: 'locked',
+    expect(await attempt(wrong)).toEqual({
+      outcome: 'closed',
+      justClosed: { orgId: a.orgId, contractorId: cpId },
     });
-    // Через 15 минут — снова ввод; верный код снимает счёт.
-    await db.admin.db
-      .update(contractorPages)
-      .set({ lockedUntil: sql`now() - interval '1 second'` });
-    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 2 });
+    // Закрытие — в истории контрагента той же транзакцией, без сотрудника.
+    const closes = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
+      (h) => h.action === 'page_close',
+    );
+    expect(closes).toHaveLength(1);
+    expect(closes[0]).toMatchObject({ contractorId: cpId, actorUserId: null });
+    // Закрыто: и верный код не принимается, счёт не идёт, сообщения второй раз нет.
+    expect(await attempt(right)).toEqual({ outcome: 'closed', justClosed: null });
+    expect(await contractorPageState(db.app.db, 'page-a', INN, null)).toEqual({ state: 'closed' });
+    expect(await contractorPageState(db.app.db, 'page-a', INN, hash('browser-0'))).toEqual({
+      state: 'closed',
+    });
+    expect(await inA((tx) => getContractorPage(tx, cpId))).toMatchObject({ closed: true });
+    // Время не открывает — только «Сменить код»: счёт за сутки начинается заново.
+    await db.admin.db.execute(
+      sql`update rate_limits set at = now() - interval '2 days' where kind = 'cp_page_fail'`,
+    );
+    expect(await attempt(right)).toEqual({ outcome: 'closed', justClosed: null });
+    await inA((tx) => changeContractorPageCode(tx, cpId, '654320'));
+    expect(await inA((tx) => getContractorPage(tx, cpId))).toMatchObject({ closed: false });
+    expect(await contractorPageState(db.app.db, 'page-a', INN, hash('browser-0'))).toEqual({
+      state: 'code',
+    });
+    expect(await attempt(wrongOf('654320'))).toEqual({ outcome: 'wrong', triesLeft: 2 });
     expect((await page())[0]).toMatchObject({ failures: 1 });
-    expect(await attempt(right, { token: 'browser-1' })).toEqual({ outcome: 'ok' });
-    expect((await page())[0]).toMatchObject({ failures: 0, lockedUntil: null });
+    expect(await attempt('654320', { token: 'browser-1' })).toEqual({ outcome: 'ok' });
+    expect((await page())[0]).toMatchObject({ failures: 0, lockedUntil: null, closedAt: null });
     expect(await contractorPageState(db.app.db, 'page-a', INN, hash('browser-1'))).toEqual({
       state: 'open',
       orgId: a.orgId,
@@ -289,7 +320,47 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     expect(await contractorPageState(db.app.db, 'page-a', INN, hash('browser-1'))).toEqual({
       state: 'code',
     });
-    expect(await cleanupContractorPageGrants(db.app.db)).toBe(1);
+    expect(await cleanupContractorPageGrants(db.app.db)).toBe(2);
+  });
+
+  it('общий счёт за сутки не снимает верный код; выключить и включить снова — страница открыта', async () => {
+    const right = await code();
+    const wrong = wrongOf(right);
+    for (let i = 0; i < 4; i++) await attempt(wrong);
+    // Верный код снимает счёт «подряд», но не за сутки: следующий неверный закрывает страницу.
+    expect(await attempt(right)).toEqual({ outcome: 'ok' });
+    expect(await attempt(wrong)).toMatchObject({ outcome: 'closed' });
+    await inA((tx) => disableContractorPage(tx, cpId));
+    await inA((tx) => enableContractorPage(tx, cpId, '482916'));
+    expect(await contractorPageState(db.app.db, 'page-a', INN, null)).toEqual({ state: 'code' });
+    expect(await attempt('482916')).toEqual({ outcome: 'ok' });
+  });
+
+  it('5 неверных кодов подряд дольше суток — ввод по ссылке закрыт на 15 минут (прототип PG_LOCK)', async () => {
+    const right = await code();
+    const wrong = wrongOf(right);
+    for (let i = 0; i < 4; i++) await attempt(wrong);
+    // Первые четыре — больше суток назад: в общий счёт за сутки уже не входят.
+    await db.admin.db.execute(
+      sql`update rate_limits set at = now() - interval '25 hours' where kind = 'cp_page_fail'`,
+    );
+    expect(await attempt(wrong)).toMatchObject({ outcome: 'locked' });
+    const locks = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
+      (h) => h.action === 'page_lock',
+    );
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toMatchObject({ contractorId: cpId, actorUserId: null });
+    // Пока закрыто — и верный код не принимается, счёт не идёт.
+    expect(await attempt(right)).toMatchObject({ outcome: 'locked' });
+    expect(await contractorPageState(db.app.db, 'page-a', INN, null)).toMatchObject({
+      state: 'locked',
+    });
+    // Через 15 минут — снова ввод: за сутки — один неверный, остаток по адресу 2.
+    await db.admin.db
+      .update(contractorPages)
+      .set({ lockedUntil: sql`now() - interval '1 second'` });
+    expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 2 });
+    expect(await attempt(right)).toEqual({ outcome: 'ok' });
   });
 
   it('«подряд» — до верного кода: давние неверные коды тоже считаются (прототип p.fails)', async () => {
@@ -302,23 +373,23 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
     expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 2 });
     expect((await page())[0]).toMatchObject({ failures: 3 });
     expect(await attempt(wrong)).toEqual({ outcome: 'wrong', triesLeft: 1 });
-    await db.admin.db.update(contractorPages).set({ failures: 0 });
   });
 
-  it('одновременные неверные коды по ссылке считаются по очереди: ровно 5 до перерыва', async () => {
+  it('одновременные неверные коды по ссылке считаются по очереди: ровно 5 до закрытия, закрытие — одно', async () => {
     const wrong = wrongOf(await code());
     const results = await Promise.all(Array.from({ length: 10 }, () => attempt(wrong)));
     const outcomes = results.map((r) => r.outcome);
     expect(outcomes.filter((o) => o === 'wrong')).toHaveLength(4);
-    expect(outcomes.filter((o) => o === 'locked')).toHaveLength(6);
+    expect(outcomes.filter((o) => o === 'closed')).toHaveLength(6);
+    // Сообщение ответственному — один раз: «только что закрыта» ровно у одной попытки.
+    expect(results.filter((r) => r.outcome === 'closed' && r.justClosed)).toHaveLength(1);
     const left = results.flatMap((r) => (r.outcome === 'wrong' ? [r.triesLeft] : []));
     // Остаток по ссылке 4, 3, 2, 1, у каждого нового адреса — 2: показывается меньший (п. О-1).
     expect(left.sort()).toEqual([1, 2, 2, 2]);
-    const locks = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
-      (h) => h.action === 'page_lock',
+    const closes = (await inA((tx) => readHistory(tx, 'contractor_page', cpId))).filter(
+      (h) => h.action === 'page_close',
     );
-    expect(locks).toHaveLength(2);
-    await db.admin.db.update(contractorPages).set({ failures: 0, lockedUntil: null });
+    expect(closes).toHaveLength(3);
   });
 
   it('одновременные неверные коды с одного адреса — точный счёт', async () => {

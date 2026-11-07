@@ -53,6 +53,11 @@ export const contractorPages = pgTable(
     failures: integer('failures').notNull().default(0),
     /** До какого момента ввод кода по ссылке закрыт (5 неверных подряд — 15 минут). */
     lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    /**
+     * Когда страница закрылась после 5 неверных кодов за сутки: закрыта для всех, пока «Сменить код»
+     * (или повторное включение) не снимет отметку (docs/deviations.md п. О-21).
+     */
+    closedAt: timestamp('closed_at', { withTimezone: true }),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),

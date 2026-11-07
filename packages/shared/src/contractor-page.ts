@@ -36,6 +36,10 @@ export const ContractorPage = z.object({
   code: z.string().nullable(),
   lastOpenAt: z.iso.datetime().nullable(),
   lastDevice: z.string().nullable(),
+  /**
+   * Страница закрыта после 5 неверных кодов за сутки — до «Сменить код» (docs/deviations.md п. О-21).
+   */
+  closed: z.boolean(),
   /** Разделы организации, которые можно скрыть у этого контрагента, по порядку страницы. */
   sections: z.array(PageSectionSchema),
   hiddenSections: z.array(PageSectionSchema),
@@ -300,12 +304,14 @@ export type PublicPageBody = z.infer<typeof PublicPageBody>;
 
 /**
  * Что показать по ссылке: «Страница недоступна» (выключенная, неизвестный ИНН, архив — одинаково),
- * ввод кода, перерыв после неверных кодов или саму страницу.
+ * ввод кода, перерыв после неверных кодов, «Страница закрыта» после 5 неверных кодов за сутки (до
+ * смены кода, docs/deviations.md п. О-21) или саму страницу.
  */
 export const PublicPage = z.discriminatedUnion('state', [
   z.object({ state: z.literal('unavailable') }),
   z.object({ state: z.literal('code') }),
   z.object({ state: z.literal('locked'), lockedUntil: z.iso.datetime() }),
+  z.object({ state: z.literal('closed') }),
   z.object({ state: z.literal('open'), page: PublicPageBody }),
 ]);
 export type PublicPage = z.infer<typeof PublicPage>;

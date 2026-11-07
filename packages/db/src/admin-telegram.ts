@@ -1,4 +1,5 @@
 import {
+  CODE_KINDS,
   OUTBOX_KINDS,
   OUTBOX_UNDELIVERABLE,
   type ListQuery,
@@ -272,8 +273,8 @@ export async function adminTelegramSummary(
 }
 
 /**
- * «Повторить отправку» и «Повторить ошибки» (прототип `tgNoRetry`): строки с «Ошибкой», кроме кода
- * восстановления, снова «Ожидают» (попыток 0) и уходят обычной очередью. Отвечает, сколько строк снова
+ * «Повторить отправку» и «Повторить ошибки» (прототип `tgNoRetry`): строки с «Ошибкой», кроме кодов
+ * (восстановления и замены Telegram), снова «Ожидают» (попыток 0) и уходят обычной очередью. Отвечает, сколько строк снова
  * в очереди и сколько из выбранных — коды восстановления с ошибкой (их повторно не отправляют).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-32 — повтор уходит очередью, в прежний чат — не отправляется.
@@ -286,7 +287,7 @@ export async function adminTelegramRetry(
   const [codes] = await tx
     .select({ n: sql<number>`count(*)::integer` })
     .from(v)
-    .where(and(inArray(v.id, [...ids]), eq(v.status, 'error'), eq(v.kind, 'code')));
+    .where(and(inArray(v.id, [...ids]), eq(v.status, 'error'), inArray(v.kind, [...CODE_KINDS])));
   const [row] = await tx.execute<{ n: number | null }>(
     sql`select app.admin_telegram_retry(array[${sql.join(
       ids.map((id) => sql`${id}`),

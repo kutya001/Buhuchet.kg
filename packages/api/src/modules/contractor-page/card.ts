@@ -111,6 +111,7 @@ async function pageOut(
     code: enabled ? page!.code : null,
     lastOpenAt: page?.lastOpenAt?.toISOString() ?? null,
     lastDevice: page?.lastDevice ?? null,
+    closed: enabled && !!page?.closed,
     sections: pageOrgSections(org.pageSections, org.features),
     hiddenSections: page?.hiddenSections ?? [],
     version: page?.version ?? null,
