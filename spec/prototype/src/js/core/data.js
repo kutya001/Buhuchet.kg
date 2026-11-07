@@ -307,6 +307,10 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
     if(a&&r.messageTemplates)ks.forEach(k=>{if(a[k]==null&&r.messageTemplates[k]!=null)a[k]=r.messageTemplates[k]});if(n&&r.templateNotes)ks.forEach(k=>{if(n[k]==null&&r.templateNotes[k]!=null)n[k]=r.templateNotes[k]});
     const de=(DBSRC.demo.db.employees||[]).find(x=>x.id==='e6'),e=(db.employees||[]).find(x=>x.id==='e6');
     if(db.meta.mode!=='empty'&&de&&e&&e.login==='jyldyz'&&e.pwLocked==null&&e.pwBad==null){e.pwBad=de.pwBad;e.pwLocked=de.pwLocked;const dh=(DBSRC.demo.db.history||[]).filter(h=>h.ent==='emp'&&h.id==='e6'&&/^Вход заблокирован/.test(h.what));if(Array.isArray(db.history))dh.forEach(h=>db.history.push(structuredClone(h)))}}
+  // v77 (решение заказчика 07.11.2026): 6 шаблонов замены Telegram и «страница контрагента закрыта»; новый текст «Telegram: привязан другой Telegram», если администратор не менял прежний
+  if(!db.meta.v77){db.meta.v77=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgRelinkCode','tgRelinkAsk','tgRelinkWrong','tgRelinkFailed','tgRelinkLimited','tgRelinkNoSend','tgPageClosed'];
+    if(a){ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(a.tgRelinked==='⚠️ К учётной записи {логин} привязан другой Telegram: {телеграм}. Сюда больше не придут напоминания и коды. Если это сделали не вы, смените пароль (все сеансы завершатся) и снова привяжите свой Telegram в «Мой профиль».'&&rm.tgRelinked)a.tgRelinked=rm.tgRelinked}
+    if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

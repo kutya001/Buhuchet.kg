@@ -4,6 +4,11 @@
 // Разделы страницы: [ключ, название, функция учётной политики, без которой раздела нет]; «Главное» и «Ваш бухгалтер» показываются всегда
 const PG_SECS=[['pay','Как оплатить'],['reports','Отчёты'],['files','Файлы'],['money','Деньги на налоги','taxpay'],['fee','Оплата за обслуживание','fee'],['kpi','Показатели','indicators'],['contacts','Контакты']];
 const PG_TRY=5,PG_LOCK=15*60e3,PG_KEEP=30*864e5;
+// Кроме 5 неверных подряд — не больше 5 неверных кодов за сутки по одной ссылке с любых адресов: пятый закрывает страницу до «Сменить код» или «Выключить» и «Включить» (решение заказчика 07.11.2026). Счёт идёт по коду (p.day — время неверных вводов), верный код между неверными его не сбрасывает; закрытая страница не открывается никому, в том числе в браузерах с запомненным кодом
+const PG_DAY=5,PG_DAYMS=864e5;
+const pgDay=p=>{const now=Date.now();p.day=(p.day||[]).filter(t=>now-t<PG_DAYMS);return p.day};
+// Ответственному за контрагента — «Telegram: страница контрагента закрыта»; нет ответственного, он заблокирован или без Telegram — первому владельцу организации с Telegram. Приходит и при выключенных напоминаниях
+function pgClosedNotify(c){const r=EM[c.resp],to=r&&r.active!==false&&r.tg?r:EMP.find(e=>e.role==='owner'&&e.active!==false&&e.tg);if(to)tgSvc(to,'Страница контрагента закрыта')}
 const pgPath=c=>`${ORG.slug}/inn/${c.inn}`;
 const pgUrl=c=>'www.buhuchet.kg/'+pgPath(c);
 const pgCodeTxt=k=>k?k.slice(0,3)+' '+k.slice(3):'';
@@ -23,6 +28,7 @@ function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why
       <div><span class="k">Последнее открытие</span><span class="v">${p.last?`${fmtDT(p.last)}${p.lastDev?` <span class="hint">· ${esc(p.lastDev)}</span>`:''}`:'<span class="faint">контрагент ещё не открывал</span>'}</span></div>
       ${secs.length?`<div class="pg-secs-row"><span class="k">Разделы страницы</span><span class="v"><span class="pg-secs">${secs.map(([k,l])=>`<label class="row"><input type="checkbox" data-pg-sec="${k}" ${(p.hide||[]).includes(k)?'':'checked'} ${why?'disabled':''}> ${esc(l)}</label>`).join('')}</span><span class="hint">«Ваш бухгалтер» видно всегда. Разделы для всех контрагентов — в учётной политике</span></span></div>`:''}</div>`
     :`<span class="hint">${c.archived?'Контрагент в архиве — страница выключена.':'Контрагент откроет по ссылке и коду из 6 цифр свои отчёты, показатели и оплату за обслуживание — только для просмотра, без входа в программу.'}</span>`}
+    ${on&&p.closed?`<div class="note bad">${ic('lock','sm')}<span>Страница закрыта: за сутки было 5 неверных кодов. Нажмите «Сменить код» (нет права — попросите владельца или главного бухгалтера) и отправьте контрагенту новый код.</span></div>`:''}
     <div class="row acts">${on?`${btn('copy','copy','Скопировать ссылку',sw)}${btn('wa','chat','Отправить в WhatsApp',sw)}<div class="grow"></div>${btn('code','refresh','Сменить код',why)}${btn('off','ban','Выключить',why)}`:c.archived?'':`<div class="grow"></div>${btn('on','link','Включить',why,'cta')}`}</div></div>`}
 function pgMount(el,c,redraw){const b=$('#cp-page',el);if(!b)return;
   b.onclick=e=>{const x=e.target.closest('[data-pg]');if(!x)return;if(x.dataset.why){toast(x.dataset.why,'lock',true);return}const k=x.dataset.pg;
@@ -40,7 +46,7 @@ function pgEnable(cs,done){const a=cs.filter(c=>!c.archived&&!(c.page&&c.page.on
 function pgOff(c,why){if(!c.page||!c.page.on)return;c.page.on=false;c.page.offAt=nowStamp();log('cp',c.id,'Страница контрагента выключена'+(why?': '+why:''),c.id)}
 function pgOffDlg(c,done){confirmDlg({title:'Выключить страницу контрагента?',text:'Ссылка перестанет открываться: контрагент увидит «Страница недоступна. Обратитесь к вашему бухгалтеру». Включить можно снова — с новым кодом.',ok:'Выключить',danger:true,run:()=>{pgOff(c,'');done&&done();refreshAll();toast('Страница выключена','ban')}})}
 function pgCodeDlg(c,done){confirmDlg({title:'Сменить код доступа?',text:'Старый код перестанет действовать сразу, в том числе в браузерах, где он запомнен. Новый код нужно будет отправить контрагенту.',ok:'Сменить код',run:()=>{
-  Object.assign(c.page,{code:pgNewCode(),codeAt:nowStamp(),fails:0,lock:0});log('cp',c.id,'Код доступа страницы контрагента изменён',c.id);done&&done();refreshAll();toast(`Новый код: ${pgCodeTxt(c.page.code)}. Отправьте его контрагенту`,'link')}})}
+  Object.assign(c.page,{code:pgNewCode(),codeAt:nowStamp(),fails:0,lock:0,day:[],closed:null});log('cp',c.id,'Код доступа страницы контрагента изменён',c.id);done&&done();refreshAll();toast(`Новый код: ${pgCodeTxt(c.page.code)}. Отправьте его контрагенту`,'link')}})}
 
 /* Сама страница — как её откроет контрагент по ссылке. В прототипе открывается поверх программы по адресу #/<адрес организации>/inn/<ИНН> */
 const PUB={back:'',open:null};
@@ -63,7 +69,8 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
   let main;
   if(!c)main=`<div class="pub-gate">${brand}<h1>Страница недоступна</h1><p class="muted">Обратитесь к вашему бухгалтеру.</p></div>`;
   else{const p=c.page,mem=pgMem()[o.slug+'|'+o.inn];
-    if(mem&&mem.code===p.code&&mem.until>Date.now())main=pubBody(c);
+    if(p.closed)main=`<div class="pub-gate">${brand}<h1>Страница закрыта</h1><p class="muted">Было ${PG_DAY} неверных кодов за сутки. Попросите новый код у вашего бухгалтера.</p></div>`;
+    else if(mem&&mem.code===p.code&&mem.until>Date.now())main=pubBody(c);
     else if(p.lock>Date.now())main=`<div class="pub-gate">${brand}<h1>Ввод кода временно закрыт</h1><p class="muted">Было ${PG_TRY} неверных кодов подряд. Попробуйте снова после ${pgHm(p.lock)} или попросите код у вашего бухгалтера.</p></div>`;
     else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код доступа</h1><p class="muted">Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.</p>${fld('Код доступа',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button><span class="hint">В этом браузере код запомнится на 30 дней.</span></form>`}
   el.innerHTML=bar+`<div class="pub-page">${main}<footer class="pub-foot">Страница только для просмотра. Вопросы — вашему бухгалтеру.</footer></div>`;
@@ -72,8 +79,10 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
   if(c&&c.page.on&&$('.pub-body',el)&&!o.logged){o.logged=true;pubSeen(c)}
   const f=$('#pub-f',el);if(f){const k=$('#pub-k',f);setTimeout(()=>k.focus(),30);k.oninput=()=>{k.value=k.value.replace(/\D/g,'').slice(0,6);setErr(f,'pub-k','')};
     f.onsubmit=e=>{e.preventDefault();const p=c.page,v=k.value.trim();if(!/^\d{6}$/.test(v)){setErr(f,'pub-k','Введите 6 цифр');return}
-      if(v!==p.code){p.fails=(p.fails||0)+1;if(p.fails>=PG_TRY){p.fails=0;p.lock=Date.now()+PG_LOCK;HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента: ${PG_TRY} неверных кодов подряд, ввод закрыт на 15 минут`});dbSoon();pubDraw();return}
-        dbSoon();setErr(f,'pub-k',`Неверный код. Осталось попыток: ${PG_TRY-p.fails}`);k.select();return}
+      if(v!==p.code){p.fails=(p.fails||0)+1;const d=pgDay(p);d.push(Date.now());
+        if(d.length>=PG_DAY){p.fails=0;p.closed=nowStamp();HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента: ${PG_DAY} неверных кодов за сутки, страница закрыта до смены кода`});pgClosedNotify(c);dbSoon();pubDraw();return}
+        if(p.fails>=PG_TRY){p.fails=0;p.lock=Date.now()+PG_LOCK;HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента: ${PG_TRY} неверных кодов подряд, ввод закрыт на 15 минут`});dbSoon();pubDraw();return}
+        dbSoon();setErr(f,'pub-k',`Неверный код. Осталось попыток: ${Math.min(PG_TRY-p.fails,PG_DAY-pgDay(p).length)}`);k.select();return}
       p.fails=0;const m=pgMem();m[o.slug+'|'+o.inn]={code:p.code,until:Date.now()+PG_KEEP};store.set('pgmem',m);pubDraw()}}
   const y=$('#pub-y',el);if(y)y.onchange=()=>{PUB.y=y.value;PUB.rm=null;pubDraw(true)};const ky=$('#pub-ky',el);if(ky)ky.onchange=()=>{PUB.ky=ky.value;pubDraw(true)};
   const b=$('.pub-body',el);if(b)b.onclick=pubClick;
