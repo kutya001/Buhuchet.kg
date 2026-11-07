@@ -806,6 +806,13 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
         tx.execute(sql`select app.telegram_relink_allow(${adminId}, 24)`),
       ),
     ).rejects.toThrow();
+    // Администратору платформы ссылка привязки и с временным паролем: без Telegram он не войдёт в
+    // Админку (код входа приходит туда).
+    await t.admin.db.update(users).set({ mustChangePassword: true }).where(eq(users.id, adminId));
+    expect(
+      await withUserContext(t.app.db, adminId, (tx) => createTelegramLinkToken(tx, newHash())),
+    ).toBeInstanceOf(Date);
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, adminId));
   });
 
   it('администратор платформы находит учётную запись; остальные — нет', async () => {
