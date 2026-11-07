@@ -140,9 +140,10 @@ async function linked(
       ? result.previous
       : (result.unlinked ?? null);
   if (before) {
+    // Имя нового Telegram задаёт его владелец — одной строкой и коротко, как в коде замены.
     const notice = await botText(deps, 'tgRelinked', {
       логин: account.login,
-      телеграм: telegramName(link),
+      телеграм: relinkName(link),
     });
     await sendNow(
       deps,
@@ -169,13 +170,24 @@ async function linked(
 }
 
 /**
- * Имя нового Telegram в сообщении с кодом в прежний чат: его выбирает владелец нового чата, поэтому —
- * одной строкой, не длиннее 32 знаков и в кавычках шаблона (не выдать за текст бота).
+ * Имя нового Telegram в сообщениях о замене в прежний чат (код замены, «привязан другой Telegram»): его
+ * выбирает владелец нового чата, поэтому — одной строкой, без невидимых и управляющих знаков (смена
+ * направления текста) и не длиннее 32 знаков (не выдать за текст бота). Режется по знакам, а не по
+ * половинкам UTF-16: обрезанный эмодзи Telegram не примет, и сообщение не дошло бы.
  */
 const RELINK_NAME_MAX = 32;
 function relinkName(link: LinkChat): string {
-  const name = telegramName(link).replace(/\s+/g, ' ').trim();
-  return name.length > RELINK_NAME_MAX ? `${name.slice(0, RELINK_NAME_MAX - 1)}…` : name;
+  const chars = [
+    ...telegramName(link)
+      // Соединитель эмодзи (U+200D) остаётся, иначе составной эмодзи распался бы на части.
+      .replace(/(?!\u200d)[\p{Cc}\p{Cf}]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  ];
+  if (chars.length === 0) return 'Telegram';
+  return chars.length > RELINK_NAME_MAX
+    ? `${chars.slice(0, RELINK_NAME_MAX - 1).join('')}…`
+    : chars.join('');
 }
 
 /**
