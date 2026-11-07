@@ -3,6 +3,11 @@ import {
   DUMMY_HASH,
   generateTemporaryPassword,
   hashPassword,
+  inPasswordQueue,
+  PASSWORD_CONCURRENCY,
+  PASSWORD_QUEUE_MAX,
+  PasswordBusyError,
+  passwordQueueFull,
   verifyAgainstDummy,
   verifyPassword,
 } from './password';
@@ -37,5 +42,33 @@ describe('пароли', () => {
     expect(p).toMatch(/^[a-km-zA-HJ-NP-Z2-9]{12}$/);
     expect(generateTemporaryPassword()).not.toBe(p);
     expect(generateTemporaryPassword(20)).toHaveLength(20);
+  });
+
+  it(`очередь argon2: одновременно не больше ${PASSWORD_CONCURRENCY}, сверх ${PASSWORD_QUEUE_MAX} ждущих — «занято»`, async () => {
+    let active = 0;
+    let peak = 0;
+    const gates: Array<() => void> = [];
+    const job = () =>
+      inPasswordQueue(async () => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise<void>((resolve) => gates.push(resolve));
+        active--;
+        return 'ok';
+      });
+    const jobs = Array.from({ length: PASSWORD_CONCURRENCY + PASSWORD_QUEUE_MAX }, job);
+    expect(passwordQueueFull()).toBe(true);
+    await expect(job()).rejects.toBeInstanceOf(PasswordBusyError);
+    // Отпускать по одной, пока все не закончатся: каждая следующая занимает освободившееся место.
+    while (gates.length || active) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      gates.shift()?.();
+    }
+    expect(await Promise.all(jobs)).toHaveLength(PASSWORD_CONCURRENCY + PASSWORD_QUEUE_MAX);
+    expect(peak).toBe(PASSWORD_CONCURRENCY);
+    // Очередь освободилась: работа снова принимается, ошибка внутри не держит место.
+    await expect(inPasswordQueue(() => Promise.reject(new Error('сбой')))).rejects.toThrow('сбой');
+    expect(await inPasswordQueue(async () => 1)).toBe(1);
+    expect(passwordQueueFull()).toBe(false);
   });
 });

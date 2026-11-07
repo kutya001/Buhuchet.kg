@@ -1,4 +1,5 @@
 import {
+  ACCOUNT_LOCK_FAILURES,
   isPermissionId,
   LOGIN_FAILURE_MEMORY_MINUTES,
   LOGIN_LOCK_MINUTES,
@@ -36,6 +37,10 @@ export interface LoginRecord {
   employeeActive: boolean | null;
   orgStatus: 'active' | 'blocked' | null;
   orgName: string | null;
+  /** Вход закрыт после 10 неверных паролей подряд (миграция 0095). */
+  loginLocked: boolean;
+  /** Владелец организации: его блокировку входа снимает администратор платформы. */
+  isOwner: boolean;
 }
 
 interface LoginRow extends Record<string, unknown> {
@@ -50,6 +55,8 @@ interface LoginRow extends Record<string, unknown> {
   employee_active: boolean | null;
   org_status: 'active' | 'blocked' | null;
   org_name: string | null;
+  login_locked: boolean;
+  is_owner: boolean;
 }
 
 const asDate = (v: Date | string | null): Date | null =>
@@ -70,7 +77,36 @@ export async function findLogin(db: Db | Tx, login: string): Promise<LoginRecord
     employeeActive: row.employee_active,
     orgStatus: row.org_status,
     orgName: row.org_name,
+    loginLocked: row.login_locked,
+    isOwner: row.is_owner,
   };
+}
+
+/**
+ * Неверный пароль у учётной записи (`userId`; null — такого логина нет: запрос тот же, по времени не
+ * видно): счёт +1, на ACCOUNT_LOCK_FAILURES-м подряд вход закрывается. true — эта попытка закрыла вход
+ * (тогда — `notifyAccountLocked`). Счёт снимают верный пароль (`clearLoginAttempts`) и новый пароль от
+ * владельца или администратора (`setTemporaryPassword`).
+ */
+export async function recordLoginFailure(db: Db, userId: string | null): Promise<boolean> {
+  const [row] = await db.execute<{ locked_now: boolean }>(
+    sql`select * from app.auth_login_failed(${userId}::uuid, ${ACCOUNT_LOCK_FAILURES})`,
+  );
+  return row?.locked_now === true;
+}
+
+/**
+ * Вход только что закрыт: запись в историю организации от имени системы и сообщения в очередь
+ * Telegram — пользователю и тем, кто снимает блокировку (владельцам или администраторам платформы).
+ */
+export async function notifyAccountLocked(
+  db: Db,
+  /** Тексты null — бот не подключён: только запись в историю. */
+  input: { userId: string; userText: string | null; unlockerText: string | null; now: Date },
+): Promise<void> {
+  await db.execute(
+    sql`select app.auth_lock_notify(${input.userId}, ${input.userText}, ${input.unlockerText}, ${input.now.toISOString()}::timestamptz)`,
+  );
 }
 
 /** Итог `reserveLoginAttempt`. */

@@ -666,6 +666,13 @@
       "when": 1794041984503,
       "tag": "0094_session_absolute_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1794044606553,
+      "tag": "0095_account_login_lock",
+      "breakpoints": true
     }
   ]
 }

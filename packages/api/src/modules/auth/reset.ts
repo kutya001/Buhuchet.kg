@@ -1,5 +1,10 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
-import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
+import {
+  hashPassword,
+  PasswordBusyError,
+  passwordQueueFull,
+  verifyPassword,
+} from '@buhuchet/adapters/password';
 import { newResetCode } from '@buhuchet/adapters/tokens';
 import {
   completePasswordReset,
@@ -32,6 +37,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { botText, notifyPasswordChanged, sendNow } from '../telegram/bot';
+import { AUTH_IP_LIMITED_DESCRIPTION, authIpLimited } from './ip-limit';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -41,6 +47,21 @@ const error = { 'application/json': { schema: ApiError } };
  * видно, есть ли логин (docs/deviations.md, п. 4). Отправка в Telegram обычно занимает меньше секунды.
  */
 export const RESET_RESPONSE_FLOOR_MS = 1500;
+
+/**
+ * Очередь проверки паролей полна (docs/deviations.md п. О-12): код не уходит и не проверяется, но
+ * ответ — обычный, после той же выдержки. Иначе 503 «Сервер занят» приходил бы только для настоящего
+ * логина с Telegram (код считается только для него) и выдавал бы, что логин есть.
+ */
+async function busyAsNothing<T>(deps: ApiDeps, fn: () => Promise<T>): Promise<T | false> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (!(err instanceof PasswordBusyError)) throw err;
+    deps.logger.warn({}, '«Забыли пароль?»: очередь проверки паролей полна');
+    return false;
+  }
+}
 
 /** Ответ не раньше, чем через floorMs после начала запроса. */
 async function atLeast<T>(floorMs: number, fn: () => Promise<T>): Promise<T> {
@@ -69,6 +90,7 @@ export const resetRequestRoute = createRoute({
       content: { 'application/json': { schema: PasswordResetRequestedResponse } },
     },
     400: { description: 'Неверные данные запроса', content: error },
+    429: { description: AUTH_IP_LIMITED_DESCRIPTION, content: error },
     503: { description: 'Telegram-бот не подключён', content: error },
   },
 });
@@ -97,9 +119,12 @@ export function resetRequestHandler(deps: ApiDeps): RouteHandler<typeof resetReq
       );
     }
     const { login } = c.req.valid('json');
+    const ipLimited = await authIpLimited(c, deps);
+    if (ipLimited) return c.json(ipLimited, 429);
     await atLeast(deps.resetResponseFloorMs ?? RESET_RESPONSE_FLOOR_MS, async () => {
       const account = await findLogin(deps.db, normalizeLogin(login));
-      if (account && !loginDenial(account)) await sendResetCode(deps, account);
+      if (account && !loginDenial(account))
+        await busyAsNothing(deps, () => sendResetCode(deps, account));
     });
     return c.json({ message: RESET_REQUESTED_MESSAGE }, 200);
   };
@@ -149,6 +174,7 @@ export const resetConfirmRoute = createRoute({
       content: { 'application/json': { schema: OkResponse } },
     },
     400: { description: 'Код неверный или истёк, или новый пароль не подходит', content: error },
+    429: { description: AUTH_IP_LIMITED_DESCRIPTION, content: error },
   },
 });
 
@@ -163,8 +189,10 @@ export const resetConfirmRoute = createRoute({
 export function resetConfirmHandler(deps: ApiDeps): RouteHandler<typeof resetConfirmRoute, AppEnv> {
   return async (c) => {
     const { login, code, newPassword } = c.req.valid('json');
+    const ipLimited = await authIpLimited(c, deps);
+    if (ipLimited) return c.json(ipLimited, 429);
     const changed = await atLeast(deps.resetResponseFloorMs ?? RESET_RESPONSE_FLOOR_MS, () =>
-      confirmReset(deps, normalizeLogin(login), code, newPassword),
+      busyAsNothing(deps, () => confirmReset(deps, normalizeLogin(login), code, newPassword)),
     );
     if (!changed) return c.json(apiError('reset_code_invalid', 'Код неверный или истёк'), 400);
     return c.json({ ok: true as const }, 200);
@@ -179,6 +207,8 @@ async function confirmReset(
 ): Promise<boolean> {
   const account = await findLogin(deps.db, login);
   if (!account || loginDenial(account)) return false;
+  // Очередь полна — попытку ввода не тратить: верный код, введённый ещё раз, подойдёт.
+  if (passwordQueueFull()) throw new PasswordBusyError();
   const attempt = await reservePasswordResetAttempt(deps.db, account.userId);
   if (!attempt || !(await verifyPassword(attempt.codeHash, code))) return false;
 

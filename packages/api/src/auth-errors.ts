@@ -1,4 +1,4 @@
-import { LOGIN_LOCK_MINUTES, type LoginDenial } from '@buhuchet/domain';
+import { ACCOUNT_LOCK_FAILURES, LOGIN_LOCK_MINUTES, type LoginDenial } from '@buhuchet/domain';
 import type { Context } from 'hono';
 import { apiError } from './errors';
 
@@ -12,8 +12,25 @@ const EMPLOYEE_BLOCKED = 'Учётная запись заблокирована
  * видит одно сообщение — «Обратитесь к владельцу организации». Экран берёт текст из словаря: в
  * `details` — вариант текста для администратора платформы (`variant`).
  */
-export function denialError(denial: LoginDenial, account: { isPlatformAdmin: boolean }) {
+export function denialError(
+  denial: LoginDenial,
+  account: { isPlatformAdmin: boolean; isOwner?: boolean },
+) {
   switch (denial) {
+    // ОТКЛОНЕНИЕ: docs/deviations.md#О-11 — вход закрыт после 10 неверных паролей подряд: сотруднику
+    // блокировку снимает владелец, владельцу — администратор платформы, выдав новый пароль.
+    case 'account_locked':
+      return account.isOwner
+        ? apiError(
+            denial,
+            `Вход заблокирован: ${ACCOUNT_LOCK_FAILURES} неверных паролей подряд. Обратитесь к администратору платформы — он выдаст новый пароль.`,
+            { variant: 'owner', failures: ACCOUNT_LOCK_FAILURES },
+          )
+        : apiError(
+            denial,
+            `Вход заблокирован: ${ACCOUNT_LOCK_FAILURES} неверных паролей подряд. Обратитесь к владельцу организации — он выдаст новый пароль.`,
+            { failures: ACCOUNT_LOCK_FAILURES },
+          );
     case 'org_blocked':
       return apiError(denial, 'Организация заблокирована. Обратитесь к администратору платформы.');
     case 'employee_blocked':
