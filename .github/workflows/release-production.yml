@@ -20,7 +20,8 @@ name: Release production
 #    сдвинут, а GITHUB_TOKEN не может сдвинуть её на коммиты, которые меняют .github/workflows.
 # Два задания — чтобы ключ развёртывания не попал туда, где работает код зависимостей (pnpm install,
 # миграции): такой код мог бы оставить git hook или прочитать ключ. Второе задание — на чистой машине, без
-# pnpm install и Node.js, git hooks выключены; ключ получает только оно (docs/decisions.md п. О-40).
+# pnpm install и setup-node, из файлов репозитория ничего не запускает, git hooks выключены; ключ получает
+# только оно (docs/decisions.md п. О-40).
 # Секреты передаются только в шаги, которым нужны, — не в установку зависимостей. Actions закреплены
 # полным SHA (обновляет Dependabot, .github/dependabot.yml), кеша пакетов нет.
 on:
@@ -137,8 +138,8 @@ jobs:
         env:
           DATABASE_ADMIN_URL: ${{ secrets.PRODUCTION_DATABASE_ADMIN_URL }}
           DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-          # Корневой сертификат базы (текст PEM) — сертификат сервера проверяется; секрета нет — пустая
-          # строка, соединение как в адресе (sslmode=require, docs/deploy.md).
+          # Корневой сертификат базы (текст PEM): с ним сертификат сервера проверяется (Р-14, читает config);
+          # секрета нет — пустая строка, соединение как в адресе (sslmode=require, docs/deploy.md).
           DATABASE_CA_CERT: ${{ secrets.PRODUCTION_DATABASE_CA_CERT }}
 
       - name: Справочники и ГКЭД (без демо-организации; изменившиеся разделы обновляются)
@@ -194,8 +195,8 @@ jobs:
             exit 1
           fi
 
-      # Только git: без pnpm install, setup-node и кода из репозитория. Вся история — ветку production пушит
-      # этот клон (из неполного клона GitHub может не принять).
+      # Только git: без pnpm install и setup-node, из файлов репозитория ничего не запускается. Вся история —
+      # ветку production пушит этот клон (из неполного клона GitHub может не принять).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.migrate.outputs.sha }}

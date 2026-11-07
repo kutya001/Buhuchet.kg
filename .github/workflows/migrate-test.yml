@@ -73,8 +73,8 @@ jobs:
         env:
           DATABASE_ADMIN_URL: ${{ secrets.TEST_DATABASE_ADMIN_URL }}
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
-          # Корневой сертификат базы (текст PEM) — сертификат сервера проверяется; секрета нет — пустая
-          # строка, соединение как в адресе (sslmode=require, docs/deploy.md).
+          # Корневой сертификат базы (текст PEM): с ним сертификат сервера проверяется (Р-14, читает config);
+          # секрета нет — пустая строка, соединение как в адресе (sslmode=require, docs/deploy.md).
           DATABASE_CA_CERT: ${{ secrets.TEST_DATABASE_CA_CERT }}
       - name: Справочники, ГКЭД и демо-организация (изменившиеся разделы обновляются)
         if: steps.ready.outputs.ok == 'true'
