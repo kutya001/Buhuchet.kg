@@ -5,6 +5,7 @@ import {
   cleanupRateLimits,
   schema,
 } from '@buhuchet/db';
+import { formatMomentRu } from '@buhuchet/domain';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
@@ -13,6 +14,7 @@ import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { createDueReportsJob } from '../modules/reports/job';
 import { telegramSendJob } from '../modules/telegram/outbox';
 import { telegramRemindersJob } from '../modules/telegram/reminders';
+import { alertTexts, sendPlatformAlert } from './alerts';
 
 const { schedulerRuns } = schema;
 
@@ -95,20 +97,47 @@ export const jobs: readonly Job[] = [
   duesRecalcJob,
 ];
 
+/** Ошибки доставки вебхуку — не чаще одного оповещения за столько часов. */
+export const WEBHOOK_ALERT_HOURS = 3;
+
 /**
  * Вебхук бота: Telegram присылает обновления на `<APP_BASE_URL>/api/telegram/webhook` с секретом
  * TELEGRAM_WEBHOOK_SECRET. Сайт сообщает адрес сам каждые 10 минут (повтор с теми же данными ничего не
  * меняет), поэтому после того как переменные бота заданы или секрет сменён, ручного шага с токеном нет.
  * У бота один вебхук: у стенда и рабочего сайта боты разные, иначе они перебивали бы друг друга.
+ * Тут же — проверка доставки (ревью безопасности Р-8 А, docs/decisions.md п. О-30): Telegram отметил
+ * ошибку доставки обновления сайту с прошлой проверки — оповещение администратору платформы (не чаще
+ * раза в 3 часа).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#14 — токен бота и секрет берутся из окружения, а не из Админки.
 export function telegramWebhookJob(webhook: { url: string; secretToken: string }): Job {
+  const period = 10;
   return {
     name: 'telegram.register-webhook',
-    cron: '*/10 * * * *',
-    lookbackMinutes: 10,
+    cron: `*/${period} * * * *`,
+    lookbackMinutes: period,
     async run(ctx) {
-      await ctx.telegram?.setWebhook(webhook.url, webhook.secretToken);
+      if (!ctx.telegram) return;
+      await ctx.telegram.setWebhook(webhook.url, webhook.secretToken);
+      const info = await ctx.telegram.getWebhookInfo();
+      const now = ctx.clock.now();
+      // С запасом в минуту: проверки идут раз в 10 минут, ошибка между ними не теряется.
+      const since = now.getTime() - (period + 1) * 60_000;
+      if (!info.lastErrorAt || info.lastErrorAt.getTime() <= since) return;
+      ctx.logger.warn(
+        { error: info.lastError, at: info.lastErrorAt.toISOString(), pending: info.pendingUpdates },
+        'Telegram: ошибка доставки вебхуку',
+      );
+      const t = await alertTexts(ctx);
+      const bucket = Math.floor(info.lastErrorAt.getTime() / (WEBHOOK_ALERT_HOURS * 3_600_000));
+      await sendPlatformAlert(ctx, {
+        key: `webhook:${bucket}`,
+        text: t('alert.webhook', {
+          error: info.lastError ?? '—',
+          at: formatMomentRu(info.lastErrorAt),
+          n: info.pendingUpdates,
+        }),
+      });
     },
   };
 }

@@ -35,6 +35,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.login_locked': { ru: 'Вход заблокирован', section: S },
   'telegram.kind.broadcast': { ru: 'Объявление', section: S },
   'telegram.kind.lead': { ru: 'Заявка с сайта', section: S },
+  'telegram.kind.alert': { ru: 'Сбой в работе сайта', section: S },
   'telegram.kind.relink_code': { ru: 'Код замены Telegram', section: S },
   'telegram.kind.page_closed': { ru: 'Страница контрагента закрыта', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },

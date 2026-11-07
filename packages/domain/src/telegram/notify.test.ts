@@ -5,11 +5,13 @@ import {
   notifyKindLocked,
   notifyKindsFor,
   notifyOn,
+  OUTBOX_KINDS,
   outboxRetryDelaySeconds,
   withNotifyKind,
   withNotifyMode,
   type NotifySettings,
 } from './notify';
+import { UI_TEXTS } from '../l10n/texts';
 
 const on = (s: NotifySettings, boss: boolean) => NOTIFY_KINDS.filter((k) => notifyOn(s, boss, k));
 
@@ -51,5 +53,13 @@ describe('очередь отправки', () => {
   it('повтор: пауза от Telegram (429) главнее, иначе 1, 2, 4, 8 минут', () => {
     expect([1, 2, 3, 4].map((n) => outboxRetryDelaySeconds(n))).toEqual([60, 120, 240, 480]);
     expect(outboxRetryDelaySeconds(3, 17)).toBe(17);
+  });
+});
+
+describe('подписи типов сообщений журнала Админки → «Телеграм»', () => {
+  it('у каждого типа есть подпись словаря, у оповещения о сбое — «Сбой в работе сайта»', () => {
+    const texts: Record<string, { ru: string }> = UI_TEXTS;
+    expect(OUTBOX_KINDS.filter((k) => !texts[`telegram.kind.${k}`])).toEqual([]);
+    expect(texts['telegram.kind.alert']?.ru).toBe('Сбой в работе сайта');
   });
 });

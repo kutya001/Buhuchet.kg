@@ -677,15 +677,29 @@
     {
       "idx": 96,
       "version": "7",
-      "when": 1794049749584,
-      "tag": "0096_telegram_relink_page_closed",
+      "when": 1794048354833,
+      "tag": "0096_scheduler_retry_alerts",
       "breakpoints": true
     },
     {
       "idx": 97,
       "version": "7",
-      "when": 1794049756303,
-      "tag": "0097_telegram_relink_functions",
+      "when": 1794048356837,
+      "tag": "0097_platform_alert_function",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1794052339780,
+      "tag": "0098_telegram_relink_page_closed",
+      "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1794052342125,
+      "tag": "0099_telegram_relink_functions",
       "breakpoints": true
     }
   ]
