@@ -84,7 +84,7 @@ export function outboxRetryRefusal(row: {
   kind: string;
 }): 'outbox_not_error' | 'outbox_code' | null {
   if (row.status !== 'error') return 'outbox_not_error';
-  if (row.kind === 'code') return 'outbox_code';
+  if ((CODE_KINDS as readonly string[]).includes(row.kind)) return 'outbox_code';
   return null;
 }
 

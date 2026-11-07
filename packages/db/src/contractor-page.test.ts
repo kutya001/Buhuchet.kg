@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { defaultOrgPolicy, PAGE_DAY_MAX_FAILURES, PAGE_IP_MAX_FAILURES } from '@buhuchet/domain';
+import {
+  defaultOrgPolicy,
+  PAGE_DAY_MAX_FAILURES,
+  PAGE_DAY_WINDOW_HOURS,
+  PAGE_IP_MAX_FAILURES,
+} from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
@@ -18,6 +23,7 @@ import {
 import { createContractor, type ContractorFields } from './contractors';
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
+import { RATE_LIMIT_KEEP_SECONDS } from './rate-limits';
 import {
   contractorPageGrants,
   contractorPages,
@@ -255,6 +261,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента �
   it('5 неверных кодов за сутки с любых адресов — страница закрыта для всех до «Сменить код»; верный код запоминает браузер до смены кода', async () => {
     // Решение заказчика 07.11.2026 (Р-5 А, docs/deviations.md п. О-21).
     expect(PAGE_DAY_MAX_FAILURES).toBe(5);
+    // Очистка пределов не удаляет неверные коды, которые ещё считаются за сутки.
+    expect(PAGE_DAY_WINDOW_HOURS * 3600).toBeLessThanOrEqual(RATE_LIMIT_KEEP_SECONDS);
     const right = await code();
     const wrong = wrongOf(right);
     // Браузер, где код уже запомнен: закрытая страница закрыта и для него.

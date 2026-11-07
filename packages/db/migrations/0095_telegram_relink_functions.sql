@@ -171,7 +171,8 @@ CREATE FUNCTION app.telegram_link_use(
   END
   $$;
 --> statement-breakpoint
--- Ссылку открыли в другом чате, а замена без кода не разрешена: ссылка использована, код записан
+-- Ссылку открыли в другом чате, а замена без кода не разрешена: ссылка использована (и при отказе по
+-- пределам), код записан
 -- (прежние ожидающие коды пользователя отменяются, коды старше суток удаляются), API отправит его в
 -- прежний чат. Строка ссылки и строка пользователя блокируются, поэтому одновременные запросы не
 -- превысят пределы. status: sent — код записан (chat_id и shared — куда отправить и привязан ли этот
@@ -205,6 +206,9 @@ CREATE FUNCTION app.telegram_relink_request(
       RETURN QUERY SELECT 'not_needed'::text, NULL::timestamptz, NULL::bigint, false;
       RETURN;
     END IF;
+    -- Дальше ссылка использована при любом ответе: повтор «/start» с ней не заставит снова считать
+    -- хеш кода.
+    UPDATE public.telegram_link_tokens SET used_at = now() WHERE token_hash = p_token_hash;
     IF app.telegram_relink_failures(v_user) >= p_max_failures THEN
       RETURN QUERY SELECT 'locked'::text, NULL::timestamptz, NULL::bigint, false;
       RETURN;
@@ -214,7 +218,6 @@ CREATE FUNCTION app.telegram_relink_request(
       RETURN QUERY SELECT 'limited'::text, NULL::timestamptz, NULL::bigint, false;
       RETURN;
     END IF;
-    UPDATE public.telegram_link_tokens SET used_at = now() WHERE token_hash = p_token_hash;
     UPDATE public.telegram_relink_codes c SET expires_at = now()
       WHERE c.user_id = v_user AND c.used_at IS NULL AND c.expires_at > now();
     DELETE FROM public.telegram_relink_codes c
@@ -234,7 +237,7 @@ CREATE FUNCTION app.telegram_relink_request(
 -- пользователя за сутки меньше p_max_failures неверных вводов; строка пользователя блокируется,
 -- поэтому одновременные сообщения проверят не больше вариантов, чем позволяют пределы. status: none —
 -- кода для этого чата нет (обычное сообщение); spent — код истёк или попытки кончились; ok — попытка
--- занята: хеш кода, сколько попыток останется после неё, имя в Telegram из сообщения со ссылкой и чья
+-- занята: хеш кода, сколько попыток останется после неё (меньший из остатков по коду и за сутки), имя в Telegram из сообщения со ссылкой и чья
 -- учётная запись (для транзакции от её имени и проверки блокировки).
 CREATE FUNCTION app.telegram_relink_attempt(
     p_chat_id bigint, p_max_attempts integer, p_max_failures integer)
@@ -285,7 +288,10 @@ CREATE FUNCTION app.telegram_relink_attempt(
       RETURN;
     END IF;
     RETURN QUERY
-      SELECT 'ok'::text, c.id, c.code_hash, p_max_attempts - v_attempts, c.username, c.first_name,
+      SELECT 'ok'::text, c.id, c.code_hash,
+             least(p_max_attempts - v_attempts,
+               p_max_failures - app.telegram_relink_failures(v_code.user_id)),
+             c.username, c.first_name,
              u.id, u.org_id, u.login::text, o.name, u.is_platform_admin, u.blocked, e.active,
              o.status
       FROM public.telegram_relink_codes c
@@ -315,6 +321,7 @@ CREATE FUNCTION app.telegram_relink_use(p_code_id uuid)
     v_user uuid := app.current_user_id();
     v_code public.telegram_relink_codes%ROWTYPE;
   BEGIN
+    PERFORM 1 FROM public.users u WHERE u.id = v_user FOR NO KEY UPDATE;
     UPDATE public.telegram_relink_codes c SET used_at = now()
       WHERE c.id = p_code_id AND c.user_id = v_user AND c.used_at IS NULL AND c.expires_at > now()
       RETURNING c.* INTO v_code;
@@ -355,7 +362,8 @@ CREATE OR REPLACE FUNCTION app.telegram_unlink()
 --> statement-breakpoint
 -- Сброс пароля владельцем или администратором платформы (временный пароль уже задан): p_hours часов
 -- Telegram привязывается без кода из прежнего чата — доступа к нему у пользователя может не быть.
--- Только учётной записи организации из контекста и только с временным паролем.
+-- Только учётной записи организации из контекста, только с временным паролем и только от имени
+-- того, кто сбрасывает пароль: незаблокированного администратора платформы или владельца организации.
 CREATE FUNCTION app.telegram_relink_allow(p_user uuid, p_hours integer)
   RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -364,6 +372,17 @@ CREATE FUNCTION app.telegram_relink_allow(p_user uuid, p_hours integer)
   DECLARE
     v_org uuid;
   BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.users c
+        WHERE c.id = app.current_user_id() AND NOT c.blocked
+          AND (c.is_platform_admin OR EXISTS (
+            SELECT 1 FROM public.employees e
+              JOIN public.roles r ON r.id = e.role_id
+              WHERE e.user_id = c.id AND e.org_id = app.current_org_id() AND e.active
+                AND r.is_owner))
+    ) THEN
+      RAISE EXCEPTION 'telegram_relink_allow: разрешает только владелец или администратор платформы';
+    END IF;
     SELECT u.org_id INTO v_org FROM public.users u
       WHERE u.id = p_user AND u.org_id = app.current_org_id() AND NOT u.is_platform_admin
         AND u.must_change_password;
@@ -592,8 +611,10 @@ CREATE FUNCTION app.contractor_page_try_code(
   END
   $$;
 --> statement-breakpoint
+-- Вспомогательные функции вызываются только из функций выше (от владельца схемы): права схемы app
+-- по умолчанию (миграция 0000) дают EXECUTE и роли приложения — снимаем.
 REVOKE ALL ON FUNCTION app.telegram_confirm_chat(uuid), app.telegram_relink_failures(uuid),
-  app.telegram_link_set(uuid, uuid, bigint, text, text) FROM PUBLIC;
+  app.telegram_link_set(uuid, uuid, bigint, text, text) FROM PUBLIC, buhuchet_app;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.telegram_link_peek(text), app.telegram_link_use(text, bigint, text, text),
   app.telegram_relink_request(text, bigint, text, text, text, integer, integer, integer),
@@ -609,3 +630,14 @@ GRANT EXECUTE ON FUNCTION app.telegram_link_peek(text),
   app.telegram_relink_allow(uuid, integer),
   app.contractor_page_try_code(text, text, text, text, text, integer, integer, integer, integer,
     integer, integer, integer, integer, integer) TO buhuchet_app;
+--> statement-breakpoint
+-- Кто отвязал Telegram до этой миграции (рабочий сайт — с 06.11.2026): отвязанный чат — из журнала
+-- отправок (последнее «Telegram отвязан»), если сейчас ничего не привязано.
+INSERT INTO public.telegram_link_guards (user_id, org_id, chat_id)
+  SELECT DISTINCT ON (o.user_id) o.user_id, u.org_id, o.chat_id
+    FROM public.telegram_outbox o
+    JOIN public.users u ON u.id = o.user_id
+    WHERE o.kind = 'unlinked'
+      AND NOT EXISTS (SELECT 1 FROM public.telegram_links l WHERE l.user_id = o.user_id)
+    ORDER BY o.user_id, o.created_at DESC
+  ON CONFLICT (user_id) DO NOTHING;

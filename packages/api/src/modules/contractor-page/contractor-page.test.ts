@@ -107,7 +107,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     text: `${fillTemplate(TELEGRAM_TEMPLATE_DEFAULTS.tgPageClosed, {
       контрагент: contractorName,
       неверных: 5,
-    })}\n\nОткрыть в Buhuchet.kg: http://localhost:3000/app/contractors`,
+    })}\n\nОткрыть в Buhuchet.kg: http://localhost:3000/app/cps/all`,
     options: { disableLinkPreview: true },
   });
 

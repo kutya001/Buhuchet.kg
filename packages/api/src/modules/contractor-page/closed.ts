@@ -18,7 +18,7 @@ import { serverTexts } from '../l10n/texts';
 import { flushEvents, queueEvents } from '../telegram/outbox';
 
 /** Куда ведёт ссылка в сообщении: модуль «Контрагенты». */
-const CONTRACTORS_PATH = '/app/contractors';
+const CONTRACTORS_PATH = '/app/cps/all';
 
 /**
  * Страница контрагента закрылась после 5 неверных кодов за сутки (решение заказчика 07.11.2026, Р-5 А):

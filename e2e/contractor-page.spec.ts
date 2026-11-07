@@ -138,6 +138,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     page,
     request,
     baseURL,
+    isMobile,
   }) => {
     const name = `ОсОО «Закрытие ${Date.now().toString(36)}»`;
     const { origin, id, code, path, inn } = await enabledPage(request, baseURL, name);
@@ -168,9 +169,21 @@ test.describe('Этап 2: страница контрагента по ссыл
     };
     expect(block.closed).toBe(true);
 
+    // У бухгалтера в карточке контрагента, в блоке «Страница контрагента», — пометка.
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/cps/all');
+    const rows = page.locator('[data-grid] [data-id]');
+    await expect(rows.first()).toBeVisible();
+    await search(page, isMobile, name);
+    await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
+    const card = page.getByRole('dialog', { name });
+    await expect(card.locator('[data-cp-page-closed]')).toHaveText(
+      'Страница закрыта: за сутки было 5 неверных кодов. Нажмите «Сменить код» (нет права — попросите владельца или главного бухгалтера) и отправьте контрагенту новый код.',
+    );
+
     const changed = await request.post(`/api/contractors/${id}/page/code`, { headers: { origin } });
     expect(changed.status()).toBe(200);
-    await page.reload();
+    await page.goto(path);
     await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
   });
 });

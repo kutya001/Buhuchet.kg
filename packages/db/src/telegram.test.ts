@@ -326,6 +326,13 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
           codeHash: 'x',
           expiresAt: new Date(Date.now() + 60_000),
         }),
+      // Вспомогательные функции привязки — только изнутри функций app.telegram_*.
+      (tx: Tx) =>
+        tx.execute(
+          sql`select * from app.telegram_link_set(${b.ownerUserId}, ${b.orgId}, 1, null, null)`,
+        ),
+      (tx: Tx) => tx.execute(sql`select * from app.telegram_confirm_chat(${b.ownerUserId})`),
+      (tx: Tx) => tx.execute(sql`select app.telegram_relink_failures(${b.ownerUserId})`),
     ];
     for (const attempt of attempts) {
       await expect(withOrgContext(t.app.db, ctxA(), attempt)).rejects.toThrow(permissionDenied);
@@ -623,12 +630,25 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     // Не больше 3 кодов в час.
     expect((await relinkRequest(x, 9002, 'c2')).result).toMatchObject({ status: 'sent' });
     expect((await relinkRequest(x, 9002, 'c3')).result).toMatchObject({ status: 'sent' });
-    expect((await relinkRequest(x, 9002, 'c4')).result).toEqual({ status: 'limited' });
+    const fourth = await relinkRequest(x, 9002, 'c4');
+    expect(fourth.result).toEqual({ status: 'limited' });
+    // Ссылка использована и при отказе: повтор «/start» не заставит снова считать хеш кода.
+    expect(await peekTelegramLink(t.app.db, fourth.token)).toMatchObject({ used: true });
     // Новый код отменяет прежний: попытка — у последнего.
     const latest = await reserveTelegramRelinkAttempt(t.app.db, 9002);
     expect(latest).toMatchObject({ status: 'ok', codeHash: 'c3', userId: x.userId });
-    // За сутки не больше 10 неверных вводов: ещё 4 у c3 (всего 10) — и коды закрыты на сутки.
-    for (let i = 0; i < 4; i++) await reserveTelegramRelinkAttempt(t.app.db, 9002);
+    // За сутки не больше 10 неверных вводов, «осталось» — меньший из остатков по коду и за сутки:
+    // у c1 будто бы 7 неверных, с c3 — 8, ещё два — и коды закрыты на сутки.
+    await t.admin.db
+      .update(telegramRelinkCodes)
+      .set({ attempts: 7 })
+      .where(eq(telegramRelinkCodes.codeHash, 'c1'));
+    const more = [];
+    for (let i = 0; i < 3; i++) {
+      const r = await reserveTelegramRelinkAttempt(t.app.db, 9002);
+      more.push(r.status === 'ok' ? r.triesLeft : r.status);
+    }
+    expect(more).toEqual([1, 0, 'spent']);
     await t.admin.db
       .update(telegramRelinkCodes)
       .set({ createdAt: sql`now() - interval '2 hours'` })
@@ -707,6 +727,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
         tx.execute(sql`select app.telegram_relink_allow(${userId}, 24)`),
       );
     await expect(allow(ctxA(), b.ownerUserId)).rejects.toThrow();
+    // И только от имени владельца организации или администратора платформы, не сотрудника.
+    await expect(allow({ orgId: a.orgId, userId: accA }, y.userId)).rejects.toThrow();
     await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, y.userId));
     await expect(allow(ctxA(), y.userId)).rejects.toThrow();
     await expect(

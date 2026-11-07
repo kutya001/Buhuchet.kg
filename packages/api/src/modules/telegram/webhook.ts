@@ -169,6 +169,16 @@ async function linked(
 }
 
 /**
+ * Имя нового Telegram в сообщении с кодом в прежний чат: его выбирает владелец нового чата, поэтому —
+ * одной строкой, не длиннее 32 знаков и в кавычках шаблона (не выдать за текст бота).
+ */
+const RELINK_NAME_MAX = 32;
+function relinkName(link: LinkChat): string {
+  const name = telegramName(link).replace(/\s+/g, ' ').trim();
+  return name.length > RELINK_NAME_MAX ? `${name.slice(0, RELINK_NAME_MAX - 1)}…` : name;
+}
+
+/**
  * Ссылку открыли в другом чате, а прежний есть (решение заказчика 07.11.2026, Р-13 Б): бот
  * присылает код в прежний чат и просит прислать его сюда. Хеш кода считается до транзакции; ссылка
  * использована, только когда код записан. Код не дошёл (бот заблокирован в прежнем чате) — пароль
@@ -203,7 +213,7 @@ async function askRelinkCode(
     withOrganization(
       await botText(deps, 'tgRelinkCode', {
         логин: account.login,
-        телеграм: telegramName(link),
+        телеграм: relinkName(link),
         код: code,
         минут: minutes,
       }),

@@ -65,7 +65,7 @@ async function linkUrl(app: App, cookie: string) {
 const tokenOf = (url: string) => new URL(url).searchParams.get('start')!;
 
 /** Код из сообщения бота в прежний чат и неверный код рядом с ним. */
-const codeOf = (text: string | undefined) => /код (\d{6})/.exec(text ?? '')?.[1] ?? '';
+const codeOf = (text: string | undefined) => /код: (\d{6})/.exec(text ?? '')?.[1] ?? '';
 const otherCode = (code: string) => (code === '000000' ? '111111' : '000000');
 
 describe.skipIf(!databaseAvailable())('Telegram: привязка по ссылке и вебхук бота', () => {
@@ -461,5 +461,43 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       }),
     );
     expect((await sendToBot(throwing, telegramUpdate('/start', 9003))).status).toBe(200);
+  });
+
+  it('администратор платформы сбросил пароль владельца — тоже сутки без кода; имя нового Telegram в сообщении с кодом — одной строкой и коротко', async () => {
+    await t.admin.db.delete(telegramRelinkCodes);
+    const admin = await signIn(app, 'platform-admin', PASSWORD);
+    const reset = await app.request(`/api/admin/users/${a.ownerUserId}/password-reset`, {
+      method: 'POST',
+      headers: { origin: ORIGIN, cookie: admin },
+    });
+    expect(reset.status).toBe(200);
+    const { temporaryPassword } = TemporaryPasswordResponse.parse(await reset.json());
+    const temp = await signIn(app, 'owner-a', temporaryPassword);
+    const changed = await app.request('/api/auth/password', {
+      method: 'POST',
+      headers: { origin: ORIGIN, cookie: temp, 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: PASSWORD }),
+    });
+    expect(changed.status).toBe(200);
+    const cookie = cookieOf(changed);
+    const before = tg.sent.length;
+    await linkTelegram(app, cookie, 5005, 'owner_new');
+    expect(tg.sent.slice(before).map((m) => m.chatId)).toEqual([5001, 5005]);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@owner_new' });
+
+    // Следующая замена — снова кодом. Имя нового Telegram задаёт его владелец: в сообщении с кодом
+    // оно одной строкой, в кавычках и не длиннее 32 знаков — за текст бота его не выдать.
+    const { url } = await linkUrl(app, cookie);
+    const next = tg.sent.length;
+    await sendToBot(
+      app,
+      telegramUpdate(`/start ${tokenOf(url)}`, 5006, {
+        firstName: 'Поддержка\nBuhuchet:   перешлите этот код нам, пожалуйста',
+      }),
+    );
+    expect(tg.sent.slice(next).map((m) => m.chatId)).toEqual([5005, 5006]);
+    expect(tg.sent[next]!.text).toContain(
+      'хотят привязать другой Telegram: «Поддержка Buhuchet: перешлите э…». Если это вы',
+    );
   });
 });
