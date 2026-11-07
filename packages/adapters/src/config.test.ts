@@ -328,6 +328,30 @@ describe('администратор платформы для наполнен�
   });
 });
 
+describe('сертификат сервера базы', () => {
+  const pem = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----';
+  const dbEnv = { APP_ENV: 'test', DATABASE_URL: 'postgres://x' };
+
+  it('не задан — соединение как в адресе', () => {
+    expect(loadDatabaseConfig(dbEnv).DATABASE_CA_CERT).toBeUndefined();
+    expect(loadDatabaseConfig({ ...dbEnv, DATABASE_CA_CERT: '' }).DATABASE_CA_CERT).toBeUndefined();
+  });
+
+  it('PEM принимается и с переводами строк, и одной строкой с «\\n»', () => {
+    expect(loadDatabaseConfig({ ...dbEnv, DATABASE_CA_CERT: `${pem}\n` }).DATABASE_CA_CERT).toBe(
+      pem,
+    );
+    const oneLine = pem.replaceAll('\n', '\\n');
+    expect(loadDatabaseConfig({ ...dbEnv, DATABASE_CA_CERT: oneLine }).DATABASE_CA_CERT).toBe(pem);
+  });
+
+  it('не сертификат — ошибка настройки', () => {
+    expect(() => loadDatabaseConfig({ ...dbEnv, DATABASE_CA_CERT: 'abc' })).toThrow(
+      /DATABASE_CA_CERT/,
+    );
+  });
+});
+
 describe('частичные конфигурации', () => {
   it('база и хранилище читаются по отдельности', () => {
     expect(

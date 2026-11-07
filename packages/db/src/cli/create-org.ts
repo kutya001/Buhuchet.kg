@@ -27,7 +27,11 @@ if (!values.name || !values.inn || !values['owner-fio'] || !values['owner-login'
 
 const config = loadDatabaseConfig();
 // Ролью приложения, под RLS — так же, как будет создавать организацию Админка.
-const handle = createDb(config.DATABASE_URL, { max: 1, applicationName: 'buhuchet-create-org' });
+const handle = createDb(config.DATABASE_URL, {
+  max: 1,
+  applicationName: 'buhuchet-create-org',
+  caCert: config.DATABASE_CA_CERT,
+});
 const password = generateTemporaryPassword();
 try {
   const org = await createOrganization(handle.db, {

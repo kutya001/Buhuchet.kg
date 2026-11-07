@@ -12,7 +12,6 @@ import { clearSessionCookie, readSessionToken, writeSessionCookie } from './cook
 const PUBLIC_PATHS = new Set([
   '/api/health',
   '/api/cron/tick',
-  '/api/openapi.json',
   // Словарь текстов нужен уже на странице входа.
   '/api/l10n',
   '/api/auth/login',
