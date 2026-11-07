@@ -17,7 +17,7 @@ export function denialError(
   account: { isPlatformAdmin: boolean; isOwner?: boolean },
 ) {
   switch (denial) {
-    // ОТКЛОНЕНИЕ: docs/deviations.md#О-11 — вход закрыт после 10 неверных паролей подряд: сотруднику
+    // Вход закрыт после 10 неверных паролей подряд: сотруднику
     // блокировку снимает владелец, владельцу — администратор платформы, выдав новый пароль.
     case 'account_locked':
       return account.isOwner

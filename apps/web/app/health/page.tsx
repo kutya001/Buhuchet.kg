@@ -11,7 +11,6 @@ import { useT } from '../../src/l10n/provider';
  * Без входа — только «работает или нет»; версия, среда и проверки по отдельности — администратору
  * платформы (docs/deviations.md п. О-9).
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-9
 type State =
   | { kind: 'loading' }
   | { kind: 'done'; health: HealthPublicResponse; details: HealthResponse | null }

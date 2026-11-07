@@ -119,7 +119,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 
-  // ОТКЛОНЕНИЕ: docs/deviations.md#О-9 — описание всех методов API только администратору платформы.
+  // Описание всех методов API только администратору платформы.
   app.use('/openapi.json', requirePlatformAdmin);
   app.doc31('/openapi.json', {
     openapi: '3.1.0',
@@ -129,7 +129,6 @@ export function createApp(deps: ApiDeps) {
   app.notFound((c) => c.json(apiError('not_found', 'Метод не найден'), 404));
   app.onError(async (err, c) => {
     // Очередь argon2 переполнена (ревью безопасности п. Р-4): «занято, повторите», а не 500.
-    // ОТКЛОНЕНИЕ: docs/deviations.md#О-12
     if (err instanceof PasswordBusyError) {
       deps.logger.warn(
         { requestId: c.get('requestId'), path: c.req.path },

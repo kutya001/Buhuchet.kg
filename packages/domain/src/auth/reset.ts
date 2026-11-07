@@ -84,7 +84,6 @@ export function formatTemporaryPassword(chars: string): string {
  * каждый код приходит администратору в Telegram — он сразу видит, что пароль знает кто-то ещё. Новый
  * пароль снимает оба предела.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-13
 export const ADMIN_CODE_TTL_MINUTES = 5;
 export const ADMIN_CODE_MAX_ATTEMPTS = 5;
 export const ADMIN_CODE_MAX_CODES = 3;

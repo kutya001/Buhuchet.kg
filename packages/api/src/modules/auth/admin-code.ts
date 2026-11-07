@@ -40,7 +40,6 @@ import { openSession } from './open-session';
  * только после кода. Без привязанного Telegram — ссылка привязки вместо сеанса: сначала Telegram,
  * потом вход с кодом.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-13
 
 const error = { 'application/json': { schema: ApiError } };
 

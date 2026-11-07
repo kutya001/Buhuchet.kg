@@ -13,7 +13,6 @@ import { apiError } from '../../errors';
  * занимается до проверки пароля и до поиска логина: ответ сверх предела одинаков для любого логина.
  * Предел по набранному логину (5 неверных — 15 минут) остаётся как был.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-12
 export const AUTH_IP_LIMIT = {
   kind: 'auth_ip',
   max: AUTH_IP_MAX_ATTEMPTS,

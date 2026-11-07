@@ -19,7 +19,6 @@ export const LOGIN_FAILURE_MEMORY_MINUTES = 60;
  * снимают верный пароль и новый пароль. У администраторов платформы такой блокировки нет — снять её
  * было бы некому (docs/deviations.md п. О-11).
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-11
 export const ACCOUNT_LOCK_FAILURES = 10;
 
 /**
@@ -27,7 +26,6 @@ export const ACCOUNT_LOCK_FAILURES = 10;
  * стольких за окно, верных и неверных вместе, по любым логинам. Офис за одним адресом входит утром
  * раз в день — запас большой; подбор паролей по многим логинам с одного адреса упирается в предел.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-12
 export const AUTH_IP_MAX_ATTEMPTS = 30;
 export const AUTH_IP_WINDOW_MINUTES = 10;
 
@@ -42,7 +40,6 @@ export const SESSION_TOUCH_MINUTES = 60;
  * безопасности 06.11.2026, п. Р-12; docs/deviations.md п. О-10): украденная cookie не работает
  * бесконечно, а сотрудник входит заново раз в рабочий день.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-10
 export const SESSION_MAX_HOURS = 12;
 
 export const LOGIN_MAX_LENGTH = 64;

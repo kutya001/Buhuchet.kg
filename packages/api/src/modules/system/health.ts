@@ -10,7 +10,6 @@ import { requirePlatformAdmin } from '../../middleware/access';
  * что именно не работает — только администратору платформы (docs/deviations.md п. О-9): посторонним
  * это облегчает разведку.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-9
 export const healthRoute = createRoute({
   method: 'get',
   path: '/health',
