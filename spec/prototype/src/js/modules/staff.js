@@ -39,8 +39,8 @@ function empActions(e){const it=[{label:'Открыть карточку',icon:'
     if(me().role==='owner')it.push({label:'Сбросить пароль',icon:'key',run:()=>empResetPass(e)});
     it.push({sep:true});it.push(e.active?{label:'Заблокировать',icon:'lock',danger:true,run:()=>blockDlg(e)}:{label:'Разблокировать',icon:'key',run:()=>{e.active=true;log('emp',e.id,'Разблокирован');refreshAll();toast('Сотрудник разблокирован')}})}
   return it}
-// Сброс пароля сотрудника: временный пароль, все сеансы завершаются; если Telegram привязан, бот сообщает о сбросе с ФИО того, кто сбросил (шаблон «Пароль сброшен»)
-function empResetPass(e){e.tmpPass=tmpPass();log('emp',e.id,'Пароль сброшен');tgSvc(e,'Пароль сброшен');
+// Сброс пароля сотрудника: временный пароль, все сеансы завершаются; если Telegram привязан, бот сообщает о сбросе с ФИО того, кто сбросил (шаблон «Пароль сброшен»). Новый пароль снимает и блокировку после 10 неверных паролей подряд (решение заказчика 07.11.2026)
+function empResetPass(e){e.tmpPass=tmpPass();accUnlock(e);log('emp',e.id,'Пароль сброшен');tgSvc(e,'Пароль сброшен');
   openModal({render:()=>({title:'Пароль сброшен',sub:esc(e.fio),body:`<p style="margin:0">Временный пароль: <b class="mono" style="font-size:16px">${esc(e.tmpPass)}</b></p><p class="muted" style="margin:0">Передайте его сотруднику лично. При первом входе нужно будет задать свой пароль. Все прежние сеансы завершены${e.tg?', бот сообщил о сбросе в Telegram':''}.</p>`,foot:'<button class="btn cta" data-close>Готово</button>'})})}
 function transferDlg(e,after){const st=empStats(e);const cps=CPS.filter(c=>c.resp===e.id&&!c.archived);const money=cps.filter(c=>c.paysTo==='emp').reduce((a,c)=>a+c.avail,0);
   const ids=new Set(cps.map(c=>c.id));const unf=REPORTS.filter(r=>ids.has(r.cp)&&repUnfinished(r)&&(r.resp===e.id||!r.resp)).length;const tks=TASKS.filter(t=>ids.has(t.cp)&&t.exec===e.id&&taskOpen(t)).length;const to0=(EMP.find(x=>x.active&&x.id!==e.id&&x.role==='chief')||EMP.find(x=>x.active&&x.id!==e.id)||{}).id;
