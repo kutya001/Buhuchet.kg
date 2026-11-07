@@ -140,9 +140,10 @@ async function linked(
       ? result.previous
       : (result.unlinked ?? null);
   if (before) {
+    // Имя нового Telegram задаёт его владелец — одной строкой и коротко, как в коде замены.
     const notice = await botText(deps, 'tgRelinked', {
       логин: account.login,
-      телеграм: telegramName(link),
+      телеграм: relinkName(link),
     });
     await sendNow(
       deps,
@@ -169,8 +170,8 @@ async function linked(
 }
 
 /**
- * Имя нового Telegram в сообщении с кодом в прежний чат: его выбирает владелец нового чата, поэтому —
- * одной строкой, не длиннее 32 знаков и в кавычках шаблона (не выдать за текст бота).
+ * Имя нового Telegram в сообщениях о замене в прежний чат (код замены, «привязан другой Telegram»): его
+ * выбирает владелец нового чата, поэтому — одной строкой и не длиннее 32 знаков (не выдать за текст бота).
  */
 const RELINK_NAME_MAX = 32;
 function relinkName(link: LinkChat): string {

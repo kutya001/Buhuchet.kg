@@ -543,17 +543,23 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     await linkAs({ orgId: a.orgId, userId: accA }, 5010);
     expect(
       await pendingAfter(accA, () =>
+        withOrgContext(t.app.db, { orgId: a.orgId, userId: accA }, unlinkTelegram),
+      ),
+    ).toBe(false);
+
+    // Тот же чат после «Отвязать» привязывается снова без кода.
+    expect(await linkAs({ orgId: a.orgId, userId: accA }, 5010)).not.toBeNull();
+    expect(
+      await pendingAfter(accA, () =>
         withOrgContext(t.app.db, ctxA(), (tx) =>
           setTemporaryPassword(tx, { userId: accA, passwordHash: 'temp-2' }),
         ),
       ),
     ).toBe(false);
-
-    expect(
-      await pendingAfter(accA, () =>
-        withOrgContext(t.app.db, { orgId: a.orgId, userId: accA }, unlinkTelegram),
-      ),
-    ).toBe(false);
+    // После сброса, пока действует разрешение без кода, новый код в прежний чат не уходит.
+    expect(await requestPasswordReset(t.app.db, { userId: accA, codeHash: 'x' })).toEqual({
+      status: 'no_telegram',
+    });
 
     // Замена Telegram на другой чат (кодом из прежнего) отменяет код, повторная привязка того же
     // чата — нет. После сброса пароля 5011 привязывается без кода.
@@ -712,6 +718,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     const hours = (guard!.freeUntil!.getTime() - before) / 3_600_000;
     expect(hours).toBeGreaterThan(23.9);
     expect(hours).toBeLessThan(24.1);
+    // Пока разрешение действует, код «Забыли пароль?» в ещё привязанный (возможно, чужой) чат не уходит.
+    expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'no_telegram' });
     const token = newHash();
     await withOrgContext(t.app.db, y, (tx) => createTelegramLinkToken(tx, token));
     expect(await peekTelegramLink(t.app.db, token)).toMatchObject({
@@ -719,6 +727,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       relinkFree: true,
     });
     expect(await linkAs(y, 9104)).toMatchObject({ previous: { chatId: 9103 } });
+    // Новая привязка снимает разрешение — коды снова уходят, уже в новый чат.
+    expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'ok' });
     expect(await linkAs(y, 9105)).toBeNull();
 
     // Разрешить без кода можно только учётной записи своей организации с временным паролем.

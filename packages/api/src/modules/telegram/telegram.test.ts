@@ -340,6 +340,16 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     });
     expect(reset.status).toBe(200);
     const { temporaryPassword } = TemporaryPasswordResponse.parse(await reset.json());
+    // Пока разрешение действует, «Забыли пароль?» не шлёт код в ещё привязанный (возможно, чужой)
+    // чат; ответ тот же, что всегда (docs/deviations.md п. О-20).
+    const sentBefore = tg.sent.length;
+    const forgot = await app.request('/api/auth/password-reset', {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ login: 'acc-a' }),
+    });
+    expect(forgot.status).toBe(200);
+    expect(tg.sent.length).toBe(sentBefore);
     const temp = await signIn(app, 'acc-a', temporaryPassword);
     const changed = await app.request('/api/auth/password', {
       method: 'POST',
@@ -499,5 +509,16 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(tg.sent[next]!.text).toContain(
       'хотят привязать другой Telegram: «Поддержка Buhuchet: перешлите э…». Если это вы',
     );
+    // И в «привязан другой Telegram» в прежний чат — так же коротко, одной строкой.
+    const done = tg.sent.length;
+    await sendToBot(app, telegramUpdate(codeOf(tg.sent[next]!.text), 5006));
+    expect(tg.sent[done]).toEqual({
+      chatId: 5005,
+      text: fillTemplate(TPL.tgRelinked, {
+        логин: 'owner-a',
+        телеграм: 'Поддержка Buhuchet: перешлите э…',
+      }),
+      options: {},
+    });
   });
 });
