@@ -4,6 +4,7 @@ import {
   check,
   customType,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -39,6 +40,16 @@ export const users = pgTable(
     /** Заблокирован администратором платформы: не входит, сеансы закрыты. */
     blocked: boolean('blocked').notNull().default(false),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+    /**
+     * Неверных паролей подряд у этой учётной записи (не по набранному логину, как login_attempts): не
+     * забывается со временем, снимается верным паролем и новым паролем (миграция 0095).
+     */
+    loginFailures: integer('login_failures').notNull().default(0),
+    /**
+     * Вход закрыт после ACCOUNT_LOCK_FAILURES неверных паролей подряд: снимает новый пароль от
+     * владельца (сотруднику) или администратора платформы (владельцу). Пусто — вход открыт.
+     */
+    loginLockedAt: timestamp('login_locked_at', { withTimezone: true }),
     ...timestamps(),
     version: recordVersion(),
   },

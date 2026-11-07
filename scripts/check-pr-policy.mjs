@@ -19,7 +19,12 @@ const VERDICTS = {
   },
 };
 
-export function checkPrPolicy(body) {
+// PR Dependabot ведёт не сессия, а сам Dependabot: он может допушить в открытый PR новую версию уже после
+// ревью. Поэтому его отчёт привязан к коммиту: в разделе должен быть SHA головы PR (от 7 знаков) — после
+// нового пуша pr-policy снова красный, пока отчёт не обновят (docs/decisions.md п. О-40).
+const UNATTENDED_AUTHORS = ['dependabot[bot]'];
+
+export function checkPrPolicy(body, { author, headSha } = {}) {
   const problems = [];
   const text = body ?? '';
   const lines = text.split(/\r?\n/);
@@ -45,12 +50,27 @@ export function checkPrPolicy(body) {
       problems.push(`У ${agent} нет вердикта из инструкции агента: «${found}».`);
     }
   }
+  if (UNATTENDED_AUTHORS.includes(author)) {
+    const sha = (headSha ?? '').toLowerCase();
+    const reviewed = [...section.matchAll(/\b[0-9a-f]{7,40}\b/gi)].some(
+      (m) => sha && sha.startsWith(m[0].toLowerCase()),
+    );
+    if (!reviewed) {
+      problems.push(
+        `PR от ${author}: в «Отчёте ревьюеров» нет проверенного коммита — строка «- проверен коммит: <SHA головы PR>». ` +
+          'После нового пуша в PR ревью и отчёт повторяются.',
+      );
+    }
+  }
   return problems;
 }
 
 if (process.argv[1]?.endsWith('check-pr-policy.mjs')) {
   const labels = (process.env.PR_LABELS ?? '').split(',').filter(Boolean);
-  const problems = checkPrPolicy(process.env.PR_BODY);
+  const problems = checkPrPolicy(process.env.PR_BODY, {
+    author: process.env.PR_AUTHOR,
+    headSha: process.env.PR_HEAD_SHA,
+  });
   if (problems.length) {
     for (const p of problems) console.error(`::error::${p}`);
     process.exit(1);

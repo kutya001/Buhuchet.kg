@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  automergeCandidate,
   blockingCheck,
   mergeGuardFiles,
   needsStagingMigration,
@@ -151,4 +152,47 @@ test('проверки ещё нет — ждать; чужое приложен
     latest: failedAgain[2],
     stale: false,
   });
+});
+
+test('автослияние берёт только открытый PR этого коммита из этого репозитория и только в main (Р-17)', () => {
+  const repo = 'kutya001/Buhuchet.kg';
+  const sha = 'a'.repeat(40);
+  const pull = (number, base, extra = {}) => ({
+    number,
+    state: 'open',
+    head: { sha, repo: { full_name: repo } },
+    base: { ref: base, repo: { full_name: repo } },
+    ...extra,
+  });
+  // PR в production (и в любую другую ветку) не сливается, даже если он первый в списке.
+  assert.equal(automergeCandidate([pull(1, 'production'), pull(2, 'main')], repo, sha).number, 2);
+  assert.equal(automergeCandidate([pull(1, 'production')], repo, sha), null);
+  assert.equal(automergeCandidate([pull(1, 'release/1')], repo, sha), null);
+  // Закрытый, с другим последним коммитом, из чужой копии репозитория — тоже нет.
+  assert.equal(automergeCandidate([pull(1, 'main', { state: 'closed' })], repo, sha), null);
+  assert.equal(
+    automergeCandidate(
+      [pull(1, 'main', { head: { sha: 'b'.repeat(40), repo: { full_name: repo } } })],
+      repo,
+      sha,
+    ),
+    null,
+  );
+  assert.equal(
+    automergeCandidate(
+      [pull(1, 'main', { head: { sha, repo: { full_name: 'someone/Buhuchet.kg' } } })],
+      repo,
+      sha,
+    ),
+    null,
+  );
+  assert.equal(
+    automergeCandidate(
+      [pull(1, 'main', { base: { ref: 'main', repo: { full_name: 'someone/Buhuchet.kg' } } })],
+      repo,
+      sha,
+    ),
+    null,
+  );
+  assert.equal(automergeCandidate([], repo, sha), null);
 });

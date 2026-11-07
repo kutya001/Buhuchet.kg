@@ -63,6 +63,8 @@ export function adminResetPasswordHandler(
         changes: [
           { field: 'passwordHash' },
           { field: 'mustChangePassword', from: reset.mustChangePasswordBefore, to: true },
+          // Новый пароль снимает блокировку входа после 10 неверных паролей (docs/deviations.md п. О-11).
+          ...(reset.loginLockedBefore ? [{ field: 'loginLocked', from: true, to: false }] : []),
         ],
         reason: 'Пароль сброшен администратором платформы: выдан временный пароль',
       });

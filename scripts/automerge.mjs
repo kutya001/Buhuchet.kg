@@ -2,7 +2,12 @@
 // Автослияние PR (вызывается из .github/workflows/automerge.yml после каждого успешно завершённого
 // workflow CI и PR policy).
 import { execFileSync } from 'node:child_process';
-import { blockingCheck, mergeGuardFiles, needsStagingMigration } from './protected-paths.mjs';
+import {
+  automergeCandidate,
+  blockingCheck,
+  mergeGuardFiles,
+  needsStagingMigration,
+} from './protected-paths.mjs';
 
 const REQUIRED_CHECKS = ['check', 'docker-e2e', 'pr-policy'];
 const BEHIND_MARKER = '<!-- automerge:behind -->';
@@ -21,17 +26,22 @@ const gh = (...args) =>
     maxBuffer: 64 * 1024 * 1024,
   });
 const api = (path) => JSON.parse(gh('api', '-H', 'Accept: application/vnd.github+json', path));
+// Пояснение в PR — не главное: не удалось написать (например, запуску от PR Dependabot GitHub даёт токен
+// только на чтение) — предупреждение в журнале, а не красный запуск.
 const comment = (number, marker, text) => {
-  const comments = api(`repos/${REPO}/issues/${number}/comments?per_page=100`);
-  if (comments.some((c) => c.body.includes(marker))) return;
-  gh('pr', 'comment', String(number), '--repo', REPO, '--body', `${marker}\n${text}`);
+  try {
+    const comments = api(`repos/${REPO}/issues/${number}/comments?per_page=100`);
+    if (comments.some((c) => c.body.includes(marker))) return;
+    gh('pr', 'comment', String(number), '--repo', REPO, '--body', `${marker}\n${text}`);
+  } catch {
+    console.log(`::warning::Не удалось оставить пояснение в PR #${number}.`);
+  }
 };
 
-const pr = api(`repos/${REPO}/commits/${HEAD_SHA}/pulls`).find(
-  (p) => p.state === 'open' && p.head.sha === HEAD_SHA && p.head.repo?.full_name === REPO,
-);
+// Только PR в main: PR в другую ветку (например, production) автослияние не трогает, его сливает человек.
+const pr = automergeCandidate(api(`repos/${REPO}/commits/${HEAD_SHA}/pulls`), REPO, HEAD_SHA);
 if (!pr) {
-  console.log('Открытого PR с этим коммитом нет (или он из форка) — пропуск.');
+  console.log('Открытого PR в main с этим коммитом нет (или он из форка) — пропуск.');
   process.exit(0);
 }
 if (pr.draft) {
@@ -159,8 +169,8 @@ gh(
 console.log(`PR #${pr.number} слит (squash).`);
 
 // Слияние токеном GITHUB_TOKEN не запускает workflow на push, а workflow_dispatch — запускает.
-// Стенд — это main: слияние в другую ветку (например, production) стенд не трогает.
-if (pr.base.ref === 'main' && needsStagingMigration(files)) {
+// Слит PR в main, то есть на стенд: его базе нужны миграции, если PR меняет базу или данные spec/.
+if (needsStagingMigration(files)) {
   try {
     gh('workflow', 'run', 'migrate-test.yml', '--repo', REPO, '--ref', 'main');
     console.log('Запущены миграции стенда (migrate-test.yml).');

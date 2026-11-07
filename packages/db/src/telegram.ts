@@ -447,12 +447,14 @@ export async function adminFindUser(
 /**
  * Временный пароль пользователю организации из контекста (сброс владельцем или администратором): при
  * входе его нужно сменить, все сеансы и ожидающий код «Забыли пароль?» отменяются, блокировка входа
- * снимается, сутки Telegram привязывается без кода из прежнего чата. Возвращает, нужно ли было сменить пароль до сброса (для истории); null — нет такого.
+ * снимается — и на 15 минут по логину, и после 10 неверных паролей подряд, — сутки Telegram
+ * привязывается без кода из прежнего чата. Возвращает, нужно ли было сменить пароль и был ли закрыт
+ * вход до сброса (для истории); null — нет такого.
  */
 export async function setTemporaryPassword(
   tx: Tx,
   input: { userId: string; passwordHash: string },
-): Promise<{ mustChangePasswordBefore: boolean } | null> {
+): Promise<{ mustChangePasswordBefore: boolean; loginLockedBefore: boolean } | null> {
   const [before] = await tx
     .select({ login: users.login, mustChangePassword: users.mustChangePassword })
     .from(users)
@@ -476,7 +478,14 @@ export async function setTemporaryPassword(
   await tx.execute(
     sql`select app.telegram_relink_allow(${input.userId}, ${TELEGRAM_RELINK_FREE_HOURS})`,
   );
-  return { mustChangePasswordBefore: before.mustChangePassword };
+  // Блокировку входа после 10 неверных паролей снимает именно новый пароль (миграция 0095).
+  const [unlock] = await tx.execute<{ was: boolean }>(
+    sql`select app.auth_account_unlock(${input.userId}) as was`,
+  );
+  return {
+    mustChangePasswordBefore: before.mustChangePassword,
+    loginLockedBefore: unlock?.was === true,
+  };
 }
 
 /**
