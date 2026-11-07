@@ -34,3 +34,6 @@ jobs:
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          # Отчёт по PR Dependabot привязан к коммиту головы PR (scripts/check-pr-policy.mjs).
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
