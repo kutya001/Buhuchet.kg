@@ -210,6 +210,17 @@ describe.skipIf(!databaseAvailable())(
         items: all.map((x) => (x.key === 'tgCode' ? { ...x, text: '  ' } : x)),
       });
       expect(empty.status).toBe(400);
+      // Без {код} код восстановления пароля и код входа в Админку не дойдут — не сохраняется.
+      for (const key of ['tgCode', 'tgAdminCode', 'tgRelinkCode']) {
+        const noCode = await put(`${P}/templates`, {
+          items: all.map((x) => (x.key === key ? { ...x, text: 'Код отправлен' } : x)),
+        });
+        expect(noCode.status).toBe(400);
+        expect(await errorOf(noCode)).toMatchObject({
+          code: 'missing_vars',
+          details: { field: key, list: '{код}' },
+        });
+      }
       const saved = await put(`${P}/templates`, {
         items: all.map((x) => (x.key === 'tgCode' ? { ...x, text: 'Ваш код: {код}' } : x)),
       });

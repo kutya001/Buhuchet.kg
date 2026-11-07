@@ -21,6 +21,7 @@ import {
   DICT_HISTORY_SHOWN,
   isStatusTone,
   messageTemplateVariables,
+  missingTemplateVariables,
   roleTemplateProblem,
   sameName,
   scaleStatuses,
@@ -478,7 +479,8 @@ export const saveMessageTemplatesRoute = createRoute({
       content: json(AdminMessageTemplatesSaved),
     },
     400: {
-      description: 'Пустой текст или подстановка, которой нет у шаблона (`unknown_vars`)',
+      description:
+        'Пустой текст, подстановка, которой нет у шаблона (`unknown_vars`), или нет обязательной (`missing_vars`)',
       content: error,
     },
     ...denied,
@@ -488,9 +490,12 @@ export const saveMessageTemplatesRoute = createRoute({
 
 /**
  * «Сохранить шаблоны»: все тексты вкладки одной транзакцией. Подстановка, которой у шаблона нет, —
- * 400 `unknown_vars` с шаблоном и списком: её никто не заполнит, и клиент получит «{кантрагент}».
+ * 400 `unknown_vars` с шаблоном и списком: её никто не заполнит, и клиент получит «{кантрагент}». Без
+ * {код} у кода восстановления пароля, кода входа в Админку и кода замены Telegram — 400 `missing_vars`:
+ * код не дойдёт.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-13
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-50
 export function saveMessageTemplatesHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof saveMessageTemplatesRoute, AppEnv> {
@@ -505,6 +510,13 @@ export function saveMessageTemplatesHandler(
           known: messageTemplateVariables(item.key)
             .map((v) => `{${v}}`)
             .join(', '),
+        });
+      }
+      const missing = missingTemplateVariables(item.key, item.text);
+      if (missing.length) {
+        apiFail(400, 'missing_vars', 'Нет обязательной подстановки', {
+          field: item.key,
+          list: missing.map((v) => `{${v}}`).join(', '),
         });
       }
     }
