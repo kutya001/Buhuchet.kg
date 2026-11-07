@@ -13,6 +13,26 @@ export function mergeGuardFiles(files) {
   return files.filter((f) => MERGE_GUARDS.some((re) => re.test(f)));
 }
 
+/** Единственная ветка, в которую сливает автослияние: стенд. В другие ветки PR сливает только человек. */
+export const AUTOMERGE_BASE = 'main';
+
+/**
+ * PR, который автослияние может слить (`pulls` — PR коммита из API): открытый, этот коммит — его последний,
+ * ветка из этого же репозитория (не из чужой копии) и цель — main. Нет такого — null.
+ */
+export function automergeCandidate(pulls, repo, headSha) {
+  return (
+    pulls.find(
+      (p) =>
+        p.state === 'open' &&
+        p.head?.sha === headSha &&
+        p.head?.repo?.full_name === repo &&
+        p.base?.ref === AUTOMERGE_BASE &&
+        p.base?.repo?.full_name === repo,
+    ) ?? null
+  );
+}
+
 /**
  * Какая обязательная проверка коммита мешает слиянию (`runs` — check_runs из API): первая, последний
  * запуск которой не зелёный, или null — все зелёные. Учитываются только проверки GitHub Actions:

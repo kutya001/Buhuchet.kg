@@ -41,3 +41,29 @@ test('критичное или несоответствие — ошибка', 
   );
   assert.equal(problems.length, 2);
 });
+
+test('PR Dependabot: отчёт привязан к коммиту головы PR', () => {
+  const sha = '0123456789abcdef0123456789abcdef01234567';
+  const ok = body('соответствует', 'замечаний нет; критичных нет');
+  const opts = { author: 'dependabot[bot]', headSha: sha };
+  // Без SHA — ошибка; SHA старого коммита (Dependabot допушил новую версию) — тоже.
+  assert.equal(checkPrPolicy(ok, opts).length, 1);
+  assert.match(checkPrPolicy(ok, opts)[0], /проверенного коммита/);
+  assert.equal(
+    checkPrPolicy(
+      `${ok.replace('## Вопросы', '- проверен коммит: fedcba9876\n\n## Вопросы')}`,
+      opts,
+    ).length,
+    1,
+  );
+  // SHA головы целиком или от 7 знаков — проходит.
+  for (const given of [sha, sha.slice(0, 7), sha.toUpperCase().slice(0, 12)]) {
+    const withSha = ok.replace('## Вопросы', `- проверен коммит: ${given}\n\n## Вопросы`);
+    assert.deepEqual(checkPrPolicy(withSha, opts), []);
+  }
+  // SHA вне раздела «Отчёт ревьюеров» не считается.
+  assert.equal(checkPrPolicy(`${sha}\n${ok}`, opts).length, 1);
+  // PR сессий Claude Code и людей — как раньше, без SHA.
+  assert.deepEqual(checkPrPolicy(ok, { author: 'kutya001', headSha: sha }), []);
+  assert.deepEqual(checkPrPolicy(ok), []);
+});

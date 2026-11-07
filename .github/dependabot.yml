@@ -1,0 +1,47 @@
+# Обновления зависимостей (docs/decisions.md п. О-40, docs/deploy.md «Обновления зависимостей»).
+# Раз в неделю, в понедельник утром по Бишкеку, одним PR на каждую группу. Версия моложе 3 суток не
+# предлагается (cooldown — как minimumReleaseAge в pnpm-workspace.yaml). PR Dependabot сам не сливается:
+# в описании нет «Отчёта ревьюеров» (pr-policy), а PR с actions меняет .github/ и сливается заказчиком.
+version: 2
+updates:
+  # actions в .github/workflows закреплены полным SHA с версией в комментарии — Dependabot меняет оба.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Bishkek
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: 'CI'
+
+  # Пакеты всего монорепозитория (pnpm-lock.yaml, catalog: в pnpm-workspace.yaml). Новые младшие версии и
+  # исправления — одним PR; новая старшая версия — отдельным PR на каждый пакет.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '07:00'
+      timezone: Asia/Bishkek
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Node.js 22 (engines, .nvmrc): типы Node 23+ не к нашей версии.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # TypeScript 5.9 — решение docs/decisions.md п. 2 (typescript-eslint не поддерживает TS 7).
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+    commit-message:
+      # Двоеточие Dependabot сам ставит только после латиницы и цифр — здесь оно в самом префиксе.
+      prefix: 'Зависимости:'
