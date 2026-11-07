@@ -694,6 +694,13 @@
       "when": 1794049091384,
       "tag": "0098_admin_login_code",
       "breakpoints": true
+    },
+    {
+      "idx": 99,
+      "version": "7",
+      "when": 1794052770168,
+      "tag": "0099_rls_context_qualified_names",
+      "breakpoints": true
     }
   ]
 }
