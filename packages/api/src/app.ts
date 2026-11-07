@@ -1,4 +1,5 @@
 import { bodyLimit } from 'hono/body-limit';
+import { PasswordBusyError } from '@buhuchet/adapters/password';
 import { HTTPException } from 'hono/http-exception';
 import { requestId } from 'hono/request-id';
 import { routePath } from 'hono/route';
@@ -127,6 +128,19 @@ export function createApp(deps: ApiDeps) {
 
   app.notFound((c) => c.json(apiError('not_found', 'Метод не найден'), 404));
   app.onError(async (err, c) => {
+    // Очередь argon2 переполнена (ревью безопасности п. Р-4): «занято, повторите», а не 500.
+    // ОТКЛОНЕНИЕ: docs/deviations.md#О-12
+    if (err instanceof PasswordBusyError) {
+      deps.logger.warn(
+        { requestId: c.get('requestId'), path: c.req.path },
+        'очередь паролей полна',
+      );
+      c.header('retry-after', '5');
+      return c.json(
+        apiError('server_busy', 'Сервер занят, попробуйте ещё раз через несколько секунд'),
+        503,
+      );
+    }
     if (err instanceof HTTPException) {
       return err.res ? err.getResponse() : c.json(apiError('http_error', err.message), err.status);
     }

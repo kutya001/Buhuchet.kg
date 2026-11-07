@@ -32,6 +32,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.unlinked': { ru: 'Telegram отвязан', section: S },
   'telegram.kind.pass_changed': { ru: 'Пароль изменён', section: S },
   'telegram.kind.pass_reset': { ru: 'Пароль сброшен', section: S },
+  'telegram.kind.login_locked': { ru: 'Вход заблокирован', section: S },
   'telegram.kind.broadcast': { ru: 'Объявление', section: S },
   'telegram.kind.lead': { ru: 'Заявка с сайта', section: S },
   'telegram.kind.alert': { ru: 'Сбой в работе сайта', section: S },

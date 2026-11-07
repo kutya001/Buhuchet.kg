@@ -13,8 +13,56 @@ const OPTIONS: Options = {
   parallelism: 1,
 };
 
+/**
+ * Очередь работы argon2 (ревью безопасности 06.11.2026, п. Р-4): каждая проверка или хеш занимает
+ * 19 МиБ и процессор, поэтому одновременно идут не больше PASSWORD_CONCURRENCY, остальные ждут своей
+ * очереди; если ждущих уже PASSWORD_QUEUE_MAX — сразу `PasswordBusyError` (API отвечает 503 «Сервер
+ * занят»), а не очередь без конца. Так поток запросов входа не съест память и не задержит остальные
+ * запросы сайта. Очередь — на один процесс; общий предел по адресу — в API.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-12
+export const PASSWORD_CONCURRENCY = 2;
+export const PASSWORD_QUEUE_MAX = 32;
+
+/** Очередь проверки паролей переполнена: попробовать чуть позже. */
+export class PasswordBusyError extends Error {
+  constructor() {
+    super('Очередь проверки паролей переполнена');
+    this.name = 'PasswordBusyError';
+  }
+}
+
+let running = 0;
+const waiting: Array<() => void> = [];
+
+/**
+ * Очередь полна: новая работа argon2 сейчас получила бы `PasswordBusyError`. Нужна тем, кто до
+ * проверки тратит что-то невосстановимое (попытку ввода кода «Забыли пароль?»).
+ */
+export function passwordQueueFull(): boolean {
+  return running >= PASSWORD_CONCURRENCY && waiting.length >= PASSWORD_QUEUE_MAX;
+}
+
+/** Выполнить работу argon2 в очереди (экспорт — для тестов). */
+export async function inPasswordQueue<T>(work: () => Promise<T>): Promise<T> {
+  if (running >= PASSWORD_CONCURRENCY) {
+    if (waiting.length >= PASSWORD_QUEUE_MAX) throw new PasswordBusyError();
+    // Место передаёт закончивший: running не уменьшается, пока очередь не пуста.
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  } else {
+    running++;
+  }
+  try {
+    return await work();
+  } finally {
+    const next = waiting.shift();
+    if (next) next();
+    else running--;
+  }
+}
+
 export function hashPassword(password: string): Promise<string> {
-  return hash(password, OPTIONS);
+  return inPasswordQueue(() => hash(password, OPTIONS));
 }
 
 /**
@@ -27,8 +75,9 @@ export const DUMMY_HASH =
 
 async function verifyDummy(password: string): Promise<void> {
   try {
-    await verify(DUMMY_HASH, password);
-  } catch {
+    await inPasswordQueue(() => verify(DUMMY_HASH, password));
+  } catch (err) {
+    if (err instanceof PasswordBusyError) throw err;
     // Подставной хеш не может не подойти по формату; ответ всё равно «не подходит».
   }
 }
@@ -40,8 +89,9 @@ async function verifyDummy(password: string): Promise<void> {
  */
 export async function verifyPassword(passwordHash: string, password: string): Promise<boolean> {
   try {
-    return await verify(passwordHash, password);
-  } catch {
+    return await inPasswordQueue(() => verify(passwordHash, password));
+  } catch (err) {
+    if (err instanceof PasswordBusyError) throw err;
     await verifyDummy(password);
     return false;
   }

@@ -292,12 +292,13 @@ export async function adminFindUser(
 /**
  * Временный пароль пользователю организации из контекста (сброс владельцем или администратором): при
  * входе его нужно сменить, все сеансы и ожидающий код «Забыли пароль?» отменяются, блокировка входа
- * снимается. Возвращает, нужно ли было сменить пароль до сброса (для истории); null — нет такого.
+ * снимается — и на 15 минут по логину, и после 10 неверных паролей подряд. Возвращает, нужно ли было
+ * сменить пароль и был ли закрыт вход до сброса (для истории); null — нет такого.
  */
 export async function setTemporaryPassword(
   tx: Tx,
   input: { userId: string; passwordHash: string },
-): Promise<{ mustChangePasswordBefore: boolean } | null> {
+): Promise<{ mustChangePasswordBefore: boolean; loginLockedBefore: boolean } | null> {
   const [before] = await tx
     .select({ login: users.login, mustChangePassword: users.mustChangePassword })
     .from(users)
@@ -316,7 +317,14 @@ export async function setTemporaryPassword(
   await tx.delete(sessions).where(eq(sessions.userId, input.userId));
   await revokePasswordResetCodes(tx, input.userId);
   await clearLoginAttempts(tx, before.login);
-  return { mustChangePasswordBefore: before.mustChangePassword };
+  // Блокировку входа после 10 неверных паролей снимает именно новый пароль (миграция 0095).
+  const [unlock] = await tx.execute<{ was: boolean }>(
+    sql`select app.auth_account_unlock(${input.userId}) as was`,
+  );
+  return {
+    mustChangePasswordBefore: before.mustChangePassword,
+    loginLockedBefore: unlock?.was === true,
+  };
 }
 
 /**

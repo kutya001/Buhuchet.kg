@@ -8,7 +8,7 @@ import type {
   Telegram,
 } from '@buhuchet/adapters';
 import type { DocumentReader } from '@buhuchet/adapters/documents';
-import type { Db } from '@buhuchet/db';
+import type { Db, RateLimit } from '@buhuchet/db';
 import type { FileSource } from './modules/files/sources';
 
 export interface JobContext {
@@ -48,4 +48,11 @@ export interface ApiDeps extends JobContext {
    * «Распознать»; тесты подставляют поддельное).
    */
   documents?: DocumentReader;
+  /**
+   * Предел попыток входа и восстановления пароля с одного адреса (docs/deviations.md п. О-12). По
+   * умолчанию — `AUTH_IP_LIMIT` на стенде и рабочем сайте; на своём компьютере, в тестах и сквозных
+   * тестах (APP_ENV local и test) предела нет: там все запросы идут с одной машины. Тест предела
+   * задаёт его сам.
+   */
+  authIpLimit?: RateLimit | null;
 }

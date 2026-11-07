@@ -13,6 +13,25 @@ export const LOGIN_LOCK_MINUTES = 15;
 export const LOGIN_FAILURE_MEMORY_MINUTES = 60;
 
 /**
+ * После стольких неверных паролей подряд у настоящей учётной записи вход в неё закрыт, пока не
+ * выдадут новый пароль (решение заказчика 07.11.2026, ревью безопасности п. Р-4): сотруднику —
+ * владелец организации, владельцу — администратор платформы. Счёт не забывается со временем, его
+ * снимают верный пароль и новый пароль. У администраторов платформы такой блокировки нет — снять её
+ * было бы некому (docs/deviations.md п. О-11).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-11
+export const ACCOUNT_LOCK_FAILURES = 10;
+
+/**
+ * Попытки входа и восстановления пароля с одного адреса (ревью безопасности п. Р-4): не больше
+ * стольких за окно, верных и неверных вместе, по любым логинам. Офис за одним адресом входит утром
+ * раз в день — запас большой; подбор паролей по многим логинам с одного адреса упирается в предел.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-12
+export const AUTH_IP_MAX_ATTEMPTS = 30;
+export const AUTH_IP_WINDOW_MINUTES = 10;
+
+/**
  * Сеанс живёт 1 день с последнего обращения (docs/deviations.md, п. 5, решение заказчика 30.10.2026);
  * срок продлевается не чаще раза в час.
  */
@@ -40,9 +59,14 @@ export interface AccountState {
   employeeActive: boolean | null;
   /** Состояние организации; null — у администратора платформы организации нет. */
   orgStatus: 'active' | 'blocked' | null;
+  /**
+   * Вход закрыт после ACCOUNT_LOCK_FAILURES неверных паролей подряд. Есть только при входе: открытый
+   * сеанс блокировка не закрывает — она против подбора пароля, а не против того, кто уже вошёл.
+   */
+  loginLocked?: boolean;
 }
 
-export type LoginDenial = 'org_blocked' | 'user_blocked' | 'employee_blocked';
+export type LoginDenial = 'org_blocked' | 'user_blocked' | 'employee_blocked' | 'account_locked';
 
 /**
  * Почему войти нельзя, даже с верным паролем; null — можно. Порядок — как в прототипе
@@ -53,5 +77,6 @@ export function loginDenial(s: AccountState): LoginDenial | null {
   if (s.orgStatus !== 'active') return 'org_blocked';
   if (s.userBlocked) return 'user_blocked';
   if (s.employeeActive !== true) return 'employee_blocked';
+  if (s.loginLocked) return 'account_locked';
   return null;
 }

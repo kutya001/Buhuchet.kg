@@ -28,6 +28,8 @@ export const OUTBOX_KINDS = [
   'pass_reset',
   'broadcast',
   'lead',
+  // Вход закрыт после 10 неверных паролей подряд: пользователю и тому, кто снимает блокировку.
+  'login_locked',
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-30 — оповещение о сбое администратору платформы.
   'alert',
 ] as const;

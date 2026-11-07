@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   changeOwnPassword,
@@ -9,6 +9,7 @@ import {
   endSession,
   findLogin,
   loadEmployeeAccess,
+  recordLoginFailure,
   reserveLoginAttempt,
   sessionByToken,
   startSession,
@@ -179,6 +180,58 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
     );
     expect(results.filter((x) => x.allowed)).toHaveLength(5);
     expect(results.filter((x) => x.allowed && !x.locked)).toHaveLength(4);
+  });
+
+  // Блокировка входа после 10 неверных паролей подряд (docs/deviations.md п. О-11, миграция 0095).
+  it('неверные пароли учётной записи: десятый закрывает вход — ровно одна из одновременных попыток', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 15 }, () => recordLoginFailure(t.app.db, b.ownerUserId)),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const row = await user(b.ownerUserId);
+    expect(row.loginFailures).toBe(10);
+    expect(row.loginLockedAt).not.toBeNull();
+    expect(await findLogin(t.app.db, 'owner-b')).toMatchObject({
+      loginLocked: true,
+      isOwner: true,
+    });
+    // Логина нет — ничего не меняется; у администратора платформы счёта нет.
+    expect(await recordLoginFailure(t.app.db, null)).toBe(false);
+    for (let i = 0; i < 12; i++) expect(await recordLoginFailure(t.app.db, adminId)).toBe(false);
+    expect(await user(adminId)).toMatchObject({ loginFailures: 0, loginLockedAt: null });
+  });
+
+  it('верный пароль снимает счёт, но не закрытый вход; его снимает новый пароль в своей организации', async () => {
+    for (let i = 0; i < 3; i++) await recordLoginFailure(t.app.db, a.ownerUserId);
+    expect((await user(a.ownerUserId)).loginFailures).toBe(3);
+    await clearLoginAttempts(t.app.db, 'Owner-A');
+    expect((await user(a.ownerUserId)).loginFailures).toBe(0);
+
+    await clearLoginAttempts(t.app.db, 'owner-b');
+    expect((await user(b.ownerUserId)).loginLockedAt).not.toBeNull();
+    const unlock = (orgId: string, userId: string) =>
+      withOrgContext(t.app.db, { orgId, userId }, async (tx) => {
+        const [r] = await tx.execute<{ was: boolean }>(
+          sql`select app.auth_account_unlock(${b.ownerUserId}) as was`,
+        );
+        return r!.was;
+      });
+    // Из чужой организации не снять.
+    expect(await unlock(a.orgId, a.ownerUserId)).toBe(false);
+    expect((await user(b.ownerUserId)).loginLockedAt).not.toBeNull();
+    expect(await unlock(b.orgId, b.ownerUserId)).toBe(true);
+    expect(await user(b.ownerUserId)).toMatchObject({ loginFailures: 0, loginLockedAt: null });
+  });
+
+  it('счёт и блокировку входа роль приложения напрямую не меняет', async () => {
+    await expect(
+      withOrgContext(t.app.db, { orgId: b.orgId, userId: b.ownerUserId }, (tx) =>
+        tx
+          .update(users)
+          .set({ loginLockedAt: null, loginFailures: 0 })
+          .where(eq(users.id, b.ownerUserId)),
+      ),
+    ).rejects.toThrow(permissionDenied);
   });
 
   it('сеанс находится по хешу токена; продлевается не чаще раза в час', async () => {
