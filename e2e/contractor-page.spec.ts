@@ -164,11 +164,11 @@ test.describe('Этап 2: страница контрагента по ссыл
     const login = uniqueLogin('e2e-cp-closed');
     const { employee, temporaryPassword } = await hire(staff, staffOrigin, login);
     await signIn(staff, staffOrigin, login, temporaryPassword);
-    const changed = await staff.post('/api/auth/password', {
+    const passwordSet = await staff.post('/api/auth/password', {
       headers: { origin: staffOrigin },
       data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
     });
-    expect(changed.status()).toBe(200);
+    expect(passwordSet.status()).toBe(200);
     const chat = uniqueChat();
     await linkTelegram(staff, staffOrigin, chat);
     await staff.dispose();
