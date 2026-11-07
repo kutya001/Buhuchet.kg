@@ -659,6 +659,13 @@
       "when": 1793942210935,
       "tag": "0093_files_page_hidden",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1794041984503,
+      "tag": "0094_session_absolute_limit",
+      "breakpoints": true
     }
   ]
 }

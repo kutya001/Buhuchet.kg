@@ -4,6 +4,7 @@ import {
   LOGIN_LOCK_MINUTES,
   LOGIN_MAX_FAILURES,
   SCOPE_GROUPS,
+  SESSION_MAX_HOURS,
   SESSION_TOUCH_MINUTES,
   SESSION_TTL_DAYS,
   type AccessSubject,
@@ -160,8 +161,9 @@ interface SessionRow extends Record<string, unknown> {
 }
 
 /**
- * Сеанс по хешу токена из cookie; истёкший или удалённый — null. Обычно сеанс заодно продлевается (не
- * чаще раза в час, тогда `touched`). `touch: false` — только прочитать: порог продления берётся равным
+ * Сеанс по хешу токена из cookie; истёкший, удалённый или начатый раньше `SESSION_MAX_HOURS` назад —
+ * null. Обычно сеанс заодно продлевается (не чаще раза в час, тогда `touched`), но не дальше
+ * `SESSION_MAX_HOURS` с входа. `touch: false` — только прочитать: порог продления берётся равным
  * сроку жизни сеанса, а за это время действующий сеанс не бывает «несвежим».
  */
 export async function sessionByToken(
@@ -171,7 +173,7 @@ export async function sessionByToken(
 ): Promise<SessionRecord | null> {
   const touchMinutes = touch ? SESSION_TOUCH_MINUTES : SESSION_TTL_DAYS * 24 * 60;
   const [row] = await db.execute<SessionRow>(
-    sql`select * from app.auth_session(${tokenHash}, ${SESSION_TTL_DAYS}, ${touchMinutes})`,
+    sql`select * from app.auth_session(${tokenHash}, ${SESSION_TTL_DAYS}, ${touchMinutes}, ${SESSION_MAX_HOURS})`,
   );
   if (!row) return null;
   return {

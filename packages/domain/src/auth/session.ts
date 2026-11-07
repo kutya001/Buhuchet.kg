@@ -18,6 +18,12 @@ export const LOGIN_FAILURE_MEMORY_MINUTES = 60;
  */
 export const SESSION_TTL_DAYS = 1;
 export const SESSION_TOUCH_MINUTES = 60;
+/**
+ * И не дольше 12 часов с входа, даже если им пользуются (OWASP ASVS 3.3.2, уровень 2; ревью
+ * безопасности 06.11.2026, п. Р-12; docs/deviations.md п. О-10): украденная cookie не работает
+ * бесконечно, а сотрудник входит заново раз в рабочий день.
+ */
+export const SESSION_MAX_HOURS = 12;
 
 export const LOGIN_MAX_LENGTH = 64;
 export const PASSWORD_MIN_LENGTH = 8;

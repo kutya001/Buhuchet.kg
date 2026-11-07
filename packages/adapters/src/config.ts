@@ -30,6 +30,20 @@ const DatabaseFields = z.object({
   /** Подключение владельца схемы: только миграции и начальное наполнение. */
   DATABASE_ADMIN_URL: z.string().min(1).optional(),
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(5),
+  /**
+   * Корневой сертификат сервера базы (PEM, у Supabase — «SSL Configuration → Download certificate»).
+   * Задан — соединения проверяют сертификат и имя сервера (как sslmode=verify-full), без него —
+   * только шифруют (sslmode из адреса; ревью безопасности 06.11.2026, п. Р-14). Строку можно вставить
+   * одной строкой с «\n» вместо переводов строки.
+   */
+  DATABASE_CA_CERT: z
+    .string()
+    .transform((v) => v.replaceAll('\\n', '\n').trim())
+    .refine((v) => v === '' || v.includes('-----BEGIN CERTIFICATE-----'), {
+      message: 'нужен сертификат в формате PEM (-----BEGIN CERTIFICATE-----)',
+    })
+    .transform((v) => v || undefined)
+    .optional(),
   /** Пароль демо-сотрудников для `pnpm db:seed`; без него войти в демо-организацию нельзя. */
   DEMO_PASSWORD: z.string().min(1).optional(),
 });
