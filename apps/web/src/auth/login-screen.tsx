@@ -301,7 +301,9 @@ function AdminCodeStep({
     <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">
       <h1 className={STEP_TITLE}>{t('auth.admin_code_title')}</h1>
       <Note icon="tg">{t('auth.admin_code_sent', { minutes: ADMIN_CODE_TTL_MINUTES })}</Note>
-      <Field id="ad-code" label={t('auth.code')} error={fieldError(t, errors.code)}>
+      {/* Имя поля — без слова «ad», как в прототипе v76 (`ac-code`): «ad-code» блокировщики рекламы прятали
+          (общее правило EasyList `###ad-code`), и поля для кода не было видно (ad-block-names.test.ts). */}
+      <Field id="ac-code" label={t('auth.code')} error={fieldError(t, errors.code)}>
         {(control) => (
           <input
             {...control}
