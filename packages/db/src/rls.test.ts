@@ -119,6 +119,50 @@ describe.skipIf(!databaseAvailable())('RLS: организации не видя
     expect(unsafe).toEqual([]);
   });
 
+  // Ревью безопасности Р-21, docs/decisions.md п. О-31.
+  it('функции контекста RLS встраиваются в запрос: без SET у функции', async () => {
+    const fns = await t.admin.sql<{ proname: string; proconfig: string[] | null }[]>`
+      select p.proname, p.proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = 'app' and p.proname in ('current_org_id', 'current_user_id')
+      order by p.proname`;
+    expect(fns).toEqual([
+      { proname: 'current_org_id', proconfig: null },
+      { proname: 'current_user_id', proconfig: null },
+    ]);
+    // Встроенная функция в плане раскрыта в своё тело: в проверке RLS она не вызывается на каждую строку.
+    const plan = await t.app.sql<{ 'QUERY PLAN': string }[]>`
+      explain (verbose, costs off) select app.current_org_id(), app.current_user_id()`;
+    const text = plan.map((r) => r['QUERY PLAN']).join('\n');
+    expect(text).toContain('current_setting');
+    expect(text).not.toMatch(/current_(org|user)_id\(/);
+  });
+
+  it('функции контекста RLS не подменить функцией, оператором или типом из схемы впереди пути', async () => {
+    await t.admin.sql.unsafe(`
+      create schema evil_path;
+      create function evil_path.current_setting(text, boolean) returns text
+        language sql as $$ select '${ORG_B}' $$;
+      create function evil_path.always(text, text) returns boolean
+        language sql immutable as $$ select true $$;
+      create operator evil_path.= (leftarg = text, rightarg = text, function = evil_path.always);
+      create domain evil_path.uuid as text;
+      grant usage on schema evil_path to buhuchet_app;
+      grant execute on all functions in schema evil_path to buhuchet_app;`);
+    try {
+      const rows = await t.app.sql.begin(async (tx) => {
+        await tx`select set_config('app.org_id', ${ORG_A}, true), set_config('app.user_id', '', true)`;
+        await tx`set local search_path = evil_path, pg_catalog, public`;
+        return tx<{ shadowed: string; org: string | null; user: string | null }[]>`
+          select current_setting('app.org_id', true) as shadowed,
+            app.current_org_id() as org, app.current_user_id() as user`;
+      });
+      // Без схемы в имени подмена срабатывает, у функций контекста — нет.
+      expect(rows).toEqual([{ shadowed: ORG_B, org: ORG_A, user: null }]);
+    } finally {
+      await t.admin.sql`drop schema evil_path cascade`;
+    }
+  });
+
   it('справочники платформы приложение только читает', async () => {
     await t.admin.db.insert(gkedItems).values({
       code: 'A',
