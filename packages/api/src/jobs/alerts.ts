@@ -1,14 +1,14 @@
-import { platformAlert } from '@buhuchet/db';
+import { platformAlert, platformAlertThrottled } from '@buhuchet/db';
 import { formatText, type UiTextParams } from '@buhuchet/domain';
 import type { JobContext } from '../deps';
 import { serverTexts } from '../modules/l10n/texts';
 import { sendPlatformOutbox } from '../modules/telegram/outbox';
 
 /*
- * Оповещения администратору платформы в Telegram о сбоях (ревью безопасности Р-8 А, docs/decisions.md
- * п. О-30): сообщение ставится в очередь без организации каждому незаблокированному администратору
- * платформы с привязанным Telegram и сразу отправляется, мимо задачи `telegram.send` — она сама может
- * быть тем, что сломалось. Не ушло сразу — уйдёт со следующей отправкой очереди (повторы, «Ошибка»
+ * Оповещения администратору платформы в Telegram о сбоях и о массовых блокировках входа (ревью
+ * безопасности Р-8 А, docs/decisions.md п. О-30 и О-32): сообщение ставится в очередь без организации
+ * каждому незаблокированному администратору платформы с привязанным Telegram и сразу отправляется,
+ * мимо задачи `telegram.send` — она сама может быть тем, что сломалось. Не ушло сразу — уйдёт со следующей отправкой очереди (повторы, «Ошибка»
  * после 5 попыток, Админка → «Телеграм» → «Журнал»: тип «Сбой в работе сайта»). На тестовом стенде — с
  * пометкой «🧪 Тестовый стенд», от бота стенда его администраторам (база стенда своя).
  */
@@ -36,15 +36,25 @@ export function jobTitle(t: AlertTexts, name: string): string {
 
 /**
  * Поставить оповещение и сразу отправить. `key` — постоянный признак события: тот же ключ второго
- * сообщения не ставит (два запуска, увидевшие один сбой, сообщат о нём один раз). Возвращает, скольким
- * администраторам поставлено.
+ * сообщения не ставит (два запуска, увидевшие один сбой, сообщат о нём один раз). С `everySeconds`
+ * `key` — вид оповещения: такое сообщение ставится не чаще раза в `everySeconds` (п. О-32).
+ * Возвращает, скольким администраторам поставлено.
  */
 export async function sendPlatformAlert(
   ctx: JobContext,
-  o: { key: string; text: string },
+  o: { key: string; text: string; everySeconds?: number },
 ): Promise<number> {
   const text = (ctx.config.APP_ENV === 'staging' ? ALERT_STAND_MARK : '') + o.text;
-  const queued = await platformAlert(ctx.db, { text, key: o.key, now: ctx.clock.now() });
+  const now = ctx.clock.now();
+  const queued =
+    o.everySeconds === undefined
+      ? await platformAlert(ctx.db, { text, key: o.key, now })
+      : await platformAlertThrottled(ctx.db, {
+          text,
+          key: o.key,
+          now,
+          everySeconds: o.everySeconds,
+        });
   // Чтобы по журналу было видно, что оповещение было и сколько получателей (без текста).
   ctx.logger.warn({ alert: o.key, queued }, 'оповещение администратору платформы');
   if (queued > 0 && ctx.telegram) {

@@ -15,6 +15,7 @@ import { createDueReportsJob } from '../modules/reports/job';
 import { telegramSendJob } from '../modules/telegram/outbox';
 import { telegramRemindersJob } from '../modules/telegram/reminders';
 import { alertTexts, sendPlatformAlert } from './alerts';
+import { watchLoginLocksJob } from './login-locks';
 
 const { schedulerRuns } = schema;
 
@@ -89,6 +90,7 @@ export const cleanupPendingFilesJob: Job = {
 export const jobs: readonly Job[] = [
   cleanupSchedulerRuns,
   cleanupLoginAttemptsJob,
+  watchLoginLocksJob,
   cleanupRateLimitsJob,
   syncServiceStatusesJob,
   cleanupContractorPageGrantsJob,

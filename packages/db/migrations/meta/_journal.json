@@ -705,15 +705,22 @@
     {
       "idx": 100,
       "version": "7",
-      "when": 1794055639134,
-      "tag": "0100_telegram_relink_page_closed",
+      "when": 1794055126275,
+      "tag": "0100_login_lock_stats_function",
       "breakpoints": true
     },
     {
       "idx": 101,
       "version": "7",
-      "when": 1794055640978,
-      "tag": "0101_telegram_relink_functions",
+      "when": 1794057689386,
+      "tag": "0101_telegram_relink_page_closed",
+      "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794057691546,
+      "tag": "0102_telegram_relink_functions",
       "breakpoints": true
     }
   ]
