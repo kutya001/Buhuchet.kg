@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChangePasswordForm, type MeResponse, type TelegramInfo } from '@buhuchet/shared';
+import { ChangePasswordForm, MeResponse, type TelegramInfo } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
@@ -195,10 +195,14 @@ function TelegramBox({
     setBusy(false);
     if (!res.ok) return setError(errorText(res.error));
     setError(null);
-    if (telegram) setPrevious({ name: telegram.name });
+    setPrevious(null);
     setTelegram(null);
     toast(t('profile.tg_unlinked'), { icon: 'tg' });
     router.refresh();
+    // Подсказку о прежнем Telegram решает сервер: пока после сброса пароля можно привязать другой
+    // чат без кода, её нет (docs/deviations.md п. О-20).
+    const me = await callApi(() => api.api.auth.me.$get());
+    if (me.ok) setPrevious(MeResponse.parse(me.data).telegramPrevious ?? null);
   };
 
   return (

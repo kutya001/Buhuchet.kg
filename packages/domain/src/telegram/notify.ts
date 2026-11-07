@@ -90,6 +90,8 @@ export function outboxRetryRefusal(row: {
   if (row.status !== 'error') return 'outbox_not_error';
   if (row.kind === 'code') return 'outbox_code';
   if (row.kind === 'relink_code') return 'outbox_relink_code';
+  // Новый вид кода без своего текста: всё равно не повторяется (как `app.admin_telegram_retry`).
+  if ((CODE_KINDS as readonly string[]).includes(row.kind)) return 'outbox_code';
   return null;
 }
 
