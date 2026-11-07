@@ -1,5 +1,5 @@
 {
-  "id": "03ad3c42-28ff-4d06-b6f5-7195a984d2fa",
+  "id": "f89cf10a-9c83-4309-bd4d-a96485bd181d",
   "prevId": "6bfb32da-73b5-45a6-a224-4261457ad257",
   "version": "7",
   "dialect": "postgresql",
@@ -3270,12 +3270,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_by": {
           "name": "created_by",
           "type": "uuid",
@@ -5946,6 +5940,126 @@
       "checkConstraints": {},
       "isRLSEnabled": true
     },
+    "public.admin_login_codes": {
+      "name": "admin_login_codes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "code_hash": {
+          "name": "code_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_tag": {
+          "name": "password_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "signed_in_at": {
+          "name": "signed_in_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "admin_login_codes_user_idx": {
+          "name": "admin_login_codes_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_login_codes_user_id_users_id_fk": {
+          "name": "admin_login_codes_user_id_users_id_fk",
+          "tableFrom": "admin_login_codes",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "admin_login_codes_token_hash_unique": {
+          "name": "admin_login_codes_token_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "token_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": true
+    },
     "public.login_attempts": {
       "name": "login_attempts",
       "schema": "",
@@ -6350,103 +6464,6 @@
           ],
           "using": "\"telegram_digest_days\".\"org_id\" = app.current_org_id()",
           "withCheck": "\"telegram_digest_days\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {},
-      "isRLSEnabled": true
-    },
-    "public.telegram_link_guards": {
-      "name": "telegram_link_guards",
-      "schema": "",
-      "columns": {
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "chat_id": {
-          "name": "chat_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "free_until": {
-          "name": "free_until",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "telegram_link_guards_user_id_users_id_fk": {
-          "name": "telegram_link_guards_user_id_users_id_fk",
-          "tableFrom": "telegram_link_guards",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "telegram_link_guards_org_id_organizations_id_fk": {
-          "name": "telegram_link_guards_org_id_organizations_id_fk",
-          "tableFrom": "telegram_link_guards",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "telegram_link_guards_user_org_fk": {
-          "name": "telegram_link_guards_user_org_fk",
-          "tableFrom": "telegram_link_guards",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "telegram_link_guards_isolation": {
-          "name": "telegram_link_guards_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"telegram_link_guards\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"telegram_link_guards\".\"org_id\" = app.current_org_id()"
         }
       },
       "checkConstraints": {},
@@ -7012,7 +7029,7 @@
       "checkConstraints": {
         "telegram_outbox_kind_check": {
           "name": "telegram_outbox_kind_check",
-          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed')"
+          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert')"
         },
         "telegram_outbox_status_check": {
           "name": "telegram_outbox_status_check",
@@ -7024,193 +7041,9 @@
         },
         "telegram_outbox_code_text_check": {
           "name": "telegram_outbox_code_text_check",
-          "value": "\"telegram_outbox\".\"kind\" not in ('code', 'relink_code') or \"telegram_outbox\".\"text\" is null"
+          "value": "\"telegram_outbox\".\"kind\" <> 'code' or \"telegram_outbox\".\"text\" is null"
         }
       },
-      "isRLSEnabled": true
-    },
-    "public.telegram_relink_codes": {
-      "name": "telegram_relink_codes",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "org_id": {
-          "name": "org_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "token_hash": {
-          "name": "token_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "chat_id": {
-          "name": "chat_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "username": {
-          "name": "username",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "first_name": {
-          "name": "first_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "code_hash": {
-          "name": "code_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "attempts": {
-          "name": "attempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "used_at": {
-          "name": "used_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "telegram_relink_codes_user_idx": {
-          "name": "telegram_relink_codes_user_idx",
-          "columns": [
-            {
-              "expression": "user_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "telegram_relink_codes_chat_idx": {
-          "name": "telegram_relink_codes_chat_idx",
-          "columns": [
-            {
-              "expression": "chat_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "telegram_relink_codes_user_id_users_id_fk": {
-          "name": "telegram_relink_codes_user_id_users_id_fk",
-          "tableFrom": "telegram_relink_codes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "telegram_relink_codes_org_id_organizations_id_fk": {
-          "name": "telegram_relink_codes_org_id_organizations_id_fk",
-          "tableFrom": "telegram_relink_codes",
-          "tableTo": "organizations",
-          "columnsFrom": [
-            "org_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "telegram_relink_codes_user_org_fk": {
-          "name": "telegram_relink_codes_user_org_fk",
-          "tableFrom": "telegram_relink_codes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id",
-            "org_id"
-          ],
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {
-        "telegram_relink_codes_isolation": {
-          "name": "telegram_relink_codes_isolation",
-          "as": "PERMISSIVE",
-          "for": "ALL",
-          "to": [
-            "buhuchet_app"
-          ],
-          "using": "\"telegram_relink_codes\".\"org_id\" = app.current_org_id()",
-          "withCheck": "\"telegram_relink_codes\".\"org_id\" = app.current_org_id()"
-        }
-      },
-      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.ui_texts": {

@@ -22,6 +22,27 @@ export const LoginRequest = z.object({
 });
 export type LoginRequest = z.infer<typeof LoginRequest>;
 
+/**
+ * Вход администратора платформы, шаг 2 (docs/deviations.md п. О-13): пароль верный, бот прислал код
+ * в Telegram (ответ 202). `challenge` — токен шага входа: с ним и кодом — `POST /auth/login/code`.
+ */
+export const AdminCodeRequiredResponse = z.object({
+  secondFactor: z.literal('telegram'),
+  challenge: z.string(),
+  expiresAt: z.iso.datetime(),
+});
+export type AdminCodeRequiredResponse = z.infer<typeof AdminCodeRequiredResponse>;
+
+/** Код из Telegram при входе администратора платформы. */
+export const AdminCodeRequest = z.object({
+  challenge: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+  code: z
+    .string()
+    .trim()
+    .regex(new RegExp(`^\\d{${RESET_CODE_LENGTH}}$`)),
+});
+export type AdminCodeRequest = z.infer<typeof AdminCodeRequest>;
+
 /** Смена своего пароля: текущий и новый (не короче 8 символов). Повтор нового сверяет форма. */
 export const ChangePasswordRequest = z.object({
   currentPassword: z.string().min(1).max(PASSWORD_MAX_LENGTH),
@@ -148,6 +169,15 @@ export type LoginForm = z.infer<typeof LoginForm>;
 /** «Забыли пароль?», шаг 1: логин. */
 export const PasswordResetLoginForm = z.object({ login: loginField });
 export type PasswordResetLoginForm = z.infer<typeof PasswordResetLoginForm>;
+
+/** Вход администратора платформы: код из Telegram. */
+export const AdminCodeForm = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(new RegExp(`^\\d{${RESET_CODE_LENGTH}}$`), message('auth.err.code')),
+});
+export type AdminCodeForm = z.infer<typeof AdminCodeForm>;
 
 /** «Забыли пароль?», шаг 2: код из Telegram, новый пароль и его повтор. */
 export const PasswordResetCodeForm = z

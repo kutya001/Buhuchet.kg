@@ -1,8 +1,14 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { RESET_CODE_LENGTH, RESET_CODE_TTL_MINUTES } from '@buhuchet/domain';
 import {
+  ADMIN_CODE_TTL_MINUTES,
+  RESET_CODE_LENGTH,
+  RESET_CODE_TTL_MINUTES,
+} from '@buhuchet/domain';
+import {
+  AdminCodeForm,
+  AdminCodeRequiredResponse,
   ChangePasswordForm,
   LoginForm,
   MeResponse,
@@ -30,9 +36,14 @@ import { fieldError, NewPasswordFields } from './fields';
 import { loginErrorText } from './login-errors';
 import { TelegramLinkRow, useTelegramLink } from './telegram-link';
 
-/** Шаг страницы входа: вход, «Забыли пароль?» (логин, затем код), смена временного пароля, Telegram. */
+/**
+ * Шаг страницы входа: вход, у администратора платформы — код из Telegram или привязка Telegram,
+ * «Забыли пароль?» (логин, затем код), смена временного пароля, Telegram.
+ */
 type Step =
   | { id: 'login'; login: string }
+  | { id: 'admin-code'; login: string; challenge: string; password: string }
+  | { id: 'admin-telegram'; login: string; url: string }
   | { id: 'forgot'; login: string }
   | { id: 'code'; login: string }
   | { id: 'change'; me: MeResponse; current: string | null }
@@ -79,6 +90,11 @@ function LoginCard({ me, returnTo }: { me: MeResponse | null; returnTo: string }
     markSignedIn();
     router.replace(returnTo);
   }, [router, returnTo]);
+  // Вошёл: с временным паролем — на его смену (пароль от входа подставлен), иначе в программу.
+  const signedIn = (signed: MeResponse, password: string) =>
+    signed.user.mustChangePassword
+      ? setStep({ id: 'change', me: signed, current: password })
+      : enter();
 
   let body: ReactNode;
   switch (step.id) {
@@ -87,11 +103,28 @@ function LoginCard({ me, returnTo }: { me: MeResponse | null; returnTo: string }
         <LoginStep
           initialLogin={step.login}
           onForgot={(login) => setStep({ id: 'forgot', login })}
-          onSignedIn={(signed, password) =>
-            signed.user.mustChangePassword
-              ? setStep({ id: 'change', me: signed, current: password })
-              : enter()
+          onSignedIn={signedIn}
+          onAdminCode={(login, challenge, password) =>
+            setStep({ id: 'admin-code', login, challenge, password })
           }
+          onTelegramRequired={(login, url) => setStep({ id: 'admin-telegram', login, url })}
+        />
+      );
+      break;
+    case 'admin-code':
+      body = (
+        <AdminCodeStep
+          challenge={step.challenge}
+          onSignedIn={(signed) => signedIn(signed, step.password)}
+          onBack={() => setStep({ id: 'login', login: step.login })}
+        />
+      );
+      break;
+    case 'admin-telegram':
+      body = (
+        <AdminTelegramStep
+          url={step.url}
+          onDone={() => setStep({ id: 'login', login: step.login })}
         />
       );
       break;
@@ -142,10 +175,16 @@ function LoginStep({
   initialLogin,
   onForgot,
   onSignedIn,
+  onAdminCode,
+  onTelegramRequired,
 }: {
   initialLogin: string;
   onForgot: (login: string) => void;
   onSignedIn: (me: MeResponse, password: string) => void;
+  /** Администратор платформы: пароль верный, бот прислал код (docs/deviations.md п. О-13). */
+  onAdminCode: (login: string, challenge: string, password: string) => void;
+  /** Администратор платформы без Telegram: сначала привязать его по ссылке. */
+  onTelegramRequired: (login: string, url: string) => void;
 }) {
   const t = useT();
   const errorText = useErrorText();
@@ -164,7 +203,15 @@ function LoginStep({
 
   const send = handleSubmit(async (values) => {
     const res = await callApi(() => api.api.auth.login.$post({ json: values }));
+    if (res.ok && res.status === 202) {
+      const { challenge } = AdminCodeRequiredResponse.parse(res.data);
+      return onAdminCode(values.login, challenge, values.password);
+    }
     if (res.ok) return onSignedIn(MeResponse.parse(res.data), values.password);
+    const url = (res.error.details as { url?: unknown } | undefined)?.url;
+    if (res.error.code === 'telegram_required' && typeof url === 'string') {
+      return onTelegramRequired(values.login, url);
+    }
     setMessage(loginErrorText(t, errorText, res.error));
   });
   // Прежняя ошибка гаснет при каждом нажатии «Войти», и при пустом поле тоже (прототип `msg('')`).
@@ -218,6 +265,81 @@ function LoginStep({
         </a>
       </div>
     </form>
+  );
+}
+
+/** Вход администратора платформы, шаг 2: код из Telegram. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-13 — в прототипе (showLogin) у администратора один шаг входа.
+function AdminCodeStep({
+  challenge,
+  onSignedIn,
+  onBack,
+}: {
+  challenge: string;
+  onSignedIn: (me: MeResponse) => void;
+  onBack: () => void;
+}) {
+  const t = useT();
+  const errorText = useErrorText();
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<AdminCodeForm>({
+    resolver: zodResolver(AdminCodeForm),
+    defaultValues: { code: '' },
+  });
+
+  const submit = handleSubmit(async ({ code }) => {
+    const res = await callApi(() => api.api.auth.login.code.$post({ json: { challenge, code } }));
+    if (res.ok) return onSignedIn(MeResponse.parse(res.data));
+    setError('code', { type: 'server', message: errorText(res.error) }, { shouldFocus: true });
+  });
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">
+      <h1 className={STEP_TITLE}>{t('auth.admin_code_title')}</h1>
+      <Note icon="tg">{t('auth.admin_code_sent', { minutes: ADMIN_CODE_TTL_MINUTES })}</Note>
+      <Field id="ad-code" label={t('auth.code')} error={fieldError(t, errors.code)}>
+        {(control) => (
+          <input
+            {...control}
+            {...register('code')}
+            className={inputClass({ mono: true })}
+            inputMode="numeric"
+            maxLength={RESET_CODE_LENGTH}
+            autoComplete="one-time-code"
+            autoFocus
+          />
+        )}
+      </Field>
+      <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
+        {t('auth.sign_in')}
+      </button>
+      <button type="button" className={LINK_LEFT} onClick={onBack}>
+        {t('auth.back')}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Администратор платформы без Telegram: войти можно только с кодом, поэтому сначала — привязка по
+ * ссылке из ответа входа (её получает только тот, кто ввёл верный пароль), потом вход заново.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-13
+function AdminTelegramStep({ url, onDone }: { url: string; onDone: () => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-3.5">
+      <h1 className={STEP_TITLE}>{t('auth.admin_tg_title')}</h1>
+      <p className="m-0 text-muted">{t('auth.admin_tg_text')}</p>
+      <TelegramLinkRow url={url} />
+      <button type="button" className={WIDE_CTA} onClick={onDone}>
+        {t('auth.admin_tg_done')}
+      </button>
+    </div>
   );
 }
 

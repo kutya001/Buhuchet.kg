@@ -47,6 +47,25 @@ describe('ошибка входа — тексты словаря refDB v59', ()
     expect(text('server_busy')).toBe('Сервер занят, попробуйте ещё раз через несколько секунд');
   });
 
+  // docs/deviations.md п. О-13.
+  it('вход администратора платформы с кодом из Telegram — тексты словаря', () => {
+    expect(text('admin_code_invalid', { attempts: 5 })).toBe(
+      'Код неверный или истёк. После 5 неверных кодов войдите заново.',
+    );
+    expect(text('admin_code_limited', { minutes: 15 })).toBe(
+      'Слишком много кодов для входа. Попробуйте через 15 минут.',
+    );
+    expect(text('admin_code_limited', { variant: 'day', max: 10 })).toBe(
+      'Слишком много кодов для входа за сутки. Если вы не входили, кто-то знает ваш пароль: смените его кнопкой «Забыли пароль?» — вход откроется.',
+    );
+    expect(text('telegram_unavailable', { variant: 'admin' })).toBe(
+      'Telegram-бот не подключён: вход в Админку невозможен без кода из Telegram.',
+    );
+    expect(text('telegram_send_failed')).toBe(
+      'Не удалось отправить код в Telegram. Попробуйте войти ещё раз через минуту.',
+    );
+  });
+
   it('другие ответы — по коду, как везде', () => {
     expect(text('rate_limited_unknown')).toBe('текст сервера');
     expect(text('validation_failed')).toBe('Неверные данные запроса');

@@ -72,6 +72,19 @@ export const AUTH_TEXTS = {
   'auth.later': { ru: 'Позже', section: 'Вход' },
   'auth.continue': { ru: 'Продолжить', section: 'Вход' },
 
+  // Вход администратора платформы: код из Telegram (docs/deviations.md п. О-13)
+  'auth.admin_code_title': { ru: 'Код для входа в Админку', section: 'Вход' },
+  'auth.admin_code_sent': {
+    ru: 'Бот прислал код в ваш Telegram. Код действует {minutes} минут.',
+    section: 'Вход',
+  },
+  'auth.admin_tg_title': { ru: 'Привяжите Telegram', section: 'Вход' },
+  'auth.admin_tg_text': {
+    ru: 'Чтобы войти в Админку, нужен код из Telegram. Откройте ссылку в Telegram и нажмите «Старт» — бот привяжет чат. Затем войдите снова.',
+    section: 'Вход',
+  },
+  'auth.admin_tg_done': { ru: 'Telegram привязан — войти', section: 'Вход' },
+
   // Ошибки полей
   'auth.err.login': { ru: 'Введите логин', section: 'Вход' },
   'auth.err.password': { ru: 'Введите пароль', section: 'Вход' },
@@ -114,6 +127,26 @@ export const AUTH_TEXTS = {
   },
   'err.server_busy': {
     ru: 'Сервер занят, попробуйте ещё раз через несколько секунд',
+    section: 'Ошибки',
+  },
+  'err.admin_code_invalid': {
+    ru: 'Код неверный или истёк. После {attempts} неверных кодов войдите заново.',
+    section: 'Ошибки',
+  },
+  'err.admin_code_limited': {
+    ru: 'Слишком много кодов для входа. Попробуйте через {minutes} минут.',
+    section: 'Ошибки',
+  },
+  'err.admin_code_limited.day': {
+    ru: 'Слишком много кодов для входа за сутки. Если вы не входили, кто-то знает ваш пароль: смените его кнопкой «Забыли пароль?» — вход откроется.',
+    section: 'Ошибки',
+  },
+  'err.telegram_unavailable.admin': {
+    ru: 'Telegram-бот не подключён: вход в Админку невозможен без кода из Telegram.',
+    section: 'Ошибки',
+  },
+  'err.telegram_send_failed': {
+    ru: 'Не удалось отправить код в Telegram. Попробуйте войти ещё раз через минуту.',
     section: 'Ошибки',
   },
   'err.org_blocked': {

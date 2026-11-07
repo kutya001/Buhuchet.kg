@@ -8,16 +8,26 @@ import {
   currentOrganization,
   endSession,
   findLogin,
+  issueAdminCode,
   loadEmployeeAccess,
   recordLoginFailure,
   reserveLoginAttempt,
   sessionByToken,
   startSession,
+  takeAdminCodeAttempt,
+  useAdminCode,
   withUserContext,
 } from './auth';
 import { withOrgContext } from './context';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { employees, loginAttempts, organizations, sessions, users } from './schema';
+import {
+  adminLoginCodes,
+  employees,
+  loginAttempts,
+  organizations,
+  sessions,
+  users,
+} from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -232,6 +242,134 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
           .where(eq(users.id, b.ownerUserId)),
       ),
     ).rejects.toThrow(permissionDenied);
+  });
+
+  // Код из Telegram при входе администратора платформы (docs/deviations.md п. О-13, миграция 0098).
+  it('код входа администратора: только администратору, новый отменяет прежний, не больше 3 за 15 минут', async () => {
+    const issue = (userId: string, token = newHash()) =>
+      issueAdminCode(t.app.db, { userId, tokenHash: token, codeHash: 'code-hash' });
+    expect(await issue(a.ownerUserId)).toEqual({ outcome: 'denied' });
+    const first = newHash();
+    expect(await issue(adminId, first)).toMatchObject({ outcome: 'ok' });
+    const second = newHash();
+    expect(await issue(adminId, second)).toMatchObject({ outcome: 'ok' });
+    expect(await takeAdminCodeAttempt(t.app.db, first)).toBeNull();
+    const attempt = await takeAdminCodeAttempt(t.app.db, second);
+    expect(attempt).toMatchObject({
+      userId: adminId,
+      login: 'platform-admin',
+      codeHash: 'code-hash',
+    });
+    expect(await issue(adminId)).toMatchObject({ outcome: 'ok' });
+    expect(await issue(adminId)).toEqual({ outcome: 'limited' });
+    // Окно прошло — снова можно; строки старше суток удаляются при следующем коде.
+    await t.admin.db
+      .update(adminLoginCodes)
+      .set({ createdAt: new Date(Date.now() - 2 * 86_400_000) })
+      .where(eq(adminLoginCodes.userId, adminId));
+    expect(await issue(adminId)).toMatchObject({ outcome: 'ok' });
+    expect(
+      await t.admin.db.select().from(adminLoginCodes).where(eq(adminLoginCodes.userId, adminId)),
+    ).toHaveLength(1);
+  });
+
+  it('код входа администратора: вводов не больше 5 даже одновременно; использовать — один раз', async () => {
+    const token = newHash();
+    await t.admin.db.delete(adminLoginCodes);
+    await issueAdminCode(t.app.db, { userId: adminId, tokenHash: token, codeHash: 'h' });
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () => takeAdminCodeAttempt(t.app.db, token)),
+    );
+    expect(results.filter(Boolean)).toHaveLength(5);
+    const codeId = results.find(Boolean)!.codeId;
+    const used = await Promise.all([
+      useAdminCode(t.app.db, codeId),
+      useAdminCode(t.app.db, codeId),
+    ]);
+    expect(used.filter(Boolean)).toHaveLength(1);
+    // Истёкший код не используется.
+    const late = newHash();
+    await t.admin.db.delete(adminLoginCodes);
+    await issueAdminCode(t.app.db, { userId: adminId, tokenHash: late, codeHash: 'h' });
+    const [row] = await t.admin.db
+      .update(adminLoginCodes)
+      .set({ expiresAt: new Date(Date.now() - 1000) })
+      .returning({ id: adminLoginCodes.id });
+    expect(await takeAdminCodeAttempt(t.app.db, late)).toBeNull();
+    expect(await useAdminCode(t.app.db, row!.id)).toBe(false);
+  });
+
+  it('код входа администратора: сменили пароль — код не действует, пределы считаются заново', async () => {
+    const setPassword = (hash: string) =>
+      t.admin.db.update(users).set({ passwordHash: hash }).where(eq(users.id, adminId));
+    const issue = (token = newHash()) =>
+      issueAdminCode(t.app.db, { userId: adminId, tokenHash: token, codeHash: 'h' });
+    await t.admin.db.delete(adminLoginCodes);
+    try {
+      const token = newHash();
+      await issue(token);
+      const attempt = await takeAdminCodeAttempt(t.app.db, token);
+      expect(attempt).not.toBeNull();
+      await setPassword('hash-admin-2');
+      expect(await takeAdminCodeAttempt(t.app.db, token)).toBeNull();
+      expect(await useAdminCode(t.app.db, attempt!.codeId)).toBe(false);
+
+      // Не больше 10 кодов за сутки без входа: окно 15 минут каждый раз «прошло».
+      await t.admin.db.delete(adminLoginCodes);
+      const back = () =>
+        t.admin.db
+          .update(adminLoginCodes)
+          .set({ createdAt: new Date(Date.now() - 3600_000) })
+          .where(eq(adminLoginCodes.userId, adminId));
+      for (let i = 0; i < 10; i++) {
+        expect(await issue()).toMatchObject({ outcome: 'ok' });
+        await back();
+      }
+      expect(await issue()).toEqual({ outcome: 'limited_day' });
+
+      // Коды, по которым вошли, в суточный предел не считаются.
+      await t.admin.db.delete(adminLoginCodes);
+      for (let i = 0; i < 10; i++) {
+        const ok = newHash();
+        expect(await issue(ok)).toMatchObject({ outcome: 'ok' });
+        const taken = await takeAdminCodeAttempt(t.app.db, ok);
+        expect(await useAdminCode(t.app.db, taken!.codeId)).toBe(true);
+        await back();
+      }
+      expect(await issue()).toMatchObject({ outcome: 'ok' });
+
+      // Новый пароль снимает и суточный предел, и предел за 15 минут.
+      await t.admin.db.delete(adminLoginCodes);
+      for (let i = 0; i < 10; i++) {
+        await issue();
+        await back();
+      }
+      expect(await issue()).toEqual({ outcome: 'limited_day' });
+      await setPassword('hash-admin-3');
+      expect(await issue()).toMatchObject({ outcome: 'ok' });
+      await issue();
+      await issue();
+      expect(await issue()).toEqual({ outcome: 'limited' });
+      await setPassword('hash-admin-4');
+      expect(await issue()).toMatchObject({ outcome: 'ok' });
+    } finally {
+      await setPassword('hash-admin');
+      await t.admin.db.delete(adminLoginCodes);
+    }
+  });
+
+  it('коды входа администратора роль приложения не читает и не меняет напрямую', async () => {
+    await expect(t.app.db.select().from(adminLoginCodes)).rejects.toThrow(permissionDenied);
+    await expect(
+      t.app.db.insert(adminLoginCodes).values({
+        userId: adminId,
+        tokenHash: newHash(),
+        codeHash: 'x',
+        passwordTag: 'x',
+        expiresAt: new Date(),
+      }),
+    ).rejects.toThrow(permissionDenied);
+    await expect(t.app.db.delete(adminLoginCodes)).rejects.toThrow(permissionDenied);
   });
 
   it('сеанс находится по хешу токена; продлевается не чаще раза в час', async () => {
