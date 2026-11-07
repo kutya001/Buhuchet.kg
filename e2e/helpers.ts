@@ -95,6 +95,21 @@ export function pressStart(api: APIRequestContext, linkUrl: string, chat: number
   });
 }
 
+/** Пользователь написал боту в личном чате (например, код подтверждения замены Telegram). */
+export function tellBot(api: APIRequestContext, chat: number, text: string) {
+  return api.post('/api/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    data: {
+      update_id: chat + 1,
+      message: {
+        text,
+        chat: { id: chat, type: 'private' },
+        from: { username: `e2e_${chat}`, first_name: 'Сквозной' },
+      },
+    },
+  });
+}
+
 /** Вошедший пользователь привязывает Telegram по ссылке из профиля. */
 export async function linkTelegram(api: APIRequestContext, origin: string, chat: number) {
   const link = await api.post('/api/telegram/link', { headers: { origin } });

@@ -1,14 +1,28 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
+import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import { isValidWebhookSecret } from '@buhuchet/adapters/telegram';
-import { hashSessionToken, isSessionTokenShape } from '@buhuchet/adapters/tokens';
+import { hashSessionToken, isSessionTokenShape, newResetCode } from '@buhuchet/adapters/tokens';
 import {
   peekTelegramLink,
+  requestTelegramRelink,
+  reserveTelegramRelinkAttempt,
   useTelegramLink,
+  useTelegramRelink,
   withOrgContext,
   withUserContext,
   writeHistory,
+  type TelegramLinkResult,
+  type Tx,
 } from '@buhuchet/db';
-import { loginDenial, parseStartCommand, telegramName, withOrganization } from '@buhuchet/domain';
+import {
+  loginDenial,
+  parseStartCommand,
+  relinkCodeOf,
+  TELEGRAM_RELINK_CODE_TTL_MINUTES,
+  telegramName,
+  telegramRelinkNeedsCode,
+  withOrganization,
+} from '@buhuchet/domain';
 import { ApiError, OkResponse } from '@buhuchet/shared';
 import { createMiddleware } from 'hono/factory';
 import type { ApiDeps } from '../../deps';
@@ -40,7 +54,7 @@ export const webhookRoute = createRoute({
   method: 'post',
   path: '/telegram/webhook',
   tags: ['telegram'],
-  summary: 'Вебхук бота: привязка Telegram по ссылке /start <токен>',
+  summary: 'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата',
   request: {
     body: { required: true, content: { 'application/json': { schema: TelegramUpdate } } },
   },
@@ -69,12 +83,185 @@ export function webhookGuard(deps: ApiDeps) {
   });
 }
 
+/** Чат и имя в Telegram того, кто открыл ссылку или прислал код. */
+interface LinkChat {
+  chatId: number;
+  username: string | null;
+  firstName: string | null;
+}
+
+/** Учётная запись, к которой привязывается чат. */
+interface LinkAccount {
+  userId: string;
+  orgId: string | null;
+  login: string;
+  orgName: string | null;
+}
+
+/** Транзакция от имени пользователя: сотрудник — в своей организации, администратор — без неё. */
+function asAccount<T>(deps: ApiDeps, account: LinkAccount, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return account.orgId
+    ? withOrgContext(deps.db, { orgId: account.orgId, userId: account.userId }, fn)
+    : withUserContext(deps.db, account.userId, fn);
+}
+
+/**
+ * Чат привязан (по ссылке или по коду из прежнего чата): запись в истории в той же транзакции, о
+ * замене — в прежний чат (привязанный или отвязанный последним), подтверждение — в новый.
+ */
+async function linked(
+  deps: ApiDeps,
+  account: LinkAccount,
+  link: LinkChat,
+  use: (tx: Tx) => Promise<TelegramLinkResult | null>,
+): Promise<boolean> {
+  const result = await asAccount(deps, account, async (tx) => {
+    const done = await use(tx);
+    // История администратора платформы — в Админке (#18); у его записи нет организации.
+    if (done && account.orgId) {
+      await writeHistory(tx, {
+        entity: 'user',
+        entityId: account.userId,
+        action: 'update',
+        changes: [
+          {
+            field: 'telegram',
+            from: done.previous ? telegramName(done.previous) : null,
+            to: telegramName(link),
+          },
+        ],
+      });
+    }
+    return done;
+  });
+  if (!result) return false;
+  const before =
+    result.previous && result.previous.chatId !== link.chatId
+      ? result.previous
+      : (result.unlinked ?? null);
+  if (before) {
+    const notice = await botText(deps, 'tgRelinked', {
+      логин: account.login,
+      телеграм: telegramName(link),
+    });
+    await sendNow(
+      deps,
+      before.chatId,
+      withOrganization(notice, account.orgName, before.shared),
+      'telegram_relinked',
+      {},
+      { userId: account.userId, kind: 'relinked' },
+    );
+  }
+  await sendNow(
+    deps,
+    link.chatId,
+    withOrganization(
+      await botText(deps, 'tgLinked', { логин: account.login }),
+      account.orgName,
+      result.shared,
+    ),
+    'bot_reply',
+    {},
+    { userId: account.userId, kind: 'linked' },
+  );
+  return true;
+}
+
+/**
+ * Ссылку открыли в другом чате, а прежний есть (решение заказчика 07.11.2026, Р-13 Б): бот
+ * присылает код в прежний чат и просит прислать его сюда. Хеш кода считается до транзакции; ссылка
+ * использована, только когда код записан. Код не дошёл (бот заблокирован в прежнем чате) — пароль
+ * сбрасывает владелец, после этого сутки Telegram привязывается без кода.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-20
+async function askRelinkCode(
+  deps: ApiDeps,
+  account: LinkAccount,
+  tokenHash: string,
+  link: LinkChat,
+  reply: (body: string) => Promise<unknown>,
+): Promise<'asked' | 'not_needed'> {
+  const code = newResetCode();
+  const codeHash = await hashPassword(code);
+  const request = await asAccount(deps, account, (tx) =>
+    requestTelegramRelink(tx, { tokenHash, ...link, codeHash }),
+  );
+  if (request.status === 'not_needed') return 'not_needed';
+  if (request.status === 'invalid') {
+    await reply(await botText(deps, 'tgLinkInvalid'));
+    return 'asked';
+  }
+  if (request.status !== 'sent') {
+    await reply(await botText(deps, 'tgRelinkLimited'));
+    return 'asked';
+  }
+  const minutes = TELEGRAM_RELINK_CODE_TTL_MINUTES;
+  const sent = await sendNow(
+    deps,
+    request.chatId,
+    withOrganization(
+      await botText(deps, 'tgRelinkCode', {
+        логин: account.login,
+        телеграм: telegramName(link),
+        код: code,
+        минут: minutes,
+      }),
+      account.orgName,
+      request.shared,
+    ),
+    'relink_code',
+    {},
+    { userId: account.userId, kind: 'relink_code' },
+  );
+  await reply(
+    sent
+      ? await botText(deps, 'tgRelinkAsk', { логин: account.login, минут: minutes })
+      : await botText(deps, 'tgRelinkNoSend'),
+  );
+  return 'asked';
+}
+
+/**
+ * Сообщение с кодом в новом чате: попытка занимается до проверки (5 на код, 10 неверных за сутки),
+ * верный код привязывает чат. Кода для этого чата нет — обычная подсказка бота.
+ */
+async function confirmRelink(
+  deps: ApiDeps,
+  chatId: number,
+  code: string,
+  reply: (body: string) => Promise<unknown>,
+): Promise<void> {
+  const attempt = await reserveTelegramRelinkAttempt(deps.db, chatId);
+  if (attempt.status === 'none') {
+    await reply(await botText(deps, 'tgStart'));
+    return;
+  }
+  if (attempt.status === 'spent' || loginDenial(attempt)) {
+    await reply(await botText(deps, 'tgRelinkFailed'));
+    return;
+  }
+  if (!(await verifyPassword(attempt.codeHash, code))) {
+    await reply(
+      attempt.triesLeft > 0
+        ? await botText(deps, 'tgRelinkWrong', { попыток: attempt.triesLeft })
+        : await botText(deps, 'tgRelinkFailed'),
+    );
+    return;
+  }
+  // Имя в Telegram — из сообщения со ссылкой: его записал запрос кода.
+  const link = { chatId, username: attempt.username, firstName: attempt.firstName };
+  const done = await linked(deps, attempt, link, (tx) => useTelegramRelink(tx, attempt.codeId));
+  if (!done) await reply(await botText(deps, 'tgRelinkFailed'));
+}
+
 /**
  * Вебхук бота (ТЗ «Телеграм бот для любых уведомлений»): ссылка t.me/бот?start=токен приходит как
  * «/start токен». Бот проверяет токен (одноразовый, 15 минут), привязывает чат к профилю и присылает
- * подтверждение. Если вместо прежнего привязан другой чат, бот пишет об этом в прежний: привязка —
- * способ восстановить пароль, и чужая замена не должна пройти незаметно. На всё остальное отвечает
- * 200, чтобы Telegram не повторял доставку.
+ * подтверждение. Другой чат вместо прежнего (привязанного или отвязанного последним) — только кодом
+ * из прежнего (решение заказчика 07.11.2026, Р-13 Б): бот присылает код туда, его присылают сюда;
+ * о замене бот пишет в прежний чат. На всё остальное отвечает 200, чтобы Telegram не повторял
+ * доставку.
  */
 export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute, AppEnv> {
   return async (c) => {
@@ -88,75 +275,38 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     };
 
     const command = parseStartCommand(text);
-    if (!command?.token) return reply(await botText(deps, 'tgStart'));
+    if (!command) {
+      const code = relinkCodeOf(text);
+      if (!code) return reply(await botText(deps, 'tgStart'));
+      await confirmRelink(deps, chat.id, code, reply);
+      return ok;
+    }
+    if (!command.token) return reply(await botText(deps, 'tgStart'));
     if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
     const tokenHash = hashSessionToken(command.token);
     const target = await peekTelegramLink(deps.db, tokenHash);
     if (!target) return reply(await botText(deps, 'tgLinkInvalid'));
-    // Telegram повторил то же сообщение после успешной привязки — второй раз не отвечаем.
-    if (target.used && target.linkedChatId === chat.id) return ok;
+    // Telegram повторил то же сообщение после привязки или запроса кода — второй раз не отвечаем.
+    if (target.used && (target.linkedChatId === chat.id || target.relinkChatId === chat.id)) {
+      return ok;
+    }
     if (target.used || target.expired || loginDenial(target)) {
       return reply(await botText(deps, 'tgLinkInvalid'));
     }
 
-    const link = {
-      tokenHash,
+    const link: LinkChat = {
       chatId: chat.id,
       username: from?.username ?? null,
       firstName: from?.first_name ?? null,
     };
-    const result = target.orgId
-      ? await withOrgContext(
-          deps.db,
-          { orgId: target.orgId, userId: target.userId },
-          async (tx) => {
-            const linked = await useTelegramLink(tx, link);
-            if (linked) {
-              await writeHistory(tx, {
-                entity: 'user',
-                entityId: target.userId,
-                action: 'update',
-                changes: [
-                  {
-                    field: 'telegram',
-                    from: linked.previous ? telegramName(linked.previous) : null,
-                    to: telegramName(link),
-                  },
-                ],
-              });
-            }
-            return linked;
-          },
-        )
-      : // История администратора платформы — в Админке (#18); у его записи нет организации.
-        await withUserContext(deps.db, target.userId, (tx) => useTelegramLink(tx, link));
-    if (!result) return reply(await botText(deps, 'tgLinkInvalid'));
-    if (result.previous && result.previous.chatId !== chat.id) {
-      const notice = await botText(deps, 'tgRelinked', {
-        логин: target.login,
-        телеграм: telegramName(link),
-      });
-      await sendNow(
-        deps,
-        result.previous.chatId,
-        withOrganization(notice, target.orgName, result.previous.shared),
-        'telegram_relinked',
-        {},
-        { userId: target.userId, kind: 'relinked' },
-      );
+    if (telegramRelinkNeedsCode(target, chat.id)) {
+      const asked = await askRelinkCode(deps, target, tokenHash, link, reply);
+      if (asked === 'asked') return ok;
     }
-    await sendNow(
-      deps,
-      chat.id,
-      withOrganization(
-        await botText(deps, 'tgLinked', { логин: target.login }),
-        target.orgName,
-        result.shared,
-      ),
-      'bot_reply',
-      {},
-      { userId: target.userId, kind: 'linked' },
+    const done = await linked(deps, target, link, (tx) =>
+      useTelegramLink(tx, { tokenHash, ...link }),
     );
+    if (!done) return reply(await botText(deps, 'tgLinkInvalid'));
     return ok;
   };
 }

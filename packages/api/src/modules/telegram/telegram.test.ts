@@ -8,13 +8,19 @@ import {
   seedAccessReference,
   type TestDatabase,
 } from '@buhuchet/db/testing';
-import { TELEGRAM_TEMPLATE_DEFAULTS } from '@buhuchet/domain';
-import { ApiError, MeResponse, TelegramLinkResponse } from '@buhuchet/shared';
+import { fillTemplate, TELEGRAM_TEMPLATE_DEFAULTS } from '@buhuchet/domain';
+import {
+  ApiError,
+  MeResponse,
+  TelegramLinkResponse,
+  TemporaryPasswordResponse,
+} from '@buhuchet/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
 import {
+  cookieOf,
   createTestDeps,
   linkTelegram,
   sendToBot,
@@ -23,7 +29,16 @@ import {
   TEST_ORIGIN as ORIGIN,
 } from '../../testing';
 
-const { auditLog, employees, messageTemplateTexts, telegramLinkTokens, users } = schema;
+const {
+  auditLog,
+  employees,
+  messageTemplateTexts,
+  telegramLinkTokens,
+  telegramOutbox,
+  telegramRelinkCodes,
+  users,
+} = schema;
+const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
 
 const PASSWORD = 'Верный-пароль-1';
 type App = ReturnType<typeof createApp>;
@@ -49,6 +64,10 @@ async function linkUrl(app: App, cookie: string) {
 
 const tokenOf = (url: string) => new URL(url).searchParams.get('start')!;
 
+/** Код из сообщения бота в прежний чат и неверный код рядом с ним. */
+const codeOf = (text: string | undefined) => /код (\d{6})/.exec(text ?? '')?.[1] ?? '';
+const otherCode = (code: string) => (code === '000000' ? '111111' : '000000');
+
 describe.skipIf(!databaseAvailable())('Telegram: привязка по ссылке и вебхук бота', () => {
   let t: TestDatabase;
   let tg: FakeTelegram;
@@ -57,6 +76,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
   let a: CreatedOrganization;
   let b: CreatedOrganization;
   let accA: string;
+  let empA: string;
 
   const lastText = () => tg.sent.at(-1)?.text;
 
@@ -82,13 +102,17 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       .values({ orgId: a.orgId, login: 'acc-a', passwordHash })
       .returning({ id: users.id });
     accA = u!.id;
-    await t.admin.db.insert(employees).values({
-      orgId: a.orgId,
-      userId: accA,
-      fullName: 'Асанов Алишер',
-      shortName: 'Асанов А.',
-      roleId: a.roles.find((r) => r.templateCode === 'acc')!.id,
-    });
+    const [e] = await t.admin.db
+      .insert(employees)
+      .values({
+        orgId: a.orgId,
+        userId: accA,
+        fullName: 'Асанов Алишер',
+        shortName: 'Асанов А.',
+        roleId: a.roles.find((r) => r.templateCode === 'acc')!.id,
+      })
+      .returning({ id: employees.id });
+    empA = e!.id;
   });
 
   beforeEach(() => {
@@ -199,18 +223,149 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect((await me(app, cookie)).telegram).toMatchObject({ name: 'Алишер' });
   });
 
-  it('другой Telegram вместо прежнего — бот пишет об этом в прежний чат', async () => {
+  it('другой Telegram вместо прежнего — только кодом из прежнего чата; о замене бот пишет туда', async () => {
     const cookie = await signIn(app, 'acc-a', PASSWORD);
     await linkTelegram(app, cookie, 7003, 'new_tg');
+    // Чат ещё прежний: код — в прежний чат, в новом бот просит прислать его.
     expect(tg.sent.map((m) => m.chatId)).toEqual([7001, 7003]);
+    const code = codeOf(tg.sent[0]!.text);
     expect(tg.sent[0]!.text).toBe(
-      TELEGRAM_TEMPLATE_DEFAULTS.tgRelinked
-        .replace('{логин}', 'acc-a')
-        .replace('{телеграм}', '@new_tg'),
+      fillTemplate(TPL.tgRelinkCode, { логин: 'acc-a', телеграм: '@new_tg', код: code, минут: 10 }),
     );
-    // Тот же чат ещё раз — сообщения о замене нет.
+    expect(tg.sent[1]!.text).toBe(fillTemplate(TPL.tgRelinkAsk, { логин: 'acc-a', минут: 10 }));
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: 'Алишер' });
+
+    await sendToBot(app, telegramUpdate(otherCode(code), 7003));
+    expect(lastText()).toBe(fillTemplate(TPL.tgRelinkWrong, { попыток: 4 }));
+    // Из другого чата код не подходит: кода для него нет — обычная подсказка.
+    await sendToBot(app, telegramUpdate(code, 7009));
+    expect(lastText()).toBe(TPL.tgStart);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: 'Алишер' });
+
+    const before = tg.sent.length;
+    await sendToBot(app, telegramUpdate(`${code.slice(0, 3)} ${code.slice(3)}`, 7003));
+    expect(tg.sent.slice(before)).toEqual([
+      {
+        chatId: 7001,
+        text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@new_tg' }),
+        options: {},
+      },
+      { chatId: 7003, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
+    ]);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@new_tg' });
+    const history = await t.admin.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entity, 'user'), eq(auditLog.entityId, accA)));
+    expect(history.at(-1)).toMatchObject({
+      actorUserId: accA,
+      changes: [{ field: 'telegram', from: 'Алишер', to: '@new_tg' }],
+    });
+    // Код одноразовый; в журнал отправок Telegram он не попадает.
+    await sendToBot(app, telegramUpdate(code, 7003));
+    expect(lastText()).toBe(TPL.tgStart);
+    const logged = await t.admin.db
+      .select()
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.kind, 'relink_code'));
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ chatId: 7001, text: null });
+
+    // Тот же чат ещё раз — без кода и без сообщения о замене.
+    const again = tg.sent.length;
     await linkTelegram(app, cookie, 7003, 'new_tg');
-    expect(tg.sent.map((m) => m.chatId)).toEqual([7001, 7003, 7003]);
+    expect(tg.sent.slice(again).map((m) => m.chatId)).toEqual([7003]);
+  });
+
+  it('код замены: повтор от Telegram — бот молчит; 5 неверных — код не действует; код не дошёл', async () => {
+    await t.admin.db.delete(telegramRelinkCodes);
+    const cookie = await signIn(app, 'acc-a', PASSWORD);
+    const { url } = await linkUrl(app, cookie);
+    const update = telegramUpdate(`/start ${tokenOf(url)}`, 7004);
+    await sendToBot(app, update);
+    await sendToBot(app, update);
+    expect(tg.sent.map((m) => m.chatId)).toEqual([7003, 7004]);
+    const code = codeOf(tg.sent[0]!.text);
+    for (const left of [4, 3, 2, 1]) {
+      await sendToBot(app, telegramUpdate(otherCode(code), 7004));
+      expect(lastText()).toBe(fillTemplate(TPL.tgRelinkWrong, { попыток: left }));
+    }
+    await sendToBot(app, telegramUpdate(otherCode(code), 7004));
+    expect(lastText()).toBe(TPL.tgRelinkFailed);
+    await sendToBot(app, telegramUpdate(code, 7004));
+    expect(lastText()).toBe(TPL.tgRelinkFailed);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@new_tg' });
+
+    // Бот заблокирован в прежнем чате: код не отправлен — подсказка, что делать.
+    tg.failNext({ ok: false, errorCode: 403, description: 'blocked', permanent: true });
+    const before = tg.sent.length;
+    await linkTelegram(app, cookie, 7004);
+    expect(tg.sent.slice(before)).toEqual([
+      { chatId: 7004, text: TPL.tgRelinkNoSend, options: {} },
+    ]);
+    // 3 кода в час: четвёртый запрос — «слишком много попыток».
+    await linkTelegram(app, cookie, 7004);
+    await linkTelegram(app, cookie, 7004);
+    expect(lastText()).toBe(TPL.tgRelinkLimited);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@new_tg' });
+  });
+
+  it('после «Отвязать» другой Telegram — тоже кодом, его бот присылает в отвязанный чат', async () => {
+    await t.admin.db.delete(telegramRelinkCodes);
+    const cookie = await signIn(app, 'acc-a', PASSWORD);
+    expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
+    expect((await me(app, cookie)).telegram).toBeNull();
+    const before = tg.sent.length;
+    await linkTelegram(app, cookie, 7004, 'third_tg');
+    expect(tg.sent.slice(before).map((m) => m.chatId)).toEqual([7003, 7004]);
+    expect((await me(app, cookie)).telegram).toBeNull();
+    await sendToBot(app, telegramUpdate(codeOf(tg.sent[before]!.text), 7004));
+    expect(tg.sent.slice(before + 2)).toEqual([
+      {
+        chatId: 7003,
+        text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@third_tg' }),
+        options: {},
+      },
+      { chatId: 7004, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
+    ]);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@third_tg' });
+  });
+
+  it('владелец сбросил пароль — сутки другой Telegram привязывается без кода, один раз', async () => {
+    await t.admin.db.delete(telegramRelinkCodes);
+    const owner = await signIn(app, 'owner-a', PASSWORD);
+    const reset = await app.request(`/api/staff/${empA}/password-reset`, {
+      method: 'POST',
+      headers: { origin: ORIGIN, cookie: owner },
+    });
+    expect(reset.status).toBe(200);
+    const { temporaryPassword } = TemporaryPasswordResponse.parse(await reset.json());
+    const temp = await signIn(app, 'acc-a', temporaryPassword);
+    const changed = await app.request('/api/auth/password', {
+      method: 'POST',
+      headers: { origin: ORIGIN, cookie: temp, 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: temporaryPassword, newPassword: PASSWORD }),
+    });
+    expect(changed.status).toBe(200);
+    const cookie = cookieOf(changed);
+
+    const before = tg.sent.length;
+    await linkTelegram(app, cookie, 7005, 'lost_tg');
+    expect(tg.sent.slice(before)).toEqual([
+      {
+        chatId: 7004,
+        text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@lost_tg' }),
+        options: {},
+      },
+      { chatId: 7005, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
+    ]);
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@lost_tg' });
+    // Разрешение одноразовое: следующая замена — снова кодом из прежнего чата.
+    const next = tg.sent.length;
+    await linkTelegram(app, cookie, 7006);
+    expect(tg.sent.slice(next).map((m) => m.chatId)).toEqual([7005, 7006]);
+    expect(lastText()).toBe(fillTemplate(TPL.tgRelinkAsk, { логин: 'acc-a', минут: 10 }));
+    expect((await me(app, cookie)).telegram).toMatchObject({ name: '@lost_tg' });
   });
 
   it('просто /start, другой текст — подсказка; группы и боты — без ответа', async () => {

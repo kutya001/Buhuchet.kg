@@ -659,6 +659,20 @@
       "when": 1793942210935,
       "tag": "0093_files_page_hidden",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1794043501840,
+      "tag": "0094_telegram_relink_page_closed",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1794043508531,
+      "tag": "0095_telegram_relink_functions",
+      "breakpoints": true
     }
   ]
 }

@@ -28,6 +28,10 @@ export const OUTBOX_KINDS = [
   'pass_reset',
   'broadcast',
   'lead',
+  // Код подтверждения замены Telegram в прежний чат и «страница контрагента закрыта» ответственному
+  // (docs/deviations.md, пп. О-20, О-21).
+  'relink_code',
+  'page_closed',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
@@ -39,7 +43,14 @@ export const SERVICE_KINDS: readonly OutboxKind[] = [
   'unlinked',
   'pass_changed',
   'pass_reset',
+  'relink_code',
 ];
+
+/**
+ * Сообщения с кодом: в журнал отправок пишутся без текста и повторно не отправляются
+ * (docs/deviations.md, п. 12).
+ */
+export const CODE_KINDS = ['code', 'relink_code'] as const satisfies readonly OutboxKind[];
 
 /** Пачка отправки и пауза между пачками (прототип: «отправляются пачками»; предел Telegram — 30 в секунду). */
 export const OUTBOX_BATCH = 25;

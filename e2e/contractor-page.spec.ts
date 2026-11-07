@@ -133,6 +133,46 @@ test.describe('Этап 2: страница контрагента по ссыл
     await page.goto(`/no-such-org/inn/${path.split('/').pop()}`);
     await expect(page.getByRole('heading', { name: 'Страница недоступна' })).toBeVisible();
   });
+
+  test('(решение заказчика 07.11.2026, Р-5 А) 5 неверных кодов за сутки с разных адресов — «Страница закрыта» и в запомненном браузере; «Сменить код» открывает её снова', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const name = `ОсОО «Закрытие ${Date.now().toString(36)}»`;
+    const { origin, id, code, path, inn } = await enabledPage(request, baseURL, name);
+    // Браузер контрагента запомнил код.
+    await page.goto(path);
+    await page.getByLabel('Код доступа').fill(code);
+    await page.getByRole('button', { name: 'Открыть' }).click();
+    await expect(page.getByRole('heading', { name })).toBeVisible();
+
+    // Пять неверных кодов с разных адресов: с одного ввод закрылся бы на час после третьего.
+    const wrong = code === '000000' ? '111111' : '000000';
+    const part = () => Math.floor(Math.random() * 256);
+    for (let i = 1; i <= 5; i++) {
+      const res = await request.post(`/api/page/${SLUG}/${inn}/code`, {
+        headers: { origin, 'x-forwarded-for': `198.19.${part()}.${part()}` },
+        data: { code: wrong },
+      });
+      expect(res.status(), await res.text()).toBe(i < 5 ? 403 : 429);
+    }
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Страница закрыта' })).toBeVisible();
+    await expect(
+      page.getByText('Было 5 неверных кодов за сутки. Попросите новый код у вашего бухгалтера.'),
+    ).toBeVisible();
+    await expect(page.getByText(name)).toHaveCount(0);
+    const block = (await (await request.get(`/api/contractors/${id}/page`)).json()) as {
+      closed: boolean;
+    };
+    expect(block.closed).toBe(true);
+
+    const changed = await request.post(`/api/contractors/${id}/page/code`, { headers: { origin } });
+    expect(changed.status()).toBe(200);
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
+  });
 });
 
 // Разделы открытой страницы (задача 2.43, #99) — в своей организации теста: в ней включены страница,

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { changeOwnPassword, sessionByToken, startSession, withUserContext } from './auth';
 import { withOrgContext } from './context';
@@ -12,8 +12,10 @@ import {
   messageTemplateTexts,
   passwordResetCodes,
   sessions,
+  telegramLinkGuards,
   telegramLinks,
   telegramLinkTokens,
+  telegramRelinkCodes,
   users,
 } from './schema';
 import {
@@ -24,11 +26,14 @@ import {
   passwordResetStatus,
   peekTelegramLink,
   requestPasswordReset,
+  requestTelegramRelink,
   reservePasswordResetAttempt,
+  reserveTelegramRelinkAttempt,
   setTemporaryPassword,
   telegramChat,
   unlinkTelegram,
   useTelegramLink,
+  useTelegramRelink,
 } from './telegram';
 import {
   createTestDatabase,
@@ -63,6 +68,32 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     return run((tx) =>
       useTelegramLink(tx, { tokenHash: token, chatId, username, firstName: 'Имя' }),
     );
+  };
+  /**
+   * Другой чат вместо прежнего — кодом из прежнего (docs/deviations.md п. О-20): ссылка, код записан
+   * (хеш сверяет API — здесь он «верный» без проверки), попытка из нового чата, привязка.
+   */
+  const relinkAs = async (
+    ctx: { orgId: string; userId: string },
+    chatId: number,
+    username: string | null = null,
+  ) => {
+    const token = newHash();
+    await withOrgContext(t.app.db, ctx, (tx) => createTelegramLinkToken(tx, token));
+    const sent = await withOrgContext(t.app.db, ctx, (tx) =>
+      requestTelegramRelink(tx, {
+        tokenHash: token,
+        chatId,
+        username,
+        firstName: 'Имя',
+        codeHash: 'relink-code',
+      }),
+    );
+    expect(sent).toMatchObject({ status: 'sent' });
+    const attempt = await reserveTelegramRelinkAttempt(t.app.db, chatId);
+    if (attempt.status !== 'ok') throw new Error(`код замены: ${attempt.status}`);
+    expect(attempt).toMatchObject({ userId: ctx.userId, codeHash: 'relink-code' });
+    return withOrgContext(t.app.db, ctx, (tx) => useTelegramRelink(tx, attempt.codeId));
   };
 
   beforeAll(async () => {
@@ -145,7 +176,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
         firstName: 'Эркин',
       }),
     );
-    expect(used).toEqual({ previous: null, shared: false });
+    expect(used).toEqual({ previous: null, shared: false, unlinked: null });
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) =>
         useTelegramLink(tx, { tokenHash: second, chatId: 5002, username: null, firstName: null }),
@@ -177,11 +208,19 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       ),
     ).toBeNull();
 
-    expect(await linkAs(ctxA(), 5003, 'erkin_new')).toEqual({
+    // Другой чат вместо прежнего ссылкой не привязывается — только кодом из прежнего (Р-13 Б).
+    expect(await linkAs(ctxA(), 5003, 'erkin_new')).toBeNull();
+    expect(await telegramChat(t.app.db, a.ownerUserId)).toMatchObject({ chatId: 5001 });
+    expect(await relinkAs(ctxA(), 5003, 'erkin_new')).toEqual({
       previous: { chatId: 5001, username: 'erkin_s', firstName: 'Эркин', shared: false },
       shared: false,
+      unlinked: null,
     });
     expect(await telegramChat(t.app.db, a.ownerUserId)).toMatchObject({ chatId: 5003 });
+    // Тот же чат ещё раз — без кода.
+    expect(await linkAs(ctxA(), 5003, 'erkin_new')).toMatchObject({
+      previous: { chatId: 5003 },
+    });
   });
 
   it('один Telegram у нескольких логинов, в том числе в разных организациях и у администратора', async () => {
@@ -192,6 +231,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     expect(await linkAs({ admin: adminId }, 7001, 'admin')).toEqual({
       previous: null,
       shared: false,
+      unlinked: null,
     });
     expect(await telegramChat(t.app.db, adminId)).toMatchObject({ chatId: 7001 });
   });
@@ -215,12 +255,22 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
   });
 
   it('чужая организация не видна: привязки, ссылки и коды Б из контекста А', async () => {
-    await linkAs({ orgId: b.orgId, userId: b.ownerUserId }, 6001);
     await withOrgContext(t.app.db, { orgId: b.orgId, userId: b.ownerUserId }, (tx) =>
       createTelegramLinkToken(tx, newHash()),
     );
+    // Код замены Telegram (Б раньше отвязал 5003 — новый чат только по коду) и отметка «прежний чат».
+    await relinkAs({ orgId: b.orgId, userId: b.ownerUserId }, 6002);
     await requestPasswordReset(t.app.db, { userId: b.ownerUserId, codeHash: 'code-b' });
-    for (const table of [telegramLinks, telegramLinkTokens, passwordResetCodes]) {
+    await t.admin.db
+      .insert(telegramLinkGuards)
+      .values({ userId: b.ownerUserId, orgId: b.orgId, chatId: 6000 });
+    for (const table of [
+      telegramLinks,
+      telegramLinkTokens,
+      passwordResetCodes,
+      telegramLinkGuards,
+      telegramRelinkCodes,
+    ]) {
       const seen = await withOrgContext(t.app.db, ctxA(), (tx) => tx.select().from(table));
       expect(seen.every((r) => r.orgId === a.orgId)).toBe(true);
       const seenB = await withOrgContext(t.app.db, { orgId: b.orgId }, (tx) =>
@@ -254,11 +304,38 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
           codeHash: 'x',
           expiresAt: new Date(Date.now() + 60_000),
         }),
+      // Ни снять отметку «прежний чат», ни разрешить замену без кода, ни подставить свой код замены.
+      (tx: Tx) => tx.delete(telegramLinkGuards).where(eq(telegramLinkGuards.userId, b.ownerUserId)),
+      (tx: Tx) =>
+        tx.insert(telegramLinkGuards).values({
+          userId: a.ownerUserId,
+          orgId: a.orgId,
+          freeUntil: new Date(Date.now() + 60_000),
+        }),
+      (tx: Tx) =>
+        tx
+          .update(telegramRelinkCodes)
+          .set({ attempts: 0 })
+          .where(eq(telegramRelinkCodes.userId, a.ownerUserId)),
+      (tx: Tx) =>
+        tx.insert(telegramRelinkCodes).values({
+          userId: a.ownerUserId,
+          orgId: a.orgId,
+          tokenHash: 'x',
+          chatId: 1,
+          codeHash: 'x',
+          expiresAt: new Date(Date.now() + 60_000),
+        }),
     ];
     for (const attempt of attempts) {
       await expect(withOrgContext(t.app.db, ctxA(), attempt)).rejects.toThrow(permissionDenied);
     }
-    expect(await telegramChat(t.app.db, b.ownerUserId)).toMatchObject({ chatId: 6001 });
+    expect(await telegramChat(t.app.db, b.ownerUserId)).toMatchObject({ chatId: 6002 });
+    const [guardB] = await t.admin.db
+      .select()
+      .from(telegramLinkGuards)
+      .where(eq(telegramLinkGuards.userId, b.ownerUserId));
+    expect(guardB).toMatchObject({ chatId: 6000, freeUntil: null });
   });
 
   it('код «Забыли пароль?»: без Telegram не записывается, 10 минут, не больше 3 в час', async () => {
@@ -471,14 +548,172 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       ),
     ).toBe(false);
 
-    // Замена Telegram на другой чат отменяет код, повторная привязка того же чата — нет.
-    await linkAs({ orgId: a.orgId, userId: accA }, 5011);
-    expect(await pendingAfter(accA, () => linkAs({ orgId: a.orgId, userId: accA }, 5012))).toBe(
+    // Замена Telegram на другой чат (кодом из прежнего) отменяет код, повторная привязка того же
+    // чата — нет. После сброса пароля 5011 привязывается без кода.
+    expect(await linkAs({ orgId: a.orgId, userId: accA }, 5011)).not.toBeNull();
+    expect(await pendingAfter(accA, () => relinkAs({ orgId: a.orgId, userId: accA }, 5012))).toBe(
       false,
     );
     expect(await pendingAfter(accA, () => linkAs({ orgId: a.orgId, userId: accA }, 5012))).toBe(
       true,
     );
+  });
+
+  /** Новая учётная запись организации А без сотрудника (свой счёт кодов замены). */
+  const newUser = async (login: string) => {
+    const [u] = await t.admin.db
+      .insert(users)
+      .values({ orgId: a.orgId, login, passwordHash: 'hash' })
+      .returning({ id: users.id });
+    return { orgId: a.orgId, userId: u!.id };
+  };
+  const relinkRequest = (ctx: { orgId: string; userId: string }, chatId: number, code: string) =>
+    withOrgContext(t.app.db, ctx, async (tx) => {
+      const token = newHash();
+      await createTelegramLinkToken(tx, token);
+      const result = await requestTelegramRelink(tx, {
+        tokenHash: token,
+        chatId,
+        username: null,
+        firstName: null,
+        codeHash: code,
+      });
+      return { token, result };
+    });
+
+  it('замена Telegram кодом из прежнего чата: 10 минут, 5 попыток на код, не больше 3 кодов в час и 10 неверных за сутки', async () => {
+    const x = await newUser('relink-x');
+    expect(await linkAs(x, 9001)).toMatchObject({ previous: null });
+    const before = Date.now();
+    const first = await relinkRequest(x, 9002, 'c1');
+    expect(first.result).toMatchObject({ status: 'sent', chatId: 9001, shared: false });
+    const minutes = ((first.result as { expiresAt: Date }).expiresAt.getTime() - before) / 60_000;
+    expect(minutes).toBeGreaterThan(9.9);
+    expect(minutes).toBeLessThan(10.1);
+    // Ссылка использована: повтор от Telegram виден по relinkChatId, второй раз код не записать.
+    expect(await peekTelegramLink(t.app.db, first.token)).toMatchObject({
+      used: true,
+      linkedChatId: 9001,
+      confirmChatId: 9001,
+      relinkFree: false,
+      relinkChatId: 9002,
+    });
+    expect(
+      await withOrgContext(t.app.db, x, (tx) =>
+        requestTelegramRelink(tx, {
+          tokenHash: first.token,
+          chatId: 9002,
+          username: null,
+          firstName: null,
+          codeHash: 'again',
+        }),
+      ),
+    ).toEqual({ status: 'invalid' });
+    // Ссылку открыли в том же чате — код не нужен.
+    expect((await relinkRequest(x, 9001, 'same')).result).toEqual({ status: 'not_needed' });
+    // Код ждут только в новом чате; 5 попыток, потом код не действует.
+    expect(await reserveTelegramRelinkAttempt(t.app.db, 9003)).toEqual({ status: 'none' });
+    const left = [];
+    for (let i = 0; i < 5; i++) {
+      const r = await reserveTelegramRelinkAttempt(t.app.db, 9002);
+      left.push(r.status === 'ok' ? r.triesLeft : r.status);
+    }
+    expect(left).toEqual([4, 3, 2, 1, 0]);
+    expect(await reserveTelegramRelinkAttempt(t.app.db, 9002)).toEqual({ status: 'spent' });
+    // Не больше 3 кодов в час.
+    expect((await relinkRequest(x, 9002, 'c2')).result).toMatchObject({ status: 'sent' });
+    expect((await relinkRequest(x, 9002, 'c3')).result).toMatchObject({ status: 'sent' });
+    expect((await relinkRequest(x, 9002, 'c4')).result).toEqual({ status: 'limited' });
+    // Новый код отменяет прежний: попытка — у последнего.
+    const latest = await reserveTelegramRelinkAttempt(t.app.db, 9002);
+    expect(latest).toMatchObject({ status: 'ok', codeHash: 'c3', userId: x.userId });
+    // За сутки не больше 10 неверных вводов: ещё 4 у c3 (всего 10) — и коды закрыты на сутки.
+    for (let i = 0; i < 4; i++) await reserveTelegramRelinkAttempt(t.app.db, 9002);
+    await t.admin.db
+      .update(telegramRelinkCodes)
+      .set({ createdAt: sql`now() - interval '2 hours'` })
+      .where(eq(telegramRelinkCodes.userId, x.userId));
+    expect((await relinkRequest(x, 9002, 'c5')).result).toEqual({ status: 'locked' });
+    // Чужой код и использованный не привязывают; верный — привязывает один раз.
+    await t.admin.db.delete(telegramRelinkCodes).where(eq(telegramRelinkCodes.userId, x.userId));
+    expect((await relinkRequest(x, 9002, 'c6')).result).toMatchObject({ status: 'sent' });
+    const ok = await reserveTelegramRelinkAttempt(t.app.db, 9002);
+    if (ok.status !== 'ok') throw new Error(ok.status);
+    expect(await withOrgContext(t.app.db, ctxA(), (tx) => useTelegramRelink(tx, ok.codeId))).toBe(
+      null,
+    );
+    expect(await withOrgContext(t.app.db, x, (tx) => useTelegramRelink(tx, ok.codeId))).toEqual({
+      previous: { chatId: 9001, username: null, firstName: 'Имя', shared: false },
+      shared: false,
+      unlinked: null,
+    });
+    expect(await telegramChat(t.app.db, x.userId)).toMatchObject({ chatId: 9002 });
+    expect(await withOrgContext(t.app.db, x, (tx) => useTelegramRelink(tx, ok.codeId))).toBe(null);
+    // Истёкший код — «попытки кончились».
+    expect((await relinkRequest(x, 9004, 'c7')).result).toMatchObject({ status: 'sent' });
+    await t.admin.db
+      .update(telegramRelinkCodes)
+      .set({ expiresAt: sql`now() - interval '1 second'` })
+      .where(eq(telegramRelinkCodes.userId, x.userId));
+    expect(await reserveTelegramRelinkAttempt(t.app.db, 9004)).toEqual({ status: 'spent' });
+  });
+
+  it('после «Отвязать» другой чат — тоже кодом из отвязанного, тот же — без кода; после сброса пароля сутки без кода', async () => {
+    const y = await newUser('relink-y');
+    await linkAs(y, 9101);
+    await withOrgContext(t.app.db, y, unlinkTelegram);
+    expect(await linkAs(y, 9102)).toBeNull();
+    expect(await telegramChat(t.app.db, y.userId)).toBeNull();
+    // Тот же чат — без кода; о замене писать некому.
+    expect(await linkAs(y, 9101)).toEqual({ previous: null, shared: false, unlinked: null });
+    // Код — в отвязанный чат, ему же — о замене.
+    await withOrgContext(t.app.db, y, unlinkTelegram);
+    expect((await relinkRequest(y, 9103, 'r1')).result).toMatchObject({
+      status: 'sent',
+      chatId: 9101,
+    });
+    const code = await reserveTelegramRelinkAttempt(t.app.db, 9103);
+    if (code.status !== 'ok') throw new Error(code.status);
+    expect(await withOrgContext(t.app.db, y, (tx) => useTelegramRelink(tx, code.codeId))).toEqual({
+      previous: null,
+      shared: false,
+      unlinked: { chatId: 9101, shared: false },
+    });
+
+    // Сброс пароля владельцем: доступа к прежнему Telegram может не быть — сутки без кода, один раз.
+    const before = Date.now();
+    await withOrgContext(t.app.db, ctxA(), (tx) =>
+      setTemporaryPassword(tx, { userId: y.userId, passwordHash: 'temp-y' }),
+    );
+    const [guard] = await t.admin.db
+      .select()
+      .from(telegramLinkGuards)
+      .where(eq(telegramLinkGuards.userId, y.userId));
+    const hours = (guard!.freeUntil!.getTime() - before) / 3_600_000;
+    expect(hours).toBeGreaterThan(23.9);
+    expect(hours).toBeLessThan(24.1);
+    const token = newHash();
+    await withOrgContext(t.app.db, y, (tx) => createTelegramLinkToken(tx, token));
+    expect(await peekTelegramLink(t.app.db, token)).toMatchObject({
+      confirmChatId: 9103,
+      relinkFree: true,
+    });
+    expect(await linkAs(y, 9104)).toMatchObject({ previous: { chatId: 9103 } });
+    expect(await linkAs(y, 9105)).toBeNull();
+
+    // Разрешить без кода можно только учётной записи своей организации с временным паролем.
+    const allow = (ctx: { orgId: string; userId: string }, userId: string) =>
+      withOrgContext(t.app.db, ctx, (tx) =>
+        tx.execute(sql`select app.telegram_relink_allow(${userId}, 24)`),
+      );
+    await expect(allow(ctxA(), b.ownerUserId)).rejects.toThrow();
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, y.userId));
+    await expect(allow(ctxA(), y.userId)).rejects.toThrow();
+    await expect(
+      withUserContext(t.app.db, adminId, (tx) =>
+        tx.execute(sql`select app.telegram_relink_allow(${adminId}, 24)`),
+      ),
+    ).rejects.toThrow();
   });
 
   it('администратор платформы находит учётную запись; остальные — нет', async () => {

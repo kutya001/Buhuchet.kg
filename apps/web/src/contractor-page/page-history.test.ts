@@ -18,6 +18,9 @@ describe('pageHistoryText', () => {
     expect(text('page_lock')).toBe(
       'Страница контрагента: 5 неверных кодов подряд, ввод закрыт на 15 минут',
     );
+    expect(text('page_close')).toBe(
+      'Страница контрагента: 5 неверных кодов за сутки, страница закрыта до смены кода',
+    );
     expect(
       pageHistoryText(t, {
         action: 'page_open',

@@ -14,6 +14,7 @@ const ACTION_TEXT = {
   page_copy: 'cppage.hist.page_copy',
   page_send: 'cppage.hist.page_send',
   page_lock: 'cppage.hist.page_lock',
+  page_close: 'cppage.hist.page_close',
 } as const;
 
 const sectionsOf = (value: unknown): PageSection[] =>
@@ -22,7 +23,7 @@ const sectionsOf = (value: unknown): PageSection[] =>
 /**
  * Что произошло со страницей — строкой, как в истории прототипа (`log('cp', …)`, pubSeen): включена,
  * выключена, код изменён, ссылка скопирована и отправлена, открыта с устройства, ввод закрыт после
- * неверных кодов; скрытые разделы — по разделу: «раздел «Оплата за обслуживание» скрыт». Подключит
+ * неверных кодов, закрыта после 5 неверных кодов за сутки; скрытые разделы — по разделу: «раздел «Оплата за обслуживание» скрыт». Подключит
  * вкладка «История» карточки контрагента (задача 2.11).
  */
 export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {

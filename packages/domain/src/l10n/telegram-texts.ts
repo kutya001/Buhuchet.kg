@@ -34,6 +34,8 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.pass_reset': { ru: 'Пароль сброшен', section: S },
   'telegram.kind.broadcast': { ru: 'Объявление', section: S },
   'telegram.kind.lead': { ru: 'Заявка с сайта', section: S },
+  'telegram.kind.relink_code': { ru: 'Код замены Telegram', section: S },
+  'telegram.kind.page_closed': { ru: 'Страница контрагента закрыта', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },
   'profile.notify.modes': { ru: 'Какие уведомления получать', section: P },
   'profile.notify.mode.all': { ru: 'Все', section: P },
