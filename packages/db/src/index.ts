@@ -4,6 +4,7 @@ export * from './client';
 export * from './context';
 export { orgIds } from './organizations';
 export * from './errors';
+export * from './scheduler';
 export * from './history';
 export * from './platform-history';
 export * from './status';

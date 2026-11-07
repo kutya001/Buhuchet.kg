@@ -30,6 +30,8 @@ export const OUTBOX_KINDS = [
   'lead',
   // Вход закрыт после 10 неверных паролей подряд: пользователю и тому, кто снимает блокировку.
   'login_locked',
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-30 — оповещение о сбое администратору платформы.
+  'alert',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 

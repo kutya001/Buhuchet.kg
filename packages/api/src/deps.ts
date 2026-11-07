@@ -1,6 +1,7 @@
 import type {
   AppConfig,
   Clock,
+  ErrorReporter,
   JobDefinition,
   Logger,
   Storage,
@@ -11,11 +12,15 @@ import type { Db, RateLimit } from '@buhuchet/db';
 import type { FileSource } from './modules/files/sources';
 
 export interface JobContext {
+  /** Среда — для пометки «🧪 Тестовый стенд» в оповещениях администратору платформы. */
+  config: Pick<AppConfig, 'APP_ENV'>;
   db: Db;
   storage: Storage;
   clock: Clock;
   logger: Logger;
   telegram: Telegram | null;
+  /** Ошибки сервера во внешний сервис (Sentry по `SENTRY_DSN`); нет — не отправляются. */
+  errors?: ErrorReporter;
 }
 
 export type Job = JobDefinition<JobContext>;

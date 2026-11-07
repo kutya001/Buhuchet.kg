@@ -11,6 +11,7 @@
     "./scheduler": "./src/scheduler.ts",
     "./telegram": "./src/telegram.ts",
     "./logger": "./src/logger.ts",
+    "./error-reporter": "./src/error-reporter.ts",
     "./password": "./src/password.ts",
     "./tokens": "./src/tokens.ts",
     "./documents": "./src/documents.ts"
