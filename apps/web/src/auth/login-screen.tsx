@@ -268,8 +268,7 @@ function LoginStep({
   );
 }
 
-/** Вход администратора платформы, шаг 2: код из Telegram. */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-13 — в прототипе (showLogin) у администратора один шаг входа.
+/** Вход администратора платформы, шаг 2: код из Telegram (прототип v76, core/login.js `showLogin`). */
 function AdminCodeStep({
   challenge,
   onSignedIn,
@@ -330,7 +329,6 @@ function AdminCodeStep({
  * Администратор платформы без Telegram: войти можно только с кодом, поэтому сначала — привязка по
  * ссылке из ответа входа (её получает только тот, кто ввёл верный пароль), потом вход заново.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-13
 function AdminTelegramStep({ url, onDone }: { url: string; onDone: () => void }) {
   const t = useT();
   return (

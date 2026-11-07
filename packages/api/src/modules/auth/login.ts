@@ -91,7 +91,7 @@ export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, App
       ? await verifyPassword(account.passwordHash, password)
       : await verifyAgainstDummy(password);
     if (!account || !valid) {
-      // ОТКЛОНЕНИЕ: docs/deviations.md#О-11 — счёт учётной записи, на десятом подряд вход закрыт.
+      // Счёт учётной записи, на десятом подряд вход закрыт.
       // Неизвестный логин — тот же запрос к базе впустую, чтобы время ответа почти не отличалось.
       if (await recordLoginFailure(deps.db, account?.userId ?? null)) {
         await announceAccountLocked(deps, account!);
@@ -102,7 +102,7 @@ export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, App
     await clearLoginAttempts(deps.db, login);
     const denial = loginDenial(account);
     if (denial) return c.json(denialError(denial, account), 403);
-    // ОТКЛОНЕНИЕ: docs/deviations.md#О-13 — администратору платформы сеанс только после кода из Telegram.
+    // Администратору платформы сеанс только после кода из Telegram.
     if (account.isPlatformAdmin && adminSecondFactorOn(deps)) {
       return startAdminCode(c, deps, account);
     }

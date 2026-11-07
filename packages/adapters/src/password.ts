@@ -20,7 +20,6 @@ const OPTIONS: Options = {
  * занят»), а не очередь без конца. Так поток запросов входа не съест память и не задержит остальные
  * запросы сайта. Очередь — на один процесс; общий предел по адресу — в API.
  */
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-12
 export const PASSWORD_CONCURRENCY = 2;
 export const PASSWORD_QUEUE_MAX = 32;
 
