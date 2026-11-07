@@ -288,9 +288,30 @@ export function messageTemplateLabelKey(key: string): string {
   return `pdicts.tpl.label.${key.replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)}`;
 }
 
+const usedTemplateVariables = (text: string) =>
+  [...text.matchAll(/\{([^{}\s]+)\}/g)].map((m) => m[1]!);
+
 /** Подстановки в тексте, которых нет у шаблона: «{кантрагент}» — опечатка, её никто не заполнит. */
 export function unknownTemplateVariables(key: string, text: string): string[] {
   const known = new Set(messageTemplateVariables(key));
-  const used = [...text.matchAll(/\{([^{}\s]+)\}/g)].map((m) => m[1]!);
-  return [...new Set(used.filter((v) => !known.has(v)))];
+  return [...new Set(usedTemplateVariables(text).filter((v) => !known.has(v)))];
+}
+
+/**
+ * Подстановки, без которых шаблон не сохранить: без {код} код восстановления пароля, код входа в
+ * Админку и код замены Telegram до человека не дойдут — восстановить пароль, войти в Админку и
+ * привязать другой Telegram станет нельзя.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-50
+export const MESSAGE_TEMPLATE_REQUIRED: Readonly<Record<string, readonly string[]>> = {
+  tgCode: ['код'],
+  tgAdminCode: ['код'],
+  tgRelinkCode: ['код'],
+};
+
+/** Обязательные подстановки шаблона, которых нет в тексте. */
+export function missingTemplateVariables(key: string, text: string): string[] {
+  if (!Object.hasOwn(MESSAGE_TEMPLATE_REQUIRED, key)) return [];
+  const used = new Set(usedTemplateVariables(text));
+  return MESSAGE_TEMPLATE_REQUIRED[key]!.filter((v) => !used.has(v));
 }

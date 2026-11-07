@@ -199,6 +199,10 @@ const SYSTEM_TEXTS = {
     ru: 'Нет такой подстановки: {list}. В этом шаблоне подстановок нет',
     section: E,
   },
+  'pdicts.err.missing_vars': {
+    ru: 'Добавьте подстановку {list}: без неё код не дойдёт до получателя',
+    section: E,
+  },
   // «История изменений» вкладок (прототип pdLog).
   'pdicts.hist.status_rename': { ru: '{dict}: «{from}» переименован в «{to}»', section: S },
   'pdicts.hist.status_tone': { ru: '{dict}: «{name}» — цвет «{from}» → «{to}»', section: S },

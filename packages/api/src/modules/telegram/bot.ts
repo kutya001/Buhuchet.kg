@@ -1,8 +1,8 @@
 import type { TelegramSendOptions } from '@buhuchet/adapters';
 import { logTelegram, messageTemplates, telegramChat } from '@buhuchet/db';
 import {
+  botTemplate,
   fillTemplate,
-  TELEGRAM_TEMPLATE_DEFAULTS,
   withOrganization,
   type OutboxKind,
   type TelegramTemplateKey,
@@ -11,7 +11,8 @@ import type { ApiDeps } from '../../deps';
 
 /**
  * Текст сообщения бота: шаблон «Справочников платформы» с этим ключом, а пока его там нет — текст по
- * умолчанию из @buhuchet/domain (docs/deviations.md, п. 6).
+ * умолчанию из @buhuchet/domain (docs/deviations.md, п. 6); у кода восстановления пароля и кода входа в
+ * Админку без {код} — тоже по умолчанию (п. О-50).
  */
 export async function botText(
   deps: ApiDeps,
@@ -19,7 +20,7 @@ export async function botText(
   values: Readonly<Record<string, string | number>> = {},
 ): Promise<string> {
   const templates = await messageTemplates(deps.db);
-  return fillTemplate(templates[key] ?? TELEGRAM_TEMPLATE_DEFAULTS[key], values);
+  return fillTemplate(botTemplate(key, templates[key]), values);
 }
 
 /**

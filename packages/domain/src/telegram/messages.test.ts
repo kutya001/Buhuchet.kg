@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import refDB from '../../../../spec/data/refDB.json';
 import {
+  botTemplate,
   fillTemplate,
   parseStartCommand,
   TELEGRAM_TEMPLATE_DEFAULTS,
@@ -19,6 +21,26 @@ describe('шаблоны сообщений бота', () => {
       fillTemplate(TELEGRAM_TEMPLATE_DEFAULTS.tgRelinked, { логин: 'meerim', телеграм: '@new_tg' }),
     ).toBe(
       '⚠️ К учётной записи meerim привязан другой Telegram: @new_tg. Сюда больше не придут напоминания и коды. Если это сделали не вы, попросите владельца организации (владельцу — администратора платформы) сбросить пароль: все сеансы завершатся, и свой Telegram можно будет привязать снова в «Мой профиль».',
+    );
+  });
+
+  it('тексты по умолчанию у шаблонов из справочника (refDB.json) — те же, что в справочнике', () => {
+    const own: Record<string, string> = refDB.messageTemplates;
+    for (const [key, text] of Object.entries(TELEGRAM_TEMPLATE_DEFAULTS)) {
+      if (Object.hasOwn(own, key)) expect(text, key).toBe(own[key]);
+    }
+  });
+
+  it('шаблон справочника главнее; без шаблона или без {код} у кодов — текст по умолчанию', () => {
+    expect(botTemplate('tgLinked', 'Привязан: {логин}')).toBe('Привязан: {логин}');
+    expect(botTemplate('tgLinked', undefined)).toBe(TELEGRAM_TEMPLATE_DEFAULTS.tgLinked);
+    expect(botTemplate('tgCode', 'Ваш код: {код}')).toBe('Ваш код: {код}');
+    expect(botTemplate('tgCode', 'Код готов')).toBe(TELEGRAM_TEMPLATE_DEFAULTS.tgCode);
+    expect(botTemplate('tgAdminCode', 'Вход ({логин})')).toBe(
+      TELEGRAM_TEMPLATE_DEFAULTS.tgAdminCode,
+    );
+    expect(botTemplate('tgRelinkCode', 'Привязать {телеграм}?')).toBe(
+      TELEGRAM_TEMPLATE_DEFAULTS.tgRelinkCode,
     );
   });
 

@@ -32,7 +32,7 @@ const formOf = (items: readonly AdminMessageTemplate[]): AdminMessageTemplatesFi
  * Админка → «Справочники платформы» → «Шаблоны» (ТЗ «Шаблоны для организаций»; прототип renderPDicts,
  * вкладка templates): тексты сообщений WhatsApp и Telegram, под каждым — какие подстановки в нём
  * доступны. «Сохранить шаблоны» сохраняет все изменённые тексты сразу; подстановку, которой у шаблона
- * нет, и пустой текст сервер не примет — ошибка под полем.
+ * нет, пустой текст и код без {код} (docs/deviations.md п. О-50) сервер не примет — ошибка под полем.
  */
 export function TemplatesTab() {
   const t = useT();
@@ -91,6 +91,10 @@ export function TemplatesTab() {
           String(details.list ?? ''),
           String(details.known ?? ''),
         );
+        return setError(`items.${i}.text`, { type: 'server', message }, { shouldFocus: true });
+      }
+      if (code === 'missing_vars' && i >= 0) {
+        const message = t('pdicts.err.missing_vars', { list: String(details.list ?? '') });
         return setError(`items.${i}.text`, { type: 'server', message }, { shouldFocus: true });
       }
       toast(errorText(res.error), { bad: true });

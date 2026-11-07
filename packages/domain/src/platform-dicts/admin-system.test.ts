@@ -6,9 +6,11 @@ import {
   defaultStatusTones,
   isAdminSystemDict,
   MESSAGE_TEMPLATE_ORDER,
+  MESSAGE_TEMPLATE_REQUIRED,
   MESSAGE_TEMPLATE_VARIABLES,
   messageTemplateLabelKey,
   messageTemplateVariables,
+  missingTemplateVariables,
   roleTemplateProblem,
   sameName,
   statusPlace,
@@ -138,5 +140,32 @@ describe('Админка → «Шаблоны» сообщений', () => {
     // Ключ из запроса не достаёт свойства объекта: у неизвестного шаблона подстановок нет.
     expect(messageTemplateVariables('constructor')).toEqual([]);
     expect(unknownTemplateVariables('__proto__', '{код}')).toEqual(['код']);
+  });
+
+  it('у кодов восстановления пароля, входа в Админку и замены Telegram {код} обязателен; у остальных — ничего', () => {
+    expect(Object.keys(MESSAGE_TEMPLATE_REQUIRED).sort()).toEqual([
+      'tgAdminCode',
+      'tgCode',
+      'tgRelinkCode',
+    ]);
+    expect(missingTemplateVariables('tgCode', 'Код для восстановления пароля готов')).toEqual([
+      'код',
+    ]);
+    expect(missingTemplateVariables('tgAdminCode', 'Вход ({логин}), {минут} минут')).toEqual([
+      'код',
+    ]);
+    expect(missingTemplateVariables('tgRelinkCode', 'Привязать {телеграм} к {логин}?')).toEqual([
+      'код',
+    ]);
+    expect(missingTemplateVariables('tgCode', 'Ваш код: {код}')).toEqual([]);
+    // «{ код }» с пробелами — не подстановка: бот её не заполнит.
+    expect(missingTemplateVariables('tgCode', 'Ваш код: { код }')).toEqual(['код']);
+    expect(missingTemplateVariables('tgLinked', 'Привязан')).toEqual([]);
+    expect(missingTemplateVariables('constructor', '')).toEqual([]);
+    for (const [key, vars] of Object.entries(MESSAGE_TEMPLATE_REQUIRED)) {
+      for (const v of vars) expect(messageTemplateVariables(key), key).toContain(v);
+      const text = refDB.messageTemplates[key as keyof typeof refDB.messageTemplates];
+      expect(missingTemplateVariables(key, text), key).toEqual([]);
+    }
   });
 });
