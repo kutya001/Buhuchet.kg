@@ -11,6 +11,7 @@ import {
 import { eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
+import { seedDemoLoginLocks } from './demo-auth';
 import { seedDemoContractorPages } from './demo-contractor-page';
 import { seedDemoContractors } from './demo-contractors';
 import { seedDemoDictRequests } from './demo-dicts';
@@ -279,6 +280,9 @@ export async function seedDemoOrganization(
     )
     .onConflictDoNothing()
     .returning({ id: employees.id });
+
+  // Вход демо-сотрудника закрыт после 10 неверных паролей подряд (прототип v76).
+  await seedDemoLoginLocks(db, file, { orgId, demoId });
 
   const defaults = defaultOrgPolicy();
   await db
