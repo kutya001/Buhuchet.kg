@@ -222,6 +222,11 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgUnlinked: ['логин'],
   tgLinkInvalid: [],
   tgStart: [],
+  tgLoginLocked: ['логин', 'попыток', 'кто'],
+  tgLoginLockedStaff: ['логин', 'попыток'],
+  tgLoginLockedOwner: ['организация', 'логин', 'попыток'],
+  tgAdminCode: ['логин', 'код', 'минут'],
+  tgPassResetByAdmin: ['логин'],
   tgLead: ['фирма', 'имя', 'телефон', 'клиентов', 'ссылка'],
   tgLeadRep: ['фирма', 'имя', 'телефон', 'ссылка'],
 };
@@ -255,6 +260,11 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgUnlinked',
   'tgLinkInvalid',
   'tgStart',
+  'tgLoginLocked',
+  'tgLoginLockedStaff',
+  'tgLoginLockedOwner',
+  'tgAdminCode',
+  'tgPassResetByAdmin',
   'tgLead',
   'tgLeadRep',
 ] as const;

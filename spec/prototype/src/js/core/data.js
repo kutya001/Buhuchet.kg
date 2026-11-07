@@ -302,6 +302,11 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
     // уведомление о заявке (06.11.2026): в шаблоне новой заявки — ссылка на «Заявки»; новый шаблон повторной заявки
     {const a=db.ref.messageTemplates,n=db.ref.templateNotes;if(a&&r.messageTemplates){if(a.tgLead==='📩 Новая заявка с сайта: {фирма}, {имя}, {телефон}, клиентов: {клиентов}.')a.tgLead=r.messageTemplates.tgLead;if(a.tgLeadRep==null)a.tgLeadRep=r.messageTemplates.tgLeadRep}if(n&&r.templateNotes&&n.tgLeadRep==null)n.tgLeadRep=r.templateNotes.tgLeadRep}
     const st=(db.ref.kbSteps||[]).find(x=>x.id==='kset'),rs=(r.kbSteps||[]).find(x=>x.id==='kset');if(st&&rs&&st.w==='Изменить примеры «Выручка» и «Количество сотрудников» или создать свои.')st.w=rs.w}
+  // v76 (решение заказчика 07.11.2026): 5 новых служебных шаблонов бота — вход заблокирован, код для входа в Админку, сброс пароля сотрудника администратором; в демо-данных у jyldyz вход закрыт после 10 неверных паролей подряд
+  if(!db.meta.v76){db.meta.v76=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,ks=['tgLoginLocked','tgLoginLockedStaff','tgLoginLockedOwner','tgAdminCode','tgPassResetByAdmin'];
+    if(a&&r.messageTemplates)ks.forEach(k=>{if(a[k]==null&&r.messageTemplates[k]!=null)a[k]=r.messageTemplates[k]});if(n&&r.templateNotes)ks.forEach(k=>{if(n[k]==null&&r.templateNotes[k]!=null)n[k]=r.templateNotes[k]});
+    const de=(DBSRC.demo.db.employees||[]).find(x=>x.id==='e6'),e=(db.employees||[]).find(x=>x.id==='e6');
+    if(db.meta.mode!=='empty'&&de&&e&&e.login==='jyldyz'&&e.pwLocked==null&&e.pwBad==null){e.pwBad=de.pwBad;e.pwLocked=de.pwLocked;const dh=(DBSRC.demo.db.history||[]).filter(h=>h.ent==='emp'&&h.id==='e6'&&/^Вход заблокирован/.test(h.what));if(Array.isArray(db.history))dh.forEach(h=>db.history.push(structuredClone(h)))}}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;
