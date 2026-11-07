@@ -27,3 +27,7 @@ onlyBuiltDependencies:
 # Сценарий после установки tesseract.js — только приглашение поддержать проект: не запускается.
 ignoredBuiltDependencies:
   - tesseract.js
+
+# Версия пакета, вышедшая меньше 3 суток назад (в минутах), не ставится: взломанный выпуск обычно
+# находят и снимают за часы. pnpm add и pnpm update берут версию старше (docs/decisions.md п. О-40).
+minimumReleaseAge: 4320
