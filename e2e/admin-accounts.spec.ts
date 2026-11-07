@@ -1,6 +1,15 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { DEMO_PASSWORD, hire, signIn, uniqueLogin } from './helpers';
+import {
+  botMessages,
+  DEMO_PASSWORD,
+  hire,
+  linkTelegram,
+  newOrgOwner,
+  signIn,
+  uniqueChat,
+  uniqueLogin,
+} from './helpers';
 
 // Админка → «Учётные записи» (ТЗ «Админка» → «Модуль учётных записей»; прототип
 // admin/accounts-orgs.js): список всех пользователей платформы, сброс пароля, блокировка и
@@ -176,5 +185,63 @@ test.describe('Админка: учётные записи', () => {
     const menu = page.getByRole('menu', { name: 'Действия' });
     await expect(menu.getByRole('menuitem', { name: 'Заблокировать' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Разблокировать' })).toHaveCount(0);
+  });
+
+  test('(прототип v76) администратор сбросил пароль бухгалтеру: владельцу организации пришло «🔑 Администратор платформы сбросил пароль сотрудника …», в окне — кому и какое сообщение', async ({
+    page,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    // Своя организация: владелец с привязанным Telegram и его бухгалтер.
+    const owner = await playwright.request.newContext({ baseURL });
+    await newOrgOwner(owner, origin);
+    const chat = uniqueChat();
+    await linkTelegram(owner, origin, chat);
+    const roles = (await (await owner.get('/api/roles?size=all')).json()) as {
+      items: { id: string; name: string }[];
+    };
+    const accountant = uniqueLogin('e2e-acc-reset');
+    const hired = await owner.post('/api/staff', {
+      headers: { origin },
+      data: {
+        fullName: 'Сбросов Сквозной Тестович',
+        login: accountant,
+        phone: null,
+        roleId: roles.items.find((r) => r.name === 'Бухгалтер')!.id,
+      },
+    });
+    expect(hired.status(), await hired.text()).toBe(201);
+    await owner.dispose();
+    // Владелец другой организации с Telegram: ему о чужом сотруднике ничего не приходит.
+    const stranger = await playwright.request.newContext({ baseURL });
+    await newOrgOwner(stranger, origin);
+    const strangerChat = uniqueChat();
+    await linkTelegram(stranger, origin, strangerChat);
+    await stranger.dispose();
+    const strangerBefore = (await botMessages(page.request, strangerChat)).length;
+
+    await platformAdmin(page.request, origin);
+    const row = await accountRow(page, isMobile, accountant);
+    await row.locator('[data-row-menu]').click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: 'Сбросить пароль' })
+      .click();
+    const done = page.getByRole('dialog', { name: 'Пароль сброшен' });
+    const text = `🔑 Администратор платформы сбросил пароль сотрудника ${accountant}: выдан временный пароль, при входе его нужно сменить. Если вы об этом не просили, напишите администратору платформы.`;
+    // Окно показывает сообщение владельцам, как прототип accResetPass.
+    const notice = done.locator('[data-owners-notice]');
+    await expect(notice).toContainText('Бот платформы');
+    await expect(notice).toContainText(`→ владельцам организации: @e2e_${chat}`);
+    await expect(notice).toContainText(text);
+    await expect(notice).toContainText(
+      'Шаблон «Telegram: пароль сотрудника сброшен администратором» — Справочники платформы → Шаблоны. Отправка записана в журнал «Телеграм» с типом «Пароль сброшен».',
+    );
+    expect(await botMessages(page.request, chat)).toContain(text);
+    expect(await botMessages(page.request, strangerChat)).toHaveLength(strangerBefore);
+    await done.getByRole('button', { name: 'Готово' }).click();
+    await expect(done).toBeHidden();
   });
 });
