@@ -20,7 +20,11 @@ if (resetAdminPassword && !(config.PLATFORM_ADMIN_LOGIN && config.PLATFORM_ADMIN
   );
   process.exit(1);
 }
-const handle = createDb(config.DATABASE_ADMIN_URL, { max: 1, applicationName: 'buhuchet-seed' });
+const handle = createDb(config.DATABASE_ADMIN_URL, {
+  max: 1,
+  applicationName: 'buhuchet-seed',
+  caCert: config.DATABASE_CA_CERT,
+});
 try {
   const result = await seedAll(handle.db, {
     update: args.has('--update'),

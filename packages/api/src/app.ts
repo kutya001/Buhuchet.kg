@@ -5,6 +5,7 @@ import { routePath } from 'hono/route';
 import { secureHeaders } from 'hono/secure-headers';
 import type { ApiDeps } from './deps';
 import { apiError, recordErrorResponse } from './errors';
+import { requirePlatformAdmin } from './middleware/access';
 import { originCheck } from './middleware/origin';
 import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
@@ -117,6 +118,8 @@ export function createApp(deps: ApiDeps) {
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-9 — описание всех методов API только администратору платформы.
+  app.use('/openapi.json', requirePlatformAdmin);
   app.doc31('/openapi.json', {
     openapi: '3.1.0',
     info: { title: 'Buhuchet.kg API', version: deps.config.APP_VERSION },

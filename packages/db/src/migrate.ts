@@ -9,8 +9,12 @@ export const MIGRATIONS_FOLDER = fileURLToPath(new URL('../migrations', import.m
 export const APP_GROUP_ROLE = 'buhuchet_app';
 
 /** Применить все новые миграции. Только от имени владельца схемы (DATABASE_ADMIN_URL). */
-export async function runMigrations(adminUrl: string): Promise<void> {
-  const { db, close } = createDb(adminUrl, { max: 1, applicationName: 'buhuchet-migrate' });
+export async function runMigrations(adminUrl: string, caCert?: string): Promise<void> {
+  const { db, close } = createDb(adminUrl, {
+    max: 1,
+    applicationName: 'buhuchet-migrate',
+    caCert,
+  });
   try {
     await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
   } finally {
@@ -57,7 +61,11 @@ async function retryConcurrent<T>(action: () => PromiseLike<T>, attempts = 5): P
  * строки подключения и членство в `buhuchet_app`. Она не владелец таблиц, не обходит RLS и не
  * получает прав владельца через членство в других ролях.
  */
-export async function ensureAppLoginRole(adminUrl: string, appUrl: string): Promise<string> {
+export async function ensureAppLoginRole(
+  adminUrl: string,
+  appUrl: string,
+  caCert?: string,
+): Promise<string> {
   const role = roleFromUrl(appUrl);
   const password = decodeURIComponent(new URL(appUrl).password);
   if (!/^buhuchet_[a-z0-9_]{1,54}$/.test(role)) {
@@ -73,7 +81,11 @@ export async function ensureAppLoginRole(adminUrl: string, appUrl: string): Prom
   }
   if (!password) throw new Error('В DATABASE_URL нет пароля роли приложения');
 
-  const { sql, close } = createDb(adminUrl, { max: 1, applicationName: 'buhuchet-migrate' });
+  const { sql, close } = createDb(adminUrl, {
+    max: 1,
+    applicationName: 'buhuchet-migrate',
+    caCert,
+  });
   try {
     const verifier = `'${scramSha256Verifier(password)}'`;
     const [existing] = await sql<{ rolsuper: boolean; rolbypassrls: boolean; owner: boolean }[]>`

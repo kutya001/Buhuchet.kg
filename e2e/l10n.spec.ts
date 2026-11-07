@@ -38,6 +38,7 @@ test.describe('Этап 1: словарь текстов интерфейса', 
 
     await page.goto('/health');
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(texts['health.title']!);
-    await expect(page.getByTestId('check-database')).toContainText(texts['health.check.database']!);
+    // Без входа — только «работает или нет» (docs/deviations.md п. О-9).
+    await expect(page.getByTestId('health')).toContainText(texts['health.all_ok']!);
   });
 });
