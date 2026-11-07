@@ -720,6 +720,15 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     expect(hours).toBeLessThan(24.1);
     // Пока разрешение действует, код «Забыли пароль?» в ещё привязанный (возможно, чужой) чат не уходит.
     expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'no_telegram' });
+    // Через сутки разрешение истекает, и коды снова уходят в привязанный чат.
+    const setFreeUntil = (freeUntil: Date) =>
+      t.admin.db
+        .update(telegramLinkGuards)
+        .set({ freeUntil })
+        .where(eq(telegramLinkGuards.userId, y.userId));
+    await setFreeUntil(new Date(Date.now() - 1000));
+    expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'ok' });
+    await setFreeUntil(guard!.freeUntil!);
     const token = newHash();
     await withOrgContext(t.app.db, y, (tx) => createTelegramLinkToken(tx, token));
     expect(await peekTelegramLink(t.app.db, token)).toMatchObject({

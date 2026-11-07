@@ -86,7 +86,7 @@ export const resetRequestRoute = createRoute({
   },
   responses: {
     200: {
-      description: `Один ответ для любого логина. Код из ${RESET_CODE_TTL_MINUTES} минут уходит, только если логин есть, не заблокирован, Telegram привязан и за час было меньше ${RESET_CODE_MAX_PER_HOUR} кодов, а за сутки — меньше ${RESET_CODE_MAX_DAILY_FAILURES} неверных`,
+      description: `Один ответ для любого логина. Код из ${RESET_CODE_TTL_MINUTES} минут уходит, только если логин есть, не заблокирован, Telegram привязан (и не действует разрешение привязать другой без кода после сброса пароля владельцем, docs/deviations.md п. О-20), и за час было меньше ${RESET_CODE_MAX_PER_HOUR} кодов, а за сутки — меньше ${RESET_CODE_MAX_DAILY_FAILURES} неверных`,
       content: { 'application/json': { schema: PasswordResetRequestedResponse } },
     },
     400: { description: 'Неверные данные запроса', content: error },
