@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { ADMIN_PASSWORD, platformAdmin } from './admin';
 import {
   botMessages,
   DEMO_PASSWORD,
@@ -167,6 +168,127 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       );
       await expect(page).toHaveURL(/\/login$/);
     });
+  });
+
+  test('(прототип v76) у демо-сотрудника Жылдыз вход закрыт после 10 неверных паролей подряд: с верным паролем — «Вход заблокирован: 10 неверных паролей подряд…»', async ({
+    page,
+  }) => {
+    // Блокировку ставит наполнение демо-организации, как в demoDB v76. Неверных паролей Жылдыз тест не
+    // вводит: их считает предел по логину, а десять подряд за прогон не набрать (docs/deviations.md п. О-51).
+    await page.goto('/login');
+    await signInByForm(page, 'jyldyz', DEMO_PASSWORD);
+    await expectLoginAlert(
+      page,
+      'Вход заблокирован: 10 неверных паролей подряд. Обратитесь к владельцу организации — он выдаст новый пароль.',
+    );
+    await expect(page).toHaveURL(/\/login$/);
+  });
+
+  test('(прототип v76) администратор платформы на своём компьютере и в тестах входит без кода из Telegram: после верного пароля сразу Админка', async ({
+    page,
+    playwright,
+    baseURL,
+  }) => {
+    // Код из Telegram нужен только на стенде и рабочем сайте; его шаг проверяют тесты API
+    // (docs/deviations.md п. О-13 и О-51).
+    const origin = new URL(baseURL!).origin;
+    const api = await playwright.request.newContext({ baseURL });
+    const admin = await platformAdmin(api, origin);
+    await api.dispose();
+    await page.goto('/login');
+    await signInByForm(page, admin, ADMIN_PASSWORD);
+    // Первый модуль Админки — «Учётные записи»: его нет ни у кого, кроме администратора платформы.
+    await expect(page).toHaveURL(/\/app\/accounts(\/|$)/);
+    await expect(page.getByText('Код для входа в Админку')).toHaveCount(0);
+    await expect(page.getByText('Привяжите Telegram')).toHaveCount(0);
+  });
+
+  test('(прототип v76) на стенде администратор платформы входит с кодом из Telegram: без Telegram — «Привяжите Telegram» со ссылкой; после верного пароля — «Код для входа в Админку», неверный код — ошибка, верный — Админка', async ({
+    page,
+    playwright,
+    baseURL,
+  }) => {
+    // Кода для входа в Админку на своём компьютере и в тестах нет (docs/deviations.md п. О-13):
+    // ответы стенда подставлены, как их отдаёт сервер (admin-code.test.ts), а сеанс в конце — настоящий.
+    const origin = new URL(baseURL!).origin;
+    const api = await playwright.request.newContext({ baseURL });
+    const admin = await platformAdmin(api, origin);
+    await api.dispose();
+    const link = 'https://t.me/buhuchet_e2e_bot?start=e2e-admin-link';
+    const expiresAt = new Date(Date.now() + 5 * 60_000).toISOString();
+    let logins = 0;
+    await page.route('**/api/auth/login', (route) =>
+      ++logins === 1
+        ? route.fulfill({
+            status: 403,
+            json: {
+              error: {
+                code: 'telegram_required',
+                message: 'Для входа в Админку нужен Telegram',
+                details: { url: link, expiresAt },
+              },
+            },
+          })
+        : route.fulfill({
+            status: 202,
+            json: { secondFactor: 'telegram', challenge: 'e2e-challenge', expiresAt },
+          }),
+    );
+    let codes = 0;
+    await page.route('**/api/auth/login/code', async (route) => {
+      if (++codes === 1) {
+        return route.fulfill({
+          status: 400,
+          json: {
+            error: {
+              code: 'admin_code_invalid',
+              message: 'Код неверный',
+              details: { attempts: 5 },
+            },
+          },
+        });
+      }
+      // Верный код: настоящий вход тем же паролем (без кода на своём компьютере) ставит сеанс в браузер.
+      const signed = await page.request.post('/api/auth/login', {
+        headers: { origin },
+        data: { login: admin, password: ADMIN_PASSWORD },
+      });
+      expect(signed.status(), await signed.text()).toBe(200);
+      return route.fulfill({ status: 200, json: await signed.json() });
+    });
+
+    await page.goto('/login');
+    await signInByForm(page, admin, ADMIN_PASSWORD);
+    await expect(page.getByRole('heading', { name: 'Привяжите Telegram' })).toBeVisible();
+    await expect(
+      page.getByText(
+        'Чтобы войти в Админку, нужен код из Telegram. Откройте ссылку в Telegram и нажмите «Старт» — бот привяжет чат. Затем войдите снова.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: link.replace('https://', '') })).toHaveAttribute(
+      'href',
+      link,
+    );
+    await page.getByRole('button', { name: 'Telegram привязан — войти' }).click();
+
+    await expect(page.getByLabel('Логин')).toHaveValue(admin);
+    await signInByForm(page, admin, ADMIN_PASSWORD);
+    await expect(page.getByRole('heading', { name: 'Код для входа в Админку' })).toBeVisible();
+    await expect(
+      page.getByText('Бот прислал код в ваш Telegram. Код действует 5 минут.'),
+    ).toBeVisible();
+    const code = page.getByLabel('Код из Telegram');
+    await code.fill('000000');
+    await page.getByRole('button', { name: 'Войти' }).click();
+    await expect(
+      page.getByText('Код неверный или истёк. После 5 неверных кодов войдите заново.'),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/login$/);
+
+    await code.fill('731604');
+    await page.getByRole('button', { name: 'Войти' }).click();
+    await expect(page).toHaveURL(/\/app\/accounts(\/|$)/);
+    expect(codes).toBe(2);
   });
 
   test('с временным паролем после входа — смена пароля, уйти с неё нельзя, тот же пароль не принимается; после смены — предложение привязать Telegram', async ({
