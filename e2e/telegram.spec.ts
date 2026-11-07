@@ -88,7 +88,10 @@ test.describe('Этап 1: Telegram и «Забыли пароль?» (API)', ()
 
     const unlink = await request.delete('/api/telegram/link', { headers: { origin } });
     expect(unlink.status()).toBe(200);
-    expect((await (await request.get('/api/auth/me')).json()).telegram).toBeNull();
+    const unlinked = await (await request.get('/api/auth/me')).json();
+    expect(unlinked.telegram).toBeNull();
+    // «Мой профиль» подскажет: другой чат — только по коду из прежнего (прототип v77).
+    expect(unlinked.telegramPrevious).toEqual({ name: `@e2e_${chat}` });
   });
 
   test('(решение заказчика 07.11.2026, Р-13 Б) другой Telegram вместо прежнего — только кодом, который бот прислал в прежний чат', async ({

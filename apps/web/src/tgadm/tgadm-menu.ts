@@ -6,6 +6,7 @@ import type { Translate } from '../l10n/translate';
 const REFUSAL_TEXT = {
   outbox_not_error: 'tgadm.retry.not_error',
   outbox_code: 'tgadm.retry.code',
+  outbox_relink_code: 'tgadm.retry.relink_code',
 } as const;
 
 /** Почему строку нельзя повторить (прототип `tgNoRetry`); пусто — можно. */
@@ -16,7 +17,7 @@ export function retryRefusal(t: Translate, row: AdminTelegramLogRow): string {
 
 /**
  * Меню строки журнала (прототип admin/telegram.js, actions): «Повторить отправку» — только у «Ошибки»
- * и не у кода восстановления; иначе пункт виден, но недоступен с причиной.
+ * и не у кода восстановления или кода замены Telegram; иначе пункт виден, но недоступен с причиной.
  */
 export function logMenu({
   t,

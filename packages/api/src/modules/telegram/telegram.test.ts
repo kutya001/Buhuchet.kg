@@ -436,8 +436,13 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       headers: { cookie },
     });
     expect(noOrigin.status).toBe(403);
+    const linked = await me(app, cookie);
+    expect(linked.telegramPrevious).toBeNull();
     expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
-    expect((await me(app, cookie)).telegram).toBeNull();
+    const unlinked = await me(app, cookie);
+    expect(unlinked.telegram).toBeNull();
+    // «Мой профиль»: «Прежний Telegram @erkin_s: другой чат бот привяжет только по коду…» (прототип v77).
+    expect(unlinked.telegramPrevious).toEqual({ name: '@erkin_s' });
     // Бот сообщает об отвязке в отвязанный чат; он остался у owner-a — с организацией.
     expect(tg.sent).toEqual([
       {

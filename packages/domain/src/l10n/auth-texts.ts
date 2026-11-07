@@ -217,6 +217,14 @@ export const AUTH_TEXTS = {
     ru: 'Ссылка одноразовая и действует {minutes} минут. Бот проверит её, привяжет чат и пришлёт подтверждение.',
     section: 'Профиль',
   },
+  'profile.tg_prev': {
+    ru: 'Прежний Telegram {name}: другой чат бот привяжет только по коду, который пришлёт туда.',
+    section: 'Профиль',
+  },
+  'profile.tg_prev_unnamed': {
+    ru: 'Прежний Telegram: другой чат бот привяжет только по коду, который пришлёт туда.',
+    section: 'Профиль',
+  },
   'profile.tg_done': { ru: 'Telegram привязан', section: 'Профиль' },
   'profile.tg_unlinked': { ru: 'Telegram отвязан', section: 'Профиль' },
   'profile.settings': { ru: 'Личные настройки', section: 'Профиль' },
