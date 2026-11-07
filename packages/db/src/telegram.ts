@@ -10,7 +10,7 @@ import {
   TELEGRAM_RELINK_MAX_DAILY_FAILURES,
   TELEGRAM_RELINK_MAX_PER_HOUR,
 } from '@buhuchet/domain';
-import { and, eq, ne, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { clearLoginAttempts } from './auth';
 import type { Db, Tx } from './client';
 import { employees, messageTemplateTexts, roles, sessions, users } from './schema';
@@ -445,15 +445,22 @@ export async function adminFindUser(
 }
 
 /**
- * Действующие владельцы организации `orgId` (она же — организация контекста, RLS), кроме
- * `exceptUserId`: кому сообщить, что администратор платформы сбросил пароль сотрудника (ревью
- * безопасности 06.11.2026, п. Р-2; docs/deviations.md п. О-13).
+ * Кому сообщить, что администратор платформы сбросил пароль сотрудника `userId` (ревью безопасности
+ * 06.11.2026, п. Р-2; ТЗ «Учётные записи»): действующим владельцам организации `orgId` (она же —
+ * организация контекста, RLS). Пароль сброшен владельцу — никому: ему сообщает
+ * `tgPassReset`, а «пароль сотрудника» другим владельцам не про него (прототип accResetPass).
  */
-export async function activeOwnerUserIds(
+export async function resetNoticeOwnerIds(
   tx: Tx,
   orgId: string,
-  exceptUserId: string,
+  userId: string,
 ): Promise<string[]> {
+  const [target] = await tx
+    .select({ isOwner: roles.isOwner })
+    .from(employees)
+    .innerJoin(roles, and(eq(roles.id, employees.roleId), eq(roles.orgId, employees.orgId)))
+    .where(and(eq(employees.orgId, orgId), eq(employees.userId, userId)));
+  if (target?.isOwner) return [];
   const rows = await tx
     .select({ userId: users.id })
     .from(users)
@@ -465,7 +472,6 @@ export async function activeOwnerUserIds(
         eq(roles.isOwner, true),
         eq(employees.active, true),
         eq(users.blocked, false),
-        ne(users.id, exceptUserId),
       ),
     );
   return rows.map((r) => r.userId);
