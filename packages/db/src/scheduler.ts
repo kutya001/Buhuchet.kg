@@ -80,12 +80,15 @@ export async function claimJobSlot(
   return attempt;
 }
 
-/** Записать итог попытки. Поздний итог уже повторённой попытки (номер не совпал) не пишется. */
+/**
+ * Записать итог попытки. Итог не пишется, если попытка уже повторена (номер не совпал) или уже закрыта
+ * как зависшая: тогда false, и в неудачи подряд он не идёт (зависание уже засчитано).
+ */
 export async function finishJobRun(
   db: Db,
   o: { job: string; slot: Date; attempt: number; now: Date; error: string | null },
-): Promise<void> {
-  await db
+): Promise<boolean> {
+  const rows = await db
     .update(schedulerRuns)
     .set({ finishedAt: o.now, ok: o.error === null, error: o.error })
     .where(
@@ -93,8 +96,21 @@ export async function finishJobRun(
         eq(schedulerRuns.job, o.job),
         eq(schedulerRuns.slot, o.slot),
         eq(schedulerRuns.attempts, o.attempt),
+        isNull(schedulerRuns.finishedAt),
       ),
-    );
+    )
+    .returning({ job: schedulerRuns.job });
+  return rows.length > 0;
+}
+
+/** Есть ли попытки без итога, начатые раньше `startedBefore` (частичный индекс — дёшево каждую минуту). */
+export async function hasHungJobRuns(db: Db, startedBefore: Date): Promise<boolean> {
+  const rows = await db
+    .select({ job: schedulerRuns.job })
+    .from(schedulerRuns)
+    .where(and(isNull(schedulerRuns.finishedAt), lte(schedulerRuns.startedAt, startedBefore)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /**
@@ -105,7 +121,7 @@ export async function finishJobRun(
 export async function failHungJobRuns(
   db: Db,
   o: { startedBefore: Date; now: Date; error: string },
-): Promise<{ job: string; slot: Date; attempts: number }[]> {
+): Promise<{ job: string; slot: Date; attempts: number; startedAt: Date }[]> {
   return db
     .update(schedulerRuns)
     .set({ finishedAt: o.now, ok: false, error: o.error })
@@ -114,6 +130,7 @@ export async function failHungJobRuns(
       job: schedulerRuns.job,
       slot: schedulerRuns.slot,
       attempts: schedulerRuns.attempts,
+      startedAt: schedulerRuns.startedAt,
     });
 }
 

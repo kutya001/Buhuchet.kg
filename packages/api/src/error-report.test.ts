@@ -26,18 +26,19 @@ const signedInDb = {
 const signedIn = { cookie: `bh_session=${'A'.repeat(43)}`, origin: 'http://localhost' };
 
 describe('ошибки сервера — в Sentry (ревью безопасности Р-8)', () => {
-  it('непредвиденная ошибка: 500 наружу, в Sentry — ошибка, метод и путь без строки запроса', async () => {
+  it('непредвиденная ошибка: 500 наружу, в Sentry — ошибка, метод и шаблон маршрута', async () => {
     const capture = vi.fn<ErrorReporter['capture']>(async () => {});
     const app = createApp(createTestDeps({ db: signedInDb, errors: { capture } }));
     const err = new Error('сломалось');
-    app.get('/boom', () => {
+    app.get('/boom/:inn', () => {
       throw err;
     });
-    const res = await app.request('/api/boom?q=иванов', { headers: signedIn });
+    const res = await app.request('/api/boom/01811201810456?q=иванов', { headers: signedIn });
     expect(res.status).toBe(500);
+    // Шаблон маршрута: ИНН и строка параметров в Sentry не уходят.
     expect(capture).toHaveBeenCalledWith(err, {
       method: 'GET',
-      path: '/api/boom',
+      path: '/api/boom/:inn',
       requestId: expect.any(String),
     });
   });

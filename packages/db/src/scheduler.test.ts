@@ -2,7 +2,16 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { createOrganization } from './organizations';
-import { claimJobSlot, jobStates, platformAlert, recordJobOutcome, setJobAlert } from './scheduler';
+import {
+  claimJobSlot,
+  failHungJobRuns,
+  finishJobRun,
+  hasHungJobRuns,
+  jobStates,
+  platformAlert,
+  recordJobOutcome,
+  setJobAlert,
+} from './scheduler';
 import { schedulerJobs, schedulerRuns, telegramLinks, telegramOutbox, users } from './schema';
 import {
   createTestDatabase,
@@ -109,7 +118,26 @@ describe.skipIf(!databaseAvailable())('задачи по расписанию: �
       await setJobAlert(t.app.db, { job: 'j', alert: null, now: NOW, onlyIf: 'failing' }),
     ).toBe(true);
     expect((await jobStates(t.app.db)).get('j')).toMatchObject({ alert: null, alertedAt: null });
+    // Зависшая попытка закрывается неудачной; её поздний итог уже не пишется.
+    const hungSlot = new Date('2026-11-07T02:00:00Z');
+    expect(
+      await claimJobSlot(t.app.db, {
+        job: 'h',
+        slot: hungSlot,
+        now: hungSlot,
+        maxAttempts: 3,
+        retryDelaysMinutes: [],
+      }),
+    ).toBe(1);
+    expect(await hasHungJobRuns(t.app.db, NOW)).toBe(true);
+    expect(
+      await failHungJobRuns(t.app.db, { startedBefore: NOW, now: NOW, error: 'завис' }),
+    ).toEqual([{ job: 'h', slot: hungSlot, attempts: 1, startedAt: hungSlot }]);
+    expect(await hasHungJobRuns(t.app.db, NOW)).toBe(false);
+    expect(
+      await finishJobRun(t.app.db, { job: 'h', slot: hungSlot, attempt: 1, now: NOW, error: null }),
+    ).toBe(false);
     // Роль приложения читает и пишет состояние задач (служебная таблица платформы).
-    expect(await t.app.db.select().from(schedulerJobs)).toHaveLength(1);
+    expect(await t.app.db.select().from(schedulerJobs)).toHaveLength(2);
   });
 });

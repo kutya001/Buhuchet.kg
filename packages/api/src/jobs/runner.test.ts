@@ -8,9 +8,9 @@ import { STAND_MARK } from '../modules/admin/leads';
 import { createTestDeps } from '../testing';
 import { ALERT_STAND_MARK } from './alerts';
 import { telegramWebhookJob } from './registry';
-import { JOB_HUNG_ERROR, overdueSlot, runDueJobs } from './runner';
+import { overdueSlot, runDueJobs } from './runner';
 
-const MIN = 60_000;
+const JOB_HUNG_ERROR = 'Не закончилась за 10 минут: оборвана по времени или процесс остановлен';
 
 describe('пропущенный слот: прошлый слот, окно догоняния которого с запасом 15 минут закончилось', () => {
   const at = (iso: string) => new Date(iso);
@@ -201,6 +201,35 @@ describe.skipIf(!databaseAvailable())('задачи по расписанию: �
     ]);
     // Неудача и успех подряд: серия сброшена, оповещения не было.
     expect(await alerts()).toEqual([]);
+    expect((await t.admin.db.select().from(schema.schedulerJobs))[0]).toMatchObject({ fails: 0 });
+  });
+
+  it('давно брошенные попытки только закрываются: в неудачи подряд не идут', async () => {
+    const job: Job = {
+      name: 'test.minute',
+      cron: '* * * * *',
+      lookbackMinutes: 1,
+      run: async () => {},
+    };
+    await t.admin.db.insert(schema.schedulerRuns).values(
+      ['01', '02', '03'].map((d) => ({
+        job: 'test.minute',
+        slot: new Date(`2026-10-${d}T03:00:00Z`),
+        startedAt: new Date(`2026-10-${d}T03:00:00Z`),
+      })),
+    );
+    const { tick } = setup([job], '2026-10-18T03:00:00Z', { jobs: [] });
+    await tick('2026-10-18T03:00:00Z');
+    const old = (await runs('test.minute')).filter((r) => r.slot < new Date('2026-10-18'));
+    expect(old.map((r) => [r.ok, r.error])).toEqual([
+      [false, JOB_HUNG_ERROR],
+      [false, JOB_HUNG_ERROR],
+      [false, JOB_HUNG_ERROR],
+    ]);
+    expect(await t.admin.db.select().from(schema.schedulerJobs)).toEqual([
+      expect.objectContaining({ job: 'test.minute', fails: 0 }),
+    ]);
+    expect(await alerts()).toEqual([]);
   });
 
   it('задачи, которые не запускались дольше положенного, — одно оповещение на все; повторно не приходит', async () => {
@@ -263,10 +292,16 @@ describe.skipIf(!databaseAvailable())('задачи по расписанию: �
     const capture = vi.fn<ErrorReporter['capture']>(async () => {});
     // База, в которой нет таблицы состояния задач, — как если бы слежение сломалось.
     const { tick, deps } = setup([job], '2026-10-18T03:00:00Z', { errors: { capture } });
+    // Любой select падает: и цепочка запроса, и её ожидание отвечают ошибкой.
+    const failing: unknown = new Proxy(() => {}, {
+      get: (_t, prop) =>
+        prop === 'then'
+          ? (_ok: unknown, fail: (e: Error) => void) => fail(new Error('нет таблицы'))
+          : () => failing,
+    });
     const db = new Proxy(deps.db, {
       get(target, prop, receiver) {
-        if (prop === 'select')
-          return () => ({ from: () => Promise.reject(new Error('нет таблицы')) });
+        if (prop === 'select') return () => failing;
         return Reflect.get(target, prop, receiver) as unknown;
       },
     });
@@ -275,6 +310,7 @@ describe.skipIf(!databaseAvailable())('задачи по расписанию: �
       { job: 'test.x', slot: '2026-10-18T03:00:00.000Z', ok: true },
     ]);
     expect(run).toHaveBeenCalledTimes(1);
+    expect(capture).toHaveBeenCalledWith(expect.any(Error), { watch: 'hung' });
     expect(capture).toHaveBeenCalledWith(expect.any(Error), { watch: 'missed' });
   });
 

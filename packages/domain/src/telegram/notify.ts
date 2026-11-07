@@ -28,6 +28,7 @@ export const OUTBOX_KINDS = [
   'pass_reset',
   'broadcast',
   'lead',
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-30 — оповещение о сбое администратору платформы.
   'alert',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];

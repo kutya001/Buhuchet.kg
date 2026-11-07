@@ -1,5 +1,6 @@
 import { Writable } from 'node:stream';
 import { createFakeTelegram, createLogger, fixedClock } from '@buhuchet/adapters';
+import { UI_TEXTS } from '@buhuchet/domain';
 import { schema } from '@buhuchet/db';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
 import { ApiError, CronTickResponse } from '@buhuchet/shared';
@@ -50,6 +51,18 @@ describe('/api/cron/tick без базы', () => {
         'files.cleanup-pending',
       ]),
     );
+  });
+
+  it('у каждой задачи есть название для оповещений администратору платформы (alert.job.*)', () => {
+    const all = jobsFor({
+      APP_BASE_URL: 'https://test.buhuchet.kg',
+      TELEGRAM_BOT_TOKEN: '123456789:test-token-not-real-0000000000000',
+      TELEGRAM_WEBHOOK_SECRET: 'webhook-secret-0000',
+    });
+    const missing = all
+      .map((j) => `alert.job.${j.name.replace(/[.-]/g, '_')}`)
+      .filter((key) => !(key in UI_TEXTS));
+    expect(missing).toEqual([]);
   });
 
   it('вебхук бота сайт сообщает сам — только если бот задан и адрес сайта по https', async () => {

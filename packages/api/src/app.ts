@@ -1,6 +1,7 @@
 import { bodyLimit } from 'hono/body-limit';
 import { HTTPException } from 'hono/http-exception';
 import { requestId } from 'hono/request-id';
+import { routePath } from 'hono/route';
 import { secureHeaders } from 'hono/secure-headers';
 import type { ApiDeps } from './deps';
 import { apiError, recordErrorResponse } from './errors';
@@ -138,10 +139,11 @@ export function createApp(deps: ApiDeps) {
       return c.json(record.body, record.status);
     }
     deps.logger.error({ err, requestId: c.get('requestId'), path: c.req.path }, 'ошибка API');
-    // В Sentry (если задан SENTRY_DSN) — только путь без параметров строки и номер запроса.
+    // В Sentry (если задан SENTRY_DSN) — шаблон маршрута (`/api/page/:slug/:inn`), а не сам путь:
+    // в пути бывают адрес страницы и ИНН контрагента; строка параметров не уходит тоже.
     await deps.errors?.capture(err, {
       method: c.req.method,
-      path: c.req.path,
+      path: routePath(c) || 'unknown',
       requestId: c.get('requestId'),
     });
     return c.json(apiError('internal_error', 'Внутренняя ошибка'), 500);

@@ -5,6 +5,7 @@ import {
   claimJobSlot,
   failHungJobRuns,
   finishJobRun,
+  hasHungJobRuns,
   jobStates,
   recordJobOutcome,
   setJobAlert,
@@ -57,7 +58,9 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
     const attempt = await claimJobSlot(ctx.db, {
       job: job.name,
       slot,
-      now,
+      // Момент занятия, а не начала вызова: задачи вызова идут друг за другом, зависание считается
+      // от начала своей попытки.
+      now: ctx.clock.now(),
       maxAttempts: JOB_MAX_ATTEMPTS,
       retryDelaysMinutes: JOB_RETRY_DELAYS_MINUTES,
     });
@@ -83,8 +86,14 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
       );
       await ctx.errors?.capture(e, { job: job.name, slot: slot.toISOString(), attempt });
     }
-    await finishJobRun(ctx.db, { job: job.name, slot, attempt, now: ctx.clock.now(), error });
-    await watch(ctx, job.name, () => afterAttempt(ctx, job.name, error));
+    const recorded = await finishJobRun(ctx.db, {
+      job: job.name,
+      slot,
+      attempt,
+      now: ctx.clock.now(),
+      error,
+    });
+    if (recorded) await watch(ctx, job.name, () => afterAttempt(ctx, job.name, error));
     result.ran.push({ job: job.name, slot: slot.toISOString(), ok: error === null });
   }
   return result;
@@ -100,23 +109,25 @@ async function watch(ctx: JobContext, what: string, fn: () => Promise<void>): Pr
   }
 }
 
-/** Текст ошибки зависшей попытки (журнал запусков и оповещение). */
-export const JOB_HUNG_ERROR = `Не закончилась за ${JOB_HANG_MINUTES} минут: оборвана по времени или процесс остановлен`;
-
 /** Зависшие попытки — неудачные: засчитываются в неудачи подряд своей задачи. */
 async function settleHungRuns(ctx: JobContext, names: ReadonlySet<string>, now: Date) {
-  const error = JOB_HUNG_ERROR;
-  const hung = await failHungJobRuns(ctx.db, {
-    startedBefore: new Date(now.getTime() - JOB_HANG_MINUTES * MINUTE),
-    now,
-    error,
-  });
+  const startedBefore = new Date(now.getTime() - JOB_HANG_MINUTES * MINUTE);
+  if (!(await hasHungJobRuns(ctx.db, startedBefore))) return;
+  // Текст ошибки — словарь (журнал запусков и «Последняя ошибка» в оповещении).
+  const error = (await alertTexts(ctx))('alert.job_hung', { n: JOB_HANG_MINUTES });
+  const hung = await failHungJobRuns(ctx.db, { startedBefore, now, error });
+  // Давно брошенные попытки (вызовов расписания долго не было, строки до этой правки) только
+  // закрываются: в неудачи подряд идут лишь зависшие в последний час, иначе старые строки дали бы
+  // ложное «не выполняется».
+  const recent = now.getTime() - (JOB_HANG_MINUTES + 60) * MINUTE;
   for (const run of hung) {
     ctx.logger.error(
       { job: run.job, slot: run.slot.toISOString(), attempt: run.attempts },
       'задача по расписанию зависла',
     );
-    if (names.has(run.job)) await afterAttempt(ctx, run.job, error);
+    if (names.has(run.job) && run.startedAt.getTime() > recent) {
+      await afterAttempt(ctx, run.job, error);
+    }
   }
 }
 
@@ -163,8 +174,10 @@ async function alertMissedJobs(ctx: JobContext, jobs: readonly Job[], now: Date)
   const missed: { job: Job; last: Date; expected: Date }[] = [];
   for (const job of jobs) {
     const state = states.get(job.name);
-    // Задача ещё ни разу не запускалась (только что добавлена) — сравнивать не с чем.
-    if (!state?.lastSlot || state.alert === 'missed') continue;
+    // Задача ещё ни разу не запускалась (только что добавлена) — сравнивать не с чем. Открытое
+    // оповещение («не запускалась» или «не выполняется») не перебивается: иначе после «не выполняется»
+    // не пришло бы «снова выполняется».
+    if (!state?.lastSlot || state.alert !== null) continue;
     const expected = overdueSlot(job, now);
     if (expected && expected > state.lastSlot) {
       missed.push({ job, last: state.lastSlot, expected });

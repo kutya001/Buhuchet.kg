@@ -99,6 +99,13 @@ describe('что уходит в Sentry', () => {
     expect(values.map((v) => v.value)).toEqual(['Ошибка запроса к базе (23505)', 'не сохранилось']);
     expect(JSON.stringify(values)).not.toContain('+996555100200');
     expect(exceptionsOf('строка')).toEqual([{ type: 'Error', value: 'строка' }]);
+    // Ошибка PostgreSQL без обёртки запроса — только код.
+    const raw = Object.assign(new Error('invalid input syntax for type uuid: "01811201810456"'), {
+      name: 'PostgresError',
+      code: '22P02',
+      severity: 'ERROR',
+    });
+    expect(exceptionsOf(raw).map((v) => v.value)).toEqual(['Ошибка базы (22P02)']);
   });
 });
 

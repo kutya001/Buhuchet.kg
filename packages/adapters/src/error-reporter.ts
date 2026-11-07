@@ -105,13 +105,20 @@ export function exceptionsOf(error: unknown): SentryException[] {
       // Ошибка запроса к базе несёт значения параметров в тексте: вместо него — код PostgreSQL
       // (как в журнале, `serializeError`); у остальных — свой текст.
       const isQuery = 'query' in e && 'params' in e;
+      // Ошибка PostgreSQL без обёртки запроса (BEGIN, COMMIT, прямой вызов): в её тексте бывают
+      // значения («invalid input syntax …: "…"») — только код.
+      const pgCode = 'severity' in e && 'code' in e ? String(e.code) : null;
       out.push({
         type: scrubText(e.name || 'Error'),
-        value: scrubText(isQuery ? safeErrorMessage(e) : e.message),
+        value: isQuery
+          ? scrubText(safeErrorMessage(e))
+          : pgCode !== null
+            ? `Ошибка базы (${scrubText(pgCode)})`
+            : scrubText(e.message),
         ...(frames.length ? { stacktrace: { frames } } : {}),
       });
       // Причина ошибки запроса (ошибка PostgreSQL) уже вошла в текст кодом.
-      if (isQuery) break;
+      if (isQuery || pgCode !== null) break;
       e = e.cause;
     } else {
       out.push({ type: 'Error', value: scrubText(safeErrorMessage(e)) });
