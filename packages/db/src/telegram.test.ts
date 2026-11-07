@@ -116,6 +116,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       slug: 'org-b',
       owner: { fullName: 'Абдыкадырова Айгуль', login: 'owner-b', passwordHash: 'hash-b' },
     });
+    // Владельцы уже сменили временный пароль: с ним ссылку привязки не создать (миграция 0103).
+    await t.admin.db.update(users).set({ mustChangePassword: false });
     const accRole = a.roles.find((r) => r.templateCode === 'acc')!;
     const [u] = await t.admin.db
       .insert(users)
@@ -540,6 +542,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       ),
     ).toBe(false);
 
+    // Временный пароль из предыдущей проверки уже сменён.
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, accA));
     await linkAs({ orgId: a.orgId, userId: accA }, 5010);
     expect(
       await pendingAfter(accA, () =>
@@ -562,7 +566,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     });
 
     // Замена Telegram на другой чат (кодом из прежнего) отменяет код, повторная привязка того же
-    // чата — нет. После сброса пароля 5011 привязывается без кода.
+    // чата — нет. После сброса пароля (временный пароль сменён) 5011 привязывается без кода.
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, accA));
     expect(await linkAs({ orgId: a.orgId, userId: accA }, 5011)).not.toBeNull();
     expect(await pendingAfter(accA, () => relinkAs({ orgId: a.orgId, userId: accA }, 5012))).toBe(
       false,
@@ -707,10 +712,53 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     });
 
     // Сброс пароля владельцем: доступа к прежнему Telegram может не быть — сутки без кода, один раз.
-    const before = Date.now();
+    // Запросы, которые начались до сброса, разрешение не снимут (docs/deviations.md п. О-20): привязка
+    // ссылкой, взятой до сброса, и новая ссылка, которую создают, пока сброс ещё не зафиксирован.
+    const signal = () => {
+      let fire!: () => void;
+      const fired = new Promise<void>((resolve) => (fire = resolve));
+      return { fire, fired };
+    };
+    const early = newHash();
+    await withOrgContext(t.app.db, y, (tx) => createTelegramLinkToken(tx, early));
+    // Привязка той же ссылкой в том же чате началась до сброса, а до проверки ссылки дошла после него.
+    const began = signal();
+    const resetDone = signal();
+    const lateUse = withOrgContext(t.app.db, y, async (tx) => {
+      began.fire();
+      await resetDone.fired;
+      return useTelegramLink(tx, {
+        tokenHash: early,
+        chatId: 9103,
+        username: null,
+        firstName: null,
+      });
+    });
+    await began.fired;
     await withOrgContext(t.app.db, ctxA(), (tx) =>
       setTemporaryPassword(tx, { userId: y.userId, passwordHash: 'temp-y' }),
     );
+    resetDone.fire();
+    expect(await lateUse).toBeNull();
+    // Новую ссылку создают, пока сброс ещё не зафиксирован: она ждёт его и видит временный пароль (с
+    // ним API пускает только к смене пароля). Повторный сброс — после смены временного пароля.
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, y.userId));
+    const before = Date.now();
+    const locked = signal();
+    const commit = signal();
+    const reset = withOrgContext(t.app.db, ctxA(), async (tx) => {
+      await setTemporaryPassword(tx, { userId: y.userId, passwordHash: 'temp-y' });
+      locked.fire();
+      await commit.fired;
+    });
+    await locked.fired;
+    const lateLink = withOrgContext(t.app.db, y, (tx) => createTelegramLinkToken(tx, newHash()));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    commit.fire();
+    await reset;
+    await expect(lateLink).rejects.toMatchObject({
+      cause: { message: expect.stringContaining('временный пароль') },
+    });
     const [guard] = await t.admin.db
       .select()
       .from(telegramLinkGuards)
@@ -720,6 +768,8 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     expect(hours).toBeLessThan(24.1);
     // Пока разрешение действует, код «Забыли пароль?» в ещё привязанный (возможно, чужой) чат не уходит.
     expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'no_telegram' });
+    // Пострадавший вошёл с временным паролем и сменил его.
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, y.userId));
     // Через сутки разрешение истекает, и коды снова уходят в привязанный чат.
     const setFreeUntil = (freeUntil: Date) =>
       t.admin.db
@@ -741,6 +791,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     expect(await linkAs(y, 9105)).toBeNull();
 
     // Разрешить без кода можно только учётной записи своей организации с временным паролем.
+    await t.admin.db.update(users).set({ mustChangePassword: true }).where(eq(users.id, y.userId));
     const allow = (ctx: { orgId: string; userId: string }, userId: string) =>
       withOrgContext(t.app.db, ctx, (tx) =>
         tx.execute(sql`select app.telegram_relink_allow(${userId}, 24)`),

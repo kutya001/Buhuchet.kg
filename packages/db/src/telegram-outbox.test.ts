@@ -5,7 +5,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { orgSettings, telegramDigestDays, telegramNotifySettings, telegramOutbox } from './schema';
+import {
+  orgSettings,
+  telegramDigestDays,
+  telegramNotifySettings,
+  telegramOutbox,
+  users,
+} from './schema';
 import { createTelegramLinkToken, useTelegramLink } from './telegram';
 import {
   claimOutbox,
@@ -55,6 +61,8 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
       slug: 'org-b',
       owner: { fullName: 'Абдыкадырова Айгуль', login: 'owner-b', passwordHash: 'hash-b' },
     });
+    // Владельцы уже сменили временный пароль: с ним ссылку привязки не создать (миграция 0103).
+    await t.admin.db.update(users).set({ mustChangePassword: false });
   });
 
   afterAll(async () => {

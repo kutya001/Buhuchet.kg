@@ -179,7 +179,8 @@ const RELINK_NAME_MAX = 32;
 function relinkName(link: LinkChat): string {
   const chars = [
     ...telegramName(link)
-      .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+      // Соединитель эмодзи (U+200D) остаётся, иначе составной эмодзи распался бы на части.
+      .replace(/(?!\u200d)[\p{Cc}\p{Cf}]/gu, ' ')
       .replace(/\s+/g, ' ')
       .trim(),
   ];
