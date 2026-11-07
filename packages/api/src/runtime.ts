@@ -2,6 +2,7 @@ import {
   clockFromConfig,
   createLogger,
   createS3Storage,
+  createSentryReporter,
   createTelegramBotApi,
   loadConfig,
   type AppConfig,
@@ -44,6 +45,13 @@ export function createRuntime(
         })
       : null,
     jobs: jobsFor(config),
+    errors: createSentryReporter({
+      dsn: config.SENTRY_DSN,
+      environment: config.APP_ENV,
+      release: config.APP_VERSION,
+      service,
+      logger,
+    }),
   };
   return { config, deps, close: () => database.close() };
 }

@@ -122,7 +122,7 @@ export function createApp(deps: ApiDeps) {
   });
 
   app.notFound((c) => c.json(apiError('not_found', 'Метод не найден'), 404));
-  app.onError((err, c) => {
+  app.onError(async (err, c) => {
     if (err instanceof HTTPException) {
       return err.res ? err.getResponse() : c.json(apiError('http_error', err.message), err.status);
     }
@@ -138,6 +138,12 @@ export function createApp(deps: ApiDeps) {
       return c.json(record.body, record.status);
     }
     deps.logger.error({ err, requestId: c.get('requestId'), path: c.req.path }, 'ошибка API');
+    // В Sentry (если задан SENTRY_DSN) — только путь без параметров строки и номер запроса.
+    await deps.errors?.capture(err, {
+      method: c.req.method,
+      path: c.req.path,
+      requestId: c.get('requestId'),
+    });
     return c.json(apiError('internal_error', 'Внутренняя ошибка'), 500);
   });
 

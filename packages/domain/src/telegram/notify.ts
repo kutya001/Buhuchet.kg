@@ -28,6 +28,7 @@ export const OUTBOX_KINDS = [
   'pass_reset',
   'broadcast',
   'lead',
+  'alert',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 

@@ -10,7 +10,10 @@ const runner = startMinuteRunner({
     const result = await runDueJobs(deps, deps.jobs);
     if (result.ran.length > 0) deps.logger.info(result, 'задачи по расписанию');
   },
-  onError: (err) => deps.logger.error({ err }, 'ошибка цикла worker'),
+  onError: (err) => {
+    deps.logger.error({ err }, 'ошибка цикла worker');
+    void deps.errors?.capture(err, { worker: 'tick' });
+  },
 });
 deps.logger.info({ jobs: deps.jobs.map((j) => j.name) }, 'worker запущен');
 

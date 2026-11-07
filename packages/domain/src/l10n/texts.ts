@@ -1,4 +1,5 @@
 import { ADMIN_ACCOUNTS_TEXTS, ADMIN_L10N_TEXTS, ADMIN_TEXTS } from './admin-texts';
+import { ALERTS_TEXTS } from './alerts-texts';
 import { AUTH_TEXTS } from './auth-texts';
 import { CONTRACTOR_CARD_TEXTS } from './contractor-card-texts';
 import { CONTRACTOR_IMPORT_TEXTS } from './contractor-import-texts';
@@ -72,7 +73,7 @@ const SYSTEM_TEXTS = {
  * refDB.json (там — тексты, которые завёл прототип). Экраны берут текст не отсюда, а из словаря
  * (`useT` в apps/web): текст, поправленный в словаре, заменяет этот без изменения кода. Ключ,
  * который есть и в refDB.json, пишется с тем же текстом (это проверяет тест наполнения). Тексты
- * разложены по файлам экранов: служебные — здесь, оболочки — `shell-texts.ts`, входа и «Мой профиль» —
+ * разложены по файлам экранов: служебные — здесь (оповещения о сбоях — `alerts-texts.ts`), оболочки — `shell-texts.ts`, входа и «Мой профиль» —
  * `auth-texts.ts`, лендинга для гостей и полосы демо-организации — `landing-texts.ts`, списков — `grid-texts.ts`, «Главной» — `home-texts.ts`, сотрудников — `staff-texts.ts`, шкалы и истории статусов —
  * `status-texts.ts`, «Моей организации» — `org-texts.ts`, Админки — `admin-texts.ts` (вкладка «Заявки» — `leads-texts.ts`), «Справочников» и сроков
  * видов отчётов словами — `dicts-texts.ts`, контрагентов и сверки с ГКЭД — `contractors-texts.ts`, загрузки контрагентов из Excel —
@@ -88,6 +89,7 @@ const SYSTEM_TEXTS = {
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
+  ...ALERTS_TEXTS,
   ...SHELL_TEXTS,
   ...AUTH_TEXTS,
   ...LANDING_TEXTS,
