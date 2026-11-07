@@ -80,9 +80,16 @@ export function useTelegramLink(): TelegramLinkState {
 
 /**
  * Ссылка привязки, «Скопировать ссылку» и пояснение (прототип modules/profile.js): ссылку можно и
- * открыть — на телефоне она сразу ведёт в приложение Telegram.
+ * открыть — на телефоне она сразу ведёт в приложение Telegram. `previous` — прежний (отвязанный)
+ * Telegram: другой чат бот привяжет только по коду, который пришлёт туда (прототип v77, `u.tgPrev`).
  */
-export function TelegramLinkRow({ url }: { url: string }) {
+export function TelegramLinkRow({
+  url,
+  previous,
+}: {
+  url: string;
+  previous?: { name: string | null } | null;
+}) {
   const t = useT();
   const toast = useToast();
   const copy = async () => {
@@ -111,6 +118,14 @@ export function TelegramLinkRow({ url }: { url: string }) {
       </div>
       <div className="text-[11.5px] leading-[1.4] text-faint">
         {t('profile.tg_hint', { minutes: TELEGRAM_LINK_TTL_MINUTES })}
+        {previous ? (
+          <span data-telegram-previous="">
+            {' '}
+            {previous.name
+              ? t('profile.tg_prev', { name: previous.name })
+              : t('profile.tg_prev_unnamed')}
+          </span>
+        ) : null}
       </div>
     </>
   );

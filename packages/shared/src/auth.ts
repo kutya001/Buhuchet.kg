@@ -85,6 +85,11 @@ export const MeResponse = z.object({
     .nullable(),
   /** Привязанный Telegram; null — не привязан (напоминания не приходят, «Забыли пароль?» не работает). */
   telegram: TelegramInfo.nullable(),
+  /**
+   * Telegram не привязан, а прежний (отвязанный) есть — другой чат бот привяжет только по коду, который
+   * пришлёт туда (прототип v77, docs/deviations.md п. О-20). `name` — «@имя»; null — имя неизвестно.
+   */
+  telegramPrevious: z.object({ name: z.string().nullable() }).nullable().optional(),
   permissions: z.array(PermissionIdSchema),
   scopes: z.partialRecord(ScopeGroupIdSchema, z.enum(SCOPES)),
   features: z.partialRecord(FeatureSchema, z.boolean()),

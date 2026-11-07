@@ -117,10 +117,12 @@ export const passwordResetCodes = pgTable(
 /**
  * Чем подтверждается следующая привязка Telegram пользователя (решение заказчика 07.11.2026, Р-13 Б;
  * docs/deviations.md п. О-20). `chat_id` — чат, отвязанный последним: новый чат после «Отвязать»
- * подтверждается кодом из него, как и замена привязанного. `free_until` — до какого момента Telegram
- * привязывается без кода (владелец или администратор платформы сбросил пароль: доступа к прежнему
- * Telegram у пользователя может не быть). Удачная привязка строку удаляет. Меняют строку только
- * функции app.telegram_* (миграция telegram_relink_functions).
+ * подтверждается кодом из него, как и замена привязанного; `username`, `first_name` — его имя для
+ * подсказки «Прежний Telegram …» в «Мой профиль» (у отвязавших до миграции 0104 — пусто).
+ * `free_until` — до какого момента Telegram привязывается без кода (владелец или администратор
+ * платформы сбросил пароль: доступа к прежнему Telegram у пользователя может не быть). Удачная
+ * привязка строку удаляет. Меняют строку только функции app.telegram_* (миграции
+ * telegram_relink_functions, telegram_prev_name).
  */
 export const telegramLinkGuards = pgTable(
   'telegram_link_guards',
@@ -130,6 +132,8 @@ export const telegramLinkGuards = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'restrict' }),
     chatId: bigint('chat_id', { mode: 'number' }),
+    username: text('username'),
+    firstName: text('first_name'),
     freeUntil: timestamp('free_until', { withTimezone: true }),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
