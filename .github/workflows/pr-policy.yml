@@ -14,14 +14,14 @@ jobs:
     timeout-minutes: 5
     steps:
       # Правило берётся из main, чтобы PR не мог ослабить проверку сам себе.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           sparse-checkout: scripts
           persist-credentials: false
           path: base
       # Только для самого первого PR, пока в main ещё нет скрипта.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           sparse-checkout: scripts
           persist-credentials: false
