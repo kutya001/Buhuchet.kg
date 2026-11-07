@@ -29,6 +29,7 @@ export function createRuntime(
   });
   const database = createDb(config.DATABASE_URL, {
     max: config.DATABASE_POOL_MAX,
+    caCert: config.DATABASE_CA_CERT,
     applicationName: `buhuchet-${service}`,
   });
   const deps: ApiDeps = {

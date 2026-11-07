@@ -1,5 +1,5 @@
 import { isSessionTokenShape } from '@buhuchet/adapters/tokens';
-import { SESSION_TTL_DAYS } from '@buhuchet/domain';
+import { SESSION_MAX_HOURS, SESSION_TTL_DAYS } from '@buhuchet/domain';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { ApiDeps } from '../deps';
@@ -34,7 +34,8 @@ export function writeSessionCookie(c: Context, deps: ApiDeps, token: string): vo
     secure,
     sameSite: 'Lax',
     path: '/',
-    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
+    // Не дольше предела сеанса с входа: решает сервер, cookie просто не живёт дольше него.
+    maxAge: Math.min(SESSION_TTL_DAYS * 24, SESSION_MAX_HOURS) * 60 * 60,
   });
 }
 

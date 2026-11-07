@@ -208,11 +208,48 @@ describe.skipIf(!databaseAvailable())('вход и сеансы в базе', ()
       .where(eq(sessions.id, id));
     expect(await sessionByToken(t.app.db, tokenHash)).toMatchObject({ touched: true });
     const [row] = await t.admin.db.select().from(sessions).where(eq(sessions.id, id));
-    // Продлён на 1 день с этого обращения (docs/deviations.md, п. 5, решение 30.10.2026).
+    // Продлён на 1 день с этого обращения (docs/deviations.md, п. 5, решение 30.10.2026), но не дальше
+    // 12 часов с входа (п. О-10): сеанс только что начат, поэтому до конца — 12 часов.
     const left = row!.expiresAt.getTime() - Date.now();
-    expect(left).toBeGreaterThan(86_400_000 - 60_000);
-    expect(left).toBeLessThan(86_400_000 + 60_000);
+    expect(left).toBeGreaterThan(12 * 3600_000 - 60_000);
+    expect(left).toBeLessThan(12 * 3600_000 + 60_000);
     expect(await sessionByToken(t.app.db, tokenHash)).toMatchObject({ touched: false });
+  });
+
+  it('сеанс не дольше 12 часов с входа, даже если им пользуются (п. О-10)', async () => {
+    const tokenHash = newHash();
+    const id = await startSession(t.app.db, { userId: a.ownerUserId, tokenHash });
+    const elevenHoursAgo = new Date(Date.now() - 11 * 3600_000);
+    await t.admin.db
+      .update(sessions)
+      .set({ createdAt: elevenHoursAgo, lastSeenAt: new Date(Date.now() - 2 * 3600_000) })
+      .where(eq(sessions.id, id));
+    expect(await sessionByToken(t.app.db, tokenHash)).toMatchObject({ touched: true });
+    const [row] = await t.admin.db.select().from(sessions).where(eq(sessions.id, id));
+    // Продление упирается в 12 часов с входа: остался час, а не сутки.
+    const left = row!.expiresAt.getTime() - Date.now();
+    expect(left).toBeGreaterThan(3600_000 - 60_000);
+    expect(left).toBeLessThan(3600_000 + 60_000);
+
+    await t.admin.db
+      .update(sessions)
+      .set({ createdAt: new Date(Date.now() - 12 * 3600_000 - 1000) })
+      .where(eq(sessions.id, id));
+    expect(await sessionByToken(t.app.db, tokenHash)).toBeNull();
+    expect(await sessionByToken(t.app.db, tokenHash, { touch: false })).toBeNull();
+  });
+
+  it('прежний вызов без предела (старая версия сайта при выкладке) тоже соблюдает 12 часов', async () => {
+    const tokenHash = newHash();
+    const id = await startSession(t.app.db, { userId: a.ownerUserId, tokenHash });
+    const call = () =>
+      t.app.sql`select session_id from app.auth_session(${tokenHash}, 1, 60)`.then((r) => r.length);
+    expect(await call()).toBe(1);
+    await t.admin.db
+      .update(sessions)
+      .set({ createdAt: new Date(Date.now() - 12 * 3600_000 - 1000) })
+      .where(eq(sessions.id, id));
+    expect(await call()).toBe(0);
   });
 
   it('истёкший сеанс не действует, выход удаляет сеанс', async () => {

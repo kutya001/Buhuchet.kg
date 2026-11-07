@@ -45,6 +45,7 @@ if (!config.DATABASE_ADMIN_URL) {
 const handle = createDb(config.DATABASE_ADMIN_URL, {
   max: 1,
   applicationName: 'buhuchet-create-admin',
+  caCert: config.DATABASE_CA_CERT,
 });
 try {
   if (fromEnv && givenPassword) {

@@ -34,29 +34,20 @@ const signedIn = { cookie: `bh_session=${'A'.repeat(43)}`, origin: 'http://local
 const signedInApp = () => createApp(createTestDeps({ db: signedInDb }));
 
 describe('GET /api/health', () => {
-  it('200 и «ok», когда база и хранилище доступны', async () => {
+  it('без входа — только «ok», без версии, окружения и подробностей', async () => {
     const app = createApp(createTestDeps({ db: okDb }));
     const res = await app.request('/api/health');
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('x-robots-tag')).toBe('noindex');
-    const body = HealthResponse.parse(await res.json());
-    expect(body).toMatchObject({
-      status: 'ok',
-      environment: 'test',
-      todayBishkek: '2026-10-18',
-      checks: { database: 'ok', storage: 'ok' },
-    });
+    expect(await res.json()).toEqual({ status: 'ok' });
   });
 
   it('503 и «degraded», когда база недоступна', async () => {
     const app = createApp(createTestDeps());
     const res = await app.request('/api/health');
     expect(res.status).toBe(503);
-    expect(HealthResponse.parse(await res.json()).checks).toEqual({
-      database: 'error',
-      storage: 'ok',
-    });
+    expect(await res.json()).toEqual({ status: 'degraded' });
   });
 
   it('503, когда хранилище недоступно', async () => {
@@ -66,19 +57,57 @@ describe('GET /api/health', () => {
     };
     const res = await createApp(deps).request('/api/health');
     expect(res.status).toBe(503);
-    expect(HealthResponse.parse(await res.json()).checks.storage).toBe('error');
+    expect(await res.json()).toEqual({ status: 'degraded' });
+  });
+});
+
+describe('GET /api/admin/health', () => {
+  it('администратору платформы — версия, окружение и состояние базы и хранилища', async () => {
+    const res = await signedInApp().request('/api/admin/health', { headers: signedIn });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(HealthResponse.parse(await res.json())).toMatchObject({
+      status: 'ok',
+      environment: 'test',
+      todayBishkek: '2026-10-18',
+      checks: { database: 'ok', storage: 'ok' },
+    });
+  });
+
+  it('503 с подробностями, когда хранилище недоступно', async () => {
+    const deps = createTestDeps({ db: signedInDb });
+    deps.storage.ping = async () => {
+      throw new Error('нет корзины');
+    };
+    const res = await createApp(deps).request('/api/admin/health', { headers: signedIn });
+    expect(res.status).toBe(503);
+    expect(HealthResponse.parse(await res.json()).checks).toEqual({
+      database: 'ok',
+      storage: 'error',
+    });
+  });
+
+  it('без входа — 401', async () => {
+    const res = await createApp(createTestDeps({ db: okDb })).request('/api/admin/health');
+    expect(res.status).toBe(401);
   });
 });
 
 describe('служебное', () => {
-  it('описание OpenAPI строится из схем', async () => {
-    const res = await createApp(createTestDeps()).request('/api/openapi.json');
+  it('описание OpenAPI без входа не отдаётся', async () => {
+    const res = await createApp(createTestDeps({ db: okDb })).request('/api/openapi.json');
+    expect(res.status).toBe(401);
+  });
+
+  it('описание OpenAPI строится из схем (администратору платформы)', async () => {
+    const res = await signedInApp().request('/api/openapi.json', { headers: signedIn });
     expect(res.status).toBe(200);
     const doc = (await res.json()) as { openapi: string; paths: Record<string, unknown> };
     expect(doc.openapi).toBe('3.1.0');
     expect(Object.keys(doc.paths)).toEqual(
       expect.arrayContaining([
         '/api/health',
+        '/api/admin/health',
         '/api/cron/tick',
         '/api/auth/login',
         '/api/auth/logout',
@@ -217,7 +246,7 @@ describe('служебное', () => {
 
   it('метод с версией записи описывает в OpenAPI ответы 404 и 409', async () => {
     const { createRoute, z } = await import('@hono/zod-openapi');
-    const app = createApp(createTestDeps());
+    const app = signedInApp();
     app.openapi(
       createRoute({
         method: 'put',
@@ -232,7 +261,7 @@ describe('служебное', () => {
       }),
       (c) => c.json({ version: 2 }, 200),
     );
-    const doc = (await (await app.request('/api/openapi.json')).json()) as {
+    const doc = (await (await app.request('/api/openapi.json', { headers: signedIn })).json()) as {
       paths: Record<string, { put: { responses: Record<string, unknown> } }>;
     };
     expect(Object.keys(doc.paths['/api/versioned']!.put.responses)).toEqual(['200', '404', '409']);
