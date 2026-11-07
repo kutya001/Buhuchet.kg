@@ -55,4 +55,10 @@ export interface ApiDeps extends JobContext {
    * задаёт его сам.
    */
   authIpLimit?: RateLimit | null;
+  /**
+   * Код из Telegram при входе администратора платформы (docs/deviations.md п. О-13). Не задано — на
+   * стенде и рабочем сайте он нужен, на своём компьютере и в тестах (APP_ENV local и test) — нет:
+   * сквозные тесты входят администратором без Telegram. Тест кода задаёт его сам.
+   */
+  adminSecondFactor?: boolean;
 }

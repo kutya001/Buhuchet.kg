@@ -2,6 +2,7 @@ import { formatText, UI_TEXTS, type UiTextKey } from '@buhuchet/domain';
 import type { Context } from 'hono';
 import { describe, expect, it } from 'vitest';
 import { denialError, lockedError } from './auth-errors';
+import { ADMIN_CODE_ERRORS } from './modules/auth/admin-code';
 import { RESET_REQUESTED_MESSAGE } from './modules/auth/reset';
 
 // Экран берёт тексты из словаря (`err.<код>`): подстановки и вариант текста — в details ответа.
@@ -59,6 +60,18 @@ describe('тексты словаря err.* совпадают с текстам
     ];
     for (const { error } of errors) expect(screen(error), error.code).toBe(error.message);
     expect(UI_TEXTS['auth.code_sent'].ru).toBe(RESET_REQUESTED_MESSAGE);
+  });
+
+  // docs/deviations.md п. О-13.
+  it('вход администратора платформы с кодом из Telegram', () => {
+    const errors = [
+      ADMIN_CODE_ERRORS.invalid(),
+      ADMIN_CODE_ERRORS.limited(),
+      ADMIN_CODE_ERRORS.limitedDay(),
+      ADMIN_CODE_ERRORS.botUnavailable(),
+      ADMIN_CODE_ERRORS.sendFailed(),
+    ];
+    for (const { error } of errors) expect(screen(error), error.code).toBe(error.message);
   });
 
   it('страница входа показывает тексты словаря refDB (auth.*) — те же, что в ответах сервера', () => {

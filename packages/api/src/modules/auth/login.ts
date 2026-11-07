@@ -1,14 +1,11 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { verifyAgainstDummy, verifyPassword } from '@buhuchet/adapters/password';
-import { hashSessionToken, newSessionToken } from '@buhuchet/adapters/tokens';
 import {
   clearLoginAttempts,
-  endSession,
   findLogin,
   notifyAccountLocked,
   recordLoginFailure,
   reserveLoginAttempt,
-  startSession,
   type LoginRecord,
 } from '@buhuchet/db';
 import {
@@ -18,15 +15,15 @@ import {
   loginDenial,
   normalizeLogin,
 } from '@buhuchet/domain';
-import { ApiError, LoginRequest, MeResponse } from '@buhuchet/shared';
+import { AdminCodeRequiredResponse, ApiError, LoginRequest, MeResponse } from '@buhuchet/shared';
 import { denialError, lockedError } from '../../auth-errors';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
-import { readSessionToken, writeSessionCookie } from '../../middleware/cookie';
 import { botText } from '../telegram/bot';
+import { ADMIN_CODE_SENT_DESCRIPTION, adminSecondFactorOn, startAdminCode } from './admin-code';
 import { AUTH_IP_LIMITED_DESCRIPTION, authIpLimited } from './ip-limit';
-import { loadMe } from './me';
+import { openSession } from './open-session';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -41,20 +38,28 @@ export const loginRoute = createRoute({
       description: 'Вошёл: cookie сеанса выставлена',
       content: { 'application/json': { schema: MeResponse } },
     },
+    202: {
+      description: ADMIN_CODE_SENT_DESCRIPTION,
+      content: { 'application/json': { schema: AdminCodeRequiredResponse } },
+    },
     400: { description: 'Неверные данные запроса', content: error },
     401: {
       description: 'Неверный логин или пароль: одно сообщение для любого логина',
       content: error,
     },
     403: {
-      description: `Пароль верный, но сотрудник, учётная запись или организация заблокированы, или вход закрыт после ${ACCOUNT_LOCK_FAILURES} неверных паролей подряд (\`account_locked\`)`,
+      description: `Пароль верный, но сотрудник, учётная запись или организация заблокированы, или вход закрыт после ${ACCOUNT_LOCK_FAILURES} неверных паролей подряд (\`account_locked\`), или у администратора платформы не привязан Telegram (\`telegram_required\`, в details — ссылка привязки)`,
       content: error,
     },
     429: {
-      description: `После ${LOGIN_MAX_FAILURES} неверных паролей подряд вход по этому логину закрыт на ${LOGIN_LOCK_MINUTES} минут, есть такой логин или нет; или ${AUTH_IP_LIMITED_DESCRIPTION}`,
+      description: `После ${LOGIN_MAX_FAILURES} неверных паролей подряд вход по этому логину закрыт на ${LOGIN_LOCK_MINUTES} минут, есть такой логин или нет; или ${AUTH_IP_LIMITED_DESCRIPTION}; или у администратора платформы слишком много кодов для входа (\`admin_code_limited\`)`,
       content: error,
     },
-    503: { description: 'Очередь проверки паролей переполнена (`server_busy`)', content: error },
+    503: {
+      description:
+        'Очередь проверки паролей переполнена (`server_busy`); администратору платформы — бот не подключён (`telegram_unavailable`) или не отправил код (`telegram_send_failed`)',
+      content: error,
+    },
   },
 });
 
@@ -97,14 +102,11 @@ export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, App
     await clearLoginAttempts(deps.db, login);
     const denial = loginDenial(account);
     if (denial) return c.json(denialError(denial, account), 403);
-
-    // Прежний сеанс этого браузера закрывается: один вход — один сеанс.
-    const previous = readSessionToken(c, deps);
-    if (previous) await endSession(deps.db, hashSessionToken(previous));
-    const token = newSessionToken();
-    await startSession(deps.db, { userId: account.userId, tokenHash: hashSessionToken(token) });
-    writeSessionCookie(c, deps, token);
-    return c.json(await loadMe(deps, account), 200);
+    // ОТКЛОНЕНИЕ: docs/deviations.md#О-13 — администратору платформы сеанс только после кода из Telegram.
+    if (account.isPlatformAdmin && adminSecondFactorOn(deps)) {
+      return startAdminCode(c, deps, account);
+    }
+    return c.json(await openSession(c, deps, account), 200);
   };
 }
 

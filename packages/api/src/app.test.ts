@@ -111,6 +111,7 @@ describe('служебное', () => {
         '/api/admin/health',
         '/api/cron/tick',
         '/api/auth/login',
+        '/api/auth/login/code',
         '/api/auth/logout',
         '/api/auth/me',
         '/api/auth/password',
