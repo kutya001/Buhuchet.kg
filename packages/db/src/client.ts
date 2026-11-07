@@ -12,17 +12,26 @@ export interface DbHandle {
   close(): Promise<void>;
 }
 
+export interface DbOptions {
+  max?: number;
+  applicationName?: string;
+  /**
+   * Корневой сертификат сервера (PEM): соединение проверяет сертификат и имя сервера, как
+   * sslmode=verify-full, и это главнее sslmode в адресе. Без него — как в адресе (обычно require:
+   * шифрование без проверки сертификата).
+   */
+  caCert?: string | undefined;
+}
+
 /**
  * Подключение к PostgreSQL. `prepare: false` — для пула Supabase (Supavisor) в режиме транзакций;
  * на обычном PostgreSQL это тоже работает.
  */
-export function createDb(
-  url: string,
-  options: { max?: number; applicationName?: string } = {},
-): DbHandle {
+export function createDb(url: string, options: DbOptions = {}): DbHandle {
   const sql = postgres(url, {
     max: options.max ?? 5,
     prepare: false,
+    ...(options.caCert ? { ssl: { ca: options.caCert, rejectUnauthorized: true } } : {}),
     onnotice: () => {},
     connection: { application_name: options.applicationName ?? 'buhuchet' },
   });
