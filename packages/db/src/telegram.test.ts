@@ -798,14 +798,17 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     // Новая привязка снимает разрешение — коды снова уходят, уже в новый чат.
     expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'ok' });
     expect(await linkAs(y, 9105)).toBeNull();
-    // Пока после сброса пароля можно без кода, подсказки «Прежний Telegram …» нет.
+    // Подсказка «Прежний Telegram …» — и пока после сброса пароля можно без кода (как в прототипе v77).
     await withOrgContext(t.app.db, y, unlinkTelegram);
     expect(await telegramPreviousChat(t.app.db, y.userId)).toEqual({
       username: null,
       firstName: 'Имя',
     });
     await setFreeUntil(new Date(Date.now() + 60_000));
-    expect(await telegramPreviousChat(t.app.db, y.userId)).toBeNull();
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toEqual({
+      username: null,
+      firstName: 'Имя',
+    });
 
     // Разрешить без кода можно только учётной записи своей организации с временным паролем.
     await t.admin.db.update(users).set({ mustChangePassword: true }).where(eq(users.id, y.userId));

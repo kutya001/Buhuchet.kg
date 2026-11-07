@@ -29,9 +29,9 @@ CREATE OR REPLACE FUNCTION app.telegram_unlink()
   END
   $$;
 --> statement-breakpoint
--- Прежний Telegram пользователя для подсказки в «Мой профиль»: Telegram сейчас не привязан, а другой
--- чат подтверждается кодом из отвязанного (разрешения без кода после сброса пароля нет). Пусто — нет
--- такого; имя пустое — отвязан до миграции 0104. Ничего не меняет.
+-- Прежний Telegram пользователя для подсказки в «Мой профиль»: Telegram сейчас не привязан, а отвязанный
+-- чат есть — как `u.tgPrev` в прототипе v77, и при действующем разрешении после сброса пароля (там
+-- подсказка тоже есть). Пусто — нет такого; имя пустое — отвязан до миграции 0104. Ничего не меняет.
 CREATE FUNCTION app.telegram_previous(p_user uuid)
   RETURNS TABLE (username text, first_name text)
   LANGUAGE sql STABLE SECURITY DEFINER
@@ -40,7 +40,6 @@ CREATE FUNCTION app.telegram_previous(p_user uuid)
     SELECT g.username, g.first_name
     FROM public.telegram_link_guards g
     WHERE g.user_id = p_user AND g.chat_id IS NOT NULL
-      AND NOT coalesce(g.free_until > now(), false)
       AND NOT EXISTS (SELECT 1 FROM public.telegram_links l WHERE l.user_id = p_user)
   $$;
 --> statement-breakpoint

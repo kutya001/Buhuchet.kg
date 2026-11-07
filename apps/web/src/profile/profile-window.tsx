@@ -199,8 +199,7 @@ function TelegramBox({
     setTelegram(null);
     toast(t('profile.tg_unlinked'), { icon: 'tg' });
     router.refresh();
-    // Подсказку о прежнем Telegram решает сервер: пока после сброса пароля можно привязать другой
-    // чат без кода, её нет (docs/deviations.md п. О-20).
+    // Подсказку о прежнем Telegram (и его имя) отдаёт сервер, как при открытии профиля.
     const me = await callApi(() => api.api.auth.me.$get());
     if (me.ok) setPrevious(MeResponse.parse(me.data).telegramPrevious ?? null);
   };

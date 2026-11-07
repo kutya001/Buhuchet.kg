@@ -55,8 +55,7 @@ export async function telegramChat(db: Db | Tx, userId: string): Promise<Telegra
 
 /**
  * Прежний Telegram для подсказки в «Мой профиль» (прототип v77, docs/deviations.md п. О-20): сейчас не
- * привязан, другой чат подтверждается кодом из отвязанного. null — нет такого (или после сброса пароля
- * сутки можно без кода); имя пустое — отвязан до миграции 0104.
+ * привязан, а отвязанный есть. null — нет такого; имя пустое — отвязан до миграции 0104.
  */
 export async function telegramPreviousChat(
   db: Db | Tx,
