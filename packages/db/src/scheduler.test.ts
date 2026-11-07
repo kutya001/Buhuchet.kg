@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { createOrganization } from './organizations';
@@ -8,11 +8,21 @@ import {
   finishJobRun,
   hasHungJobRuns,
   jobStates,
+  loginLockStats,
   platformAlert,
+  platformAlertThrottled,
   recordJobOutcome,
   setJobAlert,
 } from './scheduler';
-import { schedulerJobs, schedulerRuns, telegramLinks, telegramOutbox, users } from './schema';
+import {
+  loginAttempts,
+  rateLimits,
+  schedulerJobs,
+  schedulerRuns,
+  telegramLinks,
+  telegramOutbox,
+  users,
+} from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -139,5 +149,78 @@ describe.skipIf(!databaseAvailable())('задачи по расписанию: �
     ).toBe(false);
     // Роль приложения читает и пишет состояние задач (служебная таблица платформы).
     expect(await t.app.db.select().from(schedulerJobs)).toHaveLength(2);
+  });
+
+  it('блокировки входа за последний час по часам базы: логины, учётные записи, исчерпанный предел адресов (Р-8 А)', async () => {
+    const base = Date.now();
+    const min = (m: number) => new Date(base + m * 60_000);
+    // Логин закрывается на 15 минут: в момент закрытия last_attempt_at = locked_until − 15.
+    const locked = (login: string, m: number) => ({
+      login,
+      failures: 0,
+      lockedUntil: min(m + 15),
+      lastAttemptAt: min(m),
+    });
+    await t.admin.db
+      .insert(loginAttempts)
+      .values([
+        locked('a', -55),
+        locked('b', -5),
+        locked('old', -65),
+        { login: 'nolock', failures: 3, lockedUntil: null, lastAttemptAt: min(-1) },
+      ]);
+    await t.admin.db.insert(users).values([
+      { orgId, login: 'locked-1', passwordHash: '!', loginLockedAt: min(-30) },
+      { orgId, login: 'locked-old', passwordHash: '!', loginLockedAt: min(-90) },
+    ]);
+    // Предел 3 попытки за 10 минут: x исчерпал его раз, v — дважды (в разных отрезках по 10 минут),
+    // y набрал 3 за 20 минут (нет), z — до окна (нет), у строк другого вида предела нет.
+    const at = (subject: string, kind: string, ...ms: number[]) =>
+      ms.map((m) => ({ kind, subject, at: min(m) }));
+    await t.admin.db
+      .insert(rateLimits)
+      .values([
+        ...at('x', 'auth_ip', -20, -18, -16),
+        ...at('v', 'auth_ip', -45, -44, -43, -33, -32, -31),
+        ...at('y', 'auth_ip', -40, -30, -20),
+        ...at('z', 'auth_ip', -75, -72, -70),
+        ...at('w', 'excel', -5, -4, -3),
+      ]);
+    const stats = await loginLockStats(t.app.db, {
+      windowMinutes: 60,
+      lockMinutes: 15,
+      ip: { kind: 'auth_ip', max: 3, windowSeconds: 600 },
+    });
+    expect(stats).toEqual({ logins: 2, accounts: 1, ipBlocks: 3 });
+  });
+
+  it('оповещение не чаще раза в час: проверка и постановка одним шагом', async () => {
+    const once = (key: string) =>
+      platformAlertThrottled(t.app.db, {
+        text: 'Много блокировок',
+        key,
+        now: NOW,
+        everySeconds: 3600,
+      });
+    expect(await once('login-locks')).toBe(1);
+    expect(await once('login-locks')).toBe(0);
+    expect(await once('other-kind')).toBe(1);
+    const [row] = await t.admin.db
+      .select()
+      .from(telegramOutbox)
+      .where(like(telegramOutbox.dedupeKey, 'alert:login-locks:%'));
+    expect(row).toMatchObject({
+      orgId: null,
+      userId: adminId,
+      kind: 'alert',
+      text: 'Много блокировок',
+    });
+    // Прошёл час — снова можно.
+    await t.admin.db
+      .update(telegramOutbox)
+      .set({ createdAt: sql`now() - interval '61 minutes'` })
+      .where(like(telegramOutbox.dedupeKey, 'alert:login-locks:%'));
+    expect(await once('login-locks')).toBe(1);
+    await expect(once('bad_key%')).rejects.toThrow();
   });
 });
