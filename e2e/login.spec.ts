@@ -389,6 +389,10 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       await profile.getByRole('button', { name: 'Отвязать' }).click();
       await expect(page.getByText('Telegram отвязан')).toBeVisible();
       await expect(profile.getByText('Telegram не привязан')).toBeVisible();
+      // Прежний Telegram (прототип v77): другой чат бот привяжет только по коду, который пришлёт туда.
+      await expect(profile.locator('[data-telegram-previous]')).toHaveText(
+        `Прежний Telegram @e2e_${chat}: другой чат бот привяжет только по коду, который пришлёт туда.`,
+      );
     });
 
     await test.step('тема применяется сразу', async () => {

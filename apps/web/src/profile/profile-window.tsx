@@ -97,7 +97,7 @@ export function ProfileWindow({
           ]}
         />
       </Box>
-      <TelegramBox initial={me.telegram} />
+      <TelegramBox initial={me.telegram} initialPrevious={me.telegramPrevious ?? null} />
       {me.employee ? <MyWalletsBox holderDefault={me.employee.shortName} /> : null}
       {me.employee ? <NotifyBox /> : null}
       <Box title={t('profile.settings')}>
@@ -172,12 +172,20 @@ function ProfileFooter() {
   );
 }
 
-function TelegramBox({ initial }: { initial: TelegramInfo | null }) {
+function TelegramBox({
+  initial,
+  initialPrevious,
+}: {
+  initial: TelegramInfo | null;
+  initialPrevious: { name: string | null } | null;
+}) {
   const t = useT();
   const toast = useToast();
   const router = useRouter();
   const errorText = useErrorText();
   const [telegram, setTelegram] = useState(initial);
+  // Прежний (отвязанный) Telegram — для подсказки у ссылки привязки.
+  const [previous, setPrevious] = useState(initialPrevious);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -187,6 +195,7 @@ function TelegramBox({ initial }: { initial: TelegramInfo | null }) {
     setBusy(false);
     if (!res.ok) return setError(errorText(res.error));
     setError(null);
+    if (telegram) setPrevious({ name: telegram.name });
     setTelegram(null);
     toast(t('profile.tg_unlinked'), { icon: 'tg' });
     router.refresh();
@@ -213,8 +222,10 @@ function TelegramBox({ initial }: { initial: TelegramInfo | null }) {
           </div>
         ) : (
           <TelegramLinkPanel
+            previous={previous}
             onLinked={(info) => {
               setTelegram(info);
+              setPrevious(null);
               toast(t('profile.tg_done'), { icon: 'tg' });
               router.refresh();
             }}
@@ -231,7 +242,13 @@ function TelegramBox({ initial }: { initial: TelegramInfo | null }) {
 }
 
 /** Telegram не привязан: предупреждение и ссылка привязки; бот привязал чат — `onLinked`. */
-function TelegramLinkPanel({ onLinked }: { onLinked: (telegram: TelegramInfo) => void }) {
+function TelegramLinkPanel({
+  previous,
+  onLinked,
+}: {
+  previous: { name: string | null } | null;
+  onLinked: (telegram: TelegramInfo) => void;
+}) {
   const t = useT();
   const errorText = useErrorText();
   const link = useTelegramLink();
@@ -242,7 +259,7 @@ function TelegramLinkPanel({ onLinked }: { onLinked: (telegram: TelegramInfo) =>
   return (
     <>
       <Note tone="warn">{t('profile.tg_missing')}</Note>
-      {link.status === 'ready' ? <TelegramLinkRow url={link.url} /> : null}
+      {link.status === 'ready' ? <TelegramLinkRow url={link.url} previous={previous} /> : null}
       {link.status === 'failed' ? <Note>{errorText(link.error)}</Note> : null}
     </>
   );

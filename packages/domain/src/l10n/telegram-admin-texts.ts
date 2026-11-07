@@ -40,12 +40,16 @@ export const TELEGRAM_ADMIN_TEXTS = {
     ru: 'Код восстановления повторно не отправляется: пользователь запросит новый',
     section: S,
   },
+  'tgadm.retry.relink_code': {
+    ru: 'Код замены Telegram повторно не отправляется: пользователь запросит новый',
+    section: S,
+  },
   'tgadm.retry.done': { ru: 'Сообщение снова в очереди', section: S },
   'tgadm.retry.none': { ru: 'Сообщение уже не в «Ошибке»: журнал обновлён', section: S },
   'tgadm.retry.bulk': { ru: 'Повторить ошибки', section: S },
   'tgadm.retry.bulk_done': { ru: 'Поставлено в очередь: {n}', section: S },
   'tgadm.retry.bulk_codes': {
-    ru: '; коды восстановления повторно не отправляются ({n})',
+    ru: '; коды повторно не отправляются ({n})',
     section: S,
   },
   // «Бот платформы».

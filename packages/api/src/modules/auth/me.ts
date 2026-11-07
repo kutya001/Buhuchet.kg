@@ -5,6 +5,7 @@ import {
   orgMenuSettings,
   phoneCodes,
   telegramChat,
+  telegramPreviousChat,
   withOrgContext,
   type EmployeeAccess,
   type TelegramChat,
@@ -36,6 +37,7 @@ function meBody(
   access: EmployeeAccess | null,
   organization: MeResponse['organization'],
   telegram: TelegramChat | null,
+  previous: { username: string | null; firstName: string | null } | null,
   settings: {
     features: Record<Feature, boolean>;
     reportConfirm: boolean;
@@ -65,6 +67,9 @@ function meBody(
       name: telegramName(telegram),
       linkedAt: telegram.linkedAt.toISOString(),
     },
+    telegramPrevious: previous && {
+      name: previous.username || previous.firstName?.trim() ? telegramName(previous) : null,
+    },
     permissions: access ? effectivePermissions(access.subject) : [],
     scopes: access
       ? Object.fromEntries(SCOPE_GROUPS.map((g) => [g, scopeOf(access.subject, g)]))
@@ -91,7 +96,9 @@ export async function loadMe(
   loaded?: EmployeeAccess | null,
 ): Promise<MeResponse> {
   const telegram = await telegramChat(deps.db, user.userId);
-  if (!user.orgId) return meBody(user, null, null, telegram, null);
+  // Подсказка «Прежний Telegram …» в «Мой профиль» — только когда Telegram не привязан.
+  const previous = telegram ? null : await telegramPreviousChat(deps.db, user.userId);
+  if (!user.orgId) return meBody(user, null, null, telegram, previous, null);
   const orgId = user.orgId;
   const { access, organization, settings, phone } = await withOrgContext(
     deps.db,
@@ -108,7 +115,7 @@ export async function loadMe(
       };
     },
   );
-  return meBody(user, access, organization, telegram, settings, phone);
+  return meBody(user, access, organization, telegram, previous, settings, phone);
 }
 
 export const meRoute = createRoute({

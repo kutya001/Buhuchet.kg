@@ -1,6 +1,15 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, defaultResponsible, signIn } from './helpers';
+import {
+  botMessages,
+  DEMO_PASSWORD,
+  defaultResponsible,
+  hire,
+  linkTelegram,
+  signIn,
+  uniqueChat,
+  uniqueLogin,
+} from './helpers';
 import { orgWithTypes } from './orgs';
 
 // Страница контрагента по ссылке: включение, код доступа и защита (задача 2.42, #98) и разделы
@@ -22,8 +31,16 @@ interface PageBlock {
   lastDevice: string | null;
 }
 
-/** Владелец создаёт контрагента и включает его страницу: ссылка и код — из блока карточки. */
-async function enabledPage(api: APIRequestContext, baseURL: string | undefined, name: string) {
+/**
+ * Владелец создаёт контрагента и включает его страницу: ссылка и код — из блока карточки. Ответственный
+ * — `responsible` или по умолчанию.
+ */
+async function enabledPage(
+  api: APIRequestContext,
+  baseURL: string | undefined,
+  name: string,
+  responsible?: string,
+) {
   const origin = new URL(baseURL!).origin;
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
   const inn = freshInn();
@@ -38,7 +55,7 @@ async function enabledPage(api: APIRequestContext, baseURL: string | undefined, 
       regimeCode: 'РЕЖ-01',
       gked: '46.34.0',
       startDate: '2026-10-01',
-      responsibleEmployeeId: await defaultResponsible(api),
+      responsibleEmployeeId: responsible ?? (await defaultResponsible(api)),
       tariff: { amount: 0, period: 'M' },
     },
   });
@@ -134,14 +151,30 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByRole('heading', { name: 'Страница недоступна' })).toBeVisible();
   });
 
-  test('(решение заказчика 07.11.2026, Р-5 А) 5 неверных кодов за сутки с разных адресов — «Страница закрыта» и в запомненном браузере; «Сменить код» открывает её снова', async ({
+  test('(решение заказчика 07.11.2026, Р-5 А) 5 неверных кодов за сутки с разных адресов — «Страница закрыта» и в запомненном браузере, ответственному — сообщение в Telegram; «Сменить код» открывает её снова', async ({
     page,
     request,
+    playwright,
     baseURL,
     isMobile,
   }) => {
+    // Ответственный — новый сотрудник с Telegram (демо-сотрудникам Telegram не привязывается).
+    const staff = await playwright.request.newContext({ baseURL });
+    const staffOrigin = new URL(baseURL!).origin;
+    const login = uniqueLogin('e2e-cp-closed');
+    const { employee, temporaryPassword } = await hire(staff, staffOrigin, login);
+    await signIn(staff, staffOrigin, login, temporaryPassword);
+    const changed = await staff.post('/api/auth/password', {
+      headers: { origin: staffOrigin },
+      data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+    });
+    expect(changed.status()).toBe(200);
+    const chat = uniqueChat();
+    await linkTelegram(staff, staffOrigin, chat);
+    await staff.dispose();
+
     const name = `ОсОО «Закрытие ${Date.now().toString(36)}»`;
-    const { origin, id, code, path, inn } = await enabledPage(request, baseURL, name);
+    const { origin, id, code, path, inn } = await enabledPage(request, baseURL, name, employee.id);
     // Браузер контрагента запомнил код.
     await page.goto(path);
     await page.getByLabel('Код доступа').fill(code);
@@ -168,6 +201,12 @@ test.describe('Этап 2: страница контрагента по ссыл
       closed: boolean;
     };
     expect(block.closed).toBe(true);
+    // Ответственному — «🔒 Страница контрагента … закрыта» со ссылкой на «Контрагентов».
+    await expect
+      .poll(async () => (await botMessages(request, chat)).find((m) => m.startsWith('🔒')) ?? '')
+      .toContain(
+        `🔒 Страница контрагента ${name} закрыта: 5 неверных кодов за сутки. Откройте карточку контрагента, нажмите «Сменить код»`,
+      );
 
     // У бухгалтера в карточке контрагента, в блоке «Страница контрагента», — пометка.
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
