@@ -14,7 +14,12 @@ import {
   ADMIN_CODE_TTL_MINUTES,
   TELEGRAM_TEMPLATE_DEFAULTS,
 } from '@buhuchet/domain';
-import { AdminCodeRequiredResponse, ApiError, MeResponse } from '@buhuchet/shared';
+import {
+  AdminCodeRequiredResponse,
+  AdminTemporaryPasswordResponse,
+  ApiError,
+  MeResponse,
+} from '@buhuchet/shared';
 import { desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
@@ -34,7 +39,7 @@ import { adminSecondFactorOn } from './admin-code';
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 type App = ReturnType<typeof createApp>;
 
-const { adminLoginCodes, telegramLinks, users } = schema;
+const { adminLoginCodes, employees, telegramLinks, users } = schema;
 
 // Код из Telegram при входе администратора платформы (ревью безопасности 06.11.2026, п. Р-2;
 // docs/deviations.md п. О-13).
@@ -311,29 +316,63 @@ describe.skipIf(!databaseAvailable())('вход администратора п�
     expect(on('test', true)).toBe(true);
   });
 
-  it('администратор сбросил пароль сотрудника — владельцу сообщение в Telegram; пароль владельца — только ему', async () => {
+  it('администратор сбросил пароль сотрудника — владельцам сообщение и предпросмотр; пароль владельца — только ему', async () => {
     const admin = await signIn(f.app, 'platform-admin', TEST_PASSWORD);
+    // Второй владелец организации А — без Telegram у него сообщения нет.
+    const [second] = await f.t.admin.db
+      .insert(users)
+      .values({ orgId: f.a.orgId, login: 'owner-a2', passwordHash: 'x' })
+      .returning({ id: users.id });
+    await f.t.admin.db.insert(employees).values({
+      orgId: f.a.orgId,
+      userId: second!.id,
+      fullName: 'Второй владелец',
+      shortName: 'owner-a2',
+      roleId: f.a.roles.find((r) => r.isOwner)!.id,
+    });
     await f.t.admin.db.insert(telegramLinks).values([
-      { userId: f.a.ownerUserId, orgId: f.a.orgId, chatId: 8101 },
+      { userId: f.a.ownerUserId, orgId: f.a.orgId, chatId: 8101, username: 'erkin_s' },
       { userId: f.b.ownerUserId, orgId: f.b.orgId, chatId: 8102 },
     ]);
-    const reset = (userId: string) =>
-      apiRequest(f.app, 'POST', `/api/admin/users/${userId}/password-reset`, admin);
+    const reset = async (userId: string) => {
+      const res = await apiRequest(
+        f.app,
+        'POST',
+        `/api/admin/users/${userId}/password-reset`,
+        admin,
+      );
+      expect(res.status).toBe(200);
+      return AdminTemporaryPasswordResponse.parse(await res.json());
+    };
     const toOwner = () => tg.sent.filter((m) => m.chatId === 8101).map((m) => m.text);
+    const notice = TELEGRAM_TEMPLATE_DEFAULTS.tgPassResetByAdmin.replace('{логин}', 'acc-a');
 
-    expect((await reset(f.people['acc-a']!.userId)).status).toBe(200);
-    expect(toOwner()).toEqual([
-      TELEGRAM_TEMPLATE_DEFAULTS.tgPassResetByAdmin.replace('{логин}', 'acc-a'),
-    ]);
+    // Окно «Пароль сброшен» показывает, кому и что бот прислал (прототип accResetPass).
+    expect((await reset(f.people['acc-a']!.userId)).ownersNotice).toEqual({
+      to: ['@erkin_s'],
+      text: notice,
+    });
+    expect(toOwner()).toEqual([notice]);
     // Владелец другой организации ничего не получает.
     expect(tg.sent.filter((m) => m.chatId === 8102)).toEqual([]);
 
-    expect((await reset(f.a.ownerUserId)).status).toBe(200);
+    // Второму владельцу привязали Telegram: сброс пароля первого владельца — только ему самому.
+    await f.t.admin.db
+      .insert(telegramLinks)
+      .values({ userId: second!.id, orgId: f.a.orgId, chatId: 8103 });
+    expect((await reset(f.a.ownerUserId)).ownersNotice).toBeNull();
     expect(toOwner()).toEqual([
-      TELEGRAM_TEMPLATE_DEFAULTS.tgPassResetByAdmin.replace('{логин}', 'acc-a'),
+      notice,
       TELEGRAM_TEMPLATE_DEFAULTS.tgPassReset
         .replace('{логин}', 'owner-a')
         .replace('{кто}', 'администратор платформы'),
     ]);
+    expect(tg.sent.filter((m) => m.chatId === 8103)).toEqual([]);
+
+    // Сброс пароля сотрудника — обоим владельцам; без имени пользователя — имя в Telegram.
+    expect((await reset(f.people['chief-a']!.userId)).ownersNotice?.to.sort()).toEqual(
+      ['@erkin_s', 'Telegram'].sort(),
+    );
+    expect(tg.sent.filter((m) => m.chatId === 8102)).toEqual([]);
   });
 });

@@ -128,6 +128,22 @@ export const TemporaryPasswordResponse = z.object({
 });
 export type TemporaryPasswordResponse = z.infer<typeof TemporaryPasswordResponse>;
 
+/**
+ * «Сбросить пароль» в Админке → «Учётные записи» (прототип admin/accounts-orgs.js, accResetPass): ещё и
+ * сообщение владельцам организации о сброшенном пароле сотрудника — кому из них бот его прислал и
+ * текст; null — никому (сброшен пароль владельца, у владельцев нет Telegram или бот не подключён).
+ */
+export const AdminTemporaryPasswordResponse = TemporaryPasswordResponse.extend({
+  ownersNotice: z
+    .object({
+      /** Telegram владельцев: «@имя» или имя в Telegram. */
+      to: z.array(z.string()).min(1),
+      text: z.string(),
+    })
+    .nullable(),
+});
+export type AdminTemporaryPasswordResponse = z.infer<typeof AdminTemporaryPasswordResponse>;
+
 /** Ответ без данных: выход, смена пароля. */
 export const OkResponse = z.object({ ok: z.literal(true) });
 export type OkResponse = z.infer<typeof OkResponse>;

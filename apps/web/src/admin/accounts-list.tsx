@@ -2,16 +2,19 @@
 
 import { formatMomentRu, type ListSort } from '@buhuchet/domain';
 import {
+  AdminTemporaryPasswordResponse,
   AdminUserList,
   ListValues,
-  TemporaryPasswordResponse,
   type AdminUser,
 } from '@buhuchet/shared';
 import {
+  Box,
   buttonClass,
   ConfirmDialog,
   DataGrid,
   EmptyState,
+  Hint,
+  Icon,
   Modal,
   MONO_CLASS,
   Pill,
@@ -167,6 +170,7 @@ export function AccountsList() {
     account: AdminUser;
     password: string;
     telegram: boolean;
+    owners: AdminTemporaryPasswordResponse['ownersNotice'];
   } | null>(null);
   // Учётные записи, по которым запрос ещё идёт: повторное нажатие не шлёт второй запрос.
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
@@ -212,13 +216,14 @@ export function AccountsList() {
     );
     if (!res) return;
     if (!res.ok) return toast(errorText(res.error), { bad: true });
-    const body = TemporaryPasswordResponse.safeParse(res.data);
+    const body = AdminTemporaryPasswordResponse.safeParse(res.data);
     if (!body.success) return toast(t('err.unknown'), { bad: true });
     refresh();
     setReset({
       account: u,
       password: body.data.temporaryPassword,
       telegram: body.data.telegramNotified,
+      owners: body.data.ownersNotice,
     });
   };
 
@@ -294,7 +299,34 @@ export function AccountsList() {
         <p className="m-0 text-muted">
           {t(reset?.telegram ? 'accounts.reset.sessions_tg' : 'accounts.reset.sessions')}
         </p>
+        {reset?.owners ? <OwnersNotice t={t} notice={reset.owners} /> : null}
       </Modal>
     </>
+  );
+}
+
+/**
+ * Сообщение владельцам организации в окне «Пароль сброшен» (прототип accResetPass): кому из них бот
+ * его прислал и текст — пароль сброшен сотруднику, а не владельцу.
+ */
+function OwnersNotice({
+  t,
+  notice,
+}: {
+  t: Translate;
+  notice: NonNullable<AdminTemporaryPasswordResponse['ownersNotice']>;
+}) {
+  return (
+    <div data-owners-notice className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+        <Icon name="tg" size="sm" />
+        <b>{t('accounts.reset.bot')}</b>
+        <span>{t('accounts.reset.owners_to', { list: notice.to.join(', ') })}</span>
+      </div>
+      <Box>
+        <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{notice.text}</div>
+      </Box>
+      <Hint>{t('accounts.reset.owners_hint')}</Hint>
+    </div>
   );
 }

@@ -40,6 +40,13 @@ export const ADMIN_ACCOUNTS_TEXTS = {
     ru: 'Все сеансы пользователя завершены, бот сообщил о смене пароля в Telegram.',
     section: S,
   },
+  // Сообщение владельцам о сброшенном пароле сотрудника (прототип accResetPass).
+  'accounts.reset.bot': { ru: 'Бот платформы', section: S },
+  'accounts.reset.owners_to': { ru: '→ владельцам организации: {list}', section: S },
+  'accounts.reset.owners_hint': {
+    ru: 'Шаблон «Telegram: пароль сотрудника сброшен администратором» — Справочники платформы → Шаблоны. Отправка записана в журнал «Телеграм» с типом «Пароль сброшен».',
+    section: S,
+  },
   'err.account_self': { ru: 'Это ваша учётная запись', section: 'Ошибки' },
   'err.account_platform_admin': {
     ru: 'Учётные записи администраторов платформы здесь не меняются',
