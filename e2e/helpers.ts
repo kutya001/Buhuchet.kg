@@ -45,7 +45,7 @@ export async function hire(
   });
   expect(res.status(), await res.text()).toBe(201);
   await api.post('/api/auth/logout', { headers: { origin } });
-  return (await res.json()) as { temporaryPassword: string };
+  return (await res.json()) as { employee: { id: string }; temporaryPassword: string };
 }
 
 /**

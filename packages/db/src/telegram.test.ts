@@ -31,6 +31,7 @@ import {
   reserveTelegramRelinkAttempt,
   setTemporaryPassword,
   telegramChat,
+  telegramPreviousChat,
   unlinkTelegram,
   useTelegramLink,
   useTelegramRelink,
@@ -691,12 +692,20 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
 
   it('после «Отвязать» другой чат — тоже кодом из отвязанного, тот же — без кода; после сброса пароля сутки без кода', async () => {
     const y = await newUser('relink-y');
-    await linkAs(y, 9101);
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toBeNull();
+    await linkAs(y, 9101, 'y_first');
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toBeNull();
     await withOrgContext(t.app.db, y, unlinkTelegram);
+    // Прежний Telegram — для подсказки в «Мой профиль» (прототип v77).
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toEqual({
+      username: 'y_first',
+      firstName: 'Имя',
+    });
     expect(await linkAs(y, 9102)).toBeNull();
     expect(await telegramChat(t.app.db, y.userId)).toBeNull();
     // Тот же чат — без кода; о замене писать некому.
     expect(await linkAs(y, 9101)).toEqual({ previous: null, shared: false, unlinked: null });
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toBeNull();
     // Код — в отвязанный чат, ему же — о замене.
     await withOrgContext(t.app.db, y, unlinkTelegram);
     expect((await relinkRequest(y, 9103, 'r1')).result).toMatchObject({
@@ -789,6 +798,17 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     // Новая привязка снимает разрешение — коды снова уходят, уже в новый чат.
     expect(await passwordResetStatus(t.app.db, y.userId)).toEqual({ status: 'ok' });
     expect(await linkAs(y, 9105)).toBeNull();
+    // Подсказка «Прежний Telegram …» — и пока после сброса пароля можно без кода (как в прототипе v77).
+    await withOrgContext(t.app.db, y, unlinkTelegram);
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toEqual({
+      username: null,
+      firstName: 'Имя',
+    });
+    await setFreeUntil(new Date(Date.now() + 60_000));
+    expect(await telegramPreviousChat(t.app.db, y.userId)).toEqual({
+      username: null,
+      firstName: 'Имя',
+    });
 
     // Разрешить без кода можно только учётной записи своей организации с временным паролем.
     await t.admin.db.update(users).set({ mustChangePassword: true }).where(eq(users.id, y.userId));

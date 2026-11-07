@@ -53,6 +53,20 @@ export async function telegramChat(db: Db | Tx, userId: string): Promise<Telegra
   };
 }
 
+/**
+ * Прежний Telegram для подсказки в «Мой профиль» (прототип v77, docs/deviations.md п. О-20): сейчас не
+ * привязан, а отвязанный есть. null — нет такого; имя пустое — отвязан до миграции 0104.
+ */
+export async function telegramPreviousChat(
+  db: Db | Tx,
+  userId: string,
+): Promise<{ username: string | null; firstName: string | null } | null> {
+  const [row] = await db.execute<{ username: string | null; first_name: string | null }>(
+    sql`select * from app.telegram_previous(${userId})`,
+  );
+  return row ? { username: row.username, firstName: row.first_name } : null;
+}
+
 /** Новая ссылка привязки для пользователя из контекста (прежние перестают действовать); срок — 15 минут. */
 export async function createTelegramLinkToken(tx: Tx, tokenHash: string): Promise<Date> {
   const [row] = await tx.execute<{ until: Date | string }>(

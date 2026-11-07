@@ -212,7 +212,7 @@ export function TgAdmLog() {
       label: t('tgadm.retry.bulk'),
       icon: 'refresh',
       run: (rows, done) => {
-        // Строки не в «Ошибке» не повторяются и не шлются; коды восстановления пропускает сервер.
+        // Строки не в «Ошибке» не повторяются и не шлются; коды (восстановления и замены) пропускает сервер.
         const ids = rows.filter((r) => r.status === 'error').map((r) => r.id);
         done();
         if (!ids.length) return toast(bulkRetryToast(t, { queued: 0, codes: 0 }));
