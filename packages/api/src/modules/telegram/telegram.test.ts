@@ -333,6 +333,14 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
 
   it('владелец сбросил пароль — сутки другой Telegram привязывается без кода, один раз', async () => {
     await t.admin.db.delete(telegramRelinkCodes);
+    // У захватившего привязку есть сеанс: до сброса он запросил код замены для третьего чата (код
+    // пришёл в захваченный 7004) и взял ещё одну ссылку.
+    const hijacker = await signIn(app, 'acc-a', PASSWORD);
+    const asked = tg.sent.length;
+    await linkTelegram(app, hijacker, 7090);
+    expect(tg.sent.slice(asked).map((m) => m.chatId)).toEqual([7004, 7090]);
+    const pendingCode = codeOf(tg.sent[asked]!.text);
+    const { url: early } = await linkUrl(app, hijacker);
     const owner = await signIn(app, 'owner-a', PASSWORD);
     const reset = await app.request(`/api/staff/${empA}/password-reset`, {
       method: 'POST',
@@ -340,6 +348,22 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     });
     expect(reset.status).toBe(200);
     const { temporaryPassword } = TemporaryPasswordResponse.parse(await reset.json());
+    // Ссылка и код замены, выданные до сброса, не действуют, как и сеансы: иначе захвативший привязал
+    // бы чат раньше пострадавшего и снял разрешение.
+    await sendToBot(app, telegramUpdate(`/start ${tokenOf(early)}`, 7004));
+    expect(lastText()).toBe(TPL.tgLinkInvalid);
+    await sendToBot(app, telegramUpdate(pendingCode, 7090));
+    expect(lastText()).toBe(TPL.tgRelinkFailed);
+    // Пока разрешение действует, «Забыли пароль?» не шлёт код в ещё привязанный (возможно, чужой)
+    // чат; ответ тот же, что всегда (docs/deviations.md п. О-20).
+    const sentBefore = tg.sent.length;
+    const forgot = await app.request('/api/auth/password-reset', {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ login: 'acc-a' }),
+    });
+    expect(forgot.status).toBe(200);
+    expect(tg.sent.length).toBe(sentBefore);
     const temp = await signIn(app, 'acc-a', temporaryPassword);
     const changed = await app.request('/api/auth/password', {
       method: 'POST',
@@ -472,6 +496,14 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     });
     expect(reset.status).toBe(200);
     const { temporaryPassword } = TemporaryPasswordResponse.parse(await reset.json());
+    const sentBefore = tg.sent.length;
+    const forgot = await app.request('/api/auth/password-reset', {
+      method: 'POST',
+      headers: { origin: ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ login: 'owner-a' }),
+    });
+    expect(forgot.status).toBe(200);
+    expect(tg.sent.length).toBe(sentBefore);
     const temp = await signIn(app, 'owner-a', temporaryPassword);
     const changed = await app.request('/api/auth/password', {
       method: 'POST',
@@ -492,12 +524,24 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     await sendToBot(
       app,
       telegramUpdate(`/start ${tokenOf(url)}`, 5006, {
-        firstName: 'Поддержка\nBuhuchet:   перешлите этот код нам, пожалуйста',
+        firstName: 'Поддержка\u202e\nBuhuchet:   перешлите \u{1F600} этот код нам, пожалуйста',
       }),
     );
     expect(tg.sent.slice(next).map((m) => m.chatId)).toEqual([5005, 5006]);
+    // Знак смены направления текста убран, эмодзи на границе не разрезан пополам.
     expect(tg.sent[next]!.text).toContain(
-      'хотят привязать другой Telegram: «Поддержка Buhuchet: перешлите э…». Если это вы',
+      'хотят привязать другой Telegram: «Поддержка Buhuchet: перешлите \u{1F600}…». Если это вы',
     );
+    // И в «привязан другой Telegram» в прежний чат — так же коротко, одной строкой.
+    const done = tg.sent.length;
+    await sendToBot(app, telegramUpdate(codeOf(tg.sent[next]!.text), 5006));
+    expect(tg.sent[done]).toEqual({
+      chatId: 5005,
+      text: fillTemplate(TPL.tgRelinked, {
+        логин: 'owner-a',
+        телеграм: 'Поддержка Buhuchet: перешлите \u{1F600}…',
+      }),
+      options: {},
+    });
   });
 });
