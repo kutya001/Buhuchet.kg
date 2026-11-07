@@ -24,6 +24,16 @@ export const PAGE_IP_MAX_FAILURES = 3;
 export const PAGE_IP_WINDOW_MINUTES = 60;
 export const PAGE_IP_LOCK_MINUTES = 60;
 
+/**
+ * Общий предел по ссылке (решение заказчика 07.11.2026, Р-5 А; docs/deviations.md п. О-21): столько
+ * неверных кодов за сутки с любых адресов — страница закрыта для всех, в том числе для браузеров с
+ * запомненным кодом, пока сотрудник не нажмёт «Сменить код»; ответственный получает сообщение в
+ * Telegram. Счёт — по номеру кода: «Сменить код» начинает его заново.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-21
+export const PAGE_DAY_MAX_FAILURES = 5;
+export const PAGE_DAY_WINDOW_HOURS = 24;
+
 /** Верный код запоминается в этом браузере (ТЗ; прототип PG_KEEP). */
 export const PAGE_REMEMBER_DAYS = 30;
 

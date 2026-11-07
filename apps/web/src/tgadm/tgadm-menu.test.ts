@@ -48,11 +48,14 @@ describe('Журнал «Телеграм»: «Повторить отправк
   });
 
   it('у кода восстановления с «Ошибкой» — недоступен: код повторно не отправляется', () => {
-    const entry = item(row({ kind: 'code' }));
-    expect(entry.disabled).toBe(true);
-    expect(entry.reason).toBe(
-      'Код восстановления повторно не отправляется: пользователь запросит новый',
-    );
+    // И код замены Telegram (docs/deviations.md п. О-20).
+    for (const kind of ['code', 'relink_code'] as const) {
+      const entry = item(row({ kind }));
+      expect(entry.disabled).toBe(true);
+      expect(entry.reason).toBe(
+        'Код восстановления повторно не отправляется: пользователь запросит новый',
+      );
+    }
   });
 });
 
