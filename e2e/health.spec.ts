@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { platformAdmin } from './admin';
 
 test.describe('Этап 0: приложение работает на любой площадке', () => {
   // Без входа — только «работает или нет»; подробности — администратору платформы
@@ -8,6 +9,17 @@ test.describe('Этап 0: приложение работает на любой
     await expect(page.getByRole('heading', { name: 'Проверка работы системы' })).toBeVisible();
     await expect(page.getByTestId('health')).toContainText('Всё работает');
     await expect(page.getByTestId('check-database')).toHaveCount(0);
+  });
+
+  test('администратор платформы видит на странице «здоровья» проверки, версию и среду', async ({
+    page,
+    baseURL,
+  }) => {
+    await platformAdmin(page.request, new URL(baseURL!).origin);
+    await page.goto('/health');
+    await expect(page.getByTestId('health')).toContainText('Всё работает');
+    await expect(page.getByTestId('check-database')).toBeVisible();
+    await expect(page.getByTestId('check-storage')).toBeVisible();
   });
 
   test('API здоровья отвечает 200 и не кэшируется', async ({ request }) => {

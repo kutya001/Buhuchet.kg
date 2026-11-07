@@ -10,6 +10,7 @@ import { requirePlatformAdmin } from '../../middleware/access';
  * что именно не работает — только администратору платформы (docs/deviations.md п. О-9): посторонним
  * это облегчает разведку.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-9
 export const healthRoute = createRoute({
   method: 'get',
   path: '/health',
@@ -80,10 +81,7 @@ async function healthOf(deps: ApiDeps): Promise<HealthResponse> {
 export function healthHandler(deps: ApiDeps): RouteHandler<typeof healthRoute, AppEnv> {
   return async (c) => {
     const { status } = await healthOf(deps);
-    // Окружение — только серверу сайта в том же процессе (страница «Образцы» прячется на рабочем
-    // сайте): такой запрос нельзя прислать по сети.
-    const body: HealthPublicResponse =
-      c.env?.pageRender === true ? { status, environment: deps.config.APP_ENV } : { status };
+    const body: HealthPublicResponse = { status };
     c.header('cache-control', 'no-store');
     return status === 'ok' ? c.json(body, 200) : c.json(body, 503);
   };

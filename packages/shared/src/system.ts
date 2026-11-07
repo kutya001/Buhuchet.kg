@@ -10,8 +10,6 @@ export const CheckState = z.enum(['ok', 'error']);
  */
 export const HealthPublicResponse = z.object({
   status: z.enum(['ok', 'degraded']),
-  /** Только серверу сайта при показе страницы (в том же процессе): снаружи не приходит. */
-  environment: z.string().optional(),
 });
 export type HealthPublicResponse = z.infer<typeof HealthPublicResponse>;
 

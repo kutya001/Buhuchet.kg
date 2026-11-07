@@ -117,7 +117,7 @@ export function createApp(deps: ApiDeps) {
     .route('/', viewsModule(deps))
     .route('/', adminModule(deps));
 
-  // Описание всех методов API — только администратору платформы (docs/deviations.md п. О-9).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-9 — описание всех методов API только администратору платформы.
   app.use('/openapi.json', requirePlatformAdmin);
   app.doc31('/openapi.json', {
     openapi: '3.1.0',

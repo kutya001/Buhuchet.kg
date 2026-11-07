@@ -23,6 +23,7 @@ export const SESSION_TOUCH_MINUTES = 60;
  * безопасности 06.11.2026, п. Р-12; docs/deviations.md п. О-10): украденная cookie не работает
  * бесконечно, а сотрудник входит заново раз в рабочий день.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-10
 export const SESSION_MAX_HOURS = 12;
 
 export const LOGIN_MAX_LENGTH = 64;
