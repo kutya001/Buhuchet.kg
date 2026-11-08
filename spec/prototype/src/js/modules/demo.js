@@ -19,7 +19,7 @@ function demoOff(){if(DEMO.build||!DEMO.on)return;DEMO.on=false;document.body.cl
 // Прототип: лендинг → программа демо-организации от лица владельца
 function demoOpen(){if(DEMO.build)return;
   const run=()=>{landHide();const lg=$('#login');if(lg)lg.remove();S.loggedIn=true;demoOn();const o=demoOwner();
-    if(S.me!==o.id)switchUser(o.id);else{MODALS.slice().forEach(m=>m.close());location.hash='#home';renderSide()}};
+    if(S.me!==o.id)switchUser(o.id);else{MODALS.slice().forEach(m=>m.close());location.hash='#home';renderSide()}buIntro()};
   if(DATA_MODE==='empty')return confirmDlg({title:'Включить демо-данные?',text:'Демо-организация открывается на демо-данных (demoDB.json). Данные пустой организации в прототипе пропадут.',ok:'Включить',run:()=>{setDataMode('demo');run()}});
   run()}
 // «Вернуться на сайт» и «Оставить заявку»: в демо-версии для сайта — переход на страницу сайта, в прототипе — лендинг

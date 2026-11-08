@@ -81,7 +81,7 @@ function showLogin(step='login',ctx={}){
       if(u.id==='admin')return admStart(l,msg);
       if(lk(u))return;
       if(u.tmpPass)return showLogin('first',{login:l});
-      el.remove();S.loggedIn=true;switchUser(u.id)};
+      el.remove();S.loggedIn=true;switchUser(u.id);buIntro()};
     $('#lg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#lg-forgot',el).onclick=()=>showLogin('forgot',{login:val(el,'lg-login')});$('#lg-about',el).onclick=()=>{location.hash='#landing'};$('#lg-login',el).focus()}
   // «Забыли пароль?»: ответ один для любого логина, дальше всегда ввод кода
   if(step==='forgot'){$('#fg-back',el).onclick=()=>showLogin('login',{login:val(el,'fg-login')});const go=()=>{const l=val(el,'fg-login').trim().toLowerCase();if(!setErr(el,'fg-login',l?'':'Введите логин'))return;
@@ -91,14 +91,14 @@ function showLogin(step='login',ctx={}){
     $('#fg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#fg-login',el).focus()}
   if(step==='first'){const u=find(ctx.login||'');$('#fp-back',el).onclick=()=>showLogin('login',{login:ctx.login});const go=()=>{const p=val(el,'fp-p1');
       const a=setErr(el,'fp-p1',p.length<8?'Пароль короче 8 символов':u&&p===lgPass(u)?LG_T.same:''),b=setErr(el,'fp-p2',p===val(el,'fp-p2')?'':'Пароли не совпадают');if(!a||!b||!u)return;
-      LG_PW[u.login]=p;delete u.tmpPass;log('emp',u.id,'Временный пароль заменён своим');if(!u.tg&&u.id!=='admin')return showLogin('tglink',{login:u.login});el.remove();S.loggedIn=true;switchUser(u.id)};
+      LG_PW[u.login]=p;delete u.tmpPass;log('emp',u.id,'Временный пароль заменён своим');if(!u.tg&&u.id!=='admin')return showLogin('tglink',{login:u.login});el.remove();S.loggedIn=true;switchUser(u.id);buIntro()};
     $('#fp-set',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#fp-p1',el).focus()}
   if(step==='tglink'){const u=find(ctx.login||'');el.onkeydown=null;const cp=$('#tl-copy',el);if(cp)cp.onclick=()=>copyText('https://t.me/buhuchet_bot?start=a7f3c91e','Ссылка скопирована');
-    const dm=$('#tl-demo',el);if(dm)dm.onclick=()=>{u.tg=u.tgPrev||'@'+u.login;delete u.tgPrev;log('emp',u.id,'Telegram привязан');tgSvc(u,'Telegram привязан');showLogin('tglink',ctx)};const gb=$('#tl-go',el);if(gb){gb.onclick=()=>{el.remove();S.loggedIn=true;switchUser(u.id)};gb.focus()}}
+    const dm=$('#tl-demo',el);if(dm)dm.onclick=()=>{u.tg=u.tgPrev||'@'+u.login;delete u.tgPrev;log('emp',u.id,'Telegram привязан');tgSvc(u,'Telegram привязан');showLogin('tglink',ctx)};const gb=$('#tl-go',el);if(gb){gb.onclick=()=>{el.remove();S.loggedIn=true;switchUser(u.id);buIntro()};gb.focus()}}
   // Код для входа в Админку: каждый ввод считается; неверный, истёкший или использованный код — одно сообщение; сеанс — только после верного кода
   if(step==='admcode'){$('#ac-back',el).onclick=()=>showLogin('login',{login:ctx.login});const go=()=>{const k=val(el,'ac-code').trim();if(!setErr(el,'ac-code',k?'':'Введите код из Telegram'))return;
       const c=ADMC.code;let ok=false;if(c&&!c.used&&c.tries<ADM_TRIES&&Date.now()-c.at<ADM_TTL){c.tries++;ok=k===ADM_CODE}
-      if(!setErr(el,'ac-code',ok?'':LG_T.admBad))return;c.used=true;ADMC.code=null;el.remove();S.loggedIn=true;switchUser('admin')};
+      if(!setErr(el,'ac-code',ok?'':LG_T.admBad))return;c.used=true;ADMC.code=null;el.remove();S.loggedIn=true;switchUser('admin');buIntro()};
     $('#ac-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#ac-code',el).focus()}
   // «Telegram привязан — войти» возвращает ко входу: после привязки — вход с кодом
   if(step==='admtg'){el.onkeydown=null;const u=PLATFORM_ADMIN;$('#at-copy',el).onclick=()=>copyText('https://t.me/buhuchet_bot?start=c41d8e07','Ссылка скопирована');

@@ -54,3 +54,5 @@ derive();initTop();dbSave();
 if(DBMISS.length)setTimeout(()=>toast('В сохранённых рабочих данных не хватало разделов: '+DBMISS.join(', ')+'. Они взяты из шаблона','alert'),600);
 if(!location.hash||location.hash==='#')history.replaceState(null,'','#home');
 ckBase();route();ckBar();renderSide();renderSheetDot();firstLogin('open');
+// Заставка с логотипом при каждом открытии сайта — и на лендинге, и в учётной части
+buIntro();

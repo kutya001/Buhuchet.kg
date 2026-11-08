@@ -2,7 +2,7 @@
 // Лендинг buhuchet.kg для гостей (ТЗ «Лендинг — buhuchet.kg для гостей», решение заказчика 01.11.2026)
 /* ═════════════ Лендинг ═════════════ */
 // В прототипе открывается поверх программы по адресу #landing и ссылкой «О платформе» на экране входа. Все тексты — группа «Лендинг» в «Локализации» (Админка)
-const LAND={open:false,back:'',title0:'',test:false,netErr:false,sent:null,menu:false,shot:0,io:null,vis:{}};
+const LAND={open:false,back:'',title0:'',test:false,netErr:false,sent:null,menu:false,shot:0,io:null,vis:{},rv:null,ro:null,tm:[],raf:0,braf:0,more:{},intro:false};
 const LT=(k,v)=>{const x=L10N.find(y=>y.key===k);let t=x?x.ru:'';if(v)Object.entries(v).forEach(([a,b])=>{t=t.split('{'+a+'}').join(b)});return t};
 const LE=(k,v)=>esc(LT(k,v));
 const landRM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -10,15 +10,15 @@ const landRM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 function landRoute(){const h=location.hash;if(h!=='#landing'&&h!=='#landing/lead')return false;if(DEMO.build){location.replace(BU_DEMO.site);return true}
   if(DEMO.on)demoOff();landShow();if(h==='#landing/lead'){history.replaceState(history.state,'','#landing');setTimeout(()=>landGo('lead',!LAND.sent),60)}return true}
 function landShow(){let el=$('#land');if(!el){el=document.createElement('div');el.id='land';el.className='land';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Лендинг buhuchet.kg');document.body.append(el)}
-  if(!LAND.open){LAND.back=S.mod?'#'+S.mod+(S.tab?'.'+S.tab:''):'#home';LAND.title0=document.title;LAND.sent=null;LAND.shot=0}
-  LAND.open=true;el.hidden=false;document.body.classList.add('land-on');document.title=LT('land.title');landTheme0();landDraw()}
+  const fresh=!LAND.open;if(fresh){LAND.back=S.mod?'#'+S.mod+(S.tab?'.'+S.tab:''):'#home';LAND.title0=document.title;LAND.sent=null;LAND.shot=0;LAND.more={}}
+  LAND.open=true;el.hidden=false;document.body.classList.add('land-on');document.title=LT('land.title');landTheme0();if(fresh)buIntro();landDraw()}
 // Тема лендинга: по умолчанию светлая (Кутман 02.11.2026); выбор кнопкой запоминается так же, как кнопкой темы в программе
 const landThemeSaved=()=>{try{const t=localStorage.getItem(BU_P+'theme');return t==='light'||t==='dark'}catch(e){return false}};
 function landTheme0(){if(!landThemeSaved()){document.documentElement.setAttribute('data-theme','light');LAND.themeTmp=true}}
 function landTheme1(){if(LAND.themeTmp&&!landThemeSaved())document.documentElement.removeAttribute('data-theme');LAND.themeTmp=false;if($('#theme'))paintTheme()}
 function landThemeToggle(){const t=effTheme()==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);store.set('theme',t);try{localStorage.setItem(BU_P+'theme',t)}catch(e){}LAND.themeTmp=false;
   $$('[data-lp-theme]').forEach(b=>b.innerHTML=ic(t==='dark'?'sun':'moon'));if($('#theme'))paintTheme()}
-function landHide(){const el=$('#land');if(el)el.hidden=true;if(LAND.open)landTheme1();document.body.classList.remove('land-on');if(LAND.open)document.title=LAND.title0;LAND.open=false;LAND.menu=false;if(LAND.io){LAND.io.disconnect();LAND.io=null}}
+function landHide(){const el=$('#land');if(el)el.hidden=true;if(LAND.open)landTheme1();document.body.classList.remove('land-on');if(LAND.open)document.title=LAND.title0;LAND.open=false;LAND.menu=false;if(LAND.io){LAND.io.disconnect();LAND.io=null}landFxStop()}
 function landClose(){const b=LAND.back||'#home';landHide();if(location.hash!==b)location.hash=b;else route()}
 // «Войти» открывает страницу входа; после входа — рабочая страница
 function landLogin(){const b=LAND.back||'#home';landHide();history.replaceState(history.state,'',b);showLogin()}
@@ -50,32 +50,53 @@ function lshCard(D){const c=D.cps[1]||Object.values(D.cps)[0];if(!c)return '';co
     <div class="lsh-kv"><div><small>ИНН</small><b class="mono">${esc(c.inn)}</b></div><div><small>Ответственный</small><b>${esc(e?e.short:'—')}</b></div><div><small>Руководитель</small><b>${esc(c.head||'—')}</b></div><div><small>На обслуживании с</small><b>${c.start?fmtD(c.start):'—'}</b></div></div>
     <table class="lsh-t"><thead><tr><th style="width:34%">Отчёт</th><th style="width:20%">Период</th><th style="width:24%">Статус</th><th class="num c-sum" style="width:22%">К уплате</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${esc(T[r.t].short)}</td><td>${esc(r.plabel||'')}</td><td>${pill(r.status,ST)}</td><td class="num c-sum">${r.sum!=null?fmtM(r.sum,false):'—'}</td></tr>`).join('')}</tbody></table></div></div></div>`}
 
-function landDraw(){const el=$('#land');if(!el||!LAND.open)return;const D=landDemo(),N=landNums();
+// v78 (Кутман 08.11.2026): лендинг минималистичный — в блоке видны только заголовки, подробности раскрывает «Подробнее»; у каждого блока своя анимация
+function landDraw(){const el=$('#land');if(!el||!LAND.open)return;const D=landDemo(),N=landNums(),M=LAND.more||(LAND.more={});
   const nav=[['features','land.nav.features'],['start','land.nav.start'],['security','land.nav.security'],['faq','land.nav.faq']].map(([id,k])=>`<button type="button" data-lp-go="${id}">${LE(k)}</button>`).join('');
-  const bar=`<div class="pub-bar land-bar"><span class="pub-proto">${ic('eye','sm')}<span>Прототип: страница, которую гость видит на buhuchet.kg без входа</span></span><span class="pub-url">${ic('lock','sm')}<span class="mono">${LAND.test?'test.buhuchet.kg':'buhuchet.kg'}</span></span><label class="lp-pt"><input type="checkbox" id="lp-test" ${LAND.test?'checked':''}>Тестовый стенд</label><label class="lp-pt"><input type="checkbox" id="lp-net" ${LAND.netErr?'checked':''}>Нет связи при отправке</label><button type="button" class="btn sm" id="land-x">${ic('x','sm')}${S.loggedIn===false?'Вернуться ко входу':'Вернуться в программу'}</button></div>`;
-  const head=`<header class="lp-head"><div class="lp-wrap lp-head-in"><button type="button" class="lp-logo" data-lp-top aria-label="Buhuchet.kg — в начало страницы">${logoSvg()}<span><span class="lp-bn">Buhuchet.kg</span><span class="lp-bs">${LE('land.brand.sub')}</span></span></button>
+  const bar=`<div class="pub-bar land-bar"><span class="pub-proto">${ic('eye','sm')}<span>Прототип: страница, которую гость видит на buhuchet.kg без входа</span></span><span class="pub-url">${ic('lock','sm')}<span class="mono">${LAND.test?'test.buhuchet.kg':'buhuchet.kg'}</span></span><label class="lp-pt"><input type="checkbox" id="lp-test" ${LAND.test?'checked':''}>Тестовый стенд</label><label class="lp-pt"><input type="checkbox" id="lp-net" ${LAND.netErr?'checked':''}>Нет связи при отправке</label><button type="button" class="btn sm" id="lp-intro-r">${ic('play','sm')}Заставка</button><button type="button" class="btn sm" id="land-x">${ic('x','sm')}${S.loggedIn===false?'Вернуться ко входу':'Вернуться в программу'}</button></div>`;
+  const head=`<header class="lp-head"><div class="lp-wrap lp-head-in"><button type="button" class="lp-logo" data-lp-top aria-label="Buhuchet.kg — в начало страницы">${landLogo()}<span><span class="lp-bn">Buhuchet.kg</span><span class="lp-bs">${LE('land.brand.sub')}</span></span></button>
     <nav class="lp-nav" aria-label="Разделы страницы">${nav}</nav><div class="lp-head-r"><button type="button" class="linkbtn lp-demo-l lp-hide-m" data-lp-demo>${LE('land.nav.demo')}</button><button type="button" class="icon-btn lp-theme" data-lp-theme aria-label="${LE('land.btn.theme')}" title="${LE('land.btn.theme')}">${ic(effTheme()==='dark'?'sun':'moon')}</button><button type="button" class="btn" data-lp-login>${LE('land.btn.login')}</button><button type="button" class="btn cta lp-hide-m" data-lp-lead>${LE('land.btn.lead')}</button><button type="button" class="icon-btn lp-burger" data-lp-menu aria-expanded="${LAND.menu}" aria-controls="lp-menu" aria-label="${LE('land.btn.menu')}">${ic(LAND.menu?'x':'menu')}</button></div></div>
     <div class="lp-menu" id="lp-menu" ${LAND.menu?'':'hidden'}><nav aria-label="Разделы страницы">${nav}</nav><button type="button" class="btn cta" data-lp-lead>${LE('land.btn.lead')}</button><button type="button" class="btn" data-lp-demo>${LE('land.btn.demo')}</button></div></header>`;
-  const hero=`<section class="lp-hero" id="lp-hero"><div class="lp-wrap lp-hero-in"><div><h1>${LE('land.hero.title')}</h1><p class="lp-hero-p">${LE('land.hero.sub')}</p><div class="lp-cta-row"><button type="button" class="btn cta lp-lg" data-lp-lead>${LE('land.btn.lead')}</button><button type="button" class="btn lp-lg" data-lp-demo>${LE('land.btn.demo')}</button></div><button type="button" class="linkbtn lp-more" data-lp-go="features">${LE('land.btn.more')}${ic('down','sm')}</button><p class="lp-note">${ic('check','sm')}<span>${LE('land.hero.note')}</span></p></div>
-    <div class="lp-hero-pic" role="img" aria-label="Экран «Отчеты для сдачи» на компьютере и на телефоне">${lshDesk(D,true)}${lshPhone(D)}</div></div></section>`;
-  const stats=`<section class="lp-stats" aria-label="Buhuchet.kg в цифрах"><div class="lp-wrap lp-stats-in"><div class="lp-stat"><b>${N.types}</b><span>${LE('land.stats.types')}</span></div><div class="lp-stat"><b>${N.regimes}</b><span>${LE('land.stats.regimes')}</span></div><div class="lp-stat"><span class="lp-si">${ic('calendar')}</span><strong>${LE('land.stats.cal')}</strong><span>${LE('land.stats.cal.sub')}</span></div><div class="lp-stat"><span class="lp-si">${ic('bell')}</span><strong>${LE('land.stats.remind')}</strong></div></div></section>`;
-  const card=(icn,cls,t,d)=>`<div class="lp-card"><span class="lp-ico ${cls}">${ic(icn)}</span><h3>${t}</h3><p>${d}</p></div>`;
-  const who=`<section class="lp-sec alt" id="lp-who"><div class="lp-wrap"><h2>${LE('land.who.title')}</h2><div class="lp-grid3">${[['building',''],['user','g'],['chart','p']].map(([i,c],n)=>card(i,c,LE(`land.who.${n+1}.t`),LE(`land.who.${n+1}.d`))).join('')}</div></div></section>`;
-  const chg=`<section class="lp-sec" id="lp-change"><div class="lp-wrap"><h2>${LE('land.change.title')}</h2><div class="lp-chg"><div class="lp-chg-h"><span>${LE('land.change.was')}</span><span>${LE('land.change.now')}</span></div>${[1,2,3,4].map(n=>`<div class="lp-chg-r"><div class="lp-was">${ic('x','sm')}<span><span class="sr-only">${LE('land.change.was')}: </span>${LE(`land.change.${n}.a`)}</span></div><div class="lp-arr" aria-hidden="true">${ic('right')}</div><div class="lp-now">${ic('check','sm')}<span><span class="sr-only">${LE('land.change.now')}: </span>${LE(`land.change.${n}.b`)}</span></div></div>`).join('')}</div></div></section>`;
+  // Первый экран: заголовок, одна строка, две кнопки, картинка; внизу «Листайте вниз» — отсюда начинается линия Бернулли
+  const hero=`<section class="lp-hero lp-live" id="lp-hero">${landHeroBg()}<div class="lp-wrap lp-hero-in"><div class="lp-hero-tx"><h1 class="rv">${LE('land.hero.title')}</h1><p class="lp-hero-p rv" style="--d:1">${LE('land.hero.lead')}</p><div class="lp-cta-row rv" style="--d:2"><button type="button" class="btn cta lp-lg" data-lp-lead>${LE('land.btn.lead')}</button><button type="button" class="btn lp-lg" data-lp-demo>${LE('land.btn.demo')}</button></div></div>
+    <div class="lp-hero-pic" role="img" aria-label="Экран «Отчеты для сдачи» на компьютере и на телефоне">${lshDesk(D,true)}${lshPhone(D)}</div></div><button type="button" class="lp-scroll" data-lp-go="emb"><i aria-hidden="true"></i><span>${LE('land.scroll')}</span></button></section>`;
+  const stats=`<section class="lp-stats" aria-label="Buhuchet.kg в цифрах"><div class="lp-wrap lp-stats-in"><div class="lp-stat rv"><b data-lp-count="${N.types}">${N.types}</b><span>${LE('land.stats.types')}</span></div><div class="lp-stat rv" style="--d:1"><b data-lp-count="${N.regimes}">${N.regimes}</b><span>${LE('land.stats.regimes')}</span></div><div class="lp-stat rv" style="--d:2"><span class="lp-si">${ic('calendar')}</span><strong>${LE('land.stats.cal')}</strong></div><div class="lp-stat rv" style="--d:3"><span class="lp-si">${ic('bell')}</span><strong>${LE('land.stats.remind')}</strong></div></div></section>`;
+  // Блок с «Подробнее»: dd/ds — скрытые подробности (div и span), more — кнопка раскрытия
+  const dd=h=>`<div class="lp-d"><div>${h}</div></div>`,ds=h=>`<span class="lp-d"><span>${h}</span></span>`;
+  const more=(id,lab)=>`<div class="lp-more-row"><button type="button" class="lp-more" data-lp-more="${id}" aria-expanded="${!!M[id]}"><span>${M[id]?LE('land.less'):(lab||LE('land.more'))}</span>${ic('down','sm')}</button></div>`;
+  const sec=(id,cls,title,body,sub)=>`<section class="lp-sec lp-b ${cls}${M[id]?' open':''}" id="lp-${id}" data-lp-k="${id}"><div class="lp-wrap"><h2 class="rv">${title}</h2>${sub?`<p class="lp-sub rv">${sub}</p>`:''}${body}</div></section>`;
+  // 1. Герб — печать прилетает и «штампуется», символы оживают; нажатие на символ показывает, что он значит в программе
+  const EI=[['sun','s','sun'],['scales','w','scale'],['curve','c','infinity']];
+  const emb=sec('emb','lp-emb lp-live',LE('land.emb.title'),`<div class="lp-emb-in"><div class="lp-emb-fig">${landEmblem()}</div><div class="lp-emb-r"><ul class="lp-emb-l">${EI.map(([k,c,i],n)=>`<li class="rv" style="--d:${n}"><button type="button" data-lp-emb="${k}" aria-pressed="false"><span class="lp-emb-ic ${c}">${ic(i)}</span><span class="lp-emb-tx"><b>${LE(`land.emb.${n+1}.t`)}</b>${ds(LE(`land.emb.${n+1}.d`))}</span></button></li>`).join('')}</ul>${dd(`<p class="lp-motto"><span class="lp-motto-f">${LE('land.emb.motto')}</span><span>${LE('land.emb.motto.ru')}</span></p>`)}${more('emb')}</div></div>`,LE('land.emb.sub'));
+  // 2. Кому подходит — карточки переворачиваются к посетителю
+  const who=sec('who','lp-who alt',LE('land.who.title'),`<div class="lp-grid3">${[['building',''],['user','g'],['chart','p']].map(([i,c],n)=>`<div class="lp-card rv" style="--d:${n}"><span class="lp-ico ${c}">${ic(i)}</span><h3>${LE(`land.who.${n+1}.t`)}</h3>${dd(`<p>${LE(`land.who.${n+1}.d`)}</p>`)}</div>`).join('')}</div>${more('who')}`);
+  // 3. Что меняется — карточка «Было» переворачивается в «Стало»; «Подробнее» — обе стороны рядом
+  const chg=sec('change','lp-chg-s',LE('land.change.title'),`<div class="lp-flips">${[1,2,3,4].map(n=>`<button type="button" class="lp-fc rv" style="--d:${n-1}" data-lp-flip><span class="lp-fc-in"><span class="lp-fc-f lp-fw"><small>${ic('x','sm')}${LE('land.change.was')}</small><span class="lp-x">${LE(`land.change.${n}.a`)}</span></span><span class="lp-fc-f lp-fn"><small>${ic('check','sm')}${LE('land.change.now')}</small><span>${LE(`land.change.${n}.b`)}</span></span></span></button>`).join('')}</div><p class="lp-hint rv">${LE('land.change.tap')}</p>${more('change')}`);
+  // 4. Возможности — мозаика плиток волной; плитка раскрывается нажатием, «Подробнее» раскрывает все
   const FI=['repeat','calendar','tag','tg','task','coins','wallet','link','gauge','folder','shield','grad'],FC=['','g','p','','y','g','p','','y','g','p',''];
-  const feat=`<section class="lp-sec alt" id="lp-features"><div class="lp-wrap"><h2>${LE('land.feat.title')}</h2><div class="lp-grid3">${FI.map((i,n)=>card(i,FC[n],LE(`land.feat.${n+1}.t`),LE(`land.feat.${n+1}.d`))).join('')}</div></div></section>`;
+  const feat=sec('features','lp-feat alt',LE('land.feat.title'),`<div class="lp-tiles">${FI.map((i,n)=>`<button type="button" class="lp-tile rv" style="--d:${n%4+Math.floor(n/4)}" data-lp-tile aria-expanded="false"><span class="lp-ico ${FC[n]}">${ic(i)}</span><b>${LE(`land.feat.${n+1}.t`)}</b>${ds(LE(`land.feat.${n+1}.d`))}</button>`).join('')}</div>${more('features')}`);
+  // 5. Как это выглядит — экран «раскрывается», как крышка ноутбука, пока блок въезжает при прокрутке
   const shots=[lshDesk(D),lshCard(D),lshPhone(D)];
-  const shot=`<section class="lp-sec" id="lp-shots"><div class="lp-wrap"><h2>${LE('land.shots.title')}</h2><div class="lp-tabs" role="tablist" aria-label="${LE('land.shots.title')}">${[1,2,3].map(n=>`<button type="button" role="tab" id="lp-st-${n-1}" aria-controls="lp-sl-${n-1}" aria-selected="${LAND.shot===n-1}" data-lp-shot="${n-1}">${LE(`land.shots.${n}.t`)}</button>`).join('')}</div>
-    <div class="lp-track" id="lp-track">${shots.map((h,i)=>`<figure class="lp-slide" id="lp-sl-${i}" role="tabpanel" aria-labelledby="lp-st-${i}"><div role="img" aria-label="${LE(`land.shots.${i+1}.t`)}" style="width:100%;display:flex;justify-content:center">${h}</div><figcaption>${LE(`land.shots.${i+1}.d`)}</figcaption></figure>`).join('')}</div><div class="lp-shots-cta"><button type="button" class="btn lp-lg" data-lp-demo>${ic('eye','sm')}${LE('land.btn.demo')}</button></div></div></section>`;
-  const start=`<section class="lp-sec alt" id="lp-start"><div class="lp-wrap"><h2>${LE('land.start.title')}</h2><ol class="lp-steps">${[1,2,3,4].map(n=>`<li><span class="lp-num" aria-hidden="true">${n}</span><h3>${LE(`land.start.${n}.t`)}</h3><p>${LE(`land.start.${n}.d`)}</p></li>`).join('')}</ol></div></section>`;
+  const shot=sec('shots','lp-shots',LE('land.shots.title'),`<div class="lp-tabs rv" role="tablist" aria-label="${LE('land.shots.title')}">${[1,2,3].map(n=>`<button type="button" role="tab" id="lp-st-${n-1}" aria-controls="lp-sl-${n-1}" aria-selected="${LAND.shot===n-1}" data-lp-shot="${n-1}">${LE(`land.shots.${n}.t`)}</button>`).join('')}</div>
+    <div class="lp-tilt"><div class="lp-track" id="lp-track">${shots.map((h,i)=>`<figure class="lp-slide" id="lp-sl-${i}" role="tabpanel" aria-labelledby="lp-st-${i}"><div role="img" aria-label="${LE(`land.shots.${i+1}.t`)}" class="lp-shot">${h}</div><figcaption class="lp-d"><span>${LE(`land.shots.${i+1}.d`)}</span></figcaption></figure>`).join('')}</div></div><div class="lp-shots-cta"><button type="button" class="btn lp-lg" data-lp-demo>${ic('eye','sm')}${LE('land.btn.demo')}</button></div>${more('shots')}`);
+  // 6. Как начать — линия шагов заполняется по прокрутке, номера загораются
+  const start=sec('start','lp-start alt',LE('land.start.title'),`<div class="lp-steps-w"><span class="lp-sline" aria-hidden="true"><i></i></span><ol class="lp-steps">${[1,2,3,4].map(n=>`<li class="rv" style="--d:${n-1}"><span class="lp-num" aria-hidden="true">${n}</span><h3>${LE(`land.start.${n}.t`)}</h3>${dd(`<p>${LE(`land.start.${n}.d`)}</p>`)}</li>`).join('')}</ol></div>${more('start')}`);
+  // 7. Безопасность — щит рисуется, замок защёлкивается, значки выходят на орбиту
   const SI=['shield','key','users','history','archive']; // пункт «Серверы в Европе (Франкфурт)…» убран (Кутман 02.11.2026)
-  const sec=`<section class="lp-sec" id="lp-security"><div class="lp-wrap"><h2>${LE('land.sec.title')}</h2><ul class="lp-secl">${SI.map((i,n)=>`<li>${ic(i)}<span>${LE(`land.sec.${n+1}`)}</span></li>`).join('')}</ul></div></section>`;
-  const faq=`<section class="lp-sec alt" id="lp-faq"><div class="lp-wrap"><h2>${LE('land.faq.title')}</h2><div class="lp-faq">${[1,2,3,4,5,6,7].map(n=>`<details><summary>${LE(`land.faq.${n}.q`)}</summary><p>${LE(`land.faq.${n}.a`)}</p></details>`).join('')}</div></div></section>`;
+  const secu=sec('security','lp-secu',LE('land.sec.title'),`<div class="lp-secu-in"><div class="lp-orbit rv" aria-hidden="true"><svg class="lp-shield" viewBox="0 0 120 140" focusable="false"><path class="sh-b" d="M60 8L106 25V64C106 96 87 119 60 131C33 119 14 96 14 64V25Z" pathLength="1"/><path class="sh-k" d="M49 68V58a11 11 0 0 1 22 0v10"/><rect class="sh-l" x="42" y="66" width="36" height="28" rx="5"/><circle class="sh-h" cx="60" cy="78" r="3.6"/><path class="sh-h" d="M58.4 80h3.2l1 7h-5.2Z"/></svg><span class="lp-orb-r">${SI.map((i,n)=>`<span class="lp-orb" style="--a:${n*72-90}deg;--d:${n}"><i>${ic(i)}</i></span>`).join('')}</span></div>
+    <div class="lp-secu-r"><p class="lp-secu-s rv">${LE('land.sec.short')}</p>${dd(`<ul class="lp-secl">${SI.map((i,n)=>`<li>${ic(i)}<span>${LE(`land.sec.${n+1}`)}</span></li>`).join('')}</ul>`)}${more('security')}</div></div>`);
+  // 8. Вопросы — выезжают попеременно слева и справа; видны первые три, «Подробнее» — остальные
+  const fq=n=>`<details class="rv" style="--d:${(n-1)%3}"><summary>${LE(`land.faq.${n}.q`)}</summary><p>${LE(`land.faq.${n}.a`)}</p></details>`;
+  const faq=sec('faq','lp-faqs alt',LE('land.faq.title'),`<div class="lp-faq">${[1,2,3].map(fq).join('')}</div>${dd(`<div class="lp-faq lp-faq2">${[4,5,6,7].map(fq).join('')}</div>`)}${more('faq')}`);
+  // 9. Оставить заявку — форма раскладывается, поля встают по одному; после отправки — печать; контакты под «Контакты»
   const cont=landContacts();
-  const lead=`<section class="lp-sec" id="lp-lead"><div class="lp-wrap"><h2>${LE('land.lead.title')}</h2><p class="lp-sub">${LE('land.lead.sub')}</p><div class="lp-lead-in"><div id="lp-fbox">${LAND.sent?landOkHtml():landFormHtml()}</div>${cont.length?`<div class="lp-cont"><h3>${LE('land.c.title')}</h3>${cont.join('')}</div>`:''}</div></div></section>`;
+  const lead=sec('lead','lp-leads',LE('land.lead.title'),`<div class="lp-lead-in"><div id="lp-fbox" class="lp-fold rv">${LAND.sent?landOkHtml():landFormHtml()}</div>${cont.length?`<div class="lp-cont rv" style="--d:2">${more('lead',LE('land.c.title'))}${dd(cont.join(''))}</div>`:''}</div>`,LE('land.lead.sub'));
   const foot=`<footer class="lp-foot"><div class="lp-wrap lp-foot-in"><span><b>${LE('land.foot.name')}</b><br>${LE('land.foot.copy',{год:TODAY.slice(0,4)})}</span>${cont.length?`<span class="lp-foot-l">${cont.join('')}</span>`:''}<span class="lp-foot-l"><button type="button" class="linkbtn" data-lp-login>${LE('land.btn.login')}</button><button type="button" class="linkbtn" data-lp-consent>${LE('land.consent.title')}</button></span></div></footer>`;
   const fab=`<div class="lp-fab" id="lp-fab" hidden><button type="button" class="btn cta" data-lp-lead>${LE('land.btn.lead')}</button></div>`;
-  el.innerHTML=bar+`<div class="land-page" id="land-page">${LAND.test?`<div class="lp-test">${LE('land.test')}</div>`:''}${head}<main>${hero}${stats}${who}${chg}${feat}${shot}${start}${sec}${faq}${lead}</main>${foot}${fab}</div>`;
+  // Линия Бернулли через всю страницу (рисуется по прокрутке, на конце — солнце) и весы в углу (качаются от прокрутки, кольцо — сколько прочитано; нажатие — наверх)
+  const path=`<svg class="lp-path" id="lp-path" aria-hidden="true" focusable="false"><path class="lp-p0"/><path class="lp-p1"/><g class="lp-knots"></g><g class="lp-psun"><circle class="g" r="15"/><path class="r" d="M0-11V-15M0 11V15M-11 0H-15M11 0H15M-7.8-7.8-10.6-10.6M7.8 7.8 10.6 10.6M-7.8 7.8-10.6 10.6M7.8-7.8 10.6-10.6"/><circle class="c" r="6"/></g></svg>`;
+  const bal=`<button type="button" class="lp-bal" id="lp-bal" hidden aria-label="${LE('land.top')}" title="${LE('land.top')}"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle class="b0" cx="32" cy="32" r="29"/><circle class="b1" cx="32" cy="32" r="29" pathLength="1" transform="rotate(-90 32 32)"/><path class="bp" d="M32 19V47M25 48H39"/><g class="bb"><path class="bk" d="M16 22H48"/><g class="bl"><path d="M16 22L11 33M16 22L21 33"/><path class="bw" d="M9.5 33H22.5Q21 38 16 38Q11 38 9.5 33Z"/></g><g class="br"><path d="M48 22L43 33M48 22L53 33"/><path class="bw" d="M41.5 33H54.5Q53 38 48 38Q43 38 41.5 33Z"/></g></g><circle class="bc" cx="32" cy="22" r="2.6"/></svg></button>`;
+  el.innerHTML=bar+`<div class="land-page" id="land-page">${LAND.test?`<div class="lp-test">${LE('land.test')}</div>`:''}${head}${path}<main>${hero}${stats}${emb}${who}${chg}${feat}${shot}${start}${secu}${faq}${lead}</main>${foot}${fab}</div>${bal}`;
   landBind(el)}
 const landFormHtml=()=>{const opts=LT('land.f.size.opts').split('|').map(s=>s.trim()).filter(Boolean);
   return `<form class="lp-form" id="lp-form" novalidate autocomplete="on">${fld(LE('land.f.name'),inp('lf-name','','autocomplete="name" maxlength="120"'),{req:true,id:'lf-name'})}${fld(LE('land.f.firm'),inp('lf-firm','','autocomplete="organization" maxlength="160"'),{req:true,id:'lf-firm',hint:LE('land.f.firm.hint')})}
@@ -85,7 +106,7 @@ const landFormHtml=()=>{const opts=LT('land.f.size.opts').split('|').map(s=>s.tr
     <div class="lp-hp" aria-hidden="true"><label for="lf-site">Сайт</label><input id="lf-site" tabindex="-1" autocomplete="off"></div>
     <div class="fld lp-check-f" data-f="lf-ok"><label class="lp-check"><input type="checkbox" id="lf-ok"><span>${LE('land.f.consent.a')} <button type="button" class="linkbtn" data-lp-consent style="display:inline;padding:0">${LE('land.f.consent.b')}</button></span></label><div class="err" hidden></div></div>
     <div class="note bad" id="lf-msg" role="alert" hidden></div><div class="lp-send"><button type="submit" class="btn cta lp-lg" id="lf-send">${LE('land.f.send')}</button></div></form>`};
-const landOkHtml=()=>`<div class="lp-ok" role="status">${ic('check')}<span>${LE('land.ok',{телефон:LAND.sent})}</span></div>`;
+const landOkHtml=()=>`<div class="lp-ok" role="status"><svg class="lp-stamp" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="29"/><circle class="i" cx="32" cy="32" r="23"/><path class="k" d="M21 33l7 7 15-16"/></svg><span>${LE('land.ok',{телефон:LAND.sent})}</span></div>`;
 function landGo(id,focus){const t=$('#lp-'+id);if(!t)return;if(LAND.menu){LAND.menu=false;landMenuSync()}t.scrollIntoView({behavior:landRM()?'auto':'smooth',block:'start'});
   if(focus){const f=$('#lf-name');if(f)setTimeout(()=>f.focus({preventScroll:true}),landRM()?0:450)}}
 function landMenuSync(){const el=$('#land');if(!el)return;const m=$('#lp-menu',el),b=$('[data-lp-menu]',el);if(m)m.hidden=!LAND.menu;if(b){b.setAttribute('aria-expanded',LAND.menu);b.innerHTML=ic(LAND.menu?'x':'menu')}}
@@ -95,7 +116,12 @@ function landBind(el){const page=$('#land-page',el);
   $('#land-x',el).onclick=landClose;
   $('#lp-test',el).onchange=e=>{LAND.test=e.target.checked;const top=page.scrollTop;landDraw();$('#land-page').scrollTop=top};
   $('#lp-net',el).onchange=e=>{LAND.netErr=e.target.checked};
-  page.onclick=e=>{const b=e.target.closest('[data-lp-go],[data-lp-lead],[data-lp-login],[data-lp-top],[data-lp-menu],[data-lp-consent],[data-lp-shot],[data-lp-demo],[data-lp-theme]');if(!b)return;const d=b.dataset;if(d.lpDemo!=null)return demoOpen();if(d.lpTheme!=null)return landThemeToggle();
+  $('#lp-intro-r',el).onclick=()=>{$('#land-page',el).scrollTop=0;buIntro();landDraw()};
+  page.onclick=e=>{const b=e.target.closest('[data-lp-go],[data-lp-lead],[data-lp-login],[data-lp-top],[data-lp-menu],[data-lp-consent],[data-lp-shot],[data-lp-demo],[data-lp-theme],[data-lp-more],[data-lp-flip],[data-lp-tile],[data-lp-emb]');if(!b)return;const d=b.dataset;
+    if(d.lpMore){const k=d.lpMore,s=$('#lp-'+k,el),o=!LAND.more[k];LAND.more[k]=o;s.classList.toggle('open',o);b.setAttribute('aria-expanded',o);b.firstElementChild.textContent=o?LT('land.less'):(k==='lead'?LT('land.c.title'):LT('land.more'));return}
+    if(d.lpFlip!=null)return b.classList.toggle('now');
+    if(d.lpTile!=null){const o=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',o);return}
+    if(d.lpEmb)return landEmbPick(el,d.lpEmb);if(d.lpDemo!=null)return demoOpen();if(d.lpTheme!=null)return landThemeToggle();
     if(d.lpGo)return landGo(d.lpGo);if(d.lpLead!=null)return landGo('lead',!LAND.sent);if(d.lpLogin!=null)return landLogin();if(d.lpConsent!=null){e.preventDefault();return landConsent()}
     if(d.lpTop!=null){if(LAND.menu){LAND.menu=false;landMenuSync()}return page.scrollTo({top:0,behavior:landRM()?'auto':'smooth'})}
     if(d.lpMenu!=null){LAND.menu=!LAND.menu;return landMenuSync()}
@@ -105,8 +131,8 @@ function landBind(el){const page=$('#land-page',el);
   const tr=$('#lp-track',el);if(tr){if(LAND.shot)tr.scrollLeft=LAND.shot*tr.clientWidth;tr.onscroll=()=>{const i=Math.round(tr.scrollLeft/Math.max(1,tr.clientWidth));if(i!==LAND.shot){LAND.shot=i;landShotSync()}}}
   // На телефоне после первого экрана внизу закреплена «Оставить заявку»; над блоком «Оставить заявку» она скрывается
   if(LAND.io)LAND.io.disconnect();LAND.vis={'lp-hero':true,'lp-lead':false};const fab=$('#lp-fab',el);
-  if('IntersectionObserver' in window){LAND.io=new IntersectionObserver(en=>{en.forEach(x=>LAND.vis[x.target.id]=x.isIntersecting);fab.hidden=LAND.vis['lp-hero']||LAND.vis['lp-lead']},{root:page,threshold:0});['lp-hero','lp-lead'].forEach(id=>LAND.io.observe($('#'+id,el)))}
-  landFormBind(el)}
+  if('IntersectionObserver' in window){LAND.io=new IntersectionObserver(en=>{en.forEach(x=>LAND.vis[x.target.id]=x.isIntersecting);fab.hidden=LAND.vis['lp-hero']||LAND.vis['lp-lead'];const bl=$('#lp-bal',el);if(bl)bl.hidden=!!LAND.vis['lp-hero']},{root:page,threshold:0});['lp-hero','lp-lead'].forEach(id=>LAND.io.observe($('#'+id,el)))}
+  landFormBind(el);landFx(el)}
 function landFormBind(el){const f=$('#lp-form',el);if(!f)return;bindPhone(f,'lf-phone');
   const clr=id=>()=>setErr(f,id,'');['lf-name','lf-firm','lf-phone','lf-tg','lf-note'].forEach(id=>{const i=$('#'+id,f);if(i)i.addEventListener('input',clr(id))});$('#lf-size',f).onchange=clr('lf-size');$('#lf-ok',f).onchange=clr('lf-ok');
   f.onsubmit=e=>{e.preventDefault();const btn=$('#lf-send',f);if(btn.disabled)return;const msg=$('#lf-msg',f);msg.hidden=true;
@@ -131,3 +157,113 @@ function leadTgPreview(o,rep){const to=leadAdmins();openModal({render:()=>({titl
   body:`${to.length?'':`<div class="note warn">${ic('alert')}<span>Сообщение некому отправить: ни у одного администратора платформы не привязан Telegram. Над вкладкой «Заявки» — предупреждение.</span></div>`}<div class="lp-tg"><div class="row" style="gap:8px;color:var(--muted);font-size:12.5px">${ic('tg','sm')}<b>${LAND.test?'Бот тестового стенда':'Бот платформы'}</b>${to.length?`<span>→ ${to.map(u=>esc(u.tg)).join(', ')}</span>`:''}</div><div class="box" style="white-space:pre-wrap">${esc(leadTgText(o,rep))}</div></div><div class="note">${ic('info')}<span>Шаблон «${rep?'Telegram: повторная заявка с сайта':'Telegram: новая заявка с сайта'}» — Админка → Справочники платформы → Шаблоны.${to.length?' Отправка записана в журнал «Телеграм» с типом «Заявка с сайта».':''} Заявка — в Админке → «Организации» → «Заявки».</span></div>`,
   foot:'<button class="btn ghost" data-close>Закрыть</button><button class="btn cta" id="lp-adm">Открыть «Заявки» в Админке</button>',mount(el,m){$('#lp-adm',el).onclick=()=>{m.close();landToAdmin()}}})})}
 function landToAdmin(){landHide();const lg=$('#login');if(lg)lg.remove();S.loggedIn=true;if(S.me!=='admin')switchUser('admin');go('orgs','leads')}
+
+/* ═════════════ Анимации лендинга: отсылки к гербу бухгалтеров (v78, Кутман 08.11.2026) ═════════════ */
+// Герб бухгалтерской профессии: солнце — учёт освещает дела, весы — баланс, кривая Бернулли (∞) — учёт вечен; девиз «Science · Conscience · Indépendance».
+// Спираль логотипа — тоже кривая Бернулли (логарифмическая спираль). Сквозная линия Бернулли идёт за прокруткой через всю страницу, на её конце солнце;
+// весы в углу качаются от прокрутки. Анимации только без «уменьшить движение» (класс lp-anim); без него всё нарисовано сразу и стоит на месте
+const lpMask=(id)=>`<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="-4" y="6" width="76" height="62"><path class="lp-draw" d="${LOGO_SVG.cl}" pathLength="1"/></mask></defs>`;
+const lpLogoBody=(id,lc='')=>`${lpMask(id)}<path class="lg-sp" mask="url(#${id})" d="${LOGO_SVG.sp}"/><g class="lp-lg-b ${lc}"><path class="lg-l" transform="${LOGO_SVG.b[0]}" d="${LOGO_SVG.b[1]}"/></g><g class="lp-lg-u ${lc}"><path class="lg-l" transform="${LOGO_SVG.u[0]}" d="${LOGO_SVG.u[1]}"/></g>`;
+const landLogo=()=>`<svg class="logo lp-logo-a" viewBox="${LOGO_SVG.vb}" aria-hidden="true" focusable="false">${lpLogoBody('lp-lgm')}</svg>`;
+// Фон первого экрана: солнце с лучами справа сверху и большая спираль логотипа
+const landHeroBg=()=>`<div class="lp-hero-bg" aria-hidden="true"><span class="lp-hb-sun"></span><svg class="lp-hb-sp" viewBox="${LOGO_SVG.vb}" focusable="false">${lpMask('lp-hbm')}<path class="lg-sp" mask="url(#lp-hbm)" d="${LOGO_SVG.sp}"/></svg></div>`;
+// Лемниската Бернулли (∞): центр cx,cy, полуширина a. Из центра идёт вниз-вправо и возвращается в центр в том же направлении — так она встраивается в сквозную линию
+function lpLem(cx,cy,a,n=24){const p=[];for(let i=0;i<n;i++){const t=Math.PI/2-2*Math.PI*i/n,s=Math.sin(t),c=Math.cos(t),d=1+s*s;p.push([cx+a*c/d,cy+a*s*c/d])}
+  const f=q=>q[0].toFixed(1)+' '+q[1].toFixed(1);let d='';
+  for(let i=0;i<n;i++){const a0=p[(i-1+n)%n],a1=p[i],a2=p[(i+1)%n],a3=p[(i+2)%n];d+='C'+f([a1[0]+(a2[0]-a0[0])/6,a1[1]+(a2[1]-a0[1])/6])+' '+f([a2[0]-(a3[0]-a1[0])/6,a2[1]-(a3[1]-a1[1])/6])+' '+f(a2)}return {m:'M'+f(p[0]),d}}
+// Круглый герб: кольцо с девизом (сверху по-французски, снизу по-русски), в поле солнце, весы с чашами «Дебет» и «Кредит», ∞
+function landEmblem(){const r=(i,l)=>{const a=i*Math.PI/6,x=Math.sin(a),y=-Math.cos(a);return `M${(150+x*21).toFixed(1)} ${(78+y*21).toFixed(1)}L${(150+x*l).toFixed(1)} ${(78+y*l).toFixed(1)}`};
+  const lem=lpLem(150,229,34),L=lem.m+lem.d;
+  const pan=(x,k,lab)=>`<g class="e-pan e-pan-${k}"><path class="e-str" d="M${x} 124L${x-17} 160M${x} 124L${x+17} 160"/><ellipse class="e-coin e-coin-${k}" cx="${x}" cy="157" rx="9" ry="3.2"/><path class="e-bowl" d="M${x-22} 160H${x+22}Q${x+19} 172 ${x} 172Q${x-19} 172 ${x-22} 160Z"/><text class="e-lab" x="${x}" y="188">${lab}</text></g>`;
+  return `<svg class="lp-emb-svg" viewBox="0 0 300 300" role="img" aria-label="${LE('land.emb.aria')}" focusable="false"><defs><radialGradient id="lpe-glow"><stop offset="0" class="e-g0"/><stop offset="1" class="e-g1"/></radialGradient><radialGradient id="lpe-fld" cx="50%" cy="38%" r="62%"><stop offset="0" class="e-f0"/><stop offset="1" class="e-f1"/></radialGradient><path id="lpe-top" d="M25 150A125 125 0 0 1 275 150"/><path id="lpe-bot" d="M14 150A136 136 0 0 0 286 150"/></defs>
+    <circle class="e-rip" cx="150" cy="150" r="146"/><g class="e-seal"><circle class="e-band" cx="150" cy="150" r="146"/><circle class="e-edge" cx="150" cy="150" r="143" pathLength="1"/><circle class="e-field" cx="150" cy="150" r="117" fill="url(#lpe-fld)"/><circle class="e-dots" cx="150" cy="150" r="111" pathLength="1"/>
+    <text class="e-ring"><textPath href="#lpe-top" startOffset="50%" text-anchor="middle">${LE('land.emb.motto')}</textPath></text><text class="e-ring"><textPath href="#lpe-bot" startOffset="50%" text-anchor="middle">${LE('land.emb.motto.r')}</textPath></text><path class="e-star" d="M10 150l4-4 4 4-4 4ZM282 150l4-4 4 4-4 4Z"/></g>
+    <g class="e-part e-sun" data-e="sun"><circle class="e-glow" cx="150" cy="78" r="42" fill="url(#lpe-glow)"/><path class="e-rays" d="${[...Array(12)].map((_,i)=>r(i,i%2?27:32)).join('')}"/><circle class="e-core" cx="150" cy="78" r="15"/></g>
+    <g class="e-part e-scales" data-e="scales"><path class="e-post" d="M150 118V197"/><path class="e-base" d="M129 205H171L163 196H137Z"/><g class="e-beam"><path class="e-bar" d="M88 124H212"/>${pan(88,'l',LE('land.emb.debit'))}${pan(212,'r',LE('land.emb.credit'))}<circle class="e-piv" cx="150" cy="124" r="5"/></g><circle class="e-top" cx="150" cy="112" r="4"/></g>
+    <g class="e-part e-curve" data-e="curve"><path class="e-inf" d="${L}" pathLength="1"/><path class="e-comet" d="${L}" pathLength="1"/></g></svg>`}
+// Заставка при первом открытии сайта (один раз за сеанс): спираль логотипа рисуется от центра, встают B и u, буквами пишется BuhUchet, потом знак и надпись улетают в шапку
+// Заставка (Кутман 08.11): при каждом новом входе — открытие сайта (лендинг или учётная часть), открытие лендинга, вход в программу по логину и в демо-организацию.
+// Спираль логотипа рисуется от центра, внутри B и u, ниже по буквам складывается BuhUchet.kg; затем знак и надпись улетают туда, где логотип на экране:
+// в шапку лендинга, на карточку входа или в меню программы (на телефоне меню скрыто — знак уходит вверх и тает). Нажатие или клавиша — пропуск. При «уменьшить движение» заставки нет.
+function buIntroTargets(){const vis=e=>{if(!e)return null;const r=e.getBoundingClientRect();return r.width&&r.height&&r.bottom>0&&r.right>0&&r.left<innerWidth&&r.top<innerHeight?e:null};
+  if(LAND.open)return [vis($('#land .lp-logo .logo')),vis($('#land .lp-bn'))];
+  const lg=$('#login');if(lg)return [vis($('.logo',lg)),vis($('.brand-name',lg))];
+  const b=$$('.brand').find(x=>vis(x));return b?[vis($('.logo',b)),vis($('.brand-name',b))]:[null,null]}
+function buIntro(){if(landRM()||LAND.intro)return false;
+  buIntroEnd(true);const o=document.createElement('div');o.className='lp-intro';o.setAttribute('aria-hidden','true');
+  o.innerHTML=`<div class="lp-intro-c"><svg class="lp-intro-lg" viewBox="${LOGO_SVG.vb}" focusable="false">${lpLogoBody('lp-inm','lp-in-l')}</svg><div class="lp-intro-w">${[...'BuhUchet'].map((c,i)=>`<span style="--i:${i}">${c}</span>`).join('')}<span class="kg" style="--i:9">.kg</span></div><i class="lp-intro-ln"></i></div>`;
+  document.body.append(o);const land=$('#land');if(land)land.classList.add('lp-intro-on');LAND.intro=true;
+  const fly=()=>{if(o.classList.contains('fly'))return;const fit=(a,b)=>{if(!a||!b)return '';const r1=a.getBoundingClientRect(),r2=b.getBoundingClientRect();if(!r1.height||!r2.height)return '';return `translate(${(r2.left+r2.width/2-r1.left-r1.width/2).toFixed(1)}px,${(r2.top+r2.height/2-r1.top-r1.height/2).toFixed(1)}px) scale(${(r2.height/r1.height).toFixed(3)})`};
+    const [tl,tw]=buIntroTargets(),lg=$('.lp-intro-lg',o),w=$('.lp-intro-w',o),tf=fit(lg,tl);lg.style.transform=tf||'translateY(-34vh) scale(.3)';if(!tf)lg.classList.add('gone');w.style.transform=fit(w,tw)||'translateY(-26vh) scale(.4)';
+    if(tl&&!LAND.open){tl.classList.add('bu-intro-tg');LAND.introTg=tl}o.classList.add('fly');
+    if(LAND.afterIntro){const f=LAND.afterIntro;LAND.afterIntro=null;setTimeout(f,150)}LAND.introT2=setTimeout(()=>buIntroEnd(),850)};
+  LAND.introT1=setTimeout(fly,2700);o.onclick=()=>{clearTimeout(LAND.introT1);fly()};LAND.introKey=e=>{if(LAND.intro){clearTimeout(LAND.introT1);fly()}};document.addEventListener('keydown',LAND.introKey,{once:true});return true}
+function buIntroEnd(quiet){clearTimeout(LAND.introT1);clearTimeout(LAND.introT2);if(LAND.introKey)document.removeEventListener('keydown',LAND.introKey);$$('.lp-intro').forEach(x=>x.remove());const land=$('#land');if(land)land.classList.remove('lp-intro-on');LAND.intro=false;
+  if(LAND.introTg){LAND.introTg.classList.remove('bu-intro-tg');LAND.introTg=null}
+  if(!quiet&&LAND.afterIntro){const f=LAND.afterIntro;LAND.afterIntro=null;f()}}
+function landFxStop(){LAND.tm.forEach(t=>{clearInterval(t);clearTimeout(t)});LAND.tm=[];clearTimeout(LAND.wt);if(LAND.rv){LAND.rv.disconnect();LAND.rv=null}if(LAND.ro){LAND.ro.disconnect();LAND.ro=null}if(LAND.raf){cancelAnimationFrame(LAND.raf);LAND.raf=0}if(LAND.braf){cancelAnimationFrame(LAND.braf);LAND.braf=0}LAND.P=null;LAND.afterIntro=null}
+// Числа полосы цифр досчитываются от нуля, когда полоса показалась
+function landCount(b){const n=+b.dataset.lpCount;if(!n)return;const t0=performance.now(),dur=1200;const f=t=>{if(!b.isConnected)return;const k=Math.min(1,(t-t0)/dur);b.textContent=Math.round(n*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)};b.textContent='0';requestAnimationFrame(f)}
+// Сквозная линия: от «Листайте вниз» по левому полю страницы, у заголовка каждого блока — петля ∞; конец линии (солнце) следует за прокруткой
+function landPathCalc(el){const page=$('#land-page',el),svg=$('#lp-path',el),w=$('#lp-emb .lp-wrap',el),cue=$('.lp-scroll i',el);if(!page||!svg||!w||!cue||!page.clientWidth)return;
+  const pr=page.getBoundingClientRect(),st=page.scrollTop,W=page.clientWidth,H=page.scrollHeight,Y=r=>r.top-pr.top+st,X=r=>r.left-pr.left;
+  svg.setAttribute('width',W);svg.setAttribute('height',H);svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.style.height=H+'px';
+  const cl=X(w.getBoundingClientRect())+parseFloat(getComputedStyle(w).paddingLeft),wide=cl>=96,lx=wide?Math.round(cl-46):Math.max(6,Math.round(cl/2)),a=wide?26:8,kx=lx;
+  const cr=cue.getBoundingClientRect(),x0=X(cr)+cr.width/2,y0=Y(cr)+cr.height+4,f=v=>v.toFixed(1);
+  // от «Листайте вниз» линия спускается к полосе цифр, идёт по её верхней границе к левому полю и дальше вниз — не пересекая текст
+  const sb=$('.lp-stats',el);let d,cy;
+  if(sb&&x0-lx>40){const bt=Y(sb.getBoundingClientRect())+.5,r=Math.max(2,Math.min(18,bt-y0));d=`M${f(x0)} ${f(Math.min(y0,bt-r))}L${f(x0)} ${f(bt-r)}Q${f(x0)} ${f(bt)} ${f(x0-r)} ${f(bt)}L${lx+18} ${f(bt)}Q${lx} ${f(bt)} ${lx} ${f(bt+18)}`;cy=bt+18}
+  else{d=`M${f(x0)} ${f(y0)}C${f(x0)} ${f(y0+70)} ${lx} ${f(y0+10)} ${lx} ${f(y0+90)}`;cy=y0+90}
+  const kn=[];
+  ['emb','who','change','features','shots','start','security','faq','lead'].forEach(id=>{const s=$('#lp-'+id,el);if(!s)return;const ky=Y(s.getBoundingClientRect())+Math.min(parseFloat(getComputedStyle(s).paddingTop)*.5,34),k=Math.min(wide?18:6,(ky-cy)/4);
+    if(ky-70>cy)d+=`L${lx} ${f(ky-70)}`;d+=`C${lx} ${f(ky-36)} ${f(kx-k)} ${f(ky-k)} ${f(kx)} ${f(ky)}`+lpLem(kx,ky,a).d+`C${f(kx+k)} ${f(ky+k)} ${lx} ${f(ky+34)} ${lx} ${f(ky+70)}`;cy=ky+70;kn.push([kx,ky])});
+  const ft=$('.lp-foot',el);if(ft){const fy=Y(ft.getBoundingClientRect());if(fy-12>cy)d+=`L${lx} ${f(fy-12)}`}
+  const p0=$('.lp-p0',svg),p1=$('.lp-p1',svg);p0.setAttribute('d',d);p1.setAttribute('d',d);
+  const L=p1.getTotalLength(),step=Math.max(6,L/1600),n=Math.floor(L/step)+1,xs=new Float32Array(n),ys=new Float32Array(n);
+  for(let i=0;i<n;i++){const q=p1.getPointAtLength(i*step);xs[i]=q.x;ys[i]=q.y}
+  p1.style.strokeDasharray=`${L} ${L}`;
+  const g=$('.lp-knots',svg);g.innerHTML=kn.map(([x,y])=>`<circle cx="${f(x)}" cy="${f(y)}" r="5"/>`).join('');const ks=[...g.children];
+  const knots=kn.map(([x,y],i)=>{let j=0;for(;j<n;j++)if(Math.hypot(xs[j]-x,ys[j]-y)<=step*.75+1)break;return {len:Math.min(j,n-1)*step,el:ks[i]}});
+  // опорные точки «высота экрана → длина линии»: у каждой петли кончик линии оказывается ровно тогда, когда заголовок блока на 62 % высоты экрана;
+  // между ними линия рисуется равномерно (и по горизонтали, и по петле), конец линии успевает дорисоваться у подвала
+  const A=[{y:y0,l:0},...kn.map(([,y],i)=>({y,l:knots[i].len})),{y:ys[n-1],l:L}],tmax=H-page.clientHeight*.38-2;
+  for(let i=A.length-1;i>0;i--)A[i].y=Math.min(A[i].y,i===A.length-1?tmax:A[i+1].y-1);
+  A[0].y=Math.min(Math.max(A[0].y,page.clientHeight*.62+1),A[1].y-40); // в самом верху линия ещё не нарисована — она начинается с первой прокрутки
+  LAND.P={L,step,n,xs,ys,A,fg:p1,sun:$('.lp-psun',svg),knots};landTick(el)}
+function landTick(el){const page=$('#land-page',el);if(!page)return;const st=page.scrollTop,vh=page.clientHeight,H=page.scrollHeight,anim=page.classList.contains('lp-anim');
+  const P=LAND.P;if(P){let len=P.L;if(anim){const t=st+vh*.62,A=P.A;let k=1;while(k<A.length&&A[k].y<t)k++;if(t<=A[0].y)len=0;else if(k<A.length){const a=A[k-1],b=A[k];len=a.l+(b.l-a.l)*Math.min(1,(t-a.y)/Math.max(1,b.y-a.y))}const i=Math.min(P.n-1,Math.round(len/P.step));P.sun.setAttribute('transform',`translate(${P.xs[i].toFixed(1)} ${P.ys[i].toFixed(1)})`)}
+    P.fg.style.strokeDashoffset=(P.L-len).toFixed(1);P.knots.forEach(k=>k.el.classList.toggle('on',len>=k.len))}
+  const ring=$('#lp-bal .b1');if(ring)ring.style.strokeDashoffset=(1-(H>vh?Math.min(1,st/(H-vh)):1)).toFixed(4);
+  if(!anim)return;
+  // «Как это выглядит»: экран раскрывается, пока блок въезжает
+  const tl=$('.lp-tilt',el);if(tl){const r=tl.getBoundingClientRect(),pr=page.getBoundingClientRect(),p=Math.max(0,Math.min(1,(pr.bottom-r.top)/(vh*.75)));tl.style.setProperty('--tp',p.toFixed(3))}
+  // «Как начать»: линия шагов заполняется, номера загораются
+  const sw=$('.lp-steps-w',el);if(sw){const r=sw.getBoundingClientRect(),pr=page.getBoundingClientRect(),p=Math.max(0,Math.min(1,(pr.top+vh*.72-r.top)/Math.max(1,r.height*.85))),li=$$('.lp-steps li',sw);sw.style.setProperty('--sp',p.toFixed(3));li.forEach((x,i)=>x.classList.toggle('on',p>=i/Math.max(1,li.length-1)-.01))}}
+// Линия шагов «Как начать» — от первого номера до последнего (на ПК поперёк, на телефоне вдоль)
+function landStepsLine(el){const sw=$('.lp-steps-w',el),ln=$('.lp-sline',el);if(!sw||!ln)return;const nm=$$('.lp-num',sw);if(nm.length<2)return;const R=sw.getBoundingClientRect(),a=nm[0].getBoundingClientRect(),b=nm[nm.length-1].getBoundingClientRect();
+  const ax=a.left+a.width/2-R.left,ay=a.top+a.height/2-R.top,bx=b.left+b.width/2-R.left,by=b.top+b.height/2-R.top,h=Math.abs(by-ay)<4;
+  ln.dataset.o=h?'h':'v';Object.assign(ln.style,h?{left:ax+'px',top:(ay-1.5)+'px',width:(bx-ax)+'px',height:'3px'}:{left:(ax-1.5)+'px',top:ay+'px',width:'3px',height:(by-ay)+'px'})}
+function landFx(el){landFxStop();const page=$('#land-page',el);if(!page)return;const anim=!landRM()&&'IntersectionObserver' in window;page.classList.toggle('lp-anim',anim);
+  const tm=(f,ms)=>{const t=setTimeout(f,ms);LAND.tm.push(t);return t};
+  const emb=$('#lp-emb',el),svg=emb&&$('.lp-emb-svg',emb);
+  const onIn=x=>{if(x.dataset.lpCount)landCount(x);if(x===emb)tm(()=>emb.classList.add('e-idle'),3900);if(x.matches('.lp-fc'))tm(()=>x.classList.add('now'),900+(+x.style.getPropertyValue('--d')||0)*260)};
+  const go=()=>{if(!LAND.open)return;if(anim){LAND.rv=new IntersectionObserver(en=>en.forEach(x=>{const t=x.target;if(t.classList.contains('lp-live'))t.classList.toggle('vis',x.isIntersecting);
+      if(x.isIntersecting&&!t.classList.contains('in')){t.classList.add('in');onIn(t);if(!t.classList.contains('lp-live'))LAND.rv.unobserve(t)}}),{root:page,rootMargin:'0px 0px -12% 0px',threshold:0});
+    $$('.rv,.lp-live,[data-lp-count]',page).forEach(x=>LAND.rv.observe(x))}
+  else{$$('.rv,.lp-live',page).forEach(x=>x.classList.add('in','vis'));$$('.lp-fc',page).forEach(x=>x.classList.add('now'))}};
+  if(LAND.intro&&anim)LAND.afterIntro=go;else go();
+  // Пересчёт линии при изменении размеров (окно, «Подробнее», шрифты)
+  const calc=()=>{landStepsLine(el);landPathCalc(el)};let rt=0;const later=()=>{clearTimeout(rt);rt=tm(calc,140)};
+  if('ResizeObserver' in window){LAND.ro=new ResizeObserver(later);LAND.ro.observe($('main',page))}requestAnimationFrame(calc);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{if(LAND.open)later()});
+  // Весы в углу качаются от скорости прокрутки и снова выравниваются
+  const bal=$('#lp-bal',el),bb=bal&&$('.bb',bal),bl=bal&&$('.bl',bal),br=bal&&$('.br',bal);let ang=0,v=0,last=page.scrollTop;
+  const swing=()=>{v+=-ang*.09;v*=.86;ang+=v;if(Math.abs(ang)<.05&&Math.abs(v)<.05){ang=0;v=0;LAND.braf=0}else LAND.braf=requestAnimationFrame(swing);if(bb){bb.style.transform=`rotate(${ang.toFixed(2)}deg)`;bl.style.transform=br.style.transform=`rotate(${(-ang).toFixed(2)}deg)`}};
+  page.addEventListener('scroll',()=>{const y=page.scrollTop,dy=y-last;last=y;if(anim&&bb&&dy){ang=Math.max(-16,Math.min(16,ang-Math.max(-2.2,Math.min(2.2,dy*.05))));if(!LAND.braf)LAND.braf=requestAnimationFrame(swing)}
+    if(LAND.raf)return;LAND.raf=requestAnimationFrame(()=>{LAND.raf=0;landTick(el);const bg=$('.lp-hero-bg',el);if(anim&&bg&&y<1600)bg.style.transform=`translate3d(0,${(y*.3).toFixed(1)}px,0)`})},{passive:true});
+  if(bal)bal.onclick=()=>page.scrollTo({top:0,behavior:landRM()?'auto':'smooth'});
+  // Мышь над первым экраном чуть сдвигает солнце и картинку (только на ПК с мышью)
+  const hero=$('#lp-hero',el);if(anim&&hero&&matchMedia('(hover:hover) and (pointer:fine)').matches)hero.onpointermove=e=>{const r=hero.getBoundingClientRect();hero.style.setProperty('--mx',((e.clientX-r.left)/r.width-.5).toFixed(3));hero.style.setProperty('--my',((e.clientY-r.top)/r.height-.5).toFixed(3))};
+  // Герб: нажатие на символ подсвечивает его и показывает, что он значит; весы взвешивают
+  LAND.weigh=()=>{if(!svg)return;svg.classList.add('e-coins');if(!anim)return;svg.classList.remove('e-weigh');void svg.getBoundingClientRect();svg.classList.add('e-weigh');clearTimeout(LAND.wt);LAND.wt=setTimeout(()=>svg.classList.remove('e-weigh'),2700)};
+  if(svg)svg.onclick=e=>{const p=e.target.closest('.e-part');if(p)landEmbPick(el,p.dataset.e,true)}}
+function landEmbPick(el,k,from){const emb=$('#lp-emb',el);if(!emb)return;const cur=emb.dataset.hl||'',nk=cur===k&&!from?'':k;emb.dataset.hl=nk;$$('[data-lp-emb]',emb).forEach(b=>b.setAttribute('aria-pressed',b.dataset.lpEmb===nk));if(nk==='scales'&&LAND.weigh)LAND.weigh()}
