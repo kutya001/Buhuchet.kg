@@ -92,15 +92,17 @@ function visible(e: Element | null | undefined): Element | null {
     : null;
 }
 
-/** Куда улетают знак и надпись (прототип buIntroTargets): шапка лендинга, иначе первый видимый знак на экране. */
+/** Куда улетают знак и надпись (прототип buIntroTargets): шапка лендинга, иначе первый видимый знак с названием. */
 function introTargets(): [Element | null, Element | null] {
   const land = document.querySelector('.land');
   if (land) {
     return [visible(land.querySelector('.lp-logo .logo')), visible(land.querySelector('.lp-bn'))];
   }
+  // Только знак с названием рядом (прототип `.brand`): меню программы, карточка входа — не окно «Добро пожаловать».
   for (const mark of document.querySelectorAll('[data-brand-mark]')) {
-    if (!visible(mark)) continue;
-    return [mark, visible(mark.parentElement?.querySelector('[data-brand-name]'))];
+    const name = mark.parentElement?.querySelector('[data-brand-name]');
+    if (!name || !visible(mark)) continue;
+    return [mark, visible(name)];
   }
   return [null, null];
 }

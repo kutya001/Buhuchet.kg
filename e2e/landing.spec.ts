@@ -352,7 +352,7 @@ test.describe('Этап 3: лендинг для гостей (задача #165
 });
 
 test.describe('Этап 3: лендинг v78 — заставка, линия Бернулли, герб, «Подробнее» (прототип v78)', () => {
-  test('(проверка прототипа v78) заставка при каждом открытии лендинга: знак и BuhUchet.kg, любая клавиша — сразу к странице, знак встаёт в шапку; при новом открытии — снова', async ({
+  test('(проверка прототипа v78) заставка при каждом открытии лендинга: знак и BuhUchet.kg, любая клавиша — сразу к странице, знак встаёт в шапку; при новом открытии — снова, по «Войти» — страница входа без неё', async ({
     page,
   }) => {
     await withIntro(page);
@@ -372,6 +372,13 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(intro).toBeVisible();
     await expect(intro).toHaveCount(0, { timeout: 10_000 });
     await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
+
+    // «Войти» — страница входа сразу, без заставки.
+    await page.locator('a[href="/login"]:visible').first().click();
+    await expect(page).toHaveURL(/\/login$/);
+    await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible();
+    // Заставка сама ушла бы через 3,5 с — здесь её не должно быть сразу.
+    await expect(intro).toBeHidden({ timeout: 1_000 });
   });
 
   test('(проверка прототипа v78) заставка при входе: на странице входа и после входа по логину; знак улетает в меню слева, на телефоне меню скрыто — вверх', async ({
@@ -415,7 +422,9 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
       const block = page.locator(`#lp-${id}`);
       const detail = block.getByText(text).first();
       await expect(detail).toBeHidden();
-      const button = block.getByRole('button', { name: label, exact: true });
+      // Подпись кнопки меняется на «Свернуть» — ищем саму кнопку, а не подпись.
+      const button = block.locator('.lp-more');
+      await expect(button).toHaveText(label);
       await button.click();
       await expect(detail).toBeVisible();
       await expect(button).toHaveAttribute('aria-expanded', 'true');
@@ -450,7 +459,8 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(scales).toHaveAttribute('aria-pressed', 'false');
 
     // «Возможности»: плитка раскрывается нажатием.
-    const tile = page.locator('#lp-features').getByRole('button', { name: 'Файлы', exact: true });
+    // Раскрытая плитка читается вместе с описанием — имя начинается с «Файлы».
+    const tile = page.locator('#lp-features').getByRole('button', { name: /^Файлы/ });
     await page.locator('#lp-features').getByRole('button', { name: 'Свернуть' }).click();
     await expect(page.getByText('Отчёты, квитанции и договоры в карточках клиентов')).toBeHidden();
     await tile.click();
