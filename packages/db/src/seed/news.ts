@@ -20,7 +20,10 @@ const NewsSection = z.array(
     pin: z.boolean().nullish(),
     login: z.boolean().nullish(),
     link: z
-      .object({ k: z.enum(['art', 'mod']), id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) })
+      .object({
+        k: z.enum(['art', 'mod', 'video']),
+        id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
+      })
       .nullish(),
     hist: z.array(z.object({ at: z.string(), to: z.string() })).nullish(),
   }),
@@ -34,13 +37,19 @@ function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
   return new Date(Date.parse(`${m[1]}T${m[2]}:${m[3]}:00+06:00`));
 }
 
-/** Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи). */
+/**
+ * Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи). Ссылка
+ * «▶ Смотреть видео» на видео из refDB.videos не переносится: видео прототипа в базу продукта не
+ * заливаются, их файлов нет (docs/deviations.md п. О-53).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-53
 export function newsSeedRows(section: unknown) {
   return NewsSection.parse(section ?? [])
     .filter((n) => n.status === 'Опубликовано')
     .map((n) => {
       const type = NEWS_TYPE_BY_NAME[n.type];
       if (!type) throw new Error(`Новость ${n.id}: неизвестный тип «${n.type}»`);
+      const link = n.link && n.link.k !== 'video' ? n.link : null;
       return {
         id: n.id,
         title: n.t,
@@ -49,8 +58,8 @@ export function newsSeedRows(section: unknown) {
         publishDate: n.date,
         short: n.short?.trim() ?? '',
         md: n.md ?? '',
-        linkKind: n.link?.k ?? null,
-        linkId: n.link?.id ?? null,
+        linkKind: link?.k ?? null,
+        linkId: link?.id ?? null,
         pinned: n.pin ?? false,
         showOnLogin: n.login ?? false,
         audience: n.aud === 'adm' ? 'adm' : 'all',
