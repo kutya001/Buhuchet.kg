@@ -386,6 +386,8 @@ export const LandingVideo = z.object({
   ytId: z.string().nullable(),
   duration: z.number().int().nullable(),
   description: z.string(),
+  /** Модуль видеоинструкции (значок рисованной обложки, «· модуль» в окне); null — «Общее». */
+  module: z.string().nullable(),
   cover: z.boolean(),
 });
 export type LandingVideo = z.infer<typeof LandingVideo>;

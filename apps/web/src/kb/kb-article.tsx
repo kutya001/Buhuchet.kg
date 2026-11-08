@@ -8,7 +8,7 @@ import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { kbArticleQuery } from './kb-data';
 import { useKb } from './kb-provider';
-import { useCatalogVideo, useModuleVideos, VideoHelpBlock } from './video/video-help';
+import { useLinkedVideo, useModuleVideos, VideoHelpBlock } from './video/video-help';
 import { VideoMdButton } from './video/video-parts';
 import { useVideo } from './video/video-window';
 
@@ -170,7 +170,7 @@ export function KbArticleBody({
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-53 — у прототипа кнопка недоступного видео остаётся «▶ Видео».
 function ArticleVideo({ id }: { id: string }) {
-  const video = useCatalogVideo(id);
+  const video = useLinkedVideo(id);
   const { open } = useVideo();
   if (!video) return null;
   return (

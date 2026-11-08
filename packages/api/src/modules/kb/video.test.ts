@@ -370,6 +370,46 @@ describe.skipIf(!databaseAvailable())('Видео платформы: API', () =
     const tiny = Array.from({ length: 500 }, (_, i) => [200 + i * 0.5, 200 + i * 0.5 + 0.04]);
     const saved = VideoProgressSaved.parse(await ok(await progress(acc, v.id, second, tiny, 0)));
     expect(saved.view).toMatchObject({ pct: 20, status: 'started' });
+
+    // Много окон сразу: запас общий для всех открытий видео, сколько бы их ни было.
+    const w = await create({ title: 'Много окон', ytDuration: 600 });
+    const windows: string[] = [];
+    for (let i = 0; i < 21; i++) windows.push((await open(acc, w.id)).session!);
+    clock().advance(10_000);
+    await ok(await progress(acc, w.id, windows[0]!, [[0, 24]], 24));
+    for (const [i, s] of windows.slice(1).entries()) {
+      const at = 24 * (i + 1);
+      expect((await progress(acc, w.id, s, [[at, at + 24]], at + 24)).status).toBe(400);
+    }
+    // Два сохранения одного окна сразу идут по очереди: второе видит отрезки первого.
+    const both = await Promise.all([
+      progress(acc, w.id, windows[0]!, [[100, 101]], 101),
+      progress(acc, w.id, windows[0]!, [[200, 201]], 201),
+    ]);
+    expect(both.map((r) => r.status).sort()).toEqual([200, 400]);
+    // Снятое с публикации видео прогресс не принимает.
+    const card = VideoAdminCard.parse(
+      await ok(await call('GET', `/api/admin/videos/${w.id}`, admin)),
+    );
+    await ok(
+      await call('POST', `/api/admin/videos/${w.id}/off`, admin, {
+        version: card.video.version,
+        off: true,
+      }),
+    );
+    const off = await progress(acc, w.id, windows[0]!, [[0, 1]], 1);
+    expect(off.status).toBe(404);
+    expect(await errorOf(off)).toBe('video_off');
+  });
+
+  it('пределы частоты: длительность и «YouTube недоступно» — не чаще 30 раз в час от пользователя', async () => {
+    const v = await create({ title: 'Предел сообщений', kind: 'pres', module: null });
+    const senior = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+    const meta = () => call('POST', `/api/kb/videos/${v.id}/meta`, senior, { ytOk: true });
+    for (let i = 0; i < 30; i++) expect((await meta()).status).toBe(204);
+    const limited = await meta();
+    expect(limited.status).toBe(429);
+    expect(await errorOf(limited)).toBe('rate_limited');
   });
 
   it('загрузка файла частями: проверка содержимого, файл играет по подписанной ссылке, замена и удаление', async () => {

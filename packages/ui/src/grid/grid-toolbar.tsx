@@ -8,7 +8,7 @@ import {
   type GridViewSettings,
   type GroupAggChoice,
 } from '@buhuchet/domain';
-import { useId, useState, type DragEvent } from 'react';
+import { useId, useState, type DragEvent, type ReactNode } from 'react';
 import { ActionList } from '../action-menu';
 import { buttonClass, iconButtonClass, TOUCH_AREA } from '../button';
 import { inputClass } from '../form';
@@ -45,6 +45,8 @@ interface ToolbarProps<Row> {
   fixedView?: 'table' | 'cards';
   phone: boolean;
   total: number | null;
+  /** Своя строка вместо числа записей (прототип `caption`: «Видео: 9 · Опубликовано: 7 · Занято: …»). */
+  caption?: ReactNode;
   /** Отмеченные строки и массовые действия: при выборе вместо числа записей — «Выбрано: N». */
   selection?: GridSelectionBar<Row>;
   /** Столбцы группировки (до двух). */
@@ -79,6 +81,7 @@ export function GridToolbar<Row>({
   fixedView,
   phone,
   total,
+  caption,
   selection,
   group,
   onGroupChange,
@@ -99,7 +102,7 @@ export function GridToolbar<Row>({
         <GridBulkBar selection={selection} labels={labels} />
       ) : (
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-          {total !== null && <span data-grid-count>{labels.count(total)}</span>}
+          {total === null ? null : (caption ?? <span data-grid-count>{labels.count(total)}</span>)}
         </div>
       )}
       <div className="flex-1" />

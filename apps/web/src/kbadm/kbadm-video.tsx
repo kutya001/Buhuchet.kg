@@ -483,20 +483,22 @@ export function KbAdmVideoTab() {
   return (
     <div className="flex flex-col gap-3.5" data-kbadm-video="">
       <Note icon="info">{t('video.adm.note')}</Note>
-      {s ? (
-        <div className="vv-st">
-          <span>
-            {t('video.adm.cap.count')} <b>{s.count}</b>
-          </span>
-          <span>
-            {t('video.adm.cap.pub')} <b>{s.published}</b>
-          </span>
-          <span>
-            {t('video.adm.cap.size')} <b>{gb(t, s.bytes)}</b>
-          </span>
-        </div>
-      ) : null}
       <DataGrid
+        caption={
+          s ? (
+            <>
+              <span>
+                {t('video.adm.cap.count')} <b>{s.count}</b>
+              </span>
+              <span>
+                {t('video.adm.cap.pub')} <b>{s.published}</b>
+              </span>
+              <span>
+                {t('video.adm.cap.size')} <b>{gb(t, s.bytes)}</b>
+              </span>
+            </>
+          ) : undefined
+        }
         columns={columns}
         defaultVisible={DEFAULT_VISIBLE}
         defaultSort={DEFAULT_SORT}

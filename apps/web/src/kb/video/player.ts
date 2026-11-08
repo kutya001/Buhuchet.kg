@@ -601,6 +601,7 @@ export function mountPlayer(host: HTMLElement, o: PlayerOptions): PlayerControl 
   } else if (o.auto !== false) {
     go(0);
   } else if (kind === 'yt') {
+    // ОТКЛОНЕНИЕ: docs/deviations.md#О-57 — у прототипа плеер YouTube при `auto:false` не загружается.
     // У YouTube своей кнопки ▶ нет: плеер загружается без запуска и показывает обложку YouTube.
     ad.reload(0, false);
   } else {

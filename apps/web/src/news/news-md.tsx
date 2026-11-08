@@ -7,9 +7,8 @@ import {
   type NewsMdBlock,
   type NewsSpan,
 } from '@buhuchet/domain';
-import { useQuery } from '@tanstack/react-query';
 import { Fragment, useMemo, type MouseEvent, type ReactNode } from 'react';
-import { videoCatalogQuery } from '../kb/video/video-data';
+import { useLinkedVideo } from '../kb/video/video-help';
 import { VideoMdButton } from '../kb/video/video-parts';
 
 /*
@@ -243,7 +242,6 @@ function ListView({ node, onLink }: { node: ListNode; onLink: (link: NewsInnerLi
 
 /** Ссылка на видео в тексте новости — кнопка «▶ <название> · 3:25» (прототип v79 `vidMdBtn`). */
 function NewsVideoButton({ id, label, onOpen }: { id: string; label: string; onOpen: () => void }) {
-  const catalog = useQuery(videoCatalogQuery).data;
-  const video = catalog?.items.find((v) => v.id === id) ?? null;
+  const video = useLinkedVideo(id);
   return <VideoMdButton video={video} label={label} onOpen={onOpen} />;
 }

@@ -212,6 +212,7 @@ export function kbArticleBlocks(html: string): KbBlock[] {
         // Описание экрана — только у модуля меню: ключ ищется в справочнике `kbUi`.
         if (token.mod && MENU.has(token.mod)) blocks.push({ type: 'screen', module: token.mod });
       } else if (tag === 'kb-video' && !lists.length) {
+        // ОТКЛОНЕНИЕ: docs/deviations.md#О-57 — у прототипа кнопка видео стоит прямо в строке абзаца.
         // Видео — отдельным блоком, как картинка; текст абзаца после него — новым абзацем.
         const block: 'h4' | 'h5' | 'p' | 'quote' | null = textBlock;
         flushText();

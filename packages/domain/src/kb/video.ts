@@ -187,10 +187,11 @@ export type VideoProgressProblem = 'video_progress_invalid';
 
 /**
  * Проверка отрезков одного сохранения от браузера: концы — числа от 0 до длительности (пока она
- * неизвестна — до 12 часов), начало меньше конца, отрезков не больше 2 000. Вместе с уже сохранёнными
- * отрезками недавних открытий (`earlier`) проигралось не больше, чем могло со времени самого раннего
- * из них (`openedAt`) на скорости 2 и 5 секунд запаса, и отрезков не больше 2 000: ни серией
- * сохранений, ни несколькими окнами сразу накрутить просмотр нельзя.
+ * неизвестна — до 12 часов), начало меньше конца, отрезков не больше 2 000. Отрезки этого открытия
+ * вместе с уже сохранёнными (`earlier`) и секунды других открытий этого видео за то же время
+ * (`others`, каждое открытие — отдельно) — не больше, чем могло проиграться со времени самого раннего
+ * из них (`openedAt`) на скорости 2 и 5 секунд запаса: ни серией сохранений, ни несколькими окнами
+ * сразу накрутить просмотр нельзя (в фоне вкладки видео встаёт на паузу — два окна сразу не играют).
  */
 export function videoProgressProblem(input: {
   segs: readonly (readonly number[])[];
@@ -198,6 +199,7 @@ export function videoProgressProblem(input: {
   openedAt: Date;
   now: Date;
   earlier?: readonly VideoSegment[] | null;
+  others?: number;
 }): VideoProgressProblem | null {
   const { segs, duration, openedAt, now } = input;
   if (segs.length > VIDEO_SEGMENTS_MAX) return 'video_progress_invalid';
@@ -212,7 +214,8 @@ export function videoProgressProblem(input: {
   const elapsed = Math.max(0, (now.getTime() - openedAt.getTime()) / 1000);
   const merged = mergeSegments([input.earlier, segs]);
   if (merged.length > VIDEO_SEGMENTS_MAX) return 'video_progress_invalid';
-  return videoSegLen(merged) > elapsed * VIDEO_MAX_RATE + 5 ? 'video_progress_invalid' : null;
+  const played = Math.max(0, input.others ?? 0) + videoSegLen(merged);
+  return played > elapsed * VIDEO_MAX_RATE + 5 ? 'video_progress_invalid' : null;
 }
 
 /* ───────────── Кому видно ───────────── */

@@ -15,7 +15,7 @@ export function useCopyText() {
     async (value: string, okMsg: string) => {
       try {
         await navigator.clipboard.writeText(value);
-        toast(okMsg, { icon: 'link' });
+        toast(okMsg, { icon: 'copy' });
       } catch {
         setText(value);
       }

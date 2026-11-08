@@ -1,6 +1,6 @@
 'use client';
 
-import { videoTime, type VideoSegment } from '@buhuchet/domain';
+import { isMenuModuleId, KB_MODULE_TITLES, videoTime, type VideoSegment } from '@buhuchet/domain';
 import type { LandingVideo, VideoItem, VideoPlay, VideoView } from '@buhuchet/shared';
 import {
   buttonClass,
@@ -539,7 +539,7 @@ function GuestWindow({
       noMax
       swipeHead
       title={v.title}
-      sub={`${t(`video.kind.${v.kind}`)}${v.duration ? ` · ${videoTime(v.duration)}` : ''}`}
+      sub={`${t(`video.kind.${v.kind}`)}${v.module && isMenuModuleId(v.module) ? ` · ${t(KB_MODULE_TITLES[v.module])}` : ''}${v.duration ? ` · ${videoTime(v.duration)}` : ''}`}
       footer={<VideoFooter />}
     >
       <div className="vid-w vid-m">

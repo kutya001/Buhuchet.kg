@@ -20,7 +20,7 @@ import {
   type VideoStatus,
   type VideoViewStatus,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt, ne, sql, type SQL } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { Db, Tx } from './client';
 import {
@@ -166,38 +166,54 @@ export async function ownVideoSession(tx: Tx, sessionId: string, userId: string,
   return row ?? null;
 }
 
-/** Сколько недавних открытий сверяется при сохранении просмотра (открытия ограничены частотой). */
-export const VIDEO_RECENT_SESSIONS = 20;
-
 /**
- * Перед сохранением просмотра: строка просмотра пользователя блокируется до конца транзакции (сохранения
- * одного видео из нескольких окон идут по очереди), затем — недавние открытия этого видео (с `since`,
- * не больше `VIDEO_RECENT_SESSIONS`) с их отрезками и временем открытия.
+ * Перед сохранением просмотра (всё — до конца транзакции): строка просмотра пользователя блокируется
+ * (сохранения одного видео из нескольких окон идут по очереди), открытие перечитывается под блокировкой
+ * (его отрезки — с учётом сохранения, которое только что закончилось), затем — сколько секунд проиграли
+ * все другие открытия этого видео с `since` и самое раннее из них. Секунды считает база по всем
+ * открытиям, без предела числа: каждое открытие — отдельно, даже если секунды совпадают.
  */
-export async function recentVideoSessions(
+export async function videoProgressContext(
   tx: Tx,
-  userId: string,
-  videoId: string,
-  since: Date,
-): Promise<{ id: string; openedAt: Date; segs: VideoSegment[] }[]> {
+  input: { userId: string; videoId: string; sessionId: string; since: Date },
+): Promise<{
+  session: typeof videoSessions.$inferSelect;
+  others: number;
+  firstOpenedAt: Date | null;
+} | null> {
+  const { userId, videoId, sessionId, since } = input;
   await tx
     .select({ userId: videoViews.userId })
     .from(videoViews)
     .where(and(eq(videoViews.userId, userId), eq(videoViews.videoId, videoId)))
     .for('update');
-  const rows = await tx
-    .select({ id: videoSessions.id, openedAt: videoSessions.openedAt, segs: videoSessions.segs })
+  const [session] = await tx
+    .select()
+    .from(videoSessions)
+    .where(
+      and(
+        eq(videoSessions.id, sessionId),
+        eq(videoSessions.userId, userId),
+        eq(videoSessions.videoId, videoId),
+      ),
+    )
+    .for('update');
+  if (!session) return null;
+  const [row] = await tx
+    .select({
+      others: sql<number>`coalesce(sum((select coalesce(sum((e->>1)::float8 - (e->>0)::float8), 0) from jsonb_array_elements(${videoSessions.segs}) e)), 0)::float8`,
+      first: sql<Date | null>`min(${videoSessions.openedAt})`.mapWith(videoSessions.openedAt),
+    })
     .from(videoSessions)
     .where(
       and(
         eq(videoSessions.userId, userId),
         eq(videoSessions.videoId, videoId),
         gte(videoSessions.openedAt, since),
+        ne(videoSessions.id, sessionId),
       ),
-    )
-    .orderBy(desc(videoSessions.openedAt))
-    .limit(VIDEO_RECENT_SESSIONS);
-  return rows.map((r) => ({ id: r.id, openedAt: r.openedAt, segs: segsOf(r.segs) }));
+    );
+  return { session, others: Number(row?.others ?? 0), firstOpenedAt: row?.first ?? null };
 }
 
 /**

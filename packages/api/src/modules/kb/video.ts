@@ -4,9 +4,8 @@ import {
   listVideoTabPage,
   listVideoTabValues,
   openVideoSession,
-  ownVideoSession,
   ownVideoViews,
-  recentVideoSessions,
+  videoProgressContext,
   saveVideoProgress,
   takeRateLimit,
   setVideoDuration,
@@ -30,7 +29,6 @@ import {
   videoLive,
   videoModuleOrder,
   videoProgressProblem,
-  videoSegMerge,
   videoVisible,
   type VideoContentType,
   type VideoSegment,
@@ -52,6 +50,7 @@ import {
   type VideoItem,
   type VideoPlay,
 } from '@buhuchet/shared';
+import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
@@ -310,15 +309,24 @@ export const VIDEO_OPEN_RATE_LIMIT: RateLimit = {
   max: 120,
   windowSeconds: 3600,
 };
+/** Сохранения просмотра: браузер шлёт раз в 15 секунд и при паузе; пропущенное придёт со следующим. */
+export const VIDEO_SAVE_RATE_LIMIT: RateLimit = {
+  kind: 'video_save',
+  max: 60,
+  windowSeconds: 60,
+};
 export const VIDEO_META_RATE_LIMIT: RateLimit = {
   kind: 'video_meta',
   max: 30,
   windowSeconds: 3600,
 };
 
-/** Занять открытие или сообщение плеера пользователя; не вышло — 429. */
-async function userLimited(deps: ApiDeps, limit: RateLimit, userId: string) {
-  const take = await takeRateLimit(deps.db, limit, userId);
+/**
+ * Занять открытие, сохранение или сообщение плеера пользователя; не вышло — 429. До транзакции
+ * запроса: счётчик пишется своим подключением, и запросы не ждут друг друга за подключением.
+ */
+async function userLimited(deps: ApiDeps, c: Context<AppEnv>, limit: RateLimit) {
+  const take = await takeRateLimit(deps.db, limit, c.get('session')!.userId);
   if (!take.ok) apiFail(429, 'rate_limited', 'Слишком много запросов. Попробуйте позже.');
 }
 
@@ -352,10 +360,11 @@ export function kbVideoOpenHandler(deps: ApiDeps): RouteHandler<typeof kbVideoOp
   return async (c) => {
     const { id } = c.req.valid('param');
     const t = await serverTexts(deps);
+    // Открытия администратора платформы не записываются — и предела нет.
+    if (!c.get('session')!.isPlatformAdmin) await userLimited(deps, c, VIDEO_OPEN_RATE_LIMIT);
     const body = await asLearner(deps, c, async (tx, learner) => {
       const v = await openable(tx, learner, id);
       const tracked = !learner.access.admin;
-      if (tracked) await userLimited(deps, VIDEO_OPEN_RATE_LIMIT, learner.userId);
       // Время открытия — по часам приложения: по ним же сервер считает, сколько могло проиграться.
       const opened = tracked
         ? await openVideoSession(tx, learner.userId, v.id, deps.clock.now())
@@ -396,7 +405,11 @@ export const kbVideoProgressRoute = createRoute({
     },
     400: { description: 'Неверные отрезки (`video_progress_invalid`)', content: error },
     ...common,
-    404: { description: 'Нет такого открытия у пользователя или видео удалено', content: error },
+    ...tooMany,
+    404: {
+      description: 'Нет такого открытия у пользователя, видео снято или удалено (`video_off`)',
+      content: error,
+    },
   },
 });
 
@@ -412,30 +425,32 @@ export function kbVideoProgressHandler(
   return async (c) => {
     const { id, sessionId } = c.req.valid('param');
     const input = c.req.valid('json');
+    await userLimited(deps, c, VIDEO_SAVE_RATE_LIMIT);
     const body = await asLearner(deps, c, async (tx, learner) => {
       if (learner.access.admin)
         apiFail(403, 'forbidden', 'Просмотры администратора не записываются');
-      const session = await ownVideoSession(tx, sessionId, learner.userId, id);
-      if (!session) apiFail(404, 'not_found', 'Открытие не найдено');
-      const v = await videoRecord(tx, id);
-      if (!v) apiFail(404, 'not_found', 'Видео не найдено');
+      // Снятое, удалённое и недоступное видео прогресс не принимает (как окно: 404 и 403).
+      const v = await openable(tx, learner, id);
       const now = deps.clock.now();
-      // Сверка — со всеми недавними открытиями этого видео: серия сохранений и несколько окон сразу
-      // не дают больше секунд, чем прошло со времени самого раннего из них.
-      const since = new Date(now.getTime() - VIDEO_DURATION_MAX * 1000);
-      const recent = await recentVideoSessions(tx, learner.userId, id, since);
-      const sessions = recent.some((s) => s.id === session.id)
-        ? recent
-        : [...recent, { id: session.id, openedAt: session.openedAt, segs: [] }];
+      // Сверка — со всеми открытиями этого видео за 12 часов (каждое — отдельно): серия сохранений и
+      // несколько окон сразу не дают больше секунд, чем прошло со времени самого раннего из них.
+      // Строка просмотра и открытие — под блокировкой: параллельные сохранения идут по очереди.
+      const ctx = await videoProgressContext(tx, {
+        userId: learner.userId,
+        videoId: id,
+        sessionId,
+        since: new Date(now.getTime() - VIDEO_DURATION_MAX * 1000),
+      });
+      if (!ctx) apiFail(404, 'not_found', 'Открытие не найдено');
+      const { session } = ctx;
+      const first = ctx.firstOpenedAt ?? session.openedAt;
       const problem = videoProgressProblem({
         segs: input.segs,
         duration: v.duration,
-        openedAt: new Date(Math.min(...sessions.map((s) => s.openedAt.getTime()))),
+        openedAt: first < session.openedAt ? first : session.openedAt,
         now,
-        earlier: videoSegMerge(
-          [],
-          sessions.flatMap((s) => s.segs),
-        ),
+        earlier: session.segs,
+        others: ctx.others,
       });
       if (problem) apiFail(400, problem, VIDEO_MESSAGES[problem]);
       const end = v.duration ?? Infinity;
@@ -490,9 +505,9 @@ export function kbVideoMetaHandler(deps: ApiDeps): RouteHandler<typeof kbVideoMe
   return async (c) => {
     const { id } = c.req.valid('param');
     const input = c.req.valid('json');
+    await userLimited(deps, c, VIDEO_META_RATE_LIMIT);
     await asLearner(deps, c, async (tx, learner) => {
       const v = await openable(tx, learner, id);
-      await userLimited(deps, VIDEO_META_RATE_LIMIT, learner.userId);
       if (input.duration !== undefined && v.duration === null) {
         await setVideoDuration(tx, v.id, input.duration);
       }

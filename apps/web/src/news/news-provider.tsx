@@ -146,7 +146,8 @@ export function useNewsRuntime(shell: NewsShellInfo): {
 /**
  * Ссылки новости (прототип: обработчик `[data-mdmod],[data-mdart]` и newsLinkOk): модуль из меню —
  * переход (окно закрывается, запись истории заменяется), статья — окно статьи поверх; нет модуля в
- * меню или статья недоступна — уведомление. В редакторе Админки (`preview`) ссылки не работают.
+ * меню или статья недоступна — уведомление. В редакторе Админки (`preview`) ссылки на модуль и статью
+ * не работают, кнопка видео — открывает окно.
  */
 export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
   const t = useT();
@@ -159,8 +160,9 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
 
   const follow = useCallback(
     (link: NewsInnerLink) => {
-      if (preview) return toast(t('news.link.in_editor'), { icon: 'info' });
+      // Кнопка видео открывает окно и в предпросмотре редактора (прототип: `data-vopen` без `.md-edit`).
       if (link.kind === 'video') return video.open(link.id);
+      if (preview) return toast(t('news.link.in_editor'), { icon: 'info' });
       if (link.kind === 'mod') {
         const href = news.hrefOf(link.module, link.tab);
         if (!href) return toast(t('news.link.module_denied'), { icon: 'lock' });

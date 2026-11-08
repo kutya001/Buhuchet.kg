@@ -55,6 +55,7 @@ export function landingVideoOf(v: VideoRecord): LandingVideo {
     ytId: v.source === 'yt' ? v.ytId : null,
     duration: v.duration,
     description: v.description,
+    module: v.module,
     cover: v.coverKey !== null,
   };
 }

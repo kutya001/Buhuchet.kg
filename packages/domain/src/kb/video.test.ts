@@ -121,6 +121,16 @@ describe('Видео платформы: учёт просмотренных с�
     expect(
       videoProgressProblem({ segs: [[0, 120]], duration: 600, openedAt, now, earlier }),
     ).toBeNull();
+    // Другие окна этого видео тратят тот же запас: каждое считается отдельно, даже те же секунды.
+    expect(
+      videoProgressProblem({ segs: [[0, 5]], duration: 600, openedAt, now, others: 120 }),
+    ).toBeNull();
+    expect(
+      videoProgressProblem({ segs: [[0, 6]], duration: 600, openedAt, now, others: 120 }),
+    ).toBe('video_progress_invalid');
+    expect(
+      videoProgressProblem({ segs: [[0, 1]], duration: 600, openedAt, now, earlier, others: 6 }),
+    ).toBe('video_progress_invalid');
   });
 
   it('нулевые отрезки не копятся: короче 0,1 с после округления отбрасываются', () => {

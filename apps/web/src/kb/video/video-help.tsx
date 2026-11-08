@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { useMemo } from 'react';
 import { useT } from '../../l10n/provider';
 import { presetHref } from '../../lists/preset';
-import { videoCatalogQuery } from './video-data';
+import { useShell } from '../../shell/context';
+import { videoCatalogQuery, videoOptionsQuery } from './video-data';
 import { ItemProgress, VideoCover } from './video-parts';
 import { useVideo } from './video-window';
 
@@ -28,6 +29,20 @@ export function useModuleVideos(module: string | null | undefined): readonly Vid
 export function useCatalogVideo(id: string | null | undefined): VideoItem | null {
   const query = useQuery(videoCatalogQuery);
   return id ? (query.data?.items.find((v) => v.id === id) ?? null) : null;
+}
+
+/**
+ * Видео кнопки в тексте статьи и новости: из каталога, а у администратора платформы — и черновик или
+ * снятое (предпросмотр в Админке, прототип `vidMdBtn` по всем видео); нет — null.
+ */
+export function useLinkedVideo(
+  id: string | null | undefined,
+): Pick<VideoItem, 'id' | 'title' | 'duration'> | null {
+  const { access } = useShell();
+  const found = useCatalogVideo(id);
+  const options = useQuery({ ...videoOptionsQuery, enabled: access.admin && !!id && !found });
+  if (found || !id || !access.admin) return found;
+  return options.data?.items.find((v) => v.id === id) ?? null;
 }
 
 /**
