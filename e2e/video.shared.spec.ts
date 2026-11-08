@@ -129,10 +129,7 @@ test.describe('Видео платформы (прототип v79)', () => {
         page.locator('[data-kb-video]').or(page.getByText('Видео пока нет')).first(),
       ).toBeVisible();
       await expect(page.getByText(title)).toHaveCount(0);
-      await Promise.all([
-        page.waitForResponse('**/api/kb/videos/all'),
-        page.goto('/app/cps/all'),
-      ]);
+      await Promise.all([page.waitForResponse('**/api/kb/videos/all'), page.goto('/app/cps/all')]);
       await expect(top).toHaveCount(0);
     } finally {
       await removeVideo(admin, origin, video.id);
