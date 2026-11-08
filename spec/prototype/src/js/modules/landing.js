@@ -221,7 +221,7 @@ function landPathCalc(el){const page=$('#land-page',el),svg=$('#lp-path',el),w=$
   const p0=$('.lp-p0',svg),p1=$('.lp-p1',svg);p0.setAttribute('d',d);p1.setAttribute('d',d);
   const L=p1.getTotalLength(),step=Math.max(6,L/1600),n=Math.floor(L/step)+1,xs=new Float32Array(n),ys=new Float32Array(n);
   for(let i=0;i<n;i++){const q=p1.getPointAtLength(i*step);xs[i]=q.x;ys[i]=q.y}
-  p1.style.strokeDasharray=`${L} ${L}`;
+  p1.style.strokeDasharray=`${L} ${L+40}`;
   const g=$('.lp-knots',svg);g.innerHTML=kn.map(([x,y])=>`<circle cx="${f(x)}" cy="${f(y)}" r="5"/>`).join('');const ks=[...g.children];
   const knots=kn.map(([x,y],i)=>{let j=0;for(;j<n;j++)if(Math.hypot(xs[j]-x,ys[j]-y)<=step*.75+1)break;return {len:Math.min(j,n-1)*step,el:ks[i]}});
   // опорные точки «высота экрана → длина линии»: у каждой петли кончик линии оказывается ровно тогда, когда заголовок блока на 62 % высоты экрана;
@@ -232,8 +232,8 @@ function landPathCalc(el){const page=$('#land-page',el),svg=$('#lp-path',el),w=$
   LAND.P={L,step,n,xs,ys,A,fg:p1,sun:$('.lp-psun',svg),knots};landTick(el)}
 function landTick(el){const page=$('#land-page',el);if(!page)return;const st=page.scrollTop,vh=page.clientHeight,H=page.scrollHeight,anim=page.classList.contains('lp-anim');
   const P=LAND.P;if(P){let len=P.L;if(anim){const t=st+vh*.62,A=P.A;let k=1;while(k<A.length&&A[k].y<t)k++;if(t<=A[0].y)len=0;else if(k<A.length){const a=A[k-1],b=A[k];len=a.l+(b.l-a.l)*Math.min(1,(t-a.y)/Math.max(1,b.y-a.y))}const i=Math.min(P.n-1,Math.round(len/P.step));P.sun.setAttribute('transform',`translate(${P.xs[i].toFixed(1)} ${P.ys[i].toFixed(1)})`)}
-    P.fg.style.strokeDashoffset=(P.L-len).toFixed(1);P.knots.forEach(k=>k.el.classList.toggle('on',len>=k.len))}
-  const ring=$('#lp-bal .b1');if(ring)ring.style.strokeDashoffset=(1-(H>vh?Math.min(1,st/(H-vh)):1)).toFixed(4);
+    P.fg.style.strokeDashoffset=len>0?(P.L-len).toFixed(1):P.L+20;P.knots.forEach(k=>k.el.classList.toggle('on',len>=k.len))}
+  const ring=$('#lp-bal .b1');if(ring){const q=H>vh?Math.min(1,st/(H-vh)):1;ring.style.strokeDashoffset=q>.002?(1-q).toFixed(4):'1.1'};
   if(!anim)return;
   // «Как это выглядит»: экран раскрывается, пока блок въезжает
   const tl=$('.lp-tilt',el);if(tl){const r=tl.getBoundingClientRect(),pr=page.getBoundingClientRect(),p=Math.max(0,Math.min(1,(pr.bottom-r.top)/(vh*.75)));tl.style.setProperty('--tp',p.toFixed(3))}

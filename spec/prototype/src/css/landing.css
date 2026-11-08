@@ -168,7 +168,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lsh-nav .on{color:var(--text);font-weight:700}
 /* ═══ v78 (Кутман 08.11.2026): минималистичный лендинг — у каждого блока своя анимация и «Подробнее»; заставка, сквозная линия Бернулли, весы в углу, круглый герб.
    Скрытые до появления состояния — только под .lp-anim (без «уменьшить движение») ═══ */
-.lp-draw{fill:none;stroke:#fff;stroke-width:7.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1}
+.lp-draw{fill:none;stroke:#fff;stroke-width:7.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1.2}
 .lp-sec h2::after{content:'';display:block;width:52px;height:3px;border-radius:3px;margin-top:12px;background:linear-gradient(90deg,var(--b-yellow),var(--b-blue));transform-origin:0 50%}
 .lp-sub{margin-top:-12px}
 .land .lp-logo .logo{transition:opacity .25s}
@@ -206,7 +206,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-bal[hidden]{display:none}
 .lp-bal svg{display:block;width:100%;height:100%;overflow:visible}
 .lp-bal .b0{fill:none;stroke:var(--border);stroke-width:3}
-.lp-bal .b1{fill:none;stroke:var(--b-yellow);stroke-width:3;stroke-linecap:round;stroke-dasharray:1 1;stroke-dashoffset:1}
+.lp-bal .b1{fill:none;stroke:var(--b-yellow);stroke-width:3;stroke-linecap:round;stroke-dasharray:1 1.2;stroke-dashoffset:1.1}
 .lp-bal .bp,.lp-bal .bk{fill:none;stroke:var(--text);stroke-width:2.4;stroke-linecap:round}
 .lp-bal .bl path,.lp-bal .br path{fill:none;stroke:var(--muted);stroke-width:1}
 .lp-bal path.bw{fill:var(--accent);stroke:none}
@@ -257,7 +257,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-motto-f{font-weight:760;letter-spacing:.08em;color:var(--text);font-size:13px}
 .lp-emb-r .lp-more-row,.lp-secu-r .lp-more-row,.lp-cont .lp-more-row{justify-content:flex-start}
 .lp-emb-svg .e-band{fill:var(--accent)}
-.lp-emb-svg .e-edge{fill:none;stroke:var(--b-yellow);stroke-width:1.6;stroke-dasharray:1 1;opacity:.9}
+.lp-emb-svg .e-edge{fill:none;stroke:var(--b-yellow);stroke-width:1.6;stroke-dasharray:1 1.2;opacity:.9}
 .lp-emb-svg .e-field{stroke:var(--b-yellow);stroke-width:1.4}
 .lp-emb-svg .e-f0{stop-color:var(--raised)}.lp-emb-svg .e-f1{stop-color:var(--pane-alt)}
 .lp-emb-svg .e-dots{fill:none;stroke:var(--border-strong);stroke-width:1.8;stroke-linecap:round;stroke-dasharray:.0001 .0108}
@@ -276,7 +276,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-emb-svg .e-coin{fill:var(--b-yellow);stroke:var(--yellow);stroke-width:1;opacity:0}
 .lp-emb-svg.e-coins .e-coin{opacity:1}
 .lp-emb-svg .e-lab{font-size:10.5px;font-weight:700;fill:var(--muted);text-anchor:middle}
-.lp-emb-svg .e-inf{fill:none;stroke:var(--b-blue);stroke-width:4.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1}
+.lp-emb-svg .e-inf{fill:none;stroke:var(--b-blue);stroke-width:4.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1.2}
 .lp-emb-svg .e-comet{fill:none;stroke:var(--b-yellow);stroke-width:4.6;stroke-linecap:round;stroke-dasharray:.07 .93;opacity:0}
 .lp-emb-svg .e-part{transition:filter .4s}
 .lp-emb[data-hl="sun"] .e-sun,.lp-emb[data-hl="scales"] .e-scales,.lp-emb[data-hl="curve"] .e-curve{filter:drop-shadow(0 0 6px hsl(43 83% 57% / .9))}
@@ -328,7 +328,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-orbit{position:relative;width:300px;height:300px;margin:0 auto;display:grid;place-items:center}
 .lp-orbit::before,.lp-orbit::after{content:'';position:absolute;inset:60px;border-radius:50%;border:1.5px solid var(--green);opacity:0}
 .lp-shield{position:relative;z-index:1;width:116px;height:136px;overflow:visible}
-.lp-shield .sh-b{fill:var(--green-bg);stroke:var(--green);stroke-width:4;stroke-linejoin:round;stroke-dasharray:1 1}
+.lp-shield .sh-b{fill:var(--green-bg);stroke:var(--green);stroke-width:4;stroke-linejoin:round;stroke-dasharray:1 1.2}
 .lp-shield .sh-l{fill:var(--green)}.lp-shield .sh-k{fill:none;stroke:var(--green);stroke-width:5;stroke-linecap:round}.lp-shield .sh-h{fill:var(--raised)}
 .lp-orb-r{position:absolute;inset:0}
 .lp-orb{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;transform:rotate(var(--a)) translate(120px) rotate(calc(-1 * var(--a)))}
@@ -356,7 +356,8 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 @keyframes lp-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes lp-spin{to{transform:rotate(360deg)}}
 @keyframes lp-spin-r{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
-@keyframes lp-draw{from{stroke-dashoffset:1}}
+/* скрытое начало — 1.1 при промежутке 1.2: иначе круглый конец штриха нулевой длины виден точкой до старта рисования */
+@keyframes lp-draw{from{stroke-dashoffset:1.1}}
 @keyframes lp-dash{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
 @keyframes lp-pulse{from{opacity:.7;transform:scale(.9)}to{opacity:1;transform:scale(1.1)}}
 @keyframes lp-grow{from{transform:scaleX(0)}}
