@@ -75,6 +75,7 @@ const StoredStep = z.object({
   featk: text,
   evk: text,
   art: text,
+  video: text,
   active: z.boolean().optional().catch(undefined),
   isNew: z.boolean().optional().catch(undefined),
   mod: z.string().optional().catch(undefined),
@@ -150,6 +151,7 @@ const stepOf = (s: StoredStep): AdminKbStep => ({
   perm: s.perm,
   featk: s.featk,
   evk: s.evk,
+  video: s.video,
   active: s.active !== false,
   ord: s.ord,
   isNew: s.isNew === true,
@@ -212,6 +214,7 @@ const stepFields = (s: Omit<AdminKbStep, 'id' | 'version' | 'isNew' | 'module' |
   perm: s.perm,
   featk: s.featk,
   evk: s.evk,
+  video: s.video,
   active: s.active,
   ...(s.mod ? { mod: s.mod } : {}),
 });
@@ -268,6 +271,7 @@ export async function adminKbStepSave(
     featk: input.featk,
     evk: input.evk,
     active: input.active,
+    ...(input.video !== undefined ? { video: input.video } : {}),
   };
   let saved: RawItem;
   let before: AdminKbStep | null = null;

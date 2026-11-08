@@ -211,6 +211,7 @@ export async function stateBody(tx: Tx, ctx: KbProgramContext, now: Date): Promi
       module: step.module,
       screens: step.learn ? [...(step.def.at ?? [])] : [],
       articleId: kbStepArticle(step, articles)?.id ?? null,
+      videoId: step.def.video || null,
       done: mark?.done ?? null,
       skipped: !mark?.done && !!mark?.skipped,
     };

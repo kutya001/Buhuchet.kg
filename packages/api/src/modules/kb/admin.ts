@@ -17,6 +17,7 @@ import {
   kbScreenUi,
   listAdminKbPage,
   listAdminKbValues,
+  videoRecords,
   withUserContext,
   type AdminKbSaveResult,
   type Tx,
@@ -286,6 +287,8 @@ async function checkedStep(tx: Tx, input: KbStepInput, isNew: boolean): Promise<
       groups: new Set(meta.groups.map((g) => g.id)),
       articles: new Set(meta.articles.map((a) => a.id)),
       isNew,
+      // Видео шага — из Админки → «Видео» (прототип v79 kbStepDlg: список видео).
+      videos: new Set((await videoRecords(tx)).map((v) => v.id)),
     }),
   );
   return input;

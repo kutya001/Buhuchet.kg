@@ -15,6 +15,7 @@ import { GRID_TEXTS } from './grid-texts';
 import { HOME_TEXTS } from './home-texts';
 import { KB_ADMIN_TEXTS } from './kb-admin-texts';
 import { KB_TEXTS } from './kb-texts';
+import { KB_VIDEO_TEXTS } from './kb-video-texts';
 import { KPI_TEXTS } from './kpi-texts';
 import { LANDING_PRODUCT_TEXTS, LANDING_TEXTS } from './landing-texts';
 import { LEADS_TEXTS } from './leads-texts';
@@ -121,6 +122,7 @@ export const UI_TEXTS = {
   ...KPI_TEXTS,
   ...FILES_TEXTS,
   ...KB_TEXTS,
+  ...KB_VIDEO_TEXTS,
   ...NEWS_TEXTS,
   ...TELEGRAM_TEXTS,
   ...PLATFORM_DICTS_TEXTS,

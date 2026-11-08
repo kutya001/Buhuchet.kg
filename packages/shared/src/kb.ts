@@ -39,6 +39,10 @@ export const KbStep = z.object({
   screens: z.array(z.string()),
   /** Статья шага (своя или его модуля); null — нет. */
   articleId: KbCode.nullable(),
+  /**
+   * Видео платформы шага (прототип v79): кнопка «▶ Видео», если видео доступно пользователю; null — нет.
+   */
+  videoId: KbCode.nullable(),
   /** Засчитан: как и когда; null — нет. */
   done: z.object({ how: KbHowSchema, at: z.iso.datetime() }).nullable(),
   /** «Пропустить»: серый, в уровень не засчитывается. */
@@ -171,6 +175,8 @@ export const KbBlockSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('screen'), module: z.string() }),
   z.object({ type: z.literal('image'), src: z.string(), alt: z.string() }),
+  // Видео платформы (прототип v79 `<kb-video data-id>`): кнопка открывает окно видео.
+  z.object({ type: z.literal('video'), id: z.string() }),
 ]);
 
 /** Описание экрана модуля из `kbUi`: подписи вкладок, элементы и формы с полями. */

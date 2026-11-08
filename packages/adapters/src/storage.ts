@@ -1,13 +1,18 @@
 import {
+  AbortMultipartUploadCommand,
+  CompleteMultipartUploadCommand,
   CreateBucketCommand,
+  CreateMultipartUploadCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
   ListObjectsV2Command,
+  ListPartsCommand,
   PutObjectCommand,
   S3Client,
   S3ServiceException,
+  UploadPartCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { filePreviewKind } from '@buhuchet/domain';
@@ -45,11 +50,48 @@ export interface Storage {
   ): Promise<{ url: string; headers: Record<string, string> }>;
   /** Размер и тип лежащего файла (проверка после загрузки браузером); нет файла — null. */
   stat(key: string): Promise<{ size: number; contentType: string | null } | null>;
+  /** Кусок файла с байта `offset` длиной не больше `length` (проверка видео после загрузки); нет — null. */
+  getRange(key: string, offset: number, length: number): Promise<Uint8Array | null>;
+  /**
+   * Многочастная загрузка большого файла из браузера (видео платформы до 500 МБ): начать — номер
+   * загрузки хранилища; части браузер кладёт по подписанным ссылкам `signedPartUrl` мимо API, сервер
+   * узнаёт уложенные части (`listParts`) и собирает файл (`completeMultipart`) или прерывает загрузку.
+   */
+  createMultipart(key: string, options: { contentType: string }): Promise<string>;
+  /** Временная ссылка на `PUT` одной части (номер с 1). */
+  signedPartUrl(
+    key: string,
+    uploadId: string,
+    partNumber: number,
+    options: { expiresInSeconds: number },
+  ): Promise<string>;
+  /** Части, которые уже в хранилище, по номерам; загрузки нет — null. */
+  listParts(key: string, uploadId: string): Promise<StoragePart[] | null>;
+  completeMultipart(key: string, uploadId: string, parts: readonly StoragePart[]): Promise<void>;
+  abortMultipart(key: string, uploadId: string): Promise<void>;
+  /**
+   * Ссылка на просмотр видео (окно видео): открывается в браузере, тип ответа — этот (`video/mp4` или
+   * `video/webm`), перемотка — запросами Range к той же ссылке; срок до 2 часов.
+   */
+  signedVideoUrl(
+    key: string,
+    options: { expiresInSeconds: number; contentType: VideoContentType },
+  ): Promise<string>;
   /** Проверка доступности корзины (страница «здоровья»). */
   ping(): Promise<void>;
   /** Создать корзину, если её нет (локально и в CI). */
   ensureBucket(): Promise<void>;
 }
+
+/** Уложенная часть многочастной загрузки. */
+export interface StoragePart {
+  partNumber: number;
+  etag: string;
+  size: number;
+}
+
+/** Тип видео платформы: другой ссылкой на просмотр не отдаётся. */
+export type VideoContentType = 'video/mp4' | 'video/webm';
 
 const SEGMENT = /^[A-Za-z0-9_-]+$/;
 
@@ -109,12 +151,31 @@ function checkExpiry(seconds: number): void {
   }
 }
 
+/** Ссылка на просмотр видео — до 2 часов (ТЗ «по временной ссылке на 2 часа с перемоткой»). */
+const MAX_VIDEO_URL_SECONDS = 2 * 60 * 60;
+
+function checkVideo(seconds: number, contentType: string): void {
+  if (!Number.isInteger(seconds) || seconds < 1 || seconds > MAX_VIDEO_URL_SECONDS) {
+    throw new RangeError(`Срок ссылки на видео — от 1 до ${MAX_VIDEO_URL_SECONDS} секунд`);
+  }
+  if (contentType !== 'video/mp4' && contentType !== 'video/webm') {
+    throw new RangeError(`Тип ${contentType} — не видео платформы`);
+  }
+}
+
+function checkPart(partNumber: number): void {
+  if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10_000) {
+    throw new RangeError('Номер части — от 1 до 10 000');
+  }
+}
+
 function isNotFound(error: unknown): boolean {
   return (
     error instanceof S3ServiceException &&
     (error.$metadata.httpStatusCode === 404 ||
       error.name === 'NoSuchKey' ||
       error.name === 'NoSuchBucket' ||
+      error.name === 'NoSuchUpload' ||
       error.name === 'NotFound')
   );
 }
@@ -252,6 +313,102 @@ export function createS3Storage(config: StorageConfig): Storage {
         throw error;
       }
     },
+    async getRange(key, offset, length) {
+      if (length < 1) return new Uint8Array();
+      try {
+        const out = await client.send(
+          new GetObjectCommand({
+            Bucket,
+            Key: key,
+            Range: `bytes=${offset}-${offset + length - 1}`,
+          }),
+        );
+        return out.Body ? await out.Body.transformToByteArray() : new Uint8Array();
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        // Кусок за концом файла (416) — пусто, как у короткого файла.
+        if (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 416) {
+          return new Uint8Array();
+        }
+        throw error;
+      }
+    },
+    async createMultipart(key, { contentType }) {
+      const out = await client.send(
+        new CreateMultipartUploadCommand({ Bucket, Key: key, ContentType: contentType }),
+      );
+      if (!out.UploadId) throw new Error('Хранилище не вернуло номер многочастной загрузки');
+      return out.UploadId;
+    },
+    async signedPartUrl(key, uploadId, partNumber, { expiresInSeconds }) {
+      checkExpiry(expiresInSeconds);
+      checkPart(partNumber);
+      const command = new UploadPartCommand({
+        Bucket,
+        Key: key,
+        UploadId: uploadId,
+        PartNumber: partNumber,
+      });
+      return getSignedUrl(signer, command, { expiresIn: expiresInSeconds });
+    },
+    async listParts(key, uploadId) {
+      const parts: StoragePart[] = [];
+      let marker: string | undefined;
+      try {
+        for (let page = 0; page < 20; page++) {
+          const out = await client.send(
+            new ListPartsCommand({
+              Bucket,
+              Key: key,
+              UploadId: uploadId,
+              PartNumberMarker: marker,
+            }),
+          );
+          for (const p of out.Parts ?? []) {
+            if (p.PartNumber && p.ETag) {
+              parts.push({ partNumber: p.PartNumber, etag: p.ETag, size: p.Size ?? 0 });
+            }
+          }
+          if (!out.IsTruncated || !out.NextPartNumberMarker) break;
+          marker = out.NextPartNumberMarker;
+        }
+      } catch (error) {
+        if (isNotFound(error)) return null;
+        throw error;
+      }
+      return parts.sort((a, b) => a.partNumber - b.partNumber);
+    },
+    async completeMultipart(key, uploadId, parts) {
+      await client.send(
+        new CompleteMultipartUploadCommand({
+          Bucket,
+          Key: key,
+          UploadId: uploadId,
+          MultipartUpload: {
+            Parts: parts.map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })),
+          },
+        }),
+      );
+    },
+    async abortMultipart(key, uploadId) {
+      try {
+        await client.send(
+          new AbortMultipartUploadCommand({ Bucket, Key: key, UploadId: uploadId }),
+        );
+      } catch (error) {
+        if (!isNotFound(error)) throw error;
+      }
+    },
+    async signedVideoUrl(key, { expiresInSeconds, contentType }) {
+      checkVideo(expiresInSeconds, contentType);
+      const command = new GetObjectCommand({
+        Bucket,
+        Key: key,
+        ResponseContentDisposition: 'inline',
+        ResponseContentType: contentType,
+      });
+      return getSignedUrl(signer, command, { expiresIn: expiresInSeconds });
+    },
     async ping() {
       await client.send(new HeadBucketCommand({ Bucket }));
     },
@@ -282,14 +439,30 @@ export function createS3Storage(config: StorageConfig): Storage {
 
 export interface MemoryStorage extends Storage {
   readonly files: ReadonlyMap<string, { body: Uint8Array; contentType: string }>;
+  /** Незаконченные многочастные загрузки (номер → ключ и уложенные части). */
+  readonly multiparts: ReadonlyMap<string, { key: string; parts: Map<number, Uint8Array> }>;
+  /** Браузер положил часть по подписанной ссылке (в тестах). */
+  putPart(uploadId: string, partNumber: number, body: Uint8Array): void;
 }
 
 /** Хранилище в памяти для тестов других пакетов. */
 export function createMemoryStorage(): MemoryStorage {
   const files = new Map<string, { body: Uint8Array; contentType: string }>();
+  const multiparts = new Map<
+    string,
+    { key: string; contentType: string; parts: Map<number, Uint8Array> }
+  >();
   const encoder = new TextEncoder();
+  let uploads = 0;
+  const etag = (n: number, body: Uint8Array) => `"${n}-${body.length}"`;
   return {
     files,
+    multiparts,
+    putPart(uploadId, partNumber, body) {
+      const upload = multiparts.get(uploadId);
+      if (!upload) throw new Error(`Нет загрузки ${uploadId}`);
+      upload.parts.set(partNumber, body);
+    },
     async put(key, body, { contentType }) {
       files.set(key, { body: typeof body === 'string' ? encoder.encode(body) : body, contentType });
     },
@@ -321,6 +494,62 @@ export function createMemoryStorage(): MemoryStorage {
     async stat(key) {
       const file = files.get(key);
       return file ? { size: file.body.length, contentType: file.contentType } : null;
+    },
+    async getRange(key, offset, length) {
+      const file = files.get(key);
+      return file ? file.body.slice(offset, offset + Math.max(0, length)) : null;
+    },
+    async createMultipart(key, { contentType }) {
+      const id = `mp${++uploads}`;
+      multiparts.set(id, { key, contentType, parts: new Map() });
+      return id;
+    },
+    async signedPartUrl(key, uploadId, partNumber, { expiresInSeconds }) {
+      checkExpiry(expiresInSeconds);
+      checkPart(partNumber);
+      const params = new URLSearchParams({
+        expires: String(expiresInSeconds),
+        uploadId,
+        part: String(partNumber),
+      });
+      return `memory://${key}?${params.toString()}`;
+    },
+    async listParts(key, uploadId) {
+      const upload = multiparts.get(uploadId);
+      if (!upload || upload.key !== key) return null;
+      return [...upload.parts.entries()]
+        .sort(([a], [b]) => a - b)
+        .map(([partNumber, body]) => ({
+          partNumber,
+          etag: etag(partNumber, body),
+          size: body.length,
+        }));
+    },
+    async completeMultipart(key, uploadId, parts) {
+      const upload = multiparts.get(uploadId);
+      if (!upload || upload.key !== key) throw new Error(`Нет загрузки ${uploadId}`);
+      const bodies = parts.map((p) => {
+        const body = upload.parts.get(p.partNumber);
+        if (!body || etag(p.partNumber, body) !== p.etag) throw new Error('Часть не та');
+        return body;
+      });
+      const total = bodies.reduce((n, b) => n + b.length, 0);
+      const out = new Uint8Array(total);
+      let at = 0;
+      for (const b of bodies) {
+        out.set(b, at);
+        at += b.length;
+      }
+      files.set(key, { body: out, contentType: upload.contentType });
+      multiparts.delete(uploadId);
+    },
+    async abortMultipart(_key, uploadId) {
+      multiparts.delete(uploadId);
+    },
+    async signedVideoUrl(key, { expiresInSeconds, contentType }) {
+      checkVideo(expiresInSeconds, contentType);
+      const params = new URLSearchParams({ expires: String(expiresInSeconds), type: contentType });
+      return `memory://${key}?${params.toString()}`;
     },
     async ping() {},
     async ensureBucket() {},

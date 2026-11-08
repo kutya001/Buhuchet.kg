@@ -10,6 +10,7 @@ import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
+import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { createDueReportsJob } from '../modules/reports/job';
 import { telegramSendJob } from '../modules/telegram/outbox';
@@ -97,6 +98,7 @@ export const jobs: readonly Job[] = [
   createDueReportsJob,
   cleanupPendingFilesJob,
   duesRecalcJob,
+  cleanupVideoUploadsJob,
 ];
 
 /** Ошибки доставки вебхуку — не чаще одного оповещения за столько часов. */

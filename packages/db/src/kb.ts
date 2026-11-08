@@ -78,6 +78,7 @@ const Step = z.object({
   art: optText,
   isNew: z.boolean().optional().catch(undefined),
   mod: optText,
+  video: optText,
 });
 const Group = z.object({ id: z.string(), t: z.string(), scr: optText, adm: flag });
 const Level = z.object({ n: z.string(), p: z.number() });

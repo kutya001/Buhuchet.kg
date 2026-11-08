@@ -51,7 +51,7 @@ export const news = pgTable(
     short: text('short').notNull(),
     /** Подробное описание в markdown. */
     md: text('md').notNull(),
-    /** «Подробнее»: статья (`art`) или модуль (`mod`) Базы знаний. */
+    /** «Подробнее»: статья (`art`) или модуль (`mod`) Базы знаний, видео платформы (`video`). */
     linkKind: text('link_kind'),
     linkId: text('link_id'),
     pinned: boolean('pinned').notNull().default(false),
@@ -80,7 +80,7 @@ export const news = pgTable(
     check('news_status_check', sql`${t.status} in (${inList(NEWS_STATUSES)})`),
     check(
       'news_link_check',
-      sql`(${t.linkKind} is null and ${t.linkId} is null) or (${t.linkKind} in ('art', 'mod') and ${t.linkId} ~ '^[A-Za-z0-9_-]{1,64}$')`,
+      sql`(${t.linkKind} is null and ${t.linkId} is null) or (${t.linkKind} in ('art', 'mod', 'video') and ${t.linkId} ~ '^[A-Za-z0-9_-]{1,64}$')`,
     ),
     check(
       'news_published_check',

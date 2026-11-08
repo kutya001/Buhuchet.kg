@@ -15,9 +15,12 @@ export const NewsCode = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,63}$/);
 export const NewsTypeSchema = z.enum(NEWS_TYPES);
 export const NewsAudienceSchema = z.enum(NEWS_AUDIENCES);
 
-/** «Подробнее»: статья (`art`) или модуль (`mod`) Базы знаний. */
+/**
+ * «Подробнее»: статья (`art`) или модуль (`mod`) Базы знаний; видео платформы (`video`) — кнопка
+ * «▶ Смотреть видео» (решение заказчика 08.11.2026).
+ */
 export const NewsLinkSchema = z.object({
-  kind: z.enum(['art', 'mod']),
+  kind: z.enum(['art', 'mod', 'video']),
   id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/),
 });
 export type NewsLinkSchema = z.infer<typeof NewsLinkSchema>;

@@ -127,6 +127,7 @@ export const KB_TEXTS = {
   'kb.how.use': { ru: 'первым использованием', section: S },
   'kb.how.visit': { ru: 'открытием экрана', section: S },
   'kb.how.hand': { ru: 'вручную', section: S },
+  'kb.how.video': { ru: 'просмотром видео', section: S },
   'kb.offers.title': { ru: 'Можно включить', section: S },
   'kb.offers.hint_org': {
     ru: 'Эти функции выключены в учётной политике, поэтому их уроков нет в программе. После включения уроки появятся у всех сотрудников с отметкой «Новое».',
