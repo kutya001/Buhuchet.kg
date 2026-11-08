@@ -1,0 +1,179 @@
+/* Заставка с логотипом при каждом входе (Кутман 08.11.2026; прототип v78, src/css/landing.css: .lp-intro, .bu-intro-tg):
+   лендинг, страница входа и программа. Общие для лендинга кадры анимаций (lp-draw, lp-pop, lp-pulse, lp-grow, lp-letter) — здесь же */
+.lp-draw {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 7.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1 1.2;
+}
+.lp-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  background: var(--bu-pane);
+  transition: background-color 0.75s ease 0.05s;
+  cursor: pointer;
+  animation: lp-intro-off 0.5s ease 8s forwards;
+}
+.lp-intro.fly {
+  background-color: transparent;
+  pointer-events: none;
+}
+.lp-intro-c {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  position: relative;
+}
+.lp-intro-c::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: min(560px, 130vw);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: radial-gradient(circle, hsl(43 83% 57% / 0.3), transparent 62%);
+  animation: lp-pulse 2.2s ease-in-out infinite alternate;
+  transition: opacity 0.4s;
+}
+.lp-intro.fly .lp-intro-c::before {
+  opacity: 0;
+}
+.lp-intro-lg {
+  position: relative;
+  width: min(240px, 56vw);
+  height: auto;
+  overflow: visible;
+  transform-origin: 50% 50%;
+  transition: transform 0.85s cubic-bezier(0.65, 0, 0.25, 1);
+}
+.lp-intro-lg .lg-sp {
+  fill: var(--bu-b-blue);
+}
+.lp-intro-lg .lg-l {
+  fill: var(--bu-text);
+}
+.lp-intro .lp-draw {
+  animation: lp-draw 1.6s cubic-bezier(0.45, 0, 0.2, 1) 0.25s backwards;
+}
+.lp-in-l {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: lp-pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 1.3s backwards;
+}
+.lp-intro .lp-lg-u {
+  animation-delay: 1.5s;
+}
+.lp-intro-w {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  font-size: clamp(42px, 10vw, 76px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--bu-text);
+  transform-origin: 50% 50%;
+  transition:
+    transform 0.85s cubic-bezier(0.65, 0, 0.25, 1),
+    opacity 0.45s ease 0.25s;
+}
+.lp-intro-w span {
+  display: inline-block;
+  animation: lp-letter 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) calc(1.45s + var(--i) * 75ms) backwards;
+}
+.lp-intro-w .kg {
+  color: var(--bu-b-blue);
+  font-weight: 700;
+  font-size: 0.62em;
+  margin-left: 2px;
+}
+.lp-intro-ln {
+  position: relative;
+  display: block;
+  height: 3px;
+  width: min(320px, 70vw);
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--bu-b-yellow), var(--bu-b-blue));
+  transform-origin: 0 50%;
+  animation: lp-grow 0.9s cubic-bezier(0.5, 0, 0.2, 1) 2.05s backwards;
+  transition: opacity 0.3s;
+}
+.lp-intro.fly .lp-intro-w,
+.lp-intro.fly .lp-intro-ln {
+  opacity: 0;
+}
+.lp-intro-lg.gone {
+  opacity: 0;
+  transition:
+    transform 0.85s cubic-bezier(0.65, 0, 0.25, 1),
+    opacity 0.6s ease 0.2s;
+}
+/* Знак, на место которого улетает заставка, пока она летит, не виден (шапка лендинга, карточка входа, меню программы) */
+.bu-intro-tg {
+  opacity: 0 !important;
+}
+/* Продукт: после «Выйти» и в браузере под управлением тестов — без заставки (класс off ставит строка в начале
+   заставки); без скрипта страницы заставка сама уходит через 8 с (lp-intro-off) — пустого экрана не бывает */
+.lp-intro.off {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-intro {
+    display: none;
+  }
+}
+@keyframes lp-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* Скрытое начало — 1.1 при промежутке 1.2: иначе круглый конец штриха нулевой длины виден точкой до начала
+   рисования (прототип v78, c2c5296) */
+@keyframes lp-draw {
+  from {
+    stroke-dashoffset: 1.1;
+  }
+}
+@keyframes lp-pulse {
+  from {
+    opacity: 0.7;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+@keyframes lp-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes lp-letter {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em) rotate(6deg);
+  }
+}
+@keyframes lp-intro-off {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}

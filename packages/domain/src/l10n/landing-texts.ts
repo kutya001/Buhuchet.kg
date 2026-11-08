@@ -22,6 +22,9 @@ export const LANDING_TEXTS = {
   'land.btn.demo': { ru: 'Посмотреть на демо-организацию', section: S },
   'land.btn.menu': { ru: 'Меню', section: S },
   'land.btn.theme': { ru: 'Светлая или тёмная тема', section: S },
+  'land.more': { ru: 'Подробнее', section: S },
+  'land.less': { ru: 'Свернуть', section: S },
+  'land.top': { ru: 'Наверх', section: S },
   'land.hero.title': {
     ru: 'Отчёты, сроки и деньги клиентов бухгалтерской фирмы — в одной программе',
     section: S,
@@ -30,15 +33,52 @@ export const LANDING_TEXTS = {
     ru: 'Buhuchet.kg сам создаёт отчёты по каждому клиенту на каждый период, считает сроки по Налоговому кодексу и производственному календарю КР и напоминает сотрудникам в Telegram. Вы видите, кто что сдал и сколько заплачено.',
     section: S,
   },
+  'land.hero.lead': {
+    ru: 'Отчёты создаются сами, сроки — по НК КР, напоминания — в Telegram',
+    section: S,
+  },
   'land.hero.note': {
     ru: 'Работает в браузере на компьютере и телефоне — устанавливать ничего не нужно',
     section: S,
   },
+  'land.scroll': { ru: 'Листайте вниз', section: S },
   'land.stats.types': { ru: 'видов отчётов и платежей в каталоге', section: S },
   'land.stats.regimes': { ru: 'налоговых режимов по НК КР', section: S },
   'land.stats.cal': { ru: 'Производственный календарь КР', section: S },
   'land.stats.cal.sub': { ru: 'с праздниками и переносами', section: S },
   'land.stats.remind': { ru: 'Напоминания за 7 и 3 дня и в день срока', section: S },
+  'land.emb.title': { ru: 'Три символа герба бухгалтеров — в Buhuchet.kg', section: S },
+  'land.emb.sub': {
+    ru: 'Солнце, весы и кривая Бернулли — нажмите на символ, чтобы узнать, что он значит в программе',
+    section: S,
+  },
+  'land.emb.1.t': { ru: 'Солнце: учёт освещает дела', section: S },
+  'land.emb.1.d': {
+    ru: 'Всё на виду: на Главной видно, что сдано, что просрочено и кто отвечает за каждого клиента',
+    section: S,
+  },
+  'land.emb.2.t': { ru: 'Весы: баланс', section: S },
+  'land.emb.2.d': {
+    ru: 'Деньги клиентов на налоги сходятся: поступления, оплаты, остаток и недостача по каждому клиенту',
+    section: S,
+  },
+  'land.emb.3.t': { ru: 'Кривая Бернулли: учёт вечен', section: S },
+  'land.emb.3.d': {
+    ru: 'Отчёты сами создаются на каждый месяц, квартал и год — цикл не прерывается. Спираль Бернулли — и в нашем логотипе',
+    section: S,
+  },
+  'land.emb.motto': { ru: 'SCIENCE · CONSCIENCE · INDÉPENDANCE', section: S },
+  'land.emb.motto.ru': {
+    ru: 'Девиз на кольце герба: «Наука, совесть, независимость»',
+    section: S,
+  },
+  'land.emb.motto.r': { ru: 'НАУКА · СОВЕСТЬ · НЕЗАВИСИМОСТЬ', section: S },
+  'land.emb.debit': { ru: 'Дебет', section: S },
+  'land.emb.credit': { ru: 'Кредит', section: S },
+  'land.emb.aria': {
+    ru: 'Герб бухгалтеров: на кольце девиз, в поле солнце, весы с чашами «Дебет» и «Кредит» и кривая Бернулли',
+    section: S,
+  },
   'land.who.title': { ru: 'Кому подходит', section: S },
   'land.who.1.t': { ru: 'Бухгалтерским аутсорсинговым компаниям', section: S },
   'land.who.1.d': {
@@ -69,6 +109,7 @@ export const LANDING_TEXTS = {
     ru: 'Поступления и оплаты по каждому клиенту, остаток и недостача видны сразу',
     section: S,
   },
+  'land.change.tap': { ru: 'Нажмите на карточку — увидите, как было', section: S },
   'land.feat.title': { ru: 'Возможности', section: S },
   'land.feat.1.t': { ru: 'Отчёты создаются сами', section: S },
   'land.feat.1.d': {
@@ -162,6 +203,7 @@ export const LANDING_TEXTS = {
     section: S,
   },
   'land.sec.title': { ru: 'Безопасность и данные', section: S },
+  'land.sec.short': { ru: 'Пять уровней защиты данных вашей фирмы', section: S },
   'land.sec.1': {
     ru: 'Данные каждой фирмы отделены: другие организации их не видят — это проверяется на сервере и в базе данных',
     section: S,

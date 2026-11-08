@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  BrandMark,
   buttonClass,
   Icon,
   iconButtonClass,
@@ -10,23 +9,47 @@ import {
   type IconName,
   type PhoneInputCode,
 } from '@buhuchet/ui';
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { setTheme } from '../shell/browser';
 import { parseMaxPrefs } from '../shell/prefs';
+import { BrandIntro, skipNextIntro, usePageLoad } from '../shell/brand-intro';
 import { UiProviders } from '../shell/ui-providers';
+import {
+  BalanceIcon,
+  delay,
+  Emblem,
+  HeroBg,
+  LandLogo,
+  ScrollPath,
+  Shield,
+  Stamp,
+  type EmblemPart,
+} from './landing-art';
 import type { DemoScreens } from './landing-data';
+import { reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
 import { LeadForm } from './lead-form';
 import { CardScreen, DeskScreen, PhoneScreen } from './mini-screens';
 import './landing.css';
 
 /*
- * Лендинг buhuchet.kg для гостей (задача #165; ТЗ «Лендинг — buhuchet.kg для гостей»; прототип
- * modules/landing.js, landDraw и landBind): одна длинная страница из 12 блоков по порядку. Все тексты —
- * словарь, группа «Лендинг» (правятся в «Локализации»); числа полосы цифр и картинки — из справочников и
- * демо-данных на момент сборки. «Посмотреть на демо-организацию» открывает /demo — собранный файл
- * прототипа; «Войти» — страницу входа. Единственный запрос страницы к серверу — отправка заявки.
+ * Лендинг buhuchet.kg для гостей (задача #165; ТЗ «Лендинг — buhuchet.kg для гостей»; прототип v78
+ * modules/landing.js, landDraw, landBind, landFx): минималистичная длинная страница — заставка
+ * с логотипом при каждом открытии (`BrandIntro`), первый экран, полоса цифр и 9 блоков, у каждого своя анимация с
+ * отсылками к гербу бухгалтеров и «Подробнее». Все тексты — словарь, группа «Лендинг» (правятся в
+ * «Локализации»); числа полосы цифр и картинки — из справочников и демо-данных на момент сборки.
+ * «Посмотреть на демо-организацию» открывает /demo — собранный файл прототипа; «Войти» — страницу входа.
+ * Единственный запрос страницы к серверу — отправка заявки.
  */
 
 export interface LandingProps {
@@ -41,7 +64,14 @@ export interface LandingProps {
 
 /** Адрес демо-версии (ТЗ «Демо-организация»: buhuchet.kg/demo). */
 const DEMO_HREF = '/demo';
+/** «Войти» открывает страницу входа без заставки (прототип landLogin — сразу экран входа, `skipNextIntro`). */
 const LOGIN_HREF = '/login';
+
+/**
+ * Строка в начале страницы — до первой отрисовки: без «уменьшить движение» блоки ждут своей анимации
+ * (класс `lp-anim`).
+ */
+const BOOT = `(function(){var l=document.currentScript&&document.currentScript.parentNode;if(l&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches&&'IntersectionObserver' in window)l.classList.add('lp-anim')})()`;
 
 /**
  * Кнопка темы в шапке (прототип v72, landThemeToggle): пока тему не выбрали, лендинг светлый (класс
@@ -66,9 +96,14 @@ const NAV = [
 
 const N3 = [1, 2, 3] as const;
 const N4 = [1, 2, 3, 4] as const;
-const N7 = [1, 2, 3, 4, 5, 6, 7] as const;
 const N12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
+/** Символы герба: значок и цвет строки списка (прототип `EI`). */
+const EMBLEM: readonly (readonly [EmblemPart, string, IconName, 1 | 2 | 3])[] = [
+  ['sun', 's', 'sun', 1],
+  ['scales', 'w', 'scale', 2],
+  ['curve', 'c', 'infinity', 3],
+];
 /** Значки и цвета карточек (прототип: `who` — building/user/chart, `FI`/`FC` — «Возможности»). */
 const WHO: readonly [IconName, string][] = [
   ['building', ''],
@@ -99,8 +134,9 @@ const SECURITY: readonly (readonly [1 | 2 | 3 | 4 | 5, IconName])[] = [
   [5, 'archive'],
 ];
 
-const reducedMotion = () =>
-  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Блоки с «Подробнее». */
+type BlockId =
+  'emb' | 'who' | 'change' | 'features' | 'shots' | 'start' | 'security' | 'faq' | 'lead';
 
 /** Контакты из словаря; пустой контакт на странице не показывается (ТЗ «Тексты и контакты»). */
 function contacts(t: Translate): { href: string; icon: IconName; text: string; external?: true }[] {
@@ -133,6 +169,22 @@ export function Landing(props: LandingProps) {
   );
 }
 
+/** Скрытые подробности блока: раскрывает «Подробнее» (прототип `dd` — блок, `ds` — строка). */
+function Details({ children }: { children: ReactNode }) {
+  return (
+    <div className="lp-d">
+      <div>{children}</div>
+    </div>
+  );
+}
+function DetailsLine({ children }: { children: ReactNode }) {
+  return (
+    <span className="lp-d">
+      <span>{children}</span>
+    </span>
+  );
+}
+
 function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
   const t = useT();
   const [menu, setMenu] = useState(false);
@@ -140,7 +192,16 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
   const [sent, setSent] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [fab, setFab] = useState(false);
+  const [bal, setBal] = useState(false);
+  const [more, setMore] = useState<Partial<Record<BlockId, boolean>>>({});
+  const [hl, setHl] = useState<EmblemPart | ''>('');
+  const [tiles, setTiles] = useState<ReadonlySet<number>>(new Set());
+  const root = useRef<HTMLDivElement>(null);
+  // Строка BOOT — в разметке с сервера, при загрузке страницы.
+  const boot = usePageLoad();
+  const fx = useRef<LandingFx | null>(null);
   const burger = useRef<HTMLButtonElement>(null);
+  const logo = useRef<HTMLButtonElement>(null);
   const track = useRef<HTMLDivElement>(null);
 
   /** Плавно к блоку; `focus` — курсор в первое поле формы заявки. */
@@ -171,7 +232,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
     return () => window.removeEventListener('hashchange', onHash);
   }, [toLead]);
 
-  // На телефоне после первого экрана внизу закреплена «Оставить заявку»; над блоком заявки скрыта.
+  // После первого экрана: в углу весы-значок, на телефоне внизу «Оставить заявку» (над блоком заявки её нет).
   useEffect(() => {
     const hero = document.getElementById('lp-hero');
     const lead = document.getElementById('lp-lead');
@@ -181,6 +242,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
       (entries) => {
         for (const e of entries) seen[e.target.id] = e.isIntersecting;
         setFab(!seen['lp-hero'] && !seen['lp-lead']);
+        setBal(!seen['lp-hero']);
       },
       { threshold: 0 },
     );
@@ -188,6 +250,39 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
     io.observe(lead);
     return () => io.disconnect();
   }, []);
+
+  /*
+   * Анимации лендинга. Блоки появляются, когда заставка с логотипом (общая, `BrandIntro`) улетит в шапку,
+   * без заставки — сразу.
+   */
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const effects = startLandingFx(el, true);
+    fx.current = effects;
+    el.classList.add('lp-js');
+    return () => {
+      effects.stop();
+      fx.current = null;
+    };
+  }, []);
+  const revealBlocks = useCallback(() => fx.current?.reveal(), []);
+
+  const toggleMore = (id: BlockId) => setMore((m) => ({ ...m, [id]: !m[id] }));
+  /** Символ герба: нажатие на строку списка — подсветить или снять, на рисунок — подсветить; весы взвешивают. */
+  const pick = (part: EmblemPart, fromEmblem = false) => {
+    const next = hl === part && !fromEmblem ? '' : part;
+    setHl(next);
+    if (next === 'scales') fx.current?.weigh();
+  };
+  const toggleTile = (i: number) =>
+    setTiles((s) => {
+      const next = new Set(s);
+      if (!next.delete(i)) next.add(i);
+      return next;
+    });
+  /** «Что меняется»: карточка переворачивается между «Было» и «Стало». */
+  const flip = (e: MouseEvent<HTMLButtonElement>) => e.currentTarget.classList.toggle('now');
 
   const pickShot = (i: number) => {
     setShot(i);
@@ -214,6 +309,51 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
     setMenu(false);
     window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
   };
+  /**
+   * Весы «Наверх» прячутся, когда виден первый экран: фокус заранее переходит на логотип в шапке — иначе Chrome
+   * останавливает плавную прокрутку на полпути, как только скрывается кнопка в фокусе.
+   */
+  const balToTop = () => {
+    logo.current?.focus({ preventScroll: true });
+    toTop();
+  };
+
+  /** Кнопка «Подробнее» / «Свернуть» блока; `label` — своя подпись закрытой кнопки. */
+  const moreButton = (id: BlockId, label?: string) => (
+    <div className="lp-more-row">
+      <button
+        type="button"
+        className="lp-more"
+        aria-expanded={!!more[id]}
+        onClick={() => toggleMore(id)}
+      >
+        <span>{more[id] ? t('land.less') : (label ?? t('land.more'))}</span>
+        <Icon name="down" size="sm" />
+      </button>
+    </div>
+  );
+  /** Блок страницы: заголовок, подзаголовок и содержимое; `data-open` — раскрыты подробности. */
+  const block = (
+    id: BlockId,
+    className: string,
+    title: string,
+    body: ReactNode,
+    sub?: string,
+    extra?: { 'data-hl'?: string },
+  ) => (
+    <section
+      className={`lp-sec lp-b ${className}`}
+      id={`lp-${id}`}
+      data-open={more[id] ? '' : undefined}
+      {...extra}
+    >
+      <div className="lp-wrap">
+        <h2 className="rv">{title}</h2>
+        {sub ? <p className="lp-sub rv">{sub}</p> : null}
+        {body}
+      </div>
+    </section>
+  );
 
   const navButtons = NAV.map(([id, key]) => (
     <button key={id} type="button" onClick={() => go(id)}>
@@ -236,20 +376,34 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
     <CardScreen key="card" t={t} d={screens} />,
     <PhoneScreen key="phone" t={t} d={screens} today={today} />,
   ];
+  const faqItem = (n: 1 | 2 | 3 | 4 | 5 | 6 | 7) => (
+    <details key={n} className="rv" style={delay((n - 1) % 3)}>
+      <summary>{t(`land.faq.${n}.q` as const)}</summary>
+      <p>{t(`land.faq.${n}.a` as const)}</p>
+    </details>
+  );
 
   return (
-    <div className="land bu-light-default" onKeyDown={onKeyDown}>
+    <div
+      ref={root}
+      className="land bu-light-default"
+      onKeyDown={onKeyDown}
+      suppressHydrationWarning
+    >
+      {boot ? <script dangerouslySetInnerHTML={{ __html: BOOT }} /> : null}
+      <BrandIntro onReveal={revealBlocks} />
       {stand ? <div className="lp-test">{t('land.test')}</div> : null}
-      {/* 1. Шапка */}
+      {/* Шапка */}
       <header className="lp-head">
         <div className="lp-wrap lp-head-in">
           <button
+            ref={logo}
             type="button"
             className="lp-logo"
             onClick={toTop}
             aria-label={t('land.aria.home')}
           >
-            <BrandMark />
+            <LandLogo />
             <span>
               <span className="lp-bn">Buhuchet.kg</span>
               <span className="lp-bs">{t('land.brand.sub')}</span>
@@ -276,10 +430,10 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
                 <Icon name="sun" />
               </span>
             </button>
-            <a href={LOGIN_HREF} className={BTN}>
+            <a href={LOGIN_HREF} className={`${BTN} lp-hb`} onClick={skipNextIntro}>
               {t('land.btn.login')}
             </a>
-            <button type="button" className={`${CTA} lp-hide-m`} onClick={toLead}>
+            <button type="button" className={`${CTA} lp-hb lp-hide-m`} onClick={toLead}>
               {t('land.btn.lead')}
             </button>
             <button
@@ -305,14 +459,19 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
           </a>
         </div>
       </header>
+      {/* Линия Бернулли через всю страницу: рисуется по прокрутке, на конце — солнце */}
+      <ScrollPath />
       <main>
-        {/* 2. Первый экран */}
-        <section className="lp-hero" id="lp-hero">
+        {/* Первый экран: заголовок, одна строка, две кнопки, картинка; внизу «Листайте вниз» */}
+        <section className="lp-hero lp-live" id="lp-hero">
+          <HeroBg />
           <div className="lp-wrap lp-hero-in">
-            <div>
-              <h1>{t('land.hero.title')}</h1>
-              <p className="lp-hero-p">{t('land.hero.sub')}</p>
-              <div className="lp-cta-row">
+            <div className="lp-hero-tx">
+              <h1 className="rv">{t('land.hero.title')}</h1>
+              <p className="lp-hero-p rv" style={delay(1)}>
+                {t('land.hero.lead')}
+              </p>
+              <div className="lp-cta-row rv" style={delay(2)}>
                 <button type="button" className={CTA_LG} onClick={toLead}>
                   {t('land.btn.lead')}
                 </button>
@@ -320,44 +479,35 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
                   {t('land.btn.demo')}
                 </a>
               </div>
-              <button
-                type="button"
-                className={`${linkButtonClass()} lp-more`}
-                onClick={() => go('features')}
-              >
-                {t('land.btn.more')}
-                <Icon name="down" size="sm" />
-              </button>
-              <p className="lp-note">
-                <Icon name="check" size="sm" />
-                <span>{t('land.hero.note')}</span>
-              </p>
             </div>
             <div className="lp-hero-pic" role="img" aria-label={t('land.aria.hero_pic')}>
               <DeskScreen t={t} d={screens} today={today} hero />
               <PhoneScreen t={t} d={screens} today={today} />
             </div>
           </div>
+          <button type="button" className="lp-scroll" onClick={() => go('emb')}>
+            <i aria-hidden="true" />
+            <span>{t('land.scroll')}</span>
+          </button>
         </section>
-        {/* 3. Полоса цифр */}
+        {/* Полоса цифр: числа досчитываются от нуля */}
         <section className="lp-stats" aria-label={t('land.aria.stats')}>
           <div className="lp-wrap lp-stats-in">
-            <div className="lp-stat">
-              <b>{numbers.reportTypes}</b>
+            <div className="lp-stat rv">
+              <b data-lp-count={numbers.reportTypes}>{numbers.reportTypes}</b>
               <span>{t('land.stats.types')}</span>
             </div>
-            <div className="lp-stat">
-              <b>{numbers.regimes}</b>
+            <div className="lp-stat rv" style={delay(1)}>
+              <b data-lp-count={numbers.regimes}>{numbers.regimes}</b>
               <span>{t('land.stats.regimes')}</span>
             </div>
-            <div className="lp-stat">
+            <div className="lp-stat rv" style={delay(2)}>
               <span className="lp-si">
                 <Icon name="calendar" />
               </span>
               <strong>{t('land.stats.cal')}</strong>
-              <span>{t('land.stats.cal.sub')}</span>
             </div>
-            <div className="lp-stat">
+            <div className="lp-stat rv" style={delay(3)}>
               <span className="lp-si">
                 <Icon name="bell" />
               </span>
@@ -365,78 +515,137 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
             </div>
           </div>
         </section>
-        {/* 4. Кому подходит */}
-        <section className="lp-sec alt" id="lp-who">
-          <div className="lp-wrap">
-            <h2>{t('land.who.title')}</h2>
+        {/* 1. Герб — печать «штампуется», символы оживают; нажатие на символ — что он значит в программе */}
+        {block(
+          'emb',
+          'lp-emb lp-live',
+          t('land.emb.title'),
+          <div className="lp-emb-in">
+            <div className="lp-emb-fig">
+              <Emblem t={t} onPick={(part) => pick(part, true)} />
+            </div>
+            <div className="lp-emb-r">
+              <ul className="lp-emb-l">
+                {EMBLEM.map(([part, tone, icon, n], i) => (
+                  <li key={part} className="rv" style={delay(i)}>
+                    <button type="button" aria-pressed={hl === part} onClick={() => pick(part)}>
+                      <span className={`lp-emb-ic ${tone}`}>
+                        <Icon name={icon} />
+                      </span>
+                      <span className="lp-emb-tx">
+                        <b>{t(`land.emb.${n}.t` as const)}</b>
+                        <DetailsLine>{t(`land.emb.${n}.d` as const)}</DetailsLine>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <Details>
+                <p className="lp-motto">
+                  <span className="lp-motto-f">{t('land.emb.motto')}</span>
+                  <span>{t('land.emb.motto.ru')}</span>
+                </p>
+              </Details>
+              {moreButton('emb')}
+            </div>
+          </div>,
+          t('land.emb.sub'),
+          { 'data-hl': hl || undefined },
+        )}
+        {/* 2. Кому подходит — карточки поворачиваются к посетителю */}
+        {block(
+          'who',
+          'lp-who alt',
+          t('land.who.title'),
+          <>
             <div className="lp-grid3">
               {N3.map((n, i) => (
-                <LandCard
-                  key={n}
-                  icon={WHO[i]![0]}
-                  tone={WHO[i]![1]}
-                  title={t(`land.who.${n}.t` as const)}
-                  text={t(`land.who.${n}.d` as const)}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-        {/* 5. Что меняется */}
-        <section className="lp-sec" id="lp-change">
-          <div className="lp-wrap">
-            <h2>{t('land.change.title')}</h2>
-            <div className="lp-chg">
-              <div className="lp-chg-h">
-                <span>{t('land.change.was')}</span>
-                <span>{t('land.change.now')}</span>
-              </div>
-              {N4.map((n) => (
-                <div key={n} className="lp-chg-r">
-                  <div className="lp-was">
-                    <Icon name="x" size="sm" />
-                    <span>
-                      <span className="sr-only">{`${t('land.change.was')}: `}</span>
-                      {t(`land.change.${n}.a` as const)}
-                    </span>
-                  </div>
-                  <div className="lp-arr" aria-hidden="true">
-                    <Icon name="right" />
-                  </div>
-                  <div className="lp-now">
-                    <Icon name="check" size="sm" />
-                    <span>
-                      <span className="sr-only">{`${t('land.change.now')}: `}</span>
-                      {t(`land.change.${n}.b` as const)}
-                    </span>
-                  </div>
+                <div key={n} className="lp-card rv" style={delay(i)}>
+                  <span className={`lp-ico ${WHO[i]![1]}`}>
+                    <Icon name={WHO[i]![0]} />
+                  </span>
+                  <h3>{t(`land.who.${n}.t` as const)}</h3>
+                  <Details>
+                    <p>{t(`land.who.${n}.d` as const)}</p>
+                  </Details>
                 </div>
               ))}
             </div>
-          </div>
-        </section>
-        {/* 6. Возможности */}
-        <section className="lp-sec alt" id="lp-features">
-          <div className="lp-wrap">
-            <h2>{t('land.feat.title')}</h2>
-            <div className="lp-grid3">
-              {N12.map((n, i) => (
-                <LandCard
+            {moreButton('who')}
+          </>,
+        )}
+        {/* 3. Что меняется — карточка «Было» переворачивается в «Стало»; «Подробнее» — обе стороны рядом */}
+        {block(
+          'change',
+          'lp-chg-s',
+          t('land.change.title'),
+          <>
+            <div className="lp-flips">
+              {N4.map((n) => (
+                <button
                   key={n}
-                  icon={FEATURE_ICONS[i]!}
-                  tone={FEATURE_TONES[i]!}
-                  title={t(`land.feat.${n}.t` as const)}
-                  text={t(`land.feat.${n}.d` as const)}
-                />
+                  type="button"
+                  className="lp-fc rv"
+                  style={delay(n - 1)}
+                  onClick={flip}
+                >
+                  <span className="lp-fc-in">
+                    <span className="lp-fc-f lp-fw">
+                      <small>
+                        <Icon name="x" size="sm" />
+                        {t('land.change.was')}
+                      </small>
+                      <span className="lp-x">{t(`land.change.${n}.a` as const)}</span>
+                    </span>
+                    <span className="lp-fc-f lp-fn">
+                      <small>
+                        <Icon name="check" size="sm" />
+                        {t('land.change.now')}
+                      </small>
+                      <span>{t(`land.change.${n}.b` as const)}</span>
+                    </span>
+                  </span>
+                </button>
               ))}
             </div>
-          </div>
-        </section>
-        {/* 7. Как это выглядит */}
-        <section className="lp-sec" id="lp-shots">
-          <div className="lp-wrap">
-            <h2>{t('land.shots.title')}</h2>
-            <div className="lp-tabs" role="tablist" aria-label={t('land.shots.title')}>
+            <p className="lp-hint rv">{t('land.change.tap')}</p>
+            {moreButton('change')}
+          </>,
+        )}
+        {/* 4. Возможности — мозаика плиток волной; плитка раскрывается нажатием */}
+        {block(
+          'features',
+          'lp-feat alt',
+          t('land.feat.title'),
+          <>
+            <div className="lp-tiles">
+              {N12.map((n, i) => (
+                <button
+                  key={n}
+                  type="button"
+                  className="lp-tile rv"
+                  style={delay((i % 4) + Math.floor(i / 4))}
+                  aria-expanded={tiles.has(i)}
+                  onClick={() => toggleTile(i)}
+                >
+                  <span className={`lp-ico ${FEATURE_TONES[i]!}`}>
+                    <Icon name={FEATURE_ICONS[i]!} />
+                  </span>
+                  <b>{t(`land.feat.${n}.t` as const)}</b>
+                  <DetailsLine>{t(`land.feat.${n}.d` as const)}</DetailsLine>
+                </button>
+              ))}
+            </div>
+            {moreButton('features')}
+          </>,
+        )}
+        {/* 5. Как это выглядит — экран выпрямляется, как крышка ноутбука, пока блок въезжает */}
+        {block(
+          'shots',
+          'lp-shots',
+          t('land.shots.title'),
+          <>
+            <div className="lp-tabs rv" role="tablist" aria-label={t('land.shots.title')}>
               {N3.map((n, i) => (
                 <button
                   key={n}
@@ -451,25 +660,29 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
                 </button>
               ))}
             </div>
-            <div className="lp-track" ref={track} onScroll={onTrackScroll}>
-              {N3.map((n, i) => (
-                <figure
-                  key={n}
-                  className="lp-slide"
-                  id={`lp-sl-${i}`}
-                  role="tabpanel"
-                  aria-labelledby={`lp-st-${i}`}
-                >
-                  <div
-                    className="lp-slide-pic"
-                    role="img"
-                    aria-label={t(`land.shots.${n}.t` as const)}
+            <div className="lp-tilt">
+              <div className="lp-track" ref={track} onScroll={onTrackScroll}>
+                {N3.map((n, i) => (
+                  <figure
+                    key={n}
+                    className="lp-slide"
+                    id={`lp-sl-${i}`}
+                    role="tabpanel"
+                    aria-labelledby={`lp-st-${i}`}
                   >
-                    {shots[i]}
-                  </div>
-                  <figcaption>{t(`land.shots.${n}.d` as const)}</figcaption>
-                </figure>
-              ))}
+                    <div
+                      className="lp-shot"
+                      role="img"
+                      aria-label={t(`land.shots.${n}.t` as const)}
+                    >
+                      {shots[i]}
+                    </div>
+                    <figcaption className="lp-d">
+                      <span>{t(`land.shots.${n}.d` as const)}</span>
+                    </figcaption>
+                  </figure>
+                ))}
+              </div>
             </div>
             <div className="lp-shots-cta">
               <a href={DEMO_HREF} className={BTN_LG}>
@@ -477,80 +690,114 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
                 {t('land.btn.demo')}
               </a>
             </div>
-          </div>
-        </section>
-        {/* 8. Как начать */}
-        <section className="lp-sec alt" id="lp-start">
-          <div className="lp-wrap">
-            <h2>{t('land.start.title')}</h2>
-            <ol className="lp-steps">
-              {N4.map((n) => (
-                <li key={n}>
-                  <span className="lp-num" aria-hidden="true">
-                    {n}
+            {moreButton('shots')}
+          </>,
+        )}
+        {/* 6. Как начать — линия шагов заполняется по прокрутке, номера загораются */}
+        {block(
+          'start',
+          'lp-start alt',
+          t('land.start.title'),
+          <>
+            <div className="lp-steps-w">
+              <span className="lp-sline" aria-hidden="true">
+                <i />
+              </span>
+              <ol className="lp-steps">
+                {N4.map((n) => (
+                  <li key={n} className="rv" style={delay(n - 1)}>
+                    <span className="lp-num" aria-hidden="true">
+                      {n}
+                    </span>
+                    <h3>{t(`land.start.${n}.t` as const)}</h3>
+                    <Details>
+                      <p>{t(`land.start.${n}.d` as const)}</p>
+                    </Details>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            {moreButton('start')}
+          </>,
+        )}
+        {/* 7. Безопасность — щит рисуется, замок защёлкивается, значки выходят на орбиту */}
+        {block(
+          'security',
+          'lp-secu',
+          t('land.sec.title'),
+          <div className="lp-secu-in">
+            <div className="lp-orbit rv" aria-hidden="true">
+              <Shield />
+              <span className="lp-orb-r">
+                {SECURITY.map(([n, icon], i) => (
+                  <span
+                    key={n}
+                    className="lp-orb"
+                    style={{ '--a': `${i * 72 - 90}deg`, '--d': i } as CSSProperties}
+                  >
+                    <i>
+                      <Icon name={icon} />
+                    </i>
                   </span>
-                  <h3>{t(`land.start.${n}.t` as const)}</h3>
-                  <p>{t(`land.start.${n}.d` as const)}</p>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </section>
-        {/* 9. Безопасность и данные */}
-        <section className="lp-sec" id="lp-security">
-          <div className="lp-wrap">
-            <h2>{t('land.sec.title')}</h2>
-            <ul className="lp-secl">
-              {SECURITY.map(([n, icon]) => (
-                <li key={n}>
-                  <Icon name={icon} />
-                  <span>{t(`land.sec.${n}` as const)}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-        {/* 10. Вопросы */}
-        <section className="lp-sec alt" id="lp-faq">
-          <div className="lp-wrap">
-            <h2>{t('land.faq.title')}</h2>
-            <div className="lp-faq">
-              {N7.map((n) => (
-                <details key={n}>
-                  <summary>{t(`land.faq.${n}.q` as const)}</summary>
-                  <p>{t(`land.faq.${n}.a` as const)}</p>
-                </details>
-              ))}
+                ))}
+              </span>
             </div>
-          </div>
-        </section>
-        {/* 11. Оставить заявку */}
-        <section className="lp-sec" id="lp-lead">
-          <div className="lp-wrap">
-            <h2>{t('land.lead.title')}</h2>
-            <p className="lp-sub">{t('land.lead.sub')}</p>
-            <div className="lp-lead-in">
-              <div>
-                {sent ? (
-                  <div className="lp-ok" role="status">
-                    <Icon name="check" />
-                    <span>{t('land.ok', { телефон: sent })}</span>
-                  </div>
-                ) : (
-                  <LeadForm codes={codes} onSent={setSent} onConsent={() => setConsent(true)} />
-                )}
-              </div>
-              {links.length > 0 ? (
-                <div className="lp-cont">
-                  <h3>{t('land.c.title')}</h3>
-                  {contactLinks}
+            <div className="lp-secu-r">
+              <p className="lp-secu-s rv">{t('land.sec.short')}</p>
+              <Details>
+                <ul className="lp-secl">
+                  {SECURITY.map(([n, icon]) => (
+                    <li key={n}>
+                      <Icon name={icon} />
+                      <span>{t(`land.sec.${n}` as const)}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Details>
+              {moreButton('security')}
+            </div>
+          </div>,
+        )}
+        {/* 8. Вопросы — выезжают попеременно слева и справа; видны первые три, «Подробнее» — остальные */}
+        {block(
+          'faq',
+          'lp-faqs alt',
+          t('land.faq.title'),
+          <>
+            <div className="lp-faq">{([1, 2, 3] as const).map(faqItem)}</div>
+            <Details>
+              <div className="lp-faq lp-faq2">{([4, 5, 6, 7] as const).map(faqItem)}</div>
+            </Details>
+            {moreButton('faq')}
+          </>,
+        )}
+        {/* 9. Оставить заявку — форма раскладывается, поля встают по одному; после отправки — печать */}
+        {block(
+          'lead',
+          'lp-leads',
+          t('land.lead.title'),
+          <div className="lp-lead-in">
+            <div className="lp-fold rv">
+              {sent ? (
+                <div className="lp-ok" role="status">
+                  <Stamp />
+                  <span>{t('land.ok', { телефон: sent })}</span>
                 </div>
-              ) : null}
+              ) : (
+                <LeadForm codes={codes} onSent={setSent} onConsent={() => setConsent(true)} />
+              )}
             </div>
-          </div>
-        </section>
+            {links.length > 0 ? (
+              <div className="lp-cont rv" style={delay(2)}>
+                {moreButton('lead', t('land.c.title'))}
+                <Details>{contactLinks}</Details>
+              </div>
+            ) : null}
+          </div>,
+          t('land.lead.sub'),
+        )}
       </main>
-      {/* 12. Подвал */}
+      {/* Подвал */}
       <footer className="lp-foot">
         <div className="lp-wrap lp-foot-in">
           <span>
@@ -560,7 +807,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
           </span>
           {links.length > 0 ? <span className="lp-foot-l">{contactLinks}</span> : null}
           <span className="lp-foot-l">
-            <a href={LOGIN_HREF} className={linkButtonClass()}>
+            <a href={LOGIN_HREF} className={linkButtonClass()} onClick={skipNextIntro}>
               {t('land.btn.login')}
             </a>
             <button type="button" className={linkButtonClass()} onClick={() => setConsent(true)}>
@@ -574,6 +821,17 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
           {t('land.btn.lead')}
         </button>
       </div>
+      {/* Весы в углу: качаются от прокрутки, кольцо — сколько прочитано; нажатие — наверх */}
+      <button
+        type="button"
+        className="lp-bal"
+        hidden={!bal}
+        aria-label={t('land.top')}
+        title={t('land.top')}
+        onClick={balToTop}
+      >
+        <BalanceIcon />
+      </button>
       <Modal
         open={consent}
         onClose={() => setConsent(false)}
@@ -587,28 +845,6 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
       >
         <p className="m-0 leading-[1.55]">{t('land.consent.text')}</p>
       </Modal>
-    </div>
-  );
-}
-
-function LandCard({
-  icon,
-  tone,
-  title,
-  text,
-}: {
-  icon: IconName;
-  tone: string;
-  title: string;
-  text: string;
-}) {
-  return (
-    <div className="lp-card">
-      <span className={`lp-ico ${tone}`}>
-        <Icon name={icon} />
-      </span>
-      <h3>{title}</h3>
-      <p>{text}</p>
     </div>
   );
 }

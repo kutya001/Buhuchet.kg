@@ -45,6 +45,7 @@ export { CountBadge } from './shell/badge';
 export { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './shell/phone-nav';
 export {
   Brand,
+  BRAND_LOGO,
   BrandMark,
   SideFootButton,
   SideFootRow,
