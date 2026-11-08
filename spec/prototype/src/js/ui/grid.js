@@ -9,7 +9,7 @@ const GS={};let ACTIVE=[];let FAIL_NEXT=false;const CLOSED=new Set();
 const norm=s=>String(s??'').toLowerCase().replace(/ё/g,'е').replace(/ /g,' ');
 const strip=s=>norm(s).replace(/[\s\-()+.,№«»"]/g,'');
 const COLL=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
-function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||[],agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||25,sel:new Set()}}return s}
+function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||cfg.defView||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||(cfg.defGroup||[]).slice(),agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||25,sel:new Set()}}return s}
 /* Сортировка по умолчанию во всех списках — от новых к старым по «Создано» */
 /* Видимые по умолчанию столбцы по спискам (ТЗ, «Столбцы, видимые по умолчанию»); остальные — в меню «Столбцы» */
 const SHOW={'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
@@ -45,7 +45,7 @@ function gKey(c,r){const v=c.val(r);if(v==null||v==='')return '';return c.type==
 function gLabel(c,r){const v=c.val(r);if(v==null||v==='')return '(Пусто)';if(c.type==='datetime')return fmtD(String(v).slice(0,10));return colTxt(c,r)||'(Пусто)'}
 function aggVal(c,how,rows){const xs=rows.map(r=>c.val(r)).filter(v=>v!=null&&v!==''&&!isNaN(+v)).map(Number);if(how==='count')return xs.length;if(!xs.length)return null;if(how==='avg')return xs.reduce((a,b)=>a+b,0)/xs.length;if(how==='min')return Math.min(...xs);if(how==='max')return Math.max(...xs);return xs.reduce((a,b)=>a+b,0)}
 // Итог в строке группы: по умолчанию сумма у всех числовых столбцов (ТЗ «Группировка», решение заказчика 26.10.2026); выбор пользователя сохраняется в виде
-function aggOf(s,c){return s.agg[c.key]!=null?s.agg[c.key]:NUMT.includes(c.type)?'sum':''}
+function aggOf(s,c){return s.agg[c.key]!=null?s.agg[c.key]:c.agg!=null?c.agg:NUMT.includes(c.type)?'sum':''}
 function aggTxt(c,how,v){if(v==null)return '—';if(how==='count'||(c.type==='int'&&how!=='avg'))return String(v);return fmtM(v,c.type==='money'||how==='avg')}
 /* Служебные колонки: Создал / Изменил / Создано / Изменено — во всех списках по умолчанию */
 function auditCols(acc){const A=r=>(acc?acc(r):r)||{};return [
@@ -71,7 +71,7 @@ function grid(host,cfg){
     const ac=cols(),vc=vis();
     let rows=all.filter(r=>Object.entries(s.filters).every(([k,f])=>{const c=ac.find(x=>x.key===k);return !c||passF(c,f,r)}));
     const q=cfg.search===false?'':S.search.trim();
-    if(q){const nq=norm(q),sq=strip(q);rows=rows.filter(r=>vc.some(c=>{const t=colTxt(c,r);return norm(t).includes(nq)||(sq.length>=3&&strip(t).includes(sq))}))}
+    if(q){const nq=norm(q),sq=strip(q);rows=rows.filter(r=>vc.some(c=>{const t=colTxt(c,r);return norm(t).includes(nq)||(sq.length>=3&&strip(t).includes(sq))})||(cfg.searchText&&norm(cfg.searchText(r)).includes(nq)))}
     if(s.sort){const c=ac.find(x=>x.key===s.sort.key);if(c){const d=s.sort.dir;rows=rows.slice().sort((a,b)=>{const va=c.sortVal?c.sortVal(a):c.val(a),vb=c.sortVal?c.sortVal(b):c.val(b);const ea=va==null||va==='',eb=vb==null||vb==='';if(ea&&eb)return 0;if(ea)return 1;if(eb)return -1;return d*(typeof va==='number'&&typeof vb==='number'?va-vb:COLL.compare(String(va),String(vb)))})}}
     return {all,rows,vc,ac};
   }
@@ -134,7 +134,7 @@ function grid(host,cfg){
   function cardsHtml(pr,vc,rows,gt){
     const tc=vc.find(c=>c.key===cfg.title)||vc[0];const rest=vc.filter(c=>c!==tc&&!c.audit);const au=vc.filter(c=>c.audit);const AU=k=>au.find(c=>c.key===k);
     const audLine=r=>{if(!au.length)return '';const part=(w,t)=>{const a=AU(w),b=AU(t);if(!a&&!b)return '';return `${a?esc(colTxt(a,r)):''}${a&&b?', ':''}${b?esc(colTxt(b,r)):''}`};const c1=part('_cb','_ca'),c2=part('_ub','_ua');return `<div class="gc-aud">${c1?`<span>Создал: ${c1}</span>`:''}${c2?`<span>Изменил: ${c2}</span>`:''}</div>`};
-    const card=r=>{const id=rid(r);return `<div class="gcard ${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}" data-id="${esc(id)}" tabindex="0"><div class="gc-h">${cfg.bulk?`<input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать">`:''}<div class="gc-t">${tc.html?tc.html(r):esc(colTxt(tc,r))}</div>${cfg.actions?`<button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div><dl>${rest.map(c=>{if(c.cline)return c===rest.find(x=>x.cline)?clineHtml(rest.filter(x=>x.cline),r):'';const v=c.html?c.html(r):esc(colTxt(c,r));return `<dt>${esc(c.label)}</dt><dd>${v===''?'<span class="faint">—</span>':v}</dd>`}).join('')}</dl>${audLine(r)}</div>`};
+    const card=r=>{const id=rid(r);if(cfg.cardHtml)return `<div class="gcard gcard-x ${cfg.rowClass?cfg.rowClass(r):''}" data-id="${esc(id)}" tabindex="0">${cfg.cardHtml(r)}${cfg.actions?`<button class="icon-btn sm gc-mx" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div>`;return `<div class="gcard ${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}" data-id="${esc(id)}" tabindex="0"><div class="gc-h">${cfg.bulk?`<input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать">`:''}<div class="gc-t">${tc.html?tc.html(r):esc(colTxt(tc,r))}</div>${cfg.actions?`<button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div><dl>${rest.map(c=>{if(c.cline)return c===rest.find(x=>x.cline)?clineHtml(rest.filter(x=>x.cline),r):'';const v=c.html?c.html(r):esc(colTxt(c,r));return `<dt>${esc(c.label)}</dt><dd>${v===''?'<span class="faint">—</span>':v}</dd>`}).join('')}</dl>${audLine(r)}</div>`};
     const nums=vc.filter(c=>NUMT.includes(c.type)&&aggOf(s,c));
     const walk=arr=>arr.map(gr=>{const open=!s.closed.has(gr.path);return `<div class="gc-grp lv${gr.lv}"><button class="g-tg" data-g="${esc(gr.path)}" aria-expanded="${open}">${ic(open?'down':'right','sm')}<b>${esc(gr.label)}</b><span class="g-c">${gr.rows.length}</span></button>${nums.length?`<span class="gc-agg">${nums.map(c=>{const how=aggOf(s,c);return `<span>${esc(c.label)}${how==='sum'?'':' ('+AGG_L[how].toLowerCase()+')'}: <b>${aggTxt(c,how,aggVal(c,how,gr.rows))}</b></span>`}).join('')}</span>`:''}</div>${open?(gr.sub?`<div class="gc-sub">${walk(gr.sub)}</div>`:`<div class="gcards">${gr.rows.map(card).join('')}</div>`):''}`}).join('');
     let h=gt?`<div class="gc-groups">${walk(gt)}</div>`:`<div class="gcards">${pr.map(card).join('')}</div>`;

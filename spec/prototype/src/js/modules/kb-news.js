@@ -10,12 +10,15 @@ const newsLive=n=>n.status==='Опубликовано'&&!n.off&&(n.date<TODAY||
 const newsVis=()=>NEWS.filter(n=>newsLive(n)&&(n.aud==='all'||isAdmin()));
 const newsUnread=()=>{const r=newsRead();return newsVis().filter(n=>!r.has(n.id)).length};
 const newsPill=t=>`<span class="pill sm ${NEWS_T[t]||'blue'}">${esc(t)}</span>`;
-const newsLinkTxt=l=>!l?'':l.k==='art'?((KB_ARTS.find(a=>a.id===l.id)||{}).t||''):kbModT(l.id);
+const newsLinkTxt=l=>!l?'':l.k==='art'?((KB_ARTS.find(a=>a.id===l.id)||{}).t||''):l.k==='video'?((vidById(l.id)||{}).t||''):kbModT(l.id);
+// Кнопка ссылки новости: статья или модуль — «Подробнее», видео — «▶ Смотреть видео» (решение заказчика 08.11.2026)
+const newsLinkBtn=l=>l.k==='video'?`${ic('pl','sm')}Смотреть видео`:`${ic('right','sm')}Подробнее: ${esc(newsLinkTxt(l))}`;
+const newsLinkGo=l=>l.k==='art'?kbArtDlg(KB_ARTS.find(a=>a.id===l.id)):l.k==='video'?vidOpen(l.id):go(l.id);
 /* Markdown подробного описания (ТЗ, «База знаний (содержимое)» → «Новости»): заголовки двух уровней, жирный и курсив, списки,
    ссылки (в том числе на модуль #mod:id, его вкладку #mod:id.вкладка и статью #art:id), картинки, цитата, разделитель, простая таблица; HTML не выполняется */
 function mdInline(t){return esc(t).replace(/`([^`]+)`/g,'<code>$1</code>')
   .replace(/!\[([^\]]*)\]\(((?:https?:|data:image\/)[^)\s]+)\)/g,'<img src="$2" alt="$1">')
-  .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(x,a,h)=>{const m=/^#(mod|art):([\w-]+(?:\.[\w-]+)?)$/.exec(h);if(m)return `<a href="#" data-md${m[1]}="${m[2]}">${a}</a>`;return /^https?:/.test(h)?`<a href="${h}" target="_blank" rel="noopener">${a}</a>`:a})
+  .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g,(x,a,h)=>{const m=/^#(mod|art|video):([\w-]+(?:\.[\w-]+)?)$/.exec(h);if(m&&m[1]==='video')return vidMdBtn(m[2],a.replace(/^▶\s*/,''));if(m)return `<a href="#" data-md${m[1]}="${m[2]}">${a}</a>`;return /^https?:/.test(h)?`<a href="${h}" target="_blank" rel="noopener">${a}</a>`:a})
   .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[\s(«])[*_]([^*_\s][^*_]*?)[*_](?=[\s.,;:!?)»]|$)/g,'$1<i>$2</i>')}
 function mdHtml(src){const L=String(src||'').replace(/\r/g,'').split('\n');let h='',i=0;
   const cells=l=>l.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
@@ -50,8 +53,8 @@ function newsSync(){const fresh=(DBSRC.ref.db.news||[]);
 newsSync();
 function newsOpen(n){newsRead().add(n.id);renderSide();renderSheetDot();
   openModal({size:'wide',render:()=>({title:esc(n.t),sub:`${fmtD(n.date)}${n.ver?' · версия '+esc(n.ver):''}${n.edited?' · изменено '+fmtD(n.edited):''}`,body:`<div class="row" style="gap:8px">${newsPill(n.type)}${n.pin?'<span class="tag">Закреплено</span>':''}</div><div class="kb-art md">${mdHtml(n.md)}</div>`,
-    foot:`<div class="grow"></div>${n.link&&newsLinkOk(n.link)?`<button class="btn" id="nw-more">${ic('right','sm')}Подробнее: ${esc(newsLinkTxt(n.link))}</button>`:''}<button class="btn cta" data-close>Закрыть</button>`,
-    mount(el,m){const b=$('#nw-more',el);if(b)b.onclick=()=>{m.close();n.link.k==='art'?kbArtDlg(KB_ARTS.find(a=>a.id===n.link.id)):go(n.link.id)}}}),onClose:()=>{if(S.mod==='kb')renderPage()}});if(S.mod==='kb')setTimeout(renderPage,0)}
+    foot:`<div class="grow"></div>${n.link&&newsLinkOk(n.link)?`<button class="btn" id="nw-more">${newsLinkBtn(n.link)}</button>`:''}<button class="btn cta" data-close>Закрыть</button>`,
+    mount(el,m){const b=$('#nw-more',el);if(b)b.onclick=()=>{m.close();newsLinkGo(n.link)}}}),onClose:()=>{if(S.mod==='kb')renderPage()}});if(S.mod==='kb')setTimeout(renderPage,0)}
 /* Окно «Что нового» (ТЗ, «Новости» → «Окно «Что нового» при входе»): при входе в систему, только если есть непрочитанные новости
    с отметкой «Показывать при входе»; показанные сразу считаются прочитанными, поэтому окно с ними больше не открывается (решение заказчика 25.10.2026).
    При самом первом входе над новостями — приветствие с «Открыть Базу знаний». Не при перезагрузке страницы.
@@ -67,12 +70,12 @@ function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return
   const fresh=new Set(l.filter(n=>!r.has(n.id)).map(n=>n.id));l.forEach(n=>r.add(n.id));renderSide();renderSheetDot();if(typeof dbSoon==='function')dbSoon();
   setTimeout(()=>openModal({size:'wide',render:()=>({title:'Что нового',sub:`${unread} ${plural(unread,'новость','новости','новостей')} с вашего прошлого входа`,
     body:`${first?`<div class="note">${ic('grad')}<span><b>Добро пожаловать в Buhuchet.kg: начните с Базы знаний.</b> В «Базе знаний» — уроки по вашим модулям с кнопками «Перейти» и «Показать как», статьи инструкции и ваш уровень знаний. Программа строится из ваших прав: проходите шаги, и уровень вырастет от «Новичка» до «Эксперта».</span></div>`:''}
-      ${l.map(n=>`<section class="wn-item"><div class="row" style="gap:8px;flex-wrap:wrap">${newsPill(n.type)}<span class="muted">${fmtD(n.date)}${n.ver?' · версия '+esc(n.ver):''}</span>${fresh.has(n.id)?'<span class="pill sm red">Новое</span>':''}</div><h3>${esc(n.t)}</h3><div class="kb-art md">${mdHtml(n.md)}</div>${n.link&&newsLinkOk(n.link)?`<button class="btn sm" data-wnmore="${n.id}">${ic('right','sm')}Подробнее: ${esc(newsLinkTxt(n.link))}</button>`:''}</section>`).join('')}`,
+      ${l.map(n=>`<section class="wn-item"><div class="row" style="gap:8px;flex-wrap:wrap">${newsPill(n.type)}<span class="muted">${fmtD(n.date)}${n.ver?' · версия '+esc(n.ver):''}</span>${fresh.has(n.id)?'<span class="pill sm red">Новое</span>':''}</div><h3>${esc(n.t)}</h3><div class="kb-art md">${mdHtml(n.md)}</div>${n.link&&newsLinkOk(n.link)?`<button class="btn sm" data-wnmore="${n.id}">${newsLinkBtn(n.link)}</button>`:''}</section>`).join('')}`,
     foot:`${first?`<button class="btn" id="wn-kb">${ic('grad','sm')}Открыть Базу знаний</button>`:''}<div class="grow"></div><button class="btn ghost" id="wn-all">${ic('bell','sm')}Все новости</button><button class="btn cta" data-close>Понятно</button>`,
     mount(el,m){$('#wn-all',el).onclick=()=>{m.close();go('kb','news')};const k=$('#wn-kb',el);if(k)k.onclick=()=>{m.close();go('kb','lessons')};
-      $$('[data-wnmore]',el).forEach(b=>b.onclick=()=>{const n=NEWS.find(x=>x.id===b.dataset.wnmore);m.close();n.link.k==='art'?kbArtDlg(KB_ARTS.find(a=>a.id===n.link.id)):go(n.link.id)})}}),
+      $$('[data-wnmore]',el).forEach(b=>b.onclick=()=>{const n=NEWS.find(x=>x.id===b.dataset.wnmore);m.close();newsLinkGo(n.link)})}}),
     onClose:()=>{if(S.mod==='kb')renderPage()}}),400)}
-const newsLinkOk=l=>l.k==='art'?kbArts().some(a=>a.id===l.id):mods().some(m=>m.id===l.id);
+const newsLinkOk=l=>l.k==='art'?kbArts().some(a=>a.id===l.id):l.k==='video'?vidOk(vidById(l.id)):mods().some(m=>m.id===l.id);
 const NF={type:'',ver:'',q:''};
 function renderNews(body){const all=newsVis();const r=newsRead();const q=NF.q.trim().toLowerCase();
   const l=all.filter(n=>(!NF.type||n.type===NF.type)&&(!NF.ver||n.ver===NF.ver)&&(!q||(n.t+' '+newsShort(n)+' '+(n.md||'')).toLowerCase().includes(q))).sort(newsSort);

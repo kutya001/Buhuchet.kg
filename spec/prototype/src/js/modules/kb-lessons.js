@@ -157,7 +157,7 @@ const kbModT=id=>{const m=[...BIZ,...ADM].find(x=>x.id===id);return m?m.title:''
 const permT=p=>{const x=PERMS.find(y=>y[0]===p);return x?x[1]:''};
 const ckU=u=>{u=u||S.me;const x=CKS.u[u]=CKS.u[u]||{done:{},skip:{},max:null,got:[]};if(!x.arts)x.arts={};return x};
 // Отметка шага: один раз и навсегда, с датой и способом (ТЗ «Точные правила подсчёта»); у старых записей способ — строкой
-const CK_HOW={action:'действием',data:'действием, сделанным раньше',show:'показом «Показать как»',art:'чтением статьи',use:'первым использованием',auto:'действием',visit:'открытием экрана',hand:'вручную'};
+const CK_HOW={action:'действием',data:'действием, сделанным раньше',show:'показом «Показать как»',art:'чтением статьи',use:'первым использованием',auto:'действием',visit:'открытием экрана',hand:'вручную',video:'просмотром видео'};
 const ckRec=i=>{const r=ckU().done[i.id];return !r?null:typeof r==='string'?{how:r,at:''}:r};
 const ckHowTxt=i=>{const r=ckRec(i);return r?(CK_HOW[r.how]||'')+(r.at?' · '+fmtD(r.at.slice(0,10)):''):''};
 function kbVis(i){if(i.active===false)return false;if(i.perm&&!can(i.perm))return false;if(i.featk&&!feat(i.featk))return false;if(i.feat&&!i.feat())return false;
