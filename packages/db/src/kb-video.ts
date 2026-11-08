@@ -3,6 +3,7 @@ import {
   bishkekDate,
   isMenuModuleId,
   KB_MODULE_TITLES,
+  VIDEO_SEGMENTS_MAX,
   videoLive,
   videoPct,
   videoReachedDone,
@@ -19,7 +20,7 @@ import {
   type VideoStatus,
   type VideoViewStatus,
 } from '@buhuchet/domain';
-import { and, asc, eq, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql, type SQL } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import type { Db, Tx } from './client';
 import {
@@ -165,6 +166,40 @@ export async function ownVideoSession(tx: Tx, sessionId: string, userId: string,
   return row ?? null;
 }
 
+/** Сколько недавних открытий сверяется при сохранении просмотра (открытия ограничены частотой). */
+export const VIDEO_RECENT_SESSIONS = 20;
+
+/**
+ * Перед сохранением просмотра: строка просмотра пользователя блокируется до конца транзакции (сохранения
+ * одного видео из нескольких окон идут по очереди), затем — недавние открытия этого видео (с `since`,
+ * не больше `VIDEO_RECENT_SESSIONS`) с их отрезками и временем открытия.
+ */
+export async function recentVideoSessions(
+  tx: Tx,
+  userId: string,
+  videoId: string,
+  since: Date,
+): Promise<{ id: string; openedAt: Date; segs: VideoSegment[] }[]> {
+  await tx
+    .select({ userId: videoViews.userId })
+    .from(videoViews)
+    .where(and(eq(videoViews.userId, userId), eq(videoViews.videoId, videoId)))
+    .for('update');
+  const rows = await tx
+    .select({ id: videoSessions.id, openedAt: videoSessions.openedAt, segs: videoSessions.segs })
+    .from(videoSessions)
+    .where(
+      and(
+        eq(videoSessions.userId, userId),
+        eq(videoSessions.videoId, videoId),
+        gte(videoSessions.openedAt, since),
+      ),
+    )
+    .orderBy(desc(videoSessions.openedAt))
+    .limit(VIDEO_RECENT_SESSIONS);
+  return rows.map((r) => ({ id: r.id, openedAt: r.openedAt, segs: segsOf(r.segs) }));
+}
+
 /**
  * Сохранить прогресс открытия (прототип: каждые 15 секунд, при паузе и закрытии): отрезки открытия —
  * все, что проигралось в нём (сливаются с прежними), отрезки просмотра — объединение всех открытий;
@@ -179,9 +214,10 @@ export async function saveVideoProgress(
     pos: number;
     duration: number | null;
   },
-): Promise<{ view: VideoViewRecord; doneNow: boolean }> {
+): Promise<{ view: VideoViewRecord; doneNow: boolean } | null> {
   const { session } = input;
   const sessionSegs = videoSegMerge(segsOf(session.segs), input.segs);
+  if (sessionSegs.length > VIDEO_SEGMENTS_MAX) return null;
   await tx
     .update(videoSessions)
     .set({ segs: sessionSegs.map((s) => [s[0], s[1]]), updatedAt: sql`now()` })
@@ -192,6 +228,8 @@ export async function saveVideoProgress(
     .where(and(eq(videoViews.userId, session.userId), eq(videoViews.videoId, session.videoId)))
     .for('update');
   const segs = videoSegMerge(segsOf(current?.segs), sessionSegs);
+  // Отрезков просмотра (всех открытий) не больше 2 000: сохранение не принимается, транзакция отменяется.
+  if (segs.length > VIDEO_SEGMENTS_MAX) return null;
   const doneNow = !current?.doneAt && videoReachedDone(input.duration, segs);
   const played = videoSegLen(sessionSegs) > 0;
   const [view] = await tx
@@ -270,6 +308,8 @@ interface RowColumn {
   sqlType: SqlType;
   /** Сортировать по другому полю строки (число, порядок), а не по тексту столбца. */
   sortBy?: { key: string; sqlType: SqlType };
+  /** Искать ещё и по другому полю строки (название — и по описанию, прототип `searchText`). */
+  searchAlso?: string;
 }
 
 /** Поле строки `jsonb_to_recordset`: имена — постоянные, не ввод пользователя. */
@@ -297,6 +337,8 @@ function rowList<R extends { id: string }>(
       out[k] = cell(r, k);
       const by = defs[k]!.sortBy;
       if (by) out[by.key] = cell(r, by.key);
+      const also = defs[k]!.searchAlso;
+      if (also) out[also] = cell(r, also);
     }
     return out;
   });
@@ -308,6 +350,8 @@ function rowList<R extends { id: string }>(
     types.set(k, defs[k]!.sqlType);
     const by = defs[k]!.sortBy;
     if (by) types.set(by.key, by.sqlType);
+    const also = defs[k]!.searchAlso;
+    if (also) types.set(also, 'text');
   }
   const defsSql = [...types].map(([k, t]) => `"${k}" ${t}`).join(', ');
   const columns: Record<string, ListColumn> = {};
@@ -318,6 +362,9 @@ function rowList<R extends { id: string }>(
       label: d.label,
       value: field(k),
       ...(d.sortBy ? { sort: { value: field(d.sortBy.key), text: false } } : {}),
+      ...(d.searchAlso
+        ? { searchDisplay: sql`concat_ws(' ', ${field(k)}, ${field(d.searchAlso)})` }
+        : {}),
     };
   }
   return {
@@ -414,7 +461,7 @@ export interface LearnerVideoRow {
 }
 
 const VIDEO_TAB_COLUMNS: Readonly<Record<string, RowColumn>> = {
-  title: { type: 'text', label: 'video.col.title', sqlType: 'text' },
+  title: { type: 'text', label: 'video.col.title', sqlType: 'text', searchAlso: 'description' },
   kind: { type: 'enum', label: 'video.col.kind', sqlType: 'text' },
   module: {
     type: 'enum',
@@ -444,6 +491,8 @@ function videoTabList(rows: readonly LearnerVideoRow[], t: ListTexts) {
     switch (k) {
       case 'title':
         return v.title;
+      case 'description':
+        return v.description;
       case 'kind':
         return t(`video.kind.${v.kind}`);
       case 'module':
@@ -491,6 +540,16 @@ export function listVideoTabValues(
   return rowListValues(tx, videoTabList(rows, t), key, q);
 }
 
+export function exportVideoTab(
+  tx: Tx,
+  rows: readonly LearnerVideoRow[],
+  query: ListQuery,
+  keys: readonly string[],
+  t: ListTexts,
+) {
+  return rowListExport(tx, videoTabList(rows, t), query, keys, VIDEO_TAB_SORT);
+}
+
 /* ───────────── Админка → «Видео» ───────────── */
 
 /** Сколько сотрудников смотрели каждое видео (проигралась хотя бы секунда; прототип `vidViewers`). */
@@ -536,7 +595,7 @@ export const videoAdminStatus = (v: VideoRecord): 'draft' | 'pub' | 'off' =>
 
 const ADMIN_VIDEO_COLUMNS: Readonly<Record<string, RowColumn>> = {
   cover: { type: 'enum', label: 'video.col.cover', sqlType: 'text' },
-  title: { type: 'text', label: 'video.col.title', sqlType: 'text' },
+  title: { type: 'text', label: 'video.col.title', sqlType: 'text', searchAlso: 'description' },
   kind: { type: 'enum', label: 'video.col.kind', sqlType: 'text' },
   source: { type: 'enum', label: 'video.col.source', sqlType: 'text' },
   module: {
@@ -577,6 +636,8 @@ function adminVideoList(rows: readonly AdminVideoRow[], t: ListTexts) {
         return t(`video.cv.${v.coverKind ?? 'none'}`);
       case 'title':
         return v.title;
+      case 'description':
+        return v.description;
       case 'kind':
         return t(`video.kind.${v.kind}`);
       case 'source':

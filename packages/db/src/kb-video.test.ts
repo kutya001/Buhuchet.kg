@@ -136,7 +136,14 @@ describe.skipIf(!databaseAvailable())('Видео платформы: база',
     const save = (sessionId: string, segs: [number, number][]) =>
       asOwner(a, async (tx) => {
         const session = await ownVideoSession(tx, sessionId, a.ownerUserId, v.id);
-        return saveVideoProgress(tx, { session: session!, segs, pos: 0, duration: 100 });
+        const saved = await saveVideoProgress(tx, {
+          session: session!,
+          segs,
+          pos: 0,
+          duration: 100,
+        });
+        expect(saved).not.toBeNull();
+        return saved!;
       });
     const first = await asOwner(a, (tx) => openVideoSession(tx, a.ownerUserId, v.id, now));
     expect((await save(first.sessionId, [[0, 50]])).doneNow).toBe(false);

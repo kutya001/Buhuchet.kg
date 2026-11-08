@@ -93,6 +93,11 @@ export interface DataGridProps<Row> {
   /** Вид закреплён модулем: переключателя «Таблица / Карточки» нет. */
   fixedView?: 'table' | 'cards';
   /**
+   * Своя карточка записи в виде «Карточки» (прототип `cardHtml`: видео — обложкой во всю ширину);
+   * нет — заголовок и пары «подпись — значение» видимых столбцов.
+   */
+  cardRender?: (row: Row) => ReactNode;
+  /**
    * Фильтры столбцов (ТЗ «Поиск и фильтры»): живут на экране и уходят на сервер вместе со страницей;
    * без `onFiltersChange` кнопок фильтра у заголовков нет.
    */
@@ -147,6 +152,7 @@ export function DataGrid<Row>({
   openMenu = false,
   bulk,
   fixedView,
+  cardRender,
   filters = NO_FILTERS,
   onFiltersChange,
   loadValues,
@@ -344,6 +350,7 @@ export function DataGrid<Row>({
         total={data.total}
         groups={groups}
         labels={labels}
+        render={cardRender}
       />
     );
   }

@@ -1,11 +1,14 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  exportVideoTab,
   listVideoTabPage,
   listVideoTabValues,
   openVideoSession,
   ownVideoSession,
   ownVideoViews,
+  recentVideoSessions,
   saveVideoProgress,
+  takeRateLimit,
   setVideoDuration,
   setVideoYtBad,
   videoModuleTitle,
@@ -14,23 +17,27 @@ import {
   videoViewBody,
   videoVisibilityOf,
   type LearnerVideoRow,
+  type RateLimit,
   type Tx,
   type VideoRecord,
 } from '@buhuchet/db';
 import {
   compareVideos,
   kbProgramSteps,
+  VIDEO_DURATION_MAX,
   VIDEO_LINK_SECONDS,
   VIDEO_MESSAGES,
   videoLive,
   videoModuleOrder,
   videoProgressProblem,
+  videoSegMerge,
   videoVisible,
   type VideoContentType,
   type VideoSegment,
 } from '@buhuchet/domain';
 import {
   ApiError,
+  ListExportParams,
   ListQueryParams,
   ListValues,
   ListValuesQuery,
@@ -48,6 +55,8 @@ import {
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
+import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
+import { requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { asLearner, markSteps, programContext, type KbLearner } from './state';
 
@@ -232,6 +241,51 @@ export function kbVideoValuesHandler(
   };
 }
 
+export const kbVideoExportRoute = createRoute({
+  method: 'get',
+  path: '/kb/videos/export',
+  tags: ['kb'],
+  summary: '«Видео» Базы знаний в Excel',
+  middleware: [requirePermission('export')] as const,
+  request: { query: ListExportParams },
+  responses: {
+    200: {
+      description: 'Файл Excel со всеми видео под поиском и фильтрами',
+      content: xlsxContent,
+    },
+    ...listQueryResponses,
+    ...exportRateResponses,
+    401: { description: 'Нет входа', content: error },
+    403: { description: 'Нет права «Выгружать в Excel»', content: error },
+  },
+});
+
+/** «В Excel» вкладки «Видео» (прототип grid: «В Excel» у каждого списка с правом «Выгружать в Excel»). */
+export function kbVideoExportHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof kbVideoExportRoute, AppEnv> {
+  return async (c) => {
+    const params = c.req.valid('query');
+    const query = listQueryOf(params);
+    const keys = [...new Set(params.cols.split(','))];
+    return withExportSlot(deps, c.get('session')!.userId, async () => {
+      const t = await serverTexts(deps);
+      const result = await asLearner(deps, c, async (tx, learner) =>
+        exportVideoTab(tx, await learnerVideos(tx, learner, t), query, keys, t),
+      );
+      return xlsxResponse(c, {
+        title: t('tab.kb.video'),
+        today: deps.clock.now(),
+        columns: result.columns,
+        rows: result.rows,
+        more: result.more,
+        total: result.total,
+        t,
+      });
+    });
+  };
+}
+
 /* ───────────── Окно видео ───────────── */
 
 /** Видео для окна: нет, удалено или снято — 404 «Видео снято с публикации»; не по модулям — 403. */
@@ -247,6 +301,31 @@ async function openable(tx: Tx, learner: KbLearner, id: string): Promise<VideoRe
   return v;
 }
 
+/**
+ * Открытий окна видео у одного пользователя — не больше 120 в час: каждое открытие — строка в базе и
+ * свой счёт секунд. Сообщений плеера о длительности и «YouTube недоступно» — не больше 30 в час.
+ */
+export const VIDEO_OPEN_RATE_LIMIT: RateLimit = {
+  kind: 'video_open',
+  max: 120,
+  windowSeconds: 3600,
+};
+export const VIDEO_META_RATE_LIMIT: RateLimit = {
+  kind: 'video_meta',
+  max: 30,
+  windowSeconds: 3600,
+};
+
+/** Занять открытие или сообщение плеера пользователя; не вышло — 429. */
+async function userLimited(deps: ApiDeps, limit: RateLimit, userId: string) {
+  const take = await takeRateLimit(deps.db, limit, userId);
+  if (!take.ok) apiFail(429, 'rate_limited', 'Слишком много запросов. Попробуйте позже.');
+}
+
+const tooMany = {
+  429: { description: 'Слишком много запросов пользователя (`rate_limited`)', content: error },
+} as const;
+
 export const kbVideoOpenRoute = createRoute({
   method: 'post',
   path: '/kb/videos/{id}/open',
@@ -261,6 +340,7 @@ export const kbVideoOpenRoute = createRoute({
       content: error,
     },
     404: { description: 'Видео снято с публикации или удалено (`video_off`)', content: error },
+    ...tooMany,
   },
 });
 
@@ -275,6 +355,7 @@ export function kbVideoOpenHandler(deps: ApiDeps): RouteHandler<typeof kbVideoOp
     const body = await asLearner(deps, c, async (tx, learner) => {
       const v = await openable(tx, learner, id);
       const tracked = !learner.access.admin;
+      if (tracked) await userLimited(deps, VIDEO_OPEN_RATE_LIMIT, learner.userId);
       // Время открытия — по часам приложения: по ним же сервер считает, сколько могло проиграться.
       const opened = tracked
         ? await openVideoSession(tx, learner.userId, v.id, deps.clock.now())
@@ -339,23 +420,36 @@ export function kbVideoProgressHandler(
       const v = await videoRecord(tx, id);
       if (!v) apiFail(404, 'not_found', 'Видео не найдено');
       const now = deps.clock.now();
+      // Сверка — со всеми недавними открытиями этого видео: серия сохранений и несколько окон сразу
+      // не дают больше секунд, чем прошло со времени самого раннего из них.
+      const since = new Date(now.getTime() - VIDEO_DURATION_MAX * 1000);
+      const recent = await recentVideoSessions(tx, learner.userId, id, since);
+      const sessions = recent.some((s) => s.id === session.id)
+        ? recent
+        : [...recent, { id: session.id, openedAt: session.openedAt, segs: [] }];
       const problem = videoProgressProblem({
         segs: input.segs,
         duration: v.duration,
-        openedAt: session.openedAt,
+        openedAt: new Date(Math.min(...sessions.map((s) => s.openedAt.getTime()))),
         now,
+        earlier: videoSegMerge(
+          [],
+          sessions.flatMap((s) => s.segs),
+        ),
       });
       if (problem) apiFail(400, problem, VIDEO_MESSAGES[problem]);
       const end = v.duration ?? Infinity;
       const segs: VideoSegment[] = input.segs
         .map(([a, b]) => [a, Math.min(b, end)] as const)
         .filter(([a, b]) => b > a);
-      const { view, doneNow } = await saveVideoProgress(tx, {
+      const saved = await saveVideoProgress(tx, {
         session,
         segs,
         pos: Math.min(input.pos, end),
         duration: v.duration,
       });
+      if (!saved) apiFail(400, 'video_progress_invalid', VIDEO_MESSAGES.video_progress_invalid);
+      const { view, doneNow } = saved;
       let steps: { id: string; title: string }[] = [];
       if (doneNow) {
         const ctx = await programContext(tx, learner);
@@ -383,6 +477,7 @@ export const kbVideoMetaRoute = createRoute({
     204: { description: 'Принято' },
     ...common,
     404: { description: 'Видео нет или оно недоступно', content: error },
+    ...tooMany,
   },
 });
 
@@ -397,6 +492,7 @@ export function kbVideoMetaHandler(deps: ApiDeps): RouteHandler<typeof kbVideoMe
     const input = c.req.valid('json');
     await asLearner(deps, c, async (tx, learner) => {
       const v = await openable(tx, learner, id);
+      await userLimited(deps, VIDEO_META_RATE_LIMIT, learner.userId);
       if (input.duration !== undefined && v.duration === null) {
         await setVideoDuration(tx, v.id, input.duration);
       }

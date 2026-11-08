@@ -176,11 +176,11 @@ function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boo
       const storage = await make();
       const key = platformFileKey('contract', randomUUID());
       const id = await storage.createMultipart(key, { contentType: 'video/mp4' });
-      const url = await storage.signedPartUrl(key, id, 1, { expiresInSeconds: 60 });
+      const url = await storage.signedPartUrl(key, id, 1, { expiresInSeconds: 60, size: 10 });
       expect(url).toContain(key);
-      await expect(storage.signedPartUrl(key, id, 0, { expiresInSeconds: 60 })).rejects.toThrow(
-        RangeError,
-      );
+      await expect(
+        storage.signedPartUrl(key, id, 0, { expiresInSeconds: 60, size: 10 }),
+      ).rejects.toThrow(RangeError);
       expect(await storage.listParts(key, id)).toEqual([]);
       await storage.abortMultipart(key, id);
       expect(await storage.listParts(key, id)).toBeNull();
@@ -302,7 +302,15 @@ describe.skipIf(!s3Available)('S3: подписанная ссылка реал�
       [1, first],
       [2, last],
     ] as const) {
-      const url = await storage.signedPartUrl(key, id, n, { expiresInSeconds: 60 });
+      const url = await storage.signedPartUrl(key, id, n, {
+        expiresInSeconds: 60,
+        size: body.length,
+      });
+      // Размер части подписан: больше или меньше — хранилище не принимает.
+      if (n === 2) {
+        const bigger = await fetch(url, { method: 'PUT', body: Uint8Array.from([1, 2, 3, 4]) });
+        expect(bigger.ok).toBe(false);
+      }
       expect((await fetch(url, { method: 'PUT', body })).status).toBe(200);
     }
     const parts = (await storage.listParts(key, id))!;

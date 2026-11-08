@@ -329,7 +329,10 @@ export const VideoOption = z.object({
   moduleTitle: z.string(),
   duration: z.number().int().nullable(),
   live: z.boolean(),
+  /** Черновик: в списке ссылок новости — «(черновик)». */
+  draft: z.boolean(),
 });
+export type VideoOption = z.infer<typeof VideoOption>;
 export const VideoOptions = z.object({ items: z.array(VideoOption) });
 
 /* ───────────── Загрузка файла частями ───────────── */

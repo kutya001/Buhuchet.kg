@@ -41,6 +41,7 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { KB_GO } from '../kb/kb-go';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { videoOptionsQuery } from '../kb/video/video-data';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
@@ -266,6 +267,7 @@ const inputOf = (s: AdminKbStep | null): KbStepInput => ({
   featk: s?.featk ?? '',
   evk: s?.evk ?? 'open',
   active: s?.active ?? true,
+  video: s?.video ?? '',
   mod: s?.mod ?? 'org',
 });
 
@@ -307,6 +309,7 @@ function KbStepDialog({
   const errorText = useErrorText();
   const id = useId();
   const meta = useQuery(kbAdminMetaQuery).data;
+  const videoOptions = useQuery(videoOptionsQuery).data?.items;
   const isNew = step === null;
   const [base, setBase] = useState(step);
   const [form, setForm] = useState<KbStepInput>(() => inputOf(step));
@@ -469,6 +472,29 @@ function KbStepDialog({
                 {(meta?.articles ?? []).map((a) => (
                   <option key={a.id} value={a.id}>
                     {`${a.sec} · ${a.t}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          {/* Видео шага (прототип v79 `ks-vid`): кнопка «▶ Видео», «Посмотреть» — по «Просмотрено». */}
+          <Field
+            id={f('video')}
+            label={t('video.step.f')}
+            hint={t('video.step.hint')}
+            error={errors.video}
+          >
+            {(c) => (
+              <select
+                {...c}
+                value={form.video ?? ''}
+                onChange={(e) => set('video', e.target.value)}
+                className={`${inputClass()} cursor-pointer`}
+              >
+                <option value="">{t('video.step.none')}</option>
+                {(videoOptions ?? []).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {`${v.kind === 'pres' ? t('video.step.pres') : ''}${v.title}${v.live ? '' : t('video.step.unpublished')}`}
                   </option>
                 ))}
               </select>

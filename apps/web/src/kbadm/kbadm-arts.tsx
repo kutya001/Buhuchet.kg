@@ -38,6 +38,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { useVideoPick } from '../kb/video/video-pick';
 import { KbArticleBody, type ArticleScreenInfo } from '../kb/kb-article';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -265,7 +266,8 @@ const imageTag = (url: string, name: string) =>
 /**
  * Окно «Статья» (прототип kbArtEditDlg): раздел (из уже заданных или новый), название, модуль, право
  * для просмотра, кому, «Активна» и текст разметкой. «Добавить картинку» кладёт файл в хранилище и
- * дописывает его в текст; «Предпросмотр» — как увидит пользователь, без сохранения.
+ * дописывает его в текст; «Добавить видео» ставит кнопку видео на место курсора (прототип v79 `ka-vid`);
+ * «Предпросмотр» — как увидит пользователь, без сохранения.
  */
 function KbArticleEditDialog({
   article,
@@ -295,6 +297,8 @@ function KbArticleEditDialog({
   const [reloading, setReloading] = useState(false);
   const [saving, setSaving] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const videoPick = useVideoPick();
   const set = <K extends keyof KbArticleInput>(key: K, v: KbArticleInput[K]) =>
     setForm((f) => ({ ...f, [key]: v }));
   const dirty = JSON.stringify(form) !== JSON.stringify(inputOf(base, sec));
@@ -324,6 +328,21 @@ function KbArticleEditDialog({
     setForm((f) => ({ ...f, html: f.html + imageTag(image.url, file.name) }));
     toast(t('kbadm.art.image_added'));
   };
+
+  const addVideo = (button: HTMLElement) =>
+    videoPick.open(button, (v) => {
+      const ta = textarea.current;
+      if (!ta) return;
+      ta.setRangeText(
+        `\n<p><kb-video data-id="${v.id}"></kb-video></p>\n`,
+        ta.selectionStart,
+        ta.selectionEnd,
+        'end',
+      );
+      set('html', ta.value);
+      ta.focus();
+      toast(t('video.art.added'), { icon: 'film' });
+    });
 
   const preview = async () => {
     try {
@@ -515,6 +534,7 @@ function KbArticleEditDialog({
             {(c) => (
               <textarea
                 {...c}
+                ref={textarea}
                 value={form.html}
                 onChange={(e) => set('html', e.target.value)}
                 className={`${inputClass({ multiline: true })} min-h-[240px] text-[12.5px]`}
@@ -543,6 +563,16 @@ function KbArticleEditDialog({
             if (file) void addImage(file);
           }}
         />
+        <button
+          type="button"
+          data-kb-video-add=""
+          className={buttonClass('default', 'sm')}
+          onClick={(e) => addVideo(e.currentTarget)}
+        >
+          <Icon name="film" size="sm" />
+          {t('video.art.add')}
+        </button>
+        {videoPick.menu}
         <button type="button" className={buttonClass('ghost', 'sm')} onClick={() => void preview()}>
           <Icon name="eye" size="sm" />
           {t('kbadm.art.preview')}

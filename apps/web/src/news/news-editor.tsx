@@ -42,6 +42,8 @@ import { api, apiFailure, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { videoOptionsQuery } from '../kb/video/video-data';
+import { useVideoPick } from '../kb/video/video-pick';
 import { MODULES } from '../shell/modules';
 import { adminNewsQuery } from './news-data';
 import { NewsBody } from './news-provider';
@@ -60,7 +62,7 @@ interface NewsFormValues {
   release: string;
   date: string;
   audience: NewsAudience;
-  /** '' — нет, `art:a5` — статья, `mod:reports` — модуль. */
+  /** '' — нет, `art:a5` — статья, `mod:reports` — модуль, `video:<код>` — видео. */
   link: string;
   pinned: boolean;
   showOnLogin: boolean;
@@ -81,7 +83,7 @@ const FORM_FIELD: Record<NewsField | 'link', FieldPath<NewsFormValues>> = {
 const linkValue = (link: NewsLinkSchema | null) => (link ? `${link.kind}:${link.id}` : '');
 const linkOf = (value: string): NewsLinkSchema | null => {
   const [kind, id] = value.split(':');
-  return (kind === 'art' || kind === 'mod') && id ? { kind, id } : null;
+  return (kind === 'art' || kind === 'mod' || kind === 'video') && id ? { kind, id } : null;
 };
 
 function formValues(n: AdminNewsRecord | null): NewsFormValues {
@@ -130,9 +132,9 @@ const articleOptionsQuery = queryOptions({
   },
 });
 
-/** Кнопки над текстом (прототип `tb`): жирный, заголовок, список, ссылка, картинка. */
+/** Кнопки над текстом (прототип `tb`): жирный, заголовок, список, ссылка, картинка, видео. */
 const TOOLS: readonly {
-  id: 'b' | 'h' | 'ul' | 'a' | 'img';
+  id: 'b' | 'h' | 'ul' | 'a' | 'img' | 'vid';
   label: UiTextKey;
   /** Буква на кнопке (ключ словаря) или значок. */
   letter?: UiTextKey;
@@ -143,6 +145,7 @@ const TOOLS: readonly {
   { id: 'ul', label: 'news.md.list', icon: 'list' },
   { id: 'a', label: 'news.md.link', icon: 'link' },
   { id: 'img', label: 'news.md.image', icon: 'upload' },
+  { id: 'vid', label: 'video.pick', icon: 'film' },
 ];
 
 export function NewsEditDialog({
@@ -170,6 +173,8 @@ export function NewsEditDialog({
   const textarea = useRef<HTMLTextAreaElement | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const articles = useQuery(articleOptionsQuery).data ?? [];
+  const videoPick = useVideoPick();
+  const videos = useQuery(videoOptionsQuery).data?.items ?? [];
   const {
     register,
     getValues,
@@ -221,12 +226,27 @@ export function NewsEditDialog({
     setMd(ta.value);
     ta.focus();
   };
-  const tool = (k: (typeof TOOLS)[number]['id']) => {
+  const tool = (k: (typeof TOOLS)[number]['id'], button: HTMLElement) => {
     if (k === 'b') wrap('**', '**', t('news.md.bold_ph'));
     if (k === 'h') line('## ');
     if (k === 'ul') line('- ');
     if (k === 'a') wrap('[', '](https://)', t('news.md.link_ph'));
     if (k === 'img') fileInput.current?.click();
+    // Ссылка «▶ Название» открывает видео в окне (прототип: `#video:<код>`).
+    if (k === 'vid') {
+      videoPick.open(button, (v) => {
+        const ta = textarea.current;
+        if (!ta) return;
+        ta.setRangeText(
+          `[▶ ${v.title.replace(/[[\]]/g, '')}](#video:${v.id})`,
+          ta.selectionStart,
+          ta.selectionEnd,
+          'end',
+        );
+        setMd(ta.value);
+        ta.focus();
+      });
+    }
   };
   const addImage = async (file: File) => {
     if (file.size > NEWS_IMAGE_MAX_BYTES) return toast(t('news.md.image_big'), { bad: true });
@@ -348,6 +368,11 @@ export function NewsEditDialog({
     ...MENU_MODULE_IDS.map((m) => ({
       value: `mod:${m}`,
       label: t('news.f.link_mod', { title: t(MODULES[m].title) }),
+    })),
+    // Видео платформы (прототип v79): «Видео · <название>», у черновика — «(черновик)».
+    ...videos.map((v) => ({
+      value: `video:${v.id}`,
+      label: t(v.draft ? 'video.news.link_draft' : 'video.news.link', { title: v.title }),
     })),
   ];
   const currentLink = linkValue(current?.link ?? null);
@@ -557,7 +582,7 @@ export function NewsEditDialog({
                       key={x.id}
                       type="button"
                       data-md-tool={x.id}
-                      onClick={() => tool(x.id)}
+                      onClick={(e) => tool(x.id, e.currentTarget)}
                       title={t(x.label)}
                       aria-label={t(x.label)}
                       className={buttonClass('default', 'sm')}
@@ -581,6 +606,7 @@ export function NewsEditDialog({
                       if (file) void addImage(file);
                     }}
                   />
+                  {videoPick.menu}
                   <div className="flex-1" />
                   <div className="md:hidden">
                     <Segments

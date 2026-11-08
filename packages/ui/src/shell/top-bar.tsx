@@ -30,6 +30,11 @@ export interface TopBarProps {
   };
   /** Дата и время по Бишкеку. */
   clock: ReactNode;
+  /**
+   * «▶» слева от «?» (прототип v79 `#vhelp`): у модуля с видеоинструкцией сразу открывает первую; на
+   * телефоне кнопки нет — видео только в окне «?».
+   */
+  video?: { label: string; onClick: () => void } | null;
   /** «?» — помощь по модулю: открывает окно со статьёй «Базы знаний». */
   help: { label: string; title: string; onClick: () => void };
   /** Переключатель темы. */
@@ -43,7 +48,7 @@ export interface TopBarProps {
  * обрезается многоточием, полное — в подсказке и по нажатию. На телефоне поиск свёрнут в значок и
  * раскрывается на всю ширину вместо остальных кнопок; пустое поле при уходе фокуса сворачивается.
  */
-export function TopBar({ title, tab, menu, info, search, clock, help, theme }: TopBarProps) {
+export function TopBar({ title, tab, menu, info, search, clock, video, help, theme }: TopBarProps) {
   const [full, setFull] = useState(false);
   const [searching, setSearching] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -158,6 +163,19 @@ export function TopBar({ title, tab, menu, info, search, clock, help, theme }: T
       <div className={`text-[13px] font-[550] whitespace-nowrap text-muted tabular-nums ${other}`}>
         {clock}
       </div>
+      {video && (
+        <button
+          type="button"
+          onClick={video.onClick}
+          aria-label={video.label}
+          title={video.label}
+          aria-haspopup="dialog"
+          data-video-help
+          className={`${iconButtonClass()} max-md:hidden ${other}`}
+        >
+          <Icon name="film" />
+        </button>
+      )}
       <button
         type="button"
         onClick={help.onClick}

@@ -193,7 +193,7 @@ export const NEWS_TEXTS = {
   'err.news_md_too_long': { ru: NEWS_MESSAGES.news_md_too_long, section: E },
   'err.news_version_required': { ru: NEWS_MESSAGES.news_version_required, section: E },
   'err.news_version_too_long': { ru: NEWS_MESSAGES.news_version_too_long, section: E },
-  'err.news_link': { ru: 'Нет такой статьи или модуля', section: E },
+  'err.news_link': { ru: 'Нет такой статьи, модуля или видео', section: E },
   'err.news_not_draft': { ru: 'Новость уже опубликована', section: E },
   'err.news_delete_not_draft': {
     ru: 'Удалить можно только черновик; опубликованную — снять с публикации',

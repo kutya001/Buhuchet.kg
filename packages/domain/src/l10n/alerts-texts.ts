@@ -52,6 +52,10 @@ export const ALERTS_TEXTS = {
   },
   'alert.job.reports_create_due': { ru: 'Создание отчётов к сроку', section: S },
   'alert.job.files_cleanup_pending': { ru: 'Очистка незаконченных загрузок файлов', section: S },
+  'alert.job.kb_cleanup_video_uploads': {
+    ru: 'Очистка брошенных загрузок видео',
+    section: S,
+  },
   'alert.job.platform_dicts_dues_recalc': {
     ru: 'Пересчёт сроков после правки справочников',
     section: S,

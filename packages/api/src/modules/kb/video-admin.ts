@@ -107,7 +107,7 @@ const saveFails = {
   409: { description: 'Запись изменена другим пользователем', content: error },
 } as const;
 
-const P = '/admin/videos';
+const P = '/admin/videos' as const;
 /** Файлы видео и обложки в хранилище: `platform/videos/<загрузка>`, `platform/video-covers/<загрузка>`. */
 export const VIDEO_FILES = 'videos';
 export const VIDEO_COVERS = 'video-covers';
@@ -319,6 +319,7 @@ export function adminVideoOptionsHandler(
             audience: v.audience as 'all' | 'adm',
             module: v.module,
           }),
+          draft: v.status === 'draft',
         })),
     );
     return c.json({ items }, 200);
@@ -529,14 +530,17 @@ export function adminVideoUpdateHandler(
   };
 }
 
-const stateRoute = (
-  path: string,
+const stateRoute = <
+  Path extends 'publish' | 'off',
+  S extends typeof VideoAdminVersion | typeof VideoAdminOff,
+>(
+  path: Path,
   summary: string,
-  schema: typeof VideoAdminVersion | typeof VideoAdminOff,
+  schema: S,
 ) =>
   createRoute({
     method: 'post',
-    path: `${P}/{id}/${path}`,
+    path: `${P}/{id}/${path}` as `${typeof P}/{id}/${Path}`,
     tags: ['kb'],
     summary,
     middleware: [requirePlatformAdmin] as const,
@@ -744,6 +748,8 @@ export function adminVideoUploadPartsHandler(
         number,
         url: await deps.storage.signedPartUrl(u.storageKey, u.s3UploadId!, number, {
           expiresInSeconds: VIDEO_PART_LINK_SECONDS,
+          // Все части по 10 МБ, последняя — остаток файла.
+          size: number < parts ? VIDEO_PART_BYTES : u.sizeBytes - VIDEO_PART_BYTES * (parts - 1),
         }),
       })),
     );

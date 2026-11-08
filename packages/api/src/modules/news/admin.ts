@@ -13,6 +13,7 @@ import {
   publishNews,
   saveNews,
   setNewsOff,
+  videoRecord,
   withUserContext,
   type NewsAdminRecord,
   type NewsInput,
@@ -288,11 +289,14 @@ async function checkedInput(tx: Tx, body: NewsInputSchema, publish: boolean): Pr
   }
   if (body.link) {
     const { kind, id } = body.link;
+    // Видео (прототип v79: «Видео · <название>») — любое не удалённое, и черновик тоже.
     const known =
       kind === 'mod'
         ? (MENU_MODULE_IDS as readonly string[]).includes(id)
-        : (await kbArticles(tx)).some((a) => a.id === id && a.active !== false);
-    if (!known) apiFail(400, 'news_link', 'Нет такой статьи или модуля', { field: 'link' });
+        : kind === 'video'
+          ? (await videoRecord(tx, id))?.deletedAt === null
+          : (await kbArticles(tx)).some((a) => a.id === id && a.active !== false);
+    if (!known) apiFail(400, 'news_link', 'Нет такой статьи, модуля или видео', { field: 'link' });
   }
   return {
     title: body.title.trim(),

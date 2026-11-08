@@ -106,6 +106,50 @@ describe('Видео платформы: учёт просмотренных с�
     );
   });
 
+  it('серия сохранений и несколько окон сразу не дают больше 2× прошедшего времени', () => {
+    const openedAt = new Date('2026-11-08T10:00:00Z');
+    const now = new Date('2026-11-08T10:01:00Z');
+    // Через минуту после открытия сохранено [0, 120]: следующие 5 секунд (и запас) — можно, [120, 250] — нет.
+    const earlier: [number, number][] = [[0, 120]];
+    expect(
+      videoProgressProblem({ segs: [[120, 125]], duration: 600, openedAt, now, earlier }),
+    ).toBeNull();
+    expect(
+      videoProgressProblem({ segs: [[125, 250]], duration: 600, openedAt, now, earlier }),
+    ).toBe('video_progress_invalid');
+    // Повтор уже засчитанных секунд не тратит запас.
+    expect(
+      videoProgressProblem({ segs: [[0, 120]], duration: 600, openedAt, now, earlier }),
+    ).toBeNull();
+  });
+
+  it('нулевые отрезки не копятся: короче 0,1 с после округления отбрасываются', () => {
+    const tiny = Array.from({ length: 1000 }, (_, i) => [i, i + 0.04] as const);
+    expect(videoSegMerge([], tiny)).toEqual([]);
+    expect(videoSegAdd([[0, 5]], 7, 7.04)).toEqual([[0, 5]]);
+    // Отрезков больше 2 000 вместе с прежними — сохранение не принимается.
+    const many = Array.from({ length: 1500 }, (_, i) => [i, i + 0.1] as [number, number]);
+    const openedAt = new Date('2026-11-08T10:00:00Z');
+    const now = new Date('2026-11-08T12:00:00Z');
+    expect(videoProgressProblem({ segs: many, duration: null, openedAt, now })).toBeNull();
+    expect(
+      videoProgressProblem({
+        segs: many.map(([a, b]) => [a + 1500, b + 1500]),
+        duration: null,
+        openedAt,
+        now,
+        earlier: many,
+      }),
+    ).toBe('video_progress_invalid');
+  });
+
+  it('слияние 100 000 отрезков — за доли секунды', () => {
+    const many = Array.from({ length: 100_000 }, (_, i) => [i * 0.4, i * 0.4 + 0.1] as const);
+    const start = performance.now();
+    expect(videoSegMerge(many, many).length).toBe(100_000);
+    expect(performance.now() - start).toBeLessThan(2000);
+  });
+
   it('время — «2:15» и «1:02:05» (прототип vidT)', () => {
     expect(videoTime(135)).toBe('2:15');
     expect(videoTime(3725)).toBe('1:02:05');

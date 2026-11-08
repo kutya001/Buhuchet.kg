@@ -351,8 +351,11 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'level', icon: 'grad', label: 'tab.kb.level' },
       { id: 'lessons', icon: 'list', label: 'tab.kb.lessons' },
       { id: 'arts', icon: 'book', label: 'tab.kb.arts' },
+      // Видео платформы (решение заказчика 08.11.2026, прототип v79 kbTabs).
+      { id: 'video', icon: 'film', label: 'tab.kb.video' },
       { id: 'news', icon: 'bell', label: 'tab.kb.news' },
       { id: 'team', icon: 'users', label: 'tab.kb.team', when: (a) => a.can('kbLevels') },
+      { id: 'vviews', icon: 'eye', label: 'tab.kb.vviews', when: (a) => a.can('kbLevels') },
     ],
   },
   accounts: {
@@ -453,6 +456,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'arts', icon: 'book', label: 'tab.kbadm.arts' },
       { id: 'levels', icon: 'grad', label: 'tab.kbadm.levels' },
       { id: 'news', icon: 'bell', label: 'tab.kbadm.news' },
+      { id: 'video', icon: 'film', label: 'tab.kbadm.video' },
+      { id: 'vviews', icon: 'eye', label: 'tab.kbadm.vviews' },
     ],
     // У каждой вкладки — своё (прототип kbAdmAdd), у «Уровней» — ничего; «Выгрузить» и «Загрузить» —
     // шаги, показы, статьи и новости (задача 2.39).
@@ -461,6 +466,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'show', icon: 'play', label: 'add.kbadm.show', tabs: ['shows'] },
       { id: 'art', icon: 'book', label: 'add.kbadm.art', tabs: ['arts'] },
       { id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] },
+      { id: 'video', icon: 'film', label: 'add.kbadm.video', tabs: ['video'] },
       {
         id: 'io_export',
         icon: 'download',

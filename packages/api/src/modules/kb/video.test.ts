@@ -9,6 +9,7 @@ import {
   VideoCatalog,
   VideoList,
   VideoOpened,
+  VideoOptions,
   VideoPartLinks,
   VideoProgressSaved,
   VideoUploadChecked,
@@ -19,7 +20,14 @@ import {
 } from '@buhuchet/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readLandingDicts } from '../../landing-dicts';
-import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createStaffFixture,
+  signIn,
+  TEST_ORIGIN,
+  TEST_PASSWORD,
+  unzipTexts,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -190,6 +198,29 @@ describe.skipIf(!databaseAvailable())('Видео платформы: API', () =
     expect(tab.tracked).toBe(true);
     expect(tab.items.map((v) => v.id)).toEqual(expect.arrayContaining([reports.id, pres.id]));
     expect(tab.unseen).toBe(tab.total);
+    // Поиск — по названию и описанию (прототип `searchText: t + desc`), в «Видео» и в Админке.
+    const q = `q=${encodeURIComponent('ПОШАГОВО')}&qcols=title`;
+    const found = VideoList.parse(
+      await ok(await call('GET', `/api/kb/videos?size=50&${q}`, owner)),
+    );
+    expect(found.items.map((v) => v.id)).toEqual(expect.arrayContaining([reports.id, pres.id]));
+    const none = `q=${encodeURIComponent('нет такого текста')}&qcols=title`;
+    expect(
+      VideoList.parse(await ok(await call('GET', `/api/kb/videos?${none}`, owner))).total,
+    ).toBe(0);
+    const adminFound = VideoAdminList.parse(
+      await ok(await call('GET', `/api/admin/videos?size=50&${q}`, admin)),
+    );
+    expect(adminFound.items.map((v) => v.id)).toEqual(expect.arrayContaining([draft.id, adm.id]));
+    // «В Excel» вкладки «Видео» — с правом «Выгрузка в Excel».
+    const file = await call('GET', '/api/kb/videos/export?cols=title,kind', owner);
+    expect(file.status).toBe(200);
+    expect(Object.values(unzipTexts(new Uint8Array(await file.arrayBuffer()))).join('')).toContain(
+      'Отчёты: вкладки',
+    );
+    const senior = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+    expect((await call('GET', '/api/kb/videos/export?cols=title', senior)).status).toBe(403);
+    expect((await call('GET', '/api/kb/videos/export?cols=secret', owner)).status).toBe(400);
   });
 
   it('просмотр: открытия, секунды не больше, чем могло проиграться, «Просмотрено» при 90 % засчитывает шаг урока', async () => {
@@ -287,6 +318,58 @@ describe.skipIf(!databaseAvailable())('Видео платформы: API', () =
       new Set(['Организация А', 'Организация Б']),
     );
     expect(all.summary?.find((s) => s.videoId === v.id)).toMatchObject({ viewers: 1, done: 1 });
+  });
+
+  it('ссылка «Подробнее» новости на видео: черновик видео — можно, удалённое и неизвестное — нет', async () => {
+    const draft = await create({ title: 'Видео к новости' }, false);
+    const options = VideoOptions.parse(
+      await ok(await call('GET', '/api/admin/videos/options', admin)),
+    );
+    expect(options.items.find((v) => v.id === draft.id)).toMatchObject({
+      draft: true,
+      live: false,
+    });
+    const news = (link: { kind: string; id: string }) =>
+      call('POST', '/api/admin/news', admin, {
+        title: 'Видео о новом',
+        type: 'announce',
+        release: '',
+        date: '2026-11-08',
+        short: 'Коротко',
+        md: 'Текст',
+        link,
+        pinned: false,
+        showOnLogin: false,
+        audience: 'all',
+        publish: false,
+      });
+    expect((await news({ kind: 'video', id: draft.id })).status).toBe(201);
+    const unknown = await news({ kind: 'video', id: 'net-takogo' });
+    expect(unknown.status).toBe(400);
+    expect(await errorOf(unknown)).toBe('news_link');
+    await ok(
+      await call('DELETE', `/api/admin/videos/${draft.id}?version=${draft.version}`, admin),
+      204,
+    );
+    expect((await news({ kind: 'video', id: draft.id })).status).toBe(400);
+  });
+
+  it('накрутка просмотра: серия сохранений, второе окно и нулевые отрезки не добавляют секунд', async () => {
+    const v = await create({ title: 'Длинное видео', ytDuration: 600 });
+    const first = (await open(acc, v.id)).session!;
+    clock().advance(60_000);
+    // За минуту — не больше 125 секунд, сколько бы сохранений ни было.
+    await ok(await progress(acc, v.id, first, [[0, 120]], 120));
+    const series = await progress(acc, v.id, first, [[120, 250]], 250);
+    expect(series.status).toBe(400);
+    expect(await errorOf(series)).toBe('video_progress_invalid');
+    // Второе окно того же видео запаса не добавляет: считается от первого открытия.
+    const second = (await open(acc, v.id)).session!;
+    expect((await progress(acc, v.id, second, [[300, 420]], 420)).status).toBe(400);
+    // Отрезки короче 0,1 с не сохраняются и не копятся.
+    const tiny = Array.from({ length: 500 }, (_, i) => [200 + i * 0.5, 200 + i * 0.5 + 0.04]);
+    const saved = VideoProgressSaved.parse(await ok(await progress(acc, v.id, second, tiny, 0)));
+    expect(saved.view).toMatchObject({ pct: 20, status: 'started' });
   });
 
   it('загрузка файла частями: проверка содержимого, файл играет по подписанной ссылке, замена и удаление', async () => {

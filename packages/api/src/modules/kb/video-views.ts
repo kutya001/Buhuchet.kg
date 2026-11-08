@@ -227,7 +227,8 @@ async function adminSummary(tx: Tx) {
         videoId: v.id,
         title: v.title,
         starts: g.starts,
-        avgPct: g.starts ? Math.round(g.pctSum / g.starts) : 0,
+        // «Досмотрел» без «запуска» не поднимает средний процент выше 100.
+        avgPct: g.starts ? Math.min(100, Math.round(g.pctSum / g.starts)) : 0,
       };
     });
   return { summary, guests: guestRows };

@@ -108,6 +108,8 @@ import {
   kbVideoProgressRoute,
   kbVideoValuesHandler,
   kbVideoValuesRoute,
+  kbVideoExportHandler,
+  kbVideoExportRoute,
 } from './video';
 import {
   adminVideoCardHandler,
@@ -228,6 +230,7 @@ export function kbModule(deps: ApiDeps) {
     .openapi(kbVideoCatalogRoute, kbVideoCatalogHandler(deps))
     .openapi(kbVideoListRoute, kbVideoListHandler(deps))
     .openapi(kbVideoValuesRoute, kbVideoValuesHandler(deps))
+    .openapi(kbVideoExportRoute, kbVideoExportHandler(deps))
     .openapi(kbVideoOpenRoute, kbVideoOpenHandler(deps))
     .openapi(kbVideoProgressRoute, kbVideoProgressHandler(deps))
     .openapi(kbVideoMetaRoute, kbVideoMetaHandler(deps))

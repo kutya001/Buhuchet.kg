@@ -154,6 +154,8 @@ export interface ModalProps {
   dirty?: boolean;
   /** Касание фона не закрывает окно. */
   sticky?: boolean;
+  /** Без «На весь экран» (окно видео: у плеера своя кнопка, прототип `noMax`). */
+  noMax?: boolean;
   /** На телефоне тянуть вниз только за ручку и шапку (в окне свои жесты по содержимому). */
   swipeHead?: boolean;
   /** На телефоне — на весь экран, а не шторкой (окна подбора: прототип `.modal.pickm`). */
@@ -226,6 +228,7 @@ export function Modal({
   size = 'narrow',
   dirty = false,
   sticky = false,
+  noMax = false,
   swipeHead = false,
   phoneFull = false,
   tabs,
@@ -234,14 +237,14 @@ export function Modal({
   const mounted = useMounted();
   const phone = useMediaQuery(PHONE_QUERY);
   const titleId = useId();
-  const canMax = canMaximize(kind);
+  const canMax = canMaximize(kind) && !noMax;
   const [shown, setShown] = useState(false);
   const [max, setMax] = useState(false);
   const [openedMax, setOpenedMax] = useState(false);
   const [asking, setAsking] = useState(false);
   // Окно открылось — развёрнуто, если так выбрали в прошлый раз (для карточек и форм отдельно).
   if (shown !== open) {
-    const startMax = open && canMaximize(kind) && windows.max[kind];
+    const startMax = open && canMax && windows.max[kind as keyof typeof windows.max];
     setShown(open);
     setMax(startMax);
     setOpenedMax(startMax);
@@ -346,7 +349,7 @@ export function Modal({
   }, [tab]);
 
   const toggleMax = () => {
-    if (!canMaximize(kind)) return;
+    if (!canMax || !canMaximize(kind)) return;
     const el = dialog.current;
     if (el && !phone && !reducedMotion()) flip.current = el.getBoundingClientRect();
     setMax(!max);

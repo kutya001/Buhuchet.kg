@@ -58,12 +58,12 @@ export interface Storage {
    * узнаёт уложенные части (`listParts`) и собирает файл (`completeMultipart`) или прерывает загрузку.
    */
   createMultipart(key: string, options: { contentType: string }): Promise<string>;
-  /** Временная ссылка на `PUT` одной части (номер с 1). */
+  /** Временная ссылка на `PUT` одной части (номер с 1) ровно `size` байт: размер подписан. */
   signedPartUrl(
     key: string,
     uploadId: string,
     partNumber: number,
-    options: { expiresInSeconds: number },
+    options: { expiresInSeconds: number; size: number },
   ): Promise<string>;
   /** Части, которые уже в хранилище, по номерам; загрузки нет — null. */
   listParts(key: string, uploadId: string): Promise<StoragePart[] | null>;
@@ -340,7 +340,7 @@ export function createS3Storage(config: StorageConfig): Storage {
       if (!out.UploadId) throw new Error('Хранилище не вернуло номер многочастной загрузки');
       return out.UploadId;
     },
-    async signedPartUrl(key, uploadId, partNumber, { expiresInSeconds }) {
+    async signedPartUrl(key, uploadId, partNumber, { expiresInSeconds, size }) {
       checkExpiry(expiresInSeconds);
       checkPart(partNumber);
       const command = new UploadPartCommand({
@@ -348,8 +348,13 @@ export function createS3Storage(config: StorageConfig): Storage {
         Key: key,
         UploadId: uploadId,
         PartNumber: partNumber,
+        ContentLength: size,
       });
-      return getSignedUrl(signer, command, { expiresIn: expiresInSeconds });
+      // Content-Length браузер ставит сам по размеру части; подписан — часть другого размера не ляжет.
+      return getSignedUrl(signer, command, {
+        expiresIn: expiresInSeconds,
+        signableHeaders: new Set(['content-length']),
+      });
     },
     async listParts(key, uploadId) {
       const parts: StoragePart[] = [];
@@ -504,13 +509,14 @@ export function createMemoryStorage(): MemoryStorage {
       multiparts.set(id, { key, contentType, parts: new Map() });
       return id;
     },
-    async signedPartUrl(key, uploadId, partNumber, { expiresInSeconds }) {
+    async signedPartUrl(key, uploadId, partNumber, { expiresInSeconds, size }) {
       checkExpiry(expiresInSeconds);
       checkPart(partNumber);
       const params = new URLSearchParams({
         expires: String(expiresInSeconds),
         uploadId,
         part: String(partNumber),
+        size: String(size),
       });
       return `memory://${key}?${params.toString()}`;
     },

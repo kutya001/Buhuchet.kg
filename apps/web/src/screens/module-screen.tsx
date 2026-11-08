@@ -15,12 +15,15 @@ import { KbArticlesTab } from '../kb/kb-articles';
 import { KbLessonsTab } from '../kb/kb-lessons';
 import { KbLevelTab } from '../kb/kb-level';
 import { KbTeamTab } from '../kb/kb-team';
+import { KbVideoTab } from '../kb/video/kb-video-tab';
+import { VideoViewsTab } from '../kb/video/video-views';
 import { KpiScreen } from '../kpi/kpi-screen';
 import { KbAdmArtsTab } from '../kbadm/kbadm-arts';
 import { KbAdmNewsTab } from '../kbadm/kbadm-io';
 import { KbAdmLevelsTab } from '../kbadm/kbadm-levels';
 import { KbAdmShowsTab } from '../kbadm/kbadm-shows';
 import { KbAdmStepsTab } from '../kbadm/kbadm-steps';
+import { KbAdmVideoTab } from '../kbadm/kbadm-video';
 import { HomeAnalyticsTab } from '../home/home-analytics';
 import { HomeSummaryTab } from '../home/home-summary';
 import { KbNewsTab } from '../news/news-tab';
@@ -109,6 +112,8 @@ export function ModuleScreen({
     if (tab === 'arts') return <KbArticlesTab />;
     if (tab === 'team') return <KbTeamTab />;
     if (tab === 'news') return <KbNewsTab />;
+    if (tab === 'video') return <KbVideoTab />;
+    if (tab === 'vviews') return <VideoViewsTab admin={false} />;
     return <ModuleStub moduleId={moduleId} />;
   }
   // Админка → «База знаний (содержимое)»: «Новости» (задача 2.32), остальные вкладки — задача 2.39.
@@ -119,6 +124,8 @@ export function ModuleScreen({
     if (tab === 'arts') return <KbAdmArtsTab />;
     if (tab === 'levels') return <KbAdmLevelsTab />;
     if (tab === 'news') return <KbAdmNewsTab />;
+    if (tab === 'video') return <KbAdmVideoTab />;
+    if (tab === 'vviews') return <VideoViewsTab admin />;
     return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'accounts') return <AccountsList />;
@@ -165,6 +172,10 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'projects/all',
   'projects/mine',
   'files/',
+  // Видео платформы (прототип v79: «Не просмотренные», «Не смотрел / Начал / Просмотрено»).
+  'kb/video',
+  'kb/vviews',
+  'kbadm/vviews',
   'orgs/',
   'orgs/list',
   'l10n/',

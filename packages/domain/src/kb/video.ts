@@ -96,23 +96,38 @@ export type VideoSegment = readonly [number, number];
 const tenth = (x: number) => Math.round(x * 10) / 10;
 
 /**
- * Добавить отрезок к списку (прототип `segAdd`): соседние и перекрытые отрезки (разрыв до 0,25 с)
- * сливаются, концы округляются до 0,1 с — каждая секунда видео считается один раз.
+ * Слить списки отрезков за один проход (прототип `segAdd`): концы округляются до 0,1 с, отрезки короче
+ * 0,1 с отбрасываются, соседние и перекрытые (разрыв до 0,25 с) сливаются — каждая секунда видео
+ * считается один раз. Одна сортировка на всё: время растёт как n·log n при любом числе отрезков.
  */
+function mergeSegments(
+  parts: readonly (readonly (readonly number[])[] | null | undefined)[],
+): VideoSegment[] {
+  const all: [number, number][] = [];
+  for (const part of parts) {
+    for (const x of part ?? []) {
+      const a = tenth(x[0]!);
+      const b = tenth(x[1]!);
+      if (b > a) all.push([a, b]);
+    }
+  }
+  all.sort((x, y) => x[0] - y[0]);
+  const out: [number, number][] = [];
+  for (const x of all) {
+    const last = out[out.length - 1];
+    if (last && x[0] <= last[1] + 0.25) last[1] = Math.max(last[1], x[1]);
+    else out.push(x);
+  }
+  return out;
+}
+
+/** Добавить отрезок к списку (прототип `segAdd`). */
 export function videoSegAdd(
   list: readonly VideoSegment[] | null | undefined,
   a: number,
   b: number,
 ): VideoSegment[] {
-  if (!(b > a)) return (list ?? []).map((x) => [x[0], x[1]] as const);
-  const sorted = [...(list ?? []), [a, b] as const].sort((x, y) => x[0] - y[0]);
-  const out: [number, number][] = [];
-  for (const x of sorted) {
-    const last = out[out.length - 1];
-    if (last && x[0] <= last[1] + 0.25) last[1] = Math.max(last[1], x[1]);
-    else out.push([x[0], x[1]]);
-  }
-  return out.map((x) => [tenth(x[0]), tenth(x[1])] as const);
+  return mergeSegments([list, [[a, b]]]);
 }
 
 /** Слить два списка отрезков. */
@@ -120,9 +135,7 @@ export function videoSegMerge(
   list: readonly VideoSegment[] | null | undefined,
   more: readonly VideoSegment[] | null | undefined,
 ): VideoSegment[] {
-  let out = videoSegAdd(list, 0, 0);
-  for (const [a, b] of more ?? []) out = videoSegAdd(out, a, b);
-  return out;
+  return mergeSegments([list, more]);
 }
 
 /** Сколько секунд в отрезках (прототип `segLen`). */
@@ -173,15 +186,18 @@ export function videoViewStatus(
 export type VideoProgressProblem = 'video_progress_invalid';
 
 /**
- * Проверка отрезков одного открытия от браузера: концы — числа от 0 до длительности (пока она
- * неизвестна — до 12 часов), начало меньше конца, отрезков не больше 2 000; проигралось не больше,
- * чем могло за время с открытия окна на скорости 2 (и 5 секунд запаса) — накрутить просмотр нельзя.
+ * Проверка отрезков одного сохранения от браузера: концы — числа от 0 до длительности (пока она
+ * неизвестна — до 12 часов), начало меньше конца, отрезков не больше 2 000. Вместе с уже сохранёнными
+ * отрезками недавних открытий (`earlier`) проигралось не больше, чем могло со времени самого раннего
+ * из них (`openedAt`) на скорости 2 и 5 секунд запаса, и отрезков не больше 2 000: ни серией
+ * сохранений, ни несколькими окнами сразу накрутить просмотр нельзя.
  */
 export function videoProgressProblem(input: {
   segs: readonly (readonly number[])[];
   duration: number | null;
   openedAt: Date;
   now: Date;
+  earlier?: readonly VideoSegment[] | null;
 }): VideoProgressProblem | null {
   const { segs, duration, openedAt, now } = input;
   if (segs.length > VIDEO_SEGMENTS_MAX) return 'video_progress_invalid';
@@ -194,8 +210,9 @@ export function videoProgressProblem(input: {
     }
   }
   const elapsed = Math.max(0, (now.getTime() - openedAt.getTime()) / 1000);
-  const played = videoSegLen(videoSegMerge([], segs as readonly VideoSegment[]));
-  return played > elapsed * VIDEO_MAX_RATE + 5 ? 'video_progress_invalid' : null;
+  const merged = mergeSegments([input.earlier, segs]);
+  if (merged.length > VIDEO_SEGMENTS_MAX) return 'video_progress_invalid';
+  return videoSegLen(merged) > elapsed * VIDEO_MAX_RATE + 5 ? 'video_progress_invalid' : null;
 }
 
 /* ───────────── Кому видно ───────────── */

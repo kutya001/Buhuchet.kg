@@ -1,0 +1,2 @@
+ALTER TABLE "news" DROP CONSTRAINT "news_link_check";--> statement-breakpoint
+ALTER TABLE "news" ADD CONSTRAINT "news_link_check" CHECK (("news"."link_kind" is null and "news"."link_id" is null) or ("news"."link_kind" in ('art', 'mod', 'video') and "news"."link_id" ~ '^[A-Za-z0-9_-]{1,64}$'));
