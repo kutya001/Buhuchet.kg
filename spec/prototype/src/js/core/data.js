@@ -5,10 +5,10 @@
    в артефакте и при открытии с диска — из копии, которую сборка встраивает в страницу (блоки db-*). */
 const DB_VER=1,DB_KEY=BU_P+'temdb';
 const DB_FILES={demo:'demoDB.json',empty:'TemDB.json',ref:'refDB.json',gked:'gkedDB.json'};
-const DB_ORG_KEYS=['organization','roles','employees','contractors','reports','moneyOps','history','tasks','feePayments','services','projects','files','indicators','indicatorValues','indicatorMonths','indicatorHistory','indicatorImports','kbProgress','newsRead','platformOrgs','platformUsers','dictRequests','telegramLog','leads'];
-const DB_REF_KEYS=['dictionaries','taxes','enRates','propertyRates','bizSize','notes','reportTypes','singleTaxRates','taxRates','defaultRates','phoneCodes','holidays','workingSaturdays','statuses','statusNames','roleTemplates','messageTemplates','localization','kbGroups','kbSteps','kbLevels','kbArticles','news','dictHistory','dictLoads','calendarAudit','permissions','kbUi','kbShows','onboarding'];
-const DB_OBJ=new Set(['notes','organization','kbProgress','newsRead','dictionaries','taxRates','defaultRates','holidays','statuses','statusNames','messageTemplates','kbLevels','calendarAudit','kbUi','onboarding']);
-const DB_T={organization:'Организация',roles:'Роли',employees:'Сотрудники',contractors:'Контрагенты',reports:'Отчёты',moneyOps:'Поступления и оплаты',history:'История',tasks:'Задачи',feePayments:'Оплаты за обслуживание',services:'Разовые услуги',projects:'Проекты',files:'Файлы',indicators:'Показатели',indicatorValues:'Значения показателей',indicatorMonths:'Статусы месяцев показателей',indicatorHistory:'История показателей',indicatorImports:'Загрузки показателей из Excel',kbProgress:'Прогресс в Базе знаний',newsRead:'Прочитанные новости',platformOrgs:'Организации платформы',platformUsers:'Учётные записи',dictRequests:'Запросы на справочники',telegramLog:'Журнал Telegram',leads:'Заявки с сайта'};
+const DB_ORG_KEYS=['organization','roles','employees','contractors','reports','moneyOps','history','tasks','feePayments','services','projects','files','indicators','indicatorValues','indicatorMonths','indicatorHistory','indicatorImports','kbProgress','newsRead','platformOrgs','platformUsers','dictRequests','telegramLog','leads','videoViews','videoGuest'];
+const DB_REF_KEYS=['dictionaries','taxes','enRates','propertyRates','bizSize','notes','reportTypes','singleTaxRates','taxRates','defaultRates','phoneCodes','holidays','workingSaturdays','statuses','statusNames','roleTemplates','messageTemplates','localization','kbGroups','kbSteps','kbLevels','kbArticles','news','dictHistory','dictLoads','calendarAudit','permissions','kbUi','kbShows','onboarding','videos'];
+const DB_OBJ=new Set(['notes','organization','kbProgress','newsRead','dictionaries','taxRates','defaultRates','holidays','statuses','statusNames','messageTemplates','kbLevels','calendarAudit','kbUi','onboarding','videoGuest']);
+const DB_T={organization:'Организация',roles:'Роли',employees:'Сотрудники',contractors:'Контрагенты',reports:'Отчёты',moneyOps:'Поступления и оплаты',history:'История',tasks:'Задачи',feePayments:'Оплаты за обслуживание',services:'Разовые услуги',projects:'Проекты',files:'Файлы',indicators:'Показатели',indicatorValues:'Значения показателей',indicatorMonths:'Статусы месяцев показателей',indicatorHistory:'История показателей',indicatorImports:'Загрузки показателей из Excel',kbProgress:'Прогресс в Базе знаний',newsRead:'Прочитанные новости',platformOrgs:'Организации платформы',platformUsers:'Учётные записи',dictRequests:'Запросы на справочники',telegramLog:'Журнал Telegram',leads:'Заявки с сайта',videoViews:'Просмотры видео',videoGuest:'Просмотры видео гостями лендинга'};
 function dbRead(name,id){
   // Демо-версия для сайта к серверу не обращается: данные только из встроенной копии
   if(/^https?:/.test(location.protocol)&&BU_P==='bu.')try{const x=new XMLHttpRequest();x.open('GET','data/'+name+'?v='+Date.now(),false);x.send();
@@ -24,8 +24,10 @@ let DATA_MODE=store.get('data','demo'),DBMISS=[];
 function dbFill(db){const miss=[],e=DBSRC.empty.db,r=DBSRC.ref.db;db.meta=db.meta||{};
   // Заявки с лендинга (v65): у данных, сохранённых раньше, раздел появляется сам — в демо-режиме с демо-заявками
   if(db.leads==null&&db.meta.file==='TemDB.json'&&!db.meta.v65)db.leads=structuredClone((db.meta.mode!=='empty'&&DBSRC.demo.db.leads)||[]);
+  // Видео платформы (v79): у данных, сохранённых раньше, просмотры появляются сами — в демо-режиме с демо-просмотрами
+  if(db.meta.file==='TemDB.json'&&!db.meta.v79){const dm=db.meta.mode!=='empty';if(db.videoViews==null)db.videoViews=structuredClone((dm&&DBSRC.demo.db.videoViews)||[]);if(db.videoGuest==null)db.videoGuest=structuredClone((dm&&DBSRC.demo.db.videoGuest)||{})}
   DB_ORG_KEYS.forEach(k=>{if(db[k]==null){miss.push(DB_T[k]||k);db[k]=structuredClone(e[k]!=null?e[k]:DB_OBJ.has(k)?{}:[])}});
-  const hadRef=!!db.ref;db.ref=db.ref||{};
+  const hadRef=!!db.ref;db.ref=db.ref||{};if(hadRef&&db.ref.videos==null&&!db.meta.v79)db.ref.videos=structuredClone(r.videos||[]);
   DB_REF_KEYS.forEach(k=>{if(db.ref[k]==null){if(hadRef)miss.push('справочник '+k);db.ref[k]=structuredClone(r[k]!=null?r[k]:DB_OBJ.has(k)?{}:[])}});
   // Справочник ГКЭД — отдельный файл gkedDB.json; правки администратора платформы хранятся в TemDB (ref.gked)
   if(db.ref.gked==null)db.ref.gked=structuredClone(DBSRC.gked.db.items||[]);
@@ -313,6 +315,10 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
     if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // v78: лендинг минималистичный, блок «Три символа герба бухгалтеров» и «Подробнее» — новые тексты группы «Лендинг» встают после соседних строк
   if(!db.meta.v78){db.meta.v78=1;const l=db.ref.localization;const rl=r.localization||[];const nk=new Set(['land.hero.lead','land.scroll','land.more','land.less','land.top','land.change.tap','land.sec.short']);if(Array.isArray(l))rl.filter(x=>/^land\.emb\./.test(x.key)||nk.has(x.key)).forEach(x=>{if(l.some(y=>y.key===x.key))return;const i=rl.indexOf(x);const j=i>0?l.findIndex(y=>y.key===rl[i-1].key):-1;l.splice(j<0?l.length:j+1,0,structuredClone(x))})}
+  // v79: тексты блока «Видео о Buhuchet.kg» лендинга, видео у шагов уроков и кнопки видео в статьях модулей
+  if(!db.meta.v79){db.meta.v79=1;const l=db.ref.localization;const rl=r.localization||[];if(Array.isArray(l))rl.filter(x=>/^land\.video\./.test(x.key)).forEach(x=>{if(l.some(y=>y.key===x.key))return;const i=rl.indexOf(x);const j=i>0?l.findIndex(y=>y.key===rl[i-1].key):-1;l.splice(j<0?l.length:j+1,0,structuredClone(x))});
+    const sv={cp1:'vd-cps',rtabs:'vd-reports',journal:'vd-fin',regtasks:'vd-tasks'};(db.ref.kbSteps||[]).forEach(s=>{if(sv[s.id]&&s.video==null)s.video=sv[s.id]});
+    const av={a2:'vd-intro',a7:'vd-cps',a8:'vd-reports',a11:'vd-fin',a13:'vd-tasks'};(db.ref.kbArticles||[]).forEach(a=>{if(av[a.id]&&!/<kb-video/.test(a.html||''))a.html=`<p><kb-video data-id="${av[a.id]}"></kb-video></p>`+(a.html||'')})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

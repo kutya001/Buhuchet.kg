@@ -34,6 +34,8 @@ function parseHash(){const h=location.hash.replace(/^#/,'');const[a,b]=h.split('
 function go(mod,tab,preset){if(OV.skip){OV.next=[mod,tab,preset];return}S.preset=preset||null;const h='#'+mod+(tab?'.'+tab:'');if(location.hash===h)route();else if(ovStale()){clearTimeout(OV.t);location.replace(h)}
   else if(ovAny()&&history.state&&history.state.ov){history.replaceState(history.state,'',h);route()}else location.hash=h}
 function route(){
+  // #video/<код> — ссылка «Скопировать ссылку» на видео: вкладка «Видео» Базы знаний с окном видео
+  if(/^#video\//.test(location.hash))vidRoute();
   // #/<адрес организации>/inn/<ИНН> — страница контрагента по ссылке, открывается поверх программы
   if(pubRoute())return;if(PUB.open)pubHide();
   // #landing — лендинг buhuchet.kg для гостей, открывается поверх программы и страницы входа
