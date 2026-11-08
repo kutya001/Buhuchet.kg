@@ -405,6 +405,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       showOnLogin: true,
       publishedAt: new Date('2026-10-12T03:00:00Z'),
     });
+    // Ссылка на видео прототипа (vd-intro) не переносится: видео в базу не заливаются (п. О-53).
+    expect(rows.find((r) => r.id === 'v79')).toMatchObject({ linkKind: null, linkId: null });
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
       sql`select count(*)::integer as n from news where id = 'v1'`,
     )) as unknown as [{ n: number }];
