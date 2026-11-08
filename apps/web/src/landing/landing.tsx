@@ -201,6 +201,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
   const boot = usePageLoad();
   const fx = useRef<LandingFx | null>(null);
   const burger = useRef<HTMLButtonElement>(null);
+  const logo = useRef<HTMLButtonElement>(null);
   const track = useRef<HTMLDivElement>(null);
 
   /** Плавно к блоку; `focus` — курсор в первое поле формы заявки. */
@@ -308,6 +309,14 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
     setMenu(false);
     window.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
   };
+  /**
+   * Весы «Наверх» прячутся, когда виден первый экран: фокус заранее переходит на логотип в шапке — иначе Chrome
+   * останавливает плавную прокрутку на полпути, как только скрывается кнопка в фокусе.
+   */
+  const balToTop = () => {
+    logo.current?.focus({ preventScroll: true });
+    toTop();
+  };
 
   /** Кнопка «Подробнее» / «Свернуть» блока; `label` — своя подпись закрытой кнопки. */
   const moreButton = (id: BlockId, label?: string) => (
@@ -388,6 +397,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
       <header className="lp-head">
         <div className="lp-wrap lp-head-in">
           <button
+            ref={logo}
             type="button"
             className="lp-logo"
             onClick={toTop}
@@ -818,7 +828,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
         hidden={!bal}
         aria-label={t('land.top')}
         title={t('land.top')}
-        onClick={toTop}
+        onClick={balToTop}
       >
         <BalanceIcon />
       </button>

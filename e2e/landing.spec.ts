@@ -474,6 +474,8 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await top.click();
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect(top).toBeHidden();
+    // Фокус — на логотипе в шапке: скрытые весы с фокусом останавливали прокрутку на полпути.
+    await expect(page.locator('.lp-logo')).toBeFocused();
   });
 
   test.describe('«уменьшить движение»', () => {
