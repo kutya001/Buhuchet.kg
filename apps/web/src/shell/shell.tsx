@@ -51,6 +51,7 @@ import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
 import { useModuleStats } from '../lists/stats';
 import { ModuleScreen, screenHasPlates } from '../screens/module-screen';
+import { skipNextIntro } from './brand-intro';
 import { PHONE_QUERY, saveNavHidden, saveTree, toggleTheme } from './browser';
 import { Clock } from './clock';
 import { ShellContext, type AddRequest } from './context';
@@ -229,7 +230,10 @@ function ShellPage({
       })
       .then((fresh) => {
         if (cancelled || !fresh) return;
-        if (fresh === 'out') return window.location.assign('/login');
+        if (fresh === 'out') {
+          skipNextIntro();
+          return window.location.assign('/login');
+        }
         setMe(fresh);
         // Открытый модуль пропал из меню — на первый модуль меню.
         if (moduleId && !fresh.modules.some((m) => m === moduleId)) router.replace(APP_PATH);
@@ -352,6 +356,8 @@ function ShellPage({
     try {
       await api.api.auth.logout.$post();
     } finally {
+      // Выход — сразу страница входа, без заставки (прототип v78: заставка — при входе, не при выходе).
+      skipNextIntro();
       if (replace) window.location.replace('/login');
       else window.location.assign('/login');
     }

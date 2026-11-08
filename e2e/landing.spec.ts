@@ -6,6 +6,7 @@ import { DEMO_PASSWORD } from './helpers';
 
 const HERO = 'Отчёты, сроки и деньги клиентов бухгалтерской фирмы — в одной программе';
 const BLOCKS = [
+  'Три символа герба бухгалтеров — в Buhuchet.kg',
   'Кому подходит',
   'Что меняется',
   'Возможности',
@@ -41,6 +42,16 @@ async function signInByForm(page: Page, login: string, password: string) {
 }
 
 const leadForm = (page: Page) => page.locator('#lp-lead form');
+
+/**
+ * Заставки с логотипом (прототип v78) в браузере под управлением тестов нет (`navigator.webdriver`,
+ * docs/deviations.md п. О-52): сквозные тесты открывают сотни страниц. Проверки заставки открывают
+ * страницы как обычный браузер.
+ */
+const withIntro = (page: Page) =>
+  page.addInitScript(() =>
+    Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }),
+  );
 
 async function fillLead(page: Page, phone: string) {
   const form = leadForm(page);
@@ -337,5 +348,139 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     expect(landing).toContain('property="og:image"');
     expect(landing).toContain('og.jpg');
     expect((await request.get('/og.jpg')).headers()['content-type']).toBe('image/jpeg');
+  });
+});
+
+test.describe('Этап 3: лендинг v78 — заставка, линия Бернулли, герб, «Подробнее» (прототип v78)', () => {
+  test('(проверка прототипа v78) заставка при каждом открытии лендинга: знак и BuhUchet.kg, любая клавиша — сразу к странице, знак встаёт в шапку; при новом открытии — снова', async ({
+    page,
+  }) => {
+    await withIntro(page);
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    const intro = page.locator('.lp-intro');
+    await expect(intro).toBeVisible();
+    await expect(intro).toContainText('BuhUchet.kg');
+    await page.keyboard.press('Shift');
+    await expect(intro).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
+    await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
+    // Линия Бернулли с петлёй у заголовка каждого из 9 блоков.
+    await expect(page.locator('#lp-path .lp-knots circle')).toHaveCount(9);
+
+    // Новое открытие — снова заставка; без нажатия она уходит сама.
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(intro).toBeVisible();
+    await expect(intro).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
+  });
+
+  test('(проверка прототипа v78) заставка при входе: на странице входа и после входа по логину; знак улетает в меню слева, на телефоне меню скрыто — вверх', async ({
+    page,
+  }, testInfo) => {
+    await withIntro(page);
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+    const intro = page.locator('.lp-intro');
+    await expect(intro).toBeVisible();
+    await page.keyboard.press('Shift');
+    await expect(intro).toHaveCount(0, { timeout: 10_000 });
+
+    await signInByForm(page, 'erkin', DEMO_PASSWORD);
+    await expect(page).toHaveURL(/\/app\//);
+    await expect(intro).toBeVisible();
+    await expect(intro).toContainText('BuhUchet.kg');
+    await expect(intro).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.locator('.bu-intro-tg')).toHaveCount(0);
+    if (!testInfo.project.name.startsWith('mobile')) {
+      // Знак в левой панели — снова на месте.
+      await expect(page.locator('[data-brand-mark]:visible').first()).toHaveCSS('opacity', '1');
+    }
+  });
+
+  test('(проверка прототипа v78) у каждого блока «Подробнее»: подробности раскрываются и сворачиваются; символ герба и плитка «Возможностей» раскрываются нажатием; весы в углу — наверх', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    // Блок, подпись кнопки, текст из подробностей.
+    const more: [string, string, string][] = [
+      ['emb', 'Подробнее', 'Девиз на кольце герба: «Наука, совесть, независимость»'],
+      ['who', 'Подробнее', 'Ведёте десятки и сотни клиентов'],
+      ['features', 'Подробнее', 'Отчёты, квитанции и договоры в карточках клиентов'],
+      ['shots', 'Подробнее', 'Все отчёты клиентов со сроками, статусами и суммами'],
+      ['start', 'Подробнее', 'Мы свяжемся, покажем программу и создадим вашу организацию'],
+      ['security', 'Подробнее', 'Данные каждой фирмы отделены'],
+      ['faq', 'Подробнее', 'Что видит мой клиент?'],
+      ['lead', 'Контакты', '+996 500 888 268'],
+    ];
+    for (const [id, label, text] of more) {
+      const block = page.locator(`#lp-${id}`);
+      const detail = block.getByText(text).first();
+      await expect(detail).toBeHidden();
+      const button = block.getByRole('button', { name: label, exact: true });
+      await button.click();
+      await expect(detail).toBeVisible();
+      await expect(button).toHaveAttribute('aria-expanded', 'true');
+      await expect(button).toHaveText('Свернуть');
+    }
+    // «Что меняется»: «Подробнее» ставит «Было» и «Стало» рядом — подсказка о переворачивании не нужна.
+    const change = page.locator('#lp-change');
+    await expect(change.getByText('Нажмите на карточку — увидите, как было')).toBeVisible();
+    await change.getByRole('button', { name: 'Подробнее', exact: true }).click();
+    await expect(change.getByText('Нажмите на карточку — увидите, как было')).toBeHidden();
+    await change.getByRole('button', { name: 'Свернуть', exact: true }).click();
+    await expect(change.getByText('Нажмите на карточку — увидите, как было')).toBeVisible();
+
+    // Герб: символ подсвечивается и показывает, что он значит в программе; нажатие на солнце в гербе.
+    const emb = page.locator('#lp-emb');
+    await emb.getByRole('button', { name: 'Свернуть', exact: true }).click();
+    const scales = emb.getByRole('button', { name: 'Весы: баланс' });
+    await expect(emb.getByText('Деньги клиентов на налоги сходятся')).toBeHidden();
+    await scales.click();
+    await expect(scales).toHaveAttribute('aria-pressed', 'true');
+    await expect(emb.getByText('Деньги клиентов на налоги сходятся')).toBeVisible();
+    const seal = emb.getByRole('img', { name: /^Герб бухгалтеров/ });
+    const size = await seal.evaluate((e) => {
+      e.scrollIntoView({ block: 'center' });
+      return e.clientWidth;
+    });
+    await seal.click({ position: { x: size * 0.5, y: size * 0.26 } });
+    await expect(emb.getByRole('button', { name: 'Солнце: учёт освещает дела' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(scales).toHaveAttribute('aria-pressed', 'false');
+
+    // «Возможности»: плитка раскрывается нажатием.
+    const tile = page.locator('#lp-features').getByRole('button', { name: 'Файлы', exact: true });
+    await page.locator('#lp-features').getByRole('button', { name: 'Свернуть' }).click();
+    await expect(page.getByText('Отчёты, квитанции и договоры в карточках клиентов')).toBeHidden();
+    await tile.click();
+    await expect(tile).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByText('Отчёты, квитанции и договоры в карточках клиентов')).toBeVisible();
+
+    // Весы-значок в углу: после первого экрана; нажатие — в начало страницы.
+    await page.locator('#lp-faq h2').scrollIntoViewIfNeeded();
+    const top = page.getByRole('button', { name: 'Наверх', exact: true });
+    await expect(top).toBeVisible();
+    await top.click();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await expect(top).toBeHidden();
+  });
+
+  test.describe('«уменьшить движение»', () => {
+    test.use({ reducedMotion: 'reduce' });
+
+    test('(проверка прототипа v78) при «уменьшить движение» нет заставки и анимаций: линия Бернулли нарисована целиком, всё видно сразу', async ({
+      page,
+    }) => {
+      await withIntro(page);
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('.lp-intro')).toBeHidden();
+      await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
+      await expect(page.locator('.lp-intro')).toHaveCount(0);
+      await expect(page.locator('.land')).not.toHaveClass(/lp-anim/);
+      await expect(page.locator('#lp-path .lp-knots circle.on')).toHaveCount(9);
+      await expect(page.locator('#lp-who h2')).toHaveCSS('opacity', '1');
+      await expect(page.locator('#lp-change .lp-fc').first()).toHaveClass(/now/);
+    });
   });
 });
