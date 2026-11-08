@@ -100,7 +100,7 @@ def demo(html, site, lead):
     loading = next((x['ru'] for x in ref.get('localization', []) if x.get('key') == 'land.demo.loading'), 'Загружаем демо-организацию…')
     cfg = json.dumps({'site': site, 'lead': lead}, ensure_ascii=False).replace('<', '\\u003c')
     head = ('<meta charset=utf8><meta name="robots" content="noindex,nofollow">'
-            '<meta http-equiv="Content-Security-Policy" content="connect-src \'none\'">'
+            '<meta http-equiv="Content-Security-Policy" content="connect-src \'none\'; frame-src https://www.youtube-nocookie.com">'
             f'<script>var BU_DEMO={cfg};</script>')
     assert html.count('<meta charset=utf8>') == 1, 'в index.html нет <meta charset=utf8>'
     html = html.replace('<meta charset=utf8>', head, 1)
