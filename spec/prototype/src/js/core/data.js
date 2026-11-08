@@ -311,6 +311,8 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   if(!db.meta.v77){db.meta.v77=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgRelinkCode','tgRelinkAsk','tgRelinkWrong','tgRelinkFailed','tgRelinkLimited','tgRelinkNoSend','tgPageClosed'];
     if(a){ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(a.tgRelinked==='⚠️ К учётной записи {логин} привязан другой Telegram: {телеграм}. Сюда больше не придут напоминания и коды. Если это сделали не вы, смените пароль (все сеансы завершатся) и снова привяжите свой Telegram в «Мой профиль».'&&rm.tgRelinked)a.tgRelinked=rm.tgRelinked}
     if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // v78: лендинг минималистичный, блок «Три символа герба бухгалтеров» и «Подробнее» — новые тексты группы «Лендинг» встают после соседних строк
+  if(!db.meta.v78){db.meta.v78=1;const l=db.ref.localization;const rl=r.localization||[];const nk=new Set(['land.hero.lead','land.scroll','land.more','land.less','land.top','land.change.tap','land.sec.short']);if(Array.isArray(l))rl.filter(x=>/^land\.emb\./.test(x.key)||nk.has(x.key)).forEach(x=>{if(l.some(y=>y.key===x.key))return;const i=rl.indexOf(x);const j=i>0?l.findIndex(y=>y.key===rl[i-1].key):-1;l.splice(j<0?l.length:j+1,0,structuredClone(x))})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

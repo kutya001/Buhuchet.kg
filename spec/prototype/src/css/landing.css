@@ -166,6 +166,341 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lsh-cd span{display:flex;justify-content:space-between;gap:6px;align-items:center;color:var(--muted);font-size:9.5px}
 .lsh-nav{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);padding:5px 0 7px;font-size:8.5px;color:var(--muted);text-align:center}
 .lsh-nav .on{color:var(--text);font-weight:700}
+/* ═══ v78 (Кутман 08.11.2026): минималистичный лендинг — у каждого блока своя анимация и «Подробнее»; заставка, сквозная линия Бернулли, весы в углу, круглый герб.
+   Скрытые до появления состояния — только под .lp-anim (без «уменьшить движение») ═══ */
+.lp-draw{fill:none;stroke:#fff;stroke-width:7.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1.2}
+.lp-sec h2::after{content:'';display:block;width:52px;height:3px;border-radius:3px;margin-top:12px;background:linear-gradient(90deg,var(--b-yellow),var(--b-blue));transform-origin:0 50%}
+.lp-sub{margin-top:-12px}
+.land .lp-logo .logo{transition:opacity .25s}
+.land.lp-intro-on .lp-logo .logo{opacity:0}
+/* Заставка */
+.lp-intro{position:fixed;inset:0;z-index:120;display:grid;place-items:center;background:var(--pane);transition:background-color .75s ease .05s;cursor:pointer}
+.lp-intro.fly{background-color:transparent;pointer-events:none}
+.lp-intro-c{display:flex;flex-direction:column;align-items:center;gap:16px;position:relative}
+.lp-intro-c::before{content:'';position:absolute;left:50%;top:34%;width:min(560px,130vw);aspect-ratio:1;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,hsl(43 83% 57% / .30),transparent 62%);animation:lp-pulse 2.2s ease-in-out infinite alternate;transition:opacity .4s}
+.lp-intro.fly .lp-intro-c::before{opacity:0}
+.lp-intro-lg{position:relative;width:min(240px,56vw);height:auto;overflow:visible;transform-origin:50% 50%;transition:transform .85s cubic-bezier(.65,0,.25,1)}
+.lp-intro-lg .lg-sp{fill:var(--b-blue)}.lp-intro-lg .lg-l{fill:var(--text)}
+.lp-intro .lp-draw{animation:lp-draw 1.6s cubic-bezier(.45,0,.2,1) .25s backwards}
+.lp-in-l{transform-box:fill-box;transform-origin:50% 50%;animation:lp-pop .6s cubic-bezier(.2,.8,.2,1) 1.3s backwards}
+.lp-intro .lp-lg-u{animation-delay:1.5s}
+.lp-intro-w{position:relative;display:flex;align-items:baseline;font-size:clamp(42px,10vw,76px);font-weight:800;letter-spacing:-.03em;line-height:1.05;color:var(--text);transform-origin:50% 50%;transition:transform .85s cubic-bezier(.65,0,.25,1),opacity .45s ease .25s}
+.lp-intro-w span{display:inline-block;animation:lp-letter .6s cubic-bezier(.2,.8,.2,1) calc(1.45s + var(--i)*75ms) backwards}
+.lp-intro-w .kg{color:var(--b-blue);font-weight:700;font-size:.62em;margin-left:2px}
+.lp-intro-ln{position:relative;display:block;height:3px;width:min(320px,70vw);border-radius:3px;background:linear-gradient(90deg,var(--b-yellow),var(--b-blue));transform-origin:0 50%;animation:lp-grow .9s cubic-bezier(.5,0,.2,1) 2.05s backwards;transition:opacity .3s}
+.lp-intro.fly .lp-intro-w,.lp-intro.fly .lp-intro-ln{opacity:0}
+.lp-intro-lg.gone{opacity:0;transition:transform .85s cubic-bezier(.65,0,.25,1),opacity .6s ease .2s}
+.bu-intro-tg{opacity:0!important}
+/* Сквозная линия Бернулли и солнце на её конце */
+.lp-path{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.lp-p0{fill:none;stroke:var(--border-strong);stroke-width:1.5;stroke-dasharray:2 7;stroke-linecap:round;opacity:.75}
+.lp-p1{fill:none;stroke:var(--b-blue);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.lp-knots circle{fill:var(--pane);stroke:var(--border-strong);stroke-width:1.5;transition:fill .5s,stroke .5s}
+.lp-knots circle.on{fill:var(--b-yellow);stroke:var(--b-yellow)}
+.lp-psun .g{fill:hsl(43 83% 57% / .28)}.lp-psun .c{fill:var(--b-yellow)}.lp-psun .r{fill:none;stroke:var(--b-yellow);stroke-width:2;stroke-linecap:round}
+.lp-anim .lp-psun .r{animation:lp-spin 8s linear infinite}
+.lp-anim .lp-psun .g{transform-box:fill-box;transform-origin:50% 50%;animation:lp-pulse 1.6s ease-in-out infinite alternate}
+.land-page:not(.lp-anim) .lp-psun{display:none}
+/* Весы в углу: качаются от прокрутки, кольцо — сколько прочитано, нажатие — наверх */
+.lp-bal{position:absolute;right:22px;bottom:22px;z-index:7;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:var(--raised);box-shadow:var(--shadow-l);cursor:pointer}
+.lp-bal[hidden]{display:none}
+.lp-bal svg{display:block;width:100%;height:100%;overflow:visible}
+.lp-bal .b0{fill:none;stroke:var(--border);stroke-width:3}
+.lp-bal .b1{fill:none;stroke:var(--b-yellow);stroke-width:3;stroke-linecap:round;stroke-dasharray:1 1.2;stroke-dashoffset:1.1}
+.lp-bal .bp,.lp-bal .bk{fill:none;stroke:var(--text);stroke-width:2.4;stroke-linecap:round}
+.lp-bal .bl path,.lp-bal .br path{fill:none;stroke:var(--muted);stroke-width:1}
+.lp-bal path.bw{fill:var(--accent);stroke:none}
+.lp-bal .bc{fill:var(--b-yellow)}
+.lp-bal .bb{transform-box:view-box;transform-origin:32px 22px}.lp-bal .bl{transform-box:view-box;transform-origin:16px 22px}.lp-bal .br{transform-box:view-box;transform-origin:48px 22px}
+.lp-anim~.lp-bal:not([hidden]){animation:lp-pop .45s ease}
+/* Первый экран: минимум текста, «Листайте вниз» */
+.lp-hero{position:relative;overflow:hidden;padding-bottom:104px}
+.lp-hero-in{position:relative;z-index:1}
+.lp-hero-p{font-size:18px;margin-bottom:28px}
+.lp-hero-bg{position:absolute;inset:0;pointer-events:none;will-change:transform}
+.lp-hb-sun{position:absolute;right:calc(50% - 760px);top:-260px;width:680px;height:680px;border-radius:50%;translate:calc(var(--mx,0)*-28px) calc(var(--my,0)*-20px);transition:translate .8s cubic-bezier(.2,.7,.2,1)}
+.lp-hb-sun::before{content:'';position:absolute;inset:0;border-radius:50%;background:repeating-conic-gradient(from 3deg,hsl(43 83% 57% / .17) 0deg 5deg,transparent 5deg 15deg);-webkit-mask:radial-gradient(circle,#000 14%,transparent 68%);mask:radial-gradient(circle,#000 14%,transparent 68%)}
+.lp-hb-sun::after{content:'';position:absolute;inset:24%;border-radius:50%;background:radial-gradient(circle,hsl(43 83% 57% / .42),hsl(43 83% 57% / .14) 46%,transparent 70%)}
+.lp-hb-sp{position:absolute;left:calc(50% - 860px);bottom:-210px;width:700px;height:auto;opacity:.09;overflow:visible;transform-origin:37.6% 54.8%}
+.lp-hb-sp .lg-sp{fill:var(--b-blue)}
+.lp-hero-pic{translate:calc(var(--mx,0)*10px) calc(var(--my,0)*8px);transition:translate .8s cubic-bezier(.2,.7,.2,1)}
+.lp-scroll{position:absolute;left:50%;bottom:18px;translate:-50% 0;z-index:2;display:flex;flex-direction:column-reverse;align-items:center;gap:6px;padding:4px 10px;background:none;border:0;color:var(--muted);font:inherit;font-size:12.5px;cursor:pointer}
+.lp-scroll i{position:relative;width:22px;height:34px;border:2px solid var(--border-strong);border-radius:12px;box-sizing:border-box}
+.lp-scroll i::after{content:'';position:absolute;left:50%;top:6px;width:4px;height:8px;margin-left:-2px;border-radius:2px;background:var(--b-blue)}
+/* «Подробнее» в каждом блоке */
+.lp-d{display:grid;grid-template-rows:0fr;opacity:0;transition:grid-template-rows .5s cubic-bezier(.2,.7,.2,1),opacity .4s}
+.lp-d>*{min-height:0;overflow:hidden;visibility:hidden;transition:visibility 0s .5s}
+.lp-b.open .lp-d,.lp-emb-l [aria-pressed="true"] .lp-d,.lp-tile[aria-expanded="true"] .lp-d{grid-template-rows:1fr;opacity:1}
+.lp-b.open .lp-d>*,.lp-emb-l [aria-pressed="true"] .lp-d>*,.lp-tile[aria-expanded="true"] .lp-d>*{visibility:visible;transition:none}
+.lp-more-row{display:flex;justify-content:center;margin-top:24px}
+.lp-more{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:8px 18px;border-radius:999px;border:1px solid var(--border-strong);background:var(--raised);color:var(--text);font:inherit;font-size:14px;font-weight:650;cursor:pointer;transition:border-color .2s,box-shadow .2s}
+.lp-more:hover{border-color:var(--accent);box-shadow:var(--shadow-l)}
+.lp-more svg{transition:transform .35s}.lp-more[aria-expanded="true"] svg{transform:rotate(180deg)}
+/* 1. Герб: круглая печать */
+.lp-emb{position:relative;overflow:hidden}
+.lp-emb::before{content:'';position:absolute;left:50%;top:50%;width:1100px;height:1100px;translate:-50% -50%;border-radius:50%;background:radial-gradient(circle,hsl(43 83% 57% / .10),transparent 60%);pointer-events:none}
+.lp-emb .lp-wrap{position:relative}
+.lp-emb-in{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px 56px;align-items:center}
+.lp-emb-fig{display:flex;justify-content:center;min-width:0}
+.lp-emb-svg{display:block;width:100%;max-width:360px;height:auto;overflow:visible;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.lp-emb-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.lp-emb-l button{display:flex;gap:16px;align-items:flex-start;width:100%;box-sizing:border-box;padding:14px 18px;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--raised);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:border-color .3s,box-shadow .3s,transform .3s}
+.lp-emb-l button[aria-pressed="true"]{border-color:var(--b-yellow);box-shadow:0 0 0 3px hsl(43 83% 57% / .25),var(--shadow-l)}
+.lp-emb-tx{display:flex;flex-direction:column;min-width:0;align-self:center}
+.lp-emb-tx b{font-size:17px;font-weight:720;line-height:1.3}
+.lp-emb-tx .lp-d span{display:block;padding-top:6px;color:var(--muted);font-size:14.5px;line-height:1.5}
+.lp-emb-ic{flex:none;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;transition:transform .35s}
+.lp-emb-ic svg{width:24px;height:24px}
+.lp-emb-ic.s{background:var(--yellow-bg);color:var(--yellow)}.lp-emb-ic.w{background:var(--frame);color:var(--accent)}.lp-emb-ic.c{background:var(--blue-bg);color:var(--blue)}
+.lp-emb-l button[aria-pressed="true"] .lp-emb-ic{transform:scale(1.1) rotate(-6deg)}
+.lp-motto{margin:16px 0 0;display:flex;flex-direction:column;gap:4px;color:var(--muted);font-size:14.5px;line-height:1.5}
+.lp-motto-f{font-weight:760;letter-spacing:.08em;color:var(--text);font-size:13px}
+.lp-emb-r .lp-more-row,.lp-secu-r .lp-more-row,.lp-cont .lp-more-row{justify-content:flex-start}
+.lp-emb-svg .e-band{fill:var(--accent)}
+.lp-emb-svg .e-edge{fill:none;stroke:var(--b-yellow);stroke-width:1.6;stroke-dasharray:1 1.2;opacity:.9}
+.lp-emb-svg .e-field{stroke:var(--b-yellow);stroke-width:1.4}
+.lp-emb-svg .e-f0{stop-color:var(--raised)}.lp-emb-svg .e-f1{stop-color:var(--pane-alt)}
+.lp-emb-svg .e-dots{fill:none;stroke:var(--border-strong);stroke-width:1.8;stroke-linecap:round;stroke-dasharray:.0001 .0108}
+.lp-emb-svg .e-ring{font-size:12.5px;font-weight:800;letter-spacing:1.3px;fill:var(--on-accent)}
+.lp-emb-svg .e-star{fill:var(--b-yellow)}
+.lp-emb-svg .e-rip{fill:none;stroke:var(--b-yellow);stroke-width:3;opacity:0}
+.lp-emb-svg .e-g0{stop-color:var(--b-yellow);stop-opacity:.6}.lp-emb-svg .e-g1{stop-color:var(--b-yellow);stop-opacity:0}
+.lp-emb-svg .e-rays{fill:none;stroke:var(--b-yellow);stroke-width:3;stroke-linecap:round}
+.lp-emb-svg .e-core{fill:var(--b-yellow)}
+.lp-emb-svg .e-post{fill:none;stroke:var(--text);stroke-width:3.6;stroke-linecap:round}
+.lp-emb-svg .e-base{fill:var(--text)}
+.lp-emb-svg .e-bar{fill:none;stroke:var(--text);stroke-width:4;stroke-linecap:round}
+.lp-emb-svg .e-piv,.lp-emb-svg .e-top{fill:var(--b-yellow);stroke:var(--text);stroke-width:1.8}
+.lp-emb-svg .e-str{fill:none;stroke:var(--muted);stroke-width:1.2}
+.lp-emb-svg .e-bowl{fill:var(--accent)}
+.lp-emb-svg .e-coin{fill:var(--b-yellow);stroke:var(--yellow);stroke-width:1;opacity:0}
+.lp-emb-svg.e-coins .e-coin{opacity:1}
+.lp-emb-svg .e-lab{font-size:10.5px;font-weight:700;fill:var(--muted);text-anchor:middle}
+.lp-emb-svg .e-inf{fill:none;stroke:var(--b-blue);stroke-width:4.6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1 1.2}
+.lp-emb-svg .e-comet{fill:none;stroke:var(--b-yellow);stroke-width:4.6;stroke-linecap:round;stroke-dasharray:.07 .93;opacity:0}
+.lp-emb-svg .e-part{transition:filter .4s}
+.lp-emb[data-hl="sun"] .e-sun,.lp-emb[data-hl="scales"] .e-scales,.lp-emb[data-hl="curve"] .e-curve{filter:drop-shadow(0 0 6px hsl(43 83% 57% / .9))}
+.lp-emb-svg .e-beam{transform-box:view-box;transform-origin:150px 124px}
+.lp-emb-svg .e-pan-l{transform-box:view-box;transform-origin:88px 124px}.lp-emb-svg .e-pan-r{transform-box:view-box;transform-origin:212px 124px}
+.lp-emb-svg .e-sun,.lp-emb-svg .e-rays,.lp-emb-svg .e-glow{transform-box:view-box;transform-origin:150px 78px}
+.lp-emb-svg .e-rip,.lp-emb-svg .e-dots,.lp-emb-svg .e-scales{transform-box:view-box;transform-origin:150px 150px}
+/* 3. Что меняется: карточки переворачиваются из «Было» в «Стало» */
+.lp-flips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.lp-fc{display:block;width:100%;padding:0;border:0;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;perspective:900px;-webkit-tap-highlight-color:transparent}
+.lp-fc-in{display:grid;transition:transform .8s cubic-bezier(.3,.1,.2,1);transform-style:preserve-3d}
+.lp-fc .lp-fc-f{grid-area:1/1;display:flex;flex-direction:column;gap:8px;min-height:104px;box-sizing:border-box;padding:18px 20px;border-radius:var(--r-xl);font-size:16px;line-height:1.45;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+.lp-fc-f small{display:flex;gap:6px;align-items:center;font-size:12px;font-weight:760;text-transform:uppercase;letter-spacing:.06em}
+.lp-fc .lp-fw{background:var(--red-bg)}.lp-fw small{color:var(--red)}
+.lp-fc .lp-fn{background:var(--green-bg);font-weight:600;transform:rotateX(180deg)}.lp-fn small{color:var(--green)}
+.lp-fc.now .lp-fc-in{transform:rotateX(180deg)}
+.lp-hint{margin:14px 0 0;text-align:center;color:var(--muted);font-size:13.5px}
+.lp-chg-s.open .lp-flips{grid-template-columns:minmax(0,1fr)}
+.lp-chg-s.open .lp-fc-in{transform:none;grid-template-columns:1fr 1fr;gap:10px}
+.lp-chg-s.open .lp-fc .lp-fc-f{grid-area:auto;transform:none;min-height:0}
+.lp-chg-s.open .lp-hint{display:none}
+.lp-x{background:linear-gradient(var(--b-red),var(--b-red)) no-repeat 0 60%/100% 1.5px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+/* 4. Возможности: мозаика плиток */
+.lp-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;grid-auto-flow:dense}
+.lp-tile{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;padding:16px;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--raised);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:transform .3s,box-shadow .3s,border-color .3s}
+.lp-tile .lp-ico{margin:0}
+.lp-tile b{font-size:15px;font-weight:700;line-height:1.3}
+.lp-tile .lp-d span{display:block;color:var(--muted);font-size:14px;line-height:1.5}
+.lp-tile[aria-expanded="true"]{grid-column:span 2;border-color:var(--b-yellow);box-shadow:0 0 0 3px hsl(43 83% 57% / .22)}
+.lp-feat.open .lp-tile{grid-column:auto}
+/* 5. Как это выглядит: экран раскрывается при прокрутке */
+.lp-tilt{perspective:1400px}
+.lp-tilt .lp-slide{padding:10px 18px 34px}.lp-tilt .lsh{box-shadow:0 14px 30px -14px hsl(30 30% 18% / .32),0 2px 6px hsl(30 30% 18% / .08)}
+.lp-shot{width:100%;display:flex;justify-content:center}
+.lp-slide figcaption.lp-d span{display:block;padding-top:2px}
+/* 6. Как начать: шкала шагов */
+.lp-steps-w{position:relative}
+.lp-start .lp-steps{position:relative;z-index:1;gap:16px}
+.lp-start .lp-steps li{background:none;border:0;padding:0;align-items:center;text-align:center;gap:10px}
+.lp-start .lp-num{width:46px;height:46px;font-size:17px;background:var(--raised);color:var(--muted);border:2px solid var(--border-strong);box-sizing:border-box;transition:background .45s,color .45s,border-color .45s,transform .45s}
+.lp-start li.on .lp-num,.land-page:not(.lp-anim) .lp-start .lp-num{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.lp-start li.on .lp-num{transform:scale(1.08)}
+.lp-sline{position:absolute;z-index:0;background:var(--border);border-radius:3px;overflow:hidden}
+.lp-sline i{position:absolute;inset:0;transform-origin:0 0;background:linear-gradient(90deg,var(--b-blue),var(--b-yellow))}
+.lp-sline[data-o="h"] i{transform:scaleX(var(--sp,1))}
+.lp-sline[data-o="v"] i{transform:scaleY(var(--sp,1));background:linear-gradient(180deg,var(--b-blue),var(--b-yellow))}
+/* 7. Безопасность: щит и значки на орбите */
+.lp-secu-in{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:24px 56px;align-items:center}
+.lp-orbit{position:relative;width:300px;height:300px;margin:0 auto;display:grid;place-items:center}
+.lp-orbit::before,.lp-orbit::after{content:'';position:absolute;inset:60px;border-radius:50%;border:1.5px solid var(--green);opacity:0}
+.lp-shield{position:relative;z-index:1;width:116px;height:136px;overflow:visible}
+.lp-shield .sh-b{fill:var(--green-bg);stroke:var(--green);stroke-width:4;stroke-linejoin:round;stroke-dasharray:1 1.2}
+.lp-shield .sh-l{fill:var(--green)}.lp-shield .sh-k{fill:none;stroke:var(--green);stroke-width:5;stroke-linecap:round}.lp-shield .sh-h{fill:var(--raised)}
+.lp-orb-r{position:absolute;inset:0}
+.lp-orb{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;transform:rotate(var(--a)) translate(120px) rotate(calc(-1 * var(--a)))}
+.lp-orb i{display:grid;place-items:center;width:100%;height:100%;border-radius:50%;background:var(--raised);border:1px solid var(--border);box-shadow:var(--shadow-l);color:var(--green)}
+.lp-secu-s{margin:0 0 10px;font-size:20px;font-weight:700;line-height:1.35}
+.lp-secu .lp-secl{grid-template-columns:minmax(0,1fr);gap:0}
+/* 8. Вопросы */
+.lp-faq2{margin-top:8px}
+.lp-faq details{transition:border-color .3s,box-shadow .3s}
+.lp-faq details[open]{border-color:var(--b-yellow);box-shadow:0 0 0 3px hsl(43 83% 57% / .18)}
+/* 9. Оставить заявку */
+.lp-fold{transform-origin:50% 0}
+.lp-cont .lp-more-row{margin:0 0 10px}
+.lp-cont .lp-d>div{display:flex;flex-direction:column;gap:10px}
+.lp-ok .lp-stamp{flex:none;width:60px;height:60px;overflow:visible}
+.lp-stamp circle{fill:none;stroke:var(--green);stroke-width:3}.lp-stamp .i{stroke-width:1.4;stroke-dasharray:2 3}
+.lp-stamp .k{fill:none;stroke:var(--green);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40 40}
+/* Ключевые кадры */
+@keyframes lp-rise{from{opacity:0;transform:translateY(26px)}}
+@keyframes lp-in-r{from{opacity:0;transform:translateX(56px)}}
+@keyframes lp-in-l{from{opacity:0;transform:translateX(-56px)}}
+@keyframes lp-in-up{from{opacity:0;transform:translateY(70px)}}
+@keyframes lp-fade{from{opacity:0}}
+@keyframes lp-pop{0%{opacity:0;transform:scale(.3)}60%{opacity:1;transform:scale(1.14)}100%{transform:scale(1)}}
+@keyframes lp-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+@keyframes lp-spin{to{transform:rotate(360deg)}}
+@keyframes lp-spin-r{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
+/* скрытое начало — 1.1 при промежутке 1.2: иначе круглый конец штриха нулевой длины виден точкой до старта рисования */
+@keyframes lp-draw{from{stroke-dashoffset:1.1}}
+@keyframes lp-dash{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes lp-pulse{from{opacity:.7;transform:scale(.9)}to{opacity:1;transform:scale(1.1)}}
+@keyframes lp-grow{from{transform:scaleX(0)}}
+@keyframes lp-letter{from{opacity:0;transform:translateY(.45em) rotate(6deg)}}
+@keyframes lp-wheel{0%{transform:translateY(0);opacity:1}70%{transform:translateY(12px);opacity:0}100%{transform:translateY(0);opacity:0}}
+@keyframes lp-wiggle{0%,100%{transform:rotate(0)}30%{transform:rotate(-12deg) scale(1.1)}65%{transform:rotate(8deg) scale(1.05)}}
+@keyframes lp-faq{from{opacity:0;transform:translateY(-6px)}}
+@keyframes lp-stamp{0%{opacity:0;transform:scale(1.6) rotate(-24deg)}55%{opacity:1}100%{transform:none}}
+@keyframes lp-ripple{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.22)}}
+@keyframes lp-check{from{stroke-dashoffset:40}}
+@keyframes lp-flipin{from{opacity:0;transform:rotateY(-75deg) translateZ(-40px)}}
+@keyframes lp-tile{from{opacity:0;transform:scale(.55) rotate(-8deg)}}
+@keyframes lp-unfold{from{opacity:0;transform:perspective(1000px) rotateX(-28deg) translateY(30px)}}
+@keyframes lp-radar{0%{opacity:.55;transform:scale(.6)}100%{opacity:0;transform:scale(1.55)}}
+@keyframes lp-lock{from{transform:translateY(-10px)}}
+@keyframes lp-orb-out{from{opacity:0;transform:rotate(var(--a)) translate(0) rotate(calc(-1 * var(--a))) scale(.3)}}
+@keyframes lp-emb-rise{from{opacity:0;transform:translateY(40px) scale(.5)}}
+@keyframes lp-emb-up{from{opacity:0;transform:translateY(14px)}}
+@keyframes lp-emb-settle{0%{transform:rotate(-14deg)}28%{transform:rotate(9deg)}48%{transform:rotate(-5deg)}66%{transform:rotate(2.6deg)}82%{transform:rotate(-1deg)}100%{transform:rotate(0)}}
+@keyframes lp-emb-settle-i{0%{transform:rotate(14deg)}28%{transform:rotate(-9deg)}48%{transform:rotate(5deg)}66%{transform:rotate(-2.6deg)}82%{transform:rotate(1deg)}100%{transform:rotate(0)}}
+@keyframes lp-emb-sway{0%,100%{transform:rotate(0)}25%{transform:rotate(1.8deg)}75%{transform:rotate(-1.8deg)}}
+@keyframes lp-emb-sway-i{0%,100%{transform:rotate(0)}25%{transform:rotate(-1.8deg)}75%{transform:rotate(1.8deg)}}
+@keyframes lp-emb-weigh{0%,14%{transform:rotate(0)}30%{transform:rotate(-12deg)}50%{transform:rotate(-11deg)}64%{transform:rotate(5deg)}78%{transform:rotate(-2deg)}90%{transform:rotate(.8deg)}100%{transform:rotate(0)}}
+@keyframes lp-emb-weigh-i{0%,14%{transform:rotate(0)}30%{transform:rotate(12deg)}50%{transform:rotate(11deg)}64%{transform:rotate(-5deg)}78%{transform:rotate(2deg)}90%{transform:rotate(-.8deg)}100%{transform:rotate(0)}}
+@keyframes lp-coin{0%{opacity:0;transform:translateY(-70px)}25%{opacity:1}100%{opacity:1;transform:none}}
+/* Появление при прокрутке — у каждого блока своё */
+.lp-anim .rv:not(.in),.lp-anim .lp-live:not(.in) .lp-emb-svg{opacity:0}
+.lp-anim .rv.in{animation:lp-rise .8s cubic-bezier(.2,.75,.2,1) calc(var(--d,0)*90ms) backwards}
+.lp-anim .lp-sec h2.in::after{animation:lp-grow .9s cubic-bezier(.5,0,.2,1) .3s backwards}
+.lp-anim .lp-stat.in .lp-si svg{animation:lp-pop .6s ease calc(var(--d,0)*90ms + .2s) backwards}
+.lp-anim .lp-logo-a .lp-draw{animation:lp-draw 1.7s cubic-bezier(.5,0,.25,1) .15s backwards}
+.lp-anim .lp-logo-a .lp-lg-b,.lp-anim .lp-logo-a .lp-lg-u{animation:lp-fade .6s ease 1.2s backwards}
+@media (hover:hover){.lp-anim .lp-logo:hover .lp-draw{animation:lp-draw 1.2s cubic-bezier(.5,0,.25,1)}}
+.lp-anim .lp-scroll i::after{animation:lp-wheel 1.8s ease-in-out infinite}
+.lp-anim .lp-hero.in .lp-hb-sp .lp-draw{animation:lp-draw 2.8s cubic-bezier(.5,0,.2,1) .2s backwards}
+.lp-anim .lp-hero .lp-hb-sp{animation:lp-spin-r 260s linear infinite}
+.lp-anim .lp-hero .lp-hb-sun::before{animation:lp-spin 140s linear infinite}
+.lp-anim .lp-hero .lp-hb-sun::after{animation:lp-pulse 5s ease-in-out infinite alternate}
+.lp-anim .lp-hero.in .lp-hb-sun{animation:lp-fade 1.6s ease backwards}
+.lp-anim .lp-hero.in .lp-hero-pic .lsh-desk{animation:lp-in-r 1s cubic-bezier(.2,.8,.2,1) .25s backwards}
+.lp-anim .lp-hero.in .lp-hero-pic .lsh-ph{animation:lp-in-up 1s cubic-bezier(.2,.8,.2,1) .55s backwards,lp-bob 7s ease-in-out 1.6s infinite}
+.lp-anim .lp-hero.in .lp-scroll{animation:lp-fade 1s ease 1.2s backwards}
+.lp-anim .lp-live:not(.vis) *,.lp-anim .lp-live:not(.vis) *::before,.lp-anim .lp-live:not(.vis) *::after{animation-play-state:paused!important}
+/* 1. Герб — печать «штампуется»: прилетает с поворотом, по кольцу расходится волна, затем оживают символы */
+.lp-anim .lp-emb.in .lp-emb-svg{animation:lp-stamp .9s cubic-bezier(.3,1.3,.5,1) backwards}
+.lp-anim .lp-emb.in .e-rip{animation:lp-ripple 1s ease-out .6s}
+.lp-anim .lp-emb.in .e-edge{animation:lp-draw 1.2s ease .7s backwards}
+.lp-anim .lp-emb.in .e-ring{animation:lp-fade .8s ease .8s backwards}
+.lp-anim .lp-emb.in .e-dots{animation:lp-spin 90s linear infinite}
+.lp-anim .lp-emb.in .e-sun{animation:lp-emb-rise 1s cubic-bezier(.2,.8,.2,1) .9s backwards}
+.lp-anim .lp-emb.in .e-rays{animation:lp-spin 50s linear infinite}
+.lp-anim .lp-emb.in .e-glow{animation:lp-pulse 4.5s ease-in-out infinite alternate}
+.lp-anim .lp-emb.in .e-scales{animation:lp-emb-up .7s ease 1.2s backwards}
+.lp-anim .lp-emb.in .e-beam{animation:lp-emb-settle 2.6s cubic-bezier(.3,.1,.3,1) 1.3s backwards}
+.lp-anim .lp-emb.in .e-pan{animation:lp-emb-settle-i 2.6s cubic-bezier(.3,.1,.3,1) 1.3s backwards}
+.lp-anim .lp-emb.e-idle .e-beam{animation:lp-emb-sway 7s ease-in-out infinite}
+.lp-anim .lp-emb.e-idle .e-pan{animation:lp-emb-sway-i 7s ease-in-out infinite}
+.lp-anim .lp-emb .e-weigh .e-beam{animation:lp-emb-weigh 2.6s ease-in-out both}
+.lp-anim .lp-emb .e-weigh .e-pan{animation:lp-emb-weigh-i 2.6s ease-in-out both}
+.lp-anim .lp-emb .e-weigh .e-coin-l{animation:lp-coin .55s cubic-bezier(.55,0,.9,.55) .05s both}
+.lp-anim .lp-emb .e-weigh .e-coin-r{animation:lp-coin .55s cubic-bezier(.55,0,.9,.55) 1.12s both}
+.lp-anim .lp-emb.in .e-inf{animation:lp-draw 1.3s cubic-bezier(.5,0,.3,1) 1.5s backwards}
+.lp-anim .lp-emb.in .e-comet{opacity:1;animation:lp-dash 3.6s linear 2.8s infinite,lp-fade .5s ease 2.8s backwards}
+.lp-anim .lp-emb-l li.rv.in{animation-name:lp-in-r}
+/* 2. Кому подходит — карточки поворачиваются к посетителю */
+.lp-who .lp-grid3{perspective:1200px}
+.lp-who .lp-card{transform-origin:0 50%}
+.lp-anim .lp-who .lp-card.rv.in{animation:lp-flipin .9s cubic-bezier(.2,.8,.2,1) calc(var(--d,0)*170ms) backwards}
+/* 3. Что меняется — карточки встают, затем переворачиваются из «Было» в «Стало» */
+.lp-anim .lp-fc.rv.in{animation:lp-pop .6s cubic-bezier(.2,.8,.2,1) calc(var(--d,0)*120ms) backwards}
+/* 4. Возможности — мозаика волной по диагонали */
+.lp-anim .lp-tile.rv.in{animation:lp-tile .6s cubic-bezier(.3,1.4,.5,1) calc(var(--d,0)*70ms) backwards}
+/* 5. Как это выглядит — экран наклонён и выпрямляется, пока блок въезжает */
+.lp-anim .lp-tilt .lp-track{transform:rotateX(calc((1 - var(--tp,1)) * 38deg)) scale(calc(.86 + var(--tp,1) * .14));transform-origin:50% 100%}
+/* 6. Как начать — номера встают по очереди */
+.lp-anim .lp-start li.rv.in .lp-num{animation:lp-pop .55s ease calc(var(--d,0)*160ms + .15s) backwards}
+/* 7. Безопасность — щит рисуется, замок защёлкивается, значки выходят на орбиту и медленно вращаются, от щита расходятся волны */
+.lp-anim .lp-orbit.in .sh-b{animation:lp-draw 1.3s cubic-bezier(.5,0,.3,1) .2s backwards}
+.lp-anim .lp-orbit.in .sh-l,.lp-anim .lp-orbit.in .sh-h{animation:lp-fade .5s ease 1s backwards}
+.lp-anim .lp-orbit.in .sh-k{animation:lp-lock .7s cubic-bezier(.5,0,.3,1.4) 1.2s backwards}
+.lp-anim .lp-orbit.in .lp-orb{animation:lp-orb-out .8s cubic-bezier(.2,.9,.3,1.2) calc(1.1s + var(--d)*120ms) backwards}
+.lp-anim .lp-orbit.in .lp-orb-r{animation:lp-spin 70s linear 2.4s infinite}
+.lp-anim .lp-orbit.in .lp-orb i{animation:lp-spin-r 70s linear 2.4s infinite}
+.lp-anim .lp-orbit.in::before{animation:lp-radar 3.2s ease-out 1.6s infinite}
+.lp-anim .lp-orbit.in::after{animation:lp-radar 3.2s ease-out 3.2s infinite}
+/* 8. Вопросы — выезжают попеременно слева и справа */
+.lp-anim .lp-faq details.rv.in{animation:lp-in-l .7s cubic-bezier(.2,.75,.2,1) calc(var(--d,0)*110ms) backwards}
+.lp-anim .lp-faq details.rv.in:nth-child(even){animation-name:lp-in-r}
+.lp-anim .lp-faq details[open] p{animation:lp-faq .28s ease}
+/* 9. Оставить заявку — форма раскладывается, поля встают по одному; после отправки — печать */
+.lp-anim .lp-fold.rv.in{animation:lp-unfold 1s cubic-bezier(.2,.8,.2,1) backwards}
+.lp-anim .lp-fold.in .lp-form>*{animation:lp-rise .55s cubic-bezier(.2,.75,.2,1) .3s backwards}
+.lp-anim .lp-fold.in .lp-form>:nth-child(2){animation-delay:.38s}.lp-anim .lp-fold.in .lp-form>:nth-child(3){animation-delay:.46s}.lp-anim .lp-fold.in .lp-form>:nth-child(4){animation-delay:.54s}.lp-anim .lp-fold.in .lp-form>:nth-child(5){animation-delay:.62s}.lp-anim .lp-fold.in .lp-form>:nth-child(n+6){animation-delay:.7s}
+.lp-anim .lp-stamp{animation:lp-stamp .7s cubic-bezier(.3,1.3,.5,1) backwards}
+.lp-anim .lp-stamp .k{animation:lp-check .5s ease .55s backwards}
+.lp-anim .lp-fab:not([hidden]) .btn{animation:lp-in-up .4s cubic-bezier(.2,.8,.2,1)}
+@media (hover:hover){
+  .lp-card,.lp-tile{transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s,border-color .3s}
+  .lp-card:hover,.lp-tile:hover{transform:translateY(-4px);box-shadow:var(--shadow-l);border-color:var(--border-strong)}
+  .lp-anim .lp-card:hover .lp-ico,.lp-anim .lp-tile:hover .lp-ico{animation:lp-wiggle .6s ease}
+  .lp-emb-l button:hover{border-color:var(--border-strong);transform:translateX(4px)}
+  .lp-fc:hover .lp-fc-f{box-shadow:var(--shadow-l)}
+}
+@media (max-width:1023px){
+  .lp-emb-in{grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px 32px}
+  .lp-secu-in{grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px 32px}
+  .lp-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .lp-hb-sun{right:-260px;top:-300px}
+  .lp-hb-sp{left:-300px}
+}
+@media (max-width:767px){
+  .lp-hero{padding-bottom:96px}
+  .lp-hero-p{font-size:16px;margin-bottom:22px}
+  .lp-emb-in,.lp-secu-in{grid-template-columns:minmax(0,1fr)}
+  .lp-emb-svg{max-width:290px}
+  .lp-emb-l button{padding:12px 14px;gap:12px}
+  .lp-emb-ic{width:40px;height:40px;border-radius:12px}
+  .lp-emb-tx b{font-size:16px}
+  .lp-flips{grid-template-columns:minmax(0,1fr)}
+  .lp-chg-s.open .lp-fc-in{grid-template-columns:minmax(0,1fr)}
+  .lp-fc .lp-fc-f{min-height:88px;padding:16px}
+  .lp-tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .lp-tile{padding:13px;gap:8px}
+  .lp-tile b{font-size:14px}
+  .lp-start .lp-steps{grid-template-columns:minmax(0,1fr);gap:22px}
+  .lp-start .lp-steps li{display:grid;grid-template-columns:46px minmax(0,1fr);column-gap:14px;row-gap:0;align-items:start;text-align:left}
+  .lp-start .lp-num{grid-row:1/span 2}
+  .lp-start .lp-steps h3{align-self:center;margin-top:12px}
+  .lp-start .lp-steps .lp-d{grid-column:2}
+  .lp-orbit{width:260px;height:260px}
+  .lp-orb{width:44px;height:44px;margin:-22px 0 0 -22px;transform:rotate(var(--a)) translate(102px) rotate(calc(-1 * var(--a)))}
+  .lp-shield{width:96px;height:112px}
+  .lp-secu-s{text-align:center}
+  .lp-secu-r .lp-more-row{justify-content:center}
+  .lp-hb-sun{width:460px;height:460px;right:-230px;top:-200px}
+  .lp-hb-sp{width:520px;left:-260px;bottom:auto;top:340px}
+  .lp-sec h2::after{width:44px;margin-top:10px}
+  .lp-bal{left:16px;right:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:50px;height:50px}
+  .lp-fab{left:76px!important}
+}
+/* Телефон боком: первый экран ниже */
+@media (max-height:520px) and (orientation:landscape){.lp-hero{padding:24px 0 92px}.lp-hero h1{font-size:30px;margin-bottom:12px}.lp-hero-p{font-size:15.5px;margin-bottom:18px}}
+@media (max-width:374px){.lp-head-in{gap:4px}.lp-bn{font-size:15px}.lp-head-r .btn{padding-left:10px;padding-right:10px}.lp-tiles{gap:8px}}
 /* Фокус с клавиатуры */
 .land :focus-visible{outline:2px solid var(--b-blue);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.land *,.land *::before,.land *::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
@@ -188,7 +523,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-bs{display:none}
   .lp-head-r .lp-hide-m{display:none}
   .lp-sec{padding:44px 0;scroll-margin-top:56px}
-  .lp-hero{padding:32px 0 40px}
+  .lp-hero{padding:32px 0 100px}
   .lp-hero-in{grid-template-columns:minmax(0,1fr);gap:28px}
   .lp-hero-p{font-size:15.5px}
   .lp-cta-row .btn{flex:1 1 100%;justify-content:center;white-space:normal;text-align:center;min-width:0}
@@ -222,6 +557,8 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-fab[hidden]{display:none}
   .lp-fab .btn{width:100%;justify-content:center;min-height:48px;font-size:15.5px;box-shadow:var(--shadow-l)}
 }
+/* Узкие экраны (обложка Galaxy Fold, 280 px): в шапке остаётся только знак логотипа */
+@media (max-width:319px){.lp-bn{display:none}.lp-cont{overflow-wrap:anywhere}}
 @media (max-width:374px){.lp-hero-pic .lsh-desk,.lp-hero-pic .lsh-ph{zoom:.54}.lp-hero-pic .lsh-ph{margin:44px 0 0 -100px}.lp-head-r{gap:4px}}
 .land .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 /* Демо-организация: полоса «Демо-версия» над программой (ТЗ «Лендинг» → «Демо-организация») */
