@@ -39,8 +39,8 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * buhuchet.kg/ (задача #165, ТЗ «Лендинг» → «Кто что видит по адресу»): вошедший сразу попадает на свою
  * рабочую страницу (Главная организации, у администратора платформы — Админка); кто вошёл с временным
- * паролем — на смену пароля; гость видит лендинг. Цифры полосы и коды стран формы — из действующих
- * справочников платформы, как в прототипе; картинки — экраны демо-организации, собранные из spec/.
+ * паролем — на смену пароля; гость видит лендинг. Цифры полосы, коды стран формы и видео лендинга — из
+ * действующих справочников платформы, как в прототипе; картинки — экраны демо-организации, собранные из spec/.
  */
 export default async function HomePage() {
   const store = await cookies();
@@ -50,12 +50,13 @@ export default async function HomePage() {
     if (canEnter(me)) redirect('/app');
   }
   const today = bishkekDate(new Date(requestNow()));
-  const { numbers, codes } = await landingDicts();
+  const { numbers, codes, videos } = await landingDicts();
   return (
     <Landing
       screens={demoScreens(today)}
       numbers={numbers}
       codes={codes}
+      videos={videos}
       today={today}
       stand={siteInfo().env === 'staging'}
     />

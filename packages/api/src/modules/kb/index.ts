@@ -1,5 +1,6 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+export { VIDEO_COVER_UPLOAD_PATH } from './video-admin';
 import {
   activeAdminKbArticleHandler,
   activeAdminKbArticleRoute,
@@ -92,6 +93,86 @@ import {
   kbTeamValuesHandler,
   kbTeamValuesRoute,
 } from './team';
+import {
+  kbVideoCatalogHandler,
+  kbVideoCatalogRoute,
+  kbVideoCoverHandler,
+  kbVideoCoverRoute,
+  kbVideoListHandler,
+  kbVideoListRoute,
+  kbVideoMetaHandler,
+  kbVideoMetaRoute,
+  kbVideoOpenHandler,
+  kbVideoOpenRoute,
+  kbVideoProgressHandler,
+  kbVideoProgressRoute,
+  kbVideoValuesHandler,
+  kbVideoValuesRoute,
+  kbVideoExportHandler,
+  kbVideoExportRoute,
+} from './video';
+import {
+  adminVideoCardHandler,
+  adminVideoCardRoute,
+  adminVideoCoverHandler,
+  adminVideoCoverRoute,
+  adminVideoCreateHandler,
+  adminVideoCreateRoute,
+  adminVideoDeleteHandler,
+  adminVideoDeleteRoute,
+  adminVideoExportHandler,
+  adminVideoExportRoute,
+  adminVideoListHandler,
+  adminVideoListRoute,
+  adminVideoOffHandler,
+  adminVideoOffRoute,
+  adminVideoOptionsHandler,
+  adminVideoOptionsRoute,
+  adminVideoPublishHandler,
+  adminVideoPublishRoute,
+  adminVideoUpdateHandler,
+  adminVideoUpdateRoute,
+  adminVideoUploadCancelHandler,
+  adminVideoUploadCancelRoute,
+  adminVideoUploadCompleteHandler,
+  adminVideoUploadCompleteRoute,
+  adminVideoUploadPartsHandler,
+  adminVideoUploadPartsRoute,
+  adminVideoUploadStartHandler,
+  adminVideoUploadStartRoute,
+  adminVideoUploadStateHandler,
+  adminVideoUploadStateRoute,
+  adminVideoValuesHandler,
+  adminVideoValuesRoute,
+} from './video-admin';
+import {
+  adminVideoViewHistoryHandler,
+  adminVideoViewHistoryRoute,
+  adminVideoViewsExportHandler,
+  adminVideoViewsExportRoute,
+  adminVideoViewsHandler,
+  adminVideoViewsRoute,
+  adminVideoViewsValuesHandler,
+  adminVideoViewsValuesRoute,
+  kbVideoViewHistoryHandler,
+  kbVideoViewHistoryRoute,
+  kbVideoViewsExportHandler,
+  kbVideoViewsExportRoute,
+  kbVideoViewsHandler,
+  kbVideoViewsRoute,
+  kbVideoViewsValuesHandler,
+  kbVideoViewsValuesRoute,
+} from './video-views';
+import {
+  landingVideoCoverHandler,
+  landingVideoCoverRoute,
+  landingVideoPlayHandler,
+  landingVideoPlayRoute,
+  landingVideoStartHandler,
+  landingVideoStartRoute,
+  landingVideoWatchedHandler,
+  landingVideoWatchedRoute,
+} from './video-landing';
 
 /**
  * «База знаний» (ТЗ «База знаний», задача 2.30): своя программа обучения и уровень, отметки шагов,
@@ -99,6 +180,9 @@ import {
  * показом (задача 2.31). Свою программу видит любой вошедший (у администратора платформы — своя),
  * уровни других — право «Видеть уровни сотрудников». Содержимое правит администратор платформы
  * (Админка → «База знаний (содержимое)», задача 2.39, `/admin/kb/…`).
+ * Видео платформы (прототип v79): вкладки «Видео» и «Просмотры видео», окно видео с учётом
+ * просмотренных секунд; содержимое и загрузку ведёт администратор платформы (`/admin/videos/…`).
+ * Постоянные адреса (`options`, `values`, `export`, `uploads`, `covers`) — раньше `{id}`.
  */
 export function kbModule(deps: ApiDeps) {
   return createModuleApp()
@@ -142,5 +226,41 @@ export function kbModule(deps: ApiDeps) {
     .openapi(getAdminKbArticleRoute, getAdminKbArticleHandler(deps))
     .openapi(createAdminKbArticleRoute, createAdminKbArticleHandler(deps))
     .openapi(saveAdminKbArticleRoute, saveAdminKbArticleHandler(deps))
-    .openapi(activeAdminKbArticleRoute, activeAdminKbArticleHandler(deps));
+    .openapi(activeAdminKbArticleRoute, activeAdminKbArticleHandler(deps))
+    .openapi(kbVideoCatalogRoute, kbVideoCatalogHandler(deps))
+    .openapi(kbVideoListRoute, kbVideoListHandler(deps))
+    .openapi(kbVideoValuesRoute, kbVideoValuesHandler(deps))
+    .openapi(kbVideoExportRoute, kbVideoExportHandler(deps))
+    .openapi(kbVideoOpenRoute, kbVideoOpenHandler(deps))
+    .openapi(kbVideoProgressRoute, kbVideoProgressHandler(deps))
+    .openapi(kbVideoMetaRoute, kbVideoMetaHandler(deps))
+    .openapi(kbVideoCoverRoute, kbVideoCoverHandler(deps))
+    .openapi(kbVideoViewsRoute, kbVideoViewsHandler(deps))
+    .openapi(kbVideoViewsValuesRoute, kbVideoViewsValuesHandler(deps))
+    .openapi(kbVideoViewsExportRoute, kbVideoViewsExportHandler(deps))
+    .openapi(kbVideoViewHistoryRoute, kbVideoViewHistoryHandler(deps))
+    .openapi(adminVideoListRoute, adminVideoListHandler(deps))
+    .openapi(adminVideoValuesRoute, adminVideoValuesHandler(deps))
+    .openapi(adminVideoExportRoute, adminVideoExportHandler(deps))
+    .openapi(adminVideoOptionsRoute, adminVideoOptionsHandler(deps))
+    .openapi(adminVideoUploadStartRoute, adminVideoUploadStartHandler(deps))
+    .openapi(adminVideoUploadPartsRoute, adminVideoUploadPartsHandler(deps))
+    .openapi(adminVideoUploadStateRoute, adminVideoUploadStateHandler(deps))
+    .openapi(adminVideoUploadCompleteRoute, adminVideoUploadCompleteHandler(deps))
+    .openapi(adminVideoUploadCancelRoute, adminVideoUploadCancelHandler(deps))
+    .openapi(adminVideoCoverRoute, adminVideoCoverHandler(deps))
+    .openapi(adminVideoCreateRoute, adminVideoCreateHandler(deps))
+    .openapi(adminVideoCardRoute, adminVideoCardHandler(deps))
+    .openapi(adminVideoUpdateRoute, adminVideoUpdateHandler(deps))
+    .openapi(adminVideoPublishRoute, adminVideoPublishHandler(deps))
+    .openapi(adminVideoOffRoute, adminVideoOffHandler(deps))
+    .openapi(adminVideoDeleteRoute, adminVideoDeleteHandler(deps))
+    .openapi(adminVideoViewsRoute, adminVideoViewsHandler(deps))
+    .openapi(adminVideoViewsValuesRoute, adminVideoViewsValuesHandler(deps))
+    .openapi(adminVideoViewsExportRoute, adminVideoViewsExportHandler(deps))
+    .openapi(adminVideoViewHistoryRoute, adminVideoViewHistoryHandler(deps))
+    .openapi(landingVideoCoverRoute, landingVideoCoverHandler(deps))
+    .openapi(landingVideoPlayRoute, landingVideoPlayHandler(deps))
+    .openapi(landingVideoStartRoute, landingVideoStartHandler(deps))
+    .openapi(landingVideoWatchedRoute, landingVideoWatchedHandler(deps));
 }

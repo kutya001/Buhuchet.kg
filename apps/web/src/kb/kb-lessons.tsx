@@ -27,6 +27,8 @@ import { kbArticlesQuery, KB_STATE_KEY, kbSkip, kbStateQuery } from './kb-data';
 import { flashTarget } from './kb-go';
 import { KbBadge, KbBar, levelDate, nextText } from './kb-parts';
 import { useKb } from './kb-provider';
+import { useCatalogVideo } from './video/video-help';
+import { useVideo } from './video/video-window';
 
 /** Свёрнутые уроки — на этом устройстве у каждого пользователя (прототип `ck.closed.<пользователь>`). */
 const closedKey = (userId: string | null) => `bu.kb.closed.${userId ?? ''}`;
@@ -280,6 +282,8 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
     }
   };
   const byHand = step.done?.how === 'hand';
+  const stepVideo = useCatalogVideo(step.videoId);
+  const video = useVideo();
   const items: ActionEntry[] = [
     ...(!step.done
       ? [
@@ -439,6 +443,19 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
             </button>
           </>
         )}
+        {/* Видео к шагу (прототип v79 `data-vopen`): только доступное пользователю. */}
+        {stepVideo ? (
+          <button
+            type="button"
+            data-video-open={stepVideo.id}
+            className={buttonClass('default', 'sm')}
+            title={t('video.step_title', { title: stepVideo.title })}
+            onClick={() => video.open(stepVideo.id)}
+          >
+            <Icon name="pl" size="sm" />
+            {t('video.step_btn')}
+          </button>
+        ) : null}
         <button
           type="button"
           className={iconButtonClass('sm')}

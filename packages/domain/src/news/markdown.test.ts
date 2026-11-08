@@ -49,6 +49,14 @@ describe('newsMdSpans — оформление строки', () => {
     ]);
   });
 
+  it('ссылка на видео платформы #video:<код> (прототип v79); с вкладкой — только текст', () => {
+    expect(newsMdSpans('[▶ Знакомство](#video:vd-intro) [не так](#video:vd.x)')).toEqual([
+      { text: '▶ Знакомство', link: { kind: 'video', id: 'vd-intro' } },
+      { text: ' ' },
+      { text: 'не так' },
+    ]);
+  });
+
   it('жирный внутри ссылки и ссылка внутри жирного', () => {
     expect(newsMdSpans('**см. [здесь](#art:a5)** [**тут**](#mod:kb)')).toEqual([
       { text: 'см. ', bold: true },

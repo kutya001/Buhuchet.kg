@@ -8,6 +8,9 @@ import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { kbArticleQuery } from './kb-data';
 import { useKb } from './kb-provider';
+import { useLinkedVideo, useModuleVideos, VideoHelpBlock } from './video/video-help';
+import { VideoMdButton } from './video/video-parts';
+import { useVideo } from './video/video-window';
 
 /**
  * Окно статьи «Базы знаний» (прототип modules/kb.js, kbArtDlg): текст статьи блоками без разметки,
@@ -57,6 +60,8 @@ export function KbArticleDialog({
 }) {
   const t = useT();
   const article = useQuery(kbArticleQuery(view.id)).data;
+  // Из «?» — видеоинструкции модуля первыми (прототип v79 kbArtDlg: `vidHelpHtml(a.mod)`).
+  const helpVideos = useModuleVideos(view.help ? article?.module : null);
   const end = useRef<HTMLDivElement>(null);
   const read = useRef(false);
 
@@ -119,7 +124,8 @@ export function KbArticleDialog({
         />
       }
     >
-      <KbArticleBody article={article} info={info} />
+      {view.help ? <VideoHelpBlock module={module} /> : null}
+      <KbArticleBody article={article} info={info} leadVideo={!helpVideos.length} />
       <div
         ref={end}
         aria-hidden="true"
@@ -134,13 +140,43 @@ export function KbArticleDialog({
 }
 
 /** Текст статьи блоками — в окне статьи и в предпросмотре Админки (задача 2.39). */
-export function KbArticleBody({ article, info }: { article: KbArticle; info: ArticleScreenInfo }) {
+export function KbArticleBody({
+  article,
+  info,
+  leadVideo = true,
+}: {
+  article: KbArticle;
+  info: ArticleScreenInfo;
+  /**
+   * Показывать кнопку видео, с которой начинается статья: в «?» над статьёй уже стоят видеоинструкции
+   * модуля (прототип `.kb-art-vh>p:first-child:has(>.md-vid:only-child)`).
+   */
+  leadVideo?: boolean;
+}) {
   return (
     <div data-kb-article={article.id} className="max-w-[820px] text-[14px] leading-[1.6]">
-      {article.blocks.map((b, i) => (
-        <ArticleBlock key={i} block={b} article={article} info={info} />
-      ))}
+      {article.blocks.map((b, i) =>
+        i === 0 && b.type === 'video' && !leadVideo ? null : (
+          <ArticleBlock key={i} block={b} article={article} info={info} />
+        ),
+      )}
     </div>
+  );
+}
+
+/**
+ * Кнопка «▶ <название> · 3:25» в тексте статьи (прототип v79 `<kb-video data-id>` → `vidMdBtn`);
+ * видео нет среди доступных (снято, удалено, ещё не перенесено) — кнопки нет.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-53 — у прототипа кнопка недоступного видео остаётся «▶ Видео».
+function ArticleVideo({ id }: { id: string }) {
+  const video = useLinkedVideo(id);
+  const { open } = useVideo();
+  if (!video) return null;
+  return (
+    <p className="my-2">
+      <VideoMdButton video={video} onOpen={() => open(video.id)} />
+    </p>
   );
 }
 
@@ -251,6 +287,8 @@ function ArticleBlock({
       return <ListView node={nestList(block.items)} />;
     case 'screen':
       return <ScreenView module={block.module} article={article} info={info} />;
+    case 'video':
+      return <ArticleVideo id={block.id} />;
     case 'image':
       // Картинка из хранилища (`/api/news/images/…`, задача 2.39), размеры заранее неизвестны.
       return (

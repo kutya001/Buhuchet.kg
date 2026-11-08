@@ -11,7 +11,7 @@ export const SAVED_EVENT = 'buhuchet:saved';
 
 /**
  * Запросы, после которых сверять шаги незачем: сама «База знаний», отметки прочитанных новостей, вид
- * списков, вход и пароль, страница контрагента без входа, заявка с лендинга.
+ * списков, вход и пароль, страница контрагента без входа, заявка и видео с лендинга.
  */
 const NOT_SAVES = [
   '/api/kb/',
@@ -20,6 +20,7 @@ const NOT_SAVES = [
   '/api/auth/',
   '/api/page/',
   '/api/leads',
+  '/api/landing/',
 ];
 
 const savingFetch: typeof fetch = async (input, init) => {

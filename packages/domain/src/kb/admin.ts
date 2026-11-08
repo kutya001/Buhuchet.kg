@@ -5,6 +5,7 @@ import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
 import { FEATURES, PERMISSIONS } from '../roles/permissions';
 import type { KbLevelDef } from './catalog';
 import { isKbEvent } from './events';
+import { VIDEO_HISTORY_KINDS, type VideoHistoryKind } from './video';
 
 /*
  * Админка → «База знаний (содержимое)» (задача 2.39; ТЗ «Модуль База знаний (содержимое)»; прототип
@@ -82,6 +83,8 @@ export interface KbStepInput {
   /** Условие отметки (`KB_EVENTS`). */
   evk: string;
   active: boolean;
+  /** Видео шага (прототип v79 `ks-vid`); пусто — нет; не задано (загрузка из Excel) — как было. */
+  video?: string;
   /** Место для «Перейти» — только у нового шага. */
   mod?: string;
 }
@@ -115,7 +118,13 @@ export const KB_ADMIN_MESSAGES: Readonly<Record<KbAdminProblem, string>> = {
  */
 export function kbStepProblems(
   input: KbStepInput,
-  known: { groups: ReadonlySet<string>; articles: ReadonlySet<string>; isNew: boolean },
+  known: {
+    groups: ReadonlySet<string>;
+    articles: ReadonlySet<string>;
+    isNew: boolean;
+    /** Видео платформы (не удалённые); не передано — поле видео не проверяется. */
+    videos?: ReadonlySet<string>;
+  },
 ): Partial<Record<KbStepField, KbAdminProblem>> {
   const out: Partial<Record<KbStepField, KbAdminProblem>> = {};
   const title = input.t.trim();
@@ -129,6 +138,7 @@ export function kbStepProblems(
     out.featk = 'kb_unknown';
   if (!isKbEvent(input.evk)) out.evk = 'kb_unknown';
   if (known.isNew && !(input.mod && isMenuModuleId(input.mod))) out.mod = 'kb_unknown';
+  if (input.video && known.videos && !known.videos.has(input.video)) out.video = 'kb_unknown';
   return out;
 }
 
@@ -327,10 +337,10 @@ export const KB_ADMIN_SORT: Readonly<Record<KbAdminList, ListSort | null>> = {
 /* ───────────── История изменений ───────────── */
 
 /**
- * Разделы истории: шаги, статьи, уровни, показы (`platform_audit_log`, `<раздел>:<код>`); загрузка из
- * Excel и её откат — записи раздела без кода (`<раздел>:`).
+ * Разделы истории: шаги, статьи, уровни, показы и видео платформы (`platform_audit_log`,
+ * `<раздел>:<код>`); загрузка из Excel и её откат — записи раздела без кода (`<раздел>:`).
  */
-export const KB_HISTORY_SECTIONS = ['kbsteps', 'kbarts', 'kblevels', 'kbshows'] as const;
+export const KB_HISTORY_SECTIONS = ['kbsteps', 'kbarts', 'kblevels', 'kbshows', 'video'] as const;
 export type KbHistorySection = (typeof KB_HISTORY_SECTIONS)[number];
 
 /** Вкладка → её раздел истории. */
@@ -391,7 +401,7 @@ const changeTo = (item: KbHistoryItemInput, field: string) =>
  * — добавлено 1, изменено 2, отключено 0», «Показы: загрузка от 31.10.2026 откачена».
  */
 function loadLine(
-  item: KbHistoryItemInput & { section: Exclude<KbHistorySection, 'kblevels'> },
+  item: KbHistoryItemInput & { section: Exclude<KbHistorySection, 'kblevels' | 'video'> },
   t: (key: UiTextKey) => string,
 ): KbHistoryLine {
   const dict = t(`pdicts.title.${item.section}`);
@@ -420,8 +430,21 @@ export function kbHistoryLine(
   adminGroup: (group: string) => boolean,
 ): KbHistoryLine {
   const name = item.label;
-  if ((item.action === 'import' || item.action === 'rollback') && item.section !== 'kblevels') {
+  if (
+    (item.action === 'import' || item.action === 'rollback') &&
+    item.section !== 'kblevels' &&
+    item.section !== 'video'
+  ) {
     return loadLine({ ...item, section: item.section }, t);
+  }
+  if (item.section === 'video') {
+    // Прототип v79 `vidLog`: «Видео: «Название» — Опубликовано».
+    const kind = String(changeTo(item, 'video') ?? 'edit');
+    const what = (VIDEO_HISTORY_KINDS as readonly string[]).includes(kind) ? kind : 'edit';
+    return {
+      key: 'video.hist.line',
+      params: { name, what: t(`video.hist.${what as VideoHistoryKind}`) },
+    };
   }
   if (item.section === 'kbshows') {
     if (item.action === 'delete') return { key: 'kbadm.hist.show.auto', params: { name } };

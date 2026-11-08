@@ -149,7 +149,10 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.art.f.active': { ru: 'Активна', section: S },
   'kbadm.art.active_hint': { ru: 'показывается в «Базе знаний»', section: S },
   'kbadm.art.f.html': { ru: 'Текст', section: S },
-  'kbadm.art.html_hint': { ru: 'Разметка: абзацы, списки, заголовки, картинки', section: S },
+  'kbadm.art.html_hint': {
+    ru: 'Разметка: абзацы, списки, заголовки, картинки; видео платформы — меткой <kb-video data-id="код"> (кнопка «Добавить видео»)',
+    section: S,
+  },
   'kbadm.art.image': { ru: 'Добавить картинку', section: S },
   'kbadm.art.image_added': { ru: 'Картинка добавлена в текст', section: S },
   'kbadm.art.preview': { ru: 'Предпросмотр', section: S },

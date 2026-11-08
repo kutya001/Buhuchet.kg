@@ -15,7 +15,7 @@ import { authModule } from './modules/auth';
 import { contractorPageModule } from './modules/contractor-page';
 import { contractorsModule } from './modules/contractors';
 import { homeModule } from './modules/home';
-import { kbModule } from './modules/kb';
+import { VIDEO_COVER_UPLOAD_PATH, kbModule } from './modules/kb';
 import { kpiModule } from './modules/kpi';
 import { KPI_IMPORT_UPLOAD_PATHS } from './modules/kpi/import';
 import { l10nModule } from './modules/l10n';
@@ -47,10 +47,11 @@ const API_BODY_LIMIT = 1024 * 1024;
 /**
  * Логотип организации и картинки новостей (до 2 МБ) идут через API: сервер проверяет, что это
  * картинка, до сохранения. Файл «Ввода из Excel» показателей (до 4 МБ) разбирается сервером и нигде
- * не хранится.
+ * не хранится. Обложка видео (JPEG до 2 МБ) — так же; сам видеофайл идёт в хранилище по частям.
  */
 const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([
   LOGO_PATH,
+  VIDEO_COVER_UPLOAD_PATH,
   ...KPI_IMPORT_UPLOAD_PATHS,
   NEWS_IMAGE_UPLOAD_PATH,
 ]);

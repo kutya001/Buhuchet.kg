@@ -11,6 +11,7 @@ import { finSummaryQuery } from '../finance/journal-data';
 import { leadSummaryQuery } from '../admin/leads-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { videoAdminStatusValuesQuery } from '../kb/video/video-data';
 import { newsDraftsCountQuery } from '../news/news-data';
 import { pdictsTabCountsQuery } from '../platform-dicts/pdicts-data';
 import { projectTabCountsQuery } from '../projects/projects-data';
@@ -25,7 +26,7 @@ export type TabCounts = Partial<Record<MenuModuleId, Partial<Record<string, Shel
  * Счётчики вкладок модулей меню (прототип: `count` у вкладок, например staffTabs; их видно и в ряду
  * вкладок, и в левой панели). Счётчики есть у модулей с экранами — у «Контрагентов», «Отчетов для сдачи»,
  * «Сотрудников», «Задач», «Проектов и услуг» в «Финансовых операциях», «Проектов контрагентов», «Показателей контрагентов» («Не заполнено»), у «Запросов» «Справочников
- * платформы», черновики «Новостей» и новые «Заявки» в Админке; у остальных их добавят их экраны. Запрос — только для
+ * платформы», черновики «Новостей» и «Видео» и новые «Заявки» в Админке; у остальных их добавят их экраны. Запрос — только для
  * модулей, доступных пользователю; пока ответа нет или запрос не удался — вкладки без чисел.
  */
 export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
@@ -39,6 +40,10 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
   const kpi = useQuery({ ...missingSummaryQuery, enabled: modules.includes('kpi') });
   const pdicts = useQuery({ ...pdictsTabCountsQuery, enabled: modules.includes('pdicts') });
   const kbadm = useQuery({ ...newsDraftsCountQuery, enabled: modules.includes('kbadm') });
+  const videoStatus = useQuery({
+    ...videoAdminStatusValuesQuery,
+    enabled: modules.includes('kbadm'),
+  });
   const leads = useQuery({ ...leadSummaryQuery, enabled: modules.includes('orgs') });
   return useMemo(
     () => ({
@@ -51,7 +56,9 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       ...(projects.data ? { projects: projects.data } : {}),
       ...(kpi.data ? { kpi: { missing: kpiMissingCount(t, kpi.data) } } : {}),
       ...(pdicts.data ? { pdicts: pdicts.data } : {}),
-      ...(kbadm.data ? { kbadm: kbadm.data } : {}),
+      ...(kbadm.data || videoStatus.data
+        ? { kbadm: { ...kbadm.data, ...videoDrafts(t, videoStatus.data) } }
+        : {}),
       // «Заявки» — новых заявок с сайта (прототип registry.js: `count: leadNew()`).
       ...(leads.data ? { orgs: { leads: { value: leads.data.fresh } } } : {}),
     }),
@@ -65,10 +72,20 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       kpi.data,
       pdicts.data,
       kbadm.data,
+      videoStatus.data,
       leads.data,
       t,
     ],
   );
+}
+
+/** Черновики «Видео» Админки (прототип kbAdmTabs: `count` вкладки `video`); нет — без числа. */
+function videoDrafts(
+  t: Translate,
+  values: { items: readonly { value: string; count: number }[] } | undefined,
+): Partial<Record<string, ShellCount>> {
+  const drafts = values?.items.find((v) => v.value === t('video.st.draft'))?.count ?? 0;
+  return drafts ? { video: { value: drafts } } : {};
 }
 
 /**

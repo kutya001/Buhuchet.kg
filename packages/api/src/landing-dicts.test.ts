@@ -17,6 +17,7 @@ const dicts = (regimes: number): LandingDicts => ({
   codes: [
     { cc: 'KG', flag: '🇰🇬', name: 'Кыргызстан', code: '996', mask: 'XXX XXX XXX', active: true },
   ],
+  videos: [],
 });
 
 describe('справочники лендинга (задача #165)', () => {

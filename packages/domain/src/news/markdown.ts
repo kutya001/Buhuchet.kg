@@ -2,16 +2,20 @@
  * Markdown подробного описания новости (ТЗ «База знаний (содержимое)» → «Новости»; прототип
  * modules/kb-news.js: mdHtml, mdInline, mdText; admin/news.js: mdTrim). Поддерживается: заголовки двух
  * уровней, жирный и курсив, код, маркированные и нумерованные списки, ссылки (в том числе на модуль
- * `#mod:id`, его вкладку `#mod:id.вкладка` и статью `#art:id`), картинки, цитата-примечание, разделитель,
+ * `#mod:id`, его вкладку `#mod:id.вкладка`, статью `#art:id` и видео платформы `#video:id`), картинки, цитата-примечание, разделитель,
  * простая таблица. На экран текст уходит не HTML, а блоками и кусками (`NewsMdBlock`, `NewsSpan`) —
  * HTML и скрипты из текста не выполняются: экран показывает их как обычный текст.
  */
 
-/** Ссылка в тексте: внешняя (http, https), на модуль меню (и вкладку) или на статью Базы знаний. */
+/**
+ * Ссылка в тексте: внешняя (http, https), на модуль меню (и вкладку), на статью Базы знаний или на видео
+ * платформы — кнопка «▶ <название> · 3:25», открывает окно видео (прототип v79 `vidMdBtn`).
+ */
 export type NewsLink =
   | { kind: 'url'; href: string }
   | { kind: 'mod'; module: string; tab: string | null }
-  | { kind: 'art'; id: string };
+  | { kind: 'art'; id: string }
+  | { kind: 'video'; id: string };
 
 /** Кусок текста с оформлением; у картинки — адрес и подпись. */
 export type NewsSpan =
@@ -43,7 +47,7 @@ export type NewsMdBlock =
  */
 export const NEWS_IMAGE_PATH = '/api/news/images/';
 const IMAGE_SRC = /^(?:https:\/\/[^\s"'<>]+|\/api\/news\/images\/[0-9a-f-]{36})$/;
-const LINK_REF = /^#(mod|art):([\w-]+)(?:\.([\w-]+))?$/;
+const LINK_REF = /^#(mod|art|video):([\w-]+)(?:\.([\w-]+))?$/;
 
 type Marks = { bold?: true; italic?: true; link?: NewsLink };
 
@@ -51,6 +55,7 @@ function linkOf(href: string): NewsLink | null {
   const m = LINK_REF.exec(href);
   if (m) {
     if (m[1] === 'art') return m[3] ? null : { kind: 'art', id: m[2]! };
+    if (m[1] === 'video') return m[3] ? null : { kind: 'video', id: m[2]! };
     return { kind: 'mod', module: m[2]!, tab: m[3] ?? null };
   }
   return /^https?:\/\/[^\s"'<>]+$/.test(href) ? { kind: 'url', href } : null;

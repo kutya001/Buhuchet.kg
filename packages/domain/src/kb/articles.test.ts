@@ -62,6 +62,18 @@ describe('статья по блокам', () => {
     expect(JSON.stringify(blocks)).not.toMatch(/onclick|href|onerror|script/);
   });
 
+  it('видео платформы — отдельным блоком; неверный код пропускается (прототип v79 kb-video)', () => {
+    expect(
+      kbArticleBlocks(
+        '<p>Смотрите <kb-video data-id="vd-intro"></kb-video> и читайте</p><p><kb-video data-id="X Y"></kb-video></p>',
+      ),
+    ).toEqual([
+      { type: 'p', inline: [{ text: 'Смотрите' }] },
+      { type: 'video', id: 'vd-intro' },
+      { type: 'p', inline: [{ text: 'и читайте' }] },
+    ]);
+  });
+
   it('картинка из хранилища — отдельным блоком, другие адреса пропускаются (задача 2.39)', () => {
     const id = '0b6f1c2e-3a4d-4e5f-8a9b-0c1d2e3f4a5b';
     const blocks = kbArticleBlocks(

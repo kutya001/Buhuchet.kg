@@ -86,5 +86,6 @@ export * from './kb/program';
 export * from './kb/articles';
 export * from './kb/shows';
 export * from './kb/admin';
+export * from './kb/video';
 export * from './news/news';
 export * from './news/markdown';

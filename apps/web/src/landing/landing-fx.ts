@@ -89,6 +89,7 @@ const KNOT_BLOCKS = [
   'change',
   'features',
   'shots',
+  'video',
   'start',
   'security',
   'faq',

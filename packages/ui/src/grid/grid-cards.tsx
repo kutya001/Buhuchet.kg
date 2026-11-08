@@ -42,7 +42,10 @@ export function GridCards<Row>({
   total,
   groups,
   labels,
+  render,
 }: {
+  /** Своя карточка (прототип `cardHtml`): обёртка, «⋯» и нажатие — общие. */
+  render?: (row: Row) => ReactNode;
   groups?: GridTableGroups<Row>;
   columns: readonly GridColumn<Row>[];
   titleKey?: string;
@@ -94,7 +97,30 @@ export function GridCards<Row>({
     );
   };
 
-  const card = (row: Row): ReactNode => {
+  const card = (row: Row): ReactNode => (render ? own(row, render) : common(row));
+  /** Своя карточка во всю ширину, «⋯» — поверх в правом верхнем углу (прототип `.gcard-x .gc-mx`). */
+  const own = (row: Row, draw: (row: Row) => ReactNode): ReactNode => {
+    const id = rowKey(row);
+    return (
+      <div
+        key={id}
+        data-id={id}
+        data-card-own
+        tabIndex={0}
+        {...events.handlers(row)}
+        className={`relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-raised transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''}`}
+      >
+        {draw(row)}
+        {events.hasMenu(row) && (
+          <span className="absolute top-1.5 right-1.5 rounded-lg bg-[hsla(0_0%_100%/.9)] text-[#222]">
+            <RowMenuButton row={row} events={events} label={labels.actions} />
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const common = (row: Row): ReactNode => {
     const id = rowKey(row);
     const tone = rowTone?.(row);
     const stripe = rowStripe?.(row);

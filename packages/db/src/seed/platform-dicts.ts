@@ -74,6 +74,8 @@ export const TABLE_SECTIONS = [
   'roleTemplates',
   // «Новости» Базы знаний — таблица news (задача 2.32).
   'news',
+  // Видео платформы — таблица videos (прототип v79); видео прототипа не заливаются (docs/deviations.md п. О-53).
+  'videos',
 ] as const;
 
 /** Справочники раздела `dictionaries`, которые лежат в своих таблицах. */

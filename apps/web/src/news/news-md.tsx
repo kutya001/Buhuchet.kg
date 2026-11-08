@@ -8,15 +8,18 @@ import {
   type NewsSpan,
 } from '@buhuchet/domain';
 import { Fragment, useMemo, type MouseEvent, type ReactNode } from 'react';
+import { useLinkedVideo } from '../kb/video/video-help';
+import { VideoMdButton } from '../kb/video/video-parts';
 
 /*
  * Подробное описание новости (прототип modules/kb-news.js, mdHtml и `.kb-art.md`): блоки разбирает
  * домен (`newsMdBlocks`), здесь они становятся элементами React — HTML из текста не выполняется.
  * Ссылки на модуль (`#mod:reports`, `#mod:dicts.types`) и статью (`#art:a5`) обрабатывает `onLink`:
  * модуля нет в меню или статья недоступна — уведомление, в редакторе — «сработает после публикации».
+ * Ссылка на видео (`#video:<код>`, прототип v79) — кнопка «▶ <название> · 3:25», открывает окно видео.
  */
 
-/** Ссылка внутри платформы: модуль (вкладка) или статья Базы знаний. */
+/** Ссылка внутри платформы: модуль (вкладка), статья Базы знаний или видео. */
 export type NewsInnerLink = Exclude<NewsLink, { kind: 'url' }>;
 
 type TextSpan = Extract<NewsSpan, { text: string }>;
@@ -151,6 +154,21 @@ function Spans({ spans, onLink }: { spans: NewsSpan[]; onLink: (link: NewsInnerL
       parts.push(<Fragment key={j}>{styled(x)}</Fragment>);
     }
     i = j - 1;
+    if (link.kind === 'video') {
+      out.push(
+        <NewsVideoButton
+          key={i}
+          id={link.id}
+          label={spans
+            .slice(i - parts.length + 1, i + 1)
+            .map((x) => ('text' in x ? x.text : ''))
+            .join('')
+            .replace(/^▶\s*/, '')}
+          onOpen={() => onLink(link)}
+        />,
+      );
+      continue;
+    }
     out.push(
       link.kind === 'url' ? (
         <a
@@ -220,4 +238,10 @@ function ListView({ node, onLink }: { node: ListNode; onLink: (link: NewsInnerLi
   ) : (
     <ul className={`${LIST} list-disc`}>{items}</ul>
   );
+}
+
+/** Ссылка на видео в тексте новости — кнопка «▶ <название> · 3:25» (прототип v79 `vidMdBtn`). */
+function NewsVideoButton({ id, label, onOpen }: { id: string; label: string; onOpen: () => void }) {
+  const video = useLinkedVideo(id);
+  return <VideoMdButton video={video} label={label} onOpen={onOpen} />;
 }

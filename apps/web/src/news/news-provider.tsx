@@ -19,6 +19,8 @@ import {
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import type { ArticleView } from '../kb/kb-article';
 import { kbArticlesQuery } from '../kb/kb-data';
+import { videoCatalogQuery } from '../kb/video/video-data';
+import { useVideo } from '../kb/video/video-window';
 import { useT } from '../l10n/provider';
 import { isModuleId, MODULES } from '../shell/modules';
 import { fetchWhatsNew, markNewsRead } from './news-data';
@@ -144,7 +146,8 @@ export function useNewsRuntime(shell: NewsShellInfo): {
 /**
  * Ссылки новости (прототип: обработчик `[data-mdmod],[data-mdart]` и newsLinkOk): модуль из меню —
  * переход (окно закрывается, запись истории заменяется), статья — окно статьи поверх; нет модуля в
- * меню или статья недоступна — уведомление. В редакторе Админки (`preview`) ссылки не работают.
+ * меню или статья недоступна — уведомление. В редакторе Админки (`preview`) ссылки на модуль и статью
+ * не работают, кнопка видео — открывает окно.
  */
 export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
   const t = useT();
@@ -152,10 +155,13 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
   const router = useRouter();
   const client = useQueryClient();
   const news = useNews();
+  const video = useVideo();
   const { leave } = useWindow();
 
   const follow = useCallback(
     (link: NewsInnerLink) => {
+      // Кнопка видео открывает окно и в предпросмотре редактора (прототип: `data-vopen` без `.md-edit`).
+      if (link.kind === 'video') return video.open(link.id);
       if (preview) return toast(t('news.link.in_editor'), { icon: 'info' });
       if (link.kind === 'mod') {
         const href = news.hrefOf(link.module, link.tab);
@@ -173,22 +179,29 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
         )
         .catch(() => toast(t('news.link.article_denied'), { icon: 'lock' }));
     },
-    [preview, toast, t, news, leave, router, client],
+    [preview, toast, t, news, video, leave, router, client],
   );
   return follow;
 }
 
 /**
  * «Подробнее: …» у новости со ссылкой (прототип newsLinkOk, newsLinkTxt): статья, видная
- * пользователю, или модуль из его меню; иначе кнопки нет.
+ * пользователю, или модуль из его меню, у видео — «▶ Смотреть видео»; иначе кнопки нет.
  */
 function useMoreLink(link: NewsLinkSchema | null) {
   const t = useT();
   const news = useNews();
   const router = useRouter();
   const { close, leave } = useWindow();
+  const video = useVideo();
   const articles = useQuery({ ...kbArticlesQuery, enabled: link?.kind === 'art' }).data;
+  const videos = useQuery({ ...videoCatalogQuery, enabled: link?.kind === 'video' }).data;
   if (!link) return null;
+  // «▶ Смотреть видео» — у видео, доступного пользователю (прототип v79 newsLinkBtn, newsLinkOk).
+  if (link.kind === 'video') {
+    if (!videos?.items.some((v) => v.id === link.id)) return null;
+    return { title: '', video: true, go: () => video.open(link.id) };
+  }
   if (link.kind === 'art') {
     const article = articles?.find((a) => a.id === link.id);
     if (!article) return null;
@@ -222,8 +235,8 @@ function MoreButton({ link, small = false }: { link: NewsLinkSchema | null; smal
       onClick={more.go}
       className={buttonClass('default', small ? 'sm' : 'md')}
     >
-      <Icon name="right" size="sm" />
-      {t('news.more', { title: more.title })}
+      <Icon name={'video' in more ? 'pl' : 'right'} size="sm" />
+      {'video' in more ? t('video.news.watch') : t('news.more', { title: more.title })}
     </button>
   );
 }

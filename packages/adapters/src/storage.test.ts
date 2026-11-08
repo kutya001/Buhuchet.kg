@@ -141,8 +141,70 @@ function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boo
         storage.signedUploadUrl(key, { expiresInSeconds: 901, contentType: 'x/y', size: 1 }),
       ).rejects.toThrow(RangeError);
     });
+
+    it('кусок файла по байтам: с начала, из середины, за концом; нет файла — null', async () => {
+      const storage = await make();
+      const key = platformFileKey('contract', randomUUID());
+      expect(await storage.getRange(key, 0, 4)).toBeNull();
+      await storage.put(key, Uint8Array.from([1, 2, 3, 4, 5, 6]), { contentType: 'video/mp4' });
+      expect([...((await storage.getRange(key, 0, 4)) ?? [])]).toEqual([1, 2, 3, 4]);
+      expect([...((await storage.getRange(key, 4, 10)) ?? [])]).toEqual([5, 6]);
+      expect([...((await storage.getRange(key, 10, 4)) ?? [])]).toEqual([]);
+      await storage.delete(key);
+    });
+
+    it('ссылка на просмотр видео: только video/mp4 и video/webm, срок до 2 часов', async () => {
+      const storage = await make();
+      const key = platformFileKey('contract', randomUUID());
+      const url = await storage.signedVideoUrl(key, {
+        expiresInSeconds: 7200,
+        contentType: 'video/mp4',
+      });
+      expect(url).toContain(key);
+      await expect(
+        storage.signedVideoUrl(key, { expiresInSeconds: 7201, contentType: 'video/mp4' }),
+      ).rejects.toThrow(RangeError);
+      await expect(
+        storage.signedVideoUrl(key, {
+          expiresInSeconds: 60,
+          contentType: 'text/html' as 'video/mp4',
+        }),
+      ).rejects.toThrow(RangeError);
+    });
+
+    it('многочастная загрузка: ссылки на части, прерванная загрузка не оставляет файла', async () => {
+      const storage = await make();
+      const key = platformFileKey('contract', randomUUID());
+      const id = await storage.createMultipart(key, { contentType: 'video/mp4' });
+      const url = await storage.signedPartUrl(key, id, 1, { expiresInSeconds: 60, size: 10 });
+      expect(url).toContain(key);
+      await expect(
+        storage.signedPartUrl(key, id, 0, { expiresInSeconds: 60, size: 10 }),
+      ).rejects.toThrow(RangeError);
+      expect(await storage.listParts(key, id)).toEqual([]);
+      await storage.abortMultipart(key, id);
+      expect(await storage.listParts(key, id)).toBeNull();
+      expect(await storage.exists(key)).toBe(false);
+      // Повторное прерывание — без ошибки (задача уборки могла прервать раньше).
+      await storage.abortMultipart(key, id);
+    });
   });
 }
+
+describe('хранилище в памяти: многочастная загрузка', () => {
+  it('части, уложенные браузером, собираются в файл по порядку', async () => {
+    const storage = createMemoryStorage();
+    const key = platformFileKey('videos', randomUUID());
+    const id = await storage.createMultipart(key, { contentType: 'video/webm' });
+    storage.putPart(id, 2, Uint8Array.from([3, 4]));
+    storage.putPart(id, 1, Uint8Array.from([1, 2]));
+    const parts = (await storage.listParts(key, id))!;
+    expect(parts.map((p) => p.partNumber)).toEqual([1, 2]);
+    await storage.completeMultipart(key, id, parts);
+    expect([...((await storage.get(key)) ?? [])]).toEqual([1, 2, 3, 4]);
+    expect(await storage.stat(key)).toEqual({ size: 4, contentType: 'video/webm' });
+  });
+});
 
 contract('память', async () => createMemoryStorage());
 
@@ -225,6 +287,49 @@ describe.skipIf(!s3Available)('S3: подписанная ссылка реал�
     expect(await storage.exists(key)).toBe(false);
     expect((await put(10)).status).toBe(200);
     expect(await storage.stat(key)).toEqual({ size: 10, contentType: 'application/pdf' });
+    await storage.delete(key);
+  });
+
+  it('видео: части кладутся по подписанным ссылкам, собираются в файл, ссылка на просмотр отдаёт куски', async () => {
+    const storage = createS3Storage(loadStorageConfig());
+    await storage.ensureBucket();
+    const key = platformFileKey('videos-test', randomUUID());
+    const id = await storage.createMultipart(key, { contentType: 'video/mp4' });
+    // Часть, кроме последней, — не меньше 5 МБ.
+    const first = new Uint8Array(5 * 1024 * 1024).fill(7);
+    const last = Uint8Array.from([1, 2, 3]);
+    for (const [n, body] of [
+      [1, first],
+      [2, last],
+    ] as const) {
+      const url = await storage.signedPartUrl(key, id, n, {
+        expiresInSeconds: 60,
+        size: body.length,
+      });
+      // Размер части подписан: больше или меньше — хранилище не принимает.
+      if (n === 2) {
+        const bigger = await fetch(url, { method: 'PUT', body: Uint8Array.from([1, 2, 3, 4]) });
+        expect(bigger.ok).toBe(false);
+      }
+      expect((await fetch(url, { method: 'PUT', body })).status).toBe(200);
+    }
+    const parts = (await storage.listParts(key, id))!;
+    expect(parts.map((p) => [p.partNumber, p.size])).toEqual([
+      [1, first.length],
+      [2, 3],
+    ]);
+    await storage.completeMultipart(key, id, parts);
+    expect(await storage.stat(key)).toEqual({ size: first.length + 3, contentType: 'video/mp4' });
+    expect([...((await storage.getRange(key, first.length, 10)) ?? [])]).toEqual([1, 2, 3]);
+    const view = await storage.signedVideoUrl(key, {
+      expiresInSeconds: 60,
+      contentType: 'video/mp4',
+    });
+    const res = await fetch(view, { headers: { range: `bytes=${first.length}-` } });
+    expect(res.status).toBe(206);
+    expect(res.headers.get('content-type')).toBe('video/mp4');
+    expect(res.headers.get('content-disposition')).toBe('inline');
+    expect([...new Uint8Array(await res.arrayBuffer())]).toEqual([1, 2, 3]);
     await storage.delete(key);
   });
 

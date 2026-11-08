@@ -180,6 +180,9 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(ids(addActions('kbadm', access, 'arts'))).toEqual(['art', ...io]);
     expect(addActions('kbadm', access, 'arts').find((a) => a.id === 'io_export')?.sep).toBe(true);
     expect(addActions('kbadm', access, 'levels')).toEqual([]);
+    // Видео платформы (прототип v79 kbAdmAdd): «Видео» без Excel; у «Просмотров видео» — ничего.
+    expect(ids(addActions('kbadm', access, 'video'))).toEqual(['video']);
+    expect(addActions('kbadm', access, 'vviews')).toEqual([]);
   });
 });
 

@@ -35,6 +35,7 @@ export * from './org';
 export * from './onboarding';
 export * from './home';
 export * from './kb';
+export * from './kb-video';
 export * from './news';
 export * from './l10n';
 export * from './list';

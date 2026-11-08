@@ -1,5 +1,7 @@
 'use client';
 
+import { videoTime } from '@buhuchet/domain';
+import type { LandingVideo } from '@buhuchet/shared';
 import {
   buttonClass,
   Icon,
@@ -19,6 +21,8 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
+import { VideoCover } from '../kb/video/video-parts';
+import { useGuestVideo } from '../kb/video/video-window';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { setTheme } from '../shell/browser';
@@ -49,13 +53,17 @@ import './landing.css';
  * отсылками к гербу бухгалтеров и «Подробнее». Все тексты — словарь, группа «Лендинг» (правятся в
  * «Локализации»); числа полосы цифр и картинки — из справочников и демо-данных на момент сборки.
  * «Посмотреть на демо-организацию» открывает /demo — собранный файл прототипа; «Войти» — страницу входа.
- * Единственный запрос страницы к серверу — отправка заявки.
+ * Блок «Видео о Buhuchet.kg» и ссылка «Смотреть видео» в первом экране — видео с отметкой «На лендинге»
+ * (прототип v79 `vidLand`); блока нет, пока таких видео нет. Запросы страницы к серверу — отправка
+ * заявки и запуск видео; обложки — свои, без внешних адресов.
  */
 
 export interface LandingProps {
   screens: DemoScreens;
   numbers: { reportTypes: number; regimes: number };
   codes: readonly PhoneInputCode[];
+  /** Видео лендинга по порядку («На лендинге», порядок на лендинге). */
+  videos: readonly LandingVideo[];
   /** Сегодня по Бишкеку (YYYY-MM-DD): просрочка на картинках и год в подвале. */
   today: string;
   /** Тестовый стенд: полоса «Тестовый стенд: данные демонстрационные». */
@@ -136,7 +144,7 @@ const SECURITY: readonly (readonly [1 | 2 | 3 | 4 | 5, IconName])[] = [
 
 /** Блоки с «Подробнее». */
 type BlockId =
-  'emb' | 'who' | 'change' | 'features' | 'shots' | 'start' | 'security' | 'faq' | 'lead';
+  'emb' | 'who' | 'change' | 'features' | 'shots' | 'video' | 'start' | 'security' | 'faq' | 'lead';
 
 /** Контакты из словаря; пустой контакт на странице не показывается (ТЗ «Тексты и контакты»). */
 function contacts(t: Translate): { href: string; icon: IconName; text: string; external?: true }[] {
@@ -185,8 +193,15 @@ function DetailsLine({ children }: { children: ReactNode }) {
   );
 }
 
-function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
+function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingProps) {
   const t = useT();
+  const guest = useGuestVideo(videos);
+  const lead = videos[0];
+  /**
+   * Блоки страницы чередуют фон (прототип `landAlt`): блок «Видео» после «Как это выглядит» сдвигает
+   * чередование следующих.
+   */
+  const alt = (on: boolean) => ((lead ? !on : on) ? ' alt' : '');
   const [menu, setMenu] = useState(false);
   const [shot, setShot] = useState(0);
   const [sent, setSent] = useState<string | null>(null);
@@ -392,6 +407,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
     >
       {boot ? <script dangerouslySetInnerHTML={{ __html: BOOT }} /> : null}
       <BrandIntro onReveal={revealBlocks} />
+      {guest.overlay}
       {stand ? <div className="lp-test">{t('land.test')}</div> : null}
       {/* Шапка */}
       <header className="lp-head">
@@ -479,6 +495,22 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
                   {t('land.btn.demo')}
                 </a>
               </div>
+              {lead ? (
+                <button
+                  type="button"
+                  className="lp-vlink rv"
+                  style={delay(3)}
+                  data-lp-vid={lead.id}
+                  onClick={() => guest.open(lead.id)}
+                >
+                  <span className="lp-vlink-i">
+                    <Icon name="pl" size="sm" />
+                  </span>
+                  <span>
+                    {t('land.video.watch')} · {videoTime(lead.duration)}
+                  </span>
+                </button>
+              ) : null}
             </div>
             <div className="lp-hero-pic" role="img" aria-label={t('land.aria.hero_pic')}>
               <DeskScreen t={t} d={screens} today={today} hero />
@@ -693,10 +725,70 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
             {moreButton('shots')}
           </>,
         )}
+        {/* Видео о Buhuchet.kg — большая обложка первого видео, остальные справа въезжают по одному */}
+        {lead
+          ? block(
+              'video',
+              'lp-vids alt',
+              t('land.video.title'),
+              <>
+                <div className={`lp-vgrid${videos.length > 1 ? '' : ' one'}`}>
+                  <div className="lp-vmain rv">
+                    <button
+                      type="button"
+                      className="lp-vbig"
+                      data-lp-vid={lead.id}
+                      aria-label={`${lead.title} · ${videoTime(lead.duration)}`}
+                      onClick={() => guest.open(lead.id)}
+                    >
+                      <VideoCover video={lead} land className="lp-vcv" />
+                    </button>
+                    <div className="lp-vtx">
+                      {lead.cover ? <b>{lead.title}</b> : null}
+                      <span className="lp-vdur">
+                        <Icon name="clock" size="sm" />
+                        {videoTime(lead.duration)}
+                      </span>
+                      {lead.description ? (
+                        <Details>
+                          <p>{lead.description}</p>
+                        </Details>
+                      ) : null}
+                    </div>
+                  </div>
+                  {videos.length > 1 ? (
+                    <div className="lp-vlist">
+                      {videos.slice(1).map((v, i) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className="lp-vc rv"
+                          style={delay(i + 1)}
+                          data-lp-vid={v.id}
+                          onClick={() => guest.open(v.id)}
+                        >
+                          <VideoCover video={v} land size="sm" showDuration={false} />
+                          <span className="lp-vct">
+                            <b>{v.title}</b>
+                            <span className="lp-vdur">
+                              <Icon name="clock" size="sm" />
+                              {videoTime(v.duration)}
+                            </span>
+                            {v.description ? <DetailsLine>{v.description}</DetailsLine> : null}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                {videos.some((v) => v.description) ? moreButton('video') : null}
+              </>,
+            )
+          : null}
         {/* 6. Как начать — линия шагов заполняется по прокрутке, номера загораются */}
         {block(
           'start',
-          'lp-start alt',
+          `lp-start${alt(true)}`,
           t('land.start.title'),
           <>
             <div className="lp-steps-w">
@@ -723,7 +815,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
         {/* 7. Безопасность — щит рисуется, замок защёлкивается, значки выходят на орбиту */}
         {block(
           'security',
-          'lp-secu',
+          `lp-secu${alt(false)}`,
           t('land.sec.title'),
           <div className="lp-secu-in">
             <div className="lp-orbit rv" aria-hidden="true">
@@ -761,7 +853,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
         {/* 8. Вопросы — выезжают попеременно слева и справа; видны первые три, «Подробнее» — остальные */}
         {block(
           'faq',
-          'lp-faqs alt',
+          `lp-faqs${alt(true)}`,
           t('land.faq.title'),
           <>
             <div className="lp-faq">{([1, 2, 3] as const).map(faqItem)}</div>
@@ -774,7 +866,7 @@ function LandingPage({ screens, numbers, codes, today, stand }: LandingProps) {
         {/* 9. Оставить заявку — форма раскладывается, поля встают по одному; после отправки — печать */}
         {block(
           'lead',
-          'lp-leads',
+          `lp-leads${alt(false)}`,
           t('land.lead.title'),
           <div className="lp-lead-in">
             <div className="lp-fold rv">

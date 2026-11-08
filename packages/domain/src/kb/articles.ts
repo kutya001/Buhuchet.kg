@@ -44,7 +44,15 @@ export type KbBlock =
    * Картинка, загруженная в Админке (задача 2.39, прототип kbArtEditDlg «Добавить картинку»): только
    * из хранилища — `/api/news/images/<id>`, как у новостей; другие адреса пропускаются.
    */
-  | { type: 'image'; src: string; alt: string };
+  | { type: 'image'; src: string; alt: string }
+  /**
+   * Видео платформы (`<kb-video data-id="…">`, решение заказчика 08.11.2026, прототип v79): кнопка
+   * «▶ <название> · 3:25» открывает окно видео; видео нет или оно недоступно — экран кнопку не показывает.
+   */
+  | { type: 'video'; id: string };
+
+/** Код видео в `kb-video`: как код записи справочника. */
+const VIDEO_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
 /** Модули меню: описание экрана `kb-screen` — только у них. */
 const MENU: ReadonlySet<string> = new Set(MENU_MODULE_IDS);
@@ -74,7 +82,9 @@ function decode(text: string): string {
 }
 
 type Token =
-  { open: string; mod?: string; src?: string; alt?: string } | { close: string } | { text: string };
+  | { open: string; mod?: string; src?: string; alt?: string; id?: string }
+  | { close: string }
+  | { text: string };
 
 /** Значение атрибута тега в кавычках (`name="…"`), с разбором сущностей. */
 const attr = (attrs: string, name: string): string | undefined => {
@@ -99,6 +109,8 @@ function tokenize(html: string): Token[] {
         src: attr(m[3] ?? '', 'src') ?? '',
         alt: attr(m[3] ?? '', 'alt') ?? '',
       });
+    } else if (tag === 'kb-video') {
+      out.push({ open: tag, id: attr(m[3] ?? '', 'data-id') ?? '' });
     } else {
       const mod = /data-mod\s*=\s*"([^"]*)"/.exec(m[3] ?? '')?.[1];
       out.push(mod === undefined ? { open: tag } : { open: tag, mod });
@@ -132,7 +144,7 @@ function tidy(inline: KbInline[]): KbInline[] {
 
 /**
  * Статья по блокам: заголовки `h4`/`h5`, абзацы, цитаты, списки `ul`/`ol` (со вложенными списками),
- * жирный `b`/`strong`, описание экрана `kb-screen` и картинки `img` из хранилища. Прочие теги не
+ * жирный `b`/`strong`, описание экрана `kb-screen`, картинки `img` из хранилища и видео `kb-video`. Прочие теги не
  * попадают в ответ — только их текст.
  */
 export function kbArticleBlocks(html: string): KbBlock[] {
@@ -199,6 +211,16 @@ export function kbArticleBlocks(html: string): KbBlock[] {
         flushText();
         // Описание экрана — только у модуля меню: ключ ищется в справочнике `kbUi`.
         if (token.mod && MENU.has(token.mod)) blocks.push({ type: 'screen', module: token.mod });
+      } else if (tag === 'kb-video' && !lists.length) {
+        // ОТКЛОНЕНИЕ: docs/deviations.md#О-57 — у прототипа кнопка видео стоит прямо в строке абзаца.
+        // Видео — отдельным блоком, как картинка; текст абзаца после него — новым абзацем.
+        const block: 'h4' | 'h5' | 'p' | 'quote' | null = textBlock;
+        flushText();
+        if (token.id && VIDEO_ID.test(token.id)) blocks.push({ type: 'video', id: token.id });
+        if (block) {
+          textBlock = block;
+          inline = [];
+        }
       } else if (tag === 'img' && !lists.length) {
         // Картинка — отдельным блоком; текст абзаца после неё — новым абзацем.
         const block: 'h4' | 'h5' | 'p' | 'quote' | null = textBlock;

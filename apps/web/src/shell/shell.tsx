@@ -37,6 +37,8 @@ import { ContractorCardHost } from '../contractors/contractor-actions';
 import { ProjectCardHost } from '../projects/project-actions';
 import { kbStateQuery } from '../kb/kb-data';
 import { KbContext, useKb, useKbRuntime, type KbControls } from '../kb/kb-provider';
+import { useModuleVideos, VideoHelpBlock } from '../kb/video/video-help';
+import { VideoContext, useVideoRuntime, type VideoControls } from '../kb/video/video-window';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { newsUnreadQuery } from '../news/news-data';
@@ -449,6 +451,15 @@ function ShellPage({
     lessonsHref: tabHref('kb', 'lessons'),
     welcomeFirst: welcome.atLogin,
   });
+  // Видео платформы (решение заказчика 08.11.2026, прототип v79): окно видео, «▶» в верхней панели.
+  const video = useVideoRuntime({
+    hrefOf: (module) => (isModuleId(module) ? tabHrefOf(module) : null),
+    currentModule: moduleId,
+    openArticle: (id) => kb.controls.openArticle({ id }),
+    videoTabHref: tabHrefOf('kb', 'video'),
+    goTo: (href) => router.replace(href),
+  });
+  const topVideo = useModuleVideos(moduleId)[0] ?? null;
   const openHelp = () => {
     if (!moduleId || !isModuleId(moduleId)) return setHelpOpen(true);
     void kb.controls.help(moduleId).then((found) => {
@@ -461,7 +472,12 @@ function ShellPage({
 
   return (
     <ShellContext.Provider value={state}>
-      <KbProviders kb={kb.controls} news={news.controls} welcome={welcome.controls}>
+      <KbProviders
+        kb={kb.controls}
+        news={news.controls}
+        welcome={welcome.controls}
+        video={video.controls}
+      >
         <AppFrame
           navHidden={navHidden}
           paneLabel={title}
@@ -547,6 +563,14 @@ function ShellPage({
                 openLabel: t('shell.search_open'),
               }}
               clock={<Clock initial={serverNow} />}
+              video={
+                topVideo
+                  ? {
+                      label: t('video.top', { title: topVideo.title }),
+                      onClick: () => video.controls.open(topVideo.id),
+                    }
+                  : null
+              }
               help={{
                 label: t('shell.help'),
                 title: t('shell.help_title'),
@@ -670,6 +694,7 @@ function ShellPage({
         {kb.overlays}
         {news.overlays}
         {welcome.overlays}
+        {video.overlays}
         {me.organization ? <ContractorCardHost /> : null}
         {me.organization ? <ProjectCardHost /> : null}
         {/* «?» без статьи о модуле — описание модуля (прототип kb.js kbHelp). */}
@@ -681,6 +706,7 @@ function ShellPage({
           sub={t('kb.title')}
           footer={<HelpFooter kbHref={moduleHref('kb', access)} />}
         >
+          <VideoHelpBlock module={moduleId} />
           <p className="m-0 leading-[1.6]">{desc}</p>
           <p className="m-0 text-muted">{t('kb.no_article')}</p>
         </Modal>
@@ -707,22 +733,26 @@ function ShellPage({
   );
 }
 
-/** Управление «Базой знаний», «Новостями» и приветствием для экранов модулей (задачи 2.30, 2.32, 2.33). */
+/** Управление «Базой знаний», «Новостями», приветствием и окном видео для экранов модулей (задачи 2.30, 2.32, 2.33). */
 function KbProviders({
   kb,
   news,
   welcome,
+  video,
   children,
 }: {
   kb: KbControls;
   news: NewsControls;
   welcome: WelcomeControls;
+  video: VideoControls;
   children: ReactNode;
 }) {
   return (
     <KbContext.Provider value={kb}>
       <NewsContext.Provider value={news}>
-        <WelcomeContext.Provider value={welcome}>{children}</WelcomeContext.Provider>
+        <WelcomeContext.Provider value={welcome}>
+          <VideoContext.Provider value={video}>{children}</VideoContext.Provider>
+        </WelcomeContext.Provider>
       </NewsContext.Provider>
     </KbContext.Provider>
   );

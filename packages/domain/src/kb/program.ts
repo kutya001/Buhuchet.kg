@@ -64,8 +64,9 @@ export function kbAdminAccess(): KbAccess {
 /**
  * Как засчитан шаг (ТЗ: «с датой и способом»; прототип `CK_HOW`). `hand` — «Отметить выполненным»
  * (решение заказчика 06.11.2026, прототип v74 ckHandMark): потом выполненное условие меняет способ.
+ * `video` — привязанное к шагу «Посмотреть» видео получило «Просмотрено» (прототип v79 vidDone).
  */
-export const KB_HOWS = ['action', 'data', 'show', 'art', 'use', 'visit', 'hand'] as const;
+export const KB_HOWS = ['action', 'data', 'show', 'art', 'use', 'visit', 'hand', 'video'] as const;
 export type KbHow = (typeof KB_HOWS)[number];
 
 export function isKbHow(value: string): value is KbHow {

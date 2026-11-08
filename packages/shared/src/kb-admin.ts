@@ -59,6 +59,8 @@ export const AdminKbStepFields = z.object({
   featk: z.string().max(64),
   evk: z.string().max(64),
   active: z.boolean(),
+  /** Видео платформы шага (прототип v79); пусто — нет. */
+  video: z.union([Code, z.literal('')]).default(''),
 });
 
 export const AdminKbStepCreate = AdminKbStepFields.extend({ mod: z.string().max(64) });

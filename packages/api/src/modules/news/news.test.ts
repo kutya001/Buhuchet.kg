@@ -205,12 +205,12 @@ describe.skipIf(!databaseAvailable())('«Новости»: API', () => {
     expect(await field({ link: { kind: 'art', id: 'nope' } })).toEqual([
       'news_link',
       'link',
-      'Нет такой статьи или модуля',
+      'Нет такой статьи, модуля или видео',
     ]);
     expect(await field({ link: { kind: 'mod', id: 'nope' } })).toEqual([
       'news_link',
       'link',
-      'Нет такой статьи или модуля',
+      'Нет такой статьи, модуля или видео',
     ]);
     // Черновик без версии и объявление без версии сохраняются; ссылка на модуль — да.
     const ok1 = await create({ publish: false, release: '', link: { kind: 'mod', id: 'reports' } });
