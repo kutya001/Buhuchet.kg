@@ -99,6 +99,7 @@ const DemoContractor = z.object({
    * `pay` — «Выплата зарплаты» прототипа v82 (card/mixed/cash), на тариф не влияет: пока поля нет в
    * базе, любое значение читается как прежний признак «Зарплата только безналично» — тариф как в v82.
    */
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-58
   sf: z
     .object({ pay: z.enum(['card', 'mixed', 'cash']).optional() })
     .catchall(z.boolean())
