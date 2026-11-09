@@ -210,6 +210,8 @@ const BenefitSchema = z
     until: z.union([z.literal(''), z.iso.date()]),
     verify: z.boolean().default(false),
     verifyNote: z.string().default(''),
+    /** Подсказка о наличной зарплате (ЛЬГ-29, прототип v82): в базу её переносит правка v82. */
+    cashHint: z.string().optional(),
     gked: GkedRuleSchema.optional(),
     gkedMain: z.boolean().default(false),
     tax: z.string().default(''),
