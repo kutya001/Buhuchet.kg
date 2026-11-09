@@ -128,7 +128,7 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
     ]);
   });
 
-  it('тариф Соцфонда — как в прототипе: статус СПиНО ровно у тарифа СПиНО, «под вопросом» — трое', async () => {
+  it('тариф Соцфонда — как в прототипе: статус СПиНО ровно у тарифа СПиНО, «под вопросом» — двое', async () => {
     const all = await db.admin.db
       .select()
       .from(contractors)
@@ -149,8 +149,8 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
       socfundFlags: { cashless: true, registry: true, confirmed: true, gov: false },
       socfundTariff: { id: 'spino', manual: false, reason: null },
     });
-    expect(byNo('10').socfundTariff).toMatchObject({ id: 'spino', manual: true });
-    expect(byNo('10').socfundTariff?.reason).toBeTruthy();
+    // Прототип v82: у №10 зарплата «Безналично и наличными», тариф СПиНО выбран не вручную.
+    expect(byNo('10').socfundTariff).toMatchObject({ id: 'spino', manual: false, reason: null });
     expect(byNo('11').socfundTariff).toMatchObject({ id: 'pvtpki' });
     expect(byNo('30').socfundTariff).toBeNull();
 
@@ -165,7 +165,6 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
       }),
     );
     expect(page.rows.filter((r) => r.socfund?.ask).map((r) => r.name)).toEqual([
-      'ОсОО «Каракол Мед Сервис»',
       'ОсОО «Нарын Жүн»',
       'ОсОО «Укс»',
     ]);

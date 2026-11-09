@@ -1,6 +1,7 @@
 'use strict';
 // Единый компонент списка (grid): столбцы, сортировка, группировка, фильтры, карточки
 /* ═════════════ UnifiedDataGrid ═════════════ */
+// Для таблиц ввода: столбец c.td(r) — дополнительные атрибуты ячейки; cfg.after(host, view) — после каждой отрисовки (так «Показатели» включают ввод как в Excel)
 // «Все записи» — до 5 000 строк за раз, дальше страницы по 5 000 (решение заказчика 26.10.2026)
 const GRID_ALL_MAX=5000;
 // В фильтре-галочках — не больше 500 значений; «В Excel» — не больше 50 000 строк (решение заказчика 26.10.2026)
@@ -106,6 +107,7 @@ function grid(host,cfg){
     host.className='grid';host.dataset.density=s.density;host.dataset.width=s.width;host.innerHTML=h;
     const sc2=host.querySelector('.gscroll');if(sc2&&keep){sc2.scrollTop=keep[0];sc2.scrollLeft=keep[1]}
     bind(vc,ac,pr,rows);
+    if(cfg.after)cfg.after(host,view);
   }
   function skel(){return `<div class="gscroll" style="padding:14px;display:flex;flex-direction:column;gap:14px">${Array.from({length:6},(_,i)=>`<div style="display:flex;gap:16px">${[30,18,14,16,12].map(w=>`<div class="skel" style="width:${w+(i*7)%9}%"></div>`).join('')}</div>`).join('')}</div>`}
   function emptyHtml(any){
@@ -120,7 +122,7 @@ function grid(host,cfg){
       h+=`<th data-k="${c.key}" draggable="true" class="${c.num?'num':''}" aria-sort="${so>0?'ascending':so<0?'descending':'none'}"><div class="thc"><button class="th-sort ${so?'on':''}" data-sort="${c.key}" title="Сортировать: ${esc(c.label)}"><span>${esc(c.label)}</span>${so?ic(so>0?'up':'dn','sm'):''}</button>${c.nofilter?'':`<button class="th-f ${fa?'on':''}" data-filt="${c.key}" aria-label="Фильтр: ${esc(c.label)}" title="Фильтр">${ic('filter','sm')}</button>`}</div><span class="resz" data-rz="${c.key}" title="Ширина столбца"></span></th>`});
     if(cfg.actions)h+=`<th class="actc"></th>`;
     h+=`</tr></thead><tbody>`;
-    const rowTr=r=>{const id=rid(r);return `<tr data-id="${esc(id)}" tabindex="0" class="${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}">`+(selCol?`<td class="selc"><input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать строку"></td>`:'')+vc.map(c=>`<td class="${c.num?'num':''} ${c.cls||''}" title="${esc(colTxt(c,r))}">${c.html?c.html(r):esc(colTxt(c,r))}</td>`).join('')+(cfg.actions?`<td class="actc"><button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button></td>`:'')+`</tr>`};
+    const rowTr=r=>{const id=rid(r);return `<tr data-id="${esc(id)}" tabindex="0" class="${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}">`+(selCol?`<td class="selc"><input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать строку"></td>`:'')+vc.map(c=>`<td class="${c.num?'num':''} ${c.cls||''}" title="${esc(colTxt(c,r))}"${c.td?' '+c.td(r):''}>${c.html?c.html(r):esc(colTxt(c,r))}</td>`).join('')+(cfg.actions?`<td class="actc"><button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button></td>`:'')+`</tr>`};
     let span=0;while(span<vc.length&&!NUMT.includes(vc[span].type))span++;span=Math.max(1,span);
     const grpTr=gr=>{const open=!s.closed.has(gr.path);return `<tr class="g-row lv${gr.lv}">${selCol?'<td></td>':''}<td colspan="${span}" class="g-l"><button class="g-tg" data-g="${esc(gr.path)}" aria-expanded="${open}" style="padding-left:${gr.lv*22}px">${ic(open?'down':'right','sm')}<b>${esc(gr.label)}</b><span class="g-c">${gr.rows.length}</span></button></td>${vc.slice(span).map(c=>{const how=NUMT.includes(c.type)&&aggOf(s,c);if(!how)return '<td></td>';return `<td class="num g-a" title="${AGG_L[how]}: ${esc(c.label)}">${aggTxt(c,how,aggVal(c,how,gr.rows))}</td>`}).join('')}${cfg.actions?'<td></td>':''}</tr>`};
     const walk=arr=>arr.map(gr=>grpTr(gr)+(s.closed.has(gr.path)?'':gr.sub?walk(gr.sub):gr.rows.map(rowTr).join(''))).join('');
@@ -238,7 +240,7 @@ function grid(host,cfg){
         if(a==='emptyadd')cfg.empty.add();
         if(a==='fe'){const x=g.fe.btns.filter(Boolean)[+b.dataset.i];x&&x[2]()}
         return}
-      if(t.closest('a,button,input,select,label,textarea'))return;
+      if(t.closest('a,button,input,select,label,textarea,td[data-sr]'))return;
       const row=t.closest('[data-id]');if(row&&!row.dataset.lp&&cfg.open)cfg.open(byId[row.dataset.id]);if(row)delete row.dataset.lp;
     };
     host.onchange=e=>{const t=e.target;

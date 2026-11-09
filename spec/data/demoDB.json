@@ -932,7 +932,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -1093,7 +1093,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -1340,7 +1340,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -1466,7 +1466,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -1581,7 +1581,7 @@
     "employees"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -1726,7 +1726,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -1907,7 +1907,7 @@
     "employees"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -2011,14 +2011,12 @@
     "employees"
    ],
    "sf": {
-    "cashless": false,
+    "pay": "mixed",
     "registry": true,
     "confirmed": true,
     "gov": false
    },
-   "sfT": "spino",
-   "sfMan": true,
-   "sfWhy": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными"
+   "sfT": "spino"
   },
   {
    "id": 11,
@@ -2130,7 +2128,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -2333,7 +2331,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -2605,8 +2603,8 @@
     "statSample"
    ],
    "sf": {
-    "cashless": false,
-    "registry": true,
+    "pay": "card",
+    "registry": false,
     "confirmed": true,
     "gov": false
    },
@@ -2756,7 +2754,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -2874,7 +2872,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -2990,7 +2988,7 @@
     "employees"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "confirmed": true,
     "gov": false
    }
@@ -3172,7 +3170,7 @@
     "employees"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -3316,7 +3314,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -3465,7 +3463,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": false,
     "gov": false
@@ -3596,7 +3594,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -3743,7 +3741,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -3852,7 +3850,7 @@
     "employees"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -3967,7 +3965,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -4165,7 +4163,7 @@
     "employees"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -4280,7 +4278,7 @@
     "statSample"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -4396,7 +4394,7 @@
     "foreignPayments"
    ],
    "sf": {
-    "cashless": true,
+    "pay": "card",
     "registry": true,
     "confirmed": true,
     "gov": false
@@ -41691,6 +41689,7 @@
    "type": "som",
    "desc": "Выручка за месяц без НДС по данным учёта (оборот из декларации или книги продаж).",
    "main": "sum",
+   "tax": "rev",
    "scope": "all",
    "cps": [],
    "req": true,
@@ -41714,6 +41713,7 @@
    "type": "int",
    "desc": "Численность на последний день месяца по штатному расписанию или отчёту в Соцфонд.",
    "main": "avg",
+   "tax": "emp",
    "scope": "all",
    "cps": [],
    "req": true,
@@ -41735,6 +41735,7 @@
    "type": "som",
    "desc": "Начисленная зарплата за месяц до удержаний.",
    "main": "sum",
+   "tax": "fot",
    "scope": "all",
    "cps": [],
    "req": false,

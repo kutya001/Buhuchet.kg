@@ -1,0 +1,60 @@
+/* Таблица ввода «как в Excel» («Показатели»): выделение диапазона, ячейка в правке, строка состояния; вкладка «Ввод по месяцам»; итоги «Ввода за месяц»; расчёт налогов по показателям */
+.ex{position:relative}
+.ex-kb{position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none;resize:none;border:0;padding:0;margin:0;overflow:hidden}
+.ex td[data-sr]{cursor:cell;user-select:none;-webkit-user-select:none;min-width:96px}
+.ex td[data-sr].ex-s{background:color-mix(in srgb,var(--b-blue) 17%,var(--pane))}
+.ex td[data-sr].ex-a{box-shadow:inset 0 0 0 2px var(--b-blue)}
+.ex td[data-sr].ex-e{padding:0;box-shadow:inset 0 0 0 2px var(--b-blue);background:var(--pane)}
+.ex-in{display:block;width:100%;min-width:0;min-height:31px;border:0;outline:none;background:transparent;font:inherit;text-align:right;padding:6px 10px;font-variant-numeric:tabular-nums;color:var(--text)}
+.ex [data-exc],.ex [data-exr]{cursor:pointer}
+.ex thead [data-exc]:hover{color:var(--b-blue)}
+.ex td[data-sr].kno{cursor:not-allowed}
+.ex td[data-sr].ro{color:var(--muted)}
+.ex-ph{font-size:11.5px}
+.ex-stat{display:flex;flex-wrap:wrap;gap:3px 14px;align-items:center;min-height:30px;padding:4px 10px;font-size:12.5px;color:var(--muted);background:var(--pane-alt);border:1px solid var(--border);border-radius:var(--r-m);margin:8px 0}
+.ex-stat b{color:var(--text);font-variant-numeric:tabular-nums}
+.ex-stat kbd{font:600 11px var(--font-mono);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:0 4px;background:var(--pane);color:var(--text)}
+/* «Ввод за месяц»: строка итогов, в каждом столбце свой итог на выбор */
+.kt tfoot .ktot-r td,.kt tfoot .ktot-r th{vertical-align:top}
+.ktf{display:inline-flex;align-items:center;gap:2px;border:0;background:none;padding:0;font:inherit;font-size:11.5px;font-weight:500;color:var(--link);cursor:pointer}
+.ktf:hover{text-decoration:underline}.ktf .ic{width:12px;height:12px}
+.ktf-v{display:block;font-variant-numeric:tabular-nums}
+.ktf-v.off{color:var(--faint);font-weight:450}
+/* «Ввод по месяцам»: ИНН, контрагент и показатель закреплены слева, строки одного контрагента — одной группой */
+.kg-f{gap:8px 10px;align-items:center;margin:8px 0}
+.kg-t .kt-inn,.kg-t .kt-cp2,.kg-t .kt-ind{position:sticky;z-index:1;overflow:hidden;text-overflow:ellipsis}
+.kg-t .kt-inn{left:0;width:122px;min-width:122px;max-width:122px}
+.kg-t .kt-cp2{left:122px;width:220px;min-width:220px;max-width:220px}
+.kg-t .kt-ind{left:342px;width:190px;min-width:190px;max-width:190px;box-shadow:inset -1px 0 0 var(--border-strong)}
+.kg-t thead .kt-inn,.kg-t thead .kt-cp2,.kg-t thead .kt-ind{z-index:3}
+.kg-t td.kt-inn,.kg-t td.kt-cp2,.kg-t td.kt-ind{background:var(--pane-alt)}
+.kg-t tr.rep td.kt-inn,.kg-t tr.rep td.kt-cp2{color:var(--faint)}
+.kg-t tr.rep td.kt-cp2 .linkbtn{color:var(--faint);font-weight:450}
+.kg-t tr.first td{border-top:1px solid var(--border-strong)}
+.kg-t td.kt-ind small{color:var(--faint);margin-left:4px}
+.kg-t .kg-cpm{display:none}
+.kg-t td.kg-tot,.kg-t th.kg-tot{background:var(--pane-alt);border-left:1px solid var(--border-strong)}
+.kg-t td.kg-tot small{margin-left:4px;font-size:10.5px;color:var(--faint);font-weight:450}
+.kg-pop{width:min(360px,calc(100vw - 16px));padding:8px}
+.kg-pop .fl-list{max-height:300px}
+@media (max-width:767px){
+  .kg-t .kt-inn,.kg-t .kt-cp2{display:none}
+  .kg-t .kt-ind{left:0;width:140px;min-width:140px;max-width:140px;white-space:normal;font-size:12.5px;line-height:1.3}
+  .kg-t .kg-cpm{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;margin-bottom:2px}
+  .ex td[data-sr]{min-width:84px}
+  .ex .kt .kt-cp{min-width:112px;max-width:140px;white-space:normal}
+  .ex .kt .kt-cp .linkbtn{text-align:left}
+  .kt-m thead th small{white-space:normal}
+}
+/* Расчёт налогов по показателям: окно «Сумма к уплате» и «Отметить сданным» */
+.ktx{border:1px solid var(--border);border-radius:var(--r-m);padding:10px 12px;background:var(--pane-alt)}
+.ktx-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.ktx-t{width:100%}
+.ktx-t th,.ktx-t td{white-space:nowrap}
+.ktx-t .ktx-in{width:110px;text-align:right;min-height:30px;padding:3px 8px;margin-left:auto}
+.ktx-t td.emp .ktx-in{background:color-mix(in srgb,var(--b-yellow) 16%,var(--pane));border-color:color-mix(in srgb,var(--b-yellow) 45%,var(--border))}
+.ktx-res{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.ktx-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ktx-row .grow{min-width:200px}
+.ktx-row .grow>.hint{display:block}
+.ktx-row b{font-variant-numeric:tabular-nums}

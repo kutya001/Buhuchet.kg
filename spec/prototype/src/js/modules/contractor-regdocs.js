@@ -14,7 +14,7 @@ function regRead(el,p){const r={};REG_F.forEach(([k,id])=>{const v=val(el,`${p}-
 function regCheck(el,p){const r=regRead(el,p);return [setErr(el,`${p}-okpo`,r.okpo&&!/^\d{8}$/.test(r.okpo)?'Код ОКПО — 8 цифр':''),setErr(el,`${p}-mail`,r.email&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email)?'Проверьте адрес почты':'')].every(Boolean)}
 // Обычный шрифт и обычная ширина у всех полей (как на стенде, п. 8 отчёта «Сделано не как в прототипе»)
 function regKvBox(c){const r=c.reg||{};const v=(k,x)=>x==null||x===''?'<span class="faint">—</span>':k==='regDate'||k==='reRegDate'?fmtD(x):k==='foreign'?(x==='yes'?'Есть':'Нет'):esc(String(x));
-  return `<div class="box"><h3>Регистрационные данные${(c.regFiles||[]).length?` <span class="faint" style="font-weight:500;font-size:12px">из свидетельства и выписки</span>`:''}</h3>${regEmpty(r)?`<span class="faint">Не заполнены. Их можно указать в «Изменить» или при создании «Из свидетельства и выписки».</span>`:
+  return `<div class="box"><h3>Регистрационные данные${(c.regFiles||[]).length?` <span class="faint" style="font-weight:500;font-size:12px">${c.form==='ИП'?'из свидетельства ИП':'из свидетельства и выписки'}</span>`:''}</h3>${regEmpty(r)?`<span class="faint">Не заполнены. Их можно указать в «Изменить» или при создании «Из свидетельства и выписки».</span>`:
     `<div class="kv">${REG_F.map(([k,,l])=>`<div><span class="k">${l}</span><span class="v">${v(k,r[k])}</span></div>`).join('')}</div>`}</div>`}
 
 /* ═════════════ Окно загрузки документов ═════════════ */
@@ -27,12 +27,12 @@ function regDocsDlg(){const st={files:[],err:'',busy:false};
     st.files.push({file:f,state:!isPdf(f)||f.size>RD_MAX?'bad':'new',msg:!isPdf(f)||f.size>RD_MAX?'Загрузите PDF до 10 МБ':''})});st.err='';m.draw()};
   const row=(x,i)=>{const k=x.doc&&x.doc.kind;const lbl=x.state==='ok'?`<span class="pill green sm">${ic('check','sm')}${RD_DOC[k]}${x.doc.issued?' от '+fmtD(x.doc.issued):''}</span>`:x.state==='bad'?`<span class="pill red sm">${ic('alert','sm')}Не распознан</span>`:x.state==='busy'?'<span class="pill faint sm">Читается…</span>':'<span class="pill faint sm">Ещё не распознан</span>';
     return `<div class="li" style="cursor:default">${ic('file')}<div class="grow"><div class="t1">${esc(x.file.name)}</div><div class="t2">${fmtSize(x.file.size)}${x.msg?` · <span style="color:var(--red)">${esc(x.msg)}</span>`:''}</div></div>${lbl}<button type="button" class="icon-btn sm" data-rdel="${i}" aria-label="Убрать ${esc(x.file.name)}" title="Убрать файл">${ic('trash','sm')}</button></div>`};
-  openModal({form:true,size:'mid',render:m=>({title:`Новый контрагент из свидетельства и выписки ${rdBadge}`,sub:'Загрузите один или оба документа юрлица из Минюста КР — в любом порядке',
+  openModal({form:true,size:'mid',render:m=>({title:`Новый контрагент из свидетельства и выписки ${rdBadge}`,sub:'Документы юрлица из Минюста КР (один или оба, в любом порядке) или свидетельство ИП из ГНС',
     body:`${RD_BETA}
-    <label class="drop" id="rd-drop" tabindex="0">${ic('upload')}<span><b>Перетащите PDF сюда</b> или нажмите, чтобы выбрать файл</span><span class="hint">Свидетельство (справка) о государственной регистрации и выписка из Единого государственного реестра юридических лиц · PDF до 10 МБ · вид документа определяется по содержимому</span><input type="file" id="rd-f" accept="application/pdf,.pdf" multiple hidden></label>
+    <label class="drop" id="rd-drop" tabindex="0">${ic('upload')}<span><b>Перетащите PDF сюда</b> или нажмите, чтобы выбрать файл</span><span class="hint">Свидетельство (справка) о государственной регистрации и выписка из Единого государственного реестра юридических лиц или свидетельство о регистрации ИП из ГНС · PDF до 10 МБ · вид документа определяется по содержимому</span><input type="file" id="rd-f" accept="application/pdf,.pdf" multiple hidden></label>
     ${st.files.length?`<div class="list" style="margin-top:10px">${st.files.map(row).join('')}</div>`:''}
     ${st.err?`<div class="note bad" style="margin-top:10px">${ic('alert')}<span>${st.err}</span></div>`:''}
-    <div class="hint" style="margin-top:10px">Распознаётся текст внутри PDF, скачанного с сайта Минюста. Скан или фото документа в прототипе не читается. Файлы обрабатываются в браузере и никуда не отправляются. ИП и филиалы пока не поддерживаются.</div>`,
+    <div class="hint" style="margin-top:10px">Распознаётся текст внутри электронного PDF Минюста или ГНС. Скан или фото документа в прототипе не читается. Файлы обрабатываются в браузере и никуда не отправляются. Филиалы пока не поддерживаются.</div>`,
     foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn" id="rd-man">Заполнить вручную</button><button class="btn cta" id="rd-go" ${st.busy||!st.files.some(x=>x.state!=='bad')?'disabled':''}>${st.busy?'Распознаётся…':'Распознать'}</button>`,
     mount(el){const dz=$('#rd-drop',el),fi=$('#rd-f',el);fi.onchange=e=>addFiles(e.target.files,m);
       dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
@@ -50,14 +50,17 @@ async function rdRun(st,m){if(st.busy)return;st.busy=true;st.err='';const todo=s
     if(chars<40){x.state='bad';x.msg='В PDF нет текста (скан или фото). Не удалось прочитать документ. Заполните форму вручную';continue}
     const d=rdExtract(r);const o=d.kind?rdCpFields(d):{};
     if(!d.kind){x.state='bad';x.msg='Документ не распознан как свидетельство или выписка';continue}
-    if(o.ip||o.branch){x.state='bad';x.msg='Документ не распознан: для ИП и филиалов создание по документам пока не поддерживается, заполните форму вручную';continue}
+    if(d.kind==='ipsv'&&(!o.inn||!o.head)){x.state='bad';x.msg='Не удалось прочитать документ. Заполните форму вручную';continue}
+    if(o.branch){x.state='bad';x.msg='Документ не распознан: для филиалов создание по документам пока не поддерживается, заполните форму вручную';continue}
+    if(o.ip){x.state='bad';x.msg='Документ не распознан: для ИП загрузите свидетельство о регистрации ИП из ГНС или заполните форму вручную';continue}
     x.doc=d;x.state='ok';x.msg=''}
   st.busy=false;
   const ok=st.files.filter(x=>x.state==='ok');const kinds=ok.map(x=>x.doc.kind);
-  if(kinds.length>1&&kinds[0]===kinds[1]){st.err=`Загружены два документа одного вида (${RD_DOC[kinds[0]].toLowerCase()}): уберите лишний файл.`;m.draw();return}
+  if(kinds.length>1&&kinds[0]===kinds[1]){st.err=`Загружены два документа одного вида (${RD_DOC[kinds[0]].replace(/^\S/,s=>s.toLowerCase())}): уберите лишний файл.`;m.draw();return}
   if(!ok.length){st.err=st.files.length?'Ни один документ не распознан. Можно заполнить форму вручную — загруженные файлы прикрепятся к контрагенту.':'';m.draw();return}
   const res=rdToCp(ok.map(x=>x.doc));
   if(res.err==='diff'){st.err='Документы относятся к разным организациям: ИНН не совпадает. Уберите лишний файл.';m.draw();return}
+  if(res.err==='mix'){st.err='Документы относятся к разным организациям: свидетельство ИП загружено вместе с документом юрлица. Уберите лишний файл.';m.draw();return}
   m.draw();
   const inn=res.v.inn;const dup=inn&&CPS.find(c=>c.inn===inn);
   const go=()=>{m.close();addCpDlg('regular',{res,files:st.files.filter(x=>x.state==='ok').map(x=>x.file.name),docs:ok.map(x=>x.doc)})};
@@ -66,6 +69,7 @@ async function rdRun(st,m){if(st.busy)return;st.busy=true;st.err='';const todo=s
   go()}
 
 /* ═════════════ Форма добавления, заполненная из документов ═════════════ */
+const rdIpDocs=pre=>!!(pre&&(pre.docs||[]).some(d=>d.kind==='ipsv'));
 /* Поле формы ↔ реквизит: подпись источника видна, пока значение в поле равно значению из документа */
 const RD_MAP={name:'nc-name',inn:'nc-inn',phone:'nc-ph',head:'nc-head',form:'nc-form',ugns:'nc-ugns',full:'nc-rfull',regNo:'nc-rno',okpo:'nc-okpo',addr:'nc-addr',email:'nc-mail',regDate:'nc-rdate',reRegDate:'nc-rre',founders:'nc-fnd',foreign:'nc-frn'};
 const RD_TXT={name:'Название',full:'Полное наименование',inn:'ИНН',regNo:'Регистрационный номер',okpo:'Код ОКПО',form:'Форма собственности',phone:'Телефон',email:'Электронная почта',head:'Руководитель',regDate:'Дата первичной регистрации',reRegDate:'Дата перерегистрации',founders:'Количество учредителей',foreign:'Иностранное участие'};
@@ -73,12 +77,12 @@ const RD_TXT={name:'Название',full:'Полное наименовани�
 function rdPrefill(st,pre){const v=pre.res.v;st.form=v.form||'';st.gked=pre.res.gk&&pre.res.gk.code||'';st.gked2=(pre.res.gk&&pre.res.gk.more)||[];
   st.d={name:v.name||'',inn:v.inn||'',ph:v.phone||null,head:v.head||'',ugns:pre.res.ugns||'',start:TODAY};
   st.reg={full:v.full||'',regNo:v.regNo||'',okpo:v.okpo||'',addr:v.addr||'',email:v.email||'',regDate:v.regDate||'',reRegDate:v.reRegDate||'',founders:v.founders??'',foreign:v.foreign||''};
-  st.rd={v:Object.assign({},v,{ugns:pre.res.ugns||'',gked:st.gked}),src:Object.assign({},pre.res.src,pre.res.ugns?{ugns:'addr'}:{},st.gked?{gked:pre.res.gk.src}:{}),alt:pre.res.alt,startSet:false}}
+  st.rd={v:Object.assign({},v,{ugns:pre.res.ugns||'',gked:st.gked}),src:Object.assign({},pre.res.src,pre.res.ugns?{ugns:pre.res.ugnsSrc||'addr'}:{},st.gked?{gked:pre.res.gk.src}:{}),alt:pre.res.alt,startSet:false}}
 const rdFmt=(k,x)=>k==='phone'?fmtPhone(x):k==='regDate'||k==='reRegDate'?fmtD(x):k==='foreign'?(x==='yes'?'есть':'нет'):String(x);
 // Сводка над формой, расхождения и подсказки ГКЭД
 function rdHead(st,pre){const r=pre.res;const docs=pre.docs.map(d=>`${RD_DOC[d.kind]}${d.issued?' от '+fmtD(d.issued):''}`).join(' и ');
   const filled=Object.keys(RD_MAP).filter(k=>st.rd.v[k]!=null&&st.rd.v[k]!=='').length+(st.rd.v.gked?1:0);
-  const check=Object.keys(r.alt).length+(r.ugns?1:0)+(r.gk&&!r.gk.code?1:0);
+  const check=Object.keys(r.alt).length+(r.ugns&&r.ugnsSrc!=='ipsv'?1:0)+(r.gk&&!r.gk.code?1:0);
   const miss=['name','inn','phone','form'].filter(k=>!st.rd.v[k]).map(k=>RD_TXT[k]);if(!st.rd.v.gked)miss.push('Основной вид деятельности (ГКЭД)');
   const warn=[...Object.keys(r.alt).map(k=>`документы расходятся: ${RD_TXT[k].toLowerCase()}`),...(r.phoneBad?[`телефон в документе неполный (${r.phoneBad})`]:[])];
   return `${RD_BETA}

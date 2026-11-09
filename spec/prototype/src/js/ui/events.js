@@ -13,6 +13,13 @@ document.addEventListener('click',e=>{
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('[data-demo-fail]')){FAIL_NEXT=true;closeSheet();renderPage();toast('Демо: список покажет состояние ошибки','alert')}});
 document.addEventListener('change',e=>{if(e.target.id==='demo-user'||e.target.id==='demo-user-m'){switchUser(e.target.value)}if(e.target.hasAttribute('data-demo-data')){const v=e.target.value;e.target.value=DATA_MODE;closeSheet();if(v===DATA_MODE)return;confirmDlg({title:v==='empty'?'Перейти на пустую организацию?':'Включить демо-данные?',text:`Рабочие данные (TemDB) будут созданы заново ${v==='empty'?'как организация сразу после регистрации':'из demoDB.json'}. Всё, что вы ввели и изменили, пропадёт; чтобы сохранить, сначала нажмите «Экспорт TemDB.json».`,ok:'Переключить',run:()=>setDataMode(v)})}});
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-db]');if(b){closeSheet();dbAct(b.dataset.db)}});
+// Кнопка-глаз в поле пароля: показать или скрыть; введённое и курсор остаются в поле, автозаполнение браузера не трогается
+document.addEventListener('mousedown',e=>{if(e.target.closest&&e.target.closest('[data-pw-eye]'))e.preventDefault()});
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-pw-eye]');if(!b)return;e.preventDefault();const x=document.getElementById(b.dataset.pwEye);if(!x)return;
+  const show=b.getAttribute('aria-pressed')!=='true',l=show?'Скрыть пароль':'Показать пароль';
+  if(x.tagName==='INPUT'){const a=document.activeElement===x,s0=x.selectionStart,s1=x.selectionEnd;x.type=show?'text':'password';if(a){x.focus();const k=()=>{try{x.setSelectionRange(s0,s1)}catch(_){}};k();setTimeout(k,0)}}
+  else x.textContent=show?x.dataset.pwv:'•'.repeat(Math.max(8,(x.dataset.pwv||'').length));
+  b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',l);b.title=l;b.innerHTML=ic(show?'eyeoff':'eye','sm')});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){if(PUB.open){pubClose();return}if(POP){closePop();return}if(MODALS.length){MODALS[MODALS.length-1].close();return}if($('#sheet').classList.contains('open')){closeSheet();return}}
   if(e.key==='/'&&!/input|textarea|select/i.test(document.activeElement.tagName)&&!MODALS.length){e.preventDefault();$('#topbar').classList.add('searching');$('#q').focus()}

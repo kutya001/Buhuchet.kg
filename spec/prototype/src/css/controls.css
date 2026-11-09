@@ -27,6 +27,17 @@
 .inp{width:100%;min-height:35px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--field);color:var(--text);font-size:13.5px;outline:none;box-shadow:inset 0 1px 2px rgba(0,0,0,.04);transition:border-color .15s,box-shadow .15s}
 .inp:focus{border-color:var(--border-strong);box-shadow:0 0 0 3px var(--sel)}
 textarea.inp{min-height:90px;resize:vertical;line-height:1.5}
+/* Поле пароля с кнопкой-глазом (показать / скрыть) */
+.pw-w{position:relative;display:block}
+.pw-w .inp{padding-right:42px}
+.pw-w .inp::-ms-reveal,.pw-w .inp::-ms-clear{display:none}
+.pw-eye{position:absolute;top:0;right:0;bottom:0;width:40px;display:grid;place-items:center;border:0;background:none;color:var(--muted);cursor:pointer;border-radius:0 var(--r-m) var(--r-m) 0;padding:0}
+.pw-eye:hover{color:var(--text)}
+.pw-eye:focus-visible{outline:2px solid var(--b-blue);outline-offset:-2px}
+.pw-ro{display:inline-flex;align-items:center;gap:2px;vertical-align:middle}
+.pw-ro .pw-txt{font-size:16px}
+.pw-ro .pw-eye{position:static;width:36px;height:32px;border-radius:var(--r-s)}
+@media (pointer:coarse){.pw-w .inp{padding-right:48px;min-height:44px}.pw-eye{width:44px}.pw-ro .pw-eye{width:44px;height:44px}}
 select.inp{cursor:pointer}
 .inp[readonly]{background:var(--pane-alt)}
 .phone{display:flex;gap:6px}

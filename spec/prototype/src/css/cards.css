@@ -39,7 +39,7 @@
 .note .ic{margin-top:1px}
 
 /* Бета-плашка, загрузка PDF, подписи источника у полей формы, заполненной из документов */
-.note.beta{background:var(--yellow-bg);border-color:transparent;color:var(--yellow)}
+.note.yellow,.note.beta{background:var(--yellow-bg);border-color:transparent;color:var(--yellow)}
 .note.beta,.note+.note,.note+.form{margin-bottom:10px}
 .drop{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;padding:22px 16px;border:1.5px dashed var(--border);border-radius:var(--r-m);background:var(--pane-alt);cursor:pointer;color:var(--muted)}
 .drop:hover,.drop:focus-visible,.drop.over{border-color:var(--accent,var(--blue));color:var(--text,inherit)}
