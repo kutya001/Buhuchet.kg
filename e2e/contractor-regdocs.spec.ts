@@ -177,6 +177,10 @@ test.describe('Этап 2: контрагент из свидетельства 
     await expect(form.locator('[data-rd-src="ipsv"]').first()).toHaveText('из свидетельства ИП');
     await expect(form.locator('[data-rd-src="addr"]')).toHaveCount(0);
 
+    // Телефона в свидетельстве ИП нет — «Заполните вручную», без него шаг 1 не пройти.
+    const phone = form.getByLabel('Телефон (звонок и WhatsApp)');
+    await expect(phone).toHaveValue('');
+    await phone.fill('505890076');
     if (isMobile) {
       await form.locator('[data-cf-step="3"]').click();
       await expect(form.locator('[data-cf]')).toHaveAttribute('data-step', '3');
