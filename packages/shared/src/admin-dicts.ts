@@ -127,6 +127,8 @@ export const AdminDictData = z.object({
   validUntil: IsoDate.nullable().optional(),
   verify: z.boolean().optional(),
   verifyNote: z.string().optional(),
+  /** У льготы: «Подсказка юрлицу при наличной зарплате» (ЛЬГ-29, прототип v82 `bn-cash`). */
+  cashHint: z.string().optional(),
   /** У льготы: виды отчётов, которые статус делает ненужными и добавляет, — в порядке каталога. */
   removes: z.array(z.string()).optional(),
   adds: z.array(z.string()).optional(),
@@ -329,6 +331,7 @@ export const AdminDictValueForm = z.object({
     .optional(),
   verify: z.boolean().optional(),
   verifyNote: text(300).optional(),
+  cashHint: text(DICT_NOTE_MAX).optional(),
   removes: z.array(z.string().min(1).max(80)).max(500).optional(),
   adds: z.array(z.string().min(1).max(80)).max(500).optional(),
   dueRules: z.array(BenefitDueRule).max(500).optional(),

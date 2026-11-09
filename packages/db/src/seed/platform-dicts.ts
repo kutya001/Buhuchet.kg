@@ -210,8 +210,8 @@ const BenefitSchema = z
     until: z.union([z.literal(''), z.iso.date()]),
     verify: z.boolean().default(false),
     verifyNote: z.string().default(''),
-    /** Подсказка о наличной зарплате (ЛЬГ-29, прототип v82): в базу её переносит правка v82. */
-    cashHint: z.string().optional(),
+    /** Подсказка юрлицу с наличной зарплатой (ЛЬГ-29, прототип v82). */
+    cashHint: z.string().default(''),
     gked: GkedRuleSchema.optional(),
     gkedMain: z.boolean().default(false),
     tax: z.string().default(''),
@@ -660,6 +660,7 @@ export function platformDictRows(refDB: unknown) {
       validUntil: blankToNull(b.until),
       verify: b.verify,
       verifyNote: b.verifyNote,
+      cashHint: b.cashHint,
       gked: b.gked ?? null,
       gkedMainOnly: b.gkedMain,
       taxCode: b.tax,

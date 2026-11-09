@@ -1,33 +1,43 @@
 'use client';
 
-import { SOCFUND_FLAGS, type SocfundFlag, type UiTextKey } from '@buhuchet/domain';
+import {
+  SOCFUND_FLAGS,
+  SOCFUND_PAYS,
+  type SocfundFlag,
+  type SocfundPay,
+  type UiTextKey,
+} from '@buhuchet/domain';
 import type { ContractorSocfundCheck, ContractorSocfundRequest } from '@buhuchet/shared';
 import { buttonClass, Field, Icon, inputClass, Note, Segments } from '@buhuchet/ui';
 import { useT } from '../l10n/provider';
 
 /*
  * Блок «Тариф Соцфонда» формы контрагента (ТЗ «Тариф страховых взносов в Соцфонд (СПиНО)»; прототип
- * modules/socfund-ui.js: sfFields, sfMount, sfValid): признаки «Да / Нет», выбор тарифа («Определить
+ * modules/socfund-ui.js: sfFields, sfMount, sfValid): «Выплата зарплаты» (на тариф не влияет, юрлицу с
+ * наличными — жёлтая подсказка; прототип v82), признаки «Да / Нет», выбор тарифа («Определить
  * автоматически» по условиям), что подходит по условиям и чего не хватает, «Сменить на …» и причина
  * ручного выбора. Тариф по набранным значениям считает сервер (`socfund-check`), форма показывает ответ.
  */
 
 /** Признаки и выбор тарифа в форме: `touched` — тариф менял пользователь (иначе выбор не трогали). */
 export interface SocfundDraft {
-  flags: Readonly<Record<SocfundFlag, boolean | null>>;
+  flags: Readonly<Record<SocfundFlag, boolean | null> & { pay: SocfundPay | null }>;
   tariff: string;
   touched: boolean;
   reason: string;
 }
 
 export const socfundDraftOf = (
-  flags: Partial<Record<SocfundFlag, boolean | null>> = {},
+  flags: Partial<Record<SocfundFlag, boolean | null> & { pay: SocfundPay | null }> = {},
   tariff = '',
 ): SocfundDraft => ({
-  flags: Object.fromEntries(SOCFUND_FLAGS.map((k) => [k, flags[k] ?? null])) as Record<
-    SocfundFlag,
-    boolean | null
-  >,
+  flags: {
+    pay: flags.pay ?? null,
+    ...(Object.fromEntries(SOCFUND_FLAGS.map((k) => [k, flags[k] ?? null])) as Record<
+      SocfundFlag,
+      boolean | null
+    >),
+  },
   tariff,
   touched: false,
   reason: '',
@@ -102,6 +112,40 @@ export function SocfundFields({
         <div className="flex flex-col gap-2" data-socfund="">
           <span className="text-[12px] text-muted">{t('cp.socfund.tip')}</span>
           <div className="flex flex-col rounded-md border border-line bg-pane-alt px-2.5 py-0.5">
+            <div
+              className="flex items-center gap-2.5 border-b border-line py-[7px] last:border-b-0"
+              data-sf-flag="pay"
+            >
+              <span className="grow text-[13px]">
+                {t('cp.socfund.pay')}
+                <span className="mt-px block text-[12px] text-muted">
+                  {t('cp.socfund.pay_hint')}
+                </span>
+              </span>
+              <select
+                id={`${idPrefix}-sfpay`}
+                className={`${inputClass()} w-auto max-w-full cursor-pointer`}
+                aria-label={t('cp.socfund.pay')}
+                disabled={disabled}
+                value={draft.flags.pay ?? ''}
+                onChange={(e) =>
+                  onChange({
+                    ...draft,
+                    flags: {
+                      ...draft.flags,
+                      pay: SOCFUND_PAYS.find((p) => p === e.target.value) ?? null,
+                    },
+                  })
+                }
+              >
+                <option value="">{t('cp.socfund.pay.none')}</option>
+                {SOCFUND_PAYS.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`cp.socfund.pay.${p}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
             {SOCFUND_FLAGS.map((k) => (
               <div
                 key={k}
@@ -129,6 +173,11 @@ export function SocfundFields({
               </div>
             ))}
           </div>
+          {check.cashHint ? (
+            <Note tone="beta">
+              <span data-sf-cash="">{check.cashHint}</span>
+            </Note>
+          ) : null}
           <select
             className={`${inputClass()} cursor-pointer`}
             aria-label={t('cp.socfund.title')}

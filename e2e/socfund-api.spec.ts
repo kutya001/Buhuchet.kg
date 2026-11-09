@@ -6,8 +6,8 @@ import { asOwner, assign, reportsOf } from './reports';
 // 2.11, подбор отчётов — 2.07), поэтому пункты 38 и 39 проверяются через API сайта под владельцем
 // демо-организации.
 
-const ALL_YES = { cashless: true, registry: true, confirmed: true, gov: false };
-const NO_FLAGS = { cashless: null, registry: null, confirmed: null, gov: null };
+const ALL_YES = { pay: 'card', registry: true, confirmed: true, gov: false };
+const NO_FLAGS = { pay: null, registry: null, confirmed: null, gov: null };
 
 /** Правильный ИНН, которого нет в демо-организации; свой у ПК и телефона. */
 const freshInn = () =>
@@ -165,7 +165,7 @@ test.describe('Этап 2: тариф Соцфонда', () => {
     expect(asked.items.map((r) => r.id)).toContain(cp.id);
     // У демо-организации под вопросом те же, что в прототипе.
     expect(asked.items.map((r) => r.name)).toEqual(
-      expect.arrayContaining(['ОсОО «Каракол Мед Сервис»', 'ОсОО «Нарын Жүн»', 'ОсОО «Укс»']),
+      expect.arrayContaining(['ОсОО «Нарын Жүн»', 'ОсОО «Укс»']),
     );
     expect(asked.items.every((r) => r.socfund?.ask)).toBe(true);
   });

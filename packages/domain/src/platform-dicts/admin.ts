@@ -194,6 +194,7 @@ export const ADMIN_DICT_META: Readonly<Record<AdminValueDict, AdminDictMeta>> = 
       'verify',
       'verifyNote',
       'gked',
+      'cashHint',
     ],
     required: ['gives'],
     links: ['removes', 'adds', 'offices'],

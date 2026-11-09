@@ -9,6 +9,7 @@ import {
   serviceState,
   SOCFUND_TARIFFS,
   socfundFlagsOf,
+  SOCFUND_PAYS,
   TARIFF_PERIODS,
   type HistoryValue,
   type ServicePeriod,
@@ -95,14 +96,10 @@ const DemoContractor = z.object({
   /** Подтверждение права на режим по ГКЭД (прототип gkEnOk). */
   gkOk: z.object({ by: z.string(), at: z.iso.date(), ask: z.string() }).optional(),
   /** Признаки для тарифа Соцфонда, тариф, выбран ли вручную и почему (задача 2.08). */
-  /**
-   * `pay` — «Выплата зарплаты» прототипа v82 (card/mixed/cash): пока поля нет в базе, «Только
-   * безналично» читается как прежний признак «Зарплата только безналично».
-   */
+  /** `pay` — «Выплата зарплаты» (прототип v82: card/mixed/cash), остальные — да или нет. */
   sf: z
-    .object({ pay: z.enum(['card', 'mixed', 'cash']).optional() })
+    .object({ pay: z.enum(SOCFUND_PAYS).optional() })
     .catchall(z.boolean())
-    .transform(({ pay, ...flags }) => (pay ? { ...flags, cashless: pay === 'card' } : flags))
     .default({}),
   sfT: z.enum(SOCFUND_TARIFFS).optional(),
   sfMan: z.boolean().default(false),

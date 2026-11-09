@@ -77,6 +77,7 @@ function formOf(x: AdminDictValue | null): BenefitValueFormInput {
     offices: d.offices ?? [],
     verify: d.verify ?? false,
     verifyNote: d.verifyNote ?? '',
+    cashHint: d.cashHint ?? '',
   };
 }
 
@@ -95,6 +96,9 @@ const LINK_TEXT: Readonly<Record<string, UiTextKey>> = {
   adds: 'pdicts.err.bad_benefit_types',
   offices: 'pdicts.err.bad_offices',
 };
+
+/** Статус СПиНО: у него «Подсказка юрлицу при наличной зарплате» (прототип v82 benefitDlg). */
+const SPINO_BENEFIT = 'ЛЬГ-29';
 
 /** «Кто может применять» в порядке прототипа: организации и ИП, только организации, только ИП. */
 const PAYERS: readonly PayerKind[] = ['all', 'org', 'ip'];
@@ -226,7 +230,7 @@ export function BenefitDialog({
   const formId = `${id}-form`;
 
   const textarea = (
-    name: 'gives' | 'conditions' | 'confirmation',
+    name: 'gives' | 'conditions' | 'confirmation' | 'cashHint',
     label: string,
     hint?: string,
     required = false,
@@ -513,6 +517,14 @@ export function BenefitDialog({
             t('pdicts.benefit.conditions_hint'),
           )}
           {textarea('confirmation', t('pdicts.benefit.confirmation'))}
+          {/* Прототип v82 (`bn-cash`): подсказка тарифа Соцфонда — у ЛЬГ-29 или у статуса с подсказкой. */}
+          {current?.code === SPINO_BENEFIT || before?.cashHint
+            ? textarea(
+                'cashHint',
+                t('pdicts.benefit.cash_hint'),
+                t('pdicts.benefit.cash_hint_hint'),
+              )
+            : null}
           {input('combines', t('pdicts.col.combines'))}
           {input('term', t('pdicts.benefit.term'), false, t('pdicts.benefit.term_ph'))}
           <Field

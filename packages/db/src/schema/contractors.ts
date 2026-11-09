@@ -8,6 +8,7 @@ import {
   PAYS_TO,
   SERVICE_STATUSES,
   SOCFUND_FLAGS,
+  SOCFUND_PAYS,
   SOCFUND_TARIFFS,
   TARIFF_PERIODS,
   type ContractorGkedConfirmation,
@@ -134,10 +135,13 @@ export const contractors = pgTable(
     ),
     check(
       'contractors_socfund_flags_check',
-      sql`jsonb_typeof(${t.socfundFlags}) = 'object' and ${t.socfundFlags} - ${sql.raw(jsonKeys(SOCFUND_FLAGS))} = '{}'::jsonb and ${sql.raw(
+      // Признаки «да / нет» и «Выплата зарплаты» (прототип v82 sf.pay) — одна из постоянных
+      sql`jsonb_typeof(${t.socfundFlags}) = 'object' and ${t.socfundFlags} - ${sql.raw(jsonKeys([...SOCFUND_FLAGS, 'pay']))} = '{}'::jsonb and ${sql.raw(
         SOCFUND_FLAGS.map(
           (k) => `coalesce(jsonb_typeof(socfund_flags -> '${k}'), 'boolean') = 'boolean'`,
         ).join(' and '),
+      )} and ${sql.raw(
+        `coalesce(jsonb_typeof(socfund_flags -> 'pay'), 'string') = 'string' and coalesce(socfund_flags ->> 'pay', '${SOCFUND_PAYS[0]}') in (${SOCFUND_PAYS.map((p) => `'${p}'`).join(', ')})`,
       )}`,
     ),
     check(

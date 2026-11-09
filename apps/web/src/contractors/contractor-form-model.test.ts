@@ -200,7 +200,7 @@ describe('запрос создания', () => {
       gkedConfirm: true,
     });
     expect(r.socfund).toEqual({
-      flags: { cashless: null, registry: null, confirmed: null, gov: null },
+      flags: { pay: null, registry: null, confirmed: null, gov: null },
       reason: '',
     });
     expect(r).not.toHaveProperty('socfundConfirm');
@@ -254,7 +254,7 @@ describe('«Изменить»', () => {
       { code: 'ЛЬГ-01', name: 'Льгота', validFrom: null, validTo: '2026-12-31', byOffice: false },
     ],
     bases: [{ code: 'ОСН-01', name: 'Есть наёмные сотрудники' }],
-    socfund: { flags: { cashless: true }, tariff: { id: 'pvt', manual: true, reason: 'Резидент' } },
+    socfund: { flags: { pay: 'mixed' }, tariff: { id: 'pvt', manual: true, reason: 'Резидент' } },
     head: '',
     contact: '',
     contractNo: '',
@@ -276,7 +276,7 @@ describe('«Изменить»', () => {
       benefits: [{ code: 'ЛЬГ-01', validFrom: null, validTo: '2026-12-31' }],
       socfund: { tariff: 'pvt', reason: 'Резидент', touched: false },
     });
-    expect(before.socfund.flags.cashless).toBe(true);
+    expect(before.socfund.flags.pay).toBe('mixed');
     expect(before.registration.okpo).toBe('12345678');
   });
 

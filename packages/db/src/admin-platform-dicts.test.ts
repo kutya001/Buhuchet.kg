@@ -642,6 +642,7 @@ describe.skipIf(!databaseAvailable())(
         adds: [],
         offices: ['ugns-large'],
         dueRules: [rule({ payDay: 20, payAfter: 1 })],
+        cashHint: '  Подсказка юрлицу  ',
       });
       expect(created.ok).toBe(true);
       if (!created.ok) return;
@@ -656,6 +657,8 @@ describe.skipIf(!databaseAvailable())(
         adds: [],
         offices: ['ugns-large'],
         dueRules: [rule({ payDay: 20, payAfter: 1 })],
+        // Прототип v82 `bn-cash`: подсказка о наличной зарплате — без пробелов по краям.
+        cashHint: 'Подсказка юрлицу',
       });
 
       // «Меняет сроки» изменены — в истории число пересчитанных отчётов (его считает вызывающий до

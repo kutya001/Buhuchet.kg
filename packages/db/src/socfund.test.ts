@@ -30,7 +30,7 @@ const query = (patch: Partial<ListQuery> = {}): ListQuery =>
 const violates = (constraint: string) =>
   expect.objectContaining({ cause: expect.objectContaining({ constraint_name: constraint }) });
 
-const ALL_YES = { cashless: true, registry: true, confirmed: true, gov: false };
+const ALL_YES = { pay: 'card' as const, registry: true, confirmed: true, gov: false };
 
 let inn = 100;
 const fields = (patch: Partial<ContractorFields> = {}): ContractorFields => ({
@@ -128,6 +128,8 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: данные
       ['ЛЬГ-02', 'Резидент ПВТ'],
     ]);
     expect(dict.reportTypes).toEqual(['soc']);
+    // Прототип v82: подсказка юрлицу о наличной зарплате — из ЛЬГ-29.
+    expect(dict.cashHint).toMatch(/^Юрлицо должно платить зарплату безналично/);
     expect(dict.gkedNames.get('64.19.1')).toBeTruthy();
     expect([...dict.index.keys()]).toEqual(
       expect.arrayContaining(['47.11.0', '47', 'G', '64.19.1']),
@@ -160,9 +162,15 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: данные
     expect(await inA((tx) => activeReportTypes(tx, id))).toEqual([]);
 
     const bad: [Partial<ContractorFields>, string][] = [
-      [{ socfundFlags: { cashless: 'да' } as never }, 'contractors_socfund_flags_check'],
+      [{ socfundFlags: { registry: 'да' } as never }, 'contractors_socfund_flags_check'],
       [{ socfundFlags: { salary: true } as never }, 'contractors_socfund_flags_check'],
-      [{ socfundFlags: { cashless: null } as never }, 'contractors_socfund_flags_check'],
+      [{ socfundFlags: { registry: null } as never }, 'contractors_socfund_flags_check'],
+      // Прежний признак «Зарплата только безналично» — больше не признак (прототип v82).
+      [{ socfundFlags: { cashless: true } as never }, 'contractors_socfund_flags_check'],
+      // «Выплата зарплаты» — только card, mixed или cash.
+      [{ socfundFlags: { pay: 'card2' } as never }, 'contractors_socfund_flags_check'],
+      [{ socfundFlags: { pay: true } as never }, 'contractors_socfund_flags_check'],
+      [{ socfundFlags: { pay: null } as never }, 'contractors_socfund_flags_check'],
       [{ socfundTariff: { id: 'other' } as never }, 'contractors_socfund_tariff_check'],
       // Без ключа id или manual — тоже нельзя.
       [{ socfundTariff: { id: 'spino' } as never }, 'contractors_socfund_tariff_check'],

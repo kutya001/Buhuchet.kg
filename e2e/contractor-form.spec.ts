@@ -519,7 +519,10 @@ test.describe('Этап 2: форма контрагента', () => {
     await fillMain(page, form, { gked: '64.19.2' });
     await toSection(form, 2, isMobile);
     await form.locator('[data-base]').filter({ hasText: 'Есть наёмные сотрудники' }).click();
-    for (const flag of ['cashless', 'registry', 'confirmed']) {
+    // Прототип v82: «Выплата зарплаты» на тариф не влияет; юрлицу с наличными — подсказка про ТК КР.
+    await form.getByLabel('Выплата зарплаты').selectOption('mixed');
+    await expect(form.locator('[data-sf-cash]')).toContainText('ТК КР, ст. 153 ч. 3');
+    for (const flag of ['registry', 'confirmed']) {
       await form
         .locator(`[data-sf-flag="${flag}"]`)
         .getByRole('button', { name: 'Да', exact: true })

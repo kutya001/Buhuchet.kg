@@ -7,6 +7,7 @@ import {
   FIRST_MONTH_MODES,
   PAYS_TO,
   SERVICE_STATUSES,
+  SOCFUND_PAYS,
   SOCFUND_TARIFFS,
   TARIFF_PERIODS,
 } from '@buhuchet/domain';
@@ -64,7 +65,8 @@ const SocfundFlag = z.boolean().nullable().default(null);
  */
 export const ContractorSocfundRequest = z.strictObject({
   flags: z.strictObject({
-    cashless: SocfundFlag,
+    /** «Выплата зарплаты» (прототип v82): на тариф не влияет; null — не указано. */
+    pay: z.enum(SOCFUND_PAYS).nullable().default(null),
     registry: SocfundFlag,
     confirmed: SocfundFlag,
     gov: SocfundFlag,
@@ -192,7 +194,7 @@ export type UpdateContractorRequest = z.infer<typeof UpdateContractorRequest>;
 export const ContractorSocfund = z.object({
   needed: z.boolean(),
   flags: z.object({
-    cashless: z.boolean().nullable(),
+    pay: z.enum(SOCFUND_PAYS).nullable(),
     registry: z.boolean().nullable(),
     confirmed: z.boolean().nullable(),
     gov: z.boolean().nullable(),
@@ -220,6 +222,8 @@ export const ContractorSocfund = z.object({
   bad: z.boolean(),
   badWhy: z.string(),
   ask: z.boolean(),
+  /** Подсказка юрлицу с наличной зарплатой (прототип v82 sfCashWarn); '' — нет. */
+  cashHint: z.string(),
 });
 export type ContractorSocfund = z.infer<typeof ContractorSocfund>;
 
