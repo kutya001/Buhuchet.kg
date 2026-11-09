@@ -2,27 +2,42 @@
 
 import { formatMomentRu, monthOf, monthRange, monthText, type ListSort } from '@buhuchet/domain';
 import { ListValues, listPageSchema, KpiPeriodRow } from '@buhuchet/shared';
-import { DataGrid, EmptyState, Tag, type GridColumn } from '@buhuchet/ui';
-import { useCallback, useMemo } from 'react';
-import { api, apiFailure } from '../api-client';
+import {
+  DataGrid,
+  effectiveView,
+  EmptyState,
+  PHONE_QUERY,
+  Tag,
+  useMediaQuery,
+  useToast,
+  type GridColumn,
+} from '@buhuchet/ui';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useMemo, useRef } from 'react';
+import { api, apiFailure, callApi } from '../api-client';
 import { ContractorLink } from '../contractors/contractor-link';
-import { useT } from '../l10n/provider';
+import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { useKpiRefresh } from './kpi-data';
 import { useKpiEntry } from './kpi-entry';
-import { monthGenName, monthShortName, numberText } from './kpi-format';
+import { exCellOf, exKey, kxCell, type KxRef, numberCells, putCells } from './kpi-ex';
+import { monthGenName, monthName, monthShortName, numberText } from './kpi-format';
 import { defaultPeriod, PeriodBar, todayBishkek, type Period } from './kpi-period-bar';
 import { KpiPlates } from './kpi-plates';
 import { setKpiChoice, useKpiChoice } from './kpi-state';
+import type { CellChange } from './kpi-table';
+import { EX_WRAP, useExTable } from './use-ex-table';
 
 /*
- * Вкладка «За период» (задача 2.27; ТЗ «Вкладка «За период»»; прототип modules/kpi.js, kpiPeriod):
- * строки — контрагент и показатель, столбцы — месяцы периода и итоги «Сумма», «Среднее», «Максимум»,
- * «Минимум» только по заполненным месяцам; группировка, фильтры и «В Excel» — общий список. Ячейка месяца
+ * Вкладка «За период» (задача 2.27; ТЗ «Вкладка «За период»»; прототип v81 modules/kpi.js, kpiPeriod,
+ * kGridEx): строки — контрагент и показатель, столбцы — месяцы периода и итоги «Сумма», «Среднее»,
+ * «Максимум», «Минимум» только по заполненным месяцам; группировка, фильтры и «В Excel» — общий список.
+ * В виде «Таблица» месяцы вносятся прямо в ячейках, как в Excel; в виде «Карточки» ячейка месяца
  * открывает окно значения контрагента за месяц.
  */
 
@@ -32,11 +47,57 @@ const TOTALS = ['sum', 'avg', 'max', 'min'] as const;
 const DEFAULT_SORT: ListSort = { key: 'cp', dir: 'asc' };
 const monthKey = (m: string) => `m${m}`;
 
+/** Ячейка строки «За период» за месяц `j` периода. */
+function periodRef(r: KpiPeriodRow, months: readonly string[], j: number): KxRef | null {
+  const month = months[j];
+  if (!month) return null;
+  return {
+    contractorId: r.contractorId,
+    indicatorId: r.indicatorId,
+    type: r.type,
+    required: r.required,
+    archived: r.indicatorArchived,
+    month,
+    state: r.needed[j] ? 'required' : r.early[j] ? 'early' : 'off',
+    start: r.start,
+    offSince: r.offSince,
+    value: r.values[j] ?? null,
+    editable: r.editable,
+  };
+}
+
+/** Значения после правки — сразу в строках страницы, пока сервер не ответил. */
+function patchedPeriod(
+  page: { items: KpiPeriodRow[] } | undefined,
+  months: readonly string[],
+  changes: readonly CellChange[],
+) {
+  if (!page) return page;
+  const by = new Map(
+    changes.map((c) => [`${c.contractorId}|${c.indicatorId}|${c.month}`, c.value]),
+  );
+  return {
+    ...page,
+    items: page.items.map((r) => ({
+      ...r,
+      values: r.values.map((v, j) => {
+        const key = `${r.contractorId}|${r.indicatorId}|${months[j]}`;
+        return by.has(key) ? by.get(key)! : v;
+      }),
+    })),
+  };
+}
+
+/**
+ * `excel` — вид «Таблица»: ячейки месяцев — таблица как в Excel (`data-kx`), иначе — кнопка, которая
+ * открывает окно значения.
+ */
 function periodColumns(
   t: Translate,
   months: readonly string[],
   current: string,
   onCell: (row: KpiPeriodRow, month: string) => void,
+  excel: boolean,
 ): GridColumn<KpiPeriodRow>[] {
   const off = (r: KpiPeriodRow) =>
     r.offSince ? t('kpi.off_since', { month: monthGenName(t, r.offSince) }) : '';
@@ -83,7 +144,13 @@ function periodColumns(
         const v = r.values[j] ?? null;
         return v === null && r.needed[j] ? t('kpi.empty') : numberText(r.type, v);
       },
+      ...(excel
+        ? {
+            td: (r: KpiPeriodRow) => kxCell(t, periodRef(r, months, j)!, current, true).props,
+          }
+        : {}),
       cell: (r) => {
+        if (excel) return kxCell(t, periodRef(r, months, j)!, current).content;
         const v = r.values[j] ?? null;
         const empty = v === null && r.needed[j] && m < current;
         return (
@@ -165,6 +232,11 @@ const fetchPeriod: FetchListPage<KpiPeriodRow> = async (params) => {
 
 export function KpiPeriodTab() {
   const t = useT();
+  const toast = useToast();
+  const errorText = useErrorText();
+  const client = useQueryClient();
+  const refresh = useKpiRefresh();
+  const phone = useMediaQuery(PHONE_QUERY);
   const labels = useGridLabels('kpi.period.count');
   const { search, clearSearch, access } = useShell();
   const choice = useKpiChoice();
@@ -173,12 +245,14 @@ export function KpiPeriodTab() {
   const entry = useKpiEntry();
   const current = monthOf(todayBishkek());
   const open = entry.open;
+  const view = useViewSettings('kpi.period');
+  // Вид «Таблица» — ввод как в Excel; в «Карточках» ячеек нет (прототип `kGridEx`).
+  const excel = effectiveView(view.settings, phone) === 'table';
   const columns = useMemo(
-    () => periodColumns(t, months, current, (r, m) => void open(r.contractorId, m)),
-    [t, months, current, open],
+    () => periodColumns(t, months, current, (r, m) => void open(r.contractorId, m), excel),
+    [t, months, current, open, excel],
   );
   const defaultVisible = useMemo(() => ['cp', 'ind', ...months.map(monthKey), ...TOTALS], [months]);
-  const view = useViewSettings('kpi.period');
   const extra = useMemo(() => ({ from: period.from, to: period.to }), [period.from, period.to]);
   const list = useListPage({
     gridKey: 'kpi.period',
@@ -201,6 +275,71 @@ export function KpiPeriodTab() {
     [params, visible, period.from, period.to],
   );
   const exporter = useListExport(sendExport);
+
+  // Таблица как в Excel: ячейки — по порядку строк страницы, ключ ячейки — `data-kx`.
+  const keys = useRef<string[][]>([]);
+  const rowsById = new Map((list.data?.items ?? []).map((r) => [r.id, r]));
+  const at = (r: number, c: number): KxRef | null => {
+    const [cid, ind, m] = (keys.current[r]?.[c] ?? '').split('|');
+    const row = rowsById.get(`${cid}|${ind}`);
+    return row && m ? periodRef(row, months, months.indexOf(m)) : null;
+  };
+  const save = async (changes: CellChange[]) => {
+    client.setQueriesData<{ items: KpiPeriodRow[] }>({ queryKey: ['list', 'kpi.period'] }, (old) =>
+      patchedPeriod(old, months, changes),
+    );
+    const res = await callApi(() => api.api.kpi.values.$put({ json: { values: changes } }));
+    void refresh();
+    if (!res.ok) toast(errorText(res.error), { bad: true });
+    return res.ok;
+  };
+  const {
+    wrapRef: exRef,
+    layer: exLayer,
+    stat: exStat,
+    menu: exMenu,
+  } = useExTable(
+    {
+      number: (wrap) => {
+        keys.current = numberCells(wrap);
+        return {
+          rows: keys.current.length,
+          cols: Math.max(0, ...keys.current.map((r) => r.length)),
+        };
+      },
+      get: (r, c) => exCellOf(t, at(r, c), current),
+      key: (r, c) => exKey(at(r, c)),
+      put: (writes) => putCells(writes, at, save),
+      label: (r, c) => {
+        const x = at(r, c);
+        const row = x && rowsById.get(`${x.contractorId}|${x.indicatorId}`);
+        return row
+          ? t('kpi.ex.cell_label', {
+              name: row.contractorName,
+              ind: row.indicatorName,
+              month: monthName(t, x.month),
+            })
+          : t('kpi.ex.cell');
+      },
+      menu: (r, c) => {
+        const x = at(r, c);
+        const row = x && rowsById.get(`${x.contractorId}|${x.indicatorId}`);
+        return x && row
+          ? [
+              {
+                id: 'entry',
+                label: t('kpi.ex.menu.entry'),
+                icon: 'clip',
+                sub: `${row.contractorName} · ${monthName(t, x.month)}`,
+                run: () => void open(x.contractorId, x.month),
+              },
+            ]
+          : [];
+      },
+    },
+    { enabled: excel },
+  );
+
   const loadValues = useCallback(
     async (col: string, q?: string) => {
       const res = await api.api.kpi.period.values.$get({
@@ -216,32 +355,37 @@ export function KpiPeriodTab() {
     <div className="flex flex-col gap-3.5">
       <KpiPlates />
       <PeriodBar value={period} onChange={(p) => setKpiChoice({ period: p })} />
-      <DataGrid
-        columns={columns}
-        defaultVisible={defaultVisible}
-        defaultSort={DEFAULT_SORT}
-        settings={view.settings}
-        onSettingsChange={view.save}
-        onResetView={() => void view.reset()}
-        data={view.ready ? list.data : undefined}
-        onPageChange={list.setPage}
-        error={list.error}
-        errorText={list.errorText}
-        errorTextOf={list.errorTextOf}
-        onRetry={list.retry}
-        filters={list.filters}
-        onFiltersChange={list.setFilters}
-        loadValues={loadValues}
-        search={search}
-        onClearSearch={clearSearch}
-        onExport={access.can('export') ? () => void exporter.run() : undefined}
-        exporting={exporter.exporting}
-        empty={<EmptyState icon="chart" title={t('kpi.period.empty')} />}
-        rowKey={(r) => r.id}
-        titleKey="cp"
-        label={t('tab.kpi.period')}
-        labels={labels}
-      />
+      {exStat}
+      <div ref={exRef} className={EX_WRAP}>
+        {exLayer}
+        <DataGrid
+          columns={columns}
+          defaultVisible={defaultVisible}
+          defaultSort={DEFAULT_SORT}
+          settings={view.settings}
+          onSettingsChange={view.save}
+          onResetView={() => void view.reset()}
+          data={view.ready ? list.data : undefined}
+          onPageChange={list.setPage}
+          error={list.error}
+          errorText={list.errorText}
+          errorTextOf={list.errorTextOf}
+          onRetry={list.retry}
+          filters={list.filters}
+          onFiltersChange={list.setFilters}
+          loadValues={loadValues}
+          search={search}
+          onClearSearch={clearSearch}
+          onExport={access.can('export') ? () => void exporter.run() : undefined}
+          exporting={exporter.exporting}
+          empty={<EmptyState icon="chart" title={t('kpi.period.empty')} />}
+          rowKey={(r) => r.id}
+          titleKey="cp"
+          label={t('tab.kpi.period')}
+          labels={labels}
+        />
+      </div>
+      {exMenu}
       {entry.dialog}
     </div>
   );

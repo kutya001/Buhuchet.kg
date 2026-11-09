@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { createTestDeps } from '../../testing';
+import { serverTexts } from './texts';
 
 const { uiTexts } = schema;
 
@@ -60,6 +61,14 @@ describe.skipIf(!databaseAvailable())('словарь текстов интер�
 
   afterAll(async () => {
     await t?.drop();
+  });
+
+  it('тексты на сервере: ключ словаря — текст, остальное — как есть, и `constructor` тоже', async () => {
+    const text = await serverTexts(createTestDeps({ db: t.app.db }));
+    expect(text('health.title')).toBe('Проверка системы');
+    expect(text('Выручка')).toBe('Выручка');
+    expect(text('constructor')).toBe('constructor');
+    expect(text('toString')).toBe('toString');
   });
 
   it('открыт без входа: тексты базы поверх текстов по умолчанию, версия в ETag', async () => {

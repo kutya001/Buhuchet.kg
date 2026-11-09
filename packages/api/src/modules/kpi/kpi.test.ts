@@ -5,13 +5,15 @@ import {
   Indicators,
   KpiCard,
   KpiEntry,
+  KpiMissingRow,
   KpiMissingSummary,
   KpiMonth,
+  KpiPeriodRow,
   KpiValuesSaved,
   KpiWho,
   MonthStatus,
 } from '@buhuchet/shared';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { fixedClock } from '@buhuchet/adapters';
@@ -479,15 +481,74 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       '/api/kpi/period/values?from=2026-01&to=2026-09&col=ind',
     );
     expect(values.status).toBe(200);
+    // Таблица как в Excel (прототип v81): у ячейки — состояние по месяцам, у строки — вносит ли сотрудник.
+    const row = KpiPeriodRow.parse(c1);
+    // «с 03.2026» (задано выше в «Кому вести»): январь и февраль — раньше «с …», вносить можно.
+    expect(row).toMatchObject({ editable: true, required: true, start: '2026-03' });
+    expect(row.early).toEqual([true, true, false, false, false, false, false, false, false]);
     const missing = (await (await call(owner, 'GET', '/api/kpi/missing')).json()) as {
-      items: { due: string }[];
+      items: unknown[];
     };
-    const dues = missing.items.map((r) => r.due);
+    const rows = missing.items.map((r) => KpiMissingRow.parse(r));
+    const dues = rows.map((r) => r.due);
     expect(dues).toEqual([...dues].sort());
-    const xlsx = await call(owner, 'GET', '/api/kpi/missing/export?cols=cp,m,miss,due');
+    // Столбцы значений — действующие показатели (`v` и код без дефисов): значения за месяц строки.
+    expect(rows[0]!.editable).toBe(true);
+    const active = (await indicators()).items
+      .filter((i) => !i.archived)
+      .sort((a, b) => a.order - b.order);
+    expect(rows[0]!.cells.map((c) => c.indicatorId)).toEqual(active.map((i) => i.id));
+    const v = `v${revenue.replace(/-/g, '')}`;
+    expect((await call(owner, 'GET', `/api/kpi/missing?sort=${v}.desc`)).status).toBe(200);
+    expect((await call(owner, 'GET', `/api/kpi/missing/values?col=${v}`)).status).toBe(200);
+    const xlsx = await call(owner, 'GET', `/api/kpi/missing/export?cols=cp,m,${v},miss,due`);
     expect(xlsx.status).toBe(200);
     expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
     expect((await call(acc, 'GET', '/api/kpi/missing/export?cols=cp')).status).toBe(200);
+  });
+
+  it('(прототип v81) без права «Вносить значения» строки списков — только просмотр, запись — 403; столбец значений — только действующего показателя', async () => {
+    // «Старший» видит показатели всех контрагентов, но значения не вносит.
+    await f.t.admin.db
+      .insert(schema.rolePermissions)
+      .values({ orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'kpiView' });
+    await f.t.admin.db
+      .update(schema.roleScopes)
+      .set({ scope: 'all' })
+      .where(
+        and(eq(schema.roleScopes.roleId, f.roleIds.senior), eq(schema.roleScopes.permGroup, 'kpi')),
+      );
+    const viewer = await signIn(app, 'senior-a', TEST_PASSWORD);
+    const items = async (path: string) => {
+      const res = await call(viewer, 'GET', path);
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { items: unknown[] }).items;
+    };
+    const period = (await items('/api/kpi/period?from=2026-01&to=2026-09&size=all')).map((r) =>
+      KpiPeriodRow.parse(r),
+    );
+    expect(period.length).toBeGreaterThan(0);
+    expect(period.every((r) => !r.editable)).toBe(true);
+    const missing = (await items('/api/kpi/missing?size=all')).map((r) => KpiMissingRow.parse(r));
+    expect(missing.length).toBeGreaterThan(0);
+    expect(missing.every((r) => !r.editable)).toBe(true);
+    expect(
+      (await put(viewer, [{ contractorId: C1, indicatorId: revenue, month: '2026-09', value: 1 }]))
+        .status,
+    ).toBe(403);
+
+    // Ключ столбца значений не из списка действующих показателей организации — 400.
+    const archived = (await indicators()).items.filter((i) => i.archived).map((i) => i.id);
+    for (const id of ['00000000-0000-4000-8000-000000000000', ...archived]) {
+      const v = `v${id.replace(/-/g, '')}`;
+      for (const path of [
+        `/api/kpi/missing?sort=${v}.desc`,
+        `/api/kpi/missing/values?col=${v}`,
+        `/api/kpi/missing/export?cols=cp,${v}`,
+      ]) {
+        expect((await call(owner, 'GET', path)).status, path).toBe(400);
+      }
+    }
   });
 
   it('файлы значения: видит тот, кому видно значение; чужая организация — 404', async () => {

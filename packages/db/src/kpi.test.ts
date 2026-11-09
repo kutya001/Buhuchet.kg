@@ -24,7 +24,14 @@ import {
   writeTargets,
   type IndicatorFields,
 } from './kpi';
-import { kpiMissingRows, kpiPeriodRows, listKpiPeriodPage, listKpiMissingPage } from './kpi-lists';
+import {
+  kpiMissingList,
+  kpiMissingRows,
+  kpiPeriodRows,
+  listKpiMissingPage,
+  listKpiPeriodPage,
+  missingValueKey,
+} from './kpi-lists';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { indicatorMonths, indicators, indicatorTargets, indicatorValues } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed';
@@ -327,15 +334,32 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     const months = rows.filter((r) => r.contractorId === cp2).map((r) => r.month);
     expect(months[0]).toBe('2026-01');
     expect(months.at(-1)).toBe('2026-09');
-    const page = await inA((tx) => listKpiMissingPage(tx, query(), rows, t));
+    const missing = await inA((tx) =>
+      kpiMissingList(tx, { scope: undefined, today: TODAY, editable: () => true }),
+    );
+    expect(missing.rows).toEqual(rows.map((r) => ({ ...r, editable: true })));
+    // Столбцы значений — действующие показатели; у строки — значение каждого за её месяц.
+    expect(missing.indicators.map((i) => i.id)).toEqual(
+      missing.rows[0]!.cells.map((c) => c.indicatorId),
+    );
+    const page = await inA((tx) => listKpiMissingPage(tx, query(), { ...missing, t }));
     expect(page.total).toBe(rows.length);
     expect(page.rows[0]!.due).toBe('2026-02-10');
+    const byValue = await inA((tx) =>
+      listKpiMissingPage(tx, query({ sort: { key: missingValueKey(staff), dir: 'desc' } }), {
+        ...missing,
+        t,
+      }),
+    );
+    expect(byValue.total).toBe(rows.length);
     const period = await inA((tx) =>
       kpiPeriodRows(tx, { scope: undefined, from: '2026-07', to: '2026-10', today: TODAY }),
     );
     const staffRow = period.rows.find((r) => r.contractorId === cp1 && r.indicatorId === staff)!;
     expect(staffRow.values).toEqual([null, 3_900, null, null]);
     expect(staffRow.empty).toEqual([true, false, true, false]);
+    // Без проверки права значения не вносятся; раньше «с <месяц>» ячеек в этом периоде нет.
+    expect(staffRow).toMatchObject({ editable: false, early: [false, false, false, false] });
     const list = await inA((tx) =>
       listKpiPeriodPage(tx, query({ search: { q: 'Асанов', keys: [] } }), { ...period, t }),
     );

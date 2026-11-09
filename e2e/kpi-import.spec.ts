@@ -269,21 +269,21 @@ test.describe('Этап 2: Показатели контрагентов — в�
     expect(alpha.history.map((h) => h.reason)).toEqual(['xlsx']);
     expect((await entry('ОсОО «Бета»')).items.every((i) => i.value === null)).toBe(true);
 
+    await page.goto('/app/kpi/period');
+    const main = page.locator('main');
+    await main.getByLabel('С', { exact: true }).fill(month);
+    await main.getByLabel('по', { exact: true }).fill(month);
+    const row = page
+      .locator('[data-grid] [data-id]')
+      .filter({ hasText: 'ОсОО «Альфа»' })
+      .filter({ hasText: 'Выручка' });
     if (isMobile) {
-      await page.goto('/app/kpi/month');
-      await page.locator('[data-kpi-month-pick]').click();
-      await page.locator(`[data-kpi-choice="${month}"]`).click();
-      await page.locator(`[data-kpi-tile="${org.ids['ОсОО «Альфа»']}"]`).click();
-    } else {
-      await page.goto('/app/kpi/period');
-      const main = page.locator('main');
-      await main.getByLabel('С', { exact: true }).fill(month);
-      await main.getByLabel('по', { exact: true }).fill(month);
-      const row = page
-        .locator('[data-grid] [data-id]')
-        .filter({ hasText: 'ОсОО «Альфа»' })
-        .filter({ hasText: 'Выручка' });
+      // «Карточки»: ячейка месяца открывает окно значения.
       await row.locator(`[data-kpi-cell$="|${month}"]`).click();
+    } else {
+      // «Таблица» как в Excel: окно значения — из меню правой кнопки ячейки.
+      await row.locator(`td[data-kx$="|${month}"]`).click({ button: 'right' });
+      await page.getByRole('menuitem', { name: /Комментарий, файл и история/ }).click();
     }
     const card = page.getByRole('dialog', { name: 'ОсОО «Альфа»' });
     await expect(card).toContainText('Из Excel');

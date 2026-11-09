@@ -16,13 +16,13 @@ const row = {} as HTMLElement;
 const press = (): PressState => ({ timer: undefined, start: null, pressed: false });
 
 /** Элемент, внутри которого было нажатие: `closest` находит его, если он подходит под селектор. */
-const target = (tag: 'td' | 'button' | 'input' | 'a') => ({
+type Tag = 'td' | 'td[data-sr]' | 'button' | 'input' | 'a';
+
+const target = (tag: Tag) => ({
   closest: (selector: string) => (selector.split(',').includes(tag) ? {} : null),
 });
 
-const mouse = (
-  over: Partial<{ tag: 'td' | 'button' | 'input' | 'a'; x: number; y: number }> = {},
-) =>
+const mouse = (over: Partial<{ tag: Tag; x: number; y: number }> = {}) =>
   ({
     target: target(over.tag ?? 'td'),
     currentTarget: row,
@@ -63,6 +63,14 @@ describe('нажатия по строке списка', () => {
     expect(onOpen).toHaveBeenCalledWith(ROW);
     for (const tag of ['button', 'input', 'a'] as const) h.onClick(mouse({ tag }));
     expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('ячейка таблицы ввода как в Excel: нажатие её выделяет, у правого клика — её меню', () => {
+    const { onOpen, onMenu, h } = setup();
+    h.onClick(mouse({ tag: 'td[data-sr]' }));
+    h.onContextMenu(mouse({ tag: 'td[data-sr]' }));
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onMenu).not.toHaveBeenCalled();
   });
 
   it('правый клик — меню в точке нажатия вместо меню браузера', () => {
