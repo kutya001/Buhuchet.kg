@@ -96,13 +96,13 @@ const DemoContractor = z.object({
   gkOk: z.object({ by: z.string(), at: z.iso.date(), ask: z.string() }).optional(),
   /** Признаки для тарифа Соцфонда, тариф, выбран ли вручную и почему (задача 2.08). */
   /**
-   * `pay` — «Выплата зарплаты» прототипа v82 (card/mixed/cash): пока поля нет в базе, «Только
-   * безналично» читается как прежний признак «Зарплата только безналично».
+   * `pay` — «Выплата зарплаты» прототипа v82 (card/mixed/cash), на тариф не влияет: пока поля нет в
+   * базе, любое значение читается как прежний признак «Зарплата только безналично» — тариф как в v82.
    */
   sf: z
     .object({ pay: z.enum(['card', 'mixed', 'cash']).optional() })
     .catchall(z.boolean())
-    .transform(({ pay, ...flags }) => (pay ? { ...flags, cashless: pay === 'card' } : flags))
+    .transform(({ pay, ...flags }) => (pay ? { ...flags, cashless: true } : flags))
     .default({}),
   sfT: z.enum(SOCFUND_TARIFFS).optional(),
   sfMan: z.boolean().default(false),

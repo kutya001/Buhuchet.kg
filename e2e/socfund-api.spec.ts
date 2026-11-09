@@ -165,7 +165,7 @@ test.describe('Этап 2: тариф Соцфонда', () => {
     expect(asked.items.map((r) => r.id)).toContain(cp.id);
     // У демо-организации под вопросом те же, что в прототипе.
     expect(asked.items.map((r) => r.name)).toEqual(
-      expect.arrayContaining(['ОсОО «Каракол Мед Сервис»', 'ОсОО «Нарын Жүн»', 'ОсОО «Укс»']),
+      expect.arrayContaining(['ОсОО «Нарын Жүн»', 'ОсОО «Укс»']),
     );
     expect(asked.items.every((r) => r.socfund?.ask)).toBe(true);
   });
