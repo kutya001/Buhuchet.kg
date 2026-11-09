@@ -378,6 +378,8 @@ const fixture = {
   source: SF,
   today: TODAY,
   dict,
+  // подсказка о наличной зарплате, когда у ЛЬГ-29 в справочнике её текста нет (прототип SF_CASH_HINT)
+  cashHintDefault: /const SF_CASH_HINT='([^']+)'/.exec(read(SF))[1],
   titles: oracle.titles,
   cases: subjects.map((c, i) => ({
     name: c.name,

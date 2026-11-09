@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import fixture from './__fixtures__/socfund.json';
@@ -93,13 +92,9 @@ describe('Тариф Соцфонда по условиям — как в про
 
   it('подсказка о наличной зарплате без текста в справочнике — текст прототипа (SF_CASH_HINT)', () => {
     const c = fixture.cases.find((x) => x.name === 'зарплата только наличными')!;
-    const proto = /const SF_CASH_HINT='([^']+)'/.exec(
-      readFileSync(
-        new URL('../../../../spec/prototype/src/js/core/socfund.js', import.meta.url),
-        'utf8',
-      ),
-    )![1];
-    expect(socfundCashHint(subjectOf(c.subject), { ...dict, cashHint: '' }, t)).toBe(proto);
+    expect(socfundCashHint(subjectOf(c.subject), { ...dict, cashHint: '' }, t)).toBe(
+      fixture.cashHintDefault,
+    );
   });
 
   it('п. А-5 (решение заказчика): без основания «Есть наёмные сотрудники», но с действующим STI-161 тариф нужен, как в прототипе', () => {

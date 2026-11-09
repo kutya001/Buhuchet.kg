@@ -25,6 +25,12 @@ export type SocfundFlag = (typeof SOCFUND_FLAGS)[number];
  * наличными. На тариф не влияет (решение заказчика 09.11.2026): юрлицу с наличными — только подсказка.
  */
 export const SOCFUND_PAYS = ['card', 'mixed', 'cash'] as const;
+
+/** Код статуса СПиНО в «Налоговых льготах и особых статусах»: у него подсказка юрлицу при наличной зарплате. */
+export const SPINO_BENEFIT_CODE = 'ЛЬГ-29';
+
+/** Название формы собственности «ИП» в справочнике (прототип хранит у контрагента его, продукт — код формы). */
+export const IP_FORM_NAME = 'ИП';
 export type SocfundPay = (typeof SOCFUND_PAYS)[number];
 /**
  * Указанные признаки: да или нет; не указанного признака в объекте нет (как `sf` прототипа); `pay` —
@@ -233,7 +239,7 @@ export function socfundAuto(s: SocfundSubject, dict: SocfundDict): SocfundAuto |
 export function socfundCashHint(s: SocfundSubject, dict: SocfundDict, t: Translate): string {
   if (!socfundNeeded(s, dict)) return '';
   if (s.flags.pay !== 'mixed' && s.flags.pay !== 'cash') return '';
-  if (s.form?.name === 'ИП') return '';
+  if (s.form?.name === IP_FORM_NAME) return '';
   return dict.cashHint || t('cp.socfund.cash_hint');
 }
 

@@ -6,6 +6,7 @@ import {
   BENEFIT_KINDS,
   benefitDueRuleText,
   LAST_DAY_OF_MONTH,
+  SPINO_BENEFIT_CODE,
   type PayerKind,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -96,9 +97,6 @@ const LINK_TEXT: Readonly<Record<string, UiTextKey>> = {
   adds: 'pdicts.err.bad_benefit_types',
   offices: 'pdicts.err.bad_offices',
 };
-
-/** Статус СПиНО: у него «Подсказка юрлицу при наличной зарплате» (прототип v82 benefitDlg). */
-const SPINO_BENEFIT = 'ЛЬГ-29';
 
 /** «Кто может применять» в порядке прототипа: организации и ИП, только организации, только ИП. */
 const PAYERS: readonly PayerKind[] = ['all', 'org', 'ip'];
@@ -518,7 +516,7 @@ export function BenefitDialog({
           )}
           {textarea('confirmation', t('pdicts.benefit.confirmation'))}
           {/* Прототип v82 (`bn-cash`): подсказка тарифа Соцфонда — у ЛЬГ-29 или у статуса с подсказкой. */}
-          {current?.code === SPINO_BENEFIT || before?.cashHint
+          {current?.code === SPINO_BENEFIT_CODE || before?.cashHint
             ? textarea(
                 'cashHint',
                 t('pdicts.benefit.cash_hint'),
