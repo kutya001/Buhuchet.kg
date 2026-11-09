@@ -14,6 +14,7 @@ import {
   Modal,
   MONO_CLASS,
   Note,
+  PasswordInput,
   Pill,
   useToast,
   useWindow,
@@ -24,7 +25,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
-import { fieldError, NewPasswordFields } from '../auth/fields';
+import { fieldError, NewPasswordFields, usePasswordEye } from '../auth/fields';
 import { TelegramLinkRow, useTelegramLink } from '../auth/telegram-link';
 import { kbStateQuery } from '../kb/kb-data';
 import { BOX_LINK_CLASS, KbBox } from '../kb/kb-parts';
@@ -320,6 +321,7 @@ function ThemeField() {
 
 function PasswordBox({ onDirty }: { onDirty: (dirty: boolean) => void }) {
   const t = useT();
+  const eye = usePasswordEye();
   const toast = useToast();
   const errorText = useErrorText();
   const {
@@ -364,11 +366,10 @@ function PasswordBox({ onDirty }: { onDirty: (dirty: boolean) => void }) {
             error={fieldError(t, errors.currentPassword)}
           >
             {(control) => (
-              <input
+              <PasswordInput
                 {...control}
                 {...currentField}
-                type="password"
-                className={inputClass()}
+                labels={eye}
                 autoComplete="current-password"
               />
             )}

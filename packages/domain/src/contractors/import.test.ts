@@ -3,10 +3,12 @@ import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import {
   checkImportRows,
   CP_IMPORT_CELL_MAX,
+  CP_IMPORT_LEGACY,
   CP_IMPORT_MAX_COLUMNS,
   CP_IMPORT_MAX_ROWS,
   importColumnOf,
   importFee,
+  importPay,
   importPhone,
   importReady,
   importRequestRows,
@@ -294,11 +296,42 @@ describe('загрузка контрагентов: проверка строк
   });
 
   it('признаки Соцфонда: Да / Нет (yes, 1, true…), пусто — не указано, другое — ошибка', () => {
-    const map = [...HEAD, 'sfc', 'sfr', 'sfp', 'sfg'] as const;
-    const [r] = checkImportRows([...map], [[...row(), 'Да', 'нет', '', '1']], DICTS, t);
-    expect(r!.draft.socfund).toEqual({ cashless: true, registry: false, gov: true });
-    const [bad] = checkImportRows([...map], [[...row(), 'может быть', '', '', '']], DICTS, t);
-    expect(bad!.errors).toEqual(['«Зарплата безналично»: только Да или Нет']);
+    const map = [...HEAD, 'sfpay', 'sfr', 'sfp', 'sfg'] as const;
+    const [r] = checkImportRows([...map], [[...row(), 'На карту', 'нет', '', '1']], DICTS, t);
+    expect(r!.draft.socfund).toEqual({ pay: 'card', registry: false, gov: true });
+    const [bad] = checkImportRows([...map], [[...row(), '', 'может быть', '', '']], DICTS, t);
+    expect(bad!.errors).toEqual(['«Реестр в Салык.кг»: только Да или Нет']);
+  });
+
+  it('«Выплата зарплаты» (прототип v82): безналично, наличными или оба; другое — ошибка', () => {
+    expect(importPay('Только безналично')).toBe('card');
+    expect(importPay('карта')).toBe('card');
+    expect(importPay('Безналично и наличными')).toBe('mixed');
+    expect(importPay('Только наличными')).toBe('cash');
+    expect(importPay('наличные')).toBe('cash');
+    expect(importPay('как придётся')).toBeNull();
+    const map = [...HEAD, 'sfpay'] as const;
+    const [bad] = checkImportRows([...map], [[...row(), 'как придётся']], DICTS, t);
+    expect(bad!.errors).toEqual([
+      '«Выплата зарплаты»: Только безналично, Безналично и наличными или Только наличными',
+    ]);
+  });
+
+  it('прежняя колонка «Зарплата безналично»: Да — только безналично, Нет — безналично и наличными', () => {
+    const map = [...HEAD, 'sfc'] as const;
+    const pay = (v: string) => checkImportRows([...map], [[...row(), v]], DICTS, t)[0]!;
+    expect(pay('Да').draft.socfund).toEqual({ pay: 'card' });
+    expect(pay('нет').draft.socfund).toEqual({ pay: 'mixed' });
+    expect(pay('может быть').errors).toEqual(['«Зарплата безналично»: только Да или Нет']);
+    // Новая колонка важнее прежней.
+    const both = checkImportRows(
+      [...HEAD, 'sfpay', 'sfc'],
+      [[...row(), 'наличными', 'Да']],
+      DICTS,
+      t,
+    );
+    expect(both[0]!.draft.socfund).toEqual({ pay: 'cash' });
+    expect(CP_IMPORT_LEGACY).toEqual(['sfc']);
   });
 
   it('режим и форма — из справочников; пустая форма — по началу названия', () => {

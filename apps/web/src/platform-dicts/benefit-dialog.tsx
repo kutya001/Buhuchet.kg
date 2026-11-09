@@ -6,6 +6,7 @@ import {
   BENEFIT_KINDS,
   benefitDueRuleText,
   LAST_DAY_OF_MONTH,
+  SPINO_BENEFIT_CODE,
   type PayerKind,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -77,6 +78,7 @@ function formOf(x: AdminDictValue | null): BenefitValueFormInput {
     offices: d.offices ?? [],
     verify: d.verify ?? false,
     verifyNote: d.verifyNote ?? '',
+    cashHint: d.cashHint ?? '',
   };
 }
 
@@ -226,7 +228,7 @@ export function BenefitDialog({
   const formId = `${id}-form`;
 
   const textarea = (
-    name: 'gives' | 'conditions' | 'confirmation',
+    name: 'gives' | 'conditions' | 'confirmation' | 'cashHint',
     label: string,
     hint?: string,
     required = false,
@@ -513,6 +515,14 @@ export function BenefitDialog({
             t('pdicts.benefit.conditions_hint'),
           )}
           {textarea('confirmation', t('pdicts.benefit.confirmation'))}
+          {/* Прототип v82 (`bn-cash`): подсказка тарифа Соцфонда — у ЛЬГ-29 или у статуса с подсказкой. */}
+          {current?.code === SPINO_BENEFIT_CODE || before?.cashHint
+            ? textarea(
+                'cashHint',
+                t('pdicts.benefit.cash_hint'),
+                t('pdicts.benefit.cash_hint_hint'),
+              )
+            : null}
           {input('combines', t('pdicts.col.combines'))}
           {input('term', t('pdicts.benefit.term'), false, t('pdicts.benefit.term_ph'))}
           <Field

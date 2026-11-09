@@ -16,8 +16,8 @@ import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../tes
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
-const ALL_YES = { cashless: true, registry: true, confirmed: true, gov: false };
-const NO_FLAGS = { cashless: null, registry: null, confirmed: null, gov: null };
+const ALL_YES = { pay: 'card', registry: true, confirmed: true, gov: false };
+const NO_FLAGS = { pay: null, registry: null, confirmed: null, gov: null };
 const t = (key: UiTextKey, params?: Record<string, string | number>) =>
   formatText(UI_TEXTS[key].ru, params);
 
@@ -107,6 +107,7 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
       bad: false,
       badWhy: '',
       ask: false,
+      cashHint: '',
     });
     // Статус СПиНО (ЛЬГ-29) идёт за тарифом.
     expect(codes(cp)).toEqual(['ЛЬГ-29']);
@@ -249,7 +250,7 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
       tariff: null,
       auto: {
         id: null,
-        miss: ['способ выплаты зарплаты', 'реестр работников', 'подтверждение ГНС'],
+        miss: ['реестр работников', 'подтверждение ГНС'],
       },
       ask: true,
     });
@@ -321,7 +322,26 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
 
     // Неверные данные — 400; созданный вне области или в другой организации — 404.
     expect((await check(acc, { ...draft, kind: 'нет' })).status).toBe(400);
-    expect((await check(acc, { ...draft, flags: { cashless: 'да' } })).status).toBe(400);
+    expect((await check(acc, { ...draft, flags: { registry: 'да' } })).status).toBe(400);
+    // Прежний признак «Зарплата только безналично» и неизвестная «Выплата зарплаты» — 400.
+    expect((await check(acc, { ...draft, flags: { cashless: true } })).status).toBe(400);
+    expect((await check(acc, { ...draft, flags: { pay: 'card2' } })).status).toBe(400);
+
+    // Прототип v82: выплата зарплаты на тариф не влияет; юрлицу с наличными — подсказка про ТК КР.
+    const cash = ContractorSocfundCheck.parse(
+      await (await check(acc, { ...draft, flags: { ...ALL_YES, pay: 'cash' } })).json(),
+    );
+    expect(cash).toMatchObject({
+      auto: { id: 'spino', why: ['Все условия выполнены'] },
+      cashHint: expect.stringMatching(/^Юрлицо должно платить зарплату безналично/),
+    });
+    expect(out.cashHint).toBe('');
+    const ip = ContractorSocfundCheck.parse(
+      await (
+        await check(acc, { ...draft, formCode: 'ФС-02', flags: { ...ALL_YES, pay: 'mixed' } })
+      ).json(),
+    );
+    expect(ip).toMatchObject({ auto: { id: 'spino' }, cashHint: '' });
     const chiefs = await created(owner, { responsibleEmployeeId: employee('chief-a') });
     expect((await check(acc, { ...draft, contractorId: chiefs.id })).status).toBe(404);
     expect((await check(ownerB, { ...draft, contractorId: chiefs.id })).status).toBe(404);
@@ -334,7 +354,7 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
 
   it('окно «Тариф Соцфонда»: право, область, версия, архив; признаки без смены выбора', async () => {
     const cp = await created(owner, { socfund: { flags: ALL_YES } });
-    const req = { version: cp.version, flags: { ...ALL_YES, cashless: false } };
+    const req = { version: cp.version, flags: { ...ALL_YES, registry: false } };
 
     expect((await saveSocfund(senior, cp.id, req)).status).toBe(403);
     expect((await saveSocfund(ownerB, cp.id, req)).status).toBe(404);
@@ -356,11 +376,11 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
     expect(res.status, await res.clone().text()).toBe(200);
     const saved = ContractorSaved.parse(await res.json());
     expect(saved.socfund).toMatchObject({
-      flags: { ...ALL_YES, cashless: false },
+      flags: { ...ALL_YES, registry: false },
       tariff: { id: 'spino', manual: false },
-      auto: { id: 'general', why: ['Зарплата не безналично'] },
+      auto: { id: 'general', why: ['Реестр работников не загружен в Салык.кг'] },
       bad: true,
-      badWhy: 'Зарплата не безналично',
+      badWhy: 'Реестр работников не загружен в Салык.кг',
     });
     expect(saved.version).toBe(cp.version + 1);
 

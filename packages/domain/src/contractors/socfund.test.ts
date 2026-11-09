@@ -9,6 +9,7 @@ import {
   socfundBadWhy,
   socfundCapHint,
   socfundCapText,
+  socfundCashHint,
   socfundConfirmText,
   socfundDecide,
   socfundFlagsHistoryText,
@@ -41,6 +42,7 @@ const dict: SocfundDict = {
   gkedNames: new Map(fixture.dict.gkedNames as [string, string][]),
   index: new Map(fixture.dict.index.map((x) => [x.code, x])),
   reportTypes: fixture.dict.reportTypes,
+  cashHint: fixture.dict.cashHint,
 };
 
 type Case = (typeof fixture.cases)[number];
@@ -83,7 +85,16 @@ describe('Тариф Соцфонда по условиям — как в про
       dict.tariffs.find((x) => x.id === id) ?? null;
     const note = socfundTypeNote(tariff(st!.choice?.id), tariff(st!.auto.tariff), t);
     expect(note.title + note.text).toBe(expected.typeNote);
+    // Прототип v82 sfCashWarn: юрлицу с наличной зарплатой — подсказка про ТК КР, на тариф не влияет.
+    expect(socfundCashHint(s, dict, t)).toBe(expected.cashHint);
     expect(note.warn).toBe(!st!.choice && !st!.auto.tariff);
+  });
+
+  it('подсказка о наличной зарплате без текста в справочнике — текст прототипа (SF_CASH_HINT)', () => {
+    const c = fixture.cases.find((x) => x.name === 'зарплата только наличными')!;
+    expect(socfundCashHint(subjectOf(c.subject), { ...dict, cashHint: '' }, t)).toBe(
+      fixture.cashHintDefault,
+    );
   });
 
   it('п. А-5 (решение заказчика): без основания «Есть наёмные сотрудники», но с действующим STI-161 тариф нужен, как в прототипе', () => {

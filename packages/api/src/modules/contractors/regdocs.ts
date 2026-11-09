@@ -19,8 +19,8 @@ import {
   RD_KEYS,
   RD_MAX_BYTES,
   rdExtract,
+  rdProblem,
   rdToCp,
-  rdUnsupported,
   type RdDicts,
   type RdDoc,
   type RdKind,
@@ -209,7 +209,8 @@ async function readOne(deps: ApiDeps, reader: DocumentReader, file: FileRecord):
   if (!read.ok) return fail(read.error === 'password' ? 'password' : 'read');
   const doc = rdExtract(read.doc);
   if (!doc.kind) return fail('kind');
-  if (rdUnsupported(doc)) return fail('ip');
+  const problem = rdProblem(doc);
+  if (problem) return fail(problem);
   return { id: file.id, doc: doc as RdDoc & { kind: RdKind } };
 }
 
@@ -234,6 +235,7 @@ function resultOut(res: RdResult, dicts: RdDicts): RegdocsResult {
         }
       : null,
     ugns: res.ugns,
+    ugnsSrc: res.ugnsSrc,
     stopped: res.stopped,
     status: res.status,
     phoneBad: res.phoneBad,
@@ -303,7 +305,10 @@ export function regdocsRecognizeHandler(
       if (same) return { ...empty, error: 'same' as const, sameKind: same.kind };
       const out = rdToCp(docs, dicts);
       if (out.err)
-        return { ...empty, error: out.err === 'diff' ? ('diff' as const) : ('none' as const) };
+        return {
+          ...empty,
+          error: out.err === 'diff' || out.err === 'mix' ? out.err : ('none' as const),
+        };
       const missing = RD_KEYS.filter((k) => out.res.v[k] === undefined);
       if (missing.length || !out.res.gk?.code) {
         deps.logger.info(

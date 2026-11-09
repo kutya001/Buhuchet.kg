@@ -203,7 +203,10 @@ export const SHELL_TEXTS = {
   'add.cps.contractor': { ru: 'Контрагент', section: 'Добавление' },
   'add.cps.import': { ru: 'Загрузка из Excel', section: 'Добавление' },
   'add.cps.regdocs': { ru: 'Из свидетельства и выписки', section: 'Добавление' },
-  'add.cps.regdocs.sub': { ru: 'PDF Минюста: форма заполнится сама', section: 'Добавление' },
+  'add.cps.regdocs.sub': {
+    ru: 'PDF Минюста или свидетельство ИП: форма заполнится сама',
+    section: 'Добавление',
+  },
   'add.reports.mass': { ru: 'Назначить отчёты массово', section: 'Добавление' },
   'add.reports.adhoc': { ru: 'Разовый отчёт', section: 'Добавление' },
   'add.fin.income': { ru: 'Поступление', section: 'Добавление' },

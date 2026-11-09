@@ -25,10 +25,14 @@ export interface DocumentTextItem {
   h: number;
 }
 
-/** Текст документа по страницам; `created` — дата создания PDF (ГГГГ-ММ-ДД или пусто); `ocr` — скан. */
+/**
+ * Текст документа по страницам; `created` — дата создания PDF (ГГГГ-ММ-ДД или пусто); `title` — название
+ * и тема из свойств PDF через пробел (по ним узнаётся свидетельство ИП; пусто, если их нет); `ocr` — скан.
+ */
 export interface DocumentText {
   pages: { items: DocumentTextItem[] }[];
   created: string;
+  title: string;
   ocr: boolean;
 }
 
@@ -344,17 +348,26 @@ async function readPdf(
       pages.push({ items });
     }
     let created = '';
+    let title = '';
     try {
       const meta = await guard(doc.getMetadata(), signal);
-      created = pdfDate((meta.info as { CreationDate?: unknown }).CreationDate);
+      const info = meta.info as { CreationDate?: unknown; Title?: unknown; Subject?: unknown };
+      created = pdfDate(info.CreationDate);
+      title = [info.Title, info.Subject]
+        .filter((x): x is string => typeof x === 'string')
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 500);
     } catch {
       created = '';
+      title = '';
     }
     const chars = pages.reduce(
       (a, pg) => a + pg.items.reduce((b, i) => b + i.str.trim().length, 0),
       0,
     );
-    if (chars >= o.minChars) return { ok: true, doc: { pages, created, ocr: false } };
+    if (chars >= o.minChars) return { ok: true, doc: { pages, created, title, ocr: false } };
     // Текста нет — скан или фото: распознаём картинки первых страниц, по одной и в общей очереди.
     const scanOf = async (k: number) => {
       const page = await guard(doc.getPage(k + 1), signal);
@@ -370,7 +383,7 @@ async function readPdf(
     const ocr = await run;
     const found = ocr.reduce((a, pg) => a + pg.items.reduce((b, i) => b + i.str.length, 0), 0);
     if (found < o.minChars) return { ok: false, error: 'no_text' };
-    return { ok: true, doc: { pages: ocr, created, ocr: true } };
+    return { ok: true, doc: { pages: ocr, created, title, ocr: true } };
   } finally {
     await task.destroy().catch(() => undefined);
   }

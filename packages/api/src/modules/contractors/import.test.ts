@@ -179,7 +179,7 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
   });
 
   it('«ОК»: создаются только готовые строки — с отчётами, тарифом «Загрузка из Excel», статусами по УГНС и записью в истории; строки с ошибками остаются', async () => {
-    const map = [...MAP, 'ugns', 'head', 'contact', 'note', 'sfc', 'form'];
+    const map = [...MAP, 'ugns', 'head', 'contact', 'note', 'sfpay', 'form'];
     const r = await applied(
       [
         [
@@ -195,7 +195,7 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
           'Иванов И. И.',
           'Пётр',
           'из Excel',
-          'Да',
+          'Безналично и наличными',
           '',
         ],
         ['ИП Без ГКЭД', '21002199001235', '0700 112 234', 'НДС', '0', 'chief-a', 'ОНР', ''],
@@ -225,7 +225,7 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
       feeDay: 10,
       paysTo: 'emp',
     });
-    expect(cp.socfundFlags).toEqual({ cashless: true });
+    expect(cp.socfundFlags).toEqual({ pay: 'mixed' });
     const ip = (await byInn('21002199001235'))!;
     expect(ip).toMatchObject({ formCode: 'ФС-02', gked: null });
 
@@ -420,6 +420,12 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
     expect(resp.hint).not.toContain('owner-b');
     expect(resp.example).toBe('acc-a');
     expect(tpl.columns.find((c) => c.key === 'types')!.hint).toContain('НДС');
+    // Прототип v82: «Выплата зарплаты» с подсказкой; прежней колонки «Зарплата безналично» в шаблоне нет.
+    expect(tpl.columns.find((c) => c.key === 'sfpay')).toMatchObject({
+      title: 'Выплата зарплаты',
+      hint: expect.stringContaining('Безналично и наличными'),
+    });
+    expect(tpl.columns.map((c) => c.key)).not.toContain('sfc');
     expect(tpl.columns.find((c) => c.key === 'name')!).toMatchObject({
       title: 'Название',
       example: 'ОсОО «Пример»',

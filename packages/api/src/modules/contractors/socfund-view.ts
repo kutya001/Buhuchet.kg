@@ -9,6 +9,7 @@ import {
   SOCFUND_FLAGS,
   socfundAutoTexts,
   socfundBadWhy,
+  socfundCashHint,
   socfundConfirmText,
   socfundDecide,
   socfundFlagsOf,
@@ -80,9 +81,12 @@ export function socfundSubjectOf(
 const flagsOfRequest = (f: ContractorSocfundRequest['flags']): SocfundFlags =>
   socfundFlagsOf(f as Record<string, unknown>);
 
-/** Признаки для ответа: у каждого — да, нет или null. */
+/** Признаки для ответа: выплата зарплаты, у остальных — да, нет или null. */
 const flagsOut = (f: SocfundFlags) =>
-  Object.fromEntries(SOCFUND_FLAGS.map((k) => [k, f[k] ?? null])) as ContractorSocfund['flags'];
+  ({
+    pay: f.pay ?? null,
+    ...Object.fromEntries(SOCFUND_FLAGS.map((k) => [k, f[k] ?? null])),
+  }) as ContractorSocfund['flags'];
 
 /** Тариф словами (прототип sfState, sfBadWhy): выбранный, по условиям, «больше не применим», «под вопросом». */
 export function socfundOut(
@@ -118,6 +122,7 @@ export function socfundOut(
     bad: st?.bad ?? false,
     badWhy: st ? socfundBadWhy(st, dict, t) : '',
     ask: st?.ask ?? false,
+    cashHint: socfundCashHint(s, dict, t),
   };
 }
 

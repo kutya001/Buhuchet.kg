@@ -70,6 +70,25 @@ async function hiredAndSignedIn(
 }
 
 test.describe('Этап 1: экраны входа и «Мой профиль»', () => {
+  test('(прототип v82) глаз в поле пароля: показывает и скрывает пароль, фокус и набранное остаются', async ({
+    page,
+  }) => {
+    await page.goto('/login');
+    const password = page.getByLabel('Пароль', { exact: true });
+    await password.fill('Bh-4821-temp');
+    await expect(password).toHaveAttribute('type', 'password');
+    const show = page.getByRole('button', { name: 'Показать пароль' });
+    await expect(show).toHaveAttribute('aria-pressed', 'false');
+    await show.click();
+    await expect(password).toHaveAttribute('type', 'text');
+    await expect(password).toBeFocused();
+    await expect(password).toHaveValue('Bh-4821-temp');
+    const hide = page.getByRole('button', { name: 'Скрыть пароль' });
+    await expect(hide).toHaveAttribute('aria-pressed', 'true');
+    await hide.click();
+    await expect(password).toHaveAttribute('type', 'password');
+  });
+
   test('вход демо-сотрудником открывает рабочую страницу; неверный пароль — «Неверный логин или пароль» плашкой над «Войти», пятый подряд закрывает вход на 15 минут', async ({
     page,
     playwright,

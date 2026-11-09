@@ -22,10 +22,11 @@ export const CONTRACTOR_IMPORT_TEXTS = {
   'cp.import.col.head': { ru: 'Руководитель', section: S },
   'cp.import.col.contact': { ru: 'Контактное лицо', section: S },
   'cp.import.col.note': { ru: 'Примечание', section: S },
-  'cp.import.col.sfc': { ru: 'Зарплата безналично', section: S },
+  'cp.import.col.sfpay': { ru: 'Выплата зарплаты', section: S },
   'cp.import.col.sfr': { ru: 'Реестр в Салык.кг', section: S },
   'cp.import.col.sfp': { ru: 'Подтверждён ГНС', section: S },
   'cp.import.col.sfg': { ru: 'Госфинансирование', section: S },
+  'cp.import.col.sfc': { ru: 'Зарплата безналично (прежняя колонка)', section: S },
   'cp.import.col.skip': { ru: '— не загружать —', section: S },
   'cp.import.hint.text': { ru: 'текст', section: S },
   'cp.import.hint.inn': { ru: '14 цифр', section: S },
@@ -44,7 +45,10 @@ export const CONTRACTOR_IMPORT_TEXTS = {
     section: S,
   },
   'cp.import.hint.gked2': { ru: 'коды подклассов через запятую, сколько угодно', section: S },
-  'cp.import.hint.sfc': { ru: 'Да или Нет: для тарифа Соцфонда', section: S },
+  'cp.import.hint.sfpay': {
+    ru: 'Только безналично, Безналично и наличными или Только наличными; на тариф Соцфонда не влияет',
+    section: S,
+  },
   'cp.import.hint.sfr': {
     ru: 'Да или Нет: реестр наёмных работников загружен в Салык.кг',
     section: S,
@@ -123,6 +127,11 @@ export const CONTRACTOR_IMPORT_TEXTS = {
   'cp.import.err.gked2_level': { ru: 'ГКЭД «{code}» — не подкласс', section: S },
   'cp.import.err.gked_inactive': { ru: 'ГКЭД «{code}» больше не действует', section: S },
   'cp.import.err.flag': { ru: '«{col}»: только Да или Нет', section: S },
+  'cp.import.err.sfc': { ru: '«Зарплата безналично»: только Да или Нет', section: S },
+  'cp.import.err.pay': {
+    ru: '«Выплата зарплаты»: Только безналично, Безналично и наличными или Только наличными',
+    section: S,
+  },
   'cp.import.err.regime': { ru: 'режима нет в справочнике', section: S },
   'cp.import.err.form': { ru: 'формы нет в справочнике', section: S },
   'cp.import.err.no_types': {

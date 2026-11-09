@@ -1,6 +1,12 @@
 'use client';
 
-import { formatDateRu, formatMomentRu, formatSom, type GridKey } from '@buhuchet/domain';
+import {
+  formatDateRu,
+  formatMomentRu,
+  formatSom,
+  IP_FORM_NAME,
+  type GridKey,
+} from '@buhuchet/domain';
 import {
   ListValues,
   ReportList,
@@ -745,7 +751,8 @@ function mainItems(
 
 /**
  * «Регистрационные данные» (прототип regKvBox): незаполненные — «—»; пустой блок — подсказка; у
- * созданного из свидетельства и выписки — подпись «из свидетельства и выписки».
+ * созданного из свидетельства и выписки — подпись «из свидетельства и выписки», у ИП — «из
+ * свидетельства ИП» (прототип v82: по форме собственности «ИП»).
  */
 function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
   const r = c.registration;
@@ -771,7 +778,7 @@ function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
           <>
             {t('cp.card.reg')}{' '}
             <span className="text-[12px] font-medium" data-cp-reg-docs="">
-              {t('cp.rd.card_label')}
+              {t(c.form.name === IP_FORM_NAME ? 'cp.rd.card_label_ip' : 'cp.rd.card_label')}
             </span>
           </>
         ) : (

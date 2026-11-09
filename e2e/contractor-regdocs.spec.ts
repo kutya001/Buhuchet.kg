@@ -5,34 +5,35 @@ import { orgWithTypes } from './orgs';
 // Создание контрагента «Из свидетельства и выписки» (задача 2.17, #72, часть 2; Бета) через настоящий
 // сайт: своя организация теста (весь каталог видов подключён), «+ Добавить» → «Из свидетельства и
 // выписки» → два PDF → «Распознать» → заполненная форма → «Сохранить контрагента». Документы —
-// синтетические PDF вымышленной ОсОО «Тестовая бухгалтерия» с текстовым слоем. Правила распознавания,
+// синтетические PDF вымышленной ОсОО «Тестовая бухгалтерия» с текстовым слоем и свидетельство ИП
+// вымышленного предпринимателя (прототип v82; раскладка — как у свидетельства ГНС). Правила распознавания,
 // чтение PDF и сканов, ответы API и подписи формы — тесты packages/domain/src/contractors/regdocs.test.ts,
 // packages/adapters/src/documents.test.ts, packages/api/src/modules/contractors/regdocs.test.ts и
 // apps/web/src/contractors/contractor-regdocs-model.test.ts.
 
-const DOCS = ['regdocs-svid.pdf', 'regdocs-vyp.pdf'].map((name) =>
-  fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)),
-);
+const fixture = (name: string) => fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+const DOCS = ['regdocs-svid.pdf', 'regdocs-vyp.pdf'].map(fixture);
 const INN = '02503202010045';
+const IP_INN = '21503199000123';
 const NAME = 'ОсОО «Тестовая бухгалтерия»';
 
-/** «+ Добавить» → «Из свидетельства и выписки» → оба PDF → «Распознать». */
-async function recognize(page: Page): Promise<Locator> {
+/** «+ Добавить» → «Из свидетельства и выписки» → оба PDF (или свои) → «Распознать». */
+async function recognize(page: Page, docs: string[] = DOCS): Promise<Locator> {
   await page.getByRole('button', { name: 'Добавить', exact: true }).click();
   await page
     .getByRole('menu', { name: 'Добавить' })
     .getByRole('menuitem', { name: /^Из свидетельства и выписки/ })
     .click();
   const dialog = page.getByRole('dialog', { name: 'Новый контрагент из свидетельства и выписки' });
-  await dialog.locator('[data-rd-input]').setInputFiles(DOCS);
-  await expect(dialog.locator('[data-rd-file]')).toHaveCount(2);
+  await dialog.locator('[data-rd-input]').setInputFiles(docs);
+  await expect(dialog.locator('[data-rd-file]')).toHaveCount(docs.length);
   await dialog.locator('[data-rd-go]').click();
   return dialog;
 }
 
 /** Контрагенты организации теста с этим ИНН. */
-async function byInn(api: APIRequestContext): Promise<{ id: string }[]> {
-  const filters = encodeURIComponent(JSON.stringify({ inn: { type: 'text', q: INN } }));
+async function byInn(api: APIRequestContext, inn = INN): Promise<{ id: string }[]> {
+  const filters = encodeURIComponent(JSON.stringify({ inn: { type: 'text', q: inn } }));
   const res = await api.get(`/api/contractors?size=all&filters=${filters}`);
   expect(res.status(), await res.text()).toBe(200);
   return ((await res.json()) as { items: { id: string }[] }).items;
@@ -137,5 +138,67 @@ test.describe('Этап 2: контрагент из свидетельства 
     await dup.locator('[data-rd-dup-open]').click();
     await expect(page.getByRole('dialog', { name: NAME }).locator('[data-cp-card]')).toBeVisible();
     expect(await byInn(page.request)).toHaveLength(1);
+  });
+
+  test('(прототип v82) свидетельство о регистрации ИП из ГНС: форма заполнена «из свидетельства ИП», налоговый орган — из шапки; вместе с документом юрлица — «разные организации»; после сохранения в истории — «Создан из свидетельства ИП (бета)»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await orgWithTypes(page.request, origin);
+    await page.goto('/app/cps/all');
+
+    // Свидетельство ИП вместе со свидетельством юрлица — формы нет.
+    const mixed = await recognize(page, [fixture('regdocs-ipsv.pdf'), DOCS[0]!]);
+    await expect(mixed.locator('[data-rd-err]')).toContainText(
+      'свидетельство ИП загружено вместе с документом юрлица',
+      { timeout: 30_000 },
+    );
+    await mixed.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(mixed).toBeHidden();
+
+    await recognize(page, [fixture('regdocs-ipsv.pdf')]);
+    const form = page
+      .getByRole('dialog', { name: /^Новый контрагент/ })
+      .filter({ has: page.locator('[data-cf]') });
+    await expect(form).toBeVisible({ timeout: 30_000 });
+    await expect(
+      form.getByText(/^Заполнено из свидетельства ИП — проверьте все поля/),
+    ).toBeVisible();
+    await expect(form.locator('[data-rd-sum]')).toContainText('Распознано: Свидетельство ИП');
+    await expect(form.locator('[data-cp-field="name"]')).toHaveValue('ИП Токтогулов А. Б.');
+    await expect(form.locator('[data-cp-field="inn"]')).toHaveValue(IP_INN);
+    await expect(form.locator('[data-cp-field="form"] option:checked')).toHaveText('ИП');
+    await expect(form.getByLabel('Регистрационный номер')).toHaveValue('123-4567-890-1234');
+    await expect(form.locator('[data-gked-main]')).toContainText('62.01.0');
+    // У полей — «из свидетельства ИП»; налоговый орган — из шапки свидетельства, не «по адресу».
+    expect(await form.locator('[data-rd-src="ipsv"]').count()).toBeGreaterThanOrEqual(9);
+    await expect(form.locator('[data-rd-src="ipsv"]').first()).toHaveText('из свидетельства ИП');
+    await expect(form.locator('[data-rd-src="addr"]')).toHaveCount(0);
+
+    if (isMobile) {
+      await form.locator('[data-cf-step="3"]').click();
+      await expect(form.locator('[data-cf]')).toHaveAttribute('data-step', '3');
+    }
+    const responsible = form.locator('[data-cp-field="responsible"]');
+    if (!(await responsible.inputValue())) await responsible.selectOption({ index: 1 });
+    const fee = form.locator('[data-cp-field="fee"]');
+    if ((await fee.count()) && !(await fee.inputValue())) await fee.fill('5000');
+    await form.locator('[data-cp-save]').click();
+    await expect(form).toBeHidden();
+    expect(await byInn(page.request, IP_INN)).toHaveLength(1);
+
+    // Карточка: «Регистрационные данные» с пометкой «из свидетельства ИП», в истории — создание из него.
+    const card = page.getByRole('dialog', { name: 'ИП Токтогулов А. Б.' });
+    await expect(card.locator('[data-cp-card]')).toBeVisible();
+    await expect(card.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства ИП');
+    await toTab(page, card, isMobile, /^История/);
+    await expect(
+      card
+        .getByRole('list', { name: 'История' })
+        .getByRole('listitem')
+        .filter({ hasText: 'Создан из свидетельства ИП (бета)' }),
+    ).toHaveCount(1);
   });
 });

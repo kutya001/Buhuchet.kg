@@ -19,6 +19,7 @@ import {
   inputClass,
   Modal,
   Note,
+  PasswordInput,
   PhoneInput,
   RecordChangedNotice,
   useToast,
@@ -27,7 +28,7 @@ import {
 import { useId, useState, type FormEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
-import { fieldError } from '../auth/fields';
+import { fieldError, usePasswordEye } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { DISPLAY_NAME_CODES, DisplayNameField, useAutoDisplayName } from './display-name-field';
@@ -197,6 +198,7 @@ export function NewEmployeeDialog({
   onDone: (employee: Employee) => void;
 }) {
   const t = useT();
+  const eye = usePasswordEye();
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
@@ -350,14 +352,14 @@ export function NewEmployeeDialog({
             error={fieldError(t, errors.temporaryPassword)}
           >
             {(control) => (
-              <input
+              // Прототип v82 (`ne-pass`): временный пароль виден сразу, глаз его прячет.
+              <PasswordInput
                 {...control}
                 {...fields.temporaryPassword}
-                type="text"
+                labels={eye}
+                open
+                mono
                 autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                className={inputClass({ mono: true })}
               />
             )}
           </Field>

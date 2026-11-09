@@ -202,11 +202,15 @@ export function RegdocsDialog({
       );
     }
     if (out.error === 'same') {
-      const kind = t(`cp.rd.kind.${out.sameKind ?? 'svid'}`).toLocaleLowerCase('ru');
+      // строчная только первая буква: «свидетельство ИП» (прототип v82)
+      const kind = t(`cp.rd.kind.${out.sameKind ?? 'svid'}`).replace(/^\S/, (s) =>
+        s.toLocaleLowerCase('ru'),
+      );
       setErr(t('cp.rd.err.same', { kind }));
       return;
     }
     if (out.error === 'diff') return setErr(t('cp.rd.err.diff'));
+    if (out.error === 'mix') return setErr(t('cp.rd.err.mix'));
     if (out.error === 'none' || !out.result) return setErr(t('cp.rd.err.none'));
     if (out.duplicate) return setDup({ d: out.duplicate, open: true });
     const ok = current.current.filter((r) => r.state === 'ok' && r.id && r.kind);
