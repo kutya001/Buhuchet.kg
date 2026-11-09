@@ -135,7 +135,37 @@ const rdDate=s=>{const m=String(s||'').match(/(\d{1,2})[./](\d{1,2})[./](\d{4})/
 const rdFio=s=>String(s||'').replace(/\s+/g,' ').trim().replace(/[A-Za-zА-Яа-яЁёӨөҮүҢң]+/g,w=>w===w.toUpperCase()&&w.length>1?w[0]+w.slice(1).toLowerCase():w);
 const rdQuotes=s=>String(s||'').replace(/"([^"]+)"/g,'«$1»').replace(/[“”„]([^“”„]+)[“”„]/g,'«$1»').replace(/\s+/g,' ').trim();
 // Значения справки из нескольких документов: {v, src, date}
-function rdExtract(file){const lines=rdLines(file.pages);const kind=rdKind(lines);const pairs=rdPairs(lines,kind);const all=lines.map(l=>l.text).join('\n');
+/* ═════════════ Свидетельство о регистрации ИП из ГНС (решение заказчика 09.11.2026) ═════════════ */
+/* Подписи полей нарисованы в фоновой картинке, в текстовом слое только значения. Документ узнаётся по названию в свойствах PDF
+   или по шапке «Управление Государственной налоговой службы …» вместе со строкой «ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ» / «ЖЕКЕ ИШКЕР».
+   Значения — по виду и порядку сверху вниз: шапка (УГНС), номер 000-0000-000-0000 и дата выдачи, ИНН (14 цифр по клеткам), ОКПО (8 цифр),
+   ФИО, адрес (1–2 строки), форма, «код-вид деятельности», дата первичной регистрации, дата перерегистрации (если есть), подписант */
+const RD_IPF=/^(индивидуальный предприниматель|жеке ишкер)$/i,RD_IPNO=/\d{3}-\d{4}-\d{3}-\d{4}/,RD_FIO=/^[\p{L}-]+(\s+[\p{L}-]+){1,4}$/u;
+function rdIsIp(file,lines){const t=`${(file.info||{}).Title||''} ${(file.info||{}).Subject||''}`.toLowerCase().replace(/ё/g,'е');
+  if(/свидетельств\S* о (государственн\S* )?регистрации ип(\s|$)|свидетельств\S* о (государственн\S* )?регистрации индивидуальн/.test(t))return true;
+  return lines.some(l=>/управлени\S* государственн\S* налогов\S* служб/i.test(l.text))&&lines.some(l=>RD_IPF.test(l.text.trim()))}
+function rdIpExtract(file,lines){const pages=[...new Set(lines.map(l=>l.page))];const pg=p=>lines.filter(l=>l.page===p);
+  // Русский лист; кыргызский — только если русского нет
+  const ru=p=>pg(p).some(l=>/^индивидуальный предприниматель$/i.test(l.text.trim())),kg=p=>pg(p).some(l=>/^жеке ишкер$/i.test(l.text.trim()));
+  const p0=pages.find(ru)??pages.find(kg)??pages[0];const L=pg(p0);const isKg=!ru(p0);const f={};
+  const put=(k,v)=>{v=String(v??'').replace(/\s+/g,' ').trim();if(v&&!rdEmpty(v)&&!f[k])f[k]={v,kg:isKg}};
+  const dg=l=>l.text.replace(/\s/g,''),num=(l,n)=>/^[\d\s]+$/.test(l.text)&&dg(l).length===n;
+  const iNo=L.findIndex(l=>RD_IPNO.test(l.text));let issued='';
+  put('ugnsHead',L.slice(0,iNo<0?1:iNo).filter(l=>/налогов|служб|район|город|г\./i.test(l.text)).map(l=>l.text).join(' '));
+  if(iNo>=0){const t=L[iNo].text;put('regNo',t.match(RD_IPNO)[0]);const d=t.replace(RD_IPNO,'').match(/\d{2}\.\d{2}\.\d{4}/);if(d)issued=rdDate(d[0])}
+  const iInn=L.findIndex((l,k)=>k>iNo&&num(l,14)),iOk=L.findIndex((l,k)=>k>iNo&&num(l,8));
+  if(iInn>=0)put('inn',dg(L[iInn]));if(iOk>=0)put('okpo',dg(L[iOk]));
+  const iF=L.findIndex(l=>RD_IPF.test(l.text.trim()));
+  const mid=L.slice(Math.max(iNo,iInn,iOk)+1,iF>=0?iF:L.length).map(l=>l.text);const fi=mid.findIndex(t=>RD_FIO.test(t)&&!/[,\d]/.test(t));
+  if(fi>=0){put('head',mid[fi]);put('address',mid.slice(fi+1).join(' '))}
+  const rest=iF>=0?L.slice(iF+1):[];const isD=l=>/^\d{2}\.\d{2}\.\d{4}$/.test(l.text.trim());
+  const gi=rest.findIndex(l=>/^\d{2}\.\d{2}(\.\d{1,2})?\s*[-–—]/.test(l.text));
+  if(gi>=0){const m=rest[gi].text.match(/^(\d{2}\.\d{2}(?:\.\d{1,2})?)\s*[-–—]\s*(.*)$/);const di=rest.findIndex((l,k)=>k>gi&&isD(l));
+    put('gked',m[1]);put('actMain',[m[2],...(di>gi+1?rest.slice(gi+1,di).map(l=>l.text):[])].join(' '))}
+  const ds=rest.slice(gi+1).filter(isD);put('firstReg',ds[0]&&ds[0].text);put('reReg',ds[1]&&ds[1].text);
+  if(!issued){const c=String((file.info||{}).CreationDate||'').match(/D:(\d{4})(\d{2})(\d{2})/);if(c)issued=`${c[1]}-${c[2]}-${c[3]}`}
+  return {kind:'ipsv',f,founders:[],more:[],issued,link:'',text:L.map(l=>l.text).join('\n'),lines:L.length,pairs:0,kg:isKg}}
+function rdExtract(file){const lines0=rdLines(file.pages);if(rdIsIp(file,lines0))return rdIpExtract(file,lines0);const lines=lines0;const kind=rdKind(lines);const pairs=rdPairs(lines,kind);const all=lines.map(l=>l.text).join('\n');
   const f={};const put=(k,v,kg)=>{if(rdEmpty(v))return;if(f[k]&&!(f[k].kg&&!kg))return;f[k]={v:v.trim(),kg:!!kg}};
   const founders=[],more=[];
   pairs.forEach(p=>{let lb=rdLabel(p.l);if(!lb)return;let k=lb.k;
@@ -166,8 +196,8 @@ function rdExtract(file){const lines=rdLines(file.pages);const kind=rdKind(lines
   return {kind,f,founders:[...new Set(founders)],more:[...new Set(more)],issued,link,text:all,lines:lines.length,pairs:pairs.length}}
 
 /* ═════════════ Реквизиты контрагента из одного или двух документов ═════════════ */
-const RD_DOC={svid:'Свидетельство',vyp:'Выписка'};
-const RD_FROM={svid:'из свидетельства',vyp:'из выписки',both:'из выписки и свидетельства'};
+const RD_DOC={svid:'Свидетельство',vyp:'Выписка',ipsv:'Свидетельство ИП'};
+const RD_FROM={svid:'из свидетельства',vyp:'из выписки',both:'из выписки и свидетельства',ipsv:'из свидетельства ИП'};
 const rdCmp=x=>String(x??'').toLowerCase().replace(/ё/g,'е').replace(/[\s"«»'.,()-]/g,'');
 // Форма собственности: по организационно-правовой форме или по началу наименования
 function rdForm(t){const n=norm(t||'');if(!n)return '';const it=DICT.forms.items.filter(x=>x.active);
@@ -197,8 +227,24 @@ function rdGked(code,text){const r={code:'',choose:[],like:[],raw:code||'',text:
     r.like=GK.filter(y=>y.level==='subclass'&&y.active!==false).map(y=>{const nw=norm(y.name).split(/[^а-яёa-z0-9]+/).filter(w=>w.length>3);const n=ws.filter(w=>nw.some(x=>x.startsWith(w))).length;return {c:y.code,n,s:n-0.1*Math.max(0,nw.length-n)}})
       .filter(y=>y.n>=need).sort((a,b)=>b.s-a.s).slice(0,5).map(y=>y.c)}
   return r}
+// УГНС из шапки свидетельства ИП: «… службы по Свердловскому району города Бишкек» → «УГНС по Свердловскому району г. Бишкек»
+function rdUgnsHead(t){const m=String(t||'').match(/служб\S*\s+по\s+(.+)$/i);if(!m)return '';const p=m[1].replace(/(^|\s)город[ауе]?(?=\s)/gi,'$1г.').replace(/\s+/g,' ').trim();
+  const it=DICT.ugns.items.filter(x=>x.active);const n=norm('по '+p);const u=it.find(x=>norm(x.name).endsWith(n))||it.find(x=>norm(x.name).includes(n));if(u)return ugK(u);
+  return rdUgns({},p.replace(/([А-ЯЁ][а-яё-]+?)ому\s+району/,'$1ий район'))}
+// Свидетельство ИП: название «ИП Фамилия И. О.», полное — «Индивидуальный предприниматель ФИО», руководитель — ФИО; УГНС из шапки, иначе по адресу
+function rdIpFields(d){const f=d.f;const o={};const set=(k,v)=>{if(v!==''&&v!=null)o[k]=v};
+  const fio=f.head?rdFio(f.head.v):'';const w=fio.split(' ').filter(Boolean);const ini=w.slice(1).filter(x=>!/^(кызы|уулу|оглы|кизи)$/i.test(x)).map(x=>x[0].toUpperCase()+'.').join(' ');
+  set('name',w.length?`ИП ${w[0]}${ini?' '+ini:''}`:'');set('full',fio?'Индивидуальный предприниматель '+fio:'');set('head',fio);
+  set('inn',f.inn?f.inn.v:'');set('regNo',f.regNo?f.regNo.v:'');set('okpo',f.okpo?f.okpo.v:'');
+  set('form',DICT.forms.items.some(x=>x.active&&x.name==='ИП')?'ИП':rdForm('Индивидуальный предприниматель'));
+  set('addr',f.address?f.address.v.split(',').map(s=>s.trim()).filter(s=>s&&!rdEmpty(s)).join(', '):'');
+  set('regDate',rdDate(f.firstReg&&f.firstReg.v));set('reRegDate',rdDate(f.reReg&&f.reReg.v));
+  if(f.gked)o.gk={codes:[f.gked.v],text:f.actMain?f.actMain.v:''};
+  const u=rdUgnsHead(f.ugnsHead&&f.ugnsHead.v);if(u){o.ugns=u;o.ugnsSrc='ipsv'}
+  else if(o.addr){o.ugns=rdUgns({},o.addr.replace(/([А-ЯЁ][а-яё-]+)\s+р-н/g,'$1 район').replace(/([А-ЯЁ][а-яё-]+)\s+г\./g,'г. $1'));if(o.ugns)o.ugnsSrc='addr'}
+  o.stopped=false;o.status='';return o}
 // Поля одного документа в терминах контрагента
-function rdCpFields(d){const f=d.f;const o={};const set=(k,v)=>{if(v!==''&&v!=null&&!(typeof v==='string'&&rdEmpty(v)))o[k]=v};
+function rdCpFields(d){if(d.kind==='ipsv')return rdIpFields(d);const f=d.f;const o={};const set=(k,v)=>{if(v!==''&&v!=null&&!(typeof v==='string'&&rdEmpty(v)))o[k]=v};
   set('name',rdName(f));set('full',f.nameRu?rdQuotes(f.nameRu.v):'');set('inn',f.inn?f.inn.v.replace(/\D/g,''):'');set('regNo',f.regNo?f.regNo.v.replace(/\s+/g,''):'');set('okpo',f.okpo?f.okpo.v.replace(/\D/g,''):'');
   set('form',rdForm(f.form?f.form.v:'')||rdForm(f.nameRu?rdQuotes(f.nameRu.v):'')||rdForm(f.shortRu?rdQuotes(f.shortRu.v):''));
   set('addr',rdAddr(f));if(f.phone)set('phoneRaw',f.phone.v);if(f.phone&&rdPhone(f.phone.v))o.phone=rdPhone(f.phone.v);
@@ -218,6 +264,7 @@ const RD_KEYS=['name','full','inn','regNo','okpo','form','addr','phone','email',
 function rdToCp(docs){const ok=docs.filter(d=>d.kind);const res={v:{},src:{},alt:{},gk:null,ugns:'',stopped:false,err:'',docs:ok};
   if(!ok.length){res.err='none';return res}
   const F=ok.map(d=>({d,o:rdCpFields(d)}));
+  if(F.length>1&&F.some(x=>x.d.kind==='ipsv')){res.err='mix';return res}
   if(F.some(x=>x.o.ip||x.o.branch)){res.err='ip';return res}
   const inns=[...new Set(F.map(x=>x.o.inn).filter(Boolean))];if(inns.length>1){res.err='diff';return res}
   const ord=[...F].sort((a,b)=>(b.d.issued||'').localeCompare(a.d.issued||'')||(a.d.kind==='vyp'?-1:1));
@@ -232,6 +279,6 @@ function rdToCp(docs){const ok=docs.filter(d=>d.kind);const res={v:{},src:{},alt
   const g=ord.find(x=>x.o.gk&&x.o.gk.codes.length)||ord.find(x=>x.o.gk);
   if(g){const codes=g.o.gk.codes;const main=rdGked(codes[0],g.o.gk.text);
     res.gk=Object.assign(main,{src:g.d.kind,more:codes.slice(1).map(c=>rdGked(c).code).filter(c=>c&&c!==main.code)})}
-  const u=ord.find(x=>x.o.ugns);if(u){res.ugns=u.o.ugns}
+  const u=ord.find(x=>x.o.ugns);if(u){res.ugns=u.o.ugns;res.ugnsSrc=u.o.ugnsSrc||'addr'}
   res.stopped=F.some(x=>x.o.stopped);res.status=(F.find(x=>x.o.status)||{o:{}}).o.status||'';
   return res}

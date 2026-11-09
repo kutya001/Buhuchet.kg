@@ -4,9 +4,12 @@
    Тарифы и цифры — только из справочника: налог-взнос с guide.tariffs (ПЛТ-01), у тарифа id, short (краткое имя), status (код статуса),
    total, parts (стороны и фонды), cap (base — предельная база, amount — наибольшие взносы на работника); guide.exceptionsGked — тексты исключений по ГКЭД;
    статус СПиНО (ЛЬГ-29) в «Налоговых льготах и особых статусах»: gked.ex — запрещающие коды, gked.warn — коды с предупреждением, suggest.notWith — не для статусов.
-   Контрагент: sf — признаки {cashless, registry, confirmed, gov} (true / false, не указано — нет ключа), sfT — id тарифа,
+   Контрагент: sf — признаки {registry, confirmed, gov} (true / false, не указано — нет ключа) и pay — выплата зарплаты (card / mixed / cash), sfT — id тарифа,
    sfMan — выбран вручную, sfWhy — причина ручного выбора. При тарифе СПиНО статус ЛЬГ-29 стоит и в списке статусов контрагента. */
-const SF_FLAGS=[['cashless','Зарплата только безналично (на карты)'],['registry','Реестр наёмных работников загружен в Салык.кг'],['confirmed','Тариф подтверждён ГНС'],['gov','Госфинансирование']];
+// Выплата зарплаты на тариф не влияет (решение заказчика 09.11.2026): юрлицу с наличными — только подсказка про ТК КР ст. 153 ч. 3; ИП платит как хочет
+const SF_PAY=[['card','Только безналично'],['mixed','Безналично и наличными'],['cash','Только наличными']];
+const SF_CASH_HINT='Юрлицо должно платить зарплату безналично (ТК КР, ст. 153 ч. 3). Наличными можно только при непреодолимой силе, чрезвычайном положении или чрезвычайной ситуации и в случаях, которые установил Кабинет министров. Проверьте основание.';
+const SF_FLAGS=[['registry','Реестр наёмных работников загружен в Салык.кг'],['confirmed','Тариф подтверждён ГНС'],['gov','Госфинансирование']];
 const SF_FLAG_HINT={confirmed:'Подтверждение в кабинете налогоплательщика («Переписка с ГНС»)',gov:'Получает средства из государственного бюджета'};
 const SF_ORDER=['spino','general','pvtpki'];
 const sfTax=()=>TAXES.find(x=>x.guide&&(x.guide.tariffs||[]).some(t=>t.id==='spino'));
@@ -24,6 +27,10 @@ function sfCapTxt(t){const c=t&&t.cap;if(!c)return '';return [c.base?`база �
 // Признаки показываются, если у контрагента есть наёмные сотрудники
 const sfNeed=c=>!!c&&c.kind!=='oneoff'&&((c.bases||[]).includes('employees')||(c.assign||[]).some(a=>!a.to&&a.t==='soc'));
 const sfFlag=(c,k)=>c&&c.sf&&typeof c.sf[k]==='boolean'?c.sf[k]:null;
+const sfPay=c=>c&&c.sf&&SF_PAY.some(x=>x[0]===c.sf.pay)?c.sf.pay:null;
+const sfPayName=p=>(SF_PAY.find(x=>x[0]===p)||[])[1]||'';
+// Подсказка юрлицу (любая форма, кроме «ИП»; форма не указана — тоже юрлицо) с наличной зарплатой; текст — у статуса ЛЬГ-29 в справочнике
+function sfCashWarn(c){if(!sfNeed(c))return '';const p=sfPay(c);if(p!=='mixed'&&p!=='cash'||c.form==='ИП')return '';const b=sfSpBen();return b&&b.cashHint||SF_CASH_HINT}
 // Исключение по основному ГКЭД: block — запрещающий код («Кроме»), warn — код с предупреждением; text — какое исключение закона
 function sfGkHit(c){const b=sfSpBen();if(!b||!c||!c.gked)return null;const g=b.gked||{};const ex=(g.ex||[]).find(p=>gkHit(c.gked,p)),wr=ex?null:(g.warn||[]).find(p=>gkHit(c.gked,p));if(!ex&&!wr)return null;const p=ex||wr;
   const e=(sfGuide().exceptionsGked||[]).find(x=>[...(x.gkedBlock||[]),...(x.gked||[])].some(k=>k===p||gkHit(c.gked,k)));
@@ -36,7 +43,7 @@ function sfAuto(c){if(!sfNeed(c))return null;const sp=sfById('spino'),gen=sfById
   if(!c.gked)miss.push('основной ГКЭД');else{const h=sfGkHit(c);if(h&&h.block)why.push(`Основной ГКЭД ${c.gked} не допускает ${nm}: ${h.text}`);else if(h)warn.push(`Проверьте право на ${nm} по виду деятельности: основной ГКЭД ${c.gked} — ${h.text}`)}
   if(sb&&sb.suggest&&(sb.suggest.warnForms||[]).length){const f=DICT.forms.items.find(x=>x.name===c.form);if(f&&sb.suggest.warnForms.includes(f.code))warn.push(`Форма «${c.form}» часто означает бюджетное финансирование: проверьте признак «Госфинансирование»`)}
   if(sfFlag(c,'gov')===true)why.push('Госфинансирование');
-  [['cashless','Зарплата не безналично','способ выплаты зарплаты'],['registry','Реестр работников не загружен в Салык.кг','реестр работников'],['confirmed','Тариф не подтверждён ГНС','подтверждение ГНС']].forEach(([k,no,un])=>{const v=sfFlag(c,k);if(v===false)why.push(no);else if(v===null)miss.push(un)});
+  [['registry','Реестр работников не загружен в Салык.кг','реестр работников'],['confirmed','Тариф не подтверждён ГНС','подтверждение ГНС']].forEach(([k,no,un])=>{const v=sfFlag(c,k);if(v===false)why.push(no);else if(v===null)miss.push(un)});
   if(why.length)return {t:gen,why,miss,warn:[]};
   if(miss.length)return {t:null,why:[],miss,warn};
   return {t:sp,why:['Все условия выполнены'],miss:[],warn}}

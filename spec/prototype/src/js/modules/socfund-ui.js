@@ -12,7 +12,8 @@ function sfFields(p,cx,st,edit){const d=sfDraft(cx,st);if(!sfNeed(d))return '';c
   const yn=k=>{const v=typeof st.sf[k]==='boolean'?st.sf[k]:k==='gov'?false:null;return `<div class="seg" role="group" aria-label="${esc(SF_FLAGS.find(f=>f[0]===k)[1])}" data-sff="${k}">${[[true,'Да'],[false,'Нет']].map(([x,l])=>`<button type="button" data-v="${x}" class="${v===x?'on':''}" ${ro?'disabled':''}>${l}</button>`).join('')}</div>`};
   const s=cur?sfState(d):null;const bad=!!(s&&s.bad);const why=bad?sfBadWhy(s):'';const show=cur||a&&a.t;
   return `<div class="fld full sf-box" data-f="${p}-sf"><label>Тариф Соцфонда${tipI('Тариф страховых взносов за работников. Система предлагает его по основному ГКЭД, статусам ПВТ / ПКИ и признакам ниже. Ставки, предельная база и ограничения по ГКЭД — из справочника платформы. Зарплату платформа не считает.')}</label>
-    <div class="sf-flags">${SF_FLAGS.map(([k,l])=>`<div class="sf-flag"><span class="grow">${esc(l)}${SF_FLAG_HINT[k]?`<span class="hint">${esc(SF_FLAG_HINT[k])}</span>`:''}</span>${yn(k)}</div>`).join('')}</div>
+    <div class="sf-flags"><div class="sf-flag"><span class="grow">Выплата зарплаты<span class="hint">На тариф не влияет</span></span>${sel(p+'-sfpay',[['','Не указано'],...SF_PAY],sfPay(d)||'',`aria-label="Выплата зарплаты" style="width:auto;max-width:100%" ${ro?'disabled':''}`)}</div>${SF_FLAGS.map(([k,l])=>`<div class="sf-flag"><span class="grow">${esc(l)}${SF_FLAG_HINT[k]?`<span class="hint">${esc(SF_FLAG_HINT[k])}</span>`:''}</span>${yn(k)}</div>`).join('')}</div>
+    ${sfCashWarn(d)?`<div class="note yellow sf-cash">${ic('alert')}<span>${esc(sfCashWarn(d))}</span></div>`:''}
     <div class="sf-pick">${sel(p+'-sft',[['',a&&a.t?`Определить автоматически: ${sfShort(a.t)}`:'Определить автоматически'],...sfTariffs().map(t=>[t.id,sfTitle(t)+(t.total?' · '+t.total:'')])],st.sfT||'',`aria-label="Тариф Соцфонда" ${ro?'disabled':''}`)}</div>
     ${a?a.t?`<div class="hint">${ic('info','sm')} По условиям: <b>${esc(sfShort(a.t))}</b>${a.t.total?' · '+esc(a.t.total):''} — ${esc(a.why.join('; '))}${a.miss.length?`. Не указано: ${esc(a.miss.join(', '))}`:''}</div>`:`<div class="note warn">${ic('alert')}<span>Тариф Соцфонда не определён: укажите ${esc(a.miss.join(', '))}</span></div>`:''}
     ${sfWarnHtml(a)}
@@ -23,6 +24,7 @@ function sfFields(p,cx,st,edit){const d=sfDraft(cx,st);if(!sfNeed(d))return '';c
 // Обработчики блока: признаки Да/Нет, выбор тарифа, «Сменить на …», причина
 function sfMount(el,p,st,snap,draw){const box=el.querySelector(`[data-f="${p}-sf"]`);if(!box)return;
   box.querySelectorAll('[data-sff]').forEach(g=>g.onclick=e=>{const b=e.target.closest('[data-v]');if(!b||b.disabled)return;snap&&snap();st.sf=Object.assign({},st.sf,{[g.dataset.sff]:b.dataset.v==='true'});draw()});
+  const pp=$('#'+p+'-sfpay',el);if(pp)pp.onchange=()=>{snap&&snap();const sf=Object.assign({},st.sf);delete sf.cashless;if(pp.value)sf.pay=pp.value;else delete sf.pay;st.sf=sf;draw()};
   const s=$('#'+p+'-sft',el);if(s)s.onchange=()=>{snap&&snap();st.sfT=s.value;st.sfTouch=true;draw()};
   box.querySelectorAll('[data-sfto]').forEach(b=>b.onclick=()=>{snap&&snap();st.sfT=b.dataset.sfto;st.sfTouch=true;st.sfWhy='';draw()});
   const w=$('#'+p+'-sfwhy',el);if(w)w.oninput=()=>{st.sfWhy=w.value}}
@@ -32,8 +34,8 @@ function sfValid(el,p,cx,st){if(!sfManBad(cx,st))return true;return setErr(el,p+
 function sfConfirm(cx,st,go){if(!sfManBad(cx,st)||st.sfOk)return true;const d=sfDraft(cx,st);const s=sfState(d);const a=sfAuto(d);
   confirmDlg({title:'Тариф не совпадает с условиями',text:`«${esc(sfShort(sfById(st.sfT)))}» расходится с условиями: ${esc(sfBadWhy(s)||('не указано: '+a.miss.join(', ')))}. Сохранить ручной выбор? В истории контрагента запишется, кто и почему его поставил.`,ok:'Сохранить',run:()=>{st.sfOk=true;go()}});return false}
 // Запись признаков и тарифа в контрагента после сохранения формы: без выбора — тариф по условиям; выбор, совпавший с условиями, — не ручной
-function sfApply(c,st){const fl={};SF_FLAGS.forEach(([k])=>{if(typeof st.sf[k]==='boolean')fl[k]=st.sf[k]});const was=JSON.stringify(c.sf||{});if(Object.keys(fl).length)c.sf=fl;else delete c.sf;
-  if(was!==JSON.stringify(c.sf||{}))log('cp',c.id,'Признаки для тарифа Соцфонда: '+SF_FLAGS.filter(([k])=>typeof fl[k]==='boolean').map(([k,l])=>`${l} — ${fl[k]?'да':'нет'}`).join('; '),c.id);
+function sfApply(c,st){const fl={};if(sfPay(st))fl.pay=st.sf.pay;SF_FLAGS.forEach(([k])=>{if(typeof st.sf[k]==='boolean')fl[k]=st.sf[k]});const was=JSON.stringify(c.sf||{});if(Object.keys(fl).length)c.sf=fl;else delete c.sf;
+  if(was!==JSON.stringify(c.sf||{}))log('cp',c.id,'Признаки для тарифа Соцфонда: '+[fl.pay?`Выплата зарплаты — ${sfPayName(fl.pay).toLowerCase()}`:'',...SF_FLAGS.filter(([k])=>typeof fl[k]==='boolean').map(([k,l])=>`${l} — ${fl[k]?'да':'нет'}`)].filter(Boolean).join('; '),c.id);
   const a=sfAuto(c);if(!a)return;
   if(!st.sfT){if(a.t&&(!c.sfT||st.sfTouch)&&(c.sfT!==a.t.id||c.sfMan))sfSet(c,a.t.id,false);return}
   if(!st.sfTouch)return;const man=!a.t||a.t.id!==st.sfT;if(st.sfT!==c.sfT||man!==!!c.sfMan)sfSet(c,st.sfT,man,man?(st.sfWhy||'').trim():'')}
@@ -41,10 +43,11 @@ const sfInit=c=>({sf:Object.assign({},c&&c.sf||{}),sfT:c&&c.sfT||'',sfTouch:fals
 
 /* ═════════════ Карточка контрагента: строка «Тариф Соцфонда» ═════════════ */
 function sfCardKv(c){const s=sfState(c);if(!s)return '';const ed=can('createCp')&&!c.archived;
-  const fl=SF_FLAGS.map(([k,l])=>{const v=sfFlag(c,k);return `${esc(l.replace(/\s*\(.*\)$/,''))}: ${v===null?(k==='gov'?'нет':'<span class="yellow">не указано</span>'):v?'да':'нет'}`}).join(' · ');
+  const fl=[`Выплата зарплаты: ${sfPay(c)?esc(sfPayName(sfPay(c)).toLowerCase()):'<span class="faint">не указано</span>'}`,...SF_FLAGS.map(([k,l])=>{const v=sfFlag(c,k);return `${esc(l.replace(/\s*\(.*\)$/,''))}: ${v===null?(k==='gov'?'нет':'<span class="yellow">не указано</span>'):v?'да':'нет'}`})].join(' · ');
   const why=sfBadWhy(s);const a=s.auto;
   return `<div class="sf-kv"><span class="k">Тариф Соцфонда</span><span class="v">${sfPill(s.cur)}${s.cur?` <span class="tag">${s.man?'выбран вручную':'определён автоматически'}</span>`:''} <button class="linkbtn" id="cp-sf" style="font-size:12px">${ed?(s.cur?'изменить':'Указать'):'ставки'}</button>
     <div class="hint">${fl}</div>
+    ${sfCashWarn(c)?`<div class="note yellow sf-cash" style="margin-top:6px">${ic('alert')}<span>${esc(sfCashWarn(c))}</span></div>`:''}
     ${s.none?`<div class="hint">${a.t?`По условиям подходит «${esc(sfShort(a.t))}»`:`Не указано: ${esc(a.miss.join(', '))}`}</div>`:''}
     ${s.bad&&!s.man?`<div class="note warn sf-n" style="margin-top:6px">${ic('alert')}<span class="grow">Тариф ${esc(sfShort(s.cur))} больше не применим: ${esc(why)}</span>${ed&&a.t?`<button type="button" class="btn sm" id="cp-sfto">Сменить на ${esc(sfLow(sfShort(a.t)).replace(/ тариф$/,''))}</button>`:''}</div>`:''}
     ${s.bad&&s.man?`<div class="note warn sf-n" style="margin-top:6px">${ic('alert')}<span>Выбран вручную, хотя не совпадает с условиями: ${esc(why)}${c.sfWhy?`. Причина: ${esc(c.sfWhy)}`:''}</span></div>`:''}

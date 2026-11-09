@@ -95,6 +95,12 @@ function confirmDlg({title,text,ok='Подтвердить',danger=false,run}){
 /* Form helpers */
 function fld(label,inner,{req,full,hint,id}={}){return `<div class="fld ${full?'full':''}" ${id?`data-f="${id}"`:''}><label ${id?`for="${id}"`:''} class="${req?'req':''}">${label}</label>${inner}${hint?`<div class="hint">${hint}</div>`:''}<div class="err" hidden></div></div>`}
 const inp=(id,val='',attrs='')=>`<input ${/class=/.test(attrs)?'':'class="inp"'} id="${id}" value="${esc(val)}" ${attrs}>`;
+// Поле пароля с кнопкой-глазом справа: показать введённое и снова скрыть (решение заказчика 09.11.2026). У каждого поля своя кнопка; выбор не запоминается —
+// при каждой отрисовке экрана или окна пароль скрыт. open — временный пароль, который система заполнила сама: показан открыто, глаз его скрывает
+const pwEyeBtn=(id,open)=>{const l=open?'Скрыть пароль':'Показать пароль';return `<button type="button" class="pw-eye" data-pw-eye="${id}" aria-controls="${id}" aria-pressed="${open?'true':'false'}" aria-label="${l}" title="${l}">${ic(open?'eyeoff':'eye','sm')}</button>`};
+const pwInp=(id,val='',attrs='',open=false)=>`<span class="pw-w">${inp(id,val,attrs.replace(/\s*type="[^"]*"/,'')+` type="${open?'text':'password'}" spellcheck="false" autocapitalize="off"`)}${pwEyeBtn(id,open)}</span>`;
+// Временный пароль текстом в окне «Пароль сброшен»: глаз прячет его за точками
+const pwTxt=(id,val)=>`<span class="pw-w pw-ro"><b class="mono pw-txt" id="${id}" data-pwv="${esc(val)}">${esc(val)}</b>${pwEyeBtn(id,true)}</span>`;
 const sel=(id,opts,val,attrs='')=>`<select class="inp" id="${id}" ${attrs}>${opts.map(o=>{const[v,l,dis]=Array.isArray(o)?o:[o,o];return `<option value="${esc(v)}" ${String(v)===String(val)?'selected':''} ${dis?'disabled':''}>${esc(l)}</option>`}).join('')}</select>`;
 function setErr(root,id,msg){const f=root.querySelector(`[data-f="${id}"]`);if(!f)return!msg;f.classList.toggle('bad',!!msg);const e=f.querySelector('.err');e.hidden=!msg;e.innerHTML=msg?ic('alert','sm')+`<span>${esc(msg)}</span>`:'';return !msg}
 const val=(root,id)=>{const e=root.querySelector('#'+id);return e?e.value.trim():''};

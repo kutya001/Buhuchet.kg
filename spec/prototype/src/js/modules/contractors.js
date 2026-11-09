@@ -6,7 +6,7 @@ function cpsTabs(){const v=visCps(true);const a=v.filter(c=>!c.archived);return 
  {id:'mine',label:'Мои контрагенты',icon:'user',count:CPS.filter(c=>!c.archived&&c.resp===S.me).length},
  feat('fee')&&can('fee')?{id:'debtors',label:'Должники',icon:'coins',count:a.filter(c=>c.feeDebt>0).length,red:true}:null,
 ]}
-function cpsAdd(){return [can('createCp')&&{label:'Контрагент',icon:'building',run:addCpDlg},can('cpImport')&&{label:'Загрузка из Excel',icon:'paste',run:importDlg},can('createCp')&&{label:'Из свидетельства и выписки',icon:'upload',run:regDocsDlg,beta:true,sub:'PDF Минюста: форма заполнится сама'}].filter(Boolean)}
+function cpsAdd(){return [can('createCp')&&{label:'Контрагент',icon:'building',run:addCpDlg},can('cpImport')&&{label:'Загрузка из Excel',icon:'paste',run:importDlg},can('createCp')&&{label:'Из свидетельства и выписки',icon:'upload',run:regDocsDlg,beta:true,sub:'PDF Минюста или свидетельство ИП: форма заполнится сама'}].filter(Boolean)}
 // Значок «Показатели не заполнены» у контрагента: в подсказке месяцы, красный — есть просроченные
 const cpKpiPill=c=>{const x=kMissOk()&&!c.archived&&kMissCnt().by[c.id];return x?` <span class="pill ${x.over?'red':'yellow'} sm" title="${esc(kMissTip(x))}" aria-label="${esc(kMissTip(x))}">${ic('gauge')}${x.ms.length}</span>`:''};
 function cpCols(){const fee=feat('fee')&&can('fee');return [

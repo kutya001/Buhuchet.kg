@@ -319,6 +319,24 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   if(!db.meta.v79){db.meta.v79=1;const l=db.ref.localization;const rl=r.localization||[];if(Array.isArray(l))rl.filter(x=>/^land\.video\./.test(x.key)).forEach(x=>{if(l.some(y=>y.key===x.key))return;const i=rl.indexOf(x);const j=i>0?l.findIndex(y=>y.key===rl[i-1].key):-1;l.splice(j<0?l.length:j+1,0,structuredClone(x))});
     const sv={cp1:'vd-cps',rtabs:'vd-reports',journal:'vd-fin',regtasks:'vd-tasks'};(db.ref.kbSteps||[]).forEach(s=>{if(sv[s.id]&&s.video==null)s.video=sv[s.id]});
     const av={a2:'vd-intro',a7:'vd-cps',a8:'vd-reports',a11:'vd-fin',a13:'vd-tasks'};(db.ref.kbArticles||[]).forEach(a=>{if(av[a.id]&&!/<kb-video/.test(a.html||''))a.html=`<p><kb-video data-id="${av[a.id]}"></kb-video></p>`+(a.html||'')})}
+  // v82: признак «Зарплата только безналично» → «Выплата зарплаты»: Да — «Только безналично», Нет — «Безналично и наличными» (на тариф Соцфонда больше не влияет)
+  // Тексты ЛЬГ-29 (условия, срок, подсказка юрлицу), условие и пояснение ПЛТ-01 и статья «Контрагенты» — из refDB.json, если администратор их не менял
+  if(!db.meta.v82){db.meta.v82=1;(db.contractors||[]).forEach(c=>{if(c&&c.sf&&typeof c.sf.cashless==='boolean'){c.sf.pay=c.sf.cashless?'card':'mixed';delete c.sf.cashless}});
+    const bn=x=>(((x.dictionaries||{}).benefits||{}).items||[]).find(b=>b.code==='ЛЬГ-29');const sp=bn(db.ref||{}),fsp=bn(r||{});
+    if(sp&&fsp){const ot='бессрочно, пока выполняются условия; при наличной зарплате или исключённом виде деятельности — общий тариф 27,25 %',oc='юрлицо выплачивает зарплату безналично; ';let ch=0;
+      if(sp.term===ot){sp.term=fsp.term;if(fsp.verifyNote)sp.verifyNote=fsp.verifyNote;ch=1}if((sp.cond||'').includes(oc)){sp.cond=sp.cond.replace(oc,'');ch=1}
+      if(sp.cashHint==null&&fsp.cashHint){sp.cashHint=fsp.cashHint;ch=1}if(ch&&fsp._ua)sp._ua=fsp._ua}
+    const tx=((db.ref||{}).taxes||[]).find(x=>x.code==='ПЛТ-01'),ftx=((r||{}).taxes||[]).find(x=>x.code==='ПЛТ-01');
+    if(tx&&ftx&&tx.guide&&ftx.guide){const g=tx.guide,fn=ftx.guide.notes||[],n1=fn.find(n=>/^Тариф 12,25 % — только при статусе ЛЬГ-29/.test(n)),n2=fn.find(n=>/^Способ выплаты зарплаты на тариф не влияет/.test(n));
+      if(Array.isArray(g.conditions))g.conditions=g.conditions.filter(x=>x.text!=='Юрлицо выплачивает зарплату безналично');
+      const i=(g.notes||[]).findIndex(n=>/безналичная зарплата, реестр/.test(n));if(i>=0&&n1){g.notes[i]=n1;if(n2&&!g.notes.includes(n2))g.notes.splice(i+1,0,n2)}}
+    const arts=(db.ref||{}).kbArticles||[],ba=((r||{}).kbArticles||[]).find(x=>x.id==='a7'),ia=arts.findIndex(x=>x.id==='a7');if(ba&&ia>=0&&(!arts[ia]._ub||arts[ia]._ub==='system'))arts[ia]=structuredClone(ba);db.meta.v82b=1}
+  // v82b: подсказка ЛЬГ-29 по уточнённому ТЗ (ТК КР ст. 153 ч. 3, без перечня постановления № 267) — у тех, кто уже открыл v82 с прежним текстом
+  if(!db.meta.v82b){db.meta.v82b=1;const bn=x=>(((x.dictionaries||{}).benefits||{}).items||[]).find(b=>b.code==='ЛЬГ-29');const sp=bn(db.ref||{}),fsp=bn(r||{});
+    if(sp&&fsp&&fsp.cashHint&&/постановление № 267 от 21\.05\.2025: например/.test(sp.cashHint||''))sp.cashHint=fsp.cashHint}
+  // v80: показатели в расчёте налогов — отметка «Для расчёта налогов» у «Выручки», «ФОТ» и численности, если организация ещё ничего не отмечала
+  if(!db.meta.v80){db.meta.v80=1;const ks=db.indicators;if(Array.isArray(ks)&&!ks.some(i=>i.tax)){const f=(re,role,ts)=>{const i=ks.find(x=>!x.archived&&ts.includes(x.type)&&re.test(String(x.name||'').trim()));if(i)i.tax=role};
+    f(/^выручка/i,'rev',['som','dec']);f(/^(фот|фонд оплаты труда)$/i,'fot',['som','dec']);f(/^(количество сотрудников|численность)/i,'emp',['int'])}}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

@@ -13,7 +13,7 @@ function profileDlg(){
     ${isAdmin()?'':notifyBox(u)}
     <div class="box"><h3>Личные настройки</h3><div class="form">${fld('Тема',sel('pf-theme',[['light','Светлая'],['dark','Тёмная']],effTheme()),{id:'pf-theme'})}</div>
       <div class="row" style="margin-top:10px"><span class="grow"><b>Знакомые элементы в показах</b><div class="hint">Показы «Базы знаний» пропускают то, что вам уже объяснили</div></span><button class="btn sm" id="pf-known">${ic('refresh','sm')}Показывать всё заново</button></div></div>
-    <div class="box"><h3>Смена пароля</h3><div class="form">${fld('Текущий пароль',inp('pf-p0','','type="password" autocomplete="current-password"'),{id:'pf-p0'})}<div></div>${fld('Новый пароль',inp('pf-p1','','type="password" autocomplete="new-password"'),{id:'pf-p1',hint:'Не короче 8 символов'})}${fld('Повторите',inp('pf-p2','','type="password" autocomplete="new-password"'),{id:'pf-p2'})}</div><div class="row"><button class="btn sm" id="pf-pass">Сменить пароль</button></div></div>`,
+    <div class="box"><h3>Смена пароля</h3><div class="form">${fld('Текущий пароль',pwInp('pf-p0','','autocomplete="current-password"'),{id:'pf-p0'})}<div></div>${fld('Новый пароль',pwInp('pf-p1','','autocomplete="new-password"'),{id:'pf-p1',hint:'Не короче 8 символов'})}${fld('Повторите',pwInp('pf-p2','','autocomplete="new-password"'),{id:'pf-p2'})}</div><div class="row"><button class="btn sm" id="pf-pass">Сменить пароль</button></div></div>`,
     foot:`<div class="grow"></div><button class="btn cta" data-close>Готово</button>`,
     mount(el){
       const q=s=>el.querySelector(s);
