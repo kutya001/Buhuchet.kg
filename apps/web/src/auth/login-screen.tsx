@@ -23,6 +23,7 @@ import {
   inputClass,
   linkButtonClass,
   Note,
+  PasswordInput,
   ToastProvider,
   useToast,
 } from '@buhuchet/ui';
@@ -32,7 +33,7 @@ import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { markSignedIn } from '../news/signed-in';
-import { fieldError, NewPasswordFields } from './fields';
+import { fieldError, NewPasswordFields, usePasswordEye } from './fields';
 import { loginErrorText } from './login-errors';
 import { TelegramLinkRow, useTelegramLink } from './telegram-link';
 
@@ -187,6 +188,7 @@ function LoginStep({
   onTelegramRequired: (login: string, url: string) => void;
 }) {
   const t = useT();
+  const eye = usePasswordEye();
   const errorText = useErrorText();
   const {
     register,
@@ -238,11 +240,10 @@ function LoginStep({
       </Field>
       <Field id="lg-pass" label={t('auth.password')} error={fieldError(t, errors.password)}>
         {(control) => (
-          <input
+          <PasswordInput
             {...control}
             {...register('password')}
-            type="password"
-            className={inputClass()}
+            labels={eye}
             autoComplete="current-password"
           />
         )}
@@ -489,6 +490,7 @@ function ChangeStep({
   onLeave: () => void;
 }) {
   const t = useT();
+  const eye = usePasswordEye();
   const errorText = useErrorText();
   const {
     register,
@@ -541,11 +543,10 @@ function ChangeStep({
           error={fieldError(t, errors.currentPassword)}
         >
           {(control) => (
-            <input
+            <PasswordInput
               {...control}
               {...currentField}
-              type="password"
-              className={inputClass()}
+              labels={eye}
               autoComplete="current-password"
               autoFocus
             />

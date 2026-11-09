@@ -16,6 +16,8 @@ export const AUTH_TEXTS = {
   'auth.title': { ru: 'Вход', section: 'Вход' },
   'auth.login': { ru: 'Логин', section: 'Вход' },
   'auth.password': { ru: 'Пароль', section: 'Вход' },
+  'auth.password_show': { ru: 'Показать пароль', section: 'Вход' },
+  'auth.password_hide': { ru: 'Скрыть пароль', section: 'Вход' },
   'auth.sign_in': { ru: 'Войти', section: 'Вход' },
   'auth.forgot': { ru: 'Забыли пароль?', section: 'Вход' },
   // Ссылка на лендинг под формой входа (прототип core/login.js `#lg-about`, задача #165).

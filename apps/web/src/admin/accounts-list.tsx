@@ -17,6 +17,7 @@ import {
   Icon,
   Modal,
   MONO_CLASS,
+  PasswordText,
   Pill,
   useToast,
   type GridAudit,
@@ -25,6 +26,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
+import { usePasswordEye } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -142,6 +144,7 @@ const fetchAccountValues = async (col: string, q?: string) => {
  */
 export function AccountsList() {
   const t = useT();
+  const eye = usePasswordEye();
   const toast = useToast();
   const errorText = useErrorText();
   const client = useQueryClient();
@@ -292,9 +295,7 @@ export function AccountsList() {
       >
         <p className="m-0">
           {t('staff.reset.password')}{' '}
-          <b data-temporary-password className={`${MONO_CLASS} text-base`}>
-            {reset?.password}
-          </b>
+          <PasswordText value={reset?.password ?? ''} labels={eye} id="rp-v" />
         </p>
         <p className="m-0 text-muted">
           {t(reset?.telegram ? 'accounts.reset.sessions_tg' : 'accounts.reset.sessions')}
