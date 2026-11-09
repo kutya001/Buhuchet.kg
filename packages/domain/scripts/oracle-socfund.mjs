@@ -2,7 +2,8 @@
 // sfApply (modules/socfund-ui.js) и подсказка о пене sfPeniNote из прототипа на справочниках refDB.json и
 // gkedDB.json. Случаи — все контрагенты demoDB.json и придуманные контрагенты на каждую ветку: ПВТ / ПКИ,
 // запрещающий и предупреждающий ГКЭД, госфинансирование, форма «Учреждение», нет признаков, нет ГКЭД,
-// разовый, без наёмных сотрудников; сохранение — без выбора, с выбором по условиям и вручную. Вход
+// разовый, без наёмных сотрудников, выплата зарплаты наличными у юрлица и у ИП (подсказка sfCashWarn,
+// прототип v82); сохранение — без выбора, с выбором по условиям и вручную. Вход
 // записывается полями продукта (коды форм, льгот, оснований и видов). Запуск:
 // node packages/domain/scripts/oracle-socfund.mjs — пишет
 // packages/domain/src/contractors/__fixtures__/socfund.json (скилл prototype-oracle).
@@ -45,7 +46,7 @@ const code = (items, name, what) => {
   return x.code;
 };
 const SPINO = 'Тариф Соцфонда 12,25 % (СПиНО)';
-const ALL_YES = { cashless: true, registry: true, confirmed: true, gov: false };
+const ALL_YES = { pay: 'card', registry: true, confirmed: true, gov: false };
 const base = { form: 'ОсОО', kind: 'regular', bases: ['employees'], assign: [], ben: [] };
 const invented = [
   { ...base, name: 'п. 38: 47.11, все признаки', gked: '47.11.0', sf: ALL_YES },
@@ -94,8 +95,34 @@ const invented = [
     gked: '85.10.0',
     sf: ALL_YES,
   },
-  { ...base, name: 'зарплата не безналично', gked: '47.11.0', sf: { ...ALL_YES, cashless: false } },
-  { ...base, name: 'нет подтверждения ГНС и реестра', gked: '47.11.0', sf: { cashless: true } },
+  {
+    ...base,
+    name: 'зарплата безналично и наличными',
+    gked: '47.11.0',
+    sf: { ...ALL_YES, pay: 'mixed' },
+  },
+  { ...base, name: 'зарплата только наличными', gked: '47.11.0', sf: { ...ALL_YES, pay: 'cash' } },
+  {
+    ...base,
+    name: 'ИП: зарплата только наличными',
+    form: 'ИП',
+    gked: '47.11.0',
+    sf: { ...ALL_YES, pay: 'cash' },
+  },
+  {
+    ...base,
+    name: 'наличная зарплата, тариф не нужен',
+    kind: 'oneoff',
+    gked: '47.11.0',
+    sf: { ...ALL_YES, pay: 'cash' },
+  },
+  {
+    ...base,
+    name: 'выплата зарплаты не указана',
+    gked: '47.11.0',
+    sf: { ...ALL_YES, pay: undefined },
+  },
+  { ...base, name: 'нет подтверждения ГНС и реестра', gked: '47.11.0', sf: { pay: 'card' } },
   { ...base, name: 'нет ГКЭД', gked: '', sf: ALL_YES },
   { ...base, name: 'нет ни ГКЭД, ни признаков', gked: '' },
   { ...base, name: 'без наёмных сотрудников', bases: [], gked: '47.11.0', sf: ALL_YES },
@@ -137,7 +164,7 @@ const invented = [
     ...base,
     name: 'СПиНО при неопределённом тарифе',
     gked: '47.11.0',
-    sf: { cashless: true },
+    sf: { pay: 'card' },
     sfT: 'spino',
   },
 ];
@@ -151,10 +178,12 @@ for (const [i, c] of subjects.entries()) {
   for (const t of ['spino', 'general', 'pvtpki'])
     saves.push({ i, st: { sf: c.sf ?? {}, sfT: t, sfTouch: true, sfWhy: ' причина ' } });
 }
-// п. 38 с тарифом СПиНО: признак сменился, выбор не трогали (тариф сам не меняется); признаки стёрли.
+// п. 38 с тарифом СПиНО: признак сменился, выбор не трогали (тариф сам не меняется); сменилась только
+// выплата зарплаты (на тариф не влияет); признаки стёрли.
 const p38 = subjects.findIndex((c) => c.name === 'п. 38: СПиНО определён автоматически');
 saves.push(
-  { i: p38, st: { sf: { ...ALL_YES, cashless: false }, sfT: 'spino', sfTouch: false, sfWhy: '' } },
+  { i: p38, st: { sf: { ...ALL_YES, registry: false }, sfT: 'spino', sfTouch: false, sfWhy: '' } },
+  { i: p38, st: { sf: { ...ALL_YES, pay: 'cash' }, sfT: 'spino', sfTouch: true, sfWhy: '' } },
   { i: p38, st: { sf: {}, sfT: 'spino', sfTouch: false, sfWhy: '' } },
 );
 // Не тронутый выбор в форме — всегда сохранённый тариф (прототип sfInit): иначе случай невозможен.
@@ -224,6 +253,7 @@ vm.runInContext(
       auto: a && { t: a.t ? a.t.id : null, why: a.why, miss: a.miss, warn: a.warn },
       state: s && { bad: s.bad, none: s.none, ask: s.ask, why: sfBadWhy(s) },
       typeNote: sfTypeNote({ id: sfTypeIds()[0] }, c).replace(/<[^>]+>/g, ''),
+      cashHint: sfCashWarn(c),
     };
   };
   globalThis.oracle = {
@@ -256,8 +286,9 @@ const formOf = (name) => {
   return { code: f.code, name: f.name };
 };
 const flag = (sf, k) => (sf && typeof sf[k] === 'boolean' ? sf[k] : null);
+const PAYS = ['card', 'mixed', 'cash'];
 const flagsOf = (sf) => ({
-  cashless: flag(sf, 'cashless'),
+  pay: sf && PAYS.includes(sf.pay) ? sf.pay : null,
   registry: flag(sf, 'registry'),
   confirmed: flag(sf, 'confirmed'),
   gov: flag(sf, 'gov'),
@@ -330,6 +361,7 @@ const dict = {
     return { code, level: g.level, parent: g.parent ?? null, active: g.active !== false };
   }),
   reportTypes: sfTax.guide.reportTypes ?? [],
+  cashHint: spinoBen.cashHint ?? '',
   penalties: ref.taxes
     .filter((x) => x.guide?.penalty)
     .flatMap((x) =>
@@ -346,6 +378,8 @@ const fixture = {
   source: SF,
   today: TODAY,
   dict,
+  // подсказка о наличной зарплате, когда у ЛЬГ-29 в справочнике её текста нет (прототип SF_CASH_HINT)
+  cashHintDefault: /const SF_CASH_HINT='([^']+)'/.exec(read(SF))[1],
   titles: oracle.titles,
   cases: subjects.map((c, i) => ({
     name: c.name,

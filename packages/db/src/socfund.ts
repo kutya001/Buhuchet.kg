@@ -133,6 +133,7 @@ export async function socfundDict(
             name: taxBenefits.name,
             gked: taxBenefits.gked,
             suggest: taxBenefits.suggest,
+            cashHint: taxBenefits.cashHint,
           })
           .from(taxBenefits)
           .where(inArray(taxBenefits.code, statusCodes))
@@ -176,6 +177,7 @@ export async function socfundDict(
       gkedNames: new Map(names.map((n) => [n.code, n.name])),
       index,
       reportTypes: g?.reportTypes ?? [],
+      cashHint: status?.cashHint ?? '',
     },
     guide: { tariffs, gnpf: g?.gnpf ?? null },
   };

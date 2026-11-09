@@ -146,11 +146,14 @@ describe.skipIf(!databaseAvailable())('Контрагенты демо-орга�
     }
     const byNo = (no: string) => all.find((c) => c.id === demoId('contractor', no))!;
     expect(byNo('1')).toMatchObject({
-      socfundFlags: { cashless: true, registry: true, confirmed: true, gov: false },
+      socfundFlags: { pay: 'card', registry: true, confirmed: true, gov: false },
       socfundTariff: { id: 'spino', manual: false, reason: null },
     });
     // Прототип v82: у №10 зарплата «Безналично и наличными», тариф СПиНО выбран не вручную.
-    expect(byNo('10').socfundTariff).toMatchObject({ id: 'spino', manual: false, reason: null });
+    expect(byNo('10')).toMatchObject({
+      socfundFlags: { pay: 'mixed', registry: true, confirmed: true, gov: false },
+      socfundTariff: { id: 'spino', manual: false, reason: null },
+    });
     expect(byNo('11').socfundTariff).toMatchObject({ id: 'pvtpki' });
     expect(byNo('30').socfundTariff).toBeNull();
 

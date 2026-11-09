@@ -409,7 +409,7 @@ describe.skipIf(!databaseAvailable())('Подбор отчётов: методы
     expect((await context(acc, { bizSize: 'huge' })).status).toBe(400);
 
     // Признаки тарифа Соцфонда из формы: пояснение у вида со взносами — и у черновика.
-    const flags = { cashless: true, registry: true, confirmed: true, gov: false };
+    const flags = { pay: 'card', registry: true, confirmed: true, gov: false };
     const sf = await contextOf(acc, {
       formCode: 'ФС-01',
       regimeCode: 'РЕЖ-01',
@@ -421,7 +421,7 @@ describe.skipIf(!databaseAvailable())('Подбор отчётов: методы
     expect(sf.socfund?.types.length).toBeGreaterThan(0);
     // Без основания «Есть наёмные сотрудники» тариф не нужен.
     expect((await contextOf(acc, { gked: '47.11.0', socfund: { flags } })).socfund).toBeNull();
-    expect((await context(acc, { socfund: { flags: { cashless: 'да' } } })).status).toBe(400);
+    expect((await context(acc, { socfund: { flags: { pay: 'да' } } })).status).toBe(400);
   });
 
   it('права, область и чужая организация', async () => {

@@ -6,8 +6,8 @@ import { asOwner, assign, reportsOf } from './reports';
 // 2.11, подбор отчётов — 2.07), поэтому пункты 38 и 39 проверяются через API сайта под владельцем
 // демо-организации.
 
-const ALL_YES = { cashless: true, registry: true, confirmed: true, gov: false };
-const NO_FLAGS = { cashless: null, registry: null, confirmed: null, gov: null };
+const ALL_YES = { pay: 'card', registry: true, confirmed: true, gov: false };
+const NO_FLAGS = { pay: null, registry: null, confirmed: null, gov: null };
 
 /** Правильный ИНН, которого нет в демо-организации; свой у ПК и телефона. */
 const freshInn = () =>

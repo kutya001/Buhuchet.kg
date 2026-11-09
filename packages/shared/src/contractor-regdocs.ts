@@ -22,7 +22,15 @@ export const RegdocsRecognizeRequest = z.strictObject({
 export type RegdocsRecognizeRequest = z.infer<typeof RegdocsRecognizeRequest>;
 
 /** Почему документ не распознан (прототип rdRun: текст у файла). */
-export const REGDOCS_FILE_ERRORS = ['size', 'password', 'read', 'kind', 'ip', 'upload'] as const;
+export const REGDOCS_FILE_ERRORS = [
+  'size',
+  'password',
+  'read',
+  'kind',
+  'ip',
+  'branch',
+  'upload',
+] as const;
 export type RegdocsFileError = (typeof REGDOCS_FILE_ERRORS)[number];
 
 /** Документ после «Распознать»: вид и дата выдачи — или почему не распознан. */
@@ -63,8 +71,10 @@ export const RegdocsResult = z.object({
       more: z.array(GkedOption),
     })
     .nullable(),
-  /** Налоговый орган, предложенный по адресу (код); пусто — не найден. */
+  /** Налоговый орган (код): из шапки свидетельства ИП или предложенный по адресу; пусто — не найден. */
   ugns: z.string(),
+  /** Откуда налоговый орган: из свидетельства ИП, по адресу; пусто — не найден. */
+  ugnsSrc: z.enum(['ipsv', 'addr', '']),
   stopped: z.boolean(),
   status: z.string(),
   phoneBad: z.string(),
@@ -73,12 +83,12 @@ export type RegdocsResult = z.infer<typeof RegdocsResult>;
 
 /**
  * Ответ «Распознать»: документы по порядку; ошибка итога — два документа одного вида, ни один не
- * распознан, документы разных организаций; итог; контрагент с этим ИНН, если он уже есть (вне области
- * сотрудника — без номера).
+ * распознан, документы разных организаций (ИНН не совпадает или свидетельство ИП вместе с документом
+ * юрлица); итог; контрагент с этим ИНН, если он уже есть (вне области сотрудника — без номера).
  */
 export const RegdocsRecognized = z.object({
   files: z.array(RegdocsFile),
-  error: z.enum(['same', 'none', 'diff']).nullable(),
+  error: z.enum(['same', 'none', 'diff', 'mix']).nullable(),
   sameKind: z.enum(RD_KINDS).nullable(),
   result: RegdocsResult.nullable(),
   duplicate: z
@@ -94,10 +104,12 @@ export type RegdocsRecognized = z.infer<typeof RegdocsRecognized>;
 
 /**
  * Документы к новому контрагенту: загруженные в окне «Из свидетельства и выписки» (прикрепятся к нему);
- * `recognized` — форма заполнена из них (в истории — «Создан из свидетельства и выписки (бета)»).
+ * `recognized` — форма заполнена из них (в истории — «Создан из свидетельства и выписки (бета)»),
+ * `ip` — из свидетельства ИП («Создан из свидетельства ИП (бета)», прототип v82 rdIpDocs).
  */
 export const ContractorRegdocs = z.strictObject({
   files: z.array(Uuid).max(RD_MAX_FILES),
   recognized: z.boolean(),
+  ip: z.boolean().optional(),
 });
 export type ContractorRegdocs = z.infer<typeof ContractorRegdocs>;

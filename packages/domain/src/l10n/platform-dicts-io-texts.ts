@@ -66,6 +66,7 @@ export const PLATFORM_DICTS_IO_TEXTS = {
   'pdicts.io.col.conditions': { ru: 'Условия', section: S },
   'pdicts.io.col.confirmation': { ru: 'Как подтверждается', section: S },
   'pdicts.io.col.term': { ru: 'Срок действия', section: S },
+  'pdicts.io.col.cash_hint': { ru: 'Подсказка юрлицу при наличной зарплате', section: S },
   'pdicts.io.col.due_rules': { ru: 'Меняет сроки', section: S },
   'pdicts.io.col.offices': { ru: 'Ставится по УГНС', section: S },
   'pdicts.io.col.end': { ru: 'Для ЕНД', section: S },

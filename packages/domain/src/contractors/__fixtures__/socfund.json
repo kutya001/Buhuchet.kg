@@ -297,6 +297,7 @@
       { "code": "P", "level": "section", "parent": null, "active": true }
     ],
     "reportTypes": ["soc"],
+    "cashHint": "Юрлицо должно платить зарплату безналично (ТК КР, ст. 153 ч. 3). Наличными можно только при непреодолимой силе, чрезвычайном положении или чрезвычайной ситуации и в случаях, которые установил Кабинет министров. Проверьте основание.",
     "penalties": [
       {
         "type": "soc",
@@ -306,6 +307,7 @@
       }
     ]
   },
+  "cashHintDefault": "Юрлицо должно платить зарплату безналично (ТК КР, ст. 153 ч. 3). Наличными можно только при непреодолимой силе, чрезвычайном положении или чрезвычайной ситуации и в случаях, которые установил Кабинет министров. Проверьте основание.",
   "titles": [
     {
       "id": "spino",
@@ -339,7 +341,7 @@
         "gked": "46.34.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
@@ -353,7 +355,8 @@
           ]
         },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -365,14 +368,15 @@
         "gked": "41.20.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -384,10 +388,10 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-02", "name": "ИП" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "ОсОО «Нур Логистик»",
@@ -398,14 +402,15 @@
         "gked": "49.41.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -417,14 +422,15 @@
         "gked": "79.12.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -436,14 +442,15 @@
         "gked": "10.39.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -455,14 +462,15 @@
         "gked": "46.46.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -474,10 +482,10 @@
         "gked": "47.89.0",
         "form": { "code": "ФС-02", "name": "ИП" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "ОсОО «Ош Текстиль»",
@@ -488,14 +496,15 @@
         "gked": "14.13.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-09", "ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -507,18 +516,15 @@
         "gked": "86.21.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false }
       },
-      "current": {
-        "tariff": "spino",
-        "manual": true,
-        "reason": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными"
-      },
+      "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
-        "auto": { "t": "general", "why": ["Зарплата не безналично"], "miss": [], "warn": [] },
-        "state": { "bad": true, "none": false, "ask": true, "why": "Зарплата не безналично" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": false, "ask": false, "why": "" },
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": "Юрлицо должно платить зарплату безналично (ТК КР, ст. 153 ч. 3). Наличными можно только при непреодолимой силе, чрезвычайном положении или чрезвычайной ситуации и в случаях, которые установил Кабинет министров. Проверьте основание."
       }
     },
     {
@@ -530,7 +536,7 @@
         "gked": "62.01.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-02"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
       "expected": {
@@ -544,7 +550,8 @@
           ]
         },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты."
+        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты.",
+        "cashHint": ""
       }
     },
     {
@@ -571,14 +578,15 @@
         "gked": "01.41.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-03", "ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -590,10 +598,10 @@
         "gked": "45.20.1",
         "form": { "code": "ФС-02", "name": "ИП" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "ОсОО «Манас Авто Плюс»",
@@ -618,14 +626,25 @@
         "gked": "45.11.1",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
-        "auto": { "t": "general", "why": ["Зарплата не безналично"], "miss": [], "warn": [] },
-        "state": { "bad": true, "none": false, "ask": false, "why": "Зарплата не безналично" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "auto": {
+          "t": "general",
+          "why": ["Реестр работников не загружен в Салык.кг"],
+          "miss": [],
+          "warn": []
+        },
+        "state": {
+          "bad": true,
+          "none": false,
+          "ask": false,
+          "why": "Реестр работников не загружен в Салык.кг"
+        },
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -637,14 +656,15 @@
         "gked": "41.20.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -656,14 +676,15 @@
         "gked": "01.49.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -675,14 +696,15 @@
         "gked": "13.10.1",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": null, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": null, "why": [], "miss": ["реестр работников"], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него"
+        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него",
+        "cashHint": ""
       }
     },
     {
@@ -694,10 +716,10 @@
         "gked": "47.91.0",
         "form": { "code": "ФС-02", "name": "ИП" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "ОсОО «Айгуль Дизайн Студио»",
@@ -708,7 +730,7 @@
         "gked": "74.10.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-01"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
       "expected": {
@@ -722,7 +744,8 @@
           ]
         },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты."
+        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты.",
+        "cashHint": ""
       }
     },
     {
@@ -734,14 +757,15 @@
         "gked": "52.29.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -753,14 +777,15 @@
         "gked": "23.51.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": false, "gov": false }
       },
       "current": { "tariff": "general", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "general", "why": ["Тариф не подтверждён ГНС"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -772,14 +797,15 @@
         "gked": "22.22.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -791,7 +817,7 @@
         "gked": "35.13.0",
         "form": { "code": "ФС-03", "name": "ОАО" },
         "benefits": ["ЛЬГ-30"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "general", "manual": false, "reason": "" },
       "expected": {
@@ -805,7 +831,8 @@
           "warn": []
         },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -817,14 +844,15 @@
         "gked": "55.20.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -836,14 +864,15 @@
         "gked": "03.22.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -855,10 +884,10 @@
         "gked": "96.02.0",
         "form": { "code": "ФС-02", "name": "ИП" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "ОсОО «Кемин Агро»",
@@ -869,14 +898,15 @@
         "gked": "01.11.1",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -888,7 +918,7 @@
         "gked": "62.02.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-02"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
       "expected": {
@@ -902,7 +932,8 @@
           ]
         },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты."
+        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты.",
+        "cashHint": ""
       }
     },
     {
@@ -914,14 +945,15 @@
         "gked": null,
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": null, "why": [], "miss": ["основной ГКЭД"], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него"
+        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него",
+        "cashHint": ""
       }
     },
     {
@@ -933,10 +965,10 @@
         "gked": null,
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "п. 38: 47.11, все признаки",
@@ -947,14 +979,15 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -966,14 +999,15 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -985,7 +1019,7 @@
         "gked": "64.19.1",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-29"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
@@ -1004,7 +1038,8 @@
           "ask": false,
           "why": "Основной ГКЭД 64.19.1 не допускает СПиНО: коммерческие банки и специализированные финансово-кредитные учреждения"
         },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1016,7 +1051,7 @@
         "gked": "62.01.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-01"],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1030,7 +1065,8 @@
           ]
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: Тариф ПВТ / ПКИ (по условиям) — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты."
+        "typeNote": "Тариф: Тариф ПВТ / ПКИ (по условиям) — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты.",
+        "cashHint": ""
       }
     },
     {
@@ -1042,7 +1078,7 @@
         "gked": "62.01.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-01", "ЛЬГ-29"],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": "spino", "manual": true, "reason": "письмо ГНС" },
       "expected": {
@@ -1056,7 +1092,8 @@
           ]
         },
         "state": { "bad": true, "none": false, "ask": true, "why": "Статус «Резидент ПКИ»" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1068,7 +1105,7 @@
         "gked": "62.01.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": ["ЛЬГ-02", "ЛЬГ-01"],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1082,7 +1119,8 @@
           ]
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: Тариф ПВТ / ПКИ (по условиям) — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты."
+        "typeNote": "Тариф: Тариф ПВТ / ПКИ (по условиям) — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты.",
+        "cashHint": ""
       }
     },
     {
@@ -1094,7 +1132,7 @@
         "gked": "64.92.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1108,7 +1146,8 @@
           ]
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1120,7 +1159,7 @@
         "gked": "84.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1134,7 +1173,8 @@
           ]
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1146,7 +1186,7 @@
         "gked": "61.20.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1158,7 +1198,8 @@
           "warn": []
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1170,7 +1211,7 @@
         "gked": "11.01.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1180,11 +1221,12 @@
           "why": [
             "Основной ГКЭД 11.01.0 не допускает СПиНО: производители и импортёры алкоголя, табака и ГСМ, кроме переработчиков нефти и природного газа"
           ],
-          "miss": ["способ выплаты зарплаты", "реестр работников", "подтверждение ГНС"],
+          "miss": ["реестр работников", "подтверждение ГНС"],
           "warn": []
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1196,14 +1238,15 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": true }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "general", "why": ["Госфинансирование"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1215,7 +1258,7 @@
         "gked": "85.10.0",
         "form": { "code": "ФС-14", "name": "Учреждение" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1229,11 +1272,12 @@
           ]
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
-      "name": "зарплата не безналично",
+      "name": "зарплата безналично и наличными",
       "subject": {
         "kind": "regular",
         "bases": ["employees"],
@@ -1241,14 +1285,89 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
-        "auto": { "t": "general", "why": ["Зарплата не безналично"], "miss": [], "warn": [] },
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: Базовый тариф (по условиям) — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": "Юрлицо должно платить зарплату безналично (ТК КР, ст. 153 ч. 3). Наличными можно только при непреодолимой силе, чрезвычайном положении или чрезвычайной ситуации и в случаях, которые установил Кабинет министров. Проверьте основание."
+      }
+    },
+    {
+      "name": "зарплата только наличными",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" },
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": "Юрлицо должно платить зарплату безналично (ТК КР, ст. 153 ч. 3). Наличными можно только при непреодолимой силе, чрезвычайном положении или чрезвычайной ситуации и в случаях, которые установил Кабинет министров. Проверьте основание."
+      }
+    },
+    {
+      "name": "ИП: зарплата только наличными",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-02", "name": "ИП" },
+        "benefits": [],
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" },
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
+      }
+    },
+    {
+      "name": "наличная зарплата, тариф не нужен",
+      "subject": {
+        "kind": "oneoff",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
+    },
+    {
+      "name": "выплата зарплаты не указана",
+      "subject": {
+        "kind": "regular",
+        "bases": ["employees"],
+        "activeTypes": [],
+        "gked": "47.11.0",
+        "form": { "code": "ФС-01", "name": "ОсОО" },
+        "benefits": [],
+        "flags": { "pay": null, "registry": true, "confirmed": true, "gov": false }
+      },
+      "current": { "tariff": null, "manual": false, "reason": "" },
+      "expected": {
+        "needed": true,
+        "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
+        "state": { "bad": false, "none": true, "ask": true, "why": "" },
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1260,7 +1379,7 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1272,7 +1391,8 @@
           "warn": []
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него"
+        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него",
+        "cashHint": ""
       }
     },
     {
@@ -1284,14 +1404,15 @@
         "gked": null,
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": null, "why": [], "miss": ["основной ГКЭД"], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него"
+        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него",
+        "cashHint": ""
       }
     },
     {
@@ -1303,7 +1424,7 @@
         "gked": null,
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
@@ -1311,16 +1432,12 @@
         "auto": {
           "t": null,
           "why": [],
-          "miss": [
-            "основной ГКЭД",
-            "способ выплаты зарплаты",
-            "реестр работников",
-            "подтверждение ГНС"
-          ],
+          "miss": ["основной ГКЭД", "реестр работников", "подтверждение ГНС"],
           "warn": []
         },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него"
+        "typeNote": "Тариф Соцфонда не определён: ставки взносов зависят от него",
+        "cashHint": ""
       }
     },
     {
@@ -1332,10 +1449,10 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "без основания, но со STI-161",
@@ -1346,14 +1463,15 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": false, "none": true, "ask": true, "why": "" },
-        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО (по условиям) — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1365,10 +1483,10 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "разовый",
@@ -1379,10 +1497,10 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": null, "manual": false, "reason": "" },
-      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "" }
+      "expected": { "needed": false, "auto": null, "state": null, "typeNote": "", "cashHint": "" }
     },
     {
       "name": "базовый вручную при условиях СПиНО",
@@ -1393,14 +1511,15 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "general", "manual": true, "reason": "так решил" },
       "expected": {
         "needed": true,
         "auto": { "t": "spino", "why": ["Все условия выполнены"], "miss": [], "warn": [] },
         "state": { "bad": true, "none": false, "ask": true, "why": "по условиям подходит «СПиНО»" },
-        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1412,7 +1531,7 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "general", "manual": false, "reason": "" },
       "expected": {
@@ -1424,7 +1543,8 @@
           "ask": false,
           "why": "по условиям подходит «СПиНО»"
         },
-        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: Базовый тариф — работодатель 17,25 %, работник 10 %; итого 27,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 196 456,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     },
     {
@@ -1436,7 +1556,7 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false }
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false }
       },
       "current": { "tariff": "pvtpki", "manual": false, "reason": "" },
       "expected": {
@@ -1448,7 +1568,8 @@
           "ask": false,
           "why": "нет статуса «Резидент ПВТ» или «Резидент ПКИ»"
         },
-        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты."
+        "typeNote": "Тариф: Тариф ПВТ / ПКИ — сам резидент 12 % от СМЗ; итого 12 % от среднемесячной зарплаты.",
+        "cashHint": ""
       }
     },
     {
@@ -1460,7 +1581,7 @@
         "gked": "47.11.0",
         "form": { "code": "ФС-01", "name": "ОсОО" },
         "benefits": [],
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null }
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null }
       },
       "current": { "tariff": "spino", "manual": false, "reason": "" },
       "expected": {
@@ -1472,7 +1593,8 @@
           "warn": []
         },
         "state": { "bad": false, "none": false, "ask": false, "why": "" },
-        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы."
+        "typeNote": "Тариф: СПиНО — работодатель 2,25 %, работник 10 %; итого 12,25 %. Предельная база: не выше 720 940 сом в месяц на работника, взносы не больше 88 315,15 сом в месяц на работника, с 01.01.2026. Взносы не начисляются на часть зарплаты выше предельной базы.",
+        "cashHint": ""
       }
     }
   ],
@@ -1480,7 +1602,7 @@
     {
       "case": 0,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -1497,7 +1619,7 @@
     {
       "case": 0,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -1514,7 +1636,7 @@
     {
       "case": 0,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -1531,7 +1653,7 @@
     {
       "case": 0,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -1548,7 +1670,7 @@
     {
       "case": 0,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -1565,7 +1687,7 @@
     {
       "case": 1,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -1582,7 +1704,7 @@
     {
       "case": 1,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -1599,7 +1721,7 @@
     {
       "case": 1,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -1616,7 +1738,7 @@
     {
       "case": 1,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -1633,7 +1755,7 @@
     {
       "case": 1,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -1650,7 +1772,7 @@
     {
       "case": 2,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -1667,7 +1789,7 @@
     {
       "case": 2,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -1684,7 +1806,7 @@
     {
       "case": 2,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -1701,7 +1823,7 @@
     {
       "case": 2,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -1718,7 +1840,7 @@
     {
       "case": 2,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -1735,7 +1857,7 @@
     {
       "case": 3,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -1752,7 +1874,7 @@
     {
       "case": 3,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -1769,7 +1891,7 @@
     {
       "case": 3,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -1786,7 +1908,7 @@
     {
       "case": 3,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -1803,7 +1925,7 @@
     {
       "case": 3,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -1820,7 +1942,7 @@
     {
       "case": 4,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -1837,7 +1959,7 @@
     {
       "case": 4,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -1854,7 +1976,7 @@
     {
       "case": 4,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -1871,7 +1993,7 @@
     {
       "case": 4,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -1888,7 +2010,7 @@
     {
       "case": 4,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -1905,7 +2027,7 @@
     {
       "case": 5,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -1922,7 +2044,7 @@
     {
       "case": 5,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -1939,7 +2061,7 @@
     {
       "case": 5,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -1956,7 +2078,7 @@
     {
       "case": 5,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -1973,7 +2095,7 @@
     {
       "case": 5,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -1990,7 +2112,7 @@
     {
       "case": 6,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2007,7 +2129,7 @@
     {
       "case": 6,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2024,7 +2146,7 @@
     {
       "case": 6,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2041,7 +2163,7 @@
     {
       "case": 6,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2058,7 +2180,7 @@
     {
       "case": 6,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2075,7 +2197,7 @@
     {
       "case": 7,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -2092,7 +2214,7 @@
     {
       "case": 7,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2109,7 +2231,7 @@
     {
       "case": 7,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2126,7 +2248,7 @@
     {
       "case": 7,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2143,7 +2265,7 @@
     {
       "case": 7,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2160,7 +2282,7 @@
     {
       "case": 8,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2177,7 +2299,7 @@
     {
       "case": 8,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2194,7 +2316,7 @@
     {
       "case": 8,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2211,7 +2333,7 @@
     {
       "case": 8,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2228,7 +2350,7 @@
     {
       "case": 8,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2245,7 +2367,7 @@
     {
       "case": 9,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2253,8 +2375,8 @@
       "expected": {
         "manBad": false,
         "sfT": "spino",
-        "sfMan": true,
-        "sfWhy": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными",
+        "sfMan": false,
+        "sfWhy": "",
         "spino": true,
         "log": []
       }
@@ -2262,33 +2384,16 @@
     {
       "case": 9,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
       },
       "expected": {
         "manBad": false,
-        "sfT": "general",
+        "sfT": "spino",
         "sfMan": false,
         "sfWhy": "",
-        "spino": false,
-        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
-      }
-    },
-    {
-      "case": 9,
-      "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "spino",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": true,
-        "sfT": "spino",
-        "sfMan": true,
-        "sfWhy": "Зарплата переводится на карты с ноября, в октябре часть выплачена наличными",
         "spino": true,
         "log": []
       }
@@ -2296,24 +2401,41 @@
     {
       "case": 9,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "general",
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
         "touched": true,
         "reason": " причина "
       },
       "expected": {
         "manBad": false,
-        "sfT": "general",
+        "sfT": "spino",
         "sfMan": false,
         "sfWhy": "",
-        "spino": false,
-        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (определён автоматически)"]
+        "spino": true,
+        "log": []
       }
     },
     {
       "case": 9,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: СПиНО → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 9,
+      "input": {
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2330,7 +2452,7 @@
     {
       "case": 10,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": false,
         "reason": ""
@@ -2347,7 +2469,7 @@
     {
       "case": 10,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2364,7 +2486,7 @@
     {
       "case": 10,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2381,7 +2503,7 @@
     {
       "case": 10,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2398,7 +2520,7 @@
     {
       "case": 10,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2415,7 +2537,7 @@
     {
       "case": 11,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2432,7 +2554,7 @@
     {
       "case": 11,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2449,7 +2571,7 @@
     {
       "case": 11,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2466,7 +2588,7 @@
     {
       "case": 11,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2483,7 +2605,7 @@
     {
       "case": 11,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2500,7 +2622,7 @@
     {
       "case": 12,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -2517,7 +2639,7 @@
     {
       "case": 12,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2534,7 +2656,7 @@
     {
       "case": 12,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2551,7 +2673,7 @@
     {
       "case": 12,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2568,7 +2690,7 @@
     {
       "case": 12,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2585,7 +2707,7 @@
     {
       "case": 13,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2602,7 +2724,7 @@
     {
       "case": 13,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2619,7 +2741,7 @@
     {
       "case": 13,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2636,7 +2758,7 @@
     {
       "case": 13,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2653,7 +2775,7 @@
     {
       "case": 13,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2670,7 +2792,7 @@
     {
       "case": 14,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2687,7 +2809,7 @@
     {
       "case": 14,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2704,7 +2826,7 @@
     {
       "case": 14,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2721,7 +2843,7 @@
     {
       "case": 14,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2738,7 +2860,7 @@
     {
       "case": 14,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2755,7 +2877,7 @@
     {
       "case": 15,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -2772,7 +2894,7 @@
     {
       "case": 15,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2789,7 +2911,7 @@
     {
       "case": 15,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2806,7 +2928,7 @@
     {
       "case": 15,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2823,7 +2945,7 @@
     {
       "case": 15,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2840,7 +2962,7 @@
     {
       "case": 16,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -2857,7 +2979,7 @@
     {
       "case": 16,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2874,7 +2996,7 @@
     {
       "case": 16,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2891,7 +3013,7 @@
     {
       "case": 16,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2908,7 +3030,7 @@
     {
       "case": 16,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -2925,7 +3047,7 @@
     {
       "case": 17,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -2942,7 +3064,7 @@
     {
       "case": 17,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -2959,7 +3081,7 @@
     {
       "case": 17,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -2976,7 +3098,7 @@
     {
       "case": 17,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -2993,7 +3115,7 @@
     {
       "case": 17,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3010,7 +3132,7 @@
     {
       "case": 18,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": false,
         "reason": ""
@@ -3027,7 +3149,7 @@
     {
       "case": 18,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3044,7 +3166,7 @@
     {
       "case": 18,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3061,7 +3183,7 @@
     {
       "case": 18,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3078,7 +3200,7 @@
     {
       "case": 18,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3095,7 +3217,7 @@
     {
       "case": 19,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -3112,7 +3234,7 @@
     {
       "case": 19,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3129,7 +3251,7 @@
     {
       "case": 19,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3146,7 +3268,7 @@
     {
       "case": 19,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3163,7 +3285,7 @@
     {
       "case": 19,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3180,7 +3302,7 @@
     {
       "case": 20,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": false, "gov": false },
         "tariff": "general",
         "touched": false,
         "reason": ""
@@ -3197,7 +3319,7 @@
     {
       "case": 20,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": false, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3214,7 +3336,7 @@
     {
       "case": 20,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": false, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3231,7 +3353,7 @@
     {
       "case": 20,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": false, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3248,7 +3370,7 @@
     {
       "case": 20,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": false, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": false, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3265,7 +3387,7 @@
     {
       "case": 21,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -3282,7 +3404,7 @@
     {
       "case": 21,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3299,7 +3421,7 @@
     {
       "case": 21,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3316,7 +3438,7 @@
     {
       "case": 21,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3333,7 +3455,7 @@
     {
       "case": 21,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3350,7 +3472,7 @@
     {
       "case": 22,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": false,
         "reason": ""
@@ -3367,7 +3489,7 @@
     {
       "case": 22,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3384,7 +3506,7 @@
     {
       "case": 22,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3401,7 +3523,7 @@
     {
       "case": 22,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3418,7 +3540,7 @@
     {
       "case": 22,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3435,7 +3557,7 @@
     {
       "case": 23,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -3452,7 +3574,7 @@
     {
       "case": 23,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3469,7 +3591,7 @@
     {
       "case": 23,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3486,7 +3608,7 @@
     {
       "case": 23,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3503,7 +3625,7 @@
     {
       "case": 23,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3520,7 +3642,7 @@
     {
       "case": 24,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -3537,7 +3659,7 @@
     {
       "case": 24,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3554,7 +3676,7 @@
     {
       "case": 24,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3571,7 +3693,7 @@
     {
       "case": 24,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3588,7 +3710,7 @@
     {
       "case": 24,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3605,7 +3727,7 @@
     {
       "case": 25,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -3622,7 +3744,7 @@
     {
       "case": 25,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3639,7 +3761,7 @@
     {
       "case": 25,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3656,7 +3778,7 @@
     {
       "case": 25,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3673,7 +3795,7 @@
     {
       "case": 25,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3690,7 +3812,7 @@
     {
       "case": 26,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -3707,7 +3829,7 @@
     {
       "case": 26,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3724,7 +3846,7 @@
     {
       "case": 26,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3741,7 +3863,7 @@
     {
       "case": 26,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3758,7 +3880,7 @@
     {
       "case": 26,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3775,7 +3897,7 @@
     {
       "case": 27,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": false,
         "reason": ""
@@ -3792,7 +3914,7 @@
     {
       "case": 27,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3809,7 +3931,7 @@
     {
       "case": 27,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3826,7 +3948,7 @@
     {
       "case": 27,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3843,7 +3965,7 @@
     {
       "case": 27,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3860,7 +3982,7 @@
     {
       "case": 28,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -3877,7 +3999,7 @@
     {
       "case": 28,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3894,7 +4016,7 @@
     {
       "case": 28,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3911,7 +4033,7 @@
     {
       "case": 28,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -3928,7 +4050,7 @@
     {
       "case": 28,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -3945,7 +4067,7 @@
     {
       "case": 29,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -3962,7 +4084,7 @@
     {
       "case": 29,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -3979,7 +4101,7 @@
     {
       "case": 29,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -3996,7 +4118,7 @@
     {
       "case": 29,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4013,7 +4135,7 @@
     {
       "case": 29,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4030,7 +4152,7 @@
     {
       "case": 30,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4047,7 +4169,7 @@
     {
       "case": 30,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4064,7 +4186,7 @@
     {
       "case": 30,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4081,7 +4203,7 @@
     {
       "case": 30,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4098,7 +4220,7 @@
     {
       "case": 30,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4115,7 +4237,7 @@
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -4132,7 +4254,7 @@
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4149,7 +4271,7 @@
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4166,7 +4288,7 @@
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4183,7 +4305,7 @@
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4200,7 +4322,7 @@
     {
       "case": 32,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -4217,7 +4339,7 @@
     {
       "case": 32,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4234,7 +4356,7 @@
     {
       "case": 32,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4251,7 +4373,7 @@
     {
       "case": 32,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4268,7 +4390,7 @@
     {
       "case": 32,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4285,7 +4407,7 @@
     {
       "case": 33,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4302,7 +4424,7 @@
     {
       "case": 33,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4319,7 +4441,7 @@
     {
       "case": 33,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4336,7 +4458,7 @@
     {
       "case": 33,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4353,7 +4475,7 @@
     {
       "case": 33,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4370,7 +4492,7 @@
     {
       "case": 34,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -4387,7 +4509,7 @@
     {
       "case": 34,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4404,7 +4526,7 @@
     {
       "case": 34,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4421,7 +4543,7 @@
     {
       "case": 34,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4438,7 +4560,7 @@
     {
       "case": 34,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4455,7 +4577,7 @@
     {
       "case": 35,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4472,7 +4594,7 @@
     {
       "case": 35,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4489,7 +4611,7 @@
     {
       "case": 35,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4506,7 +4628,7 @@
     {
       "case": 35,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4523,7 +4645,7 @@
     {
       "case": 35,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4540,7 +4662,7 @@
     {
       "case": 36,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4557,7 +4679,7 @@
     {
       "case": 36,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4574,7 +4696,7 @@
     {
       "case": 36,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4591,7 +4713,7 @@
     {
       "case": 36,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4608,7 +4730,7 @@
     {
       "case": 36,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4625,7 +4747,7 @@
     {
       "case": 37,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4642,7 +4764,7 @@
     {
       "case": 37,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4659,7 +4781,7 @@
     {
       "case": 37,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4676,7 +4798,7 @@
     {
       "case": 37,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4693,7 +4815,7 @@
     {
       "case": 37,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4710,7 +4832,7 @@
     {
       "case": 38,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4727,7 +4849,7 @@
     {
       "case": 38,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4744,7 +4866,7 @@
     {
       "case": 38,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4761,7 +4883,7 @@
     {
       "case": 38,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4778,7 +4900,7 @@
     {
       "case": 38,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4795,7 +4917,7 @@
     {
       "case": 39,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4812,7 +4934,7 @@
     {
       "case": 39,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4829,7 +4951,7 @@
     {
       "case": 39,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4846,7 +4968,7 @@
     {
       "case": 39,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4863,7 +4985,7 @@
     {
       "case": 39,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4880,7 +5002,7 @@
     {
       "case": 40,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": true },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4897,7 +5019,7 @@
     {
       "case": 40,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": true },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4914,7 +5036,7 @@
     {
       "case": 40,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": true },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -4931,7 +5053,7 @@
     {
       "case": 40,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": true },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -4948,7 +5070,7 @@
     {
       "case": 40,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": true },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": true },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -4965,7 +5087,7 @@
     {
       "case": 41,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -4982,7 +5104,7 @@
     {
       "case": 41,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -4999,7 +5121,7 @@
     {
       "case": 41,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5016,7 +5138,7 @@
     {
       "case": 41,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -5033,7 +5155,7 @@
     {
       "case": 41,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5050,41 +5172,466 @@
     {
       "case": 42,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
       },
       "expected": {
         "manBad": false,
-        "sfT": "general",
+        "sfT": "spino",
         "sfMan": false,
         "sfWhy": "",
-        "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
       }
     },
     {
       "case": 42,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
       },
       "expected": {
         "manBad": false,
-        "sfT": "general",
+        "sfT": "spino",
         "sfMan": false,
         "sfWhy": "",
-        "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
       }
     },
     {
       "case": 42,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 42,
+      "input": {
+        "flags": { "pay": "mixed", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 43,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 44,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 45,
+      "input": {
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "pay": null, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "pay": null, "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "pay": null, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "pay": null, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 46,
+      "input": {
+        "flags": { "pay": null, "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 47,
+      "input": {
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5099,26 +5646,26 @@
       }
     },
     {
-      "case": 42,
+      "case": 47,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
       },
       "expected": {
-        "manBad": false,
+        "manBad": true,
         "sfT": "general",
-        "sfMan": false,
-        "sfWhy": "",
+        "sfMan": true,
+        "sfWhy": "причина",
         "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Базовый тариф (определён автоматически)"]
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
       }
     },
     {
-      "case": 42,
+      "case": 47,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5133,9 +5680,9 @@
       }
     },
     {
-      "case": 43,
+      "case": 48,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -5150,9 +5697,9 @@
       }
     },
     {
-      "case": 43,
+      "case": 48,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -5167,9 +5714,9 @@
       }
     },
     {
-      "case": 43,
+      "case": 48,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5184,9 +5731,9 @@
       }
     },
     {
-      "case": 43,
+      "case": 48,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -5201,9 +5748,9 @@
       }
     },
     {
-      "case": 43,
+      "case": 48,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5218,9 +5765,9 @@
       }
     },
     {
-      "case": 44,
+      "case": 49,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -5235,9 +5782,9 @@
       }
     },
     {
-      "case": 44,
+      "case": 49,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -5252,9 +5799,9 @@
       }
     },
     {
-      "case": 44,
+      "case": 49,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5269,9 +5816,9 @@
       }
     },
     {
-      "case": 44,
+      "case": 49,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -5286,9 +5833,9 @@
       }
     },
     {
-      "case": 44,
+      "case": 49,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5303,9 +5850,9 @@
       }
     },
     {
-      "case": 45,
+      "case": 50,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": false,
         "reason": ""
@@ -5320,9 +5867,9 @@
       }
     },
     {
-      "case": 45,
+      "case": 50,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -5337,384 +5884,10 @@
       }
     },
     {
-      "case": 45,
+      "case": 50,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": true,
-        "sfT": "spino",
-        "sfMan": true,
-        "sfWhy": "причина",
-        "spino": true,
-        "log": ["Тариф Соцфонда: не определён → СПиНО (выбран вручную: причина)"]
-      }
-    },
-    {
-      "case": 45,
-      "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
-        "tariff": "general",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": true,
-        "sfT": "general",
-        "sfMan": true,
-        "sfWhy": "причина",
-        "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
-      }
-    },
-    {
-      "case": 45,
-      "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
-        "tariff": "pvtpki",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": true,
-        "sfT": "pvtpki",
-        "sfMan": true,
-        "sfWhy": "причина",
-        "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
-      }
-    },
-    {
-      "case": 46,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": false,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 46,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": true,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 46,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "spino",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 46,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "general",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 46,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "pvtpki",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 47,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": false,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": "spino",
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": true,
-        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
-      }
-    },
-    {
-      "case": 47,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": true,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": "spino",
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": true,
-        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
-      }
-    },
-    {
-      "case": 47,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "spino",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": "spino",
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": true,
-        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
-      }
-    },
-    {
-      "case": 47,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "general",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": true,
-        "sfT": "general",
-        "sfMan": true,
-        "sfWhy": "причина",
-        "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
-      }
-    },
-    {
-      "case": 47,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "pvtpki",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": true,
-        "sfT": "pvtpki",
-        "sfMan": true,
-        "sfWhy": "причина",
-        "spino": false,
-        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
-      }
-    },
-    {
-      "case": 48,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": false,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 48,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": true,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 48,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "spino",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 48,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "general",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 48,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "pvtpki",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 49,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": false,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 49,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": null,
-        "touched": true,
-        "reason": ""
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 49,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "spino",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 49,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "general",
-        "touched": true,
-        "reason": " причина "
-      },
-      "expected": {
-        "manBad": false,
-        "sfT": null,
-        "sfMan": false,
-        "sfWhy": "",
-        "spino": false,
-        "log": []
-      }
-    },
-    {
-      "case": 49,
-      "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
-        "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
       },
@@ -5730,7 +5903,296 @@
     {
       "case": 50,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 50,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": ["Тариф Соцфонда: не определён → СПиНО (определён автоматически)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "general",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Базовый тариф (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 51,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": true,
+        "sfT": "pvtpki",
+        "sfMan": true,
+        "sfWhy": "причина",
+        "spino": false,
+        "log": ["Тариф Соцфонда: не определён → Тариф ПВТ / ПКИ (выбран вручную: причина)"]
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 52,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": false,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": null,
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "general",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 53,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "pvtpki",
+        "touched": true,
+        "reason": " причина "
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": null,
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": false,
+        "log": []
+      }
+    },
+    {
+      "case": 54,
+      "input": {
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": false,
         "reason": ""
@@ -5745,9 +6207,9 @@
       }
     },
     {
-      "case": 50,
+      "case": 54,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -5762,9 +6224,9 @@
       }
     },
     {
-      "case": 50,
+      "case": 54,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5779,9 +6241,9 @@
       }
     },
     {
-      "case": 50,
+      "case": 54,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -5796,9 +6258,9 @@
       }
     },
     {
-      "case": 50,
+      "case": 54,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5813,9 +6275,9 @@
       }
     },
     {
-      "case": 51,
+      "case": 55,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": false,
         "reason": ""
@@ -5830,9 +6292,9 @@
       }
     },
     {
-      "case": 51,
+      "case": 55,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -5847,9 +6309,9 @@
       }
     },
     {
-      "case": 51,
+      "case": 55,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5864,9 +6326,9 @@
       }
     },
     {
-      "case": 51,
+      "case": 55,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -5881,9 +6343,9 @@
       }
     },
     {
-      "case": 51,
+      "case": 55,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5898,9 +6360,9 @@
       }
     },
     {
-      "case": 52,
+      "case": 56,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": false,
         "reason": ""
@@ -5915,9 +6377,9 @@
       }
     },
     {
-      "case": 52,
+      "case": 56,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -5932,9 +6394,9 @@
       }
     },
     {
-      "case": 52,
+      "case": 56,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -5949,9 +6411,9 @@
       }
     },
     {
-      "case": 52,
+      "case": 56,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -5966,9 +6428,9 @@
       }
     },
     {
-      "case": 52,
+      "case": 56,
       "input": {
-        "flags": { "cashless": true, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": true, "confirmed": true, "gov": false },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -5983,9 +6445,9 @@
       }
     },
     {
-      "case": 53,
+      "case": 57,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -6000,9 +6462,9 @@
       }
     },
     {
-      "case": 53,
+      "case": 57,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": null,
         "touched": true,
         "reason": ""
@@ -6017,9 +6479,9 @@
       }
     },
     {
-      "case": 53,
+      "case": 57,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": true,
         "reason": " причина "
@@ -6034,9 +6496,9 @@
       }
     },
     {
-      "case": 53,
+      "case": 57,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "general",
         "touched": true,
         "reason": " причина "
@@ -6051,9 +6513,9 @@
       }
     },
     {
-      "case": 53,
+      "case": 57,
       "input": {
-        "flags": { "cashless": true, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "card", "registry": null, "confirmed": null, "gov": null },
         "tariff": "pvtpki",
         "touched": true,
         "reason": " причина "
@@ -6070,7 +6532,7 @@
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": false, "registry": true, "confirmed": true, "gov": false },
+        "flags": { "pay": "card", "registry": false, "confirmed": true, "gov": false },
         "tariff": "spino",
         "touched": false,
         "reason": ""
@@ -6082,14 +6544,33 @@
         "sfWhy": "",
         "spino": true,
         "log": [
-          "Признаки для тарифа Соцфонда: Зарплата только безналично (на карты) — нет; Реестр наёмных работников загружен в Салык.кг — да; Тариф подтверждён ГНС — да; Госфинансирование — нет"
+          "Признаки для тарифа Соцфонда: Выплата зарплаты — только безналично; Реестр наёмных работников загружен в Салык.кг — нет; Тариф подтверждён ГНС — да; Госфинансирование — нет"
         ]
       }
     },
     {
       "case": 31,
       "input": {
-        "flags": { "cashless": null, "registry": null, "confirmed": null, "gov": null },
+        "flags": { "pay": "cash", "registry": true, "confirmed": true, "gov": false },
+        "tariff": "spino",
+        "touched": true,
+        "reason": ""
+      },
+      "expected": {
+        "manBad": false,
+        "sfT": "spino",
+        "sfMan": false,
+        "sfWhy": "",
+        "spino": true,
+        "log": [
+          "Признаки для тарифа Соцфонда: Выплата зарплаты — только наличными; Реестр наёмных работников загружен в Салык.кг — да; Тариф подтверждён ГНС — да; Госфинансирование — нет"
+        ]
+      }
+    },
+    {
+      "case": 31,
+      "input": {
+        "flags": { "pay": null, "registry": null, "confirmed": null, "gov": null },
         "tariff": "spino",
         "touched": false,
         "reason": ""

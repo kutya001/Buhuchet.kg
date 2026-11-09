@@ -1,7 +1,7 @@
 import type { Translate, UiTextKey } from '../l10n/texts';
 import { phoneProblem, type PhoneCode } from '../staff/rules';
 import { CONTRACTOR_TEXT_MAX, innProblem } from './rules';
-import type { SocfundFlag, SocfundFlags } from './socfund';
+import type { SocfundFlag, SocfundFlags, SocfundPay } from './socfund';
 
 /*
  * Загрузка контрагентов вставкой из Excel (задача 2.16; ТЗ «Контрагенты» → «Загрузка текущих
@@ -28,10 +28,11 @@ export const CP_IMPORT_COLUMNS = [
   'head',
   'contact',
   'note',
-  'sfc',
+  'sfpay',
   'sfr',
   'sfp',
   'sfg',
+  'sfc',
   'skip',
 ] as const;
 export type CpImportColumn = (typeof CP_IMPORT_COLUMNS)[number];
@@ -39,6 +40,11 @@ export type CpImportField = Exclude<CpImportColumn, 'skip'>;
 
 /** Колонки шаблона без «— не загружать —». */
 export const CP_IMPORT_FIELDS = CP_IMPORT_COLUMNS.filter((c): c is CpImportField => c !== 'skip');
+/**
+ * Прежние колонки: читаются при загрузке, в шаблон не попадают (прототип v82 IMP_COLS, четвёртое поле) —
+ * «Зарплата безналично» до поля «Выплата зарплаты».
+ */
+export const CP_IMPORT_LEGACY: readonly CpImportField[] = ['sfc'];
 
 /** До 500 строк за одну загрузку (ТЗ «Ограничение»; прототип: `slice(0,500)`). */
 export const CP_IMPORT_MAX_ROWS = 500;
@@ -74,10 +80,11 @@ const HEADERS: Record<CpImportField, readonly string[]> = {
   head: ['руководитель', 'директор'],
   contact: ['контакт', 'контактное лицо'],
   note: ['примечание', 'комментарий'],
-  sfc: ['зарплата безналично', 'безналичная зарплата', 'зарплата'],
+  sfpay: ['выплата зарплаты', 'способ выплаты зарплаты', 'зарплата наличными'],
   sfr: ['реестр в салык.кг', 'реестр работников', 'реестр'],
   sfp: ['подтверждён гнс', 'подтвержден гнс', 'тариф подтверждён'],
   sfg: ['госфинансирование', 'бюджет'],
+  sfc: ['зарплата безналично', 'безналичная зарплата', 'зарплата'],
 };
 
 /** Колонка по заголовку: первая, у которой заголовок совпал или начинается так же. */
@@ -180,9 +187,8 @@ export function importFee(raw: string): number | null {
   return Number.isSafeInteger(tyiyn) ? tyiyn : null;
 }
 
-/** Колонки «Да / Нет» для тарифа Соцфонда и их признаки (прототип: sfc, sfr, sfp, sfg). */
+/** Колонки «Да / Нет» для тарифа Соцфонда и их признаки (прототип: sfr, sfp, sfg). */
 export const IMPORT_SOCFUND_COLUMNS: readonly (readonly [CpImportField, SocfundFlag])[] = [
-  ['sfc', 'cashless'],
   ['sfr', 'registry'],
   ['sfp', 'confirmed'],
   ['sfg', 'gov'],
@@ -190,6 +196,17 @@ export const IMPORT_SOCFUND_COLUMNS: readonly (readonly [CpImportField, SocfundF
 
 const YES = ['да', 'yes', '1', 'true'];
 const NO = ['нет', 'no', '0', 'false'];
+
+/**
+ * «Выплата зарплаты» из ячейки (прототип v82 importDlg): «безнал» или «карт» — безналично, «налич» (кроме
+ * слова «безналично») — наличными, оба — «Безналично и наличными». null — не понять.
+ */
+export function importPay(raw: string): SocfundPay | null {
+  const x = importNorm(raw).trim();
+  const card = /безнал|карт/.test(x);
+  const cash = /налич/.test(x.replace(/безнал\S*/g, ''));
+  return card && cash ? 'mixed' : card ? 'card' : cash ? 'cash' : null;
+}
 
 /** Справочники и данные организации для проверки строк. Значения справочников — только действующие. */
 export interface CpImportDicts {
@@ -355,6 +372,18 @@ export function checkImportRows(
     }
 
     const socfund: SocfundFlags = {};
+    // «Выплата зарплаты»; без неё — прежняя «Зарплата безналично»: Да — только безналично, Нет — с наличными
+    const pay = importNorm(v.sfpay).trim();
+    const legacy = importNorm(v.sfc).trim();
+    if (pay) {
+      const p = importPay(pay);
+      if (p) socfund.pay = p;
+      else err('cp.import.err.pay');
+    } else if (legacy) {
+      if (YES.includes(legacy)) socfund.pay = 'card';
+      else if (NO.includes(legacy)) socfund.pay = 'mixed';
+      else err('cp.import.err.sfc');
+    }
     for (const [col, flag] of IMPORT_SOCFUND_COLUMNS) {
       const x = importNorm(v[col]).trim();
       if (!x) continue;

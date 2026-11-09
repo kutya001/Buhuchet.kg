@@ -377,6 +377,7 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
     col('term', 'pdicts.io.col.term'),
     col('verify', 'pdicts.io.col.verify', { type: 'yesno' }),
     col('verifyNote', 'pdicts.io.col.verify_note'),
+    col('cashHint', 'pdicts.io.col.cash_hint'),
     GKED,
     GKED_WARN,
     col(

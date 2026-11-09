@@ -285,13 +285,24 @@ function SocfundValue({
   const s = c.socfund;
   const cur = s.tariff;
   const auto = s.auto;
-  const flags = SOCFUND_FLAGS.map((k, i) => {
+  // Первой — выплата зарплаты (прототип v82 sfCardKv): не указана — бледным, на тариф не влияет.
+  const pay = (
+    <span key="pay">
+      {t('cp.socfund.pay')}:{' '}
+      {s.flags.pay ? (
+        t(`cp.socfund.pay.${s.flags.pay}`).toLowerCase()
+      ) : (
+        <span className="text-faint">{t('cp.socfund.flag_unset')}</span>
+      )}
+    </span>
+  );
+  const flags = SOCFUND_FLAGS.map((k) => {
     const v = s.flags[k];
     // Подпись без пояснения в скобках; у госфинансирования «нет» по умолчанию (прототип sfCardKv).
     const label = t(`cp.socfund.flag.${k}`).replace(/\s*\(.*\)$/, '');
     return (
       <span key={k}>
-        {i ? ' · ' : ''}
+        {' · '}
         {label}:{' '}
         {v === null ? (
           k === 'gov' ? (
@@ -327,7 +338,17 @@ function SocfundValue({
           {t(edit ? (cur ? 'cp.socfund.edit' : 'cp.socfund.set') : 'cp.socfund.view_rates')}
         </button>
       </span>
-      <Hint>{flags}</Hint>
+      <Hint>
+        {pay}
+        {flags}
+      </Hint>
+      {s.cashHint ? (
+        <span className="mt-1.5 block">
+          <Note tone="beta">
+            <span data-sf-cash="">{s.cashHint}</span>
+          </Note>
+        </span>
+      ) : null}
       {!cur && auto ? (
         <Hint>
           {auto.id

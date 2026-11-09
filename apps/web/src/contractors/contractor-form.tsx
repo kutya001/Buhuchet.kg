@@ -83,6 +83,7 @@ import {
 import { RegdocsGkedBox, RegdocsHead, regdocsMarks } from './contractor-regdocs';
 import {
   regdocsDraft,
+  regdocsIp,
   regdocsState,
   takeAlt,
   type RdField,
@@ -576,9 +577,15 @@ function NewContractorForm({
             socfundConfirm: dec.socfund,
           }),
           // Документы окна прикрепятся к контрагенту; распознанные — запись истории «Создан из
-          // свидетельства и выписки (бета)».
+          // свидетельства и выписки (бета)» или «Создан из свидетельства ИП (бета)».
           ...(pre
-            ? { regdocs: { files: pre.files.map((f) => f.id), recognized: !!pre.result } }
+            ? {
+                regdocs: {
+                  files: pre.files.map((f) => f.id),
+                  recognized: !!pre.result,
+                  ...(pre.result && regdocsIp(pre) ? { ip: true } : {}),
+                },
+              }
             : {}),
         },
       }),
@@ -1188,7 +1195,11 @@ function NewContractorForm({
             t('cp.form.title_new')
           )
         }
-        sub={pre?.result ? t('cp.rd.form_sub') : t('cp.form.sub_new')}
+        sub={
+          pre?.result
+            ? t(regdocsIp(pre) ? 'cp.rd.form_sub_ip' : 'cp.rd.form_sub')
+            : t('cp.form.sub_new')
+        }
         dirty={JSON.stringify(d) !== JSON.stringify(initial)}
         footer={
           phone ? (

@@ -8,6 +8,7 @@ import {
   docsText,
   needs,
   regdocsDraft,
+  regdocsIp,
   regdocsState,
   regdocsSummary,
   sourceOf,
@@ -82,6 +83,7 @@ const result = (o: Partial<RegdocsResult> = {}): RegdocsResult => ({
     more: [{ code: '62.01.0', name: 'Разработка программного обеспечения' }],
   },
   ugns: '003',
+  ugnsSrc: 'addr',
   stopped: false,
   status: 'Регистрация',
   phoneBad: '',
@@ -228,13 +230,31 @@ describe('сводка над формой (rdHead)', () => {
   it('без телефона, формы и ГКЭД; неполный телефон в документе; ГКЭД не подставлен — на проверку', () => {
     const { form: _f, phone: _p, ...v } = result().v;
     const gk = { ...result().gk!, code: '', name: '', choose: [{ code: '69.20.0', name: 'x' }] };
-    const res = result({ v, alt: {}, ugns: '', gk, phoneBad: '555 01' });
+    const res = result({ v, alt: {}, ugns: '', ugnsSrc: '', gk, phoneBad: '555 01' });
     expect(regdocsSummary(regdocsState(res), res, t)).toEqual({
       filled: 11,
       check: 1,
       miss: ['Телефон', 'Форма собственности', 'Основной вид деятельности (ГКЭД)'],
       warn: ['телефон в документе неполный (555 01)'],
     });
+  });
+
+  it('свидетельство ИП (прототип v82): налоговый орган из шапки — «из свидетельства ИП», без проверки', () => {
+    const res = result({ alt: {}, ugnsSrc: 'ipsv' });
+    const st = regdocsState(res);
+    const d = regdocsDraft(base(), res, codes);
+    expect(sourceOf(st, d, 'ugns', codes)).toBe('ipsv');
+    expect(t('cp.rd.src.ipsv')).toBe('из свидетельства ИП');
+    expect(regdocsSummary(st, res, t).check).toBe(0);
+    // найден по адресу — на проверку, как у юрлица
+    const byAddr = { ...res, ugnsSrc: 'addr' as const };
+    expect(regdocsSummary(regdocsState(byAddr), byAddr, t).check).toBe(1);
+    expect(regdocsIp({ files: [], result: res, docs: [{ kind: 'ipsv', issued: '' }] })).toBe(true);
+    expect(regdocsIp({ files: [], result: res, docs: [{ kind: 'svid', issued: '' }] })).toBe(false);
+    expect(regdocsIp(null)).toBe(false);
+    expect(docsText([{ kind: 'ipsv', issued: '2024-02-01' }], t)).toBe(
+      'Свидетельство ИП от 01.02.2024',
+    );
   });
 
   it('«Распознано: Свидетельство от 18.10.2026 и Выписка»', () => {

@@ -1,4 +1,5 @@
 import { importNorm } from './import';
+import { IP_FORM_NAME } from './socfund';
 
 /*
  * Создание контрагента «Из свидетельства и выписки» (Бета; задача 2.17; ТЗ «Контрагенты» → «Создание
@@ -7,6 +8,8 @@ import { importNorm } from './import';
  * скан — с положением на странице) получает сервер (переходник `documents` в @buhuchet/adapters), правила
  * разбора — здесь, один в один с прототипом: поля находятся по подписям, номера полей выписки — опора;
  * справочники платформы (формы собственности, налоговые органы, ГКЭД) передаются параметром.
+ * Свидетельство о регистрации ИП из ГНС (прототип v82: rdIsIp, rdIpExtract, rdIpFields, rdUgnsHead) —
+ * без подписей полей в тексте: значения берутся по виду и порядку сверху вниз.
  */
 
 /** Кусок текста на странице: левый нижний угол в пунктах PDF (ось y — вверх), ширина и высота. */
@@ -18,16 +21,23 @@ export interface RdItem {
   h: number;
 }
 
-/** Документ глазами разбора: страницы с кусками текста и дата создания PDF (ГГГГ-ММ-ДД или пусто). */
+/**
+ * Документ глазами разбора: страницы с кусками текста, дата создания PDF (ГГГГ-ММ-ДД или пусто) и
+ * название с темой из свойств PDF через пробел (по ним узнаётся свидетельство ИП).
+ */
 export interface RdSource {
   pages: readonly { items: readonly RdItem[] }[];
   created?: string;
+  title?: string;
 }
 
-/** Вид документа: свидетельство (справка) о госрегистрации или выписка из реестра. */
-export const RD_KINDS = ['svid', 'vyp'] as const;
+/**
+ * Вид документа: свидетельство (справка) о госрегистрации или выписка из реестра юрлиц (Минюст),
+ * свидетельство о регистрации ИП (ГНС).
+ */
+export const RD_KINDS = ['svid', 'vyp', 'ipsv'] as const;
 export type RdKind = (typeof RD_KINDS)[number];
-/** Откуда значение поля: из свидетельства, из выписки или из обоих документов (они совпали). */
+/** Откуда значение поля: из свидетельства, из выписки, из обоих документов (они совпали), из свидетельства ИП. */
 export type RdSrc = RdKind | 'both';
 
 /** Сколько страниц документа читается (прототип pdfRead: первые 10). */
@@ -383,10 +393,103 @@ interface Field {
 /** Разобранный документ (прототип rdExtract): вид, поля по подписям, дополнительные ГКЭД, дата выдачи. */
 export interface RdDoc {
   kind: RdKind | '';
-  f: Partial<Record<LabelKey | 'benefCount' | 'benefName', Field>>;
+  f: Partial<Record<LabelKey | 'benefCount' | 'benefName' | 'ugnsHead', Field>>;
   more: string[];
   issued: string;
   text: string;
+}
+
+/*
+ * Свидетельство о регистрации ИП из ГНС (решение заказчика 09.11.2026; прототип v82). Подписи полей
+ * нарисованы в фоновой картинке, в текстовом слое только значения. Документ узнаётся по названию в
+ * свойствах PDF или по шапке «Управление Государственной налоговой службы …» вместе со строкой
+ * «ИНДИВИДУАЛЬНЫЙ ПРЕДПРИНИМАТЕЛЬ» / «ЖЕКЕ ИШКЕР». Значения — по виду и порядку сверху вниз: шапка (УГНС),
+ * номер 000-0000-000-0000 и дата выдачи, ИНН (14 цифр по клеткам), ОКПО (8 цифр), ФИО, адрес (1–2 строки),
+ * форма, «код-вид деятельности», дата первичной регистрации, дата перерегистрации (если есть), подписант.
+ */
+const RD_IPF = /^(индивидуальный предприниматель|жеке ишкер)$/i;
+const RD_IPNO = /\d{3}-\d{4}-\d{3}-\d{4}/;
+const RD_FIO = /^[\p{L}-]+(\s+[\p{L}-]+){1,4}$/u;
+
+/** Свидетельство ИП: по названию PDF или по шапке ГНС и строке формы (прототип rdIsIp). */
+function rdIsIp(file: RdSource, lines: readonly Line[]): boolean {
+  const t = String(file.title || '')
+    .toLowerCase()
+    .replace(/ё/g, 'е');
+  if (
+    /свидетельств\S* о (государственн\S* )?регистрации ип(\s|$)|свидетельств\S* о (государственн\S* )?регистрации индивидуальн/.test(
+      t,
+    )
+  )
+    return true;
+  return (
+    lines.some((l) => /управлени\S* государственн\S* налогов\S* служб/i.test(l.text)) &&
+    lines.some((l) => RD_IPF.test(l.text.trim()))
+  );
+}
+
+/** Поля свидетельства ИП по порядку строк (прототип rdIpExtract): русский лист, кыргызский — если русского нет. */
+function rdIpExtract(file: RdSource, lines: readonly Line[]): RdDoc {
+  const pages = [...new Set(lines.map((l) => l.page))];
+  const pg = (p: number) => lines.filter((l) => l.page === p);
+  const ru = (p: number) =>
+    pg(p).some((l) => /^индивидуальный предприниматель$/i.test(l.text.trim()));
+  const kg = (p: number) => pg(p).some((l) => /^жеке ишкер$/i.test(l.text.trim()));
+  const p0 = pages.find(ru) ?? pages.find(kg) ?? pages[0];
+  const L = p0 === undefined ? [] : pg(p0);
+  const isKg = p0 === undefined ? false : !ru(p0);
+  const f: RdDoc['f'] = {};
+  const put = (k: keyof RdDoc['f'], v: string | undefined) => {
+    const t = String(v ?? '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (t && !rdEmpty(t) && !f[k]) f[k] = { v: t, kg: isKg };
+  };
+  const dg = (l: Line) => l.text.replace(/\s/g, '');
+  const num = (l: Line, n: number) => /^[\d\s]+$/.test(l.text) && dg(l).length === n;
+  const iNo = L.findIndex((l) => RD_IPNO.test(l.text));
+  let issued = '';
+  put(
+    'ugnsHead',
+    L.slice(0, iNo < 0 ? 1 : iNo)
+      .filter((l) => /налогов|служб|район|город|г\./i.test(l.text))
+      .map((l) => l.text)
+      .join(' '),
+  );
+  if (iNo >= 0) {
+    const t = L[iNo]!.text;
+    put('regNo', RD_IPNO.exec(t)![0]);
+    const d = /\d{2}\.\d{2}\.\d{4}/.exec(t.replace(RD_IPNO, ''));
+    if (d) issued = rdDate(d[0]);
+  }
+  const iInn = L.findIndex((l, k) => k > iNo && num(l, 14));
+  const iOk = L.findIndex((l, k) => k > iNo && num(l, 8));
+  if (iInn >= 0) put('inn', dg(L[iInn]!));
+  if (iOk >= 0) put('okpo', dg(L[iOk]!));
+  const iF = L.findIndex((l) => RD_IPF.test(l.text.trim()));
+  const mid = L.slice(Math.max(iNo, iInn, iOk) + 1, iF >= 0 ? iF : L.length).map((l) => l.text);
+  const fi = mid.findIndex((t) => RD_FIO.test(t) && !/[,\d]/.test(t));
+  if (fi >= 0) {
+    put('head', mid[fi]);
+    put('address', mid.slice(fi + 1).join(' '));
+  }
+  const rest = iF >= 0 ? L.slice(iF + 1) : [];
+  const isD = (l: Line) => /^\d{2}\.\d{2}\.\d{4}$/.test(l.text.trim());
+  const gi = rest.findIndex((l) => /^\d{2}\.\d{2}(\.\d{1,2})?\s*[-–—]/.test(l.text));
+  if (gi >= 0) {
+    const m = /^(\d{2}\.\d{2}(?:\.\d{1,2})?)\s*[-–—]\s*(.*)$/.exec(rest[gi]!.text)!;
+    const di = rest.findIndex((l, k) => k > gi && isD(l));
+    put('gked', m[1]);
+    put(
+      'actMain',
+      [m[2], ...(di > gi + 1 ? rest.slice(gi + 1, di).map((l) => l.text) : [])].join(' '),
+    );
+  }
+  const ds = rest.slice(gi + 1).filter(isD);
+  put('firstReg', ds[0]?.text);
+  put('reReg', ds[1]?.text);
+  if (!issued && file.created && /^\d{4}-\d{2}-\d{2}$/.test(file.created)) issued = file.created;
+  return { kind: 'ipsv', f, more: [], issued, text: L.map((l) => l.text).join('\n') };
 }
 
 /**
@@ -395,6 +498,7 @@ export interface RdDoc {
  */
 export function rdExtract(file: RdSource): RdDoc {
   const lines = rdLines(file.pages);
+  if (rdIsIp(file, lines)) return rdIpExtract(file, lines);
   const kind = rdKind(lines);
   const pairs = rdPairs(lines, kind);
   const all = lines.map((l) => l.text).join('\n');
@@ -598,6 +702,24 @@ function rdUgns(f: RdDoc['f'], addr: string, offices: readonly RdOffice[]): stri
   return u ? u.code : '';
 }
 
+/**
+ * УГНС из шапки свидетельства ИП (прототип rdUgnsHead): «… службы по Свердловскому району города Бишкек»
+ * → «УГНС по Свердловскому району г. Бишкек»; не нашлось по названию — как по адресу.
+ */
+function rdUgnsHead(t: string, offices: readonly RdOffice[]): string {
+  const m = /служб\S*\s+по\s+(.+)$/i.exec(String(t || ''));
+  if (!m) return '';
+  const p = m[1]!
+    .replace(/(^|\s)город[ауе]?(?=\s)/gi, '$1г.')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const it = offices.filter((x) => x.active);
+  const n = norm('по ' + p);
+  const u = it.find((x) => norm(x.name).endsWith(n)) ?? it.find((x) => norm(x.name).includes(n));
+  if (u) return u.code;
+  return rdUgns({}, p.replace(/([А-ЯЁ][а-яё-]+?)ому\s+району/, '$1ий район'), offices);
+}
+
 /** Основной ГКЭД по документу (прототип rdGked). */
 export interface RdGkedPick {
   /** Подкласс, который подставляется сам; пусто — не найден. */
@@ -704,13 +826,78 @@ interface CpFields extends RdValues {
   phoneRaw?: string;
   gk?: { codes: string[]; text: string };
   ugns: string;
+  /** Откуда налоговый орган: из шапки свидетельства ИП или по адресу. */
+  ugnsSrc?: RdUgnsSrc;
   stopped: boolean;
   status: string;
   ip: boolean;
   branch: boolean;
 }
 
+/**
+ * Свидетельство ИП (прототип rdIpFields): название «ИП Фамилия И. О.», полное — «Индивидуальный
+ * предприниматель ФИО», руководитель — ФИО; форма — ИП; УГНС из шапки, иначе по адресу.
+ */
+function rdIpFields(d: RdDoc, dicts: RdDicts): CpFields {
+  const f = d.f;
+  const o: Partial<CpFields> = {};
+  const set = (k: RdKey, v: string) => {
+    if (v !== '' && v != null) (o as Record<string, unknown>)[k] = v;
+  };
+  const fio = f.head ? rdFio(f.head.v) : '';
+  const w = fio.split(' ').filter(Boolean);
+  const ini = w
+    .slice(1)
+    .filter((x) => !/^(кызы|уулу|оглы|кизи)$/i.test(x))
+    .map((x) => x[0]!.toUpperCase() + '.')
+    .join(' ');
+  set('name', w.length ? `ИП ${w[0]}${ini ? ' ' + ini : ''}` : '');
+  set('full', fio ? 'Индивидуальный предприниматель ' + fio : '');
+  set('head', fio);
+  set('inn', f.inn ? f.inn.v : '');
+  set('regNo', f.regNo ? f.regNo.v : '');
+  set('okpo', f.okpo ? f.okpo.v : '');
+  // прототип хранит у контрагента название формы «ИП», продукт — код формы с этим названием
+  const ipForm = dicts.forms.find((x) => x.active && x.name === IP_FORM_NAME);
+  set('form', ipForm ? ipForm.code : rdForm('Индивидуальный предприниматель', dicts.forms));
+  set(
+    'addr',
+    f.address
+      ? f.address.v
+          .split(',')
+          .map((x) => x.trim())
+          .filter((x) => x && !rdEmpty(x))
+          .join(', ')
+      : '',
+  );
+  set('regDate', rdDate(f.firstReg?.v));
+  set('reRegDate', rdDate(f.reReg?.v));
+  if (f.gked) o.gk = { codes: [f.gked.v], text: f.actMain ? f.actMain.v : '' };
+  let ugns = rdUgnsHead(f.ugnsHead?.v ?? '', dicts.offices);
+  let ugnsSrc: RdUgnsSrc | undefined = ugns ? 'ipsv' : undefined;
+  if (!ugns && typeof o.addr === 'string' && o.addr) {
+    ugns = rdUgns(
+      {},
+      o.addr
+        .replace(/([А-ЯЁ][а-яё-]+)\s+р-н/g, '$1 район')
+        .replace(/([А-ЯЁ][а-яё-]+)\s+г\./g, 'г. $1'),
+      dicts.offices,
+    );
+    if (ugns) ugnsSrc = 'addr';
+  }
+  return {
+    ...o,
+    ugns,
+    ...(ugnsSrc ? { ugnsSrc } : {}),
+    stopped: false,
+    status: '',
+    ip: false,
+    branch: false,
+  };
+}
+
 function rdCpFields(d: RdDoc, dicts: RdDicts): CpFields {
+  if (d.kind === 'ipsv') return rdIpFields(d, dicts);
   const f = d.f;
   const o: Partial<CpFields> = {};
   const set = (k: RdKey | 'phoneRaw', v: string) => {
@@ -780,8 +967,10 @@ export interface RdResult {
   src: Partial<Record<RdKey, RdSrc>>;
   alt: Partial<Record<RdKey, RdAlt[]>>;
   gk: (RdGkedPick & { src: RdKind; more: string[] }) | null;
-  /** Налоговый орган, предложенный по адресу (код); пусто — не найден. */
+  /** Налоговый орган, предложенный по адресу или по шапке свидетельства ИП (код); пусто — не найден. */
   ugns: string;
+  /** Откуда налоговый орган: из свидетельства ИП, по адресу; пусто — не найден. */
+  ugnsSrc: RdUgnsSrc | '';
   /** Юрлицо прекращено (ликвидировано) по данным документа. */
   stopped: boolean;
   status: string;
@@ -789,11 +978,14 @@ export interface RdResult {
   phoneBad: string;
 }
 
+/** Откуда налоговый орган в итоге: из шапки свидетельства ИП или по адресу. */
+export type RdUgnsSrc = 'ipsv' | 'addr';
+
 /**
- * Ошибка итога: ни один документ не распознан; документ ИП или филиала; документы разных организаций
- * (ИНН не совпадает).
+ * Ошибка итога: ни один документ не распознан; документ ИП или филиала в формате юрлица; документы
+ * разных организаций (ИНН не совпадает); свидетельство ИП вместе с документом юрлица.
  */
-export type RdError = 'none' | 'ip' | 'diff';
+export type RdError = 'none' | 'ip' | 'diff' | 'mix';
 
 /**
  * Реквизиты контрагента из одного или двух документов (прототип rdToCp). Расхождение: верх берёт
@@ -806,6 +998,7 @@ export function rdToCp(
   const ok = docs.filter((d): d is RdDoc & { kind: RdKind } => !!d.kind);
   if (!ok.length) return { err: 'none' };
   const F = ok.map((d) => ({ d, o: rdCpFields(d, dicts) }));
+  if (F.length > 1 && F.some((x) => x.d.kind === 'ipsv')) return { err: 'mix' };
   if (F.some((x) => x.o.ip || x.o.branch)) return { err: 'ip' };
   const inns = [...new Set(F.map((x) => x.o.inn).filter(Boolean))];
   if (inns.length > 1) return { err: 'diff' };
@@ -818,6 +1011,7 @@ export function rdToCp(
     alt: {},
     gk: null,
     ugns: '',
+    ugnsSrc: '',
     stopped: false,
     status: '',
     phoneBad: '',
@@ -856,7 +1050,11 @@ export function rdToCp(
         .filter((c) => c && c !== main.code),
     };
   }
-  res.ugns = ord.find((x) => x.o.ugns)?.o.ugns ?? '';
+  const u = ord.find((x) => x.o.ugns);
+  if (u) {
+    res.ugns = u.o.ugns;
+    res.ugnsSrc = u.o.ugnsSrc ?? 'addr';
+  }
   res.stopped = F.some((x) => x.o.stopped);
   res.status = F.find((x) => x.o.status)?.o.status ?? '';
   return { err: null, res };
@@ -866,12 +1064,15 @@ export function rdToCp(
 export const rdChars = (file: RdSource): number =>
   file.pages.reduce((a, p) => a + p.items.reduce((b, i) => b + i.str.trim().length, 0), 0);
 
-/** Документ ИП или филиала: в первой версии не поддерживается (прототип rdRun, rdCpFields). */
-export function rdUnsupported(d: RdDoc): boolean {
-  if (!d.kind) return false;
+/**
+ * Почему распознанный документ не годится (прототип rdRun): свидетельство ИП без ИНН или ФИО — не
+ * прочитано; филиал — пока не поддерживается; документ ИП в формате юрлица — нужно свидетельство ИП из ГНС.
+ */
+export function rdProblem(d: RdDoc): 'read' | 'branch' | 'ip' | null {
+  if (!d.kind) return null;
   const f = d.f;
-  return (
-    (/индивидуальн\S* предпринимател/i.test(d.text || '') && !f.nameRu) ||
-    /^(филиал|представительств)/i.test(f.nameRu ? f.nameRu.v.trim() : '')
-  );
+  if (d.kind === 'ipsv') return !f.inn || !f.head ? 'read' : null;
+  if (/^(филиал|представительств)/i.test(f.nameRu ? f.nameRu.v.trim() : '')) return 'branch';
+  if (/индивидуальн\S* предпринимател/i.test(d.text || '') && !f.nameRu) return 'ip';
+  return null;
 }

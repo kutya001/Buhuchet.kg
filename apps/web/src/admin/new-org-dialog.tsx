@@ -8,11 +8,20 @@ import {
   type NewOrganizationFormInput,
 } from '@buhuchet/shared';
 import { formatMomentRu } from '@buhuchet/domain';
-import { buttonClass, Field, FormGrid, inputClass, Modal, Note, useToast } from '@buhuchet/ui';
+import {
+  buttonClass,
+  Field,
+  FormGrid,
+  inputClass,
+  Modal,
+  Note,
+  PasswordInput,
+  useToast,
+} from '@buhuchet/ui';
 import { useId, useState, type FormEvent } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
-import { fieldError } from '../auth/fields';
+import { fieldError, usePasswordEye } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { suggestTemporaryPassword } from '../staff/temp-password';
 
@@ -57,6 +66,7 @@ export function NewOrganizationDialog({
   lead?: OrgFromLead | null;
 }) {
   const t = useT();
+  const eye = usePasswordEye();
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
@@ -186,7 +196,17 @@ export function NewOrganizationDialog({
             required
             error={fieldError(t, errors.temporaryPassword)}
           >
-            {(control) => <input {...control} {...fields.temporaryPassword} {...mono} />}
+            {(control) => (
+              // Прототип v82 (`no-pass`): временный пароль виден сразу, глаз его прячет.
+              <PasswordInput
+                {...control}
+                {...fields.temporaryPassword}
+                labels={eye}
+                open
+                mono
+                autoComplete="off"
+              />
+            )}
           </Field>
         </FormGrid>
         <Note icon="info">{t('orgs.new.note')}</Note>

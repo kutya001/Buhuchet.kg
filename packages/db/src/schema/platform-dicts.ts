@@ -330,6 +330,8 @@ export const taxBenefits = pgTable(
     validUntil: date('valid_until', { mode: 'string' }),
     verify: boolean('verify').notNull().default(false),
     verifyNote: text('verify_note').notNull().default(''),
+    /** Подсказка юрлицу с наличной зарплатой (у статуса СПиНО ЛЬГ-29, прототип v82 cashHint). */
+    cashHint: text('cash_hint').notNull().default(''),
     gked: jsonb('gked').$type<GkedRule>(),
     /** Проверяется только основной ГКЭД. */
     gkedMainOnly: boolean('gked_main_only').notNull().default(false),

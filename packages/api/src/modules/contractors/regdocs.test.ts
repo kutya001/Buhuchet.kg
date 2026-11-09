@@ -30,7 +30,8 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
   let ownerB: string;
 
   const text = (name: keyof typeof fixture.docs): DocumentText => ({
-    ...(fixture.docs[name] as Omit<DocumentText, 'ocr'>),
+    title: '',
+    ...(fixture.docs[name] as Omit<DocumentText, 'ocr' | 'title'>),
     ocr: false,
   });
   const reader = createFakeDocumentReader({
@@ -39,6 +40,8 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
     'vyp-other': { ok: true, doc: text('vypOther') },
     other: { ok: true, doc: text('other') },
     branch: { ok: true, doc: text('vypBranch') },
+    ipsv: { ok: true, doc: text('ipsv') },
+    'ipsv-no-inn': { ok: true, doc: text('ipsvNoInn') },
     locked: { ok: false, error: 'password' },
     scan: { ok: false, error: 'no_text' },
   });
@@ -220,7 +223,7 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
       ['bad', 'kind'],
       ['bad', 'password'],
       ['bad', 'read'],
-      ['bad', 'ip'],
+      ['bad', 'branch'],
       ['bad', 'upload'],
       ['bad', 'size'],
       ['bad', 'upload'],
@@ -236,6 +239,66 @@ describe.skipIf(!databaseAvailable())('«Из свидетельства и вы
     expect(same).toMatchObject({ error: 'same', sameKind: 'svid', result: null });
     const diff = await recognized([await upload('svid'), await upload('vyp-other')]);
     expect(diff).toMatchObject({ error: 'diff', result: null });
+    // свидетельство ИП вместе с документом юрлица (прототип v82)
+    const mix = await recognized([await upload('ipsv'), await upload('svid')]);
+    expect(mix).toMatchObject({ error: 'mix', result: null });
+    expect(mix.files.map((x) => x.kind)).toEqual(['ipsv', 'svid']);
+  });
+
+  it('(прототип v82) свидетельство ИП из ГНС: форма ИП, ФИО, налоговый орган из шапки; без ИНН — не прочитано', async () => {
+    const out = await recognized([await upload('ipsv')]);
+    expect(out.files.map((x) => [x.state, x.kind, x.issued, x.error])).toEqual([
+      ['ok', 'ipsv', '2024-02-01', null],
+    ]);
+    expect(out.error).toBeNull();
+    expect(out.result?.v).toEqual({
+      name: 'ИП Токтогулов А. Б.',
+      full: 'Индивидуальный предприниматель Токтогулов Азамат Бакытович',
+      inn: '21503199000123',
+      regNo: '123-4567-890-1234',
+      okpo: '31415926',
+      form: 'ФС-02',
+      addr: 'Бишкек г., Первомайский р-н, улица Киевская, дом 15',
+      head: 'Токтогулов Азамат Бакытович',
+      regDate: '2021-03-15',
+    });
+    expect(out.result?.src.inn).toBe('ipsv');
+    expect(out.result?.ugns).not.toBe('');
+    expect(out.result?.ugnsSrc).toBe('ipsv');
+    expect(out.result?.gk).toMatchObject({ code: '62.01.0', src: 'ipsv' });
+    const noInn = await recognized([await upload('ipsv-no-inn')]);
+    expect(noInn.files.map((x) => [x.state, x.error])).toEqual([['bad', 'read']]);
+    expect(noInn).toMatchObject({ error: 'none', result: null });
+    const two = await recognized([await upload('ipsv'), await upload('ipsv')]);
+    expect(two).toMatchObject({ error: 'same', sameKind: 'ipsv', result: null });
+  });
+
+  it('(прототип v82) «Сохранить» из свидетельства ИП: в истории — «Создан из свидетельства ИП (бета)»', async () => {
+    const file = await upload('ipsv');
+    const res = await post(
+      '/api/contractors',
+      owner,
+      draft('21503199000123', {
+        name: 'ИП Токтогулов А. Б.',
+        formCode: 'ФС-02',
+        head: 'Токтогулов Азамат Бакытович',
+        regdocs: { files: [file], recognized: true, ip: true },
+      }),
+    );
+    expect(res.status, await res.clone().text()).toBe(201);
+    const cp = ContractorCreated.parse(await res.json());
+    expect((await fileRows([file]))[0]).toMatchObject({ state: 'ready', contractorId: cp.id });
+    const [created] = await f.t.admin.db
+      .select()
+      .from(schema.auditLog)
+      .where(
+        and(
+          eq(schema.auditLog.entity, 'contractor'),
+          eq(schema.auditLog.entityId, cp.id),
+          eq(schema.auditLog.action, 'create'),
+        ),
+      );
+    expect(created?.reason).toBe('Создан из свидетельства ИП (бета)');
   });
 
   it('«Сохранить»: оба PDF прикрепляются к контрагенту, в истории — «Создан из свидетельства и выписки (бета)»; повторная загрузка — «уже есть»', async () => {

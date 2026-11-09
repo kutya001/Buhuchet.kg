@@ -1,7 +1,7 @@
 'use client';
 
 import { PASSWORD_MIN_LENGTH } from '@buhuchet/domain';
-import { Field, inputClass } from '@buhuchet/ui';
+import { Field, PasswordInput, type PasswordEyeLabels } from '@buhuchet/ui';
 import type { FieldError, UseFormRegisterReturn } from 'react-hook-form';
 import { useT } from '../l10n/provider';
 import { fieldErrorText, type Translate } from '../l10n/translate';
@@ -10,6 +10,12 @@ import { fieldErrorText, type Translate } from '../l10n/translate';
 export function fieldError(t: Translate, error: FieldError | undefined): string | undefined {
   if (!error) return undefined;
   return error.type === 'server' ? error.message : fieldErrorText(t, error.message);
+}
+
+/** Подписи глаза в полях пароля (прототип v82 pwEyeBtn): «Показать пароль» и «Скрыть пароль». */
+export function usePasswordEye(): PasswordEyeLabels {
+  const t = useT();
+  return { show: t('auth.password_show'), hide: t('auth.password_hide') };
 }
 
 /** «Новый пароль» с подсказкой и его повтор — в «Забыли пароль?», смене временного пароля и профиле. */
@@ -26,6 +32,7 @@ export function NewPasswordFields({
   repeatLabel: string;
 }) {
   const t = useT();
+  const eye = usePasswordEye();
   return (
     <>
       <Field
@@ -35,24 +42,17 @@ export function NewPasswordFields({
         error={fieldError(t, errors.newPassword)}
       >
         {(control) => (
-          <input
+          <PasswordInput
             {...control}
             {...fields.newPassword}
-            type="password"
-            className={inputClass()}
+            labels={eye}
             autoComplete="new-password"
           />
         )}
       </Field>
       <Field id={`${idPrefix}-p2`} label={repeatLabel} error={fieldError(t, errors.repeat)}>
         {(control) => (
-          <input
-            {...control}
-            {...fields.repeat}
-            type="password"
-            className={inputClass()}
-            autoComplete="new-password"
-          />
+          <PasswordInput {...control} {...fields.repeat} labels={eye} autoComplete="new-password" />
         )}
       </Field>
     </>

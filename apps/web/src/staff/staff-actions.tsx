@@ -11,8 +11,8 @@ import {
 import {
   buttonClass,
   ConfirmDialog,
-  MONO_CLASS,
   Modal,
+  PasswordText,
   useToast,
   type ActionEntry,
 } from '@buhuchet/ui';
@@ -23,6 +23,7 @@ import { api, apiFailure, callApi } from '../api-client';
 import { responsibleCountsQuery } from '../contractors/contractor-data';
 import { TransferDialog } from '../contractors/responsible-dialogs';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { usePasswordEye } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { policyQuery } from '../org/org-data';
 import { useShell } from '../shell/context';
@@ -62,6 +63,7 @@ export function useStaffActions(): {
   dialogs: ReactNode;
 } {
   const t = useT();
+  const eye = usePasswordEye();
   const toast = useToast();
   const errorText = useErrorText();
   const client = useQueryClient();
@@ -291,9 +293,7 @@ export function useStaffActions(): {
       >
         <p className="m-0">
           {t('staff.reset.password')}{' '}
-          <b data-temporary-password className={`${MONO_CLASS} text-base`}>
-            {reset?.password}
-          </b>
+          <PasswordText value={reset?.password ?? ''} labels={eye} id="rp-v" />
         </p>
         <p className="m-0 text-muted">{t('staff.reset.text')}</p>
       </Modal>

@@ -27,6 +27,7 @@ import {
 import {
   checkImportRows,
   CP_IMPORT_FIELDS,
+  CP_IMPORT_LEGACY,
   DEFAULT_FEE_DAY,
   defaultSingleTaxRates,
   defaultTypeRate,
@@ -504,7 +505,7 @@ const HINTED = [
   'form',
   'gked',
   'gked2',
-  'sfc',
+  'sfpay',
   'sfr',
   'sfp',
   'sfg',
@@ -556,7 +557,9 @@ async function templateOf(
     regime: data.regimes.map((x) => x.name),
   };
   return {
-    columns: CP_IMPORT_FIELDS.filter((k) => k !== 'fee' || fee).map((key) => {
+    columns: CP_IMPORT_FIELDS.filter(
+      (k) => (k !== 'fee' || fee) && !CP_IMPORT_LEGACY.includes(k),
+    ).map((key) => {
       const hint = t(isHinted(key) ? `cp.import.hint.${key}` : 'cp.import.hint.text');
       const list = lists[key];
       return {

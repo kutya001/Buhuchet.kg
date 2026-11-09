@@ -115,8 +115,8 @@ function monthAt(shift: number): string {
 }
 
 /** Признаки тарифа Соцфонда: все «да» (СПиНО) или ничего не указано. */
-const ALL_YES = { cashless: true, registry: true, confirmed: true, gov: false };
-const NO_FLAGS = { cashless: null, registry: null, confirmed: null, gov: null };
+const ALL_YES = { pay: 'card', registry: true, confirmed: true, gov: false };
+const NO_FLAGS = { pay: null, registry: null, confirmed: null, gov: null };
 
 /** Контрагент демо-организации с ГКЭД, льготами и признаками тарифа Соцфонда (как в socfund-api). */
 async function socfundContractor(

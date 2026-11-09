@@ -507,6 +507,11 @@ export const PLATFORM_DICTS_TEXTS = {
     section: S,
   },
   'pdicts.benefit.confirmation': { ru: 'Как подтверждается', section: S },
+  'pdicts.benefit.cash_hint': { ru: 'Подсказка юрлицу при наличной зарплате', section: S },
+  'pdicts.benefit.cash_hint_hint': {
+    ru: 'Тариф Соцфонда в карточке контрагента: у юрлица с выплатой зарплаты «Безналично и наличными» или «Только наличными»; у ИП не показывается',
+    section: S,
+  },
   'pdicts.benefit.term': { ru: 'Срок действия', section: S },
   'pdicts.benefit.term_ph': { ru: 'Например: бессрочно', section: S },
   'pdicts.benefit.until_hint': {

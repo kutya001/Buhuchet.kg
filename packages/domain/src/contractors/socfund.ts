@@ -17,11 +17,26 @@ import type { ContractorKind } from './rules';
 export const SOCFUND_TARIFFS = ['spino', 'general', 'pvtpki'] as const;
 export type SocfundTariffId = (typeof SOCFUND_TARIFFS)[number];
 
-/** Признаки контрагента для тарифа: зарплата безналично, реестр в Салык.кг, подтверждение ГНС, госфинансирование. */
-export const SOCFUND_FLAGS = ['cashless', 'registry', 'confirmed', 'gov'] as const;
+/** Признаки контрагента для тарифа: реестр в Салык.кг, подтверждение ГНС, госфинансирование. */
+export const SOCFUND_FLAGS = ['registry', 'confirmed', 'gov'] as const;
 export type SocfundFlag = (typeof SOCFUND_FLAGS)[number];
-/** Указанные признаки: да или нет; не указанного признака в объекте нет (как `sf` прототипа). */
-export type SocfundFlags = Partial<Record<SocfundFlag, boolean>>;
+/**
+ * «Выплата зарплаты» (прототип v82 SF_PAY): только безналично, безналично и наличными, только
+ * наличными. На тариф не влияет (решение заказчика 09.11.2026): юрлицу с наличными — только подсказка.
+ */
+export const SOCFUND_PAYS = ['card', 'mixed', 'cash'] as const;
+
+/** Код статуса СПиНО в «Налоговых льготах и особых статусах»: у него подсказка юрлицу при наличной зарплате. */
+export const SPINO_BENEFIT_CODE = 'ЛЬГ-29';
+
+/** Название формы собственности «ИП» в справочнике (прототип хранит у контрагента его, продукт — код формы). */
+export const IP_FORM_NAME = 'ИП';
+export type SocfundPay = (typeof SOCFUND_PAYS)[number];
+/**
+ * Указанные признаки: да или нет; не указанного признака в объекте нет (как `sf` прототипа); `pay` —
+ * выплата зарплаты, не указана — нет ключа.
+ */
+export type SocfundFlags = Partial<Record<SocfundFlag, boolean>> & { pay?: SocfundPay };
 
 /** Тариф из справочника (guide.tariffs налога-взноса). */
 export interface SocfundTariff {
@@ -65,6 +80,8 @@ export interface SocfundDict {
   index: GkedIndex;
   /** Виды отчётов, по которым сдаются взносы (guide.reportTypes: STI-161). */
   reportTypes: readonly string[];
+  /** Подсказка юрлицу с наличной зарплатой — у статуса СПиНО в справочнике (cashHint); '' — нет. */
+  cashHint: string;
 }
 
 /** Контрагент для тарифа. */
@@ -94,10 +111,10 @@ export const EMPLOYEES_BASE = 'employees';
 export type SocfundWhy =
   | { reason: 'resident'; statuses: string[] }
   | { reason: 'gked_block'; gked: string; text: string }
-  | { reason: 'gov' | 'cashless' | 'registry' | 'confirmed' | 'all_met' };
+  | { reason: 'gov' | 'registry' | 'confirmed' | 'all_met' };
 
 /** Чего не хватает, чтобы определить тариф. */
-export type SocfundMissing = 'gked' | 'cashless' | 'registry' | 'confirmed';
+export type SocfundMissing = 'gked' | 'registry' | 'confirmed';
 
 export type SocfundWarning =
   | { reason: 'resident_verify' }
@@ -203,7 +220,8 @@ export function socfundAuto(s: SocfundSubject, dict: SocfundDict): SocfundAuto |
     warn.push({ reason: 'form', form: s.form.name });
   }
   if (s.flags.gov === true) why.push({ reason: 'gov' });
-  for (const k of ['cashless', 'registry', 'confirmed'] as const) {
+  // Выплата зарплаты на тариф не влияет (прототип v82): только реестр и подтверждение ГНС
+  for (const k of ['registry', 'confirmed'] as const) {
     const v = s.flags[k];
     if (v === false) why.push({ reason: k });
     else if (v === undefined) miss.push(k);
@@ -211,6 +229,18 @@ export function socfundAuto(s: SocfundSubject, dict: SocfundDict): SocfundAuto |
   if (why.length) return { tariff: 'general', why, miss, warn: [] };
   if (miss.length) return { tariff: null, why: [], miss, warn };
   return { tariff: 'spino', why: [{ reason: 'all_met' }], miss: [], warn };
+}
+
+/**
+ * Подсказка юрлицу с наличной зарплатой (прототип v82 sfCashWarn): тариф нужен, выплата «Безналично и
+ * наличными» или «Только наличными», форма — не «ИП» (форма не указана — тоже юрлицо). Текст — у статуса
+ * СПиНО в справочнике, без него — из словаря. '' — подсказки нет.
+ */
+export function socfundCashHint(s: SocfundSubject, dict: SocfundDict, t: Translate): string {
+  if (!socfundNeeded(s, dict)) return '';
+  if (s.flags.pay !== 'mixed' && s.flags.pay !== 'cash') return '';
+  if (s.form?.name === IP_FORM_NAME) return '';
+  return dict.cashHint || t('cp.socfund.cash_hint');
 }
 
 /** Состояние у контрагента (прототип sfState); null — тариф не нужен. */
@@ -344,9 +374,11 @@ export interface SocfundInput {
   reason?: string;
 }
 
-/** Только указанные признаки, по порядку. */
+/** Только указанные признаки, по порядку: выплата зарплаты, затем «да / нет». */
 export function socfundFlagsOf(flags: Readonly<Record<string, unknown>>): SocfundFlags {
   const out: SocfundFlags = {};
+  const pay = SOCFUND_PAYS.find((p) => p === flags.pay);
+  if (pay) out.pay = pay;
   for (const k of SOCFUND_FLAGS) if (typeof flags[k] === 'boolean') out[k] = flags[k];
   return out;
 }
@@ -394,17 +426,28 @@ export function socfundDecide(
   return { flags, choice: { id: input.tariff, manual, reason }, changed: true };
 }
 
-/** Запись истории «Признаки для тарифа Соцфонда: … — да; …» (прототип sfApply). */
+/**
+ * Запись истории «Признаки для тарифа Соцфонда: Выплата зарплаты — только безналично; … — да; …»
+ * (прототип v82 sfApply).
+ */
 export function socfundFlagsHistoryText(flags: SocfundFlags, t: Translate): string {
   return t('cp.socfund.history.flags', {
-    flags: SOCFUND_FLAGS.filter((k) => typeof flags[k] === 'boolean')
-      .map((k) =>
+    flags: [
+      ...(flags.pay
+        ? [
+            t('cp.socfund.history.flag', {
+              flag: t('cp.socfund.pay'),
+              value: t(`cp.socfund.pay.${flags.pay}`).toLowerCase(),
+            }),
+          ]
+        : []),
+      ...SOCFUND_FLAGS.filter((k) => typeof flags[k] === 'boolean').map((k) =>
         t('cp.socfund.history.flag', {
           flag: t(`cp.socfund.flag.${k}`),
           value: t(flags[k] ? 'cp.socfund.yes' : 'cp.socfund.no'),
         }),
-      )
-      .join('; '),
+      ),
+    ].join('; '),
   });
 }
 
