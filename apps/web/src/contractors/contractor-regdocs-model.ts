@@ -36,10 +36,17 @@ export interface RegdocsPrefill {
   docs: { kind: RdKind; issued: string }[];
 }
 
+/** Форма заполнена из свидетельства ИП (прототип v82 rdIpDocs): подпись над формой и запись истории. */
+export const regdocsIp = (pre: RegdocsPrefill | null | undefined): boolean =>
+  !!pre?.docs.some((d) => d.kind === 'ipsv');
+
 /** Реквизит формы с подписью источника: реквизиты документа, налоговый орган и основной ГКЭД. */
 export type RdField = RdKey | 'ugns' | 'gked';
 
-/** Откуда значение поля: документ, оба документа или «Предложено по адресу» (налоговый орган). */
+/**
+ * Откуда значение поля: документ, оба документа или «Предложено по адресу» (налоговый орган; из шапки
+ * свидетельства ИП — «из свидетельства ИП»).
+ */
 export type RdFieldSrc = RdKind | 'both' | 'addr';
 
 /**
@@ -139,7 +146,7 @@ export function regdocsState(res: RegdocsResult): RegdocsState {
     v: { ...res.v, ugns: res.ugns, gked },
     src: {
       ...res.src,
-      ...(res.ugns ? { ugns: 'addr' as const } : {}),
+      ...(res.ugns ? { ugns: res.ugnsSrc || ('addr' as const) } : {}),
       ...(gked && res.gk ? { gked: res.gk.src } : {}),
     },
     alt: res.alt,
@@ -290,7 +297,11 @@ export function regdocsSummary(st: RegdocsState, res: RegdocsResult, t: Translat
   if (!st.v.gked) miss.push(t('cp.rd.f.gked'));
   return {
     filled: RD_FIELDS.filter((k) => filled(st.v[k])).length + (st.v.gked ? 1 : 0),
-    check: altKeys.length + (res.ugns ? 1 : 0) + (res.gk && !res.gk.code ? 1 : 0),
+    // налоговый орган из шапки свидетельства ИП проверки не требует (прототип v82)
+    check:
+      altKeys.length +
+      (res.ugns && res.ugnsSrc !== 'ipsv' ? 1 : 0) +
+      (res.gk && !res.gk.code ? 1 : 0),
     miss,
     warn: [
       ...altKeys.map((k) =>

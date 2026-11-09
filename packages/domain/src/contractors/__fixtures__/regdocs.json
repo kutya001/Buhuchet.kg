@@ -4068,6 +4068,7 @@
           "alt": {},
           "gk": null,
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "Регистрация",
           "phoneBad": ""
@@ -4123,6 +4124,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "",
           "phoneBad": ""
@@ -4178,6 +4180,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "Регистрация",
           "phoneBad": ""
@@ -4233,6 +4236,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "Регистрация",
           "phoneBad": ""
@@ -4293,6 +4297,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "Регистрация",
           "phoneBad": ""
@@ -4362,6 +4367,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "",
           "phoneBad": ""
@@ -4417,6 +4423,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "",
           "phoneBad": ""
@@ -4472,6 +4479,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "",
           "phoneBad": ""
@@ -4525,6 +4533,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": false,
           "status": "",
           "phoneBad": "55501"
@@ -4580,6 +4589,7 @@
             "more": []
           },
           "ugns": "ugns-bishkek-okt",
+          "ugnsSrc": "addr",
           "stopped": true,
           "status": "Прекращена",
           "phoneBad": ""

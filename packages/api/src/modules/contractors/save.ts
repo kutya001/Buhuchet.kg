@@ -287,7 +287,9 @@ export function createContractorHandler(
           },
           {
             today,
-            ...(body.regdocs?.recognized ? { reason: t('cp.rd.reason') } : {}),
+            ...(body.regdocs?.recognized
+              ? { reason: t(body.regdocs.ip ? 'cp.rd.reason_ip' : 'cp.rd.reason') }
+              : {}),
           },
         );
         if (regdocs.length) {

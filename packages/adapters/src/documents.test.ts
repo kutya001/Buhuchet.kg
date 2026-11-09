@@ -31,6 +31,19 @@ describe('чтение PDF на сервере', { timeout: 30_000 }, () => {
     expect(doc.kind).toBe('svid');
   });
 
+  it('свидетельство ИП из ГНС: название из свойств PDF, правила прототипа узнают свидетельство ИП', async () => {
+    // синтетическое свидетельство вымышленного предпринимателя (раскладка — как у свидетельства ГНС)
+    const res = await reader.read(file('regdocs-ipsv.pdf'));
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.doc.ocr).toBe(false);
+    expect(res.doc.title).toBe('Свидетельство о регистрации ИП Свидетельство о регистрации ИП');
+    const doc = rdExtract(res.doc);
+    expect(doc.kind).toBe('ipsv');
+    expect(doc.f.inn?.v).toBe('21503199000123');
+    expect(doc.issued).toBe('2024-02-01');
+  });
+
   it('скан без текста — распознавание на русском и кыргызском', async () => {
     const res = await reader.read(file('regdocs-scan.pdf'));
     expect(res.ok).toBe(true);
@@ -94,7 +107,7 @@ describe('чтение PDF на сервере', { timeout: 30_000 }, () => {
 describe('поддельное чтение для тестов', () => {
   it('ответ по содержимому файла; неизвестный — «broken»', async () => {
     const fake = createFakeDocumentReader({
-      a: { ok: true, doc: { pages: [], created: '', ocr: false } },
+      a: { ok: true, doc: { pages: [], created: '', title: '', ocr: false } },
     });
     expect(await fake.read(new TextEncoder().encode('a'))).toMatchObject({ ok: true });
     expect(await fake.read(new TextEncoder().encode('b'))).toEqual({ ok: false, error: 'broken' });
