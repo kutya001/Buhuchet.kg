@@ -331,6 +331,14 @@ export const KpiPeriodRow = z.object({
   values: z.array(IndicatorValue),
   needed: z.array(z.boolean()),
   empty: z.array(z.boolean()),
+  /** Месяц раньше «с <месяц>»: значение можно внести, но оно необязательно. */
+  early: z.array(z.boolean()),
+  /** Показатель обязательный: пустая прошедшая ячейка подсвечена. */
+  required: z.boolean(),
+  /** «с <месяц>» показателя у контрагента. */
+  start: YearMonth,
+  /** Вносит значения контрагента (право и область): ввод в таблице как в Excel. */
+  editable: z.boolean(),
   need: z.number().int(),
   count: z.number().int(),
   totals: z.object({
@@ -356,6 +364,10 @@ export const KpiMissingRow = z.object({
   overdueDays: z.number().int(),
   status: FillStatus,
   statusAt: z.iso.datetime().nullable(),
+  /** Значения действующих показателей за месяц (столбцы «Не заполнено», ключ `v<код без дефисов>`). */
+  cells: z.array(KpiCell),
+  /** Вносит значения контрагента (право и область): ввод в таблице как в Excel. */
+  editable: z.boolean(),
 });
 export type KpiMissingRow = z.infer<typeof KpiMissingRow>;
 

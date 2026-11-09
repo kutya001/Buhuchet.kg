@@ -72,7 +72,6 @@ export const KPI_TEXTS = {
     section: S,
   },
   'kpi.early_cell': { ru: 'Ведётся с {from}: значение за этот месяц необязательно', section: S },
-  'kpi.early_card': { ru: 'Ведётся с {from}: значение необязательно', section: S },
   'kpi.off_since': { ru: 'Не ведётся с {month}', section: S },
   'kpi.cell_off': {
     ru: 'Показатель у этого контрагента не ведётся или не нужен в этом месяце',
@@ -83,8 +82,6 @@ export const KPI_TEXTS = {
     section: S,
   },
   'kpi.cell_label': { ru: '{name}: {ind}', section: S },
-  'kpi.cell_label_early': { ru: '{name}: {ind}. {since}, необязательно', section: S },
-  'kpi.month_cell_label': { ru: '{ind}, {month}', section: S },
   'kpi.cell_title': { ru: '{ind}, {month}', section: S },
   'kpi.desc_label': { ru: 'Что значит «{name}»', section: S },
   'kpi.n_of': { ru: '{n} из {of}', section: S },
@@ -94,8 +91,76 @@ export const KPI_TEXTS = {
   'kpi.empty': { ru: 'пусто', section: S },
   'kpi.from_excel': { ru: 'Из Excel', section: S },
   'kpi.not_number': { ru: '«{text}» — не число', section: S },
-  'kpi.pasted': { ru: 'Вставлено значений: {n}', section: S },
-  'kpi.pasted_bad': { ru: 'Вставлено значений: {n}, пропущено не чисел: {bad}', section: S },
+
+  // Таблица как в Excel (прототип ui/extable.js, kExHint, kRoWhy, kNoWhy)
+  'kpi.ex.keyboard': { ru: 'Таблица ввода', section: S },
+  'kpi.ex.cell': { ru: 'Ячейка', section: S },
+  'kpi.ex.value': { ru: 'Значение', section: S },
+  'kpi.ex.locked': { ru: 'Эту ячейку изменить нельзя', section: S },
+  'kpi.ex.no_value': { ru: 'Здесь значения нет', section: S },
+  'kpi.ex.month_future': { ru: 'Месяц ещё не начался', section: S },
+  'kpi.ex.optional': { ru: 'необязательно', section: S },
+  'kpi.ex.written': { ru: 'Записано значений: {n}', section: S },
+  'kpi.ex.cleared': { ru: 'Стёрто значений: {n}', section: S },
+  'kpi.ex.undone': { ru: 'Отменено значений: {n}', section: S },
+  'kpi.ex.bad': { ru: 'не числа: {n}', section: S },
+  'kpi.ex.bad_list': { ru: 'не числа: {n} ({list})', section: S },
+  'kpi.ex.skipped': { ru: 'пропущено ячеек, где ввод недоступен: {n}', section: S },
+  'kpi.ex.copied': { ru: 'Скопировано: Ctrl+V вставит в Excel или в другие ячейки', section: S },
+  'kpi.ex.fill_rows': { ru: 'Выделите ячейки ниже той, что нужно размножить', section: S },
+  'kpi.ex.nothing_undo': { ru: 'Отменять нечего', section: S },
+  'kpi.ex.clipboard_denied': {
+    ru: 'Браузер не дал прочитать буфер обмена: нажмите Ctrl+V',
+    section: S,
+  },
+  'kpi.ex.press_ctrl_v': { ru: 'Нажмите Ctrl+V', section: S },
+  'kpi.ex.stat.selected': { ru: 'Выделено:', section: S },
+  'kpi.ex.stat.filled': { ru: 'Заполнено:', section: S },
+  'kpi.ex.stat.sum': { ru: 'Сумма:', section: S },
+  'kpi.ex.stat.avg': { ru: 'Среднее:', section: S },
+  'kpi.ex.stat.min': { ru: 'Мин:', section: S },
+  'kpi.ex.stat.max': { ru: 'Макс:', section: S },
+  'kpi.ex.stat.empty': { ru: 'в выделении нет значений', section: S },
+  'kpi.ex.menu.label': { ru: 'Действия с ячейками', section: S },
+  'kpi.ex.menu.copy': { ru: 'Копировать', section: S },
+  'kpi.ex.menu.cut': { ru: 'Вырезать', section: S },
+  'kpi.ex.menu.paste': { ru: 'Вставить', section: S },
+  'kpi.ex.menu.fill': { ru: 'Заполнить вниз', section: S },
+  'kpi.ex.menu.fill_sub': { ru: 'Ctrl+D — первой строкой выделения', section: S },
+  'kpi.ex.menu.clear': { ru: 'Очистить', section: S },
+  'kpi.ex.menu.undo': { ru: 'Отменить', section: S },
+  'kpi.ex.menu.undo_reason': { ru: 'Изменений ещё не было', section: S },
+  'kpi.ex.menu.entry': { ru: 'Комментарий, файл и история', section: S },
+  'kpi.ex.hint.phone': {
+    ru: 'Нажмите на ячейку, чтобы внести значение; «Далее» на клавиатуре — сохранить и перейти ниже',
+    section: S,
+  },
+  'kpi.ex.hint.select': { ru: 'Выделяйте мышью или', section: S },
+  'kpi.ex.hint.arrows': { ru: '+стрелками', section: S },
+  'kpi.ex.hint.enter': { ru: 'сохранить и вниз', section: S },
+  'kpi.ex.hint.tab': { ru: 'вправо', section: S },
+  'kpi.ex.hint.delete': { ru: 'стереть', section: S },
+  'kpi.ex.hint.clipboard': { ru: 'блоком из Excel и в Excel', section: S },
+  'kpi.ex.hint.all': { ru: 'во все выделенные', section: S },
+  'kpi.ex.hint.undo': { ru: 'отменить', section: S },
+  'kpi.ex.select_col': { ru: 'Выделить столбец', section: S },
+  'kpi.ex.cell_label': { ru: '{name}, {ind}, {month}', section: S },
+
+  // Итог под столбцом «Ввода за месяц» — на выбор (прототип KTOT, kTotOf)
+  'kpi.ktot.sum': { ru: 'Сумма', section: S },
+  'kpi.ktot.avg': { ru: 'Среднее', section: S },
+  'kpi.ktot.max': { ru: 'Максимум', section: S },
+  'kpi.ktot.min': { ru: 'Минимум', section: S },
+  'kpi.ktot.count': { ru: 'Заполнено', section: S },
+  'kpi.ktot.none': { ru: 'Не считать', section: S },
+  'kpi.ktot.title': { ru: 'Итоги', section: S },
+  'kpi.ktot.by.one': { ru: 'по {n} контрагенту в списке', section: S },
+  'kpi.ktot.by.few': { ru: 'по {n} контрагентам в списке', section: S },
+  'kpi.ktot.by.many': { ru: 'по {n} контрагентам в списке', section: S },
+  'kpi.ktot.pick': { ru: 'Какой итог считать по столбцу «{name}»', section: S },
+  'kpi.ktot.main': { ru: 'основной итог показателя', section: S },
+  'kpi.ktot.count_sub': { ru: 'сколько контрагентов внесли значение', section: S },
+  'kpi.ktot.of': { ru: '{n} из {of}', section: S },
   'kpi.yes': { ru: 'да', section: S },
   'kpi.no': { ru: 'нет', section: S },
   'kpi.on': { ru: 'Ведётся', section: S },
@@ -169,7 +234,7 @@ export const KPI_TEXTS = {
 
   // «Ввод за месяц»
   'kpi.month.hint': {
-    ru: 'Внесите значения за месяц после его окончания или выберите любой прошлый месяц. Пусто — «не заполнено», 0 — «внесено, равно нулю». Можно вставить блок из Excel.',
+    ru: 'Внесите значения за месяц после его окончания или выберите любой прошлый месяц. Пусто — «не заполнено», 0 — «внесено, равно нулю». Несколько месяцев сразу — во вкладке «Ввод по месяцам».',
     section: S,
   },
   'kpi.month.nobody': {
@@ -183,9 +248,6 @@ export const KPI_TEXTS = {
   'kpi.month.choice_missing': { ru: '{month} · не заполнено {n}', section: S },
   'kpi.month.current_missing': { ru: '{month} · не заполнено {n}', section: S },
   'kpi.month.now': { ru: 'идёт сейчас', section: S },
-  'kpi.tile.filled': { ru: 'Внесено', section: S },
-  'kpi.tile.optional': { ru: 'Необязательно', section: S },
-  'kpi.tile.since': { ru: 'ведётся с {from}', section: S },
 
   // Окно «контрагент × месяц»
   'kpi.entry.sub': { ru: 'Показатели за {month} · заполнить до {due}', section: S },
@@ -233,9 +295,10 @@ export const KPI_TEXTS = {
 
   // «Не заполнено»
   'kpi.missing.note': {
-    ru: 'Контрагенты, у которых за прошедшие месяцы не внесены обязательные показатели. После срока заполнения строка подсвечивается красным.',
+    ru: 'Контрагенты, у которых за прошедшие месяцы не внесены обязательные показатели. После срока заполнения строка подсвечивается красным. Недостающие значения вносите прямо в таблице, как в Excel; необязательные показатели включаются в «Столбцах».',
     section: S,
   },
+  'kpi.missing.row_done': { ru: 'Всё внесено', section: S },
   'kpi.missing.empty_title': { ru: 'Всё заполнено', section: S },
   'kpi.missing.empty_text': {
     ru: 'Обязательные показатели внесены по всем контрагентам.',
@@ -446,7 +509,7 @@ export const KPI_TEXTS = {
     ru: 'Итоги считаются только по заполненным месяцам. Незаполненные месяцы подсвечены.',
     section: S,
   },
-  'kpi.card.saved': { ru: 'Сохранено', section: S },
+  'kpi.card.hint_edit': { ru: 'Значения вносятся прямо в таблице, как в Excel.', section: S },
   'kpi.card.chart_pick': { ru: 'Показать на графике', section: S },
   'kpi.card.chart_title': { ru: '{name} по месяцам', section: S },
   'kpi.card.chart_label': { ru: 'График «{name}»', section: S },
@@ -455,7 +518,7 @@ export const KPI_TEXTS = {
     section: S,
   },
   'kpi.card.past_note': {
-    ru: 'Незаполненные месяцы от «с …» до прошлого месяца. Пусто — «не заполнено», 0 — «внесено, равно нулю». Стрелки и Enter переходят между ячейками, можно вставить блок из Excel.',
+    ru: 'Незаполненные месяцы от «с …» до прошлого месяца. Пусто — «не заполнено», 0 — «внесено, равно нулю». Таблица как в Excel: выделяйте диапазоны, Enter — сохранить и вниз, блоки вставляются из Excel, Delete стирает, Ctrl+Z отменяет.',
     section: S,
   },
   'kpi.card.past_empty': {
@@ -464,7 +527,6 @@ export const KPI_TEXTS = {
   },
   'kpi.card.past_left': { ru: 'Осталось незаполненных месяцев: {n} из {of}', section: S },
   'kpi.card.due': { ru: 'до {date}', section: S },
-  'kpi.card.not_needed': { ru: 'В этом месяце показатель не нужен', section: S },
   'kpi.card.done': { ru: 'Готово', section: S },
 
   // Ввод из Excel (задача 2.28; прототип modules/kpi-excel.js: kxDlg, kxTplBlob, kxParse, kxErrBlob, kxHistHtml)

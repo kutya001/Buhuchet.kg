@@ -10,7 +10,6 @@ import {
   monthName,
   monthShortName,
   parseCell,
-  pasteBlock,
   totalText,
   valueText,
 } from './kpi-format';
@@ -52,25 +51,12 @@ describe('подписи месяцев и значений', () => {
   });
 });
 
-describe('ввод ячейки и вставка блока из Excel', () => {
+describe('ввод ячейки', () => {
   it('пусто — null, 0 — ноль, не число — undefined', () => {
     expect(parseCell('int', '')).toBeNull();
     expect(parseCell('int', '0')).toBe(0);
     expect(parseCell('som', '1 250,5')).toBe(125_050);
     expect(parseCell('int', 'abc')).toBeUndefined();
-  });
-
-  it('строки по переводу строки, ячейки по табуляции, последний перевод строки отбрасывается', () => {
-    expect(pasteBlock('1\t2\r\n3\t4\r\n')).toEqual([
-      ['1', '2'],
-      ['3', '4'],
-    ]);
-    expect(pasteBlock('5\n6')).toEqual([['5'], ['6']]);
-  });
-
-  it('одна ячейка — не блок: её вставляет само поле', () => {
-    expect(pasteBlock('125')).toBeNull();
-    expect(pasteBlock('125\n')).toBeNull();
   });
 });
 

@@ -267,6 +267,25 @@ describe('UnifiedDataGrid: таблица (ТЗ «Списки записей»,
     expect(plain).not.toMatch(/<tr data-id="p1" tabindex="0"[^>]*cursor-pointer/);
   });
 
+  it('свои атрибуты ячейки (таблица ввода как в Excel): классы, подсказка и data-атрибуты', () => {
+    const columns = COLUMNS.map((c) =>
+      c.key === 'role'
+        ? {
+            ...c,
+            td: (p: Person) => ({
+              className: 'bg-pane-alt!',
+              title: `Роль: ${p.role}`,
+              'data-kx': p.id,
+              'data-kno': p.active ? undefined : '',
+            }),
+          }
+        : c,
+    );
+    const html = grid({ columns });
+    expect(html).toMatch(/<td title="Роль: [^"]+" class="[^"]*bg-pane-alt![^"]*" data-kx="p1">/);
+    expect(html).toMatch(/data-kx="p2" data-kno=""/);
+  });
+
   it('итоги по фильтру — закреплённая строка внизу из ответа сервера', () => {
     const html = grid({
       settings: { shown: ['name', 'balance'] },

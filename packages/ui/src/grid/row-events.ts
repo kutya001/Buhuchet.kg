@@ -13,8 +13,11 @@ import type { MenuPlace } from '../action-menu';
 export const LONG_PRESS_MS = 550;
 export const LONG_PRESS_SLOP_PX = 8;
 
-/** Элементы внутри строки, нажатие на которые строку не открывает. */
-const INTERACTIVE = 'a,button,input,select,label,textarea';
+/**
+ * Элементы внутри строки, нажатие на которые строку не открывает; `td[data-sr]` — ячейка таблицы ввода
+ * как в Excel (прототип ui/grid.js): её нажатие выделяет ячейку.
+ */
+const INTERACTIVE = 'a,button,input,select,label,textarea,td[data-sr]';
 
 export interface RowEvents<Row> {
   /** Обработчики строки таблицы или карточки. */
@@ -91,7 +94,8 @@ export function rowEvents<Row>(
           open?.(e.currentTarget);
         },
         onContextMenu: (e) => {
-          if (!menu || (e.target as HTMLElement).closest('a')) return;
+          // У ячейки таблицы ввода — своё меню (копировать, вставить, отменить).
+          if (!menu || (e.target as HTMLElement).closest('a,td[data-sr]')) return;
           e.preventDefault();
           cancel();
           menu(row, { x: e.clientX, y: e.clientY });

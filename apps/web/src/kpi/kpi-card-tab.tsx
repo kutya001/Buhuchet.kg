@@ -1,7 +1,13 @@
 'use client';
 
 import { formatDateRu, indicatorTotals, monthText, pluralForm } from '@buhuchet/domain';
-import { KpiValuesSaved, type KpiCard, type KpiCell, type MonthStatus } from '@buhuchet/shared';
+import {
+  KpiValuesSaved,
+  type KpiCard,
+  type KpiCell,
+  type KpiColumn,
+  type MonthStatus,
+} from '@buhuchet/shared';
 import {
   buttonClass,
   EmptyState,
@@ -17,12 +23,14 @@ import {
   useToast,
   type ShellCount,
 } from '@buhuchet/ui';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { cardQuery, missingSummaryQuery, useKpiRefresh } from './kpi-data';
+import { useKpiEntry } from './kpi-entry';
+import { exCellOf, exKey, type KxRef, KxTd, putCells } from './kpi-ex';
 import {
   columnSub,
   monthGenName,
@@ -34,26 +42,23 @@ import {
 import { PeriodBar, type Period } from './kpi-period-bar';
 import { MonthMini } from './kpi-status';
 import {
-  EMPTY_CELL,
   FIRST_CLASS,
   HEAD_CLASS,
   InfoTip,
   NUM,
-  OFF_CELL,
   OVERDUE_ROW,
   TABLE_CLASS,
-  useCellGrid,
-  ValueInput,
   WRAP_CLASS,
   type CellChange,
 } from './kpi-table';
+import { EX_WRAP, useExTable } from './use-ex-table';
 
 /*
  * Вкладка «Показатели» карточки контрагента (задача 2.27; ТЗ «В карточке контрагента на вкладке
  * «Показатели»», «Индикатор незаполненных показателей»; прототип modules/kpi.js: kpiCardHtml,
  * kpiCardWhoHtml, kCardMissHtml, kPastDlg, kpiCardMount). Ставит её в карточку задача карточки
  * контрагента (2.11, #67): здесь — сама вкладка, число на ярлыке вкладки и значок для списка контрагентов
- * (задача 2.10, #66).
+ * (задача 2.10, #66). Ввод значений — таблица как в Excel (прототип v81, `ex-table.ts`).
  */
 
 const TOTALS = ['sum', 'avg', 'max', 'min'] as const;
@@ -97,25 +102,27 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
+  const client = useQueryClient();
   const refresh = useKpiRefresh();
   const phone = useMediaQuery(PHONE_QUERY);
+  const entry = useKpiEntry();
   const [period, setPeriod] = useState<Period | null>(null);
   const [chart, setChart] = useState<string | null>(null);
   const [past, setPast] = useState<{ n: number; open: boolean } | null>(null);
   const query = useQuery({ ...cardQuery(contractorId, period), placeholderData: keepPreviousData });
-  const tableRef = useRef<HTMLTableElement>(null);
   const data = query.data;
-  const grid = useCellGrid(tableRef, {
-    rows: data?.rows.length ?? 0,
-    cols: data?.months.length ?? 0,
-  });
 
   if (query.isError && !data) return <Note tone="bad">{t('kpi.load_error')}</Note>;
   if (!data) return null;
 
-  const save = async (changes: CellChange[]) => {
+  /** Сохранить значения: сразу в таблице, потом на сервере; ошибка — уведомление и данные с сервера. */
+  const save = async (changes: readonly CellChange[]) => {
     if (changes.length === 0) return null;
-    const res = await callApi(() => api.api.kpi.values.$put({ json: { values: changes } }));
+    client.setQueryData<KpiCard>(
+      cardQuery(contractorId, period).queryKey,
+      (old) => old && patchedCard(old, changes),
+    );
+    const res = await callApi(() => api.api.kpi.values.$put({ json: { values: [...changes] } }));
     void refresh();
     if (!res.ok) {
       toast(errorText(res.error), { bad: true });
@@ -123,6 +130,7 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
     }
     return KpiValuesSaved.parse(res.data);
   };
+  const onSave = async (changes: CellChange[]) => (await save(changes)) !== null;
 
   const sendWho = async (indicatorId: string, on: boolean, name: string) => {
     const res = await callApi(() =>
@@ -147,81 +155,7 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
   const shownPeriod = { from: data.from, to: data.to };
   const rows = data.rows;
   const chosen = rows.find((r) => r.indicator.id === chart) ?? rows[0];
-
-  const cell = (r: KpiCard['rows'][number], j: number, ri: number) => {
-    const m = data.months[j]!;
-    const v = r.values[j] ?? null;
-    const applies = r.applies[j]!;
-    const early = r.early[j]!;
-    const empty = v === null && applies && m < data.current;
-    const editable =
-      data.editable &&
-      !r.indicator.archived &&
-      (applies || v !== null || early) &&
-      m <= data.current;
-    if (editable) {
-      return (
-        <td key={m} className={`${NUM} ${early ? OFF_CELL : empty ? EMPTY_CELL : ''}`}>
-          <ValueInput
-            r={ri}
-            c={j}
-            wide={phone}
-            cell={{ contractorId, indicatorId: r.indicator.id, month: m, type: r.indicator.type }}
-            value={v}
-            readOnly={false}
-            label={t('kpi.month_cell_label', { ind: r.indicator.name, month: monthName(t, m) })}
-            title={early ? t('kpi.early_card', { from: monthText(r.start) }) : undefined}
-            onCommit={async (value, prev) => {
-              const done = await save([
-                { contractorId, indicatorId: r.indicator.id, month: m, value, prev },
-              ]);
-              if (done) toast(t('kpi.card.saved'));
-            }}
-            onBad={(text) => toast(t('kpi.not_number', { text }), { bad: true })}
-            onMove={grid.onMove}
-            onPaste={async (r0, c0, block) => {
-              const { changes, bad } = grid.pasted(r0, c0, block);
-              const done = await save(changes);
-              if (done) {
-                toast(
-                  bad
-                    ? t('kpi.pasted_bad', { n: done.changed, bad })
-                    : t('kpi.pasted', { n: done.changed }),
-                  { icon: 'paste' },
-                );
-              }
-            }}
-          />
-        </td>
-      );
-    }
-    return (
-      <td key={m} className={`${NUM} ${empty ? EMPTY_CELL : ''}`}>
-        {v !== null ? (
-          numberText(r.indicator.type, v)
-        ) : (
-          <span className="text-faint">{empty ? t('kpi.empty') : '—'}</span>
-        )}
-      </td>
-    );
-  };
-
-  const totals = (r: KpiCard['rows'][number]) =>
-    TOTALS.map((k) => (
-      <td
-        key={k}
-        className={`${NUM} bg-pane-alt! ${k === r.indicator.total ? 'font-semibold' : ''} ${k === 'min' ? 'border-r border-r-line-strong' : ''}`}
-        data-kpi-card-total={`${r.indicator.name}|${k}`}
-      >
-        {r.count ? numberText(r.indicator.type, r.totals[k]) : '—'}
-        {k === 'avg' && r.count ? (
-          <small className="text-faint">
-            {' '}
-            {t('kpi.avg_of', { n: r.count, of: r.need || data.months.length })}
-          </small>
-        ) : null}
-      </td>
-    ));
+  const onEntry = (month: string) => void entry.open(contractorId, month);
 
   return (
     <div className="flex flex-col gap-3.5" data-kpi-card={contractorId}>
@@ -246,101 +180,30 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
         />
       ) : (
         <>
-          <Hint>{t('kpi.card.hint')}</Hint>
+          <Hint>
+            {t('kpi.card.hint')}
+            {data.editable ? ` ${t('kpi.card.hint_edit')}` : ''}
+          </Hint>
           {phone ? (
-            rows.map((r, ri) => (
-              <section
+            rows.map((r) => (
+              <CardMini
                 key={r.indicator.id}
-                className="flex flex-col gap-2 rounded-lg border border-line bg-pane p-3"
-              >
-                <div className="flex items-center gap-2">
-                  <b className="flex-1">{r.indicator.name}</b>
-                  {r.indicator.description ? (
-                    <InfoTip
-                      label={t('kpi.desc_label', { name: r.indicator.name })}
-                      text={r.indicator.description}
-                    />
-                  ) : null}
-                  <Tag>{r.indicator.unit || '—'}</Tag>
-                </div>
-                <div className="grid grid-cols-4 gap-1.5 max-[560px]:grid-cols-2">
-                  {TOTALS.map((k) => (
-                    <span
-                      key={k}
-                      className={`flex flex-col rounded-lg bg-pane-alt px-2 py-1.5 ${k === r.indicator.total ? 'shadow-[inset_0_0_0_1px_var(--bu-border-strong)]' : ''}`}
-                    >
-                      <small className="text-[11px] text-faint">{t(`kpi.total.${k}`)}</small>
-                      <b className="text-[13.5px] tabular-nums">
-                        {r.count ? numberText(r.indicator.type, r.totals[k]) : '—'}
-                      </b>
-                    </span>
-                  ))}
-                </div>
-                <table className="w-full text-[13px]" ref={ri === 0 ? tableRef : undefined}>
-                  <tbody>
-                    {data.months.map((m, j) => (
-                      <tr key={m}>
-                        <td className="px-0.5 py-1">{monthName(t, m)}</td>
-                        {cell(r, j, ri)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
+                t={t}
+                data={data}
+                row={r}
+                onSave={onSave}
+                onEntry={onEntry}
+              />
             ))
           ) : (
-            <div className={WRAP_CLASS} data-no-swipe="">
-              <table ref={tableRef} className={TABLE_CLASS} data-kpi-card-table="">
-                <thead>
-                  <tr>
-                    <th className={`${HEAD_CLASS} ${FIRST_CLASS} z-[3]`}>
-                      {t('kpi.col.indicator')}
-                    </th>
-                    {TOTALS.map((k) => (
-                      <th
-                        key={k}
-                        className={`${HEAD_CLASS} ${NUM} ${k === 'min' ? 'border-r border-r-line-strong' : ''}`}
-                      >
-                        {t(`kpi.total.${k}`)}
-                      </th>
-                    ))}
-                    {data.months.map((m) => (
-                      <th key={m} className={`${HEAD_CLASS} ${NUM}`}>
-                        {monthShortName(t, m)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, ri) => (
-                    <tr
-                      key={r.indicator.id}
-                      className={chosen?.indicator.id === r.indicator.id ? '[&_td]:bg-sel!' : ''}
-                    >
-                      <td className={FIRST_CLASS}>
-                        <button
-                          type="button"
-                          className="cursor-pointer border-0 bg-transparent p-0 text-left text-link hover:underline"
-                          title={t('kpi.card.chart_pick')}
-                          onClick={() => setChart(r.indicator.id)}
-                        >
-                          {r.indicator.name}
-                        </button>
-                        {r.indicator.description ? (
-                          <InfoTip
-                            label={t('kpi.desc_label', { name: r.indicator.name })}
-                            text={r.indicator.description}
-                          />
-                        ) : null}
-                        <small className="text-faint"> {r.indicator.unit}</small>
-                      </td>
-                      {totals(r)}
-                      {data.months.map((_, j) => cell(r, j, ri))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <CardGrid
+              t={t}
+              data={data}
+              chosen={chosen?.indicator.id ?? null}
+              onChart={setChart}
+              onSave={onSave}
+              onEntry={onEntry}
+            />
           )}
           {!phone && chosen ? <Chart t={t} data={data} row={chosen} /> : null}
         </>
@@ -352,9 +215,269 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
           onClose={() => setPast((p) => p && { ...p, open: false })}
           data={data}
           onSave={save}
+          onEntry={onEntry}
         />
       ) : null}
+      {entry.dialog}
     </div>
+  );
+}
+
+type CardRow = KpiCard['rows'][number];
+
+/** Значения после правки — сразу в таблице карточки, пока сервер не ответил. */
+function patchedCard(data: KpiCard, changes: readonly CellChange[]): KpiCard {
+  const by = new Map(changes.map((c) => [`${c.indicatorId}|${c.month}`, c.value]));
+  return {
+    ...data,
+    rows: data.rows.map((r) => ({
+      ...r,
+      values: r.values.map((v, j) => {
+        const key = `${r.indicator.id}|${data.months[j]}`;
+        return by.has(key) ? by.get(key)! : v;
+      }),
+    })),
+  };
+}
+
+/** Ячейка карточки: показатель строки за месяц `j`. */
+function cardRef(data: KpiCard, row: CardRow, j: number): KxRef | null {
+  const month = data.months[j];
+  if (!month) return null;
+  return {
+    contractorId: data.contractor.id,
+    indicatorId: row.indicator.id,
+    type: row.indicator.type,
+    required: row.indicator.required,
+    archived: row.indicator.archived,
+    month,
+    state: row.applies[j] ? 'required' : row.early[j] ? 'early' : 'off',
+    start: row.start,
+    offSince: row.offSince,
+    value: row.values[j] ?? null,
+    editable: data.editable,
+  };
+}
+
+/** Пункт меню правой кнопки: окно контрагента за месяц — комментарий, файл и история значения. */
+const entryItem = (t: Translate, name: string, month: string, onEntry: (m: string) => void) => ({
+  id: 'entry',
+  label: t('kpi.ex.menu.entry'),
+  icon: 'clip' as const,
+  sub: `${name} · ${monthName(t, month)}`,
+  run: () => onEntry(month),
+});
+
+/** Итоги строки (прототип `kCardTots`): сумма, среднее «по N из M», максимум, минимум. */
+function CardTotals({ t, data, row }: { t: Translate; data: KpiCard; row: CardRow }) {
+  return TOTALS.map((k) => (
+    <td
+      key={k}
+      className={`${NUM} bg-pane-alt! ${k === row.indicator.total ? 'font-semibold' : ''} ${k === 'min' ? 'border-r border-r-line-strong' : ''}`}
+      data-kpi-card-total={`${row.indicator.name}|${k}`}
+    >
+      {row.count ? numberText(row.indicator.type, row.totals[k]) : '—'}
+      {k === 'avg' && row.count ? (
+        <small className="text-faint">
+          {' '}
+          {t('kpi.avg_of', { n: row.count, of: row.need || data.months.length })}
+        </small>
+      ) : null}
+    </td>
+  ));
+}
+
+/**
+ * Таблица «показатель × месяц» карточки на ПК (прототип `kpiCardHtml`, `kpiCardMount`): итоги строки и
+ * ввод как в Excel; название показателя выбирает его для графика.
+ */
+function CardGrid({
+  t,
+  data,
+  chosen,
+  onChart,
+  onSave,
+  onEntry,
+}: {
+  t: Translate;
+  data: KpiCard;
+  chosen: string | null;
+  onChart: (id: string) => void;
+  onSave: (changes: CellChange[]) => Promise<boolean>;
+  onEntry: (month: string) => void;
+}) {
+  const rows = data.rows;
+  const at = (r: number, j: number) => (rows[r] ? cardRef(data, rows[r], j) : null);
+  const {
+    wrapRef: exRef,
+    layer: exLayer,
+    stat: exStat,
+    menu: exMenu,
+  } = useExTable({
+    rows: rows.length,
+    cols: data.months.length,
+    get: (r, c) => exCellOf(t, at(r, c), data.current),
+    key: (r, c) => exKey(at(r, c)),
+    put: (list) => putCells(list, at, onSave),
+    label: (r, c) =>
+      t('kpi.ex.cell_label', {
+        name: data.contractor.name,
+        ind: rows[r]!.indicator.name,
+        month: monthName(t, data.months[c]!),
+      }),
+    menu: (_r, c) => [entryItem(t, data.contractor.name, data.months[c]!, onEntry)],
+  });
+  return (
+    <>
+      {exStat}
+      <div ref={exRef} className={`${WRAP_CLASS} ${EX_WRAP}`} data-no-swipe="">
+        {exLayer}
+        <table className={TABLE_CLASS} data-kpi-card-table="">
+          <thead>
+            <tr>
+              <th className={`${HEAD_CLASS} ${FIRST_CLASS} z-[3]`}>{t('kpi.col.indicator')}</th>
+              {TOTALS.map((k) => (
+                <th
+                  key={k}
+                  className={`${HEAD_CLASS} ${NUM} ${k === 'min' ? 'border-r border-r-line-strong' : ''}`}
+                >
+                  {t(`kpi.total.${k}`)}
+                </th>
+              ))}
+              {data.months.map((m, j) => (
+                <th
+                  key={m}
+                  className={`${HEAD_CLASS} ${NUM}`}
+                  data-exc={j}
+                  title={t('kpi.ex.select_col')}
+                >
+                  {monthShortName(t, m)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, r) => (
+              <tr
+                key={row.indicator.id}
+                className={chosen === row.indicator.id ? '[&_td]:bg-sel!' : ''}
+                data-kpi-card-row={row.indicator.id}
+              >
+                <td className={FIRST_CLASS} data-exr={r}>
+                  <button
+                    type="button"
+                    className="cursor-pointer border-0 bg-transparent p-0 text-left text-link hover:underline"
+                    title={t('kpi.card.chart_pick')}
+                    onClick={() => onChart(row.indicator.id)}
+                  >
+                    {row.indicator.name}
+                  </button>
+                  {row.indicator.description ? (
+                    <InfoTip
+                      label={t('kpi.desc_label', { name: row.indicator.name })}
+                      text={row.indicator.description}
+                    />
+                  ) : null}
+                  <small className="text-faint"> {row.indicator.unit}</small>
+                </td>
+                <CardTotals t={t} data={data} row={row} />
+                {data.months.map((m, j) => (
+                  <KxTd key={m} r={r} c={j} x={at(r, j)!} current={data.current} />
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {exMenu}
+    </>
+  );
+}
+
+/**
+ * Показатель карточки на телефоне (прототип `kpiCardHtml`, `.kcard-i`): итоги плитками и месяцы
+ * столбиком — своя таблица как в Excel в один столбец: нажатие открывает ввод, «Далее» — следующий месяц.
+ */
+function CardMini({
+  t,
+  data,
+  row,
+  onSave,
+  onEntry,
+}: {
+  t: Translate;
+  data: KpiCard;
+  row: CardRow;
+  onSave: (changes: CellChange[]) => Promise<boolean>;
+  onEntry: (month: string) => void;
+}) {
+  const at = (r: number, c: number) => (c === 0 ? cardRef(data, row, r) : null);
+  const {
+    wrapRef: exRef,
+    layer: exLayer,
+    menu: exMenu,
+  } = useExTable(
+    {
+      rows: data.months.length,
+      cols: 1,
+      get: (r, c) => exCellOf(t, at(r, c), data.current),
+      key: (r, c) => exKey(at(r, c)),
+      put: (list) => putCells(list, at, onSave),
+      label: (r) =>
+        t('kpi.ex.cell_label', {
+          name: data.contractor.name,
+          ind: row.indicator.name,
+          month: monthName(t, data.months[r]!),
+        }),
+      menu: (r) => [entryItem(t, data.contractor.name, data.months[r]!, onEntry)],
+    },
+    { stat: false },
+  );
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-lg border border-line bg-pane p-3"
+      data-kpi-card-row={row.indicator.id}
+    >
+      <div className="flex items-center gap-2">
+        <b className="flex-1">{row.indicator.name}</b>
+        {row.indicator.description ? (
+          <InfoTip
+            label={t('kpi.desc_label', { name: row.indicator.name })}
+            text={row.indicator.description}
+          />
+        ) : null}
+        <Tag>{row.indicator.unit || '—'}</Tag>
+      </div>
+      <div className="grid grid-cols-4 gap-1.5 max-[560px]:grid-cols-2">
+        {TOTALS.map((k) => (
+          <span
+            key={k}
+            className={`flex flex-col rounded-lg bg-pane-alt px-2 py-1.5 ${k === row.indicator.total ? 'shadow-[inset_0_0_0_1px_var(--bu-border-strong)]' : ''}`}
+          >
+            <small className="text-[11px] text-faint">{t(`kpi.total.${k}`)}</small>
+            <b className="text-[13.5px] tabular-nums">
+              {row.count ? numberText(row.indicator.type, row.totals[k]) : '—'}
+            </b>
+          </span>
+        ))}
+      </div>
+      <div ref={exRef} className={EX_WRAP} data-no-swipe="">
+        {exLayer}
+        <table className="w-full text-[13px]">
+          <tbody>
+            {data.months.map((m, j) => (
+              <tr key={m}>
+                <td className="px-0.5 py-1" data-exr={j}>
+                  {monthName(t, m)}
+                </td>
+                <KxTd r={j} c={0} x={at(j, 0)!} current={data.current} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {exMenu}
+    </section>
   );
 }
 
@@ -562,32 +685,28 @@ function Chart({ t, data, row }: { t: Translate; data: KpiCard; row: KpiCard['ro
 type PastRow = { month: string; due: string; status: MonthStatus | null; cells: KpiCell[] };
 
 /**
- * «Внести за прошлые месяцы» (прототип `kPastDlg`): незаполненные месяцы контрагента от «с …» до
- * прошлого месяца по всем ведущимся показателям, ввод в ячейках как в «Вводе за месяц». Список месяцев
- * запоминается при открытии: заполненная строка не исчезает, пока окно открыто.
+ * «Внести за прошлые месяцы» (прототип v81 `kPastDlg`): незаполненные месяцы контрагента от «с …» до
+ * прошлого месяца по всем ведущимся показателям, таблица как в Excel, как в «Вводе за месяц». Список
+ * месяцев запоминается при открытии: заполненная строка не исчезает, пока окно открыто.
  */
 function PastDialog({
   open,
   onClose,
   data,
   onSave,
+  onEntry,
 }: {
   open: boolean;
   onClose: () => void;
   data: KpiCard;
-  onSave: (changes: CellChange[]) => Promise<{
-    changed: number;
-    statuses: { month: string; status: MonthStatus['code'] }[];
-  } | null>;
+  onSave: (changes: CellChange[]) => Promise<KpiValuesSaved | null>;
+  onEntry: (month: string) => void;
 }) {
   const t = useT();
-  const toast = useToast();
-  const ref = useRef<HTMLTableElement>(null);
   const columns = data.who.filter((w) => w.on).map((w) => w.indicator);
   const [rows, setRows] = useState<PastRow[]>(() =>
     data.past.map((p) => ({ month: p.month, due: p.due, status: p.status, cells: p.cells })),
   );
-  const grid = useCellGrid(ref, { rows: rows.length, cols: columns.length });
   const contractorId = data.contractor.id;
   const cellOf = (row: PastRow, indicatorId: string) =>
     row.cells.find((c) => c.indicatorId === indicatorId);
@@ -598,8 +717,27 @@ function PastDialog({
     }),
   ).length;
 
+  const at = (r: number, ci: number): KxRef | null => {
+    const row = rows[r];
+    const col = columns[ci];
+    if (!row || !col) return null;
+    const c = cellOf(row, col.id);
+    return {
+      contractorId,
+      indicatorId: col.id,
+      type: col.type,
+      required: col.required,
+      archived: col.archived,
+      month: row.month,
+      state: c?.state ?? 'off',
+      start: c?.start ?? row.month,
+      offSince: c?.offSince ?? null,
+      value: c?.value ?? null,
+      editable: data.editable,
+    };
+  };
+
   const save = async (changes: CellChange[]) => {
-    if (changes.length === 0) return null;
     const by = new Map(changes.map((c) => [`${c.month}|${c.indicatorId}`, c.value]));
     setRows((list) =>
       list.map((r) => ({
@@ -612,24 +750,23 @@ function PastDialog({
       })),
     );
     const done = await onSave(changes);
-    if (done) {
-      const statuses = new Map(done.statuses.map((s) => [s.month, s.status]));
-      setRows((list) =>
-        list.map((r) =>
-          statuses.has(r.month)
-            ? {
-                ...r,
-                status: {
-                  ...(r.status ?? { id: '', version: 0, actor: null }),
-                  code: statuses.get(r.month)!,
-                  at: new Date().toISOString(),
-                },
-              }
-            : r,
-        ),
-      );
-    }
-    return done;
+    if (!done) return false;
+    const statuses = new Map(done.statuses.map((s) => [s.month, s.status]));
+    setRows((list) =>
+      list.map((r) =>
+        statuses.has(r.month)
+          ? {
+              ...r,
+              status: {
+                ...(r.status ?? { id: '', version: 0, actor: null }),
+                code: statuses.get(r.month)!,
+                at: new Date().toISOString(),
+              },
+            }
+          : r,
+      ),
+    );
+    return true;
   };
 
   return (
@@ -651,7 +788,7 @@ function PastDialog({
         </>
       }
     >
-      {rows.length === 0 ? (
+      {rows.length === 0 || columns.length === 0 ? (
         <EmptyState
           icon="ok"
           title={t('kpi.missing.empty_title')}
@@ -660,116 +797,117 @@ function PastDialog({
       ) : (
         <div className="flex flex-col gap-3">
           <Note>{t('kpi.card.past_note')}</Note>
-          <div className={WRAP_CLASS} data-no-swipe="">
-            <table ref={ref} className={TABLE_CLASS} data-kpi-past-table="">
-              <thead>
-                <tr>
-                  <th className={`${HEAD_CLASS} ${FIRST_CLASS} z-[3]`}>{t('kpi.col.month')}</th>
-                  {columns.map((col) => (
-                    <th key={col.id} className={`${HEAD_CLASS} ${NUM}`}>
-                      {col.name}
-                      {col.description ? (
-                        <InfoTip
-                          label={t('kpi.desc_label', { name: col.name })}
-                          text={col.description}
-                        />
-                      ) : null}
-                      <small>{columnSub(t, col)}</small>
-                    </th>
-                  ))}
-                  <th className={HEAD_CLASS}>{t('kpi.col.month_status')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, ri) => {
-                  const overdue =
-                    (row.status?.code ?? 'empty') === 'empty' &&
-                    data.past.find((p) => p.month === row.month)?.overdue;
-                  return (
-                    <tr
-                      key={row.month}
-                      className={overdue ? OVERDUE_ROW : ''}
-                      data-kpi-past-row={row.month}
-                    >
-                      <td className={FIRST_CLASS}>
-                        <b>{monthName(t, row.month)}</b>
-                        <small className="block text-[11px] text-faint">
-                          {t('kpi.card.due', { date: formatDateRu(row.due) })}
-                        </small>
-                      </td>
-                      {columns.map((col, ci) => {
-                        const c = cellOf(row, col.id);
-                        if (!c || c.state !== 'required') {
-                          return (
-                            <td
-                              key={col.id}
-                              className={`${NUM} ${OFF_CELL}`}
-                              title={t('kpi.card.not_needed')}
-                            >
-                              —
-                            </td>
-                          );
-                        }
-                        return (
-                          <td
-                            key={col.id}
-                            className={`${NUM} ${c.value === null && col.required ? EMPTY_CELL : ''}`}
-                          >
-                            <ValueInput
-                              r={ri}
-                              c={ci}
-                              cell={{
-                                contractorId,
-                                indicatorId: col.id,
-                                month: row.month,
-                                type: col.type,
-                              }}
-                              value={c.value}
-                              readOnly={false}
-                              label={t('kpi.month_cell_label', {
-                                ind: col.name,
-                                month: monthName(t, row.month),
-                              })}
-                              onCommit={(value, prev) =>
-                                void save([
-                                  {
-                                    contractorId,
-                                    indicatorId: col.id,
-                                    month: row.month,
-                                    value,
-                                    prev,
-                                  },
-                                ])
-                              }
-                              onBad={(text) => toast(t('kpi.not_number', { text }), { bad: true })}
-                              onMove={grid.onMove}
-                              onPaste={async (r0, c0, block) => {
-                                const { changes, bad } = grid.pasted(r0, c0, block);
-                                const done = await save(changes);
-                                if (done) {
-                                  toast(
-                                    bad
-                                      ? t('kpi.pasted_bad', { n: done.changed, bad })
-                                      : t('kpi.pasted', { n: done.changed }),
-                                    { icon: 'paste' },
-                                  );
-                                }
-                              }}
-                            />
-                          </td>
-                        );
-                      })}
-                      <td>
-                        <MonthMini status={row.status} needed />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <PastTable
+            t={t}
+            data={data}
+            rows={rows}
+            columns={columns}
+            at={at}
+            onSave={save}
+            onEntry={onEntry}
+          />
         </div>
       )}
     </Modal>
+  );
+}
+
+/** Таблица окна «Внести за прошлые месяцы»: месяцы × показатели как в Excel; строится, когда окно на экране. */
+function PastTable({
+  t,
+  data,
+  rows,
+  columns,
+  at,
+  onSave,
+  onEntry,
+}: {
+  t: Translate;
+  data: KpiCard;
+  rows: readonly PastRow[];
+  columns: readonly KpiColumn[];
+  at: (r: number, c: number) => KxRef | null;
+  onSave: (changes: CellChange[]) => Promise<boolean>;
+  onEntry: (month: string) => void;
+}) {
+  const {
+    wrapRef: exRef,
+    layer: exLayer,
+    stat: exStat,
+    menu: exMenu,
+  } = useExTable({
+    rows: rows.length,
+    cols: columns.length,
+    get: (r, c) => exCellOf(t, at(r, c), data.current),
+    key: (r, c) => exKey(at(r, c)),
+    put: (list) => putCells(list, at, onSave),
+    label: (r, c) =>
+      t('kpi.ex.cell_label', {
+        name: data.contractor.name,
+        ind: columns[c]!.name,
+        month: monthName(t, rows[r]!.month),
+      }),
+    menu: (r) => [entryItem(t, data.contractor.name, rows[r]!.month, onEntry)],
+  });
+  return (
+    <>
+      {exStat}
+      <div ref={exRef} className={`${WRAP_CLASS} ${EX_WRAP}`} data-no-swipe="">
+        {exLayer}
+        <table className={TABLE_CLASS} data-kpi-past-table="">
+          <thead>
+            <tr>
+              <th className={`${HEAD_CLASS} ${FIRST_CLASS} z-[3]`}>{t('kpi.col.month')}</th>
+              {columns.map((col, ci) => (
+                <th
+                  key={col.id}
+                  className={`${HEAD_CLASS} ${NUM}`}
+                  data-exc={ci}
+                  title={t('kpi.ex.select_col')}
+                >
+                  {col.name}
+                  {col.description ? (
+                    <InfoTip
+                      label={t('kpi.desc_label', { name: col.name })}
+                      text={col.description}
+                    />
+                  ) : null}
+                  <small>{columnSub(t, col)}</small>
+                </th>
+              ))}
+              <th className={HEAD_CLASS}>{t('kpi.col.month_status')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, ri) => {
+              const overdue =
+                (row.status?.code ?? 'empty') === 'empty' &&
+                data.past.find((p) => p.month === row.month)?.overdue;
+              return (
+                <tr
+                  key={row.month}
+                  className={overdue ? OVERDUE_ROW : ''}
+                  data-kpi-past-row={row.month}
+                >
+                  <td className={FIRST_CLASS} data-exr={ri}>
+                    <b>{monthName(t, row.month)}</b>
+                    <small className="block text-[11px] text-faint">
+                      {t('kpi.card.due', { date: formatDateRu(row.due) })}
+                    </small>
+                  </td>
+                  {columns.map((col, ci) => (
+                    <KxTd key={col.id} r={ri} c={ci} x={at(ri, ci)!} current={data.current} />
+                  ))}
+                  <td>
+                    <MonthMini status={row.status} needed />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {exMenu}
+    </>
   );
 }

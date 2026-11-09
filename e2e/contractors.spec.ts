@@ -122,7 +122,12 @@ const NO_FLAGS = { pay: null, registry: null, confirmed: null, gov: null };
 async function socfundContractor(
   api: APIRequestContext,
   origin: string,
-  data: { name: string; gked: string; flags: Record<string, boolean | null>; benefits?: string[] },
+  data: {
+    name: string;
+    gked: string;
+    flags: Record<string, boolean | string | null>;
+    benefits?: string[];
+  },
 ) {
   const inn = `06${Date.now().toString().slice(-8)}${String(Math.floor(Math.random() * 10_000)).padStart(4, '0')}`;
   const res = await api.post('/api/contractors', {

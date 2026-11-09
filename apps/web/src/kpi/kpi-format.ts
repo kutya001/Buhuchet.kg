@@ -61,17 +61,3 @@ export function parseCell(type: IndicatorType, text: string): number | null | un
   const parsed = parseIndicatorValue(type, text);
   return parsed.ok ? parsed.value : undefined;
 }
-
-/**
- * Блок, вставленный из Excel (прототип `paste` в `kpiMonth`): строки по `\n`, ячейки по табуляции,
- * последний перевод строки отбрасывается. Одна ячейка без табуляции и переводов строки — не блок (null):
- * её вставляет само поле.
- */
-export function pasteBlock(text: string): string[][] | null {
-  if (!/[\t\n]/.test(text.trim())) return null;
-  return text
-    .replace(/\r/g, '')
-    .replace(/\n$/, '')
-    .split('\n')
-    .map((line) => line.split('\t'));
-}

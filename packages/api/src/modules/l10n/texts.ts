@@ -93,9 +93,10 @@ export function uiDictionaryEdited(lang: UiLanguage): void {
 
 /**
  * Тексты словаря на сервере по ключу — те же, что на экране (язык интерфейса пока один —
- * русский). Ключа нет — сам ключ, как у экрана.
+ * русский). Ключа нет — сам ключ, как у экрана: так в выгрузку попадают и готовые подписи
+ * (название показателя в столбце), поэтому ищутся только свои ключи словаря, не `constructor`.
  */
 export async function serverTexts(deps: TextDeps): Promise<(key: string) => string> {
   const { texts } = await uiDictionary(deps)(DEFAULT_UI_LANGUAGE);
-  return (key) => texts[key] ?? key;
+  return (key) => (Object.hasOwn(texts, key) ? texts[key]! : key);
 }

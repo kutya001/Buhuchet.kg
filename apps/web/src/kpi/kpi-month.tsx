@@ -1,8 +1,9 @@
 'use client';
 
-import { addMonths, columnTotals, monthText, searchText } from '@buhuchet/domain';
-import { KpiValuesSaved, type KpiMonth } from '@buhuchet/shared';
+import { addMonths, columnTotals, monthText, pluralForm, searchText } from '@buhuchet/domain';
+import { KpiValuesSaved, type KpiColumn, type KpiMonth } from '@buhuchet/shared';
 import {
+  ActionMenu,
   buttonClass,
   EmptyState,
   Hint,
@@ -16,42 +17,39 @@ import {
   useToast,
 } from '@buhuchet/ui';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef } from 'react';
+import { useMemo, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { ContractorLink } from '../contractors/contractor-link';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { monthQuery, useKpiRefresh } from './kpi-data';
 import { useKpiEntry } from './kpi-entry';
-import { columnSub, monthGenName, monthName, totalText } from './kpi-format';
+import { exCellOf, exKey, type KxRef, KxTd, putCells } from './kpi-ex';
+import { columnSub, monthName, totalText } from './kpi-format';
 import { KpiPlates } from './kpi-plates';
 import { setKpiChoice, useKpiChoice } from './kpi-state';
 import { MonthMini } from './kpi-status';
 import {
-  EMPTY_CELL,
   FIRST_CLASS,
   FOOT_CLASS,
   HEAD_CLASS,
   InfoTip,
   NUM,
-  OFF_CELL,
   OVERDUE_ROW,
   TABLE_CLASS,
-  useCellGrid,
-  ValueInput,
   WRAP_CLASS,
   type CellChange,
 } from './kpi-table';
+import { EX_WRAP, useExTable } from './use-ex-table';
 
 /*
- * Вкладка «Ввод за месяц» (задача 2.27; ТЗ «Вкладка «Ввод за месяц»»; прототип modules/kpi.js: kpiMonth,
- * kMonPick): выбор месяца, таблица контрагенты × показатели с вводом прямо в ячейках и вставкой блока из
- * Excel, итоги по столбцам и статус месяца; на телефоне — плитки контрагентов, нажатие открывает окно
- * ввода всех показателей контрагента за месяц.
+ * Вкладка «Ввод за месяц» (задача 2.27; ТЗ «Вкладка «Ввод за месяц»»; прототип v81 modules/kpi.js:
+ * kpiMonth, kMonPick, KTOT): выбор месяца, таблица контрагенты × показатели как в Excel (выделение,
+ * ввод, блоки через буфер обмена, Ctrl+Z — `ex-table.ts`), итог под каждым столбцом на выбор и статус
+ * месяца; на телефоне — та же таблица без столбца «Ответственный».
  */
-
-const TOTALS = ['sum', 'avg', 'max', 'min'] as const;
 
 export function KpiMonthTab() {
   const t = useT();
@@ -122,21 +120,16 @@ export function KpiMonthTab() {
         text={t('kpi.month.nobody', { month: monthName(t, data.month) })}
       />
     );
-  } else if (phone) {
-    body = <MonthTiles t={t} rows={rows} onOpen={(cid) => void entry.open(cid, data.month)} />;
   } else {
+    // На телефоне — та же таблица без столбца «Ответственный»: нажатие на ячейку открывает ввод.
     body = (
       <MonthTable
         t={t}
         data={data}
         rows={rows}
-        onSave={(changes) => void save(changes)}
-        onPaste={async (changes, bad) => {
-          const n = await save(changes);
-          if (n === null) return;
-          toast(bad ? t('kpi.pasted_bad', { n, bad }) : t('kpi.pasted', { n }), { icon: 'paste' });
-        }}
-        onBad={(text) => toast(t('kpi.not_number', { text }), { bad: true })}
+        phone={phone}
+        onSave={async (changes) => (await save(changes)) !== null}
+        onEntry={(cid) => void entry.open(cid, data.month)}
       />
     );
   }
@@ -267,217 +260,212 @@ const Dot = () => (
 
 type Row = KpiMonth['rows'][number];
 
+/** Итог под столбцом на выбор (прототип `KTOT`): у сотрудника запоминается для каждого показателя. */
+const KTOT = ['sum', 'avg', 'max', 'min', 'count', 'none'] as const;
+type Ktot = (typeof KTOT)[number];
+
+/** Ключ показателя в настройках вида: без дефисов (ключ столбца — буквы и цифры). */
+const ktotKey = (id: string) => `i${id.replace(/-/g, '')}`;
+
+/** Итог по умолчанию — основной итог показателя («последнее» — сумма, прототип `kTotOf`). */
+const ktotDefault = (col: KpiColumn): Ktot => (col.total === 'last' ? 'sum' : col.total);
+
 function MonthTable({
   t,
   data,
   rows,
+  phone,
   onSave,
-  onPaste,
-  onBad,
+  onEntry,
 }: {
   t: Translate;
   data: KpiMonth;
   rows: readonly Row[];
-  onSave: (changes: CellChange[]) => void;
-  onPaste: (changes: CellChange[], bad: number) => void;
-  onBad: (text: string) => void;
+  phone: boolean;
+  onSave: (changes: CellChange[]) => Promise<boolean>;
+  onEntry: (contractorId: string) => void;
 }) {
-  const ref = useRef<HTMLTableElement>(null);
   const cols = data.indicators;
-  const grid = useCellGrid(ref, { rows: rows.length, cols: cols.length });
+  const view = useViewSettings('kpi.month');
+  const [pick, setPick] = useState<{ col: KpiColumn; anchor: HTMLElement } | null>(null);
+  const at = (r: number, c: number): KxRef | null => {
+    const row = rows[r];
+    const col = cols[c];
+    const cell = row?.cells[c];
+    if (!row || !col || !cell) return null;
+    return {
+      contractorId: row.contractorId,
+      indicatorId: col.id,
+      type: col.type,
+      required: col.required,
+      archived: col.archived,
+      month: data.month,
+      state: cell.state,
+      start: cell.start,
+      offSince: cell.offSince,
+      value: cell.value,
+      editable: row.editable,
+    };
+  };
+  const {
+    wrapRef: exRef,
+    layer: exLayer,
+    stat: exStat,
+    menu: exMenu,
+  } = useExTable({
+    rows: rows.length,
+    cols: cols.length,
+    get: (r, c) => exCellOf(t, at(r, c), data.current),
+    key: (r, c) => exKey(at(r, c)),
+    put: (list) => putCells(list, at, onSave),
+    label: (r, c) => t('kpi.cell_label', { name: rows[r]!.name, ind: cols[c]!.name }),
+    // ОТКЛОНЕНИЕ: docs/deviations.md#О-60 — в прототипе у «Ввода за месяц» меню без окна значения.
+    menu: (r) => [
+      {
+        id: 'entry',
+        label: t('kpi.ex.menu.entry'),
+        icon: 'clip',
+        sub: `${rows[r]!.name} · ${monthName(t, data.month)}`,
+        run: () => onEntry(rows[r]!.contractorId),
+      },
+    ],
+  });
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-60 — выбранный итог в настройках вида на сервере, в прототипе —
+  // в браузере (`g5.kpitot`).
+  const ktotOf = (col: KpiColumn): Ktot => {
+    const saved = view.settings.agg?.[ktotKey(col.id)];
+    return saved && (KTOT as readonly string[]).includes(saved) ? saved : ktotDefault(col);
+  };
+  const setKtot = (col: KpiColumn, how: Ktot) =>
+    view.save({ ...view.settings, agg: { ...view.settings.agg, [ktotKey(col.id)]: how } });
 
   return (
-    <div className={WRAP_CLASS} data-no-swipe="">
-      <table ref={ref} className={TABLE_CLASS} data-kpi-table="">
-        <thead>
-          <tr>
-            <th className={`${HEAD_CLASS} ${FIRST_CLASS} z-[3]`}>{t('kpi.col.contractor')}</th>
-            <th className={HEAD_CLASS}>{t('kpi.col.responsible')}</th>
-            {cols.map((col) => (
-              <th key={col.id} className={`${HEAD_CLASS} ${NUM}`} data-kpi-col={col.id}>
-                {col.name}
-                {col.description ? (
-                  <InfoTip label={t('kpi.desc_label', { name: col.name })} text={col.description} />
-                ) : null}
-                <small>{columnSub(t, col)}</small>
-              </th>
-            ))}
-            <th className={HEAD_CLASS}>{t('kpi.col.month_status')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, r) => (
-            <tr
-              key={row.contractorId}
-              className={row.overdue ? OVERDUE_ROW : ''}
-              data-kpi-row={row.contractorId}
-            >
-              <td className={FIRST_CLASS}>
-                <ContractorLink id={row.contractorId} name={row.name} tab="kpi" />
-              </td>
-              <td className="text-muted">{row.responsibleName ?? '—'}</td>
-              {row.cells.map((cell, c) => {
-                const col = cols[c]!;
-                if (cell.state === 'off') {
-                  return (
-                    <td
-                      key={col.id}
-                      className={`${NUM} ${OFF_CELL}`}
-                      title={
-                        cell.offSince
-                          ? t('kpi.off_since', { month: monthGenName(t, cell.offSince) })
-                          : t('kpi.cell_off')
-                      }
-                      data-kpi-off=""
-                    >
-                      —
-                    </td>
-                  );
-                }
-                const early = cell.state === 'early';
-                const since = t('kpi.early_tag', { from: monthText(cell.start) });
-                return (
-                  <td
-                    key={col.id}
-                    className={`${NUM} ${early ? OFF_CELL : cell.value === null && col.required ? EMPTY_CELL : ''}`}
-                  >
-                    <ValueInput
-                      r={r}
-                      c={c}
-                      cell={{
-                        contractorId: row.contractorId,
-                        indicatorId: col.id,
-                        month: data.month,
-                        type: col.type,
-                      }}
-                      value={cell.value}
-                      readOnly={!row.editable}
-                      label={
-                        early
-                          ? t('kpi.cell_label_early', { name: row.name, ind: col.name, since })
-                          : t('kpi.cell_label', { name: row.name, ind: col.name })
-                      }
-                      placeholder={early ? since.toLowerCase() : undefined}
-                      title={
-                        !row.editable
-                          ? t('kpi.readonly_cell')
-                          : early
-                            ? t('kpi.early_cell', { from: monthText(cell.start) })
-                            : undefined
-                      }
-                      onCommit={(value, prev) =>
-                        onSave([
-                          {
-                            contractorId: row.contractorId,
-                            indicatorId: col.id,
-                            month: data.month,
-                            value,
-                            prev,
-                          },
-                        ])
-                      }
-                      onBad={onBad}
-                      onMove={grid.onMove}
-                      onPaste={(r0, c0, block) => {
-                        const { changes, bad } = grid.pasted(r0, c0, block);
-                        onPaste(changes, bad);
-                      }}
+    <>
+      {exStat}
+      <div ref={exRef} className={`${WRAP_CLASS} ${EX_WRAP}`} data-no-swipe="">
+        {exLayer}
+        <table className={TABLE_CLASS} data-kpi-table="">
+          <thead>
+            <tr>
+              <th className={`${HEAD_CLASS} ${FIRST_CLASS} z-[3]`}>{t('kpi.col.contractor')}</th>
+              {phone ? null : <th className={HEAD_CLASS}>{t('kpi.col.responsible')}</th>}
+              {cols.map((col, c) => (
+                <th
+                  key={col.id}
+                  className={`${HEAD_CLASS} ${NUM}`}
+                  data-kpi-col={col.id}
+                  data-exc={c}
+                  title={t('kpi.ex.select_col')}
+                >
+                  {col.name}
+                  {col.description ? (
+                    <InfoTip
+                      label={t('kpi.desc_label', { name: col.name })}
+                      text={col.description}
                     />
-                  </td>
-                );
-              })}
-              <td>
-                <MonthMini
-                  status={row.status}
-                  needed={row.cells.some((c) => c.state === 'required')}
-                />
-              </td>
+                  ) : null}
+                  <small className="max-md:whitespace-normal">{columnSub(t, col)}</small>
+                </th>
+              ))}
+              <th className={HEAD_CLASS}>{t('kpi.col.month_status')}</th>
             </tr>
-          ))}
-        </tbody>
-        <tfoot className={FOOT_CLASS}>
-          {TOTALS.map((key) => (
-            <tr key={key}>
-              <th colSpan={2} className={FIRST_CLASS}>
-                {t(`kpi.total.${key}`)}
+          </thead>
+          <tbody>
+            {rows.map((row, r) => (
+              <tr
+                key={row.contractorId}
+                className={row.overdue ? OVERDUE_ROW : ''}
+                data-kpi-row={row.contractorId}
+              >
+                <td
+                  className={`${FIRST_CLASS} max-md:max-w-[140px] max-md:min-w-[112px] max-md:whitespace-normal`}
+                  data-exr={r}
+                >
+                  <ContractorLink id={row.contractorId} name={row.name} tab="kpi" />
+                </td>
+                {phone ? null : <td className="text-muted">{row.responsibleName ?? '—'}</td>}
+                {cols.map((col, c) => (
+                  <KxTd key={col.id} r={r} c={c} x={at(r, c)!} current={data.current} />
+                ))}
+                <td>
+                  <MonthMini
+                    status={row.status}
+                    needed={row.cells.some((c) => c.state === 'required')}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className={FOOT_CLASS}>
+            <tr className="[&_td]:align-top [&_th]:align-top">
+              <th colSpan={phone ? 1 : 2} className={FIRST_CLASS}>
+                {t('kpi.ktot.title')}
+                <small className="block font-[450] text-faint">
+                  {t(`kpi.ktot.by.${pluralForm(rows.length)}`, { n: rows.length })}
+                </small>
               </th>
               {cols.map((col, c) => {
+                const how = ktotOf(col);
                 // ОТКЛОНЕНИЕ: docs/deviations.md#В-7 — выключенные у контрагента показатели в итоги не входят.
-                const totals = columnTotals(rows.map((r) => r.cells[c]!));
+                const totals = columnTotals(rows.map((row) => row.cells[c]!));
+                const text =
+                  how === 'none'
+                    ? '—'
+                    : how === 'count'
+                      ? t('kpi.ktot.of', { n: totals.count, of: totals.of })
+                      : totalText(col.type, totals, how);
                 return (
-                  <td
-                    key={col.id}
-                    className={NUM}
-                    data-kpi-total={`${col.id}|${key}`}
-                    title={
-                      totals.count
-                        ? t('kpi.total_of', { n: totals.count, of: totals.of })
-                        : undefined
-                    }
-                  >
-                    {totalText(col.type, totals, key)}
+                  <td key={col.id} className={NUM} data-kpi-total={col.id}>
+                    <button
+                      type="button"
+                      className="inline-flex cursor-pointer items-center gap-0.5 border-0 bg-transparent p-0 text-[11.5px] font-medium text-link hover:underline"
+                      title={t('kpi.ktot.pick', { name: col.name })}
+                      aria-haspopup="menu"
+                      data-kpi-ktot={col.id}
+                      onClick={(e) => setPick({ col, anchor: e.currentTarget })}
+                    >
+                      {t(`kpi.ktot.${how}`)}
+                      <Icon name="down" size="sm" className="h-3 w-3" />
+                    </button>
+                    <span
+                      className={`block tabular-nums ${how === 'none' ? 'font-[450] text-faint' : ''}`}
+                      data-kpi-total-value=""
+                      title={
+                        how !== 'none' && how !== 'count' && totals.count
+                          ? t('kpi.total_of', { n: totals.count, of: totals.of })
+                          : undefined
+                      }
+                    >
+                      {text}
+                    </span>
                   </td>
                 );
               })}
               <td />
             </tr>
-          ))}
-        </tfoot>
-      </table>
-    </div>
-  );
-}
-
-/** Телефон: плитки контрагентов (прототип `gcard kcard`); нажатие открывает окно ввода. */
-function MonthTiles({
-  t,
-  rows,
-  onOpen,
-}: {
-  t: Translate;
-  rows: readonly Row[];
-  onOpen: (contractorId: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-2.5">
-      {rows.map((row) => {
-        const open = row.cells.filter((c) => c.state !== 'off');
-        const filled = open.filter((c) => c.value !== null).length;
-        const early = row.cells.find((c) => c.state === 'early');
-        return (
-          <button
-            key={row.contractorId}
-            type="button"
-            data-kpi-tile={row.contractorId}
-            className={`flex flex-col gap-2 rounded-lg border bg-raised p-3 text-left text-[13px] hover:bg-row-hover ${row.overdue ? 'border-danger' : 'border-line'}`}
-            onClick={() => onOpen(row.contractorId)}
-          >
-            <span className="flex items-center gap-2">
-              <b className="min-w-0 flex-1">{row.name}</b>
-              <Icon name="right" size="sm" />
-            </span>
-            <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-              <dt className="text-muted">{t('kpi.tile.filled')}</dt>
-              <dd className="m-0">{t('kpi.n_of', { n: filled, of: open.length })}</dd>
-              {early ? (
-                <>
-                  <dt className="text-muted">{t('kpi.tile.optional')}</dt>
-                  <dd className="m-0">{t('kpi.tile.since', { from: monthText(early.start) })}</dd>
-                </>
-              ) : null}
-              <dt className="text-muted">{t('kpi.col.responsible')}</dt>
-              <dd className="m-0">{row.responsibleName ?? '—'}</dd>
-              <dt className="text-muted">{t('kpi.col.month_status')}</dt>
-              <dd className="m-0">
-                <MonthMini
-                  status={row.status}
-                  needed={row.cells.some((c) => c.state === 'required')}
-                />
-              </dd>
-            </dl>
-          </button>
-        );
-      })}
-    </div>
+          </tfoot>
+        </table>
+      </div>
+      {exMenu}
+      {pick ? (
+        <ActionMenu
+          label={t('kpi.ktot.pick', { name: pick.col.name })}
+          place={{ anchor: pick.anchor }}
+          onClose={() => setPick(null)}
+          items={KTOT.map((how) => ({
+            id: how,
+            label: t(`kpi.ktot.${how}`),
+            icon: how === 'none' ? 'x' : how === 'count' ? 'check' : 'chart',
+            on: how === ktotOf(pick.col),
+            ...(how === ktotDefault(pick.col)
+              ? { sub: t('kpi.ktot.main') }
+              : how === 'count'
+                ? { sub: t('kpi.ktot.count_sub') }
+                : {}),
+            run: () => setKtot(pick.col, how),
+          }))}
+        />
+      ) : null}
+    </>
   );
 }

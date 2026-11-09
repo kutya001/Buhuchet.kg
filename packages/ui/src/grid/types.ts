@@ -19,6 +19,11 @@ export interface GridColumn<Row> {
   cell?: (row: Row) => ReactNode;
   /** Классы ячейки, например моноширинный шрифт логина. */
   className?: string;
+  /**
+   * Свои атрибуты ячейки строки в виде «Таблица» (прототип `c.td(r)`): классы и подсказка ячейки,
+   * `data-*` для таблицы ввода как в Excel. Классы добавляются к `className`, подсказка заменяет `text`.
+   */
+  td?: (row: Row) => GridCellProps;
   /** Число справа (по умолчанию — у `int` и `money`). */
   numeric?: boolean;
   /** Служебный столбец «Создал», «Создано», «Изменил», «Изменено» (в меню «Столбцы» — «системный»). */
@@ -39,6 +44,12 @@ export interface GridColumn<Row> {
   /** Только на ПК (`deskOnly` прототипа): на телефоне столбец не показывается, даже если выбран. */
   desktopOnly?: boolean;
 }
+
+/** Атрибуты ячейки из `GridColumn.td`. */
+export type GridCellProps = {
+  className?: string;
+  title?: string;
+} & { [data: `data-${string}`]: string | undefined };
 
 /** Страница списка с сервера (`listPageSchema` в `@buhuchet/shared`). */
 export interface GridPage<Row> {

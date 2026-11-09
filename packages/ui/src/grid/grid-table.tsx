@@ -293,11 +293,13 @@ export function GridTable<Row>({
         )}
         {columns.map((c) => {
           const text = c.text(row);
+          const { className, title, ...data } = c.td?.(row) ?? {};
           return (
             <td
               key={c.key}
-              title={text}
-              className={`${cell} ${last ? 'border-b-0' : ''} ${isNumeric(c) ? 'text-right' : ''} ${c.className ?? ''}`}
+              title={title ?? text}
+              className={`${cell} ${last ? 'border-b-0' : ''} ${isNumeric(c) ? 'text-right' : ''} ${c.className ?? ''} ${className ?? ''}`}
+              {...data}
             >
               {c.cell ? c.cell(row) : text}
             </td>

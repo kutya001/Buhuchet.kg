@@ -194,6 +194,10 @@ async function summary(api: APIRequestContext): Promise<Summary> {
 const rows = (page: Page, text: string) =>
   page.locator('[data-grid] [data-id]').filter({ hasText: text });
 
+/** Ячейка «Ввода за месяц» (таблица как в Excel): контрагент × показатель. */
+const valueCell = (page: Page, contractorId: string, indicatorId: string) =>
+  page.locator(`[data-kpi-row="${contractorId}"] td[data-kx*="|${indicatorId}|"]`);
+
 /**
  * Счётчик модуля: на ПК — у «Показатели контрагентов» в меню слева; на телефоне модуль в «Других
  * модулях», поэтому цвет повторяет точка на кнопке «Меню».
@@ -247,17 +251,10 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     await page.locator('[data-kpi-month-pick]').click();
     await page.locator(`[data-kpi-choice="${early}"]`).click();
     await expect(page.locator(`[data-kpi-month="${early}"]`)).toBeVisible();
-    if (isMobile) {
-      await page.locator(`[data-kpi-tile="${org.contractors[cp]}"]`).click();
-      const entry = page.getByRole('dialog', { name: cp });
-      await entry.getByLabel('Значение, сом').fill('450 000');
-      await entry.getByRole('button', { name: 'Сохранить' }).click();
-      await expect(entry).toBeHidden();
-    } else {
-      const cell = page.getByRole('textbox', { name: `${cp}: Выручка` });
-      await cell.fill('450 000');
-      await cell.press('Enter');
-    }
+    // Таблица как в Excel и на ПК, и на телефоне: нажать на ячейку, набрать число, Enter.
+    await valueCell(page, org.contractors[cp]!, org.indicators['Выручка']!).click();
+    await page.keyboard.type('450000');
+    await page.keyboard.press('Enter');
     await expect
       .poll(
         async () =>
@@ -282,6 +279,7 @@ test.describe('Этап 2: Показатели контрагентов', () =>
   test('(п. 23) пустой месяц — не ноль: 100 чел. и один пустой месяц — среднее 100 «по 1 из 2», месяц в «Не заполнено»', async ({
     page,
     baseURL,
+    isMobile,
   }) => {
     const api = page.request;
     const cp = 'ОсОО «Среднее без нулей»';
@@ -299,8 +297,15 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     const row = rows(page, cp).filter({ hasText: 'Количество сотрудников' });
     await expect(row).toHaveCount(1);
     await expect(row).toContainText('по 1 из 2');
-    await expect(row.locator(`[data-kpi-cell$="|${first}"]`)).toHaveText('100');
-    await expect(row.locator(`[data-kpi-cell$="|${second}"]`)).toHaveText('пусто');
+    if (isMobile) {
+      // «Карточки»: ячейка месяца — кнопка окна значения.
+      await expect(row.locator(`[data-kpi-cell$="|${first}"]`)).toHaveText('100');
+      await expect(row.locator(`[data-kpi-cell$="|${second}"]`)).toHaveText('пусто');
+    } else {
+      // «Таблица» — как в Excel: пустая обязательная ячейка подсвечена.
+      await expect(row.locator(`td[data-kx$="|${first}"]`)).toHaveText('100');
+      await expect(row.locator(`td[data-kx$="|${second}"]`)).toHaveAttribute('data-kx-empty', '');
+    }
 
     await page.goto('/app/kpi/missing');
     await expect(rows(page, cp)).toHaveCount(1);
@@ -310,7 +315,6 @@ test.describe('Этап 2: Показатели контрагентов', () =>
   test('(п. 44) «Выручка» «Выбранным» — только ОНР: у контрагента на едином налоге ячейка серая, в «Не заполнено» его нет; новый контрагент на ОНР включён сам', async ({
     page,
     baseURL,
-    isMobile,
   }) => {
     const api = page.request;
     const onr = 'ОсОО «Общий режим»';
@@ -337,23 +341,12 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     await page.locator('[data-kpi-month-pick]').click();
     await page.locator(`[data-kpi-choice="${monthAt(-2)}"]`).click();
     await expect(page.locator(`[data-kpi-month="${monthAt(-2)}"]`)).toBeVisible();
-    if (isMobile) {
-      await page.locator(`[data-kpi-tile="${org.contractors[en]!}"]`).click();
-      const entry = page.getByRole('dialog', { name: en });
-      await expect(entry.locator(`[data-kpi-item="${org.indicators['Выручка']!}"]`)).toHaveCount(0);
-      await entry.getByRole('button', { name: 'Отмена' }).click();
-      await page.locator(`[data-kpi-tile="${org.contractors[onr]!}"]`).click();
-      const own = page.getByRole('dialog', { name: onr });
-      await expect(own.locator(`[data-kpi-item="${org.indicators['Выручка']!}"]`)).toHaveCount(1);
-      await own.getByRole('button', { name: 'Отмена' }).click();
-    } else {
-      await expect(
-        page.locator(`[data-kpi-row="${org.contractors[en]!}"] [data-kpi-off]`),
-      ).toHaveCount(1);
-      await expect(
-        page.locator(`[data-kpi-row="${org.contractors[onr]!}"] [data-kpi-off]`),
-      ).toHaveCount(0);
-    }
+    await expect(
+      page.locator(`[data-kpi-row="${org.contractors[en]!}"] [data-kpi-off]`),
+    ).toHaveCount(1);
+    await expect(
+      page.locator(`[data-kpi-row="${org.contractors[onr]!}"] [data-kpi-off]`),
+    ).toHaveCount(0);
 
     // «Не заполнено»: контрагент на ОНР есть, на едином налоге — нет.
     await page.goto('/app/kpi/missing');
@@ -487,6 +480,61 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     await page.goto('/app/kpi/period');
     const row = rows(page, cp).filter({ hasText: 'Доля экспорта' });
     await expect(row).toContainText('Не ведётся с');
-    await expect(row.locator(`[data-kpi-cell$="|${monthAt(-1)}"]`)).toHaveText('12');
+    await expect(
+      row.locator(`[data-kpi-cell$="|${monthAt(-1)}"], td[data-kx$="|${monthAt(-1)}"]`),
+    ).toHaveText('12');
+  });
+  test('(проверка прототипа v81) таблица как в Excel: в «Не заполнено» значение вносится прямо в ячейке — строка остаётся с «Всё внесено», Ctrl+Z возвращает; в «За период» Tab — вправо, итоги строки и выделения пересчитываются, Delete стирает', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.skip(
+      isMobile,
+      'Списки на телефоне — в виде «Карточки»: ячейка месяца открывает окно значения.',
+    );
+    const api = page.request;
+    const cp = 'ОсОО «Как в Excel»';
+    const org = await kpiOrg(api, baseURL, { [cp]: 'РЕЖ-01' });
+    const [first, second] = [monthAt(-2), monthAt(-1)];
+    await editIndicator(api, org, 'Выручка', { start: first });
+    const key = (m: string) => `${org.contractors[cp]!}|${org.indicators['Выручка']!}|${m}`;
+
+    // «Не заполнено»: столбец «Выручка» — ячейки как в Excel; внесли — строка осталась с «Всё внесено».
+    await page.goto('/app/kpi/missing');
+    await expect(rows(page, cp)).toHaveCount(2);
+    const cell = page.locator(`td[data-kx="${key(first)}"]`);
+    const row = rows(page, cp).filter({ has: cell });
+    await cell.click();
+    await page.keyboard.type('1000');
+    await page.keyboard.press('Enter');
+    await expect(cell).toHaveText(/^1\s000$/);
+    await expect(row).toContainText('Всё внесено');
+    await expect(rows(page, cp)).toHaveCount(2);
+    await cell.click();
+    await page.keyboard.press('Control+z');
+    await expect(cell).toHaveText('');
+    await expect(row).not.toContainText('Всё внесено');
+
+    // «За период»: 1 000, Tab — соседний месяц, 2 000; сумма строки и выделения — 3 000.
+    await page.goto('/app/kpi/period');
+    const main = page.locator('main');
+    await main.getByLabel('С', { exact: true }).fill(first);
+    await main.getByLabel('по', { exact: true }).fill(second);
+    const a = page.locator(`td[data-kx="${key(first)}"]`);
+    const b = page.locator(`td[data-kx="${key(second)}"]`);
+    await a.click();
+    await page.keyboard.type('1000');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('2000');
+    await page.keyboard.press('Enter');
+    await expect(b).toHaveText(/^2\s000$/);
+    await expect(rows(page, cp).filter({ has: a })).toContainText(/3\s000/);
+    await a.click();
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.locator('[data-ex-stat]')).toContainText(/Сумма:\s*3\s000/);
+    await page.keyboard.press('Delete');
+    await expect(a).toHaveText('');
+    await expect(b).toHaveText('');
   });
 });

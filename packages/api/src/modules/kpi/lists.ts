@@ -2,6 +2,7 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   exportKpiMissing,
   exportKpiPeriod,
+  kpiMissingList,
   kpiMissingRows,
   kpiPeriodRows,
   listKpiMissingPage,
@@ -30,7 +31,16 @@ import { listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { error, inKpi, kpiFail, kpiScopeOf, noAuth, subjectOf, todayOf } from './common';
+import {
+  canEditValues,
+  error,
+  inKpi,
+  kpiFail,
+  kpiScopeOf,
+  noAuth,
+  subjectOf,
+  todayOf,
+} from './common';
 
 /*
  * Списки «За период» и «Не заполнено» и индикатор незаполненных (задача 2.27; ТЗ «Показатели
@@ -75,12 +85,29 @@ async function periodInput(
   params: { from: YearMonth; to: YearMonth },
 ) {
   const period = periodOf(params);
+  const subject = subjectOf(c);
   const { rows, months } = await kpiPeriodRows(tx, {
-    scope: kpiScopeOf(subjectOf(c)),
+    scope: kpiScopeOf(subject),
     ...period,
     today: todayOf(deps),
+    editable: (r) => canEditValues(subject, r),
   });
   return { rows, months, t: await serverTexts(deps) };
+}
+
+/** Строки и столбцы значений «Не заполнено» в области сотрудника. */
+async function missingInput(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  tx: Parameters<typeof kpiMissingList>[0],
+) {
+  const subject = subjectOf(c);
+  const { rows, indicators } = await kpiMissingList(tx, {
+    scope: kpiScopeOf(subject),
+    today: todayOf(deps),
+    editable: (r) => canEditValues(subject, r),
+  });
+  return { rows, indicators, t: await serverTexts(deps) };
 }
 
 export const periodRoute = createRoute({
@@ -220,13 +247,9 @@ export const missingRoute = createRoute({
 export function missingHandler(deps: ApiDeps): RouteHandler<typeof missingRoute, AppEnv> {
   return async (c) => {
     const query = listQueryOf(c.req.valid('query'));
-    const page = await inKpi(deps, c, async (tx) => {
-      const rows = await kpiMissingRows(tx, {
-        scope: kpiScopeOf(subjectOf(c)),
-        today: todayOf(deps),
-      });
-      return listKpiMissingPage(tx, query, rows, await serverTexts(deps));
-    });
+    const page = await inKpi(deps, c, async (tx) =>
+      listKpiMissingPage(tx, query, await missingInput(deps, c, tx)),
+    );
     return c.json(
       {
         items: page.rows.map(missingBody),
@@ -264,13 +287,9 @@ export function missingValuesHandler(
 ): RouteHandler<typeof missingValuesRoute, AppEnv> {
   return async (c) => {
     const { col, q } = c.req.valid('query');
-    const values = await inKpi(deps, c, async (tx) => {
-      const rows = await kpiMissingRows(tx, {
-        scope: kpiScopeOf(subjectOf(c)),
-        today: todayOf(deps),
-      });
-      return listKpiMissingValues(tx, col, rows, await serverTexts(deps), q);
-    });
+    const values = await inKpi(deps, c, async (tx) =>
+      listKpiMissingValues(tx, col, await missingInput(deps, c, tx), q),
+    );
     return c.json(values, 200);
   };
 }
@@ -306,13 +325,7 @@ export function missingExportHandler(
       const result = await inKpi(
         deps,
         c,
-        async (tx) => {
-          const rows = await kpiMissingRows(tx, {
-            scope: kpiScopeOf(subjectOf(c)),
-            today: todayOf(deps),
-          });
-          return exportKpiMissing(tx, query, keys, rows, t);
-        },
+        async (tx) => exportKpiMissing(tx, query, keys, await missingInput(deps, c, tx)),
         'export',
       );
       return xlsxResponse(c, {
