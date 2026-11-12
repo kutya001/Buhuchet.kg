@@ -58,8 +58,12 @@ export function createRuntime(
     // Папка данных лежит рядом с сайтом (apps/web/techdocs): её собирает scripts/build-techdocs.mjs.
     ...(service === 'web'
       ? {
-          techDocs: fileTechDocs(path.join(process.cwd(), 'techdocs'), (err) =>
-            logger.warn({ err }, 'Техническая документация: данные не прочитаны'),
+          techDocs: fileTechDocs(
+            [
+              path.join(process.cwd(), 'techdocs'),
+              path.join(process.cwd(), 'apps/web/techdocs'),
+            ],
+            (err) => logger.warn({ err }, 'Техническая документация: данные не прочитаны'),
           ),
         }
       : {}),

@@ -123,7 +123,14 @@ export const AdminApiMethodCard = z.object({
   /** Список с фильтрами: показан вариант запроса без фильтров и сортировки. */
   filtered: z.boolean(),
   code: z.array(
-    z.object({ file: z.string(), fn: z.string(), line: z.number().int(), what: z.string() }),
+    z.object({
+      file: z.string(),
+      fn: z.string(),
+      line: z.number().int(),
+      what: z.string(),
+      /** Место — запрос к базе (значок базы), иначе — код маршрута или обработчика. */
+      db: z.boolean(),
+    }),
   ),
   repo: z.string(),
   commit: z.string(),

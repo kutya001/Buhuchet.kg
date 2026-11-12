@@ -478,6 +478,17 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'io_import', icon: 'upload', label: 'pdicts.add.io_import', tabs: KBADM_IO_TABS },
     ],
   },
+  // «Техническая документация» (прототип v83): только просмотр, добавлять нечего.
+  tdocs: {
+    icon: 'db',
+    title: 'nav.tdocs',
+    short: 'nav.short.tdocs',
+    desc: 'nav.desc.tdocs',
+    tabs: [
+      { id: 'db', icon: 'db', label: 'tab.tdocs.db' },
+      { id: 'api', icon: 'code', label: 'tab.tdocs.api' },
+    ],
+  },
   tg: {
     icon: 'tg',
     title: 'nav.telegram',

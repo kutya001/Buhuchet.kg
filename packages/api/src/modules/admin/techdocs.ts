@@ -308,10 +308,17 @@ export function exportApiMethodsHandler(
 
 /* ───────────── Карточка метода ───────────── */
 
+/** Так скрипт снимка называет место кода с запросом к базе (spec/prototype/db/api_snapshot.py). */
+const DB_QUERY_PLACE = 'Запрос к базе';
+
 const part = (api: ApiDocs, p: ApiDocPart | undefined) =>
   p && p.f.length ? { schema: p.s ?? '', fields: p.f.map(fieldRow) } : null;
 
-function methodCard(docs: TechDocs, m: ApiDocMethod): AdminApiMethodCard {
+function methodCard(
+  docs: TechDocs,
+  m: ApiDocMethod,
+  permName: (id: string) => string,
+): AdminApiMethodCard {
   const { api, schema } = docs;
   const ru = tableNames(schema);
   const rls = new Map(schema.tables.map((t) => [t.name, t.rls ?? '']));
@@ -335,7 +342,7 @@ function methodCard(docs: TechDocs, m: ApiDocMethod): AdminApiMethodCard {
     summary: m.sum,
     description: m.desc ?? '',
     access: m.acc,
-    permissions: m.perm,
+    permissions: m.perm.map(permName),
     rate: m.rate,
     request: {
       params: part(api, m.req.params),
@@ -371,7 +378,7 @@ function methodCard(docs: TechDocs, m: ApiDocMethod): AdminApiMethodCard {
       return q ? [{ kind: q.k, text: q.t, file: q.f, fn: q.fn, line: q.l }] : [];
     }),
     filtered: m.m === 'GET' && (m.req.query?.f.length ?? 0) > 0,
-    code: m.code,
+    code: m.code.map((x) => ({ ...x, db: x.what === DB_QUERY_PLACE })),
     repo: api.meta.repo,
     commit: api.meta.commit,
     schemas: knownSchemas(api, fields),
@@ -405,7 +412,9 @@ export function apiMethodCardHandler(
     const docs = await docsOf(deps);
     const method = docs.api.methods.find((m) => m.id === id);
     if (!method) apiFail(404, 'not_found', 'Метод не найден в описании API');
-    return c.json(methodCard(docs, method!), 200);
+    // Права — названиями из каталога прав, как на экране ролей.
+    const perms = new Map((await permissionCatalog(deps.db)).map((p) => [p.id as string, p.name]));
+    return c.json(methodCard(docs, method!, (p) => perms.get(p) ?? p), 200);
   };
 }
 

@@ -1,0 +1,150 @@
+/*
+ * «Техническая документация» (прототип v83 css/admin-docs.css): метка метода HTTP, рамка схемы на весь
+ * экран, блоки кода с подсветкой SQL, раскрывающиеся ответы. Цвета — переменные темы (`--bu-*`).
+ */
+.td-mth {
+  display: inline-block;
+  font:
+    650 11px/18px ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  border-radius: 5px;
+  padding: 0 6px;
+  min-width: 52px;
+  text-align: center;
+  letter-spacing: 0.02em;
+  vertical-align: 1px;
+  background: var(--bu-label-bg);
+  color: var(--bu-label);
+}
+.td-m-GET {
+  background: var(--bu-blue-bg);
+  color: var(--bu-blue);
+}
+.td-m-POST {
+  background: var(--bu-green-bg);
+  color: var(--bu-green);
+}
+.td-m-PUT,
+.td-m-PATCH {
+  background: var(--bu-yellow-bg);
+  color: var(--bu-yellow);
+}
+.td-m-DELETE {
+  background: var(--bu-red-bg);
+  color: var(--bu-red);
+}
+.td-mth.td-mth-title {
+  font-size: 12px;
+  line-height: 20px;
+  vertical-align: 2px;
+  margin-right: 4px;
+}
+
+.td-frame-w {
+  border: 1px solid var(--bu-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bu-pane);
+}
+.td-frame {
+  display: block;
+  width: 100%;
+  height: 640px;
+  border: 0;
+  background: transparent;
+}
+.td-frame-w.td-full {
+  position: fixed;
+  inset: 0;
+  z-index: 48;
+  border: 0;
+  border-radius: 0;
+}
+.td-frame-w.td-full .td-frame {
+  height: 100% !important;
+}
+body.td-full-on {
+  overflow: hidden;
+}
+@media (max-width: 767px) {
+  .td-frame-w {
+    border-radius: 8px;
+  }
+}
+
+.td-code {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bu-pane-alt);
+  border: 1px solid var(--bu-border);
+  border-radius: 8px;
+  font:
+    12.5px/1.55 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+  white-space: pre;
+  overflow: auto;
+  max-height: 420px;
+  tab-size: 2;
+}
+.td-code i {
+  font-style: normal;
+}
+.td-code .k {
+  color: var(--bu-purple);
+  font-weight: 600;
+}
+.td-code .s {
+  color: var(--bu-green);
+}
+.td-code .p {
+  color: var(--bu-orange);
+  font-weight: 600;
+}
+.td-code .c {
+  color: var(--bu-faint);
+}
+
+.td-r {
+  border: 1px solid var(--bu-border);
+  border-radius: 8px;
+  background: var(--bu-raised);
+}
+.td-r > summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  list-style: none;
+}
+.td-r > summary::-webkit-details-marker {
+  display: none;
+}
+.td-r[open] > summary {
+  border-bottom: 1px solid var(--bu-border);
+}
+.td-r > .td-r-b {
+  display: block;
+  padding: 8px 12px;
+}
+.td-rls > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+.td-ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: disc;
+}

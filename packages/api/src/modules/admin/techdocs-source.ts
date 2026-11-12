@@ -125,25 +125,34 @@ export function parseTechDocs(files: { api: string; schema: string; page: string
 }
 
 /**
- * Данные из папки, собранной scripts/build-techdocs.mjs. Читаются один раз при первом обращении и
- * остаются в памяти: файлы меняются только со сборкой сайта. Не прочиталось — null, следующее
- * обращение пробует снова.
+ * Данные из папки, собранной scripts/build-techdocs.mjs. Папок может быть несколько: берётся первая,
+ * где данные читаются (рабочая папка сайта на Vercel и в Docker — apps/web, при запуске из корня
+ * репозитория — корень). Читаются один раз при первом обращении и остаются в памяти: файлы меняются
+ * только со сборкой сайта. Не прочиталось — null, следующее обращение пробует снова.
  */
-export function fileTechDocs(dir: string, onError?: (err: unknown) => void): TechDocsSource {
+export function fileTechDocs(
+  dirs: readonly string[],
+  onError?: (err: unknown) => void,
+): TechDocsSource {
   let loaded: Promise<TechDocs | null> | null = null;
+  const readDir = async (dir: string): Promise<TechDocs> => {
+    const [api, schema, page] = await Promise.all(
+      ['api.json', 'schema.json', 'page.html'].map((name) => readFile(path.join(dir, name), 'utf8')),
+    );
+    return parseTechDocs({ api: api!, schema: schema!, page: page! });
+  };
   const read = async (): Promise<TechDocs | null> => {
-    try {
-      const [api, schema, page] = await Promise.all(
-        ['api.json', 'schema.json', 'page.html'].map((name) =>
-          readFile(path.join(dir, name), 'utf8'),
-        ),
-      );
-      return parseTechDocs({ api: api!, schema: schema!, page: page! });
-    } catch (err) {
-      onError?.(err);
-      loaded = null;
-      return null;
+    let last: unknown = new Error('techdocs: папка данных не задана');
+    for (const dir of dirs) {
+      try {
+        return await readDir(dir);
+      } catch (err) {
+        last = err;
+      }
     }
+    onError?.(last);
+    loaded = null;
+    return null;
   };
   return { load: () => (loaded ??= read()) };
 }

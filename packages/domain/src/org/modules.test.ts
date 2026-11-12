@@ -79,7 +79,16 @@ describe('модули в меню — как mods() прототипа', () => 
 
 describe('модули Админки и общий список модулей', () => {
   it('модули Админки — по порядку прототипа (ADM)', () => {
-    expect(ADMIN_MENU_MODULES).toEqual(['accounts', 'orgs', 'pdicts', 'l10n', 'kb', 'kbadm', 'tg']);
+    expect(ADMIN_MENU_MODULES).toEqual([
+      'accounts',
+      'orgs',
+      'pdicts',
+      'l10n',
+      'kb',
+      'kbadm',
+      'tdocs',
+      'tg',
+    ]);
   });
 
   it('общий список без повторов: «База знаний» есть и у организации, и в Админке', () => {
@@ -91,6 +100,7 @@ describe('модули Админки и общий список модулей'
       'pdicts',
       'l10n',
       'kbadm',
+      'tdocs',
       'tg',
     ]);
   });
