@@ -232,6 +232,7 @@ export function AccountCard({
   );
 }
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-65 — списки карточки — простые таблицы до 200 строк, а не общий список.
 /** «Показаны первые 200 из N» — список карточки длиннее предела ответа. */
 function More({ t, shown, total }: { t: Translate; shown: number; total: number }) {
   return total > shown ? <Hint>{t('accounts.card.more', { n: shown, total })}</Hint> : null;
@@ -598,6 +599,7 @@ function SessionsTab({ t, card }: { t: Translate; card: AdminUserCard }) {
   const [ask, setAsk] = useState(false);
   const [busy, setBusy] = useState(false);
   const s = card.sessions;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-65 — сеансы администраторов платформы из Админки не завершаются.
   const locked = s.self || card.user.isPlatformAdmin;
   const hint = s.self
     ? t('accounts.card.ses.end_self')

@@ -271,9 +271,7 @@ test.describe('Админка: учётные записи', () => {
     const row = await accountRow(page, isMobile, login);
     await row.getByText('Входов Сквозной Тестович').click();
     const card = page.getByRole('dialog', { name: 'Входов Сквозной Тестович' });
-    await expect(card.locator('[data-account-states]')).toContainText(
-      'Не сменил временный пароль',
-    );
+    await expect(card.locator('[data-account-states]')).toContainText('Не сменил временный пароль');
     await expect(card).toContainText(login);
     await expect(card).toContainText('Бухгалтер');
     await expect(card).toContainText(

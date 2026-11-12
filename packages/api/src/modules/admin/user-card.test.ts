@@ -226,9 +226,9 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
       reason: 'Открыта карточка пользователя',
     });
     // «Учётная запись создана» есть в истории всегда, одна.
-    expect(
-      first.history.filter((h) => h.entity === 'user' && h.action === 'create'),
-    ).toHaveLength(1);
+    expect(first.history.filter((h) => h.entity === 'user' && h.action === 'create')).toHaveLength(
+      1,
+    );
     expect(views(await card('chief-a'))).toBe(2);
     // Перечитывание открытой карточки — не новое открытие; у администратора, который карточку
     // ещё не открывал, запись появляется и при перечитывании.
@@ -238,9 +238,7 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
     const fresh = f.people['acc-b']!.userId;
     const unseen = await get(`/api/admin/users/${fresh}/card?refresh=1`);
     expect(views(AdminUserCard.parse(await unseen.json()))).toBe(1);
-    expect(
-      first.history.find((h) => h.reason?.includes('заблокирована')),
-    ).toBeUndefined();
+    expect(first.history.find((h) => h.reason?.includes('заблокирована'))).toBeUndefined();
 
     const blocked = await apiRequest(f.app, 'POST', `/api/admin/users/${id}/block`, admin, {
       version: first.user.version,

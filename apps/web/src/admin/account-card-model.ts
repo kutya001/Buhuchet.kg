@@ -52,7 +52,10 @@ export function accountHistoryWho(t: Translate, h: HistoryEntry): string {
 }
 
 /** «История» карточки: сверху новые (порядок ответа сервера). */
-export function accountHistoryItems(t: Translate, history: readonly HistoryEntry[]): TimelineItem[] {
+export function accountHistoryItems(
+  t: Translate,
+  history: readonly HistoryEntry[],
+): TimelineItem[] {
   return history.map((h) => {
     const at = new Date(h.at);
     return {

@@ -23,10 +23,14 @@ describe('устройство сеанса по заголовку браузе
   it('браузеры на движке Chrome узнаются раньше самого Chrome', () => {
     const tail = 'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0';
     expect(
-      sessionDevice(`Mozilla/5.0 (Windows NT 10.0; Win64; x64) ${tail} YaBrowser/24.10.0 Safari/537.36`),
+      sessionDevice(
+        `Mozilla/5.0 (Windows NT 10.0; Win64; x64) ${tail} YaBrowser/24.10.0 Safari/537.36`,
+      ),
     ).toBe('Яндекс Браузер 24 · Windows 10 или 11');
     expect(
-      sessionDevice(`Mozilla/5.0 (Windows NT 10.0; Win64; x64) ${tail} Safari/537.36 Edg/130.0.0.0`),
+      sessionDevice(
+        `Mozilla/5.0 (Windows NT 10.0; Win64; x64) ${tail} Safari/537.36 Edg/130.0.0.0`,
+      ),
     ).toBe('Edge 130 · Windows 10 или 11');
     expect(
       sessionDevice(`Mozilla/5.0 (Linux; Android 14; SM-A546B) ${tail} Mobile Safari/537.36`),
@@ -45,7 +49,9 @@ describe('устройство сеанса по заголовку браузе
   });
 
   it('длинный или подделанный заголовок не даёт подпись длиннее предела и разметку', () => {
-    const label = sessionDevice(`Chrome/${'9'.repeat(400)} <script>alert(1)</script> Windows NT 10.0`);
+    const label = sessionDevice(
+      `Chrome/${'9'.repeat(400)} <script>alert(1)</script> Windows NT 10.0`,
+    );
     expect(label === null || label.length <= SESSION_DEVICE_MAX).toBe(true);
     expect(label ?? '').not.toContain('<');
   });

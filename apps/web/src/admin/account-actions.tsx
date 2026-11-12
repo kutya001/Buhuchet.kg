@@ -114,8 +114,7 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
   const me = userId ?? '';
   const actions = accountMenu({ userId: me, t, run: { ...run, open: options.open } });
   const menu = accountMenu({ userId: me, t, run });
-  const cardActions = (u: AdminUser) =>
-    menu(u).filter((a): a is ActionItem => !('separator' in a));
+  const cardActions = (u: AdminUser) => menu(u).filter((a): a is ActionItem => !('separator' in a));
 
   const dialogs = (
     <>
