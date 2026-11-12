@@ -4,6 +4,7 @@ import {
   excelColumn,
   formatCount,
   formatMomentRu,
+  importMonthHead,
   KPI_IMPORT_MAX_BYTES,
   pluralForm,
   type YearMonth,
@@ -55,9 +56,10 @@ import { monthName, numberText, valueText } from './kpi-format';
 import { OFF_CELL } from './kpi-table';
 
 /*
- * Окно «Ввод из Excel» (задача 2.28; ТЗ «Показатели контрагентов» → «Ввод из Excel»; прототип
- * modules/kpi-excel.js, kxDlg): шаг 1 — период, фильтр и показатели, предпросмотр листа и «Скачать
- * шаблон .xlsx»; шаг 2 — выбор или перетаскивание заполненного шаблона, плашки «Новые», «Изменённые»,
+ * Окно «Ввод из Excel» (задача 2.28; ТЗ «Показатели контрагентов» → «Ввод из Excel»; прототип v80
+ * modules/kpi-excel.js, kxDlg): шаг 1 — период, фильтр и показатели, предпросмотр листа (строка —
+ * контрагент и показатель, столбцы — месяцы) и «Скачать шаблон .xlsx»; шаг 2 (и «Загрузить из Excel»
+ * вкладки «Ввод по месяцам») — выбор или перетаскивание заполненного шаблона, плашки «Новые», «Изменённые»,
  * «Без изменений», «Ошибки», таблицы и «Применить» (изменения проверенных — с подтверждением);
  * «История загрузок». Файл разбирает сервер: он приходит на предпросмотр, «Применить» и файл ошибок.
  */
@@ -128,20 +130,28 @@ export function useKpiImport() {
   const t = useT();
   const toast = useToast();
   const client = useQueryClient();
-  const [slot, setSlot] = useState<DialogSlot<KpiImportOptions> | null>(null);
-  const open = useCallback(async () => {
-    try {
-      setSlot(openSlot(await client.fetchQuery({ ...optionsQuery, staleTime: 0 })));
-    } catch {
-      toast(t('err.unknown'), { bad: true });
-    }
-  }, [client, toast, t]);
+  const [slot, setSlot] = useState<DialogSlot<{ options: KpiImportOptions; step: Step }> | null>(
+    null,
+  );
+  /** `step` — с какого шага открыть: «Загрузить из Excel» вкладки «Ввод по месяцам» — сразу шаг 2. */
+  const open = useCallback(
+    async (step: Step = 'tpl') => {
+      try {
+        const options = await client.fetchQuery({ ...optionsQuery, staleTime: 0 });
+        setSlot(openSlot({ options, step }));
+      } catch {
+        toast(t('err.unknown'), { bad: true });
+      }
+    },
+    [client, toast, t],
+  );
   const dialog = slot ? (
     <KpiImportDialog
       key={`kpi-import-${slot.n}`}
       open={slot.open}
       onClose={() => setSlot(closeSlot)}
-      options={slot.data}
+      options={slot.data.options}
+      initialStep={slot.data.step}
     />
   ) : null;
   return { open, dialog };
@@ -156,13 +166,15 @@ function KpiImportDialog({
   open,
   onClose,
   options,
+  initialStep,
 }: {
   open: boolean;
   onClose: () => void;
   options: KpiImportOptions;
+  initialStep: Step;
 }) {
   const t = useT();
-  const [step, setStep] = useState<Step>('tpl');
+  const [step, setStep] = useState<Step>(initialStep);
   const [history, setHistory] = useState(false);
   const [filter, setFilter] = useState<Filter>(() => ({
     from: options.defaultMonth,
@@ -295,7 +307,7 @@ function TemplateStep({
   const preview = useQuery(templateQuery(filter));
   const [busy, setBusy] = useState(false);
   const data = preview.data;
-  const ready = !!data && !data.tooMany && data.contractors > 0 && data.columns > 0;
+  const ready = !!data && !data.tooMany && data.lines > 0 && data.months.length > 0;
 
   const setPeriod = (from: string, to: string) => {
     if (!from || !to) return;
@@ -467,7 +479,7 @@ function TemplateStep({
         {data && !(data.tooMany === 'months' && data.contractors === 0) ? (
           <TemplateSummary data={data} />
         ) : null}
-        {data && data.contractors > 0 && data.columns > 0 ? (
+        {data && data.lines > 0 && data.months.length > 0 ? (
           <TemplateTable data={data} />
         ) : data && !data.tooMany ? (
           <EmptyState
@@ -481,12 +493,17 @@ function TemplateStep({
   );
 }
 
-/** «В шаблоне N контрагентов и M столбцов показателей…» с подсветкой, как ячейки в файле. */
+/**
+ * «В шаблоне N контрагентов, M строк «контрагент × показатель» и K месяцев…» с подсветкой, как ячейки в
+ * файле.
+ */
 function TemplateSummary({ data }: { data: KpiImportTemplatePreview }) {
   const t = useT();
+  const months = data.months.length;
   const text = t('kpi.import.summary', {
     cps: t(`kpi.import.cps.${pluralForm(data.contractors)}`, { n: formatCount(data.contractors) }),
-    cols: t(`kpi.import.cols.${pluralForm(data.columns)}`, { n: formatCount(data.columns) }),
+    lines: t(`kpi.import.lines.${pluralForm(data.lines)}`, { n: formatCount(data.lines) }),
+    months: t(`kpi.import.months.${pluralForm(months)}`, { n: formatCount(months) }),
     checked: '{checked}',
     off: '{off}',
   });
@@ -508,18 +525,22 @@ function TemplateSummary({ data }: { data: KpiImportTemplatePreview }) {
   );
 }
 
-/** Предпросмотр листа «Показатели»: первые строки как в Excel — буквы столбцов и номера строк. */
+/**
+ * Предпросмотр листа «Показатели»: первые строки как в Excel — буквы столбцов и номера строк; ИНН,
+ * контрагент и показатель — на голубом (защищены), месяцы — дальше.
+ */
 function TemplateTable({ data }: { data: KpiImportTemplatePreview }) {
   const t = useT();
   const th =
     'border-b border-line px-2 py-1.5 text-left text-[11.5px] font-[650] whitespace-nowrap text-faint';
   const td = 'border-b border-line px-2 py-[7px] whitespace-nowrap';
+  const key = `${td} bg-info-bg`;
   return (
     <section className="flex flex-col gap-2">
       <h3 className="m-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
         {t('kpi.import.preview')}
-        {data.contractors > PREVIEW_ROWS
-          ? ` · ${t('kpi.import.preview_first', { shown: PREVIEW_ROWS, n: formatCount(data.contractors) })}`
+        {data.lines > PREVIEW_ROWS
+          ? ` · ${t('kpi.import.preview_first', { shown: PREVIEW_ROWS, n: formatCount(data.lines) })}`
           : ''}
       </h3>
       <div
@@ -532,32 +553,30 @@ function TemplateTable({ data }: { data: KpiImportTemplatePreview }) {
               <th className={`${th} w-7 text-right`}>#</th>
               <th className={th}>A · {t('kpi.import.inn')}</th>
               <th className={th}>B · {t('kpi.import.contractor')}</th>
-              {data.head.map((h, j) => (
-                <th key={`${h.indicatorId}-${h.month}`} className={th}>
-                  {excelColumn(j + 2)} · {h.title}
-                  <small className="block font-[450] text-faint">{h.unit}</small>
+              <th className={th}>C · {t('kpi.import.indicator')}</th>
+              {data.months.map((m, j) => (
+                <th key={m} className={`${th} text-right`}>
+                  {excelColumn(j + 3)} · {importMonthHead(m)}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.rows.map((row, k) => (
-              <tr key={row.inn}>
+              <tr key={`${row.inn}|${row.indicator}`}>
                 <td className={`${td} text-right text-faint`}>{k + 2}</td>
-                <td className={`${td} bg-info-bg font-mono text-[.92em]`}>{row.inn}</td>
-                <td className={`${td} bg-info-bg font-mono text-[.92em]`}>{row.name}</td>
-                {row.cells.map((cell, j) => {
-                  const type = data.head[j]!.type;
-                  return (
-                    <td
-                      key={j}
-                      data-cell={cell.kind}
-                      className={`${td} text-right ${cell.kind === 'off' ? OFF_CELL : cell.kind === 'checked' ? 'bg-ok-bg text-ok' : ''}`}
-                    >
-                      {cell.kind === 'off' ? '' : numberText(type, cell.value)}
-                    </td>
-                  );
-                })}
+                <td className={`${key} font-mono text-[.92em]`}>{row.inn}</td>
+                <td className={key}>{row.name}</td>
+                <td className={key}>{row.indicator}</td>
+                {row.cells.map((cell, j) => (
+                  <td
+                    key={j}
+                    data-cell={cell.kind}
+                    className={`${td} text-right ${cell.kind === 'off' ? OFF_CELL : cell.kind === 'checked' ? 'bg-ok-bg text-ok' : ''}`}
+                  >
+                    {cell.kind === 'off' ? '' : numberText(row.type, cell.value)}
+                  </td>
+                ))}
               </tr>
             ))}
           </tbody>

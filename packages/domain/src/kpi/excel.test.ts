@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import type { YearMonth } from '../common/months';
+import oracle from './__fixtures__/kx-month-heads.json';
 import {
   excelColumn,
   IMPORT_ERROR_VALUE_MAX_LENGTH,
   IMPORT_ERRORS_KEPT,
+  importFileMonths,
   importHead,
   importInn,
+  importMonthHead,
   importTemplate,
   importTooMany,
   importWrites,
+  KPI_IMPORT_MAX_CELLS,
+  KPI_IMPORT_MAX_LINES,
+  KPI_IMPORT_MAX_MONTHS,
   parseImportHead,
+  parseImportMonth,
   planImport,
   type ImportCellValue,
   type ImportIndicator,
@@ -93,16 +100,28 @@ describe('шаблон «Ввода из Excel»', () => {
     expect(parseImportHead('a · 01.2026('.repeat(30))).toBeNull();
     expect(parseImportHead(`${'a'.repeat(280)} · 09.2026`)).not.toBeNull();
     expect(excelColumn(0)).toBe('A');
-    // Пределы шаблона: месяцы, контрагенты, ячейки показателей (docs/deviations.md п. В-8).
-    expect(importTooMany(24, 1000, 480)).toBeNull();
+    // Пределы шаблона: месяцы, контрагенты, ячейки показателей (строки × месяцы, docs/deviations.md п. В-8).
+    expect(importTooMany(24, 1000, 20_000)).toBeNull();
     expect(importTooMany(25, 1, 1)).toBe('months');
     expect(importTooMany(24, 1001, 1)).toBe('contractors');
-    expect(importTooMany(24, 1000, 481)).toBe('cells');
-    expect(importTooMany(1, 100, 2400)).toBeNull();
+    expect(importTooMany(1, 1000, 20_001)).toBe('lines');
+    expect(importTooMany(24, 1000, 20_000)).toBeNull();
+    // 480 000 ячеек при 24 месяцах — те же 20 000 строк; предел ячеек остаётся правилом на случай иного
+    // числа месяцев.
+    expect(KPI_IMPORT_MAX_LINES * KPI_IMPORT_MAX_MONTHS).toBe(KPI_IMPORT_MAX_CELLS);
     expect(excelColumn(27)).toBe('AB');
   });
 
-  it('строки — контрагенты, у которых ведётся показатель; невключённые — серые; проверенные — помечены', () => {
+  it('(v80) месяц столбца: «янв 2026», «январь 2026», «01.2026», «2026-01», дата Excel — как kxMon', () => {
+    expect(importMonthHead('2026-01')).toBe('янв 2026');
+    expect(importMonthHead('2026-05')).toBe('май 2026');
+    for (const [head, month] of oracle.cases as [string | number | null, string | null][]) {
+      expect([head, parseImportMonth(head)]).toEqual([head, month]);
+    }
+    expect(parseImportMonth(`${'я'.repeat(60)} 2026`)).toBeNull();
+  });
+
+  it('(v80) строка — контрагент и показатель; невключённые и будущие — серые; проверенные — помечены', () => {
     const t = importTemplate(
       book,
       [onr, single, contractor('c9', { oneOff: true })],
@@ -110,29 +129,47 @@ describe('шаблон «Ввода из Excel»', () => {
       ['2026-08', '2026-09'],
       valueOf,
       checked,
+      { current: '2026-10' },
     );
-    // Архивный показатель в шаблон не идёт, разовый контрагент — тоже.
-    expect(t.contractors.map((c) => c.id)).toEqual(['c1']);
-    expect(t.columns).toEqual([
-      { indicatorId: 'k1', month: '2026-08' },
-      { indicatorId: 'k1', month: '2026-09' },
-    ]);
-    expect(t.cells).toEqual([
-      [
-        { kind: 'checked', value: 10_000_000 },
-        { kind: 'input', value: null },
-      ],
+    // Архивный показатель в шаблон не идёт, разовый контрагент — тоже; у c2 «Выручка» выключена с 08.2026.
+    expect(t.rows.map((r) => [r.contractor.id, r.indicatorId])).toEqual([['c1', 'k1']]);
+    expect(t.contractors).toBe(1);
+    expect(t.rows[0]!.cells).toEqual([
+      { kind: 'checked', value: 10_000_000 },
+      { kind: 'input', value: null },
     ]);
     const both = importTemplate(
       book,
       [onr, single],
       new Set(['k1', 'k2']),
-      ['2026-09'],
+      ['2026-09', '2026-10', '2026-11'],
       valueOf,
       checked,
+      { current: '2026-10' },
     );
-    expect(both.contractors.map((c) => c.id)).toEqual(['c1', 'c2']);
-    expect(both.cells[1]).toEqual([{ kind: 'off' }, { kind: 'input', value: null }]);
+    expect(both.rows.map((r) => [r.contractor.id, r.indicatorId])).toEqual([
+      ['c1', 'k1'],
+      ['c1', 'k2'],
+      ['c2', 'k2'],
+    ]);
+    expect(both.contractors).toBe(2);
+    // Будущий месяц — серый, как невключённый.
+    expect(both.rows[1]!.cells).toEqual([
+      { kind: 'input', value: 500 },
+      { kind: 'input', value: null },
+      { kind: 'off' },
+    ]);
+  });
+
+  it('(v80) выгрузка «Ввода по месяцам»: и строки с внесёнными значениями, когда показатель уже не ведётся', () => {
+    const was: KpiValueOf = (c, i, m) =>
+      c === 'c2' && i === 'k1' && m === '2026-08' ? 700 : valueOf(c, i, m);
+    const args = [book, [single], new Set(['k1']), ['2026-08', '2026-09'], was, checked] as const;
+    expect(importTemplate(...args, { current: '2026-10' }).rows).toEqual([]);
+    const out = importTemplate(...args, { current: '2026-10', withValues: true });
+    expect(out.rows).toEqual([
+      { contractor: single, indicatorId: 'k1', cells: [{ kind: 'off' }, { kind: 'off' }] },
+    ]);
   });
 });
 
@@ -254,5 +291,70 @@ describe('загрузка заполненного шаблона', () => {
     expect(importInn(' 0374 4097 401851 ')).toBe('03744097401851');
     expect(importInn(3744097401851)).toBe('03744097401851');
     expect(importInn(null)).toBe('');
+  });
+});
+
+describe('(v80) загрузка шаблона «строка — контрагент и показатель»', () => {
+  const head = ['ИНН', 'Контрагент', 'Показатель', 'авг 2026', 'сен 2026', 'Итог'];
+
+  it('показатель — по названию в строке, месяц — по заголовку; «Итог» пропускается', () => {
+    const p = planImport(
+      [
+        head,
+        [3744097401851, 'ОсОО «Укс»', 'Выручка', 120_000, '150 000,50', '270 000,50'],
+        ['03744097401851', 'ОсОО «Укс»', ' количество сотрудников ', null, 5],
+        ['21503199000123', 'ИП Асанов', 'Количество сотрудников', null, 3],
+      ],
+      lookup,
+    );
+    expect(p.errors).toEqual([]);
+    expect(p.changed.map((x) => [x.ref, x.old, x.value, x.checked])).toEqual([
+      ['D2', 10_000_000, 12_000_000, true],
+    ]);
+    expect(p.added.map((x) => [x.ref, x.contractorId, x.indicatorId, x.month, x.value])).toEqual([
+      ['E2', 'c1', 'k1', '2026-09', 15_000_050],
+      ['E4', 'c2', 'k2', '2026-09', 300],
+    ]);
+    expect(p.same).toBe(1);
+    expect(p.months).toEqual(['2026-08', '2026-09']);
+    expect(importFileMonths(head)).toEqual(['2026-08', '2026-09']);
+  });
+
+  it('ошибки: заголовок — не месяц, неизвестный показатель в строке (вся строка), в архиве, не ведётся', () => {
+    const p = planImport(
+      [
+        [...head.slice(0, 5), 'Примечание', 'ноя 2026'],
+        ['03744097401851', 'ОсОО «Укс»', 'Прибыль', 1, 2],
+        ['03744097401851', 'ОсОО «Укс»', 'Площадь', null, 4],
+        ['21503199000123', 'ИП Асанов', 'Выручка', 5, 6],
+        ['21503199000123', 'ИП Асанов', 'Количество сотрудников', 'abc', 2, null, 9],
+        ['99999999999999', '', 'Выручка', 1],
+      ],
+      lookup,
+    );
+    expect(p.errors.map((e) => [e.ref, e.problem, e.contractorId, e.value])).toEqual([
+      ['F1', 'not_month', null, 'Примечание'],
+      ['C2', 'unknown_indicator', 'c1', 'Прибыль'],
+      ['E3', 'indicator_archived', 'c1', '4'],
+      ['D4', 'indicator_off', 'c2', '5'],
+      ['E4', 'indicator_off', 'c2', '6'],
+      ['D5', 'not_number', 'c2', 'abc'],
+      ['G5', 'month_in_future', 'c2', '9'],
+      ['A6', 'unknown_contractor', null, '99999999999999'],
+    ]);
+    // Строки с ошибками не пишутся: «2» за сентябрь у c2 пропущено.
+    expect(p.added).toEqual([]);
+    expect(p.skipped).toBe(1);
+  });
+
+  it('месяцы файла: прежний шаблон — из «Показатель · ММ.ГГГГ», новый — из заголовков месяцев', () => {
+    expect(
+      importFileMonths(['ИНН', 'Выручка · 09.2026 (сом)', 'Площадь · 01.2026', 'Итог']),
+    ).toEqual(['2026-01', '2026-09']);
+    expect(importFileMonths(['ИНН', 'Показатель', 46023, '01.2026', 'фев 2026'])).toEqual([
+      '2026-01',
+      '2026-02',
+    ]);
+    expect(importFileMonths([])).toEqual([]);
   });
 });

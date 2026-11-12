@@ -3,10 +3,23 @@
 import { useSyncExternalStore } from 'react';
 
 /*
- * Выбор на экранах модуля, который живёт, пока открыта страница (прототип `S.kpiM`, `S.kpiP`, `S.kSetV`):
- * месяц «Ввода за месяц» (по нему же плашки на других вкладках), период «За период» и вид «Настройки
- * показателей». Переход между вкладками его не сбрасывает; после перезагрузки — снова по умолчанию.
+ * Выбор на экранах модуля, который живёт, пока открыта страница (прототип `S.kpiM`, `S.kpiP`, `S.kSetV`,
+ * `S.kpiG`, `S.kGF`): месяц «Ввода за месяц» (по нему же плашки на других вкладках), период «За период»,
+ * период и выбор «Ввода по месяцам» и вид «Настройки показателей». Переход между вкладками его не
+ * сбрасывает; после перезагрузки — снова по умолчанию.
  */
+
+/** «Ввод по месяцам»: что выбрано над таблицей. */
+export interface KpiGridChoice {
+  /** null — с января до текущего месяца заполнения (прототип `S.kpiG`). */
+  period: { from: string; to: string } | null;
+  /** Выбранные контрагенты; пусто — все. */
+  cps: readonly string[];
+  /** Выбранные показатели; null — все. */
+  inds: readonly string[] | null;
+  /** Ответственный; пусто — все. */
+  resp: string;
+}
 
 export interface KpiChoice {
   /** null — месяц по умолчанию с сервера (текущий месяц заполнения). */
@@ -14,9 +27,15 @@ export interface KpiChoice {
   /** null — последние 12 месяцев до текущего месяца заполнения. */
   period: { from: string; to: string } | null;
   setupView: 'list' | 'who';
+  grid: KpiGridChoice;
 }
 
-let state: KpiChoice = { month: null, period: null, setupView: 'list' };
+let state: KpiChoice = {
+  month: null,
+  period: null,
+  setupView: 'list',
+  grid: { period: null, cps: [], inds: null, resp: '' },
+};
 const listeners = new Set<() => void>();
 
 const subscribe = (fn: () => void) => {

@@ -23,21 +23,24 @@ import {
 import {
   addMonths,
   EXPORT_ROWS_LIMIT,
-  importHead,
+  importFileMonths,
   importInn,
+  importMonthHead,
   importTemplate,
   importTooMany,
   importWrites,
   KPI_IMPORT_HOURLY_LIMIT,
   KPI_IMPORT_MAX_BYTES,
+  KPI_IMPORT_MAX_LINES,
+  KPI_IMPORT_MAX_MONTHS,
   KPI_MESSAGES,
   KPI_PERIOD_MAX_MONTHS,
   monthRange,
-  parseImportHead,
   planImport,
   searchText,
   type ImportIndicator,
   type ImportPlan,
+  type ImportTemplate,
   type IndicatorType,
   type YearMonth,
 } from '@buhuchet/domain';
@@ -60,7 +63,12 @@ import type { AppEnv } from '../../env';
 import { apiError, apiFail } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent } from '../../lists/export';
 import { buildXlsx, XLSX_TYPE } from '../../lists/xlsx';
-import { readSheetRows, SheetReadError, type SheetCell } from '../../lists/xlsx-read';
+import {
+  readSheetRows,
+  SheetReadError,
+  type SheetCell,
+  type SheetLimits,
+} from '../../lists/xlsx-read';
 import { requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import {
@@ -73,11 +81,11 @@ import {
   noAuth,
   subjectOf,
 } from './common';
-import { buildImportTemplate } from './import-file';
+import { buildImportTemplate, type TemplateRow } from './import-file';
 
 /*
- * «Ввод из Excel» (задача 2.28; ТЗ «Показатели контрагентов» → «Ввод из Excel»; прототип
- * modules/kpi-excel.js: kxDlg, kxTpl, kxParse, kxApply). Всё — с правом «Вводить показатели из Excel»;
+ * «Ввод из Excel» (задача 2.28; ТЗ «Показатели контрагентов» → «Ввод из Excel»; прототип v80
+ * modules/kpi-excel.js: kxDlg, kxTpl, kxBlob, kxParse, kxApply). Всё — с правом «Вводить показатели из Excel»;
  * шаблон — по контрагентам в области сотрудника, записываются значения только тех, кому он вносит
  * значения (право «Вносить значения показателей» и область). Загруженный файл нигде не хранится: он
  * приходит телом запроса на предпросмотр, «Применить» и файл ошибок и каждый раз разбирается заново.
@@ -211,26 +219,50 @@ export function importOptionsHandler(
 
 type TemplateQuery = z.infer<typeof KpiImportTemplateQuery>;
 
+/** Строка файла шаблона и предпросмотра: ИНН, названия контрагента и показателя, ячейки по месяцам. */
+type TemplateLine = TemplateRow & { type: IndicatorType };
+
+/** Строки шаблона с названиями: контрагент — из записей, показатель — из данных показателей. */
+export function templateLines(
+  tpl: ImportTemplate,
+  records: ReadonlyMap<string, KpiContractorRecord>,
+  data: KpiData,
+): TemplateLine[] {
+  const indicators = new Map(data.indicators.map((i) => [i.id, i]));
+  return tpl.rows.map((r) => {
+    const c = records.get(r.contractor.id)!;
+    const i = indicators.get(r.indicatorId)!;
+    return { inn: c.inn, name: c.name, indicator: i.name, type: i.type, cells: r.cells };
+  });
+}
+
+/** Контрагенты шаблона и вкладки «Ввод по месяцам» — по названию (прототип `COLL.compare`). */
+export const byContractorName = (a: { name: string }, b: { name: string }) =>
+  a.name.localeCompare(b.name, 'ru');
+
 /**
- * Шаблон за период по фильтру: строки, столбцы и что превышен предел (прототип `kxTpl`, `kxCps`). Больше
+ * Шаблон за период по фильтру: строки, месяцы и что превышен предел (прототип `kxTpl`, `kxCps`). Больше
  * 24 месяцев шаблон не скачивается, но предпросмотр, как в прототипе, считается — до 72 месяцев, как
  * «За период»; дальше — только предупреждение.
  */
 async function templateOf(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, query: TemplateQuery) {
+  const current = currentMonthOf(deps);
   const [from, to] = query.from <= query.to ? [query.from, query.to] : [query.to, query.from];
-  if (to > currentMonthOf(deps)) kpiFail(400, 'month_in_future');
+  if (to > current) kpiFail(400, 'month_in_future');
   const months = monthRange(from, to);
   if (months.length > KPI_PERIOD_MAX_MONTHS) {
-    return { tooMany: 'months' as const, months, rows: [], tpl: null, data: null };
+    return { tooMany: 'months' as const, months, rows: [], contractors: 0, data: null };
   }
   const q = searchText(query.q ?? '').trim();
-  const records = (await kpiContractorRecords(tx, { scope: kpiScopeOf(subjectOf(c)) })).filter(
-    (r) =>
-      r.kind !== 'oneoff' &&
-      (!query.resp || r.responsibleEmployeeId === query.resp) &&
-      (!query.reg || r.regimeCode === query.reg) &&
-      (!q || searchText(r.name).includes(q) || r.inn.includes(q)),
-  );
+  const records = (await kpiContractorRecords(tx, { scope: kpiScopeOf(subjectOf(c)) }))
+    .filter(
+      (r) =>
+        r.kind !== 'oneoff' &&
+        (!query.resp || r.responsibleEmployeeId === query.resp) &&
+        (!query.reg || r.regimeCode === query.reg) &&
+        (!q || searchText(r.name).includes(q) || r.inn.includes(q)),
+    )
+    .sort(byContractorName);
   const ids = records.map((r) => r.id);
   const [data, statuses] = await Promise.all([
     loadKpiData(tx, { contractorIds: ids, from, to }),
@@ -246,33 +278,71 @@ async function templateOf(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, query: Temp
     months,
     data.valueOf,
     (cid, m) => checked.has(`${cid}|${m}`),
+    { current },
   );
-  const byId = new Map(records.map((r) => [r.id, r]));
-  const rows = tpl.contractors.map((k, n) => ({
-    inn: byId.get(k.id)!.inn,
-    name: byId.get(k.id)!.name,
-    cells: tpl.cells[n]!,
-  }));
-  const tooMany = importTooMany(months.length, rows.length, tpl.columns.length);
-  return { tooMany, months, rows, tpl, data };
+  const rows = templateLines(tpl, new Map(records.map((r) => [r.id, r])), data);
+  const tooMany = importTooMany(months.length, tpl.contractors, rows.length);
+  return { tooMany, months, rows, contractors: tpl.contractors, data };
 }
 
-/** Заголовки столбцов показателей: «Выручка · 09.2026» и подпись типа. */
-function headOf(
+/**
+ * Файл шаблона и выгрузки «Ввода по месяцам» (прототип `kxBlob`, `kxFileName`): лист «Показатели»,
+ * «Подсказки» с описанием показателей; имя — «Показатели январь 2026 — август 2026.xlsx».
+ */
+export async function templateFile(
   t: (key: string) => string,
-  data: KpiData,
-  columns: readonly { indicatorId: string; month: YearMonth }[],
+  months: readonly YearMonth[],
+  rows: readonly TemplateRow[],
+  indicators: readonly { name: string; unit: string; type: IndicatorType; description: string }[],
 ) {
-  const byId = new Map(data.indicators.map((i) => [i.id, i]));
-  return columns.map((col) => {
-    const i = byId.get(col.indicatorId)!;
-    return {
-      indicatorId: i.id,
-      month: col.month,
-      title: importHead(i.name, col.month),
-      unit: unitText(t, i),
-      type: i.type,
-    };
+  const tips = [
+    t('kpi.import.tips.title'),
+    '',
+    t('kpi.import.tips.rows'),
+    t('kpi.import.tips.columns'),
+    t('kpi.import.tips.off'),
+    t('kpi.import.tips.checked'),
+    '',
+    t('kpi.import.tips.numbers'),
+    t('kpi.import.tips.empty'),
+    t('kpi.import.tips.heads'),
+    '',
+    t('kpi.import.tips.list'),
+    ...indicators.map(
+      (i) => `${i.name} — ${unitText(t, i)}${i.description ? `. ${i.description}` : ''}`,
+    ),
+  ];
+  const file = await buildImportTemplate({
+    sheet: t('kpi.import.sheet'),
+    tipsSheet: t('kpi.import.tips_sheet'),
+    head: [
+      t('kpi.import.inn'),
+      t('kpi.import.contractor'),
+      t('kpi.import.indicator'),
+      ...months.map(importMonthHead),
+    ],
+    rows,
+    tips,
+  });
+  const from = months[0]!;
+  const to = months[months.length - 1]!;
+  const period = from === to ? monthText(t, from) : `${monthText(t, from)} — ${monthText(t, to)}`;
+  return { file, name: `${t('kpi.import.file')} ${period}.xlsx` };
+}
+
+/** Ответ файлом .xlsx: имя — по-русски (`filename*`), запасное — латиницей. */
+export function xlsxAttachment(
+  c: Context<AppEnv>,
+  file: Buffer,
+  name: string,
+  fallback: string,
+  headers: Record<string, string> = {},
+) {
+  return c.body(new Uint8Array(file), 200, {
+    'content-type': XLSX_TYPE,
+    'content-disposition': `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+    'cache-control': 'no-store',
+    ...headers,
   });
 }
 
@@ -302,17 +372,14 @@ export function templatePreviewHandler(
 ): RouteHandler<typeof templatePreviewRoute, AppEnv> {
   return async (c) => {
     const query = c.req.valid('query');
-    const t = await serverTexts(deps);
     const body = await inKpi(deps, c, async (tx) => {
       const r = await templateOf(deps, c, tx, query);
-      if (!r.tpl) {
-        return { contractors: 0, columns: 0, tooMany: r.tooMany, head: [], rows: [] };
-      }
       return {
-        contractors: r.rows.length,
-        columns: r.tpl.columns.length,
+        contractors: r.contractors,
+        lines: r.rows.length,
+        cells: r.rows.length * r.months.length,
         tooMany: r.tooMany,
-        head: headOf(t, r.data, r.tpl.columns),
+        months: r.data ? r.months : [],
         rows: r.rows.slice(0, PREVIEW_ROWS).map((row) => ({
           ...row,
           cells: row.cells.map((cell) =>
@@ -353,49 +420,14 @@ export function templateHandler(deps: ApiDeps): RouteHandler<typeof templateRout
       const r = await inKpi(deps, c, (tx) => templateOf(deps, c, tx, query), 'export');
       if (r.tooMany === 'months') kpiFail(400, 'import_too_many_months');
       if (r.tooMany === 'contractors') kpiFail(400, 'import_too_many_contractors');
+      if (r.tooMany === 'lines') kpiFail(400, 'import_too_many_lines');
       if (r.tooMany === 'cells') kpiFail(400, 'import_too_many_cells');
-      if (!r.tpl || !r.rows.length || !r.tpl.columns.length) kpiFail(400, 'import_empty');
-      const head = headOf(t, r.data!, r.tpl.columns);
-      const indicators = r.data!.indicators.filter((i) => query.inds.includes(i.id) && !i.archived);
-      const tips = [
-        t('kpi.import.tips.title'),
-        '',
-        t('kpi.import.tips.rows'),
-        t('kpi.import.tips.columns'),
-        t('kpi.import.tips.off'),
-        t('kpi.import.tips.checked'),
-        '',
-        t('kpi.import.tips.numbers'),
-        t('kpi.import.tips.empty'),
-        t('kpi.import.tips.heads'),
-        '',
-        t('kpi.import.tips.list'),
-        ...indicators.map(
-          (i) => `${i.name} — ${unitText(t, i)}${i.description ? `. ${i.description}` : ''}`,
-        ),
-      ];
-      const file = await buildImportTemplate({
-        sheet: t('kpi.import.sheet'),
-        tipsSheet: t('kpi.import.tips_sheet'),
-        head: [
-          t('kpi.import.inn'),
-          t('kpi.import.contractor'),
-          ...head.map((h) => `${h.title} (${h.unit})`),
-        ],
-        rows: r.rows,
-        tips,
-      });
-      const from = r.months[0]!;
-      const to = r.months[r.months.length - 1]!;
-      const period =
-        from === to ? monthText(t, from) : `${monthText(t, from)} — ${monthText(t, to)}`;
-      const name = `${t('kpi.import.file')} ${period}.xlsx`;
-      return c.body(new Uint8Array(file), 200, {
-        'content-type': XLSX_TYPE,
-        'content-disposition': `attachment; filename="template.xlsx"; filename*=UTF-8''${encodeURIComponent(name)}`,
-        'cache-control': 'no-store',
+      if (!r.data || !r.rows.length || !r.months.length) kpiFail(400, 'import_empty');
+      const indicators = r.data.indicators.filter((i) => query.inds.includes(i.id) && !i.archived);
+      const { file, name } = await templateFile(t, r.months, r.rows, indicators);
+      return xlsxAttachment(c, file, name, 'template.xlsx', {
         'x-import-rows': String(r.rows.length),
-        'x-import-columns': String(r.tpl.columns.length),
+        'x-import-columns': String(r.months.length),
       });
     });
   };
@@ -404,15 +436,26 @@ export function templateHandler(deps: ApiDeps): RouteHandler<typeof templateRout
 /* ───────────── Шаг 2: загрузка заполненного шаблона ───────────── */
 
 /**
- * Таблица из тела запроса: больше 4 МБ — 413; не читается или больше пределов листа (строк, столбцов,
- * ячеек; распакованный — больше 24 МБ) — 400.
+ * Пределы загруженного шаблона: строка — контрагент и показатель, поэтому строк — до 20 000, непустых
+ * ячеек — 480 000 значений и ИНН с названиями в каждой строке; распакованный шаблон на 1 000 контрагентов
+ * по 20 показателям за 24 месяца с самыми длинными названиями — около 45 МБ.
+ */
+export const KPI_IMPORT_SHEET_LIMITS: Partial<SheetLimits> = {
+  rows: KPI_IMPORT_MAX_LINES + 1,
+  cells: 600_000,
+  unpacked: 48 * 1024 * 1024,
+};
+
+/**
+ * Таблица из тела запроса: больше 4 МБ — 413; не читается или больше пределов листа (строк, ячеек,
+ * распакованный — больше 48 МБ) — 400.
  */
 async function sheetOf(c: Context<AppEnv>): Promise<SheetCell[][]> {
   const bytes = Buffer.from(await c.req.arrayBuffer());
   if (bytes.length > KPI_IMPORT_MAX_BYTES) tooBig();
   if (!bytes.length) kpiFail(400, 'import_file_unreadable');
   try {
-    return readSheetRows(bytes);
+    return readSheetRows(bytes, KPI_IMPORT_SHEET_LIMITS);
   } catch (err) {
     if (err instanceof SheetReadError) {
       kpiFail(
@@ -445,10 +488,11 @@ async function planOf(
   const subject = subjectOf(c);
   const head = rows[0] ?? [];
   const innCol = head.findIndex((h) => searchText(String(h ?? '')).trim() === 'инн');
-  const months = head
-    .map((h) => (h == null ? null : parseImportHead(String(h))?.month))
-    .filter((m): m is YearMonth => !!m)
-    .sort();
+  const months = importFileMonths(head);
+  // В шаблоне и выгрузке — до 24 месяцев: файл с большим числом месяцев не разбирается (иначе один файл
+  // дал бы сотни тысяч значений за годы вперёд и назад).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-61
+  if (months.length > KPI_IMPORT_MAX_MONTHS) kpiFail(400, 'import_too_many_months');
   const all = await kpiContractorRecords(tx, { scope: undefined, archived: true });
   const byInn = new Map<string, KpiContractorRecord>();
   for (const r of all) if (!byInn.has(r.inn)) byInn.set(r.inn, r);

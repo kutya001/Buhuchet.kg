@@ -237,6 +237,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     desc: 'nav.desc.kpi',
     tabs: [
       { id: 'month', icon: 'edit', label: 'tab.kpi.month' },
+      { id: 'grid', icon: 'table', label: 'tab.kpi.grid' },
       { id: 'period', icon: 'chart', label: 'tab.kpi.period' },
       { id: 'missing', icon: 'alert', label: 'tab.kpi.missing' },
       { id: 'setup', icon: 'sliders', label: 'tab.kpi.setup', when: (a) => a.can('indSetup') },

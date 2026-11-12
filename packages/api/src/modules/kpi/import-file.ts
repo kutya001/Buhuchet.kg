@@ -2,17 +2,19 @@ import type { ImportTemplateCell } from '@buhuchet/domain';
 import { columnName, xmlText, zip } from '../../lists/xlsx';
 
 /*
- * Файл шаблона «Ввода из Excel» (задача 2.28; ТЗ «Шаг 1 «Скачать шаблон»»; прототип `kxTplBlob`): лист
- * «Показатели» — заголовки, ИНН и название защищены, ячейки невключённых показателей серые и защищены,
+ * Файл шаблона «Ввода из Excel» и выгрузки «Ввода по месяцам» (задача 2.28; ТЗ «Шаг 1 «Скачать шаблон»»;
+ * прототип v80 `kxBlob`): лист «Показатели» — строка «контрагент и показатель», ИНН, название контрагента
+ * и название показателя защищены, столбцы — месяцы; ячейки, где показатель не ведётся, серые и защищены,
  * проверенные значения — зелёные; лист защищён без пароля (менять можно только ячейки ввода и ширину
- * столбцов), первые два столбца и строка заголовков закреплены. Второй лист — «Подсказки». Архив
+ * столбцов), первые три столбца и строка заголовков закреплены. Второй лист — «Подсказки». Архив
  * собирается так же, как выгрузка списка (`lists/xlsx.ts`), без библиотеки.
  */
 
 export interface TemplateRow {
   inn: string;
   name: string;
-  /** Значения ячеек ввода — в единицах показателя (сотые / 100). */
+  indicator: string;
+  /** Значения ячеек ввода по месяцам — в единицах показателя (сотые / 100). */
   cells: ImportTemplateCell[];
 }
 
@@ -25,15 +27,19 @@ export interface TemplateBook {
 }
 
 /** Стили ячеек: номер — индекс в `cellXfs` (как в прототипе, core/xlsx.js `XL_ST`). */
-const S = { head: 1, input: 2, off: 3, checked: 4, key: 5, wrap: 6 } as const;
+const S = { head: 1, input: 2, off: 3, checked: 4, key: 5, wrap: 6, headR: 7 } as const;
+
+/** Столбцов-ключей слева: ИНН, «Контрагент», «Показатель». */
+const KEYS = 3;
 
 const fill = (rgb: string) =>
   `<fill><patternFill patternType="solid"><fgColor rgb="FF${rgb}"/><bgColor indexed="64"/></patternFill></fill>`;
 const side = (name: string) => `<${name} style="thin"><color rgb="FFBFBFBF"/></${name}>`;
 
 /**
- * Заголовки — жирным на сером, ИНН и название — текстом на голубом, невключённые — серые, проверенные —
- * зелёные; ячейки ввода и проверенные не защищены, число — «1 250 000,50» (формат 4), рамки — тонкие.
+ * Заголовки — жирным на сером (месяцы — по правому краю), ИНН и названия — текстом на голубом,
+ * невключённые — серые, проверенные — зелёные; ячейки ввода и проверенные не защищены, число —
+ * «1 250 000,50» (формат 4), рамки — тонкие.
  */
 const STYLES =
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
@@ -44,7 +50,7 @@ const STYLES =
   `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>` +
   `<border>${side('left')}${side('right')}${side('top')}${side('bottom')}<diagonal/></border></borders>` +
   `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
-  `<cellXfs count="7">` +
+  `<cellXfs count="8">` +
   `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>` +
   `<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>` +
   `<xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyProtection="1"><protection locked="0"/></xf>` +
@@ -52,6 +58,7 @@ const STYLES =
   `<xf numFmtId="4" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1" applyProtection="1"><protection locked="0"/></xf>` +
   `<xf numFmtId="49" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>` +
   `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>` +
+  `<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf>` +
   `</cellXfs>` +
   `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>` +
   `</styleSheet>`;
@@ -67,17 +74,21 @@ function cellXml(ref: string, cell: ImportTemplateCell): string {
 }
 
 function mainSheet(book: TemplateBook): string {
-  const head = `<row r="1">${book.head.map((h, i) => text(`${columnName(i)}1`, h, S.head)).join('')}</row>`;
+  const head = `<row r="1">${book.head
+    .map((h, i) => text(`${columnName(i)}1`, h, i < KEYS ? S.head : S.headR))
+    .join('')}</row>`;
   const body = book.rows
     .map((row, r) => {
       const n = r + 2;
       return (
         `<row r="${n}">${text(`A${n}`, row.inn, S.key)}${text(`B${n}`, row.name, S.key)}` +
-        `${row.cells.map((cell, j) => cellXml(`${columnName(j + 2)}${n}`, cell)).join('')}</row>`
+        `${text(`C${n}`, row.indicator, S.key)}` +
+        `${row.cells.map((cell, j) => cellXml(`${columnName(j + KEYS)}${n}`, cell)).join('')}</row>`
       );
     })
     .join('');
-  const widths = book.head.map((_, i) => (i === 0 ? 18 : i === 1 ? 34 : 20));
+  // Ширины как в прототипе: ИНН 18, «Контрагент» 34, «Показатель» 26, месяцы 13.
+  const widths = book.head.map((_, i) => [18, 34, 26][i] ?? 13);
   const cols = widths
     .map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`)
     .join('');
@@ -85,8 +96,8 @@ function mainSheet(book: TemplateBook): string {
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
     `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
     `<sheetViews><sheetView tabSelected="1" workbookViewId="0">` +
-    `<pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/>` +
-    `<selection pane="bottomRight" activeCell="C2" sqref="C2"/></sheetView></sheetViews>` +
+    `<pane xSplit="${KEYS}" ySplit="1" topLeftCell="D2" activePane="bottomRight" state="frozen"/>` +
+    `<selection pane="bottomRight" activeCell="D2" sqref="D2"/></sheetView></sheetViews>` +
     `<cols>${cols}</cols><sheetData>${head}${body}</sheetData>` +
     `<sheetProtection sheet="1" objects="1" scenarios="1" formatColumns="0" formatRows="0" sort="0" autoFilter="0"/>` +
     `</worksheet>`

@@ -23,6 +23,14 @@ export function defaultPeriod(): Period {
 export const currentFillMonth = () => fillMonth(todayBishkek());
 
 /**
+ * «Ввод по месяцам» по умолчанию — с января года текущего месяца заполнения до него (прототип `S.kpiG`).
+ */
+export function defaultGridPeriod(): Period {
+  const to = currentFillMonth();
+  return { from: `${to.slice(0, 4)}-01`, to };
+}
+
+/**
  * Выбор периода (прототип `kPeriodBar`, `kBindPeriod`): «С … по …» и быстрые варианты «Этот год»,
  * «Прошлый год», «Последние 12 месяцев», «Квартал»; «с» позже «по» — меняются местами.
  */

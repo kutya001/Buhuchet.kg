@@ -8,6 +8,7 @@ import { useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { moduleHref } from '../shell/modules';
 import { indicatorsQuery } from './kpi-data';
+import { KpiGridTab } from './kpi-grid';
 import { useKpiImport } from './kpi-import';
 import { useIndicatorDialog } from './kpi-indicator-dialog';
 import { KpiMissingTab } from './kpi-missing';
@@ -16,10 +17,10 @@ import { KpiPeriodTab } from './kpi-period';
 import { KpiSetupTab } from './kpi-setup';
 
 /*
- * Модуль «Показатели контрагентов» (задача 2.27; ТЗ «Показатели контрагентов»; прототип modules/kpi.js):
- * вкладки «Ввод за месяц», «За период», «Не заполнено», «Настройка показателей». «+ Добавить» →
- * «Показатель» открывает окно нового показателя на любой вкладке, «Ввод из Excel» — окно шаблона и
- * загрузки (задача 2.28).
+ * Модуль «Показатели контрагентов» (задача 2.27; ТЗ «Показатели контрагентов»; прототип v80 modules/kpi.js):
+ * вкладки «Ввод за месяц», «Ввод по месяцам», «За период», «Не заполнено», «Настройка показателей».
+ * «+ Добавить» → «Показатель» открывает окно нового показателя на любой вкладке, «Ввод из Excel» — окно
+ * шаблона и загрузки (задача 2.28); «Загрузить из Excel» «Ввода по месяцам» — его шаг 2.
  */
 
 export function KpiScreen({ tab }: { tab: string }) {
@@ -31,6 +32,8 @@ export function KpiScreen({ tab }: { tab: string }) {
     <>
       {noContractors && tab !== 'setup' ? (
         <NoContractors />
+      ) : tab === 'grid' ? (
+        <KpiGridTab onUpload={() => void excel.open('load')} />
       ) : tab === 'period' ? (
         <KpiPeriodTab />
       ) : tab === 'missing' ? (

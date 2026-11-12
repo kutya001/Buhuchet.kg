@@ -5,7 +5,10 @@ import {
   KPI_IMPORT_MAX_BYTES,
   KPI_IMPORT_MAX_CELLS,
   KPI_IMPORT_MAX_CONTRACTORS,
+  KPI_IMPORT_MAX_MONTHS,
   KPI_MESSAGES,
+  importMonthHead,
+  monthRange,
 } from '@buhuchet/domain';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
@@ -16,11 +19,13 @@ import {
   KpiImportOptions,
   KpiImportPreview,
   KpiImportTemplatePreview,
+  KpiGrid,
 } from '@buhuchet/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { buildXlsx, type XlsxCell } from '../../lists/xlsx';
+import { KPI_IMPORT_SHEET_LIMITS } from './import';
 import { buildImportTemplate } from './import-file';
 import { readSheetRows, readXlsxRows } from '../../lists/xlsx-read';
 import {
@@ -57,35 +62,33 @@ const sheet = (rows: XlsxCell[][]) =>
   );
 
 describe('Ввод из Excel: самый большой шаблон загружается обратно', () => {
-  it('1 000 контрагентов и 480 000 заполненных ячеек: файл меньше 4 МБ и в пределах листа', async () => {
-    const columns = KPI_IMPORT_MAX_CELLS / KPI_IMPORT_MAX_CONTRACTORS;
-    const head = [
-      'ИНН',
-      'Контрагент',
-      ...Array.from(
-        { length: columns },
-        (_, j) =>
-          `Показатель ${j % 20} · ${String((j % 12) + 1).padStart(2, '0')}.2026 (сом, сумма)`,
-      ),
-    ];
+  it('(v80) 1 000 контрагентов × 20 показателей × 24 месяца — 480 000 ячеек: файл меньше 4 МБ и в пределах листа', async () => {
+    const months = monthRange('2025-01', '2026-12');
+    expect(months).toHaveLength(KPI_IMPORT_MAX_MONTHS);
+    const indicators = KPI_IMPORT_MAX_CELLS / KPI_IMPORT_MAX_CONTRACTORS / months.length;
     const file = await buildImportTemplate({
       sheet: 'Показатели',
       tipsSheet: 'Подсказки',
-      head,
-      rows: Array.from({ length: KPI_IMPORT_MAX_CONTRACTORS }, (_, i) => ({
-        inn: `0${1e12 + i}`,
-        name: `ОсОО «Контрагент ${i}»`,
-        cells: Array.from({ length: columns }, (_, j) => ({
-          kind: 'input' as const,
-          value: 12_345_678_900 + i * 1000 + j,
-        })),
-      })),
+      head: ['ИНН', 'Контрагент', 'Показатель', ...months.map(importMonthHead)],
+      rows: Array.from({ length: KPI_IMPORT_MAX_CONTRACTORS * indicators }, (_, n) => {
+        const i = Math.floor(n / indicators);
+        return {
+          inn: `0${1e12 + i}`,
+          // Самые длинные названия: контрагента — 300 знаков, показателя — 100.
+          name: `ОсОО «Контрагент ${i}»`.padEnd(300, 'я'),
+          indicator: `Показатель ${n % indicators}`.padEnd(100, 'я'),
+          cells: months.map((_m, j) => ({
+            kind: 'input' as const,
+            value: 12_345_678_900 + i * 1000 + j,
+          })),
+        };
+      }),
       tips: ['Как заполнить шаблон'],
     });
     expect(file.length).toBeLessThan(KPI_IMPORT_MAX_BYTES);
-    const rows = readSheetRows(file);
-    expect(rows).toHaveLength(KPI_IMPORT_MAX_CONTRACTORS + 1);
-    expect(rows[KPI_IMPORT_MAX_CONTRACTORS]).toHaveLength(columns + 2);
+    const rows = readSheetRows(file, KPI_IMPORT_SHEET_LIMITS);
+    expect(rows).toHaveLength(KPI_IMPORT_MAX_CONTRACTORS * indicators + 1);
+    expect(rows[rows.length - 1]).toHaveLength(months.length + 3);
   });
 });
 
@@ -224,17 +227,18 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect(own.responsibles).toHaveLength(1);
   });
 
-  it('(п. 45) шаблон бухгалтера: только его контрагенты и ведущиеся показатели, ИНН и названия защищены', async () => {
+  it('(п. 45, v80) шаблон бухгалтера: строка — его контрагент и ведущийся показатель, столбцы — месяцы', async () => {
     const q = await call(acc, 'GET', `/api/kpi/import/template/preview?${tpl('')}`);
     expect(q.status).toBe(200);
     const p = KpiImportTemplatePreview.parse(await q.json());
-    expect([p.contractors, p.columns, p.tooMany]).toEqual([2, 2, null]);
-    expect(p.rows.map((r) => r.inn)).toEqual([INN3, INN1]);
-    expect(p.head.map((h) => h.title)).toEqual([
-      'Выручка · 09.2026',
-      'Количество сотрудников · 09.2026',
+    expect([p.contractors, p.lines, p.cells, p.tooMany]).toEqual([2, 4, 4, null]);
+    expect(p.months).toEqual(['2026-09']);
+    expect(p.rows.map((r) => [r.inn, r.indicator, r.type])).toEqual([
+      [INN3, 'Выручка', 'som'],
+      [INN3, 'Количество сотрудников', 'int'],
+      [INN1, 'Выручка', 'som'],
+      [INN1, 'Количество сотрудников', 'int'],
     ]);
-    expect(p.head.map((h) => h.unit)).toEqual(['сом, сумма в сом', 'чел., целое число']);
 
     const res = await call(acc, 'GET', `/api/kpi/import/template?${tpl('')}`);
     expect(res.status).toBe(200);
@@ -242,14 +246,16 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       encodeURIComponent('Показатели сентябрь 2026.xlsx'),
     );
     expect([res.headers.get('x-import-rows'), res.headers.get('x-import-columns')]).toEqual([
-      '2',
-      '2',
+      '4',
+      '1',
     ]);
     const rows = readXlsxRows(Buffer.from(await res.arrayBuffer()));
     expect(rows).toEqual([
-      ['ИНН', 'Контрагент', REVENUE, STAFF],
-      [INN3, 'ОсОО «Ак-Жол»'],
-      [INN1, 'ОсОО «Укс»'],
+      ['ИНН', 'Контрагент', 'Показатель', 'сен 2026'],
+      [INN3, 'ОсОО «Ак-Жол»', 'Выручка'],
+      [INN3, 'ОсОО «Ак-Жол»', 'Количество сотрудников'],
+      [INN1, 'ОсОО «Укс»', 'Выручка'],
+      [INN1, 'ОсОО «Укс»', 'Количество сотрудников'],
     ]);
     // Владелец видит всех; фильтр «Ответственный» и поиск сужают шаблон.
     const all = KpiImportTemplatePreview.parse(
@@ -261,7 +267,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
         await call(owner, 'GET', `/api/kpi/import/template/preview?${tpl('&q=асанов')}`)
       ).json(),
     );
-    expect(found.rows.map((r) => r.inn)).toEqual([INN2]);
+    expect([...new Set(found.rows.map((r) => r.inn))]).toEqual([INN2]);
     const resp = KpiImportTemplatePreview.parse(
       await (
         await call(
@@ -281,7 +287,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     );
     expect(p.tooMany).toBe('months');
     // Как в прототипе: предупреждение, а числа и первые строки — настоящие.
-    expect([p.contractors, p.columns]).toEqual([3, 25]);
+    expect([p.contractors, p.lines, p.months.length, p.cells]).toEqual([3, 3, 25, 75]);
     expect(p.rows).toHaveLength(3);
     const tooLong = KpiImportTemplatePreview.parse(
       await (
@@ -405,6 +411,182 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect((await errorOf(res)).code).toBe('import_nothing');
   });
 
+  it('(v80) шаблон «строка — контрагент и показатель»: показатель — по названию в строке, месяц — по заголовку', async () => {
+    const file = await sheet([
+      ['ИНН', 'Контрагент', 'Показатель', 'авг 2026', 'сен 2026', 'Итог'],
+      [INN1, 'ОсОО «Укс»', 'Выручка', 900_000, 1_250_000.5, 'x'],
+      [INN1, 'ОсОО «Укс»', 'количество сотрудников', null, 12],
+      [INN3, 'ОсОО «Ак-Жол»', 'Прибыль', 1, null],
+    ]);
+    const p = await preview(acc, file);
+    // Сентябрь уже внесён — «Без изменений»: значения загружены за месяцы из заголовков.
+    expect([p.added, p.changed, p.same, p.errorCount, p.skipped]).toEqual([1, 0, 2, 1, 0]);
+    expect(p.addedItems.map((x) => [x.ref, x.indicator, x.month, x.value])).toEqual([
+      ['D2', 'Выручка', '2026-08', 90_000_000],
+    ]);
+    expect(p.errors).toEqual([
+      {
+        ref: 'C4',
+        row: 4,
+        col: 'C',
+        contractor: 'ОсОО «Ак-Жол»',
+        value: 'Прибыль',
+        problem: 'unknown_indicator',
+      },
+    ]);
+    // Контрагент вне области: «нет доступа» без названия — раньше, чем проверка показателя строки.
+    const foreign = await preview(
+      acc,
+      await sheet([
+        ['ИНН', 'Контрагент', 'Показатель', 'сен 2026'],
+        [INN2, 'x', 'Прибыль', 5],
+      ]),
+    );
+    expect(foreign.errors).toEqual([
+      { ref: 'A2', row: 2, col: 'A', contractor: null, value: INN2, problem: 'no_access' },
+    ]);
+    // Месяцев в заголовках больше, чем в шаблоне (24), — файл не разбирается.
+    const wide = await upload(
+      acc,
+      '/api/kpi/import/preview?file=a.xlsx',
+      await sheet([
+        ['ИНН', 'Показатель', ...monthRange('2024-01', '2026-01').map((m) => importMonthHead(m))],
+        [INN1, 'Выручка', 1],
+      ]),
+    );
+    expect(wide.status).toBe(400);
+    expect((await errorOf(wide)).code).toBe('import_too_many_months');
+  });
+
+  it('(v80) «Ввод по месяцам»: контрагент × показатель в области сотрудника, до 24 месяцев, правка — по праву', async () => {
+    expect((await call(undefined, 'GET', '/api/kpi/grid?from=2026-08&to=2026-09')).status).toBe(
+      401,
+    );
+    for (const cookie of [senior, admin]) {
+      expect((await call(cookie, 'GET', '/api/kpi/grid?from=2026-08&to=2026-09')).status).toBe(403);
+    }
+    const grid = async (cookie: string, q: string) => {
+      const res = await call(cookie, 'GET', `/api/kpi/grid?${q}`);
+      expect(res.status).toBe(200);
+      return KpiGrid.parse(await res.json());
+    };
+    const own = await grid(acc, 'from=2026-09&to=2026-08');
+    expect([own.from, own.to, own.current, own.months, own.cut]).toEqual([
+      '2026-08',
+      '2026-09',
+      '2026-10',
+      ['2026-08', '2026-09'],
+      false,
+    ]);
+    expect(own.indicators.map((i) => i.name)).toEqual(['Выручка', 'Количество сотрудников']);
+    expect(own.contractors.map((c) => [c.inn, c.editable])).toEqual([
+      [INN3, true],
+      [INN1, true],
+    ]);
+    expect(own.rows.map((r) => [r.contractorId, r.indicatorId])).toEqual([
+      [C3, revenue],
+      [C3, staffCount],
+      [C1, revenue],
+      [C1, staffCount],
+    ]);
+    expect(own.rows[2]).toMatchObject({
+      values: [null, 125_000_050],
+      states: ['required', 'required'],
+      start: '2026-01',
+      offSince: null,
+    });
+    const off = await call(ownerB, 'GET', '/api/kpi/grid?from=2026-08&to=2026-09');
+    expect(off.status).toBe(403);
+    expect((await errorOf(off)).code).toBe('indicators_off');
+    const all = await grid(owner, 'from=2020-01&to=2026-09');
+    expect([all.cut, all.months.length, all.months[0]]).toEqual([true, 24, '2024-10']);
+    expect(all.contractors).toHaveLength(3);
+    expect(all.responsibles.map((r) => r.id)).toEqual([f.people['acc-a']!.employeeId]);
+  });
+
+  it('(v80) «Ввод по месяцам» → «Выгрузить в Excel»: тот же вид, что у шаблона, и загружается обратно; без права выгрузки — 403', async () => {
+    const res = await call(acc, 'POST', '/api/kpi/grid/export', {
+      from: '2026-09',
+      to: '2026-08',
+      cps: [C1],
+      inds: [revenue],
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toContain(
+      encodeURIComponent('Показатели август 2026 — сентябрь 2026.xlsx'),
+    );
+    const file = Buffer.from(await res.arrayBuffer());
+    expect(readXlsxRows(file)).toEqual([
+      ['ИНН', 'Контрагент', 'Показатель', 'авг 2026', 'сен 2026'],
+      [INN1, 'ОсОО «Укс»', 'Выручка', null, 1_250_000.5],
+    ]);
+    const p = await preview(acc, file);
+    expect([p.added, p.changed, p.same, p.errorCount]).toEqual([0, 0, 1, 0]);
+    // Поиск по ИНН, чужой ответственный и контрагент вне области — пусто.
+    const found = await call(acc, 'POST', '/api/kpi/grid/export', {
+      from: '2026-09',
+      to: '2026-09',
+      cps: [],
+      inds: null,
+      q: INN3.slice(0, 8),
+    });
+    expect(readXlsxRows(Buffer.from(await found.arrayBuffer())).map((r) => r[2])).toEqual([
+      'Показатель',
+      'Выручка',
+      'Количество сотрудников',
+    ]);
+    const empty = await call(acc, 'POST', '/api/kpi/grid/export', {
+      from: '2026-09',
+      to: '2026-09',
+      cps: [C2, B1],
+      inds: null,
+    });
+    expect(empty.status).toBe(400);
+    expect((await errorOf(empty)).code).toBe('import_empty');
+    // Ответственный не из области бухгалтера — тоже пусто.
+    const other = await call(acc, 'POST', '/api/kpi/grid/export', {
+      from: '2026-09',
+      to: '2026-09',
+      cps: [],
+      inds: null,
+      resp: f.people['hr-a']!.employeeId,
+    });
+    expect(other.status).toBe(400);
+    expect((await errorOf(other)).code).toBe('import_empty');
+    const bad = await call(acc, 'POST', '/api/kpi/grid/export', { from: '2026-09', to: '2026-09' });
+    expect(bad.status).toBe(400);
+    const body = { from: '2026-09', to: '2026-09', cps: [], inds: null };
+    expect((await call(undefined, 'POST', '/api/kpi/grid/export', body)).status).toBe(401);
+    const off = await call(ownerB, 'POST', '/api/kpi/grid/export', body);
+    expect(off.status).toBe(403);
+    expect((await errorOf(off)).code).toBe('indicators_off');
+    // «Старший» с правом «Просматривать показатели», но без «Выгружать в Excel»: таблица — да, файл — нет.
+    await f.t.admin.db
+      .insert(schema.rolePermissions)
+      .values({ orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'kpiView' });
+    try {
+      const view = await call(senior, 'GET', '/api/kpi/grid?from=2026-09&to=2026-09');
+      expect(view.status).toBe(200);
+      expect(KpiGrid.parse(await view.json()).contractors.every((c) => !c.editable)).toBe(true);
+      const denied = await call(senior, 'POST', '/api/kpi/grid/export', {
+        from: '2026-09',
+        to: '2026-09',
+        cps: [],
+        inds: null,
+      });
+      expect(denied.status).toBe(403);
+    } finally {
+      await f.t.admin.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, f.roleIds.senior),
+            eq(schema.rolePermissions.permissionId, 'kpiView'),
+          ),
+        );
+    }
+  });
+
   it('проверенный месяц: изменение — только с согласия, иначе пропускается; с согласием месяц снова «Заполнено»', async () => {
     const status = (await entry(C1)).status!;
     const check = await call(chief, 'POST', '/api/kpi/months/check', {
@@ -460,7 +642,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       ['Ячейка', 'Строка', 'Столбец', 'Контрагент', 'Значение', 'Причина'],
       ['D1', 1, 'D', null, 'Прибыль · 09.2026', 'неизвестный показатель'],
       ['C2', 2, 'C', 'ОсОО «Ак-Жол»', 'abc', 'не число'],
-      ['E2', 2, 'E', 'ОсОО «Ак-Жол»', '5', 'месяц ещё не наступил'],
+      ['E2', 2, 'E', 'ОсОО «Ак-Жол»', '5', 'месяц ещё не начался'],
     ]);
   });
 
@@ -471,8 +653,13 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     expect((await errorOf(unreadable)).code).toBe('import_file_unreadable');
     const empty = await upload(acc, '/api/kpi/import/preview?file=a.xlsx', '');
     expect((await errorOf(empty)).code).toBe('import_file_unreadable');
-    // Строк больше предела листа (в шаблоне — до 1 000 контрагентов) — 400, файл не разбирается.
-    const tall = await upload(acc, '/api/kpi/import/preview?file=a.csv', 'ИНН\n'.repeat(5_001));
+    // Строк больше предела листа (в шаблоне — до 1 000 контрагентов × 100 показателей) — 400, файл не
+    // разбирается.
+    const tall = await upload(
+      acc,
+      '/api/kpi/import/preview?file=a.csv',
+      'ИНН\n'.repeat(KPI_IMPORT_SHEET_LIMITS.rows! + 1),
+    );
     expect(tall.status).toBe(400);
     expect(await errorOf(tall)).toMatchObject({
       code: 'import_sheet_too_big',

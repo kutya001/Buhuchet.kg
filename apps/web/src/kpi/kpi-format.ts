@@ -28,6 +28,10 @@ export const monthGenName = (t: Translate, m: YearMonth) =>
 export const monthShortName = (t: Translate, m: YearMonth) =>
   `${t(`month.short.${monthNo(m)}` as UiTextKey)} ${m.slice(2, 4)}`;
 
+/** «авг 2026» — заголовок столбца месяца «Ввода по месяцам», как в файле Excel (прототип `kxMonHead`). */
+export const monthHeadName = (t: Translate, m: YearMonth) =>
+  `${t(`month.short.${monthNo(m)}` as UiTextKey)} ${m.slice(0, 4)}`;
+
 /** Число значения без единицы; пусто — пустая строка (прототип `kNum`). */
 export const numberText = (type: IndicatorType, value: number | null) =>
   value === null ? '' : indicatorNumberText(type, value);

@@ -37,14 +37,17 @@ export interface SheetLimits {
    * `SHEET_TEXT_MAX_LENGTH`; загрузке справочников платформы нужны пояснения до 2 000 знаков.
    */
   text: number;
+  /** Байт распакованного файла (все части книги, которые читаются): больше — `sheet_too_big`. */
+  unpacked: number;
 }
 
 /** Текст ячейки — не длиннее: длиннее обрезается и кончается «…» (названия и заголовки короче). */
 export const SHEET_TEXT_MAX_LENGTH = 1_000;
 
 /**
- * Пределы по умолчанию: с запасом для самого большого шаблона «Ввода из Excel» — 1 000 контрагентов и
- * 480 000 ячеек показателей (`KPI_IMPORT_MAX_CELLS`, docs/deviations.md п. В-8).
+ * Пределы по умолчанию: строк — 5 000, непустых ячеек — 500 000, распакованный файл — 24 МБ. Шаблону
+ * «Ввода из Excel» (строка — контрагент и показатель) нужно больше — свои пределы у загрузки показателей
+ * (`KPI_IMPORT_SHEET_LIMITS`).
  */
 export const DEFAULT_SHEET_LIMITS: SheetLimits = {
   rows: 5_000,
@@ -52,13 +55,8 @@ export const DEFAULT_SHEET_LIMITS: SheetLimits = {
   cells: 500_000,
   area: 2_000_000,
   text: SHEET_TEXT_MAX_LENGTH,
+  unpacked: 24 * 1024 * 1024,
 };
-
-/**
- * Распакованный файл (все части книги, которые читаются) — не больше: шаблон на 1 000 контрагентов и
- * 24 месяца по 20 показателям — около 18 МБ.
- */
-const MAX_UNPACKED = 24 * 1024 * 1024;
 /** Значение нужного атрибута (адрес, тип, связь листа) — не длиннее: длиннее — файл испорчен. */
 const ATTR_MAX_LENGTH = 1_000;
 /** Строк и столбцов на листе Excel: адрес дальше — файл испорчен. */
@@ -478,7 +476,7 @@ function sheetRows(xml: string, shared: readonly string[], limits: SheetLimits):
 export function readXlsxRows(buf: Buffer, limits: Partial<SheetLimits> = {}): SheetCell[][] {
   const lim = limitsOf(limits);
   const entries = zipEntries(buf);
-  const budget = { left: MAX_UNPACKED };
+  const budget = { left: lim.unpacked };
   const sheetPath = firstSheetPath(entries, buf, budget);
   const sharedEntry = entries.get('xl/sharedStrings.xml');
   const shared = sharedEntry ? sharedStrings(zipText(buf, sharedEntry, budget), lim) : [];
