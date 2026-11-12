@@ -799,6 +799,20 @@
       "when": 1794500180287,
       "tag": "0113_session_log_isolation",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1794521224503,
+      "tag": "0114_activity_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1794521226883,
+      "tag": "0115_staff_activity",
+      "breakpoints": true
     }
   ]
 }

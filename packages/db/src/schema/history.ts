@@ -56,6 +56,8 @@ export const auditLog = pgTable(
     index('audit_log_contractor_idx')
       .on(t.orgId, t.contractorId, t.at)
       .where(sql`${t.contractorId} is not null`),
+    // Действия сотрудников за период: «Главная» → «Активность» (docs/decisions.md п. О-43).
+    index('audit_log_org_at_idx').on(t.orgId, t.at),
     orgIsolation('audit_log_isolation', t.orgId),
     pgPolicy('audit_log_insert_guard', {
       as: 'restrictive',

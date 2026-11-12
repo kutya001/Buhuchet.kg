@@ -25,6 +25,7 @@ import { KbAdmLevelsTab } from '../kbadm/kbadm-levels';
 import { KbAdmShowsTab } from '../kbadm/kbadm-shows';
 import { KbAdmStepsTab } from '../kbadm/kbadm-steps';
 import { KbAdmVideoTab } from '../kbadm/kbadm-video';
+import { HomeActivityTab } from '../home/home-activity';
 import { HomeAnalyticsTab } from '../home/home-analytics';
 import { HomeSummaryTab } from '../home/home-summary';
 import { KbNewsTab } from '../news/news-tab';
@@ -57,9 +58,10 @@ export function ModuleScreen({
   moduleId: MenuModuleId;
   tabId: string | null;
 }) {
-  // «Главная»: «Сводка» и «Аналитика» (задача 2.34).
+  // «Главная»: «Сводка» и «Аналитика» (задача 2.34), «Активность» (прототип v84).
   if (moduleId === 'home') {
     if (tabId === 'analytics') return <HomeAnalyticsTab />;
+    if (tabId === 'act') return <HomeActivityTab />;
     return <HomeSummaryTab />;
   }
   if (moduleId === 'kpi') return <KpiScreen tab={tabId ?? 'month'} />;
@@ -147,6 +149,7 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'home/',
   'home/today',
   'home/analytics',
+  'home/act',
   'cps/',
   'cps/all',
   'cps/mine',

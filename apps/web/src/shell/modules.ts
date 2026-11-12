@@ -128,6 +128,7 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     tabs: [
       { id: 'today', icon: 'home', label: 'tab.home.today' },
       { id: 'analytics', icon: 'chart', label: 'tab.home.analytics', when: feeVis },
+      { id: 'act', icon: 'users', label: 'tab.home.act', when: (a) => a.can('staffStats') },
     ],
   },
   cps: {

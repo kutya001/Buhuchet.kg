@@ -1,3 +1,4 @@
+import { ACTIVITY_KINDS, ACTIVITY_MAX_BACK } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, Tyiyn, Uuid } from './common';
 import { listPageSchema } from './list';
@@ -117,3 +118,117 @@ export const RevenueRow = z.object({
 export type RevenueRow = z.infer<typeof RevenueRow>;
 
 export const RevenueList = listPageSchema(RevenueRow);
+
+/*
+ * «Главная» → «Активность» (прототип v84, modules/activity.js): сотрудники организации за день, неделю,
+ * месяц или год. Только с правом «Смотреть аналитику по сотрудникам».
+ */
+
+/** Период: вид (день, неделя, месяц, год) и сдвиг назад от текущего. */
+export const ActivityPeriodParam = z.object({
+  k: z.enum(ACTIVITY_KINDS),
+  off: z.coerce.number().int().min(-ACTIVITY_MAX_BACK).max(0),
+});
+
+/** «ГГГГ-ММ-ДД ЧЧ:ММ» по Бишкеку. */
+const ActivityMoment = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+const DayTime = z.string().regex(/^\d{2}:\d{2}$/);
+
+/** Строка списка: сотрудник и его числа за период. */
+export const ActivityRow = z.object({
+  id: Uuid,
+  name: z.string(),
+  role: z.string(),
+  /** false — «заблокирован». */
+  active: z.boolean(),
+  /** Последняя активность в периоде; null — «не было». */
+  last: ActivityMoment.nullable(),
+  in: Count,
+  out: Count,
+  /** Дней с активностью. */
+  days: Count,
+  /** Действий. */
+  n: Count,
+  sub: Count,
+  late: Count,
+  due: Count,
+  over: Count,
+  cps: Count,
+  tasks: Count,
+});
+export type ActivityRow = z.infer<typeof ActivityRow>;
+
+export const ActivityList = listPageSchema(ActivityRow);
+
+/** Плашки и столбики «Активности» (прототип renderHomeAct). */
+export const ActivityOverview = z.object({
+  k: z.enum(ACTIVITY_KINDS),
+  off: z.number().int(),
+  from: IsoDate,
+  to: IsoDate,
+  today: IsoDate,
+  /** Сотрудников в списке и из них с активностью. */
+  staff: Count,
+  active: Count,
+  in: Count,
+  out: Count,
+  n: Count,
+  sub: Count,
+  late: Count,
+  /** Задач выполнено; null — «Задачи» выключены. */
+  tasks: Count.nullable(),
+  /** Действия по дням (за год — по месяцам `ГГГГ-ММ`); за день — пусто. */
+  buckets: z.array(z.object({ key: z.string(), value: Count })),
+});
+export type ActivityOverview = z.infer<typeof ActivityOverview>;
+
+/** Окно сотрудника «Активность по дням» (прототип actEmpDlg). */
+export const ActivityEmployee = z.object({
+  id: Uuid,
+  name: z.string(),
+  active: z.boolean(),
+  k: z.enum(ACTIVITY_KINDS),
+  off: z.number().int(),
+  from: IsoDate,
+  to: IsoDate,
+  last: ActivityMoment.nullable(),
+  in: Count,
+  out: Count,
+  n: Count,
+  sub: Count,
+  due: Count,
+  over: Count,
+  cps: Count,
+  /** «По дням» — от последнего дня к первому. */
+  days: z.array(
+    z.object({
+      day: IsoDate,
+      first: DayTime.nullable(),
+      last: DayTime,
+      in: Count,
+      out: Count,
+      n: Count,
+      sub: Count,
+    }),
+  ),
+  /**
+   * «По контрагентам» — контрагенты в ответственности сотрудника, по названию: только те, кого тот,
+   * кто смотрит, вправе видеть («Просматривать контрагентов» и его область).
+   */
+  contractors: z.array(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      sub: Count,
+      due: Count,
+      open: Count,
+      over: Count,
+      act: Count,
+    }),
+  ),
+  /** Остальные контрагенты сотрудника одной строкой — число и суммы без названий; null — таких нет. */
+  others: z
+    .object({ count: Count, sub: Count, due: Count, open: Count, over: Count, act: Count })
+    .nullable(),
+});
+export type ActivityEmployee = z.infer<typeof ActivityEmployee>;

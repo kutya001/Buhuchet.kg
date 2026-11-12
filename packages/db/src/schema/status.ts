@@ -63,6 +63,8 @@ export const statusHistory = pgTable(
   },
   (t) => [
     index('status_history_entity_idx').on(t.orgId, t.scale, t.entityId, t.at),
+    // Смены статусов за период: «Главная» → «Активность» (docs/decisions.md п. О-43).
+    index('status_history_org_at_idx').on(t.orgId, t.at),
     foreignKey({
       name: 'status_history_file_fk',
       columns: [t.fileId, t.orgId],

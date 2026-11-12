@@ -34,6 +34,7 @@ export * from './roles';
 export * from './org';
 export * from './onboarding';
 export * from './home';
+export * from './activity';
 export * from './kb';
 export * from './kb-video';
 export * from './news';
