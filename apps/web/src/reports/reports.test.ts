@@ -25,6 +25,8 @@ import {
   type ReportMenuRun,
 } from './report-menu';
 import { rowNeedsFile, rowNeedsReceipt } from './report-status-dialogs';
+import { boardSumText } from '../lists/board-sum';
+import { boardEmployees, reportKanban, reportMove } from './report-board';
 import { isPlateFilter, monthEnd, plateFilters } from './report-plates';
 import { noTypesHint, reportTabCounts } from './reports-data';
 
@@ -546,5 +548,152 @@ describe('плашки и счётчики', () => {
     expect(
       withTabCounts(module, reportTabCounts({ week: 0, overdue: 0, waiting: 0 })).count,
     ).toBeUndefined();
+  });
+});
+
+// Доска отчётов (прототип modules/reports.js, `repKanban`): перенос карточки делает то же, что действие
+// меню, по ответственному — меняет ответственного; остальное — отказ с причиной.
+describe('доска отчётов', () => {
+  const col = (key: string, label = key) => ({ key, label });
+  const move = (
+    r: ReportRow,
+    key: string,
+    to: { key: string; label: string },
+    who: ReportActor = actor(),
+    active?: string[],
+  ) => reportMove(t, r, who, key, to, active);
+
+  it('столбцы: статус по умолчанию; «К сдаче», «В работе», «Сдан» видны и пустыми; сумма — целыми сомами', () => {
+    const kanban = reportKanban(t, [OTHER], () => {});
+    expect(kanban.def).toBe('status');
+    expect(kanban.by).toEqual([
+      'status',
+      'responsible',
+      'cp',
+      'type',
+      'period',
+      'act',
+      'organ',
+      'paymentStatus',
+      'overdue',
+    ]);
+    expect(kanban.order?.status).toEqual([
+      'todo',
+      'in_progress',
+      'needs_fix',
+      'submitted',
+      'not_required',
+    ]);
+    expect(kanban.order?.paymentStatus).toEqual(['unpaid', 'partial', 'paid']);
+    expect(kanban.show?.status).toEqual([
+      { key: 'todo', label: 'К сдаче' },
+      { key: 'in_progress', label: 'В работе' },
+      { key: 'submitted', label: 'Сдан' },
+    ]);
+    expect(kanban.show?.responsible).toEqual([{ key: OTHER.id, label: OTHER.shortName }]);
+    expect(kanban.sum?.(125050)).toBe('1\u00a0251');
+    expect(boardSumText(0)).toBe('0');
+    expect(reportKanban(t, [], undefined).drop).toBeUndefined();
+  });
+
+  it('сотрудники-столбцы — действующие с закреплёнными контрагентами; числа не пришли — все действующие', () => {
+    const staff = [{ id: ME }, OTHER];
+    expect(boardEmployees(staff, undefined)).toEqual(staff);
+    expect(boardEmployees(staff, { counts: new Map([[ME, 2]]), complete: false })).toEqual(staff);
+    expect(boardEmployees(staff, { counts: new Map([[ME, 2]]), complete: true })).toEqual([
+      { id: ME },
+    ]);
+  });
+
+  it('по статусу: «В работе», «Сдан», «Требует исправления», «Не требуется» — действия меню', () => {
+    expect(move(report(), 'status', col('in_progress'))).toEqual({
+      kind: 'action',
+      action: 'start',
+    });
+    for (const status of ['todo', 'in_progress', 'needs_fix'] as const)
+      expect(move(report({ status }), 'status', col('submitted'))).toEqual({
+        kind: 'action',
+        action: 'submit',
+      });
+    expect(move(report({ status: 'submitted' }), 'status', col('needs_fix'))).toEqual({
+      kind: 'action',
+      action: 'reject',
+    });
+    expect(move(report(), 'status', col('not_required'))).toEqual({
+      kind: 'action',
+      action: 'not_required',
+    });
+  });
+
+  it('по статусу: отказы — нет права, только уплата, сдача после оплаты, недопустимый переход', () => {
+    expect(move(report(), 'status', col('in_progress'), actor({ changeStatus: false }))).toEqual({
+      kind: 'refusal',
+      text: 'Нет права менять статус',
+    });
+    expect(move(report({ act: 'pay' }), 'status', col('submitted'))).toEqual({
+      kind: 'refusal',
+      text: 'Это только оплата: отметьте её в меню «Отметить оплаченным»',
+    });
+    const unpaid = move(
+      report({ amount: 100000 }),
+      'status',
+      col('submitted'),
+      actor({}, { taxpay: true, payFirst: true }),
+    );
+    expect(unpaid).toEqual({
+      kind: 'refusal',
+      text: 'Сначала оплатите налог: к уплате 1\u00a0000\u00a0сом, оплачено 0\u00a0сом',
+    });
+    // Как в прототипе: у вида «Уплата» сначала «Это только оплата…», и только потом право.
+    expect(
+      move(report({ act: 'pay' }), 'status', col('submitted'), actor({ changeStatus: false })),
+    ).toEqual({
+      kind: 'refusal',
+      text: 'Это только оплата: отметьте её в меню «Отметить оплаченным»',
+    });
+    expect(move(report({ status: 'in_progress' }), 'status', col('todo', 'К сдаче'))).toEqual({
+      kind: 'refusal',
+      text: 'Из «В работе» в «К сдаче» отчёт перевести нельзя',
+    });
+    expect(move(report({ status: 'submitted' }), 'status', col('todo', 'К сдаче'))).toEqual({
+      kind: 'refusal',
+      text: 'Из «Сдан» в «К сдаче» отчёт перевести нельзя: откат — в меню отчёта',
+    });
+    // Окончательно сданный «Не требуется» не отмечается.
+    expect(
+      move(
+        report({ status: 'submitted', confirmedAt: '2026-10-20T10:00:00.000Z' }),
+        'status',
+        col('not_required', 'Не требуется'),
+      ).kind,
+    ).toBe('refusal');
+  });
+
+  it('по ответственному: право «Назначать отчёты», столбец работающего сотрудника; свой столбец — ничего', () => {
+    const r = report({ responsible: { id: ME, shortName: 'Я' } } as Partial<ReportRow>);
+    expect(move(r, 'responsible', col(OTHER.id, OTHER.shortName))).toEqual({
+      kind: 'responsible',
+      employeeId: OTHER.id,
+    });
+    expect(move(r, 'responsible', col(ME))).toEqual({ kind: 'none' });
+    expect(move(r, 'responsible', col(OTHER.id), actor({ assign: false }))).toEqual({
+      kind: 'refusal',
+      text: 'Нужно право «Назначать отчёты контрагентам»',
+    });
+    for (const to of [col(''), col(OTHER.id)])
+      expect(move(r, 'responsible', to, actor(), [ME])).toEqual({
+        kind: 'refusal',
+        text: 'Выберите столбец работающего сотрудника',
+      });
+    // Вид «Уплата» ответственного меняет: это не статус сдачи.
+    expect(move(report({ act: 'pay' }), 'responsible', col(OTHER.id)).kind).toBe('responsible');
+  });
+
+  it('по остальным столбцам перенос ничего не меняет', () => {
+    for (const key of ['cp', 'type', 'period', 'act', 'organ', 'paymentStatus', 'overdue'])
+      expect(move(report(), key, col('x'))).toEqual({
+        kind: 'refusal',
+        text: 'Перетаскиванием меняются статус сдачи и ответственный. Срок и сумма — в меню отчёта',
+      });
   });
 });

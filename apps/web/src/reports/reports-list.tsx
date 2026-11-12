@@ -47,6 +47,7 @@ import {
   reportTone,
 } from './report-columns';
 import { noTypesHint, reportSummaryQuery, type ReportListTab } from './reports-data';
+import { useReportKanban } from './use-report-board';
 
 /**
  * Быстрый фильтр «Все / Сдать / Уплатить» (прототип `S.repAct`): один на все вкладки модуля, до
@@ -170,6 +171,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
     },
     [tab, quick],
   );
+  const kanban = useReportKanban(reports.drop);
   const list = useListPage({
     gridKey,
     columns,
@@ -181,6 +183,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
     fetchPage,
     extra,
     initialFilters: preset,
+    kanban,
   });
   const { params, visible, setFilters } = list;
   const sendExport = useCallback(
@@ -365,6 +368,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
         empty={empty}
         rowKey={(r) => r.id}
         titleKey="cp"
+        kanban={kanban}
         rowTone={reportTone}
         label={t('nav.reports')}
         labels={labels}

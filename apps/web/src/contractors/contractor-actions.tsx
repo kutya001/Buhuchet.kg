@@ -2,7 +2,14 @@
 
 import { scopeOf, type ContractorKind } from '@buhuchet/domain';
 import type { Contractor, ContractorFees, ContractorRow } from '@buhuchet/shared';
-import { ConfirmDialog, useToast, type ActionEntry, type GridBulkAction } from '@buhuchet/ui';
+import {
+  ConfirmDialog,
+  useToast,
+  type ActionEntry,
+  type BoardValue,
+  type GridBulkAction,
+} from '@buhuchet/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useEnablePages } from '../contractor-page/page-box';
@@ -17,7 +24,8 @@ import { useShell } from '../shell/context';
 import { BaseChangesDialog } from './base-changes';
 import { closeContractorCard, openContractorCard, useContractorCardRequest } from './card-store';
 import { ContractorCardWindow, type ContractorCardProps } from './contractor-card';
-import { useContractorsRefresh } from './contractor-data';
+import { contractorMove } from './contractor-board';
+import { formOptionsQuery, useContractorsRefresh } from './contractor-data';
 import { EditContractorDialog, type BaseChanges } from './contractor-edit';
 import { NewContractorDialog } from './contractor-form';
 import { RegdocsDialog } from './contractor-regdocs';
@@ -81,6 +89,8 @@ const feeOfCard = (c: Contractor, f: ContractorFees | undefined): FeeMenuContrac
 export function useContractorActions(): {
   actions: (r: ContractorRow) => ActionEntry[];
   bulk: GridBulkAction<ContractorRow>[] | undefined;
+  /** Перенос карточки на доске (прототип `cpKanban.drop`): смена ответственного после вопроса. */
+  drop: (r: ContractorRow, key: string, to: BoardValue) => void;
   newContractor: (kind?: ContractorKind) => void;
   regdocs: () => void;
   card: CardActions;
@@ -115,6 +125,13 @@ export function useContractorActions(): {
   const [bases, setBases] = useState<DialogSlot<BaseChanges> | null>(null);
   const [resp, setResp] = useState<DialogSlot<RespTargets> | null>(null);
   const [remove, setRemove] = useState<{ id: string; name: string } | null>(null);
+  const [move, setMove] = useState<{
+    id: string;
+    name: string;
+    from: string;
+    to: BoardValue;
+  } | null>(null);
+  const client = useQueryClient();
   const [create, setCreate] = useState<DialogSlot<NewContractorSlot> | null>(null);
   const [regdocs, setRegdocs] = useState<DialogSlot<null> | null>(null);
   const [oneOff, setOneOff] = useState<DialogSlot<{ id: string; name: string }> | null>(null);
@@ -229,6 +246,36 @@ export function useContractorActions(): {
       : null,
   };
 
+  const drop = (r: ContractorRow, key: string, to: BoardValue) => {
+    // Действующие сотрудники известны, если их уже запрашивала форма или окно ответственного.
+    const known = client.getQueryData(formOptionsQuery.queryKey)?.employees;
+    const m = contractorMove(
+      r,
+      rights,
+      key,
+      to.key,
+      known?.map((e) => e.id),
+    );
+    if (m.kind === 'refusal') return void toast(t(m.key), { bad: true });
+    if (m.kind === 'none') return;
+    setMove({
+      id: r.id,
+      name: r.name,
+      from: r.responsible?.shortName ?? t('cp.board.confirm.none'),
+      to,
+    });
+  };
+  const moveNow = async (m: { id: string; to: BoardValue }) => {
+    const res = await callApi(() =>
+      api.api.contractors.assign.$post({
+        json: { ids: [m.id], responsibleEmployeeId: m.to.key },
+      }),
+    );
+    refresh();
+    if (!res.ok) return toast(errorText(res.error), { bad: true });
+    toast(t('cp.resp.done_one'), { icon: 'user' });
+  };
+
   const bulk: GridBulkAction<ContractorRow>[] = [
     ...(people
       ? [
@@ -319,6 +366,18 @@ export function useContractorActions(): {
         />
       ) : null}
       <ConfirmDialog
+        open={move !== null}
+        onClose={() => setMove(null)}
+        title={t('cp.board.confirm.title')}
+        text={t('cp.board.confirm.text', {
+          name: move?.name ?? '',
+          from: move?.from ?? '',
+          to: move?.to.label ?? '',
+        })}
+        ok={t('cp.board.confirm.ok')}
+        onConfirm={() => move && void moveNow(move)}
+      />
+      <ConfirmDialog
         open={remove !== null}
         onClose={() => setRemove(null)}
         title={t('cp.delete.title', { name: remove?.name ?? '' })}
@@ -373,6 +432,7 @@ export function useContractorActions(): {
   return {
     actions,
     bulk: bulk.length ? bulk : undefined,
+    drop,
     newContractor: (kind: ContractorKind = 'regular') =>
       setCreate(openSlot<NewContractorSlot>({ kind })),
     regdocs: () => setRegdocs(openSlot(null)),

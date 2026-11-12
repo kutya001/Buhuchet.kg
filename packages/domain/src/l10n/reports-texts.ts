@@ -641,6 +641,29 @@ export const REPORTS_TEXTS = {
   // «сменить» ответственного в карточке отчёта (прототип report-card.js, `#rc-resp`).
   'report.card.change_responsible': { ru: 'сменить', section: S },
   'report.responsible.done': { ru: 'Ответственный изменён', section: S },
+  // Доска отчётов (прототип v84–v87, modules/reports.js repKanban): отказы и итог переноса карточки.
+  'report.board.need_assign': {
+    ru: 'Нужно право «Назначать отчёты контрагентам»',
+    section: S,
+  },
+  'report.board.pick_employee': { ru: 'Выберите столбец работающего сотрудника', section: S },
+  'report.board.resp_done': {
+    ru: 'Ответственный за отчёт: {name}, задача перешла к нему',
+    section: S,
+  },
+  'report.board.only': {
+    ru: 'Перетаскиванием меняются статус сдачи и ответственный. Срок и сумма — в меню отчёта',
+    section: S,
+  },
+  'report.board.pay_only': {
+    ru: 'Это только оплата: отметьте её в меню «Отметить оплаченным»',
+    section: S,
+  },
+  'report.board.no_move': { ru: 'Из «{from}» в «{to}» отчёт перевести нельзя', section: S },
+  'report.board.no_move_back': {
+    ru: 'Из «{from}» в «{to}» отчёт перевести нельзя: откат — в меню отчёта',
+    section: S,
+  },
   'report.hist.field.responsible': { ru: 'Ответственный', section: S },
   // Срок «Разового отчёта» на нерабочем дне (прототип adhocDlg, `offTxt`).
   'report.manual.due_shift_hint': {

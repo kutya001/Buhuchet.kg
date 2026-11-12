@@ -89,6 +89,21 @@ export const CONTRACTOR_CARD_TEXTS = {
   'cp.resp.ok': { ru: 'Назначить', section: L },
   'cp.resp.done_one': { ru: 'Ответственный изменён', section: L },
   'cp.resp.done_many': { ru: 'Ответственный назначен: {n} контрагентов', section: L },
+  // Доска контрагентов (прототип v84, modules/contractors.js cpKanban): перенос карточки.
+  'cp.board.only': {
+    ru: 'Перетаскиванием меняется только ответственный. Остальное — в карточке контрагента',
+    section: L,
+  },
+  'cp.board.no_right': { ru: 'Нет права назначать ответственного', section: L },
+  'cp.board.archived': { ru: 'Контрагент в архиве', section: L },
+  'cp.board.pick_employee': { ru: 'Выберите столбец сотрудника', section: L },
+  'cp.board.confirm.title': { ru: 'Сменить ответственного?', section: L },
+  'cp.board.confirm.text': {
+    ru: '«{name}»: {from} → {to}. Новый ответственный получит незавершённые отчёты и открытые задачи контрагента.',
+    section: L,
+  },
+  'cp.board.confirm.none': { ru: 'без ответственного', section: L },
+  'cp.board.confirm.ok': { ru: 'Передать', section: L },
   'cp.transfer.title': { ru: 'Передать контрагентов', section: L },
   'cp.transfer.from': { ru: 'от {name}', section: L },
   'cp.transfer.to': { ru: 'Кому', section: L },
