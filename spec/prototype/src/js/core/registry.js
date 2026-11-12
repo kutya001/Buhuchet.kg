@@ -22,6 +22,7 @@ const ADM=[
  {id:'l10n',title:'Локализация',short:'Языки',icon:'globe',desc:'Словарь текстов интерфейса. Сейчас включён только русский язык; добавление других заложено в логику.',render:renderL10n},
  {id:'kb',title:'База знаний',short:'База знаний',icon:'grad',desc:'Обучение работе с системой: уроки с практикой по вашим правам, статьи инструкции и ваш уровень знаний — от «Новичка» до «Эксперта».',tabs:kbTabs,render:renderKB},
  {id:'kbadm',title:'База знаний (содержимое)',short:'Обучение',icon:'layers',desc:'Содержимое «Базы знаний» для всех организаций: статьи, шаги уроков с правами и условиями отметки, уровни. Организации его только проходят.',tabs:kbAdmTabs,add:kbAdmAdd,render:renderKbAdm},
+ {id:'tdocs',title:'Техническая документация',short:'Документация',icon:'db',desc:'Схема базы данных (ER-диаграмма) и описание API продукта со связями: какой метод какие таблицы читает и меняет, какой SQL выполняет. Только просмотр.',tabs:()=>[{id:'db',label:'Схема базы',icon:'db'},{id:'api',label:'API',icon:'code'}],render:renderTdocs},
  {id:'tg',title:'Телеграм',short:'Телеграм',icon:'tg',desc:'Бот платформы: журнал отправленных сообщений и ошибок, повтор отправки, рассылка объявлений.',tabs:()=>[{id:'log',label:'Журнал',icon:'list'},{id:'bot',label:'Бот платформы',icon:'tg'},{id:'cast',label:'Рассылка',icon:'send'}],add:()=>[{label:'Объявление',icon:'send',run:()=>go('tg','cast')}],render:renderTg},
 ];
 const mods=()=>isAdmin()?ADM:BIZ.filter(m=>(!m.feature||feat(m.feature))&&(!m.perm||can(m.perm))&&(m.id!=='fin'||taxVis()||moneyVis()));
@@ -36,6 +37,8 @@ function go(mod,tab,preset){if(OV.skip){OV.next=[mod,tab,preset];return}S.preset
 function route(){
   // #video/<код> — ссылка «Скопировать ссылку» на видео: вкладка «Видео» Базы знаний с окном видео
   if(/^#video\//.test(location.hash))vidRoute();
+  // #accounts/<логин>, #orgs/<адрес организации> — карточка пользователя или организации в Админке
+  if(/^#(accounts|orgs)\//.test(location.hash))admCardRoute();
   // #/<адрес организации>/inn/<ИНН> — страница контрагента по ссылке, открывается поверх программы
   if(pubRoute())return;if(PUB.open)pubHide();
   // #landing — лендинг buhuchet.kg для гостей, открывается поверх программы и страницы входа

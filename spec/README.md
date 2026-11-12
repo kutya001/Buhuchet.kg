@@ -1,12 +1,12 @@
 # spec/ — источник истины (только чтение)
 
-Копия ТЗ, справочников, JSON-данных и файлов прототипа из https://github.com/kutya001/DevBuhUchet.kg (коммит `42389d4`, подробности — `SOURCE.json`).
+Копия ТЗ, справочников, JSON-данных и файлов прототипа из https://github.com/kutya001/DevBuhUchet.kg (коммит `91c7709`, подробности — `SOURCE.json`).
 
 - Руками не правится: обновляется командой `pnpm spec:sync` (хук Claude Code запрещает правки).
 - `ТЗ Buhuchet.kg.md` — итоговое ТЗ; раздел модуля — правила и пункты приёмки.
 - `Справочники платформы (исчерпывающие).md`, `ГКЭД 2022 (справочник).md` — содержание справочников.
 - `Основные паттерны разработки.md` — как устроены экраны прототипа.
 - `data/*.json` — refDB (справочники платформы), gkedDB (ГКЭД), demoDB (демо-организация), TemDB (пустая организация); из них `pnpm db:seed` заливает начальное наполнение.
-- `prototype/` — исходники прототипа: `src/js/core` (правила: derive.js, gked.js, socfund.js, reference.js…), `src/js/modules` (модули), `src/js/ui` и `src/css` (интерфейс). Открыть прототип: `python3 prototype/build.py` собирает один HTML.
+- `prototype/` — исходники прототипа: `src/js/core` (правила: derive.js, gked.js, socfund.js, reference.js…), `src/js/modules` (модули), `src/js/ui` и `src/css` (интерфейс), `db` (схема базы `schema.json`, её страница `index.html`, сборщик снимка описания API). Открыть прототип: `python3 prototype/build.py` собирает один HTML.
 
 На любой вопрос — как в прототипе (`docs/decisions.md` п. О-2 продукта), расхождение — в `docs/deviations.md` (скилл `spec-deviation`).
