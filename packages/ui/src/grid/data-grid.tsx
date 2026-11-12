@@ -32,7 +32,7 @@ import {
 } from './grid-state';
 import { GridCards } from './grid-cards';
 import { GridTable, type GridTableGroups } from './grid-table';
-import { GridToolbar } from './grid-toolbar';
+import { GridFoldButton, GridToolbar, type GridFold } from './grid-toolbar';
 import { useRowEvents } from './row-events';
 import type {
   GridAudit,
@@ -236,6 +236,15 @@ export function DataGrid<Row>({
 
   const tree =
     group.length && data?.groups ? groupTree(data.groups, data.items, data.rowGroups ?? []) : null;
+  // Группы есть — одна кнопка над списком сворачивает их все или, если все свёрнуты, разворачивает.
+  const allPaths = tree && !error && !loading ? groupPaths(tree) : [];
+  const fold: GridFold | undefined = allPaths.length
+    ? {
+        shut: allPaths.every((p) => closedPaths.has(p)),
+        onToggle: () =>
+          setClosedPaths(allPaths.every((p) => closedPaths.has(p)) ? new Set() : new Set(allPaths)),
+      }
+    : undefined;
   const groups: GridTableGroups<Row> | undefined = tree
     ? {
         tree,
@@ -389,6 +398,7 @@ export function DataGrid<Row>({
         }
         group={group}
         onGroupChange={() => setClosedPaths(new Set())}
+        fold={fold}
         onExport={onExport}
         exporting={exporting}
         labels={labels}
@@ -396,6 +406,7 @@ export function DataGrid<Row>({
       {(filterKeys.length > 0 || group.length > 0 || searching) && (
         <GridChips
           group={group.map((k) => columns.find((c) => c.key === k)!.label)}
+          fold={phone && fold ? <GridFoldButton fold={fold} phone labels={labels} /> : null}
           onUngroup={() => onSettingsChange(withGroup(settings, []))}
           search={searching ? search : null}
           onClearSearch={onClearSearch}
@@ -420,21 +431,6 @@ export function DataGrid<Row>({
           data-grid-footer
         >
           <span>{labels.groupsShown(tree.length, data.total)}</span>
-          <div className="flex-1" />
-          <button
-            type="button"
-            className={linkButtonClass()}
-            onClick={() => setClosedPaths(new Set())}
-          >
-            {labels.expandAll}
-          </button>
-          <button
-            type="button"
-            className={linkButtonClass()}
-            onClick={() => setClosedPaths(new Set(groupPaths(tree)))}
-          >
-            {labels.collapseAll}
-          </button>
         </div>
       )}
       {!error &&
@@ -510,6 +506,7 @@ export function pickRows<Row>(
 export function GridChips({
   group,
   onUngroup,
+  fold,
   search,
   onClearSearch,
   filters,
@@ -519,6 +516,8 @@ export function GridChips({
 }: {
   group: readonly string[];
   onUngroup: () => void;
+  /** Телефон: значок «Свернуть все / Развернуть все» рядом с чипом «Группировка». */
+  fold?: ReactNode;
   search: string | null;
   onClearSearch?: () => void;
   filters: readonly { key: string; label: string; text: string }[];
@@ -535,6 +534,7 @@ export function GridChips({
     <div className="flex flex-wrap items-center gap-1.5" data-grid-chips>
       {group.length > 0 &&
         chip('group', labels.chipGroup, group.join(' → '), labels.ungroup, onUngroup)}
+      {group.length > 0 && fold}
       {search !== null &&
         chip('search', labels.chipSearch, `«${search}»`, labels.clearSearch, onClearSearch)}
       {filters.map((f) =>

@@ -280,6 +280,23 @@ test.describe('Списки: UnifiedDataGrid', () => {
       `Групп: ${all.groups!.length} · записей: ${all.total}`,
     );
 
+    // Одна кнопка над списком (прототип v83): «Свернуть все» прячет записи и вложенные группы и
+    // становится «Развернуть все»; на телефоне это значок у чипа «Группировка». Ссылок внизу нет.
+    const fold = grid.locator('[data-grid-fold]');
+    await expect(fold).toHaveAttribute('title', 'Свернуть все группы');
+    if (!isMobile) await expect(fold).toHaveText('Свернуть все');
+    await expect(grid.locator('[data-grid-footer]').first()).not.toContainText('Свернуть все');
+    await fold.click();
+    await expect(grid.locator('[data-id]')).toHaveCount(0);
+    await expect(grid.locator('[data-group-level="1"]')).toHaveCount(0);
+    await expect(grid.locator('[data-group-level="0"]')).toHaveCount(all.groups!.length);
+    await expect(fold).toHaveAttribute('title', 'Развернуть все группы');
+    if (!isMobile) await expect(fold).toHaveText('Развернуть все');
+    await fold.click();
+    await expect(fold).toHaveAttribute('data-grid-fold', 'collapse');
+    await expect(grid.locator(`[data-group^="${path}›"]`)).toHaveCount(accountants.sub!.length);
+    await expect(grid.locator('[data-id]').first()).toBeVisible();
+
     // Фильтр у столбца «Статус»: только «Активен».
     await grid.getByRole('button', { name: 'Фильтр: Статус' }).click();
     const filter = page.getByRole('dialog', { name: 'Статус' });
