@@ -15,6 +15,16 @@ import {
   organizationValuesRoute,
   unblockOrganizationRoute,
 } from './organizations';
+import {
+  orgActivityExportHandler,
+  orgActivityExportRoute,
+  orgActivityListHandler,
+  orgActivityListRoute,
+  orgActivityOverviewHandler,
+  orgActivityOverviewRoute,
+  orgActivityValuesHandler,
+  orgActivityValuesRoute,
+} from './org-activity';
 import { submitLeadHandler, submitLeadRoute } from './leads';
 import {
   deleteLeadHandler,
@@ -114,6 +124,10 @@ export function adminModule(deps: ApiDeps) {
       .openapi(organizationValuesRoute, organizationValuesHandler(deps))
       .openapi(exportOrganizationsRoute, exportOrganizationsHandler(deps))
       .openapi(organizationSummaryRoute, organizationSummaryHandler(deps))
+      .openapi(orgActivityOverviewRoute, orgActivityOverviewHandler(deps))
+      .openapi(orgActivityListRoute, orgActivityListHandler(deps))
+      .openapi(orgActivityValuesRoute, orgActivityValuesHandler(deps))
+      .openapi(orgActivityExportRoute, orgActivityExportHandler(deps))
       .openapi(orgLookupRoute, orgLookupHandler(deps))
       .openapi(orgCardRoute, orgCardHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))

@@ -19,6 +19,7 @@ export * from './admin/accounts';
 export * from './admin/ui-texts';
 export * from './admin/telegram';
 export * from './admin/leads';
+export * from './admin/org-activity';
 export * from './common/history';
 export * from './common/status';
 export * from './common/errors';

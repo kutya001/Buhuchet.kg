@@ -508,6 +508,8 @@ export const GRID_KEYS = [
   'kbadm.vviews',
   'accounts.list',
   'orgs.list',
+  // Админка → «Организации» → «Активность» (прототип v84).
+  'orgs.act',
   // Админка → «Организации» → «Заявки» (задача #165).
   'orgs.leads',
   'l10n.list',

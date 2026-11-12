@@ -495,6 +495,33 @@ export const ADMIN_TEXTS = {
   'err.owner_fio_required': { ru: 'Введите ФИО', section: 'Ошибки' },
   'err.org_not_found': { ru: 'Организация не найдена', section: 'Ошибки' },
   'err.demo_org': { ru: 'Демо-организацию стенда не блокируют', section: 'Ошибки' },
+  // «Организации» → «Активность» (прототип v84, modules/activity.js, renderOrgAct). Период, листание и
+  // подписи столбиков — тексты «Главной» → «Активность» (`home.act.*`).
+  'tab.orgs.act': { ru: 'Активность', section: 'Вкладки' },
+  'orgs.act.note': {
+    ru: 'Активность организаций на платформе; данные организаций администратор не видит',
+    section: S,
+  },
+  'orgs.act.load_error': { ru: 'Не удалось загрузить активность организаций.', section: S },
+  'orgs.act.plate.orgs': { ru: 'Организаций с активностью', section: S },
+  'orgs.act.plate.orgs_of': { ru: ' из {n}', section: S },
+  'orgs.act.plate.users': { ru: 'Работали в программе', section: S },
+  'orgs.act.plate.users_sub': { ru: 'пользователей', section: S },
+  'orgs.act.plate.in': { ru: 'Входов', section: S },
+  'orgs.act.plate.n': { ru: 'Действий', section: S },
+  'orgs.act.plate.sub': { ru: 'Отчётов сдано', section: S },
+  'orgs.act.plate.sub_cps': { ru: 'новых контрагентов: {n}', section: S },
+  'orgs.act.col.name': { ru: 'Организация', section: S },
+  'orgs.act.col.st': { ru: 'Статус', section: S },
+  'orgs.act.col.last': { ru: 'Последняя активность', section: S },
+  'orgs.act.col.users': { ru: 'Работали, пользователей', section: S },
+  'orgs.act.col.staff': { ru: 'Сотрудников всего', section: S },
+  'orgs.act.col.days': { ru: 'Дней с активностью', section: S },
+  'orgs.act.col.in': { ru: 'Входов', section: S },
+  'orgs.act.col.n': { ru: 'Действий', section: S },
+  'orgs.act.col.sub': { ru: 'Отчётов сдано', section: S },
+  'orgs.act.col.cps': { ru: 'Новых контрагентов', section: S },
+  'orgs.act.empty': { ru: 'Организаций нет', section: S },
 } as const satisfies Record<string, UiTextDefault>;
 
 const T = 'Техническая документация';

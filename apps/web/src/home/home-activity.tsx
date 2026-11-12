@@ -113,14 +113,14 @@ function periodLabel(t: Translate, p: ActivityPeriod, today: IsoDate): string {
 }
 
 /** «12.11.2026 14:05» из «2026-11-12 14:05». */
-const momentText = (last: string) => `${formatDateRu(last.slice(0, 10))} ${last.slice(11)}`;
+export const momentText = (last: string) => `${formatDateRu(last.slice(0, 10))} ${last.slice(11)}`;
 
-const Faint = ({ children }: { children: ReactNode }) => (
+export const Faint = ({ children }: { children: ReactNode }) => (
   <span className="text-faint">{children}</span>
 );
 
 /** Число в ячейке: ноль — бледный (прототип `actNum`). */
-const num = (v: number) => (v ? String(v) : <Faint>0</Faint>);
+export const num = (v: number) => (v ? String(v) : <Faint>0</Faint>);
 
 /** «Просрочено сейчас»: красная метка со значком (прототип `.pill.red.sm`). */
 const overdue = (v: number) =>
@@ -136,7 +136,7 @@ const overdue = (v: number) =>
  * Строка выбора периода (прототип `actBar`): день, неделя, месяц, год; «Раньше» и «Позже» (не дальше
  * текущего), подпись периода, «К текущему» и пояснение справа.
  */
-function PeriodBar({
+export function PeriodBar({
   t,
   p,
   today,
@@ -273,7 +273,7 @@ function bucketTexts(t: Translate, k: ActivityKind, b: ActivityBucket, i: number
 }
 
 /** Столбики «Действия по дням» (прототип `actChart`, стили `.act-ch`, `.act-b`). */
-function ActivityChart({
+export function ActivityChart({
   t,
   k,
   buckets,

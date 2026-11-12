@@ -1,5 +1,6 @@
 import {
   ACCOUNT_CARD_STATES,
+  ACTIVITY_KINDS,
   ACCOUNT_STATUSES,
   FULL_NAME_MAX_LENGTH,
   isValidLogin,
@@ -47,6 +48,57 @@ export type AdminOrganization = z.infer<typeof AdminOrganization>;
 /** Страница списка организаций платформы: сортировка, страницы и фильтры — на сервере. */
 export const AdminOrganizationList = listPageSchema(AdminOrganization);
 export type AdminOrganizationList = z.infer<typeof AdminOrganizationList>;
+
+/*
+ * Админка → «Организации» → «Активность» (прототип v84, modules/activity.js — `renderOrgAct`): числа
+ * организаций за день, неделю, месяц или год. Период — `ActivityPeriodParam` «Главной».
+ */
+const ActivityCount = z.number().int().nonnegative();
+
+/** Строка списка: организация и её числа за период. */
+export const OrgActivityRow = z.object({
+  id: Uuid,
+  name: z.string(),
+  /** false — «Заблокирована». */
+  active: z.boolean(),
+  /** Последняя активность в периоде, «ГГГГ-ММ-ДД ЧЧ:ММ» по Бишкеку; null — «не было». */
+  last: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+    .nullable(),
+  /** Работали, пользователей. */
+  users: ActivityCount,
+  /** Действующих сотрудников. */
+  staff: ActivityCount,
+  days: ActivityCount,
+  in: ActivityCount,
+  n: ActivityCount,
+  sub: ActivityCount,
+  cps: ActivityCount,
+});
+export type OrgActivityRow = z.infer<typeof OrgActivityRow>;
+
+export const OrgActivityList = listPageSchema(OrgActivityRow);
+
+/** Плашки и столбики «Активности» организаций (прототип renderOrgAct). */
+export const OrgActivityOverview = z.object({
+  k: z.enum(ACTIVITY_KINDS),
+  off: z.number().int(),
+  from: IsoDate,
+  to: IsoDate,
+  today: IsoDate,
+  /** Организаций всего и из них с активностью. */
+  orgs: ActivityCount,
+  active: ActivityCount,
+  users: ActivityCount,
+  in: ActivityCount,
+  n: ActivityCount,
+  sub: ActivityCount,
+  cps: ActivityCount,
+  /** Столбики «Действия по дням» (за год — по месяцам); за день — пусто. */
+  buckets: z.array(z.object({ key: z.string(), value: ActivityCount })),
+});
+export type OrgActivityOverview = z.infer<typeof OrgActivityOverview>;
 
 /**
  * Плашки над списком организаций (прототип renderOrgs): активных организаций, контрагентов на

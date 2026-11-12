@@ -13,12 +13,20 @@ export const ORG_CARD_KEY = ['admin', 'org-card'] as const;
 
 /** Ключ плашек над списком организаций. */
 export const ORGS_SUMMARY_KEY = ['admin', 'orgs-summary'] as const;
+/** Плашки и столбики вкладки «Активность» (за любой период). */
+export const ORG_ACTIVITY_KEY = ['admin', 'org-activity'] as const;
 
-/** После создания, блокировки и разблокировки — перечитать список, плашки и открытую карточку. */
+/**
+ * После создания, блокировки и разблокировки — перечитать списки («Организации» и «Активность»),
+ * плашки и открытую карточку.
+ */
 export function useOrgsRefresh() {
   const client = useQueryClient();
   return useCallback(() => {
     void client.invalidateQueries({ queryKey: ['list', 'orgs.list'] });
+    // Вкладка «Активность»: статус организации в списке и «из стольких» в плашке.
+    void client.invalidateQueries({ queryKey: ['list', 'orgs.act'] });
+    void client.invalidateQueries({ queryKey: ORG_ACTIVITY_KEY });
     void client.invalidateQueries({ queryKey: ORGS_SUMMARY_KEY });
     void client.invalidateQueries({ queryKey: ORG_CARD_KEY });
   }, [client]);

@@ -5,6 +5,7 @@ import { AccountsList } from '../admin/accounts-list';
 import { ContractorsList } from '../contractors/contractors-list';
 import { L10nList } from '../admin/l10n-list';
 import { LeadsList } from '../admin/leads-list';
+import { OrgsActivity } from '../admin/orgs-activity';
 import { OrgsList } from '../admin/orgs-list';
 import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
@@ -132,7 +133,10 @@ export function ModuleScreen({
     return <ModuleStub moduleId={moduleId} />;
   }
   if (moduleId === 'accounts') return <AccountsList />;
-  if (moduleId === 'orgs') return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
+  if (moduleId === 'orgs') {
+    if (tabId === 'act') return <OrgsActivity />;
+    return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
+  }
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;
@@ -183,6 +187,7 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'kbadm/vviews',
   'orgs/',
   'orgs/list',
+  'orgs/act',
   'l10n/',
   'tg/',
   'tg/log',
