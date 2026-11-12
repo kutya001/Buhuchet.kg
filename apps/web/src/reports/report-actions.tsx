@@ -13,6 +13,7 @@ import {
   RollbackDialog,
   useToast,
   type ActionEntry,
+  type BoardValue,
   type GridBulkAction,
 } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
@@ -26,6 +27,7 @@ import { TaxReminderDialog } from '../finance/tax-reminder';
 import { lastPayment, payFirstWhy } from '../money/report-money';
 import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
+import { reportMove } from './report-board';
 import { ReportCardWindow, reportToday } from './report-card';
 import { DueChangeDialog, ManualReportDialog } from './report-dialogs';
 import {
@@ -50,6 +52,7 @@ import {
   dueReasonsQuery,
   manualOptionsQuery,
   reportQuery,
+  responsibleOptionsQuery,
   useReportsRefresh,
 } from './reports-data';
 import type { ReportListTab } from './reports-data';
@@ -86,6 +89,11 @@ export function useReportActions(): {
   submit: (r: { id: string }) => void;
   /** «Взять в работу» отчёта «К сдаче» — и переносом регулярной задачи на доске задач. */
   start: (r: { id: string; version: number }) => void;
+  /**
+   * Перенос карточки на доске отчётов (прототип `repKanban.drop`); нет вошедшего сотрудника — доска
+   * только для просмотра.
+   */
+  drop: ((r: ReportRow, key: string, to: BoardValue) => void) | undefined;
   bulk: (tab: ReportListTab | 'calendar') => GridBulkAction<ReportRow>[];
   newReport: () => void;
   /** «Принять» в строке списка: с «Учётом оплаты налогов» и правом «Учёт денег», иначе null. */
@@ -205,7 +213,11 @@ export function useReportActions(): {
   };
 
   /** «сменить» ответственного в карточке (прототип `#rc-resp`). */
-  const changeResponsible = async (r: ReportCard, employeeId: string) => {
+  const changeResponsible = async (
+    r: Pick<ReportRow, 'id' | 'version' | 'responsible'>,
+    employeeId: string,
+    done: string = t('report.responsible.done'),
+  ) => {
     if (employeeId === r.responsible?.id) return;
     const res = await once(r.id, () =>
       callApi(() =>
@@ -218,7 +230,7 @@ export function useReportActions(): {
     if (!res) return;
     refresh();
     if (!res.ok) return void toast(errorText(res.error), { bad: true });
-    toast(t('report.responsible.done'), { icon: 'user' });
+    toast(done, { icon: 'user' });
   };
 
   /** «Отметить оплаченным» — по свежей карточке: деньги контрагента и график на сейчас. */
@@ -305,6 +317,32 @@ export function useReportActions(): {
     not_required: setNotRequired,
   };
   const actions = actor ? reportMenuEntries({ t, actor, run }) : () => [];
+
+  /**
+   * Перенос карточки на доске в столбец `to` столбца списка `key` (прототип `repKanban.drop`): то же,
+   * что действие в меню отчёта, а по ответственному — смена ответственного; отказ — уведомлением.
+   */
+  const drop = (r: ReportRow, key: string, to: BoardValue) => {
+    if (!actor) return;
+    // Действующих сотрудников доска уже запросила (тому, кто назначает отчёты); нет списка — не знаем.
+    const known = client.getQueryData(responsibleOptionsQuery.queryKey)?.employees;
+    const move = reportMove(
+      t,
+      r,
+      actor,
+      key,
+      to,
+      known?.map((e) => e.id),
+    );
+    if (move.kind === 'refusal') return void toast(move.text, { bad: true });
+    if (move.kind === 'responsible')
+      return void changeResponsible(
+        r,
+        move.employeeId,
+        t('report.board.resp_done', { name: to.label }),
+      );
+    if (move.kind === 'action') run[move.action](r);
+  };
   const cardActions = actor ? reportMenuEntries({ t, actor, run, card: true }) : () => [];
 
   /**
@@ -565,6 +603,7 @@ export function useReportActions(): {
     openCard,
     submit: (r) => void openDialog(r, 'submit'),
     start: (r) => void step(r, 'start'),
+    drop: actor ? drop : undefined,
     bulk,
     newReport: () => void newReport(),
     receive: actor?.taxpay && actor.can.money ? openReceive : null,

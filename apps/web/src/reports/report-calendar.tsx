@@ -39,6 +39,7 @@ import {
   reportTone,
 } from './report-columns';
 import { reportCalendarQuery, reportSummaryQuery } from './reports-data';
+import { useReportKanban } from './use-report-board';
 
 type Day = ReportCalendar['days'][number];
 
@@ -276,6 +277,7 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
     },
     [day],
   );
+  const kanban = useReportKanban(reports.drop);
   const list = useListPage({
     gridKey: 'reports.calendar',
     columns,
@@ -286,6 +288,7 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
     enabled: view.ready,
     fetchPage,
     extra,
+    kanban,
   });
   const { params, visible } = list;
   const sendExport = useCallback(
@@ -320,6 +323,7 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
         empty={<EmptyState icon="calendar" title={t('report.cal.empty')} />}
         rowKey={(r) => r.id}
         titleKey="cp"
+        kanban={kanban}
         rowTone={reportTone}
         label={t('report.cal.list', { date: formatDateRu(day) })}
         labels={labels}

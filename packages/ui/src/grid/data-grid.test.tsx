@@ -644,6 +644,26 @@ describe('UnifiedDataGrid: доска (прототип v84, ui/grid.js kanbanHt
     expect([...movable.matchAll(/data-row-menu/g)]).toHaveLength(3);
   });
 
+  it('сумма в шапке столбца: свой формат доски (`sum`); у столбца с записями без сумм — ноль, у пустого суммы нет', () => {
+    const html = board({
+      kanban: { ...KANBAN, sum: (value: number) => `≈${value / 100}` },
+      data: {
+        items: people(3),
+        total: 12,
+        page: 1,
+        totals: {},
+        groups: [
+          { key: 'no', label: 'Заблокирован', count: 5, aggs: {} },
+          { key: 'yes', label: 'Активен', count: 7, aggs: { balance: 700 } },
+        ],
+        rowGroups: [['yes'], ['no'], ['yes']],
+      },
+    });
+    const sums = [...html.matchAll(/data-board-sum="[^"]*"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    // «Активен» — 700, «Заблокирован» — без сумм, ноль; у пустого «Новый» суммы нет.
+    expect(sums).toEqual(['≈7', '≈0']);
+  });
+
   it('у списка без доски сохранённая «Доска» открывается таблицей, третьей кнопки вида нет', () => {
     const html = grid({ settings: { view: 'kanban' } });
     expect(html).toContain('<table');

@@ -29,6 +29,7 @@ export function GridKanban<Row>({
   titleKey,
   boardKey,
   sumKey,
+  sumText,
   board,
   cut,
   rowKey,
@@ -51,6 +52,8 @@ export function GridKanban<Row>({
   boardKey: string;
   /** Столбец с суммой в шапке столбца доски (первый видимый с итогом). */
   sumKey?: string;
+  /** Свой формат суммы в шапке (`GridKanban.sum`); нет — формат итога столбца. */
+  sumText?: (value: number) => string;
   board: readonly BoardColumn<Row>[];
   /** Столбцов больше, чем показано: сколько всего; 0 — показаны все. */
   cut: number;
@@ -138,7 +141,8 @@ export function GridKanban<Row>({
     const name = col.label ?? labels.empty;
     const limit = boardLimit(more, col.key);
     const rest = boardMore(col.rows.length, limit);
-    const total = sum?.total && col.count ? col.aggs[sum.key] : null;
+    // Как в прототипе: у столбца с записями сумма видна всегда, без сумм — ноль.
+    const total = sum?.total && col.count ? (col.aggs[sum.key] ?? 0) : null;
     const target = drag !== null && over === col.key && drag.from !== col.key;
     return (
       <section
@@ -184,7 +188,7 @@ export function GridKanban<Row>({
               data-board-sum
               className="ml-auto flex-none text-[12px] text-muted tabular-nums"
             >
-              {sum.total(total)}
+              {(sumText ?? sum.total)(total)}
             </span>
           )}
         </header>

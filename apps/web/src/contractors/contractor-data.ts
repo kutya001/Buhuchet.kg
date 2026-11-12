@@ -132,6 +132,22 @@ export const responsibleCountsQuery = queryOptions({
   },
 });
 
+/**
+ * Сотрудники, за которыми закреплены контрагенты вкладки списка, — столбцы доски «по ответственному»,
+ * видные и пустыми (прототип `cpKanban`, `show.resp`). Значения — того же списка, что видит сотрудник.
+ */
+export const boardResponsibleQuery = (tab: 'all' | 'mine' | 'debtors') =>
+  queryOptions({
+    queryKey: ['contractors', 'board-responsible', tab],
+    queryFn: async () => {
+      const res = await api.api.contractors.values.$get({ query: { col: 'responsible', tab } });
+      if (!res.ok) throw await apiFailure(res);
+      return ListValues.parse(await res.json())
+        .items.filter((v) => v.value !== '' && v.label !== null)
+        .map((v) => ({ key: v.value, label: v.label ?? '' }));
+    },
+  });
+
 /** Закреплённые за сотрудником контрагенты (вкладка «Контрагенты» карточки сотрудника). */
 export const employeeContractorsQuery = (employeeId: string) =>
   queryOptions({

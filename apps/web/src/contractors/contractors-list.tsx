@@ -32,7 +32,8 @@ import {
   contractorColumns,
   contractorTone,
 } from './contractor-columns';
-import { contractorSummaryQuery } from './contractor-data';
+import { contractorKanban } from './contractor-board';
+import { boardResponsibleQuery, contractorSummaryQuery } from './contractor-data';
 
 /** «Все», «Мои контрагенты», «Должники» (с долгом за обслуживание; при «Плате за обслуживание»). */
 export type ContractorTab = 'all' | 'mine' | 'debtors';
@@ -109,6 +110,11 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
     },
     [tab],
   );
+  const cps = useContractorActions();
+  // Столбцы сотрудников, видные и пустыми, — те, за кем закреплены контрагенты этой вкладки (прототип
+  // `cpKanban`, `show.resp`).
+  const boardStaff = useQuery(boardResponsibleQuery(tab));
+  const kanban = contractorKanban<ContractorRow>(t, boardStaff.data ?? [], cps.drop);
   const list = useListPage({
     gridKey,
     columns,
@@ -119,6 +125,7 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
     enabled: view.ready,
     fetchPage,
     extra,
+    kanban,
   });
   const { params, visible, filters, setFilters } = list;
   const sendExport = useCallback(
@@ -126,7 +133,6 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
-  const cps = useContractorActions();
   const importer = useContractorImport();
   useContractorAddRequest({
     contractor: cps.newContractor,
@@ -309,6 +315,7 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
         empty={empty}
         rowKey={(r) => r.id}
         titleKey="name"
+        kanban={kanban}
         rowTone={contractorTone}
         label={t('nav.counterparties')}
         labels={labels}

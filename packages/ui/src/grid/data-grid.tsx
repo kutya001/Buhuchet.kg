@@ -394,6 +394,7 @@ export function DataGrid<Row>({
         titleKey={titleKey}
         boardKey={kbKey}
         sumKey={visible.find((c) => c.total)?.key}
+        sumText={kanban?.sum}
         board={board.columns}
         cut={board.cut}
         rowKey={rowKey}

@@ -67,6 +67,7 @@ import {
   useMoneyTabOn,
 } from '../money/contractor-money';
 import { useReportActions } from '../reports/report-actions';
+import { useReportKanban } from '../reports/use-report-board';
 import {
   REPORT_AUDIT,
   REPORT_DEFAULT_SORT,
@@ -1031,6 +1032,7 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
     },
     [contractorId],
   );
+  const kanban = useReportKanban(reports.drop);
   const list = useListPage({
     gridKey: REPORTS_GRID,
     columns,
@@ -1041,6 +1043,7 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
     enabled: view.ready,
     fetchPage,
     extra,
+    kanban,
   });
   const { params, visible } = list;
   const sendExport = useCallback(
@@ -1072,6 +1075,7 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
         empty={<EmptyState icon="file" title={t('cp.card.reports_empty')} />}
         rowKey={(r) => r.id}
         titleKey="type"
+        kanban={kanban}
         rowTone={reportTone}
         label={t('cp.card.tab.reports')}
         labels={labels}
