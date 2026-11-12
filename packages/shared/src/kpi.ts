@@ -5,6 +5,7 @@ import {
   INDICATOR_NAME_MAX_LENGTH,
   INDICATOR_NOTE_MAX_LENGTH,
   INDICATOR_SCOPES,
+  INDICATOR_TAX_ROLES,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   INDICATOR_UNIT_MAX_LENGTH,
@@ -45,6 +46,8 @@ const IndicatorBody = {
   scope: z.enum(INDICATOR_SCOPES),
   /** «Включать новых контрагентов автоматически». */
   autoNew: z.boolean(),
+  /** «Для расчёта налогов»: выручка, ФОТ, численность; null — «Не используется». */
+  taxRole: z.enum(INDICATOR_TAX_ROLES).nullable(),
 };
 
 /** Показатель в «Настройке показателей». */
@@ -513,3 +516,98 @@ export const KpiGridExport = z.strictObject({
   q: z.string().max(200).optional(),
 });
 export type KpiGridExport = z.infer<typeof KpiGridExport>;
+
+/* ───────────── «Расчёт по показателям» в окнах отчёта ───────────── */
+
+export const KpiTaxParams = z.object({ reportId: Uuid });
+
+const Money = z.number().int().refine(Number.isSafeInteger);
+
+/** Итог блока под таблицей показателей (правило `taxResult` домена); суммы — тыйыны. */
+export const KpiTaxResult = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('no_indicator') }),
+  z.object({ kind: z.literal('missing'), indicator: z.string(), months: z.array(YearMonth) }),
+  z.object({ kind: z.literal('no_tariff') }),
+  z.object({
+    kind: z.literal('socfund'),
+    /** Тариф кратко («СПиНО») и его итоговая ставка («12,25 %»). */
+    tariff: z.string(),
+    total: z.string(),
+    incomeTax: Money,
+    contributions: Money,
+    incomeRate: z.number(),
+    workerRate: z.number(),
+    capped: z.boolean(),
+    cap: Money,
+    /** Ключи строк «Подоходный налог» и «Страховые взносы» окна; нет обеих — сумма идёт в итог. */
+    incomeKey: z.string().nullable(),
+    contributionsKey: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal('line'),
+    key: z.string(),
+    label: z.string(),
+    revenue: Money,
+    tax: Money,
+  }),
+  z.object({
+    kind: z.literal('lines'),
+    revenue: Money,
+    lines: z.array(z.object({ key: z.string(), label: z.string() })),
+  }),
+  z.object({ kind: z.literal('no_rate'), revenue: Money, vat: z.boolean() }),
+  z.object({ kind: z.literal('rate'), pct: z.string(), revenue: Money, amount: Money }),
+]);
+export type KpiTaxResult = z.infer<typeof KpiTaxResult>;
+
+/**
+ * «Расчёт по показателям» окон «Сумма к уплате» и «Отметить сданным» (прототип v80 modules/kpi-tax.js):
+ * значения показателей с отметкой «Для расчёта налогов» за месяцы периода отчёта и подсказка суммы.
+ * `box: null` — блока у отчёта нет (вид без расчёта, период не с первого числа, контрагент вне области
+ * показателей сотрудника).
+ */
+export const KpiTaxBox = z.object({
+  box: z
+    .object({
+      contractor: z.object({ id: Uuid, name: z.string() }),
+      /** Основной показатель расчёта: ФОТ — у «Соцфонда», выручка — у налогов от выручки. */
+      main: z.enum(['rev', 'fot']),
+      months: z.array(YearMonth),
+      /** Текущий месяц по Бишкеку: «Вести» ставит «с <месяц>» не позже него. */
+      current: YearMonth,
+      /** Право «Настраивать показатели»: подсказка, где отметить показатель, и кнопка «Вести». */
+      canSetup: z.boolean(),
+      /** Вносит значения этого контрагента: пустые месяцы — поля ввода. */
+      editable: z.boolean(),
+      rows: z.array(
+        z.object({
+          role: z.enum(INDICATOR_TAX_ROLES),
+          indicator: z.object({
+            id: Uuid,
+            name: z.string(),
+            unit: z.string(),
+            type: z.enum(INDICATOR_TYPES),
+          }),
+          /** Показатель у контрагента ведётся; нет — метка «не ведётся» и «Вести». */
+          on: z.boolean(),
+          offSince: YearMonth.nullable(),
+          canTurnOn: z.boolean(),
+          /** «с <месяц>» у контрагента. */
+          start: YearMonth,
+          cells: z.array(
+            z.object({
+              month: YearMonth,
+              value: IndicatorValue,
+              /** Ячейка — поле ввода (сотрудник вносит значения, месяц наступил, показатель ведётся). */
+              input: z.boolean(),
+            }),
+          ),
+          /** «Итого» при периоде длиннее месяца: сумма, у численности — среднее; null — «—». */
+          total: IndicatorValue,
+        }),
+      ),
+      result: KpiTaxResult,
+    })
+    .nullable(),
+});
+export type KpiTaxBox = z.infer<typeof KpiTaxBox>;

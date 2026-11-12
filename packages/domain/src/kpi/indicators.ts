@@ -25,6 +25,23 @@ export const INDICATOR_UNITS = ['сом', 'чел.', 'шт.', '%'] as const;
 export const INDICATOR_SCOPES = ['all', 'selected'] as const;
 export type IndicatorScope = (typeof INDICATOR_SCOPES)[number];
 
+/**
+ * «Для расчёта налогов» (прототип v80 modules/kpi-tax.js: KTAX, KTAX_TYPES): значения показателя идут в
+ * «Расчёт по показателям» окон «Сумма к уплате» и «Отметить сданным». `rev` — выручка: база единого
+ * налога, налога с продаж и отчислений ПВТ; `fot` — ФОТ: база подоходного налога и взносов в Соцфонд;
+ * `emp` — численность: предел базы взносов на работника. Отметка — у одного действующего показателя
+ * организации на каждую роль (docs/deviations.md п. О-62).
+ */
+export const INDICATOR_TAX_ROLES = ['rev', 'fot', 'emp'] as const;
+export type IndicatorTaxRole = (typeof INDICATOR_TAX_ROLES)[number];
+
+/** Типы значения, с которыми отметку можно поставить: выручка и ФОТ — деньги, численность — целое. */
+export const TAX_ROLE_TYPES: Readonly<Record<IndicatorTaxRole, readonly IndicatorType[]>> = {
+  rev: ['som', 'dec'],
+  fot: ['som', 'dec'],
+  emp: ['int'],
+};
+
 /** Срок заполнения — число следующего месяца: от 1 до 28, по умолчанию 10-е. */
 export const DUE_DAY_MIN = 1;
 export const DUE_DAY_MAX = 28;
@@ -53,13 +70,16 @@ export interface IndicatorInput {
   scope: IndicatorScope;
   /** «Включать новых контрагентов автоматически»; при «Всем контрагентам» всегда включено. */
   autoNew: boolean;
+  /** «Для расчёта налогов»; null — «Не используется». */
+  taxRole: IndicatorTaxRole | null;
 }
 
 /**
  * Показатели по умолчанию новой организации (ТЗ «Показатели контрагентов», решение заказчика
  * 06.11.2026; прототип v74 — `indicators` пустого шаблона TemDB.json): «Выручка» — сом, итог сумма;
  * «Количество сотрудников» — чел., итог среднее; «ФОТ» — сом, итог сумма. Описания и обязательность —
- * как в прототипе. Организациям, созданным раньше, «ФОТ» добавила миграция 0090.
+ * как в прототипе. Организациям, созданным раньше, «ФОТ» добавила миграция 0090. Отметки «Для расчёта
+ * налогов» — как в шаблоне прототипа v80; у прежних организаций их расставила миграция 0110.
  */
 export const DEFAULT_INDICATORS: readonly Omit<IndicatorInput, 'start'>[] = [
   {
@@ -73,6 +93,7 @@ export const DEFAULT_INDICATORS: readonly Omit<IndicatorInput, 'start'>[] = [
     dueDay: DUE_DAY_DEFAULT,
     scope: 'all',
     autoNew: true,
+    taxRole: 'rev',
   },
   {
     name: 'Количество сотрудников',
@@ -85,6 +106,7 @@ export const DEFAULT_INDICATORS: readonly Omit<IndicatorInput, 'start'>[] = [
     dueDay: DUE_DAY_DEFAULT,
     scope: 'all',
     autoNew: true,
+    taxRole: 'emp',
   },
   {
     name: 'ФОТ',
@@ -96,6 +118,7 @@ export const DEFAULT_INDICATORS: readonly Omit<IndicatorInput, 'start'>[] = [
     dueDay: DUE_DAY_DEFAULT,
     scope: 'all',
     autoNew: true,
+    taxRole: 'fot',
   },
 ];
 
@@ -111,10 +134,13 @@ export const INDICATOR_PROBLEMS = [
   'type_locked',
   'unit_locked',
   'targets_required',
+  'tax_role_taken',
+  'tax_role_int',
+  'tax_role_money',
 ] as const;
 export type IndicatorProblem = (typeof INDICATOR_PROBLEMS)[number];
 export type IndicatorField =
-  'name' | 'unit' | 'type' | 'description' | 'dueDay' | 'start' | 'scope';
+  'name' | 'unit' | 'type' | 'description' | 'dueDay' | 'start' | 'scope' | 'taxRole';
 
 /** Тексты ошибок — как в окне показателя прототипа (indDlg). */
 export const INDICATOR_MESSAGES: Record<IndicatorProblem, string> = {
@@ -129,6 +155,9 @@ export const INDICATOR_MESSAGES: Record<IndicatorProblem, string> = {
   type_locked: 'Нельзя менять: по показателю уже есть значения',
   unit_locked: 'Нельзя менять: по показателю уже есть значения',
   targets_required: 'Выберите хотя бы одного контрагента',
+  tax_role_taken: 'Эта отметка уже у показателя «{name}»: снимите её там',
+  tax_role_int: 'Нужен тип значения «Целое число»',
+  tax_role_money: 'Нужен тип значения «Сумма в сом» или «Число с копейками»',
 };
 
 export interface IndicatorCheck {
@@ -140,15 +169,25 @@ export interface IndicatorCheck {
   before?: { type: IndicatorType; unit: string; hasValues: boolean };
   /** «Выбранным»: сколько контрагентов отмечено. */
   selected?: number;
+  /** Отметки «Для расчёта налогов» остальных действующих (не архивных) показателей. */
+  otherTaxRoles?: readonly { role: IndicatorTaxRole; name: string }[];
+}
+
+/** Ошибка поля показателя; `params` — подстановки текста (название показателя с той же отметкой). */
+export interface IndicatorProblemAt {
+  field: IndicatorField;
+  problem: IndicatorProblem;
+  params?: { name: string };
 }
 
 /** Все ошибки показателя по полям (одни и те же в окне и на сервере). */
 export function indicatorProblems(
   input: IndicatorInput,
   check: IndicatorCheck,
-): { field: IndicatorField; problem: IndicatorProblem }[] {
-  const out: { field: IndicatorField; problem: IndicatorProblem }[] = [];
-  const add = (field: IndicatorField, problem: IndicatorProblem) => out.push({ field, problem });
+): IndicatorProblemAt[] {
+  const out: IndicatorProblemAt[] = [];
+  const add = (field: IndicatorField, problem: IndicatorProblem, params?: { name: string }) =>
+    out.push({ field, problem, ...(params ? { params } : {}) });
   const name = input.name.trim();
   if (!name) add('name', 'name_required');
   else if (name.length > INDICATOR_NAME_MAX_LENGTH) add('name', 'name_too_long');
@@ -168,6 +207,14 @@ export function indicatorProblems(
   }
   if (input.start > check.currentMonth) add('start', 'start_in_future');
   if (input.scope === 'selected' && (check.selected ?? 0) === 0) add('scope', 'targets_required');
+  if (input.taxRole) {
+    // Как в прототипе (indDlg): сначала «отметка уже у другого показателя», потом тип значения.
+    const taken = check.otherTaxRoles?.find((o) => o.role === input.taxRole);
+    if (taken) add('taxRole', 'tax_role_taken', { name: taken.name });
+    else if (!TAX_ROLE_TYPES[input.taxRole].includes(input.type)) {
+      add('taxRole', input.taxRole === 'emp' ? 'tax_role_int' : 'tax_role_money');
+    }
+  }
   return out;
 }
 

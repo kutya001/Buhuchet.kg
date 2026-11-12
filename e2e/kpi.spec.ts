@@ -45,6 +45,7 @@ type Indicator = {
   start: string;
   scope: 'all' | 'selected';
   autoNew: boolean;
+  taxRole: 'rev' | 'fot' | 'emp' | null;
   version: number;
 };
 
@@ -155,6 +156,7 @@ async function editIndicator(
       start: card.start,
       scope: card.scope,
       autoNew: card.autoNew,
+      taxRole: card.taxRole,
       selected: card.selected,
       version: card.version,
       ...patch,

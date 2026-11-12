@@ -145,6 +145,7 @@ async function importOrg(api: APIRequestContext, origin: string): Promise<Org> {
       start: card.start,
       scope: 'selected',
       autoNew: false,
+      taxRole: card.taxRole,
       selected: [ids['ОсОО «Гамма»']],
       version: card.version,
     },

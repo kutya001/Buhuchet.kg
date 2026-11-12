@@ -138,3 +138,32 @@ export function readAmount(
   if (Number.isNaN(amount)) return { ok: false, field: 'amount' };
   return { ok: true, amount, lines };
 }
+
+/** «Подставить» блока «Расчёт по показателям» (прототип modules/kpi-tax.js: kTaxBind, `data-ktx-go`). */
+export type TaxFill =
+  /** В поле суммы: налог по ставке назначения; подоходный налог и взносы, когда строк платежей нет. */
+  | { kind: 'amount'; amount: Tyiyn }
+  /** Выручка — в строку по ставке: налог строки посчитается сам. */
+  | { kind: 'revenue'; key: string; revenue: Tyiyn }
+  /** Суммы — в строки платежей («Подоходный налог», «Страховые взносы»). */
+  | { kind: 'parts'; parts: readonly { key: string; tax: Tyiyn }[] };
+
+/** Поля окна после «Подставить»; строки с таким ключом в окне нет — null (поля не меняются). */
+export function withTaxFill(
+  defs: readonly LineDef[],
+  form: AmountForm,
+  fill: TaxFill,
+): AmountForm | null {
+  if (fill.kind === 'amount') return { ...form, amount: som(fill.amount) };
+  if (fill.kind === 'revenue') {
+    const k = defs.findIndex((d) => d.key === fill.key && d.kind === 'rate');
+    return k < 0 ? null : withRevenue(defs, form, k, som(fill.revenue));
+  }
+  let next = form;
+  for (const part of fill.parts) {
+    const k = defs.findIndex((d) => d.key === part.key);
+    if (k < 0) return null;
+    next = withTax(defs, next, k, som(part.tax));
+  }
+  return next;
+}

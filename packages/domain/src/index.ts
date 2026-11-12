@@ -77,6 +77,7 @@ export * from './kpi/fill';
 export * from './kpi/targets';
 export * from './kpi/views';
 export * from './kpi/excel';
+export * from './kpi/tax';
 export * from './files/files';
 export * from './files/manager';
 export * from './kb/catalog';

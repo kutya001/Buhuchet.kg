@@ -2,6 +2,7 @@ import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import { cardHandler, cardRoute } from './card';
 import { gridExportHandler, gridExportRoute, gridHandler, gridRoute } from './grid';
+import { taxBoxHandler, taxBoxRoute } from './tax';
 import {
   archiveIndicatorHandler,
   archiveIndicatorRoute,
@@ -95,6 +96,7 @@ export function kpiModule(deps: ApiDeps) {
     .openapi(rollbackMonthRoute, rollbackMonthHandler(deps))
     .openapi(gridRoute, gridHandler(deps))
     .openapi(gridExportRoute, gridExportHandler(deps))
+    .openapi(taxBoxRoute, taxBoxHandler(deps))
     .openapi(periodRoute, periodHandler(deps))
     .openapi(periodValuesRoute, periodValuesHandler(deps))
     .openapi(periodExportRoute, periodExportHandler(deps))

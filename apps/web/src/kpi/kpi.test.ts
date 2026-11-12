@@ -143,6 +143,25 @@ describe('история показателя словами', () => {
     );
   });
 
+  it('отметка «Для расчёта налогов»: роль словами, без отметки — «не используется»', () => {
+    expect(
+      indicatorHistoryText(t, item('update', [{ field: 'taxRole', from: null, to: 'rev' }])),
+    ).toBe('Для расчёта налогов: не используется → Выручка');
+    expect(
+      indicatorHistoryText(t, item('update', [{ field: 'taxRole', from: 'fot', to: 'emp' }])),
+    ).toBe('Для расчёта налогов: ФОТ → Численность');
+    // Возврат из архива снял отметку, занятую другим показателем.
+    expect(
+      indicatorHistoryText(
+        t,
+        item('archive', [
+          { field: 'archived', from: true, to: false },
+          { field: 'taxRole', from: 'rev', to: null },
+        ]),
+      ),
+    ).toBe('Возвращён из архива; Для расчёта налогов: Выручка → не используется');
+  });
+
   it('у контрагента: «Ведётся» → «Не ведётся» и «вести с», архив', () => {
     expect(
       indicatorHistoryText(

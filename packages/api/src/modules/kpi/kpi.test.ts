@@ -171,6 +171,7 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
       start: '2026-10',
       scope: 'all',
       autoNew: true,
+      taxRole: null,
       selected: [],
     };
     expect((await call(acc, 'POST', '/api/kpi/indicators', body)).status).toBe(403);

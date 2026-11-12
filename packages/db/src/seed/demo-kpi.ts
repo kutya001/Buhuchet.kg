@@ -1,4 +1,4 @@
-import { INDICATOR_TOTALS, INDICATOR_TYPES } from '@buhuchet/domain';
+import { INDICATOR_TAX_ROLES, INDICATOR_TOTALS, INDICATOR_TYPES } from '@buhuchet/domain';
 import { z } from 'zod';
 import type { Db } from '../client';
 import { indicatorMonths, indicators, indicatorTargets, indicatorValues } from '../schema';
@@ -30,6 +30,8 @@ const DemoIndicator = z.object({
   archived: z.boolean().default(false),
   order: z.number().int(),
   autoNew: z.boolean().default(true),
+  /** «Для расчёта налогов» (прототип v80): выручка, ФОТ, численность. */
+  tax: z.enum(INDICATOR_TAX_ROLES).optional(),
   /** Контрагенты, которые были при выборе «Выбранным»: остальные для показателя новые. */
   seen: z.array(z.number().int()).default([]),
   /** Выключен у контрагента с месяца — «Не ведётся с …». */
@@ -93,6 +95,7 @@ export async function seedDemoKpi(db: Db, file: unknown, orgId: string): Promise
         scope: i.scope === 'all' ? ('all' as const) : ('selected' as const),
         autoNew: i.scope === 'all' || i.autoNew,
         archived: i.archived,
+        taxRole: i.tax ?? null,
         sortOrder: i.order,
         createdBy: user(i._cb),
         updatedBy: user(i._cb),

@@ -1,5 +1,6 @@
 import {
   INDICATOR_SCOPES,
+  INDICATOR_TAX_ROLES,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   monthText,
@@ -26,6 +27,13 @@ function valueOf(t: Translate, field: string, v: unknown): string {
   if (field === 'scope' && INDICATOR_SCOPES.includes(v as never)) {
     return t(`kpi.scope.${v as (typeof INDICATOR_SCOPES)[number]}`);
   }
+  if (field === 'taxRole') {
+    return t(
+      INDICATOR_TAX_ROLES.includes(v as never)
+        ? `kpi.tax.name.${v as (typeof INDICATOR_TAX_ROLES)[number]}`
+        : 'kpi.tax.name.none',
+    );
+  }
   if ((field === 'startMonth' || field === 'fromMonth') && typeof v === 'string') {
     return monthText(v);
   }
@@ -38,6 +46,7 @@ const FIELD_KEYS = {
   unit: 'kpi.field.unit',
   type: 'kpi.field.type',
   total: 'kpi.field.total',
+  taxRole: 'kpi.field.tax_role',
   description: 'kpi.field.description',
   required: 'kpi.field.required',
   dueDay: 'kpi.field.due_day',

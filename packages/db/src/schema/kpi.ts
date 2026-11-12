@@ -6,6 +6,7 @@ import {
   INDICATOR_NAME_MAX_LENGTH,
   INDICATOR_NOTE_MAX_LENGTH,
   INDICATOR_SCOPES,
+  INDICATOR_TAX_ROLES,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   INDICATOR_UNIT_MAX_LENGTH,
@@ -79,6 +80,11 @@ export const indicators = pgTable(
     scope: text('scope', { enum: INDICATOR_SCOPES }).notNull().default('all'),
     autoNew: boolean('auto_new').notNull().default(true),
     archived: boolean('archived').notNull().default(false),
+    /**
+     * «Для расчёта налогов» (прототип v80): выручка, ФОТ или численность; пусто — не используется.
+     * Отметка — у одного действующего показателя организации на роль (`indicators_org_tax_role_key`).
+     */
+    taxRole: text('tax_role', { enum: INDICATOR_TAX_ROLES }),
     /** Порядок в таблицах и в карточке контрагента. */
     sortOrder: integer('sort_order').notNull(),
     createdBy: uuid('created_by').references(() => users.id),
@@ -90,9 +96,17 @@ export const indicators = pgTable(
     unique('indicators_id_org_unique').on(t.id, t.orgId),
     uniqueIndex('indicators_org_name_key').on(t.orgId, sql`lower(${t.name})`),
     index('indicators_org_order_idx').on(t.orgId, t.sortOrder),
+    uniqueIndex('indicators_org_tax_role_key')
+      .on(t.orgId, t.taxRole)
+      .where(sql`${t.taxRole} is not null and not ${t.archived}`),
     check('indicators_type_check', oneOf(t.type, INDICATOR_TYPES)),
     check('indicators_total_check', oneOf(t.total, INDICATOR_TOTALS)),
     check('indicators_scope_check', oneOf(t.scope, INDICATOR_SCOPES)),
+    // Выручка и ФОТ — деньги («Сумма в сом», «Число с копейками»), численность — «Целое число».
+    check(
+      'indicators_tax_role_check',
+      sql`${t.taxRole} is null or (${t.taxRole} = 'emp' and ${t.type} = 'int') or (${t.taxRole} in ('rev', 'fot') and ${t.type} in ('som', 'dec'))`,
+    ),
     check(
       'indicators_name_check',
       sql`btrim(${t.name}) <> '' and char_length(${t.name}) <= ${sql.raw(String(INDICATOR_NAME_MAX_LENGTH))}`,

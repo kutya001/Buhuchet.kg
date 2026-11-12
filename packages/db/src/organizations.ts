@@ -233,6 +233,7 @@ async function insertOrganization(
         startMonth: start,
         scope: i.scope,
         autoNew: i.autoNew,
+        taxRole: i.taxRole,
         sortOrder: n + 1,
         createdBy,
         updatedBy: createdBy,

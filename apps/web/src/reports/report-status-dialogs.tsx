@@ -24,6 +24,7 @@ import {
   CheckRow,
   Field,
   FormGrid,
+  Hint,
   Icon,
   inputClass,
   KeyValues,
@@ -39,10 +40,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { filesQuery, pickedFilesProblem, uploadFile } from '../files/files-data';
+import { ReportTaxBox, useReportTaxBox } from '../kpi/kpi-tax-box';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { payFirstWhy } from '../money/report-money';
-import { amountFormOf, readAmount, withRevenue, withTax, type AmountForm } from './report-amount';
+import {
+  amountFormOf,
+  readAmount,
+  withRevenue,
+  withTax,
+  withTaxFill,
+  type AmountForm,
+} from './report-amount';
 import { reportSub } from './report-menu';
 import { reportQuery } from './reports-data';
 
@@ -358,8 +367,12 @@ function AmountFields({
               </span>
             }
           >
-            {t('report.repeat.hint', { type: card.type.shortName })}
-            {fixed !== null ? ` ${t('report.repeat.now', { sum: formatSomWithUnit(fixed) })}` : ''}
+            <Hint>
+              {t('report.repeat.hint', { type: card.type.shortName })}
+              {fixed !== null
+                ? ` ${t('report.repeat.now', { sum: formatSomWithUnit(fixed) })}`
+                : ''}
+            </Hint>
           </CheckRow>
         </div>
       ) : null}
@@ -412,6 +425,7 @@ export function ReportSubmitDialog({
   const { card } = fresh;
   const canUpload = useCanUpload(card);
   const withAmount = reportHasAmount(card.act);
+  const tax = useReportTaxBox(card);
 
   const submit = async () => {
     if (!date || date > todayBishkek()) return setErrors({ date: t('err.submit_date_invalid') });
@@ -481,7 +495,7 @@ export function ReportSubmitDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      size={card.lineDefs.length ? 'mid' : undefined}
+      size={card.lineDefs.length || (withAmount && tax.wide) ? 'mid' : undefined}
       dirty={picked.length > 0 || form.amount !== form.initial}
       title={t('report.submit.title')}
       sub={reportSub(card, 'full')}
@@ -515,6 +529,21 @@ export function ReportSubmitDialog({
               />
             )}
           </Field>
+          {withAmount && tax.box ? (
+            <ReportTaxBox
+              reportId={card.id}
+              box={tax.box}
+              period={card.periodFull}
+              typeShort={card.type.shortName}
+              onFill={(fill) => {
+                const next = withTaxFill(card.lineDefs, form, fill);
+                if (!next) return false;
+                setForm(next);
+                setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
+                return true;
+              }}
+            />
+          ) : null}
           {withAmount ? (
             <AmountFields
               t={t}
@@ -1166,6 +1195,7 @@ export function ReportAmountDialog({ card: initial, open, onClose, onDone }: Car
   const [busy, setBusy] = useState(false);
   const fresh = useFreshCard(initial, (c) => setForm(amountFormOf(c)));
   const { card } = fresh;
+  const tax = useReportTaxBox(card);
 
   const submit = async () => {
     const read = readAmount(card.lineDefs, form, true);
@@ -1197,7 +1227,7 @@ export function ReportAmountDialog({ card: initial, open, onClose, onDone }: Car
       open={open}
       onClose={onClose}
       kind="form"
-      size={card.lineDefs.length ? 'mid' : undefined}
+      size={card.lineDefs.length || tax.wide ? 'mid' : undefined}
       dirty={form.amount !== form.initial}
       title={t('report.amount.title')}
       sub={reportSub(card)}
@@ -1224,6 +1254,21 @@ export function ReportAmountDialog({ card: initial, open, onClose, onDone }: Car
       >
         {fresh.notice}
         <FormGrid>
+          {tax.box ? (
+            <ReportTaxBox
+              reportId={card.id}
+              box={tax.box}
+              period={card.periodFull}
+              typeShort={card.type.shortName}
+              onFill={(fill) => {
+                const next = withTaxFill(card.lineDefs, form, fill);
+                if (!next) return false;
+                setForm(next);
+                setErrors({});
+                return true;
+              }}
+            />
+          ) : null}
           <AmountFields
             t={t}
             id={id}

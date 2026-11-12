@@ -43,6 +43,12 @@ describe('показатели по умолчанию новой организ
       ).toEqual([]);
     }
   });
+
+  it('отметки «Для расчёта налогов» — как в шаблоне прототипа v80: выручка, численность, ФОТ', () => {
+    expect(DEFAULT_INDICATORS.map((i) => [i.name, i.taxRole])).toEqual(
+      temDB.indicators.filter((i) => !i.archived).map((i) => [i.name, i.tax ?? null]),
+    );
+  });
 });
 
 describe('проверка окна показателя', () => {
@@ -195,5 +201,50 @@ describe('итоги по заполненным месяцам', () => {
       last: 3000,
     });
     expect(indicatorTotals([null, null])).toEqual({ count: 0 });
+  });
+});
+
+describe('отметка «Для расчёта налогов» (прототип v80 indDlg)', () => {
+  const input: IndicatorInput = { ...DEFAULT_INDICATORS[0]!, start: '2026-10' };
+  const check = { otherNames: [], currentMonth: '2026-10' };
+  const tax = (
+    patch: Partial<IndicatorInput>,
+    others: { role: 'rev' | 'fot' | 'emp'; name: string }[] = [],
+  ) =>
+    indicatorProblems({ ...input, ...patch }, { ...check, otherTaxRoles: others }).filter(
+      (p) => p.field === 'taxRole',
+    );
+
+  it('без отметки и с отметкой подходящего типа — ошибок нет', () => {
+    expect(tax({ taxRole: null })).toEqual([]);
+    expect(tax({ taxRole: 'rev', type: 'som' })).toEqual([]);
+    expect(tax({ taxRole: 'fot', type: 'dec' })).toEqual([]);
+    expect(tax({ taxRole: 'emp', type: 'int' })).toEqual([]);
+  });
+
+  it('отметка уже у другого действующего показателя — «снимите её там» с его названием', () => {
+    expect(tax({ taxRole: 'rev' }, [{ role: 'rev', name: 'Оборот' }])).toEqual([
+      { field: 'taxRole', problem: 'tax_role_taken', params: { name: 'Оборот' } },
+    ]);
+    expect(tax({ taxRole: 'rev' }, [{ role: 'fot', name: 'ФОТ' }])).toEqual([]);
+    expect(INDICATOR_MESSAGES.tax_role_taken).toBe(
+      'Эта отметка уже у показателя «{name}»: снимите её там',
+    );
+  });
+
+  it('выручка и ФОТ — только «Сумма в сом» или «Число с копейками», численность — только «Целое число»', () => {
+    expect(tax({ taxRole: 'rev', type: 'int' })).toEqual([
+      { field: 'taxRole', problem: 'tax_role_money' },
+    ]);
+    expect(tax({ taxRole: 'fot', type: 'pct' })).toEqual([
+      { field: 'taxRole', problem: 'tax_role_money' },
+    ]);
+    expect(tax({ taxRole: 'emp', type: 'som' })).toEqual([
+      { field: 'taxRole', problem: 'tax_role_int' },
+    ]);
+    // Как в прототипе: занятая отметка проверяется раньше типа.
+    expect(tax({ taxRole: 'emp', type: 'som' }, [{ role: 'emp', name: 'Штат' }])).toEqual([
+      { field: 'taxRole', problem: 'tax_role_taken', params: { name: 'Штат' } },
+    ]);
   });
 });
