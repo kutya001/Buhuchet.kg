@@ -35,6 +35,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import { markSignedIn } from '../news/signed-in';
 import { fieldError, NewPasswordFields, usePasswordEye } from './fields';
 import { loginErrorText } from './login-errors';
+import { withCardHash } from './return-to';
 import { TelegramLinkRow, useTelegramLink } from './telegram-link';
 
 /**
@@ -89,7 +90,7 @@ function LoginCard({ me, returnTo }: { me: MeResponse | null; returnTo: string }
   // После входа рабочая страница один раз покажет «Что нового» (задача 2.32).
   const enter = useCallback(() => {
     markSignedIn();
-    router.replace(returnTo);
+    router.replace(withCardHash(returnTo, window.location.hash));
   }, [router, returnTo]);
   // Вошёл: с временным паролем — на его смену (пароль от входа подставлен), иначе в программу.
   const signedIn = (signed: MeResponse, password: string) =>

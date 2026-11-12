@@ -34,6 +34,14 @@ import type { Job, JobContext } from '../../deps';
 export type Pause = (ms: number) => Promise<void>;
 const realPause: Pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Текст исключения отправки — для журнала: адрес запроса к Telegram содержит токен бота
+ * (`/bot<токен>/`); попади адрес в текст ошибки — в журнал и в ответы Админки токен не уходит.
+ */
+export function redactBotToken(message: string): string {
+  return message.replace(/\/bot[^/\s]+/g, '/bot<скрыт>');
+}
+
 /** Отправить одну строку и решить, что с ней дальше. */
 async function sendOne(
   ctx: JobContext,
@@ -55,7 +63,7 @@ async function sendOne(
     if (res.ok) return { id: row.id, result: 'sent', at: now() };
     return fail(`${res.errorCode}: ${res.description}`, res.permanent, res.retryAfterSeconds);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : String(err), false);
+    return fail(redactBotToken(err instanceof Error ? err.message : String(err)), false);
   }
 }
 

@@ -71,7 +71,10 @@ export function adminResetPasswordHandler(
           // Новый пароль снимает блокировку входа после 10 неверных паролей (docs/deviations.md п. О-11).
           ...(reset.loginLockedBefore ? [{ field: 'loginLocked', from: true, to: false }] : []),
         ],
-        reason: 'Пароль сброшен администратором платформы: выдан временный пароль',
+        // Число завершённых сеансов — как в прототипе v83 (admin/accounts-orgs.js, accResetPass).
+        reason: `Пароль сброшен администратором платформы: выдан временный пароль${
+          reset.sessionsEnded ? `, завершено сеансов: ${reset.sessionsEnded}` : ''
+        }`,
       });
       return {
         org: await currentOrganization(tx, orgId),

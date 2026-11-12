@@ -14,6 +14,7 @@ import {
 import { and, asc, count, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
+import { markSessionEnd } from './auth';
 import { employeeBalance } from './finance-journal';
 import { writeHistory } from './history';
 import {
@@ -591,9 +592,22 @@ export async function createEmployee(tx: Tx, input: NewEmployee): Promise<string
   return employee!.id;
 }
 
-/** Заблокированный сотрудник: все его сеансы закрываются сразу. */
-export async function endUserSessions(tx: Tx, userId: string): Promise<void> {
-  await tx.delete(sessions).where(eq(sessions.userId, userId));
+/**
+ * Заблокированный сотрудник: все его сеансы закрываются сразу. `reason` — подпись в журнале сеансов
+ * (`admin` — «Завершить все сеансы» в карточке пользователя Админки). Возвращает, сколько сеансов
+ * ещё действовало.
+ */
+export async function endUserSessions(
+  tx: Tx,
+  userId: string,
+  reason: 'blocked' | 'admin' = 'blocked',
+): Promise<number> {
+  await markSessionEnd(tx, reason);
+  const ended = await tx
+    .delete(sessions)
+    .where(eq(sessions.userId, userId))
+    .returning({ open: sql<boolean>`${sessions.expiresAt} > now()` });
+  return ended.filter((s) => s.open).length;
 }
 
 /** Строка справочника «Коды телефонов» для поля ввода телефона. */

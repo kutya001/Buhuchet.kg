@@ -37,6 +37,42 @@ export const sessions = pgTable(
 ).enableRLS();
 
 /**
+ * Журнал сеансов входа (ТЗ «Админка» → «Карточка пользователя», вкладка «Сеансы»; прототип
+ * demoDB.sessions): начало, последняя активность, «действует до», устройство (браузер и система по
+ * заголовку браузера, без адреса IP), чем сеанс закончился. Сам сеанс живёт в `sessions` и при
+ * выходе удаляется, поэтому журнал ведёт триггер на `sessions` (миграция 0112): строка появляется
+ * вместе с сеансом, повторяет его продление и закрывается при удалении. Токена сеанса в журнале нет.
+ * Роль приложения таблицу не видит и не меняет: читает только администратор платформы через
+ * представление `app.admin_sessions`.
+ */
+export const sessionLog = pgTable(
+  'session_log',
+  {
+    /** Тот же id, что был у сеанса. */
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Пусто — сеанс администратора платформы. */
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'restrict' }),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** «Chrome 130 · Windows 10 или 11» (`sessionDevice`); пусто — браузер не узнан. */
+    device: text('device'),
+    /** Пусто — сеанс не закрыт (открыт или истёк по сроку `expiresAt`). */
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    /** Чем закрыт: `SESSION_END_REASONS` (logout, expired, admin, blocked, password, closed). */
+    endReason: text('end_reason'),
+  },
+  (t) => [
+    index('session_log_user_idx').on(t.userId, t.startedAt),
+    // Прав на таблицу у роли приложения нет; политика — вторая преграда, как у всех таблиц с org_id.
+    orgIsolation('session_log_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
  * Неверные пароли по набранному логину (ТЗ: «После нескольких неверных паролей вход временно
  * блокируется»; docs/deviations.md, п. 4, решение Б). Счёт ведётся по логину, как его ввели, есть
  * такой логин на платформе или нет: «вход закрыт» одинаков для любого логина и не выдаёт, какие

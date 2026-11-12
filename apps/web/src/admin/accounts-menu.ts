@@ -1,10 +1,12 @@
 import { accountActionRefusal } from '@buhuchet/domain';
 import type { AdminUser } from '@buhuchet/shared';
-import type { ActionEntry } from '@buhuchet/ui';
+import type { ActionEntry, ActionItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 
 /** Что делают пункты меню учётной записи. */
 export interface AccountMenuRun {
+  /** «Открыть карточку» — первым пунктом меню строки списка; в шапке карточки его нет. */
+  open?: (u: AdminUser) => void;
   resetPassword: (u: AdminUser) => void;
   block: (u: AdminUser) => void;
   unblock: (u: AdminUser) => void;
@@ -15,7 +17,8 @@ export interface AccountMenuRun {
  * пароль», черта и «Заблокировать» (красным, после вопроса) или у заблокированной администратором —
  * «Разблокировать» (сразу). Блокировку сотрудника владельцем администратор не снимает: у такой записи
  * «Заблокировать» (docs/deviations.md, п. 49). На своей строке — недоступный пункт «Это вы», как в
- * прототипе; у других администраторов платформы пунктов нет (`accountActionRefusal`).
+ * прототипе; у других администраторов платформы пунктов нет (`accountActionRefusal`). В меню строки
+ * списка первым идёт «Открыть карточку» (прототип v83, renderAccounts: `run.open`).
  */
 export function accountMenu({
   userId,
@@ -28,14 +31,21 @@ export function accountMenu({
   run: AccountMenuRun;
 }): (u: AdminUser) => ActionEntry[] {
   return (u) => {
+    const open = run.open;
+    const card: ActionEntry[] = open
+      ? [{ id: 'card', label: t('accounts.action.card'), icon: 'user', run: () => open(u) }]
+      : [];
+    const head: ActionEntry[] = card.length ? [...card, { id: 'sep-card', separator: true }] : [];
     const refusal = accountActionRefusal(userId, u);
     if (refusal === 'self') {
       return [
+        ...head,
         { id: 'self', label: t('accounts.self'), icon: 'user', disabled: true, run: () => {} },
       ];
     }
-    if (refusal) return [];
+    if (refusal) return card;
     return [
+      ...head,
       {
         id: 'reset-password',
         label: t('accounts.action.reset'),
@@ -59,4 +69,12 @@ export function accountMenu({
           },
     ];
   };
+}
+
+/**
+ * Кнопки шапки карточки пользователя: пункты меню без черт и без «Это вы» — у своей записи кнопок в
+ * шапке нет (прототип admin/admin-cards.js, accCard: `acts=adm?[]:accActions(...)`).
+ */
+export function accountHeadActions(entries: readonly ActionEntry[]): ActionItem[] {
+  return entries.filter((a): a is ActionItem => !('separator' in a) && a.id !== 'self');
 }

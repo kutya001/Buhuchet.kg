@@ -11,6 +11,7 @@ import {
   LOGIN_MAX_FAILURES,
   SCOPE_GROUPS,
   SESSION_MAX_HOURS,
+  type SessionEndReason,
   SESSION_TOUCH_MINUTES,
   SESSION_TTL_DAYS,
   type AccessSubject,
@@ -220,12 +221,24 @@ export async function cleanupLoginAttempts(db: Db): Promise<number> {
 /** Верный пароль: создаётся сеанс (в базе — только хеш токена). */
 export async function startSession(
   db: Db,
-  input: { userId: string; tokenHash: string },
+  input: { userId: string; tokenHash: string; device?: string | null },
 ): Promise<string> {
+  // Устройство («браузер и система») — в журнал сеансов для карточки пользователя в Админке.
   const [row] = await db.execute<{ id: string }>(
-    sql`select app.auth_start_session(${input.userId}, ${input.tokenHash}, ${SESSION_TTL_DAYS}) as id`,
+    sql`select app.auth_start_session(${input.userId}, ${input.tokenHash}, ${SESSION_TTL_DAYS}, ${input.device ?? null}) as id`,
   );
   return row!.id;
+}
+
+/**
+ * Перед удалением сеансов в этой транзакции: причина для журнала сеансов (триггер на `sessions`
+ * читает настройку транзакции app.session_end). На доступ не влияет — только подпись в карточке.
+ */
+export async function markSessionEnd(
+  tx: Tx,
+  reason: Exclude<SessionEndReason, 'expired' | 'closed' | 'logout'>,
+): Promise<void> {
+  await tx.execute(sql`select set_config('app.session_end', ${reason}, true)`);
 }
 
 /** Действующий сеанс и состояние пользователя. */
@@ -292,9 +305,23 @@ export async function sessionByToken(
   };
 }
 
-/** Выход: сеанс удаляется. */
-export async function endSession(db: Db, tokenHash: string): Promise<void> {
-  await db.execute(sql`select app.auth_end_session(${tokenHash})`);
+/**
+ * Выход: сеанс удаляется. `reason` — чем он закрыт в журнале сеансов вместо «Выход»: `blocked` —
+ * пользователю или организации закрыли вход, `closed` — в этом браузере вошли заново.
+ */
+export async function endSession(
+  db: Db,
+  tokenHash: string,
+  reason?: Extract<SessionEndReason, 'blocked' | 'closed'>,
+): Promise<void> {
+  if (!reason) {
+    await db.execute(sql`select app.auth_end_session(${tokenHash})`);
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.session_end', ${reason}, true)`);
+    await tx.execute(sql`select app.auth_end_session(${tokenHash})`);
+  });
 }
 
 /**
@@ -305,6 +332,7 @@ export async function changeOwnPassword(
   tx: Tx,
   input: { sessionId: string; passwordHash: string; newTokenHash: string },
 ): Promise<void> {
+  await markSessionEnd(tx, 'password');
   await tx.execute(
     sql`select app.auth_change_own_password(${input.sessionId}, ${input.passwordHash}, ${input.newTokenHash})`,
   );

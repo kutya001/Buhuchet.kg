@@ -63,15 +63,16 @@ test.describe('Админка: учётные записи', () => {
     await expect(row).toContainText('Активен');
     await expect(page.locator('[data-grid]')).toContainText('Последний вход');
 
-    // Администратор платформы — тоже в списке: организация «Платформа». Нажатие на строку открывает
-    // меню записи, как в прототипе; на своей строке — только недоступное «Это вы».
+    // Администратор платформы — тоже в списке: организация «Платформа». В меню записи на своей
+    // строке — «Открыть карточку» и недоступное «Это вы» (прототип v83).
     await search(page, isMobile, admin);
     const self = page.locator('[data-grid] [data-id]').filter({ hasText: admin });
     await expect(self).toHaveCount(1);
     await expect(self).toContainText('Администратор платформы');
     await expect(self).toContainText('Платформа');
-    await self.click();
+    await self.locator('[data-row-menu]').click();
     const menu = page.getByRole('menu', { name: 'Действия' });
+    await expect(menu.getByRole('menuitem', { name: 'Открыть карточку' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Это вы' })).toBeDisabled();
     await expect(menu.getByRole('menuitem', { name: 'Заблокировать' })).toHaveCount(0);
     await page.keyboard.press('Escape');
@@ -243,5 +244,136 @@ test.describe('Админка: учётные записи', () => {
     expect(await botMessages(page.request, strangerChat)).toHaveLength(strangerBefore);
     await done.getByRole('button', { name: 'Готово' }).click();
     await expect(done).toBeHidden();
+  });
+
+  test('(приёмка, прототип v83) карточка пользователя: шесть вкладок, «Завершить все сеансы» — пользователь вышел, в «Истории» — завершение сеансов и открытие карточки; ссылка #accounts/<логин>', async ({
+    page,
+    baseURL,
+    isMobile,
+    playwright,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const admin = await platformAdmin(page.request, origin);
+    // Бухгалтер демо-организации со своим сеансом: браузер — Chrome на Windows.
+    const login = uniqueLogin('e2e-card');
+    const hr = await playwright.request.newContext({ baseURL });
+    const { temporaryPassword } = await hire(hr, origin, login);
+    await hr.dispose();
+    const user = await playwright.request.newContext({
+      baseURL,
+      userAgent:
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    });
+    await signIn(user, origin, login, temporaryPassword);
+    expect((await user.get('/api/auth/me')).status()).toBe(200);
+
+    // Нажатие на строку списка открывает карточку.
+    const row = await accountRow(page, isMobile, login);
+    await row.getByText('Входов Сквозной Тестович').click();
+    const card = page.getByRole('dialog', { name: 'Входов Сквозной Тестович' });
+    await expect(card.locator('[data-account-states]')).toContainText('Не сменил временный пароль');
+    await expect(card).toContainText(login);
+    await expect(card).toContainText('Бухгалтер');
+    await expect(card).toContainText(
+      'Только просмотр: войти в программу под этим пользователем из Админки нельзя',
+    );
+    const openTab = async (name: string) => {
+      if (isMobile) {
+        await card.getByRole('tab', { selected: true }).click();
+        await page.getByRole('menu').getByRole('menuitem', { name }).click();
+      } else {
+        await card.getByRole('tab', { name }).click();
+      }
+      await expect(card.getByRole('tab', { selected: true })).toContainText(name);
+    };
+    // Кнопки шапки — как в меню строки.
+    await expect(card.locator('[data-account-action="reset-password"]')).toBeVisible();
+    await expect(card.locator('[data-account-action="block"]')).toBeVisible();
+
+    // «Основное»: сведения и права роли с областью.
+    await expect(card).toContainText('Неверных паролей подряд сейчас');
+    await expect(card).toContainText('0 из 10');
+    await expect(card).toContainText('не привязан');
+    await expect(card.locator('[data-account-perms]')).toContainText('только свои');
+
+    // «Работа»: плашки-числа; нажатие открывает список только для просмотра.
+    await openTab('Работа');
+    const work = card.locator('[data-account-work]');
+    await expect(work).toContainText('Закреплено контрагентов');
+    await expect(work).toContainText('Просрочено');
+    await expect(card).toContainText('Нет закреплённых контрагентов');
+    await work.getByText('Открытых задач').click();
+    const list = page.getByRole('dialog', { name: 'Открытые задачи' });
+    await expect(list).toContainText('Входов Сквозной Тестович · только просмотр');
+    await expect(list).toContainText('Записей нет');
+    await list.getByRole('button', { name: 'Готово' }).click();
+    await expect(list).toBeHidden();
+
+    // «Обучение и видео», «Telegram».
+    await openTab('Обучение и видео');
+    await expect(card).toContainText('Уровень знаний');
+    await expect(card).toContainText('Статей пока не читал');
+    await expect(card).toContainText('Просмотры видео');
+    await openTab('Telegram');
+    await expect(card).toContainText(
+      'Telegram не привязан: сообщения бота пользователю не уходят.',
+    );
+
+    // «Сеансы»: открытый сеанс с устройством, без адреса IP; «Завершить все сеансы» с вопросом.
+    await openTab('Сеансы');
+    await expect(card.locator('[data-account-sessions="1"]')).toBeVisible();
+    await expect(card).toContainText('Chrome 130 · Windows 10 или 11');
+    await expect(card).toContainText('Открыт');
+    await expect(card).toContainText('адрес IP в карточке не показывается');
+    await card.locator('[data-account-sessions-end]').click();
+    const ask = page.getByRole('dialog', { name: `Завершить все сеансы ${login}?` });
+    await expect(ask).toContainText(
+      'Пользователь выйдет на всех устройствах: открытых сеансов — 1. Войти снова он сможет со своим паролем.',
+    );
+    await ask.getByRole('button', { name: 'Завершить' }).click();
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Сеансы завершены: пользователь вышел на всех устройствах' }),
+    ).toBeVisible();
+    await expect(card.locator('[data-account-sessions="0"]')).toBeVisible();
+    await expect(card).toContainText('Завершён администратором платформы');
+    await expect(card.locator('[data-account-sessions-end]')).toBeDisabled();
+    // Пользователь вышел на всех устройствах и может войти снова со своим паролем.
+    expect((await user.get('/api/auth/me')).status()).toBe(401);
+    await signIn(user, origin, login, temporaryPassword);
+    await user.dispose();
+
+    // «История»: завершение сеансов и одно открытие карточки администратором (перечитывание
+    // открытой карточки после действия новой записи не даёт), создание учётной записи.
+    await openTab('История');
+    await expect(card).toContainText('Завершены все сеансы администратором платформы: 1');
+    await expect(card.getByText('Открыта карточка пользователя')).toHaveCount(1);
+    await expect(card).toContainText('Администратор платформы');
+    await expect(card).toContainText('Учётная запись создана');
+    await card.getByRole('button', { name: 'Готово' }).click();
+    await expect(card).toBeHidden();
+
+    // Ссылка #accounts/<логин> открывает карточку; у администратора платформы — три вкладки.
+    await page.goto(`/app/accounts#accounts/${admin}`);
+    const own = page.locator('[data-account-card]');
+    await expect(own).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/accounts$/);
+    const adminCard = page.getByRole('dialog').filter({ has: own });
+    await expect(adminCard.locator('[data-account-states]')).toContainText(
+      'Учётные записи администраторов платформы из Админки не меняются',
+    );
+    // На телефоне вкладки — списком под текущей: «1 из 3».
+    const tabNames = isMobile
+      ? page.getByRole('menu').getByRole('menuitem')
+      : adminCard.getByRole('tab');
+    if (isMobile) await adminCard.getByRole('tab', { selected: true }).click();
+    await expect(tabNames).toHaveText([/Основное/, /Сеансы/, /История/]);
+
+    // Нет такой учётной записи — уведомление, карточки нет.
+    await page.goto('/app/accounts#accounts/net-takogo-logina');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Такой учётной записи нет' }),
+    ).toBeVisible();
   });
 });

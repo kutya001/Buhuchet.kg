@@ -3,7 +3,7 @@ import type { AdminUser } from '@buhuchet/shared';
 import type { ActionItem } from '@buhuchet/ui';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { accountMenu } from './accounts-menu';
+import { accountHeadActions, accountMenu } from './accounts-menu';
 
 // Меню учётной записи в Админке (прототип admin/accounts-orgs.js, accActions): «Сбросить пароль»,
 // «Заблокировать» или «Разблокировать»; на своей строке — «Это вы»; у других администраторов платформы
@@ -59,5 +59,32 @@ describe('меню учётной записи в Админке', () => {
       expect.objectContaining({ id: 'self', label: 'Это вы', disabled: true }),
     ]);
     expect(menu(account({ isPlatformAdmin: true }))).toEqual([]);
+  });
+
+  it('меню строки списка (прототип v83): первым «Открыть карточку», затем черта и действия', () => {
+    const open = vi.fn();
+    const menu = accountMenu({ userId: ME, t, run: { ...run(), open } });
+    const items = menu(account());
+    expect(items.map((i) => i.id)).toEqual(['card', 'sep-card', 'reset-password', 'sep', 'block']);
+    expect(items[0]).toMatchObject({ label: 'Открыть карточку', icon: 'user' });
+    (items[0] as ActionItem).run();
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ login: 'asanov' }));
+    // Своя строка — карточка и «Это вы»; другой администратор платформы — только карточка.
+    expect(menu(account({ id: ME, isPlatformAdmin: true })).map((i) => i.id)).toEqual([
+      'card',
+      'sep-card',
+      'self',
+    ]);
+    expect(menu(account({ isPlatformAdmin: true })).map((i) => i.id)).toEqual(['card']);
+  });
+
+  it('кнопки шапки карточки: действия без черт; у своей записи кнопок нет', () => {
+    const menu = accountMenu({ userId: ME, t, run: run() });
+    expect(accountHeadActions(menu(account())).map((a) => a.id)).toEqual([
+      'reset-password',
+      'block',
+    ]);
+    expect(accountHeadActions(menu(account({ id: ME, isPlatformAdmin: true })))).toEqual([]);
+    expect(accountHeadActions(menu(account({ isPlatformAdmin: true })))).toEqual([]);
   });
 });
