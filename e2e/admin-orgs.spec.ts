@@ -386,7 +386,13 @@ test.describe('Админка: организации', () => {
     await expect(card.locator('[data-org-states]')).toHaveText('Активна');
     await expect(page).toHaveURL(/\/app\/orgs(\/list)?$/);
     await page.goto('/app/orgs#orgs/net-takogo-adresa');
-    await expect(toast.filter({ hasText: 'Организация с таким адресом не найдена' })).toBeVisible();
+    const none = toast.filter({ hasText: 'Организация с таким адресом не найдена' });
+    await expect(none).toBeVisible();
+    await expect(page.locator('[data-org-card]')).toHaveCount(0);
+    // Номер организации, которой нет, — то же уведомление, окно карточки не остаётся.
+    await expect(none).toBeHidden();
+    await page.goto('/app/orgs#orgs/00000000-0000-4000-8000-000000000000');
+    await expect(none).toBeVisible();
     await expect(page.locator('[data-org-card]')).toHaveCount(0);
   });
 });

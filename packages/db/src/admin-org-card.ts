@@ -2,10 +2,9 @@ import {
   addMonths,
   bishkekDate,
   FEATURES,
+  FILE_LIST_KIND_OF,
   formatPhone,
-  localPhoneText,
   OPEN_REPORT_STATUSES,
-  requisiteText,
   tariffAt,
   type Feature,
   type IsoDate,
@@ -13,7 +12,7 @@ import {
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
-import { and, asc, desc, eq, inArray, lt, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, ne, not, notInArray, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { adminGetOrganization, type AdminOrganizationRecord } from './admin-orgs';
@@ -41,7 +40,7 @@ import {
   users,
 } from './schema';
 import { dateLiteral } from './sql-text';
-import { phoneCodeList, phoneCodes } from './staff';
+import { phoneCodes } from './staff';
 
 // Карточка организации в Админке (ТЗ «Админка» → «Карточка организации», решение заказчика
 // 09.11.2026; прототип admin/admin-cards.js, orgCard). Только чтение: администратор платформы не
@@ -56,7 +55,7 @@ export interface AdminOrgCardRecord {
     phone: string | null;
     head: string | null;
     hasLogo: boolean;
-    /** Счета организации строкой, как в сообщениях контрагентам. */
+    /** Банки счетов организации — только названия, как в прототипе: номеров и получателей нет. */
     accounts: string[];
   };
   owner: { userId: string; login: string; fullName: string } | null;
@@ -173,8 +172,30 @@ export interface AdminOrgHistoryEntry {
 /** Сколько блокировок и разблокировок показывает «Основное». */
 const BLOCK_ROWS = 50;
 
+/** Сколько последних открытий карточки показывает «История». */
+export const ADMIN_ORG_VIEW_ROWS = 30;
+
 /** Сколько последних загрузок показывает вкладка «Файлы» (прототип ocGrids: `slice(0, 30)`). */
 const RECENT_FILES = 30;
+
+/**
+ * Файлы карточки — те же, что в «Файловом менеджере» организации (прототип allFiles): файлов оплат
+ * за обслуживание и финансовых операций в нём нет (у этих источников нет списка, `FileListSource.list`).
+ */
+const HIDDEN_FILE_KINDS = ['fee_payment', 'money_operation'] as const;
+
+/** Вид источника как в менеджере (`FILE_LIST_KIND_OF`): файлы оплат услуги и проекта — их вид. */
+const FILE_KIND = sql.raw(
+  `(case "files"."source_kind" ${Object.entries(FILE_LIST_KIND_OF)
+    .map(([from, to]) => {
+      // Страховка: в текст запроса попадают только имена видов из кода.
+      if (!/^[a-z_]+$/.test(from) || !/^[a-z_]+$/.test(to)) {
+        throw new Error(`Неверный вид источника файла: ${from}`);
+      }
+      return `when '${from}' then '${to}'`;
+    })
+    .join(' ')} else "files"."source_kind" end)`,
+);
 
 /**
  * Поля организации и роли, чьи значения «было → стало» уходят в «Историю» карточки; у остальных
@@ -248,38 +269,27 @@ export async function adminOrgCard(
   const accountRows = await tx
     .select({
       kind: orgAccounts.kind,
-      accountNo: orgAccounts.accountNo,
-      bik: orgAccounts.bik,
-      phone: orgAccounts.phone,
       phoneBanks: orgAccounts.phoneBanks,
-      holderName: orgAccounts.holderName,
       bankName: banks.name,
     })
     .from(orgAccounts)
     .leftJoin(banks, eq(banks.code, orgAccounts.bankCode))
     .orderBy(asc(orgAccounts.createdAt), asc(orgAccounts.id));
-  const [localCodes, bankNames] = await Promise.all([
-    phoneCodeList(tx),
-    bankNamesOf(
-      tx,
-      accountRows.flatMap((a) => a.phoneBanks),
-    ),
-  ]);
-  const accounts = accountRows.map((a) =>
-    requisiteText(
-      {
-        kind: a.kind,
-        bankNames:
-          a.kind === 'phone' ? a.phoneBanks.map((c) => bankNames.get(c) ?? c) : [a.bankName ?? ''],
-        accountNo: a.accountNo,
-        bik: a.bik,
-        phoneText: a.phone ? localPhoneText(a.phone, localCodes) : '',
-        holderName: a.holderName,
-      },
-      'org',
-      input.t,
-    ),
+  const bankNames = await bankNamesOf(
+    tx,
+    accountRows.flatMap((a) => a.phoneBanks),
   );
+  // Только названия банков (прототип ocMain): номер счёта, БИК, телефон перевода и получатель
+  // администратору платформы не отдаются.
+  const accounts = [
+    ...new Set(
+      accountRows
+        .flatMap((a) =>
+          a.kind === 'phone' ? a.phoneBanks.map((c) => bankNames.get(c) ?? c) : [a.bankName ?? ''],
+        )
+        .filter((name) => name !== ''),
+    ),
+  ];
   const [owner] = await tx
     .select({
       userId: users.id,
@@ -324,16 +334,20 @@ export async function adminOrgCard(
     .select({ n: countAll })
     .from(tasks)
     .where(inArray(tasks.status, ['todo', 'in_progress', 'rework']));
-  const shownFiles = and(eq(files.state, 'ready'), sql`${files.deletedAt} is null`);
+  const shownFiles = and(
+    eq(files.state, 'ready'),
+    sql`${files.deletedAt} is null`,
+    notInArray(files.sourceKind, [...HIDDEN_FILE_KINDS]),
+  );
   const byKind = await tx
     .select({
-      kind: files.sourceKind,
+      kind: sql<string>`${FILE_KIND}`,
       count: countAll,
       bytes: sql<string>`coalesce(sum(${files.sizeBytes}), 0)::text`,
     })
     .from(files)
     .where(shownFiles)
-    .groupBy(files.sourceKind);
+    .groupBy(FILE_KIND);
   const kinds = byKind
     .map((k) => ({ kind: k.kind, count: k.count, bytes: Number(k.bytes) }))
     .sort((a, b) => b.bytes - a.bytes || a.kind.localeCompare(b.kind));
@@ -516,7 +530,7 @@ export async function adminOrgCard(
     .select({
       id: files.id,
       name: files.name,
-      kind: files.sourceKind,
+      kind: sql<string>`${FILE_KIND}`,
       contractor: contractors.name,
       by: uploader.shortName,
       at: files.createdAt,
@@ -564,10 +578,13 @@ export async function adminOrgCard(
     changes: historyChanges(h.entity, h.changes),
     reason: h.reason,
   });
-  const history = await historyRows(
-    inArray(auditLog.entity, ['organization', 'org_settings', 'role']),
-    ADMIN_CARD_ROWS,
-  );
+  // Открытия карточки — отдельным пределом: частые открытия не вытесняют из «Истории» правки
+  // организации, её учётной политики и ролей.
+  const inHistory = inArray(auditLog.entity, ['organization', 'org_settings', 'role']);
+  const isView = and(eq(auditLog.entity, 'organization'), eq(auditLog.action, 'card_view'))!;
+  const changed = await historyRows(and(inHistory, not(isView))!, ADMIN_CARD_ROWS);
+  const viewed = await historyRows(isView, ADMIN_ORG_VIEW_ROWS);
+  const history = [...changed, ...viewed].sort((x, y) => y.at.getTime() - x.at.getTime());
   const blocks = await historyRows(
     and(
       eq(auditLog.entity, 'organization'),

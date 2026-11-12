@@ -8,7 +8,9 @@ import {
   formatDateRu,
   formatMomentRu,
   formatSom,
+  formatSomWithUnit,
   monthLabel,
+  ORG_TIMEZONES,
   periodLabel,
   type AccountCardState,
   type ReportPeriod,
@@ -34,6 +36,7 @@ import {
   Plates,
   Tag,
   Timeline,
+  useToast,
   type ActionItem,
   type CardTab,
   type IconName,
@@ -41,8 +44,8 @@ import {
   type MiniColumn,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState, type ReactNode } from 'react';
-import { api, apiFailure } from '../api-client';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { api, ApiFailure, apiFailure } from '../api-client';
 import { fileSizeText } from '../files/files-data';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -72,6 +75,8 @@ const TAB_ICONS: Readonly<Record<OrgCardTab, IconName>> = {
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');
 const DASH = <span className="text-faint">—</span>;
 const som = (n: number) => formatSom(n as Tyiyn);
+/** «45 000 сом» — суммы вне таблиц (прототип som). */
+const somUnit = (n: number) => formatSomWithUnit(n as Tyiyn);
 
 /** Владелец организации — для «Сбросить пароль владельцу» и ссылки на его карточку. */
 export type OrgCardOwner = NonNullable<AdminOrgCard['owner']>;
@@ -127,6 +132,16 @@ export function OrgCard({
   });
   const card = query.data;
   const org = card?.org ?? initial;
+  // Такой организации нет (ссылка `#orgs/<номер>` на удалённую): окна нет, только уведомление.
+  const toast = useToast();
+  const missing = query.error instanceof ApiFailure && query.error.status === 404;
+  const gone = useRef(false);
+  useEffect(() => {
+    if (!missing || gone.current) return;
+    gone.current = true;
+    toast(t('orgs.card.none'), { bad: true });
+    onClose();
+  }, [missing, toast, t, onClose]);
   const [tab, setTab] = useState<OrgCardTab>('main');
   const overdue = card?.summary.reports.overdue ?? 0;
   const tabs: CardTab[] = ORG_CARD_TABS.map((k) => ({
@@ -670,12 +685,13 @@ function MoneyTab({
         <div data-org-fee={id}>
           <KeyValues
             items={[
-              { id: 'charged', label: t('orgs.card.money.charged'), value: som(f.charged) },
-              { id: 'paid', label: t('orgs.card.money.paid'), value: som(f.paid) },
+              { id: 'charged', label: t('orgs.card.money.charged'), value: somUnit(f.charged) },
+              { id: 'paid', label: t('orgs.card.money.paid'), value: somUnit(f.paid) },
               {
                 id: 'debt',
                 label: t('orgs.card.money.debt'),
-                value: debt > 0 ? <b className="text-danger-label">{som(debt)}</b> : som(debt),
+                value:
+                  debt > 0 ? <b className="text-danger-label">{somUnit(debt)}</b> : somUnit(debt),
               },
             ]}
           />
@@ -746,7 +762,12 @@ function SettingsTab({ t, settings }: { t: Translate; settings: AdminOrgCard['se
               label: t('orgs.card.set.pay_first'),
               value: yes(settings.payBeforeSubmit),
             },
-            { id: 'timezone', label: t('orgs.card.set.timezone'), value: settings.timezone },
+            {
+              id: 'timezone',
+              label: t('orgs.card.set.timezone'),
+              value:
+                ORG_TIMEZONES.find((z) => z.id === settings.timezone)?.label ?? settings.timezone,
+            },
           ]}
         />
       </Box>

@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { schema } from '@buhuchet/db';
+import { ADMIN_ORG_VIEW_ROWS, schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { bishkekDate } from '@buhuchet/domain';
 import { AdminOrgCard, AdminOrgLookup, ApiError } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import { ADMIN_CARD_VIEW_RATE_LIMIT } from './card-guard';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -13,6 +14,8 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
   let f: Fixture;
   let admin: string;
   let owner: string;
+  let bankName: string;
+  const ACCOUNT_NO = '1090012345678901';
   const today = bishkekDate(new Date());
   const month = today.slice(0, 7);
   const day = (iso: string, n: number) => {
@@ -111,12 +114,17 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
         status: 'done',
       },
     ]);
-    const file = (name: string, sizeBytes: number, state: 'ready' | 'pending') => {
+    const file = (
+      name: string,
+      sizeBytes: number,
+      state: 'ready' | 'pending',
+      sourceKind = 'contractor',
+    ) => {
       const id = randomUUID();
       return {
         id,
         orgId: f.a.orgId,
-        sourceKind: 'contractor',
+        sourceKind,
         sourceId: cp,
         contractorId: cp,
         name,
@@ -127,9 +135,29 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
         createdBy: acc.userId,
       };
     };
-    await f.t.admin.db
-      .insert(schema.files)
-      .values([file('Устав.pdf', 2_097_152, 'ready'), file('Черновик.pdf', 500, 'pending')]);
+    await f.t.admin.db.insert(schema.files).values([
+      file('Устав.pdf', 2_097_152, 'ready'),
+      file('Черновик.pdf', 500, 'pending'),
+      // Как в «Файловом менеджере»: файл оплаты услуги — вид «Разовая услуга», файлов оплат за
+      // обслуживание и финансовых операций в карточке нет.
+      file('Платёжка услуги.pdf', 1024, 'ready', 'one_off_service_payment'),
+      file('Оплата обслуживания.pdf', 4096, 'ready', 'fee_payment'),
+      file('Списание.pdf', 8192, 'ready', 'money_operation'),
+    ]);
+    const [bank] = await f.t.admin.db
+      .select({ code: schema.banks.code, name: schema.banks.name })
+      .from(schema.banks)
+      .orderBy(asc(schema.banks.code))
+      .limit(1);
+    bankName = bank!.name;
+    await f.t.admin.db.insert(schema.orgAccounts).values({
+      orgId: f.a.orgId,
+      kind: 'acc',
+      bankCode: bank!.code,
+      accountNo: ACCOUNT_NO,
+      bik: '109001',
+      holderName: 'ОсОО «Получатель»',
+    });
     await f.t.admin.db
       .insert(schema.telegramLinks)
       .values({ orgId: f.a.orgId, userId: acc.userId, chatId: 700200, username: 'acc_a' });
@@ -170,7 +198,10 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       fullName: 'Владелец owner-a',
     });
     expect(c.lead).toBeNull();
-    expect(c.profile).toMatchObject({ hasLogo: false, accounts: [] });
+    // «Банковские счета» — только названия банков: номера счёта и получателя в ответе нет.
+    expect(c.profile).toMatchObject({ hasLogo: false, accounts: [bankName] });
+    expect(JSON.stringify(c)).not.toContain(ACCOUNT_NO);
+    expect(JSON.stringify(c)).not.toContain('Получатель');
     expect(c.summary).toMatchObject({
       staff: 5,
       staffBlocked: 0,
@@ -178,7 +209,7 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       month,
       reports: { todo: 1, inWork: 1, submitted: 1, overdue: firstDay ? 0 : 1 },
       tasks: 1,
-      files: { count: 1, bytes: 2_097_152 },
+      files: { count: 2, bytes: 2_097_152 + 1024 },
       telegram: 1,
     });
     // Входы за 30 дней: владелец вошёл в начале теста.
@@ -234,15 +265,23 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       permissions: 2,
       employees: 1,
     });
-    expect(c.files.byKind).toEqual([{ kind: 'contractor', count: 1, bytes: 2_097_152 }]);
-    expect(c.files.recent).toEqual([
-      expect.objectContaining({
-        name: 'Устав.pdf',
-        contractor: 'ОсОО «Ала-Тоо Трейд»',
-        by: 'acc-a',
-        bytes: 2_097_152,
-      }),
+    expect(c.files.byKind).toEqual([
+      { kind: 'contractor', count: 1, bytes: 2_097_152 },
+      { kind: 'one_off_service', count: 1, bytes: 1024 },
     ]);
+    expect(c.files.recent).toHaveLength(2);
+    expect(c.files.recent).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Устав.pdf',
+          kind: 'contractor',
+          contractor: 'ОсОО «Ала-Тоо Трейд»',
+          by: 'acc-a',
+          bytes: 2_097_152,
+        }),
+        expect.objectContaining({ name: 'Платёжка услуги.pdf', kind: 'one_off_service' }),
+      ]),
+    );
     // Ключа хранилища и ссылок на файлы в ответе нет.
     expect(JSON.stringify(c)).not.toContain('/files/');
   });
@@ -309,12 +348,62 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     expect(roleEntry?.subject).toEqual(expect.any(String));
   });
 
+  it('открытий карточек одним администратором — не больше предела за час; открытия не вытесняют правки из «Истории»', async () => {
+    const [user] = await f.t.admin.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.login, 'platform-admin'));
+    const mine = and(
+      eq(schema.rateLimits.kind, ADMIN_CARD_VIEW_RATE_LIMIT.kind),
+      eq(schema.rateLimits.subject, user!.id),
+    );
+    const [taken = { n: 0 }] = await f.t.admin.db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(schema.rateLimits)
+      .where(mine);
+    await f.t.admin.db.insert(schema.rateLimits).values(
+      Array.from({ length: ADMIN_CARD_VIEW_RATE_LIMIT.max - taken.n - 1 }, () => ({
+        kind: ADMIN_CARD_VIEW_RATE_LIMIT.kind,
+        subject: user!.id,
+      })),
+    );
+    const path = `/api/admin/organizations/${f.a.orgId}/card`;
+    expect((await get(path)).status).toBe(200);
+    const over = await get(path);
+    expect(over.status).toBe(429);
+    expect(ApiError.parse(await over.json()).error.code).toBe('card_view_limit');
+    // Перечитывание открытой карточки в предел не входит; у карточки пользователя предел общий.
+    expect((await get(`${path}?refresh=1`)).status).toBe(200);
+    const userCard = await get(`/api/admin/users/${f.people['acc-a']!.userId}/card`);
+    expect(userCard.status).toBe(429);
+    await f.t.admin.db.delete(schema.rateLimits).where(mine);
+
+    // «История» показывает не больше ADMIN_ORG_VIEW_ROWS последних открытий — остальное место за
+    // правками организации, учётной политики и ролей.
+    await f.t.admin.db.execute(
+      sql`insert into audit_log (org_id, entity, entity_id, action, actor_user_id, reason)
+          select ${f.a.orgId}::uuid, 'organization', ${f.a.orgId}, 'card_view', ${user!.id}::uuid, 'Открыта карточка организации'
+          from generate_series(1, ${ADMIN_ORG_VIEW_ROWS + 5})`,
+    );
+    const c = await card(f.a.orgId, '?refresh=1');
+    expect(c.history.filter((h) => h.action === 'card_view')).toHaveLength(ADMIN_ORG_VIEW_ROWS);
+    expect(c.history.some((h) => h.entity === 'organization' && h.action === 'create')).toBe(true);
+  });
+
   it('запрос карточки с чужого сайта не принимается; нет такой организации — 404, неверный id — 400', async () => {
     const res = await f.app.request(`/api/admin/organizations/${f.a.orgId}/card`, {
       headers: { cookie: admin, 'sec-fetch-site': 'cross-site' },
     });
     expect(res.status).toBe(403);
     expect(ApiError.parse(await res.json()).error.code).toBe('origin_mismatch');
+    // Соседний поддомен (стенд и рабочий сайт) — тоже не свой сайт; свой сайт и набранный адрес — можно.
+    const site = (value: string) =>
+      f.app.request(`/api/admin/organizations/${f.a.orgId}/card?refresh=1`, {
+        headers: { cookie: admin, 'sec-fetch-site': value },
+      });
+    expect((await site('same-site')).status).toBe(403);
+    expect((await site('same-origin')).status).toBe(200);
+    expect((await site('none')).status).toBe(200);
     const none = '00000000-0000-4000-8000-000000000000';
     expect((await get(`/api/admin/organizations/${none}/card`)).status).toBe(404);
     expect((await get('/api/admin/organizations/not-a-uuid/card')).status).toBe(400);

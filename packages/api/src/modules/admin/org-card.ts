@@ -12,9 +12,9 @@ import { accountStates, RecordNotFoundError } from '@buhuchet/domain';
 import { AdminOrgCard, AdminOrgLookup, ApiError, Uuid } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
-import { apiFail } from '../../errors';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { translateOf } from '../contractors/common';
+import { guardCardRead } from './card-guard';
 import { adminOrganizationBody } from './organizations';
 
 // Карточка организации в Админке (ТЗ «Админка» → «Карточка организации», решение заказчика
@@ -35,10 +35,11 @@ type CardHistory = AdminOrgCard['history'];
 /**
  * «Организация создана вместе с владельцем» есть в истории всегда (прототип ocHist: запись из
  * «Создано»): у организаций без неё строка собирается из «Кто и когда создал». Если история обрезана
- * пределом карточки, старейшая запись в ответ не попала — строку не добавляем.
+ * пределом карточки (открытия карточки считаются отдельно), старейшая запись в ответ не попала —
+ * строку не добавляем.
  */
 function withCreation(history: CardHistory, audit: AdminOrgCard['org']['audit']): CardHistory {
-  if (history.length >= ADMIN_CARD_ROWS) return history;
+  if (history.filter((h) => h.action !== 'card_view').length >= ADMIN_CARD_ROWS) return history;
   if (history.some((h) => h.entity === 'organization' && h.action === 'create')) return history;
   return [
     ...history,
@@ -76,6 +77,7 @@ export const orgCardRoute = createRoute({
     400: { description: 'Неверный параметр', content: error },
     ...denied,
     ...notFound,
+    429: { description: 'Слишком много открытий карточек за час', content: error },
   },
 });
 
@@ -85,13 +87,10 @@ export const orgCardRoute = createRoute({
  */
 export function orgCardHandler(deps: ApiDeps): RouteHandler<typeof orgCardRoute, AppEnv> {
   return async (c) => {
-    // Чтение карточки пишет в историю, а проверка Origin идёт только у изменяющих методов: запрос,
-    // который браузер сделал с чужого сайта, записи не оставляет.
-    if (c.req.header('sec-fetch-site') === 'cross-site') {
-      apiFail(403, 'origin_mismatch', 'Запрос с другого сайта отклонён');
-    }
     const { id } = c.req.valid('param');
     const refresh = c.req.valid('query').refresh === '1';
+    // Чтение карточки пишет в историю: только запрос своего сайта и предел частоты открытий.
+    await guardCardRead(deps, c, refresh);
     const adminId = c.get('session')!.userId;
     const now = new Date();
     const found = await withUserContext(deps.db, adminId, (tx) => adminGetOrganization(tx, id));
@@ -99,9 +98,11 @@ export function orgCardHandler(deps: ApiDeps): RouteHandler<typeof orgCardRoute,
     const t = await translateOf(deps);
     const card = await withOrgContext(deps.db, { orgId: id, userId: adminId }, async (tx) => {
       await logOrgCardView(tx, id, refresh);
-      return adminOrgCard(tx, { orgId: id, now, t });
+      const read = await adminOrgCard(tx, { orgId: id, now, t });
+      // Организации уже нет — запись об открытии откатывается вместе с транзакцией.
+      if (!read) throw new RecordNotFoundError('organization', id);
+      return read;
     });
-    if (!card) throw new RecordNotFoundError('organization', id);
     const org = adminOrganizationBody(card.org);
     const body: AdminOrgCard = {
       org,
