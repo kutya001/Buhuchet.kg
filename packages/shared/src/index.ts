@@ -26,6 +26,7 @@ export * from './status';
 export * from './files';
 export * from './platform-dicts';
 export * from './admin';
+export * from './admin-techdocs';
 export * from './dicts';
 export * from './money';
 export * from './fees';
