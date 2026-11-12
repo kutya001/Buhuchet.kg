@@ -64,6 +64,7 @@ import {
   userValuesHandler,
   userValuesRoute,
 } from './users';
+import { orgCardHandler, orgCardRoute, orgLookupHandler, orgLookupRoute } from './org-card';
 import {
   endUserSessionsHandler,
   endUserSessionsRoute,
@@ -95,6 +96,8 @@ export function adminModule(deps: ApiDeps) {
       .openapi(organizationValuesRoute, organizationValuesHandler(deps))
       .openapi(exportOrganizationsRoute, exportOrganizationsHandler(deps))
       .openapi(organizationSummaryRoute, organizationSummaryHandler(deps))
+      .openapi(orgLookupRoute, orgLookupHandler(deps))
+      .openapi(orgCardRoute, orgCardHandler(deps))
       .openapi(createOrganizationRoute, createOrganizationHandler(deps))
       .openapi(blockOrganizationRoute, organizationStatusHandler(deps, 'block'))
       .openapi(unblockOrganizationRoute, organizationStatusHandler(deps, 'unblock'))

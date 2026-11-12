@@ -284,6 +284,148 @@ export type AdminSessionsEnded = z.infer<typeof AdminSessionsEnded>;
 export const AdminUserLookup = z.object({ id: Uuid });
 export type AdminUserLookup = z.infer<typeof AdminUserLookup>;
 
+const Count = z.number().int().nonnegative();
+const Money = z.number().int();
+const Month = z.string().regex(/^\d{4}-\d{2}$/);
+
+/**
+ * Карточка организации в Админке (ТЗ «Админка» → «Карточка организации»; прототип
+ * admin/admin-cards.js, orgCard): всё по одной организации-клиенту одним ответом, только просмотр.
+ * Списки — первые 200 строк и настоящее число записей.
+ */
+export const AdminOrgCard = z.object({
+  org: AdminOrganization,
+  profile: z.object({
+    address: z.string().nullable(),
+    /** Телефон по маске страны. */
+    phone: z.string().nullable(),
+    head: z.string().nullable(),
+    hasLogo: z.boolean(),
+    /** Счета организации строкой. */
+    accounts: z.array(z.string()),
+  }),
+  owner: z.object({ userId: Uuid, login: z.string(), fullName: z.string() }).nullable(),
+  /** Заявка с сайта, по которой создана организация; null — создана без заявки. */
+  lead: z.object({ id: Uuid, title: z.string(), at: z.iso.datetime() }).nullable(),
+  summary: z.object({
+    staff: Count,
+    staffBlocked: Count,
+    contractors: z.object({ regular: Count, oneoff: Count, paused: Count, archived: Count }),
+    /** Месяц «Отчётов за месяц» по Бишкеку. */
+    month: Month,
+    reports: z.object({ todo: Count, inWork: Count, submitted: Count, overdue: Count }),
+    tasks: Count,
+    files: z.object({ count: Count, bytes: Count }),
+    telegram: Count,
+    logins30: Count,
+  }),
+  staff: cardList(
+    z.object({
+      userId: Uuid,
+      fullName: z.string(),
+      login: z.string(),
+      role: z.string(),
+      telegram: z.boolean(),
+      lastLoginAt: z.iso.datetime().nullable(),
+      states: z.array(z.enum(ACCOUNT_CARD_STATES)),
+    }),
+  ),
+  contractors: cardList(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      inn: z.string(),
+      form: z.string(),
+      regime: z.string().nullable(),
+      responsible: z.string().nullable(),
+      kind: z.string(),
+      /** Стоимость обслуживания по действующей ставке, тыйыны; null — ставки нет. */
+      fee: Money.nullable(),
+      serviceStatus: z.string(),
+    }),
+  ),
+  reports: z.object({
+    byMonth: z.array(
+      z.object({ month: Month, type: z.string(), total: Count, submitted: Count, overdue: Count }),
+    ),
+    overdue: cardList(
+      z.object({
+        id: Uuid,
+        contractor: z.string(),
+        type: z.string(),
+        period: z.string(),
+        periodStart: IsoDate,
+        eventDate: IsoDate.nullable(),
+        dueDate: IsoDate,
+        responsible: z.string().nullable(),
+        status: z.string(),
+      }),
+    ),
+  }),
+  money: z.object({
+    feeMonth: z.object({ charged: Money, paid: Money }),
+    feeYear: z.object({ charged: Money, paid: Money }),
+    taxes: z.array(z.object({ month: Month, sum: Money, paid: Money })),
+  }),
+  /** null — у организации нет записи настроек (не бывает у созданной Админкой). */
+  settings: z
+    .object({
+      reportConfirm: z.boolean(),
+      confirmWaitDays: z.number().int(),
+      taskConfirm: z.boolean(),
+      payBeforeSubmit: z.boolean(),
+      timezone: z.string(),
+      features: z.record(z.string(), z.boolean()),
+      reportTypes: z.array(z.string()),
+      roles: z.array(
+        z.object({
+          id: Uuid,
+          name: z.string(),
+          isOwner: z.boolean(),
+          permissions: Count,
+          employees: Count,
+        }),
+      ),
+      remindDays: z.array(z.number().int()),
+      digestTime: z.string(),
+      overdueRepeat: z.boolean(),
+    })
+    .nullable(),
+  files: z.object({
+    byKind: z.array(z.object({ kind: z.string(), count: Count, bytes: Count })),
+    recent: z.array(
+      z.object({
+        id: Uuid,
+        name: z.string(),
+        kind: z.string(),
+        contractor: z.string().nullable(),
+        by: z.string().nullable(),
+        at: z.iso.datetime(),
+        bytes: Count,
+      }),
+    ),
+  }),
+  history: z.array(
+    z.object({
+      id: z.string(),
+      at: z.iso.datetime(),
+      actor: z.string().nullable(),
+      actorAdmin: z.boolean(),
+      entity: z.string(),
+      action: z.string(),
+      changes: z.array(
+        z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
+      ),
+      reason: z.string().nullable(),
+    }),
+  ),
+});
+export type AdminOrgCard = z.infer<typeof AdminOrgCard>;
+
+/** Организация по адресу страницы — для ссылки #orgs/<адрес>. */
+export const AdminOrgLookup = z.object({ id: Uuid });
+export type AdminOrgLookup = z.infer<typeof AdminOrgLookup>;
+
 /** Страница списка учётных записей платформы: сортировка, страницы и фильтры — на сервере. */
 export const AdminUserList = listPageSchema(AdminUser);
 export type AdminUserList = z.infer<typeof AdminUserList>;

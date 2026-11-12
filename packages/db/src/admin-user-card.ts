@@ -129,13 +129,13 @@ function cardList<Row>(rows: readonly Row[]): CardList<Row> {
   return { count: rows.length, rows: rows.slice(0, ADMIN_CARD_ROWS) };
 }
 
-const countAll = sql<number>`count(*)::int`;
+export const countAll = sql<number>`count(*)::int`;
 
 /**
  * Список из запроса с пределом `ADMIN_CARD_ROWS`: число записей считает база, и только когда строк
  * набралось до предела — иначе оно равно числу строк.
  */
-async function capped<Row>(
+export async function capped<Row>(
   rows: Row[],
   count: () => Promise<{ n: number }[]>,
 ): Promise<CardList<Row>> {
