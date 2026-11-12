@@ -11,7 +11,7 @@ import {
   TELEGRAM_RELINK_MAX_PER_HOUR,
 } from '@buhuchet/domain';
 import { and, eq, sql } from 'drizzle-orm';
-import { clearLoginAttempts } from './auth';
+import { clearLoginAttempts, markSessionEnd } from './auth';
 import type { Db, Tx } from './client';
 import { employees, messageTemplateTexts, roles, sessions, users } from './schema';
 
@@ -426,6 +426,7 @@ export async function completePasswordReset(
   tx: Tx,
   input: { resetId: string; passwordHash: string },
 ): Promise<boolean> {
+  await markSessionEnd(tx, 'password');
   const [row] = await tx.execute<{ ok: boolean }>(
     sql`select app.auth_reset_complete(${input.resetId}, ${input.passwordHash}) as ok`,
   );
@@ -518,6 +519,7 @@ export async function setTemporaryPassword(
       updatedAt: sql`now()`,
     })
     .where(eq(users.id, input.userId));
+  await markSessionEnd(tx, 'reset');
   await tx.delete(sessions).where(eq(sessions.userId, input.userId));
   await revokePasswordResetCodes(tx, input.userId);
   await clearLoginAttempts(tx, before.login);

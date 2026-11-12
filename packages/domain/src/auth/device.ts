@@ -49,3 +49,22 @@ export function sessionDevice(userAgent: string | null | undefined): string | nu
   const parts = [browserOf(ua), systemOf(ua)].filter((x): x is string => x !== null);
   return parts.length ? parts.join(' · ').slice(0, SESSION_DEVICE_MAX) : null;
 }
+
+/**
+ * Чем закрыт сеанс — подпись в журнале сеансов (миграция 0112): выход, срок, «Завершить все сеансы»
+ * администратором платформы, блокировка, смена своего пароля, сброс пароля; `closed` — прочее.
+ */
+export const SESSION_END_REASONS = [
+  'logout',
+  'expired',
+  'admin',
+  'blocked',
+  'password',
+  'reset',
+  'closed',
+] as const;
+export type SessionEndReason = (typeof SESSION_END_REASONS)[number];
+
+export function isSessionEndReason(value: string | null | undefined): value is SessionEndReason {
+  return (SESSION_END_REASONS as readonly string[]).includes(value ?? '');
+}
