@@ -53,10 +53,47 @@ interface ToolbarProps<Row> {
   group: readonly string[];
   /** «Группировка» сменила уровни — свёрнутые группы снова раскрыты. */
   onGroupChange: () => void;
+  /** Группы есть — кнопка «Свернуть все / Развернуть все» (на телефоне она у чипа «Группировка»). */
+  fold?: GridFold;
   /** «В Excel»: есть — кнопка на панели; `exporting` — файл собирается. */
   onExport?: () => void;
   exporting?: boolean;
   labels: GridLabels;
+}
+
+/** Все группы свёрнуты (`shut`) — кнопка разворачивает их, иначе сворачивает. */
+export interface GridFold {
+  shut: boolean;
+  onToggle: () => void;
+}
+
+/**
+ * Одна кнопка для всех групп (прототип ui/grid.js, `fold`; docs/deviations.md#О-64): «Свернуть все», а
+ * когда все группы свёрнуты — «Развернуть все». На телефоне — значок с подсказкой.
+ */
+export function GridFoldButton({
+  fold,
+  phone,
+  labels,
+}: {
+  fold: GridFold;
+  phone: boolean;
+  labels: GridLabels;
+}) {
+  const hint = fold.shut ? labels.expandAllHint : labels.collapseAllHint;
+  return (
+    <button
+      type="button"
+      onClick={fold.onToggle}
+      title={hint}
+      aria-label={phone ? hint : undefined}
+      data-grid-fold={fold.shut ? 'expand' : 'collapse'}
+      className={phone ? `${TOUCH_AREA} ${RAISED_ICON}` : buttonClass('default', 'sm')}
+    >
+      <Icon name={fold.shut ? 'unfold' : 'fold'} size="sm" />
+      {!phone && (fold.shut ? labels.expandAll : labels.collapseAll)}
+    </button>
+  );
 }
 
 export interface GridSelectionBar<Row> {
@@ -85,6 +122,7 @@ export function GridToolbar<Row>({
   selection,
   group,
   onGroupChange,
+  fold,
   onExport,
   exporting = false,
   labels,
@@ -275,6 +313,7 @@ export function GridToolbar<Row>({
           />
         )}
       </Popover>
+      {fold && !phone && <GridFoldButton fold={fold} phone={false} labels={labels} />}
       {onExport &&
         (phone ? (
           <button

@@ -221,8 +221,12 @@ export interface GridLabels {
   agg: Readonly<Record<GroupAgg, string>>;
   /** Низ сгруппированного списка: «Групп: 4 · записей: 52». */
   groupsShown: (groups: number, total: number) => string;
+  /** Кнопка над сгруппированным списком: «Свернуть все», а когда все группы свёрнуты — «Развернуть все». */
   expandAll: string;
   collapseAll: string;
+  /** Подсказки кнопки: «Развернуть все группы», «Свернуть все группы». */
+  expandAllHint: string;
+  collapseAllHint: string;
   /** Чипы над списком: «Группировка:», «Поиск:», «от 100», «до 200», «с 01.03.2026», «по …», «+3». */
   chipGroup: string;
   chipSearch: string;

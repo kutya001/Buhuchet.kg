@@ -8,7 +8,7 @@ import { DataGrid, GridChips, GridFooter, pickRows, type DataGridProps } from '.
 import { FilterPanel } from './grid-filter';
 import { GridCards } from './grid-cards';
 import { GridTable } from './grid-table';
-import { ColumnsPanel, GridBulkBar, GridToolbar, GroupPanel } from './grid-toolbar';
+import { ColumnsPanel, GridBulkBar, GridFoldButton, GridToolbar, GroupPanel } from './grid-toolbar';
 import { rowEvents } from './row-events';
 import type { GridColumn, GridLabels, GridRowSelection } from './types';
 
@@ -134,6 +134,8 @@ const LABELS: GridLabels = {
   groupsShown: (g, n) => `Групп: ${g} · записей: ${n}`,
   expandAll: 'Развернуть все',
   collapseAll: 'Свернуть все',
+  expandAllHint: 'Развернуть все группы',
+  collapseAllHint: 'Свернуть все группы',
   chipGroup: 'Группировка:',
   chipSearch: 'Поиск:',
   chipFrom: (v) => `от ${v}`,
@@ -794,11 +796,56 @@ describe('поиск, фильтры и группировка (задача #15
     expect(html).toContain('padding-left:22px');
     expect(html.match(/data-id="/g)).toHaveLength(2);
     expect(html).toContain('Групп: 1 · записей: 2');
-    expect(html).toContain('Развернуть все');
-    expect(html).toContain('Свернуть все');
+    // Одна кнопка над списком: группы раскрыты — «Свернуть все»; ссылок внизу списка нет (прототип v83).
+    expect(html).toMatch(
+      /<button type="button" title="Свернуть все группы" data-grid-fold="collapse"[^>]*>.*?Свернуть все<\/button>/,
+    );
+    expect(html).not.toContain('Развернуть все');
+    expect(html.indexOf('data-grid-fold')).toBeLessThan(html.indexOf('data-grid-chips'));
     expect(html).not.toContain('data-grid-page');
     expect(html).toContain('<b class="font-[650]">Группировка:</b> Роль → Статус');
     expect(html).toContain('Группировка (2)');
+  });
+
+  it('«Свернуть все»: на телефоне — значок у чипа «Группировка»; без групп кнопки нет', () => {
+    const fold = { shut: false, onToggle: () => {} };
+    const chips = renderToStaticMarkup(
+      <GridChips
+        group={['Роль', 'Статус']}
+        onUngroup={() => {}}
+        fold={<GridFoldButton fold={fold} phone labels={LABELS} />}
+        search={null}
+        filters={[]}
+        onRemove={() => {}}
+        onResetAll={() => {}}
+        labels={LABELS}
+      />,
+    );
+    expect(chips).toMatch(
+      /Роль → Статус.*?<button type="button" title="Свернуть все группы" aria-label="Свернуть все группы" data-grid-fold="collapse"[^>]*><svg[^>]*>.*?<\/svg><\/button><button[^>]*data-grid-reset/,
+    );
+    expect(grid({ settings: withBalance })).not.toContain('data-grid-fold');
+    // Группировка выбрана, а список ещё грузится — групп нет, кнопки тоже.
+    expect(
+      grid({ settings: { ...withBalance, group: ['role'] }, data: undefined, loading: true }),
+    ).not.toContain('data-grid-fold');
+  });
+
+  it('кнопка групп: все свёрнуты — «Развернуть все» со своим значком и подсказкой', () => {
+    const toggle = vi.fn();
+    const html = renderToStaticMarkup(
+      <GridFoldButton fold={{ shut: true, onToggle: toggle }} phone={false} labels={LABELS} />,
+    );
+    expect(html).toContain('title="Развернуть все группы" data-grid-fold="expand"');
+    expect(html).toContain('Развернуть все</button>');
+    expect(html).not.toContain('aria-label');
+    const button = GridFoldButton({
+      fold: { shut: false, onToggle: toggle },
+      phone: true,
+      labels: LABELS,
+    });
+    (button.props as { onClick: () => void }).onClick();
+    expect(toggle).toHaveBeenCalledTimes(1);
   });
 
   it('«Не считать» у числового столбца — в строке группы пусто', () => {

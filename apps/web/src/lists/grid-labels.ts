@@ -141,6 +141,8 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     groupsShown: (groups, total) => t('grid.groups_shown', { groups, total }),
     expandAll: t('grid.expand_all'),
     collapseAll: t('grid.collapse_all'),
+    expandAllHint: t('grid.expand_all_hint'),
+    collapseAllHint: t('grid.collapse_all_hint'),
     chipGroup: t('grid.chip_group'),
     chipSearch: t('grid.chip_search'),
     chipFrom: (v) => t('grid.chip_from', { v }),

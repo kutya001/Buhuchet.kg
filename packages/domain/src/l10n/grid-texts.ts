@@ -119,6 +119,8 @@ export const GRID_TEXTS = {
   'grid.groups_shown': { ru: 'Групп: {groups} · записей: {total}', section: 'Списки' },
   'grid.expand_all': { ru: 'Развернуть все', section: 'Списки' },
   'grid.collapse_all': { ru: 'Свернуть все', section: 'Списки' },
+  'grid.expand_all_hint': { ru: 'Развернуть все группы', section: 'Списки' },
+  'grid.collapse_all_hint': { ru: 'Свернуть все группы', section: 'Списки' },
   'grid.chip_group': { ru: 'Группировка:', section: 'Списки' },
   'grid.chip_search': { ru: 'Поиск:', section: 'Списки' },
   'grid.chip_from': { ru: 'от {v}', section: 'Списки' },
