@@ -8,6 +8,7 @@ import {
   KpiGrid,
   KpiMissingSummary,
   KpiMonth,
+  KpiTaxBox,
   KpiWho,
 } from '@buhuchet/shared';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
@@ -92,6 +93,16 @@ export const cardQuery = (id: string, period: { from: string; to: string } | nul
     queryFn: async () =>
       json(await api.api.kpi.contractors[':id'].$get({ param: { id }, query: period ?? {} }), (v) =>
         KpiCard.parse(v),
+      ),
+  });
+
+/** «Расчёт по показателям» отчёта в окнах «Сумма к уплате» и «Отметить сданным». */
+export const taxBoxQuery = (reportId: string) =>
+  queryOptions({
+    queryKey: ['kpi', 'tax', reportId],
+    queryFn: async () =>
+      json(await api.api.kpi.tax[':reportId'].$get({ param: { reportId } }), (v) =>
+        KpiTaxBox.parse(v),
       ),
   });
 

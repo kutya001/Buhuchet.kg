@@ -180,6 +180,16 @@ function IndicatorList({ onEdit }: { onEdit: (id: string | null) => void }) {
                       {t('kpi.setup.required')}
                     </span>
                   ) : null}
+                  {i.taxRole ? (
+                    <span
+                      className={`${pillClass('sm')} gap-[3px] bg-violet-bg text-violet`}
+                      title={t('kpi.tax.pill_title', { about: t(`kpi.tax.about.${i.taxRole}`) })}
+                      data-kpi-tax-pill={i.taxRole}
+                    >
+                      <Icon name="coins" size="sm" />
+                      {t('kpi.tax.pill', { name: t(`kpi.tax.name.${i.taxRole}`) })}
+                    </span>
+                  ) : null}
                   {i.archived ? <Tag>{t('kpi.archived_tag')}</Tag> : null}
                 </div>
                 <Hint>

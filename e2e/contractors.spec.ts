@@ -741,6 +741,7 @@ test.describe('Этап 2: контрагенты — список и карто
         start: monthAt(-3),
         scope: ind.scope,
         autoNew: ind.autoNew,
+        taxRole: ind.taxRole,
         selected: ind.selected,
         version: ind.version,
       },

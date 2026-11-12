@@ -9,6 +9,7 @@ import {
   kpiIndicatorOf,
   listIndicators,
   loadTargets,
+  lockKpi,
   reorderIndicators,
   resyncFillStatuses,
   updateIndicator,
@@ -19,6 +20,7 @@ import {
 } from '@buhuchet/db';
 import {
   applyWho,
+  formatText,
   hasPermission,
   indicatorOn,
   indicatorProblems,
@@ -96,6 +98,7 @@ function indicatorBody(r: IndicatorRecord, on: number, setup = true): Indicator 
     scope: r.scope,
     autoNew: r.autoNew,
     archived: r.archived,
+    taxRole: r.taxRole,
     order: r.sortOrder,
     version: r.version,
     // Число значений — по всей организации: его видит только тот, кто настраивает показатели.
@@ -133,6 +136,7 @@ function fieldsOf(body: IndicatorSave): IndicatorFields {
     startMonth: body.start,
     scope: body.scope,
     autoNew: whoAutoNew(body.scope, body.autoNew),
+    taxRole: body.taxRole,
   };
 }
 
@@ -150,13 +154,22 @@ function checkIndicator(
       otherNames: others.map((o) => o.name),
       currentMonth,
       selected,
+      // Отметка «Для расчёта налогов» — у одного действующего показателя на роль.
+      otherTaxRoles: others.flatMap((o) =>
+        o.taxRole && !o.archived ? [{ role: o.taxRole, name: o.name }] : [],
+      ),
       ...(before
         ? { before: { type: before.type, unit: before.unit, hasValues: before.valueCount > 0 } }
         : {}),
     },
   );
   const first = problems[0];
-  if (first) apiFail(400, first.problem, INDICATOR_MESSAGES[first.problem], { field: first.field });
+  if (first) {
+    apiFail(400, first.problem, formatText(INDICATOR_MESSAGES[first.problem], first.params), {
+      field: first.field,
+      ...first.params,
+    });
+  }
 }
 
 /**
@@ -313,6 +326,8 @@ export function createIndicatorHandler(
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const result = await inKpi(deps, c, async (tx) => {
+      // Правки показателей организации — по одной: отметка «Для расчёта налогов» — у одного показателя.
+      await lockKpi(tx);
       const others = await listIndicators(tx);
       const plan = await whoPlan(tx, subject, null, null, body);
       checkIndicator(body, others, currentMonthOf(deps), plan.selected.size);
@@ -351,6 +366,7 @@ export function updateIndicatorHandler(
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const result = await inKpi(deps, c, async (tx) => {
+      await lockKpi(tx);
       const all = await listIndicators(tx);
       const before = all.find((r) => r.id === id);
       if (!before) return apiFail(404, 'not_found', 'Показатель не найден');
@@ -385,7 +401,10 @@ export const archiveIndicatorRoute = createRoute({
   responses: { ...listResponse, 403: noSetup, ...versionedSaveResponses },
 });
 
-/** «В архив»: новых значений нет, старые видны; «Вернуть из архива». */
+/**
+ * «В архив»: новых значений нет, старые видны; «Вернуть из архива». Отметка «Для расчёта налогов»,
+ * которую тем временем получил другой показатель, при возврате снимается (docs/deviations.md п. О-62).
+ */
 export function archiveIndicatorHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof archiveIndicatorRoute, AppEnv> {
@@ -393,6 +412,7 @@ export function archiveIndicatorHandler(
     const { id } = c.req.valid('param');
     const { archived, version } = c.req.valid('json');
     const result = await inKpi(deps, c, async (tx) => {
+      await lockKpi(tx);
       await archiveIndicator(tx, id, version, archived);
       await resyncFillStatuses(tx, todayOf(deps));
       return indicatorsBody(tx, subjectOf(c));

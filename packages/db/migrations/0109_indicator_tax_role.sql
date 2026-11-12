@@ -1,0 +1,3 @@
+ALTER TABLE "indicators" ADD COLUMN "tax_role" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "indicators_org_tax_role_key" ON "indicators" USING btree ("org_id","tax_role") WHERE "indicators"."tax_role" is not null and not "indicators"."archived";--> statement-breakpoint
+ALTER TABLE "indicators" ADD CONSTRAINT "indicators_tax_role_check" CHECK ("indicators"."tax_role" is null or ("indicators"."tax_role" = 'emp' and "indicators"."type" = 'int') or ("indicators"."tax_role" in ('rev', 'fot') and "indicators"."type" in ('som', 'dec')));

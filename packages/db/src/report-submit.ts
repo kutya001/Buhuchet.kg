@@ -253,6 +253,52 @@ export async function reportLineDefs(
   ];
 }
 
+/** Отчёт для «Расчёта по показателям» (прототип v80 modules/kpi-tax.js). */
+export interface ReportTaxSource {
+  contractorId: string;
+  typeCode: string;
+  act: ReportRecord['act'];
+  period: ReportRecord['period'];
+  periodStart: IsoDate;
+  /** Ставка назначения отчёта (или действующего назначения вида у контрагента); нет — null. */
+  rate: string | null;
+  /** Строки окна суммы: по ставкам назначения и по платежам вида. */
+  lineDefs: ReportLineDef[];
+}
+
+/**
+ * Что нужно блоку «Расчёт по показателям» от отчёта: вид, период, ставка назначения и строки окна
+ * суммы; null — отчёта нет или он вне области `scope` (`reportScope`).
+ */
+export async function reportTaxSource(
+  tx: Tx,
+  id: string,
+  scope: SQL | undefined,
+  t: Translate,
+): Promise<ReportTaxSource | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const [row] = await tx
+    .select({ report: reports })
+    .from(reports)
+    .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+    .where(and(eq(reports.id, id), scope));
+  if (!row) return null;
+  const r = row.report;
+  const [lineDefs, assignment] = await Promise.all([
+    reportLineDefs(tx, r, t),
+    reportHasAmount(r.act) ? assignmentOf(tx, r, false) : null,
+  ]);
+  return {
+    contractorId: r.contractorId,
+    typeCode: r.reportTypeCode,
+    act: r.act,
+    period: r.period,
+    periodStart: r.periodStart,
+    rate: assignment?.rate ?? null,
+    lineDefs,
+  };
+}
+
 /** Строки в истории: подпись, выручка, налог. */
 const linesValue = (lines: readonly ReportLine[]): HistoryValue =>
   lines.map((l) => ({ label: l.label, revenue: l.revenue, tax: l.tax }));

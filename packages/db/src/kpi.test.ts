@@ -89,6 +89,7 @@ const indicatorFields = (patch: Partial<IndicatorFields> = {}): IndicatorFields 
   startMonth: '2026-01',
   scope: 'all',
   autoNew: true,
+  taxRole: null,
   ...patch,
 });
 
@@ -308,6 +309,38 @@ describe.skipIf(!databaseAvailable())('Показатели контрагент
     });
     await inA((tx) => tx.update(indicators).set({ archived: true }).where(eq(indicators.id, id)));
     await inA((tx) => resyncFillStatuses(tx, TODAY));
+  });
+
+  it('отметка «Для расчёта налогов»: у новой организации — по умолчанию; вторую такую же и отметку не своего типа база не принимает', async () => {
+    expect(defaults.map((i) => [i.name, i.taxRole])).toEqual([
+      ['Выручка', 'rev'],
+      ['Количество сотрудников', 'emp'],
+      ['ФОТ', 'fot'],
+    ]);
+    // Отметка — у одного действующего показателя организации (уникальный индекс).
+    await expect(
+      inA((tx) =>
+        insertIndicator(
+          tx,
+          indicatorFields({ name: 'Оборот', unit: 'сом', type: 'som', taxRole: 'rev' }),
+        ),
+      ),
+    ).rejects.toThrow();
+    // «Численность» — только у целого числа, «Выручка» и «ФОТ» — у суммы или числа с копейками.
+    await expect(
+      inA((tx) => tx.update(indicators).set({ taxRole: 'emp' }).where(eq(indicators.id, revenue))),
+    ).rejects.toThrow();
+    await expect(
+      inA((tx) => tx.update(indicators).set({ taxRole: 'fot' }).where(eq(indicators.id, staff))),
+    ).rejects.toThrow();
+    // У архивного показателя отметка места не занимает.
+    const spare = await inA((tx) =>
+      insertIndicator(tx, indicatorFields({ name: 'Оборот', unit: 'сом', type: 'som' })),
+    );
+    await inA((tx) =>
+      tx.update(indicators).set({ archived: true, taxRole: 'rev' }).where(eq(indicators.id, spare)),
+    );
+    await inA((tx) => tx.delete(indicators).where(eq(indicators.id, spare)));
   });
 
   it('порядок показателей и удаление только без значений', async () => {

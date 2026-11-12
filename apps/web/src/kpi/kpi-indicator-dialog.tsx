@@ -3,6 +3,7 @@
 import {
   DUE_DAY_DEFAULT,
   formatMomentRu,
+  INDICATOR_TAX_ROLES,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   INDICATOR_UNITS,
@@ -10,6 +11,7 @@ import {
   monthOf,
   type IndicatorField,
   type IndicatorScope,
+  type IndicatorTaxRole,
   type IndicatorTotal,
   type IndicatorType,
 } from '@buhuchet/domain';
@@ -50,8 +52,11 @@ const CUSTOM = '_';
 interface DialogData {
   card: IndicatorCard | null;
   who: KpiWho;
-  /** Названия всех показателей организации (в архиве тоже): «Такой показатель уже есть». */
-  names: { id: string; name: string }[];
+  /**
+   * Все показатели организации (в архиве тоже): «Такой показатель уже есть» и «Эта отметка уже у
+   * показателя «…»» (отметка «Для расчёта налогов» — у одного действующего показателя).
+   */
+  names: { id: string; name: string; taxRole: IndicatorTaxRole | null; archived: boolean }[];
 }
 
 export function useIndicatorDialog() {
@@ -70,7 +75,16 @@ export function useIndicatorDialog() {
           client.fetchQuery(indicatorsQuery),
         ]);
         setSlot(
-          openSlot({ card, who, names: list.items.map((i) => ({ id: i.id, name: i.name })) }),
+          openSlot({
+            card,
+            who,
+            names: list.items.map((i) => ({
+              id: i.id,
+              name: i.name,
+              taxRole: i.taxRole,
+              archived: i.archived,
+            })),
+          }),
         );
       } catch {
         toast(t('err.unknown'), { bad: true });
@@ -96,6 +110,8 @@ interface State {
   customUnit: string;
   type: IndicatorType;
   total: IndicatorTotal;
+  /** «Для расчёта налогов»; пусто — «Не используется». */
+  taxRole: IndicatorTaxRole | '';
   description: string;
   dueDay: string;
   start: string;
@@ -113,6 +129,7 @@ function stateOf(card: IndicatorCard | null, current: string): State {
     customUnit: preset ? '' : (card?.unit ?? ''),
     type: card?.type ?? 'som',
     total: card?.total ?? 'sum',
+    taxRole: card?.taxRole ?? '',
     description: card?.description ?? '',
     dueDay: String(card?.dueDay ?? DUE_DAY_DEFAULT),
     start: card?.start ?? current,
@@ -123,7 +140,15 @@ function stateOf(card: IndicatorCard | null, current: string): State {
   };
 }
 
-const FOCUS: IndicatorField[] = ['name', 'unit', 'type', 'description', 'dueDay', 'start'];
+const FOCUS: IndicatorField[] = [
+  'name',
+  'unit',
+  'type',
+  'taxRole',
+  'description',
+  'dueDay',
+  'start',
+];
 
 function IndicatorDialog({
   open,
@@ -183,6 +208,7 @@ function IndicatorDialog({
       unit,
       type: st.type,
       total: st.total,
+      taxRole: st.taxRole || null,
       description: st.description.trim(),
       required: st.required,
       dueDay: Number(st.dueDay),
@@ -192,6 +218,9 @@ function IndicatorDialog({
     };
     const problems = indicatorProblems(input, {
       otherNames: data.names.filter((n) => n.id !== card?.id).map((n) => n.name),
+      otherTaxRoles: data.names.flatMap((n) =>
+        n.id !== card?.id && n.taxRole && !n.archived ? [{ role: n.taxRole, name: n.name }] : [],
+      ),
       currentMonth: current,
       ...(card ? { before: { type: card.type, unit: card.unit, hasValues } } : {}),
       selected: st.selected.length,
@@ -199,7 +228,7 @@ function IndicatorDialog({
     const found: Partial<Record<IndicatorField, string>> = {};
     for (const p of problems) {
       if (p.field === 'scope') continue;
-      found[p.field] ??= t(`err.${p.problem}`);
+      found[p.field] ??= t(`err.${p.problem}`, p.params);
     }
     setErrors(found);
     const first = FOCUS.find((f) => found[f]);
@@ -365,6 +394,30 @@ function IndicatorDialog({
                 {INDICATOR_TOTALS.map((x) => (
                   <option key={x} value={x}>
                     {t(`kpi.total.${x}`)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          <Field
+            id={`${id}-taxRole`}
+            label={t('kpi.field.tax_role')}
+            full
+            hint={t('kpi.indicator.tax_hint')}
+            error={errors.taxRole}
+          >
+            {(control) => (
+              <select
+                {...control}
+                className={`${inputClass()} cursor-pointer`}
+                data-kpi-tax-role=""
+                value={st.taxRole}
+                onChange={(e) => set({ taxRole: e.target.value as State['taxRole'] }, 'taxRole')}
+              >
+                <option value="">{t('kpi.tax.option.none')}</option>
+                {INDICATOR_TAX_ROLES.map((x) => (
+                  <option key={x} value={x}>
+                    {t(`kpi.tax.option.${x}`)}
                   </option>
                 ))}
               </select>

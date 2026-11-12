@@ -2,7 +2,7 @@ import { defaultUiTexts } from '@buhuchet/domain';
 import type { ReportCard, ReportHistoryEntry } from '@buhuchet/shared';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { amountFormOf, readAmount, withRevenue, withTax } from './report-amount';
+import { amountFormOf, readAmount, withRevenue, withTax, withTaxFill } from './report-amount';
 import { reportHistoryText } from './report-history';
 
 // Поля суммы окон «Отметить сданным» и «Сумма к уплате» и «История изменений» карточки (задача 2.14;
@@ -36,6 +36,72 @@ const card = (o: Partial<Pick<ReportCard, 'amount' | 'lines' | 'lineDefs'>> = {}
   lines: [],
   lineDefs: en,
   ...o,
+});
+
+describe('«Подставить» из «Расчёта по показателям» (прототип v80 kTaxBind)', () => {
+  const soc: Def[] = [
+    { kind: 'payment', key: 'pay:0', label: 'Подоходный налог', pct: '', cash: null, old: false },
+    { kind: 'payment', key: 'pay:1', label: 'Страховые взносы', pct: '', cash: null, old: false },
+  ];
+
+  it('выручка — в строку по ставке: налог строки и итог считаются сами', () => {
+    const form = withTaxFill(en, amountFormOf(card()), {
+      kind: 'revenue',
+      key: 'ЕНС-04:ca',
+      revenue: som(200_000),
+    });
+    expect(form?.lines.map((l) => [l.revenue, l.tax])).toEqual([
+      ['', ''],
+      [`200${NBSP}000`, `12${NBSP}000`],
+    ]);
+    expect(form?.amount).toBe(`12${NBSP}000`);
+  });
+
+  it('налог строки, введённый руками, подставленная выручка не меняет', () => {
+    const manual = withTax(en, amountFormOf(card()), 0, '11 900');
+    const form = withTaxFill(en, manual, {
+      kind: 'revenue',
+      key: 'ЕНС-04:cl',
+      revenue: som(300_000),
+    });
+    expect(form?.lines[0]).toMatchObject({ revenue: `300${NBSP}000`, tax: '11 900' });
+  });
+
+  it('подоходный налог и взносы — в строки платежей, итог — их сумма', () => {
+    const form = withTaxFill(soc, amountFormOf(card({ lineDefs: soc })), {
+      kind: 'parts',
+      parts: [
+        { key: 'pay:0', tax: som(46_980) },
+        { key: 'pay:1', tax: som(63_945) },
+      ],
+    });
+    expect(form?.lines.map((l) => l.tax)).toEqual([`46${NBSP}980`, `63${NBSP}945`]);
+    expect(form?.amount).toBe(`110${NBSP}925`);
+    expect(readAmount(soc, form!, true)).toEqual({
+      ok: true,
+      amount: som(110_925),
+      lines: [
+        { key: 'pay:0', revenue: null, tax: som(46_980) },
+        { key: 'pay:1', revenue: null, tax: som(63_945) },
+      ],
+    });
+  });
+
+  it('без строк сумма идёт в поле суммы', () => {
+    const form = withTaxFill([], amountFormOf(card({ lineDefs: [] })), {
+      kind: 'amount',
+      amount: som(122_698),
+    });
+    expect(form?.amount).toBe(`122${NBSP}698`);
+  });
+
+  it('строки с таким ключом в окне нет — поля не меняются', () => {
+    const form = amountFormOf(card());
+    expect(withTaxFill(en, form, { kind: 'revenue', key: 'нет', revenue: som(1) })).toBeNull();
+    expect(
+      withTaxFill(en, form, { kind: 'parts', parts: [{ key: 'pay:0', tax: som(1) }] }),
+    ).toBeNull();
+  });
 });
 
 describe('строки по ставкам', () => {

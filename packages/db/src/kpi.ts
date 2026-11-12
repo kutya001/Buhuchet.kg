@@ -12,6 +12,7 @@ import {
   type FillStatus,
   type HistoryChange,
   type IndicatorScope,
+  type IndicatorTaxRole,
   type IndicatorTotal,
   type IndicatorType,
   type IsoDate,
@@ -65,6 +66,8 @@ export interface IndicatorRecord {
   scope: IndicatorScope;
   autoNew: boolean;
   archived: boolean;
+  /** «Для расчёта налогов»: выручка, ФОТ, численность; null — не используется. */
+  taxRole: IndicatorTaxRole | null;
   sortOrder: number;
   version: number;
   /** Сколько внесённых значений (без пустых строк): тип и единицу при них не меняют. */
@@ -93,6 +96,7 @@ const indicatorFields = {
   scope: indicators.scope,
   autoNew: indicators.autoNew,
   archived: indicators.archived,
+  taxRole: indicators.taxRole,
   sortOrder: indicators.sortOrder,
   version: indicators.version,
   valueCount: VALUE_COUNT,
@@ -137,6 +141,7 @@ export interface IndicatorFields {
   startMonth: YearMonth;
   scope: IndicatorScope;
   autoNew: boolean;
+  taxRole: IndicatorTaxRole | null;
 }
 
 /** Новый показатель — последним по порядку; история — «создан». */
@@ -216,19 +221,38 @@ export async function updateIndicator(
   });
 }
 
-/** «В архив» и «Вернуть из архива» (с версией, в историю показателя). */
+/**
+ * «В архив» и «Вернуть из архива» (с версией, в историю показателя). Отметка «Для расчёта налогов» — у
+ * одного действующего показателя: если, пока показатель был в архиве, её получил другой, при возврате
+ * она снимается (в историю — отдельной строкой; docs/deviations.md п. О-62).
+ */
 export async function archiveIndicator(
   tx: Tx,
   id: string,
   version: number,
   archived: boolean,
 ): Promise<void> {
+  let dropRole = false;
+  if (!archived && UUID_RE.test(id)) {
+    const [taken] = await tx
+      .select({ id: indicators.id })
+      .from(indicators)
+      .where(
+        and(
+          sql`${indicators.id} <> ${id}`,
+          eq(indicators.archived, false),
+          sql`${indicators.taxRole} = (select x.tax_role from indicators x where x.id = ${id})`,
+        ),
+      )
+      .limit(1);
+    dropRole = !!taken;
+  }
   await updateWithHistory(tx, {
     table: indicators,
     entity: 'indicator',
     id,
     version,
-    patch: { archived },
+    patch: dropRole ? { archived, taxRole: null } : { archived },
   });
 }
 
