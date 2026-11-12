@@ -2,10 +2,12 @@ import type { UiTextDefault } from './texts';
 
 const S = 'Главная';
 const A = 'Главная: аналитика';
+const C = 'Главная: активность';
 
 /**
  * Тексты модуля «Главная» (задача 2.34; прототип modules/home.js — `renderHome`, modules/analytics.js —
- * `renderAnalytics`, `monthChart`, `shareChart`). Число контрагентов — `cp.count.*`, дни недели —
+ * `renderAnalytics`, `monthChart`, `shareChart`; «Активность» — прототип v84, modules/activity.js —
+ * `renderHomeAct`, `actEmpDlg`). Число контрагентов — `cp.count.*`, дни недели —
  * `pdicts.cal.dow.*`, месяцы — `rule.month_gen.*` и `report.month.*`.
  */
 export const HOME_TEXTS = {
@@ -119,4 +121,81 @@ export const HOME_TEXTS = {
   'home.an.kind.regular': { ru: 'Постоянное', section: A },
   'home.an.ops': { ru: 'Операции контрагента', section: A },
   'home.an.card': { ru: 'Карточка контрагента', section: A },
+  // «Активность» (прототип v84): период
+  'home.act.period': { ru: 'Период', section: C },
+  'home.act.kind.d': { ru: 'День', section: C },
+  'home.act.kind.w': { ru: 'Неделя', section: C },
+  'home.act.kind.m': { ru: 'Месяц', section: C },
+  'home.act.kind.y': { ru: 'Год', section: C },
+  'home.act.prev': { ru: 'Раньше', section: C },
+  'home.act.prev_aria': { ru: 'Предыдущий период', section: C },
+  'home.act.next': { ru: 'Позже', section: C },
+  'home.act.next_aria': { ru: 'Следующий период', section: C },
+  'home.act.now': { ru: 'К текущему', section: C },
+  'home.act.label.d': { ru: '{date}, {dow}', section: C },
+  'home.act.label.w': { ru: '{from} – {to}', section: C },
+  'home.act.note': {
+    ru: 'Входы, выходы и действия сотрудников; отчёты и задачи — по данным организации',
+    section: C,
+  },
+  'home.act.load_error': { ru: 'Не удалось загрузить активность', section: C },
+  // Плашки
+  'home.act.plate.worked': { ru: 'Работали в программе', section: C },
+  'home.act.plate.worked_of': { ru: ' из {n}', section: C },
+  'home.act.plate.worked_sub': { ru: 'сотрудников с активностью', section: C },
+  'home.act.plate.in': { ru: 'Входов', section: C },
+  'home.act.plate.in_sub': { ru: 'выходов: {n}', section: C },
+  'home.act.plate.n': { ru: 'Действий', section: C },
+  'home.act.plate.n_sub': { ru: 'создание, правки, смена статусов', section: C },
+  'home.act.plate.sub': { ru: 'Отчётов сдано', section: C },
+  'home.act.plate.sub_late': { ru: 'позже срока: {n}', section: C },
+  'home.act.plate.sub_ok': { ru: 'все в срок', section: C },
+  'home.act.plate.tasks': { ru: 'Задач выполнено', section: C },
+  // Столбики
+  'home.act.chart.days': { ru: 'Действия по дням', section: C },
+  'home.act.chart.months': { ru: 'Действия по месяцам', section: C },
+  'home.act.chart.bar': { ru: '{label}: {n}', section: C },
+  // Список сотрудников
+  'home.act.col.fio': { ru: 'Сотрудник', section: C },
+  'home.act.col.role': { ru: 'Роль', section: C },
+  'home.act.col.last': { ru: 'Последняя активность', section: C },
+  'home.act.col.in': { ru: 'Входов', section: C },
+  'home.act.col.out': { ru: 'Выходов', section: C },
+  'home.act.col.days': { ru: 'Дней с активностью', section: C },
+  'home.act.col.n': { ru: 'Действий', section: C },
+  'home.act.col.sub': { ru: 'Отчётов сдано', section: C },
+  'home.act.col.late': { ru: 'Сдано позже срока', section: C },
+  'home.act.col.due': { ru: 'Отчётов со сроком в периоде', section: C },
+  'home.act.col.over': { ru: 'Просрочено сейчас', section: C },
+  'home.act.col.cps': { ru: 'Контрагентов в ответственности', section: C },
+  'home.act.col.tasks': { ru: 'Задач выполнено', section: C },
+  'home.act.never': { ru: 'не было', section: C },
+  'home.act.blocked': { ru: 'заблокирован', section: C },
+  'home.act.empty': { ru: 'Сотрудников нет', section: C },
+  'home.act.by_days': { ru: 'Активность по дням', section: C },
+  'home.act.card': { ru: 'Карточка сотрудника', section: C },
+  // Окно сотрудника
+  'home.act.dlg.sub': { ru: 'Активность · {period}', section: C },
+  'home.act.dlg.last': { ru: 'Последняя активность', section: C },
+  'home.act.dlg.last_none': { ru: 'в этом периоде не было', section: C },
+  'home.act.dlg.in': { ru: 'Входов', section: C },
+  'home.act.dlg.in_sub': { ru: 'выходов: {n}', section: C },
+  'home.act.dlg.n': { ru: 'Действий', section: C },
+  'home.act.dlg.n_sub': { ru: 'дней с активностью: {n}', section: C },
+  'home.act.dlg.sub_plate': { ru: 'Отчётов сдано', section: C },
+  'home.act.dlg.sub_due': { ru: 'со сроком в периоде: {n}', section: C },
+  'home.act.dlg.cps': { ru: 'Контрагентов', section: C },
+  'home.act.dlg.cps_over': { ru: 'просрочено отчётов: {n}', section: C },
+  'home.act.dlg.cps_ok': { ru: 'просрочек нет', section: C },
+  'home.act.dlg.tab.days': { ru: 'По дням', section: C },
+  'home.act.dlg.tab.cps': { ru: 'По контрагентам', section: C },
+  'home.act.dlg.day': { ru: 'Дата', section: C },
+  'home.act.dlg.first': { ru: 'Первый вход', section: C },
+  'home.act.dlg.days_empty': { ru: 'В этом периоде активности не было', section: C },
+  'home.act.dlg.cp': { ru: 'Контрагент', section: C },
+  'home.act.dlg.cp_due': { ru: 'Со сроком в периоде', section: C },
+  'home.act.dlg.cp_open': { ru: 'Не сдано', section: C },
+  'home.act.dlg.cp_act': { ru: 'Действий по контрагенту', section: C },
+  'home.act.dlg.cps_empty': { ru: 'За сотрудником нет контрагентов', section: C },
+  'home.act.dlg.cp_others': { ru: 'Прочие контрагенты: {n}', section: C },
 } as const satisfies Record<string, UiTextDefault>;

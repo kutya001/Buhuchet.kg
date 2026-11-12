@@ -127,6 +127,7 @@ export const SHELL_TEXTS = {
   // Вкладки модулей
   'tab.home.today': { ru: 'Сводка', section: 'Вкладки' },
   'tab.home.analytics': { ru: 'Аналитика', section: 'Вкладки' },
+  'tab.home.act': { ru: 'Активность', section: 'Вкладки' },
   'tab.cps.all': { ru: 'Все', section: 'Вкладки' },
   'tab.cps.mine': { ru: 'Мои контрагенты', section: 'Вкладки' },
   'tab.cps.debtors': { ru: 'Должники', section: 'Вкладки' },

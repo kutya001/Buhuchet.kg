@@ -10,6 +10,7 @@ export * from './org/modules';
 export * from './onboarding/onboarding';
 export * from './home/home';
 export * from './home/analytics';
+export * from './home/activity';
 export * from './auth/login';
 export * from './auth/return-path';
 export * from './staff/names';

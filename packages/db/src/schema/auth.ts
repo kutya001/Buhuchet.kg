@@ -67,6 +67,8 @@ export const sessionLog = pgTable(
   },
   (t) => [
     index('session_log_user_idx').on(t.userId, t.startedAt),
+    // Входы организации за период: «Главная» → «Активность» (docs/decisions.md п. О-43).
+    index('session_log_org_started_idx').on(t.orgId, t.startedAt),
     // Прав на таблицу у роли приложения нет; политика — вторая преграда, как у всех таблиц с org_id.
     orgIsolation('session_log_isolation', t.orgId),
   ],
