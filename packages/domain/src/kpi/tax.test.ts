@@ -61,7 +61,12 @@ describe('база налога из показателя (прототип kTax
     const emp = taxBase(months, (m) => (m === '2026-08' ? null : m === '2026-07' ? 500 : 600));
     expect(taxBaseTotal('emp', emp)).toBe(600);
     expect(taxBaseTotal('fot', emp)).toBe(1100);
-    expect(taxBaseTotal('rev', taxBase(months, () => null))).toBeNull();
+    expect(
+      taxBaseTotal(
+        'rev',
+        taxBase(months, () => null),
+      ),
+    ).toBeNull();
   });
 });
 

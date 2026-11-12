@@ -207,7 +207,10 @@ describe('итоги по заполненным месяцам', () => {
 describe('отметка «Для расчёта налогов» (прототип v80 indDlg)', () => {
   const input: IndicatorInput = { ...DEFAULT_INDICATORS[0]!, start: '2026-10' };
   const check = { otherNames: [], currentMonth: '2026-10' };
-  const tax = (patch: Partial<IndicatorInput>, others: { role: 'rev' | 'fot' | 'emp'; name: string }[] = []) =>
+  const tax = (
+    patch: Partial<IndicatorInput>,
+    others: { role: 'rev' | 'fot' | 'emp'; name: string }[] = [],
+  ) =>
     indicatorProblems({ ...input, ...patch }, { ...check, otherTaxRoles: others }).filter(
       (p) => p.field === 'taxRole',
     );
