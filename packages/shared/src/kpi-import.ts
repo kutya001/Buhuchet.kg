@@ -33,25 +33,29 @@ export const KpiImportTemplateQuery = z.object({
   q: z.string().max(200).optional(),
 });
 
-/** Предпросмотр листа «Показатели»: сколько строк и столбцов, первые строки. */
+/**
+ * Предпросмотр листа «Показатели» (прототип v80 `kxTpl`): строка — контрагент и показатель, столбцы —
+ * месяцы; сколько контрагентов, строк и ячеек, первые строки.
+ */
 export const KpiImportTemplatePreview = z.object({
+  /** Разных контрагентов в шаблоне. */
   contractors: z.number().int().nonnegative(),
-  columns: z.number().int().nonnegative(),
-  /** Шаблон не собирается: больше 24 месяцев, 1 000 контрагентов или 480 000 ячеек показателей. */
-  tooMany: z.enum(['months', 'contractors', 'cells']).nullable(),
-  head: z.array(
-    z.object({
-      indicatorId: Uuid,
-      month: YearMonth,
-      title: z.string(),
-      unit: z.string(),
-      type: z.enum(INDICATOR_TYPES),
-    }),
-  ),
+  /** Строк «контрагент × показатель». */
+  lines: z.number().int().nonnegative(),
+  /** Ячеек показателей: строки × месяцы. */
+  cells: z.number().int().nonnegative(),
+  /**
+   * Шаблон не собирается: больше 24 месяцев, 1 000 контрагентов, 20 000 строк или 480 000 ячеек
+   * показателей.
+   */
+  tooMany: z.enum(['months', 'contractors', 'lines', 'cells']).nullable(),
+  months: z.array(YearMonth),
   rows: z.array(
     z.object({
       inn: z.string(),
       name: z.string(),
+      indicator: z.string(),
+      type: z.enum(INDICATOR_TYPES),
       cells: z.array(
         z.object({ kind: z.enum(['off', 'input', 'checked']), value: IndicatorValue }),
       ),

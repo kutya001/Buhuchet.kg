@@ -1,4 +1,5 @@
 import {
+  EXPORT_ROWS_LIMIT,
   FILL_STATUSES,
   INDICATOR_DESCRIPTION_MAX_LENGTH,
   INDICATOR_NAME_MAX_LENGTH,
@@ -449,3 +450,66 @@ export const KpiCard = z.object({
   ),
 });
 export type KpiCard = z.infer<typeof KpiCard>;
+
+/* ───────────── «Ввод по месяцам» ───────────── */
+
+/** Период вкладки «Ввод по месяцам»: «с … по …»; длиннее 24 месяцев — последние 24. */
+export const KpiGridQuery = z.object({ from: YearMonth, to: YearMonth });
+
+/**
+ * «Ввод по месяцам» (прототип v80 `kpiGrid`): строки «контрагент × показатель» всех контрагентов в
+ * области сотрудника, столбцы — месяцы периода. Выбор контрагентов, ответственного, показателей и поиск —
+ * на экране.
+ */
+export const KpiGrid = z.object({
+  from: YearMonth,
+  to: YearMonth,
+  /** Идущий месяц: позже него значения не вносятся. */
+  current: YearMonth,
+  /** Месяцы таблицы — не больше 24: у более длинного периода последние 24. */
+  months: z.array(YearMonth),
+  /** Период длиннее 24 месяцев: показаны последние 24. */
+  cut: z.boolean(),
+  /** Действующие показатели по порядку. */
+  indicators: z.array(KpiColumn),
+  /** Неразовые контрагенты области по названию — для выбора «Контрагенты». */
+  contractors: z.array(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      inn: z.string(),
+      responsibleId: Uuid.nullable(),
+      /** Вносит значения контрагента (право и область). */
+      editable: z.boolean(),
+    }),
+  ),
+  responsibles: z.array(z.object({ id: Uuid, name: z.string() })),
+  /** Строки: показатель ведётся хотя бы в одном месяце периода или по нему есть значения. */
+  rows: z.array(
+    z.object({
+      contractorId: Uuid,
+      indicatorId: Uuid,
+      /** «с <месяц>» показателя у контрагента. */
+      start: YearMonth,
+      offSince: YearMonth.nullable(),
+      values: z.array(IndicatorValue),
+      /** По месяцам: `required` — ведётся, `early` — раньше «с <месяц>», `off` — не ведётся. */
+      states: z.array(z.enum(['required', 'early', 'off'])),
+    }),
+  ),
+});
+export type KpiGrid = z.infer<typeof KpiGrid>;
+
+/** «Выгрузить в Excel» вкладки «Ввод по месяцам»: что на экране — период, контрагенты, показатели. */
+export const KpiGridExport = z.strictObject({
+  from: YearMonth,
+  to: YearMonth,
+  /** Выбранные контрагенты; пусто — все. Больше 1 000 — отказ правилом шаблона, с понятной причиной. */
+  cps: z.array(Uuid).max(EXPORT_ROWS_LIMIT),
+  /** Выбранные показатели; null — все действующие. */
+  inds: z.array(Uuid).max(100).nullable(),
+  resp: Uuid.optional(),
+  /** Поиск: название или ИНН. */
+  q: z.string().max(200).optional(),
+});
+export type KpiGridExport = z.infer<typeof KpiGridExport>;

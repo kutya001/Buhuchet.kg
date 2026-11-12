@@ -39,20 +39,22 @@ const code = (fn: () => unknown) => {
 };
 
 describe('Чтение загруженной таблицы (.xlsx и CSV)', () => {
-  it('шаблон «Ввода из Excel» читается обратно: заголовки, ИНН текстом, значения в единицах', async () => {
+  it('(v80) шаблон «Ввода из Excel» читается обратно: заголовки, ИНН текстом, значения в единицах', async () => {
     const file = await buildImportTemplate({
       sheet: 'Показатели',
       tipsSheet: 'Подсказки',
-      head: ['ИНН', 'Контрагент', 'Выручка · 09.2026 (сом, сумма в сом)', 'Штат · 09.2026'],
+      head: ['ИНН', 'Контрагент', 'Показатель', 'авг 2026', 'сен 2026'],
       rows: [
         {
           inn: '03744097401851',
           name: 'ОсОО «Укс» & Ко',
+          indicator: 'Выручка',
           cells: [{ kind: 'checked', value: 125_000_050 }, { kind: 'off' }],
         },
         {
           inn: '02203199000124',
           name: 'ИП <Асанов>',
+          indicator: 'Штат <чел.>',
           cells: [
             { kind: 'input', value: null },
             { kind: 'input', value: 3_700 },
@@ -62,22 +64,29 @@ describe('Чтение загруженной таблицы (.xlsx и CSV)', ()
       tips: ['Как заполнить шаблон', '', 'Показатели в шаблоне:'],
     });
     expect(readSheetRows(file)).toEqual([
-      ['ИНН', 'Контрагент', 'Выручка · 09.2026 (сом, сумма в сом)', 'Штат · 09.2026'],
-      ['03744097401851', 'ОсОО «Укс» & Ко', 1_250_000.5],
-      ['02203199000124', 'ИП <Асанов>', null, 37],
+      ['ИНН', 'Контрагент', 'Показатель', 'авг 2026', 'сен 2026'],
+      ['03744097401851', 'ОсОО «Укс» & Ко', 'Выручка', 1_250_000.5],
+      ['02203199000124', 'ИП <Асанов>', 'Штат <чел.>', null, 37],
     ]);
-    // Лист защищён без пароля, ИНН и название — заблокированы, ячейки ввода — нет, первые столбцы закреплены.
+    // Лист защищён без пароля, ИНН и названия — заблокированы, ячейки ввода — нет, три первых столбца
+    // закреплены, месяцы в заголовке — по правому краю.
     const xml = unzipTexts(file);
     const sheet = xml['xl/worksheets/sheet1.xml']!;
     expect(sheet).toContain('<sheetProtection sheet="1"');
     expect(sheet).not.toContain('password');
-    expect(sheet).toContain('xSplit="2" ySplit="1"');
+    expect(sheet).toContain('xSplit="3" ySplit="1"');
+    expect(sheet).toMatch(/<c r="C1" t="inlineStr" s="1">/);
+    expect(sheet).toMatch(/<c r="D1" t="inlineStr" s="7">/);
     expect(sheet).toMatch(/<c r="A2" t="inlineStr" s="5">/);
-    expect(sheet).toMatch(/<c r="C2" s="4"><v>1250000\.5<\/v>/);
-    expect(sheet).toMatch(/<c r="D2" s="3"\/>/);
-    expect(sheet).toMatch(/<c r="C3" s="2"\/>/);
+    expect(sheet).toMatch(/<c r="C2" t="inlineStr" s="5">/);
+    expect(sheet).toMatch(/<c r="D2" s="4"><v>1250000\.5<\/v>/);
+    expect(sheet).toMatch(/<c r="E2" s="3"\/>/);
+    expect(sheet).toMatch(/<c r="D3" s="2"\/>/);
+    expect(sheet).toContain('<col min="3" max="3" width="26" customWidth="1"/>');
+    expect(sheet).toContain('<col min="4" max="4" width="13" customWidth="1"/>');
     const styles = xml['xl/styles.xml']!;
     expect(styles).toContain('<protection locked="0"/>');
+    expect(styles).toContain('<cellXfs count="8">');
     expect(xml['xl/workbook.xml']).toContain('name="Подсказки"');
   });
 

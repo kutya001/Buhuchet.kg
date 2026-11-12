@@ -5,6 +5,7 @@ import {
   Indicators,
   KpiCard,
   KpiEntry,
+  KpiGrid,
   KpiMissingSummary,
   KpiMonth,
   KpiWho,
@@ -57,6 +58,14 @@ export const monthQuery = (month: string | null) =>
       json(await api.api.kpi.month.$get({ query: month ? { month } : {} }), (v) =>
         KpiMonth.parse(v),
       ),
+  });
+
+/** «Ввод по месяцам» за период. */
+export const gridQuery = (period: { from: string; to: string }) =>
+  queryOptions({
+    queryKey: ['kpi', 'grid', period.from, period.to],
+    queryFn: async () =>
+      json(await api.api.kpi.grid.$get({ query: period }), (v) => KpiGrid.parse(v)),
   });
 
 /** Окно «контрагент × месяц». */

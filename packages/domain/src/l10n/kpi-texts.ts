@@ -249,6 +249,38 @@ export const KPI_TEXTS = {
   'kpi.month.current_missing': { ru: '{month} · не заполнено {n}', section: S },
   'kpi.month.now': { ru: 'идёт сейчас', section: S },
 
+  // «Ввод по месяцам» (прототип v80 modules/kpi.js: kpiGrid, kGridCps)
+  'kpi.grid.cps_all': { ru: 'Все контрагенты · {n}', section: S },
+  'kpi.grid.cps_some': { ru: 'Контрагенты: {n} из {of}', section: S },
+  'kpi.grid.cps_title': { ru: 'Контрагенты таблицы', section: S },
+  'kpi.grid.cps_search': { ru: 'Поиск контрагента', section: S },
+  'kpi.grid.cps_check_all': { ru: 'Выбрать все', section: S },
+  'kpi.grid.cps_uncheck_all': { ru: 'Снять все', section: S },
+  'kpi.grid.cps_count': { ru: 'выбрано {n} из {of}', section: S },
+  'kpi.grid.cps_show': { ru: 'Показать', section: S },
+  'kpi.grid.cps_none': { ru: 'Выберите хотя бы одного контрагента', section: S },
+  'kpi.grid.resp_all': { ru: 'Все ответственные', section: S },
+  'kpi.grid.download': { ru: 'Выгрузить в Excel', section: S },
+  'kpi.grid.downloaded': {
+    ru: 'Файл «{name}» скачан: тот же вид, что у шаблона — его можно заполнить и загрузить обратно',
+    section: S,
+  },
+  'kpi.grid.upload': { ru: 'Загрузить из Excel', section: S },
+  'kpi.grid.cut': {
+    ru: 'В таблице — не больше {n} месяцев: показаны последние {n}. Сократите период.',
+    section: S,
+  },
+  'kpi.grid.none': {
+    ru: 'За выбранный период у выбранных контрагентов показатели не ведутся. Измените период, контрагентов или показатели.',
+    section: S,
+  },
+  'kpi.grid.rows_cap': {
+    ru: 'Показаны первые {shown} строк из {n}. Сузьте выбор контрагентов или показателей.',
+    section: S,
+  },
+  'kpi.grid.total': { ru: 'Итог', section: S },
+  'kpi.grid.avg_by': { ru: 'по {n}', section: S },
+
   // Окно «контрагент × месяц»
   'kpi.entry.sub': { ru: 'Показатели за {month} · заполнить до {due}', section: S },
   'kpi.entry.note': {
@@ -510,6 +542,11 @@ export const KPI_TEXTS = {
     section: S,
   },
   'kpi.card.hint_edit': { ru: 'Значения вносятся прямо в таблице, как в Excel.', section: S },
+  'kpi.card.to_grid': { ru: 'Ввести в таблице', section: S },
+  'kpi.card.to_grid_title': {
+    ru: 'Вкладка «Ввод по месяцам» с этим контрагентом: несколько лет и выгрузка в Excel',
+    section: S,
+  },
   'kpi.card.chart_pick': { ru: 'Показать на графике', section: S },
   'kpi.card.chart_title': { ru: '{name} по месяцам', section: S },
   'kpi.card.chart_label': { ru: 'График «{name}»', section: S },
@@ -529,7 +566,7 @@ export const KPI_TEXTS = {
   'kpi.card.due': { ru: 'до {date}', section: S },
   'kpi.card.done': { ru: 'Готово', section: S },
 
-  // Ввод из Excel (задача 2.28; прототип modules/kpi-excel.js: kxDlg, kxTplBlob, kxParse, kxErrBlob, kxHistHtml)
+  // Ввод из Excel (задача 2.28; прототип v80 modules/kpi-excel.js: kxDlg, kxBlob, kxParse, kxErrBlob, kxHistHtml)
   'kpi.import.title': { ru: 'Ввод из Excel', section: S },
   'kpi.import.sub': {
     ru: 'Показатели контрагентов: шаблон и загрузка заполненного шаблона',
@@ -552,11 +589,14 @@ export const KPI_TEXTS = {
   'kpi.import.cps.one': { ru: '{n} контрагент', section: S },
   'kpi.import.cps.few': { ru: '{n} контрагента', section: S },
   'kpi.import.cps.many': { ru: '{n} контрагентов', section: S },
-  'kpi.import.cols.one': { ru: '{n} столбец', section: S },
-  'kpi.import.cols.few': { ru: '{n} столбца', section: S },
-  'kpi.import.cols.many': { ru: '{n} столбцов', section: S },
+  'kpi.import.lines.one': { ru: '{n} строка', section: S },
+  'kpi.import.lines.few': { ru: '{n} строки', section: S },
+  'kpi.import.lines.many': { ru: '{n} строк', section: S },
+  'kpi.import.months.one': { ru: '{n} месяц', section: S },
+  'kpi.import.months.few': { ru: '{n} месяца', section: S },
+  'kpi.import.months.many': { ru: '{n} месяцев', section: S },
   'kpi.import.summary': {
-    ru: 'В шаблоне {cps} и {cols} показателей. Столбцы ИНН и «Контрагент» защищены, внесённые значения подставлены, {checked} выделены зелёным, {off} — серые и защищены. Второй лист — «Подсказки».',
+    ru: 'В шаблоне {cps}, {lines} «контрагент × показатель» и {months} — тот же вид, что у вкладки «Ввод по месяцам». Столбцы ИНН, «Контрагент» и «Показатель» защищены, внесённые значения подставлены, {checked} выделены зелёным, {off} — серые и защищены. Второй лист — «Подсказки».',
     section: S,
   },
   'kpi.import.summary.checked': { ru: 'проверенные', section: S },
@@ -579,7 +619,7 @@ export const KPI_TEXTS = {
   },
   'kpi.import.drop.busy': { ru: 'Читаем файл…', section: S },
   'kpi.import.drop.text': {
-    ru: 'Файл .xlsx из шага 1 (подойдёт и CSV с теми же столбцами). Контрагент ищется по ИНН, показатель и месяц — по заголовку столбца.',
+    ru: 'Файл .xlsx из шага 1 или выгрузка из «Ввода по месяцам» (подойдёт и CSV с теми же столбцами). Контрагент ищется по ИНН, показатель — по названию в строке, месяц — по заголовку столбца.',
     section: S,
   },
   'kpi.import.read_error': { ru: 'Не удалось прочитать «{name}»: {error}', section: S },
@@ -654,18 +694,19 @@ export const KPI_TEXTS = {
   'kpi.import.tips_sheet': { ru: 'Подсказки', section: S },
   'kpi.import.inn': { ru: 'ИНН', section: S },
   'kpi.import.contractor': { ru: 'Контрагент', section: S },
+  'kpi.import.indicator': { ru: 'Показатель', section: S },
   'kpi.import.file': { ru: 'Показатели', section: S },
   'kpi.import.tips.title': { ru: 'Как заполнить шаблон', section: S },
   'kpi.import.tips.rows': {
-    ru: 'Строки — контрагенты. Столбцы «ИНН» и «Контрагент» защищены: по ИНН система находит контрагента при загрузке.',
+    ru: 'Строка — контрагент и показатель: ИНН, название контрагента и название показателя. Эти три столбца защищены: по ИНН и названию показателя система находит, куда записать значение.',
     section: S,
   },
   'kpi.import.tips.columns': {
-    ru: 'Дальше — столбцы «Показатель · месяц.год». Вносите значения в белые ячейки.',
+    ru: 'Дальше — столбцы месяцев: «янв 2026», «фев 2026» и так далее. Вносите значения в белые ячейки; можно вставить блок, скопированный из своей таблицы.',
     section: S,
   },
   'kpi.import.tips.off': {
-    ru: 'Серые ячейки — показатель у этого контрагента не ведётся: они защищены и при загрузке не принимаются.',
+    ru: 'Серые ячейки — в этом месяце показатель у контрагента не ведётся: они защищены и при загрузке не принимаются.',
     section: S,
   },
   'kpi.import.tips.checked': {
@@ -681,7 +722,7 @@ export const KPI_TEXTS = {
     section: S,
   },
   'kpi.import.tips.heads': {
-    ru: 'Не меняйте заголовки столбцов: по ним определяются показатель и месяц.',
+    ru: 'Не меняйте заголовки столбцов и названия показателей: по ним определяются месяц и показатель.',
     section: S,
   },
   'kpi.import.tips.list': { ru: 'Показатели в шаблоне:', section: S },
@@ -698,8 +739,9 @@ export const KPI_TEXTS = {
   'kpi.import.problem.no_access': { ru: 'нет доступа к контрагенту', section: S },
   'kpi.import.problem.indicator_archived': { ru: 'показатель в архиве', section: S },
   'kpi.import.problem.indicator_off': { ru: 'показатель не ведётся у контрагента', section: S },
-  'kpi.import.problem.month_in_future': { ru: 'месяц ещё не наступил', section: S },
+  'kpi.import.problem.month_in_future': { ru: 'месяц ещё не начался', section: S },
   'kpi.import.problem.not_number': { ru: 'не число', section: S },
+  'kpi.import.problem.not_month': { ru: 'заголовок столбца — не месяц', section: S },
 
   // Ошибки (код отказа API или поля окна показателя — ключ `err.<код>`)
   'err.name_too_long': { ru: INDICATOR_MESSAGES.name_too_long, section: E },
@@ -725,6 +767,7 @@ export const KPI_TEXTS = {
   'err.period_too_long': { ru: KPI_MESSAGES.period_too_long, section: E },
   'err.import_too_many_months': { ru: KPI_MESSAGES.import_too_many_months, section: E },
   'err.import_too_many_contractors': { ru: KPI_MESSAGES.import_too_many_contractors, section: E },
+  'err.import_too_many_lines': { ru: KPI_MESSAGES.import_too_many_lines, section: E },
   'err.import_too_many_cells': { ru: KPI_MESSAGES.import_too_many_cells, section: E },
   'err.import_empty': { ru: KPI_MESSAGES.import_empty, section: E },
   'err.import_nothing': { ru: KPI_MESSAGES.import_nothing, section: E },

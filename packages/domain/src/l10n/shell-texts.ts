@@ -146,6 +146,7 @@ export const SHELL_TEXTS = {
   'tab.projects.all': { ru: 'Все', section: 'Вкладки' },
   'tab.projects.mine': { ru: 'Мои', section: 'Вкладки' },
   'tab.kpi.month': { ru: 'Ввод за месяц', section: 'Вкладки' },
+  'tab.kpi.grid': { ru: 'Ввод по месяцам', section: 'Вкладки' },
   'tab.kpi.period': { ru: 'За период', section: 'Вкладки' },
   'tab.kpi.missing': { ru: 'Не заполнено', section: 'Вкладки' },
   'tab.kpi.setup': { ru: 'Настройка показателей', section: 'Вкладки' },

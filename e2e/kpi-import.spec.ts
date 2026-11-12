@@ -13,6 +13,10 @@ function monthAt(shift: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+/** Заголовок столбца месяца в шаблоне и во вкладке «Ввод по месяцам»: «сен 2026». */
+const SHORT = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+const monthHead = (m: string) => `${SHORT[Number(m.slice(5)) - 1]!} ${m.slice(0, 4)}`;
+
 const MONTHS = [
   'январь',
   'февраль',
@@ -184,7 +188,7 @@ test.describe('Этап 2: Показатели контрагентов — в�
     const origin = new URL(baseURL!).origin;
     const org = await importOrg(api, origin);
     const month = monthAt(-1);
-    const head = `Выручка · ${month.slice(5)}.${month.slice(0, 4)}`;
+    const head = monthHead(month);
 
     await page.goto('/app/kpi/month');
     const dialog = await openImport(page, isMobile);
@@ -196,9 +200,13 @@ test.describe('Этап 2: Показатели контрагентов — в�
     await expect(preview).toContainText('ОсОО «Альфа»');
     await expect(preview).toContainText('ОсОО «Бета»');
     await expect(preview).not.toContainText('ОсОО «Гамма»');
-    await expect(preview).toContainText(head);
+    // Как вкладка «Ввод по месяцам»: строка — контрагент и показатель, столбцы — месяцы.
+    await expect(preview).toContainText(`D · ${head}`);
+    await expect(preview).toContainText('Выручка');
     await expect(preview).not.toContainText('Количество сотрудников');
-    await expect(dialog).toContainText('В шаблоне 2 контрагента и 1 столбец показателей');
+    await expect(dialog).toContainText(
+      'В шаблоне 2 контрагента, 2 строки «контрагент × показатель» и 1 месяц',
+    );
 
     const download = page.waitForEvent('download');
     const response = page.waitForResponse((r) => r.url().includes('/api/kpi/import/template?'));
@@ -216,17 +224,21 @@ test.describe('Этап 2: Показатели контрагентов — в�
     expect(sheet).toContain(org.inn['ОсОО «Бета»']);
     expect(sheet).not.toContain(org.inn['ОсОО «Гамма»']);
     expect(sheet).not.toContain('Количество сотрудников');
-    // Лист защищён; ИНН и название — защищённые ячейки (стиль без «locked=0»).
+    // Лист защищён; ИНН, название и показатель — защищённые ячейки (стиль без «locked=0»); первые три
+    // столбца закреплены, месяц — заголовком «сен 2026».
     expect(sheet).toContain('<sheetProtection sheet="1"');
     expect(sheet).toMatch(/<c r="A2" t="inlineStr" s="5">/);
+    expect(sheet).toMatch(/<c r="C2" t="inlineStr" s="5"><is><t xml:space="preserve">Выручка</);
+    expect(sheet).toContain(`<c r="D1" t="inlineStr" s="7"><is><t xml:space="preserve">${head}</`);
+    expect(sheet).toContain('<pane xSplit="3" ySplit="1"');
     expect(xlsx['xl/workbook.xml']).toContain('name="Подсказки"');
 
     // Шаг 2 открылся сам: загружаем заполненный шаблон с «abc» во второй строке.
     await expect(dialog.locator('[data-kpi-import="load"]')).toBeVisible();
     const csv = [
-      `ИНН;Контрагент;${head} (сом, сумма в сом)`,
-      `${org.inn['ОсОО «Альфа»']};ОсОО «Альфа»;1 250 000`,
-      `${org.inn['ОсОО «Бета»']};ОсОО «Бета»;abc`,
+      `ИНН;Контрагент;Показатель;${head}`,
+      `${org.inn['ОсОО «Альфа»']};ОсОО «Альфа»;Выручка;1 250 000`,
+      `${org.inn['ОсОО «Бета»']};ОсОО «Бета»;Выручка;abc`,
     ].join('\r\n');
     await dialog.locator('[data-kpi-import-drop] input[type=file]').setInputFiles({
       name: 'Показатели заполненные.csv',
@@ -237,7 +249,7 @@ test.describe('Этап 2: Показатели контрагентов — в�
     await expect(dialog.locator('[data-plate="kxn"]')).toContainText('1');
     await expect(dialog.locator('[data-plate="kxe"]')).toContainText('1');
     const errors = dialog.locator('[data-kpi-import-errors]');
-    await expect(errors).toContainText('C3');
+    await expect(errors).toContainText('D3');
     await expect(errors).toContainText('ОсОО «Бета»');
     await expect(errors).toContainText('abc');
     await expect(errors).toContainText('не число');
@@ -287,5 +299,87 @@ test.describe('Этап 2: Показатели контрагентов — в�
     }
     const card = page.getByRole('dialog', { name: 'ОсОО «Альфа»' });
     await expect(card).toContainText('Из Excel');
+  });
+
+  test('(проверка прототипа v80) «Ввод по месяцам»: строка — контрагент и показатель, столбцы — месяцы, у бухгалтера — только свои; значение вносится прямо в ячейке, итог строки пересчитывается; «Ввести в таблице» в карточке оставляет одного контрагента; «Выгрузить в Excel» — то, что на экране, в виде шаблона', async ({
+    page,
+    baseURL,
+  }) => {
+    const api = page.request;
+    const origin = new URL(baseURL!).origin;
+    const org = await importOrg(api, origin);
+    const [first, second] = [monthAt(-2), monthAt(-1)];
+    const alpha = 'ОсОО «Альфа»';
+    const beta = 'ОсОО «Бета»';
+
+    await page.goto('/app/kpi/grid');
+    const main = page.locator('main');
+    await main.getByLabel('С', { exact: true }).fill(first);
+    await main.getByLabel('по', { exact: true }).fill(second);
+    await expect(page.locator(`[data-kpi-grid="${first}|${second}"]`)).toBeVisible();
+    const table = page.locator('[data-kpi-grid-table]');
+    await expect(table.locator('thead')).toContainText(monthHead(first));
+    await expect(table.locator('thead')).toContainText(monthHead(second));
+    // «Количество сотрудников» ведётся только у «Гаммы» владельца: у бухгалтера — две строки «Выручки».
+    const rows = table.locator('[data-kpi-grid-row]');
+    await expect(rows).toHaveCount(2);
+    await expect(table).toContainText(alpha);
+    await expect(table).toContainText(beta);
+    await expect(table).not.toContainText('ОсОО «Гамма»');
+    await expect(table).not.toContainText('Количество сотрудников');
+
+    // Ввод как в Excel: нажать на ячейку, набрать число, Enter; итог строки — сумма.
+    const row = (name: string) => table.locator(`[data-kpi-grid-row^="${org.ids[name]!}|"]`);
+    const cell = (name: string, month: string) => row(name).locator(`td[data-kx$="|${month}"]`);
+    for (const [month, value] of [
+      [first, '1000'],
+      [second, '2000'],
+    ] as const) {
+      await cell(alpha, month).click();
+      await page.keyboard.type(value);
+      await page.keyboard.press('Enter');
+    }
+    await expect(cell(alpha, second)).toHaveText(/^2\s000$/);
+    await expect(row(alpha).locator('[data-kpi-grid-total]')).toContainText(/3\s000/);
+    await expect
+      .poll(async () => {
+        const grid = (await (await api.get(`/api/kpi/grid?from=${first}&to=${second}`)).json()) as {
+          rows: { contractorId: string; values: (number | null)[] }[];
+        };
+        return grid.rows.find((r) => r.contractorId === org.ids[alpha])?.values;
+      })
+      .toEqual([100_000, 200_000]);
+
+    // Карточка контрагента (открыта с «Ввода за месяц») → «Ввести в таблице»: вкладка «Ввод по месяцам»
+    // с одним этим контрагентом.
+    await page.goto('/app/kpi/month');
+    await page.locator(`[data-cp-link="${org.ids[alpha]!}"]:visible`).first().click();
+    const card = page.getByRole('dialog', { name: alpha });
+    await card.locator('[data-kpi-card-grid]').click();
+    await expect(card).toBeHidden();
+    await expect(page).toHaveURL(/\/app\/kpi\/grid$/);
+    await expect(rows).toHaveCount(1);
+    await expect(page.locator('[data-kpi-grid-cps]')).toContainText('Контрагенты: 1 из 2');
+
+    // «Выгрузить в Excel» — то, что на экране: «Альфа» со значениями, вид — как у шаблона.
+    const download = page.waitForEvent('download');
+    const response = page.waitForResponse((r) => r.url().includes('/api/kpi/grid/export'));
+    await page.locator('[data-kpi-grid-download]').click();
+    expect((await response).status()).toBe(200);
+    const xlsx = unzip(readFileSync((await (await download).path())!));
+    const sheet = xlsx['xl/worksheets/sheet1.xml']!;
+    expect(sheet).toContain(org.inn[alpha]);
+    expect(sheet).not.toContain(org.inn[beta]);
+    expect(sheet).toContain('<pane xSplit="3" ySplit="1"');
+    expect(sheet).toContain('<v>2000</v>');
+    expect(xlsx['xl/workbook.xml']).toContain('name="Подсказки"');
+
+    // Выбор контрагентов: «Выбрать все» → «Показать» — снова оба.
+    await page.locator('[data-kpi-grid-cps]').click();
+    const pick = page.locator('[data-kpi-grid-pick]');
+    await pick.getByRole('button', { name: 'Выбрать все' }).click();
+    await pick.getByRole('button', { name: 'Показать' }).click();
+    await expect(rows).toHaveCount(2);
+    await expect(page.locator('[data-kpi-grid-cps]')).toContainText('Все контрагенты · 2');
   });
 });

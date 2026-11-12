@@ -4,6 +4,9 @@ import {
   cardRows,
   cellState,
   columnTotals,
+  gridMonths,
+  gridRows,
+  KPI_GRID_MAX_MONTHS,
   monthCells,
   monthContractors,
   offSince,
@@ -159,5 +162,54 @@ describe('«За период» и вкладка «Показатели» ка�
     expect(
       columnTotals([on(100), { value: 900, state: 'off' }, { value: 50, state: 'early' }]),
     ).toMatchObject({ count: 2, sum: 150, of: 2 });
+  });
+});
+
+describe('(v80) «Ввод по месяцам»', () => {
+  const revenue = indicator('k1');
+  const staff = indicator('k2', { start: '2026-09' });
+  const old = indicator('k3', { archived: true });
+  const onr = contractor('c1');
+  const off = contractor('c2');
+  const once = contractor('c3', { oneOff: true });
+  const { book, valueOf } = bookOf(
+    [revenue, staff, old],
+    {
+      'k1|c2': { on: false, from: null, offSince: '2026-07' },
+      'k2|c2': { on: false, from: null, offSince: null },
+    },
+    { 'c2|k1|2026-06': 700, 'c1|k3|2026-08': 5 },
+  );
+
+  it('период: «с» позже «по» — местами; длиннее 24 месяцев — последние 24', () => {
+    expect(gridMonths('2026-03', '2026-01')).toEqual({
+      from: '2026-01',
+      to: '2026-03',
+      months: ['2026-01', '2026-02', '2026-03'],
+      cut: false,
+    });
+    const long = gridMonths('2020-01', '2026-08');
+    expect(long.cut).toBe(true);
+    expect(long.months).toHaveLength(KPI_GRID_MAX_MONTHS);
+    expect([long.months[0], long.months.at(-1)]).toEqual(['2024-09', '2026-08']);
+    expect(gridMonths('2024-09', '2026-08').cut).toBe(false);
+  });
+
+  it('строки — контрагент × действующий показатель: ведётся хоть в одном месяце или есть значения', () => {
+    const rows = gridRows(book, [onr, off, once], ['2026-06', '2026-07', '2026-08'], valueOf);
+    // Архивный показатель — не в таблице, разовый контрагент — тоже; у c2 «Выручка» выключена, но есть значение.
+    expect(rows.map((r) => [r.contractorId, r.indicatorId])).toEqual([
+      ['c1', 'k1'],
+      ['c1', 'k2'],
+      ['c2', 'k1'],
+    ]);
+    expect(rows[0]!.states).toEqual(['required', 'required', 'required']);
+    // «с 09.2026»: раньше — необязательно.
+    expect(rows[1]).toMatchObject({ states: ['early', 'early', 'early'], start: '2026-09' });
+    expect(rows[2]).toMatchObject({
+      values: [700, null, null],
+      states: ['off', 'off', 'off'],
+      offSince: '2026-07',
+    });
   });
 });

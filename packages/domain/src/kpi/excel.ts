@@ -5,11 +5,13 @@ import { parseIndicatorValue, type IndicatorType, type IndicatorValue } from './
 import { cellState, type KpiValueOf } from './views';
 
 /*
- * «Ввод из Excel» (задача 2.28; ТЗ «Показатели контрагентов» → «Ввод из Excel»; прототип
- * modules/kpi-excel.js: kxHead, kxTpl, kxParse). Шаблон: строки — контрагенты, первые столбцы — ИНН и
- * название, дальше «Показатель · ММ.ГГГГ» — сначала по показателю, внутри по месяцу. Загрузка:
- * контрагент — по ИНН, показатель и месяц — по заголовку столбца; пустая ячейка ничего не стирает;
- * строка с ошибкой не записывается целиком.
+ * «Ввод из Excel» (задача 2.28; ТЗ «Показатели контрагентов» → «Ввод из Excel»; прототип v80
+ * modules/kpi-excel.js: kxTpl, kxBlob, kxMon, kxParse). Шаблон — в виде вкладки «Ввод по месяцам»:
+ * строка — контрагент и показатель (ИНН, «Контрагент», «Показатель»), дальше столбцы месяцев «янв 2026».
+ * Загрузка: контрагент — по ИНН, показатель — по названию в строке, месяц — по заголовку столбца; прежний
+ * шаблон («Показатель · ММ.ГГГГ» в столбцах) тоже принимается. Пустая ячейка ничего не стирает; строка с
+ * ошибкой не записывается целиком.
+ * ОТКЛОНЕНИЕ: docs/deviations.md#О-61
  */
 
 /** Не больше контрагентов и месяцев в одном шаблоне (прототип `KX_MAX_CP`, `KX_MAX_M`). */
@@ -17,25 +19,38 @@ export const KPI_IMPORT_MAX_CONTRACTORS = 1000;
 export const KPI_IMPORT_MAX_MONTHS = 24;
 
 /**
- * Ячеек показателей в одном шаблоне (контрагенты × столбцы) — не больше: шаблон больше не загрузится
- * обратно (пределы загруженного листа — `packages/api/src/lists/xlsx-read.ts`). 1 000 контрагентов
- * за 24 месяца — это до 20 показателей. В прототипе такого предела нет (docs/deviations.md п. В-8).
+ * Ячеек показателей в одном шаблоне (строки «контрагент × показатель» × месяцы) — не больше: шаблон больше
+ * не загрузится обратно (пределы загруженного листа — `packages/api/src/lists/xlsx-read.ts`). 1 000
+ * контрагентов за 24 месяца — это до 20 показателей (прототип `KX_MAX_CELLS`, docs/deviations.md п. В-8).
  */
 export const KPI_IMPORT_MAX_CELLS = 480_000;
 
-/** Почему шаблон не собирается: больше месяцев, контрагентов или ячеек показателей. */
-export type ImportTooMany = 'months' | 'contractors' | 'cells';
+/**
+ * Строк «контрагент × показатель» в одном шаблоне — не больше: в каждой строке повторяются ИНН, название
+ * контрагента и показателя, и лист длиннее не загрузится обратно (в прототипе предела нет). 1 000
+ * контрагентов — это до 20 показателей.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-61
+export const KPI_IMPORT_MAX_LINES = 20_000;
 
-/** Шаблон больше пределов: `months` — месяцев, `contractors` — строк, `cells` — ячеек показателей. */
+/** Почему шаблон не собирается: больше месяцев, контрагентов, строк или ячеек показателей. */
+export type ImportTooMany = 'months' | 'contractors' | 'lines' | 'cells';
+
+/**
+ * Шаблон больше пределов: `months` — месяцев, `contractors` — разных контрагентов, `lines` — строк
+ * «контрагент × показатель», `cells` — ячеек показателей (строки × месяцы).
+ */
 export function importTooMany(
   months: number,
   contractors: number,
-  columns: number,
+  lines: number,
 ): ImportTooMany | null {
+  const cells = lines * months;
   if (months > KPI_IMPORT_MAX_MONTHS) return 'months';
   if (contractors > KPI_IMPORT_MAX_CONTRACTORS) return 'contractors';
+  if (lines > KPI_IMPORT_MAX_LINES) return 'lines';
   // ОТКЛОНЕНИЕ: docs/deviations.md#В-8
-  if (contractors * columns > KPI_IMPORT_MAX_CELLS) return 'cells';
+  if (cells > KPI_IMPORT_MAX_CELLS) return 'cells';
   return null;
 }
 
@@ -54,9 +69,74 @@ export const KPI_IMPORT_HOURLY_LIMIT = 60;
 /** Имя файла в «Истории загрузок» — не длиннее (длиннее обрезается). */
 export const KPI_IMPORT_FILE_MAX_LENGTH = 255;
 
-/** Заголовок столбца шаблона: «Выручка · 09.2026» (прототип `kxHead`). */
+/** Заголовок столбца прежнего шаблона: «Выручка · 09.2026» (прототип `kxHead`). */
 export function importHead(name: string, month: YearMonth): string {
   return `${name} · ${month.slice(5, 7)}.${month.slice(0, 4)}`;
+}
+
+/** Месяцы в заголовках столбцов шаблона (прототип `MON_S`). */
+export const IMPORT_MONTHS_SHORT = [
+  'янв',
+  'фев',
+  'мар',
+  'апр',
+  'май',
+  'июн',
+  'июл',
+  'авг',
+  'сен',
+  'окт',
+  'ноя',
+  'дек',
+] as const;
+
+/** Заголовок столбца месяца шаблона и вкладки «Ввод по месяцам»: «янв 2026» (прототип `kxMonHead`). */
+export function importMonthHead(month: YearMonth): string {
+  return `${IMPORT_MONTHS_SHORT[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
+}
+
+/** Начала названий месяцев: «май» и «мая» — май (прототип `KX_MON`). */
+const MONTH_PREFIXES: readonly (readonly string[])[] = IMPORT_MONTHS_SHORT.map((m) =>
+  m === 'май' ? ['май', 'мая'] : [m],
+);
+
+/** Заголовок месяца — не длиннее: «сентябрь 2026 года» короче. */
+const MONTH_HEAD_MAX_LENGTH = 40;
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * Месяц из заголовка столбца (прототип `kxMon`): «янв 2026», «январь 2026», «янв. 26», «январь 2026 г.»,
+ * «01.2026», «01.01.2026», «2026-01», «2026-01-31» или дата Excel (число дней); не месяц — null.
+ */
+export function parseImportMonth(head: ImportCellValue | undefined): YearMonth | null {
+  if (typeof head === 'number') {
+    if (!(head >= 20000 && head <= 80000)) return null;
+    const d = new Date(Math.round((head - 25569) * 864e5));
+    return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}` as YearMonth;
+  }
+  const t = String(head ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/ё/g, 'е');
+  if (t.length > MONTH_HEAD_MAX_LENGTH) return null;
+  let x = /^([а-я]+)\.?[\s.-]*(\d{4}|\d{2})(?:\s*г(?:ода?)?\.?)?$/.exec(t);
+  if (x) {
+    const k = MONTH_PREFIXES.findIndex((ps) => ps.some((q) => x![1]!.startsWith(q)));
+    if (k < 0) return null;
+    return `${x[2]!.length === 2 ? `20${x[2]}` : x[2]}-${pad2(k + 1)}` as YearMonth;
+  }
+  x = /^(?:\d{1,2}\.)?(\d{1,2})\.(\d{4})$/.exec(t);
+  if (x) {
+    const m = Number(x[1]);
+    return m >= 1 && m <= 12 ? (`${x[2]}-${pad2(m)}` as YearMonth) : null;
+  }
+  x = /^(\d{4})-(\d{1,2})(?:-\d{1,2})?$/.exec(t);
+  if (x) {
+    const m = Number(x[2]);
+    return m >= 1 && m <= 12 ? (`${x[1]}-${pad2(m)}` as YearMonth) : null;
+  }
+  return null;
 }
 
 /**
@@ -100,18 +180,35 @@ export function excelColumn(index: number): string {
 export type ImportTemplateCell =
   { kind: 'off' } | { kind: 'input' | 'checked'; value: IndicatorValue | null };
 
+/** Строка шаблона и вкладки «Ввод по месяцам»: контрагент и показатель, ячейки — по месяцам. */
+export interface ImportTemplateRow {
+  contractor: KpiContractor;
+  indicatorId: string;
+  cells: ImportTemplateCell[];
+}
+
 export interface ImportTemplate {
-  /** Строки — контрагенты, у которых ведётся хотя бы один выбранный показатель за период. */
-  contractors: KpiContractor[];
-  /** Столбцы — где показатель ведётся хотя бы у одного контрагента шаблона. */
-  columns: { indicatorId: string; month: YearMonth }[];
-  cells: ImportTemplateCell[][];
+  /** Строки «контрагент × показатель», где показатель ведётся хотя бы в одном месяце периода. */
+  rows: ImportTemplateRow[];
+  /** Разных контрагентов в строках. */
+  contractors: number;
+}
+
+export interface ImportTemplateOptions {
+  /** Идущий месяц: ячейки будущих месяцев — серые (прототип `kxCell`). */
+  current: YearMonth;
+  /**
+   * Строки и с внесёнными значениями, хотя показатель за период уже не ведётся (выгрузка «Ввода по
+   * месяцам», прототип `kGridRows`); шаблон — без них (`kxTpl`).
+   */
+  withValues?: boolean;
 }
 
 /**
- * Состав шаблона (прототип `kxTpl`). `contractors` — уже отобранные фильтром и областью сотрудника, по
- * порядку строк; показатели — действующие из `indicatorIds` по их порядку; внесённые значения
- * подставлены, проверенные (`checked` — статус месяца «Проверено») помечены.
+ * Состав шаблона (прототип `kxTpl`, `kxCell`) и выгрузки «Ввода по месяцам» (`kGridRows`): `contractors` —
+ * уже отобранные фильтром и областью сотрудника, по порядку строк; у каждого — действующие показатели
+ * из `indicatorIds` по их порядку; внесённые значения подставлены, проверенные (`checked` — статус месяца
+ * «Проверено») помечены.
  */
 export function importTemplate(
   book: KpiBook,
@@ -120,31 +217,31 @@ export function importTemplate(
   months: readonly YearMonth[],
   valueOf: KpiValueOf,
   checked: (contractorId: string, month: YearMonth) => boolean,
+  options: ImportTemplateOptions,
 ): ImportTemplate {
   const indicators = activeIndicators(book).filter((i) => indicatorIds.has(i.id));
   const can = (i: KpiIndicator, c: KpiContractor, m: YearMonth) =>
     cellState(book, i, c, m) !== 'off';
-  const rows = contractors.filter(
-    (c) => !c.oneOff && indicators.some((i) => months.some((m) => can(i, c, m))),
-  );
-  const columns: { indicator: KpiIndicator; month: YearMonth }[] = [];
-  for (const indicator of indicators) {
-    for (const month of months) {
-      if (rows.some((c) => can(indicator, c, month))) columns.push({ indicator, month });
-    }
-  }
-  const cells = rows.map((c) =>
-    columns.map(({ indicator, month }): ImportTemplateCell => {
-      if (!can(indicator, c, month)) return { kind: 'off' };
-      const value = valueOf(c.id, indicator.id, month);
-      return { kind: value !== null && checked(c.id, month) ? 'checked' : 'input', value };
-    }),
-  );
-  return {
-    contractors: rows,
-    columns: columns.map((x) => ({ indicatorId: x.indicator.id, month: x.month })),
-    cells,
-  };
+  const keep = (i: KpiIndicator, c: KpiContractor) =>
+    months.some(
+      (m) => can(i, c, m) || (options.withValues === true && valueOf(c.id, i.id, m) !== null),
+    );
+  const rows = contractors
+    .filter((c) => !c.oneOff)
+    .flatMap((c) =>
+      indicators
+        .filter((i) => keep(i, c))
+        .map((i): ImportTemplateRow => ({
+          contractor: c,
+          indicatorId: i.id,
+          cells: months.map((m): ImportTemplateCell => {
+            if (!can(i, c, m) || m > options.current) return { kind: 'off' };
+            const value = valueOf(c.id, i.id, m);
+            return { kind: value !== null && checked(c.id, m) ? 'checked' : 'input', value };
+          }),
+        })),
+    );
+  return { rows, contractors: new Set(rows.map((r) => r.contractor.id)).size };
 }
 
 /** Значение ячейки прочитанного файла: число, текст или пусто. */
@@ -160,6 +257,7 @@ export const IMPORT_PROBLEMS = [
   'indicator_off',
   'month_in_future',
   'not_number',
+  'not_month',
 ] as const;
 export type ImportProblem = (typeof IMPORT_PROBLEMS)[number];
 
@@ -240,11 +338,35 @@ export function importInn(value: ImportCellValue | undefined): string {
   return /^\d{13}$/.test(inn) ? `0${inn}` : inn;
 }
 
+/** Заголовок столбца для сравнения: «ИНН», «Показатель», «Итог» — без регистра и пробелов по краям. */
+const headKey = (h: ImportCellValue | undefined) => searchText(String(h ?? '')).trim();
+
+/** Столбец «Показатель» в первой строке: шаблон «строка — контрагент и показатель»; нет — прежний. */
+const indicatorColumn = (keys: readonly string[]) => keys.indexOf('показатель');
+
+/** Месяцы из заголовков загруженного файла (того или другого вида) — по порядку, без повторов. */
+export function importFileMonths(head: readonly (ImportCellValue | undefined)[]): YearMonth[] {
+  const byRow = indicatorColumn(head.map(headKey)) >= 0;
+  const months = new Set<YearMonth>();
+  for (const h of head) {
+    const m = byRow ? parseImportMonth(h) : h == null ? null : parseImportHead(String(h))?.month;
+    if (m) months.add(m);
+  }
+  return [...months].sort();
+}
+
+/** Столбец значений: месяц и показатель (в прежнем шаблоне — из заголовка, в новом — из строки). */
+interface ImportColumn {
+  indicator: ImportIndicator | null;
+  month: YearMonth;
+}
+
 /**
- * Разбор заполненного шаблона (прототип `kxParse`): первая строка — заголовки, в ней столбец «ИНН»
- * (нет — файл не принимается целиком); «Контрагент» и «Название» пропускаются. Повтор той же ячейки
- * (контрагент, показатель, месяц) — берётся первая. Строка с ошибкой не записывается целиком: её значения
- * считаются в `skipped`.
+ * Разбор заполненного шаблона (прототип `kxParse`): первая строка — заголовки, в ней столбец «ИНН» (нет —
+ * файл не принимается целиком); «Контрагент» и «Название» пропускаются. Есть столбец «Показатель» —
+ * строка «контрагент и показатель», остальные столбцы — месяцы («Итог» пропускается, не месяц — ошибка
+ * заголовка); нет — прежний шаблон «Показатель · ММ.ГГГГ». Повтор той же ячейки (контрагент, показатель,
+ * месяц) — берётся первая. Строка с ошибкой не записывается целиком: её значения считаются в `skipped`.
  */
 export function planImport(
   rows: readonly (readonly ImportCellValue[] | undefined)[],
@@ -284,18 +406,28 @@ export function planImport(
     });
   };
   const head = rows[0] ?? [];
-  const innCol = head.findIndex((h) => searchText(String(h ?? '')).trim() === 'инн');
+  const keys = head.map(headKey);
+  const innCol = keys.indexOf('инн');
   if (innCol < 0) {
     err(0, 0, 'no_inn', null, null);
     return plan;
   }
+  const indCol = indicatorColumn(keys);
   const byName = new Map<string, ImportIndicator>();
   for (const i of lookup.indicators) byName.set(searchText(i.name).trim(), i);
-  const columns = head.map((h, j) => {
+  const columns = head.map((h, j): ImportColumn | null => {
     if (j === innCol || isBlank(h)) return null;
+    if (keys[j] === 'контрагент' || keys[j] === 'название') return null;
+    if (indCol >= 0) {
+      if (j === indCol || keys[j] === 'итог') return null;
+      const month = parseImportMonth(h);
+      if (!month) {
+        err(0, j, 'not_month', null, h);
+        return null;
+      }
+      return { indicator: null, month };
+    }
     const text = String(h).trim();
-    const key = searchText(text);
-    if (key === 'контрагент' || key === 'название') return null;
     const parsed = parseImportHead(text);
     const indicator = parsed && byName.get(searchText(parsed.name).trim());
     if (!indicator) {
@@ -323,25 +455,50 @@ export function planImport(
       continue;
     }
     const c = found.contractor;
-    columns.forEach((x, j) => {
-      if (!x) return;
-      const raw = row[j];
-      if (isBlank(raw)) return;
-      if (x.indicator.archived) return err(r, j, 'indicator_archived', c.id, raw);
-      if (x.month > lookup.currentMonth) return err(r, j, 'month_in_future', c.id, raw);
-      if (cellState(lookup.book, x.indicator, c, x.month) === 'off') {
-        return err(r, j, 'indicator_off', c.id, raw);
+    // Новый шаблон: показатель — по названию в строке.
+    let rowIndicator: ImportIndicator | null = null;
+    if (indCol >= 0) {
+      const name = String(row[indCol] ?? '').trim();
+      rowIndicator = byName.get(searchText(name).trim()) ?? null;
+      if (!rowIndicator) {
+        err(r, indCol, 'unknown_indicator', c.id, name);
+        continue;
       }
-      const parsed = parseIndicatorValue(x.indicator.type, String(raw));
-      if (!parsed.ok || parsed.value === null) return err(r, j, 'not_number', c.id, raw);
-      const key = `${c.id}|${x.indicator.id}|${x.month}`;
-      if (seen.has(key)) return;
+    }
+    // По ячейкам строки, а не по всем столбцам заголовка: короткая строка под широким заголовком не
+    // тратит время на пустые столбцы.
+    const width = Math.min(row.length, columns.length);
+    for (let j = 0; j < width; j++) {
+      const x = columns[j];
+      if (!x) continue;
+      const raw = row[j];
+      if (isBlank(raw)) continue;
+      const indicator = x.indicator ?? rowIndicator!;
+      if (indicator.archived) {
+        err(r, j, 'indicator_archived', c.id, raw);
+        continue;
+      }
+      if (x.month > lookup.currentMonth) {
+        err(r, j, 'month_in_future', c.id, raw);
+        continue;
+      }
+      if (cellState(lookup.book, indicator, c, x.month) === 'off') {
+        err(r, j, 'indicator_off', c.id, raw);
+        continue;
+      }
+      const parsed = parseIndicatorValue(indicator.type, String(raw));
+      if (!parsed.ok || parsed.value === null) {
+        err(r, j, 'not_number', c.id, raw);
+        continue;
+      }
+      const key = `${c.id}|${indicator.id}|${x.month}`;
+      if (seen.has(key)) continue;
       seen.add(key);
       months.add(x.month);
-      const old = lookup.valueOf(c.id, x.indicator.id, x.month);
+      const old = lookup.valueOf(c.id, indicator.id, x.month);
       const item: ImportItem = {
         contractorId: c.id,
-        indicatorId: x.indicator.id,
+        indicatorId: indicator.id,
         month: x.month,
         value: parsed.value,
         old,
@@ -352,7 +509,7 @@ export function planImport(
       if (old === null) items.push(item);
       else if (old === parsed.value) plan.same++;
       else items.push(item);
-    });
+    }
   }
   for (const item of items) {
     if (bad.has(item.row)) plan.skipped++;

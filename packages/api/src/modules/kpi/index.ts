@@ -1,6 +1,7 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import { cardHandler, cardRoute } from './card';
+import { gridExportHandler, gridExportRoute, gridHandler, gridRoute } from './grid';
 import {
   archiveIndicatorHandler,
   archiveIndicatorRoute,
@@ -72,7 +73,7 @@ import {
 
 /**
  * Модуль «Показатели контрагентов» (поток В, задача 2.27): настройка показателей и «Кому вести», ввод за
- * месяц и окно значения со статусом месяца, «За период», «Не заполнено», индикатор незаполненных и
+ * месяц и окно значения со статусом месяца, «Ввод по месяцам», «За период», «Не заполнено», индикатор незаполненных и
  * вкладка «Показатели» карточки контрагента; ввод из Excel (задача 2.28).
  */
 export function kpiModule(deps: ApiDeps) {
@@ -92,6 +93,8 @@ export function kpiModule(deps: ApiDeps) {
     .openapi(entryRoute, entryHandler(deps))
     .openapi(checkMonthRoute, checkMonthHandler(deps))
     .openapi(rollbackMonthRoute, rollbackMonthHandler(deps))
+    .openapi(gridRoute, gridHandler(deps))
+    .openapi(gridExportRoute, gridExportHandler(deps))
     .openapi(periodRoute, periodHandler(deps))
     .openapi(periodValuesRoute, periodValuesHandler(deps))
     .openapi(periodExportRoute, periodExportHandler(deps))

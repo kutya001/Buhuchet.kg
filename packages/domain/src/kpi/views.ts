@@ -10,7 +10,7 @@ import {
   type KpiContractor,
   type KpiIndicator,
 } from './fill';
-import type { YearMonth } from '../common/months';
+import { addMonths, monthRange, type YearMonth } from '../common/months';
 
 /*
  * Что показывают экраны модуля «Показатели контрагентов»: ячейки «Ввода за месяц», строки «За период»,
@@ -178,6 +178,57 @@ export function cardRows(
         row.values.some((v) => v !== null),
     )
     .map(({ row }) => row);
+}
+
+/** В таблице «Ввода по месяцам» — не больше месяцев (прототип `KG_MAX`). */
+export const KPI_GRID_MAX_MONTHS = 24;
+
+/**
+ * Месяцы «Ввода по месяцам»: «с» позже «по» — меняются местами; период длиннее 24 месяцев — последние 24
+ * (`cut`, прототип: «показаны последние 24»).
+ */
+export function gridMonths(a: YearMonth, b: YearMonth) {
+  const [from, to] = a <= b ? [a, b] : [b, a];
+  const first = addMonths(to, 1 - KPI_GRID_MAX_MONTHS);
+  const cut = from < first;
+  return { from, to, months: monthRange(cut ? first : from, to), cut };
+}
+
+/** Строка вкладки «Ввод по месяцам»: показатель контрагента по месяцам периода. */
+export interface KpiGridRow {
+  contractorId: string;
+  indicatorId: string;
+  values: (IndicatorValue | null)[];
+  states: KpiCellState[];
+  start: YearMonth;
+  offSince: YearMonth | null;
+}
+
+/**
+ * Строки «Ввода по месяцам» (прототип v80 `kGridRows`): неразовые контрагенты × действующие показатели,
+ * если показатель ведётся хотя бы в одном месяце периода (и раньше «с <месяц>») или по нему есть значения.
+ */
+export function gridRows(
+  book: KpiBook,
+  contractors: readonly KpiContractor[],
+  months: readonly YearMonth[],
+  valueOf: KpiValueOf,
+): KpiGridRow[] {
+  const indicators = activeIndicators(book);
+  return contractors
+    .filter((c) => !c.oneOff)
+    .flatMap((c) =>
+      indicators
+        .map((i) => ({
+          contractorId: c.id,
+          indicatorId: i.id,
+          values: months.map((m) => valueOf(c.id, i.id, m)),
+          states: months.map((m) => cellState(book, i, c, m)),
+          start: indicatorStart(i, book.target(i.id, c.id), c),
+          offSince: offSince(i, book, c.id),
+        }))
+        .filter((r) => r.states.some((s) => s !== 'off') || r.values.some((v) => v !== null)),
+    );
 }
 
 /**

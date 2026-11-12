@@ -22,12 +22,16 @@ import {
   useMediaQuery,
   useToast,
   type ShellCount,
+  useWindow,
 } from '@buhuchet/ui';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { useShell } from '../shell/context';
+import { tabHref } from '../shell/modules';
 import { cardQuery, missingSummaryQuery, useKpiRefresh } from './kpi-data';
 import { useKpiEntry } from './kpi-entry';
 import { exCellOf, exKey, type KxRef, KxTd, putCells } from './kpi-ex';
@@ -40,6 +44,7 @@ import {
   valueText,
 } from './kpi-format';
 import { PeriodBar, type Period } from './kpi-period-bar';
+import { setKpiChoice } from './kpi-state';
 import { MonthMini } from './kpi-status';
 import {
   FIRST_CLASS,
@@ -106,6 +111,9 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
   const refresh = useKpiRefresh();
   const phone = useMediaQuery(PHONE_QUERY);
   const entry = useKpiEntry();
+  const router = useRouter();
+  const { clearSearch } = useShell();
+  const { leave } = useWindow();
   const [period, setPeriod] = useState<Period | null>(null);
   const [chart, setChart] = useState<string | null>(null);
   const [past, setPast] = useState<{ n: number; open: boolean } | null>(null);
@@ -156,6 +164,19 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
   const rows = data.rows;
   const chosen = rows.find((r) => r.indicator.id === chart) ?? rows[0];
   const onEntry = (month: string) => void entry.open(contractorId, month);
+  /**
+   * «Ввести в таблице» (прототип v80 `kc-grid`): вкладка «Ввод по месяцам» с этим контрагентом за период
+   * карточки, но не позже идущего месяца; поиск сброшен, карточка закрыта.
+   */
+  const toGrid = () => {
+    const to = shownPeriod.to > data.current ? data.current : shownPeriod.to;
+    const from = shownPeriod.from < to ? shownPeriod.from : to;
+    setKpiChoice({ grid: { period: { from, to }, cps: [contractorId], inds: null, resp: '' } });
+    clearSearch();
+    // Переход из открытого окна — с заменой записи истории: «Назад» не вернёт к закрытой карточке.
+    leave();
+    router.replace(tabHref('kpi', 'grid'));
+  };
 
   return (
     <div className="flex flex-col gap-3.5" data-kpi-card={contractorId}>
@@ -180,10 +201,26 @@ export function KpiCardTab({ contractorId }: { contractorId: string }) {
         />
       ) : (
         <>
-          <Hint>
-            {t('kpi.card.hint')}
-            {data.editable ? ` ${t('kpi.card.hint_edit')}` : ''}
-          </Hint>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <Hint>
+                {t('kpi.card.hint')}
+                {data.editable ? ` ${t('kpi.card.hint_edit')}` : ''}
+              </Hint>
+            </div>
+            {data.editable ? (
+              <button
+                type="button"
+                className={buttonClass('default', 'sm')}
+                title={t('kpi.card.to_grid_title')}
+                onClick={toGrid}
+                data-kpi-card-grid=""
+              >
+                <Icon name="table" size="sm" />
+                {t('kpi.card.to_grid')}
+              </button>
+            ) : null}
+          </div>
           {phone ? (
             rows.map((r) => (
               <CardMini
