@@ -9,6 +9,7 @@ import type {
 } from '@buhuchet/domain';
 import { listQueryParams, type ListQuery } from '@buhuchet/shared';
 import {
+  activeBoardKey,
   AUDIT_COLUMNS,
   effectiveGroup,
   effectiveSort,
@@ -17,6 +18,7 @@ import {
   PHONE_QUERY,
   screenVisibleKeys,
   useMediaQuery,
+  type BoardChoice,
   type GridPage,
 } from '@buhuchet/ui';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
@@ -40,7 +42,8 @@ type Filters = Record<string, ListFilterValue>;
  * сохраняются (после сохранения записи они не сбрасываются). Поиск — по видимым столбцам, через
  * 300 мс после последней буквы. Новые поиск, фильтры или группировка — снова первая страница. Пока
  * грузится следующая страница, видна прежняя. Сервер вернул другую страницу (за концом списка —
- * последняя) — номер на экране тот же, что у сервера.
+ * последняя) — номер на экране тот же, что у сервера. Вид «Доска» (`kanban`) — тот же запрос, что
+ * группировка по столбцу доски: сервер считает столбцы доски, число записей и суммы.
  */
 export function useListPage<Row>({
   gridKey,
@@ -54,6 +57,7 @@ export function useListPage<Row>({
   fetchPage,
   extra,
   initialFilters,
+  kanban,
 }: {
   gridKey: GridKey;
   /**
@@ -78,6 +82,8 @@ export function useListPage<Row>({
   extra?: Readonly<Record<string, string>>;
   /** Фильтры, с которыми список открыт (плашка «Главной», `usePresetFilters`): первый запрос — сразу с ними. */
   initialFilters?: Readonly<Filters>;
+  /** Доска списка (тот же проп `kanban` у `DataGrid`): в виде «Доска» записи приходят по её столбцам. */
+  kanban?: BoardChoice;
 }) {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>(() => ({ ...initialFilters }));
@@ -86,7 +92,9 @@ export function useListPage<Row>({
   const all = audit ? [...columns, ...AUDIT_COLUMNS] : columns;
   const keys = all.map((c) => c.key);
   const visible = screenVisibleKeys(all, settings, defaultVisible, phone);
-  const group = effectiveGroup(keys, settings);
+  // Доска — один уровень групп по её столбцу; суммы — у видимых числовых столбцов, без «Не считать».
+  const board = activeBoardKey(kanban, keys, settings, phone);
+  const group = board !== null ? [board] : effectiveGroup(keys, settings);
 
   // Поиск, фильтры или группировка сменились — список с первой страницы (прототип `s.page = 0`).
   const scope = JSON.stringify([q, filters, group, extra ?? null]);
@@ -104,7 +112,9 @@ export function useListPage<Row>({
     size: pageSizeOf(settings),
     filters,
     ...(q ? { search: { q, keys: visible } } : {}),
-    ...(group.length ? { group, agg: groupAggs(all, visible, settings) } : {}),
+    ...(group.length
+      ? { group, agg: groupAggs(all, visible, board !== null ? {} : settings) }
+      : {}),
   };
   const params = { ...listQueryParams(query), ...extra };
 

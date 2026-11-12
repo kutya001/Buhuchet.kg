@@ -3,6 +3,7 @@ import {
   ENUM_FILTER_STEPS_MAX,
   ENUM_FILTER_VALS_MAX,
   enumSelectionSize,
+  GRID_VIEWS,
   GROUP_AGGS,
   isListPageSize,
   MAX_GROUP_LEVELS,
@@ -282,8 +283,9 @@ export const GridKeyParam = z.string().regex(/^[a-z][a-z0-9-]{0,30}\.[a-z][a-z0-
  * поиск не запоминаются.
  */
 export const ViewSettings = z.object({
-  view: z.enum(['table', 'cards']).optional(),
-  phoneView: z.enum(['table', 'cards']).optional(),
+  view: z.enum(GRID_VIEWS).optional(),
+  phoneView: z.enum(GRID_VIEWS).optional(),
+  kb: ColumnKey.optional(),
   density: z.enum(['normal', 'compact']).optional(),
   width: z.enum(['full', 'center']).optional(),
   shown: z.array(ColumnKey).max(COLUMN_LIST_MAX).optional(),

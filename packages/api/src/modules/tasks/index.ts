@@ -33,6 +33,8 @@ import {
   exportTasksRoute,
   listTasksHandler,
   listTasksRoute,
+  taskBoardOptionsHandler,
+  taskBoardOptionsRoute,
   taskSummaryHandler,
   taskSummaryRoute,
   taskValuesHandler,
@@ -56,6 +58,7 @@ export function tasksModule(deps: ApiDeps) {
       .openapi(taskValuesRoute, taskValuesHandler(deps))
       .openapi(exportTasksRoute, exportTasksHandler(deps))
       .openapi(taskFormOptionsRoute, taskFormOptionsHandler(deps))
+      .openapi(taskBoardOptionsRoute, taskBoardOptionsHandler(deps))
       .openapi(taskProjectsRoute, taskProjectsHandler(deps))
       .openapi(getTaskRoute, getTaskHandler(deps))
       .openapi(createTaskRoute, createTaskHandler(deps))

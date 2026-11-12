@@ -3,6 +3,7 @@ import {
   exportTasks,
   listTasksPage,
   listTaskValues,
+  taskBoardExecutors,
   taskPendingStats,
   taskTabCounts,
   tasksOrgEmpty,
@@ -17,6 +18,7 @@ import {
   ListQueryParams,
   ListValues,
   ListValuesQuery,
+  TaskBoardOptions,
   TaskList,
   TaskSummary,
   TaskTabParam,
@@ -133,6 +135,40 @@ export function taskSummaryHandler(deps: ApiDeps): RouteHandler<typeof taskSumma
       return { ...counts, ...pending, monthStart: monthStart(today), empty };
     });
     return c.json(body, 200);
+  };
+}
+
+export const taskBoardOptionsRoute = createRoute({
+  method: 'get',
+  path: '/tasks/board-options',
+  tags: ['tasks'],
+  summary: 'Столбцы доски задач, которые видны и без задач',
+  middleware: [requireEmployee] as const,
+  responses: {
+    200: {
+      description:
+        'Действующие сотрудники — столбцы доски по исполнителю; без права «Видеть задачи всех» — пусто',
+      content: { 'application/json': { schema: TaskBoardOptions } },
+    },
+    401: { description: 'Нет входа', content: error },
+    403: off,
+  },
+});
+
+/**
+ * Доска задач (прототип `taskKanban`, `show.exec`): сотрудники без задач видны столбцами только тому,
+ * кто видит задачи всех; остальным — столбцы только их задач, список сотрудников им не отдаётся.
+ */
+export function taskBoardOptionsHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof taskBoardOptionsRoute, AppEnv> {
+  return async (c) => {
+    const viewer = viewerOf(subjectOf(c));
+    const executors = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      await requireTasks(tx, orgContextOf(c).orgId);
+      return viewer.all ? taskBoardExecutors(tx) : [];
+    });
+    return c.json({ executors }, 200);
   };
 }
 

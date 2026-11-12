@@ -144,6 +144,7 @@ export {
   type DataGridProps,
 } from './grid/data-grid';
 export { FilterPanel, type ValueLabels } from './grid/grid-filter';
+export * from './grid/grid-board';
 export * from './grid/grid-filters';
 export * from './grid/grid-groups';
 export * from './grid/grid-state';
@@ -152,6 +153,7 @@ export {
   GridBulkBar,
   GridToolbar,
   GroupPanel,
+  type GridBoardChoice,
   type GridSelectionBar,
 } from './grid/grid-toolbar';
 export {

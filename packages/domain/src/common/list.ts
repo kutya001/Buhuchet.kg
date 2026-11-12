@@ -413,20 +413,26 @@ export const DEFAULT_LIST_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
 /**
  * Настройки вида списка у пользователя (ТЗ «Настройки вида»; прототип gsave): вид «Таблица /
- * Карточки» — отдельно на ПК (`view`) и на телефоне (`phoneView`), плотность, ширина, показанные и скрытые столбцы (столбца нет ни там, ни там — он
+ * Карточки / Доска» — отдельно на ПК (`view`) и на телефоне (`phoneView`), столбец доски (`kb`), плотность, ширина, показанные и скрытые столбцы (столбца нет ни там, ни там — он
  * появился позже, у него видимость по умолчанию), порядок, ширины в px, сортировка (null —
  * пользователь выключил сортировку, нет поля — по умолчанию), записей на странице, группировка
  * (до двух столбцов) и итоги групп (`agg`). У страницы модуля (`statsViewKey`) — только «Статистика»:
  * показана ли она на ПК (`stats`) и на телефоне (`phoneStats`). Схема для API — `ViewSettings` в
  * `@buhuchet/shared`.
  */
+/** Вид списка: «Таблица», «Карточки» и «Доска» (канбан; только у списков, где она есть). */
+export const GRID_VIEWS = ['table', 'cards', 'kanban'] as const;
+export type GridViewKind = (typeof GRID_VIEWS)[number];
+
 export interface GridViewSettings {
   group?: string[];
   agg?: Record<string, GroupAggChoice>;
   stats?: boolean;
   phoneStats?: boolean;
-  view?: 'table' | 'cards';
-  phoneView?: 'table' | 'cards';
+  view?: GridViewKind;
+  phoneView?: GridViewKind;
+  /** Вид «Доска»: столбец списка, по значениям которого разложены записи (прототип `s.kb`). */
+  kb?: string;
   density?: 'normal' | 'compact';
   width?: 'full' | 'center';
   shown?: string[];

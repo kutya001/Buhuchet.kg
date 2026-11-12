@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  enumChecked,
   LIST_PAGE_SIZES,
   pageCount,
   shownRange,
@@ -21,6 +22,14 @@ import { useToast } from '../toast';
 import { PHONE_QUERY, useMediaQuery } from '../use-media';
 import { auditColumns } from './audit';
 import { FilterPanel, type ValueLabels } from './grid-filter';
+import {
+  boardColumns,
+  boardKey,
+  boardKeys,
+  boardTargets,
+  type BoardColumn,
+  type GridKanban,
+} from './grid-board';
 import { activeFilterKeys, chipText, unlabeledEnumFilters } from './grid-filters';
 import { effectiveGroup, groupAggs, groupPaths, groupTree, withGroup } from './grid-groups';
 import {
@@ -31,6 +40,7 @@ import {
   toggleSort,
 } from './grid-state';
 import { GridCards } from './grid-cards';
+import { GridKanban as GridBoard } from './grid-kanban';
 import { GridTable, type GridTableGroups } from './grid-table';
 import { GridFoldButton, GridToolbar, type GridFold } from './grid-toolbar';
 import { useRowEvents } from './row-events';
@@ -93,6 +103,11 @@ export interface DataGridProps<Row> {
   /** Вид закреплён модулем: переключателя «Таблица / Карточки» нет. */
   fixedView?: 'table' | 'cards';
   /**
+   * Вид «Доска» (канбан): есть — третий вид списка. Экран в этом виде просит у сервера записи,
+   * сгруппированные по столбцу доски (`useListPage` с тем же `kanban`).
+   */
+  kanban?: GridKanban<Row>;
+  /**
    * Своя карточка записи в виде «Карточки» (прототип `cardHtml`: видео — обложкой во всю ширину);
    * нет — заголовок и пары «подпись — значение» видимых столбцов.
    */
@@ -154,6 +169,7 @@ export function DataGrid<Row>({
   openMenu = false,
   bulk,
   fixedView,
+  kanban,
   cardRender,
   caption,
   filters = NO_FILTERS,
@@ -174,19 +190,30 @@ export function DataGrid<Row>({
   );
   // Отмеченные строки — по ключу записи; выбор переживает переход по страницам до «Снять выбор».
   const [picked, setPicked] = useState<ReadonlyMap<string, Row>>(() => new Map());
-  const [menu, setMenu] = useState<{ row: Row; place: MenuPlace } | null>(null);
+  // `move` — второй шаг меню карточки доски: «Перенести в столбец…» → список столбцов.
+  const [menu, setMenu] = useState<{ row: Row; place: MenuPlace; move?: boolean } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
+
+  const keys = columns.map((c) => c.key);
+  // Доска: её столбец — значение столбца списка; записи приходят сгруппированными по нему.
+  const kbKey = kanban ? boardKey(kanban, keys, settings) : null;
+  const view = effectiveView(settings, phone, fixedView, kbKey !== null);
+  const onBoard = view === 'kanban' && kanban !== undefined && kbKey !== null;
+  const canMove = onBoard && !!kanban.drop;
   const events = useRowEvents<Row>({
     onOpen,
-    onMenu: actions ? (row, place) => setMenu({ row, place }) : undefined,
-    hasMenu: actions ? (row) => actions(row).length > 0 : undefined,
+    onMenu: actions || canMove ? (row, place) => setMenu({ row, place }) : undefined,
+    hasMenu:
+      actions || canMove
+        ? (row) => canMove || (actions ? actions(row).length > 0 : false)
+        : undefined,
     openMenu,
   });
 
-  const keys = columns.map((c) => c.key);
   const shown = screenVisibleKeys(columns, settings, defaultVisible, phone);
   const visible = shown.map((k) => columns.find((c) => c.key === k)!);
-  const group = effectiveGroup(keys, settings);
+  // На доске группировки нет: вместо неё — столбец доски.
+  const group = onBoard ? [] : effectiveGroup(keys, settings);
   const groupKey = group.join('|');
   // Свёрнутые группы — пока группировка та же (прототип `s.closed`, сбрасывается при смене уровней).
   const [closed, setClosed] = useState<{ key: string; paths: ReadonlySet<string> }>(() => ({
@@ -219,7 +246,6 @@ export function DataGrid<Row>({
     }
   }, [unlabeled, loadValues]);
   const searching = search.trim() !== '';
-  const view = effectiveView(settings, phone, fixedView);
   const sort = effectiveSort(settings, defaultSort, keys);
   const size = pageSizeOf(settings);
   const total = data?.total ?? null;
@@ -236,6 +262,54 @@ export function DataGrid<Row>({
 
   const tree =
     group.length && data?.groups ? groupTree(data.groups, data.items, data.rowGroups ?? []) : null;
+  // Столбцы доски: группы с сервера и столбцы, которые видны и пустыми.
+  const boardFilter = onBoard ? filters[kbKey] : undefined;
+  const board =
+    onBoard && data?.groups
+      ? boardColumns({
+          groups: data.groups,
+          rows: data.items,
+          rowGroups: data.rowGroups ?? [],
+          order: kanban.order?.[kbKey],
+          show: kanban.show?.[kbKey],
+          merge: kanban.merge?.[kbKey],
+          searching,
+          allowed:
+            boardFilter?.type === 'enum'
+              ? (v) => enumChecked(boardFilter, v.key, v.label)
+              : undefined,
+        })
+      : null;
+  const boardOf = (row: Row): BoardColumn<Row> | undefined => {
+    const id = rowKey(row);
+    return board?.columns.find((c) => c.rows.some((r) => rowKey(r) === id));
+  };
+  const moveTo = (row: Row, to: BoardColumn<Row>) => {
+    if (!onBoard || !kanban.drop) return;
+    kanban.drop(row, kbKey, { key: to.key, label: to.label ?? labels.empty });
+  };
+  /** Пункты меню записи; на доске с переносом — ещё «Перенести в столбец…» (телефон и клавиатура). */
+  const menuItems = (row: Row): readonly ActionEntry[] => {
+    const own = actions ? actions(row) : [];
+    if (!canMove || !board || board.columns.length < 2) return own;
+    const move: ActionEntry = {
+      id: 'board-move',
+      label: labels.boardMove,
+      icon: 'board',
+      sub: columns.find((c) => c.key === kbKey)?.label,
+      // Меню записи закрывается до действия пункта — следом у той же карточки открывается список столбцов.
+      run: () => {
+        if (menu) setMenu({ ...menu, move: true });
+      },
+    };
+    return own.length ? [...own, { id: 'board-sep', separator: true }, move] : [move];
+  };
+  const moveItems = (row: Row): readonly ActionEntry[] =>
+    boardTargets(board?.columns ?? [], boardOf(row)?.key ?? '\u0000').map((c) => ({
+      id: `to-${c.key}`,
+      label: c.label ?? labels.empty,
+      run: () => moveTo(row, c),
+    }));
   // Группы есть — одна кнопка над списком сворачивает их все или, если все свёрнуты, разворачивает.
   const allPaths = tree ? groupPaths(tree) : [];
   const fold: GridFold | undefined = allPaths.length
@@ -312,6 +386,30 @@ export function DataGrid<Row>({
       ) : (
         empty
       );
+  } else if (onBoard) {
+    body = board ? (
+      <GridBoard
+        columns={visible}
+        allColumns={columns}
+        titleKey={titleKey}
+        boardKey={kbKey}
+        sumKey={visible.find((c) => c.total)?.key}
+        board={board.columns}
+        cut={board.cut}
+        rowKey={rowKey}
+        rowTone={rowTone}
+        rowStripe={rowStripe}
+        clickable={!!onOpen || (openMenu && !!actions)}
+        events={events}
+        hasMenu={(row) => menuItems(row).length > 0}
+        draggable={canMove && !phone}
+        onMove={moveTo}
+        labels={labels}
+      />
+    ) : (
+      // Вид только что сменили: прежняя страница пришла без столбцов доски.
+      <GridSkeleton />
+    );
   } else if (view === 'table') {
     body = (
       <GridTable
@@ -373,7 +471,7 @@ export function DataGrid<Row>({
       data-grid
       data-density={settings.density ?? 'normal'}
       data-view={view}
-      className={`flex min-w-0 flex-col gap-2.5 ${settings.width === 'center' ? 'mx-auto w-full max-w-[1180px]' : ''}`}
+      className={`flex min-w-0 flex-col gap-2.5 ${settings.width === 'center' && !onBoard ? 'mx-auto w-full max-w-[1180px]' : ''}`}
     >
       <GridToolbar
         columns={columns}
@@ -383,6 +481,17 @@ export function DataGrid<Row>({
         onResetView={onResetView}
         view={view}
         fixedView={fixedView}
+        board={
+          kanban && kbKey !== null
+            ? {
+                key: kbKey,
+                options: boardKeys(kanban, keys).map((k) => ({
+                  key: k,
+                  label: columns.find((c) => c.key === k)!.label,
+                })),
+              }
+            : undefined
+        }
         phone={phone}
         total={error ? null : total}
         caption={caption}
@@ -425,6 +534,20 @@ export function DataGrid<Row>({
         />
       )}
       {body}
+      {!error && !loading && data && data.total > 0 && board && (
+        <div
+          className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted"
+          data-grid-footer
+        >
+          <span>{labels.boardShown(board.columns.length, data.total)}</span>
+          <div className="flex-1" />
+          {canMove && (
+            <span className="text-faint" data-board-tip>
+              {phone ? labels.boardTipMenu : labels.boardTipDrag}
+            </span>
+          )}
+        </div>
+      )}
       {!error && !loading && data && data.total > 0 && tree && (
         <div
           className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted"
@@ -437,11 +560,11 @@ export function DataGrid<Row>({
         !loading &&
         data &&
         data.total > 0 &&
-        (!tree || pageCount(data.total, 'all') > 1) && (
+        (!(tree || onBoard) || pageCount(data.total, 'all') > 1) && (
           <GridFooter
             page={data.page}
             total={data.total}
-            size={tree ? 'all' : size}
+            size={tree || onBoard ? 'all' : size}
             onPageChange={onPageChange}
             onSizeChange={(next) => {
               onSettingsChange({ ...settings, size: next });
@@ -471,11 +594,12 @@ export function DataGrid<Row>({
           />
         </FloatingPanel>
       )}
-      {menu && actions && (
+      {menu && (actions || canMove) && (
         <ActionMenu
-          items={actions(menu.row)}
+          key={menu.move ? 'move' : 'actions'}
+          items={menu.move ? moveItems(menu.row) : menuItems(menu.row)}
           place={menu.place}
-          label={labels.actions}
+          label={menu.move ? labels.boardMove : labels.actions}
           onClose={closeMenu}
         />
       )}

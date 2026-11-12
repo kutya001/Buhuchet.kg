@@ -247,6 +247,15 @@ export const TaskFormOptions = z.object({
 });
 export type TaskFormOptions = z.infer<typeof TaskFormOptions>;
 
+/**
+ * Доска задач (прототип `taskKanban`, `show.exec`): действующие сотрудники — столбцы доски «Столбцы:
+ * Исполнитель», которые видны и без задач. Без права «Видеть задачи всех» список пуст.
+ */
+export const TaskBoardOptions = z.object({
+  executors: z.array(z.object({ id: Uuid, shortName: z.string() })),
+});
+export type TaskBoardOptions = z.infer<typeof TaskBoardOptions>;
+
 /** Вкладка «Задачи» карточки контрагента: «Задач: N · открытых M» и последние 40. */
 export const ContractorTasks = z.object({
   total: z.number().int().nonnegative(),

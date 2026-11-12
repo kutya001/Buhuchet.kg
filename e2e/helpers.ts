@@ -189,6 +189,19 @@ export async function finger(page: Page) {
   };
 }
 
+/**
+ * Телефон: вид списка «Таблица». Кнопка вида называет следующий вид по кругу: у списка с «Доской»
+ * после «Карточек» (вид телефона по умолчанию) идёт «Доска» и только за ней «Таблица», у списка без
+ * доски — сразу «Таблица» (прототип v84, ui/grid.js).
+ */
+export async function phoneTableView(page: Page) {
+  const board = page.getByRole('button', { name: 'Вид списка: Доска', exact: true });
+  const table = page.getByRole('button', { name: 'Вид списка: Таблица', exact: true });
+  await expect(board.or(table)).toBeVisible();
+  if (await board.isVisible()) await board.click();
+  await table.click();
+}
+
 /** Положение элемента, когда анимация появления закончилась (два одинаковых замера подряд). */
 export async function settledBox(locator: Locator) {
   let last = '';

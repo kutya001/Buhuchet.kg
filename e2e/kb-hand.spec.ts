@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { ownerPassword } from './admin';
-import { newOrgOwner, signIn, uniqueLogin } from './helpers';
+import { newOrgOwner, phoneTableView, signIn, uniqueLogin } from './helpers';
 
 // «Отметить выполненным» в «Уроках» (решение заказчика 06.11.2026, прототип v74 ckHandMark, ckHandOff):
 // шаг засчитывается сразу, без перехода и показа, в процент и уровень; «Снять отметку» возвращает
@@ -118,7 +118,7 @@ test.describe('Этап 3: База знаний — «Отметить выпо
     await page.goto('/app/kb/team');
     const grid = page.locator('[data-grid]');
     await expect(grid.locator('[data-id]').first()).toBeVisible();
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    if (isMobile) await phoneTableView(page);
     const head = grid.locator('thead').first();
     await expect(head.locator('th[data-column="hand"]')).toContainText('Из них отмечено вручную');
     const keys = await head

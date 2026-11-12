@@ -5,6 +5,7 @@ import {
   groupAggOf,
   groupLevels,
   isNumericColumn,
+  type GridViewKind,
   type GridViewSettings,
   type GroupAggChoice,
 } from '@buhuchet/domain';
@@ -16,8 +17,10 @@ import { Icon } from '../icon';
 import { Popover } from '../popover';
 import { withGroup } from './grid-groups';
 import {
+  gridViews,
   isHidden,
   moveColumn,
+  nextView,
   orderedKeys,
   setColumnVisible,
   setView as withView,
@@ -25,6 +28,17 @@ import {
   visibleKeys,
 } from './grid-state';
 import type { GridBulkAction, GridColumn, GridLabels } from './types';
+
+/** Значки видов списка (прототип `VI`). */
+const VIEW_ICON = { table: 'table', cards: 'cards', kanban: 'board' } as const;
+
+/** Вид «Доска» на панели: по какому столбцу списка разложены записи и из каких можно выбрать. */
+export interface GridBoardChoice {
+  /** Столбец доски сейчас. */
+  key: string;
+  /** Столбцы списка, по которым можно разложить доску, с подписями. */
+  options: readonly { key: string; label: string }[];
+}
 
 /**
  * Кнопка панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`), область
@@ -41,8 +55,10 @@ interface ToolbarProps<Row> {
   settings: GridViewSettings;
   onSettingsChange: (settings: GridViewSettings) => void;
   onResetView: () => void;
-  view: 'table' | 'cards';
+  view: GridViewKind;
   fixedView?: 'table' | 'cards';
+  /** У списка есть вид «Доска»: третья кнопка вида; на доске — выбор её столбца вместо «Группировки». */
+  board?: GridBoardChoice;
   phone: boolean;
   total: number | null;
   /** Своя строка вместо числа записей (прототип `caption`: «Видео: 9 · Опубликовано: 7 · Занято: …»). */
@@ -116,6 +132,7 @@ export function GridToolbar<Row>({
   onResetView,
   view,
   fixedView,
+  board,
   phone,
   total,
   caption,
@@ -130,9 +147,19 @@ export function GridToolbar<Row>({
   const keys = columns.map((c) => c.key);
   const visible = screenVisibleKeys(columns, settings, defaultVisible, phone);
   const shown = visible.length;
-  const columnsLabel = `${labels.columns} (${shown}/${keys.length})`;
+  const kanban = view === 'kanban' && !!board;
+  // На доске «Столбцы» — это поля карточки: первые пять видимых (прототип «Поля (5/12)»).
+  const columnsName = kanban ? labels.boardFields : labels.columns;
+  const columnsLabel = `${columnsName} (${shown}/${keys.length})`;
   const groupLabel = group.length ? labels.groupN(group.length) : labels.group;
-  const setView = (next: 'table' | 'cards') => onSettingsChange(withView(settings, phone, next));
+  const setView = (next: GridViewKind) => onSettingsChange(withView(settings, phone, next));
+  const views = gridViews(!!board);
+  const boardName = kanban ? (board.options.find((o) => o.key === board.key)?.label ?? '') : '';
+  const boardLabel = labels.boardBy(boardName);
+  // На телефоне у кнопок-значков — полные подписи прототипа: «Столбцы доски: …», «Поля карточки».
+  const boardPhoneLabel = labels.boardByPhone(boardName);
+  const columnsTitle = kanban ? labels.boardFieldsPhone(shown, keys.length) : columnsLabel;
+  const columnsAria = kanban ? labels.boardFieldsName : columnsLabel;
 
   return (
     <div className="flex min-h-[33px] flex-wrap items-center gap-2">
@@ -146,7 +173,7 @@ export function GridToolbar<Row>({
       <div className="flex-1" />
       {!fixedView &&
         (phone ? (
-          <PhoneViewToggle view={view} onChange={setView} labels={labels} />
+          <PhoneViewToggle to={nextView(view, !!board)} onChange={setView} labels={labels} />
         ) : (
           <div
             role="group"
@@ -154,71 +181,110 @@ export function GridToolbar<Row>({
             data-grid-view
             className="inline-flex gap-0.5 rounded-lg border border-line bg-pane-alt p-[3px]"
           >
-            {(['table', 'cards'] as const).map((v) => (
+            {views.map((v) => (
               <button
                 key={v}
                 type="button"
                 aria-pressed={view === v}
-                title={labels[v]}
+                data-view={v}
+                title={v === 'kanban' ? labels.kanbanHint : labels[v]}
                 onClick={() => setView(v)}
                 className={`inline-flex min-h-[26px] cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 py-1 text-[12.5px] font-[550] ${view === v ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
               >
-                <Icon name={v} size="sm" />
+                <Icon name={VIEW_ICON[v]} size="sm" />
                 <span>{labels[v]}</span>
               </button>
             ))}
           </div>
         ))}
+      {kanban && (
+        <Popover
+          label={labels.boardByHint}
+          role="menu"
+          placement="bottom-end"
+          trigger={({ open, toggle, id }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              aria-controls={id}
+              aria-haspopup="menu"
+              data-grid-board-by
+              title={phone ? boardPhoneLabel : labels.boardByHint}
+              aria-label={phone ? boardPhoneLabel : undefined}
+              className={phone ? `${PHONE_TOOL} text-ink` : buttonClass('default', 'sm')}
+            >
+              <Icon name="layers" size="sm" />
+              {!phone && boardLabel}
+            </button>
+          )}
+        >
+          {(close) => (
+            <ActionList
+              onPick={close}
+              items={board.options.map((o) => ({
+                id: o.key,
+                label: o.label,
+                icon: 'layers' as const,
+                on: o.key === board.key,
+                run: () => onSettingsChange({ ...settings, kb: o.key }),
+              }))}
+            />
+          )}
+        </Popover>
+      )}
+      {!kanban && (
+        <Popover
+          label={labels.group}
+          placement="bottom-end"
+          padded
+          trigger={({ open, toggle, id }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              aria-controls={id}
+              aria-haspopup="dialog"
+              data-grid-group-button
+              title={phone ? groupLabel : labels.groupButtonHint}
+              aria-label={phone ? groupLabel : undefined}
+              className={
+                phone
+                  ? `${PHONE_TOOL} ${group.length ? 'text-ink' : ''}`
+                  : buttonClass('default', 'sm')
+              }
+            >
+              <Icon name="layers" size="sm" />
+              {phone && group.length > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-1 -right-1 h-[15px] min-w-[15px] rounded-lg bg-accent px-[3px] text-center text-[9.5px] leading-[15px] font-bold text-on-accent"
+                >
+                  {group.length}
+                </span>
+              )}
+              {!phone && groupLabel}
+            </button>
+          )}
+        >
+          {(close) => (
+            <GroupPanel
+              columns={columns}
+              keys={keys}
+              visible={visible}
+              settings={settings}
+              onApply={(next) => {
+                onSettingsChange(next);
+                onGroupChange();
+                close();
+              }}
+              labels={labels}
+            />
+          )}
+        </Popover>
+      )}
       <Popover
-        label={labels.group}
-        placement="bottom-end"
-        padded
-        trigger={({ open, toggle, id }) => (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-expanded={open}
-            aria-controls={id}
-            aria-haspopup="dialog"
-            data-grid-group-button
-            title={phone ? groupLabel : labels.groupButtonHint}
-            aria-label={phone ? groupLabel : undefined}
-            className={
-              phone
-                ? `${PHONE_TOOL} ${group.length ? 'text-ink' : ''}`
-                : buttonClass('default', 'sm')
-            }
-          >
-            <Icon name="layers" size="sm" />
-            {phone && group.length > 0 && (
-              <span
-                aria-hidden="true"
-                className="absolute -top-1 -right-1 h-[15px] min-w-[15px] rounded-lg bg-accent px-[3px] text-center text-[9.5px] leading-[15px] font-bold text-on-accent"
-              >
-                {group.length}
-              </span>
-            )}
-            {!phone && groupLabel}
-          </button>
-        )}
-      >
-        {(close) => (
-          <GroupPanel
-            columns={columns}
-            keys={keys}
-            visible={visible}
-            settings={settings}
-            onApply={(next) => {
-              onSettingsChange(next);
-              onGroupChange();
-              close();
-            }}
-            labels={labels}
-          />
-        )}
-      </Popover>
-      <Popover
-        label={labels.columns}
+        label={columnsName}
         placement="bottom-end"
         padded
         trigger={({ open, toggle, id }) => (
@@ -229,8 +295,8 @@ export function GridToolbar<Row>({
             aria-controls={id}
             aria-haspopup="dialog"
             data-grid-columns-button
-            title={phone ? columnsLabel : undefined}
-            aria-label={phone ? columnsLabel : undefined}
+            title={phone ? columnsTitle : kanban ? labels.boardFieldsHint : undefined}
+            aria-label={phone ? columnsAria : undefined}
             className={phone ? PHONE_TOOL : buttonClass('default', 'sm')}
           >
             <Icon name="columns" size="sm" />
@@ -248,71 +314,74 @@ export function GridToolbar<Row>({
           />
         )}
       </Popover>
-      <Popover
-        label={labels.viewOptions}
-        role="menu"
-        placement="bottom-end"
-        trigger={({ open, toggle, id }) => (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-expanded={open}
-            aria-controls={id}
-            aria-haspopup="menu"
-            title={labels.viewOptionsHint}
-            aria-label={labels.viewOptions}
-            data-grid-options-button
-            className={phone ? PHONE_TOOL : RAISED_ICON}
-          >
-            <Icon name="sliders" size="sm" />
-          </button>
-        )}
-      >
-        {(close) => (
-          <ActionList
-            onPick={close}
-            items={[
-              {
-                id: 'normal',
-                label: labels.densityNormal,
-                icon: 'list',
-                on: (settings.density ?? 'normal') === 'normal',
-                run: () => onSettingsChange({ ...settings, density: 'normal' }),
-              },
-              {
-                id: 'compact',
-                label: labels.densityCompact,
-                icon: 'menu',
-                on: settings.density === 'compact',
-                run: () => onSettingsChange({ ...settings, density: 'compact' }),
-              },
-              { id: 'sep1', separator: true },
-              {
-                id: 'full',
-                label: labels.widthFull,
-                icon: 'columns',
-                on: (settings.width ?? 'full') === 'full',
-                run: () => onSettingsChange({ ...settings, width: 'full' }),
-              },
-              {
-                id: 'center',
-                label: labels.widthCenter,
-                icon: 'table',
-                on: settings.width === 'center',
-                run: () => onSettingsChange({ ...settings, width: 'center' }),
-              },
-              { id: 'sep2', separator: true },
-              {
-                id: 'reset',
-                label: labels.resetView,
-                icon: 'refresh',
-                sub: labels.resetViewSub,
-                run: onResetView,
-              },
-            ]}
-          />
-        )}
-      </Popover>
+      {/* На доске плотности и ширины нет — как в прототипе: только «Столбцы: …», «Поля» и «В Excel». */}
+      {!kanban && (
+        <Popover
+          label={labels.viewOptions}
+          role="menu"
+          placement="bottom-end"
+          trigger={({ open, toggle, id }) => (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              aria-controls={id}
+              aria-haspopup="menu"
+              title={labels.viewOptionsHint}
+              aria-label={labels.viewOptions}
+              data-grid-options-button
+              className={phone ? PHONE_TOOL : RAISED_ICON}
+            >
+              <Icon name="sliders" size="sm" />
+            </button>
+          )}
+        >
+          {(close) => (
+            <ActionList
+              onPick={close}
+              items={[
+                {
+                  id: 'normal',
+                  label: labels.densityNormal,
+                  icon: 'list',
+                  on: (settings.density ?? 'normal') === 'normal',
+                  run: () => onSettingsChange({ ...settings, density: 'normal' }),
+                },
+                {
+                  id: 'compact',
+                  label: labels.densityCompact,
+                  icon: 'menu',
+                  on: settings.density === 'compact',
+                  run: () => onSettingsChange({ ...settings, density: 'compact' }),
+                },
+                { id: 'sep1', separator: true },
+                {
+                  id: 'full',
+                  label: labels.widthFull,
+                  icon: 'columns',
+                  on: (settings.width ?? 'full') === 'full',
+                  run: () => onSettingsChange({ ...settings, width: 'full' }),
+                },
+                {
+                  id: 'center',
+                  label: labels.widthCenter,
+                  icon: 'table',
+                  on: settings.width === 'center',
+                  run: () => onSettingsChange({ ...settings, width: 'center' }),
+                },
+                { id: 'sep2', separator: true },
+                {
+                  id: 'reset',
+                  label: labels.resetView,
+                  icon: 'refresh',
+                  sub: labels.resetViewSub,
+                  run: onResetView,
+                },
+              ]}
+            />
+          )}
+        </Popover>
+      )}
       {fold && !phone && <GridFoldButton fold={fold} phone={false} labels={labels} />}
       {onExport &&
         (phone ? (
@@ -524,16 +593,16 @@ export function GridBulkBar<Row>({
   );
 }
 
+/** Телефон: одна кнопка показывает следующий вид по кругу и включает его. */
 function PhoneViewToggle({
-  view,
+  to,
   onChange,
   labels,
 }: {
-  view: 'table' | 'cards';
-  onChange: (view: 'table' | 'cards') => void;
+  to: GridViewKind;
+  onChange: (view: GridViewKind) => void;
   labels: GridLabels;
 }) {
-  const to = view === 'table' ? 'cards' : 'table';
   return (
     <button
       type="button"
@@ -541,9 +610,10 @@ function PhoneViewToggle({
       aria-label={labels.viewTo(labels[to])}
       onClick={() => onChange(to)}
       data-grid-view
+      data-view={to}
       className={PHONE_TOOL}
     >
-      <Icon name={to} size="sm" />
+      <Icon name={VIEW_ICON[to]} size="sm" />
     </button>
   );
 }

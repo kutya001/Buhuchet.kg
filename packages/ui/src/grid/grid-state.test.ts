@@ -5,6 +5,8 @@ import {
   dropColumn,
   effectiveSort,
   effectiveView,
+  gridViews,
+  nextView,
   setView,
   isHidden,
   moveColumn,
@@ -186,6 +188,21 @@ describe('вид и страница', () => {
     });
     expect(setView({}, false, 'cards')).toEqual({ view: 'cards' });
     expect(effectiveView({ view: 'cards' }, false, 'table')).toBe('table');
+  });
+
+  it('вид «Доска» — только у списка с доской; на телефоне виды переключаются по кругу', () => {
+    expect(effectiveView({ view: 'kanban' }, false, undefined, true)).toBe('kanban');
+    expect(effectiveView({ view: 'kanban' }, false)).toBe('table');
+    expect(effectiveView({ phoneView: 'kanban' }, true)).toBe('cards');
+    expect(effectiveView({ phoneView: 'kanban' }, true, undefined, true)).toBe('kanban');
+    expect(effectiveView({ view: 'kanban' }, false, 'cards', true)).toBe('cards');
+    expect(gridViews(false)).toEqual(['table', 'cards']);
+    expect(gridViews(true)).toEqual(['table', 'cards', 'kanban']);
+    expect(nextView('table', true)).toBe('cards');
+    expect(nextView('cards', true)).toBe('kanban');
+    expect(nextView('kanban', true)).toBe('table');
+    expect(nextView('cards', false)).toBe('table');
+    expect(setView({}, true, 'kanban')).toEqual({ phoneView: 'kanban' });
   });
 
   it('записей на странице — 25 по умолчанию', () => {

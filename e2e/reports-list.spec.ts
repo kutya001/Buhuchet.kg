@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, finger, newOrgOwner, settledBox, signIn } from './helpers';
+import { DEMO_PASSWORD, finger, newOrgOwner, phoneTableView, settledBox, signIn } from './helpers';
 import { asOwner, manualReport, newContractor, staffIds } from './reports';
 
 // «Отчеты для сдачи» → вкладки и список (задача 2.13, #69) через настоящий сайт. Отчёты — «Разовым
@@ -247,7 +247,7 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
 
     // Фильтр у столбца «Вид отчёта» (на телефоне — в виде «Таблица», как в прототипе); плашка фильтра
     // видна и в плитках, там же фильтр снимается.
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    if (isMobile) await phoneTableView(page);
     await grid.getByRole('button', { name: 'Фильтр: Вид отчёта' }).click();
     const filter = page.getByRole('dialog', { name: 'Вид отчёта' });
     // «1-Т» месячный и годовой — одно значение, как в прототипе.

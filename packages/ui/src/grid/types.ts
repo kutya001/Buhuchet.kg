@@ -124,6 +124,34 @@ export interface GridLabels {
   view: string;
   table: string;
   cards: string;
+  /** Третий вид — «Доска»; подсказка кнопки — «Доска: записи карточками по столбцам». */
+  kanban: string;
+  kanbanHint: string;
+  /** Кнопка столбца доски: «Столбцы: Статус»; подсказка — «Выбрать, по какому полю разложить записи на доске». */
+  boardBy: (label: string) => string;
+  boardByHint: string;
+  /** На доске вместо «Столбцы» — «Поля»; подсказка — «Какие поля показывать на карточке: первые пять видимых». */
+  boardFields: string;
+  boardFieldsHint: string;
+  /** Подписи кнопок-значков доски на телефоне: «Столбцы доски: {поле}», «Поля карточки (n/m)». */
+  boardByPhone: (label: string) => string;
+  boardFieldsPhone: (shown: number, total: number) => string;
+  boardFieldsName: string;
+  /** Столбец доски для диктора: «В работе: 12». */
+  boardColumn: (label: string, count: number) => string;
+  /** Пустой столбец: «Нет записей». */
+  boardEmpty: string;
+  /** «Показать ещё 30 из 45». */
+  boardMore: (next: number, left: number) => string;
+  /** «Показаны первые 60 столбцов из 75 — сузьте список фильтром или поиском». */
+  boardCut: (shown: number, total: number) => string;
+  /** Низ доски: «Столбцов: 4 · записей: 52». */
+  boardShown: (columns: number, total: number) => string;
+  /** Подсказки внизу: «Карточку можно перетащить в другой столбец», «Перенос — в меню карточки «⋯»». */
+  boardTipDrag: string;
+  boardTipMenu: string;
+  /** Пункт меню карточки: «Перенести в столбец…». */
+  boardMove: string;
   /** Кнопка вида на телефоне: «Вид списка: Карточки». */
   viewTo: (name: string) => string;
   /** «Столбцы». */
