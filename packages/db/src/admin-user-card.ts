@@ -1,6 +1,7 @@
 import {
   addMonths,
   bishkekDate,
+  formatPhone,
   indicatorValueText,
   isSessionEndReason,
   OPEN_REPORT_STATUSES,
@@ -35,7 +36,7 @@ import {
   telegramOutbox,
   users,
 } from './schema';
-import { endUserSessions } from './staff';
+import { endUserSessions, phoneCodes } from './staff';
 
 // Карточка пользователя в Админке (ТЗ «Админка» → «Карточка пользователя», решение заказчика
 // 09.11.2026; прототип admin/admin-cards.js, accCard). Только чтение, кроме «Завершить все сеансы».
@@ -83,11 +84,22 @@ export async function adminUserSessions(
   now: Date,
 ): Promise<{ rows: AdminSessionRecord[]; total: number; open: number }> {
   const s = adminSessions;
+  const of = eq(s.userId, userId);
+  const till = sql`least(${s.expiresAt}, ${s.startedAt} + make_interval(hours => ${SESSION_MAX_HOURS}))`;
+  // Журнал растёт с каждым входом: в память — только первые строки, числа считает база.
+  const [counts = { total: 0, open: 0 }] = await tx
+    .select({
+      total: sql<number>`count(*)::int`,
+      open: sql<number>`(count(*) filter (where ${s.endedAt} is null and ${till} > ${now.toISOString()}::timestamptz))::int`,
+    })
+    .from(s)
+    .where(of);
   const all = await tx
     .select()
     .from(s)
-    .where(eq(s.userId, userId))
-    .orderBy(desc(s.startedAt), desc(s.id));
+    .where(of)
+    .orderBy(desc(s.startedAt), desc(s.id))
+    .limit(ADMIN_CARD_ROWS);
   const rows = all.map((r): AdminSessionRecord => {
     const hardEnd = new Date(r.startedAt.getTime() + SESSION_MAX_HOURS * 3_600_000);
     const till = r.expiresAt < hardEnd ? r.expiresAt : hardEnd;
@@ -104,11 +116,7 @@ export async function adminUserSessions(
       endReason: open ? null : reason,
     };
   });
-  return {
-    rows: rows.slice(0, ADMIN_CARD_ROWS),
-    total: rows.length,
-    open: rows.filter((r) => r.open).length,
-  };
+  return { rows, total: counts.total, open: counts.open };
 }
 
 /** Список карточки: настоящее число записей и первые `ADMIN_CARD_ROWS` строк. */
@@ -119,6 +127,21 @@ export interface CardList<Row> {
 
 function cardList<Row>(rows: readonly Row[]): CardList<Row> {
   return { count: rows.length, rows: rows.slice(0, ADMIN_CARD_ROWS) };
+}
+
+const countAll = sql<number>`count(*)::int`;
+
+/**
+ * Список из запроса с пределом `ADMIN_CARD_ROWS`: число записей считает база, и только когда строк
+ * набралось до предела — иначе оно равно числу строк.
+ */
+async function capped<Row>(
+  rows: Row[],
+  count: () => Promise<{ n: number }[]>,
+): Promise<CardList<Row>> {
+  if (rows.length < ADMIN_CARD_ROWS) return { count: rows.length, rows };
+  const [total] = await count();
+  return { count: total?.n ?? rows.length, rows };
 }
 
 export interface AdminCardContractor {
@@ -166,6 +189,8 @@ export interface AdminUserCardRecord {
     id: string;
     shortName: string;
     phone: string | null;
+    /** Телефон по маске страны («+996 555 100 200») — как в карточке сотрудника. */
+    phoneText: string | null;
     isOwner: boolean;
     mustChangePassword: boolean;
     loginFailures: number;
@@ -213,10 +238,32 @@ export interface AdminUserCardRecord {
     actorAdmin: boolean;
     entity: string;
     action: string;
-    fields: string[];
+    /** Что изменено; «было → стало» — только у полей из `HISTORY_VALUE_FIELDS`. */
+    changes: { field: string; from: HistoryValue; to: HistoryValue }[];
     reason: string | null;
   }[];
 }
+
+export type HistoryValue = string | boolean | null;
+
+/**
+ * Поля, чьи значения «было → стало» показывает «История» карточки (ТЗ: «кто, когда, было → стало»).
+ * У остальных (пароль, id роли, незнакомые поля) наружу уходит только название поля.
+ */
+const HISTORY_VALUE_FIELDS: ReadonlySet<string> = new Set([
+  'fullName',
+  'shortName',
+  'login',
+  'phone',
+  'roleName',
+  'active',
+  'blocked',
+  'loginLocked',
+  'telegram',
+]);
+
+const historyValue = (v: unknown): HistoryValue =>
+  typeof v === 'string' ? v.slice(0, 200) : typeof v === 'boolean' ? v : null;
 
 const actor = alias(employees, 'actor');
 const actorUser = alias(users, 'actor_user');
@@ -228,7 +275,7 @@ function historyRow(r: {
   actorAdmin: boolean | null;
   entity: string;
   action: string;
-  changes: readonly { field: string }[];
+  changes: readonly { field: string; from?: unknown; to?: unknown }[];
   reason: string | null;
 }): AdminUserCardRecord['history'][number] {
   return {
@@ -238,7 +285,14 @@ function historyRow(r: {
     actorAdmin: r.actorAdmin === true,
     entity: r.entity,
     action: r.action,
-    fields: r.changes.map((c) => c.field),
+    changes: r.changes.map((c) => {
+      const shown = HISTORY_VALUE_FIELDS.has(c.field);
+      return {
+        field: c.field,
+        from: shown ? historyValue(c.from) : null,
+        to: shown ? historyValue(c.to) : null,
+      };
+    }),
     reason: r.reason,
   };
 }
@@ -328,14 +382,24 @@ export async function adminEmployeeCard(
   const month = today.slice(0, 7);
   const kpiMonth = addMonths(month, -1);
   const mine = and(eq(reports.responsibleEmployeeId, e.id), eq(reports.superseded, false));
-  const reportsOf = (where: ReturnType<typeof and>) =>
-    tx
+  const reportsOf = async (where: ReturnType<typeof and>) => {
+    const cond = and(mine, where);
+    const rows = await tx
       .select(reportRow)
       .from(reports)
       .innerJoin(contractors, eq(contractors.id, reports.contractorId))
       .leftJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
-      .where(and(mine, where))
-      .orderBy(asc(reports.dueDate), asc(reports.id));
+      .where(cond)
+      .orderBy(asc(reports.dueDate), asc(reports.id))
+      .limit(ADMIN_CARD_ROWS);
+    return capped(rows, () =>
+      tx
+        .select({ n: countAll })
+        .from(reports)
+        .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+        .where(cond),
+    );
+  };
 
   const role = await getRole(tx, e.roleId);
   const [tg] = await tx
@@ -346,20 +410,26 @@ export async function adminEmployeeCard(
     })
     .from(telegramLinks)
     .where(eq(telegramLinks.userId, input.userId));
-  const cps = await tx
-    .select({
-      id: contractors.id,
-      name: contractors.name,
-      inn: contractors.inn,
-      regime: taxRegimes.name,
-      serviceStatus: contractors.serviceStatus,
-    })
-    .from(contractors)
-    .leftJoin(taxRegimes, eq(taxRegimes.code, contractors.regimeCode))
-    .where(
-      and(eq(contractors.responsibleEmployeeId, e.id), ne(contractors.serviceStatus, 'archived')),
-    )
-    .orderBy(asc(contractors.name), asc(contractors.id));
+  const cpsOf = and(
+    eq(contractors.responsibleEmployeeId, e.id),
+    ne(contractors.serviceStatus, 'archived'),
+  );
+  const cps = await capped(
+    await tx
+      .select({
+        id: contractors.id,
+        name: contractors.name,
+        inn: contractors.inn,
+        regime: taxRegimes.name,
+        serviceStatus: contractors.serviceStatus,
+      })
+      .from(contractors)
+      .leftJoin(taxRegimes, eq(taxRegimes.code, contractors.regimeCode))
+      .where(cpsOf)
+      .orderBy(asc(contractors.name), asc(contractors.id))
+      .limit(ADMIN_CARD_ROWS),
+    () => tx.select({ n: countAll }).from(contractors).where(cpsOf),
+  );
   const due = await reportsOf(eq(reports.status, 'todo'));
   const inWork = await reportsOf(eq(reports.status, 'in_progress'));
   // Просрочена сдача — как в списке отчётов (report-list.ts, overdueOf): несданный отчёт со сдачей,
@@ -378,46 +448,55 @@ export async function adminEmployeeCard(
       sql`to_char(${reports.submittedOn}, 'YYYY-MM') = ${month}`,
     ),
   );
-  const openTasks = await tx
-    .select({
-      id: tasks.id,
-      title: tasks.title,
-      contractor: contractors.name,
-      dueDate: tasks.dueDate,
-      status: tasks.status,
-    })
-    .from(tasks)
-    .leftJoin(contractors, eq(contractors.id, tasks.contractorId))
-    .where(
-      and(
-        eq(tasks.executorEmployeeId, e.id),
-        inArray(tasks.status, ['todo', 'in_progress', 'rework']),
-      ),
-    )
-    .orderBy(asc(tasks.dueDate), asc(tasks.id));
-  const kpi = await tx
-    .select({
-      id: indicatorValues.id,
-      contractor: contractors.name,
-      indicator: indicators.name,
-      type: indicators.type,
-      unit: indicators.unit,
-      value: indicatorValues.value,
-      at: indicatorValues.updatedAt,
-    })
-    .from(indicatorValues)
-    .innerJoin(contractors, eq(contractors.id, indicatorValues.contractorId))
-    .innerJoin(indicators, eq(indicators.id, indicatorValues.indicatorId))
-    .where(
-      and(
-        eq(indicatorValues.month, kpiMonth),
-        or(
-          eq(indicatorValues.updatedBy, input.userId),
-          eq(indicatorValues.createdBy, input.userId),
-        ),
-      ),
-    )
-    .orderBy(asc(contractors.name), asc(indicators.name), asc(indicatorValues.id));
+  const tasksOf = and(
+    eq(tasks.executorEmployeeId, e.id),
+    inArray(tasks.status, ['todo', 'in_progress', 'rework']),
+  );
+  const openTasks = await capped(
+    await tx
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        contractor: contractors.name,
+        dueDate: tasks.dueDate,
+        status: tasks.status,
+      })
+      .from(tasks)
+      .leftJoin(contractors, eq(contractors.id, tasks.contractorId))
+      .where(tasksOf)
+      .orderBy(asc(tasks.dueDate), asc(tasks.id))
+      .limit(ADMIN_CARD_ROWS),
+    () => tx.select({ n: countAll }).from(tasks).where(tasksOf),
+  );
+  const kpiOf = and(
+    eq(indicatorValues.month, kpiMonth),
+    or(eq(indicatorValues.updatedBy, input.userId), eq(indicatorValues.createdBy, input.userId)),
+  );
+  const kpi = await capped(
+    await tx
+      .select({
+        id: indicatorValues.id,
+        contractor: contractors.name,
+        indicator: indicators.name,
+        type: indicators.type,
+        unit: indicators.unit,
+        value: indicatorValues.value,
+        at: indicatorValues.updatedAt,
+      })
+      .from(indicatorValues)
+      .innerJoin(contractors, eq(contractors.id, indicatorValues.contractorId))
+      .innerJoin(indicators, eq(indicators.id, indicatorValues.indicatorId))
+      .where(kpiOf)
+      .orderBy(asc(contractors.name), asc(indicators.name), asc(indicatorValues.id))
+      .limit(ADMIN_CARD_ROWS),
+    () =>
+      tx
+        .select({ n: countAll })
+        .from(indicatorValues)
+        .innerJoin(contractors, eq(contractors.id, indicatorValues.contractorId))
+        .innerJoin(indicators, eq(indicators.id, indicatorValues.indicatorId))
+        .where(kpiOf),
+  );
 
   const [progress] = await kbTeam(tx, input.orgId, [e.id]);
   const read = await kbReadArticles(tx, input.userId);
@@ -495,6 +574,7 @@ export async function adminEmployeeCard(
       id: e.id,
       shortName: e.shortName,
       phone: e.phone,
+      phoneText: e.phone ? formatPhone(e.phone, await phoneCodes(tx)) : null,
       isOwner: e.isOwner,
       mustChangePassword: e.mustChangePassword,
       loginFailures: e.loginFailures,
@@ -504,21 +584,22 @@ export async function adminEmployeeCard(
       telegram: tg ?? null,
     },
     work: {
-      contractors: cardList(cps),
-      due: cardList(due),
-      inWork: cardList(inWork),
-      overdue: cardList(overdue),
-      done: cardList(done),
-      tasks: cardList(openTasks),
-      kpi: cardList(
-        kpi.map((v) => ({
+      contractors: cps,
+      due,
+      inWork,
+      overdue,
+      done,
+      tasks: openTasks,
+      kpi: {
+        count: kpi.count,
+        rows: kpi.rows.map((v) => ({
           id: v.id,
           contractor: v.contractor,
           indicator: v.indicator,
           value: indicatorValueText(v, v.value),
           at: v.at,
         })),
-      ),
+      },
       kpiMonth,
     },
     kb: {

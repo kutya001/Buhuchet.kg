@@ -70,7 +70,7 @@ export function sessionGuard(deps: ApiDeps) {
     }
     const denial = loginDenial(session);
     if (denial) {
-      await endSession(deps.db, tokenHash);
+      await endSession(deps.db, tokenHash, 'blocked');
       clearSessionCookie(c, deps);
       return c.json(denialError(denial, session), 403);
     }

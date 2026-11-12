@@ -305,9 +305,23 @@ export async function sessionByToken(
   };
 }
 
-/** Выход: сеанс удаляется. */
-export async function endSession(db: Db, tokenHash: string): Promise<void> {
-  await db.execute(sql`select app.auth_end_session(${tokenHash})`);
+/**
+ * Выход: сеанс удаляется. `reason` — чем он закрыт в журнале сеансов вместо «Выход»: `blocked` —
+ * пользователю или организации закрыли вход, `closed` — в этом браузере вошли заново.
+ */
+export async function endSession(
+  db: Db,
+  tokenHash: string,
+  reason?: Extract<SessionEndReason, 'blocked' | 'closed'>,
+): Promise<void> {
+  if (!reason) {
+    await db.execute(sql`select app.auth_end_session(${tokenHash})`);
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.session_end', ${reason}, true)`);
+    await tx.execute(sql`select app.auth_end_session(${tokenHash})`);
+  });
 }
 
 /**

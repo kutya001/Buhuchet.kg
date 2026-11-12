@@ -18,7 +18,7 @@ export async function openSession(
   account: LoginRecord,
 ): Promise<MeResponse> {
   const previous = readSessionToken(c, deps);
-  if (previous) await endSession(deps.db, hashSessionToken(previous));
+  if (previous) await endSession(deps.db, hashSessionToken(previous), 'closed');
   const token = newSessionToken();
   await startSession(deps.db, {
     userId: account.userId,

@@ -1,6 +1,6 @@
 import { accountActionRefusal } from '@buhuchet/domain';
 import type { AdminUser } from '@buhuchet/shared';
-import type { ActionEntry } from '@buhuchet/ui';
+import type { ActionEntry, ActionItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 
 /** Что делают пункты меню учётной записи. */
@@ -69,4 +69,12 @@ export function accountMenu({
           },
     ];
   };
+}
+
+/**
+ * Кнопки шапки карточки пользователя: пункты меню без черт и без «Это вы» — у своей записи кнопок в
+ * шапке нет (прототип admin/admin-cards.js, accCard: `acts=adm?[]:accActions(...)`).
+ */
+export function accountHeadActions(entries: readonly ActionEntry[]): ActionItem[] {
+  return entries.filter((a): a is ActionItem => !('separator' in a) && a.id !== 'self');
 }

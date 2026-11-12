@@ -1,4 +1,4 @@
-import { schema } from '@buhuchet/db';
+import { kbArticles, schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { addMonths, bishkekDate } from '@buhuchet/domain';
 import { AdminSessionsEnded, AdminUserCard, AdminUserLookup, ApiError } from '@buhuchet/shared';
@@ -195,6 +195,16 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
       endReason: null,
     });
     expect(JSON.stringify(c)).not.toContain(cookie.split('=')[1]);
+    // В строке сеанса — только это: ни адреса IP, ни заголовка браузера, ни токена.
+    expect(Object.keys(c.sessions.rows[0]!).sort()).toEqual([
+      'device',
+      'endReason',
+      'id',
+      'lastAt',
+      'open',
+      'startedAt',
+      'till',
+    ]);
 
     const id = f.people['acc-a']!.userId;
     const ended = await post(`/api/admin/users/${id}/sessions/end`);
@@ -259,6 +269,9 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
     c = await card('chief-a');
     expect(c.states).toEqual(['temp_password']);
     expect(c.sessions.rows[0]).toMatchObject({ open: false, endReason: 'reset' });
+    expect(c.history.map((h) => h.reason)).toContain(
+      'Пароль сброшен администратором платформы: выдан временный пароль, завершено сеансов: 1',
+    );
     // Блокировка владельцем — отдельное состояние.
     await f.t.admin.db
       .update(schema.employees)
@@ -285,10 +298,108 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
     expect(ApiError.parse(await refused.json()).error.code).toBe('account_self');
     expect((await get('/api/auth/me')).status).toBe(200);
 
+    // Сеансы другого администратора платформы завершить нельзя; его карточка открывается.
+    const [other] = await f.t.admin.db
+      .insert(schema.users)
+      .values({ login: 'platform-admin-2', passwordHash: 'x', isPlatformAdmin: true })
+      .returning({ id: schema.users.id });
+    const foreign = await post(`/api/admin/users/${other!.id}/sessions/end`);
+    expect(foreign.status).toBe(400);
+    expect(ApiError.parse(await foreign.json()).error.code).toBe('account_platform_admin');
+    const otherCard = AdminUserCard.parse(
+      await (await get(`/api/admin/users/${other!.id}/card`)).json(),
+    );
+    expect(otherCard.sessions.self).toBe(false);
+    expect(otherCard).toMatchObject({ employee: null, work: null });
+
     const none = '00000000-0000-4000-8000-000000000000';
     expect((await get(`/api/admin/users/${none}/card`)).status).toBe(404);
     expect((await post(`/api/admin/users/${none}/sessions/end`)).status).toBe(404);
     expect((await get('/api/admin/users/not-a-uuid/card')).status).toBe(400);
+  });
+
+  it('«Обучение и видео», «Telegram», «История»: строки без текста сообщений; «было → стало» — только у показываемых полей', async () => {
+    const acc = f.people['acc-a']!;
+    const [article] = await kbArticles(f.t.admin.db);
+    await f.t.admin.db
+      .insert(schema.kbArticleReads)
+      .values({ orgId: f.a.orgId, userId: acc.userId, articleId: article!.id });
+    await f.t.admin.db.insert(schema.telegramOutbox).values([
+      {
+        orgId: f.a.orgId,
+        userId: acc.userId,
+        chatId: 700100,
+        kind: 'task_new',
+        text: 'Текст сообщения бота',
+        status: 'sent',
+        sentAt: new Date(),
+      },
+      {
+        orgId: f.a.orgId,
+        userId: acc.userId,
+        chatId: 700100,
+        kind: 'reminders',
+        text: 'Текст напоминания',
+        status: 'error',
+        lastError: 'recipient_unlinked',
+      },
+    ]);
+    await f.t.admin.db.insert(schema.auditLog).values({
+      orgId: f.a.orgId,
+      entity: 'employee',
+      entityId: acc.employeeId,
+      action: 'update',
+      actorUserId: f.a.ownerUserId,
+      changes: [
+        { field: 'roleId', from: 'role-1', to: 'role-2' },
+        { field: 'roleName', from: 'Бухгалтер', to: 'Главный бухгалтер' },
+        { field: 'passwordHash', from: 'hash-before', to: 'hash-after' },
+        { field: 'telegram', from: null, to: '@acc_a' },
+      ],
+    });
+
+    const c = await card('acc-a');
+    expect(c.kb!.articles).toMatchObject({
+      count: 1,
+      rows: [{ id: article!.id, title: article!.t }],
+    });
+    expect(c.telegram!.count).toBe(2);
+    expect(c.telegram!.rows.map((m) => [m.kind, m.status, m.error]).sort()).toEqual([
+      ['reminders', 'error', 'recipient_unlinked'],
+      ['task_new', 'sent', null],
+    ]);
+    const text = JSON.stringify(c);
+    expect(text).not.toContain('Текст сообщения бота');
+    expect(text).not.toContain('Текст напоминания');
+    expect(text).not.toContain('700100');
+    // «История»: значения — у роли и Telegram; у пароля и id роли — только название поля.
+    const entry = c.history.find((h) => h.changes.some((x) => x.field === 'roleName'))!;
+    expect(entry.changes).toEqual([
+      { field: 'roleId', from: null, to: null },
+      { field: 'roleName', from: 'Бухгалтер', to: 'Главный бухгалтер' },
+      { field: 'passwordHash', from: null, to: null },
+      { field: 'telegram', from: null, to: '@acc_a' },
+    ]);
+    expect(text).not.toContain('hash-after');
+    expect(text).not.toContain('role-2');
+  });
+
+  it('запрос карточки с чужого сайта не принимается и записи об открытии не оставляет', async () => {
+    const id = f.people['acc-b']!.userId;
+    const views = async () =>
+      (await card('acc-b')).history.filter((h) => h.action === 'card_view').length;
+    const before = await views();
+    const res = await f.app.request(`/api/admin/users/${id}/card`, {
+      headers: { cookie: admin, 'sec-fetch-site': 'cross-site' },
+    });
+    expect(res.status).toBe(403);
+    expect(ApiError.parse(await res.json()).error.code).toBe('origin_mismatch');
+    // Сам сайт (same-origin) карточку читает; запись добавил только он.
+    const own = await f.app.request(`/api/admin/users/${id}/card`, {
+      headers: { cookie: admin, 'sec-fetch-site': 'same-origin' },
+    });
+    expect(own.status).toBe(200);
+    expect(await views()).toBe(before + 2);
   });
 
   it('карточка сотрудника другой организации читается в её контексте: данные организаций не смешиваются', async () => {

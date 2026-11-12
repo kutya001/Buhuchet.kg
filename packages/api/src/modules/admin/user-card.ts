@@ -97,7 +97,7 @@ function withCreation(history: CardHistory, audit: AdminUserCard['user']['audit'
       actorAdmin: false,
       entity: 'user',
       action: 'create',
-      fields: [],
+      changes: [],
       reason: null,
     },
   ];
@@ -132,6 +132,11 @@ export const userCardRoute = createRoute({
  */
 export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRoute, AppEnv> {
   return async (c) => {
+    // Чтение карточки пишет в историю, а проверка Origin идёт только у изменяющих методов: запрос,
+    // который браузер сделал с чужого сайта (ссылка на адрес API, картинка), записи не оставляет.
+    if (c.req.header('sec-fetch-site') === 'cross-site') {
+      apiFail(403, 'origin_mismatch', 'Запрос с другого сайта отклонён');
+    }
     const { id } = c.req.valid('param');
     const refresh = c.req.valid('query').refresh === '1';
     const adminId = c.get('session')!.userId;
@@ -169,15 +174,20 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
             id: e.id,
             shortName: e.shortName,
             phone: e.phone,
+            phoneText: e.phoneText,
             isOwner: e.isOwner,
             loginFailures: e.loginFailures,
             loginFailuresMax: ACCOUNT_LOCK_FAILURES,
             createdAt: iso(e.createdAt),
             telegram: e.telegram
               ? {
-                  name: e.telegram.username
-                    ? `@${e.telegram.username}`
-                    : (e.telegram.firstName ?? ''),
+                  // «@имя · имя в Telegram», как в прототипе (acMain).
+                  name: [
+                    e.telegram.username ? `@${e.telegram.username}` : null,
+                    e.telegram.firstName,
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
                   linkedAt: iso(e.telegram.linkedAt),
                 }
               : null,

@@ -157,6 +157,8 @@ export const AdminUserCard = z.object({
       id: Uuid,
       shortName: z.string(),
       phone: z.string().nullable(),
+      /** Телефон по маске страны; null — телефона нет. */
+      phoneText: z.string().nullable(),
       isOwner: z.boolean(),
       loginFailures: z.number().int(),
       /** Предел неверных паролей подряд, после которого вход закрывается. */
@@ -260,7 +262,14 @@ export const AdminUserCard = z.object({
       actorAdmin: z.boolean(),
       entity: z.string(),
       action: z.string(),
-      fields: z.array(z.string()),
+      /** Что изменено; «было → стало» — у полей, значения которых показывает «История». */
+      changes: z.array(
+        z.object({
+          field: z.string(),
+          from: z.union([z.string(), z.boolean()]).nullable(),
+          to: z.union([z.string(), z.boolean()]).nullable(),
+        }),
+      ),
       reason: z.string().nullable(),
     }),
   ),

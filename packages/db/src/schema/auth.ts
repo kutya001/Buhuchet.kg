@@ -65,7 +65,11 @@ export const sessionLog = pgTable(
     /** Чем закрыт: `SESSION_END_REASONS` (logout, expired, admin, blocked, password, closed). */
     endReason: text('end_reason'),
   },
-  (t) => [index('session_log_user_idx').on(t.userId, t.startedAt)],
+  (t) => [
+    index('session_log_user_idx').on(t.userId, t.startedAt),
+    // Прав на таблицу у роли приложения нет; политика — вторая преграда, как у всех таблиц с org_id.
+    orgIsolation('session_log_isolation', t.orgId),
+  ],
 ).enableRLS();
 
 /**

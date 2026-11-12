@@ -26,3 +26,15 @@ export function loginHref(back: string | null | undefined): string {
 export function afterLogin(next: string | string[] | null | undefined): string {
   return safeReturnPath(typeof next === 'string' ? next : null) ?? '/app';
 }
+
+/** Ссылка на карточку в адресе: `#accounts/<логин>`, `#orgs/<адрес>` — имя раздела и значение. */
+const CARD_HASH = /^#[a-z]+\/[^#\s]+$/;
+
+/**
+ * Адрес после входа вместе со ссылкой на карточку. По ссылке `…#accounts/<логин>` пришёл не вошедший
+ * пользователь: браузер сохранил её в адресе страницы входа, после входа карточка открывается
+ * (прототип admin/admin-cards.js, `ACARD.pend`). Другой текст после «#» не переносится.
+ */
+export function withCardHash(returnTo: string, hash: string): string {
+  return CARD_HASH.test(hash) && !returnTo.includes('#') ? `${returnTo}${hash}` : returnTo;
+}

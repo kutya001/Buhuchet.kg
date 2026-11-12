@@ -25,9 +25,39 @@ const FIELD_KEYS: Readonly<Record<string, UiTextKey>> = {
   notify: 'accounts.card.hist.field.notify',
 };
 
+type HistoryChange = HistoryEntry['changes'][number];
+
+const label = (t: Translate, field: string): string =>
+  FIELD_KEYS[field] ? t(FIELD_KEYS[field]) : field;
+const capital = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Одно изменение со значениями — как в истории прототипа (staff.js, profile.js): «Роль: А → Б»,
+ * «Telegram привязан», «Заблокирован». null — значений нет, остаётся только название поля.
+ */
+function changeText(t: Translate, c: HistoryChange): string | null {
+  if (c.field === 'telegram') {
+    if (typeof c.to !== 'string' || !c.to) return t('accounts.card.hist.tg_unlinked');
+    return typeof c.from === 'string' && c.from
+      ? t('accounts.card.hist.tg_replaced', { from: c.from, to: c.to })
+      : t('accounts.card.hist.tg_linked', { name: c.to });
+  }
+  // Блокировка сотрудника владельцем: `active` false — заблокирован.
+  if (c.field === 'active' && typeof c.to === 'boolean') {
+    return t(c.to ? 'accounts.card.hist.unblocked' : 'accounts.card.hist.blocked');
+  }
+  if (c.field === 'loginLocked' && c.to === false) return t('accounts.card.hist.login_unlock');
+  if (typeof c.to !== 'string' || !c.to) return null;
+  const field = capital(label(t, c.field));
+  return typeof c.from === 'string' && c.from
+    ? t('accounts.card.hist.value', { field, from: c.from, to: c.to })
+    : t('accounts.card.hist.value_set', { field, to: c.to });
+}
+
 /**
  * Что произошло — строкой «Истории». У действий с пояснением (сброс пароля, блокировка, открытие
- * карточки, завершение сеансов) — само пояснение; у остальных — по виду записи и изменённым полям.
+ * карточки, завершение сеансов) — само пояснение; у остальных — по виду записи и изменениям: со
+ * значениями «было → стало», где они есть (ТЗ: «кто, когда, было → стало»), остальные — «Изменено: …».
  */
 export function accountHistoryText(t: Translate, h: HistoryEntry): string {
   if (h.reason) return h.reason;
@@ -39,10 +69,25 @@ export function accountHistoryText(t: Translate, h: HistoryEntry): string {
     );
   }
   if (h.action === 'login_lock') return t('accounts.card.hist.login_lock');
-  const fields = [...new Set(h.fields.map((f) => (FIELD_KEYS[f] ? t(FIELD_KEYS[f]) : f)))];
-  return fields.length
-    ? t('accounts.card.hist.updated', { fields: fields.join(', ') })
-    : t('accounts.card.hist.changed');
+  const valued = new Set<string>();
+  const named = new Set<string>();
+  const plain = new Set<string>();
+  for (const c of h.changes) {
+    const text = changeText(t, c);
+    if (text) {
+      valued.add(text);
+      named.add(label(t, c.field));
+    } else {
+      plain.add(label(t, c.field));
+    }
+  }
+  // Смена роли пишется двумя полями (`roleId`, `roleName`): «Роль: А → Б» уже сказала всё.
+  const rest = [...plain].filter((f) => !named.has(f));
+  const parts = [
+    ...valued,
+    ...(rest.length ? [t('accounts.card.hist.updated', { fields: rest.join(', ') })] : []),
+  ];
+  return parts.length ? parts.join('; ') : t('accounts.card.hist.changed');
 }
 
 /** Кто: сотрудник организации, администратор платформы или «Система». */
@@ -71,6 +116,12 @@ export function accountHistoryItems(
 /** Чем закрыт сеанс — рядом с меткой «Закрыт» (прототип `s.how`). */
 export function sessionEndText(t: Translate, reason: SessionEndReason | null): string {
   return reason ? t(`accounts.card.ses.reason.${reason}`) : '';
+}
+
+/** «Ошибка» сообщения бота: подпись кода итога из словаря или ответ Telegram (как журнал «Телеграм»). */
+export function telegramErrorText(t: Translate, error: string | null): string {
+  if (!error) return t('tgadm.st.error');
+  return error === 'recipient_unlinked' ? t('tgadm.err.unlinked') : error;
 }
 
 /** Адрес карточки пользователя на странице «Учётные записи»: `#accounts/<логин>` (прототип admCardRoute). */

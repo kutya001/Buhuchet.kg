@@ -135,6 +135,24 @@ describe.skipIf(!databaseAvailable())(
       expect(row).toMatchObject({ open: false, endReason: 'expired' });
       expect(row.lastAt.getTime()).toBe(past.getTime());
 
+      // Сеанс заблокированного пользователя закрывает проверка сеанса — «Блокировка»; повторный вход
+      // в том же браузере — «Закрыт»; обычный выход — «Выход».
+      const deniedToken = hash();
+      const denied = await startSession(db.app.db, {
+        userId: a.ownerUserId,
+        tokenHash: deniedToken,
+      });
+      await endSession(db.app.db, deniedToken, 'blocked');
+      expect(await reasonOf(denied)).toBe('blocked');
+      const againToken = hash();
+      const again = await startSession(db.app.db, { userId: a.ownerUserId, tokenHash: againToken });
+      await endSession(db.app.db, againToken, 'closed');
+      expect(await reasonOf(again)).toBe('closed');
+      const outToken = hash();
+      const out = await startSession(db.app.db, { userId: a.ownerUserId, tokenHash: outToken });
+      await endSession(db.app.db, outToken);
+      expect(await reasonOf(out)).toBe('logout');
+
       // Удаление без причины и с неизвестной причиной — «Закрыт».
       const other = await start();
       await db.admin.db.transaction(async (tx) => {

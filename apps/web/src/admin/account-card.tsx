@@ -49,7 +49,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { statusName } from '../status/status-view';
 import { ACCOUNT_CARD_KEY } from './account-actions';
-import { accountHistoryItems, sessionEndText } from './account-card-model';
+import { accountHistoryItems, sessionEndText, telegramErrorText } from './account-card-model';
 
 const TAB_ICONS: Readonly<Record<AccountCardTab, IconName>> = {
   main: 'user',
@@ -266,7 +266,7 @@ function MainTab({ t, card, org }: { t: Translate; card: AdminUserCard; org: Rea
       label: t('staff.col.phone'),
       value: e?.phone ? (
         <a href={`tel:+${digits}`} title={t('staff.card.call')} className="font-mono text-inherit">
-          {e.phone}
+          {e.phoneText ?? e.phone}
         </a>
       ) : (
         DASH
@@ -787,7 +787,7 @@ function TelegramTab({
                 </Pill>
               ) : m.status === 'error' ? (
                 <Pill size="sm" tone="bad" icon="alert">
-                  {m.error || t('tgadm.st.error')}
+                  {telegramErrorText(t, m.error)}
                 </Pill>
               ) : (
                 <Pill size="sm">{t('tgadm.st.pending')}</Pill>

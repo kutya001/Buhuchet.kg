@@ -45,6 +45,9 @@ CREATE FUNCTION app.session_log_sync() RETURNS trigger
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.session_log_sync() FROM PUBLIC;
 --> statement-breakpoint
+-- Право по умолчанию схемы app: функция триггера роли приложения не нужна.
+REVOKE ALL ON FUNCTION app.session_log_sync() FROM buhuchet_app;
+--> statement-breakpoint
 CREATE TRIGGER sessions_log_sync
   AFTER INSERT OR DELETE OR UPDATE OF last_seen_at, expires_at ON public.sessions
   FOR EACH ROW EXECUTE FUNCTION app.session_log_sync();
@@ -76,16 +79,23 @@ REVOKE ALL ON FUNCTION app.auth_start_session(uuid, text, integer, text) FROM PU
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.auth_start_session(uuid, text, integer, text) TO buhuchet_app;
 --> statement-breakpoint
--- Выход: сеанс удаляется, в журнале — «Выход».
+-- Сеанс удаляется; в журнале — «Выход», если вызвавший не назвал другую причину в app.session_end
+-- (сеанс заблокированного пользователя, повторный вход в том же браузере).
 CREATE OR REPLACE FUNCTION app.auth_end_session(p_token_hash text)
   RETURNS void
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
+  DECLARE
+    v_logout boolean := coalesce(current_setting('app.session_end', true), '') = '';
   BEGIN
-    PERFORM set_config('app.session_end', 'logout', true);
+    IF v_logout THEN
+      PERFORM set_config('app.session_end', 'logout', true);
+    END IF;
     DELETE FROM public.sessions WHERE token_hash = p_token_hash;
-    PERFORM set_config('app.session_end', '', true);
+    IF v_logout THEN
+      PERFORM set_config('app.session_end', '', true);
+    END IF;
   END
   $$;
 --> statement-breakpoint

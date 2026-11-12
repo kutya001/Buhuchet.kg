@@ -497,13 +497,17 @@ export async function resetNoticeOwnerIds(
  * входе его нужно сменить, все сеансы и ожидающий код «Забыли пароль?» отменяются, блокировка входа
  * снимается — и на 15 минут по логину, и после 10 неверных паролей подряд, — сутки Telegram
  * привязывается без кода из прежнего чата (ссылки привязки и коды замены, выданные до сброса,
- * отменяются, а код «Забыли пароль?» эти сутки не уходит). Возвращает, нужно ли было сменить пароль и
- * был ли закрыт вход до сброса (для истории); null — нет такого.
+ * отменяются, а код «Забыли пароль?» эти сутки не уходит). Возвращает, нужно ли было сменить пароль,
+ * был ли закрыт вход до сброса и сколько сеансов завершено (для истории); null — нет такого.
  */
 export async function setTemporaryPassword(
   tx: Tx,
   input: { userId: string; passwordHash: string },
-): Promise<{ mustChangePasswordBefore: boolean; loginLockedBefore: boolean } | null> {
+): Promise<{
+  mustChangePasswordBefore: boolean;
+  loginLockedBefore: boolean;
+  sessionsEnded: number;
+} | null> {
   const [before] = await tx
     .select({ login: users.login, mustChangePassword: users.mustChangePassword })
     .from(users)
@@ -520,7 +524,10 @@ export async function setTemporaryPassword(
     })
     .where(eq(users.id, input.userId));
   await markSessionEnd(tx, 'reset');
-  await tx.delete(sessions).where(eq(sessions.userId, input.userId));
+  const ended = await tx
+    .delete(sessions)
+    .where(eq(sessions.userId, input.userId))
+    .returning({ id: sessions.id });
   await revokePasswordResetCodes(tx, input.userId);
   await clearLoginAttempts(tx, before.login);
   // Доступа к прежнему Telegram у пользователя может не быть: сутки новый привязывается без кода из
@@ -535,6 +542,7 @@ export async function setTemporaryPassword(
   return {
     mustChangePasswordBefore: before.mustChangePassword,
     loginLockedBefore: unlock?.was === true,
+    sessionsEnded: ended.length,
   };
 }
 

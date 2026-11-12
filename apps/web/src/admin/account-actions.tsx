@@ -20,7 +20,7 @@ import { usePasswordEye } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useShell } from '../shell/context';
-import { accountMenu } from './accounts-menu';
+import { accountHeadActions, accountMenu } from './accounts-menu';
 
 /** Ключ запроса карточки пользователя: после действия карточка перечитывается. */
 export const ACCOUNT_CARD_KEY = ['admin', 'account-card'] as const;
@@ -114,7 +114,7 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
   const me = userId ?? '';
   const actions = accountMenu({ userId: me, t, run: { ...run, open: options.open } });
   const menu = accountMenu({ userId: me, t, run });
-  const cardActions = (u: AdminUser) => menu(u).filter((a): a is ActionItem => !('separator' in a));
+  const cardActions = (u: AdminUser) => accountHeadActions(menu(u));
 
   const dialogs = (
     <>

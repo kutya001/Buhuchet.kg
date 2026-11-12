@@ -792,6 +792,13 @@
       "when": 1794496611294,
       "tag": "0112_session_log_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1794500180287,
+      "tag": "0113_session_log_isolation",
+      "breakpoints": true
     }
   ]
 }
