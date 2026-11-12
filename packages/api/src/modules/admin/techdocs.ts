@@ -460,8 +460,10 @@ export function apiSchemaFieldsHandler(
 
 /**
  * Страница схемы приходит из репозитория прототипа и работает в рамке без прав сайта: `sandbox` без
- * `allow-same-origin` (cookie и методы API ей недоступны), ничего не загружает и никуда не отправляет.
- * Показать её может только сам сайт.
+ * `allow-same-origin` (cookie и методы API ей недоступны), ничего не загружает и запросов не шлёт.
+ * Уйти на другой адрес внутри своей рамки она может (заголовком это не запретить), но с собой унесёт
+ * только то, что ей дали: описание базы и методов из открытого репозитория. Показать её может только
+ * сам сайт.
  */
 export const SCHEMA_PAGE_CSP = [
   'sandbox allow-scripts',
@@ -624,7 +626,7 @@ export function openApiDocument(api: ApiDocs, accessText: (code: string) => stri
     info: {
       title: 'Buhuchet.kg API',
       version: commit,
-      description: `Описание API продукта ${repo}, ветка ${branch}, коммит ${commit} от ${date}. ${note}`,
+      description: `Снимок описания API продукта ${repo}, ветка ${branch}, коммит ${commit} от ${date}. ${note}`,
     },
     servers: [{ url: '/api' }],
     paths,

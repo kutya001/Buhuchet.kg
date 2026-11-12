@@ -53,7 +53,7 @@ services:
 
   # Пароль владельца базы — только здесь: web и worker работают ролью приложения без обхода RLS.
   migrate:
-    build: { context: ., target: tools }
+    build: { context: ., target: tools, args: { SOURCE_COMMIT: '${SOURCE_COMMIT:-}' } }
     environment:
       <<: *app-env
       DATABASE_ADMIN_URL: postgres://postgres:${DB_ADMIN_PASSWORD:?задайте DB_ADMIN_PASSWORD}@postgres:5432/buhuchet
@@ -63,7 +63,7 @@ services:
       minio: { condition: service_healthy }
 
   web:
-    build: { context: ., target: web }
+    build: { context: ., target: web, args: { SOURCE_COMMIT: '${SOURCE_COMMIT:-}' } }
     restart: unless-stopped
     environment: *app-env
     depends_on:
@@ -74,7 +74,7 @@ services:
       retries: 30
 
   worker:
-    build: { context: ., target: worker }
+    build: { context: ., target: worker, args: { SOURCE_COMMIT: '${SOURCE_COMMIT:-}' } }
     restart: unless-stopped
     environment: *app-env
     depends_on:

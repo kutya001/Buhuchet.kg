@@ -143,6 +143,9 @@ export interface SchemaPageMessage {
   esc?: boolean;
 }
 
+/** Номер метода в снимке — «GET /admin/users»; другое страница схемы открыть не просит. */
+const METHOD_ID = /^(GET|POST|PUT|PATCH|DELETE) \/[\w\-{}/.:]{0,290}$/;
+
 export function schemaPageMessage(data: unknown): SchemaPageMessage | null {
   if (!data || typeof data !== 'object') return null;
   const d = data as Record<string, unknown>;
@@ -150,7 +153,7 @@ export function schemaPageMessage(data: unknown): SchemaPageMessage | null {
   const out: SchemaPageMessage = {};
   if (d.ready) out.ready = true;
   if (typeof d.hash === 'string') out.hash = safeSchemaHash(d.hash);
-  if (typeof d.open === 'string' && d.open.length <= 300) out.open = d.open;
+  if (typeof d.open === 'string' && METHOD_ID.test(d.open)) out.open = d.open;
   if ('full' in d) out.full = Boolean(d.full);
   if (d.esc) out.esc = true;
   return out;

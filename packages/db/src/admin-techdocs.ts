@@ -91,7 +91,14 @@ function recordset(rows: readonly ApiMethodListRow[]): SQL {
 /** Столбцы списка (прототип grid `adm-api`): ключи — как у столбцов экрана. */
 export const API_METHOD_COLUMNS: ListColumns = {
   m: { type: 'enum', label: 'tdocs.col.m', value: field('m') },
-  p: { type: 'text', label: 'tdocs.col.p', value: field('p') },
+  // Поиск по имени и русскому названию таблицы — всегда (прототип searchText): столбец «Таблицы» по
+  // умолчанию скрыт, а экран ищет только по видимым столбцам, поэтому таблицы ищутся и через «Адрес».
+  p: {
+    type: 'text',
+    label: 'tdocs.col.p',
+    value: field('p'),
+    searchDisplay: sql`concat_ws(' ', ${field('p')}, ${field('tb_search')})`,
+  },
   sec: {
     type: 'enum',
     label: 'tdocs.col.sec',

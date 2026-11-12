@@ -69,4 +69,16 @@ test('версия: коммит и дата из git, без git — из пе�
   const v = sourceVersion({});
   assert.match(v.date, /^\d{4}-\d{2}-\d{2}$/);
   assert.match(v.commit, /^([0-9a-f]{7,40})?$/);
+  // Сборка образа Docker: папки .git нет, коммит приходит переменной сборки.
+  const dir = mkdtempSync(path.join(tmpdir(), 'techdocs-nogit-'));
+  try {
+    const sha = '0123456789abcdef0123456789abcdef01234567';
+    assert.equal(sourceVersion({ SOURCE_COMMIT: sha }, dir).commit, '0123456');
+    assert.equal(sourceVersion({ GITHUB_SHA: sha }, dir).commit, '0123456');
+    assert.equal(sourceVersion({ SOURCE_COMMIT: 'main; rm -rf' }, dir).commit, '');
+    assert.equal(sourceVersion({}, dir).commit, '');
+    assert.match(sourceVersion({}, dir).date, /^\d{4}-\d{2}-\d{2}$/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

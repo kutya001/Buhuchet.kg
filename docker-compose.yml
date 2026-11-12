@@ -3,6 +3,11 @@
 #   Всё приложение, как на VPS (проверка переносимости):   docker compose --profile app up -d --build --wait
 name: buhuchet
 
+# Коммит версии для сборки образов (строка версии «Технической документации»): в CI — GITHUB_SHA,
+# вручную — SOURCE_COMMIT=$(git rev-parse HEAD) docker compose … --build.
+x-build-args: &build-args
+  SOURCE_COMMIT: ${SOURCE_COMMIT:-${GITHUB_SHA:-}}
+
 x-app-env: &app-env
   APP_ENV: ${APP_ENV:-local}
   APP_VERSION: ${APP_VERSION:-0.0.0-docker}
@@ -68,6 +73,7 @@ services:
     build:
       context: .
       target: tools
+      args: *build-args
     # Владелец базы — только у миграций; web и worker работают ролью приложения, как на VPS.
     environment:
       <<: *app-env
@@ -86,6 +92,7 @@ services:
     build:
       context: .
       target: web
+      args: *build-args
     environment: *app-env
     extra_hosts:
       - 'host.docker.internal:host-gateway'
@@ -105,6 +112,7 @@ services:
     build:
       context: .
       target: worker
+      args: *build-args
     environment: *app-env
     extra_hosts:
       - 'host.docker.internal:host-gateway'

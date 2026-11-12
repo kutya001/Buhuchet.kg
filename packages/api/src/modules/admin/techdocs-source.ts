@@ -22,10 +22,13 @@ const Part = z.object({
   ct: z.string().optional(),
   ex: z.unknown().optional(),
 });
+// Имена из снимка становятся ключами объектов (карта API страницы схемы, OpenAPI), поэтому вид у них
+// строгий: метод HTTP, адрес с «/», имя таблицы — как в PostgreSQL.
+const TableName = z.string().regex(/^[a-z_][a-z0-9_]*$/);
 const Method = z.object({
-  id: z.string(),
-  m: z.string(),
-  p: z.string(),
+  id: z.string().regex(/^(GET|POST|PUT|PATCH|DELETE) \/[\w\-{}/.:]*$/),
+  m: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']),
+  p: z.string().startsWith('/'),
   sec: z.string(),
   sum: z.string().default(''),
   desc: z.string().nullish(),
@@ -41,8 +44,8 @@ const Method = z.object({
     })
     .default({}),
   res: z.array(z.object({ code: z.string(), d: z.string().default(''), s: z.string().optional() })),
-  r: z.array(z.string()).default([]),
-  w: z.array(z.string()).default([]),
+  r: z.array(TableName).default([]),
+  w: z.array(TableName).default([]),
   v: z.array(z.string()).default([]),
   fns: z.array(z.string()).default([]),
   ctx: z.array(z.string()).default([]),
@@ -175,11 +178,12 @@ export const methodTables = (m: Pick<ApiDocMethod, 'r' | 'w'>): string[] => [
  * метода. Методы таблицы — по адресу, затем по методу.
  */
 export function schemaPageIndex(api: ApiDocs) {
-  const t: Record<string, [string, 'r' | 'w' | 'rw'][]> = {};
-  const m: Record<
+  // Без прототипа: имя таблицы вроде «__proto__» остаётся обычным ключом.
+  const t = Object.create(null) as Record<string, [string, 'r' | 'w' | 'rw'][]>;
+  const m = Object.create(null) as Record<
     string,
     { m: string; p: string; s: string; g: string; r: string[]; w: string[] }
-  > = {};
+  >;
   for (const x of api.methods) {
     m[x.id] = { m: x.m, p: x.p, s: x.sum, g: api.sections[x.sec] ?? x.sec, r: x.r, w: x.w };
     for (const name of methodTables(x)) {

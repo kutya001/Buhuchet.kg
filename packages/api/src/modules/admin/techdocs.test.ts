@@ -262,6 +262,12 @@ describe.skipIf(!databaseAvailable())('Админка → «Техническа
       ['POST /admin/users/{id}/block'],
     );
     expect((await list('?q=login')).total).toBe(1);
+    // Экран ищет только по видимым столбцам, «Таблицы» по умолчанию скрыты — таблица находится и так.
+    const shown = 'qcols=m,p,sum,acc,n,w';
+    expect(
+      (await list(`?q=${encodeURIComponent('сеансы входа')}&${shown}`)).items.map((m) => m.id),
+    ).toEqual(['POST /admin/users/{id}/block']);
+    expect((await list(`?q=sessions&${shown}`)).total).toBe(1);
     // Фильтр «Таблица» — методы, которые читают или меняют таблицу.
     expect((await list('?table=users')).total).toBe(2);
     expect((await list('?table=sessions')).items.map((m) => m.id)).toEqual([
@@ -428,6 +434,19 @@ describe.skipIf(!databaseAvailable())('Админка → «Техническа
       r: [],
       w: [],
     });
+  });
+
+  it('имена из снимка — строгого вида: чужой метод, адрес и таблица не читаются, «__proto__» — обычный ключ', () => {
+    const first = API.methods[0]!;
+    const withMethod = (over: object) => ({ ...API, methods: [{ ...first, ...over }] });
+    expect(() => docs({ api: withMethod({ m: 'TRACE' }) })).toThrow();
+    expect(() => docs({ api: withMethod({ p: '__proto__' }) })).toThrow();
+    expect(() => docs({ api: withMethod({ id: 'GET <script>' }) })).toThrow();
+    expect(() => docs({ api: withMethod({ r: ['users; drop'] }) })).toThrow();
+    const idx = schemaPageIndex(docs({ api: withMethod({ r: ['__proto__'], w: [] }) }).api);
+    expect(Object.keys(idx.t)).toContain('__proto__');
+    expect(idx.t['__proto__']).toEqual([[first.id, 'r']]);
+    expect(({} as Record<string, unknown>)[first.id]).toBeUndefined();
   });
 
   it('«Скачать OpenAPI»: OpenAPI 3.1 с x-tables, x-access и схемами', async () => {

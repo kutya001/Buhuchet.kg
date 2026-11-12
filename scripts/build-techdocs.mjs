@@ -39,11 +39,14 @@ const safeEnv = () => ({
   PYTHONUTF8: '1',
 });
 
-/** Коммит и дата версии продукта: git, а где его нет (сборка без .git) — переменная сборки и сегодня. */
-export function sourceVersion(env = process.env) {
+/**
+ * Коммит и дата версии продукта: git, а где его нет (сборка без .git: образ Docker) — переменная
+ * сборки и сегодняшний день по Бишкеку.
+ */
+export function sourceVersion(env = process.env, root = ROOT) {
   const git = (format) => {
     try {
-      return execFileSync('git', ['-C', ROOT, 'log', '-1', `--format=${format}`], {
+      return execFileSync('git', ['-C', root, 'log', '-1', `--format=${format}`], {
         stdio: ['ignore', 'pipe', 'ignore'],
         env: safeEnv(),
       })
@@ -55,7 +58,7 @@ export function sourceVersion(env = process.env) {
   };
   const given = String(env.SOURCE_COMMIT ?? env.VERCEL_GIT_COMMIT_SHA ?? env.GITHUB_SHA ?? '');
   const commit = git('%h') || (/^[0-9a-f]{7,40}$/.test(given) ? given.slice(0, 7) : '');
-  const date = git('%cs') || new Date().toISOString().slice(0, 10);
+  const date = git('%cs') || new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10);
   return { commit, date };
 }
 

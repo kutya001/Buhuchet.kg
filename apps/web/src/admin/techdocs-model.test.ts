@@ -170,6 +170,12 @@ describe('сообщение страницы схемы', () => {
     expect(schemaPageMessage({ tdx: 1, hash: 'http://x' })).toEqual({ hash: '#/t' });
     expect(schemaPageMessage({ tdx: 1, open: 'GET /a' })).toEqual({ open: 'GET /a' });
     expect(schemaPageMessage({ tdx: 1, open: 5 })).toEqual({});
+    // Открыть просят только метод: произвольная строка в заголовок окна и в запрос не попадает.
+    expect(schemaPageMessage({ tdx: 1, open: 'javascript:alert(1)' })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, open: 'GET /a b' })).toEqual({});
+    expect(schemaPageMessage({ tdx: 1, open: 'POST /admin/users/{id}/block' })).toEqual({
+      open: 'POST /admin/users/{id}/block',
+    });
     expect(schemaPageMessage({ tdx: 1, full: 0 })).toEqual({ full: false });
     expect(schemaPageMessage({ tdx: 1, full: true })).toEqual({ full: true });
     expect(schemaPageMessage({ tdx: 1, esc: 1 })).toEqual({ esc: true });
