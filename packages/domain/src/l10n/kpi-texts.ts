@@ -829,6 +829,7 @@ export const KPI_TEXTS = {
   'kpi.tax.saved': { ru: '«{name}», {month}: записано в показатели', section: S },
   'kpi.tax.turned_on': { ru: '«{name}»: ведётся у {cp}', section: S },
   'kpi.tax.filled': { ru: 'Подставлено из показателей — проверьте и сохраните', section: S },
+  'kpi.tax.no_field': { ru: 'Поле суммы не найдено', section: S },
   'err.name_taken': { ru: INDICATOR_MESSAGES.name_taken, section: E },
   'err.unit_required': { ru: INDICATOR_MESSAGES.unit_required, section: E },
   'err.unit_too_long': { ru: INDICATOR_MESSAGES.unit_too_long, section: E },

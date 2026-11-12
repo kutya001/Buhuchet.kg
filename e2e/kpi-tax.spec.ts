@@ -10,8 +10,8 @@ import {
   type NewContractor,
 } from './reports';
 
-// Показатели «для расчёта налогов» и «Расчёт по показателям» в окне «Сумма к уплате» (прототип v80
-// modules/kpi-tax.js; docs/deviations.md п. О-62) через настоящий сайт. Демо-организация: «Показатели
+// Показатели «для расчёта налогов» и «Расчёт по показателям» в окнах «Сумма к уплате» и «Отметить сданным»
+// (прототип v80 modules/kpi-tax.js; docs/deviations.md п. О-62) через настоящий сайт. Демо-организация: «Показатели
 // контрагентов» включены, отметки стоят у показателей «Выручка», «Фонд оплаты труда» и «Количество
 // сотрудников». Значения вносятся только своему на каждый запуск и проект (ПК и телефон) контрагенту.
 
@@ -21,7 +21,11 @@ const MONTH = '2026-09';
 type TaxBox = {
   box: {
     main: 'rev' | 'fot';
-    rows: { role: string; cells: { month: string; value: number | null }[] }[];
+    rows: {
+      role: string;
+      on: boolean;
+      cells: { month: string; value: number | null; input: boolean }[];
+    }[];
     result: { kind: string; incomeTax?: number; contributions?: number; revenue?: number };
   } | null;
 };
@@ -32,18 +36,19 @@ async function taxBox(api: APIRequestContext, reportId: string): Promise<TaxBox>
   return (await res.json()) as TaxBox;
 }
 
-/** Карточка отчёта из списка с фильтром «ИНН и период» → «Ещё действия» → «Указать сумму». */
-async function openAmount(
+/** Карточка отчёта из списка с фильтром «ИНН и период». */
+async function openCard(
   page: Page,
   cp: NewContractor,
   name: string,
   reportId: string,
   typeName: string,
+  period = PERIOD,
 ) {
   const preset = encodeURIComponent(
     JSON.stringify({
       inn: { type: 'text', q: cp.inn },
-      period: { type: 'enum', vals: [PERIOD] },
+      period: { type: 'enum', vals: [period] },
     }),
   );
   await page.goto(`/app/reports/all?preset=${preset}`);
@@ -52,6 +57,18 @@ async function openAmount(
   await row.getByText(name).first().click();
   const card = page.getByRole('dialog', { name: typeName });
   await expect(card.locator(`[data-report-card="${reportId}"]`)).toBeVisible();
+  return card;
+}
+
+/** Карточка отчёта → «Ещё действия» → «Указать сумму». */
+async function openAmount(
+  page: Page,
+  cp: NewContractor,
+  name: string,
+  reportId: string,
+  typeName: string,
+) {
+  const card = await openCard(page, cp, name, reportId, typeName);
   await card.locator('[data-report-more]').click();
   await page
     .getByRole('menu', { name: 'Ещё действия' })
@@ -192,6 +209,77 @@ test.describe('Этап 3: «Расчёт по показателям» в ок�
       /Выручка за период — 1\s200\s000\sсом\. НДС к уплате зависит от зачёта входящего НДС — сумму впишите сами\./,
     );
     await expect(box.locator('[data-kpi-tax-fill]')).toHaveCount(0);
+  });
+
+  test('Налог с продаж: показатель включается у контрагента кнопкой «Вести», выручка вносится по месяцам квартала, налог по ставке назначения подставляется в сумму в окне «Отметить сданным»', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const quarter = '2026-07-01';
+    const months = ['2026-07', '2026-08', '2026-09'];
+    const origin = await asOwner(request, baseURL);
+    const name = `ОсОО «Расчёт НсП ${Date.now() % 1_000_000}»`;
+    const cp = await newContractor(request, origin, { name });
+    await assign(request, origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nspq',
+      rate: '2 %',
+      fromMonth: quarter,
+    });
+    const nsp = find(await reportsOf(request, cp.inn), 'nspq', quarter)!;
+    const indicator = (
+      (await (await request.get('/api/kpi/indicators')).json()) as {
+        items: { id: string; name: string; taxRole: string | null; archived: boolean }[];
+      }
+    ).items.find((i) => i.taxRole === 'rev' && !i.archived)!;
+    // «Выручка» у контрагента не ведётся.
+    const off = await request.put('/api/kpi/who', {
+      headers: { origin },
+      data: { changes: [{ indicatorId: indicator.id, contractorId: cp.id, on: false }] },
+    });
+    expect(off.status(), await off.text()).toBe(200);
+    expect((await taxBox(request, nsp.id)).box?.rows[0]).toMatchObject({ role: 'rev', on: false });
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const card = await openCard(
+      page,
+      cp,
+      name,
+      nsp.id,
+      'Налог с продаж, квартальный (малый бизнес, до 8 млн сом)',
+      quarter,
+    );
+    await card.locator('[data-report-button="submit"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Отметить отчёт сданным' });
+    const box = dialog.locator('[data-kpi-tax-box="rev"]');
+    await expect(box).toContainText('не ведётся');
+    await expect(box.locator('[data-kpi-tax-cell]')).toHaveCount(0);
+    await box.locator('[data-kpi-tax-on="rev"]').click();
+    await expect(toast(page, `«${indicator.name}»: ведётся у ${name}`)).toBeVisible();
+    await expect(box.locator('[data-kpi-tax-on]')).toHaveCount(0);
+    await expect(box.locator('[data-kpi-tax-cell]')).toHaveCount(3);
+
+    for (const [k, month] of months.entries()) {
+      const cell = box.locator(`[data-kpi-tax-cell="rev:${month}"]`);
+      await cell.fill(`${k + 1}00 000`);
+      await cell.press('Enter');
+      await expect(cell).toHaveValue(new RegExp(`^${k + 1}00\\s000$`));
+    }
+    const result = box.locator('[data-kpi-tax-result="rate"]');
+    await expect(result).toContainText(/≈ 12\s000\sсом/);
+    await expect(result).toContainText(/2 % от выручки 600\s000\sсом/);
+
+    // Показатель включён с первого месяца квартала, значения — в показателях.
+    const after = await taxBox(request, nsp.id);
+    expect(after.box?.rows[0]).toMatchObject({
+      on: true,
+      cells: months.map((month, k) => ({ month, value: (k + 1) * 10_000_000, input: true })),
+    });
+
+    await result.locator('[data-kpi-tax-fill="sum"]').click();
+    await expect(toast(page, 'Подставлено из показателей — проверьте и сохраните')).toBeVisible();
+    await expect(dialog.locator('[data-report-amount]')).toHaveValue(/^12\s000$/);
   });
 
   test('«Настройка показателей»: у показателя метка «для налогов», вторая такая же отметка не сохраняется', async ({

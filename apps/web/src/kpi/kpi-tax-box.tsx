@@ -241,6 +241,7 @@ export function ReportTaxBox({
 
   const fill = (value: TaxFill) => {
     if (onFill(value)) toast(t('kpi.tax.filled'), { icon: 'gauge' });
+    else toast(t('kpi.tax.no_field'), { bad: true });
   };
   const fillButton = (label: string, value: TaxFill, mark: string) => (
     <button

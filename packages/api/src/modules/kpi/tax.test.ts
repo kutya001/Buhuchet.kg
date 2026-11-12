@@ -2,7 +2,7 @@ import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { socfundTax } from '@buhuchet/domain';
 import { ApiError, IndicatorCard, Indicators, KpiTaxBox, ReportList } from '@buhuchet/shared';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import refDB from '../../../../../spec/data/refDB.json';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
@@ -215,9 +215,9 @@ describe.skipIf(!databaseAvailable())(
       const card = IndicatorCard.parse(
         await (await call('GET', `/api/kpi/indicators/${revenue}`, owner)).json(),
       );
-      expect(
-        card.history.flatMap((h) => h.changes).filter((x) => x.field === 'taxRole'),
-      ).toEqual([{ field: 'taxRole', from: 'rev', to: null }]);
+      expect(card.history.flatMap((h) => h.changes).filter((x) => x.field === 'taxRole')).toEqual([
+        { field: 'taxRole', from: 'rev', to: null },
+      ]);
     });
 
     it('архив: отметку архивного показателя можно отдать другому; при возврате из архива занятая отметка снимается', async () => {
@@ -268,6 +268,26 @@ describe.skipIf(!databaseAvailable())(
       expect((await apiRequest(f.app, 'GET', path, '')).status).toBe(401);
       // «Старший»: ни «Просматривать показатели», ни «Просматривать отчёты».
       expect((await failure(await call('GET', path, senior))).code).toBe('forbidden');
+      // Одного права из двух мало: только «Просматривать отчёты», потом только «Просматривать показатели».
+      const only = async (permissionId: string) => {
+        await f.t.admin.db
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, f.roleIds.senior),
+              inArray(schema.rolePermissions.permissionId, ['repView', 'kpiView']),
+            ),
+          );
+        if (permissionId)
+          await f.t.admin.db
+            .insert(schema.rolePermissions)
+            .values({ orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId });
+        const res = await call('GET', path, senior);
+        return { status: res.status, code: (await failure(res)).code };
+      };
+      expect(await only('repView')).toEqual({ status: 403, code: 'forbidden' });
+      expect(await only('kpiView')).toEqual({ status: 403, code: 'forbidden' });
+      expect(await only('')).toEqual({ status: 403, code: 'forbidden' });
       // Чужая организация и отчёт вне области «Свои» — «не найден»; не номер — 400.
       await f.t.admin.db
         .update(schema.orgSettings)
@@ -419,7 +439,10 @@ describe.skipIf(!databaseAvailable())(
         ...(await fieldsOf(fot)),
         taxRole: null,
       });
-      expect(await box(owner, sep.id)).toMatchObject({ rows: [], result: { kind: 'no_indicator' } });
+      expect(await box(owner, sep.id)).toMatchObject({
+        rows: [],
+        result: { kind: 'no_indicator' },
+      });
     });
   },
 );
