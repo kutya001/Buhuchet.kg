@@ -502,7 +502,7 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
       await withOrgContext(t.app.db, ctxA(), (tx) =>
         setTemporaryPassword(tx, { userId: accA, passwordHash: 'temp' }),
       ),
-    ).toEqual({ mustChangePasswordBefore: false, loginLockedBefore: false });
+    ).toEqual({ mustChangePasswordBefore: false, loginLockedBefore: false, sessionsEnded: 1 });
     const [u] = await t.admin.db.select().from(users).where(eq(users.id, accA));
     expect(u).toMatchObject({ passwordHash: 'temp', mustChangePassword: true });
     expect(await sessionByToken(t.app.db, token)).toBeNull();
