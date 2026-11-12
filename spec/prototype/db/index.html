@@ -1,0 +1,1448 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>База данных Buhuchet.kg</title>
+<meta name="description" content="Схема базы данных Buhuchet.kg: таблицы, поля, связи, типы и правила. Описание читается из schema.json.">
+<style>
+/* Страница только показывает db/schema.json: всё описание базы — там. */
+:root{
+  color-scheme:light;
+  --bg:#f5efe5; --surface:#fffdf9; --surface-2:#f1e8da; --surface-3:#e9dcc8;
+  --border:#e1d3bd; --border-strong:#c8b08c;
+  --text:#43301d; --muted:#7a6447; --faint:#9f8a6c;
+  --accent:#86684a; --on-accent:#fffaf1; --link:#966400; --focus:#c08a1e;
+  --green:#17734b; --green-bg:#17734b1f; --blue:#1d6a8a; --blue-bg:#1d6a8a1c;
+  --orange:#b04a1c; --orange-bg:#b04a1c1c; --red:#b0372c; --red-bg:#b0372c1a;
+  --purple:#6c4888; --purple-bg:#6c48881c; --yellow:#946600; --yellow-bg:#d9a32a2e;
+  --shadow:0 1px 2px #0000000a,0 4px 12px #0000000f; --shadow-l:0 8px 40px #00000033;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --mono:ui-monospace,'Cascadia Code','JetBrains Mono',Menlo,Consolas,monospace;
+  --r:10px; --top:108px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --bg:#1f1914; --surface:#2a221b; --surface-2:#231c16; --surface-3:#342a21;
+  --border:#3b3026; --border-strong:#5a4737;
+  --text:#dccaa9; --muted:#a8916e; --faint:#857257;
+  --accent:#6e533a; --on-accent:#f4e6cc; --link:#e2bd5e; --focus:#e2bd5e;
+  --green:#5fcf98; --green-bg:#5fcf9822; --blue:#72c2da; --blue-bg:#72c2da1f;
+  --orange:#ef9b5c; --orange-bg:#ef9b5c22; --red:#f07b6f; --red-bg:#f07b6f22;
+  --purple:#aba7ea; --purple-bg:#aba7ea22; --yellow:#e2bd5e; --yellow-bg:#e2bd5e22;
+  --shadow:0 1px 2px #0000004d,0 4px 12px #00000040; --shadow-l:0 8px 40px #00000080;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#1f1914; --surface:#2a221b; --surface-2:#231c16; --surface-3:#342a21;
+  --border:#3b3026; --border-strong:#5a4737;
+  --text:#dccaa9; --muted:#a8916e; --faint:#857257;
+  --accent:#6e533a; --on-accent:#f4e6cc; --link:#e2bd5e; --focus:#e2bd5e;
+  --green:#5fcf98; --green-bg:#5fcf9822; --blue:#72c2da; --blue-bg:#72c2da1f;
+  --orange:#ef9b5c; --orange-bg:#ef9b5c22; --red:#f07b6f; --red-bg:#f07b6f22;
+  --purple:#aba7ea; --purple-bg:#aba7ea22; --yellow:#e2bd5e; --yellow-bg:#e2bd5e22;
+  --shadow:0 1px 2px #0000004d,0 4px 12px #00000040; --shadow-l:0 8px 40px #00000080;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font)}
+button,input,select{font:inherit;color:inherit}
+a{color:var(--link)}
+code,.mono{font-family:var(--mono);font-size:.88em}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:6px}
+[hidden]{display:none!important}
+
+/* шапка и вкладки */
+header{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--border)}
+.hd{display:flex;align-items:center;gap:12px;padding:12px 20px 8px;max-width:1500px;margin:0 auto}
+.hd h1{font-size:19px;line-height:1.25;margin:0;font-weight:700;letter-spacing:-.01em}
+.hd .sub{color:var(--muted);font-size:13px}
+.hd .grow{flex:1;min-width:0}
+.icon-btn{border:1px solid var(--border);background:var(--surface);border-radius:9px;width:38px;height:38px;display:inline-grid;place-items:center;cursor:pointer;flex:none}
+.icon-btn:hover{border-color:var(--border-strong)}
+.icon-btn svg{width:18px;height:18px}
+nav.tabs{display:flex;gap:4px;padding:0 20px;max-width:1500px;margin:0 auto}
+nav.tabs button{flex:0 0 auto;border:0;background:none;padding:9px 14px 10px;cursor:pointer;color:var(--muted);font-weight:600;font-size:14px;border-bottom:2px solid transparent}
+nav.tabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent)}
+main{max-width:1500px;margin:0 auto;padding:16px 20px 40px}
+
+/* общие элементы */
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer;white-space:nowrap;min-height:32px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.chip .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.badge{display:inline-flex;align-items:center;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:600;line-height:1.6;white-space:nowrap}
+.b-actual{background:var(--green-bg);color:var(--green)}
+.b-planned{background:var(--surface-3);color:var(--muted)}
+.b-pk{background:var(--yellow-bg);color:var(--yellow)}
+.b-fk{background:var(--blue-bg);color:var(--blue)}
+.b-uq{background:var(--purple-bg);color:var(--purple)}
+.b-null{background:transparent;color:var(--faint);border:1px solid var(--border);font-weight:500}
+.b-issue{background:var(--orange-bg);color:var(--orange);font-weight:500}
+.muted{color:var(--muted)}.faint{color:var(--faint)}
+.search{position:relative}
+.search input{width:100%;border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:10px 12px 10px 38px;min-height:44px}
+.search input:focus{outline:none;border-color:var(--border-strong);box-shadow:0 0 0 3px var(--yellow-bg)}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--faint)}
+.row-chips{display:flex;gap:6px;flex-wrap:wrap}
+.lnk{color:var(--link);cursor:pointer;background:none;border:0;padding:0;text-align:left;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+.box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow)}
+h2{font-size:17px;margin:0 0 10px}
+h3{font-size:14px;margin:22px 0 8px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-weight:700}
+ul.list{margin:0;padding-left:20px}
+ul.list li{margin:4px 0}
+
+/* вкладка «Таблицы» */
+.tlayout{display:grid;grid-template-columns:minmax(300px,400px) minmax(0,1fr);gap:20px;align-items:start}
+.tside{position:sticky;top:calc(var(--top) + 16px);max-height:calc(100vh - var(--top) - 32px);display:flex;flex-direction:column;gap:10px;min-height:0}
+.filters{display:flex;flex-direction:column;gap:8px}
+.filters details summary{cursor:pointer;color:var(--muted);font-size:13px;list-style:none;display:flex;align-items:center;gap:6px;min-height:28px}
+.filters details summary::-webkit-details-marker{display:none}
+.filters details[open] summary .car{transform:rotate(90deg)}
+.car{display:inline-block;transition:transform .15s}
+.count-line{font-size:13px;color:var(--muted)}
+.tlist>*{flex:none}
+.tlist{overflow:auto;min-height:0;padding:2px 4px 8px 2px;margin:0 -4px 0 -2px;display:flex;flex-direction:column;gap:6px;overscroll-behavior:contain}
+.gtitle{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:10px 2px 2px}
+.gtitle .dot{width:9px;height:9px;border-radius:3px}
+.tcard{display:block;width:100%;text-align:left;border:1px solid var(--border);background:var(--surface);border-radius:var(--r);padding:10px 12px 10px 14px;cursor:pointer;position:relative;overflow:hidden}
+.tcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--g)}
+.tcard:hover{border-color:var(--border-strong)}
+.tcard[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--yellow-bg)}
+.tcard .t1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.tcard .ru{font-weight:650}
+.tcard .en{font-family:var(--mono);font-size:12px;color:var(--faint)}
+.tcard .d{font-size:13px;color:var(--muted);margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tcard .meta{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--faint)}
+.tcard .hit{font-size:12px;margin-top:5px;color:var(--muted)}
+.tcard .hit code{background:var(--yellow-bg);border-radius:4px;padding:0 4px}
+.empty{padding:28px 12px;text-align:center;color:var(--muted)}
+
+.detail{min-width:0}
+.dhead{padding:18px 20px;border-bottom:1px solid var(--border);position:relative}
+.dhead::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--g);border-radius:var(--r) 0 0 0}
+.dbar{display:none}
+.dhead h2{font-size:22px;margin:0;line-height:1.25}
+.dhead .en{font-family:var(--mono);color:var(--muted);font-size:14px;margin-top:2px;word-break:break-all}
+.dhead .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.dbody{padding:4px 20px 22px}
+.dbody p{margin:12px 0 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.btn{border:1px solid var(--border-strong);background:var(--surface-2);border-radius:9px;padding:7px 12px;cursor:pointer;font-size:14px;font-weight:600;min-height:38px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--surface-3)}
+
+/* карта связей таблицы */
+.rmap{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.rcol{display:flex;flex-direction:column;gap:6px;min-width:0}
+.rcol .cap{font-size:12px;color:var(--faint);font-weight:600}
+.rnode{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--border);border-left:4px solid var(--g);background:var(--surface-2);border-radius:8px;padding:5px 9px;cursor:pointer;text-align:left;min-width:0;width:100%}
+.rnode:hover{border-color:var(--border-strong);border-left-color:var(--g)}
+.rnode b{font-weight:600;font-size:13.5px}
+.rnode small{font-family:var(--mono);font-size:11.5px;color:var(--muted);word-break:break-all}
+.rself{border:2px solid var(--accent);background:var(--surface);border-radius:10px;padding:10px 14px;text-align:center;font-weight:700;max-width:220px}
+.rself small{display:block;font-family:var(--mono);font-weight:400;color:var(--muted);font-size:12px}
+.rarrow{color:var(--faint);font-size:12px;text-align:center}
+
+/* поля таблицы */
+.cols{border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.crow{display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(110px,.6fr) 92px minmax(0,2.4fr);gap:12px;padding:10px 14px;border-top:1px solid var(--border);align-items:start}
+.crow:first-child{border-top:0}
+.crow.head{background:var(--surface-2);font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:8px 14px}
+.crow:not(.head):nth-child(odd){background:color-mix(in srgb,var(--surface-2) 45%,transparent)}
+.crow.planned-col .cn b::after{content:" · спроектировано";font-weight:500;color:var(--faint);font-size:12px}
+.cn b{font-weight:600;display:block}
+.cn code{color:var(--muted);word-break:break-all}
+.ct code{color:var(--blue)}
+.ct .lnk{font-family:var(--mono);font-size:.88em}
+.ck{display:flex;gap:4px;flex-wrap:wrap}
+.cd{font-size:14px;min-width:0}
+.cd .x{color:var(--muted);font-size:13px;margin-top:3px}
+.cd .x code{color:var(--text)}
+
+/* вкладка «Схема»: холст с таблицами */
+:root{--edge:#a8916e;--edge-on:#966400;--grid:#e3d5bf;--st-act:#17734b;--st-plan:#a3906f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--edge:#7d6a52;--edge-on:#e2bd5e;--grid:#352b22;--st-act:#5fcf98;--st-plan:#7d6a52}}
+:root[data-theme="dark"]{--edge:#7d6a52;--edge-on:#e2bd5e;--grid:#352b22;--st-act:#5fcf98;--st-plan:#7d6a52}
+main:has(#tab-d:not([hidden])){padding-bottom:14px}
+.erd-wrap{display:flex;flex-direction:column;gap:10px;height:calc(100vh - var(--top) - 32px);height:calc(100dvh - var(--top) - 32px);min-height:440px}
+.erd-wrap.full{position:fixed;inset:0;z-index:60;background:var(--bg);height:auto;min-height:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom))}
+.dtools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;position:relative}
+.dtools select{border:1px solid var(--border);background:var(--surface);border-radius:9px;padding:7px 10px;min-height:38px;max-width:100%}
+.dtools label.sw{display:inline-flex;gap:7px;align-items:center;font-size:14px;cursor:pointer;min-height:36px;white-space:nowrap}
+.dtools input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
+.dopts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tbtn svg{width:17px;height:17px;flex:none}
+.tbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+#d-full{margin-left:auto}
+.ph-only{display:none!important}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;background:var(--surface);flex:none}
+.seg button{border:0;background:none;padding:6px 11px;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--muted);min-height:36px}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent)}
+.erd{flex:1;min-height:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--surface);position:relative}
+.stage{grid-column:2;grid-row:1;position:relative;overflow:hidden;touch-action:none;cursor:grab;background-color:var(--surface-2);background-image:radial-gradient(circle,var(--grid) 1.2px,transparent 1.4px);background-size:24px 24px;user-select:none;-webkit-user-select:none}
+.stage.moving{cursor:grabbing}
+.world{position:absolute;left:0;top:0;transform-origin:0 0}
+.wsvg{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+.stage .msg{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;color:var(--muted)}
+
+/* таблица на холсте */
+.node{position:absolute;left:0;top:0;width:max-content;min-width:210px;max-width:330px;background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;transition:opacity .15s,box-shadow .15s}
+@media (hover:hover){.node{cursor:grab}}
+.wdesc .node{width:300px;max-width:300px}
+.nh{display:flex;align-items:center;gap:4px;padding:7px 4px 7px 11px;background:color-mix(in srgb,var(--g) 16%,var(--surface));border-top:5px solid var(--g);border-bottom:1px solid var(--border)}
+.node.coll .nh{border-bottom:0}
+.nt{flex:1;min-width:0;line-height:1.2;padding-right:2px}
+.nt b{display:block;font-weight:650;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nt small{display:block;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.wcode .nt b{font-family:var(--mono);font-size:13px}
+.wcode .nt small{font-family:var(--font);font-size:11.5px}
+.nst{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--st-act);flex:none;margin:0 3px}
+.nb{border:0;background:none;width:26px;height:26px;border-radius:7px;cursor:pointer;color:var(--muted);display:grid;place-items:center;flex:none;font-size:15px;line-height:1;padding:0}
+.nb:hover{background:color-mix(in srgb,var(--text) 10%,transparent);color:var(--text)}
+.nb svg{width:15px;height:15px}
+.ndesc{padding:6px 11px 7px;font-size:12px;line-height:1.4;color:var(--muted);border-bottom:1px solid var(--border)}
+.nrows{padding:3px 0}
+.nr{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:1px 7px;align-items:center;padding:2.5px 11px 2.5px 9px;font-size:13px;line-height:1.35;border-left:3px solid transparent}
+.nr:hover{background:var(--surface-2)}
+.nr.flash{background:var(--yellow-bg);border-left-color:var(--focus)}
+.ki{display:grid;place-items:center;width:14px;height:14px}
+.ki svg{width:12px;height:12px;display:block}
+.ki.pk{color:var(--yellow)}.ki.fk{color:var(--blue)}.ki.uq{color:var(--purple)}
+.ki.uq svg{width:9px;height:9px}
+.nr .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wcode .nr .nm{font-family:var(--mono);font-size:12.5px}
+.nr .ty{font-family:var(--mono);font-size:11.5px;color:var(--faint);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.nr .ty.en{color:var(--purple)}
+.nq{font-style:normal;color:var(--faint);margin-left:3px;font-size:12px}
+.nr.pl .nm{color:var(--faint);font-style:italic}
+.nr .rd{grid-column:2/4;font-size:11.5px;color:var(--muted);line-height:1.35;white-space:normal;padding-bottom:2px}
+.cst .nr.ok{border-left-color:var(--st-act)}
+.cst .nr.pl{border-left-color:var(--st-plan)}
+.nf{display:flex;justify-content:space-between;gap:8px;padding:3px 7px 5px;border-top:1px solid var(--border);font-size:12px}
+.node.coll .nf{border-top:0;padding-top:0}
+.nlink{border:0;background:none;color:var(--link);cursor:pointer;padding:3px 4px;font-size:12px;border-radius:6px;font-weight:600}
+.nlink:hover{background:var(--yellow-bg)}
+.node.sel{border-color:var(--edge-on);box-shadow:0 0 0 3px color-mix(in srgb,var(--edge-on) 30%,transparent),var(--shadow-l);z-index:3}
+.node.dragging{box-shadow:var(--shadow-l);z-index:4;transition:none}
+.world.has-sel .node:not(.sel):not(.nbr){opacity:.38}
+
+/* связи и рамки групп */
+.lk .ln{fill:none;stroke:var(--edge);stroke-width:1.5;stroke-linejoin:round}
+.lk .cc{fill:var(--surface);stroke:var(--edge);stroke-width:1.5}
+.lk .hit{fill:none;stroke:transparent;stroke-width:12;pointer-events:stroke;cursor:pointer}
+.lk.on .ln,.lk.on .cc,.lk:hover .ln,.lk:hover .cc{stroke:var(--edge-on);stroke-width:2.4}
+.has-sel .lk:not(.on){opacity:.16}
+.fr rect.frb{pointer-events:none}
+.fr .frh{pointer-events:all;cursor:move;fill:transparent}
+.fr text{font:700 22px var(--font);pointer-events:none}
+.fr text .frn{font-weight:500;opacity:.75}
+
+/* кнопки масштаба, мини-карта, цвета, подсказка */
+.ctl{position:absolute;left:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;z-index:5}
+.ctl .icon-btn{box-shadow:var(--shadow);font-size:18px;font-weight:700;width:40px;height:40px}
+.ctl .zv{font-size:11px;font-weight:600;font-family:var(--mono)}
+.mini{position:absolute;right:10px;bottom:10px;width:210px;height:140px;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);z-index:5;cursor:pointer;touch-action:none}
+.lgd{position:absolute;left:10px;right:10px;top:10px;z-index:5;display:flex;flex-wrap:wrap;gap:5px;align-items:center;pointer-events:none}
+.lgd>*{pointer-events:auto}
+.lgd-t,.lgd .li{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:color-mix(in srgb,var(--surface) 92%,transparent);border-radius:999px;padding:3px 10px;font-size:12.5px;cursor:pointer;box-shadow:var(--shadow);white-space:nowrap;min-height:28px}
+.lgd-t{font-weight:650}
+.lgd-t::after{content:"‹";font-size:15px;line-height:1;color:var(--muted)}
+.lgd.closed .lgd-t::after{content:"›"}
+.lgd.closed .lgd-b{display:none}
+.lgd-b{display:contents}
+.lgd .li:hover{border-color:var(--border-strong)}
+.lgd .li .sw2{width:11px;height:11px;border-radius:3px;flex:none}
+.lgd .li .n{color:var(--faint)}
+.tip{position:absolute;z-index:8;max-width:320px;background:var(--surface);border:1px solid var(--border-strong);border-radius:10px;box-shadow:var(--shadow-l);padding:9px 12px;font-size:13px;line-height:1.4;pointer-events:none}
+.tip b{font-weight:650}
+.tip code{color:var(--muted)}
+.tip .tt{color:var(--muted);font-size:12px;margin-top:2px}
+.tip .td{margin-top:5px}
+.hint{font-size:12.5px;color:var(--faint);line-height:1.4}
+
+/* список таблиц слева */
+.eside{grid-column:1;grid-row:1;width:280px;border-right:1px solid var(--border);background:var(--surface);display:none;flex-direction:column;min-height:0}
+.erd.side-open .eside{display:flex}
+.es-h{padding:10px 10px 8px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.es-top{display:flex;align-items:center;gap:8px;font-size:13px}
+.es-top b{font-size:14px}
+.es-top .grow{flex:1}
+.search.sm input{min-height:38px;padding:7px 10px 7px 34px;font-size:14px}
+.search.sm svg{left:10px}
+.es-list{flex:1;overflow:auto;padding:4px 6px 10px;overscroll-behavior:contain}
+.es-gh{display:flex;align-items:center;gap:7px;padding:9px 6px 4px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);cursor:pointer}
+.es-gh b{font-weight:700;flex:1;min-width:0}
+.es-gh .dot{width:10px;height:10px;border-radius:3px;flex:none}
+.es-list input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);flex:none;margin:0}
+.si{display:flex;align-items:center;gap:7px;padding:0 6px;border-radius:8px}
+.si:hover{background:var(--surface-2)}
+.si.cur{background:var(--yellow-bg)}
+.sl{flex:1;min-width:0;border:0;background:none;text-align:left;cursor:pointer;padding:5px 0;line-height:1.25}
+.sl .sl1{display:flex;align-items:center;gap:4px;font-size:13.5px}
+.sl code{display:block;font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.es-f{border-top:1px solid var(--border);padding:8px 12px 10px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.lg2{display:grid;grid-template-columns:18px 1fr;gap:3px 6px;align-items:center}
+.lg2 svg{width:16px;height:12px}
+
+/* описание справа */
+.eins{grid-column:3;grid-row:1;width:400px;border-left:1px solid var(--border);background:var(--surface);overflow:auto;overscroll-behavior:contain;position:relative}
+.ins-h{position:sticky;top:0;z-index:2;background:var(--surface);padding:10px 12px 12px 16px;border-bottom:1px solid var(--border);border-top:5px solid var(--g)}
+.ins-top{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.ins-top .grow{flex:1}
+.ins-g{display:inline-flex;align-items:center;gap:6px}
+.ins-g .dot{width:9px;height:9px;border-radius:3px}
+.ins-h h2{font-size:19px;margin:2px 0 0;line-height:1.25}
+.ins-en{font-size:13px;color:var(--muted);word-break:break-all}
+.ins-h .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ins-h .tags .badge{white-space:normal}
+.ins-b{padding:2px 16px 22px}
+.ins-b h3{margin:18px 0 6px}
+.ins-d{margin:12px 0 0}
+.ins-b .actions .btn{font-size:13px;min-height:34px;padding:5px 10px}
+.if{padding:8px 6px 9px;border-top:1px solid var(--border);border-radius:6px;cursor:pointer}
+.if:first-child{border-top:0}
+.if:hover{background:var(--surface-2)}
+.if.flash{background:var(--yellow-bg)}
+.if1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.if1 b{font-weight:600}
+.if1 code{color:var(--muted);font-size:12px}
+.if1 .ty{margin-left:auto;color:var(--blue)}
+.if2{font-size:12px;color:var(--faint);margin-top:1px}
+.if3{font-size:13.5px;margin-top:3px}
+.if-x,.if-ev{font-size:12.5px;color:var(--muted);margin-top:4px}
+.ev{display:inline-block;background:var(--purple-bg);border-radius:6px;padding:0 6px;margin:2px 3px 0 0;color:var(--text);font-size:12px}
+.ev code{color:var(--purple);font-size:11px}
+.rel{display:grid;grid-template-columns:1fr;gap:4px}
+.rel .cap{font-size:12px;color:var(--faint);font-weight:600;margin-top:4px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips details{width:100%}
+.chips details summary{list-style:none;font-size:13px;padding:3px 0}
+.chips details[open] summary{margin-bottom:5px}
+.rchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-left:4px solid var(--g);background:var(--surface-2);border-radius:8px;padding:3px 9px;font-size:13px;cursor:pointer;margin:0 5px 5px 0}
+.rchip:hover{border-color:var(--border-strong);border-left-color:var(--g)}
+.rchip .plus{color:var(--link);font-weight:700}
+
+@media (max-width:899px){
+  .erd-wrap{height:calc(100vh - var(--top) - 24px);height:calc(100dvh - var(--top) - 24px);min-height:360px;gap:8px}
+  .dtools{flex-wrap:nowrap;gap:6px}
+  .dtools #d-what{flex:1 1 auto;min-width:0}
+  .tbtn span{display:none}
+  .tbtn{padding:7px 9px}
+  .ph-only{display:inline-flex!important}
+  #d-full{margin-left:0}
+  .dopts{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:9;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-l);padding:12px;flex-direction:column;align-items:stretch}
+  .dopts.open{display:flex}
+  .dopts select{width:100%}
+  .dopts .seg{align-self:flex-start}
+  .erd{display:block}
+  .stage{position:absolute;inset:0}
+  .mini{display:none}
+  .ctl{left:auto;right:8px;bottom:8px}
+  .eside{position:absolute;left:0;top:0;bottom:0;width:min(320px,88%);z-index:7;box-shadow:var(--shadow-l)}
+  .eins{position:absolute;left:0;right:0;bottom:0;width:auto;max-height:60%;z-index:7;border:1px solid var(--border);border-radius:16px 16px 0 0;box-shadow:var(--shadow-l)}
+  .eins.tall{max-height:calc(100% - 8px)}
+  .ins-h{border-radius:12px 12px 0 0}
+  .hint{font-size:12px}
+}
+
+/* вкладки «Значения» и «Правила» */
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}
+.ecard{padding:14px 16px}
+.ecard .en{font-family:var(--mono);font-size:13px;color:var(--muted)}
+.ecard table{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px}
+.ecard td{border-top:1px solid var(--border);padding:6px 6px 6px 0;vertical-align:top}
+.ecard td:first-child{white-space:nowrap;width:1%}
+.ecard .used{font-size:13px;color:var(--muted);margin-top:8px}
+.ecard:target,.ecard.flash{box-shadow:0 0 0 3px var(--yellow-bg),var(--shadow)}
+.rules{max-width:980px;display:flex;flex-direction:column;gap:14px}
+.rules .box{padding:16px 18px}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center}
+.types{display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+.types code{color:var(--blue)}
+.fns{display:flex;flex-direction:column}
+.fn{display:grid;grid-template-columns:minmax(0,320px) 1fr;gap:4px 14px;padding:9px 0;border-top:1px solid var(--border)}
+.fn:first-child{border-top:0;padding-top:0}
+.fn>code{color:var(--blue);word-break:break-word}
+@media (max-width:899px){.fn{grid-template-columns:1fr}}
+
+/* телефон */
+@media (max-width:899px){
+  :root{--top:96px}
+  .hd{padding:10px 16px 6px}
+  .hd h1{font-size:17px}
+  nav.tabs{padding:0 8px;justify-content:space-between}
+  nav.tabs button{flex:1 1 0;padding:9px 4px 10px;font-size:13.5px}
+  main{padding:12px 16px 32px}
+  .tlayout{display:block}
+  .tside{position:static;max-height:none}
+  .tlist{overflow:visible;margin:0;padding:0}
+  .detail{position:fixed;inset:0;z-index:40;background:var(--bg);overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+  .detail.closed{display:none}
+  .detail>.box{border:0;border-radius:0;box-shadow:none;min-height:100%}
+  .dbar{display:flex;align-items:center;gap:6px;position:sticky;top:0;z-index:3;background:var(--surface);border-bottom:1px solid var(--border);padding:4px 12px 4px 6px;min-height:52px}
+  .dbar b{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dbar .back{border:0;background:none;color:var(--link);font-size:22px;font-weight:600;width:44px;height:44px;display:grid;place-items:center;cursor:pointer;flex:none}
+  .dhead{padding:14px 16px 14px}
+  .dhead::before{border-radius:0}
+  .dhead h2{font-size:19px}
+  .dbody{padding:4px 16px 28px}
+  .rmap{grid-template-columns:1fr}
+  .rself{max-width:none}
+  .rarrow{display:none}
+  .crow.head{display:none}
+  .crow{grid-template-columns:1fr auto;grid-template-areas:"n k" "t t" "d d";gap:4px 10px;padding:10px 12px}
+  .cn{grid-area:n}.ck{grid-area:k;justify-content:flex-end}.ct{grid-area:t}.cd{grid-area:d}
+  .grid2{grid-template-columns:1fr}
+}
+@media (min-width:900px){ .detail.closed{display:block} }
+
+/* Встроенная в Админку прототипа («Техническая документация»): без заголовка страницы и своей кнопки темы — тема как в программе */
+.emb .hd h1,.emb #theme{display:none}
+#emb-full{display:none}.emb #emb-full{display:inline-flex}
+.emb .hd{padding-top:8px;padding-bottom:4px}
+/* «Где используется в API» и подсветка таблиц метода */
+.apiu{display:flex;flex-direction:column;gap:2px;margin:0}
+.apiu button{display:grid;grid-template-columns:62px minmax(0,1fr) auto;gap:4px 10px;align-items:baseline;text-align:left;background:none;border:0;border-top:1px solid var(--border);padding:7px 2px;cursor:pointer;border-radius:0}
+.apiu button:hover{background:var(--surface-2)}
+.apiu .ap{font-family:var(--mono);font-size:13px;word-break:break-all;color:var(--link)}
+.apiu .as{grid-column:2/4;color:var(--muted);font-size:13px}
+.apiu.sm button{grid-template-columns:56px minmax(0,1fr) auto;padding:5px 0}
+.mth{display:inline-block;font:600 11px/1.7 var(--mono);border-radius:5px;padding:0 6px;text-align:center;min-width:48px}
+.m-GET{background:var(--blue-bg);color:var(--blue)}.m-POST{background:var(--green-bg);color:var(--green)}.m-PUT,.m-PATCH{background:var(--yellow-bg);color:var(--yellow)}.m-DELETE{background:var(--red-bg);color:var(--red)}
+.b-rd{background:var(--blue-bg);color:var(--blue)}.b-wr{background:var(--orange-bg);color:var(--orange)}
+.dapi{display:flex;gap:6px;align-items:center;min-width:0}
+.dapi select{max-width:340px}
+.dapi .hlk{display:inline-flex;gap:8px;font-size:12.5px;color:var(--muted);white-space:nowrap}
+.dapi .hlk i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.node.hl-r{box-shadow:0 0 0 3px var(--blue),var(--shadow)}
+.node.hl-w{box-shadow:0 0 0 3px var(--orange),var(--shadow)}
+.node.dim{opacity:.3}
+.node.dim:hover{opacity:.75}
+@media (max-width:899px){.dapi select{max-width:none;flex:1 1 auto;min-width:0}.dapi .hlk{display:none}.dapi{flex:1 1 100%}}
+</style>
+</head>
+<body>
+<header>
+  <div class="hd">
+    <div class="grow">
+      <h1>База данных Buhuchet.kg</h1>
+      <div class="sub" id="sub">Загрузка описания…</div>
+    </div>
+    <button class="btn tbtn" id="emb-full" type="button" aria-pressed="false" title="На весь экран: Esc — обычный вид"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg><span>На весь экран</span></button>
+    <button class="icon-btn" id="theme" type="button" title="Тема: как в устройстве" aria-label="Сменить тему">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="t" aria-selected="true">Таблицы</button>
+    <button role="tab" data-tab="d" aria-selected="false">Схема</button>
+    <button role="tab" data-tab="e" aria-selected="false">Значения</button>
+    <button role="tab" data-tab="r" aria-selected="false">Правила</button>
+  </nav>
+</header>
+
+<main>
+  <section id="tab-t">
+    <div class="tlayout">
+      <aside class="tside">
+        <div class="filters">
+          <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Поиск: таблица, поле, описание" autocomplete="off" aria-label="Поиск"></label>
+          <div class="row-chips" id="st-chips"></div>
+          <details id="grp-box"><summary><span class="car">▸</span> Группы: <b id="grp-sum">все</b></summary><div class="row-chips" id="grp-chips" style="margin-top:6px"></div></details>
+          <div class="count-line" id="cnt"></div>
+        </div>
+        <div class="tlist" id="tlist"></div>
+      </aside>
+      <div class="detail closed" id="detail"></div>
+    </div>
+  </section>
+
+  <section id="tab-d" hidden>
+   <div class="erd-wrap" id="erd-wrap">
+    <div class="dtools">
+      <button class="btn tbtn" type="button" id="d-side" aria-pressed="false" title="Список таблиц: найти, показать, скрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Таблицы</span></button>
+      <select id="d-what" aria-label="Что показать"></select>
+      <div class="dapi" id="d-api-w" hidden><select id="d-api" aria-label="Подсветить метод API"></select><span class="hlk"><span><i style="background:var(--blue)"></i>читает</span><span><i style="background:var(--orange)"></i>меняет</span></span></div>
+      <div class="dopts" id="d-opts">
+        <select id="d-cols" aria-label="Поля в таблицах"><option value="all">Все поля</option><option value="keys">Только ключи и ссылки</option><option value="none">Свернуть все таблицы</option></select>
+        <select id="d-color" aria-label="Цвет таблиц"><option value="group">Цвет: по группам</option><option value="status">Цвет: есть в базе или нет</option></select>
+        <div class="seg" role="group" aria-label="Подписи"><button type="button" data-lbl="ru" title="Названия по-русски">Рус</button><button type="button" data-lbl="code" title="Имена как в базе">Код</button></div>
+        <label class="sw" title="Описание таблиц и полей прямо на схеме"><input type="checkbox" id="d-desc"> Описания</label>
+        <label class="sw" title="Связи org_id → «Организации» и «Кто создал / изменил» → «Пользователи» есть почти у каждой таблицы"><input type="checkbox" id="d-std"> Служебные связи</label>
+        <button class="btn" type="button" id="d-relayout" title="Расставить таблицы заново">Упорядочить</button>
+      </div>
+      <button class="btn tbtn ph-only" type="button" id="d-optbtn" aria-expanded="false" title="Настройки схемы"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Вид</span></button>
+      <button class="btn tbtn" type="button" id="d-full" aria-pressed="false" title="На весь экран"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>На весь экран</span></button>
+    </div>
+    <div class="erd" id="erd">
+      <aside class="eside" id="eside" aria-label="Таблицы на схеме">
+        <div class="es-h">
+          <div class="es-top"><b>Таблицы</b><span class="faint" id="es-cnt"></span><span class="grow"></span><button class="nb ph-only" type="button" id="es-close" aria-label="Закрыть список">×</button></div>
+          <label class="search sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="es-q" type="search" placeholder="Найти таблицу или поле" autocomplete="off" aria-label="Найти таблицу или поле"></label>
+        </div>
+        <div class="es-list" id="es-list"></div>
+        <div class="es-f">
+          <div class="lg2" id="es-legend"></div>
+          <button class="lnk" type="button" id="es-reset">Вернуть эту схему как было</button>
+        </div>
+      </aside>
+      <div class="stage" id="stage">
+        <div class="world" id="world"><svg class="wsvg" aria-hidden="true"><g id="frames"></g><g id="links"></g></svg><div id="nodes"></div></div>
+        <div class="lgd" id="lgd"><button type="button" class="lgd-t" id="lgd-t" aria-expanded="true" title="Показать или скрыть подписи цветов"></button><div class="lgd-b" id="lgd-b"></div></div>
+        <div class="ctl">
+          <button class="icon-btn" type="button" id="z-in" aria-label="Крупнее" title="Крупнее">+</button>
+          <button class="icon-btn zv" type="button" id="z-val" title="Масштаб 100 %">100%</button>
+          <button class="icon-btn" type="button" id="z-out" aria-label="Мельче" title="Мельче">−</button>
+          <button class="icon-btn" type="button" id="z-fit" aria-label="Показать всю схему" title="Показать всю схему"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="7" width="14" height="10" rx="2"/><path d="M2 4h4M18 4h4M2 20h4M18 20h4"/></svg></button>
+        </div>
+        <canvas class="mini" id="mini" title="Мини-карта: нажмите или ведите, чтобы перейти"></canvas>
+        <div class="tip" id="tip" hidden></div>
+        <div class="msg" id="d-msg" hidden></div>
+      </div>
+      <aside class="eins" id="eins" hidden aria-label="Описание таблицы"></aside>
+    </div>
+    <div class="hint" id="d-hint"></div>
+   </div>
+  </section>
+
+  <section id="tab-e" hidden>
+    <p class="muted" style="margin-top:0">Перечисления — списки допустимых значений полей: статусы, виды, периоды. В таблицах такие поля показаны с типом-ссылкой.</p>
+    <div class="grid2" id="enums"></div>
+  </section>
+
+  <section id="tab-r" hidden>
+    <div class="rules" id="rules"></div>
+  </section>
+</main>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const plural=(n,a,b,c)=>{const m=n%10,h=n%100;return n+' '+(m===1&&h!==11?a:m>=2&&m<=4&&(h<10||h>=20)?b:c)};
+const fmtDate=s=>s?s.split('-').reverse().join('.'):'';
+let DB,TBL,GRP,ENUM,IN,ST={q:'',status:'all',groups:new Set()};
+let detailName=null;
+// Встраивание в Админку прототипа: страница получает описание базы и карту API (какие методы читают и меняют таблицу) от прототипа,
+// переходы к методу API отправляет ему сообщением; своя история браузера не ведётся (адрес меняется без новых записей)
+const EMB=window.TDX_IN||null;
+if(EMB)document.documentElement.classList.add('emb');
+const toHost=m=>{try{parent.postMessage(Object.assign({tdx:1},m),'*')}catch(e){}};
+const API_T=EMB&&EMB.api?EMB.api.t||{}:{},API_M=EMB&&EMB.api?EMB.api.m||{}:{};
+const RW={r:'чтение',w:'запись',rw:'чтение и запись'};
+function apiUse(name,sm){const l=API_T[name]||[];if(!l.length)return '<p class="faint" style="margin:0">Методов API, которые читают или меняют эту таблицу, в описании API нет.</p>';
+  return `<div class="apiu${sm?' sm':''}">${l.map(([id,rw])=>{const m=API_M[id];return `<button type="button" data-api="${esc(id)}" title="Открыть метод на вкладке «API»"><span><span class="mth m-${m.m}">${m.m}</span></span><span class="ap">${esc(m.p)}</span><span class="badge ${rw==='r'?'b-rd':'b-wr'}">${RW[rw]}</span>${sm?'':`<span class="as">${esc(m.s)}</span>`}</button>`}).join('')}</div>`}
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-api]');if(b)toHost({open:b.dataset.api})});
+
+/* ═════════════ Загрузка ═════════════ */
+async function load(){
+  if(EMB){init(EMB.schema);return}
+  try{
+    const r=await fetch('schema.json',{cache:'no-cache'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    init(await r.json());
+  }catch(e){
+    $('#sub').textContent='Не удалось загрузить schema.json';
+    $('#tlist').innerHTML=`<div class="empty">Не удалось прочитать <code>schema.json</code> (${esc(e.message)}).<br>Откройте страницу через GitHub Pages или локальный сервер — с диска браузер не даёт читать файлы.<br><br><label class="btn">Выбрать schema.json вручную<input type="file" accept=".json,application/json" hidden id="pick"></label></div>`;
+    $('#pick').addEventListener('change',async ev=>{const f=ev.target.files[0];if(f)init(JSON.parse(await f.text()))});
+  }
+}
+
+function init(db){
+  DB=db;TBL=new Map(db.tables.map(t=>[t.name,t]));GRP=new Map(db.groups.map(g=>[g.id,g]));ENUM=new Map(db.enums.map(e=>[e.name,e]));
+  IN=new Map(db.tables.map(t=>[t.name,[]]));
+  db.tables.forEach(t=>t.columns.forEach(c=>{if(c.fk){const to=c.fk.split('.')[0];IN.get(to)&&IN.get(to).push({t,c})}}));
+  const act=db.tables.filter(t=>t.status==='actual').length;
+  $('#sub').textContent=`${plural(db.tables.length,'таблица','таблицы','таблиц')} · ${act} уже в базе · ${fmtDate(db.meta.updated)}`;$('#sub').title='Описание обновлено '+fmtDate(db.meta.updated);
+  renderFilters();renderList();renderEnums();renderRules();initErd();
+  route();
+}
+
+/* ═════════════ Навигация: адрес #/t/таблица, #/d/группа, #/e/перечисление, #/r ═════════════ */
+function go(hash,replace){
+  if(location.hash===hash)return route();
+  history[replace||EMB?'replaceState':'pushState']({app:1},'',hash);route();
+}
+window.addEventListener('popstate',route);
+function route(){
+  if(!DB)return;
+  const [,tab='t',arg='']=(location.hash||'#/t').split('/');
+  const name=decodeURIComponent(arg);
+  showTab(['t','d','e','r'].includes(tab)?tab:'t');
+  if(tab==='t'||!tab){openDetail(TBL.has(name)?name:null)}else document.body.style.overflow='';
+  if(tab==='d')openErd(name||$('#d-what').value||'core');
+  if(tab==='e'&&name){const el=document.getElementById('enum-'+name);if(el){el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}}
+  if(tab==='r'&&name){const el=document.getElementById('fn-'+name);if(el){el.scrollIntoView({block:'center'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1600)}}
+  if(EMB)toHost({hash:location.hash});
+}
+function showTab(id){
+  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===id)));
+  ['t','d','e','r'].forEach(k=>$('#tab-'+k).hidden=k!==id);
+}
+document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('click',()=>{
+  const k=b.dataset.tab;go(k==='t'?(detailName&&!isPhone()?'#/t/'+detailName:'#/t'):k==='d'?'#/d/'+encodeURIComponent($('#d-what').value||'core'):'#/'+k);
+}));
+const isPhone=()=>matchMedia('(max-width:899px)').matches;
+
+/* ═════════════ Список таблиц ═════════════ */
+function renderFilters(){
+  const sc=[['all','Все'],['actual','Есть в базе'],['planned','Спроектировано']];
+  $('#st-chips').innerHTML=sc.map(([k,l])=>`<button class="chip" type="button" data-st="${k}" aria-pressed="${ST.status===k}">${l}</button>`).join('');
+  $('#grp-chips').innerHTML=DB.groups.map(g=>`<button class="chip" type="button" data-g="${g.id}" aria-pressed="false"><span class="dot" style="background:${g.color}"></span>${esc(g.ru)}</button>`).join('');
+  $('#st-chips').onclick=e=>{const b=e.target.closest('[data-st]');if(!b)return;ST.status=b.dataset.st;$('#st-chips').querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderList()};
+  $('#grp-chips').onclick=e=>{const b=e.target.closest('[data-g]');if(!b)return;const g=b.dataset.g;ST.groups.has(g)?ST.groups.delete(g):ST.groups.add(g);b.setAttribute('aria-pressed',String(ST.groups.has(g)));renderList()};
+  let tm;$('#q').addEventListener('input',e=>{clearTimeout(tm);tm=setTimeout(()=>{ST.q=e.target.value.trim().toLowerCase();renderList()},120)});
+}
+function matchTable(t,q){
+  if(!q)return {ok:true,cols:[]};
+  const inT=[t.name,t.ru,t.desc,t.issue,...(t.logic||[])].join(' ').toLowerCase().includes(q);
+  const cols=t.columns.filter(c=>[c.name,c.ru,c.desc,c.type].join(' ').toLowerCase().includes(q));
+  return {ok:inT||cols.length>0,cols};
+}
+function renderList(){
+  const q=ST.q,groups=ST.groups;
+  $('#grp-sum').textContent=groups.size?[...groups].map(g=>GRP.get(g).ru).join(', '):'все';
+  let html='',n=0;
+  DB.groups.forEach(g=>{
+    if(groups.size&&!groups.has(g.id))return;
+    const items=DB.tables.filter(t=>t.group===g.id&&(ST.status==='all'||t.status===ST.status)).map(t=>({t,m:matchTable(t,q)})).filter(x=>x.m.ok);
+    if(!items.length)return;
+    n+=items.length;
+    html+=`<div class="gtitle"><span class="dot" style="background:${g.color}"></span>${esc(g.ru)} · ${items.length}</div>`;
+    html+=items.map(({t,m})=>card(t,m,g)).join('');
+  });
+  $('#tlist').innerHTML=html||'<div class="empty">Ничего не найдено. Измените поиск или фильтры.</div>';
+  $('#cnt').textContent=n===DB.tables.length?`Показаны все ${plural(n,'таблица','таблицы','таблиц')}`:`Найдено: ${plural(n,'таблица','таблицы','таблиц')} из ${DB.tables.length}`;
+  markCurrent();
+}
+function card(t,m,g){
+  const fk=t.columns.filter(c=>c.fk).length,inc=IN.get(t.name).length;
+  const hit=m.cols.length&&ST.q?`<div class="hit">Поля: ${m.cols.slice(0,6).map(c=>`<code>${esc(c.name)}</code>`).join(' ')}${m.cols.length>6?' …':''}</div>`:'';
+  return `<button type="button" class="tcard" data-t="${t.name}" style="--g:${g.color}">
+    <div class="t1"><span class="ru">${esc(t.ru)}</span><span class="en">${esc(t.name)}</span></div>
+    <div class="d">${esc(t.desc)}</div>
+    <div class="meta">${statusBadge(t.status)}<span>${plural(t.columns.length,'поле','поля','полей')}</span>${fk+inc?`<span>· ${plural(fk+inc,'связь','связи','связей')}</span>`:''}</div>${hit}</button>`;
+}
+const statusBadge=s=>`<span class="badge b-${s}" title="${esc(DB.meta.statuses[s].desc)}">${esc(DB.meta.statuses[s].ru)}</span>`;
+$('#tlist').addEventListener('click',e=>{const b=e.target.closest('[data-t]');if(b)go('#/t/'+b.dataset.t)});
+function markCurrent(){document.querySelectorAll('.tcard').forEach(b=>b.setAttribute('aria-current',String(b.dataset.t===detailName)))}
+
+/* ═════════════ Описание таблицы ═════════════ */
+function openDetail(name){
+  const box=$('#detail');
+  detailName=name;markCurrent();
+  if(!name){
+    box.classList.add('closed');
+    box.innerHTML=overview();
+    document.body.style.overflow='';
+    return;
+  }
+  const t=TBL.get(name),g=GRP.get(t.group);
+  box.innerHTML=`<div class="box" style="--g:${g.color}">
+    <div class="dbar"><button class="back" type="button" id="back" aria-label="Все таблицы">←</button><b>${esc(t.ru)}</b></div>
+    <div class="dhead">
+      <h2>${esc(t.ru)}</h2>
+      <div class="en">${esc(t.name)}</div>
+      <div class="tags">${statusBadge(t.status)}<span class="badge b-planned" style="background:none;border:1px solid var(--border)"><span class="dot" style="width:8px;height:8px;border-radius:2px;background:${g.color};margin-right:6px;display:inline-block"></span>${esc(g.ru)}</span>${t.migration?`<span class="badge b-actual" title="Миграция в продукте">миграция ${esc(t.migration)}</span>`:''}${t.issue?`<span class="badge b-issue" title="Задача или поток разработки">${esc(t.issue)}</span>`:''}</div>
+    </div>
+    <div class="dbody">
+      <p>${esc(t.desc)}</p>
+      <div class="actions"><button class="btn" type="button" data-diag="=${t.name}">Показать на схеме</button></div>
+      <h3>Поля · ${t.columns.length}</h3>
+      ${colsTable(t)}
+      ${relMap(t)}
+      ${t.logic&&t.logic.length?`<h3>Бизнес-логика</h3><ul class="list">${t.logic.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+      <h3>Защита строк (RLS)</h3><p style="margin-top:0">${esc(t.rls)}</p>
+      ${EMB?`<h3>Где используется в API · ${(API_T[t.name]||[]).length}</h3>${apiUse(t.name)}`:''}
+      ${t.uniques&&t.uniques.length?`<h3>Уникальность</h3><ul class="list">${t.uniques.map(x=>`<li><code>${esc(x)}</code></li>`).join('')}</ul>`:''}
+      ${t.indexes&&t.indexes.length?`<h3>Индексы</h3><ul class="list">${t.indexes.map(x=>`<li><code>${esc(x)}</code></li>`).join('')}</ul>`:''}
+      ${t.source?`<h3>Откуда взято</h3><p style="margin-top:0" class="muted">${esc(t.source)}</p>`:''}
+    </div></div>`;
+  box.classList.remove('closed');
+  box.scrollTop=0;
+  if(isPhone())document.body.style.overflow='hidden';
+  else{const r=box.getBoundingClientRect();if(r.top<0||r.top>innerHeight)scrollTo({top:0})}
+  $('#back').onclick=()=>{!EMB&&history.state&&history.state.app?history.back():go('#/t',true)};
+}
+function overview(){
+  const by=DB.groups.map(g=>{const ts=DB.tables.filter(t=>t.group===g.id);return `<button type="button" class="tcard" data-ov="${g.id}" style="--g:${g.color}"><div class="t1"><span class="ru">${esc(g.ru)}</span></div><div class="d">${ts.slice(0,6).map(t=>esc(t.ru)).join(', ')}${ts.length>6?'…':''}</div><div class="meta"><span>${plural(ts.length,'таблица','таблицы','таблиц')}</span>${ts.some(t=>t.status==='actual')?`<span class="badge b-actual">${ts.filter(t=>t.status==='actual').length} в базе</span>`:''}</div></button>`}).join('');
+  return `<div class="box" style="padding:18px 20px"><h2>Обзор базы</h2><p class="muted" style="margin:0 0 14px">Выберите таблицу слева, чтобы увидеть её поля, связи и правила. Или откройте схему группы:</p><div class="grid2" style="grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">${by}</div></div>`;
+}
+$('#detail').addEventListener('click',e=>{
+  const d=e.target.closest('[data-diag]');if(d){go('#/d/'+d.dataset.diag);return}
+  const t=e.target.closest('[data-go]');if(t){go('#/t/'+t.dataset.go);return}
+  const en=e.target.closest('[data-enum]');if(en){go('#/e/'+en.dataset.enum);return}
+  const ov=e.target.closest('[data-ov]');if(ov){go('#/d/'+ov.dataset.ov)}
+});
+function relMap(t){
+  // одна плашка на таблицу-соседа, а поля связи — списком
+  const gather=list=>{const m=new Map();list.forEach(({tt,col})=>{if(!m.has(tt.name))m.set(tt.name,{tt,cols:[]});m.get(tt.name).cols.push(col)});return [...m.values()]};
+  const out=gather(t.columns.filter(c=>c.fk).map(c=>({tt:TBL.get(c.fk.split('.')[0]),col:c.name})));
+  const inc=gather(IN.get(t.name).map(({t:ft,c})=>({tt:ft,col:c.name})));
+  if(!out.length&&!inc.length)return '<h3>Связи</h3><p class="muted" style="margin-top:0">Связей с другими таблицами нет.</p>';
+  const node=(x,dir)=>`<button type="button" class="rnode" data-go="${x.tt.name}" style="--g:${GRP.get(x.tt.group).color}"><b>${esc(x.tt.ru)}</b><small>${dir==='out'?x.cols.map(esc).join(', ')+' → '+esc(x.tt.name):esc(x.tt.name)+': '+x.cols.map(esc).join(', ')}</small></button>`;
+  const grp=(arr,dir)=>{
+    // org_id и «Кто создал / изменил» есть почти везде: сворачиваем, чтобы не заслоняли смысловые связи
+    const isStd=x=>dir==='in'&&(t.name==='organizations'&&x.cols.every(c=>c==='org_id')||t.name==='users'&&x.cols.every(c=>c==='created_by'||c==='updated_by'));
+    const common=arr.filter(isStd),main=arr.filter(x=>!isStd(x));
+    // длинный список сворачиваем: первые 6 видны сразу
+    const head=main.length>8?main.slice(0,6):main,rest=main.length>8?main.slice(6):[];
+    let h=head.map(x=>node(x,dir)).join('');
+    if(rest.length)h+=`<details><summary class="lnk" style="font-size:14px;padding:4px 0;list-style:none">Показать ещё ${plural(rest.length,'таблицу','таблицы','таблиц')}</summary><div class="rcol" style="margin-top:6px">${rest.map(x=>node(x,dir)).join('')}</div></details>`;
+    if(common.length)h+=`<details><summary class="muted" style="cursor:pointer;font-size:13px;padding:4px 0">и ещё ${plural(common.length,'таблица','таблицы','таблиц')} через ${t.name==='organizations'?'org_id':'«Кто создал / изменил»'}</summary><div class="rcol" style="margin-top:6px">${common.map(x=>node(x,dir)).join('')}</div></details>`;
+    return h;
+  };
+  return `<h3>Связи</h3><div class="rmap">
+    <div class="rcol"><div class="cap">Ссылается на (${out.length})</div>${out.length?grp(out,'out'):'<span class="faint">—</span>'}</div>
+    <div class="rself">${esc(t.ru)}<small>${esc(t.name)}</small><div class="rarrow">← ссылается · ссылаются →</div></div>
+    <div class="rcol"><div class="cap">На неё ссылаются (${inc.length})</div>${inc.length?grp(inc,'in'):'<span class="faint">—</span>'}</div>
+  </div>`;
+}
+const OD={cascade:'удалится вместе с ней',restrict:'удалить нельзя, пока есть ссылки','set null':'поле станет пустым'};
+function colsTable(t){
+  const rows=t.columns.map(c=>{
+    const keys=[c.pk?'<span class="badge b-pk" title="Первичный ключ: по нему находят запись">PK</span>':'',c.fk?'<span class="badge b-fk" title="Внешний ключ: ссылка на другую таблицу">FK</span>':'',c.unique?'<span class="badge b-uq" title="Значение не повторяется">UQ</span>':'',c.null?'<span class="badge b-null" title="Поле может быть пустым">NULL</span>':''].join('');
+    const en=ENUM.get(c.type);
+    const type=en?`<button type="button" class="lnk" data-enum="${en.name}" title="${esc(en.ru)}: допустимые значения">${esc(c.type)}</button><div class="faint" style="font-size:12px">${esc(en.ru)}</div>`:`<code title="${esc(DB.types[c.type]||'')}">${esc(c.type)}</code>`;
+    let x='';
+    if(c.fk){const [to,col]=c.fk.split('.');const tt=TBL.get(to);x+=`<div class="x">→ <button type="button" class="lnk" data-go="${to}">${esc(tt?tt.ru:to)}</button> <code>${esc(c.fk)}</code>${c.onDelete?` · при удалении записи там: ${esc(OD[c.onDelete]||c.onDelete)}`:''}</div>`}
+    if(c.default!==undefined)x+=`<div class="x">По умолчанию: <code>${esc(c.default)}</code></div>`;
+    const planned=t.status==='actual'&&c.status==='planned';
+    return `<div class="crow${planned?' planned-col':''}"><div class="cn"><b>${esc(c.ru)}</b><code>${esc(c.name)}</code></div><div class="ct">${type}</div><div class="ck">${keys}</div><div class="cd">${c.desc?esc(c.desc):'<span class="faint">—</span>'}${x}</div></div>`;
+  }).join('');
+  return `<div class="cols"><div class="crow head"><div>Поле</div><div>Тип</div><div>Ключи</div><div>Описание</div></div>${rows}</div>`;
+}
+
+function cssVar(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+/* ═════════════ Схема: холст с таблицами ═════════════ */
+// Таблицы — карточки на холсте: их двигают, сворачивают, скрывают; линия идёт от поля-ссылки к таблице.
+// Расположение, скрытые и свёрнутые таблицы запоминаются в этом браузере — отдельно для каждого вида схемы.
+const GX=120,GY=36,CLG=170,FPAD=26,FTOP=58;
+const E={view:'',st:null,base:{main:[],light:[]},nodes:new Map(),shown:new Set(),sel:null,ins:null,v:{s:1,x:0,y:0},q:'',anim:0};
+const EO={cols:'all',lbl:'ru',desc:false,std:false,color:'group',side:null};
+try{Object.assign(EO,JSON.parse(localStorage.getItem('db-erd-opts')||'{}'))}catch(e){}
+function saveOpts(){try{localStorage.setItem('db-erd-opts',JSON.stringify(EO))}catch(e){}}
+function loadState(v){let s=null;try{s=JSON.parse(localStorage.getItem('db-erd:'+v)||'null')}catch(e){}s=s||{};
+  return {pins:s.pins||{},hidden:s.hidden||[],added:s.added||[],modes:s.modes||{}}}
+function saveState(){try{localStorage.setItem('db-erd:'+E.view,JSON.stringify(E.st))}catch(e){}}
+function dropState(v){try{localStorage.removeItem('db-erd:'+v)}catch(e){}}
+const fkTo=c=>c.fk.split('.')[0];
+const isStd=(c,to)=>to==='organizations'&&c.name==='org_id'||to==='users'&&(c.name==='created_by'||c.name==='updated_by');
+// служебные связи есть почти у каждой таблицы: без переключателя их не рисуем (кроме группы «Ядро»)
+const hideStd=(c,to)=>!EO.std&&E.view!=='core'&&isStd(c,to);
+const refs=(a,b)=>TBL.get(a).columns.some(c=>c.fk&&fkTo(c)===b);
+function links(n){
+  const s=new Set();
+  TBL.get(n).columns.forEach(c=>{if(c.fk&&!hideStd(c,fkTo(c)))s.add(fkTo(c))});
+  IN.get(n).forEach(({t,c})=>{if(!hideStd(c,n))s.add(t.name)});
+  s.delete(n);return [...s];
+}
+const colorOf=n=>EO.color==='status'?(TBL.get(n).status==='actual'?'var(--st-act)':'var(--st-plan)'):GRP.get(TBL.get(n).group).color;
+const colorNow=n=>EO.color==='status'?cssVar(TBL.get(n).status==='actual'?'--st-act':'--st-plan'):GRP.get(TBL.get(n).group).color;
+
+/* что входит в вид: группа — её таблицы и (свёрнутыми) таблицы, на которые она ссылается */
+function baseSet(v){
+  const main=[],light=[];
+  if(v.startsWith('@')){const m=API_M[v.slice(1)];if(m)main.push(...new Set([...m.r,...m.w].filter(n=>TBL.has(n))))}
+  else if(v==='all')DB.tables.forEach(t=>light.push(t.name));
+  else if(v.startsWith('=')){main.push(v.slice(1));light.push(...links(v.slice(1)))}
+  else{
+    DB.tables.forEach(t=>{if(t.group===v)main.push(t.name)});
+    const s=new Set(main);
+    main.forEach(n=>TBL.get(n).columns.forEach(c=>{if(!c.fk)return;const to=fkTo(c);if(!s.has(to)&&!isStd(c,to)){s.add(to);light.push(to)}}));
+  }
+  return {main,light};
+}
+const isBase=n=>E.base.main.includes(n)||E.base.light.includes(n);
+function visibleList(){
+  const hid=new Set(E.st.hidden),seen=new Set(),out=[];
+  [...E.base.main,...E.base.light,...E.st.added].forEach(n=>{if(TBL.has(n)&&!hid.has(n)&&!seen.has(n)){seen.add(n);out.push(n)}});
+  return out;
+}
+function modeOf(n){
+  const m=E.st.modes[n];if(m==='all'||m==='keys'||m==='none')return m;
+  if(E.base.main.includes(n))return EO.cols;
+  return E.view.startsWith('=')&&EO.cols!=='none'?'keys':'none';
+}
+
+/* ─── карточка таблицы ─── */
+const IC={
+  pk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="8" cy="15" r="4.5"/><path d="m11.5 11.5 8-8M16.5 6.5l2.5 2.5M14 9l2 2"/></svg>',
+  fk:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4L12 5.6"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.2-1.2"/></svg>',
+  uq:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 22 12 12 22 2 12z"/></svg>',
+  hide:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>'
+};
+const keyIcon=c=>c.pk?`<span class="ki pk" title="Первичный ключ">${IC.pk}</span>`:c.fk?`<span class="ki fk" title="Ссылка на другую таблицу">${IC.fk}</span>`:c.unique?`<span class="ki uq" title="Значение не повторяется">${IC.uq}</span>`:'<span class="ki"></span>';
+function rowHtml(t,c){
+  const cls=t.status==='actual'?(c.status==='planned'?' pl':' ok'):'';
+  return `<div class="nr${cls}" data-c="${esc(c.name)}">${keyIcon(c)}<span class="nm">${esc(EO.lbl==='ru'?c.ru:c.name)}${c.null?'<i class="nq">?</i>':''}</span><span class="ty${ENUM.has(c.type)?' en':''}">${esc(c.type)}</span>${EO.desc&&c.desc?`<span class="rd">${esc(c.desc)}</span>`:''}</div>`;
+}
+function nodeHtml(n){
+  const t=TBL.get(n),mode=modeOf(n);
+  const cols=mode==='none'?[]:t.columns.filter(c=>mode==='all'||c.pk||c.fk&&!hideStd(c,fkTo(c)));
+  const rest=t.columns.length-cols.length,more=links(n).filter(x=>!E.shown.has(x)).length;
+  const [a,b]=EO.lbl==='ru'?[t.ru,t.name]:[t.name,t.ru];
+  const foot=rest||more?`<div class="nf">${rest?`<button type="button" class="nlink" data-act="open" title="Показать все поля">${mode==='none'?plural(rest,'поле','поля','полей'):'ещё '+plural(rest,'поле','поля','полей')}</button>`:'<span></span>'}${more?`<button type="button" class="nlink" data-act="more" title="Показать на схеме связанные таблицы">+ ${plural(more,'связанная','связанные','связанных')}</button>`:''}</div>`:'';
+  return `<div class="node${mode==='none'?' coll':''}" data-n="${n}" style="--g:${colorOf(n)}">
+<div class="nh"><div class="nt"><b>${esc(a)}</b><small>${esc(b)}</small></div>${t.status==='actual'?'<span class="nst" title="Уже есть в базе"></span>':''}<button type="button" class="nb" data-act="coll" title="${mode==='none'?'Развернуть поля':'Свернуть'}" aria-label="${mode==='none'?'Развернуть поля':'Свернуть'}">${mode==='none'?'▸':'▾'}</button><button type="button" class="nb" data-act="hide" title="Скрыть со схемы" aria-label="Скрыть со схемы">${IC.hide}</button></div>${EO.desc?`<div class="ndesc">${esc(t.desc)}</div>`:''}${cols.length?`<div class="nrows">${cols.map(c=>rowHtml(t,c)).join('')}</div>`:''}${foot}</div>`;
+}
+function makeNode(n){const d=document.createElement('div');d.innerHTML=nodeHtml(n);return d.firstElementChild}
+function measure(o){
+  o.w=o.el.offsetWidth;o.h=o.el.offsetHeight;o.rows=new Map();
+  o.el.querySelectorAll('.nr').forEach(r=>o.rows.set(r.dataset.c,r.offsetTop+r.offsetHeight/2));
+  const h=o.el.firstElementChild;o.hy=h.offsetTop+h.offsetHeight/2;
+}
+const place=o=>{o.el.style.transform=`translate(${o.x}px,${o.y}px)`};
+function swapNode(n){const o=E.nodes.get(n);if(!o)return;const el=makeNode(n);o.el.replaceWith(el);o.el=el;measure(o);place(o)}
+function redraw(){markSel();drawLinks();drawFrames();renderLegend();miniSoon()}
+
+/* ─── расстановка: слои по ссылкам (на кого ссылаются — левее, на узком экране — выше), группы — рядом ─── */
+function bboxOf(pos){
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+  pos.forEach((p,n)=>{const o=E.nodes.get(n);x1=Math.min(x1,p.x);y1=Math.min(y1,p.y);x2=Math.max(x2,p.x+o.w);y2=Math.max(y2,p.y+o.h)});
+  return x1===Infinity?{x:0,y:0,w:0,h:0}:{x:x1,y:y1,w:x2-x1,h:y2-y1};
+}
+const aspect=()=>{const st=$('#stage');return st.clientWidth&&st.clientHeight?Math.min(2.2,Math.max(.4,st.clientHeight/st.clientWidth)):.6};
+const vert=()=>aspect()>1.25;
+function layered(names){
+  const V=vert(),W=n=>E.nodes.get(n).w,H=n=>E.nodes.get(n).h;
+  // A — размер вдоль слоёв, B — поперёк; на вертикальном экране слои идут сверху вниз
+  const A=V?H:W,B=V?W:H,GA=V?80:GX,GB=V?36:GY;
+  const s=new Set(names),par=new Map(),ch=new Map();
+  names.forEach(n=>{par.set(n,new Set());ch.set(n,new Set())});
+  names.forEach(n=>TBL.get(n).columns.forEach(c=>{if(!c.fk)return;const to=fkTo(c);if(to!==n&&s.has(to)&&!hideStd(c,to)){par.get(n).add(to);ch.get(to).add(n)}}));
+  const linked=names.filter(n=>par.get(n).size||ch.get(n).size),alone=names.filter(n=>!par.get(n).size&&!ch.get(n).size);
+  const L=new Map(),busy=new Set();
+  const lay=n=>{if(L.has(n))return L.get(n);if(busy.has(n))return 0;busy.add(n);let l=0;par.get(n).forEach(p=>{l=Math.max(l,lay(p)+1)});busy.delete(n);L.set(n,l);return l};
+  linked.forEach(lay);
+  // таблицу, которая сама ни на кого не ссылается, ставим ближе к тем, кто ссылается на неё
+  linked.forEach(n=>{if(!par.get(n).size){const m=Math.min(...[...ch.get(n)].map(c=>L.get(c)));if(m-1>L.get(n))L.set(n,m-1)}});
+  const lays=[];linked.forEach(n=>{const l=L.get(n);(lays[l]||(lays[l]=[])).push(n)});
+  const LS=lays.filter(Boolean),idx=new Map();
+  const re=()=>LS.forEach(l=>l.forEach((n,i)=>idx.set(n,(i+.5)/l.length)));
+  const sortBy=(l,rel)=>{const k=new Map(l.map(n=>{const r=[...rel.get(n)];return [n,r.length?r.reduce((a,x)=>a+idx.get(x),0)/r.length:idx.get(n)]}));l.sort((a,b)=>k.get(a)-k.get(b))};
+  re();
+  for(let it=0;it<6;it++){for(let i=1;i<LS.length;i++)sortBy(LS[i],par);re();for(let i=LS.length-2;i>=0;i--)sortBy(LS[i],ch);re()}
+  // длинный слой делим на части, чтобы схема была ближе к форме экрана
+  const area=linked.reduce((a,n)=>a+(W(n)+GX)*(H(n)+GY),0),r=V?1/aspect():aspect();
+  const maxB=Math.max(Math.max(0,...linked.map(B))*1.2,Math.sqrt(area*r)*1.05),cols=[];
+  LS.forEach(l=>{let cur=[],sum=0;l.forEach(n=>{if(cur.length&&sum+B(n)>maxB){cols.push(cur);cur=[];sum=0}cur.push(n);sum+=B(n)+GB});if(cur.length)cols.push(cur)});
+  const q=new Map(),cb=n=>q.get(n).b+B(n)/2;
+  let a=0;
+  cols.forEach(l=>{
+    let b=0;
+    l.forEach(n=>{const ps=[...par.get(n)].filter(x=>q.has(x));let want=b;if(ps.length)want=Math.max(b,ps.reduce((t,x)=>t+cb(x),0)/ps.length-B(n)/2);q.set(n,{a,b:want});b=want+B(n)+GB});
+    a+=Math.max(...l.map(A))+GA;
+  });
+  for(let i=cols.length-2;i>=0;i--){
+    let end=-Infinity;
+    cols[i].forEach(n=>{const cs=[...ch.get(n)];let want=q.get(n).b;if(cs.length)want=cs.reduce((t,c)=>t+cb(c),0)/cs.length-B(n)/2;want=Math.max(want,end+GB);q.get(n).b=want;end=want+B(n)});
+  }
+  const pos=new Map();q.forEach((v,n)=>pos.set(n,V?{x:v.b,y:v.a}:{x:v.a,y:v.b}));
+  // таблицы без связей — сеткой под остальными
+  if(alone.length){
+    const bb=bboxOf(pos),cw=Math.max(...alone.map(W));
+    const per=Math.max(linked.length?Math.floor((bb.w+GX)/(cw+GX)):1,Math.ceil(Math.sqrt(alone.length/aspect()*.8)),1);
+    let y=linked.length?bb.y+bb.h+GY*2:0;
+    for(let i=0;i<alone.length;i+=per){const row=alone.slice(i,i+per);row.forEach((n,j)=>pos.set(n,{x:bb.x+j*(cw+GX),y}));y+=Math.max(...row.map(H))+GY}
+  }
+  const bb=bboxOf(pos);pos.forEach(p=>{p.x-=bb.x;p.y-=bb.y});
+  return {pos,w:bb.w,h:bb.h};
+}
+function autoLayout(names){
+  const pos=new Map();if(!names.length)return pos;
+  const v=E.view;
+  if(v.startsWith('='))return focusLayout(names);
+  // таблицы метода API — по слоям связей, без деления на группы
+  if(v.startsWith('@'))return layered(names).pos;
+  const by=new Map();names.forEach(n=>{const g=TBL.get(n).group;if(!by.has(g))by.set(g,[]);by.get(g).push(n)});
+  if(v==='all'){
+    // вся база: каждая группа в своей рамке, рамки — рядами
+    const cl=DB.groups.filter(g=>by.has(g.id)).map(g=>layered(by.get(g.id)));
+    const area=cl.reduce((a,c)=>a+(c.w+CLG)*(c.h+FTOP+CLG),0),maxW=Math.max(Math.sqrt(area/aspect())*1.05,...cl.map(c=>c.w));
+    let x=0,y=0,rowH=0;
+    cl.forEach(c=>{if(x>0&&x+c.w>maxW){x=0;y+=rowH+CLG;rowH=0}c.pos.forEach((p,n)=>pos.set(n,{x:p.x+x,y:p.y+y+FTOP}));x+=c.w+CLG;rowH=Math.max(rowH,c.h+FTOP)});
+    return pos;
+  }
+  // группа: её таблицы по слоям, таблицы других групп — сбоку (на узком экране — сверху), напротив тех, кто на них ссылается
+  const m=layered(by.get(v)||[]);m.pos.forEach((p,n)=>pos.set(n,p));
+  const others=names.filter(n=>TBL.get(n).group!==v);
+  if(others.length){
+    const V=vert(),sz=n=>E.nodes.get(n);
+    const want=n=>{const c=[];m.pos.forEach((p,k)=>{if(refs(k,n)||refs(n,k))c.push(V?p.x+sz(k).w/2:p.y+sz(k).h/2)});return c.length?c.reduce((a,b)=>a+b,0)/c.length:(V?m.w:m.h)/2};
+    const list=others.map(n=>({n,w:want(n)})).sort((a,b)=>a.w-b.w);
+    let end=-Infinity;
+    if(V){const rh=Math.max(...others.map(n=>sz(n).h)),y=-(rh+80);list.forEach(({n,w})=>{const o=sz(n),x=Math.max(w-o.w/2,end+GX/3);pos.set(n,{x,y:y+rh-o.h});end=x+o.w})}
+    else{const cw=Math.max(...others.map(n=>sz(n).w)),x=-(cw+GX*1.6);list.forEach(({n,w})=>{const o=sz(n),y=Math.max(w-o.h/2,end+GY);pos.set(n,{x:x+cw-o.w,y});end=y+o.h})}
+  }
+  return pos;
+}
+function focusLayout(names){
+  const n=E.view.slice(1),pos=new Map(),o=E.nodes.get(n)||{w:0,h:0},V=vert(),sz=x=>E.nodes.get(x);
+  const P=[],C=[],O=[];
+  names.forEach(x=>{if(x===n)pos.set(n,{x:0,y:0});else if(TBL.has(n)&&refs(n,x))P.push(x);else if(TBL.has(n)&&refs(x,n))C.push(x);else O.push(x)});
+  // на кого она ссылается — слева (сверху), кто ссылается на неё — справа (снизу)
+  const band=(list,dir,a0)=>{
+    const per=V?3:8;
+    for(let i=0;i<list.length;i+=per){
+      const part=list.slice(i,i+per);
+      if(V){
+        const rh=Math.max(...part.map(x=>sz(x).h)),tot=part.reduce((t,x)=>t+sz(x).w,0)+GX/2*(part.length-1);
+        let x=o.w/2-tot/2;part.forEach(k=>{pos.set(k,{x,y:dir<0?a0-sz(k).h:a0});x+=sz(k).w+GX/2});a0+=dir*(rh+80);
+      }else{
+        const cw=Math.max(...part.map(x=>sz(x).w)),tot=part.reduce((t,x)=>t+sz(x).h,0)+GY*(part.length-1);
+        let y=Math.min(o.h,420)/2-tot/2;part.forEach(k=>{pos.set(k,{x:dir<0?a0-sz(k).w:a0,y});y+=sz(k).h+GY});a0+=dir*(cw+GX);
+      }
+    }
+    return a0;
+  };
+  if(V){band(P,-1,-80);band(O,1,band(C,1,o.h+80)+40)}
+  else{band(P,-1,-GX*1.4);band(O,1,band(C,1,o.w+GX*1.4)+GX)}
+  return pos;
+}
+
+/* ─── вывод вида ─── */
+function renderErd(v,{keep=false,fitAfter=true}={}){
+  if(!keep){E.view=v;E.st=loadState(v)}
+  E.base=baseSet(E.view);
+  const vis=visibleList();E.shown=new Set(vis);
+  const w=$('#world');w.classList.toggle('wdesc',EO.desc);w.classList.toggle('wcode',EO.lbl==='code');w.classList.toggle('cst',EO.color==='status');
+  $('#nodes').innerHTML=vis.map(nodeHtml).join('');
+  E.nodes=new Map();
+  $('#nodes').querySelectorAll('.node').forEach(el=>{const o={n:el.dataset.n,el,x:0,y:0};measure(o);E.nodes.set(o.n,o)});
+  // таблицы, которые передвигали руками, остаются на месте; остальные расставляются заново
+  const pos=autoLayout(vis.filter(n=>!E.st.pins[n]));
+  E.nodes.forEach(o=>{const p=E.st.pins[o.n],q=p?{x:p[0],y:p[1]}:pos.get(o.n)||{x:0,y:0};o.x=q.x;o.y=q.y;place(o)});
+  if(E.sel&&!E.nodes.has(E.sel))E.sel=null;
+  $('#d-msg').hidden=!!vis.length;$('#d-msg').textContent='На схеме нет таблиц. Откройте список «Таблицы» и отметьте нужные.';
+  redraw();renderSide();
+  if(E.ins)inspect(E.ins);
+  if(fitAfter)fit(false);
+}
+function openErd(v){
+  const sel=$('#d-what'),fg=$('#d-focus');
+  if(v.startsWith('@')){const id=v.slice(1),m=API_M[id];if(m&&!sel.querySelector(`option[value="${CSS.escape(v)}"]`))$('#d-mth').insertAdjacentHTML('beforeend',`<option value="${esc(v)}">${esc(m.m+' '+m.p)}</option>`);if(m)HL='';}
+  if(v.startsWith('=')){const n=v.slice(1);if(TBL.has(n)&&!fg.querySelector(`option[value="=${n}"]`))fg.insertAdjacentHTML('beforeend',`<option value="=${n}">${esc(TBL.get(n).ru)}</option>`)}
+  if(![...sel.options].some(o=>o.value===v))v='core';
+  sel.value=v;
+  if(v===E.view&&$('#nodes').childElementCount){miniSoon();return}
+  E.sel=null;closeIns();
+  const f=v.startsWith('=')&&TBL.has(v.slice(1))?v.slice(1):null;
+  renderErd(v,{fitAfter:!f});
+  // таблица в фокусе выделена, на ПК сразу открыто её описание; вписываем после этого — панель сужает холст
+  if(f){if(E.nodes.has(f))select(f);if(!isPhone())inspect(f,null,true);fit(false)}
+}
+
+/* ─── связи и рамки групп ─── */
+let linksRaf=0;const linksSoon=()=>{if(!linksRaf)linksRaf=requestAnimationFrame(()=>{linksRaf=0;drawLinks();drawFrames()})};
+function drawLinks(){
+  const on=[],off=[],sel=E.sel;
+  E.nodes.forEach((a,n)=>TBL.get(n).columns.forEach(c=>{
+    if(!c.fk)return;const [to,tc]=c.fk.split('.'),b=E.nodes.get(to);if(!b||hideStd(c,to))return;
+    const y1=a.y+(a.rows.get(c.name)??a.hy),y2=b.y+(b.rows.get(tc)??b.hy);
+    let x1,s1,x2,s2;
+    if(n===to){x1=x2=a.x+a.w;s1=s2=1}
+    else if(a.x>=b.x+b.w+40){x1=a.x;s1=-1;x2=b.x+b.w;s2=1}
+    else if(a.x+a.w+40<=b.x){x1=a.x+a.w;s1=1;x2=b.x;s2=-1}
+    else if(a.x+a.w/2<b.x+b.w/2){x1=a.x;s1=-1;x2=b.x;s2=-1}
+    else{x1=a.x+a.w;s1=1;x2=b.x+b.w;s2=1}
+    const p1=x1+s1*14,p2=x2+s2*22;let d;
+    if(s1===s2){const xm=s1>0?Math.max(p1,p2)+50:Math.min(p1,p2)-50;d=`M${x1} ${y1}H${p1}C${xm} ${y1} ${xm} ${y2} ${p2} ${y2}H${x2}`}
+    else{const k=Math.max(40,Math.abs(p2-p1)*.45);d=`M${x1} ${y1}H${p1}C${p1+s1*k} ${y1} ${p2+s2*k} ${y2} ${p2} ${y2}H${x2}`}
+    // у поля-ссылки: «лапка» — много записей, черта — одна; у таблицы-цели: две черты — ровно одна, черта и кружок — одна или ни одной
+    const one=c.unique||c.pk&&TBL.get(n).columns.filter(x=>x.pk).length===1;
+    let m=one?`M${x1+s1*8} ${y1-6}V${y1+6}`:`M${x1} ${y1-6}L${x1+s1*12} ${y1}L${x1} ${y1+6}`;
+    m+=`M${x2+s2*7} ${y2-6}V${y2+6}`;
+    if(!c.null)m+=`M${x2+s2*12} ${y2-6}V${y2+6}`;
+    const circ=c.null?`<path class="cc" d="M${x2+s2*16-4} ${y2}a4 4 0 1 0 8 0a4 4 0 1 0-8 0"/>`:'';
+    const hot=sel&&(n===sel||to===sel);
+    (hot?on:off).push(`<g class="lk${hot?' on':''}" data-f="${n}" data-c="${esc(c.name)}"><path class="hit" d="${d}"/><path class="ln" d="${d}${m}"/>${circ}</g>`);
+  }));
+  $('#links').innerHTML=off.join('')+on.join('');
+  $('#world').classList.toggle('has-sel',!!sel);
+}
+function groupBoxes(){
+  const bb=new Map();
+  E.nodes.forEach(o=>{const g=TBL.get(o.n).group,b=bb.get(g)||{x1:Infinity,y1:Infinity,x2:-Infinity,y2:-Infinity,n:0};b.x1=Math.min(b.x1,o.x);b.y1=Math.min(b.y1,o.y);b.x2=Math.max(b.x2,o.x+o.w);b.y2=Math.max(b.y2,o.y+o.h);b.n++;bb.set(g,b)});
+  return bb;
+}
+function drawFrames(){
+  let h='';
+  if(E.view==='all'){
+    const bb=groupBoxes(),st=EO.color==='status';
+    DB.groups.forEach(g=>{const b=bb.get(g.id);if(!b)return;
+      const x=b.x1-FPAD,y=b.y1-FTOP,w=b.x2-b.x1+FPAD*2,hh=b.y2-b.y1+FTOP+FPAD,col=st?'var(--muted)':g.color,fo=st?.035:.07;
+      h+=`<g class="fr" data-g="${g.id}"><rect class="frb" x="${x}" y="${y}" width="${w}" height="${hh}" rx="18" style="fill:${col};fill-opacity:${fo};stroke:${col};stroke-opacity:.5;stroke-width:1.5"/><rect class="frh" data-g="${g.id}" x="${x}" y="${y}" width="${w}" height="${FTOP-10}" rx="18"><title>Перетащите, чтобы сдвинуть всю группу</title></rect><text x="${x+20}" y="${y+35}" style="fill:${col}">${esc(g.ru)} <tspan class="frn">· ${b.n}</tspan></text></g>`});
+  }
+  $('#frames').innerHTML=h;
+}
+
+/* ─── вид: сдвиг, масштаб, вписать ─── */
+function applyView(){
+  const v=E.v,st=$('#stage');
+  $('#world').style.transform=`translate(${v.x}px,${v.y}px) scale(${v.s})`;
+  const g=24*v.s;st.style.backgroundSize=`${g}px ${g}px`;st.style.backgroundPosition=`${v.x}px ${v.y}px`;
+  $('#z-val').textContent=Math.round(v.s*100)+'%';
+  miniSoon();
+}
+function bbox(names){
+  let x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity;
+  (names?names.map(n=>E.nodes.get(n)).filter(Boolean):[...E.nodes.values()]).forEach(o=>{x1=Math.min(x1,o.x);y1=Math.min(y1,o.y);x2=Math.max(x2,o.x+o.w);y2=Math.max(y2,o.y+o.h)});
+  if(x1===Infinity)return null;
+  if(E.view==='all'){x1-=FPAD;y1-=FTOP;x2+=FPAD;y2+=FPAD}
+  return {x:x1,y:y1,w:x2-x1,h:y2-y1};
+}
+const visH=()=>{const st=$('#stage'),ins=$('#eins');return isPhone()&&!ins.hidden?Math.max(120,st.clientHeight-ins.offsetHeight):st.clientHeight};
+function fit(anim=true,names,maxS=1.1){
+  const st=$('#stage'),b=bbox(names);if(!b||!st.clientWidth)return;
+  const W=st.clientWidth,pad=W<600?14:40,lg=$('#lgd'),top=Math.max(pad,lg.offsetTop+lg.offsetHeight+14),H=visH()-top;
+  const s=Math.max(.05,Math.min((W-pad*2)/b.w,(H-pad)/b.h,maxS));
+  const t={s,x:(W-b.w*s)/2-b.x*s,y:top+Math.max(0,(H-pad-b.h*s)/2)-b.y*s};
+  anim?animateTo(t):(E.v=t,applyView());
+}
+function animateTo(t){
+  cancelAnimationFrame(E.anim);const f={...E.v},t0=performance.now();
+  const step=now=>{const k=Math.min(1,(now-t0)/280),e=1-Math.pow(1-k,3);E.v={s:f.s+(t.s-f.s)*e,x:f.x+(t.x-f.x)*e,y:f.y+(t.y-f.y)*e};applyView();if(k<1)E.anim=requestAnimationFrame(step)};
+  E.anim=requestAnimationFrame(step);
+}
+function center(n){
+  const o=E.nodes.get(n),st=$('#stage');if(!o)return;
+  const s=Math.max(E.v.s,.8),H=visH();
+  animateTo({s,x:st.clientWidth/2-(o.x+o.w/2)*s,y:H/2-(o.y+Math.min(o.h,(H-40)/s)/2)*s});
+}
+function ensureVisible(names){
+  const b=bbox(names),st=$('#stage'),v=E.v;if(!b)return;
+  const x1=b.x*v.s+v.x,y1=b.y*v.s+v.y,x2=x1+b.w*v.s,y2=y1+b.h*v.s;
+  if(x1<0||y1<0||x2>st.clientWidth||y2>visH())fit(true,names,Math.max(v.s,.35));
+}
+function zoomAt(f,cx,cy){const s=Math.min(2.5,Math.max(.05,E.v.s*f)),k=s/E.v.s;E.v.x=cx-(cx-E.v.x)*k;E.v.y=cy-(cy-E.v.y)*k;E.v.s=s;applyView()}
+function keepStage(fn){
+  // кнопки, меняющие размер холста, не сдвигают таблицы на экране
+  const st=$('#stage'),a=st.getBoundingClientRect();fn();const b=st.getBoundingClientRect();
+  if(E.nodes.size&&a.width&&b.width){E.v.x-=b.left-a.left;E.v.y-=b.top-a.top;applyView()}
+}
+
+/* ─── мини-карта ─── */
+let miniRaf=0;function miniSoon(){if(!miniRaf)miniRaf=requestAnimationFrame(()=>{miniRaf=0;drawMini()})}
+function drawMini(){
+  const cv=$('#mini');if(!cv.offsetWidth)return;
+  const W=cv.offsetWidth,H=cv.offsetHeight,dpr=devicePixelRatio||1;
+  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)}
+  const x=cv.getContext('2d');x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,W,H);
+  const b=bbox();if(!b){E.mini=null;return}
+  const st=$('#stage'),v=E.v,vw={x:-v.x/v.s,y:-v.y/v.s,w:st.clientWidth/v.s,h:st.clientHeight/v.s};
+  const ux=Math.min(b.x,vw.x),uy=Math.min(b.y,vw.y),uw=Math.max(b.x+b.w,vw.x+vw.w)-ux,uh=Math.max(b.y+b.h,vw.y+vw.h)-uy;
+  const k=Math.min((W-10)/uw,(H-10)/uh),ox=(W-uw*k)/2-ux*k,oy=(H-uh*k)/2-uy*k;
+  E.mini={k,ox,oy};
+  E.nodes.forEach(o=>{x.globalAlpha=E.sel&&o.n!==E.sel?.4:.85;x.fillStyle=colorNow(o.n);x.fillRect(ox+o.x*k,oy+o.y*k,Math.max(2,o.w*k),Math.max(2,o.h*k))});
+  x.globalAlpha=1;x.fillStyle=cssVar('--yellow-bg');x.strokeStyle=cssVar('--edge-on');x.lineWidth=1.5;
+  x.fillRect(ox+vw.x*k,oy+vw.y*k,vw.w*k,vw.h*k);x.strokeRect(ox+vw.x*k,oy+vw.y*k,vw.w*k,vw.h*k);
+}
+(function miniPointer(){
+  const cv=$('#mini');let m=null;
+  const goTo=e=>{if(!m)return;const r=cv.getBoundingClientRect(),st=$('#stage');const wx=(e.clientX-r.left-m.ox)/m.k,wy=(e.clientY-r.top-m.oy)/m.k;E.v.x=st.clientWidth/2-wx*E.v.s;E.v.y=st.clientHeight/2-wy*E.v.s;applyView()};
+  cv.addEventListener('pointerdown',e=>{e.stopPropagation();cancelAnimationFrame(E.anim);m=E.mini&&{...E.mini};try{cv.setPointerCapture(e.pointerId)}catch(_){}goTo(e)});
+  cv.addEventListener('pointermove',e=>{if(m)goTo(e)});
+  const up=()=>{m=null};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>e.stopPropagation(),{passive:true});
+})();
+
+/* ─── выбор, подсказки, касания ─── */
+function select(n){
+  E.sel=n&&E.nodes.has(n)?n:null;redraw();
+  document.querySelectorAll('#es-list .si').forEach(r=>r.classList.toggle('cur',r.dataset.row===E.sel));
+}
+function markSel(){const nb=new Set(E.sel?links(E.sel):[]);const h=hlNow();E.nodes.forEach(o=>{o.el.classList.toggle('sel',o.n===E.sel);o.el.classList.toggle('nbr',nb.has(o.n));
+  o.el.classList.toggle('hl-w',!!h&&h.w.has(o.n));o.el.classList.toggle('hl-r',!!h&&!h.w.has(o.n)&&h.r.has(o.n));o.el.classList.toggle('dim',!!h&&!h.w.has(o.n)&&!h.r.has(o.n))})}
+// Подсвеченный метод: выбран в поле «Подсветить метод API» или открыт вид «таблицы метода»
+let HL='';
+function hlNow(){const id=HL||(E.view&&E.view.startsWith('@')?E.view.slice(1):'');const m=id&&API_M[id];return m?{r:new Set(m.r),w:new Set(m.w)}:null}
+function hlSet(id){HL=id||'';const s=$('#d-api');if(s)s.value=HL;markSel()}
+function flashRow(n,c){const o=E.nodes.get(n);if(!o)return;const r=o.el.querySelector(`.nr[data-c="${c}"]`);if(!r)return;r.classList.add('flash');setTimeout(()=>r.classList.remove('flash'),1600)}
+let lastTap={n:'',t:0};
+function tap(el){
+  if(!el||!el.closest)return;
+  const nd=el.closest('.node');
+  if(nd){
+    const n=nd.dataset.n,r=el.closest('.nr'),hdr=el.closest('.nh'),now=Date.now();
+    // двойное нажатие на заголовок — свернуть или развернуть
+    if(hdr&&lastTap.n===n&&now-lastTap.t<380){lastTap={n:'',t:0};toggleMode(n);return}
+    lastTap={n:hdr?n:'',t:now};
+    select(n);inspect(n,r?r.dataset.c:null);return;
+  }
+  const lk=el.closest('.lk');if(lk){select(lk.dataset.f);inspect(lk.dataset.f,lk.dataset.c);return}
+  if(el.closest('.frh'))return;
+  select(null);closeIns();if(isPhone())sideOpen(false);
+}
+let tipT=0;
+function hideTip(){clearTimeout(tipT);$('#tip').hidden=true}
+function showTip(el,cx,cy){
+  const tip=$('#tip'),st=$('#stage').getBoundingClientRect();let h='';
+  const nd=el.closest('.node'),lk=el.closest('.lk');
+  if(nd&&el.classList.contains('nr')){
+    const t=TBL.get(nd.dataset.n),c=t.columns.find(x=>x.name===el.dataset.c);if(!c)return;
+    const en=ENUM.get(c.type);
+    h=`<b>${esc(c.ru)}</b> <code>${esc(c.name)}</code><div class="tt">${esc(c.type)}${en?' — '+esc(en.ru):''}${c.pk?' · первичный ключ':''}${c.null?' · может быть пустым':' · обязательное'}</div>${c.desc?`<div class="td">${esc(c.desc)}</div>`:''}${c.fk?`<div class="tt">→ ${esc(TBL.get(fkTo(c)).ru)} (${esc(c.fk)})</div>`:''}`;
+  }else if(nd){
+    const t=TBL.get(nd.dataset.n);
+    h=`<b>${esc(t.ru)}</b> <code>${esc(t.name)}</code><div class="tt">${esc(GRP.get(t.group).ru)} · ${esc(DB.meta.statuses[t.status].ru)} · ${plural(t.columns.length,'поле','поля','полей')}</div><div class="td">${esc(t.desc)}</div>`;
+  }else if(lk){
+    const t=TBL.get(lk.dataset.f),c=t.columns.find(x=>x.name===lk.dataset.c),to=TBL.get(fkTo(c));
+    h=`<b>${esc(t.ru)}</b> → <b>${esc(to.ru)}</b><div class="tt"><code>${esc(t.name)}.${esc(c.name)}</code> → <code>${esc(c.fk)}</code></div>${c.onDelete?`<div class="td">При удалении записи в «${esc(to.ru)}»: ${esc(OD[c.onDelete]||c.onDelete)}.</div>`:''}`;
+  }
+  if(!h)return;
+  tip.innerHTML=h;tip.hidden=false;
+  const r=lk?{left:cx,right:cx,top:cy-10}:el.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+  let left=r.right-st.left+12;if(left+tw>st.width-8)left=Math.max(8,r.left-st.left-tw-12);
+  const top=Math.min(Math.max(8,r.top-st.top),st.height-th-8);
+  tip.style.left=left+'px';tip.style.top=top+'px';
+}
+(function stagePointer(){
+  const st=$('#stage'),pts=new Map();let mode=null,moved=0,pinch=null,drag=null,grp=null,downEl=null;
+  st.addEventListener('pointerover',e=>{
+    if(e.pointerType!=='mouse'||pts.size)return;
+    const el=e.target.closest('.nr,.nh,.lk');if(!el)return;
+    clearTimeout(tipT);const cx=e.clientX,cy=e.clientY;tipT=setTimeout(()=>showTip(el.classList.contains('nh')?el.parentNode:el,cx,cy),380);
+  });
+  st.addEventListener('pointerout',e=>{const el=e.target.closest('.nr,.nh,.lk');if(el&&!el.contains(e.relatedTarget))hideTip()});
+  st.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0&&e.button!==1)return;
+    if(e.target.closest('.node button,.ctl,.lgd'))return;
+    hideTip();cancelAnimationFrame(E.anim);
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{st.setPointerCapture(e.pointerId)}catch(_){}
+    if(pts.size===1){
+      moved=0;downEl=e.target;drag=grp=null;
+      const nd=e.target.closest('.node'),fr=e.target.closest('.frh');
+      if(e.button===1)mode='pan';
+      else if(nd&&(e.pointerType==='mouse'||e.target.closest('.nh'))){mode='node';drag=E.nodes.get(nd.dataset.n)}
+      else if(fr){mode='grp';grp=[...E.nodes.values()].filter(o=>TBL.get(o.n).group===fr.dataset.g)}
+      else mode='pan';
+    }else if(pts.size===2){
+      const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1};mode='pinch';
+      if(drag)drag.el.classList.remove('dragging');drag=grp=null;
+    }
+  });
+  st.addEventListener('pointermove',e=>{
+    const p=pts.get(e.pointerId);if(!p)return;
+    const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+    if(mode==='pinch'){
+      if(pts.size<2)return;const [a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y)||1,r=st.getBoundingClientRect();
+      E.v.x+=dx/2;E.v.y+=dy/2;zoomAt(d/pinch.d,(a.x+b.x)/2-r.left,(a.y+b.y)/2-r.top);pinch.d=d;
+    }else if(moved<5)return;
+    else if(mode==='node'){drag.el.classList.add('dragging');st.classList.add('moving');drag.x+=dx/E.v.s;drag.y+=dy/E.v.s;place(drag);linksSoon()}
+    else if(mode==='grp'){st.classList.add('moving');grp.forEach(o=>{o.x+=dx/E.v.s;o.y+=dy/E.v.s;place(o)});linksSoon()}
+    else if(mode==='pan'){st.classList.add('moving');E.v.x+=dx;E.v.y+=dy;applyView()}
+  });
+  const end=e=>{
+    if(!pts.has(e.pointerId))return;pts.delete(e.pointerId);
+    if(mode==='pinch'){if(!pts.size){mode=null;pinch=null}else{mode='pan';moved=99}return}
+    if(pts.size)return;
+    st.classList.remove('moving');
+    if(e.type==='pointerup'&&moved<5)tap(downEl);
+    else if(mode==='node'&&drag){E.st.pins[drag.n]=[Math.round(drag.x),Math.round(drag.y)];saveState()}
+    else if(mode==='grp'&&grp){grp.forEach(o=>{E.st.pins[o.n]=[Math.round(o.x),Math.round(o.y)]});saveState()}
+    if(drag)drag.el.classList.remove('dragging');drag=grp=null;mode=null;miniSoon();
+  };
+  st.addEventListener('pointerup',end);st.addEventListener('pointercancel',end);
+  st.addEventListener('wheel',e=>{
+    if(e.target.closest('.lgd'))return;
+    e.preventDefault();hideTip();cancelAnimationFrame(E.anim);const r=st.getBoundingClientRect();
+    // колесо мыши и щипок на тачпаде — масштаб, прокрутка двумя пальцами — сдвиг
+    if(e.ctrlKey)zoomAt(Math.exp(-e.deltaY*.01),e.clientX-r.left,e.clientY-r.top);
+    else if(Math.abs(e.deltaX)>.5){E.v.x-=e.deltaX;E.v.y-=e.deltaY;applyView()}
+    else zoomAt(Math.exp(-e.deltaY*(e.deltaMode===1?.06:.0022)),e.clientX-r.left,e.clientY-r.top);
+  },{passive:false});
+  const mid=()=>[st.clientWidth/2,visH()/2];
+  $('#z-in').onclick=()=>zoomAt(1.25,...mid());
+  $('#z-out').onclick=()=>zoomAt(1/1.25,...mid());
+  $('#z-val').onclick=()=>{const [cx,cy]=mid(),k=1/E.v.s;animateTo({s:1,x:cx-(cx-E.v.x)*k,y:cy-(cy-E.v.y)*k})};
+  $('#z-fit').onclick=()=>fit();
+})();
+
+/* ─── свернуть, скрыть, показать связанные ─── */
+function setMode(n,m){E.st.modes[n]=m;saveState();swapNode(n);redraw();if(E.ins===n)inspect(n)}
+function toggleMode(n){setMode(n,modeOf(n)==='none'?(EO.cols==='none'?'all':EO.cols):'none')}
+function refreshAround(list){
+  const s=new Set();
+  list.forEach(n=>{TBL.get(n).columns.forEach(c=>{if(c.fk)s.add(fkTo(c))});IN.get(n).forEach(({t})=>s.add(t.name))});
+  list.forEach(n=>s.delete(n));s.forEach(x=>{if(E.nodes.has(x))swapNode(x)});
+}
+function hideNodes(list,keepIns){
+  list=list.filter(n=>E.nodes.has(n));if(!list.length)return;
+  list.forEach(n=>{
+    if(isBase(n)){if(!E.st.hidden.includes(n))E.st.hidden.push(n)}else E.st.added=E.st.added.filter(x=>x!==n);
+    E.nodes.get(n).el.remove();E.nodes.delete(n);E.shown.delete(n);
+    if(E.sel===n)E.sel=null;if(E.ins===n&&!keepIns)closeIns();
+  });
+  saveState();refreshAround(list);redraw();renderSide();
+  $('#d-msg').hidden=!!E.nodes.size;
+}
+function showNodes(list,near){
+  list=list.filter(n=>TBL.has(n)&&!E.nodes.has(n));if(!list.length)return;
+  const objs=list.map(n=>{
+    E.st.hidden=E.st.hidden.filter(x=>x!==n);if(!isBase(n)&&!E.st.added.includes(n))E.st.added.push(n);E.shown.add(n);
+    return {n,x:0,y:0};
+  });
+  objs.forEach(o=>{o.el=makeNode(o.n);$('#nodes').appendChild(o.el);measure(o);E.nodes.set(o.n,o)});
+  placeNew(objs,near);
+  objs.forEach(o=>{place(o);E.st.pins[o.n]=[Math.round(o.x),Math.round(o.y)]});
+  saveState();refreshAround(list);redraw();renderSide();
+  $('#d-msg').hidden=true;
+  ensureVisible(near?[...list,near]:list);
+}
+function placeNew(objs,near){
+  const todo=objs.filter(o=>{const p=E.st.pins[o.n];if(p){o.x=p[0];o.y=p[1];return false}return true});
+  if(!todo.length)return;
+  const others=[...E.nodes.values()].filter(o=>!todo.includes(o));
+  const hit=o=>others.some(b=>o.x<b.x+b.w+30&&o.x+o.w+30>b.x&&o.y<b.y+b.h+30&&o.y+o.h+30>b.y);
+  const stack=(list,x0,dir,cy)=>{
+    for(let i=0;i<list.length;i+=8){
+      const part=list.slice(i,i+8),cw=Math.max(...part.map(o=>o.w)),tot=part.reduce((a,o)=>a+o.h,0)+GY*(part.length-1);
+      let y=cy-tot/2;
+      part.forEach(o=>{o.x=dir<0?x0-o.w:x0;o.y=y;y+=o.h+GY;let k=0;while(hit(o)&&k++<60)o.x+=dir*60;others.push(o)});
+      x0+=dir*(cw+GX);
+    }
+  };
+  const a=near&&E.nodes.get(near);
+  if(a){
+    const P=todo.filter(o=>refs(near,o.n)),C=todo.filter(o=>!P.includes(o)),cy=a.y+Math.min(a.h,360)/2;
+    stack(P,a.x-GX,-1,cy);stack(C,a.x+a.w+GX,1,cy);
+  }else{
+    const b=bbox(others.map(o=>o.n))||{x:0,y:0,w:0,h:0};
+    stack(todo,b.x+b.w+GX,1,b.y+Math.min(b.h||600,900)/2);
+  }
+}
+$('#nodes').addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const n=b.closest('.node').dataset.n,act=b.dataset.act;hideTip();
+  if(act==='coll')toggleMode(n);
+  else if(act==='open')setMode(n,'all');
+  else if(act==='hide')hideNodes([n]);
+  else if(act==='more'){showNodes(links(n).filter(x=>!E.nodes.has(x)),n);select(n)}
+});
+
+/* ─── описание таблицы и полей ─── */
+function insField(t,c){
+  const en=ENUM.get(c.type),planned=t.status==='actual'&&c.status==='planned';
+  let x='';
+  if(c.fk){const to=fkTo(c),tt=TBL.get(to);x+=`<div class="if-x">→ <button type="button" class="lnk" data-isel="${to}">${esc(tt?tt.ru:to)}</button> <code>${esc(c.fk)}</code>${c.onDelete?`<br><span class="faint">При удалении записи там: ${esc(OD[c.onDelete]||c.onDelete)}</span>`:''}</div>`}
+  if(en)x+=`<div class="if-ev"><button type="button" class="lnk" data-enum="${en.name}">${esc(en.ru)}</button>: ${en.values.map(v=>`<span class="ev" title="${esc(v.desc||'')}"><code>${esc(v.v)}</code> ${esc(v.ru)}</span>`).join('')}</div>`;
+  const props=[c.null?'может быть пустым':'обязательное',c.unique?'не повторяется':'',c.default!==undefined?`по умолчанию <code>${esc(c.default)}</code>`:'',planned?'<span class="badge b-planned">спроектировано</span>':''].filter(Boolean).join(' · ');
+  return `<div class="if" data-ifc="${esc(c.name)}"><div class="if1">${keyIcon(c)}<b>${esc(c.ru)}</b><code>${esc(c.name)}</code><code class="ty">${esc(c.type)}</code></div><div class="if2">${props}</div>${c.desc?`<div class="if3">${esc(c.desc)}</div>`:''}${x}</div>`;
+}
+function inspect(n,col,quiet){
+  const t=TBL.get(n);if(!t)return;const g=GRP.get(t.group),box=$('#eins');
+  const wasOpen=!box.hidden&&E.ins===n,keepScroll=wasOpen&&!col?box.scrollTop:0;E.ins=n;
+  const chip=x=>{const tt=TBL.get(x);return `<button type="button" class="rchip" data-isel="${x}" style="--g:${colorOf(x)}" title="${esc(x)}">${esc(tt.ru)}${E.shown.has(x)?'':'<span class="plus" title="Нет на схеме — нажмите, чтобы добавить">+</span>'}</button>`};
+  const chips=list=>!list.length?'<span class="faint">—</span>':list.slice(0,12).map(chip).join('')+(list.length>12?`<details><summary class="lnk">ещё ${plural(list.length-12,'таблица','таблицы','таблиц')}</summary>${list.slice(12).map(chip).join('')}</details>`:'');
+  const outs=[...new Set(t.columns.filter(c=>c.fk).map(fkTo))].filter(x=>x!==n);
+  const ins=[...new Set(IN.get(n).map(x=>x.t.name))].filter(x=>x!==n);
+  const hid=links(n).filter(x=>!E.shown.has(x)).length,on=E.shown.has(n);
+  box.innerHTML=`<div class="ins-h" style="--g:${colorOf(n)}">
+    <div class="ins-top"><span class="ins-g"><span class="dot" style="background:${g.color}"></span>${esc(g.ru)}</span><span class="grow"></span><button class="nb ph-only" type="button" id="ins-tall" aria-label="Развернуть описание" title="Развернуть">⤢</button><button class="nb" type="button" id="ins-close" aria-label="Закрыть описание" title="Закрыть">${IC.hide}</button></div>
+    <h2>${esc(t.ru)}</h2><code class="ins-en">${esc(t.name)}</code>
+    <div class="tags">${statusBadge(t.status)}${t.migration?`<span class="badge b-actual" title="Миграция в продукте">${esc(t.migration)}</span>`:''}${t.issue?`<span class="badge b-issue" title="Задача или поток разработки">${esc(t.issue)}</span>`:''}</div>
+  </div><div class="ins-b">
+    <p class="ins-d">${esc(t.desc)}</p>
+    <div class="actions">
+      <button class="btn" type="button" data-iact="full">Полное описание</button>
+      ${hid&&on?`<button class="btn" type="button" data-iact="more">Показать связанные · ${hid}</button>`:''}
+      ${E.view==='='+n?'':`<button class="btn" type="button" data-iact="focus">Только эта таблица и соседи</button>`}
+      <button class="btn" type="button" data-iact="${on?'hide':'show'}">${on?'Скрыть со схемы':'Показать на схеме'}</button>
+    </div>
+    <h3>Поля · ${t.columns.length}</h3><div class="ifs">${t.columns.map(c=>insField(t,c)).join('')}</div>
+    <h3>Связи</h3><div class="rel"><div class="cap">Ссылается на · ${outs.length}</div><div class="chips">${chips(outs)}</div><div class="cap">На неё ссылаются · ${ins.length}</div><div class="chips">${chips(ins)}</div></div>
+    ${t.logic&&t.logic.length?`<h3>Бизнес-логика</h3><ul class="list">${t.logic.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+    <h3>Защита строк (RLS)</h3><p style="margin:0">${esc(t.rls)}</p>
+    ${EMB?`<h3>Где используется в API · ${(API_T[t.name]||[]).length}</h3>${apiUse(t.name,1)}`:''}
+    ${t.uniques&&t.uniques.length?`<h3>Уникальность</h3><ul class="list">${t.uniques.map(x=>`<li><code>${esc(x)}</code></li>`).join('')}</ul>`:''}
+    ${t.indexes&&t.indexes.length?`<h3>Индексы</h3><ul class="list">${t.indexes.map(x=>`<li><code>${esc(x)}</code></li>`).join('')}</ul>`:''}
+  </div>`;
+  const opening=box.hidden;
+  if(opening)keepStage(()=>{box.hidden=false});
+  box.scrollTop=keepScroll;
+  if(col){
+    const f=box.querySelector(`[data-ifc="${col}"]`);
+    if(f){box.scrollTop=Math.max(0,f.offsetTop-box.querySelector('.ins-h').offsetHeight-12);f.classList.add('flash');setTimeout(()=>f.classList.remove('flash'),1600)}
+    flashRow(n,col);
+  }
+  if(opening&&!quiet&&isPhone()&&E.nodes.has(n))setTimeout(()=>ensureVisible([n]),30);
+}
+function closeIns(){const box=$('#eins');if(box.hidden)return;keepStage(()=>{box.hidden=true;box.classList.remove('tall')});E.ins=null}
+function focusTable(x,near){
+  if(!E.nodes.has(x))showNodes([x],near&&E.nodes.has(near)?near:null);
+  select(x);inspect(x,null,true);center(x);
+}
+$('#eins').addEventListener('click',e=>{
+  const n=E.ins;if(!n)return;
+  if(e.target.closest('#ins-close')){closeIns();select(null);return}
+  if(e.target.closest('#ins-tall')){$('#eins').classList.toggle('tall');return}
+  const en=e.target.closest('[data-enum]');if(en){go('#/e/'+en.dataset.enum);return}
+  const s=e.target.closest('[data-isel]');if(s){focusTable(s.dataset.isel,n);return}
+  const a=e.target.closest('[data-iact]');
+  if(a){const k=a.dataset.iact;
+    if(k==='full')go('#/t/'+n);
+    else if(k==='focus')go('#/d/='+n);
+    else if(k==='more'){showNodes(links(n).filter(x=>!E.nodes.has(x)),n);inspect(n)}
+    else if(k==='hide'){hideNodes([n],true);inspect(n)}
+    else if(k==='show'){focusTable(n)}
+    return}
+  if(e.target.closest('summary,button,a'))return;
+  const f=e.target.closest('[data-ifc]');if(f&&E.nodes.has(n)){if(modeOf(n)!=='all'&&!E.nodes.get(n).rows.has(f.dataset.ifc))setMode(n,'all');flashRow(n,f.dataset.ifc)}
+});
+
+/* ─── список таблиц и легенда ─── */
+function renderSide(){
+  if(!$('#erd').classList.contains('side-open'))return;
+  let h='';
+  DB.groups.forEach(g=>{
+    const ts=DB.tables.filter(t=>t.group===g.id&&matchTable(t,E.q).ok);if(!ts.length)return;
+    const on=ts.filter(t=>E.shown.has(t.name)).length;
+    h+=`<label class="es-gh"><input type="checkbox" data-sg="${g.id}"${on===ts.length?' checked':''} data-mixed="${on>0&&on<ts.length}"><span class="dot" style="background:${g.color}"></span><b>${esc(g.ru)}</b><span class="faint">${on}/${ts.length}</span></label>`;
+    h+=ts.map(t=>`<div class="si${E.sel===t.name?' cur':''}" data-row="${t.name}"><input type="checkbox" data-si="${t.name}"${E.shown.has(t.name)?' checked':''} aria-label="Показать на схеме: ${esc(t.ru)}"><button type="button" class="sl" data-sf="${t.name}"><span class="sl1">${esc(t.ru)}${t.status==='actual'?'<span class="nst" title="Уже есть в базе"></span>':''}</span><code>${esc(t.name)}</code></button></div>`).join('');
+  });
+  $('#es-list').innerHTML=h||'<div class="empty">Ничего не найдено</div>';
+  $('#es-list').querySelectorAll('[data-mixed="true"]').forEach(i=>{i.indeterminate=true});
+  $('#es-cnt').textContent=`на схеме ${E.nodes.size} из ${DB.tables.length}`;
+}
+function renderLegend(){
+  const lg=$('#lgd'),b=$('#lgd-b');let h='';
+  if(EO.color==='status'){
+    $('#lgd-t').textContent='Цвет: готовность';
+    const cnt=s=>[...E.nodes.keys()].filter(n=>TBL.get(n).status===s).length;
+    h=[['actual','--st-act'],['planned','--st-plan']].map(([s,v])=>`<button type="button" class="li" data-ls="${s}" title="${esc(DB.meta.statuses[s].desc)} Полоса слева у поля готовой таблицы: зелёная — поле уже в базе, серая — спроектировано."><span class="sw2" style="background:var(${v})"></span>${esc(DB.meta.statuses[s].ru)}<span class="n">${cnt(s)}</span></button>`).join('');
+  }else{
+    $('#lgd-t').textContent='Цвет: группы';
+    const bb=groupBoxes();
+    h=DB.groups.filter(g=>bb.has(g.id)).map(g=>`<button type="button" class="li" data-lg="${g.id}" title="Показать таблицы группы"><span class="sw2" style="background:${g.color}"></span>${esc(g.ru)}<span class="n">${bb.get(g.id).n}</span></button>`).join('');
+  }
+  b.innerHTML=h;
+}
+function lgdOpen(on){$('#lgd').classList.toggle('closed',!on);$('#lgd-t').setAttribute('aria-expanded',String(on))}
+$('#lgd-t').onclick=()=>lgdOpen($('#lgd').classList.contains('closed'));
+$('#lgd-b').addEventListener('click',e=>{
+  const g=e.target.closest('[data-lg]'),s=e.target.closest('[data-ls]');
+  const names=g?[...E.nodes.keys()].filter(n=>TBL.get(n).group===g.dataset.lg):s?[...E.nodes.keys()].filter(n=>TBL.get(n).status===s.dataset.ls):null;
+  if(names&&names.length){select(null);fit(true,names,1)}
+});
+function sideOpen(on,init){
+  keepStage(()=>{$('#erd').classList.toggle('side-open',on);$('#d-side').setAttribute('aria-pressed',String(on))});
+  if(!init&&!isPhone()){EO.side=on;saveOpts()}
+  if(on)renderSide();
+  miniSoon();
+}
+$('#es-list').addEventListener('change',e=>{
+  const i=e.target.closest('[data-si]'),g=e.target.closest('[data-sg]');
+  if(i){i.checked?showNodes([i.dataset.si],E.sel):hideNodes([i.dataset.si])}
+  else if(g){const ts=DB.tables.filter(t=>t.group===g.dataset.sg&&matchTable(t,E.q).ok).map(t=>t.name);g.checked?showNodes(ts):hideNodes(ts)}
+});
+$('#es-list').addEventListener('click',e=>{const b=e.target.closest('[data-sf]');if(!b)return;if(isPhone())sideOpen(false);focusTable(b.dataset.sf,E.sel)});
+let esT=0;$('#es-q').addEventListener('input',e=>{clearTimeout(esT);esT=setTimeout(()=>{E.q=e.target.value.trim().toLowerCase();renderSide()},120)});
+$('#es-close').onclick=()=>sideOpen(false);
+$('#es-reset').onclick=()=>{dropState(E.view);E.sel=null;closeIns();renderErd(E.view)};
+
+/* ─── панель над холстом ─── */
+function initErd(){
+  const o=DB.groups.map(g=>`<option value="${g.id}">${esc(g.ru)} · ${DB.tables.filter(t=>t.group===g.id).length}</option>`).join('');
+  $('#d-what').innerHTML=`<optgroup label="Группа">${o}</optgroup><option value="all">Вся база · ${DB.tables.length} — все таблицы сразу</option><optgroup label="Таблица и её соседи" id="d-focus"></optgroup>${EMB?'<optgroup label="Таблицы метода API" id="d-mth"></optgroup>':''}`;
+  $('#d-what').onchange=()=>go('#/d/'+encodeURIComponent($('#d-what').value));
+  if(EMB&&EMB.api){const by={};Object.entries(API_M).forEach(([id,m])=>{(by[m.g]=by[m.g]||[]).push([id,m])});
+    $('#d-api').innerHTML='<option value="">Подсветить метод API…</option>'+Object.entries(by).sort((a,b)=>a[0].localeCompare(b[0],'ru')).map(([g,l])=>`<optgroup label="${esc(g)}">${l.sort((a,b)=>a[1].p.localeCompare(b[1].p)||a[1].m.localeCompare(b[1].m)).map(([id,m])=>`<option value="${esc(id)}">${esc(m.m+' '+m.p)}</option>`).join('')}</optgroup>`).join('');
+    $('#d-api-w').hidden=false;$('#d-api').onchange=e=>hlSet(e.target.value)}
+  $('#d-cols').value=EO.cols;$('#d-color').value=EO.color;$('#d-desc').checked=EO.desc;$('#d-std').checked=EO.std;
+  const seg=()=>document.querySelectorAll('[data-lbl]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.lbl===EO.lbl)));seg();
+  $('#d-cols').onchange=e=>{EO.cols=e.target.value;saveOpts();E.shown.forEach(n=>{E.st.modes[n]=EO.cols});saveState();renderErd(E.view,{keep:true})};
+  $('#d-color').onchange=e=>{EO.color=e.target.value;saveOpts();renderErd(E.view,{keep:true,fitAfter:false})};
+  document.querySelectorAll('[data-lbl]').forEach(b=>b.onclick=()=>{EO.lbl=b.dataset.lbl;saveOpts();seg();renderErd(E.view,{keep:true,fitAfter:false})});
+  $('#d-desc').onchange=e=>{EO.desc=e.target.checked;saveOpts();renderErd(E.view,{keep:true})};
+  $('#d-std').onchange=e=>{EO.std=e.target.checked;saveOpts();renderErd(E.view,{keep:true,fitAfter:false})};
+  $('#d-relayout').onclick=()=>{E.st.pins={};saveState();renderErd(E.view,{keep:true});if(isPhone())optsOpen(false)};
+  $('#d-side').onclick=()=>sideOpen(!$('#erd').classList.contains('side-open'));
+  $('#d-optbtn').onclick=()=>optsOpen(!$('#d-opts').classList.contains('open'));
+  $('#d-full').onclick=()=>fullOpen(!$('#erd-wrap').classList.contains('full'));
+  $('#d-hint').textContent=isPhone()?'Нажмите на таблицу или поле — снизу откроется описание. Таблицу двигают за заголовок.'
+    :'Перетаскивайте таблицы мышью, рамку группы — за заголовок, холст — за пустое место; колесо — масштаб. Нажмите на таблицу или поле — справа откроется описание; двойное нажатие на заголовок сворачивает таблицу. Расположение запоминается в этом браузере.';
+  lgdOpen(!isPhone());
+  sideOpen(isPhone()?false:(EO.side??innerWidth>=1280),true);
+}
+function optsOpen(on){$('#d-opts').classList.toggle('open',on);$('#d-optbtn').setAttribute('aria-expanded',String(on))}
+function fullOpen(on,quiet){
+  keepStage(()=>{$('#erd-wrap').classList.toggle('full',on);const b=$('#d-full');b.setAttribute('aria-pressed',String(on));b.querySelector('span').textContent=on?'Обычный вид':'На весь экран';b.title=on?'Вернуться к обычному виду (Esc)':'На весь экран'});
+  document.body.style.overflow=on?'hidden':'';miniSoon();
+  // в Админке схема на весь экран — это и рамка на всё окно программы; выход из схемы выводит и из него, если вход был отсюда
+  if(EMB&&!quiet){if(on&&!EFULL){EFULL_ERD=true;toHost({full:true})}else if(!on&&EFULL&&EFULL_ERD){EFULL_ERD=false;toHost({full:false})}}
+}
+// полноэкранный режим Админки (рамка со схемой на всё окно)
+let EFULL=false,EFULL_ERD=false;
+function embFull(on){EFULL=on;const b=$('#emb-full');if(b){b.setAttribute('aria-pressed',String(on));b.querySelector('span').textContent=on?'Обычный вид':'На весь экран';b.title=on?'Вернуться к обычному виду (Esc)':'На весь экран: Esc — обычный вид'}
+  if(!on){EFULL_ERD=false;if($('#erd-wrap').classList.contains('full'))fullOpen(false,true)}
+  setTimeout(()=>{if(DB&&!$('#tab-d').hidden)fit(false)},60)}
+if(EMB)$('#emb-full').onclick=()=>toHost({full:!EFULL});
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  if(!$('#tab-d').hidden){
+    if($('#d-opts').classList.contains('open')){optsOpen(false);return}
+    if(E.ins){closeIns();select(null);return}
+    if($('#erd-wrap').classList.contains('full')){fullOpen(false);return}
+  }
+  // в Админке необработанный Esc уходит программе: закрыть окно поверх схемы или выйти из полноэкранного режима
+  if(EMB)toHost({esc:1});
+});
+document.addEventListener('pointerdown',e=>{if($('#d-opts').classList.contains('open')&&!e.target.closest('#d-opts,#d-optbtn'))optsOpen(false)});
+addEventListener('resize',()=>{if(DB)miniSoon()});
+
+/* ═════════════ Перечисления и правила ═════════════ */
+function renderEnums(){
+  const used=new Map();DB.tables.forEach(t=>t.columns.forEach(c=>{if(ENUM.has(c.type)){if(!used.has(c.type))used.set(c.type,[]);used.get(c.type).push({t,c})}}));
+  $('#enums').innerHTML=DB.enums.map(e=>`<div class="box ecard" id="enum-${e.name}">
+    <h2 style="margin:0">${esc(e.ru)}</h2><div class="en">${esc(e.name)}</div>${e.desc?`<div class="muted" style="font-size:13px;margin-top:4px">${esc(e.desc)}</div>`:''}
+    <table>${e.values.map(v=>`<tr><td><code>${esc(v.v)}</code></td><td><b style="font-weight:600">${esc(v.ru)}</b>${v.desc?`<div class="muted" style="font-size:13px">${esc(v.desc)}</div>`:''}</td></tr>`).join('')}</table>
+    <div class="used">Где используется: ${(used.get(e.name)||[]).map(({t,c})=>`<button type="button" class="lnk" data-go="${t.name}">${esc(t.ru)}</button> <code>${esc(c.name)}</code>`).join(', ')||'—'}</div></div>`).join('');
+  $('#enums').onclick=e=>{const b=e.target.closest('[data-go]');if(b)go('#/t/'+b.dataset.go)};
+}
+function renderRules(){
+  const m=DB.meta;
+  $('#rules').innerHTML=`
+  <div class="box"><h2>Общие правила базы</h2><ul class="list">${m.rules.map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>
+  ${(DB.functions||[]).length?`<div class="box"><h2>Функции базы</h2><p class="muted" style="margin:0 0 10px">Функции в схеме app, которые вызывает приложение. Метка SECURITY DEFINER — функция работает с правами владельца схемы и обходит RLS, поэтому отдаёт только узко нужное.</p><div class="fns">${DB.functions.map(f=>`<div class="fn" id="fn-${esc(f.name.replace(/\(.*$/,'').replace(/^app\./,''))}"><code>${esc(f.name)}</code><div><b style="font-weight:600">${esc(f.ru)}</b>${f.definer?' <span class="badge b-fk">SECURITY DEFINER</span>':''} <span class="faint" style="font-size:12px">${esc(f.migration)}</span><div class="muted" style="font-size:14px">${esc(f.desc)}</div></div></div>`).join('')}</div></div>`:''}
+  <div class="box"><h2>Как читать</h2><div class="legend">
+    ${statusBadge('actual')}<span>${esc(m.statuses.actual.desc)}</span>
+    ${statusBadge('planned')}<span>${esc(m.statuses.planned.desc)}</span>
+    <span class="badge b-pk">PK</span><span>Первичный ключ: по нему находят запись. Если PK у нескольких полей — ключ составной.</span>
+    <span class="badge b-fk">FK</span><span>Внешний ключ: ссылка на запись другой таблицы (в описании поля — куда и что будет при удалении).</span>
+    <span class="badge b-uq">UQ</span><span>Значение не повторяется в таблице.</span>
+    <span class="badge b-null">NULL</span><span>Поле может быть пустым. Без этой метки поле обязательно.</span>
+    <span class="badge b-issue">#3</span><span>Задача в репозитории продукта или поток разработки, где таблица появится.</span>
+  </div>
+  <p class="muted" style="margin:12px 0 0">На схеме линия соединяет поле-ссылку с таблицей, на которую оно ссылается. У поля-ссылки «лапка» значит, что таких записей может быть много, черта — не больше одной. У таблицы, на которую ссылаются, две черты — ссылка обязательна (ровно одна запись), черта с кружком — поле может быть пустым (одна запись или ни одной). Зелёная точка в заголовке таблицы — таблица уже есть в базе.</p></div>
+  <div class="box"><h2>Типы данных</h2><div class="types">${Object.entries(DB.types).map(([k,v])=>`<code>${esc(k)}</code><span>${esc(v)}</span>`).join('')}</div></div>
+  <div class="box"><h2>Откуда это описание</h2><ul class="list">${m.sources.map(s=>`<li><b>${esc(s.name)}</b> <span class="muted">(${esc(s.ref)})</span> — ${esc(s.what)}</li>`).join('')}</ul></div>
+  <div class="box"><h2>Как поддерживается</h2><ul class="list">${m.maintain.map(r=>`<li>${esc(r)}</li>`).join('')}</ul><p class="faint" style="margin:10px 0 0;font-size:13px">Версия описания ${esc(m.schemaVersion)} от ${fmtDate(m.updated)}.</p></div>`;
+}
+
+/* ═════════════ Тема ═════════════ */
+const THEMES=['auto','light','dark'],THEME_RU={auto:'как в устройстве',light:'светлая',dark:'тёмная'};
+let theme='auto';try{theme=localStorage.getItem('db-theme')||'auto'}catch(e){}
+if(EMB)theme=EMB.theme||'auto';
+function themeNow(){return theme==='auto'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):theme}
+function applyTheme(){
+  if(theme==='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',theme);
+  $('#theme').title='Тема: '+THEME_RU[theme];
+  if(DB)miniSoon();
+}
+$('#theme').onclick=()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%3];try{localStorage.setItem('db-theme',theme)}catch(e){}applyTheme()};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(theme==='auto')applyTheme()});
+applyTheme();
+addEventListener('resize',()=>{if(!isPhone())document.body.style.overflow=''});
+// Команды прототипа: тема, переход по адресу страницы (#/t/таблица, #/d/@метод), подсветка метода на схеме
+if(EMB)addEventListener('message',e=>{if(e.source!==parent||!e.data||!e.data.tdx)return;const d=e.data;
+  if(d.theme){theme=d.theme;applyTheme()}
+  if(d.go){go(d.go,true)}
+  if(d.hl!=null)hlSet(d.hl);
+  if('full' in d)embFull(!!d.full)});
+load();
+if(EMB){const fixTop=()=>document.documentElement.style.setProperty('--top',document.querySelector('header').offsetHeight+'px');fixTop();addEventListener('resize',fixTop);toHost({ready:1})}
+</script>
+</body>
+</html>
