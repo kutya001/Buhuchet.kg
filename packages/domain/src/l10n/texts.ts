@@ -1,4 +1,9 @@
-import { ADMIN_ACCOUNTS_TEXTS, ADMIN_L10N_TEXTS, ADMIN_TEXTS } from './admin-texts';
+import {
+  ADMIN_ACCOUNT_CARD_TEXTS,
+  ADMIN_ACCOUNTS_TEXTS,
+  ADMIN_L10N_TEXTS,
+  ADMIN_TEXTS,
+} from './admin-texts';
 import { ALERTS_TEXTS } from './alerts-texts';
 import { AUTH_TEXTS } from './auth-texts';
 import { CONTRACTOR_CARD_TEXTS } from './contractor-card-texts';
@@ -110,6 +115,7 @@ export const UI_TEXTS = {
   ...REPORTS_TEXTS,
   ...TASKS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,
+  ...ADMIN_ACCOUNT_CARD_TEXTS,
   ...ADMIN_L10N_TEXTS,
   ...ADMIN_TEXTS,
   ...LEADS_TEXTS,

@@ -14,6 +14,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
+import { KbProgress } from './kb';
 import { listPageSchema } from './list';
 
 /**
@@ -216,14 +217,8 @@ export const AdminUserCard = z.object({
   }),
   kb: z
     .object({
-      level: z
-        .object({
-          level: z.number().int(),
-          name: z.string(),
-          pct: z.number(),
-          of: z.number().int(),
-        })
-        .nullable(),
+      /** Блок «Уровень знаний» с прогрессом по модулям; null — программы у сотрудника нет. */
+      progress: KbProgress.nullable(),
       articles: cardList(
         z.object({
           id: z.string(),

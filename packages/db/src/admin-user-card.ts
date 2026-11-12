@@ -13,8 +13,10 @@ import { and, asc, desc, eq, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { alias, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { Db, Tx } from './client';
 import { adminGetUser, type AdminUserRecord } from './admin-users';
-import { kbArticles, kbEmployeeLevels, kbReadArticles } from './kb';
+import { writeHistory } from './history';
+import { kbArticles, kbReadArticles, kbTeam, type KbMemberProgress } from './kb';
 import { ownVideoViews, videoRecords, videoViewBody } from './kb-video';
+import { writePlatformHistory } from './platform-history';
 import { getRole } from './roles';
 import {
   auditLog,
@@ -180,7 +182,8 @@ export interface AdminUserCardRecord {
     kpiMonth: string;
   } | null;
   kb: {
-    level: { level: number; name: string; pct: number; of: number } | null;
+    /** Прогресс программы обучения — как в блоке «Уровень знаний» карточки сотрудника. */
+    progress: KbMemberProgress | null;
     articles: CardList<{ id: string; title: string; section: string; readAt: Date }>;
     videos: CardList<{
       id: string;
@@ -409,8 +412,7 @@ export async function adminEmployeeCard(
     )
     .orderBy(asc(contractors.name), asc(indicators.name), asc(indicatorValues.id));
 
-  const levels = await kbEmployeeLevels(tx, input.orgId);
-  const level = levels.rows.find((l) => l.employeeId === e.id);
+  const [progress] = await kbTeam(tx, input.orgId, [e.id]);
   const read = await kbReadArticles(tx, input.userId);
   const articles = (await kbArticles(db))
     .flatMap((a) => {
@@ -505,7 +507,7 @@ export async function adminEmployeeCard(
       kpiMonth,
     },
     kb: {
-      level: level ? { level: level.level, name: level.name, pct: level.pct, of: levels.of } : null,
+      progress: progress ?? null,
       articles: cardList(articles),
       videos: cardList(videos),
     },
@@ -521,7 +523,7 @@ export async function adminEmployeeCard(
  */
 export async function adminEndUserSessions(tx: Tx, userId: string): Promise<number> {
   const ended = await endUserSessions(tx, userId, 'admin');
-  await tx.insert(auditLog).values({
+  await writeHistory(tx, {
     entity: 'user',
     entityId: userId,
     action: 'sessions_end',
@@ -530,9 +532,33 @@ export async function adminEndUserSessions(tx: Tx, userId: string): Promise<numb
   return ended;
 }
 
-/** Открытие карточки пользователя организации — в историю его учётной записи. */
-export async function logUserCardView(tx: Tx, userId: string): Promise<void> {
-  await tx.insert(auditLog).values({
+/** Сколько минут повторное чтение уже открытой карточки не считается новым открытием. */
+export const CARD_REFRESH_MINUTES = 30;
+
+/**
+ * Открытие карточки пользователя организации — в историю его учётной записи. `refresh` — карточка
+ * уже открыта и перечитывается (после действия, при возврате на вкладку браузера): новой записи нет,
+ * только если этот же администратор открывал её не раньше `CARD_REFRESH_MINUTES` минут назад — без
+ * записи об открытии карточку не прочитать.
+ */
+export async function logUserCardView(tx: Tx, userId: string, refresh = false): Promise<void> {
+  if (refresh) {
+    const [seen] = await tx
+      .select({ id: auditLog.id })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entity, 'user'),
+          eq(auditLog.entityId, userId),
+          eq(auditLog.action, 'card_view'),
+          sql`${auditLog.actorUserId} = app.current_user_id()`,
+          sql`${auditLog.at} > now() - make_interval(mins => ${CARD_REFRESH_MINUTES})`,
+        ),
+      )
+      .limit(1);
+    if (seen) return;
+  }
+  await writeHistory(tx, {
     entity: 'user',
     entityId: userId,
     action: 'card_view',
@@ -540,9 +566,25 @@ export async function logUserCardView(tx: Tx, userId: string): Promise<void> {
   });
 }
 
-/** Открытие карточки администратора платформы — в историю платформы. */
-export async function logAdminCardView(tx: Tx, userId: string): Promise<void> {
-  await tx.insert(platformAuditLog).values({
+/** Открытие карточки администратора платформы — в историю платформы (`refresh` — как выше). */
+export async function logAdminCardView(tx: Tx, userId: string, refresh = false): Promise<void> {
+  if (refresh) {
+    const [seen] = await tx
+      .select({ id: platformAuditLog.id })
+      .from(platformAuditLog)
+      .where(
+        and(
+          eq(platformAuditLog.entity, 'user'),
+          eq(platformAuditLog.entityId, userId),
+          eq(platformAuditLog.action, 'card_view'),
+          sql`${platformAuditLog.actorUserId} = app.current_user_id()`,
+          sql`${platformAuditLog.at} > now() - make_interval(mins => ${CARD_REFRESH_MINUTES})`,
+        ),
+      )
+      .limit(1);
+    if (seen) return;
+  }
+  await writePlatformHistory(tx, {
     entity: 'user',
     entityId: userId,
     action: 'card_view',

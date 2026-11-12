@@ -280,14 +280,15 @@ export async function adminSetUserBlocked(
     sql`select app.admin_set_user_blocked(${input.userId}, ${input.blocked}, ${input.version}) as version`,
   );
   if (row?.version == null) return { ok: false, reason: 'changed' };
-  if (input.blocked) await endUserSessions(tx, input.userId);
+  // Блокировка завершает сеансы; сколько их было — в той же записи истории (прототип accActions).
+  const ended = input.blocked ? await endUserSessions(tx, input.userId) : 0;
   await writeHistory(tx, {
     entity: 'user',
     entityId: input.userId,
     action: 'update',
     changes: [{ field: 'blocked', from: before.blocked, to: input.blocked }],
     reason: input.blocked
-      ? 'Учётная запись заблокирована администратором платформы'
+      ? `Учётная запись заблокирована администратором платформы${ended ? `, завершено сеансов: ${ended}` : ''}`
       : 'Учётная запись разблокирована администратором платформы',
   });
   const after = await adminGetUser(tx, input.userId);

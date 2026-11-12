@@ -35,6 +35,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { requirePlatformAdmin } from '../../middleware/access';
+import { progressBody } from '../kb/state';
 import { adminUserBody } from './users';
 
 // Карточка пользователя в Админке (ТЗ «Админка» → «Карточка пользователя», решение заказчика
@@ -82,13 +83,18 @@ export const userCardRoute = createRoute({
   tags: ['admin'],
   summary: 'Карточка пользователя: вся информация по одной учётной записи',
   middleware: [requirePlatformAdmin] as const,
-  request: { params: z.object({ id: Uuid }) },
+  request: {
+    params: z.object({ id: Uuid }),
+    // Перечитывание открытой карточки (после действия, при возврате на вкладку) — не новое открытие.
+    query: z.object({ refresh: z.enum(['1']).optional() }),
+  },
   responses: {
     200: {
       description:
         'Карточка: основное, работа, сеансы, обучение и видео, Telegram, история. Открытие пишется в историю учётной записи',
       content: { 'application/json': { schema: AdminUserCard } },
     },
+    400: { description: 'Неверный параметр', content: error },
     ...denied,
     ...notFound,
   },
@@ -101,6 +107,7 @@ export const userCardRoute = createRoute({
 export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
+    const refresh = c.req.valid('query').refresh === '1';
     const adminId = c.get('session')!.userId;
     const now = new Date();
     const found = await withUserContext(deps.db, adminId, (tx) => adminGetUser(tx, id));
@@ -108,11 +115,11 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
     const orgId = found.orgId;
     const card = orgId
       ? await withOrgContext(deps.db, { orgId, userId: adminId }, async (tx) => {
-          await logUserCardView(tx, id);
+          await logUserCardView(tx, id, refresh);
           return adminEmployeeCard(tx, deps.db, { userId: id, orgId, now });
         })
       : await withUserContext(deps.db, adminId, async (tx) => {
-          await logAdminCardView(tx, id);
+          await logAdminCardView(tx, id, refresh);
           return adminAccountCard(tx, id);
         });
     if (!card) throw new RecordNotFoundError('user', id);
@@ -178,7 +185,13 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
       },
       kb: card.kb
         ? {
-            level: card.kb.level,
+            progress: card.kb.progress
+              ? progressBody(
+                  card.kb.progress.stats,
+                  card.kb.progress.levels,
+                  card.kb.progress.reached,
+                )
+              : null,
             articles: listOf(card.kb.articles, (a) => ({ ...a, readAt: iso(a.readAt) })),
             videos: listOf(card.kb.videos, (v) => ({
               ...v,

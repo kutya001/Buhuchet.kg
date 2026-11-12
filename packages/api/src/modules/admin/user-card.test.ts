@@ -176,6 +176,8 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
     expect(w.kpi).toEqual({ count: 0, rows: [] });
     expect(w.kpiMonth).toBe(addMonths(month, -1));
     expect(c.kb).toMatchObject({ articles: { count: 0 }, videos: { count: 0 } });
+    expect(c.kb?.progress).toMatchObject({ done: 0, level: 0 });
+    expect(c.kb?.progress?.groups.length).toBeGreaterThan(0);
     expect(c.telegram).toEqual({ count: 0, rows: [] });
   });
 
@@ -224,6 +226,17 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
       reason: 'Открыта карточка пользователя',
     });
     expect(views(await card('chief-a'))).toBe(2);
+    // Перечитывание открытой карточки — не новое открытие; у администратора, который карточку
+    // ещё не открывал, запись появляется и при перечитывании.
+    const again = await get(`/api/admin/users/${id}/card?refresh=1`);
+    expect(views(AdminUserCard.parse(await again.json()))).toBe(2);
+    expect((await get(`/api/admin/users/${id}/card?refresh=yes`)).status).toBe(400);
+    const fresh = f.people['acc-b']!.userId;
+    const unseen = await get(`/api/admin/users/${fresh}/card?refresh=1`);
+    expect(views(AdminUserCard.parse(await unseen.json()))).toBe(1);
+    expect(
+      first.history.find((h) => h.reason?.includes('заблокирована')),
+    ).toBeUndefined();
 
     const blocked = await apiRequest(f.app, 'POST', `/api/admin/users/${id}/block`, admin, {
       version: first.user.version,
@@ -231,6 +244,9 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
     expect(blocked.status).toBe(200);
     let c = await card('chief-a');
     expect(c.states).toEqual(['blocked_admin']);
+    expect(c.history.map((h) => h.reason)).toContain(
+      'Учётная запись заблокирована администратором платформы, завершено сеансов: 1',
+    );
     expect(c.sessions.rows[0]).toMatchObject({ open: false, endReason: 'blocked' });
 
     await apiRequest(f.app, 'POST', `/api/admin/users/${id}/unblock`, admin, {
