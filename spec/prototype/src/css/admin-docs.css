@@ -1,0 +1,55 @@
+/* Админка: «Техническая документация» (схема базы и API) и карточки пользователя и организации */
+.td-ver{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted);margin:0 0 10px;line-height:1.5}
+.td-ver code{font-size:12px}
+.td-ver+.note{margin:-2px 0 10px}
+.td-frame-w{border:1px solid var(--border);border-radius:var(--r-l);overflow:hidden;background:var(--pane)}
+.td-frame{display:block;width:100%;height:640px;border:0;background:transparent}
+.td-ver .td-fbtn{margin-left:auto;flex:none;margin-top:-4px}
+.td-frame-w.full{position:fixed;inset:0;z-index:48;border:0;border-radius:0}
+.td-frame-w.full .td-frame{height:100%!important}
+body.td-full{overflow:hidden}
+.td-bar{gap:10px;margin:0 0 10px;flex-wrap:wrap;align-items:center}
+.td-tf{display:inline-flex;gap:8px;align-items:center;font-size:12.5px;color:var(--muted);min-width:0;flex:0 1 420px}
+.td-tf select{min-width:0;flex:1 1 auto}
+.mth{display:inline-block;font:650 11px/18px var(--mono,ui-monospace,monospace);border-radius:5px;padding:0 6px;min-width:52px;text-align:center;letter-spacing:.02em;vertical-align:1px}
+.m-GET{background:var(--blue-bg);color:var(--blue)}.m-POST{background:var(--green-bg);color:var(--green)}.m-PUT,.m-PATCH{background:var(--yellow-bg);color:var(--yellow)}.m-DELETE{background:var(--red-bg);color:var(--red)}
+.td-p{word-break:break-all}
+.mh h2 .td-tp{font-size:16px;font-weight:600;word-break:break-all}
+.mh h2 .mth{font-size:12px;line-height:20px;vertical-align:2px;margin-right:4px}
+.td-kv{margin:0 0 12px}
+.td-kv .full{grid-column:1/-1}
+.td-b{display:flex;flex-direction:column;gap:10px;margin-top:12px;min-width:0}
+.td-b h4,.ac-b h4{margin:6px 0 0;font-size:13px;font-weight:650}
+table.td-f td,table.td-f th{vertical-align:top}
+table.td-f td:nth-child(5){min-width:220px}
+.td-code-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px}
+.td-src{font-size:11.5px;overflow-wrap:anywhere}
+.td-code{margin:0;padding:10px 12px;background:var(--pane-alt);border:1px solid var(--border);border-radius:var(--r-m);font:12.5px/1.55 var(--mono,ui-monospace,monospace);white-space:pre;overflow:auto;max-height:420px;tab-size:2}
+.td-code i{font-style:normal}.td-code .k{color:var(--purple);font-weight:600}.td-code .s{color:var(--green)}.td-code .p{color:var(--orange);font-weight:600}.td-code .c{color:var(--faint)}
+.td-q{display:flex;flex-direction:column;gap:6px}
+.td-res{display:flex;flex-direction:column;gap:6px}
+.td-r{border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised)}
+.td-r>summary{display:flex;gap:10px;align-items:center;padding:8px 12px;cursor:pointer;font-size:13px;list-style:none}
+.td-r>summary::-webkit-details-marker{display:none}
+.td-r[open]>summary{border-bottom:1px solid var(--border)}
+.td-r>.tbl-wrap,.td-r>.faint{display:block;padding:8px 12px}
+.td-tbs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.td-tbs>div{display:flex;flex-direction:column;gap:6px;min-width:0}
+.td-tb{display:flex;gap:9px;align-items:center;text-align:left;border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised);padding:7px 10px;cursor:pointer;min-height:44px;color:inherit}
+.td-tb:hover{background:var(--row-hover)}
+.td-tb>span{display:flex;flex-direction:column;min-width:0}.td-tb b{font-weight:600;font-size:13px}.td-tb .mono{font-size:11.5px}
+.td-ul{margin:4px 0 0;padding-left:18px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.td-ctx{gap:6px}
+.td-fn{cursor:pointer;border:0;font-family:var(--mono,ui-monospace,monospace);font-size:11.5px;letter-spacing:0}
+.td-rls>summary{cursor:pointer;font-size:13px;font-weight:600}
+.td-codel .li{text-decoration:none;color:inherit}
+@media (max-width:767px){.td-ver{flex-wrap:wrap}.td-ver .td-fbtn{margin-left:0}.td-tbs{grid-template-columns:1fr}.td-frame-w{border-radius:var(--r-m)}.td-tf{flex:1 1 100%}}
+
+/* карточки пользователя и организации */
+.ac-st{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.ac-b{display:flex;flex-direction:column;gap:12px;margin-top:12px;min-width:0}
+.ac-bar{gap:10px;flex-wrap:wrap;align-items:center}
+.ac-perms{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px 18px}
+.ac-pg{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.ac-pg b{font-weight:650}.ac-pg .pill{align-self:flex-start}
+.ac-b .plates [data-cpl]{cursor:pointer}

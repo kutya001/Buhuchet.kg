@@ -23,6 +23,10 @@ CSS_RE = re.compile(r'<link rel="stylesheet" href="(src/[^"]+\.css)">')
 JS_RE = re.compile(r'<script src="(src/[^"]+\.js)"></script>')
 DATA = [('demo', 'demoDB.json'), ('tem', 'TemDB.json'), ('ref', 'refDB.json'), ('gked', 'gkedDB.json')]
 VENDOR = [('vendor-pdf', 'vendor/pdfjs/pdf.min.js'), ('vendor-pdf-worker', 'vendor/pdfjs/pdf.worker.min.js')]
+# «Техническая документация» Админки (решение заказчика 09.11.2026): схема базы, страница схемы и снимок описания API продукта.
+# Встраиваются строками JSON (td-schema, td-page, td-api); демо-версия их вырезает — Админки в ней нет
+TDOCS = [('td-schema', 'db/schema.json', True), ('td-page', 'db/index.html', False), ('td-api', 'data/apiDocs.json', True)]
+TD_RE = re.compile(r'<script type="application/json" id="td-[a-z]+">.*?</script>\n', re.S)
 
 
 def read(rel):
@@ -37,6 +41,16 @@ def data_blocks():
         assert j.get('meta', {}).get('file') == name, f'data/{name}: в meta.file другое имя'
         t = json.dumps(j, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
         out += f'<script type="application/json" id="db-{id_}">{t}</script>\n'
+    return out
+
+
+def tdocs_blocks():
+    out = ''
+    for id_, rel, is_json in TDOCS:
+        s = read(rel)
+        v = json.loads(s) if is_json else s
+        t = json.dumps(v, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c')
+        out += f'<script type="application/json" id="{id_}">{t}</script>\n'
     return out
 
 
@@ -73,7 +87,7 @@ def build():
         if m:
             if js is None:
                 js = len(out); out.append(None)
-                out[js] = data_blocks() + vendor_blocks() + "<script>\n'use strict';\n"
+                out[js] = data_blocks() + tdocs_blocks() + vendor_blocks() + "<script>\n'use strict';\n"
             out[js] += js_body(m.group(1))
             continue
         out.append(ln)
@@ -104,6 +118,9 @@ def demo(html, site, lead):
             f'<script>var BU_DEMO={cfg};</script>')
     assert html.count('<meta charset=utf8>') == 1, 'в index.html нет <meta charset=utf8>'
     html = html.replace('<meta charset=utf8>', head, 1)
+    n = len(TD_RE.findall(html))
+    assert n == len(TDOCS), f'ожидались {len(TDOCS)} блока «Технической документации», найдено {n}'
+    html = TD_RE.sub('', html)
     n = len(FONT_RE.findall(html))
     assert n == 3, f'ожидались 3 подключения Google Fonts, найдено {n}'
     html = FONT_RE.sub('', html)
