@@ -6,6 +6,7 @@ import { ContractorsList } from '../contractors/contractors-list';
 import { L10nList } from '../admin/l10n-list';
 import { LeadsList } from '../admin/leads-list';
 import { OrgsList } from '../admin/orgs-list';
+import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
 import { FilesManager } from '../files/files-manager';
@@ -132,6 +133,7 @@ export function ModuleScreen({
   if (moduleId === 'orgs') return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
+  if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;
   if (moduleId === 'tg') return <TgAdmScreen tab={tabId ?? 'log'} />;
   return <ModuleStub moduleId={moduleId} />;
 }

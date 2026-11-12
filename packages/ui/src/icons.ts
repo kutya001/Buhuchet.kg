@@ -117,6 +117,9 @@ export const ICONS = {
   pl: '<path fill="currentColor" stroke="none" d="M7.5 4.8v14.4a.8.8 0 0 0 1.2.7l11.3-7.2a.8.8 0 0 0 0-1.4L8.7 4.1a.8.8 0 0 0-1.2.7z"/>',
   ps: '<rect fill="currentColor" stroke="none" x="6" y="4.5" width="4" height="15" rx="1"/><rect fill="currentColor" stroke="none" x="14" y="4.5" width="4" height="15" rx="1"/>',
   upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
+  // «Техническая документация» (прототип v83): база данных и код.
+  db: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  code: '<path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>',
 } as const;
 
 export type IconName = keyof typeof ICONS;

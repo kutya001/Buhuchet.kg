@@ -7,9 +7,11 @@ import {
   loadConfig,
   type AppConfig,
 } from '@buhuchet/adapters';
+import path from 'node:path';
 import { createDb } from '@buhuchet/db';
 import type { ApiDeps } from './deps';
 import { jobsFor } from './jobs/registry';
+import { fileTechDocs } from './modules/admin/techdocs-source';
 
 export interface Runtime {
   config: AppConfig;
@@ -53,6 +55,15 @@ export function createRuntime(
       service,
       logger,
     }),
+    // Папка данных лежит рядом с сайтом (apps/web/techdocs): её собирает scripts/build-techdocs.mjs.
+    ...(service === 'web'
+      ? {
+          techDocs: fileTechDocs(
+            [path.join(process.cwd(), 'techdocs'), path.join(process.cwd(), 'apps/web/techdocs')],
+            (err) => logger.warn({ err }, 'Техническая документация: данные не прочитаны'),
+          ),
+        }
+      : {}),
   };
   return { config, deps, close: () => database.close() };
 }

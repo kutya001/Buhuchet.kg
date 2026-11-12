@@ -17,6 +17,9 @@ RUN apk add --no-cache python3
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --offline
 ENV NEXT_TELEMETRY_DISABLED=1
+# Коммит версии — для строки версии и ссылок на код «Технической документации»: git в образе нет
+# (scripts/build-techdocs.mjs). Не задан — модуль покажет «нет данных» и код без ссылок.
+ARG SOURCE_COMMIT=""
 RUN pnpm --filter @buhuchet/web build && pnpm --filter @buhuchet/worker build
 
 FROM build AS tools

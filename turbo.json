@@ -12,12 +12,15 @@
     "SENTRY_DSN",
     "LOG_LEVEL",
     "REQUIRE_INTEGRATION_TESTS",
-    "CI"
+    "CI",
+    "SOURCE_COMMIT",
+    "VERCEL_GIT_COMMIT_SHA",
+    "GITHUB_SHA"
   ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+      "outputs": [".next/**", "!.next/cache/**", "dist/**", "techdocs/**"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"],

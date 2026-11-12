@@ -54,6 +54,8 @@ const config: NextConfig = {
       `${PNPM}/tesseract.js@*/node_modules/tesseract.js-core/{package.json,index.js,tesseract-core{,-simd,-relaxedsimd}{,-lstm}.{js,wasm}}`,
       `${PNPM}/@tesseract.js-data+{rus,kir}@*/node_modules/@tesseract.js-data/*/{package.json,index.js,4.0.0_best_int/*}`,
       `${PNPM}/pdfjs-dist@*/node_modules/pdfjs-dist/legacy/build/{pdf,pdf.worker}.mjs`,
+      // Данные «Технической документации» (scripts/build-techdocs.mjs): API читает их с диска.
+      './techdocs/*',
     ],
   },
   // Быстрые (менее точные) языковые данные, на которые указывают сами пакеты языков, не нужны. Пакеты

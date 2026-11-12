@@ -66,6 +66,24 @@ import {
 } from './users';
 import { orgCardHandler, orgCardRoute, orgLookupHandler, orgLookupRoute } from './org-card';
 import {
+  apiMethodCardHandler,
+  apiMethodCardRoute,
+  apiMethodValuesHandler,
+  apiMethodValuesRoute,
+  apiSchemaFieldsHandler,
+  apiSchemaFieldsRoute,
+  exportApiMethodsHandler,
+  exportApiMethodsRoute,
+  listApiMethodsHandler,
+  listApiMethodsRoute,
+  schemaPageHandler,
+  schemaPageRoute,
+  techDocsMetaHandler,
+  techDocsMetaRoute,
+  techDocsOpenApiHandler,
+  techDocsOpenApiRoute,
+} from './techdocs';
+import {
   endUserSessionsHandler,
   endUserSessionsRoute,
   userCardHandler,
@@ -98,6 +116,14 @@ export function adminModule(deps: ApiDeps) {
       .openapi(organizationSummaryRoute, organizationSummaryHandler(deps))
       .openapi(orgLookupRoute, orgLookupHandler(deps))
       .openapi(orgCardRoute, orgCardHandler(deps))
+      .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))
+      .openapi(apiMethodValuesRoute, apiMethodValuesHandler(deps))
+      .openapi(exportApiMethodsRoute, exportApiMethodsHandler(deps))
+      .openapi(listApiMethodsRoute, listApiMethodsHandler(deps))
+      .openapi(apiMethodCardRoute, apiMethodCardHandler(deps))
+      .openapi(apiSchemaFieldsRoute, apiSchemaFieldsHandler(deps))
+      .openapi(schemaPageRoute, schemaPageHandler(deps))
+      .openapi(techDocsOpenApiRoute, techDocsOpenApiHandler(deps))
       .openapi(createOrganizationRoute, createOrganizationHandler(deps))
       .openapi(blockOrganizationRoute, organizationStatusHandler(deps, 'block'))
       .openapi(unblockOrganizationRoute, organizationStatusHandler(deps, 'unblock'))

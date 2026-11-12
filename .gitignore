@@ -16,3 +16,5 @@ playwright-report/
 *.log
 # Демо-версия для buhuchet.kg/demo: собирается при сборке сайта (scripts/build-demo.mjs).
 apps/web/public/demo.html
+# Данные «Технической документации» Админки: собираются при сборке сайта (scripts/build-techdocs.mjs).
+apps/web/techdocs/
