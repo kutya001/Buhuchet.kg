@@ -216,6 +216,12 @@ export async function adminGetOrganization(
   return row ? toRecord(row) : null;
 }
 
+/** Организация по адресу страницы — для ссылки на карточку `#orgs/<адрес>`; нет такой — null. */
+export async function adminOrgIdBySlug(tx: Tx, slug: string): Promise<string | null> {
+  const [row] = await tx.select({ id: v.id }).from(v).where(eq(v.slug, slug));
+  return row?.id ?? null;
+}
+
 /**
  * Плашки над списком (прототип renderOrgs): активных организаций, контрагентов на платформе (пока 0 —
  * появятся с модулем «Контрагенты»), учётных записей организаций и запросов организаций на добавление

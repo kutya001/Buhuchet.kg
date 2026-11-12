@@ -251,6 +251,23 @@ export async function adminLeadList(tx: Tx): Promise<AdminLeadRecord[]> {
   return tx.select(LEAD_FIELDS).from(v).orderBy(desc(v.createdAt));
 }
 
+/**
+ * Заявка с сайта, по которой создана организация (карточка организации в Админке → «Из заявки»):
+ * самая ранняя; null — организация создана без заявки или в контексте не администратор платформы.
+ */
+export async function adminLeadOfOrganization(
+  tx: Tx,
+  orgId: string,
+): Promise<{ id: string; title: string; at: Date } | null> {
+  const [row] = await tx
+    .select({ id: v.id, firm: v.firm, name: v.name, at: v.createdAt })
+    .from(v)
+    .where(eq(v.createdOrgId, orgId))
+    .orderBy(asc(v.createdAt))
+    .limit(1);
+  return row ? { id: row.id, title: row.firm || row.name, at: row.at } : null;
+}
+
 function leadFrom(tx: Tx): ListFrom {
   return (f) => tx.select(f).from(v).$dynamic();
 }

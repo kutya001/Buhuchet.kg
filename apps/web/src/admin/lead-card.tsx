@@ -27,6 +27,7 @@ import {
   StatusScales,
   Timeline,
   useToast,
+  useWindow,
   type ActionEntry,
   type KeyValueItem,
 } from '@buhuchet/ui';
@@ -48,6 +49,7 @@ import {
 } from '../status/status-view';
 import { leadHistoryItems } from './lead-history';
 import { leadCardQuery, leadState, saveLeadNote, useLeadsRefresh } from './leads-data';
+import { requestOrgCard } from './org-card-store';
 
 /*
  * Окно заявки (задача #165; ТЗ «Админка» → «Вкладка «Заявки»»; прототип admin/leads.js — `openLead`):
@@ -55,7 +57,7 @@ import { leadCardQuery, leadState, saveLeadNote, useLeadsRefresh } from './leads
  * данные заявки, «Заметка администратора» с «Сохранить заметку», «История статусов», «История». Внизу —
  * «Ещё действия» (меню без «Открыть заявку») и главная кнопка: «В работу» у новой, иначе «Создать
  * организацию», пока её не создали (у «Отказа» — нет). Ссылка на организацию закрывает окно и ведёт в
- * список организаций.
+ * список организаций с карточкой этой организации (прототип v83).
  */
 
 const faint = <span className="text-faint">—</span>;
@@ -161,13 +163,7 @@ export function LeadCardDialog({
       <div className="flex flex-col gap-3.5" data-lead-card={id}>
         {failed ? <Note tone="bad">{failed}</Note> : null}
         {l ? (
-          <CardBody
-            t={t}
-            l={l}
-            onStep={(to) => onStep(l, to)}
-            onBack={(to) => onBack(l, to)}
-            onOrgLink={onClose}
-          />
+          <CardBody t={t} l={l} onStep={(to) => onStep(l, to)} onBack={(to) => onBack(l, to)} />
         ) : null}
       </div>
       {more && l ? (
@@ -187,15 +183,14 @@ function CardBody({
   l,
   onStep,
   onBack,
-  onOrgLink,
 }: {
   t: Translate;
   l: AdminLeadCard;
   onStep: (to: LeadStatus) => void;
   onBack: (to: LeadStatus) => void;
-  onOrgLink: () => void;
 }) {
   const router = useRouter();
+  const { leave } = useWindow();
   const codes = useQuery(phoneCodesQuery);
   const events = statusEvents(l.statusHistory);
   const bk = leadBack(leadState(l));
@@ -245,8 +240,10 @@ function CardBody({
           data-lead-org=""
           className={linkButtonClass()}
           onClick={() => {
-            onOrgLink();
-            router.push(tabHref('orgs', 'list'));
+            // Переход из открытого окна — с заменой записи истории: «Назад» не вернёт к окну заявки.
+            leave();
+            if (l.org) requestOrgCard(l.org.id);
+            router.replace(tabHref('orgs', 'list'));
           }}
         >
           {l.org.name}

@@ -37,6 +37,7 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { progressBody } from '../kb/state';
+import { guardCardRead } from './card-guard';
 import { adminUserBody } from './users';
 
 // Карточка пользователя в Админке (ТЗ «Админка» → «Карточка пользователя», решение заказчика
@@ -123,6 +124,7 @@ export const userCardRoute = createRoute({
     400: { description: 'Неверный параметр', content: error },
     ...denied,
     ...notFound,
+    429: { description: 'Слишком много открытий карточек за час', content: error },
   },
 });
 
@@ -132,13 +134,10 @@ export const userCardRoute = createRoute({
  */
 export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRoute, AppEnv> {
   return async (c) => {
-    // Чтение карточки пишет в историю, а проверка Origin идёт только у изменяющих методов: запрос,
-    // который браузер сделал с чужого сайта (ссылка на адрес API, картинка), записи не оставляет.
-    if (c.req.header('sec-fetch-site') === 'cross-site') {
-      apiFail(403, 'origin_mismatch', 'Запрос с другого сайта отклонён');
-    }
     const { id } = c.req.valid('param');
     const refresh = c.req.valid('query').refresh === '1';
+    // Чтение карточки пишет в историю: только запрос своего сайта и предел частоты открытий.
+    await guardCardRead(deps, c, refresh);
     const adminId = c.get('session')!.userId;
     const now = new Date();
     const found = await withUserContext(deps.db, adminId, (tx) => adminGetUser(tx, id));

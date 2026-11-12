@@ -9,12 +9,12 @@ import {
 } from '@buhuchet/domain';
 import {
   AdminOrganizationList,
+  AdminOrgLookup,
   AdminOrgSummary,
   ListValues,
   type AdminOrganization,
 } from '@buhuchet/shared';
 import {
-  ConfirmDialog,
   DataGrid,
   EmptyState,
   MONO_CLASS,
@@ -25,12 +25,12 @@ import {
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
-import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
-import { useErrorText, useT } from '../l10n/provider';
+import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
@@ -39,9 +39,12 @@ import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
+import { useAdminCards } from './admin-cards';
 import { leadSummaryQuery } from './leads-data';
 import { NewOrganizationDialog } from './new-org-dialog';
-import { orgMenu } from './orgs-menu';
+import { ORGS_SUMMARY_KEY, useOrgsRefresh } from './org-actions';
+import { orgHashTarget } from './org-card-model';
+import { useOrgCardRequests } from './org-card-store';
 
 /**
  * Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (ТЗ «Сортировка»; прототип
@@ -158,22 +161,13 @@ const fetchOrgValues = async (col: string, q?: string) => {
 
 /** Плашки над списком: активных организаций, контрагентов, пользователей, запросов в справочники. */
 const summaryQuery = queryOptions({
-  queryKey: ['admin', 'orgs-summary'],
+  queryKey: ORGS_SUMMARY_KEY,
   queryFn: async () => {
     const res = await api.api.admin.organizations.summary.$get();
     if (!res.ok) throw new Error(`admin organizations summary: ${res.status}`);
     return AdminOrgSummary.parse(await res.json());
   },
 });
-
-/** После создания, блокировки и разблокировки — перечитать список и плашки. */
-function useOrgsRefresh() {
-  const client = useQueryClient();
-  return useCallback(() => {
-    void client.invalidateQueries({ queryKey: ['list', 'orgs.list'] });
-    void client.invalidateQueries({ queryKey: summaryQuery.queryKey });
-  }, [client]);
-}
 
 /**
  * «+ Добавить» → «Организация» (прототип core/registry.js, ADM orgs → addOrgDlg) — на обеих вкладках
@@ -198,13 +192,14 @@ export function useOrgsAddRequest(run: () => void) {
  * запросов на добавление в справочники (нажатие открывает «Справочники платформы» → «Запросы»),
  * новых заявок с сайта (нажатие открывает вкладку «Заявки»).
  * Список всех организаций платформы с поиском, фильтрами, группировкой и «В Excel»; заблокированные —
- * приглушённо, причина — подсказкой у метки «Заблокирована». Действия — «Заблокировать» после вопроса
- * (демо-организацию стенда не блокируют) и «Разблокировать» сразу; «+ Добавить» — «Новая организация».
+ * приглушённо, причина — подсказкой у метки «Заблокирована». Нажатие на строку открывает карточку
+ * организации (прототип v83, orgCard); в меню записи — «Открыть карточку», «Заблокировать» после
+ * вопроса (демо-организацию стенда не блокируют) и «Разблокировать» сразу; «+ Добавить» — «Новая
+ * организация». Адрес `#orgs/<адрес организации>` открывает карточку этой организации.
  */
 export function OrgsList() {
   const t = useT();
   const toast = useToast();
-  const errorText = useErrorText();
   const router = useRouter();
   const labels = useGridLabels('orgs.count');
   const columns = useMemo(() => orgColumns(t), [t]);
@@ -232,36 +227,38 @@ export function OrgsList() {
   );
   const exporter = useListExport(sendExport);
   const [create, setCreate] = useState<DialogSlot<null> | null>(null);
-  const [askBlock, setAskBlock] = useState<AdminOrganization | null>(null);
-  // Организации, по которым запрос ещё идёт: повторное нажатие не шлёт второй запрос.
-  const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
+  const { orgActions: actions, openOrg, cards } = useAdminCards();
+  const openCard = useCallback((o: AdminOrganization) => openOrg(o.id, o), [openOrg]);
   useOrgsAddRequest(() => setCreate(openSlot(null)));
+  // Организация из заявки: «Организации» открываются с её карточкой.
+  useOrgCardRequests(openOrg);
 
-  const setActive = async (o: AdminOrganization, active: boolean) => {
-    if (pending.has(o.id)) return;
-    setPending((p) => new Set(p).add(o.id));
-    const res = await callApi(() =>
-      api.api.admin.organizations[':id'][active ? 'unblock' : 'block'].$post({
-        param: { id: o.id },
-        json: { version: o.version },
-      }),
-    );
-    setPending((p) => {
-      const next = new Set(p);
-      next.delete(o.id);
-      return next;
-    });
-    refresh();
-    if (!res.ok) return toast(errorText(res.error), { bad: true });
-    toast(t(active ? 'orgs.unblock.done' : 'orgs.block.done'), {
-      icon: active ? 'check' : 'lock',
-    });
-  };
+  // Ссылка `#orgs/<адрес организации>` (или номер организации — из заявки): карточка открывается
+  // один раз, адрес остаётся без неё.
+  useEffect(() => {
+    const route = () => {
+      const target = orgHashTarget(window.location.hash);
+      if (!target) return;
+      window.history.replaceState(
+        window.history.state,
+        '',
+        window.location.pathname + window.location.search,
+      );
+      if ('id' in target) return openOrg(target.id);
+      void (async () => {
+        const res = await callApi(() =>
+          api.api.admin.organizations.lookup.$get({ query: { slug: target.slug } }),
+        );
+        const found = res.ok ? AdminOrgLookup.safeParse(res.data) : null;
+        if (!found?.success) return toast(t('orgs.card.none'), { bad: true });
+        openOrg(found.data.id);
+      })();
+    };
+    route();
+    window.addEventListener('hashchange', route);
+    return () => window.removeEventListener('hashchange', route);
+  }, [t, toast, openOrg]);
 
-  const actions = orgMenu({
-    t,
-    run: { block: setAskBlock, unblock: (o) => void setActive(o, true) },
-  });
   const plate = (n: number | undefined) => (n === undefined ? '' : formatCount(n));
   const requests = summary.data?.requests ?? 0;
   const fresh = leads.data?.fresh ?? 0;
@@ -338,6 +335,7 @@ export function OrgsList() {
         label={t('nav.organizations')}
         labels={labels}
         actions={actions}
+        onOpen={openCard}
       />
       {create ? (
         <NewOrganizationDialog
@@ -347,15 +345,7 @@ export function OrgsList() {
           onDone={refresh}
         />
       ) : null}
-      <ConfirmDialog
-        open={askBlock !== null}
-        onClose={() => setAskBlock(null)}
-        title={t('orgs.block.title', { name: askBlock?.name ?? '' })}
-        text={t('orgs.block.text')}
-        ok={t('orgs.action.block')}
-        danger
-        onConfirm={() => askBlock && void setActive(askBlock, false)}
-      />
+      {cards}
     </div>
   );
 }

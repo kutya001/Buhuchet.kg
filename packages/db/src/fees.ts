@@ -323,6 +323,11 @@ export async function feeLedgers(
   );
 }
 
+/** Журналы тарифов и периоды обслуживания контрагентов по id (карточка организации в Админке). */
+export function feeSubjectsOf(tx: Tx, ids: readonly string[]): Promise<Map<string, FeeSubject>> {
+  return ids.length ? feeSubjects(tx, ids) : Promise.resolve(new Map());
+}
+
 /** Поле таблицы долгов `fd` — для столбца, фильтра и плашки списка контрагентов. */
 export const FEE_DEBT = {
   id: sql.raw('"fd"."id"'),

@@ -3,7 +3,7 @@ import type { AdminOrganization } from '@buhuchet/shared';
 import type { ActionItem } from '@buhuchet/ui';
 import { describe, expect, it, vi } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { orgMenu } from './orgs-menu';
+import { orgHeadActions, orgMenu } from './orgs-menu';
 
 // Меню организации в Админке (прототип admin/accounts-orgs.js, renderOrgs): «Заблокировать» у
 // активной, «Разблокировать» у заблокированной, демо-организацию стенда не блокируют.
@@ -47,5 +47,15 @@ describe('меню организации в Админке', () => {
       disabled: true,
       reason: 'Демо-организация стенда',
     });
+  });
+
+  it('меню строки списка: первым «Открыть карточку» и черта; в шапке карточки — пункты без них', () => {
+    const open = vi.fn();
+    const entries = orgMenu({ t, run: { ...run(), open } })(org());
+    expect(entries.map((e) => e.id)).toEqual(['card', 'sep-card', 'block']);
+    (entries[0] as ActionItem).run();
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ name: 'ОсОО «Альфа»' }));
+    expect(entries[0]).toMatchObject({ label: 'Открыть карточку', icon: 'building' });
+    expect(orgHeadActions(entries.slice(1)).map((e) => e.id)).toEqual(['block']);
   });
 });

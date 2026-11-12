@@ -144,6 +144,18 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect(more.getByRole('menuitem', { name: 'Откатить в «—»' })).toBeDisabled();
     await expect(more.getByRole('menuitem', { name: 'Создать организацию' })).toHaveCount(0);
     await page.keyboard.press('Escape');
+
+    // Организация в окне заявки открывает «Организации» с карточкой этой организации (прототип v83);
+    // в карточке — ссылка на заявку, по которой организация создана.
+    await card.locator('[data-lead-org]').click();
+    await expect(page).toHaveURL(/\/app\/orgs(\/list)?$/);
+    const orgCard = page.locator('[data-org-card]');
+    await expect(orgCard.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(orgCard.locator('[data-org-lead]')).toContainText(firm);
+    await orgCard.locator('[data-org-lead]').click();
+    await expect(
+      page.getByRole('dialog', { name: firm }).filter({ hasText: 'По заявке создана организация' }),
+    ).toBeVisible();
   });
 
   test('(прототип v74) гость отправил заявку: администратору с привязанным Telegram пришло «📩 Новая заявка с сайта: …» со ссылкой на «Заявки», повторная с того же телефона — «🔁 Повторная заявка с сайта»; в журнале «Телеграм» записи «Заявка с сайта» со статусом «Отправлено»', async ({

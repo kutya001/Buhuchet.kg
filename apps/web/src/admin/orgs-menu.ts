@@ -1,9 +1,11 @@
 import type { AdminOrganization } from '@buhuchet/shared';
-import type { ActionEntry } from '@buhuchet/ui';
+import type { ActionEntry, ActionItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
 
 /** Что делают пункты меню организации. */
 export interface OrgMenuRun {
+  /** «Открыть карточку» — первым пунктом меню строки списка; в шапке карточки его нет. */
+  open?: (o: AdminOrganization) => void;
   block: (o: AdminOrganization) => void;
   unblock: (o: AdminOrganization) => void;
 }
@@ -12,7 +14,8 @@ export interface OrgMenuRun {
  * Пункты меню организации в Админке (прототип admin/accounts-orgs.js, renderOrgs → actions): у
  * активной — «Заблокировать» (красным, после вопроса), у заблокированной — «Разблокировать» (сразу).
  * Демо-организацию стенда не блокируют: пункт виден, но недоступен с причиной «Демо-организация
- * стенда» (в прототипе — «Демо-организация прототипа», docs/deviations.md).
+ * стенда» (в прототипе — «Демо-организация прототипа», docs/deviations.md). В меню строки списка
+ * первым идёт «Открыть карточку» и черта (прототип v83, renderOrgs).
  */
 export function orgMenu({
   t,
@@ -21,7 +24,14 @@ export function orgMenu({
   t: Translate;
   run: OrgMenuRun;
 }): (o: AdminOrganization) => ActionEntry[] {
+  const open = run.open;
   return (o) => [
+    ...(open
+      ? ([
+          { id: 'card', label: t('orgs.action.card'), icon: 'building', run: () => open(o) },
+          { id: 'sep-card', separator: true },
+        ] satisfies ActionEntry[])
+      : []),
     o.active
       ? {
           id: 'block',
@@ -39,4 +49,9 @@ export function orgMenu({
           run: () => run.unblock(o),
         },
   ];
+}
+
+/** Кнопки шапки карточки организации: пункты меню без черт (прототип orgCard: `orgActions(o)`). */
+export function orgHeadActions(entries: readonly ActionEntry[]): ActionItem[] {
+  return entries.filter((a): a is ActionItem => !('separator' in a));
 }
