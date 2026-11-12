@@ -1,5 +1,13 @@
 import { expect, test, type APIRequestContext, type Page, type Response } from '@playwright/test';
-import { DEMO_PASSWORD, finger, hire, settledBox, signIn, uniqueLogin } from './helpers';
+import {
+  DEMO_PASSWORD,
+  finger,
+  hire,
+  phoneTableView,
+  settledBox,
+  signIn,
+  uniqueLogin,
+} from './helpers';
 
 // Общий список записей (UnifiedDataGrid, задачи #14–#16) на списке сотрудников через настоящий
 // сайт: страницы с сервера, настройки вида пользователя, группировка, фильтры у столбцов, поиск и
@@ -191,7 +199,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await page.goto('/app/staff/list');
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
     // На телефоне по умолчанию — карточки: переключаемся на таблицу (выбор тоже запоминается).
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    if (isMobile) await phoneTableView(page);
     // «Уровень» — у главбуха есть право «Видеть уровни сотрудников» (База знаний, 2.30).
     await expect.poll(() => headers(page)).toEqual(['fullName', 'role', 'phone', 'active', 'kb']);
 
@@ -254,7 +262,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     const grid = page.locator('[data-grid]');
     await expect(grid.locator('[data-id]').first()).toBeVisible();
     // Фильтры — у заголовков таблицы: на телефоне переключаемся с карточек на таблицу.
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    if (isMobile) await phoneTableView(page);
 
     // «Группировка»: роль, внутри — статус.
     await grid.locator('[data-grid-group-button]').click();
@@ -375,7 +383,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await page.goto('/app/staff/list');
     const grid = page.locator('[data-grid]');
     await expect(grid.locator('[data-id]').first()).toBeVisible();
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    if (isMobile) await phoneTableView(page);
 
     await grid.getByRole('button', { name: 'Фильтр: Роль' }).click();
     const filter = page.getByRole('dialog', { name: 'Роль' });
@@ -459,7 +467,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
 
     // Фильтр у столбца «Статус» (на телефоне — в виде «Таблица», как в прототипе); плашка фильтра
     // видна и в плитках, там же фильтр снимается.
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+    if (isMobile) await phoneTableView(page);
     await grid.getByRole('button', { name: 'Фильтр: Статус' }).click();
     const filter = page.getByRole('dialog', { name: 'Статус' });
     await filter.getByRole('checkbox', { name: 'Активен' }).uncheck();

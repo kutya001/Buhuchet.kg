@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { ownerPassword } from './admin';
-import { newOrgOwner, settledBox, signIn, uniqueInn, uniqueLogin } from './helpers';
+import { newOrgOwner, phoneTableView, settledBox, signIn, uniqueInn, uniqueLogin } from './helpers';
 
 // «Отображаемое имя» сотрудника (решение заказчика 06.11.2026, прототип v74): поле в «Новом
 // сотруднике» заполняется по ФИО, сотрудник меняет имя сам в «Мой профиль», новое имя видно в списках
@@ -66,7 +66,7 @@ async function listRow(page: Page, isMobile: boolean, path: string, id: string) 
   await page.goto(path);
   const grid = page.locator('[data-grid]');
   await expect(grid.locator('[data-id]').first()).toBeVisible();
-  if (isMobile) await page.getByRole('button', { name: 'Вид списка: Таблица' }).click();
+  if (isMobile) await phoneTableView(page);
   return grid.locator(`[data-id="${id}"]`);
 }
 
