@@ -60,4 +60,21 @@ describe('меню учётной записи в Админке', () => {
     ]);
     expect(menu(account({ isPlatformAdmin: true }))).toEqual([]);
   });
+
+  it('меню строки списка (прототип v83): первым «Открыть карточку», затем черта и действия', () => {
+    const open = vi.fn();
+    const menu = accountMenu({ userId: ME, t, run: { ...run(), open } });
+    const items = menu(account());
+    expect(items.map((i) => i.id)).toEqual(['card', 'sep-card', 'reset-password', 'sep', 'block']);
+    expect(items[0]).toMatchObject({ label: 'Открыть карточку', icon: 'user' });
+    (items[0] as ActionItem).run();
+    expect(open).toHaveBeenCalledWith(expect.objectContaining({ login: 'asanov' }));
+    // Своя строка — карточка и «Это вы»; другой администратор платформы — только карточка.
+    expect(menu(account({ id: ME, isPlatformAdmin: true })).map((i) => i.id)).toEqual([
+      'card',
+      'sep-card',
+      'self',
+    ]);
+    expect(menu(account({ isPlatformAdmin: true })).map((i) => i.id)).toEqual(['card']);
+  });
 });
