@@ -57,7 +57,7 @@ export const SCOPE_GROUPS = PERMISSION_GROUPS.filter((g) => g.scope).map(
 export const SCOPES = ['own', 'all'] as const;
 export type Scope = (typeof SCOPES)[number];
 
-/** 39 прав: [код, группа]. */
+/** 40 прав: [код, группа]. */
 export const PERMISSIONS = [
   ['cpView', 'cps'],
   ['createCp', 'cps'],
@@ -91,6 +91,7 @@ export const PERMISSIONS = [
   ['filesUpload', 'files'],
   ['filesDelete', 'files'],
   ['staffView', 'staff'],
+  ['staffStats', 'staff'],
   ['staff', 'staff'],
   ['dicts', 'dicts'],
   ['kbLevels', 'kb'],

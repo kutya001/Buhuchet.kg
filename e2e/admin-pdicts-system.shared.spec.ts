@@ -180,7 +180,7 @@ test.describe('Админка: справочники платформы — р�
       await page.goto('/app/pdicts/roletpl');
       await expect(page.getByText('Шаблоны ролей для новых организаций')).toBeVisible();
       const card = page.locator('[data-role-template="acc"]');
-      await expect(card).toContainText(`${before.permissions.length} из 38 прав`);
+      await expect(card).toContainText(`${before.permissions.length} из 39 прав`);
 
       // Повтор названия другого шаблона — ошибка.
       await card.getByRole('button', { name: `Переименовать шаблон «${before.name}»` }).click();
@@ -192,7 +192,7 @@ test.describe('Админка: справочники платформы — р�
 
       await card.getByRole('button', { name: 'Права' }).click();
       let dialog = page.getByRole('dialog', { name: 'Права шаблона роли' });
-      await expect(dialog).toContainText(`Выбрано прав: ${before.permissions.length} из 38`);
+      await expect(dialog).toContainText(`Выбрано прав: ${before.permissions.length} из 39`);
       await dialog.getByRole('searchbox').fill('Настройки и учётная политика');
       const owner = dialog.locator('[data-permission="org"]');
       await expect(owner.getByRole('checkbox')).toBeDisabled();
@@ -213,13 +213,13 @@ test.describe('Админка: справочники платформы — р�
       // На телефоне группы свёрнуты: поиск раскрывает группу с найденным правом.
       await dialog.getByRole('searchbox').fill(name);
       await dialog.locator(`[data-permission="${removed}"]`).getByRole('checkbox').uncheck();
-      await expect(dialog).toContainText(`Выбрано прав: ${before.permissions.length - 1} из 38`);
+      await expect(dialog).toContainText(`Выбрано прав: ${before.permissions.length - 1} из 39`);
       await dialog.getByRole('button', { name: 'Сохранить' }).click();
       await expect(dialog).toBeHidden();
       await expect(
         toast(page, 'Шаблон роли изменён: действует для новых организаций'),
       ).toBeVisible();
-      await expect(card).toContainText(`${before.permissions.length - 1} из 38 прав`);
+      await expect(card).toContainText(`${before.permissions.length - 1} из 39 прав`);
       await expect(page.locator('[data-pdicts-history]')).toContainText(
         `Шаблоны ролей: «${before.name}» — убрано право «${name}»`,
       );

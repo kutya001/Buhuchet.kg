@@ -1,8 +1,9 @@
 /* Оболочка: панели, страница */
 /* ── App shell ── */
-.app{display:grid;grid-template-columns:var(--side-w,276px) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:100%;box-sizing:border-box;padding:10px;gap:10px}
-.app.nav-hidden{column-gap:0}
-.app.nav-hidden{--side-w:0px}
+.app{display:grid;grid-template-columns:276px minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);height:100%;box-sizing:border-box;padding:10px;gap:10px;transition:grid-template-columns .24s cubic-bezier(.3,.7,.3,1)}
+/* Свёрнутая панель (кнопка «Меню») — полоска значков модулей: названия и вкладки скрыты, подсказка с названием — при наведении */
+.app.nav-hidden{grid-template-columns:60px minmax(0,1fr)}
+@media (prefers-reduced-motion:reduce){.app{transition:none}}
 .topbar{grid-column:2;grid-row:1;display:flex;align-items:center;gap:10px;padding:7px 12px 7px 10px;min-width:0;background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-s)}
 .tb-search{flex:1;display:flex;justify-content:center;min-width:0}
 .search{position:relative;width:min(560px,100%)}
@@ -15,10 +16,10 @@
 .clock .d{color:var(--faint);font-weight:450;margin-right:6px}
 
 .side{grid-column:1;grid-row:1/-1;min-height:0;overflow:auto;display:flex;flex-direction:column;padding:8px 10px 12px;background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-s)}
-.app.nav-hidden .side{display:none}
-.app.nav-hidden .topbar{grid-column:1/-1}
 .pane{grid-column:2;grid-row:2;min-width:0;min-height:0;margin:0;background:var(--pane);border:1px solid var(--border);border-radius:var(--r-l);box-shadow:var(--shadow-s);overflow:auto;position:relative}
-.app.nav-hidden .pane{margin-left:0;grid-column:1/-1}
+/* «На всю ширину» (кнопка в верхней панели): страница модуля занимает всю ширину окна, без полей по бокам на широком экране */
+.app.wide .page{max-width:none}
+.app.wide .grid[data-width=center]{max-width:none}
 .page{max-width:1640px;margin:0 auto;padding:22px 28px 48px;display:flex;flex-direction:column;gap:14px;min-width:0}
 
 .brand{display:flex;align-items:center;gap:11px;padding:8px 8px 16px}
@@ -63,3 +64,23 @@
 .demo select{font-size:12.5px;min-height:30px;padding:4px 8px}
 .demo-db{display:flex;flex-direction:column;align-items:flex-start;gap:3px}
 
+
+/* ═════ Свёрнутая левая панель: значки (ПК) ═════ */
+.side{overflow-x:hidden}
+.brand>div,.ti a span,.orgbtn>span:last-child,.demo{transition:opacity .18s}
+@media (min-width:768px){
+  .app.nav-hidden .side{padding:8px 7px 12px;scrollbar-width:none}
+  .app.nav-hidden .side::-webkit-scrollbar{display:none}
+  .app.nav-hidden .brand{padding:8px 0 16px;justify-content:center;gap:0}
+  .app.nav-hidden .brand>div,.app.nav-hidden .ti a>span:not(.badge):not(.kb-dot),.app.nav-hidden .tog,.app.nav-hidden .subtree,.app.nav-hidden .demo,.app.nav-hidden .orgbtn>span:last-child{display:none}
+  .app.nav-hidden .ti a{justify-content:center;padding:9px 0;position:relative}
+  .app.nav-hidden .ti .badge{position:absolute;top:1px;right:0;margin:0;min-width:16px;padding:0 4px;font-size:9.5px;line-height:15px}
+  .app.nav-hidden .ti .kb-dot{position:absolute;top:5px;right:6px;margin:0}
+  .app.nav-hidden .orgbtn{justify-content:center;padding:6px 0}
+  .app.nav-hidden .foot-row{flex-direction:column;align-items:center}
+  .app.nav-hidden .foot-row .btn{font-size:0;gap:0;padding:7px 0;width:100%}
+  .app.nav-hidden .foot-row .btn .ic{width:16px;height:16px}
+  .app.nav-hidden .side-foot{align-items:stretch}
+}
+#wide.on{color:var(--text);background:var(--btn);box-shadow:var(--sh-btn)}
+@media (max-width:767px){#wide{display:none}}

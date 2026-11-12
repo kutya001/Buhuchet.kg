@@ -135,10 +135,10 @@ describe.skipIf(!databaseAvailable())(
 
     it('«Права ролей»: список по группам, фильтр и Excel; повтор названия — отказ', async () => {
       const list = AdminPermissionList.parse(await (await get(`${P}/perms?size=all`)).json());
-      expect(list.total).toBe(39);
+      expect(list.total).toBe(40);
       expect(list.items[0]).toMatchObject({ group: 'cps', groupText: 'Контрагенты' });
       const groups = ListValues.parse(await (await get(`${P}/perms/values?col=group`)).json());
-      expect(groups.items.reduce((n, v) => n + v.count, 0)).toBe(39);
+      expect(groups.items.reduce((n, v) => n + v.count, 0)).toBe(40);
       const xlsx = await get(`${P}/perms/export?cols=group,name,description`);
       expect(xlsx.status).toBe(200);
 

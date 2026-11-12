@@ -48,8 +48,32 @@ function taskActions(t){
   if(taskOpen(t)){if(t.status==='К выполнению')it.push({label:'Взять в работу',icon:'clock',disabled:!mine&&!boss,reason:!mine&&!boss&&(why||'Взять в работу может исполнитель или постановщик'),run:()=>{t.status='В работе';log('t',t.id,'Статус: К выполнению → В работе');refreshAll();toast('Задача в работе')}});
     it.push({label:'Выполнена',icon:'ok',disabled:!mine,reason:!mine&&'Отметить может только исполнитель',run:()=>taskDoneDlg(t)});
     it.push({label:'Не выполнена',icon:'x',disabled:!mine,reason:!mine&&'Отметить может только исполнитель',run:()=>taskFailDlg(t)});
-    if(boss||why)it.push(edit,{sep:true},{label:'Отменить задачу',icon:'ban',danger:true,disabled:!boss,reason:why,run:()=>confirmDlg({title:'Отменить задачу?',text:`«${esc(t.title)}» получит статус «Отменена». Исполнитель увидит это в Telegram.`,ok:'Отменить задачу',danger:true,run:()=>{t.status='Отменена';log('t',t.id,'Задача отменена');refreshAll();toast('Задача отменена')}})})}
+    if(boss||why)it.push(edit,{sep:true},{label:'Отменить задачу',icon:'ban',danger:true,disabled:!boss,reason:why,run:()=>taskCancelDlg(t)})}
   return it}
+function taskCancelDlg(t){confirmDlg({title:'Отменить задачу?',text:`«${esc(t.title)}» получит статус «Отменена». Исполнитель увидит это в Telegram.`,ok:'Отменить задачу',danger:true,run:()=>{t.status='Отменена';log('t',t.id,'Задача отменена');refreshAll();toast('Задача отменена')}})}
+/* Доска задач: столбцы — статус (по умолчанию), исполнитель, контрагент, категория, проект, постановщик, вид срока.
+   Перенос карточки в другой столбец делает то же, что действие в меню: те же права и те же окна (файл, причина, подтверждение) */
+const empByName=n=>EMP.find(e=>e.active&&e.short===n);
+function taskKanban(){return {def:'status',by:['status','exec','cp','cat','proj','by','term','tkind'],
+  order:{status:['К выполнению','К сдаче','В работе','На доработке','Требует исправления','На подтверждении','Выполнена','Сдан','Подтверждена','Не выполнена','Не требуется','Отменена']},
+  show:{status:['К выполнению','В работе','На подтверждении','Выполнена'],exec:()=>can('tasksAll')?EMP.filter(e=>e.active).map(e=>e.short):[]},
+  drop(t,key,v,label){const bad=m=>toast(m,'alert',true);
+    if(key==='status'){
+      if(t.reg){const r=REPORTS.find(x=>x.id===t.rid);if(v==='Сдан'&&OPEN.has(r.status)){if(!can('changeStatus'))return bad('Нет права менять статус');const w=subPayWhy(r);if(w)return bad(w);return submitDlg([r])}
+        if(v==='В работе'&&r.status==='К сдаче'){if(!can('changeStatus'))return bad('Нет права менять статус');return setStatus(r,'В работе')}
+        return bad('Статус регулярной задачи берётся из отчёта: её можно взять в работу или отметить отчёт сданным')}
+      const mine=t.exec===S.me,boss=taskBoss(t),open=taskOpen(t);
+      if(v==='В работе'&&t.status==='К выполнению'){if(!mine&&!boss)return bad('Взять в работу может исполнитель или постановщик');t.status='В работе';log('t',t.id,'Статус: К выполнению → В работе');refreshAll();return toast('Задача в работе')}
+      if((v==='Выполнена'||v==='На подтверждении'||(v==='Подтверждена'&&!taskPend(t)))&&open){if(!mine)return bad('Отметить выполненной может только исполнитель');return taskDoneDlg(t)}
+      if(v==='Подтверждена'&&taskPend(t))return taskConfDlg(t);
+      if(v==='На доработке'&&taskPend(t))return taskReworkDlg(t);
+      if(v==='Не выполнена'&&open){if(!mine)return bad('Отметить может только исполнитель');return taskFailDlg(t)}
+      if(v==='Отменена'&&open){if(!boss)return bad(taskBossWhy(t)||'Отменить задачу может тот, кто её поставил, или владелец');return taskCancelDlg(t)}
+      return bad(`Из «${t.status}» в «${label}» задачу перевести нельзя`)}
+    if(key==='exec'){if(t.reg)return bad('Исполнитель регулярной задачи — ответственный за отчёт');const e=empByName(v);if(!e)return bad('Выберите столбец сотрудника');
+      if(!taskBoss(t))return bad(taskBossWhy(t)||'Сменить исполнителя может тот, кто поставил задачу, или владелец');if(!taskOpen(t))return bad('Исполнитель меняется только у открытой задачи');
+      const was=empName(t.exec);t.exec=e.id;touch(t);log('t',t.id,`Исполнитель: ${was||'—'} → ${e.short}`,t.cp);refreshAll();return toast(`Исполнитель: ${e.short}`,'user')}
+    bad('Перетаскиванием меняются статус и исполнитель. Остальное — в окне «Изменить»')}}}
 function renderTasks(body,tab,fresh){
   const v=S.taskView;const m=ym(TODAY);
   const reg=taskScope().filter(t=>t.reg&&ym(t.date)===m&&(tab==='mine'?t.exec===S.me:true));const done=reg.filter(t=>{const r=REPORTS.find(x=>x.id===t.rid);return r.status==='Сдан'}).length;
@@ -59,7 +83,7 @@ function renderTasks(body,tab,fresh){
   const pb=body.querySelector('.plates');if(pb)pb.onclick=e=>{if(!e.target.closest('[data-plate="pend"]'))return;const g=GS[gid];if(!g)return;g.filters=pendOn?{}:{status:{type:'enum',vals:['На подтверждении']}};g.page=0;renderPage()};
   const rows=()=>{let l=taskScope();const g=GS[gid];if(g&&g.filters&&g.filters.status&&(g.filters.status.vals||[]).includes('На подтверждении')&&tab!=='overdue')return l.filter(t=>taskPend(t)||g.filters.status.vals.includes(t.status));if(tab==='mine')l=l.filter(t=>t.exec===S.me);if(tab==='byme')l=TASKS.filter(t=>t.by===S.me);if(tab==='overdue')return l.filter(taskOver);
     return l.filter(t=>ym(t.date)>=m||taskOver(t))};
-  grid($('#tg',body),{id:gid,cols:taskCols(),rows,title:'title',noun:['задача','задачи','задач'],rowClass:t=>(t.kind==='month'?'k-month ':'k-day ')+(taskOver(t)?'overdue':!taskOpen(t)?'muted':''),actions:taskActions,open:openTask,sort:{key:'date',dir:1},preset:S.preset,simulateLoad:fresh,
+  grid($('#tg',body),{id:gid,cols:taskCols(),rows,title:'title',noun:['задача','задачи','задач'],rowClass:t=>(t.kind==='month'?'k-month ':'k-day ')+(taskOver(t)?'overdue':!taskOpen(t)?'muted':''),actions:taskActions,open:openTask,sort:{key:'date',dir:1},preset:S.preset,simulateLoad:fresh,kanban:taskKanban(),
     empty:{icon:'ok',title:tab==='overdue'?'Просроченных задач нет':'Задач нет',text:'',add:can('tasksCreate')&&tab!=='overdue'?()=>taskDlg():null}});
 }
 function openTask(t){

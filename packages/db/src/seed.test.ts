@@ -61,7 +61,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.platformDicts.reportTypes.inserted).toBe((refDB.reportTypes as unknown[]).length);
     expect(result.gked.inserted).toBe(gked.items.length);
     expect(result.demo).toEqual({ orgId: DEMO_ORG_ID, created: true, employees: 7 });
-    expect(result.permissions.inserted).toBe(39);
+    expect(result.permissions.inserted).toBe(40);
     expect(result.roleTemplates.inserted).toBe(2);
     expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
@@ -92,7 +92,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     for (const report of Object.values(result.platformDicts))
       expect(report).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.gked).toMatchObject({ inserted: 0, updated: 0 });
-    expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 39 });
+    expect(result.permissions).toEqual({ inserted: 0, updated: 0, unchanged: 40 });
     expect(result.roleTemplates).toEqual({ inserted: 0, updated: 0, unchanged: 2 });
     expect(result.uiTexts).toMatchObject({ inserted: 0, updated: 0 });
     expect(result.demo).toMatchObject({ created: false, employees: 0 });

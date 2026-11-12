@@ -579,7 +579,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
         .filter({ hasText: 'Владелец организации' });
       await expect(owner).toHaveCount(1);
       await expect(owner).toContainText('все права');
-      await expect(owner).toContainText('39 из 39');
+      await expect(owner).toContainText('40 из 40');
       await owner.locator('[data-row-menu]').click();
       const menu = page.getByRole('menu', { name: 'Действия' });
       const edit = menu.getByRole('menuitem', { name: 'Изменить' });
@@ -589,7 +589,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
       const card = page.getByRole('dialog', { name: 'Владелец организации' });
       await expect(card).toContainText('У владельца организации все права, они не меняются.');
       await expect(card.getByRole('button', { name: 'Изменить' })).toHaveCount(0);
-      await expect(card.locator('[data-permission]')).toHaveCount(isMobile ? 0 : 39);
+      await expect(card.locator('[data-permission]')).toHaveCount(isMobile ? 0 : 40);
       await card.getByRole('button', { name: 'Готово' }).click();
       await expect(card).toBeHidden();
     });
@@ -655,7 +655,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
           }),
         )
         .toEqual({ sameRow: true, side: true });
-      await expect(form.locator('[data-permission]')).toHaveCount(39);
+      await expect(form.locator('[data-permission]')).toHaveCount(40);
     }
     // Под каждым правом — что оно разрешает (справочник «Права ролей»).
     for (const p of catalog.items.filter((i) => i.group === 'tasks')) {
@@ -678,7 +678,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     const manage = projects.locator('[data-permission="projects"]');
     await expect(manage.getByRole('checkbox')).toBeDisabled();
     await expect(manage).toContainText('Сначала дайте просмотр');
-    await expect(form.locator('[data-role-count]')).toHaveText('Выбрано прав: 16 из 39');
+    await expect(form.locator('[data-role-count]')).toHaveText('Выбрано прав: 16 из 40');
 
     // Область группы: «Все контрагенты» для отчётов.
     const reports = form.locator('[data-permission-group="reports"]');

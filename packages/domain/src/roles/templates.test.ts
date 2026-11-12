@@ -45,6 +45,7 @@ const TEMPLATES: RoleTemplate[] = [
       'filesUpload',
       'filesDelete',
       'staffView',
+      'staffStats',
       'dicts',
       'kbLevels',
       'viewAll',
@@ -86,7 +87,7 @@ describe('rolesForNewOrganization', () => {
     ]);
   });
 
-  it('владелец имеет все 39 прав', () => {
+  it('владелец имеет все 40 прав', () => {
     const owner = roles[0]!;
     const all = effectivePermissions({
       employeeId: 'e1',
@@ -94,7 +95,7 @@ describe('rolesForNewOrganization', () => {
       permissions: new Set(owner.permissions),
       scopes: owner.scopes,
     });
-    expect(all).toHaveLength(39);
+    expect(all).toHaveLength(40);
   });
 
   it('главный бухгалтер — всё, кроме прав владельца, «Сотрудников и ролей», отката и архива; «Все»', () => {
