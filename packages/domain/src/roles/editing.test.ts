@@ -14,6 +14,7 @@ import {
   roleReadOnly,
   roleScopeLock,
   roleWithinRights,
+  type RoleFormLock,
   type RoleLock,
 } from './editing';
 import { UI_TEXTS } from '../l10n/texts';
@@ -25,9 +26,12 @@ import {
   type ScopeGroupId,
 } from './permissions';
 
-const LOCK_BY_MESSAGE = new Map(
-  Object.entries(ROLE_LOCK_MESSAGES).map(([lock, message]) => [message, lock as RoleLock]),
-);
+const LOCK_BY_MESSAGE = new Map<string, RoleFormLock>([
+  ...Object.entries(ROLE_LOCK_MESSAGES).map(
+    ([lock, message]) => [message, lock as RoleLock] as const,
+  ),
+  ['Этого права нет у вашей роли', 'not_own'],
+]);
 
 const set = (...p: PermissionId[]) => new Set<PermissionId>(p);
 
@@ -58,7 +62,7 @@ const owner = { isOwner: true, roleId: 'owner', subject: ownerSubject };
 const hr = { isOwner: false, roleId: 'hr', subject: hrSubject };
 const accRole = { id: 'acc', isOwner: false };
 
-describe('rolePermissionLock — как roleLock прототипа', () => {
+describe('roleFormLock — как roleLock прототипа', () => {
   const roles = fixture.roles as Record<string, { isOwner: boolean; permissions: PermissionId[] }>;
   const editors = new Map(fixture.editors.map((e) => [e.employee, e]));
 
@@ -73,8 +77,15 @@ describe('rolePermissionLock — как roleLock прототипа', () => {
       const editor = editors.get(employee)!;
       const role = roles[roleId]!;
       const set = new Set(selected === 'role' ? role.permissions : []);
-      const lock = rolePermissionLock(
-        { isOwner: editor.isOwner, roleId: editor.roleId },
+      // Права редактора — права его роли demoDB (прототип смотрит myRole().perms).
+      const subject: AccessSubject = {
+        employeeId: employee,
+        isOwner: editor.isOwner,
+        permissions: new Set(roles[editor.roleId]!.permissions),
+        scopes: {},
+      };
+      const lock = roleFormLock(
+        { isOwner: editor.isOwner, roleId: editor.roleId, subject },
         { id: roleId, isOwner: role.isOwner },
         permission,
         set,
@@ -87,7 +98,7 @@ describe('rolePermissionLock — как roleLock прототипа', () => {
         roleId,
         permission,
         selected,
-        lock: message ? LOCK_BY_MESSAGE.get(message) : null,
+        lock: message ? (LOCK_BY_MESSAGE.get(message) ?? message) : null,
       });
     }
   });
