@@ -237,7 +237,7 @@ export function DataGrid<Row>({
   const tree =
     group.length && data?.groups ? groupTree(data.groups, data.items, data.rowGroups ?? []) : null;
   // Группы есть — одна кнопка над списком сворачивает их все или, если все свёрнуты, разворачивает.
-  const allPaths = tree && !error && !loading ? groupPaths(tree) : [];
+  const allPaths = tree ? groupPaths(tree) : [];
   const fold: GridFold | undefined = allPaths.length
     ? {
         shut: allPaths.every((p) => closedPaths.has(p)),

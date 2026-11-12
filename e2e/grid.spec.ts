@@ -292,6 +292,17 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(grid.locator('[data-group-level="0"]')).toHaveCount(all.groups!.length);
     await expect(fold).toHaveAttribute('title', 'Развернуть все группы');
     if (!isMobile) await expect(fold).toHaveText('Развернуть все');
+    // На телефоне кнопка стоит у плашки группировки, на ПК — в панели над списком.
+    await expect(grid.locator('[data-grid-chips] [data-grid-fold]')).toHaveCount(isMobile ? 1 : 0);
+    // Свёрнуты и вложенные группы: раскрытая верхняя показывает их без записей, а кнопка снова
+    // «Свернуть все» — свёрнуты уже не все.
+    await top.getByRole('button').first().click();
+    await expect(grid.locator(`[data-group^="${path}›"]`)).toHaveCount(accountants.sub!.length);
+    await expect(grid.locator('[data-id]')).toHaveCount(0);
+    await expect(fold).toHaveAttribute('data-grid-fold', 'collapse');
+    await fold.click();
+    await expect(grid.locator('[data-group-level="1"]')).toHaveCount(0);
+    await expect(fold).toHaveAttribute('data-grid-fold', 'expand');
     await fold.click();
     await expect(fold).toHaveAttribute('data-grid-fold', 'collapse');
     await expect(grid.locator(`[data-group^="${path}›"]`)).toHaveCount(accountants.sub!.length);
