@@ -36,3 +36,42 @@ export function accountActionRefusal(
   if (account.isPlatformAdmin) return 'platform_admin';
   return null;
 }
+
+/**
+ * Состояния учётной записи цветными метками в карточке пользователя (ТЗ «Админка» → «Карточка
+ * пользователя», шапка; прототип admin-cards.js, acStates): их может быть несколько — заблокирован и
+ * не сменил временный пароль. Обе блокировки показываются отдельно (docs/deviations.md, п. 49).
+ */
+export const ACCOUNT_CARD_STATES = [
+  'active',
+  'blocked_admin',
+  'blocked_owner',
+  'login_locked',
+  'temp_password',
+] as const;
+export type AccountCardState = (typeof ACCOUNT_CARD_STATES)[number];
+
+export function accountStates(account: {
+  isPlatformAdmin: boolean;
+  blocked: boolean;
+  employeeActive: boolean;
+  loginLocked: boolean;
+  mustChangePassword: boolean;
+}): AccountCardState[] {
+  // Учётные записи администраторов платформы из Админки не меняются: только «Активен» или блокировка.
+  if (account.isPlatformAdmin) return [account.blocked ? 'blocked_admin' : 'active'];
+  const out: AccountCardState[] = [];
+  if (account.blocked) out.push('blocked_admin');
+  if (!account.employeeActive) out.push('blocked_owner');
+  if (account.loginLocked) out.push('login_locked');
+  if (account.mustChangePassword) out.push('temp_password');
+  return out.length ? out : ['active'];
+}
+
+/** Вкладки карточки пользователя: у администратора платформы — только три (прототип accCard). */
+export const ACCOUNT_CARD_TABS = ['main', 'work', 'ses', 'kb', 'tg', 'hist'] as const;
+export type AccountCardTab = (typeof ACCOUNT_CARD_TABS)[number];
+
+export function accountCardTabs(isPlatformAdmin: boolean): AccountCardTab[] {
+  return isPlatformAdmin ? ['main', 'ses', 'hist'] : [...ACCOUNT_CARD_TABS];
+}

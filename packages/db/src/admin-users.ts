@@ -251,6 +251,12 @@ export async function adminGetUser(tx: Tx, id: string): Promise<AdminUserRecord 
   return row ? toRecord(row) : null;
 }
 
+/** Учётная запись по логину (ссылка #accounts/<логин>); null — нет такой или не администратор. */
+export async function adminUserIdByLogin(tx: Tx, login: string): Promise<string | null> {
+  const [row] = await tx.select({ id: v.id }).from(v).where(eq(v.login, login));
+  return row?.id ?? null;
+}
+
 export type AdminUserBlockResult =
   { ok: true; record: AdminUserRecord } | { ok: false; reason: 'not_found' | 'changed' };
 

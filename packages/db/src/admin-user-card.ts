@@ -130,7 +130,9 @@ export interface AdminCardReport {
   id: string;
   contractor: string;
   type: string;
+  /** Вид периода и его начало: подпись периода собирает экран. */
   period: string;
+  periodStart: string;
   dueDate: string;
   status: string;
 }
@@ -280,6 +282,7 @@ const reportRow = {
   contractor: contractors.name,
   type: sql<string>`coalesce(${reportTypes.shortName}, ${reportTypes.name}, ${reports.reportTypeCode})`,
   period: reports.period,
+  periodStart: reports.periodStart,
   dueDate: reports.dueDate,
   status: reports.status,
 };
@@ -351,8 +354,15 @@ export async function adminEmployeeCard(
     .orderBy(asc(contractors.name), asc(contractors.id));
   const due = await reportsOf(eq(reports.status, 'todo'));
   const inWork = await reportsOf(eq(reports.status, 'in_progress'));
+  // Просрочена сдача — как в списке отчётов (report-list.ts, overdueOf): несданный отчёт со сдачей,
+  // срок прошёл, контрагент не приостановлен.
   const overdue = await reportsOf(
-    and(inArray(reports.status, [...OPEN_REPORT_STATUSES]), lt(reports.dueDate, today)),
+    and(
+      inArray(reports.status, [...OPEN_REPORT_STATUSES]),
+      lt(reports.dueDate, today),
+      ne(reports.act, 'pay'),
+      ne(contractors.serviceStatus, 'paused'),
+    ),
   );
   const done = await reportsOf(
     and(

@@ -64,6 +64,14 @@ import {
   userValuesHandler,
   userValuesRoute,
 } from './users';
+import {
+  endUserSessionsHandler,
+  endUserSessionsRoute,
+  userCardHandler,
+  userCardRoute,
+  userLookupHandler,
+  userLookupRoute,
+} from './user-card';
 
 /**
  * Модуль «Админка»: «Учётные записи» — список всех пользователей платформы, сброс пароля (#6),
@@ -77,6 +85,9 @@ export function adminModule(deps: ApiDeps) {
       .openapi(listUsersRoute, listUsersHandler(deps))
       .openapi(userValuesRoute, userValuesHandler(deps))
       .openapi(exportUsersRoute, exportUsersHandler(deps))
+      .openapi(userLookupRoute, userLookupHandler(deps))
+      .openapi(userCardRoute, userCardHandler(deps))
+      .openapi(endUserSessionsRoute, endUserSessionsHandler(deps))
       .openapi(blockUserRoute, userBlockHandler(deps, 'block'))
       .openapi(unblockUserRoute, userBlockHandler(deps, 'unblock'))
       .openapi(adminResetPasswordRoute, adminResetPasswordHandler(deps))
