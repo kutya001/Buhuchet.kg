@@ -93,11 +93,11 @@ export type ApiDocPart = z.infer<typeof Part>;
 /** Описание базы (spec/prototype/db/schema.json): здесь нужны только версия и таблицы. */
 const DbSchemaDoc = z
   .object({
-    meta: z.object({ schemaVersion: z.number().nullish(), updated: z.string().default('') }).loose(),
+    meta: z
+      .object({ schemaVersion: z.number().nullish(), updated: z.string().default('') })
+      .loose(),
     tables: z.array(
-      z
-        .object({ name: z.string(), ru: z.string().default(''), rls: z.string().nullish() })
-        .loose(),
+      z.object({ name: z.string(), ru: z.string().default(''), rls: z.string().nullish() }).loose(),
     ),
   })
   .loose();
@@ -137,7 +137,9 @@ export function fileTechDocs(
   let loaded: Promise<TechDocs | null> | null = null;
   const readDir = async (dir: string): Promise<TechDocs> => {
     const [api, schema, page] = await Promise.all(
-      ['api.json', 'schema.json', 'page.html'].map((name) => readFile(path.join(dir, name), 'utf8')),
+      ['api.json', 'schema.json', 'page.html'].map((name) =>
+        readFile(path.join(dir, name), 'utf8'),
+      ),
     );
     return parseTechDocs({ api: api!, schema: schema!, page: page! });
   };
@@ -174,8 +176,10 @@ export const methodTables = (m: Pick<ApiDocMethod, 'r' | 'w'>): string[] => [
  */
 export function schemaPageIndex(api: ApiDocs) {
   const t: Record<string, [string, 'r' | 'w' | 'rw'][]> = {};
-  const m: Record<string, { m: string; p: string; s: string; g: string; r: string[]; w: string[] }> =
-    {};
+  const m: Record<
+    string,
+    { m: string; p: string; s: string; g: string; r: string[]; w: string[] }
+  > = {};
   for (const x of api.methods) {
     m[x.id] = { m: x.m, p: x.p, s: x.sum, g: api.sections[x.sec] ?? x.sec, r: x.r, w: x.w };
     for (const name of methodTables(x)) {
@@ -185,7 +189,8 @@ export function schemaPageIndex(api: ApiDocs) {
   const collator = new Intl.Collator('ru', { numeric: true });
   for (const list of Object.values(t)) {
     list.sort(
-      (a, b) => collator.compare(m[a[0]]!.p, m[b[0]]!.p) || collator.compare(m[a[0]]!.m, m[b[0]]!.m),
+      (a, b) =>
+        collator.compare(m[a[0]]!.p, m[b[0]]!.p) || collator.compare(m[a[0]]!.m, m[b[0]]!.m),
     );
   }
   return { t, m };
@@ -205,5 +210,8 @@ export function schemaPageHtml(docs: TechDocs, theme: string): string | null {
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
   // Функция, а не строка: «$» в данных не должен читаться как подстановка replace.
-  return docs.page.replace(PAGE_SCRIPT, () => `<script>window.TDX_IN=${data};</script>${PAGE_SCRIPT}`);
+  return docs.page.replace(
+    PAGE_SCRIPT,
+    () => `<script>window.TDX_IN=${data};</script>${PAGE_SCRIPT}`,
+  );
 }

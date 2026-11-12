@@ -670,4 +670,8 @@ export const ADMIN_TECHDOCS_TEXTS = {
   },
   'tdocs.zod.sub': { ru: 'Схема Zod из пакета shared продукта', section: T },
   'tdocs.zod.load_error': { ru: 'Не удалось загрузить поля схемы', section: T },
+  'err.techdocs_missing': {
+    ru: 'Не удалось прочитать описание API и схемы базы',
+    section: 'Ошибки',
+  },
 } as const satisfies Record<string, UiTextDefault>;

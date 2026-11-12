@@ -66,7 +66,8 @@ describe('цвета меток', () => {
 });
 
 describe('подсветка SQL', () => {
-  const sql = "select u.id from users u where u.login = $1 and u.kind = 'admin' -- только свои\nlimit 10";
+  const sql =
+    "select u.id from users u where u.login = $1 and u.kind = 'admin' -- только свои\nlimit 10";
 
   it('ключевые слова, параметры, строки и комментарии', () => {
     const tokens = sqlTokens(sql);

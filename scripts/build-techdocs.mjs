@@ -33,7 +33,11 @@ const DB_DIR = path.join(ROOT, 'spec/prototype/db');
 
 // Окружение — только нужное: при сборке на Vercel и в Docker в process.env есть ключи и пароли, а
 // скрипт приходит из репозитория прототипа (spec:sync).
-const safeEnv = () => ({ PATH: process.env.PATH ?? '/usr/bin:/bin', LANG: 'C.UTF-8', PYTHONUTF8: '1' });
+const safeEnv = () => ({
+  PATH: process.env.PATH ?? '/usr/bin:/bin',
+  LANG: 'C.UTF-8',
+  PYTHONUTF8: '1',
+});
 
 /** Коммит и дата версии продукта: git, а где его нет (сборка без .git) — переменная сборки и сегодня. */
 export function sourceVersion(env = process.env) {
@@ -101,7 +105,12 @@ export function buildTechDocs(dir = TECHDOCS_DIR) {
     return { source: 'repo', note };
   } catch (err) {
     copyFileSync(path.join(ROOT, 'spec/data/apiDocs.json'), api);
-    return { source: 'spec', note: String(err.stderr || err.message).trim().slice(0, 400) };
+    return {
+      source: 'spec',
+      note: String(err.stderr || err.message)
+        .trim()
+        .slice(0, 400),
+    };
   }
 }
 
@@ -113,7 +122,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `Техническая документация: ${path.relative(ROOT, TECHDOCS_DIR)} — ${meta.methods} методов, ${size} КБ, коммит ${meta.commit} от ${meta.date}`,
   );
   if (made.source === 'spec') {
-    console.warn(`Снимок API не собран, взят снимок прототипа spec/data/apiDocs.json: ${made.note}`);
+    console.warn(
+      `Снимок API не собран, взят снимок прототипа spec/data/apiDocs.json: ${made.note}`,
+    );
   } else if (made.note) {
     console.warn(`Снимок API: ${made.note}`);
   }

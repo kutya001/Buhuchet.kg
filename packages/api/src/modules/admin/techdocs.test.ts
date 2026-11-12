@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import {
   AdminApiMethodCard,
@@ -11,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
 import { SCHEMA_PAGE_CSP } from './techdocs';
-import { parseTechDocs, schemaPageIndex, type TechDocs } from './techdocs-source';
+import { fileTechDocs, parseTechDocs, schemaPageIndex, type TechDocs } from './techdocs-source';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -339,6 +342,16 @@ describe.skipIf(!databaseAvailable())('Админка → «Техническа
     ]);
     // Имена схем с разобранными полями — в типах они открываются по нажатию.
     expect(c.schemas).toEqual(['AdminUserOrg']);
+    // Место с запросом к базе отмечено — у него значок базы.
+    expect(c.code).toEqual([
+      {
+        file: 'packages/db/src/admin-users.ts',
+        fn: 'adminSetUserBlocked',
+        line: 10,
+        what: 'Запрос к базе',
+        db: true,
+      },
+    ]);
 
     // Список с параметрами строки запроса — «Меняется по фильтрам»; представление — с таблицами.
     const listed = AdminApiMethodCard.parse(
@@ -349,6 +362,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Техническа
       { name: 'admin_users', migration: '0033_admin_users', reads: ['Сотрудники', 'Пользователи'] },
     ]);
     expect(listed.queries.map((q) => q.kind)).toEqual(['view', 'code']);
+    expect(listed.code.map((x) => x.db)).toEqual([false]);
 
     const none = await get(`${P}/method?id=${encodeURIComponent('GET /net/takogo')}`);
     expect(none.status).toBe(404);
@@ -442,6 +456,57 @@ describe.skipIf(!databaseAvailable())('Админка → «Техническа
         org: { $ref: '#/components/schemas/AdminUserOrg', nullable: true },
       },
     });
+  });
+
+  it('карточка метода с правом: права — названиями из каталога, неизвестное — кодом', async () => {
+    const api = {
+      ...API,
+      methods: [
+        { ...API.methods[0]!, id: 'GET /contractors', acc: 'perm', perm: ['cpView', 'netTakogo'] },
+      ],
+    };
+    const withPerm = createApp({ ...f.deps, techDocs: { load: async () => docs({ api }) } });
+    const res = await apiRequest(
+      withPerm,
+      'GET',
+      `${P}/method?id=${encodeURIComponent('GET /contractors')}`,
+      admin,
+    );
+    expect(res.status).toBe(200);
+    const c = AdminApiMethodCard.parse(await res.json());
+    expect(c.access).toBe('perm');
+    expect(c.permissions).toHaveLength(2);
+    expect(c.permissions[0]).toMatch(/[А-Яа-я]/);
+    expect(c.permissions[0]).not.toBe('cpView');
+    expect(c.permissions[1]).toBe('netTakogo');
+  });
+
+  it('данные с диска: первая папка, где они читаются; нет нигде — null и сообщение об ошибке', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'techdocs-'));
+    try {
+      await writeFile(path.join(dir, 'api.json'), JSON.stringify(API));
+      await writeFile(path.join(dir, 'schema.json'), JSON.stringify(SCHEMA));
+      await writeFile(path.join(dir, 'page.html'), PAGE);
+      const errors: unknown[] = [];
+      const found = await fileTechDocs([path.join(dir, 'net'), dir], (e) => errors.push(e)).load();
+      expect(found?.api.methods).toHaveLength(3);
+      expect(found?.page).toBe(PAGE);
+      expect(errors).toEqual([]);
+
+      const source = fileTechDocs([path.join(dir, 'net')], (e) => errors.push(e));
+      expect(await source.load()).toBeNull();
+      expect(errors).toHaveLength(1);
+      // Следующее обращение пробует снова.
+      expect(await source.load()).toBeNull();
+      expect(errors).toHaveLength(2);
+
+      // Неверный состав файла — тоже «не прочитано», а не падение.
+      await writeFile(path.join(dir, 'api.json'), '{"meta":{}}');
+      expect(await fileTechDocs([dir], (e) => errors.push(e)).load()).toBeNull();
+      expect(errors).toHaveLength(3);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('описание не собрано — 404 «не удалось прочитать», а не ошибка сервера', async () => {

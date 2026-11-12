@@ -56,6 +56,8 @@ const missing = {
   404: { description: 'Описание не собрано или такого метода нет', content: error },
 } as const;
 
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-67 — описание API собирает скрипт прототипа при сборке сайта,
+// «Скачать OpenAPI» отдаёт файл из того же снимка, страница схемы — в рамке без источника и сети.
 const P = '/admin/tech-docs';
 
 /** Данные модуля; не собраны — 404 «Не удалось прочитать описание». */
@@ -414,7 +416,10 @@ export function apiMethodCardHandler(
     if (!method) apiFail(404, 'not_found', 'Метод не найден в описании API');
     // Права — названиями из каталога прав, как на экране ролей.
     const perms = new Map((await permissionCatalog(deps.db)).map((p) => [p.id as string, p.name]));
-    return c.json(methodCard(docs, method!, (p) => perms.get(p) ?? p), 200);
+    return c.json(
+      methodCard(docs, method!, (p) => perms.get(p) ?? p),
+      200,
+    );
   };
 }
 

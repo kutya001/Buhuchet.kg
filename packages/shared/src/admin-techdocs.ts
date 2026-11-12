@@ -90,7 +90,10 @@ export const AdminApiMethodCard = z.object({
     params: RequestPart.nullable(),
     query: RequestPart.nullable(),
     headers: RequestPart.nullable(),
-    body: RequestPart.extend({ contentType: z.string(), example: z.string().nullable() }).nullable(),
+    body: RequestPart.extend({
+      contentType: z.string(),
+      example: z.string().nullable(),
+    }).nullable(),
   }),
   responses: z.array(
     z.object({

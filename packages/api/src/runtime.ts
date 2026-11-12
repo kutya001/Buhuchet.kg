@@ -59,10 +59,7 @@ export function createRuntime(
     ...(service === 'web'
       ? {
           techDocs: fileTechDocs(
-            [
-              path.join(process.cwd(), 'techdocs'),
-              path.join(process.cwd(), 'apps/web/techdocs'),
-            ],
+            [path.join(process.cwd(), 'techdocs'), path.join(process.cwd(), 'apps/web/techdocs')],
             (err) => logger.warn({ err }, 'Техническая документация: данные не прочитаны'),
           ),
         }
