@@ -193,8 +193,8 @@ export function schemaPageHtml(docs: TechDocs, theme: string): string | null {
   if (!docs.page.includes(PAGE_SCRIPT)) return null;
   const data = JSON.stringify({ schema: docs.schema, api: schemaPageIndex(docs.api), theme })
     .replace(/</g, '\\u003c')
-    .replace(/ /g, '\\u2028')
-    .replace(/ /g, '\\u2029');
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
   // Функция, а не строка: «$» в данных не должен читаться как подстановка replace.
   return docs.page.replace(PAGE_SCRIPT, () => `<script>window.TDX_IN=${data};</script>${PAGE_SCRIPT}`);
 }

@@ -9,6 +9,7 @@ import type {
 } from '@buhuchet/adapters';
 import type { DocumentReader } from '@buhuchet/adapters/documents';
 import type { Db, RateLimit } from '@buhuchet/db';
+import type { TechDocsSource } from './modules/admin/techdocs-source';
 import type { FileSource } from './modules/files/sources';
 
 export interface JobContext {
@@ -61,4 +62,9 @@ export interface ApiDeps extends JobContext {
    * сквозные тесты входят администратором без Telegram. Тест кода задаёт его сам.
    */
   adminSecondFactor?: boolean;
+  /**
+   * Данные «Технической документации» Админки (собирает scripts/build-techdocs.mjs при сборке сайта).
+   * Нет — модуль отвечает «Не удалось прочитать описание»; тесты подставляют свои.
+   */
+  techDocs?: TechDocsSource;
 }
