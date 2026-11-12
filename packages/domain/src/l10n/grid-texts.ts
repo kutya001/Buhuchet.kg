@@ -15,6 +15,33 @@ export const GRID_TEXTS = {
   'grid.view': { ru: 'Вид списка', section: 'Списки' },
   'grid.table': { ru: 'Таблица', section: 'Списки' },
   'grid.cards': { ru: 'Карточки', section: 'Списки' },
+  // Вид «Доска» (канбан; прототип v84, ui/grid.js kanbanHtml).
+  'grid.kanban': { ru: 'Доска', section: 'Списки' },
+  'grid.kanban_hint': { ru: 'Доска: записи карточками по столбцам', section: 'Списки' },
+  'grid.board.by': { ru: 'Столбцы: {name}', section: 'Списки' },
+  'grid.board.by_hint': {
+    ru: 'Выбрать, по какому полю разложить записи на доске',
+    section: 'Списки',
+  },
+  'grid.board.fields': { ru: 'Поля', section: 'Списки' },
+  'grid.board.fields_hint': {
+    ru: 'Какие поля показывать на карточке: первые пять видимых',
+    section: 'Списки',
+  },
+  'grid.board.by_phone': { ru: 'Столбцы доски: {name}', section: 'Списки' },
+  'grid.board.fields_phone': { ru: 'Поля карточки ({n}/{total})', section: 'Списки' },
+  'grid.board.fields_name': { ru: 'Поля карточки', section: 'Списки' },
+  'grid.board.column': { ru: '{name}: {n}', section: 'Списки' },
+  'grid.board.empty': { ru: 'Нет записей', section: 'Списки' },
+  'grid.board.more': { ru: 'Показать ещё {n} из {left}', section: 'Списки' },
+  'grid.board.cut': {
+    ru: 'Показаны первые {n} столбцов из {total} — сузьте список фильтром или поиском',
+    section: 'Списки',
+  },
+  'grid.board.shown': { ru: 'Столбцов: {n} · записей: {total}', section: 'Списки' },
+  'grid.board.tip_drag': { ru: 'Карточку можно перетащить в другой столбец', section: 'Списки' },
+  'grid.board.tip_menu': { ru: 'Перенос — в меню карточки «⋯»', section: 'Списки' },
+  'grid.board.move': { ru: 'Перенести в столбец…', section: 'Списки' },
   'grid.view_to': { ru: 'Вид списка: {name}', section: 'Списки' },
   'grid.columns': { ru: 'Столбцы', section: 'Списки' },
   'grid.columns_hint': {

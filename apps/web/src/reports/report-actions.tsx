@@ -84,6 +84,8 @@ export function useReportActions(): {
   openCard: (r: ReportRow | { id: string }) => void;
   /** «Отметить сданным» — окно сдачи по свежей карточке (и из регулярной задачи, задача 2.24). */
   submit: (r: { id: string }) => void;
+  /** «Взять в работу» отчёта «К сдаче» — и переносом регулярной задачи на доске задач. */
+  start: (r: { id: string; version: number }) => void;
   bulk: (tab: ReportListTab | 'calendar') => GridBulkAction<ReportRow>[];
   newReport: () => void;
   /** «Принять» в строке списка: с «Учётом оплаты налогов» и правом «Учёт денег», иначе null. */
@@ -171,7 +173,7 @@ export function useReportActions(): {
     if (data) setManual(openSlot({ options: data[0], reasons: data[1] }));
   };
 
-  const step = async (r: ReportRow, kind: keyof typeof STEP) => {
+  const step = async (r: Pick<ReportRow, 'id' | 'version'>, kind: keyof typeof STEP) => {
     const s = STEP[kind];
     const res = await once(r.id, () =>
       callApi(() =>
@@ -562,6 +564,7 @@ export function useReportActions(): {
     actions,
     openCard,
     submit: (r) => void openDialog(r, 'submit'),
+    start: (r) => void step(r, 'start'),
     bulk,
     newReport: () => void newReport(),
     receive: actor?.taxpay && actor.can.money ? openReceive : null,

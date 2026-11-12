@@ -13,7 +13,13 @@ import {
   type TaskListRow,
   type TaskRow,
 } from '@buhuchet/shared';
-import { ConfirmDialog, RollbackDialog, useToast, type ActionEntry } from '@buhuchet/ui';
+import {
+  ConfirmDialog,
+  RollbackDialog,
+  useToast,
+  type ActionEntry,
+  type BoardValue,
+} from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
@@ -21,7 +27,8 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { useReportActions, useReportActor } from '../reports/report-actions';
-import { rollbackLabels, rollbackTitle } from '../status/status-view';
+import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
+import { executorChangeBody, manualTaskMove, regularTaskMove } from './task-board';
 import { TaskCard } from './task-card';
 import {
   TaskConfirmDialog,
@@ -31,8 +38,13 @@ import {
 } from './task-dialogs';
 import { TaskFormDialog } from './task-form';
 import type { TaskFormPreset } from './task-form-values';
-import { taskMenuEntries } from './task-menu';
-import { taskFormOptionsQuery, taskQuery, useTasksRefresh } from './tasks-data';
+import { taskFacts, taskMenuEntries } from './task-menu';
+import {
+  taskBoardOptionsQuery,
+  taskFormOptionsQuery,
+  taskQuery,
+  useTasksRefresh,
+} from './tasks-data';
 
 /** Окно действия с задачей: какое и над какой (свежая карточка с сервера). */
 type ActionDialog = { kind: 'done' | 'fail' | 'confirm' | 'rework'; task: Task };
@@ -63,6 +75,11 @@ export function useTaskActions(): {
   /** Карточка: ручной задачи (строка списка или карточка с сервера) или отчёта регулярной задачи. */
   openCard: (task: TaskListRow | TaskRow) => void;
   newTask: (preset?: TaskFormPreset) => void;
+  /**
+   * Перенос карточки на доске в столбец `to` столбца списка `key` (прототип `taskKanban.drop`): то же,
+   * что действие в меню, — те же права и окна; нельзя — уведомление с причиной. Не сотруднику — нет.
+   */
+  drop: ((task: TaskListRow, key: string, to: BoardValue) => void) | undefined;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -167,11 +184,11 @@ export function useTaskActions(): {
 
   const reports = useReportActions();
   const reportActor = useReportActor();
-  /** Меню регулярной задачи (прототип `taskActions`, `t.reg`). */
-  const regularActions = (task: RegularTaskRow): ActionEntry[] => {
+  /** Почему отчёт регулярной задачи нельзя отметить сданным: нет права или «Сдача только после оплаты». */
+  const submitWhy = (task: RegularTaskRow): string => {
     const r = task.report;
-    const open = r.status === 'todo' || r.status === 'in_progress' || r.status === 'needs_fix';
-    const payWhy = submitNeedsPayment(
+    if (!access.can('changeStatus')) return t('task.reg.no_status_right');
+    return submitNeedsPayment(
       { act: r.act, status: r.status, sum: r.amount, paid: r.paid, superseded: false },
       !!reportActor?.taxpay && !!reportActor.payFirst,
     )
@@ -180,7 +197,12 @@ export function useTaskActions(): {
           paid: formatSomWithUnit(r.paid),
         })
       : '';
-    const why = !access.can('changeStatus') ? t('task.reg.no_status_right') : payWhy;
+  };
+  /** Меню регулярной задачи (прототип `taskActions`, `t.reg`). */
+  const regularActions = (task: RegularTaskRow): ActionEntry[] => {
+    const r = task.report;
+    const open = r.status === 'todo' || r.status === 'in_progress' || r.status === 'needs_fix';
+    const why = submitWhy(task);
     const closes =
       r.mark === 'waiting'
         ? 'task.reg.closes_wait'
@@ -212,6 +234,49 @@ export function useTaskActions(): {
     task.kind === 'regular' ? regularActions(task) : manualActions(task);
   const openCard = (task: TaskListRow | TaskRow) =>
     'kind' in task && task.kind === 'regular' ? reports.openCard({ id: task.id }) : run.open(task);
+
+  /** Смена исполнителя переносом на доске: «Изменить» по свежей карточке, меняется только исполнитель. */
+  const changeExecutor = async (task: TaskRow, employeeId: string, name: string) => {
+    const full = await load(task.id, () => fresh(task.id));
+    if (!full) return;
+    const res = await once(task.id, () =>
+      callApi(() =>
+        api.api.tasks[':id'].$patch({
+          param: { id: task.id },
+          json: executorChangeBody(full, employeeId),
+        }),
+      ),
+    );
+    if (!res) return;
+    refresh();
+    if (!res.ok) return toast(errorText(res.error), { bad: true });
+    const next = Task.safeParse(res.data);
+    if (next.success) client.setQueryData(taskQuery(task.id).queryKey, next.data);
+    toast(t('task.board.exec_done', { name }), { icon: 'user' });
+  };
+
+  const drop = (task: TaskListRow, key: string, to: BoardValue) => {
+    const bad = (text: string) => toast(text, { bad: true });
+    if (task.kind === 'regular') {
+      const move = regularTaskMove(task.report, key, to.key);
+      if (typeof move !== 'string') return bad(t(move.key));
+      if (move === 'submit') {
+        const why = submitWhy(task);
+        return why ? bad(why) : reports.submit({ id: task.id });
+      }
+      if (!access.can('changeStatus')) return bad(t('task.reg.no_status_right'));
+      return reports.start({ id: task.id, version: task.version });
+    }
+    if (!actor) return;
+    // Список действующих сотрудников доска уже запросила (тому, кто видит задачи всех); пуст — не знаем.
+    const known = client.getQueryData(taskBoardOptionsQuery.queryKey)?.executors ?? [];
+    const active = known.length ? known.map((e) => e.id) : undefined;
+    const move = manualTaskMove(taskFacts(task), actor, key, to.key, active);
+    if (move.kind === 'action') return run[move.action](task);
+    if (move.kind === 'executor') return void changeExecutor(task, move.employeeId, to.label);
+    if (move.kind === 'refusal') return bad(t(`err.${move.code}`));
+    bad(t(move.key, { from: statusName(t, 'task', task.status), to: to.label }));
+  };
 
   const rollback = async (reason: string) => {
     if (!back) return;
@@ -312,6 +377,7 @@ export function useTaskActions(): {
     actions,
     openCard,
     newTask: (preset) => void newTask(preset),
+    drop: actor ? drop : undefined,
     dialogs: (
       <>
         {dialogs}

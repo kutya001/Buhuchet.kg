@@ -1,6 +1,7 @@
 import {
   DEFAULT_PAGE_SIZE,
   nextSort,
+  type GridViewKind,
   type GridViewSettings,
   type ListPageSize,
   type ListSort,
@@ -181,21 +182,37 @@ export function pageSizeOf(settings: GridViewSettings): ListPageSize {
 /**
  * Вид списка: закреплённый модулем, выбранный пользователем или по умолчанию — «Таблица» на ПК,
  * «Карточки» на телефоне (ТЗ «Вид»). Выбор запоминается отдельно для ПК и телефона: таблица,
- * выбранная на ПК, не открывается на телефоне вместо карточек.
+ * выбранная на ПК, не открывается на телефоне вместо карточек. «Доска» — только у списка, где она
+ * есть (`kanban`): у остальных сохранённая «Доска» открывается видом по умолчанию.
  */
 export function effectiveView(
   settings: GridViewSettings,
   phone: boolean,
   fixed?: 'table' | 'cards',
-): 'table' | 'cards' {
-  return fixed ?? (phone ? settings.phoneView : settings.view) ?? (phone ? 'cards' : 'table');
+  kanban = false,
+): GridViewKind {
+  if (fixed) return fixed;
+  const base = phone ? 'cards' : 'table';
+  const view = (phone ? settings.phoneView : settings.view) ?? base;
+  return view === 'kanban' && !kanban ? base : view;
 }
 
-/** Выбор «Таблица / Карточки» на этом устройстве (ПК или телефон). */
+/** Виды списка по порядку переключателя: «Таблица», «Карточки» и, если есть, «Доска». */
+export function gridViews(kanban: boolean): GridViewKind[] {
+  return kanban ? ['table', 'cards', 'kanban'] : ['table', 'cards'];
+}
+
+/** Телефон: кнопка вида переключает виды по кругу (прототип `views[(i + 1) % views.length]`). */
+export function nextView(view: GridViewKind, kanban: boolean): GridViewKind {
+  const views = gridViews(kanban);
+  return views[(views.indexOf(view) + 1) % views.length]!;
+}
+
+/** Выбор вида на этом устройстве (ПК или телефон). */
 export function setView(
   settings: GridViewSettings,
   phone: boolean,
-  view: 'table' | 'cards',
+  view: GridViewKind,
 ): GridViewSettings {
   return phone ? { ...settings, phoneView: view } : { ...settings, view };
 }

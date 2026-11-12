@@ -58,6 +58,24 @@ const LABELS: GridLabels = {
   view: 'Вид списка',
   table: 'Таблица',
   cards: 'Карточки',
+  kanban: 'Доска',
+  kanbanHint: 'Доска: записи карточками по столбцам',
+  boardBy: (label) => `Столбцы: ${label}`,
+  boardByHint: 'Выбрать, по какому полю разложить записи на доске',
+  boardFields: 'Поля',
+  boardFieldsHint: 'Какие поля показывать на карточке: первые пять видимых',
+  boardByPhone: (label) => `Столбцы доски: ${label}`,
+  boardFieldsPhone: (shown, total) => `Поля карточки (${shown}/${total})`,
+  boardFieldsName: 'Поля карточки',
+  boardColumn: (label, count) => `${label}: ${count}`,
+  boardEmpty: 'Нет записей',
+  boardMore: (next, left) => `Показать ещё ${next} из ${left}`,
+  boardCut: (shown, total) =>
+    `Показаны первые ${shown} столбцов из ${total} — сузьте список фильтром или поиском`,
+  boardShown: (n, total) => `Столбцов: ${n} · записей: ${total}`,
+  boardTipDrag: 'Карточку можно перетащить в другой столбец',
+  boardTipMenu: 'Перенос — в меню карточки «⋯»',
+  boardMove: 'Перенести в столбец…',
   viewTo: (name) => `Вид списка: ${name}`,
   columns: 'Столбцы',
   columnsHint: 'Галочка — показать столбец.',
@@ -559,6 +577,86 @@ describe('UnifiedDataGrid: карточки', () => {
   });
 });
 
+describe('UnifiedDataGrid: доска (прототип v84, ui/grid.js kanbanHtml)', () => {
+  const KANBAN = {
+    by: ['active', 'role'],
+    def: 'active',
+    order: { active: ['yes', 'no'] },
+    show: { active: [{ key: 'new', label: 'Новый' }] },
+  };
+  const board = (over: Partial<DataGridProps<Person>> = {}) =>
+    grid({
+      kanban: KANBAN,
+      titleKey: 'name',
+      settings: { view: 'kanban', shown: ['name', 'role', 'active', 'balance'] },
+      data: {
+        items: people(3),
+        total: 12,
+        page: 1,
+        totals: {},
+        groups: [
+          { key: 'no', label: 'Заблокирован', count: 5, aggs: { balance: 500 } },
+          { key: 'yes', label: 'Активен', count: 7, aggs: { balance: 700 } },
+        ],
+        rowGroups: [['yes'], ['no'], ['yes']],
+      },
+      ...over,
+    });
+
+  it('столбцы — значения столбца списка по порядку доски: число записей, сумма, карточки; пустой — «Нет записей»', () => {
+    const html = board();
+    expect(html).toContain('data-grid-board');
+    expect(html).not.toContain('<table');
+    const columns = [...html.matchAll(/data-board-column="(\w+)" aria-label="([^"]+)"/g)].map(
+      (m) => `${m[1]}|${m[2]}`,
+    );
+    expect(columns).toEqual(['yes|Активен: 7', 'no|Заблокирован: 5', 'new|Новый: 0']);
+    expect(html).toMatch(/data-board-count="[^"]*"[^>]*>7</);
+    expect(html).toMatch(/data-board-sum="[^"]*"[^>]*>700 сом</);
+    expect(html).toContain('Нет записей');
+    // Карточка: заголовок и видимые поля, кроме столбца доски.
+    expect([...html.matchAll(/data-board-card/g)]).toHaveLength(3);
+    expect(html).toContain('<dt class="text-faint">Роль</dt>');
+    expect(html).not.toContain('<dt class="text-faint">Статус</dt>');
+    // Заголовок карточки — столбец-заголовок, даже когда он скрыт (прототип `ac.find`).
+    const hidden = board({ settings: { view: 'kanban', shown: ['role', 'active', 'balance'] } });
+    expect(hidden).toContain(people(1)[0]!.name);
+    expect(html).toContain('Столбцов: 3 · записей: 12');
+  });
+
+  it('над доской — «Столбцы: …» вместо «Группировки» и «Поля» вместо «Столбцы»; три вида', () => {
+    const html = board();
+    expect(html).toContain('data-grid-board-by');
+    expect(html).toContain('Столбцы: Статус');
+    expect(html).not.toContain('data-grid-group-button');
+    expect(html).toContain('Поля (4/7)');
+    expect(html).toContain('data-view="kanban"');
+    expect(board({ settings: { view: 'kanban', kb: 'role' } })).toContain('Столбцы: Роль');
+  });
+
+  it('без переноса карточки не перетаскиваются и подсказки нет; с переносом — перетаскиваются, у каждой — «⋯»', () => {
+    const plain = board();
+    expect(plain).not.toContain('draggable="true"');
+    expect(plain).not.toContain('data-board-tip');
+    const movable = board({ kanban: { ...KANBAN, drop: () => {} } });
+    expect([...movable.matchAll(/draggable="true"/g)]).toHaveLength(3);
+    expect(movable).toContain('Карточку можно перетащить в другой столбец');
+    expect([...movable.matchAll(/data-row-menu/g)]).toHaveLength(3);
+  });
+
+  it('у списка без доски сохранённая «Доска» открывается таблицей, третьей кнопки вида нет', () => {
+    const html = grid({ settings: { view: 'kanban' } });
+    expect(html).toContain('<table');
+    expect(html).not.toContain('data-view="kanban"');
+  });
+
+  it('пока группы не пришли — заготовка, без доски', () => {
+    const html = board({ data: { items: people(3), total: 3, page: 1, totals: {} } });
+    expect(html).not.toContain('data-grid-board=');
+    expect(html).not.toContain('data-board-column');
+  });
+});
+
 describe('панель над списком', () => {
   const toolbar = (over: Partial<Parameters<typeof GridToolbar<Person>>[0]> = {}) =>
     GridToolbar<Person>({
@@ -592,6 +690,26 @@ describe('панель над списком', () => {
     );
     expect(html).toContain('Выбрано: 3');
     expect(html).not.toContain('250 сотрудников');
+  });
+
+  it('доска: кнопки «Плотность и ширина» нет; на телефоне — «Столбцы доски: …» и «Поля карточки»', () => {
+    const board = {
+      key: 'role',
+      options: [
+        { key: 'active', label: 'Статус' },
+        { key: 'role', label: 'Роль' },
+      ],
+    };
+    const pc = renderToStaticMarkup(toolbar({ view: 'kanban', board }));
+    expect(pc).toContain('Столбцы: Роль');
+    expect(pc).toContain('Поля (3/7)');
+    expect(pc).not.toContain('data-grid-options-button');
+    expect(renderToStaticMarkup(toolbar())).toContain('data-grid-options-button');
+    const phone = renderToStaticMarkup(toolbar({ phone: true, view: 'kanban', board }));
+    expect(phone).toContain('aria-label="Столбцы доски: Роль"');
+    expect(phone).toContain('title="Поля карточки (3/7)"');
+    expect(phone).toContain('aria-label="Поля карточки"');
+    expect(phone).not.toContain('data-grid-options-button');
   });
 
   it('телефон: одна кнопка-значок вида с подписью для диктора', () => {

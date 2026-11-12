@@ -9,6 +9,7 @@ import {
   FileUploadTicket,
   ListValues,
   Task,
+  TaskBoardOptions,
   TaskFormOptions,
   TaskList,
   TaskSummary,
@@ -208,6 +209,41 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
       { id: cpAcc.id, responsibleEmployeeId: employee('acc-a') },
     ]);
     expect((await call('GET', '/api/tasks/form-options', acc)).status).toBe(403);
+  });
+
+  it('доска: сотрудники-столбцы — только тому, кто видит задачи всех; чужой организации в них нет', async () => {
+    const res = await call('GET', '/api/tasks/board-options', chief);
+    expect(res.status).toBe(200);
+    const names = TaskBoardOptions.parse(await res.json()).executors.map((e) => e.shortName);
+    expect(names).toContain('acc-a');
+    expect(names).toContain('chief-a');
+    expect(names).not.toContain('acc-b');
+    // Заблокированный сотрудник столбцом не показывается.
+    await f.t.admin.db
+      .update(schema.employees)
+      .set({ active: false })
+      .where(eq(schema.employees.id, employee('hr-a')));
+    const active = TaskBoardOptions.parse(
+      await (await call('GET', '/api/tasks/board-options', chief)).json(),
+    );
+    expect(active.executors.map((e) => e.id)).not.toContain(employee('hr-a'));
+    await f.t.admin.db
+      .update(schema.employees)
+      .set({ active: true })
+      .where(eq(schema.employees.id, employee('hr-a')));
+    // Без права «Видеть задачи всех» список сотрудников не отдаётся.
+    const own = await call('GET', '/api/tasks/board-options', acc);
+    expect(own.status).toBe(200);
+    expect(TaskBoardOptions.parse(await own.json()).executors).toEqual([]);
+    // Чужая организация получает только своих.
+    const other = TaskBoardOptions.parse(
+      await (await call('GET', '/api/tasks/board-options', ownerB)).json(),
+    );
+    expect(other.executors.map((e) => e.shortName)).not.toContain('acc-a');
+    expect((await call('GET', '/api/tasks/board-options', '')).status).toBe(401);
+    // Администратор платформы — не сотрудник организации.
+    const admin = await signIn(f.app, 'platform-admin', TEST_PASSWORD);
+    expect((await call('GET', '/api/tasks/board-options', admin)).status).toBe(403);
   });
 
   it('видимость: свои — исполнителю и постановщику, все — по праву, чужая организация не видна', async () => {
@@ -461,6 +497,9 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
     expect(res.status).toBe(403);
     expect((await failure(res)).code).toBe('tasks_off');
     expect((await call('GET', '/api/tasks/summary', acc)).status).toBe(403);
+    expect((await call('GET', '/api/tasks/board-options', acc)).status).toBe(403);
+    // И тому, кто видит задачи всех: модуль проверяется раньше права.
+    expect((await call('GET', '/api/tasks/board-options', chief)).status).toBe(403);
     await features({ tasks: true, files: true });
     const [row] = await f.t.admin.db
       .select({ n: schema.tasks.id })

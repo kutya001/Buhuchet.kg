@@ -1,6 +1,12 @@
 'use client';
 
-import { ContractorTasks, Task, TaskFormOptions, TaskSummary } from '@buhuchet/shared';
+import {
+  ContractorTasks,
+  Task,
+  TaskBoardOptions,
+  TaskFormOptions,
+  TaskSummary,
+} from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -52,6 +58,13 @@ export const taskFormOptionsQuery = queryOptions({
   queryKey: ['tasks', 'form-options'],
   queryFn: async () =>
     json(await api.api.tasks['form-options'].$get(), (v) => TaskFormOptions.parse(v)),
+});
+
+/** Доска задач: действующие сотрудники — столбцы по исполнителю (тому, кто видит задачи всех). */
+export const taskBoardOptionsQuery = queryOptions({
+  queryKey: ['tasks', 'board-options'],
+  queryFn: async () =>
+    json(await api.api.tasks['board-options'].$get(), (v) => TaskBoardOptions.parse(v)),
 });
 
 /** Вкладка «Задачи» карточки контрагента. */

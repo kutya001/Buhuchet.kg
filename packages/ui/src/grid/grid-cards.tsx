@@ -1,23 +1,11 @@
 'use client';
 
 import { Fragment, type ReactNode } from 'react';
+import { cardToneClass } from './card-tone';
 import { aggText, type GroupNode } from './grid-groups';
 import { GroupToggle, RowMenuButton, SELECT_BOX, type GridTableGroups } from './grid-table';
 import type { RowEvents } from './row-events';
 import type { GridColumn, GridLabels, GridRowSelection, GridRowStripe, GridRowTone } from './types';
-
-/** Как `.gcard.<класс>` прототипа: приглушения у карточек нет (`.gt tr.muted` — только таблица). */
-const TONE_CARD: Record<GridRowTone, string> = {
-  muted: '',
-  overdue:
-    'border-[color-mix(in_srgb,var(--bu-red)_40%,var(--bu-border))] bg-[linear-gradient(var(--bu-red-bg),var(--bu-red-bg)),var(--bu-raised)]',
-  warn: 'border-l-[3px] border-l-caution',
-};
-
-const STRIPE_CARD: Record<GridRowStripe, string> = {
-  info: 'border-l-[3px] border-l-info',
-  violet: 'border-l-[3px] border-l-violet',
-};
 
 /**
  * Карточки списка (прототип ui/grid.js, cardsHtml; стили `.gcards`, `.gcard`): заголовок — главный
@@ -134,7 +122,7 @@ export function GridCards<Row>({
         data-tone={tone}
         tabIndex={0}
         {...events.handlers(row)}
-        className={`flex min-w-0 flex-col gap-[9px] rounded-xl border border-line bg-raised pt-[11px] pr-3 pb-3 pl-3.5 transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${tone && !(stripe && tone === 'warn') ? TONE_CARD[tone] : ''} ${stripe ? STRIPE_CARD[stripe] : ''} ${picked ? 'shadow-btn-active' : ''}`}
+        className={`flex min-w-0 flex-col gap-[9px] rounded-xl border pt-[11px] pr-3 pb-3 pl-3.5 transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${cardToneClass(tone, stripe)} ${picked ? 'shadow-btn-active' : ''}`}
       >
         <div className="flex items-start gap-[9px]">
           {selection && (

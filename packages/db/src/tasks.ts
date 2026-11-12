@@ -1303,6 +1303,15 @@ export async function taskFormOptions(
   return { executors, contractors: cps };
 }
 
+/** Действующие сотрудники по имени — столбцы доски задач «Столбцы: Исполнитель» (прототип `taskKanban`). */
+export async function taskBoardExecutors(tx: Tx): Promise<{ id: string; shortName: string }[]> {
+  return tx
+    .select({ id: employees.id, shortName: employees.shortName })
+    .from(employees)
+    .where(eq(employees.active, true))
+    .orderBy(sql`${employees.shortName} collate app.ru_natural`, employees.id);
+}
+
 /** Сотрудник текущего пользователя: исполнитель и постановщик задач — сотрудники. */
 export async function currentEmployeeId(tx: Tx): Promise<string | null> {
   const [row] = await tx

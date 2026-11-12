@@ -97,6 +97,23 @@ export const TASKS_TEXTS = {
   'task.action.edit': { ru: 'Изменить', section: S },
   'task.action.cancel': { ru: 'Отменить задачу', section: S },
   'task.action.more': { ru: 'Действия', section: S },
+  // Доска задач (прототип v84, modules/tasks.js taskKanban): отказы и итог переноса карточки.
+  'task.board.reg_status': {
+    ru: 'Статус регулярной задачи берётся из отчёта: её можно взять в работу или отметить отчёт сданным',
+    section: S,
+  },
+  'task.board.reg_exec': {
+    ru: 'Исполнитель регулярной задачи — ответственный за отчёт',
+    section: S,
+  },
+  'task.board.no_move': { ru: 'Из «{from}» в «{to}» задачу перевести нельзя', section: S },
+  'task.board.pick_employee': { ru: 'Выберите столбец сотрудника', section: S },
+  'task.board.exec_open': { ru: 'Исполнитель меняется только у открытой задачи', section: S },
+  'task.board.only': {
+    ru: 'Перетаскиванием меняются статус и исполнитель. Остальное — в окне «Изменить»',
+    section: S,
+  },
+  'task.board.exec_done': { ru: 'Исполнитель: {name}', section: S },
   'task.started': { ru: 'Задача в работе', section: S },
   'task.done.toast': { ru: 'Задача выполнена', section: S },
   'task.done.sent': {

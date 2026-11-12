@@ -24,7 +24,8 @@ import {
   taskStripe,
   taskTone,
 } from './task-columns';
-import { taskSummaryQuery } from './tasks-data';
+import { taskKanban } from './task-board';
+import { taskBoardOptionsQuery, taskSummaryQuery } from './tasks-data';
 
 export type TaskTab = 'mine' | 'byme' | 'all' | 'overdue';
 
@@ -93,7 +94,8 @@ function useTaskAddRequest(run: () => void) {
  * «Задачи» → вкладка (ТЗ «Модуль Задачи»; прототип modules/tasks.js, `renderTasks`): плашка-фильтр «На
  * подтверждении» (тем, кто ставит или подтверждает задачи; «можете подтвердить: N»), над списком —
  * метки «День» и «Месяц» и «С <месяц>, вперёд и всё просроченное»; общий список с поиском, фильтрами,
- * группировкой и «В Excel» (в файле всегда есть «Вид задачи»). Полоска слева у строки — вид срока,
+ * группировкой, видом «Доска» (перенос карточки — то же, что действие в меню) и «В Excel» (в файле
+ * всегда есть «Вид задачи»). Полоска слева у строки — вид срока,
  * просроченные — красным, закрытые — приглушённо. Строка открывает карточку задачи; действия — «⋯»,
  * долгим нажатием и правым кликом. Пока задач в организации нет — подсказка первого входа. Регулярные
  * задачи по отчётам — в том же списке, справа над ним — «Отчёты за месяц: сдано N из M» (задача 2.24).
@@ -124,9 +126,14 @@ export function TasksList({ tab }: { tab: TaskTab }) {
     },
     [tab],
   );
+  const tasks = useTaskActions();
+  // Столбцы сотрудников без задач — тому, кто видит задачи всех (прототип `taskKanban`, `show.exec`).
+  const boardOptions = useQuery({ ...taskBoardOptionsQuery, enabled: access.can('tasksAll') });
+  const kanban = taskKanban<TaskListRow>(t, boardOptions.data?.executors ?? [], tasks.drop);
   const list = useListPage({
     gridKey,
     columns,
+    kanban,
     defaultVisible: TASK_DEFAULT_VISIBLE,
     settings: view.settings,
     defaultSort: TASK_DEFAULT_SORT,
@@ -141,7 +148,6 @@ export function TasksList({ tab }: { tab: TaskTab }) {
     [params, visible, tab],
   );
   const exporter = useListExport(sendExport);
-  const tasks = useTaskActions();
   const canCreate = access.can('tasksCreate');
   useTaskAddRequest(() => tasks.newTask());
 
@@ -257,6 +263,7 @@ export function TasksList({ tab }: { tab: TaskTab }) {
         labels={labels}
         actions={tasks.actions}
         onOpen={tasks.openCard}
+        kanban={kanban}
       />
       {tasks.dialogs}
     </div>
