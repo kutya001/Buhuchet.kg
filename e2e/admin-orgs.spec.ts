@@ -231,4 +231,162 @@ test.describe('Админка: организации', () => {
     await page.request.post('/api/auth/logout', { headers: { origin } });
     await signIn(page.request, origin, owner, OWNER_PASSWORD);
   });
+
+  test('(приёмка, прототип v83) карточка организации: девять вкладок только для просмотра, кнопки шапки, ссылки на карточку пользователя и #orgs/<адрес>', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const owner = uniqueLogin('e2e-oc');
+    const name = `ОсОО «${uniqueLogin('Карточная')}»`;
+    const inn = uniqueInn();
+    const created = await page.request.post('/api/admin/organizations', {
+      headers: { origin },
+      data: {
+        name,
+        inn,
+        ownerFullName: 'Карточкин Сквозной',
+        ownerLogin: owner,
+        temporaryPassword: OWNER_PASSWORD,
+      },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const orgs = (await (await page.request.get('/api/admin/organizations?size=all')).json()) as {
+      items: { name: string; slug: string }[];
+    };
+    const slug = orgs.items.find((o) => o.name === name)!.slug;
+    const toast = page.getByRole('status');
+
+    // Нажатие на строку списка открывает карточку; в меню строки первым — «Открыть карточку».
+    await page.goto('/app/orgs');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    await search(page, isMobile, name);
+    const row = page.locator('[data-grid] [data-id]').filter({ hasText: name });
+    await expect(row).toHaveCount(1);
+    await row.locator('[data-row-menu]').click();
+    await expect(
+      page.getByRole('menu', { name: 'Действия' }).getByRole('menuitem').first(),
+    ).toHaveText('Открыть карточку');
+    await page.keyboard.press('Escape');
+    await row.getByText(name).click();
+    const card = page.getByRole('dialog', { name });
+    const openTab = async (tab: string) => {
+      if (isMobile) {
+        await card.getByRole('tab', { selected: true }).click();
+        await page.getByRole('menu').getByRole('menuitem', { name: tab }).click();
+      } else {
+        await card.getByRole('tab', { name: tab }).click();
+      }
+      await expect(card.getByRole('tab', { selected: true })).toContainText(tab);
+    };
+
+    // Шапка: ИНН, адрес страницы, состояние, кнопки — как в меню строки и «Сбросить пароль владельцу».
+    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card).toContainText(inn);
+    await expect(card).toContainText(`buhuchet.kg/${slug}`);
+    await expect(card).toContainText('подключена');
+    await expect(card.locator('[data-org-action="block"]')).toBeVisible();
+    await expect(card.locator('[data-org-action="reset-owner"]')).toBeVisible();
+    await expect(card).toContainText(
+      'Только просмотр: администратор не меняет контрагентов, отчёты и настройки организации',
+    );
+
+    // «Основное»: реквизиты, владелец, заявка, блокировки.
+    await expect(card).toContainText('На платформе');
+    await expect(card.locator('[data-org-owner]')).toHaveText(owner);
+    await expect(card).toContainText('создана без заявки');
+    await expect(card.locator('[data-org-blocks]')).toHaveText('Не блокировалась');
+
+    // «Сводка»: плитки с числами; нажатие открывает вкладку.
+    await openTab('Сводка');
+    const summary = card.locator('[data-org-summary]');
+    await expect(summary).toContainText('активных · заблокировано 0');
+    await expect(summary).toContainText('Входы за 30 дней');
+    await summary.getByRole('button', { name: /Сотрудники/ }).click();
+    await expect(card.getByRole('tab', { selected: true })).toContainText('Сотрудники');
+
+    // «Сотрудники»: строка открывает карточку пользователя, организация в ней — карточку организации.
+    const staff = card.locator('[data-org-staff]');
+    await expect(staff).toContainText(owner);
+    await expect(staff).toContainText('Владелец организации');
+    await expect(staff).toContainText('Не сменил временный пароль');
+    await staff.getByText('Карточкин Сквозной').click();
+    const account = page.getByRole('dialog', { name: 'Карточкин Сквозной' });
+    await expect(account.locator('[data-account-states]')).toContainText(
+      'Не сменил временный пароль',
+    );
+    // Карточка организации открывается заново — поверх карточки пользователя.
+    await account.getByRole('button', { name, exact: true }).first().click();
+    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card.getByRole('tab', { selected: true })).toContainText('Основное');
+
+    // Остальные вкладки — только просмотр.
+    await openTab('Контрагенты');
+    await expect(card.locator('[data-org-contractors]')).toContainText(
+      'Только просмотр: изменить контрагентов организации из Админки нельзя.',
+    );
+    await openTab('Отчёты');
+    await expect(card).toContainText('По месяцам и видам отчётов');
+    await expect(card.locator('[data-org-overdue]')).toContainText('Просроченных отчётов нет');
+    await openTab('Деньги');
+    await expect(card.locator('[data-org-fee="year"]')).toContainText('Начислено');
+    await expect(card).toContainText('Налоги контрагентов по месяцам');
+    await openTab('Настройки');
+    const settings = card.locator('[data-org-settings]');
+    await expect(settings).toContainText('Учётная политика');
+    await expect(settings).toContainText('Включённые модули и функции');
+    await expect(settings).toContainText('Подключённые виды отчётов');
+    await expect(settings).toContainText('Роли и права · 3');
+    await expect(settings).toContainText('Telegram-напоминания');
+    await expect(settings.locator('button, input, select, textarea')).toHaveCount(0);
+    await openTab('Файлы');
+    await expect(card.locator('[data-org-files]')).toContainText('Файлов пока нет');
+
+    // Кнопки шапки: блокировка после вопроса, разблокировка сразу; причины — в «Основном».
+    await card.locator('[data-org-action="block"]').click();
+    const ask = page.getByRole('dialog', { name: `Заблокировать ${name}?` });
+    await ask.getByRole('button', { name: 'Заблокировать' }).click();
+    await expect(toast.filter({ hasText: 'Организация заблокирована' })).toBeVisible();
+    await expect(card.locator('[data-org-states]')).toHaveText('Заблокирована администратором');
+    await openTab('Основное');
+    await expect(card.locator('[data-org-blocks]')).toContainText(
+      'Организация заблокирована: Заблокирована администратором',
+    );
+    await card.locator('[data-org-action="unblock"]').click();
+    await expect(toast.filter({ hasText: 'Организация разблокирована' })).toBeVisible();
+    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(card.locator('[data-org-blocks]')).toContainText(
+      'Организация разблокирована (была: Заблокирована администратором)',
+    );
+
+    // «Сбросить пароль владельцу» — то же окно, что у «Сбросить пароль» учётной записи.
+    await card.locator('[data-org-action="reset-owner"]').click();
+    const done = page.getByRole('dialog', { name: 'Пароль сброшен' });
+    await expect(done).toContainText(owner);
+    await done.getByRole('button', { name: 'Готово' }).click();
+    await expect(done).toBeHidden();
+
+    // «История»: создание, блокировки и два открытия карточки (из списка и из карточки пользователя);
+    // перечитывание открытой карточки после действий новой записи не даёт.
+    await openTab('История');
+    await expect(card.getByText('Организация создана вместе с владельцем')).toHaveCount(1);
+    await expect(card.getByText('Открыта карточка организации')).toHaveCount(2);
+    await expect(card.locator('[data-timeline-item]').first()).toContainText(
+      'Организация разблокирована',
+    );
+    await card.getByRole('button', { name: 'Готово' }).click();
+    await expect(card).toBeHidden();
+    await account.getByRole('button', { name: 'Готово' }).click();
+    await expect(account).toBeHidden();
+
+    // Ссылка #orgs/<адрес организации> открывает карточку; нет такого адреса — уведомление.
+    await page.goto(`/app/orgs#orgs/${slug}`);
+    await expect(card.locator('[data-org-states]')).toHaveText('Активна');
+    await expect(page).toHaveURL(/\/app\/orgs(\/list)?$/);
+    await page.goto('/app/orgs#orgs/net-takogo-adresa');
+    await expect(toast.filter({ hasText: 'Организация с таким адресом не найдена' })).toBeVisible();
+    await expect(page.locator('[data-org-card]')).toHaveCount(0);
+  });
 });

@@ -27,6 +27,7 @@ import {
   StatusScales,
   Timeline,
   useToast,
+  useWindow,
   type ActionEntry,
   type KeyValueItem,
 } from '@buhuchet/ui';
@@ -162,13 +163,7 @@ export function LeadCardDialog({
       <div className="flex flex-col gap-3.5" data-lead-card={id}>
         {failed ? <Note tone="bad">{failed}</Note> : null}
         {l ? (
-          <CardBody
-            t={t}
-            l={l}
-            onStep={(to) => onStep(l, to)}
-            onBack={(to) => onBack(l, to)}
-            onOrgLink={onClose}
-          />
+          <CardBody t={t} l={l} onStep={(to) => onStep(l, to)} onBack={(to) => onBack(l, to)} />
         ) : null}
       </div>
       {more && l ? (
@@ -188,15 +183,14 @@ function CardBody({
   l,
   onStep,
   onBack,
-  onOrgLink,
 }: {
   t: Translate;
   l: AdminLeadCard;
   onStep: (to: LeadStatus) => void;
   onBack: (to: LeadStatus) => void;
-  onOrgLink: () => void;
 }) {
   const router = useRouter();
+  const { leave } = useWindow();
   const codes = useQuery(phoneCodesQuery);
   const events = statusEvents(l.statusHistory);
   const bk = leadBack(leadState(l));
@@ -246,9 +240,10 @@ function CardBody({
           data-lead-org=""
           className={linkButtonClass()}
           onClick={() => {
-            onOrgLink();
+            // Переход из открытого окна — с заменой записи истории: «Назад» не вернёт к окну заявки.
+            leave();
             if (l.org) requestOrgCard(l.org.id);
-            router.push(tabHref('orgs', 'list'));
+            router.replace(tabHref('orgs', 'list'));
           }}
         >
           {l.org.name}
