@@ -1,6 +1,7 @@
 import {
   addMonths,
   bishkekDate,
+  indicatorValueText,
   isSessionEndReason,
   OPEN_REPORT_STATUSES,
   type PermissionId,
@@ -135,6 +136,8 @@ export interface AdminCardReport {
   /** Вид периода и его начало: подпись периода собирает экран. */
   period: string;
   periodStart: string;
+  /** Дата события разового отчёта. */
+  eventDate: string | null;
   dueDate: string;
   status: string;
 }
@@ -151,7 +154,8 @@ export interface AdminCardKpiValue {
   id: string;
   contractor: string;
   indicator: string;
-  value: number | null;
+  /** Значение как на экране «Показателей»: «1 250 000 сом», «37 чел.». */
+  value: string;
   at: Date;
 }
 
@@ -286,6 +290,7 @@ const reportRow = {
   type: sql<string>`coalesce(${reportTypes.shortName}, ${reportTypes.name}, ${reports.reportTypeCode})`,
   period: reports.period,
   periodStart: reports.periodStart,
+  eventDate: reports.eventDate,
   dueDate: reports.dueDate,
   status: reports.status,
 };
@@ -395,6 +400,8 @@ export async function adminEmployeeCard(
       id: indicatorValues.id,
       contractor: contractors.name,
       indicator: indicators.name,
+      type: indicators.type,
+      unit: indicators.unit,
       value: indicatorValues.value,
       at: indicatorValues.updatedAt,
     })
@@ -503,7 +510,15 @@ export async function adminEmployeeCard(
       overdue: cardList(overdue),
       done: cardList(done),
       tasks: cardList(openTasks),
-      kpi: cardList(kpi),
+      kpi: cardList(
+        kpi.map((v) => ({
+          id: v.id,
+          contractor: v.contractor,
+          indicator: v.indicator,
+          value: indicatorValueText(v, v.value),
+          at: v.at,
+        })),
+      ),
       kpiMonth,
     },
     kb: {

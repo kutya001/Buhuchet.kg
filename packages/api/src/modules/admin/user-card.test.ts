@@ -225,6 +225,10 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
       actorAdmin: true,
       reason: 'Открыта карточка пользователя',
     });
+    // «Учётная запись создана» есть в истории всегда, одна.
+    expect(
+      first.history.filter((h) => h.entity === 'user' && h.action === 'create'),
+    ).toHaveLength(1);
     expect(views(await card('chief-a'))).toBe(2);
     // Перечитывание открытой карточки — не новое открытие; у администратора, который карточку
     // ещё не открывал, запись появляется и при перечитывании.

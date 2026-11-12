@@ -1,5 +1,6 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
+  ADMIN_CARD_ROWS,
   adminAccountCard,
   adminEmployeeCard,
   adminEndUserSessions,
@@ -77,6 +78,31 @@ function roleGroups(
   });
 }
 
+type CardHistory = AdminUserCard['history'];
+
+/**
+ * «Учётная запись создана» есть в истории всегда (прототип acHist: запись из «Создано»): у записей
+ * без неё — созданных наполнением или служебной командой — строка собирается из «Кто и когда создал».
+ * Если история обрезана пределом карточки, старейшая запись в ответ не попала — строку не добавляем.
+ */
+function withCreation(history: CardHistory, audit: AdminUserCard['user']['audit']): CardHistory {
+  if (history.length >= ADMIN_CARD_ROWS) return history;
+  if (history.some((h) => h.entity === 'user' && h.action === 'create')) return history;
+  return [
+    ...history,
+    {
+      id: 'user-created',
+      at: audit.createdAt,
+      actor: audit.createdBy,
+      actorAdmin: false,
+      entity: 'user',
+      action: 'create',
+      fields: [],
+      reason: null,
+    },
+  ];
+}
+
 export const userCardRoute = createRoute({
   method: 'get',
   path: '/admin/users/{id}/card',
@@ -128,8 +154,9 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
     );
     const names = new Map((await permissionCatalog(deps.db)).map((p) => [p.id as string, p.name]));
     const e = card.employee;
+    const body0 = adminUserBody(card.user);
     const body: AdminUserCard = {
-      user: adminUserBody(card.user),
+      user: body0,
       states: accountStates({
         isPlatformAdmin: card.user.isPlatformAdmin,
         blocked: card.user.blocked,
@@ -200,7 +227,10 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
           }
         : null,
       telegram: card.telegram ? listOf(card.telegram, (m) => ({ ...m, at: iso(m.at) })) : null,
-      history: card.history.map((h) => ({ ...h, at: iso(h.at) })),
+      history: withCreation(
+        card.history.map((h) => ({ ...h, at: iso(h.at) })),
+        body0.audit,
+      ),
     };
     return c.json(body, 200);
   };

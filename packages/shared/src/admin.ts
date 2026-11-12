@@ -127,6 +127,8 @@ const AdminCardReport = z.object({
   /** Вид периода (M, Q, Y…) и его начало: подпись периода собирает экран. */
   period: z.string(),
   periodStart: IsoDate,
+  /** Дата события разового отчёта. */
+  eventDate: IsoDate.nullable(),
   dueDate: IsoDate,
   status: z.string(),
 });
@@ -200,7 +202,8 @@ export const AdminUserCard = z.object({
           id: Uuid,
           contractor: z.string(),
           indicator: z.string(),
-          value: z.number().nullable(),
+          /** Значение с единицей, как на экране «Показателей». */
+          value: z.string(),
           at: z.iso.datetime(),
         }),
       ),
