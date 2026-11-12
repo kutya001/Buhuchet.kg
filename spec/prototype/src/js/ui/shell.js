@@ -13,16 +13,16 @@ function renderSide(){
   const cn=isAdmin()?{}:counts();
   l.filter(m=>!m.hidden).forEach(m=>{const tabs=modTabs(m);const open=S.open.has(m.id);const on=S.mod===m.id;
     const badge=m.id==='reports'&&cn.overdue?`<span class="badge red" title="Просрочено">${cn.overdue}</span>`:m.id==='kpi'?kMissBadge():m.id==='kb'&&newsUnread()?`<span class="badge red" title="Непрочитанные новости">${newsUnread()}</span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':'';
-    h+=`<div class="ti ${on?'on':''}"><a href="#${m.id}" data-go="${m.id}" ${on?'aria-current="page"':''}>${ic(m.icon)}<span>${esc(m.title)}</span>${badge}</a>${tabs.length?`<button class="tog ${open?'open':''}" data-tog="${m.id}" aria-label="${open?'Свернуть':'Раскрыть'} вкладки" aria-expanded="${open}">${ic('right','sm')}</button>`:''}</div>`;
+    h+=`<div class="ti ${on?'on':''}"><a href="#${m.id}" data-go="${m.id}" title="${esc(m.title)}" ${on?'aria-current="page"':''}>${ic(m.icon)}<span>${esc(m.title)}</span>${badge}</a>${tabs.length?`<button class="tog ${open?'open':''}" data-tog="${m.id}" aria-label="${open?'Свернуть':'Раскрыть'} вкладки" aria-expanded="${open}">${ic('right','sm')}</button>`:''}</div>`;
     if(tabs.length&&open)h+=`<div class="subtree">${tabs.map(t=>`<a class="sti ${on&&S.tab===t.id?'on':''}" href="#${m.id}.${t.id}">${ic(t.icon||'right')}<span>${esc(t.label)}</span>${t.count!=null&&t.count!==''?`<span class="badge ${t.count?(t.red?'red':t.yellow?'yellow':''):''}" style="margin-left:auto">${t.count}</span>`:''}</a>`).join('')}</div>`;
   });
   h+=`</nav><div class="side-foot">`;
   if(!isAdmin())h+=`<button class="orgbtn" id="org-open" title="Профиль организации"><span class="av">${ic('landmark','sm')}</span><span style="min-width:0"><div class="o-n">${esc(ORG.name)}</div><div class="o-s">ИНН ${ORG.inn}</div></span></button>`;
-  h+=`<div class="foot-row"><button class="btn ghost sm" id="me-open">${ic('user','sm')}Мой профиль</button>${DEMO.on?'':`<button class="btn ghost sm" id="logout">${ic('logout','sm')}Выйти из аккаунта</button>`}</div>`;
+  h+=`<div class="foot-row"><button class="btn ghost sm" id="me-open" title="Мой профиль">${ic('user','sm')}Мой профиль</button>${DEMO.on?'':`<button class="btn ghost sm" id="logout" title="Выйти из аккаунта">${ic('logout','sm')}Выйти из аккаунта</button>`}</div>`;
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v83 · 09.11.2026';
+const PROTO_VER='v87 · 12.11.2026';
 // В демо-режиме — только «Войти как» (без администратора платформы) и «Очистить рабочие данные»
 function demoBox(){if(DEMO.on)return `<div class="demo"><div class="row" style="gap:6px"><b>${LE('land.demo.box')}</b></div><label for="demo-user">Войти как:</label>${sel('demo-user',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),S.me)}<div class="demo-db"><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button></div><span>${LE('land.demo.box.sub')}</span></div>`;
   return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
@@ -70,7 +70,10 @@ function fitTabs(){const t=$('#tabs');if(!t)return;const ab=$('#add-btn');const 
 // Положение вкладки внутри строки вкладок (не зависит от прокрутки) и прокрутка, при которой вкладка по центру — её же берёт листание вкладок свайпом
 const tabRelL=(t,b)=>b.getBoundingClientRect().left-t.getBoundingClientRect().left-t.clientLeft+t.scrollLeft;
 function tabsTarget(t,on){on=on||$('.tab.on',t);if(!on||t.scrollWidth<=t.clientWidth+2)return 0;return Math.max(0,Math.min(t.scrollWidth-t.clientWidth,tabRelL(t,on)-(t.clientWidth-on.offsetWidth)/2))}
-function renderShell(fresh){$('#app').classList.toggle('nav-hidden',S.navHidden&&!isMobile());renderSide();renderBnav();renderPage(fresh);vidTopSync()}
+// «На всю ширину»: страница модуля без ограничения ширины (на телефоне не действует); выбор запоминается
+function paintWide(){const b=$('#wide'),on=!!S.wide;$('#app').classList.toggle('wide',on);if(!b)return;b.innerHTML=ic(on?'minimize':'maximize');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));b.title=on?'Обычная ширина: содержимое по центру':'На всю ширину экрана';b.setAttribute('aria-label',b.title)}
+function paintBurger(){const b=$('#burger');if(!b)return;const t=isMobile()?'Меню':S.navHidden?'Развернуть панель модулей':'Свернуть панель до значков';b.title=t;b.setAttribute('aria-label',t);b.setAttribute('aria-expanded',String(!S.navHidden))}
+function renderShell(fresh){$('#app').classList.toggle('nav-hidden',S.navHidden&&!isMobile());paintBurger();renderSide();renderBnav();renderPage(fresh);vidTopSync()}
 function refreshAll(){gkIndex();derive();const openForms=MODALS.filter(m=>m.o.live);renderShell();openForms.forEach(m=>m.draw())}
 
 /* ═════════════ Top bar ═════════════ */
@@ -79,7 +82,8 @@ function effTheme(){const a=document.documentElement.getAttribute('data-theme');
 function paintTheme(){$('#theme').innerHTML=ic(effTheme()==='dark'?'sun':'moon')}
 function initTop(){
   $('#burger').innerHTML=ic('menu');$('#help').innerHTML=ic('help');$('#help').onclick=()=>kbHelp();$('#search-ic').outerHTML=ic('search');$('#q-open').innerHTML=ic('search');paintTheme();
-  $('#burger').onclick=()=>{if(isMobile()){openSheet();return}S.navHidden=!S.navHidden;store.set('nav',S.navHidden);$('#app').classList.toggle('nav-hidden',S.navHidden);fitTabs()};
+  $('#burger').onclick=()=>{if(isMobile()){openSheet();return}S.navHidden=!S.navHidden;store.set('nav',S.navHidden);$('#app').classList.toggle('nav-hidden',S.navHidden);paintBurger();fitTabs();setTimeout(fitTabs,260)};
+  S.wide=store.get('wide',false);paintWide();$('#wide').onclick=()=>{S.wide=!S.wide;store.set('wide',S.wide);paintWide();fitTabs()};
   $('#theme').onclick=()=>{ckHit('theme');const t=effTheme()==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);store.set('theme',t);try{localStorage.setItem(BU_P+'theme',t)}catch(e){}paintTheme()};
   let deb;$('#q').addEventListener('input',e=>{clearTimeout(deb);deb=setTimeout(()=>{S.search=e.target.value;if(S.search)ckHit('search');ACTIVE.forEach(g=>{g.s.page=0;g.refresh()});if(S.mod==='reports'&&S.tab==='matrix')renderPage()},120)});
   $('#q-open').onclick=()=>{$('#topbar').classList.add('searching');$('#q').focus()};

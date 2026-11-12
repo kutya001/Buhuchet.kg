@@ -396,6 +396,7 @@
     "filesUpload",
     "filesDelete",
     "staffView",
+    "staffStats",
     "staff",
     "dicts",
     "kbLevels",
@@ -451,6 +452,7 @@
     "filesUpload",
     "filesDelete",
     "staffView",
+    "staffStats",
     "dicts",
     "kbLevels",
     "viewAll",
@@ -1159,5 +1161,6 @@
  "leads": [],
  "videoViews": [],
  "videoGuest": {},
- "sessions": []
+ "sessions": [],
+ "bonusOps": []
 }

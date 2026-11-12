@@ -65,7 +65,7 @@ const readShort=(el,shId,fio)=>val(el,shId).trim().replace(/\s+/g,' ')||autoShor
 const initials=fio=>fio.split(' ').slice(0,2).map(w=>w[0]).join('');
 
 /* ═════════════ Counterparties & reports ═════════════ */
-const CPS=DB.contractors,REPORTS=DB.reports,OPS=DB.moneyOps,HIST=DB.history,TASKS=DB.tasks,FEEPAYS=DB.feePayments,SERVICES=DB.services,PROJECTS=DB.projects,FILES=DB.files;
+const CPS=DB.contractors,REPORTS=DB.reports,OPS=DB.moneyOps,HIST=DB.history,TASKS=DB.tasks,FEEPAYS=DB.feePayments,SERVICES=DB.services,PROJECTS=DB.projects,FILES=DB.files,BONUSOPS=DB.bonusOps;
 const nextNum=(a,p='')=>a.reduce((m,x)=>Math.max(m,+String(x.id).slice(p.length)||0),0)+1;
 let CPID=nextNum(CPS),RID=nextNum(REPORTS),OPID=nextNum(OPS),TID=nextNum(TASKS,'t');
 const CPM={};CPS.forEach(c=>CPM[c.id]=c);

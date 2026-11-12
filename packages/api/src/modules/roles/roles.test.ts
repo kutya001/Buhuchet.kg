@@ -64,7 +64,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
   });
 
   describe('список, карточка, справочник прав', () => {
-    it('список ролей: число активных сотрудников и прав, у владельца — все 39', async () => {
+    it('список ролей: число активных сотрудников и прав, у владельца — все 40', async () => {
       const res = await call('GET', '/api/roles', owner);
       expect(res.status).toBe(200);
       const { items } = RoleList.parse(await res.json());
@@ -75,7 +75,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(byName['Владелец организации']).toMatchObject({
         isOwner: true,
         employees: 1,
-        permissionCount: 39,
+        permissionCount: 40,
       });
       expect(byName['Кадры']).toMatchObject({ isOwner: false, employees: 1, permissionCount: 16 });
       expect(byName['Бухгалтер']!.employees).toBe(1);
@@ -128,7 +128,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(res.status).toBe(200);
       const values = ListValues.parse(await res.json());
       expect(values.items.reduce((n, v) => n + v.count, 0)).toBe(5);
-      expect(values.items.map((v) => v.value)).toContain('39');
+      expect(values.items.map((v) => v.value)).toContain('40');
       expect((await call('GET', '/api/roles/values?col=passwordHash', owner)).status).toBe(400);
 
       const params = new URLSearchParams({ cols: 'name,employees,permissionCount' });
@@ -196,7 +196,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(Object.values(accRole.scopes)).toEqual(SCOPE_GROUPS.map(() => 'own'));
     });
 
-    it('справочник прав: 39 прав в порядке формы, группы — как в каталоге системы', async () => {
+    it('справочник прав: 40 прав в порядке формы, группы — как в каталоге системы', async () => {
       const res = await call('GET', '/api/permissions', hr);
       expect(res.status).toBe(200);
       const { items } = PermissionCatalog.parse(await res.json());
@@ -260,7 +260,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(fromChief.permissions).not.toContain('viewAll');
       expect(fromChief.permissions.every((p) => hrRole.permissions.includes(p))).toBe(true);
       const byOwner = await newRole('Всё кроме настроек', f.a.roles.find((r) => r.isOwner)!.id);
-      expect(byOwner.permissions).toHaveLength(38);
+      expect(byOwner.permissions).toHaveLength(39);
     });
 
     it('название уникально в организации; образец из чужой организации — 400', async () => {

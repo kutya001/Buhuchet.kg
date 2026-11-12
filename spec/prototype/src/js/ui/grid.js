@@ -10,7 +10,7 @@ const GS={};let ACTIVE=[];let FAIL_NEXT=false;const CLOSED=new Set();
 const norm=s=>String(s??'').toLowerCase().replace(/ё/g,'е').replace(/ /g,' ');
 const strip=s=>norm(s).replace(/[\s\-()+.,№«»"]/g,'');
 const COLL=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
-function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||cfg.defView||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||(cfg.defGroup||[]).slice(),agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||25,sel:new Set()}}return s}
+function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||cfg.defView||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},kb:sv.kb||null,sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||(cfg.defGroup||[]).slice(),agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||25,sel:new Set()}}return s}
 /* Сортировка по умолчанию во всех списках — от новых к старым по «Создано» */
 /* Видимые по умолчанию столбцы по спискам (ТЗ, «Столбцы, видимые по умолчанию»); остальные — в меню «Столбцы» */
 const SHOW={'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
@@ -22,7 +22,7 @@ function defHidden(cfg){const k=Object.keys(SHOW).find(k=>cfg.id===k)||Object.ke
   if(!sh)return cfg.cols.filter(c=>c.hide).map(c=>c.key);const keys=cfg.cols.map(c=>c.key);if(!sh.some(x=>keys.includes(x)))return cfg.cols.filter(c=>c.hide).map(c=>c.key);
   const v=sh.filter(x=>keys.includes(x));return keys.filter(x=>!v.includes(x))}
 function defSort(cfg){return cfg.ordered?cfg.sort:cfg.cols.some(c=>c.key==='_ca')?{key:'_ca',dir:-1}:cfg.sort||null}
-function gsave(id){const s=GS[id];store.set('g5.'+id,{view:s.view,density:s.density,width:s.width,hidden:[...s.hidden],order:s.order,widths:s.widths,size:s.size,sort:s.sort,group:s.group,agg:s.agg})}
+function gsave(id){const s=GS[id];store.set('g5.'+id,{view:s.view,density:s.density,width:s.width,hidden:[...s.hidden],order:s.order,widths:s.widths,size:s.size,sort:s.sort,group:s.group,agg:s.agg,kb:s.kb})}
 const fmtDT=v=>v?fmtD(String(v).slice(0,10))+(String(v).length>10?' '+String(v).slice(11,16):''):'';
 function colTxt(c,r){if(c.text)return c.text(r);const v=c.val(r);if(v==null||v==='')return '';if(c.type==='date')return fmtD(v);if(c.type==='datetime')return fmtDT(v);if(c.type==='money')return fmtM(v);return String(v)}
 function ftype(c){return c.type==='enum'?'enum':c.type==='date'||c.type==='datetime'?'date':['money','num','int'].includes(c.type)?'num':'text'}
@@ -79,9 +79,11 @@ function grid(host,cfg){
   function refresh(){
     const {all,rows,vc,ac}=compute();g.rows=rows;
     const total=rows.length;const size=s.size==='all'?Math.min(Math.max(total,1),GRID_ALL_MAX):s.size;const pages=Math.max(1,Math.ceil(total/size));if(s.page>=pages)s.page=pages-1;
-    const gt=gcols().length?groupTree(rows,0,''):null;g.tree=gt;
-    const pr=gt?rows:rows.slice(s.page*size,s.page*size+size);
-    const view=cfg.fixedView||s.view||(isMobile()?'cards':'table');
+    // вид «Доска» (канбан) есть только у списков с cfg.kanban; в нём нет страниц и группировки — записи разложены по столбцам доски
+    let view=cfg.fixedView||s.view||(isMobile()?'cards':'table');if(view==='kanban'&&!cfg.kanban)view=isMobile()?'cards':'table';
+    const kb=view==='kanban';g.view=view;
+    const gt=!kb&&gcols().length?groupTree(rows,0,''):null;g.tree=gt;
+    const pr=gt||kb?rows:rows.slice(s.page*size,s.page*size+size);
     const selRows=[...s.sel].filter(id=>byId[id]);s.sel=new Set(selRows);
     const fk=Object.keys(s.filters).filter(k=>ac.find(c=>c.key===k));
     let h=`<div class="gtools">`;
@@ -89,10 +91,14 @@ function grid(host,cfg){
     else h+=`<div class="gcount">${cfg.caption?cfg.caption(rows):`<span>${total} ${plural(total,...(cfg.noun||['запись','записи','записей']))}</span>`}</div>`;
     h+=`<div class="grow"></div>`;
     /* На телефоне (до 768 px) кнопки панели — только значками с подсказкой, вид списка — одна кнопка-переключатель (ТЗ, «Панель над списком») */
-    const mob=isMobile(),ng=gcols().length;
-    if(!cfg.fixedView){if(mob){const to=view==='table'?'cards':'table',tl=to==='table'?'Таблица':'Карточки';h+=`<button class="icon-btn sm raised" data-view="${to}" title="${tl}" aria-label="Вид списка: ${tl}">${ic(to,'sm')}</button>`}
-      else h+=`<div class="seg" role="group" aria-label="Вид списка"><button data-view="table" class="${view==='table'?'on':''}" title="Таблица">${ic('table','sm')}<span>Таблица</span></button><button data-view="cards" class="${view==='cards'?'on':''}" title="Карточки">${ic('cards','sm')}<span>Карточки</span></button></div>`}
-    if(mob)h+=`<button class="icon-btn sm raised gt-ic ${ng?'on':''}" data-a="grp" title="Группировка${ng?` (${ng})`:''}" aria-label="Группировка${ng?` (${ng})`:''}">${ic('layers','sm')}${ng?`<span class="gt-n">${ng}</span>`:''}</button><button class="icon-btn sm raised" data-a="cols" title="Столбцы (${vc.length}/${ac.length})" aria-label="Столбцы (${vc.length}/${ac.length})">${ic('columns','sm')}</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
+    const mob=isMobile(),ng=kb?0:gcols().length;
+    const VL={table:'Таблица',cards:'Карточки',kanban:'Доска'},VI={table:'table',cards:'cards',kanban:'board'},views=cfg.kanban?['table','cards','kanban']:['table','cards'];
+    if(!cfg.fixedView){if(mob){const to=views[(views.indexOf(view)+1)%views.length],tl=VL[to];h+=`<button class="icon-btn sm raised" data-view="${to}" title="${tl}" aria-label="Вид списка: ${tl}">${ic(VI[to],'sm')}</button>`}
+      else h+=`<div class="seg" role="group" aria-label="Вид списка">${views.map(v=>`<button data-view="${v}" class="${view===v?'on':''}" title="${VL[v]}${v==='kanban'?': записи карточками по столбцам':''}">${ic(VI[v],'sm')}<span>${VL[v]}</span></button>`).join('')}</div>`}
+    // на доске вместо «Группировки» — выбор, по какому столбцу списка разложить записи
+    if(kb){const bc=kbCol(ac),t=`Столбцы доски: ${bc.label}`;h+=mob?`<button class="icon-btn sm raised" data-a="kbby" title="${esc(t)}" aria-label="${esc(t)}">${ic('layers','sm')}</button>`:`<button class="btn sm on" data-a="kbby" title="Выбрать, по какому полю разложить записи на доске">${ic('layers','sm')}Столбцы: ${esc(bc.label)}</button>`;
+      h+=mob?`<button class="icon-btn sm raised" data-a="cols" title="Поля карточки (${vc.length}/${ac.length})" aria-label="Поля карточки">${ic('columns','sm')}</button>`:`<button class="btn sm" data-a="cols" title="Какие поля показывать на карточке: первые пять видимых">${ic('columns','sm')}Поля (${vc.length}/${ac.length})</button>`}
+    else if(mob)h+=`<button class="icon-btn sm raised gt-ic ${ng?'on':''}" data-a="grp" title="Группировка${ng?` (${ng})`:''}" aria-label="Группировка${ng?` (${ng})`:''}">${ic('layers','sm')}${ng?`<span class="gt-n">${ng}</span>`:''}</button><button class="icon-btn sm raised" data-a="cols" title="Столбцы (${vc.length}/${ac.length})" aria-label="Столбцы (${vc.length}/${ac.length})">${ic('columns','sm')}</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
     else h+=`<button class="btn sm ${ng?'on':''}" data-a="grp" title="Группировать список по столбцам (до двух уровней)">${ic('layers','sm')}Группировка${ng?` (${ng})`:''}</button><button class="btn sm" data-a="cols">${ic('columns','sm')}Столбцы (${vc.length}/${ac.length})</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
     // группы есть — одна кнопка сворачивает все группы или, если все свёрнуты, разворачивает их (ТЗ, «Панель над списком»)
     // на телефоне — значком рядом с меткой «Группировка», чтобы панель не переносилась на вторую строку
@@ -100,15 +106,16 @@ function grid(host,cfg){
       fold=mob?`<button class="icon-btn sm raised" data-a="${a}" title="${t}" aria-label="${t}">${ic(shut?'unfold':'fold','sm')}</button>`:`<button class="btn sm" data-a="${a}" title="${t}">${ic(shut?'unfold':'fold','sm')}${l}</button>`;if(!mob)h+=fold}
     if(cfg.exportable!==false&&(isAdmin()||can('export')))h+=mob?`<button class="icon-btn sm raised" data-a="xls" title="В Excel: скачать файл .xlsx со всеми отфильтрованными записями" aria-label="В Excel">${ic('download','sm')}</button>`:`<button class="btn sm" data-a="xls" title="Скачать файл .xlsx со всеми отфильтрованными записями">${ic('download','sm')}В Excel</button>`;
     h+=`</div>`;
-    const gc=gcols();if(fk.length||gc.length||(S.search&&cfg.search!==false))h+=`<div class="chips">${gc.length?`<span class="chip"><span><b>Группировка:</b> ${gc.map(c=>esc(c.label)).join(' → ')}</span><button data-a="ungrp" aria-label="Убрать группировку">${ic('x','sm')}</button></span>${mob?fold:''}`:''}${S.search&&cfg.search!==false?`<span class="chip"><span><b>Поиск:</b> «${esc(S.search)}»</span><button data-a="clrq" aria-label="Очистить поиск">${ic('x','sm')}</button></span>`:''}${fk.map(k=>{const c=ac.find(x=>x.key===k);return `<span class="chip"><span><b>${esc(c.label)}:</b> ${esc(chipText(c,s.filters[k]))}</span><button data-clr="${k}" aria-label="Убрать фильтр">${ic('x','sm')}</button></span>`}).join('')}<button class="linkbtn" data-a="clrall" style="font-size:12.5px">Сбросить всё</button></div>`;
+    const gc=kb?[]:gcols();if(fk.length||gc.length||(S.search&&cfg.search!==false))h+=`<div class="chips">${gc.length?`<span class="chip"><span><b>Группировка:</b> ${gc.map(c=>esc(c.label)).join(' → ')}</span><button data-a="ungrp" aria-label="Убрать группировку">${ic('x','sm')}</button></span>${mob?fold:''}`:''}${S.search&&cfg.search!==false?`<span class="chip"><span><b>Поиск:</b> «${esc(S.search)}»</span><button data-a="clrq" aria-label="Очистить поиск">${ic('x','sm')}</button></span>`:''}${fk.map(k=>{const c=ac.find(x=>x.key===k);return `<span class="chip"><span><b>${esc(c.label)}:</b> ${esc(chipText(c,s.filters[k]))}</span><button data-clr="${k}" aria-label="Убрать фильтр">${ic('x','sm')}</button></span>`}).join('')}<button class="linkbtn" data-a="clrall" style="font-size:12.5px">Сбросить всё</button></div>`;
     if(cfg.error)h+=`<div class="state">${ic('alert','lg')}<b>Не удалось загрузить список</b><span>Проверьте подключение к интернету и попробуйте ещё раз.</span><button class="btn cta" data-a="retry">${ic('refresh','sm')}Повторить</button></div>`;
     else if(cfg.loading)h+=skel();
     else if(!total)h+=emptyHtml(all.length||fk.length||(S.search&&cfg.search!==false));
-    else h+=view==='table'?tableHtml(pr,vc,rows,gt):cardsHtml(pr,vc,rows,gt);
-    if(total&&gt)h+=`<div class="gfoot"><span>Групп: ${gt.length} · записей: ${total}</span></div>`;
+    else h+=kb?kanbanHtml(vc,rows,ac):view==='table'?tableHtml(pr,vc,rows,gt):cardsHtml(pr,vc,rows,gt);
+    if(total&&kb)h+=`<div class="gfoot"><span>Столбцов: ${g.kbCols.length} · записей: ${total}</span><div class="grow"></div><span class="faint kan-tip">${cfg.kanban.drop?(mob?'Перенос — в меню карточки «⋯»':'Карточку можно перетащить в другой столбец'):''}</span></div>`;
+    else if(total&&gt)h+=`<div class="gfoot"><span>Групп: ${gt.length} · записей: ${total}</span></div>`;
     else if(total)h+=`<div class="gfoot"><span>Показано ${fmtM(s.page*size+1,false)}–${fmtM(Math.min(total,(s.page+1)*size),false)} из ${fmtM(total,false)}</span><div class="grow"></div><label>На странице ${sel('pg-'+cfg.id,[[25,'25'],[50,'50'],[100,'100'],['all','Все записи']],s.size,'data-a="size" style="display:inline-block;width:auto"')}</label><button class="icon-btn sm" data-a="prev" ${s.page?'':'disabled'} aria-label="Назад">${ic('left')}</button><span class="tnum">${s.page+1} / ${pages}</span><button class="icon-btn sm" data-a="next" ${s.page<pages-1?'':'disabled'} aria-label="Вперёд">${ic('right')}</button></div>`;
     const sc=host.querySelector('.gscroll');const keep=sc?[sc.scrollTop,sc.scrollLeft]:null;
-    host.className='grid';host.dataset.density=s.density;host.dataset.width=s.width;host.innerHTML=h;
+    host.className='grid';host.dataset.gv=view;host.dataset.density=s.density;host.dataset.width=s.width;host.innerHTML=h;
     const sc2=host.querySelector('.gscroll');if(sc2&&keep){sc2.scrollTop=keep[0];sc2.scrollLeft=keep[1]}
     bind(vc,ac,pr,rows);
     if(cfg.after)cfg.after(host,view);
@@ -148,6 +155,27 @@ function grid(host,cfg){
     if(tcs.length)h+=`<div class="gtotal"><span>Итого по фильтру · ${rows.length}</span>${tcs.map(c=>`<span>${esc(c.label)}: <b>${fmtM(rows.reduce((a,r)=>a+(+c.val(r)||0),0))}</b></span>`).join('')}</div>`;
     return h;
   }
+  /* Доска (канбан). cfg.kanban={def, by:[ключи столбцов списка], order:{ключ:[значения по порядку]}, show:{ключ:[значения, которые видны и пустыми]}, drop(запись, ключ, значение, подпись)}.
+     Столбцы доски — значения выбранного поля; в столбце первые 30 карточек и «Показать ещё»; больше 60 столбцов не рисуется */
+  const KB_COLS=60,KB_STEP=30;
+  function kbKeys(ac){const k=cfg.kanban;return (k.by||ac.filter(c=>c.type==='enum'&&!c.audit).map(c=>c.key)).map(x=>ac.find(c=>c.key===x)).filter(Boolean)}
+  function kbCol(ac){const l=kbKeys(ac);return l.find(c=>c.key===s.kb)||l.find(c=>c.key===cfg.kanban.def)||l[0]}
+  function kanbanHtml(vc,rows,ac){
+    const k=cfg.kanban,bc=kbCol(ac),m=new Map();
+    rows.forEach(r=>{const v=gKey(bc,r);if(!m.has(v))m.set(v,{k:v,label:gLabel(bc,r),rows:[]});m.get(v).rows.push(r)});
+    let fx=(k.show||{})[bc.key];if(typeof fx==='function')fx=fx();const flt=s.filters[bc.key];
+    if(!(S.search&&cfg.search!==false))(fx||[]).forEach(v=>{if(!m.has(v)&&!(flt&&flt.vals&&!flt.vals.includes(v)))m.set(v,{k:v,label:v===''?'(Пусто)':v,rows:[]})});
+    const ord=(k.order||{})[bc.key]||[],oi=v=>{const i=ord.indexOf(v);return i<0?ord.length:i};
+    let arr=[...m.values()].sort((a,b)=>(oi(a.k)-oi(b.k))||(a.k===''?1:b.k===''?-1:COLL.compare(a.label,b.label)));
+    const cut=arr.length>KB_COLS?arr.length:0;if(cut)arr=arr.slice(0,KB_COLS);
+    g.kbCols=arr.map(x=>({k:x.k,label:x.label}));g.kbC=bc;
+    const tc=ac.find(c=>c.key===cfg.title)||vc[0];const rest=vc.filter(c=>c!==tc&&c!==bc&&!c.audit).slice(0,5);const sumc=vc.find(c=>c.total);
+    const card=r=>{const id=rid(r);return `<div class="gcard kan-card ${cfg.rowClass?cfg.rowClass(r):''}" data-id="${esc(id)}" tabindex="0"${k.drop&&!isMobile()?' draggable="true"':''}><div class="gc-h"><div class="gc-t">${tc.html?tc.html(r):esc(colTxt(tc,r))}</div>${cfg.actions||k.drop?`<button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div><dl>${rest.map(c=>{const t=colTxt(c,r);return t===''?'':`<dt>${esc(c.cl||c.label)}</dt><dd>${c.html?c.html(r):esc(t)}</dd>`}).join('')}</dl></div>`};
+    const col=x=>{const lim=(g.kbMore&&g.kbMore[x.k])||KB_STEP,n=x.rows.length;
+      return `<section class="kan-col" data-kv="${esc(x.k)}" aria-label="${esc(x.label)}: ${n}"><header class="kan-h"><b title="${esc(x.label)}">${esc(x.label)}</b><span class="g-c">${n}</span>${sumc&&n?`<span class="kan-sum" title="${esc(sumc.label)}">${fmtM(x.rows.reduce((a,r)=>a+(+sumc.val(r)||0),0),false)}</span>`:''}</header><div class="kan-list">${n?x.rows.slice(0,lim).map(card).join(''):'<div class="kan-empty">Нет записей</div>'}${n>lim?`<button class="linkbtn kan-more" data-kbmore="${esc(x.k)}">Показать ещё ${Math.min(KB_STEP,n-lim)} из ${n-lim}</button>`:''}</div></section>`};
+    return `<div class="kan">${arr.map(col).join('')}</div>${cut?`<div class="hint kan-cut">Показаны первые ${KB_COLS} столбцов из ${cut} — сузьте список фильтром или поиском</div>`:''}`;
+  }
+  function kbMove(r,x){if(!r||!g.kbC||gKey(g.kbC,r)===x.k)return;cfg.kanban.drop(r,g.kbC.key,x.k,x.label)}
   function filterPop(btn,c){
     const f=s.filters[c.key];const t=ftype(c);let body='',keys=[],on=null,fmatch=null,fvals=null;
     if(t==='text')body=`<input class="inp" id="gf-q" placeholder="Содержит…" value="${esc(f?f.q:'')}">`;
@@ -206,7 +234,11 @@ function grid(host,cfg){
       L.addEventListener('dragend',()=>{dk=null;$$('.cl-row',L).forEach(x=>x.classList.remove('dragover','drag'))});
     }});
   }
-  function rowMenu(anchor,r,pt){if(!cfg.actions)return;menu(anchor,cfg.actions(r),pt)}
+  function rowMenu(anchor,r,pt){const it=cfg.actions?cfg.actions(r).filter(Boolean):[];
+    // на доске в меню карточки — «Перенести в столбец…»: то же, что перетаскивание, для телефона и клавиатуры
+    if(g.view==='kanban'&&cfg.kanban.drop&&g.kbCols&&g.kbCols.length>1){const cur=gKey(g.kbC,r);if(it.length)it.push({sep:true});
+      it.push({label:'Перенести в столбец…',icon:'board',sub:g.kbC.label,run:()=>setTimeout(()=>menu(anchor.isConnected?anchor:host,g.kbCols.filter(x=>x.k!==cur).map(x=>({label:x.label,run:()=>kbMove(r,x)})),pt))})}
+    if(!it.length)return;menu(anchor,it,pt)}
   function bind(vc,ac,pr,rows){
     host.onclick=e=>{
       const t=e.target;let b;
@@ -215,10 +247,12 @@ function grid(host,cfg){
       if(b=t.closest('[data-filt]')){filterPop(b,ac.find(c=>c.key===b.dataset.filt));return}
       if(b=t.closest('[data-menu]')){rowMenu(b,byId[b.dataset.menu]);ckHit('rowmenu.'+cfg.id);return}
       if(b=t.closest('[data-view]')){s.view=b.dataset.view;gsave(cfg.id);refresh();return}
+      if(b=t.closest('[data-kbmore]')){g.kbMore=g.kbMore||{};const k=b.dataset.kbmore;g.kbMore[k]=(g.kbMore[k]||KB_STEP)+KB_STEP;refresh();return}
       if(b=t.closest('[data-clr]')){delete s.filters[b.dataset.clr];s.page=0;refresh();return}
       if(b=t.closest('[data-bulk]')){ckHit('bulk');const list=[...s.sel].map(id=>byId[id]).filter(Boolean);cfg.bulk[+b.dataset.bulk].run(list,()=>{s.sel.clear()});return}
       if(b=t.closest('[data-a]')){const a=b.dataset.a;
         if(a==='cols'){colsPop(b);ckHit('cols')}
+        if(a==='kbby'){const cur=kbCol(ac).key;menu(b,kbKeys(ac).map(c=>({label:c.label,icon:'layers',on:c.key===cur,run:()=>{s.kb=c.key;g.kbMore={};gsave(cfg.id);refresh()}})))}
         if(a==='grp'){groupPop(b);ckHit('grp')}
         if(a==='ungrp'){s.group=[];gsave(cfg.id);refresh()}
         if(a==='gall'){s.closed=new Set();refresh()}
@@ -252,10 +286,16 @@ function grid(host,cfg){
       if(t.dataset.a==='selall'){pr.forEach(r=>{if(t.checked)s.sel.add(rid(r));else s.sel.delete(rid(r))});refresh()}
       if(t.dataset.a==='size'){s.size=t.value==='all'?'all':+t.value;s.page=0;gsave(cfg.id);refresh()}
     };
-    host.oncontextmenu=e=>{const row=e.target.closest('[data-id]');if(!row||!cfg.actions||e.target.closest('a'))return;e.preventDefault();rowMenu(row,byId[row.dataset.id],{x:e.clientX,y:e.clientY})};
+    // доска: перетаскивание карточки в другой столбец
+    let kd=null;const kbOn=g.view==='kanban'&&!!cfg.kanban.drop;
+    host.ondragstart=kbOn?e=>{const c=e.target.closest&&e.target.closest('.kan-card');if(!c)return;kd=c.dataset.id;c.classList.add('drag');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',kd)}catch(_){}}:null;
+    host.ondragover=kbOn?e=>{const c=e.target.closest('.kan-col');if(!kd||!c)return;e.preventDefault();$$('.kan-col.over',host).forEach(x=>x!==c&&x.classList.remove('over'));c.classList.add('over')}:null;
+    host.ondrop=kbOn?e=>{const c=e.target.closest('.kan-col');if(!kd||!c)return;e.preventDefault();const r=byId[kd];kd=null;$$('.kan-col.over',host).forEach(x=>x.classList.remove('over'));const x=(g.kbCols||[]).find(y=>y.k===c.dataset.kv);if(r&&x)kbMove(r,x)}:null;
+    host.ondragend=kbOn?()=>{kd=null;$$('.kan-col.over,.kan-card.drag',host).forEach(x=>x.classList.remove('over','drag'))}:null;
+    host.oncontextmenu=e=>{const row=e.target.closest('[data-id]');if(!row||!(cfg.actions||kbOn)||e.target.closest('a'))return;e.preventDefault();rowMenu(row,byId[row.dataset.id],{x:e.clientX,y:e.clientY})};
     host.onkeydown=e=>{const row=e.target.closest&&e.target.closest('tr[data-id],.gcard[data-id]');if(row&&e.target===row&&e.key==='Enter'&&cfg.open)cfg.open(byId[row.dataset.id]);if(row&&e.target===row&&(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10'))){e.preventDefault();rowMenu(row,byId[row.dataset.id])}};
     let lp=null;
-    let lpx=0,lpy=0;host.onpointerdown=e=>{if(e.pointerType!=='touch')return;const row=e.target.closest('[data-id]');if(!row||!cfg.actions)return;const x=e.clientX,y=e.clientY;lpx=x;lpy=y;lp=setTimeout(()=>{row.dataset.lp='1';rowMenu(row,byId[row.dataset.id],{x,y});if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){} },550)};
+    let lpx=0,lpy=0;host.onpointerdown=e=>{if(e.pointerType!=='touch')return;const row=e.target.closest('[data-id]');if(!row||!(cfg.actions||kbOn))return;const x=e.clientX,y=e.clientY;lpx=x;lpy=y;lp=setTimeout(()=>{row.dataset.lp='1';rowMenu(row,byId[row.dataset.id],{x,y});if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){} },550)};
     const cancel=()=>{clearTimeout(lp)};host.onpointerup=cancel;host.onpointercancel=cancel;host.onpointermove=e=>{if(e.pointerType==='touch'&&Math.hypot(e.clientX-lpx,e.clientY-lpy)>8)cancel()};host.addEventListener('touchmove',e=>{const t=e.touches[0];if(t&&Math.hypot(t.clientX-lpx,t.clientY-lpy)>8)cancel()},{passive:true});
     // resize
     $$('.resz',host).forEach(rz=>{rz.onpointerdown=e=>{e.preventDefault();e.stopPropagation();const k=rz.dataset.rz;const th=rz.closest('th');th.draggable=false;const col=host.querySelector(`col[data-c="${k}"]`);const tb=host.querySelector('table.gt');const x0=e.clientX,w0=col.offsetWidth||parseInt(col.style.width),tw0=tb.offsetWidth;rz.classList.add('act');rz.setPointerCapture(e.pointerId);

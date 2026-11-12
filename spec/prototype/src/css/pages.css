@@ -63,7 +63,9 @@
 @media (max-width:420px){.kv>.sf-kv{grid-column:auto}}
 /* Страница контрагента по ссылке: блок в карточке и сама страница поверх программы */
 .cp-page .pg-link{color:var(--link);overflow-wrap:anywhere}
-.cp-page .pg-code{font-size:16px;letter-spacing:.06em}
+.cp-page .pg-code{font-size:16px;letter-spacing:.06em;all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:8px;padding:2px 8px;margin:-2px -8px;border-radius:var(--r-s);font-family:var(--mono,ui-monospace,monospace);font-weight:650}
+.cp-page .pg-code:hover{background:var(--hover)}.cp-page .pg-code:focus-visible{outline:2px solid var(--b-blue)}.cp-page .pg-code .ic{color:var(--faint)}
+.tf-log li{grid-template-columns:92px minmax(0,1fr) auto;align-items:start}
 .cp-page .kv>.pg-secs-row{grid-column:1/-1}
 .pg-secs{display:flex;flex-wrap:wrap;gap:4px 14px}.pg-secs .row{gap:6px;font-size:13px}
 .pg-pol{margin:-4px 0 6px 52px;display:flex;flex-direction:column;gap:2px}.pg-pol .check-row{padding:4px 0}
@@ -228,3 +230,18 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
   .ln-tbl .inp{max-width:none}
   .ln-row{flex-direction:column;gap:0}
 }
+
+/* ═════ Активность (v84): Главная → «Активность», Админка → Организации → «Активность» ═════ */
+.act-bar{flex-wrap:wrap;gap:8px 12px;align-items:center}
+.act-nav{display:inline-flex;align-items:center;gap:6px}.act-nav b{min-width:150px;text-align:center;font-weight:650;font-variant-numeric:tabular-nums}
+.act-note{font-size:12.5px}
+.act-ch{display:flex;align-items:stretch;gap:3px;height:150px}
+.act-b{flex:1;min-width:0;display:grid;grid-template-rows:1fr 16px;justify-items:center}
+.act-b .w{width:100%;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid var(--border)}
+.act-b i{display:block;width:100%;max-width:34px;background:var(--blue);border-radius:4px 4px 0 0;opacity:.85}
+.act-b:hover i{opacity:1}
+.act-b span{font-size:10.5px;line-height:16px;color:var(--faint);white-space:nowrap}
+/* бонусы сотрудникам в окне разовой услуги */
+.bn-list{display:flex;flex-direction:column;gap:6px}.bn-list:empty{display:none}
+.bn-row{display:grid;grid-template-columns:minmax(0,1fr) 150px 30px;gap:8px;align-items:center}
+@media (max-width:767px){.act-nav{width:100%;justify-content:space-between}.act-nav b{min-width:0}.act-note{display:none}.act-ch{height:120px;gap:1px}.bn-row{grid-template-columns:minmax(0,1fr) 110px 30px}}

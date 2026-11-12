@@ -84,10 +84,20 @@ function renderCps(body,tab,fresh){
     if(!g)return;const was=b.classList.contains('on');g.filters={};if(was){g.page=0;renderPage();return}if(id==='noresp')g.filters.resp={type:'enum',vals:['']};if(id==='nogk')g.filters.gkno={type:'enum',vals:['Нет']};if(id==='sfq')g.filters.sfq={type:'enum',vals:['Да']};if(id==='kpin')g.filters.kpin={type:'enum',vals:['Да']};if(id==='pau')g.filters.svc={type:'enum',vals:['Приостановлен']};if(id==='one')g.filters.kind={type:'enum',vals:['Разовое']};if(id==='arc')g.filters.svc={type:'enum',vals:['В архиве']};if(id==='over')g.filters.over={type:'num',from:1,to:null};g.page=0;renderPage()};
   const rows=()=>{const v=visCps(true);const g=GS[gid];const fs=g&&g.filters&&g.filters.svc;if(fs&&fs.vals&&fs.vals.includes('В архиве'))return v;const a=v.filter(c=>!c.archived);if(tab==='mine')return a.filter(c=>c.resp===S.me);if(tab==='debtors')return a.filter(c=>c.feeDebt>0);if(tab==='paused')return a.filter(c=>c.paused);if(tab==='oneoff')return a.filter(c=>c.kind==='oneoff');return a};
   grid($('#cg',body),{id:gid,cols:cpCols(),rows,title:'name',noun:['контрагент','контрагента','контрагентов'],rowClass:c=>!c.resp&&!c.archived?'warn':c.archived||c.paused?'muted':'',
-    actions:cpActions,open:openCp,sort:{key:'name',dir:1},preset:S.preset,simulateLoad:fresh,
+    actions:cpActions,open:openCp,sort:{key:'name',dir:1},preset:S.preset,simulateLoad:fresh,kanban:cpKanban(),
     bulk:tab==='archive'||!(can('assign')||can('createCp')||can('cpArchive')||(feat('cppage')&&can('cpPage')))?null:[...(can('assign')||can('createCp')?[{label:'Назначить ответственного',icon:'user',run:(rs,done)=>respDlg(rs,done)}]:[]),...(feat('cppage')&&can('cpPage')?[{label:'Включить страницу',icon:'link',run:(rs,done)=>pgEnable(rs,done)}]:[]),...(can('cpArchive')?[{label:'В архив',icon:'archive',danger:true,run:(rs,done)=>archiveDlg(rs,done)}]:[])],
     empty:{icon:'building',title:tab==='mine'?'За вами пока не закреплены контрагенты':tab==='archive'?'Архив пуст':'Контрагентов пока нет',text:tab==='all'?'Добавьте первого контрагента или загрузите список из Excel.':'',add:tab==='all'&&can('createCp')?addCpDlg:null}});
 }
+/* Доска контрагентов: столбцы — ответственный (по умолчанию), статус обслуживания, режим, тип обслуживания, форма, налоговый орган, тариф Соцфонда.
+   Перенос в столбец сотрудника передаёт контрагента этому ответственному (право «Назначать»), остальное меняется в карточке */
+function cpKanban(){return {def:'resp',by:['resp','svc','regime','kind','form','ugns','sft'],
+  order:{svc:['Обслуживается','Приостановлен','В архиве']},
+  show:{resp:()=>EMP.filter(e=>e.active&&visCps(true).some(c=>c.resp===e.id)).map(e=>e.short),svc:['Обслуживается','Приостановлен']},
+  drop(c,key,v,label){const bad=m=>toast(m,'alert',true);
+    if(key!=='resp')return bad('Перетаскиванием меняется только ответственный. Остальное — в карточке контрагента');
+    if(!(can('assign')||can('createCp')))return bad('Нет права назначать ответственного');if(c.archived)return bad('Контрагент в архиве');
+    const e=empByName(v);if(!e)return bad('Выберите столбец сотрудника');
+    confirmDlg({title:'Сменить ответственного?',text:`«${esc(c.name)}»: ${esc(empName(c.resp)||'без ответственного')} → ${esc(e.short)}. Новый ответственный получит незавершённые отчёты и открытые задачи контрагента.`,ok:'Передать',run:()=>{transferCp(c,e.id);refreshAll();toast('Ответственный изменён','user')}})}}}
 function respDlg(cs,done){
   openModal({form:true,render:()=>({title:cs.length>1?`Ответственный для ${cs.length} контрагентов`:'Сменить ответственного',sub:cs.length>1?'':esc(cs[0].name),
     body:`${fld('Ответственный бухгалтер',sel('rs-e',EMP.filter(e=>e.active).map(e=>[e.id,e.short]),cs.length===1?cs[0].resp:''),{req:true,id:'rs-e'})}<div class="note">${ic('info')}<span>Новый ответственный получит все незавершённые отчёты (ещё не сданы или налог не оплачен) и открытые задачи этих контрагентов, а также остаток денег на их налоги. Завершённые отчёты остаются за тем, кто их сдал.</span></div>`,

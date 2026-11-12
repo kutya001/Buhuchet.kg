@@ -405,8 +405,8 @@ describe('счётчики роли', () => {
     );
   });
 
-  it('число прав: у владельца все 39', () => {
-    expect(rolePermissionCount({ isOwner: true, permissions: [] })).toBe(39);
+  it('число прав: у владельца все 40', () => {
+    expect(rolePermissionCount({ isOwner: true, permissions: [] })).toBe(40);
     expect(
       rolePermissionCount({ isOwner: false, permissions: ['cpView', 'export', 'cpView'] }),
     ).toBe(2);

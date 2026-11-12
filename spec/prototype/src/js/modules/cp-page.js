@@ -24,7 +24,7 @@ function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why
   const secs=PG_SECS.filter(pgSecOrg);
   return `<div class="box cp-page" id="cp-page"><h3>Страница контрагента<span class="grow"></span>${on?pill('Включена',{Включена:['green','check']}):pill('Выключена',{Выключена:['gray','ban']})}</h3>
     ${on?`<div class="kv"><div><span class="k">Ссылка</span><span class="v"><a class="mono pg-link" href="#/${esc(pgPath(c))}" title="Открыть страницу так, как её увидит контрагент">${esc(pgUrl(c))}</a></span></div>
-      <div><span class="k">Код доступа</span><span class="v mono strong pg-code">${pgCodeTxt(p.code)}</span></div>
+      <div><span class="k">Код доступа</span><span class="v"><button type="button" class="pg-code mono strong" data-pg="codecopy" title="Нажмите, чтобы скопировать код" aria-label="Код доступа ${esc(pgCodeTxt(p.code))}: скопировать">${pgCodeTxt(p.code)}${ic('copy','sm')}</button></span></div>
       <div><span class="k">Последнее открытие</span><span class="v">${p.last?`${fmtDT(p.last)}${p.lastDev?` <span class="hint">· ${esc(p.lastDev)}</span>`:''}`:'<span class="faint">контрагент ещё не открывал</span>'}</span></div>
       ${secs.length?`<div class="pg-secs-row"><span class="k">Разделы страницы</span><span class="v"><span class="pg-secs">${secs.map(([k,l])=>`<label class="row"><input type="checkbox" data-pg-sec="${k}" ${(p.hide||[]).includes(k)?'':'checked'} ${why?'disabled':''}> ${esc(l)}</label>`).join('')}</span><span class="hint">«Ваш бухгалтер» видно всегда. Разделы для всех контрагентов — в учётной политике</span></span></div>`:''}</div>`
     :`<span class="hint">${c.archived?'Контрагент в архиве — страница выключена.':'Контрагент откроет по ссылке и коду из 6 цифр свои отчёты, показатели и оплату за обслуживание — только для просмотра, без входа в программу.'}</span>`}
@@ -33,6 +33,7 @@ function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why
 function pgMount(el,c,redraw){const b=$('#cp-page',el);if(!b)return;
   b.onclick=e=>{const x=e.target.closest('[data-pg]');if(!x)return;if(x.dataset.why){toast(x.dataset.why,'lock',true);return}const k=x.dataset.pg;
     if(k==='on')pgEnable([c],redraw);else if(k==='off')pgOffDlg(c,redraw);else if(k==='code')pgCodeDlg(c,redraw);
+    else if(k==='codecopy'){copyText(c.page.code,`Код ${pgCodeTxt(c.page.code)} скопирован`,true);log('cp',c.id,'Скопирован код доступа страницы контрагента',c.id)}
     else if(k==='copy'){copyText('https://'+pgUrl(c),'Ссылка скопирована',true);log('cp',c.id,'Скопирована ссылка на страницу контрагента',c.id)}else if(k==='wa')waDlg({cp:c,page:true})};
   b.onchange=e=>{const x=e.target.closest('[data-pg-sec]');if(!x)return;const k=x.dataset.pgSec,p=c.page,h=new Set(p.hide||[]);x.checked?h.delete(k):h.add(k);p.hide=[...h];
     log('cp',c.id,`Страница контрагента: раздел «${PG_SECS.find(s=>s[0]===k)[1]}» ${x.checked?'показывается':'скрыт'}`,c.id);toast(x.checked?'Раздел показывается на странице':'Раздел скрыт на странице')}}

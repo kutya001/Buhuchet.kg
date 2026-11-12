@@ -2,9 +2,10 @@
 // Модуль «Главная»
 /* ═════════════ Главная ═════════════ */
 function plate({icon,color,label,value,unit,sub,on,id}){return `<button class="plate ${on?'on':''}" data-plate="${id}"><span class="pl-top"><span class="pl-dot ${color}">${ic(icon)}</span>${esc(label)}</span><span class="pl-val">${value}${unit?`<small>${unit}</small>`:''}</span>${sub?`<span class="pl-sub">${sub}</span>`:''}</button>`}
-function homeTabs(){return [{id:'today',label:'Сводка',icon:'home'},feat('fee')&&can('fee')?{id:'analytics',label:'Аналитика',icon:'chart'}:null]}
+function homeTabs(){return [{id:'today',label:'Сводка',icon:'home'},feat('fee')&&can('fee')?{id:'analytics',label:'Аналитика',icon:'chart'}:null,can('staffStats')?{id:'act',label:'Активность',icon:'users'}:null]}
 function renderHome(body,tab){
   if(tab==='analytics')return renderAnalytics(body);
+  if(tab==='act')return renderHomeAct(body);
   const u=me();const vr=visReports();const[w0,w1]=weekRange();
   // Как во вкладке «На неделе»: у приостановленных контрагентов сроков нет, у отчётов «Уплата» сдавать нечего, оплатить можно только указанную сумму
   const live=r=>!CPM[r.cp].paused;
