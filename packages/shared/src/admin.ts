@@ -293,6 +293,22 @@ const Month = z.string().regex(/^\d{4}-\d{2}$/);
  * admin/admin-cards.js, orgCard): всё по одной организации-клиенту одним ответом, только просмотр.
  * Списки — первые 200 строк и настоящее число записей.
  */
+/** Запись «Истории» карточки организации: организация, её настройки и роли. */
+const OrgCardHistoryEntry = z.object({
+  id: z.string(),
+  at: z.iso.datetime(),
+  actor: z.string().nullable(),
+  actorAdmin: z.boolean(),
+  entity: z.string(),
+  action: z.string(),
+  /** Название роли у записи о роли; у остальных — null. */
+  subject: z.string().nullable(),
+  changes: z.array(
+    z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
+  ),
+  reason: z.string().nullable(),
+});
+
 export const AdminOrgCard = z.object({
   org: AdminOrganization,
   profile: z.object({
@@ -405,20 +421,9 @@ export const AdminOrgCard = z.object({
       }),
     ),
   }),
-  history: z.array(
-    z.object({
-      id: z.string(),
-      at: z.iso.datetime(),
-      actor: z.string().nullable(),
-      actorAdmin: z.boolean(),
-      entity: z.string(),
-      action: z.string(),
-      changes: z.array(
-        z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),
-      ),
-      reason: z.string().nullable(),
-    }),
-  ),
+  history: z.array(OrgCardHistoryEntry),
+  /** Блокировки и разблокировки организации — для «Блокировок с причинами» вкладки «Основное». */
+  blocks: z.array(OrgCardHistoryEntry),
 });
 export type AdminOrgCard = z.infer<typeof AdminOrgCard>;
 

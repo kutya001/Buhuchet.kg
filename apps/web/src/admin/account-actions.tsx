@@ -21,6 +21,10 @@ import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useShell } from '../shell/context';
 import { accountHeadActions, accountMenu } from './accounts-menu';
+import { ORG_CARD_KEY } from './org-actions';
+
+/** Чей пароль сбрасывают: строка списка, карточка или владелец из карточки организации. */
+export type ResetAccount = Pick<AdminUser, 'id' | 'fullName' | 'login'>;
 
 /** Ключ запроса карточки пользователя: после действия карточка перечитывается. */
 export const ACCOUNT_CARD_KEY = ['admin', 'account-card'] as const;
@@ -36,6 +40,8 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
   actions: (u: AdminUser) => ActionEntry[];
   /** Те же пункты без «Открыть карточку» и черты — кнопки шапки карточки. */
   cardActions: (u: AdminUser) => ActionItem[];
+  /** «Сбросить пароль» вне меню — «Сбросить пароль владельцу» карточки организации. */
+  resetPassword: (u: ResetAccount) => void;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -46,7 +52,7 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
   const { userId } = useShell();
   const [askBlock, setAskBlock] = useState<AdminUser | null>(null);
   const [reset, setReset] = useState<{
-    account: AdminUser;
+    account: ResetAccount;
     password: string;
     telegram: boolean;
     owners: AdminTemporaryPasswordResponse['ownersNotice'];
@@ -56,6 +62,8 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
   const refresh = useCallback(() => {
     void client.invalidateQueries({ queryKey: ['list', 'accounts.list'] });
     void client.invalidateQueries({ queryKey: ACCOUNT_CARD_KEY });
+    // Состояния сотрудников видны и в открытой карточке организации.
+    void client.invalidateQueries({ queryKey: ORG_CARD_KEY });
   }, [client]);
 
   const once = async <T,>(id: string, fetch: () => Promise<T>): Promise<T | null> => {
@@ -89,7 +97,7 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
     });
   };
 
-  const resetPassword = async (u: AdminUser) => {
+  const resetPassword = async (u: ResetAccount) => {
     const res = await once(u.id, () =>
       callApi(() => api.api.admin.users[':id']['password-reset'].$post({ param: { id: u.id } })),
     );
@@ -107,7 +115,7 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
   };
 
   const run = {
-    resetPassword: (u: AdminUser) => void resetPassword(u),
+    resetPassword: (u: ResetAccount) => void resetPassword(u),
     block: setAskBlock,
     unblock: (u: AdminUser) => void setBlocked(u, false),
   };
@@ -150,7 +158,7 @@ export function useAccountActions(options: { open?: (u: AdminUser) => void } = {
       </Modal>
     </>
   );
-  return { actions, cardActions, dialogs };
+  return { actions, cardActions, resetPassword: run.resetPassword, dialogs };
 }
 
 /**

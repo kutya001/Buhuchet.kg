@@ -48,6 +48,7 @@ import {
 } from '../status/status-view';
 import { leadHistoryItems } from './lead-history';
 import { leadCardQuery, leadState, saveLeadNote, useLeadsRefresh } from './leads-data';
+import { requestOrgCard } from './org-card-store';
 
 /*
  * Окно заявки (задача #165; ТЗ «Админка» → «Вкладка «Заявки»»; прототип admin/leads.js — `openLead`):
@@ -55,7 +56,7 @@ import { leadCardQuery, leadState, saveLeadNote, useLeadsRefresh } from './leads
  * данные заявки, «Заметка администратора» с «Сохранить заметку», «История статусов», «История». Внизу —
  * «Ещё действия» (меню без «Открыть заявку») и главная кнопка: «В работу» у новой, иначе «Создать
  * организацию», пока её не создали (у «Отказа» — нет). Ссылка на организацию закрывает окно и ведёт в
- * список организаций.
+ * список организаций с карточкой этой организации (прототип v83).
  */
 
 const faint = <span className="text-faint">—</span>;
@@ -246,6 +247,7 @@ function CardBody({
           className={linkButtonClass()}
           onClick={() => {
             onOrgLink();
+            if (l.org) requestOrgCard(l.org.id);
             router.push(tabHref('orgs', 'list'));
           }}
         >

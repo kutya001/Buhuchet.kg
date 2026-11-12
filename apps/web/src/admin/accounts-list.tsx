@@ -11,9 +11,8 @@ import {
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
-import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -21,9 +20,8 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
-import { useAccountActions } from './account-actions';
-import { AccountCard } from './account-card';
 import { accountHashLogin } from './account-card-model';
+import { useAdminCards } from './admin-cards';
 
 /**
  * Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (ТЗ «Сортировка»; прототип
@@ -131,7 +129,7 @@ const fetchAccountValues = async (col: string, q?: string) => {
  * приглушённо. Нажатие на строку открывает карточку пользователя (прототип v83, accCard); в меню
  * записи — «Открыть карточку», «Сбросить пароль» (окно «Пароль сброшен» с временным паролем),
  * «Заблокировать» после вопроса и «Разблокировать» сразу. Адрес `#accounts/<логин>` открывает карточку
- * этой учётной записи (прототип admCardRoute).
+ * этой учётной записи (прототип admCardRoute); организация в карточке открывает карточку организации.
  */
 export function AccountsList() {
   const t = useT();
@@ -156,14 +154,8 @@ export function AccountsList() {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
-  const [card, setCard] = useState<DialogSlot<{ id: string; initial: AdminUser | null }> | null>(
-    null,
-  );
-  const openCard = useCallback(
-    (u: AdminUser) => setCard(openSlot({ id: u.id, initial: u as AdminUser | null })),
-    [],
-  );
-  const { actions, cardActions, dialogs } = useAccountActions({ open: openCard });
+  const { accountActions: actions, openAccount, cards } = useAdminCards();
+  const openCard = useCallback((u: AdminUser) => openAccount(u.id, u), [openAccount]);
 
   // Ссылка `#accounts/<логин>`: карточка открывается один раз, адрес остаётся без неё.
   useEffect(() => {
@@ -179,13 +171,13 @@ export function AccountsList() {
         const res = await callApi(() => api.api.admin.users.lookup.$get({ query: { login } }));
         const found = res.ok ? AdminUserLookup.safeParse(res.data) : null;
         if (!found?.success) return toast(t('accounts.card.none'), { bad: true });
-        setCard(openSlot({ id: found.data.id, initial: null as AdminUser | null }));
+        openAccount(found.data.id);
       })();
     };
     route();
     window.addEventListener('hashchange', route);
     return () => window.removeEventListener('hashchange', route);
-  }, [t, toast]);
+  }, [t, toast, openAccount]);
 
   return (
     <>
@@ -219,17 +211,7 @@ export function AccountsList() {
         actions={actions}
         onOpen={openCard}
       />
-      {card ? (
-        <AccountCard
-          key={`card-${card.n}`}
-          id={card.data.id}
-          initial={card.data.initial}
-          open={card.open}
-          onClose={() => setCard(closeSlot)}
-          actions={cardActions}
-        />
-      ) : null}
-      {dialogs}
+      {cards}
     </>
   );
 }

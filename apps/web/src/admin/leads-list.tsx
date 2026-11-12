@@ -33,6 +33,7 @@ import { phoneCodesQuery } from '../staff/staff-data';
 import { miniView, statusName } from '../status/status-view';
 import { useLeadActions } from './lead-actions';
 import { fetchLeadValues, fetchLeads, leadSummaryQuery, useLeadsRefresh } from './leads-data';
+import { requestOrgCard } from './org-card-store';
 import { NewOrganizationDialog } from './new-org-dialog';
 import { useOrgsAddRequest } from './orgs-list';
 
@@ -88,7 +89,7 @@ function LeadStatusMini({ t, l }: { t: Translate; l: AdminLead }) {
 function leadColumns(
   t: Translate,
   phone: (raw: string) => string,
-  toOrgs: () => void,
+  toOrg: (orgId: string) => void,
 ): GridColumn<AdminLead>[] {
   return [
     {
@@ -145,22 +146,24 @@ function leadColumns(
       type: 'text',
       width: 200,
       text: (l) => l.org?.name ?? '',
-      cell: (l) =>
-        l.org ? (
+      cell: (l) => {
+        const org = l.org;
+        return org ? (
           <button
             type="button"
             data-lead-org=""
             className={linkButtonClass()}
             onClick={(e) => {
               e.stopPropagation();
-              toOrgs();
+              toOrg(org.id);
             }}
           >
-            {l.org.name}
+            {org.name}
           </button>
         ) : (
           <span className="text-faint">—</span>
-        ),
+        );
+      },
     },
   ];
 }
@@ -184,8 +187,15 @@ export function LeadsList() {
   const labels = useGridLabels('leads.count');
   const codes = useQuery(phoneCodesQuery);
   const phone = useCallback((raw: string) => formatPhone(raw, codes.data ?? []), [codes.data]);
-  const toOrgs = useCallback(() => router.push(tabHref('orgs', 'list')), [router]);
-  const columns = useMemo(() => leadColumns(t, phone, toOrgs), [t, phone, toOrgs]);
+  // Организация заявки открывает «Организации» с её карточкой (прототип leads.js: `orgCard(id)`).
+  const toOrg = useCallback(
+    (orgId: string) => {
+      requestOrgCard(orgId);
+      router.push(tabHref('orgs', 'list'));
+    },
+    [router],
+  );
+  const columns = useMemo(() => leadColumns(t, phone, toOrg), [t, phone, toOrg]);
   const view = useViewSettings('orgs.leads');
   const { search, clearSearch, openProfile } = useShell();
   const summary = useQuery(leadSummaryQuery);

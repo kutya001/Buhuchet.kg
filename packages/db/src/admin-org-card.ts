@@ -149,17 +149,29 @@ export interface AdminOrgCardRecord {
       bytes: number;
     }[];
   };
-  history: {
-    id: string;
-    at: Date;
-    actor: string | null;
-    actorAdmin: boolean;
-    entity: string;
-    action: string;
-    changes: { field: string; from?: unknown; to?: unknown }[];
-    reason: string | null;
-  }[];
+  history: AdminOrgHistoryEntry[];
+  /**
+   * Блокировки и разблокировки организации — отдельным списком: открытия карточки тоже пишутся в
+   * историю и со временем вытеснили бы их из последних `ADMIN_CARD_ROWS` записей.
+   */
+  blocks: AdminOrgHistoryEntry[];
 }
+
+export interface AdminOrgHistoryEntry {
+  id: string;
+  at: Date;
+  actor: string | null;
+  actorAdmin: boolean;
+  entity: string;
+  action: string;
+  /** Название роли у записи о роли (нынешнее; у удалённой — null, прежнее есть в изменениях). */
+  subject: string | null;
+  changes: { field: string; from?: unknown; to?: unknown }[];
+  reason: string | null;
+}
+
+/** Сколько блокировок и разблокировок показывает «Основное». */
+const BLOCK_ROWS = 50;
 
 /** Сколько последних загрузок показывает вкладка «Файлы» (прототип ocGrids: `slice(0, 30)`). */
 const RECENT_FILES = 30;
@@ -518,22 +530,52 @@ export async function adminOrgCard(
     .limit(RECENT_FILES);
 
   // «История»: организация, настройки и роли; автор без сотрудника — администратор платформы.
-  const history = await tx
-    .select({
-      id: auditLog.id,
-      at: auditLog.at,
-      actorName: actor.shortName,
-      actorAdmin: sql<boolean>`${auditLog.actorUserId} is not null and ${actor.id} is null`,
-      entity: auditLog.entity,
-      action: auditLog.action,
-      changes: auditLog.changes,
-      reason: auditLog.reason,
-    })
-    .from(auditLog)
-    .leftJoin(actor, eq(actor.userId, auditLog.actorUserId))
-    .where(inArray(auditLog.entity, ['organization', 'org_settings', 'role']))
-    .orderBy(desc(auditLog.at), desc(auditLog.id))
-    .limit(ADMIN_CARD_ROWS);
+  const historyRows = (where: SQL, limit: number) =>
+    tx
+      .select({
+        id: auditLog.id,
+        at: auditLog.at,
+        actorName: actor.shortName,
+        actorAdmin: sql<boolean>`${auditLog.actorUserId} is not null and ${actor.id} is null`,
+        entity: auditLog.entity,
+        action: auditLog.action,
+        subject: roles.name,
+        changes: auditLog.changes,
+        reason: auditLog.reason,
+      })
+      .from(auditLog)
+      .leftJoin(actor, eq(actor.userId, auditLog.actorUserId))
+      .leftJoin(
+        roles,
+        and(eq(auditLog.entity, 'role'), sql`${roles.id}::text = ${auditLog.entityId}`),
+      )
+      .where(where)
+      .orderBy(desc(auditLog.at), desc(auditLog.id))
+      .limit(limit);
+  type HistoryRow = Awaited<ReturnType<typeof historyRows>>[number];
+  const entry = (h: HistoryRow): AdminOrgHistoryEntry => ({
+    id: `${h.entity}-${h.id}`,
+    at: h.at,
+    actor: h.actorName,
+    actorAdmin: h.actorAdmin === true,
+    entity: h.entity,
+    action: h.action,
+    subject: h.subject,
+    changes: historyChanges(h.entity, h.changes),
+    reason: h.reason,
+  });
+  const history = await historyRows(
+    inArray(auditLog.entity, ['organization', 'org_settings', 'role']),
+    ADMIN_CARD_ROWS,
+  );
+  const blocks = await historyRows(
+    and(
+      eq(auditLog.entity, 'organization'),
+      eq(auditLog.action, 'update'),
+      sql`${auditLog.changes} @> '[{"field":"status"}]'::jsonb`,
+    )!,
+    BLOCK_ROWS,
+  );
 
   return {
     org,
@@ -591,16 +633,8 @@ export async function adminOrgCard(
         }
       : null,
     files: { byKind: kinds, recent },
-    history: history.map((h) => ({
-      id: `${h.entity}-${h.id}`,
-      at: h.at,
-      actor: h.actorName,
-      actorAdmin: h.actorAdmin === true,
-      entity: h.entity,
-      action: h.action,
-      changes: historyChanges(h.entity, h.changes),
-      reason: h.reason,
-    })),
+    history: history.map(entry),
+    blocks: blocks.map(entry),
   };
 }
 

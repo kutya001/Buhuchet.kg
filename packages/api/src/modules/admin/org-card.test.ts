@@ -296,6 +296,17 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       reason: 'Организация заблокирована администратором платформы',
     });
     expect(entry.changes).toContainEqual({ field: 'status', from: 'active', to: 'blocked' });
+    // «Блокировки с причинами» — отдельным списком: открытия карточки их не вытесняют.
+    expect(c.blocks).toHaveLength(1);
+    expect(c.blocks[0]).toMatchObject({ id: entry.id, entity: 'organization', subject: null });
+    expect(c.blocks[0]!.changes).toContainEqual({
+      field: 'blockedReason',
+      from: null,
+      to: 'Заблокирована администратором',
+    });
+    // У записей о ролях — название роли.
+    const roleEntry = c.history.find((h) => h.entity === 'role');
+    expect(roleEntry?.subject).toEqual(expect.any(String));
   });
 
   it('запрос карточки с чужого сайта не принимается; нет такой организации — 404, неверный id — 400', async () => {

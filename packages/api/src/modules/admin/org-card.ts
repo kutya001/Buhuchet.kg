@@ -49,6 +49,7 @@ function withCreation(history: CardHistory, audit: AdminOrgCard['org']['audit'])
       actorAdmin: false,
       entity: 'organization',
       action: 'create',
+      subject: null,
       changes: [],
       reason: null,
     },
@@ -132,6 +133,7 @@ export function orgCardHandler(deps: ApiDeps): RouteHandler<typeof orgCardRoute,
         card.history.map((h) => ({ ...h, at: iso(h.at) })),
         org.audit,
       ),
+      blocks: card.blocks.map((h) => ({ ...h, at: iso(h.at) })),
     };
     return c.json(body, 200);
   };
