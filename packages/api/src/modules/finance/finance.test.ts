@@ -266,6 +266,8 @@ describe.skipIf(!databaseAvailable())(
         received: som(1000),
         paid: 0,
         bonus: som(300),
+        // Плашка «Накоплено бонусов»: списанный в бонус остаток копится на счёте сотрудника (п. О-75).
+        bonuses: { bal: som(300), out: 0, svc: 0 },
         rows: [
           {
             contractorId: cpA,

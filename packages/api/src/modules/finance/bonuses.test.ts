@@ -223,19 +223,10 @@ describe.skipIf(!databaseAvailable())(
           },
         ],
       });
+      // Запись истории хранит краткое имя сотрудника и сумму (без отдельного полного имени).
       expect(now.history.at(-1)!.changes.find((ch) => ch.field === 'bonuses')?.to).toEqual([
-        {
-          employeeId: employee('acc-a'),
-          name: expect.any(String),
-          short: expect.any(String),
-          amount: som(500),
-        },
-        {
-          employeeId: employee('hr-a'),
-          name: expect.any(String),
-          short: expect.any(String),
-          amount: som(300),
-        },
+        { employeeId: employee('acc-a'), name: expect.any(String), amount: som(500) },
+        { employeeId: employee('hr-a'), name: expect.any(String), amount: som(300) },
       ]);
       expect(await summary(owner)).toMatchObject({ wait: som(800), svc: 0, bal: 0, canOut: true });
       const waiting = await log(owner);
