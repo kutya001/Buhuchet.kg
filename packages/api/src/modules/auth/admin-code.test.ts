@@ -69,7 +69,7 @@ describe.skipIf(!databaseAvailable())('вход администратора п�
     const { challenge } = AdminCodeRequiredResponse.parse(await res.json());
     const last = tg.sent.at(-1)!;
     expect(last.chatId).toBe(ADMIN_CHAT);
-    return { challenge, code: /: (\d{6})\./.exec(last.text)![1]! };
+    return { challenge, code: /^(\d{6}) — код/m.exec(last.text)![1]! };
   };
   const otherCode = (code: string) => (code === '000000' ? '111111' : '000000');
   /** Сколько вводов занято у последнего кода. */

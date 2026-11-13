@@ -118,8 +118,8 @@ test.describe('Этап 1: Telegram и «Забыли пароль?» (API)', ()
     expect(await telegram()).toMatchObject({ name: `@e2e_${first}` });
     await expect.poll(() => botMessages(request, first)).toHaveLength(2);
     const notice = (await botMessages(request, first))[1]!;
-    expect(notice).toContain(`хотят привязать другой Telegram: «@e2e_${second}»`);
-    const code = /код: (\d{6})/.exec(notice)?.[1];
+    expect(notice).toContain(`код для привязки другого Telegram «@e2e_${second}»`);
+    const code = /^(\d{6}) — код/m.exec(notice)?.[1];
     expect(code, notice).toBeTruthy();
     await expect
       .poll(() => botMessages(request, second))

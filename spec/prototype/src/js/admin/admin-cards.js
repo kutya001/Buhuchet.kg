@@ -9,7 +9,7 @@ const SES_DAY=864e5;
 function accEndSessions(login,how){const at=nowStamp();let n=0;SESS.forEach(s=>{if(s.u===login&&s.st==='open'){s.st='closed';s.end=at;s.how=how;n++}});return n}
 const orgOwnerId=()=>(EMP.find(e=>e.role==='owner')||EMP[0]||{}).id;
 const asOrg=f=>asUser(orgOwnerId(),f);
-const acThemeL=t=>t==='light'?'Светлая':t==='dark'?'Тёмная':'Как в устройстве';
+const acThemeL=t=>t==='dark'?'Тёмная':t==='light'?'Светлая':'Светлая (по умолчанию)';
 function acUser(login){const u=allUsers().find(x=>x.login===login);if(!u)return null;const src=u.ref||OTHER_USERS.find(x=>x.login===login)||(login==='admin'?PLATFORM_ADMIN:u);
   return {u,src,kind:u.ref?'emp':login==='admin'?'admin':'other',org:u.org?ORGS.find(o=>o.id===u.org):null}}
 // Состояние учётной записи цветной меткой (может быть несколько: заблокирован и не сменил временный пароль)

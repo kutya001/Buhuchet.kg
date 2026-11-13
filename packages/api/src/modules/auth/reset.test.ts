@@ -239,7 +239,7 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     await linkTelegram(app, await signIn(app, 'acc-b', PASSWORD), 5001);
     await forgetCodes(people['acc-a']!.userId);
     await requestCode('acc-a');
-    expect(tg.sent.at(-1)!.text).toMatch(/^Организация А\nКод для восстановления пароля: \d{6}\./);
+    expect(tg.sent.at(-1)!.text).toMatch(/^Организация А\n\d{6} — код для восстановления пароля\./);
     const last = sentCode();
     if (codes[0] !== last) expect((await confirm('acc-a', codes[0]!)).status).toBe(400);
     expect((await confirm('acc-a', last)).status).toBe(200);
