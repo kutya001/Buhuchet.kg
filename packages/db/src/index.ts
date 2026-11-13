@@ -43,6 +43,7 @@ export * from './list';
 export * from './views';
 export * from './platform-dicts';
 export * from './admin-orgs';
+export * from './admin-org-activity';
 export * from './admin-org-card';
 export * from './admin-techdocs';
 export * from './admin-users';
