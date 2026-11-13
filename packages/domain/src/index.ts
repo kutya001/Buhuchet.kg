@@ -51,6 +51,7 @@ export * from './contractors/gked';
 export * from './contractors/socfund';
 export * from './contractors/report-pick';
 export * from './contractors/service';
+export * from './contractors/start-date';
 export * from './contractor-page/page';
 export * from './contractor-page/view';
 export * from './contractor-page/files';

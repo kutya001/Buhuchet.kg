@@ -553,13 +553,15 @@ export interface ServiceSyncResult {
  * Статус обслуживания по периодам в идущем месяце (задача по расписанию): наступил месяц
  * запланированной приостановки или возобновления — статус меняется системой с записью «Истории
  * статусов» (причина приостановки — та, что ввели в окне). Архивные и разовые не меняются; повтор
- * ничего не меняет.
+ * ничего не меняет. С `ids` — только эти контрагенты: сразу после правки, которая сдвинула период
+ * (исправление даты начала обслуживания).
  */
 export async function syncServiceStatuses(
   tx: Tx,
   options: {
     today: IsoDate;
     texts: Pick<ServiceTexts, 'pausedFrom' | 'pausedFromResume' | 'pauseReason' | 'resumedFrom'>;
+    ids?: readonly string[];
   },
 ): Promise<ServiceSyncResult> {
   const month = options.today.slice(0, 7);
@@ -570,7 +572,13 @@ export async function syncServiceStatuses(
       version: contractors.version,
     })
     .from(contractors)
-    .where(and(ne(contractors.serviceStatus, 'archived'), eq(contractors.kind, 'regular')));
+    .where(
+      and(
+        ne(contractors.serviceStatus, 'archived'),
+        eq(contractors.kind, 'regular'),
+        options.ids ? inArray(contractors.id, [...options.ids]) : undefined,
+      ),
+    );
   const periods = await servicePeriodsOf(
     tx,
     rows.map((r) => r.id),

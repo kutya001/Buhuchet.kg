@@ -259,6 +259,7 @@ describe('«Изменить»', () => {
     contact: '',
     contractNo: '',
     contractDate: null,
+    startDate: '2026-05-15',
     feeDay: 5,
     note: '',
     registration: { okpo: '12345678' },
@@ -329,15 +330,51 @@ describe('«Изменить»', () => {
     ).toEqual({});
   });
 
+  const cx = {
+    codes,
+    block: null,
+    socfundReason: false,
+    feeDay: true,
+    startDate: before.startDate,
+    today: '2026-10-18',
+  };
+
   it('ошибки: ГКЭД своим текстом, день оплаты 1–28', () => {
-    const e = editErrors(
-      { ...before, gked: null, feeDay: '29' },
-      { codes, block: null, socfundReason: false, feeDay: true },
-      t,
-    );
+    const e = editErrors({ ...before, gked: null, feeDay: '29' }, cx, t);
     expect(e).toEqual({ gked: t('err.gked_required.edit'), feeDay: t('err.fee_day') });
+    expect(editErrors(before, cx, t)).toEqual({});
+  });
+
+  it('дата начала обслуживания (прототип v84): уходит только изменённая, вместе с причиной', () => {
+    expect(before).toMatchObject({ startDate: '2026-05-15', startReason: '' });
+    // Причина без новой даты — не правка.
+    expect(updatePatchOf(before, { ...before, startReason: 'просто так' }, opts)).toEqual({});
     expect(
-      editErrors(before, { codes, block: null, socfundReason: false, feeDay: true }, t),
+      updatePatchOf(
+        before,
+        { ...before, startDate: '2026-03-02', startReason: ' внесли с ошибкой ' },
+        opts,
+      ),
+    ).toEqual({ startDate: '2026-03-02', startReason: 'внесли с ошибкой' });
+  });
+
+  it('дата начала: пустая, позже сегодняшней, раньше 2000 года, без причины; та же дата не проверяется', () => {
+    const errors = (startDate: string, startReason = 'ошибка') =>
+      editErrors({ ...before, startDate, startReason }, cx, t);
+    expect(errors('')).toEqual({ startDate: 'Укажите дату' });
+    expect(errors('2026-10-19')).toEqual({ startDate: 'Дата не может быть позже сегодняшней' });
+    expect(errors('1999-12-31')).toEqual({ startDate: 'Проверьте год' });
+    expect(errors('2026-10-18', ' ')).toEqual({
+      startReason: 'Укажите причину: меняется дата начала',
+    });
+    expect(errors('2026-10-19', '')).toEqual({
+      startDate: 'Дата не может быть позже сегодняшней',
+      startReason: 'Укажите причину: меняется дата начала',
+    });
+    expect(errors('2026-10-18')).toEqual({});
+    // Дата осталась прежней — даже будущая (начало обслуживания запланировано) не ошибка.
+    expect(
+      editErrors({ ...before, startDate: '2027-01-01' }, { ...cx, startDate: '2027-01-01' }, t),
     ).toEqual({});
   });
 });

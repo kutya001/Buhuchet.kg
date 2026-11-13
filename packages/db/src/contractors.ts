@@ -30,6 +30,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { gkedIndexOf } from './gked';
 import { FEE_DEBT, feeDebtTable } from './fees';
+import { shiftFirstPeriod } from './contractor-start';
 import { contractorHasMoney, syncMoneyHolders } from './money-tax';
 import { SOCFUND_LIST, socfundListTable } from './socfund';
 import { updateWithHistory, writeHistory } from './history';
@@ -1388,14 +1389,16 @@ export async function writeContractorNotes(
  * Изменить контрагента («Изменить» в карточке): поля, дополнительные ГКЭД, льготы и основания — с
  * защитой от одновременной правки и историей «было → стало» в той же транзакции. Устаревшая версия —
  * `RecordChangedError`, вне области — `RecordNotFoundError`. С `redue` сменившиеся статусы пересчитывают
- * сроки несданных отчётов; `redued` — у скольких отчётов изменился срок.
+ * сроки несданных отчётов; `redued` — у скольких отчётов изменился срок. Новая дата начала (`startDate`
+ * с причиной `startReason`; можно ли её поставить, решает вызывающий — `startDateFacts`) сдвигает
+ * начало первого периода обслуживания, причина — в той же записи истории.
  */
 export async function updateContractor(
   tx: Tx,
   orgId: string,
   id: string,
   version: number,
-  patch: Partial<ContractorFields>,
+  patch: Partial<ContractorFields> & { startReason?: string },
   scope: SQL | undefined,
   redue?: { today: IsoDate; texts: RedueTexts },
 ): Promise<{ redued: number }> {
@@ -1428,6 +1431,13 @@ export async function updateContractor(
       replace.bases = bases;
     }
     await insertChildren(tx, orgId, id, replace);
+    // Дата начала: первый период обслуживания идёт за ней (прототип cpSetStart), причина — в историю.
+    if (patch.startDate !== undefined && patch.startDate !== current.startDate) {
+      await shiftFirstPeriod(tx, id, current.startDate, patch.startDate);
+      changes.push({ field: 'startReason', to: patch.startReason ?? '' });
+      // У разового это «Дата первого обращения»: история называет дату так, как она звалась при правке.
+      if (current.kind === 'oneoff') changes.push({ field: 'startKind', to: 'oneoff' });
+    }
   }
   await updateWithHistory(tx, {
     table: contractors,

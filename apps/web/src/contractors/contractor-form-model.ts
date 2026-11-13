@@ -2,6 +2,7 @@ import {
   addMonths,
   FEE_DAY_MAX,
   FEE_DAY_MIN,
+  START_DATE_MIN,
   firstMonthFee,
   formatSom,
   formatSomWithUnit,
@@ -84,6 +85,9 @@ export const FIELD_SECTION: Readonly<Record<FormField, FormSection>> = {
   startDate: 3,
   contractDate: 3,
 };
+
+/** Поля «Изменить»: ещё день оплаты обслуживания и причина изменения даты начала. */
+export type EditField = FormField | 'feeDay' | 'startReason';
 
 /** Поле ответа сервера → поле формы (у регистрационных данных — `registration.okpo`). */
 export function formFieldOf(field: unknown): FormField | null {
@@ -366,6 +370,9 @@ export interface EditDraft {
   contact: string;
   contractNo: string;
   contractDate: string;
+  /** Дата начала обслуживания (у разового — дата первого обращения) и причина её изменения. */
+  startDate: string;
+  startReason: string;
   feeDay: string;
   note: string;
   registration: RegistrationDraft;
@@ -393,6 +400,8 @@ export function editDraftOf(c: Contractor, codes: readonly PhoneCodeOption[]): E
     contact: c.contact,
     contractNo: c.contractNo,
     contractDate: c.contractDate ?? '',
+    startDate: c.startDate,
+    startReason: '',
     feeDay: c.feeDay === null ? '' : String(c.feeDay),
     note: c.note,
     registration: registrationDraftOf(c.registration),
@@ -402,10 +411,15 @@ export function editDraftOf(c: Contractor, codes: readonly PhoneCodeOption[]): E
 /** Ошибки «Изменить» (прототип editCpDlg, `ok`): те же тексты, у ГКЭД — «Укажите основной вид деятельности (ГКЭД)». */
 export function editErrors(
   d: EditDraft,
-  cx: Pick<DraftCheckContext, 'codes' | 'block' | 'socfundReason'> & { feeDay: boolean },
+  cx: Pick<DraftCheckContext, 'codes' | 'block' | 'socfundReason'> & {
+    feeDay: boolean;
+    /** Дата начала до правки и сегодня по Бишкеку: дата проверяется, только если её поменяли. */
+    startDate: string;
+    today: string;
+  },
   t: Translate,
-): Partial<Record<FormField | 'feeDay', string>> {
-  const out: Partial<Record<FormField | 'feeDay', string>> = {};
+): Partial<Record<EditField, string>> {
+  const out: Partial<Record<EditField, string>> = {};
   if (!d.name.trim()) out.name = t('err.name_empty');
   const inn = innProblem(d.inn.trim());
   if (inn) out.inn = t(`err.${inn}`);
@@ -425,6 +439,13 @@ export function editErrors(
   }
   if (cx.socfundReason && !d.socfund.reason.trim()) {
     out['socfund.reason'] = t('err.socfund_reason_required');
+  }
+  // Дата начала (прототип cpStartWhy): период, оплаты обслуживания и сданные отчёты сверяет сервер.
+  if (!d.startDate) out.startDate = t('err.start_empty');
+  else if (d.startDate !== cx.startDate) {
+    if (d.startDate > cx.today) out.startDate = t('err.start_future');
+    else if (d.startDate < START_DATE_MIN) out.startDate = t('err.start_year');
+    if (!d.startReason.trim()) out.startReason = t('err.start_reason');
   }
   return out;
 }
@@ -475,6 +496,10 @@ export function updatePatchOf(
   text('contact');
   text('contractNo');
   if (d.contractDate !== before.contractDate) out.contractDate = d.contractDate || null;
+  if (d.startDate !== before.startDate) {
+    out.startDate = d.startDate;
+    out.startReason = d.startReason.trim();
+  }
   if (x.feeDay && d.feeDay.trim() !== before.feeDay) out.feeDay = Number(d.feeDay);
   text('note');
   const registration = registrationOf(d.registration);

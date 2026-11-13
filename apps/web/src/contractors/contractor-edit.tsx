@@ -1,6 +1,12 @@
 'use client';
 
-import { pluralForm, reportPickAuto, reportPickBaseDiff } from '@buhuchet/domain';
+import {
+  bishkekDate,
+  pluralForm,
+  reportPickAuto,
+  reportPickBaseDiff,
+  START_REASON_MAX,
+} from '@buhuchet/domain';
 import {
   ContractorSaved,
   type Contractor,
@@ -53,7 +59,7 @@ import {
   formFieldOf,
   updatePatchOf,
   type EditDraft,
-  type FormField,
+  type EditField,
 } from './contractor-form-model';
 import { GkedFields } from './gked-pick';
 import { RegistrationFields } from './registration-fields';
@@ -66,10 +72,13 @@ import { SocfundFields } from './socfund-fields';
  * modules/contractor-form.js, editCpDlg): реквизиты, режимы, статусы, основания, признаки тарифа
  * Соцфонда и регистрационные данные. Отчёты здесь не выбираются — их подбор на вкладке «Подбор
  * отчётов» карточки; тип обслуживания, тариф, ответственный и периоды обслуживания меняются своими
- * действиями. Сохраняются только изменённые поля (`PATCH /api/contractors/{id}` с версией записи).
+ * действиями. Дата начала обслуживания (у разового — дата первого обращения) исправляется здесь же,
+ * только с причиной (прототип v84, cpStartWhy; docs/deviations.md п. О-73): период, оплаты и сданные
+ * отчёты сверяет сервер. Сохраняются только изменённые поля (`PATCH /api/contractors/{id}` с версией
+ * записи).
  */
 
-type ErrorKey = FormField | 'feeDay';
+type ErrorKey = EditField;
 
 interface Ask {
   title: string;
@@ -266,6 +275,8 @@ function EditContractorForm({
     block: notes?.block[0] ?? null,
     socfundReason: !!(regular && socfund?.needed && socfund.manualMismatch),
     feeDay,
+    startDate: initial.startDate,
+    today: bishkekDate(new Date()),
   };
 
   const set = (patch: Partial<EditDraft>, ...clear: ErrorKey[]) => {
@@ -410,6 +421,11 @@ function EditContractorForm({
     if (res.ok) {
       const saved = ContractorSaved.safeParse(res.data);
       refresh();
+      // От даты начала считаются начисления за обслуживание и месяцы показателей.
+      if ('startDate' in patch) {
+        void client.invalidateQueries({ queryKey: ['fees'] });
+        void client.invalidateQueries({ queryKey: ['kpi'] });
+      }
       onClose();
       const n = saved.success ? saved.data.redued : 0;
       const redued = n ? t(`cp.form.edit.redued.${pluralForm(n)}`, { n }) : '';
@@ -452,7 +468,8 @@ function EditContractorForm({
     // повторный отказ — обычная ошибка под полем.
     if (res.error.code === 'gked_confirm_required' && again)
       return save({ ...over, gked: '' }, false);
-    const field = formFieldOf((res.error.details as { field?: unknown } | undefined)?.field);
+    const failed = (res.error.details as { field?: unknown } | undefined)?.field;
+    const field: ErrorKey | null = failed === 'startReason' ? failed : formFieldOf(failed);
     if (field) {
       setErrors((e) => ({ ...e, [field]: errorText(res.error) }));
       return focusField(field);
@@ -686,6 +703,41 @@ function EditContractorForm({
                 className={inputClass()}
                 value={d.contractDate}
                 onChange={(e) => set({ contractDate: e.target.value }, 'contractDate')}
+              />
+            )}
+          </Field>
+          <Field
+            id={fieldId('startDate')}
+            label={t(regular ? 'cp.form.start' : 'cp.form.start_oneoff')}
+            hint={regular ? t('cp.form.edit.start_hint') : undefined}
+            error={errors.startDate}
+          >
+            {(control) => (
+              <input
+                {...control}
+                type="date"
+                className={inputClass()}
+                value={d.startDate}
+                data-cp-field="start-date"
+                onChange={(e) => set({ startDate: e.target.value }, 'startDate', 'startReason')}
+              />
+            )}
+          </Field>
+          <Field
+            id={fieldId('startReason')}
+            label={t('cp.form.edit.start_reason')}
+            hint={t('cp.form.edit.start_reason_hint')}
+            error={errors.startReason}
+          >
+            {(control) => (
+              <input
+                {...control}
+                className={inputClass()}
+                value={d.startReason}
+                maxLength={START_REASON_MAX}
+                placeholder={t('cp.form.edit.start_reason_placeholder')}
+                data-cp-field="start-reason"
+                onChange={(e) => set({ startReason: e.target.value }, 'startReason')}
               />
             )}
           </Field>

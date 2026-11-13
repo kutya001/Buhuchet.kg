@@ -658,11 +658,11 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
       feeDay: 12,
     });
     expect(patch.status).toBe(403);
-    // Дата начала и «Первый неполный месяц» после создания не меняются: поля «Изменить» их не берут.
+    // «Первый неполный месяц» после создания не меняется: поле «Изменить» его не берёт. Дата начала
+    // исправляется только с причиной (прототип v84, docs/deviations.md п. О-73) — start-date.test.ts.
     const saved = await apiRequest(f.app, 'PATCH', `/api/contractors/${own.id}`, owner, {
       version: own.version,
       feeDay: 25,
-      startDate: '2020-01-01',
       firstMonthMode: 'full',
     });
     expect(saved.status).toBe(200);

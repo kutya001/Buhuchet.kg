@@ -12,6 +12,8 @@ import {
   orgMenuSettings,
   pendingRegdocs,
   readContractorFields,
+  startDateFacts,
+  syncServiceStatuses,
   uniqueViolation,
   updateContractor,
   withOfficeBenefits,
@@ -25,8 +27,13 @@ import {
   CONTRACTOR_MESSAGES,
   contractorDeleteRefusal,
   DEFAULT_FEE_DAY,
+  formatDateRu,
+  hasPermission,
+  monthLabel,
   RD_MAX_BYTES,
+  startDateProblem,
   type AccessSubject,
+  type IsoDate,
   type Translate,
 } from '@buhuchet/domain';
 import {
@@ -43,7 +50,7 @@ import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { dropObjects } from '../files/files';
 import { serverTexts } from '../l10n/texts';
-import { assignmentTexts } from '../reports/common';
+import { assignmentTexts, ownReportsEmployeeOf } from '../reports/common';
 import { notFound } from './card';
 import {
   checkContractor,
@@ -59,6 +66,7 @@ import {
   translateOf,
 } from './common';
 import { createNewReports, planNewReports } from './new-reports';
+import { serviceTextsOf } from './service';
 import {
   requireSocfundConfirm,
   requireSocfundReason,
@@ -429,7 +437,8 @@ export function updateContractorHandler(
 ): RouteHandler<typeof updateContractorRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const { version, gkedConfirm, socfund, socfundConfirm, ...patch } = c.req.valid('json');
+    const { version, gkedConfirm, socfund, socfundConfirm, startDate, startReason, ...patch } =
+      c.req.valid('json');
     const subject = subjectOf(c);
     const ctx = orgContextOf(c);
     const today = todayOf(deps);
@@ -440,6 +449,59 @@ export function updateContractorHandler(
     } catch (err) {
       await innRace(deps, c, err, patch.inn, id);
       throw err;
+    }
+
+    /** Отказ в новой дате начала — у поля даты, без причины — у поля причины. */
+    async function checkStartDate(
+      tx: Tx,
+      row: { responsibleEmployeeId: string | null },
+      start: IsoDate,
+      reason: string | undefined,
+    ) {
+      const facts = await startDateFacts(tx, id, start, today, t);
+      const problem = startDateProblem(start, facts);
+      // Месяц оплаты и сданный отчёт называем только тому, кто их видит (плата — право и функция, отчёт —
+      // право и область «Отчётов для сдачи»); остальным — только до какой даты можно, без того, что мешает.
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-73 — прототип называет месяц оплаты и отчёт любому, кто меняет контрагента.
+      if (problem?.code === 'paid' && !(await feeVisible(tx, ctx.orgId, subject))) {
+        const month = monthLabel(problem.month);
+        apiFail(400, 'start_limit', t('err.start_limit.month', { month }), {
+          field: 'startDate',
+          variant: 'month',
+          month,
+        });
+      }
+      if (problem?.code === 'report' && !reportVisible(row, facts.reportResponsibleId)) {
+        const date = formatDateRu(problem.date);
+        apiFail(400, 'start_limit', t('err.start_limit.date', { date }), {
+          field: 'startDate',
+          variant: 'date',
+          date,
+        });
+      }
+      if (problem) {
+        const params: Record<string, string> =
+          problem.code === 'period' || problem.code === 'paid'
+            ? { month: monthLabel(problem.month) }
+            : problem.code === 'report'
+              ? { name: problem.name, date: formatDateRu(problem.date) }
+              : {};
+        apiFail(400, `start_${problem.code}`, t(`err.start_${problem.code}`, params), {
+          field: 'startDate',
+          ...params,
+        });
+      }
+      if (!reason) apiFail(400, 'start_reason', t('err.start_reason'), { field: 'startReason' });
+    }
+
+    /** Виден ли сотруднику отчёт контрагента: право и область, как в списке отчётов (п. А-2). */
+    function reportVisible(
+      row: { responsibleEmployeeId: string | null },
+      reportResponsibleId: string | null,
+    ) {
+      if (!hasPermission(subject, 'repView')) return false;
+      const own = ownReportsEmployeeOf(subject);
+      return own === null || row.responsibleEmployeeId === own || reportResponsibleId === own;
     }
 
     async function update() {
@@ -456,6 +518,11 @@ export function updateContractorHandler(
         if (patch.feeDay !== undefined && !(await feeVisible(tx, ctx.orgId, subject))) {
           forbidden(FEE_ONLY);
         }
+        // Дата начала обслуживания: та же дата — не правка; новая — только с причиной и если ей не
+        // мешают период, оплаты обслуживания и сданные отчёты (прототип cpStartWhy).
+        const start =
+          startDate !== undefined && startDate !== row.startDate ? startDate : undefined;
+        if (start) await checkStartDate(tx, row, start, startReason);
         const before = await readContractorFields(tx, row);
         const next: ContractorFields = {
           ...before,
@@ -528,10 +595,15 @@ export function updateContractorHandler(
             gkedConfirmation: confirmation,
             socfundFlags: sfPatch.socfundFlags,
             socfundTariff: sfPatch.socfundTariff,
+            ...(start ? { startDate: start, startReason } : {}),
           },
           scope,
           { today, texts: redueTexts(t) },
         );
+        // Начало было в будущем, а стало в прошлом — «Обслуживается» сразу, а не со следующей сверкой.
+        if (start && row.kind === 'regular') {
+          await syncServiceStatuses(tx, { today, texts: serviceTextsOf(t), ids: [id] });
+        }
         await writeContractorNotes(tx, id, office.notes);
         return savedOut(tx, id, {
           orgId: ctx.orgId,

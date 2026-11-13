@@ -349,6 +349,14 @@ export const CONTRACTOR_CARD_TEXTS = {
   },
   'cp.hist.gked_confirmed_ask': { ru: 'Подтверждено право на режим: «{ask}» — нет', section: H },
   'cp.hist.gked_unconfirmed': { ru: 'Подтверждение права на режим снято', section: H },
+  'cp.hist.start': {
+    ru: 'Дата начала обслуживания: {from} → {to}. Причина: {reason}',
+    section: H,
+  },
+  'cp.hist.start_oneoff': {
+    ru: 'Дата первого обращения: {from} → {to}. Причина: {reason}',
+    section: H,
+  },
   'cp.hist.changed': { ru: 'Изменено: {fields}', section: H },
   'cp.hist.update': { ru: 'Изменено', section: H },
   'cp.hist.field.name': { ru: 'название', section: H },
