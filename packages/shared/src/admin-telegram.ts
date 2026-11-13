@@ -63,8 +63,14 @@ export const AdminTelegramBot = z.object({
   lastError: z.string().nullable(),
   actualUrl: z.string().nullable(),
   checkedAt: z.iso.datetime(),
+  /** «Сообщения с таблицами»: выключено — все получают простой текст (кнопки остаются). */
+  rich: z.boolean(),
 });
 export type AdminTelegramBot = z.infer<typeof AdminTelegramBot>;
+
+/** «Вид сообщений и кнопки» → «Сообщения с таблицами» (поток Т, задача Т1). */
+export const AdminTelegramBotView = z.strictObject({ rich: z.boolean() });
+export type AdminTelegramBotView = z.infer<typeof AdminTelegramBotView>;
 
 /** Действующие организации для «Кому». */
 export const AdminTelegramOrgs = z.object({

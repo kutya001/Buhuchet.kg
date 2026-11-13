@@ -204,6 +204,7 @@ async function insertOrganization(
     features: policy.features,
     remindDays: policy.remindDays,
     overdueRepeat: policy.overdueRepeat,
+    telegramActions: policy.telegramActions,
     digestTime: policy.digestTime,
     timezone: policy.timezone,
     confirmWaitDays: policy.confirmWaitDays,

@@ -1,5 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
+  adminSetTelegramBotRich,
   adminTelegramBroadcast,
   adminTelegramOrgs,
   adminTelegramRetry,
@@ -7,12 +8,14 @@ import {
   exportAdminTelegramLog,
   listAdminTelegramLogPage,
   listAdminTelegramLogValues,
+  telegramBotRich,
   withUserContext,
   type AdminTelegramLogRecord,
 } from '@buhuchet/db';
 import { bishkekDate, webhookState } from '@buhuchet/domain';
 import {
   AdminTelegramBot,
+  AdminTelegramBotView,
   AdminTelegramBroadcastRequest,
   AdminTelegramBroadcastResult,
   AdminTelegramLogList,
@@ -278,7 +281,40 @@ export function telegramBotHandler(deps: ApiDeps): RouteHandler<typeof telegramB
     }
     const now = deps.clock.now();
     const state = webhookState(info, url, now);
-    return c.json({ url, ...state, checkedAt: now.toISOString() }, 200);
+    const rich = await telegramBotRich(deps.db);
+    return c.json({ url, ...state, checkedAt: now.toISOString(), rich }, 200);
+  };
+}
+
+export const telegramBotViewRoute = createRoute({
+  method: 'put',
+  path: '/admin/telegram/bot/view',
+  tags: ['admin'],
+  summary: 'Бот платформы: «Сообщения с таблицами» — включить или выключить для всех',
+  middleware: [requirePlatformAdmin] as const,
+  request: { body: { required: true, content: json(AdminTelegramBotView) } },
+  responses: {
+    200: { description: 'Сохранено', content: json(AdminTelegramBotView) },
+    400: { description: 'Неверные данные', content: error },
+    ...denied,
+  },
+});
+
+/**
+ * «Вид сообщений и кнопки» (поток Т, задача Т1; прототип admin/telegram.js `#tg-rich`): выключено — все
+ * пользователи получают сообщения бота простым текстом, кнопки под сообщением остаются. Запись — в
+ * историю платформы.
+ */
+export function telegramBotViewHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof telegramBotViewRoute, AppEnv> {
+  return async (c) => {
+    const { rich } = c.req.valid('json');
+    const was = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
+      adminSetTelegramBotRich(tx, rich),
+    );
+    if (was === null) apiFail(403, 'forbidden', 'Не администратор платформы');
+    return c.json({ rich }, 200);
   };
 }
 

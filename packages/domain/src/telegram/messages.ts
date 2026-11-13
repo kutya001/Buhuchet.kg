@@ -77,6 +77,22 @@ export const TELEGRAM_TEMPLATE_DEFAULTS = {
     '{код} — код для входа в Админку ({логин}). Действует {минут} минут. Если вы сейчас не входили, кто-то знает ваш пароль: смените его кнопкой «Забыли пароль?» на странице входа.',
   tgPassResetByAdmin:
     '🔑 Администратор платформы сбросил пароль сотрудника {логин}: выдан временный пароль, при входе его нужно сменить. Если вы об этом не просили, напишите администратору платформы.',
+  // Основа бота (поток Т, задача Т1; прототип v89 modules/tg-chat.js): подписи кнопок, «Проверить бота»
+  // и скрытые ответы на нажатия — их видит только нажавший, в переписке они не остаются.
+  tgBtnCopyCode: 'Скопировать код',
+  tgBtnTest: 'Проверить кнопки',
+  tgTest:
+    'Если вы видите таблицу столбцами и кнопку под этим сообщением, бот работает. Если вместо таблицы непонятный текст, включите «Сообщения простым текстом» в «Мой профиль».',
+  tgTestOk: 'Кнопки работают. Этот ответ видите только вы.',
+  tgActOff: 'Действия из Telegram отключены владельцем организации. Откройте Buhuchet.kg.',
+  tgActNoRight:
+    'Нет права на это действие. Откройте Buhuchet.kg или обратитесь к владельцу организации.',
+  tgActStale: 'Кнопка устарела: запись уже изменена. Откройте Buhuchet.kg.',
+  tgActNoLink:
+    'Этот Telegram не привязан к учётной записи. Откройте «Мой профиль» в Buhuchet.kg и привяжите Telegram.',
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-2 — в справочнике шаблонов прототипа такого ответа нет: действие
+  // не выполнилось из-за сбоя на сервере.
+  tgActFailed: 'Не получилось выполнить действие. Откройте Buhuchet.kg.',
 } as const;
 
 export type TelegramTemplateKey = keyof typeof TELEGRAM_TEMPLATE_DEFAULTS;
@@ -106,6 +122,18 @@ export function fillTemplate(template: string, values: Readonly<Record<string, s
  */
 export function withOrganization(text: string, orgName: string | null, shared: boolean): string {
   return shared && orgName ? `${orgName}\n${text}` : text;
+}
+
+/**
+ * То же для сообщения с кодом: организация — второй строкой, чтобы код остался первым в строке
+ * уведомления телефона (пакет заказчика 13.11.2026; docs/deviations.md п. Т-2).
+ */
+export function codeWithOrganization(
+  text: string,
+  orgName: string | null,
+  shared: boolean,
+): string {
+  return shared && orgName ? `${text}\n${orgName}` : text;
 }
 
 /** Как показать привязанный Telegram: «@имя» или, если имени пользователя нет, имя в Telegram. */

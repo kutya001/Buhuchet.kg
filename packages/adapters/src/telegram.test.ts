@@ -21,6 +21,138 @@ describe('createTelegramBotApi', () => {
     });
   });
 
+  it('кнопки под сообщением: нажатие, копирование, ссылка, неактивная кнопка', async () => {
+    const fetch = fetchReturning({ ok: true, result: { message_id: 7 } });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    await bot.sendMessage(100, 'Отчёт', {
+      keyboard: [
+        [
+          { text: 'Сдан', data: 'repDone:r1' },
+          { text: 'Готово', data: 'off', disabled: true },
+        ],
+        [
+          { text: 'Скопировать код', copy: '482913' },
+          { text: 'Открыть', url: 'https://buhuchet.kg' },
+        ],
+        [],
+      ],
+    });
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body)).reply_markup).toEqual({
+      inline_keyboard: [
+        [
+          { text: 'Сдан', callback_data: 'repDone:r1' },
+          { text: 'Готово', callback_data: 'off', disabled: {} },
+        ],
+        [
+          { text: 'Скопировать код', copy_text: { text: '482913' } },
+          { text: 'Открыть', url: 'https://buhuchet.kg' },
+        ],
+      ],
+    });
+  });
+
+  it('код подтверждения — моноширинный, остальной текст экранируется', async () => {
+    const fetch = fetchReturning({ ok: true, result: { message_id: 7 } });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    await bot.sendMessage(100, '482913 — код для «A&B» <x>', { code: '482913' });
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toMatchObject({
+      text: '<code>482913</code> — код для «A&amp;B» &lt;x&gt;',
+      parse_mode: 'HTML',
+    });
+    // Кода в тексте нет — обычный текст без разметки.
+    await bot.sendMessage(100, 'Текст <b>', { code: '111111' });
+    const plain = JSON.parse(String(fetch.mock.calls[1]![1].body));
+    expect(plain.text).toBe('Текст <b>');
+    expect(plain.parse_mode).toBeUndefined();
+  });
+
+  it('вид с таблицами — sendRichMessage; не принят — тот же текст обычным сообщением с кнопками', async () => {
+    const keyboard = [[{ text: 'Проверить кнопки', data: 'test' }]];
+    const ok = fetchReturning({ ok: true, result: { message_id: 9 } });
+    const rich = createTelegramBotApi({ token: '1:abc', fetch: ok });
+    expect(
+      await rich.sendMessage(100, 'простой', {
+        rich: '<table><tr><td>а</td></tr></table>',
+        keyboard,
+      }),
+    ).toEqual({ ok: true, messageId: 9 });
+    expect(ok.mock.calls).toHaveLength(1);
+    expect(ok.mock.calls[0]![0]).toBe('https://api.telegram.org/bot1:abc/sendRichMessage');
+    expect(JSON.parse(String(ok.mock.calls[0]![1].body))).toEqual({
+      chat_id: 100,
+      rich_message: { html: '<table><tr><td>а</td></tr></table>' },
+      reply_markup: { inline_keyboard: [[{ text: 'Проверить кнопки', callback_data: 'test' }]] },
+    });
+
+    for (const code of [400, 404]) {
+      const replies = [
+        { ok: false, error_code: code, description: 'Bad Request: rich message is not supported' },
+        { ok: true, result: { message_id: 10 } },
+      ];
+      const fetch = vi.fn(
+        async (_url: string, _init: RequestInit) => new Response(JSON.stringify(replies.shift())),
+      );
+      const bot = createTelegramBotApi({ token: '1:abc', fetch });
+      expect(await bot.sendMessage(100, 'простой', { rich: '<table></table>', keyboard })).toEqual({
+        ok: true,
+        messageId: 10,
+      });
+      expect(fetch.mock.calls[1]![0]).toBe('https://api.telegram.org/bot1:abc/sendMessage');
+      expect(JSON.parse(String(fetch.mock.calls[1]![1].body))).toMatchObject({
+        text: 'простой',
+        reply_markup: { inline_keyboard: [[{ text: 'Проверить кнопки', callback_data: 'test' }]] },
+      });
+    }
+
+    // Лимит и блокировка бота — не про вид сообщения: второй попытки нет.
+    const limited = fetchReturning({
+      ok: false,
+      error_code: 429,
+      description: 'Too Many Requests',
+      parameters: { retry_after: 5 },
+    });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch: limited });
+    expect(await bot.sendMessage(100, 'простой', { rich: '<table></table>' })).toMatchObject({
+      ok: false,
+      retryAfterSeconds: 5,
+    });
+    expect(limited.mock.calls).toHaveLength(1);
+  });
+
+  it('ответ на нажатие и правка кнопок', async () => {
+    const fetch = fetchReturning({ ok: true, result: true });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    expect(await bot.answerCallback('cb1')).toBe(true);
+    expect(await bot.answerCallback('cb2', 'Нет права', { alert: true })).toBe(true);
+    expect(
+      await bot.editKeyboard(100, 7, [[{ text: 'Сдан ✓', data: 'off', disabled: true }]]),
+    ).toBe(true);
+    const bodies = fetch.mock.calls.map(([url, init]) => [
+      url.split('/').pop(),
+      JSON.parse(String(init.body)),
+    ]);
+    expect(bodies).toEqual([
+      ['answerCallbackQuery', { callback_query_id: 'cb1' }],
+      ['answerCallbackQuery', { callback_query_id: 'cb2', text: 'Нет права', show_alert: true }],
+      [
+        'editMessageReplyMarkup',
+        {
+          chat_id: 100,
+          message_id: 7,
+          reply_markup: {
+            inline_keyboard: [[{ text: 'Сдан ✓', callback_data: 'off', disabled: {} }]],
+          },
+        },
+      ],
+    ]);
+    const refused = createTelegramBotApi({
+      token: '1:abc',
+      fetch: fetchReturning({ ok: false, error_code: 400, description: 'query is too old' }),
+    });
+    expect(await refused.answerCallback('cb3', 'x')).toBe(false);
+    expect(await refused.editKeyboard(100, 7, [])).toBe(false);
+  });
+
   it('не ждёт Telegram дольше заданного: запрос прерывается', async () => {
     const hanging = vi.fn(
       (_url: string, init: RequestInit) =>
@@ -31,6 +163,21 @@ describe('createTelegramBotApi', () => {
     const bot = createTelegramBotApi({ token: 't', fetch: hanging });
     await expect(bot.sendMessage(1, 'код', { timeoutMs: 20 })).rejects.toThrow();
     expect(hanging.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('ошибка сети: токен бота из адреса в текст и причину ошибки не попадает', async () => {
+    const fetch = vi.fn(async (url: string) => {
+      throw new TypeError(`Failed to parse URL from ${url}`, { cause: new Error(url) });
+    });
+    const bot = createTelegramBotApi({ token: '1:secret', fetch });
+    const err = await bot.sendMessage(100, 'Текст').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).name).toBe('TypeError');
+    expect((err as Error).message).toBe(
+      'Failed to parse URL from https://api.telegram.org/bot<скрыт>/sendMessage',
+    );
+    expect((err as Error).cause).toBeUndefined();
+    expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain('1:secret');
   });
 
   it('429 — повторить позже, 403 — повтор бессмыслен', async () => {
@@ -132,6 +279,13 @@ describe('createFakeTelegram', () => {
     expect(await tg.sendMessage(1, 'a')).toMatchObject({ ok: false, retryAfterSeconds: 3 });
     expect(await tg.sendMessage(1, 'b')).toEqual({ ok: true, messageId: 1 });
     expect(tg.sent).toEqual([{ chatId: 1, text: 'b', options: {} }]);
+    expect(tg.messageIds).toEqual([1]);
+    await tg.answerCallback('cb', 'Готово', { alert: true });
+    await tg.editKeyboard(1, 1, [[{ text: 'к', data: 'off', disabled: true }]]);
+    expect(tg.answers).toEqual([{ callbackId: 'cb', text: 'Готово', alert: true }]);
+    expect(tg.edits).toEqual([
+      { chatId: 1, messageId: 1, keyboard: [[{ text: 'к', data: 'off', disabled: true }]] },
+    ]);
     await tg.setWebhook('u', 's');
     expect(tg.webhook).toEqual({ url: 'u', secretToken: 's' });
     expect(await tg.getWebhookInfo()).toEqual({

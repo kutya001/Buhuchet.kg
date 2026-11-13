@@ -210,6 +210,7 @@ const SYSTEM_TEXTS = {
     ru: 'Нет такой подстановки: {list}. В этом шаблоне подстановок нет',
     section: E,
   },
+  'pdicts.err.template_too_long': { ru: 'Не длиннее {max} знаков: сейчас {n}', section: E },
   'pdicts.err.missing_vars': {
     ru: 'Добавьте подстановку {list}: без неё код не дойдёт до получателя',
     section: E,

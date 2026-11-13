@@ -93,6 +93,13 @@ export function TemplatesTab() {
         );
         return setError(`items.${i}.text`, { type: 'server', message }, { shouldFocus: true });
       }
+      if (code === 'template_too_long' && i >= 0) {
+        const message = t('pdicts.err.template_too_long', {
+          max: String(details.max ?? ''),
+          n: String(details.length ?? ''),
+        });
+        return setError(`items.${i}.text`, { type: 'server', message }, { shouldFocus: true });
+      }
       if (code === 'missing_vars' && i >= 0) {
         const message = t('pdicts.err.missing_vars', { list: String(details.list ?? '') });
         return setError(`items.${i}.text`, { type: 'server', message }, { shouldFocus: true });

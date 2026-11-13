@@ -848,6 +848,20 @@
       "when": 1794541805420,
       "tag": "0120_tariff_edit_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 121,
+      "version": "7",
+      "when": 1794571125693,
+      "tag": "0121_telegram_bot",
+      "breakpoints": true
+    },
+    {
+      "idx": 122,
+      "version": "7",
+      "when": 1794571128271,
+      "tag": "0122_telegram_bot_functions",
+      "breakpoints": true
     }
   ]
 }

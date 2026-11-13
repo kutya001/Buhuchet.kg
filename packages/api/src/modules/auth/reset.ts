@@ -24,7 +24,7 @@ import {
   RESET_CODE_MAX_DAILY_FAILURES,
   RESET_CODE_MAX_PER_HOUR,
   RESET_CODE_TTL_MINUTES,
-  withOrganization,
+  codeWithOrganization,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -36,7 +36,7 @@ import {
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
-import { botText, notifyPasswordChanged, sendNow } from '../telegram/bot';
+import { botText, notifyPasswordChanged, sendCodeMessage } from '../telegram/bot';
 import { AUTH_IP_LIMITED_DESCRIPTION, authIpLimited } from './ip-limit';
 
 const error = { 'application/json': { schema: ApiError } };
@@ -140,17 +140,19 @@ async function sendResetCode(deps: ApiDeps, account: LoginRecord): Promise<void>
     codeHash: await hashPassword(code),
   });
   if (request.status !== 'sent') return;
-  const text = withOrganization(
+  // Организация — второй строкой: код остаётся первым в строке уведомления (docs/deviations.md п. Т-2).
+  const text = codeWithOrganization(
     await botText(deps, 'tgCode', { код: code }),
     account.orgName,
     request.chat.shared,
   );
   // Дольше секунды не ждём: иначе медленный Telegram выдал бы по времени ответа, что логин есть.
   // В журнал отправок — без текста кода (docs/deviations.md, п. 12).
-  await sendNow(
+  await sendCodeMessage(
     deps,
     request.chat.chatId,
     text,
+    code,
     'reset_code',
     { timeoutMs: 1000 },
     { userId: account.userId, kind: 'code' },

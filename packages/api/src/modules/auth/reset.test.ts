@@ -239,7 +239,16 @@ describe.skipIf(!databaseAvailable())('«Забыли пароль?» и сбр�
     await linkTelegram(app, await signIn(app, 'acc-b', PASSWORD), 5001);
     await forgetCodes(people['acc-a']!.userId);
     await requestCode('acc-a');
-    expect(tg.sent.at(-1)!.text).toMatch(/^Организация А\n\d{6} — код для восстановления пароля\./);
+    // Один Telegram у двух логинов: организация — второй строкой, код остаётся первым (п. Т-2).
+    expect(tg.sent.at(-1)!.text).toMatch(
+      /^\d{6} — код для восстановления пароля\. Действует 10 минут\.\nОрганизация А$/,
+    );
+    // Код копируется: в тексте он моноширинный, под сообщением — кнопка «Скопировать код».
+    const code = /^(\d{6})/.exec(tg.sent.at(-1)!.text)![1]!;
+    expect(tg.sent.at(-1)!.options).toMatchObject({
+      code,
+      keyboard: [[{ text: 'Скопировать код', copy: code }]],
+    });
     const last = sentCode();
     if (codes[0] !== last) expect((await confirm('acc-a', codes[0]!)).status).toBe(400);
     expect((await confirm('acc-a', last)).status).toBe(200);

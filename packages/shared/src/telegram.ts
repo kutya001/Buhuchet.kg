@@ -6,6 +6,8 @@ import { RecordVersion } from './common';
 export const TelegramInfo = z.object({
   name: z.string(),
   linkedAt: z.iso.datetime(),
+  /** «Сообщения простым текстом» — только в «кто я» (свой профиль). */
+  plain: z.boolean().optional(),
 });
 export type TelegramInfo = z.infer<typeof TelegramInfo>;
 
@@ -49,3 +51,7 @@ export const NotifySettingsRequest = z.strictObject({
   off: z.array(z.enum(NOTIFY_KINDS)).max(NOTIFY_KINDS.length),
 });
 export type NotifySettingsRequest = z.infer<typeof NotifySettingsRequest>;
+
+/** «Сообщения простым текстом» в «Мой профиль» (поток Т, задача Т1): без таблиц и раскрывающихся разделов. */
+export const TelegramPlainRequest = z.strictObject({ plain: z.boolean() });
+export type TelegramPlainRequest = z.infer<typeof TelegramPlainRequest>;
