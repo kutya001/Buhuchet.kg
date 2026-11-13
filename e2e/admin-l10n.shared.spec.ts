@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, showStats, signIn } from './helpers';
 
 // Админка → «Локализация» (ТЗ «Админка» → «Модуль Локализация»; прототип admin/l10n.js): языки на
 // плашках, словарь текстов интерфейса с поиском и правка русского текста без изменения кода. Словарь
@@ -60,11 +60,8 @@ test.describe('Админка: Локализация', () => {
     try {
       await page.goto('/app/l10n');
       const plates = page.locator('[data-plates]');
-      // «Статистика» по умолчанию: на ПК показана, на телефоне скрыта (ТЗ «Статистика модуля»).
-      if (isMobile) {
-        await expect(plates).toHaveCount(0);
-        await page.getByRole('button', { name: 'Статистика' }).click();
-      }
+      // «Статистика» по умолчанию скрыта и на ПК, и на телефоне (прототип v88) — показать.
+      await showStats(page);
       const ru = plates.locator('[data-plate="ru"]');
       await expect(ru).toContainText('Русский');
       await expect(ru).toContainText('100 %');

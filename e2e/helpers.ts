@@ -202,6 +202,28 @@ export async function phoneTableView(page: Page) {
   await table.click();
 }
 
+/**
+ * «Статистика» модуля по умолчанию скрыта и на ПК, и на телефоне (прототип v88, docs/deviations.md
+ * п. И-1): показать плашки-итоги кнопкой, если они ещё не показаны. Выбор запоминается за
+ * пользователем, поэтому показанные плашки второй раз не скрываются. Нажатие, попавшее до ответа
+ * настроек вида, ответ затирает (кнопка «нажата», плашек нет) — тогда выключить и включить заново.
+ */
+export async function showStats(page: Page) {
+  const toggle = page.locator('[data-stats-toggle]');
+  const plates = page.locator('[data-plates]').first();
+  await expect(toggle).toBeVisible();
+  await expect(async () => {
+    if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true', { timeout: 1_000 });
+    try {
+      await expect(plates).toBeVisible({ timeout: 3_000 });
+    } catch (error) {
+      await toggle.click();
+      throw error;
+    }
+  }).toPass();
+}
+
 /** Положение элемента, когда анимация появления закончилась (два одинаковых замера подряд). */
 export async function settledBox(locator: Locator) {
   let last = '';

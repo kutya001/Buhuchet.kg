@@ -17,7 +17,7 @@ const YEAR_SECONDS = 365 * 24 * 60 * 60;
 
 export type Theme = 'light' | 'dark';
 
-/** Сохранённая тема; нет выбора — null (тема устройства). */
+/** Сохранённая тема; нет выбора — null (тема светлая, от темы устройства не зависит). */
 export function parseTheme(value: string | undefined): Theme | null {
   return value === 'light' || value === 'dark' ? value : null;
 }

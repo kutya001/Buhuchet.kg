@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { signIn, uniqueLogin } from './helpers';
+import { showStats, signIn, uniqueLogin } from './helpers';
 import { orgWithTypes } from './orgs';
 import { newContractor } from './reports';
 
@@ -27,12 +27,11 @@ function bishkekDay(shift = 0): string {
   return `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
 }
 
-/** На телефоне «Статистика» по умолчанию скрыта — показать плашки. */
-async function showStats(page: Page, screen: Locator, isMobile: boolean) {
+/** «Статистика» по умолчанию скрыта (прототип v88) — показать плашки. */
+async function showPlates(page: Page, screen: Locator) {
   await expect(screen.locator('[data-activity-chart]')).toBeVisible();
   await expect(screen.locator('[data-grid] [data-id]').first()).toBeVisible();
-  if (isMobile && (await screen.locator('[data-plates]').count()) === 0)
-    await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await showStats(page);
   await expect(screen.locator('[data-plates]')).toBeVisible();
 }
 
@@ -83,7 +82,7 @@ test.describe('«Главная» → «Активность»', () => {
     await expect(label).toHaveText(`${MONTHS[Number(today.slice(3, 5)) - 1]} ${today.slice(6)}`);
 
     // Плашки: работал один из двух, входы и действия владельца посчитаны.
-    await showStats(page, screen, isMobile);
+    await showPlates(page, screen);
     const worked = screen.locator('[data-plate="a1"]');
     await expect(worked.locator('[data-plate-value]')).toContainText('1');
     await expect(worked).toContainText('из 2');

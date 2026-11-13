@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newOrgOwner } from './helpers';
+import { newOrgOwner, showStats } from './helpers';
 import { orgWithTypes } from './orgs';
 import { assign } from './reports';
 
@@ -7,14 +7,13 @@ import { assign } from './reports';
 // каждый тест и проект (ПК и телефон): числа демо-организации меняют другие тесты.
 
 /**
- * На телефоне «Статистика» по умолчанию скрыта (прототип: `stats` — «off» на телефоне) — показать.
+ * «Статистика» по умолчанию скрыта и на ПК, и на телефоне (прототип v88) — показать.
  * Выбор запоминается: показанные плашки второй раз не скрываются.
  */
-async function showStats(page: Page, isMobile: boolean) {
+async function showPlates(page: Page) {
   const home = page.locator('[data-home-summary]');
   await expect(home.locator('[data-home-hello]')).toBeVisible();
-  if (isMobile && (await home.locator('[data-plates]').count()) === 0)
-    await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+  await showStats(page);
   await expect(home.locator('[data-plates]')).toBeVisible();
 }
 
@@ -30,7 +29,6 @@ test.describe('«Главная»', () => {
   test('(п. 24) новая организация: на «Главной» — нули и подсказка «Добавьте контрагентов…», без чек-листов и обучающих плашек; модули пустые с подсказкой и кнопкой первого действия', async ({
     page,
     baseURL,
-    isMobile,
   }) => {
     await newOrgOwner(page.request, new URL(baseURL!).origin);
     await page.goto('/app/home/today');
@@ -40,7 +38,7 @@ test.describe('«Главная»', () => {
     await expect(hint).toContainText('Добавьте контрагентов, чтобы здесь появились сроки и суммы.');
 
     // Статистика — по нулям.
-    await showStats(page, isMobile);
+    await showPlates(page);
     const values = home.locator('[data-plate] [data-plate-value]');
     await expect(values.first()).toBeVisible();
     expect(await values.count()).toBeGreaterThanOrEqual(4);
@@ -75,7 +73,6 @@ test.describe('«Главная»', () => {
   test('(проверка задачи #90) число на плашке равно числу строк в открытом списке', async ({
     page,
     baseURL,
-    isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
     await orgWithTypes(page.request, origin);
@@ -108,14 +105,14 @@ test.describe('«Главная»', () => {
     });
 
     await page.goto('/app/home/today');
-    await showStats(page, isMobile);
+    await showPlates(page);
     const home = page.locator('[data-home-summary]');
     await expect(home.locator('[data-plate="ovr"] [data-plate-value]')).not.toHaveText('0');
     const plates = ['ovr', 'wks', 'tsk'] as const;
     for (const id of plates) {
       if (id !== 'ovr') {
         await page.goto('/app/home/today');
-        await showStats(page, isMobile);
+        await showPlates(page);
       }
       const plate = home.locator(`[data-plate="${id}"]`);
       const n = Number((await plate.locator('[data-plate-value]').innerText()).trim());

@@ -98,16 +98,21 @@ describe('ключи списков с настройками вида', () => {
 });
 
 describe('«Статистика» модуля (ТЗ «Статистика модуля»)', () => {
-  it('по умолчанию показана на ПК и скрыта на телефоне', () => {
-    expect(statsShown({}, false)).toBe(true);
+  it('по умолчанию скрыта и на ПК, и на телефоне (прототип v88)', () => {
+    expect(statsShown({}, false)).toBe(false);
     expect(statsShown({}, true)).toBe(false);
+  });
+
+  it('показанная на ПК остаётся показанной, пока её не скроют', () => {
+    expect(statsShown({ stats: true }, false)).toBe(true);
+    expect(statsShown({ stats: true }, true)).toBe(false);
   });
 
   it('выбор на ПК и на телефоне — свой', () => {
     expect(statsShown({ stats: false }, false)).toBe(false);
     expect(statsShown({ stats: false }, true)).toBe(false);
     expect(statsShown({ phoneStats: true }, true)).toBe(true);
-    expect(statsShown({ phoneStats: true }, false)).toBe(true);
+    expect(statsShown({ phoneStats: true }, false)).toBe(false);
     expect(statsShown({ stats: false, phoneStats: true }, false)).toBe(false);
   });
 });

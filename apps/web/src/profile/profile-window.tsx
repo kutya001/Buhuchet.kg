@@ -307,7 +307,8 @@ function ThemeField() {
           value={theme}
           onChange={(e) => {
             const next = e.target.value === 'dark' ? 'dark' : 'light';
-            setTheme(next);
+            // Волна идёт со стороны кнопки темы верхней панели (прототип v88).
+            setTheme(next, document.querySelector('[data-theme-toggle]'));
             choose(next);
           }}
         >

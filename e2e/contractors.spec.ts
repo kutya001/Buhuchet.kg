@@ -1,10 +1,11 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
-  DEMO_PASSWORD,
   defaultResponsible,
+  DEMO_PASSWORD,
   finger,
   hire,
   settledBox,
+  showStats,
   signIn,
   uniqueLogin,
 } from './helpers';
@@ -74,11 +75,11 @@ async function signInAsNewChief(page: Page, origin: string) {
   expect(changed.status(), await changed.text()).toBe(200);
 }
 
-/** Список с плашками: на телефоне статистика по умолчанию скрыта — включается кнопкой. */
-async function showPlates(page: Page, isMobile: boolean) {
+/** Список с плашками: статистика по умолчанию скрыта — включается кнопкой. */
+async function showPlates(page: Page) {
   await page.goto('/app/cps/all');
   await expect(rows(page).first()).toBeVisible();
-  if (isMobile) await page.locator('[data-stats-toggle]').click();
+  await showStats(page);
   await expect(page.locator('[data-plates]')).toBeVisible();
 }
 
@@ -206,7 +207,6 @@ test.describe('Этап 2: контрагенты — список и карто
   test('(Без ГКЭД) плашка «Без ГКЭД» показывает контрагентов без основного вида деятельности; в их карточке — предупреждение «Укажите основной вид деятельности (ГКЭД)»', async ({
     page,
     baseURL,
-    isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
     await signInAsNewChief(page, origin);
@@ -217,7 +217,7 @@ test.describe('Этап 2: контрагенты — список и карто
     };
     const without = all.items.filter((c) => c.gked === null).map((c) => c.id);
     expect(without.length).toBeGreaterThan(0);
-    await showPlates(page, isMobile);
+    await showPlates(page);
     const plate = page.locator('[data-plate="nogk"]');
     await expect(plate).toContainText('Без ГКЭД');
     // Пока ответ с фильтром не пришёл, список держит прежние строки (keepPreviousData): строки
@@ -633,7 +633,7 @@ test.describe('Этап 2: контрагенты — список и карто
     const name = 'ИП Жумабеков Р. С.';
     await signInAsNewChief(page, origin);
     // ИП в архиве (как в прототипе): виден по плашке «В архиве».
-    await showPlates(page, isMobile);
+    await showPlates(page);
     await page.locator('[data-plate="arc"]').click();
     await search(page, isMobile, 'Жумабеков');
     const card = await openCard(page, name);
@@ -718,7 +718,7 @@ test.describe('Этап 2: контрагенты — список и карто
       benefits: ['ЛЬГ-01'],
     });
     await signInAsNewChief(page, origin);
-    await showPlates(page, isMobile);
+    await showPlates(page);
     await search(page, isMobile, word);
     const card = await openCard(page, name);
     await expect(card).toContainText('Тариф ПВТ / ПКИ');

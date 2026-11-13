@@ -587,11 +587,11 @@ export function isViewKey(value: string): value is ViewKey {
 }
 
 /**
- * Показана ли «Статистика» модуля: выбор пользователя на этом устройстве, иначе — на ПК показана, на
- * телефоне скрыта (ТЗ «По умолчанию статистика показана на ПК и скрыта на телефоне»).
+ * Показана ли «Статистика» модуля: выбор пользователя (свой на ПК и на телефоне), иначе — скрыта и на
+ * ПК, и на телефоне (решение заказчика 13.11.2026, прототип v88; docs/deviations.md п. И-1).
  */
 export function statsShown(settings: GridViewSettings, phone: boolean): boolean {
-  return (phone ? settings.phoneStats : settings.stats) ?? !phone;
+  return (phone ? settings.phoneStats : settings.stats) ?? false;
 }
 
 /**
