@@ -375,7 +375,13 @@ export function ContractorCardWindow(props: ContractorCardProps) {
         ) : null}
         {shownTab === 'tasks' ? <ContractorTasksTab contractorId={id} archived={archived} /> : null}
         {shownTab === 'kpi' ? <KpiCardTab contractorId={id} /> : null}
-        {shownTab === 'files' ? <ContractorFilesTab contractorId={id} archived={archived} /> : null}
+        {shownTab === 'files' ? (
+          <ContractorFilesTab
+            contractorId={id}
+            name={c?.name ?? initial?.name ?? ''}
+            archived={archived}
+          />
+        ) : null}
         {shownTab === 'hist' ? <HistoryTab t={t} id={id} /> : null}
       </div>
       {feeDialogs.dialogs}

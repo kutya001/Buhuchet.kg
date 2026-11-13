@@ -14,18 +14,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
-import {
-  fileMeta,
-  filesQuery,
-  pickedFilesProblem,
-  uploadFile,
-  useFilePageToggle,
-} from './files-data';
+import { AttachDialog } from './attach-dialog';
+import { FileEditDialog } from './file-edit-dialog';
+import { fileMeta, filesQuery, uploadFile, useFilePageToggle } from './files-data';
 
 /**
  * Блок «Файлы» карточки записи (задача 2.04; прототип modules/services.js `filesBox`, `bindFiles`):
- * файлы записи, «Прикрепить» (несколько файлов сразу), «Скачать» по ссылке на 15 минут и «Удалить» с
- * подтверждением. Модуль с записями ставит его в карточку со своим `source`.
+ * файлы записи, «Прикрепить» (несколько файлов сразу; после выбора — окно с необязательным
+ * примечанием, прототип v95 `attachDlg`), «Скачать» по ссылке на 15 минут, «Изменить файл» (название,
+ * примечание, замена — `fileEditDlg`) и «Удалить» с подтверждением. Модуль с записями ставит его в
+ * карточку со своим `source`.
  */
 export function RecordFiles({ source }: { source: FileSource }) {
   const t = useT();
@@ -36,6 +34,8 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const files = useQuery(query);
   const [busy, setBusy] = useState(false);
   const [ask, setAsk] = useState<{ id: string; name: string; version: number } | null>(null);
+  const [picked, setPicked] = useState<File[] | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const togglePage = useFilePageToggle(t, toast, errorText);
 
   const labels = useMemo<FilesBoxLabels>(
@@ -47,6 +47,9 @@ export function RecordFiles({ source }: { source: FileSource }) {
       download: (name) => t('files.download', { name }),
       remove: (name) => t('files.remove', { name }),
       removeTitle: t('files.remove_title'),
+      edit: (name) => t('files.edit', { name }),
+      editTitle: t('files.edit_title'),
+      noteTitle: t('files.note_title'),
     }),
     [t],
   );
@@ -60,7 +63,9 @@ export function RecordFiles({ source }: { source: FileSource }) {
     id: f.id,
     name: f.name,
     meta: fileMeta(t, f.name, f.size),
+    note: f.note,
     canDelete: f.canDelete,
+    canEdit: f.canEdit,
     // «Глаз» (прототип v74 `pgFileBtn`): только с правом «Управлять страницей контрагента».
     ...(f.page?.canChange
       ? {
@@ -73,22 +78,11 @@ export function RecordFiles({ source }: { source: FileSource }) {
   }));
   const refresh = () => client.invalidateQueries({ queryKey: query.queryKey });
 
-  const pick = async (picked: File[]) => {
-    const problem = pickedFilesProblem(picked);
-    if (problem) {
-      const text =
-        'names' in problem
-          ? t('files.too_large', { names: problem.names })
-          : t('files.upload_failed', {
-              name: problem.name,
-              error: errorText({ code: problem.code, message: '' }),
-            });
-      return toast(text, { bad: true, icon: 'alert' });
-    }
+  const attach = async (chosen: File[], note: string) => {
     setBusy(true);
     let attached = 0;
-    for (const file of picked) {
-      const res = await uploadFile(source, file);
+    for (const file of chosen) {
+      const res = await uploadFile(source, file, { note });
       if (res.ok) attached++;
       else
         toast(t('files.upload_failed', { name: file.name, error: errorText(res.error) }), {
@@ -126,13 +120,27 @@ export function RecordFiles({ source }: { source: FileSource }) {
         canUpload={files.data.canUpload}
         busy={busy}
         labels={labels}
-        onPick={(picked) => void pick(picked)}
+        onPick={setPicked}
         onDownload={(item) => void download(item)}
         onDelete={(item) => {
           const file = files.data.items.find((f) => f.id === item.id);
           if (file) setAsk({ id: file.id, name: file.name, version: file.version });
         }}
         onPage={(item) => item.page && void togglePage(item, !item.page.hidden)}
+        onEdit={(item) => setEditId(item.id)}
+      />
+      <AttachDialog
+        files={picked}
+        onClose={() => setPicked(null)}
+        onAttach={(note) => {
+          const chosen = picked ?? [];
+          setPicked(null);
+          void attach(chosen, note);
+        }}
+      />
+      <FileEditDialog
+        file={files.data.items.find((f) => f.id === editId) ?? null}
+        onClose={() => setEditId(null)}
       />
       <ConfirmDialog
         open={ask !== null}

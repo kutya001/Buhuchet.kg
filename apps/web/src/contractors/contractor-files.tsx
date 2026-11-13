@@ -15,15 +15,11 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { AttachDialog } from '../files/attach-dialog';
+import { FileEditDialog } from '../files/file-edit-dialog';
 import { FileWindow } from '../files/file-window';
-import { filePageText } from '../files/file-columns';
-import {
-  fileSizeText,
-  pickedFilesProblem,
-  uploadFile,
-  useFilePageToggle,
-  useFilesRefresh,
-} from '../files/files-data';
+import { fileKindText, filePageText } from '../files/file-columns';
+import { fileSizeText, uploadFile, useFilePageToggle, useFilesRefresh } from '../files/files-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 
@@ -59,13 +55,18 @@ export function useFilesTabOn(): boolean {
  * Вкладка «Файлы» карточки контрагента (ТЗ «Карточка контрагента с вкладками»: «Документов: N» и
  * «Прикрепить»; прототип modules/contractor-card.js, `st.tab==='files'`): документы контрагента и его
  * записей; строка открывает окно файла со «Скачать». «Прикрепить» (право «Загружать файлы») кладёт файлы
- * как загруженные вручную к этому контрагенту — их видно и в «Файловом менеджере».
+ * как загруженные вручную к этому контрагенту — их видно и в «Файловом менеджере». После выбора файлов —
+ * окно с необязательным примечанием; примечание — под названием файла; карандаш — «Изменить файл»
+ * (прототип v95 `attachDlg`, `fileEditDlg`).
  */
 export function ContractorFilesTab({
   contractorId,
+  name,
   archived,
 }: {
   contractorId: string;
+  /** Название контрагента — строка под заголовком окна «Прикрепить файл». */
+  name: string;
   archived: boolean;
 }) {
   const t = useT();
@@ -77,6 +78,9 @@ export function ContractorFilesTab({
   const files = useQuery(contractorFilesQuery(contractorId));
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<DialogSlot<FileManagerRow> | null>(null);
+  const [picked, setPicked] = useState<File[] | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const canEdit = access.can('filesUpload');
   const canAttach = access.can('filesUpload') && !archived;
   const cppage = access.feature('cppage');
   const togglePage = useFilePageToggle(t, toast, errorText);
@@ -87,23 +91,11 @@ export function ContractorFilesTab({
     globalThis.location.assign(FileLink.parse(res.data).url);
   };
 
-  const attach = async (picked: File[]) => {
-    const problem = pickedFilesProblem(picked);
-    if (problem) {
-      return toast(
-        'names' in problem
-          ? t('files.too_large', { names: problem.names })
-          : t('files.upload_failed', {
-              name: problem.name,
-              error: errorText({ code: problem.code, message: '' }),
-            }),
-        { bad: true, icon: 'alert' },
-      );
-    }
+  const attach = async (chosen: File[], note: string) => {
     setBusy(true);
     let done = 0;
-    for (const file of picked) {
-      const res = await uploadFile(MANUAL, file, { contractorId, note: '' });
+    for (const file of chosen) {
+      const res = await uploadFile(MANUAL, file, { contractorId, note });
       if (res.ok) done++;
       else
         toast(t('files.upload_failed', { name: file.name, error: errorText(res.error) }), {
@@ -134,9 +126,9 @@ export function ContractorFilesTab({
         multiple
         hidden
         onChange={(e) => {
-          const picked = [...(e.target.files ?? [])];
+          const chosen = [...(e.target.files ?? [])];
           e.target.value = '';
-          if (picked.length) void attach(picked);
+          if (chosen.length) setPicked(chosen);
         }}
       />
     </>
@@ -145,6 +137,7 @@ export function ContractorFilesTab({
   if (files.isError) return <Note tone="bad">{t('files.load_error')}</Note>;
   const data = files.data;
   if (!data) return null;
+  const editFile = data.items.find((f) => f.id === editId) ?? null;
   return (
     <div className="flex flex-col gap-3" data-cp-files="">
       {data.total === 0 ? (
@@ -168,15 +161,28 @@ export function ContractorFilesTab({
                 { key: 'size', label: t('cp.files.col.size'), numeric: true },
                 // Прототип v74: «На странице» — «глаз» и «Да» / «Скрыт» / «—».
                 ...(cppage ? [{ key: 'page', label: t('cp.files.col.page') }] : []),
+                // Прототип v95: карандаш «Изменить файл» — тем, у кого есть право «Загружать файлы».
+                ...(canEdit ? [{ key: 'edit', label: '', numeric: true, actions: true }] : []),
               ]}
               rows={data.items.map((f) => ({
                 key: f.id,
                 cells: {
                   name: (
-                    <span className="inline-flex items-center gap-1.5">
-                      <Icon name="file" size="sm" />
-                      {f.name}
-                    </span>
+                    <>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Icon name="file" size="sm" />
+                        {f.name}
+                      </span>
+                      {f.note ? (
+                        <div
+                          data-file-note=""
+                          title={t('files.note_title')}
+                          className="text-xs font-normal text-muted italic [overflow-wrap:anywhere]"
+                        >
+                          {f.note}
+                        </div>
+                      ) : null}
+                    </>
                   ),
                   src: <span className="text-muted">{f.source}</span>,
                   size: <span className="text-muted">{fileSizeText(t, f.size)}</span>,
@@ -205,6 +211,22 @@ export function ContractorFilesTab({
                       </span>
                     </span>
                   ),
+                  edit: (
+                    <button
+                      type="button"
+                      data-file-edit=""
+                      className={iconButtonClass('sm')}
+                      title={t('files.edit_title')}
+                      aria-label={t('files.edit', { name: f.name })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditId(f.id);
+                      }}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <Icon name="edit" size="sm" />
+                    </button>
+                  ),
                 },
                 wide: ['name'],
               }))}
@@ -214,7 +236,7 @@ export function ContractorFilesTab({
               }}
             />
             <span className="text-[11.5px] leading-[1.4] text-faint">
-              {t('cp.files.hint')}
+              {t('cp.files.hint')} {t('files.cp.hint_edit')}
               {cppage ? ` ${t('cp.files.hint_page')}` : ''}
             </span>
           </Box>
@@ -223,13 +245,34 @@ export function ContractorFilesTab({
       {open ? (
         <FileWindow
           key={`file-${open.n}`}
-          file={open.data}
+          // После «Изменить файл» окно показывает перечитанную строку.
+          file={data.items.find((f) => f.id === open.data.id) ?? open.data}
           open={open.open}
           onClose={() => setOpen(closeSlot)}
           onDownload={() => void download(open.data)}
           onSource={null}
+          onEdit={() => setEditId(open.data.id)}
         />
       ) : null}
+      <AttachDialog
+        files={picked}
+        sub={name}
+        onClose={() => setPicked(null)}
+        onAttach={(note) => {
+          const chosen = picked ?? [];
+          setPicked(null);
+          void attach(chosen, note);
+        }}
+      />
+      <FileEditDialog
+        file={editFile}
+        sub={
+          editFile
+            ? t('files.window.sub', { kind: fileKindText(t, editFile.kind), src: editFile.source })
+            : undefined
+        }
+        onClose={() => setEditId(null)}
+      />
     </div>
   );
 }

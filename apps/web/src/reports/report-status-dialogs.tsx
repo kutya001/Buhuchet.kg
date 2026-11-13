@@ -39,6 +39,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
+import { FileNoteInput } from '../files/attach-dialog';
 import { filesQuery, pickedFilesProblem, uploadFile } from '../files/files-data';
 import { ReportTaxBox, useReportTaxBox } from '../kpi/kpi-tax-box';
 import { useErrorText, useT } from '../l10n/provider';
@@ -142,6 +143,8 @@ async function uploadPicked(
   errorText: (e: ApiErrorLike) => string,
   reportId: string,
   picked: readonly File[],
+  /** Примечание — одно на все выбранные файлы (окно «Прикрепить файлы», прототип v95 `fileDlg`). */
+  note?: string,
 ): Promise<{ ok: true; ids: string[] } | { ok: false; error: string }> {
   const problem = pickedFilesProblem(picked);
   if (problem) {
@@ -158,7 +161,11 @@ async function uploadPicked(
   }
   const ids: string[] = [];
   for (const file of picked) {
-    const res = await uploadFile({ kind: 'report', id: reportId }, file);
+    const res = await uploadFile(
+      { kind: 'report', id: reportId },
+      file,
+      note ? { note } : undefined,
+    );
     if (!res.ok)
       return {
         ok: false,
@@ -1291,7 +1298,10 @@ export function ReportAmountDialog({ card: initial, open, onClose, onDone }: Car
 
 /* ───────────── «Прикрепить файл» ───────────── */
 
-/** «Прикрепить файлы» (прототип fileDlg): отчёт, квитанция, скриншот из кабинета — в блок «Файлы». */
+/**
+ * «Прикрепить файлы» (прототип fileDlg): отчёт, квитанция, скриншот из кабинета — в блок «Файлы»;
+ * необязательное примечание — одно на все выбранные файлы (прототип v95).
+ */
 export function ReportFileDialog({
   report,
   open,
@@ -1308,13 +1318,14 @@ export function ReportFileDialog({
   const errorText = useErrorText();
   const id = useId();
   const [picked, setPicked] = useState<File[]>([]);
+  const [note, setNote] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     if (!picked.length) return setError(t('report.file.required'));
     setBusy(true);
-    const res = await uploadPicked(t, errorText, report.id, picked);
+    const res = await uploadPicked(t, errorText, report.id, picked, note);
     setBusy(false);
     onDone();
     if (!res.ok) return setError(res.error);
@@ -1327,7 +1338,7 @@ export function ReportFileDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      dirty={picked.length > 0}
+      dirty={picked.length > 0 || note !== ''}
       title={t('report.file.title')}
       sub={reportSub(report)}
       footer={
@@ -1341,22 +1352,27 @@ export function ReportFileDialog({
         />
       }
     >
-      <Field
-        id={`${id}-files`}
-        label={t('report.file.field')}
-        hint={t('report.file.hint')}
-        error={error}
-      >
-        {(control) => (
-          <FilesInput
-            control={control}
-            onPick={(f) => {
-              setPicked(f);
-              setError(undefined);
-            }}
-          />
-        )}
-      </Field>
+      <div className="flex flex-col gap-3.5">
+        <Field
+          id={`${id}-files`}
+          label={t('report.file.field')}
+          hint={t('report.file.hint')}
+          error={error}
+        >
+          {(control) => (
+            <FilesInput
+              control={control}
+              onPick={(f) => {
+                setPicked(f);
+                setError(undefined);
+              }}
+            />
+          )}
+        </Field>
+        <Field id={`${id}-note`} label={t('files.note')} hint={t('files.note_hint_many')}>
+          {(control) => <FileNoteInput control={control} value={note} onChange={setNote} />}
+        </Field>
+      </div>
     </Modal>
   );
 }
