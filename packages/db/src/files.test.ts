@@ -154,6 +154,12 @@ describe.skipIf(!databaseAvailable())('файлы организации: таб
         tx.insert(files).values({ ...newFile(b), orgId: b.orgId }),
       ),
     ).rejects.toThrow(rlsViolation);
+    // Загрузка-замена не может ссылаться на файл чужой организации (составной ключ с `org_id`).
+    await expect(
+      withOrgContext(t.app.db, ctxA(), (tx) =>
+        insertPendingFile(tx, newFile(a, { replacesId: fileB.id })),
+      ),
+    ).rejects.toThrow(violation('files_replaces_fk'));
     // Без контекста организации не видно ничего.
     expect(await t.app.db.select().from(files)).toEqual([]);
   });
@@ -276,7 +282,11 @@ describe.skipIf(!databaseAvailable())('файлы организации: таб
     await expect(
       withOrgContext(t.app.db, ctxChief(), (tx) => markFileReady(tx, upload.id)),
     ).rejects.toThrow(violation('files_replaces_check'));
-    const oldKey = await change(3, { name: 'Договор.jpg', note: 'цветной', replacementId: upload.id });
+    const oldKey = await change(3, {
+      name: 'Договор.jpg',
+      note: 'цветной',
+      replacementId: upload.id,
+    });
     expect(oldKey).toBe(file.storageKey);
     [row] = await t.admin.db.select().from(files).where(eq(files.id, file.id));
     expect(row).toMatchObject({

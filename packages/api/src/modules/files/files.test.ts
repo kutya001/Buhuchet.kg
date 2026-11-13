@@ -641,7 +641,11 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       expect(same.status).toBe(200);
       expect(FileItem.parse(await same.json()).version).toBe(saved.version);
       // Примечание убрано.
-      const cleared = await edit(acc, item.id, { version: saved.version, name: saved.name, note: '' });
+      const cleared = await edit(acc, item.id, {
+        version: saved.version,
+        name: saved.name,
+        note: '',
+      });
       expect(FileItem.parse(await cleared.json())).toMatchObject({
         note: null,
         version: saved.version + 1,
@@ -724,6 +728,79 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       expect((await apiErr(res)).code).toBe('forbidden');
       const shown = (await list(chief, `kind=record&id=${closed.id}`)).items[0]!;
       expect(shown).toMatchObject({ name: 'архив.pdf', canEdit: false, canReplace: false });
+    });
+
+    it('оба метода: без входа — 401; «Просматривать файлы» без «Загружать файлы» — 403; замену файла чужого контрагента не начать — 404', async () => {
+      const item = await upload(acc, 'вход.pdf');
+      const body = { version: item.version, name: 'вход 2.pdf', note: '' };
+      const begin = (cookie: string | undefined, id: string) =>
+        call('POST', `/api/files/${id}/replacement`, cookie, { name: 'вход.pdf', size: 3 });
+      expect((await call('PATCH', `/api/files/${item.id}`, undefined, body)).status).toBe(401);
+      expect((await begin(undefined, item.id)).status).toBe(401);
+      // Видит файлы, но не загружает: ни названия с примечанием, ни замены.
+      await f.t.admin.db.insert(schema.rolePermissions).values({
+        orgId: f.a.orgId,
+        roleId: f.roleIds.senior,
+        permissionId: 'filesView',
+      });
+      try {
+        const viewer = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+        expect((await call('GET', '/api/files?kind=manual', viewer)).status).toBe(200);
+        for (const res of [await edit(viewer, item.id, body), await begin(viewer, item.id)]) {
+          expect(res.status).toBe(403);
+          expect((await apiErr(res)).code).toBe('forbidden');
+        }
+      } finally {
+        await f.t.admin.db
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, f.roleIds.senior),
+              eq(schema.rolePermissions.permissionId, 'filesView'),
+            ),
+          );
+      }
+      // Файл записи чужого контрагента (область «Свои») — как несуществующий и для начала замены.
+      const foreign = newRecord('chief-a');
+      const theirs = await upload(chief, 'чужой контрагент 2.pdf', undefined, foreign);
+      expect((await begin(acc, theirs.id)).status).toBe(404);
+      expect((await list(acc)).items.find((i) => i.id === item.id)).toMatchObject({
+        name: 'вход.pdf',
+        version: item.version,
+      });
+    });
+
+    it('замену, начатую больше часа назад, сохранить нельзя — 404; управляющие знаки в примечании — пробелом', async () => {
+      const item = await upload(acc, 'час.pdf');
+      const old = await replacement(acc, item.id, 'час.pdf', new Uint8Array(4));
+      await f.t.admin.db
+        .update(files)
+        .set({ createdAt: sql`now() - interval '61 minutes'` })
+        .where(eq(files.id, old));
+      const late = await edit(acc, item.id, {
+        version: item.version,
+        name: item.name,
+        note: '',
+        uploadId: old,
+      });
+      expect(late.status).toBe(404);
+      // Файл остался прежним; свежая замена сохраняется.
+      expect((await list(acc)).items.find((i) => i.id === item.id)).toMatchObject({
+        size: item.size,
+        version: item.version,
+      });
+      const fresh = await replacement(acc, item.id, 'час.pdf', new Uint8Array(6));
+      const saved = await edit(acc, item.id, {
+        version: item.version,
+        name: item.name,
+        note: 'первая\u0000строка\nвторая\tстрока',
+        uploadId: fresh,
+      });
+      expect(saved.status).toBe(200);
+      expect(FileItem.parse(await saved.json())).toMatchObject({
+        size: 6,
+        note: 'первая строка вторая строка',
+      });
     });
 
     it('замена файла: номер прежний, содержимое, размер, тип и расширение — нового; прежний стёрт из хранилища', async () => {
@@ -899,6 +976,12 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
         await start(acc, 'акт.pdf', 10),
         await call('GET', `/api/files/${item.id}/link`, acc),
         await call('DELETE', `/api/files/${item.id}?version=${item.version}`, acc),
+        await call('PATCH', `/api/files/${item.id}`, acc, {
+          version: item.version,
+          name: 'выкл 2.pdf',
+          note: '',
+        }),
+        await call('POST', `/api/files/${item.id}/replacement`, acc, { name: 'выкл.pdf', size: 3 }),
       ]) {
         expect(res.status).toBe(403);
         expect(await apiErr(res)).toEqual({ code: 'files_off', message: FILE_MESSAGES.files_off });

@@ -24,6 +24,7 @@ import {
   FILE_LINK_SECONDS,
   FILE_MAX_BYTES,
   FILE_MESSAGES,
+  FILE_REPLACE_TTL_MS,
   FILE_UPLOAD_LINK_SECONDS,
   FILE_UPLOADS_PER_HOUR,
   fileContentType,
@@ -202,11 +203,22 @@ function itemBody(
 export const realNow = () => new Date();
 
 /** Удалить файл из хранилища, не роняя метод: запись в базе уже верная, лишний файл не опасен. */
-async function dropObject(deps: ApiDeps, key: string): Promise<void> {
+async function dropObject(
+  deps: ApiDeps,
+  key: string,
+  replaced?: { fileId: string },
+): Promise<void> {
   try {
     await deps.storage.delete(key);
   } catch (err) {
-    deps.logger.error({ err }, 'файлы: не удалось удалить файл из хранилища');
+    if (replaced) {
+      deps.logger.error(
+        { err, fileId: replaced.fileId, key },
+        'файлы: прежний файл после замены не удалён из хранилища',
+      );
+    } else {
+      deps.logger.error({ err }, 'файлы: не удалось удалить файл из хранилища');
+    }
   }
 }
 
@@ -691,7 +703,10 @@ export const startReplaceRoute = createRoute({
         'Замена начата: куда и с какими заголовками положить новый файл; прежний остаётся на месте, пока замену не сохранит «Изменить файл»',
       content: { 'application/json': { schema: FileUploadTicket } },
     },
-    400: { description: 'Файл больше 20 МБ, такой тип не загружается, неверное имя', content: error },
+    400: {
+      description: 'Файл больше 20 МБ, такой тип не загружается, неверное имя',
+      content: error,
+    },
     401: { description: 'Нет входа', content: error },
     403: {
       description:
@@ -813,12 +828,14 @@ export function editFileHandler(deps: ApiDeps): RouteHandler<typeof editFileRout
     let upload: FileRecord | null = null;
     if (uploadId) {
       upload = await withOrgContext(deps.db, ctx, (tx) => getFile(tx, uploadId));
-      // Чужая, законченная или начатая для другого файла загрузка — как несуществующая.
+      // Чужая, законченная, начатая для другого файла или больше часа назад загрузка — как
+      // несуществующая (старую может в эту минуту стирать очистка незаконченных загрузок).
       if (
         !upload ||
         upload.state !== 'pending' ||
         upload.createdBy !== ctx.userId ||
-        upload.replacesId !== id
+        upload.replacesId !== id ||
+        now.getTime() - upload.createdAt.getTime() > FILE_REPLACE_TTL_MS
       ) {
         return notFound();
       }
@@ -869,8 +886,9 @@ export function editFileHandler(deps: ApiDeps): RouteHandler<typeof editFileRout
         replacedKey,
       };
     });
-    // Прежний файл стирается из хранилища после сохранения: ссылки на него больше нет.
-    if (replacedKey) await dropObject(deps, replacedKey);
+    // Прежний файл стирается из хранилища после сохранения: ссылки на него больше нет. Не удалось —
+    // в журнале остаётся номер файла и ключ объекта, чтобы его можно было найти и стереть.
+    if (replacedKey) await dropObject(deps, replacedKey, { fileId: id });
     return c.json(body, 200);
   };
 }
