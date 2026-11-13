@@ -6,6 +6,8 @@ import {
   DICT_REQUEST_WHAT_MAX,
   ORG_DICT_IDS,
   ORG_DICT_WINDOW_IDS,
+  ORG_REPORT_TYPE_BULK_ACTIONS,
+  ORG_REPORT_TYPE_BULK_MAX,
   REMIND_DAY_MAX,
   REPORT_ACTS,
   REPORT_KINDS,
@@ -118,6 +120,32 @@ export const OrgReportTypesConnected = z.object({
   disconnected: z.number().int().nonnegative(),
 });
 export type OrgReportTypesConnected = z.infer<typeof OrgReportTypesConnected>;
+
+/**
+ * Массовые изменения видов отчётов (прототип v84: галочки в списке, «Подключить», «Настроить»,
+ * «Отключить»). Настройки — только у действия «Настроить»: без поля — «Не менять», `remindDays` —
+ * «Задать заново» (пустой набор — только в день срока), `connect` — «Подключить неподключённые виды».
+ */
+export const OrgReportTypesBulk = z.object({
+  action: z.enum(ORG_REPORT_TYPE_BULK_ACTIONS),
+  codes: z.array(TypeCode).min(1).max(ORG_REPORT_TYPE_BULK_MAX),
+  needFile: z.boolean().optional(),
+  needReceipt: z.boolean().optional(),
+  remindDays: RemindDays.optional(),
+  connect: z.boolean().optional(),
+});
+export type OrgReportTypesBulk = z.infer<typeof OrgReportTypesBulk>;
+
+/**
+ * Итог массового изменения: сколько видов выбрано, сколько изменено и сколько осталось подключёнными,
+ * потому что назначены действующим контрагентам (только у «Отключить»).
+ */
+export const OrgReportTypesBulkResult = z.object({
+  total: z.number().int().nonnegative(),
+  changed: z.number().int().nonnegative(),
+  busy: z.number().int().nonnegative(),
+});
+export type OrgReportTypesBulkResult = z.infer<typeof OrgReportTypesBulkResult>;
 
 /* ───────────── «Справочники платформы» глазами организации (задача 2.03) ───────────── */
 

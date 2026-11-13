@@ -46,6 +46,7 @@ import {
 } from './dicts-data';
 import { useTaxPick } from './tax-pick';
 import { TypeView } from './type-view';
+import { useTypesBulk } from './types-bulk';
 
 /**
  * Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). «Создано»
@@ -399,6 +400,11 @@ export function ReportTypesList() {
   };
 
   const noneConnected = settings.data ? !settings.data.items.some((s) => s.enabled) : false;
+  const policyDays = settings.data?.remindDays;
+  const bulk = useTypesBulk({
+    policyDays: useMemo(() => policyDays ?? [], [policyDays]),
+    onChanged: refresh,
+  });
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -448,8 +454,10 @@ export function ReportTypesList() {
         actions={(r) => [
           { id: 'open', label: t('dicts.types.open'), icon: 'eye', run: () => void openView(r) },
         ]}
+        bulk={canEdit ? bulk.actions : undefined}
         onOpen={(r) => void openView(r)}
       />
+      {bulk.dialogs}
       {view ? (
         <TypeView
           key={`type-${view.n}`}
