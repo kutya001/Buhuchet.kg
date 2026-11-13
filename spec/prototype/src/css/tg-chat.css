@@ -1,0 +1,42 @@
+/* Макет чата бота (поток Т, пакет заказчика 13.11.2026): сообщения с заголовком, таблицами, раскрывающимися разделами и кнопками, скрытые ответы, запасной простой текст */
+.tgc{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:var(--r-m,10px);background:var(--pane-alt);border:1px solid var(--border);min-width:0}
+.tgc-head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.tgc-ava{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--blue);color:#fff;font-weight:700;font-size:12px;flex:none}
+.tgc-day{align-self:center;font-size:11.5px;color:var(--muted);background:var(--pane);border:1px solid var(--border);border-radius:999px;padding:1px 10px}
+.tgc-m{align-self:flex-start;max-width:min(440px,100%);min-width:0;display:flex;flex-direction:column;gap:4px}
+.tgc-m.me{align-self:flex-end}
+.tgc-b{background:var(--raised);border:1px solid var(--border);border-radius:14px 14px 14px 4px;padding:8px 11px;font-size:13.5px;line-height:1.45;overflow-wrap:anywhere;min-width:0}
+.tgc-m.me .tgc-b{border-radius:14px 14px 4px 14px;background:var(--sel);font-family:var(--font-mono);font-size:13px}
+.tgc-b p{margin:0;white-space:pre-wrap}
+.tgc-b p+p,.tgc-b p+.tgc-t,.tgc-b .tgc-t+p,.tgc-b details+p{margin-top:6px}
+.tgc-h{font-weight:700;margin:0 0 2px}
+.tgc-sub{color:var(--muted);font-size:12.5px;margin:0 0 4px}
+.tgc-at{display:block;text-align:right;font-size:11px;color:var(--faint);margin-top:2px}
+.tgc-code{font-family:var(--font-mono);font-weight:700;letter-spacing:.04em;padding:0 5px;border-radius:5px;background:var(--pane-alt);border:1px dashed var(--border-strong);color:inherit;cursor:pointer;font-size:inherit}
+.tgc-code:hover{background:var(--sel)}
+.tgc-t{width:100%;border-collapse:collapse;font-size:12.5px;margin:4px 0 2px}
+.tgc-t th{text-align:left;font-weight:600;color:var(--muted);font-size:11.5px;padding:3px 6px 3px 0;border-bottom:1px solid var(--border)}
+.tgc-t td{padding:4px 6px 4px 0;border-bottom:1px solid var(--border);vertical-align:top}
+.tgc-t tr:last-child td{border-bottom:0}
+.tgc-t td.num,.tgc-t th.num{text-align:right;padding-right:0;white-space:nowrap}
+.tgc-t tfoot td{font-weight:700;border-top:1px solid var(--border-strong)}
+.tgc-b details{margin-top:6px;border-top:1px solid var(--border);padding-top:5px}
+.tgc-b details:first-of-type{border-top:0;padding-top:0}
+.tgc-b summary{cursor:pointer;font-weight:600;list-style:none;display:flex;align-items:center;gap:6px}
+.tgc-b summary::-webkit-details-marker{display:none}
+.tgc-b summary::after{content:'›';margin-left:auto;color:var(--muted);transition:transform .15s}
+.tgc-b details[open] summary::after{transform:rotate(90deg)}
+.tgc-n{font-size:11.5px;font-weight:600;color:var(--muted);background:var(--pane-alt);border-radius:999px;padding:0 7px}
+.tgc-kb{display:flex;flex-direction:column;gap:4px}
+.tgc-row{display:flex;gap:4px}
+.tgc-k{flex:1 1 0;min-width:0;border:1px solid var(--border);background:var(--btn);color:var(--text);border-radius:8px;padding:7px 8px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;text-align:center}
+.tgc-k:hover{background:var(--btn-hover)}
+.tgc-k .ic{width:13px;height:13px;flex:none}
+.tgc-k[disabled]{opacity:.55;cursor:default;background:var(--pane-alt)}
+.tgc-eph{align-self:flex-start;max-width:min(440px,100%);border:1px dashed var(--border-strong);border-radius:12px;padding:7px 11px;font-size:12.5px;line-height:1.4;background:var(--pane)}
+.tgc-eph b{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);font-weight:600;margin-bottom:2px}
+.tgc-eph b .ic{width:12px;height:12px}
+.tgc-empty{color:var(--muted);font-size:12.5px}
+.tgc-wrap{display:grid;gap:12px}
+.tgc-wrap.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:768px){.tgc-wrap.two{grid-template-columns:minmax(0,1fr)}.tgc-m,.tgc-eph{max-width:100%}.tgc-row{flex-wrap:wrap}.tgc-k{flex:1 1 40%}}

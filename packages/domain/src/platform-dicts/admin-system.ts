@@ -236,6 +236,15 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgPassResetByAdmin: ['логин'],
   tgLead: ['фирма', 'имя', 'телефон', 'клиентов', 'ссылка'],
   tgLeadRep: ['фирма', 'имя', 'телефон', 'ссылка'],
+  // Основа бота (прототип v89): подписи кнопок и скрытые ответы на нажатия.
+  tgBtnCopyCode: [],
+  tgBtnTest: [],
+  tgTest: [],
+  tgTestOk: [],
+  tgActOff: [],
+  tgActNoRight: [],
+  tgActStale: [],
+  tgActNoLink: [],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -281,6 +290,14 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgPassResetByAdmin',
   'tgLead',
   'tgLeadRep',
+  'tgBtnCopyCode',
+  'tgBtnTest',
+  'tgTest',
+  'tgTestOk',
+  'tgActOff',
+  'tgActNoRight',
+  'tgActStale',
+  'tgActNoLink',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */
