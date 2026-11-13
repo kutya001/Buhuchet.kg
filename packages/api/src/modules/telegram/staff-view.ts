@@ -1,8 +1,11 @@
 import {
+  botPeriodBrief,
   fixBotMessage,
   periodFull,
   taskBotMessage,
+  type BotReportRow,
   type IsoDate,
+  type ReminderItem,
   type ReportPeriod,
   type Translate,
 } from '@buhuchet/domain';
@@ -71,5 +74,55 @@ export async function taskView(
   const url = taskSiteUrl(deps, task.id);
   return {
     view: (body) => taskBotMessage(task, body, { work, done, open }, url),
+  };
+}
+
+/** Столбцы таблицы отчётов в сообщении бота и строка «ещё N — на сайте» (задача Т3). */
+export function reportTableTexts(t: Translate): {
+  columns: readonly [string, string, string];
+  more: (n: number) => string;
+} {
+  return {
+    columns: [t('telegram.table.contractor'), t('telegram.table.report'), t('telegram.table.due')],
+    more: (n) => t('telegram.table.more', { n }),
+  };
+}
+
+/**
+ * Строка таблицы отчётов (прототип v100 `tgRepCell`): «НДС, окт.» и срок сдачи; у строки оплаты налога —
+ * срок оплаты. Пометка «не привязан Telegram» и «ответственный не назначен» — та же, что в строках
+ * напоминания; `mark` — «… — оплата» в списке просроченного.
+ */
+export function botReportRow(
+  r: {
+    id: string;
+    contractorName: string;
+    typeShort: string;
+    period: ReportPeriod;
+    periodStart: IsoDate;
+    dueDate: IsoDate;
+    payDue: IsoDate | null;
+  },
+  item: Pick<ReminderItem, 'unlinked'> | null,
+  pay: boolean,
+  today: IsoDate,
+  t: Translate,
+  mark = false,
+): BotReportRow {
+  const cell = t('telegram.table.report_cell', {
+    type: r.typeShort,
+    period: botPeriodBrief({ period: r.period, start: r.periodStart }, today, t),
+  });
+  const marked = mark && pay ? t('telegram.table.pay_mark', { report: cell }) : cell;
+  const report = item?.unlinked
+    ? item.unlinked.shortName
+      ? t('telegram.unlinked', { report: marked, name: item.unlinked.shortName })
+      : t('telegram.unassigned', { report: marked })
+    : marked;
+  return {
+    id: r.id,
+    contractor: r.contractorName,
+    report,
+    due: pay && r.payDue ? r.payDue : r.dueDate,
   };
 }

@@ -1,6 +1,8 @@
+import { STAFF_BOT_NUDGE } from '@buhuchet/domain';
 import { testAction } from './bot-test';
 import type { BotAction } from './press';
 import { STAFF_BOT_HANDLERS } from './staff-actions';
+import { nudgeAction } from './staff-nudge';
 
 /**
  * Реестр действий по кнопкам бота: код действия → обработчик (как `FILE_SOURCES` у файлов). Поток,
@@ -14,4 +16,5 @@ import { STAFF_BOT_HANDLERS } from './staff-actions';
 export const BOT_ACTIONS: Readonly<Record<string, BotAction>> = {
   test: testAction,
   ...STAFF_BOT_HANDLERS,
+  [STAFF_BOT_NUDGE]: nudgeAction,
 };

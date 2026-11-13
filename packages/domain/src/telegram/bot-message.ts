@@ -29,8 +29,13 @@ export interface BotTable {
   head?: readonly string[];
   rows: readonly (readonly string[])[];
   foot?: readonly string[];
-  /** Номера числовых столбцов (с нуля): выравниваются вправо. */
+  /**
+   * Номера числовых столбцов (с нуля): выравниваются вправо, а в простом тексте идут с названием столбца
+   * («Сдать 6»), иначе число в строке непонятно (задача Т3; прототип v100 `tgPlain`).
+   */
   numeric?: readonly number[];
+  /** Сколько записей всего, когда в таблице показаны не все: счётчик раздела «Название · n». */
+  n?: number;
 }
 
 /**
@@ -63,6 +68,11 @@ export interface BotMessage {
   tables?: readonly BotTable[];
   buttons?: readonly (readonly BotButton[])[];
   ask?: BotAsk;
+  /**
+   * Свой простой текст вместо собранного из описания (задача Т3; прототип v100 `m.plain`): утреннее
+   * напоминание в простом виде остаётся прежними строками, а не строками таблиц.
+   */
+  plain?: string;
 }
 
 /** Пределы Telegram: текст простого сообщения, данные и подпись кнопки, текст копирования, столбцы. */
@@ -72,6 +82,8 @@ export const BOT_PRESS_DATA_MAX = 64;
 export const BOT_BUTTON_TEXT_MAX = 64;
 export const BOT_COPY_MAX = 256;
 export const BOT_TABLE_COLUMNS_MAX = 20;
+/** Строк в таблице сообщения — не больше (прототип v100 `TG_ROWS_MAX`); остальное — «ещё N — на сайте». */
+export const BOT_TABLE_ROWS_MAX = 20;
 /** Скрытый ответ на нажатие (ответ Telegram на нажатие кнопки) — не длиннее 200 знаков. */
 export const BOT_HIDDEN_REPLY_MAX = 200;
 
@@ -83,15 +95,33 @@ const ARG_RE = /^[A-Za-z0-9_.-]{1,40}$/;
 
 const filled = (cells: readonly string[]) => cells.filter((x) => x !== '' && x != null);
 
-/** Запасной простой текст: строка таблицы — «• ячейка — ячейка», раздел — «Название · число строк». */
+/** Подпись кнопки и текст копирования не длиннее предела: лишнее — многоточием (прототип `tgClip`). */
+export function botClip(text: string, max: number): string {
+  const chars = [...text];
+  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : text;
+}
+
+/**
+ * Запасной простой текст: строка таблицы — «• ячейка — ячейка», раздел — «Название · число записей»;
+ * число в числовом столбце — с названием столбца («Сдать 6»). У сообщения со своим простым текстом
+ * (`plain`) — он.
+ */
 export function botPlainText(m: BotMessage): string {
+  if (m.plain !== undefined) return m.plain;
   const lines: string[] = [];
   if (m.heading) lines.push(m.heading);
   if (m.sub) lines.push(m.sub);
   if (m.text) lines.push(m.text);
   for (const t of m.tables ?? []) {
-    if (t.title) lines.push(`${t.title} · ${t.rows.length}`);
-    for (const row of t.rows) lines.push(`• ${filled(row).join(' — ')}`);
+    const numeric = new Set(t.numeric ?? []);
+    const cell = (x: string, i: number) =>
+      numeric.has(i) && t.head?.[i] ? `${t.head[i]} ${x}` : x;
+    if (t.title) lines.push(`${t.title} · ${t.n ?? t.rows.length}`);
+    for (const row of t.rows) {
+      lines.push(
+        `• ${row.flatMap((x, i) => (x === '' || x == null ? [] : [cell(x, i)])).join(' — ')}`,
+      );
+    }
     if (t.foot) lines.push(filled(t.foot).join(' — '));
   }
   return lines.join('\n');
@@ -124,7 +154,7 @@ function tableHtml(t: BotTable): string {
       : '') +
     '</table>';
   return t.title
-    ? `<details${t.open ? ' open' : ''}><summary>${botEscape(t.title)} · ${t.rows.length}</summary>${table}</details>`
+    ? `<details${t.open ? ' open' : ''}><summary>${botEscape(t.title)} · ${t.n ?? t.rows.length}</summary>${table}</details>`
     : table;
 }
 
@@ -281,7 +311,7 @@ const isString = (x: unknown) => typeof x === 'string';
 export function asBotMessage(value: unknown): BotMessage | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const m = value as Record<string, unknown>;
-  if (![m.heading, m.sub, m.text, m.code].every((x) => optional(x, isString))) return null;
+  if (![m.heading, m.sub, m.text, m.code, m.plain].every((x) => optional(x, isString))) return null;
   const tablesOk = optional(
     m.tables,
     (ts) =>
@@ -293,6 +323,7 @@ export function asBotMessage(value: unknown): BotMessage | null {
           optional(x.title, isString) &&
           optional(x.head, isStrings) &&
           optional(x.foot, isStrings) &&
+          optional(x.n, (n) => Number.isSafeInteger(n) && (n as number) >= 0) &&
           Array.isArray(x.rows) &&
           x.rows.every(isStrings)
         );

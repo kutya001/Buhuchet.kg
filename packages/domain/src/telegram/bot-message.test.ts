@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asBotMessage,
+  botClip,
   botHasMarkup,
   botKeyboard,
   botMessageProblem,
@@ -48,11 +49,25 @@ describe('сообщение бота: два вида из одного опи�
         'ОсОО «Ромашка»',
         'Сдать 2, оплатить 1.',
         'Сдать · 2',
-        '• ОсОО «А&Б» — НДС — 1 250,50',
+        '• ОсОО «А&Б» — НДС — Сумма 1 250,50',
         '• ИП <Иванов> — ЕН',
         'Итого — 1 250,50',
       ].join('\n'),
     );
+  });
+
+  it('свой простой текст и счётчик раздела: `plain` заменяет собранный текст, `n` — сколько записей всего (задача Т3)', () => {
+    const table = { ...digest.tables![0]!, n: 25 };
+    expect(botPlainText({ ...digest, tables: [table] })).toContain('Сдать · 25');
+    expect(botRichHtml({ ...digest, tables: [table] })).toContain('<summary>Сдать · 25</summary>');
+    const own = { ...digest, plain: 'Прежние строки напоминания' };
+    expect(botPlainText(own)).toBe('Прежние строки напоминания');
+    expect(botRichHtml(own)).toContain('<b>Сегодня, 13 ноября</b>');
+    expect(asBotMessage(JSON.parse(JSON.stringify({ ...own, tables: [table] })))).not.toBeNull();
+    expect(asBotMessage({ ...own, plain: 5 })).toBeNull();
+    expect(asBotMessage({ ...digest, tables: [{ ...table, n: -1 }] })).toBeNull();
+    expect(botClip('Напомнить: Иванов', 10)).toBe('Напомнить…');
+    expect(botClip('Коротко', 10)).toBe('Коротко');
   });
 
   it('вид с таблицами: раздел с числом строк, числовой столбец вправо, текст экранирован', () => {

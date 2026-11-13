@@ -109,6 +109,11 @@ export interface BotPressResult {
   closeAsk?: boolean;
   /** Сообщения другим сотрудникам о сделанном: в очередь в той же транзакции, отправка — после неё. */
   events?: readonly TelegramEvent[];
+  /**
+   * Строки очереди, которые обработчик сам поставил в транзакции нажатия (`enqueueTelegram` — когда
+   * нужен свой ключ «один раз в день»): после транзакции они отправляются сразу, как `events`.
+   */
+  queued?: readonly string[];
 }
 
 /** Файл, присланный боту и уже положенный в хранилище организации (ключ — с номером от сервера). */
@@ -144,6 +149,11 @@ export type BotReplyContext = Omit<BotPressContext, 'button'>;
 export interface BotAction {
   /** Действие меняет данные: выключается владельцем («Действия из Telegram»). */
   change?: boolean;
+  /**
+   * Действие данные не меняет, но пишет другим людям или читает много: в предел частоты нажатий входит
+   * так же, как меняющее данные («Напомнить», задача Т3).
+   */
+  limited?: boolean;
   /**
    * Право из 40, без которого действие не выполняется: ядро проверяет его до обработчика («Нет
    * права»). Область «Свои / Все контрагенты» по конкретной записи и условия действия проверяет сам
@@ -252,7 +262,7 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
   if (denied) return refuse(denied);
   // Действие, меняющее данные, — не чаще предела с одного чата (docs/decisions.md п. Т-1): человек столько
   // не нажимает, а поток нажатий не должен держать транзакции и блокировки записей.
-  if (action.change) {
+  if (action.change || action.limited) {
     const slot = await takeRateLimit(deps.db, BOT_PRESS_RATE_LIMIT, String(press.chatId));
     if (!slot.ok) return refuse('tgActFailed');
   }
@@ -311,9 +321,10 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
           );
         }
       }
-      const queued = result.events?.length
-        ? await queueTelegramEvents(deps, tx, result.events)
-        : [];
+      const queued = [
+        ...(result.queued ?? []),
+        ...(result.events?.length ? await queueTelegramEvents(deps, tx, result.events) : []),
+      ];
       const pressed = pressBotButton(current, parsed.action, parsed.arg, result);
       const after = result.closeAsk ? closeBotAsk(pressed) : pressed;
       if (after === current) return { result, after: null, ask, queued };

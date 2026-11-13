@@ -458,3 +458,61 @@ test.describe('Доработки 13.11. Т2: действия сотрудни�
     await accountant.dispose();
   });
 });
+
+// Таблицы в сообщениях бота (поток Т, задача Т3; пакет заказчика 13.11.2026, идеи 2, 8 и 10; прототип
+// v100 modules/tg-tables.js). Сводка недели приходит только по понедельникам, поэтому тест проверяет то,
+// что положено сегодня: в понедельник — сообщение с таблицей по сотрудникам, в другой день — что его нет.
+// Кнопка «Напомнить», раздел долгов, права и область — `packages/api/src/modules/telegram/
+// staff-tables.test.ts` (там часы стоят на понедельнике).
+test.describe('Доработки 13.11. Т3: таблицы в сообщениях бота', () => {
+  test('(пакет заказчика 13.11.2026, идеи 2 и 8) утреннее напоминание — таблицей с разделами, простой текст — прежние строки; сводка недели владельцу — по понедельникам таблицей по сотрудникам, в другие дни её нет', async ({
+    request,
+    baseURL,
+  }) => {
+    test.setTimeout(180_000);
+    const origin = new URL(baseURL!).origin;
+    await orgWithTypes(request, origin, false);
+    await policy(request, origin, {
+      features: { telegram: false, tasks: true, files: true },
+      digestTime: '00:00',
+    });
+    const connected = await request.post('/api/org-report-types/connect', {
+      headers: { origin },
+      data: { connect: ['t1m'], disconnect: [], remindDays: [3] },
+    });
+    expect(connected.status(), await connected.text()).toBe(200);
+    const chat = uniqueChat();
+    await linkTelegram(request, origin, chat);
+    const name = `ОсОО «${unique('Таблицы')}»`;
+    const cp = await newContractor(request, origin, { tariff: false, name });
+    const today = bishkekToday();
+    const id = await reportDueSoon(request, origin, cp.id);
+    await policy(request, origin, { features: { telegram: true } });
+
+    // Сообщение с кнопками отчёта идёт следом за сообщением дня: раз оно пришло, сообщение дня уже в чате.
+    await remindedWith(request, chat, `repWork:${id}`);
+    const all = await botSent(request, chat);
+    const morning = all.find((m) => m.html?.includes('<b>Отчёты на '));
+    expect(morning, 'сообщение дня с таблицами').toBeTruthy();
+    expect(morning!.html).toContain('<i>Просрочено 0 · сегодня 0 · скоро 1 · оплата 0</i>');
+    // Срочного нет — раскрыт первый раздел; в строке — контрагент, отчёт коротко и срок.
+    expect(morning!.html).toMatch(/<details open><summary>⏰ Через \d+ дн\. · 1<\/summary>/);
+    expect(morning!.html).toContain(`<td>${name}</td><td>1-Т, `);
+    expect(morning!.html).toContain('<th>Контрагент</th><th>Отчёт</th><th align="right">Срок</th>');
+    // Простой текст — прежняя строка напоминания.
+    expect(morning!.text).toMatch(/⏰ Через \d+ дн\. срок сдачи: 1-Т за /);
+    expect(morning!.text).toContain(name);
+    expect(morning!.text).not.toContain('<');
+
+    // Сводка недели владельцу: только в понедельник (день — по Бишкеку, на момент сбора напоминаний).
+    const week = all.find((m) => m.text.startsWith('🗓 Неделя ') && m.html?.includes('<table'));
+    const monday = new Date(`${today}T00:00:00Z`).getUTCDay() === 1;
+    if (monday && bishkekToday() === today) {
+      expect(week, 'сводка недели в понедельник').toBeTruthy();
+      expect(week!.html).toContain('<th>Сотрудник</th><th align="right">Сдать</th>');
+      expect(week!.text).toMatch(/Сдать \d+ · оплатить \d+ · просрочено \d+/);
+    } else if (!monday && bishkekToday() === today) {
+      expect(week, 'сводки недели не в понедельник нет').toBeUndefined();
+    }
+  });
+});

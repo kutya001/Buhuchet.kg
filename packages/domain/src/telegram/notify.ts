@@ -43,6 +43,8 @@ export const OUTBOX_KINDS = [
   'task_started',
   'task_done',
   'bot_ask',
+  // «Напомнить» под сводкой недели (поток Т, задача Т3): сотруднику — список его просроченного.
+  'nudge',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 

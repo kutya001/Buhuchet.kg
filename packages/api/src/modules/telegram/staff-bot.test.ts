@@ -246,7 +246,17 @@ describe.skipIf(!databaseAvailable())(
       const mine = sent(CHAT.acc);
       expect(mine).toHaveLength(3);
       expect(mine[0]!.text).toContain('⏰ Через 3 дн. срок сдачи: ');
-      expect(keys(mine[0]!)).toEqual([]);
+      // Сообщение дня — таблицами (задача Т3): простой текст прежний, ссылку в тексте заменяет кнопка.
+      expect(mine[0]!.text).not.toContain('Открыть в Buhuchet.kg');
+      expect(keys(mine[0]!)).toEqual([
+        { text: 'Открыть отчёты на сайте', url: `${SITE}/app/reports/week` },
+      ]);
+      const rich = mine[0]!.options.rich!;
+      expect(rich).toContain('<b>Отчёты на понедельник, 19 октября</b>');
+      expect(rich).toContain('<i>Просрочено 0 · сегодня 0 · скоро 2 · оплата 0</i>');
+      expect(rich).toContain('<details open><summary>⏰ Через 3 дн. · 2</summary>');
+      expect(rich).toContain(`<td>${CP}</td><td>1-Т, сен.</td><td align="right">22.10</td>`);
+      expect(rich).toContain(`<td>${CP}</td><td>НДС, сен.</td><td align="right">22.10</td>`);
       const byReport = new Map(
         mine.slice(1).map((m) => [
           keys(m)
@@ -812,7 +822,9 @@ describe.skipIf(!databaseAvailable())(
       ]);
       // Порядок: сообщение дня, затем сообщения с кнопками, затем «ещё на сайте».
       expect(mine.indexOf(more)).toBeGreaterThan(mine.indexOf(withWork.at(-1)!));
-      expect(keys(mine[0]!)).toEqual([]);
+      expect(keys(mine[0]!)).toEqual([
+        { text: 'Открыть отчёты на сайте', url: `${SITE}/app/reports/week` },
+      ]);
 
       const boss = sent(CHAT.owner).slice(from.owner);
       const head = boss.findIndex((m) => /^⏳ Ждут вашего подтверждения: \d+$/.test(m.text));
