@@ -8,10 +8,13 @@ import { createManualReport, schema, withOrgContext } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   BOT_COPY_MAX,
+  formatText,
   STAFF_BOT_NUDGE,
   TELEGRAM_TEMPLATE_DEFAULTS,
+  UI_TEXTS,
   type BotMessage,
   type IsoDate,
+  type Translate,
 } from '@buhuchet/domain';
 import { FeeReminder } from '@buhuchet/shared';
 import { and, eq } from 'drizzle-orm';
@@ -31,6 +34,7 @@ import {
 import { sendBotMessage } from './bot';
 import { BOT_PRESS_RATE_LIMIT } from './press';
 import { buildDailyReminders, telegramRemindersJob } from './reminders';
+import { botReportRow } from './staff-view';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 type App = ReturnType<typeof createApp>;
@@ -578,3 +582,34 @@ describe.skipIf(!databaseAvailable())(
     });
   },
 );
+
+describe('строка таблицы отчётов в сообщении бота (Т3)', () => {
+  const tr: Translate = (key, params) => formatText(UI_TEXTS[key].ru, params);
+  const report = {
+    id: 'r1',
+    contractorName: 'ОсОО «Ромашка»',
+    typeShort: 'Увольнение',
+    period: 'M' as const,
+    periodStart: '2026-10-01',
+    dueDate: '2026-10-25',
+    payDue: '2026-10-28',
+  };
+
+  it('отчёт по событию — с датой события и её названием у вида; оплата — со сроком оплаты и пометкой', () => {
+    const today = '2026-11-13';
+    expect(botReportRow(report, null, false, today, tr)).toEqual({
+      id: 'r1',
+      contractor: 'ОсОО «Ромашка»',
+      report: 'Увольнение, окт.',
+      due: '2026-10-25',
+    });
+    const event = { ...report, eventDate: '2026-10-15', eventLabel: 'Дата увольнения' };
+    expect(botReportRow(event, null, false, today, tr).report).toBe(
+      'Увольнение, окт. · дата увольнения 15.10.2026',
+    );
+    expect(botReportRow({ ...event, eventLabel: '' }, null, true, today, tr, true)).toMatchObject({
+      report: 'Увольнение, окт. · дата события 15.10.2026 — оплата',
+      due: '2026-10-28',
+    });
+  });
+});

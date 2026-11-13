@@ -75,7 +75,11 @@ export function botPeriodBrief(
     const label = (ref.eventLabel || t('report.event.default')).replace(/^./u, (c) =>
       c.toLowerCase(),
     );
-    return `${month} · ${label} ${formatDateRu(ref.event)}`;
+    return t('report.period.event_full', {
+      period: month,
+      event: label,
+      date: formatDateRu(ref.event),
+    });
   }
   // Квартал — коротко («III кв.»), полугодие — целиком («I полугодие»), как в прототипе.
   const label =
