@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
 import { DEMO_PASSWORD, signIn } from './helpers';
+import { newContractor } from './reports';
 
 // Доработки 13.11, задача И4 (прототип v95, modules/files.js `attachDlg`, `fileEditDlg`): необязательное
 // примечание к прикрепляемым файлам и «Изменить файл» — название, примечание, замена файла. Блок «Файлы»
@@ -290,6 +291,92 @@ test.describe('Доработки 13.11: примечание к файлам и
     expect(link.status()).toBe(200);
 
     // История контрагента: прикрепление с примечанием, переименование, замена и снятое примечание.
+    const history = (await (
+      await page.request.get(`/api/contractors/${cp.id}/history`)
+    ).json()) as { items: { action: string; changes: { field: string; to?: unknown }[] }[] };
+    const ofFile = history.items.filter((h) =>
+      h.changes.some((c) => c.field === 'file' && String(c.to).includes(tag)),
+    );
+    expect(ofFile.map((h) => h.action).sort()).toEqual(['file_attach', 'file_edit', 'file_edit']);
+  });
+
+  test('(проверка прототипа v95) вкладка «Файлы» карточки контрагента: «Прикрепить» с примечанием, карандаш в строке, «Изменить» в окне файла; правки — в истории контрагента', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const tag = uniqueTag();
+    const cpName = `Файлы карточки ${tag}`;
+    const cp = await newContractor(page.request, origin, { name: cpName });
+
+    await page.goto('/app/cps/all');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    await search(page, isMobile, tag);
+    await page
+      .locator(`[data-grid] [data-id="${cp.id}"]`)
+      .getByText(cpName, { exact: true })
+      .click();
+    const card = page.getByRole('dialog', { name: cpName });
+    await expect(card.locator('[data-cp-card]')).toBeVisible();
+    if (isMobile) {
+      await card.getByRole('tab', { selected: true }).click();
+      await page
+        .getByRole('menu')
+        .getByRole('menuitem', { name: /^Файлы/ })
+        .click();
+    } else {
+      await card.getByRole('tab', { name: /^Файлы/ }).click();
+    }
+    const tab = card.locator('[data-cp-files]');
+    await expect(tab).toBeVisible();
+
+    // «Прикрепить»: окно с названием контрагента под заголовком и необязательным примечанием.
+    const name = `договор-${tag}.pdf`;
+    const chooser = page.waitForEvent('filechooser');
+    await card.locator('[data-cp-attach]').click();
+    await (await chooser).setFiles([pdf(name)]);
+    const attach = page.getByRole('dialog', { name: 'Прикрепить файл' });
+    await expect(attach).toContainText(cpName);
+    await expect(attach.getByRole('listitem').filter({ hasText: name })).toContainText(
+      'PDF · 3 КБ',
+    );
+    await attach.getByLabel('Примечание').fill('Подписан обеими сторонами');
+    await attach.locator('[data-files-attach-ok]').click();
+    await expect(attach).toBeHidden();
+    const line = tab.locator('tbody tr').filter({ hasText: name });
+    await expect(line.locator('[data-file-note]')).toHaveText('Подписан обеими сторонами');
+
+    // Карандаш в строке: новое название, примечание убрано.
+    await line.getByRole('button', { name: `Изменить ${name}` }).click();
+    const dlg = page.getByRole('dialog', { name: 'Изменить файл' });
+    await expect(dlg).toContainText('Загружен вручную');
+    await expect(dlg.getByLabel('Название')).toHaveValue(`договор-${tag}`);
+    await expect(dlg.getByLabel('Примечание')).toHaveValue('Подписан обеими сторонами');
+    const renamed = `договор подписан-${tag}.pdf`;
+    await dlg.getByLabel('Название').fill(`договор подписан-${tag}`);
+    await dlg.getByLabel('Примечание').fill('');
+    await dlg.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(page.getByText('Файл изменён')).toBeVisible();
+    await expect(dlg).toBeHidden();
+    const changed = tab.locator('tbody tr').filter({ hasText: renamed });
+    await expect(changed).toBeVisible();
+    await expect(changed.locator('[data-file-note]')).toHaveCount(0);
+
+    // Окно файла: «Изменить» открывает то же окно; замена — «Файл заменён» и строка «Заменён».
+    await changed.getByText(renamed, { exact: true }).click();
+    const win = page.getByRole('dialog', { name: renamed });
+    await expect(win).toContainText('Примечание');
+    await win.locator('[data-file-window-edit]').click();
+    await dlg.locator('[data-file-edit-input]').setInputFiles(pdf(`скан-${tag}.pdf`, 9 * 1024));
+    await dlg.getByLabel('Примечание').fill('Скан с печатью');
+    await dlg.getByRole('button', { name: 'Сохранить' }).click();
+    await expect(page.getByText('Файл заменён')).toBeVisible();
+    await expect(win).toContainText('Заменён');
+    await expect(win.locator('[data-file-window-note]')).toHaveText('Скан с печатью');
+
+    // История контрагента: прикрепление с примечанием и две правки файла.
     const history = (await (
       await page.request.get(`/api/contractors/${cp.id}/history`)
     ).json()) as { items: { action: string; changes: { field: string; to?: unknown }[] }[] };
