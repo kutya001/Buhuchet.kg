@@ -274,6 +274,19 @@ describe('«История статусов» (statusHistHtml)', () => {
     expect(rows.map((r) => r.duration)).toEqual(['меньше часа', '5 ч']);
   });
 
+  it('смена статуса в чате бота — отметка «через Telegram» после имени (прототип histVia)', () => {
+    const { rows } = historyView(
+      t,
+      'report',
+      [
+        ev('2026-10-01T09:00', null, 'todo'),
+        ev('2026-10-02T09:00', 'todo', 'in_progress', { via: 'telegram' }),
+      ],
+      at('2026-10-03T09:00'),
+    );
+    expect(rows.map((r) => r.via)).toEqual([null, 'через Telegram']);
+  });
+
   it('из ответа API — время строкой; заголовок отката — названия статусов', () => {
     const [e] = statusEvents([
       {

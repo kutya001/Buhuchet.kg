@@ -495,5 +495,6 @@ export function contractorHistoryItem(t: Translate, e: Entry, names: Names): Tim
       e.entity === 'contractor_page'
         ? pageHistoryActor(t, e.actor)
         : (e.actor ?? t('status.system')),
+    via: e.via === 'telegram' ? t('telegram.via') : null,
   };
 }

@@ -1394,6 +1394,8 @@ export async function openTasksOf(tx: Tx, executorEmployeeId: string): Promise<n
 export interface TaskHistoryItem {
   at: Date;
   actor: string | null;
+  /** `telegram` — сделано в чате бота («через Telegram»); пусто — на сайте. */
+  via: 'telegram' | null;
   action: string;
   changes: HistoryChange[];
 }
@@ -1409,6 +1411,7 @@ export async function taskHistory(tx: Tx, taskId: string): Promise<TaskHistoryIt
       at: auditLog.at,
       actorUserId: auditLog.actorUserId,
       actorName: actor.shortName,
+      via: auditLog.via,
       action: auditLog.action,
       changes: auditLog.changes,
     })
@@ -1467,6 +1470,7 @@ export async function taskHistory(tx: Tx, taskId: string): Promise<TaskHistoryIt
   return rows.map((r) => ({
     at: r.at,
     actor: auditActorName(r.actorUserId, r.actorName),
+    via: r.via === 'telegram' ? r.via : null,
     action: r.action,
     changes: ((r.changes ?? []) as HistoryChange[]).map((c) => ({
       field: c.field,

@@ -335,6 +335,8 @@ export const ReportLineDef = z.object({
 export const ReportHistoryEntry = z.object({
   at: z.iso.datetime(),
   actor: z.string().nullable(),
+  /** Откуда сделано: `telegram` — кнопкой или ответом в чате бота («через Telegram»); пусто — на сайте. */
+  via: z.enum(['telegram']).nullable().optional(),
   action: z.string(),
   reason: z.string().nullable(),
   changes: z.array(

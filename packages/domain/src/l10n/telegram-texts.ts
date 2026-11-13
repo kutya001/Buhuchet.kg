@@ -29,6 +29,8 @@ export const TELEGRAM_TEXTS = {
   'telegram.done.confirmed': { ru: '✓ Подтверждено', section: S },
   'telegram.done.returned': { ru: '↩ Возвращён', section: S },
   'telegram.done.cancelled': { ru: 'Отменено', section: S },
+  // Отметка у записи истории, сделанной кнопкой или ответом в чате бота (прототип `histVia`).
+  'telegram.via': { ru: 'через Telegram', section: S },
   'telegram.photo_name': { ru: 'Фото из Telegram {date}.jpg', section: S },
   'telegram.file_name': { ru: 'Файл из Telegram {date}', section: S },
   'telegram.week.contractor': { ru: '• {contractor}: {what}', section: S },

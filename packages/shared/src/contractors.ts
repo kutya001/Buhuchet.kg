@@ -466,6 +466,8 @@ export const ContractorHistory = z.object({
       id: z.number().int(),
       at: z.iso.datetime(),
       actor: z.string().nullable(),
+      /** `telegram` — сделано в чате бота («через Telegram»). */
+      via: z.enum(['telegram']).nullable().optional(),
       entity: z.string(),
       action: z.string(),
       reason: z.string().nullable(),

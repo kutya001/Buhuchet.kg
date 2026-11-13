@@ -377,7 +377,7 @@ export function useTaskActions(): {
 
   const openById = async (id: string) => {
     const full = await load(id, () => fresh(id));
-    if (full) setCard(openSlot(full));
+    if (full) setCard(openSlot<TaskRow>(full));
   };
 
   return {

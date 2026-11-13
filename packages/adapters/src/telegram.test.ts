@@ -153,6 +153,98 @@ describe('createTelegramBotApi', () => {
     expect(await refused.editKeyboard(100, 7, [])).toBe(false);
   });
 
+  it('loadFile: getFile и скачивание по пути файла; содержимое — без адреса с токеном', async () => {
+    const fetch = vi.fn(async (url: string, _init: RequestInit) =>
+      url.endsWith('/getFile')
+        ? new Response(
+            JSON.stringify({
+              ok: true,
+              result: { file_path: 'documents/file 1.pdf', file_size: 3 },
+            }),
+          )
+        : new Response(new Uint8Array([1, 2, 3])),
+    );
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    const res = await bot.loadFile('FILE', 20);
+    expect(res).toEqual({ ok: true, body: new Uint8Array([1, 2, 3]) });
+    expect(fetch.mock.calls[0]![0]).toBe('https://api.telegram.org/bot1:abc/getFile');
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({ file_id: 'FILE' });
+    expect(fetch.mock.calls[1]![0]).toBe(
+      'https://api.telegram.org/file/bot1:abc/documents/file%201.pdf',
+    );
+    expect(fetch.mock.calls[1]![1]).toMatchObject({ method: 'GET' });
+    expect(fetch.mock.calls[1]![1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('loadFile: больше предела — по словам Telegram, по заголовку и по фактическому размеру', async () => {
+    const file = (info: unknown, body: Response) =>
+      createTelegramBotApi({
+        token: 't',
+        fetch: vi.fn(async (url: string) =>
+          url.endsWith('/getFile') ? new Response(JSON.stringify(info)) : body,
+        ),
+      });
+    const tooLarge = { ok: false, reason: 'too_large', description: '' };
+    const path = { ok: true, result: { file_path: 'a.pdf' } };
+    expect(
+      await file(
+        { ok: true, result: { file_path: 'a.pdf', file_size: 11 } },
+        new Response(),
+      ).loadFile('f', 10),
+    ).toEqual(tooLarge);
+    expect(
+      await file(
+        { ok: false, error_code: 400, description: 'Bad Request: file is too big' },
+        new Response(),
+      ).loadFile('f', 10),
+    ).toEqual(tooLarge);
+    expect(
+      await file(
+        path,
+        new Response(new Uint8Array(2), { headers: { 'content-length': '11' } }),
+      ).loadFile('f', 10),
+    ).toEqual(tooLarge);
+    expect(await file(path, new Response(new Uint8Array(11))).loadFile('f', 10)).toEqual(tooLarge);
+  });
+
+  it('loadFile: ошибка Telegram, чужой путь и сбой сети — отказ без токена в тексте', async () => {
+    const bot = (fetch: (url: string) => Promise<Response>) =>
+      createTelegramBotApi({ token: '1:secret', fetch: vi.fn(fetch) });
+    const info = (result: unknown) => new Response(JSON.stringify(result));
+    expect(
+      await bot(async () =>
+        info({ ok: false, error_code: 400, description: 'wrong file_id' }),
+      ).loadFile('f', 10),
+    ).toEqual({ ok: false, reason: 'failed', description: 'getFile: 400 wrong file_id' });
+    // Путь встаёт в адрес после токена: «..», начало с «/» и посторонние знаки не принимаются.
+    for (const path of ['../bot2:x/getMe', '/etc/passwd', 'a?b=1', 'a#b', 'a\\b']) {
+      const calls: string[] = [];
+      const res = await bot(async (url) => {
+        calls.push(url);
+        return info({ ok: true, result: { file_path: path } });
+      }).loadFile('f', 10);
+      expect(res).toMatchObject({ ok: false, reason: 'failed' });
+      expect(calls).toHaveLength(1);
+    }
+    expect(
+      await bot(async (url) =>
+        url.endsWith('/getFile')
+          ? info({ ok: true, result: { file_path: 'a.pdf' } })
+          : new Response('', { status: 404 }),
+      ).loadFile('f', 10),
+    ).toEqual({ ok: false, reason: 'failed', description: 'файл: HTTP 404' });
+    const down = await bot(async (url) => {
+      if (url.endsWith('/getFile')) return info({ ok: true, result: { file_path: 'a.pdf' } });
+      throw new TypeError(`fetch failed ${url}`);
+    }).loadFile('f', 10);
+    expect(down).toEqual({
+      ok: false,
+      reason: 'failed',
+      description: 'fetch failed https://api.telegram.org/file/bot<скрыт>/a.pdf',
+    });
+    expect(JSON.stringify(down)).not.toContain('1:secret');
+  });
+
   it('не ждёт Telegram дольше заданного: запрос прерывается', async () => {
     const hanging = vi.fn(
       (_url: string, init: RequestInit) =>
@@ -298,6 +390,11 @@ describe('createFakeTelegram', () => {
     expect((await tg.getWebhookInfo()).lastError).toBe('x');
     tg.webhookInfo = new Error('down');
     await expect(tg.getWebhookInfo()).rejects.toThrow('down');
+    // Файлы, «присланные боту»: содержимое по номеру файла, предел размера.
+    tg.files.set('f1', new Uint8Array(5));
+    expect(await tg.loadFile('f1', 5)).toEqual({ ok: true, body: new Uint8Array(5) });
+    expect(await tg.loadFile('f1', 4)).toMatchObject({ ok: false, reason: 'too_large' });
+    expect(await tg.loadFile('нет', 5)).toMatchObject({ ok: false, reason: 'failed' });
   });
 });
 

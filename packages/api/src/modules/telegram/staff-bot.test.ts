@@ -59,7 +59,6 @@ describe.skipIf(!databaseAvailable())(
     let deps: ApiDeps;
     let app: App;
     let owner: string;
-    let chief: string;
     let cpAcc = '';
     let cpChief = '';
     /** Отчёты бухгалтера: 1-Т (без суммы) и НДС (с суммой) за сентябрь, срок 22.10. */
@@ -212,7 +211,6 @@ describe.skipIf(!databaseAvailable())(
         await linkTelegram(app, cookies[login]!, chat);
       }
       owner = cookies['owner-a']!;
-      chief = cookies['chief-a']!;
       const connect = await apiRequest(app, 'POST', '/api/org-report-types/connect', owner, {
         connect: ['nds', 't1m'],
         disconnect: [],
@@ -289,6 +287,25 @@ describe.skipIf(!databaseAvailable())(
       expect(await statusVia(t1)).toEqual({ to: 'submitted', via: 'telegram' });
       expect((await press(CHAT.acc, m.id, `repDone:${t1}`)).text).toBe(TPL.tgActStale);
       expect((await report(t1)).version).toBe(row.version);
+
+      // На сайте: «История статусов» карточки отчёта и «История» контрагента — с отметкой «через Telegram».
+      const card = await apiRequest(app, 'GET', `/api/reports/${t1}`, owner);
+      expect(card.status).toBe(200);
+      const { statusHistory } = (await card.json()) as {
+        statusHistory: { to: string; via?: string | null }[];
+      };
+      expect(statusHistory.map((h) => [h.to, h.via ?? null])).toEqual(
+        expect.arrayContaining([
+          ['todo', null],
+          ['in_progress', 'telegram'],
+          ['submitted', 'telegram'],
+        ]),
+      );
+      const feed = await apiRequest(app, 'GET', `/api/contractors/${cpAcc}/history`, owner);
+      expect(feed.status).toBe(200);
+      const { items } = (await feed.json()) as { items: { via?: string | null }[] };
+      expect(items.some((x) => x.via === 'telegram')).toBe(true);
+      expect(items.some((x) => !x.via)).toBe(true);
     });
 
     it('«Сдан» без суммы налога — на сайт; чужая организация, область «Свои», право и «Действия из Telegram» проверяются при нажатии', async () => {
@@ -688,6 +705,16 @@ describe.skipIf(!databaseAvailable())(
       expect(await status(task.id)).toBe('done');
       expect(last(CHAT.owner).text).toContain('Задача выполнена: Сверить акт. Исполнитель: acc-a.');
       expect(await statusVia(task.id)).toEqual({ to: 'done', via: 'telegram' });
+      const card = await apiRequest(app, 'GET', `/api/tasks/${task.id}`, owner);
+      expect(card.status).toBe(200);
+      const seen = (await card.json()) as { statusHistory: { to: string; via?: string | null }[] };
+      expect(seen.statusHistory.map((h) => [h.to, h.via ?? null])).toEqual(
+        expect.arrayContaining([
+          ['todo', null],
+          ['in_progress', 'telegram'],
+          ['done', 'telegram'],
+        ]),
+      );
 
       // «Требуется файл» и подтверждение: бот ждёт файл; фото — самый большой размер.
       const hard = await create({ title: 'Скан договора', needFile: true, confirm: true });
