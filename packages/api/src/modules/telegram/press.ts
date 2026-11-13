@@ -5,9 +5,11 @@ import {
   markViaTelegram,
   openBotAsks,
   saveBotPress,
+  takeRateLimit,
   withOrgContext,
   withUserContext,
   type BotPressTarget,
+  type RateLimit,
   type Tx,
 } from '@buhuchet/db';
 import {
@@ -212,6 +214,9 @@ export interface BotPress {
   data: string;
 }
 
+/** Нажатий кнопок, меняющих данные, с одного чата — не больше стольких в минуту. */
+export const BOT_PRESS_RATE_LIMIT: RateLimit = { kind: 'bot_press', max: 60, windowSeconds: 60 };
+
 const clip = (text: string) =>
   text.length > BOT_HIDDEN_REPLY_MAX ? `${text.slice(0, BOT_HIDDEN_REPLY_MAX - 1)}…` : text;
 
@@ -245,6 +250,12 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
   }
   const denied = botTargetRefusal(target, action);
   if (denied) return refuse(denied);
+  // Действие, меняющее данные, — не чаще предела с одного чата (docs/decisions.md п. Т-1): человек столько
+  // не нажимает, а поток нажатий не должен держать транзакции и блокировки записей.
+  if (action.change) {
+    const slot = await takeRateLimit(deps.db, BOT_PRESS_RATE_LIMIT, String(press.chatId));
+    if (!slot.ok) return refuse('tgActFailed');
+  }
   const today = bishkekDate(deps.clock.now());
 
   // Нажатие — одна транзакция от имени получателя: строка сообщения блокируется, кнопка сверяется ещё
