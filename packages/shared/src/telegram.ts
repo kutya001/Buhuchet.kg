@@ -53,5 +53,5 @@ export const NotifySettingsRequest = z.strictObject({
 export type NotifySettingsRequest = z.infer<typeof NotifySettingsRequest>;
 
 /** «Сообщения простым текстом» в «Мой профиль» (поток Т, задача Т1): без таблиц и раскрывающихся разделов. */
-export const TelegramPlainRequest = z.object({ plain: z.boolean() });
+export const TelegramPlainRequest = z.strictObject({ plain: z.boolean() });
 export type TelegramPlainRequest = z.infer<typeof TelegramPlainRequest>;

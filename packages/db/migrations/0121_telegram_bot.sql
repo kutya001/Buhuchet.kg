@@ -1,7 +1,7 @@
 ALTER TABLE "telegram_outbox" DROP CONSTRAINT "telegram_outbox_kind_check";--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "telegram_plain" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "org_settings" ADD COLUMN "telegram_actions" boolean DEFAULT true NOT NULL;--> statement-breakpoint
 ALTER TABLE "audit_log" ADD COLUMN "via" text DEFAULT nullif(current_setting('app.via', true), '');--> statement-breakpoint
-ALTER TABLE "telegram_links" ADD COLUMN "plain_text" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "telegram_outbox" ADD COLUMN "payload" jsonb;--> statement-breakpoint
 ALTER TABLE "telegram_outbox" ADD COLUMN "message_id" bigint;--> statement-breakpoint
 ALTER TABLE "status_history" ADD COLUMN "via" text DEFAULT nullif(current_setting('app.via', true), '');--> statement-breakpoint

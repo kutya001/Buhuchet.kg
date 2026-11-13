@@ -5,10 +5,12 @@ import {
   ADMIN_STATUS_SCALES,
   defaultStatusTones,
   isAdminSystemDict,
+  MESSAGE_TEMPLATE_MAX,
   MESSAGE_TEMPLATE_ORDER,
   MESSAGE_TEMPLATE_REQUIRED,
   MESSAGE_TEMPLATE_VARIABLES,
   messageTemplateLabelKey,
+  messageTemplateMax,
   messageTemplateVariables,
   missingTemplateVariables,
   roleTemplateProblem,
@@ -109,6 +111,21 @@ describe('Админка → «Шаблоны» сообщений', () => {
     expect([...MESSAGE_TEMPLATE_ORDER].sort()).toEqual(
       Object.keys(MESSAGE_TEMPLATE_VARIABLES).sort(),
     );
+  });
+
+  it('предел длины по ключу: подпись кнопки бота — 40 знаков, скрытый ответ — 200, остальные — общий', () => {
+    expect(messageTemplateMax('tgBtnCopyCode')).toBe(40);
+    expect(messageTemplateMax('tgBtnTest')).toBe(40);
+    expect(messageTemplateMax('tgActStale')).toBe(200);
+    expect(messageTemplateMax('tgActNoRight')).toBe(200);
+    expect(messageTemplateMax('tgTestOk')).toBe(200);
+    expect(messageTemplateMax('tgTest')).toBe(MESSAGE_TEMPLATE_MAX);
+    expect(messageTemplateMax('tgCode')).toBe(MESSAGE_TEMPLATE_MAX);
+    expect(messageTemplateMax('waTax')).toBe(MESSAGE_TEMPLATE_MAX);
+    // Тексты справочника в свои пределы укладываются.
+    for (const [key, text] of Object.entries(refDB.messageTemplates)) {
+      expect(text.length, key).toBeLessThanOrEqual(messageTemplateMax(key));
+    }
   });
 
   it('у каждого шаблона справочника (refDB.json, messageTemplates) — подстановки, место и подпись', () => {

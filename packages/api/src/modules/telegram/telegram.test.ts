@@ -232,7 +232,13 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(tg.sent[0]!.text).toBe(
       fillTemplate(TPL.tgRelinkCode, { логин: 'acc-a', телеграм: '@new_tg', код: code, минут: 10 }),
     );
+    // Код копируется одним нажатием: моноширинный в тексте и кнопка «Скопировать код».
+    expect(tg.sent[0]!.options).toMatchObject({
+      code,
+      keyboard: [[{ text: TPL.tgBtnCopyCode, copy: code }]],
+    });
     expect(tg.sent[1]!.text).toBe(fillTemplate(TPL.tgRelinkAsk, { логин: 'acc-a', минут: 10 }));
+    expect(tg.sent[1]!.options.keyboard).toBeUndefined();
     expect((await me(app, cookie)).telegram).toMatchObject({ name: 'Алишер' });
 
     await sendToBot(app, telegramUpdate(otherCode(code), 7003));

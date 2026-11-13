@@ -146,9 +146,9 @@ export async function claimOutbox(
     rich.length
       ? (
           await tx
-            .select({ userId: telegramLinks.userId })
-            .from(telegramLinks)
-            .where(and(inArray(telegramLinks.userId, rich), eq(telegramLinks.plainText, true)))
+            .select({ userId: users.id })
+            .from(users)
+            .where(and(inArray(users.id, rich), eq(users.telegramPlain, true)))
         ).map((r) => r.userId)
       : [],
   );

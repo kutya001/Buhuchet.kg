@@ -47,6 +47,10 @@ export interface BotPressTarget {
   message: BotMessage;
   /** Чат, из которого нажали, всё ещё привязан к этой учётной записи. */
   linked: boolean;
+  /** Пароль сброшен (временный): на сайте доступна только смена пароля, кнопки не действуют. */
+  mustChangePassword: boolean;
+  /** После сброса пароля разрешено привязать другой Telegram без кода — кнопки не действуют. */
+  relinkFree: boolean;
   isPlatformAdmin: boolean;
   userBlocked: boolean;
   employeeActive: boolean | null;
@@ -73,6 +77,8 @@ export async function botPressTarget(
     org_name: string | null;
     payload: unknown;
     linked: boolean;
+    must_change_password: boolean;
+    relink_free: boolean;
     is_platform_admin: boolean;
     user_blocked: boolean;
     employee_active: boolean | null;
@@ -93,12 +99,31 @@ export async function botPressTarget(
     orgName: row.org_name,
     message,
     linked: row.linked,
+    mustChangePassword: row.must_change_password,
+    relinkFree: row.relink_free,
     isPlatformAdmin: row.is_platform_admin,
     userBlocked: row.user_blocked,
     employeeActive: row.employee_active,
     orgStatus: row.org_status,
     telegramActions: row.telegram_actions,
   };
+}
+
+/**
+ * Взять сообщение на обработку нажатия: строка журнала блокируется до конца транзакции (нажатия одного
+ * сообщения идут по одному), возвращается её описание на этот момент. Только своё сообщение:
+ * вызывается в транзакции от имени нажавшего. null — сообщение не найдено.
+ */
+export async function lockBotPress(
+  tx: Tx,
+  outboxId: string,
+  chatId: number,
+): Promise<BotMessage | null> {
+  const [row] = await tx.execute<{ payload: unknown }>(
+    sql`select app.telegram_press_lock(${outboxId}::uuid, ${chatId}::bigint) as payload`,
+  );
+  if (!row?.payload) return null;
+  return asBotMessage(typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload);
 }
 
 /**
@@ -125,7 +150,7 @@ export async function markViaTelegram(tx: Tx): Promise<void> {
   await tx.execute(sql`select set_config('app.via', 'telegram', true)`);
 }
 
-/** «Сообщения простым текстом» пользователя; Telegram не привязан — false. */
+/** «Сообщения простым текстом» пользователя (хранится у пользователя и отвязку переживает). */
 export async function telegramPlainText(db: Db | Tx, userId: string): Promise<boolean> {
   const [row] = await db.execute<{ plain: boolean | null }>(
     sql`select app.telegram_plain_text(${userId}::uuid) as plain`,

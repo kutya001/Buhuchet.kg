@@ -30,6 +30,7 @@ export const testAction: BotAction = {
 };
 
 /** «Проверить бота» одним пользователем — не чаще стольких раз в час. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-2
 export const BOT_TEST_RATE_LIMIT: RateLimit = {
   kind: 'telegram_bot_test',
   max: 10,

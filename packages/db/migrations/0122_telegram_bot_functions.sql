@@ -9,7 +9,8 @@ GRANT UPDATE (message_id) ON TABLE telegram_outbox TO buhuchet_app;
 --> statement-breakpoint
 -- Сообщение, отправленное сразу (мимо очереди), — в журнал вместе с описанием сообщения и номером в
 -- чате. Вид сообщения проверяет ограничение таблицы; у сообщений с кодом текст и описание не пишутся.
--- Возвращает идентификатор строки журнала.
+-- Описание и номер (по ним принимаются нажатия кнопок) пишутся, только если чат привязан к этому
+-- пользователю: по сообщению в чужой чат нажатие принять нельзя. Возвращает идентификатор строки.
 CREATE FUNCTION app.telegram_log(
   p_user uuid, p_chat bigint, p_kind text, p_text text, p_ok boolean, p_error text,
   p_payload jsonb, p_message bigint
@@ -26,9 +27,11 @@ CREATE FUNCTION app.telegram_log(
            CASE WHEN p_ok THEN 'sent' ELSE 'error' END, 1, now(),
            CASE WHEN p_ok THEN NULL ELSE left(coalesce(p_error, ''), 300) END,
            CASE WHEN p_ok THEN now() END,
-           CASE WHEN p_kind IN ('code', 'relink_code') OR NOT p_ok THEN NULL ELSE p_payload END,
-           CASE WHEN p_ok THEN p_message END
+           CASE WHEN p_kind IN ('code', 'relink_code') OR NOT p_ok OR l.user_id IS NULL
+                THEN NULL ELSE p_payload END,
+           CASE WHEN p_ok AND l.user_id IS NOT NULL THEN p_message END
     FROM public.users u
+    LEFT JOIN public.telegram_links l ON l.user_id = u.id AND l.chat_id = p_chat
     WHERE u.id = p_user
     RETURNING id
   $$;
@@ -36,7 +39,9 @@ CREATE FUNCTION app.telegram_log(
 -- Нажатие кнопки: отправленное сообщение с кнопками по чату и номеру сообщения, кому оно отправлено и
 -- можно ли этому пользователю сейчас действовать. `linked` — чат всё ещё привязан к этой учётной
 -- записи: один Telegram бывает привязан к нескольким логинам, и после замены Telegram прежний чат
--- действовать не должен.
+-- действовать не должен. `must_change_password` — пароль сброшен (временный): на сайте с ним доступна
+-- только смена пароля, кнопки тоже не действуют; `relink_free` — после сброса пароля разрешено
+-- привязать другой Telegram без кода (привязку могли захватить, п. О-20) — кнопки тоже не действуют.
 CREATE FUNCTION app.telegram_press_target(p_chat bigint, p_message bigint)
   RETURNS TABLE (
     outbox_id uuid,
@@ -47,6 +52,8 @@ CREATE FUNCTION app.telegram_press_target(p_chat bigint, p_message bigint)
     org_name text,
     payload jsonb,
     linked boolean,
+    must_change_password boolean,
+    relink_free boolean,
     is_platform_admin boolean,
     user_blocked boolean,
     employee_active boolean,
@@ -59,6 +66,9 @@ CREATE FUNCTION app.telegram_press_target(p_chat bigint, p_message bigint)
     SELECT m.id, u.id, u.org_id, e.id, u.login::text, o.name, m.payload,
            EXISTS (SELECT 1 FROM public.telegram_links l
                    WHERE l.user_id = u.id AND l.chat_id = p_chat),
+           u.must_change_password,
+           EXISTS (SELECT 1 FROM public.telegram_link_guards g
+                   WHERE g.user_id = u.id AND g.free_until > now()),
            u.is_platform_admin, u.blocked, e.active, o.status,
            coalesce(s.telegram_actions, true)
     FROM public.telegram_outbox m
@@ -70,6 +80,20 @@ CREATE FUNCTION app.telegram_press_target(p_chat bigint, p_message bigint)
       AND m.payload IS NOT NULL AND m.status = 'sent'
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT 1
+  $$;
+--> statement-breakpoint
+-- Нажатие обрабатывается по одному на сообщение: строка журнала блокируется до конца транзакции
+-- действия, и возвращается её описание на этот момент — по нему кнопка сверяется ещё раз (два быстрых
+-- нажатия, повторная доставка от Telegram). Только своё сообщение; пусто — не найдено.
+CREATE FUNCTION app.telegram_press_lock(p_id uuid, p_chat bigint)
+  RETURNS jsonb
+  LANGUAGE sql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    SELECT m.payload FROM public.telegram_outbox m
+    WHERE m.id = p_id AND m.chat_id = p_chat AND m.user_id = app.current_user_id()
+      AND m.message_id IS NOT NULL AND m.payload IS NOT NULL AND m.status = 'sent'
+    FOR UPDATE
   $$;
 --> statement-breakpoint
 -- После нажатия: кнопка стала неактивной — запомнить описание сообщения. Только своё сообщение
@@ -92,17 +116,18 @@ CREATE FUNCTION app.telegram_press_save(p_id uuid, p_chat bigint, p_payload json
   $$;
 --> statement-breakpoint
 -- «Сообщения простым текстом» пользователя (для отправки сразу: у администратора платформы нет
--- организации, и под RLS его привязка не видна). Telegram не привязан — пусто.
+-- организации, и под RLS его строка не видна). Хранится у пользователя, как в прототипе: отвязка и
+-- другой Telegram выбор не сбрасывают.
 CREATE FUNCTION app.telegram_plain_text(p_user uuid)
   RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
-    SELECT l.plain_text FROM public.telegram_links l WHERE l.user_id = p_user
+    SELECT u.telegram_plain FROM public.users u WHERE u.id = p_user
   $$;
 --> statement-breakpoint
 -- Включить или выключить свои «Сообщения простым текстом». Возвращает прежнее значение; пусто —
--- Telegram не привязан.
+-- Telegram не привязан (переключатель есть только у привязанного Telegram).
 CREATE FUNCTION app.telegram_set_plain_text(p_plain boolean)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -111,34 +136,20 @@ CREATE FUNCTION app.telegram_set_plain_text(p_plain boolean)
   DECLARE
     was boolean;
   BEGIN
-    SELECT l.plain_text INTO was FROM public.telegram_links l
-      WHERE l.user_id = app.current_user_id() FOR UPDATE;
-    IF NOT FOUND OR p_plain IS NULL THEN
+    IF p_plain IS NULL THEN
       RETURN NULL;
     END IF;
-    UPDATE public.telegram_links l SET plain_text = p_plain
-      WHERE l.user_id = app.current_user_id();
+    SELECT u.telegram_plain INTO was FROM public.users u
+      WHERE u.id = app.current_user_id()
+        AND EXISTS (SELECT 1 FROM public.telegram_links l WHERE l.user_id = u.id)
+      FOR NO KEY UPDATE;
+    IF NOT FOUND THEN
+      RETURN NULL;
+    END IF;
+    UPDATE public.users u SET telegram_plain = p_plain WHERE u.id = app.current_user_id();
     RETURN was;
   END
   $$;
---> statement-breakpoint
--- Новая привязка — снова вид по умолчанию: другое приложение Telegram может показывать таблицы.
--- (Строка привязки при замене чата обновляется, поэтому сброс — триггером на смену чата.)
-CREATE FUNCTION app.telegram_links_reset_plain()
-  RETURNS trigger
-  LANGUAGE plpgsql
-  SET search_path = pg_catalog, pg_temp
-  AS $$
-  BEGIN
-    IF NEW.chat_id IS DISTINCT FROM OLD.chat_id THEN
-      NEW.plain_text := false;
-    END IF;
-    RETURN NEW;
-  END
-  $$;
---> statement-breakpoint
-CREATE TRIGGER telegram_links_reset_plain BEFORE UPDATE OF chat_id ON public.telegram_links
-  FOR EACH ROW EXECUTE FUNCTION app.telegram_links_reset_plain();
 --> statement-breakpoint
 -- Админка → «Телеграм» → «Бот платформы» → «Сообщения с таблицами»: настройка хранится разделом
 -- `telegramBot` справочников платформы (`platform_reference`); пишет только администратор платформы.
@@ -172,19 +183,20 @@ REVOKE ALL ON FUNCTION app.telegram_log(uuid, bigint, text, text, boolean, text,
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.telegram_press_target(bigint, bigint) FROM PUBLIC;
 --> statement-breakpoint
+REVOKE ALL ON FUNCTION app.telegram_press_lock(uuid, bigint) FROM PUBLIC;
+--> statement-breakpoint
 REVOKE ALL ON FUNCTION app.telegram_press_save(uuid, bigint, jsonb) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.telegram_plain_text(uuid) FROM PUBLIC;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.telegram_set_plain_text(boolean) FROM PUBLIC;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION app.telegram_links_reset_plain() FROM PUBLIC, buhuchet_app;
---> statement-breakpoint
 REVOKE ALL ON FUNCTION app.admin_set_telegram_rich(boolean) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION
   app.telegram_log(uuid, bigint, text, text, boolean, text, jsonb, bigint),
   app.telegram_press_target(bigint, bigint),
+  app.telegram_press_lock(uuid, bigint),
   app.telegram_press_save(uuid, bigint, jsonb),
   app.telegram_plain_text(uuid),
   app.telegram_set_plain_text(boolean),

@@ -221,6 +221,21 @@ describe.skipIf(!databaseAvailable())(
           details: { field: key, list: '{код}' },
         });
       }
+      // Пределы Telegram: подпись кнопки — 40 знаков, скрытый ответ на нажатие — 200.
+      for (const [key, max] of [
+        ['tgBtnCopyCode', 40],
+        ['tgActStale', 200],
+        ['tgTestOk', 200],
+      ] as const) {
+        const long = await put(`${P}/templates`, {
+          items: all.map((x) => (x.key === key ? { ...x, text: 'я'.repeat(max + 1) } : x)),
+        });
+        expect(long.status, key).toBe(400);
+        expect(await errorOf(long)).toMatchObject({
+          code: 'template_too_long',
+          details: { field: key, max, length: max + 1 },
+        });
+      }
       const saved = await put(`${P}/templates`, {
         items: all.map((x) => (x.key === 'tgCode' ? { ...x, text: 'Ваш код: {код}' } : x)),
       });
@@ -230,6 +245,18 @@ describe.skipIf(!databaseAvailable())(
         code: 'tgCode',
         label: 'Telegram: код восстановления пароля',
       });
+      // Ровно по пределу — сохраняется.
+      const fresh = AdminMessageTemplates.parse(await (await get(`${P}/templates`)).json()).items;
+      const fits = await put(`${P}/templates`, {
+        items: fresh
+          .filter((x) => x.key === 'tgBtnCopyCode' || x.key === 'tgActStale')
+          .map((x) => ({
+            key: x.key,
+            version: x.version,
+            text: 'я'.repeat(x.key === 'tgBtnCopyCode' ? 40 : 200),
+          })),
+      });
+      expect(await fits.json()).toEqual({ changed: 2 });
     });
   },
 );

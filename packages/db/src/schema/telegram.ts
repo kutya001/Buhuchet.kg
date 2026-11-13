@@ -9,7 +9,6 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   bigint,
-  boolean,
   check,
   date,
   foreignKey,
@@ -53,11 +52,6 @@ export const telegramLinks = pgTable(
     username: text('username'),
     firstName: text('first_name'),
     linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
-    /**
-     * «Сообщения простым текстом» (поток Т, задача Т1): без таблиц и раскрывающихся разделов. Меняет
-     * сам пользователь функцией `app.telegram_set_plain_text`; с новым чатом — снова выключено.
-     */
-    plainText: boolean('plain_text').notNull().default(false),
   },
   (t) => [
     foreignKey({

@@ -165,6 +165,21 @@ describe('createTelegramBotApi', () => {
     expect(hanging.mock.calls[0]![1].signal).toBeInstanceOf(AbortSignal);
   });
 
+  it('ошибка сети: токен бота из адреса в текст и причину ошибки не попадает', async () => {
+    const fetch = vi.fn(async (url: string) => {
+      throw new TypeError(`Failed to parse URL from ${url}`, { cause: new Error(url) });
+    });
+    const bot = createTelegramBotApi({ token: '1:secret', fetch });
+    const err = await bot.sendMessage(100, 'Текст').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).name).toBe('TypeError');
+    expect((err as Error).message).toBe(
+      'Failed to parse URL from https://api.telegram.org/bot<скрыт>/sendMessage',
+    );
+    expect((err as Error).cause).toBeUndefined();
+    expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain('1:secret');
+  });
+
   it('429 — повторить позже, 403 — повтор бессмыслен', async () => {
     const limited = createTelegramBotApi({
       token: 't',

@@ -352,6 +352,37 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     });
   });
 
+  it('«Сообщения с таблицами»: переключает только администратор платформы; неверное тело — 400; запись в историю платформы', async () => {
+    const path = '/api/admin/telegram/bot/view';
+    const put = (body: unknown, cookie = admin) => apiRequest(f.app, 'PUT', path, cookie, body);
+    const rich = async () =>
+      AdminTelegramBot.parse(await (await get('/api/admin/telegram/bot')).json()).rich;
+    expect((await put({ rich: false }, owner)).status).toBe(403);
+    expect((await put({ rich: false }, '')).status).toBe(401);
+    for (const body of [{}, { rich: 'нет' }, { rich: false, extra: 1 }]) {
+      expect((await put(body)).status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await rich()).toBe(true);
+    expect((await put({ rich: false })).status).toBe(200);
+    expect(await rich()).toBe(false);
+    // Повтор того же значения историю не пишет.
+    expect((await put({ rich: false })).status).toBe(200);
+    expect((await put({ rich: true })).status).toBe(200);
+    expect(await rich()).toBe(true);
+    const history = await f.t.admin.db
+      .select({
+        changes: schema.platformAuditLog.changes,
+        actor: schema.platformAuditLog.actorUserId,
+      })
+      .from(schema.platformAuditLog)
+      .where(eq(schema.platformAuditLog.entity, 'telegram_bot'))
+      .orderBy(schema.platformAuditLog.at, schema.platformAuditLog.id);
+    expect(history).toEqual([
+      { changes: [{ field: 'rich', from: true, to: false }], actor: adminId },
+      { changes: [{ field: 'rich', from: false, to: true }], actor: adminId },
+    ]);
+  });
+
   it('«Рассылка»: всем, одной организации; пустой и длинный текст — 400, заблокированная организация — 409', async () => {
     const orgs = AdminTelegramOrgs.parse(await (await get('/api/admin/telegram/orgs')).json());
     expect(orgs.items.map((o) => o.name)).toEqual(['Организация А', 'Организация Б']);

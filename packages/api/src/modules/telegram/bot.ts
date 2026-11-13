@@ -63,7 +63,7 @@ export async function sendNow(
       );
     }
   } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+    error = redactBotToken(err instanceof Error ? err.message : String(err));
     deps.logger.warn({ err, purpose }, 'Telegram: сообщение не отправлено');
   }
   if (log) {

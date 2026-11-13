@@ -98,6 +98,11 @@ interface BotApiResponse<T> {
   parameters?: { retry_after?: number };
 }
 
+/** Токен бота стоит в адресе запроса к Telegram: в тексте ошибки он заменяется. */
+export function redactBotToken(message: string): string {
+  return message.replace(/\/bot[^/\s]+/g, '/bot<скрыт>');
+}
+
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -132,13 +137,21 @@ export function createTelegramBotApi(options: {
     body: unknown,
     timeoutMs = DEFAULT_TIMEOUT_MS,
   ): Promise<BotApiResponse<T>> {
-    const res = await doFetch(`${base}/${method}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    return (await res.json()) as BotApiResponse<T>;
+    try {
+      const res = await doFetch(`${base}/${method}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      return (await res.json()) as BotApiResponse<T>;
+    } catch (err) {
+      // Адрес запроса содержит токен бота, и текст ошибки сети может его повторить («Failed to parse
+      // URL from …/bot<токен>/…»): наружу — новая ошибка с вычищенным текстом и без исходной причины.
+      const safe = new Error(redactBotToken(err instanceof Error ? err.message : String(err)));
+      safe.name = err instanceof Error ? err.name : 'Error';
+      throw safe;
+    }
   }
 
   return {

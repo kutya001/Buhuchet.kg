@@ -1,6 +1,12 @@
 import { createFakeTelegram, type FakeTelegram } from '@buhuchet/adapters';
 import { hashPassword } from '@buhuchet/adapters/password';
-import { schema, withOrgContext, writeHistory } from '@buhuchet/db';
+import {
+  adminSetTelegramBotRich,
+  schema,
+  withOrgContext,
+  withUserContext,
+  writeHistory,
+} from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
 import {
   createTestDatabase,
@@ -26,7 +32,15 @@ import { sendBotMessage } from './bot';
 import { flushEvents, queueEvents } from './outbox';
 import type { BotAction, BotPressContext } from './press';
 
-const { auditLog, employees, telegramOutbox, users } = schema;
+const {
+  auditLog,
+  employees,
+  organizations,
+  telegramLinkGuards,
+  telegramLinks,
+  telegramOutbox,
+  users,
+} = schema;
 const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
 const PASSWORD = 'Верный-пароль-1';
 type App = ReturnType<typeof createApp>;
@@ -43,6 +57,7 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
   let a: CreatedOrganization;
   let b: CreatedOrganization;
   let accA: string;
+  let adminId: string;
   let seen: BotPressContext[];
 
   /** Действия теста: «mark» меняет данные и пишет в историю, «look» только отвечает. */
@@ -84,6 +99,23 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
         send: { message: { text: 'Пришлите файл отчёта.' }, kind: 'bot_test' },
       }),
     },
+    // Действие с правом: «Настройки и учётная политика» есть только у владельца.
+    perm: {
+      permission: 'org',
+      run: async (ctx) => {
+        seen.push(ctx);
+        return { reply: 'Право есть' };
+      },
+    },
+    who: {
+      change: true,
+      run: async (ctx) => {
+        const who = await ctx.asUser(async (_tx, access) =>
+          access ? 'сотрудник' : 'не сотрудник',
+        );
+        return { reply: `${who}; администратор платформы: ${ctx.user.isPlatformAdmin}` };
+      },
+    },
   };
 
   const message: BotMessage = {
@@ -99,6 +131,16 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
         { text: 'Сбой', action: 'boom' },
         { text: 'Устарело', action: 'stale' },
         { text: 'Файл', action: 'ask' },
+      ],
+    ],
+  };
+
+  const extra: BotMessage = {
+    text: 'Проверка прав',
+    buttons: [
+      [
+        { text: 'Право', action: 'perm' },
+        { text: 'Кто', action: 'who' },
       ],
     ],
   };
@@ -147,6 +189,11 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
       shortName: 'Асанова М.',
       roleId: chiefRole,
     });
+    const [admin] = await t.admin.db
+      .insert(users)
+      .values({ login: 'platform-bot', passwordHash, isPlatformAdmin: true })
+      .returning({ id: users.id });
+    adminId = admin!.id;
   });
 
   beforeEach(() => {
@@ -336,6 +383,17 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     expect((await policyOf(owner)).telegramActions).toBe(true);
     expect((await setActions(owner, false)).status).toBe(200);
     expect((await policyOf(chief)).telegramActions).toBe(false);
+    // Переключатель — в истории учётной политики: было включено, стало выключено, кто.
+    const [history] = await t.admin.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entity, 'org_settings'), eq(auditLog.entityId, a.orgId)))
+      .orderBy(desc(auditLog.id));
+    expect(history).toMatchObject({
+      actorUserId: a.ownerUserId,
+      changes: [{ field: 'telegramActions', from: true, to: false }],
+      via: null,
+    });
 
     const id = await send(a.ownerUserId, 6001);
     await press('mark:r1', 6001, id);
@@ -415,5 +473,210 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     expect((await apiRequest(app, 'DELETE', '/api/telegram/link', again)).status).toBe(200);
     await press('look:r1', 6003, id);
     expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoLink, alert: true });
+  });
+
+  it('временный пароль и привязка другого Telegram без кода после сброса пароля: кнопки не действуют', async () => {
+    const id = await send(a.ownerUserId, 6001);
+    const owner = eq(users.id, a.ownerUserId);
+    await t.admin.db.update(users).set({ mustChangePassword: true }).where(owner);
+    for (const data of ['look:r1', 'mark:r1']) {
+      await press(data, 6001, id);
+      expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    }
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(owner);
+    await t.admin.db.insert(telegramLinkGuards).values({
+      userId: a.ownerUserId,
+      orgId: a.orgId,
+      freeUntil: new Date(Date.now() + 3_600_000),
+    });
+    await press('mark:r1', 6001, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    expect(seen).toHaveLength(0);
+    expect(tg.edits).toEqual([]);
+    await t.admin.db.delete(telegramLinkGuards).where(eq(telegramLinkGuards.userId, a.ownerUserId));
+    await press('look:r1', 6001, id);
+    expect(lastAnswer()).toMatchObject({ text: 'Смотрю r1' });
+  });
+
+  it('право действия проверяет ядро: без права — «Нет права», обработчик не вызывается', async () => {
+    await t.admin.db.insert(telegramLinks).values({ userId: accA, orgId: a.orgId, chatId: 6004 });
+    const id = await send(accA, 6004, extra);
+    await press('perm', 6004, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    expect(seen).toHaveLength(0);
+    // Действие без права тот же сотрудник выполняет.
+    await press('who', 6004, id);
+    expect(lastAnswer()).toMatchObject({ text: 'сотрудник; администратор платформы: false' });
+    await t.admin.db.delete(telegramLinks).where(eq(telegramLinks.userId, accA));
+
+    const idOwner = await send(a.ownerUserId, 6001, extra);
+    await press('perm', 6001, idOwner);
+    expect(lastAnswer()).toMatchObject({ text: 'Право есть', alert: false });
+    expect(seen).toHaveLength(1);
+  });
+
+  it('администратор платформы: нажатие без организации; действие с правом сотрудника — «Нет права»', async () => {
+    await t.admin.db.insert(telegramLinks).values({ userId: adminId, orgId: null, chatId: 6009 });
+    const id = await send(adminId, 6009, extra);
+    // «Действия из Telegram» организаций администратора платформы не касаются.
+    await press('who', 6009, id);
+    expect(lastAnswer()).toMatchObject({
+      text: 'не сотрудник; администратор платформы: true',
+      alert: false,
+    });
+    await press('perm', 6009, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    expect(seen).toHaveLength(0);
+    // Заблокированный администратор платформы — «Нет права».
+    await t.admin.db.update(users).set({ blocked: true }).where(eq(users.id, adminId));
+    await press('who', 6009, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    await t.admin.db.update(users).set({ blocked: false }).where(eq(users.id, adminId));
+  });
+
+  it('два нажатия одной кнопки сразу: действие выполняется один раз, второе — «Кнопка устарела»', async () => {
+    const id = await send(a.ownerUserId, 6001);
+    const from = tg.answers.length;
+    await Promise.all([press('mark:r1', 6001, id), press('mark:r1', 6001, id)]);
+    expect(seen).toHaveLength(1);
+    const texts = tg.answers
+      .slice(from)
+      .map((x) => x.text)
+      .sort();
+    expect(texts).toEqual(
+      [TPL.tgActStale, 'Готово: r1; организаций видно: 1; владелец: true'].sort(),
+    );
+    expect(tg.edits).toHaveLength(1);
+    const marks = await t.admin.db
+      .select({ id: auditLog.id })
+      .from(auditLog)
+      .where(and(eq(auditLog.entity, 'user'), eq(auditLog.via, 'telegram')));
+    const before = marks.length;
+    await press('mark:r1', 6001, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActStale, alert: true });
+    const after = await t.admin.db
+      .select({ id: auditLog.id })
+      .from(auditLog)
+      .where(and(eq(auditLog.entity, 'user'), eq(auditLog.via, 'telegram')));
+    expect(after).toHaveLength(before);
+  });
+
+  it('сбой действия откатывает всё нажатие: записи в истории нет, кнопка остаётся активной', async () => {
+    const failing: Record<string, BotAction> = {
+      ...actions,
+      mark: {
+        change: true,
+        run: async (ctx) => {
+          await ctx.asUser((tx) =>
+            writeHistory(tx, {
+              entity: 'user',
+              entityId: ctx.user.userId,
+              action: 'update',
+              changes: [{ field: 'botRollback', to: ctx.arg }],
+            }),
+          );
+          throw new Error('сбой после записи');
+        },
+      },
+    };
+    deps = createTestDeps({ db: t.app.db, telegram: tg, botActions: failing });
+    app = createApp(deps);
+    const id = await send(a.ownerUserId, 6001);
+    await press('mark:r1', 6001, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActFailed, alert: true });
+    expect(tg.edits).toEqual([]);
+    const rows = await t.admin.db
+      .select({ changes: auditLog.changes })
+      .from(auditLog)
+      .where(and(eq(auditLog.entity, 'user'), eq(auditLog.entityId, a.ownerUserId)));
+    expect(rows.flatMap((r) => r.changes).some((c) => c.field === 'botRollback')).toBe(false);
+    // Кнопка не погашена: то же нажатие с исправным действием выполняется.
+    deps = createTestDeps({ db: t.app.db, telegram: tg, botActions: actions });
+    app = createApp(deps);
+    await press('mark:r1', 6001, id);
+    expect(seen).toHaveLength(1);
+  });
+
+  it('заблокированная организация, заблокированный пользователь — «Нет права»; Telegram привязан заново к другому чату — «не привязан»', async () => {
+    const id = await send(b.ownerUserId, 6002);
+    const org = eq(organizations.id, b.orgId);
+    await t.admin.db.update(organizations).set({ status: 'blocked' }).where(org);
+    await press('look:r1', 6002, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    await t.admin.db.update(organizations).set({ status: 'active' }).where(org);
+    const user = eq(users.id, b.ownerUserId);
+    await t.admin.db.update(users).set({ blocked: true }).where(user);
+    await press('look:r1', 6002, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    await t.admin.db.update(users).set({ blocked: false }).where(user);
+    await press('look:r1', 6002, id);
+    expect(lastAnswer()).toMatchObject({ text: 'Смотрю r1' });
+
+    // Привязан другой чат: из прежнего кнопки не действуют, а в новом такого сообщения нет.
+    const link = eq(telegramLinks.userId, b.ownerUserId);
+    await t.admin.db.update(telegramLinks).set({ chatId: 6012 }).where(link);
+    await press('look:r1', 6002, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoLink, alert: true });
+    await press('look:r1', 6012, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActStale, alert: true });
+    await t.admin.db.update(telegramLinks).set({ chatId: 6002 }).where(link);
+    expect(seen).toHaveLength(0);
+  });
+
+  it('вид сообщения: таблицы платформы выключены — простой текст с кнопками (сразу и из очереди); заголовок без таблиц — вид с разметкой', async () => {
+    const setRich = (rich: boolean) =>
+      withUserContext(t.app.db, adminId, (tx) => adminSetTelegramBotRich(tx, rich));
+    expect(await setRich(false)).toBe(true);
+    try {
+      const id = await send(a.ownerUserId, 6001);
+      expect(tg.sent.at(-1)!.options.rich).toBeUndefined();
+      expect(tg.sent.at(-1)!.text).toBe('Сегодня срок\nНДС за октябрь\n• ОсОО «Ромашка» — НДС');
+      expect(tg.sent.at(-1)!.options.keyboard).toHaveLength(2);
+      await press('look:r1', 6001, id);
+      expect(lastAnswer()).toMatchObject({ text: 'Смотрю r1' });
+
+      const now = deps.clock.now();
+      const ids = await withOrgContext(deps.db, { orgId: a.orgId, userId: a.ownerUserId }, (tx) =>
+        queueEvents(
+          tx,
+          [
+            {
+              userId: a.ownerUserId,
+              chatId: 6001,
+              kind: 'bot_test',
+              text: 'Сегодня срок',
+              message,
+            },
+          ],
+          now,
+        ),
+      );
+      const from = tg.sent.length;
+      await flushEvents(deps, a.orgId, ids);
+      expect(tg.sent.slice(from)).toHaveLength(1);
+      expect(tg.sent.at(-1)!.options.rich).toBeUndefined();
+      expect(tg.sent.at(-1)!.options.keyboard).toHaveLength(2);
+    } finally {
+      await setRich(true);
+    }
+    // Заголовок или подзаголовок без таблиц — тоже вид с разметкой; один текст — обычное сообщение.
+    await send(a.ownerUserId, 6001, { heading: 'Заголовок', text: 'Текст' });
+    expect(tg.sent.at(-1)!.options.rich).toContain('Заголовок');
+    await send(a.ownerUserId, 6001, { text: 'Просто текст' });
+    expect(tg.sent.at(-1)!.options.rich).toBeUndefined();
+  });
+
+  it('«Проверить бота» — не чаще 10 раз в час: дальше 429', async () => {
+    deps = createTestDeps({ db: t.app.db, telegram: tg });
+    app = createApp(deps);
+    const cookie = await signIn(app, 'owner-b', PASSWORD);
+    for (let i = 0; i < 10; i += 1) {
+      expect((await apiRequest(app, 'POST', '/api/telegram/test', cookie)).status).toBe(200);
+    }
+    const from = tg.sent.length;
+    const res = await apiRequest(app, 'POST', '/api/telegram/test', cookie);
+    expect(res.status).toBe(429);
+    expect(await errorCode(res)).toBe('bot_test_limit');
+    expect(tg.sent).toHaveLength(from);
   });
 });

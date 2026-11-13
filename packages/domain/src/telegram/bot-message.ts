@@ -116,9 +116,12 @@ export function botRichHtml(m: BotMessage): string {
   return text + (m.tables ?? []).map(tableHtml).join('');
 }
 
-/** Есть ли в сообщении то, чего нет в простом тексте: таблицы. Без них особый вид не нужен. */
-export function botHasTables(m: BotMessage): boolean {
-  return (m.tables ?? []).length > 0;
+/**
+ * Есть ли в сообщении то, чего нет в простом тексте: выделенный заголовок, подзаголовок, таблицы
+ * (прототип `tgcMsg` выделяет их в любом сообщении). Без них особый вид не нужен.
+ */
+export function botHasMarkup(m: BotMessage): boolean {
+  return Boolean(m.heading || m.sub) || (m.tables ?? []).length > 0;
 }
 
 /** Данные кнопки-действия: «действие» или «действие:запись» — не длиннее 64 байт. */
@@ -223,6 +226,8 @@ export function botMessageProblem(m: BotMessage): string | null {
       if (b.copy !== undefined && (b.copy.length < 1 || b.copy.length > BOT_COPY_MAX)) {
         return 'текст копирования';
       }
+      // Ссылка — только https: адрес собирает код, и другой схемы (tg:, javascript:) в нём быть не должно.
+      if (b.url !== undefined && !/^https:\/\/[^\s/]+/.test(b.url)) return 'адрес ссылки';
       if (b.action !== undefined) {
         try {
           const bytes = new TextEncoder().encode(botPressData(b.action, b.arg)).length;

@@ -7,12 +7,21 @@ import { withOrgContext } from './context';
 import { writeHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { readPlatformHistory } from './platform-history';
-import { auditLog, employees, statusHistory, telegramLinks, telegramOutbox, users } from './schema';
+import {
+  auditLog,
+  employees,
+  statusHistory,
+  telegramLinkGuards,
+  telegramLinks,
+  telegramOutbox,
+  users,
+} from './schema';
 import { writeStatusChange } from './status';
 import { createTelegramLinkToken, unlinkTelegram, useTelegramLink } from './telegram';
 import {
   adminSetTelegramBotRich,
   botPressTarget,
+  lockBotPress,
   logBotMessage,
   markViaTelegram,
   saveBotPress,
@@ -151,6 +160,29 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
         sql`update telegram_outbox set payload = '{"text":"x"}'::jsonb where id = ${code.id}`,
       ),
     ).rejects.toThrow();
+    // Сообщение в чат, не привязанный к получателю: в журнале оно есть, но без описания и номера —
+    // нажатие по нему не принять.
+    await logBotMessage(t.app.db, {
+      userId: a.ownerUserId,
+      chatId: 7999,
+      kind: 'bot_test',
+      text: 'В чужой чат',
+      ok: true,
+      message,
+      messageId: 103,
+    });
+    const [foreign] = await t.admin.db
+      .select()
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.chatId, 7999));
+    expect(foreign).toMatchObject({
+      userId: a.ownerUserId,
+      status: 'sent',
+      text: 'В чужой чат',
+      payload: null,
+      messageId: null,
+    });
+    expect(await botPressTarget(t.app.db, 7999, 103)).toBeNull();
   });
 
   it('нажатие: сообщение находится только по своему чату и номеру, с состоянием учётной записи', async () => {
@@ -164,6 +196,8 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
       orgName: 'Организация А',
       message,
       linked: true,
+      mustChangePassword: false,
+      relinkFree: false,
       isPlatformAdmin: false,
       userBlocked: false,
       employeeActive: true,
@@ -205,6 +239,36 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     await t.admin.db.execute(
       sql`update org_settings set telegram_actions = true where org_id = ${a.orgId}`,
     );
+
+    // Временный пароль и привязка Telegram без кода после сброса пароля — тоже в ответе.
+    await t.admin.db
+      .update(users)
+      .set({ mustChangePassword: true })
+      .where(eq(users.id, a.ownerUserId));
+    const hour = 3_600_000;
+    await t.admin.db.insert(telegramLinkGuards).values({
+      userId: a.ownerUserId,
+      orgId: a.orgId,
+      freeUntil: new Date(Date.now() + hour),
+    });
+    expect(await botPressTarget(t.app.db, 7001, 201)).toMatchObject({
+      mustChangePassword: true,
+      relinkFree: true,
+    });
+    // Срок привязки без кода вышел — отметки нет.
+    await t.admin.db
+      .update(telegramLinkGuards)
+      .set({ freeUntil: new Date(Date.now() - hour) })
+      .where(eq(telegramLinkGuards.userId, a.ownerUserId));
+    await t.admin.db
+      .update(users)
+      .set({ mustChangePassword: false })
+      .where(eq(users.id, a.ownerUserId));
+    expect(await botPressTarget(t.app.db, 7001, 201)).toMatchObject({
+      mustChangePassword: false,
+      relinkFree: false,
+    });
+    await t.admin.db.delete(telegramLinkGuards).where(eq(telegramLinkGuards.userId, a.ownerUserId));
   });
 
   it('после нажатия описание меняет только получатель сообщения; чужая организация его не видит и не меняет', async () => {
@@ -234,10 +298,26 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
       ),
     ).toBe(false);
     expect((await botPressTarget(t.app.db, 7001, 301))!.message).toEqual(message);
+    // Взять сообщение на обработку нажатия может тоже только получатель из своего чата.
+    expect(
+      await withOrgContext(t.app.db, ctxB(), (tx) => lockBotPress(tx, row.id, 7001)),
+    ).toBeNull();
+    expect(
+      await withOrgContext(t.app.db, ctxA(), (tx) => lockBotPress(tx, row.id, 7002)),
+    ).toBeNull();
+    expect(
+      await withOrgContext(t.app.db, { orgId: a.orgId }, (tx) => lockBotPress(tx, row.id, 7001)),
+    ).toBeNull();
+    expect(await withOrgContext(t.app.db, ctxA(), (tx) => lockBotPress(tx, row.id, 7001))).toEqual(
+      message,
+    );
 
     expect(
       await withOrgContext(t.app.db, ctxA(), (tx) => saveBotPress(tx, row.id, 7001, pressed)),
     ).toBe(true);
+    expect(await withOrgContext(t.app.db, ctxA(), (tx) => lockBotPress(tx, row.id, 7001))).toEqual(
+      pressed,
+    );
     expect((await botPressTarget(t.app.db, 7001, 301))!.message).toEqual(pressed);
     // Напрямую описание сообщения роль приложения не меняет — только функцией.
     await expect(
@@ -269,7 +349,7 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     expect(await botPressTarget(t.app.db, 7001, 401)).toMatchObject({ outboxId: id, message });
   });
 
-  it('«Сообщения простым текстом»: свой переключатель, прежнее значение, сброс при смене чата', async () => {
+  it('«Сообщения простым текстом»: свой переключатель, прежнее значение, хранится у пользователя', async () => {
     expect(await telegramPlainText(t.app.db, a.ownerUserId)).toBe(false);
     expect(await withOrgContext(t.app.db, ctxA(), (tx) => setTelegramPlainText(tx, true))).toBe(
       false,
@@ -278,7 +358,7 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
       true,
     );
     expect(await telegramPlainText(t.app.db, a.ownerUserId)).toBe(true);
-    // Чужая привязка не меняется, у пользователя без Telegram — пусто.
+    // Чужая настройка не меняется, у пользователя без Telegram — пусто.
     expect(await telegramPlainText(t.app.db, b.ownerUserId)).toBe(false);
     expect(
       await withUserContext(t.app.db, adminId, (tx) => setTelegramPlainText(tx, true)),
@@ -301,17 +381,12 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
       finishOutbox(tx, [{ id: id!, result: 'sent', at: now, messageId: 501 }]),
     );
 
-    // Другой чат — снова вид по умолчанию; тот же чат — настройка остаётся.
-    await t.admin.db
-      .update(telegramLinks)
-      .set({ username: 'same' })
-      .where(eq(telegramLinks.userId, a.ownerUserId));
-    expect(await telegramPlainText(t.app.db, a.ownerUserId)).toBe(true);
+    // Настройка — у пользователя, как в прототипе: другой чат её не сбрасывает.
     await t.admin.db
       .update(telegramLinks)
       .set({ chatId: 7011 })
       .where(eq(telegramLinks.userId, a.ownerUserId));
-    expect(await telegramPlainText(t.app.db, a.ownerUserId)).toBe(false);
+    expect(await telegramPlainText(t.app.db, a.ownerUserId)).toBe(true);
     // Сообщение прежнего чата больше не «привязано»: нажатие из него бот не примет.
     expect(await botPressTarget(t.app.db, 7001, 201)).toMatchObject({ linked: false });
     await t.admin.db
@@ -319,6 +394,10 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
       .set({ chatId: 7001 })
       .where(eq(telegramLinks.userId, a.ownerUserId));
     expect(await botPressTarget(t.app.db, 7001, 201)).toMatchObject({ linked: true });
+    expect(await withOrgContext(t.app.db, ctxA(), (tx) => setTelegramPlainText(tx, false))).toBe(
+      true,
+    );
+    expect(await telegramPlainText(t.app.db, a.ownerUserId)).toBe(false);
   });
 
   it('история «через Telegram»: отметка ставится только в помеченной транзакции, значение проверяет база', async () => {
@@ -392,14 +471,26 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     ]);
   });
 
-  it('отвязанный Telegram: сообщение находится, но чат уже не привязан', async () => {
-    await logged(b.ownerUserId, 7002, 601);
+  it('отвязанный Telegram: сообщение находится, но чат уже не привязан; вид сообщений остаётся', async () => {
+    const row = await logged(b.ownerUserId, 7002, 601);
     expect(await botPressTarget(t.app.db, 7002, 601)).toMatchObject({ linked: true });
+    expect(await withOrgContext(t.app.db, ctxB(), (tx) => setTelegramPlainText(tx, true))).toBe(
+      false,
+    );
     await withOrgContext(t.app.db, ctxB(), (tx) => unlinkTelegram(tx));
     expect(await botPressTarget(t.app.db, 7002, 601)).toMatchObject({
       userId: b.ownerUserId,
       linked: false,
     });
-    expect(await telegramPlainText(t.app.db, b.ownerUserId)).toBe(false);
+    // Описание сообщения остаётся своим, но принять нажатие по нему бот уже не даст (`linked`).
+    expect(await withOrgContext(t.app.db, ctxB(), (tx) => lockBotPress(tx, row.id, 7002))).toEqual(
+      message,
+    );
+    // Выбор вида отвязку переживает (как в прототипе), а менять его без Telegram нельзя.
+    expect(await telegramPlainText(t.app.db, b.ownerUserId)).toBe(true);
+    expect(
+      await withOrgContext(t.app.db, ctxB(), (tx) => setTelegramPlainText(tx, false)),
+    ).toBeNull();
+    expect(await telegramPlainText(t.app.db, b.ownerUserId)).toBe(true);
   });
 });

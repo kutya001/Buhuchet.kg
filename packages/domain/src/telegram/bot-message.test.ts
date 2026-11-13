@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   asBotMessage,
+  botHasMarkup,
   botKeyboard,
   botMessageProblem,
   botPlainText,
@@ -62,6 +63,14 @@ describe('сообщение бота: два вида из одного опи�
     expect(html).toContain('<td>ОсОО «А&amp;Б»</td>');
     expect(html).toContain('<td>ИП &lt;Иванов&gt;</td>');
     expect(html).toContain('<td align="right"><b>1 250,50</b></td>');
+  });
+
+  it('особый вид нужен сообщению с заголовком, подзаголовком или таблицей', () => {
+    expect(botHasMarkup(digest)).toBe(true);
+    expect(botHasMarkup({ heading: 'з', text: 'т' })).toBe(true);
+    expect(botHasMarkup({ sub: 'п', text: 'т' })).toBe(true);
+    expect(botHasMarkup({ text: 'т', buttons: [[{ text: 'к', action: 'a' }]] })).toBe(false);
+    expect(botHasMarkup(codeBotMessage('1 — код', '1', 'Скопировать код'))).toBe(false);
   });
 
   it('таблица без названия — без раскрывающегося раздела', () => {
@@ -161,6 +170,11 @@ describe('проверка сообщения до отправки', () => {
     expect(botMessageProblem({ text: 'т', buttons: [[{ text: 'к', action: 'Плохое' }]] })).toBe(
       'данные кнопки',
     );
+    for (const url of ['http://buhuchet.kg', 'javascript:alert(1)', 'tg://resolve', 'https://']) {
+      expect(botMessageProblem({ text: 'т', buttons: [[{ text: 'к', url }]] })).toBe(
+        'адрес ссылки',
+      );
+    }
   });
 
   it('сообщение из базы: не объект и неверные поля — null', () => {

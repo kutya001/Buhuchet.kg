@@ -12,9 +12,9 @@ import {
   type OutboxOutcome,
   type Tx,
 } from '@buhuchet/db';
-import type { TelegramSendOptions } from '@buhuchet/adapters';
+import { redactBotToken, type TelegramSendOptions } from '@buhuchet/adapters';
 import {
-  botHasTables,
+  botHasMarkup,
   botKeyboard,
   botRichHtml,
   OUTBOX_BATCH,
@@ -42,11 +42,9 @@ const realPause: Pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms
 
 /**
  * Текст исключения отправки — для журнала: адрес запроса к Telegram содержит токен бота
- * (`/bot<токен>/`); попади адрес в текст ошибки — в журнал и в ответы Админки токен не уходит.
+ * (`/bot<токен>/`); переходник вычищает его сам, здесь — ещё раз для любого другого `deps.telegram`.
  */
-export function redactBotToken(message: string): string {
-  return message.replace(/\/bot[^/\s]+/g, '/bot<скрыт>');
-}
+export { redactBotToken };
 
 /** Строка очереди: у строк организации — ещё описание сообщения и «простым текстом» получателя. */
 type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'text' | 'tries'> &
@@ -54,8 +52,8 @@ type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'text' | 'tries'> &
 
 /**
  * Как отправить сообщение с описанием (поток Т, задача Т1): кнопки под сообщением — всегда; вид с
- * таблицами — если в сообщении есть таблицы и получателю не нужен простой текст (свой переключатель
- * или выключенные таблицы платформы); код подтверждения — моноширинным.
+ * таблицами — если в сообщении есть выделенный заголовок или таблицы и получателю не нужен простой
+ * текст (свой переключатель или выключенные таблицы платформы); код подтверждения — моноширинным.
  */
 export function botSendOptions(
   message: BotMessage,
@@ -64,7 +62,7 @@ export function botSendOptions(
   const keyboard = botKeyboard(message);
   return {
     ...(keyboard.length ? { keyboard } : {}),
-    ...(!o.plain && botHasTables(message) ? { rich: botRichHtml(message) } : {}),
+    ...(!o.plain && botHasMarkup(message) ? { rich: botRichHtml(message) } : {}),
     ...(message.code !== undefined ? { code: message.code } : {}),
   };
 }

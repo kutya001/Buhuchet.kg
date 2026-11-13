@@ -1,6 +1,6 @@
 {
-  "id": "5cf6ad86-f369-458a-886a-f5cef58257c2",
-  "prevId": "e023a84b-69f2-42ea-9922-83bece1e9a85",
+  "id": "65cce9d4-ff07-475e-9325-51d58f24293b",
+  "prevId": "c59bd774-f651-40c0-84c7-aa4f5e023a87",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1064,6 +1064,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "telegram_plain": {
+          "name": "telegram_plain",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "login_failures": {
           "name": "login_failures",
@@ -6983,13 +6990,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "plain_text": {
-          "name": "plain_text",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         }
       },
       "indexes": {
