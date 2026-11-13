@@ -1520,7 +1520,7 @@ function FeeFields({
               data-cp-field="first"
               onChange={(e) => onChange({ firstMonth: e.target.value as FirstMonthMode })}
             >
-              {(['prorate', 'full', 'next'] as const).map((m) => (
+              {(['full', 'prorate', 'next'] as const).map((m) => (
                 <option key={m} value={m}>
                   {t(`cp.form.first.${m}`)}
                 </option>

@@ -22,6 +22,15 @@ export const FEE_MESSAGES = {
   tariff_month_taken: 'На этот месяц ставка уже есть: ставка меняется не чаще раза в месяц',
   tariff_month_past: 'Прошлые месяцы не меняются',
   tariff_month_current: 'Ставка меняется со следующего месяца: текущий месяц уже начислен',
+  // Окно «Изменить ставку обслуживания» (прототип v86 `tariffEditDlg`).
+  tariff_not_found: 'Ставка не найдена: журнал тарифов изменился',
+  tariff_archived: 'Контрагент в архиве: ставку не меняют',
+  tariff_edit_month_taken: 'На этот месяц уже есть другая ставка',
+  tariff_edit_before_start: 'Не раньше начала обслуживания: {month}',
+  tariff_edit_reason_required: 'Укажите причину',
+  tariff_edit_first_month: 'У этой ставки правило первого неполного месяца не меняется',
+  tariff_delete_started: 'Удалить можно только ставку, которая ещё не начала действовать',
+  tariff_delete_last: 'Единственную ставку удалить нельзя',
   // Окно оплаты за обслуживание в «Финансовых операциях» (задача 2.22; прототип fin-op.js, feePayDlg).
   fee_payment_deleted: 'Операция удалена',
   fee_payment_receipt_part:

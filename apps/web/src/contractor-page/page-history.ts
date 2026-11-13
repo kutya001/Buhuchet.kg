@@ -12,6 +12,7 @@ const ACTION_TEXT = {
   page_off: 'cppage.hist.page_off',
   page_code: 'cppage.hist.page_code',
   page_copy: 'cppage.hist.page_copy',
+  page_code_copy: 'cppage.hist.page_code_copy',
   page_send: 'cppage.hist.page_send',
   page_lock: 'cppage.hist.page_lock',
   page_close: 'cppage.hist.page_close',

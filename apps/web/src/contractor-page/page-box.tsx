@@ -41,7 +41,7 @@ import { contractorPageQuery } from './page-data';
  * задача списка контрагентов (`useEnablePages`).
  */
 
-type Action = 'enable' | 'disable' | 'code' | 'copied' | 'sent';
+type Action = 'enable' | 'disable' | 'code' | 'copied' | 'codeCopied' | 'sent';
 
 /** Кнопка блока; недоступная — с причиной: нажатие показывает её (прототип `data-why`). */
 function PageButton({
@@ -104,7 +104,9 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
             ? path.code.$post(param)
             : action === 'copied'
               ? path.copied.$post(param)
-              : path.sent.$post(param),
+              : action === 'codeCopied'
+                ? path['code-copied'].$post(param)
+                : path.sent.$post(param),
     );
     if (!res.ok) {
       toast(errorText(res.error), { bad: true });
@@ -133,6 +135,17 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
     }
     toast(t('cppage.toast.copied'), { icon: 'copy' });
     void run('copied');
+  };
+  /** Нажатие на код доступа (прототип v86, `codecopy`): код — в буфер, действие — в историю. */
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(page.code!);
+    } catch {
+      // Буфер обмена недоступен (нет разрешения): код видно в блоке, его можно выделить.
+      return;
+    }
+    toast(t('cppage.toast.code_copied', { code: pageCodeText(page.code!) }), { icon: 'copy' });
+    void run('codeCopied');
   };
   const toggleSection = async (section: PageSection, shown: boolean) => {
     const hidden = shown
@@ -176,9 +189,17 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
           id: 'code',
           label: t('cppage.code'),
           value: (
-            <b data-cp-page-code="" className={`${MONO_CLASS} text-[16px] tracking-[.06em]`}>
+            <button
+              type="button"
+              data-cp-page-code=""
+              title={t('cppage.code.copy_hint')}
+              aria-label={t('cppage.code.copy_label', { code: pageCodeText(page.code!) })}
+              onClick={() => void copyCode()}
+              className={`${MONO_CLASS} -mx-2 -my-0.5 inline-flex cursor-pointer items-center gap-2 rounded-md border-0 bg-transparent px-2 py-0.5 text-[16px] font-[650] tracking-[.06em] text-ink hover:bg-hover`}
+            >
               {pageCodeText(page.code!)}
-            </b>
+              <Icon name="copy" size="sm" className="text-faint" />
+            </button>
           ),
         },
         {

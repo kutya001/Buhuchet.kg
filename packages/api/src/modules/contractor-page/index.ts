@@ -11,6 +11,7 @@ import {
   enablePagesRoute,
   getPageHandler,
   getPageRoute,
+  pageCodeCopiedRoute,
   pageCopiedRoute,
   pageLogHandler,
   pageSectionsHandler,
@@ -39,6 +40,7 @@ export function contractorPageModule(deps: ApiDeps) {
     .openapi(changePageCodeRoute, changePageCodeHandler(deps))
     .openapi(pageSectionsRoute, pageSectionsHandler(deps))
     .openapi(pageCopiedRoute, pageLogHandler(deps, 'page_copy'))
+    .openapi(pageCodeCopiedRoute, pageLogHandler(deps, 'page_code_copy'))
     .openapi(pageSentRoute, pageLogHandler(deps, 'page_send'))
     .openapi(enablePagesRoute, enablePagesHandler(deps))
     .openapi(publicPageRoute, publicPageHandler(deps))

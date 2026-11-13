@@ -81,9 +81,13 @@ export const FEE_TEXTS = {
   'fee.tariffs.per_month': { ru: 'в месяц', section: S },
   'fee.tariffs.per_year': { ru: 'в год', section: S },
   'fee.tariffs.hint': {
-    ru: 'Записи не удаляются и не переписываются: новая ставка всегда добавляется новой записью и действует с 1-го числа.',
+    ru: 'Новая ставка добавляется новой записью и действует с 1-го числа. Ошибочно внесённую ставку можно изменить — с причиной; правка видна в журнале и в истории контрагента.',
     section: S,
   },
+  'fee.tariffs.edited': { ru: 'изменена', section: S },
+  'fee.tariffs.edited_title': { ru: 'Изменил {who}, {at}. Причина: {reason}', section: S },
+  'fee.tariffs.edit': { ru: 'Изменить ставку', section: S },
+  'fee.tariffs.edit_label': { ru: 'Изменить ставку с {month}', section: S },
 
   'fee.tariff.title': { ru: 'Новая ставка обслуживания', section: S },
   'fee.tariff.amount': { ru: 'Сумма, сом', section: S },
@@ -108,6 +112,35 @@ export const FEE_TEXTS = {
   },
   'fee.tariff.ok': { ru: 'Добавить в журнал', section: S },
   'fee.tariff.saved': { ru: 'Ставка добавлена в журнал', section: S },
+
+  // Окно «Изменить ставку обслуживания» (прототип v86 `tariffEditDlg`).
+  'fee.tedit.title': { ru: 'Изменить ставку обслуживания', section: S },
+  'fee.tedit.sub': { ru: '{name} · с {month}', section: S },
+  'fee.tedit.from_hint_first': {
+    ru: 'Первая ставка: не раньше месяца начала обслуживания',
+    section: S,
+  },
+  'fee.tedit.from_hint': { ru: 'С 1-го числа месяца', section: S },
+  'fee.tedit.first': { ru: 'Первый неполный месяц', section: S },
+  'fee.tedit.first_hint': { ru: 'Обслуживание начато {date}', section: S },
+  'fee.tedit.reason': { ru: 'Причина изменения', section: S },
+  'fee.tedit.reason_ph': { ru: 'Например: ставку внесли с ошибкой', section: S },
+  'fee.tedit.warn': {
+    ru: 'Начисления за месяцы этой ставки пересчитаются. Записанные оплаты не меняются: разница станет долгом или переплатой.',
+    section: S,
+  },
+  'fee.tedit.delete': { ru: 'Удалить ставку', section: S },
+  'fee.tedit.none': { ru: 'Изменений нет', section: S },
+  'fee.tedit.saved': { ru: 'Ставка изменена', section: S },
+  'fee.tedit.saved_up': {
+    ru: 'Ставка изменена: долг за обслуживание вырос на {amount}',
+    section: S,
+  },
+  'fee.tedit.saved_down': {
+    ru: 'Ставка изменена: долг за обслуживание уменьшился на {amount}',
+    section: S,
+  },
+  'fee.tedit.deleted': { ru: 'Ставка удалена из журнала', section: S },
 
   'fee.pay.title': { ru: 'Принять оплату за обслуживание', section: S },
   'fee.pay.sub_debt': { ru: 'долг {amount}', section: S },
@@ -189,6 +222,18 @@ export const FEE_TEXTS = {
   'files.kind.fee_payment': { ru: 'Оплата за обслуживание', section: S },
   'money.op.basis_fee': { ru: 'За обслуживание', section: S },
   'fee.hist.tariff': { ru: 'Новая ставка {amount} {per} с {month}', section: S },
+  'fee.hist.tariff_edited': {
+    ru: 'Изменена ставка обслуживания: {changes}. Причина: {reason}',
+    section: S,
+  },
+  'fee.hist.tedit.amount': { ru: 'сумма {from} → {to}', section: S },
+  'fee.hist.tedit.period': { ru: 'периодичность: {per}', section: S },
+  'fee.hist.tedit.from': { ru: 'действует с {from} → с {to}', section: S },
+  'fee.hist.tedit.first': { ru: 'первый неполный месяц: {from} → {to}', section: S },
+  'fee.hist.tariff_deleted': {
+    ru: 'Удалена ставка {amount} {per} с {month} (ещё не действовала). Причина: {reason}',
+    section: S,
+  },
   'fee.hist.payment': { ru: 'Оплата за обслуживание {amount}: {what}', section: S },
   'fee.hist.reminder': { ru: 'Напоминание в WhatsApp о долге за обслуживание', section: S },
   'fee.hist.one_sum_on': {

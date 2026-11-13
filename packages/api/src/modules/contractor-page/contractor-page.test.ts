@@ -229,8 +229,20 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const res = await act(senior, cpAcc.id, 'copied');
     expect(res.status).toBe(403);
     expect((await failure(res)).code).toBe('page_send_right');
+    // Код копирует каждый, кто видит его в блоке (прототип v86): нажатие пишется в историю.
+    expect(other.code).toBe(mine.code);
+    await block(await act(senior, cpAcc.id, 'code-copied'));
+    // Нажатия подряд тем же сотрудником — одна запись; у другого сотрудника — своя.
+    await block(await act(senior, cpAcc.id, 'code-copied'));
+    await block(await act(acc, cpAcc.id, 'code-copied'));
     const actions = (await history(cpAcc.id)).map((h) => h.action);
-    expect(actions).toEqual(['page_on', 'page_copy', 'page_send']);
+    expect(actions).toEqual([
+      'page_on',
+      'page_copy',
+      'page_send',
+      'page_code_copy',
+      'page_code_copy',
+    ]);
   });
 
   it('«Разделы страницы»: с версией, только разделы организации', async () => {
@@ -481,7 +493,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const off = await block(await act(owner, cpAcc.id, 'disable'));
     expect(off).toMatchObject({ enabled: false, link: null, code: null, send: 'page_off' });
     expect(await visited(`org-a/${cpAcc.inn}`)).toEqual({ state: 'unavailable' });
-    for (const action of ['code', 'copied']) {
+    for (const action of ['code', 'copied', 'code-copied']) {
       const res = await act(owner, cpAcc.id, action);
       expect(res.status, action).toBe(409);
       expect((await failure(res)).code).toBe('page_off');

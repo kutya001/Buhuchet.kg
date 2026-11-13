@@ -834,6 +834,20 @@
       "when": 1794537079075,
       "tag": "0118_bonus_writeoff_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1794541803149,
+      "tag": "0119_tariff_edit",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1794541805420,
+      "tag": "0120_tariff_edit_grants",
+      "breakpoints": true
     }
   ]
 }

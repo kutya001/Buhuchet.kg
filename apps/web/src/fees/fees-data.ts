@@ -5,6 +5,8 @@ import {
   FeePaymentForm,
   FeeReminder,
   type FeePaymentRequest,
+  type TariffDeleteRequest,
+  type TariffEditRequest,
   type TariffRequest,
 } from '@buhuchet/shared';
 import { queryOptions, useQueryClient } from '@tanstack/react-query';
@@ -67,6 +69,20 @@ export function useFeesRefresh() {
 /** «Добавить в журнал»: новая ставка обслуживания. */
 export function addTariff(id: string, json: TariffRequest) {
   return callApi(() => api.api.contractors[':id'].tariffs.$post({ param: { id }, json }));
+}
+
+/** «Сохранить» в окне «Изменить ставку» (прототип v86): ответ — изменилось ли что-то и долг. */
+export function editTariff(id: string, tariffId: string, json: TariffEditRequest) {
+  return callApi(() =>
+    api.api.contractors[':id'].tariffs[':tariffId'].$put({ param: { id, tariffId }, json }),
+  );
+}
+
+/** «Удалить ставку», которая ещё не начала действовать. */
+export function deleteTariff(id: string, tariffId: string, json: TariffDeleteRequest) {
+  return callApi(() =>
+    api.api.contractors[':id'].tariffs[':tariffId'].delete.$post({ param: { id, tariffId }, json }),
+  );
 }
 
 /** «Принять оплату»: файлы окно загружает к оплате после ответа. */

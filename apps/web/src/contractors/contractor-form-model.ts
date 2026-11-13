@@ -134,7 +134,7 @@ export interface ContractorDraft {
 
 /**
  * Пустой черновик (прототип addCpDlg, `st`): «Единый налог» и ОсОО, если они действуют в справочниках,
- * малый бизнес, сегодняшняя дата начала, ответственный по умолчанию, «Пропорционально дням».
+ * малый бизнес, сегодняшняя дата начала, ответственный по умолчанию, «Полный месяц» (прототип v86).
  */
 export function newDraft(o: {
   kind: ContractorKind;
@@ -170,7 +170,8 @@ export function newDraft(o: {
     startDate: o.today,
     fee: '',
     period: 'M',
-    firstMonth: 'prorate',
+    // Прототип v86: по умолчанию «Полный месяц» (docs/deviations.md п. О-78).
+    firstMonth: 'full',
     contractNo: '',
     contractDate: '',
     note: '',

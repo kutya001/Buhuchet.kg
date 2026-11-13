@@ -231,10 +231,9 @@ export function createContractorHandler(
           note: body.note,
           registration: body.registration,
           startDate: body.startDate,
-          // ОТКЛОНЕНИЕ: docs/deviations.md#А-1 — поле есть у того, кто видит плату, при ставке «в месяц»
-          // (по умолчанию «Пропорционально дням»); без поля — «Полный месяц», как в прототипе.
-          firstMonthMode:
-            body.firstMonthMode ?? (fee && body.tariff?.period === 'M' ? 'prorate' : 'full'),
+          // ОТКЛОНЕНИЕ: docs/deviations.md#А-1 — поле есть у того, кто видит плату, при ставке «в месяц»;
+          // по умолчанию и без поля — «Полный месяц» (прототип v86, docs/deviations.md#О-78).
+          firstMonthMode: body.firstMonthMode ?? 'full',
           feeDay: body.feeDay ?? DEFAULT_FEE_DAY,
           paysTo: body.paysTo,
           gkedConfirmation: null,

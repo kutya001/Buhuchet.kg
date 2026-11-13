@@ -6,15 +6,23 @@ import {
   feePaymentErrorCode,
   feePaymentForm,
   feePaymentProblem,
+  firstMonthEditable,
   formatSomWithUnit,
   localPhoneText,
   MONEY_NOTE_MAX,
+  monthLabel,
   monthLabelGen,
+  monthOf,
+  OP_REASON_MAX,
   orgMainAccount,
   purposeServes,
+  RecordChangedError,
   RecordNotFoundError,
   requisiteText,
   savedAllocation,
+  tariffDeletable,
+  tariffEditChanges,
+  tariffEditProblems,
   tariffErrorCode,
   tariffProblem,
   type Allocation,
@@ -28,12 +36,14 @@ import {
   type IsoDate,
   type PaysTo,
   type Tariff,
+  type TariffEntry,
   type TariffPeriod,
   type Translate,
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
 import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
 import { writeHistory } from './history';
 import {
@@ -61,7 +71,7 @@ import { phoneCodeList } from './staff';
 export class FeeRefusedError extends Error {
   constructor(
     readonly code: FeeMessageKey,
-    readonly status: 400 | 409 = 409,
+    readonly status: 400 | 404 | 409 = 409,
     readonly field?: string,
     readonly params?: Readonly<Record<string, string | number>>,
   ) {
@@ -95,13 +105,19 @@ export interface FeePaymentRow extends FeePayment {
   createdAt: Date;
 }
 
-/** Запись журнала тарифов для вкладки: кто и когда внёс, примечание. */
+/** Запись журнала тарифов для вкладки: кто и когда внёс, примечание, правка. */
 export interface TariffRow extends Tariff {
   id: string;
   note: string;
   author: string | null;
   at: IsoDate;
+  version: number;
+  /** Правка ошибочно внесённой ставки (прототип v86): кто, когда и почему; null — не правили. */
+  edited: { by: string | null; at: Date; reason: string } | null;
 }
+
+/** Кто правил ставку — для ярлыка «изменена» журнала. */
+const tariffEditor = alias(employees, 'tariff_editor');
 
 const baseFields = {
   id: contractors.id,
@@ -289,19 +305,25 @@ export async function contractorFeeView(
       note: contractorTariffs.note,
       author: employees.shortName,
       at: sql<string>`to_char(${contractorTariffs.createdAt} at time zone 'Asia/Bishkek', 'YYYY-MM-DD')`,
+      version: contractorTariffs.version,
+      editedBy: tariffEditor.shortName,
+      editedAt: contractorTariffs.editedAt,
+      editReason: contractorTariffs.editReason,
     })
     .from(contractorTariffs)
     .leftJoin(employees, eq(employees.userId, contractorTariffs.createdBy))
+    .leftJoin(tariffEditor, eq(tariffEditor.userId, contractorTariffs.editedBy))
     .where(eq(contractorTariffs.contractorId, contractorId))
     .orderBy(asc(contractorTariffs.validFrom), asc(contractorTariffs.createdAt));
   return {
     subject,
     fees,
     payments,
-    tariffs: tariffs.map((x) => ({
+    tariffs: tariffs.map(({ editedBy, editedAt, editReason, ...x }) => ({
       ...x,
       period: x.period as TariffPeriod,
       from: monthOfDate(x.from),
+      edited: editedAt ? { by: editedBy, at: editedAt, reason: editReason ?? '' } : null,
     })),
     current: currentTariff(subject.tariffs, o.today),
     canAccept: canAcceptFeePayment(subject, subject.archived, fees),
@@ -502,8 +524,8 @@ export interface TariffInput {
 /**
  * «Добавить в журнал» (прототип `tariffDlg`): ставка не меньше 0, месяц не прошлый, если ставка уже есть —
  * со следующего месяца, не чаще раза в месяц; у разового ставок не вносят (у архивного — можно, как в
- * прототипе). Запись журнала
- * не меняется и не удаляется; в истории контрагента — «Новая ставка …».
+ * прототипе). В истории контрагента — «Новая ставка …». Внесённую запись правят и удаляют
+ * `editTariff` и `deleteTariff` (прототип v86).
  */
 export async function addTariff(
   tx: Tx,
@@ -554,6 +576,208 @@ export async function addTariff(
     contractorId,
   });
   return { id: row!.id };
+}
+
+/* ───────────── «Изменить ставку обслуживания» (прототип v86 `tariffEditDlg`) ───────────── */
+
+export interface TariffEditInput {
+  amount: Tyiyn;
+  period: TariffPeriod;
+  from: YearMonth;
+  /** Правило первого неполного месяца — только у первой ставки, у которой это поле есть в окне. */
+  firstMonth?: FirstMonthMode;
+  reason: string;
+  version: number;
+}
+
+interface TariffEntryRow extends TariffEntry {
+  version: number;
+}
+
+/**
+ * Журнал контрагента и запись, которую правят: контрагент заблокирован, он не разовый и не в архиве
+ * (кнопки «Изменить ставку» у архивного в прототипе нет), запись — его и той же версии, что в окне.
+ */
+async function lockTariff(
+  tx: Tx,
+  contractorId: string,
+  tariffId: string,
+  version: number,
+  scope: SQL | undefined,
+) {
+  const { subject, payments } = await lockFeeSubject(tx, contractorId, scope);
+  if (subject.oneOff) throw new FeeRefusedError('tariff_oneoff');
+  if (subject.archived) throw new FeeRefusedError('tariff_archived');
+  const rows = UUID.test(tariffId)
+    ? await tx
+        .select({
+          id: contractorTariffs.id,
+          amount: contractorTariffs.amount,
+          period: contractorTariffs.period,
+          validFrom: contractorTariffs.validFrom,
+          version: contractorTariffs.version,
+        })
+        .from(contractorTariffs)
+        .where(eq(contractorTariffs.contractorId, contractorId))
+    : [];
+  const journal: TariffEntryRow[] = rows.map((r) => ({
+    id: r.id,
+    amount: r.amount,
+    period: r.period as TariffPeriod,
+    from: monthOfDate(r.validFrom),
+    version: r.version,
+  }));
+  const tariff = journal.find((r) => r.id === tariffId);
+  if (!tariff) throw new FeeRefusedError('tariff_not_found', 404);
+  if (tariff.version !== version)
+    throw new RecordChangedError('contractor_tariff', tariffId, tariff.version);
+  return { subject, payments, journal, tariff };
+}
+
+const tariffHistoryValue = (t: Tariff, firstMonth?: FirstMonthMode) => ({
+  amount: t.amount,
+  period: t.period,
+  validFrom: dateOfMonth(t.from),
+  ...(firstMonth ? { firstMonth } : {}),
+});
+
+/**
+ * «Сохранить» в окне «Изменить ставку» (прототип `tariffEditDlg`): сумма, периодичность, месяц и — у
+ * первой ставки неполного месяца — правило первого месяца; причина обязательна. Начисления считаются
+ * из журнала, поэтому пересчитываются сами; оплаты не меняются. Правка без изменений ничего не пишет.
+ * Ответ — на сколько изменился долг за обслуживание (для сообщения «долг вырос / уменьшился на …»).
+ */
+export async function editTariff(
+  tx: Tx,
+  contractorId: string,
+  tariffId: string,
+  input: TariffEditInput,
+  ctx: { today: IsoDate; scope: SQL | undefined },
+): Promise<{ changed: boolean; debtDelta: Tyiyn }> {
+  const { subject, payments, journal, tariff } = await lockTariff(
+    tx,
+    contractorId,
+    tariffId,
+    input.version,
+    ctx.scope,
+  );
+  const withFirst = firstMonthEditable(journal, tariff, subject.start);
+  if (input.firstMonth !== undefined && !withFirst && input.firstMonth !== subject.firstMonth)
+    throw new FeeRefusedError('tariff_edit_first_month', 400, 'firstMonth');
+  const reason = input.reason.trim().slice(0, OP_REASON_MAX);
+  const edit = {
+    amount: input.amount,
+    period: input.period,
+    from: input.from,
+    firstMonth: withFirst ? input.firstMonth : undefined,
+    reason,
+  };
+  const problems = tariffEditProblems(journal, tariff, edit, subject.start);
+  for (const field of ['amount', 'from', 'reason'] as const) {
+    const problem = problems[field];
+    if (!problem) continue;
+    throw new FeeRefusedError(
+      `tariff_${problem}`,
+      400,
+      field,
+      problem === 'edit_before_start' ? { month: monthLabel(monthOf(subject.start)) } : undefined,
+    );
+  }
+  const changes = tariffEditChanges(tariff, edit, subject.firstMonth);
+  if (!changes.length) return { changed: false, debtDelta: 0 };
+  const firstMonth = changes.includes('firstMonth') ? edit.firstMonth! : subject.firstMonth;
+  await tx
+    .update(contractorTariffs)
+    .set({
+      amount: edit.amount,
+      period: edit.period,
+      validFrom: dateOfMonth(edit.from),
+      editedBy: sql`app.current_user_id()`,
+      editedAt: sql`now()`,
+      editReason: reason,
+      version: sql`${contractorTariffs.version} + 1`,
+    })
+    .where(eq(contractorTariffs.id, tariffId));
+  // Правка ставки — правка контрагента: «изменён» и «кем» обновляются (прототип `cp.upd`, `cp.updBy`).
+  // Правило первого месяца — поле контрагента: с ним растёт и версия, чтобы открытое «Изменить» не
+  // сохранило устаревшую карточку поверх.
+  await tx
+    .update(contractors)
+    .set({
+      ...(firstMonth !== subject.firstMonth
+        ? { firstMonthMode: firstMonth, version: sql`${contractors.version} + 1` }
+        : {}),
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(eq(contractors.id, contractorId));
+  await writeHistory(tx, {
+    entity: 'contractor',
+    entityId: contractorId,
+    action: 'update',
+    changes: [
+      {
+        field: 'tariffEdited',
+        from: tariffHistoryValue(tariff, withFirst ? subject.firstMonth : undefined),
+        to: tariffHistoryValue(
+          { amount: edit.amount, period: edit.period, from: edit.from },
+          withFirst ? firstMonth : undefined,
+        ),
+      },
+    ],
+    reason,
+    contractorId,
+  });
+  const after: FeeSubject = {
+    ...subject,
+    firstMonth,
+    tariffs: journal.map((t) =>
+      t.id === tariffId ? { amount: edit.amount, period: edit.period, from: edit.from } : t,
+    ),
+  };
+  return {
+    changed: true,
+    debtDelta:
+      contractorFees(after, payments, ctx.today).debt -
+      contractorFees(subject, payments, ctx.today).debt,
+  };
+}
+
+/**
+ * «Удалить ставку» (прототип `tariffEditDlg`, `te-del`): только ставку, которая ещё не начала
+ * действовать, и не единственную; причина обязательна, удаление — в истории контрагента.
+ */
+export async function deleteTariff(
+  tx: Tx,
+  contractorId: string,
+  tariffId: string,
+  input: { reason: string; version: number },
+  ctx: { today: IsoDate; scope: SQL | undefined },
+): Promise<void> {
+  const { journal, tariff } = await lockTariff(
+    tx,
+    contractorId,
+    tariffId,
+    input.version,
+    ctx.scope,
+  );
+  const reason = input.reason.trim().slice(0, OP_REASON_MAX);
+  if (!reason) throw new FeeRefusedError('tariff_edit_reason_required', 400, 'reason');
+  if (!tariffDeletable(journal, tariff, ctx.today))
+    throw new FeeRefusedError(journal.length > 1 ? 'tariff_delete_started' : 'tariff_delete_last');
+  await tx.delete(contractorTariffs).where(eq(contractorTariffs.id, tariffId));
+  await tx
+    .update(contractors)
+    .set({ updatedAt: sql`now()`, updatedBy: sql`app.current_user_id()` })
+    .where(eq(contractors.id, contractorId));
+  await writeHistory(tx, {
+    entity: 'contractor',
+    entityId: contractorId,
+    action: 'update',
+    changes: [{ field: 'tariffDeleted', from: tariffHistoryValue(tariff) }],
+    reason,
+    contractorId,
+  });
 }
 
 /** Окно «Принять оплату за обслуживание»: строки месяцев, сумма и распределение по умолчанию. */

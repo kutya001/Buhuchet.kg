@@ -345,11 +345,14 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
     });
   });
 
-  it('журнал тарифов не меняется и не удаляется; с контрагентом удаляется каскадом, файлы остаются', async () => {
-    await expect(inA((tx) => tx.update(contractorTariffs).set({ amount: 1 }))).rejects.toEqual(
+  it('журнал тарифов: правится только ставка с отметкой правки от своего имени; с контрагентом удаляется каскадом, файлы остаются', async () => {
+    // Примечание и автор записи журнала не меняются вовсе (права на столбцы, миграция 0120).
+    await expect(inA((tx) => tx.update(contractorTariffs).set({ note: 'x' }))).rejects.toEqual(
       permissionDenied,
     );
-    await expect(inA((tx) => tx.delete(contractorTariffs))).rejects.toEqual(permissionDenied);
+    await expect(
+      inA((tx) => tx.update(contractorTariffs).set({ createdBy: b.ownerUserId })),
+    ).rejects.toEqual(permissionDenied);
     const id = await inA((tx) =>
       createContractor(tx, a.orgId, fields({ inn: '21234567890123' }), {
         amount: 0,
@@ -358,6 +361,61 @@ describe.skipIf(!databaseAvailable())('Контрагенты: данные', ()
         note: '',
       }),
     );
+    // Правка ставки (прототип v86) — только с отметкой «кто, когда и почему» и от своего имени:
+    // политика contractor_tariffs_update_guard.
+    const own = eq(contractorTariffs.contractorId, id);
+    const mark = (userId: string) => ({
+      editedBy: userId,
+      editedAt: new Date(),
+      editReason: 'ошибка',
+    });
+    await expect(
+      inA((tx) => tx.update(contractorTariffs).set({ amount: 1 }).where(own)),
+    ).rejects.toEqual(permissionDenied);
+    await expect(
+      inA((tx) =>
+        tx
+          .update(contractorTariffs)
+          .set({ amount: 1, ...mark(b.ownerUserId) })
+          .where(own),
+      ),
+    ).rejects.toEqual(permissionDenied);
+    await inA((tx) =>
+      tx
+        .update(contractorTariffs)
+        .set({ amount: 100, ...mark(a.ownerUserId) })
+        .where(own),
+    );
+    // Отметка правки — целиком или никак.
+    await expect(
+      inA((tx) =>
+        tx
+          .update(contractorTariffs)
+          .set({ ...mark(a.ownerUserId), editReason: ' ' })
+          .where(own),
+      ),
+    ).rejects.toEqual(permissionDenied);
+    // Чужая организация ставку не видит: не меняет и не удаляет.
+    expect(
+      await inB((tx) =>
+        tx
+          .update(contractorTariffs)
+          .set({ amount: 5, ...mark(b.ownerUserId) })
+          .where(own)
+          .returning({ id: contractorTariffs.id }),
+      ),
+    ).toEqual([]);
+    expect(
+      await inB((tx) =>
+        tx.delete(contractorTariffs).where(own).returning({ id: contractorTariffs.id }),
+      ),
+    ).toEqual([]);
+    const [edited] = await db.admin.db.select().from(contractorTariffs).where(own);
+    expect([edited!.amount, edited!.editedBy, edited!.editReason]).toEqual([
+      100,
+      a.ownerUserId,
+      'ошибка',
+    ]);
     const fileId = '00000000-0000-4000-8000-0000000000f1';
     await db.admin.db.insert(files).values({
       id: fileId,
