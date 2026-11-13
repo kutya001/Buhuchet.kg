@@ -210,7 +210,7 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     expect(created.status, await created.clone().text()).toBe(201);
     const task = Task.parse(await created.json());
     expect(to(CHAT.acc).at(-1)).toContain(
-      'Новая задача от chief-a: Собрать первичку за октябрь, срок 25.10.2026.',
+      'Собрать первичку за октябрь\nНовая задача от chief-a · срок 25.10.2026',
     );
     expect((await call('POST', `/api/tasks/${task.id}/done`, acc, {})).status).toBe(200);
     const back = await call('POST', `/api/tasks/${task.id}/rework`, chief, {

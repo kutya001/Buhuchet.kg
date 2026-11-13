@@ -276,8 +276,9 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
 }
 
 /**
- * «Новая задача от {автор}: {задача}, срок {срок}.» исполнителю (ТЗ: «сообщение о новой задаче …
- * приходит сразу»); у задачи на месяц срок — «до 31.10.2026».
+ * Название задачи и «Новая задача от {автор} · срок {срок}» исполнителю (ТЗ: «сообщение о новой
+ * задаче … приходит сразу»; прототип v97 `tgTaskMsg`: название — заголовком); у задачи на месяц срок —
+ * «до 31.10.2026».
  */
 function newTaskEvent(task: TaskRecord, by: string, t: (key: string) => string): TelegramEvent {
   const date = formatDateRu(task.dueDate);
@@ -286,6 +287,7 @@ function newTaskEvent(task: TaskRecord, by: string, t: (key: string) => string):
     to: task.executor.id,
     by,
     template: 'tgTask',
+    heading: task.title,
     values: {
       автор: task.author.shortName,
       задача: task.title,
