@@ -238,7 +238,13 @@ export const TaskFormOptions = z.object({
   categories: z.array(z.object({ code: z.string(), name: z.string() })),
   executors: z.array(z.object({ id: Uuid, shortName: z.string() })),
   contractors: z.array(
-    z.object({ id: Uuid, name: z.string(), responsibleEmployeeId: Uuid.nullable() }),
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      /** ИНН — для поиска в списке (прототип v93). */
+      inn: z.string(),
+      responsibleEmployeeId: Uuid.nullable(),
+    }),
   ),
   confirmDefault: z.boolean(),
   filesOn: z.boolean(),

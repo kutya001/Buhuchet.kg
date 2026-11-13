@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, pickContractor, signIn } from './helpers';
 import { asOwner, newContractor } from './reports';
 
 // Бонусы сотрудников за разовые услуги (прототип v84 и v87, docs/deviations.md п. О-75) через
@@ -76,7 +76,7 @@ test.describe('Бонусы сотрудников за разовые услу�
       .getByRole('menuitem', { name: 'Разовая услуга' })
       .click();
     const add = page.getByRole('dialog', { name: 'Разовая услуга' });
-    await add.locator('[data-svc-cp]').selectOption(cp.id);
+    await pickContractor(add.locator('[data-svc-cp]'), cp.inn);
     await add.locator('[data-svc-name]').fill(service);
     await add.locator('[data-svc-amount]').fill('5000');
     await add.locator('[data-svc-bonus-add]').click();

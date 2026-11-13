@@ -139,9 +139,12 @@ export const FileManagerSummary = z.object({
 });
 export type FileManagerSummary = z.infer<typeof FileManagerSummary>;
 
-/** Контрагенты окна «Загрузить файл»: не в архиве, в области группы «Файловый менеджер». */
+/**
+ * Контрагенты окна «Загрузить файл»: не в архиве, в области группы «Файловый менеджер»; `inn` — для
+ * поиска в списке (прототип v93).
+ */
 export const FileFormContractors = z.object({
-  items: z.array(z.object({ id: Uuid, name: z.string() })),
+  items: z.array(z.object({ id: Uuid, name: z.string(), inn: z.string() })),
 });
 export type FileFormContractors = z.infer<typeof FileFormContractors>;
 

@@ -6,6 +6,7 @@ import {
   enumMatchChecked,
   filterTypeOf,
   matchesValue,
+  type EnumDigitsOf,
   type EnumLabelOf,
   type EnumSelection,
   type EnumStep,
@@ -35,6 +36,12 @@ export type ValueLabels = Readonly<Record<string, string | null>>;
 
 const labelsOf = (values: GridValues): ValueLabels =>
   Object.fromEntries(values.items.map((i) => [i.value, i.label]));
+
+/** ИНН значений столбца с контрагентами: по ним шаги выбора узнают значения, найденные цифрами. */
+type ValueDigits = Readonly<Record<string, string | null>>;
+
+const digitsOfValues = (values: GridValues): ValueDigits =>
+  Object.fromEntries(values.items.map((i) => [i.value, i.digits ?? null]));
 
 const HINT = 'text-[11.5px] leading-[1.4] text-faint';
 
@@ -80,6 +87,7 @@ export function FilterPanel<Row>({
   const [selection, setSelection] = useState<EnumSelection>(() => enumSelectionOf(filter));
   // Подписи всех значений, которые приходили с сервера: для шагов выбора и чипа.
   const [names, setNames] = useState<ValueLabels>({});
+  const [inns, setInns] = useState<ValueDigits>({});
   const [find, setFind] = useState('');
   const [found, setFound] = useState<{ q: string; values: GridValues | 'error' } | null>(null);
   const [tooMany, setTooMany] = useState(false);
@@ -93,6 +101,7 @@ export function FilterPanel<Row>({
         if (!live) return;
         setValues(v);
         setNames((prev) => ({ ...prev, ...labelsOf(v) }));
+        setInns((prev) => ({ ...prev, ...digitsOfValues(v) }));
       },
       (error: unknown) => {
         if (!live) return;
@@ -119,6 +128,7 @@ export function FilterPanel<Row>({
           if (!live) return;
           setFound({ q: needle, values: v });
           setNames((prev) => ({ ...prev, ...labelsOf(v) }));
+          setInns((prev) => ({ ...prev, ...digitsOfValues(v) }));
         },
         (error: unknown) => {
           if (!live) return;
@@ -134,9 +144,10 @@ export function FilterPanel<Row>({
   }, [partial, needle, loadValues, errorTextOf, column.key]);
 
   const labelOf: EnumLabelOf = (v) => (Object.hasOwn(names, v) ? names[v] : undefined);
+  const digitsOf: EnumDigitsOf = (v) => (Object.hasOwn(inns, v) ? inns[v] : undefined);
   const step = (next: EnumStep) => {
     setTooMany(false);
-    setSelection((prev) => addEnumStep(prev, next, labelOf));
+    setSelection((prev) => addEnumStep(prev, next, labelOf, digitsOf));
   };
 
   const apply = () => {
@@ -249,6 +260,7 @@ export function FilterPanel<Row>({
           found={found}
           selection={selection}
           labelOf={labelOf}
+          digitsOf={digitsOf}
           onStep={step}
           find={find}
           onFind={setFind}
@@ -300,6 +312,7 @@ function EnumValues({
   found,
   selection,
   labelOf,
+  digitsOf,
   onStep,
   find,
   onFind,
@@ -312,6 +325,7 @@ function EnumValues({
   found: { q: string; values: GridValues | 'error' } | null;
   selection: EnumSelection;
   labelOf: EnumLabelOf;
+  digitsOf: EnumDigitsOf;
   onStep: (step: EnumStep) => void;
   find: string;
   onFind: (find: string) => void;
@@ -328,7 +342,10 @@ function EnumValues({
   let shown: GridValues | 'error' = values;
   let busy = false;
   if (!values.more) {
-    shown = { ...values, items: values.items.filter((i) => matchesValue(i.label, needle)) };
+    shown = {
+      ...values,
+      items: values.items.filter((i) => matchesValue(i.label, needle, i.digits)),
+    };
   } else if (needle && found?.q === needle) {
     shown = found.values;
   } else if (needle) {
@@ -342,8 +359,8 @@ function EnumValues({
           className={inputClass()}
           value={find}
           onChange={(e) => onFind(e.target.value)}
-          placeholder={labels.filterFind}
-          aria-label={labels.filterFind}
+          placeholder={values.byDigits ? labels.filterFindDigits : labels.filterFind}
+          aria-label={values.byDigits ? labels.filterFindDigits : labels.filterFind}
           maxLength={200}
         />
       )}
@@ -356,6 +373,7 @@ function EnumValues({
           busy={busy}
           selection={selection}
           labelOf={labelOf}
+          digitsOf={digitsOf}
           onStep={onStep}
           labels={labels}
         />
@@ -380,6 +398,7 @@ function EnumList({
   busy,
   selection,
   labelOf,
+  digitsOf,
   onStep,
   labels,
 }: {
@@ -389,15 +408,17 @@ function EnumList({
   busy: boolean;
   selection: EnumSelection;
   labelOf: EnumLabelOf;
+  digitsOf: EnumDigitsOf;
   onStep: (step: EnumStep) => void;
   labels: GridLabels;
 }) {
-  const isOn = (i: GridValues['items'][number]) => enumChecked(selection, i.value, i.label);
+  const isOn = (i: GridValues['items'][number]) =>
+    enumChecked(selection, i.value, i.label, i.digits);
   const allOn =
     !busy &&
     shown.items.length > 0 &&
     shown.items.every(isOn) &&
-    (!shown.more || enumMatchChecked(selection, needle, labelOf));
+    (!shown.more || enumMatchChecked(selection, needle, labelOf, digitsOf));
   return (
     <>
       <div

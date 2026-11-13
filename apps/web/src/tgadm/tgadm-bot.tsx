@@ -7,10 +7,11 @@ import {
   OUTBOX_PAUSE_MS,
   pluralForm,
 } from '@buhuchet/domain';
-import { AdminTelegramBot } from '@buhuchet/shared';
+import { AdminTelegramBot, AdminTelegramBotView } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
+  CheckRow,
   Hint,
   Icon,
   KeyValues,
@@ -20,11 +21,12 @@ import {
   Pill,
   useToast,
 } from '@buhuchet/ui';
-import { queryOptions, useQuery } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { api, apiFailure } from '../api-client';
-import { useT } from '../l10n/provider';
+import { api, apiFailure, callApi } from '../api-client';
+import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { BotSamplesDialog } from './bot-samples';
 
 const botQuery = queryOptions({
   queryKey: ['admin', 'tg-bot'],
@@ -71,14 +73,40 @@ const PAUSE_SECONDS = String(OUTBOX_PAUSE_MS / 1000).replace('.', ',');
  * Админка → «Телеграм» → «Бот платформы» (ТЗ: адрес вебхука, состояние — работает или текст последней
  * ошибки Telegram, «Проверить вебхук»; токен не вводится и не показывается, «Заменить токен» —
  * пояснение про настройки Vercel; прототип admin/telegram.js, tab 'bot'). Справа — как работает
- * очередь отправки.
+ * очередь отправки. Ниже — «Вид сообщений и кнопки» (поток Т, задача Т1): общий переключатель
+ * таблиц в сообщениях (сохраняется сразу) и примеры сообщений.
  */
 export function TgAdmBot() {
   const t = useT();
   const toast = useToast();
   const bot = useQuery(botQuery);
+  const errorText = useErrorText();
+  const client = useQueryClient();
   const [token, setToken] = useState(false);
+  const [samples, setSamples] = useState(false);
+  const [saving, setSaving] = useState(false);
   const data = bot.data;
+  const rich = data?.rich ?? true;
+
+  /** «Таблицы и раскрывающиеся разделы в сообщениях»: сохраняется сразу (прототип `#tg-rich`). */
+  const setRich = async (next: boolean) => {
+    if (!data) return;
+    setSaving(true);
+    // Идущая проверка вебхука могла прочитать прежнее значение — её ответ переключатель не затирает
+    // (на время сохранения «Проверить вебхук» недоступна).
+    await client.cancelQueries({ queryKey: botQuery.queryKey });
+    const show = (rich: boolean) =>
+      client.setQueryData(botQuery.queryKey, (old) => (old ? { ...old, rich } : old));
+    show(next);
+    const res = await callApi(() => api.api.admin.telegram.bot.view.$put({ json: { rich: next } }));
+    setSaving(false);
+    if (!res.ok) {
+      show(!next);
+      return toast(errorText(res.error), { bad: true, icon: 'alert' });
+    }
+    show(AdminTelegramBotView.parse(res.data).rich);
+    toast(t(next ? 'tgadm.view.rich_on' : 'tgadm.view.rich_off'), { icon: 'tg' });
+  };
 
   const check = async () => {
     const was = data?.ok ?? true;
@@ -106,74 +134,113 @@ export function TgAdmBot() {
   );
 
   return (
-    <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)]">
-      <Box title={t('tgadm.bot.title')}>
-        <KeyValues
-          items={[
-            {
-              id: 'url',
-              label: t('tgadm.bot.url'),
-              value: <span className={`${MONO_CLASS} text-[12px]`}>{data?.url ?? ''}</span>,
-            },
-            { id: 'state', label: t('tgadm.bot.state'), value: state },
-            {
-              id: 'checked',
-              label: t('tgadm.bot.checked'),
-              value: data
-                ? t('tgadm.bot.checked_at', { hm: bishkekTime(new Date(data.checkedAt)) })
-                : '',
-            },
-          ]}
-        />
-        {data ? <ProblemNote t={t} bot={data} /> : null}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={buttonClass('default', 'sm')}
-            disabled={bot.isFetching}
-            onClick={() => void check()}
+    <div className="flex flex-col gap-3.5">
+      <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)]">
+        <Box title={t('tgadm.bot.title')}>
+          <KeyValues
+            items={[
+              {
+                id: 'url',
+                label: t('tgadm.bot.url'),
+                value: <span className={`${MONO_CLASS} text-[12px]`}>{data?.url ?? ''}</span>,
+              },
+              { id: 'state', label: t('tgadm.bot.state'), value: state },
+              {
+                id: 'checked',
+                label: t('tgadm.bot.checked'),
+                value: data
+                  ? t('tgadm.bot.checked_at', { hm: bishkekTime(new Date(data.checkedAt)) })
+                  : '',
+              },
+            ]}
+          />
+          {data ? <ProblemNote t={t} bot={data} /> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={buttonClass('default', 'sm')}
+              disabled={bot.isFetching || saving}
+              onClick={() => void check()}
+            >
+              <Icon name="refresh" size="sm" />
+              {t('tgadm.bot.check')}
+            </button>
+            <button
+              type="button"
+              className={buttonClass('ghost', 'sm')}
+              onClick={() => setToken(true)}
+            >
+              <Icon name="key" size="sm" />
+              {t('tgadm.bot.token')}
+            </button>
+          </div>
+          <Hint>{t('tgadm.bot.hint')}</Hint>
+        </Box>
+        <Box title={t('tgadm.queue.title')}>
+          <p className="m-0 leading-[1.55]">{t('tgadm.queue.text')}</p>
+          <KeyValues
+            items={[
+              {
+                id: 'batch',
+                label: t('tgadm.queue.batch'),
+                value: t(`tgadm.count.${pluralForm(OUTBOX_BATCH)}`, { n: OUTBOX_BATCH }),
+              },
+              {
+                id: 'pause',
+                label: t('tgadm.queue.pause'),
+                value: t('tgadm.queue.pause_v', { s: PAUSE_SECONDS }),
+              },
+              {
+                id: 'tries',
+                label: t('tgadm.queue.tries'),
+                value: t('tgadm.queue.tries_v', { n: OUTBOX_MAX_TRIES }),
+              },
+              {
+                id: 'digest',
+                label: t('tgadm.queue.digest'),
+                value: t('tgadm.queue.digest_v'),
+              },
+            ]}
+          />
+        </Box>
+      </div>
+      <div data-tg-view="">
+        <Box title={t('tgadm.view.title')}>
+          <CheckRow
+            plain
+            checked={rich}
+            disabled={!data || saving}
+            onChange={(next) => void setRich(next)}
+            label={t('tgadm.view.rich')}
+            data-tg-rich=""
           >
-            <Icon name="refresh" size="sm" />
-            {t('tgadm.bot.check')}
-          </button>
-          <button
-            type="button"
-            className={buttonClass('ghost', 'sm')}
-            onClick={() => setToken(true)}
-          >
-            <Icon name="key" size="sm" />
-            {t('tgadm.bot.token')}
-          </button>
-        </div>
-        <Hint>{t('tgadm.bot.hint')}</Hint>
-      </Box>
-      <Box title={t('tgadm.queue.title')}>
-        <p className="m-0 leading-[1.55]">{t('tgadm.queue.text')}</p>
-        <KeyValues
-          items={[
-            {
-              id: 'batch',
-              label: t('tgadm.queue.batch'),
-              value: t(`tgadm.count.${pluralForm(OUTBOX_BATCH)}`, { n: OUTBOX_BATCH }),
-            },
-            {
-              id: 'pause',
-              label: t('tgadm.queue.pause'),
-              value: t('tgadm.queue.pause_v', { s: PAUSE_SECONDS }),
-            },
-            {
-              id: 'tries',
-              label: t('tgadm.queue.tries'),
-              value: t('tgadm.queue.tries_v', { n: OUTBOX_MAX_TRIES }),
-            },
-            {
-              id: 'digest',
-              label: t('tgadm.queue.digest'),
-              value: t('tgadm.queue.digest_v'),
-            },
-          ]}
-        />
-      </Box>
+            <Hint>{t('tgadm.view.rich_hint')}</Hint>
+          </CheckRow>
+          <KeyValues
+            items={[
+              { id: 'press', label: t('tgadm.view.press'), value: t('tgadm.view.press_v') },
+              { id: 'refusal', label: t('tgadm.view.refusal'), value: t('tgadm.view.refusal_v') },
+              { id: 'actions', label: t('tgadm.view.actions'), value: t('tgadm.view.actions_v') },
+              {
+                id: 'fallback',
+                label: t('tgadm.view.fallback'),
+                value: t('tgadm.view.fallback_v'),
+              },
+            ]}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={buttonClass('default', 'sm')}
+              onClick={() => setSamples(true)}
+            >
+              <Icon name="eye" size="sm" />
+              {t('tgadm.view.samples')}
+            </button>
+          </div>
+        </Box>
+      </div>
+      <BotSamplesDialog open={samples} rich={rich} onClose={() => setSamples(false)} />
       <Modal
         open={token}
         onClose={() => setToken(false)}

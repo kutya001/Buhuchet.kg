@@ -119,6 +119,13 @@ describe('карточка пользователя: «История»', () => 
     expect(tg('@asanov', '@asan2')).toBe('Telegram заменён: @asanov → @asan2');
   });
 
+  it('«Сообщения простым текстом»: включено и выключено', () => {
+    const plain = (to: boolean) =>
+      accountHistoryText(t, entry({ changes: [{ field: 'telegramPlain', from: !to, to }] }));
+    expect(plain(true)).toBe('Сообщения бота простым текстом: включено');
+    expect(plain(false)).toBe('Сообщения бота простым текстом: выключено');
+  });
+
   it('блокировка сотрудника владельцем и снятие блокировки входа', () => {
     const flag = (field: string, from: boolean, to: boolean) =>
       accountHistoryText(t, entry({ entity: 'employee', changes: [{ field, from, to }] }));

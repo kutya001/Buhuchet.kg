@@ -63,6 +63,11 @@ export interface ListColumn {
   searchDisplay?: Expr;
   /** Ячейка выгрузки, если не как `display` (у общих задач «Контрагент» в Excel пустой — ТЗ). */
   exportDisplay?: Expr;
+  /**
+   * ИНН контрагента у столбца «Контрагент» (прототип v93, `c.inn`): «Найти значение» из одних цифр
+   * находит значение и по нему. Эталон — `matchesValue`.
+   */
+  digits?: Expr;
   /** Подпись столбца — ключ словаря (`staff.col.full_name`): заголовок в выгрузке Excel. */
   label: string;
 }
@@ -219,12 +224,16 @@ function valuesCondition(column: ListColumn, values: readonly string[]): SQL {
 
 /**
  * Подпись значения, как на экране, содержит текст «Найти значение» без учёта регистра и «ё»; '' —
- * подходит любое значение. Эталон — `matchesValue`.
+ * подходит любое значение. У столбца с контрагентами (`digits`) текст из одних цифр (пробелы не в
+ * счёт) ищется и в ИНН — подряд. Эталон — `matchesValue`.
  */
 function valueMatch(column: ListColumn, match: string): SQL {
   const needle = searchText(match.trim());
   if (!needle) return sql`true`;
-  return sql`${searchable(displayOf(column))} like ${likePattern(needle)} escape '\\'`;
+  const byLabel = sql`${searchable(displayOf(column))} like ${likePattern(needle)} escape '\\'`;
+  const compact = needle.replace(/\s/g, '');
+  if (!column.digits || !/^\d+$/.test(compact)) return byLabel;
+  return sql`(coalesce(${byLabel}, false) or coalesce(${column.digits} like ${likePattern(compact)} escape '\\', false))`;
 }
 
 function filterCondition(key: string, column: ListColumn, filter: ListFilterValue): SQL {
@@ -553,6 +562,8 @@ export interface ListValue {
   value: string;
   label: string | null;
   count: number;
+  /** ИНН значения у столбца с контрагентами (`ListColumn.digits`). */
+  digits?: string;
 }
 
 /**
@@ -569,12 +580,20 @@ export async function selectListValues(options: {
   scope: SQL | undefined;
   from: ListFrom;
   q?: string;
-}): Promise<{ items: ListValue[]; total: number; more: boolean }> {
+}): Promise<{ items: ListValue[]; total: number; more: boolean; byDigits?: true }> {
   const column = columnOf(options.columns, options.key, 'column');
   const value = sql`coalesce(${column.value}::text, '')`;
   const label = sql`min(${displayOf(column)})`;
+  // У значения-названия (журнал бонусов) контрагентов может быть несколько — ИНН всех, через пробел.
+  const fields: Record<string, SQL> = {
+    value,
+    label,
+    count: sql`count(*)::int`,
+    total: sql`count(*) over ()`,
+  };
+  if (column.digits) fields.digits = sql`string_agg(distinct ${column.digits}, ' ')`;
   const rows = await options
-    .from({ value, label, count: sql`count(*)::int`, total: sql`count(*) over ()` })
+    .from(fields)
     .where(and(options.scope, valueMatch(column, options.q ?? '')))
     .groupBy(value, groupSortOf(column))
     .orderBy(...groupOrderOf(column, options.key, null))
@@ -583,9 +602,15 @@ export async function selectListValues(options: {
     value: String(r.value ?? ''),
     label: (r.label as string | null) ?? null,
     count: Number(r.count),
+    ...(typeof r.digits === 'string' && r.digits ? { digits: r.digits } : {}),
   }));
   const total = rows.length ? Number(rows[0]!.total) : 0;
-  return { items, total, more: total > items.length };
+  return {
+    items,
+    total,
+    more: total > items.length,
+    ...(column.digits ? { byDigits: true as const } : {}),
+  };
 }
 
 export type ExportCell = string | number | null;

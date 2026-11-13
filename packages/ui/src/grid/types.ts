@@ -65,13 +65,15 @@ export interface GridPage<Row> {
 
 /**
  * Значения столбца для фильтра-галочек (`ListValues` в `@buhuchet/shared`): код, подпись как на
- * экране (null — «(Пусто)») и число записей; `more` — значений больше, чем пришло.
+ * экране (null — «(Пусто)») и число записей; `more` — значений больше, чем пришло. У столбца с
+ * контрагентами (`byDigits`, прототип v93) значение ищется и по ИНН — `digits` значения.
  */
 export interface GridValues {
-  items: readonly { value: string; label: string | null; count: number }[];
+  items: readonly { value: string; label: string | null; count: number; digits?: string }[];
   /** Сколько всего значений (под «Найти значение» — подходящих); `more` — пришли не все. */
   total: number;
   more: boolean;
+  byDigits?: boolean;
 }
 
 /**
@@ -219,6 +221,8 @@ export interface GridLabels {
   filterUntil: string;
   filterBadNumber: string;
   filterFind: string;
+  /** Поле поиска значений у столбца с контрагентами — «Название или ИНН». */
+  filterFindDigits: string;
   filterAll: string;
   /** Пустое значение в фильтре, группе и чипе: «(Пусто)». */
   empty: string;

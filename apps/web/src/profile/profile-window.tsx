@@ -5,8 +5,10 @@ import { ChangePasswordForm, MeResponse, type TelegramInfo } from '@buhuchet/sha
 import {
   Box,
   buttonClass,
+  CheckRow,
   Field,
   FormGrid,
+  Hint,
   Icon,
   inputClass,
   KeyValues,
@@ -189,6 +191,34 @@ function TelegramBox({
   const [previous, setPrevious] = useState(initialPrevious);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // «Сообщения простым текстом»: выбор хранится у пользователя и отвязку переживает.
+  const [plain, setPlain] = useState(initial?.plain ?? false);
+  const [plainBusy, setPlainBusy] = useState(false);
+
+  /** «Проверить бота»: бот присылает в привязанный Telegram сообщение с таблицей и кнопкой. */
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-3 — окна «Прототип: чат с ботом» нет, сообщение приходит в Telegram.
+  const test = async () => {
+    if (!telegram) return;
+    setBusy(true);
+    const res = await callApi(() => api.api.telegram.test.$post());
+    setBusy(false);
+    if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
+    toast(t('profile.tg_test_sent', { name: telegram.name }), { icon: 'tg' });
+  };
+
+  /** Переключатель сохраняется сразу, как в прототипе (`#pf-tgplain`). */
+  const togglePlain = async (next: boolean) => {
+    setPlain(next);
+    // Пока запрос идёт, переключатель недоступен: два запроса подряд могли бы прийти в обратном порядке.
+    setPlainBusy(true);
+    const res = await callApi(() => api.api.telegram.plain.$put({ json: { plain: next } }));
+    setPlainBusy(false);
+    if (!res.ok) {
+      setPlain(!next);
+      return toast(errorText(res.error), { bad: true, icon: 'alert' });
+    }
+    toast(t(next ? 'profile.tg_plain_on' : 'profile.tg_plain_off'), { icon: 'tg' });
+  };
 
   const unlink = async () => {
     setBusy(true);
@@ -209,26 +239,49 @@ function TelegramBox({
     <div data-profile-telegram="" className="flex flex-col">
       <Box title={t('profile.tg')}>
         {telegram ? (
-          <div className="flex flex-wrap items-center gap-2.5">
-            <Pill tone="ok" icon="check">
-              {t('profile.tg_linked')}
-            </Pill>
-            <span className={MONO_CLASS}>{telegram.name}</span>
-            <div className="grow" />
-            <button
-              type="button"
-              className={buttonClass('ghost', 'sm')}
-              onClick={unlink}
-              disabled={busy}
+          <>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Pill tone="ok" icon="check">
+                {t('profile.tg_linked')}
+              </Pill>
+              <span className={MONO_CLASS}>{telegram.name}</span>
+              <div className="grow" />
+              <button
+                type="button"
+                className={buttonClass('default', 'sm')}
+                onClick={() => void test()}
+                disabled={busy}
+                data-telegram-test=""
+              >
+                <Icon name="tg" size="sm" />
+                {t('profile.tg_test')}
+              </button>
+              <button
+                type="button"
+                className={buttonClass('ghost', 'sm')}
+                onClick={unlink}
+                disabled={busy}
+              >
+                {t('profile.tg_unlink')}
+              </button>
+            </div>
+            <CheckRow
+              plain
+              checked={plain}
+              disabled={plainBusy}
+              onChange={(next) => void togglePlain(next)}
+              label={t('profile.tg_plain')}
+              data-telegram-plain=""
             >
-              {t('profile.tg_unlink')}
-            </button>
-          </div>
+              <Hint>{t('profile.tg_plain_hint')}</Hint>
+            </CheckRow>
+          </>
         ) : (
           <TelegramLinkPanel
             previous={previous}
             onLinked={(info) => {
               setTelegram(info);
+              setPlain(info.plain ?? false);
               setPrevious(null);
               toast(t('profile.tg_done'), { icon: 'tg' });
               router.refresh();
