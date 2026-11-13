@@ -2,7 +2,13 @@
 
 import { projectCancelable, scaleBack, scaleNext, type ProjectStatus } from '@buhuchet/domain';
 import { ProjectCard } from '@buhuchet/shared';
-import { ConfirmDialog, RollbackDialog, useToast, type ActionEntry } from '@buhuchet/ui';
+import {
+  ConfirmDialog,
+  RollbackDialog,
+  useToast,
+  type ActionEntry,
+  type BoardValue,
+} from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ApiFailure } from '../api-client';
@@ -13,11 +19,18 @@ import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName, statusPillView } from '../status/status-view';
 import { useTaskActions } from '../tasks/task-actions';
 import { taskQuery } from '../tasks/tasks-data';
+import { leadChangeBody, leadChangeRefusal, projectMove } from './project-board';
 import { ProjectCardDialog } from './project-card';
 import { closeProjectCard, openProjectCard, useProjectCardRequest } from './project-card-store';
 import { ProjectDialog, type ProjectContractorPreset } from './project-dialog';
 import { payAction, ProjectPaymentSlot, type ProjectPaymentAction } from './project-payments';
-import { projectCardQuery, setProjectStatus, useProjectsRefresh } from './projects-data';
+import {
+  editProject,
+  projectCardQuery,
+  projectFormQuery,
+  setProjectStatus,
+  useProjectsRefresh,
+} from './projects-data';
 
 /** Что нужно меню о проекте: строка списка или карточка. */
 export interface ProjectRef {
@@ -58,11 +71,15 @@ const ROLLBACK_EFFECT = {
  * шкала. «Изменить» — окном по свежей карточке; «В работу» и «Завершить» из меню — сразу, со шкалы —
  * после вопроса; «Отменить проект» — после вопроса; откат — окном с причиной (кнопка видна и без
  * права «Откат статусов», но неактивна с подсказкой). «Задача по проекту» — форма задачи с
- * контрагентом, проектом и главным ответственным. Отказ сервера — уведомлением.
+ * контрагентом, проектом и главным ответственным. Отказ сервера — уведомлением. Перенос карточки на
+ * доске (прототип v85 `projKanban.drop`) — `drop`: шаг статуса сразу, «Отменён» — после вопроса,
+ * столбец сотрудника — он становится главным.
  */
 export function useProjectActions(): {
   actions: (p: ProjectRef) => ActionEntry[];
   openCard: (id: string) => void;
+  /** Перенос карточки проекта в столбец доски. */
+  drop: (p: ProjectRef, key: string, to: BoardValue) => void;
   newProject: (contractor?: ProjectContractorPreset | null) => void;
   /** Что нужно карточке проекта (её рисует `ProjectCardHost`). */
   card: CardHandlers;
@@ -132,6 +149,50 @@ export function useProjectActions(): {
     } catch (e) {
       toast(e instanceof ApiFailure ? errorText(e.error) : t('err.unknown'), { bad: true });
     }
+  };
+
+  /**
+   * Главный — другой сотрудник: остальные поля и работы — из свежей карточки проекта, версия — записи
+   * на доске; действующие сотрудники — из данных окна проекта.
+   */
+  const setLead = async (p: ProjectRef, to: BoardValue) => {
+    try {
+      const res = await once(p.id, async () => {
+        const [fresh, form] = await Promise.all([
+          client.fetchQuery({ ...projectCardQuery(p.id), staleTime: 0 }),
+          client.fetchQuery(projectFormQuery(null)),
+        ]);
+        const refusal = leadChangeRefusal(
+          fresh,
+          form.employees.map((e) => e.id),
+          to.key,
+        );
+        if (refusal) return { refusal };
+        return editProject(p.id, leadChangeBody(fresh, to.key, p.version));
+      });
+      if (!res) return;
+      if ('refusal' in res) {
+        if (res.refusal === 'proj.board.lead_open') refresh();
+        return void toast(t(res.refusal), { bad: true });
+      }
+      refresh();
+      if (!res.ok) return void toast(errorText(res.error), { bad: true });
+      toast(t('proj.board.lead_done', { name: to.label }), { icon: 'user' });
+    } catch (e) {
+      toast(e instanceof ApiFailure ? errorText(e.error) : t('err.unknown'), { bad: true });
+    }
+  };
+
+  const drop = (p: ProjectRef, key: string, to: BoardValue) => {
+    const m = projectMove(p, keep, key, to.key);
+    if (m.kind === 'none') return;
+    if (m.kind === 'refusal')
+      return void toast(t(m.key, { from: statusName(t, 'project', p.status), to: to.label }), {
+        bad: true,
+      });
+    if (m.kind === 'status') return void move(p, m.to);
+    if (m.kind === 'cancel') return setAskCancel(p);
+    void setLead(p, to);
   };
 
   const taskFor = (p: ProjectRef) =>
@@ -291,6 +352,7 @@ export function useProjectActions(): {
   return {
     actions: (p) => entries(p, false),
     openCard: openProjectCard,
+    drop,
     newProject: (contractor) =>
       setForm(openSlot<FormSlot>({ contractor: contractor ?? null, edit: null })),
     card: {

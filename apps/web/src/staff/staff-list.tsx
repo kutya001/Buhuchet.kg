@@ -14,6 +14,7 @@ import {
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
 import { KbBadge } from '../kb/kb-parts';
@@ -21,12 +22,15 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useNewRole } from '../roles/new-role';
 import { useShell } from '../shell/context';
 import { useStaffActions } from './staff-actions';
 import { useStaffAddRequest } from './staff-add';
+import { boardRoles, staffKanban } from './staff-board';
+import { allRolesQuery, boardRoleQuery } from './staff-data';
 
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
 const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
@@ -174,7 +178,7 @@ const fetchStaffValues = async (col: string, q?: string) => {
 
 /**
  * «Сотрудники» → список (ТЗ «Сотрудники», прототип modules/staff.js, renderStaff): общий список
- * записей с поиском, фильтрами у столбцов, группировкой и «В Excel» (по праву «Выгружать в Excel»);
+ * записей с поиском, фильтрами у столбцов, группировкой, видом «Доска» и «В Excel» (по праву «Выгружать в Excel»);
  * заблокированные — приглушённо. Строка открывает карточку сотрудника; действия — «⋯», долгим
  * нажатием и правым кликом (`useStaffActions`). Пока в организации один сотрудник — подсказка
  * «Добавить сотрудника». «+ Добавить» — «Сотрудник» и «Роль».
@@ -182,6 +186,8 @@ const fetchStaffValues = async (col: string, q?: string) => {
 export function StaffList() {
   const t = useT();
   const labels = useGridLabels('staff.count');
+  // Список можно открыть с фильтром адресом (`presetHref`), как списки других модулей.
+  const preset = usePresetFilters('staff', 'list');
   const { search, clearSearch, access } = useShell();
   const kb = access.can('kbLevels');
   // Как вкладка «Счёт» карточки сотрудника (docs/deviations.md п. В-33).
@@ -193,6 +199,20 @@ export function StaffList() {
   const columns = useMemo(() => staffColumns(t, kb, balance), [t, kb, balance]);
   const defaultVisible = kb ? DEFAULT_VISIBLE_KB : DEFAULT_VISIBLE;
   const view = useViewSettings('staff.list');
+  const staff = useStaffActions();
+  // Доска (прототип v85 `staffKanban`): столбцы ролей видны и пустыми — все роли организации тому,
+  // кто ведёт сотрудников (по порядку `boardRoles`), остальным — роли сотрудников списка.
+  const canManage = access.can('staff');
+  const allRoles = useQuery({ ...allRolesQuery, enabled: canManage });
+  const listRoles = useQuery({ ...boardRoleQuery, enabled: !canManage });
+  const kanban = useMemo(
+    () =>
+      staffKanban<Employee>(
+        canManage ? boardRoles(allRoles.data ?? []) : (listRoles.data ?? []),
+        staff.drop,
+      ),
+    [canManage, allRoles.data, listRoles.data, staff.drop],
+  );
   const list = useListPage({
     gridKey: 'staff.list',
     columns,
@@ -202,6 +222,8 @@ export function StaffList() {
     search,
     enabled: view.ready,
     fetchPage: fetchStaff,
+    initialFilters: preset,
+    kanban,
   });
   const { params, visible } = list;
   const sendExport = useCallback(
@@ -209,7 +231,6 @@ export function StaffList() {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
-  const staff = useStaffActions();
   const newRole = useNewRole();
   useStaffAddRequest({ employee: staff.newEmployee, role: newRole.open });
   // Подсказка — пока в организации только владелец (прототип `EMP.length===1`): без поиска и фильтров
@@ -262,6 +283,7 @@ export function StaffList() {
         labels={labels}
         actions={staff.actions}
         onOpen={staff.openCard}
+        kanban={kanban}
       />
       {staff.dialogs}
       {newRole.dialog}

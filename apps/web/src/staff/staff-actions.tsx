@@ -15,6 +15,7 @@ import {
   PasswordText,
   useToast,
   type ActionEntry,
+  type BoardValue,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -30,6 +31,7 @@ import { useShell } from '../shell/context';
 import { EmployeeCard } from './employee-card';
 import { ChangeRoleDialog, EditEmployeeDialog, NewEmployeeDialog } from './employee-forms';
 import { allRolesQuery, phoneCodesQuery, useStaffRefresh } from './staff-data';
+import { staffMove } from './staff-board';
 import { canEditEmployee, staffMenu } from './staff-menu';
 
 /** «Передать контрагентов»; `block` — после передачи заблокировать («Передать и заблокировать»). */
@@ -54,11 +56,14 @@ interface NewEmployeeData {
  * Отказ сервера (роль с правами, которые выдаёт только владелец, или шире ваших) — уведомлением с
  * текстом из словаря. «Передать контрагентов» — окно передачи (модуль «Контрагенты»); «Заблокировать»
  * сотрудника с контрагентами сначала предлагает их передать (ТЗ «Сотрудники»: «система предлагает это
- * при блокировке»; прототип blockDlg — «Передать и заблокировать»).
+ * при блокировке»; прототип blockDlg — «Передать и заблокировать»). Перенос карточки на доске
+ * (прототип v85 `staffKanban.drop`) — `drop`: в столбец роли — «Сменить роль?» и смена роли.
  */
 export function useStaffActions(): {
   actions: (e: Employee) => ActionEntry[];
   openCard: (e: Employee) => void;
+  /** Перенос карточки сотрудника в столбец доски. */
+  drop: (e: Employee, key: string, to: BoardValue) => void;
   newEmployee: () => void;
   dialogs: ReactNode;
 } {
@@ -82,6 +87,7 @@ export function useStaffActions(): {
     codes: PhoneCodes['items'];
   }> | null>(null);
   const [askBlock, setAskBlock] = useState<Employee | null>(null);
+  const [askRole, setAskRole] = useState<{ employee: Employee; to: BoardValue } | null>(null);
   const [askTransfer, setAskTransfer] = useState<{ employee: Employee; n: number } | null>(null);
   const [transfer, setTransfer] = useState<DialogSlot<TransferSlot> | null>(null);
   // Число закреплённых — только когда видны все контрагенты организации: иначе неизвестно.
@@ -143,6 +149,25 @@ export function useStaffActions(): {
     toast(t(active ? 'staff.unblock.done' : 'staff.block.done'), {
       icon: active ? 'check' : 'lock',
     });
+  };
+
+  /** Перенос на доске: роль меняется после вопроса, остальное — отказ с причиной. */
+  const drop = (e: Employee, key: string, to: BoardValue) => {
+    // Роли известны, если их уже запросили доска или окно «Сменить роль»; иначе проверит сервер.
+    const m = staffMove(e, canManage, key, to.key, client.getQueryData(allRolesQuery.queryKey));
+    if (m.kind === 'refusal') return void toast(t(m.key), { bad: true });
+    if (m.kind === 'role') setAskRole({ employee: e, to });
+  };
+  const setRoleNow = async (e: Employee, roleId: string) => {
+    const res = await once(e.id, () =>
+      callApi(() =>
+        api.api.staff[':id'].$patch({ param: { id: e.id }, json: { version: e.version, roleId } }),
+      ),
+    );
+    if (!res) return;
+    refresh();
+    if (!res.ok) return toast(errorText(res.error), { bad: true });
+    toast(t('staff.role.done'), { icon: 'shield' });
   };
 
   const changeRole = async (e: Employee) => {
@@ -271,6 +296,22 @@ export function useStaffActions(): {
         />
       ) : null}
       <ConfirmDialog
+        open={askRole !== null}
+        onClose={() => setAskRole(null)}
+        title={t('staff.board.confirm.title')}
+        text={
+          askRole
+            ? t('staff.board.confirm.text', {
+                name: askRole.employee.fullName,
+                from: askRole.employee.role.name,
+                to: askRole.to.label,
+              })
+            : ''
+        }
+        ok={t('staff.board.confirm.ok')}
+        onConfirm={() => askRole && void setRoleNow(askRole.employee, askRole.to.key)}
+      />
+      <ConfirmDialog
         open={askBlock !== null}
         onClose={() => setAskBlock(null)}
         title={t('staff.block.title', { name: askBlock?.shortName ?? '' })}
@@ -303,6 +344,7 @@ export function useStaffActions(): {
   return {
     actions,
     openCard: run.open,
+    drop,
     newEmployee: () => void newEmployee(),
     dialogs,
   };

@@ -392,7 +392,29 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
         400,
       ),
     ).toBe('project_work_invalid');
+    // Добавленная работа повышает версию проекта: сохранение окна «Изменить проект» или смена главного
+    // с доски со старой версией и прежним списком работ её не уберёт.
+    const stale = await call('PUT', `/api/projects/${id}`, chief, {
+      version: c.version,
+      name: c.name,
+      startsOn: c.startsOn,
+      endsOn: c.endsOn,
+      description: c.description,
+      plan: null,
+      members: [employee('chief-a'), employee('acc-a')],
+      lead: employee('acc-a'),
+      works: c.works.map((w) => ({
+        id: w.id,
+        name: w.name,
+        executorId: w.executor.id,
+        due: w.due,
+      })),
+    });
+    expect(await refused(stale, 409)).toBe('record_changed');
+    const before = c.version;
     c = await card(acc, id);
+    expect(c.version).toBe(before + 1);
+    expect(c.lead.id).toBe(employee('chief-a'));
     expect(c.works.map((w) => [w.name, w.done])).toEqual([
       ['Акт сверки', true],
       ['Сдать уточнённые', false],

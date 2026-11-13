@@ -1,6 +1,6 @@
 'use client';
 
-import { Employee, PhoneCodes, RoleList, StaffTabCounts } from '@buhuchet/shared';
+import { Employee, ListValues, PhoneCodes, RoleList, StaffTabCounts } from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -34,6 +34,20 @@ export const allRolesQuery = queryOptions({
     json(
       await api.api.roles.$get({ query: { size: 'all', sort: 'name.asc' } }),
       (v) => RoleList.parse(v).items,
+    ),
+});
+
+/**
+ * Роли сотрудников списка — столбцы доски «по роли» у того, кто не видит список ролей (без права
+ * «Сотрудники и роли»): значения того же списка, что видит сотрудник.
+ */
+export const boardRoleQuery = queryOptions({
+  queryKey: ['staff', 'board-role'],
+  queryFn: async () =>
+    json(await api.api.staff.values.$get({ query: { col: 'role' } }), (v) =>
+      ListValues.parse(v)
+        .items.filter((x) => x.value !== '' && x.label !== null)
+        .map((x) => ({ key: x.value, label: x.label ?? '' })),
     ),
 });
 

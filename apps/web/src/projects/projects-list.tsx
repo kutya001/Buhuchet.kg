@@ -17,12 +17,14 @@ import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { useProjectActions } from './project-actions';
+import { projectKanban } from './project-board';
 import {
   PROJECT_AUDIT,
   PROJECT_DEFAULT_SORT,
@@ -30,7 +32,7 @@ import {
   projectColumns,
   projectTone,
 } from './project-columns';
-import { projectFormQuery, projectSummaryQuery } from './projects-data';
+import { boardLeadQuery, projectFormQuery, projectSummaryQuery } from './projects-data';
 
 export type ProjectTab = 'active' | 'all' | 'mine';
 
@@ -73,7 +75,7 @@ function useProjectAddRequest(run: () => void) {
  * «Проекты контрагентов» → вкладка (ТЗ «Модуль Проекты контрагентов»; прототип modules/projects.js,
  * `renderProjects`): плашки «В работе», «Планируются», «Срок прошёл», «Осталось получить» (тому, кто
  * видит деньги) — нажатие ставит фильтр списка; общий список с поиском, фильтрами, группировкой и «В
- * Excel». Срок прошёл — строка красным, завершённые и отменённые — приглушённо. Строка открывает
+ * Excel», вид «Доска» (прототип v85 `projKanban`). Срок прошёл — строка красным, завершённые и отменённые — приглушённо. Строка открывает
  * карточку проекта; действия — «⋯», долгим нажатием и правым кликом. Пока проектов в организации нет —
  * подсказка первого входа.
  */
@@ -84,6 +86,8 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
   const client = useQueryClient();
   const gridKey: GridKey = `projects.${tab}`;
   const labels = useGridLabels('proj.count');
+  // Список можно открыть с фильтром адресом (`presetHref`), как списки других модулей.
+  const preset = usePresetFilters('projects', tab);
   const summary = useQuery(projectSummaryQuery);
   const s = summary.data;
   const money = !!s?.can.money;
@@ -109,6 +113,10 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
     },
     [tab],
   );
+  const projects = useProjectActions();
+  // Столбцы главных видны на доске и пустыми — когда фильтр убрал их проекты (прототип `show.lead`).
+  const boardLeads = useQuery(boardLeadQuery(tab));
+  const kanban = projectKanban<ProjectRow>(t, boardLeads.data ?? [], projects.drop);
   const list = useListPage({
     gridKey,
     columns,
@@ -118,6 +126,8 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
     search,
     enabled: view.ready && !!s,
     fetchPage,
+    initialFilters: preset,
+    kanban,
   });
   const { params, visible, filters, setFilters } = list;
   const sendExport = useCallback(
@@ -125,7 +135,6 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
     [params, visible, tab],
   );
   const exporter = useListExport(sendExport);
-  const projects = useProjectActions();
   const canCreate = access.can('projects');
   useProjectAddRequest(() => projects.newProject());
 
@@ -243,6 +252,7 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
         labels={labels}
         actions={projects.actions}
         onOpen={(r) => projects.openCard(r.id)}
+        kanban={kanban}
       />
       {projects.dialogs}
     </div>
