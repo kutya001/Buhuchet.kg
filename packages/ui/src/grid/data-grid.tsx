@@ -472,7 +472,7 @@ export function DataGrid<Row>({
       data-grid
       data-density={settings.density ?? 'normal'}
       data-view={view}
-      className={`flex min-w-0 flex-col gap-2.5 ${settings.width === 'center' && !onBoard ? 'mx-auto w-full max-w-[1180px]' : ''}`}
+      className={`flex min-w-0 flex-col gap-2.5 ${settings.width === 'center' && !onBoard ? 'mx-auto w-full max-w-[1180px] group-data-[wide=true]/app:max-w-none' : ''}`}
     >
       <GridToolbar
         columns={columns}

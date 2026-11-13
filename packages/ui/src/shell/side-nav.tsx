@@ -53,9 +53,11 @@ export function Brand({
   className?: string;
 }) {
   return (
-    <div className={`flex items-center gap-[11px] ${className}`}>
+    <div
+      className={`flex items-center gap-[11px] md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:gap-0 md:group-data-[nav=hidden]/app:px-0 ${className}`}
+    >
       <BrandMark />
-      <div>
+      <div className="md:group-data-[nav=hidden]/app:hidden">
         <div data-brand-name="" className="text-base leading-[1.1] font-[750] tracking-[-0.015em]">
           Buhuchet.kg
         </div>
@@ -66,6 +68,15 @@ export function Brand({
     </div>
   );
 }
+
+/** Подпись в свёрнутой панели (ПК): на экране её нет, экранный диктор читает. */
+const MINI_TEXT = 'md:group-data-[nav=hidden]/app:sr-only';
+/** Счётчик модуля в свёрнутой панели — в правом верхнем углу значка (прототип `.ti .badge`). */
+const MINI_BADGE =
+  'md:group-data-[nav=hidden]/app:absolute md:group-data-[nav=hidden]/app:top-px md:group-data-[nav=hidden]/app:right-0 md:group-data-[nav=hidden]/app:m-0 md:group-data-[nav=hidden]/app:min-w-4 md:group-data-[nav=hidden]/app:px-1 md:group-data-[nav=hidden]/app:text-[9.5px] md:group-data-[nav=hidden]/app:leading-[15px]';
+/** Точка модуля в свёрнутой панели (прототип `.ti .kb-dot`). */
+const MINI_DOT =
+  'md:group-data-[nav=hidden]/app:absolute md:group-data-[nav=hidden]/app:top-[5px] md:group-data-[nav=hidden]/app:right-1.5 md:group-data-[nav=hidden]/app:m-0';
 
 export interface SideNavLabels {
   /** «Модули» — название панели для экранного диктора. */
@@ -78,7 +89,9 @@ export interface SideNavLabels {
  * Панель модулей на ПК (прототип ui/shell.js, renderSide; css/shell.css `.side`, `.tree`): вверху
  * «Buhuchet.kg» и режим, дерево модулей до вкладок — название открывает модуль, стрелка рядом
  * раскрывает его вкладки, вкладка открывает модуль сразу на ней; активные модуль и вкладка подсвечены.
- * Внизу — `footer` (организация, «Выйти из аккаунта»).
+ * Внизу — `footer` (организация, «Выйти из аккаунта»). Свёрнутая панель (прототип v85
+ * `.app.nav-hidden`, ПК) — полоска значков: названия, стрелки и вкладки скрыты, название модуля — в
+ * подсказке значка, счётчик и точка — в углу значка; экранный диктор названия читает по-прежнему.
  */
 export function SideNav({
   mode,
@@ -105,7 +118,7 @@ export function SideNav({
   return (
     <aside
       aria-label={labels.nav}
-      className="col-start-1 row-span-2 row-start-1 flex min-h-0 flex-col overflow-auto rounded-2xl border border-line bg-pane px-2.5 pt-2 pb-3 shadow-pane group-data-[nav=hidden]/app:hidden max-md:hidden"
+      className="col-start-1 row-span-2 row-start-1 flex min-h-0 flex-col overflow-x-hidden overflow-y-auto rounded-2xl border border-line bg-pane px-2.5 pt-2 pb-3 shadow-pane max-md:hidden md:group-data-[nav=hidden]/app:px-[7px] md:group-data-[nav=hidden]/app:[scrollbar-width:none] md:group-data-[nav=hidden]/app:[&::-webkit-scrollbar]:hidden"
     >
       <Brand mode={mode} />
       <nav className="flex flex-1 flex-col gap-0.5">
@@ -120,11 +133,17 @@ export function SideNav({
                 <Link
                   href={m.href}
                   aria-current={on ? 'page' : undefined}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-[7px] text-[13.5px] font-[550] text-inherit no-underline"
+                  title={m.title}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-[7px] text-[13.5px] font-[550] text-inherit no-underline md:group-data-[nav=hidden]/app:relative md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-[9px]"
                 >
                   <Icon name={m.icon} />
-                  <span className="truncate">{m.title}</span>
-                  {m.count && <CountBadge count={m.count} className="ml-auto" />}
+                  <span className={`truncate ${MINI_TEXT}`}>{m.title}</span>
+                  {m.count && (
+                    <CountBadge
+                      count={m.count}
+                      className={`ml-auto ${m.count.dot ? MINI_DOT : MINI_BADGE}`}
+                    />
+                  )}
                 </Link>
                 {m.tabs.length > 0 && (
                   <button
@@ -132,7 +151,7 @@ export function SideNav({
                     onClick={() => onToggle(m.id)}
                     aria-expanded={open}
                     aria-label={`${open ? labels.collapse : labels.expand}: ${m.title}`}
-                    className="mr-[3px] grid h-[26px] w-[26px] flex-none cursor-pointer place-items-center rounded-[5px] border-0 bg-transparent text-faint hover:bg-row-hover hover:text-ink"
+                    className="mr-[3px] grid h-[26px] w-[26px] flex-none cursor-pointer place-items-center rounded-[5px] border-0 bg-transparent text-faint hover:bg-row-hover hover:text-ink md:group-data-[nav=hidden]/app:hidden"
                   >
                     <Icon
                       name="right"
@@ -143,7 +162,7 @@ export function SideNav({
                 )}
               </div>
               {open && (
-                <div className="mt-px mb-1.5 ml-[21px] flex flex-col gap-px border-l border-line pl-2">
+                <div className="mt-px mb-1.5 ml-[21px] flex flex-col gap-px border-l border-line pl-2 md:group-data-[nav=hidden]/app:hidden">
                   {m.tabs.map((t) => {
                     const tabOn = on && t.id === activeTab;
                     return (
@@ -191,12 +210,12 @@ export function SideOrg({
       title={title}
       onClick={onClick}
       data-side-org=""
-      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover"
+      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-1.5"
     >
       <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
         <Icon name="landmark" size="sm" />
       </span>
-      <span className="min-w-0">
+      <span className={`min-w-0 ${MINI_TEXT}`}>
         <span className="block truncate text-[13px] leading-[1.2] font-[650]">{name}</span>
         <span className="block text-[11.5px] text-faint">{sub}</span>
       </span>
@@ -204,12 +223,19 @@ export function SideOrg({
   );
 }
 
-/** Строка кнопок под организацией («Мой профиль», «Выйти из аккаунта»). */
+/** Строка кнопок под организацией («Мой профиль», «Выйти из аккаунта»); в свёрнутой панели — столбиком. */
 export function SideFootRow({ children }: { children: ReactNode }) {
-  return <div className="flex flex-nowrap gap-1">{children}</div>;
+  return (
+    <div className="flex flex-nowrap gap-1 md:group-data-[nav=hidden]/app:flex-col md:group-data-[nav=hidden]/app:items-center">
+      {children}
+    </div>
+  );
 }
 
-/** Кнопка в строке под организацией (прототип `.foot-row .btn.ghost.sm`). */
+/**
+ * Кнопка в строке под организацией (прототип `.foot-row .btn.ghost.sm`); в свёрнутой панели — один
+ * значок 16 px, подпись — в подсказке.
+ */
 export function SideFootButton({
   icon,
   label,
@@ -226,10 +252,15 @@ export function SideFootButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex min-h-[29px] min-w-0 flex-[1_1_auto] cursor-pointer items-center justify-center gap-1 rounded-lg border-0 bg-transparent px-1 py-1 text-[11.5px] font-[550] whitespace-nowrap text-muted hover:bg-row-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+      title={label}
+      className="inline-flex min-h-[29px] min-w-0 flex-[1_1_auto] cursor-pointer items-center justify-center gap-1 rounded-lg border-0 bg-transparent px-1 py-1 text-[11.5px] font-[550] whitespace-nowrap text-muted hover:bg-row-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 md:group-data-[nav=hidden]/app:w-full md:group-data-[nav=hidden]/app:gap-0 md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-[7px]"
     >
-      <Icon name={icon} size="sm" />
-      {label}
+      <Icon
+        name={icon}
+        size="sm"
+        className="md:group-data-[nav=hidden]/app:h-4 md:group-data-[nav=hidden]/app:w-4"
+      />
+      <span className={MINI_TEXT}>{label}</span>
     </button>
   );
 }

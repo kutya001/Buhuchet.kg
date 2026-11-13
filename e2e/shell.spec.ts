@@ -174,7 +174,7 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     expect(luminance(await frame())).toBeGreaterThan(0.6);
   });
 
-  test('верхняя и левая панели: «ⓘ», «?», поиск по вкладке, время по Бишкеку, скрытие панели и раскрытые ветки', async ({
+  test('верхняя и левая панели: «ⓘ», «?», поиск по вкладке, время по Бишкеку, свёрнутая панель и раскрытые ветки', async ({
     page,
     baseURL,
     isMobile,
@@ -219,16 +219,85 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
 
     if (isMobile) return; // Левой панели и дерева модулей на телефоне нет.
 
-    // «Меню» скрывает левую панель, раскрытая ветка дерева — запоминаются.
+    // Кнопка панели сворачивает её до значков (прототип v85, docs/deviations.md п. О-76), раскрытая
+    // ветка дерева — запоминаются.
     const side = page.getByRole('complementary', { name: 'Модули' });
     await page.getByRole('button', { name: 'Раскрыть вкладки: Отчеты для сдачи' }).click();
     await expect(side.getByRole('link', { name: 'Кто что сдаёт' })).toBeVisible();
-    await page.getByRole('button', { name: 'Меню' }).click();
-    await expect(side).toBeHidden();
+    await page.getByRole('button', { name: 'Свернуть панель до значков' }).click();
+    await expect(side.getByRole('link', { name: 'Кто что сдаёт' })).toBeHidden();
     await page.reload();
-    await expect(side).toBeHidden();
-    await page.getByRole('button', { name: 'Меню' }).click();
+    await expect(side.getByRole('link', { name: 'Кто что сдаёт' })).toBeHidden();
+    await page.getByRole('button', { name: 'Развернуть панель модулей' }).click();
     await expect(side.getByRole('link', { name: 'Кто что сдаёт' })).toBeVisible();
+  });
+
+  test('(прототип v85) кнопка панели на ПК сворачивает её до полоски значков 60 px, «На всю ширину» снимает предел 1640 px; выбор запоминается, на телефоне этих кнопок нет', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/reports/week');
+    const collapse = page.getByRole('button', { name: 'Свернуть панель до значков' });
+    const widen = page.getByRole('button', { name: 'На всю ширину экрана' });
+    if (isMobile) {
+      // На телефоне — прежняя кнопка «Меню» (панель снизу), кнопки ширины нет.
+      await expect(page.getByRole('button', { name: 'Меню', exact: true })).toBeVisible();
+      await expect(collapse).toBeHidden();
+      await expect(widen).toBeHidden();
+      return;
+    }
+
+    const side = page.getByRole('complementary', { name: 'Модули' });
+    const widthOf = (selector: string) =>
+      page.evaluate(
+        (s) => Math.round(document.querySelector(s)!.getBoundingClientRect().width),
+        selector,
+      );
+    await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+    await expect(side.getByText('Buhuchet.kg')).toBeVisible();
+    await expect.poll(() => widthOf('aside')).toBe(276);
+
+    // Свёрнутая панель: полоска 60 px со значками, названий и стрелок нет, счётчик остаётся.
+    await collapse.click();
+    const expand = page.getByRole('button', { name: 'Развернуть панель модулей' });
+    await expect(expand).toHaveAttribute('aria-expanded', 'false');
+    await expect.poll(() => widthOf('aside')).toBe(60);
+    await expect(side).toBeVisible();
+    await expect(side.getByText('Buhuchet.kg')).toBeHidden();
+    await expect(
+      page.getByRole('button', { name: /^(Раскрыть|Свернуть) вкладки: Отчеты для сдачи/ }),
+    ).toBeHidden();
+    // Значок модуля — ссылка с названием в подсказке: открывает модуль, панель остаётся свёрнутой.
+    const contractors = side.getByRole('link', { name: /^Контрагенты/ });
+    await expect(contractors).toHaveAttribute('title', 'Контрагенты');
+    await contractors.click();
+    await expect(page).toHaveURL(/\/app\/cps\//);
+    await expect.poll(() => widthOf('aside')).toBe(60);
+    await page.reload();
+    await expect(expand).toBeVisible();
+    await expect.poll(() => widthOf('aside')).toBe(60);
+    // Организация и кнопки внизу — значками: «Выйти из аккаунта» по-прежнему доступна.
+    await expect(side.getByRole('button', { name: 'Выйти из аккаунта' })).toBeVisible();
+    await expand.click();
+    await expect.poll(() => widthOf('aside')).toBe(276);
+    await expect(side.getByText('Buhuchet.kg')).toBeVisible();
+
+    // «На всю ширину»: на широком окне страница модуля ограничена 1640 px, кнопка снимает предел.
+    await page.setViewportSize({ width: 2200, height: 900 });
+    await expect.poll(() => widthOf('main > div')).toBe(1640);
+    await expect(widen).toHaveAttribute('aria-pressed', 'false');
+    await widen.click();
+    const narrow = page.getByRole('button', { name: 'Обычная ширина: содержимое по центру' });
+    await expect(narrow).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => widthOf('main > div')).toBeGreaterThan(1800);
+    await page.reload();
+    await expect(narrow).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => widthOf('main > div')).toBeGreaterThan(1800);
+    await narrow.click();
+    await expect(widen).toHaveAttribute('aria-pressed', 'false');
+    await expect.poll(() => widthOf('main > div')).toBe(1640);
   });
 
   test('без входа, с временным паролем и после выхода страницы за входом ведут на страницу входа', async ({

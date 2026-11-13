@@ -13,9 +13,17 @@ export interface TopBarProps {
   /**
    * «Меню»: показать или скрыть левую панель; `dot` — на телефоне точка на кнопке, когда в «Других
    * модулях» есть модуль с точкой или цветным счётчиком (прототип renderSheetDot); `dotTone` — цвет
-   * счётчика (не заполнены показатели), без него точка синяя.
+   * счётчика (не заполнены показатели), без него точка синяя. `panel` — кнопка на ПК (прототип v85
+   * paintBurger): подпись по состоянию панели («Свернуть панель до значков» или «Развернуть панель
+   * модулей») и развёрнута ли панель; «Меню» с точкой остаётся кнопкой телефона.
    */
-  menu: { label: string; onClick: () => void; dot?: string; dotTone?: 'red' | 'yellow' };
+  menu: {
+    label: string;
+    onClick: () => void;
+    dot?: string;
+    dotTone?: 'red' | 'yellow';
+    panel?: { label: string; expanded: boolean };
+  };
   /** «ⓘ» у названия: описание модуля — при наведении (ПК) или по нажатию. */
   info: { label: string; content: ReactNode };
   /** Общий поиск по текущей вкладке. */
@@ -31,6 +39,11 @@ export interface TopBarProps {
   /** Дата и время по Бишкеку. */
   clock: ReactNode;
   /**
+   * «На всю ширину» справа от часов (прототип v85 `#wide`, paintWide): рабочая область без предела
+   * ширины; включена — кнопка нажата и значок «свернуть». Только на ПК.
+   */
+  wide?: { on: boolean; label: string; onToggle: () => void } | null;
+  /**
    * «▶» слева от «?» (прототип v79 `#vhelp`): у модуля с видеоинструкцией сразу открывает первую; на
    * телефоне кнопки нет — видео только в окне «?».
    */
@@ -44,11 +57,22 @@ export interface TopBarProps {
 /**
  * Верхняя панель (прототип index.html `#topbar`, ui/shell.js initTop и renderPage; css/shell.css,
  * mobile.css `.tb-title`): «Меню», название модуля и под ним вкладки с «ⓘ», общий поиск, дата и время,
- * «?» (окно помощи, kb.js kbHelp) и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
+ * «На всю ширину» (ПК), «?» (окно помощи, kb.js kbHelp) и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
  * обрезается многоточием, полное — в подсказке и по нажатию. На телефоне поиск свёрнут в значок и
  * раскрывается на всю ширину вместо остальных кнопок; пустое поле при уходе фокуса сворачивается.
  */
-export function TopBar({ title, tab, menu, info, search, clock, video, help, theme }: TopBarProps) {
+export function TopBar({
+  title,
+  tab,
+  menu,
+  info,
+  search,
+  clock,
+  wide,
+  video,
+  help,
+  theme,
+}: TopBarProps) {
   const [full, setFull] = useState(false);
   const [searching, setSearching] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -63,14 +87,14 @@ export function TopBar({ title, tab, menu, info, search, clock, video, help, the
   return (
     <header
       data-searching={searching}
-      className="col-start-2 row-start-1 flex min-w-0 items-center gap-2.5 rounded-2xl border border-line bg-pane py-[7px] pr-3 pl-2.5 shadow-pane group-data-[nav=hidden]/app:col-start-1 max-md:col-start-1 max-md:gap-1 max-md:px-2 max-md:py-1.5"
+      className="col-start-2 row-start-1 flex min-w-0 items-center gap-2.5 rounded-2xl border border-line bg-pane py-[7px] pr-3 pl-2.5 shadow-pane max-md:col-start-1 max-md:gap-1 max-md:px-2 max-md:py-1.5"
     >
       <button
         type="button"
         onClick={menu.onClick}
         aria-label={menu.label}
         title={menu.label}
-        className={`${iconButtonClass()} ${other} ${menu.dot ? 'relative' : ''}`}
+        className={`${iconButtonClass()} ${other} ${menu.dot ? 'relative' : ''} ${menu.panel ? 'md:hidden' : ''}`}
       >
         <Icon name="menu" />
         {menu.dot ? (
@@ -81,6 +105,19 @@ export function TopBar({ title, tab, menu, info, search, clock, video, help, the
           />
         ) : null}
       </button>
+      {menu.panel && (
+        <button
+          type="button"
+          onClick={menu.onClick}
+          aria-label={menu.panel.label}
+          title={menu.panel.label}
+          aria-expanded={menu.panel.expanded}
+          data-nav-toggle
+          className={`${iconButtonClass()} max-md:hidden`}
+        >
+          <Icon name="menu" />
+        </button>
+      )}
       <button
         type="button"
         onClick={() => setFull((v) => !v)}
@@ -163,6 +200,19 @@ export function TopBar({ title, tab, menu, info, search, clock, video, help, the
       <div className={`text-[13px] font-[550] whitespace-nowrap text-muted tabular-nums ${other}`}>
         {clock}
       </div>
+      {wide && (
+        <button
+          type="button"
+          onClick={wide.onToggle}
+          aria-pressed={wide.on}
+          aria-label={wide.label}
+          title={wide.label}
+          data-wide-toggle
+          className={`${iconButtonClass()} aria-pressed:bg-btn aria-pressed:text-ink aria-pressed:shadow-btn aria-pressed:hover:bg-btn aria-pressed:hover:text-ink max-md:hidden`}
+        >
+          <Icon name={wide.on ? 'minimize' : 'maximize'} />
+        </button>
+      )}
       {video && (
         <button
           type="button"
