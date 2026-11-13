@@ -204,17 +204,22 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect(page).toHaveURL(/\/app\/orgs\/leads$/);
     await expect(page.getByText('О каждой новой и повторной заявке бот сразу пишет')).toBeVisible();
 
-    // Журнал «Телеграм»: обе отправки — «Заявка с сайта», «Отправлено».
+    // Журнал «Телеграм»: обе отправки — «Заявка с сайта», «Отправлено». О заявке пишут каждому
+    // администратору с привязанным Telegram, а соседние тесты заявок идут в это же время, поэтому
+    // у этого чата могут быть и записи о чужих заявках: своих — не меньше двух (ровно две о своей
+    // фирме проверены выше по сообщениям бота).
     await page.goto('/app/tg/log');
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
     await search(page, isMobile, `e2e_${chat}`);
-    const rows = page
-      .locator('[data-grid] [data-id]')
-      .filter({ hasText: 'Заявка с сайта' })
-      .filter({ hasText: 'Отправлено' });
-    await expect(rows).toHaveCount(2);
-    // «Организация» (на телефоне карточка её не показывает) — «Платформа».
-    if (!isMobile) await expect(rows.filter({ hasText: 'Платформа' })).toHaveCount(2);
+    // Поиск применился: в списке остались записи только этого получателя.
+    const all = page.locator('[data-grid] [data-id]');
+    await expect(all.filter({ hasNotText: `e2e_${chat}` })).toHaveCount(0);
+    const rows = all.filter({ hasText: 'Заявка с сайта' }).filter({ hasText: 'Отправлено' });
+    await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(2);
+    // «Организация» (на телефоне карточка её не показывает) — «Платформа» у каждой такой записи.
+    if (!isMobile) {
+      await expect(rows.filter({ hasText: 'Платформа' })).toHaveCount(await rows.count());
+    }
   });
 
   test('(лендинг, повтор) четвёртая заявка за час с одного адреса не принимается — «Слишком много заявок…»; повторная заявка с тем же телефоном не создаёт вторую строку: комментарий дописан', async ({
