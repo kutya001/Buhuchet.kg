@@ -211,6 +211,14 @@ export const ADMIN_ACCOUNT_CARD_TEXTS = {
   'accounts.card.hist.tg_linked': { ru: 'Telegram привязан: {name}', section: S },
   'accounts.card.hist.tg_unlinked': { ru: 'Telegram отвязан', section: S },
   'accounts.card.hist.tg_replaced': { ru: 'Telegram заменён: {from} → {to}', section: S },
+  'accounts.card.hist.tg_plain_on': {
+    ru: 'Сообщения бота простым текстом: включено',
+    section: S,
+  },
+  'accounts.card.hist.tg_plain_off': {
+    ru: 'Сообщения бота простым текстом: выключено',
+    section: S,
+  },
   'accounts.card.hist.blocked': { ru: 'Заблокирован', section: S },
   'accounts.card.hist.unblocked': { ru: 'Разблокирован', section: S },
   'accounts.card.hist.login_unlock': { ru: 'Вход разблокирован', section: S },
@@ -390,6 +398,8 @@ export const ADMIN_ORG_CARD_TEXTS = {
   'orgs.card.hist.updated': { ru: 'Изменено: {fields}', section: S },
   'orgs.card.hist.changed': { ru: 'Запись изменена', section: S },
   'orgs.card.hist.policy': { ru: 'Учётная политика изменена', section: S },
+  'orgs.card.hist.tg_actions_on': { ru: 'Действия из Telegram: включены', section: S },
+  'orgs.card.hist.tg_actions_off': { ru: 'Действия из Telegram: выключены', section: S },
   'orgs.card.hist.role_created': { ru: 'Роль создана', section: S },
   'orgs.card.hist.role_created_name': { ru: 'Роль «{name}» создана', section: S },
   'orgs.card.hist.role_deleted': { ru: 'Роль удалена', section: S },

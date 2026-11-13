@@ -118,6 +118,11 @@ function roleText(t: Translate, h: HistoryEntry): string {
  */
 export function orgHistoryText(t: Translate, h: HistoryEntry): string {
   if (h.entity === 'org_settings') {
+    // «Действия из Telegram» (вкладка «Настройки», прототип org.js `#st-tgact`).
+    const actions = h.changes.find((c) => c.field === 'telegramActions');
+    if (actions && typeof actions.to === 'boolean') {
+      return t(actions.to ? 'orgs.card.hist.tg_actions_on' : 'orgs.card.hist.tg_actions_off');
+    }
     const item = policyHistoryItem(
       { at: h.at, actor: h.actor, action: h.action, changes: h.changes, reason: h.reason },
       0,

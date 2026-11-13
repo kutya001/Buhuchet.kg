@@ -1,6 +1,14 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { botMessages, linkTelegram, signIn, uniqueChat, uniqueLogin } from './helpers';
+import {
+  botMessages,
+  botSent,
+  hire,
+  linkTelegram,
+  signIn,
+  uniqueChat,
+  uniqueLogin,
+} from './helpers';
 
 // Админка → «Телеграм» (задача 2.41; ТЗ «Админка» → «Модуль Телеграмм»; прототип admin/telegram.js)
 // через настоящий сайт с ботом-подделкой (fake-telegram.ts). Рассылка — только своей организации теста:
@@ -180,5 +188,88 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await expect(dialog.locator('input, textarea')).toHaveCount(0);
     await dialog.getByRole('button', { name: 'Понятно' }).click();
     await expect(dialog).toHaveCount(0);
+  });
+
+  test('(пакет заказчика 13.11.2026) «Вид сообщений и кнопки»: примеры сообщений с кодом и таблицей; таблицы выключены — «Проверить бота» приходит простым текстом с кнопкой, включены — снова таблицей', async ({
+    page,
+    baseURL,
+    playwright,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    // Сотрудник демо-организации с привязанным Telegram: ему бот присылает проверочное сообщение.
+    const staff = await playwright.request.newContext({ baseURL });
+    const login = uniqueLogin('e2e-view');
+    const { temporaryPassword } = await hire(staff, origin, login);
+    await signIn(staff, origin, login, temporaryPassword);
+    const changed = await staff.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: temporaryPassword, newPassword: ownerPassword() },
+    });
+    expect(changed.status(), await changed.text()).toBe(200);
+    const chat = uniqueChat();
+    await linkTelegram(staff, origin, chat);
+    const testBot = async () => {
+      const before = (await botSent(staff, chat)).length;
+      const res = await staff.post('/api/telegram/test', { headers: { origin } });
+      expect(res.status(), await res.text()).toBe(200);
+      await expect.poll(async () => (await botSent(staff, chat)).length).toBe(before + 1);
+      return (await botSent(staff, chat)).at(-1)!;
+    };
+
+    await platformAdmin(page.request, origin);
+    try {
+      await page.goto('/app/tg/bot');
+      const view = page.locator('[data-tg-view]');
+      await expect(view).toContainText('Вид сообщений и кнопки');
+      await expect(view).toContainText('скрытый ответ, виден только нажавшему');
+      await expect(view).toContainText('бот сразу отправляет то же сообщение простым текстом');
+      const rich = view.locator('[data-tg-rich]').getByRole('switch');
+      await expect(rich).toBeChecked();
+
+      // Примеры: код подтверждения с кнопкой копирования и сообщение с таблицей и кнопкой.
+      await view.getByRole('button', { name: 'Показать примеры сообщений' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Вид сообщений бота' });
+      const chatBox = dialog.locator('[data-bot-chat]');
+      await expect(chatBox.locator('[data-chat-code]')).toHaveText('482913');
+      await expect(chatBox.getByRole('button', { name: 'Скопировать код' })).toBeVisible();
+      await expect(chatBox.locator('table')).toContainText('Что проверяем');
+      await chatBox.getByRole('button', { name: 'Проверить кнопки' }).click();
+      await expect(chatBox.locator('[data-chat-hidden]')).toContainText('Видно только вам');
+      await expect(chatBox.locator('[data-chat-hidden]')).toContainText('Кнопки работают');
+      // Запасной простой текст: таблицы нет, строки — списком, кнопки на месте.
+      await dialog.locator('[data-chat-plain]').getByRole('switch').click();
+      await expect(chatBox.locator('table')).toHaveCount(0);
+      await expect(chatBox).toContainText('• Таблица — столбцами, как здесь');
+      await expect(chatBox.getByRole('button', { name: 'Проверить кнопки' })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Готово' }).click();
+      await expect(dialog).toHaveCount(0);
+
+      // Таблицы выключены для всех: сообщение уходит простым текстом, кнопка остаётся.
+      await rich.click();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Бот присылает простой текст' }),
+      ).toBeVisible();
+      const plain = await testBot();
+      expect(plain.html).toBeUndefined();
+      expect(plain.text).toContain('• Таблица — столбцами, как здесь');
+      expect(plain.keyboard).toEqual([[{ text: 'Проверить кнопки', callback_data: 'test' }]]);
+
+      // Выбор сохранён; включили обратно — снова сообщение с таблицей.
+      await page.reload();
+      await expect(rich).not.toBeChecked();
+      await rich.click();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Бот присылает таблицы' }),
+      ).toBeVisible();
+      const tables = await testBot();
+      expect(tables.html).toContain('<table');
+    } finally {
+      const back = await page.request.put('/api/admin/telegram/bot/view', {
+        headers: { origin },
+        data: { rich: true },
+      });
+      expect(back.status(), await back.text()).toBe(200);
+      await staff.dispose();
+    }
   });
 });

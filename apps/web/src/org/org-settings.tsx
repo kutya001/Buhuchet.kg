@@ -25,11 +25,20 @@ import { policyQuery, roleOptionsQuery, useOrgRefresh } from './org-data';
 
 type RoleOption = { id: string; name: string };
 
+/** Несохранённые поля формы: «Действия из Telegram» сохраняются сразу, остальное при этом не теряется. */
+interface Drafts {
+  timezone: string;
+  roleId: string;
+  overdueRepeat: boolean;
+  digestTime: string;
+}
+
 /**
  * «Моя организация» → «Настройки» (прототип modules/org.js, renderOrg → settings): часовой пояс, роль по
  * умолчанию для новых сотрудников, повтор напоминания при просрочке и время еженедельной сводки
  * (если включены «Напоминания в Telegram»); «Сохранить настройки». Без права «Настройки и учётная
- * политика» поля только для просмотра. Вверху — «Хранилище файлов» (задача 2.29).
+ * политика» поля только для просмотра. Вверху — «Хранилище файлов» (задача 2.29). «Действия из
+ * Telegram» (поток Т, задача Т1; прототип `#st-tgact`) сохраняются сразу, меняет только владелец.
  */
 export function OrgSettingsTab() {
   const t = useT();
@@ -37,22 +46,37 @@ export function OrgSettingsTab() {
   const canEdit = access.can('org');
   const policy = useQuery(policyQuery);
   const roles = useQuery({ ...roleOptionsQuery, enabled: canEdit });
+  const [drafts, setDrafts] = useState<Drafts | null>(null);
   if (policy.isError || roles.isError) return <Note tone="bad">{t('org.load_error')}</Note>;
   if (!policy.data || (canEdit && !roles.data)) return null;
   const p = policy.data;
   const shown: RoleOption[] =
     roles.data ?? (p.defaultRoleId ? [{ id: p.defaultRoleId, name: p.defaultRoleName ?? '' }] : []);
-  return <SettingsForm key={p.version} policy={p} roles={shown} readOnly={!canEdit} />;
+  return (
+    <SettingsForm
+      key={p.version}
+      policy={p}
+      roles={shown}
+      readOnly={!canEdit}
+      drafts={drafts}
+      onDrafts={setDrafts}
+    />
+  );
 }
 
 function SettingsForm({
   policy,
   roles,
   readOnly,
+  drafts,
+  onDrafts,
 }: {
   policy: OrgPolicy;
   roles: readonly RoleOption[];
   readOnly: boolean;
+  /** Поля, которые правили до переключения «Действий из Telegram» (форма после него создаётся заново). */
+  drafts: Drafts | null;
+  onDrafts: (drafts: Drafts | null) => void;
 }) {
   const t = useT();
   const toast = useToast();
@@ -61,10 +85,11 @@ function SettingsForm({
   const client = useQueryClient();
   const refresh = useOrgRefresh();
   const id = useId();
-  const [timezone, setTimezone] = useState(policy.timezone);
-  const [roleId, setRoleId] = useState(policy.defaultRoleId ?? '');
-  const [overdueRepeat, setOverdueRepeat] = useState(policy.overdueRepeat);
-  const [digestTime, setDigestTime] = useState(policy.digestTime);
+  const [timezone, setTimezone] = useState(drafts?.timezone ?? policy.timezone);
+  const [roleId, setRoleId] = useState(drafts?.roleId ?? policy.defaultRoleId ?? '');
+  const [overdueRepeat, setOverdueRepeat] = useState(drafts?.overdueRepeat ?? policy.overdueRepeat);
+  const [digestTime, setDigestTime] = useState(drafts?.digestTime ?? policy.digestTime);
+  const [actions, setActions] = useState(policy.telegramActions);
   const [digestError, setDigestError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
@@ -94,10 +119,32 @@ function SettingsForm({
     );
     setBusy(false);
     if (res.ok) {
+      onDrafts(null);
       client.setQueryData(policyQuery.queryKey, OrgPolicy.parse(res.data));
       refresh(false);
       return toast(t('org.settings.saved'), { icon: 'check' });
     }
+    if (res.error.code === 'record_changed') return setChanged(true);
+    toast(errorText(res.error), { bad: true, icon: 'alert' });
+  };
+
+  /** «Действия из Telegram» сохраняются сразу (прототип `#st-tgact`), остальные поля — кнопкой. */
+  const toggleActions = async (next: boolean) => {
+    setActions(next);
+    setBusy(true);
+    const res = await callApi(() =>
+      api.api.org.policy.$patch({ json: { version: policy.version, telegramActions: next } }),
+    );
+    setBusy(false);
+    if (res.ok) {
+      onDrafts({ timezone, roleId, overdueRepeat, digestTime });
+      client.setQueryData(policyQuery.queryKey, OrgPolicy.parse(res.data));
+      refresh(false);
+      return toast(t(next ? 'org.settings.tg_actions_on' : 'org.settings.tg_actions_off'), {
+        icon: 'tg',
+      });
+    }
+    setActions(!next);
     if (res.error.code === 'record_changed') return setChanged(true);
     toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
@@ -108,7 +155,10 @@ function SettingsForm({
         <RecordChangedNotice
           message={t('err.record_changed')}
           reloadLabel={t('form.reload')}
-          onReload={() => void client.invalidateQueries({ queryKey: policyQuery.queryKey })}
+          onReload={() => {
+            onDrafts(null);
+            void client.invalidateQueries({ queryKey: policyQuery.queryKey });
+          }}
         />
       ) : null}
       <FilesStorageBox />
@@ -185,6 +235,19 @@ function SettingsForm({
               </Field>
             </FormGrid>
             <Hint>{t('org.settings.digest_hint')}</Hint>
+            <CheckRow
+              plain
+              checked={actions}
+              disabled={off}
+              onChange={(next) => void toggleActions(next)}
+              label={t('org.settings.tg_actions')}
+              data-telegram-actions=""
+            >
+              <Hint>
+                {t('org.settings.tg_actions_hint')}{' '}
+                {t(readOnly ? 'org.settings.tg_actions_other' : 'org.settings.tg_actions_owner')}
+              </Hint>
+            </CheckRow>
           </>
         ) : (
           <Note icon="info">{t('org.settings.telegram_off')}</Note>
