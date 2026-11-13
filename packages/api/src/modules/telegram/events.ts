@@ -45,6 +45,8 @@ export interface TelegramEvent {
   by: string | null;
   template: TelegramTemplateKey;
   values: Readonly<Record<string, string | number>>;
+  /** Первая строка сообщения: название задачи (в шаблоне «Новой задачи» его нет, прототип v97). */
+  heading?: string;
   /** Куда ведёт ссылка: список задач или отчётов. */
   link: 'tasks' | 'reports';
 }
@@ -72,10 +74,11 @@ export async function queueTelegramEvents(
     if (!notifyOn(target.settings, target.boss, kind)) continue;
     const chat = await telegramChat(tx, target.userId);
     if (!chat) continue;
-    const body = fillTemplate(
+    const filled = fillTemplate(
       templates[e.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.template],
       e.values,
     );
+    const body = e.heading ? `${e.heading}\n${filled}` : filled;
     const link = formatText(t('telegram.open'), {
       link: new URL(LINKS[e.link], deps.config.APP_BASE_URL).href,
     });
