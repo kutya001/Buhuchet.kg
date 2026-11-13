@@ -7,11 +7,13 @@ import { createServer, type ServerResponse } from 'node:http';
 // идут тесты; коды в них — от локальной базы с демо-данными.
 //   POST /bot<токен>/sendMessage, /bot<токен>/sendRichMessage (сообщение с таблицами),
 //   /bot<токен>/answerCallbackQuery (скрытый ответ на нажатие кнопки), /bot<токен>/editMessageReplyMarkup
-//   (кнопки после нажатия), /bot<токен>/setWebhook, /bot<токен>/getWebhookInfo — как Bot API;
+//   (кнопки после нажатия), /bot<токен>/setWebhook, /bot<токен>/getWebhookInfo, /bot<токен>/setMyCommands
+//   (команды меню бота) — как Bot API;
 //   /bot<токен>/getFile и GET /file/bot<токен>/<путь> — файл, который человек прислал боту (поток Т,
 //   задача Т2); сам файл тест кладёт заранее: POST /files {id, name, base64} или {id, tooBig: true};
 //   GET /messages?chat=<id> — что бот отправил в этот чат: `text` — текст без разметки (как его видит
-//   человек), `html` — вид с таблицами, `keyboard` — кнопки сейчас, `messageId` — номер в чате;
+//   человек), `html` — вид с таблицами, `keyboard` — кнопки сейчас, `menu` — кнопки меню под полем ввода
+//   (ряды подписей; поток Т, задача Т5), `messageId` — номер в чате; GET /commands — команды меню бота;
 //   GET /answers — скрытые ответы на нажатия; GET /health;
 //   POST /webhook-info {url, error} — что ответит getWebhookInfo (Админка → «Телеграм» → «Бот платформы»).
 
@@ -25,6 +27,8 @@ interface Sent {
   html?: string;
   /** Ряды кнопок под сообщением — как в `reply_markup.inline_keyboard`. */
   keyboard?: unknown;
+  /** Кнопки меню под полем ввода — ряды подписей из `reply_markup.keyboard`; `[]` — меню убрано. */
+  menu?: string[][];
 }
 
 const sent: Sent[] = [];
@@ -32,6 +36,7 @@ const sent: Sent[] = [];
 // 20 МБ, такой Bot API не отдаёт («file is too big»).
 const files = new Map<string, { path: string; body: Buffer; tooBig: boolean }>();
 const answers: { id: string; text: string; alert: boolean }[] = [];
+let commands: unknown = [];
 let nextId = 1;
 
 /** Текст сообщения с разметкой HTML — как его видит человек: без тегов, строки таблицы — с новой строки. */
@@ -62,6 +67,7 @@ createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://fake-telegram');
   if (req.method === 'GET' && url.pathname === '/health') return reply(res, 200, { ok: true });
   if (req.method === 'GET' && url.pathname === '/answers') return reply(res, 200, answers);
+  if (req.method === 'GET' && url.pathname === '/commands') return reply(res, 200, commands);
   if (req.method === 'GET' && url.pathname === '/messages') {
     const chat = url.searchParams.get('chat');
     return reply(
@@ -101,7 +107,12 @@ createServer((req, res) => {
       error?: string;
       parse_mode?: string;
       rich_message?: { html?: string };
-      reply_markup?: { inline_keyboard?: unknown };
+      reply_markup?: {
+        inline_keyboard?: unknown;
+        keyboard?: { text?: string }[][];
+        remove_keyboard?: boolean;
+      };
+      commands?: unknown;
       message_id?: number;
       callback_query_id?: string;
       show_alert?: boolean;
@@ -117,6 +128,9 @@ createServer((req, res) => {
       return reply(res, 400, { ok: false, error_code: 400, description: 'Bad Request' });
     }
     const keyboard = data.reply_markup?.inline_keyboard;
+    const menu = data.reply_markup?.remove_keyboard
+      ? []
+      : data.reply_markup?.keyboard?.map((row) => row.map((b) => String(b.text ?? '')));
     if (method === 'sendMessage' || method === 'sendRichMessage') {
       const html = method === 'sendRichMessage' ? String(data.rich_message?.html ?? '') : undefined;
       const text = String(data.text ?? '');
@@ -128,6 +142,7 @@ createServer((req, res) => {
           html !== undefined ? plainOf(html) : data.parse_mode === 'HTML' ? plainOf(text) : text,
         ...(html !== undefined ? { html } : {}),
         ...(keyboard ? { keyboard } : {}),
+        ...(menu ? { menu } : {}),
       });
       return reply(res, 200, { ok: true, result: { message_id: messageId } });
     }
@@ -180,6 +195,10 @@ createServer((req, res) => {
     }
     if (method === 'setWebhook') {
       webhook.url = String(data.url ?? '');
+      return reply(res, 200, { ok: true, result: true });
+    }
+    if (method === 'setMyCommands') {
+      commands = data.commands ?? [];
       return reply(res, 200, { ok: true, result: true });
     }
     if (method === 'getWebhookInfo') {

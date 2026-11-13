@@ -28,7 +28,7 @@ import {
 import { FILE_NOTE_MAX } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import { FILES_SECTION, UPLOAD_RATE_LIMIT } from '../files/files';
-import { botText, sendNow } from './bot';
+import { botText, sendBotMessage, sendNow } from './bot';
 import { queueTelegramEvents } from './events';
 import { flushEvents } from './outbox';
 import {
@@ -331,6 +331,15 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
   if (closed) await edit(messageId, closed);
   if (pressed && ask.src) await edit(ask.src.messageId, pressed);
   if (result.say) await say(result.say);
+  if (result.send) {
+    await sendBotMessage(
+      deps,
+      { userId: target.userId, chatId: msg.chatId },
+      result.send.message,
+      result.send.kind,
+      'bot_reply',
+    );
+  }
   if (target.orgId) await flushEvents(deps, target.orgId, queued);
   return true;
 }

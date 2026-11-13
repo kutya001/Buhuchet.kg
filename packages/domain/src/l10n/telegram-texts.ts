@@ -105,6 +105,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.nudge': { ru: 'Напоминание о просроченном', section: S },
   // «Это не я» под сообщениями о безопасности (поток Т, задача Т4; прототип v101 tg-security.js).
   'telegram.kind.not_me': { ru: 'Нажато «Это не я»', section: S },
+  'telegram.kind.bot_cmd': { ru: 'Ответ на команду бота', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },

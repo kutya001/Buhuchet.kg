@@ -41,6 +41,12 @@ export interface TelegramSendOptions {
   /** Ряды кнопок под сообщением. */
   keyboard?: readonly (readonly TelegramButton[])[];
   /**
+   * Кнопки меню под полем ввода (ряды подписей; поток Т, задача Т5): нажатие шлёт боту подпись обычным
+   * сообщением. Остаются у человека, пока бот их не заменит. Вместе с кнопками под сообщением не
+   * отправляются — Telegram принимает одно из двух, и `keyboard` важнее. Пустой список — убрать меню.
+   */
+  menu?: readonly (readonly string[])[];
+  /**
    * Вид с таблицами и раскрывающимися разделами (HTML для sendRichMessage). Если Telegram такое
    * сообщение не принял, уходит обычное сообщение с текстом `text`: напоминание должно дойти всегда.
    */
@@ -65,6 +71,12 @@ export type TelegramFileResult =
  * Состояние вебхука по ответу Telegram (getWebhookInfo): адрес, куда Telegram шлёт обновления (пусто —
  * вебхук не поставлен), последняя ошибка доставки и сколько обновлений ждут доставки.
  */
+/** Команда меню бота: латиница, цифры и «_» (до 32 знаков) и подпись (до 256 знаков). */
+export interface TelegramCommand {
+  command: string;
+  description: string;
+}
+
 export interface TelegramWebhookInfo {
   url: string;
   pendingUpdates: number;
@@ -100,6 +112,11 @@ export interface Telegram {
    */
   loadFile(fileId: string, maxBytes: number): Promise<TelegramFileResult>;
   setWebhook(url: string, secretToken: string): Promise<void>;
+  /**
+   * Команды бота в его меню в личных чатах («/today — Сегодня»; поток Т, задача Т5): список заменяется
+   * целиком. Ошибка Bot API — исключение.
+   */
+  setCommands(commands: readonly TelegramCommand[]): Promise<void>;
   /** Состояние вебхука (Админка → «Телеграм» → «Проверить вебхук»); ошибка Bot API — исключение. */
   getWebhookInfo(): Promise<TelegramWebhookInfo>;
 }
@@ -153,6 +170,18 @@ async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array |
   return body;
 }
 
+/** Кнопки меню под полем ввода в виде Bot API; пустой список — убрать их. */
+function menuMarkup(menu: readonly (readonly string[])[]) {
+  const rows = menu.filter((row) => row.length > 0);
+  return rows.length
+    ? {
+        keyboard: rows.map((row) => row.map((text) => ({ text }))),
+        resize_keyboard: true,
+        is_persistent: true,
+      }
+    : { remove_keyboard: true };
+}
+
 /** Клавиатура в виде Bot API. Неактивная кнопка — `disabled` (Bot API 10.3), данные остаются. */
 function replyMarkup(keyboard: readonly (readonly TelegramButton[])[] | undefined) {
   const rows = (keyboard ?? []).filter((row) => row.length > 0);
@@ -204,7 +233,11 @@ export function createTelegramBotApi(options: {
 
   return {
     async sendMessage(chatId, text, opts = {}) {
-      const markup = opts.keyboard?.length ? { reply_markup: replyMarkup(opts.keyboard) } : {};
+      const markup = opts.keyboard?.length
+        ? { reply_markup: replyMarkup(opts.keyboard) }
+        : opts.menu
+          ? { reply_markup: menuMarkup(opts.menu) }
+          : {};
       let data: BotApiResponse<{ message_id: number }> | null = null;
       if (opts.rich !== undefined) {
         data = await call<{ message_id: number }>(
@@ -310,6 +343,15 @@ export function createTelegramBotApi(options: {
       });
       if (!data.ok) throw new Error(`Telegram setWebhook: ${data.description ?? data.error_code}`);
     },
+    async setCommands(commands) {
+      const data = await call<boolean>('setMyCommands', {
+        commands: commands.map((c) => ({ command: c.command, description: c.description })),
+        scope: { type: 'all_private_chats' },
+      });
+      if (!data.ok) {
+        throw new Error(`Telegram setMyCommands: ${data.description ?? data.error_code}`);
+      }
+    },
     async getWebhookInfo() {
       const data = await call<{
         url?: string;
@@ -347,6 +389,8 @@ export interface FakeTelegram extends Telegram {
   /** Файлы, которые «прислали боту»: номер файла → содержимое (для `loadFile`). */
   readonly files: Map<string, Uint8Array>;
   webhook?: { url: string; secretToken: string };
+  /** Команды меню бота, заданные последним `setCommands`. */
+  commands?: readonly TelegramCommand[];
   /** Что ответит getWebhookInfo: по умолчанию — поставленный адрес без ошибок; `Error` — исключение. */
   webhookInfo?: Partial<TelegramWebhookInfo> | Error;
   /** Следующие отправки вернут эти ответы (по очереди), затем — успех. */
@@ -387,6 +431,9 @@ export function createFakeTelegram(): FakeTelegram {
     },
     async setWebhook(url, secretToken) {
       fake.webhook = { url, secretToken };
+    },
+    async setCommands(commands) {
+      fake.commands = commands.map((c) => ({ ...c }));
     },
     async getWebhookInfo() {
       if (fake.webhookInfo instanceof Error) throw fake.webhookInfo;

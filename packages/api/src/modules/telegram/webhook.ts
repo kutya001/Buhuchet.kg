@@ -34,6 +34,7 @@ import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { serverTexts } from '../l10n/texts';
 import { botText, sendCodeMessage, sendNow, sendSecurityNotice } from './bot';
+import { botMenu, handleBotCommand, sendBotHint } from './commands';
 import { handleBotPress } from './press';
 import { handleBotReply, type BotIncoming } from './reply';
 
@@ -206,7 +207,8 @@ async function linked(
       result.shared,
     ),
     'bot_reply',
-    {},
+    // С подтверждением привязки приходят кнопки меню команд под полем ввода (задача Т5).
+    { menu: await botMenu(deps) },
     { userId: account.userId, kind: 'linked' },
   );
   return true;
@@ -394,6 +396,22 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       // должны уйти причиной возврата отчёта.
       const code = text === null ? null : relinkCodeOf(text);
       if (code && (await confirmRelink(deps, chat.id, code, reply))) return ok;
+      // Команда меню бота: «/today» или подпись кнопки под полем ввода (поток Т, задача Т5) — раньше
+      // ответа на просьбу: «Сегодня» не должно уйти запросом поиска контрагента. Сбой не роняет вебхук.
+      if (text !== null) {
+        try {
+          const handled = await handleBotCommand(deps, {
+            chatId: chat.id,
+            fromId: from?.id ?? 0,
+            messageId: message.data.message_id ?? null,
+            text,
+          });
+          if (handled) return ok;
+        } catch (err) {
+          deps.logger.error({ err }, 'Telegram: команда меню бота не обработана');
+          return ok;
+        }
+      }
       // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
       // Telegram повторял бы доставку, а действие могло уже выполниться.
       try {
@@ -412,9 +430,13 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
         return ok;
       }
       // Файл, которого бот не ждал, остаётся без ответа — как раньше; на текст — подсказка.
-      return text === null ? ok : reply(await botText(deps, 'tgStart'));
+      if (text !== null) await sendBotHint(deps, chat.id);
+      return ok;
     }
-    if (!command.token) return reply(await botText(deps, 'tgStart'));
+    if (!command.token) {
+      await sendBotHint(deps, chat.id);
+      return ok;
+    }
     if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
     const tokenHash = hashSessionToken(command.token);
     const target = await peekTelegramLink(deps.db, tokenHash);

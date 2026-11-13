@@ -159,6 +159,8 @@ export interface BotReplyResult {
   off?: readonly string[];
   /** Что бот пишет в чат после ответа (обычным сообщением: скрытого ответа у сообщения нет). */
   say?: string;
+  /** Новое сообщение в чат после ответа — с таблицами и кнопками (карточка контрагента, задача Т5). */
+  send?: { message: BotMessage; kind: OutboxKind };
   /** Присланный файл прикреплён к записи; иначе после транзакции он удаляется из хранилища. */
   fileKept?: boolean;
   events?: readonly TelegramEvent[];

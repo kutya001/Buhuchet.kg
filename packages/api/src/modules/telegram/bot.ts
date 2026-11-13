@@ -93,6 +93,8 @@ export async function sendBotMessage(
   message: BotMessage,
   kind: OutboxKind,
   purpose: string,
+  /** Кнопки меню под полем ввода: уйдут с сообщением, если под ним самим кнопок нет (задача Т5). */
+  options: Pick<TelegramSendOptions, 'menu'> = {},
 ): Promise<boolean> {
   const problem = botMessageProblem(message);
   if (problem) throw new Error(`Сообщение бота (${purpose}): ${problem}`);
@@ -104,11 +106,10 @@ export async function sendBotMessage(
   try {
     const plain =
       !(await telegramBotRich(deps.db)) || (await telegramPlainText(deps.db, to.userId));
-    const res = await deps.telegram.sendMessage(
-      to.chatId,
-      text,
-      botSendOptions(message, { plain }),
-    );
+    const res = await deps.telegram.sendMessage(to.chatId, text, {
+      ...botSendOptions(message, { plain }),
+      ...(options.menu ? { menu: options.menu } : {}),
+    });
     ok = res.ok;
     if (res.ok) messageId = res.messageId;
     else {

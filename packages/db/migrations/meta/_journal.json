@@ -897,6 +897,20 @@
       "when": 1794595975071,
       "tag": "0127_telegram_not_me_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1794599815305,
+      "tag": "0128_telegram_bot_cmd",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1794599825412,
+      "tag": "0129_telegram_commands",
+      "breakpoints": true
     }
   ]
 }

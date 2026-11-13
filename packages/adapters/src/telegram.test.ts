@@ -334,6 +334,41 @@ describe('createTelegramBotApi', () => {
     await expect(failing.setWebhook('x', 'y')).rejects.toThrow(/bad url/);
   });
 
+  it('кнопки меню под полем ввода: ряды подписей, пустой список убирает; с кнопками под сообщением не идут', async () => {
+    const fetch = fetchReturning({ ok: true, result: { message_id: 1 } });
+    const tg = createTelegramBotApi({ token: 't', fetch, apiBase: 'http://tg.local' });
+    const markup = (i: number) => JSON.parse(String(fetch.mock.calls[i]![1].body)).reply_markup;
+    await tg.sendMessage(1, 'а', { menu: [['Сегодня', 'Неделя'], [], ['Просрочено']] });
+    expect(markup(0)).toEqual({
+      keyboard: [[{ text: 'Сегодня' }, { text: 'Неделя' }], [{ text: 'Просрочено' }]],
+      resize_keyboard: true,
+      is_persistent: true,
+    });
+    await tg.sendMessage(1, 'б', { menu: [] });
+    expect(markup(1)).toEqual({ remove_keyboard: true });
+    await tg.sendMessage(1, 'в', { menu: [['Сегодня']], keyboard: [[{ text: 'к', data: 'x' }]] });
+    expect(markup(2)).toEqual({ inline_keyboard: [[{ text: 'к', callback_data: 'x' }]] });
+    await tg.sendMessage(1, 'г');
+    expect(markup(3)).toBeUndefined();
+  });
+
+  it('setCommands: команды меню для личных чатов; ошибка Bot API — исключение', async () => {
+    const fetch = fetchReturning({ ok: true, result: true });
+    await createTelegramBotApi({ token: 't', fetch, apiBase: 'http://tg.local' }).setCommands([
+      { command: 'today', description: 'Сегодня' },
+    ]);
+    expect(fetch.mock.calls[0]![0]).toBe('http://tg.local/bott/setMyCommands');
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({
+      commands: [{ command: 'today', description: 'Сегодня' }],
+      scope: { type: 'all_private_chats' },
+    });
+    const failing = createTelegramBotApi({
+      token: 't',
+      fetch: fetchReturning({ ok: false, description: 'bad command' }),
+    });
+    await expect(failing.setCommands([])).rejects.toThrow(/bad command/);
+  });
+
   it('getWebhookInfo: адрес, последняя ошибка и её время; ошибка Bot API — исключение', async () => {
     const fetch = fetchReturning({
       ok: true,
@@ -391,6 +426,8 @@ describe('createFakeTelegram', () => {
     ]);
     await tg.setWebhook('u', 's');
     expect(tg.webhook).toEqual({ url: 'u', secretToken: 's' });
+    await tg.setCommands([{ command: 'today', description: 'Сегодня' }]);
+    expect(tg.commands).toEqual([{ command: 'today', description: 'Сегодня' }]);
     expect(await tg.getWebhookInfo()).toEqual({
       url: 'u',
       pendingUpdates: 0,
