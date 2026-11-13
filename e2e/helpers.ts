@@ -124,7 +124,8 @@ export async function pressBotButton(
   const res = await api.post('/api/telegram/webhook', {
     headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
     data: {
-      update_id: chat + 2,
+      // Номер обновления у каждого нажатия свой: повторную доставку Telegram шлёт с тем же номером.
+      update_id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
       callback_query: {
         id,
         from: { id: chat, is_bot: false, first_name: 'Сквозной' },

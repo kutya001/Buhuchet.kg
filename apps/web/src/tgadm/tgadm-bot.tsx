@@ -7,7 +7,7 @@ import {
   OUTBOX_PAUSE_MS,
   pluralForm,
 } from '@buhuchet/domain';
-import { AdminTelegramBot } from '@buhuchet/shared';
+import { AdminTelegramBot, AdminTelegramBotView } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
@@ -92,13 +92,19 @@ export function TgAdmBot() {
   const setRich = async (next: boolean) => {
     if (!data) return;
     setSaving(true);
-    client.setQueryData(botQuery.queryKey, { ...data, rich: next });
+    // Идущая проверка вебхука могла прочитать прежнее значение — её ответ переключатель не затирает
+    // (на время сохранения «Проверить вебхук» недоступна).
+    await client.cancelQueries({ queryKey: botQuery.queryKey });
+    const show = (rich: boolean) =>
+      client.setQueryData(botQuery.queryKey, (old) => (old ? { ...old, rich } : old));
+    show(next);
     const res = await callApi(() => api.api.admin.telegram.bot.view.$put({ json: { rich: next } }));
     setSaving(false);
     if (!res.ok) {
-      client.setQueryData(botQuery.queryKey, { ...data, rich: !next });
+      show(!next);
       return toast(errorText(res.error), { bad: true, icon: 'alert' });
     }
+    show(AdminTelegramBotView.parse(res.data).rich);
     toast(t(next ? 'tgadm.view.rich_on' : 'tgadm.view.rich_off'), { icon: 'tg' });
   };
 
@@ -153,7 +159,7 @@ export function TgAdmBot() {
             <button
               type="button"
               className={buttonClass('default', 'sm')}
-              disabled={bot.isFetching}
+              disabled={bot.isFetching || saving}
               onClick={() => void check()}
             >
               <Icon name="refresh" size="sm" />

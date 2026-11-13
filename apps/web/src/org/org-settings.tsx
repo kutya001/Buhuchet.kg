@@ -25,8 +25,14 @@ import { policyQuery, roleOptionsQuery, useOrgRefresh } from './org-data';
 
 type RoleOption = { id: string; name: string };
 
-/** Несохранённые поля формы: «Действия из Telegram» сохраняются сразу, остальное при этом не теряется. */
+/**
+ * Несохранённые поля формы: «Действия из Telegram» сохраняются сразу, остальное при этом не теряется.
+ * Черновик годится только для той версии политики, которую вернуло это сохранение: пришла другая
+ * версия (правка в другой вкладке, опросник) — он не применяется, иначе поверх свежей записи легли бы
+ * старые значения полей мимо проверки версии.
+ */
 interface Drafts {
+  version: number;
   timezone: string;
   roleId: string;
   overdueRepeat: boolean;
@@ -58,7 +64,7 @@ export function OrgSettingsTab() {
       policy={p}
       roles={shown}
       readOnly={!canEdit}
-      drafts={drafts}
+      drafts={drafts && drafts.version === p.version ? drafts : null}
       onDrafts={setDrafts}
     />
   );
@@ -137,8 +143,9 @@ function SettingsForm({
     );
     setBusy(false);
     if (res.ok) {
-      onDrafts({ timezone, roleId, overdueRepeat, digestTime });
-      client.setQueryData(policyQuery.queryKey, OrgPolicy.parse(res.data));
+      const saved = OrgPolicy.parse(res.data);
+      onDrafts({ version: saved.version, timezone, roleId, overdueRepeat, digestTime });
+      client.setQueryData(policyQuery.queryKey, saved);
       refresh(false);
       return toast(t(next ? 'org.settings.tg_actions_on' : 'org.settings.tg_actions_off'), {
         icon: 'tg',

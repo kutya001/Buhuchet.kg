@@ -101,6 +101,10 @@ export const TELEGRAM_TEXTS = {
     ru: 'Слишком много проверок бота. Попробуйте через час',
     section: 'Ошибки',
   },
+  'err.bot_test_failed': {
+    ru: 'Telegram не принял сообщение. Попробуйте позже',
+    section: 'Ошибки',
+  },
   'err.telegram_not_linked': { ru: 'Сначала привяжите Telegram', section: 'Ошибки' },
   'err.notify_boss_only': {
     ru: 'Режим и уведомления по отчётам других сотрудников — только владельцу и главному бухгалтеру',

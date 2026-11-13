@@ -217,6 +217,7 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     };
 
     await platformAdmin(page.request, origin);
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
     try {
       await page.goto('/app/tg/bot');
       const view = page.locator('[data-tg-view]');
@@ -231,7 +232,14 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
       const dialog = page.getByRole('dialog', { name: 'Вид сообщений бота' });
       const chatBox = dialog.locator('[data-bot-chat]');
       await expect(chatBox.locator('[data-chat-code]')).toHaveText('482913');
-      await expect(chatBox.getByRole('button', { name: 'Скопировать код' })).toBeVisible();
+      // Код копируется и нажатием на него в тексте, и кнопкой под сообщением.
+      const copied = page.getByRole('status').filter({ hasText: 'Код скопирован' });
+      await chatBox.locator('[data-chat-code]').click();
+      await expect(copied).toBeVisible();
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('482913');
+      await page.evaluate(() => navigator.clipboard.writeText(''));
+      await chatBox.getByRole('button', { name: 'Скопировать код' }).click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('482913');
       await expect(chatBox.locator('table')).toContainText('Что проверяем');
       await chatBox.getByRole('button', { name: 'Проверить кнопки' }).click();
       await expect(chatBox.locator('[data-chat-hidden]')).toContainText('Видно только вам');
@@ -253,6 +261,16 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
       expect(plain.html).toBeUndefined();
       expect(plain.text).toContain('• Таблица — столбцами, как здесь');
       expect(plain.keyboard).toEqual([[{ text: 'Проверить кнопки', callback_data: 'test' }]]);
+      // Примеры при выключенных таблицах сразу открываются простым текстом, с пояснением.
+      await view.getByRole('button', { name: 'Показать примеры сообщений' }).click();
+      await expect(dialog.locator('[data-chat-plain]').getByRole('switch')).toBeChecked();
+      await expect(dialog.locator('[data-chat-plain]')).toContainText(
+        'сейчас так получают все — таблицы выключены в Админке',
+      );
+      await expect(chatBox.locator('table')).toHaveCount(0);
+      await expect(chatBox).toContainText('• Таблица — столбцами, как здесь');
+      await dialog.getByRole('button', { name: 'Готово' }).click();
+      await expect(dialog).toHaveCount(0);
 
       // Выбор сохранён; включили обратно — снова сообщение с таблицей.
       await page.reload();

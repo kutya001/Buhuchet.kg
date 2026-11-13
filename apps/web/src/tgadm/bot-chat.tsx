@@ -140,7 +140,10 @@ function ChatTable({ table }: { table: BotTable }) {
   );
   if (!table.title) return body;
   return (
-    <details open={table.open} className="group mt-1.5 border-t border-line pt-[5px]">
+    <details
+      open={table.open}
+      className="group mt-1.5 border-t border-line pt-[5px] first-of-type:border-t-0 first-of-type:pt-0"
+    >
       <summary className="flex cursor-pointer list-none items-center gap-1.5 font-semibold [&::-webkit-details-marker]:hidden">
         {table.title}
         <span className="rounded-full bg-pane-alt px-[7px] text-[11.5px] font-semibold text-muted">
@@ -158,8 +161,9 @@ function ChatTable({ table }: { table: BotTable }) {
   );
 }
 
+// Отступы между частями сообщения — как `.tgc-b p+p`, `p+.tgc-t`, `.tgc-t+p`, `details+p` прототипа.
 const BUBBLE =
-  'min-w-0 rounded-[14px_14px_14px_4px] border border-line bg-raised px-[11px] py-2 text-[13.5px] leading-[1.45] [overflow-wrap:anywhere]';
+  'min-w-0 rounded-[14px_14px_14px_4px] border border-line bg-raised px-[11px] py-2 text-[13.5px] leading-[1.45] [overflow-wrap:anywhere] [&_details+p]:mt-1.5 [&_p+p]:mt-1.5 [&_p+table]:mt-1.5 [&_table+p]:mt-1.5';
 const SIDE = 'flex max-w-[min(440px,100%)] min-w-0 flex-col gap-1 self-start max-md:max-w-full';
 
 /**

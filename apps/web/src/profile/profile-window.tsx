@@ -193,6 +193,7 @@ function TelegramBox({
   const [busy, setBusy] = useState(false);
   // «Сообщения простым текстом»: выбор хранится у пользователя и отвязку переживает.
   const [plain, setPlain] = useState(initial?.plain ?? false);
+  const [plainBusy, setPlainBusy] = useState(false);
 
   /** «Проверить бота»: бот присылает в привязанный Telegram сообщение с таблицей и кнопкой. */
   // ОТКЛОНЕНИЕ: docs/deviations.md#Т-3 — окна «Прототип: чат с ботом» нет, сообщение приходит в Telegram.
@@ -208,7 +209,10 @@ function TelegramBox({
   /** Переключатель сохраняется сразу, как в прототипе (`#pf-tgplain`). */
   const togglePlain = async (next: boolean) => {
     setPlain(next);
+    // Пока запрос идёт, переключатель недоступен: два запроса подряд могли бы прийти в обратном порядке.
+    setPlainBusy(true);
     const res = await callApi(() => api.api.telegram.plain.$put({ json: { plain: next } }));
+    setPlainBusy(false);
     if (!res.ok) {
       setPlain(!next);
       return toast(errorText(res.error), { bad: true, icon: 'alert' });
@@ -264,6 +268,7 @@ function TelegramBox({
             <CheckRow
               plain
               checked={plain}
+              disabled={plainBusy}
               onChange={(next) => void togglePlain(next)}
               label={t('profile.tg_plain')}
               data-telegram-plain=""
