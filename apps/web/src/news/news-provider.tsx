@@ -133,7 +133,7 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
   const client = useQueryClient();
   const news = useNews();
   const video = useVideo();
-  const { leave } = useWindow();
+  const { leave, inside } = useWindow();
 
   const follow = useCallback(
     (link: NewsInnerLink) => {
@@ -143,8 +143,11 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
       if (link.kind === 'mod') {
         const href = news.hrefOf(link.module, link.tab);
         if (!href) return toast(t('news.link.module_denied'), { icon: 'lock' });
+        // Из окна — с заменой записи истории; из ленты вкладки — обычный переход: «Назад» вернёт в
+        // «Новости» (прототип go()).
         leave();
-        router.replace(href);
+        if (inside) router.replace(href);
+        else router.push(href);
         return;
       }
       void client
@@ -156,7 +159,7 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
         )
         .catch(() => toast(t('news.link.article_denied'), { icon: 'lock' }));
     },
-    [preview, toast, t, news, video, leave, router, client],
+    [preview, toast, t, news, video, leave, inside, router, client],
   );
   return follow;
 }
@@ -169,7 +172,7 @@ function useMoreLink(link: NewsLinkSchema | null) {
   const t = useT();
   const news = useNews();
   const router = useRouter();
-  const { close, leave } = useWindow();
+  const { close, leave, inside } = useWindow();
   const video = useVideo();
   const articles = useQuery({ ...kbArticlesQuery, enabled: link?.kind === 'art' }).data;
   const videos = useQuery({ ...videoCatalogQuery, enabled: link?.kind === 'video' }).data;
@@ -196,7 +199,8 @@ function useMoreLink(link: NewsLinkSchema | null) {
     title: t(MODULES[link.id].title),
     go: () => {
       leave();
-      router.replace(href);
+      if (inside) router.replace(href);
+      else router.push(href);
     },
   };
 }
@@ -255,7 +259,9 @@ export function NewsRow({
         className={`flex w-full cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-left text-ink hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-brand-blue md:flex-nowrap ${open ? 'rounded-t-lg' : 'rounded-lg'}`}
       >
         <Icon name={open ? 'down' : 'right'} size="sm" className="flex-none text-faint" />
-        <b className="min-w-0 flex-[1_1_calc(100%-28px)] leading-[1.35] md:flex-1">{item.title}</b>
+        <b className="min-w-0 flex-[1_1_calc(100%-28px)] leading-[1.35] font-semibold md:flex-1">
+          {item.title}
+        </b>
         <span className="flex flex-[1_1_100%] flex-wrap items-center gap-2 pl-[26px] text-[12.5px] md:flex-none md:flex-nowrap md:pl-0 md:whitespace-nowrap">
           {fresh ? <NewsFreshPill t={t} /> : null}
           {item.pinned ? <Tag icon="star">{t('news.pinned')}</Tag> : null}

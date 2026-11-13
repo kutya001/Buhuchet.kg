@@ -11,7 +11,6 @@ import {
   newsOrder,
   newsProblems,
   newsReleasedAt,
-  newsShortText,
   newsShowMoment,
   newsState,
   newsTitleHasVersion,
@@ -98,6 +97,9 @@ describe('лента', () => {
     expect(newsTitleHasVersion('Версия 98: новости', '9')).toBe(false);
     expect(newsTitleHasVersion('Версия 114', '1.4')).toBe(false);
     expect(newsTitleHasVersion('Плановые работы 20 октября', '1.4')).toBe(false);
+    // Номер версии — обычный текст, а не шаблон поиска.
+    expect(newsTitleHasVersion('Версия (1+2)* [бета]', '(1+2)*')).toBe(true);
+    expect(newsTitleHasVersion('Версия 1.4', '[')).toBe(false);
   });
 
   it('версии для фильтра — от новых к старым как числа', () => {
@@ -121,8 +123,6 @@ describe('лента', () => {
     expect(newsMatches(item, 'ВЕРСИЯ')).toBe(true);
     expect(newsMatches(item, 'нет такого')).toBe(false);
     expect(newsMatches(item, '  ')).toBe(true);
-    expect(newsShortText({ short: '', md: '## Что нового\n- Пункт' })).toBe('Что нового - Пункт');
-    expect(newsShortText({ short: 'Своё', md: 'текст' })).toBe('Своё');
   });
 });
 

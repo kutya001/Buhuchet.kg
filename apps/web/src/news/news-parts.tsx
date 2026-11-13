@@ -42,19 +42,9 @@ export function NewsFreshPill({ t }: { t: Translate }) {
 /** Дата момента по Бишкеку: «изменено 21.10.2026». */
 export const momentDate = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
 
-/**
- * Строка под заголовком (прототип newsOpen, renderNews): «20.10.2026 · версия 1.4», у исправленной
- * опубликованной — ещё «· изменено 21.10.2026».
- */
-export function newsMeta(
-  t: Translate,
-  n: { date: IsoDate; release: string | null; editedAt?: string | null },
-): string {
-  return [
-    formatDateRu(n.date),
-    n.release ? t('news.meta.version', { v: n.release }) : null,
-    n.editedAt ? t('news.meta.edited', { date: momentDate(n.editedAt) }) : null,
-  ]
+/** Дата и версия в строке новости (прототип v98 newsRow): «20.10.2026 · версия 1.4». */
+export function newsMeta(t: Translate, n: { date: IsoDate; release: string | null }): string {
+  return [formatDateRu(n.date), n.release ? t('news.meta.version', { v: n.release }) : null]
     .filter(Boolean)
     .join(' · ');
 }

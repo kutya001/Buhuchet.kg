@@ -160,11 +160,6 @@ export function newsMatches(n: { title: string; short: string; md: string }, q: 
   return `${n.title} ${n.short} ${newsMdText(n.md)}`.toLowerCase().includes(query);
 }
 
-/** Краткое описание для ленты: своё или начало текста без разметки (прототип newsShort). */
-export function newsShortText(n: { short: string; md: string }): string {
-  return n.short || newsMdText(n.md).slice(0, NEWS_SHORT_MAX);
-}
-
 export interface NewsDraft {
   title: string;
   type: NewsType;

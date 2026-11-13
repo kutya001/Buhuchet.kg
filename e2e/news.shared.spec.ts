@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { ADMIN_PASSWORD, platformAdmin } from './admin';
-import { hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
+import { finger, hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
 
 // «Новости» и «Что нового» (задача 2.32). Новость видят все пользователи платформы, поэтому тесты — в
 // *.shared.spec.ts (идут после остальных и по одному): опубликованная новость не попадёт в чужую
@@ -161,8 +161,12 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await page.request.post('/api/auth/logout', { headers: { origin } });
       await signIn(page.request, origin, reader, READER_PASSWORD);
       expect(await unread(page.request)).toBe(1);
-      await page.goto('/app/kb/news');
+      // Счётчик непрочитанных — у вкладки «Новости», пока пользователь на другой вкладке Базы знаний.
+      await page.goto('/app/kb/video');
       const tab = page.locator('[data-tabrow] [role=tab][title="Новости"]');
+      await expect(tab.locator('[title="Непрочитанные новости"]')).toHaveText('1');
+      await tab.click();
+      await expect(page).toHaveURL(/\/app\/kb\/news$/);
       // Лента — строго по номеру версии: у новости теста номер больше всех, она первая под
       // закреплёнными, раскрыта сама и с «Новое» (прототип v98).
       const feedList = page.locator('[data-news-list]');
@@ -291,6 +295,7 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
     page,
     baseURL,
     playwright,
+    isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
     const admin = await playwright.request.newContext({ baseURL });
@@ -341,15 +346,38 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       // Показанные в «Что нового» прочитаны.
       await expect.poll(() => unread(page.request)).toBe(0);
 
-      // Ещё одна версия — она не прочитана и теперь самая новая.
+      // Ещё две версии, обе не прочитаны: одна теперь самая новая, другая — ниже остальных, и номера
+      // версии в её заголовке нет.
       const top = await publish(admin, origin, { title: 'Версия 9104: новая', release: '9104' });
       ids.push(top.id);
-      expect(await unread(page.request)).toBe(1);
-      await page.goto('/app/kb/news');
+      const low = await publish(admin, origin, { title: 'Мелкие правки списков', release: '9101' });
+      ids.push(low.id);
+      expect(await unread(page.request)).toBe(2);
+      await page.goto('/app/kb/video');
+      const tab = page.locator('[data-tabrow] [role=tab][title="Новости"]');
+      const counter = tab.locator('[title="Непрочитанные новости"]');
+      await expect(counter).toHaveText('2');
+      if (isMobile) {
+        // Телефон: недотянутая протяжка к «Новостям» рисует вкладку соседней под пальцем, но входом
+        // во вкладку не считается — самая новая остаётся непрочитанной.
+        const pane = (await page.locator('main').boundingBox())!;
+        const from = { x: pane.x + pane.width * 0.85, y: pane.y + pane.height * 0.6 };
+        const swipe = await finger(page);
+        await swipe.drag(from, { x: from.x - 60, y: from.y }, async () => {
+          await expect(page.locator('[inert] [data-news-list] [data-news]').first()).toBeVisible();
+        });
+        await page.waitForTimeout(400);
+        await expect(page).toHaveURL(/\/app\/kb\/video$/);
+        await expect(counter).toHaveText('2');
+        expect(await unread(page.request)).toBe(2);
+      }
+      await tab.click();
+      await expect(page).toHaveURL(/\/app\/kb\/news$/);
       const rows = page.locator('[data-news-list] [data-news]');
       await expect(rows.nth(0)).toHaveAttribute('data-news', top.id);
       await expect(rows.nth(1)).toHaveAttribute('data-news', newer.id);
       await expect(rows.nth(2)).toHaveAttribute('data-news', older.id);
+      await expect(rows.nth(3)).toHaveAttribute('data-news', low.id);
       // Раскрыта сама только самая новая: она прочитана сразу, «Новое» видно до ухода со вкладки.
       await expect(
         page.locator('[data-news-list] [data-news-head][aria-expanded="true"]'),
@@ -359,7 +387,19 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
         'true',
       );
       await expect(rows.nth(0).locator('[data-news-fresh]')).toHaveText('Новое');
+      await expect(counter).toHaveText('1');
+      // Непрочитанная ниже — свёрнута, с «Новое»; номера версии в заголовке нет — он в строке.
+      const lowHead = rows.nth(3).locator('[data-news-head]');
+      await expect(lowHead).toHaveAttribute('aria-expanded', 'false');
+      await expect(lowHead).toContainText('версия 9101');
+      await expect(rows.nth(3).locator('[data-news-fresh]')).toHaveText('Новое');
+      // Раскрыли — прочитана: «Новое» и счётчика у вкладки больше нет.
+      await lowHead.click();
+      await expect(lowHead).toHaveAttribute('aria-expanded', 'true');
+      await expect(rows.nth(3).locator('[data-news-fresh]')).toHaveCount(0);
+      await expect(counter).toHaveCount(0);
       await expect.poll(() => unread(page.request)).toBe(0);
+      await lowHead.click();
       // В свёрнутой строке — только заголовок: ни краткого описания, ни подробностей.
       await expect(rows.nth(1)).not.toContainText('Отчёты по неделям');
       const second = rows.nth(1).locator('[data-news-head]');

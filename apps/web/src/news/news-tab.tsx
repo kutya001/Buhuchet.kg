@@ -4,7 +4,7 @@ import { NEWS_TYPES, newsMatches, newsVersions, pluralForm } from '@buhuchet/dom
 import type { NewsItem } from '@buhuchet/shared';
 import { Box, EmptyState, Icon, inputClass, linkButtonClass, Note, useToast } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiFailure } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { markAllNewsRead, markNewsRead, newsFeedQuery, newsUnreadQuery } from './news-data';
@@ -30,7 +30,9 @@ export function KbNewsTab() {
   // Что нажато: раскрыто или свёрнуто; не нажатая — раскрыта только самая новая на момент входа.
   const [toggled, setToggled] = useState<Readonly<Record<string, boolean>>>({});
   const [top, setTop] = useState<{ id: string; unread: boolean } | null>(null);
-  const newest = feed.data?.[0];
+  const root = useRef<HTMLDivElement>(null);
+  // Самая новая — по свежей ленте: пока лента из прошлого входа обновляется, ждём ответа.
+  const newest = feed.isFetching ? undefined : feed.data?.[0];
   if (newest && !top) setTop({ id: newest.id, unread: !newest.read });
 
   // Число непрочитанных у модуля и вкладки — по свежей ленте.
@@ -40,9 +42,12 @@ export function KbNewsTab() {
     }
   }, [feed.data, client]);
 
-  // Самая новая раскрыта сама — значит, прочитана (как показанная в «Что нового»).
+  // Самая новая раскрыта сама — значит, прочитана (как показанная в «Что нового»). Не из соседней
+  // вкладки, которую оболочка рисует под пальцем при листании на телефоне (`inert`): пользователь
+  // во вкладку ещё не вошёл.
   useEffect(() => {
-    if (top?.unread) void markNewsRead(client, [top.id]).catch(() => {});
+    if (!top?.unread || !root.current || root.current.closest('[inert]')) return;
+    void markNewsRead(client, [top.id]).catch(() => {});
   }, [top, client]);
 
   if (feed.isError) return <Note tone="bad">{t('news.load_error')}</Note>;
@@ -86,7 +91,7 @@ export function KbNewsTab() {
   };
 
   return (
-    <div className="flex flex-col gap-3.5">
+    <div ref={root} className="flex flex-col gap-3.5">
       <Box>
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="flex min-w-[220px] flex-1 items-center gap-2">
