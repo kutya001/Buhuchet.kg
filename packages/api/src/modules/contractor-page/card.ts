@@ -60,7 +60,7 @@ const off = 'Функция «Страница контрагента по сс�
 /** Новый код доступа: 6 случайных цифр, может начинаться с нуля (прототип pgNewCode). */
 const newPageCode = () => String(randomInt(0, 1_000_000)).padStart(6, '0');
 
-const subjectOf = (c: Context<AppEnv>): AccessSubject => c.get('access')!.subject;
+export const subjectOf = (c: Context<AppEnv>): AccessSubject => c.get('access')!.subject;
 
 const actorOf = (subject: AccessSubject, cp: ContractorRecord): PageActor => ({
   canManage: hasPermission(subject, 'cpPage'),
@@ -72,7 +72,7 @@ function refuse(code: PageRefusal): never {
 }
 
 /** Контрагент в области сотрудника, страницы организации включены. */
-async function contractorOf(tx: Tx, deps: ApiDeps, c: Context<AppEnv>, id: string) {
+export async function contractorOf(tx: Tx, deps: ApiDeps, c: Context<AppEnv>, id: string) {
   const org = await contractorPageOrg(tx, orgContextOf(c).orgId);
   if (!org?.features.cppage) apiFail(403, 'cppage_off', off);
   const cp = await getContractor(tx, id, { scope: scopeSqlOf(subjectOf(c)), today: todayOf(deps) });

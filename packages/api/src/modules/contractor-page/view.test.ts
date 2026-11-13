@@ -269,11 +269,22 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
         'pay',
         'reports',
         'sections',
+        'telegram',
         'texts',
         'today',
       ].sort(),
     );
-    expect(page.sections).toEqual(['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts']);
+    expect(page.sections).toEqual([
+      'pay',
+      'reports',
+      'files',
+      'money',
+      'fee',
+      'kpi',
+      'contacts',
+      'tg',
+    ]);
+    expect(page.telegram).toEqual({ on: 0, wait: 0, full: false });
     expect(page.today).toBe('2026-10-18');
     const json = JSON.stringify(page);
     for (const hidden of ['task', 'history', 'bonus', 'comment', 'storageKey', 'org/']) {
@@ -382,7 +393,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
   });
 
   it('скрытые разделы сервер не передаёт вовсе; «Ваш бухгалтер» — всегда', async () => {
-    await hide(uks, ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts']);
+    await hide(uks, ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts', 'tg']);
     const page = await view(uks, uksCookie);
     expect(page.sections).toEqual([]);
     expect(page).toMatchObject({
@@ -393,6 +404,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       fee: null,
       kpi: null,
       contacts: null,
+      telegram: null,
       main: { reports: null, taxes: null, fee: null },
       issues: { late: 0, short: 0, feeDebt: 0 },
     });

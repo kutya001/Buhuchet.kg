@@ -48,7 +48,7 @@ export const orgSettings = pgTable(
     pageSections: text('page_sections')
       .array()
       .notNull()
-      .default(sql`'{pay,reports,files,money,fee,kpi,contacts}'`),
+      .default(sql`'{pay,reports,files,money,fee,kpi,contacts,tg}'`),
     createdBy: uuid('created_by').references(() => users.id),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),

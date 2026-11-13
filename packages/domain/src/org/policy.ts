@@ -154,6 +154,8 @@ export const PAGE_SECTIONS = [
   'fee',
   'kpi',
   'contacts',
+  // Telegram контрагента (прототип v92): последний раздел страницы.
+  'tg',
 ] as const;
 export type PageSection = (typeof PAGE_SECTIONS)[number];
 
@@ -165,6 +167,7 @@ export const PAGE_SECTION_TITLES: Record<PageSection, string> = {
   fee: 'Оплата за обслуживание',
   kpi: 'Показатели',
   contacts: 'Контакты',
+  tg: 'Telegram',
 };
 
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-7 — у «Файлов» прототипа функции нет.
@@ -173,6 +176,8 @@ export const PAGE_SECTION_FEATURE: Readonly<Partial<Record<PageSection, Feature>
   money: 'taxpay',
   fee: 'fee',
   kpi: 'indicators',
+  // ОТКЛОНЕНИЕ: docs/deviations.md#К-2 — раздел «Telegram» есть только при «Напоминаниях в Telegram».
+  tg: 'telegram',
 };
 
 /** Разделы в порядке страницы, без повторов (прототип: ORG.pageSec после переключения). */

@@ -96,6 +96,7 @@ const ORDER: Record<string, string> = {
   fee: 'max-md:order-7',
   kpi: 'max-md:order-8',
   contacts: 'max-md:order-9',
+  tg: 'max-md:order-10',
 };
 
 /**

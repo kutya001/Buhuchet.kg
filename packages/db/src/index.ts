@@ -26,6 +26,7 @@ export * from './contractor-start';
 export * from './service-periods';
 export * from './contractor-page';
 export * from './contractor-page-view';
+export * from './contractor-telegram';
 export * from './reports';
 export * from './report-pick';
 export * from './report-list';

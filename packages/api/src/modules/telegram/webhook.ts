@@ -16,6 +16,7 @@ import {
 } from '@buhuchet/db';
 import {
   codeWithOrganization,
+  cpTgStartToken,
   loginDenial,
   parseStartCommand,
   relinkCodeOf,
@@ -30,6 +31,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { botText, sendCodeMessage, sendNow } from './bot';
+import { clientStart, clientText } from './client';
 import { handleBotPress } from './press';
 
 const error = { 'application/json': { schema: ApiError } };
@@ -336,12 +338,24 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
 
     const command = parseStartCommand(text);
     if (!command) {
+      // Telegram контрагента (поток К): «Отключить» от клиента, подключившего чат к контрагенту.
+      if (await clientText(deps, chat.id, text)) return ok;
       const code = relinkCodeOf(text);
       if (!code) return reply(await botText(deps, 'tgStart'));
       await confirmRelink(deps, chat.id, code, reply);
       return ok;
     }
     if (!command.token) return reply(await botText(deps, 'tgStart'));
+    // Telegram контрагента (поток К): ссылка со страницы контрагента — «/start cp_<токен>».
+    const clientToken = cpTgStartToken(command.token);
+    if (clientToken) {
+      await clientStart(
+        deps,
+        { chatId: chat.id, username: from?.username ?? null, firstName: from?.first_name ?? null },
+        clientToken,
+      );
+      return ok;
+    }
     if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
     const tokenHash = hashSessionToken(command.token);
     const target = await peekTelegramLink(deps.db, tokenHash);

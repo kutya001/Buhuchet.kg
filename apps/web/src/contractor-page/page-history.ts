@@ -18,19 +18,36 @@ const ACTION_TEXT = {
   page_close: 'cppage.hist.page_close',
 } as const;
 
+/** Telegram контрагента (прототип v92 cp-telegram.js): запрос, решение сотрудника, отключение клиентом. */
+const TELEGRAM_TEXT = {
+  page_tg_request: 'cppage.hist.page_tg_request',
+  page_tg_on: 'cppage.hist.page_tg_on',
+  page_tg_no: 'cppage.hist.page_tg_no',
+  page_tg_off: 'cppage.hist.page_tg_off',
+  page_tg_leave: 'cppage.hist.page_tg_leave',
+} as const;
+
 const sectionsOf = (value: unknown): PageSection[] =>
   Array.isArray(value) ? PAGE_SECTIONS.filter((s) => value.includes(s)) : [];
 
 /**
  * Что произошло со страницей — строкой, как в истории прототипа (`log('cp', …)`, pubSeen): включена,
  * выключена, код изменён, ссылка скопирована и отправлена, открыта с устройства, ввод закрыт после
- * неверных кодов, закрыта после 5 неверных кодов за сутки; скрытые разделы — по разделу: «раздел «Оплата за обслуживание» скрыт». Подключит
+ * неверных кодов, закрыта после 5 неверных кодов за сутки; Telegram контрагента — запрос, решение и
+ * отключение с именем в Telegram; скрытые разделы — по разделу: «раздел «Оплата за обслуживание» скрыт». Подключит
  * вкладка «История» карточки контрагента (задача 2.11).
  */
 export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
   if (entry.action === 'page_open') {
     const device = entry.changes.find((c) => c.field === 'device')?.to;
     return t('cppage.hist.page_open', { device: typeof device === 'string' ? device : '' });
+  }
+  if (entry.action in TELEGRAM_TEXT) {
+    const change = entry.changes.find((c) => c.field === 'telegram');
+    const name = change?.to ?? change?.from;
+    return t(TELEGRAM_TEXT[entry.action as keyof typeof TELEGRAM_TEXT], {
+      name: typeof name === 'string' ? name : '',
+    });
   }
   if (entry.action in ACTION_TEXT) {
     return t(ACTION_TEXT[entry.action as keyof typeof ACTION_TEXT]);

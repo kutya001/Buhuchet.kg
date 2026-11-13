@@ -33,6 +33,7 @@ import { api, callApi, type ApiResult } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { contractorPageQuery } from './page-data';
+import { ContractorTelegramBox } from './page-telegram';
 
 /*
  * Блок «Страница контрагента» на вкладке «Основное» карточки контрагента (задача 2.42; прототип
@@ -254,6 +255,7 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
         ) : (
           <Hint>{t(page.archived ? 'cppage.archived_hint' : 'cppage.off_hint')}</Hint>
         )}
+        <ContractorTelegramBox contractorId={contractorId} />
         <div className="flex flex-wrap items-center gap-2">
           {page.enabled ? (
             <>

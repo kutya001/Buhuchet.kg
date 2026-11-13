@@ -80,7 +80,7 @@ describe.skipIf(!databaseAvailable())(
         remindDays: [7, 3],
         digestTime: '09:00',
         timezone: 'Asia/Bishkek',
-        pageSections: ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts'],
+        pageSections: ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts', 'tg'],
         defaultRoleId: a.roles.find((r) => r.templateCode === 'acc')!.id,
         version: 1,
       });
