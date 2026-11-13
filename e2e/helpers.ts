@@ -79,6 +79,66 @@ export async function botMessages(api: APIRequestContext, chat: number): Promise
   return ((await res.json()) as { text: string }[]).map((m) => m.text);
 }
 
+/** Сообщение бота в чате, как его хранит подделка: текст, вид с таблицами, кнопки, номер в чате. */
+export interface BotSent {
+  messageId: number;
+  text: string;
+  /** Вид с таблицами (`sendRichMessage`); у простого сообщения нет. */
+  html?: string;
+  /** Ряды кнопок — как в `reply_markup.inline_keyboard` Bot API. */
+  keyboard?: {
+    text: string;
+    callback_data?: string;
+    copy_text?: { text: string };
+    url?: string;
+  }[][];
+}
+
+/** Что бот сайта отправил в чат — вместе с видом и кнопками (основа бота, поток Т). */
+export async function botSent(api: APIRequestContext, chat: number): Promise<BotSent[]> {
+  const res = await api.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`);
+  expect(res.status()).toBe(200);
+  return (await res.json()) as BotSent[];
+}
+
+/** Скрытые ответы бота на нажатия кнопок (их видит только нажавший). */
+export async function botAnswers(
+  api: APIRequestContext,
+): Promise<{ id: string; text: string; alert: boolean }[]> {
+  const res = await api.get(`${FAKE_TELEGRAM}/answers`);
+  expect(res.status()).toBe(200);
+  return (await res.json()) as { id: string; text: string; alert: boolean }[];
+}
+
+/**
+ * Пользователь нажал кнопку под сообщением бота в личном чате: Telegram присылает вебхуком
+ * `callback_query`. Возвращает идентификатор нажатия — по нему ищется скрытый ответ (`botAnswers`).
+ */
+export async function pressBotButton(
+  api: APIRequestContext,
+  chat: number,
+  messageId: number,
+  data: string,
+): Promise<string> {
+  const id = `e2e-${chat}-${messageId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const res = await api.post('/api/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    data: {
+      // Номер обновления у каждого нажатия свой: повторную доставку Telegram шлёт с тем же номером.
+      update_id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      callback_query: {
+        id,
+        from: { id: chat, is_bot: false, first_name: 'Сквозной' },
+        chat_instance: 'e2e',
+        data,
+        message: { message_id: messageId, date: 0, chat: { id: chat, type: 'private' } },
+      },
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+  return id;
+}
+
 /** Пользователь открыл ссылку привязки в Telegram: Telegram присылает вебхуком «/start <токен>». */
 export function pressStart(api: APIRequestContext, linkUrl: string, chat: number) {
   const token = new URL(linkUrl).searchParams.get('start')!;

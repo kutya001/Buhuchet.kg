@@ -99,6 +99,22 @@ describe('карточка организации: «История»', () => {
     ).toBe('Учётная политика изменена');
   });
 
+  it('«Действия из Telegram»: включены и выключены; другие поля той же записи не теряются', () => {
+    const actions = (to: boolean, more: Entry['changes'] = []) =>
+      orgHistoryText(
+        t,
+        entry({
+          entity: 'org_settings',
+          changes: [{ field: 'telegramActions', from: !to, to }, ...more],
+        }),
+      );
+    expect(actions(false)).toBe('Действия из Telegram: выключены');
+    expect(actions(true)).toBe('Действия из Telegram: включены');
+    expect(actions(false, [{ field: 'taskConfirm', from: true, to: false }])).toBe(
+      'Действия из Telegram: выключены; Задачи требуют подтверждения: выключено',
+    );
+  });
+
   it('роли: создана, удалена, переименована, изменены права и область', () => {
     const role = (over: Partial<Entry>) => entry({ entity: 'role', ...over });
     expect(orgHistoryText(t, role({ action: 'create', subject: 'Бухгалтер' }))).toBe(
