@@ -578,6 +578,32 @@ describe.skipIf(!databaseAvailable())(
       expect((await say(CHAT.chief, ' ( ) ', { replyTo: ask.id })).text).toBe(TPL.tgAskNeedText);
       expect((await report(t1)).status).toBe('submitted');
 
+      // Код замены Telegram, которого бот ждёт в этом же чате, — раньше ответа на просьбу: шесть цифр
+      // не уходят причиной возврата (один Telegram — несколько логинов).
+      const codeOf = (text: string) => /^(\d{6}) — код/m.exec(text)?.[1] ?? '';
+      const senior = await signIn(app, 'senior-a', TEST_PASSWORD);
+      await linkTelegram(app, senior, CHAT.chief);
+      const code = codeOf(last(CHAT.senior).text);
+      expect(code).toMatch(/^\d{6}$/);
+      const wrong = code === '000000' ? '111111' : '000000';
+      expect((await say(CHAT.chief, wrong)).text).toBe(fill(TPL.tgRelinkWrong, { попыток: 4 }));
+      // Чат теперь общий для двух логинов — первой строкой организация.
+      expect((await say(CHAT.chief, code)).text).toBe(
+        `Организация А\n${fill(TPL.tgLinked, { логин: 'senior-a' })}`,
+      );
+      expect((await report(t1)).status).toBe('submitted');
+      // Обратно в свой чат — тем же порядком, кодом из прежнего чата.
+      await linkTelegram(app, senior, CHAT.senior);
+      const backCode = codeOf(
+        sent(CHAT.chief)
+          .map((x) => x.text)
+          .findLast((x) => codeOf(x) !== '')!,
+      );
+      expect((await say(CHAT.senior, backCode)).text).toBe(
+        fill(TPL.tgLinked, { логин: 'senior-a' }),
+      );
+      expect((await report(t1)).status).toBe('submitted');
+
       const fixAt = sent(CHAT.acc).length;
       const back = await say(CHAT.chief, '  Нет (квитанции)\nо приёме ', { replyTo: ask.id });
       expect(back.text).toBe(fill(TPL.tgConfBackOk, { отчёт: full }));

@@ -24,6 +24,7 @@ import {
   lockBotPress,
   logBotMessage,
   markViaTelegram,
+  openBotAsks,
   saveBotPress,
   setTelegramPlainText,
   telegramBotRich,
@@ -440,6 +441,63 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
         await writeHistory(tx, { entity: 'user', entityId: a.ownerUserId, action: 'update' });
       }),
     ).rejects.toThrow();
+  });
+
+  it('просьбы бота (Т2): открытые — только своего чата и дня, сначала последняя; закрытая, без дня и неотправленная не отдаются', async () => {
+    const ask = (more: Record<string, unknown> = {}): BotMessage =>
+      ({
+        text: 'Пришлите файл',
+        ask: { action: 'repFile', arg: 'r1', kind: 'file', day: '2026-10-19', ...more },
+      }) as unknown as BotMessage;
+    const chat = 7001;
+    const first = await logged(a.ownerUserId, chat, 601, ask());
+    await t.admin.db
+      .update(telegramOutbox)
+      .set({ createdAt: new Date(first.createdAt.getTime() - 60_000) })
+      .where(eq(telegramOutbox.id, first.id));
+    await logged(a.ownerUserId, chat, 602, ask({ action: 'confWhy', arg: 'r2', kind: 'text' }));
+    await logged(a.ownerUserId, chat, 603, ask({ off: true }));
+    await logged(a.ownerUserId, chat, 604, ask({ day: '2026-10-18' }));
+    await logged(a.ownerUserId, chat, 605, ask({ day: undefined }));
+    // Неизвестный вид ответа и просьба без действия — не просьбы.
+    await logged(a.ownerUserId, chat, 606, ask({ kind: 'voice' }));
+    await logged(a.ownerUserId, chat, 607, ask({ action: undefined }));
+    // Просьба в чужом чате (другая организация).
+    await logged(b.ownerUserId, 7002, 608, ask({ arg: 'r9' }));
+    // Сообщение без просьбы.
+    await logged(a.ownerUserId, chat, 609);
+
+    expect(await openBotAsks(t.app.db, chat, '2026-10-19')).toEqual([
+      { messageId: 602, action: 'confWhy', arg: 'r2', kind: 'text' },
+      { messageId: 601, action: 'repFile', arg: 'r1', kind: 'file' },
+    ]);
+    expect(await openBotAsks(t.app.db, 7002, '2026-10-19')).toEqual([
+      { messageId: 608, action: 'repFile', arg: 'r9', kind: 'file' },
+    ]);
+    expect(await openBotAsks(t.app.db, chat, '2026-10-18')).toEqual([
+      { messageId: 604, action: 'repFile', arg: 'r1', kind: 'file' },
+    ]);
+    // На следующий день вчерашние просьбы закрыты; в чате без сообщений — пусто.
+    expect(await openBotAsks(t.app.db, chat, '2026-10-20')).toEqual([]);
+    expect(await openBotAsks(t.app.db, 7999, '2026-10-19')).toEqual([]);
+
+    // Закрытая просьба (ответ принят или «Отмена») больше не отдаётся.
+    await withOrgContext(t.app.db, ctxA(), async (tx) => {
+      const locked = await lockBotPress(tx, first.id, chat);
+      expect(locked?.ask).toMatchObject({ action: 'repFile', day: '2026-10-19' });
+      expect(await saveBotPress(tx, first.id, chat, ask({ off: true }))).toBe(true);
+    });
+    expect((await openBotAsks(t.app.db, chat, '2026-10-19')).map((x) => x.messageId)).toEqual([
+      602,
+    ]);
+    // Функцию зовёт только роль приложения; сама таблица ей по-прежнему видна только в своей организации.
+    const seen = await withOrgContext(t.app.db, ctxB(), (tx) =>
+      tx
+        .select({ id: telegramOutbox.id })
+        .from(telegramOutbox)
+        .where(eq(telegramOutbox.chatId, chat)),
+    );
+    expect(seen).toEqual([]);
   });
 
   it('«Сообщения с таблицами» платформы: меняет только администратор платформы, с записью в историю', async () => {

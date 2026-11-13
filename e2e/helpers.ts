@@ -170,6 +170,70 @@ export function tellBot(api: APIRequestContext, chat: number, text: string) {
   });
 }
 
+/**
+ * Файл, который человек пришлёт боту (поток Т, задача Т2): подделка Telegram отдаст его сайту по
+ * `getFile`. Возвращает номер файла для `sendToBot`.
+ */
+export async function botFile(
+  api: APIRequestContext,
+  file: { name: string; content: string | Buffer; tooBig?: boolean },
+): Promise<string> {
+  const id = `e2e-file-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const res = await api.post(`${FAKE_TELEGRAM}/files`, {
+    data: {
+      id,
+      name: file.name,
+      base64: Buffer.from(file.content).toString('base64'),
+      tooBig: file.tooBig === true,
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+  return id;
+}
+
+/**
+ * Человек написал боту в личном чате: текст, документ (`botFile`) или ответ на сообщение бота
+ * (`replyTo` — номер сообщения в чате).
+ */
+export async function sendToBot(
+  api: APIRequestContext,
+  chat: number,
+  message: {
+    text?: string;
+    document?: { fileId: string; name: string; size?: number };
+    caption?: string;
+    replyTo?: number;
+  },
+) {
+  const res = await api.post('/api/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    data: {
+      update_id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      message: {
+        ...(message.text !== undefined ? { text: message.text } : {}),
+        ...(message.caption !== undefined ? { caption: message.caption } : {}),
+        ...(message.document
+          ? {
+              document: {
+                file_id: message.document.fileId,
+                file_name: message.document.name,
+                ...(message.document.size !== undefined
+                  ? { file_size: message.document.size }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(message.replyTo !== undefined
+          ? { reply_to_message: { message_id: message.replyTo } }
+          : {}),
+        chat: { id: chat, type: 'private' },
+        from: { id: chat, is_bot: false, username: `e2e_${chat}`, first_name: 'Сквозной' },
+      },
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+}
+
 /** Вошедший пользователь привязывает Telegram по ссылке из профиля. */
 export async function linkTelegram(api: APIRequestContext, origin: string, chat: number) {
   const link = await api.post('/api/telegram/link', { headers: { origin } });

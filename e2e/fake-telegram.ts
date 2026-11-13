@@ -8,6 +8,8 @@ import { createServer, type ServerResponse } from 'node:http';
 //   POST /bot<токен>/sendMessage, /bot<токен>/sendRichMessage (сообщение с таблицами),
 //   /bot<токен>/answerCallbackQuery (скрытый ответ на нажатие кнопки), /bot<токен>/editMessageReplyMarkup
 //   (кнопки после нажатия), /bot<токен>/setWebhook, /bot<токен>/getWebhookInfo — как Bot API;
+//   /bot<токен>/getFile и GET /file/bot<токен>/<путь> — файл, который человек прислал боту (поток Т,
+//   задача Т2); сам файл тест кладёт заранее: POST /files {id, name, base64} или {id, tooBig: true};
 //   GET /messages?chat=<id> — что бот отправил в этот чат: `text` — текст без разметки (как его видит
 //   человек), `html` — вид с таблицами, `keyboard` — кнопки сейчас, `messageId` — номер в чате;
 //   GET /answers — скрытые ответы на нажатия; GET /health;
@@ -26,6 +28,9 @@ interface Sent {
 }
 
 const sent: Sent[] = [];
+// Файлы, «присланные боту»: номер файла → путь на сервере Telegram и содержимое; `tooBig` — файл больше
+// 20 МБ, такой Bot API не отдаёт («file is too big»).
+const files = new Map<string, { path: string; body: Buffer; tooBig: boolean }>();
 const answers: { id: string; text: string; alert: boolean }[] = [];
 let nextId = 1;
 
@@ -65,10 +70,23 @@ createServer((req, res) => {
       sent.filter((m) => m.chatId === chat),
     );
   }
+  const filePath = /^\/file\/bot[^/]+\/(.+)$/.exec(url.pathname)?.[1];
+  if (req.method === 'GET' && filePath) {
+    const path = decodeURIComponent(filePath);
+    const file = [...files.values()].find((f) => f.path === path);
+    if (!file) return reply(res, 404, notFound);
+    res.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': file.body.byteLength,
+    });
+    return res.end(file.body);
+  }
   const method =
     url.pathname === '/webhook-info'
       ? 'webhookInfo'
-      : /^\/bot[^/]+\/(\w+)$/.exec(url.pathname)?.[1];
+      : url.pathname === '/files'
+        ? 'files'
+        : /^\/bot[^/]+\/(\w+)$/.exec(url.pathname)?.[1];
   if (req.method !== 'POST' || !method) return reply(res, 404, notFound);
   let body = '';
   req.setEncoding('utf8');
@@ -87,6 +105,11 @@ createServer((req, res) => {
       message_id?: number;
       callback_query_id?: string;
       show_alert?: boolean;
+      file_id?: string;
+      id?: string;
+      name?: string;
+      base64?: string;
+      tooBig?: boolean;
     };
     try {
       data = JSON.parse(body || '{}') as typeof data;
@@ -125,6 +148,35 @@ createServer((req, res) => {
       }
       message.keyboard = keyboard;
       return reply(res, 200, { ok: true, result: true });
+    }
+    if (method === 'files') {
+      const id = String(data.id ?? '');
+      if (!id) return reply(res, 400, { ok: false, error_code: 400, description: 'Bad Request' });
+      files.set(id, {
+        // Путь — как у Telegram: папка вида файла и имя из обычных знаков.
+        path: `documents/file_${files.size + 1}${/\.\w+$/.exec(String(data.name ?? ''))?.[0] ?? ''}`,
+        body: Buffer.from(String(data.base64 ?? ''), 'base64'),
+        tooBig: data.tooBig === true,
+      });
+      return reply(res, 200, { ok: true });
+    }
+    if (method === 'getFile') {
+      const file = files.get(String(data.file_id ?? ''));
+      if (!file || file.tooBig) {
+        return reply(res, 400, {
+          ok: false,
+          error_code: 400,
+          description: file ? 'Bad Request: file is too big' : 'Bad Request: file not found',
+        });
+      }
+      return reply(res, 200, {
+        ok: true,
+        result: {
+          file_id: data.file_id,
+          file_path: file.path,
+          file_size: file.body.byteLength,
+        },
+      });
     }
     if (method === 'setWebhook') {
       webhook.url = String(data.url ?? '');
