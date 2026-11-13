@@ -11,7 +11,7 @@ import {
   ResponsibleOptions,
 } from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
-import { queryOptions, useQueryClient } from '@tanstack/react-query';
+import { queryOptions, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api, apiFailure } from '../api-client';
 
@@ -142,21 +142,39 @@ export const responsibleOptionsQuery = queryOptions({
 
 /**
  * После действия с отчётом — перечитать карточки, списки вкладок и дня «Календаря», счётчики, сетку
- * «Кто что сдаёт», числа «Календаря» и блоки «Файлы».
+ * «Кто что сдаёт», числа «Календаря» и блоки «Файлы»; у контрагента — «Отчёты к сдаче» карточки (сумма
+ * к уплате и новый статус видны сразу, без переключения вкладок), число просроченных на вкладке,
+ * «Деньги», «Файлы», «История» и столбцы списка (прототип refreshAll: перерисовывает экран и все
+ * открытые карточки).
  */
+export function refreshReports(client: QueryClient) {
+  void client.invalidateQueries({ queryKey: ['reports', 'summary'] });
+  void client.invalidateQueries({ queryKey: ['reports', 'card'] });
+  void client.invalidateQueries({ queryKey: ['reports', 'matrix'] });
+  void client.invalidateQueries({ queryKey: ['reports', 'calendar'] });
+  void client.invalidateQueries({ queryKey: ['files', 'report'] });
+  for (const tab of [...REPORT_LIST_TABS, 'calendar'])
+    void client.invalidateQueries({ queryKey: ['list', `reports.${tab}`] });
+  // Регулярные задачи — это отчёты месяца (задача 2.24): их статус и счётчики меняются вместе с отчётом.
+  void client.invalidateQueries({ queryKey: ['tasks'] });
+  for (const tab of ['mine', 'byme', 'all', 'overdue'])
+    void client.invalidateQueries({ queryKey: ['list', `tasks.${tab}`] });
+  // Списки «Контрагентов» — вкладки модуля и «Отчёты к сдаче» карточки: ключи `['list', 'cps.<вкладка>', …]`.
+  void client.invalidateQueries({
+    predicate: (q) =>
+      q.queryKey[0] === 'list' &&
+      typeof q.queryKey[1] === 'string' &&
+      q.queryKey[1].startsWith('cps.'),
+  });
+  void client.invalidateQueries({ queryKey: ['contractors', 'card'] });
+  void client.invalidateQueries({ queryKey: ['contractors', 'summary'] });
+  void client.invalidateQueries({ queryKey: ['contractors', 'tab-counts'] });
+  void client.invalidateQueries({ queryKey: ['contractors', 'history'] });
+  void client.invalidateQueries({ queryKey: ['files', 'contractor'] });
+  void client.invalidateQueries({ queryKey: ['money', 'contractor'] });
+}
+
 export function useReportsRefresh() {
   const client = useQueryClient();
-  return useCallback(() => {
-    void client.invalidateQueries({ queryKey: ['reports', 'summary'] });
-    void client.invalidateQueries({ queryKey: ['reports', 'card'] });
-    void client.invalidateQueries({ queryKey: ['reports', 'matrix'] });
-    void client.invalidateQueries({ queryKey: ['reports', 'calendar'] });
-    void client.invalidateQueries({ queryKey: ['files', 'report'] });
-    for (const tab of [...REPORT_LIST_TABS, 'calendar'])
-      void client.invalidateQueries({ queryKey: ['list', `reports.${tab}`] });
-    // Регулярные задачи — это отчёты месяца (задача 2.24): их статус и счётчики меняются вместе с отчётом.
-    void client.invalidateQueries({ queryKey: ['tasks'] });
-    for (const tab of ['mine', 'byme', 'all', 'overdue'])
-      void client.invalidateQueries({ queryKey: ['list', `tasks.${tab}`] });
-  }, [client]);
+  return useCallback(() => refreshReports(client), [client]);
 }

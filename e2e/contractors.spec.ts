@@ -10,7 +10,7 @@ import {
   uniqueLogin,
 } from './helpers';
 import { orgWithTypes } from './orgs';
-import { asOwner, assign, newContractor, staffIds } from './reports';
+import { asOwner, assign, manualReport, newContractor, staffIds } from './reports';
 
 // «Контрагенты» → список и карточка контрагента (задачи 2.10 и 2.11, #66) через настоящий сайт.
 // Демо-организация: владелец erkin, бухгалтер alisher с областью «Свои контрагенты»; новые
@@ -443,6 +443,50 @@ test.describe('Этап 2: контрагенты — список и карто
       await expect(async () =>
         expect((await settledBox(card)).width).toBeCloseTo(before, 0),
       ).toPass();
+    });
+  });
+
+  test('(доработки 13.11.2026, К1) в карточке на вкладке «Отчёты к сдаче» новый статус и сумма к уплате видны сразу, без переключения вкладок', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = await asOwner(page.request, baseURL);
+    const word = uniqueWord('Сразу');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(page.request, origin, { name });
+    const nds = await manualReport(page.request, origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: '2026-09-01',
+      due: '2030-01-15',
+    });
+    await page.goto('/app/cps/all');
+    await expect(rows(page).first()).toBeVisible();
+    await search(page, isMobile, word);
+    const card = await openCard(page, name);
+    await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+    const row = card.locator(`[data-grid] [data-id="${nds}"]`);
+    const mini = row.locator('[data-status-mini]:not([data-payment-mini] *)');
+    await expect(mini).toContainText('К сдаче');
+    const menu = page.getByRole('menu', { name: 'Действия' });
+
+    await test.step('«⋯» → «Взять в работу»: в строке сразу «В работе»', async () => {
+      await row.locator('[data-row-menu]').click();
+      await menu.getByRole('menuitem', { name: 'Взять в работу' }).click();
+      await expect(mini).toContainText('В работе');
+    });
+
+    await test.step('«⋯» → «Указать сумму» 5 000 сом: сумма сразу в строке', async () => {
+      await expect(row).not.toContainText(/5\s000/);
+      await row.locator('[data-row-menu]').click();
+      await menu.getByRole('menuitem', { name: 'Указать сумму' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Сумма к уплате' });
+      await dialog.locator('[data-report-amount]').fill('5 000');
+      await dialog.locator('[data-report-ok]').click();
+      await expect(dialog).toBeHidden();
+      await expect(row).toContainText(/5\s000/);
+      await expect(card.getByRole('tab', { selected: true })).toContainText('Отчёты к сдаче');
     });
   });
 

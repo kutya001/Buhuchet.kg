@@ -60,16 +60,17 @@ export const receiptContractorsQuery = queryOptions({
   staleTime: 0,
 });
 
-/** Перечитать всё, что меняют деньги по отчётам. */
+/**
+ * Перечитать всё, что меняют деньги по отчётам (списки контрагентов и «Деньги» карточки перечитывает
+ * `useReportsRefresh`).
+ */
 export function useMoneyRefresh() {
   const client = useQueryClient();
   const reports = useReportsRefresh();
   return useCallback(() => {
     reports();
-    void client.invalidateQueries({ queryKey: ['money', 'contractor'] });
     void client.invalidateQueries({ queryKey: ['contractors'] });
     void client.invalidateQueries({ queryKey: ['files'] });
-    void client.invalidateQueries({ queryKey: ['list', 'cps'] });
   }, [client, reports]);
 }
 
