@@ -4,7 +4,7 @@ import data from './landing-data.json';
 
 /*
  * Картинки лендинга из spec/ (scripts/landing-data.mjs → landing-data.json): выборка demoDB.json для
- * уменьшенных экранов программы, как `landDemo` прототипа. Контрагенты и суммы на картинках выдуманные
+ * уменьшенных экранов программы, как `landDemo` прототипа, и номер версии платформы для подвала. Контрагенты и суммы на картинках выдуманные
  * (демо-организация), реальных данных на лендинге нет (ТЗ «Лендинг» → «Общий вид»). Числа полосы цифр
  * и коды стран формы — из действующих справочников (`landingDicts`, `@buhuchet/api/web`).
  */
@@ -34,6 +34,8 @@ interface DemoContractor {
 }
 
 interface LandingData {
+  /** Номер версии прототипа, с которым сверена копия spec/ («91»). */
+  version: string;
   demo: {
     contractors: Record<string, DemoContractor>;
     employees: Record<string, string>;
@@ -44,6 +46,12 @@ interface LandingData {
 }
 
 const DATA = data as unknown as LandingData;
+
+/**
+ * Версия платформы для подвала лендинга (прототип v91: «Версия N» без даты): номер версии прототипа, с
+ * которым сверена копия spec/ (docs/deviations.md п. И-2).
+ */
+export const LANDING_VERSION = DATA.version;
 
 export interface DemoReport {
   contractor: string;

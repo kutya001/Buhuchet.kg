@@ -379,7 +379,7 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(intro).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
     await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
-    // Линия Бернулли с петлёй у заголовка каждого из 9 блоков.
+    // Линия Бернулли со спиралью у заголовка каждого из 9 блоков.
     await expect(page.locator('#lp-path .lp-knots circle')).toHaveCount(9);
 
     // Новое открытие — снова заставка; без нажатия она уходит сама.
@@ -421,6 +421,8 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
   test('(проверка прототипа v78) у каждого блока «Подробнее»: подробности раскрываются и сворачиваются; символ герба и плитка «Возможностей» раскрываются нажатием; весы в углу — наверх', async ({
     page,
   }) => {
+    // Блоки появляются плавнее (прототип v91): нажатие ждёт, пока кнопка встанет на место, а блоков 8.
+    test.slow();
     await page.goto('/');
     // Блок, подпись кнопки, текст из подробностей.
     const more: [string, string, string][] = [
@@ -493,6 +495,81 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(page.locator('.lp-logo')).toBeFocused();
   });
 
+  test('(проверка прототипа v91) линия идёт из стороны в сторону со спиралями Бернулли; в гербе — спираль; у каждой из 12 возможностей свой значок, он оживает при раскрытии плитки; в подвале — версия платформы без даты', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    // Спирали линии — у заголовка каждого из 9 блоков, по очереди у левого и у правого края страницы.
+    const knots = page.locator('#lp-path .lp-knots circle');
+    await expect(knots).toHaveCount(9);
+    const sides = await page.evaluate(() => {
+      const width = document.querySelector('.land')!.clientWidth;
+      return [...document.querySelectorAll('#lp-path .lp-knots circle')].map((c) =>
+        Number(c.getAttribute('cx')) < width / 2 ? 'l' : 'r',
+      );
+    });
+    expect(sides).toEqual(['l', 'r', 'l', 'r', 'l', 'r', 'l', 'r', 'l']);
+    // Сама линия проходит и по левому, и по правому полю страницы и не выходит за её края.
+    const span = await page.evaluate(() => {
+      const line = document.querySelector<SVGPathElement>('#lp-path .lp-p1')!;
+      const box = line.getBBox();
+      return {
+        from: box.x,
+        to: box.x + box.width,
+        width: document.querySelector('.land')!.clientWidth,
+      };
+    });
+    expect(span.from).toBeGreaterThanOrEqual(0);
+    expect(span.from).toBeLessThan(span.width * 0.25);
+    expect(span.to).toBeGreaterThan(span.width * 0.75);
+    expect(span.to).toBeLessThanOrEqual(span.width);
+
+    // Герб: под весами — спираль Бернулли, у всех трёх символов в списке — значки.
+    const emb = page.locator('#lp-emb');
+    await expect(emb.locator('.e-curve .e-inf')).toHaveCount(1);
+    await expect(emb.locator('.lp-emb-ic svg')).toHaveCount(3);
+    // Это именно спираль, а не прежняя «∞»: кривая начинается у своего центра, раскручивается вправо и
+    // не замыкается — и в гербе, и в значке строки «Кривая Бернулли».
+    const ends = (path: SVGPathElement) => {
+      const a = path.getPointAtLength(0);
+      const b = path.getPointAtLength(path.getTotalLength());
+      return {
+        ax: a.x,
+        ay: a.y,
+        bx: b.x,
+        by: b.y,
+        closed: /z/i.test(path.getAttribute('d') ?? ''),
+      };
+    };
+    const curve = await emb.locator('.e-curve .e-inf').evaluate(ends);
+    expect(curve.closed).toBe(false);
+    expect(Math.hypot(curve.ax - 146, curve.ay - 235)).toBeLessThan(5);
+    expect(curve.bx - 146).toBeGreaterThan(20);
+    const mark = await emb
+      .locator('.lp-emb-l li')
+      .filter({ hasText: 'Кривая Бернулли' })
+      .locator('.lp-emb-ic svg path')
+      .evaluate(ends);
+    expect(mark.closed).toBe(false);
+    expect(Math.hypot(mark.ax - 11, mark.ay - 12.6)).toBeLessThan(2.5);
+    expect(mark.bx - 11).toBeGreaterThan(5);
+
+    // «Возможности»: 12 плиток, у каждой свой значок; при раскрытии плитки значок оживает.
+    const icons = page.locator('#lp-features .lp-tile .lp-fi');
+    await expect(icons).toHaveCount(12);
+    const kinds = await icons.evaluateAll((list) => list.map((x) => x.classList[1]));
+    expect(new Set(kinds).size).toBe(12);
+    const tile = page.locator('#lp-features').getByRole('button', { name: /^Задачи/ });
+    await tile.click();
+    await expect(tile).toHaveAttribute('aria-expanded', 'true');
+    await expect(tile).toHaveClass(/(^| )fx( |$)/);
+
+    // Подвал: версия платформы — номером, без даты.
+    const foot = page.locator('.lp-foot');
+    await expect(foot.locator('.lp-ver')).toHaveText(/^Версия \d+$/);
+    await expect(foot).not.toContainText(/\d{2}\.\d{2}\.\d{4}/);
+  });
+
   test.describe('«уменьшить движение»', () => {
     test.use({ reducedMotion: 'reduce' });
 
@@ -508,6 +585,11 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
       await expect(page.locator('#lp-path .lp-knots circle.on')).toHaveCount(9);
       await expect(page.locator('#lp-who h2')).toHaveCSS('opacity', '1');
       await expect(page.locator('#lp-change .lp-fc').first()).toHaveClass(/now/);
+      // Значок плитки «Возможностей» при раскрытии не оживает.
+      const tile = page.locator('#lp-features').getByRole('button', { name: /^Задачи/ });
+      await tile.click();
+      await expect(tile).toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('#lp-features .lp-tile.fx')).toHaveCount(0);
     });
   });
 });

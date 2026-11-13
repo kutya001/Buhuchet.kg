@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Картинки лендинга из spec/ (ТЗ «Лендинг»: картинки — экраны демо-организации, нарисованные из
 // демо-данных; прототип modules/landing.js, landDemo): короткая выборка demoDB.json для уменьшенных
-// экранов программы. Числа полосы цифр и коды стран формы — не отсюда, а из действующих справочников
-// платформы при показе страницы (`landingDicts`). Пишет apps/web/src/landing/landing-data.json;
+// экранов программы и номер версии платформы для подвала (прототип v91: «Версия N» без даты — номер
+// версии прототипа, с которым сверена копия spec/, из PROTO_VER в ui/shell.js). Числа полосы цифр и
+// коды стран формы — не отсюда, а из действующих справочников платформы при показе страницы
+// (`landingDicts`). Пишет apps/web/src/landing/landing-data.json;
 // тест apps/web (landing.test.ts) сверяет файл с spec/, поэтому после `pnpm spec:sync` —
 // `pnpm landing:data`.
 //
@@ -21,8 +23,21 @@ const OPEN = new Set(['К сдаче', 'В работе', 'Требует исп
 
 const read = (name) => JSON.parse(readFileSync(path.join(ROOT, 'spec/data', name), 'utf8'));
 
+/** Номер версии прототипа в spec/ без «v» и даты: `const PROTO_VER='v91 · 13.11.2026'` → «91». */
+export function prototypeVersion(
+  shell = readFileSync(path.join(ROOT, 'spec/prototype/src/js/ui/shell.js'), 'utf8'),
+) {
+  const found = /const PROTO_VER='v(\d+)/.exec(shell);
+  if (!found) throw new Error('В spec/prototype/src/js/ui/shell.js нет PROTO_VER');
+  return found[1];
+}
+
 /** Картинки лендинга из refDB.json и demoDB.json — как считает их прототип (modules/landing.js). */
-export function landingData(refDB = read('refDB.json'), demoDB = read('demoDB.json')) {
+export function landingData(
+  refDB = read('refDB.json'),
+  demoDB = read('demoDB.json'),
+  version = prototypeVersion(),
+) {
   const types = Object.fromEntries(refDB.reportTypes.map((t) => [t.id, t.short]));
   const look = refDB.statuses.report;
   const contractors = Object.fromEntries(
@@ -55,6 +70,7 @@ export function landingData(refDB = read('refDB.json'), demoDB = read('demoDB.js
       OPEN.has(r.status) ? 'open' : r.status === 'Сдан' ? 'done' : '',
     ]);
   return {
+    version,
     demo: {
       contractors,
       employees,
