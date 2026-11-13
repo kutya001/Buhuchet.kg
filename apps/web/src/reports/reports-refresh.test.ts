@@ -25,6 +25,12 @@ describe('refreshReports — что перечитывается после де
     for (const tab of ['all', 'mine', 'debtors'])
       expect(staleAfterRefresh(['list', `cps.${tab}`, { page: 1 }])).toBe(true);
     expect(staleAfterRefresh(['contractors', 'tab-counts'])).toBe(true);
+    expect(staleAfterRefresh(['contractors', 'summary'])).toBe(true);
+  });
+
+  it('число на вкладке «Файлы» и «История» открытой карточки контрагента', () => {
+    expect(staleAfterRefresh(['files', 'contractor', 'c1'])).toBe(true);
+    expect(staleAfterRefresh(['contractors', 'history', 'c1'])).toBe(true);
   });
 
   it('списки и карточки модуля «Отчеты для сдачи» — как раньше', () => {

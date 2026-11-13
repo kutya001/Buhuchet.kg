@@ -140,14 +140,12 @@ export const responsibleOptionsQuery = queryOptions({
   staleTime: 60_000,
 });
 
-/** Списки «Контрагентов»: вкладки модуля и «Отчёты к сдаче» карточки контрагента (`cps.reports`). */
-const CONTRACTOR_LISTS = ['all', 'mine', 'debtors', 'reports'] as const;
-
 /**
  * После действия с отчётом — перечитать карточки, списки вкладок и дня «Календаря», счётчики, сетку
  * «Кто что сдаёт», числа «Календаря» и блоки «Файлы»; у контрагента — «Отчёты к сдаче» карточки (сумма
  * к уплате и новый статус видны сразу, без переключения вкладок), число просроченных на вкладке,
- * «Деньги» и столбцы списка (прототип refreshAll: перерисовывает экран и все открытые карточки).
+ * «Деньги», «Файлы», «История» и столбцы списка (прототип refreshAll: перерисовывает экран и все
+ * открытые карточки).
  */
 export function refreshReports(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['reports', 'summary'] });
@@ -161,11 +159,18 @@ export function refreshReports(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['tasks'] });
   for (const tab of ['mine', 'byme', 'all', 'overdue'])
     void client.invalidateQueries({ queryKey: ['list', `tasks.${tab}`] });
-  for (const tab of CONTRACTOR_LISTS)
-    void client.invalidateQueries({ queryKey: ['list', `cps.${tab}`] });
+  // Списки «Контрагентов» — вкладки модуля и «Отчёты к сдаче» карточки: ключи `['list', 'cps.<вкладка>', …]`.
+  void client.invalidateQueries({
+    predicate: (q) =>
+      q.queryKey[0] === 'list' &&
+      typeof q.queryKey[1] === 'string' &&
+      q.queryKey[1].startsWith('cps.'),
+  });
   void client.invalidateQueries({ queryKey: ['contractors', 'card'] });
   void client.invalidateQueries({ queryKey: ['contractors', 'summary'] });
   void client.invalidateQueries({ queryKey: ['contractors', 'tab-counts'] });
+  void client.invalidateQueries({ queryKey: ['contractors', 'history'] });
+  void client.invalidateQueries({ queryKey: ['files', 'contractor'] });
   void client.invalidateQueries({ queryKey: ['money', 'contractor'] });
 }
 
