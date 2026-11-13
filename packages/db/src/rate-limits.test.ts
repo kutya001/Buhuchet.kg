@@ -1,7 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
-import { QUERY_TIMEOUT_MS, withOrgContext, type QueryKind } from './context';
+import {
+  IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  QUERY_TIMEOUT_MS,
+  withOrgContext,
+  type QueryKind,
+} from './context';
 import { queryTimedOut } from './errors';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { cleanupRateLimits, releaseRateLimit, takeRateLimit, type RateLimit } from './rate-limits';
@@ -90,6 +95,58 @@ describe.skipIf(!databaseAvailable())('защита тяжёлых запрос�
       expect(queryTimedOut(error)).toBe(true);
       expect(queryTimedOut(new Error('другая ошибка'))).toBe(false);
       expect(queryTimedOut({ cause: { code: '23505' } })).toBe(false);
+    });
+  });
+
+  describe('предел простоя открытой транзакции', () => {
+    const idle = sql`select current_setting('idle_in_transaction_session_timeout') as v`;
+
+    it.each<[QueryKind | undefined, string]>([
+      [undefined, '30s'],
+      ['request', '30s'],
+      ['export', '1min'],
+      ['job', '4min'],
+    ])('withOrgContext с видом работы %s — %s', async (kind, shown) => {
+      const ms = IDLE_IN_TRANSACTION_TIMEOUT_MS[kind ?? 'request'];
+      expect(ms % 60_000 === 0 ? `${ms / 60_000}min` : `${ms / 1000}s`).toBe(shown);
+      const value = await withOrgContext(
+        t.app.db,
+        { orgId: a.orgId, userId: a.ownerUserId, ...(kind ? { kind } : {}) },
+        async (tx) => (await tx.execute<{ v: string }>(idle))[0]!.v,
+      );
+      expect(value).toBe(shown);
+    });
+
+    it('withUserContext ставит тот же предел, после транзакции предела нет', async () => {
+      const read = (kind?: QueryKind) =>
+        withUserContext(
+          t.app.db,
+          a.ownerUserId,
+          async (tx) => (await tx.execute<{ v: string }>(idle))[0]!.v,
+          kind,
+        );
+      expect(await read()).toBe('30s');
+      expect(await read('job')).toBe('4min');
+      expect((await t.app.db.execute<{ v: string }>(idle))[0]!.v).toBe('0');
+    });
+
+    it('транзакция, простоявшая дольше предела, обрывается, а пул работает дальше', async () => {
+      const error = await withOrgContext(t.app.db, { orgId: a.orgId }, async (tx) => {
+        await tx.execute(sql`set local idle_in_transaction_session_timeout = 200`);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await tx.execute(sql`select 1`);
+        return 'не оборвалась';
+      }).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(Error);
+      // Соединение оборванной транзакции закрыто базой — пул открывает новое.
+      const rows = await Promise.all([
+        t.app.db.execute<{ n: number }>(sql`select 1 as n`),
+        t.app.db.execute<{ n: number }>(sql`select 2 as n`),
+        withOrgContext(t.app.db, { orgId: a.orgId }, async (tx) =>
+          tx.execute<{ n: number }>(sql`select 3 as n`),
+        ),
+      ]);
+      expect(rows.map((r) => r[0]!.n)).toEqual([1, 2, 3]);
     });
   });
 

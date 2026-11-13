@@ -19,6 +19,20 @@ export const QUERY_TIMEOUT_MS: Readonly<Record<QueryKind, number>> = {
   job: 240_000,
 };
 
+/**
+ * Предел простоя открытой транзакции (`idle_in_transaction_session_timeout`), миллисекунды. Транзакция,
+ * которая держит соединение и дольше этого ничего не выполняет, зависла: ждёт то, чего не дождётся
+ * (например, свободное соединение пула, занятого такими же транзакциями, docs/decisions.md п. О-46).
+ * База закрывает её соединение — транзакция откатывается, метод отвечает ошибкой, пул освобождается
+ * сам, а не стоит до перезапуска сайта (п. О-47). Обычная транзакция между запросами простаивает
+ * миллисекунды; предел — запас на медленное хранилище или Telegram внутри транзакции.
+ */
+export const IDLE_IN_TRANSACTION_TIMEOUT_MS: Readonly<Record<QueryKind, number>> = {
+  request: 30_000,
+  export: 60_000,
+  job: 240_000,
+};
+
 export interface OrgContext {
   orgId: string;
   userId?: string | null;
@@ -28,8 +42,8 @@ export interface OrgContext {
 
 /**
  * Транзакция от имени организации: задаёт `app.org_id` и `app.user_id` (как SET LOCAL),
- * по которым работают политики RLS, и предел времени запросов по виду работы. Все запросы к данным
- * организаций идут только так.
+ * по которым работают политики RLS, и пределы времени по виду работы — запроса и простоя транзакции.
+ * Все запросы к данным организаций идут только так.
  */
 export async function withOrgContext<T>(
   db: Db,
@@ -44,7 +58,7 @@ export async function withOrgContext<T>(
   });
 }
 
-/** `set_config` предела времени запросов до конца транзакции. */
+/** `set_config` пределов времени до конца транзакции: запроса и простоя между запросами. */
 export function timeoutSetting(kind: QueryKind = 'request') {
-  return sql`set_config('statement_timeout', ${String(QUERY_TIMEOUT_MS[kind])}, true)`;
+  return sql`set_config('statement_timeout', ${String(QUERY_TIMEOUT_MS[kind])}, true), set_config('idle_in_transaction_session_timeout', ${String(IDLE_IN_TRANSACTION_TIMEOUT_MS[kind])}, true)`;
 }
