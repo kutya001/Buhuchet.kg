@@ -485,6 +485,7 @@ export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListCo
       display: contractors.name,
       searchDisplay: sql`coalesce(${contractors.name}, ${t('files.cp.general')})`,
       sort: { value: contractors.name, text: true },
+      digits: contractors.inn,
     },
     date: {
       type: 'date',

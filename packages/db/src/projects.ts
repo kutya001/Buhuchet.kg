@@ -168,6 +168,7 @@ export function projectListColumns(t: ListTexts, money: boolean): ListColumns {
       value: projects.contractorId,
       display: contractors.name,
       sort: { value: contractors.name, text: true },
+      digits: contractors.inn,
     },
     status: {
       type: 'enum',

@@ -593,6 +593,7 @@ export function taskListColumns(t: ListTexts): ListColumns {
       // (ТЗ «Задачи» → «Общие задачи в списке»).
       searchDisplay: sql`coalesce(${contractors.name}, ${dictLiteral(t('task.cp.general'))})`,
       exportDisplay: contractors.name,
+      digits: contractors.inn,
       // «Общие задачи» — первыми (прототип: pin), остальные — по названию по-русски.
       sort: {
         value: sql`(${TL.contractorId} is not null, ${contractors.name} collate app.ru_natural)`,
