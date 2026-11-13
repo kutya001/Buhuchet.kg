@@ -126,8 +126,9 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
 
   it('п. 8: одно сообщение за 3 дня до срока со всеми своими отчётами, в понедельник — сводка на неделю; повтор — без дублей', async () => {
     await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
+    // Сообщение дня и следом — по сообщению с кнопками на каждый свой отчёт (поток Т, задача Т2).
     const mine = to(CHAT.acc);
-    expect(mine).toHaveLength(1);
+    expect(mine).toHaveLength(3);
     const text = mine[0]!;
     expect(text).toContain('⏰ Через 3 дн. срок сдачи: ');
     expect(text).toContain('1-Т за Сентябрь 2026 — ОсОО «Ала-Тоо Трейд»');
@@ -143,7 +144,7 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
     clock.advance(60_000);
     await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
-    expect(tg.sent).toHaveLength(2);
+    expect(tg.sent).toHaveLength(4);
     clock.set('2026-10-19T03:00:00Z');
   });
 

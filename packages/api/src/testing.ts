@@ -81,19 +81,46 @@ let nextUpdateId = 1;
 
 /** Обновление Telegram с текстом в личном чате — как его присылает вебхук. */
 export function telegramUpdate(
-  text: string,
+  text: string | null,
   chatId: number,
-  options: { username?: string; firstName?: string; chatType?: string; isBot?: boolean } = {},
+  options: {
+    username?: string;
+    firstName?: string;
+    chatType?: string;
+    isBot?: boolean;
+    fromId?: number;
+    /** Ответ на сообщение бота с этим номером. */
+    replyTo?: number;
+    /** Документ: номер файла у Telegram, имя и размер со слов Telegram. */
+    document?: { fileId: string; name?: string; size?: number };
+    /** Фото: размеры одной картинки, как их присылает Telegram. */
+    photo?: { fileId: string; size: number }[];
+    caption?: string;
+  } = {},
 ) {
   return {
     update_id: nextUpdateId++,
     message: {
       message_id: nextUpdateId,
       date: 1_792_972_800,
-      text,
+      ...(text === null ? {} : { text }),
+      ...(options.caption ? { caption: options.caption } : {}),
+      ...(options.replyTo ? { reply_to_message: { message_id: options.replyTo } } : {}),
+      ...(options.document
+        ? {
+            document: {
+              file_id: options.document.fileId,
+              ...(options.document.name ? { file_name: options.document.name } : {}),
+              ...(options.document.size === undefined ? {} : { file_size: options.document.size }),
+            },
+          }
+        : {}),
+      ...(options.photo
+        ? { photo: options.photo.map((p) => ({ file_id: p.fileId, file_size: p.size })) }
+        : {}),
       chat: { id: chatId, type: options.chatType ?? 'private' },
       from: {
-        id: chatId,
+        id: options.fromId ?? chatId,
         is_bot: options.isBot ?? false,
         first_name: options.firstName ?? 'Тест',
         ...(options.username ? { username: options.username } : {}),
