@@ -146,7 +146,7 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
     const card = orgId
       ? await withOrgContext(deps.db, { orgId, userId: adminId }, async (tx) => {
           await logUserCardView(tx, id, refresh);
-          return adminEmployeeCard(tx, deps.db, { userId: id, orgId, now });
+          return adminEmployeeCard(tx, { userId: id, orgId, now });
         })
       : await withUserContext(deps.db, adminId, async (tx) => {
           await logAdminCardView(tx, id, refresh);

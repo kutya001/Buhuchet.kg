@@ -1,8 +1,8 @@
-import { schema, type Db } from '@buhuchet/db';
+import { createDb, schema, type Db } from '@buhuchet/db';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
 import { UI_TEXTS } from '@buhuchet/domain';
 import { ApiError, UiDictionary } from '@buhuchet/shared';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import { createTestDeps } from '../../testing';
@@ -26,6 +26,62 @@ function failingDb(): Db {
   });
   return chain as Db;
 }
+
+/** База без строк, которая считает запросы; ответ приходит не сразу — запросы успевают совпасть. */
+function countingDb(): { db: Db; queries: () => number } {
+  let count = 0;
+  const chain: object = new Proxy(() => chain, {
+    get: (_target, prop) =>
+      prop === 'then'
+        ? (resolve: (rows: unknown[]) => void) => {
+            count += 1;
+            setTimeout(() => resolve([]), 5);
+          }
+        : chain,
+    apply: () => chain,
+  });
+  return { db: chain as Db, queries: () => count };
+}
+
+describe('словарь текстов: сверка с базой', () => {
+  it('одновременные запросы ждут одну общую сверку, а не каждый свою', async () => {
+    const { db, queries } = countingDb();
+    const deps = createTestDeps({ db });
+    const texts = await Promise.all([serverTexts(deps), serverTexts(deps), serverTexts(deps)]);
+    // Отметка текстов, отметка цветов, тексты и цвета — один раз на троих.
+    expect(queries()).toBe(4);
+    for (const t of texts) expect(t('health.title')).toBe(UI_TEXTS['health.title'].ru);
+    // Следующая сверка — только отметки: словарь не изменился.
+    await serverTexts(deps);
+    expect(queries()).toBe(6);
+  });
+
+  it('сверка идёт по своему соединению словаря, пул методов не занят', async () => {
+    const pool = countingDb();
+    const own = countingDb();
+    const text = await serverTexts(createTestDeps({ db: pool.db, textsDb: own.db }));
+    expect(text('health.title')).toBe(UI_TEXTS['health.title'].ru);
+    expect(pool.queries()).toBe(0);
+    expect(own.queries()).toBe(4);
+  });
+
+  it('сверка упала — ошибку получают все, кто её ждал, а следующая идёт заново', async () => {
+    const { db, queries } = countingDb();
+    let broken = true;
+    const flaky = new Proxy(db, {
+      get: (target, prop, receiver) => {
+        if (broken) throw new Error('база недоступна');
+        return Reflect.get(target, prop, receiver) as unknown;
+      },
+    });
+    const deps = createTestDeps({ db: flaky });
+    const failed = await Promise.allSettled([serverTexts(deps), serverTexts(deps)]);
+    expect(failed.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    broken = false;
+    expect((await serverTexts(deps))('health.title')).toBe(UI_TEXTS['health.title'].ru);
+    expect(queries()).toBe(4);
+  });
+});
 
 describe('словарь текстов: без базы', () => {
   const app = createApp(createTestDeps({ db: failingDb() }));
@@ -119,6 +175,37 @@ describe.skipIf(!databaseAvailable())('словарь текстов интер�
     expect(removed.version).not.toBe(added.version);
     expect(removed.texts['health.title']).toBe(UI_TEXTS['health.title'].ru);
   });
+
+  it('тексты внутри транзакций, занявших весь пул: словарь идёт по своему соединению и не зависает', async () => {
+    const pool = createDb(t.appUrl, { max: 2, applicationName: 'buhuchet-test-pool' });
+    const own = createDb(t.appUrl, { max: 1, applicationName: 'buhuchet-test-l10n' });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const deps = createTestDeps({ db: pool.db, textsDb: own.db });
+      // Обе транзакции открыты и держат оба соединения пула — и только тогда им нужны тексты. По
+      // соединению пула сверка словаря не дождалась бы свободного никогда.
+      let opened = 0;
+      let release!: () => void;
+      const bothOpen = new Promise<void>((resolve) => (release = resolve));
+      const inTransaction = () =>
+        pool.db.transaction(async (tx) => {
+          await tx.execute(sql`select 1`);
+          opened += 1;
+          if (opened === 2) release();
+          await bothOpen;
+          return (await serverTexts(deps))('health.title');
+        });
+      const stuck = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('словарь ждёт соединение пула')), 10_000);
+      });
+      const texts = await Promise.race([Promise.all([inTransaction(), inTransaction()]), stuck]);
+      expect(texts).toHaveLength(2);
+      expect(texts[0]).toBe(texts[1]);
+    } finally {
+      clearTimeout(timer);
+      await Promise.all([pool.close(), own.close()]);
+    }
+  }, 30_000);
 
   it('с базой словарь сверяется не чаще заданного: в промежутке отдаётся из памяти', async () => {
     const slow = createApp(createTestDeps({ db: t.app.db, l10nRecheckMs: 60_000 }));

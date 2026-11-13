@@ -4,8 +4,8 @@ import { DEFAULT_UI_LANGUAGE, defaultUiTexts, type UiLanguage } from '@buhuchet/
 import type { UiDictionary } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 
-/** Что нужно словарю: база и частота сверки (у задач по расписанию — по умолчанию). */
-type TextDeps = Pick<ApiDeps, 'db' | 'l10nRecheckMs'>;
+/** Что нужно словарю: база, своё соединение и частота сверки (у задач — по умолчанию). */
+type TextDeps = Pick<ApiDeps, 'db' | 'textsDb' | 'l10nRecheckMs'>;
 
 /** Тексты экранов продукта по умолчанию (`UI_TEXTS`): под ними — тексты базы. */
 export const DEFAULT_TEXTS = defaultUiTexts();
@@ -45,24 +45,31 @@ function edits(): Map<UiLanguage, number> {
  * умолчанию. Не чаще раза в секунду он сверяется с отметкой базы (число текстов и хеш) и
  * перечитывается, только когда она изменилась. Им пользуются метод словаря для экранов и методы,
  * которым нужны подписи на сервере (поиск по подписям статусов, заголовки выгрузки в Excel).
+ *
+ * Сверка идёт по своему соединению (`deps.textsDb`), а не по пулу методов: тексты нужны и внутри
+ * открытых транзакций, и запрос к пулу, все соединения которого заняты такими же транзакциями, не
+ * дождался бы соединения никогда — вместе с ним навсегда встали бы и они. Одновременные запросы
+ * ждут одну общую сверку, а не встают за своей каждый.
  */
 export function uiDictionary(deps: TextDeps): LoadDictionary {
   const existing = loaders.get(deps);
   if (existing) return existing;
   const recheckMs = deps.l10nRecheckMs ?? RECHECK_MS;
+  const db = deps.textsDb ?? deps.db;
   const cache = new Map<
     UiLanguage,
     { stamp: string; checkedAt: number; edits: number; body: UiDictionary }
   >();
 
-  const load: LoadDictionary = async (lang) => {
+  /** Сверка, которая сейчас идёт: её ждут все, кто пришёл за тем же словарём (язык и число правок). */
+  const checking = new Map<UiLanguage, { edits: number; result: Promise<UiDictionary> }>();
+
+  const recheck = async (lang: UiLanguage, edited: number): Promise<UiDictionary> => {
     const cached = cache.get(lang);
     const now = Date.now();
-    const edited = edits().get(lang) ?? 0;
-    if (cached && cached.edits === edited && now - cached.checkedAt < recheckMs) return cached.body;
     // Цвета статусов из Админки едут вместе с текстами (`tone.<шкала>.<код>`): шкалы и метки всех
     // экранов берут цвет из словаря.
-    const stamp = `${await uiTextsStamp(deps.db, lang)}|${await statusTonesStamp(deps.db)}`;
+    const stamp = `${await uiTextsStamp(db, lang)}|${await statusTonesStamp(db)}`;
     if (cached?.stamp === stamp) {
       Object.assign(cached, { checkedAt: now, edits: edited });
       return cached.body;
@@ -72,12 +79,27 @@ export function uiDictionary(deps: TextDeps): LoadDictionary {
       version: versionOf(lang, stamp),
       texts: {
         ...DEFAULT_TEXTS,
-        ...(await loadUiTexts(deps.db, lang)),
-        ...(await statusToneTexts(deps.db)),
+        ...(await loadUiTexts(db, lang)),
+        ...(await statusToneTexts(db)),
       },
     };
     cache.set(lang, { stamp, checkedAt: now, edits: edited, body });
     return body;
+  };
+
+  const load: LoadDictionary = (lang) => {
+    const cached = cache.get(lang);
+    const edited = edits().get(lang) ?? 0;
+    if (cached && cached.edits === edited && Date.now() - cached.checkedAt < recheckMs) {
+      return Promise.resolve(cached.body);
+    }
+    const running = checking.get(lang);
+    if (running?.edits === edited) return running.result;
+    const result = recheck(lang, edited).finally(() => {
+      if (checking.get(lang)?.result === result) checking.delete(lang);
+    });
+    checking.set(lang, { edits: edited, result });
+    return result;
   };
   loaders.set(deps, load);
   return load;

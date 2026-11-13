@@ -56,7 +56,8 @@ export async function buildDailyReminders(
     loadReminderData(tx, day),
     productionCalendarEntries(tx),
     serverTexts(ctx),
-    messageTemplates(ctx.db),
+    // Тем же соединением, что и вся транзакция организации: запрос к пулу внутри неё ждал бы свободное.
+    messageTemplates(tx),
   ]);
   const calendar = productionCalendar(entries);
   const tr: Translate = (key, params) => formatText(t(key), params);
