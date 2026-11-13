@@ -5,6 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext, type OrgContext } from './context';
 import {
+  changeFile,
   dropPendingFile,
   dropPendingFiles,
   getFile,
@@ -176,14 +177,15 @@ describe.skipIf(!databaseAvailable())('файлы организации: таб
     ).rejects.toThrow();
   });
 
-  it('имя, размер, место в хранилище и источник после создания не меняются', async () => {
+  it('источник, автор и время загрузки после создания не меняются', async () => {
     const file = await readyFile();
     for (const set of [
-      { name: 'другое.pdf' },
-      { sizeBytes: 1 },
-      { storageKey: `org/${a.orgId}/files/${randomUUID()}` },
       { sourceKind: 'report' },
+      { sourceId: randomUUID() },
       { createdBy: chiefUserId },
+      { createdAt: new Date() },
+      { replacesId: file.id },
+      { orgId: b.orgId },
     ]) {
       await expect(
         withOrgContext(t.app.db, ctxA(), (tx) =>
@@ -231,6 +233,83 @@ describe.skipIf(!databaseAvailable())('файлы организации: таб
       sql`select ${dictLiteral('a\0b')}::text as v`,
     );
     expect(row!.v).toBe('ab');
+  });
+
+  it('«Изменить файл» (прототип v95): название и примечание — с версией; замена — номер прежний, ключ, размер и тип от загрузки-замены', async () => {
+    const file = await readyFile(ctxA(), { name: 'скан.pdf', note: 'было' });
+    const change = (version: number, c: Parameters<typeof changeFile>[3], ctx = ctxChief()) =>
+      withOrgContext(t.app.db, ctx, (tx) => changeFile(tx, file.id, version, c));
+    await expect(change(1, { name: 'x.pdf', note: null })).rejects.toThrow(RecordChangedError);
+    expect(await change(2, { name: 'Договор.pdf', note: null })).toBeNull();
+    let [row] = await t.admin.db.select().from(files).where(eq(files.id, file.id));
+    expect(row).toMatchObject({
+      name: 'Договор.pdf',
+      note: null,
+      version: 3,
+      updatedBy: chiefUserId,
+      storageKey: file.storageKey,
+      replacedAt: null,
+    });
+    // Загрузка-замена: начатая загрузка с отметкой, какой файл она заменит.
+    const upload = newFile(a, {
+      name: 'новый.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 77,
+      replacesId: file.id,
+    });
+    const other = await readyFile();
+    const stray = newFile(a);
+    await withOrgContext(t.app.db, ctxChief(), async (tx) => {
+      await insertPendingFile(tx, upload);
+      await insertPendingFile(tx, stray);
+    });
+    // Обычная загрузка и замена другого файла не подходят; файл остаётся как был.
+    await expect(
+      change(3, { name: 'Договор.jpg', note: null, replacementId: stray.id }),
+    ).rejects.toThrow(RecordNotFoundError);
+    await expect(
+      withOrgContext(t.app.db, ctxChief(), (tx) =>
+        changeFile(tx, other.id, 2, { name: 'x.jpg', note: null, replacementId: upload.id }),
+      ),
+    ).rejects.toThrow(RecordNotFoundError);
+    // Загрузка-замена файлом записи не становится.
+    await expect(
+      withOrgContext(t.app.db, ctxChief(), (tx) => markFileReady(tx, upload.id)),
+    ).rejects.toThrow(violation('files_replaces_check'));
+    const oldKey = await change(3, { name: 'Договор.jpg', note: 'цветной', replacementId: upload.id });
+    expect(oldKey).toBe(file.storageKey);
+    [row] = await t.admin.db.select().from(files).where(eq(files.id, file.id));
+    expect(row).toMatchObject({
+      name: 'Договор.jpg',
+      note: 'цветной',
+      contentType: 'image/jpeg',
+      sizeBytes: 77,
+      storageKey: upload.storageKey,
+      replacedBy: chiefUserId,
+      createdBy: a.ownerUserId,
+      state: 'ready',
+      version: 4,
+    });
+    expect(row!.replacedAt).toBeInstanceOf(Date);
+    expect(await t.admin.db.select().from(files).where(eq(files.id, upload.id))).toEqual([]);
+    // Ключ хранилища — только в папке файлов своей организации; отметка «заменён» — и кто, и когда.
+    const set = (values: Partial<typeof files.$inferInsert>) =>
+      withOrgContext(t.app.db, ctxChief(), (tx) =>
+        tx.update(files).set(values).where(eq(files.id, file.id)),
+      );
+    await expect(set({ storageKey: `org/${b.orgId}/files/${randomUUID()}` })).rejects.toThrow(
+      violation('files_key_check'),
+    );
+    await expect(set({ storageKey: `org/${a.orgId}/logo/${randomUUID()}` })).rejects.toThrow(
+      violation('files_key_check'),
+    );
+    await expect(set({ replacedBy: null })).rejects.toThrow(violation('files_replaced_check'));
+    // Чужая организация файл не меняет.
+    await expect(
+      withOrgContext(t.app.db, { orgId: b.orgId, userId: b.ownerUserId }, (tx) =>
+        changeFile(tx, file.id, 4, { name: 'чужое.jpg', note: null }),
+      ),
+    ).rejects.toThrow(RecordNotFoundError);
   });
 
   it('удаление: отметка с автором и временем, устаревшая версия — «изменено другим»', async () => {

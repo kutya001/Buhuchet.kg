@@ -77,6 +77,12 @@ export const FILE_MESSAGES = {
   file_not_uploaded: 'Файл не загрузился. Попробуйте ещё раз',
   file_upload_limit: 'Слишком много загрузок за час. Попробуйте позже',
   files_off: 'Файлы в карточках выключены в учётной политике',
+  // Окно «Изменить файл» (прототип v95 `fileEditDlg`).
+  file_name_empty: 'Укажите название файла',
+  file_name_chars: 'В названии нельзя использовать знаки \\ / : * ? " < > |',
+  file_name_long: 'Название длиннее 255 знаков',
+  file_replace_forbidden:
+    'Заменить файл может тот, у кого есть право «Удалять файлы»; свой файл — в течение суток после загрузки',
   file_no_preview: 'Этот файл не открывается в окне: скачайте его',
 } as const;
 export type FileProblem = keyof typeof FILE_MESSAGES;
@@ -155,6 +161,39 @@ export function fileUploadProblem(file: { name: string; size: number }): FilePro
   }
   if (FILE_BLOCKED_EXTENSIONS.has(fileExtension(name) ?? '')) return 'file_type_forbidden';
   return file.size > FILE_MAX_BYTES ? 'file_too_large' : null;
+}
+
+/**
+ * Название и расширение файла (прототип v95 `fileEditDlg`, `cut`): «Договор.pdf» → «Договор» и «.pdf»;
+ * без расширения — всё имя и пустая строка. Окно «Изменить файл» меняет только название.
+ */
+export function fileNameParts(name: string): [base: string, ext: string] {
+  const i = name.lastIndexOf('.');
+  return i > 0 ? [name.slice(0, i), name.slice(i)] : [name, ''];
+}
+
+/** Примечание к файлу, как его хранят: пробелы и переносы — одним пробелом (прототип `fNoteClean`). */
+export function cleanFileNote(note: string): string {
+  return note.replace(/\s+/g, ' ').trim();
+}
+
+/** Знаки, которых не бывает в названии файла на диске (прототип v95 `fileEditDlg`). */
+const NAME_FORBIDDEN = /[\\/:*?"<>|]/;
+
+/**
+ * Что не так с новым названием файла (окно «Изменить файл», прототип v95 `fileEditDlg`): `base` —
+ * название без расширения, `ext` — расширение файла с точкой (прежнее, при замене — нового файла):
+ * его правка не меняет, иначе у файла сменился бы тип. Название, из-за которого расширение стало бы
+ * другим («Акт.exe» у файла без расширения), — неверное имя.
+ */
+export function fileRenameProblem(base: string, ext: string): FileProblem | null {
+  const name = base.replace(/\s+/g, ' ').trim();
+  if (!name) return 'file_name_empty';
+  if (NAME_FORBIDDEN.test(name)) return 'file_name_chars';
+  const full = name + ext;
+  if (full.length > FILE_NAME_MAX_LENGTH) return 'file_name_long';
+  if (fileNameParts(full)[1] !== ext) return 'file_name_invalid';
+  return fileUploadProblem({ name: full, size: 0 });
 }
 
 /**

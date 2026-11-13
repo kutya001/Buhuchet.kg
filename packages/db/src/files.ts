@@ -32,7 +32,7 @@ import {
 } from './schema';
 import { dictLiteral, textLiteral } from './sql-text';
 
-/** Описание файла организации (без комментария ручной загрузки — он у Файлового менеджера). */
+/** Описание файла организации. */
 export interface FileRecord {
   id: string;
   sourceKind: string;
@@ -42,6 +42,10 @@ export interface FileRecord {
   contentType: string;
   sizeBytes: number;
   storageKey: string;
+  /** Примечание к файлу (прототип v95). */
+  note: string | null;
+  /** У начатой загрузки-замены — файл, который она заменит (прототип v95, «Заменить файл»). */
+  replacesId: string | null;
   state: FileState;
   /** Скрыт со страницы контрагента (решение заказчика 06.11.2026). */
   pageHidden: boolean;
@@ -62,6 +66,8 @@ const columns = {
   contentType: files.contentType,
   sizeBytes: files.sizeBytes,
   storageKey: files.storageKey,
+  note: files.note,
+  replacesId: files.replacesId,
   state: files.state,
   pageHidden: files.pageHidden,
   createdBy: files.createdBy,
@@ -86,10 +92,12 @@ export interface NewFile {
   contentType: string;
   sizeBytes: number;
   storageKey: string;
-  /** Комментарий ручной загрузки (Файловый менеджер). */
+  /** Примечание к файлу (прототип v95: у любого прикрепляемого файла). */
   note?: string | null;
   /** Не показывать на странице контрагента (галочка окна «Загрузить файл» снята). */
   pageHidden?: boolean;
+  /** Загрузка-замена: файл, который она заменит. */
+  replacesId?: string | null;
 }
 
 export async function insertPendingFile(tx: Tx, file: NewFile): Promise<void> {
@@ -188,6 +196,61 @@ export async function markFileDeleted(tx: Tx, id: string, version: number): Prom
       updatedBy: sql`app.current_user_id()`,
     })
     .where(and(eq(files.id, id), eq(files.version, version)));
+}
+
+/** Что сохраняет окно «Изменить файл» (прототип v95 `fileEditDlg`). */
+export interface FileChange {
+  name: string;
+  note: string | null;
+  /** Номер загрузки-замены: её ключ хранилища, размер и тип переходят к файлу. */
+  replacementId?: string;
+}
+
+/**
+ * «Изменить файл» с защитой от одновременной правки: название, примечание и, при замене, содержимое.
+ * Номер файла при замене остаётся прежним (на него ссылаются «История статусов» и история записи):
+ * к файлу переходят ключ хранилища, размер и тип загрузки-замены, её строка стирается, ставится
+ * отметка «заменён: кто и когда». Ответ — ключ прежнего файла в хранилище (его удаляют после
+ * фиксации) или null. Устаревшая версия — `RecordChangedError`; нет файла или загрузки-замены этого
+ * файла — `RecordNotFoundError`.
+ */
+export async function changeFile(
+  tx: Tx,
+  id: string,
+  version: number,
+  change: FileChange,
+): Promise<string | null> {
+  const current = await getFile(tx, id, { lock: true });
+  if (!current || current.state !== 'ready') throw new RecordNotFoundError('file', id);
+  if (current.version !== version) throw new RecordChangedError('file', id, current.version);
+  let content = {};
+  if (change.replacementId) {
+    const upload = await getFile(tx, change.replacementId, { lock: true });
+    if (!upload || upload.state !== 'pending' || upload.replacesId !== id) {
+      throw new RecordNotFoundError('file', change.replacementId);
+    }
+    // Ключ хранилища уникален: сначала стереть строку загрузки, потом отдать её ключ файлу.
+    await dropPendingFile(tx, upload.id);
+    content = {
+      storageKey: upload.storageKey,
+      sizeBytes: upload.sizeBytes,
+      contentType: upload.contentType,
+      replacedAt: sql`now()`,
+      replacedBy: sql`app.current_user_id()`,
+    };
+  }
+  await tx
+    .update(files)
+    .set({
+      name: change.name,
+      note: change.note,
+      ...content,
+      version: sql`${files.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(and(eq(files.id, id), eq(files.version, version)));
+  return change.replacementId ? current.storageKey : null;
 }
 
 /**
@@ -548,6 +611,11 @@ function rowFields(parts: FileListParts) {
     createdBy: files.createdBy,
     createdByName: uploader.shortName,
     createdAt: files.createdAt,
+    replacedAt: files.replacedAt,
+    replacedBy: files.replacedBy,
+    replacedByName: sql<
+      string | null
+    >`(select e.short_name from employees e where e.user_id = ${files.replacedBy})`,
     updatedAt: files.updatedAt,
     version: files.version,
   };
@@ -587,6 +655,8 @@ export interface FileManagerRow {
   createdBy: string;
   uploadedBy: string | null;
   createdAt: Date;
+  /** Кто и когда заменил файл (прототип v95); файл не заменяли — null. */
+  replaced: { by: string | null; at: Date } | null;
   updatedAt: Date;
   version: number;
 }
@@ -616,6 +686,12 @@ function toRow(r: RowData): FileManagerRow {
     createdBy: r.createdBy as string,
     uploadedBy: auditActorName(r.createdBy as string, r.createdByName as string | null),
     createdAt: r.createdAt as Date,
+    replaced: r.replacedAt
+      ? {
+          by: auditActorName(r.replacedBy as string, r.replacedByName as string | null),
+          at: r.replacedAt as Date,
+        }
+      : null,
     updatedAt: r.updatedAt as Date,
     version: r.version as number,
   };
