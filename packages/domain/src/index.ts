@@ -64,6 +64,7 @@ export * from './reports/assignment';
 export * from './reports/compatible';
 export * from './reports/submit';
 export * from './reports/calendar';
+export * from './reports/month-plan';
 export * from './tasks/rules';
 export * from './money/requisites';
 export * from './money/tax';

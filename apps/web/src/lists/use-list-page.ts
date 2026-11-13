@@ -58,6 +58,7 @@ export function useListPage<Row>({
   extra,
   initialFilters,
   kanban,
+  searchAlso,
 }: {
   gridKey: GridKey;
   /**
@@ -84,6 +85,11 @@ export function useListPage<Row>({
   initialFilters?: Readonly<Filters>;
   /** Доска списка (тот же проп `kanban` у `DataGrid`): в виде «Доска» записи приходят по её столбцам. */
   kanban?: BoardChoice;
+  /**
+   * Столбцы, по которым поиск идёт и тогда, когда они скрыты: значение видно на экране иначе —
+   * заголовком группы (контрагент во вкладке «По месяцам» отчётов).
+   */
+  searchAlso?: readonly string[];
 }) {
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<Filters>(() => ({ ...initialFilters }));
@@ -111,7 +117,14 @@ export function useListPage<Row>({
     page: current,
     size: pageSizeOf(settings),
     filters,
-    ...(q ? { search: { q, keys: visible } } : {}),
+    ...(q
+      ? {
+          search: {
+            q,
+            keys: searchAlso ? [...new Set([...visible, ...searchAlso])] : visible,
+          },
+        }
+      : {}),
     ...(group.length
       ? { group, agg: groupAggs(all, visible, board !== null ? {} : settings) }
       : {}),

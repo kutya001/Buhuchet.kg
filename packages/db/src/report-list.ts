@@ -5,17 +5,20 @@ import {
   OPEN_REPORT_STATUSES,
   rateText,
   rateVariants,
+  REPORT_MONTH_SHIFT,
   reportWeek,
   SINGLE_TAX_TYPES,
   type AssignmentRate,
   type IsoDate,
   type ListQuery,
+  type MonthPlanReport,
   type ReportAct,
   type ReportPeriod,
   type PaymentStatus,
   type ReportFunds,
   type ReportStatus,
   type Translate,
+  type YearMonth,
 } from '@buhuchet/domain';
 import { and, asc, desc, eq, ne, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
@@ -54,7 +57,7 @@ import {
 } from './schema';
 import type { FileListPart } from './files';
 import { FUNDS_STATE, PAYMENT_STATUS, RECEIVED, REPORT_MONEY, rmField } from './money-tax';
-import { dateLiteral, dictLiteral, textLiteral } from './sql-text';
+import { dateLiteral, dictLiteral, monthLiteral, textLiteral } from './sql-text';
 import type { AuditRecord } from './staff';
 import { readStatusHistory, type StatusHistoryItem } from './status';
 
@@ -527,8 +530,11 @@ export function reportListColumns(
   };
 }
 
-/** Вкладки списка (прототип repTabs); «Календарь» — отчёты выбранного дня (прототип `S.calSel`). */
-export const REPORT_TABS = ['week', 'overdue', 'waiting', 'all', 'calendar'] as const;
+/**
+ * Вкладки списка (прототип repTabs); «Календарь» — отчёты выбранного дня (прототип `S.calSel`), «По
+ * месяцам» — отчёты выбранного месяца (прототип v90 `S.rmM`).
+ */
+export const REPORT_TABS = ['week', 'overdue', 'waiting', 'all', 'calendar', 'months'] as const;
 export type ReportTab = (typeof REPORT_TABS)[number];
 
 /**
@@ -554,6 +560,8 @@ export interface ReportListOptions {
   contractorId?: string | null;
   /** Вкладка «Календарь»: день и включён ли «Учёт оплаты налогов» (тогда — и оплаты с этим сроком). */
   day?: { date: IsoDate; taxpay: boolean };
+  /** Вкладка «По месяцам»: месяц отчётов (`reportMonth` домена). */
+  month?: YearMonth;
   /** «Учёт оплаты налогов» включён: просрочка оплаты во вкладках «Просрочено» и «На неделе». */
   taxpay: boolean;
 }
@@ -656,21 +664,41 @@ function dayCondition(day: NonNullable<ReportListOptions['day']>): SQL {
   return sql`(${reports.dueDate} = ${dateLiteral(day.date)}${pay})`;
 }
 
+/**
+ * Месяц отчёта `YYYY-MM` (правило `reportMonth` домена, прототип v90 `rmYm`): месяц, которым
+ * заканчивается период; у отчёта по событию — месяц события.
+ */
+const REPORT_MONTH = sql`to_char(coalesce(${reports.eventDate}, (${reports.periodStart} + (case ${reports.period} ${sql.join(
+  Object.entries(REPORT_MONTH_SHIFT).map(
+    ([period, shift]) => sql`when ${textLiteral(period)} then ${sql.raw(String(shift))}`,
+  ),
+  sql` `,
+)} else 0 end) * interval '1 month')::date), 'YYYY-MM')`;
+
+/**
+ * Отчёты месяца «По месяцам» (прототип v90 `rmRender`, `rmPlan`): месяц отчёта — выбранный, без «Не
+ * требуется» (прежних версий в списке нет).
+ */
+function monthCondition(month: YearMonth): SQL {
+  return sql`(${reports.status} <> 'not_required' and ${REPORT_MONTH} = ${monthLiteral(month)})`;
+}
+
 function tabCondition(
-  o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting' | 'day' | 'taxpay'>,
+  o: Pick<ReportListOptions, 'tab' | 'today' | 'waiting' | 'day' | 'month' | 'taxpay'>,
 ): SQL | undefined {
   if (o.tab === 'week') return weekCondition(o.today, o.taxpay);
   if (o.tab === 'overdue')
     return sql`(${overdueOf(o.today)} or ${payOverdueOf(o.today, o.taxpay)})`;
   if (o.tab === 'waiting') return waitingCondition(o.waiting);
   if (o.tab === 'calendar') return o.day ? dayCondition(o.day) : sql`false`;
+  if (o.tab === 'months') return o.month ? monthCondition(o.month) : sql`false`;
   return undefined;
 }
 
 function listScope(
   o: Pick<
     ReportListOptions,
-    'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'contractorId' | 'day' | 'taxpay'
+    'scope' | 'tab' | 'today' | 'quick' | 'waiting' | 'contractorId' | 'day' | 'month' | 'taxpay'
   >,
 ): SQL | undefined {
   return and(
@@ -1107,6 +1135,39 @@ export async function reportSummary(
     quick,
     empty: Boolean(r.empty),
   };
+}
+
+/** Отчёт месяца для правила «По месяцам» (`monthPlanItem` домена) и его контрагент. */
+export type ReportMonthPlanRow = MonthPlanReport & { contractorId: string };
+
+/**
+ * Отчёты месяца в области сотрудника — только то, что нужно правилу «к сдаче и к оплате по месяцам»
+ * (`monthPlanGroup`, `monthPlanQuick` домена; прототип v90 `rmRender`: итог месяца и числа «Все / Сдать
+ * / Уплатить»). Те же отчёты, что в списке вкладки «По месяцам»: без прежних версий и «Не требуется».
+ */
+export async function reportMonthPlanRows(
+  tx: Tx,
+  o: { scope: SQL | undefined; today: IsoDate; taxpay: boolean; month: YearMonth },
+): Promise<ReportMonthPlanRow[]> {
+  return tx
+    .select({
+      id: reports.id,
+      contractorId: reports.contractorId,
+      act: reports.act,
+      status: reports.status,
+      period: reports.period,
+      periodStart: reports.periodStart,
+      eventDate: reports.eventDate,
+      dueDate: reports.dueDate,
+      payDue: reports.payDue,
+      amount: reports.amount,
+      paid: reports.paid,
+      overdue: sql<boolean>`${overdueOf(o.today)}`,
+      payOverdue: sql<boolean>`${payOverdueOf(o.today, o.taxpay)}`,
+    })
+    .from(reports)
+    .innerJoin(contractors, eq(contractors.id, reports.contractorId))
+    .where(and(eq(reports.superseded, false), o.scope, monthCondition(o.month)));
 }
 
 /**
