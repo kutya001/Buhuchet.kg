@@ -131,7 +131,7 @@ export function SpiralIcon() {
       height="16"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.75"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -344,9 +344,6 @@ const FEATURE_PARTS: readonly ReactNode[] = [
     <path className="f12-t" d="M21.5 9.5v5.5" />
   </g>,
 ];
-
-/** Сколько функций в блоке «Возможности» — у каждой свой значок. */
-export const FEATURE_COUNT = FEATURE_PARTS.length;
 
 /** Значок функции блока «Возможности»: `n` — номер функции с единицы. */
 export function FeatureIcon({ n }: { n: number }) {

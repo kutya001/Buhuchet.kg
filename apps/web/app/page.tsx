@@ -5,7 +5,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { SESSION_COOKIES } from '../src/auth/return-to';
 import { Landing } from '../src/landing/landing';
-import { demoScreens } from '../src/landing/landing-data';
+import { demoScreens, LANDING_VERSION } from '../src/landing/landing-data';
 import { getT } from '../src/l10n/server';
 import { canEnter } from '../src/shell/modules';
 import { loadMe, requestNow } from '../src/shell/server';
@@ -59,6 +59,7 @@ export default async function HomePage() {
       videos={videos}
       today={today}
       stand={siteInfo().env === 'staging'}
+      version={LANDING_VERSION}
     />
   );
 }

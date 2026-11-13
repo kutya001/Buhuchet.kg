@@ -379,7 +379,7 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(intro).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
     await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
-    // Линия Бернулли с петлёй у заголовка каждого из 9 блоков.
+    // Линия Бернулли со спиралью у заголовка каждого из 9 блоков.
     await expect(page.locator('#lp-path .lp-knots circle')).toHaveCount(9);
 
     // Новое открытие — снова заставка; без нажатия она уходит сама.
@@ -421,6 +421,8 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
   test('(проверка прототипа v78) у каждого блока «Подробнее»: подробности раскрываются и сворачиваются; символ герба и плитка «Возможностей» раскрываются нажатием; весы в углу — наверх', async ({
     page,
   }) => {
+    // Блоки появляются плавнее (прототип v91): нажатие ждёт, пока кнопка встанет на место, а блоков 8.
+    test.slow();
     await page.goto('/');
     // Блок, подпись кнопки, текст из подробностей.
     const more: [string, string, string][] = [
@@ -526,6 +528,31 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     const emb = page.locator('#lp-emb');
     await expect(emb.locator('.e-curve .e-inf')).toHaveCount(1);
     await expect(emb.locator('.lp-emb-ic svg')).toHaveCount(3);
+    // Это именно спираль, а не прежняя «∞»: кривая начинается у своего центра, раскручивается вправо и
+    // не замыкается — и в гербе, и в значке строки «Кривая Бернулли».
+    const ends = (path: SVGPathElement) => {
+      const a = path.getPointAtLength(0);
+      const b = path.getPointAtLength(path.getTotalLength());
+      return {
+        ax: a.x,
+        ay: a.y,
+        bx: b.x,
+        by: b.y,
+        closed: /z/i.test(path.getAttribute('d') ?? ''),
+      };
+    };
+    const curve = await emb.locator('.e-curve .e-inf').evaluate(ends);
+    expect(curve.closed).toBe(false);
+    expect(Math.hypot(curve.ax - 146, curve.ay - 235)).toBeLessThan(5);
+    expect(curve.bx - 146).toBeGreaterThan(20);
+    const mark = await emb
+      .locator('.lp-emb-l li')
+      .filter({ hasText: 'Кривая Бернулли' })
+      .locator('.lp-emb-ic svg path')
+      .evaluate(ends);
+    expect(mark.closed).toBe(false);
+    expect(Math.hypot(mark.ax - 11, mark.ay - 12.6)).toBeLessThan(2.5);
+    expect(mark.bx - 11).toBeGreaterThan(5);
 
     // «Возможности»: 12 плиток, у каждой свой значок; при раскрытии плитки значок оживает.
     const icons = page.locator('#lp-features .lp-tile .lp-fi');

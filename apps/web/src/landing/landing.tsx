@@ -42,7 +42,7 @@ import {
   Stamp,
   type EmblemPart,
 } from './landing-art';
-import { LANDING_VERSION, type DemoScreens } from './landing-data';
+import type { DemoScreens } from './landing-data';
 import { playTile, reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
 import { LeadForm } from './lead-form';
 import { CardScreen, DeskScreen, PhoneScreen } from './mini-screens';
@@ -70,6 +70,11 @@ export interface LandingProps {
   today: string;
   /** Тестовый стенд: полоса «Тестовый стенд: данные демонстрационные». */
   stand: boolean;
+  /**
+   * Номер версии платформы для подвала («Версия N», прототип v91). Считает сервер: в код страницы
+   * браузера файл данных лендинга целиком не попадает.
+   */
+  version: string;
 }
 
 /** Адрес демо-версии (ТЗ «Демо-организация»: buhuchet.kg/demo). */
@@ -181,8 +186,9 @@ function DetailsLine({ children }: { children: ReactNode }) {
   );
 }
 
-function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingProps) {
+function LandingPage({ screens, numbers, codes, videos, today, stand, version }: LandingProps) {
   const t = useT();
+  const versionText = t('land.foot.ver', { версия: version });
   const guest = useGuestVideo(videos);
   const lead = videos[0];
   /**
@@ -883,8 +889,13 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
             <b>{t('land.foot.name')}</b>
             <br />
             {t('land.foot.copy', { год: today.slice(0, 4) })}
-            {' · '}
-            <span className="lp-ver">{t('land.foot.ver', { версия: LANDING_VERSION })}</span>
+            {/* Текст версии очищен в «Локализации» — версии в подвале нет (как в прототипе). */}
+            {versionText ? (
+              <>
+                {' · '}
+                <span className="lp-ver">{versionText}</span>
+              </>
+            ) : null}
           </span>
           {links.length > 0 ? <span className="lp-foot-l">{contactLinks}</span> : null}
           <span className="lp-foot-l">
