@@ -628,6 +628,16 @@ export const CONTRACTORS_TEXTS = {
     ru: 'Число месяца, до которого контрагент платит за обслуживание (1–28)',
     section: S,
   },
+  'cp.form.edit.start_hint': {
+    ru: 'С этой даты ведётся учёт контрагента: первый период обслуживания, начисления за обслуживание и месяцы показателей',
+    section: S,
+  },
+  'cp.form.edit.start_reason': { ru: 'Причина изменения даты', section: S },
+  'cp.form.edit.start_reason_placeholder': { ru: 'Например: внесли с ошибкой', section: S },
+  'cp.form.edit.start_reason_hint': {
+    ru: 'Обязательна, если дата начала меняется',
+    section: S,
+  },
   'cp.form.edit.foot': {
     ru: 'Тип обслуживания, тариф, ответственный и периоды обслуживания меняются своими действиями в карточке.',
     section: S,
@@ -717,6 +727,25 @@ export const CONTRACTORS_TEXTS = {
   'err.phone_digits': { ru: 'Номер для этой страны — {n} цифр', section: E },
   'err.form_required': { ru: 'Выберите форму собственности', section: E },
   'err.fee_day': { ru: 'Число от 1 до 28', section: E },
+  'err.start_empty': { ru: 'Укажите дату', section: E },
+  'err.start_future': { ru: 'Дата не может быть позже сегодняшней', section: E },
+  'err.start_year': { ru: 'Проверьте год', section: E },
+  'err.start_period': {
+    ru: 'Первый период обслуживания закончился в {month}: дата начала должна быть не позже',
+    section: E,
+  },
+  'err.start_paid': {
+    ru: 'Есть оплата обслуживания за {month}: дата начала должна быть не позже этого месяца',
+    section: E,
+  },
+  'err.start_report': {
+    ru: 'Отчёт «{name}» сдан {date}: дата начала должна быть не позже',
+    section: E,
+  },
+  // Тому, кто не видит плату за обслуживание или отчёты, — без того, что именно мешает.
+  'err.start_limit.month': { ru: 'Дата начала должна быть не позже месяца: {month}', section: E },
+  'err.start_limit.date': { ru: 'Дата начала должна быть не позже {date}', section: E },
+  'err.start_reason': { ru: 'Укажите причину: меняется дата начала', section: E },
   'samples.pick.title': { ru: 'Подбор отчётов, льготы и статусы', section: 'Образцы' },
   'samples.pick.hint': {
     ru: 'Окна задач 2.07 и 2.09 до карточки контрагента. Черновик формы ничего не сохраняет; вкладка «Подбор отчётов» и «Изменить контрагента» меняют выбранного контрагента по-настоящему.',

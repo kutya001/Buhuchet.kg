@@ -58,6 +58,37 @@ describe('история контрагента', () => {
     );
   });
 
+  it('исправление даты начала (прототип v84): одной строкой с причиной; у разового — «первого обращения»', () => {
+    const changes = [
+      { field: 'startDate', from: '2026-05-15', to: '2026-03-02' },
+      { field: 'startReason', to: 'внесли с ошибкой' },
+    ];
+    expect(contractorHistoryText(t, entry({ changes }), names)).toBe(
+      'Дата начала обслуживания: 15.05.2026 → 02.03.2026. Причина: внесли с ошибкой',
+    );
+    expect(
+      contractorHistoryText(
+        t,
+        entry({ changes: [...changes, { field: 'startKind', to: 'oneoff' }] }),
+        names,
+      ),
+    ).toBe('Дата первого обращения: 15.05.2026 → 02.03.2026. Причина: внесли с ошибкой');
+    // Вместе с другими полями — в той же записи.
+    expect(
+      contractorHistoryText(
+        t,
+        entry({ changes: [{ field: 'head', from: '', to: 'Асанов' }, ...changes] }),
+        names,
+      ),
+    ).toBe(
+      'Дата начала обслуживания: 15.05.2026 → 02.03.2026. Причина: внесли с ошибкой; Изменено: руководитель',
+    );
+    // Дата без причины (перевод разового в постоянное) — как прежде.
+    expect(contractorHistoryText(t, entry({ changes: [changes[0]!] }), names)).toBe(
+      'Изменено: начало обслуживания',
+    );
+  });
+
   it('ответственного не было — «—»; причина — в скобках, запись только с причиной — сама причина', () => {
     expect(
       contractorHistoryText(

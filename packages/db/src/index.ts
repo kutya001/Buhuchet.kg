@@ -21,6 +21,7 @@ export * from './contractor-regdocs';
 export { gkedNames, gkedSearch, type GkedFound } from './gked';
 export * from './socfund';
 export * from './contractor-service';
+export * from './contractor-start';
 export * from './service-periods';
 export * from './contractor-page';
 export * from './contractor-page-view';

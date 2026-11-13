@@ -9,6 +9,7 @@ import {
   SERVICE_STATUSES,
   SOCFUND_PAYS,
   SOCFUND_TARIFFS,
+  START_REASON_MAX,
   TARIFF_PERIODS,
 } from '@buhuchet/domain';
 import { z } from 'zod';
@@ -176,14 +177,18 @@ export type CreateContractorRequest = z.input<typeof CreateContractorRequest>;
 /**
  * «Изменить» в карточке (прототип editCpDlg): не переданное поле не меняется. Ответственного меняет
  * «Сменить ответственного» (`AssignContractorsRequest`), тариф — журнал тарифов (поток В), статус —
- * приостановка и архив (задача 2.12); дата начала обслуживания и «Первый неполный месяц» после
- * создания не меняются («тариф и дата начала меняются своими действиями»).
+ * приостановка и архив (задача 2.12); «Первый неполный месяц» после создания не меняется. Дата начала
+ * обслуживания (у разового — дата первого обращения) исправляется только с причиной `startReason`
+ * (прототип v84, `cpStartWhy`): вместе с ней сдвигается начало первого периода обслуживания.
  */
 export const UpdateContractorRequest = z
   .object(contractorFields)
-  .omit({ startDate: true, firstMonthMode: true })
+  .omit({ firstMonthMode: true })
   .partial()
-  .extend({ version: RecordVersion });
+  .extend({
+    version: RecordVersion,
+    startReason: z.string().trim().max(START_REASON_MAX).optional(),
+  });
 export type UpdateContractorRequest = z.infer<typeof UpdateContractorRequest>;
 
 /**

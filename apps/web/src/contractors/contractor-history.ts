@@ -138,8 +138,27 @@ function contractorLines(t: Translate, e: Entry, names: Names): string[] {
   if (e.action === 'delete') return [t('cp.hist.deleted')];
   const lines: string[] = [];
   const rest: Change[] = [];
+  // Исправление даты начала (прототип cpSetStart): одной строкой с причиной; у разового — «первого обращения».
+  const startReason = e.changes.find((c) => c.field === 'startReason')?.to;
+  const oneoff = e.changes.find((c) => c.field === 'startKind')?.to === 'oneoff';
   for (const c of e.changes) {
     switch (c.field) {
+      case 'startDate':
+        if (typeof startReason !== 'string') {
+          rest.push(c);
+          break;
+        }
+        lines.push(
+          t(oneoff ? 'cp.hist.start_oneoff' : 'cp.hist.start', {
+            from: typeof c.from === 'string' ? formatDateRu(c.from) : '—',
+            to: typeof c.to === 'string' ? formatDateRu(c.to) : '—',
+            reason: startReason,
+          }),
+        );
+        break;
+      case 'startReason':
+      case 'startKind':
+        break;
       case 'responsibleEmployeeId':
         lines.push(
           t('cp.hist.responsible', { from: nameOf(names, c.from), to: nameOf(names, c.to) }),
