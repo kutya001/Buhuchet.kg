@@ -26,6 +26,27 @@ export function staffKanban<Row>(
   };
 }
 
+/**
+ * Столбцы ролей по порядку списка ролей прототипа (`ROLES`: владелец, роли из шаблонов, новые — в
+ * конец): роль владельца первой, остальные — по времени создания; роли, созданные одновременно (вместе
+ * с организацией), остаются в порядке списка — по названию.
+ */
+export function boardRoles(
+  roles: readonly Pick<RoleListItem, 'id' | 'name' | 'isOwner' | 'audit'>[],
+): BoardValue[] {
+  return [...roles]
+    .sort(
+      (a, b) =>
+        Number(b.isOwner) - Number(a.isOwner) ||
+        (a.audit.createdAt < b.audit.createdAt
+          ? -1
+          : a.audit.createdAt > b.audit.createdAt
+            ? 1
+            : 0),
+    )
+    .map((r) => ({ key: r.id, label: r.name }));
+}
+
 /** Что делает перенос сотрудника: вопрос о смене роли, ничего или отказ с причиной. */
 export type StaffMove =
   { kind: 'role'; roleId: string } | { kind: 'none' } | { kind: 'refusal'; key: UiTextKey };

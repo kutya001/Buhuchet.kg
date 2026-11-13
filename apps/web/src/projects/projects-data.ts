@@ -34,7 +34,6 @@ const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
   return parse(await res.json());
 };
 
-/** Числа вкладок, плашки и что сотрудник может (прототип `projTabs`, `renderProjects`). */
 /**
  * Главные по проектам вкладки — столбцы доски «по главному», видные и пустыми (прототип v85
  * `projKanban`, `show.lead`). Значения — того же списка, что видит сотрудник.
@@ -51,6 +50,7 @@ export const boardLeadQuery = (tab: 'active' | 'all' | 'mine') =>
     },
   });
 
+/** Числа вкладок, плашки и что сотрудник может (прототип `projTabs`, `renderProjects`). */
 export const projectSummaryQuery = queryOptions({
   queryKey: ['projects', 'summary'],
   queryFn: async () => json(await api.api.projects.summary.$get(), (v) => ProjectSummary.parse(v)),

@@ -2,7 +2,7 @@ import { defaultUiTexts } from '@buhuchet/domain';
 import { ProjectEditRequest, type ProjectCard } from '@buhuchet/shared';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { leadChangeBody, projectKanban, projectMove } from './project-board';
+import { leadChangeBody, leadChangeRefusal, projectKanban, projectMove } from './project-board';
 
 // Доска проектов (прототип v85 modules/projects.js, `projKanban`): перетаскиванием меняются статус
 // (шаг вперёд по шкале, «Отменён» — с вопросом) и главный незавершённого проекта.
@@ -158,7 +158,7 @@ describe('смена главного с доски', () => {
   } as unknown as ProjectCard;
 
   it('новый главный добавляется в ответственные, остальное — как в карточке', () => {
-    const body = leadChangeBody(card, OTHER);
+    const body = leadChangeBody(card, OTHER, 7);
     expect(body).toEqual({
       version: 7,
       name: 'Восстановление учёта',
@@ -188,9 +188,23 @@ describe('смена главного с доски', () => {
   });
 
   it('главный из ответственных второй раз не добавляется; без права на деньги стоимость пустая', () => {
-    const body = leadChangeBody({ ...card, money: null }, THIRD);
+    const body = leadChangeBody({ ...card, money: null }, THIRD, 5);
     expect(body.members).toEqual([ME, THIRD]);
     expect(body.lead).toBe(THIRD);
     expect(body.plan).toBeNull();
+    // Версия — записи на доске: проект, изменённый после загрузки списка, сервер не сохранит.
+    expect(body.version).toBe(5);
+  });
+
+  it('по свежим данным: столбец заблокированного сотрудника и завершённый проект — отказ', () => {
+    const active = [ME, OTHER];
+    expect(leadChangeRefusal({ status: 'in_progress' }, active, OTHER)).toBeNull();
+    expect(leadChangeRefusal({ status: 'planned' }, active, OTHER)).toBeNull();
+    // Заблокированный сотрудник ещё числится главным другого проекта — его столбец виден.
+    expect(leadChangeRefusal({ status: 'in_progress' }, active, THIRD)).toBe(
+      'proj.board.pick_employee',
+    );
+    for (const status of ['done', 'cancelled'] as const)
+      expect(leadChangeRefusal({ status }, active, OTHER)).toBe('proj.board.lead_open');
   });
 });

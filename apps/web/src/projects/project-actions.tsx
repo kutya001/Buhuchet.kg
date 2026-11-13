@@ -19,7 +19,7 @@ import { useShell } from '../shell/context';
 import { rollbackLabels, rollbackTitle, statusName, statusPillView } from '../status/status-view';
 import { useTaskActions } from '../tasks/task-actions';
 import { taskQuery } from '../tasks/tasks-data';
-import { leadChangeBody, projectMove } from './project-board';
+import { leadChangeBody, leadChangeRefusal, projectMove } from './project-board';
 import { ProjectCardDialog } from './project-card';
 import { closeProjectCard, openProjectCard, useProjectCardRequest } from './project-card-store';
 import { ProjectDialog, type ProjectContractorPreset } from './project-dialog';
@@ -27,6 +27,7 @@ import { payAction, ProjectPaymentSlot, type ProjectPaymentAction } from './proj
 import {
   editProject,
   projectCardQuery,
+  projectFormQuery,
   setProjectStatus,
   useProjectsRefresh,
 } from './projects-data';
@@ -150,14 +151,30 @@ export function useProjectActions(): {
     }
   };
 
-  /** Главный — другой сотрудник: остальные поля и работы — из свежей карточки проекта. */
+  /**
+   * Главный — другой сотрудник: остальные поля и работы — из свежей карточки проекта, версия — записи
+   * на доске; действующие сотрудники — из данных окна проекта.
+   */
   const setLead = async (p: ProjectRef, to: BoardValue) => {
     try {
       const res = await once(p.id, async () => {
-        const fresh = await client.fetchQuery({ ...projectCardQuery(p.id), staleTime: 0 });
-        return editProject(p.id, leadChangeBody(fresh, to.key));
+        const [fresh, form] = await Promise.all([
+          client.fetchQuery({ ...projectCardQuery(p.id), staleTime: 0 }),
+          client.fetchQuery(projectFormQuery(null)),
+        ]);
+        const refusal = leadChangeRefusal(
+          fresh,
+          form.employees.map((e) => e.id),
+          to.key,
+        );
+        if (refusal) return { refusal };
+        return editProject(p.id, leadChangeBody(fresh, to.key, p.version));
       });
       if (!res) return;
+      if ('refusal' in res) {
+        if (res.refusal === 'proj.board.lead_open') refresh();
+        return void toast(t(res.refusal), { bad: true });
+      }
       refresh();
       if (!res.ok) return void toast(errorText(res.error), { bad: true });
       toast(t('proj.board.lead_done', { name: to.label }), { icon: 'user' });

@@ -17,6 +17,7 @@ import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
@@ -85,6 +86,8 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
   const client = useQueryClient();
   const gridKey: GridKey = `projects.${tab}`;
   const labels = useGridLabels('proj.count');
+  // Список можно открыть с фильтром адресом (`presetHref`), как списки других модулей.
+  const preset = usePresetFilters('projects', tab);
   const summary = useQuery(projectSummaryQuery);
   const s = summary.data;
   const money = !!s?.can.money;
@@ -123,6 +126,7 @@ export function ProjectsList({ tab }: { tab: ProjectTab }) {
     search,
     enabled: view.ready && !!s,
     fetchPage,
+    initialFilters: preset,
     kanban,
   });
   const { params, visible, filters, setFilters } = list;

@@ -22,13 +22,14 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
+import { usePresetFilters } from '../lists/preset';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useNewRole } from '../roles/new-role';
 import { useShell } from '../shell/context';
 import { useStaffActions } from './staff-actions';
 import { useStaffAddRequest } from './staff-add';
-import { staffKanban } from './staff-board';
+import { boardRoles, staffKanban } from './staff-board';
 import { allRolesQuery, boardRoleQuery } from './staff-data';
 
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
@@ -185,6 +186,8 @@ const fetchStaffValues = async (col: string, q?: string) => {
 export function StaffList() {
   const t = useT();
   const labels = useGridLabels('staff.count');
+  // Список можно открыть с фильтром адресом (`presetHref`), как списки других модулей.
+  const preset = usePresetFilters('staff', 'list');
   const { search, clearSearch, access } = useShell();
   const kb = access.can('kbLevels');
   // Как вкладка «Счёт» карточки сотрудника (docs/deviations.md п. В-33).
@@ -198,18 +201,14 @@ export function StaffList() {
   const view = useViewSettings('staff.list');
   const staff = useStaffActions();
   // Доска (прототип v85 `staffKanban`): столбцы ролей видны и пустыми — все роли организации тому,
-  // кто ведёт сотрудников (владелец — первой, как в прототипе), остальным — роли сотрудников списка.
+  // кто ведёт сотрудников (по порядку `boardRoles`), остальным — роли сотрудников списка.
   const canManage = access.can('staff');
   const allRoles = useQuery({ ...allRolesQuery, enabled: canManage });
   const listRoles = useQuery({ ...boardRoleQuery, enabled: !canManage });
   const kanban = useMemo(
     () =>
       staffKanban<Employee>(
-        canManage
-          ? [...(allRoles.data ?? [])]
-              .sort((a, b) => Number(b.isOwner) - Number(a.isOwner))
-              .map((r) => ({ key: r.id, label: r.name }))
-          : (listRoles.data ?? []),
+        canManage ? boardRoles(allRoles.data ?? []) : (listRoles.data ?? []),
         staff.drop,
       ),
     [canManage, allRoles.data, listRoles.data, staff.drop],
@@ -223,6 +222,7 @@ export function StaffList() {
     search,
     enabled: view.ready,
     fetchPage: fetchStaff,
+    initialFilters: preset,
     kanban,
   });
   const { params, visible } = list;

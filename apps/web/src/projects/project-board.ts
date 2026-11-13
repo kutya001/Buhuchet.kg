@@ -89,14 +89,34 @@ export function projectMove(
 }
 
 /**
- * Запрос «главный — другой сотрудник» (прототип: `p.lead = e.id`, нового главного добавляет в
- * ответственные): остальные поля проекта и работы — как в свежей карточке. Стоимость без права видеть
- * деньги сервер не меняет.
+ * Последняя проверка смены главного — по свежим данным перед записью (прототип `projKanban.drop`:
+ * `empByName` знает только действующих сотрудников): столбец заблокированного сотрудника — не столбец
+ * сотрудника; проект, который успели завершить или отменить, главного не меняет.
  */
-export function leadChangeBody(card: ProjectCard, leadId: string): ProjectEditRequest {
+export function leadChangeRefusal(
+  card: Pick<ProjectCard, 'status'>,
+  active: readonly string[],
+  leadId: string,
+): UiTextKey | null {
+  if (!active.includes(leadId)) return 'proj.board.pick_employee';
+  if (!projectCancelable(card.status)) return 'proj.board.lead_open';
+  return null;
+}
+
+/**
+ * Запрос «главный — другой сотрудник» (прототип: `p.lead = e.id`, нового главного добавляет в
+ * ответственные): остальные поля проекта и работы — как в свежей карточке, версия — та, что у записи
+ * на доске: проект, изменённый после загрузки списка, сервер не сохранит («запись изменена другим
+ * пользователем»). Стоимость без права видеть деньги сервер не меняет.
+ */
+export function leadChangeBody(
+  card: ProjectCard,
+  leadId: string,
+  version: number,
+): ProjectEditRequest {
   const members = card.members.map((m) => m.id);
   return {
-    version: card.version,
+    version,
     name: card.name,
     startsOn: card.startsOn,
     endsOn: card.endsOn,

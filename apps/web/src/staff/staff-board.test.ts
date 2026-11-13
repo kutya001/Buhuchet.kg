@@ -1,7 +1,7 @@
 import { defaultUiTexts } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
-import { staffKanban, staffMove } from './staff-board';
+import { boardRoles, staffKanban, staffMove } from './staff-board';
 
 // Доска сотрудников (прототип v85 modules/staff.js, `staffKanban`): перетаскиванием меняется только
 // роль — с правом, не у владельца, в роль, которую можно назначить.
@@ -43,6 +43,30 @@ describe('доска сотрудников', () => {
     expect(kanban.sum).toBeUndefined();
     expect(kanban.drop).toBeTypeOf('function');
     expect(staffKanban(roles, undefined).drop).toBeUndefined();
+  });
+
+  it('порядок столбцов ролей: владелец, затем по времени создания; созданные вместе — как в списке', () => {
+    const audit = (createdAt: string) => ({
+      createdAt,
+      createdBy: null,
+      updatedAt: createdAt,
+      updatedBy: null,
+    });
+    const born = '2026-01-10T06:00:00.000Z';
+    expect(
+      boardRoles([
+        { id: ACC, name: 'Бухгалтер', isOwner: false, audit: audit(born) },
+        { id: WIDE, name: 'Архивариус', isOwner: false, audit: audit('2026-05-01T06:00:00.000Z') },
+        { id: OWNER, name: 'Владелец организации', isOwner: true, audit: audit(born) },
+        { id: SENIOR, name: 'Главный бухгалтер', isOwner: false, audit: audit(born) },
+      ]),
+    ).toEqual([
+      { key: OWNER, label: 'Владелец организации' },
+      { key: ACC, label: 'Бухгалтер' },
+      { key: SENIOR, label: 'Главный бухгалтер' },
+      { key: WIDE, label: 'Архивариус' },
+    ]);
+    expect(boardRoles([])).toEqual([]);
   });
 
   it('по роли: другая роль — вопрос о смене, свой столбец — ничего', () => {

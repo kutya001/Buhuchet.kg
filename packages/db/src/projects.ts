@@ -885,6 +885,7 @@ export async function setProjectWorkDone(
 /**
  * «Добавить работу» в карточке (прототип `openProject`: строка под таблицей): название, исполнитель из
  * ответственных проекта, срок (необязательно). История: «Добавлена работа: … (исполнитель, до …)».
+ * Версия проекта повышается (docs/deviations.md п. О-77).
  */
 export async function addProjectWork(
   tx: Tx,
@@ -914,6 +915,17 @@ export async function addProjectWork(
       updatedBy: sql`app.current_user_id()`,
     })
     .returning({ id: projectWorks.id });
+  // Версия проекта растёт: окно «Изменить проект» и смена главного с доски шлют весь список работ, и
+  // сохранение со старой версией молча убрало бы только что добавленную работу — теперь оно получит
+  // «запись изменена другим пользователем».
+  await tx
+    .update(projects)
+    .set({
+      version: sql`${projects.version} + 1`,
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(eq(projects.id, project.id));
   await writeHistory(tx, {
     entity: 'project',
     entityId: project.id,

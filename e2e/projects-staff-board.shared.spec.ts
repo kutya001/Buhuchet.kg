@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import { boardBy, moveCard, openBoard } from './board';
 import { asOwner, newContractor, staffIds } from './reports';
 
@@ -10,18 +10,19 @@ import { asOwner, newContractor, staffIds } from './reports';
 const resetView = (api: APIRequestContext, origin: string, key: string) =>
   api.delete(`/api/view-settings/${key}`, { headers: { origin } });
 
-/** Слово из кириллицы, своё на каждый запуск: по нему поиск находит только записи теста. */
+/** Слово из кириллицы, своё на каждый запуск: по нему фильтр оставляет только записи теста. */
 const uniqueWord = (prefix: string) =>
   `${prefix}${Array.from({ length: 6 }, () => 'абвгдежзиклмнопрстуф'[Math.floor(Math.random() * 20)]).join('')}`;
 
 const uniqueLogin = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-/** Общий поиск по вкладке (на телефоне — кнопкой «Поиск» в верхней панели). */
-async function search(page: Page, isMobile: boolean, text: string) {
-  if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
-  await page.getByRole('searchbox').first().fill(text);
-}
+/**
+ * Адрес списка с фильтром столбца «содержит слово»: остаются только записи теста, а пустые столбцы
+ * доски видны (при поиске доска их не показывает — как в прототипе).
+ */
+const filtered = (path: string, column: string, word: string) =>
+  `${path}?preset=${encodeURIComponent(JSON.stringify({ [column]: { type: 'text', q: word } }))}`;
 
 /** Сегодня по Бишкеку и день через `days` дней. */
 const day = (days: number) =>
@@ -61,9 +62,7 @@ test.describe('Этап 3: вид «Доска» в проектах и сотр
     await create('Постановка учёта', staff.aigerim!);
     await resetView(page.request, origin, 'projects.all');
     try {
-      await page.goto('/app/projects/all');
-      await expect(page.locator('[data-grid]')).toBeVisible();
-      await search(page, isMobile, word);
+      await page.goto(filtered('/app/projects/all', 'name', word));
       await expect(page.locator(`[data-grid] [data-id="${id}"]`)).toBeVisible();
       const board = await openBoard(page, isMobile);
       const column = (key: string) => board.locator(`[data-board-column="${key}"]`);
@@ -151,9 +150,7 @@ test.describe('Этап 3: вид «Доска» в проектах и сотр
     expect(blocked.status(), await blocked.text()).toBe(200);
     await resetView(page.request, origin, 'staff.list');
     try {
-      await page.goto('/app/staff/list');
-      await expect(page.locator('[data-grid]')).toBeVisible();
-      await search(page, isMobile, word);
+      await page.goto(filtered('/app/staff/list', 'fullName', word));
       await expect(page.locator(`[data-grid] [data-id="${first.id}"]`)).toBeVisible();
       const board = await openBoard(page, isMobile);
       const column = (key: string) => board.locator(`[data-board-column="${key}"]`);
