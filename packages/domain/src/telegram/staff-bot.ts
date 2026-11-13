@@ -144,8 +144,21 @@ export function fixBotMessage(
 }
 
 /**
- * Новая задача исполнителю (прототип `tgTaskMsg`): название — заголовком, «Новая задача от … · срок …»
- * — под ним; «Взять в работу» — только у «К выполнению», «Выполнена», ниже — «Открыть задачу».
+ * Название, которое написал пользователь, в заголовке сообщения: одной строкой, без переводов строк,
+ * управляющих и невидимых знаков (смена направления текста) — чтобы его нельзя было выдать за текст
+ * бота. Соединитель эмодзи (U+200D) остаётся, иначе составной эмодзи распался бы на части.
+ */
+export function botTitleLine(text: string): string {
+  return text
+    .replace(/(?!\u200d)[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Новая задача исполнителю (прототип `tgTaskMsg`): название — заголовком (одной строкой,
+ * `botTitleLine`), «Новая задача от … · срок …» — под ним; «Взять в работу» — только у «К выполнению»,
+ * «Выполнена», ниже — «Открыть задачу».
  */
 export function taskBotMessage(
   task: { id: string; title: string; todo: boolean },
@@ -154,7 +167,7 @@ export function taskBotMessage(
   url: string | null,
 ): BotMessage {
   return {
-    heading: task.title,
+    heading: botTitleLine(task.title),
     sub,
     buttons: [
       [

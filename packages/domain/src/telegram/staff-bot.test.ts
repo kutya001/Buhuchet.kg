@@ -163,6 +163,10 @@ describe('сообщения сотруднику с кнопками', () => {
     const task = { id: ID, title: 'Сверить акт', todo: true };
     const m = taskBotMessage(task, 'Новая задача от Иванов И. · срок 20.11.2026', labels, URL);
     expect(m.heading).toBe('Сверить акт');
+    // Название в несколько строк и со сменой направления текста — одной строкой.
+    expect(
+      taskBotMessage({ ...task, title: 'Сверка\nс банком\u202e' }, 'x', labels, URL).heading,
+    ).toBe('Сверка с банком');
     expect(m.buttons).toEqual([
       [
         { text: 'Взять в работу', action: 'taskWork', arg: ID },
