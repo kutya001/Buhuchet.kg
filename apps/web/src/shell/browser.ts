@@ -5,6 +5,7 @@ import {
   prefCookie,
   THEME_COOKIE,
   TREE_COOKIE,
+  WIDE_COOKIE,
   serializeMaxPrefs,
   serializeTree,
   type Theme,
@@ -39,6 +40,10 @@ export function toggleTheme(): Theme {
 
 export function saveNavHidden(hidden: boolean) {
   savePref(NAV_COOKIE, hidden ? 'hidden' : 'shown');
+}
+
+export function saveWide(wide: boolean) {
+  savePref(WIDE_COOKIE, wide ? 'on' : 'off');
 }
 
 export function saveTree(ids: Iterable<string>) {

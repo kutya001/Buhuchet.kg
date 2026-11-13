@@ -24,6 +24,7 @@ import {
 import {
   parseMaxPrefs,
   parseNavHidden,
+  parseWide,
   parseTheme,
   parseTree,
   prefCookie,
@@ -322,6 +323,13 @@ describe('выбор на устройстве: тема, левая панел�
     expect(parseNavHidden('hidden')).toBe(true);
     expect(parseNavHidden('shown')).toBe(false);
     expect(parseNavHidden(undefined)).toBe(false);
+  });
+
+  it('(прототип v85) «На всю ширину» — только по явному выбору', () => {
+    expect(parseWide('on')).toBe(true);
+    expect(parseWide('off')).toBe(false);
+    expect(parseWide('true')).toBe(false);
+    expect(parseWide(undefined)).toBe(false);
   });
 
   it('раскрытые ветки: только известные модули и без повторов', () => {

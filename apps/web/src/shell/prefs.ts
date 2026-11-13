@@ -1,7 +1,7 @@
 import type { MaxPrefs } from '@buhuchet/ui';
 
 /**
- * Выбор пользователя на этом устройстве: тема, скрытая левая панель, раскрытые ветки дерева модулей,
+ * Выбор пользователя на этом устройстве: тема, свёрнутая левая панель, «На всю ширину», раскрытые ветки дерева модулей,
  * развёрнутые на весь экран карточки и формы (ТЗ: «выбор запоминается», «тема применяется без вспышки
  * при загрузке», «выбор запоминается на этом устройстве отдельно для карточек и для форм ввода»). Хранится в cookie, а не
  * в localStorage: сервер читает её и сразу отдаёт страницу в нужном виде — без вспышки и прыжка
@@ -9,6 +9,7 @@ import type { MaxPrefs } from '@buhuchet/ui';
  */
 export const THEME_COOKIE = 'bh_theme';
 export const NAV_COOKIE = 'bh_nav';
+export const WIDE_COOKIE = 'bh_wide';
 export const TREE_COOKIE = 'bh_tree';
 export const MAX_COOKIE = 'bh_max';
 
@@ -23,6 +24,11 @@ export function parseTheme(value: string | undefined): Theme | null {
 
 export function parseNavHidden(value: string | undefined): boolean {
   return value === 'hidden';
+}
+
+/** «На всю ширину» (прототип v85): включено — значение `on`. */
+export function parseWide(value: string | undefined): boolean {
+  return value === 'on';
 }
 
 /** Раскрытые ветки: только известные модули, без повторов. */

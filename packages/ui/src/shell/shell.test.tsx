@@ -55,6 +55,9 @@ function find<P>(tree: ReactNode, type: unknown): ReactElement<P>[] {
   return found;
 }
 
+/** Строка как есть внутри регулярного выражения (классы Tailwind со скобками и косой чертой). */
+const esc = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
 function sideNav(props: Partial<Parameters<typeof SideNav>[0]> = {}) {
   return {
     mode: 'Business',
@@ -118,6 +121,59 @@ describe('SideNav — панель модулей на ПК', () => {
       <SideNav {...sideNav({ openIds: new Set(['reports']), Link })} />,
     );
     expect(html.match(/data-own/g)).toHaveLength(4);
+  });
+
+  it('(прототип v85) свёрнутая панель — полоска значков: панель не прячется, названия остаются диктору и в подсказке, стрелки и вкладки скрыты, счётчик — в углу значка', () => {
+    const html = renderToStaticMarkup(<SideNav {...sideNav({ openIds: new Set(['reports']) })} />);
+    const MINI = 'md:group-data-[nav=hidden]/app:';
+    // Сама панель остаётся на экране (раньше скрывалась целиком), только уже и без полосы прокрутки.
+    const aside = /<aside[^>]*class="([^"]*)"/.exec(html)![1]!;
+    expect(aside).not.toContain('group-data-[nav=hidden]/app:hidden');
+    expect(aside).toContain(`${MINI}px-[7px]`);
+    expect(aside).toContain('overflow-x-hidden');
+    // Название модуля — в подсказке значка и для экранного диктора.
+    expect(html).toMatch(
+      new RegExp(
+        `href="/app/reports/week" aria-current="page" title="Отчеты для сдачи" class="[^"]*${esc(MINI)}justify-center`,
+      ),
+    );
+    expect(html).toContain(`<span class="truncate ${MINI}sr-only">Отчеты для сдачи</span>`);
+    // Счётчик — в правом верхнем углу значка, стрелка и вкладки скрыты.
+    expect(html).toMatch(
+      new RegExp(`title="Просрочено" data-tone="red" class="[^"]*${esc(MINI)}absolute`),
+    );
+    expect(html).toMatch(
+      new RegExp(`aria-label="Свернуть вкладки: Отчеты для сдачи" class="[^"]*${esc(MINI)}hidden"`),
+    );
+    expect(html).toMatch(new RegExp(`<div class="[^"]*border-l[^"]*${esc(MINI)}hidden">`));
+    // Логотип — без подписи «Buhuchet.kg», организация и кнопки внизу — значками с подсказкой.
+    expect(html).toContain(`<div class="${MINI}hidden"><div data-brand-name=""`);
+    const org = renderToStaticMarkup(
+      <SideOrg name="ОсОО «Учёт»" sub="ИНН 1" title="Профиль организации" onClick={() => {}} />,
+    );
+    expect(org).toContain(`<span class="min-w-0 ${MINI}sr-only">`);
+    const foot = renderToStaticMarkup(
+      <SideFootButton icon="logout" label="Выйти из аккаунта" onClick={() => {}} />,
+    );
+    expect(foot).toContain('title="Выйти из аккаунта"');
+    expect(foot).toContain(`<span class="${MINI}sr-only">Выйти из аккаунта</span>`);
+  });
+
+  it('(прототип v85) точка «Начните с Базы знаний» в свёрнутой панели — в углу значка', () => {
+    const modules: ShellModule[] = [
+      {
+        id: 'kb',
+        title: 'База знаний',
+        icon: 'book',
+        href: '/app/kb',
+        tabs: [],
+        count: { value: '', dot: true, title: 'Начните с Базы знаний' },
+      },
+    ];
+    const html = renderToStaticMarkup(<SideNav {...sideNav({ modules })} />);
+    expect(html).toMatch(
+      /title="Начните с Базы знаний"[^>]*class="[^"]*md:group-data-\[nav=hidden\]\/app:top-\[5px\]/,
+    );
   });
 });
 
@@ -242,6 +298,57 @@ describe('TopBar — верхняя панель', () => {
     expect(html).toMatch(/aria-label="Поиск" title="Поиск" class="[^"]* md:hidden"/);
     expect(html).toMatch(/role="search" class="[^"]*max-md:hidden"/);
     expect(html).toContain('data-searching="false"');
+  });
+
+  it('(прототип v85) на ПК кнопка панели названа по её состоянию, «Меню» с точкой остаётся телефону', () => {
+    const shown = renderToStaticMarkup(
+      <TopBar
+        {...TOP}
+        menu={{
+          ...TOP.menu,
+          dot: 'Начните с Базы знаний',
+          panel: { label: 'Свернуть панель до значков', expanded: true },
+        }}
+      />,
+    );
+    expect(shown).toMatch(/aria-label="Меню" title="Меню" class="[^"]* md:hidden"/);
+    expect(shown).toMatch(
+      /aria-label="Свернуть панель до значков" title="Свернуть панель до значков" aria-expanded="true" data-nav-toggle="true" class="[^"]* max-md:hidden"/,
+    );
+    const hidden = renderToStaticMarkup(
+      <TopBar
+        {...TOP}
+        menu={{ ...TOP.menu, panel: { label: 'Развернуть панель модулей', expanded: false } }}
+      />,
+    );
+    expect(hidden).toMatch(/aria-label="Развернуть панель модулей"[^>]*aria-expanded="false"/);
+    // Обе кнопки делают одно: что именно — решает приложение по ширине экрана.
+    const onClick = vi.fn();
+    const html = renderToStaticMarkup(<TopBar {...TOP} menu={{ ...TOP.menu, onClick }} />);
+    expect(html).not.toContain('data-nav-toggle');
+  });
+
+  it('(прототип v85) «На всю ширину» — только на ПК: нажатая кнопка со значком «свернуть»', () => {
+    expect(renderToStaticMarkup(<TopBar {...TOP} />)).not.toContain('data-wide-toggle');
+    const off = renderToStaticMarkup(
+      <TopBar {...TOP} wide={{ on: false, label: 'На всю ширину экрана', onToggle: () => {} }} />,
+    );
+    expect(off).toMatch(
+      /aria-pressed="false" aria-label="На всю ширину экрана" title="На всю ширину экрана" data-wide-toggle="true" class="[^"]*max-md:hidden"/,
+    );
+    expect(off).toContain(ICONS.maximize);
+    expect(off).not.toContain(ICONS.minimize);
+    // Кнопка стоит после часов и до «?».
+    expect(off.indexOf('data-wide-toggle')).toBeGreaterThan(off.indexOf('<time>10:33</time>'));
+    expect(off.indexOf('data-wide-toggle')).toBeLessThan(off.indexOf('aria-label="Помощь"'));
+    const on = renderToStaticMarkup(
+      <TopBar
+        {...TOP}
+        wide={{ on: true, label: 'Обычная ширина: содержимое по центру', onToggle: () => {} }}
+      />,
+    );
+    expect(on).toMatch(/aria-pressed="true" aria-label="Обычная ширина: содержимое по центру"/);
+    expect(on).toContain(ICONS.minimize);
   });
 
   it('значок темы выбирается стилями: «луна» в светлой, «солнце» в тёмной', () => {
@@ -688,6 +795,28 @@ describe('AppFrame и значки', () => {
       </AppFrame>,
     );
     expect(shown).toMatch(/^<div data-nav="shown"/);
+  });
+
+  it('(прототип v85) свёрнутая панель — столбец 60 px только на ПК; «На всю ширину» снимает предел 1640 px', () => {
+    const html = renderToStaticMarkup(
+      <AppFrame navHidden wide side={<aside />} topBar={<header />}>
+        <p>экран</p>
+      </AppFrame>,
+    );
+    expect(html).toMatch(/^<div data-nav="hidden" data-kb="false" data-wide="true"/);
+    expect(html).toContain('md:data-[nav=hidden]:grid-cols-[60px_minmax(0,1fr)]');
+    expect(html).toContain('max-md:grid-cols-[minmax(0,1fr)]');
+    expect(html).toContain('motion-reduce:transition-none');
+    // Рабочая область остаётся во втором столбце, справа от полоски значков.
+    expect(html).toMatch(/<main class="[^"]*col-start-2/);
+    expect(html).not.toContain('group-data-[nav=hidden]/app:col-start-1');
+    expect(html).toContain('max-w-[1640px] min-w-0 group-data-[wide=true]/app:max-w-none');
+    const normal = renderToStaticMarkup(
+      <AppFrame navHidden={false} side={null} topBar={null}>
+        {null}
+      </AppFrame>,
+    );
+    expect(normal).toMatch(/^<div data-nav="shown" data-kb="false" data-wide="false"/);
   });
 
   it('телефон: нижняя панель и панель «Меню» в каркасе; клавиатура закрыта', () => {

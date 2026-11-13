@@ -54,7 +54,7 @@ import { QueryProvider } from '../query';
 import { useModuleStats } from '../lists/stats';
 import { ModuleScreen, screenHasPlates } from '../screens/module-screen';
 import { skipNextIntro } from './brand-intro';
-import { PHONE_QUERY, saveNavHidden, saveTree, toggleTheme } from './browser';
+import { PHONE_QUERY, saveNavHidden, saveTree, saveWide, toggleTheme } from './browser';
 import { Clock } from './clock';
 import { ShellContext, type AddRequest } from './context';
 import {
@@ -105,6 +105,8 @@ function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): Shell
 interface ShellProps {
   me: MeResponse;
   initialNavHidden: boolean;
+  /** «На всю ширину» (выбор на этом устройстве). */
+  initialWide: boolean;
   initialOpen: readonly string[];
   /** Развёрнутые на весь экран карточки и формы (выбор на этом устройстве). */
   initialMax: MaxPrefs;
@@ -201,6 +203,7 @@ function TabRowWithStats({ moduleId, ...props }: TabRowProps & { moduleId: MenuM
 function ShellPage({
   me: initialMe,
   initialNavHidden,
+  initialWide,
   initialOpen,
   serverNow,
   children,
@@ -286,6 +289,7 @@ function ShellPage({
   }, [me.modules, access.admin, modules, t]);
 
   const [navHidden, setNavHidden] = useState(initialNavHidden);
+  const [wide, setWide] = useState(initialWide);
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set(initialOpen));
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -339,6 +343,13 @@ function ShellPage({
     setNavHidden((hidden) => {
       saveNavHidden(!hidden);
       return !hidden;
+    });
+  };
+
+  const toggleWide = () => {
+    setWide((on) => {
+      saveWide(!on);
+      return !on;
     });
   };
 
@@ -480,6 +491,7 @@ function ShellPage({
       >
         <AppFrame
           navHidden={navHidden}
+          wide={wide}
           paneLabel={title}
           side={
             <SideNav
@@ -531,6 +543,10 @@ function ShellPage({
               menu={{
                 label: t('shell.menu'),
                 onClick: toggleNav,
+                panel: {
+                  label: t(navHidden ? 'shell.nav_expand' : 'shell.nav_collapse'),
+                  expanded: !navHidden,
+                },
                 // Непрочитанные новости — обычная точка у «Меню», цветная — только у показателей
                 // (прототип renderSheetDot).
                 ...menuDot(
@@ -563,6 +579,11 @@ function ShellPage({
                 openLabel: t('shell.search_open'),
               }}
               clock={<Clock initial={serverNow} />}
+              wide={{
+                on: wide,
+                label: t(wide ? 'shell.wide_off' : 'shell.wide_on'),
+                onToggle: toggleWide,
+              }}
               video={
                 topVideo
                   ? {

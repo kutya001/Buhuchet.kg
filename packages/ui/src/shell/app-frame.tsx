@@ -8,14 +8,17 @@ const TEXT_INPUT = 'input:not([type=checkbox]):not([type=radio]),textarea';
 /**
  * Каркас рабочей страницы (прототип index.html `.app`, css/shell.css, css/mobile.css): три «площадки»
  * со скруглёнными углами и тенью на фоне рамки — левая панель модулей во всю высоту окна, справа от
- * неё верхняя панель и под ней рабочая область. Скрытая левая панель — верхняя панель и рабочая
- * область во всю ширину. Уже 768 px левой панели нет: верхняя панель, рабочая область и внизу —
+ * неё верхняя панель и под ней рабочая область. Свёрнутая левая панель (прототип v85 `.app.nav-hidden`)
+ * — полоска значков шириной 60 px, ширина меняется плавно. «На всю ширину» (`.app.wide`) снимает с
+ * рабочей области предел 1640 px и центрирование, со списка «По центру» — его предел. Уже 768 px
+ * левой панели нет: верхняя панель, рабочая область и внизу —
  * нижняя панель модулей; учитываются вырезы экрана, содержимое не прячется под нижней панелью. При
  * открытой клавиатуре телефона нижняя панель и кнопка «+» скрываются. Прокручивается только рабочая
  * область, верхняя панель остаётся на месте.
  */
 export function AppFrame({
   navHidden,
+  wide = false,
   side,
   topBar,
   bottomNav,
@@ -23,7 +26,10 @@ export function AppFrame({
   children,
   paneLabel,
 }: {
+  /** Левая панель свёрнута до значков (ПК). */
   navHidden: boolean;
+  /** «На всю ширину»: рабочая область без предела ширины (ПК). */
+  wide?: boolean;
   side: ReactNode;
   topBar: ReactNode;
   /** Нижняя панель телефона. */
@@ -39,15 +45,16 @@ export function AppFrame({
     <div
       data-nav={navHidden ? 'hidden' : 'shown'}
       data-kb={keyboard}
-      className="group/app grid h-dvh grid-cols-[276px_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-2.5 p-2.5 data-[nav=hidden]:grid-cols-[minmax(0,1fr)] max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[auto_minmax(0,1fr)_auto] max-md:gap-2 max-md:pt-[max(8px,env(safe-area-inset-top,0px))] max-md:pr-[max(8px,env(safe-area-inset-right,0px))] max-md:pb-[calc(8px+env(safe-area-inset-bottom,0px))] max-md:pl-[max(8px,env(safe-area-inset-left,0px))] max-md:data-[kb=true]:grid-rows-[auto_minmax(0,1fr)]"
+      data-wide={wide}
+      className="group/app grid h-dvh grid-cols-[276px_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-2.5 p-2.5 transition-[grid-template-columns] duration-[240ms] ease-[cubic-bezier(.3,.7,.3,1)] motion-reduce:transition-none md:data-[nav=hidden]:grid-cols-[60px_minmax(0,1fr)] max-md:grid-cols-[minmax(0,1fr)] max-md:grid-rows-[auto_minmax(0,1fr)_auto] max-md:gap-2 max-md:pt-[max(8px,env(safe-area-inset-top,0px))] max-md:pr-[max(8px,env(safe-area-inset-right,0px))] max-md:pb-[calc(8px+env(safe-area-inset-bottom,0px))] max-md:pl-[max(8px,env(safe-area-inset-left,0px))] max-md:data-[kb=true]:grid-rows-[auto_minmax(0,1fr)]"
     >
       {topBar}
       {side}
       <main
         aria-label={paneLabel}
-        className="relative col-start-2 row-start-2 min-h-0 min-w-0 overflow-auto rounded-xl border border-line bg-pane shadow-pane group-data-[nav=hidden]/app:col-start-1 data-[paging=true]:overflow-x-hidden max-md:col-start-1 max-md:rounded-2xl"
+        className="relative col-start-2 row-start-2 min-h-0 min-w-0 overflow-auto rounded-xl border border-line bg-pane shadow-pane data-[paging=true]:overflow-x-hidden max-md:col-start-1 max-md:rounded-2xl"
       >
-        <div className="mx-auto flex max-w-[1640px] min-w-0 flex-col gap-3.5 px-7 pt-[22px] pb-12 max-md:gap-3 max-md:px-4 max-md:pt-4 max-md:pb-[92px]">
+        <div className="mx-auto flex max-w-[1640px] min-w-0 group-data-[wide=true]/app:max-w-none flex-col gap-3.5 px-7 pt-[22px] pb-12 max-md:gap-3 max-md:px-4 max-md:pt-4 max-md:pb-[92px]">
           {children}
         </div>
       </main>
