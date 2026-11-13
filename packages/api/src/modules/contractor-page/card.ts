@@ -11,6 +11,7 @@ import {
   messageTemplates,
   setContractorPageHidden,
   withOrgContext,
+  writeContractorPageCodeCopy,
   writeContractorPageHistory,
   type ContractorRecord,
   type Tx,
@@ -317,7 +318,8 @@ export function pageLogHandler(
             : 'page_off'
           : pageSendRefusal(actorOf(subjectOf(c), cp), enabled);
       if (refusal) refuse(refusal);
-      await writeContractorPageHistory(tx, id, action);
+      if (action === 'page_code_copy') await writeContractorPageCodeCopy(tx, id);
+      else await writeContractorPageHistory(tx, id, action);
       return pageOut(tx, deps, c, id);
     });
     return c.json(body, 200);

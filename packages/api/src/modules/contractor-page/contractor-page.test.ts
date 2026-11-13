@@ -232,8 +232,17 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     // Код копирует каждый, кто видит его в блоке (прототип v86): нажатие пишется в историю.
     expect(other.code).toBe(mine.code);
     await block(await act(senior, cpAcc.id, 'code-copied'));
+    // Нажатия подряд тем же сотрудником — одна запись; у другого сотрудника — своя.
+    await block(await act(senior, cpAcc.id, 'code-copied'));
+    await block(await act(acc, cpAcc.id, 'code-copied'));
     const actions = (await history(cpAcc.id)).map((h) => h.action);
-    expect(actions).toEqual(['page_on', 'page_copy', 'page_send', 'page_code_copy']);
+    expect(actions).toEqual([
+      'page_on',
+      'page_copy',
+      'page_send',
+      'page_code_copy',
+      'page_code_copy',
+    ]);
   });
 
   it('«Разделы страницы»: с версией, только разделы организации', async () => {

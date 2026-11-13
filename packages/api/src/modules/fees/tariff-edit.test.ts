@@ -1,6 +1,6 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { ApiError, ContractorFees, TariffEdited } from '@buhuchet/shared';
+import { ApiError, ContractorFees, ContractorHistory, TariffEdited } from '@buhuchet/shared';
 import { and, desc, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
@@ -241,6 +241,8 @@ describe.skipIf(!databaseAvailable())('Журнал тарифов: правка
     await expectStatus(await edit(owner, cp, first.id, { ...ok, reason: '   ' }), 400);
     await expectStatus(await edit(owner, cp, first.id, { ...ok, amount: -1 }), 400);
     await expectStatus(await edit(owner, cp, first.id, { ...ok, note: 'x' }), 400);
+    // Месяц — настоящая дата: года 0000 в базе нет.
+    await expectStatus(await edit(owner, cp, first.id, { ...ok, from: '0000-01' }), 400);
     // Первая ставка — не раньше месяца начала обслуживания; месяц другой ставки занят.
     const early = await failure(
       await expectStatus(await edit(owner, cp, first.id, { ...ok, from: '2026-06' }), 400),
@@ -354,5 +356,71 @@ describe.skipIf(!databaseAvailable())('Журнал тарифов: правка
     });
     // Повторное удаление — ставки уже нет.
     await expectStatus(await remove(chief, cp, second.id, args), 404);
+  });
+
+  it('область «Свои» и права: без «Менять журнал тарифов» — 403, чужой контрагент — 404; правку и удаление ставки не видит в истории тот, кто не видит плату', async () => {
+    const hr = f.people['hr-a']!.employeeId;
+    const [role] = await f.t.admin.db
+      .select({ id: schema.employees.roleId })
+      .from(schema.employees)
+      .where(eq(schema.employees.id, hr));
+    const grant = (permissionId: string) =>
+      f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: role!.id, permissionId });
+    const mine = await contractor(
+      'ИП Своя',
+      '21503198700031',
+      [
+        { amount: som(10_000), validFrom: '2026-07-01' },
+        { amount: som(12_000), validFrom: '2026-12-01' },
+      ],
+      { responsibleEmployeeId: hr },
+    );
+    const hrCookie = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+    // Только «Видеть плату»: журнал виден, но ставку не изменить и не удалить.
+    await grant('fee');
+    const own = await fees(hrCookie, mine);
+    expect(own.canEditTariff).toBe(false);
+    const first = own.tariffs.find((x) => x.first)!;
+    const second = own.tariffs.find((x) => !x.first)!;
+    const change = { amount: som(11_000), version: first.version };
+    await expectStatus(await edit(hrCookie, mine, first.id, change), 403);
+    await expectStatus(await remove(hrCookie, mine, second.id, { version: second.version }), 403);
+    // С правом «Менять журнал тарифов», но область «Свои»: чужого контрагента нет.
+    await grant('tariff');
+    expect((await fees(hrCookie, mine)).canEditTariff).toBe(true);
+    const foreign = (await fees(owner, cp)).tariffs[0]!;
+    const args = { version: foreign.version };
+    await expectStatus(await edit(hrCookie, cp, foreign.id, { ...args, amount: som(1) }), 404);
+    await expectStatus(await remove(hrCookie, cp, foreign.id, args), 404);
+    expect((await fees(owner, cp)).tariffs[0]).toMatchObject({
+      amount: foreign.amount,
+      version: foreign.version,
+    });
+    // Свой контрагент — можно.
+    await expectStatus(await edit(hrCookie, mine, first.id, change), 200);
+    await expectStatus(await remove(hrCookie, mine, second.id, { version: second.version }), 200);
+    // Бухгалтер без права на плату — ответственный за контрагента: правки ставок и их причины ему не видны.
+    await f.t.admin.db
+      .update(schema.contractors)
+      .set({ responsibleEmployeeId: f.people['acc-a']!.employeeId })
+      .where(eq(schema.contractors.id, mine));
+    const history = async (cookie: string) =>
+      ContractorHistory.parse(
+        await (
+          await expectStatus(await call('GET', `/api/contractors/${mine}/history`, cookie), 200)
+        ).json(),
+      ).items;
+    const fieldsOf = (items: Awaited<ReturnType<typeof history>>) =>
+      items.flatMap((h) => h.changes.map((x) => x.field));
+    const seen = await history(acc);
+    expect(fieldsOf(seen)).not.toContain('tariffEdited');
+    expect(fieldsOf(seen)).not.toContain('tariffDeleted');
+    expect(seen.map((h) => h.reason)).not.toContain('ставку внесли с ошибкой');
+    expect(seen.map((h) => h.reason)).not.toContain('внесли по ошибке');
+    expect(fieldsOf(await history(owner))).toEqual(
+      expect.arrayContaining(['tariffEdited', 'tariffDeleted']),
+    );
   });
 });

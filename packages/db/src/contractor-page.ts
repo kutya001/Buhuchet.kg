@@ -7,6 +7,7 @@ import {
   PAGE_IP_WINDOW_MINUTES,
   PAGE_LOCK_MINUTES,
   PAGE_MAX_GRANTS,
+  PAGE_CODE_COPY_REPEAT_MINUTES,
   PAGE_OPEN_REPEAT_MINUTES,
   PAGE_REMEMBER_DAYS,
   type HistoryAction,
@@ -175,6 +176,26 @@ export async function writeContractorPageOpen(
   await writeContractorPageHistory(tx, contractorId, 'page_open', {
     changes: [{ field: 'device', to: device }],
   });
+}
+
+/**
+ * Нажатие на код доступа — в историю контрагента (прототип v86 `codecopy`). Повтор тем же сотрудником
+ * в течение `PAGE_CODE_COPY_REPEAT_MINUTES` — то же копирование: нажатия подряд историю не заваливают.
+ */
+export async function writeContractorPageCodeCopy(tx: Tx, contractorId: string): Promise<void> {
+  const [last] = await tx
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .where(
+      and(
+        pageHistoryOf(contractorId, 'page_code_copy'),
+        sql`${auditLog.actorUserId} = app.current_user_id()`,
+        gt(auditLog.at, sql`now() - make_interval(mins => ${PAGE_CODE_COPY_REPEAT_MINUTES})`),
+      ),
+    )
+    .limit(1);
+  if (last) return;
+  await writeContractorPageHistory(tx, contractorId, 'page_code_copy');
 }
 
 /**

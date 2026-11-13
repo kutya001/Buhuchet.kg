@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { linkTelegram, newOrgOwner, signIn, uniqueChat, uniqueLogin } from './helpers';
 import { connectAllTypes, orgWithTypes } from './orgs';
-import { find, manualReport, newContractor, reportsOf } from './reports';
+import { asOwner, find, manualReport, newContractor, reportsOf } from './reports';
 
 // Форма контрагента (задача 2.09, #65): «+ Добавить» → «Контрагент» в модуле «Контрагенты» (списка
 // ещё нет — задача 2.10, вместо него заглушка), разделы и шаги формы, сверка с ГКЭД и вопросы перед
@@ -787,5 +787,24 @@ test.describe('Этап 2: форма контрагента', () => {
       status: string;
     };
     expect(service.status).toBe('active');
+  });
+
+  test('(проверка прототипа v86) «Новый контрагент»: в поле «Первый неполный месяц» выбран «Полный месяц», он первый в списке', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    // Демо-организация: в ней включена «Плата за обслуживание», поле есть в форме.
+    await asOwner(page.request, baseURL);
+    const form = await openForm(page);
+    await fillMain(page, form, { gked: '47.11.0' });
+    await toSection(form, 3, isMobile);
+    const first = form.locator('[data-cp-field="first"]');
+    await expect(first).toHaveValue('full');
+    await expect(first.locator('option')).toHaveText([
+      'Полный месяц',
+      'Пропорционально дням',
+      'Со следующего месяца',
+    ]);
   });
 });

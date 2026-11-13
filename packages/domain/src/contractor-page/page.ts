@@ -52,6 +52,13 @@ export const PAGE_MAX_GRANTS = 20;
 // ОТКЛОНЕНИЕ: docs/deviations.md#Е-3
 export const PAGE_OPEN_REPEAT_MINUTES = 1;
 
+/**
+ * Повторное нажатие на код доступа тем же сотрудником в течение стольких минут — то же копирование:
+ * так история контрагента не растёт от нажатий подряд.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-78
+export const PAGE_CODE_COPY_REPEAT_MINUTES = 10;
+
 /** Адрес организации и ИНН в правильном виде; иначе — «Страница недоступна» без запроса к базе. */
 export function isPageAddress(slug: string, inn: string): boolean {
   return /^[a-z0-9-]{3,30}$/.test(slug) && /^\d{14}$/.test(inn);

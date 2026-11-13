@@ -248,6 +248,14 @@ test.describe('Этап 2: плата за обслуживание', () => {
     await expect(dialog.locator('[data-fee-tedit-amount]')).toHaveValue(som('60 000'));
     await expect(dialog.locator('[data-fee-tedit-delete]')).toHaveCount(0);
     await expect(dialog).toContainText('Начисления за месяцы этой ставки пересчитаются');
+    // «Сохранить» без правок: «Изменений нет», окно закрывается, запись журнала прежняя.
+    await dialog.locator('[data-fee-tedit-reason]').fill('проверка');
+    await dialog.locator('[data-fee-tedit-ok]').click();
+    await expect(page.getByRole('status').filter({ hasText: 'Изменений нет' })).toBeVisible();
+    await expect(dialog).toBeHidden();
+    await expect(tab.locator('[data-fee-tariffs]')).not.toContainText('изменена');
+    await tab.locator('[data-fee-tariff-edit="2026-01"]').click();
+    await expect(dialog.locator('[data-fee-tedit-reason]')).toHaveValue('');
     await dialog.locator('[data-fee-tedit-amount]').fill('50000');
     await dialog.locator('[data-fee-tedit-ok]').click();
     await expect(dialog).toContainText('Укажите причину');

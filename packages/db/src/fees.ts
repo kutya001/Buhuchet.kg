@@ -524,8 +524,8 @@ export interface TariffInput {
 /**
  * «Добавить в журнал» (прототип `tariffDlg`): ставка не меньше 0, месяц не прошлый, если ставка уже есть —
  * со следующего месяца, не чаще раза в месяц; у разового ставок не вносят (у архивного — можно, как в
- * прототипе). Запись журнала
- * не меняется и не удаляется; в истории контрагента — «Новая ставка …».
+ * прототипе). В истории контрагента — «Новая ставка …». Внесённую запись правят и удаляют
+ * `editTariff` и `deleteTariff` (прототип v86).
  */
 export async function addTariff(
   tx: Tx,
@@ -698,19 +698,19 @@ export async function editTariff(
       version: sql`${contractorTariffs.version} + 1`,
     })
     .where(eq(contractorTariffs.id, tariffId));
-  if (firstMonth !== subject.firstMonth) {
-    // Правило первого месяца — поле контрагента: его версия растёт, чтобы открытое «Изменить» не
-    // сохранило устаревшую карточку поверх.
-    await tx
-      .update(contractors)
-      .set({
-        firstMonthMode: firstMonth,
-        version: sql`${contractors.version} + 1`,
-        updatedAt: sql`now()`,
-        updatedBy: sql`app.current_user_id()`,
-      })
-      .where(eq(contractors.id, contractorId));
-  }
+  // Правка ставки — правка контрагента: «изменён» и «кем» обновляются (прототип `cp.upd`, `cp.updBy`).
+  // Правило первого месяца — поле контрагента: с ним растёт и версия, чтобы открытое «Изменить» не
+  // сохранило устаревшую карточку поверх.
+  await tx
+    .update(contractors)
+    .set({
+      ...(firstMonth !== subject.firstMonth
+        ? { firstMonthMode: firstMonth, version: sql`${contractors.version} + 1` }
+        : {}),
+      updatedAt: sql`now()`,
+      updatedBy: sql`app.current_user_id()`,
+    })
+    .where(eq(contractors.id, contractorId));
   await writeHistory(tx, {
     entity: 'contractor',
     entityId: contractorId,
@@ -766,6 +766,10 @@ export async function deleteTariff(
   if (!tariffDeletable(journal, tariff, ctx.today))
     throw new FeeRefusedError(journal.length > 1 ? 'tariff_delete_started' : 'tariff_delete_last');
   await tx.delete(contractorTariffs).where(eq(contractorTariffs.id, tariffId));
+  await tx
+    .update(contractors)
+    .set({ updatedAt: sql`now()`, updatedBy: sql`app.current_user_id()` })
+    .where(eq(contractors.id, contractorId));
   await writeHistory(tx, {
     entity: 'contractor',
     entityId: contractorId,

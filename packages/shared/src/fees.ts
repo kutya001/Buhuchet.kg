@@ -151,7 +151,8 @@ export type TariffSaved = z.infer<typeof TariffSaved>;
 export const TariffEditRequest = z.strictObject({
   amount: Amount,
   period: z.enum(TARIFF_PERIODS),
-  from: Month,
+  // Нижняя граница — чтобы месяц всегда был датой базы (года 0000 в ней нет).
+  from: Month.refine((m) => m >= '2000-01', 'Месяц — ГГГГ-ММ'),
   firstMonth: z.enum(FIRST_MONTH_MODES).optional(),
   reason: z.string().trim().min(1, 'Укажите причину').max(OP_REASON_MAX),
   version: RecordVersion,

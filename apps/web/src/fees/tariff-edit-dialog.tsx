@@ -3,7 +3,6 @@
 import {
   formatDateRu,
   formatSom,
-  formatSomWithUnit,
   monthLabel,
   monthLabelGen,
   parseSom,
@@ -27,6 +26,7 @@ import {
 import { useId, useState } from 'react';
 import { useErrorText, useT } from '../l10n/provider';
 import { deleteTariff, editTariff } from './fees-data';
+import { tariffGone, tariffSavedText } from './tariff-edit';
 
 /*
  * «Изменить ставку обслуживания» (прототип v86 modules/contractor-card.js `tariffEditDlg`;
@@ -73,14 +73,20 @@ export function TariffEditDialog({
       ? t(`err.tariff_${problem}`, { month: monthLabel(cp.startDate.slice(0, 7)) })
       : undefined;
 
-  /** Отказ сервера: у своего поля, иначе — сообщением; чужая правка — перечитать журнал. */
+  /**
+   * Отказ сервера: у своего поля, иначе — сообщением. Ставку тем временем изменили или удалили —
+   * окно закрывается, журнал перечитывается: правку начинают заново по свежей записи.
+   */
   const refused = (error: Parameters<typeof errorText>[0]) => {
     const message = errorText(error);
     const field = (error.details as { field?: string } | undefined)?.field;
     if (field === 'amount' || field === 'from' || field === 'reason')
       return setErrors({ [field]: message });
     toast(message, { bad: true });
-    if (error.code === 'record_changed' || error.code === 'tariff_not_found') onDone();
+    if (tariffGone(error.code)) {
+      onDone();
+      onClose();
+    }
   };
 
   const save = async () => {
@@ -116,17 +122,9 @@ export function TariffEditDialog({
     setBusy(false);
     if (!res.ok) return refused(res.error);
     const saved = TariffEdited.safeParse(res.data);
-    const delta = saved.success ? saved.data.debtDelta : 0;
     onDone();
     onClose();
-    if (saved.success && !saved.data.changed) return void toast(t('fee.tedit.none'));
-    toast(
-      delta
-        ? t(delta > 0 ? 'fee.tedit.saved_up' : 'fee.tedit.saved_down', {
-            amount: formatSomWithUnit(Math.abs(delta)),
-          })
-        : t('fee.tedit.saved'),
-    );
+    toast(tariffSavedText(t, saved.success ? saved.data : null));
   };
 
   const remove = async () => {
