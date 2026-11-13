@@ -186,6 +186,69 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_act_off': { ru: 'Telegram: скрытый ответ — действия отключены', section: S },
   'pdicts.tpl.label.tg_act_no_right': { ru: 'Telegram: скрытый ответ — нет права', section: S },
   'pdicts.tpl.label.tg_act_stale': { ru: 'Telegram: скрытый ответ — кнопка устарела', section: S },
+  'pdicts.tpl.label.tg_cp_req': {
+    ru: 'Telegram: запрос на подключение Telegram контрагента',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_ok': {
+    ru: 'Telegram: кнопка «Подтвердить» Telegram контрагента',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_no': {
+    ru: 'Telegram: кнопка «Отклонить» Telegram контрагента',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_ask': {
+    ru: 'Telegram контрагента: запрос отправлен бухгалтеру',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_on': { ru: 'Telegram контрагента: подключён', section: S },
+  'pdicts.tpl.label.tg_cp_no': { ru: 'Telegram контрагента: запрос отклонён', section: S },
+  'pdicts.tpl.label.tg_cp_off': { ru: 'Telegram контрагента: отключён', section: S },
+  'pdicts.tpl.label.tg_cp_already': { ru: 'Telegram контрагента: уже подключён', section: S },
+  'pdicts.tpl.label.tg_cp_limit': { ru: 'Telegram контрагента: мест нет', section: S },
+  'pdicts.tpl.label.tg_cp_link_bad': { ru: 'Telegram контрагента: ссылка устарела', section: S },
+  'pdicts.tpl.label.wa_pay_month': { ru: 'WhatsApp: налоги к оплате за месяц', section: S },
+  'pdicts.tpl.label.tg_cp_pay': { ru: 'Telegram контрагента: «К оплате» за месяц', section: S },
+  'pdicts.tpl.label.tg_btn_cp_req': {
+    ru: 'Telegram контрагента: кнопка «Скопировать реквизиты»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_paid': { ru: 'Telegram контрагента: кнопка «Оплатил»', section: S },
+  'pdicts.tpl.label.tg_btn_cp_q': {
+    ru: 'Telegram контрагента: кнопка «Вопрос бухгалтеру»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_paid_ok': { ru: 'Telegram контрагента: ответ на «Оплатил»', section: S },
+  'pdicts.tpl.label.tg_cp_paid_staff': { ru: 'Telegram: контрагент сообщил об оплате', section: S },
+  'pdicts.tpl.label.tg_cp_ask_how': {
+    ru: 'Telegram контрагента: просьба написать вопрос',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_ask_sent': { ru: 'Telegram контрагента: вопрос передан', section: S },
+  'pdicts.tpl.label.tg_cp_ask_staff': { ru: 'Telegram: вопрос контрагента бухгалтеру', section: S },
+  'pdicts.tpl.label.tg_cp_answer': { ru: 'Telegram контрагента: ответ бухгалтера', section: S },
+  'pdicts.tpl.label.tg_cp_not_linked': {
+    ru: 'Telegram контрагента: Telegram не подключён',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_debt': { ru: 'Telegram контрагента: напоминание о долге', section: S },
+  'pdicts.tpl.label.tg_btn_cp_no_debt': {
+    ru: 'Telegram контрагента: кнопка «Не напоминать»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_no_debt_ok': {
+    ru: 'Telegram контрагента: ответ на «Не напоминать»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_req_tax': {
+    ru: 'Telegram контрагента: кнопка «Реквизиты для налогов»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_req_fee': {
+    ru: 'Telegram контрагента: кнопка «Реквизиты для обслуживания»',
+    section: S,
+  },
   'pdicts.tpl.label.tg_act_no_link': {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,

@@ -80,7 +80,7 @@ function opWin(d){if(!d)return;if(d.src==='svc')return serviceCard(d.ref);
       if(q('#ow-corr:not(.dis)'))q('#ow-corr').onclick=()=>corrDlg(x);
       q('#ow-src').onclick=()=>{m.close();v.src[1]()};q('#ow-cp').onclick=()=>openCp(c,d.src==='fee'?'fee':'money');if(q('#ow-rep'))q('#ow-rep').onclick=()=>openReport(v.rep);
       $$('[data-rep]',el).forEach(y=>y.onclick=()=>openReport(REPORTS.find(r=>r.id===+y.dataset.rep)));
-      bindFiles(el,'ow-f',v.files,f=>{opLog(d,'Прикреплены файлы: '+f.join(', '));m.draw()})}}}});
+      bindFiles(el,'ow-f',v.files,(f,note)=>{opLog(d,'Прикреплены файлы: '+f.join(', ')+fNoteLog(note));m.draw()})}}}});
 }
 // Пункты меню строки: те же действия, что в окне; «Отменить списание» и «Отменить возврат» — это «Удалить»
 function opActs(d,open=true){const v=opView(d),k=v.k;if(v.del)return [open&&{label:'Открыть',icon:'list',run:()=>opWin(d)},{label:'Открыть источник',icon:'link',sub:v.src[0],run:v.src[1]}].filter(Boolean);
