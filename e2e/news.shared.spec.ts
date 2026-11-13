@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { ADMIN_PASSWORD, platformAdmin } from './admin';
-import { hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
+import { finger, hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
 
 // «Новости» и «Что нового» (задача 2.32). Новость видят все пользователи платформы, поэтому тесты — в
 // *.shared.spec.ts (идут после остальных и по одному): опубликованная новость не попадёт в чужую
@@ -13,14 +13,19 @@ test.describe.configure({ mode: 'serial' });
 const READER_PASSWORD = 'Свой-пароль-e2e-1';
 
 /**
- * Последний день, новости которого уже видны: сегодня по Бишкеку с 09:00, раньше — вчера. Новость теста
- * с этой датой — выше любой новости начального наполнения (в один день выше та, что опубликована позже).
+ * Последний день, новости которого уже видны: сегодня по Бишкеку с 09:00, раньше — вчера.
  */
 const shownDay = () => {
   const bishkek = new Date(Date.now() + 6 * 3600_000);
   if (bishkek.getUTCHours() < 9) bishkek.setUTCDate(bishkek.getUTCDate() - 1);
   return bishkek.toISOString().slice(0, 10);
 };
+
+/**
+ * Лента идёт строго по номеру версии (прототип v98): чтобы новость теста встала выше любой новости
+ * начального наполнения, её номер — заведомо больше всех.
+ */
+const TOP_RELEASE = '9001.4';
 
 const MD_14 =
   '## Что нового\n- Отчёты по неделям\n\n## Исправлено\n- Счётчик на вкладке\n\n## Где найти\n- Меню → «Отчёты»\n';
@@ -126,7 +131,7 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
 
       const title = `Версия 1.4 — 20.10.2026 ${uniqueLogin('e2e')}`;
       await form.getByRole('textbox', { name: 'Заголовок', exact: true }).fill(title);
-      await form.getByLabel('Версия', { exact: true }).fill('1.4');
+      await form.getByLabel('Версия', { exact: true }).fill(TOP_RELEASE);
       await form.getByLabel('Дата публикации').fill(shownDay());
       await form.getByLabel('Краткое описание').fill('Отчёты по неделям и исправленный счётчик');
       const md = form.getByLabel('Подробное описание (markdown)');
@@ -152,29 +157,30 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       };
       id = list.items.find((n) => n.title === title)!.id;
 
-      // Пользователь: сверху ленты (под закреплёнными), «Новое», счётчик у вкладки.
+      // Пользователь: новость не прочитана — счётчик 1.
       await page.request.post('/api/auth/logout', { headers: { origin } });
       await signIn(page.request, origin, reader, READER_PASSWORD);
-      await page.goto('/app/kb/news');
+      expect(await unread(page.request)).toBe(1);
+      // Счётчик непрочитанных — у вкладки «Новости», пока пользователь на другой вкладке Базы знаний.
+      await page.goto('/app/kb/video');
       const tab = page.locator('[data-tabrow] [role=tab][title="Новости"]');
       await expect(tab.locator('[title="Непрочитанные новости"]')).toHaveText('1');
-      // Под закреплёнными первая группа версий — 1.4, в ней эта новость.
-      const firstGroup = page
-        .locator('section')
-        .filter({ has: page.getByRole('heading', { name: /^Версия / }) })
-        .first();
-      await expect(firstGroup.getByRole('heading')).toHaveText(/^Версия 1\.4 — /);
-      await expect(firstGroup.locator('[data-news]').first()).toHaveAttribute('data-news', id);
+      await tab.click();
+      await expect(page).toHaveURL(/\/app\/kb\/news$/);
+      // Лента — строго по номеру версии: у новости теста номер больше всех, она первая под
+      // закреплёнными, раскрыта сама и с «Новое» (прототип v98).
+      const feedList = page.locator('[data-news-list]');
+      await expect(feedList.locator('[data-news]').first()).toHaveAttribute('data-news', id);
       const row = page.locator(`[data-news="${id}"]`);
+      await expect(row.locator('[data-news-head]')).toHaveAttribute('aria-expanded', 'true');
       await expect(row.locator('[data-news-fresh]')).toHaveText('Новое');
-      await row.click();
-      const dialog = page.getByRole('dialog', { name: title });
-      await expect(dialog.getByRole('heading', { name: 'Где найти' })).toBeVisible();
-      await dialog.getByRole('button', { name: 'Закрыть' }).last().click();
-      await expect(dialog).toBeHidden();
-      await expect(row.locator('[data-news-fresh]')).toHaveCount(0);
+      await expect(row.getByRole('heading', { name: 'Где найти' })).toBeVisible();
+      // Раскрытая новость прочитана: счётчика у вкладки нет, а после возвращения нет и «Новое».
       await expect(tab.locator('[title="Непрочитанные новости"]')).toHaveCount(0);
-      expect(await unread(page.request)).toBe(0);
+      await expect.poll(() => unread(page.request)).toBe(0);
+      await page.reload();
+      await expect(row.locator('[data-news-head]')).toHaveAttribute('aria-expanded', 'true');
+      await expect(row.locator('[data-news-fresh]')).toHaveCount(0);
 
       // Администратор снимает новость с публикации — у пользователя её нет.
       await page.request.post('/api/auth/logout', { headers: { origin } });
@@ -240,9 +246,11 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       const window = page.getByRole('dialog', { name: 'Что нового' });
       await expect(window).toBeVisible();
       await expect(window).toContainText('Добро пожаловать в Buhuchet.kg: начните с Базы знаний.');
-      await expect(window.locator('[data-whats-new-item]')).toHaveCount(1);
-      const item = window.locator(`[data-whats-new-item="${v14.id}"]`);
-      await expect(item.getByRole('heading', { name: 'Версия 1.4 — 20.10.2026' })).toBeVisible();
+      await expect(window.locator('[data-news]')).toHaveCount(1);
+      const item = window.locator(`[data-news="${v14.id}"]`);
+      // Единственная новость — она же самая новая: раскрыта сама.
+      await expect(item.locator('[data-news-head]')).toContainText('Версия 1.4 — 20.10.2026');
+      await expect(item.locator('[data-news-head]')).toHaveAttribute('aria-expanded', 'true');
       for (const section of ['Что нового', 'Исправлено', 'Где найти']) {
         await expect(item.getByRole('heading', { name: section })).toBeVisible();
       }
@@ -270,11 +278,149 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await page.request.post('/api/auth/logout', { headers: { origin } });
       await logIn(page, reader);
       await expect(window).toBeVisible();
-      await expect(window.locator('[data-whats-new-item]')).toHaveCount(1);
-      await expect(window.locator(`[data-whats-new-item="${v15.id}"]`)).toBeVisible();
+      await expect(window.locator('[data-news]')).toHaveCount(1);
+      await expect(window.locator(`[data-news="${v15.id}"]`)).toBeVisible();
       await expect(window).not.toContainText('Добро пожаловать');
       await window.getByRole('button', { name: 'Понятно' }).click();
       await expect(window).toBeHidden();
+    } finally {
+      for (const id of ids) await takeOff(admin, origin, id);
+      await admin.dispose();
+    }
+  });
+
+  // Просьба заказчика 13.11.2026 (прототип v98, docs/deviations.md п. И-5): в новостях главное —
+  // заголовки. Версии — строго по номеру, подробности раскрыты сами только у самой новой.
+  test('(проверка прототипа v98) новости — только заголовки: версии строго по номеру, новые сверху; подробности раскрыты сами только у самой новой, остальные раскрываются и сворачиваются по нажатию; раскрытая — прочитана; так же в окне «Что нового»', async ({
+    page,
+    baseURL,
+    playwright,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const admin = await playwright.request.newContext({ baseURL });
+    await platformAdmin(admin, origin);
+    const reader = await newReader(page.request, origin);
+    const ids: string[] = [];
+    try {
+      // Номера больше всех остальных; старшая версия опубликована раньше младшей и с более ранней датой.
+      const day = shownDay();
+      const before = new Date(`${day}T00:00:00Z`);
+      before.setUTCDate(before.getUTCDate() - 3);
+      const newer = await publish(admin, origin, {
+        title: 'Версия 9103: старшая',
+        release: '9103',
+        date: before.toISOString().slice(0, 10),
+      });
+      ids.push(newer.id);
+      const older = await publish(admin, origin, {
+        title: 'Версия 9102: младшая',
+        release: '9102',
+      });
+      ids.push(older.id);
+
+      // «Что нового» после входа: заголовки по номеру версии, раскрыта только самая новая.
+      await logIn(page, reader);
+      const window = page.getByRole('dialog', { name: 'Что нового' });
+      await expect(window).toBeVisible();
+      const shown = window.locator('[data-news]');
+      await expect(shown).toHaveCount(2);
+      await expect(shown.nth(0)).toHaveAttribute('data-news', newer.id);
+      await expect(shown.nth(1)).toHaveAttribute('data-news', older.id);
+      await expect(shown.nth(0).locator('[data-news-head]')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      await expect(shown.nth(0).getByRole('heading', { name: 'Где найти' })).toBeVisible();
+      // Номер версии уже в заголовке — «версия N» в строке не повторяется.
+      await expect(shown.nth(0).locator('[data-news-head]')).not.toContainText('версия 9103');
+      const olderHead = shown.nth(1).locator('[data-news-head]');
+      await expect(olderHead).toHaveAttribute('aria-expanded', 'false');
+      await expect(shown.nth(1).locator('[data-news-body]')).toHaveCount(0);
+      await olderHead.click();
+      await expect(shown.nth(1).getByRole('heading', { name: 'Исправлено' })).toBeVisible();
+      await olderHead.click();
+      await expect(shown.nth(1).locator('[data-news-body]')).toHaveCount(0);
+      await window.getByRole('button', { name: 'Понятно' }).click();
+      await expect(window).toBeHidden();
+      // Показанные в «Что нового» прочитаны.
+      await expect.poll(() => unread(page.request)).toBe(0);
+
+      // Ещё две версии, обе не прочитаны: одна теперь самая новая, другая — ниже остальных, и номера
+      // версии в её заголовке нет.
+      const top = await publish(admin, origin, { title: 'Версия 9104: новая', release: '9104' });
+      ids.push(top.id);
+      const low = await publish(admin, origin, { title: 'Мелкие правки списков', release: '9101' });
+      ids.push(low.id);
+      expect(await unread(page.request)).toBe(2);
+      await page.goto('/app/kb/video');
+      const tab = page.locator('[data-tabrow] [role=tab][title="Новости"]');
+      const counter = tab.locator('[title="Непрочитанные новости"]');
+      await expect(counter).toHaveText('2');
+      if (isMobile) {
+        // Телефон: недотянутая протяжка к «Новостям» рисует вкладку соседней под пальцем, но входом
+        // во вкладку не считается — самая новая остаётся непрочитанной.
+        const pane = (await page.locator('main').boundingBox())!;
+        const from = { x: pane.x + pane.width * 0.85, y: pane.y + pane.height * 0.6 };
+        const swipe = await finger(page);
+        await swipe.drag(from, { x: from.x - 60, y: from.y }, async () => {
+          await expect(page.locator('[inert] [data-news-list] [data-news]').first()).toBeVisible();
+        });
+        await page.waitForTimeout(400);
+        await expect(page).toHaveURL(/\/app\/kb\/video$/);
+        await expect(counter).toHaveText('2');
+        expect(await unread(page.request)).toBe(2);
+      }
+      await tab.click();
+      await expect(page).toHaveURL(/\/app\/kb\/news$/);
+      const rows = page.locator('[data-news-list] [data-news]');
+      await expect(rows.nth(0)).toHaveAttribute('data-news', top.id);
+      await expect(rows.nth(1)).toHaveAttribute('data-news', newer.id);
+      await expect(rows.nth(2)).toHaveAttribute('data-news', older.id);
+      await expect(rows.nth(3)).toHaveAttribute('data-news', low.id);
+      // Раскрыта сама только самая новая: она прочитана сразу, «Новое» видно до ухода со вкладки.
+      await expect(
+        page.locator('[data-news-list] [data-news-head][aria-expanded="true"]'),
+      ).toHaveCount(1);
+      await expect(rows.nth(0).locator('[data-news-head]')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      await expect(rows.nth(0).locator('[data-news-fresh]')).toHaveText('Новое');
+      await expect(counter).toHaveText('1');
+      // Непрочитанная ниже — свёрнута, с «Новое»; номера версии в заголовке нет — он в строке.
+      const lowHead = rows.nth(3).locator('[data-news-head]');
+      await expect(lowHead).toHaveAttribute('aria-expanded', 'false');
+      await expect(lowHead).toContainText('версия 9101');
+      await expect(rows.nth(3).locator('[data-news-fresh]')).toHaveText('Новое');
+      // Раскрыли — прочитана: «Новое» и счётчика у вкладки больше нет.
+      await lowHead.click();
+      await expect(lowHead).toHaveAttribute('aria-expanded', 'true');
+      await expect(rows.nth(3).locator('[data-news-fresh]')).toHaveCount(0);
+      await expect(counter).toHaveCount(0);
+      await expect.poll(() => unread(page.request)).toBe(0);
+      await lowHead.click();
+      // В свёрнутой строке — только заголовок: ни краткого описания, ни подробностей.
+      await expect(rows.nth(1)).not.toContainText('Отчёты по неделям');
+      const second = rows.nth(1).locator('[data-news-head]');
+      await second.click();
+      await expect(second).toHaveAttribute('aria-expanded', 'true');
+      await expect(rows.nth(1).getByRole('heading', { name: 'Что нового' })).toBeVisible();
+      await second.click();
+      await expect(rows.nth(1).locator('[data-news-body]')).toHaveCount(0);
+      // Самую новую тоже можно свернуть.
+      await rows.nth(0).locator('[data-news-head]').click();
+      await expect(rows.nth(0).locator('[data-news-body]')).toHaveCount(0);
+      // Снова на вкладке: раскрыта опять только самая новая, «Новое» на ней уже нет.
+      await page.reload();
+      await expect(rows.nth(0).locator('[data-news-head]')).toHaveAttribute(
+        'aria-expanded',
+        'true',
+      );
+      await expect(
+        page.locator('[data-news-list] [data-news-head][aria-expanded="true"]'),
+      ).toHaveCount(1);
+      await expect(rows.nth(0).locator('[data-news-fresh]')).toHaveCount(0);
     } finally {
       for (const id of ids) await takeOff(admin, origin, id);
       await admin.dispose();
@@ -321,7 +467,7 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await logIn(page, owner);
       const window = page.getByRole('dialog', { name: 'Что нового' });
       await expect(window).toBeVisible();
-      await expect(window.locator(`[data-whats-new-item="${v16.id}"]`)).toBeVisible();
+      await expect(window.locator(`[data-news="${v16.id}"]`)).toBeVisible();
       await expect(window).not.toContainText('Добро пожаловать');
       await expect(window.getByRole('link', { name: 'Открыть Базу знаний' })).toHaveCount(0);
       await expect(welcome).toHaveCount(0);

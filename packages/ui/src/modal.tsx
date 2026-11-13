@@ -112,9 +112,15 @@ interface CurrentWindow {
   close: () => void;
   /** Закрыть окно перед переходом с заменой записи истории (`replace`): «Назад» не вернёт к окну. */
   leave: () => void;
+  /** Компонент нарисован внутри окна; вне окна `close` и `leave` ничего не делают. */
+  inside: boolean;
 }
 
-const CurrentWindowContext = createContext<CurrentWindow>({ close: () => {}, leave: () => {} });
+const CurrentWindowContext = createContext<CurrentWindow>({
+  close: () => {},
+  leave: () => {},
+  inside: false,
+});
 
 /** Тексты окон из `WindowProvider` («Отмена», «Подтвердить», …) — для своих окон пакета. */
 export function useWindowLabels(): WindowLabels {
@@ -363,6 +369,7 @@ export function Modal({
         release(true);
         onClose();
       },
+      inside: true,
     }),
     [onClose, release],
   );

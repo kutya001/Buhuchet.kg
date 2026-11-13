@@ -1,20 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
-  compareNews,
   NEWS_MESSAGES,
   NEWS_TEMPLATE,
-  newsGroups,
   newsHistoryKinds,
   newsImageProblem,
   newsImageType,
   newsLive,
   newsLoginDefault,
   newsMatches,
+  newsOrder,
   newsProblems,
   newsReleasedAt,
-  newsShortText,
   newsShowMoment,
   newsState,
+  newsTitleHasVersion,
   newsVersions,
   type NewsDraft,
 } from './news';
@@ -65,30 +64,42 @@ describe('лента', () => {
     pinned = false,
   ) => ({ id, date, version, pinned, publishedAt: publishedAt ? at(publishedAt) : null });
 
-  it('от новых к старым: дата, в один день — время публикации, затем версия', () => {
+  const ordered = (items: ReturnType<typeof n>[]) => newsOrder(items, (x) => x).map((x) => x.id);
+
+  it('строго по номеру версии, новые сверху: дата и время публикации порядок версий не меняют', () => {
     const items = [
-      n('a', '2026-10-01', '1.2'),
-      n('b', '2026-10-05', '1.3', '2026-10-05T04:00:00Z'),
-      n('c', '2026-10-05', '1.10', '2026-10-05T08:00:00Z'),
-      n('d', '2026-10-01', '1.10'),
+      n('v95', '2026-11-13', '95', '2026-11-13T14:45:00Z'),
+      n('v97', '2026-11-13', '97', '2026-11-13T14:32:00Z'),
+      n('v96', '2026-11-13', '96', '2026-11-13T15:40:00Z'),
+      n('v9', '2026-11-14', '9'),
+      n('v1.10', '2026-10-05', '1.10'),
+      n('v1.9', '2026-10-06', '1.9'),
     ];
-    // В один день без времени публикации — по номеру версии числом, как в прототипе (+ver): 1.2 > 1.10.
-    expect(items.sort(compareNews).map((x) => x.id)).toEqual(['c', 'b', 'a', 'd']);
+    expect(ordered(items)).toEqual(['v97', 'v96', 'v95', 'v9', 'v1.10', 'v1.9']);
   });
 
-  it('группы по версиям в порядке ленты, закреплённые отдельно; дата группы — самая поздняя', () => {
+  it('новость без версии встаёт среди версий по дате выхода, в один день — выше версии', () => {
     const items = [
-      n('p', '2026-10-27', '2.0', null, true),
-      n('x', '2026-10-25', '1.4'),
-      n('y', '2026-10-20', null),
-      n('z', '2026-10-18', '1.4'),
+      n('v2', '2026-10-10', '2'),
+      n('v3', '2026-10-20', '3'),
+      n('old', '2026-10-01', null),
+      n('same', '2026-10-20', null, '2026-10-20T03:00:00Z'),
+      n('same-later', '2026-10-20', null, '2026-10-20T08:00:00Z'),
+      n('mid', '2026-10-15', null),
     ];
-    const { pinned, groups } = newsGroups(items);
-    expect(pinned.map((x) => x.id)).toEqual(['p']);
-    expect(groups.map((g) => [g.version, g.date, g.items.map((x) => x.id)])).toEqual([
-      ['1.4', '2026-10-25', ['x', 'z']],
-      [null, '2026-10-20', ['y']],
-    ]);
+    expect(ordered(items)).toEqual(['same-later', 'same', 'v3', 'mid', 'v2', 'old']);
+    expect(ordered([])).toEqual([]);
+  });
+
+  it('номер версии в заголовке: «версия N» в строке ленты не повторяется', () => {
+    expect(newsTitleHasVersion('Версия 98: новости — только заголовки', '98')).toBe(true);
+    expect(newsTitleHasVersion('Версия 1.4 — 20.10.2026', '1.4')).toBe(true);
+    expect(newsTitleHasVersion('Версия 98: новости', '9')).toBe(false);
+    expect(newsTitleHasVersion('Версия 114', '1.4')).toBe(false);
+    expect(newsTitleHasVersion('Плановые работы 20 октября', '1.4')).toBe(false);
+    // Номер версии — обычный текст, а не шаблон поиска.
+    expect(newsTitleHasVersion('Версия (1+2)* [бета]', '(1+2)*')).toBe(true);
+    expect(newsTitleHasVersion('Версия 1.4', '[')).toBe(false);
   });
 
   it('версии для фильтра — от новых к старым как числа', () => {
@@ -112,8 +123,6 @@ describe('лента', () => {
     expect(newsMatches(item, 'ВЕРСИЯ')).toBe(true);
     expect(newsMatches(item, 'нет такого')).toBe(false);
     expect(newsMatches(item, '  ')).toBe(true);
-    expect(newsShortText({ short: '', md: '## Что нового\n- Пункт' })).toBe('Что нового - Пункт');
-    expect(newsShortText({ short: 'Своё', md: 'текст' })).toBe('Своё');
   });
 });
 

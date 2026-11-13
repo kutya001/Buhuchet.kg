@@ -1,6 +1,6 @@
 'use client';
 
-import { pluralForm, type MenuModuleId } from '@buhuchet/domain';
+import { newsTitleHasVersion, pluralForm, type MenuModuleId } from '@buhuchet/domain';
 import type { NewsItem, NewsLinkSchema, WhatsNew } from '@buhuchet/shared';
 import { buttonClass, Icon, Modal, Note, Tag, useToast, useWindow } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -29,17 +29,16 @@ import { NewsFreshPill, newsMeta, NewsTypePill } from './news-parts';
 import { takeSignedIn } from './signed-in';
 
 /*
- * «Новости» поверх экрана (задача 2.32; прототип modules/kb-news.js — newsOpen, whatsNew): окно
- * новости и окно «Что нового» после входа. Открытая новость и показанные в «Что нового» сразу
- * прочитаны (решение заказчика 25.10.2026): окно с ними больше не откроется.
+ * «Новости» поверх экрана (задача 2.32; прототип modules/kb-news.js — newsRow, whatsNew): строка
+ * новости с раскрывающимися подробностями и окно «Что нового» после входа. Раскрытая новость и
+ * показанные в «Что нового» сразу прочитаны (решение заказчика 25.10.2026): окно с ними больше не
+ * откроется.
  */
 
 /** «Что нового» открывается чуть позже рабочей страницы (прототип: 400 мс). */
 const WHATS_NEW_DELAY_MS = 400;
 
 export interface NewsControls {
-  /** Открыть новость в окне: она прочитана. */
-  open: (item: NewsItem) => void;
   /** Адрес модуля (вкладки) из меню вошедшего; null — модуля нет в меню. */
   hrefOf: (module: string, tab?: string | null) => string | null;
   /** Открыть статью Базы знаний. */
@@ -47,7 +46,6 @@ export interface NewsControls {
 }
 
 export const NewsContext = createContext<NewsControls>({
-  open: () => {},
   hrefOf: () => null,
   openArticle: () => {},
 });
@@ -76,7 +74,6 @@ export function useNewsRuntime(shell: NewsShellInfo): {
   overlays: ReactNode;
 } {
   const client = useQueryClient();
-  const [item, setItem] = useState<DialogSlot<NewsItem> | null>(null);
   const [whatsNew, setWhatsNew] = useState<DialogSlot<WhatsNew> | null>(null);
   const started = useRef(false);
   const { tabHrefOf, openArticle, welcomeFirst } = shell;
@@ -84,13 +81,6 @@ export function useNewsRuntime(shell: NewsShellInfo): {
   const read = useCallback(
     (ids: string[]) => void markNewsRead(client, ids).catch(() => {}),
     [client],
-  );
-  const open = useCallback(
-    (n: NewsItem) => {
-      setItem(openSlot(n));
-      if (!n.read) read([n.id]);
-    },
-    [read],
   );
 
   // Только сразу после входа (отметка страницы входа), не при перезагрузке. Запрос не отменяется при
@@ -111,42 +101,30 @@ export function useNewsRuntime(shell: NewsShellInfo): {
 
   const controls = useMemo<NewsControls>(
     () => ({
-      open,
       hrefOf: (module, tab) => (isModuleId(module) ? tabHrefOf(module, tab ?? undefined) : null),
       openArticle: (id) => openArticle({ id }),
     }),
-    [open, tabHrefOf, openArticle],
+    [tabHrefOf, openArticle],
   );
 
-  const overlays = (
-    <>
-      {item ? (
-        <NewsDialog
-          key={`news-${item.n}`}
-          item={item.data}
-          open={item.open}
-          onClose={() => setItem(closeSlot)}
-        />
-      ) : null}
-      {whatsNew ? (
-        <WhatsNewDialog
-          key={`whats-new-${whatsNew.n}`}
-          data={whatsNew.data}
-          open={whatsNew.open}
-          onClose={() => setWhatsNew(closeSlot)}
-          newsHref={shell.newsHref}
-          lessonsHref={shell.lessonsHref}
-        />
-      ) : null}
-    </>
-  );
+  const overlays = whatsNew ? (
+    <WhatsNewDialog
+      key={`whats-new-${whatsNew.n}`}
+      data={whatsNew.data}
+      open={whatsNew.open}
+      onClose={() => setWhatsNew(closeSlot)}
+      newsHref={shell.newsHref}
+      lessonsHref={shell.lessonsHref}
+    />
+  ) : null;
   return { controls, overlays };
 }
 
 /**
  * Ссылки новости (прототип: обработчик `[data-mdmod],[data-mdart]` и newsLinkOk): модуль из меню —
- * переход (окно закрывается, запись истории заменяется), статья — окно статьи поверх; нет модуля в
- * меню или статья недоступна — уведомление. В редакторе Админки (`preview`) ссылки на модуль и статью
+ * переход (из окна — окно закрывается, запись истории заменяется; из ленты вкладки — обычный переход,
+ * «Назад» вернёт в «Новости»), статья — окно статьи поверх; нет модуля в меню или статья недоступна —
+ * уведомление. В редакторе Админки (`preview`) ссылки на модуль и статью
  * не работают, кнопка видео — открывает окно.
  */
 export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
@@ -156,7 +134,7 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
   const client = useQueryClient();
   const news = useNews();
   const video = useVideo();
-  const { leave } = useWindow();
+  const { leave, inside } = useWindow();
 
   const follow = useCallback(
     (link: NewsInnerLink) => {
@@ -166,8 +144,11 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
       if (link.kind === 'mod') {
         const href = news.hrefOf(link.module, link.tab);
         if (!href) return toast(t('news.link.module_denied'), { icon: 'lock' });
+        // Из окна — с заменой записи истории; из ленты вкладки — обычный переход: «Назад» вернёт в
+        // «Новости» (прототип go()).
         leave();
-        router.replace(href);
+        if (inside) router.replace(href);
+        else router.push(href);
         return;
       }
       void client
@@ -179,7 +160,7 @@ export function useNewsLinks({ preview = false }: { preview?: boolean } = {}) {
         )
         .catch(() => toast(t('news.link.article_denied'), { icon: 'lock' }));
     },
-    [preview, toast, t, news, video, leave, router, client],
+    [preview, toast, t, news, video, leave, inside, router, client],
   );
   return follow;
 }
@@ -192,7 +173,7 @@ function useMoreLink(link: NewsLinkSchema | null) {
   const t = useT();
   const news = useNews();
   const router = useRouter();
-  const { close, leave } = useWindow();
+  const { close, leave, inside } = useWindow();
   const video = useVideo();
   const articles = useQuery({ ...kbArticlesQuery, enabled: link?.kind === 'art' }).data;
   const videos = useQuery({ ...videoCatalogQuery, enabled: link?.kind === 'video' }).data;
@@ -219,7 +200,8 @@ function useMoreLink(link: NewsLinkSchema | null) {
     title: t(MODULES[link.id].title),
     go: () => {
       leave();
-      router.replace(href);
+      if (inside) router.replace(href);
+      else router.push(href);
     },
   };
 }
@@ -241,50 +223,65 @@ function MoreButton({ link, small = false }: { link: NewsLinkSchema | null; smal
   );
 }
 
-/** Окно новости (прототип newsOpen): тип, «Закреплено», подробное описание, «Подробнее». */
-function NewsDialog({
+/**
+ * Новость строкой-заголовком (прототип v98 newsRow, решение заказчика 13.11.2026): главный смысл — в
+ * заголовке, подробности и «Подробнее» раскрываются по нажатию. Справа — «Новое», «Закреплено», тип и
+ * дата; «версия N» — только если номера нет в самом заголовке. `marked` — синяя черта непрочитанной
+ * (в ленте; в окне «Что нового» новые все, черты нет).
+ */
+export function NewsRow({
   item,
   open,
-  onClose,
+  fresh,
+  marked = true,
+  onToggle,
 }: {
   item: NewsItem;
   open: boolean;
-  onClose: () => void;
+  fresh: boolean;
+  marked?: boolean;
+  onToggle: () => void;
 }) {
   const t = useT();
+  const release =
+    item.release && !newsTitleHasVersion(item.title, item.release) ? item.release : null;
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      kind="card"
-      size="wide"
-      title={item.title}
-      sub={newsMeta(t, item)}
-      label={item.title}
-      footer={<NewsFooter link={item.link} />}
+    <div
+      data-news={item.id}
+      data-open={open ? '' : undefined}
+      data-unread={fresh ? '' : undefined}
+      className={`rounded-lg border bg-pane ${fresh && marked ? 'border-brand-blue shadow-[inset_3px_0_0_var(--bu-blue)]' : 'border-line'}`}
     >
-      <div data-news-dialog={item.id} className="flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center gap-2">
-          <NewsTypePill type={item.type} t={t} />
+      <button
+        type="button"
+        data-news-head=""
+        aria-expanded={open}
+        onClick={onToggle}
+        className={`flex w-full cursor-pointer flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2.5 text-left text-ink hover:bg-row-hover focus-visible:outline-2 focus-visible:outline-brand-blue md:flex-nowrap ${open ? 'rounded-t-lg' : 'rounded-lg'}`}
+      >
+        <Icon name={open ? 'down' : 'right'} size="sm" className="flex-none text-faint" />
+        <b className="min-w-0 flex-[1_1_calc(100%-28px)] leading-[1.35] font-semibold md:flex-1">
+          {item.title}
+        </b>
+        <span className="flex flex-[1_1_100%] flex-wrap items-center gap-2 pl-[26px] text-[12.5px] md:flex-none md:flex-nowrap md:pl-0 md:whitespace-nowrap">
+          {fresh ? <NewsFreshPill t={t} /> : null}
           {item.pinned ? <Tag icon="star">{t('news.pinned')}</Tag> : null}
-        </div>
-        <NewsBody source={item.md} />
-      </div>
-    </Modal>
-  );
-}
-
-function NewsFooter({ link }: { link: NewsLinkSchema | null }) {
-  const t = useT();
-  const { close } = useWindow();
-  return (
-    <>
-      <div className="flex-1" />
-      <MoreButton link={link} />
-      <button type="button" onClick={close} className={buttonClass('cta')}>
-        {t('news.close')}
+          <NewsTypePill type={item.type} t={t} />
+          <span className="text-muted">{newsMeta(t, { date: item.date, release })}</span>
+        </span>
       </button>
-    </>
+      {open ? (
+        <div
+          data-news-body=""
+          className="flex flex-col items-start gap-2.5 border-t border-line px-3 pt-3 pb-3.5 md:pl-9"
+        >
+          <div className="w-full">
+            <NewsBody source={item.md} />
+          </div>
+          <MoreButton link={item.link} small />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -295,9 +292,10 @@ export function NewsBody({ source, preview = false }: { source: string; preview?
 }
 
 /**
- * «Что нового» (ТЗ «Окно «Что нового» при входе»; прототип whatsNew): непрочитанные новости
- * «Показывать при входе» с подробным описанием, от новых к старым; в самый первый раз — приветствие и
- * «Открыть Базу знаний». «Все новости» — вкладка «Новости», «Понятно» — закрыть.
+ * «Что нового» (ТЗ «Окно «Что нового» при входе»; прототип v98 whatsNew): непрочитанные новости
+ * «Показывать при входе» строками-заголовками, по номеру версии от новых к старым; подробности сами
+ * раскрыты только у самой новой, остальные раскрываются по нажатию. В самый первый раз — приветствие
+ * и «Открыть Базу знаний». «Все новости» — вкладка «Новости», «Понятно» — закрыть.
  */
 function WhatsNewDialog({
   data,
@@ -314,6 +312,8 @@ function WhatsNewDialog({
 }) {
   const t = useT();
   const n = data.items.length;
+  // Что нажато: раскрыто или свёрнуто; не нажатая — раскрыта только самая новая.
+  const [toggled, setToggled] = useState<Readonly<Record<string, boolean>>>({});
   return (
     <Modal
       open={open}
@@ -330,24 +330,21 @@ function WhatsNewDialog({
             <b>{t('news.wn.welcome')}</b> {t('news.wn.welcome_text')}
           </Note>
         ) : null}
-        {data.items.map((item) => (
-          <section
-            key={item.id}
-            data-whats-new-item={item.id}
-            className="flex flex-col items-start gap-1.5 border-b border-line pt-1 pb-3.5 last:border-b-0 last:pb-0"
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <NewsTypePill type={item.type} t={t} />
-              <span className="text-muted">{newsMeta(t, { ...item, editedAt: null })}</span>
-              <NewsFreshPill t={t} />
-            </div>
-            <h3 className="m-0 mt-0.5 text-[16px] font-bold">{item.title}</h3>
-            <div className="w-full">
-              <NewsBody source={item.md} />
-            </div>
-            <MoreButton link={item.link} small />
-          </section>
-        ))}
+        <div data-news-list="" className="flex flex-col gap-1.5">
+          {data.items.map((item, i) => {
+            const shown = toggled[item.id] ?? i === 0;
+            return (
+              <NewsRow
+                key={item.id}
+                item={item}
+                open={shown}
+                fresh
+                marked={false}
+                onToggle={() => setToggled((was) => ({ ...was, [item.id]: !shown }))}
+              />
+            );
+          })}
+        </div>
       </div>
     </Modal>
   );
