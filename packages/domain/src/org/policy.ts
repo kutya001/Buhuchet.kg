@@ -6,6 +6,8 @@ export interface OrgPolicy {
   /** Напоминать за N дней до срока; в день срока — всегда. */
   remindDays: number[];
   overdueRepeat: boolean;
+  /** «Действия из Telegram»: кнопки под сообщениями бота, которые меняют данные (только владелец). */
+  telegramActions: boolean;
   /** Время сводки, ЧЧ:ММ по часовому поясу организации. */
   digestTime: string;
   timezone: string;
@@ -30,6 +32,7 @@ export function defaultOrgPolicy(): OrgPolicy {
     ) as Record<Feature, boolean>,
     remindDays: [7, 3],
     overdueRepeat: true,
+    telegramActions: true,
     digestTime: '09:00',
     timezone: 'Asia/Bishkek',
     confirmWaitDays: 3,

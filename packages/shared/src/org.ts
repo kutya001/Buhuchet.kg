@@ -133,6 +133,8 @@ export const OrgPolicy = z.object({
   timezone: z.string(),
   /** Повторять напоминание при просрочке каждый день. */
   overdueRepeat: z.boolean(),
+  /** «Действия из Telegram»: кнопки под сообщениями бота, которые меняют данные. */
+  telegramActions: z.boolean(),
   /** Время еженедельной сводки по понедельникам, ЧЧ:ММ. */
   digestTime: z.string(),
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
@@ -172,6 +174,8 @@ export const UpdateOrgPolicyRequest = z.object({
   pageSections: z.array(PageSectionSchema).max(PAGE_SECTIONS.length).optional(),
   timezone: z.enum(ORG_TIMEZONE_IDS as [OrgTimezone, ...OrgTimezone[]]).optional(),
   overdueRepeat: z.boolean().optional(),
+  /** Меняет только владелец организации. */
+  telegramActions: z.boolean().optional(),
   digestTime: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)

@@ -29,7 +29,7 @@ import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
-import { botText, sendNow } from '../telegram/bot';
+import { botText, sendCodeMessage } from '../telegram/bot';
 import { AUTH_IP_LIMITED_DESCRIPTION, authIpLimited } from './ip-limit';
 import { openSession } from './open-session';
 
@@ -134,10 +134,11 @@ export async function startAdminCode(c: Context<AppEnv>, deps: ApiDeps, account:
     минут: ADMIN_CODE_TTL_MINUTES,
   });
   // В журнал отправок — без текста кода (docs/deviations.md, п. 12); вид — «Код» (п. О-13).
-  const sent = await sendNow(
+  const sent = await sendCodeMessage(
     deps,
     chat.chatId,
     text,
+    code,
     'admin_code',
     { timeoutMs: 5000 },
     { userId: account.userId, kind: 'code' },

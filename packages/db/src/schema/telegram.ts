@@ -4,15 +4,18 @@ import {
   NOTIFY_MODES,
   OUTBOX_KINDS,
   OUTBOX_STATUSES,
+  type BotMessage,
 } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   date,
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -50,6 +53,11 @@ export const telegramLinks = pgTable(
     username: text('username'),
     firstName: text('first_name'),
     linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * «Сообщения простым текстом» (поток Т, задача Т1): без таблиц и раскрывающихся разделов. Меняет
+     * сам пользователь функцией `app.telegram_set_plain_text`; с новым чатом — снова выключено.
+     */
+    plainText: boolean('plain_text').notNull().default(false),
   },
   (t) => [
     foreignKey({
@@ -214,6 +222,13 @@ export const telegramOutbox = pgTable(
     sentAt: timestamp('sent_at', { withTimezone: true }),
     dedupeKey: text('dedupe_key'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Описание сообщения с таблицами и кнопками (`BotMessage`; поток Т, задача Т1): по нему строятся оба
+     * вида сообщения и принимаются нажатия кнопок. Пусто — обычный текст; у кода — всегда пусто.
+     */
+    payload: jsonb('payload').$type<BotMessage>(),
+    /** Номер сообщения в чате (ответ Telegram): по чату и номеру бот находит сообщение при нажатии. */
+    messageId: bigint('message_id', { mode: 'number' }),
   },
   (t) => [
     foreignKey({
@@ -233,6 +248,13 @@ export const telegramOutbox = pgTable(
       'telegram_outbox_code_text_check',
       sql`${t.kind} not in (${inList(CODE_KINDS)}) or ${t.text} is null`,
     ),
+    check(
+      'telegram_outbox_code_payload_check',
+      sql`${t.kind} not in (${inList(CODE_KINDS)}) or ${t.payload} is null`,
+    ),
+    index('telegram_outbox_message_idx')
+      .on(t.chatId, t.messageId)
+      .where(sql`${t.messageId} is not null and ${t.payload} is not null`),
     orgIsolation('telegram_outbox_isolation', t.orgId),
   ],
 ).enableRLS();

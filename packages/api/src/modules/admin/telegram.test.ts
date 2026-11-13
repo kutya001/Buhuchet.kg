@@ -309,6 +309,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       lastError: null,
       actualUrl: null,
       checkedAt: f.deps.clock.now().toISOString(),
+      rich: true,
     });
     tg().webhookInfo = {
       lastErrorAt: new Date(f.deps.clock.now().getTime() - 5 * 60_000),

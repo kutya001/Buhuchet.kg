@@ -5,6 +5,7 @@ import {
   orgMenuSettings,
   phoneCodes,
   telegramChat,
+  telegramPlainText,
   telegramPreviousChat,
   withOrgContext,
   type EmployeeAccess,
@@ -36,7 +37,7 @@ function meBody(
   user: MeUser,
   access: EmployeeAccess | null,
   organization: MeResponse['organization'],
-  telegram: TelegramChat | null,
+  telegram: (TelegramChat & { plain: boolean }) | null,
   previous: { username: string | null; firstName: string | null } | null,
   settings: {
     features: Record<Feature, boolean>;
@@ -66,6 +67,7 @@ function meBody(
     telegram: telegram && {
       name: telegramName(telegram),
       linkedAt: telegram.linkedAt.toISOString(),
+      plain: telegram.plain,
     },
     telegramPrevious: previous && {
       name: previous.username || previous.firstName?.trim() ? telegramName(previous) : null,
@@ -95,7 +97,9 @@ export async function loadMe(
   user: MeUser & { employeeId: string | null },
   loaded?: EmployeeAccess | null,
 ): Promise<MeResponse> {
-  const telegram = await telegramChat(deps.db, user.userId);
+  const chat = await telegramChat(deps.db, user.userId);
+  // «Сообщения простым текстом» — переключатель в «Мой профиль» (поток Т, задача Т1).
+  const telegram = chat && { ...chat, plain: await telegramPlainText(deps.db, user.userId) };
   // Подсказка «Прежний Telegram …» в «Мой профиль» — только когда Telegram не привязан.
   const previous = telegram ? null : await telegramPreviousChat(deps.db, user.userId);
   if (!user.orgId) return meBody(user, null, null, telegram, previous, null);

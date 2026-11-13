@@ -17,10 +17,34 @@ export type TelegramSendResult =
       permanent: boolean;
     };
 
+/**
+ * Кнопка под сообщением (inline keyboard): нажатие с данными (`data`, до 64 байт — приходит боту как
+ * callback_query), копирование текста (`copy`) или ссылка (`url`). `disabled` — кнопка неактивна.
+ */
+export interface TelegramButton {
+  text: string;
+  data?: string;
+  copy?: string;
+  url?: string;
+  disabled?: boolean;
+}
+
 export interface TelegramSendOptions {
   /** Разметка HTML (по умолчанию — обычный текст). */
   html?: boolean;
   disableLinkPreview?: boolean;
+  /**
+   * Код подтверждения в тексте: показывается моноширинным — в Telegram копируется нажатием. Текст при
+   * этом обычный (без разметки): переходник экранирует его сам.
+   */
+  code?: string;
+  /** Ряды кнопок под сообщением. */
+  keyboard?: readonly (readonly TelegramButton[])[];
+  /**
+   * Вид с таблицами и раскрывающимися разделами (HTML для sendRichMessage). Если Telegram такое
+   * сообщение не принял, уходит обычное сообщение с текстом `text`: напоминание должно дойти всегда.
+   */
+  rich?: string;
   /** Сколько ждать ответа Telegram, мс (по умолчанию 10 с); дольше — ошибка, запрос прерывается. */
   timeoutMs?: number;
 }
@@ -44,6 +68,21 @@ export interface Telegram {
     text: string,
     options?: TelegramSendOptions,
   ): Promise<TelegramSendResult>;
+  /**
+   * Ответ на нажатие кнопки: без текста — просто снять ожидание; с текстом — скрытый ответ (до 200
+   * знаков), его видит только нажавший; `alert` — окном. false — Telegram ответ не принял.
+   */
+  answerCallback(
+    callbackId: string,
+    text?: string,
+    options?: { alert?: boolean },
+  ): Promise<boolean>;
+  /** Заменить кнопки под отправленным сообщением. false — Telegram правку не принял. */
+  editKeyboard(
+    chatId: string | number,
+    messageId: number,
+    keyboard: readonly (readonly TelegramButton[])[],
+  ): Promise<boolean>;
   setWebhook(url: string, secretToken: string): Promise<void>;
   /** Состояние вебхука (Админка → «Телеграм» → «Проверить вебхук»); ошибка Bot API — исключение. */
   getWebhookInfo(): Promise<TelegramWebhookInfo>;
@@ -57,6 +96,27 @@ interface BotApiResponse<T> {
   error_code?: number;
   description?: string;
   parameters?: { retry_after?: number };
+}
+
+const escapeHtml = (text: string) =>
+  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Клавиатура в виде Bot API. Неактивная кнопка — `disabled` (Bot API 10.3), данные остаются. */
+function replyMarkup(keyboard: readonly (readonly TelegramButton[])[] | undefined) {
+  const rows = (keyboard ?? []).filter((row) => row.length > 0);
+  return {
+    inline_keyboard: rows.map((row) =>
+      row.map((b) => ({
+        text: b.text,
+        ...(b.copy !== undefined
+          ? { copy_text: { text: b.copy } }
+          : b.url !== undefined
+            ? { url: b.url }
+            : { callback_data: b.data ?? '' }),
+        ...(b.disabled ? { disabled: {} } : {}),
+      })),
+    ),
+  };
 }
 
 export function createTelegramBotApi(options: {
@@ -83,16 +143,38 @@ export function createTelegramBotApi(options: {
 
   return {
     async sendMessage(chatId, text, opts = {}) {
-      const data = await call<{ message_id: number }>(
-        'sendMessage',
-        {
-          chat_id: chatId,
-          text,
-          ...(opts.html ? { parse_mode: 'HTML' } : {}),
-          link_preview_options: { is_disabled: opts.disableLinkPreview ?? true },
-        },
-        opts.timeoutMs,
-      );
+      const markup = opts.keyboard?.length ? { reply_markup: replyMarkup(opts.keyboard) } : {};
+      let data: BotApiResponse<{ message_id: number }> | null = null;
+      if (opts.rich !== undefined) {
+        data = await call<{ message_id: number }>(
+          'sendRichMessage',
+          { chat_id: chatId, rich_message: { html: opts.rich }, ...markup },
+          opts.timeoutMs,
+        );
+        // Сообщение с таблицей не принято (старый сервер Bot API, неверная разметка) — тот же текст
+        // уходит обычным сообщением. Лимит и блокировка бота — не про вид сообщения: их не повторяем.
+        if (!data.ok && (data.error_code === 400 || data.error_code === 404)) data = null;
+      }
+      if (!data) {
+        const code = opts.code;
+        const body =
+          code !== undefined && code !== '' && text.includes(code)
+            ? escapeHtml(text)
+                .split(escapeHtml(code))
+                .join(`<code>${escapeHtml(code)}</code>`)
+            : null;
+        data = await call<{ message_id: number }>(
+          'sendMessage',
+          {
+            chat_id: chatId,
+            text: body ?? text,
+            ...(opts.html || body !== null ? { parse_mode: 'HTML' } : {}),
+            link_preview_options: { is_disabled: opts.disableLinkPreview ?? true },
+            ...markup,
+          },
+          opts.timeoutMs,
+        );
+      }
       if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
       const errorCode = data.error_code ?? 0;
       return {
@@ -104,6 +186,21 @@ export function createTelegramBotApi(options: {
           : {}),
         permanent: errorCode === 400 || errorCode === 403,
       };
+    },
+    async answerCallback(callbackId, text, opts = {}) {
+      const data = await call<boolean>('answerCallbackQuery', {
+        callback_query_id: callbackId,
+        ...(text ? { text, show_alert: opts.alert === true } : {}),
+      });
+      return data.ok;
+    },
+    async editKeyboard(chatId, messageId, keyboard) {
+      const data = await call<unknown>('editMessageReplyMarkup', {
+        chat_id: chatId,
+        message_id: messageId,
+        reply_markup: replyMarkup(keyboard),
+      });
+      return data.ok;
     },
     async setWebhook(url, secretToken) {
       const data = await call<boolean>('setWebhook', {
@@ -135,7 +232,18 @@ export function createTelegramBotApi(options: {
 }
 
 export interface FakeTelegram extends Telegram {
+  /** Отправленные сообщения; кнопки — в `options.keyboard`, вид с таблицами — в `options.rich`. */
   readonly sent: Array<{ chatId: string | number; text: string; options: TelegramSendOptions }>;
+  /** Номера отправленных сообщений — в том же порядке, что `sent` (для нажатий кнопок в тестах). */
+  readonly messageIds: number[];
+  /** Ответы на нажатия кнопок (скрытые ответы). */
+  readonly answers: Array<{ callbackId: string; text: string | undefined; alert: boolean }>;
+  /** Правки кнопок под отправленными сообщениями. */
+  readonly edits: Array<{
+    chatId: string | number;
+    messageId: number;
+    keyboard: readonly (readonly TelegramButton[])[];
+  }>;
   webhook?: { url: string; secretToken: string };
   /** Что ответит getWebhookInfo: по умолчанию — поставленный адрес без ошибок; `Error` — исключение. */
   webhookInfo?: Partial<TelegramWebhookInfo> | Error;
@@ -149,11 +257,24 @@ export function createFakeTelegram(): FakeTelegram {
   let nextId = 1;
   const fake: FakeTelegram = {
     sent: [],
+    messageIds: [],
+    answers: [],
+    edits: [],
     async sendMessage(chatId, text, options = {}) {
       const failure = failures.shift();
       if (failure) return failure;
+      const messageId = nextId++;
       fake.sent.push({ chatId, text, options });
-      return { ok: true, messageId: nextId++ };
+      fake.messageIds.push(messageId);
+      return { ok: true, messageId };
+    },
+    async answerCallback(callbackId, text, options = {}) {
+      fake.answers.push({ callbackId, text, alert: options.alert === true });
+      return true;
+    },
+    async editKeyboard(chatId, messageId, keyboard) {
+      fake.edits.push({ chatId, messageId, keyboard });
+      return true;
     },
     async setWebhook(url, secretToken) {
       fake.webhook = { url, secretToken };

@@ -1,11 +1,13 @@
 import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
+import { botTestHandler, botTestRoute, plainTextHandler, plainTextRoute } from './bot-test';
 import { createLinkHandler, createLinkRoute, unlinkHandler, unlinkRoute } from './link';
 import { getNotifyHandler, getNotifyRoute, saveNotifyHandler, saveNotifyRoute } from './notify';
 import { webhookGuard, webhookHandler, webhookRoute } from './webhook';
 
 /**
- * Модуль «Telegram»: привязка в профиле по ссылке, свои «Уведомления в Telegram» и вебхук бота. Очередь
+ * Модуль «Telegram»: привязка в профиле по ссылке, свои «Уведомления в Telegram», «Проверить бота»,
+ * «Сообщения простым текстом» и вебхук бота (привязка и нажатия кнопок под сообщениями). Очередь
  * отправки и напоминания — задачи расписания (`telegramSendJob`, `telegramRemindersJob`).
  */
 export function telegramModule(deps: ApiDeps) {
@@ -17,5 +19,7 @@ export function telegramModule(deps: ApiDeps) {
     .openapi(unlinkRoute, unlinkHandler(deps))
     .openapi(getNotifyRoute, getNotifyHandler(deps))
     .openapi(saveNotifyRoute, saveNotifyHandler(deps))
+    .openapi(botTestRoute, botTestHandler(deps))
+    .openapi(plainTextRoute, plainTextHandler(deps))
     .openapi(webhookRoute, webhookHandler(deps));
 }

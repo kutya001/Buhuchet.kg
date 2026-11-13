@@ -11,6 +11,7 @@ export * from './status';
 export * from './files';
 export * from './auth';
 export * from './telegram';
+export * from './telegram-bot';
 export * from './telegram-outbox';
 export * from './telegram-reminders';
 export * from './staff';

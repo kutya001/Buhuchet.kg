@@ -117,7 +117,15 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
       claimOutbox(tx, { now: later, limit: 10, leaseSeconds: 120 }),
     );
     expect(retry).toEqual([
-      { id: ids[1], chatId: 5001, kind: 'reminders', text: 'Второе', tries: 2 },
+      {
+        id: ids[1],
+        chatId: 5001,
+        kind: 'reminders',
+        text: 'Второе',
+        tries: 2,
+        message: null,
+        plain: false,
+      },
     ]);
     await withOrgContext(t.app.db, ctxA(), (tx) =>
       finishOutbox(tx, [

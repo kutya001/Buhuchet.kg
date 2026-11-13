@@ -4,6 +4,7 @@ import {
   enqueueTelegram,
   finishOutbox,
   finishPlatformOutbox,
+  telegramBotRich,
   telegramOutboxOrgs,
   withOrgContext,
   type ClaimedOutbox,
@@ -11,13 +12,18 @@ import {
   type OutboxOutcome,
   type Tx,
 } from '@buhuchet/db';
+import type { TelegramSendOptions } from '@buhuchet/adapters';
 import {
+  botHasTables,
+  botKeyboard,
+  botRichHtml,
   OUTBOX_BATCH,
   OUTBOX_LEASE_SECONDS,
   OUTBOX_MAX_BATCHES,
   OUTBOX_MAX_TRIES,
   OUTBOX_PAUSE_MS,
   outboxRetryDelaySeconds,
+  type BotMessage,
 } from '@buhuchet/domain';
 import type { Job, JobContext } from '../../deps';
 
@@ -42,10 +48,32 @@ export function redactBotToken(message: string): string {
   return message.replace(/\/bot[^/\s]+/g, '/bot<скрыт>');
 }
 
+/** Строка очереди: у строк организации — ещё описание сообщения и «простым текстом» получателя. */
+type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'text' | 'tries'> &
+  Partial<Pick<ClaimedOutbox, 'message' | 'plain'>>;
+
+/**
+ * Как отправить сообщение с описанием (поток Т, задача Т1): кнопки под сообщением — всегда; вид с
+ * таблицами — если в сообщении есть таблицы и получателю не нужен простой текст (свой переключатель
+ * или выключенные таблицы платформы); код подтверждения — моноширинным.
+ */
+export function botSendOptions(
+  message: BotMessage,
+  o: { plain: boolean },
+): Pick<TelegramSendOptions, 'keyboard' | 'rich' | 'code'> {
+  const keyboard = botKeyboard(message);
+  return {
+    ...(keyboard.length ? { keyboard } : {}),
+    ...(!o.plain && botHasTables(message) ? { rich: botRichHtml(message) } : {}),
+    ...(message.code !== undefined ? { code: message.code } : {}),
+  };
+}
+
 /** Отправить одну строку и решить, что с ней дальше. */
 async function sendOne(
   ctx: JobContext,
-  row: ClaimedOutbox,
+  row: QueuedRow,
+  rich: boolean,
   now: () => Date,
 ): Promise<OutboxOutcome> {
   const fail = (error: string, permanent: boolean, retryAfter?: number): OutboxOutcome =>
@@ -59,8 +87,19 @@ async function sendOne(
         };
   if (!ctx.telegram) return fail('Telegram-бот не подключён', false);
   try {
-    const res = await ctx.telegram.sendMessage(row.chatId, row.text, { disableLinkPreview: true });
-    if (res.ok) return { id: row.id, result: 'sent', at: now() };
+    const res = await ctx.telegram.sendMessage(row.chatId, row.text, {
+      disableLinkPreview: true,
+      ...(row.message ? botSendOptions(row.message, { plain: !rich || row.plain === true }) : {}),
+    });
+    if (res.ok) {
+      // Номер сообщения нужен только сообщению с кнопками: по нему бот находит его при нажатии.
+      return {
+        id: row.id,
+        result: 'sent',
+        at: now(),
+        ...(row.message ? { messageId: res.messageId } : {}),
+      };
+    }
     return fail(`${res.errorCode}: ${res.description}`, res.permanent, res.retryAfterSeconds);
   } catch (err) {
     return fail(redactBotToken(err instanceof Error ? err.message : String(err)), false);
@@ -75,7 +114,7 @@ async function sendOne(
 async function sendBatches(
   ctx: JobContext,
   q: {
-    claim: (now: Date) => Promise<ClaimedOutbox[]>;
+    claim: (now: Date) => Promise<QueuedRow[]>;
     finish: (outcomes: OutboxOutcome[]) => Promise<void>;
     orgId: string | null;
   },
@@ -89,7 +128,9 @@ async function sendBatches(
     const rows = await q.claim(now());
     if (!rows.length) break;
     const outcomes: OutboxOutcome[] = [];
-    for (const row of rows) outcomes.push(await sendOne(ctx, row, now));
+    // «Сообщения с таблицами» платформы читаются раз на пачку и только если в ней есть такие сообщения.
+    const rich = rows.some((r) => r.message) ? await telegramBotRich(ctx.db) : true;
+    for (const row of rows) outcomes.push(await sendOne(ctx, row, rich, now));
     await q.finish(outcomes);
     sent += outcomes.filter((x) => x.result === 'sent').length;
     for (const x of outcomes) {

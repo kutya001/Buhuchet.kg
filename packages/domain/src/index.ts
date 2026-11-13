@@ -26,6 +26,7 @@ export * from './common/errors';
 export * from './auth/session';
 export * from './auth/device';
 export * from './auth/reset';
+export * from './telegram/bot-message';
 export * from './telegram/messages';
 export * from './telegram/notify';
 export * from './telegram/reminders';

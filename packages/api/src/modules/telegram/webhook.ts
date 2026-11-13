@@ -15,6 +15,7 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  codeWithOrganization,
   loginDenial,
   parseStartCommand,
   relinkCodeOf,
@@ -28,7 +29,8 @@ import { createMiddleware } from 'hono/factory';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
-import { botText, sendNow } from './bot';
+import { botText, sendCodeMessage, sendNow } from './bot';
+import { handleBotPress } from './press';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -50,11 +52,25 @@ const PrivateText = z.object({
     .optional(),
 });
 
+/** Нажатие кнопки под сообщением бота (`callback_query`): данные кнопки — до 64 байт. */
+const ButtonPress = z.object({
+  id: z.string().min(1).max(128),
+  from: z.object({ id: z.number().int(), is_bot: z.boolean().optional() }),
+  data: z.string().max(64).optional(),
+  message: z
+    .object({
+      message_id: z.number().int(),
+      chat: z.object({ id: z.number().int(), type: z.string().max(32) }),
+    })
+    .optional(),
+});
+
 export const webhookRoute = createRoute({
   method: 'post',
   path: '/telegram/webhook',
   tags: ['telegram'],
-  summary: 'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата',
+  summary:
+    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями',
   request: {
     body: { required: true, content: { 'application/json': { schema: TelegramUpdate } } },
   },
@@ -219,10 +235,11 @@ async function askRelinkCode(
     return 'asked';
   }
   const minutes = TELEGRAM_RELINK_CODE_TTL_MINUTES;
-  const sent = await sendNow(
+  const sent = await sendCodeMessage(
     deps,
     request.chatId,
-    withOrganization(
+    // Организация — второй строкой: код остаётся первым в строке уведомления (п. Т-2).
+    codeWithOrganization(
       await botText(deps, 'tgRelinkCode', {
         логин: account.login,
         телеграм: relinkName(link),
@@ -232,6 +249,7 @@ async function askRelinkCode(
       account.orgName,
       request.shared,
     ),
+    code,
     'relink_code',
     {},
     { userId: account.userId, kind: 'relink_code' },
@@ -288,7 +306,27 @@ async function confirmRelink(
 export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute, AppEnv> {
   return async (c) => {
     const ok = c.json({ ok: true as const }, 200);
-    const message = PrivateText.safeParse((c.req.valid('json') as { message?: unknown }).message);
+    const update = c.req.valid('json') as { message?: unknown; callback_query?: unknown };
+    // Нажатие кнопки под сообщением (поток Т, задача Т1). Сбой не роняет вебхук: иначе Telegram
+    // повторял бы доставку нажатия, а действие могло уже выполниться.
+    const press = ButtonPress.safeParse(update.callback_query);
+    if (press.success) {
+      const q = press.data;
+      try {
+        await handleBotPress(deps, {
+          callbackId: q.id,
+          fromId: q.from.id,
+          chatId: q.message?.chat.id ?? 0,
+          chatType: q.from.is_bot ? '' : (q.message?.chat.type ?? ''),
+          messageId: q.message?.message_id ?? 0,
+          data: q.data ?? '',
+        });
+      } catch (err) {
+        deps.logger.error({ err }, 'Telegram: нажатие кнопки не обработано');
+      }
+      return ok;
+    }
+    const message = PrivateText.safeParse(update.message);
     if (!message.success || message.data.from?.is_bot) return ok;
     const { chat, from, text } = message.data;
     const reply = async (body: string) => {
