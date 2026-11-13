@@ -322,6 +322,22 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgTaskTook: ['задача', 'исполнитель'],
   tgTaskDoneBy: ['задача', 'исполнитель'],
   tgTaskWaitBy: ['задача', 'исполнитель'],
+  // Таблицы в сообщениях бота: утро, сводка недели, «Напомнить», долги (прототип v100).
+  tgMornHead: ['день'],
+  tgMornSub: ['просрочено', 'сегодня', 'скоро', 'оплата'],
+  tgSecOver: [],
+  tgSecToday: [],
+  tgSecBefore: ['дней'],
+  tgSecPay: [],
+  tgWeekHead: ['даты'],
+  tgWeekSub: ['n1', 'n2', 'n3'],
+  tgSecDebt: [],
+  tgBtnNudge: ['сотрудник', 'n'],
+  tgBtnFeeCopy: ['контрагент'],
+  tgNudge: ['кто', 'n'],
+  tgActNudgeOk: ['сотрудник', 'n'],
+  tgActNudgeWait: ['сотрудник', 'n'],
+  tgActNudgeNoTg: ['сотрудник', 'n'],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -440,6 +456,21 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgTaskTook',
   'tgTaskDoneBy',
   'tgTaskWaitBy',
+  'tgMornHead',
+  'tgMornSub',
+  'tgSecOver',
+  'tgSecToday',
+  'tgSecBefore',
+  'tgSecPay',
+  'tgWeekHead',
+  'tgWeekSub',
+  'tgSecDebt',
+  'tgBtnNudge',
+  'tgBtnFeeCopy',
+  'tgNudge',
+  'tgActNudgeOk',
+  'tgActNudgeWait',
+  'tgActNudgeNoTg',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

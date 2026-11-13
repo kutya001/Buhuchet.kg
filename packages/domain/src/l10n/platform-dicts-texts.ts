@@ -348,6 +348,45 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram постановщику: задача ждёт подтверждения',
     section: S,
   },
+  'pdicts.tpl.label.tg_morn_head': { ru: 'Telegram: утреннее напоминание — заголовок', section: S },
+  'pdicts.tpl.label.tg_morn_sub': {
+    ru: 'Telegram: утреннее напоминание — строка итогов',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_sec_over': { ru: 'Telegram: раздел «Просрочено»', section: S },
+  'pdicts.tpl.label.tg_sec_today': { ru: 'Telegram: раздел «Сегодня»', section: S },
+  'pdicts.tpl.label.tg_sec_before': { ru: 'Telegram: раздел «Через N дн.»', section: S },
+  'pdicts.tpl.label.tg_sec_pay': { ru: 'Telegram: раздел «Оплата налогов»', section: S },
+  'pdicts.tpl.label.tg_week_head': {
+    ru: 'Telegram: сводка недели руководителю — заголовок',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_week_sub': {
+    ru: 'Telegram: сводка недели руководителю — строка итогов',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_sec_debt': { ru: 'Telegram: раздел «Долги за обслуживание»', section: S },
+  'pdicts.tpl.label.tg_btn_nudge': { ru: 'Telegram: кнопка «Напомнить» сотруднику', section: S },
+  'pdicts.tpl.label.tg_btn_fee_copy': {
+    ru: 'Telegram: кнопка «Скопировать напоминание» о долге',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_nudge': {
+    ru: 'Telegram: напоминание сотруднику от руководителя',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_nudge_ok': {
+    ru: 'Telegram: скрытый ответ — напоминание отправлено',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_nudge_wait': {
+    ru: 'Telegram: скрытый ответ — сегодня уже напоминали',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_nudge_no_tg': {
+    ru: 'Telegram: скрытый ответ — у сотрудника нет Telegram',
+    section: S,
+  },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
   'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },
