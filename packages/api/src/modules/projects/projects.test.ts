@@ -7,6 +7,7 @@ import {
   ContractorProjects,
   FileUploadTicket,
   FinJournalRow,
+  ListValues,
   listPageSchema,
   OperationEdited,
   ProjectCard,
@@ -590,6 +591,15 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
     const values = await call('GET', '/api/projects/values?tab=all&col=status', chief);
     await expectStatus(values, 200);
     expect((await call('GET', '/api/projects/values?tab=all&col=plan', acc)).status).toBe(400);
+    // Столбец «Контрагент»: значение находится и по ИНН (прототип v93).
+    const byInn = (inn: string) =>
+      get(chief, `/api/projects/values?tab=all&col=cp&q=${inn}`, (x) => ListValues.parse(x));
+    expect(await byInn('03744097401851')).toMatchObject({
+      byDigits: true,
+      total: 1,
+      items: [{ value: cpAcc, digits: '03744097401851' }],
+    });
+    expect((await byInn('99999999999999')).total).toBe(0);
   });
 
   it('транши: «Записать оплату» не больше остатка, окно, «Изменить» с причиной (п. 66), «Удалить»', async () => {

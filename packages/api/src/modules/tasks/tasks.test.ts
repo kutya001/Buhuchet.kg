@@ -315,6 +315,19 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
       await (await call('GET', '/api/tasks/values?col=cp&tab=all', hr)).json(),
     );
     expect(hrValues.items.map((v) => v.label)).not.toContain(cpAcc.name);
+    // По ИНН значение находится (прототип v93) — тоже только у контрагентов видимых задач.
+    const byInn = async (cookie: string) =>
+      ListValues.parse(
+        await (
+          await call('GET', '/api/tasks/values?col=cp&tab=all&q=03744097401851', cookie)
+        ).json(),
+      );
+    expect(await byInn(chief)).toMatchObject({
+      byDigits: true,
+      total: 1,
+      items: [{ value: cpAcc.id, digits: '03744097401851' }],
+    });
+    expect((await byInn(hr)).total).toBe(0);
     expect((await card(chief, task.id)).status).toBe('todo');
   });
 

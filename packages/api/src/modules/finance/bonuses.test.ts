@@ -8,6 +8,7 @@ import {
   BonusOutSaved,
   BonusSummary,
   EmployeeAccount,
+  ListValues,
   ServiceCard,
   ServiceForm,
   ServiceSaved,
@@ -309,6 +310,17 @@ describe.skipIf(!databaseAvailable())(
       expect(await (await call('GET', '/api/bonuses/log/values?col=cp', chief)).text()).toContain(
         'Ала-Тоо',
       );
+      // ИНН контрагента в значениях фильтра и поиск по нему (прототип v93) — тоже только тому, кто
+      // видит контрагента записи.
+      const cpValues = (cookie: string, q = '') =>
+        get(cookie, `/api/bonuses/log/values?col=cp${q && `&q=${q}`}`, (x) => ListValues.parse(x));
+      expect(await cpValues(chief, '0374 4097401851'.replace(' ', '%20'))).toMatchObject({
+        byDigits: true,
+        total: 1,
+        items: [{ label: 'ОсОО «Ала-Тоо Трейд»', digits: '03744097401851' }],
+      });
+      expect((await cpValues(hr)).items.every((v) => v.digits === undefined)).toBe(true);
+      expect((await cpValues(hr, '03744097401851')).total).toBe(0);
       expect(
         await get(hr, `/api/bonuses/employees/${employee('acc-a')}`, (x) => BonusEmployee.parse(x)),
       ).toMatchObject({ svc: som(500), bal: som(500), canOut: false, today: '2026-10-18' });

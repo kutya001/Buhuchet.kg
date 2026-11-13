@@ -622,7 +622,23 @@ const LOG_COLUMNS: ListColumns = {
 /** По умолчанию — по дате, сначала новые (прототип: `sort: {key: 'date', dir: -1}`). */
 const LOG_SORT: ListSort = { key: 'date', dir: 'desc' };
 
-const logSource = (rows: readonly BonusLogRow[], t: ListTexts) =>
+/**
+ * ИНН для «Название или ИНН» фильтра столбца «Контрагент»: значение фильтра здесь — название, поэтому у
+ * одноимённых контрагентов — ИНН всех через пробел (как `inn[name]` прототипа): выбор по ИНН отбирает
+ * одни и те же записи, ушёл ли он списком значений или шагом «Выбрать все».
+ */
+function innsByName(rows: readonly BonusLogRow[]): Map<string, string> {
+  const inns = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!r.contractor || !r.contractorInn) continue;
+    const set = inns.get(r.contractor.name) ?? new Set<string>();
+    set.add(r.contractorInn);
+    inns.set(r.contractor.name, set);
+  }
+  return new Map([...inns].map(([name, set]) => [name, [...set].sort().join(' ')]));
+}
+
+const logSource = (rows: readonly BonusLogRow[], t: ListTexts, inns = innsByName(rows)) =>
   recordset(
     rows.map((r, pos) => ({
       id: r.id,
@@ -632,7 +648,7 @@ const logSource = (rows: readonly BonusLogRow[], t: ListTexts) =>
       kind: r.kind,
       kind_text: t(`staff.bonus.kind.${r.kind}`),
       cp: r.contractor?.name ?? '',
-      cp_inn: r.contractorInn ?? '',
+      cp_inn: (r.contractor && inns.get(r.contractor.name)) ?? '',
       what: bonusWhat(r, t),
       // Ожидающий бонус в итог не входит (прототип: `val: x => x.wait ? 0 : x.amount`).
       sum: r.kind === 'wait' ? 0 : r.amount,

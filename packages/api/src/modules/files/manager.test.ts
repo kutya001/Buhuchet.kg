@@ -189,6 +189,17 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
       await (await call('GET', '/api/files/manager/values?col=cp', acc)).json(),
     );
     expect(values.items.map((v) => v.label)).not.toContain('ИП Садыков');
+    // По ИНН значение находится (прототип v93) — только у контрагентов своей области.
+    const byInn = async (inn: string) =>
+      ListValues.parse(
+        await (await call('GET', `/api/files/manager/values?col=cp&q=${inn}`, acc)).json(),
+      );
+    expect(await byInn('03744097401851')).toMatchObject({
+      byDigits: true,
+      total: 1,
+      items: [{ value: cpAcc.id, digits: '03744097401851' }],
+    });
+    expect((await byInn('03744097401852')).total).toBe(0);
     expect((await call('GET', `/api/files/${ids.manualOther}/link`, acc)).status).toBe(404);
     expect((await call('GET', `/api/files/${ids.taskOther}/view`, acc)).status).toBe(404);
     // Контрагенты окна «Загрузить файл» — тоже только свои; загрузить к чужому нельзя.
