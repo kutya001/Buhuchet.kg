@@ -38,6 +38,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { ApiFailure } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { ContractorSelect } from '../shell/contractor-select';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import { useShell } from '../shell/context';
@@ -362,23 +363,20 @@ function ServiceModal({
                 error={errors.contractor}
               >
                 {(control) => (
-                  <select
+                  <ContractorSelect
                     {...control}
                     data-svc-cp=""
-                    className={`${inputClass()} cursor-pointer`}
+                    contractors={form.contractors.map((c) => ({
+                      ...c,
+                      label: c.oneOff ? t('fin.svc.cp_oneoff', { name: c.name }) : c.name,
+                    }))}
                     value={cp}
-                    onChange={(e) => {
-                      setCp(e.target.value);
+                    empty={t('fin.svc.cp_pick')}
+                    onChange={(v) => {
+                      setCp(v);
                       clear('contractor');
                     }}
-                  >
-                    <option value="">{t('fin.svc.cp_pick')}</option>
-                    {form.contractors.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.oneOff ? t('fin.svc.cp_oneoff', { name: c.name }) : c.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </Field>
             )}

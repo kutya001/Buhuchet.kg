@@ -17,6 +17,7 @@ import {
   OperationEditForm,
   OperationEdited,
   OperationSaved,
+  ListValues,
   OperationWindow,
   ReceiptEditForm,
   ReceiptJournalRow,
@@ -220,6 +221,20 @@ describe.skipIf(!databaseAvailable())(
       expect(own.items.map((r) => r.contractor.id)).toEqual([cpA]);
       expect(own.totals).toMatchObject({ amount: som(1000) });
       expect((await receipts(acc)).items.map((r) => r.contractor.id)).toEqual([cpA]);
+      // Фильтр столбца «Контрагент» находит значение и по ИНН (прототип v93) — в своей области.
+      const byInn = (cookie: string, list: string, inn: string) =>
+        get(cookie, `/api/fin/${list}/values?col=cp&q=${inn}`, (x) => ListValues.parse(x));
+      for (const list of ['journal', 'receipts']) {
+        expect(await byInn(acc, list, '03744097401851'), list).toMatchObject({
+          byDigits: true,
+          total: 1,
+          items: [{ value: cpA, digits: '03744097401851' }],
+        });
+        expect((await byInn(acc, list, '20101199000123')).total, list).toBe(0);
+      }
+      expect((await byInn(owner, 'journal', '20101199000123')).items).toMatchObject([
+        { value: cpChief, digits: '20101199000123' },
+      ]);
       // Плашки — по своей области; платы бухгалтер не видит.
       expect(await summary(acc)).toEqual({
         month: '2026-10',
@@ -488,6 +503,15 @@ describe.skipIf(!databaseAvailable())(
       expect(list.items.map((r) => r.contractor.id)).toEqual([cpA]);
       // «Кадры» с областью «Свои»: своих контрагентов нет — пусто (docs/deviations.md п. В-29).
       expect((await get(hr, '/api/fin/bonuses?size=all', (x) => Bonuses.parse(x))).total).toBe(0);
+      // Фильтр столбца «Контрагент» находит значение по ИНН; вне области — нет.
+      const byInn = (cookie: string) =>
+        get(cookie, '/api/fin/bonuses/values?col=cp&q=03744097401851', (x) => ListValues.parse(x));
+      expect(await byInn(owner)).toMatchObject({
+        byDigits: true,
+        total: 1,
+        items: [{ value: cpA, digits: '03744097401851' }],
+      });
+      expect((await byInn(hr)).total).toBe(0);
       let months = await get(owner, '/api/fin/months', (x) => ClosedMonths.parse(x));
       expect(months).toEqual({
         closed: [],

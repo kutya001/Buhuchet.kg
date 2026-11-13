@@ -593,6 +593,7 @@ export function taskListColumns(t: ListTexts): ListColumns {
       // (ТЗ «Задачи» → «Общие задачи в списке»).
       searchDisplay: sql`coalesce(${contractors.name}, ${dictLiteral(t('task.cp.general'))})`,
       exportDisplay: contractors.name,
+      digits: contractors.inn,
       // «Общие задачи» — первыми (прототип: pin), остальные — по названию по-русски.
       sort: {
         value: sql`(${TL.contractorId} is not null, ${contractors.name} collate app.ru_natural)`,
@@ -1281,7 +1282,7 @@ export async function taskFormOptions(
   scope: SQL | undefined,
 ): Promise<{
   executors: { id: string; shortName: string }[];
-  contractors: { id: string; name: string; responsibleEmployeeId: string | null }[];
+  contractors: { id: string; name: string; inn: string; responsibleEmployeeId: string | null }[];
 }> {
   const [executors, cps] = await Promise.all([
     tx
@@ -1293,6 +1294,7 @@ export async function taskFormOptions(
       .select({
         id: contractors.id,
         name: contractors.name,
+        inn: contractors.inn,
         responsibleEmployeeId: contractors.responsibleEmployeeId,
       })
       .from(contractors)

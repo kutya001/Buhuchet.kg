@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { ContractorSelect } from '../shell/contractor-select';
 import { taskProjectsQuery } from '../projects/projects-data';
 import {
   confirmHint,
@@ -362,11 +363,15 @@ export function TaskFormDialog({
               'contractorId',
               t('task.form.cp'),
               (control) => (
-                <Select
-                  control={control}
+                <ContractorSelect
+                  {...control}
+                  contractors={lists.contractors.map((c) => ({
+                    id: c.value,
+                    name: c.label,
+                    inn: c.inn,
+                  }))}
                   value={values.contractorId}
-                  options={lists.contractors}
-                  placeholder={t('task.form.cp_pick')}
+                  empty={t('task.form.cp_pick')}
                   onChange={(v) => setScope('contractor', v)}
                 />
               ),

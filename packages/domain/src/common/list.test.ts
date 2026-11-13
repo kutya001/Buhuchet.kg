@@ -238,6 +238,39 @@ describe('фильтр-галочки: «Найти значение» и «Вы
     expect(matchesValue(null, '  ')).toBe(true);
   });
 
+  it('столбец с контрагентами: значение находится и по ИНН — цифрами подряд, пробелы не в счёт (прототип v93)', () => {
+    const inn = '01234567890123';
+    expect(matchesValue('ОсОО «Ак-Жол»', '3456', inn)).toBe(true);
+    expect(matchesValue('ОсОО «Ак-Жол»', ' 0123 4567 ', inn)).toBe(true);
+    expect(matchesValue('ОсОО «Ак-Жол»', '9999', inn)).toBe(false);
+    // Не одни цифры — только по названию; без ИНН — как обычный столбец.
+    expect(matchesValue('ОсОО «Ак-Жол»', 'жол 0123', inn)).toBe(false);
+    expect(matchesValue('ОсОО «Ак-Жол»', '3456')).toBe(false);
+    expect(matchesValue('ОсОО «Ак-Жол»', '3456', null)).toBe(false);
+    // Цифры в названии находятся и без ИНН.
+    expect(matchesValue('Магазин 24', '24', inn)).toBe(true);
+    const cps = [
+      { value: 'c1', label: 'ОсОО «Ак-Жол»', digits: '01234567890123' },
+      { value: 'c2', label: 'ИП Асанов', digits: '21234500000000' },
+      { value: 'c3', label: 'Магазин 12345', digits: '30000000000000' },
+    ];
+    const labelOf = (v: string) => cps.find((x) => x.value === v)?.label;
+    const digitsOf = (v: string) => cps.find((x) => x.value === v)?.digits;
+    const on = (s: EnumSelection) =>
+      cps.filter((x) => enumChecked(s, x.value, x.label, x.digits)).map((x) => x.value);
+    // «Выбрать все» по цифрам отмечает найденных и по ИНН, и по названию.
+    let s = addEnumStep({ vals: [] }, { on: true, match: '12345' }, labelOf, digitsOf);
+    expect(on(s)).toEqual(['c1', 'c2', 'c3']);
+    expect(enumMatchChecked(s, '123456', labelOf, digitsOf)).toBe(true);
+    // Снятие одного значения, найденного по ИНН, снимает «Выбрать все» для этого поиска.
+    s = addEnumStep(s, { on: false, vals: ['c2'] }, labelOf, digitsOf);
+    expect(on(s)).toEqual(['c1', 'c3']);
+    expect(enumMatchChecked(s, '12345', labelOf, digitsOf)).toBe(false);
+    // Отметка отдельного значения, уже отмеченного шагом по ИНН, выбор не меняет.
+    const again = addEnumStep(s, { on: true, vals: ['c1'] }, labelOf, digitsOf);
+    expect(again).toEqual(s);
+  });
+
   it('без шагов — отмеченные значения; решает последний шаг, который касается значения', () => {
     expect(checked({ vals: ['r1', ''] })).toEqual(['r1', '']);
     expect(checked(enumAll())).toEqual(VALUES.map((x) => x.value));

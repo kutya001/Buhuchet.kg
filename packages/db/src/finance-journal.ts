@@ -318,6 +318,7 @@ export function finJournalColumns(o: Pick<FinJournalOptions, 't' | 'fee'>): List
       value: sql`${contractors.id}::text`,
       display: contractors.name,
       sort: { value: contractors.name, text: true },
+      digits: contractors.inn,
     },
     cat: {
       type: 'enum',
@@ -665,6 +666,7 @@ export function receiptJournalColumns(o: Pick<ReceiptJournalOptions, 't' | 'fee'
       value: sql`${contractors.id}::text`,
       display: contractors.name,
       sort: { value: contractors.name, text: true },
+      digits: contractors.inn,
     },
     total: { type: 'money', label: 'fin.r.col.total', value: live(total), total: true },
     dist: { type: 'money', label: 'fin.r.col.dist', value: live(dist), total: true },
@@ -1038,6 +1040,7 @@ export function bonusColumns(t: ListTexts): ListColumns {
       value: sql`${contractors.id}::text`,
       display: contractors.name,
       sort: { value: contractors.name, text: true },
+      digits: contractors.inn,
     },
     sum: { type: 'money', label: 'fin.b.col.sum', value: B('amount'), total: true },
     note: { type: 'text', label: 'fin.b.col.note', value: B('note') },

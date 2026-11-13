@@ -265,6 +265,8 @@ export interface BonusLogRow {
   amount: Tyiyn;
   /** Контрагент и основание — только тому, кто видит запись-источник (`BonusVisibility`). */
   contractor: { id: string; name: string } | null;
+  /** ИНН контрагента — для «Название или ИНН» фильтра столбца; виден тому же, кто видит контрагента. */
+  contractorInn: string | null;
   what: string;
   /** У ожидающего бонуса: сколько оплачено по услуге и её стоимость. */
   paid: Tyiyn | null;
@@ -302,6 +304,7 @@ export async function bonusLogRows(
         amount: moneyOperations.amount,
         contractorId: contractors.id,
         contractorName: contractors.name,
+        contractorInn: contractors.inn,
         note: moneyOperations.note,
         by: logBy.shortName,
         createdAt: stamp(moneyOperations.createdAt),
@@ -331,6 +334,7 @@ export async function bonusLogRows(
         amount: oneOffServiceBonuses.amount,
         contractorId: contractors.id,
         contractorName: contractors.name,
+        contractorInn: contractors.inn,
         by: logBy.shortName,
         createdAt: stamp(oneOffServices.createdAt),
         seen: seen(see.services),
@@ -373,6 +377,7 @@ export async function bonusLogRows(
       employeeName: o.employeeName,
       amount: Number(o.amount),
       contractor: o.seen ? { id: o.contractorId, name: o.contractorName } : null,
+      contractorInn: o.seen ? o.contractorInn : null,
       what: o.seen ? o.note : '',
       by: o.by,
       createdAt: o.createdAt,
@@ -391,6 +396,7 @@ export async function bonusLogRows(
         employeeName: b.employeeName,
         amount: Number(b.amount),
         contractor: b.seen ? { id: b.contractorId, name: b.contractorName } : null,
+        contractorInn: b.seen ? b.contractorInn : null,
         what: b.seen ? b.name : '',
         paid: on ? null : pays.reduce((sum, p) => sum + p.amount, 0),
         cost: on ? null : cost,
@@ -408,6 +414,7 @@ export async function bonusLogRows(
       employeeName: x.employeeName,
       amount: -Number(x.amount),
       contractor: null,
+      contractorInn: null,
       what: x.note,
       by: x.by,
       createdAt: x.createdAt,
@@ -602,7 +609,12 @@ const LOG_COLUMNS: ListColumns = {
     value: field('kind'),
     display: field('kind_text'),
   },
-  cp: { type: 'enum', label: 'staff.bonus.col.contractor', value: field('cp') },
+  cp: {
+    type: 'enum',
+    label: 'staff.bonus.col.contractor',
+    value: field('cp'),
+    digits: field('cp_inn'),
+  },
   what: { type: 'text', label: 'staff.bonus.col.what', value: field('what') },
   sum: { type: 'money', label: 'staff.bonus.col.sum', value: field('sum'), total: true },
   by: { type: 'enum', label: 'staff.bonus.col.by', value: field('by') },
@@ -610,7 +622,23 @@ const LOG_COLUMNS: ListColumns = {
 /** По умолчанию — по дате, сначала новые (прототип: `sort: {key: 'date', dir: -1}`). */
 const LOG_SORT: ListSort = { key: 'date', dir: 'desc' };
 
-const logSource = (rows: readonly BonusLogRow[], t: ListTexts) =>
+/**
+ * ИНН для «Название или ИНН» фильтра столбца «Контрагент»: значение фильтра здесь — название, поэтому у
+ * одноимённых контрагентов — ИНН всех через пробел (как `inn[name]` прототипа): выбор по ИНН отбирает
+ * одни и те же записи, ушёл ли он списком значений или шагом «Выбрать все».
+ */
+function innsByName(rows: readonly BonusLogRow[]): Map<string, string> {
+  const inns = new Map<string, Set<string>>();
+  for (const r of rows) {
+    if (!r.contractor || !r.contractorInn) continue;
+    const set = inns.get(r.contractor.name) ?? new Set<string>();
+    set.add(r.contractorInn);
+    inns.set(r.contractor.name, set);
+  }
+  return new Map([...inns].map(([name, set]) => [name, [...set].sort().join(' ')]));
+}
+
+const logSource = (rows: readonly BonusLogRow[], t: ListTexts, inns = innsByName(rows)) =>
   recordset(
     rows.map((r, pos) => ({
       id: r.id,
@@ -620,6 +648,7 @@ const logSource = (rows: readonly BonusLogRow[], t: ListTexts) =>
       kind: r.kind,
       kind_text: t(`staff.bonus.kind.${r.kind}`),
       cp: r.contractor?.name ?? '',
+      cp_inn: (r.contractor && inns.get(r.contractor.name)) ?? '',
       what: bonusWhat(r, t),
       // Ожидающий бонус в итог не входит (прототип: `val: x => x.wait ? 0 : x.amount`).
       sum: r.kind === 'wait' ? 0 : r.amount,
@@ -633,6 +662,7 @@ const logSource = (rows: readonly BonusLogRow[], t: ListTexts) =>
       ['kind', 'text'],
       ['kind_text', 'text'],
       ['cp', 'text'],
+      ['cp_inn', 'text'],
       ['what', 'text'],
       ['sum', 'bigint'],
       ['by', 'text'],

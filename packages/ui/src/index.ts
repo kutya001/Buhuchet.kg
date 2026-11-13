@@ -39,6 +39,13 @@ export { FloatingPanel } from './floating';
 export { Plate, Plates, type PlateColor, type PlateProps } from './plates';
 export { Popover, type PopoverProps } from './popover';
 export { RecordChangedNotice, type RecordChangedNoticeProps } from './record-changed';
+export {
+  SEARCH_SELECT_MAX,
+  SearchSelect,
+  type SearchSelectLabels,
+  type SearchSelectOption,
+  type SearchSelectProps,
+} from './search-select';
 export { BottomSheet, type BottomSheetProps } from './sheet';
 export { AppFrame } from './shell/app-frame';
 export { CountBadge } from './shell/badge';

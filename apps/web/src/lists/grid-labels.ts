@@ -128,6 +128,7 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     filterUntil: t('grid.filter_until'),
     filterBadNumber: t('grid.filter_bad_number'),
     filterFind: t('grid.filter_find'),
+    filterFindDigits: t('cpsel.placeholder'),
     filterAll: t('grid.filter_all'),
     empty: t('grid.filter_empty'),
     filterLoading: t('grid.filter_loading'),

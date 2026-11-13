@@ -23,6 +23,7 @@ import {
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { ContractorSelect } from '../shell/contractor-select';
 import type { Translate } from '../l10n/translate';
 
 /** Поле, к которому относится отказ сервера (`details.field`). */
@@ -442,10 +443,10 @@ export function ManualReportDialog({
           'contractorId',
           t('report.manual.cp'),
           (control) => (
-            <Select
-              control={control}
+            <ContractorSelect
+              {...control}
+              contractors={options.contractors}
               value={cp}
-              options={options.contractors.map((c) => ({ value: c.id, label: c.name }))}
               onChange={(v) => {
                 setCp(v);
                 clear('contractorId');

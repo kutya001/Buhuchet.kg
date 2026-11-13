@@ -851,7 +851,7 @@ export async function oneOffServiceFormData(
   scope: SQL | undefined,
   contractorId: string | null,
 ): Promise<{
-  contractors: { id: string; name: string; oneOff: boolean }[];
+  contractors: { id: string; name: string; inn: string; oneOff: boolean }[];
   performers: { id: string; name: string }[];
   responsible: string | null;
 }> {
@@ -860,6 +860,7 @@ export async function oneOffServiceFormData(
       .select({
         id: contractors.id,
         name: contractors.name,
+        inn: contractors.inn,
         oneOff: sql<boolean>`${contractors.kind} = 'oneoff'`,
         responsible: contractors.responsibleEmployeeId,
       })
@@ -874,7 +875,7 @@ export async function oneOffServiceFormData(
   ]);
   const chosen = contractorId ? cps.find((c) => c.id === contractorId) : undefined;
   return {
-    contractors: cps.map(({ id, name, oneOff }) => ({ id, name, oneOff })),
+    contractors: cps.map(({ id, name, inn, oneOff }) => ({ id, name, inn, oneOff })),
     performers: people,
     responsible: chosen?.responsible ?? null,
   };
