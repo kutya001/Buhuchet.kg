@@ -1,6 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
-import { employeeAccountOf, getEmployee } from '@buhuchet/db';
-import { hasPermission } from '@buhuchet/domain';
+import { bonusBalances, employeeAccountOf, getEmployee } from '@buhuchet/db';
+import { EMPTY_BONUS_BALANCE, hasPermission } from '@buhuchet/domain';
 import { AccountEmployeeParam, EmployeeAccount } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -56,7 +56,11 @@ export function employeeAccountHandler(
     const out = await inTaxpay(deps, c, async (tx, settings) => {
       if (!settings.features.accounts) moneyFail(403, 'accounts_off');
       if (!(await getEmployee(tx, id))) return null;
-      return employeeAccountOf(tx, id, finScopeOf(subject));
+      const [found, bonuses] = await Promise.all([
+        employeeAccountOf(tx, id, finScopeOf(subject)),
+        bonusBalances(tx, [id]),
+      ]);
+      return { ...found, bonuses: bonuses.get(id) ?? EMPTY_BONUS_BALANCE };
     });
     if (!out) apiFail(404, 'not_found', 'Сотрудник не найден');
     const names = new Map(out.contractors.map((x) => [x.id, x.name]));
@@ -66,6 +70,7 @@ export function employeeAccountHandler(
       received: account.received,
       paid: account.paid,
       bonus: account.bonus,
+      bonuses: { bal: out.bonuses.bal, out: out.bonuses.out, svc: out.bonuses.svc },
       rows: account.rows.map((x) => ({
         contractorId: x.contractorId,
         name: names.get(x.contractorId) ?? '',

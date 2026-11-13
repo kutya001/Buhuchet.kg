@@ -1,16 +1,20 @@
 import {
+  BONUS_LOG_KINDS,
+  BONUS_NOTE_MAX,
   HISTORY_ACTIONS,
   MONEY_AMOUNT_MAX,
   MONEY_HOLDER_KINDS,
   MONEY_NOTE_MAX,
   MONEY_OP_KINDS,
   OP_REASON_MAX,
+  SERVICE_BONUS_LINES_MAX,
   SERVICE_DESCRIPTION_MAX,
   SERVICE_NAME_MAX,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Tyiyn, Uuid } from './common';
 import { FeePaymentForm, FeePaymentRequest } from './fees';
+import { listPageSchema } from './list';
 import { ReceiptForm, ReceiptRequest } from './money';
 
 /*
@@ -155,6 +159,11 @@ export const EmployeeAccount = z.object({
   received: Tyiyn,
   paid: Tyiyn,
   bonus: Tyiyn,
+  /**
+   * Плашка «Накоплено бонусов» (прототип v84 `bonusSum`): остаток бонусов сотрудника, сколько списано
+   * и сколько начислено за разовые услуги.
+   */
+  bonuses: z.object({ bal: z.number().int(), out: Tyiyn, svc: Tyiyn }),
   rows: z.array(
     z.object({
       contractorId: Uuid,
@@ -486,6 +495,8 @@ export const ServiceForm = z.object({
   /** Исполнитель по умолчанию: ответственный контрагента или сам сотрудник. */
   performer: Uuid.nullable(),
   today: IsoDate,
+  /** Блок «Бонусы сотрудникам» (прототип v84): есть право «Списывать остаток в бонус». */
+  canBonus: z.boolean(),
 });
 export type ServiceForm = z.infer<typeof ServiceForm>;
 
@@ -498,6 +509,14 @@ const ServiceFields = {
   amount: Tyiyn.refine((v) => v <= MONEY_AMOUNT_MAX, 'Сумма слишком большая'),
   performerId: Uuid.nullable(),
   description: z.string().max(SERVICE_DESCRIPTION_MAX).default(''),
+  /**
+   * «Бонусы сотрудникам» (прототип v84): строки «сотрудник — сумма»; только с правом «Списывать
+   * остаток в бонус». Не передано — бонусы не меняются.
+   */
+  bonuses: z
+    .array(z.strictObject({ employeeId: Uuid, amount: Tyiyn }))
+    .max(SERVICE_BONUS_LINES_MAX)
+    .optional(),
 };
 
 /** «Добавить услугу»: файлы окно загрузит к услуге после ответа (`files` — сколько). */
@@ -570,6 +589,21 @@ export const ServiceCard = z.object({
   locks: z.object({ edit: Lock, del: Lock, pay: Lock }),
   /** Блок «Файлы»: «Файлы в карточках» включены и есть право «Просматривать файлы». */
   files: z.boolean(),
+  /**
+   * «Бонусы сотрудникам» (прототип v84 и v87): строки, которые видит сотрудник (с правом «Списывать
+   * остаток в бонус» или «Сотрудники и роли» — все, иначе только свои), их сумма и день начисления —
+   * услуга оплачена полностью; null — ждут оплаты. Нет видимых строк — null.
+   */
+  bonuses: z
+    .object({
+      total: Tyiyn,
+      on: IsoDate.nullable(),
+      /** `name` — полное ФИО (карточка), `short` — краткое имя (окно «Изменить»). */
+      lines: z.array(
+        z.object({ employeeId: Uuid, name: z.string(), short: z.string(), amount: Tyiyn }),
+      ),
+    })
+    .nullable(),
   history: ServiceHistory,
 });
 export type ServiceCard = z.infer<typeof ServiceCard>;
@@ -616,3 +650,91 @@ export const ServicePaymentEditRequest = z.strictObject({
   reason: EditReason,
 });
 export type ServicePaymentEditRequest = z.input<typeof ServicePaymentEditRequest>;
+
+/* ───────────── Бонусы сотрудников (прототип v84 и v87, docs/deviations.md п. О-75) ───────────── */
+
+const BonusSums = {
+  /** Из остатков контрагентов. */
+  cp: Tyiyn,
+  /** За разовые услуги, оплаченные полностью. */
+  svc: Tyiyn,
+  /** Ожидает оплаты услуг: в остаток не входит. */
+  wait: Tyiyn,
+  /** Списано. */
+  out: Tyiyn,
+  /** Остаток бонусов. */
+  bal: z.number().int(),
+};
+
+/** Плашки «Бонусов» → «Остатки» и что можно делать. */
+export const BonusSummary = z.object({
+  ...BonusSums,
+  /** «Списать бонус» и «Отменить списание»: право «Списывать остаток в бонус». */
+  canOut: z.boolean(),
+  /** Раздел «Остатки контрагентов»: прежний отчёт о списаниях с закрытием месяца. */
+  contractors: z.boolean(),
+});
+export type BonusSummary = z.infer<typeof BonusSummary>;
+
+/** Строка «Остатков» (прототип: сетка `bonus-bal`). */
+export const BonusBalanceRow = z.object({
+  id: Uuid,
+  fullName: z.string(),
+  role: z.string(),
+  active: z.boolean(),
+  ...BonusSums,
+});
+export type BonusBalanceRow = z.infer<typeof BonusBalanceRow>;
+export const BonusBalanceList = listPageSchema(BonusBalanceRow);
+
+/** Запись журнала «Начисления и списания» (прототип `bonusLog`). */
+export const BonusLogRow = z.object({
+  id: z.string(),
+  kind: z.enum(BONUS_LOG_KINDS),
+  date: IsoDate,
+  employee: z.object({ id: Uuid, name: z.string() }),
+  /** Со знаком: списание — с минусом. */
+  amount: z.number().int(),
+  /** Контрагент и основание — только тому, кто видит услугу или операцию. */
+  contractor: z.object({ id: Uuid, name: z.string() }).nullable(),
+  what: z.string(),
+  by: z.string().nullable(),
+  /** «Открыть услугу», «Открыть операцию», «Отменить списание». */
+  serviceId: Uuid.nullable(),
+  operationId: Uuid.nullable(),
+  writeoff: z.object({ id: Uuid, version: RecordVersion }).nullable(),
+});
+export type BonusLogRow = z.infer<typeof BonusLogRow>;
+export const BonusLogList = listPageSchema(BonusLogRow);
+
+/** Журнал одного сотрудника — окно «Бонусы: начисления и списания». */
+export const BonusLogQuery = z.object({ employeeId: Uuid.optional() });
+
+export const BonusEmployeeParam = z.object({ id: Uuid });
+
+/** Окно сотрудника (прототип `bonusEmpDlg`) и «Списать бонус» (`bonusOutDlg`). */
+export const BonusEmployee = z.object({
+  id: Uuid,
+  fullName: z.string(),
+  ...BonusSums,
+  canOut: z.boolean(),
+  today: IsoDate,
+});
+export type BonusEmployee = z.infer<typeof BonusEmployee>;
+
+/** «Списать бонус»: сумму, дату и основание проверяет сервер — отказ у поля, текстом прототипа. */
+export const BonusOutRequest = z.strictObject({
+  amount: Tyiyn,
+  date: IsoDate,
+  note: z.string().max(BONUS_NOTE_MAX),
+});
+export type BonusOutRequest = z.input<typeof BonusOutRequest>;
+
+export const BonusOutSaved = z.object({ id: Uuid, balance: z.number().int() });
+export type BonusOutSaved = z.infer<typeof BonusOutSaved>;
+
+export const BonusWriteoffParam = z.object({ id: Uuid });
+
+/** «Отменить списание». */
+export const BonusUndoRequest = z.strictObject({ version: RecordVersion });
+export type BonusUndoRequest = z.infer<typeof BonusUndoRequest>;

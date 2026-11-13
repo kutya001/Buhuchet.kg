@@ -367,6 +367,32 @@ describe('история разовой услуги', () => {
     expect(contractorHistoryText(t, named, {})).toBe('Услуга изменена');
   });
 
+  it('бонусы сотрудникам: в записи о создании и отдельной записью при изменении', () => {
+    const lines = [
+      { employeeId: 'e1', name: 'Алишер Т.', amount: 50000 },
+      { employeeId: 'e2', name: 'Айгуль С.', amount: 30000 },
+    ];
+    const created = svc({
+      changes: [
+        { field: 'name', to: 'Восстановление учёта' },
+        { field: 'amount', to: 500000 },
+        { field: 'bonuses', to: lines },
+      ],
+    });
+    expect(plain(contractorHistoryText(t, created, {}))).toBe(
+      'Разовая услуга «Восстановление учёта» на 5 000 сом. Бонусы сотрудникам: Алишер Т. — 500 сом, Айгуль С. — 300 сом',
+    );
+    const changed = svc({
+      action: 'update',
+      changes: [{ field: 'bonuses', from: lines, to: [lines[0]] }],
+    });
+    expect(plain(contractorHistoryText(t, changed, {}))).toBe(
+      'Бонусы сотрудникам: Алишер Т. — 500 сом',
+    );
+    const removed = svc({ action: 'update', changes: [{ field: 'bonuses', from: lines, to: [] }] });
+    expect(contractorHistoryText(t, removed, {})).toBe('Бонусы сотрудникам убраны');
+  });
+
   it('оплата и удаление — как у операций', () => {
     const pay = cp({
       entity: 'one_off_service_payment',

@@ -475,6 +475,11 @@ export const GRID_KEYS = [
   'staff.roles',
   // «Списания в бонус» (прототип `'bonus'`).
   'staff.bonus',
+  // «Бонусы» (прототип v84): «Остатки», «Начисления и списания», журнал одного сотрудника
+  // (`'bonus-bal'`, `'bonus-log'`, `'bonus-emp'`).
+  'staff.bonus.bal',
+  'staff.bonus.log',
+  'staff.bonus.emp',
   // «Финансовые операции»: у каждой вкладки свой вид, как `'fin-'+tab` в прототипе; «Журнал
   // поступлений» — `'fin-journal'`.
   'fin.all',

@@ -11,7 +11,7 @@ import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
 import { FilesManager } from '../files/files-manager';
-import { BonusTab } from '../finance/bonus-tab';
+import { StaffBonusTab } from '../finance/staff-bonuses';
 import { FinanceScreen } from '../finance/finance-screen';
 import { KbArticlesTab } from '../kb/kb-articles';
 import { KbLessonsTab } from '../kb/kb-lessons';
@@ -71,7 +71,7 @@ export function ModuleScreen({
     const tab = tabId ?? 'list';
     if (tab === 'list') return <StaffList />;
     if (tab === 'roles') return <RolesList />;
-    if (tab === 'bonus') return <BonusTab />;
+    if (tab === 'bonus') return <StaffBonusTab />;
     return <StaffList />;
   }
   if (moduleId === 'fin') return <FinanceScreen tab={tabId ?? 'all'} />;
@@ -181,6 +181,8 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'projects/all',
   'projects/mine',
   'files/',
+  // «Бонусы» сотрудников (прототип v84): плашки раздела «Остатки».
+  'staff/bonus',
   // Видео платформы (прототип v79: «Не просмотренные», «Не смотрел / Начал / Просмотрено»).
   'kb/video',
   'kb/vviews',

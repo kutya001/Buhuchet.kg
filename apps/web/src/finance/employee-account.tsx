@@ -1,6 +1,6 @@
 'use client';
 
-import { formatSom } from '@buhuchet/domain';
+import { formatSom, formatSomWithUnit } from '@buhuchet/domain';
 import { Box, MiniTable, Note, Plate, Plates } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { openContractorCard } from '../contractors/card-store';
@@ -70,8 +70,16 @@ export function EmployeeAccountTab({ employeeId }: { employeeId: string }) {
           icon="gift"
           color="purple"
           label={t('fin.acc.bonus')}
-          value={whole(a.bonus)}
+          // Прототип v84: накопленный остаток бонусов (`bonusSum(e.id).bal`), а не сумма списаний в бонус.
+          value={whole(a.bonuses.bal)}
           unit={t('report.plate.som')}
+          sub={
+            a.bonuses.out
+              ? t('staff.bonus.acc.out', { amount: formatSomWithUnit(a.bonuses.out) })
+              : a.bonuses.svc
+                ? t('staff.bonus.acc.svc', { amount: formatSomWithUnit(a.bonuses.svc) })
+                : undefined
+          }
         />
       </Plates>
       <Box title={t('fin.acc.by_cp')}>

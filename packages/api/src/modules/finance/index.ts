@@ -2,6 +2,28 @@ import type { ApiDeps } from '../../deps';
 import { createModuleApp } from '../../module';
 import { employeeAccountHandler, employeeAccountRoute } from './account';
 import {
+  bonusBalanceExportHandler,
+  bonusBalanceExportRoute,
+  bonusBalanceValuesHandler,
+  bonusBalanceValuesRoute,
+  bonusBalancesHandler,
+  bonusBalancesRoute,
+  bonusEmployeeHandler,
+  bonusEmployeeRoute,
+  bonusLogHandler,
+  bonusLogRoute,
+  bonusLogExportHandler,
+  bonusLogExportRoute,
+  bonusLogValuesHandler,
+  bonusLogValuesRoute,
+  bonusOutHandler,
+  bonusOutRoute,
+  bonusSummaryHandler,
+  bonusSummaryRoute,
+  bonusUndoHandler,
+  bonusUndoRoute,
+} from './bonuses';
+import {
   feePaymentDeleteHandler,
   feePaymentDeleteRoute,
   feePaymentEditFormHandler,
@@ -129,6 +151,16 @@ export function financeModule(deps: ApiDeps) {
     .openapi(bonusListRoute, bonusListHandler(deps))
     .openapi(bonusValuesRoute, bonusValuesHandler(deps))
     .openapi(bonusExportRoute, bonusExportHandler(deps))
+    .openapi(bonusSummaryRoute, bonusSummaryHandler(deps))
+    .openapi(bonusBalancesRoute, bonusBalancesHandler(deps))
+    .openapi(bonusBalanceValuesRoute, bonusBalanceValuesHandler(deps))
+    .openapi(bonusBalanceExportRoute, bonusBalanceExportHandler(deps))
+    .openapi(bonusLogRoute, bonusLogHandler(deps))
+    .openapi(bonusLogValuesRoute, bonusLogValuesHandler(deps))
+    .openapi(bonusLogExportRoute, bonusLogExportHandler(deps))
+    .openapi(bonusEmployeeRoute, bonusEmployeeHandler(deps))
+    .openapi(bonusOutRoute, bonusOutHandler(deps))
+    .openapi(bonusUndoRoute, bonusUndoHandler(deps))
     .openapi(closedMonthsRoute, closedMonthsHandler(deps))
     .openapi(closeMonthRoute, closeMonthHandler(deps))
     .openapi(taxReminderRoute, taxReminderHandler(deps))

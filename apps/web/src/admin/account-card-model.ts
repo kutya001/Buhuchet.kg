@@ -60,6 +60,10 @@ function changeText(t: Translate, c: HistoryChange): string | null {
  * значениями «было → стало», где они есть (ТЗ: «кто, когда, было → стало»), остальные — «Изменено: …».
  */
 export function accountHistoryText(t: Translate, h: HistoryEntry): string {
+  // Бонусы сотрудника (прототип v84 `bonusOutDlg`, `bonusUndo`): основание списания — в причине записи.
+  if (h.changes.some((c) => c.field === 'bonusOut'))
+    return t('staff.bonus.hist.out', { note: h.reason ?? '' });
+  if (h.changes.some((c) => c.field === 'bonusOutUndo')) return t('staff.bonus.hist.undo');
   if (h.reason) return h.reason;
   if (h.action === 'create') {
     return t(

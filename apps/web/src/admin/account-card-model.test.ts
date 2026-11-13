@@ -29,6 +29,26 @@ const entry = (over: Partial<AdminUserCard['history'][number]> = {}) => ({
 });
 
 describe('карточка пользователя: «История»', () => {
+  it('бонусы сотрудника: списание — с основанием и без суммы, отмена списания', () => {
+    const change = (field: string) => ({ field, from: null, to: null });
+    expect(
+      accountHistoryText(
+        t,
+        entry({
+          entity: 'employee',
+          changes: [change('bonusOut'), change('bonusOutDate'), change('bonusBalance')],
+          reason: 'Выдано с зарплатой',
+        }),
+      ),
+    ).toBe('Списан бонус: Выдано с зарплатой');
+    expect(
+      accountHistoryText(
+        t,
+        entry({ entity: 'employee', changes: [change('bonusOutUndo'), change('bonusOutDate')] }),
+      ),
+    ).toBe('Отменено списание бонуса');
+  });
+
   it('действие с пояснением показывается пояснением', () => {
     expect(
       accountHistoryText(

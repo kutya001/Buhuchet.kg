@@ -157,7 +157,7 @@ export const SHELL_TEXTS = {
   'tab.tasks.overdue': { ru: 'Просроченные', section: 'Вкладки' },
   'tab.staff.list': { ru: 'Сотрудники', section: 'Вкладки' },
   'tab.staff.roles': { ru: 'Роли', section: 'Вкладки' },
-  'tab.staff.bonus': { ru: 'Списания в бонус', section: 'Вкладки' },
+  'tab.staff.bonus': { ru: 'Бонусы', section: 'Вкладки' },
   'tab.dicts.types': { ru: 'Виды отчётов', section: 'Вкладки' },
   'tab.dicts.platform': { ru: 'Справочники платформы', section: 'Вкладки' },
   'tab.org.main': { ru: 'Основное', section: 'Вкладки' },

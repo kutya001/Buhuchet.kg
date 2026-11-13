@@ -43,6 +43,7 @@ import { statusPillView } from '../status/status-view';
 import { useFinanceRefresh } from './finance-data';
 import { WhyButton } from './finance-dialogs';
 import { serviceHistoryText } from './finance-history';
+import { ServiceBonusBox } from './service-bonuses';
 import { serviceCardQuery, servicePaymentQuery } from './service-data';
 import {
   ServiceDeleteDialog,
@@ -470,6 +471,15 @@ export function ServiceCardDialog({
             <KeyValues items={items} />
             {s.description ? <p className="m-0 [overflow-wrap:anywhere]">{s.description}</p> : null}
           </Box>
+        ) : null}
+        {s?.bonuses ? (
+          <ServiceBonusBox
+            t={t}
+            bonuses={s.bonuses}
+            deleted={!!s.deleted}
+            paid={s.paid}
+            amount={s.amount}
+          />
         ) : null}
         {s ? (
           <Box
