@@ -49,6 +49,21 @@ export const TELEGRAM_TEXTS = {
   'telegram.table.total': { ru: 'Всего', section: S },
   'telegram.table.total_of': { ru: 'Всего у {n} контрагентов', section: S },
   // День недели в заголовке «Отчёты на пятницу, 13 ноября»: 0 — понедельник.
+  // Ответы по запросу (поток Т, задача Т5; прототип v102 modules/tg-menu.js): столбцы таблиц команд
+  // «Сегодня», «Неделя», «Просрочено» и карточки контрагента; заголовки и подписи кнопок — шаблоны.
+  'telegram.table.status': { ru: 'Статус', section: S },
+  'telegram.table.payment': { ru: 'Оплата', section: S },
+  'telegram.table.day': { ru: 'День', section: S },
+  'telegram.table.to_pay': { ru: 'Оплатить', section: S },
+  'telegram.cmd.counted': { ru: '{head} · {n}', section: S },
+  'telegram.cmd.menu_hint': {
+    ru: 'Команды бота — в меню и на кнопках под полем ввода.',
+    section: S,
+  },
+  'telegram.card.nobody': { ru: 'не назначен', section: S },
+  'telegram.card.paused': { ru: '{sub} · обслуживание приостановлено', section: S },
+  'telegram.card.debt': { ru: '{sum} сом за {n} мес.', section: S },
+  'telegram.card.no_debt': { ru: 'нет', section: S },
   'telegram.weekday.0': { ru: 'понедельник', section: S },
   'telegram.weekday.1': { ru: 'вторник', section: S },
   'telegram.weekday.2': { ru: 'среду', section: S },
