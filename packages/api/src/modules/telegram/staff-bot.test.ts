@@ -33,6 +33,7 @@ import {
 } from '../../testing';
 import { attachStoredFile } from '../files/attach';
 import { sendBotMessage } from './bot';
+import { BOT_REPLY_RATE_LIMIT } from './reply';
 import { telegramRemindersJob } from './reminders';
 import { taskView } from './staff-view';
 
@@ -42,7 +43,15 @@ type App = ReturnType<typeof createApp>;
 const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
 const SITE = 'https://stand.example';
 const noPause = async () => {};
-const CHAT = { owner: 7000, chief: 7001, acc: 7002, hr: 7003, senior: 7004, accB: 7100 } as const;
+const CHAT = {
+  owner: 7000,
+  chief: 7001,
+  acc: 7002,
+  hr: 7003,
+  senior: 7004,
+  accB: 7100,
+  ownerB: 7101,
+} as const;
 const LABELS = { work: 'В работе', done: 'Сдан', open: 'Открыть' };
 const CP = 'ОсОО «Ала-Тоо Трейд»';
 const fill = (text: string, values: Record<string, string | number>) =>
@@ -66,6 +75,7 @@ describe.skipIf(!databaseAvailable())(
     let nds = '';
 
     const person = (login: string) => f.people[login]!;
+    let ownerOf: Record<string, string> = {};
     const sent = (chatId: number) =>
       tg.sent.map((m, i) => ({ ...m, id: tg.messageIds[i]! })).filter((m) => m.chatId === chatId);
     const last = (chatId: number) => sent(chatId).at(-1)!;
@@ -90,7 +100,7 @@ describe.skipIf(!databaseAvailable())(
       expect(
         await sendBotMessage(
           deps,
-          { userId: login === 'owner-a' ? f.a.ownerUserId : person(login).userId, chatId },
+          { userId: ownerOf[login] ?? person(login).userId, chatId },
           message,
           'reminders',
           't',
@@ -191,6 +201,7 @@ describe.skipIf(!databaseAvailable())(
 
     beforeAll(async () => {
       f = await createStaffFixture();
+      ownerOf = { 'owner-a': f.a.ownerUserId, 'owner-b': f.b.ownerUserId };
       await seedAllPlatformDictionaries(f.t.admin.db);
       tg = createFakeTelegram();
       clock = fixedClock('2026-10-19T03:00:00Z');
@@ -206,6 +217,7 @@ describe.skipIf(!databaseAvailable())(
         ['hr-a', CHAT.hr],
         ['senior-a', CHAT.senior],
         ['acc-b', CHAT.accB],
+        ['owner-b', CHAT.ownerB],
       ] as const) {
         cookies[login] = await signIn(app, login, TEST_PASSWORD);
         await linkTelegram(app, cookies[login]!, chat);
@@ -711,16 +723,12 @@ describe.skipIf(!databaseAvailable())(
         text: 'Задача',
         buttons: [[{ text: 'Выполнена', action: 'taskDone', arg: task.id }]],
       });
-      expect([TPL.tgActNoRight, TPL.tgActStale]).toContain(
-        (await press(CHAT.hr, other.id, `taskDone:${task.id}`)).text,
-      );
+      expect((await press(CHAT.hr, other.id, `taskDone:${task.id}`)).text).toBe(TPL.tgActNoRight);
       const alien = await give('acc-b', CHAT.accB, {
         text: 'Задача',
         buttons: [[{ text: 'Выполнена', action: 'taskDone', arg: task.id }]],
       });
-      expect([TPL.tgActNoRight, TPL.tgActStale]).toContain(
-        (await press(CHAT.accB, alien.id, `taskDone:${task.id}`)).text,
-      );
+      expect((await press(CHAT.accB, alien.id, `taskDone:${task.id}`)).text).toBe(TPL.tgActStale);
       expect(await status(task.id)).toBe('todo');
 
       expect((await press(CHAT.acc, m.id, `taskWork:${task.id}`)).text).toBe(TPL.tgActTaskWork);
@@ -772,9 +780,10 @@ describe.skipIf(!databaseAvailable())(
       await press(CHAT.acc, wm.id, `repDone:${waiting}`);
       expect((await report(waiting)).status).toBe('submitted');
       // Момент сдачи ставит база по своим часам — для теста переносим его на «сегодня» теста.
+      // «Дата сдачи» отчёта — днём раньше отметки: в сообщении стоит она.
       await f.t.admin.db
         .update(schema.reports)
-        .set({ submittedAt: new Date('2026-10-19T04:00:00Z') })
+        .set({ submittedAt: new Date('2026-10-19T04:00:00Z'), submittedOn: '2026-10-18' })
         .where(eq(schema.reports.id, waiting));
       clock.set('2026-10-22T03:00:00Z');
       // Дни напоминаний вида отчёта — за день до срока.
@@ -810,7 +819,7 @@ describe.skipIf(!databaseAvailable())(
       expect(head).toBeGreaterThan(0);
       const confirm = boss.find((m) => keys(m).some((b) => b.data === `confOk:${waiting}`))!;
       expect(boss.indexOf(confirm)).toBeGreaterThan(head);
-      expect(confirm.text).toBe(`1-Т за Апрель 2026\n${CP} · сдан 19.10, acc-a`);
+      expect(confirm.text).toBe(`1-Т за Апрель 2026\n${CP} · сдан 18.10, acc-a`);
       expect(keys(confirm)).toEqual([
         { text: 'Подтвердить', data: `confOk:${waiting}` },
         { text: 'Вернуть', data: `confBack:${waiting}` },
@@ -829,6 +838,331 @@ describe.skipIf(!databaseAvailable())(
             eq(schema.orgReportTypes.reportTypeCode, 't1m'),
           ),
         );
+    });
+
+    it('«Сдан» до оплаты налога и уточнённый отчёт с переплатой — на сайт; «Подтвердить» без обязательной квитанции — нельзя; контрагент в архиве — «Нет права»', async () => {
+      const id = await manual(cpAcc, 'nds', '2026-03-01', '2026-10-22');
+      const full = `НДС за Март 2026, ${CP}`;
+      const m = await give('acc-a', CHAT.acc, reportMessage(id));
+      const set = (patch: Partial<typeof schema.reports.$inferInsert>) =>
+        f.t.admin.db.update(schema.reports).set(patch).where(eq(schema.reports.id, id));
+
+      // «Сдача отчёта только после оплаты»: налог начислен и не оплачен — оплату отмечают на сайте.
+      await settings({ features: { ...FEATURES, taxpay: true }, payBeforeSubmit: true });
+      await set({ amount: 500_000 });
+      expect((await press(CHAT.acc, m.id, `repDone:${id}`)).text).toBe(
+        fill(TPL.tgActRepPay, { отчёт: full }),
+      );
+      await settings({ features: { ...FEATURES, taxpay: false } });
+      // Уточнённый отчёт, оплачено больше суммы: возврат переплаты создаётся на сайте.
+      await set({ revision: 1, amount: 100_000, paid: 200_000 });
+      expect((await press(CHAT.acc, m.id, `repDone:${id}`)).text).toBe(
+        fill(TPL.tgActRepSite, { отчёт: full }),
+      );
+      expect(await report(id)).toMatchObject({ status: 'todo', version: 1 });
+      await settings({ features: FEATURES });
+
+      // Виду нужна квитанция о приёме, а файла у отчёта нет — подтвердить из чата нельзя.
+      const receipt = (on: boolean) =>
+        f.t.admin.db
+          .update(schema.orgReportTypes)
+          .set({ needReceipt: on })
+          .where(
+            and(
+              eq(schema.orgReportTypes.orgId, f.a.orgId),
+              eq(schema.orgReportTypes.reportTypeCode, 't1m'),
+            ),
+          );
+      const sub = await manual(cpAcc, 't1m', '2026-03-01', '2026-10-22');
+      const sm = await give('acc-a', CHAT.acc, reportMessage(sub));
+      await press(CHAT.acc, sm.id, `repDone:${sub}`);
+      expect((await report(sub)).status).toBe('submitted');
+      await receipt(true);
+      const cm = await give('chief-a', CHAT.chief, confirmMessage(sub));
+      expect((await press(CHAT.chief, cm.id, `confOk:${sub}`)).text).toBe(
+        fill(TPL.tgActConfRcpt, { отчёт: `1-Т за Март 2026, ${CP}` }),
+      );
+      expect((await report(sub)).confirmedAt).toBeNull();
+      await receipt(false);
+
+      // Контрагент в архиве: его отчёты из чата не меняются — ни статус, ни подтверждение.
+      const todo = await manual(cpAcc, 't1m', '2026-02-01', '2026-10-22');
+      const tm = await give('acc-a', CHAT.acc, reportMessage(todo));
+      const archive = (serviceStatus: 'archived' | 'active') =>
+        f.t.admin.db
+          .update(schema.contractors)
+          .set({ serviceStatus })
+          .where(eq(schema.contractors.id, cpAcc));
+      await archive('archived');
+      try {
+        expect((await press(CHAT.acc, tm.id, `repWork:${todo}`)).text).toBe(TPL.tgActNoRight);
+        expect((await press(CHAT.acc, tm.id, `repDone:${todo}`)).text).toBe(TPL.tgActNoRight);
+        expect((await press(CHAT.chief, cm.id, `confOk:${sub}`)).text).toBe(TPL.tgActNoRight);
+      } finally {
+        await archive('active');
+      }
+      expect(await report(todo)).toMatchObject({ status: 'todo', version: 1 });
+      expect((await report(sub)).confirmedAt).toBeNull();
+    });
+
+    it('задача с «Требуется файл» при выключенных «Файлах в карточках» закрывается без файла — как на сайте', async () => {
+      const res = await apiRequest(app, 'POST', '/api/tasks', owner, {
+        title: 'Акт сверки',
+        description: '',
+        categoryCode: 'КАТ-001',
+        contractorId: null,
+        executorEmployeeId: person('acc-a').employeeId,
+        term: 'day',
+        dueDate: '2026-10-25',
+        needFile: true,
+        confirm: false,
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+      const task = Task.parse(await res.json());
+      const m = last(CHAT.acc);
+      await settings({ features: { ...FEATURES, files: false } });
+      try {
+        expect((await press(CHAT.acc, m.id, `taskDone:${task.id}`)).text).toBe(TPL.tgActTaskDone);
+      } finally {
+        await settings({ features: FEATURES });
+      }
+      const [row] = await f.t.admin.db
+        .select({ status: schema.tasks.status })
+        .from(schema.tasks)
+        .where(eq(schema.tasks.id, task.id));
+      expect(row!.status).toBe('done');
+      expect(await filesOf('task', task.id)).toEqual([]);
+    });
+
+    it('чужая организация, область «Свои» и право проверяются у каждого действия: «Сдан», «Подтвердить», «Вернуть» с причиной, «Взять в работу», файл к задаче', async () => {
+      const today = clock.today();
+      const rep = await manual(cpAcc, 't1m', '2026-01-01', '2026-10-22');
+      const sub = await manual(cpAcc, 't1m', '2025-12-01', '2026-10-22');
+      const sm = await give('acc-a', CHAT.acc, reportMessage(sub));
+      await press(CHAT.acc, sm.id, `repDone:${sub}`);
+      expect((await report(sub)).status).toBe('submitted');
+      const created = await apiRequest(app, 'POST', '/api/tasks', owner, {
+        title: 'Сверка с банком',
+        description: '',
+        categoryCode: 'КАТ-001',
+        contractorId: null,
+        executorEmployeeId: person('acc-a').employeeId,
+        term: 'day',
+        dueDate: '2026-10-25',
+        needFile: true,
+        confirm: false,
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      const task = Task.parse(await created.json());
+      // «Кадры»: права бухгалтера и «Подтверждать сдачу», область «Свои»; отчёты — чужого контрагента.
+      const confirmRight = {
+        orgId: f.a.orgId,
+        roleId: f.roleIds.hr,
+        permissionId: 'repConfirm' as const,
+      };
+      await f.t.admin.db.insert(schema.rolePermissions).values(confirmRight);
+      const files = storage.files.size;
+      const button = (action: string, arg: string): BotMessage => ({
+        text: 'Запись',
+        buttons: [[{ text: 'Кнопка', action, arg }]],
+      });
+      const ask = (action: string, arg: string, kind: 'file' | 'text'): BotMessage =>
+        askBotMessage('Ответьте.', { action, arg, kind, day: today }, 'Отмена');
+
+      try {
+        // Нажатия: владелец чужой организации — записи для него нет; «Свои» и нет права — «Нет права».
+        const presses: [string, string, [string, number, string][]][] = [
+          [
+            'repDone',
+            rep,
+            [
+              ['owner-b', CHAT.ownerB, TPL.tgActStale],
+              ['hr-a', CHAT.hr, TPL.tgActNoRight],
+              ['senior-a', CHAT.senior, TPL.tgActNoRight],
+            ],
+          ],
+          [
+            'confOk',
+            sub,
+            [
+              ['owner-b', CHAT.ownerB, TPL.tgActStale],
+              ['hr-a', CHAT.hr, TPL.tgActNoRight],
+              ['acc-a', CHAT.acc, TPL.tgActNoRight],
+            ],
+          ],
+          [
+            'confBack',
+            sub,
+            [
+              ['owner-b', CHAT.ownerB, TPL.tgActStale],
+              ['hr-a', CHAT.hr, TPL.tgActNoRight],
+              ['acc-a', CHAT.acc, TPL.tgActNoRight],
+            ],
+          ],
+          [
+            'taskWork',
+            task.id,
+            [
+              ['owner-b', CHAT.ownerB, TPL.tgActStale],
+              ['hr-a', CHAT.hr, TPL.tgActNoRight],
+            ],
+          ],
+        ];
+        for (const [action, arg, cases] of presses) {
+          for (const [login, chat, refusal] of cases) {
+            const m = await give(login, chat, button(action, arg));
+            expect((await press(chat, m.id, `${action}:${arg}`)).text, `${action} — ${login}`).toBe(
+              refusal,
+            );
+          }
+        }
+
+        // Ответы на просьбу: причина возврата и файл к задаче.
+        const replies: [string, string, 'file' | 'text', [string, number, string][]][] = [
+          [
+            'confWhy',
+            sub,
+            'text',
+            [
+              ['owner-b', CHAT.ownerB, TPL.tgActStale],
+              ['hr-a', CHAT.hr, TPL.tgActNoRight],
+              ['acc-a', CHAT.acc, TPL.tgActNoRight],
+            ],
+          ],
+          [
+            'taskFile',
+            task.id,
+            'file',
+            [
+              ['owner-b', CHAT.ownerB, TPL.tgActStale],
+              ['hr-a', CHAT.hr, TPL.tgActNoRight],
+            ],
+          ],
+        ];
+        let n = 0;
+        for (const [action, arg, kind, cases] of replies) {
+          for (const [login, chat, refusal] of cases) {
+            const m = await give(login, chat, ask(action, arg, kind));
+            const answer =
+              kind === 'text'
+                ? await say(chat, 'Нет квитанции', { replyTo: m.id })
+                : await say(chat, null, { document: pdf(`x${n++}`), replyTo: m.id });
+            expect(answer.text, `${action} — ${login}`).toBe(refusal);
+            // Отказ ядра просьбу не закрывает — закрываем сами, чтобы она не ждала до конца дня.
+            await press(chat, m.id, 'askCancel');
+          }
+        }
+      } finally {
+        await f.t.admin.db
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, f.roleIds.hr),
+              eq(schema.rolePermissions.permissionId, 'repConfirm'),
+            ),
+          );
+      }
+
+      expect(await report(rep)).toMatchObject({ status: 'todo', version: 1 });
+      expect(await report(sub)).toMatchObject({ status: 'submitted', confirmedAt: null });
+      const [row] = await f.t.admin.db
+        .select({ status: schema.tasks.status })
+        .from(schema.tasks)
+        .where(eq(schema.tasks.id, task.id));
+      expect(row!.status).toBe('todo');
+      expect(await filesOf('task', task.id)).toEqual([]);
+      expect(storage.files.size).toBe(files);
+    });
+
+    it('ответ боту: на закрытую просьбу не принимается и другой не достаётся, повтор доставки — один раз, команда — не ответ, без права файл не скачивается, не больше 30 ответов в минуту', async () => {
+      const clear = () =>
+        f.t.admin.db
+          .delete(schema.rateLimits)
+          .where(eq(schema.rateLimits.kind, BOT_REPLY_RATE_LIMIT.kind));
+      await clear();
+      await needFile(true);
+      const ids: string[] = [];
+      const asks: number[] = [];
+      for (const month of ['2025-09-01', '2025-10-01', '2025-11-01']) {
+        const id = await manual(cpAcc, 't1m', month, '2026-10-22');
+        const m = await give('acc-a', CHAT.acc, reportMessage(id));
+        await press(CHAT.acc, m.id, `repDone:${id}`);
+        ids.push(id);
+        asks.push(last(CHAT.acc).id);
+      }
+      const [a, b, c] = ids as [string, string, string];
+      const statuses = async () => [
+        (await report(a)).status,
+        (await report(b)).status,
+        (await report(c)).status,
+      ];
+      const files = storage.files.size;
+
+      // Ответ на первую просьбу — сдан первый отчёт.
+      await say(CHAT.acc, null, { document: pdf('r1'), replyTo: asks[0]! });
+      expect(await statuses()).toEqual(['submitted', 'todo', 'todo']);
+      // Ещё один файл ответом на ту же, уже закрытую просьбу: другим открытым просьбам он не достаётся.
+      const quiet = tg.sent.length;
+      await sendToBot(
+        app,
+        telegramUpdate(null, CHAT.acc, { document: pdf('r2'), replyTo: asks[0]! }),
+      );
+      expect(tg.sent.length).toBe(quiet);
+      expect(await statuses()).toEqual(['submitted', 'todo', 'todo']);
+      expect(storage.files.size).toBe(files + 1);
+
+      // Файл без ответа на сообщение — последней открытой просьбе; повтор той же доставки от Telegram
+      // следующей открытой просьбе не достаётся.
+      const update = telegramUpdate(null, CHAT.acc, { document: pdf('r3') });
+      expect((await sendToBot(app, update)).status).toBe(200);
+      expect(await statuses()).toEqual(['submitted', 'todo', 'submitted']);
+      const once = tg.sent.length;
+      expect((await sendToBot(app, update)).status).toBe(200);
+      expect(tg.sent.length).toBe(once);
+      expect(await statuses()).toEqual(['submitted', 'todo', 'submitted']);
+      expect(storage.files.size).toBe(files + 2);
+
+      // Команда — не ответ на просьбу: бот отвечает подсказкой, просьба ждёт дальше.
+      expect((await say(CHAT.acc, '/help')).text).toBe(TPL.tgStart);
+
+      // Право «Менять статус отчётов» отобрали, пока бот ждал: файл не скачивается (такого файла у
+      // Telegram нет — без проверки права заранее был бы ответ «Не получилось»).
+      const right = {
+        orgId: f.a.orgId,
+        roleId: f.templateRole(f.a, 'acc'),
+        permissionId: 'changeStatus' as const,
+      };
+      await f.t.admin.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, right.roleId),
+            eq(schema.rolePermissions.permissionId, right.permissionId),
+          ),
+        );
+      try {
+        expect(
+          (
+            await say(CHAT.acc, null, {
+              document: { fileId: 'нет-такого', name: 'отчёт.pdf', size: 5 },
+            })
+          ).text,
+        ).toBe(TPL.tgActNoRight);
+      } finally {
+        await f.t.admin.db.insert(schema.rolePermissions).values(right);
+      }
+      expect(await statuses()).toEqual(['submitted', 'todo', 'submitted']);
+      expect(storage.files.size).toBe(files + 2);
+
+      // Не больше 30 ответов в минуту с одного чата.
+      await clear();
+      for (let i = 0; i < 30; i++) {
+        expect((await say(CHAT.acc, `текст ${i}`)).text).toBe(TPL.tgAskNeedFile);
+      }
+      expect((await say(CHAT.acc, 'ещё')).text).toBe(TPL.tgActFailed);
+      await clear();
+      await press(CHAT.acc, asks[1]!, 'askCancel');
+      await needFile(false);
     });
   },
 );

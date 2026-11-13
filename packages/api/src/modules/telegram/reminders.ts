@@ -237,9 +237,12 @@ export async function buildDailyReminders(
     if (waiting.length) {
       push({ text: tpl('tgConfHead', { n: waiting.length }) }, 'conf');
       for (const r of waiting.slice(0, STAFF_BOT_BUTTONS_MAX)) {
-        const by = r.submittedById ? byEmployee.get(r.submittedById)?.shortName : undefined;
+        // «сдан ДД.ММ, кто»: «Дата сдачи» отчёта и сдавший, а если он неизвестен — ответственный
+        // (прототип `tgConfMsg`: `r.subDate`, `r.subBy || r.resp`).
+        const who = r.submittedById ?? r.responsibleId;
+        const by = who ? byEmployee.get(who)?.shortName : undefined;
         const submitted = tr('telegram.item.submitted', {
-          date: botDayMonth(r.waitingSince ?? day),
+          date: botDayMonth(r.submittedOn ?? r.waitingSince ?? day),
         });
         push(
           confirmBotMessage(

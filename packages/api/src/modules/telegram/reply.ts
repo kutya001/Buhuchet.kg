@@ -61,6 +61,8 @@ import {
 export interface BotIncoming {
   chatId: number;
   fromId: number;
+  /** Номер самого сообщения в чате: одно сообщение принимается один раз. */
+  messageId: number | null;
   /** Номер сообщения, на которое ответили. */
   replyTo: number | null;
   text: string | null;
@@ -72,6 +74,12 @@ export interface BotIncoming {
 
 /** Ответы на просьбы из одного чата: не чаще 30 в минуту (каждый — запросы к базе и хранилищу). */
 export const BOT_REPLY_RATE_LIMIT: RateLimit = { kind: 'bot_reply', max: 30, windowSeconds: 60 };
+
+/**
+ * Одно сообщение человека — один ответ: Telegram повторяет доставку, если вебхук долго отвечал (файл
+ * скачивается до 30 секунд), а повтор при двух открытых просьбах ушёл бы во вторую.
+ */
+export const BOT_REPLY_ONCE: RateLimit = { kind: 'bot_reply_once', max: 1, windowSeconds: 43_200 };
 
 /** Подпись к файлу — примечание файла: одна строка, без управляющих знаков, не длиннее предела сайта. */
 export function botFileNote(caption: string | null): string | null {
@@ -91,7 +99,11 @@ async function askTarget(
 ): Promise<{ target: BotPressTarget; messageId: number } | null> {
   if (msg.replyTo !== null) {
     const target = await botPressTarget(deps.db, msg.chatId, msg.replyTo);
-    if (target && botAskLive(target.message, today)) return { target, messageId: msg.replyTo };
+    // Ответили именно на просьбу: закрытая или вчерашняя ответ другой открытой просьбе не передаёт —
+    // иначе второй файл «в ответ» на уже принятую просьбу сдал бы другой отчёт.
+    if (target?.message.ask) {
+      return botAskLive(target.message, today) ? { target, messageId: msg.replyTo } : null;
+    }
   }
   // Ответили не на просьбу или без ответа — последняя открытая просьба чата за сегодня.
   for (const open of await openBotAsks(deps.db, msg.chatId, today)) {
@@ -107,6 +119,8 @@ async function askTarget(
  */
 export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<boolean> {
   if (!deps.telegram || msg.fromId !== msg.chatId) return false;
+  // Команда («/start», «/help») — не ответ: причиной возврата отчёта она не становится.
+  if (!msg.file && (msg.text ?? '').trimStart().startsWith('/')) return false;
   const today = bishkekDate(deps.clock.now());
   const found = await askTarget(deps, msg, today);
   if (!found) return false;
@@ -122,6 +136,10 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
   if (!slot.ok) {
     await sayKey('tgActFailed');
     return true;
+  }
+  if (msg.messageId !== null) {
+    const once = await takeRateLimit(deps.db, BOT_REPLY_ONCE, `${msg.chatId}:${msg.messageId}`);
+    if (!once.ok) return true;
   }
   const action = botActionOf(deps, ask.action);
   const run = action?.reply?.bind(action);
@@ -165,6 +183,18 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
     if (!target.orgId) {
       await sayKey('tgActNoRight');
       return true;
+    }
+    // Право действия — до скачивания: без него сервер файл не качает и в хранилище не кладёт.
+    const permission = action.permission;
+    if (permission) {
+      const allowed = await botUserContext(deps, target, async (tx) => {
+        const access = target.employeeId ? await loadEmployeeAccess(tx, target.employeeId) : null;
+        return !!access && hasPermission(access.subject, permission);
+      });
+      if (!allowed) {
+        await sayKey('tgActNoRight');
+        return true;
+      }
     }
     const uploads = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, target.userId);
     if (!uploads.ok) {
@@ -241,15 +271,20 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
         asUser: (fn) => fn(tx, access),
         text: (key, values) => botText(deps, key, values),
       };
+      // Исходное сообщение блокируется до записи — тем же порядком, что у нажатия кнопки (сообщение,
+      // потом отчёт или задача): нажатие и ответ по одной записи друг друга не ждут по кругу.
+      const before =
+        ask.src && source && source.userId === target.userId
+          ? await lockBotPress(tx, source.outboxId, msg.chatId)
+          : null;
       const result = await run(ctx, reply);
       if (result.again !== undefined) return { result, closed: null, pressed: null, queued: [] };
       const closed = closeBotAsk(current);
       await saveBotPress(tx, target.outboxId, msg.chatId, closed);
       let pressed: BotMessage | null = null;
-      if (ask.src && source && source.userId === target.userId) {
-        const before = await lockBotPress(tx, source.outboxId, msg.chatId);
-        const after = before && pressBotButton(before, ask.src.action, ask.arg ?? null, result);
-        if (before && after && after !== before) {
+      if (ask.src && source && before) {
+        const after = pressBotButton(before, ask.src.action, ask.arg ?? null, result);
+        if (after !== before) {
           await saveBotPress(tx, source.outboxId, msg.chatId, after);
           pressed = after;
         }

@@ -57,6 +57,7 @@ const IncomingFile = z.object({
  * — документ либо фото с подписью (ответ на просьбу бота прислать файл, задача Т2).
  */
 const PrivateMessage = z.object({
+  message_id: z.number().int().optional(),
   text: z.string().max(4096).optional(),
   caption: z.string().max(4096).optional(),
   document: IncomingFile.optional(),
@@ -394,6 +395,7 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
         const handled = await handleBotReply(deps, {
           chatId: chat.id,
           fromId: from?.id ?? 0,
+          messageId: message.data.message_id ?? null,
           replyTo: message.data.reply_to_message?.message_id ?? null,
           text,
           file: await incomingFile(deps, message.data),

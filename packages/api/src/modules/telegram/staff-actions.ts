@@ -124,7 +124,8 @@ interface ReportOpened {
 
 /**
  * Отчёт кнопки глазами нажавшего: заблокирован до конца транзакции. Отказ — ключ шаблона: отчёта нет —
- * «Кнопка устарела», отчёт есть, но вне области «Свои» (контрагента передали другому) — «Нет права».
+ * «Кнопка устарела», отчёт есть, но вне области «Свои» (контрагента передали другому) или контрагент в
+ * архиве — «Нет права» (прототип `tgRepIn`).
  */
 async function openReport(
   ctx: Ctx,
@@ -136,6 +137,7 @@ async function openReport(
   const rc = await reportContext(ctx, tx, access.subject, t);
   const facts = await reportMessageFacts(tx, ctx.arg);
   if (!facts) return 'tgActStale';
+  if (facts.contractorArchived) return 'tgActNoRight';
   let r: ReportRow;
   try {
     r = await lockReport(tx, ctx.arg, rc.scope);
@@ -440,7 +442,10 @@ async function reportItemValues(tx: Tx, id: string, t: Translate) {
   };
 }
 
-/** Задача кнопки глазами нажавшего: видна, заблокирована, нажал исполнитель. */
+/**
+ * Задача кнопки глазами нажавшего: заблокирована, нажал исполнитель, задача ему видна. Задачи нет —
+ * «Кнопка устарела»; задача есть, но нажал не исполнитель (её передали другому) — «Нет права».
+ */
 async function openTask(
   ctx: Ctx,
   tx: Tx,
@@ -452,11 +457,12 @@ async function openTask(
   if (!access || !ctx.user.orgId || !ctx.arg) return 'tgActNoRight';
   const { features } = await orgMenuSettings(tx, ctx.user.orgId);
   if (!features.tasks) return 'tgActNoRight';
-  const task = await getTask(tx, ctx.arg, taskAccessOf(access.subject));
-  const lock = task && (await lockTask(tx, ctx.arg));
-  if (!task || !lock) return 'tgActStale';
+  const lock = await lockTask(tx, ctx.arg);
+  if (!lock) return 'tgActStale';
   // Кнопки задачи — только её исполнителю (прототип `tgTaskIn`).
   if (lock.executorEmployeeId !== access.subject.employeeId) return 'tgActNoRight';
+  const task = await getTask(tx, ctx.arg, taskAccessOf(access.subject));
+  if (!task) return 'tgActNoRight';
   return { task, lock, filesOn: features.files, subject: access.subject };
 }
 

@@ -172,7 +172,8 @@ describe('createTelegramBotApi', () => {
     expect(fetch.mock.calls[1]![0]).toBe(
       'https://api.telegram.org/file/bot1:abc/documents/file%201.pdf',
     );
-    expect(fetch.mock.calls[1]![1]).toMatchObject({ method: 'GET' });
+    // Перенаправление не принимается: адрес с токеном не уходит на другой сервер.
+    expect(fetch.mock.calls[1]![1]).toMatchObject({ method: 'GET', redirect: 'error' });
     expect(fetch.mock.calls[1]![1].signal).toBeInstanceOf(AbortSignal);
   });
 
@@ -205,6 +206,16 @@ describe('createTelegramBotApi', () => {
       ).loadFile('f', 10),
     ).toEqual(tooLarge);
     expect(await file(path, new Response(new Uint8Array(11))).loadFile('f', 10)).toEqual(tooLarge);
+    // Тело идёт частями без заголовка размера: сверх предела не дочитывается.
+    let pulled = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(6));
+      },
+    });
+    expect(await file(path, new Response(endless)).loadFile('f', 10)).toEqual(tooLarge);
+    expect(pulled).toBeLessThan(10);
   });
 
   it('loadFile: ошибка Telegram, чужой путь и сбой сети — отказ без токена в тексте', async () => {

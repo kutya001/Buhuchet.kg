@@ -122,6 +122,37 @@ export function redactBotToken(message: string): string {
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/**
+ * Тело ответа не больше предела: читается по частям, сверх предела не дочитывается (заголовку размера
+ * верить нельзя). null — тело больше предела.
+ */
+async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array | null> {
+  if (!res.body) {
+    const all = new Uint8Array(await res.arrayBuffer());
+    return all.byteLength > maxBytes ? null : all;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return body;
+}
+
 /** Клавиатура в виде Bot API. Неактивная кнопка — `disabled` (Bot API 10.3), данные остаются. */
 function replyMarkup(keyboard: readonly (readonly TelegramButton[])[] | undefined) {
   const rows = (keyboard ?? []).filter((row) => row.length > 0);
@@ -258,14 +289,15 @@ export function createTelegramBotApi(options: {
           `${fileBase}/${path.split('/').map(encodeURIComponent).join('/')}`,
           {
             method: 'GET',
+            // Перенаправление увело бы запрос с токеном в адресе на другой сервер.
+            redirect: 'error',
             signal: AbortSignal.timeout(FILE_TIMEOUT_MS),
           },
         );
         if (!res.ok) return failed(`файл: HTTP ${res.status}`);
         if (Number(res.headers.get('content-length') ?? 0) > maxBytes) return tooLarge;
-        const body = new Uint8Array(await res.arrayBuffer());
-        if (body.byteLength > maxBytes) return tooLarge;
-        return { ok: true, body };
+        const body = await readCapped(res, maxBytes);
+        return body ? { ok: true, body } : tooLarge;
       } catch (err) {
         return failed(err instanceof Error ? err.message : String(err));
       }

@@ -205,11 +205,14 @@ export async function sendToBot(
     replyTo?: number;
   },
 ) {
+  // Номер сообщения — свой у каждого, как у Telegram: одно сообщение бот принимает один раз.
+  const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
   const res = await api.post('/api/telegram/webhook', {
     headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
     data: {
-      update_id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      update_id: id,
       message: {
+        message_id: id,
         ...(message.text !== undefined ? { text: message.text } : {}),
         ...(message.caption !== undefined ? { caption: message.caption } : {}),
         ...(message.document

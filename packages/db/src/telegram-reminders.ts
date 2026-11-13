@@ -72,6 +72,8 @@ export interface ReminderReportRow {
   remindDays: number[];
   /** День сдачи по Бишкеку, если сдача ждёт подтверждения. */
   waitingSince: IsoDate | null;
+  /** «Дата сдачи» отчёта, как её указали при отметке «Сдан». */
+  submittedOn: IsoDate | null;
   submittedById: string | null;
 }
 
@@ -200,6 +202,7 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
         remindDays: orgReportTypes.remindDays,
         confirmedAt: reports.confirmedAt,
         submittedDay,
+        submittedOn: reports.submittedOn,
         submittedById: sql<
           string | null
         >`(select e.id from ${employees} e where e.user_id = ${reports.submittedBy})`,
@@ -268,6 +271,7 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
         r.status === 'submitted' && r.act !== 'pay' && r.confirmedAt === null
           ? (r.submittedDay?.slice(0, 10) ?? null)
           : null,
+      submittedOn: r.submittedOn,
       submittedById: r.submittedById,
     })),
     tasks: taskRows.map((t) => ({ ...t, doneOn: t.doneOn?.slice(0, 10) ?? null })),
@@ -345,6 +349,8 @@ export async function reportMessageFacts(
   period: ReportPeriod;
   periodStart: IsoDate;
   contractorName: string;
+  /** Контрагент в архиве: его записи из чата не меняются. */
+  contractorArchived: boolean;
   responsibleId: string | null;
 } | null> {
   const [row] = await tx
@@ -353,11 +359,14 @@ export async function reportMessageFacts(
       period: reports.period,
       periodStart: reports.periodStart,
       contractorName: contractors.name,
+      serviceStatus: contractors.serviceStatus,
       responsibleId: reports.responsibleEmployeeId,
     })
     .from(reports)
     .innerJoin(contractors, eq(contractors.id, reports.contractorId))
     .innerJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
     .where(eq(reports.id, reportId));
-  return row ?? null;
+  if (!row) return null;
+  const { serviceStatus, ...facts } = row;
+  return { ...facts, contractorArchived: serviceStatus === 'archived' };
 }
