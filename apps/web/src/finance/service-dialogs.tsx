@@ -6,6 +6,7 @@ import {
   formatSom,
   formatSomWithUnit,
   parseSom,
+  serviceBonusProblem,
   servicePaymentProblem,
   serviceProblems,
   type IsoDate,
@@ -42,6 +43,13 @@ import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import { useShell } from '../shell/context';
 import { reasonNeeded, type ChangedPart } from './edit-reason';
 import {
+  bonusDraftOf,
+  bonusLinesOf,
+  ServiceBonusNote,
+  ServiceBonusRows,
+  type BonusDraftRow,
+} from './service-bonuses';
+import {
   createService,
   deleteService,
   deleteServicePayment,
@@ -69,7 +77,7 @@ const loadError = (errorText: (e: ApiErrorLike) => string, e: unknown) =>
   errorText(e instanceof ApiFailure ? e.error : { code: 'unknown', message: '' });
 
 type Errors = Partial<
-  Record<'contractor' | 'name' | 'date' | 'amount' | 'files' | 'reason', string>
+  Record<'contractor' | 'name' | 'date' | 'amount' | 'files' | 'reason' | 'bonuses', string>
 >;
 
 function Footer({
@@ -121,7 +129,8 @@ function useFail(setErrors: (e: Errors) => void) {
       key === 'name' ||
       key === 'date' ||
       key === 'amount' ||
-      key === 'reason'
+      key === 'reason' ||
+      key === 'bonuses'
     )
       return setErrors({ [key]: message });
     toast(message, { bad: true });
@@ -223,6 +232,12 @@ function ServiceModal({
   );
   const [description, setDescription] = useState(edit?.description ?? '');
   const [paidNow, setPaidNow] = useState(false);
+  // Прототип serviceDlg: блок «Бонусы сотрудникам» — только с правом «Списывать остаток в бонус».
+  const canBonus = !!form?.canBonus;
+  const [bonusRows, setBonusRows] = useState<BonusDraftRow[]>(() =>
+    bonusDraftOf(edit?.bonuses ?? null),
+  );
+  const [bonusTouched, setBonusTouched] = useState(false);
   const [reason, setReason] = useState('');
   const [picked, setPicked] = useState<File[]>([]);
   const [errors, setErrors] = useState<Errors>({});
@@ -244,6 +259,10 @@ function ServiceModal({
       found[p.field] = problemText(t, p);
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) found.files = bad;
+    // Бонусы: сотрудник и сумма в каждой строке, без повторов, в сумме не больше стоимости.
+    const lines = canBonus ? bonusLinesOf(bonusRows) : [];
+    const bonusProblem = canBonus ? serviceBonusProblem(lines, n) : null;
+    if (bonusProblem) found.bonuses = problemText(t, bonusProblem);
     if (Object.keys(found).length) return setErrors(found);
     const fields = {
       name: name.trim(),
@@ -251,6 +270,9 @@ function ServiceModal({
       amount: n ?? 0,
       performerId: performer || null,
       description: description.trim(),
+      ...(canBonus
+        ? { bonuses: lines.map((b) => ({ employeeId: b.employeeId ?? '', amount: b.amount ?? 0 })) }
+        : {}),
     };
     setBusy(true);
     const res = edit
@@ -284,11 +306,20 @@ function ServiceModal({
     fail(res.error);
   };
 
+  // Прототип: действующие сотрудники и те, кто уже в бонусах услуги.
+  const bonusEmployees = [
+    ...(form?.performers ?? []),
+    ...(edit?.bonuses?.lines ?? [])
+      .filter((b) => !form?.performers.some((p) => p.id === b.employeeId))
+      .map((b) => ({ id: b.employeeId, name: b.short })),
+  ];
+
   const dirty =
     name !== (edit?.name ?? '') ||
     amount !== (edit ? formatSom(edit.amount, 'auto') : '') ||
     description !== (edit?.description ?? '') ||
     reason !== '' ||
+    bonusTouched ||
     picked.length > 0;
 
   return (
@@ -443,6 +474,22 @@ function ServiceModal({
                 />
               )}
             </Field>
+            {canBonus ? (
+              <ServiceBonusRows
+                t={t}
+                rows={bonusRows}
+                employees={bonusEmployees}
+                performer={performer}
+                error={errors.bonuses}
+                onChange={(rows) => {
+                  setBonusRows(rows);
+                  setBonusTouched(true);
+                  clear('bonuses');
+                }}
+              />
+            ) : edit?.bonuses ? (
+              <ServiceBonusNote t={t} bonuses={edit.bonuses} />
+            ) : null}
             {edit ? null : (
               // Прототип serviceDlg: название обычным шрифтом, пояснение — строкой ниже, под строкой черта.
               <div className={`col-span-full ${canUpload ? 'border-b border-line' : ''}`}>

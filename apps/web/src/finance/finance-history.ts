@@ -45,6 +45,31 @@ export const signedSom = (amount: number) =>
 const valueOf = (changes: readonly HistoryChange[], field: string, key: 'from' | 'to') =>
   changes.find((c) => c.field === field)?.[key];
 
+/** Строки «сотрудник — сумма» из записи истории услуги. */
+const bonusLines = (v: unknown) =>
+  (Array.isArray(v) ? v : []).filter(
+    (b): b is { name: string; amount: number } =>
+      typeof b === 'object' &&
+      b !== null &&
+      typeof (b as { name?: unknown }).name === 'string' &&
+      typeof (b as { amount?: unknown }).amount === 'number',
+  );
+
+/** «Алишер Т. — 500 сом, …» (прототип `svcBonusTxt`). */
+export const serviceBonusList = (
+  t: Translate,
+  lines: readonly { name: string; amount: number }[],
+): string =>
+  lines
+    .map((b) => t('fin.svc.bonus.line', { name: b.name, amount: formatSomWithUnit(b.amount) }))
+    .join(', ');
+
+/** «Бонусы сотрудникам: …» или «Бонусы сотрудникам убраны» (прототип serviceDlg: `bTxt`). */
+const serviceBonusesText = (t: Translate, lines: readonly { name: string; amount: number }[]) =>
+  lines.length
+    ? t('fin.svc.hist.bonuses', { list: serviceBonusList(t, lines) })
+    : t('fin.svc.hist.bonuses_off');
+
 /**
  * Удаление операции (прототип opLog): «Списание отменено: списание в бонус на 300 сом от 18.10.2026.
  * Причина: …». Вид, сумма и дата — из записи истории, иначе — из самой операции.
@@ -336,13 +361,16 @@ export function serviceHistoryText(
   if (e.action === 'create') {
     if (payment) return t('fin.svc.hist.pay', { amount: formatSomWithUnit(amountTo ?? 0) });
     const name = valueOf(e.changes, 'name', 'to');
-    return t(
+    const created = t(
       valueOf(e.changes, 'paid', 'to') ? 'fin.svc.hist.created_paid' : 'fin.svc.hist.created',
       {
         name: typeof name === 'string' ? name : '',
         amount: formatSomWithUnit(amountTo ?? 0),
       },
     );
+    // Прототип serviceDlg: «Разовая услуга «…» на … . Бонусы сотрудникам: …».
+    const lines = bonusLines(valueOf(e.changes, 'bonuses', 'to'));
+    return lines.length ? `${created}. ${serviceBonusesText(t, lines)}` : created;
   }
   if (e.action === 'delete') {
     const amount = numberOf(valueOf(e.changes, 'amount', 'from'));
@@ -357,6 +385,9 @@ export function serviceHistoryText(
       ? t('fin.hist.deleted_why', { ...params, reason: e.reason })
       : t('fin.hist.deleted', params);
   }
+  // Бонусы меняются отдельной записью (прототип serviceDlg: `bCh`).
+  const bonuses = payment ? undefined : e.changes.find((c) => c.field === 'bonuses');
+  if (bonuses && e.changes.length === 1) return serviceBonusesText(t, bonusLines(bonuses.to));
   const parts: string[] = [];
   const amount = e.changes.find((c) => c.field === 'amount');
   if (amount)

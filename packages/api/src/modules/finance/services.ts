@@ -15,6 +15,7 @@ import {
   servicePaymentCard,
   servicePaymentOf,
   withOrgContext,
+  type ServiceBonusRow,
   type ServiceHistoryRow,
   type Tx,
 } from '@buhuchet/db';
@@ -254,6 +255,53 @@ const historyOut = (rows: readonly ServiceHistoryRow[]) =>
     reason: h.reason,
   }));
 
+/**
+ * «Бонусы сотрудникам» в услуге задаёт и меняет право «Списывать остаток в бонус» (прототип v84
+ * `serviceDlg`: блок виден только с `can('bonus')`); без него строки в запросе — отказ.
+ */
+function checkBonusRight(subject: AccessSubject, bonuses: readonly unknown[] | undefined) {
+  if (bonuses !== undefined && !hasPermission(subject, 'bonus')) moneyFail(403, 'bonus_right');
+}
+
+/** Все бонусы услуги видит право «Списывать остаток в бонус» или «Сотрудники и роли». */
+const bonusesSeen = (subject: AccessSubject) =>
+  hasPermission(subject, 'bonus') || hasPermission(subject, 'staff');
+
+/**
+ * Блок «Бонусы сотрудникам» карточки (прототип `serviceCard`): все строки — с правом на бонусы или на
+ * сотрудников, иначе только своя; сумма — по видимым строкам (строже прототипа, docs/deviations.md
+ * п. О-75).
+ */
+function bonusesOut(
+  subject: AccessSubject,
+  card: { bonuses: readonly ServiceBonusRow[]; bonusOn: string | null },
+): ServiceCard['bonuses'] {
+  const all = bonusesSeen(subject);
+  const lines = card.bonuses.filter((b) => all || b.employeeId === subject.employeeId);
+  if (!lines.length) return null;
+  return {
+    total: lines.reduce((sum, b) => sum + b.amount, 0),
+    on: card.bonusOn,
+    lines: lines.map((b) => ({
+      employeeId: b.employeeId,
+      name: b.fullName,
+      short: b.name,
+      amount: b.amount,
+    })),
+  };
+}
+
+/** Записи истории о бонусах — тому же, кто видит все бонусы услуги. */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-75
+function historyBonusesSeen(rows: readonly ServiceHistoryRow[], seen: boolean) {
+  if (seen) return rows;
+  return rows.flatMap((h) => {
+    const changes = (h.changes as { field: string }[]).filter((ch) => ch.field !== 'bonuses');
+    if (changes.length === (h.changes as unknown[]).length) return [h];
+    return h.action === 'update' && !changes.length ? [] : [{ ...h, changes }];
+  });
+}
+
 /** Файлы к записи окно загрузит после ответа — значит, загружать их должно быть можно. */
 export function checkUpload(
   subject: AccessSubject,
@@ -297,6 +345,7 @@ export function serviceFormHandler(deps: ApiDeps): RouteHandler<typeof serviceFo
       performers: data.performers,
       performer: data.performers.some((p) => p.id === performer) ? performer : null,
       today: todayOf(deps),
+      canBonus: hasPermission(subject, 'bonus'),
     };
     c.header('Cache-Control', 'no-store');
     return c.json(res, 200);
@@ -330,6 +379,7 @@ export function serviceCreateHandler(
     const subject = subjectOf(c);
     const saved = await inServices(deps, c, (tx, features) => {
       checkUpload(subject, features, input.files);
+      checkBonusRight(subject, input.bonuses);
       return createOneOffService(
         tx,
         {
@@ -340,6 +390,7 @@ export function serviceCreateHandler(
           performerEmployeeId: input.performerId,
           description: input.description ?? '',
           paidNow: input.paidNow ?? false,
+          bonuses: input.bonuses,
         },
         { today: todayOf(deps), scope: projScopeOf(subject) },
       );
@@ -431,7 +482,10 @@ export function serviceCardHandler(deps: ApiDeps): RouteHandler<typeof serviceCa
         })),
         locks,
         files: filesSeen,
-        history: historyOut(historyFilesSeen(card.history, filesSeen)),
+        bonuses: bonusesOut(subject, card),
+        history: historyOut(
+          historyBonusesSeen(historyFilesSeen(card.history, filesSeen), bonusesSeen(subject)),
+        ),
       };
       return out;
     });
@@ -493,6 +547,7 @@ export function serviceEditHandler(deps: ApiDeps): RouteHandler<typeof serviceEd
     const input = c.req.valid('json');
     const subject = subjectOf(c);
     const t = await translateOf(deps);
+    checkBonusRight(subject, input.bonuses);
     const out = await inServices(deps, c, async (tx) =>
       editOneOffService(tx, await lockedService(tx, t, subject, id, 'edit'), {
         version: input.version,
@@ -502,6 +557,7 @@ export function serviceEditHandler(deps: ApiDeps): RouteHandler<typeof serviceEd
         performerEmployeeId: input.performerId,
         description: input.description ?? '',
         reason: input.reason ?? '',
+        bonuses: input.bonuses,
       }),
     );
     return c.json(out, 200);

@@ -235,6 +235,11 @@ export interface ContractorHistoryAccess {
   projects: SQL | undefined | false;
   /** Деньги проектов видны (`projectMoneyVisible`): иначе «было → стало» стоимости проекта убирается. */
   projectMoney?: boolean;
+  /**
+   * Бонусы сотрудникам в записях разовых услуг — тому, кто видит все бонусы услуги (право «Списывать
+   * остаток в бонус» или «Сотрудники и роли»); иначе строки бонусов убираются (docs/deviations.md п. О-75).
+   */
+  serviceBonuses?: boolean;
 }
 
 /**
@@ -378,6 +383,9 @@ function withoutFields<T extends { changes: HistoryChange[] }>(
 /** Деньги проекта в его истории: планируемая стоимость (транши — часть 2 задачи 2.26). */
 const PROJECT_MONEY_FIELDS: ReadonlySet<string> = new Set(['plan']);
 
+/** Бонусы сотрудникам в истории разовой услуги (прототип v84). */
+const SERVICE_BONUS_FIELDS: ReadonlySet<string> = new Set(['bonuses']);
+
 /**
  * Записи, которые видит сотрудник: без полей платы без права «Видеть плату», без стоимости проекта —
  * тому, кто не видит деньги проектов.
@@ -387,7 +395,12 @@ function visibleChanges<T extends { entity: string; changes: HistoryChange[] }>(
   access: ContractorHistoryAccess,
 ): T | null {
   const fee = access.fee ? r : withoutFields(r, FEE_FIELDS);
-  if (!fee || fee.entity !== 'project' || access.projectMoney) return fee;
+  if (!fee) return fee;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-75
+  // «Услуга создана» остаётся без строки бонусов; отдельная запись «Бонусы сотрудникам» убирается целиком.
+  if (fee.entity === 'one_off_service' && !access.serviceBonuses)
+    return withoutFields(fee, SERVICE_BONUS_FIELDS);
+  if (fee.entity !== 'project' || access.projectMoney) return fee;
   return withoutFields(fee, PROJECT_MONEY_FIELDS);
 }
 

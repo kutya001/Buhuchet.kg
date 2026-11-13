@@ -62,7 +62,9 @@ export type DemoKind =
   | 'indicator_value'
   | 'indicator_month'
   | 'dict_request'
-  | 'lead';
+  | 'lead'
+  | 'service_bonus'
+  | 'bonus_writeoff';
 export type DemoIdOf = (kind: DemoKind, protoId: string) => string;
 
 /**

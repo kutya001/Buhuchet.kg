@@ -34,6 +34,7 @@ import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { PROJECTS_TEXTS } from './projects-texts';
 import { REPORTS_TEXTS } from './reports-texts';
 import { SHELL_TEXTS } from './shell-texts';
+import { STAFF_BONUS_TEXTS } from './staff-bonus-texts';
 import { STAFF_TEXTS } from './staff-texts';
 import { STATUS_TEXTS } from './status-texts';
 import { TASKS_TEXTS } from './tasks-texts';
@@ -128,6 +129,7 @@ export const UI_TEXTS = {
   ...TAX_MONEY_TEXTS,
   ...FEE_TEXTS,
   ...FINANCE_TEXTS,
+  ...STAFF_BONUS_TEXTS,
   ...PROJECTS_TEXTS,
   ...KPI_TEXTS,
   ...FILES_TEXTS,

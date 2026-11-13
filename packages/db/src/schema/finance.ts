@@ -1,4 +1,5 @@
 import {
+  BONUS_NOTE_MAX,
   MONEY_AMOUNT_MAX,
   MONEY_NOTE_MAX,
   OP_REASON_MAX,
@@ -12,6 +13,8 @@ import {
   date,
   foreignKey,
   index,
+  integer,
+  pgPolicy,
   pgTable,
   text,
   timestamp,
@@ -21,7 +24,7 @@ import {
 import { money, recordVersion, timestamps } from './columns';
 import { contractors } from './contractors';
 import { organizations } from './organizations';
-import { currentOrgId, orgIsolation } from './rls';
+import { appRole, currentOrgId, orgIsolation } from './rls';
 import { employees } from './staff';
 import { users } from './users';
 
@@ -163,5 +166,97 @@ export const oneOffServicePayments = pgTable(
       sql`(${t.deletedAt} is null) = (${t.deletedBy} is null) and (${t.deletedAt} is null) = (${t.deleteReason} is null) and char_length(coalesce(${t.deleteReason}, '')) <= ${REASON_MAX}`,
     ),
     orgIsolation('one_off_service_payments_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Бонус сотруднику за разовую услугу (прототип v84: `s.bonus = [{emp, amount}]`, modules/services.js
+ * `serviceDlg`; docs/deviations.md п. О-75): строка «сотрудник — сумма», сотрудник в услуге не
+ * повторяется. Начисляется, когда услуга оплачена полностью (v87), — это считают по оплатам услуги, в
+ * строке не хранится. Строки заменяются при правке услуги; что было и стало — в истории услуги.
+ */
+export const oneOffServiceBonuses = pgTable(
+  'one_off_service_bonuses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .default(currentOrgId)
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    serviceId: uuid('service_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    amount: money('amount').notNull(),
+    /** Порядок строк в окне услуги. */
+    position: integer('position').notNull().default(0),
+    createdBy: uuid('created_by').references(() => users.id),
+    ...timestamps(),
+  },
+  (t) => [
+    unique('one_off_service_bonuses_employee_unique').on(t.serviceId, t.employeeId),
+    foreignKey({
+      name: 'one_off_service_bonuses_service_fk',
+      columns: [t.serviceId, t.orgId],
+      foreignColumns: [oneOffServices.id, oneOffServices.orgId],
+    }).onDelete('restrict'),
+    foreignKey({
+      name: 'one_off_service_bonuses_employee_fk',
+      columns: [t.employeeId, t.orgId],
+      foreignColumns: [employees.id, employees.orgId],
+    }).onDelete('restrict'),
+    index('one_off_service_bonuses_employee_idx').on(t.orgId, t.employeeId),
+    check(
+      'one_off_service_bonuses_amount_check',
+      sql`${t.amount} > 0 and ${t.amount} <= ${AMOUNT_MAX}`,
+    ),
+    orgIsolation('one_off_service_bonuses_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Списание (выплата) накопленного бонуса сотрудника (прототип v84: `BONUSOPS`, modules/services.js
+ * `bonusOutDlg`, `bonusUndo`): сумма, дата, основание. Уменьшает остаток бонусов; деньги контрагентов и
+ * счёт сотрудника не меняет. Не стирается: «Отменить списание» — отметка, сумма возвращается в остаток.
+ */
+export const bonusWriteoffs = pgTable(
+  'bonus_writeoffs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .default(currentOrgId)
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    employeeId: uuid('employee_id').notNull(),
+    amount: money('amount').notNull(),
+    paidOn: date('paid_on', { mode: 'string' }).notNull(),
+    note: text('note').notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    deletedBy: uuid('deleted_by').references(() => users.id),
+    createdBy: uuid('created_by').references(() => users.id),
+    updatedBy: uuid('updated_by').references(() => users.id),
+    ...timestamps(),
+    version: recordVersion(),
+  },
+  (t) => [
+    unique('bonus_writeoffs_id_org_unique').on(t.id, t.orgId),
+    foreignKey({
+      name: 'bonus_writeoffs_employee_fk',
+      columns: [t.employeeId, t.orgId],
+      foreignColumns: [employees.id, employees.orgId],
+    }).onDelete('restrict'),
+    index('bonus_writeoffs_employee_idx').on(t.orgId, t.employeeId, t.paidOn),
+    check('bonus_writeoffs_amount_check', sql`${t.amount} > 0 and ${t.amount} <= ${AMOUNT_MAX}`),
+    check(
+      'bonus_writeoffs_note_check',
+      sql`char_length(btrim(${t.note})) > 0 and char_length(${t.note}) <= ${sql.raw(String(BONUS_NOTE_MAX))}`,
+    ),
+    check('bonus_writeoffs_delete_check', sql`(${t.deletedAt} is null) = (${t.deletedBy} is null)`),
+    orgIsolation('bonus_writeoffs_isolation', t.orgId),
+    // Списание записывают только от своего имени и действующим: отметку отмены ставит «Отменить списание».
+    pgPolicy('bonus_writeoffs_insert_guard', {
+      as: 'restrictive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`${t.createdBy} = app.current_user_id() and ${t.deletedAt} is null and ${t.deletedBy} is null`,
+    }),
   ],
 ).enableRLS();

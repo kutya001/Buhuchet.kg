@@ -21,7 +21,7 @@ import {
   type GridColumn,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api-client';
 import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -41,7 +41,8 @@ import { JournalActionDialog, type JournalAction } from './journal-actions';
 import { closedMonthsQuery, closeMonth, fetchBonuses, fetchBonusValues } from './journal-data';
 
 /*
- * Вкладка «Списания в бонус» раздела «Сотрудники» (задача 2.22; ТЗ «Финансовые операции по
+ * Раздел «Остатки контрагентов» вкладки «Бонусы» (прототип v84; `lead` — переключатель разделов из
+ * `StaffBonusTab`), прежде — вкладка «Списания в бонус» раздела «Сотрудники» (задача 2.22; ТЗ «Финансовые операции по
  * контрагентам» → «Ежемесячный отчёт по списаниям»; прототип modules/staff.js, `bonus`): все списания
  * остатка в бонус; «Закрыть <прошлый месяц>» — право «Списывать остаток в бонус» и область «Все»
  * финансовых операций; закрытый месяц фиксирует списания и оплаты. Строка открывает окно операции,
@@ -104,7 +105,7 @@ const AUDIT: GridAudit<BonusRow> = {
   updatedAt: (r) => formatMomentRu(new Date(r.audit.updatedAt)),
 };
 
-export function BonusTab() {
+export function BonusTab({ lead }: { lead?: ReactNode }) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -196,6 +197,7 @@ export function BonusTab() {
   return (
     <div className="flex flex-col gap-3.5">
       <div className="flex flex-wrap items-center gap-2">
+        {lead}
         <span className="text-muted">{t('fin.b.note')}</span>
         <div className="flex-1" />
         {closed.length ? (
@@ -238,7 +240,7 @@ export function BonusTab() {
         empty={<EmptyState icon="gift" title={t('fin.b.empty')} />}
         rowKey={(r) => r.id}
         titleKey="cp"
-        label={t('tab.staff.bonus')}
+        label={t('staff.bonus.seg.cp')}
         labels={labels}
         onOpen={(r) => run({ act: 'open', src: 'op', id: r.id })}
         actions={actions}

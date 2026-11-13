@@ -65,6 +65,7 @@ async function historyAccess(
     // ОТКЛОНЕНИЕ: docs/deviations.md#Г-10 — записи проектов тому, кто видит проекты, по их видимости.
     projects: features.projects && can('projView') && projectWhere(subject),
     projectMoney: projectMoneyVisible(subject, features),
+    serviceBonuses: hasPermission(subject, 'bonus') || hasPermission(subject, 'staff'),
   };
 }
 

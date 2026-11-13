@@ -11,11 +11,20 @@ import {
   servicePaymentProblem,
   serviceProblems,
   serviceStatus,
+  serviceBonusOn,
   type IsoDate,
+  type ServiceBonusLine,
   type Tyiyn,
 } from '@buhuchet/domain';
 import { and, asc, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+import {
+  bonusHistoryValue,
+  checkServiceBonusCost,
+  saveServiceBonuses,
+  serviceBonusesOf,
+  type ServiceBonusRow,
+} from './bonuses';
 import type { Tx } from './client';
 import type { FileListPart } from './files';
 import { writeHistory, type HistoryEntry } from './history';
@@ -122,6 +131,8 @@ export interface OneOffServiceInput {
   description: string;
   /** «Оплачено сразу»: оплата на всю сумму сегодняшним днём. */
   paidNow: boolean;
+  /** «Бонусы сотрудникам» (прототип v84): строки «сотрудник — сумма»; нет — без бонусов. */
+  bonuses?: readonly ServiceBonusLine[];
 }
 
 /**
@@ -168,6 +179,9 @@ export async function createOneOffService(
       updatedBy: sql`app.current_user_id()`,
     });
   }
+  const bonuses = input.bonuses?.length
+    ? await saveServiceBonuses(tx, id, input.bonuses, { cost: input.amount, wasCost: null })
+    : null;
   await writeHistory(tx, {
     entity: 'one_off_service',
     entityId: id,
@@ -177,6 +191,7 @@ export async function createOneOffService(
       { field: 'amount', to: input.amount },
       { field: 'serviceDate', to: input.date },
       { field: 'paid', to: input.paidNow },
+      ...(bonuses ? [{ field: 'bonuses', to: bonusHistoryValue(bonuses.to) }] : []),
     ],
     contractorId: c.id,
   });
@@ -291,6 +306,9 @@ export interface OneOffServiceCard extends LockedOneOffService {
   payments: ServicePaymentLine[];
   /** Удалённые оплаты — для отметки «удалена» в истории. */
   deletedPayments: string[];
+  /** «Бонусы сотрудникам» и день начисления: услуга оплачена полностью; null — ждут оплаты. */
+  bonuses: ServiceBonusRow[];
+  bonusOn: IsoDate | null;
   history: ServiceHistoryRow[];
 }
 
@@ -308,7 +326,8 @@ export async function oneOffServiceCard(
     if (e instanceof RecordNotFoundError) return null;
     throw e;
   }
-  const [names, pays] = await Promise.all([
+  const [bonuses, names, pays] = await Promise.all([
+    serviceBonusesOf(tx, id),
     tx
       .select({
         performer: svcPerformer.shortName,
@@ -368,6 +387,11 @@ export async function oneOffServiceCard(
       files: p.files,
     })),
     deletedPayments: pays.filter((p) => p.deleted).map((p) => p.id),
+    bonuses,
+    bonusOn: serviceBonusOn(
+      amount,
+      pays.map((p) => ({ amount: Number(p.amount), date: p.date, deleted: p.deleted })),
+    ),
     history: await historyOf(
       tx,
       id,
@@ -384,12 +408,15 @@ export interface OneOffServiceEditInput {
   performerEmployeeId: string | null;
   description: string;
   reason: string;
+  /** «Бонусы сотрудникам»: новые строки; нет — бонусы не меняются (нет права их менять). */
+  bonuses?: readonly ServiceBonusLine[];
 }
 
 /**
  * «Сохранить» в окне «Изменить разовую услугу» (прототип `serviceDlg` с `s0`): стоимость не меньше уже
  * полученного; причина — если меняются стоимость или дата, тогда же отметка «Изменена». История: было
- * → стало по каждому полю, причина.
+ * → стало по каждому полю, причина. Бонусы сотрудникам — отдельной записью истории (прототип: «Бонусы
+ * сотрудникам: …» или «Бонусы сотрудникам убраны»); правка не уводит уже списанный бонус в минус.
  */
 export async function editOneOffService(
   tx: Tx,
@@ -427,6 +454,9 @@ export async function editOneOffService(
     { amount: amount0, date: service.serviceDate },
     { amount: input.amount, date: input.date },
   );
+  // Блок бонусов не передан, а стоимость меняется: прежние бонусы сверяются с новой стоимостью.
+  if (!input.bonuses && input.amount !== amount0)
+    await checkServiceBonusCost(tx, service.id, { cost: input.amount, wasCost: amount0 });
   await tx
     .update(oneOffServices)
     .set({
@@ -450,7 +480,27 @@ export async function editOneOffService(
     reason: money ? input.reason.trim() : null,
     contractorId: contractor.id,
   });
-  return { changed: changes.length > 0 };
+  const bonuses = input.bonuses
+    ? await saveServiceBonuses(tx, service.id, input.bonuses, {
+        cost: input.amount,
+        wasCost: amount0,
+      })
+    : null;
+  if (bonuses)
+    await writeHistory(tx, {
+      entity: 'one_off_service',
+      entityId: service.id,
+      action: 'update',
+      changes: [
+        {
+          field: 'bonuses',
+          from: bonusHistoryValue(bonuses.from),
+          to: bonusHistoryValue(bonuses.to),
+        },
+      ],
+      contractorId: contractor.id,
+    });
+  return { changed: changes.length > 0 || bonuses !== null };
 }
 
 /**

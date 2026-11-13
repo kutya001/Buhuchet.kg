@@ -1,0 +1,1 @@
+CREATE POLICY "bonus_writeoffs_insert_guard" ON "bonus_writeoffs" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("bonus_writeoffs"."created_by" = app.current_user_id() and "bonus_writeoffs"."deleted_at" is null and "bonus_writeoffs"."deleted_by" is null);
