@@ -117,6 +117,13 @@ export const TELEGRAM_TEXTS = {
   },
   'telegram.done.not_me': { ru: '✓ Вход закрыт', section: S },
   'telegram.done.not_me_admin': { ru: '✓ Сеансы завершены', section: S },
+  // Заявка с сайта в Telegram — с кнопками (поток Т, задача Т6; прототип v103 admin/tg-leads.js):
+  // строки таблицы сообщения и подпись погашенной кнопки; заголовок и подписи кнопок — шаблоны.
+  'telegram.lead.firm': { ru: 'Фирма', section: S },
+  'telegram.lead.size': { ru: 'Контрагентов', section: S },
+  'telegram.lead.contact': { ru: 'Контакт', section: S },
+  'telegram.lead.status': { ru: 'Статус', section: S },
+  'telegram.done.lead_no': { ru: '✓ Отказ', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },
   'profile.notify.modes': { ru: 'Какие уведомления получать', section: P },
   'profile.notify.mode.all': { ru: 'Все', section: P },

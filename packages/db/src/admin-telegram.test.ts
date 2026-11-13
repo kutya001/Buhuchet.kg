@@ -1,5 +1,5 @@
 import { OUTBOX_UNDELIVERABLE, shortName, type ListQuery } from '@buhuchet/domain';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   adminTelegramBroadcast,
@@ -464,6 +464,73 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     await db.admin.db.delete(telegramOutbox).where(eq(telegramOutbox.id, answer!.id));
   });
 
+  it('сообщение с кнопками без организации (заявка с сайта, задача Т6): задача получает описание и «простым текстом» получателя, номер сообщения запоминается только у него', async () => {
+    const message = {
+      heading: 'Новая заявка с сайта',
+      plain: '📩 Новая заявка',
+      buttons: [[{ text: 'Взять в работу', action: 'leadWork', arg: 'x1' }]],
+    };
+    const [rich] = await db.admin.db
+      .insert(telegramOutbox)
+      .values({
+        orgId: null,
+        userId: adminId,
+        chatId: 1006,
+        kind: 'lead',
+        text: '📩 Новая заявка',
+        payload: message,
+        nextAt: new Date(NOW.getTime() - 10 * 86_400_000),
+      })
+      .returning({ id: telegramOutbox.id });
+    await db.admin.db.update(users).set({ telegramPlain: true }).where(eq(users.id, adminId));
+    const claimed = await claimPlatformOutbox(db.app.db, { now: NOW, limit: 1, leaseSeconds: 120 });
+    expect(claimed).toEqual([
+      {
+        id: rich!.id,
+        chatId: 1006,
+        kind: 'lead',
+        text: '📩 Новая заявка',
+        tries: 1,
+        message,
+        plain: true,
+      },
+    ]);
+    await db.admin.db.update(users).set({ telegramPlain: false }).where(eq(users.id, adminId));
+    await finishPlatformOutbox(db.app.db, [
+      { id: rich!.id, result: 'sent', at: NOW, messageId: 777 },
+    ]);
+    const [sent] = await db.admin.db
+      .select({ status: telegramOutbox.status, messageId: telegramOutbox.messageId })
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.id, rich!.id));
+    expect(sent).toEqual({ status: 'sent', messageId: 777 });
+    // У обычного текста номер сообщения не пишется: нажатий по нему не бывает.
+    const [plainRow] = await db.admin.db
+      .insert(telegramOutbox)
+      .values({
+        orgId: null,
+        userId: adminId,
+        chatId: 1006,
+        kind: 'lead',
+        text: 'текст',
+        nextAt: new Date(NOW.getTime() - 10 * 86_400_000),
+      })
+      .returning({ id: telegramOutbox.id });
+    const [taken] = await claimPlatformOutbox(db.app.db, { now: NOW, limit: 1, leaseSeconds: 120 });
+    expect(taken).toMatchObject({ id: plainRow!.id, message: null });
+    await finishPlatformOutbox(db.app.db, [
+      { id: plainRow!.id, result: 'sent', at: NOW, messageId: 778 },
+    ]);
+    const [text] = await db.admin.db
+      .select({ messageId: telegramOutbox.messageId })
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.id, plainRow!.id));
+    expect(text!.messageId).toBeNull();
+    await db.admin.db
+      .delete(telegramOutbox)
+      .where(inArray(telegramOutbox.id, [rich!.id, plainRow!.id]));
+  });
+
   it('строки без организации отправляет задача: берёт, засчитывает попытку, пишет итог; отвязанный — «recipient_unlinked»', async () => {
     const claimed = await claimPlatformOutbox(db.app.db, {
       now: NOW,
@@ -471,7 +538,15 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       leaseSeconds: 120,
     });
     expect(claimed).toEqual([
-      { id: ids.platform, chatId: 1006, kind: 'pass_changed', text: 'Пароль изменён', tries: 1 },
+      {
+        id: ids.platform,
+        chatId: 1006,
+        kind: 'pass_changed',
+        text: 'Пароль изменён',
+        tries: 1,
+        message: null,
+        plain: false,
+      },
     ]);
     // До конца аренды строку не берёт другой запуск; строки организаций сюда не попадают.
     expect(

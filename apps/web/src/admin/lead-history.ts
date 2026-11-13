@@ -43,6 +43,7 @@ export function leadHistoryItems(t: Translate, l: AdminLeadCard): TimelineItem[]
         time: bishkekTime(at),
         text: leadEventText(t, e, l.fromStand),
         who: e.actor,
+        via: e.via === 'telegram' ? t('telegram.via') : null,
       };
     })
     .reverse();

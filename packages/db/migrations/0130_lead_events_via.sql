@@ -1,0 +1,2 @@
+ALTER TABLE "platform_lead_events" ADD COLUMN "via" text DEFAULT nullif(current_setting('app.via', true), '');--> statement-breakpoint
+ALTER TABLE "platform_lead_events" ADD CONSTRAINT "platform_lead_events_via_check" CHECK ("platform_lead_events"."via" is null or "platform_lead_events"."via" = 'telegram');

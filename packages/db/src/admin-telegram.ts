@@ -1,7 +1,9 @@
 import {
+  asBotMessage,
   CODE_KINDS,
   OUTBOX_KINDS,
   OUTBOX_UNDELIVERABLE,
+  type BotMessage,
   type ListQuery,
   type OutboxKind,
   type OutboxStatus,
@@ -341,6 +343,10 @@ export interface ClaimedPlatformOutbox {
   kind: OutboxKind;
   text: string;
   tries: number;
+  /** Описание сообщения с таблицами и кнопками (заявка с сайта, задача Т6); пусто — обычный текст. */
+  message: BotMessage | null;
+  /** Получатель включил «Сообщения простым текстом». */
+  plain: boolean;
 }
 
 /**
@@ -358,8 +364,10 @@ export async function claimPlatformOutbox(
     kind: OutboxKind;
     text: string;
     tries: number;
+    payload: unknown;
+    plain: boolean | null;
   }>(
-    sql`select id, chat_id, kind, text, tries from app.telegram_platform_claim(${o.now.toISOString()}::timestamptz, ${o.limit}, ${o.leaseSeconds})`,
+    sql`select id, chat_id, kind, text, tries, payload, plain from app.telegram_platform_claim(${o.now.toISOString()}::timestamptz, ${o.limit}, ${o.leaseSeconds})`,
   );
   return rows.map((r) => ({
     id: r.id,
@@ -367,14 +375,19 @@ export async function claimPlatformOutbox(
     kind: r.kind,
     text: r.text,
     tries: r.tries,
+    message: asBotMessage(r.payload),
+    plain: r.plain === true,
   }));
 }
 
-/** Итоги попыток строк без организации (как `finishOutbox`). */
+/**
+ * Итоги попыток строк без организации (как `finishOutbox`): у отправленного сообщения с кнопками
+ * запоминается номер в чате — по нему бот находит сообщение при нажатии.
+ */
 export async function finishPlatformOutbox(
   db: Db,
   outcomes: readonly (
-    | { id: string; result: 'sent'; at: Date }
+    | { id: string; result: 'sent'; at: Date; messageId?: number }
     | { id: string; result: 'retry'; at: Date; error: string }
     | { id: string; result: 'error'; error: string }
   )[],
@@ -384,8 +397,9 @@ export async function finishPlatformOutbox(
     const nextAt = o.result === 'retry' ? o.at.toISOString() : null;
     const error = o.result === 'sent' ? null : o.error;
     const sentAt = o.result === 'sent' ? o.at.toISOString() : null;
+    const messageId = o.result === 'sent' ? (o.messageId ?? null) : null;
     await db.execute(
-      sql`select app.telegram_platform_finish(${o.id}::uuid, ${status}, ${nextAt}::timestamptz, ${error}, ${sentAt}::timestamptz)`,
+      sql`select app.telegram_platform_finish(${o.id}::uuid, ${status}, ${nextAt}::timestamptz, ${error}, ${sentAt}::timestamptz, ${messageId}::bigint)`,
     );
   }
 }

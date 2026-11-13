@@ -1,11 +1,15 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
-import { LEAD_REPEAT_MARKS, messageTemplates, phoneCodes, submitLead } from '@buhuchet/db';
+import { messageTemplates, phoneCodes, submitLead, type LeadSubmission } from '@buhuchet/db';
 import {
+  botMessageProblem,
+  botTemplate,
   fillTemplate,
   formatPhone,
+  leadBotMessage,
   leadSizeOptions,
   pageIpSubject,
   phoneProblem,
+  type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import { ApiError, LeadForm, LeadSubmitted } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -14,13 +18,15 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { serverTexts } from '../l10n/texts';
+import { botSiteUrl } from '../telegram/staff-view';
 
 /*
  * «Оставить заявку» с лендинга (ТЗ «Лендинг» → «Форма «Оставить заявку»», «Основные технические
  * парадигмы»: «единственный метод без входа на нём — «Оставить заявку» с пределом по адресу IP»;
  * прототип modules/landing.js, landFormBind и leadAdd). Метод без сеанса (`PUBLIC_PATHS` в
  * middleware/session.ts): схема Zod, 400 на неверные данные, предел — в общей таблице `rate_limits`
- * функцией базы `app.lead_submit` (миграция 0089). Защита от спама — без внешних сервисов: не больше
+ * функцией базы `app.lead_submit` (миграция 0089); сообщение администраторам платформы в Telegram — с
+ * таблицей и кнопками (поток Т, задача Т6), в очередь в той же транзакции. Защита от спама — без внешних сервисов: не больше
  * 3 заявок в час с адреса, повтор с того же телефона за сутки дописывает комментарий к первой
  * заявке, заявку с заполненным полем-ловушкой сервер не сохраняет, но проверяет и засчитывает в предел
  * как обычную и отвечает так же — по ответу ловушку не распознать.
@@ -41,7 +47,7 @@ const TG_LEAD_REP_FALLBACK =
 /** {ссылка} — вкладка «Заявки» Админки на этом сайте (прототип v74 leadLink). */
 const LEADS_TAB = '/app/orgs/leads';
 
-/** Пометка в начале сообщения о заявке с тестового стенда (прототип v74 leadTgText). */
+/** Пометка в начале простого текста сообщения о заявке с тестового стенда (прототип v74 leadTgText). */
 export const STAND_MARK = '🧪 Тестовый стенд ';
 
 /**
@@ -104,30 +110,63 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
     // Заявка со стенда сохраняется только на стенде (своя база): сообщение о ней получают
     // администраторы стенда от бота стенда, с пометкой в начале (решение заказчика 06.11.2026).
     const fromStand = deps.config.APP_ENV === 'staging';
-    let telegramText: string | null = null;
-    let telegramRepeatText: string | null = null;
+    let notify: LeadSubmission['notify'] = null;
     if (!trap && deps.telegram) {
       // Уведомление обязательно (прототип v74 leadNotify): о новой заявке и о повторной за сутки.
       const templates = await messageTemplates(deps.db);
-      const vars = {
-        фирма: form.firm,
-        имя: form.name,
-        телефон: formatPhone(form.phone, codes),
-        клиентов: form.size,
-        ссылка: new URL(LEADS_TAB, deps.config.APP_BASE_URL).href,
-      };
-      const mark = fromStand ? STAND_MARK : '';
-      telegramText = mark + fillTemplate(templates.tgLead ?? TG_LEAD_FALLBACK, vars);
-      // О повторе — фирма, имя и «клиентов» сохранённой заявки (прототип leadTgPreview(o.dup ? o.lead : o)):
-      // их подставляет функция базы вместо меток, телефон тот же.
-      telegramRepeatText =
-        mark +
-        fillTemplate(templates.tgLeadRep ?? TG_LEAD_REP_FALLBACK, {
-          ...vars,
-          фирма: LEAD_REPEAT_MARKS.firm,
-          имя: LEAD_REPEAT_MARKS.name,
-          клиентов: LEAD_REPEAT_MARKS.size,
+      const phone = formatPhone(form.phone, codes);
+      const link = new URL(LEADS_TAB, deps.config.APP_BASE_URL).href;
+      const tpl = (key: TelegramTemplateKey) => botTemplate(key, templates[key]);
+      notify = (saved) => {
+        // О повторе — фирма, имя, «клиентов» и статус сохранённой заявки, а не второй формы (прототип
+        // `leadMsg(o.dup ? o.lead : o)`); телефон тот же.
+        const plain =
+          (fromStand ? STAND_MARK : '') +
+          fillTemplate(
+            saved.repeat
+              ? (templates.tgLeadRep ?? TG_LEAD_REP_FALLBACK)
+              : (templates.tgLead ?? TG_LEAD_FALLBACK),
+            {
+              фирма: saved.firm,
+              имя: saved.name,
+              телефон: phone,
+              клиентов: saved.size,
+              ссылка: link,
+            },
+          );
+        // Сообщение с таблицей и кнопками «Взять в работу», «Отклонить», «Открыть в Админке» (задача Т6;
+        // прототип v103 `leadMsg`); простой текст — прежнее сообщение одной строкой.
+        const message = leadBotMessage({
+          id: saved.id,
+          firm: saved.firm,
+          name: saved.name,
+          phone,
+          size: saved.size,
+          status: saved.status,
+          statusName: t(`status.lead.${saved.status}`),
+          repeat: saved.repeat,
+          stand: fromStand,
+          link: botSiteUrl(deps, LEADS_TAB),
+          plain,
+          texts: {
+            head: tpl(saved.repeat ? 'tgLeadRepHead' : 'tgLeadHead'),
+            work: tpl('tgBtnLeadWork'),
+            no: tpl('tgBtnLeadNo'),
+            open: tpl('tgBtnLeadOpen'),
+            firm: t('telegram.lead.firm'),
+            size: t('telegram.lead.size'),
+            contact: t('telegram.lead.contact'),
+            status: t('telegram.lead.status'),
+          },
         });
+        const problem = botMessageProblem(message);
+        if (problem) {
+          // Шаблон кнопки испортили в справочнике — заявка всё равно доходит, прежним текстом.
+          deps.logger.error({ problem }, 'Telegram: сообщение о заявке собрано неверно');
+          return { text: plain, message: { text: plain } };
+        }
+        return { text: plain, message };
+      };
     }
     const res = await submitLead(deps.db, {
       ipSubject: leadIpSubject(c, deps),
@@ -139,8 +178,7 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
       note: form.note,
       fromStand,
       trap,
-      telegramText,
-      telegramRepeatText,
+      notify,
       now: deps.clock.now(),
     });
     if (res.outcome === 'limited') {

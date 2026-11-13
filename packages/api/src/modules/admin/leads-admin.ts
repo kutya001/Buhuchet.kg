@@ -130,6 +130,8 @@ export function leadStatusHistory(
         rollback: e.kind === 'rollback',
         reason,
         actor: PLATFORM_ADMIN_NAME,
+        // Статус сменили кнопкой или ответом в чате бота (поток Т, задача Т6).
+        ...(e.via ? { via: e.via } : {}),
       },
     ];
   });
@@ -151,6 +153,7 @@ async function leadCard(tx: Tx, id: string, t: Texts): Promise<AdminLeadCard> {
       from: e.fromStatus,
       to: e.toStatus,
       text: e.text,
+      via: e.via ?? null,
     })),
   };
 }
