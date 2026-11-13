@@ -14,7 +14,7 @@ function finRows(withDel){const out=[];const vc=new Set(visCps(true,'fin').map(c
   return out}
 function finCols(){return [
  {key:'date',label:'Дата',type:'date',w:110,val:x=>x.date},
- {key:'cp',label:'Контрагент',type:'enum',w:220,val:x=>CPM[x.cp].name,html:x=>`<span class="strong">${esc(CPM[x.cp].name)}</span>`},
+ {key:'cp',label:'Контрагент',type:'enum',inn:true,w:220,val:x=>CPM[x.cp].name,html:x=>`<span class="strong">${esc(CPM[x.cp].name)}</span>`},
  {key:'cat',label:'Тип операции',type:'enum',w:230,val:x=>x.cat,html:x=>`<span class="pill sm ${x.color}">${esc(x.cat)}</span>${x.del?' <span class="tag red">удалена</span>':x.edited?' <span class="tag yellow">изменена</span>':''}`},
  {key:'what',label:'За что',type:'text',w:320,val:x=>x.what},
  {key:'amount',label:'Сумма',type:'money',w:140,num:true,total:true,val:x=>x.del||x.src==='op'&&(x.ref.kind==='xfer'||x.ref.self)?null:x.sign==='−'?-x.amount:x.amount,html:x=>`<span class="${x.del?'faint strike':x.sign==='+'&&x.src!=='svc'?'green':''}">${x.src==='svc'?'':x.sign}${fmtM(x.amount)}</span>`},
@@ -70,7 +70,7 @@ function renderJournal(body,fresh){
   const rows=()=>{const vc=new Set(visCps(true,'fin').map(c=>c.id));return OPS.filter(o=>(o.kind==='in'||S.finDel&&o.kind==='in_x')&&vc.has(o.cp))};const dl=o=>o.kind!=='in';
   grid($('#jg',body),{id:'fin-journal',cols:[
     {key:'date',label:'Дата',type:'date',w:110,val:o=>o.date},
-    {key:'cp',label:'Контрагент',type:'enum',w:220,val:o=>CPM[o.cp].name,html:o=>`<span class="strong">${esc(CPM[o.cp].name)}</span>`},
+    {key:'cp',label:'Контрагент',type:'enum',inn:true,w:220,val:o=>CPM[o.cp].name,html:o=>`<span class="strong">${esc(CPM[o.cp].name)}</span>`},
     {key:'total',label:'Общая сумма',type:'money',w:140,num:true,total:true,val:o=>dl(o)?null:o.total??o.amount,html:o=>dl(o)?`<span class="faint strike">${fmtM(o.total??o.amount)}</span> <span class="tag red">удалено</span>`:fmtM(o.total??o.amount)+(o.edited?' <span class="tag yellow">изменено</span>':'')},
     {key:'dist',label:'Распределено',type:'money',w:140,num:true,total:true,val:o=>dl(o)?null:(o.alloc||[]).reduce((a,x)=>a+x.a,0)+(o.feeAlloc||[]).reduce((a,x)=>a+x.a,0)},
     {key:'alloc',label:'Детализация',type:'text',w:360,hide:true,val:o=>allocText(o)||'аванс',html:o=>(o.alloc||[]).length+(o.feeAlloc||[]).length>1?`<span class="tag">${(o.alloc||[]).length+(o.feeAlloc||[]).length} строки</span> ${esc(allocText(o))}`:esc(allocText(o)||'аванс')},
@@ -96,7 +96,7 @@ function corrDlg(o){const c=CPM[o.cp];
       HIST.push({at:nowStamp(),who:S.me,ent:'in',id:o.id,cp:c.id,what:`Обратная запись ${amt>0?'+':'−'}${som(n)}: ${val(el,'cr-why')}`});log('cp',c.id,`Обратная запись к поступлению от ${fmtD(o.date)}: ${amt>0?'+':'−'}${som(n)}`,c.id);m.close();refreshAll();toast('Обратная запись сделана')}}})});
 }
 function renderServices(body,fresh){body.innerHTML='<div id="sg"></div>';
-  grid($('#sg',body),{id:'fin-svc',cols:[{key:'date',label:'Дата',type:'date',w:110,val:s=>s.date},{key:'cp',label:'Контрагент',type:'enum',w:220,val:s=>CPM[s.cp].name,html:s=>`<span class="strong">${esc(CPM[s.cp].name)}</span>${CPM[s.cp].kind==='oneoff'?' <span class="tag">разовый</span>':''}`},{key:'name',label:'Услуга',type:'text',w:300,val:s=>s.name},{key:'resp',label:'Исполнитель',type:'enum',w:130,val:s=>empName(s.resp)},
+  grid($('#sg',body),{id:'fin-svc',cols:[{key:'date',label:'Дата',type:'date',w:110,val:s=>s.date},{key:'cp',label:'Контрагент',type:'enum',inn:true,w:220,val:s=>CPM[s.cp].name,html:s=>`<span class="strong">${esc(CPM[s.cp].name)}</span>${CPM[s.cp].kind==='oneoff'?' <span class="tag">разовый</span>':''}`},{key:'name',label:'Услуга',type:'text',w:300,val:s=>s.name},{key:'resp',label:'Исполнитель',type:'enum',w:130,val:s=>empName(s.resp)},
     {key:'amount',label:'Стоимость',type:'money',w:130,num:true,total:true,val:s=>s.amount},{key:'paid',label:'Получено',type:'money',w:130,num:true,total:true,val:s=>svcPaid(s)},{key:'left',label:'Осталось',type:'money',w:130,num:true,total:true,val:s=>s.amount-svcPaid(s),html:s=>s.amount>svcPaid(s)?`<span class="red strong">${fmtM(s.amount-svcPaid(s))}</span>`:'<span class="faint">0,00</span>'},
     {key:'st',label:'Оплата',type:'enum',w:170,val:svcStatus,html:s=>pill(svcStatus(s),PST)},{key:'files',label:'Файлов',type:'int',w:90,num:true,val:s=>s.files.length,hide:true}],
     rows:()=>{const vc=new Set(visCps(true,'fin').map(c=>c.id));return SERVICES.filter(s=>vc.has(s.cp)&&!s.del)},title:'name',noun:['услуга','услуги','услуг'],sort:{key:'date',dir:-1},preset:S.preset,simulateLoad:fresh,open:serviceCard,actions:svcActions,

@@ -442,9 +442,12 @@
    "money",
    "fee",
    "kpi",
-   "contacts"
+   "contacts",
+   "tg"
   ],
-  "payFirst": true
+  "payFirst": true,
+  "tgCpDebt": true,
+  "tgCpPay": false
  },
  "roles": [
   {
@@ -1122,7 +1125,23 @@
     "lastDev": "",
     "fails": 0,
     "lock": 0
-   }
+   },
+   "tgs": [
+    {
+     "id": 1,
+     "name": "Назгуль Жээнбекова",
+     "at": "2026-11-10 14:20",
+     "st": "on",
+     "by": "e3",
+     "doneAt": "2026-11-10 15:02"
+    },
+    {
+     "id": 2,
+     "name": "Азамат Стройсервис",
+     "at": "2026-11-12 09:41",
+     "st": "wait"
+    }
+   ]
   },
   {
    "id": 3,

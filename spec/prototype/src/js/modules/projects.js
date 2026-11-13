@@ -8,7 +8,7 @@ function projTabs(){const v=PROJECTS.filter(projVisible);return [{id:'active',la
 function projAdd(){return can('projects')?[{label:'Проект',icon:'briefcase',run:()=>projectDlg()}]:[]}
 function projCols(){const mv=moneyVis();return [
  {key:'name',label:'Проект',type:'text',w:280,val:p=>p.name,html:p=>`<span class="strong">${esc(p.name)}</span>`},
- {key:'cp',label:'Контрагент',type:'enum',w:210,val:p=>CPM[p.cp].name},
+ {key:'cp',label:'Контрагент',type:'enum',inn:true,w:210,val:p=>CPM[p.cp].name},
  {key:'status',label:'Статус',type:'enum',w:170,val:p=>p.status,html:p=>scaleMini('proj',p.status,p)+(projOver(p)?` <span class="pill red sm">${ic('alert')}срок прошёл</span>`:'')},
  {key:'from',label:'Начало',type:'date',w:110,val:p=>p.from},{key:'to',label:'Окончание',type:'date',w:120,val:p=>p.to,html:p=>`<span class="${projOver(p)?'red strong':''}">${fmtD(p.to)}</span>`},
  {key:'lead',label:'Главный',type:'enum',w:130,val:p=>empName(p.lead),hide:true},
@@ -66,14 +66,14 @@ function openProject(p){if(!p)return;
       if(q('#pj-pay'))q('#pj-pay').onclick=()=>projPay(p);
       if(q('#pj-task'))q('#pj-task').onclick=()=>taskDlg(null,{cp:p.cp,proj:p.id,exec:p.lead});
       $$('[data-task]',el).forEach(x=>x.onclick=()=>openTask(TASKS.find(t=>t.id===x.dataset.task)));
-      bindFiles(el,'pj-f',p.files,f=>{log('p',p.id,'Прикреплены файлы: '+f.join(', '),p.cp);mm.draw()})}}}});
+      bindFiles(el,'pj-f',p.files,(f,note)=>{log('p',p.id,'Прикреплены файлы: '+f.join(', ')+fNoteLog(note),p.cp);mm.draw()})}}}});
 }
 function projectDlg(p0,c0){const e=p0?{name:p0.name,cp:p0.cp,from:p0.from,to:p0.to,status:p0.status,resps:[...p0.resps],lead:p0.lead,desc:p0.desc,plan:p0.plan??'',works:p0.works.map(w=>Object.assign({},w))}
     :{name:'',cp:c0?c0.id:'',from:TODAY,to:addDays(TODAY,60),status:'Планируется',resps:c0&&c0.resp?[c0.resp]:[S.me],lead:c0&&c0.resp||S.me,desc:'',plan:'',works:[]};
   const mv=moneyVis();const rs='style="min-height:30px;padding:3px 8px"';
   openModal({form:true,size:'mid',render:m=>({title:p0?'Изменить проект':'Новый проект',sub:p0||c0?esc(CPM[e.cp].name):'Разовая работа за отдельную плату',body:`<div class="form">
     ${fld('Название проекта',inp('pd-name',e.name,'placeholder="Например: восстановление учёта 2024–2025"'),{req:true,full:true,id:'pd-name'})}
-    ${p0||c0?'':fld('Контрагент',sel('pd-cp',[['','— выберите —'],...visCps(false,'projects').map(c=>[c.id,c.name])],e.cp),{req:true,full:true,id:'pd-cp',hint:'У контрагента может быть несколько проектов одновременно'})}
+    ${p0||c0?'':fld('Контрагент',cpSel('pd-cp',visCps(false,'projects'),e.cp,{empty:'— выберите —'}),{req:true,full:true,id:'pd-cp',hint:'У контрагента может быть несколько проектов одновременно'})}
     ${fld('Срок с',inp('pd-from',e.from,'type="date"'),{req:true,id:'pd-from'})}${fld('Срок по',inp('pd-to',e.to,'type="date"'),{req:true,id:'pd-to'})}
     ${p0?fld('Статус',`<div class="v" style="padding-top:6px">${pill(e.status,PRS)}</div>`,{id:'pd-stv',hint:'Меняется на шкале статусов в карточке проекта'}):fld('Статус',sel('pd-st',['Планируется','В работе'],e.status),{id:'pd-st'})}${mv?fld('Планируемая стоимость, сом',inp('pd-plan',e.plan,'inputmode="decimal" class="inp tnum" placeholder="не обязательно"'),{id:'pd-plan',hint:p0&&projPaid(p0)?`Уже получено ${som(projPaid(p0))}`:'Можно не указывать, если стоимость договорная'}):'<div></div>'}
     ${fld('Ответственные',`<div class="chipsel" id="pd-resp">${EMP.filter(x=>x.active).map(x=>`<button type="button" data-e="${x.id}" class="${e.resps.includes(x.id)?'on':''}">${e.resps.includes(x.id)?ic('check','sm'):''}${esc(x.short)}</button>`).join('')}</div>`,{req:true,full:true,id:'pd-resp',hint:'Можно выбрать нескольких'})}

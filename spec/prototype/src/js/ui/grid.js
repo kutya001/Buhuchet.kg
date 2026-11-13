@@ -13,10 +13,10 @@ const COLL=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=GS[cfg.id]={view:sv.view||cfg.defView||null,density:sv.density||'normal',width:sv.width||'full',hidden:new Set(sv.hidden||defHidden(cfg)),order:sv.order||null,widths:sv.widths||{},kb:sv.kb||null,sort:sv.sort!==undefined?sv.sort:defSort(cfg),group:sv.group||(cfg.defGroup||[]).slice(),agg:sv.agg||{},closed:new Set(),filters:{},page:0,size:sv.size||25,sel:new Set()}}return s}
 /* Сортировка по умолчанию во всех списках — от новых к старым по «Создано» */
 /* Видимые по умолчанию столбцы по спискам (ТЗ, «Столбцы, видимые по умолчанию»); остальные — в меню «Столбцы» */
-const SHOW={'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
+const SHOW={'rep-months':['type','act','period','due','status','sum','paydue','paid','resp'],'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
  'cps-':['name','inn','regime','resp','over','svc'],'tasks-':['title','cp','exec','date','status'],'staff':['fio','role','phone','cps','over','active','kb'],
  'fin-journal':['date','cp','total','dist','adv','files'],'cp-fin':['date','cat','what','amount','acc'],'fin-svc':null,'fin-':['date','cp','cat','what','amount','acc'],
- 'proj-':['name','cp','from','to','resps','status','paid'],'files':['name','cp','src','by','date'],'dict-types':['on','name','act','pays','organ','per','rule','file','rcpt','used'],
+ 'proj-':['name','cp','from','to','resps','status','paid'],'files':['name','cp','src','by','date','desc'],'dict-types':['on','name','act','pays','organ','per','rule','file','rcpt','used'],
  'bonus':['month','emp','cp','sum'],'an-cps':['cp','feeCh','fee','debt','total'],'adm-users':['login','fio','org','role','last','active'],'adm-orgs':['name','inn','owner','cps','staff','active']};
 function defHidden(cfg){const k=Object.keys(SHOW).find(k=>cfg.id===k)||Object.keys(SHOW).find(k=>k.endsWith('-')&&cfg.id.startsWith(k));const sh=k&&SHOW[k];
   if(!sh)return cfg.cols.filter(c=>c.hide).map(c=>c.key);const keys=cfg.cols.map(c=>c.key);if(!sh.some(x=>keys.includes(x)))return cfg.cols.filter(c=>c.hide).map(c=>c.key);
@@ -186,10 +186,12 @@ function grid(host,cfg){
     if(t==='enum'){const all=(typeof cfg.rows==='function'?cfg.rows():cfg.rows);const cnt={};all.forEach(r=>{const v=c.val(r);const k=v==null?'':String(v);cnt[k]=(cnt[k]||0)+1});
       keys=Object.keys(cnt).sort((a,b)=>a===c.pin?-1:b===c.pin?1:a===''?1:b===''?-1:COLL.compare(a,b));on=f?new Set(f.vals):new Set(keys);
       // Показываются первые 500 значений; «Найти значение» ищет по всем, отметки скрытых значений сохраняются
-      fmatch=q=>q?keys.filter(k=>norm(k).includes(q)):keys;
+      // Столбец с контрагентами (c.inn): значение ищется по названию и по ИНН — цифрами подряд (просьба заказчика 13.11.2026)
+      const inn={};if(c.inn)CPS.forEach(x=>{inn[x.name]=(inn[x.name]||'')+' '+x.inn});
+      fmatch=q=>{if(!q)return keys;const d=q.replace(/\s/g,'');const byInn=c.inn&&/^\d+$/.test(d);return keys.filter(k=>norm(k).includes(q)||byInn&&(inn[k]||'').includes(d))};
       fvals=q=>{const m=fmatch(q);return {html:m.slice(0,GRID_ENUM_MAX).map(k=>`<label data-v="${esc(norm(k))}"><input type="checkbox" class="gf-v" value="${esc(k)}" ${on.has(k)?'checked':''}> ${k===''?'<i class="faint">(Пусто)</i>':esc(k)}<span class="n">${cnt[k]}</span></label>`).join(''),more:m.length>GRID_ENUM_MAX?`Показаны первые ${fmtM(GRID_ENUM_MAX,false)} значений из ${fmtM(m.length,false)} — сузьте список поиском`:'',all:m.every(k=>on.has(k))}};
       const v0=fvals('');
-      body=`${keys.length>8?`<input class="inp" id="gf-find" placeholder="Найти значение">`:''}<div class="fl-list"><label><input type="checkbox" id="gf-all" ${v0.all?'checked':''}> <b>Выбрать все</b></label><div id="gf-vals">${v0.html}</div></div><div class="hint" id="gf-more" ${v0.more?'':'hidden'}>${esc(v0.more)}</div>`}
+      body=`${keys.length>8?`<input class="inp" id="gf-find" placeholder="${c.inn?'Название или ИНН':'Найти значение'}">`:''}<div class="fl-list"><label><input type="checkbox" id="gf-all" ${v0.all?'checked':''}> <b>Выбрать все</b></label><div id="gf-vals">${v0.html}</div></div><div class="hint" id="gf-more" ${v0.more?'':'hidden'}>${esc(v0.more)}</div>`}
     const ing=(s.group||[]).includes(c.key);
     openPop(btn,`<h4>${esc(c.label)}</h4>${body}<button class="linkbtn" id="gf-grp" style="margin-top:8px;font-size:12.5px">${ic('layers','sm')} ${ing?'Убрать группировку по этому столбцу':'Группировать по этому столбцу'}</button><div class="pop-actions"><button class="btn sm ghost" id="gf-clr">Очистить</button><button class="btn sm cta" id="gf-ok">Применить</button></div>`,{cls:'pad',mount(el){
       const all=$('#gf-all',el),fd=$('#gf-find',el),fq=()=>fd?norm(fd.value):'';

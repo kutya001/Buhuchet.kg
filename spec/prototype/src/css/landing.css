@@ -27,7 +27,9 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-lg{padding:12px 20px;font-size:15px;min-height:46px}
 /* Блоки */
 .lp-sec{padding:64px 0;scroll-margin-top:64px}
-.lp-sec.alt{background:var(--frame)}
+/* Блоки через один — на фоне потемнее; край фона мягкий, без резкой границы */
+.lp-sec.alt{background:linear-gradient(180deg,transparent 0,var(--frame) 88px,var(--frame) calc(100% - 88px),transparent 100%)}
+.lp-sec.alt:last-child{background:linear-gradient(180deg,transparent 0,var(--frame) 88px)}
 .lp-sec h2{margin:0 0 28px;font-size:clamp(24px,3vw,32px);font-weight:760;letter-spacing:-.02em;line-height:1.2}
 .lp-sub{margin:-18px 0 26px;color:var(--muted);font-size:15.5px;max-width:640px}
 /* 2. Первый экран */
@@ -62,8 +64,8 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-card{background:var(--raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:20px 20px 22px;display:flex;flex-direction:column;gap:8px}
 .lp-card h3{margin:0;font-size:17px;font-weight:700;line-height:1.3}
 .lp-card p{margin:0;color:var(--muted);font-size:14.5px;line-height:1.5}
-.lp-ico{width:40px;height:40px;border-radius:var(--r-l);display:grid;place-items:center;background:var(--blue-bg);color:var(--blue);margin-bottom:4px}
-.lp-ico.g{background:var(--green-bg);color:var(--green)}.lp-ico.p{background:var(--purple-bg);color:var(--purple)}.lp-ico.y{background:var(--yellow-bg);color:var(--yellow)}
+.lp-ico{--ib:var(--blue-bg);width:40px;height:40px;border-radius:var(--r-l);display:grid;place-items:center;background:var(--ib);color:var(--blue);margin-bottom:4px}
+.lp-ico.g{--ib:var(--green-bg);color:var(--green)}.lp-ico.p{--ib:var(--purple-bg);color:var(--purple)}.lp-ico.y{--ib:var(--yellow-bg);color:var(--yellow)}
 /* 5. Было → Стало */
 .lp-chg{display:flex;flex-direction:column;gap:10px}
 .lp-chg-h,.lp-chg-r{display:grid;grid-template-columns:minmax(0,1fr) 36px minmax(0,1fr);gap:10px;align-items:stretch}
@@ -123,6 +125,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-foot{background:var(--frame);border-top:1px solid var(--border);padding:28px 0 32px;font-size:14px;color:var(--muted)}
 .lp-foot-in{display:flex;gap:14px 28px;flex-wrap:wrap;align-items:center}
 .lp-foot b{color:var(--text)}
+.lp-ver{white-space:nowrap}
 .lp-foot a,.lp-foot .linkbtn{color:var(--link)}
 .lp-foot-l{display:flex;gap:6px 18px;flex-wrap:wrap;margin-left:auto}
 .lp-fab{display:none}
@@ -302,7 +305,13 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 /* 4. Возможности: мозаика плиток */
 .lp-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;align-items:start;grid-auto-flow:dense}
 .lp-tile{display:flex;flex-direction:column;align-items:flex-start;gap:10px;min-width:0;padding:16px;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--raised);color:var(--text);font:inherit;text-align:left;cursor:pointer;transition:transform .3s,box-shadow .3s,border-color .3s}
-.lp-tile .lp-ico{margin:0}
+.lp-tile .lp-ico{margin:0;width:46px;height:46px;border-radius:14px}
+/* Значки «Возможностей» из частей: .bg — заливка цветом подложки (закрывает то, что позади), .dot — сплошная точка */
+.lp-fi{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;overflow:visible}
+.lp-fi *{transform-box:fill-box;transform-origin:50% 50%}
+.lp-fi .bg{fill:var(--ib)}.lp-fi .dot{fill:currentColor;stroke:none}
+.lp-fi .f2-g{stroke-width:1.9}.lp-fi .f4-t{opacity:0}.lp-fi .f7-s{stroke-width:2.4}.lp-fi .f9-b{stroke-width:2.7;transform-origin:50% 100%}
+.lp-fi .f10-f{transform-origin:50% 100%}.lp-fi .f12-t{transform-origin:50% 0}
 .lp-tile b{font-size:15px;font-weight:700;line-height:1.3}
 .lp-tile .lp-d span{display:block;color:var(--muted);font-size:14px;line-height:1.5}
 .lp-tile[aria-expanded="true"]{grid-column:span 2;border-color:var(--b-yellow);box-shadow:0 0 0 3px hsl(43 83% 57% / .22)}
@@ -347,12 +356,12 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-stamp circle{fill:none;stroke:var(--green);stroke-width:3}.lp-stamp .i{stroke-width:1.4;stroke-dasharray:2 3}
 .lp-stamp .k{fill:none;stroke:var(--green);stroke-width:4.5;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40 40}
 /* Ключевые кадры */
-@keyframes lp-rise{from{opacity:0;transform:translateY(26px)}}
+@keyframes lp-rise{from{opacity:0;transform:translateY(20px)}}
 @keyframes lp-in-r{from{opacity:0;transform:translateX(56px)}}
 @keyframes lp-in-l{from{opacity:0;transform:translateX(-56px)}}
 @keyframes lp-in-up{from{opacity:0;transform:translateY(70px)}}
 @keyframes lp-fade{from{opacity:0}}
-@keyframes lp-pop{0%{opacity:0;transform:scale(.3)}60%{opacity:1;transform:scale(1.14)}100%{transform:scale(1)}}
+@keyframes lp-pop{0%{opacity:0;transform:scale(.5)}60%{opacity:1;transform:scale(1.06)}100%{transform:scale(1)}}
 @keyframes lp-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
 @keyframes lp-spin{to{transform:rotate(360deg)}}
 @keyframes lp-spin-r{from{transform:rotate(0)}to{transform:rotate(-360deg)}}
@@ -368,8 +377,8 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 @keyframes lp-stamp{0%{opacity:0;transform:scale(1.6) rotate(-24deg)}55%{opacity:1}100%{transform:none}}
 @keyframes lp-ripple{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.22)}}
 @keyframes lp-check{from{stroke-dashoffset:40}}
-@keyframes lp-flipin{from{opacity:0;transform:rotateY(-75deg) translateZ(-40px)}}
-@keyframes lp-tile{from{opacity:0;transform:scale(.55) rotate(-8deg)}}
+@keyframes lp-flipin{from{opacity:0;transform:rotateY(-36deg) translateZ(-24px)}}
+@keyframes lp-tile{from{opacity:0;transform:translateY(24px) scale(.94)}}
 @keyframes lp-unfold{from{opacity:0;transform:perspective(1000px) rotateX(-28deg) translateY(30px)}}
 @keyframes lp-radar{0%{opacity:.55;transform:scale(.6)}100%{opacity:0;transform:scale(1.55)}}
 @keyframes lp-lock{from{transform:translateY(-10px)}}
@@ -385,7 +394,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 @keyframes lp-coin{0%{opacity:0;transform:translateY(-70px)}25%{opacity:1}100%{opacity:1;transform:none}}
 /* Появление при прокрутке — у каждого блока своё */
 .lp-anim .rv:not(.in),.lp-anim .lp-live:not(.in) .lp-emb-svg{opacity:0}
-.lp-anim .rv.in{animation:lp-rise .8s cubic-bezier(.2,.75,.2,1) calc(var(--d,0)*90ms) backwards}
+.lp-anim .rv.in{animation:lp-rise 1s cubic-bezier(.16,.84,.24,1) calc(var(--d,0)*90ms) backwards}
 .lp-anim .lp-sec h2.in::after{animation:lp-grow .9s cubic-bezier(.5,0,.2,1) .3s backwards}
 .lp-anim .lp-stat.in .lp-si svg{animation:lp-pop .6s ease calc(var(--d,0)*90ms + .2s) backwards}
 .lp-anim .lp-logo-a .lp-draw{animation:lp-draw 1.7s cubic-bezier(.5,0,.25,1) .15s backwards}
@@ -425,13 +434,59 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 /* 2. Кому подходит — карточки поворачиваются к посетителю */
 .lp-who .lp-grid3{perspective:1200px}
 .lp-who .lp-card{transform-origin:0 50%}
-.lp-anim .lp-who .lp-card.rv.in{animation:lp-flipin .9s cubic-bezier(.2,.8,.2,1) calc(var(--d,0)*170ms) backwards}
+.lp-anim .lp-who .lp-card.rv.in{animation:lp-flipin 1.1s cubic-bezier(.16,.84,.24,1) calc(var(--d,0)*170ms) backwards}
 /* 3. Что меняется — карточки встают, затем переворачиваются из «Было» в «Стало» */
 .lp-anim .lp-fc.rv.in{animation:lp-pop .6s cubic-bezier(.2,.8,.2,1) calc(var(--d,0)*120ms) backwards}
-/* 4. Возможности — мозаика волной по диагонали */
-.lp-anim .lp-tile.rv.in{animation:lp-tile .6s cubic-bezier(.3,1.4,.5,1) calc(var(--d,0)*70ms) backwards}
+/* 4. Возможности — плитки встают волной по диагонали; у каждой функции — своя анимация значка (класс fx ставит landTileFx) */
+.lp-anim .lp-tile.rv.in{animation:lp-tile .85s cubic-bezier(.16,.84,.24,1) calc(var(--d,0)*80ms) backwards}
+.lp-anim .lp-tile.fx .f1-a{animation:lp-f-beat .5s ease}
+.lp-anim .lp-tile.fx .f1-b{animation:lp-f1b .55s cubic-bezier(.3,1.4,.5,1) .12s backwards}
+.lp-anim .lp-tile.fx .f1-c{animation:lp-f1c .55s cubic-bezier(.3,1.4,.5,1) .34s backwards}
+.lp-anim .lp-tile.fx .f2-d{animation:lp-f2 1.25s cubic-bezier(.3,1.5,.5,1)}
+.lp-anim .lp-tile.fx .f2-r{animation:lp-f-hop .4s ease 1.15s}
+.lp-anim .lp-tile.fx .f3-m{animation:lp-f3 1.25s cubic-bezier(.4,0,.3,1)}
+.lp-anim .lp-tile.fx .f3-k{animation:lp-f-draw .35s ease 1.2s backwards}
+.lp-anim .lp-tile.fx .f4-p{animation:lp-f4 1.3s cubic-bezier(.5,0,.3,1)}
+.lp-anim .lp-tile.fx .f4-t{animation:lp-f4t 1.3s ease}
+.lp-anim .lp-tile.fx .f5-a{animation:lp-f-draw .35s ease .1s backwards}
+.lp-anim .lp-tile.fx .f5-b{animation:lp-f-draw .35s ease .6s backwards}
+.lp-anim .lp-tile.fx .f5-x{animation:lp-f-beat .4s ease .3s}
+.lp-anim .lp-tile.fx .f5-y{animation:lp-f-beat .4s ease .8s}
+.lp-anim .lp-tile.fx .f6-c{animation:lp-f6 .9s cubic-bezier(.5,0,.6,1)}
+.lp-anim .lp-tile.fx .f6-s{animation:lp-f6s .6s cubic-bezier(.3,1.5,.5,1) .7s backwards}
+.lp-anim .lp-tile.fx .f7-r{animation:lp-f7 1.2s steps(8,end)}
+.lp-anim .lp-tile.fx .f7-s{animation:lp-f-hop .25s ease 4}
+.lp-anim .lp-tile.fx .f8-d{animation:lp-f8 .4s cubic-bezier(.3,1.5,.5,1) calc(var(--i)*.17s + .1s) backwards}
+.lp-anim .lp-tile.fx .f8-w{animation:lp-f-beat .45s ease .95s}
+.lp-anim .lp-tile.fx .f9-b{animation:lp-f9 .6s cubic-bezier(.3,1.4,.5,1) calc(var(--i)*.16s) backwards}
+.lp-anim .lp-tile.fx .f10-s{animation:lp-f10 1s cubic-bezier(.3,.8,.3,1)}
+.lp-anim .lp-tile.fx .f10-f{animation:lp-f10f 1s ease}
+.lp-anim .lp-tile.fx .f11-a{animation:lp-f11a .5s cubic-bezier(.3,1.5,.5,1) .1s backwards}
+.lp-anim .lp-tile.fx .f11-b{animation:lp-f11b 1s ease .55s}
+.lp-anim .lp-tile.fx .f12-c{animation:lp-f12 1.1s cubic-bezier(.3,.6,.3,1)}
+.lp-anim .lp-tile.fx .f12-t{animation:lp-f12t 1.3s ease .15s}
+@keyframes lp-f-beat{40%{transform:scale(1.12)}}
+@keyframes lp-f-hop{50%{transform:translateY(-1.4px)}}
+@keyframes lp-f-draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}
+@keyframes lp-f1b{from{opacity:0;transform:translate(-3px,2.5px)}}
+@keyframes lp-f1c{from{opacity:0;transform:translate(-6px,5px)}}
+@keyframes lp-f2{0%{transform:translate(-9px,-3.5px)}20%{transform:translate(-4.5px,-3.5px)}40%{transform:translate(0,-3.5px)}60%{transform:translate(-9px,0)}80%{transform:translate(-4.5px,0)}100%{transform:none}}
+@keyframes lp-f3{0%{transform:translate(-9px,-7.5px)}28%{transform:translate(-2px,-7.5px)}52%{transform:translate(-9px,-2.5px)}76%{transform:translate(-4px,-2.5px)}100%{transform:none}}
+@keyframes lp-f4{0%{transform:none;opacity:1}38%{transform:translate(11px,-11px) scale(.5);opacity:0}39%{transform:translate(-11px,11px) scale(.5);opacity:0}100%{transform:none;opacity:1}}
+@keyframes lp-f4t{0%,100%{opacity:0}45%,75%{opacity:.75}}
+@keyframes lp-f6{0%{opacity:0;transform:translateY(-11px)}45%{opacity:1;transform:none}65%{transform:translateY(-2.4px)}100%{transform:none}}
+@keyframes lp-f6s{from{opacity:0;transform:scale(0) rotate(-90deg)}}
+@keyframes lp-f7{from{transform:translateY(-16px)}}
+@keyframes lp-f8{0%{transform:scale(0)}60%{transform:scale(1.5)}}
+@keyframes lp-f9{from{transform:scaleY(0)}}
+@keyframes lp-f10{0%{transform:translateY(5.5px)}55%{transform:translateY(-3.6px)}100%{transform:none}}
+@keyframes lp-f10f{35%,60%{transform:skewX(-9deg) scaleY(.92)}}
+@keyframes lp-f11a{from{transform:translateX(-5.5px)}}
+@keyframes lp-f11b{35%,55%{transform:translateX(5.5px)}}
+@keyframes lp-f12{0%{transform:none}32%{transform:translateY(-6.5px) rotate(-16deg)}62%{transform:translateY(0) rotate(4deg)}80%{transform:translateY(-1.6px)}100%{transform:none}}
+@keyframes lp-f12t{0%,100%{transform:none}28%{transform:rotate(30deg)}55%{transform:rotate(-22deg)}78%{transform:rotate(10deg)}}
 /* 5. Как это выглядит — экран наклонён и выпрямляется, пока блок въезжает */
-.lp-anim .lp-tilt .lp-track{transform:rotateX(calc((1 - var(--tp,1)) * 38deg)) scale(calc(.86 + var(--tp,1) * .14));transform-origin:50% 100%}
+.lp-anim .lp-tilt .lp-track{transform:rotateX(calc((1 - var(--tp,1)) * 38deg)) scale(calc(.86 + var(--tp,1) * .14));transform-origin:50% 100%;transition:transform .3s cubic-bezier(.2,.7,.3,1)}
 /* 6. Как начать — номера встают по очереди */
 .lp-anim .lp-start li.rv.in .lp-num{animation:lp-pop .55s ease calc(var(--d,0)*160ms + .15s) backwards}
 /* 7. Безопасность — щит рисуется, замок защёлкивается, значки выходят на орбиту и медленно вращаются, от щита расходятся волны */
@@ -457,7 +512,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 @media (hover:hover){
   .lp-card,.lp-tile{transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s,border-color .3s}
   .lp-card:hover,.lp-tile:hover{transform:translateY(-4px);box-shadow:var(--shadow-l);border-color:var(--border-strong)}
-  .lp-anim .lp-card:hover .lp-ico,.lp-anim .lp-tile:hover .lp-ico{animation:lp-wiggle .6s ease}
+  .lp-anim .lp-card:hover .lp-ico{animation:lp-wiggle .6s ease}
   .lp-emb-l button:hover{border-color:var(--border-strong);transform:translateX(4px)}
   .lp-fc:hover .lp-fc-f{box-shadow:var(--shadow-l)}
 }

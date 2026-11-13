@@ -8,6 +8,10 @@
 .li:hover{background:var(--row-hover)}
 .li .grow{flex:1;min-width:0}
 .li .t1{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.f-note{font-size:12px;color:var(--muted);font-style:italic;overflow-wrap:anywhere;white-space:normal;font-weight:400}
+textarea.f-note-i{min-height:58px}
+.at-l{max-height:190px;overflow:auto;margin-bottom:10px}.at-l .li:last-child{border-bottom:0}
+.fe-n{display:flex;align-items:center;gap:8px}.fe-n .inp{flex:1;min-width:0}
 .li .t2{font-size:12px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .datebox{width:42px;flex:none;text-align:center;border-radius:8px;background:var(--pane-alt);border:1px solid var(--border);padding:3px 0;line-height:1.1}
 .datebox b{display:block;font-size:15px;font-variant-numeric:tabular-nums}
@@ -67,6 +71,15 @@
 .cp-page .pg-code:hover{background:var(--hover)}.cp-page .pg-code:focus-visible{outline:2px solid var(--b-blue)}.cp-page .pg-code .ic{color:var(--faint)}
 .tf-log li{grid-template-columns:92px minmax(0,1fr) auto;align-items:start}
 .cp-page .kv>.pg-secs-row{grid-column:1/-1}
+/* Telegram контрагента (К3, 13.11.2026): список запросов и подключений в блоке «Страница контрагента», раздел «Telegram» на странице */
+.pg-tg{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:10px}
+.pg-tg h4{margin:0;font-size:13px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}.pg-tg h4>.ic{color:var(--b-blue)}
+/* Таблица в сообщении клиенту: столбец после числового не прилипает к сумме */
+.tgc-t th.num+th,.tgc-t td.num+td{padding-left:14px}
+.pg-tg-debt{align-items:center;gap:8px 10px;flex-wrap:wrap}.pg-tg-debt>.check-row{flex:1 1 280px;margin:0}
+.pg-tg-tbl td{vertical-align:middle}.pg-tg-act{white-space:nowrap;text-align:right}.pg-tg-act .btn+.btn{margin-left:6px}
+.pub-tgp{margin:0;line-height:1.5}.pub-tgst{display:flex;gap:6px;flex-wrap:wrap}
+@media (max-width:767px){.pg-tg-act{white-space:normal;text-align:left;display:flex;gap:6px;flex-wrap:wrap}.pg-tg-act .btn+.btn{margin-left:0}}
 .pg-secs{display:flex;flex-wrap:wrap;gap:4px 14px}.pg-secs .row{gap:6px;font-size:13px}
 .pg-pol{margin:-4px 0 6px 52px;display:flex;flex-direction:column;gap:2px}.pg-pol .check-row{padding:4px 0}
 .pub{position:fixed;inset:0;z-index:85;background:var(--frame);display:flex;flex-direction:column;overflow:hidden}
@@ -187,7 +200,7 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
 @media (max-width:767px){.pub-proto span{display:none}.pub-bar{padding:8px 12px}.pub-title h1{font-size:20px}.pub-gate{margin-top:4vh;padding:22px 18px}.pg-pol{margin-left:0}
   .pub-page{padding:14px 12px calc(84px + env(safe-area-inset-bottom,0px));gap:14px}.pub-body{gap:10px}
   .pub-grid{display:flex;flex-direction:column;align-items:stretch;gap:10px}.pub-col{display:contents}
-  .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=files]{order:5}.pub-s[data-sec=money]{order:6}.pub-s[data-sec=fee]{order:7}.pub-s[data-sec=kpi]{order:8}.pub-s[data-sec=contacts]{order:9}
+  .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=files]{order:5}.pub-s[data-sec=money]{order:6}.pub-s[data-sec=fee]{order:7}.pub-s[data-sec=kpi]{order:8}.pub-s[data-sec=contacts]{order:9}.pub-s[data-sec=tg]{order:10}
   .pub-frow{padding:8px 10px;gap:8px}.pub-fq{max-width:none}
   .pub-s{padding:12px 14px}.pub-fd .pub-tg{cursor:pointer;min-height:28px}.pub-tg>.ic:last-child:not(:first-child){display:inline-block}
   .pub-fd:not(.fold) .pub-tg>.ic:last-child{transform:rotate(180deg)}

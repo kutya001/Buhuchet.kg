@@ -2,13 +2,13 @@
 // Поповеры, меню, модальные окна, подтверждения, уведомления, помощники форм
 /* ═════════════ Popover / menu / modal / toast ═════════════ */
 let POP=null,POP_ANCHOR=null;
-function closePop(){if(POP){POP.remove();POP=null;POP_ANCHOR=null}}
+function closePop(){if(POP){POP.remove();POP=null;if(POP_ANCHOR&&POP_ANCHOR.classList&&POP_ANCHOR.classList.contains('cps-b'))POP_ANCHOR.setAttribute('aria-expanded','false');POP_ANCHOR=null}}
 function openPop(anchor,html,{pt,cls='',mount}={}){
   closePop();const el=document.createElement('div');el.className='pop '+cls;el.innerHTML=html;document.body.appendChild(el);
   const W=innerWidth,H=innerHeight,w=el.offsetWidth,h=el.offsetHeight;let x,y;
   if(pt){x=pt.x;y=pt.y}else{const r=anchor.getBoundingClientRect();x=r.left;y=r.bottom+6;if(x+w>W-8)x=r.right-w;if(y+h>H-8)y=Math.max(8,r.top-h-6)}
   x=Math.max(8,Math.min(x,W-w-8));y=Math.max(8,Math.min(y,H-h-8));el.style.left=x+'px';el.style.top=y+'px';
-  POP=el;POP_ANCHOR=anchor;mount&&mount(el);swipeDown(el,()=>el,{can:()=>true,close:closePop});
+  POP=el;POP_ANCHOR=anchor;mount&&mount(el);swipeDown(el,()=>el.querySelector('.cps-l')||el,{can:()=>true,close:closePop});
   const f=el.querySelector('input:not([type=checkbox]),select');if(f&&!isMobile())f.focus();
   return el;
 }
@@ -78,7 +78,7 @@ function openModal(o){
     m.el.querySelector('.mb').scrollTop=keep;
   };
   m.setMax(!!store.get(m.maxKey,false));m.draw();m.drawn=true;
-  if(!isMobile()){const f=m.el.querySelector('.mb .fld input:not([type=checkbox]):not([readonly]),.mb .fld textarea,.mb .fld select');f&&f.focus({preventScroll:true})}
+  if(!isMobile()){const f=m.el.querySelector('.mb .fld input:not([type=checkbox]):not([readonly]),.mb .fld textarea,.mb .fld select:not(.cps-n),.mb .fld .cps-b');f&&f.focus({preventScroll:true})}
   return m;
 }
 // Уведомление внизу экрана: исчезает само через 3,2 с; на ПК — крестик «Закрыть», на телефоне — свайп влево или вправо (ТЗ «Уведомления внизу экрана»)
