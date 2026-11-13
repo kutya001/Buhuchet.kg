@@ -194,7 +194,7 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
         message: current,
         button,
         asUser: (fn) => fn(tx, access),
-        text: (key, values) => botText(deps, key, values),
+        text: (key, values) => botText(deps, key, values, tx),
       };
       const result = await action.run(ctx);
       const after = pressBotButton(current, parsed.action, parsed.arg, result);

@@ -19,6 +19,9 @@ export interface Runtime {
   close(): Promise<void>;
 }
 
+/** Сколько секунд простоя живёт соединение словаря текстов. */
+const TEXTS_IDLE_SECONDS = 30;
+
 /** Собрать зависимости API из переменных окружения. Единственное место, где они соединяются. */
 export function createRuntime(
   service: 'web' | 'worker',
@@ -35,9 +38,18 @@ export function createRuntime(
     caCert: config.DATABASE_CA_CERT,
     applicationName: `buhuchet-${service}`,
   });
+  // Словарь текстов — на своём соединении (`ApiDeps.textsDb`): открывается первым запросом словаря и
+  // закрывается через полминуты простоя.
+  const texts = createDb(config.DATABASE_URL, {
+    max: 1,
+    idleTimeoutSeconds: TEXTS_IDLE_SECONDS,
+    caCert: config.DATABASE_CA_CERT,
+    applicationName: `buhuchet-${service}-l10n`,
+  });
   const deps: ApiDeps = {
     config,
     db: database.db,
+    textsDb: texts.db,
     storage: createS3Storage(config),
     clock: clockFromConfig(config),
     logger,
@@ -65,7 +77,13 @@ export function createRuntime(
         }
       : {}),
   };
-  return { config, deps, close: () => database.close() };
+  return {
+    config,
+    deps,
+    close: async () => {
+      await Promise.all([database.close(), texts.close()]);
+    },
+  };
 }
 
 /**
