@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { chaseStep, drawnLength, pathAnchors, spiral, spiralKnot } from './landing-fx';
+import {
+  chaseStep,
+  drawnLength,
+  pathAnchors,
+  pathPolyline,
+  spiral,
+  spiralKnot,
+} from './landing-fx';
 
 /** Точки пути «M x y C x y x y x y …»: начало (если есть) и концы всех кривых. */
 function ends(d: string): [number, number][] {
@@ -60,6 +67,52 @@ describe('сквозная линия Бернулли лендинга (про�
         if (Math.sign(arm[i]![0] - 500) !== Math.sign(arm[i - 1]![0] - 500)) turns += 1;
       expect(turns).toBe(3);
     }
+  });
+
+  it('ломаная по линии: длина прямых и кривых, точки через равный шаг — без вопросов к браузеру', () => {
+    // Прямые: 30 вниз и 40 вправо.
+    const line = pathPolyline();
+    line.add('M10.0 20.0L10.0 50.0');
+    expect(line.length()).toBeCloseTo(30, 6);
+    line.add('L50.0 50.0');
+    expect(line.length()).toBeCloseTo(70, 6);
+    const pts = line.sample(10, 8);
+    expect([pts.xs[0], pts.ys[0]]).toEqual([10, 20]);
+    expect([pts.xs[3], pts.ys[3]]).toEqual([10, 50]);
+    expect([pts.xs[5], pts.ys[5]]).toEqual([30, 50]);
+    expect([pts.xs[7], pts.ys[7]]).toEqual([50, 50]);
+    // Длина браузера на 10 % больше: тот же шаг приходится на более раннее место ломаной.
+    const scaled = line.sample(11, 8, 1.1);
+    expect(scaled.ys[3]).toBeCloseTo(50, 4);
+    expect(scaled.xs[7]).toBeCloseTo(50, 4);
+
+    // Четверть окружности радиуса 100 кубической кривой: длина π·100/2.
+    const k = 55.2285;
+    const arc = pathPolyline();
+    arc.add(`M100 0C100 ${k} ${k} 100 0 100`);
+    expect(arc.length()).toBeCloseTo((Math.PI * 100) / 2, 0);
+    const mid = arc.sample(arc.length() / 2, 3);
+    expect(Math.hypot(mid.xs[1]!, mid.ys[1]!)).toBeCloseTo(100, 0);
+    expect(mid.xs[1]).toBeCloseTo(mid.ys[1]!, 0);
+    expect([Math.round(mid.xs[2]!), Math.round(mid.ys[2]!)]).toEqual([0, 100]);
+
+    // Кривая второго порядка — та же длина, что у равной ей кубической.
+    const quad = pathPolyline();
+    quad.add('M0 0Q30 0 30 30');
+    const cubic = pathPolyline();
+    cubic.add('M0 0C20 0 30 10 30 30');
+    expect(quad.length()).toBeCloseTo(cubic.length(), 6);
+
+    // Двойная спираль линии: до центра и от центра — поровну, кончик проходит точно через центр.
+    const knot = spiralKnot(200, 300, 44, 1);
+    const sp = pathPolyline();
+    sp.add(`M${knot.in[0].toFixed(1)} ${knot.in[1].toFixed(1)}${knot.d1}`);
+    const half = sp.length();
+    sp.add(knot.d2);
+    expect(sp.length()).toBeCloseTo(half * 2, 0);
+    const centre = sp.sample(half, 2);
+    expect(centre.xs[1]).toBeCloseTo(200, 0);
+    expect(centre.ys[1]).toBeCloseTo(300, 0);
   });
 
   it('кончик линии догоняет прокрутку плавно: 16 % остатка за кадр, вплотную — сразу цель', () => {

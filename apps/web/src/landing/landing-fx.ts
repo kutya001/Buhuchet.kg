@@ -90,6 +90,105 @@ export function spiralKnot(cx: number, cy: number, R: number, side: 1 | -1): Spi
   return { in: first, out: last, d1: curves(a, 1, n + 2, 1), d2: curves(a, n + 2, m, 1) };
 }
 
+/** Ломаная по линии: точки и длина от начала линии до каждой из них. */
+export interface PathPolyline {
+  /** Дописать команды пути: M, L, Q, C с абсолютными координатами. */
+  add: (d: string) => void;
+  /** Длина ломаной сейчас. */
+  length: () => number;
+  /**
+   * `n` точек через равный шаг `step` по длине линии; `scale` — во сколько раз длина линии по счёту
+   * браузера больше длины ломаной (шаг задан в длине браузера).
+   */
+  sample: (step: number, n: number, scale?: number) => { xs: Float32Array; ys: Float32Array };
+}
+
+/**
+ * Сквозная линия ломаной с шагом около 4 px — чтобы знать, где её кончик на любой длине, не спрашивая
+ * браузер. ОТКЛОНЕНИЕ: docs/deviations.md#И-2 — прототип спрашивает `getPointAtLength` 2 400 раз, а
+ * каждый вызов заново проходит всю линию: со спиралями это секунды простоя страницы при загрузке.
+ */
+export function pathPolyline(): PathPolyline {
+  const px: number[] = [];
+  const py: number[] = [];
+  const pl: number[] = [];
+  let x = 0;
+  let y = 0;
+  let len = 0;
+  const to = (nx: number, ny: number) => {
+    len += Math.hypot(nx - x, ny - y);
+    x = nx;
+    y = ny;
+    px.push(x);
+    py.push(y);
+    pl.push(len);
+  };
+  return {
+    add(d) {
+      for (const m of d.matchAll(/([MLQC])([^MLQC]*)/g)) {
+        const v = m[2]!
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number);
+        const v0 = v[0] ?? 0;
+        const v1 = v[1] ?? 0;
+        if (m[1] === 'M') {
+          x = v0;
+          y = v1;
+          px.push(x);
+          py.push(y);
+          pl.push(len);
+        } else if (m[1] === 'L') {
+          to(v0, v1);
+        } else {
+          // Кривая второго порядка — та же кубическая с опорными точками на 2/3 пути к вершине.
+          const quad = m[1] === 'Q';
+          const ex = quad ? (v[2] ?? 0) : (v[4] ?? 0);
+          const ey = quad ? (v[3] ?? 0) : (v[5] ?? 0);
+          const ax = quad ? x + ((v0 - x) * 2) / 3 : v0;
+          const ay = quad ? y + ((v1 - y) * 2) / 3 : v1;
+          const bx = quad ? ex + ((v0 - ex) * 2) / 3 : (v[2] ?? 0);
+          const by = quad ? ey + ((v1 - ey) * 2) / 3 : (v[3] ?? 0);
+          const sx = x;
+          const sy = y;
+          const rough =
+            Math.hypot(ax - sx, ay - sy) +
+            Math.hypot(bx - ax, by - ay) +
+            Math.hypot(ex - bx, ey - by);
+          const parts = Math.max(4, Math.min(160, Math.ceil(rough / 4)));
+          for (let k = 1; k <= parts; k += 1) {
+            const t = k / parts;
+            const u = 1 - t;
+            to(
+              u * u * u * sx + 3 * u * u * t * ax + 3 * u * t * t * bx + t * t * t * ex,
+              u * u * u * sy + 3 * u * u * t * ay + 3 * u * t * t * by + t * t * t * ey,
+            );
+          }
+        }
+      }
+    },
+    length: () => len,
+    sample(step, n, scale = 1) {
+      const xs = new Float32Array(n);
+      const ys = new Float32Array(n);
+      const last = px.length - 1;
+      let j = 0;
+      for (let i = 0; i < n && last >= 0; i += 1) {
+        const at = (i * step) / scale;
+        while (j < last && pl[j + 1]! < at) j += 1;
+        const a = pl[j]!;
+        const b = pl[Math.min(last, j + 1)]!;
+        const k = b > a ? Math.max(0, Math.min(1, (at - a) / (b - a))) : 0;
+        const nx = px[Math.min(last, j + 1)]!;
+        const ny = py[Math.min(last, j + 1)]!;
+        xs[i] = px[j]! + (nx - px[j]!) * k;
+        ys[i] = py[j]! + (ny - py[j]!) * k;
+      }
+      return { xs, ys };
+    },
+  };
+}
+
 /**
  * Кончик линии догоняет прокрутку плавно (прототип landLineRun): следующий шаг от `cur` к цели `to` —
  * 16 % оставшегося пути за кадр, ближе 0,6 px — сразу цель.
@@ -248,6 +347,14 @@ function pathCalc(root: HTMLElement, prev: PathState | null): PathState | null {
   }
   const centres: Point[] = [];
   const lengths: number[] = [];
+  const poly = pathPolyline();
+  // Начало линии — в ломаную; дальше каждый кусок дописывается и в путь, и в ломаную.
+  poly.add(d);
+  let fed = d.length;
+  const feed = () => {
+    poly.add(d.slice(fed));
+    fed = d.length;
+  };
   blocks.forEach((s, i) => {
     const e = s.knot.in;
     if (Math.abs(px - e[0]) < 2) {
@@ -263,8 +370,8 @@ function pathCalc(root: HTMLElement, prev: PathState | null): PathState | null {
     }
     d += s.knot.d1;
     // Длина линии до центра спирали — по самой линии.
-    p0.setAttribute('d', d);
-    lengths.push(p0.getTotalLength());
+    feed();
+    lengths.push(poly.length());
     centres.push(s.c);
     d += s.knot.d2;
     px = s.knot.out[0];
@@ -275,25 +382,26 @@ function pathCalc(root: HTMLElement, prev: PathState | null): PathState | null {
     const fy = Y(ft.getBoundingClientRect());
     if (fy - 12 > cy) d += `L${f(px)} ${f(fy - 12)}`;
   }
+  feed();
   p0.setAttribute('d', d);
   p1.setAttribute('d', d);
+  // Длину всей линии браузер считает один раз: по ней рисуется штрих. Ломаная чуть короче кривой —
+  // её длины приводятся к длине браузера.
   const total = p1.getTotalLength();
+  const scale = poly.length() > 0 && total > 0 ? total / poly.length() : 1;
   const step = Math.max(6, total / 2400);
   const n = Math.floor(total / step) + 1;
-  const xs = new Float32Array(n);
-  const ys = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) {
-    const pt = p1.getPointAtLength(i * step);
-    xs[i] = pt.x;
-    ys[i] = pt.y;
-  }
+  const { xs, ys } = poly.sample(step, n, scale);
   // Промежуток длиннее линии: в начале у неё не видно круглого конца нулевой длины (прототип v78, c2c5296).
   p1.style.strokeDasharray = `${total} ${total + 40}`;
   g.innerHTML = centres
     .map(([x, y]) => `<circle cx="${f(x)}" cy="${f(y)}" r="${R > 12 ? 4.5 : 3}"/>`)
     .join('');
   const marks = [...g.children];
-  const knots = centres.map((_, i) => ({ len: Math.min(lengths[i]!, total), el: marks[i]! }));
+  const knots = centres.map((_, i) => ({
+    len: Math.min(lengths[i]! * scale, total),
+    el: marks[i]!,
+  }));
   const anchors = pathAnchors(
     y0,
     centres.map(([, y], i) => ({ y, l: knots[i]!.len })),
