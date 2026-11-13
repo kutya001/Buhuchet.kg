@@ -296,6 +296,7 @@ export const LANDING_TEXTS = {
   'land.c.email': { ru: 'kutmanomuraliev012@gmail.com', section: S },
   'land.foot.name': { ru: 'Buhuchet.kg — автоматизация бухгалтерского аутсорсинга', section: S },
   'land.foot.copy': { ru: '© {год}', section: S },
+  'land.foot.ver': { ru: 'Версия {версия}', section: S },
   'land.demo.strip': {
     ru: 'Демо-версия: данные выдуманные, всё работает только в вашем браузере',
     section: S,

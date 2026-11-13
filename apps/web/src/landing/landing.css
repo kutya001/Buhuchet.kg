@@ -136,8 +136,18 @@
   padding: 64px 0;
   scroll-margin-top: 64px;
 }
+/* Блоки через один — на фоне потемнее; край фона мягкий, без резкой границы (прототип v91) */
 .lp-sec.alt {
-  background: var(--bu-frame);
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    var(--bu-frame) 88px,
+    var(--bu-frame) calc(100% - 88px),
+    transparent 100%
+  );
+}
+.lp-sec.alt:last-child {
+  background: linear-gradient(180deg, transparent 0, var(--bu-frame) 88px);
 }
 .lp-sec h2 {
   margin: 0 0 28px;
@@ -290,25 +300,26 @@
   line-height: 1.5;
 }
 .lp-ico {
+  --ib: var(--bu-blue-bg);
   width: 40px;
   height: 40px;
   border-radius: 12px;
   display: grid;
   place-items: center;
-  background: var(--bu-blue-bg);
+  background: var(--ib);
   color: var(--bu-blue);
   margin-bottom: 4px;
 }
 .lp-ico.g {
-  background: var(--bu-green-bg);
+  --ib: var(--bu-green-bg);
   color: var(--bu-green);
 }
 .lp-ico.p {
-  background: var(--bu-purple-bg);
+  --ib: var(--bu-purple-bg);
   color: var(--bu-purple);
 }
 .lp-ico.y {
-  background: var(--bu-yellow-bg);
+  --ib: var(--bu-yellow-bg);
   color: var(--bu-yellow);
 }
 /* 7. Как это выглядит */
@@ -599,6 +610,9 @@
 }
 .lp-foot b {
   color: var(--bu-text);
+}
+.lp-ver {
+  white-space: nowrap;
 }
 .lp-foot a {
   color: var(--bu-link);
@@ -1609,6 +1623,50 @@
 }
 .lp-tile .lp-ico {
   margin: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+}
+/* Значки «Возможностей» из частей (прототип v91): .bg — заливка цветом подложки (закрывает то, что позади), .dot — сплошная точка */
+.lp-fi {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+.lp-fi * {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.lp-fi .bg {
+  fill: var(--ib);
+}
+.lp-fi .dot {
+  fill: currentColor;
+  stroke: none;
+}
+.lp-fi .f2-g {
+  stroke-width: 1.9;
+}
+.lp-fi .f4-t {
+  opacity: 0;
+}
+.lp-fi .f7-s {
+  stroke-width: 2.4;
+}
+.lp-fi .f9-b {
+  stroke-width: 2.7;
+  transform-origin: 50% 100%;
+}
+.lp-fi .f10-f {
+  transform-origin: 50% 100%;
+}
+.lp-fi .f12-t {
+  transform-origin: 50% 0;
 }
 .lp-tile b {
   font-size: 15px;
@@ -1846,7 +1904,7 @@
 @keyframes lp-rise {
   from {
     opacity: 0;
-    transform: translateY(26px);
+    transform: translateY(20px);
   }
 }
 @keyframes lp-in-r {
@@ -1964,13 +2022,13 @@
 @keyframes lp-flipin {
   from {
     opacity: 0;
-    transform: rotateY(-75deg) translateZ(-40px);
+    transform: rotateY(-36deg) translateZ(-24px);
   }
 }
 @keyframes lp-tile {
   from {
     opacity: 0;
-    transform: scale(0.55) rotate(-8deg);
+    transform: translateY(24px) scale(0.94);
   }
 }
 @keyframes lp-unfold {
@@ -2143,7 +2201,7 @@
   opacity: 0;
 }
 .lp-anim .rv.in {
-  animation: lp-rise 0.8s cubic-bezier(0.2, 0.75, 0.2, 1) calc(var(--d, 0) * 90ms) backwards;
+  animation: lp-rise 1s cubic-bezier(0.16, 0.84, 0.24, 1) calc(var(--d, 0) * 90ms) backwards;
 }
 .lp-anim .lp-sec h2.in::after {
   animation: lp-grow 0.9s cubic-bezier(0.5, 0, 0.2, 1) 0.3s backwards;
@@ -2269,20 +2327,296 @@
   transform-origin: 0 50%;
 }
 .lp-anim .lp-who .lp-card.rv.in {
-  animation: lp-flipin 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--d, 0) * 170ms) backwards;
+  animation: lp-flipin 1.1s cubic-bezier(0.16, 0.84, 0.24, 1) calc(var(--d, 0) * 170ms) backwards;
 }
 /* 3. Что меняется — карточки встают, затем переворачиваются из «Было» в «Стало» */
 .lp-anim .lp-fc.rv.in {
   animation: lp-pop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--d, 0) * 120ms) backwards;
 }
-/* 4. Возможности — мозаика волной по диагонали */
+/* 4. Возможности — плитки встают волной по диагонали; у каждой функции — своя анимация значка (класс fx ставит playTile) */
 .lp-anim .lp-tile.rv.in {
-  animation: lp-tile 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) calc(var(--d, 0) * 70ms) backwards;
+  animation: lp-tile 0.85s cubic-bezier(0.16, 0.84, 0.24, 1) calc(var(--d, 0) * 80ms) backwards;
+}
+.lp-anim .lp-tile.fx .f1-a {
+  animation: lp-f-beat 0.5s ease;
+}
+.lp-anim .lp-tile.fx .f1-b {
+  animation: lp-f1b 0.55s cubic-bezier(0.3, 1.4, 0.5, 1) 0.12s backwards;
+}
+.lp-anim .lp-tile.fx .f1-c {
+  animation: lp-f1c 0.55s cubic-bezier(0.3, 1.4, 0.5, 1) 0.34s backwards;
+}
+.lp-anim .lp-tile.fx .f2-d {
+  animation: lp-f2 1.25s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.lp-anim .lp-tile.fx .f2-r {
+  animation: lp-f-hop 0.4s ease 1.15s;
+}
+.lp-anim .lp-tile.fx .f3-m {
+  animation: lp-f3 1.25s cubic-bezier(0.4, 0, 0.3, 1);
+}
+.lp-anim .lp-tile.fx .f3-k {
+  animation: lp-f-draw 0.35s ease 1.2s backwards;
+}
+.lp-anim .lp-tile.fx .f4-p {
+  animation: lp-f4 1.3s cubic-bezier(0.5, 0, 0.3, 1);
+}
+.lp-anim .lp-tile.fx .f4-t {
+  animation: lp-f4t 1.3s ease;
+}
+.lp-anim .lp-tile.fx .f5-a {
+  animation: lp-f-draw 0.35s ease 0.1s backwards;
+}
+.lp-anim .lp-tile.fx .f5-b {
+  animation: lp-f-draw 0.35s ease 0.6s backwards;
+}
+.lp-anim .lp-tile.fx .f5-x {
+  animation: lp-f-beat 0.4s ease 0.3s;
+}
+.lp-anim .lp-tile.fx .f5-y {
+  animation: lp-f-beat 0.4s ease 0.8s;
+}
+.lp-anim .lp-tile.fx .f6-c {
+  animation: lp-f6 0.9s cubic-bezier(0.5, 0, 0.6, 1);
+}
+.lp-anim .lp-tile.fx .f6-s {
+  animation: lp-f6s 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) 0.7s backwards;
+}
+.lp-anim .lp-tile.fx .f7-r {
+  animation: lp-f7 1.2s steps(8, end);
+}
+.lp-anim .lp-tile.fx .f7-s {
+  animation: lp-f-hop 0.25s ease 4;
+}
+.lp-anim .lp-tile.fx .f8-d {
+  animation: lp-f8 0.4s cubic-bezier(0.3, 1.5, 0.5, 1) calc(var(--i) * 0.17s + 0.1s) backwards;
+}
+.lp-anim .lp-tile.fx .f8-w {
+  animation: lp-f-beat 0.45s ease 0.95s;
+}
+.lp-anim .lp-tile.fx .f9-b {
+  animation: lp-f9 0.6s cubic-bezier(0.3, 1.4, 0.5, 1) calc(var(--i) * 0.16s) backwards;
+}
+.lp-anim .lp-tile.fx .f10-s {
+  animation: lp-f10 1s cubic-bezier(0.3, 0.8, 0.3, 1);
+}
+.lp-anim .lp-tile.fx .f10-f {
+  animation: lp-f10f 1s ease;
+}
+.lp-anim .lp-tile.fx .f11-a {
+  animation: lp-f11a 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) 0.1s backwards;
+}
+.lp-anim .lp-tile.fx .f11-b {
+  animation: lp-f11b 1s ease 0.55s;
+}
+.lp-anim .lp-tile.fx .f12-c {
+  animation: lp-f12 1.1s cubic-bezier(0.3, 0.6, 0.3, 1);
+}
+.lp-anim .lp-tile.fx .f12-t {
+  animation: lp-f12t 1.3s ease 0.15s;
+}
+@keyframes lp-f-beat {
+  40% {
+    transform: scale(1.12);
+  }
+}
+@keyframes lp-f-hop {
+  50% {
+    transform: translateY(-1.4px);
+  }
+}
+@keyframes lp-f-draw {
+  from {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes lp-f1b {
+  from {
+    opacity: 0;
+    transform: translate(-3px, 2.5px);
+  }
+}
+@keyframes lp-f1c {
+  from {
+    opacity: 0;
+    transform: translate(-6px, 5px);
+  }
+}
+@keyframes lp-f2 {
+  0% {
+    transform: translate(-9px, -3.5px);
+  }
+  20% {
+    transform: translate(-4.5px, -3.5px);
+  }
+  40% {
+    transform: translate(0, -3.5px);
+  }
+  60% {
+    transform: translate(-9px, 0);
+  }
+  80% {
+    transform: translate(-4.5px, 0);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes lp-f3 {
+  0% {
+    transform: translate(-9px, -7.5px);
+  }
+  28% {
+    transform: translate(-2px, -7.5px);
+  }
+  52% {
+    transform: translate(-9px, -2.5px);
+  }
+  76% {
+    transform: translate(-4px, -2.5px);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes lp-f4 {
+  0% {
+    transform: none;
+    opacity: 1;
+  }
+  38% {
+    transform: translate(11px, -11px) scale(0.5);
+    opacity: 0;
+  }
+  39% {
+    transform: translate(-11px, 11px) scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes lp-f4t {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  45%,
+  75% {
+    opacity: 0.75;
+  }
+}
+@keyframes lp-f6 {
+  0% {
+    opacity: 0;
+    transform: translateY(-11px);
+  }
+  45% {
+    opacity: 1;
+    transform: none;
+  }
+  65% {
+    transform: translateY(-2.4px);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes lp-f6s {
+  from {
+    opacity: 0;
+    transform: scale(0) rotate(-90deg);
+  }
+}
+@keyframes lp-f7 {
+  from {
+    transform: translateY(-16px);
+  }
+}
+@keyframes lp-f8 {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.5);
+  }
+}
+@keyframes lp-f9 {
+  from {
+    transform: scaleY(0);
+  }
+}
+@keyframes lp-f10 {
+  0% {
+    transform: translateY(5.5px);
+  }
+  55% {
+    transform: translateY(-3.6px);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes lp-f10f {
+  35%,
+  60% {
+    transform: skewX(-9deg) scaleY(0.92);
+  }
+}
+@keyframes lp-f11a {
+  from {
+    transform: translateX(-5.5px);
+  }
+}
+@keyframes lp-f11b {
+  35%,
+  55% {
+    transform: translateX(5.5px);
+  }
+}
+@keyframes lp-f12 {
+  0% {
+    transform: none;
+  }
+  32% {
+    transform: translateY(-6.5px) rotate(-16deg);
+  }
+  62% {
+    transform: translateY(0) rotate(4deg);
+  }
+  80% {
+    transform: translateY(-1.6px);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes lp-f12t {
+  0%,
+  100% {
+    transform: none;
+  }
+  28% {
+    transform: rotate(30deg);
+  }
+  55% {
+    transform: rotate(-22deg);
+  }
+  78% {
+    transform: rotate(10deg);
+  }
 }
 /* 5. Как это выглядит — экран наклонён и выпрямляется, пока блок въезжает */
 .lp-anim .lp-tilt .lp-track {
   transform: rotateX(calc((1 - var(--tp, 1)) * 38deg)) scale(calc(0.86 + var(--tp, 1) * 0.14));
   transform-origin: 50% 100%;
+  transition: transform 0.3s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 /* 6. Как начать — номера встают по очереди */
 .lp-anim .lp-start li.rv.in .lp-num {
@@ -2370,8 +2704,7 @@
     box-shadow: var(--bu-shadow-l);
     border-color: var(--bu-border-strong);
   }
-  .lp-anim .lp-card:hover .lp-ico,
-  .lp-anim .lp-tile:hover .lp-ico {
+  .lp-anim .lp-card:hover .lp-ico {
     animation: lp-wiggle 0.6s ease;
   }
   .lp-emb-l button:hover {

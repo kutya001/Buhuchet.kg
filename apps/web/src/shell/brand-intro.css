@@ -133,11 +133,11 @@
 @keyframes lp-pop {
   0% {
     opacity: 0;
-    transform: scale(0.3);
+    transform: scale(0.5);
   }
   60% {
     opacity: 1;
-    transform: scale(1.14);
+    transform: scale(1.06);
   }
   100% {
     transform: scale(1);

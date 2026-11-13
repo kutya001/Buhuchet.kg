@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { afterLogin, loginHref } from '../auth/return-to';
 import { DEMO_CSP, DEMO_HEADERS, DEMO_PATHS, SECURITY_HEADERS, SITE_PAGES } from '../site-headers';
-import { demoScreens } from './landing-data';
+import { demoScreens, LANDING_VERSION } from './landing-data';
 
 const ROOT = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -12,6 +12,10 @@ describe('данные лендинга (задача #165)', () => {
     expect(() =>
       execFileSync('node', ['scripts/landing-data.mjs', '--check'], { cwd: ROOT, stdio: 'pipe' }),
     ).not.toThrow();
+  });
+
+  it('версия платформы в подвале — номер версии прототипа из spec/, без «v» и даты', () => {
+    expect(LANDING_VERSION).toMatch(/^\d+$/);
   });
 
   it('картинка: последние 2 просроченных не старше 30 дней и ближайшие сроки, всего до 6 строк', () => {

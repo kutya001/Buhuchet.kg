@@ -33,15 +33,17 @@ import {
   BalanceIcon,
   delay,
   Emblem,
+  FeatureIcon,
   HeroBg,
   LandLogo,
   ScrollPath,
   Shield,
+  SpiralIcon,
   Stamp,
   type EmblemPart,
 } from './landing-art';
-import type { DemoScreens } from './landing-data';
-import { reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
+import { LANDING_VERSION, type DemoScreens } from './landing-data';
+import { playTile, reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
 import { LeadForm } from './lead-form';
 import { CardScreen, DeskScreen, PhoneScreen } from './mini-screens';
 import './landing.css';
@@ -106,31 +108,17 @@ const N3 = [1, 2, 3] as const;
 const N4 = [1, 2, 3, 4] as const;
 const N12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
-/** Символы герба: значок и цвет строки списка (прототип `EI`). */
-const EMBLEM: readonly (readonly [EmblemPart, string, IconName, 1 | 2 | 3])[] = [
+/** Символы герба: значок и цвет строки списка (прототип `EI`); у кривой Бернулли значок — спираль. */
+const EMBLEM: readonly (readonly [EmblemPart, string, IconName | null, 1 | 2 | 3])[] = [
   ['sun', 's', 'sun', 1],
   ['scales', 'w', 'scale', 2],
-  ['curve', 'c', 'infinity', 3],
+  ['curve', 'c', null, 3],
 ];
-/** Значки и цвета карточек (прототип: `who` — building/user/chart, `FI`/`FC` — «Возможности»). */
+/** Значки и цвета карточек (прототип: `who` — building/user/chart, `FC` — цвета «Возможностей»). */
 const WHO: readonly [IconName, string][] = [
   ['building', ''],
   ['user', 'g'],
   ['chart', 'p'],
-];
-const FEATURE_ICONS: readonly IconName[] = [
-  'repeat',
-  'calendar',
-  'tag',
-  'tg',
-  'task',
-  'coins',
-  'wallet',
-  'link',
-  'gauge',
-  'folder',
-  'shield',
-  'grad',
 ];
 const FEATURE_TONES = ['', 'g', 'p', '', 'y', 'g', 'p', '', 'y', 'g', 'p', ''];
 /** Пункты «Безопасность и данные» (прототип v70: без «Серверы в Европе…»). */
@@ -557,7 +545,7 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
                   <li key={part} className="rv" style={delay(i)}>
                     <button type="button" aria-pressed={hl === part} onClick={() => pick(part)}>
                       <span className={`lp-emb-ic ${tone}`}>
-                        <Icon name={icon} />
+                        {icon ? <Icon name={icon} /> : <SpiralIcon />}
                       </span>
                       <span className="lp-emb-tx">
                         <b>{t(`land.emb.${n}.t` as const)}</b>
@@ -639,10 +627,11 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
             {moreButton('change')}
           </>,
         )}
-        {/* 4. Возможности — мозаика плиток волной; плитка раскрывается нажатием */}
+        {/* 4. Возможности — плитки встают волной; у каждой функции свой значок со своей анимацией; плитка
+            раскрывается нажатием */}
         {block(
           'features',
-          'lp-feat alt',
+          'lp-feat lp-live alt',
           t('land.feat.title'),
           <>
             <div className="lp-tiles">
@@ -653,10 +642,13 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
                   className="lp-tile rv"
                   style={delay((i % 4) + Math.floor(i / 4))}
                   aria-expanded={tiles.has(i)}
-                  onClick={() => toggleTile(i)}
+                  onClick={(e) => {
+                    if (!tiles.has(i)) playTile(e.currentTarget);
+                    toggleTile(i);
+                  }}
                 >
                   <span className={`lp-ico ${FEATURE_TONES[i]!}`}>
-                    <Icon name={FEATURE_ICONS[i]!} />
+                    <FeatureIcon n={n} />
                   </span>
                   <b>{t(`land.feat.${n}.t` as const)}</b>
                   <DetailsLine>{t(`land.feat.${n}.d` as const)}</DetailsLine>
@@ -891,6 +883,8 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
             <b>{t('land.foot.name')}</b>
             <br />
             {t('land.foot.copy', { год: today.slice(0, 4) })}
+            {' · '}
+            <span className="lp-ver">{t('land.foot.ver', { версия: LANDING_VERSION })}</span>
           </span>
           {links.length > 0 ? <span className="lp-foot-l">{contactLinks}</span> : null}
           <span className="lp-foot-l">

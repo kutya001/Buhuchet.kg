@@ -1,9 +1,11 @@
 /*
- * Анимации лендинга с отсылками к гербу бухгалтеров (прототип v78, modules/landing.js: lpLem,
- * landPathCalc, landTick, landStepsLine, landFx, landCount). Герб бухгалтерской профессии: солнце — учёт
- * освещает дела, весы — баланс, кривая Бернулли (∞) — учёт вечен. Сквозная линия Бернулли идёт за
- * прокруткой через всю страницу, на её конце солнце; весы в углу качаются от прокрутки. Анимации — только
- * без «уменьшить движение» (класс `lp-anim` на `.land`): без него всё нарисовано сразу и стоит на месте.
+ * Анимации лендинга с отсылками к гербу бухгалтеров (прототип v78 и v91, modules/landing.js: lpSpi,
+ * lpSpiral, landPathCalc, landLineSet, landLineRun, landTick, landStepsLine, landFx, landTileFx,
+ * landCount). Герб бухгалтерской профессии: солнце — учёт освещает дела, весы — баланс, кривая Бернулли
+ * (логарифмическая спираль) — учёт вечен. Сквозная линия идёт за прокруткой через всю страницу, плавно
+ * переходя с левого поля на правое и обратно, и у заголовка каждого блока закручивается двойной спиралью
+ * Бернулли; на её конце солнце; весы в углу качаются от прокрутки. Анимации — только без «уменьшить
+ * движение» (класс `lp-anim` на `.land`): без него всё нарисовано сразу и стоит на месте.
  *
  * В прототипе лендинг — окно поверх программы со своей прокруткой; здесь прокручивается сама страница,
  * поэтому координаты считаются от верха `.land`, а «экран» — окно браузера.
@@ -13,31 +15,88 @@
 export const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/**
- * Лемниската Бернулли (∞): центр cx, cy, полуширина a, n точек. Из центра идёт вниз-вправо и
- * возвращается в центр в том же направлении — так она встраивается в сквозную линию. `m` — начало пути,
- * `d` — кривые Безье через все точки (сплайн Катмулла — Рома).
- */
-export function lemniscate(cx: number, cy: number, a: number, n = 24): { m: string; d: string } {
-  const p: [number, number][] = [];
-  for (let i = 0; i < n; i += 1) {
-    const t = Math.PI / 2 - (2 * Math.PI * i) / n;
-    const s = Math.sin(t);
-    const c = Math.cos(t);
-    const k = 1 + s * s;
-    p.push([cx + (a * c) / k, cy + (a * s * c) / k]);
-  }
-  const f = (q: readonly [number, number]) => `${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
-  const at = (i: number) => p[(i + n) % n]!;
+type Point = readonly [number, number];
+
+/** Кривые Безье через точки `p` (сплайн Катмулла — Рома) от `from`-й до `to`-й; `a` — точки с соседями. */
+function curves(a: readonly Point[], from: number, to: number, digits: number): string {
+  const f = (q: Point) => `${q[0].toFixed(digits)} ${q[1].toFixed(digits)}`;
   let d = '';
-  for (let i = 0; i < n; i += 1) {
-    const a0 = at(i - 1);
-    const a1 = at(i);
-    const a2 = at(i + 1);
-    const a3 = at(i + 2);
+  for (let i = from; i < to; i += 1) {
+    const a0 = a[i - 1]!;
+    const a1 = a[i]!;
+    const a2 = a[i + 1]!;
+    const a3 = a[i + 2]!;
     d += `C${f([a1[0] + (a2[0] - a0[0]) / 6, a1[1] + (a2[1] - a0[1]) / 6])} ${f([a2[0] - (a3[0] - a1[0]) / 6, a2[1] - (a3[1] - a1[1]) / 6])} ${f(a2)}`;
   }
-  return { m: `M${f(p[0]!)}`, d };
+  return d;
+}
+
+/**
+ * Спираль Бернулли (логарифмическая, r = R·e^(−b·φ)) одной линией — от центра наружу; внешний конец
+ * справа, с коротким росчерком (прототип lpSpi). `turns` — число витков, `digits` — знаков после запятой.
+ */
+export function spiral(
+  cx: number,
+  cy: number,
+  R: number,
+  turns = 2.6,
+  b = 0.2,
+  digits = 1,
+): string {
+  const n = Math.round(turns * 14);
+  const full = turns * 2 * Math.PI;
+  const p: Point[] = [];
+  for (let j = 0; j <= n; j += 1) {
+    const f = full * (1 - j / n) - 0.55;
+    const r = R * Math.exp(-b * f);
+    p.push([cx + r * Math.cos(-f), cy + r * Math.sin(-f)]);
+  }
+  const first = p[0]!;
+  return `M${first[0].toFixed(digits)} ${first[1].toFixed(digits)}${curves([first, ...p, p[n]!], 1, n + 1, digits)}`;
+}
+
+/** Двойная спираль Бернулли в сквозной линии: точки входа и выхода и кривые до центра и от центра. */
+export interface SpiralKnot {
+  in: Point;
+  out: Point;
+  d1: string;
+  d2: string;
+}
+
+/**
+ * Двойная спираль Бернулли (прототип lpSpiral): линия входит сверху, закручивается к центру cx, cy и тем же
+ * ходом раскручивается, выходя вниз. `side` 1 — вход справа от центра, выход слева; −1 — зеркально. Линия
+ * проходит точно через центр: `d1` — кривые от входа до центра, `d2` — от центра до выхода.
+ */
+export function spiralKnot(cx: number, cy: number, R: number, side: 1 | -1): SpiralKnot {
+  const b = 0.22;
+  const n = 21;
+  const full = 1.5 * 2 * Math.PI;
+  const th0 = side > 0 ? -Math.atan(b) : Math.PI + Math.atan(b);
+  const p: Point[] = [];
+  for (let j = 0; j <= n; j += 1) {
+    const f = (full * j) / n;
+    const r = R * Math.exp(-b * f);
+    const a = th0 + side * f;
+    p.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  const mirror = [...p].reverse().map(([x, y]): Point => [2 * cx - x, 2 * cy - y]);
+  const pts: Point[] = [...p, [cx, cy], ...mirror];
+  const m = pts.length;
+  const first = pts[0]!;
+  const last = pts[m - 1]!;
+  // Соседи до входа и после выхода — по вертикали: линия входит и выходит отвесно.
+  const a: Point[] = [[first[0], first[1] - R * 0.6], ...pts, [last[0], last[1] + R * 0.6]];
+  return { in: first, out: last, d1: curves(a, 1, n + 2, 1), d2: curves(a, n + 2, m, 1) };
+}
+
+/**
+ * Кончик линии догоняет прокрутку плавно (прототип landLineRun): следующий шаг от `cur` к цели `to` —
+ * 16 % оставшегося пути за кадр, ближе 0,6 px — сразу цель.
+ */
+export function chaseStep(cur: number, to: number): number {
+  const rest = to - cur;
+  return Math.abs(rest) < 0.6 ? to : cur + rest * 0.16;
 }
 
 /** Опорная точка «высота страницы → длина линии». */
@@ -48,8 +107,9 @@ export interface PathAnchor {
 
 /**
  * Сколько линии нарисовано, когда точка `t` (62 % высоты экрана от верха страницы) дошла до высоты:
- * у каждой петли кончик линии оказывается ровно тогда, когда заголовок блока на 62 % высоты экрана; между
- * опорными точками линия рисуется равномерно (прототип landTick).
+ * в центре каждой спирали кончик линии оказывается ровно тогда, когда заголовок блока на 62 % высоты
+ * экрана; между опорными точками линия рисуется равномерно — и переход через страницу, и витки спирали
+ * (прототип landTick).
  */
 export function drawnLength(anchors: readonly PathAnchor[], total: number, t: number): number {
   if (anchors.length === 0 || t <= anchors[0]!.y) return 0;
@@ -62,7 +122,7 @@ export function drawnLength(anchors: readonly PathAnchor[], total: number, t: nu
 }
 
 /**
- * Опорные точки по высотам петель (прототип landPathCalc): с конца — не ниже следующей и не ниже
+ * Опорные точки по высотам центров спиралей (прототип landPathCalc): с конца — не ниже следующей и не ниже
  * `tmax` (конец линии успевает дорисоваться у подвала); в самом верху линия ещё не нарисована — она
  * начинается с первой прокрутки.
  */
@@ -82,7 +142,7 @@ export function pathAnchors(
   return a;
 }
 
-/** Блоки, у заголовка которых линия делает петлю ∞. */
+/** Блоки, у заголовка которых линия закручивается спиралью: по очереди слева и справа. */
 const KNOT_BLOCKS = [
   'emb',
   'who',
@@ -106,17 +166,29 @@ interface PathState {
   line: SVGPathElement;
   sun: SVGGElement;
   knots: { len: number; el: Element }[];
+  /** Докуда линия нарисована сейчас и докуда должна дойти (кончик догоняет цель плавно). */
+  cur: number | null;
+  to: number | null;
 }
 
 const q = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
-/** Сквозная линия: от «Листайте вниз» по левому полю страницы, у заголовка каждого блока — петля ∞. */
-function pathCalc(root: HTMLElement): PathState | null {
+/**
+ * Сквозная линия (прототип v91, landPathCalc): от «Листайте вниз» идёт вниз через всю страницу, плавно
+ * переходя с левого поля на правое и обратно между блоками; у заголовка каждого блока — двойная спираль
+ * Бернулли. `prev` — прежнее состояние: при пересчёте линия не прыгает к началу.
+ */
+function pathCalc(root: HTMLElement, prev: PathState | null): PathState | null {
   const svg = q<SVGSVGElement>(root, '#lp-path');
   const wrap = q<HTMLElement>(root, '#lp-emb .lp-wrap');
   const cue = q<HTMLElement>(root, '.lp-scroll i');
   if (!svg || !wrap || !cue || !root.clientWidth) return null;
+  const p0 = q<SVGPathElement>(svg, '.lp-p0');
+  const p1 = q<SVGPathElement>(svg, '.lp-p1');
+  const sun = q<SVGGElement>(svg, '.lp-psun');
+  const g = q<SVGGElement>(svg, '.lp-knots');
+  if (!p0 || !p1 || !sun || !g) return null;
   const pr = root.getBoundingClientRect();
   const W = root.clientWidth;
   const H = root.scrollHeight;
@@ -127,55 +199,86 @@ function pathCalc(root: HTMLElement): PathState | null {
   svg.setAttribute('height', String(H));
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.style.height = `${H}px`;
+  // Поле страницы слева и справа от содержимого: на широком экране спираль крупная, на телефоне —
+  // маленькая, у самого края.
   const cl = X(wrap.getBoundingClientRect()) + parseFloat(getComputedStyle(wrap).paddingLeft);
   const wide = cl >= 96;
-  const lx = wide ? Math.round(cl - 46) : Math.max(6, Math.round(cl / 2));
-  const a = wide ? 26 : 8;
-  const kx = lx;
+  const R = wide
+    ? Math.min(44, Math.round((cl - 14) / 2.7))
+    : Math.max(6, Math.min(9, Math.round(cl / 2 - 1)));
+  const lx = wide ? Math.round(cl - 12 - R) : Math.max(R + 3, Math.round(cl / 2));
   const cr = cue.getBoundingClientRect();
   const x0 = X(cr) + cr.width / 2;
   const y0 = Y(cr) + cr.height + 4;
   const f = (v: number) => v.toFixed(1);
-  // От «Листайте вниз» линия спускается к полосе цифр, идёт по её верхней границе к левому полю и
-  // дальше вниз — не пересекая текст.
-  const sb = q<HTMLElement>(root, '.lp-stats');
-  let d: string;
-  let cy: number;
-  if (sb && x0 - lx > 40) {
-    const bt = Y(sb.getBoundingClientRect()) + 0.5;
-    const r = Math.max(2, Math.min(18, bt - y0));
-    d = `M${f(x0)} ${f(Math.min(y0, bt - r))}L${f(x0)} ${f(bt - r)}Q${f(x0)} ${f(bt)} ${f(x0 - r)} ${f(bt)}L${lx + 18} ${f(bt)}Q${lx} ${f(bt)} ${lx} ${f(bt + 18)}`;
-    cy = bt + 18;
-  } else {
-    d = `M${f(x0)} ${f(y0)}C${f(x0)} ${f(y0 + 70)} ${lx} ${f(y0 + 10)} ${lx} ${f(y0 + 90)}`;
-    cy = y0 + 90;
-  }
-  const kn: [number, number][] = [];
+  const blocks: { bot: number; pb: number; knot: SpiralKnot; c: Point }[] = [];
   for (const id of KNOT_BLOCKS) {
     const s = q<HTMLElement>(root, `#lp-${id}`);
     if (!s) continue;
-    const ky =
-      Y(s.getBoundingClientRect()) + Math.min(parseFloat(getComputedStyle(s).paddingTop) * 0.5, 34);
-    const k = Math.min(wide ? 18 : 6, (ky - cy) / 4);
-    if (ky - 70 > cy) d += `L${lx} ${f(ky - 70)}`;
-    d += `C${lx} ${f(ky - 36)} ${f(kx - k)} ${f(ky - k)} ${f(kx)} ${f(ky)}${lemniscate(kx, ky, a).d}C${f(kx + k)} ${f(ky + k)} ${lx} ${f(ky + 34)} ${lx} ${f(ky + 70)}`;
-    cy = ky + 70;
-    kn.push([kx, ky]);
+    const r = s.getBoundingClientRect();
+    const cs = getComputedStyle(s);
+    const top = Y(r);
+    const left = blocks.length % 2 === 0;
+    const cx = left ? lx : W - lx;
+    const cy = top + Math.min((parseFloat(cs.paddingTop) || 0) * 0.5, 34) + R * 0.25;
+    blocks.push({
+      bot: top + r.height,
+      pb: parseFloat(cs.paddingBottom) || 0,
+      knot: spiralKnot(cx, cy, R, left ? 1 : -1),
+      c: [cx, cy],
+    });
   }
+  if (blocks.length === 0) return null;
+  // От «Листайте вниз» линия спускается к полосе цифр, идёт по её верхней границе к левому полю и
+  // входит в первую спираль — не пересекая текст.
+  const e0 = blocks[0]!.knot.in;
+  const sb = q<HTMLElement>(root, '.lp-stats');
+  let px = e0[0];
+  let d: string;
+  let cy: number;
+  if (sb && x0 - px > 40) {
+    const bt = Y(sb.getBoundingClientRect()) + 0.5;
+    const r = Math.max(2, Math.min(26, bt - y0));
+    const r2 = Math.max(2, Math.min(30, (e0[1] - bt) / 2));
+    d = `M${f(x0)} ${f(Math.min(y0, bt - r))}L${f(x0)} ${f(bt - r)}Q${f(x0)} ${f(bt)} ${f(x0 - r)} ${f(bt)}L${f(px + r2)} ${f(bt)}Q${f(px)} ${f(bt)} ${f(px)} ${f(bt + r2)}`;
+    cy = bt + r2;
+  } else {
+    d = `M${f(x0)} ${f(y0)}C${f(x0)} ${f(y0 + 70)} ${f(px)} ${f(y0 + 10)} ${f(px)} ${f(y0 + 90)}`;
+    cy = y0 + 90;
+  }
+  const centres: Point[] = [];
+  const lengths: number[] = [];
+  blocks.forEach((s, i) => {
+    const e = s.knot.in;
+    if (Math.abs(px - e[0]) < 2) {
+      if (e[1] > cy) d += `L${f(e[0])} ${f(e[1])}`;
+    } else {
+      // Переход на другое поле: по своему полю вниз до конца предыдущего блока, потом плавная волна
+      // через страницу к спирали следующего.
+      const before = blocks[i - 1];
+      const ys = Math.max(cy, Math.min(e[1] - 70, before ? before.bot - before.pb - 48 : cy));
+      const h = (e[1] - ys) * 0.78;
+      if (ys > cy) d += `L${f(px)} ${f(ys)}`;
+      d += `C${f(px)} ${f(ys + h)} ${f(e[0])} ${f(e[1] - h)} ${f(e[0])} ${f(e[1])}`;
+    }
+    d += s.knot.d1;
+    // Длина линии до центра спирали — по самой линии.
+    p0.setAttribute('d', d);
+    lengths.push(p0.getTotalLength());
+    centres.push(s.c);
+    d += s.knot.d2;
+    px = s.knot.out[0];
+    cy = s.knot.out[1];
+  });
   const ft = q<HTMLElement>(root, '.lp-foot');
   if (ft) {
     const fy = Y(ft.getBoundingClientRect());
-    if (fy - 12 > cy) d += `L${lx} ${f(fy - 12)}`;
+    if (fy - 12 > cy) d += `L${f(px)} ${f(fy - 12)}`;
   }
-  const p0 = q<SVGPathElement>(svg, '.lp-p0');
-  const p1 = q<SVGPathElement>(svg, '.lp-p1');
-  const sun = q<SVGGElement>(svg, '.lp-psun');
-  const g = q<SVGGElement>(svg, '.lp-knots');
-  if (!p0 || !p1 || !sun || !g) return null;
   p0.setAttribute('d', d);
   p1.setAttribute('d', d);
   const total = p1.getTotalLength();
-  const step = Math.max(6, total / 1600);
+  const step = Math.max(6, total / 2400);
   const n = Math.floor(total / step) + 1;
   const xs = new Float32Array(n);
   const ys = new Float32Array(n);
@@ -186,38 +289,47 @@ function pathCalc(root: HTMLElement): PathState | null {
   }
   // Промежуток длиннее линии: в начале у неё не видно круглого конца нулевой длины (прототип v78, c2c5296).
   p1.style.strokeDasharray = `${total} ${total + 40}`;
-  g.innerHTML = kn.map(([x, y]) => `<circle cx="${f(x)}" cy="${f(y)}" r="5"/>`).join('');
+  g.innerHTML = centres
+    .map(([x, y]) => `<circle cx="${f(x)}" cy="${f(y)}" r="${R > 12 ? 4.5 : 3}"/>`)
+    .join('');
   const marks = [...g.children];
-  const knots = kn.map(([x, y], i) => {
-    let j = 0;
-    for (; j < n; j += 1) if (Math.hypot(xs[j]! - x, ys[j]! - y) <= step * 0.75 + 1) break;
-    return { len: Math.min(j, n - 1) * step, el: marks[i]! };
-  });
+  const knots = centres.map((_, i) => ({ len: Math.min(lengths[i]!, total), el: marks[i]! }));
   const anchors = pathAnchors(
     y0,
-    kn.map(([, y], i) => ({ y, l: knots[i]!.len })),
+    centres.map(([, y], i) => ({ y, l: knots[i]!.len })),
     { y: ys[n - 1]!, l: total },
     H,
     vh,
   );
-  return { total, step, n, xs, ys, anchors, line: p1, sun, knots };
+  const cur = prev?.cur != null ? Math.min(prev.cur, total) : null;
+  return { total, step, n, xs, ys, anchors, line: p1, sun, knots, cur, to: null };
 }
 
-/** Кадр прокрутки: конец линии с солнцем, петли, кольцо весов, «Как это выглядит», «Как начать». */
-function tick(root: HTMLElement, P: PathState | null) {
+/** Кончик линии: `len` — докуда она нарисована; солнце — на конце, точки спиралей загораются. */
+function lineSet(P: PathState, len: number) {
+  P.cur = len;
+  const i = Math.min(P.n - 1, Math.max(0, Math.round(len / P.step)));
+  P.sun.setAttribute('transform', `translate(${P.xs[i]!.toFixed(1)} ${P.ys[i]!.toFixed(1)})`);
+  P.line.style.strokeDashoffset = len > 0 ? (P.total - len).toFixed(1) : String(P.total + 20);
+  for (const k of P.knots) k.el.classList.toggle('on', len >= k.len - 1);
+}
+
+/**
+ * Кадр прокрутки: цель для кончика линии (`chase` плавно ведёт к ней линию), кольцо весов, «Как это
+ * выглядит», «Как начать».
+ */
+function tick(root: HTMLElement, P: PathState | null, chase: () => void) {
   const anim = root.classList.contains('lp-anim');
   const vh = window.innerHeight;
   const st = -root.getBoundingClientRect().top;
   const H = root.scrollHeight;
   if (P) {
-    let len = P.total;
     if (anim) {
-      len = drawnLength(P.anchors, P.total, st + vh * 0.62);
-      const i = Math.min(P.n - 1, Math.round(len / P.step));
-      P.sun.setAttribute('transform', `translate(${P.xs[i]!.toFixed(1)} ${P.ys[i]!.toFixed(1)})`);
-    }
-    P.line.style.strokeDashoffset = len > 0 ? (P.total - len).toFixed(1) : String(P.total + 20);
-    for (const k of P.knots) k.el.classList.toggle('on', len >= k.len);
+      P.to = drawnLength(P.anchors, P.total, st + vh * 0.62);
+      // Первый кадр — сразу на место, дальше кончик догоняет прокрутку плавно.
+      if (P.cur == null) lineSet(P, P.to);
+      else chase();
+    } else lineSet(P, P.total);
   }
   const ring = q<SVGCircleElement>(root, '.lp-bal .b1');
   if (ring) {
@@ -282,6 +394,19 @@ function countUp(b: HTMLElement) {
   requestAnimationFrame(frame);
 }
 
+/**
+ * «Возможности»: запустить анимацию значка плитки заново (прототип landTileFx; класс `fx`, анимации
+ * частей значка — в landing.css).
+ */
+export function playTile(tile: HTMLElement) {
+  if (reducedMotion()) return;
+  tile.classList.remove('fx');
+  void tile.offsetWidth;
+  tile.classList.add('fx');
+  window.clearTimeout(Number(tile.dataset.fxTimer));
+  tile.dataset.fxTimer = String(window.setTimeout(() => tile.classList.remove('fx'), 1900));
+}
+
 export interface LandingFx {
   /** Показать блоки (после заставки): появление при прокрутке. */
   reveal(): void;
@@ -308,6 +433,10 @@ export function startLandingFx(root: HTMLElement, deferReveal: boolean): Landing
   const onIn = (x: HTMLElement) => {
     if (x.dataset.lpCount) countUp(x);
     if (x === emb) later(() => emb.classList.add('e-idle'), 3900);
+    if (x.matches('.lp-tile')) {
+      const d = Number(x.style.getPropertyValue('--d')) || 0;
+      later(() => playTile(x), 450 + d * 80);
+    }
     if (x.matches('.lp-fc')) {
       const d = Number(x.style.getPropertyValue('--d')) || 0;
       later(() => x.classList.add('now'), 900 + d * 260);
@@ -342,12 +471,53 @@ export function startLandingFx(root: HTMLElement, deferReveal: boolean): Landing
   };
   if (!(deferReveal && anim)) reveal();
 
+  // «Возможности»: значок оживает под мышью, а пока блок на экране — у плиток по очереди.
+  const tiles = [...root.querySelectorAll<HTMLElement>('.lp-tile')];
+  const feat = q<HTMLElement>(root, '#lp-features');
+  if (anim && feat && tiles.length > 0) {
+    const cleanTiles = tiles.map((x) => {
+      const enter = (e: PointerEvent) => {
+        if (e.pointerType === 'mouse') playTile(x);
+      };
+      x.addEventListener('pointerenter', enter);
+      return () => {
+        x.removeEventListener('pointerenter', enter);
+        window.clearTimeout(Number(x.dataset.fxTimer));
+      };
+    });
+    let turn = 0;
+    const idle = window.setInterval(() => {
+      if (!feat.classList.contains('vis') || document.hidden) return;
+      const x = tiles[turn % tiles.length]!;
+      turn += 1;
+      if (!x.matches(':hover')) playTile(x);
+    }, 2300);
+    cleanups.push(() => {
+      window.clearInterval(idle);
+      cleanTiles.forEach((f) => f());
+    });
+  }
+
+  // Кончик линии не прыгает за прокруткой, а плавно догоняет её.
+  let lineRaf = 0;
+  const lineRun = () => {
+    lineRaf = 0;
+    if (!P || P.to == null) return;
+    const next = chaseStep(P.cur ?? P.to, P.to);
+    lineSet(P, next);
+    if (next !== P.to) lineRaf = requestAnimationFrame(lineRun);
+  };
+  const chase = () => {
+    if (!lineRaf) lineRaf = requestAnimationFrame(lineRun);
+  };
+  cleanups.push(() => cancelAnimationFrame(lineRaf));
+
   // Пересчёт линии при изменении размеров (окно, «Подробнее», шрифты).
   const calc = () => {
     if (stopped) return;
     stepsLine(root);
-    P = pathCalc(root);
-    tick(root, P);
+    P = pathCalc(root, P);
+    tick(root, P, chase);
   };
   let rt = 0;
   const recalc = () => {
@@ -401,7 +571,7 @@ export function startLandingFx(root: HTMLElement, deferReveal: boolean): Landing
     if (tickRaf) return;
     tickRaf = requestAnimationFrame(() => {
       tickRaf = 0;
-      tick(root, P);
+      tick(root, P, chase);
       if (anim && bg && y < 1600) bg.style.transform = `translate3d(0,${(y * 0.3).toFixed(1)}px,0)`;
     });
   };
