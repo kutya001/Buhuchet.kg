@@ -70,6 +70,8 @@ export function Brand({
 }
 
 /** Подпись в свёрнутой панели (ПК): на экране её нет, экранный диктор читает. */
+// Скрытая подпись (`sr-only`) стоит абсолютно: её кнопка в свёрнутой панели — `relative`, иначе при низком
+// окне подпись выходит за панель и страница начинает прокручиваться.
 const MINI_TEXT = 'md:group-data-[nav=hidden]/app:sr-only';
 /** Счётчик модуля в свёрнутой панели — в правом верхнем углу значка (прототип `.ti .badge`). */
 const MINI_BADGE =
@@ -210,7 +212,7 @@ export function SideOrg({
       title={title}
       onClick={onClick}
       data-side-org=""
-      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-1.5"
+      className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover md:group-data-[nav=hidden]/app:relative md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-1.5"
     >
       <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
         <Icon name="landmark" size="sm" />
@@ -253,7 +255,7 @@ export function SideFootButton({
       onClick={onClick}
       disabled={disabled}
       title={label}
-      className="inline-flex min-h-[29px] min-w-0 flex-[1_1_auto] cursor-pointer items-center justify-center gap-1 rounded-lg border-0 bg-transparent px-1 py-1 text-[11.5px] font-[550] whitespace-nowrap text-muted hover:bg-row-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 md:group-data-[nav=hidden]/app:w-full md:group-data-[nav=hidden]/app:gap-0 md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-[7px]"
+      className="inline-flex min-h-[29px] min-w-0 flex-[1_1_auto] cursor-pointer items-center justify-center gap-1 rounded-lg border-0 bg-transparent px-1 py-1 text-[11.5px] font-[550] whitespace-nowrap text-muted hover:bg-row-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 md:group-data-[nav=hidden]/app:relative md:group-data-[nav=hidden]/app:w-full md:group-data-[nav=hidden]/app:gap-0 md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-[7px]"
     >
       <Icon
         name={icon}

@@ -259,6 +259,18 @@ describe('UnifiedDataGrid: таблица (ТЗ «Списки записей»,
     expect(html).toContain('font-mono');
   });
 
+  it('ширина «По центру»: предел 1180 px, который снимает «На всю ширину» оболочки (прототип v85)', () => {
+    const root = (html: string) => /<div data-grid="[^"]*"[^>]*class="([^"]*)"/.exec(html)![1]!;
+    const centered = root(grid({ settings: { width: 'center' } }));
+    expect(centered).toContain('mx-auto');
+    expect(centered).toContain('max-w-[1180px]');
+    // `.app.wide .grid[data-width=center]{max-width:none}` прототипа: признак `data-wide` стоит на каркасе.
+    expect(centered).toContain('group-data-[wide=true]/app:max-w-none');
+    const full = root(grid());
+    expect(full).not.toContain('max-w-[1180px]');
+    expect(full).not.toContain('max-w-none');
+  });
+
   it('сортировка: стрелка у столбца и aria-sort', () => {
     const html = grid({ settings: { sort: { key: 'name', dir: 'asc' } } });
     expect(html).toMatch(/data-column="name"[^>]*aria-sort="ascending"/);

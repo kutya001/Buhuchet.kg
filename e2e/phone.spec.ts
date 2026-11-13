@@ -31,13 +31,18 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     await page.goto('/app/reports/week');
 
     if (!isMobile) {
-      // На ПК нижней панели нет: все модули — в левой панели, «Меню» скрывает её.
+      // На ПК нижней панели нет: все модули — в левой панели; кнопка панели сворачивает её до значков
+      // (прототип v85), панель «Меню» телефона при этом не открывается.
       await expect(bottomNav(page)).toBeHidden();
-      await expect(page.getByRole('complementary', { name: 'Модули' })).toBeVisible();
-      await page.getByRole('button', { name: 'Меню' }).click();
+      const side = page.getByRole('complementary', { name: 'Модули' });
+      await expect(side).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Меню', exact: true })).toBeHidden();
+      await page.getByRole('button', { name: 'Свернуть панель до значков' }).click();
       await expect(sheet(page)).toBeHidden();
-      await expect(page.getByRole('complementary', { name: 'Модули' })).toBeHidden();
-      await page.getByRole('button', { name: 'Меню' }).click();
+      await expect(side).toBeVisible();
+      await expect.poll(async () => (await side.boundingBox())?.width).toBe(60);
+      await page.getByRole('button', { name: 'Развернуть панель модулей' }).click();
+      await expect.poll(async () => (await side.boundingBox())?.width).toBe(276);
       return;
     }
 
