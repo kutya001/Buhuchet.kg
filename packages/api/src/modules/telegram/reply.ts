@@ -129,6 +129,8 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
     await sayKey('tgActStale');
     return true;
   }
+  // Отказ ядра просьбу не закрывает: она гаснет сама в конце дня.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-5
   const denied = botTargetRefusal(target, action);
   if (denied) {
     await sayKey(denied);

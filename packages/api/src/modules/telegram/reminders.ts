@@ -202,6 +202,7 @@ export async function buildDailyReminders(
       m.lines.flatMap((l) => (keys.includes(l.key) && 'items' in l ? l.items : []));
 
     // Свои несданные отчёты напоминания: кнопки — только с правом «Менять статус отчётов».
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-5
     if (hasPermission(e.subject, 'changeStatus')) {
       const own = itemsOf(['tgOver', 'tgToday', 'tgBefore'])
         .map((i) => rows.get(i.id)!)
