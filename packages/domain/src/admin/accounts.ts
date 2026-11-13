@@ -47,6 +47,8 @@ export const ACCOUNT_CARD_STATES = [
   'blocked_admin',
   'blocked_owner',
   'login_locked',
+  // Вход закрыт кнопкой «Это не я» под сообщением бота (прототип v101, acStates).
+  'login_locked_not_me',
   'temp_password',
 ] as const;
 export type AccountCardState = (typeof ACCOUNT_CARD_STATES)[number];
@@ -56,6 +58,7 @@ export function accountStates(account: {
   blocked: boolean;
   employeeActive: boolean;
   loginLocked: boolean;
+  loginLockReason?: string | null;
   mustChangePassword: boolean;
 }): AccountCardState[] {
   // Учётные записи администраторов платформы из Админки не меняются: только «Активен» или блокировка.
@@ -63,7 +66,9 @@ export function accountStates(account: {
   const out: AccountCardState[] = [];
   if (account.blocked) out.push('blocked_admin');
   if (!account.employeeActive) out.push('blocked_owner');
-  if (account.loginLocked) out.push('login_locked');
+  if (account.loginLocked) {
+    out.push(account.loginLockReason === 'not_me' ? 'login_locked_not_me' : 'login_locked');
+  }
   if (account.mustChangePassword) out.push('temp_password');
   return out.length ? out : ['active'];
 }

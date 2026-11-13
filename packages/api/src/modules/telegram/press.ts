@@ -181,6 +181,13 @@ export interface BotAction {
    * обработчик. У действия с правом администратор платформы (не сотрудник) получает отказ.
    */
   permission?: PermissionId;
+  /**
+   * Защита учётной записи, а не работа с данными организации («Это не я», задача Т4; прототип v101 —
+   * `prev: true`): кнопка принимается в том чате, куда ушло сообщение, даже если он уже отвязан
+   * (сообщения о замене и отвязке Telegram приходят в прежний чат). У такого действия нет права и
+   * `change` — выключатель «Действия из Telegram» на него не влияет. Отказы — `securityRefusal`.
+   */
+  security?: boolean;
   /** Нажатие кнопки. У действия, которое только принимает ответ на просьбу, его нет. */
   run?(ctx: BotPressContext): Promise<BotPressResult>;
   /**
@@ -205,9 +212,23 @@ export function botTargetRefusal(
   target: BotPressTarget,
   action: BotAction,
 ): TelegramTemplateKey | null {
+  if (action.security) return securityRefusal(target);
   if (!target.linked) return 'tgActNoLink';
   if (loginDenial(target) || target.mustChangePassword || target.relinkFree) return 'tgActNoRight';
   if (action.change && !target.isPlatformAdmin && !target.telegramActions) return 'tgActOff';
+  return null;
+}
+
+/**
+ * Отказы действия защиты учётной записи («Это не я»): привязка чата не нужна. Учётная запись или
+ * организация заблокированы — войти и так нельзя («Нет права»). Пароль сброшен (временный) или после
+ * сброса разрешено привязать другой Telegram без кода — «Кнопка устарела»: новый пароль уже выдал
+ * владелец или администратор платформы, сеансы завершены, а прежний чат мог остаться у постороннего —
+ * закрыть вход заново и отменить разрешение ему нельзя.
+ */
+function securityRefusal(target: BotPressTarget): TelegramTemplateKey | null {
+  if (loginDenial(target)) return 'tgActNoRight';
+  if (target.mustChangePassword || target.relinkFree) return 'tgActStale';
   return null;
 }
 

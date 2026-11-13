@@ -30,6 +30,7 @@ export * from './telegram/bot-message';
 export * from './telegram/messages';
 export * from './telegram/notify';
 export * from './telegram/reminders';
+export * from './telegram/security';
 export * from './telegram/staff-bot';
 export * from './telegram/tables';
 export * from './l10n/texts';

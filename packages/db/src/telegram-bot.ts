@@ -186,6 +186,63 @@ export async function markViaTelegram(tx: Tx): Promise<void> {
   await tx.execute(sql`select set_config('app.via', 'telegram', true)`);
 }
 
+/** Что сделало нажатие «Это не я» (поток Т, задача Т4). */
+export interface TelegramNotMeResult {
+  /** done — выполнено; locked — вход уже закрыт; denied — учётная запись заблокирована. */
+  status: 'done' | 'locked' | 'denied';
+  /** Сколько сеансов завершено. */
+  sessions: number;
+  /** Отвязан другой Telegram, привязанный вместо чата, из которого нажали; его имя — для истории. */
+  cut: { username: string | null; firstName: string | null } | null;
+  /** Вход закрыт (у администратора платформы — нет: новый пароль ему выдать некому). */
+  locked: boolean;
+  /** Нажал владелец организации: новый пароль ему выдаёт администратор платформы. */
+  isOwner: boolean;
+  /** Строки очереди: сообщения тем, кто выдаёт новый пароль. */
+  queued: string[];
+}
+
+/**
+ * «Это не я» под сообщением бота о безопасности — в транзакции нажатия от имени получателя сообщения
+ * (миграция 0127, `app.telegram_not_me`): сеансы завершены, другой Telegram отвязан, ожидающие коды и
+ * ссылки отменены, вход закрыт, тем, кто выдаёт новый пароль, — сообщения в очередь (`staffText` — о
+ * сотруднике владельцам организации, `ownerText` — о владельце администраторам платформы; null — не
+ * писать). null — такого сообщения этому пользователю в этот чат бот не отправлял.
+ */
+export async function telegramNotMe(
+  tx: Tx,
+  input: { chatId: number; staffText: string | null; ownerText: string | null; now: Date },
+): Promise<TelegramNotMeResult | null> {
+  const [row] = await tx.execute<{
+    status: 'done' | 'locked' | 'denied';
+    sessions: number;
+    cut: boolean;
+    cut_username: string | null;
+    cut_first_name: string | null;
+    locked: boolean;
+    is_owner: boolean;
+    queued: string[] | string;
+  }>(
+    sql`select * from app.telegram_not_me(${input.chatId}::bigint, ${input.staffText}, ${input.ownerText}, ${input.now.toISOString()}::timestamptz)`,
+  );
+  if (!row) return null;
+  // Массив uuid драйвер отдаёт списком или текстом «{a,b}».
+  const queued = Array.isArray(row.queued)
+    ? row.queued
+    : row.queued
+        .replace(/^\{|\}$/g, '')
+        .split(',')
+        .filter(Boolean);
+  return {
+    status: row.status,
+    sessions: Number(row.sessions),
+    cut: row.cut ? { username: row.cut_username, firstName: row.cut_first_name } : null,
+    locked: row.locked,
+    isOwner: row.is_owner,
+    queued,
+  };
+}
+
 /** «Сообщения простым текстом» пользователя (хранится у пользователя и отвязку переживает). */
 export async function telegramPlainText(db: Db | Tx, userId: string): Promise<boolean> {
   const [row] = await db.execute<{ plain: boolean | null }>(

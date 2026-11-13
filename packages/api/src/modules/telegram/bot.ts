@@ -8,14 +8,18 @@ import {
   telegramPlainText,
 } from '@buhuchet/db';
 import {
+  bishkekTime,
   botMessageProblem,
   botPlainText,
   botTemplate,
   codeBotMessage,
   fillTemplate,
+  SECURITY_NOTICE_DEFS,
+  securityBotMessage,
   withOrganization,
   type BotMessage,
   type OutboxKind,
+  type SecurityNotice,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
@@ -146,6 +150,31 @@ export async function sendCodeMessage(
 }
 
 /**
+ * Сообщение о безопасности с кнопкой «Это не я» (поток Т, задача Т4; прототип v101 `tgSecSend`): «Пароль
+ * изменён» — в привязанный чат, «Привязан другой Telegram» и «Telegram отвязан» — в прежний. Уходит
+ * сразу; описание с кнопкой пишется в журнал отправок и для прежнего, уже не привязанного чата
+ * (миграция 0127) — по нему бот примет нажатие. В записи кнопки — момент отправки: кнопка действует
+ * `NOT_ME_HOURS` часов. Организация в начале — если Telegram привязан к нескольким логинам.
+ */
+export async function sendSecurityNotice(
+  deps: ApiDeps,
+  to: { userId: string; chatId: number; shared: boolean; orgName: string | null },
+  notice: SecurityNotice,
+  values: Readonly<Record<string, string | number>>,
+  purpose: string,
+): Promise<boolean> {
+  const def = SECURITY_NOTICE_DEFS[notice];
+  const now = deps.clock.now();
+  const text = withOrganization(
+    await botText(deps, def.template, { ...values, время: bishkekTime(now) }),
+    to.orgName,
+    to.shared,
+  );
+  const message = securityBotMessage(text, notice, now, await botText(deps, 'tgBtnNotMe'));
+  return sendBotMessage(deps, to, message, def.kind, purpose);
+}
+
+/**
  * Бот сообщает о каждой смене пароля, чтобы пользователь заметил чужую попытку (ТЗ «Восстановление
  * пароля через Telegram»); resetBy — кто выдал временный пароль. false — Telegram не привязан или
  * сообщение не ушло.
@@ -158,10 +187,19 @@ export async function notifyPasswordChanged(
   if (!deps.telegram) return false;
   const chat = await telegramChat(deps.db, user.userId);
   if (!chat) return false;
+  // Пароль сменил сам пользователь — под сообщением кнопка «Это не я»; под «Пароль сброшен» её нет:
+  // пароль сбросил владелец или администратор платформы.
+  if (resetBy === undefined) {
+    return sendSecurityNotice(
+      deps,
+      { userId: user.userId, chatId: chat.chatId, shared: chat.shared, orgName: user.orgName },
+      'pass',
+      { логин: user.login },
+      'password_changed',
+    );
+  }
   const text = withOrganization(
-    resetBy === undefined
-      ? await botText(deps, 'tgPassChanged', { логин: user.login })
-      : await botText(deps, 'tgPassReset', { логин: user.login, кто: resetBy }),
+    await botText(deps, 'tgPassReset', { логин: user.login, кто: resetBy }),
     user.orgName,
     chat.shared,
   );
@@ -171,9 +209,6 @@ export async function notifyPasswordChanged(
     text,
     'password_changed',
     {},
-    {
-      userId: user.userId,
-      kind: resetBy === undefined ? 'pass_changed' : 'pass_reset',
-    },
+    { userId: user.userId, kind: 'pass_reset' },
   );
 }

@@ -166,6 +166,7 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
         blocked: card.user.blocked,
         employeeActive: card.user.employeeActive,
         loginLocked: e?.loginLocked ?? false,
+        loginLockReason: e?.loginLockReason ?? null,
         mustChangePassword: e?.mustChangePassword ?? false,
       }),
       employee: e

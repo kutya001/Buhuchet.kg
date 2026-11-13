@@ -33,7 +33,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { serverTexts } from '../l10n/texts';
-import { botText, sendCodeMessage, sendNow } from './bot';
+import { botText, sendCodeMessage, sendNow, sendSecurityNotice } from './bot';
 import { handleBotPress } from './press';
 import { handleBotReply, type BotIncoming } from './reply';
 
@@ -179,17 +179,18 @@ async function linked(
       : (result.unlinked ?? null);
   if (before) {
     // Имя нового Telegram задаёт его владелец — одной строкой и коротко, как в коде замены.
-    const notice = await botText(deps, 'tgRelinked', {
-      логин: account.login,
-      телеграм: relinkName(link),
-    });
-    await sendNow(
+    // В прежний чат — с кнопкой «Это не я» (поток Т, задача Т4).
+    await sendSecurityNotice(
       deps,
-      before.chatId,
-      withOrganization(notice, account.orgName, before.shared),
+      {
+        userId: account.userId,
+        chatId: before.chatId,
+        shared: before.shared,
+        orgName: account.orgName,
+      },
+      'relink',
+      { логин: account.login, телеграм: relinkName(link) },
       'telegram_relinked',
-      {},
-      { userId: account.userId, kind: 'relinked' },
     );
   }
   await sendNow(

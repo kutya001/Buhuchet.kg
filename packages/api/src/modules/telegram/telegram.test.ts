@@ -8,7 +8,13 @@ import {
   seedAccessReference,
   type TestDatabase,
 } from '@buhuchet/db/testing';
-import { fillTemplate, TELEGRAM_TEMPLATE_DEFAULTS } from '@buhuchet/domain';
+import {
+  botPressData,
+  fillTemplate,
+  NOT_ME_ACTION,
+  notMeArg,
+  TELEGRAM_TEMPLATE_DEFAULTS,
+} from '@buhuchet/domain';
 import {
   ApiError,
   MeResponse,
@@ -39,6 +45,13 @@ const {
   users,
 } = schema;
 const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
+/** Кнопка «Это не я» под сообщением о замене и отвязке Telegram: в записи — момент отправки (часы тестов). */
+const notMe = (notice: 'relink' | 'unlink') => ({
+  keyboard: [
+    [{ text: TPL.tgBtnNotMe, data: botPressData(NOT_ME_ACTION, notMeArg(notice, NOTICE_SENT)) }],
+  ],
+});
+const NOTICE_SENT = new Date('2026-10-18T03:00:00Z');
 
 const PASSWORD = 'Верный-пароль-1';
 type App = ReturnType<typeof createApp>;
@@ -254,7 +267,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7001,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@new_tg' }),
-        options: {},
+        options: notMe('relink'),
       },
       { chatId: 7003, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
     ]);
@@ -330,7 +343,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7003,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@third_tg' }),
-        options: {},
+        options: notMe('relink'),
       },
       { chatId: 7004, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
     ]);
@@ -385,7 +398,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7004,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@lost_tg' }),
-        options: {},
+        options: notMe('relink'),
       },
       { chatId: 7005, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
     ]);
@@ -454,7 +467,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 5001,
         text: `Организация Б\n${TELEGRAM_TEMPLATE_DEFAULTS.tgUnlinked.replace('{логин}', 'owner-b')}`,
-        options: {},
+        options: notMe('unlink'),
       },
     ]);
     expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
@@ -552,7 +565,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
         логин: 'owner-a',
         телеграм: 'Поддержка Buhuchet: перешлите \u{1F600}…',
       }),
-      options: {},
+      options: notMe('relink'),
     });
   });
 });

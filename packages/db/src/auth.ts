@@ -7,6 +7,7 @@ import {
   ADMIN_CODE_WINDOW_MINUTES,
   isPermissionId,
   LOGIN_FAILURE_MEMORY_MINUTES,
+  type LoginLockReason,
   LOGIN_LOCK_MINUTES,
   LOGIN_MAX_FAILURES,
   SCOPE_GROUPS,
@@ -45,6 +46,8 @@ export interface LoginRecord {
   orgName: string | null;
   /** Вход закрыт после 10 неверных паролей подряд (миграция 0095). */
   loginLocked: boolean;
+  /** Чем закрыт вход: `not_me` — кнопкой «Это не я» в Telegram (миграция 0127); пусто — паролями. */
+  loginLockReason: LoginLockReason | null;
   /** Владелец организации: его блокировку входа снимает администратор платформы. */
   isOwner: boolean;
 }
@@ -63,6 +66,7 @@ interface LoginRow extends Record<string, unknown> {
   org_name: string | null;
   login_locked: boolean;
   is_owner: boolean;
+  login_lock_reason: string | null;
 }
 
 const asDate = (v: Date | string | null): Date | null =>
@@ -84,6 +88,7 @@ export async function findLogin(db: Db | Tx, login: string): Promise<LoginRecord
     orgStatus: row.org_status,
     orgName: row.org_name,
     loginLocked: row.login_locked,
+    loginLockReason: row.login_lock_reason === 'not_me' ? 'not_me' : null,
     isOwner: row.is_owner,
   };
 }
