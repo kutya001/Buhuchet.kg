@@ -438,6 +438,30 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       queued: 0,
       codes: 0,
     });
+    // Ответ на команду бота (задача Т5) собран по правам сотрудника на момент запроса: не повторяется.
+    const [answer] = await db.admin.db
+      .insert(telegramOutbox)
+      .values({
+        orgId: a.orgId,
+        userId: a.ownerUserId,
+        chatId: 1001,
+        kind: 'bot_cmd',
+        text: 'Просрочено · 3',
+        status: 'error',
+        tries: 1,
+        lastError: '429: Too Many Requests',
+      })
+      .returning({ id: telegramOutbox.id });
+    expect(await asAdmin((tx) => adminTelegramRetry(tx, [answer!.id], NOW))).toEqual({
+      queued: 0,
+      codes: 0,
+    });
+    const [kept] = await db.admin.db
+      .select({ status: telegramOutbox.status })
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.id, answer!.id));
+    expect(kept!.status).toBe('error');
+    await db.admin.db.delete(telegramOutbox).where(eq(telegramOutbox.id, answer!.id));
   });
 
   it('строки без организации отправляет задача: берёт, засчитывает попытку, пишет итог; отвязанный — «recipient_unlinked»', async () => {

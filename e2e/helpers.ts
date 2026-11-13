@@ -103,15 +103,6 @@ export async function botSent(api: APIRequestContext, chat: number): Promise<Bot
   return (await res.json()) as BotSent[];
 }
 
-/** Команды меню бота, которые сайт сообщил Telegram (`setMyCommands`; поток Т, задача Т5). */
-export async function botCommands(
-  api: APIRequestContext,
-): Promise<{ command: string; description: string }[]> {
-  const res = await api.get(`${FAKE_TELEGRAM}/commands`);
-  expect(res.status()).toBe(200);
-  return (await res.json()) as { command: string; description: string }[];
-}
-
 /** Скрытые ответы бота на нажатия кнопок (их видит только нажавший). */
 export async function botAnswers(
   api: APIRequestContext,

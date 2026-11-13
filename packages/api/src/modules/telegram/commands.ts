@@ -54,7 +54,7 @@ import { BOT_REPLY_ONCE } from './reply';
  *
  * Сообщение само ничего не разрешает. Кому отвечать, бот решает по привязке чата (`botChatUsers`):
  * непривязанному — прежняя подсказка «привяжите Telegram»; привязанному — те же отказы, что у нажатия
- * кнопки (вход закрыт, временный пароль, разрешение привязать другой Telegram без кода — «Нет права»),
+ * кнопки (блокировка, временный пароль, разрешение привязать другой Telegram без кода — «Нет права»),
  * у администратора платформы организации нет — тоже «Нет права». Дальше — от имени сотрудника в его
  * организации (RLS): «Напоминания в Telegram» включены и есть право команды; данные — в его области.
  * Чат привязан к нескольким учётным записям — отвечает каждая, с названием организации первой строкой.
@@ -69,6 +69,11 @@ export interface BotCommandMessage {
   fromId: number;
   /** Номер самого сообщения в чате: одно сообщение принимается один раз. */
   messageId: number | null;
+  /**
+   * Сообщение — ответ (reply) на другое сообщение: подпись кнопки («Просрочено») тогда не команда, а
+   * ответ на просьбу бота (например, причина возврата); командой остаётся только «/overdue».
+   */
+  reply: boolean;
   text: string;
 }
 
@@ -216,7 +221,7 @@ export async function handleBotCommand(deps: ApiDeps, msg: BotCommandMessage): P
     BOT_COMMANDS.map((c) => [c.code, commandLabel(templates, c)]),
   ) as Record<BotCommandCode, string>;
   const command = parseBotCommand(msg.text, labels);
-  if (!command) return false;
+  if (!command || (msg.reply && !msg.text.trim().startsWith('/'))) return false;
   const tpl = (key: TelegramTemplateKey) => fillTemplate(botTemplate(key, templates[key]), {});
   const menu = botMenuRows(templates);
 

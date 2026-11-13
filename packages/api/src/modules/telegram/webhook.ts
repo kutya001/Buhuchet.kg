@@ -404,6 +404,7 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
             chatId: chat.id,
             fromId: from?.id ?? 0,
             messageId: message.data.message_id ?? null,
+            reply: message.data.reply_to_message != null,
             text,
           });
           if (handled) return ok;

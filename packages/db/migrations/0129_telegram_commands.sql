@@ -9,7 +9,6 @@ CREATE FUNCTION app.telegram_chat_users(p_chat bigint)
     user_id uuid,
     org_id uuid,
     employee_id uuid,
-    login text,
     org_name text,
     must_change_password boolean,
     relink_free boolean,
@@ -21,7 +20,7 @@ CREATE FUNCTION app.telegram_chat_users(p_chat bigint)
   LANGUAGE sql STABLE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
-    SELECT u.id, u.org_id, e.id, u.login::text, o.name,
+    SELECT u.id, u.org_id, e.id, o.name,
            u.must_change_password,
            EXISTS (SELECT 1 FROM public.telegram_link_guards g
                    WHERE g.user_id = u.id AND g.free_until > now()),
@@ -38,3 +37,23 @@ CREATE FUNCTION app.telegram_chat_users(p_chat bigint)
 REVOKE ALL ON FUNCTION app.telegram_chat_users(bigint) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.telegram_chat_users(bigint) TO buhuchet_app;
+
+--> statement-breakpoint
+-- «Повторить отправку» Админки (как в 0102): ответ на команду бота, как и код, повторно не отправляется.
+-- Ответ собран по правам и области сотрудника на момент запроса; повтор позже ушёл бы без этой проверки
+-- (сотрудника уволили, сняли право, сменили область). Человек запросит ответ снова.
+CREATE OR REPLACE FUNCTION app.admin_telegram_retry(p_ids uuid[], p_now timestamptz)
+  RETURNS integer
+  LANGUAGE sql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    WITH queued AS (
+      UPDATE public.telegram_outbox
+        SET status = 'pending', tries = 0, last_error = NULL, sent_at = NULL, next_at = p_now
+        WHERE id = ANY (p_ids) AND status = 'error'
+          AND kind NOT IN ('code', 'relink_code', 'bot_cmd')
+          AND (SELECT app.is_platform_admin())
+        RETURNING 1
+    )
+    SELECT count(*)::integer FROM queued
+  $$;

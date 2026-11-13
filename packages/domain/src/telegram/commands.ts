@@ -41,6 +41,9 @@ export type BotCommandCode = BotCommand['code'];
 export const BOT_FIND_ACTION = 'cpFind';
 export const BOT_CARD_ACTION = 'cpCard';
 
+/** Предел Telegram для описания команды в меню бота (`setMyCommands`). */
+export const BOT_COMMAND_DESCRIPTION_MAX = 256;
+
 /** Поиск контрагента: кнопок с названиями, знаков в запросе — от и до (прототип `TG_FIND_*`). */
 export const BOT_FIND_MAX = 5;
 export const BOT_FIND_MIN = 2;

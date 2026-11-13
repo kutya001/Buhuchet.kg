@@ -44,6 +44,10 @@ export const TELEGRAM_ADMIN_TEXTS = {
     ru: 'Код замены Telegram повторно не отправляется: пользователь запросит новый',
     section: S,
   },
+  'tgadm.retry.bot_cmd': {
+    ru: 'Ответ на команду бота повторно не отправляется: человек запросит его снова',
+    section: S,
+  },
   'tgadm.retry.done': { ru: 'Сообщение снова в очереди', section: S },
   'tgadm.retry.none': { ru: 'Сообщение уже не в «Ошибке»: журнал обновлён', section: S },
   'tgadm.retry.bulk': { ru: 'Повторить ошибки', section: S },

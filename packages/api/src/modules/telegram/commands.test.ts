@@ -375,6 +375,16 @@ describe.skipIf(!databaseAvailable())(
       await user('acc-a', { blocked: false, mustChangePassword: true });
       expect((await say(CHAT.acc, '/today'))[0]!.text).toBe(NO_RIGHT);
       await user('acc-a', { mustChangePassword: false });
+      // Пароль сброшен, действует разрешение привязать Telegram без кода: прежнему чату бот не доверяет.
+      await f.t.admin.db.insert(schema.telegramLinkGuards).values({
+        userId: person('acc-a').userId,
+        orgId: f.a.orgId,
+        freeUntil: new Date(Date.now() + 3_600_000),
+      });
+      expect((await say(CHAT.acc, '/today'))[0]!.text).toBe(NO_RIGHT);
+      await f.t.admin.db
+        .delete(schema.telegramLinkGuards)
+        .where(eq(schema.telegramLinkGuards.userId, person('acc-a').userId));
       await f.t.admin.db
         .update(schema.employees)
         .set({ active: false })
@@ -406,6 +416,11 @@ describe.skipIf(!databaseAvailable())(
       expect(keys(ask!)).toEqual([{ text: TPL.tgBtnCancel, data: 'askCancel' }]);
       // Команда меню при открытой просьбе — команда, а не запрос поиска; просьба остаётся открытой.
       expect((await say(CHAT.owner, 'Сегодня'))[0]!.options.rich).toContain('Сегодня, 13 ноября');
+      // Подпись кнопки ответом (reply) на просьбу — запрос поиска, а не команда; «/overdue» — команда.
+      expect((await say(CHAT.owner, 'Просрочено', ask!.id))[0]!.text).toBe(TPL.tgFindNone);
+      expect((await say(CHAT.owner, '/overdue', ask!.id))[0]!.options.rich).toContain(
+        'Просрочено · ',
+      );
       // Короткий запрос и «не найден» — бот ждёт другой ответ.
       expect((await say(CHAT.owner, 'т'))[0]!.text).toBe(
         'Слишком коротко. Напишите не меньше 2 знаков названия или начало ИНН.',
@@ -475,6 +490,26 @@ describe.skipIf(!databaseAvailable())(
       // «Отмена» под просьбой — бот больше не ждёт.
       await press(CHAT.acc, next!.id, 'askCancel');
       expect((await say(CHAT.acc, 'трейд'))[0]!.text).toBe(HINT);
+    });
+
+    it('«Действия из Telegram» выключены: команды, поиск и карточка работают — они ничего не меняют', async () => {
+      const actions = (on: boolean) =>
+        f.t.admin.db
+          .update(schema.orgSettings)
+          .set({ telegramActions: on })
+          .where(eq(schema.orgSettings.orgId, f.a.orgId));
+      await actions(false);
+      try {
+        expect((await say(CHAT.owner, '/today'))[0]!.options.rich).toContain('Сегодня, 13 ноября');
+        const [ask] = await say(CHAT.owner, '/find');
+        expect(ask!.text).toBe(TPL.tgFindAsk);
+        const [list] = await say(CHAT.owner, 'трейд', ask!.id);
+        expect(list!.text).toBe('Найдено контрагентов: 2. Выберите нужного.');
+        await press(CHAT.owner, list!.id, `${BOT_CARD_ACTION}:${cpAcc}`);
+        expect(last(CHAT.owner).options.rich).toContain(`<b>${CP_ACC}</b>`);
+      } finally {
+        await actions(true);
+      }
     });
 
     it('карточка: чужая организация, область «Свои», архив и права проверяются при каждом нажатии', async () => {

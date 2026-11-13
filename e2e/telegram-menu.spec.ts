@@ -1,7 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
   botAnswers,
-  botCommands,
   botSent,
   linkTelegram,
   pressBotButton,
@@ -16,12 +15,12 @@ import { newContractor } from './reports';
 
 // Меню команд бота (поток Т, задача Т5; пакет заказчика 13.11.2026, идея 4; прототип v102
 // modules/tg-menu.js) через настоящий сайт с ботом-подделкой (fake-telegram.ts): кнопки команд под полем
-// ввода после привязки, команды в меню бота, «Сегодня», «Неделя», «Просрочено», «Найти контрагента» с
+// ввода после привязки, «Сегодня», «Неделя», «Просрочено», «Найти контрагента» с
 // карточкой контрагента и ссылкой на сайт, область «Свои», чат без привязки. Каждый тест — в своей
 // организации. Права по каждой команде, модуль «Оплата налогов», долг в карточке, общий чат двух
-// логинов, чужая организация, предел частоты — `packages/api/src/modules/telegram/commands.test.ts`.
+// логинов, чужая организация, предел частоты и команды в меню бота (сайт сообщает их Telegram только
+// по https, у сквозного теста сайт по http) — `packages/api/src/modules/telegram/commands.test.ts`.
 
-const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 const OWN_PASSWORD = 'Свой-пароль-e2e-1';
 const DAY = 86_400_000;
 const MENU = [
@@ -33,13 +32,6 @@ const addDays = (iso: string, n: number) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const unique = (text: string) =>
   `${text} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-
-async function tick(api: APIRequestContext) {
-  const res = await api.post('/api/cron/tick', {
-    headers: { authorization: `Bearer ${CRON_SECRET}` },
-  });
-  expect(res.status(), await res.text()).toBe(200);
-}
 
 /** Учётная политика своей организации: только переданные поля. */
 async function policy(api: APIRequestContext, origin: string, patch: Record<string, unknown>) {
@@ -96,7 +88,7 @@ const actions = (m: BotSent) =>
   (m.keyboard ?? []).flat().flatMap((b) => (b.callback_data ? [b.callback_data] : []));
 
 test.describe('Доработки 13.11. Т5: меню команд бота', () => {
-  test('(пакет заказчика 13.11.2026, идея 4) после привязки под полем ввода — кнопки команд, в меню бота — команды; «Сегодня», «Неделя» и «Просрочено» отвечают по отчётам организации; на другой текст бот подсказывает про меню', async ({
+  test('(пакет заказчика 13.11.2026, идея 4) после привязки под полем ввода — кнопки команд; «Сегодня», «Неделя» и «Просрочено» отвечают по отчётам организации; на другой текст бот подсказывает про меню', async ({
     request,
     baseURL,
   }) => {
@@ -110,22 +102,6 @@ test.describe('Доработки 13.11. Т5: меню команд бота', (
     await expect
       .poll(async () => (await botSent(request, chat)).find((m) => m.menu)?.menu)
       .toEqual(MENU);
-    // Команды в меню бота сайт сообщает Telegram по расписанию — вместе с адресом вебхука.
-    await expect
-      .poll(
-        async () => {
-          await tick(request);
-          return (await botCommands(request)).map((c) => `${c.command} — ${c.description}`);
-        },
-        { timeout: 60_000, intervals: [2_000, 5_000] },
-      )
-      .toEqual([
-        'today — Сегодня',
-        'week — Неделя',
-        'overdue — Просрочено',
-        'find — Найти контрагента',
-      ]);
-
     // Пока отчётов нет — ответы одной строкой; ответ на команду кнопки меню не убирает.
     const empty = await ask(request, chat, { text: '/today' });
     expect(empty.text).toContain('ничего нет');
@@ -162,11 +138,11 @@ test.describe('Доработки 13.11. Т5: меню команд бота', (
       expect(todayAnswer.text).toContain('ничего нет');
     }
 
-    // «Неделя»: просроченное — числом в подзаголовке, сегодняшний отчёт — в своём дне.
+    // «Неделя»: дни без названий контрагентов; просроченное — числом в подзаголовке.
     const week = await ask(request, chat, { text: '/week' });
     expect(week.text).toContain('🗓 Неделя ');
     expect(week.text).toContain('просрочено 1');
-    if (dueToday) expect(week.text).toContain('Сегодняшний');
+    if (dueToday) expect(week.text).toContain('Сдать 1 · оплатить 0 · просрочено 1');
 
     // Другой текст в привязанном чате — подсказка про меню, а не просьба привязать Telegram.
     const hint = await ask(request, chat, { text: 'Привет' });

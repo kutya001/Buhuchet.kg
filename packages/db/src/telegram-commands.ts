@@ -26,7 +26,6 @@ export interface BotChatUser {
   userId: string;
   orgId: string | null;
   employeeId: string | null;
-  login: string;
   orgName: string | null;
   /** Пароль сброшен (временный): на сайте доступна только смена пароля, бот не отвечает. */
   mustChangePassword: boolean;
@@ -47,7 +46,6 @@ export async function botChatUsers(db: Db | Tx, chatId: number): Promise<BotChat
     user_id: string;
     org_id: string | null;
     employee_id: string | null;
-    login: string;
     org_name: string | null;
     must_change_password: boolean;
     relink_free: boolean;
@@ -60,7 +58,6 @@ export async function botChatUsers(db: Db | Tx, chatId: number): Promise<BotChat
     userId: r.user_id,
     orgId: r.org_id,
     employeeId: r.employee_id,
-    login: r.login,
     orgName: r.org_name,
     mustChangePassword: r.must_change_password,
     relinkFree: r.relink_free,

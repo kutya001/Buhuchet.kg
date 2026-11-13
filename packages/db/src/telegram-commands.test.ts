@@ -175,7 +175,6 @@ describe.skipIf(!databaseAvailable())('Меню команд бота: данн�
         userId: acc.userId,
         orgId: a.orgId,
         employeeId: acc.employeeId,
-        login: 'cmd-acc',
         orgName: 'Организация А',
         mustChangePassword: false,
         relinkFree: false,

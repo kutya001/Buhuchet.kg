@@ -11,9 +11,11 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  BOT_COMMAND_DESCRIPTION_MAX,
   BOT_COMMANDS,
   BOT_FIND_MAX,
   BOT_FIND_MIN,
+  botClip,
   botFindByInn,
   botFindQuery,
   botTemplate,
@@ -104,7 +106,12 @@ export function botMenuRows(templates: Readonly<Record<string, string>>): string
 /** Команды меню бота для Telegram (`setCommands`): «/today — Сегодня». */
 export async function botMenuCommands(db: Db): Promise<{ command: string; description: string }[]> {
   const templates = await messageTemplates(db);
-  return BOT_COMMANDS.map((c) => ({ command: c.slash, description: commandLabel(templates, c) }));
+  // Описание команды в меню Telegram — не длиннее предела: одна длинная подпись шаблона иначе ломала бы
+  // всё меню.
+  return BOT_COMMANDS.map((c) => ({
+    command: c.slash,
+    description: botClip(commandLabel(templates, c), BOT_COMMAND_DESCRIPTION_MAX),
+  }));
 }
 
 /**
