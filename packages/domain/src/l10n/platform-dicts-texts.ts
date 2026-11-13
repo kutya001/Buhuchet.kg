@@ -387,6 +387,91 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram: скрытый ответ — у сотрудника нет Telegram',
     section: S,
   },
+  'pdicts.tpl.label.tg_btn_not_me': { ru: 'Telegram: кнопка «Это не я»', section: S },
+  'pdicts.tpl.label.tg_not_me_done': {
+    ru: 'Telegram: ответ на «Это не я» — вход закрыт',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_not_me_admin': {
+    ru: 'Telegram: ответ на «Это не я» администратору платформы',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_not_me_staff': { ru: 'Telegram: сотрудник нажал «Это не я»', section: S },
+  'pdicts.tpl.label.tg_not_me_owner': {
+    ru: 'Telegram: владелец организации нажал «Это не я»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_not_me_late': {
+    ru: 'Telegram: скрытый ответ — «Это не я» нажато поздно',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cmd_today': { ru: 'Telegram: команда «Сегодня»', section: S },
+  'pdicts.tpl.label.tg_cmd_week': { ru: 'Telegram: команда «Неделя»', section: S },
+  'pdicts.tpl.label.tg_cmd_over': { ru: 'Telegram: команда «Просрочено»', section: S },
+  'pdicts.tpl.label.tg_cmd_find': { ru: 'Telegram: команда «Найти контрагента»', section: S },
+  'pdicts.tpl.label.tg_today_head': { ru: 'Telegram: «Сегодня» — заголовок', section: S },
+  'pdicts.tpl.label.tg_today_sub': { ru: 'Telegram: «Сегодня» — строка итогов', section: S },
+  'pdicts.tpl.label.tg_today_none': { ru: 'Telegram: «Сегодня» — ничего нет', section: S },
+  'pdicts.tpl.label.tg_week_none': { ru: 'Telegram: «Неделя» — ничего нет', section: S },
+  'pdicts.tpl.label.tg_over_none': { ru: 'Telegram: «Просрочено» — ничего нет', section: S },
+  'pdicts.tpl.label.tg_find_ask': { ru: 'Telegram: «Найти контрагента» — просьба', section: S },
+  'pdicts.tpl.label.tg_find_short': {
+    ru: 'Telegram: «Найти контрагента» — запрос короткий',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_find_none': { ru: 'Telegram: «Найти контрагента» — не найден', section: S },
+  'pdicts.tpl.label.tg_find_many': { ru: 'Telegram: «Найти контрагента» — несколько', section: S },
+  'pdicts.tpl.label.tg_find_more': {
+    ru: 'Telegram: «Найти контрагента» — слишком много',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_card_sub': {
+    ru: 'Telegram: карточка контрагента — строка под названием',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_card_debt': {
+    ru: 'Telegram: карточка контрагента — долг за обслуживание',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_card_no_reports': {
+    ru: 'Telegram: карточка контрагента — отчётов нет',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_open_cp': {
+    ru: 'Telegram: кнопка «Открыть на сайте» у контрагента',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_head': { ru: 'Telegram: заявка с сайта — заголовок', section: S },
+  'pdicts.tpl.label.tg_lead_rep_head': {
+    ru: 'Telegram: заявка с сайта — заголовок повторной',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_lead_work': {
+    ru: 'Telegram: заявка с сайта — кнопка «Взять в работу»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_lead_no': {
+    ru: 'Telegram: заявка с сайта — кнопка «Отклонить»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_lead_open': {
+    ru: 'Telegram: заявка с сайта — кнопка «Открыть в Админке»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_lead_work': {
+    ru: 'Telegram: скрытый ответ — заявка взята в работу',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_ask_why': {
+    ru: 'Telegram: заявка с сайта — просьба указать причину отказа',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_refused': {
+    ru: 'Telegram: заявка с сайта — отказ записан',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_more': { ru: 'Telegram: кнопка «Подробнее»', section: S },
+  'pdicts.tpl.label.tg_btn_video': { ru: 'Telegram: кнопка «Смотреть видео»', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
   'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },
