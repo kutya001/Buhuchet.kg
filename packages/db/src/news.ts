@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
-  compareNews,
+  newsOrder,
   diffChanges,
   newsHistoryKinds,
   NEWS_TYPES,
@@ -154,11 +154,9 @@ function omitMd({ md: _md, ...rest }: NewsRecord): Omit<NewsRecord, 'md'> {
   return rest;
 }
 
-const byFeedOrder = (a: NewsRecord, b: NewsRecord) =>
-  compareNews(
-    { date: a.date, publishedAt: a.publishedAt, version: a.release },
-    { date: b.date, publishedAt: b.publishedAt, version: b.release },
-  );
+/** Порядок ленты и «Что нового»: строго по номеру версии, новые сверху (`newsOrder` домена). */
+const inFeedOrder = <T extends NewsRecord>(list: readonly T[]): T[] =>
+  newsOrder(list, (n) => ({ date: n.date, publishedAt: n.publishedAt, version: n.release }));
 
 /* ───────────── Лента пользователя ───────────── */
 
@@ -168,7 +166,7 @@ export async function newsFeed(tx: Tx): Promise<NewsFeedRecord[]> {
     .select({ ...fields, read: sql<boolean>`${READ}` })
     .from(news)
     .where(and(LIVE, FOR_ME));
-  return rows.map((r) => ({ ...toRecord(r), read: r.read })).sort(byFeedOrder);
+  return inFeedOrder(rows.map((r) => ({ ...toRecord(r), read: r.read })));
 }
 
 /** Сколько непрочитанных новостей у вошедшего — счётчик у вкладки и у модуля «База знаний». */
@@ -198,7 +196,7 @@ export async function newsWhatsNew(tx: Tx): Promise<{ items: NewsRecord[]; first
     .from(newsReads)
     .where(sql`${newsReads.userId} = app.current_user_id()`);
   const first = (seen?.n ?? 0) === 0 && !(await welcomeSeenByMe(tx));
-  return { items: rows.map(toRecord).sort(byFeedOrder), first };
+  return { items: inFeedOrder(rows.map(toRecord)), first };
 }
 
 /**

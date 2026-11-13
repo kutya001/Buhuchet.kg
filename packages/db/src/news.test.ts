@@ -412,4 +412,25 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     )) as unknown as [{ n: number }];
     expect(n).toBe(1);
   });
+
+  it('лента и «Что нового» — строго по номеру версии, новые сверху: дата выхода порядок версий не меняет', async () => {
+    const make = (release: string, daysBack: number) =>
+      asAdmin((tx) =>
+        createNews(
+          tx,
+          input({ title: `Версия ${release}`, release, date: addDays(yesterday, -daysBack) }),
+          { publish: true },
+        ),
+      );
+    const v9000 = await make('9000', 3);
+    const v9001 = await make('9001', 5);
+    const v8999 = await make('8999', 0);
+    const mine = new Set([v9000.id, v9001.id, v8999.id]);
+    const order = [v9001.id, v9000.id, v8999.id];
+    const feed = await asOwner(a, (tx) => newsFeed(tx));
+    // Версии с номером больше всех остальных — в самом верху ленты.
+    expect(feed.slice(0, 3).map((n) => n.id)).toEqual(order);
+    const wn = await asOwner(a, (tx) => newsWhatsNew(tx));
+    expect(wn.items.filter((n) => mine.has(n.id)).map((n) => n.id)).toEqual(order);
+  });
 });
