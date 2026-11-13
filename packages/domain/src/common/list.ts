@@ -466,6 +466,8 @@ export const GRID_KEYS = [
   'reports.all',
   // Список отчётов дня «Календаря» (прототип `'rep-cal'`).
   'reports.calendar',
+  // «По месяцам»: что сдать и оплатить за месяц по всем контрагентам (прототип `'rep-months'`).
+  'reports.months',
   // «Задачи»: у каждой вкладки свой вид, как `'tasks-'+tab` в прототипе.
   'tasks.mine',
   'tasks.byme',

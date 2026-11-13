@@ -36,6 +36,12 @@ const ReportDate = IsoDate.refine(
 /** Первое число месяца: «с какого периода», «до какого», месяц разового отчёта. */
 const Month = ReportDate.refine((d) => d.endsWith('-01'), 'Первое число месяца');
 
+/** Месяц отчётов вкладки «По месяцам» — `YYYY-MM`, с 2000 по 2100 год. */
+const ReportMonth = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Месяц — в виде ГГГГ-ММ')
+  .refine((m) => m >= '2000-01' && m <= '2100-12', 'Месяц — с 2000 по 2100 год');
+
 /** Примечание назначения и комментарий к изменению срока. */
 export const REPORT_NOTE_MAX = 500;
 
@@ -267,18 +273,46 @@ export type ReportList = z.infer<typeof ReportList>;
  * нужно сделать»»).
  */
 export const ReportTabParam = z.object({
-  tab: z.enum(['week', 'overdue', 'waiting', 'all', 'calendar']).default('all'),
+  tab: z.enum(['week', 'overdue', 'waiting', 'all', 'calendar', 'months']).default('all'),
   quick: z.enum(['all', 'sub', 'pay']).default('all'),
   /** Только отчёты контрагента: вкладка «Отчёты к сдаче» его карточки. */
   contractorId: Uuid.optional(),
   /** Вкладка «Календарь»: день, отчёты которого показать (прототип `S.calSel`). */
   day: ReportDate.optional(),
+  /** Вкладка «По месяцам»: месяц отчётов `YYYY-MM` (прототип `S.rmM`). */
+  month: ReportMonth.optional(),
 });
 export type ReportTab = z.infer<typeof ReportTabParam>['tab'];
 export type ReportQuick = z.infer<typeof ReportTabParam>['quick'];
 
 const Count = z.number().int().nonnegative();
 const QuickCounts = z.object({ all: Count, sub: Count, pay: Count });
+
+export const ReportMonthQuery = z.object({ month: ReportMonth });
+
+/**
+ * Итог месяца вкладки «По месяцам» в области сотрудника (прототип `rmGroup`, `rmSumHtml`; правило —
+ * `monthPlanGroup` домена): сколько контрагентов, сколько нужно сдать и уплатить и сколько уже сделано,
+ * суммы, просрочки, первый и последний срок; `quick` — числа «Все / Сдать / Уплатить» месяца.
+ */
+export const ReportMonthSummary = z.object({
+  month: ReportMonth,
+  contractors: Count,
+  submitCount: Count,
+  submitDone: Count,
+  payCount: Count,
+  payDone: Count,
+  noAmount: Count,
+  amount: Tyiyn,
+  paid: Tyiyn,
+  left: Tyiyn,
+  late: Count,
+  done: z.boolean(),
+  from: IsoDate.nullable(),
+  to: IsoDate.nullable(),
+  quick: QuickCounts,
+});
+export type ReportMonthSummary = z.infer<typeof ReportMonthSummary>;
 
 /**
  * Счётчики вкладок, плашки и числа быстрого фильтра в области сотрудника (прототип counts,

@@ -37,6 +37,7 @@ import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
 import { ProjectsList, type ProjectTab } from '../projects/projects-list';
 import { ReportCalendarTab } from '../reports/report-calendar';
 import { ReportMatrixTab } from '../reports/report-matrix';
+import { ReportMonthsTab } from '../reports/report-months';
 import { REPORT_LIST_TABS, type ReportListTab } from '../reports/reports-data';
 import { ReportsList } from '../reports/reports-list';
 import { RolesList } from '../roles/roles-list';
@@ -91,6 +92,7 @@ export function ModuleScreen({
   if (moduleId === 'reports') {
     const tab = (tabId ?? 'week') as ReportListTab;
     if (REPORT_LIST_TABS.includes(tab)) return <ReportsList key={tab} tab={tab} />;
+    if (tabId === 'months') return <ReportMonthsTab />;
     if (tabId === 'matrix') return <ReportMatrixTab />;
     if (tabId === 'calendar') return <ReportCalendarTab />;
     return <ModuleStub moduleId={moduleId} />;

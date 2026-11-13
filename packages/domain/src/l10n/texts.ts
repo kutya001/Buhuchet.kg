@@ -32,6 +32,7 @@ import { ONBOARDING_TEXTS } from './onboarding-texts';
 import { ORG_TEXTS } from './org-texts';
 import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { PROJECTS_TEXTS } from './projects-texts';
+import { REPORT_MONTHS_TEXTS } from './report-months-texts';
 import { REPORTS_TEXTS } from './reports-texts';
 import { SHELL_TEXTS } from './shell-texts';
 import { STAFF_BONUS_TEXTS } from './staff-bonus-texts';
@@ -116,6 +117,7 @@ export const UI_TEXTS = {
   ...CONTRACTOR_SERVICE_TEXTS,
   ...CONTRACTOR_PAGE_TEXTS,
   ...REPORTS_TEXTS,
+  ...REPORT_MONTHS_TEXTS,
   ...TASKS_TEXTS,
   ...ADMIN_ACCOUNTS_TEXTS,
   ...ADMIN_ACCOUNT_CARD_TEXTS,

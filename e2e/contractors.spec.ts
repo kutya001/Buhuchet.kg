@@ -384,6 +384,8 @@ test.describe('Этап 2: контрагенты — список и карто
     // На ПК таблица «Отчётов к сдаче» растягивается на всю ширину развёрнутой карточки; заголовки
     // столбцов стоят над своими ячейками.
     await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+    // Вкладка открывается «По месяцам» (доработки 13.11.2026, К2): общий список — «Списком».
+    await card.locator('[data-reports-mode] [data-mode="list"]').click();
     const table = card.getByRole('table', { name: 'Отчёты к сдаче' });
     await expect(table.locator('tbody tr[data-id]').first()).toBeVisible();
     const scroller = card.locator('[data-grid-scroll]');
@@ -466,6 +468,8 @@ test.describe('Этап 2: контрагенты — список и карто
     await search(page, isMobile, word);
     const card = await openCard(page, name);
     await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+    // Ошибка была в общем списке вкладки: с задачи К2 он открывается «Списком».
+    await card.locator('[data-reports-mode] [data-mode="list"]').click();
     const row = card.locator(`[data-grid] [data-id="${nds}"]`);
     const mini = row.locator('[data-status-mini]:not([data-payment-mini] *)');
     await expect(mini).toContainText('К сдаче');

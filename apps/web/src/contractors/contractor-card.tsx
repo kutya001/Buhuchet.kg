@@ -66,7 +66,13 @@ import {
   useMoneySettingsItems,
   useMoneyTabOn,
 } from '../money/contractor-money';
-import { useReportActions } from '../reports/report-actions';
+import { useReportActions, type ReportActions } from '../reports/report-actions';
+import {
+  ContractorReportMonths,
+  ReportsModeSwitch,
+  useReportsMode,
+} from '../reports/report-months';
+import { MONTHS_CARD_VIEW, type MonthsCardView } from '../reports/report-months-model';
 import { useReportKanban } from '../reports/use-report-board';
 import {
   REPORT_AUDIT,
@@ -169,6 +175,8 @@ export function ContractorCardWindow(props: ContractorCardProps) {
   const service = useQuery(serviceQuery(id)).data;
   const [tab, setTab] = useState<ContractorCardTab>(props.tab);
   const [pickDirty, setPickDirty] = useState(false);
+  // Выбор «По месяцам» вкладки «Отчёты к сдаче» живёт, пока карточка открыта (прототип `st.rq`).
+  const [monthsView, setMonthsView] = useState<MonthsCardView>(MONTHS_CARD_VIEW);
   const [leave, setLeave] = useState<{ go: () => void; open: boolean } | null>(null);
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const filesOn = useFilesTabOn();
@@ -350,7 +358,9 @@ export function ContractorCardWindow(props: ContractorCardProps) {
             onPick={() => guard(() => setTab('pick'))}
           />
         ) : null}
-        {shownTab === 'reports' ? <ReportsTab contractorId={id} /> : null}
+        {shownTab === 'reports' ? (
+          <ReportsTab contractorId={id} view={monthsView} onView={setMonthsView} />
+        ) : null}
         {shownTab === 'pick' ? <ReportPickTab contractorId={id} onDirty={setPickDirty} /> : null}
         {shownTab === 'money' ? <ContractorMoneyTab contractorId={id} /> : null}
         {shownTab === 'fee' ? (
@@ -991,12 +1001,19 @@ function AssignmentsBox({
  * контрагента — без поиска оболочки и без столбца «Контрагент» по умолчанию; строка открывает карточку
  * отчёта, меню — те же действия, что в «Отчётах для сдачи».
  */
-function ReportsTab({ contractorId }: { contractorId: string }) {
+function ReportsListTab({
+  contractorId,
+  reports,
+  lead,
+}: {
+  contractorId: string;
+  reports: ReportActions;
+  lead: ReactNode;
+}) {
   const t = useT();
   const { access } = useShell();
   const phone = useMediaQuery(PHONE_QUERY);
   const labels = useGridLabels('report.count');
-  const reports = useReportActions();
   const taxpay = access.feature('taxpay');
   const onReceive = reports.receive;
   const columns = useMemo(
@@ -1052,7 +1069,8 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
   );
   const exporter = useListExport(sendExport);
   return (
-    <>
+    <div className="flex flex-col gap-2.5">
+      {lead}
       <DataGrid
         columns={columns}
         audit={REPORT_AUDIT}
@@ -1083,6 +1101,40 @@ function ReportsTab({ contractorId }: { contractorId: string }) {
         onOpen={reports.openCard}
         bulk={reports.bulk('all')}
       />
+    </div>
+  );
+}
+
+/**
+ * Вкладка «Отчёты к сдаче» (решение заказчика 13.11.2026, прототип v90 `rmCardHtml`): «По месяцам» (по
+ * умолчанию) — что сдать и что оплатить за каждый месяц, или «Списком» — прежний общий список; выбор
+ * запоминает браузер. Действия и окна отчёта — одни на оба вида.
+ */
+function ReportsTab({
+  contractorId,
+  view,
+  onView,
+}: {
+  contractorId: string;
+  view: MonthsCardView;
+  onView: (view: MonthsCardView) => void;
+}) {
+  const reports = useReportActions();
+  const [mode, setMode] = useReportsMode();
+  const lead = <ReportsModeSwitch mode={mode} onChange={setMode} />;
+  return (
+    <>
+      {mode === 'months' ? (
+        <ContractorReportMonths
+          contractorId={contractorId}
+          reports={reports}
+          lead={lead}
+          view={view}
+          onView={onView}
+        />
+      ) : (
+        <ReportsListTab contractorId={contractorId} reports={reports} lead={lead} />
+      )}
       {reports.dialogs}
     </>
   );
