@@ -1,0 +1,7 @@
+ALTER TABLE "contractor_tariffs" ADD COLUMN "edited_by" uuid;--> statement-breakpoint
+ALTER TABLE "contractor_tariffs" ADD COLUMN "edited_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "contractor_tariffs" ADD COLUMN "edit_reason" text;--> statement-breakpoint
+ALTER TABLE "contractor_tariffs" ADD COLUMN "version" integer DEFAULT 1 NOT NULL;--> statement-breakpoint
+ALTER TABLE "contractor_tariffs" ADD CONSTRAINT "contractor_tariffs_edited_by_users_id_fk" FOREIGN KEY ("edited_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "contractor_tariffs" ADD CONSTRAINT "contractor_tariffs_edit_check" CHECK (("contractor_tariffs"."edited_at" is null and "contractor_tariffs"."edited_by" is null and "contractor_tariffs"."edit_reason" is null) or ("contractor_tariffs"."edited_at" is not null and "contractor_tariffs"."edited_by" is not null and btrim("contractor_tariffs"."edit_reason") <> ''));--> statement-breakpoint
+CREATE POLICY "contractor_tariffs_update_guard" ON "contractor_tariffs" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING (true) WITH CHECK ("contractor_tariffs"."edited_by" = app.current_user_id() and "contractor_tariffs"."edited_at" is not null and btrim("contractor_tariffs"."edit_reason") <> '');

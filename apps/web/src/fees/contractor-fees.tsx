@@ -3,6 +3,7 @@
 import {
   bishkekDate,
   formatDateRu,
+  formatMomentRu,
   formatSom,
   formatSomWithUnit,
   monthLabel,
@@ -14,6 +15,7 @@ import {
   Box,
   buttonClass,
   Icon,
+  iconButtonClass,
   MiniTable,
   Note,
   Pill,
@@ -32,12 +34,14 @@ import { useReportActions } from '../reports/report-actions';
 import { statusPillView } from '../status/status-view';
 import { TariffDialog } from './fee-dialogs';
 import { contractorFeesQuery, useFeesRefresh } from './fees-data';
+import { TariffEditDialog, type TariffRow } from './tariff-edit-dialog';
 
 /*
  * Вкладка «Обслуживание» карточки контрагента (задача 2.21; ТЗ «Контрагенты» → «Плата за
  * обслуживание»; прототип modules/contractor-card.js, `st.tab==='fee'`): плашки «Текущая ставка» и
  * «Долг за обслуживание», кнопки «Новая ставка», «Напомнить в WhatsApp», «Принять оплату за
- * обслуживание», таблицы «Начисления и оплаты», «Оплаты · N» и «Журнал тарифов». Видна при «Плате за
+ * обслуживание», таблицы «Начисления и оплаты», «Оплаты · N» и «Журнал тарифов» (с «Изменить ставку»,
+ * прототип v86). Видна при «Плате за
  * обслуживание», с правом «Видеть плату» и у постоянного контрагента; данные и права проверяет сервер.
  */
 
@@ -183,15 +187,26 @@ function PaymentsBox({
   );
 }
 
-/** «Журнал тарифов»: от новых к старым; записи не меняются и не удаляются. */
-function TariffsBox({ t, f }: { t: Translate; f: ContractorFees }) {
+/**
+ * «Журнал тарифов»: от новых к старым. Правленая ставка — с ярлыком «изменена» (кто, когда и почему —
+ * в подсказке); «Изменить ставку» — по праву «Менять журнал тарифов» (прототип v86).
+ */
+function TariffsBox({
+  t,
+  f,
+  onEdit,
+}: {
+  t: Translate;
+  f: ContractorFees;
+  onEdit: (tariff: TariffRow) => void;
+}) {
   return (
     <Box title={t('fee.tariffs.title')}>
       <ul aria-label={t('fee.tariffs.title')} className="m-0 list-none p-0" data-fee-tariffs="">
         {f.tariffs.map((x) => (
           <li
             key={x.id}
-            className="grid grid-cols-[92px_minmax(0,1fr)] gap-2.5 border-b border-line py-[7px] text-[13px] last:border-b-0"
+            className="grid grid-cols-[92px_minmax(0,1fr)_auto] items-start gap-2.5 border-b border-line py-[7px] text-[13px] last:border-b-0"
           >
             <span className="text-[12px] text-faint">
               {t('fee.tariffs.from', { month: monthLabelGen(x.from) })}
@@ -199,11 +214,40 @@ function TariffsBox({ t, f }: { t: Translate; f: ContractorFees }) {
             <span className="min-w-0 [overflow-wrap:anywhere]">
               <b className="tabular-nums">{formatSomWithUnit(x.amount)}</b>{' '}
               {t(x.period === 'Y' ? 'fee.tariffs.per_year' : 'fee.tariffs.per_month')}
+              {x.edited ? (
+                <>
+                  {' '}
+                  <Tag
+                    tone="warn"
+                    title={t('fee.tariffs.edited_title', {
+                      who: x.edited.by ?? '—',
+                      at: formatMomentRu(new Date(x.edited.at)),
+                      reason: x.edited.reason,
+                    })}
+                  >
+                    {t('fee.tariffs.edited')}
+                  </Tag>
+                </>
+              ) : null}
               <br />
               <span className="text-[12px] text-muted">
                 {x.note} · {x.author ?? '—'}, {formatDateRu(x.at)}
               </span>
             </span>
+            {f.canEditTariff ? (
+              <button
+                type="button"
+                data-fee-tariff-edit={x.from}
+                className={iconButtonClass('sm')}
+                title={t('fee.tariffs.edit')}
+                aria-label={t('fee.tariffs.edit_label', { month: monthLabelGen(x.from) })}
+                onClick={() => onEdit(x)}
+              >
+                <Icon name="edit" size="sm" />
+              </button>
+            ) : (
+              <span />
+            )}
           </li>
         ))}
       </ul>
@@ -225,6 +269,7 @@ export function ContractorFeesTab({
   const query = useQuery(contractorFeesQuery(contractorId));
   const refresh = useFeesRefresh();
   const [tariff, setTariff] = useState<DialogSlot<null> | null>(null);
+  const [tariffEdit, setTariffEdit] = useState<DialogSlot<TariffRow> | null>(null);
   const [payment, setPayment] = useState<DialogSlot<string> | null>(null);
   const reports = useReportActions();
   const f = query.data;
@@ -308,7 +353,7 @@ export function ContractorFeesTab({
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3.5 max-[900px]:grid-cols-1">
         <MonthsBox t={t} f={f} />
         <PaymentsBox t={t} f={f} onOpen={(id) => setPayment(openSlot(id))} />
-        <TariffsBox t={t} f={f} />
+        <TariffsBox t={t} f={f} onEdit={(x) => setTariffEdit(openSlot(x))} />
       </div>
       {tariff ? (
         <TariffDialog
@@ -316,6 +361,16 @@ export function ContractorFeesTab({
           fees={f}
           open={tariff.open}
           onClose={() => setTariff(closeSlot)}
+          onDone={refresh}
+        />
+      ) : null}
+      {tariffEdit ? (
+        <TariffEditDialog
+          key={`tariff-edit-${tariffEdit.n}`}
+          fees={f}
+          tariff={tariffEdit.data}
+          open={tariffEdit.open}
+          onClose={() => setTariffEdit(closeSlot)}
           onDone={refresh}
         />
       ) : null}

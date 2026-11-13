@@ -7,6 +7,7 @@ import {
   formatSomWithUnit,
   monthLabel,
   monthLabelGen,
+  type FirstMonthMode,
   type UiTextKey,
 } from '@buhuchet/domain';
 import type { ContractorHistory } from '@buhuchet/shared';
@@ -113,6 +114,68 @@ function tariffAddedText(t: Translate, v: unknown): string {
     per: t(x.period === 'Y' ? 'fee.tariffs.per_year' : 'fee.tariffs.per_month'),
     month: monthLabelGen(x.validFrom.slice(0, 7)),
   });
+}
+
+/** Значение ставки в истории: сумма, периодичность, месяц и — у первой ставки — правило первого месяца. */
+function tariffValue(v: unknown) {
+  if (typeof v !== 'object' || v === null) return null;
+  const x = v as { amount?: unknown; period?: unknown; validFrom?: unknown; firstMonth?: unknown };
+  if (typeof x.amount !== 'number' || typeof x.validFrom !== 'string') return null;
+  return {
+    amount: x.amount,
+    period: x.period === 'Y' ? ('Y' as const) : ('M' as const),
+    month: x.validFrom.slice(0, 7),
+    firstMonth:
+      x.firstMonth === 'full' || x.firstMonth === 'prorate' || x.firstMonth === 'next'
+        ? (x.firstMonth as FirstMonthMode)
+        : null,
+  };
+}
+
+/**
+ * Правка и удаление ставки (прототип v86 `tariffEditDlg`): «Изменена ставка обслуживания: сумма
+ * 14 000,00 сом → 15 000,00 сом; периодичность: в год; действует с ноября 2026 → с декабря 2026; первый
+ * неполный месяц: Полный месяц → Пропорционально дням. Причина: …», «Удалена ставка … (ещё не
+ * действовала). Причина: …»; null — запись не о ставке.
+ */
+function tariffChangeText(t: Translate, e: Pick<Entry, 'changes' | 'reason'>): string | null {
+  const per = (p: 'M' | 'Y') => t(p === 'Y' ? 'fee.tariffs.per_year' : 'fee.tariffs.per_month');
+  const reason = e.reason ?? '';
+  const deleted = tariffValue(e.changes.find((c) => c.field === 'tariffDeleted')?.from);
+  if (deleted) {
+    return t('fee.hist.tariff_deleted', {
+      amount: formatSomWithUnit(deleted.amount),
+      per: per(deleted.period),
+      month: monthLabelGen(deleted.month),
+      reason,
+    });
+  }
+  const edited = e.changes.find((c) => c.field === 'tariffEdited');
+  const from = tariffValue(edited?.from);
+  const to = tariffValue(edited?.to);
+  if (!from || !to) return null;
+  const parts = [
+    from.amount !== to.amount
+      ? t('fee.hist.tedit.amount', {
+          from: formatSomWithUnit(from.amount),
+          to: formatSomWithUnit(to.amount),
+        })
+      : '',
+    from.period !== to.period ? t('fee.hist.tedit.period', { per: per(to.period) }) : '',
+    from.month !== to.month
+      ? t('fee.hist.tedit.from', {
+          from: monthLabelGen(from.month),
+          to: monthLabelGen(to.month),
+        })
+      : '',
+    from.firstMonth && to.firstMonth && from.firstMonth !== to.firstMonth
+      ? t('fee.hist.tedit.first', {
+          from: t(`cp.form.first.${from.firstMonth}`),
+          to: t(`cp.form.first.${to.firstMonth}`),
+        })
+      : '',
+  ].filter(Boolean);
+  return t('fee.hist.tariff_edited', { changes: parts.join('; '), reason });
 }
 
 /** Распределение по месяцам из истории: `[{ month, amount }]`, лишнее отброшено. */
@@ -349,9 +412,13 @@ function feePaymentLines(t: Translate, e: FeeEntry): string[] {
 export function contractorHistoryText(t: Translate, e: Entry, names: Names): string {
   let lines: string[];
   switch (e.entity) {
-    case 'contractor':
+    case 'contractor': {
+      // Правка и удаление ставки — с причиной в тексте, как в прототипе (`log('cp', …)`).
+      const tariff = tariffChangeText(t, e);
+      if (tariff) return tariff;
       lines = e.changes.length || e.action !== 'update' ? contractorLines(t, e, names) : [];
       break;
+    }
     case 'assignment':
       lines = assignmentLines(t, e);
       break;

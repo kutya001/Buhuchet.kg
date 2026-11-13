@@ -1,4 +1,10 @@
-import { MONEY_AMOUNT_MAX, MONEY_NOTE_MAX, TARIFF_PERIODS } from '@buhuchet/domain';
+import {
+  FIRST_MONTH_MODES,
+  MONEY_AMOUNT_MAX,
+  MONEY_NOTE_MAX,
+  OP_REASON_MAX,
+  TARIFF_PERIODS,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
 
@@ -21,6 +27,7 @@ const Amount = Tyiyn.refine((v) => v >= 0 && v <= MONEY_AMOUNT_MAX, 'Невер�
 const ALLOCATION_ROWS_MAX = 400;
 
 export const FeeContractorParam = z.object({ id: Uuid });
+export const FeeTariffParam = z.object({ id: Uuid, tariffId: Uuid });
 
 const FeeMonthItem = z.object({
   month: Month,
@@ -63,6 +70,8 @@ export const ContractorFees = z.object({
     feeDay: z.number().int(),
     /** Начало обслуживания и день, когда завели: «с 22-го» у первого неполного месяца. */
     startDate: IsoDate,
+    /** Правило первого неполного месяца — для окна «Изменить ставку». */
+    firstMonth: z.enum(FIRST_MONTH_MODES),
     version: RecordVersion,
   }),
   /** Действующая ставка; null — ставки нет. */
@@ -97,12 +106,25 @@ export const ContractorFees = z.object({
       note: z.string(),
       author: z.string().nullable(),
       at: IsoDate,
+      version: RecordVersion,
+      /** Ставку правили — ярлык «изменена»: кто, когда (момент) и почему (прототип v86 `t.edited`). */
+      edited: z
+        .object({ by: z.string().nullable(), at: z.string(), reason: z.string() })
+        .nullable(),
+      /** Первая ставка журнала: «действует с» — не раньше месяца начала обслуживания. */
+      first: z.boolean(),
+      /** В окне есть поле «Первый неполный месяц». */
+      firstMonthEditable: z.boolean(),
+      /** Есть кнопка «Удалить ставку»: ставка ещё не начала действовать и в журнале не одна. */
+      deletable: z.boolean(),
     }),
   ),
   /** «Принять оплату за обслуживание»: права «Видеть плату» и «Менять журнал тарифов», есть начисления. */
   canAccept: z.boolean(),
   /** «Новая ставка»: право «Менять журнал тарифов», контрагент не разовый и не в архиве. */
   canTariff: z.boolean(),
+  /** «Изменить ставку» у записей журнала: то же право, контрагент не разовый и не в архиве. */
+  canEditTariff: z.boolean(),
   /** «Напомнить в WhatsApp»: есть долг. */
   canRemind: z.boolean(),
   /** Что подставить в окне «Новая ставка»; null — ставку вносить нельзя. */
@@ -121,6 +143,31 @@ export type TariffRequest = z.input<typeof TariffRequest>;
 
 export const TariffSaved = z.object({ id: Uuid });
 export type TariffSaved = z.infer<typeof TariffSaved>;
+
+/**
+ * «Изменить ставку обслуживания» (прототип v86 `tariffEditDlg`): сумма, периодичность, месяц, у первой
+ * ставки неполного месяца — правило первого месяца; причина обязательна.
+ */
+export const TariffEditRequest = z.strictObject({
+  amount: Amount,
+  period: z.enum(TARIFF_PERIODS),
+  from: Month,
+  firstMonth: z.enum(FIRST_MONTH_MODES).optional(),
+  reason: z.string().trim().min(1, 'Укажите причину').max(OP_REASON_MAX),
+  version: RecordVersion,
+});
+export type TariffEditRequest = z.input<typeof TariffEditRequest>;
+
+/** Ответ на правку: изменилось ли что-то и на сколько вырос (плюс) или уменьшился (минус) долг. */
+export const TariffEdited = z.object({ changed: z.boolean(), debtDelta: Tyiyn });
+export type TariffEdited = z.infer<typeof TariffEdited>;
+
+/** «Удалить ставку»: причина обязательна. */
+export const TariffDeleteRequest = z.strictObject({
+  reason: z.string().trim().min(1, 'Укажите причину').max(OP_REASON_MAX),
+  version: RecordVersion,
+});
+export type TariffDeleteRequest = z.input<typeof TariffDeleteRequest>;
 
 /** Окно «Принять оплату за обслуживание». */
 export const FeePaymentForm = z.object({

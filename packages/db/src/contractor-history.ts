@@ -252,6 +252,8 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   'feeDay',
   'firstMonthMode',
   'tariffAdded',
+  'tariffEdited',
+  'tariffDeleted',
   'feeReminder',
   'feeTotal',
   'feeAllocations',

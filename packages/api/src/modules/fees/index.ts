@@ -7,6 +7,10 @@ import {
   contractorFeesRoute,
   createFeePaymentHandler,
   createFeePaymentRoute,
+  deleteTariffHandler,
+  deleteTariffRoute,
+  editTariffHandler,
+  editTariffRoute,
   feePaymentFormHandler,
   feePaymentFormRoute,
   feeReminderHandler,
@@ -24,6 +28,8 @@ export function feesModule(deps: ApiDeps) {
   return createModuleApp()
     .openapi(contractorFeesRoute, contractorFeesHandler(deps))
     .openapi(addTariffRoute, addTariffHandler(deps))
+    .openapi(editTariffRoute, editTariffHandler(deps))
+    .openapi(deleteTariffRoute, deleteTariffHandler(deps))
     .openapi(feePaymentFormRoute, feePaymentFormHandler(deps))
     .openapi(createFeePaymentRoute, createFeePaymentHandler(deps))
     .openapi(feeReminderRoute, feeReminderHandler(deps))

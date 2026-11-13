@@ -3,6 +3,8 @@ import {
   addTariff,
   contractorFeeView,
   createFeePayment,
+  deleteTariff,
+  editTariff,
   feePaymentFormOf,
   feeSubject,
   feeToOptions,
@@ -17,9 +19,12 @@ import {
   FEE_WHATSAPP_TEMPLATE,
   feeReminder,
   feeWhatsAppText,
+  firstMonthEditable,
   formatPhone,
   hasPermission,
+  isFirstTariff,
   tariffDefaults,
+  tariffDeletable,
 } from '@buhuchet/domain';
 import {
   ContractorFees,
@@ -28,7 +33,11 @@ import {
   FeePaymentRequest,
   FeePaymentSaved,
   FeeReminder,
+  FeeTariffParam,
   OkResponse,
+  TariffDeleteRequest,
+  TariffEdited,
+  TariffEditRequest,
   TariffRequest,
   TariffSaved,
 } from '@buhuchet/shared';
@@ -46,6 +55,7 @@ import { feeFail, inFee } from './common';
  * ui/status-scale.js — `waDlg` с `fee`). Всё — при включённой «Плате за обслуживание» и праве «Видеть
  * плату за обслуживание»; контрагент — в области группы «Контрагенты»; ставки и приём оплаты — ещё и
  * право «Менять журнал тарифов». Правила — домен, запись — слой данных (`@buhuchet/db` fees).
+ * «Изменить ставку» и «Удалить ставку» — прототип v86 `tariffEditDlg` (docs/deviations.md п. О-78).
  */
 
 const json = <S>(schema: S) => ({ 'application/json': { schema } });
@@ -105,6 +115,8 @@ export function contractorFeesHandler(
       a.date === b.date ? b.createdAt.getTime() - a.createdAt.getTime() : a.date < b.date ? 1 : -1,
     );
     const defaults = canTariff ? tariffDefaults(cp.tariffs, today, t) : null;
+    // «Изменить ставку» у архивного в прототипе нет (`can('tariff')&&!c.archived`).
+    const canEditTariff = canTariff && !cp.archived;
     const out: ContractorFees = {
       contractor: {
         id: cp.id,
@@ -113,6 +125,7 @@ export function contractorFeesHandler(
         oneOff: cp.oneOff,
         feeDay: cp.feeDay,
         startDate: cp.start,
+        firstMonth: cp.firstMonth,
         version: cp.version,
       },
       current: view.current,
@@ -137,9 +150,19 @@ export function contractorFeesHandler(
         note: x.note,
         author: x.author,
         at: x.at,
+        version: x.version,
+        edited: x.edited && {
+          by: x.edited.by,
+          at: x.edited.at.toISOString(),
+          reason: x.edited.reason,
+        },
+        first: isFirstTariff(view.tariffs, x.id),
+        firstMonthEditable: firstMonthEditable(view.tariffs, x, cp.start),
+        deletable: tariffDeletable(view.tariffs, x, today),
       })),
       canAccept: view.canAccept && tariffRight,
       canTariff,
+      canEditTariff,
       canRemind: fees.debt > 0,
       tariffForm: defaults && { ...defaults, hasTariff: cp.tariffs.length > 0 },
     };
@@ -185,6 +208,89 @@ export function addTariffHandler(deps: ApiDeps): RouteHandler<typeof addTariffRo
       ),
     );
     return c.json(saved, 201);
+  };
+}
+
+const tariffNotFound = {
+  description: 'Нет такого контрагента, он вне области или у него нет такой ставки',
+  content: error,
+};
+
+export const editTariffRoute = createRoute({
+  method: 'put',
+  path: '/contractors/{id}/tariffs/{tariffId}',
+  tags: ['fees'],
+  summary: '«Изменить ставку обслуживания»: правка записи журнала тарифов с причиной',
+  middleware: [requirePermission('fee'), requirePermission('tariff')] as const,
+  request: { params: FeeTariffParam, body: body(TariffEditRequest) },
+  responses: {
+    200: {
+      description: 'Ставка изменена (или изменений нет) и на сколько изменился долг',
+      content: json(TariffEdited),
+    },
+    400: {
+      description:
+        'Нет суммы, месяца или причины; месяц занят другой ставкой или раньше начала обслуживания',
+      content: error,
+    },
+    401: unauthorized,
+    403: { description: `${off}; нет права «Менять журнал тарифов»`, content: error },
+    404: tariffNotFound,
+    409: {
+      description: 'Контрагент разовый или в архиве; ставку уже изменил другой пользователь',
+      content: error,
+    },
+  },
+});
+
+/**
+ * «Сохранить» в окне «Изменить ставку» (прототип v86 `tariffEditDlg`): начисления считаются из журнала
+ * и пересчитываются сами, оплаты не меняются; правка — в журнале (ярлык «изменена») и в истории
+ * контрагента.
+ */
+export function editTariffHandler(deps: ApiDeps): RouteHandler<typeof editTariffRoute, AppEnv> {
+  return async (c) => {
+    const { id, tariffId } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const subject = subjectOf(c);
+    const saved = await inFee(deps, c, (tx) =>
+      editTariff(tx, id, tariffId, input, { today: todayOf(deps), scope: scopeSqlOf(subject) }),
+    );
+    return c.json(saved, 200);
+  };
+}
+
+export const deleteTariffRoute = createRoute({
+  method: 'post',
+  path: '/contractors/{id}/tariffs/{tariffId}/delete',
+  tags: ['fees'],
+  summary: '«Удалить ставку»: ставка, которая ещё не начала действовать, с причиной',
+  middleware: [requirePermission('fee'), requirePermission('tariff')] as const,
+  request: { params: FeeTariffParam, body: body(TariffDeleteRequest) },
+  responses: {
+    200: { description: 'Ставка удалена из журнала', content: json(OkResponse) },
+    400: { description: 'Нет причины', content: error },
+    401: unauthorized,
+    403: { description: `${off}; нет права «Менять журнал тарифов»`, content: error },
+    404: tariffNotFound,
+    409: {
+      description:
+        'Ставка уже действует или единственная; контрагент разовый или в архиве; ставку изменил другой пользователь',
+      content: error,
+    },
+  },
+});
+
+/** «Удалить ставку» (прототип v86 `te-del`): удаление — в истории контрагента. */
+export function deleteTariffHandler(deps: ApiDeps): RouteHandler<typeof deleteTariffRoute, AppEnv> {
+  return async (c) => {
+    const { id, tariffId } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const subject = subjectOf(c);
+    await inFee(deps, c, (tx) =>
+      deleteTariff(tx, id, tariffId, input, { today: todayOf(deps), scope: scopeSqlOf(subject) }),
+    );
+    return c.json({ ok: true as const }, 200);
   };
 }
 

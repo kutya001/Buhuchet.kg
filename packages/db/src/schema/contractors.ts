@@ -25,6 +25,7 @@ import {
   index,
   integer,
   jsonb,
+  pgPolicy,
   pgTable,
   primaryKey,
   smallint,
@@ -39,7 +40,7 @@ import { money, recordVersion, timestamps } from './columns';
 import { organizations } from './organizations';
 import { gkedItems } from './platform';
 import { ownershipForms, reportBases, taxBenefits, taxOffices, taxRegimes } from './platform-dicts';
-import { orgIsolation } from './rls';
+import { appRole, orgIsolation } from './rls';
 import { employees } from './staff';
 import { users } from './users';
 
@@ -291,6 +292,11 @@ export const contractorTariffs = pgTable(
     note: text('note').notNull().default(''),
     createdBy: uuid('created_by').references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Правка ошибочно внесённой ставки (прототип v86 `t.edited`): кто, когда и почему; пусто — не правили. */
+    editedBy: uuid('edited_by').references(() => users.id),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    editReason: text('edit_reason'),
+    version: recordVersion(),
   },
   (t) => [
     contractorRef('contractor_tariffs_contractor_fk', t),
@@ -301,6 +307,18 @@ export const contractorTariffs = pgTable(
       'contractor_tariffs_month_check',
       sql`${t.validFrom} = date_trunc('month', ${t.validFrom})::date`,
     ),
+    check(
+      'contractor_tariffs_edit_check',
+      sql`(${t.editedAt} is null and ${t.editedBy} is null and ${t.editReason} is null) or (${t.editedAt} is not null and ${t.editedBy} is not null and btrim(${t.editReason}) <> '')`,
+    ),
     orgIsolation('contractor_tariffs_isolation', t.orgId),
+    // Правку ставки записывают только от своего имени и с причиной (столбцы — в миграции прав).
+    pgPolicy('contractor_tariffs_update_guard', {
+      as: 'restrictive',
+      for: 'update',
+      to: appRole,
+      using: sql`true`,
+      withCheck: sql`${t.editedBy} = app.current_user_id() and ${t.editedAt} is not null and btrim(${t.editReason}) <> ''`,
+    }),
   ],
 ).enableRLS();

@@ -213,4 +213,80 @@ test.describe('Этап 2: плата за обслуживание', () => {
     await expect(card).not.toContainText('Оплата за обслуживание');
     await expect(card).not.toContainText('Ставка обслуживания');
   });
+
+  test('(проверка прототипа v86) в «Журнале тарифов» ошибочно внесённую ставку можно изменить с причиной: начисление пересчитано, у записи ярлык «изменена», правка — в истории контрагента; ставку, которая ещё не начала действовать, можно удалить', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Ставка');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(request, origin, { name, tariffAmount: 6_000_000 });
+    const month = currentMonth();
+    const [y, m] = month.split('-').map(Number) as [number, number];
+    const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    // Вторая ставка — со следующего месяца: она ещё не действует.
+    const added = await request.post(`/api/contractors/${cp.id}/tariffs`, {
+      headers: { origin },
+      data: { amount: 7_000_000, period: 'M', from: next, note: 'Повышение' },
+    });
+    expect(added.status(), await added.text()).toBe(201);
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await openList(page, isMobile, word);
+    const card = await openCard(page, cp.id, name);
+    await toTab(page, card, isMobile, /Обслуживание/);
+    const tab = card.locator('[data-fee-tab]');
+    const journal = tab.locator('[data-fee-tariffs] li');
+    await expect(journal).toHaveCount(2);
+
+    // Первая ставка (с месяца начала обслуживания): удалить нельзя, причина обязательна.
+    await tab.locator('[data-fee-tariff-edit="2026-01"]').click();
+    const dialog = page.getByRole('dialog', { name: 'Изменить ставку обслуживания' });
+    await expect(dialog.locator('[data-fee-tedit-amount]')).toHaveValue(som('60 000'));
+    await expect(dialog.locator('[data-fee-tedit-delete]')).toHaveCount(0);
+    await expect(dialog).toContainText('Начисления за месяцы этой ставки пересчитаются');
+    await dialog.locator('[data-fee-tedit-amount]').fill('50000');
+    await dialog.locator('[data-fee-tedit-ok]').click();
+    await expect(dialog).toContainText('Укажите причину');
+    await dialog.locator('[data-fee-tedit-reason]').fill('ставку внесли с ошибкой');
+    await dialog.locator('[data-fee-tedit-ok]').click();
+    await expect(page.getByRole('status').filter({ hasText: 'Ставка изменена' })).toBeVisible();
+    await expect(dialog).toBeHidden();
+
+    // Журнал: новая сумма и ярлык «изменена» с причиной в подсказке; начисление месяца пересчитано.
+    const edited = journal.filter({ hasText: /50\s000/ });
+    await expect(edited).toHaveCount(1);
+    await expect(edited.locator('[data-tag]')).toHaveText('изменена');
+    await expect(edited.locator('[data-tag]')).toHaveAttribute(
+      'title',
+      /Причина: ставку внесли с ошибкой/,
+    );
+    const fees = await feesOf(request, cp.id);
+    expect(fees.months.find((x) => x.month === month)).toMatchObject({ charge: 5_000_000 });
+
+    // Ставка со следующего месяца ещё не действует: её можно удалить — тоже с причиной.
+    await tab.locator(`[data-fee-tariff-edit="${next}"]`).click();
+    await expect(dialog.locator('[data-fee-tedit-amount]')).toHaveValue(som('70 000'));
+    await dialog.locator('[data-fee-tedit-delete]').click();
+    await expect(dialog).toContainText('Укажите причину');
+    await dialog.locator('[data-fee-tedit-reason]').fill('внесли по ошибке');
+    await dialog.locator('[data-fee-tedit-delete]').click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Ставка удалена из журнала' }),
+    ).toBeVisible();
+    await expect(dialog).toBeHidden();
+    await expect(journal).toHaveCount(1);
+
+    // История контрагента: правка и удаление — с причиной.
+    await toTab(page, card, isMobile, /История/);
+    await expect(card).toContainText(
+      /Изменена ставка обслуживания: сумма 60\s000\sсом → 50\s000\sсом\. Причина: ставку внесли с ошибкой/,
+    );
+    await expect(card).toContainText(
+      /Удалена ставка 70\s000\sсом в месяц с .+ \(ещё не действовала\)\. Причина: внесли по ошибке/,
+    );
+  });
 });
