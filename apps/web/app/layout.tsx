@@ -27,7 +27,7 @@ export const viewport: Viewport = {
 
 /**
  * Тема — из cookie выбора на этом устройстве, поэтому страница сразу приходит в нужной теме, без
- * вспышки; выбора нет — тема устройства (стили theme.css). Шрифт Inter — свой, со своего сайта.
+ * вспышки; выбора нет — светлая (стили theme.css, прототип v88). Шрифт Inter — свой, со своего сайта.
  */
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const dictionary = await loadDictionary();

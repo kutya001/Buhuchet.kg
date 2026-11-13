@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
+import { DEMO_PASSWORD, newOrgOwner, showStats, signIn } from './helpers';
 
 // «Файловый менеджер» (задача 2.29, #85): все файлы организации с источником, ручная загрузка с
 // контрагентом, окно файла, область «Свои контрагенты» и уроки модуля в «Базе знаний».
@@ -201,10 +201,13 @@ test.describe('Этап 2: Файловый менеджер', () => {
       page.getByRole('dialog', { name: 'Готово: шаг «Загрузить файл вручную» выполнен' }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Остаться здесь' }).click();
-    // Строка файла; на ПК плашка «Загружено вручную» — 1 (на телефоне плашки скрыты, пока не включена
+    // Строка файла; на ПК плашка «Загружено вручную» — 1 (плашки скрыты, пока не включена
     // «Статистика»).
     await expect(page.locator('[data-grid]')).toContainText('Устав.pdf');
-    if (!isMobile) await expect(page.locator('[data-plate="manual"]')).toContainText('1');
+    if (!isMobile) {
+      await showStats(page);
+      await expect(page.locator('[data-plate="manual"]')).toContainText('1');
+    }
 
     await policy(false);
     await page.goto('/app/kb/lessons');

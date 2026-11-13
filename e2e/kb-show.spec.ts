@@ -240,7 +240,14 @@ test.describe('Этап 2: База знаний — «Показать как»
     baseURL,
     isMobile,
   }) => {
-    await reportThisWeek(page, new URL(baseURL!).origin);
+    const origin = new URL(baseURL!).origin;
+    await reportThisWeek(page, origin);
+    // «Статистика» по умолчанию скрыта (прототип v88): показ обходит плашки, когда она включена.
+    const stats = await page.request.put('/api/view-settings/stats.reports', {
+      headers: { origin },
+      data: { stats: true },
+    });
+    expect(stats.status(), await stats.text()).toBe(200);
     await showStep(page, 'rtabs');
     await expect(page).toHaveURL(/\/app\/reports\/week/);
     const first = await position(page);
@@ -276,7 +283,7 @@ test.describe('Этап 2: База знаний — «Показать как»
         'Кнопка «…» — действия',
       ]),
     );
-    // На телефоне плашки по умолчанию скрыты, а список — карточками без фильтров столбцов, как в
+    // На телефоне плашки скрыты (их выбор — свой), а список — карточками без фильтров столбцов, как в
     // прототипе: облачка показывают только видимое.
     if (!isMobile) {
       expect(titles).toEqual(

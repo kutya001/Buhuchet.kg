@@ -312,7 +312,7 @@ describe('меню на телефоне (ТЗ «Мобильная навига
 });
 
 describe('выбор на устройстве: тема, левая панель, раскрытые ветки, «На весь экран»', () => {
-  it('тема — только light или dark, иначе тема устройства', () => {
+  it('тема — только light или dark, иначе выбора нет (светлая, прототип v88)', () => {
     expect(parseTheme('dark')).toBe('dark');
     expect(parseTheme('light')).toBe('light');
     expect(parseTheme('blue')).toBeNull();

@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, showStats, signIn } from './helpers';
 import { asOwner, newContractor } from './reports';
 
 // «Проекты контрагентов» (задача 2.26, #82, часть 1) через настоящий сайт. Демо-организация: владелец
@@ -184,8 +184,11 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/projects/active');
     await expect(page.locator('[data-grid]')).toBeVisible();
-    // Плашки-итоги на телефоне по умолчанию скрыты (ТЗ «Статистика модуля»).
-    if (!isMobile) await expect(page.locator('[data-plate="run"]')).toBeVisible();
+    // Плашки-итоги по умолчанию скрыты (прототип v88) — на ПК показать кнопкой «Статистика».
+    if (!isMobile) {
+      await showStats(page);
+      await expect(page.locator('[data-plate="run"]')).toBeVisible();
+    }
     await add(page);
     const dlg = page.getByRole('dialog', { name: 'Новый проект' });
     await dlg.locator('[data-pd-ok]').click();
