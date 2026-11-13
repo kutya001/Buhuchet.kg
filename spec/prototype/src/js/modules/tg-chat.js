@@ -1,7 +1,7 @@
 'use strict';
 // Чат бота: общий вид сообщений и приём нажатий (поток Т, задача Т1; пакет заказчика 13.11.2026, одобрены все идеи списка «Идеи для Telegram-бота»)
 // Сообщение бота — не строка, а описание: заголовок, текст, таблицы (у таблицы с названием — раскрывающийся раздел), кнопки под сообщением.
-//   m: {h, sub, t, plain, code, tables:[{title, open, n, head:[], rows:[[]], foot:[], num:[номера числовых столбцов]}], btns:[[{t, icon, act, arg, copy, copied, url, go, off}]], at, me, eph,
+//   m: {img:{name, src} — картинка над текстом (рассылка, задача Т6), h, sub, t, plain, code, tables:[{title, open, n, head:[], rows:[[]], foot:[], num:[номера числовых столбцов]}], btns:[[{t, icon, act, arg, copy, copied, url, go, off}]], at, me, eph,
 //       ask:{act, arg, kind:'file'|'text', re, day, off} — бот ждёт ответ на это сообщение (задача Т2), file:{name, size} и re — файл и «в ответ на» в сообщении человека}
 // Что правит администратор платформы, а что задаёт продукт: тексты, подписи кнопок и скрытые ответы — шаблоны «Справочников платформы»; состав таблиц и место кнопок — продукт.
 // Запасной простой текст строится из того же описания (tgPlain), отдельно его никто не пишет. Число в строке таблицы идёт с названием своего столбца: «Нурлан Т. — Сдать 6 — Просроч. 2».
@@ -27,9 +27,9 @@ function tgcMsg(m,i,plain){
   if(m.me)return `<div class="tgc-m me${m.re||m.file?' say':''}"><div class="tgc-b">${m.re?`<p class="tgc-re">${ic('chat','sm')}${esc(m.re)}</p>`:''}${m.file?`<p class="tgc-file">${ic('file','sm')}<span>${esc(m.file.name)}</span><span class="tgc-fs">${fmtSize(m.file.size)}</span></p>`:''}${m.t?`<p>${esc(m.t)}</p>`:''}${at}</div></div>`;
   const body=plain?`<p>${tgcText(tgPlain(m),m.code)}</p>`:`${m.h?`<p class="tgc-h">${esc(m.h)}</p>`:''}${m.sub?`<p class="tgc-sub">${esc(m.sub)}</p>`:''}${m.t?`<p>${tgcText(m.t,m.code)}</p>`:''}${(m.tables||[]).map(tgcTable).join('')}`;
   const kb=(m.btns||[]).length?`<div class="tgc-kb">${m.btns.map((r,ri)=>`<div class="tgc-row">${r.map((b,ci)=>`<button type="button" class="tgc-k" data-tgc="${i}:${ri}:${ci}" ${b.off?'disabled':''}>${b.icon?ic(b.icon,'sm'):b.copy?ic('copy','sm'):b.url?ic('link','sm'):''}<span>${esc(b.t)}</span></button>`).join('')}</div>`).join('')}</div>`:'';
-  return `<div class="tgc-m"><div class="tgc-b">${body}${tgAskLive(m)?`<p class="tgc-wait">${ic('hourglass','sm')}Бот ждёт ответ на это сообщение</p>`:''}${at}</div>${kb}</div>`}
-// chat: {who, list, plain}
-function tgcHtml(chat){return `<div class="tgc" data-tgchat><div class="tgc-head"><span class="tgc-ava">B</span><b>${esc(chat.who||'Buhuchet.kg')}</b><span>бот</span></div>${chat.list.map((m,i)=>tgcMsg(m,i,chat.plain)).join('')||'<span class="tgc-empty">Сообщений нет</span>'}${tgcAskHtml(chat)}</div>`}
+  return `<div class="tgc-m"><div class="tgc-b">${m.img?`<img class="tgc-img" src="${esc(m.img.src)}" alt="${esc(m.img.name||'Картинка')}">`:''}${body}${tgAskLive(m)?`<p class="tgc-wait">${ic('hourglass','sm')}Бот ждёт ответ на это сообщение</p>`:''}${at}</div>${kb}</div>`}
+// chat: {who, list, plain, menu — строка команд под перепиской (задача Т5, tg-menu.js)}
+function tgcHtml(chat){return `<div class="tgc" data-tgchat><div class="tgc-head"><span class="tgc-ava">B</span><b>${esc(chat.who||'Buhuchet.kg')}</b><span>бот</span></div>${chat.list.map((m,i)=>tgcMsg(m,i,chat.plain)).join('')||'<span class="tgc-empty">Сообщений нет</span>'}${tgcAskHtml(chat)}${chat.menu?tgcMenuHtml():''}</div>`}
 
 // Ответ боту (поток Т, задача Т2; решение заказчика 13.11.2026: «если нужно прикрепить файл — отправить файл боту, нет файла — не сдано»).
 // Действию нужен файл или текст — бот просит ответить на своё сообщение и ждёт до конца дня; под просьбой кнопка «Отмена». Пока ответа нет, запись не меняется.
@@ -56,18 +56,19 @@ function tgReply(u,chat,m,p){const k=m.ask,a=TG_ACTS[k.act],at=bishkekNow().hm,s
 function tgAskClose(m){m.ask.off=true;(m.btns||[]).forEach(row=>row.forEach(x=>{if(x.act==='askCancel')x.off=true}))}
 
 // Нажатие кнопки под сообщением. Общие проверки — до действия, одни для всех кнопок:
-//   чат привязан к учётной записи; учётная запись и организация не заблокированы; владелец не выключил «Действия из Telegram» (для кнопок, которые меняют данные);
+//   чат привязан к учётной записи (кроме кнопки «Это не я» под сообщением о безопасности, a.prev: она работает в том чате, куда пришло сообщение, даже отвязанном — tg-security.js);
+//   учётная запись и организация не заблокированы; владелец не выключил «Действия из Telegram» (для кнопок, которые меняют данные);
 //   у сотрудника есть право, запись — в его области «Свои / Все контрагенты»; запись не изменилась с момента отправки сообщения.
 // Отказ бот показывает скрытым ответом — его видит только нажавший, в переписке он не остаётся. Данные меняют только обратимые действия; деньги и удаление — только на сайте.
 // Каждое выполненное действие пишется в историю записи с пометкой «через Telegram» (tgLog).
 const TG_ACTS={};
-// def: {change — меняет данные (выключается владельцем), perm — право, scope(u,arg) — запись в области, stale(u,arg) — запись уже изменена, run(u,arg,m,b) → {eph, msg, done}}
+// def: {change — меняет данные (выключается владельцем), prev — работает и в отвязанном чате, perm — право, scope(u,arg) — запись в области, stale(u,arg) — запись уже изменена, run(u,arg,m,b) → {eph, msg, done}}
 function tgAct(id,def){TG_ACTS[id]=def}
 // «Отмена» под просьбой бота: бот перестаёт ждать ответ, запись не меняется
 tgAct('askCancel',{run:(u,arg,m)=>{if(!tgAskLive(m))return {eph:tplFill('tgActStale',{})};tgAskClose(m);return {done:'Отменено',eph:tplFill('tgActCancelled',{})}}});
 function tgRefusal(u,a,arg){
   if(!a)return tplFill('tgActStale',{});
-  if(!u||!u.tg)return tplFill('tgActNoLink',{});
+  if(!u||(!u.tg&&!a.prev))return tplFill('tgActNoLink',{});
   if(u.active===false)return tplFill('tgActNoRight',{});
   if(a.change&&u.id!=='admin'&&ORG.tgActions===false)return tplFill('tgActOff',{});
   if(a.perm&&!can(a.perm))return tplFill('tgActNoRight',{});
@@ -96,6 +97,8 @@ function tgcBind(root,chat,redraw,u){const box=root.querySelector('[data-tgchat]
     if(b.copy)return copyText(b.copy,b.copied||'Скопировано',true);
     if(b.url)return b.go?b.go():toast('В Telegram кнопка откроет сайт: '+b.url,'link');
     if(b.act){tgPress(u,chat,m,b);chat.jump=true;redraw()}};
+  // Меню команд (задача Т5): нажатие — сообщение человека и ответ бота
+  box.querySelectorAll('[data-tgc-cmd]').forEach(x=>x.onclick=e=>{e.stopPropagation();tgCmd(u,chat,x.dataset.tgcCmd);chat.jump=true;redraw()});
   const ask=box.querySelector('[data-tgc-ask]');if(!ask)return;
   const m=tgAskOpen(chat),q=s=>ask.querySelector(s),send=p=>{tgReply(u,chat,m,p);chat.jump=true;redraw()};
   q('[data-tgc-send]').onclick=()=>{if(m.ask.kind==='file'){const f=q('[data-tgc-file]').files[0];if(!f)return toast('Выберите файл','alert',true);return send({file:{name:f.name,size:f.size},cap:fNoteClean(q('[data-tgc-cap]').value)})}
@@ -111,8 +114,9 @@ tgAct('test',{run:()=>({eph:tplFill('tgTestOk',{})})});
 function tgTestMsg(){return {h:'Проверка бота',t:tplFill('tgTest',{}),tables:[{head:['Что проверяем','Как должно быть'],rows:[['Таблица','столбцами, как здесь'],['Кнопки','под сообщением'],['Скрытый ответ','после нажатия кнопки']]}],at:bishkekNow().hm,btns:[[{t:tgBtnT('tgBtnTest','Проверить кнопки'),act:'test',icon:'check'}]]}}
 
 // Окно «Чат с ботом»: макет переписки. o: {title, sub, note, who}
-function tgBotDlg(u,list,o={}){const chat={who:o.who||'Buhuchet.kg',list,plain:tgIsPlain(u)};
-  openModal({size:'mid',live:true,render:m=>({title:o.title||'Прототип: чат с ботом',sub:o.sub||'Так сообщения бота выглядят в Telegram',
+function tgBotDlg(u,list,o={}){const chat={who:o.who||'Buhuchet.kg',list,plain:tgIsPlain(u),menu:!!o.menu};
+  // После «Это не я» сеанс нажавшего завершён: когда окно переписки закроют, макет покажет страницу входа (tgSecLeave, tg-security.js)
+  openModal({size:'mid',live:true,onClose:()=>{tgSecLeave();if(o.onClose)o.onClose()},render:m=>({title:o.title||'Прототип: чат с ботом',sub:o.sub||'Так сообщения бота выглядят в Telegram',
     body:`<label class="check-row"><input type="checkbox" class="sw" id="tgc-plain" ${chat.plain?'checked':''}><span class="grow">Показать простым текстом<div class="hint">Запасной вид: без таблиц и разделов. Его получает тот, кто включил «Сообщения простым текстом» в «Мой профиль»${TG_BOT.rich?'':'; сейчас так получают все — таблицы выключены в Админке'}. Кнопки остаются.</div></span></label>${tgcHtml(chat)}<div class="note">${ic('info')}<span>${o.note||'Это макет: шрифты и форма кнопок в приложении Telegram немного другие. Тексты, подписи кнопок и скрытые ответы — Справочники платформы → «Шаблоны».'}</span></div>`,
     foot:'<button class="btn cta" data-close>Готово</button>',
     mount(el){$('#tgc-plain',el).onchange=e=>{chat.plain=e.target.checked;m.draw()};tgcBind(el,chat,()=>o.live?refreshAll():m.draw(),u)}})})}

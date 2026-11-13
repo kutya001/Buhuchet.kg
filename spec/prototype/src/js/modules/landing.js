@@ -155,10 +155,8 @@ function leadAdd(v){const day=Date.now()-24*36e5,at=nowStamp();const dup=LEADS.f
   const id='L'+(Math.max(0,...LEADS.map(x=>+String(x.id).slice(1)||0))+1);
   const o={id,at,name:v.name,firm:v.firm,phone:v.phone,size:v.size,tg:v.tg,note:v.note,status:'Новая',org:null,adminNote:'',hist:[{at,who:'guest',what:'Заявка с сайта'+(LAND.test?' (тестовый стенд)':'')}],_cb:'guest',_ca:at,_ub:'guest',_ua:at};
   LEADS.unshift(o);leadNotify();dbSoon();return o}
-// Сообщение администраторам платформы в Telegram в прототипе показывается окном предпросмотра
-function leadTgPreview(o,rep){const to=leadAdmins();openModal({render:()=>({title:'Прототип: сообщение в Telegram',sub:LAND.test?'Тестовый стенд: от бота стенда администраторам стенда, в Telegram рабочего сайта не уходит':'Администраторам платформы с привязанным Telegram',
-  body:`${to.length?'':`<div class="note warn">${ic('alert')}<span>Сообщение некому отправить: ни у одного администратора платформы не привязан Telegram. Над вкладкой «Заявки» — предупреждение.</span></div>`}<div class="lp-tg"><div class="row" style="gap:8px;color:var(--muted);font-size:12.5px">${ic('tg','sm')}<b>${LAND.test?'Бот тестового стенда':'Бот платформы'}</b>${to.length?`<span>→ ${to.map(u=>esc(u.tg)).join(', ')}</span>`:''}</div><div class="box" style="white-space:pre-wrap">${esc(leadTgText(o,rep))}</div></div><div class="note">${ic('info')}<span>Шаблон «${rep?'Telegram: повторная заявка с сайта':'Telegram: новая заявка с сайта'}» — Админка → Справочники платформы → Шаблоны.${to.length?' Отправка записана в журнал «Телеграм» с типом «Заявка с сайта».':''} Заявка — в Админке → «Организации» → «Заявки».</span></div>`,
-  foot:'<button class="btn ghost" data-close>Закрыть</button><button class="btn cta" id="lp-adm">Открыть «Заявки» в Админке</button>',mount(el,m){$('#lp-adm',el).onclick=()=>{m.close();landToAdmin()}}})})}
+// Сообщение администраторам платформы в Telegram в прототипе показывается окном предпросмотра: чат бота с кнопками «Взять в работу», «Отклонить», «Открыть в Админке» (поток Т, задача Т6 — admin/tg-leads.js)
+function leadTgPreview(o,rep){leadTgDlg(o,rep)}
 function landToAdmin(){landHide();const lg=$('#login');if(lg)lg.remove();S.loggedIn=true;if(S.me!=='admin')switchUser('admin');go('orgs','leads')}
 
 /* ═════════════ Анимации лендинга: отсылки к гербу бухгалтеров (v78, Кутман 08.11.2026) ═════════════ */
