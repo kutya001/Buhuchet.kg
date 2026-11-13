@@ -71,6 +71,8 @@ test.describe('Этап 2: справочники — виды отчётов', 
     await search(page, isMobile, 'НДС');
     const row = page.locator('[data-grid] [data-id="nds"]');
     await expect(row.getByRole('switch').first()).toBeDisabled();
+    // Галочек массовых изменений без права нет (прототип v84).
+    await expect(row.getByRole('checkbox', { name: /Выбрать/ })).toHaveCount(0);
     await row.getByText('НДС', { exact: true }).first().click();
     const view = page.getByRole('dialog', { name: 'НДС' });
     await expect(view.locator('[data-type-settings]')).toContainText('Настройки организации');

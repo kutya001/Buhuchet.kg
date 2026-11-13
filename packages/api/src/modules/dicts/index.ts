@@ -20,6 +20,7 @@ import {
   platformValueValuesHandler,
   platformValueValuesRoute,
 } from './platform';
+import { bulkOrgReportTypesHandler, bulkOrgReportTypesRoute } from './report-types-bulk';
 import {
   connectOrgReportTypesHandler,
   connectOrgReportTypesRoute,
@@ -51,6 +52,7 @@ export function dictsModule(deps: ApiDeps) {
       .openapi(exportOrgReportTypesRoute, exportOrgReportTypesHandler(deps))
       .openapi(orgReportTypeSettingsRoute, orgReportTypeSettingsHandler(deps))
       .openapi(connectOrgReportTypesRoute, connectOrgReportTypesHandler(deps))
+      .openapi(bulkOrgReportTypesRoute, bulkOrgReportTypesHandler(deps))
       .openapi(saveOrgReportTypeRoute, saveOrgReportTypeHandler(deps))
       .openapi(platformDictTilesRoute, platformDictTilesHandler(deps))
       .openapi(platformDictListRoute, platformDictListHandler(deps))

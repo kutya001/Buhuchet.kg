@@ -130,6 +130,7 @@ export async function createOrgReportType(
   tx: Tx,
   code: string,
   values: Required<OrgReportTypePatch>,
+  mark: OrgReportTypeMark = {},
 ): Promise<OrgReportTypeSetting> {
   const [row] = await tx
     .insert(orgReportTypes)
@@ -147,10 +148,18 @@ export async function createOrgReportType(
     entity: 'org_report_type',
     entityId: code,
     action: 'create',
-    changes: Object.entries(values).map(([field, to]) => ({ field, to })),
+    changes: [...Object.entries(values).map(([field, to]) => ({ field, to })), ...bulkMark(mark)],
   });
   return row;
 }
+
+/** Пометка записи истории: изменение сделано окном «Настроить виды отчётов» (прототип v84). */
+export interface OrgReportTypeMark {
+  bulk?: boolean;
+}
+
+/** «(массовое изменение)» прототипа — поле `bulk` в записи истории. */
+const bulkMark = (mark: OrgReportTypeMark) => (mark.bulk ? [{ field: 'bulk', to: true }] : []);
 
 /**
  * Изменить строку организации: подключить, отключить, дни напоминаний, файл, квитанция. Устаревшая
@@ -161,7 +170,10 @@ export async function updateOrgReportType(
   code: string,
   version: number,
   patch: OrgReportTypePatch,
+  mark: OrgReportTypeMark = {},
 ): Promise<OrgReportTypeSetting> {
+  // Пометка — только к настоящему изменению: одна она запись истории не создаёт.
+  const changed = Object.keys(patch).length > 0;
   const row = await updateWithHistory(tx, {
     table: orgReportTypes,
     entity: 'org_report_type',
@@ -170,6 +182,7 @@ export async function updateOrgReportType(
     id: code,
     version,
     patch,
+    changes: changed ? bulkMark(mark) : [],
   });
   return {
     code: row.reportTypeCode,
@@ -187,11 +200,15 @@ export function lockOrgReportTypes(
   codes: readonly string[],
 ): Promise<OrgReportTypeSetting[]> {
   if (!codes.length) return Promise.resolve([]);
-  return tx
-    .select(settingFields)
-    .from(orgReportTypes)
-    .where(and(OWN, inArray(orgReportTypes.reportTypeCode, [...codes])))
-    .for('update');
+  return (
+    tx
+      .select(settingFields)
+      .from(orgReportTypes)
+      .where(and(OWN, inArray(orgReportTypes.reportTypeCode, [...codes])))
+      // Строки блокируются в одном порядке у всех транзакций — без взаимного ожидания.
+      .orderBy(asc(orgReportTypes.reportTypeCode))
+      .for('update')
+  );
 }
 
 /* ───────────── Список «Виды отчётов» ───────────── */

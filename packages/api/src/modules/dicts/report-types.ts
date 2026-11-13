@@ -68,7 +68,7 @@ function rowBody(r: OrgReportTypeRecord): OrgReportTypeRow {
 }
 
 /** Отказ по правилу подключения: 409 — состояние вида не то, 400 — неверное значение. */
-function refuse(problem: OrgReportTypeProblem): never {
+export function refuse(problem: OrgReportTypeProblem): never {
   const status = problem === 'need_file_pay' || problem === 'remind_days_invalid' ? 400 : 409;
   apiFail(status, problem, ORG_REPORT_TYPE_MESSAGES[problem]);
 }
@@ -226,7 +226,7 @@ export function orgReportTypeSettingsHandler(
 }
 
 /** Набор дней по умолчанию из учётной политики организации. */
-async function policyDays(tx: Tx, orgId: string): Promise<number[]> {
+export async function policyDays(tx: Tx, orgId: string): Promise<number[]> {
   const policy = await getOrgPolicy(tx, orgId);
   if (!policy) throw new RecordNotFoundError('org_settings', orgId);
   return policy.remindDays;
