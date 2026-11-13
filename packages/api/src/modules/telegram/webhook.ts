@@ -16,6 +16,7 @@ import {
 } from '@buhuchet/db';
 import {
   codeWithOrganization,
+  CP_TG_START_PREFIX,
   cpTgStartToken,
   loginDenial,
   parseStartCommand,
@@ -347,12 +348,12 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     }
     if (!command.token) return reply(await botText(deps, 'tgStart'));
     // Telegram контрагента (поток К): ссылка со страницы контрагента — «/start cp_<токен>».
-    const clientToken = cpTgStartToken(command.token);
-    if (clientToken) {
+    // Испорченная ссылка страницы (ключ не той длины) — тоже клиенту: «ссылка не подходит».
+    if (command.token.startsWith(CP_TG_START_PREFIX)) {
       await clientStart(
         deps,
         { chatId: chat.id, username: from?.username ?? null, firstName: from?.first_name ?? null },
-        clientToken,
+        cpTgStartToken(command.token),
       );
       return ok;
     }

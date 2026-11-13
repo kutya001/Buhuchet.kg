@@ -348,6 +348,9 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
     await toBot(`/start ${token}`, CLIENT_2, 'client_two');
     await toBot(`/start cp_${'B'.repeat(43)}`, CLIENT_2, 'client_two');
     expect(sentTo(CLIENT_2)).toEqual([text('tgCpLinkBad'), text('tgCpLinkBad')]);
+    // Ключ не той длины (ссылку обрезали) — тот же ответ клиенту, а не подсказка сотруднику.
+    await toBot(`/start cp_${'B'.repeat(20)}`, CLIENT_2, 'client_two');
+    expect(sentTo(CLIENT_2).slice(2)).toEqual([text('tgCpLinkBad')]);
     // Новая ссылка тому же чату — запрос уже ждёт: новой строки и сообщения сотруднику нет.
     await start('org-a', cpAcc, grantAcc, CLIENT_1, 'client_one');
     expect(sentTo(CLIENT_1)).toHaveLength(2);

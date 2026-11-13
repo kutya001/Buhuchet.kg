@@ -122,8 +122,9 @@ async function notifyStaff(
 export async function clientStart(
   deps: ApiDeps,
   chat: { chatId: number; username: string | null; firstName: string | null },
-  token: string,
+  token: string | null,
 ): Promise<void> {
+  if (!token) return reply(deps, chat.chatId, 'tgCpLinkBad');
   const tokenHash = hashSessionToken(token);
   const target = await peekContractorTelegramLink(deps.db, tokenHash, chat.chatId);
   if (!target) return reply(deps, chat.chatId, 'tgCpLinkBad');
