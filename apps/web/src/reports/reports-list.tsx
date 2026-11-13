@@ -34,6 +34,7 @@ import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useShell } from '../shell/context';
 import { moduleHref, tabHref } from '../shell/modules';
 import { useMassAssign } from './mass-assign';
@@ -114,9 +115,6 @@ function NoTypesNote() {
     </div>
   );
 }
-
-/** Номер записи в адресе (`?report=`): только uuid. */
-const RECORD_ID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
 /**
  * «Отчеты для сдачи» → вкладка «На неделе», «Просрочено», «Ожидают подтверждения» или «Все отчёты»
@@ -207,9 +205,10 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
   }, [tab, s, plateParam, setFilters, router]);
 
   // Ссылка «Открыть» из сообщения бота: карточка отчёта и адрес без `?report=`.
-  const openLinked = useEffectEvent((id: string) => {
-    if (RECORD_ID.test(id)) reports.openCard({ id });
-    router.replace(tabHref('reports', tab), { scroll: false });
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('report');
+    const id = linkedRecordId(value);
+    if (id) reports.openCard({ id });
   });
   useEffect(() => {
     if (reportParam) openLinked(reportParam);
