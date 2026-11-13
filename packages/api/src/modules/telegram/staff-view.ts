@@ -18,14 +18,15 @@ import type { TelegramEvent } from './events';
  */
 
 /** Адрес записи на сайте для кнопки «Открыть»; null — адрес сайта не https (кнопка-ссылка невозможна). */
-export function botSiteUrl(deps: ApiDeps, path: string): string | null {
+export function botSiteUrl(
+  deps: { config: Pick<ApiDeps['config'], 'APP_BASE_URL'> },
+  path: string,
+): string | null {
   const url = new URL(path, deps.config.APP_BASE_URL);
   return url.protocol === 'https:' ? url.href : null;
 }
 export const reportSiteUrl = (deps: ApiDeps, id: string) =>
   botSiteUrl(deps, `/app/reports/all?report=${id}`);
-export const reportsSiteUrl = (deps: ApiDeps, tab: 'all' | 'wait') =>
-  botSiteUrl(deps, `/app/reports/${tab}`);
 export const taskSiteUrl = (deps: ApiDeps, id: string) =>
   botSiteUrl(deps, `/app/tasks/mine?task=${id}`);
 

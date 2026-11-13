@@ -74,6 +74,8 @@ export function useTaskActions(): {
   actions: (task: TaskListRow) => ActionEntry[];
   /** Карточка: ручной задачи (строка списка или карточка с сервера) или отчёта регулярной задачи. */
   openCard: (task: TaskListRow | TaskRow) => void;
+  /** Карточка задачи по номеру: ссылка «Открыть задачу» из сообщения бота (`?task=`). */
+  openById: (id: string) => void;
   newTask: (preset?: TaskFormPreset) => void;
   /**
    * Перенос карточки на доске в столбец `to` столбца списка `key` (прототип `taskKanban.drop`): то же,
@@ -373,9 +375,15 @@ export function useTaskActions(): {
     </>
   );
 
+  const openById = async (id: string) => {
+    const full = await load(id, () => fresh(id));
+    if (full) setCard(openSlot(full));
+  };
+
   return {
     actions,
     openCard,
+    openById: (id) => void openById(id),
     newTask: (preset) => void newTask(preset),
     drop: actor ? drop : undefined,
     dialogs: (

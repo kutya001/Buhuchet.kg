@@ -22,7 +22,7 @@ import {
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useSyncExternalStore } from 'react';
 import { api, apiFailure } from '../api-client';
 import { typeSettingsQuery } from '../dicts/dicts-data';
 import { useTaxPick } from '../dicts/tax-pick';
@@ -115,6 +115,9 @@ function NoTypesNote() {
   );
 }
 
+/** Номер записи в адресе (`?report=`): только uuid. */
+const RECORD_ID = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
 /**
  * «Отчеты для сдачи» → вкладка «На неделе», «Просрочено», «Ожидают подтверждения» или «Все отчёты»
  * (ТЗ «Отчеты для сдачи» → «Вкладки модуля», плашки, столбцы, «Метка «Что нужно сделать»»; прототип
@@ -127,7 +130,9 @@ function NoTypesNote() {
 export function ReportsList({ tab }: { tab: ReportListTab }) {
   const t = useT();
   const router = useRouter();
-  const plateParam = useSearchParams().get('plate');
+  const query = useSearchParams();
+  const plateParam = query.get('plate');
+  const reportParam = query.get('report');
   const gridKey: GridKey = `reports.${tab}`;
   const preset = usePresetFilters('reports', tab);
   const labels = useGridLabels('report.count');
@@ -200,6 +205,15 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
     setFilters(plateFilters(plateParam, s.month));
     router.replace(tabHref('reports', 'all'), { scroll: false });
   }, [tab, s, plateParam, setFilters, router]);
+
+  // Ссылка «Открыть» из сообщения бота: карточка отчёта и адрес без `?report=`.
+  const openLinked = useEffectEvent((id: string) => {
+    if (RECORD_ID.test(id)) reports.openCard({ id });
+    router.replace(tabHref('reports', tab), { scroll: false });
+  });
+  useEffect(() => {
+    if (reportParam) openLinked(reportParam);
+  }, [reportParam]);
 
   const goPlate = (plate: PlateFilter) => {
     if (!s) return;
