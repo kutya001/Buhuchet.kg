@@ -101,11 +101,6 @@ export function newsLoginDefault(type: NewsType, pinned: boolean): boolean {
   return pinned || type === 'update' || type === 'feature';
 }
 
-const versionNumber = (v: string | null) => {
-  const n = Number.parseFloat(v ?? '');
-  return Number.isFinite(n) ? n : 0;
-};
-
 /** Сравнение версий как чисел по частям: «1.10» новее «1.9». */
 export function compareNewsVersions(a: string, b: string): number {
   return a.localeCompare(b, undefined, { numeric: true });
@@ -117,43 +112,38 @@ export interface NewsOrderFields {
   version: string | null;
 }
 
-/**
- * Порядок ленты (ТЗ; прототип newsSort): от новых к старым по дате выхода, в один день — по времени
- * публикации, затем по номеру версии.
- */
-export function compareNews(a: NewsOrderFields, b: NewsOrderFields): number {
-  return (
-    b.date.localeCompare(a.date) ||
-    (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0) ||
-    versionNumber(b.version) - versionNumber(a.version)
-  );
-}
-
-export interface NewsGroup<T> {
-  /** Версия; пусто — объявления без версии. */
-  version: string | null;
-  /** Дата группы — самая поздняя дата её новостей («Версия 1.4 — 20.10.2026»). */
-  date: IsoDate;
-  items: T[];
-}
+/** От новых к старым по дате выхода, в один день — по времени публикации. */
+const byDate = (a: NewsOrderFields, b: NewsOrderFields) =>
+  b.date.localeCompare(a.date) || (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0);
 
 /**
- * Лента по группам (прототип renderNews): закреплённые — отдельно сверху, остальные по версиям; группы
- * идут в порядке ленты — выше та, в которой новость вышла позже. Новости должны быть уже упорядочены
- * `compareNews`.
+ * Порядок ленты и окна «Что нового» (прототип v98 newsOrder, решение заказчика 13.11.2026): строго по
+ * номеру версии, новые сверху — версии одного дня раньше шли по времени публикации и путались. Новость
+ * без версии (объявление) встаёт среди версий по дате выхода, в один день — выше версии.
  */
-export function newsGroups<T extends { version: string | null; date: IsoDate; pinned: boolean }>(
-  items: readonly T[],
-): { pinned: T[]; groups: NewsGroup<T>[] } {
-  const groups: NewsGroup<T>[] = [];
-  for (const n of items) {
-    if (n.pinned) continue;
-    let g = groups.find((x) => x.version === (n.version || null));
-    if (!g) groups.push((g = { version: n.version || null, date: n.date, items: [] }));
-    g.items.push(n);
-    if (n.date > g.date) g.date = n.date;
+export function newsOrder<T>(items: readonly T[], fields: (item: T) => NewsOrderFields): T[] {
+  const keyed = items.map((item) => ({ item, f: fields(item) }));
+  const versioned = keyed
+    .filter((x) => x.f.version)
+    .sort((a, b) => compareNewsVersions(b.f.version!, a.f.version!) || byDate(a.f, b.f));
+  const rest = keyed.filter((x) => !x.f.version).sort((a, b) => byDate(a.f, b.f));
+  const out: T[] = [];
+  let i = 0;
+  for (const v of versioned) {
+    while (i < rest.length && rest[i]!.f.date >= v.f.date) out.push(rest[i++]!.item);
+    out.push(v.item);
   }
-  return { pinned: items.filter((n) => n.pinned), groups };
+  while (i < rest.length) out.push(rest[i++]!.item);
+  return out;
+}
+
+/**
+ * Номер версии уже назван в заголовке («Версия 98: …») — тогда «версия 98» в строке ленты не
+ * повторяется (прототип v98 newsVerInT): номер ищется целиком, «9» в «98» не считается.
+ */
+export function newsTitleHasVersion(title: string, version: string): boolean {
+  const number = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|\\D)${number}(\\D|$)`).test(title);
 }
 
 /** Версии для фильтра — от новых к старым (прототип: сортировка с numeric). */
@@ -168,11 +158,6 @@ export function newsMatches(n: { title: string; short: string; md: string }, q: 
   const query = q.trim().toLowerCase();
   if (!query) return true;
   return `${n.title} ${n.short} ${newsMdText(n.md)}`.toLowerCase().includes(query);
-}
-
-/** Краткое описание для ленты: своё или начало текста без разметки (прототип newsShort). */
-export function newsShortText(n: { short: string; md: string }): string {
-  return n.short || newsMdText(n.md).slice(0, NEWS_SHORT_MAX);
 }
 
 export interface NewsDraft {
