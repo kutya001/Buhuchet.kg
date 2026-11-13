@@ -95,6 +95,10 @@ export const TELEGRAM_TEXTS = {
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },
   'telegram.notme.who.owner': { ru: 'владелец организации', section: S },
   'telegram.notme.who.admin': { ru: 'администратор платформы', section: S },
+  'telegram.notme.after_reset': {
+    ru: 'Пароль этой учётной записи недавно сброшен, поэтому кнопка не действует. Если это сделали не вы, попросите сбросить пароль ещё раз.',
+    section: S,
+  },
   'telegram.done.not_me': { ru: '✓ Вход закрыт', section: S },
   'telegram.done.not_me_admin': { ru: '✓ Сеансы завершены', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },

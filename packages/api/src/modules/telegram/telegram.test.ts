@@ -46,9 +46,14 @@ const {
 } = schema;
 const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
 /** Кнопка «Это не я» под сообщением о замене и отвязке Telegram: в записи — момент отправки (часы тестов). */
-const notMe = (notice: 'relink' | 'unlink') => ({
+const notMe = (notice: 'relink' | 'unlink', inert = false) => ({
   keyboard: [
-    [{ text: TPL.tgBtnNotMe, data: botPressData(NOT_ME_ACTION, notMeArg(notice, NOTICE_SENT)) }],
+    [
+      {
+        text: TPL.tgBtnNotMe,
+        data: botPressData(NOT_ME_ACTION, notMeArg(notice, NOTICE_SENT, inert)),
+      },
+    ],
   ],
 });
 const NOTICE_SENT = new Date('2026-10-18T03:00:00Z');
@@ -398,7 +403,8 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7004,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@lost_tg' }),
-        options: notMe('relink'),
+        // Привязка без кода после сброса пароля: кнопка в прежнем чате вход не закрывает.
+        options: notMe('relink', true),
       },
       { chatId: 7005, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
     ]);

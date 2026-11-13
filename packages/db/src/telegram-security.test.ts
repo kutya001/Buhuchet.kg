@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { NOT_ME_ACTION, securityBotMessage, type OutboxKind } from '@buhuchet/domain';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { findLogin, startSession, withUserContext } from './auth';
+import { findLogin, LoginClosedError, startSession, withUserContext } from './auth';
 import { withOrgContext } from './context';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
@@ -18,7 +18,7 @@ import {
   users,
 } from './schema';
 import { setTemporaryPassword } from './telegram';
-import { botPressTarget, logBotMessage, telegramNotMe } from './telegram-bot';
+import { botPressTarget, logBotMessage, telegramNotMe, telegramNotMeInert } from './telegram-bot';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -27,7 +27,11 @@ import {
 } from './testing';
 
 const NOW = new Date('2026-11-14T03:15:27.000Z');
-const TEXTS = { staffText: 'Сотрудник нажал «Это не я»', ownerText: 'Владелец нажал «Это не я»' };
+const TEXTS = {
+  staffText: 'Сотрудник нажал «Это не я»',
+  ownerText: 'Владелец нажал «Это не я»',
+  hours: 24,
+};
 
 describe.skipIf(!databaseAvailable())('«Это не я» под сообщениями о безопасности (Т4)', () => {
   let t: TestDatabase;
@@ -174,7 +178,8 @@ describe.skipIf(!databaseAvailable())('«Это не я» под сообщен�
       .select()
       .from(telegramLinkTokens)
       .where(eq(telegramLinkTokens.userId, staffId));
-    expect(linkToken!.expiresAt.getTime()).toBeLessThanOrEqual(Date.now());
+    // Отменена «-infinity»: драйвер отдаёт такую дату как неверную.
+    expect(linkToken!.expiresAt.getTime() > Date.now()).toBe(false);
     const [code] = await t.admin.db
       .select()
       .from(passwordResetCodes)
@@ -253,7 +258,72 @@ describe.skipIf(!databaseAvailable())('«Это не я» под сообщен�
     expect(done!.queued).toEqual([toAdmin!.id]);
   });
 
-  it('Telegram отвязан: чат остаётся «прежним» со своим именем, разрешение привязать без кода снято', async () => {
+  it('пароль сброшен владельцем: прежние кнопки погашены, из прежнего чата вход заново не закрыть', async () => {
+    // Сброс пароля в предыдущем тесте погасил кнопку под сообщением, отправленным до него.
+    const before = await t.admin.db
+      .select({ payload: telegramOutbox.payload })
+      .from(telegramOutbox)
+      .where(and(eq(telegramOutbox.userId, staffId), eq(telegramOutbox.kind, 'pass_changed')));
+    expect(before.length).toBeGreaterThan(0);
+    expect(before.every((m) => m.payload === null)).toBe(true);
+    const press = () =>
+      withOrgContext(t.app.db, asUser(b.orgId, staffId), (tx) =>
+        telegramNotMe(tx, { chatId: 7003, ...TEXTS, now: NOW }),
+      );
+    expect(await press()).toBeNull();
+
+    // Временный пароль: и новая кнопка ничего не закрывает.
+    await notice(staffId, 7003, 'pass_changed');
+    expect(await telegramNotMeInert(t.app.db, staffId)).toBe(true);
+    expect(await press()).toMatchObject({ status: 'reset', locked: false, sessions: 0 });
+    // Пароль заменён своим, но разрешение привязать Telegram без кода ещё действует — то же.
+    await t.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, staffId));
+    expect((await guardOf(staffId))?.freeUntil).not.toBeNull();
+    expect(await telegramNotMeInert(t.app.db, staffId)).toBe(true);
+    expect(await press()).toMatchObject({ status: 'reset', locked: false });
+    expect((await guardOf(staffId))?.freeUntil).not.toBeNull();
+    expect((await userOf(staffId)).loginLockedAt).toBeNull();
+
+    // Разрешение истекло — кнопка снова действует; сообщение старше срока кнопки не принимается.
+    await t.admin.db
+      .update(telegramLinkGuards)
+      .set({ freeUntil: null })
+      .where(eq(telegramLinkGuards.userId, staffId));
+    expect(await telegramNotMeInert(t.app.db, staffId)).toBe(false);
+    await t.admin.db
+      .update(telegramOutbox)
+      .set({ sentAt: new Date(Date.now() - 25 * 3600_000) })
+      .where(eq(telegramOutbox.userId, staffId));
+    expect(await press()).toBeNull();
+  });
+
+  it('вход закрыт неверными паролями: нажатие всё равно завершает сеансы, новый сеанс не начинается', async () => {
+    await startSession(t.app.db, { userId: staffId, tokenHash: token() });
+    // Блокировка после 10 неверных паролей открытых сеансов не завершает.
+    await t.admin.db.update(users).set({ loginLockedAt: new Date() }).where(eq(users.id, staffId));
+    await expect(
+      startSession(t.app.db, { userId: staffId, tokenHash: token() }),
+    ).rejects.toBeInstanceOf(LoginClosedError);
+    await notice(staffId, 7003, 'pass_changed');
+    const done = await withOrgContext(t.app.db, asUser(b.orgId, staffId), (tx) =>
+      telegramNotMe(tx, { chatId: 7003, ...TEXTS, now: NOW }),
+    );
+    expect(done).toMatchObject({ status: 'done', sessions: 1, locked: true });
+    expect(await userOf(staffId)).toMatchObject({ loginLockReason: 'not_me' });
+    expect(
+      await t.admin.db.select().from(sessions).where(eq(sessions.userId, staffId)),
+    ).toHaveLength(0);
+    // Вход закрыт — сеанс не начинается и у того, кто успел проверить пароль до нажатия.
+    await expect(
+      startSession(t.app.db, { userId: staffId, tokenHash: token() }),
+    ).rejects.toBeInstanceOf(LoginClosedError);
+    await t.admin.db
+      .update(users)
+      .set({ loginLockedAt: null, loginLockReason: null })
+      .where(eq(users.id, staffId));
+  });
+
+  it('Telegram отвязан: чат остаётся «прежним» со своим именем; пока действует разрешение без кода — отказ', async () => {
     await t.admin.db.delete(telegramLinks).where(eq(telegramLinks.userId, b.ownerUserId));
     await t.admin.db.insert(telegramLinkGuards).values({
       userId: b.ownerUserId,
@@ -263,9 +333,18 @@ describe.skipIf(!databaseAvailable())('«Это не я» под сообщен�
       freeUntil: new Date(Date.now() + 3600_000),
     });
     await notice(b.ownerUserId, 7002, 'unlinked');
-    const done = await withOrgContext(t.app.db, asUser(b.orgId, b.ownerUserId), (tx) =>
-      telegramNotMe(tx, { chatId: 7002, ...TEXTS, now: NOW }),
-    );
+    const press = () =>
+      withOrgContext(t.app.db, asUser(b.orgId, b.ownerUserId), (tx) =>
+        telegramNotMe(tx, { chatId: 7002, ...TEXTS, now: NOW }),
+      );
+    // Пароль сбросил администратор платформы: разрешение из прежнего чата не отменить.
+    expect(await press()).toMatchObject({ status: 'reset', locked: false });
+    expect((await guardOf(b.ownerUserId))?.freeUntil).not.toBeNull();
+    await t.admin.db
+      .update(telegramLinkGuards)
+      .set({ freeUntil: null })
+      .where(eq(telegramLinkGuards.userId, b.ownerUserId));
+    const done = await press();
     expect(done).toMatchObject({ status: 'done', cut: null, locked: true, isOwner: true });
     expect(await guardOf(b.ownerUserId)).toMatchObject({
       chatId: 7002,

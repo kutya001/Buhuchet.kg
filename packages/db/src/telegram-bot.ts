@@ -188,8 +188,12 @@ export async function markViaTelegram(tx: Tx): Promise<void> {
 
 /** Что сделало нажатие «Это не я» (поток Т, задача Т4). */
 export interface TelegramNotMeResult {
-  /** done — выполнено; locked — вход уже закрыт; denied — учётная запись заблокирована. */
-  status: 'done' | 'locked' | 'denied';
+  /**
+   * done — выполнено; locked — вход уже закрыт этой кнопкой; reset — пароль сброшен владельцем или
+   * администратором платформы (кнопка из прежнего чата не действует); denied — учётная запись
+   * заблокирована.
+   */
+  status: 'done' | 'locked' | 'reset' | 'denied';
   /** Сколько сеансов завершено. */
   sessions: number;
   /** Отвязан другой Telegram, привязанный вместо чата, из которого нажали; его имя — для истории. */
@@ -211,10 +215,17 @@ export interface TelegramNotMeResult {
  */
 export async function telegramNotMe(
   tx: Tx,
-  input: { chatId: number; staffText: string | null; ownerText: string | null; now: Date },
+  input: {
+    chatId: number;
+    staffText: string | null;
+    ownerText: string | null;
+    now: Date;
+    /** Сколько часов действует кнопка: сообщение с ней должно быть не старше. */
+    hours: number;
+  },
 ): Promise<TelegramNotMeResult | null> {
   const [row] = await tx.execute<{
-    status: 'done' | 'locked' | 'denied';
+    status: TelegramNotMeResult['status'];
     sessions: number;
     cut: boolean;
     cut_username: string | null;
@@ -223,7 +234,7 @@ export async function telegramNotMe(
     is_owner: boolean;
     queued: string[] | string;
   }>(
-    sql`select * from app.telegram_not_me(${input.chatId}::bigint, ${input.staffText}, ${input.ownerText}, ${input.now.toISOString()}::timestamptz)`,
+    sql`select * from app.telegram_not_me(${input.chatId}::bigint, ${input.staffText}, ${input.ownerText}, ${input.now.toISOString()}::timestamptz, ${input.hours}::integer)`,
   );
   if (!row) return null;
   // Массив uuid драйвер отдаёт списком или текстом «{a,b}».
@@ -241,6 +252,18 @@ export async function telegramNotMe(
     isOwner: row.is_owner,
     queued,
   };
+}
+
+/**
+ * Кнопка «Это не я» сейчас ничего не сделает: у пользователя временный пароль или действует разрешение
+ * привязать Telegram без кода — пароль сбросил владелец или администратор платформы. Сообщение о
+ * безопасности в это время уходит с кнопкой, которая только объясняет, что делать.
+ */
+export async function telegramNotMeInert(db: Db | Tx, userId: string): Promise<boolean> {
+  const [row] = await db.execute<{ inert: boolean | null }>(
+    sql`select app.telegram_not_me_inert(${userId}::uuid) as inert`,
+  );
+  return row?.inert === true;
 }
 
 /** «Сообщения простым текстом» пользователя (хранится у пользователя и отвязку переживает). */

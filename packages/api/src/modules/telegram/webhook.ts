@@ -152,6 +152,8 @@ async function linked(
   account: LinkAccount,
   link: LinkChat,
   use: (tx: Tx) => Promise<TelegramLinkResult | null>,
+  /** Привязка без кода из прежнего чата — по разрешению после сброса пароля. */
+  free = false,
 ): Promise<boolean> {
   const result = await asAccount(deps, account, async (tx) => {
     const done = await use(tx);
@@ -179,7 +181,8 @@ async function linked(
       : (result.unlinked ?? null);
   if (before) {
     // Имя нового Telegram задаёт его владелец — одной строкой и коротко, как в коде замены.
-    // В прежний чат — с кнопкой «Это не я» (поток Т, задача Т4).
+    // В прежний чат — с кнопкой «Это не я» (поток Т, задача Т4). Привязка по разрешению после сброса
+    // пароля — кнопка ничего не закрывает: прежний чат мог остаться у постороннего.
     await sendSecurityNotice(
       deps,
       {
@@ -191,6 +194,7 @@ async function linked(
       'relink',
       { логин: account.login, телеграм: relinkName(link) },
       'telegram_relinked',
+      { inert: free },
     );
   }
   await sendNow(
@@ -432,8 +436,12 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       const asked = await askRelinkCode(deps, target, tokenHash, link, reply);
       if (asked === 'asked') return ok;
     }
-    const done = await linked(deps, target, link, (tx) =>
-      useTelegramLink(tx, { tokenHash, ...link }),
+    const done = await linked(
+      deps,
+      target,
+      link,
+      (tx) => useTelegramLink(tx, { tokenHash, ...link }),
+      target.relinkFree,
     );
     if (!done) return reply(await botText(deps, 'tgLinkInvalid'));
     return ok;

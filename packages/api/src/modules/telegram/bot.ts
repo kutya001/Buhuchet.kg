@@ -5,6 +5,7 @@ import {
   messageTemplates,
   telegramBotRich,
   telegramChat,
+  telegramNotMeInert,
   telegramPlainText,
 } from '@buhuchet/db';
 import {
@@ -155,6 +156,11 @@ export async function sendCodeMessage(
  * сразу; описание с кнопкой пишется в журнал отправок и для прежнего, уже не привязанного чата
  * (миграция 0127) — по нему бот примет нажатие. В записи кнопки — момент отправки: кнопка действует
  * `NOT_ME_HOURS` часов. Организация в начале — если Telegram привязан к нескольким логинам.
+ *
+ * После сброса пароля владельцем или администратором платформы прежнему чату доверять нельзя (он мог
+ * остаться у постороннего): пока у пользователя временный пароль или действует разрешение привязать
+ * Telegram без кода, и под сообщением о привязке по такому разрешению (`inert`) кнопка ничего не
+ * закрывает — бот отвечает, что делать (docs/deviations.md п. Т-7).
  */
 export async function sendSecurityNotice(
   deps: ApiDeps,
@@ -162,15 +168,17 @@ export async function sendSecurityNotice(
   notice: SecurityNotice,
   values: Readonly<Record<string, string | number>>,
   purpose: string,
+  options: { inert?: boolean } = {},
 ): Promise<boolean> {
   const def = SECURITY_NOTICE_DEFS[notice];
   const now = deps.clock.now();
+  const inert = options.inert === true || (await telegramNotMeInert(deps.db, to.userId));
   const text = withOrganization(
     await botText(deps, def.template, { ...values, время: bishkekTime(now) }),
     to.orgName,
     to.shared,
   );
-  const message = securityBotMessage(text, notice, now, await botText(deps, 'tgBtnNotMe'));
+  const message = securityBotMessage(text, notice, now, await botText(deps, 'tgBtnNotMe'), inert);
   return sendBotMessage(deps, to, message, def.kind, purpose);
 }
 
@@ -183,6 +191,8 @@ export async function notifyPasswordChanged(
   deps: ApiDeps,
   user: { userId: string; login: string; orgName: string | null },
   resetBy?: string,
+  /** Заменён временный пароль: кнопка под сообщением ничего не закрывает (`sendSecurityNotice`). */
+  temporaryReplaced = false,
 ): Promise<boolean> {
   if (!deps.telegram) return false;
   const chat = await telegramChat(deps.db, user.userId);
@@ -196,6 +206,7 @@ export async function notifyPasswordChanged(
       'pass',
       { логин: user.login },
       'password_changed',
+      { inert: temporaryReplaced },
     );
   }
   const text = withOrganization(

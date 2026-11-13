@@ -17,6 +17,10 @@ import type { BotAction, BotPressResult } from './press';
  * пароль. Другой Telegram, привязанный вместо чата, из которого нажали, отвязывается; ожидающие коды и
  * ссылки привязки отменяются. У администратора платформы вход не закрывается — пароль ему выдать некому.
  *
+ * После сброса пароля владельцем или администратором платформы прежнему чату доверять нельзя: кнопки,
+ * выданные до сброса, гаснут, а под сообщениями, пока действует временный пароль или разрешение
+ * привязать Telegram без кода, кнопка только отвечает, что делать (docs/deviations.md п. Т-7).
+ *
  * Это защита учётной записи, а не работа с данными организации (`security`): права не нужно,
  * выключатель «Действия из Telegram» не влияет, чат может быть уже отвязан. Кнопка действует
  * `NOT_ME_HOURS` часов; момент отправки — в записи кнопки, а её ядро сверяет с отправленным сообщением.
@@ -33,10 +37,17 @@ export const notMeAction: BotAction = {
         key: TelegramTemplateKey,
         values: Record<string, string | number> = {},
       ): Promise<BotPressResult> => ({ reply: await ctx.text(key, values), alert: true });
+      // Пароль сбросил владелец или администратор платформы: прежний чат мог остаться у постороннего —
+      // закрыть вход заново и отменить разрешение привязать Telegram из него нельзя.
+      const afterReset = (): BotPressResult => ({
+        reply: ctx.tr('telegram.notme.after_reset'),
+        alert: true,
+      });
       const pressed = parseNotMeArg(ctx.arg);
       if (!pressed) return refused('tgActStale');
       const now = ctx.deps.clock.now();
       if (notMeLate(pressed.sentAt, now)) return refused('tgActNotMeLate', { часов: NOT_ME_HOURS });
+      if (pressed.inert) return afterReset();
 
       const { login, orgId, orgName, userId } = ctx.user;
       const event = ctx.tr(SECURITY_NOTICE_DEFS[pressed.notice].event);
@@ -49,9 +60,12 @@ export const notMeAction: BotAction = {
           событие: event,
         }),
         now,
+        hours: NOT_ME_HOURS,
       });
-      // Вход уже закрыт (или сообщения о безопасности в этом чате не было) — «Кнопка устарела».
+      // Вход уже закрыт этой кнопкой (или сообщения о безопасности с действующей кнопкой в этом чате
+      // нет) — «Кнопка устарела».
       if (!result || result.status === 'locked') return refused('tgActStale');
+      if (result.status === 'reset') return afterReset();
       if (result.status === 'denied') return refused('tgActNoRight');
 
       const entry = {

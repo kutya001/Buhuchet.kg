@@ -37,17 +37,21 @@ const isNotice = (x: string): x is SecurityNotice =>
 /**
  * Запись кнопки: вид сообщения и момент отправки (секунды) — по нему считается срок действия. Данные
  * нажатия сами ничего не решают: бот сверяет их с отправленным сообщением, поэтому подставить другой
- * момент нельзя.
+ * момент нельзя. `inert` — кнопка только объясняет, что делать: сообщение ушло, пока после сброса
+ * пароля владельцем или администратором платформы прежнему чату доверять нельзя (временный пароль,
+ * разрешение привязать Telegram без кода, привязка по такому разрешению).
  */
-export function notMeArg(notice: SecurityNotice, sentAt: Date): string {
-  return `${notice}.${Math.floor(sentAt.getTime() / 1000)}`;
+export function notMeArg(notice: SecurityNotice, sentAt: Date, inert = false): string {
+  return `${notice}.${Math.floor(sentAt.getTime() / 1000)}${inert ? '.x' : ''}`;
 }
 
 /** Разобрать запись кнопки; null — не наша. */
-export function parseNotMeArg(arg: string | null): { notice: SecurityNotice; sentAt: Date } | null {
-  const m = /^([a-z]+)\.(\d{1,12})$/.exec(arg ?? '');
+export function parseNotMeArg(
+  arg: string | null,
+): { notice: SecurityNotice; sentAt: Date; inert: boolean } | null {
+  const m = /^([a-z]+)\.(\d{1,12})(\.x)?$/.exec(arg ?? '');
   if (!m || !isNotice(m[1]!)) return null;
-  return { notice: m[1], sentAt: new Date(Number(m[2]) * 1000) };
+  return { notice: m[1], sentAt: new Date(Number(m[2]) * 1000), inert: m[3] !== undefined };
 }
 
 /** Кнопка нажата позже срока: бот советует попросить сброс пароля. */
@@ -61,9 +65,10 @@ export function securityBotMessage(
   notice: SecurityNotice,
   sentAt: Date,
   label: string,
+  inert = false,
 ): BotMessage {
   return {
     text,
-    buttons: [[{ text: label, action: NOT_ME_ACTION, arg: notMeArg(notice, sentAt) }]],
+    buttons: [[{ text: label, action: NOT_ME_ACTION, arg: notMeArg(notice, sentAt, inert) }]],
   };
 }

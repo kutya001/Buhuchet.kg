@@ -39,7 +39,16 @@ type App = ReturnType<typeof createApp>;
 const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
 const START = '2026-11-14T03:15:27Z';
 const NEW_PASSWORD = 'Новый-пароль-2';
-const CHAT = { owner: 7400, acc: 7401, chief: 7402, chiefNew: 7403, ownerB: 7500, admin: 7900 };
+const CHAT = {
+  owner: 7400,
+  acc: 7401,
+  chief: 7402,
+  chiefNew: 7403,
+  accNew: 7404,
+  ownerB: 7500,
+  admin: 7900,
+};
+const AFTER_RESET = UI_TEXTS['telegram.notme.after_reset'].ru;
 const codeOf = (text: string | undefined) => /^(\d{6}) — код/m.exec(text ?? '')?.[1] ?? '';
 
 // «Это не я» под сообщениями бота о безопасности (поток Т, задача Т4; пакет заказчика 13.11.2026,
@@ -60,8 +69,8 @@ describe.skipIf(!databaseAvailable())(
     const last = (chatId: number) => sent(chatId).at(-1)!;
     const keys = (m: { options: FakeTelegram['sent'][number]['options'] }) =>
       (m.options.keyboard ?? []).flat();
-    const data = (notice: SecurityNotice, at = clock.now()) =>
-      botPressData(NOT_ME_ACTION, notMeArg(notice, at));
+    const data = (notice: SecurityNotice, at = clock.now(), inert = false) =>
+      botPressData(NOT_ME_ACTION, notMeArg(notice, at, inert));
     const press = async (chatId: number, messageId: number, pressed: string) => {
       const res = await sendToBot(app, telegramPress(pressed, chatId, messageId));
       expect(res.status).toBe(200);
@@ -235,7 +244,7 @@ describe.skipIf(!databaseAvailable())(
       expect(await history(acc.userId)).toHaveLength(1);
     });
 
-    it('новый пароль от владельца открывает вход; с временным паролем кнопка устарела', async () => {
+    it('новый пароль от владельца открывает вход и гасит прежние кнопки; с временным паролем кнопка ничего не закрывает', async () => {
       const acc = person('acc-a');
       const active = last(CHAT.acc);
       const owner = await signIn(app, 'owner-a', TEST_PASSWORD);
@@ -252,9 +261,18 @@ describe.skipIf(!databaseAvailable())(
       expect((await login('acc-a', temporaryPassword)).status).toBe(200);
       // Под «Пароль сброшен» кнопки нет.
       expect(keys(last(CHAT.acc))).toEqual([]);
-      // Пароль сброшен: прежняя кнопка «Это не я» вход заново не закроет.
+      // Пароль сброшен: прежняя кнопка «Это не я» погашена и вход заново не закроет.
       expect(await press(CHAT.acc, active.id, keys(active)[0]!.data!)).toMatchObject({
         text: TPL.tgActStale,
+        alert: true,
+      });
+      // Сообщение, пока пароль временный, — с кнопкой, которая только отвечает, что делать.
+      const fresh = await notice(acc.userId, CHAT.acc, 'acc-a');
+      expect(keys(fresh)).toEqual([
+        { text: TPL.tgBtnNotMe, data: data('pass', clock.now(), true) },
+      ]);
+      expect(await press(CHAT.acc, fresh.id, keys(fresh)[0]!.data!)).toMatchObject({
+        text: AFTER_RESET,
         alert: true,
       });
       expect((await user(acc.userId)).loginLockedAt).toBeNull();
@@ -302,7 +320,7 @@ describe.skipIf(!databaseAvailable())(
         't',
       );
       const plain = last(CHAT.chief);
-      expect(await press(CHAT.chief, plain.id, botPressData('test', null))).toMatchObject({
+      expect(await press(CHAT.chief, plain.id, botPressData('test'))).toMatchObject({
         text: TPL.tgActStale,
       });
 
@@ -441,6 +459,60 @@ describe.skipIf(!databaseAvailable())(
       );
       expect(res.status).toBe(200);
       expect((await user(acc.userId)).loginLockedAt).toBeNull();
+    });
+
+    it('после сброса пароля владельцем прежний чат вход не закроет: ни под «Пароль изменён», ни после привязки Telegram без кода', async () => {
+      const acc = person('acc-a');
+      const owner = await signIn(app, 'owner-a', TEST_PASSWORD);
+      const reset = await apiRequest(
+        app,
+        'POST',
+        `/api/staff/${acc.employeeId}/password-reset`,
+        owner,
+        {},
+      );
+      const { temporaryPassword } = (await reset.json()) as { temporaryPassword: string };
+      const temp = await signIn(app, 'acc-a', temporaryPassword);
+      const changed = await apiRequest(app, 'POST', '/api/auth/password', temp, {
+        currentPassword: temporaryPassword,
+        newPassword: NEW_PASSWORD,
+      });
+      expect(changed.status).toBe(200);
+      const cookie = changed.headers.get('set-cookie')!.split(';')[0]!;
+      // Временный пароль заменён: под «Пароль изменён» кнопка ничего не закрывает.
+      const pass = last(CHAT.acc);
+      expect(pass.text).toBe(fillTemplate(TPL.tgPassChanged, { логин: 'acc-a', время: '09:15' }));
+      expect(keys(pass)).toEqual([{ text: TPL.tgBtnNotMe, data: data('pass', clock.now(), true) }]);
+      expect(await press(CHAT.acc, pass.id, keys(pass)[0]!.data!)).toMatchObject({
+        text: AFTER_RESET,
+        alert: true,
+      });
+
+      // Сутки после сброса другой Telegram привязывается без кода из прежнего чата.
+      await linkTelegram(app, cookie, CHAT.accNew, 'acc_new');
+      expect(last(CHAT.accNew).text).toBe(fillTemplate(TPL.tgLinked, { логин: 'acc-a' }));
+      const relinked = last(CHAT.acc);
+      expect(relinked.text).toBe(
+        fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@acc_new' }),
+      );
+      // Разрешение уже использовано, но прежний чат мог остаться у постороннего: кнопка под сообщением о
+      // такой привязке вход не закрывает и новый Telegram не отвязывает.
+      expect(keys(relinked)).toEqual([
+        { text: TPL.tgBtnNotMe, data: data('relink', clock.now(), true) },
+      ]);
+      expect(await press(CHAT.acc, relinked.id, keys(relinked)[0]!.data!)).toMatchObject({
+        text: AFTER_RESET,
+        alert: true,
+      });
+      expect(await user(acc.userId)).toMatchObject({ loginLockedAt: null, loginLockReason: null });
+      expect((await apiRequest(app, 'GET', '/api/auth/me', cookie)).status).toBe(200);
+      expect(
+        await f.t.admin.db
+          .select({ chatId: schema.telegramLinks.chatId })
+          .from(schema.telegramLinks)
+          .where(eq(schema.telegramLinks.userId, acc.userId)),
+      ).toEqual([{ chatId: CHAT.accNew }]);
+      expect(await history(acc.userId)).toHaveLength(2);
     });
   },
 );

@@ -18,7 +18,12 @@ describe('«Это не я» под сообщениями о безопасно
     for (const notice of SECURITY_NOTICES) {
       const arg = notMeArg(notice, SENT);
       expect(arg).toBe(`${notice}.1794626127`);
-      expect(parseNotMeArg(arg)).toEqual({ notice, sentAt: new Date('2026-11-14T03:15:27.000Z') });
+      const sentAt = new Date('2026-11-14T03:15:27.000Z');
+      expect(parseNotMeArg(arg)).toEqual({ notice, sentAt, inert: false });
+      // Кнопка, которая после сброса пароля вход не закрывает, — с отметкой в записи.
+      const inert = notMeArg(notice, SENT, true);
+      expect(inert).toBe(`${notice}.1794626127.x`);
+      expect(parseNotMeArg(inert)).toEqual({ notice, sentAt, inert: true });
     }
   });
 

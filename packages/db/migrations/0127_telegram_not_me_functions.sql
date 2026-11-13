@@ -144,10 +144,16 @@ CREATE OR REPLACE FUNCTION app.telegram_log(
 --     новый пароль: о сотруднике — владельцам его организации (p_staff_text), о владельце —
 --     администраторам платформы (p_owner_text); только незаблокированным и с привязанным Telegram.
 -- У администратора платформы вход не закрывается (новый пароль ему выдать некому) и сообщений нет.
--- status: done — выполнено; locked — вход уже закрыт (кнопка устарела); denied — учётная запись
--- заблокирована. Пусто — такого сообщения этому пользователю в этот чат бот не отправлял.
+-- Вход, уже закрытый 10 неверными паролями, нажатию не мешает: та блокировка открытых сеансов не
+-- завершает, поэтому всё выполняется, а причина закрытого входа становится «not_me».
+-- status: done — выполнено; locked — вход уже закрыт этой кнопкой (кнопка устарела); reset — пароль
+-- сброшен владельцем или администратором платформы (временный пароль или действует разрешение привязать
+-- Telegram без кода): прежний чат мог остаться у постороннего, закрыть вход заново и отменить разрешение
+-- из него нельзя; denied — учётная запись заблокирована. Пусто —
+-- сообщения о безопасности с кнопкой этому пользователю в этот чат за последние p_hours часов бот не
+-- отправлял (после сброса пароля прежние кнопки гаснут — app.telegram_relink_allow).
 CREATE FUNCTION app.telegram_not_me(
-    p_chat bigint, p_staff_text text, p_owner_text text, p_now timestamptz)
+    p_chat bigint, p_staff_text text, p_owner_text text, p_now timestamptz, p_hours integer)
   RETURNS TABLE (
     status text,
     sessions integer,
@@ -167,6 +173,8 @@ CREATE FUNCTION app.telegram_not_me(
     v_admin boolean;
     v_blocked boolean;
     v_locked boolean;
+    v_reason text;
+    v_temp boolean;
     v_org_name text;
     v_owner boolean := false;
     v_sessions integer;
@@ -174,14 +182,16 @@ CREATE FUNCTION app.telegram_not_me(
     v_event uuid := gen_random_uuid();
     v_queued uuid[] := '{}';
   BEGIN
-    SELECT u.org_id, u.is_platform_admin, u.blocked, u.login_locked_at IS NOT NULL
-      INTO v_org, v_admin, v_blocked, v_locked
+    SELECT u.org_id, u.is_platform_admin, u.blocked, u.login_locked_at IS NOT NULL,
+           u.login_lock_reason, u.must_change_password
+      INTO v_org, v_admin, v_blocked, v_locked, v_reason, v_temp
       FROM public.users u WHERE u.id = v_user FOR UPDATE;
     IF NOT FOUND OR NOT EXISTS (
       SELECT 1 FROM public.telegram_outbox m
         WHERE m.user_id = v_user AND m.chat_id = p_chat AND m.status = 'sent'
           AND m.kind IN ('pass_changed', 'relinked', 'unlinked')
           AND m.payload IS NOT NULL AND m.message_id IS NOT NULL
+          AND m.sent_at > now() - make_interval(hours => p_hours)
     ) THEN
       RETURN;
     END IF;
@@ -189,7 +199,14 @@ CREATE FUNCTION app.telegram_not_me(
       RETURN QUERY SELECT 'denied'::text, 0, false, NULL::text, NULL::text, false, false, v_queued;
       RETURN;
     END IF;
-    IF v_locked AND NOT v_admin THEN
+    IF v_temp OR EXISTS (
+      SELECT 1 FROM public.telegram_link_guards g
+        WHERE g.user_id = v_user AND g.free_until > now()
+    ) THEN
+      RETURN QUERY SELECT 'reset'::text, 0, false, NULL::text, NULL::text, false, false, v_queued;
+      RETURN;
+    END IF;
+    IF v_locked AND v_reason = 'not_me' AND NOT v_admin THEN
       RETURN QUERY SELECT 'locked'::text, 0, false, NULL::text, NULL::text, false, false, v_queued;
       RETURN;
     END IF;
@@ -215,9 +232,11 @@ CREATE FUNCTION app.telegram_not_me(
       UPDATE public.telegram_link_guards g SET free_until = NULL, updated_at = now()
         WHERE g.user_id = v_user AND g.free_until IS NOT NULL;
     END IF;
-    UPDATE public.telegram_relink_codes c SET expires_at = now()
+    -- «-infinity», а не now(): привязка, начатая раньше и дождавшаяся блокировки строки, код или ссылку
+    -- действующими уже не сочтёт (как в 0103).
+    UPDATE public.telegram_relink_codes c SET expires_at = '-infinity'
       WHERE c.user_id = v_user AND c.used_at IS NULL AND c.expires_at > now();
-    UPDATE public.telegram_link_tokens t SET expires_at = now()
+    UPDATE public.telegram_link_tokens t SET expires_at = '-infinity'
       WHERE t.user_id = v_user AND t.used_at IS NULL AND t.expires_at > now();
     PERFORM app.auth_reset_revoke(v_user);
 
@@ -227,7 +246,8 @@ CREATE FUNCTION app.telegram_not_me(
       RETURN;
     END IF;
 
-    UPDATE public.users SET login_locked_at = clock_timestamp(), login_lock_reason = 'not_me'
+    UPDATE public.users
+      SET login_locked_at = coalesce(login_locked_at, clock_timestamp()), login_lock_reason = 'not_me'
       WHERE id = v_user;
     SELECT o.name, coalesce(r.is_owner, false) INTO v_org_name, v_owner
       FROM public.organizations o
@@ -269,6 +289,93 @@ CREATE FUNCTION app.telegram_not_me(
   END
   $$;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION app.telegram_not_me(bigint, text, text, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app.telegram_not_me(bigint, text, text, timestamptz, integer) FROM PUBLIC;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION app.telegram_not_me(bigint, text, text, timestamptz) TO buhuchet_app;
+GRANT EXECUTE ON FUNCTION app.telegram_not_me(bigint, text, text, timestamptz, integer) TO buhuchet_app;
+--> statement-breakpoint
+-- Кнопка «Это не я» сейчас ничего не сделает: у пользователя временный пароль или действует разрешение
+-- привязать Telegram без кода (пароль сбросил владелец или администратор платформы). Сообщение о
+-- безопасности в это время уходит с кнопкой, которая только объясняет, что делать.
+CREATE FUNCTION app.telegram_not_me_inert(p_user uuid)
+  RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    SELECT coalesce((SELECT u.must_change_password FROM public.users u WHERE u.id = p_user), false)
+      OR EXISTS (SELECT 1 FROM public.telegram_link_guards g
+                 WHERE g.user_id = p_user AND g.free_until > now())
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.telegram_not_me_inert(uuid) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app.telegram_not_me_inert(uuid) TO buhuchet_app;
+--> statement-breakpoint
+-- Сброс пароля владельцем или администратором платформы гасит кнопки «Это не я», выданные до него:
+-- прежний чат мог остаться у постороннего, и старой кнопкой он закрыл бы вход заново уже после того,
+-- как пользователь привязал свой Telegram (остальное — как в 0103).
+CREATE OR REPLACE FUNCTION app.telegram_relink_allow(p_user uuid, p_hours integer)
+  RETURNS void
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    v_org uuid;
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.users c
+        WHERE c.id = app.current_user_id() AND NOT c.blocked
+          AND (c.is_platform_admin OR EXISTS (
+            SELECT 1 FROM public.employees e
+              JOIN public.roles r ON r.id = e.role_id
+              WHERE e.user_id = c.id AND e.org_id = app.current_org_id() AND e.active
+                AND r.is_owner))
+    ) THEN
+      RAISE EXCEPTION 'telegram_relink_allow: разрешает только владелец или администратор платформы';
+    END IF;
+    SELECT u.org_id INTO v_org FROM public.users u
+      WHERE u.id = p_user AND u.org_id = app.current_org_id() AND NOT u.is_platform_admin
+        AND u.must_change_password;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'telegram_relink_allow: нет учётной записи с временным паролем в организации';
+    END IF;
+    UPDATE public.telegram_link_tokens t SET expires_at = '-infinity'
+      WHERE t.user_id = p_user AND t.used_at IS NULL AND t.expires_at > now();
+    UPDATE public.telegram_relink_codes c SET expires_at = '-infinity'
+      WHERE c.user_id = p_user AND c.used_at IS NULL AND c.expires_at > now();
+    INSERT INTO public.telegram_link_guards (user_id, org_id, free_until)
+      VALUES (p_user, v_org, now() + make_interval(hours => p_hours))
+      ON CONFLICT (user_id) DO UPDATE SET free_until = EXCLUDED.free_until, updated_at = now();
+    UPDATE public.telegram_outbox m SET payload = NULL
+      WHERE m.user_id = p_user AND m.kind IN ('pass_changed', 'relinked', 'unlinked')
+        AND m.payload IS NOT NULL;
+  END
+  $$;
+--> statement-breakpoint
+-- Сеанс не начинается, если вход закрыт: вход читает учётную запись до проверки пароля, и нажатие
+-- «Это не я» между проверкой и началом сеанса иначе оставило бы новый сеанс при закрытом входе. Этот
+-- UPDATE ждёт блокировку строки пользователя, которую держит app.telegram_not_me. NULL — вход закрыт;
+-- у администратора платформы вход не закрывается (остальное — как в 0013).
+CREATE OR REPLACE FUNCTION app.auth_start_session(p_user uuid, p_token_hash text, p_ttl_days integer)
+  RETURNS uuid
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    v_org uuid;
+    v_session uuid;
+  BEGIN
+    UPDATE public.users SET last_login_at = now()
+      WHERE id = p_user AND (is_platform_admin OR login_locked_at IS NULL)
+      RETURNING org_id INTO v_org;
+    IF NOT FOUND THEN
+      IF EXISTS (SELECT 1 FROM public.users u WHERE u.id = p_user) THEN
+        RETURN NULL;
+      END IF;
+      RAISE EXCEPTION 'auth_start_session: нет пользователя';
+    END IF;
+    INSERT INTO public.sessions (user_id, org_id, token_hash, expires_at)
+      VALUES (p_user, v_org, p_token_hash, now() + make_interval(days => p_ttl_days))
+      RETURNING id INTO v_session;
+    RETURN v_session;
+  END
+  $$;
