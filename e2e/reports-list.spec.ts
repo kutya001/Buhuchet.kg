@@ -303,7 +303,6 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
   test('(проверка задачи 2.13) «Перейти» у шага «Скрыть и показать статистику модуля» ведёт на «На неделе» «Отчетов для сдачи», кнопка статистики засчитывает шаг', async ({
     page,
     baseURL,
-    isMobile,
   }) => {
     // Шаги засчитываются один раз и навсегда — у владельца новой организации.
     await newOrgOwner(page.request, new URL(baseURL!).origin);
@@ -321,12 +320,17 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(
       page.getByText('Отчёты появятся, когда вы назначите виды отчётов контрагентам'),
     ).toBeVisible();
-    // Статистика по умолчанию: на ПК показана, на телефоне скрыта.
+    // Статистика по умолчанию скрыта и на ПК, и на телефоне (прототип v88); кнопка показывает плашки.
     const toggle = page.locator('[data-stats-toggle]');
-    await expect(toggle).toHaveAttribute('aria-pressed', isMobile ? 'false' : 'true');
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('[data-plates]')).toHaveCount(0);
     await toggle.click();
-    await expect(toggle).toHaveAttribute('aria-pressed', isMobile ? 'true' : 'false');
-    await expect(page.locator('[data-plates]')).toHaveCount(isMobile ? 1 : 0);
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-plates]')).toHaveCount(1);
+    // Выбор запомнен: после перезагрузки плашки показаны.
+    await page.reload();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-plates]')).toHaveCount(1);
     await expect.poll(stepDone).not.toBeNull();
   });
 });

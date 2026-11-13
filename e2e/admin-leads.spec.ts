@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search, uniqueInn } from './admin';
-import { botMessages, linkTelegram, uniqueChat, uniqueLogin } from './helpers';
+import { botMessages, linkTelegram, showStats, uniqueChat, uniqueLogin } from './helpers';
 
 const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 /** Сообщение администраторам платформы уходит из очереди задачей «telegram.send» раз в минуту. */
@@ -103,7 +103,7 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     // Плитка «Заявки с сайта» на вкладке «Организации» ведёт на вкладку «Заявки».
     await page.goto('/app/orgs/list');
     const plates = page.locator('[data-plates]');
-    if (isMobile) await page.getByRole('button', { name: 'Статистика' }).click();
+    await showStats(page);
     await plates.getByRole('button', { name: /Заявки с сайта/ }).click();
     await expect(page).toHaveURL(/\/app\/orgs\/leads$/);
     await expect(page.getByText('Заявки с лендинга buhuchet.kg.')).toBeVisible();

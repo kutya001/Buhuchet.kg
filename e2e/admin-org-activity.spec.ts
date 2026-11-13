@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { signIn, uniqueLogin } from './helpers';
+import { showStats, signIn, uniqueLogin } from './helpers';
 import { newContractor } from './reports';
 
 // Админка → «Организации» → «Активность» (прототип v84, modules/activity.js — `renderOrgAct`) через
@@ -80,9 +80,8 @@ test.describe('Админка: «Активность» организаций',
     const rows = screen.locator('[data-grid] [data-id]');
     await expect(rows.first()).toBeVisible();
 
-    // Плашки: на телефоне «Статистика» по умолчанию скрыта.
-    if (isMobile && (await screen.locator('[data-plates]').count()) === 0)
-      await page.getByRole('button', { name: 'Статистика', exact: true }).click();
+    // Плашки: «Статистика» по умолчанию скрыта.
+    await showStats(page);
     const withActivity = screen.locator('[data-plate="o1"]');
     await expect(withActivity).toContainText('Организаций с активностью');
     await expect(withActivity).toContainText('из ');

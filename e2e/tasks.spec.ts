@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, showStats, signIn } from './helpers';
 
 // «Задачи» (задача 2.23, #79) через настоящий сайт: форма «Общая / По контрагенту», подтверждение
 // выполнения, возврат «На доработку», карточка задачи на телефоне. Демо-организация: владелец erkin,
@@ -175,6 +175,7 @@ test.describe('Этап 2: задачи', () => {
     await page.goto('/app/tasks/all');
     const plate = page.locator('[data-plate="pend"]');
     if (!isMobile) {
+      await showStats(page);
       await expect(plate).toContainText('На подтверждении');
       await expect(plate).toContainText('можете подтвердить:');
     }

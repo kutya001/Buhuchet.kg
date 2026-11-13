@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, showStats, signIn } from './helpers';
 import { asOwner, newContractor, staffIds } from './reports';
 
 // «Контрагенты» → плата за обслуживание (задача 2.21, #77) через настоящий сайт. Демо-организация:
@@ -203,6 +203,9 @@ test.describe('Этап 2: плата за обслуживание', () => {
 
     // На экране: ни плашки «Должники», ни вкладки «Обслуживание», ни строки об оплате в истории.
     await openList(page, isMobile, word);
+    // «Статистика» по умолчанию скрыта (прототип v88): плашки показать, иначе проверка пустая.
+    await showStats(page);
+    await expect(page.locator('[data-plate]').first()).toBeVisible();
     await expect(page.locator('[data-plate="deb"]')).toHaveCount(0);
     card = await openCard(page, cp.id, name);
     const names = await tabNames(page, card, isMobile);

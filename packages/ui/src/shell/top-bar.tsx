@@ -51,7 +51,8 @@ export interface TopBarProps {
   /** «?» — помощь по модулю: открывает окно со статьёй «Базы знаний». */
   help: { label: string; title: string; onClick: () => void };
   /** Переключатель темы. */
-  theme: { label: string; title: string; onToggle: () => void };
+  /** `onToggle` получает нажатую кнопку: смена темы идёт волной с её стороны экрана. */
+  theme: { label: string; title: string; onToggle: (button: HTMLElement) => void };
 }
 
 /**
@@ -238,7 +239,7 @@ export function TopBar({
       </button>
       <button
         type="button"
-        onClick={theme.onToggle}
+        onClick={(e) => theme.onToggle(e.currentTarget)}
         data-theme-toggle
         aria-label={theme.label}
         title={theme.title}
