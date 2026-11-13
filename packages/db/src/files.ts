@@ -720,14 +720,14 @@ export const FILE_FORM_CONTRACTORS_MAX = 5000;
 
 /**
  * Контрагенты окна «Загрузить файл» (прототип `visCps(false, 'files')`): не в архиве, в области
- * группы «Файловый менеджер», по названию.
+ * группы «Файловый менеджер», по названию; ИНН — для поиска в списке (прототип v93).
  */
 export function fileFormContractors(
   tx: Tx,
   scope: SQL | undefined,
-): Promise<{ id: string; name: string }[]> {
+): Promise<{ id: string; name: string; inn: string }[]> {
   return tx
-    .select({ id: contractors.id, name: contractors.name })
+    .select({ id: contractors.id, name: contractors.name, inn: contractors.inn })
     .from(contractors)
     .where(and(ne(contractors.serviceStatus, 'archived'), scope))
     .orderBy(sql`${contractors.name} collate app.ru_natural`, asc(contractors.id))

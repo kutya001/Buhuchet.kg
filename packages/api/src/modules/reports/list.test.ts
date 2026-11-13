@@ -417,6 +417,8 @@ describe.skipIf(!databaseAvailable())(
         await (await get(acc, '/api/reports/manual-options')).json(),
       );
       expect(accOptions.contractors.map((c) => c.id)).toEqual([cpA]);
+      // ИНН — для поиска в списке формы (прототип v93).
+      expect(accOptions.contractors.every((c) => /^\d{14}$/.test(c.inn))).toBe(true);
       expect((await get(senior, '/api/reports/manual-options')).status).toBe(403);
       expect((await apiRequest(f.app, 'GET', '/api/reports/manual-options')).status).toBe(401);
 

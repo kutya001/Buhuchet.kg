@@ -178,6 +178,8 @@ describe.skipIf(!databaseAvailable())('Проекты контрагентов �
     expect(form.contractors.map((c) => c.id)).toEqual(expect.arrayContaining([cpAcc, cpChief]));
     expect(form.contractors.map((c) => c.id)).not.toContain(cpArch);
     expect(form.contractors.find((c) => c.id === cpAcc)!.responsible).toBe(employee('acc-a'));
+    // ИНН — для поиска в списке формы (прототип v93).
+    expect(form.contractors.every((c) => /^\d{14}$/.test(c.inn))).toBe(true);
     expect(form).toMatchObject({ me: employee('chief-a'), today: '2026-10-18', money: true });
     const bad = async (body: Record<string, unknown>, status = 400) =>
       refused(await call('POST', '/api/projects', chief, project(body)), status);

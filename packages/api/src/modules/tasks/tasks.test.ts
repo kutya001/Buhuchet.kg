@@ -208,6 +208,8 @@ describe.skipIf(!databaseAvailable())('Задачи: методы API', () => {
       { id: cpOther.id, responsibleEmployeeId: employee('chief-a') },
       { id: cpAcc.id, responsibleEmployeeId: employee('acc-a') },
     ]);
+    // ИНН — для поиска в списке формы (прототип v93).
+    expect(options.contractors.map((c) => c.inn)).toEqual([cpOther.inn, cpAcc.inn]);
     expect((await call('GET', '/api/tasks/form-options', acc)).status).toBe(403);
   });
 

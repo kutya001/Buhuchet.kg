@@ -6,6 +6,11 @@ import { menuPosition } from './action-menu';
 import { PHONE_QUERY } from './use-media';
 import { useSwipeDown } from './use-swipe-down';
 
+const SIZE_CLASS = {
+  menu: 'w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] gap-2.5 overflow-auto p-3',
+  select: 'w-[min(420px,calc(100vw-16px))] gap-1.5 overflow-hidden p-2',
+} as const;
+
 /**
  * Всплывающее окошко у элемента поверх страницы (прототип ui/popups.js, openPop с `cls:'pad'`): как
  * `Popover`, но рисуется в `document.body` — не обрезается прокруткой таблицы (фильтр у заголовка
@@ -17,12 +22,18 @@ import { useSwipeDown } from './use-swipe-down';
 export function FloatingPanel({
   anchor,
   label,
+  size = 'menu',
   onClose,
   children,
 }: {
   anchor: HTMLElement;
   /** Название окошка для экранного диктора. */
   label: string;
+  /**
+   * `menu` — по содержимому, 210–360 px (фильтр столбца); `select` — список с поиском (`.cps-pop`
+   * прототипа): 420 px, прокручивается список внутри, а не окошко.
+   */
+  size?: 'menu' | 'select';
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -50,13 +61,19 @@ export function FloatingPanel({
     return () => resized.disconnect();
   }, [anchor]);
 
+  // Фокус — когда окошко встало на место: до этого оно скрыто (`visibility: hidden`) и фокус не берёт.
+  const placed = pos !== null;
   useEffect(() => {
+    if (!placed) return;
     const field = window.matchMedia(PHONE_QUERY).matches
       ? null
       : box.current?.querySelector<HTMLElement>(
           'input:not([type=checkbox]):not([disabled]),select:not([disabled])',
         );
     (field ?? box.current?.querySelector<HTMLElement>('button:not([disabled])'))?.focus();
+  }, [placed]);
+
+  useEffect(() => {
     const outside = (e: PointerEvent) => {
       const target = e.target as Node;
       if (box.current?.contains(target) || anchor.contains(target)) return;
@@ -86,7 +103,7 @@ export function FloatingPanel({
       data-overlay
       data-popover
       style={pos ? { left: pos.x, top: pos.y } : { left: 0, top: 0, visibility: 'hidden' }}
-      className="fixed z-[70] flex max-h-[min(460px,calc(100dvh-24px))] w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] touch-pan-y animate-slide-up flex-col gap-2.5 overflow-auto rounded-xl border border-line-strong bg-raised p-3 text-ink shadow-pop"
+      className={`fixed z-[70] flex max-h-[min(460px,calc(100dvh-24px))] touch-pan-y animate-slide-up flex-col rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${SIZE_CLASS[size]}`}
     >
       {children}
     </div>,

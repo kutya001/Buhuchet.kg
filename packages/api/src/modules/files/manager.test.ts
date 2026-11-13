@@ -196,6 +196,8 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
       await (await call('GET', '/api/files/manager/contractors', acc)).json(),
     );
     expect(options.items.map((c) => c.name)).toEqual(['ОсОО «Ала-Тоо Трейд»']);
+    // ИНН — для поиска в списке формы (прототип v93).
+    expect(options.items.map((c) => c.inn)).toEqual([cpAcc.inn]);
     const denied = await startUpload(acc, { source: MANUAL, contractorId: cpOther.id });
     expect(denied.status).toBe(404);
   });

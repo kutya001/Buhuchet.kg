@@ -1281,7 +1281,7 @@ export async function taskFormOptions(
   scope: SQL | undefined,
 ): Promise<{
   executors: { id: string; shortName: string }[];
-  contractors: { id: string; name: string; responsibleEmployeeId: string | null }[];
+  contractors: { id: string; name: string; inn: string; responsibleEmployeeId: string | null }[];
 }> {
   const [executors, cps] = await Promise.all([
     tx
@@ -1293,6 +1293,7 @@ export async function taskFormOptions(
       .select({
         id: contractors.id,
         name: contractors.name,
+        inn: contractors.inn,
         responsibleEmployeeId: contractors.responsibleEmployeeId,
       })
       .from(contractors)

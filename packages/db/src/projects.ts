@@ -1118,7 +1118,7 @@ export async function projectFormData(
   scope: SQL | undefined,
   contractorId: string | null,
 ): Promise<{
-  contractors: { id: string; name: string; responsible: string | null }[];
+  contractors: { id: string; name: string; inn: string; responsible: string | null }[];
   employees: { id: string; name: string }[];
   responsible: string | null;
 }> {
@@ -1127,6 +1127,7 @@ export async function projectFormData(
       .select({
         id: contractors.id,
         name: contractors.name,
+        inn: contractors.inn,
         responsible: contractors.responsibleEmployeeId,
       })
       .from(contractors)

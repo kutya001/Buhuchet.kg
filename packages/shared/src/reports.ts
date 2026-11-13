@@ -481,9 +481,12 @@ export const ManualReportCreate = z.strictObject({
   reasonCode: Code,
 });
 
-/** Списки окна «Разовый отчёт»: контрагенты в области (кроме архивных) и подключённые действующие виды. */
+/**
+ * Списки окна «Разовый отчёт»: контрагенты в области (кроме архивных; `inn` — для поиска в списке,
+ * прототип v93) и подключённые действующие виды.
+ */
 export const ManualReportOptions = z.object({
-  contractors: z.array(z.object({ id: Uuid, name: z.string() })),
+  contractors: z.array(z.object({ id: Uuid, name: z.string(), inn: z.string() })),
   types: z.array(
     z.object({
       code: z.string(),

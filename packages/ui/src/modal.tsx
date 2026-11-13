@@ -177,7 +177,7 @@ export interface ModalProps {
 
 /** Первое поле формы: на ПК фокус сразу в нём. */
 const FIRST_FIELD =
-  'input:not([type=checkbox]):not([type=radio]):not([readonly]):not([disabled]),textarea:not([readonly]),select:not([disabled])';
+  'input:not([type=checkbox]):not([type=radio]):not([readonly]):not([disabled]),textarea:not([readonly]),select:not([disabled]),button[data-search-select]:not([disabled])';
 const FOCUSABLE =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
 const FLIP_MS = 220;

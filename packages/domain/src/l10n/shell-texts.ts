@@ -292,6 +292,11 @@ export const SHELL_TEXTS = {
   },
   'window.discard_ok': { ru: 'Закрыть', section: 'Окна' },
   'window.tab_position': { ru: '{n} из {total}', section: 'Окна' },
+  // Список контрагентов с поиском (прототип v93, ui/cp-select.js)
+  'cpsel.placeholder': { ru: 'Название или ИНН', section: 'Формы' },
+  'cpsel.search': { ru: 'Поиск контрагента по названию или ИНН', section: 'Формы' },
+  'cpsel.nothing': { ru: 'Ничего не найдено', section: 'Формы' },
+  'cpsel.more': { ru: 'Показаны первые {shown} из {total} — уточните поиск', section: 'Формы' },
   'toast.close': { ru: 'Закрыть уведомление', section: 'Уведомления' },
   'toast.close_title': { ru: 'Закрыть', section: 'Уведомления' },
 } as const satisfies Record<string, UiTextDefault>;

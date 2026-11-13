@@ -488,8 +488,13 @@ export const ServiceIdParam = z.object({ id: Uuid });
 
 /** Окно «Разовая услуга» (прототип serviceDlg): контрагенты, исполнители, кто по умолчанию. */
 export const ServiceForm = z.object({
-  /** «Контрагент»: в области «Проекты контрагентов», не в архиве; разовый — с пометкой. */
-  contractors: z.array(z.object({ id: Uuid, name: z.string(), oneOff: z.boolean() })),
+  /**
+   * «Контрагент»: в области «Проекты контрагентов», не в архиве; разовый — с пометкой; `inn` — для
+   * поиска в списке (прототип v93).
+   */
+  contractors: z.array(
+    z.object({ id: Uuid, name: z.string(), inn: z.string(), oneOff: z.boolean() }),
+  ),
   /** «Исполнитель»: действующие сотрудники. */
   performers: z.array(z.object({ id: Uuid, name: z.string() })),
   /** Исполнитель по умолчанию: ответственный контрагента или сам сотрудник. */

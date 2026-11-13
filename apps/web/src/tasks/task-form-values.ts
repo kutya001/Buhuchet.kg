@@ -47,6 +47,11 @@ export interface TaskFormOption {
   label: string;
 }
 
+/** Контрагент в списке формы: с ИНН для поиска (у архивного контрагента изменяемой задачи его нет). */
+export interface TaskFormContractor extends TaskFormOption {
+  inn: string;
+}
+
 /**
  * Исполнитель по умолчанию (прототип `taskExec0`): ответственный выбранного контрагента, если он
  * действующий сотрудник; иначе (и у общей задачи) — тот, кто ставит задачу.
@@ -129,8 +134,12 @@ export function initialTaskForm({
 export function taskFormLists(
   options: TaskFormOptions,
   task: Task | null,
-): { categories: TaskFormOption[]; executors: TaskFormOption[]; contractors: TaskFormOption[] } {
-  const withCurrent = (list: TaskFormOption[], current: TaskFormOption | null) =>
+): {
+  categories: TaskFormOption[];
+  executors: TaskFormOption[];
+  contractors: TaskFormContractor[];
+} {
+  const withCurrent = <T extends TaskFormOption>(list: T[], current: T | null) =>
     current && !list.some((o) => o.value === current.value) ? [...list, current] : list;
   return {
     categories: withCurrent(
@@ -142,8 +151,10 @@ export function taskFormLists(
       task ? { value: task.executor.id, label: task.executor.shortName } : null,
     ),
     contractors: withCurrent(
-      options.contractors.map((c) => ({ value: c.id, label: c.name })),
-      task?.contractor ? { value: task.contractor.id, label: task.contractor.name } : null,
+      options.contractors.map((c) => ({ value: c.id, label: c.name, inn: c.inn })),
+      task?.contractor
+        ? { value: task.contractor.id, label: task.contractor.name, inn: '' }
+        : null,
     ),
   };
 }

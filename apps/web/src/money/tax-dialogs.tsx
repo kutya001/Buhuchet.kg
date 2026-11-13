@@ -41,6 +41,7 @@ import { api, callApi } from '../api-client';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
+import { ContractorSelect } from '../shell/contractor-select';
 import { reportSub } from '../reports/report-menu';
 import { useShell } from '../shell/context';
 import {
@@ -458,7 +459,7 @@ function oneSumSplit(form: ReceiptForm) {
 
 /** Поле «Контрагент» окна без контрагента. */
 interface ReceiptPicker {
-  options: readonly { id: string; name: string; oneOff: boolean }[];
+  options: readonly { id: string; name: string; inn: string; oneOff: boolean }[];
   value: string;
   onChange: (id: string) => void;
   /** Контрагентов нет — записать некуда. */
@@ -821,19 +822,13 @@ function ReceiptModal({
               error={errors.contractor}
             >
               {(control) => (
-                <select
+                <ContractorSelect
                   {...control}
                   data-receipt-contractor=""
-                  className={`${inputClass()} cursor-pointer`}
+                  contractors={picker.options}
                   value={picker.value}
-                  onChange={(e) => picker.onChange(e.target.value)}
-                >
-                  {picker.options.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={picker.onChange}
+                />
               )}
             </Field>
           </FormGrid>
