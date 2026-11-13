@@ -12,7 +12,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { FloatingPanel } from './floating';
-import { inputClass, MONO_CLASS } from './form';
+import { inputClass } from './form';
 import { Icon } from './icon';
 
 /** Строка списка: значение, подпись и «второе имя» для поиска цифрами (ИНН контрагента). */
@@ -37,9 +37,15 @@ export interface SearchSelectLabels {
 /** В окошке — не больше стольких строк; остальные находятся поиском (прототип `CPS_MAX`). */
 export const SEARCH_SELECT_MAX = 200;
 
+// «е» кодом: буква для сравнения, а не текст интерфейса.
+const YE = String.fromCharCode(0x435);
+
 /** Как сравнивает поиск: без учёта регистра и «ё/е» (прототип `norm`). */
 export const searchFold = (text: string) =>
-  text.toLowerCase().replace(/ё/g, 'е').replace(/ /g, ' ');
+  text
+    .toLowerCase()
+    .replace(/ё/g, YE)
+    .replace(/\u00a0/g, ' ');
 
 /**
  * Подходит ли строка под запрос (прототип `cpsHit`): часть подписи либо цифры подряд из `hint`
@@ -77,7 +83,9 @@ export function searchSelectMove(active: number, count: number, down: boolean): 
   return down ? Math.min(count - 1, active + 1) : Math.max(0, active - 1);
 }
 
-const HINT_CLASS = `flex-none text-[11.5px] font-normal text-faint ${MONO_CLASS}`;
+// Моноширинный, как `MONO_CLASS`, но своего размера: у одного свойства — один класс.
+const HINT_CLASS =
+  'flex-none font-mono text-[11.5px] font-normal text-faint [font-feature-settings:"calt"_1,"zero"_1]';
 
 /** Что написано на кнопке поля (`cpsFace`): подпись выбранного, его ИНН и стрелка. */
 export function SearchSelectFace({
@@ -100,11 +108,7 @@ export function SearchSelectFace({
 }
 
 const rowTone = (on: boolean, active: boolean) =>
-  on
-    ? 'bg-sel font-semibold'
-    : active
-      ? 'bg-row-hover'
-      : 'bg-transparent hover:bg-row-hover';
+  on ? 'bg-sel font-semibold' : active ? 'bg-row-hover' : 'bg-transparent hover:bg-row-hover';
 
 /** Строки окошка (`.cps-o`), «Ничего не найдено» или приписка «Показаны первые N из M». */
 export function SearchSelectRows({
@@ -141,7 +145,9 @@ export function SearchSelectRows({
           onClick={() => onPick(o)}
           className={`flex w-full flex-none cursor-pointer items-baseline justify-between gap-2.5 rounded-[5px] border-0 px-2.5 py-[7px] text-left text-[13px] leading-[1.35] text-ink pointer-coarse:py-2.5 ${rowTone(o.value === value, i === active)}`}
         >
-          <span className={`min-w-0 [overflow-wrap:anywhere]${o.value === '' ? ' text-faint' : ''}`}>
+          <span
+            className={`min-w-0 [overflow-wrap:anywhere]${o.value === '' ? ' text-faint' : ''}`}
+          >
             {o.label}
           </span>
           {o.hint ? <small className={HINT_CLASS}>{o.hint}</small> : null}

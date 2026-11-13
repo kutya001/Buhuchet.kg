@@ -150,11 +150,10 @@ export function taskFormLists(
       options.executors.map((e) => ({ value: e.id, label: e.shortName })),
       task ? { value: task.executor.id, label: task.executor.shortName } : null,
     ),
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-3 — у архивного контрагента задачи (его нет в списке) ИНН не показан.
     contractors: withCurrent(
       options.contractors.map((c) => ({ value: c.id, label: c.name, inn: c.inn })),
-      task?.contractor
-        ? { value: task.contractor.id, label: task.contractor.name, inn: '' }
-        : null,
+      task?.contractor ? { value: task.contractor.id, label: task.contractor.name, inn: '' } : null,
     ),
   };
 }

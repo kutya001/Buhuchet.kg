@@ -29,7 +29,12 @@ const options: TaskFormOptions = {
   ],
   contractors: [
     { id: CP, name: 'ОсОО «Ала-Тоо»', inn: '01203199810045', responsibleEmployeeId: RESP },
-    { id: CP_BLOCKED_RESP, name: 'ИП Садыков', inn: '22807198500321', responsibleEmployeeId: BLOCKED },
+    {
+      id: CP_BLOCKED_RESP,
+      name: 'ИП Садыков',
+      inn: '22807198500321',
+      responsibleEmployeeId: BLOCKED,
+    },
   ],
   confirmDefault: true,
   filesOn: true,

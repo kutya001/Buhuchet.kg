@@ -1,6 +1,14 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { menuPosition } from './action-menu';
 import { PHONE_QUERY } from './use-media';
@@ -16,8 +24,10 @@ const SIZE_CLASS = {
  * `Popover`, но рисуется в `document.body` — не обрезается прокруткой таблицы (фильтр у заголовка
  * столбца). Место — `menuPosition`: под элементом, а если не помещается — над ним; вырос за край
  * экрана — место считается заново. Закрывается Esc (фокус возвращается на элемент), нажатием вне
- * окошка и элемента, кнопкой «Назад» и на телефоне протяжкой вниз. При открытии фокус — на первом поле
- * ввода (на телефоне — на первой кнопке, чтобы не выскакивала клавиатура, как `!isMobile()` в openPop).
+ * окошка и элемента, кнопкой «Назад» и на телефоне протяжкой вниз (у списка с поиском — когда список
+ * внутри прокручен к началу). При открытии фокус — на первом поле ввода (на телефоне — на выбранной
+ * строке списка или первой кнопке, чтобы не выскакивала клавиатура, как `!isMobile()` в openPop; список
+ * при этом остаётся прокручен к выбранной строке).
  */
 export function FloatingPanel({
   anchor,
@@ -39,7 +49,17 @@ export function FloatingPanel({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  useSwipeDown(box, { enabled: true, onClose });
+  // У списка с поиском прокручивается список внутри окошка, а не оно само.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-3 — в прототипе v93 протяжка закрывает окошко и при прокрученном списке.
+  const scroller = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        return box.current?.querySelector<HTMLElement>('[role=listbox]') ?? box.current;
+      },
+    }),
+    [],
+  );
+  useSwipeDown(box, { enabled: true, onClose, scroller });
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -62,6 +82,7 @@ export function FloatingPanel({
   }, [anchor]);
 
   // Фокус — когда окошко встало на место: до этого оно скрыто (`visibility: hidden`) и фокус не берёт.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-3 — на телефоне фокус на выбранной строке (в прототипе остаётся на поле).
   const placed = pos !== null;
   useEffect(() => {
     if (!placed) return;
@@ -70,7 +91,11 @@ export function FloatingPanel({
       : box.current?.querySelector<HTMLElement>(
           'input:not([type=checkbox]):not([disabled]),select:not([disabled])',
         );
-    (field ?? box.current?.querySelector<HTMLElement>('button:not([disabled])'))?.focus();
+    (
+      field ??
+      box.current?.querySelector<HTMLElement>('button[aria-selected=true]') ??
+      box.current?.querySelector<HTMLElement>('button:not([disabled])')
+    )?.focus({ preventScroll: true });
   }, [placed]);
 
   useEffect(() => {

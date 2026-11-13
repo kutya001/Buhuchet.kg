@@ -81,9 +81,24 @@ test.describe('Доработки 13.11: список контрагентов �
       await page.keyboard.press('Enter');
     }
     await expect(page.getByRole('listbox')).toBeHidden();
+    // Enter выбрал строку и форму не сохранял: окно открыто, ошибок полей нет.
     await expect(dlg).toBeVisible();
+    await expect(dlg.locator('[id$="-err"]')).toHaveCount(0);
     await expect(field).toContainText(`ОсОО «${name}»`);
-    if (!isMobile) await expect(field).toContainText(cp.inn);
+    // ИНН выбранного — на кнопке поля; на узком телефоне его там нет.
+    const inn = field.locator('small');
+    await expect(inn).toHaveText(cp.inn);
+    if (isMobile) await expect(inn).toBeHidden();
+    else await expect(inn).toBeVisible();
+
+    // Список открывается на выбранном контрагенте (и на телефоне); повторное нажатие на поле закрывает.
+    await field.click();
+    const picked = page.getByRole('listbox').getByRole('option', { selected: true });
+    await expect(picked).toContainText(`ОсОО «${name}»`);
+    await expect(picked).toBeInViewport();
+    await field.click();
+    await expect(page.getByRole('listbox')).toBeHidden();
+    await expect(dlg).toBeVisible();
   });
 
   test('(проверка прототипа v93) тот же список — в окнах «Новая задача», «Загрузить файл» и «Поступление от контрагента»: контрагент находится по ИНН', async ({
