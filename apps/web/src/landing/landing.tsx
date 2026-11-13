@@ -25,7 +25,7 @@ import { VideoCover } from '../kb/video/video-parts';
 import { useGuestVideo } from '../kb/video/video-window';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
-import { setTheme } from '../shell/browser';
+import { toggleTheme } from '../shell/browser';
 import { parseMaxPrefs } from '../shell/prefs';
 import { BrandIntro, skipNextIntro, usePageLoad } from '../shell/brand-intro';
 import { UiProviders } from '../shell/ui-providers';
@@ -82,12 +82,12 @@ const LOGIN_HREF = '/login';
 const BOOT = `(function(){var l=document.currentScript&&document.currentScript.parentNode;if(l&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches&&'IntersectionObserver' in window)l.classList.add('lp-anim')})()`;
 
 /**
- * Кнопка темы в шапке (прототип v72, landThemeToggle): пока тему не выбрали, лендинг светлый (класс
- * bu-light-default, packages/ui/src/theme.css), поэтому без выбора следующая — тёмная. Выбор
- * запоминается так же, как кнопкой темы в программе, и действует после входа.
+ * Кнопка темы в шапке (прототип v72 и v88, landThemeToggle): тема та же, что в программе, — по
+ * умолчанию светлая, меняется волной со стороны кнопки. Выбор запоминается так же, как кнопкой темы
+ * в программе, и действует после входа.
  */
-function toggleLandingTheme() {
-  setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+function toggleLandingTheme(button: HTMLElement) {
+  toggleTheme(button);
 }
 
 const CTA = buttonClass('cta');
@@ -399,12 +399,7 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
   );
 
   return (
-    <div
-      ref={root}
-      className="land bu-light-default"
-      onKeyDown={onKeyDown}
-      suppressHydrationWarning
-    >
+    <div ref={root} className="land" onKeyDown={onKeyDown} suppressHydrationWarning>
       {boot ? <script dangerouslySetInnerHTML={{ __html: BOOT }} /> : null}
       <BrandIntro onReveal={revealBlocks} />
       {guest.overlay}
@@ -437,7 +432,7 @@ function LandingPage({ screens, numbers, codes, videos, today, stand }: LandingP
               className={`${iconButtonClass()} lp-theme`}
               aria-label={t('land.btn.theme')}
               title={t('land.btn.theme')}
-              onClick={toggleLandingTheme}
+              onClick={(e) => toggleLandingTheme(e.currentTarget)}
             >
               <span className="bu-light-only inline-grid">
                 <Icon name="moon" />

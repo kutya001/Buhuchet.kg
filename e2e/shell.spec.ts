@@ -154,7 +154,7 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     ).toBeVisible();
   });
 
-  test('тема: без выбора — как на устройстве, переключатель запоминает выбор', async ({
+  test('тема: без выбора — светлая и при тёмной теме устройства (прототип v88), смена — волной, при «Уменьшить движение» — сразу, переключатель запоминает выбор', async ({
     page,
     baseURL,
   }) => {
@@ -164,14 +164,35 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     const frame = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     const html = page.locator('html');
     await expect(html).not.toHaveAttribute('data-theme', /./);
-    const darkFrame = await frame();
-    expect(luminance(darkFrame)).toBeLessThan(0.05);
+    expect(luminance(await frame())).toBeGreaterThan(0.6);
 
+    // Смена темы идёт волной: на время волны у страницы отметка data-wave, после — отметки нет.
+    const watch = () =>
+      page.evaluate(() => {
+        const seen: string[] = [];
+        const root = document.documentElement;
+        new MutationObserver(() => {
+          if (root.dataset.wave) seen.push(root.dataset.wave);
+        }).observe(root, { attributes: true, attributeFilter: ['data-wave'] });
+        (window as unknown as { __waves: string[] }).__waves = seen;
+      });
+    const waves = () => page.evaluate(() => (window as unknown as { __waves: string[] }).__waves);
+    await watch();
+    await page.getByRole('button', { name: 'Переключить тему' }).click();
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+    await expect(html).not.toHaveAttribute('data-wave', /./);
+    expect(await waves()).toHaveLength(1);
+    await page.reload();
+    await expect(html).toHaveAttribute('data-theme', 'dark');
+    expect(luminance(await frame())).toBeLessThan(0.05);
+
+    // «Уменьшить движение» — тема меняется сразу, без волны.
+    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await watch();
     await page.getByRole('button', { name: 'Переключить тему' }).click();
     await expect(html).toHaveAttribute('data-theme', 'light');
-    await page.reload();
-    await expect(html).toHaveAttribute('data-theme', 'light');
     expect(luminance(await frame())).toBeGreaterThan(0.6);
+    expect(await waves()).toEqual([]);
   });
 
   test('верхняя и левая панели: «ⓘ», «?», поиск по вкладке, время по Бишкеку, свёрнутая панель и раскрытые ветки', async ({

@@ -130,7 +130,7 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await expect(menu).toBeHidden();
   });
 
-  test('(проверка прототипа v72) кнопка темы: без выбора лендинг светлый и при тёмной теме устройства; выбор запоминается и действует в программе; страница входа без выбора — по устройству', async ({
+  test('(проверка прототипа v72 и v88) кнопка темы: без выбора лендинг и страница входа светлые и при тёмной теме устройства; тема меняется волной; выбор запоминается и действует в программе', async ({
     page,
   }) => {
     await page.emulateMedia({ colorScheme: 'dark' });
@@ -138,9 +138,9 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     const scheme = () =>
       page.evaluate(() => getComputedStyle(document.documentElement).colorScheme);
 
-    // Страница входа без выбора — тема устройства, как раньше.
+    // Страница входа без выбора — светлая: от темы устройства тема не зависит (прототип v88).
     await page.goto('/login');
-    await expect.poll(scheme).toBe('dark');
+    await expect.poll(scheme).toBe('light');
 
     await page.goto('/');
     await expect.poll(scheme).toBe('light');
@@ -158,11 +158,26 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     if (page.viewportSize()!.width >= 1280) await expect(demo).toBeVisible();
     else await expect(demo).toBeHidden();
 
+    // Смена темы идёт волной со стороны кнопки: на время волны у страницы отметка data-wave
+    // (сторона кнопки — «r» справа или «l» слева), после — отметки нет.
+    const waves = await page.evaluate(() => {
+      const seen: string[] = [];
+      const root = document.documentElement;
+      new MutationObserver(() => {
+        if (root.dataset.wave) seen.push(root.dataset.wave);
+      }).observe(root, { attributes: true, attributeFilter: ['data-wave'] });
+      return ((window as unknown as { __waves: string[] }).__waves = seen);
+    });
+    expect(waves).toEqual([]);
     await toggle.click();
     await expect(html).toHaveAttribute('data-theme', 'dark');
     await expect.poll(scheme).toBe('dark');
     await expect(sun).toBeVisible();
     await expect(moon).toBeHidden();
+    await expect(html).not.toHaveAttribute('data-wave', /./);
+    const seen = await page.evaluate(() => (window as unknown as { __waves: string[] }).__waves);
+    expect(seen).toHaveLength(1);
+    expect(['l', 'r']).toContain(seen[0]);
     await toggle.click();
     await expect(html).toHaveAttribute('data-theme', 'light');
     await expect.poll(scheme).toBe('light');

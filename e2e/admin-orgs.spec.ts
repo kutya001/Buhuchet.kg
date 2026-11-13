@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ADMIN_PASSWORD, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { signIn, uniqueLogin } from './helpers';
+import { showStats, signIn, uniqueLogin } from './helpers';
 
 // Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; просьба заказчика 27.10.2026 —
 // стенд, где администратор платформы создаёт организации): плашки, список всех организаций,
@@ -26,11 +26,8 @@ test.describe('Админка: организации', () => {
 
     await page.goto('/app/orgs');
     const plates = page.locator('[data-plates]');
-    // «Статистика» по умолчанию: на ПК показана, на телефоне скрыта (ТЗ «Статистика модуля»).
-    if (isMobile) {
-      await expect(plates).toHaveCount(0);
-      await page.getByRole('button', { name: 'Статистика' }).click();
-    }
+    // «Статистика» по умолчанию скрыта и на ПК, и на телефоне (прототип v88) — показать.
+    await showStats(page);
     await expect(plates).toContainText('Организаций');
     await expect(plates).toContainText('активных');
     await expect(plates).toContainText('Контрагентов на платформе');

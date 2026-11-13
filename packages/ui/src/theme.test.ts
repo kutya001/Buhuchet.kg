@@ -49,10 +49,6 @@ const PROTO_NAME: Readonly<Record<string, string>> = {
 
 const light = vars(blockAfter(theme, ':root {'), 'bu-');
 const dark = vars(blockAfter(theme, ":root[data-theme='dark'] {"), 'bu-');
-const darkAuto = vars(
-  blockAfter(theme, ":root:not([data-theme='light']):not(:has(.bu-light-default)) {"),
-  'bu-',
-);
 const protoLight = vars(blockAfter(proto, ':root{'), '');
 const protoDark = vars(blockAfter(proto, ':root[data-theme="dark"]{'), '');
 
@@ -108,20 +104,46 @@ describe('тема оформления', () => {
     expect(light.size).toBeGreaterThan(40);
   });
 
-  it('тёмная тема по выбору и по настройке устройства — одни и те же значения', () => {
-    expect(darkAuto).toEqual(dark);
+  it('тема по умолчанию светлая: от темы устройства не зависит, тёмная — только по выбору (прототип v88)', () => {
+    expect(theme).not.toContain('prefers-color-scheme');
+    expect(theme).not.toContain('bu-light-default');
+    expect(theme).toContain(":root[data-theme='dark'] {");
   });
 
-  it('лендинг (bu-light-default) без выбора светлый и при тёмной теме устройства; выбранная тёмная действует (прототип v72)', () => {
-    const auto = [...theme.matchAll(/prefers-color-scheme:\s*dark\)\s*\{([\s\S]*?)\n\}/g)];
-    expect(auto).toHaveLength(2);
-    for (const [, body] of auto) {
-      const heads = [...body!.matchAll(/^\s*(:root[^{]*)\{/gm)].map((m) => m[1]!.trim());
-      expect(heads.length).toBeGreaterThan(0);
-      for (const head of heads) expect(head).toContain(':not(:has(.bu-light-default))');
+  it('смена темы волной: новая тема накатывает маской с обеих сторон, прежняя стоит на месте', () => {
+    const next = blockAfter(theme, ':root[data-wave]::view-transition-new(root) {');
+    expect(next).toContain('animation: bu-theme-wave-r');
+    expect(next).toContain('mask: var(--bu-wave-r)');
+    const left = blockAfter(theme, ":root[data-wave='l']::view-transition-new(root) {");
+    expect(left).toContain('animation-name: bu-theme-wave-l');
+    expect(left).toContain('mask-image: var(--bu-wave-l)');
+    expect(blockAfter(theme, ':root[data-wave]::view-transition-old(root) {')).toContain(
+      'animation: none',
+    );
+    for (const side of ['r', 'l']) {
+      expect(theme).toContain(`@keyframes bu-theme-wave-${side} {`);
+      // Маска — три слоя: тело волны и два слоя «пены» перед ним.
+      const mask = new RegExp(`--bu-wave-${side}: url\\("data:image/svg\\+xml,([^"]+)"\\)`).exec(
+        theme,
+      );
+      expect(mask?.[1]?.match(/%3Cpath/g)).toHaveLength(3);
     }
-    expect(theme).toContain(":root[data-theme='dark'] {");
-    expect(theme).not.toMatch(/\[data-theme='dark'\][^{]*bu-light-default/);
+    // Волна — 0,85 с, как в прототипе v88.
+    expect(next).toMatch(/bu-theme-wave-r 0\.85s cubic-bezier\(0\.5, 0\.05, 0\.35, 1\)/);
+  });
+
+  it('без View Transitions — плавная смена цветов за 0,4 с (класс снимается через 450 мс)', () => {
+    const fade = blockAfter(theme, ':root.bu-theme-fade *::after {');
+    for (const prop of [
+      'background-color',
+      'color',
+      'border-color',
+      'box-shadow',
+      'fill',
+      'stroke',
+    ])
+      expect(fade).toContain(`${prop} 0.4s ease`);
+    expect(fade).toContain('!important');
   });
 
   it('цвета и тени — как в прототипе (css/base.css), в обеих темах', () => {

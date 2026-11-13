@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { showStats } from './helpers';
 import { orgWithTypes } from './orgs';
 
 // Загрузка контрагентов из Excel (задача 2.16, #72, часть 1) через настоящий сайт: своя организация
@@ -25,7 +26,6 @@ test.describe('Этап 2: загрузка контрагентов из Excel'
   test('(п. 19) строка без основного ГКЭД загружается с предупреждением «без ГКЭД»; плашка-фильтр «Без ГКЭД» показывает загруженного контрагента без основного вида деятельности, в его карточке — предупреждение «Укажите основной вид деятельности (ГКЭД)»', async ({
     page,
     baseURL,
-    isMobile,
   }) => {
     const origin = new URL(baseURL!).origin;
     await orgWithTypes(page.request, origin);
@@ -87,9 +87,9 @@ test.describe('Этап 2: загрузка контрагентов из Excel'
     await dialog.getByRole('button', { name: 'Закрыть' }).first().click();
     await expect(dialog).toBeHidden();
 
-    // Плашка «Без ГКЭД» (на телефоне статистика скрыта — включается кнопкой): только контрагент без ГКЭД.
+    // Плашка «Без ГКЭД» (статистика по умолчанию скрыта — включается кнопкой): только контрагент без ГКЭД.
     await expect(rows(page).filter({ hasText: noGked })).toBeVisible();
-    if (isMobile) await page.locator('[data-stats-toggle]').click();
+    await showStats(page);
     const plate = page.locator('[data-plate="nogk"]');
     await plate.click();
     await expect(plate).toHaveAttribute('aria-pressed', 'true');

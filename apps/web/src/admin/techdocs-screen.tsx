@@ -41,6 +41,7 @@ import { saveFile, useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { currentTheme } from '../shell/browser';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import {
@@ -92,12 +93,6 @@ function VersionLine({ meta, extra }: { meta: AdminTechDocsMeta; extra?: ReactNo
       ) : null}
     </>
   );
-}
-
-/** Тема программы для страницы схемы: выбранная или «как на устройстве». */
-function themeChoice(): 'light' | 'dark' | 'auto' {
-  const chosen = document.documentElement.dataset.theme;
-  return chosen === 'light' || chosen === 'dark' ? chosen : 'auto';
 }
 
 /** Открыто окно или всплывающее окошко программы: Esc сначала закрывает его. */
@@ -173,7 +168,7 @@ function DbTab({ meta }: { meta: AdminTechDocsMeta }) {
     if (!d) return;
     if (d.ready) {
       ready.current = true;
-      win.postMessage({ tdx: 1, theme: themeChoice() }, '*');
+      win.postMessage({ tdx: 1, theme: currentTheme() }, '*');
       for (const message of queue.current.splice(0)) post(message);
     }
     if (d.hash) techDocsStore.setHash(d.hash);
@@ -207,7 +202,7 @@ function DbTab({ meta }: { meta: AdminTechDocsMeta }) {
     const f = frame.current;
     if (!f) return;
     // Адрес рамки ставится один раз: страница открывается там, где её оставили, с темой программы.
-    f.src = schemaPageSrc(themeChoice(), techDocsStore.get().hash);
+    f.src = schemaPageSrc(currentTheme(), techDocsStore.get().hash);
     fit();
     const message = (e: MessageEvent) => onMessage(e);
     const browser = () => onBrowserFull();
@@ -216,7 +211,7 @@ function DbTab({ meta }: { meta: AdminTechDocsMeta }) {
     window.addEventListener('resize', fit);
     window.addEventListener('keydown', key, true);
     document.addEventListener('fullscreenchange', browser);
-    const theme = new MutationObserver(() => post({ theme: themeChoice() }));
+    const theme = new MutationObserver(() => post({ theme: currentTheme() }));
     theme.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     const unbind = techDocsStore.bindFrame((hash) => post({ go: hash }));
     return () => {
