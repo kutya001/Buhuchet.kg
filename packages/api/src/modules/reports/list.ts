@@ -5,6 +5,7 @@ import {
   listReportValues,
   orgMenuSettings,
   reportConfirmPolicy,
+  reportMonthPlanRows,
   reportSummary,
   withOrgContext,
   type ReportListOptions,
@@ -12,13 +13,22 @@ import {
   type ReportWaitingView,
   type Tx,
 } from '@buhuchet/db';
-import { hasPermission, reportWeek, type AccessSubject } from '@buhuchet/domain';
+import {
+  hasPermission,
+  monthPlanGroup,
+  monthPlanItem,
+  monthPlanQuick,
+  reportWeek,
+  type AccessSubject,
+} from '@buhuchet/domain';
 import {
   ListExportParams,
   ListQueryParams,
   ListValues,
   ListValuesQuery,
   ReportList,
+  ReportMonthQuery,
+  ReportMonthSummary,
   ReportTabCounts,
   ReportTabParam,
   type ReportRow as ReportRowBody,
@@ -37,8 +47,9 @@ import { error, reportScopeOf } from './common';
 /*
  * Список отчётов (прототип modules/reports.js: repGrid, repTabs, renderReports; экран — задача 2.13):
  * вкладки «На неделе», «Просрочено», «Ожидают подтверждения», «Все отчёты», быстрый фильтр «Все /
- * Сдать / Уплатить»; список дня вкладки «Календарь» (`tab=calendar&day=…`, задача 2.15); прежние версии
- * уточнённых не показываются; область — п. А-2.
+ * Сдать / Уплатить»; список дня вкладки «Календарь» (`tab=calendar&day=…`, задача 2.15); отчёты месяца
+ * вкладки «По месяцам» (`tab=months&month=…`, прототип v90 modules/report-months.js) и итог месяца;
+ * прежние версии уточнённых не показываются; область — п. А-2.
  */
 
 const noView = {
@@ -68,6 +79,9 @@ async function listOptions(
   if (q.tab === 'calendar' && !q.day) {
     apiFail(400, 'validation_failed', 'Укажите день календаря', { field: 'day' });
   }
+  if (q.tab === 'months' && !q.month) {
+    apiFail(400, 'validation_failed', 'Укажите месяц отчётов', { field: 'month' });
+  }
   const [policy, settings] = await Promise.all([
     reportConfirmPolicy(tx, orgContextOf(c).orgId),
     orgMenuSettings(tx, orgContextOf(c).orgId),
@@ -88,6 +102,7 @@ async function listOptions(
     ...(q.tab === 'calendar' && q.day
       ? { day: { date: q.day, taxpay: settings.features.taxpay } }
       : {}),
+    ...(q.tab === 'months' && q.month ? { month: q.month } : {}),
   };
 }
 
@@ -190,6 +205,59 @@ export function reportTabCountsHandler(
         weekFrom: week.from,
         weekTo: week.to,
         waitDays: policy.waitDays,
+      };
+    });
+    return c.json(body, 200);
+  };
+}
+
+export const reportMonthSummaryRoute = createRoute({
+  method: 'get',
+  path: '/reports/month-summary',
+  tags: ['reports'],
+  summary: 'Итог месяца вкладки «По месяцам»: что сдать и оплатить за месяц',
+  middleware: [requirePermission('repView')] as const,
+  request: { query: ReportMonthQuery },
+  responses: {
+    200: {
+      description:
+        'Сколько контрагентов, сколько нужно сдать и уплатить за месяц и сколько сделано, суммы, просрочки, сроки и числа «Все / Сдать / Уплатить» — в области сотрудника',
+      content: { 'application/json': { schema: ReportMonthSummary } },
+    },
+    400: { description: 'Месяц не в виде ГГГГ-ММ', content: error },
+    401: { description: 'Нет входа', content: error },
+    403: noView,
+  },
+});
+
+/**
+ * Итог месяца (прототип v90 `rmRender`: строка под заголовком месяца и числа плашек): отчёты месяца в
+ * области сотрудника читает база, считает одно правило домена — то же, что в карточке контрагента.
+ */
+export function reportMonthSummaryHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof reportMonthSummaryRoute, AppEnv> {
+  return async (c) => {
+    const { month } = c.req.valid('query');
+    const subject = subjectOf(c);
+    const today = todayOf(deps);
+    const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
+      const rows = await reportMonthPlanRows(tx, {
+        scope: reportScopeOf(subject),
+        today,
+        taxpay: features.taxpay,
+        month,
+      });
+      const { items: _items, ...totals } = monthPlanGroup(
+        month,
+        rows.map((r) => monthPlanItem(r, { taxpay: features.taxpay })),
+      );
+      const quick = (q: 'all' | 'sub' | 'pay') => rows.filter((r) => monthPlanQuick(r, q)).length;
+      return {
+        ...totals,
+        contractors: new Set(rows.map((r) => r.contractorId)).size,
+        quick: { all: quick('all'), sub: quick('sub'), pay: quick('pay') },
       };
     });
     return c.json(body, 200);

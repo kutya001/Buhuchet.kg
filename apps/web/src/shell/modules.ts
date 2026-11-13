@@ -176,6 +176,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
         fallback: 'all',
       },
       { id: 'all', icon: 'list', label: 'tab.reports.all' },
+      // «По месяцам» (прототип v90): что сдать и оплатить за месяц по всем контрагентам.
+      { id: 'months', icon: 'layers', label: 'tab.reports.months' },
       { id: 'matrix', icon: 'matrix', label: 'tab.reports.matrix' },
       {
         id: 'calendar',

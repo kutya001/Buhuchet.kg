@@ -1,6 +1,12 @@
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { ListValues, ManualReportOptions, ReportList, ReportTabCounts } from '@buhuchet/shared';
+import {
+  ListValues,
+  ManualReportOptions,
+  ReportList,
+  ReportMonthSummary,
+  ReportTabCounts,
+} from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD, unzipTexts } from '../../testing';
@@ -396,6 +402,177 @@ describe.skipIf(!databaseAvailable())(
       expect((await get(senior, '/api/reports/values?col=cp&tab=waiting')).status).toBe(403);
       expect((await get(senior, '/api/reports/export?cols=cp&tab=waiting')).status).toBe(403);
       expect((await list(ownerB, '&tab=waiting')).items).toEqual([]);
+    });
+
+    describe('«По месяцам» (доработки 13.11.2026, К2; прототип v90 modules/report-months.js)', () => {
+      let quarter = '';
+      const monthSummary = async (cookie: string, month: string) => {
+        const res = await get(cookie, `/api/reports/month-summary?month=${month}`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        return ReportMonthSummary.parse(await res.json());
+      };
+
+      beforeAll(async () => {
+        // Патент за III квартал: сдача + уплата, оплачен частично — месяц отчёта сентябрь.
+        const [row] = await f.t.admin.db
+          .insert(schema.reports)
+          .values({
+            orgId: f.a.orgId,
+            contractorId: cpA,
+            responsibleEmployeeId: employee('acc-a'),
+            reportTypeCode: 'pat',
+            period: 'Q',
+            periodStart: '2026-07-01',
+            act: 'both',
+            dueBase: '2026-10-20',
+            dueDate: '2026-10-20',
+            payDue: '2026-10-22',
+            amount: 400_000,
+            paid: 100_000,
+          })
+          .returning({ id: schema.reports.id });
+        quarter = row!.id;
+      });
+
+      afterAll(async () => {
+        await f.t.admin.db.delete(schema.reports).where(eq(schema.reports.id, quarter));
+      });
+
+      it('отчёты месяца: квартальный — в последнем месяце квартала; без «Не требуется» и прежних версий', async () => {
+        expect((await names(owner, '&tab=months&month=2026-09')).sort()).toEqual(
+          [...of('ndsSep', 't1Q3'), quarter].sort(),
+        );
+        // В июле — только НДС: 1-Т «Не требуется» в план не входит, квартальный стоит в сентябре.
+        expect(await names(owner, '&tab=months&month=2026-07')).toEqual(of('ndsJul'));
+        expect(await names(owner, '&tab=months&month=2026-01')).toEqual([]);
+        expect((await names(owner, '&tab=months&month=2026-09&quick=pay')).sort()).toEqual(
+          [...of('ndsSep'), quarter].sort(),
+        );
+        expect(await names(owner, `&tab=months&month=2026-09&contractorId=${cpChief}`)).toEqual([]);
+      });
+
+      it('итог месяца: сдать и уплатить, суммы, просрочка, сроки и числа «Все / Сдать / Уплатить»', async () => {
+        const s = await monthSummary(owner, '2026-09');
+        expect(s).toMatchObject({
+          month: '2026-09',
+          contractors: 1,
+          submitCount: 3,
+          submitDone: 0,
+          payCount: 2,
+          noAmount: 1,
+          amount: 400_000,
+          paid: 100_000,
+          left: 300_000,
+          // 1-Т за сентябрь просрочен: срок 15.10, сегодня 18.10.
+          late: 1,
+          done: false,
+          from: '2026-10-15',
+          to: '2026-10-22',
+          quick: { all: 3, sub: 3, pay: 2 },
+        });
+        // Июнь: 1-Т сдан, НДС сдан с суммой 0 — платить нечего, месяц закрыт.
+        expect(await monthSummary(owner, '2026-06')).toMatchObject({
+          submitCount: 2,
+          submitDone: 2,
+          payCount: 0,
+          amount: 0,
+          done: true,
+          quick: { all: 2, sub: 0, pay: 0 },
+        });
+        expect(await monthSummary(owner, '2026-01')).toMatchObject({
+          contractors: 0,
+          submitCount: 0,
+          done: true,
+          from: null,
+          to: null,
+        });
+      });
+
+      it('«Учёт оплаты налогов»: без него оплата считается сделанной, с ним — пока налог не оплачен, нет', async () => {
+        const [before] = await f.t.admin.db
+          .select({ features: schema.orgSettings.features })
+          .from(schema.orgSettings)
+          .where(eq(schema.orgSettings.orgId, f.a.orgId));
+        const taxpay = (on: boolean) =>
+          f.t.admin.db
+            .update(schema.orgSettings)
+            .set({ features: { ...before!.features, taxpay: on } })
+            .where(eq(schema.orgSettings.orgId, f.a.orgId));
+        await taxpay(false);
+        try {
+          // Суммы видны, но неоплаченного нет: месяц закрывает одна сдача.
+          expect(await monthSummary(owner, '2026-09')).toMatchObject({
+            submitCount: 3,
+            submitDone: 0,
+            payCount: 2,
+            payDone: 2,
+            amount: 400_000,
+            left: 300_000,
+            done: false,
+          });
+          expect((await monthSummary(owner, '2026-06')).done).toBe(true);
+          await taxpay(true);
+          // Патент оплачен частично, у НДС сумма не указана — оплачено 0 из 2.
+          expect(await monthSummary(owner, '2026-09')).toMatchObject({
+            payCount: 2,
+            payDone: 0,
+            noAmount: 1,
+            left: 300_000,
+            done: false,
+          });
+        } finally {
+          await f.t.admin.db
+            .update(schema.orgSettings)
+            .set({ features: before!.features })
+            .where(eq(schema.orgSettings.orgId, f.a.orgId));
+        }
+      });
+
+      it('область «Свои», права, неверный месяц и чужая организация', async () => {
+        // Бухгалтер видит отчёты своих контрагентов: июльского НДС контрагента главного бухгалтера нет.
+        expect(await names(acc, '&tab=months&month=2026-07')).toEqual([]);
+        expect((await monthSummary(acc, '2026-07')).contractors).toBe(0);
+        expect((await monthSummary(acc, '2026-09')).submitCount).toBe(3);
+        expect((await monthSummary(chief, '2026-07')).contractors).toBe(1);
+        expect(await names(ownerB, '&tab=months&month=2026-09')).toEqual([]);
+        expect((await monthSummary(ownerB, '2026-09')).contractors).toBe(0);
+        // Те же границы — у значений фильтра и выгрузки вкладки.
+        const cps = async (cookie: string, month: string) =>
+          ListValues.parse(
+            await (
+              await get(cookie, `/api/reports/values?col=cp&tab=months&month=${month}`)
+            ).json(),
+          ).items.length;
+        const sheetRows = async (cookie: string, month: string) => {
+          const file = await get(
+            cookie,
+            `/api/reports/export?cols=cp,type&tab=months&month=${month}`,
+          );
+          expect(file.status).toBe(200);
+          const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))[
+            'xl/worksheets/sheet1.xml'
+          ]!;
+          return (sheet.match(/<row /g) ?? []).length;
+        };
+        expect(await cps(chief, '2026-07')).toBe(1);
+        expect(await cps(acc, '2026-07')).toBe(0);
+        expect(await cps(ownerB, '2026-09')).toBe(0);
+        expect(await sheetRows(chief, '2026-07')).toBe(2);
+        expect(await sheetRows(acc, '2026-07')).toBe(1);
+        expect(await sheetRows(ownerB, '2026-09')).toBe(1);
+
+        expect((await get(owner, '/api/reports?tab=months')).status).toBe(400);
+        expect((await get(owner, '/api/reports?tab=months&month=2026-13')).status).toBe(400);
+        expect((await get(owner, '/api/reports/values?col=cp&tab=months')).status).toBe(400);
+        expect((await get(owner, '/api/reports/month-summary')).status).toBe(400);
+        expect((await get(owner, '/api/reports/month-summary?month=1999-12')).status).toBe(400);
+        expect((await get(owner, "/api/reports/month-summary?month=2026-09'")).status).toBe(400);
+        expect(
+          (await apiRequest(f.app, 'GET', '/api/reports/month-summary?month=2026-09')).status,
+        ).toBe(401);
+        expect((await get(senior, '/api/reports/month-summary?month=2026-09')).status).toBe(403);
+        expect((await get(senior, '/api/reports?tab=months&month=2026-09')).status).toBe(403);
+      });
     });
 
     it('«Разовый отчёт»: списки окна и срок разового вида по дате события (п. 55)', async () => {

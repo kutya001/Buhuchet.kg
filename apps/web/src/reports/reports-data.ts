@@ -6,7 +6,9 @@ import {
   ManualReportOptions,
   ReportCalendar,
   ReportCard,
+  ReportList,
   ReportMatrix,
+  ReportMonthSummary,
   ReportTabCounts,
   ResponsibleOptions,
 } from '@buhuchet/shared';
@@ -41,6 +43,31 @@ export const reportSummaryQuery = queryOptions({
   queryKey: ['reports', 'summary'],
   queryFn: summaryFn,
 });
+
+/** Итог месяца вкладки «По месяцам» и числа «Все / Сдать / Уплатить» (прототип v90 `rmRender`). */
+export const reportMonthSummaryQuery = (month: string) =>
+  queryOptions({
+    queryKey: ['reports', 'months', month],
+    queryFn: async () =>
+      json(await api.api.reports['month-summary'].$get({ query: { month } }), (v) =>
+        ReportMonthSummary.parse(v),
+      ),
+  });
+
+/**
+ * Все отчёты контрагента для «По месяцам» вкладки «Отчёты к сдаче» его карточки (прототип v90
+ * `rmCardHtml`): тот же метод списка, «Все записи»; план по месяцам строит правило `monthPlan` домена.
+ * Ключ — под списком `cps.reports`: после действия с отчётом перечитывается вместе с ним.
+ */
+export const contractorMonthReportsQuery = (contractorId: string) =>
+  queryOptions({
+    queryKey: ['list', 'cps.reports', 'months', contractorId],
+    queryFn: async () =>
+      json(
+        await api.api.reports.$get({ query: { tab: 'all', contractorId, size: 'all' } }),
+        (v) => ReportList.parse(v).items,
+      ),
+  });
 
 /**
  * Числа у вкладок (прототип repTabs): «На неделе», «Просрочено» — красным, «Ожидают подтверждения»; у
@@ -152,8 +179,9 @@ export function refreshReports(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['reports', 'card'] });
   void client.invalidateQueries({ queryKey: ['reports', 'matrix'] });
   void client.invalidateQueries({ queryKey: ['reports', 'calendar'] });
+  void client.invalidateQueries({ queryKey: ['reports', 'months'] });
   void client.invalidateQueries({ queryKey: ['files', 'report'] });
-  for (const tab of [...REPORT_LIST_TABS, 'calendar'])
+  for (const tab of [...REPORT_LIST_TABS, 'calendar', 'months'])
     void client.invalidateQueries({ queryKey: ['list', `reports.${tab}`] });
   // Регулярные задачи — это отчёты месяца (задача 2.24): их статус и счётчики меняются вместе с отчётом.
   void client.invalidateQueries({ queryKey: ['tasks'] });

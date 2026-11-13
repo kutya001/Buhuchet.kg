@@ -69,8 +69,51 @@ const quickStore = {
 
 const QUICK: readonly ReportQuick[] = ['all', 'sub', 'pay'];
 
+/** Выбор быстрого фильтра — общий для вкладок модуля, в том числе «По месяцам». */
+export function useReportQuick(): ReportQuick {
+  return useSyncExternalStore(quickStore.subscribe, quickStore.get, () => 'all' as const);
+}
+
+/** Плашки «Все / Сдать / Уплатить» с числами (прототип `.chipsel.actq`). */
+export function ReportQuickChips({
+  quick,
+  counts,
+}: {
+  quick: ReportQuick;
+  counts: Readonly<Record<ReportQuick, number>> | undefined;
+}) {
+  const t = useT();
+  return (
+    <div
+      role="group"
+      aria-label={t('report.quick.label')}
+      data-report-quick=""
+      className="flex flex-wrap gap-1.5"
+    >
+      {QUICK.map((q) => {
+        const on = q === quick;
+        return (
+          <button
+            key={q}
+            type="button"
+            data-quick={q}
+            aria-pressed={on}
+            onClick={() => quickStore.set(q)}
+            className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-[11px] py-1 text-[12.5px] font-[550] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${on ? 'border-transparent bg-accent text-on-accent shadow-cta' : 'border-line bg-raised text-muted'}`}
+          >
+            {t(`report.quick.${q}`)}
+            {counts ? (
+              <span className="ml-1 tabular-nums opacity-70">{formatCount(counts[q])}</span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /** «октябрь 2026», «за октябрь» — название месяца строчными (прототип ymLabel, MONTHS). */
-function monthName(t: Translate, month: string): string {
+export function monthName(t: Translate, month: string): string {
   return t(`report.month.${Number(month.slice(5, 7))}` as UiTextKey).toLowerCase();
 }
 
@@ -80,7 +123,7 @@ function monthName(t: Translate, month: string): string {
  * вида, над плашками — подсказка и «Выбрать налоги» (окно «Выбор налогов», как «Подключить из
  * каталога»), без права «Вести справочники организации» — «Подключает владелец».
  */
-function NoTypesNote() {
+export function NoTypesNote() {
   const t = useT();
   const { access } = useShell();
   const settings = useQuery(typeSettingsQuery);
@@ -154,7 +197,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
   const defaultVisible = useMemo(() => reportDefaultVisible(waiting, taxpay), [waiting, taxpay]);
   const view = useViewSettings(gridKey);
   const stats = useModuleStats('reports');
-  const quick = useSyncExternalStore(quickStore.subscribe, quickStore.get, () => 'all' as const);
+  const quick = useReportQuick();
   const extra = useMemo(() => ({ tab, quick }), [tab, quick]);
   const fetchPage = useCallback<FetchListPage<ReportRow>>(async (params) => {
     const res = await api.api.reports.$get({ query: params });
@@ -319,31 +362,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
           ))}
         </Plates>
       ) : null}
-      <div
-        role="group"
-        aria-label={t('report.quick.label')}
-        data-report-quick=""
-        className="flex flex-wrap gap-1.5"
-      >
-        {QUICK.map((q) => {
-          const on = q === quick;
-          return (
-            <button
-              key={q}
-              type="button"
-              data-quick={q}
-              aria-pressed={on}
-              onClick={() => quickStore.set(q)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-[11px] py-1 text-[12.5px] font-[550] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${on ? 'border-transparent bg-accent text-on-accent shadow-cta' : 'border-line bg-raised text-muted'}`}
-            >
-              {t(`report.quick.${q}`)}
-              {quickCounts ? (
-                <span className="ml-1 tabular-nums opacity-70">{formatCount(quickCounts[q])}</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
+      <ReportQuickChips quick={quick} counts={quickCounts} />
       <DataGrid
         columns={columns}
         audit={REPORT_AUDIT}

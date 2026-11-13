@@ -135,6 +135,7 @@ export const SHELL_TEXTS = {
   'tab.reports.overdue': { ru: 'Просрочено', section: 'Вкладки' },
   'tab.reports.waiting': { ru: 'Ожидают подтверждения', section: 'Вкладки' },
   'tab.reports.all': { ru: 'Все отчёты', section: 'Вкладки' },
+  'tab.reports.months': { ru: 'По месяцам', section: 'Вкладки' },
   'tab.reports.matrix': { ru: 'Кто что сдаёт', section: 'Вкладки' },
   'tab.reports.calendar': { ru: 'Календарь', section: 'Вкладки' },
   'tab.fin.all': { ru: 'Все', section: 'Вкладки' },

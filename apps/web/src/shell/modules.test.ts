@@ -117,6 +117,7 @@ describe('вкладки и «+ Добавить» по правам и учёт
       'week',
       'overdue',
       'all',
+      'months',
       'matrix',
       'calendar',
     ]);
