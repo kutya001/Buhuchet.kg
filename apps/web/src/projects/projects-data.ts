@@ -2,6 +2,7 @@
 
 import {
   ContractorProjects,
+  ListValues,
   ProjectCard,
   ProjectForm,
   ProjectPaymentWindow,
@@ -34,6 +35,22 @@ const json = async <T>(res: JsonResponse, parse: (v: unknown) => T) => {
 };
 
 /** Числа вкладок, плашки и что сотрудник может (прототип `projTabs`, `renderProjects`). */
+/**
+ * Главные по проектам вкладки — столбцы доски «по главному», видные и пустыми (прототип v85
+ * `projKanban`, `show.lead`). Значения — того же списка, что видит сотрудник.
+ */
+export const boardLeadQuery = (tab: 'active' | 'all' | 'mine') =>
+  queryOptions({
+    queryKey: ['projects', 'board-lead', tab],
+    queryFn: async () => {
+      const res = await api.api.projects.values.$get({ query: { col: 'lead', tab } });
+      if (!res.ok) throw await apiFailure(res);
+      return ListValues.parse(await res.json())
+        .items.filter((v) => v.value !== '' && v.label !== null)
+        .map((v) => ({ key: v.value, label: v.label ?? '' }));
+    },
+  });
+
 export const projectSummaryQuery = queryOptions({
   queryKey: ['projects', 'summary'],
   queryFn: async () => json(await api.api.projects.summary.$get(), (v) => ProjectSummary.parse(v)),

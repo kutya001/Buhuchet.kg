@@ -80,6 +80,22 @@ export const STAFF_TEXTS = {
   'staff.card.cps.empty': { ru: 'Нет закреплённых контрагентов', section: 'Сотрудники' },
   'staff.role.title': { ru: 'Роль сотрудника', section: 'Сотрудники' },
   'staff.role.done': { ru: 'Роль изменена', section: 'Сотрудники' },
+  // Доска сотрудников (прототип v85, modules/staff.js staffKanban): перенос карточки.
+  'staff.board.only': {
+    ru: 'Перетаскиванием меняется только роль. Блокировка и остальное — в меню сотрудника',
+    section: 'Сотрудники',
+  },
+  'staff.board.no_right': { ru: 'Нужно право «Сотрудники и роли»', section: 'Сотрудники' },
+  'staff.board.owner': { ru: 'Роль владельца не меняется', section: 'Сотрудники' },
+  'staff.board.locked': { ru: 'Роль этого сотрудника меняет владелец', section: 'Сотрудники' },
+  'staff.board.owner_one': { ru: 'Владелец в организации один', section: 'Сотрудники' },
+  'staff.board.role_locked': { ru: 'Эту роль назначает владелец', section: 'Сотрудники' },
+  'staff.board.confirm.title': { ru: 'Сменить роль?', section: 'Сотрудники' },
+  'staff.board.confirm.text': {
+    ru: '{name}: {from} → {to}. Права сотрудника изменятся сразу.',
+    section: 'Сотрудники',
+  },
+  'staff.board.confirm.ok': { ru: 'Сменить роль', section: 'Сотрудники' },
   // Подсказка под «Роль» у не владельца: каких ролей нет в списке (ТЗ, решение заказчика 27.10.2026).
   'staff.role.hint': {
     ru: 'Роли с правами, которые выдаёт только владелец, и роли шире вашей назначает владелец',

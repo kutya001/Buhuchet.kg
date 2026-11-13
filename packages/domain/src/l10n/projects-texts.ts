@@ -80,6 +80,23 @@ export const PROJECTS_TEXTS = {
     section: S,
   },
   'proj.status.toast': { ru: 'Статус проекта: {status}', section: S },
+  // Доска проектов (прототип v85, modules/projects.js projKanban): перенос карточки.
+  'proj.board.no_right': { ru: 'Нужно право «Вести проекты и разовые услуги»', section: S },
+  'proj.board.no_move': { ru: 'Из «{from}» в «{to}» проект перевести нельзя', section: S },
+  'proj.board.no_move_back': {
+    ru: 'Из «{from}» в «{to}» проект перевести нельзя: откат — в меню проекта',
+    section: S,
+  },
+  'proj.board.pick_employee': { ru: 'Выберите столбец сотрудника', section: S },
+  'proj.board.lead_open': {
+    ru: 'Главный меняется только у незавершённого проекта',
+    section: S,
+  },
+  'proj.board.only': {
+    ru: 'Перетаскиванием меняются статус и главный по проекту. Остальное — в окне «Изменить»',
+    section: S,
+  },
+  'proj.board.lead_done': { ru: 'Главный по проекту: {name}', section: S },
   'proj.status.no_right': { ru: 'Нет права менять проекты', section: S },
   'proj.rollback.to_work': {
     ru: 'Проект снова станет активным, по нему можно вести работы и принимать оплаты.',
