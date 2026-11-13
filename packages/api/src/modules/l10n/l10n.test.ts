@@ -3,7 +3,7 @@ import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuc
 import { UI_TEXTS } from '@buhuchet/domain';
 import { ApiError, UiDictionary } from '@buhuchet/shared';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app';
 import { createTestDeps } from '../../testing';
 import { serverTexts } from './texts';
@@ -80,6 +80,74 @@ describe('словарь текстов: сверка с базой', () => {
     broken = false;
     expect((await serverTexts(deps))('health.title')).toBe(UI_TEXTS['health.title'].ru);
     expect(queries()).toBe(4);
+  });
+});
+
+describe('словарь текстов: база не отвечает на сверку', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('ошибка сверки — отдаётся словарь из памяти, новая попытка — после паузы', async () => {
+    vi.useFakeTimers();
+    const { db, queries } = countingDb();
+    let broken = false;
+    const flaky = new Proxy(db, {
+      get: (target, prop, receiver) => {
+        if (broken) throw new Error('база недоступна');
+        return Reflect.get(target, prop, receiver) as unknown;
+      },
+    });
+    const deps = createTestDeps({ db: flaky });
+    const first = serverTexts(deps);
+    await vi.advanceTimersByTimeAsync(50);
+    expect((await first)('health.title')).toBe(UI_TEXTS['health.title'].ru);
+    expect(queries()).toBe(4);
+
+    broken = true;
+    expect((await serverTexts(deps))('health.title')).toBe(UI_TEXTS['health.title'].ru);
+    // Пока пауза — к базе не ходит совсем, даже когда она уже ожила.
+    broken = false;
+    await serverTexts(deps);
+    expect(queries()).toBe(4);
+    await vi.advanceTimersByTimeAsync(15_000);
+    const again = serverTexts(deps);
+    await vi.advanceTimersByTimeAsync(50);
+    await again;
+    expect(queries()).toBe(6);
+  });
+
+  it('база молчит дольше предела — словарь из памяти, запросы не ждут её', async () => {
+    vi.useFakeTimers();
+    const { db } = countingDb();
+    let hung = false;
+    const never: object = new Proxy(() => never, {
+      get: (_target, prop) => (prop === 'then' ? () => {} : never),
+      apply: () => never,
+    });
+    const slow = new Proxy(db, {
+      get: (target, prop, receiver) =>
+        hung ? (never as Db)[prop as keyof Db] : (Reflect.get(target, prop, receiver) as unknown),
+    });
+    const deps = createTestDeps({ db: slow });
+    const first = serverTexts(deps);
+    await vi.advanceTimersByTimeAsync(50);
+    await first;
+
+    hung = true;
+    let answered = false;
+    const waiting = Promise.all([serverTexts(deps), serverTexts(deps)]).then((texts) => {
+      answered = true;
+      return texts;
+    });
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(answered).toBe(false);
+    await vi.advanceTimersByTimeAsync(1100);
+    const texts = await waiting;
+    expect(texts.map((t) => t('health.title'))).toEqual([
+      UI_TEXTS['health.title'].ru,
+      UI_TEXTS['health.title'].ru,
+    ]);
   });
 });
 
