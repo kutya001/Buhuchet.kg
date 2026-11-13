@@ -30,6 +30,8 @@ import {
   exportReportsRoute,
   listReportsHandler,
   listReportsRoute,
+  reportMonthSummaryHandler,
+  reportMonthSummaryRoute,
   reportTabCountsHandler,
   reportTabCountsRoute,
   reportValuesHandler,
@@ -105,6 +107,7 @@ export function reportsModule(deps: ApiDeps) {
       // «due-shift», «matrix» и «calendar» разбирались бы как номер отчёта.
       .openapi(reportValuesRoute, reportValuesHandler(deps))
       .openapi(reportTabCountsRoute, reportTabCountsHandler(deps))
+      .openapi(reportMonthSummaryRoute, reportMonthSummaryHandler(deps))
       .openapi(exportReportsRoute, exportReportsHandler(deps))
       .openapi(manualReportOptionsRoute, manualReportOptionsHandler(deps))
       .openapi(manualReportDueRoute, manualReportDueHandler(deps))

@@ -21,6 +21,8 @@ export interface MiniRow {
   blank?: readonly string[];
   /** Итоговая строка таблицы-карточек (прототип `tr.m-total`): жирная, на телефоне — серый фон; не открывается. */
   total?: boolean;
+  /** Просроченная строка (прототип `tr.rm-late`): на ПК — красная полоска слева, на телефоне — красная рамка карточки. */
+  late?: boolean;
 }
 
 /** Значение длиннее стольких знаков на телефоне занимает всю ширину карточки (прототип `MC_LONG`). */
@@ -36,7 +38,8 @@ export const miniWide = (texts: Readonly<Record<string, string>>): string[] =>
  * подписями, первый столбец — заголовок карточки, длинные значения — на всю ширину, кнопки строки — в
  * правом верхнем углу. Пустая — одна строка с серым текстом. С `onOpen` строка открывает запись
  * (нажатием или Enter), как строка списка. С `phoneCards={false}` — таблица и на телефоне, узкая
- * прокручивается вбок (прототип `table.mini` без `m-cards`: строки распределения в окнах оплаты).
+ * прокручивается вбок (прототип `table.mini` без `m-cards`: строки распределения в окнах оплаты). С
+ * `fixed` — столбцы по заданной ширине; `late` у строки — отметка просрочки.
  */
 export function MiniTable({
   columns,
@@ -45,10 +48,16 @@ export function MiniTable({
   label,
   headless = false,
   phoneCards = true,
+  fixed = false,
   onOpen,
 }: {
   columns: readonly MiniColumn[];
   rows: readonly MiniRow[];
+  /**
+   * На ПК столбцы ровно по заданной ширине, первый — на остаток; узкая таблица прокручивается вбок
+   * (прототип `.rm-tbl`: таблицы месяцев одна под другой — столбцы на одной линии).
+   */
+  fixed?: boolean;
   /** Без строки заголовков и подписей у значений на телефоне (реквизиты в карточке сотрудника). */
   headless?: boolean;
   /** «Нет закреплённых контрагентов». */
@@ -88,7 +97,7 @@ export function MiniTable({
       <table
         aria-label={label}
         data-mini-table=""
-        className="w-full border-collapse text-[13px] tabular-nums max-md:block"
+        className={`w-full border-collapse text-[13px] tabular-nums max-md:block ${fixed ? 'md:min-w-[860px] md:table-fixed' : ''}`}
       >
         <thead className={headless ? 'hidden' : 'max-md:hidden'}>
           <tr>
@@ -115,7 +124,9 @@ export function MiniTable({
             rows.map((row) => (
               <tr
                 key={row.key}
+                data-mini-row={row.key}
                 {...(row.total ? { 'data-mini-total': '' } : {})}
+                {...(row.late ? { 'data-mini-late': '' } : {})}
                 {...(onOpen && !row.total
                   ? {
                       'data-open': '',
@@ -128,7 +139,7 @@ export function MiniTable({
                       },
                     }
                   : {})}
-                className="data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none data-mini-total:font-bold md:last:[&>td]:border-b-0 max-md:relative max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0 max-md:data-mini-total:bg-pane-alt"
+                className="data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none data-mini-total:font-bold md:last:[&>td]:border-b-0 max-md:relative max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0 max-md:data-mini-total:bg-pane-alt md:data-mini-late:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-danger)] max-md:data-mini-late:border-danger"
               >
                 {columns.map((c, i) => (
                   <td

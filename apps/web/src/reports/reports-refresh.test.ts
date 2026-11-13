@@ -34,9 +34,11 @@ describe('refreshReports — что перечитывается после де
   });
 
   it('списки и карточки модуля «Отчеты для сдачи» — как раньше', () => {
-    for (const tab of ['week', 'overdue', 'waiting', 'all', 'calendar'])
+    for (const tab of ['week', 'overdue', 'waiting', 'all', 'calendar', 'months'])
       expect(staleAfterRefresh(['list', `reports.${tab}`, { page: 1 }])).toBe(true);
     expect(staleAfterRefresh(['reports', 'card', 'r1'])).toBe(true);
+    expect(staleAfterRefresh(['reports', 'months', '2026-10'])).toBe(true);
+    expect(staleAfterRefresh(['list', 'cps.reports', 'months', 'c1'])).toBe(true);
     expect(staleAfterRefresh(['tasks', 'summary'])).toBe(true);
   });
 
