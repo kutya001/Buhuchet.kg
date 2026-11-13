@@ -1,5 +1,5 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, pickContractor, signIn } from './helpers';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { DEMO_PASSWORD, phoneTableView, pickContractor, signIn } from './helpers';
 import { newContractor } from './reports';
 
 // Доработки 13.11, задача И3 (прототип v93, ui/cp-select.js): поле «Контрагент» во всех формах — общий
@@ -23,6 +23,33 @@ const rowsOf = (page: Page) => page.getByRole('listbox').getByRole('option');
 async function openList(page: Page, field: Locator) {
   await field.click();
   await expect(searchOf(page)).toHaveAttribute('placeholder', 'Название или ИНН');
+}
+
+/** Файл контрагента, загруженный вручную: начать → PUT в хранилище → закончить. */
+async function uploadFor(
+  api: APIRequestContext,
+  origin: string,
+  contractorId: string,
+  name: string,
+) {
+  const size = 1024;
+  const start = await api.post('/api/files/uploads', {
+    headers: { origin },
+    data: { source: { kind: 'manual', id: null }, contractorId, name, size },
+  });
+  expect(start.status(), await start.text()).toBe(201);
+  const ticket = (await start.json()) as {
+    id: string;
+    upload: { url: string; headers: Record<string, string> };
+  };
+  const put = await api.put(ticket.upload.url, {
+    headers: ticket.upload.headers,
+    data: Buffer.alloc(size, 5),
+  });
+  expect(put.status(), await put.text()).toBe(200);
+  const done = await api.post(`/api/files/${ticket.id}/complete`, { headers: { origin } });
+  expect(done.status(), await done.text()).toBe(200);
+  return ticket.id;
 }
 
 test.describe('Доработки 13.11: список контрагентов с поиском по названию и ИНН', () => {
@@ -149,5 +176,59 @@ test.describe('Доработки 13.11: список контрагентов �
         .getByRole('dialog', { name: 'Поступление от контрагента' })
         .locator('[data-receipt-contractor]'),
     ).toContainText(`ОсОО «${name}»`);
+  });
+
+  test('(проверка прототипа v93) фильтр столбца «Контрагент»: поле «Название или ИНН» находит значение по ИНН — цифрами подряд и с пробелами; «Выбрать все» по найденному оставляет в списке записи этого контрагента', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    // Поле поиска в фильтре есть, когда значений больше восьми: девять контрагентов с файлом у каждого.
+    const tag = word();
+    const cps: { id: string; inn: string; name: string; file: string }[] = [];
+    for (let i = 1; i <= 9; i++) {
+      const name = `ОсОО «${tag} ${i}»`;
+      const cp = await newContractor(page.request, origin, { name, tariffAmount: 0 });
+      const file = await uploadFor(page.request, origin, cp.id, `устав ${tag} ${i}.pdf`);
+      cps.push({ id: cp.id, inn: cp.inn, name, file });
+    }
+    const target = cps[4]!;
+
+    await page.goto('/app/files');
+    const grid = page.locator('[data-grid]');
+    await expect(grid.locator('[data-id]').first()).toBeVisible();
+    if (isMobile) await phoneTableView(page);
+    await grid.getByRole('button', { name: 'Фильтр: Контрагент' }).click();
+    const filter = page.getByRole('dialog', { name: 'Контрагент' });
+    const find = filter.getByRole('textbox', { name: 'Название или ИНН' });
+    await expect(find).toHaveAttribute('placeholder', 'Название или ИНН');
+    const values = filter.locator('[data-filter-values] label');
+
+    // По названию — как раньше: все девять контрагентов теста.
+    await find.fill(tag.toUpperCase());
+    await expect(values).toHaveCount(10);
+    // По ИНН — цифрами подряд: один контрагент; цифры через пробел — он же.
+    await find.fill(target.inn);
+    await expect(values).toHaveCount(2);
+    await expect(values.nth(1)).toContainText(target.name);
+    await find.fill(`${target.inn.slice(0, 4)} ${target.inn.slice(4, 9)} ${target.inn.slice(9)}`);
+    await expect(values).toHaveCount(2);
+    await expect(values.nth(1)).toContainText(target.name);
+    // Цифры, которых нет ни в одном ИНН и названии, — ничего не найдено.
+    await find.fill('99999999999999999');
+    await expect(values).toHaveCount(1);
+
+    // Снять всё, найти по ИНН, «Выбрать все» и «Применить»: в списке — только файл этого контрагента.
+    await find.fill('');
+    await filter.getByRole('checkbox', { name: 'Выбрать все' }).uncheck();
+    await find.fill(target.inn);
+    await expect(values).toHaveCount(2);
+    await filter.getByRole('checkbox', { name: 'Выбрать все' }).check();
+    await expect(filter.getByRole('checkbox', { name: target.name })).toBeChecked();
+    await filter.getByRole('button', { name: 'Применить' }).click();
+    await expect(grid.locator('[data-id]')).toHaveCount(1);
+    await expect(grid.locator(`[data-id="${target.file}"]`)).toBeVisible();
   });
 });
