@@ -21,6 +21,7 @@ import {
   DICT_HISTORY_SHOWN,
   isStatusTone,
   messageTemplateVariables,
+  messageTemplateMax,
   missingTemplateVariables,
   roleTemplateProblem,
   sameName,
@@ -480,7 +481,7 @@ export const saveMessageTemplatesRoute = createRoute({
     },
     400: {
       description:
-        'Пустой текст, подстановка, которой нет у шаблона (`unknown_vars`), или нет обязательной (`missing_vars`)',
+        'Пустой текст, текст длиннее предела шаблона (`template_too_long`), подстановка, которой нет у шаблона (`unknown_vars`), или нет обязательной (`missing_vars`)',
       content: error,
     },
     ...denied,
@@ -502,6 +503,15 @@ export function saveMessageTemplatesHandler(
   return async (c) => {
     const { items } = c.req.valid('json');
     for (const item of items) {
+      // Подпись кнопки и скрытый ответ бота короче остальных шаблонов (прототип v89, `tplErr`).
+      const max = messageTemplateMax(item.key);
+      if (item.text.length > max) {
+        apiFail(400, 'template_too_long', 'Текст длиннее предела шаблона', {
+          field: item.key,
+          max,
+          length: item.text.length,
+        });
+      }
       const unknown = unknownTemplateVariables(item.key, item.text);
       if (unknown.length) {
         apiFail(400, 'unknown_vars', 'Нет такой подстановки', {

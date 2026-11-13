@@ -29,5 +29,4 @@ swipeDown($('#sheet'),()=>$('#sheet'),{cover:$('#sheet-cover'),can:()=>true,clos
 document.addEventListener('focusin',e=>{if(isMobile()&&e.target.matches('input:not([type=checkbox]):not([type=radio]),textarea')){$('#app').classList.add('kb');document.body.classList.add('kb')}});
 document.addEventListener('focusout',()=>setTimeout(()=>{const a=document.activeElement;if(!a||!a.matches||!a.matches('input:not([type=checkbox]),textarea')){$('#app').classList.remove('kb');document.body.classList.remove('kb')}},50));
 let wasMobile=isMobile();addEventListener('resize',()=>{const m=isMobile();if(m!==wasMobile){wasMobile=m;renderShell()}else fitTabs()});
-matchMedia('(prefers-color-scheme: dark)').addEventListener&&matchMedia('(prefers-color-scheme: dark)').addEventListener('change',paintTheme);
 

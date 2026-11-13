@@ -54,6 +54,7 @@ function orgPolicyBody(p: OrgPolicyRecord): OrgPolicy {
     pageSections: p.pageSections,
     timezone: p.timezone,
     overdueRepeat: p.overdueRepeat,
+    telegramActions: p.telegramActions,
     digestTime: p.digestTime,
     defaultRoleId: p.defaultRoleId,
     defaultRoleName: p.defaultRoleName,
@@ -208,6 +209,8 @@ export function updateOrgPolicyHandler(
     if (body.confirmWaitDays !== undefined && !isValidConfirmWaitDays(body.confirmWaitDays)) {
       return c.json(apiError('confirm_wait_days_invalid', CONFIRM_WAIT_DAYS_MESSAGE), 400);
     }
+    // «Действия из Telegram» (поток Т, задача Т1; прототип modules/org.js `#st-tgact`) меняет только
+    // владелец: право «Настройки и учётная политика» метода — только у владельца.
     const ctx = orgContextOf(c);
     const policy = await withOrgContext(deps.db, ctx, async (tx) => {
       const current = await getOrgPolicy(tx, ctx.orgId);
@@ -261,6 +264,7 @@ export function updateOrgPolicyHandler(
           ),
           timezone: body.timezone,
           overdueRepeat: body.overdueRepeat,
+          telegramActions: body.telegramActions,
           digestTime: changed(body.digestTime, current.digestTime),
           defaultRoleId: body.defaultRoleId,
         },

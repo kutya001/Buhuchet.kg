@@ -69,7 +69,7 @@ describe.skipIf(!databaseAvailable())('вход администратора п�
     const { challenge } = AdminCodeRequiredResponse.parse(await res.json());
     const last = tg.sent.at(-1)!;
     expect(last.chatId).toBe(ADMIN_CHAT);
-    return { challenge, code: /: (\d{6})\./.exec(last.text)![1]! };
+    return { challenge, code: /^(\d{6}) — код/m.exec(last.text)![1]! };
   };
   const otherCode = (code: string) => (code === '000000' ? '111111' : '000000');
   /** Сколько вводов занято у последнего кода. */
@@ -111,6 +111,12 @@ describe.skipIf(!databaseAvailable())('вход администратора п�
         .replace('{код}', code)
         .replace('{минут}', String(ADMIN_CODE_TTL_MINUTES)),
     );
+    // Код копируется одним нажатием: моноширинный в тексте и кнопка «Скопировать код».
+    expect(tg.sent.at(-1)!.options).toMatchObject({
+      code,
+      keyboard: [[{ text: TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCopyCode, copy: code }]],
+    });
+    expect(tg.sent.at(-1)!.options.rich).toBeUndefined();
     const wrong = await enterCode(challenge, otherCode(code));
     expect(wrong.status).toBe(400);
     expect(await error(wrong)).toMatchObject({ code: 'admin_code_invalid' });

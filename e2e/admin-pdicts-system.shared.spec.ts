@@ -253,9 +253,10 @@ test.describe('Админка: справочники платформы — р�
       await expect(page.getByText('Подстановки в фигурных скобках заполняются сами')).toBeVisible();
       const field = page.getByLabel('Telegram: код восстановления пароля');
       await expect(field).toHaveValue(code.text);
-      await expect(page.locator('[data-template="tgCode"]')).toContainText(
-        'код для восстановления пароля, действует 10 минут. Подстановки: {код}',
-      );
+      // Пояснение к шаблону — из справочника (прототип v89: код первым и кнопка «Скопировать код»).
+      const note = page.locator('[data-template="tgCode"]');
+      await expect(note).toContainText('код для восстановления пароля, действует 10 минут');
+      await expect(note).toContainText('кнопка «Скопировать код». Подстановки: {код}');
       const save = page.getByRole('button', { name: 'Сохранить шаблоны' });
       await field.fill('');
       await save.click();

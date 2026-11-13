@@ -48,6 +48,8 @@ import { adminResetPasswordHandler, adminResetPasswordRoute } from './password-r
 import {
   telegramBotHandler,
   telegramBotRoute,
+  telegramBotViewHandler,
+  telegramBotViewRoute,
   telegramBroadcastHandler,
   telegramBroadcastRoute,
   telegramLogExportHandler,
@@ -157,6 +159,7 @@ export function adminModule(deps: ApiDeps) {
       .openapi(telegramSummaryRoute, telegramSummaryHandler(deps))
       .openapi(telegramRetryRoute, telegramRetryHandler(deps))
       .openapi(telegramBotRoute, telegramBotHandler(deps))
+      .openapi(telegramBotViewRoute, telegramBotViewHandler(deps))
       .openapi(telegramOrgsRoute, telegramOrgsHandler(deps))
       .openapi(telegramBroadcastRoute, telegramBroadcastHandler(deps))
   );

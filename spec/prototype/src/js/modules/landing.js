@@ -11,14 +11,10 @@ function landRoute(){const h=location.hash;if(h!=='#landing'&&h!=='#landing/lead
   if(DEMO.on)demoOff();landShow();if(h==='#landing/lead'){history.replaceState(history.state,'','#landing');setTimeout(()=>landGo('lead',!LAND.sent),60)}return true}
 function landShow(){let el=$('#land');if(!el){el=document.createElement('div');el.id='land';el.className='land';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Лендинг buhuchet.kg');document.body.append(el)}
   const fresh=!LAND.open;if(fresh){LAND.back=S.mod?'#'+S.mod+(S.tab?'.'+S.tab:''):'#home';LAND.title0=document.title;LAND.sent=null;LAND.shot=0;LAND.more={}}
-  LAND.open=true;el.hidden=false;document.body.classList.add('land-on');document.title=LT('land.title');landTheme0();if(fresh)buIntro();landDraw()}
-// Тема лендинга: по умолчанию светлая (Кутман 02.11.2026); выбор кнопкой запоминается так же, как кнопкой темы в программе
-const landThemeSaved=()=>{try{const t=localStorage.getItem(BU_P+'theme');return t==='light'||t==='dark'}catch(e){return false}};
-function landTheme0(){if(!landThemeSaved()){document.documentElement.setAttribute('data-theme','light');LAND.themeTmp=true}}
-function landTheme1(){if(LAND.themeTmp&&!landThemeSaved())document.documentElement.removeAttribute('data-theme');LAND.themeTmp=false;if($('#theme'))paintTheme()}
-function landThemeToggle(){const t=effTheme()==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);store.set('theme',t);try{localStorage.setItem(BU_P+'theme',t)}catch(e){}LAND.themeTmp=false;
-  $$('[data-lp-theme]').forEach(b=>b.innerHTML=ic(t==='dark'?'sun':'moon'));if($('#theme'))paintTheme()}
-function landHide(){const el=$('#land');if(el)el.hidden=true;if(LAND.open)landTheme1();document.body.classList.remove('land-on');if(LAND.open)document.title=LAND.title0;LAND.open=false;LAND.menu=false;if(LAND.io){LAND.io.disconnect();LAND.io=null}landFxStop()}
+  LAND.open=true;el.hidden=false;document.body.classList.add('land-on');document.title=LT('land.title');if(fresh)buIntro();landDraw()}
+// Тема лендинга — та же, что в программе: по умолчанию светлая, кнопка меняет её волной и запоминает (setTheme в ui/shell.js)
+function landThemeToggle(b){setTheme(effTheme()==='dark'?'light':'dark',b)}
+function landHide(){const el=$('#land');if(el)el.hidden=true;document.body.classList.remove('land-on');if(LAND.open)document.title=LAND.title0;LAND.open=false;LAND.menu=false;if(LAND.io){LAND.io.disconnect();LAND.io=null}landFxStop()}
 function landClose(){const b=LAND.back||'#home';landHide();if(location.hash!==b)location.hash=b;else route()}
 // «Войти» открывает страницу входа; после входа — рабочая страница
 function landLogin(){const b=LAND.back||'#home';landHide();history.replaceState(history.state,'',b);showLogin()}
@@ -128,7 +124,7 @@ function landBind(el){const page=$('#land-page',el);
     if(d.lpMore){const k=d.lpMore,s=$('#lp-'+k,el),o=!LAND.more[k];LAND.more[k]=o;s.classList.toggle('open',o);b.setAttribute('aria-expanded',o);b.firstElementChild.textContent=o?LT('land.less'):(k==='lead'?LT('land.c.title'):LT('land.more'));return}
     if(d.lpFlip!=null)return b.classList.toggle('now');
     if(d.lpTile!=null){const o=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',o);return}
-    if(d.lpEmb)return landEmbPick(el,d.lpEmb);if(d.lpDemo!=null)return demoOpen();if(d.lpTheme!=null)return landThemeToggle();
+    if(d.lpEmb)return landEmbPick(el,d.lpEmb);if(d.lpDemo!=null)return demoOpen();if(d.lpTheme!=null)return landThemeToggle(b);
     if(d.lpGo)return landGo(d.lpGo);if(d.lpLead!=null)return landGo('lead',!LAND.sent);if(d.lpLogin!=null)return landLogin();if(d.lpConsent!=null){e.preventDefault();return landConsent()}
     if(d.lpTop!=null){if(LAND.menu){LAND.menu=false;landMenuSync()}return page.scrollTo({top:0,behavior:landRM()?'auto':'smooth'})}
     if(d.lpMenu!=null){LAND.menu=!LAND.menu;return landMenuSync()}

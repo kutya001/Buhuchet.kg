@@ -36,6 +36,8 @@ export const OUTBOX_KINDS = [
   // (docs/deviations.md, пп. О-20, О-21).
   'relink_code',
   'page_closed',
+  // «Проверить бота» в «Мой профиль»: сообщение с таблицей и кнопкой (поток Т, задача Т1).
+  'bot_test',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 

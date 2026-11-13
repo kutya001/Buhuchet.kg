@@ -65,7 +65,7 @@ async function linkUrl(app: App, cookie: string) {
 const tokenOf = (url: string) => new URL(url).searchParams.get('start')!;
 
 /** Код из сообщения бота в прежний чат и неверный код рядом с ним. */
-const codeOf = (text: string | undefined) => /код: (\d{6})/.exec(text ?? '')?.[1] ?? '';
+const codeOf = (text: string | undefined) => /^(\d{6}) — код/m.exec(text ?? '')?.[1] ?? '';
 const otherCode = (code: string) => (code === '000000' ? '111111' : '000000');
 
 describe.skipIf(!databaseAvailable())('Telegram: привязка по ссылке и вебхук бота', () => {
@@ -232,7 +232,13 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(tg.sent[0]!.text).toBe(
       fillTemplate(TPL.tgRelinkCode, { логин: 'acc-a', телеграм: '@new_tg', код: code, минут: 10 }),
     );
+    // Код копируется одним нажатием: моноширинный в тексте и кнопка «Скопировать код».
+    expect(tg.sent[0]!.options).toMatchObject({
+      code,
+      keyboard: [[{ text: TPL.tgBtnCopyCode, copy: code }]],
+    });
     expect(tg.sent[1]!.text).toBe(fillTemplate(TPL.tgRelinkAsk, { логин: 'acc-a', минут: 10 }));
+    expect(tg.sent[1]!.options.keyboard).toBeUndefined();
     expect((await me(app, cookie)).telegram).toMatchObject({ name: 'Алишер' });
 
     await sendToBot(app, telegramUpdate(otherCode(code), 7003));
@@ -535,7 +541,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(tg.sent.slice(next).map((m) => m.chatId)).toEqual([5005, 5006]);
     // Знак смены направления текста убран, эмодзи на границе не разрезан пополам.
     expect(tg.sent[next]!.text).toContain(
-      'хотят привязать другой Telegram: «Поддержка Buhuchet: перешлите \u{1F600}…». Если это вы',
+      'код для привязки другого Telegram «Поддержка Buhuchet: перешлите \u{1F600}…» к учётной записи',
     );
     // И в «привязан другой Telegram» в прежний чат — так же коротко, одной строкой.
     const done = tg.sent.length;

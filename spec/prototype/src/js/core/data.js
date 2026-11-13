@@ -351,6 +351,17 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // v80: показатели в расчёте налогов — отметка «Для расчёта налогов» у «Выручки», «ФОТ» и численности, если организация ещё ничего не отмечала
   if(!db.meta.v80){db.meta.v80=1;const ks=db.indicators;if(Array.isArray(ks)&&!ks.some(i=>i.tax)){const f=(re,role,ts)=>{const i=ks.find(x=>!x.archived&&ts.includes(x.type)&&re.test(String(x.name||'').trim()));if(i)i.tax=role};
     f(/^выручка/i,'rev',['som','dec']);f(/^(фот|фонд оплаты труда)$/i,'fot',['som','dec']);f(/^(количество сотрудников|численность)/i,'emp',['int'])}}
+  // v88 (поток И, 13.11.2026): статистика модулей сначала скрыта, тема сначала светлая — новые тексты статьи «Как устроен экран», шага «Выбрать тему» и показа «Статистика», если администратор их не менял
+  if(!db.meta.v88){db.meta.v88=1;const R=db.ref||{},sys=x=>!x._ub||x._ub==='system';
+    const a=(R.kbArticles||[]).find(x=>x.id==='a5'),ba=(r.kbArticles||[]).find(x=>x.id==='a5');if(a&&ba&&sys(a))a.html=ba.html;
+    const s=(R.kbSteps||[]).find(x=>x.id==='theme'),bs=(r.kbSteps||[]).find(x=>x.id==='theme');if(s&&bs&&sys(s))s.w=bs.w;
+    const sh=Array.isArray(R.kbShows)?R.kbShows.find(x=>x.id==='sh-stats'):null,bsh=Array.isArray(r.kbShows)?r.kbShows.find(x=>x.id==='sh-stats'):null;if(sh&&bsh&&sys(sh))sh.items=structuredClone(bsh.items);
+    if(R.kbUi&&R.kbUi.ui&&r.kbUi&&r.kbUi.ui&&/На телефоне они по умолчанию скрыты/.test(R.kbUi.ui.stats||''))R.kbUi.ui.stats=r.kbUi.ui.stats}
+  // Поток Т, задача Т1 (пакет заказчика 13.11.2026): шаблоны кнопок и скрытых ответов бота; в сообщениях с кодом код встаёт первым, если администратор не менял прежний текст
+  if(!db.meta.tgT1){db.meta.tgT1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgBtnCopyCode','tgBtnTest','tgTest','tgTestOk','tgActOff','tgActNoRight','tgActStale','tgActNoLink'],
+      old={tgCode:'Код для восстановления пароля: {код}. Действует 10 минут.',tgAdminCode:'🔐 Код для входа в Админку ({логин}): {код}. Действует {минут} минут. Если вы сейчас не входили, кто-то знает ваш пароль: смените его кнопкой «Забыли пароль?» на странице входа.',tgRelinkCode:'🔐 К учётной записи {логин} хотят привязать другой Telegram: «{телеграм}». Если это вы, отправьте боту из нового Telegram код: {код}. Никому не сообщайте и не пересылайте этот код — в Buhuchet.kg его никто не спрашивает. Код действует {минут} минут. Если это не вы, смените пароль — все сеансы завершатся.'};
+    if(a){ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});Object.keys(old).forEach(k=>{if(a[k]===old[k]&&rm[k])a[k]=rm[k]})}
+    if(n){ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});Object.keys(old).forEach(k=>{if(rn[k])n[k]=rn[k]})}}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

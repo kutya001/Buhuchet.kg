@@ -1,4 +1,5 @@
 import {
+  asBotMessage,
   CODE_KINDS,
   OUTBOX_ERROR_MAX,
   OUTBOX_UNDELIVERABLE,
@@ -8,6 +9,7 @@ import {
   type NotifySettings,
   type OutboxKind,
   type OutboxStatus,
+  type BotMessage,
 } from '@buhuchet/domain';
 import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
@@ -37,6 +39,11 @@ export interface OutboxMessage {
   text: string;
   /** Одно такое сообщение: повтор с тем же ключом ничего не добавляет. */
   dedupeKey?: string | null;
+  /**
+   * Описание сообщения с таблицами и кнопками (поток Т, задача Т1): из него при отправке строятся оба
+   * вида сообщения, по нему принимаются нажатия. `text` при этом — его простой текст (`botPlainText`).
+   */
+  message?: BotMessage | null;
 }
 
 /**
@@ -60,6 +67,7 @@ export async function enqueueTelegram(
         kind: m.kind,
         text: m.text,
         dedupeKey: m.dedupeKey ?? null,
+        payload: m.message ?? null,
         ...(now ? { nextAt: now } : {}),
       })),
     )
@@ -76,6 +84,10 @@ export interface ClaimedOutbox {
   text: string;
   /** Номер этой попытки (с 1). */
   tries: number;
+  /** Описание сообщения с таблицами и кнопками; пусто — обычный текст. */
+  message: BotMessage | null;
+  /** Получатель включил «Сообщения простым текстом». */
+  plain: boolean;
 }
 
 /**
@@ -125,15 +137,37 @@ export async function claimOutbox(
       text: telegramOutbox.text,
       tries: telegramOutbox.tries,
       nextAt: telegramOutbox.nextAt,
+      userId: telegramOutbox.userId,
+      payload: telegramOutbox.payload,
     });
+  // «Сообщения простым текстом» получателей — только у строк с описанием сообщения.
+  const rich = [...new Set(rows.filter((r) => r.payload).map((r) => r.userId))];
+  const plain = new Set(
+    rich.length
+      ? (
+          await tx
+            .select({ userId: users.id })
+            .from(users)
+            .where(and(inArray(users.id, rich), eq(users.telegramPlain, true)))
+        ).map((r) => r.userId)
+      : [],
+  );
   return rows
     .sort((a, b) => a.nextAt.getTime() - b.nextAt.getTime())
-    .map((r) => ({ id: r.id, chatId: r.chatId, kind: r.kind, text: r.text ?? '', tries: r.tries }));
+    .map((r) => ({
+      id: r.id,
+      chatId: r.chatId,
+      kind: r.kind,
+      text: r.text ?? '',
+      tries: r.tries,
+      message: asBotMessage(r.payload),
+      plain: plain.has(r.userId),
+    }));
 }
 
 /** Итог попытки: отправлено, повторить в такой момент или окончательная ошибка. */
 export type OutboxOutcome =
-  | { id: string; result: 'sent'; at: Date }
+  | { id: string; result: 'sent'; at: Date; messageId?: number }
   | { id: string; result: 'retry'; at: Date; error: string }
   | { id: string; result: 'error'; error: string };
 
@@ -142,7 +176,12 @@ export async function finishOutbox(tx: Tx, outcomes: readonly OutboxOutcome[]): 
   for (const o of outcomes) {
     const set =
       o.result === 'sent'
-        ? { status: 'sent' as const, sentAt: o.at, lastError: null }
+        ? {
+            status: 'sent' as const,
+            sentAt: o.at,
+            lastError: null,
+            ...(o.messageId !== undefined ? { messageId: o.messageId } : {}),
+          }
         : o.result === 'retry'
           ? {
               status: 'pending' as const,

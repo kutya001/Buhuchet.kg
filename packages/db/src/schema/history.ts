@@ -2,6 +2,7 @@ import type { HistoryChange } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  check,
   index,
   jsonb,
   pgPolicy,
@@ -48,8 +49,14 @@ export const auditLog = pgTable(
       .default(sql`app.current_user_id()`)
       .references(() => users.id, { onDelete: 'restrict' }),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * Откуда сделано действие: пусто — на сайте, `telegram` — кнопкой под сообщением бота («через
+     * Telegram»; поток Т, задача Т1). Ставит база из отметки транзакции `app.via` (`markViaTelegram`).
+     */
+    via: text('via').default(sql`nullif(current_setting('app.via', true), '')`),
   },
   (t) => [
+    check('audit_log_via_check', sql`${t.via} is null or ${t.via} = 'telegram'`),
     index('audit_log_entity_idx').on(t.orgId, t.entity, t.entityId, t.at),
     // Свои действия пользователя: отметка шагов «Базы знаний» по истории (docs/decisions.md п. Г-2).
     index('audit_log_actor_idx').on(t.orgId, t.actorUserId, t.entity, t.at),

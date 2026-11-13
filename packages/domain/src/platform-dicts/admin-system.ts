@@ -113,6 +113,16 @@ export const PERMISSION_DESCRIPTION_MAX = 500;
 /** Текст шаблона сообщения — не длиннее (длинное сообщение Telegram режет на части). */
 export const MESSAGE_TEMPLATE_MAX = 2000;
 
+/**
+ * Предел длины шаблона по ключу (прототип v89 `tplErr`): подпись кнопки бота — до 40 знаков, скрытый
+ * ответ на нажатие — до 200 (больше Telegram не покажет), остальные — `MESSAGE_TEMPLATE_MAX`.
+ */
+export function messageTemplateMax(key: string): number {
+  if (/^tgBtn/.test(key)) return 40;
+  if (/^(tgAct|tgTestOk$)/.test(key)) return 200;
+  return MESSAGE_TEMPLATE_MAX;
+}
+
 /** Сравнение названий без регистра и лишних пробелов («Такое название уже есть»). */
 export function sameName(a: string, b: string): boolean {
   const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru');
@@ -236,6 +246,15 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgPassResetByAdmin: ['логин'],
   tgLead: ['фирма', 'имя', 'телефон', 'клиентов', 'ссылка'],
   tgLeadRep: ['фирма', 'имя', 'телефон', 'ссылка'],
+  // Основа бота (прототип v89): подписи кнопок и скрытые ответы на нажатия.
+  tgBtnCopyCode: [],
+  tgBtnTest: [],
+  tgTest: [],
+  tgTestOk: [],
+  tgActOff: [],
+  tgActNoRight: [],
+  tgActStale: [],
+  tgActNoLink: [],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -281,6 +300,14 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgPassResetByAdmin',
   'tgLead',
   'tgLeadRep',
+  'tgBtnCopyCode',
+  'tgBtnTest',
+  'tgTest',
+  'tgTestOk',
+  'tgActOff',
+  'tgActNoRight',
+  'tgActStale',
+  'tgActNoLink',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

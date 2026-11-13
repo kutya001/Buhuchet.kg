@@ -22,7 +22,7 @@ function renderSide(){
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v87 · 12.11.2026';
+const PROTO_VER='v89 · 13.11.2026';
 // В демо-режиме — только «Войти как» (без администратора платформы) и «Очистить рабочие данные»
 function demoBox(){if(DEMO.on)return `<div class="demo"><div class="row" style="gap:6px"><b>${LE('land.demo.box')}</b></div><label for="demo-user">Войти как:</label>${sel('demo-user',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),S.me)}<div class="demo-db"><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button></div><span>${LE('land.demo.box.sub')}</span></div>`;
   return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
@@ -56,7 +56,7 @@ function renderPage(fresh){
   const ab=$('#add-btn');if(ab)ab.onclick=()=>runAdd(ab);
   const fab=$('#fab');fab.hidden=!adds.length;fab.innerHTML=ic('plus');fab.onclick=()=>runAdd(fab);
   m.render($('#mbody'),S.tab,fresh);
-  {const sb=$('#stat-btn');const has=!!$('#mbody .plates');sb.hidden=!has;const k='stats.'+m.id;const off=()=>store.get(k,isMobile()?'off':'on')==='off';const ap=()=>{page.classList.toggle('nostats',off());sb.classList.toggle('on',!off());sb.setAttribute('aria-pressed',String(!off()));sb.title=off()?'Показать статистику':'Скрыть статистику'};ap();sb.onclick=()=>{store.set(k,off()?'on':'off');ap();fitTabs();ckHit('stats')}}
+  {const sb=$('#stat-btn');const has=!!$('#mbody .plates');sb.hidden=!has;const k='stats.'+m.id;const off=()=>store.get(k,'off')==='off';const ap=()=>{page.classList.toggle('nostats',off());sb.classList.toggle('on',!off());sb.setAttribute('aria-pressed',String(!off()));sb.title=off()?'Показать статистику':'Скрыть статистику'};ap();sb.onclick=()=>{store.set(k,off()?'on':'off');ap();fitTabs();ckHit('stats')}}
   S.preset=null;
   fitTabs();
   pane.scrollTop=keep;ckVisit();
@@ -78,13 +78,21 @@ function refreshAll(){gkIndex();derive();const openForms=MODALS.filter(m=>m.o.li
 
 /* ═════════════ Top bar ═════════════ */
 function tick(){const n=bishkekNow();if(n.iso!==TODAY){TODAY=n.iso;derive()}$('#clock').innerHTML=`<span class="d">${fmtD(n.iso)}</span>${n.hm}`;$('#clock').title=`${fmtD(n.iso)} ${n.hm}, Бишкек`}
-function effTheme(){const a=document.documentElement.getAttribute('data-theme');return a||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}
-function paintTheme(){$('#theme').innerHTML=ic(effTheme()==='dark'?'sun':'moon')}
+// Тема: по умолчанию светлая, от темы устройства не зависит (решение заказчика 13.11.2026); выбор запоминается в браузере
+function effTheme(){return document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light'}
+function paintTheme(){const i=ic(effTheme()==='dark'?'sun':'moon');if($('#theme'))$('#theme').innerHTML=i;$$('[data-lp-theme]').forEach(b=>b.innerHTML=i);const s=$('#pf-theme');if(s)s.value=effTheme()}
+// Смена темы волной от нажатой кнопки: from — кнопка (волна идёт с её стороны экрана). Без View Transitions — плавная смена цветов; при «меньше движения» — сразу
+function setTheme(t,from){const R=document.documentElement,was=effTheme(),ap=()=>{R.setAttribute('data-theme',t);paintTheme()};
+  store.set('theme',t);try{localStorage.setItem(BU_P+'theme',t)}catch(e){}
+  if(t===was||matchMedia('(prefers-reduced-motion: reduce)').matches)return ap();
+  if(!document.startViewTransition){R.classList.add('theme-fade');ap();clearTimeout(setTheme.tm);setTheme.tm=setTimeout(()=>R.classList.remove('theme-fade'),450);return}
+  const r=from&&from.getBoundingClientRect&&from.getBoundingClientRect();R.dataset.wave=r&&r.width&&r.left+r.width/2<innerWidth/2?'l':'r';
+  const vt=document.startViewTransition(ap),n=setTheme.n=(setTheme.n||0)+1;vt.finished.catch(()=>{}).then(()=>{if(setTheme.n===n)delete R.dataset.wave})}
 function initTop(){
   $('#burger').innerHTML=ic('menu');$('#help').innerHTML=ic('help');$('#help').onclick=()=>kbHelp();$('#search-ic').outerHTML=ic('search');$('#q-open').innerHTML=ic('search');paintTheme();
   $('#burger').onclick=()=>{if(isMobile()){openSheet();return}S.navHidden=!S.navHidden;store.set('nav',S.navHidden);$('#app').classList.toggle('nav-hidden',S.navHidden);paintBurger();fitTabs();setTimeout(fitTabs,260)};
   S.wide=store.get('wide',false);paintWide();$('#wide').onclick=()=>{S.wide=!S.wide;store.set('wide',S.wide);paintWide();fitTabs()};
-  $('#theme').onclick=()=>{ckHit('theme');const t=effTheme()==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);store.set('theme',t);try{localStorage.setItem(BU_P+'theme',t)}catch(e){}paintTheme()};
+  $('#theme').onclick=e=>{ckHit('theme');setTheme(effTheme()==='dark'?'light':'dark',e.currentTarget)};
   let deb;$('#q').addEventListener('input',e=>{clearTimeout(deb);deb=setTimeout(()=>{S.search=e.target.value;if(S.search)ckHit('search');ACTIVE.forEach(g=>{g.s.page=0;g.refresh()});if(S.mod==='reports'&&S.tab==='matrix')renderPage()},120)});
   $('#q-open').onclick=()=>{$('#topbar').classList.add('searching');$('#q').focus()};
   $('#q').addEventListener('blur',()=>{if(!S.search)$('#topbar').classList.remove('searching')});

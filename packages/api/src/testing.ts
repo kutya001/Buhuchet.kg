@@ -102,6 +102,33 @@ export function telegramUpdate(
   };
 }
 
+/**
+ * Нажатие кнопки под сообщением бота (`callback_query`): данные кнопки, чат и номер сообщения (у
+ * подставного бота — `tg.messageIds[i]` для `tg.sent[i]`). `fromId` — кто нажал (по умолчанию хозяин чата).
+ */
+export function telegramPress(
+  data: string,
+  chatId: number,
+  messageId: number,
+  options: { chatType?: string; fromId?: number; callbackId?: string } = {},
+) {
+  const id = nextUpdateId++;
+  return {
+    update_id: id,
+    callback_query: {
+      id: options.callbackId ?? `cb-${id}`,
+      from: { id: options.fromId ?? chatId, is_bot: false, first_name: 'Тест' },
+      chat_instance: 'test',
+      data,
+      message: {
+        message_id: messageId,
+        date: 1_792_972_800,
+        chat: { id: chatId, type: options.chatType ?? 'private' },
+      },
+    },
+  };
+}
+
 /** Прислать обновление в вебхук бота (без Origin, как Telegram), с секретом вебхука. */
 export function sendToBot(
   app: RequestApp,

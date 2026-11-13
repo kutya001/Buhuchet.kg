@@ -60,8 +60,11 @@ export const statusHistory = pgTable(
       .default(sql`app.current_user_id()`)
       .references(() => users.id, { onDelete: 'restrict' }),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    /** Откуда сменён статус: пусто — на сайте, `telegram` — кнопкой бота (как `audit_log.via`). */
+    via: text('via').default(sql`nullif(current_setting('app.via', true), '')`),
   },
   (t) => [
+    check('status_history_via_check', sql`${t.via} is null or ${t.via} = 'telegram'`),
     index('status_history_entity_idx').on(t.orgId, t.scale, t.entityId, t.at),
     // Смены статусов за период: «Главная» → «Активность» (docs/decisions.md п. О-43).
     index('status_history_org_at_idx').on(t.orgId, t.at),

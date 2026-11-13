@@ -41,6 +41,12 @@ export const users = pgTable(
     blocked: boolean('blocked').notNull().default(false),
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     /**
+     * «Сообщения простым текстом» бота (поток Т, задача Т1): без таблиц и раскрывающихся разделов.
+     * Хранится у пользователя, как в прототипе (`u.tgPlain`): отвязка и другой Telegram выбор не
+     * сбрасывают. Меняет сам пользователь функцией `app.telegram_set_plain_text`.
+     */
+    telegramPlain: boolean('telegram_plain').notNull().default(false),
+    /**
      * Неверных паролей подряд у этой учётной записи (не по набранному логину, как login_attempts): не
      * забывается со временем, снимается верным паролем и новым паролем (миграция 0095).
      */

@@ -11,6 +11,7 @@ import type { DocumentReader } from '@buhuchet/adapters/documents';
 import type { Db, RateLimit } from '@buhuchet/db';
 import type { TechDocsSource } from './modules/admin/techdocs-source';
 import type { FileSource } from './modules/files/sources';
+import type { BotAction } from './modules/telegram/press';
 
 export interface JobContext {
   /** Среда — для пометки «🧪 Тестовый стенд» в оповещениях администратору платформы. */
@@ -42,6 +43,8 @@ export interface ApiDeps extends JobContext {
   resetResponseFloorMs?: number;
   /** Не чаще скольких миллисекунд словарь сверяется с базой (по умолчанию 1 с; в тестах — 0). */
   l10nRecheckMs?: number;
+  /** Действия по кнопкам бота (по умолчанию `BOT_ACTIONS`; тесты подставляют свои). */
+  botActions?: Readonly<Record<string, BotAction>>;
   /** Источники файлов (по умолчанию `FILE_SOURCES`; тесты подставляют запись с контрагентом). */
   fileSources?: Readonly<Record<string, FileSource>>;
   /**

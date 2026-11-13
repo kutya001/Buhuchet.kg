@@ -183,7 +183,7 @@ export const AdminMessageTemplatesForm = z.object({
       }),
     )
     .min(1)
-    .max(50),
+    .max(200),
 });
 export type AdminMessageTemplatesForm = z.infer<typeof AdminMessageTemplatesForm>;
 
