@@ -3,6 +3,7 @@ import {
   loadEmployeeAccess,
   lockBotPress,
   markViaTelegram,
+  messageTemplates,
   openBotAsks,
   saveBotPress,
   takeRateLimit,
@@ -17,8 +18,11 @@ import {
   bishkekDate,
   BOT_HIDDEN_REPLY_MAX,
   botKeyboard,
+  botTemplate,
   closeBotAsk,
+  fillTemplate,
   findBotButton,
+  formatText,
   hasPermission,
   loginDenial,
   parseBotPress,
@@ -30,8 +34,10 @@ import {
   type OutboxKind,
   type PermissionId,
   type TelegramTemplateKey,
+  type Translate,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
+import { serverTexts } from '../l10n/texts';
 import { BOT_ACTIONS } from './actions';
 import { botText, sendBotMessage } from './bot';
 import { queueTelegramEvents, type TelegramEvent } from './events';
@@ -85,6 +91,21 @@ export interface BotPressContext {
     key: TelegramTemplateKey,
     values?: Readonly<Record<string, string | number>>,
   ): Promise<string>;
+  /** Текст словаря интерфейса с подстановками. */
+  tr: Translate;
+}
+
+/**
+ * Тексты нажатия — шаблоны бота и словарь — читаются до транзакции нажатия: внутри неё `ctx.text` и
+ * `ctx.tr` второго соединения с базой не берут. Иначе одновременные нажатия (каждое держит соединение
+ * своей транзакции и ждёт ещё одно ради текста) могли бы занять все соединения и встать.
+ */
+export async function botPressTexts(deps: ApiDeps): Promise<Pick<BotPressContext, 'text' | 'tr'>> {
+  const [templates, dict] = await Promise.all([messageTemplates(deps.db), serverTexts(deps)]);
+  return {
+    text: async (key, values = {}) => fillTemplate(botTemplate(key, templates[key]), values),
+    tr: (key, params) => formatText(dict(key), params),
+  };
 }
 
 export interface BotPressResult {
@@ -267,6 +288,7 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
     if (!slot.ok) return refuse('tgActFailed');
   }
   const today = bishkekDate(deps.clock.now());
+  const texts = await botPressTexts(deps);
 
   // Нажатие — одна транзакция от имени получателя: строка сообщения блокируется, кнопка сверяется ещё
   // раз (два быстрых нажатия и повторная доставка от Telegram идут по одному), действие выполняется, и
@@ -295,7 +317,7 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
         message: current,
         button,
         asUser: (fn) => fn(tx, access),
-        text: (key, values) => botText(deps, key, values),
+        ...texts,
       };
       const result = await run(ctx);
       // Действию нужен ответ: просьба с «Отменой» уйдёт после транзакции. Такая же уже открыта в этом
@@ -305,7 +327,7 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
         const wanted = result.ask;
         const open = await openBotAsks(tx, press.chatId, today);
         if (open.some((x) => x.action === wanted.action && x.arg === parsed.arg)) {
-          result.reply = await botText(deps, 'tgActAskWait');
+          result.reply = await texts.text('tgActAskWait');
           result.alert = false;
         } else {
           ask = askBotMessage(
@@ -317,7 +339,7 @@ export async function handleBotPress(deps: ApiDeps, press: BotPress): Promise<vo
               day: today,
               src: { messageId: press.messageId, action: parsed.action },
             },
-            await botText(deps, 'tgBtnCancel'),
+            await texts.text('tgBtnCancel'),
           );
         }
       }

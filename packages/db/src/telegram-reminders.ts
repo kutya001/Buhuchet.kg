@@ -62,6 +62,9 @@ export interface ReminderReportRow {
   typeShort: string;
   period: ReportPeriod;
   periodStart: IsoDate;
+  /** Дата события отчёта по событию и её название у вида («Дата увольнения»; пусто — «Дата события»). */
+  eventDate: IsoDate | null;
+  eventLabel: string;
   act: ReportAct;
   status: ReportStatus;
   dueDate: IsoDate;
@@ -95,6 +98,8 @@ export interface ReminderOrgData {
   confirmWaitDays: number;
   reportConfirm: boolean;
   employees: ReminderEmployee[];
+  /** Короткие имена всех сотрудников организации, в том числе уволенных и заблокированных. */
+  employeeNames: ReadonlyMap<string, string>;
   reports: ReminderReportRow[];
   tasks: ReminderTaskRow[];
 }
@@ -182,8 +187,9 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
   const submittedDay = sql<
     string | null
   >`coalesce((${reports.submittedAt} at time zone 'Asia/Bishkek')::date, ${reports.submittedOn})::text`;
-  const [employeeRows, reportRows, taskRows] = await Promise.all([
+  const [employeeRows, nameRows, reportRows, taskRows] = await Promise.all([
     reminderEmployees(tx),
+    tx.select({ id: employees.id, shortName: employees.shortName }).from(employees),
     tx
       .select({
         id: reports.id,
@@ -192,6 +198,8 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
         typeShort: reportTypes.shortName,
         period: reports.period,
         periodStart: reports.periodStart,
+        eventDate: reports.eventDate,
+        eventLabel: reportTypes.eventLabel,
         act: reports.act,
         status: reports.status,
         dueDate: reports.dueDate,
@@ -251,6 +259,7 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
     confirmWaitDays: settings.confirmWaitDays,
     reportConfirm: settings.reportConfirm,
     employees: employeeRows,
+    employeeNames: new Map(nameRows.map((e) => [e.id, e.shortName])),
     reports: reportRows.map((r) => ({
       id: r.id,
       contractorName: r.contractorName,
@@ -258,6 +267,8 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
       typeShort: r.typeShort,
       period: r.period,
       periodStart: r.periodStart,
+      eventDate: r.eventDate,
+      eventLabel: r.eventLabel,
       act: r.act,
       status: r.status,
       dueDate: r.dueDate,

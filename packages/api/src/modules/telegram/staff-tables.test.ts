@@ -401,6 +401,33 @@ describe.skipIf(!databaseAvailable())(
       clock.set('2026-10-19T03:00:00Z');
     });
 
+    it('«Напомнить»: два руководителя нажали одновременно — сотрудник получает одно сообщение', async () => {
+      const acc = person('acc-a');
+      clock.advance(5 * 24 * 3600_000);
+      const fromOwner = await give(f.a.ownerUserId, CHAT.owner, acc.employeeId);
+      const fromChief = await give(person('chief-a').userId, CHAT.chief, acc.employeeId);
+      const before = {
+        acc: sent(CHAT.acc).length,
+        rows: (await outbox('nudge', acc.userId)).length,
+        answers: tg.answers.length,
+      };
+      const responses = await Promise.all([
+        sendToBot(app, telegramPress(nudge(acc.employeeId), CHAT.owner, fromOwner.id)),
+        sendToBot(app, telegramPress(nudge(acc.employeeId), CHAT.chief, fromChief.id)),
+      ]);
+      expect(responses.map((r) => r.status)).toEqual([200, 200]);
+      // Один получил «получит напоминание», второй — «уже получил напоминание сегодня».
+      const answers = tg.answers.slice(before.answers).map((a) => a.text ?? '');
+      expect(answers).toHaveLength(2);
+      const tail = (key: 'tgActNudgeOk' | 'tgActNudgeWait') =>
+        TPL[key].split('{сотрудник}')[1]!.split('{')[0]!;
+      expect(answers.filter((x) => x.includes(tail('tgActNudgeOk')))).toHaveLength(1);
+      expect(answers.filter((x) => x.includes(tail('tgActNudgeWait')))).toHaveLength(1);
+      expect(await outbox('nudge', acc.userId)).toHaveLength(before.rows + 1);
+      expect(sent(CHAT.acc)).toHaveLength(before.acc + 1);
+      clock.set('2026-10-19T03:00:00Z');
+    });
+
     it('«Напомнить»: у сотрудника нет Telegram, нет просроченного, сам себе, уволенный, выключены напоминания', async () => {
       const hr = person('hr-a');
       const week = weekOwner;
@@ -432,6 +459,10 @@ describe.skipIf(!databaseAvailable())(
       expect(await press(CHAT.owner, week.id, nudge(hr.employeeId))).toMatchObject({
         text: TPL.tgActNoRight,
       });
+      // В сводке его отчёты остаются под его именем, а кнопки «Напомнить» у него нет.
+      const fired = await weekOf(ownerUser);
+      expect(fired?.tables?.[0]?.rows.map((r) => r[0])).toContain('hr-a');
+      expect((fired?.buttons ?? []).flat().map((b) => b.arg)).not.toContain(hr.employeeId);
       await active(true);
       // «Напоминания в Telegram» организации выключены — кнопка устарела.
       await settings({ features: { ...FEATURES, telegram: false } });

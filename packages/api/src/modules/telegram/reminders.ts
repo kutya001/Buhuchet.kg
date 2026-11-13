@@ -15,6 +15,7 @@ import {
 import {
   addDays,
   botDayMonth,
+  BOT_TEXT_MAX,
   botDayWords,
   botDueText,
   botMessageProblem,
@@ -22,9 +23,8 @@ import {
   confirmBotMessage,
   dailyReminders,
   FEE_WHATSAPP_TEMPLATE,
-  feeCopyNote,
+  feeDebtCopyNote,
   feeReminder,
-  feeWhatsAppText,
   fillTemplate,
   formatText,
   hasPermission,
@@ -202,7 +202,10 @@ export async function buildDailyReminders(
   };
   const reportUrl = (id: string) => botSiteUrl(site.deps, `/app/reports/all?report=${id}`);
   const tableTexts = reportTableTexts(tr);
-  const names = new Map(data.employees.map((e) => [e.employeeId, e.shortName]));
+  // Имена — всех сотрудников: у уволенного или заблокированного отчёты в сводке остаются под его именем
+  // (как в прототипе), а кнопки «Напомнить» у него нет.
+  const names = data.employeeNames;
+  const active = new Set(data.employees.map((e) => e.employeeId));
   // Долги за обслуживание — по области получателя; у получателей с одной областью запрос один.
   const debtsByScope = new Map<string, Promise<WeekDebt[]>>();
   const requisite = lazy(() => mainFeeRequisite(tx, tr));
@@ -220,28 +223,24 @@ export async function buildDailyReminders(
         const template = templates.waFee ?? FEE_WHATSAPP_TEMPLATE;
         return list.map((c) => {
           const r = feeReminder(c.fees, c.feeDay, day);
-          const note = (requisiteText: string | null, monthsText?: string) =>
-            feeWhatsAppText(
-              template,
-              {
-                contractor: c.name,
-                months: r.months,
-                ...(monthsText ? { monthsText } : {}),
-                amount: r.amount,
-                payBy: r.payBy,
-                requisite: requisiteText,
-              },
-              (x) => tr('fee.wa.requisites', { req: x }),
-            );
           return {
             name: c.name,
             debt: c.fees.debt,
             months: r.months.length,
-            note: feeCopyNote([
-              ...(req ? [note(req.text)] : []),
-              note(null),
-              note(null, tr('telegram.table.months_n', { n: r.months.length })),
-            ]),
+            note: feeDebtCopyNote(
+              template,
+              {
+                contractor: c.name,
+                months: r.months,
+                amount: r.amount,
+                payBy: r.payBy,
+                requisite: req?.text ?? null,
+              },
+              {
+                requisites: (x) => tr('fee.wa.requisites', { req: x }),
+                monthsCount: tr('telegram.table.months_n', { n: r.months.length }),
+              },
+            ),
           };
         });
       })();
@@ -322,8 +321,11 @@ export async function buildDailyReminders(
       });
     }
     const push = (message: BotMessage, suffix: string) => {
-      // Подпись кнопки в шаблоне длиннее предела — сообщение дня остаётся, это сообщение не уходит.
-      const problem = botMessageProblem(message);
+      // Подпись кнопки в шаблоне длиннее предела или простой текст длиннее предела Telegram — сообщение
+      // дня остаётся, это сообщение не уходит.
+      const problem =
+        botMessageProblem(message) ??
+        (botPlainText(message).length > BOT_TEXT_MAX ? 'текст длиннее предела Telegram' : null);
       if (problem) {
         ctx.logger.warn({ job: 'telegram.reminders', problem }, 'Telegram: сообщение с кнопками');
         return;
@@ -417,6 +419,7 @@ export async function buildDailyReminders(
         names,
         confirm: data.reportConfirm,
         canNudge: hasPermission(e.subject, 'repView') && scopeOf(e.subject, 'reports') === 'all',
+        active,
         debts: await debtsOf(e),
         texts: {
           heading: withOrganization(
@@ -443,7 +446,11 @@ export async function buildDailyReminders(
           more: tableTexts.more,
         },
       });
-      if (week) push(week, 'week');
+      if (week) {
+        // Не собралась кнопка (пустой шаблон подписи) — сводка уходит без кнопок, а не теряется.
+        const { buttons: _buttons, ...bare } = week;
+        push(botMessageProblem(week) ? bare : week, 'week');
+      }
     }
   }
   return out;

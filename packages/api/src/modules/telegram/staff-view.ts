@@ -100,6 +100,8 @@ export function botReportRow(
     typeShort: string;
     period: ReportPeriod;
     periodStart: IsoDate;
+    eventDate?: IsoDate | null;
+    eventLabel?: string;
     dueDate: IsoDate;
     payDue: IsoDate | null;
   },
@@ -111,7 +113,16 @@ export function botReportRow(
 ): BotReportRow {
   const cell = t('telegram.table.report_cell', {
     type: r.typeShort,
-    period: botPeriodBrief({ period: r.period, start: r.periodStart }, today, t),
+    period: botPeriodBrief(
+      {
+        period: r.period,
+        start: r.periodStart,
+        event: r.eventDate ?? null,
+        ...(r.eventLabel ? { eventLabel: r.eventLabel } : {}),
+      },
+      today,
+      t,
+    ),
   });
   const marked = mark && pay ? t('telegram.table.pay_mark', { report: cell }) : cell;
   const report = item?.unlinked

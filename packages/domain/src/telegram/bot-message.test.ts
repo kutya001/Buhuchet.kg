@@ -68,6 +68,16 @@ describe('сообщение бота: два вида из одного опи�
     expect(asBotMessage({ ...digest, tables: [{ ...table, n: -1 }] })).toBeNull();
     expect(botClip('Напомнить: Иванов', 10)).toBe('Напомнить…');
     expect(botClip('Коротко', 10)).toBe('Коротко');
+    // Длина — в единицах UTF-16, как у проверки подписи кнопки: эмодзи пополам не режется.
+    const emoji = '😀'.repeat(40);
+    expect(botClip(emoji, 64)).toBe(`${'😀'.repeat(31)}…`);
+    expect(botClip(emoji, 64).length).toBeLessThanOrEqual(64);
+    expect(
+      botMessageProblem({
+        text: 'Сводка',
+        buttons: [[{ text: botClip(emoji, 64), action: 'nudge', arg: 'a' }]],
+      }),
+    ).toBeNull();
   });
 
   it('вид с таблицами: раздел с числом строк, числовой столбец вправо, текст экранирован', () => {

@@ -84,6 +84,11 @@ export const BOT_COPY_MAX = 256;
 export const BOT_TABLE_COLUMNS_MAX = 20;
 /** Строк в таблице сообщения — не больше (прототип v100 `TG_ROWS_MAX`); остальное — «ещё N — на сайте». */
 export const BOT_TABLE_ROWS_MAX = 20;
+/**
+ * Название контрагента в ячейке таблицы — не длиннее (в прототипе не режется): название бывает до 300
+ * знаков, а простой текст сообщения с 20 строками должен уместиться в `BOT_TEXT_MAX`.
+ */
+export const BOT_TABLE_NAME_MAX = 60;
 /** Скрытый ответ на нажатие (ответ Telegram на нажатие кнопки) — не длиннее 200 знаков. */
 export const BOT_HIDDEN_REPLY_MAX = 200;
 
@@ -95,10 +100,19 @@ const ARG_RE = /^[A-Za-z0-9_.-]{1,40}$/;
 
 const filled = (cells: readonly string[]) => cells.filter((x) => x !== '' && x != null);
 
-/** Подпись кнопки и текст копирования не длиннее предела: лишнее — многоточием (прототип `tgClip`). */
+/**
+ * Подпись кнопки и ячейка таблицы не длиннее предела: лишнее — многоточием (прототип `tgClip`). Длина —
+ * как её считают Telegram и `botMessageProblem` (единицы UTF-16), знак из двух единиц (эмодзи) пополам
+ * не режется.
+ */
 export function botClip(text: string, max: number): string {
-  const chars = [...text];
-  return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : text;
+  if (text.length <= max) return text;
+  let out = '';
+  for (const ch of text) {
+    if (out.length + ch.length > max - 1) break;
+    out += ch;
+  }
+  return `${out}…`;
 }
 
 /**

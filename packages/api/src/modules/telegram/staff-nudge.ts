@@ -1,17 +1,15 @@
 import { enqueueTelegram, loadReminderData, telegramChat, telegramFeatureOn } from '@buhuchet/db';
 import {
   bishkekDate,
+  BOT_TEXT_MAX,
   botMessageProblem,
   botPlainText,
-  formatText,
   nudgeBotMessage,
   overdueOf,
   scopeOf,
   withOrganization,
   type TelegramTemplateKey,
-  type Translate,
 } from '@buhuchet/domain';
-import { serverTexts } from '../l10n/texts';
 import type { BotAction, BotPressResult } from './press';
 import { reminderReports } from './reminders';
 import { botReportRow, botSiteUrl, reportTableTexts } from './staff-view';
@@ -28,6 +26,7 @@ import { botReportRow, botSiteUrl, reportTableTexts } from './staff-view';
  * раз, повтор получает «уже получил напоминание сегодня». Данные кнопка не меняет, поэтому работает и
  * при выключенных «Действиях из Telegram»; в предел частоты нажатий входит (`limited`).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-6
 export const nudgeAction: BotAction = {
   permission: 'repView',
   limited: true,
@@ -48,8 +47,7 @@ export const nudgeAction: BotAction = {
       const data = await loadReminderData(tx, today);
       const target = data.employees.find((e) => e.employeeId === ctx.arg);
       if (!target) return refused('tgActNoRight');
-      const texts = await serverTexts(ctx.deps);
-      const tr: Translate = (key, params) => formatText(texts(key), params);
+      const tr = ctx.tr;
       const overdue = overdueOf(target.employeeId, reminderReports(data.reports, tr), {
         today,
         taxpay: data.features.taxpay === true,
@@ -73,7 +71,11 @@ export const nudgeAction: BotAction = {
           url: botSiteUrl(ctx.deps, '/app/reports/all'),
         },
       );
-      const problem = botMessageProblem(message);
+      const text = botPlainText(message);
+      // Не собралось — нажатие откатывается целиком: ключ «сотрудник + день» остаётся свободным.
+      const problem =
+        botMessageProblem(message) ??
+        (text.length > BOT_TEXT_MAX ? 'текст длиннее предела Telegram' : null);
       if (problem) throw new Error(`Telegram: напоминание о просроченном — ${problem}`);
       const queued = await enqueueTelegram(
         tx,
@@ -82,7 +84,7 @@ export const nudgeAction: BotAction = {
             userId: target.userId,
             chatId: chat.chatId,
             kind: 'nudge',
-            text: botPlainText(message),
+            text,
             message,
             dedupeKey: `nudge:${target.userId}:${today}`,
           },

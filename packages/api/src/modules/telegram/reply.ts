@@ -33,6 +33,7 @@ import { queueTelegramEvents } from './events';
 import { flushEvents } from './outbox';
 import {
   botActionOf,
+  botPressTexts,
   botTargetRefusal,
   botUserContext,
   botUserOf,
@@ -253,6 +254,8 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
     queued: string[];
   };
   let outcome: Done | { refusal: TelegramTemplateKey };
+  // Тексты — до транзакции: внутри неё второе соединение с базой ради текста не берётся.
+  const texts = await botPressTexts(deps);
   try {
     outcome = await botUserContext(deps, target, async (tx) => {
       // Строка просьбы блокируется: два ответа подряд и повторная доставка идут по одному.
@@ -269,7 +272,7 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
         arg: ask.arg ?? null,
         message: current,
         asUser: (fn) => fn(tx, access),
-        text: (key, values) => botText(deps, key, values),
+        ...texts,
       };
       // Исходное сообщение блокируется до записи — тем же порядком, что у нажатия кнопки (сообщение,
       // потом отчёт или задача): нажатие и ответ по одной записи друг друга не ждут по кругу.

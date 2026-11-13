@@ -1,10 +1,12 @@
-import { type IsoDate } from '../common/dates';
+import { formatDateRu, type IsoDate } from '../common/dates';
 import { formatSom, sumTyiyn, type Tyiyn } from '../common/money';
-import { monthLabelGen, monthOf } from '../common/months';
+import { monthLabelGen, monthOf, type YearMonth } from '../common/months';
+import { feeWhatsAppText } from '../fees/reminder';
 import type { Translate, UiTextKey } from '../l10n/texts';
-import { periodLabel, type PeriodRef } from '../reports/periods';
+import { periodFull, periodLabel, type PeriodRef } from '../reports/periods';
 import {
   BOT_BUTTON_TEXT_MAX,
+  BOT_TABLE_NAME_MAX,
   BOT_COPY_MAX,
   BOT_TABLE_ROWS_MAX,
   botClip,
@@ -54,10 +56,11 @@ export function botTableRows<T>(
 
 /**
  * Период коротко, чтобы столбец «Отчёт» помещался на телефоне (прототип `tgPerShort`): «окт.», «III кв.»,
- * «I пол.», «2026»; год — только если он не текущий.
+ * «I полугодие», «2026»; год — только если он не текущий. У отчёта по событию — с датой события:
+ * «окт. · дата события 15.10.2026».
  */
 export function botPeriodBrief(
-  ref: Pick<PeriodRef, 'period' | 'start'>,
+  ref: Pick<PeriodRef, 'period' | 'start' | 'event'> & { eventLabel?: string },
   today: IsoDate,
   t: Translate,
 ): string {
@@ -66,9 +69,19 @@ export function botPeriodBrief(
   if (ref.period === 'Y') return year;
   if (ref.period === 'M') {
     const name = t(`report.month.${Number(ref.start.slice(5, 7))}` as UiTextKey).toLowerCase();
-    return `${name.length > 3 ? `${name.slice(0, 3)}.` : name}${tail}`;
+    const month = `${name.length > 3 ? `${name.slice(0, 3)}.` : name}${tail}`;
+    if (!ref.event) return month;
+    // Отчёт по событию: за месяц их может быть несколько — в ячейке есть дата события.
+    const label = (ref.eventLabel || t('report.event.default')).replace(/^./u, (c) =>
+      c.toLowerCase(),
+    );
+    return `${month} · ${label} ${formatDateRu(ref.event)}`;
   }
-  const label = periodLabel({ period: ref.period, start: ref.start }, t);
+  // Квартал — коротко («III кв.»), полугодие — целиком («I полугодие»), как в прототипе.
+  const label =
+    ref.period === 'Q'
+      ? periodLabel({ period: ref.period, start: ref.start }, t)
+      : periodFull({ period: ref.period, start: ref.start }, t);
   return label.endsWith(` ${year}`) ? `${label.slice(0, -year.length - 1)}${tail}` : label;
 }
 
@@ -88,7 +101,11 @@ export interface BotReportRow {
 
 const byDue = (a: BotReportRow, b: BotReportRow) =>
   a.due.localeCompare(b.due) || a.id.localeCompare(b.id);
-const reportCells = (r: BotReportRow) => [r.contractor, r.report, botDayMonth(r.due)];
+const reportCells = (r: BotReportRow) => [
+  botClip(r.contractor, BOT_TABLE_NAME_MAX),
+  r.report,
+  botDayMonth(r.due),
+];
 
 export interface MorningTexts {
   /** Разделы — шаблоны `tgSecOver`, `tgSecToday`, `tgSecBefore`, `tgSecPay`. */
@@ -201,6 +218,8 @@ export function weekBotMessage(
     names: ReadonlyMap<string, string>;
     confirm: boolean;
     canNudge: boolean;
+    /** Кому можно напомнить: действующие сотрудники. Не задано — всем из таблицы. */
+    active?: ReadonlySet<string>;
     debts: readonly WeekDebt[];
     texts: WeekTexts;
   },
@@ -233,7 +252,13 @@ export function weekBotMessage(
     });
     if (o.canNudge) {
       for (const x of rows
-        .filter((r) => r.employeeId && r.employeeId !== o.self && r.over > 0)
+        .filter(
+          (r) =>
+            r.employeeId &&
+            r.employeeId !== o.self &&
+            r.over > 0 &&
+            (!o.active || o.active.has(r.employeeId)),
+        )
         .slice(0, WEEK_NUDGE_MAX)) {
         buttons.push([
           {
@@ -257,7 +282,7 @@ export function weekBotMessage(
       numeric: [1, 2],
       rows: debts
         .slice(0, WEEK_DEBT_ROWS_MAX)
-        .map((c) => [c.name, formatSom(c.debt), String(c.months)]),
+        .map((c) => [botClip(c.name, BOT_TABLE_NAME_MAX), formatSom(c.debt), String(c.months)]),
       foot: [
         debts.length > WEEK_DEBT_ROWS_MAX ? texts.totalOf(debts.length) : texts.total,
         formatSom(sumTyiyn(debts.map((c) => c.debt))),
@@ -285,6 +310,38 @@ export function weekBotMessage(
  */
 export function feeCopyNote(variants: readonly string[], max = BOT_COPY_MAX): string | null {
   return variants.find((x) => x.length >= 1 && x.length <= max) ?? null;
+}
+
+/**
+ * Текст напоминания о долге для кнопки копирования — тот же, что «Напомнить об оплате» на сайте
+ * (`feeWhatsAppText`), по шагам: с реквизитами, без реквизитов, с месяцами числом (`monthsCount`).
+ */
+export function feeDebtCopyNote(
+  template: string,
+  values: {
+    contractor: string;
+    months: readonly YearMonth[];
+    amount: Tyiyn;
+    payBy: IsoDate;
+    requisite: string | null;
+  },
+  texts: { requisites: (req: string) => string; monthsCount: string },
+  max = BOT_COPY_MAX,
+): string | null {
+  const make = (requisite: string | null, monthsText?: string) =>
+    feeWhatsAppText(
+      template,
+      { ...values, requisite, ...(monthsText ? { monthsText } : {}) },
+      texts.requisites,
+    );
+  return feeCopyNote(
+    [
+      ...(values.requisite ? [make(values.requisite)] : []),
+      make(null),
+      make(null, texts.monthsCount),
+    ],
+    max,
+  );
 }
 
 /**

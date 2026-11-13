@@ -24,7 +24,6 @@ import {
   BOT_ASK_CANCEL,
   botAskLive,
   botReturnReason,
-  formatText,
   hasPermission,
   periodFull,
   RecordNotFoundError,
@@ -42,9 +41,7 @@ import {
   type TelegramTemplateKey,
   type Translate,
 } from '@buhuchet/domain';
-import type { ApiDeps } from '../../deps';
 import { attachStoredFile } from '../files/attach';
-import { serverTexts } from '../l10n/texts';
 import { assigneeScopeOf, reportScopeOf } from '../reports/common';
 import { taskAccessOf } from '../tasks/common';
 import type { TelegramEvent } from './events';
@@ -73,12 +70,6 @@ import type {
 
 type Ctx = BotReplyContext;
 type Access = NonNullable<BotPressAccess>;
-
-/** Тексты словаря с подстановками — для названий отчётов и подписей нажатых кнопок. */
-async function translator(deps: ApiDeps): Promise<Translate> {
-  const texts = await serverTexts(deps);
-  return (key, params) => formatText(texts(key), params);
-}
 
 const refused = async (
   ctx: Ctx,
@@ -133,7 +124,7 @@ async function openReport(
   access: BotPressAccess,
 ): Promise<ReportOpened | TelegramTemplateKey> {
   if (!access || !ctx.user.orgId || !ctx.arg) return 'tgActNoRight';
-  const t = await translator(ctx.deps);
+  const t = ctx.tr;
   const rc = await reportContext(ctx, tx, access.subject, t);
   const facts = await reportMessageFacts(tx, ctx.arg);
   if (!facts) return 'tgActStale';
@@ -492,7 +483,7 @@ const taskWork: BotAction = {
       if (typeof o === 'string') return refused(ctx, o);
       if (o.lock.status !== 'todo') return refused(ctx, 'tgActStale');
       await changeTaskStatus(tx, o.lock.id, { from: o.lock.status, to: 'in_progress' });
-      const t = await translator(ctx.deps);
+      const t = ctx.tr;
       return {
         done: t('telegram.done.work'),
         reply: await ctx.text('tgActTaskWork'),
@@ -515,7 +506,7 @@ async function finishTask(
     { from: o.lock.status, to, fileId },
     { doneAt: ctx.deps.clock.now(), reworkReason: '' },
   );
-  const t = await translator(ctx.deps);
+  const t = ctx.tr;
   return {
     done: t('telegram.done.task'),
     off: [STAFF_BOT_ACTIONS.taskWork],
@@ -577,7 +568,7 @@ const askCancel: BotAction = {
     if (!botAskLive(ctx.message, bishkekDate(ctx.deps.clock.now()))) {
       return refused(ctx, 'tgActStale');
     }
-    const t = await translator(ctx.deps);
+    const t = ctx.tr;
     return {
       done: t('telegram.done.cancelled'),
       closeAsk: true,

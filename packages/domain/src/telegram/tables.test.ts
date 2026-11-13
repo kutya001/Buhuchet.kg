@@ -3,16 +3,20 @@ import { formatText, UI_TEXTS, type Translate } from '../l10n/texts';
 import {
   BOT_BUTTON_TEXT_MAX,
   BOT_COPY_MAX,
+  BOT_TABLE_NAME_MAX,
+  BOT_TEXT_MAX,
   botMessageProblem,
   botPlainText,
   botRichHtml,
 } from './bot-message';
+import { FEE_WHATSAPP_TEMPLATE, feeWhatsAppText } from '../fees/reminder';
 import type { ReminderItem, ReminderLine } from './reminders';
 import {
   botDayWords,
   botPeriodBrief,
   botTableRows,
   feeCopyNote,
+  feeDebtCopyNote,
   morningTables,
   nudgeBotMessage,
   STAFF_BOT_NUDGE,
@@ -65,7 +69,17 @@ describe('таблицы в сообщениях бота (задача Т3)', (
     expect(botPeriodBrief({ period: 'M', start: '2025-12-01' }, today, t)).toBe('дек. 2025');
     expect(botPeriodBrief({ period: 'Q', start: '2026-07-01' }, today, t)).toBe('III кв.');
     expect(botPeriodBrief({ period: 'Q', start: '2025-10-01' }, today, t)).toBe('IV кв. 2025');
-    expect(botPeriodBrief({ period: 'H', start: '2026-01-01' }, today, t)).toBe('I пол.');
+    // Полугодие не сокращается — как `tgPerShort` прототипа («I полугодие 2026» без текущего года).
+    expect(botPeriodBrief({ period: 'H', start: '2026-01-01' }, today, t)).toBe('I полугодие');
+    expect(botPeriodBrief({ period: 'H', start: '2025-07-01' }, today, t)).toBe(
+      'II полугодие 2025',
+    );
+    // Отчёт по событию: месяц и дата события — отчёты одного вида за месяц различимы.
+    const event = { period: 'M' as const, start: '2026-10-01', event: '2026-10-15' };
+    expect(botPeriodBrief(event, today, t)).toBe('окт. · дата события 15.10.2026');
+    expect(botPeriodBrief({ ...event, eventLabel: 'Дата увольнения' }, today, t)).toBe(
+      'окт. · дата увольнения 15.10.2026',
+    );
     expect(botPeriodBrief({ period: 'Y', start: '2026-01-01' }, today, t)).toBe('2026');
     expect(botDayWords(today, 4, t)).toBe('пятницу, 13 ноября');
     expect(botDayWords('2026-11-02', 0, t)).toBe('понедельник, 2 ноября');
@@ -211,6 +225,28 @@ describe('таблицы в сообщениях бота (задача Т3)', (
     expect(botMessageProblem(long)).toBeNull();
     // Писать нечего — сообщения нет.
     expect(weekBotMessage({ rows: [] }, o)).toBeNull();
+    // При равных числах — по имени; «Без ответственного» и уволенный (его нет среди действующих) кнопку
+    // не получают, хотя просроченное у них есть; сотрудник без имени — «—».
+    const tie = weekBotMessage(
+      {
+        rows: [
+          { employeeId: 'e2', sub: 1, over: 2, wait: 0 },
+          { employeeId: null, sub: 0, over: 4, wait: 0 },
+          { employeeId: 'e1', sub: 1, over: 2, wait: 0 },
+          { employeeId: 'e5', sub: 0, over: 3, wait: 0 },
+          { employeeId: 'gone', sub: 0, over: 1, wait: 0 },
+        ],
+      },
+      { ...o, active: new Set(['e1', 'e2', 'e4']) },
+    )!;
+    expect(tie.tables![0]!.rows.map((r) => r[0])).toEqual([
+      'Без ответственного',
+      'Жылдыз К.',
+      'Айбек С.',
+      'Нурлан Т.',
+      '—',
+    ]);
+    expect(tie.buttons!.map(([b]) => b!.arg)).toEqual(['e1', 'e2']);
   });
 
   it('долги за обслуживание: свёрнутый раздел, самые большие первыми, итог по всем, «Скопировать напоминание» — первым трём', () => {
@@ -270,6 +306,51 @@ describe('таблицы в сообщениях бота (задача Т3)', (
     expect(feeCopyNote([''])).toBeNull();
   });
 
+  it('«Скопировать напоминание»: текст сайта — с реквизитами, не помещается — без них, затем месяцы числом, иначе кнопки нет', () => {
+    const texts = {
+      requisites: (r: string) => `Реквизиты для оплаты: ${r}.`,
+      monthsCount: '6 мес.',
+    };
+    const values: Parameters<typeof feeDebtCopyNote>[1] = {
+      contractor: 'ОсОО «Ромашка»',
+      months: ['2026-09', '2026-10'],
+      amount: 6_000_000,
+      payBy: '2026-11-20',
+      requisite: 'Оптима Банк, счёт 1091820000012345',
+    };
+    const site = (v: Parameters<typeof feeDebtCopyNote>[1], monthsText?: string) =>
+      feeWhatsAppText(
+        FEE_WHATSAPP_TEMPLATE,
+        { ...v, ...(monthsText ? { monthsText } : {}) },
+        texts.requisites,
+      );
+    // Помещается — тот же текст, что «Напомнить об оплате» на сайте, с реквизитами.
+    const full = feeDebtCopyNote(FEE_WHATSAPP_TEMPLATE, values, texts)!;
+    expect(full).toBe(site(values));
+    expect(full).toContain('Реквизиты для оплаты: Оптима Банк');
+    // Длинные реквизиты — без них.
+    const longReq = { ...values, requisite: `Банк ${'очень '.repeat(30)}длинный, счёт 1` };
+    expect(site(longReq).length).toBeGreaterThan(BOT_COPY_MAX);
+    expect(feeDebtCopyNote(FEE_WHATSAPP_TEMPLATE, longReq, texts)).toBe(
+      site({ ...values, requisite: null }),
+    );
+    // Много месяцев долга — и без реквизитов не помещается: месяцы числом.
+    const months = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'];
+    const many = {
+      ...longReq,
+      contractor: `ОсОО «${'Очень длинное название '.repeat(5).trim()}»`,
+      months,
+    };
+    const short = feeDebtCopyNote(FEE_WHATSAPP_TEMPLATE, many, texts)!;
+    expect(short).toBe(site({ ...many, requisite: null }, '6 мес.'));
+    expect(short).toContain('за 6 мес.:');
+    expect(short.length).toBeLessThanOrEqual(BOT_COPY_MAX);
+    // Название на 300 знаков — не помещается ничего: кнопки нет.
+    expect(
+      feeDebtCopyNote(FEE_WHATSAPP_TEMPLATE, { ...many, contractor: 'я'.repeat(300) }, texts),
+    ).toBeNull();
+  });
+
   it('«Напомнить»: текст и таблица просроченного, ссылка — только у сайта по https', () => {
     const list: BotReportRow[] = [
       { id: 'b', contractor: 'ОсОО Б', report: 'НДС, окт. — оплата', due: '2026-11-10' },
@@ -300,5 +381,60 @@ describe('таблицы в сообщениях бота (задача Т3)', (
     expect(
       nudgeBotMessage('x', list, { columns, more }, { ...open, url: null }).buttons,
     ).toBeUndefined();
+  });
+
+  it('эмодзи в имени и длинные названия не ломают сообщение: подписи кнопок — в пределе Telegram, текст — до 4096 знаков', () => {
+    // Имя из 40 эмодзи (предел отображаемого имени) — 80 единиц UTF-16: подпись кнопки режется по ним.
+    const emoji = '😀'.repeat(40);
+    const week = weekBotMessage(
+      { rows: [{ employeeId: 'e1', sub: 0, over: 1, wait: 0 }] },
+      {
+        self: 'e4',
+        names: new Map([['e1', emoji]]),
+        confirm: false,
+        canNudge: true,
+        debts: [debt(`ОсОО ${emoji}`, 100, 1, 'Оплатите')],
+        texts: weekTexts,
+      },
+    )!;
+    expect(week.buttons).toHaveLength(2);
+    for (const [b] of week.buttons!)
+      expect(b!.text.length).toBeLessThanOrEqual(BOT_BUTTON_TEXT_MAX);
+    expect(botMessageProblem(week)).toBeNull();
+    // Название контрагента — до 300 знаков: в ячейке оно обрезано, 20 строк помещаются в сообщение.
+    const name = 'Общество с ограниченной ответственностью «Очень длинное название» '.repeat(5);
+    expect(name.length).toBeGreaterThan(300);
+    const list: BotReportRow[] = Array.from({ length: 25 }, (_, i) => ({
+      id: `r${String(i).padStart(2, '0')}`,
+      contractor: name,
+      report: 'НДС, окт. — оплата (ответственный Очень Длинное Имя без Telegram)',
+      due: '2026-10-20',
+    }));
+    const m = nudgeBotMessage('🔔 Напоминание', list, { columns, more }, { label: 'x', url: null });
+    expect(m.tables![0]!.rows).toHaveLength(20);
+    expect(m.tables![0]!.rows[0]![0]).toHaveLength(BOT_TABLE_NAME_MAX);
+    expect(m.tables![0]!.rows[0]![0]!.endsWith('…')).toBe(true);
+    expect(botPlainText(m).length).toBeLessThanOrEqual(BOT_TEXT_MAX);
+    const debts = Array.from({ length: 12 }, (_, i) => debt(`${name}${i}`, 100, 1, null));
+    const big = weekBotMessage(
+      {
+        rows: Array.from({ length: 30 }, (_, i) => ({
+          employeeId: `x${i}`,
+          sub: 1,
+          over: 1,
+          wait: 1,
+        })),
+      },
+      {
+        self: 'e4',
+        names: new Map(Array.from({ length: 30 }, (_, i) => [`x${i}`, emoji])),
+        confirm: true,
+        canNudge: true,
+        debts,
+        texts: weekTexts,
+      },
+    )!;
+    expect(botMessageProblem(big)).toBeNull();
+    expect(botPlainText(big).length).toBeLessThanOrEqual(BOT_TEXT_MAX);
   });
 });
