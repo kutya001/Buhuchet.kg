@@ -168,6 +168,7 @@ export function projectListColumns(t: ListTexts, money: boolean): ListColumns {
       value: projects.contractorId,
       display: contractors.name,
       sort: { value: contractors.name, text: true },
+      digits: contractors.inn,
     },
     status: {
       type: 'enum',
@@ -1118,7 +1119,7 @@ export async function projectFormData(
   scope: SQL | undefined,
   contractorId: string | null,
 ): Promise<{
-  contractors: { id: string; name: string; responsible: string | null }[];
+  contractors: { id: string; name: string; inn: string; responsible: string | null }[];
   employees: { id: string; name: string }[];
   responsible: string | null;
 }> {
@@ -1127,6 +1128,7 @@ export async function projectFormData(
       .select({
         id: contractors.id,
         name: contractors.name,
+        inn: contractors.inn,
         responsible: contractors.responsibleEmployeeId,
       })
       .from(contractors)

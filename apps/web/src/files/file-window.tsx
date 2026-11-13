@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
+import { ContractorSelect } from '../shell/contractor-select';
 import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
 import { formContractorsQuery, fileSizeText } from './files-data';
 
@@ -276,20 +277,14 @@ export function UploadDialog({
         </Field>
         <Field id={`${id}-cp`} label={t('files.upload.cp')} hint={t('files.upload.cp_hint')}>
           {(control) => (
-            <select
+            <ContractorSelect
               {...control}
               data-files-upload-cp=""
-              className={`${inputClass()} cursor-pointer`}
+              contractors={contractors.data ?? []}
               value={contractorId}
-              onChange={(e) => setContractorId(e.target.value)}
-            >
-              <option value="">{t('files.upload.cp_none')}</option>
-              {(contractors.data ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              empty={t('files.upload.cp_none')}
+              onChange={setContractorId}
+            />
           )}
         </Field>
         <Field id={`${id}-note`} label={t('files.upload.note')} full>

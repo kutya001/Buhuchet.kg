@@ -133,30 +133,42 @@ export function enumSelectionSize(selection: EnumSelection): number {
 /**
  * Подходит ли значение под «Найти значение» в фильтре-галочках (прототип filterPop: подпись содержит
  * текст без учёта регистра и «ё»): '' — подходит любое; у пустого значения подписи нет — «(Пусто)»
- * поиском не находится, как в прототипе. Эталон для поиска значений на сервере.
+ * поиском не находится, как в прототипе. У столбца с контрагентами (прототип v93, `c.inn`) значение
+ * находится и по ИНН: `digits` — ИНН контрагента, текст из одних цифр (пробелы не в счёт) ищется в
+ * нём подряд. Эталон для поиска значений на сервере.
  */
-export function matchesValue(label: string | null, match: string): boolean {
+export function matchesValue(label: string | null, match: string, digits?: string | null): boolean {
   const needle = searchText(match.trim());
   if (!needle) return true;
-  return label !== null && searchText(label).includes(needle);
+  if (label !== null && searchText(label).includes(needle)) return true;
+  if (!digits) return false;
+  const compact = needle.replace(/\s/g, '');
+  return /^\d+$/.test(compact) && digits.includes(compact);
 }
 
-function stepCovers(step: EnumStep, value: string, label: string | null): boolean {
-  return 'match' in step ? matchesValue(label, step.match) : step.vals.includes(value);
+function stepCovers(
+  step: EnumStep,
+  value: string,
+  label: string | null,
+  digits: string | null | undefined,
+): boolean {
+  return 'match' in step ? matchesValue(label, step.match, digits) : step.vals.includes(value);
 }
 
 /**
  * Отмечено ли значение (код `value`, подпись как на экране `label`): решает последний шаг, который
  * его касается; если ни один — отмечено ли оно в `vals`. Эталон для условия фильтра на сервере.
+ * `digits` — ИНН значения у столбца с контрагентами (`matchesValue`).
  */
 export function enumChecked(
   selection: EnumSelection,
   value: string,
   label: string | null,
+  digits?: string | null,
 ): boolean {
   const steps = selection.steps ?? [];
   for (let i = steps.length - 1; i >= 0; i--) {
-    if (stepCovers(steps[i]!, value, label)) return steps[i]!.on;
+    if (stepCovers(steps[i]!, value, label, digits)) return steps[i]!.on;
   }
   return selection.vals.includes(value);
 }
@@ -174,6 +186,9 @@ export function isEnumAll(selection: EnumSelection): boolean {
 /** Подпись значения, если она уже приходила с сервера; undefined — не известна. */
 export type EnumLabelOf = (value: string) => string | null | undefined;
 
+/** ИНН значения столбца с контрагентами, если значение уже приходило с сервера (`matchesValue`). */
+export type EnumDigitsOf = (value: string) => string | null | undefined;
+
 /**
  * Отмечены ли наверняка все значения, подпись которых содержит `match` ('' — все значения): галочка
  * «Выбрать все», когда пришли не все подходящие (прототип: `m.every(k => on.has(k))`). Да — если
@@ -184,6 +199,7 @@ export function enumMatchChecked(
   selection: EnumSelection,
   match: string,
   labelOf: EnumLabelOf,
+  digitsOf?: EnumDigitsOf,
 ): boolean {
   const needle = searchText(match.trim());
   const steps = selection.steps ?? [];
@@ -195,7 +211,7 @@ export function enumMatchChecked(
       'match' in s ||
       s.vals.some((v) => {
         const label = labelOf(v);
-        return label === undefined || matchesValue(label, needle);
+        return label === undefined || matchesValue(label, needle, digitsOf?.(v));
       })
     ) {
       return false;
@@ -209,10 +225,11 @@ function knownChecked(
   selection: EnumSelection,
   value: string,
   labelOf: EnumLabelOf,
+  digitsOf: EnumDigitsOf | undefined,
 ): boolean | undefined {
   const label = labelOf(value);
   if (label === undefined && (selection.steps ?? []).some((s) => 'match' in s)) return undefined;
-  return enumChecked(selection, value, label ?? null);
+  return enumChecked(selection, value, label ?? null, digitsOf?.(value));
 }
 
 /**
@@ -225,6 +242,7 @@ export function addEnumStep(
   selection: EnumSelection,
   step: EnumStep,
   labelOf: EnumLabelOf,
+  digitsOf?: EnumDigitsOf,
 ): EnumSelection {
   if ('vals' in step && !step.vals.length) return selection;
   const needle = 'match' in step ? searchText(step.match.trim()) : '';
@@ -232,7 +250,7 @@ export function addEnumStep(
   const covered = (value: string) => {
     if ('vals' in step) return step.vals.includes(value);
     const label = labelOf(value);
-    return label !== undefined && matchesValue(label, needle);
+    return label !== undefined && matchesValue(label, needle, digitsOf?.(value));
   };
   let vals = selection.vals.filter((v) => !covered(v));
   const steps: EnumStep[] = [];
@@ -247,8 +265,8 @@ export function addEnumStep(
   const before: EnumSelection = { vals, steps };
   const unchanged =
     'match' in step
-      ? step.on && enumMatchChecked(before, step.match, labelOf)
-      : step.vals.every((v) => knownChecked(before, v, labelOf) === step.on);
+      ? step.on && enumMatchChecked(before, step.match, labelOf, digitsOf)
+      : step.vals.every((v) => knownChecked(before, v, labelOf, digitsOf) === step.on);
   const last = steps.at(-1);
   if (unchanged) {
     // Шаг ничего не меняет — выбор остаётся прежним (без перекрытых им записей).

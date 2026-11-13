@@ -199,7 +199,10 @@ export type ProjectCard = z.infer<typeof ProjectCard>;
 
 /** Окно проекта (прототип `projectDlg`): контрагенты области, действующие сотрудники. */
 export const ProjectForm = z.object({
-  contractors: z.array(z.object({ id: Uuid, name: z.string(), responsible: Uuid.nullable() })),
+  /** `inn` — для поиска в списке (прототип v93). */
+  contractors: z.array(
+    z.object({ id: Uuid, name: z.string(), inn: z.string(), responsible: Uuid.nullable() }),
+  ),
   employees: z.array(Named),
   /** Сотрудник, который открыл окно (ответственный по умолчанию). */
   me: Uuid.nullable(),

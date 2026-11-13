@@ -38,6 +38,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useRef, useState } from 'react';
 import { ApiFailure } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { ContractorSelect } from '../shell/contractor-select';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { statusPillView } from '../status/status-view';
 import { createProject, editProject, projectFormQuery } from './projects-data';
@@ -382,25 +383,19 @@ function ProjectModal({
                 error={errors.contractor}
               >
                 {(control) => (
-                  <select
+                  <ContractorSelect
                     {...control}
                     data-pd-cp=""
-                    className={`${inputClass()} cursor-pointer`}
+                    contractors={form.contractors}
                     value={cp}
-                    onChange={(e) => {
+                    empty={t('proj.dlg.cp_pick')}
+                    onChange={(v) => {
                       // Прототип: выбор контрагента ответственных не меняет (у окна из карточки
                       // контрагента ответственный — его ответственный, иначе — тот, кто создаёт).
-                      setCp(e.target.value);
+                      setCp(v);
                       clear('contractor');
                     }}
-                  >
-                    <option value="">{t('proj.dlg.cp_pick')}</option>
-                    {form.contractors.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 )}
               </Field>
             )}

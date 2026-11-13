@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, pickContractor, signIn } from './helpers';
 import { asOwner, manualReport, newContractor, staffIds } from './reports';
 
 // Остаток контрагента и счёт сотрудника (задача 2.20, #76, часть 1) через настоящий сайт. Демо-
@@ -443,7 +443,7 @@ test.describe('Этап 2: финансовые операции по контр
       .getByRole('menuitem', { name: 'Разовая услуга' })
       .click();
     const add = page.getByRole('dialog', { name: 'Разовая услуга' });
-    await add.locator('[data-svc-cp]').selectOption(cp.id);
+    await pickContractor(add.locator('[data-svc-cp]'), cp.inn);
     await add.locator('[data-svc-name]').fill(service);
     await add.locator('[data-svc-amount]').fill('5000');
     await add.locator('[data-svc-ok]').click();

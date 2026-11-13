@@ -340,3 +340,16 @@ export async function newOrgOwner(api: APIRequestContext, origin: string) {
   expect(changed.status(), await changed.text()).toBe(200);
   return login;
 }
+
+/**
+ * Выбрать контрагента в поле «Контрагент» формы — общий список с поиском (доработки 13.11, задача И3;
+ * прототип v93): открыть список, найти по части названия или по цифрам ИНН и нажать на первую строку.
+ */
+export async function pickContractor(field: Locator, query: string) {
+  const page = field.page();
+  await field.click();
+  await page.getByRole('combobox', { name: 'Поиск контрагента по названию или ИНН' }).fill(query);
+  const list = page.getByRole('listbox');
+  await list.getByRole('option').first().click();
+  await expect(list).toBeHidden();
+}
