@@ -269,16 +269,20 @@ describe.skipIf(!databaseAvailable())('Меню команд бота: данн�
     );
     expect(ids(scoped)).toEqual([today, overdue, sunday, pay, payOnly, mine].sort());
     // Чужая организация не видна — и из своей видна только своя.
-    expect(ids(await inB((tx) => commandReports(tx, { scope: undefined, horizon: HORIZON })))).toEqual(
-      [inForeign],
-    );
+    expect(
+      ids(await inB((tx) => commandReports(tx, { scope: undefined, horizon: HORIZON }))),
+    ).toEqual([inForeign]);
     await db.admin.db.delete(reports);
   });
 
   it('отчёты карточки: просроченные несданные и со сроком в этом месяце, без «Уплаты»', async () => {
     const overdue = await report({ dueDate: '2026-09-21', dueBase: '2026-09-21' });
     const later = await report({ dueDate: '2026-11-25', dueBase: '2026-11-25' });
-    const done = await report({ dueDate: '2026-11-02', dueBase: '2026-11-02', status: 'submitted' });
+    const done = await report({
+      dueDate: '2026-11-02',
+      dueBase: '2026-11-02',
+      status: 'submitted',
+    });
     await report({ dueDate: '2026-10-20', dueBase: '2026-10-20', status: 'submitted' });
     await report({ dueDate: '2026-12-01', dueBase: '2026-12-01' });
     await report({ act: 'pay', payDue: TODAY, amount: 1_000 });
@@ -301,9 +305,7 @@ describe.skipIf(!databaseAvailable())('Меню команд бота: данн�
 
   it('поиск: часть названия без регистра и «ё», начало ИНН, область, без архива и чужих', async () => {
     const find = (query: string, scope = contractorScope(null), limit = 5) =>
-      inA((tx) =>
-        findCommandContractors(tx, { scope, query, byInn: /^\d+$/.test(query), limit }),
-      );
+      inA((tx) => findCommandContractors(tx, { scope, query, byInn: /^\d+$/.test(query), limit }));
     // «трейд» есть в трёх названиях организации А (одно — в архиве) и в одном чужом.
     expect(await find('трейд')).toEqual({
       total: 2,

@@ -92,6 +92,8 @@ export interface BotSent {
     copy_text?: { text: string };
     url?: string;
   }[][];
+  /** Кнопки меню под полем ввода (ряды подписей; `[]` — меню убрано); у сообщения без меню нет. */
+  menu?: string[][];
 }
 
 /** Что бот сайта отправил в чат — вместе с видом и кнопками (основа бота, поток Т). */
@@ -99,6 +101,15 @@ export async function botSent(api: APIRequestContext, chat: number): Promise<Bot
   const res = await api.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`);
   expect(res.status()).toBe(200);
   return (await res.json()) as BotSent[];
+}
+
+/** Команды меню бота, которые сайт сообщил Telegram (`setMyCommands`; поток Т, задача Т5). */
+export async function botCommands(
+  api: APIRequestContext,
+): Promise<{ command: string; description: string }[]> {
+  const res = await api.get(`${FAKE_TELEGRAM}/commands`);
+  expect(res.status()).toBe(200);
+  return (await res.json()) as { command: string; description: string }[];
 }
 
 /** Скрытые ответы бота на нажатия кнопок (их видит только нажавший). */

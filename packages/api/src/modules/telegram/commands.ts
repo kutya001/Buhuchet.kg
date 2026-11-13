@@ -107,7 +107,8 @@ async function openFindAsks(
   for (const ask of await openBotAsks(deps.db, chatId, today)) {
     if (ask.action !== BOT_FIND_ACTION) continue;
     const target = await botPressTarget(deps.db, chatId, ask.messageId);
-    if (target?.userId === userId) out.push({ outboxId: target.outboxId, messageId: ask.messageId });
+    if (target?.userId === userId)
+      out.push({ outboxId: target.outboxId, messageId: ask.messageId });
   }
   return out;
 }
@@ -148,8 +149,7 @@ async function answerCommand(run: CommandRun, user: BotChatUser): Promise<void> 
     await refuse();
     return;
   }
-  const stale =
-    command.code === 'find' ? await openFindAsks(deps, chatId, user.userId, today) : [];
+  const stale = command.code === 'find' ? await openFindAsks(deps, chatId, user.userId, today) : [];
   const outcome = await withOrgContext(deps.db, { orgId, userId: user.userId }, async (tx) => {
     const [access, { features }] = [
       await loadEmployeeAccess(tx, employeeId),

@@ -13,6 +13,7 @@ import {
   confirmBotMessage,
   reportBotMessage,
   TELEGRAM_TEMPLATE_DEFAULTS,
+  UI_TEXTS,
   type BotMessage,
 } from '@buhuchet/domain';
 import { Task } from '@buhuchet/shared';
@@ -1135,7 +1136,7 @@ describe.skipIf(!databaseAvailable())(
       expect(storage.files.size).toBe(files + 2);
 
       // Команда — не ответ на просьбу: бот отвечает подсказкой, просьба ждёт дальше.
-      expect((await say(CHAT.acc, '/help')).text).toBe(TPL.tgStart);
+      expect((await say(CHAT.acc, '/help')).text).toBe(UI_TEXTS['telegram.cmd.menu_hint'].ru);
 
       // Право «Менять статус отчётов» отобрали, пока бот ждал: файл не скачивается (такого файла у
       // Telegram нет — без проверки права заранее был бы ответ «Не получилось»).

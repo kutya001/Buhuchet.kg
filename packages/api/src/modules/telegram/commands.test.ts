@@ -3,7 +3,6 @@ import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   BOT_CARD_ACTION,
-  BOT_FIND_ACTION,
   TELEGRAM_TEMPLATE_DEFAULTS,
   UI_TEXTS,
   type BotMessage,
@@ -64,7 +63,6 @@ describe.skipIf(!databaseAvailable())(
     let cpSenior = '';
     let cpArchived = '';
     let cpB = '';
-    let n = 0;
 
     const person = (login: string) => f.people[login]!;
     const sent = (chatId: number) =>
@@ -135,7 +133,6 @@ describe.skipIf(!databaseAvailable())(
       patch: Partial<typeof schema.reports.$inferInsert> = {},
       orgId = f.a.orgId,
     ) => {
-      n += 1;
       const [row] = await f.t.admin.db
         .insert(schema.reports)
         .values({
@@ -341,9 +338,7 @@ describe.skipIf(!databaseAvailable())(
         `${CP_ACC}</td><td>1-Т, сен.</td><td align="right">20.10</td>`,
         `${CP_CHIEF}</td><td>НДС, авг. — оплата</td><td align="right">02.11</td>`,
       ]);
-      expect(keys(over!)).toEqual([
-        { text: TPL.tgBtnOpenReports, url: `${SITE}/app/reports/all` },
-      ]);
+      expect(keys(over!)).toEqual([{ text: TPL.tgBtnOpenReports, url: `${SITE}/app/reports/all` }]);
       const [mine] = await say(CHAT.chief, '/overdue');
       expect(mine!.options.rich).toContain('<b>🔴 Просрочено · 1</b>');
       expect(mine!.options.rich).not.toContain(CP_ACC);
@@ -494,9 +489,9 @@ describe.skipIf(!databaseAvailable())(
       }
       // Владелец чужой организации контрагента организации А не видит — и по поиску тоже.
       const foreign = await giveCard('owner-b', CHAT.ownerB, cpAcc);
-      expect(
-        await press(CHAT.ownerB, foreign.id, `${BOT_CARD_ACTION}:${cpAcc}`),
-      ).toMatchObject({ text: NO_RIGHT });
+      expect(await press(CHAT.ownerB, foreign.id, `${BOT_CARD_ACTION}:${cpAcc}`)).toMatchObject({
+        text: NO_RIGHT,
+      });
       await say(CHAT.ownerB, '/find');
       expect((await say(CHAT.ownerB, 'ала-тоо'))[0]!.text).toBe(TPL.tgFindNone);
       const [onlyB] = await say(CHAT.ownerB, 'трейд');

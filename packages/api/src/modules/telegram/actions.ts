@@ -1,9 +1,4 @@
-import {
-  BOT_CARD_ACTION,
-  BOT_FIND_ACTION,
-  NOT_ME_ACTION,
-  STAFF_BOT_NUDGE,
-} from '@buhuchet/domain';
+import { BOT_CARD_ACTION, BOT_FIND_ACTION, NOT_ME_ACTION, STAFF_BOT_NUDGE } from '@buhuchet/domain';
 import { testAction } from './bot-test';
 import { contractorCardAction, findContractorAction } from './command-actions';
 import type { BotAction } from './press';

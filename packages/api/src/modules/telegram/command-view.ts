@@ -67,7 +67,10 @@ export interface CommandAsker {
 }
 
 /** Тексты ответов: шаблоны бота (уже прочитанные) и словарь. */
-export function commandTexts(templates: Readonly<Record<string, string>>, tr: Translate): CommandTexts {
+export function commandTexts(
+  templates: Readonly<Record<string, string>>,
+  tr: Translate,
+): CommandTexts {
   return {
     tpl: (key, values = {}) => fillTemplate(botTemplate(key, templates[key]), values),
     columns: {
