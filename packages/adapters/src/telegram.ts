@@ -50,6 +50,16 @@ export interface TelegramSendOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+/** Сколько ждать файл, присланный боту, мс: до 20 МБ с серверов Telegram. */
+const FILE_TIMEOUT_MS = 30_000;
+
+/**
+ * Файл, присланный боту (поток Т, задача Т2): содержимое либо почему его нет — файл больше предела
+ * (`too_large`) или Telegram его не отдал (`failed`: устаревший номер файла, сбой сети).
+ */
+export type TelegramFileResult =
+  | { ok: true; body: Uint8Array }
+  | { ok: false; reason: 'too_large' | 'failed'; description: string };
 
 /**
  * Состояние вебхука по ответу Telegram (getWebhookInfo): адрес, куда Telegram шлёт обновления (пусто —
@@ -83,6 +93,12 @@ export interface Telegram {
     messageId: number,
     keyboard: readonly (readonly TelegramButton[])[],
   ): Promise<boolean>;
+  /**
+   * Скачать файл, присланный боту, по его номеру из сообщения (`file_id`): не больше `maxBytes`.
+   * Адрес файла содержит токен бота, поэтому наружу он не отдаётся — только содержимое. Ошибка сети —
+   * не исключение, а `failed` с вычищенным текстом.
+   */
+  loadFile(fileId: string, maxBytes: number): Promise<TelegramFileResult>;
   setWebhook(url: string, secretToken: string): Promise<void>;
   /** Состояние вебхука (Админка → «Телеграм» → «Проверить вебхук»); ошибка Bot API — исключение. */
   getWebhookInfo(): Promise<TelegramWebhookInfo>;
@@ -131,6 +147,7 @@ export function createTelegramBotApi(options: {
 }): Telegram {
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const base = `${options.apiBase ?? 'https://api.telegram.org'}/bot${options.token}`;
+  const fileBase = `${options.apiBase ?? 'https://api.telegram.org'}/file/bot${options.token}`;
 
   async function call<T>(
     method: string,
@@ -215,6 +232,44 @@ export function createTelegramBotApi(options: {
       });
       return data.ok;
     },
+    async loadFile(fileId, maxBytes) {
+      const failed = (description: string): TelegramFileResult => ({
+        ok: false,
+        reason: 'failed',
+        description: redactBotToken(description),
+      });
+      const tooLarge: TelegramFileResult = { ok: false, reason: 'too_large', description: '' };
+      try {
+        const info = await call<{ file_path?: string; file_size?: number }>('getFile', {
+          file_id: fileId,
+        });
+        if (!info.ok || !info.result?.file_path) {
+          // Файл больше 20 МБ Bot API не отдаёт: «Bad Request: file is too big».
+          if (/too big/i.test(info.description ?? '')) return tooLarge;
+          return failed(`getFile: ${info.error_code ?? 0} ${info.description ?? ''}`);
+        }
+        if ((info.result.file_size ?? 0) > maxBytes) return tooLarge;
+        // Путь приходит от Telegram и встаёт в адрес после токена: только обычные знаки пути.
+        const path = info.result.file_path;
+        if (!/^[\w.\-/ ]+$/.test(path) || path.includes('..') || path.startsWith('/')) {
+          return failed('getFile: неожиданный путь файла');
+        }
+        const res = await doFetch(
+          `${fileBase}/${path.split('/').map(encodeURIComponent).join('/')}`,
+          {
+            method: 'GET',
+            signal: AbortSignal.timeout(FILE_TIMEOUT_MS),
+          },
+        );
+        if (!res.ok) return failed(`файл: HTTP ${res.status}`);
+        if (Number(res.headers.get('content-length') ?? 0) > maxBytes) return tooLarge;
+        const body = new Uint8Array(await res.arrayBuffer());
+        if (body.byteLength > maxBytes) return tooLarge;
+        return { ok: true, body };
+      } catch (err) {
+        return failed(err instanceof Error ? err.message : String(err));
+      }
+    },
     async setWebhook(url, secretToken) {
       const data = await call<boolean>('setWebhook', {
         url,
@@ -257,6 +312,8 @@ export interface FakeTelegram extends Telegram {
     messageId: number;
     keyboard: readonly (readonly TelegramButton[])[];
   }>;
+  /** Файлы, которые «прислали боту»: номер файла → содержимое (для `loadFile`). */
+  readonly files: Map<string, Uint8Array>;
   webhook?: { url: string; secretToken: string };
   /** Что ответит getWebhookInfo: по умолчанию — поставленный адрес без ошибок; `Error` — исключение. */
   webhookInfo?: Partial<TelegramWebhookInfo> | Error;
@@ -273,6 +330,7 @@ export function createFakeTelegram(): FakeTelegram {
     messageIds: [],
     answers: [],
     edits: [],
+    files: new Map(),
     async sendMessage(chatId, text, options = {}) {
       const failure = failures.shift();
       if (failure) return failure;
@@ -288,6 +346,12 @@ export function createFakeTelegram(): FakeTelegram {
     async editKeyboard(chatId, messageId, keyboard) {
       fake.edits.push({ chatId, messageId, keyboard });
       return true;
+    },
+    async loadFile(fileId, maxBytes) {
+      const body = fake.files.get(fileId);
+      if (!body) return { ok: false, reason: 'failed', description: 'нет такого файла' };
+      if (body.byteLength > maxBytes) return { ok: false, reason: 'too_large', description: '' };
+      return { ok: true, body };
     },
     async setWebhook(url, secretToken) {
       fake.webhook = { url, secretToken };

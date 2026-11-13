@@ -862,6 +862,20 @@
       "when": 1794571128271,
       "tag": "0122_telegram_bot_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 123,
+      "version": "7",
+      "when": 1794581213423,
+      "tag": "0123_telegram_staff_bot",
+      "breakpoints": true
+    },
+    {
+      "idx": 124,
+      "version": "7",
+      "when": 1794581215990,
+      "tag": "0124_telegram_staff_bot_functions",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,10 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  bishkekDate,
   codeWithOrganization,
+  formatDateRu,
+  formatText,
   loginDenial,
   parseStartCommand,
   relinkCodeOf,
@@ -29,8 +32,10 @@ import { createMiddleware } from 'hono/factory';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
+import { serverTexts } from '../l10n/texts';
 import { botText, sendCodeMessage, sendNow } from './bot';
 import { handleBotPress } from './press';
+import { handleBotReply, type BotIncoming } from './reply';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -40,11 +45,27 @@ const error = { 'application/json': { schema: ApiError } };
  */
 const TelegramUpdate = z.looseObject({ update_id: z.number().int() });
 
-const PrivateText = z.object({
-  text: z.string().max(4096),
+/** Файл в сообщении: номер файла у Telegram, имя (у документа) и размер со слов Telegram. */
+const IncomingFile = z.object({
+  file_id: z.string().min(1).max(256),
+  file_name: z.string().max(1024).optional(),
+  file_size: z.number().int().nonnegative().optional(),
+});
+
+/**
+ * Сообщение человека в личном чате: текст (ссылка привязки, код замены, ответ на просьбу бота) или файл
+ * — документ либо фото с подписью (ответ на просьбу бота прислать файл, задача Т2).
+ */
+const PrivateMessage = z.object({
+  text: z.string().max(4096).optional(),
+  caption: z.string().max(4096).optional(),
+  document: IncomingFile.optional(),
+  photo: z.array(IncomingFile).max(20).optional(),
+  reply_to_message: z.looseObject({ message_id: z.number().int() }).optional(),
   chat: z.object({ id: z.number().int(), type: z.literal('private') }),
   from: z
     .object({
+      id: z.number().int().optional(),
       is_bot: z.boolean().optional(),
       username: z.string().max(64).optional(),
       first_name: z.string().max(256).optional(),
@@ -70,7 +91,7 @@ export const webhookRoute = createRoute({
   path: '/telegram/webhook',
   tags: ['telegram'],
   summary:
-    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями',
+    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями, ответ на просьбу бота (файл или текст)',
   request: {
     body: { required: true, content: { 'application/json': { schema: TelegramUpdate } } },
   },
@@ -264,22 +285,20 @@ async function askRelinkCode(
 
 /**
  * Сообщение с кодом в новом чате: попытка занимается до проверки (5 на код, 10 неверных за сутки),
- * верный код привязывает чат. Кода для этого чата нет — обычная подсказка бота.
+ * верный код привязывает чат. false — кода для этого чата бот не ждёт: сообщение разбирается дальше
+ * (ответ на просьбу бота или обычная подсказка).
  */
 async function confirmRelink(
   deps: ApiDeps,
   chatId: number,
   code: string,
   reply: (body: string) => Promise<unknown>,
-): Promise<void> {
+): Promise<boolean> {
   const attempt = await reserveTelegramRelinkAttempt(deps.db, chatId);
-  if (attempt.status === 'none') {
-    await reply(await botText(deps, 'tgStart'));
-    return;
-  }
+  if (attempt.status === 'none') return false;
   if (attempt.status === 'spent' || loginDenial(attempt)) {
     await reply(await botText(deps, 'tgRelinkFailed'));
-    return;
+    return true;
   }
   if (!(await verifyPassword(attempt.codeHash, code))) {
     await reply(
@@ -287,12 +306,40 @@ async function confirmRelink(
         ? await botText(deps, 'tgRelinkWrong', { попыток: attempt.triesLeft })
         : await botText(deps, 'tgRelinkFailed'),
     );
-    return;
+    return true;
   }
   // Имя в Telegram — из сообщения со ссылкой: его записал запрос кода.
   const link = { chatId, username: attempt.username, firstName: attempt.firstName };
   const done = await linked(deps, attempt, link, (tx) => useTelegramRelink(tx, attempt.codeId));
   if (!done) await reply(await botText(deps, 'tgRelinkFailed'));
+  return true;
+}
+
+/**
+ * Файл из сообщения: документ — со своим именем, фото — самый большой размер с именем «Фото из
+ * Telegram <дата>.jpg» (у фото в Telegram имени нет).
+ */
+async function incomingFile(
+  deps: ApiDeps,
+  message: z.infer<typeof PrivateMessage>,
+): Promise<BotIncoming['file']> {
+  const date = formatDateRu(bishkekDate(deps.clock.now()));
+  const texts = await serverTexts(deps);
+  const { document, photo } = message;
+  if (document) {
+    return {
+      fileId: document.file_id,
+      name: document.file_name?.trim() || formatText(texts('telegram.file_name'), { date }),
+      size: document.file_size ?? 0,
+    };
+  }
+  const best = [...(photo ?? [])].sort((a, b) => (b.file_size ?? 0) - (a.file_size ?? 0))[0];
+  if (!best) return null;
+  return {
+    fileId: best.file_id,
+    name: formatText(texts('telegram.photo_name'), { date }),
+    size: best.file_size ?? 0,
+  };
 }
 
 /**
@@ -326,20 +373,39 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       }
       return ok;
     }
-    const message = PrivateText.safeParse(update.message);
+    const message = PrivateMessage.safeParse(update.message);
     if (!message.success || message.data.from?.is_bot) return ok;
-    const { chat, from, text } = message.data;
+    const { chat, from } = message.data;
+    const text = message.data.text ?? null;
     const reply = async (body: string) => {
       await sendNow(deps, chat.id, body, 'bot_reply');
       return ok;
     };
 
-    const command = parseStartCommand(text);
+    const command = text === null ? null : parseStartCommand(text);
     if (!command) {
-      const code = relinkCodeOf(text);
-      if (!code) return reply(await botText(deps, 'tgStart'));
-      await confirmRelink(deps, chat.id, code, reply);
-      return ok;
+      // Код замены Telegram, если бот ждёт его в этом чате, — раньше ответа на просьбу: шесть цифр не
+      // должны уйти причиной возврата отчёта.
+      const code = text === null ? null : relinkCodeOf(text);
+      if (code && (await confirmRelink(deps, chat.id, code, reply))) return ok;
+      // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
+      // Telegram повторял бы доставку, а действие могло уже выполниться.
+      try {
+        const handled = await handleBotReply(deps, {
+          chatId: chat.id,
+          fromId: from?.id ?? 0,
+          replyTo: message.data.reply_to_message?.message_id ?? null,
+          text,
+          file: await incomingFile(deps, message.data),
+          caption: message.data.caption ?? null,
+        });
+        if (handled) return ok;
+      } catch (err) {
+        deps.logger.error({ err }, 'Telegram: ответ на просьбу бота не обработан');
+        return ok;
+      }
+      // Файл, которого бот не ждал, остаётся без ответа — как раньше; на текст — подсказка.
+      return text === null ? ok : reply(await botText(deps, 'tgStart'));
     }
     if (!command.token) return reply(await botText(deps, 'tgStart'));
     if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));

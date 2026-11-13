@@ -142,6 +142,42 @@ export async function saveBotPress(
   return row?.ok === true;
 }
 
+/** Открытая просьба бота в чате: номер сообщения-просьбы и что бот ждёт. */
+export interface OpenBotAsk {
+  messageId: number;
+  action: string;
+  arg: string | null;
+  kind: 'file' | 'text';
+}
+
+/**
+ * Открытые просьбы бота в чате за день `day` (поток Т, задача Т2): сначала последняя. К ней относится
+ * файл или текст, присланный без ответа на сообщение; по ним же видно, что такую просьбу бот уже
+ * отправил. Чей чат и можно ли действовать — дальше `botPressTarget` по номеру сообщения.
+ */
+export async function openBotAsks(db: Db | Tx, chatId: number, day: string): Promise<OpenBotAsk[]> {
+  const rows = await db.execute<{ message_id: string | number; ask: unknown }>(
+    sql`select message_id, ask from app.telegram_open_asks(${chatId}::bigint, ${day})`,
+  );
+  const out: OpenBotAsk[] = [];
+  for (const row of rows) {
+    const ask = (typeof row.ask === 'string' ? JSON.parse(row.ask) : row.ask) as {
+      action?: unknown;
+      arg?: unknown;
+      kind?: unknown;
+    } | null;
+    if (!ask || typeof ask.action !== 'string') continue;
+    if (ask.kind !== 'file' && ask.kind !== 'text') continue;
+    out.push({
+      messageId: Number(row.message_id),
+      action: ask.action,
+      arg: typeof ask.arg === 'string' ? ask.arg : null,
+      kind: ask.kind,
+    });
+  }
+  return out;
+}
+
 /**
  * Пометить транзакцию «через Telegram»: записи истории (`audit_log`, `status_history`), сделанные в ней,
  * получают `via = 'telegram'` значением столбца по умолчанию.

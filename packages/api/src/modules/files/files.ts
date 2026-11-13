@@ -123,7 +123,7 @@ export function canView(subject: AccessSubject, record: FileSourceRecord): boole
   return !record.contractor || canSeeContractor(subject, 'files', record.contractor);
 }
 
-function canUpload(subject: AccessSubject, record: FileSourceRecord): boolean {
+export function canUpload(subject: AccessSubject, record: FileSourceRecord): boolean {
   return canView(subject, record) && record.editable && hasPermission(subject, 'filesUpload');
 }
 
@@ -145,7 +145,7 @@ export function deleteRefusal(
  * Запись-источник, файлы которой сотрудник видит; иначе — 404 (чужую запись и запись вне области не
  * отличить от несуществующей).
  */
-async function visibleSource(
+export async function visibleSource(
   deps: ApiDeps,
   tx: Tx,
   subject: AccessSubject,

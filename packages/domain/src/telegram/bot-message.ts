@@ -33,6 +33,27 @@ export interface BotTable {
   numeric?: readonly number[];
 }
 
+/**
+ * Бот ждёт ответ на это сообщение (поток Т, задача Т2; прототип v97 `m.ask`, `tgReply`): файл или текст.
+ * Ответ получает обработчик действия `action` с записью `arg`. Просьба закрывается принятым ответом,
+ * кнопкой «Отмена» или концом дня `day`; без дня она ждёт, пока не ответят, но только ответом именно на
+ * это сообщение.
+ */
+export interface BotAsk {
+  action: string;
+  arg?: string;
+  kind: 'file' | 'text';
+  /** День по Бишкеку (`YYYY-MM-DD`), до конца которого бот ждёт ответ. */
+  day?: string;
+  /** Ответ принят или просьба отменена. */
+  off?: boolean;
+  /**
+   * Сообщение и кнопка, нажатием которой просьба открыта: когда ответ принят, эта кнопка гаснет с новой
+   * подписью — как после обычного нажатия.
+   */
+  src?: { messageId: number; action: string };
+}
+
 export interface BotMessage {
   heading?: string;
   sub?: string;
@@ -41,6 +62,7 @@ export interface BotMessage {
   code?: string;
   tables?: readonly BotTable[];
   buttons?: readonly (readonly BotButton[])[];
+  ask?: BotAsk;
 }
 
 /** Пределы Telegram: текст простого сообщения, данные и подпись кнопки, текст копирования, столбцы. */
@@ -218,6 +240,13 @@ export function botMessageProblem(m: BotMessage): string | null {
     );
     if (width > BOT_TABLE_COLUMNS_MAX) return 'в таблице больше 20 столбцов';
   }
+  if (m.ask) {
+    try {
+      botPressData(m.ask.action, m.ask.arg);
+    } catch {
+      return 'просьба бота: действие или запись';
+    }
+  }
   for (const row of m.buttons ?? []) {
     for (const b of row) {
       if (!b.text.trim() || b.text.length > BOT_BUTTON_TEXT_MAX) return 'подпись кнопки';
@@ -286,7 +315,53 @@ export function asBotMessage(value: unknown): BotMessage | null {
           }),
       ),
   );
-  return tablesOk && buttonsOk ? (value as BotMessage) : null;
+  const askOk = optional(m.ask, (ask) => {
+    if (!ask || typeof ask !== 'object' || Array.isArray(ask)) return false;
+    const x = ask as Record<string, unknown>;
+    const src = x.src as Record<string, unknown> | undefined;
+    return (
+      typeof x.action === 'string' &&
+      (x.kind === 'file' || x.kind === 'text') &&
+      [x.arg, x.day].every((y) => optional(y, isString)) &&
+      optional(x.off, (y) => typeof y === 'boolean') &&
+      optional(
+        src,
+        (y) =>
+          !!y &&
+          typeof y === 'object' &&
+          Number.isSafeInteger((y as { messageId?: unknown }).messageId) &&
+          typeof (y as { action?: unknown }).action === 'string',
+      )
+    );
+  });
+  return tablesOk && buttonsOk && askOk ? (value as BotMessage) : null;
+}
+
+/** Действие кнопки «Отмена» под просьбой бота: бот перестаёт ждать ответ, запись не меняется. */
+export const BOT_ASK_CANCEL = 'askCancel';
+
+/** Бот всё ещё ждёт ответ на это сообщение (`today` — сегодня по Бишкеку). */
+export function botAskLive(m: BotMessage, today: string): boolean {
+  return !!m.ask && !m.ask.off && (m.ask.day === undefined || m.ask.day === today);
+}
+
+/** Та же просьба (то же действие с той же записью) уже открыта этим сообщением. */
+export function sameBotAsk(m: BotMessage, action: string, arg: string | null): boolean {
+  return !!m.ask && m.ask.action === action && (m.ask.arg ?? null) === (arg || null);
+}
+
+/** Сообщение после ответа или отмены: бот больше не ждёт, кнопка «Отмена» гаснет. */
+export function closeBotAsk(m: BotMessage): BotMessage {
+  if (!m.ask) return m;
+  const buttons = (m.buttons ?? []).map((row) =>
+    row.map((b): BotButton => (b.action === BOT_ASK_CANCEL ? { ...b, off: true } : b)),
+  );
+  return { ...m, ask: { ...m.ask, off: true }, ...(m.buttons ? { buttons } : {}) };
+}
+
+/** Просьба бота прислать файл или текст ответом на сообщение; под ней — кнопка «Отмена». */
+export function askBotMessage(text: string, ask: BotAsk, cancelLabel: string): BotMessage {
+  return { text, ask, buttons: [[{ text: cancelLabel, action: BOT_ASK_CANCEL }]] };
 }
 
 /**
