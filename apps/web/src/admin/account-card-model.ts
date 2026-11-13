@@ -2,6 +2,7 @@ import {
   bishkekDate,
   bishkekTime,
   formatDateRu,
+  SECURITY_NOTICE_DEFS,
   SECURITY_NOTICES,
   type SessionEndReason,
 } from '@buhuchet/domain';
@@ -72,10 +73,8 @@ function changeText(t: Translate, c: HistoryChange): string | null {
 function notMeText(t: Translate, h: HistoryEntry): string {
   const of = (field: string) => h.changes.find((c) => c.field === field);
   const notice = of('notMe')?.to;
-  const event =
-    typeof notice === 'string' && (SECURITY_NOTICES as readonly string[]).includes(notice)
-      ? t(`telegram.notme.event.${notice}`)
-      : '';
+  const known = SECURITY_NOTICES.find((n) => n === notice);
+  const event = known ? t(SECURITY_NOTICE_DEFS[known].event) : '';
   const locked = of('loginLocked')?.to === true;
   const sessions = Number(of('sessionsEnded')?.to) || 0;
   return [

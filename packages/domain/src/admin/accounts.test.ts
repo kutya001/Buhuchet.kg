@@ -43,6 +43,17 @@ describe('карточка пользователя: состояния и вк�
     expect(accountStates({ ...base, employeeActive: false })).toEqual(['blocked_owner']);
   });
 
+  it('вход закрыт кнопкой «Это не я» из Telegram — своё состояние (прототип v101)', () => {
+    expect(accountStates({ ...base, loginLocked: true, loginLockReason: 'not_me' })).toEqual([
+      'login_locked_not_me',
+    ]);
+    expect(accountStates({ ...base, loginLocked: true, loginLockReason: null })).toEqual([
+      'login_locked',
+    ]);
+    // Причина без закрытого входа ничего не значит.
+    expect(accountStates({ ...base, loginLockReason: 'not_me' })).toEqual(['active']);
+  });
+
   it('администратор платформы: одно состояние и три вкладки', () => {
     expect(accountStates({ ...base, isPlatformAdmin: true, mustChangePassword: true })).toEqual([
       'active',

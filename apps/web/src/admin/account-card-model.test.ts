@@ -68,6 +68,44 @@ describe('карточка пользователя: «История»', () => 
     );
   });
 
+  it('«Это не я» под сообщением бота: под каким сообщением, сколько сеансов, другой Telegram', () => {
+    const change = (
+      field: string,
+      to: string | boolean | null,
+      from: string | boolean | null = null,
+    ) => ({
+      field,
+      from,
+      to,
+    });
+    expect(
+      accountHistoryText(
+        t,
+        entry({
+          action: 'not_me',
+          changes: [
+            change('notMe', 'relink'),
+            change('sessionsEnded', '2'),
+            change('telegram', null, '@stranger'),
+            change('loginLocked', true, false),
+          ],
+        }),
+      ),
+    ).toBe(
+      'Вход закрыт кнопкой «Это не я» под сообщением бота «привязан другой Telegram», завершено сеансов: 2, другой Telegram отвязан',
+    );
+    // У администратора платформы вход не закрывается; сеансов не было — о них ни слова.
+    expect(
+      accountHistoryText(
+        t,
+        entry({
+          action: 'not_me',
+          changes: [change('notMe', 'pass'), change('sessionsEnded', '0')],
+        }),
+      ),
+    ).toBe('Все сеансы завершены кнопкой «Это не я» под сообщением бота «пароль изменён»');
+  });
+
   const plain = (...fields: string[]) => fields.map((field) => ({ field, from: null, to: null }));
 
   it('правка без значений — перечень изменённых полей; незнакомое поле — как есть', () => {
