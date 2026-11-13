@@ -194,7 +194,8 @@ describe('запрос создания', () => {
       regime2Code: null,
       bases: ['ОСН-01'],
       tariff: { amount: 1500050, period: 'M' },
-      firstMonthMode: 'prorate',
+      // По умолчанию — «Полный месяц» (прототип v86).
+      firstMonthMode: 'full',
       reports: [{ code: 'STI-010', rate: null, rateAdditions: [] }],
       reportsForced: ['STI-020'],
       gkedConfirm: true,
@@ -204,6 +205,13 @@ describe('запрос создания', () => {
       reason: '',
     });
     expect(r).not.toHaveProperty('socfundConfirm');
+  });
+
+  it('выбранный способ первого месяца уходит в запрос', () => {
+    for (const firstMonth of ['prorate', 'next'] as const)
+      expect(createRequestOf({ ...filled(), fee: '100', firstMonth }, x())).toMatchObject({
+        firstMonthMode: firstMonth,
+      });
   });
 
   it('годовая ставка — первый месяц «полный»; без права — стоимости в запросе нет', () => {

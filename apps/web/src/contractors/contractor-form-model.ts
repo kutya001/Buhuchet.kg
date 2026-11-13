@@ -170,7 +170,8 @@ export function newDraft(o: {
     startDate: o.today,
     fee: '',
     period: 'M',
-    firstMonth: 'prorate',
+    // Прототип v86: по умолчанию «Полный месяц» (docs/deviations.md п. О-78).
+    firstMonth: 'full',
     contractNo: '',
     contractDate: '',
     note: '',

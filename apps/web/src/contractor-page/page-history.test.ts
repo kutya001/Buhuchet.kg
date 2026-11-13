@@ -14,6 +14,7 @@ describe('pageHistoryText', () => {
     expect(text('page_off')).toBe('Страница контрагента выключена');
     expect(text('page_code')).toBe('Код доступа страницы контрагента изменён');
     expect(text('page_copy')).toBe('Скопирована ссылка на страницу контрагента');
+    expect(text('page_code_copy')).toBe('Скопирован код доступа страницы контрагента');
     expect(text('page_send')).toBe('Ссылка на страницу контрагента с кодом отправлена в WhatsApp');
     expect(text('page_lock')).toBe(
       'Страница контрагента: 5 неверных кодов подряд, ввод закрыт на 15 минут',

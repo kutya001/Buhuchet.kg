@@ -37,6 +37,9 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.btn.off': { ru: 'Выключить', section: S },
   'cppage.btn.bulk': { ru: 'Включить страницу', section: S },
   'cppage.toast.copied': { ru: 'Ссылка скопирована', section: S },
+  'cppage.toast.code_copied': { ru: 'Код {code} скопирован', section: S },
+  'cppage.code.copy_hint': { ru: 'Нажмите, чтобы скопировать код', section: S },
+  'cppage.code.copy_label': { ru: 'Код доступа {code}: скопировать', section: S },
   'cppage.toast.on': { ru: 'Страница включена. Код доступа: {code}', section: S },
   'cppage.toast.already': { ru: 'Страница уже включена', section: S },
   'cppage.toast.off': { ru: 'Страница выключена', section: S },
@@ -98,6 +101,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.hist.page_off': { ru: 'Страница контрагента выключена', section: S },
   'cppage.hist.page_code': { ru: 'Код доступа страницы контрагента изменён', section: S },
   'cppage.hist.page_copy': { ru: 'Скопирована ссылка на страницу контрагента', section: S },
+  'cppage.hist.page_code_copy': {
+    ru: 'Скопирован код доступа страницы контрагента',
+    section: S,
+  },
   'cppage.hist.page_send': {
     ru: 'Ссылка на страницу контрагента с кодом отправлена в WhatsApp',
     section: S,

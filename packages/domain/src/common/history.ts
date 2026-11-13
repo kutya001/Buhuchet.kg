@@ -68,6 +68,8 @@ export const HISTORY_ACTIONS = [
   'page_off',
   'page_code',
   'page_copy',
+  // Скопирован код доступа (прототип v86, `codecopy`).
+  'page_code_copy',
   'page_send',
   'page_open',
   'page_lock',

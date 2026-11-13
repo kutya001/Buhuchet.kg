@@ -62,6 +62,9 @@ function historyOf(what: string): PageHistoryRow | null {
   if (what === 'Скопирована ссылка на страницу контрагента') {
     return { action: 'page_copy', changes: [] };
   }
+  if (what === 'Скопирован код доступа страницы контрагента') {
+    return { action: 'page_code_copy', changes: [] };
+  }
   if (what.startsWith('Ссылка на страницу контрагента с кодом отправлена')) {
     return { action: 'page_send', changes: [] };
   }

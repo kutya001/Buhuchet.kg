@@ -641,8 +641,11 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
   it('день оплаты и «Первый неполный месяц» — только тому, кто видит плату; по умолчанию — 10-е, без поля — «Полный месяц»', async () => {
     const own = await created(owner, { feeDay: 20, firstMonthMode: 'next' });
     expect(own).toMatchObject({ feeDay: 20, firstMonthMode: 'next' });
-    // Поле в форме по умолчанию — «Пропорционально дням»; при ставке «в год» поля нет.
-    expect(await created(owner)).toMatchObject({ firstMonthMode: 'prorate' });
+    // Поле в форме по умолчанию — «Полный месяц» (прототип v86); при ставке «в год» поля нет.
+    expect(await created(owner)).toMatchObject({ firstMonthMode: 'full' });
+    expect(await created(owner, { firstMonthMode: 'prorate' })).toMatchObject({
+      firstMonthMode: 'prorate',
+    });
     expect(await created(owner, { tariff: { amount: 12_000_000, period: 'Y' } })).toMatchObject({
       firstMonthMode: 'full',
     });

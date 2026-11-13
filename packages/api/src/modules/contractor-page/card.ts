@@ -272,8 +272,11 @@ export function pageSectionsHandler(deps: ApiDeps): RouteHandler<typeof pageSect
   };
 }
 
-/** «Скопировать ссылку» и «Открыть WhatsApp» — только запись в историю (прототип log('cp', …)). */
-function logRoute(path: 'copied' | 'sent', summary: string) {
+/**
+ * «Скопировать ссылку», нажатие на код доступа и «Открыть WhatsApp» — только запись в историю
+ * (прототип log('cp', …)).
+ */
+function logRoute(path: 'copied' | 'code-copied' | 'sent', summary: string) {
   return createRoute({
     method: 'post',
     path: `/contractors/{id}/page/${path}`,
@@ -290,10 +293,14 @@ function logRoute(path: 'copied' | 'sent', summary: string) {
 
 export const pageCopiedRoute = logRoute('copied', '«Скопировать ссылку»: запись в историю');
 export const pageSentRoute = logRoute('sent', '«Отправить в WhatsApp»: запись в историю');
+export const pageCodeCopiedRoute = logRoute(
+  'code-copied',
+  'Код доступа скопирован нажатием на него: запись в историю',
+);
 
 export function pageLogHandler(
   deps: ApiDeps,
-  action: 'page_copy' | 'page_send',
+  action: 'page_copy' | 'page_code_copy' | 'page_send',
 ): RouteHandler<typeof pageCopiedRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
@@ -301,7 +308,14 @@ export function pageLogHandler(
       const { cp } = await contractorOf(tx, deps, c, id);
       const page = await getContractorPage(tx, id);
       const enabled = !!page?.enabled && cp.serviceStatus !== 'archived';
-      const refusal = pageSendRefusal(actorOf(subjectOf(c), cp), enabled);
+      // Код копирует каждый, кто его видит в блоке (прототип v86: `codecopy` без проверки права);
+      // ссылку копирует и отправляет ответственный или тот, кто управляет страницей.
+      const refusal =
+        action === 'page_code_copy'
+          ? enabled
+            ? null
+            : 'page_off'
+          : pageSendRefusal(actorOf(subjectOf(c), cp), enabled);
       if (refusal) refuse(refusal);
       await writeContractorPageHistory(tx, id, action);
       return pageOut(tx, deps, c, id);

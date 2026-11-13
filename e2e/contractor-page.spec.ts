@@ -225,6 +225,39 @@ test.describe('Этап 2: страница контрагента по ссыл
     await page.goto(path);
     await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
   });
+
+  test('(проверка прототипа v86) код доступа в блоке «Страница контрагента» копируется нажатием на него: «Код … скопирован», действие — в истории контрагента', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    const name = `ОсОО «Код ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}»`;
+    const { origin, id, code } = await enabledPage(request, baseURL, name);
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/cps/all');
+    const rows = page.locator('[data-grid] [data-id]');
+    await expect(rows.first()).toBeVisible();
+    await search(page, isMobile, name);
+    await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
+    const card = page.getByRole('dialog', { name });
+    const shown = `${code.slice(0, 3)} ${code.slice(3)}`;
+    const button = card.getByRole('button', { name: `Код доступа ${shown}: скопировать` });
+    await expect(button).toHaveAttribute('title', 'Нажмите, чтобы скопировать код');
+    await button.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: `Код ${shown} скопирован` }),
+    ).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(code);
+    await expect
+      .poll(async () => {
+        const res = await request.get(`/api/contractors/${id}/history`);
+        const { items } = (await res.json()) as { items: { entity: string; action: string }[] };
+        return items.some((h) => h.entity === 'contractor_page' && h.action === 'page_code_copy');
+      })
+      .toBe(true);
+  });
 });
 
 // Разделы открытой страницы (задача 2.43, #99) — в своей организации теста: в ней включены страница,
