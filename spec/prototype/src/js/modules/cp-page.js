@@ -2,7 +2,7 @@
 // Страница контрагента по ссылке (v56, решение заказчика 24.10.2026): www.buhuchet.kg/<адрес организации>/inn/<ИНН>, вход по коду из 6 цифр, только просмотр
 /* ═════════════ Страница контрагента по ссылке ═════════════ */
 // Разделы страницы: [ключ, название, функция учётной политики, без которой раздела нет]; «Главное» и «Ваш бухгалтер» показываются всегда
-const PG_SECS=[['pay','Как оплатить'],['reports','Отчёты'],['files','Файлы'],['money','Деньги на налоги','taxpay'],['fee','Оплата за обслуживание','fee'],['kpi','Показатели','indicators'],['contacts','Контакты']];
+const PG_SECS=[['pay','Как оплатить'],['reports','Отчёты'],['files','Файлы'],['money','Деньги на налоги','taxpay'],['fee','Оплата за обслуживание','fee'],['kpi','Показатели','indicators'],['contacts','Контакты'],['tg','Telegram']];
 const PG_TRY=5,PG_LOCK=15*60e3,PG_KEEP=30*864e5;
 // Кроме 5 неверных подряд — не больше 5 неверных кодов за сутки по одной ссылке с любых адресов: пятый закрывает страницу до «Сменить код» или «Выключить» и «Включить» (решение заказчика 07.11.2026). Счёт идёт по коду (p.day — время неверных вводов), верный код между неверными его не сбрасывает; закрытая страница не открывается никому, в том числе в браузерах с запомненным кодом
 const PG_DAY=5,PG_DAYMS=864e5;
@@ -28,10 +28,11 @@ function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why
       <div><span class="k">Последнее открытие</span><span class="v">${p.last?`${fmtDT(p.last)}${p.lastDev?` <span class="hint">· ${esc(p.lastDev)}</span>`:''}`:'<span class="faint">контрагент ещё не открывал</span>'}</span></div>
       ${secs.length?`<div class="pg-secs-row"><span class="k">Разделы страницы</span><span class="v"><span class="pg-secs">${secs.map(([k,l])=>`<label class="row"><input type="checkbox" data-pg-sec="${k}" ${(p.hide||[]).includes(k)?'':'checked'} ${why?'disabled':''}> ${esc(l)}</label>`).join('')}</span><span class="hint">«Ваш бухгалтер» видно всегда. Разделы для всех контрагентов — в учётной политике</span></span></div>`:''}</div>`
     :`<span class="hint">${c.archived?'Контрагент в архиве — страница выключена.':'Контрагент откроет по ссылке и коду из 6 цифр свои отчёты, показатели и оплату за обслуживание — только для просмотра, без входа в программу.'}</span>`}
+    ${pgTgBox(c)}
     ${on&&p.closed?`<div class="note bad">${ic('lock','sm')}<span>Страница закрыта: за сутки было 5 неверных кодов. Нажмите «Сменить код» (нет права — попросите владельца или главного бухгалтера) и отправьте контрагенту новый код.</span></div>`:''}
     <div class="row acts">${on?`${btn('copy','copy','Скопировать ссылку',sw)}${btn('wa','chat','Отправить в WhatsApp',sw)}<div class="grow"></div>${btn('code','refresh','Сменить код',why)}${btn('off','ban','Выключить',why)}`:c.archived?'':`<div class="grow"></div>${btn('on','link','Включить',why,'cta')}`}</div></div>`}
 function pgMount(el,c,redraw){const b=$('#cp-page',el);if(!b)return;
-  b.onclick=e=>{const x=e.target.closest('[data-pg]');if(!x)return;if(x.dataset.why){toast(x.dataset.why,'lock',true);return}const k=x.dataset.pg;
+  b.onclick=e=>{const t=e.target.closest('[data-pg-tg]');if(t)return pgTgBoxClick(c,t,redraw);const x=e.target.closest('[data-pg]');if(!x)return;if(x.dataset.why){toast(x.dataset.why,'lock',true);return}const k=x.dataset.pg;
     if(k==='on')pgEnable([c],redraw);else if(k==='off')pgOffDlg(c,redraw);else if(k==='code')pgCodeDlg(c,redraw);
     else if(k==='codecopy'){copyText(c.page.code,`Код ${pgCodeTxt(c.page.code)} скопирован`,true);log('cp',c.id,'Скопирован код доступа страницы контрагента',c.id)}
     else if(k==='copy'){copyText('https://'+pgUrl(c),'Ссылка скопирована',true);log('cp',c.id,'Скопирована ссылка на страницу контрагента',c.id)}else if(k==='wa')waDlg({cp:c,page:true})};
@@ -96,7 +97,8 @@ function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)retur
 // Обновление страницы в том же браузере в течение минуты новым открытием не считается (решение заказчика 30.10.2026, Е-3)
 function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
-function pubClick(e){const x=e.target.closest('[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo]');if(!x)return;const d=x.dataset;
+function pubClick(e){const x=e.target.closest('[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo]');if(!x)return;const d=x.dataset;
+  if(d.pubTgon!=null){const c=pubCp(PUB.open);if(d.why)toast(d.why,'lock',true);else if(c)pgTgDlg(c);return}
   if(d.pubFo!=null){const f=PUB.fl[+d.pubFo];if(f)pubFileOpen(f.name,f);return}
   if(d.pubFf!=null){PUB.ff=PUB.ff===d.pubFf?'':d.pubFf;pubDraw(true);return}
   if(d.pubCopy!=null){copyText(d.pubCopy,d.pubOk||'Скопировано',true);return}
@@ -104,7 +106,7 @@ function pubClick(e){const x=e.target.closest('[data-pub-go],[data-pub-tg],[data
   if(d.pubTg){if(isMobile())pubFold(d.pubTg,!PUB.unf.has(d.pubTg));return}
   if(d.pubGo){pubGo(d.pubGo,d.pubFl);return}
   if(d.pubF!=null){PUB.f=PUB.f===d.pubF?'':d.pubF;pubDraw(true);return}
-  if(d.pubMode){PUB.mode=d.pubMode;pubDraw(true);return}
+  if(d.pubMode){PUB.mode=d.pubMode;PUB.rm=null;pubDraw(true);return}
   const flip=(set,k)=>{const on=!set.has(k);on?set.add(k):set.delete(k);x.parentElement.classList.toggle('open',on);x.setAttribute('aria-expanded',on)};
   if(d.pubRt)flip(PUB.rt,d.pubRt);else if(d.pubRm){if(!PUB.rm)PUB.rm=new Set($$('#pub .pub-grp.open [data-pub-rm]').map(b=>b.dataset.pubRm));flip(PUB.rm,d.pubRm)}else if(d.pubKi)flip(PUB.ki,d.pubKi)}
 // На телефоне разделы, кроме «Главного» и «Как оплатить», свёрнуты; на ПК всё раскрыто
@@ -160,7 +162,7 @@ function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,r
   if(feat('projects')){SERVICES.forEach(x=>{if(x.cp!==c.id||x.del)return;[...(x.files||[]),...(x.pays||[]).filter(y=>!y.del).flatMap(y=>y.files||[])].forEach(n=>add('prj',n,`Услуга «${x.name}»`,x.date))});
     PROJECTS.forEach(x=>{if(x.cp!==c.id||x.del)return;[...(x.files||[]),...(x.pays||[]).filter(y=>!y.del).flatMap(y=>y.files||[])].forEach(n=>add('prj',n,`Проект «${x.name}»`,x.from))})}
   if(fee)FEEPAYS.forEach(x=>{if(x.cp===c.id&&!x.del)(x.files||[]).forEach(n=>add('fee',n,`Оплата ${som(x.amount)} от ${fmtD(x.date)}`,x.date))});
-  FILES.forEach(f=>{if(f.cp===c.id)add('oth',f.name,f.note||'',f.at)});
+  FILES.forEach(f=>{if(f.cp===c.id)add('oth',f.name,'',f.at)});
   return out.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0)}
 const pubFIc=n=>/^(JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n))?'image':/^(XLSX?|CSV)$/.test(fext(n))?'table':/^(ZIP|RAR|7Z)$/.test(fext(n))?'folder':'file';
 const pubFView=n=>/^(PDF|JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n));
@@ -210,9 +212,11 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
         <div class="pub-r2"><span class="${lt?'red strong':''}">${lt?ic('alert','sm'):''}срок ${fmtD(r.due)}</span>${st==='Сдан'&&r.subDate?`<span>сдан ${fmtD(r.subDate)}</span>`:''}${t.sum?`<span>${r.sum!=null?`к уплате <b class="tnum">${pubM(r.sum)}</b>`:'<span class="faint">сумма ещё не рассчитана</span>'}</span>${tp&&r.sum>0?pubTp(pill(r.payStatus,PST),PGT('taxPay',r.payStatus)):''}`:''}</div>
         ${rf(r).length?`<div class="pub-files">${rf(r).map(n=>`<a href="#" class="pub-file" data-pub-file="${esc(n)}">${ic('download','sm')}${esc(n)}</a>`).join('')}</div>`:''}</div>`};
     let list;
-    if(PUB.mode==='due'){const ms=[...new Set(vis.map(r=>ym(r.due)))].sort(),op=PUB.rm||new Set([ms.find(m=>m>=ym(TODAY))||ms[ms.length-1]]);
-      list=ms.map(m=>{const rs=vis.filter(r=>ym(r.due)===m),l=rs.filter(r=>fk(r)==='late').length,o=op.has(m);
-        return `<div class="pub-grp${o?' open':''}"><button type="button" class="pub-gh" data-pub-rm="${m}" aria-expanded="${o}"><span class="pub-rt1"><b>${esc(ymLabel(m))}</b><span class="hint">${rs.length} ${plural(rs.length,'отчёт','отчёта','отчётов')}</span>${l?`<span class="red strong">${ic('alert','sm')}${plural(l,'просрочен','просрочено','просрочено')} ${l}</span>`:''}<span class="grow"></span>${ic('down','sm')}</span></button><div class="pub-gb pub-list">${rs.map(r=>row(r,true)).join('')}${pubMore(rs.length)}</div></div>`}).join('')}
+    // «По срокам» — группы по месяцу срока сдачи; «По месяцам» — по месяцу, за который отчёт (правило rmYm, общее с карточкой контрагента и сообщением «К оплате»): в шапке группы — сколько налогов к уплате за месяц
+    if(PUB.mode==='due'||PUB.mode==='month'){const bm=PUB.mode==='month',gk=bm?rmYm:r=>ym(r.due),now=bm?addMonths(ym(TODAY),-1):ym(TODAY);
+      const ms=[...new Set(vis.map(gk))].sort(),op=PUB.rm||new Set([ms.find(m=>m>=now)||ms[ms.length-1]]);
+      list=ms.map(m=>{const rs=vis.filter(r=>gk(r)===m),l=rs.filter(r=>fk(r)==='late').length,o=op.has(m),g=bm?rmGroup(m,rs.map(rmItem)):null;
+        return `<div class="pub-grp${o?' open':''}"><button type="button" class="pub-gh" data-pub-rm="${m}" aria-expanded="${o}"><span class="pub-rt1"><b>${esc(bm?rmTitle(m):ymLabel(m))}</b><span class="hint">${rs.length} ${plural(rs.length,'отчёт','отчёта','отчётов')}</span>${g&&g.sum>0?`<span class="hint pub-gsum">к уплате <b class="tnum">${pubM(g.sum)}</b>${tp&&g.left>0&&g.left<g.sum?`, осталось ${pubM(g.left)}`:tp&&g.left===0?', оплачено':''}</span>`:''}${l?`<span class="red strong">${ic('alert','sm')}${plural(l,'просрочен','просрочено','просрочено')} ${l}</span>`:''}<span class="grow"></span>${ic('down','sm')}</span></button><div class="pub-gb pub-list">${rs.map(r=>row(r,true)).join('')}${pubMore(rs.length)}</div></div>`}).join('')}
     else{const soon=addDays(TODAY,30),rk=id=>{const rs=yr.filter(r=>r.t===id);return rs.some(r=>fk(r)==='late')?0:rs.some(r=>fk(r)==='next'&&r.due<=soon)?1:2};
       const ts=[...new Set(vis.map(r=>r.t))].sort((a,b)=>rk(a)-rk(b)||RT.indexOf(T[a])-RT.indexOf(T[b]));
       list=`<div class="pub-list pub-rts">${ts.map(id=>{const t=T[id],rs=vis.filter(r=>r.t===id),ty=yr.filter(r=>r.t===id),n=ty.filter(isSub).length,l=ty.filter(r=>fk(r)==='late').length,nx=ty.find(r=>fk(r)==='next'),o=PUB.rt.has(id),nt=pubNote(t);
@@ -223,7 +227,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
           <div class="pub-gb pub-list">${rs.map(r=>row(r,false)).join('')}${pubMore(rs.length)}</div></div>`}).join('')}${pubMore(ts.length)}</div>`}
     H.reports=pubSec('reports','file','Отчёты',`сдано ${cnt.sub} из ${yr.length}${cnt.late?` · ${cnt.late} ${plural(cnt.late,'просрочен','просрочено','просрочено')}`:''}`,
       `<div class="plates pub-pl">${pl('sub','check','green','Сдано')}${pl('next','clock','blue','Впереди')}${pl('late','alert',cnt.late?'red':'green','Просрочено')}</div>
-      <div class="pub-tools"><div class="chipsel" role="group" aria-label="Как показать отчёты">${[['type','По видам'],['due','По срокам']].map(([k,l])=>`<button type="button" data-pub-mode="${k}" class="${PUB.mode===k?'on':''}" aria-pressed="${PUB.mode===k}">${l}</button>`).join('')}</div>${f?`<button type="button" class="linkbtn" data-pub-f="${f}">${ic('x','sm')}Показать все</button>`:''}</div>
+      <div class="pub-tools"><div class="chipsel" role="group" aria-label="Как показать отчёты">${[['type','По видам'],['month','По месяцам'],['due','По срокам']].map(([k,l])=>`<button type="button" data-pub-mode="${k}" class="${PUB.mode===k?'on':''}" aria-pressed="${PUB.mode===k}">${l}</button>`).join('')}</div>${f?`<button type="button" class="linkbtn" data-pub-f="${f}">${ic('x','sm')}Показать все</button>`:''}</div>
       ${vis.length?list:`<span class="faint">${f?`Отчётов с отметкой «${{sub:'Сдано',next:'Впереди',late:'Просрочено'}[f]}» в ${y} году нет`:`Отчётов со сроком в ${y} году нет`}</span>`}`,
       {extra:sel('pub-y',ys.map(x=>[x,x+' год']),y,'aria-label="Год срока сдачи"')})}
   if(has('files')){const fs=pubFiles(c,has,fee),cats=PG_FCAT.filter(([k])=>fs.some(f=>f.cat===k)),ff=cats.some(([k])=>k===PUB.ff)?PUB.ff:'',vis=fs.filter(f=>!ff||f.cat===ff);PUB.fl=vis;
@@ -255,12 +259,14 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
     const what=id=>{const ts=c.assign.filter(a=>!a.to&&(a.resp||c.resp)===id).map(a=>T[a.t]&&T[a.t].short).filter(Boolean);return id===c.resp?'ответственный'+(ts.length?' · '+ts.join(', '):''):ts.join(', ')};
     H.contacts=pubSec('contacts','users','Контакты',ids.length?`${ids.length} ${plural(ids.length,'сотрудник','сотрудника','сотрудников')}`:'',`<div class="pub-people">${ids.map(id=>person(EM[id],`${role(EM[id])} · ${what(id)}`)).join('')}${ORG.phone&&ORG.phone.digits?`<div class="pub-person"><b>${esc(ORG.name)}</b><span class="hint">телефон организации</span><a class="mono" href="tel:+${ORG.phone.digits}">${esc(fmtPhone(ORG.phone))}</a></div>`:''}</div>
       <h4>Ваши данные у нас</h4><div class="kv"><div><span class="k">Руководитель</span><span class="v">${esc(c.head||'—')}</span></div><div><span class="k">Контактное лицо</span><span class="v">${esc(c.contact||'—')}</span></div><div><span class="k">Телефон</span><span class="v mono">${esc(fmtPhone(c.phone)||'—')}</span></div></div><span class="hint">${esc(PGT('contacts','Ваши данные у нас')||'Если что-то устарело, сообщите вашему бухгалтеру.')}</span>`)}
+  // «Telegram» — клиент подключает свой Telegram к боту, подключение подтверждает бухгалтер (cp-telegram.js)
+  if(has('tg'))H.tg=pgTgPub(c);
   const logo=ORG.logo?`<img src="${ORG.logo}" alt="" class="pub-logo">`:`<span class="pub-logo">${esc(initials(ORG.name.replace(/^(ОсОО|ИП|ОАО|ЗАО)\s+/,'').replace(/[«»"]/g,'')))}</span>`;
-  // На ПК две колонки; на телефоне разделы идут один под другим в порядке: «Главное», «Как оплатить», «Ваш бухгалтер», «Отчёты», «Файлы», «Деньги на налоги», «Оплата за обслуживание», «Показатели», «Контакты»
+  // На ПК две колонки; на телефоне разделы идут один под другим в порядке: «Главное», «Как оплатить», «Ваш бухгалтер», «Отчёты», «Файлы», «Деньги на налоги», «Оплата за обслуживание», «Показатели», «Контакты», «Telegram»
   const col=ks=>ks.map(k=>H[k]||'').join('');
   const nav=[['main','Главное','home'],['pay','Оплата','wallet'],['reports','Отчёты','file'],['kpi','Показатели','gauge'],['contacts','Контакты','users']].filter(([k])=>H[k]);
   return `<div class="pub-body"><header class="pub-h"><div class="pub-org">${logo}<span><b>${esc(ORG.name)}</b><span class="hint">ваша бухгалтерская компания</span></span></div><span class="hint">Данные на ${fmtD(TODAY)} ${bishkekNow().hm}${PGT('head','Данные на')?tipI(PGT('head','Данные на')):''}</span></header>
     <div class="pub-title"><h1>${esc(c.name)}</h1><span class="muted">ИНН <span class="mono">${c.inn}</span> · ${esc(c.regime?REGIME_FULL[c.regime]||c.regime:'режим налогообложения не указан')}</span></div>
     ${state}
-    <div class="pub-grid"><div class="pub-col">${col(['main','reports','files','kpi'])}</div><div class="pub-col">${col(['pay','acc','money','fee','contacts'])}</div></div>
+    <div class="pub-grid"><div class="pub-col">${col(['main','reports','files','kpi'])}</div><div class="pub-col">${col(['pay','acc','tg','money','fee','contacts'])}</div></div>
     ${nav.length>1?`<nav class="pub-nav" aria-label="Разделы страницы">${nav.map(([k,l,i])=>`<button type="button" data-pub-go="${k}">${ic(i)}<span>${l}</span></button>`).join('')}</nav>`:''}</div>`}

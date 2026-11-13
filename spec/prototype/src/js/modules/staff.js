@@ -8,7 +8,7 @@ function bonusLogGrid(host,id,rows,one){grid(host,{id,rows,title:'emp',noun:['з
   actions:x=>[x.svc?{label:'Открыть услугу',icon:'coins',run:()=>serviceCard(x.svc)}:null,x.op?{label:'Открыть операцию',icon:'wallet',run:()=>opWin({src:'op',ref:x.op})}:null,x.cp?{label:'Карточка контрагента',icon:'building',run:()=>openCp(CPM[x.cp])}:null,x.out?{label:'Отменить списание',icon:'history',danger:true,disabled:!can('bonus'),reason:'Нужно право «Списывать остаток в бонус»',run:()=>bonusUndo(x.out)}:null].filter(Boolean),
   cols:[{key:'date',label:'Дата',type:'date',w:110,val:x=>x.date},...(one?[]:[{key:'emp',label:'Сотрудник',type:'enum',w:150,val:x=>empName(x.emp)}]),
     {key:'kind',label:'Вид',type:'enum',w:170,val:x=>x.kind,html:x=>`<span class="pill sm ${x.wait?'faint':x.kind==='Списание'?'yellow':x.kind==='Разовая услуга'?'green':'blue'}">${esc(x.kind)}</span>`},
-    {key:'cp',label:'Контрагент',type:'enum',w:210,val:x=>x.cp?CPM[x.cp].name:''},{key:'what',label:'Основание',type:'text',w:260,val:x=>x.what},
+    {key:'cp',label:'Контрагент',type:'enum',inn:true,w:210,val:x=>x.cp?CPM[x.cp].name:''},{key:'what',label:'Основание',type:'text',w:260,val:x=>x.what},
     {key:'sum',label:'Сумма',type:'money',w:130,num:true,total:true,val:x=>x.wait?0:x.amount,html:x=>x.wait?`<span class="faint" title="Начислится после полной оплаты услуги">${fmtM(x.amount)}</span>`:`<span class="${x.amount<0?'red':'green'} strong">${x.amount>0?'+':''}${fmtM(x.amount)}</span>`},{key:'by',label:'Записал',type:'enum',w:130,val:x=>whoName(x.by)}],
   empty:{icon:'gift',title:'Начислений и списаний пока не было'}})}
 function bonusEmpDlg(e){openModal({size:'wide',live:true,render:m=>{const b=bonusSum(e.id);return {title:esc(e.fio),sub:'Бонусы: начисления и списания',
@@ -57,7 +57,7 @@ function renderStaff(body,tab,fresh){
     segBind();if($('#bg-close',body))$('#bg-close',body).onclick=()=>{const n=OPS.filter(o=>o.kind==='bonus'&&ym(o.date)===prev);confirmDlg({title:`Закрыть ${esc(ymLabel(prev))}?`,text:`Списаний за месяц: ${n.length} на ${som(n.reduce((a,o)=>a+o.amount,0))}. После закрытия оплаты налогов и списания этого месяца нельзя отменить — только корректирующей записью.`,ok:'Закрыть месяц',run:()=>{CLOSED.add(prev);log('org','policy',`Месяц ${ymLabel(prev)} закрыт отчётом о списаниях`);renderPage();toast('Месяц закрыт','lock')}})};
     grid($('#bg',body),{id:'bonus',cols:[
     {key:'date',label:'Дата',type:'date',w:110,val:o=>o.date},{key:'month',label:'Месяц',type:'enum',w:130,val:o=>ymLabel(ym(o.date)),sortVal:o=>o.date},
-    {key:'emp',label:'Сотрудник',type:'enum',w:150,val:o=>o.holder==='org'?'Счёт организации':empName(o.holder)},{key:'cp',label:'Контрагент',type:'enum',w:220,val:o=>CPM[o.cp].name},
+    {key:'emp',label:'Сотрудник',type:'enum',w:150,val:o=>o.holder==='org'?'Счёт организации':empName(o.holder)},{key:'cp',label:'Контрагент',type:'enum',inn:true,w:220,val:o=>CPM[o.cp].name},
     {key:'sum',label:'Сумма',type:'money',w:130,num:true,total:true,val:o=>o.amount},{key:'note',label:'Причина',type:'text',w:220,val:o=>o.note||''},{key:'by',label:'Списал',type:'enum',w:120,val:o=>empName(o.by)}],
     audit:o=>({_cb:o.by,_ca:o._ca||o.date}),rows:()=>OPS.filter(o=>o.kind==='bonus'),open:o=>opWin({src:'op',ref:o}),actions:o=>[...opActs({src:'op',ref:o}),{sep:true},{label:'Карточка контрагента',icon:'building',run:()=>openCp(CPM[o.cp],'money')}],title:'cp',noun:['списание','списания','списаний'],sort:{key:'date',dir:-1},empty:{icon:'gift',title:'Списаний пока не было'}})}
 }

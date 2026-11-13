@@ -6,6 +6,7 @@ function repTabs(){const c=counts();return [
  {id:'overdue',label:'Просрочено',icon:'alert',count:c.overdue,red:true},
  repConfOn()?{id:'waiting',label:'Ожидают подтверждения',icon:'hourglass',count:c.waiting}:null,
  {id:'all',label:'Все отчёты',icon:'list'},
+ {id:'months',label:'По месяцам',icon:'layers'},
  {id:'matrix',label:'Кто что сдаёт',icon:'matrix'},
  feat('calendar')?{id:'calendar',label:'Календарь',icon:'calendar'}:null]}
 function repAdd(){return [can('assign')?{label:'Назначить отчёты массово',icon:'matrix',run:massAssignDlg}:null,can('changeStatus')?{label:'Разовый отчёт',icon:'file',run:adhocDlg}:null].filter(Boolean)}
@@ -110,6 +111,7 @@ function renderReports(body,tab,fresh){
     repGrid($('#rg',body),'rep-'+tab,rows,extra);
     return;
   }
+  if(tab==='months')return rmRender(body,fresh);
   if(tab==='matrix')return renderMatrix(body);
   if(tab==='calendar')return renderCalendar(body);
 }

@@ -39,6 +39,24 @@ textarea.inp{min-height:90px;resize:vertical;line-height:1.5}
 .pw-ro .pw-eye{position:static;width:36px;height:32px;border-radius:var(--r-s)}
 @media (pointer:coarse){.pw-w .inp{padding-right:48px;min-height:44px}.pw-eye{width:44px}.pw-ro .pw-eye{width:44px;height:44px}}
 select.inp{cursor:pointer}
+/* Общий список контрагентов с поиском по названию и ИНН (v93): кнопка поля и окно со списком */
+.cps{display:block;min-width:0}.cps-n{display:none}
+.cps-b{display:flex;align-items:center;gap:8px;text-align:left;cursor:pointer;font-family:inherit}
+.cps-b>.cps-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cps-i{flex:none;font-size:11.5px;color:var(--faint);font-weight:400}
+.cps-b>svg{flex:none;color:var(--muted)}
+.cps-b[aria-expanded=true]{border-color:var(--border-strong);box-shadow:0 0 0 3px var(--sel)}
+.cps-b:disabled{opacity:.6;cursor:not-allowed}
+.pop.cps-pop{width:min(420px,calc(100vw - 16px));max-width:none;padding:8px;display:flex;flex-direction:column;gap:6px;overflow:hidden}
+.cps-pop>.inp{flex:none}
+.cps-l{display:flex;flex-direction:column;overflow:auto;max-height:min(300px,45dvh);overscroll-behavior:contain}
+.mi.cps-o{flex:none;align-items:baseline;justify-content:space-between}
+.cps-o>.cps-t{min-width:0;overflow-wrap:anywhere}
+.cps-o.act{background:var(--row-hover)}.cps-o.on.act{background:var(--sel)}
+.cps-e{padding:12px 8px;color:var(--faint);font-size:13px;text-align:center}
+.cps-m{flex:none;padding:6px 10px 2px;color:var(--faint);font-size:11.5px}
+@media (max-width:480px){.cps-b>.cps-i{display:none}}
+@media (pointer:coarse){.mi.cps-o{padding-top:10px;padding-bottom:10px}}
 .inp[readonly]{background:var(--pane-alt)}
 .phone{display:flex;gap:6px}
 .phone select{width:118px;flex:none}

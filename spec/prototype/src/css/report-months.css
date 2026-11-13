@@ -1,0 +1,42 @@
+/* «Отчёты и налоги по месяцам» (v88): вкладка «Отчёты к сдаче» карточки контрагента и вкладка «По месяцам» модуля «Отчеты для сдачи» */
+.rm-bar{gap:8px 12px;flex-wrap:wrap;align-items:center;margin:0 0 10px}
+.rm-bar .actq{margin:0}
+.rm-left{font-size:12.5px}
+.rm-all{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;white-space:nowrap}
+.rm-list{display:flex;flex-direction:column;gap:10px}
+.rm-m{margin:0;border-left:3px solid var(--border)}
+.rm-m.late{border-left-color:var(--red)}
+.rm-m.done{border-left-color:var(--green)}
+.rm-m>h3{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin:0}
+.rm-m.open>h3{margin-bottom:10px}
+.rm-tg{display:inline-flex;align-items:center;gap:6px;border:0;background:none;padding:2px 4px 2px 0;margin:0;font:inherit;font-weight:700;color:var(--text);cursor:pointer;border-radius:var(--r-s)}
+.rm-tg .ic{transition:transform .18s;transform:rotate(-90deg)}
+.rm-tg[aria-expanded="true"] .ic{transform:none}
+.rm-sum,.rm-total{display:inline-flex;align-items:center;gap:6px 8px;flex-wrap:wrap;font-weight:450;text-transform:none;letter-spacing:0}
+.rm-t{font-size:14.5px;text-transform:none;letter-spacing:0}
+.rm-sum .hint,.rm-total .hint{margin:0}
+.rm-total{display:flex;margin:0 0 10px}
+.rm-tbl{table-layout:fixed;width:100%;min-width:860px}
+.rm-tbl th:nth-child(2){width:152px}.rm-tbl th:nth-child(3){width:158px}.rm-tbl th:nth-child(4){width:148px}.rm-tbl th:nth-child(5){width:112px}.rm-tbl th:nth-child(6){width:108px}.rm-tbl th:nth-child(7):not(:last-child){width:168px}.rm-tbl th:last-child{width:40px}
+.rm-tbl td{vertical-align:middle}
+.rm-tbl .sum-st{align-items:flex-start}
+.rm-tbl tr.rm-late>td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+.rm-tbl td.rm-act{width:36px;text-align:right;padding-right:4px}
+/* Блок «К оплате клиенту» под таблицей месяца (карточка контрагента) */
+.rm-pay{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-top:10px;padding:8px 10px;border:1px dashed var(--border);border-radius:10px;background:var(--bg-soft,transparent)}
+.rm-pay-t{display:inline-flex;align-items:center;gap:6px 8px;flex-wrap:wrap}.rm-pay-t>.ic{color:var(--b-purple,var(--muted))}
+.rm-pay-l{flex:1 1 100%;order:3;min-width:0}
+.rm-empty{display:flex;align-items:center;gap:8px;color:var(--muted)}
+.rm-hint{margin-top:10px}
+.rm-head{margin-bottom:10px}
+.rm-head h3{min-width:190px;text-transform:none}
+.pub-gsum b{color:var(--text)}
+@media (max-width:767px){
+  .rm-tbl{min-width:0}
+  .rm-bar .grow{display:none}
+  .rm-tbl tr.rm-late>td:first-child{box-shadow:none}
+  table.m-cards.rm-tbl>tbody>tr.rm-late{border-color:var(--red)}
+  .rm-head h3{min-width:0;flex:1;font-size:15.5px}
+  .rm-head .hint{display:none}
+  .rm-pay .grow{display:none}.rm-pay .btn{flex:1 1 auto;justify-content:center}
+}

@@ -362,6 +362,17 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
       old={tgCode:'Код для восстановления пароля: {код}. Действует 10 минут.',tgAdminCode:'🔐 Код для входа в Админку ({логин}): {код}. Действует {минут} минут. Если вы сейчас не входили, кто-то знает ваш пароль: смените его кнопкой «Забыли пароль?» на странице входа.',tgRelinkCode:'🔐 К учётной записи {логин} хотят привязать другой Telegram: «{телеграм}». Если это вы, отправьте боту из нового Telegram код: {код}. Никому не сообщайте и не пересылайте этот код — в Buhuchet.kg его никто не спрашивает. Код действует {минут} минут. Если это не вы, смените пароль — все сеансы завершатся.'};
     if(a){ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});Object.keys(old).forEach(k=>{if(a[k]===old[k]&&rm[k])a[k]=rm[k]})}
     if(n){ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});Object.keys(old).forEach(k=>{if(rn[k])n[k]=rn[k]})}}
+  // v91 (поток И, 13.11.2026): версия платформы в подвале лендинга — новый текст «Версия {версия}» сразу после «© {год}»
+  if(!db.meta.v91){db.meta.v91=1;const l=db.ref&&db.ref.localization,x=(r.localization||[]).find(y=>y.key==='land.foot.ver');
+    if(Array.isArray(l)&&x&&!l.some(y=>y.key===x.key)){const j=l.findIndex(y=>y.key==='land.foot.copy');l.splice(j<0?l.length:j+1,0,structuredClone(x))}}
+  // Поток К, задача К3 (пакет заказчика 13.11.2026): Telegram контрагента — шаблоны сообщений, раздел «Telegram» страницы контрагента (включён по умолчанию) и его пояснение
+  if(!db.meta.tgK3){db.meta.tgK3=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCpReq','tgBtnCpOk','tgBtnCpNo','tgCpAsk','tgCpOn','tgCpNo','tgCpOff','tgCpAlready','tgCpLimit','tgCpLinkBad'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});
+    const o=db.organization;if(o&&Array.isArray(o.pageSec)&&!o.pageSec.includes('tg'))o.pageSec.push('tg');
+    const ps=db.ref.kbUi&&db.ref.kbUi.page&&db.ref.kbUi.page.secs,bs=r.kbUi&&r.kbUi.page&&r.kbUi.page.secs;if(ps&&bs&&ps.Telegram==null&&bs.Telegram)ps.Telegram=bs.Telegram}
+  // v93 (поток К, задачи К4 и К5): шаблоны «К оплате» клиенту в Telegram и напоминания о долге; обе настройки организации по умолчанию выключены
+  if(!db.meta.tgK4){db.meta.tgK4=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['waPayMonth', 'tgCpPay', 'tgBtnCpReq', 'tgBtnCpPaid', 'tgBtnCpQ', 'tgCpPaidOk', 'tgCpPaidStaff', 'tgCpAskHow', 'tgCpAskSent', 'tgCpAskStaff', 'tgCpAnswer', 'tgCpNotLinked', 'tgCpDebt', 'tgBtnCpNoDebt', 'tgCpNoDebtOk', 'tgBtnCpReqTax', 'tgBtnCpReqFee'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

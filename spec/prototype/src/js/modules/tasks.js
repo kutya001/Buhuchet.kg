@@ -28,7 +28,7 @@ function taskTabs(){const sc=taskScope();return [
 function taskAdd(){return can('tasksCreate')?[{label:'Задача',icon:'task',run:()=>taskDlg()}]:[]}
 function taskCols(){return [
  {key:'title',label:'Задача',type:'text',w:330,val:t=>t.title,html:t=>`${t.reg?'<span class="tag" title="Создана системой по отчёту">регулярная</span> ':''}<span class="strong">${esc(t.title)}</span>`},
- {key:'cp',label:'Контрагент',type:'enum',w:190,val:t=>t.cp?CPM[t.cp].name:'Общие задачи',text:t=>t.cp?CPM[t.cp].name:'',html:t=>t.cp?esc(CPM[t.cp].name):'<span class="faint">Общая</span>',pin:'Общие задачи',hide:true},
+ {key:'cp',label:'Контрагент',type:'enum',inn:true,w:190,val:t=>t.cp?CPM[t.cp].name:'Общие задачи',text:t=>t.cp?CPM[t.cp].name:'',html:t=>t.cp?esc(CPM[t.cp].name):'<span class="faint">Общая</span>',pin:'Общие задачи',hide:true},
  {key:'proj',label:'Проект',type:'enum',w:200,val:t=>t.proj?(PROJECTS.find(p=>p.id===t.proj)||{}).name||'':'',hide:true},
  {key:'cat',label:'Категория',type:'enum',w:150,val:t=>t.cat},
  {key:'exec',label:'Исполнитель',type:'enum',w:130,val:t=>empName(t.exec)},
@@ -117,7 +117,7 @@ function taskDlg(t,pre){const e=t||Object.assign({},pre||{});const st={kind:e.ki
     return {title:t?'Изменить задачу':'Новая задача',body:`<div class="form">
     <div class="fld full"><span class="lbl">Вид задачи</span><div class="seg" role="group" aria-label="Вид задачи" id="tk-scope" style="align-self:flex-start;width:max-content">${[['gen','Общая'],['cp','По контрагенту']].map(([k,l])=>`<button type="button" data-k="${k}" class="${st.scope===k?'on':''}">${l}</button>`).join('')}</div>${t&&wasCp&&!cpOn?`<div class="hint red">Контрагент и проект будут убраны из задачи</div>`:''}</div>
     ${fld('Название',inp('tk-title',e.title||''),{req:true,full:true,id:'tk-title'})}${fld('Описание',`<textarea class="inp" id="tk-desc" style="min-height:70px">${esc(e.desc||'')}</textarea>`,{full:true,id:'tk-desc'})}
-    ${cpOn?`${fld('Контрагент',sel('tk-cp',[['','— выберите контрагента —'],...visCps().map(c=>[c.id,c.name])],e.cp||''),{req:true,id:'tk-cp'})}${feat('projects')?`<div class="fld"><span class="lbl m-sp">&nbsp;</span><label class="row" style="min-height:35px"><input type="checkbox" class="sw" id="tk-wp" ${st.withProj?'checked':''}> Проект</label></div>`:'<div></div>'}`:''}
+    ${cpOn?`${fld('Контрагент',cpSel('tk-cp',visCps(),e.cp||'',{empty:'— выберите контрагента —'}),{req:true,id:'tk-cp'})}${feat('projects')?`<div class="fld"><span class="lbl m-sp">&nbsp;</span><label class="row" style="min-height:35px"><input type="checkbox" class="sw" id="tk-wp" ${st.withProj?'checked':''}> Проект</label></div>`:'<div></div>'}`:''}
     ${projOn?fld('Проект',sel('tk-proj',[['',e.cp?(projsOf(e.cp).length?'— выберите проект —':'— у контрагента нет активных проектов —'):'— сначала выберите контрагента —'],...(e.cp?projsOf(e.cp).map(p=>[p.id,p.name]):[])],e.proj||''),{req:true,full:true,id:'tk-proj',hint:'Задача появится в карточке проекта'}):''}
     ${fld('Категория',sel('tk-cat',DICT.cats.items.filter(x=>x.active).map(x=>x.name),e.cat||'Сбор документов'),{id:'tk-cat'})}<div></div>
     ${fld('Исполнитель',sel('tk-exec',EMP.filter(x=>x.active).map(x=>[x.id,x.short]),st.execT?e.exec:cpOn?taskExec0(e):S.me),{req:true,id:'tk-exec',hint:st.execT?'':cpOn?'По умолчанию — ответственный контрагента':'По умолчанию — вы'})}${fld('Вид срока',sel('tk-kind',[['day','На день'],['month','На месяц']],st.kind),{id:'tk-kind'})}
