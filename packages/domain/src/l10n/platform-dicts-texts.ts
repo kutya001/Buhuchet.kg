@@ -253,6 +253,101 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,
   },
+  'pdicts.tpl.label.tg_btn_work': { ru: 'Telegram: кнопка «В работе» у отчёта', section: S },
+  'pdicts.tpl.label.tg_btn_done': { ru: 'Telegram: кнопка «Сдан» у отчёта', section: S },
+  'pdicts.tpl.label.tg_btn_open': { ru: 'Telegram: кнопка «Открыть» у отчёта', section: S },
+  'pdicts.tpl.label.tg_btn_open_reports': {
+    ru: 'Telegram: кнопка «Открыть отчёты на сайте»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cancel': {
+    ru: 'Telegram: кнопка «Отмена» под просьбой бота',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_task_work': {
+    ru: 'Telegram: кнопка «Взять в работу» у задачи',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_task_done': { ru: 'Telegram: кнопка «Выполнена» у задачи', section: S },
+  'pdicts.tpl.label.tg_btn_task_open': { ru: 'Telegram: кнопка «Открыть задачу»', section: S },
+  'pdicts.tpl.label.tg_btn_conf_ok': { ru: 'Telegram: кнопка «Подтвердить» сдачу', section: S },
+  'pdicts.tpl.label.tg_btn_conf_back': { ru: 'Telegram: кнопка «Вернуть» сдачу', section: S },
+  'pdicts.tpl.label.tg_act_rep_work': {
+    ru: 'Telegram: скрытый ответ — отчёт в работе',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_done': { ru: 'Telegram: скрытый ответ — отчёт сдан', section: S },
+  'pdicts.tpl.label.tg_act_rep_wait': {
+    ru: 'Telegram: скрытый ответ — отчёт сдан, ждёт подтверждения',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_sum': {
+    ru: 'Telegram: скрытый ответ — нужна сумма налога',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_pay': {
+    ru: 'Telegram: скрытый ответ — сначала оплата налога',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_site': {
+    ru: 'Telegram: скрытый ответ — отметьте на сайте',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_ask_wait': {
+    ru: 'Telegram: скрытый ответ — бот уже ждёт ответ',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_cancelled': { ru: 'Telegram: скрытый ответ — отменено', section: S },
+  'pdicts.tpl.label.tg_act_task_work': {
+    ru: 'Telegram: скрытый ответ — задача в работе',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_task_done': {
+    ru: 'Telegram: скрытый ответ — задача выполнена',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_task_wait': {
+    ru: 'Telegram: скрытый ответ — задача ждёт подтверждения',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_conf_ok': {
+    ru: 'Telegram: скрытый ответ — сдача подтверждена',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_conf_own': {
+    ru: 'Telegram: скрытый ответ — свой отчёт не подтверждается',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_conf_rcpt': {
+    ru: 'Telegram: скрытый ответ — нужна квитанция',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_failed': { ru: 'Telegram: скрытый ответ — сбой действия', section: S },
+  'pdicts.tpl.label.tg_rep_ask_file': { ru: 'Telegram: просьба прислать файл отчёта', section: S },
+  'pdicts.tpl.label.tg_task_ask_file': { ru: 'Telegram: просьба прислать файл задачи', section: S },
+  'pdicts.tpl.label.tg_conf_ask_why': {
+    ru: 'Telegram: просьба написать причину возврата',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_conf_back_ok': {
+    ru: 'Telegram: отчёт возвращён на исправление',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_ask_need_file': { ru: 'Telegram: нужен файл, а не текст', section: S },
+  'pdicts.tpl.label.tg_ask_need_text': { ru: 'Telegram: нужен текст, а не файл', section: S },
+  'pdicts.tpl.label.tg_file_big': { ru: 'Telegram: файл слишком большой', section: S },
+  'pdicts.tpl.label.tg_file_type': { ru: 'Telegram: файл такого типа не принимается', section: S },
+  'pdicts.tpl.label.tg_more_on_site': { ru: 'Telegram: остальные записи — на сайте', section: S },
+  'pdicts.tpl.label.tg_conf_head': { ru: 'Telegram: ждут вашего подтверждения', section: S },
+  'pdicts.tpl.label.tg_task_took': {
+    ru: 'Telegram постановщику: задача взята в работу',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_task_done_by': { ru: 'Telegram постановщику: задача выполнена', section: S },
+  'pdicts.tpl.label.tg_task_wait_by': {
+    ru: 'Telegram постановщику: задача ждёт подтверждения',
+    section: S,
+  },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
   'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },
