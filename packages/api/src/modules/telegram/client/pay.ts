@@ -10,6 +10,7 @@ import {
   contractorsWithTelegram,
   getContractor,
   insertContractorTelegramMessage,
+  loadEmployeeAccess,
   lockContractorTelegramMessage,
   logContractorTelegramPay,
   markContractorTelegramMessage,
@@ -55,6 +56,7 @@ import {
   formatDateRu,
   formatSomWithUnit,
   formatText,
+  hasPermission,
   monthLabel,
   monthPayAutoDue,
   monthPayBotMessage,
@@ -320,12 +322,18 @@ export async function logMonthPaySent(
   );
 }
 
+/** Видит ли сотрудник плату за обслуживание: право «Видеть плату за обслуживание». */
+function seesFee(access: Awaited<ReturnType<typeof loadEmployeeAccess>>): boolean {
+  return !!access && hasPermission(access.subject, 'fee');
+}
+
 /**
  * Сообщение ответственному сотруднику (без него, заблокированному или без Telegram — первому
  * владельцу с Telegram; прототип pgTgStaff) с заголовком: строка очереди в транзакции действия
  * клиента или задачи. `ask` — бот ждёт ответ сотрудника на это сообщение (вопрос клиента);
- * `dedupeKey` — одно такое сообщение: повтор с тем же ключом строки не добавляет. Ответ — номера строк
- * очереди: после транзакции их отправляет `flushEvents`.
+ * `dedupeKey` — одно такое сообщение: повтор с тем же ключом строки не добавляет; `allowed` — кому
+ * сообщение можно (не проходит — следующему по порядку). Ответ — номера строк очереди: после
+ * транзакции их отправляет `flushEvents`.
  */
 async function queueStaffNotice(
   tx: Tx,
@@ -333,14 +341,20 @@ async function queueStaffNotice(
   contractorId: string,
   heading: string,
   build: (contractor: string) => Promise<string>,
-  opts: { ask?: BotAsk; dedupeKey?: string } = {},
+  opts: {
+    ask?: BotAsk;
+    dedupeKey?: string;
+    /** Кому можно сообщение: кто не проходит (нет права на сумму), пропускается — следующему. */
+    allowed?: (employeeId: string) => Promise<boolean>;
+  } = {},
 ): Promise<string[]> {
-  const { ask, dedupeKey } = opts;
+  const { ask, dedupeKey, allowed } = opts;
   const notice = await pageClosedNotice(tx, contractorId);
   if (!notice) return [];
   for (const employeeId of notice.employeeIds) {
     const target = await notifyTarget(tx, employeeId);
     if (!target?.chatId) continue;
+    if (allowed && !(await allowed(employeeId))) continue;
     const chat = await telegramChat(tx, target.userId);
     if (!chat) continue;
     const orgName = await contextOrgName(tx);
@@ -474,6 +488,9 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
         // прототип v110 tgAct('cp-feepaid')): сумма — из записи сообщения (долг на момент отправки).
         if (parsed.action === CP_TG_PAID_ACTION && target.kind === 'fee') {
           if (!current.total) return { refusal: 'tgActStale' };
+          // Функцию «Плата за обслуживание» выключили после отправки — кнопка устарела.
+          const { features } = await orgMenuSettings(tx, target.orgId);
+          if (!features.fee) return { refusal: 'tgActStale' };
           const { total } = current;
           await logContractorTelegramPay(tx, target.contractorId, 'page_tg_paid', [
             { field: 'tgFeePaid', to: { total, name: current.name } },
@@ -489,6 +506,11 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
                 телеграм: current.name,
                 сумма: formatSomWithUnit(total),
               }),
+            // ОТКЛОНЕНИЕ: docs/deviations.md#К-10 — сумма платы за обслуживание только тому, кто её
+            // видит (право «Видеть плату за обслуживание»): ответственному без права — первому
+            // владельцу с Telegram (ТЗ: «без права эти поля скрыты везде»; прототип pgTgStaff не
+            // проверяет).
+            { allowed: async (employeeId) => seesFee(await loadEmployeeAccess(tx, employeeId)) },
           );
           const done = t('cppage.tg.paid_done');
           const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });

@@ -142,8 +142,9 @@ function FeeTelegramDialog({
     refresh();
     if (!res.ok) {
       if (res.error.code === 'validation_failed') return setError(errorText(res.error));
+      // Отказ или сбой отправки — сообщением, окно с поправленным текстом остаётся открытым (прототип
+      // pgFeeTgDlg: toast и return): после сбоя Telegram можно сразу отправить снова.
       toast(errorText(res.error), { icon: 'lock', bad: true });
-      onClose();
       return;
     }
     const done = ContractorFeeTelegramSent.safeParse(res.data);

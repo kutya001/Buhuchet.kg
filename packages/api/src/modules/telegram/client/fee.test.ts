@@ -1,4 +1,4 @@
-import type { FakeTelegram } from '@buhuchet/adapters';
+import type { FakeTelegram, FixedClock } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
@@ -64,6 +64,7 @@ const COPY_PHONE = { text: TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpCopyPhone, copy: '0
 const PAID_HEADING = 'Контрагент сообщил об оплате';
 
 const CHAT_ACC = 7101;
+const CHAT_OWNER = 7102;
 const CLIENT_1 = 9101;
 const CLIENT_2 = 9102;
 const CLIENT_B = 9103;
@@ -293,6 +294,7 @@ describe.skipIf(!databaseAvailable())(
       cpB = await contractor(f.b.orgId, 'ОсОО «Бишкек»', '03744097401852', employee('acc-b'));
       await addFeeAccount();
       await linkTelegram(f.app, acc, CHAT_ACC, 'acc_a');
+      await linkTelegram(f.app, owner, CHAT_OWNER, 'owner_a');
       await linkClient(owner, cpA, '03744097401851', 'org-a', CLIENT_1, 'client_one');
       await linkClient(owner, cpA, '03744097401851', 'org-a', CLIENT_2, 'client_two');
       // Страница контрагента без Telegram: подключённых нет — кнопки нет.
@@ -345,7 +347,7 @@ describe.skipIf(!databaseAvailable())(
       expect(await history(cpA)).toEqual([]);
     });
 
-    it('месяцев с наступившим сроком нет — текущий месяц; срок не раньше завтрашнего дня', async () => {
+    it('день оплаты 18-го: срок октября — сегодня, октябрь входит в долг; срок — не раньше завтрашнего дня', async () => {
       // День оплаты 18-го: срок октября — сегодня, долг за четыре месяца, срок — 18.11.
       await setContractor(cpA, { feeDay: 18 });
       try {
@@ -383,20 +385,23 @@ describe.skipIf(!databaseAvailable())(
         { cppage: true, taxpay: true, fee: true },
         { telegram: true, taxpay: true, fee: true },
       ];
-      for (const off of offs) {
-        await features(f.a.orgId, off);
-        await hidden(cpA);
+      try {
+        for (const off of offs) {
+          await features(f.a.orgId, off);
+          await hidden(cpA);
+        }
+        // Без «Платы за обслуживание» вкладки нет — и метода тоже.
+        await features(f.a.orgId, { cppage: true, telegram: true, taxpay: true });
+        for (const res of [
+          await call(owner, 'GET', `/api/contractors/${cpA}/fee-telegram`),
+          await send(owner, cpA),
+        ]) {
+          expect(res.status).toBe(403);
+          expect((await failure(res)).code).toBe('fee_off');
+        }
+      } finally {
+        await features(f.a.orgId, ALL_ON);
       }
-      // Без «Платы за обслуживание» вкладки нет — и метода тоже.
-      await features(f.a.orgId, { cppage: true, telegram: true, taxpay: true });
-      for (const res of [
-        await call(owner, 'GET', `/api/contractors/${cpA}/fee-telegram`),
-        await send(owner, cpA),
-      ]) {
-        expect(res.status).toBe(403);
-        expect((await failure(res)).code).toBe('fee_off');
-      }
-      await features(f.a.orgId, ALL_ON);
       // Долга нет: ставка начинается с ноября.
       await f.t.admin.db
         .update(schema.contractorTariffs)
@@ -602,6 +607,44 @@ describe.skipIf(!databaseAvailable())(
       expect((await state(ownerB, cpB)).refusal).toBe('cp_tg_fee_no_req');
     });
 
+    it('раз в сутки по Бишкеку: в 23:59 — ещё сегодня, с полуночи — можно снова; вчерашняя отправка не мешает', async () => {
+      const clock = f.deps.clock as FixedClock;
+      await sent(owner, cpA);
+      try {
+        // 18.10 23:59 по Бишкеку (17:59 UTC) — те же сутки.
+        clock.set('2026-10-18T17:59:00Z');
+        expect((await state(owner, cpA)).refusal).toBe('cp_tg_fee_today');
+        // 19.10 00:00 по Бишкеку (18:00 UTC; в UTC ещё 18.10) — новые сутки.
+        clock.set('2026-10-18T18:00:00Z');
+        expect((await state(owner, cpA)).refusal).toBeNull();
+      } finally {
+        clock.set('2026-10-18T03:00:00Z');
+      }
+      // Отправка, записанная «вчерашним» днём, сегодня не мешает.
+      await f.t.admin.db
+        .update(schema.contractorTelegramMessages)
+        .set({ day: '2026-10-17' })
+        .where(eq(schema.contractorTelegramMessages.contractorId, cpA));
+      expect((await state(owner, cpA)).refusal).toBeNull();
+    });
+
+    it('отправка ещё идёт (записана, попыток не было): меньше 5 минут — «сегодня уже напоминали», дольше — можно', async () => {
+      await sent(owner, cpA);
+      const inFlight = (minutes: number) =>
+        f.t.admin.db
+          .update(schema.contractorTelegramMessages)
+          .set({
+            messageId: null,
+            attempts: 0,
+            createdAt: sql`now() - make_interval(mins => ${minutes})`,
+          })
+          .where(eq(schema.contractorTelegramMessages.contractorId, cpA));
+      await inFlight(4);
+      expect((await state(owner, cpA)).refusal).toBe('cp_tg_fee_today');
+      await inFlight(6);
+      expect((await state(owner, cpA)).refusal).toBeNull();
+    });
+
     it('две вкладки нажали «Отправить» разом — уходит одно напоминание', async () => {
       const [a, b] = await Promise.all([send(owner, cpA), send(chief, cpA)]);
       expect([a.status, b.status].sort()).toEqual([200, 409]);
@@ -642,7 +685,7 @@ describe.skipIf(!databaseAvailable())(
       expect((await state(owner, cpA)).refusal).toBe('cp_tg_fee_today');
     });
 
-    it('«Оплатил»: сумма из записи, сообщение ответственному, история, кнопка гаснет; второй раз — «устарела»', async () => {
+    it('«Оплатил»: сумма из записи, сообщение тому, кто видит плату (ответственному без права — владельцу), история, кнопка гаснет; второй раз — «устарела»', async () => {
       await sent(owner, cpA);
       const [m1, m2] = tg.messageIds as [number, number];
       tg.sent.length = 0;
@@ -661,6 +704,20 @@ describe.skipIf(!databaseAvailable())(
         expect(a?.text).not.toBe(text('tgCpPaidOk'));
       }
       expect(tg.edits).toEqual([]);
+      expect(await history(cpA)).toHaveLength(1);
+
+      // Функцию «Плата за обслуживание» выключили после отправки — кнопка устарела, ничего не пишется.
+      await features(f.a.orgId, { cppage: true, telegram: true, taxpay: true });
+      try {
+        expect(await press(paidData, CLIENT_1, m1)).toMatchObject({
+          text: text('tgActStale'),
+          alert: true,
+        });
+      } finally {
+        await features(f.a.orgId, ALL_ON);
+      }
+      expect(tg.edits).toEqual([]);
+      expect(tg.sent).toEqual([]);
       expect(await history(cpA)).toHaveLength(1);
 
       const answer = await press(paidData, CLIENT_1, m1);
@@ -682,16 +739,16 @@ describe.skipIf(!databaseAvailable())(
           changes: [{ field: 'tgFeePaid', to: { total: DEBT, name: '@client_one' } }],
         },
       ]);
-      // Ответственному бухгалтеру — сообщение; второму клиенту — ничего.
+      // Сумма платы — только тому, кто её видит: у ответственного бухгалтера нет права «Видеть плату
+      // за обслуживание» — сообщение владельцу; второму клиенту — ничего.
+      const staffText = (name: string) =>
+        `${PAID_HEADING}\n${text('tgCpFeePaidStaff', {
+          контрагент: CP_A,
+          телеграм: name,
+          сумма: som(DEBT),
+        })}`;
       expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
-        [
-          CHAT_ACC,
-          `${PAID_HEADING}\n${text('tgCpFeePaidStaff', {
-            контрагент: CP_A,
-            телеграм: '@client_one',
-            сумма: som(DEBT),
-          })}`,
-        ],
+        [CHAT_OWNER, staffText('@client_one')],
       ]);
 
       // Второе нажатие и повтор от Telegram ничего не меняют.
@@ -699,6 +756,28 @@ describe.skipIf(!databaseAvailable())(
       expect(repeat).toMatchObject({ text: text('tgActStale'), alert: true });
       expect(await history(cpA)).toHaveLength(2);
       expect(tg.sent).toHaveLength(1);
+
+      // Ответственный с правом «Видеть плату за обслуживание» получает сообщение сам.
+      tg.sent.length = 0;
+      const accRole = f.templateRole(f.a, 'acc');
+      await f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: accRole, permissionId: 'fee' });
+      try {
+        expect(await press(paidData, CLIENT_2, m2)).toMatchObject({ text: text('tgCpPaidOk') });
+      } finally {
+        await f.t.admin.db
+          .delete(schema.rolePermissions)
+          .where(
+            and(
+              eq(schema.rolePermissions.roleId, accRole),
+              eq(schema.rolePermissions.permissionId, 'fee'),
+            ),
+          );
+      }
+      expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
+        [CHAT_ACC, staffText('@client_two')],
+      ]);
     });
 
     it('история: записи с суммой платы — только тому, кто видит плату за обслуживание', async () => {

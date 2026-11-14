@@ -264,7 +264,7 @@ export interface Point {
  */
 export async function finger(page: Page) {
   const cdp = await page.context().newCDPSession(page);
-  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', p?: Point) =>
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel', p?: Point) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });
   return {
     async drag(from: Point, to: Point, holding?: () => Promise<void>) {
@@ -281,11 +281,15 @@ export async function finger(page: Page) {
       await holding?.();
       await send('touchEnd');
     },
-    /** Долгое нажатие: палец стоит на месте `ms` миллисекунд. */
+    /**
+     * Долгое нажатие: палец стоит на месте `ms` миллисекунд. Отпускается `touchCancel`: в headless
+     * Chromium жеста долгого нажатия нет, и `touchEnd` дал бы click в точке касания — по пункту меню,
+     * открытого под пальцем (docs/typical-mistakes.md № 27); на телефоне после долгого нажатия click нет.
+     */
     async hold(at: Point, ms = 700) {
       await send('touchStart', at);
       await page.waitForTimeout(ms);
-      await send('touchEnd');
+      await send('touchCancel');
     },
     flick: (from: Point, to: Point) =>
       page.evaluate(
