@@ -13,6 +13,7 @@ import {
   type Scope,
   type ScopeGroupId,
   type TaskStatus,
+  type WeekDay,
 } from '@buhuchet/domain';
 import { and, eq, inArray, lte, ne, or, sql } from 'drizzle-orm';
 import type { Tx } from './client';
@@ -31,6 +32,7 @@ import {
   telegramLinks,
   users,
 } from './schema';
+import { staffWeekDay } from './telegram-notices';
 import { getNotifySettings, notifySettingsOf } from './telegram-outbox';
 
 /*
@@ -95,6 +97,8 @@ export interface ReminderOrgData {
   orgName: string;
   features: Record<string, boolean>;
   overdueRepeat: boolean;
+  /** День недельной сводки (1 — понедельник … 7 — воскресенье; строки нет — понедельник). */
+  weekDay: WeekDay;
   confirmWaitDays: number;
   reportConfirm: boolean;
   employees: ReminderEmployee[];
@@ -187,7 +191,8 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
   const submittedDay = sql<
     string | null
   >`coalesce((${reports.submittedAt} at time zone 'Asia/Bishkek')::date, ${reports.submittedOn})::text`;
-  const [employeeRows, nameRows, reportRows, taskRows] = await Promise.all([
+  const [weekDay, employeeRows, nameRows, reportRows, taskRows] = await Promise.all([
+    staffWeekDay(tx),
     reminderEmployees(tx),
     tx.select({ id: employees.id, shortName: employees.shortName }).from(employees),
     tx
@@ -256,6 +261,7 @@ export async function loadReminderData(tx: Tx, today: IsoDate): Promise<Reminder
     orgName: settings.name,
     features: settings.features,
     overdueRepeat: settings.overdueRepeat,
+    weekDay,
     confirmWaitDays: settings.confirmWaitDays,
     reportConfirm: settings.reportConfirm,
     employees: employeeRows,

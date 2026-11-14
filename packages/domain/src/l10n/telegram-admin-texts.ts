@@ -167,8 +167,11 @@ export const TELEGRAM_ADMIN_TEXTS = {
   'tgadm.queue.pause_v': { ru: '{s} секунды', section: S },
   'tgadm.queue.tries': { ru: 'Повторов при ошибке', section: S },
   'tgadm.queue.tries_v': { ru: '{n}, затем «Ошибка»', section: S },
-  'tgadm.queue.digest': { ru: 'Сводка', section: S },
-  'tgadm.queue.digest_v': { ru: 'по понедельникам, 09:00', section: S },
+  'tgadm.queue.digest': { ru: 'Сводка недели', section: S },
+  'tgadm.queue.digest_v': {
+    ru: 'в день и час организации, по умолчанию понедельник, 09:00',
+    section: S,
+  },
   // «Рассылка».
   'tgadm.cast.to': { ru: 'Кому', section: S },
   'tgadm.cast.all': { ru: 'Всем пользователям платформы', section: S },

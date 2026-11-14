@@ -42,6 +42,10 @@ describe('«Показать как»: элементы прототипа на 
     expect(fieldText(FIELDS, 'ФИО', undefined)).toBe('Фамилия, имя, отчество сотрудника.');
     expect(fieldText(FIELDS, 'ИНН', undefined)).toBeUndefined();
     expect(fieldText(FIELDS, 'ИНН', 'ne')).toBeUndefined();
+    // Несколько форм прототипа на экране («Настройки»: вкладка и блок «Telegram-уведомления»).
+    expect(fieldText(FIELDS, 'ИНН', 'ne|og')).toBe('14 цифр.');
+    expect(fieldText(FIELDS, 'ИНН', 'ne|xx')).toBeUndefined();
+    expect(fieldForm({ screen: 'org.settings' }, t)).toBe('st|tgn');
   });
 
   it('форма прототипа — по экрану формы на странице или заголовку окна без названия записи', () => {

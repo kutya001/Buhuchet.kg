@@ -259,6 +259,8 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     expect(c.money.feeMonth).toEqual({ charged: expect.any(Number), paid: 0 });
     const s = c.settings!;
     expect(s.timezone).toBeTruthy();
+    // «Сводка недели»: день и час (пакет 14.11.2026, блок 3) — строки дня нет, понедельник.
+    expect(s).toMatchObject({ digestTime: '09:00', weekDay: 1 });
     expect(Object.keys(s.features).length).toBeGreaterThan(0);
     expect(s.roles.find((r) => r.isOwner)).toMatchObject({ employees: 1 });
     expect(s.roles.find((r) => r.name === 'Старший')).toMatchObject({
@@ -324,7 +326,13 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       { version: second.org.version },
     );
     expect(blocked.status, await blocked.clone().text()).toBe(200);
+    // День недельной сводки организации Б (строка этапа 0) виден в её карточке, у А — прежний.
+    await f.t.admin.db
+      .insert(schema.orgTelegramNotices)
+      .values({ orgId: f.b.orgId, code: 'staff_week', weekday: 5 });
     const c = await card(f.b.orgId, '?refresh=1');
+    expect(c.settings).toMatchObject({ weekDay: 5 });
+    expect((await card(f.a.orgId, '?refresh=1')).settings).toMatchObject({ weekDay: 1 });
     expect(c.org).toMatchObject({
       active: false,
       blockedReason: 'Заблокирована администратором',

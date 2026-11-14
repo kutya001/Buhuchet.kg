@@ -407,10 +407,12 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     });
     // Ссылка на видео прототипа (vd-intro) не переносится: видео в базу не заливаются (п. О-53).
     expect(rows.find((r) => r.id === 'v79')).toMatchObject({ linkKind: null, linkId: null });
-    // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14; v110, п. К-7; v111, п. Т-15),
-    // не наполняются; v109 и v112 («Файлы от контрагентов», перенесены — п. И-7) — да.
+    // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14; v110, п. К-7), не
+    // наполняются; v109, v111 (блок «Telegram-уведомления», п. Т-15) и v112 («Файлы от контрагентов»,
+    // п. И-7) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
+    expect(rows.find((r) => r.id === 'v111')).toMatchObject({ release: '111', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v112')).toMatchObject({ release: '112' });
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
