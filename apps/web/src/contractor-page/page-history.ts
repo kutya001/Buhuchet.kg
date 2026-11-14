@@ -76,12 +76,12 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
           name: typeof p.name === 'string' ? p.name : '',
         });
   }
-  if (entry.action === 'page_tg_question') {
-    const p = (entry.changes.find((c) => c.field === 'tgQuestion')?.to ?? {}) as Record<
-      string,
-      unknown
-    >;
-    return t('cppage.hist.page_tg_question', {
+  // Вопрос клиента бухгалтеру и ответ сотрудника клиенту из Telegram (прототип pgTgAsk, pgTgAnswer).
+  if (entry.action === 'page_tg_question' || entry.action === 'page_tg_answer') {
+    const question = entry.action === 'page_tg_question';
+    const p = (entry.changes.find((c) => c.field === (question ? 'tgQuestion' : 'tgAnswer'))?.to ??
+      {}) as Record<string, unknown>;
+    return t(question ? 'cppage.hist.page_tg_question' : 'cppage.hist.page_tg_answer', {
       name: typeof p.name === 'string' ? p.name : '',
       text: typeof p.text === 'string' ? p.text : '',
     });

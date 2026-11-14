@@ -1,12 +1,26 @@
 import {
   ContractorTelegramRefusedError,
   contractorTelegramLinkOf,
+  contractorTelegramQuestionOf,
   decideContractorTelegram,
+  lockContractorTelegramMessage,
+  logContractorTelegramPay,
 } from '@buhuchet/db';
-import { CP_TG_NO_ACTION, CP_TG_OK_ACTION, formatText, hasPermission } from '@buhuchet/domain';
+import {
+  CP_TG_ANSWER_ACTION,
+  CP_TG_NO_ACTION,
+  CP_TG_OK_ACTION,
+  cpTgQuestion,
+  cpTgQuestionForHistory,
+  formatText,
+  hasPermission,
+  type BotMessage,
+  type TelegramTemplateKey,
+} from '@buhuchet/domain';
 import { serverTexts } from '../l10n/texts';
 import { notifyContractorTelegramClient } from '../telegram/client';
-import type { BotAction, BotPressResult } from '../telegram/press';
+import { sendClientAnswer } from '../telegram/client/pay';
+import type { BotAction, BotPressResult, BotReplyResult } from '../telegram/press';
 import { telegramSectionFor } from './telegram';
 
 /*
@@ -86,8 +100,64 @@ const decide = (action: 'approve' | 'reject'): BotAction => ({
     }),
 });
 
-/** Действия кнопок под запросом на подключение: строки реестра `BOT_ACTIONS`. */
+/**
+ * Ответ сотрудника на вопрос клиента (доработки 13.11.2026, задача К4; прототип v94 `pgTgAnswer`, шаблоны
+ * `tgCpAskStaff` и `tgCpAnswer`): сообщение «Вопрос контрагента» — просьба бота без дня, сотрудник
+ * отвечает на него текстом, и ответ уходит в тот чат клиента, откуда пришёл вопрос. Права — как у
+ * просмотра контрагента на сайте: «Просматривать контрагентов» и контрагент в области «Свои / Все
+ * контрагенты»; клиенту — только пока его подключение действует (то же правило, что у рассылки).
+ * Номер вопроса из просьбы ничего не разрешает сам — вопрос ищется в организации отвечающего (RLS).
+ * Принятый ответ закрывает просьбу (основа бота): одна просьба — один ответ, как в прототипе. Текст —
+ * как у вопроса: одной строкой, до 500 знаков, в истории — первые 200; история — от имени сотрудника,
+ * с пометкой «через Telegram». Telegram не принял сообщение — просьба остаётся открытой, истории нет.
+ */
+const answer: BotAction = {
+  change: true,
+  permission: 'cpView',
+  reply: (ctx, reply) =>
+    ctx.asUser(async (tx, access): Promise<BotReplyResult> => {
+      const text = 'text' in reply ? cpTgQuestion(reply.text) : null;
+      if (!text) return { again: await ctx.text('tgAskNeedText') };
+      const refuse = async (key: TelegramTemplateKey): Promise<BotReplyResult> => ({
+        say: await ctx.text(key),
+      });
+      if (!access || !ctx.user.orgId || !ctx.arg) return refuse('tgActNoRight');
+      const question = await contractorTelegramQuestionOf(tx, ctx.arg);
+      if (!question) return refuse('tgActStale');
+      const found = await telegramSectionFor(
+        tx,
+        ctx.deps,
+        { orgId: ctx.user.orgId, subject: access.subject },
+        question.contractorId,
+      );
+      // Контрагент вне области «Свои контрагенты» — как нет права.
+      if (found === 'hidden') return refuse('tgActNoRight');
+      // Строка вопроса блокируется: ответ и нажатия клиента по этому сообщению идут по одному.
+      const current = await lockContractorTelegramMessage(tx, ctx.arg, question.chatId);
+      if (!current) return refuse('tgActStale');
+      if (found === 'off' || !current.linked) {
+        return { say: ctx.tr('cppage.tg.bot.answer_unlinked') };
+      }
+      const message: BotMessage = {
+        heading: ctx.tr('cppage.tg.answer_heading'),
+        text: await ctx.text('tgCpAnswer', { бухгалтер: access.shortName, ответ: text }),
+      };
+      if (!(await sendClientAnswer(ctx.deps, tx, question.chatId, message))) {
+        return { again: ctx.tr('cppage.tg.bot.answer_failed') };
+      }
+      await logContractorTelegramPay(tx, question.contractorId, 'page_tg_answer', [
+        { field: 'tgAnswer', to: { name: current.name, text: cpTgQuestionForHistory(text) } },
+      ]);
+      return { say: ctx.tr('cppage.tg.bot.answer_sent') };
+    }),
+};
+
+/**
+ * Действия сотрудника в чате бота по Telegram контрагента: кнопки под запросом на подключение и ответ
+ * на вопрос клиента — строки реестра `BOT_ACTIONS`.
+ */
 export const cpTelegramActions: Readonly<Record<string, BotAction>> = {
   [CP_TG_OK_ACTION]: decide('approve'),
   [CP_TG_NO_ACTION]: decide('reject'),
+  [CP_TG_ANSWER_ACTION]: answer,
 };

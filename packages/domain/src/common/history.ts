@@ -85,10 +85,12 @@ export const HISTORY_ACTIONS = [
   'page_tg_no',
   'page_tg_off',
   'page_tg_leave',
-  // «К оплате» клиенту в Telegram (задача К4): отправка, «Оплатил» и вопрос клиента бухгалтеру.
+  // «К оплате» клиенту в Telegram (задача К4): отправка, «Оплатил», вопрос клиента бухгалтеру и ответ
+  // сотрудника клиенту из Telegram.
   'page_tg_pay',
   'page_tg_paid',
   'page_tg_question',
+  'page_tg_answer',
   // Напоминание о долге (задача К5): клиент выключил его кнопкой «Не напоминать» и включил снова.
   'page_tg_nodebt',
   'page_tg_debt_on',

@@ -3,12 +3,14 @@ import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   botPressData,
+  CP_TG_ANSWER_ACTION,
   CP_TG_PAY_SENDS_PER_HOUR,
   CP_TG_QUESTIONS_PER_HOUR,
   fillTemplate,
   formatSomWithUnit,
   TELEGRAM_TEMPLATE_DEFAULTS,
   UI_TEXTS,
+  type BotMessage,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -32,6 +34,7 @@ import {
   TEST_ORIGIN,
   TEST_PASSWORD,
 } from '../../../testing';
+import { sendBotMessage } from '../bot';
 import { contractorDebtJob } from './debt';
 import { contractorPayJob } from './pay';
 
@@ -47,15 +50,18 @@ const REQUISITE = 'Перевод по номеру 0555 123 456 (M-Bank), по�
 const CHAT_ACC = 7001;
 const CHAT_OWNER = 7002;
 const CHAT_ACC_B = 7003;
+const CHAT_HR = 7004;
+const CHAT_SENIOR = 7005;
 const CLIENT_1 = 9001;
 const CLIENT_2 = 9002;
 const CLIENT_B = 9003;
 const STRANGER = 9099;
 
-/** Пока сотрудник не может ответить клиенту из Telegram (docs/deviations.md п. К-4). */
 const PAID_HEADING = 'Контрагент сообщил об оплате';
 const ASK_HEADING = 'Вопрос контрагента';
-const NO_REPLY = 'Ответить клиенту из Telegram пока нельзя — свяжитесь с ним сами.';
+/** Конец шаблона `tgCpAskStaff`: ответ сотрудника на это сообщение уходит клиенту (прототип pgTgAnswer). */
+const REPLY_HINT = 'Ответьте на это сообщение — ответ уйдёт клиенту.';
+const ANSWER_HEADING = 'Ответ бухгалтера';
 
 const SEP = '2026-09';
 const TOTAL = 467_050;
@@ -236,7 +242,9 @@ describe.skipIf(!databaseAvailable())(
             ),
           )
           .orderBy(asc(schema.auditLog.at), asc(schema.auditLog.id))
-      ).filter((h) => ['page_tg_pay', 'page_tg_paid', 'page_tg_question'].includes(h.action));
+      ).filter((h) =>
+        ['page_tg_pay', 'page_tg_paid', 'page_tg_question', 'page_tg_answer'].includes(h.action),
+      );
     const messages = (contractorId: string) =>
       f.t.admin.db
         .select()
@@ -250,7 +258,7 @@ describe.skipIf(!databaseAvailable())(
     const wipe = async () => {
       await f.t.admin.db.delete(schema.contractorTelegramMessages);
       await f.t.admin.db.execute(
-        sql`delete from audit_log where action in ('page_tg_pay', 'page_tg_paid', 'page_tg_question')`,
+        sql`delete from audit_log where action in ('page_tg_pay', 'page_tg_paid', 'page_tg_question', 'page_tg_answer')`,
       );
       await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_tg_ask'`);
       await f.t.admin.db.delete(schema.telegramOutbox);
@@ -779,10 +787,10 @@ describe.skipIf(!databaseAvailable())(
       await toBot(question, CLIENT_1, 'client_one', askId);
       expect(sentTo(CLIENT_1).map((m) => m.text)).toEqual([
         text('tgCpAskHow'),
-        'Вопрос передан вашему бухгалтеру. Он свяжется с вами.',
+        text('tgCpAskSent'),
       ]);
       expect(sentTo(CHAT_ACC).map((m) => m.text)).toEqual([
-        `${ASK_HEADING}\nОсОО «Ала-Тоо Трейд»: вопрос от «@client_one». Можно оплатить частями? До 25 числа ${NO_REPLY}`,
+        `${ASK_HEADING}\nОсОО «Ала-Тоо Трейд»: вопрос от «@client_one». Можно оплатить частями? До 25 числа ${REPLY_HINT}`,
       ]);
       expect(sentTo(CHAT_OWNER)).toEqual([]);
       expect(sentTo(CLIENT_2)).toEqual([]);
@@ -833,7 +841,7 @@ describe.skipIf(!databaseAvailable())(
       await press(askData, CLIENT_B, mB);
       await toBot('Вопрос организации Б', CLIENT_B, 'client_b', lastMessageId(CLIENT_B));
       expect(sentTo(CHAT_ACC_B).map((m) => m.text)).toEqual([
-        `${ASK_HEADING}\nОсОО «Бишкек»: вопрос от «@client_b». Вопрос организации Б ${NO_REPLY}`,
+        `${ASK_HEADING}\nОсОО «Бишкек»: вопрос от «@client_b». Вопрос организации Б ${REPLY_HINT}`,
       ]);
       expect(sentTo(CHAT_ACC)).toHaveLength(staffBefore);
       expect(sentTo(CHAT_OWNER)).toEqual([]);
@@ -860,6 +868,175 @@ describe.skipIf(!databaseAvailable())(
         CP_TG_QUESTIONS_PER_HOUR,
       );
       expect(sentTo(CHAT_ACC)).toHaveLength(CP_TG_QUESTIONS_PER_HOUR);
+    });
+
+    /** Клиент задаёт вопрос по «К оплате»: номер вопроса (строка просьбы) и сообщения сотруднику. */
+    const askQuestion = async (question: string) => {
+      await sent(owner, cpA);
+      await press(askData, CLIENT_1, tg.messageIds[0]!);
+      await toBot(question, CLIENT_1, 'client_one', lastMessageId(CLIENT_1));
+      const row = (await messages(cpA)).find((m) => m.kind === 'ask' && m.answeredAt !== null);
+      expect(row).toBeTruthy();
+      return { id: row!.id, staffMessage: lastMessageId(CHAT_ACC) };
+    };
+    /** Записи истории «Ответ контрагенту в Telegram» с пометкой «через Telegram». */
+    const answers = async () =>
+      f.t.admin.db
+        .select({
+          userId: schema.auditLog.actorUserId,
+          via: schema.auditLog.via,
+          changes: schema.auditLog.changes,
+        })
+        .from(schema.auditLog)
+        .where(
+          and(eq(schema.auditLog.contractorId, cpA), eq(schema.auditLog.action, 'page_tg_answer')),
+        )
+        .orderBy(asc(schema.auditLog.at), asc(schema.auditLog.id));
+    /** Сообщение сотруднику с просьбой ответить на вопрос — как его отправил бы бот. */
+    const giveAsk = async (login: string, chatId: number, questionId: string) => {
+      const message: BotMessage = {
+        heading: ASK_HEADING,
+        text: 'Вопрос',
+        ask: { action: CP_TG_ANSWER_ACTION, arg: questionId, kind: 'text' },
+      };
+      const person = f.people[login]!;
+      expect(
+        await sendBotMessage(
+          f.deps,
+          { userId: person.userId, chatId },
+          message,
+          'cp_tg_request',
+          't',
+        ),
+      ).toBe(true);
+      return lastMessageId(chatId);
+    };
+
+    it('«Ответить»: ответ сотрудника на вопрос уходит в чат клиента и в историю от его имени; один ответ на вопрос', async () => {
+      const q = await askQuestion('Можно оплатить частями?');
+      expect(sentTo(CHAT_ACC).map((m) => m.text)).toEqual([
+        `${ASK_HEADING}\n${text('tgCpAskStaff', {
+          контрагент: 'ОсОО «Ала-Тоо Трейд»',
+          телеграм: '@client_one',
+          вопрос: 'Можно оплатить частями?',
+        })}`,
+      ]);
+      expect(sentTo(CLIENT_1).at(-1)!.text).toBe(text('tgCpAskSent'));
+      const before = sentTo(CLIENT_1).length;
+
+      await toBot('Да,  можно\nдвумя частями', CHAT_ACC, 'acc_a', q.staffMessage);
+      expect(
+        sentTo(CLIENT_1)
+          .slice(before)
+          .map((m) => m.text),
+      ).toEqual([
+        `${ANSWER_HEADING}\n${text('tgCpAnswer', { бухгалтер: 'acc-a', ответ: 'Да, можно двумя частями' })}`,
+      ]);
+      // Ответ — только в чат, откуда пришёл вопрос.
+      expect(sentTo(CLIENT_2)).toHaveLength(1);
+      expect(sentTo(CHAT_ACC).at(-1)!.text).toBe('Ответ отправлен клиенту в Telegram.');
+      expect(await answers()).toEqual([
+        {
+          userId: f.people['acc-a']!.userId,
+          via: 'telegram',
+          changes: [
+            { field: 'tgAnswer', to: { name: '@client_one', text: 'Да, можно двумя частями' } },
+          ],
+        },
+      ]);
+
+      // Одна просьба — один ответ: второй ответ на то же сообщение клиенту не уходит.
+      await toBot('И ещё', CHAT_ACC, 'acc_a', q.staffMessage);
+      expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
+      expect(await answers()).toHaveLength(1);
+      // Просто текст в чат сотрудника без ответа на сообщение — тоже не ответ клиенту.
+      await toBot('Ответ без ответа', CHAT_ACC, 'acc_a');
+      expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
+    });
+
+    it('«Ответить»: чужая организация, область «Свои» и право проверяются; подключение должно действовать', async () => {
+      const q = await askQuestion('Когда платить патент?');
+      const before = sentTo(CLIENT_1).length;
+      const hr = await signIn(f.app, 'hr-a', TEST_PASSWORD);
+      await linkTelegram(f.app, hr, CHAT_HR, 'hr_a');
+      await linkTelegram(f.app, senior, CHAT_SENIOR, 'senior_a');
+
+      // Чужая организация: номер вопроса из просьбы ничего не открывает — вопроса для неё нет.
+      const alien = await giveAsk('acc-b', CHAT_ACC_B, q.id);
+      await toBot('Ответ из Б', CHAT_ACC_B, 'acc_b', alien);
+      expect(sentTo(CHAT_ACC_B).at(-1)!.text).toBe(text('tgActStale'));
+      // Область «Свои»: контрагент закреплён за другим сотрудником — «Нет права».
+      const own = await giveAsk('hr-a', CHAT_HR, q.id);
+      await toBot('Ответ кадров', CHAT_HR, 'hr_a', own);
+      expect(sentTo(CHAT_HR).at(-1)!.text).toBe(text('tgActNoRight'));
+      // Без права «Просматривать контрагентов» — «Нет права» (область «Все» не помогает).
+      const right = and(
+        eq(schema.rolePermissions.roleId, f.roleIds.senior),
+        eq(schema.rolePermissions.permissionId, 'cpView'),
+      );
+      await f.t.admin.db.delete(schema.rolePermissions).where(right);
+      try {
+        const m = await giveAsk('senior-a', CHAT_SENIOR, q.id);
+        await toBot('Ответ старшего', CHAT_SENIOR, 'senior_a', m);
+        expect(sentTo(CHAT_SENIOR).at(-1)!.text).toBe(text('tgActNoRight'));
+      } finally {
+        await f.t.admin.db
+          .insert(schema.rolePermissions)
+          .values({ orgId: f.a.orgId, roleId: f.roleIds.senior, permissionId: 'cpView' });
+      }
+      expect(sentTo(CLIENT_1)).toHaveLength(before);
+      expect(await answers()).toEqual([]);
+
+      // Раздел «Telegram» страницы скрыт — клиенту писать нельзя, просьба закрывается.
+      const hide = (hiddenSections: 'tg'[]) =>
+        f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ hiddenSections })
+          .where(eq(schema.contractorPages.contractorId, cpA));
+      await hide(['tg']);
+      try {
+        await toBot('Ответ при скрытом разделе', CHAT_ACC, 'acc_a', q.staffMessage);
+        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(
+          'Ответ не отправлен: этот Telegram больше не подключён к контрагенту.',
+        );
+      } finally {
+        await hide([]);
+      }
+      expect(sentTo(CLIENT_1)).toHaveLength(before);
+      expect(await answers()).toEqual([]);
+
+      // С правом и областью «Все» — ответ уходит от имени отвечающего.
+      const m = await giveAsk('senior-a', CHAT_SENIOR, q.id);
+      await toBot('Ответ старшего', CHAT_SENIOR, 'senior_a', m);
+      expect(sentTo(CLIENT_1).at(-1)!.text).toBe(
+        `${ANSWER_HEADING}\n${text('tgCpAnswer', { бухгалтер: 'senior-a', ответ: 'Ответ старшего' })}`,
+      );
+      expect((await answers()).map((a) => a.userId)).toEqual([f.people['senior-a']!.userId]);
+    });
+
+    it('«Ответить»: Telegram не принял ответ — истории нет, просьба ждёт; повторный ответ уходит', async () => {
+      const q = await askQuestion('Сколько платить?');
+      const before = sentTo(CLIENT_1).length;
+      tg.failNext({
+        ok: false as const,
+        errorCode: 403,
+        description: 'bot was blocked',
+        permanent: true,
+      });
+      await toBot('Сумма в сообщении', CHAT_ACC, 'acc_a', q.staffMessage);
+      expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(
+        'Ответ не отправлен: Telegram не принял сообщение. Попробуйте ответить ещё раз позже.',
+      );
+      expect(await answers()).toEqual([]);
+      await toBot('Сумма в сообщении', CHAT_ACC, 'acc_a', q.staffMessage);
+      expect(
+        sentTo(CLIENT_1)
+          .slice(before)
+          .map((m) => m.text),
+      ).toEqual([
+        `${ANSWER_HEADING}\n${text('tgCpAnswer', { бухгалтер: 'acc-a', ответ: 'Сумма в сообщении' })}`,
+      ]);
+      expect(await answers()).toHaveLength(1);
     });
 
     it('само «К оплате» за 5 дней до срока: только при включённой настройке, один раз на месяц и чат', async () => {

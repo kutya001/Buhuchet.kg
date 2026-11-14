@@ -209,14 +209,16 @@ export const CONTRACTOR_PAGE_TEXTS = {
   // Заголовки сообщений сотруднику (прототип tgAct('cp-paid'), pgTgAsk).
   'cppage.tg.staff.paid_heading': { ru: 'Контрагент сообщил об оплате', section: S },
   'cppage.tg.staff.ask_heading': { ru: 'Вопрос контрагента', section: S },
-  // Пока сотрудник не может ответить клиенту из Telegram (docs/deviations.md п. К-4) — тексты без
-  // «ответ придёт сюда».
-  'cppage.tg.ask_sent': {
-    ru: 'Вопрос передан вашему бухгалтеру. Он свяжется с вами.',
+  // Ответ сотрудника на вопрос клиента (прототип pgTgAnswer): заголовок сообщения клиенту и что бот
+  // пишет сотруднику (docs/deviations.md п. К-4).
+  'cppage.tg.answer_heading': { ru: 'Ответ бухгалтера', section: S },
+  'cppage.tg.bot.answer_sent': { ru: 'Ответ отправлен клиенту в Telegram.', section: S },
+  'cppage.tg.bot.answer_unlinked': {
+    ru: 'Ответ не отправлен: этот Telegram больше не подключён к контрагенту.',
     section: S,
   },
-  'cppage.tg.ask_staff': {
-    ru: '{contractor}: вопрос от «{name}». {text} Ответить клиенту из Telegram пока нельзя — свяжитесь с ним сами.',
+  'cppage.tg.bot.answer_failed': {
+    ru: 'Ответ не отправлен: Telegram не принял сообщение. Попробуйте ответить ещё раз позже.',
     section: S,
   },
   // Подсказка бота в чате клиента вместо «привяжите Telegram» (меню команд бота — для сотрудников;
@@ -239,6 +241,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'cppage.hist.page_tg_question': {
     ru: 'Вопрос бухгалтеру из Telegram («{name}»): {text}',
+    section: S,
+  },
+  'cppage.hist.page_tg_answer': {
+    ru: 'Ответ контрагенту в Telegram («{name}»): {text}',
     section: S,
   },
   // Напоминание клиенту о долге (задача К5; прототип v94 cp-telegram.js: pgDebtMsg, pgDebtRow,
