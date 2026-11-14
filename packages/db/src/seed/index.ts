@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import type { Db } from '../client';
 import { readSpecJson, specCommit } from '../spec-data';
 import { seedPermissions, seedRoleTemplates } from './access';
@@ -62,7 +63,7 @@ export async function seedAll(
   },
 ): Promise<SeedAllResult> {
   const commit = await specCommit();
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const t = tx as unknown as Db;
     const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
     const platformReference = await seedPlatformReference(
@@ -107,4 +108,10 @@ export async function seedAll(
       platformAdmin,
     };
   });
+  // После заливки демо-данных — статистика всех таблиц сразу. Иначе первые минуты автоочистка успевает
+  // собрать её только у части таблиц (где изменено от 50 строк), и планировщик выбирает для списка
+  // отчётов план в десятки раз медленнее: на машине CI — 7–12 с вместо долей секунды (п. О-52).
+  // ANALYZE таблиц не блокирует; на рабочем сайте демо-данных нет — там ничего не меняется.
+  if (options.demo) await db.execute(sql`analyze`);
+  return result;
 }
