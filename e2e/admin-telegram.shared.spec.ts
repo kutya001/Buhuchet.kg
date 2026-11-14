@@ -19,11 +19,14 @@ import {
 const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
 const POLL = { timeout: 120_000, intervals: [2_000, 5_000, 10_000] };
-/** Картинка рассылки: подпись PNG и немного данных (сервер узнаёт тип по первым байтам). */
-const PNG = Buffer.concat([
-  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-  Buffer.alloc(56),
-]);
+/**
+ * Картинка рассылки — настоящий PNG 2×1 (сервер узнаёт тип по первым байтам). Одной подписи PNG мало:
+ * браузер не может её показать, и картинка в предпросмотре получает высоту 0 — «не видна».
+ */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR42mPQqjoBRAAIvwLZExre1wAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 async function tick(api: APIRequestContext) {
   const res = await api.post('/api/cron/tick', {
