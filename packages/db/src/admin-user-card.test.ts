@@ -184,7 +184,7 @@ describe.skipIf(!databaseAvailable())(
         { orgId: a.orgId, userId: adminId },
         async (tx) => {
           await logUserCardView(tx, a.ownerUserId);
-          return adminEmployeeCard(tx, db.app.db, {
+          return adminEmployeeCard(tx, {
             userId: a.ownerUserId,
             orgId: a.orgId,
             now: now(),
@@ -217,15 +217,14 @@ describe.skipIf(!databaseAvailable())(
 
       // Чужая организация в контексте: сотрудника не видно.
       const foreign = await withOrgContext(db.app.db, { orgId: b.orgId, userId: adminId }, (tx) =>
-        adminEmployeeCard(tx, db.app.db, { userId: a.ownerUserId, orgId: b.orgId, now: now() }),
+        adminEmployeeCard(tx, { userId: a.ownerUserId, orgId: b.orgId, now: now() }),
       );
       expect(foreign).toBeNull();
       // Владелец организации — не администратор платформы: карточки нет.
       const byOwner = await withOrgContext(
         db.app.db,
         { orgId: a.orgId, userId: a.ownerUserId },
-        (tx) =>
-          adminEmployeeCard(tx, db.app.db, { userId: a.ownerUserId, orgId: a.orgId, now: now() }),
+        (tx) => adminEmployeeCard(tx, { userId: a.ownerUserId, orgId: a.orgId, now: now() }),
       );
       expect(byOwner).toBeNull();
     });

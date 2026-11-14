@@ -6,6 +6,8 @@ import {
   telegramBotRich,
   telegramChat,
   telegramPlainText,
+  type Db,
+  type Tx,
 } from '@buhuchet/db';
 import {
   botMessageProblem,
@@ -30,8 +32,10 @@ export async function botText(
   deps: ApiDeps,
   key: TelegramTemplateKey,
   values: Readonly<Record<string, string | number>> = {},
+  /** Внутри открытой транзакции — она сама: запрос к пулу мимо неё ждал бы свободное соединение. */
+  db: Db | Tx = deps.db,
 ): Promise<string> {
-  const templates = await messageTemplates(deps.db);
+  const templates = await messageTemplates(db);
   return fillTemplate(botTemplate(key, templates[key]), values);
 }
 

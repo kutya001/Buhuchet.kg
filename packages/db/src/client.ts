@@ -16,6 +16,11 @@ export interface DbOptions {
   max?: number;
   applicationName?: string;
   /**
+   * Через сколько секунд простоя соединение закрывается (по умолчанию не закрывается): для
+   * соединений, которые нужны не всё время, — следующий запрос откроет его заново.
+   */
+  idleTimeoutSeconds?: number;
+  /**
    * Корневой сертификат сервера (PEM): соединение проверяет сертификат и имя сервера, как
    * sslmode=verify-full, и это главнее sslmode в адресе. Без него — как в адресе (обычно require:
    * шифрование без проверки сертификата).
@@ -31,6 +36,7 @@ export function createDb(url: string, options: DbOptions = {}): DbHandle {
   const sql = postgres(url, {
     max: options.max ?? 5,
     prepare: false,
+    ...(options.idleTimeoutSeconds ? { idle_timeout: options.idleTimeoutSeconds } : {}),
     ...(options.caCert ? { ssl: { ca: options.caCert, rejectUnauthorized: true } } : {}),
     onnotice: () => {},
     connection: { application_name: options.applicationName ?? 'buhuchet' },

@@ -74,7 +74,9 @@ export async function queueTelegramEvents(
   const todo = events.filter((e) => e.to !== e.by);
   if (!deps.telegram || !todo.length || !(await telegramFeatureOn(tx))) return [];
   const [templates, t, name] = await Promise.all([
-    messageTemplates(deps.db),
+    // Шаблоны — тем же соединением, что и действие: запрос к пулу внутри транзакции ждал бы
+    // свободное соединение, а его может не быть (все заняты такими же транзакциями).
+    messageTemplates(tx),
     serverTexts(deps),
     contextOrgName(tx),
   ]);

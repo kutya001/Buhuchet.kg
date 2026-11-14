@@ -13,7 +13,7 @@ import {
 } from '@buhuchet/domain';
 import { and, asc, desc, eq, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { alias, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import type { Db, Tx } from './client';
+import type { Tx } from './client';
 import { adminGetUser, type AdminUserRecord } from './admin-users';
 import { writeHistory } from './history';
 import { kbArticles, kbReadArticles, kbTeam, type KbMemberProgress } from './kb';
@@ -355,7 +355,6 @@ const reportRow = {
  */
 export async function adminEmployeeCard(
   tx: Tx,
-  db: Db,
   input: { userId: string; orgId: string; now: Date },
 ): Promise<AdminUserCardRecord | null> {
   const user = await adminGetUser(tx, input.userId);
@@ -500,7 +499,7 @@ export async function adminEmployeeCard(
 
   const [progress] = await kbTeam(tx, input.orgId, [e.id]);
   const read = await kbReadArticles(tx, input.userId);
-  const articles = (await kbArticles(db))
+  const articles = (await kbArticles(tx))
     .flatMap((a) => {
       const readAt = read.get(a.id);
       return readAt ? [{ id: a.id, title: a.t, section: a.sec, readAt }] : [];
