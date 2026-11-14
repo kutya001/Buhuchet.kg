@@ -379,6 +379,11 @@ describe.skipIf(!databaseAvailable())(
         // Номера отчётов — случайные UUID и сами могут содержать «555»: телефон ищется в остальном ответе.
         const rows = p.rows.map(({ reportId: _id, ...row }) => row);
         expect(JSON.stringify({ ...p, rows })).not.toContain('555');
+        // Ни реквизита, ни получателя — и в причине кнопки «Отправить в Telegram» (`send`): в её
+        // подстановках только название контрагента и краткое имя ответственного.
+        expect(JSON.stringify(p)).not.toContain('Бухгалтер А.');
+        if (p.send?.params)
+          expect(Object.keys(p.send.params).sort()).toEqual(['contractor', 'employee']);
         const res = await copied(hr, cpA, '2026-09');
         expect(res.status).toBe(409);
         expect(await codeOf(res)).toBe('month_pay_requisite_hidden');

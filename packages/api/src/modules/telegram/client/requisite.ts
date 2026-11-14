@@ -9,6 +9,7 @@ import {
 import {
   botTemplate,
   fillTemplate,
+  type ContractorKind,
   transferBlock,
   type PaysTo,
   type TelegramTemplateKey,
@@ -89,13 +90,17 @@ export async function payRequisite(
 /**
  * Реквизиты для обслуживания (прототип `pgFeeAcc`): основной счёт организации для обслуживания, пока
  * клиенту показан «Как оплатить»; null — нет. Функцию «Плата за обслуживание» проверяет вызывающий.
+ * Как на странице (`showFee`): ещё и пока показан раздел «Оплата за обслуживание» и контрагент не
+ * разовый — бот не отдаёт того, чего не отдаёт страница (docs/deviations.md п. К-9).
  */
 export async function feeRequisite(
   tx: Tx,
   t: Translate,
-  contractorId: string,
+  cp: { id: string; kind: ContractorKind },
 ): Promise<TransferBlock | null> {
-  if (!(await contractorPageSectionShown(tx, contractorId, 'pay'))) return null;
+  if (cp.kind === 'oneoff') return null;
+  if (!(await contractorPageSectionShown(tx, cp.id, 'pay'))) return null;
+  if (!(await contractorPageSectionShown(tx, cp.id, 'fee'))) return null;
   const of = await feeTransfer(tx);
   return of ? blockOf(tx, t, of) : null;
 }

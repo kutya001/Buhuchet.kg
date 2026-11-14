@@ -612,6 +612,13 @@ describe.skipIf(!databaseAvailable())(
       expect(tg.sent).toHaveLength(CP_TG_PAY_SENDS_PER_HOUR * 2);
       // Предел — на контрагента: другой организации он не мешает.
       expect(await sent(ownerB, cpB)).toEqual({ recipients: 1, delivered: 1 });
+      // У «К оплате» организации Б — реквизит её бухгалтера, реквизитов организации А нет.
+      const b = sentTo(CLIENT_B).at(-1)!;
+      expect(b.text).toContain('Получатель: Бухгалтер Б.');
+      expect(b.text).toContain('0555 765 432');
+      expect(b.text).not.toContain('Организация А');
+      expect(b.text).not.toContain('0555 123 456');
+      expect(b.options?.keyboard).toContainEqual([{ ...COPY_PHONE, copy: '0555765432' }]);
     });
 
     it('«Оплатил»: запись в историю, сообщение ответственному, кнопка гаснет; второй раз — «устарела»', async () => {
@@ -1632,6 +1639,38 @@ describe.skipIf(!databaseAvailable())(
         });
         await press(reqData('tax-fee'), CLIENT_1, messageId, STRANGER);
         expect(tg.sent.filter((m) => m.chatId === CLIENT_1)).toEqual([]);
+        // То же нажатие из другого чата этого контрагента и из чата организации Б: сообщение ищется
+        // только в чате нажатия — чужое напоминание не найдено, реквизитов организации А нет.
+        for (const chat of [CLIENT_2, CLIENT_B]) {
+          expect(await press(reqData('tax-fee'), chat, messageId)).toMatchObject({
+            text: text('tgActStale'),
+            alert: true,
+          });
+        }
+        expect(tg.sent).toEqual([]);
+
+        // Реквизита для налогов нет (у контрагента нет ответственного) — только «Для обслуживания»;
+        // раздел «Оплата за обслуживание» скрыт — только «Для налогов», как на странице.
+        const [was] = await f.t.admin.db
+          .select({ resp: schema.contractors.responsibleEmployeeId })
+          .from(schema.contractors)
+          .where(eq(schema.contractors.id, cpA));
+        await f.t.admin.db
+          .update(schema.contractors)
+          .set({ responsibleEmployeeId: null })
+          .where(eq(schema.contractors.id, cpA));
+        await press(reqData('tax-fee'), CLIENT_1, messageId);
+        await f.t.admin.db
+          .update(schema.contractors)
+          .set({ responsibleEmployeeId: was!.resp })
+          .where(eq(schema.contractors.id, cpA));
+        expect(tg.sent.map((m) => m.text.split('\n')[0])).toEqual(['Для обслуживания']);
+        tg.sent.length = 0;
+        await hide(cpA, ['fee']);
+        await press(reqData('tax-fee'), CLIENT_1, messageId);
+        await hide(cpA, []);
+        expect(tg.sent.map((m) => m.text.split('\n')[0])).toEqual(['Для налогов']);
+        tg.sent.length = 0;
 
         // Не больше 10 раз в час с одного подключения.
         await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_tg_req'`);

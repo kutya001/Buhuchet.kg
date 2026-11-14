@@ -534,7 +534,7 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
             }
           }
           if (parts.fee && features.fee) {
-            const block = await feeRequisite(tx, t, cp.id);
+            const block = await feeRequisite(tx, t, cp);
             if (block) {
               direct.push(
                 transferBotMessage({ heading: t('cppage.tg.req.fee'), contractor: cp.name, block }),
