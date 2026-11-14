@@ -40,3 +40,14 @@
 .tgc-wrap{display:grid;gap:12px}
 .tgc-wrap.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:768px){.tgc-wrap.two{grid-template-columns:minmax(0,1fr)}.tgc-m,.tgc-eph{max-width:100%}.tgc-row{flex-wrap:wrap}.tgc-k{flex:1 1 40%}}
+/* Ответ боту (задача Т2): файл и «в ответ на» в сообщении человека, отметка «бот ждёт ответ», поле ответа под перепиской */
+.tgc-m.me.say .tgc-b{font-family:inherit;font-size:13.5px}
+.tgc-re{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);border-left:2px solid var(--blue);padding-left:6px;white-space:normal!important}
+.tgc-re .ic,.tgc-wait .ic,.tgc-ask-h .ic{width:12px;height:12px;flex:none}
+.tgc-file{display:flex;align-items:center;gap:6px;font-weight:600;white-space:normal!important}
+.tgc-file .ic{width:15px;height:15px;flex:none}
+.tgc-fs{font-weight:400;font-size:11.5px;color:var(--muted);white-space:nowrap}
+.tgc-wait{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);margin-top:6px!important}
+.tgc-ask{display:flex;flex-direction:column;gap:6px;margin-top:4px;padding:9px 10px;border:1px solid var(--border-strong);border-radius:12px;background:var(--pane)}
+.tgc-ask-h{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);min-width:0}
+.tgc-ask-h span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

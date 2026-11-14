@@ -238,7 +238,7 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
       .poll(async () => (await botMessages(request, chat)).some((m) => m.includes(title)))
       .toBe(true);
     expect((await botMessages(request, chat)).find((m) => m.includes(title))).toContain(
-      `Новая задача от ${me.employee.shortName}: ${title}, срок 30.12.2099.`,
+      `${title}\nНовая задача от ${me.employee.shortName} · срок 30.12.2099`,
     );
 
     const done = await executor.post(`/api/tasks/${id}/done`, { headers: { origin }, data: {} });
