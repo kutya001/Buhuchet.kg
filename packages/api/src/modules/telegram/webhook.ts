@@ -33,6 +33,7 @@ import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { botText, sendCodeMessage, sendNow } from './bot';
 import { clientStart, clientText } from './client';
+import { clientPress, clientQuestion } from './client/pay';
 import { handleBotPress } from './press';
 
 const error = { 'application/json': { schema: ApiError } };
@@ -316,14 +317,17 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     if (press.success) {
       const q = press.data;
       try {
-        await handleBotPress(deps, {
+        const pressed = {
           callbackId: q.id,
           fromId: q.from.id,
           chatId: q.message?.chat.id ?? 0,
           chatType: q.from.is_bot ? '' : (q.message?.chat.type ?? ''),
           messageId: q.message?.message_id ?? 0,
           data: q.data ?? '',
-        });
+        };
+        // Telegram контрагента (поток К): кнопки под сообщением клиенту — «Оплатил», «Вопрос бухгалтеру».
+        if (await clientPress(deps, pressed)) return ok;
+        await handleBotPress(deps, pressed);
       } catch (err) {
         deps.logger.error({ err }, 'Telegram: нажатие кнопки не обработано');
       }
@@ -341,6 +345,8 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     if (!command) {
       // Telegram контрагента (поток К): «Отключить» от клиента, подключившего чат к контрагенту.
       if (await clientText(deps, chat.id, text)) return ok;
+      // Вопрос клиента бухгалтеру — ответом на просьбу бота (поток К, задача К4).
+      if (await clientQuestion(deps, update.message)) return ok;
       const code = relinkCodeOf(text);
       if (!code) return reply(await botText(deps, 'tgStart'));
       await confirmRelink(deps, chat.id, code, reply);

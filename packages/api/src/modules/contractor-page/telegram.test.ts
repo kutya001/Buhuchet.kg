@@ -13,6 +13,7 @@ import {
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
+import { clientChatHint } from '../telegram/client';
 import {
   apiRequest,
   createStaffFixture,
@@ -583,6 +584,8 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
       const wait = (await listed(cookie, cp.id)).items.find((i) => i.status === 'wait')!;
       await decided(cookie, cp.id, wait.id, 'approve', wait.version);
     };
+    // Подсказка чата клиента (для меню команд бота сотрудников): только у подключённого чата.
+    expect(await clientChatHint(f.deps, CLIENT_2)).toBeNull();
     // Чат без подключений: команда клиента не срабатывает, бот отвечает обычной подсказкой.
     await toBot('Отключить', CLIENT_2, 'client_two');
     expect(sentTo(CLIENT_2).some((t) => t.includes('отключён'))).toBe(false);
@@ -590,6 +593,7 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
 
     await start('org-a', cpAcc, grantAcc, CLIENT_1, 'client_one');
     await approve(owner, cpAcc);
+    expect(await clientChatHint(f.deps, CLIENT_1)).toContain(cpAcc.name);
     tg.sent.length = 0;
     await toBot('отключить', CLIENT_1, 'client_one');
     expect(sentTo(CLIENT_1)).toEqual([text('tgCpOff', { контрагент: cpAcc.name })]);
@@ -626,6 +630,7 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
     await toBot('Отключить 5', CLIENT_1, 'client_one');
     expect(sentTo(CLIENT_1).at(-1)).toBe(text('tgCpOff', { контрагент: cpAcc.name }));
     expect((await listed(owner, cpAcc.id)).on).toBe(0);
+    expect(await clientChatHint(f.deps, CLIENT_1)).toBeNull();
     await wipe();
   });
 });

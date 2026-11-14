@@ -1,6 +1,7 @@
 import {
   ASSIGNMENT_DUE_DAYS,
   MONTH_PAY_REFUSALS,
+  MONTH_PAY_SEND_REFUSALS,
   PAYMENT_STATUSES,
   REPORT_ACTS,
   REPORT_LINE_KINDS,
@@ -331,8 +332,23 @@ export const ContractorMonthPay = z.object({
   requisite: z.string().nullable(),
   text: z.string().nullable(),
   refusal: z.enum(MONTH_PAY_REFUSALS).nullable(),
+  /**
+   * «Отправить в Telegram» (прототип v94 `rmPaySendWhy`): null — кнопки нет (выключены «Напоминания в
+   * Telegram» или «Страница контрагента по ссылке»); `refusal` — что мешает отправке (ключ словаря
+   * `err.<код>`), `recipients` — сколько Telegram подключено у контрагента.
+   */
+  send: z
+    .object({
+      refusal: z.enum([...MONTH_PAY_SEND_REFUSALS, 'month_pay_partial']).nullable(),
+      recipients: Count,
+    })
+    .nullable(),
 });
 export type ContractorMonthPay = z.infer<typeof ContractorMonthPay>;
+
+/** «Отправить в Telegram»: скольким подключённым Telegram контрагента сообщение записано и ушло. */
+export const ContractorMonthPaySent = z.object({ recipients: Count, delivered: Count });
+export type ContractorMonthPaySent = z.infer<typeof ContractorMonthPaySent>;
 
 /** «Скопировать для клиента»: за какой месяц текст. */
 export const ContractorMonthPayCopied = z.object({ month: ReportMonth });

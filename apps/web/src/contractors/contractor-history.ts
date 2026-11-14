@@ -505,7 +505,7 @@ export function contractorHistoryItem(t: Translate, e: Entry, names: Names): Tim
     text: contractorHistoryText(t, e, names),
     who:
       e.entity === 'contractor_page'
-        ? pageHistoryActor(t, e.actor)
+        ? pageHistoryActor(t, e.actor, e.action)
         : (e.actor ?? t('status.system')),
   };
 }

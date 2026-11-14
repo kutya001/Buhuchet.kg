@@ -43,6 +43,10 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
       return [t('report.confirm_off.history', { n: Number(change.to) })];
     case 'payBeforeSubmit':
       return [t('org.history.pay_first', { state: state(change.to) })];
+    // «Telegram контрагентов» (доработки 13.11.2026, К4; прототип pgTgOrgMount: «Отправлять «К оплате»
+    // контрагентам: включено»).
+    case 'cpTgPay':
+      return [t('cppage.org.toggled', { name: t('cppage.org.pay'), state: state(change.to) })];
     // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).
     case 'confirmWaitDays':
       return [

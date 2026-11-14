@@ -8,6 +8,8 @@ export interface OrgPolicy {
   overdueRepeat: boolean;
   /** «Действия из Telegram»: кнопки под сообщениями бота, которые меняют данные (только владелец). */
   telegramActions: boolean;
+  /** «Отправлять «К оплате» контрагентам» в Telegram — само, за 5 дней до срока оплаты (задача К4). */
+  cpTgPay: boolean;
   /** Время сводки, ЧЧ:ММ по часовому поясу организации. */
   digestTime: string;
   timezone: string;
@@ -33,6 +35,7 @@ export function defaultOrgPolicy(): OrgPolicy {
     remindDays: [7, 3],
     overdueRepeat: true,
     telegramActions: true,
+    cpTgPay: false,
     digestTime: '09:00',
     timezone: 'Asia/Bishkek',
     confirmWaitDays: 3,

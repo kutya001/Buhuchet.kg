@@ -143,6 +143,21 @@ export async function clientStart(
 }
 
 /**
+ * Подсказка для чата клиента (договорённость с потоком Т, задача Т5): бот отвечает ею вместо «привяжите
+ * Telegram» на текст или команду сотрудника из чата, подключённого к контрагенту. null — чат ни к кому
+ * не подключён: отвечает обычная подсказка бота. Тексты читаются вне транзакций (docs/decisions.md
+ * п. О-46).
+ */
+export async function clientChatHint(deps: ApiDeps, chatId: number): Promise<string | null> {
+  const links = await contractorTelegramChats(deps.db, chatId);
+  if (links.length === 0) return null;
+  const t = await serverTexts(deps);
+  return formatText(t('cppage.tg.client_hint'), {
+    contractors: links.map((l) => l.contractor).join(', '),
+  });
+}
+
+/**
  * Сообщение клиента без ссылки. «Отключить» — отключает этот чат от контрагента; подключён к
  * нескольким — бот присылает их список с номерами и ждёт «Отключить N». false — это не команда клиента
  * или чат ни к кому не подключён: отвечает обычная подсказка бота.

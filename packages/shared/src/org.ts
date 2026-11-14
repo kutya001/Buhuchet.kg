@@ -135,6 +135,8 @@ export const OrgPolicy = z.object({
   overdueRepeat: z.boolean(),
   /** «Действия из Telegram»: кнопки под сообщениями бота, которые меняют данные. */
   telegramActions: z.boolean(),
+  /** «Отправлять «К оплате» контрагентам»: бот сам пишет клиенту за 5 дней до срока оплаты. */
+  cpTgPay: z.boolean(),
   /** Время еженедельной сводки по понедельникам, ЧЧ:ММ. */
   digestTime: z.string(),
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
@@ -176,6 +178,7 @@ export const UpdateOrgPolicyRequest = z.object({
   overdueRepeat: z.boolean().optional(),
   /** Меняет только владелец организации. */
   telegramActions: z.boolean().optional(),
+  cpTgPay: z.boolean().optional(),
   digestTime: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)

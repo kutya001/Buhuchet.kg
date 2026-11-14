@@ -1,4 +1,14 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import {
+  botMessages,
+  hire,
+  linkTelegram,
+  pressStart,
+  signIn,
+  uniqueChat,
+  uniqueLogin,
+  WEBHOOK_SECRET,
+} from './helpers';
 import { asOwner, manualReport, newContractor, prepay } from './reports';
 
 // «К сдаче и к оплате по месяцам» (доработки заказчика 13.11.2026, задача К2; прототип v90
@@ -369,6 +379,263 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
       const again = await openReportsTab(page, isMobile, word);
       await expect(again.locator('[data-report-month="2026-09"]')).toBeVisible();
       await expect(again.locator('[data-month-pay]')).toHaveCount(0);
+    });
+  });
+
+  /** Адрес демо-организации «Бухгалтер Плюс» (страницы контрагентов). */
+  const SLUG = 'buhgalter-plyus';
+  /** Подделка Telegram Bot API (fake-telegram.ts). */
+  const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
+
+  interface BotSent {
+    messageId: number;
+    text: string;
+    keyboard?: { text: string; callback_data?: string; copy_text?: { text: string } }[][];
+  }
+  /** Сообщения бота в чате вместе с кнопками и номером сообщения. */
+  async function chatMessages(api: APIRequestContext, chat: number): Promise<BotSent[]> {
+    const res = await api.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`);
+    expect(res.status()).toBe(200);
+    return (await res.json()) as BotSent[];
+  }
+  /** Клиент нажал кнопку под сообщением бота: Telegram присылает вебхуком `callback_query`. */
+  function pressButton(api: APIRequestContext, chat: number, messageId: number, data: string) {
+    return api.post('/api/telegram/webhook', {
+      headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+      data: {
+        update_id: Date.now(),
+        callback_query: {
+          id: `e2e-${chat}-${Date.now()}`,
+          from: { id: chat, is_bot: false, first_name: 'Сквозной' },
+          chat_instance: 'e2e',
+          data,
+          message: { message_id: messageId, date: 0, chat: { id: chat, type: 'private' } },
+        },
+      },
+    });
+  }
+  /** Клиент ответил на сообщение бота текстом. */
+  function replyToBot(api: APIRequestContext, chat: number, replyTo: number, text: string) {
+    return api.post('/api/telegram/webhook', {
+      headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+      data: {
+        update_id: Date.now(),
+        message: {
+          message_id: Date.now() % 1_000_000,
+          date: 0,
+          text,
+          chat: { id: chat, type: 'private' },
+          from: { id: chat, username: `e2e_${chat}`, first_name: 'Сквозной' },
+          reply_to_message: { message_id: replyTo },
+        },
+      },
+    });
+  }
+
+  test('(доработки 13.11.2026, К4) «Отправить в Telegram»: клиент с подключённым Telegram получает «К оплате» с налогами месяца и кнопками; «Оплатил» и «Вопрос бухгалтеру» доходят до ответственного бухгалтера и пишутся в историю контрагента', async ({
+    page,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    test.setTimeout(150_000);
+    const origin = new URL(baseURL!).origin;
+    // Ответственный — новый сотрудник с Telegram (демо-сотрудникам Telegram не привязывается).
+    const staff = await playwright.request.newContext({ baseURL });
+    const login = uniqueLogin('e2e-cp-pay');
+    const { employee, temporaryPassword } = await hire(staff, origin, login);
+    await signIn(staff, origin, login, temporaryPassword);
+    const passwordSet = await staff.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+    });
+    expect(passwordSet.status()).toBe(200);
+    const staffChat = uniqueChat();
+    await linkTelegram(staff, origin, staffChat);
+    await staff.dispose();
+
+    await asOwner(page.request, baseURL);
+    const word = uniqueWord('Телеоплата');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(page.request, origin, { name, responsible: employee.id });
+    const report = (reportTypeCode: string) =>
+      manualReport(page.request, origin, {
+        contractorId: cp.id,
+        reportTypeCode,
+        month: '2026-09-01',
+        due: '2030-01-15',
+      });
+    const nds = await report('nds');
+    const pat = await report('pat');
+    await prepay(page.request, origin, nds, 500_000, 120_000);
+    await setAmount(page.request, origin, pat, 87_050);
+
+    // Клиент вводит код своей страницы, подключает Telegram, владелец подтверждает.
+    const enabled = await page.request.post(`/api/contractors/${cp.id}/page/enable`, {
+      headers: { origin },
+    });
+    expect(enabled.status(), await enabled.text()).toBe(200);
+    const { code } = (await enabled.json()) as { code: string };
+    const part = () => Math.floor(Math.random() * 256);
+    const client = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: { 'x-forwarded-for': `198.18.${part()}.${part()}` },
+    });
+    const opened = await client.post(`/api/page/${SLUG}/${cp.inn}/code`, {
+      headers: { origin },
+      data: { code },
+    });
+    expect(opened.status(), await opened.text()).toBe(200);
+    const link = await client.post(`/${SLUG}/inn/${cp.inn}/telegram`, { headers: { origin } });
+    expect(link.status(), await link.text()).toBe(200);
+    const clientChat = uniqueChat();
+    const telegramName = `@e2e_${clientChat}`;
+    const { url } = (await link.json()) as { url: string };
+    expect((await pressStart(page.request, url, clientChat)).status()).toBe(200);
+    await client.dispose();
+
+    const card = await openReportsTab(page, isMobile, word);
+    const block = card.locator('[data-contractor-months] [data-month-pay="2026-09"]');
+    const send = block.locator('[data-month-pay-send]');
+
+    await test.step('пока Telegram не подтверждён — кнопка говорит, что мешает', async () => {
+      await expect(send).toHaveAttribute('aria-disabled', 'true');
+      await expect(send).toHaveAttribute('title', /Контрагент не подключил Telegram/);
+      // Кнопка помечена недоступной, но нажимается: по нажатию — причина сообщением.
+      await send.click({ force: true });
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Контрагент не подключил Telegram' }),
+      ).toBeVisible();
+    });
+
+    const list = (await (
+      await page.request.get(`/api/contractors/${cp.id}/page/telegram`)
+    ).json()) as { items: { id: string; name: string; version: number }[] };
+    const waiting = list.items.find((i) => i.name === telegramName)!;
+    const approved = await page.request.post(
+      `/api/contractors/${cp.id}/page/telegram/${waiting.id}`,
+      { headers: { origin }, data: { action: 'approve', version: waiting.version } },
+    );
+    expect(approved.status(), await approved.text()).toBe(200);
+
+    await test.step('«Отправить в Telegram»: вопрос с суммой, сроком и числом получателей; клиенту — сообщение с таблицей и кнопками', async () => {
+      await page.reload();
+      const again = await openReportsTab(page, isMobile, word);
+      const button = again.locator('[data-month-pay="2026-09"] [data-month-pay-send]');
+      await expect(button).toBeEnabled();
+      await expect(button).not.toHaveAttribute('aria-disabled', 'true');
+      await button.click();
+      const confirm = page.getByRole('dialog', { name: 'Отправить «К оплате» в Telegram?' });
+      await expect(confirm).toContainText(
+        /Клиент получит в Telegram налоги за сентябрь 2026: 4\s670,50\sсом до \d\d\.\d\d\.\d{4}\. Получателей: 1\./,
+      );
+      await confirm.getByRole('button', { name: 'Отправить' }).click();
+      await expect(
+        page
+          .getByRole('status')
+          .filter({ hasText: '«К оплате» отправлено в Telegram: получателей — 1' }),
+      ).toBeVisible();
+      // Ничего не прокручивается вбок (на телефоне — тоже).
+      const wide = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      );
+      expect(wide).toBe(false);
+    });
+
+    let payMessage: BotSent;
+    await test.step('сообщение клиенту: заголовок со сроком, контрагент, налоги с остатками, итог; кнопки «Оплатил» и «Вопрос бухгалтеру»', async () => {
+      await expect
+        .poll(async () => (await chatMessages(page.request, clientChat)).at(-1)?.text ?? '')
+        .toContain('Налоги к оплате до');
+      payMessage = (await chatMessages(page.request, clientChat)).at(-1)!;
+      expect(payMessage.text).toContain(name);
+      expect(payMessage.text).toMatch(/Налоги за сентябрь 2026: к оплате 4\s670,50\sсом до/);
+      expect(payMessage.text).toMatch(/3\s800,00/);
+      expect(payMessage.text).toContain('870,50');
+      expect(payMessage.text).toMatch(/Итого — 4\s670,50/);
+      const buttons = (payMessage.keyboard ?? []).flat();
+      expect(buttons.map((b) => b.text)).toEqual(
+        expect.arrayContaining(['Оплатил', 'Вопрос бухгалтеру']),
+      );
+      expect(buttons.find((b) => b.text === 'Оплатил')!.callback_data).toBe('cpPaid:2026-09');
+    });
+
+    await test.step('«Оплатил»: клиенту — «Спасибо», кнопка гаснет, бухгалтеру — сообщение', async () => {
+      const res = await pressButton(
+        page.request,
+        clientChat,
+        payMessage.messageId,
+        'cpPaid:2026-09',
+      );
+      expect(res.status()).toBe(200);
+      await expect
+        .poll(async () => (await botMessages(page.request, staffChat)).at(-1) ?? '')
+        .toMatch(
+          new RegExp(
+            `${word}.*контрагент сообщил об оплате налогов за сентябрь 2026 — 4\\s670,50\\sсом \\(«${telegramName}»\\)\\. Проверьте поступление\\.`,
+          ),
+        );
+      const after = (await chatMessages(page.request, clientChat)).find(
+        (m) => m.messageId === payMessage.messageId,
+      )!;
+      expect((after.keyboard ?? []).flat().map((b) => b.text)).toContain('✓ Сообщили бухгалтеру');
+      // Нажатие с подделанным месяцем ничего не меняет.
+      expect(
+        (
+          await pressButton(page.request, clientChat, payMessage.messageId, 'cpPaid:2026-08')
+        ).status(),
+      ).toBe(200);
+    });
+
+    await test.step('«Вопрос бухгалтеру»: бот просит написать вопрос, вопрос уходит бухгалтеру', async () => {
+      expect(
+        (
+          await pressButton(page.request, clientChat, payMessage.messageId, 'cpAsk:2026-09')
+        ).status(),
+      ).toBe(200);
+      await expect
+        .poll(async () => (await chatMessages(page.request, clientChat)).at(-1)?.text ?? '')
+        .toBe('Напишите ваш вопрос ответом на это сообщение — я передам его вашему бухгалтеру.');
+      const ask = (await chatMessages(page.request, clientChat)).at(-1)!;
+      expect(
+        (
+          await replyToBot(page.request, clientChat, ask.messageId, 'Можно оплатить частями?')
+        ).status(),
+      ).toBe(200);
+      await expect
+        .poll(async () => (await botMessages(page.request, clientChat)).at(-1) ?? '')
+        .toBe('Вопрос передан вашему бухгалтеру. Он свяжется с вами.');
+      await expect
+        .poll(async () => (await botMessages(page.request, staffChat)).at(-1) ?? '')
+        .toContain(`${name}: вопрос от «${telegramName}». Можно оплатить частями?`);
+    });
+
+    await test.step('история контрагента: отправка, «оплатил» и вопрос', async () => {
+      await page.reload();
+      const again = await openReportsTab(page, isMobile, word);
+      await toCardTab(page, again, isMobile, /^История/);
+      await expect(
+        again.getByText(
+          /«К оплате» за сентябрь 2026 отправлено в Telegram: 4\s670,50\sсом, получателей — 1/,
+        ),
+      ).toBeVisible();
+      await expect(
+        again.getByText(
+          new RegExp(
+            `Контрагент сообщил в Telegram об оплате налогов за сентябрь 2026: 4\\s670,50\\sсом \\(«${telegramName}»\\)`,
+          ),
+        ),
+      ).toBeVisible();
+      await expect(
+        again.getByText(
+          `Вопрос бухгалтеру из Telegram («${telegramName}»): Можно оплатить частями?`,
+        ),
+      ).toBeVisible();
+      // Подделанное нажатие второй записи об оплате не добавило.
+      const history = (await (
+        await page.request.get(`/api/contractors/${cp.id}/history`)
+      ).json()) as { items: { action: string }[] };
+      expect(history.items.filter((h) => h.action === 'page_tg_paid')).toHaveLength(1);
     });
   });
 });

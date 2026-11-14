@@ -133,6 +133,7 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     remindDays: s.remindDays,
     overdueRepeat: s.overdueRepeat,
     telegramActions: s.telegramActions,
+    cpTgPay: s.cpTgPay,
     // В базе — time «09:00:00», в интерфейсе — «09:00».
     digestTime: s.digestTime.slice(0, 5),
     timezone: s.timezone,

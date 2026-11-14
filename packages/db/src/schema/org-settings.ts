@@ -44,6 +44,11 @@ export const orgSettings = pgTable(
      * Выключает только владелец организации; выключено — бот отвечает нажавшему скрытым ответом.
      */
     telegramActions: boolean('telegram_actions').notNull().default(true),
+    /**
+     * «Telegram контрагентов» (доработки 13.11.2026, задача К4; прототип v94 `ORG.tgCpPay`): бот сам
+     * отправляет клиенту «К оплате» за 5 дней до ближайшего срока оплаты месяца. По умолчанию выключено.
+     */
+    cpTgPay: boolean('cp_tg_pay').notNull().default(false),
     /** Разделы страницы контрагента по ссылке (`PAGE_SECTIONS` из @buhuchet/domain), по порядку. */
     pageSections: text('page_sections')
       .array()

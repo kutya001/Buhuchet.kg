@@ -1191,6 +1191,30 @@ export async function reportMonthPlanRows(
 }
 
 /**
+ * Месяцы отчётов контрагента, у которых срок оплаты (а без него — срок сдачи) попадает в дни с `from`
+ * по `to`: для «К оплате» клиенту за 5 дней до срока. Месяц отчёта и его срок оплаты могут далеко
+ * расходиться (годовой отчёт — декабрь, а платить в апреле), поэтому месяцы ищутся по срокам, а не
+ * отсчётом от сегодняшнего. Что из месяца ещё не оплачено, считает правило `monthToPay`.
+ */
+export async function reportPayDueMonths(
+  tx: Tx,
+  o: { contractorId: string; from: IsoDate; to: IsoDate },
+): Promise<YearMonth[]> {
+  const rows = await tx
+    .selectDistinct({ month: sql<YearMonth>`${REPORT_MONTH}` })
+    .from(reports)
+    .where(
+      and(
+        eq(reports.superseded, false),
+        eq(reports.contractorId, o.contractorId),
+        sql`${reports.status} <> 'not_required'`,
+        sql`coalesce(${reports.payDue}, ${reports.dueDate}) between ${o.from}::date and ${o.to}::date`,
+      ),
+    );
+  return rows.map((r) => r.month).sort();
+}
+
+/**
  * «Ближайшие сроки сдачи» на «Главной» (задача 2.34; прототип renderHome, `upcoming`): несданные отчёты со
  * сдачей в области сотрудника, срок — сегодня или позже, контрагент не приостановлен; по сроку, первые
  * `limit`. Строки — как в списке отчётов (карточка открывается по строке).

@@ -258,6 +258,8 @@ describe.skipIf(!databaseAvailable())(
         requisite: null,
         text: null,
         refusal: null,
+        // «Напоминания в Telegram» и «Страница контрагента по ссылке» выключены — кнопки отправки нет.
+        send: null,
       });
       expect(await pay(owner, cpA, '2026-01')).toMatchObject({ rows: [], text: null });
       const res = await copied(owner, cpA, '2026-08');

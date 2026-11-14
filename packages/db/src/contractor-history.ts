@@ -263,8 +263,11 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   'feeTotal',
   'feeAllocations',
 ]);
-/** Сумма налогов месяца в записи «Скопирован текст «К оплате»» (задача К4). */
-const MONTH_PAY_FIELDS: ReadonlySet<string> = new Set(['payText']);
+/**
+ * Сумма налогов месяца в записях «Скопирован текст «К оплате»», ««К оплате» отправлено в Telegram» и
+ * «Контрагент сообщил об оплате» (задача К4).
+ */
+const MONTH_PAY_FIELDS: ReadonlySet<string> = new Set(['payText', 'tgPay', 'tgPaid']);
 const KPI_ENTITIES = ['indicator', 'indicator_value'] as const;
 const FILE_ACTIONS = ['file_attach', 'file_delete', 'file_hide', 'file_show'] as const;
 

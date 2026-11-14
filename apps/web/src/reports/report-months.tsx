@@ -15,11 +15,12 @@ import {
   type MonthPlanItem,
   type MonthPlanQuick,
 } from '@buhuchet/domain';
-import { ListValues, ReportList, type ReportRow } from '@buhuchet/shared';
+import { ContractorMonthPaySent, ListValues, ReportList, type ReportRow } from '@buhuchet/shared';
 import {
   ActionMenu,
   buttonClass,
   CHECKBOX_CLASS,
+  ConfirmDialog,
   DataGrid,
   EmptyState,
   Icon,
@@ -173,6 +174,8 @@ function MonthPayBlock({
   const client = useQueryClient();
   const query = useQuery(contractorMonthPayQuery(contractorId, pay.month));
   const data = query.data;
+  const [confirm, setConfirm] = useState(false);
+  const [sending, setSending] = useState(false);
   const rows = data?.rows ?? pay.rows.map((x) => ({ name: x.report.type.shortName, left: x.left }));
   const hint = [
     ...rows.map((x) => `${x.name} ${formatSom(x.left)}`),
@@ -214,6 +217,39 @@ function MonthPayBlock({
     }
     void client.invalidateQueries({ queryKey: contractorHistoryQuery(contractorId).queryKey });
   };
+  // «Отправить в Telegram» (прототип rmPayHtml, rmPayMount): кнопка есть, пока у организации включены
+  // «Напоминания в Telegram» и «Страница контрагента по ссылке»; что мешает — подсказкой и сообщением.
+  const send = query.isFetching ? null : (data?.send ?? null);
+  const sendWhy = send?.refusal ? t(`err.${send.refusal}`) : null;
+  const askSend = () => {
+    if (sendWhy) {
+      toast(sendWhy, { icon: 'lock', bad: true });
+      return;
+    }
+    if (send) setConfirm(true);
+  };
+  const runSend = async () => {
+    setSending(true);
+    const res = await callApi(() =>
+      api.api.contractors[':id']['month-pay'].send.$post({
+        param: { id: contractorId },
+        json: { month: pay.month },
+      }),
+    );
+    setSending(false);
+    if (!res.ok) {
+      toast(errorText(res.error), { bad: true });
+      void client.invalidateQueries({
+        queryKey: contractorMonthPayQuery(contractorId, pay.month).queryKey,
+      });
+      return;
+    }
+    const done = ContractorMonthPaySent.safeParse(res.data);
+    toast(t('report.months.pay.sent', { n: done.success ? done.data.delivered : 0 }), {
+      icon: 'tg',
+    });
+    void client.invalidateQueries({ queryKey: contractorHistoryQuery(contractorId).queryKey });
+  };
   return (
     <div
       role="group"
@@ -253,6 +289,36 @@ function MonthPayBlock({
         <Icon name="copy" size="sm" />
         <span>{t('report.months.pay.copy')}</span>
       </button>
+      {data?.send ? (
+        <button
+          type="button"
+          data-month-pay-send=""
+          disabled={!sendWhy && (!send || sending)}
+          aria-disabled={sendWhy ? true : undefined}
+          title={sendWhy ?? undefined}
+          className={`${buttonClass('default', 'sm')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none max-md:flex-auto max-md:justify-center`}
+          onClick={askSend}
+        >
+          <Icon name="tg" size="sm" />
+          <span>{t('report.months.pay.send')}</span>
+        </button>
+      ) : null}
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        title={t('report.months.pay.send_title')}
+        text={
+          t('report.months.pay.send_text', {
+            title: title.toLowerCase(),
+            total: formatSomWithUnit(data?.total ?? pay.total),
+            date: data?.due ? formatDateRu(data.due) : '',
+          }) +
+          (data?.noAmount ? t('report.months.pay.send_no_amount', { n: data.noAmount }) : '') +
+          t('report.months.pay.send_recipients', { n: send?.recipients ?? 0 })
+        }
+        ok={t('report.months.pay.send_ok')}
+        onConfirm={() => void runSend()}
+      />
     </div>
   );
 }

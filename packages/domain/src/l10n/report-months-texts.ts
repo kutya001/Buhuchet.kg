@@ -67,6 +67,22 @@ export const REPORT_MONTHS_TEXTS = {
   },
   'err.month_pay_partial': { ru: MONTH_PAY_MESSAGES.month_pay_partial, section: E },
   'report.months.pay.load_error': { ru: 'Не удалось подготовить текст для клиента', section: S },
+  'report.months.pay.send': { ru: 'Отправить в Telegram', section: S },
+  'report.months.pay.send_title': { ru: 'Отправить «К оплате» в Telegram?', section: S },
+  'report.months.pay.send_text': {
+    ru: 'Клиент получит в Telegram налоги {title}: {total} до {date}',
+    section: S,
+  },
+  'report.months.pay.send_no_amount': {
+    ru: '. Отчётов без суммы — {n}: в сообщение они не войдут',
+    section: S,
+  },
+  'report.months.pay.send_recipients': { ru: '. Получателей: {n}.', section: S },
+  'report.months.pay.send_ok': { ru: 'Отправить', section: S },
+  'report.months.pay.sent': {
+    ru: '«К оплате» отправлено в Telegram: получателей — {n}',
+    section: S,
+  },
   // Вкладка «По месяцам» модуля (прототип `rmRender`).
   'report.months.now': { ru: 'Прошлый месяц', section: S },
   'report.months.now_title': { ru: 'Месяц, отчёты за который сдаются сейчас', section: S },
