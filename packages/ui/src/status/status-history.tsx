@@ -21,6 +21,8 @@ export interface StatusHistoryRow {
   to: { label: string; tone: StatusTone; icon: IconName };
   /** Кто изменил: краткое ФИО или «Система». */
   actor: string;
+  /** Отметка после имени: «через Telegram» — статус сменён в чате бота (прототип `histVia`). */
+  via?: string | null | undefined;
   /** Комментарий или причина. */
   note?: string | null | undefined;
   /** Откат — отдельная пометка «Откат» перед причиной. */
@@ -101,6 +103,14 @@ export function StatusHistory({
                   >
                     <span className="max-md:hidden">{row.actor}</span>
                     <span className="md:hidden">{labels.whoLine(row.actor)}</span>
+                    {row.via ? (
+                      <>
+                        {' '}
+                        <Pill tone="info" icon="tg">
+                          {row.via}
+                        </Pill>
+                      </>
+                    ) : null}
                   </td>
                   <td
                     className={`${TD} max-md:order-5 max-md:col-span-full max-md:text-[13px] ${empty ? 'max-md:hidden' : ''}`}

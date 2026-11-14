@@ -61,7 +61,14 @@ test.describe('Этап 2: файлы записи', () => {
     await (
       await chooser
     ).setFiles({ name: big, mimeType: 'application/pdf', buffer: Buffer.alloc(20 * MB + 1, 1) });
-    await expect(page.getByText(`Файл больше 20 МБ: ${big}`)).toBeVisible();
+    // Окно «Прикрепить файл» (прототип v95): сообщение о большом файле, «Прикрепить» недоступна.
+    const refusedDlg = page.getByRole('dialog', { name: 'Прикрепить файл' });
+    await expect(
+      refusedDlg.getByText(`Файл больше 20 МБ: ${big}. Выберите файлы заново.`),
+    ).toBeVisible();
+    await expect(refusedDlg.getByRole('button', { name: 'Прикрепить' })).toBeDisabled();
+    await refusedDlg.getByRole('button', { name: 'Отмена' }).click();
+    await expect(refusedDlg).toBeHidden();
     await expect(row(box, big)).toHaveCount(0);
 
     // Сервер не начинает загрузку больше 20 МБ, даже если браузер её не остановил.
@@ -82,6 +89,10 @@ test.describe('Этап 2: файлы записи', () => {
     await (
       await chooser2
     ).setFiles({ name: small, mimeType: 'application/pdf', buffer: Buffer.alloc(3 * 1024, 2) });
+    await page
+      .getByRole('dialog', { name: 'Прикрепить файл' })
+      .getByRole('button', { name: 'Прикрепить' })
+      .click();
     await expect(page.getByText('Файлы прикреплены')).toBeVisible();
     const line = row(box, small);
     await expect(line).toContainText('PDF · 3 КБ');

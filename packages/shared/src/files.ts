@@ -17,12 +17,13 @@ export type FileSource = z.infer<typeof FileSource>;
 /** Запрос файлов записи: `?kind=…&id=…` (без `id` — запись без номера). */
 export const FileSourceQuery = z.strictObject({ kind: FileSourceKind, id: Uuid.optional() });
 
-/** Комментарий ручной загрузки — не длиннее стольких знаков. */
+/** Примечание к файлу — не длиннее стольких знаков. */
 export const FILE_NOTE_MAX = 1000;
 
 /**
- * Начать загрузку: куда, имя и размер файла (тип сервер определяет по расширению сам). У ручной
- * загрузки Файлового менеджера — ещё контрагент (необязательно) и комментарий.
+ * Начать загрузку: куда, имя и размер файла (тип сервер определяет по расширению сам) и необязательное
+ * примечание (прототип v95 `attachDlg`: одно на все выбранные файлы). У ручной загрузки Файлового
+ * менеджера — ещё контрагент (необязательно).
  */
 export const FileUploadStart = z
   .strictObject({
@@ -38,10 +39,9 @@ export const FileUploadStart = z
      */
     page: z.boolean().optional(),
   })
-  .refine(
-    (b) => b.source.kind === 'manual' || (!b.contractorId && !b.note && b.page === undefined),
-    { message: 'Контрагент, комментарий и показ на странице — только у ручной загрузки' },
-  );
+  .refine((b) => b.source.kind === 'manual' || (!b.contractorId && b.page === undefined), {
+    message: 'Контрагент и показ на странице — только у ручной загрузки',
+  });
 export type FileUploadStart = z.infer<typeof FileUploadStart>;
 
 /**
@@ -56,19 +56,47 @@ export type FilePage = z.infer<typeof FilePage>;
 /** «Скрыть со страницы контрагента» (true) и «Показать на странице контрагента» (false). */
 export const FilePageInput = z.strictObject({ hidden: z.boolean() });
 
-/** Файл в блоке «Файлы»: кто и когда загрузил, можно ли его удалить этому пользователю. */
+/**
+ * Файл в блоке «Файлы»: кто и когда загрузил, примечание, что с ним может этот пользователь: удалить,
+ * изменить (название и примечание — право «Загружать файлы» и право менять запись) и заменить (тот,
+ * кто может и изменить, и удалить: прежний файл при замене пропадает).
+ */
 export const FileItem = z.object({
   id: Uuid,
   name: z.string(),
   contentType: z.string(),
   size: z.number().int().nonnegative(),
+  note: z.string().nullable(),
   uploadedBy: z.string().nullable(),
   uploadedAt: z.iso.datetime(),
   canDelete: z.boolean(),
+  canEdit: z.boolean(),
+  canReplace: z.boolean(),
   page: FilePage.nullable(),
   version: RecordVersion,
 });
 export type FileItem = z.infer<typeof FileItem>;
+
+/**
+ * «Изменить файл» (прототип v95 `fileEditDlg`): название целиком (расширение остаётся прежним, при
+ * замене — берётся от нового файла), примечание (пусто — убрать) и, если файл заменяют, номер
+ * загрузки, начатой `POST /api/files/{id}/replacement`; с версией, которую видел пользователь.
+ */
+export const FileEdit = z.strictObject({
+  version: RecordVersion,
+  // Длину и знаки названия проверяет правило домена (`fileRenameProblem`): ответ — код под полем.
+  name: z.string().max(1000),
+  note: z.string().trim().max(FILE_NOTE_MAX),
+  uploadId: Uuid.optional(),
+});
+export type FileEdit = z.infer<typeof FileEdit>;
+
+/** Начать замену файла: имя и размер нового файла (тип сервер определяет по расширению сам). */
+export const FileReplaceStart = z.strictObject({
+  name: z.string().min(1).max(1000),
+  size: z.number().int().nonnegative(),
+});
+export type FileReplaceStart = z.infer<typeof FileReplaceStart>;
 
 /** Файлы записи и можно ли прикреплять новые. */
 export const FileList = z.object({ items: z.array(FileItem), canUpload: z.boolean() });
@@ -98,8 +126,8 @@ export const FileIdParam = z.object({ id: Uuid });
 /**
  * Строка «Файлового менеджера» (задача 2.29; прототип modules/files.js, `allFiles`): файл, откуда он
  * (вид и номер записи-источника, источник как на экране), контрагент (null — общий файл), кто и когда
- * загрузил, комментарий ручной загрузки; можно ли его удалить этому пользователю (право и сутки — запись
- * в архиве проверит удаление).
+ * загрузил, примечание; можно ли его удалить, изменить и заменить этому пользователю (право и сутки —
+ * запись в архиве проверит само действие); `replaced` — кто и когда заменил файл (прототип v95).
  */
 export const FileManagerRow = z.object({
   id: Uuid,
@@ -116,6 +144,9 @@ export const FileManagerRow = z.object({
   uploadedBy: z.string().nullable(),
   uploadedAt: z.iso.datetime(),
   canDelete: z.boolean(),
+  canEdit: z.boolean(),
+  canReplace: z.boolean(),
+  replaced: z.object({ by: z.string().nullable(), at: z.iso.datetime() }).nullable(),
   page: FilePage.nullable(),
   audit: z.object({
     createdAt: z.iso.datetime(),

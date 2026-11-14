@@ -1,7 +1,7 @@
 'use client';
 
-import { bishkekDate, filePreviewKind, formatDateRu } from '@buhuchet/domain';
-import { FileLink, FILE_NOTE_MAX, type FileManagerRow } from '@buhuchet/shared';
+import { bishkekDate, bishkekTime, filePreviewKind, formatDateRu } from '@buhuchet/domain';
+import { FileLink, type FileManagerRow } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
@@ -21,6 +21,7 @@ import { useId, useState } from 'react';
 import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
+import { FileNoteInput } from './attach-dialog';
 import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
 import { formContractorsQuery, fileSizeText } from './files-data';
 
@@ -100,8 +101,9 @@ function Preview({ file }: { file: FileManagerRow }) {
 
 /**
  * Окно файла (прототип modules/files.js, `openFile`): просмотр картинки или PDF (остальное — значок,
- * тип и размер), «Откуда», «Источник», «Контрагент», кто и когда загрузил, описание; «Скачать» и
- * «Перейти к источнику» — у файла записи, «Готово» — у загруженного вручную.
+ * тип и размер), «Откуда», «Источник», «Контрагент», кто и когда загрузил, «Заменён» (кто и когда —
+ * прототип v95) и примечание (нет — «нет»); «Скачать», «Изменить» (без права «Загружать файлы» —
+ * недоступна, с причиной) и «Перейти к источнику» — у файла записи, «Готово» — у загруженного вручную.
  */
 export function FileWindow({
   file,
@@ -109,6 +111,7 @@ export function FileWindow({
   onClose,
   onDownload,
   onSource,
+  onEdit,
 }: {
   file: FileManagerRow;
   open: boolean;
@@ -116,8 +119,11 @@ export function FileWindow({
   onDownload: () => void;
   /** «Перейти к источнику»; нет — у файла нет записи. */
   onSource: (() => void) | null;
+  /** «Изменить» — окно «Изменить файл» открывает экран; нет — кнопки нет. */
+  onEdit?: () => void;
 }) {
   const t = useT();
+  const replacedAt = file.replaced ? new Date(file.replaced.at) : null;
   const items: KeyValueItem[] = [
     { id: 'kind', label: t('files.window.kind'), value: fileKindText(t, file.kind) },
     { id: 'src', label: t('files.window.src'), value: file.source },
@@ -134,7 +140,27 @@ export function FileWindow({
         date: formatDateRu(bishkekDate(new Date(file.uploadedAt))),
       }),
     },
-    ...(file.note ? [{ id: 'desc', label: t('files.window.desc'), value: file.note }] : []),
+    ...(file.replaced && replacedAt
+      ? [
+          {
+            id: 'replaced',
+            label: t('files.window.replaced'),
+            value: t('files.window.replaced_value', {
+              name: file.replaced.by ?? '—',
+              date: `${formatDateRu(bishkekDate(replacedAt))} ${bishkekTime(replacedAt)}`,
+            }),
+          },
+        ]
+      : []),
+    {
+      id: 'desc',
+      label: t('files.window.desc'),
+      value: file.note ? (
+        <span data-file-window-note="">{file.note}</span>
+      ) : (
+        <span className="text-faint">{t('files.window.no_note')}</span>
+      ),
+    },
   ];
   return (
     <Modal
@@ -155,6 +181,19 @@ export function FileWindow({
             <Icon name="download" size="sm" />
             {t('files.act.download')}
           </button>
+          {onEdit ? (
+            <button
+              type="button"
+              data-file-window-edit=""
+              className={buttonClass('default')}
+              disabled={!file.canEdit}
+              title={file.canEdit ? undefined : t('files.act.edit_reason')}
+              onClick={onEdit}
+            >
+              <Icon name="edit" size="sm" />
+              {t('files.window.edit')}
+            </button>
+          ) : null}
           <div className="flex-1" />
           {onSource ? (
             <button
@@ -199,7 +238,7 @@ export interface UploadChoice {
 /**
  * «Загрузить файл» (прототип modules/files.js, `uploadDlg`): несколько файлов сразу, контрагент
  * (необязательно — «общий файл организации»; только свои в области «Свои контрагенты», не в архиве) и
- * комментарий. Файл больше 20 МБ и запрещённые типы — сообщением под полем, не загружается ни один.
+ * примечание. Файл больше 20 МБ и запрещённые типы — сообщением под полем, не загружается ни один.
  */
 export function UploadDialog({
   open,
@@ -287,15 +326,12 @@ export function UploadDialog({
             />
           )}
         </Field>
-        <Field id={`${id}-note`} label={t('files.upload.note')} full>
+        <Field id={`${id}-note`} label={t('files.upload.note')} full hint={t('files.note_hint')}>
           {(control) => (
-            <input
-              {...control}
-              data-files-upload-note=""
-              className={inputClass()}
-              maxLength={FILE_NOTE_MAX}
+            <FileNoteInput
+              control={{ ...control, 'data-files-upload-note': '' }}
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={setNote}
             />
           )}
         </Field>

@@ -5,6 +5,7 @@ import {
   formatDateRu,
   formatSom,
   formatSomWithUnit,
+  isYearMonth,
   monthLabel,
   monthLabelGen,
   type FirstMonthMode,
@@ -274,6 +275,17 @@ function contractorLines(t: Translate, e: Entry, names: Names): string[] {
       case 'feeReminder':
         lines.push(t('fee.hist.reminder'));
         break;
+      case 'payText': {
+        // «Скопировать для клиента» (задача К4; прототип v94 `rmPayMount`): месяц и сумма на тот момент.
+        const p = (c.to ?? {}) as { month?: unknown; total?: unknown };
+        lines.push(
+          t('report.months.pay.hist', {
+            month: isYearMonth(String(p.month)) ? monthLabel(String(p.month)) : '',
+            total: typeof p.total === 'number' ? formatSomWithUnit(p.total) : '',
+          }),
+        );
+        break;
+      }
       case 'kind':
         lines.push(
           t('cp.hist.kind', {
@@ -493,7 +505,8 @@ export function contractorHistoryItem(t: Translate, e: Entry, names: Names): Tim
     text: contractorHistoryText(t, e, names),
     who:
       e.entity === 'contractor_page'
-        ? pageHistoryActor(t, e.actor)
+        ? pageHistoryActor(t, e.actor, e.action)
         : (e.actor ?? t('status.system')),
+    via: e.via === 'telegram' ? t('telegram.via') : null,
   };
 }

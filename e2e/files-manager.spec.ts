@@ -93,7 +93,8 @@ test.describe('Этап 2: Файловый менеджер', () => {
     await owner.dispose();
 
     await openManager(page, isMobile, tag);
-    // Столбцы по умолчанию — как в ТЗ: название, источник, контрагент, дата, кто загрузил.
+    // Столбцы по умолчанию — как в ТЗ: название, источник, контрагент, дата, кто загрузил — и
+    // «Примечание» (прототип v95).
     if (!isMobile) {
       await expect
         .poll(() =>
@@ -101,7 +102,7 @@ test.describe('Этап 2: Файловый менеджер', () => {
             .locator('[data-grid] th[data-column]')
             .evaluateAll((ths) => ths.map((th) => th.getAttribute('data-column'))),
         )
-        .toEqual(['name', 'src', 'cp', 'date', 'by']);
+        .toEqual(['name', 'src', 'cp', 'date', 'by', 'desc']);
     }
     await expect(fileRow(page, general)).toBeVisible();
     await expect(fileRow(page, ofMine)).toBeVisible();
@@ -194,7 +195,7 @@ test.describe('Этап 2: Файловый менеджер', () => {
       mimeType: 'application/pdf',
       buffer: Buffer.alloc(1024, 1),
     });
-    await dialog.getByLabel('Комментарий').fill('Учредительные документы');
+    await dialog.getByLabel('Примечание').fill('Учредительные документы');
     await dialog.getByRole('button', { name: 'Загрузить' }).click();
     await expect(page.getByText('Загружено: 1')).toBeVisible();
     await expect(

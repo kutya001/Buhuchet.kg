@@ -20,9 +20,9 @@ export const FILE_DEFAULT_SORT: ListSort = { key: 'date', dir: 'desc' };
 
 /**
  * Видимые по умолчанию — как в ТЗ «Столбцы, видимые по умолчанию»: название, контрагент, источник, кто
- * загрузил, дата; тип, размер, описание и «Откуда» — в меню «Столбцы».
+ * загрузил, дата и примечание (прототип v95); тип, размер и «Откуда» — в меню «Столбцы».
  */
-export const FILE_DEFAULT_VISIBLE = ['name', 'src', 'cp', 'date', 'by'];
+export const FILE_DEFAULT_VISIBLE = ['name', 'src', 'cp', 'date', 'by', 'desc'];
 
 /** Вид источника словами: «Задача», «Загружен вручную». */
 export function fileKindText(t: Translate, kind: string): string {

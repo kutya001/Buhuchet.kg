@@ -380,7 +380,6 @@ export async function pageFiles(
       projectStart: projects.startsOn,
       kind,
       sourceId: files.sourceId,
-      note: files.note,
       reportType: reportTypes.shortName,
       reportPeriod: reports.period,
       reportStart: reports.periodStart,
@@ -539,7 +538,6 @@ function pageFileDate(r: {
 function pageFileSourceOf(r: {
   kind: string;
   sourceId: string | null;
-  note: string | null;
   reportType: string | null;
   reportPeriod: string | null;
   reportStart: string | null;
@@ -570,7 +568,8 @@ function pageFileSourceOf(r: {
     case 'contractor':
       return { kind: 'regdocs' };
     case 'manual':
-      return { kind: 'manual', note: r.note };
+      // Примечание к файлу — только сотрудникам (docs/deviations.md п. И-4): на страницу не уходит.
+      return { kind: 'manual' };
     case 'tax_payment':
       return r.opAmount !== null && r.opDate
         ? {

@@ -1,5 +1,7 @@
 import { PAGE_MESSAGES } from '../contractor-page/page';
 import { CP_TG_MESSAGES } from '../contractor-page/telegram';
+import { DEBT_TOGGLE_MESSAGES } from '../contractor-page/telegram-debt';
+import { MONTH_PAY_SEND_MESSAGES } from '../contractor-page/telegram-pay';
 import type { UiTextDefault } from './texts';
 
 const S = 'Страница контрагента';
@@ -163,6 +165,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.tg.toast.approve': { ru: 'Telegram «{name}» подключён', section: S },
   'cppage.tg.toast.reject': { ru: 'Запрос отклонён', section: S },
   'cppage.tg.toast.unlink': { ru: 'Telegram «{name}» отключён', section: S },
+  // Кнопки под сообщением бота сотруднику о запросе (задача К5; прототип tgAct('cptg-ok'), ('cptg-no')).
+  'cppage.tg.bot.done_ok': { ru: '✓ Подтверждён', section: S },
+  'cppage.tg.bot.done_no': { ru: '✓ Отклонён', section: S },
+  'cppage.tg.bot.approved': { ru: 'Telegram «{name}» подключён к «{contractor}»', section: S },
   'cppage.hist.page_tg_request': {
     ru: 'Telegram контрагента: запрос на подключение от «{name}»',
     section: S,
@@ -172,6 +178,114 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.hist.page_tg_off': { ru: 'Telegram контрагента «{name}»: отключён', section: S },
   'cppage.hist.page_tg_leave': {
     ru: 'Telegram контрагента «{name}»: отключён контрагентом',
+    section: S,
+  },
+  // «К оплате» клиенту в Telegram (задача К4; прототип v94 cp-telegram.js: pgPayMsg, pgPaySend,
+  // tgAct('cp-paid'), pgTgAsk): подписи сообщения бота, история контрагента.
+  // «Моя организация» → «Настройки» → «Telegram контрагентов» (прототип pgTgOrgHtml).
+  'cppage.org.title': { ru: 'Telegram контрагентов', section: S },
+  'cppage.org.pay': { ru: 'Отправлять «К оплате» контрагентам', section: S },
+  'cppage.org.pay_hint': {
+    ru: 'Сообщение с налогами месяца приходит клиенту за {n} дней до ближайшего срока оплаты, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».',
+    section: S,
+  },
+  'cppage.org.hint': {
+    ru: 'Сообщения получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.',
+    section: S,
+  },
+  'cppage.org.debt': { ru: 'Напоминать контрагентам о долге', section: S },
+  'cppage.org.debt_hint': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
+    section: S,
+  },
+  'cppage.org.toggled': { ru: '{name}: {state}', section: S },
+  'cppage.tg.pay.heading': { ru: 'Налоги к оплате до', section: S },
+  'cppage.tg.pay.accountant': { ru: 'бухгалтер', section: S },
+  'cppage.tg.pay.col_tax': { ru: 'Налог', section: S },
+  'cppage.tg.pay.col_amount': { ru: 'Сумма, сом', section: S },
+  'cppage.tg.pay.col_due': { ru: 'Срок', section: S },
+  'cppage.tg.pay.total': { ru: 'Итого', section: S },
+  'cppage.tg.paid_done': { ru: '✓ Сообщили бухгалтеру', section: S },
+  // Заголовки сообщений сотруднику (прототип tgAct('cp-paid'), pgTgAsk).
+  'cppage.tg.staff.paid_heading': { ru: 'Контрагент сообщил об оплате', section: S },
+  'cppage.tg.staff.ask_heading': { ru: 'Вопрос контрагента', section: S },
+  // Пока сотрудник не может ответить клиенту из Telegram (docs/deviations.md п. К-4) — тексты без
+  // «ответ придёт сюда».
+  'cppage.tg.ask_sent': {
+    ru: 'Вопрос передан вашему бухгалтеру. Он свяжется с вами.',
+    section: S,
+  },
+  'cppage.tg.ask_staff': {
+    ru: '{contractor}: вопрос от «{name}». {text} Ответить клиенту из Telegram пока нельзя — свяжитесь с ним сами.',
+    section: S,
+  },
+  // Подсказка бота в чате клиента вместо «привяжите Telegram» (меню команд бота — для сотрудников;
+  // docs/deviations.md п. К-4).
+  'cppage.tg.client_hint': {
+    ru: 'Этот Telegram подключён к контрагенту: {contractors}. Сюда приходят налоги к оплате от вашего бухгалтера. Чтобы отключиться, отправьте «Отключить».',
+    section: S,
+  },
+  'cppage.tg.ask_limit': {
+    ru: 'Слишком много вопросов за час. Позвоните вашему бухгалтеру или напишите позже.',
+    section: S,
+  },
+  'cppage.hist.page_tg_pay': {
+    ru: '«К оплате» за {month} отправлено в Telegram: {total}, получателей — {n}',
+    section: S,
+  },
+  'cppage.hist.page_tg_paid': {
+    ru: 'Контрагент сообщил в Telegram об оплате налогов за {month}: {total} («{name}»)',
+    section: S,
+  },
+  'cppage.hist.page_tg_question': {
+    ru: 'Вопрос бухгалтеру из Telegram («{name}»): {text}',
+    section: S,
+  },
+  // Напоминание клиенту о долге (задача К5; прототип v94 cp-telegram.js: pgDebtMsg, pgDebtRow,
+  // tgAct('cp-nodebt')): сообщение бота, строка в карточке контрагента, история.
+  'cppage.tg.debt.heading': { ru: 'Напоминание об оплате', section: S },
+  'cppage.tg.debt.what': { ru: 'Что оплатить', section: S },
+  'cppage.tg.debt.amount': { ru: 'Сумма, сом', section: S },
+  'cppage.tg.debt.short': { ru: 'Не хватает на налоги этого месяца', section: S },
+  'cppage.tg.debt.fee': { ru: 'Долг за обслуживание', section: S },
+  'cppage.tg.nodebt_done': { ru: '✓ Напоминания выключены', section: S },
+  // В прототипе команды «Напоминать» нет (шаблон `tgCpNoDebtOk` её только обещает) — docs/deviations.md п. К-5.
+  'cppage.tg.debt_on': {
+    ru: 'Напоминания о долге снова включены: {contractor}.',
+    section: S,
+  },
+  'cppage.tg.debt_on_already': {
+    ru: 'Напоминания о долге уже включены.',
+    section: S,
+  },
+  'cppage.debt.label': { ru: 'Напоминать о долге в Telegram', section: S },
+  'cppage.debt.hint': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас {sum}.',
+    section: S,
+  },
+  'cppage.debt.hint_none': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас долга нет.',
+    section: S,
+  },
+  'cppage.debt.hint_plain': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание.',
+    section: S,
+  },
+  'cppage.debt.hint_org_off': {
+    ru: 'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram контрагентов».',
+    section: S,
+  },
+  'cppage.debt.toast_on': { ru: 'Напоминание о долге: включено', section: S },
+  'cppage.debt.toast_off': { ru: 'Напоминание о долге: выключено', section: S },
+  'cppage.tg.no_debt': { ru: 'напоминания о долге выключил клиент', section: S },
+  'cppage.hist.debt_on': { ru: 'Напоминание о долге в Telegram: включено', section: S },
+  'cppage.hist.debt_off': { ru: 'Напоминание о долге в Telegram: выключено', section: S },
+  'cppage.hist.page_tg_nodebt': {
+    ru: 'Напоминания о долге в Telegram выключены контрагентом («{name}»)',
+    section: S,
+  },
+  'cppage.hist.page_tg_debt_on': {
+    ru: 'Напоминания о долге в Telegram включены контрагентом («{name}»)',
     section: S,
   },
   // Страница без входа (прототип pubDraw).
@@ -396,6 +510,20 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.cp_tg_not_on': { ru: CP_TG_MESSAGES.cp_tg_not_on, section: E },
   'err.cp_tg_limit': { ru: CP_TG_MESSAGES.cp_tg_limit, section: E },
   'err.cp_tg_section_off': { ru: CP_TG_MESSAGES.cp_tg_section_off, section: E },
+  'err.page_debt_right': { ru: DEBT_TOGGLE_MESSAGES.page_debt_right, section: E },
+  'err.page_debt_org_off': { ru: DEBT_TOGGLE_MESSAGES.page_debt_org_off, section: E },
   'err.cp_tg_full': { ru: CP_TG_MESSAGES.cp_tg_full, section: E },
   'err.cp_tg_link_limit': { ru: CP_TG_MESSAGES.cp_tg_link_limit, section: E },
+  'err.month_pay_send_right': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_right, section: E },
+  'err.month_pay_send_archived': {
+    ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_archived,
+    section: E,
+  },
+  'err.month_pay_send_not_linked': {
+    ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_not_linked,
+    section: E,
+  },
+  'err.month_pay_send_off': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_off, section: E },
+  'err.month_pay_send_limit': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_limit, section: E },
+  'err.month_pay_send_failed': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_failed, section: E },
 } as const satisfies Record<string, UiTextDefault>;

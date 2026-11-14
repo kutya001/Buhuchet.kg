@@ -54,6 +54,13 @@ export function cpTgName(from: { username?: string | null; firstName?: string | 
 }
 
 /** Решение сотрудника: подтвердить, отклонить, отключить (прототип pgTgDecide: ok, no, off). */
+/**
+ * Коды действий кнопок «Подтвердить» и «Отклонить» под сообщением бота сотруднику о запросе (задача
+ * К5; прототип `cptg-ok`, `cptg-no`): действия сотрудника — в реестре `BOT_ACTIONS`.
+ */
+export const CP_TG_OK_ACTION = 'cptgOk';
+export const CP_TG_NO_ACTION = 'cptgNo';
+
 export const CP_TG_ACTIONS = ['approve', 'reject', 'unlink'] as const;
 export type CpTgAction = (typeof CP_TG_ACTIONS)[number];
 

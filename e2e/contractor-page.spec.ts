@@ -638,6 +638,8 @@ test.describe('Этап 3: страница контрагента — разд�
       source: { kind: 'manual', id: null },
       contractorId: cp.id,
       name: `Устав ${tag}.pdf`,
+      // Примечание к файлу (прототип v95) видят только сотрудники: на странице его нет (v96).
+      note: `Оригинал в сейфе ${tag}`,
     });
     const draft = await apiUpload(request, o.origin, {
       source: { kind: 'manual', id: null },
@@ -703,6 +705,8 @@ test.describe('Этап 3: страница контрагента — разд�
     const rows = files.locator('[data-pub-fo]');
     await expect(rows).toHaveCount(2);
     await expect(files.locator(`[data-pub-fo="${charter}"]`)).toBeVisible();
+    await expect(files.locator(`[data-pub-fo="${charter}"]`)).toContainText(`Устав ${tag}.pdf`);
+    await expect(page.locator('body')).not.toContainText('Оригинал в сейфе');
     await expect(files).not.toContainText('Черновик договора');
     await expect(files).not.toContainText('Файл задачи');
 

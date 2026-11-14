@@ -15,7 +15,7 @@ import { filesScopeOf } from '../files/manager';
 import { kpiScopeOf } from '../kpi/common';
 import { serviceReadScope, servicesVisible } from '../finance/services';
 import { finScopeOf } from '../money/common';
-import { reportScopeOf } from '../reports/common';
+import { assigneeScopeOf, reportScopeOf } from '../reports/common';
 import { notFound } from './card';
 import { projectMoneyVisible, projectWhere } from '../projects/common';
 import { error, scopeSqlOf, subjectOf, translateOf } from './common';
@@ -56,6 +56,9 @@ async function historyAccess(
   return {
     fee: features.fee && can('fee'),
     reports: can('repView') && reportScopeOf(subject),
+    // ОТКЛОНЕНИЕ: docs/deviations.md#К-3 — сумма налогов месяца в «Скопирован текст «К оплате»» — тому,
+    // кто видит все отчёты контрагента.
+    monthPay: can('repView') && assigneeScopeOf(subject),
     tasks: features.tasks,
     kpi: features.indicators && can('kpiView') && kpiScopeOf(subject),
     files: features.files && can('filesView') && filesScopeOf(subject),

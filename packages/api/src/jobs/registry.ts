@@ -14,6 +14,10 @@ import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { createDueReportsJob } from '../modules/reports/job';
+import { contractorDebtJob } from '../modules/telegram/client/debt';
+import { contractorPayJob } from '../modules/telegram/client/pay';
+
+import { botMenuCommands } from '../modules/telegram/command-view';
 import { telegramSendJob } from '../modules/telegram/outbox';
 import { telegramRemindersJob } from '../modules/telegram/reminders';
 import { alertTexts, sendPlatformAlert } from './alerts';
@@ -98,6 +102,8 @@ export const jobs: readonly Job[] = [
   cleanupRateLimitsJob,
   syncServiceStatusesJob,
   cleanupContractorPageGrantsJob,
+  contractorPayJob,
+  contractorDebtJob,
   createDueReportsJob,
   cleanupPendingFilesJob,
   duesRecalcJob,
@@ -112,7 +118,8 @@ export const WEBHOOK_ALERT_HOURS = 3;
  * TELEGRAM_WEBHOOK_SECRET. Сайт сообщает адрес сам каждые 10 минут (повтор с теми же данными ничего не
  * меняет), поэтому после того как переменные бота заданы или секрет сменён, ручного шага с токеном нет.
  * У бота один вебхук: у стенда и рабочего сайта боты разные, иначе они перебивали бы друг друга.
- * Тут же — проверка доставки (ревью безопасности Р-8 А, docs/decisions.md п. О-30): Telegram отметил
+ * Тут же сайт сообщает Telegram меню команд бота («/today — Сегодня»; поток Т, задача Т5) и идёт проверка
+ * доставки (ревью безопасности Р-8 А, docs/decisions.md п. О-30): Telegram отметил
  * ошибку доставки обновления сайту с прошлой проверки — оповещение администратору платформы (не чаще
  * раза в 3 часа).
  */
@@ -126,6 +133,13 @@ export function telegramWebhookJob(webhook: { url: string; secretToken: string }
     async run(ctx) {
       if (!ctx.telegram) return;
       await ctx.telegram.setWebhook(webhook.url, webhook.secretToken);
+      // Меню команд бота (поток Т, задача Т5): подписи — из шаблонов, поэтому обновляются тут же. Сбой
+      // меню проверке вебхука не мешает.
+      try {
+        await ctx.telegram.setCommands(await botMenuCommands(ctx.db));
+      } catch (err) {
+        ctx.logger.warn({ err }, 'Telegram: меню команд бота не обновлено');
+      }
       const info = await ctx.telegram.getWebhookInfo();
       const now = ctx.clock.now();
       // С запасом в минуту: проверки идут раз в 10 минут, ошибка между ними не теряется.

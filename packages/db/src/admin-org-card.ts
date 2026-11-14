@@ -82,6 +82,7 @@ export interface AdminOrgCardRecord {
     blocked: boolean;
     employeeActive: boolean;
     loginLocked: boolean;
+    loginLockReason: string | null;
     mustChangePassword: boolean;
   }>;
   contractors: CardList<{
@@ -375,6 +376,7 @@ export async function adminOrgCard(
         blocked: users.blocked,
         employeeActive: employees.active,
         loginLocked: sql<boolean>`${users.loginLockedAt} is not null`,
+        loginLockReason: users.loginLockReason,
         mustChangePassword: users.mustChangePassword,
       })
       .from(employees)

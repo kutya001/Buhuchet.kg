@@ -19,6 +19,14 @@ import {
 const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
 const POLL = { timeout: 120_000, intervals: [2_000, 5_000, 10_000] };
+/**
+ * Картинка рассылки — настоящий PNG 2×1 (сервер узнаёт тип по первым байтам). Одной подписи PNG мало:
+ * браузер не может её показать, и картинка в предпросмотре получает высоту 0 — «не видна».
+ */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR42mPQqjoBRAAIvwLZExre1wAAAABJRU5ErkJggg==',
+  'base64',
+);
 
 async function tick(api: APIRequestContext) {
   const res = await api.post('/api/cron/tick', {
@@ -95,7 +103,11 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await page.locator('[data-tg-cast-to]').selectOption({ label: orgName });
     const first = `Плановые работы ${ownerLogin}`;
     await page.locator('[data-tg-cast-text]').fill(first);
-    await page.getByRole('button', { name: 'Поставить в очередь' }).click();
+    // Перед очередью — подтверждение с числом получателей (поток Т, задача Т6; прототип v103).
+    await page.locator('[data-tg-cast-go]').click();
+    const confirm = page.getByRole('dialog', { name: 'Поставить рассылку в очередь?' });
+    await expect(confirm).toContainText(`получат 1 пользователь — организации «${orgName}»`);
+    await confirm.getByRole('button', { name: 'Поставить в очередь' }).click();
     await expect(page.getByText('В очереди: 1 сообщение')).toBeVisible();
     await expect(page.locator('[data-tg-cast-text]')).toHaveValue('');
     const delivered = async () => {
@@ -103,6 +115,60 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
       return (await botMessages(page.request, chat)).filter((m) => m === first);
     };
     await expect.poll(delivered, POLL).toHaveLength(1);
+
+    // Оформленная рассылка (задача Т6): «Заполнить из новости», заголовок, картинка; предпросмотр — как
+    // в Telegram, «Показать простым текстом» — тот же текст без выделения; уходит картинкой с подписью.
+    await page.locator('[data-tg-cast-news]').selectOption({ index: 1 });
+    await expect(page.getByText('Поля заполнены из новости')).toBeVisible();
+    await expect(page.locator('[data-tg-cast-more]')).not.toHaveValue('');
+    const heading = `Рассылка с картинкой ${ownerLogin}`;
+    await page.locator('[data-tg-cast-title]').fill(heading);
+    await page.locator('[data-tg-cast-image]').setInputFiles({
+      name: 'cast.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    await expect(page.locator('[data-tg-cast-image-name]')).toHaveText('cast.png');
+    const preview = page.locator('[data-tg-cast-preview] [data-chat-message]');
+    await expect(preview.locator('[data-chat-image]')).toBeVisible();
+    await expect(preview).toContainText(heading);
+    await expect(preview.getByRole('button', { name: 'Подробнее' })).toBeVisible();
+    await page.locator('[data-tg-cast-plain]').click();
+    await expect(preview.locator('[data-chat-image]')).toBeVisible();
+    await page.locator('[data-tg-cast-go]').click();
+    await confirm.getByRole('button', { name: 'Поставить в очередь' }).click();
+    await expect(page.getByText('В очереди: 1 сообщение')).toBeVisible();
+    await expect(page.locator('[data-tg-cast-title]')).toHaveValue('');
+    const photo = async () => {
+      await tick(page.request);
+      return (await botSent(page.request, chat))
+        .filter((m) => m.photo && m.text.startsWith(heading))
+        .map((m) => m.photo!.bytes);
+    };
+    await expect.poll(photo, POLL).toEqual([PNG.byteLength]);
+
+    // «Отправить в Telegram» из меню новости (прототип v103 admin/news.js): открывается «Рассылка» с
+    // полями из новости.
+    const castNews = (
+      (await (await page.request.get('/api/admin/telegram/cast-options')).json()) as {
+        news: { id: string; title: string }[];
+      }
+    ).news[0]!;
+    await page.goto('/app/kbadm/news');
+    await search(page, isMobile, castNews.title);
+    const newsRow = page.locator(`[data-grid] [data-id="${castNews.id}"]`);
+    await newsRow.locator('[data-row-menu]').click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: /^Отправить в Telegram/ })
+      .click();
+    await expect(page).toHaveURL(/\/app\/tg\/cast$/);
+    await expect(page.getByText('Поля рассылки заполнены из новости')).toBeVisible();
+    // Заголовок рассылки — до 80 знаков (длиннее — обрезан с «…»).
+    if (castNews.title.length <= 80) {
+      await expect(page.locator('[data-tg-cast-title]')).toHaveValue(castNews.title);
+    }
+    await expect(page.locator('[data-tg-cast-more]')).toHaveValue(`news:${castNews.id}`);
 
     // Второе объявление ждёт в очереди, а получатель тем временем отвязал Telegram: в прежний чат оно
     // не уходит — «Ошибка» с пояснением.
@@ -130,15 +196,16 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     const sent = rows.filter({ hasText: 'Объявление' }).filter({ hasText: 'Отправлено' });
     // На телефоне у плиток подпись «Ошибка» есть у всех — ищем по пояснению.
     const error = rows.filter({ hasText: 'Получатель отвязал или сменил Telegram' });
-    await expect(sent).toHaveCount(1);
+    // Отправлены два объявления: простое и с картинкой (задача Т6).
+    await expect(sent).toHaveCount(2);
     await expect(error).toHaveCount(1);
     await expect(error).toContainText('Объявление');
     await expect(rows.filter({ hasText: 'Telegram привязан' })).toHaveCount(1);
     await expect(rows.filter({ hasText: 'Telegram отвязан' })).toHaveCount(1);
-    await expect(sent).toContainText(orgName);
+    await expect(sent.first()).toContainText(orgName);
 
     const menu = page.getByRole('menu', { name: 'Действия' });
-    await sent.locator('[data-row-menu]').click();
+    await sent.first().locator('[data-row-menu]').click();
     await expect(menu.getByRole('menuitem', { name: 'Повторить отправку' })).toBeDisabled();
     await expect(menu).toContainText('Повтор доступен только для ошибок');
     await page.keyboard.press('Escape');
@@ -190,7 +257,7 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await expect(dialog).toHaveCount(0);
   });
 
-  test('(пакет заказчика 13.11.2026) «Вид сообщений и кнопки»: примеры сообщений с кодом и таблицей; таблицы выключены — «Проверить бота» приходит простым текстом с кнопкой, включены — снова таблицей', async ({
+  test('(пакет заказчика 13.11.2026) «Вид сообщений и кнопки»: примеры сообщений с кодом и таблицей; таблицы выключены — «Проверить бота» приходит простым текстом с кнопкой, включены — снова таблицей; «Темы в чате с ботом» включаются и выключаются, видно состояние тем в @BotFather', async ({
     page,
     baseURL,
     playwright,
@@ -281,12 +348,34 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
       ).toBeVisible();
       const tables = await testBot();
       expect(tables.html).toContain('<table');
+
+      // «Темы в чате с ботом» (задача Т7): по умолчанию выключено; темы у бота в @BotFather — по
+      // ответу Telegram (подставной бот: включены). Включили и выключили — подсказка и запись сразу.
+      const topics = view.locator('[data-tg-topics]').getByRole('switch');
+      await expect(topics).not.toBeChecked();
+      await expect(view).toContainText('Сначала включите темы для бота в @BotFather');
+      await expect(view).toContainText('Темы в @BotFather');
+      await expect(view).toContainText('Включены');
+      await topics.click();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Бот раскладывает сообщения по темам' }),
+      ).toBeVisible();
+      await page.reload();
+      await expect(topics).toBeChecked();
+      await topics.click();
+      await expect(page.getByRole('status').filter({ hasText: 'Бот пишет без тем' })).toBeVisible();
+      await expect(topics).not.toBeChecked();
     } finally {
       const back = await page.request.put('/api/admin/telegram/bot/view', {
         headers: { origin },
         data: { rich: true },
       });
       expect(back.status(), await back.text()).toBe(200);
+      const noTopics = await page.request.put('/api/admin/telegram/bot/topics', {
+        headers: { origin },
+        data: { topics: false },
+      });
+      expect(noTopics.status(), await noTopics.text()).toBe(200);
       await staff.dispose();
     }
   });

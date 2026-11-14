@@ -84,7 +84,7 @@ export const PAGE_FILE_LINK_SECONDS = 5 * 60;
 export type PageFileSource =
   | { kind: 'report'; type: string; period: ReportPeriod; start: IsoDate; event: IsoDate | null }
   | { kind: 'regdocs' }
-  | { kind: 'manual'; note: string | null }
+  | { kind: 'manual' }
   | {
       kind: 'tax_payment';
       report: { type: string; period: ReportPeriod; start: IsoDate; event: IsoDate | null } | null;
@@ -113,8 +113,9 @@ export function pageFileRel(src: PageFileSource, t: Translate): string {
       return report(src);
     case 'regdocs':
       return t('files.src.regdocs');
+    // Примечание к файлу видно только сотрудникам (прототип v95, docs/deviations.md п. И-4).
     case 'manual':
-      return src.note?.trim() ?? '';
+      return '';
     case 'tax_payment': {
       const pay = t('pub.files.rel.tax_payment', {
         amount: formatSomWithUnit(src.amount),

@@ -7,6 +7,7 @@ import {
   ADMIN_CODE_WINDOW_MINUTES,
   isPermissionId,
   LOGIN_FAILURE_MEMORY_MINUTES,
+  type LoginLockReason,
   LOGIN_LOCK_MINUTES,
   LOGIN_MAX_FAILURES,
   SCOPE_GROUPS,
@@ -45,6 +46,8 @@ export interface LoginRecord {
   orgName: string | null;
   /** Вход закрыт после 10 неверных паролей подряд (миграция 0095). */
   loginLocked: boolean;
+  /** Чем закрыт вход: `not_me` — кнопкой «Это не я» в Telegram (миграция 0135); пусто — паролями. */
+  loginLockReason: LoginLockReason | null;
   /** Владелец организации: его блокировку входа снимает администратор платформы. */
   isOwner: boolean;
 }
@@ -63,6 +66,7 @@ interface LoginRow extends Record<string, unknown> {
   org_name: string | null;
   login_locked: boolean;
   is_owner: boolean;
+  login_lock_reason: string | null;
 }
 
 const asDate = (v: Date | string | null): Date | null =>
@@ -84,6 +88,7 @@ export async function findLogin(db: Db | Tx, login: string): Promise<LoginRecord
     orgStatus: row.org_status,
     orgName: row.org_name,
     loginLocked: row.login_locked,
+    loginLockReason: row.login_lock_reason === 'not_me' ? 'not_me' : null,
     isOwner: row.is_owner,
   };
 }
@@ -218,16 +223,31 @@ export async function cleanupLoginAttempts(db: Db): Promise<number> {
   return row?.removed ?? 0;
 }
 
-/** Верный пароль: создаётся сеанс (в базе — только хеш токена). */
+/**
+ * Вход закрыт (10 неверных паролей или «Это не я» из Telegram) — сеанс не начат: учётную запись вход
+ * читает до проверки пароля, а закрыть вход могли, пока пароль проверялся.
+ */
+export class LoginClosedError extends Error {
+  constructor() {
+    super('Вход закрыт: сеанс не начат');
+    this.name = 'LoginClosedError';
+  }
+}
+
+/**
+ * Верный пароль: создаётся сеанс (в базе — только хеш токена). Вход закрыт — `LoginClosedError`; у
+ * администратора платформы вход не закрывается.
+ */
 export async function startSession(
   db: Db,
   input: { userId: string; tokenHash: string; device?: string | null },
 ): Promise<string> {
   // Устройство («браузер и система») — в журнал сеансов для карточки пользователя в Админке.
-  const [row] = await db.execute<{ id: string }>(
+  const [row] = await db.execute<{ id: string | null }>(
     sql`select app.auth_start_session(${input.userId}, ${input.tokenHash}, ${SESSION_TTL_DAYS}, ${input.device ?? null}) as id`,
   );
-  return row!.id;
+  if (!row?.id) throw new LoginClosedError();
+  return row.id;
 }
 
 /**

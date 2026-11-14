@@ -6,6 +6,7 @@ import { contractorHistory, type ContractorHistoryAccess } from './contractor-hi
 import {
   contractorSummary,
   contractorTabCounts,
+  contractorScope,
   contractorUsage,
   createContractor,
   listContractorsPage,
@@ -16,6 +17,7 @@ import {
   addTariff,
   contractorFeeView,
   createFeePayment,
+  feeDebtorList,
   feePaymentFormOf,
   feeToOptions,
   logFeeReminder,
@@ -125,6 +127,7 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание:
   const access = (fee: boolean): ContractorHistoryAccess => ({
     fee,
     reports: undefined,
+    monthPay: undefined,
     tasks: true,
     kpi: false,
     files: false,
@@ -419,6 +422,41 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание:
     expect(
       (await inA((tx) => contractorTabCounts(tx, undefined, a.ownerEmployeeId))).debtors,
     ).toBeNull();
+  });
+
+  it('должники для сводки недели в Telegram: долг больше нуля, область, без архивных, чужая организация не видна', async () => {
+    const all = await inA((tx) => feeDebtorList(tx, { scope: undefined, today: TODAY }));
+    expect(all.map((d) => [d.name, d.fees.debt]).sort()).toEqual([
+      ['ИП Садыкова', som(120_000)],
+      ['ОсОО «Бета»', som(120_000)],
+    ]);
+    expect(all.every((d) => d.feeDay === 15)).toBe(true);
+    // Область «Свои контрагенты»: у владельца закреплённых нет; с областью — только свой.
+    expect(
+      await inA((tx) =>
+        feeDebtorList(tx, { scope: contractorScope(a.ownerEmployeeId), today: TODAY }),
+      ),
+    ).toEqual([]);
+    const own = await inA((tx) =>
+      feeDebtorList(tx, { scope: eq(contractors.id, cpDebt), today: TODAY }),
+    );
+    expect(own.map((d) => d.id)).toEqual([cpDebt]);
+    // Чужая организация видит только своих должников.
+    const other = await inB((tx) => feeDebtorList(tx, { scope: undefined, today: TODAY }));
+    expect(other.map((d) => d.id)).toEqual([cpB]);
+    // Контрагент в архиве в должники не входит, хотя долг за ним остался.
+    await db.admin.db
+      .update(contractors)
+      .set({ serviceStatus: 'archived' })
+      .where(eq(contractors.id, cpB));
+    try {
+      expect(await inB((tx) => feeDebtorList(tx, { scope: undefined, today: TODAY }))).toEqual([]);
+    } finally {
+      await db.admin.db
+        .update(contractors)
+        .set({ serviceStatus: 'active' })
+        .where(eq(contractors.id, cpB));
+    }
   });
 
   it('история контрагента: без права на плату — без оплат, ставок и напоминаний', async () => {

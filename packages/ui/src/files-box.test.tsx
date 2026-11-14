@@ -10,6 +10,9 @@ const labels: FilesBoxLabels = {
   download: (name) => `Скачать ${name}`,
   remove: (name) => `Удалить ${name}`,
   removeTitle: 'Удалить файл',
+  edit: (name) => `Изменить ${name}`,
+  editTitle: 'Изменить файл: название, примечание, замена',
+  noteTitle: 'Примечание к файлу',
 };
 
 const items = [
@@ -71,6 +74,21 @@ describe('блок «Файлы» (прототип filesBox)', () => {
     expect(html.match(/data-pgf=/g)).toHaveLength(2);
     // Без обработчика кнопки нет.
     expect(render({ items: marked })).not.toContain('data-pgf');
+  });
+
+  it('примечание — строкой под типом и размером; «Изменить» — только где можно и при обработчике (прототип v95)', () => {
+    const noted = [
+      { ...items[0]!, note: 'Скан с печатью', canEdit: true },
+      { ...items[1]!, note: null, canEdit: false },
+    ];
+    const html = render({ items: noted, onEdit: vi.fn() });
+    expect(html).toContain('Скан с печатью');
+    expect(html.match(/data-file-note=/g)).toHaveLength(1);
+    expect(html).toContain('title="Примечание к файлу"');
+    expect(html).toContain('aria-label="Изменить Акт сверки.pdf"');
+    expect(html).not.toContain('aria-label="Изменить Договор.docx"');
+    // Без обработчика кнопки нет.
+    expect(render({ items: noted })).not.toContain('data-file-edit');
   });
 
   it('пока файлы загружаются, кнопка недоступна и подписана «Загрузка…»', () => {

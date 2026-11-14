@@ -9,6 +9,7 @@ import {
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   check,
   date,
   foreignKey,
@@ -22,7 +23,7 @@ import {
   unique,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { recordVersion } from './columns';
+import { recordVersion, timestamps } from './columns';
 import { organizations } from './organizations';
 import { orgIsolation } from './rls';
 import { users } from './users';
@@ -305,5 +306,122 @@ export const telegramDigestDays = pgTable(
   (t) => [
     primaryKey({ name: 'telegram_digest_days_pk', columns: [t.orgId, t.day] }),
     orgIsolation('telegram_digest_days_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Темы личного чата с ботом (поток Т, задача Т7; docs/decisions.md п. Т-7): какой теме чата какой номер
+ * темы у Telegram. Ключ — тема по виду (`rep`, `task`, `lead`, `sec`) или организации (`org:<id>`).
+ * Строка — про чат, а не про организацию: роль приложения таблицу не видит, читает и пишет её только
+ * функциями `app.telegram_topic_*` (миграция `telegram_topics_functions`).
+ */
+export const telegramTopics = pgTable(
+  'telegram_topics',
+  {
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    key: text('key').notNull(),
+    threadId: integer('thread_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'telegram_topics_pk', columns: [t.chatId, t.key] }),
+    check('telegram_topics_key_check', sql`${t.key} ~ '^(rep|task|lead|sec|org:[0-9a-f-]{36})$'`),
+  ],
+).enableRLS();
+
+/**
+ * Общий рабочий чат фирмы (поток Т, задача Т8; docs/decisions.md п. Т-8; прототип v105
+ * modules/tg-group.js): у организации — одна группа Telegram, куда бот пишет сводку дня. Номер группы
+ * у Telegram отрицательный и один на всю платформу: группа не бывает общим чатом двух организаций.
+ * `linked_by` — владелец, который подключил группу: от его имени строки очереди в группу (у строки очереди
+ * всегда есть пользователь). `gone_at` — бота удалили из группы: сводки прекращаются.
+ */
+export const telegramGroups = pgTable(
+  'telegram_groups',
+  {
+    orgId: uuid('org_id')
+      .primaryKey()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    title: text('title').notNull(),
+    linkedBy: uuid('linked_by').notNull(),
+    linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
+    summary: boolean('summary').notNull().default(true),
+    goneAt: timestamp('gone_at', { withTimezone: true }),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    ...timestamps(),
+    version: recordVersion(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'telegram_groups_linked_by_fk',
+      columns: [t.linkedBy, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    unique('telegram_groups_chat_key').on(t.chatId),
+    check('telegram_groups_chat_check', sql`${t.chatId} < 0`),
+    check('telegram_groups_title_check', sql`char_length(${t.title}) between 1 and 128`),
+    orgIsolation('telegram_groups_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Одноразовые ссылки подключения общего чата фирмы (поток Т, задача Т8): хеш ключа из
+ * `t.me/<бот>?startgroup=g_<ключ>`, 15 минут. Создаёт владелец на сайте; группа приносит ключ в
+ * «/start@<бот> g_<ключ>» — организацию по нему вебхук узнаёт функцией `app.telegram_group_token`.
+ */
+export const telegramGroupTokens = pgTable(
+  'telegram_group_tokens',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    createdBy: uuid('created_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+  },
+  (t) => [
+    foreignKey({
+      name: 'telegram_group_tokens_user_org_fk',
+      columns: [t.createdBy, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    index('telegram_group_tokens_org_idx').on(t.orgId),
+    orgIsolation('telegram_group_tokens_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Виджет «Мои отчёты на неделю» (поток Т, задача Т9; прототип v106 modules/tg-widget.js): у сотрудника —
+ * один действующий виджет, последний присланный (прежний бот помечает «устарел»). `items` — номера
+ * отчётов строк виджета по порядку: виджет присылает боту номер строки, а не номер отчёта. `data` —
+ * данные виджета (`chat_data`) в том виде, в каком они сейчас в чате.
+ */
+export const telegramWidgets = pgTable(
+  'telegram_widgets',
+  {
+    userId: uuid('user_id').primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    messageId: integer('message_id').notNull(),
+    items: jsonb('items').$type<string[]>().notNull(),
+    data: text('data').notNull(),
+    sentOn: date('sent_on', { mode: 'string' }).notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'telegram_widgets_user_org_fk',
+      columns: [t.userId, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    check('telegram_widgets_chat_check', sql`${t.chatId} > 0`),
+    check('telegram_widgets_data_check', sql`octet_length(${t.data}) <= 1024`),
+    index('telegram_widgets_org_idx').on(t.orgId, t.sentOn),
+    orgIsolation('telegram_widgets_isolation', t.orgId),
   ],
 ).enableRLS();

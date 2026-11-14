@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import { orgFileKey } from '@buhuchet/adapters';
 import {
+  changeFile,
   dropPendingFile,
   getFile,
   takeRateLimit,
@@ -19,28 +20,35 @@ import {
 } from '@buhuchet/db';
 import {
   canSeeContractor,
+  cleanFileNote,
   FILE_LINK_SECONDS,
   FILE_MAX_BYTES,
   FILE_MESSAGES,
+  FILE_REPLACE_TTL_MS,
   FILE_UPLOAD_LINK_SECONDS,
   FILE_UPLOADS_PER_HOUR,
   fileContentType,
   fileDeleteRefusal,
+  fileNameParts,
+  fileRenameProblem,
   fileUploadProblem,
   hasPermission,
   PAGE_MESSAGES,
   pageFileApplies,
+  RecordChangedError,
   type AccessSubject,
   type Feature,
 } from '@buhuchet/domain';
 import {
   ApiError,
+  FileEdit,
   FileIdParam,
   FileItem,
   FileLink,
   FileList,
   FilePage,
   FilePageInput,
+  FileReplaceStart,
   FileSourceQuery,
   FileUploadStart,
   FileUploadTicket,
@@ -58,7 +66,9 @@ import { FILE_SOURCES, type FileSource, type FileSourceRecord } from './sources'
  * Файлы записей (задача 2.04; ТЗ «Файловый менеджер»; прототип modules/services.js — `filesBox`,
  * modules/files.js — правила). Видит файлы право «Просматривать файлы» в области группы «Файловый
  * менеджер» и тот, кто видит саму запись; прикрепляет — «Загружать файлы» и право менять запись в её
- * модуле; удаляет свой файл в течение суток или любой — с правом «Удалять файлы». Функция учётной
+ * модуле; он же меняет название и примечание файла (прототип v95, «Изменить файл»), а заменяет файл
+ * тот, кто может ещё и удалить его; удаляет свой файл в течение суток или любой — с правом «Удалять
+ * файлы». Функция учётной
  * политики «Файлы в карточках» выключена — файлов нет совсем. Сам файл идёт мимо API: браузер кладёт
  * его в хранилище по подписанной ссылке, API проверяет размер и делает файл видимым.
  */
@@ -123,7 +133,7 @@ export function canView(subject: AccessSubject, record: FileSourceRecord): boole
   return !record.contractor || canSeeContractor(subject, 'files', record.contractor);
 }
 
-function canUpload(subject: AccessSubject, record: FileSourceRecord): boolean {
+export function canUpload(subject: AccessSubject, record: FileSourceRecord): boolean {
   return canView(subject, record) && record.editable && hasPermission(subject, 'filesUpload');
 }
 
@@ -145,7 +155,7 @@ export function deleteRefusal(
  * Запись-источник, файлы которой сотрудник видит; иначе — 404 (чужую запись и запись вне области не
  * отличить от несуществующей).
  */
-async function visibleSource(
+export async function visibleSource(
   deps: ApiDeps,
   tx: Tx,
   subject: AccessSubject,
@@ -159,7 +169,7 @@ async function visibleSource(
   return record;
 }
 
-/** Файл блока «Файлы» для ответа: можно ли удалить — для этого сотрудника сейчас. */
+/** Файл блока «Файлы» для ответа: можно ли удалить, изменить и заменить — этому сотруднику сейчас. */
 function itemBody(
   file: FileRecord,
   record: FileSourceRecord,
@@ -168,14 +178,19 @@ function itemBody(
   now: Date,
   cppage: boolean,
 ): FileItemBody {
+  const canDelete = deleteRefusal(subject, record, file, userId, now) === null;
+  const canEdit = canUpload(subject, record);
   return {
     id: file.id,
     name: file.name,
     contentType: file.contentType,
     size: file.sizeBytes,
+    note: file.note,
     uploadedBy: file.uploadedBy,
     uploadedAt: file.createdAt.toISOString(),
-    canDelete: deleteRefusal(subject, record, file, userId, now) === null,
+    canDelete,
+    canEdit,
+    canReplace: canEdit && canDelete,
     page: filePageOf(file, record.contractor, subject, cppage),
     version: file.version,
   };
@@ -188,11 +203,22 @@ function itemBody(
 export const realNow = () => new Date();
 
 /** Удалить файл из хранилища, не роняя метод: запись в базе уже верная, лишний файл не опасен. */
-async function dropObject(deps: ApiDeps, key: string): Promise<void> {
+async function dropObject(
+  deps: ApiDeps,
+  key: string,
+  replaced?: { fileId: string },
+): Promise<void> {
   try {
     await deps.storage.delete(key);
   } catch (err) {
-    deps.logger.error({ err }, 'файлы: не удалось удалить файл из хранилища');
+    if (replaced) {
+      deps.logger.error(
+        { err, fileId: replaced.fileId, key },
+        'файлы: прежний файл после замены не удалён из хранилища',
+      );
+    } else {
+      deps.logger.error({ err }, 'файлы: не удалось удалить файл из хранилища');
+    }
   }
 }
 
@@ -309,7 +335,7 @@ export function startUploadHandler(deps: ApiDeps): RouteHandler<typeof startUplo
         contentType,
         sizeBytes: size,
         storageKey,
-        note: note || null,
+        note: cleanFileNote(note ?? '') || null,
         // Галочка «Показывать контрагенту на его странице» снята (только при «Странице контрагента»).
         pageHidden: page === false && features.cppage && record.contractor !== null,
       });
@@ -360,6 +386,30 @@ export const completeUploadRoute = createRoute({
 });
 
 /**
+ * Файл начатой загрузки дошёл до хранилища и он тот, что заявлен: размер и тип подписаны в ссылке, но
+ * проверяются ещё раз — не всякое хранилище S3 сверяет подпись типа одинаково. Не тот файл удаляется
+ * вместе с записью загрузки.
+ */
+async function checkStored(
+  deps: ApiDeps,
+  ctx: ReturnType<typeof orgContextOf>,
+  pending: FileRecord,
+): Promise<void> {
+  const stored = await deps.storage.stat(pending.storageKey);
+  if (!stored) apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
+  if (
+    stored.size !== pending.sizeBytes ||
+    stored.size > FILE_MAX_BYTES ||
+    stored.contentType !== pending.contentType
+  ) {
+    await withOrgContext(deps.db, ctx, (tx) => dropPendingFile(tx, pending.id));
+    await dropObject(deps, pending.storageKey);
+    if (stored.size > FILE_MAX_BYTES) apiFail(400, 'file_too_large', FILE_MESSAGES.file_too_large);
+    apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
+  }
+}
+
+/**
  * Закончить загрузку: файл лежит в хранилище и его размер — тот, что заявлен (не больше 20 МБ). Закончить
  * может только тот, кто начал. Файл не того размера удаляется вместе с записью.
  */
@@ -371,24 +421,16 @@ export function completeUploadHandler(
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);
     const pending = await withOrgContext(deps.db, ctx, (tx) => getFile(tx, id));
-    if (!pending || pending.state !== 'pending' || pending.createdBy !== ctx.userId) {
+    // Загрузка-замена файлом записи не становится: её заканчивает «Изменить файл» (`PATCH /files/{id}`).
+    if (
+      !pending ||
+      pending.state !== 'pending' ||
+      pending.createdBy !== ctx.userId ||
+      pending.replacesId !== null
+    ) {
       return notFound();
     }
-    const stored = await deps.storage.stat(pending.storageKey);
-    if (!stored) apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-    // Размер и тип подписаны в ссылке, но проверяются ещё раз: не всякое хранилище S3 сверяет подпись
-    // типа одинаково.
-    if (
-      stored.size !== pending.sizeBytes ||
-      stored.size > FILE_MAX_BYTES ||
-      stored.contentType !== pending.contentType
-    ) {
-      await withOrgContext(deps.db, ctx, (tx) => dropPendingFile(tx, id));
-      await dropObject(deps, pending.storageKey);
-      if (stored.size > FILE_MAX_BYTES)
-        apiFail(400, 'file_too_large', FILE_MESSAGES.file_too_large);
-      apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-    }
+    await checkStored(deps, ctx, pending);
     const now = realNow();
     const body = await withOrgContext(deps.db, ctx, async (tx) => {
       const file = await getFile(tx, id, { lock: true });
@@ -400,7 +442,11 @@ export function completeUploadHandler(
       await writeHistory(tx, {
         ...record.history(id),
         action: 'file_attach',
-        changes: [{ field: 'file', to: file.name }],
+        // Примечание — в той же записи истории (прототип v95: «Прикреплены файлы: …. Примечание: …»).
+        changes: [
+          { field: 'file', to: file.name },
+          ...(file.note ? [{ field: 'note', to: file.note }] : []),
+        ],
       });
       // Загружен скрытым со страницы контрагента — и это в истории (прототип v74 uploadDlg → pgFileSet).
       if (file.pageHidden) {
@@ -635,5 +681,214 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
     });
     await dropObject(deps, key);
     return c.json({ id }, 200);
+  };
+}
+
+/** Одна строка названия: пробелы и переносы — одним пробелом (прототип v95 `fileEditDlg`). */
+const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+export const startReplaceRoute = createRoute({
+  method: 'post',
+  path: '/files/{id}/replacement',
+  tags: ['files'],
+  summary: 'Начать замену файла: ссылка на хранилище для нового файла на 2 минуты',
+  middleware: [requirePermission('filesView'), requirePermission('filesUpload')] as const,
+  request: {
+    params: FileIdParam,
+    body: { required: true, content: { 'application/json': { schema: FileReplaceStart } } },
+  },
+  responses: {
+    201: {
+      description:
+        'Замена начата: куда и с какими заголовками положить новый файл; прежний остаётся на месте, пока замену не сохранит «Изменить файл»',
+      content: { 'application/json': { schema: FileUploadTicket } },
+    },
+    400: {
+      description: 'Файл больше 20 МБ, такой тип не загружается, неверное имя',
+      content: error,
+    },
+    401: { description: 'Нет входа', content: error },
+    403: {
+      description:
+        'Нет права «Загружать файлы» или менять запись; заменить чужой файл без права «Удалять файлы», свой — позже суток; «Файлы в карточках» выключены',
+      content: error,
+    },
+    404: { description: 'Файла нет, он удалён или вне области', content: error },
+    429: { description: 'Больше 300 загрузок за час', content: error },
+  },
+});
+
+/**
+ * Начать замену файла (прототип v95 `fileEditDlg`, поле «Заменить файл»): проверить новый файл и права,
+ * завести загрузку-замену «pending» этого файла и подписать ссылку на хранилище. Прежний файл виден и
+ * скачивается, пока замену не сохранит `PATCH /files/{id}` с номером этой загрузки.
+ */
+export function startReplaceHandler(deps: ApiDeps): RouteHandler<typeof startReplaceRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { name: rawName, size } = c.req.valid('json');
+    const problem = fileUploadProblem({ name: rawName, size });
+    if (problem) apiFail(400, problem, FILE_MESSAGES[problem]);
+    const name = rawName.trim();
+    const contentType = fileContentType(name);
+    const ctx = orgContextOf(c);
+    const subject = subjectOf(c);
+    const now = realNow();
+    const uploadId = randomUUID();
+    const storageKey = orgFileKey(ctx.orgId, FILES_SECTION, uploadId);
+    const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
+    if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
+    await withOrgContext(deps.db, ctx, async (tx) => {
+      const file = await getFile(tx, id);
+      if (!file || file.state !== 'ready') return notFound();
+      await requireFilesFeature(tx, ctx.orgId);
+      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId, file);
+      if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
+      if (deleteRefusal(subject, record, file, ctx.userId!, now) !== null) {
+        apiFail(403, 'file_replace_forbidden', FILE_MESSAGES.file_replace_forbidden);
+      }
+      await insertPendingFile(tx, {
+        id: uploadId,
+        sourceKind: file.sourceKind,
+        sourceId: file.sourceId,
+        contractorId: file.contractorId,
+        name,
+        contentType,
+        sizeBytes: size,
+        storageKey,
+        replacesId: file.id,
+      });
+    });
+    const expiresAt = new Date(Date.now() + FILE_UPLOAD_LINK_SECONDS * 1000);
+    const upload = await deps.storage.signedUploadUrl(storageKey, {
+      expiresInSeconds: FILE_UPLOAD_LINK_SECONDS,
+      contentType,
+      size,
+    });
+    return c.json(
+      {
+        id: uploadId,
+        upload: {
+          url: upload.url,
+          method: 'PUT' as const,
+          headers: upload.headers,
+          expiresAt: expiresAt.toISOString(),
+        },
+      },
+      201,
+    );
+  };
+}
+
+export const editFileRoute = createRoute({
+  method: 'patch',
+  path: '/files/{id}',
+  tags: ['files'],
+  summary: 'Изменить файл записи: название, примечание, замена файла',
+  middleware: [requirePermission('filesView'), requirePermission('filesUpload')] as const,
+  request: {
+    params: FileIdParam,
+    body: { required: true, content: { 'application/json': { schema: FileEdit } } },
+  },
+  responses: {
+    200: {
+      description:
+        'Файл после правки (в истории записи — что изменилось: название, примечание, замена; без изменений — без записи)',
+      content: { 'application/json': { schema: FileItem } },
+    },
+    400: {
+      description:
+        'Название пустое, длиннее 255 знаков, со знаками \\ / : * ? " < > | или меняет расширение; новый файл больше 20 МБ',
+      content: error,
+    },
+    401: { description: 'Нет входа', content: error },
+    403: {
+      description:
+        'Нет права «Загружать файлы» или менять запись; заменить чужой файл без права «Удалять файлы», свой — позже суток; «Файлы в карточках» выключены',
+      content: error,
+    },
+    ...versionedSaveResponses,
+  },
+});
+
+/**
+ * «Изменить файл» (прототип v95 `fileEditDlg`): название (расширение остаётся прежним, при замене — от
+ * нового файла), примечание и замена файла. Название и примечание меняет право «Загружать файлы» и
+ * право менять запись; заменяет тот, кто может ещё и удалить файл: прежний файл при замене пропадает
+ * из хранилища. Номер файла остаётся прежним — ссылки из «Истории статусов» ведут на новый файл. Что
+ * изменилось — одной записью истории записи-источника.
+ */
+export function editFileHandler(deps: ApiDeps): RouteHandler<typeof editFileRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { version, name: rawName, note: rawNote, uploadId } = c.req.valid('json');
+    const ctx = orgContextOf(c);
+    const subject = subjectOf(c);
+    const now = realNow();
+    let upload: FileRecord | null = null;
+    if (uploadId) {
+      upload = await withOrgContext(deps.db, ctx, (tx) => getFile(tx, uploadId));
+      // Чужая, законченная, начатая для другого файла или больше часа назад загрузка — как
+      // несуществующая (старую может в эту минуту стирать очистка незаконченных загрузок).
+      if (
+        !upload ||
+        upload.state !== 'pending' ||
+        upload.createdBy !== ctx.userId ||
+        upload.replacesId !== id ||
+        now.getTime() - upload.createdAt.getTime() > FILE_REPLACE_TTL_MS
+      ) {
+        return notFound();
+      }
+      await checkStored(deps, ctx, upload);
+    }
+    const { body, replacedKey } = await withOrgContext(deps.db, ctx, async (tx) => {
+      const file = await getFile(tx, id, { lock: true });
+      if (!file || file.state !== 'ready') return notFound();
+      const features = await requireFilesFeature(tx, ctx.orgId);
+      const record = await visibleSource(deps, tx, subject, file.sourceKind, file.sourceId, file);
+      if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
+      if (upload && deleteRefusal(subject, record, file, ctx.userId!, now) !== null) {
+        apiFail(403, 'file_replace_forbidden', FILE_MESSAGES.file_replace_forbidden);
+      }
+      if (file.version !== version) throw new RecordChangedError('file', id, file.version);
+      // Расширение правка не меняет: прежнее, при замене — нового файла.
+      const [, ext] = fileNameParts(upload ? upload.name : file.name);
+      const name = oneLine(rawName);
+      const base = name.endsWith(ext) ? name.slice(0, name.length - ext.length) : name;
+      const problem = name.endsWith(ext) ? fileRenameProblem(base, ext) : 'file_name_invalid';
+      if (problem) apiFail(400, problem, FILE_MESSAGES[problem], { field: 'name' });
+      const note = cleanFileNote(rawNote) || null;
+      const changes = [
+        ...(name !== file.name ? [{ field: 'name', from: file.name, to: name }] : []),
+        ...(note !== file.note ? [{ field: 'note', from: file.note, to: note }] : []),
+        ...(upload ? [{ field: 'size', from: file.sizeBytes, to: upload.sizeBytes }] : []),
+      ];
+      // Ничего не изменилось — ни новой версии, ни записи в истории (как в прототипе).
+      if (!changes.length) {
+        return {
+          body: itemBody(file, record, subject, ctx.userId!, now, features.cppage),
+          replacedKey: null,
+        };
+      }
+      const replacedKey = await changeFile(tx, id, version, {
+        name,
+        note,
+        ...(upload ? { replacementId: upload.id } : {}),
+      });
+      await writeHistory(tx, {
+        ...record.history(id),
+        action: 'file_edit',
+        changes: [{ field: 'file', to: name }, ...changes],
+      });
+      const saved = (await getFile(tx, id))!;
+      return {
+        body: itemBody(saved, record, subject, ctx.userId!, now, features.cppage),
+        replacedKey,
+      };
+    });
+    // Прежний файл стирается из хранилища после сохранения: ссылки на него больше нет. Не удалось —
+    // в журнале остаётся номер файла и ключ объекта, чтобы его можно было найти и стереть.
+    if (replacedKey) await dropObject(deps, replacedKey, { fileId: id });
+    return c.json(body, 200);
   };
 }

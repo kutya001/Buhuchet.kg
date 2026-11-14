@@ -156,6 +156,8 @@ export type TaskComment = z.infer<typeof TaskComment>;
 export const TaskHistoryEntry = z.object({
   at: z.iso.datetime(),
   actor: z.string().nullable(),
+  /** Откуда сделано: `telegram` — кнопкой или ответом в чате бота («через Telegram»); пусто — на сайте. */
+  via: z.enum(['telegram']).nullable().optional(),
   action: z.string(),
   changes: z.array(
     z.object({ field: z.string(), from: z.unknown().optional(), to: z.unknown().optional() }),

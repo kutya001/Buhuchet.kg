@@ -47,8 +47,9 @@ async function error(res: Response) {
   return ApiError.parse(await res.json()).error;
 }
 
+// Время в сообщении — по часам тестов (09:00 по Бишкеку).
 const passedChangeNotice = (login: string) =>
-  TELEGRAM_TEMPLATE_DEFAULTS.tgPassChanged.replace('{логин}', login);
+  TELEGRAM_TEMPLATE_DEFAULTS.tgPassChanged.replace('{логин}', login).replace('{время}', '09:00');
 const passwordResetNotice = (login: string, by: string) =>
   TELEGRAM_TEMPLATE_DEFAULTS.tgPassReset.replace('{логин}', login).replace('{кто}', by);
 

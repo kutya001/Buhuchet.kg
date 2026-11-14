@@ -1,6 +1,11 @@
 'use client';
 
-import { CP_TG_LINK_TTL_HOURS, formatMomentRu, type CpTgStatus } from '@buhuchet/domain';
+import {
+  CP_TG_LINK_TTL_HOURS,
+  formatMomentRu,
+  formatSomWithUnit,
+  type CpTgStatus,
+} from '@buhuchet/domain';
 import {
   ContractorTelegram,
   PublicPageTelegramLink,
@@ -9,6 +14,7 @@ import {
 } from '@buhuchet/shared';
 import {
   buttonClass,
+  CheckRow,
   ConfirmDialog,
   Hint,
   Icon,
@@ -24,6 +30,7 @@ import { useEffect, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { contractorPageQuery } from './page-data';
 
 /*
  * Telegram контрагента (доработки 13.11.2026, задача К3; прототип v92 modules/cp-telegram.js): раздел
@@ -202,11 +209,53 @@ export function ContractorTelegramBox({ contractorId }: { contractorId: string }
       void client.invalidateQueries({ queryKey: key });
       return;
     }
+    // Идущее перечитывание блока (его запускает и блок «Страница контрагента») ответ не затрёт.
+    await client.cancelQueries({ queryKey: key });
     client.setQueryData(key, ContractorTelegram.parse(res.data));
     // Решение пишется в историю контрагента.
     void client.invalidateQueries({ queryKey: ['contractors', 'history', contractorId] });
     toast(t(`cppage.tg.toast.${action}`, { name: item.name }), { icon: 'tg' });
   };
+  // «Напоминать о долге в Telegram» у этого контрагента (задача К5; прототип pgDebtRow, pgTgBoxClick).
+  const debt = data.debt;
+  const toggleDebt = async (on: boolean) => {
+    if (!debt) return;
+    if (debt.refusal) return toast(t(`err.${debt.refusal}`), { icon: 'lock', bad: true });
+    const res = await callApi(() =>
+      api.api.contractors[':id'].page.telegram.debt.$post({
+        param: { id: contractorId },
+        json: { on, version: debt.version },
+      }),
+    );
+    if (!res.ok) {
+      toast(errorText(res.error), { bad: true });
+      // Запись страницы общая с блоком «Страница контрагента» — перечитать оба блока.
+      void client.invalidateQueries({ queryKey: contractorPageQuery(contractorId).queryKey });
+      return;
+    }
+    const next = ContractorTelegram.parse(res.data);
+    await client.cancelQueries({ queryKey: key });
+    client.setQueryData(key, next);
+    // Переключатель хранится в записи страницы контрагента: блок «Страница контрагента» держит её
+    // версию у себя — отдать ему новую сразу, иначе его следующее действие упрётся в «запись изменена».
+    const version = next.debt?.version;
+    if (version != null) {
+      client.setQueryData(contractorPageQuery(contractorId).queryKey, (old) =>
+        old ? { ...old, version } : old,
+      );
+    }
+    void client.invalidateQueries({ queryKey: ['contractors', 'history', contractorId] });
+    toast(t(on ? 'cppage.debt.toast_on' : 'cppage.debt.toast_off'), { icon: 'tg' });
+  };
+  const debtHint = !debt
+    ? ''
+    : !debt.orgOn
+      ? t('cppage.debt.hint_org_off')
+      : debt.sum === null
+        ? t('cppage.debt.hint_plain')
+        : debt.sum > 0
+          ? t('cppage.debt.hint', { sum: formatSomWithUnit(debt.sum) })
+          : t('cppage.debt.hint_none');
   const press = (item: ContractorTelegramItem, action: Decision) => {
     const why = whyNot(action);
     if (why) return toast(why, { icon: 'lock', bad: true });
@@ -256,6 +305,7 @@ export function ContractorTelegramBox({ contractorId }: { contractorId: string }
                 {formatMomentRu(new Date(item.decidedAt))}
               </Hint>
             ) : null}
+            {item.status === 'on' && item.noDebt ? <Hint>{t('cppage.tg.no_debt')}</Hint> : null}
           </>
         ),
         act: (
@@ -299,6 +349,22 @@ export function ContractorTelegramBox({ contractorId }: { contractorId: string }
       ) : (
         <Hint>{t('cppage.tg.empty')}</Hint>
       )}
+      {debt ? (
+        <div
+          data-cp-tg-debt=""
+          title={debt.refusal ? t(`err.${debt.refusal}`) : undefined}
+          className={debt.refusal ? 'opacity-60' : undefined}
+        >
+          <CheckRow
+            plain
+            checked={debt.on}
+            onChange={(on) => void toggleDebt(on)}
+            label={t('cppage.debt.label')}
+          >
+            <Hint>{debtHint}</Hint>
+          </CheckRow>
+        </div>
+      ) : null}
       <Hint>{t('cppage.tg.hint')}</Hint>
       <ConfirmDialog
         open={ask !== null}

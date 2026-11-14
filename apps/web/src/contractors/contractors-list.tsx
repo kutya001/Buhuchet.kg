@@ -9,8 +9,8 @@ import {
 import { ContractorList, ListValues, type ContractorRow } from '@buhuchet/shared';
 import { DataGrid, EmptyState, Plate, Plates, type PlateProps } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useCallback, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
 import { missingSummaryQuery } from '../kpi/kpi-data';
 import { useT } from '../l10n/provider';
@@ -19,6 +19,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
 import { openContractorCard } from './card-store';
@@ -83,6 +84,7 @@ const plateOn = (f: Filters, id: string): boolean => {
 export function ContractorsList({ tab }: { tab: ContractorTab }) {
   const t = useT();
   const router = useRouter();
+  const contractorParam = useSearchParams().get('contractor');
   const gridKey: GridKey = `cps.${tab}`;
   const labels = useGridLabels('cp.count');
   const { search, clearSearch, access } = useShell();
@@ -133,6 +135,16 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
     [params, visible],
   );
   const exporter = useListExport(sendExport);
+  // Ссылка «Открыть на сайте» из карточки контрагента в чате бота (поток Т, задача Т5): карточка
+  // контрагента и адрес без `?contractor=`. Чужой или недоступный контрагент — карточка ответит сама.
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('contractor');
+    const id = linkedRecordId(value);
+    if (id) openContractorCard({ id });
+  });
+  useEffect(() => {
+    if (contractorParam) openLinked(contractorParam);
+  }, [contractorParam]);
   const importer = useContractorImport();
   useContractorAddRequest({
     contractor: cps.newContractor,

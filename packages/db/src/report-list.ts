@@ -1137,17 +1137,27 @@ export async function reportSummary(
   };
 }
 
-/** Отчёт месяца для правила «По месяцам» (`monthPlanItem` домена) и его контрагент. */
-export type ReportMonthPlanRow = MonthPlanReport & { contractorId: string };
+/**
+ * Отчёт месяца для правила «По месяцам» (`monthPlanItem` домена), его контрагент и короткое название
+ * вида. Строки идут в порядке создания отчётов (прототип `rmToPay`: при равном сроке — по номеру отчёта).
+ */
+export type ReportMonthPlanRow = MonthPlanReport & { contractorId: string; typeShort: string };
 
 /**
  * Отчёты месяца в области сотрудника — только то, что нужно правилу «к сдаче и к оплате по месяцам»
  * (`monthPlanGroup`, `monthPlanQuick` домена; прототип v90 `rmRender`: итог месяца и числа «Все / Сдать
  * / Уплатить»). Те же отчёты, что в списке вкладки «По месяцам»: без прежних версий и «Не требуется».
+ * `contractorId` — только отчёты одного контрагента («К оплате клиенту» в его карточке).
  */
 export async function reportMonthPlanRows(
   tx: Tx,
-  o: { scope: SQL | undefined; today: IsoDate; taxpay: boolean; month: YearMonth },
+  o: {
+    scope: SQL | undefined;
+    today: IsoDate;
+    taxpay: boolean;
+    month: YearMonth;
+    contractorId?: string;
+  },
 ): Promise<ReportMonthPlanRow[]> {
   return tx
     .select({
@@ -1164,10 +1174,44 @@ export async function reportMonthPlanRows(
       paid: reports.paid,
       overdue: sql<boolean>`${overdueOf(o.today)}`,
       payOverdue: sql<boolean>`${payOverdueOf(o.today, o.taxpay)}`,
+      typeShort: reportTypes.shortName,
     })
     .from(reports)
     .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-    .where(and(eq(reports.superseded, false), o.scope, monthCondition(o.month)));
+    .innerJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
+    .where(
+      and(
+        eq(reports.superseded, false),
+        o.scope,
+        monthCondition(o.month),
+        o.contractorId ? eq(reports.contractorId, o.contractorId) : undefined,
+      ),
+    )
+    .orderBy(asc(reports.createdAt), asc(reports.id));
+}
+
+/**
+ * Месяцы отчётов контрагента, у которых срок оплаты (а без него — срок сдачи) попадает в дни с `from`
+ * по `to`: для «К оплате» клиенту за 5 дней до срока. Месяц отчёта и его срок оплаты могут далеко
+ * расходиться (годовой отчёт — декабрь, а платить в апреле), поэтому месяцы ищутся по срокам, а не
+ * отсчётом от сегодняшнего. Что из месяца ещё не оплачено, считает правило `monthToPay`.
+ */
+export async function reportPayDueMonths(
+  tx: Tx,
+  o: { contractorId: string; from: IsoDate; to: IsoDate },
+): Promise<YearMonth[]> {
+  const rows = await tx
+    .selectDistinct({ month: sql<YearMonth>`${REPORT_MONTH}` })
+    .from(reports)
+    .where(
+      and(
+        eq(reports.superseded, false),
+        eq(reports.contractorId, o.contractorId),
+        sql`${reports.status} <> 'not_required'`,
+        sql`coalesce(${reports.payDue}, ${reports.dueDate}) between ${o.from}::date and ${o.to}::date`,
+      ),
+    );
+  return rows.map((r) => r.month).sort();
 }
 
 /**

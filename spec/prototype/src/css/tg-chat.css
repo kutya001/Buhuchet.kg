@@ -51,3 +51,41 @@
 .tgc-ask{display:flex;flex-direction:column;gap:6px;margin-top:4px;padding:9px 10px;border:1px solid var(--border-strong);border-radius:12px;background:var(--pane)}
 .tgc-ask-h{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);min-width:0}
 .tgc-ask-h span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Меню команд бота (задача Т5): строка кнопок под перепиской — в Telegram это кнопки под полем ввода */
+.tgc-menu{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;padding-top:8px;border-top:1px dashed var(--border-strong)}
+.tgc-menu .tgc-k{flex:1 1 auto}
+/* Картинка в сообщении рассылки (задача Т6) */
+.tgc-img{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:9px;margin:0 0 6px;background:var(--pane-alt)}
+/* Темы в чате с ботом (задача Т7): вкладки тем над перепиской */
+.tgc-topics{display:flex;gap:4px;overflow-x:auto;padding-bottom:6px;border-bottom:1px dashed var(--border-strong);scrollbar-width:thin}
+.tgc-tp{display:inline-flex;align-items:center;gap:5px;flex:none;max-width:220px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--pane);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
+.tgc-tp span:first-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tgc-tp.on{background:var(--sel);border-color:var(--blue);font-weight:600}
+.tgc-tp .tgc-n{flex:none}
+/* Виджет «Мои отчёты на неделю» (задача Т9): маленький экран в чате — вкладки дней, галочки «Сдан», строка итога. Вкладки переносятся, а не прокручиваются: в виджете Telegram прокрутки нет */
+.tgc-b.tgw{width:min(360px,100%);padding:9px 10px}
+.tgw-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.tgw-h b{font-size:13.5px}
+.tgw-h span{margin-left:auto;font-size:11px;color:var(--faint)}
+.tgw-tabs{display:flex;flex-wrap:wrap;gap:4px;padding-bottom:6px}
+.tgw-tab{flex:none;border:1px solid var(--border);background:var(--pane-alt);color:var(--text);border-radius:999px;padding:3px 9px;font:inherit;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.tgw-tab span{font-size:11px;font-weight:700;color:var(--muted)}
+.tgw-tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.tgw-tab.on span{color:#fff}
+.tgw-tab.over:not(.on){border-color:var(--red,#d14);color:var(--red,#d14)}
+.tgw-list{display:flex;flex-direction:column}
+.tgw-row{display:flex;align-items:flex-start;gap:8px;padding:6px 0;border-top:1px solid var(--border)}
+.tgw-row:first-child{border-top:0}
+.tgw-chk{flex:none;width:22px;height:22px;border-radius:6px;border:1.5px solid var(--border-strong);background:var(--raised);display:grid;place-items:center;cursor:pointer;padding:0;color:#fff}
+.tgw-chk .ic{width:14px;height:14px}
+.tgw-row.done .tgw-chk{background:var(--green,#2a8);border-color:var(--green,#2a8);cursor:default}
+.tgw-t{display:flex;flex-direction:column;min-width:0;font-size:12.5px;line-height:1.35}
+.tgw-t b{font-weight:600;overflow-wrap:anywhere}
+.tgw-t span{color:var(--muted);font-size:12px}
+.tgw-row.done .tgw-t b{text-decoration:line-through;color:var(--muted)}
+.tgw-none,.tgw-more{margin:6px 0 0!important;font-size:12px;color:var(--muted)}
+.tgw-note{margin:6px 0 0!important;font-size:12px;padding:5px 8px;border-radius:8px;background:var(--pane-alt);border:1px dashed var(--border-strong)}
+.tgw-old{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px}
+.tgw-old .ic{width:13px;height:13px;flex:none}
+.tgw-foot{display:flex;gap:4px;margin-top:8px}
+.tgw-foot .tgc-k{flex:1 1 0}

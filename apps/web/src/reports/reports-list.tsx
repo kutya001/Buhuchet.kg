@@ -22,7 +22,7 @@ import {
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useSyncExternalStore } from 'react';
 import { api, apiFailure } from '../api-client';
 import { typeSettingsQuery } from '../dicts/dicts-data';
 import { useTaxPick } from '../dicts/tax-pick';
@@ -34,6 +34,7 @@ import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useShell } from '../shell/context';
 import { moduleHref, tabHref } from '../shell/modules';
 import { useMassAssign } from './mass-assign';
@@ -170,7 +171,9 @@ export function NoTypesNote() {
 export function ReportsList({ tab }: { tab: ReportListTab }) {
   const t = useT();
   const router = useRouter();
-  const plateParam = useSearchParams().get('plate');
+  const query = useSearchParams();
+  const plateParam = query.get('plate');
+  const reportParam = query.get('report');
   const gridKey: GridKey = `reports.${tab}`;
   const preset = usePresetFilters('reports', tab);
   const labels = useGridLabels('report.count');
@@ -243,6 +246,16 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
     setFilters(plateFilters(plateParam, s.month));
     router.replace(tabHref('reports', 'all'), { scroll: false });
   }, [tab, s, plateParam, setFilters, router]);
+
+  // Ссылка «Открыть» из сообщения бота: карточка отчёта и адрес без `?report=`.
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('report');
+    const id = linkedRecordId(value);
+    if (id) reports.openCard({ id });
+  });
+  useEffect(() => {
+    if (reportParam) openLinked(reportParam);
+  }, [reportParam]);
 
   const goPlate = (plate: PlateFilter) => {
     if (!s) return;

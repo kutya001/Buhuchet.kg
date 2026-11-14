@@ -17,6 +17,8 @@ export function feeWhatsAppText(
   values: {
     contractor: string;
     months: readonly YearMonth[];
+    /** Месяцы долга своим текстом («4 мес.») вместо перечня — когда перечень не помещается. */
+    monthsText?: string;
     amount: Tyiyn;
     payBy: IsoDate;
     requisite: string | null;
@@ -25,7 +27,7 @@ export function feeWhatsAppText(
 ): string {
   const text = template
     .replaceAll('{контрагент}', values.contractor)
-    .replaceAll('{месяц}', values.months.map(monthLabel).join(', '))
+    .replaceAll('{месяц}', values.monthsText ?? values.months.map(monthLabel).join(', '))
     .replaceAll('{сумма}', formatSomWithUnit(values.amount))
     .replaceAll('{дата}', formatDateRu(values.payBy))
     .replaceAll('{реквизиты}', values.requisite || '—');

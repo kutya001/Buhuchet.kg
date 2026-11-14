@@ -1086,6 +1086,8 @@ export async function confirmSubmittedWhileOff(tx: Tx, note: string): Promise<nu
 export interface ReportHistoryItem {
   at: Date;
   actor: string | null;
+  /** `telegram` — сделано в чате бота («через Telegram»); пусто — на сайте. */
+  via: 'telegram' | null;
   action: string;
   reason: string | null;
   changes: HistoryChange[];
@@ -1150,6 +1152,7 @@ export async function reportSubmitView(
         at: auditLog.at,
         actorUserId: auditLog.actorUserId,
         actorName: historyActor.shortName,
+        via: auditLog.via,
         action: auditLog.action,
         reason: auditLog.reason,
         changes: auditLog.changes,
@@ -1204,6 +1207,7 @@ export async function reportSubmitView(
     history: history.map((h) => ({
       at: h.at,
       actor: auditActorName(h.actorUserId, h.actorName),
+      via: h.via === 'telegram' ? h.via : null,
       action: h.action,
       reason: h.reason,
       changes: ((h.changes ?? []) as HistoryChange[]).map(named),

@@ -106,7 +106,12 @@ export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, App
     if (account.isPlatformAdmin && adminSecondFactorOn(deps)) {
       return startAdminCode(c, deps, account);
     }
-    return c.json(await openSession(c, deps, account), 200);
+    const me = await openSession(c, deps, account);
+    if (me) return c.json(me, 200);
+    // Вход закрыли, пока проверялся пароль («Это не я» из Telegram или десятый неверный пароль):
+    // сеанса нет, ответ — как у закрытого входа, причина — по свежей записи.
+    const closed = (await findLogin(deps.db, login)) ?? account;
+    return c.json(denialError(loginDenial(closed) ?? 'account_locked', closed), 403);
   };
 }
 

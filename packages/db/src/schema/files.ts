@@ -24,8 +24,9 @@ export type FileState = (typeof FILE_STATES)[number];
 
 /**
  * Файлы организации (ТЗ «Файловый менеджер»): договоры, отчёты, квитанции, платёжки — до 20 МБ. Сам файл
- * лежит в хранилище S3 под ключом `org/<org_id>/files/<id>` (ограничение `files_key_check` не даёт
- * записи указать на чужой файл), здесь — описание и источник: к какой записи он прикреплён (вид и номер
+ * лежит в хранилище S3 под ключом `org/<org_id>/files/<номер загрузки>` (ограничение `files_key_check`
+ * не даёт записи указать на файл чужой организации; у заменённого файла это номер загрузки-замены —
+ * прототип v95, «Изменить файл»), здесь — описание и источник: к какой записи он прикреплён (вид и номер
  * записи; «manual» — загружен вручную, без записи) и контрагент записи — для области «Свои контрагенты»
  * и Файлового менеджера.
  *
@@ -59,8 +60,17 @@ export const files = pgTable(
     contentType: text('content_type').notNull(),
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     storageKey: text('storage_key').notNull().unique(),
-    /** Комментарий ручной загрузки (Файловый менеджер). */
+    /** Примечание к файлу (прототип v95): необязательное, меняется в окне «Изменить файл». */
     note: text('note'),
+    /**
+     * Загрузка-замена (прототип v95, «Изменить файл» → «Заменить файл»): номер файла, который она
+     * заменит. Есть только у начатой загрузки: при замене её ключ хранилища, размер и тип переходят к
+     * файлу, а сама строка стирается. Обычным «закончить загрузку» такая строка файлом не становится.
+     */
+    replacesId: uuid('replaces_id'),
+    /** Когда и кто заменил файл; пусто — файл не заменяли. */
+    replacedAt: timestamp('replaced_at', { withTimezone: true }),
+    replacedBy: uuid('replaced_by').references(() => users.id),
     state: text('state', { enum: FILE_STATES }).notNull().default('pending'),
     /**
      * Скрыт со страницы контрагента («Скрыть со страницы контрагента», решение заказчика 06.11.2026):
@@ -92,9 +102,17 @@ export const files = pgTable(
       'files_name_check',
       sql`char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))}`,
     ),
+    foreignKey({
+      name: 'files_replaces_fk',
+      columns: [t.replacesId, t.orgId],
+      foreignColumns: [t.id, t.orgId],
+    }).onDelete('cascade'),
+    // Замену начинают только для загруженного файла, и она остаётся начатой загрузкой.
+    check('files_replaces_check', sql`${t.replacesId} is null or ${t.state} = 'pending'`),
+    check('files_replaced_check', sql`(${t.replacedAt} is null) = (${t.replacedBy} is null)`),
     check(
       'files_key_check',
-      sql`${t.storageKey} = 'org/' || ${t.orgId}::text || '/files/' || ${t.id}::text`,
+      sql`${t.storageKey} ~ ('^org/' || ${t.orgId}::text || '/files/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')`,
     ),
     check(
       'files_deleted_check',

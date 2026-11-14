@@ -17,6 +17,7 @@ const event = (over: Partial<AdminLeadEvent>): AdminLeadEvent => ({
   from: null,
   to: null,
   text: null,
+  via: null,
   ...over,
 });
 
@@ -62,6 +63,20 @@ describe('история заявки', () => {
     expect(leadHistoryItems(t, card).map((i) => [i.date, i.time, i.text, i.who])).toEqual([
       ['01.11.2026', '11:00', 'Заметка администратора изменена', ADMIN],
       ['01.11.2026', '10:42', 'Заявка с сайта (тестовый стенд)', GUEST],
+    ]);
+  });
+
+  it('статус, изменённый кнопкой в чате бота, — с отметкой «через Telegram» (задача Т6)', () => {
+    const card = {
+      fromStand: false,
+      history: [
+        event({ kind: 'created', actor: GUEST, to: 'new' }),
+        event({ at: '2026-11-01T05:00:00.000Z', from: 'new', to: 'in_progress', via: 'telegram' }),
+      ],
+    } as AdminLeadCard;
+    expect(leadHistoryItems(t, card).map((i) => [i.text, i.via])).toEqual([
+      ['Статус: Новая → В работе', 'через Telegram'],
+      ['Заявка с сайта', null],
     ]);
   });
 });

@@ -68,6 +68,7 @@ const STATE_PILLS: Readonly<
   blocked_admin: { tone: 'bad', icon: 'lock' },
   blocked_owner: { tone: 'bad', icon: 'lock' },
   login_locked: { tone: 'bad', icon: 'ban' },
+  login_locked_not_me: { tone: 'bad', icon: 'ban' },
   temp_password: { tone: 'warn', icon: 'key' },
 };
 

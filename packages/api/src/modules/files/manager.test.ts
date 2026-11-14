@@ -318,12 +318,14 @@ describe.skipIf(!databaseAvailable())('Файловый менеджер: мет
     ids.big = big;
   });
 
-  it('ручная загрузка: контрагент и комментарий — только у ручной; к архивному нельзя; в истории — у контрагента', async () => {
-    const bad = await startUpload(acc, {
-      source: { kind: 'task', id: '00000000-0000-4000-8000-000000000001' },
-      note: 'нельзя',
-    });
-    expect(bad.status).toBe(400);
+  it('ручная загрузка: контрагент и показ на странице — только у ручной (примечание — у любой); к архивному нельзя; в истории — у контрагента', async () => {
+    const task = { kind: 'task', id: '00000000-0000-4000-8000-000000000001' };
+    for (const extra of [{ contractorId: cpAcc.id }, { page: false }]) {
+      const bad = await startUpload(acc, { source: task, ...extra });
+      expect(bad.status, JSON.stringify(extra)).toBe(400);
+    }
+    // Примечание — у любого прикрепляемого файла (прототип v95): запрос доходит до записи (её нет).
+    expect((await startUpload(acc, { source: task, note: 'можно' })).status).toBe(404);
     const [entry] = await f.t.admin.db
       .select({ entity: schema.auditLog.entity, contractorId: schema.auditLog.contractorId })
       .from(schema.auditLog)

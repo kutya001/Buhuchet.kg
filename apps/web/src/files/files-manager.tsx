@@ -36,7 +36,9 @@ import {
   FILE_DEFAULT_VISIBLE,
   fileColumns,
   fileKindIcon,
+  fileKindText,
 } from './file-columns';
+import { FileEditDialog } from './file-edit-dialog';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
 import {
   managerSummaryQuery,
@@ -103,6 +105,7 @@ export function FilesManager() {
   const [service, setService] = useState<DialogSlot<string> | null>(null);
   const [uploading, setUploading] = useState(false);
   const [ask, setAsk] = useState<FileManagerRow | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
 
   const fetchPage = useCallback<FetchListPage<FileManagerRow>>(async (params) => {
     const res = await api.api.files.manager.$get({ query: params });
@@ -206,6 +209,15 @@ export function FilesManager() {
             },
           ]
         : []),
+      // Прототип v95 `fEditAct`: «Изменить» — название, примечание, замена; без права — с причиной.
+      {
+        id: 'edit',
+        label: t('files.act.edit'),
+        icon: 'edit' as IconName,
+        disabled: !file.canEdit,
+        reason: file.canEdit ? undefined : t('files.act.edit_reason'),
+        run: () => setEditId(file.id),
+      },
       // Прототип v74 `pgFileAct`: у файла контрагента не задачи; без права — недоступно с причиной.
       ...(file.page
         ? [
@@ -304,6 +316,10 @@ export function FilesManager() {
     <EmptyState icon="folder" title={t('files.empty')} actions={addAction} />
   );
 
+  const rowOf = (id: string) => list.data?.items.find((r) => r.id === id);
+  // Файл окна «Изменить файл»: строка списка, а если её уже нет на странице — файл открытого окна.
+  const editFile = editId ? (rowOf(editId) ?? (card?.data.id === editId ? card.data : null)) : null;
+
   return (
     <div className="flex flex-col gap-3.5">
       {plates.length ? (
@@ -357,13 +373,24 @@ export function FilesManager() {
       {card ? (
         <FileWindow
           key={`file-${card.n}`}
-          file={card.data}
+          // После «Изменить файл» окно показывает перечитанную строку списка.
+          file={rowOf(card.data.id) ?? card.data}
           open={card.open}
           onClose={() => setCard(closeSlot)}
           onDownload={() => void download(card.data)}
           onSource={sourceOf(card.data)}
+          onEdit={() => setEditId(card.data.id)}
         />
       ) : null}
+      <FileEditDialog
+        file={editFile}
+        sub={
+          editFile
+            ? t('files.window.sub', { kind: fileKindText(t, editFile.kind), src: editFile.source })
+            : undefined
+        }
+        onClose={() => setEditId(null)}
+      />
       {upload ? (
         <UploadDialog
           key={`upload-${upload.n}`}

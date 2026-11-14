@@ -73,7 +73,17 @@ describe('taskHistoryText', () => {
 
   it('запись ленты: дата и время по Бишкеку, автор; без автора — «Система»', () => {
     expect(taskHistoryItem(t, { at, actor: null, action: 'create', changes: [] }, 0)).toMatchObject(
-      { date: '18.10.2026', time: '09:00', who: 'Система' },
+      { date: '18.10.2026', time: '09:00', who: 'Система', via: null },
     );
+  });
+
+  it('действие из чата бота — отметка «через Telegram» (прототип histVia)', () => {
+    expect(
+      taskHistoryItem(
+        t,
+        { at, actor: 'Иванов И.', action: 'status', changes: [], via: 'telegram' },
+        1,
+      ),
+    ).toMatchObject({ who: 'Иванов И.', via: 'через Telegram' });
   });
 });

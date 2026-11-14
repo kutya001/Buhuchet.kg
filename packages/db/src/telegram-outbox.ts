@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import {
   telegramDigestDays,
+  telegramGroups,
   telegramLinks,
   telegramNotifySettings,
   telegramOutbox,
@@ -49,7 +50,7 @@ export interface OutboxMessage {
 /**
  * Поставить в очередь организации из контекста; повтор с тем же ключом пропускается. Номера новых строк.
  * `now` — часы приложения: с этого момента строку можно отправлять (в тестах и на демо-стенде часы стоят
- * на месте, поэтому время базы не годится).
+ * на месте, поэтому время базы не годится). Сообщения одного вызова уходят в порядке списка.
  */
 export async function enqueueTelegram(
   tx: Tx,
@@ -60,7 +61,7 @@ export async function enqueueTelegram(
   const rows = await tx
     .insert(telegramOutbox)
     .values(
-      messages.map((m) => ({
+      messages.map((m, i) => ({
         orgId: sql`app.current_org_id()`,
         userId: m.userId,
         chatId: m.chatId,
@@ -68,7 +69,8 @@ export async function enqueueTelegram(
         text: m.text,
         dedupeKey: m.dedupeKey ?? null,
         payload: m.message ?? null,
-        ...(now ? { nextAt: now } : {}),
+        // Порядок отправки — порядок списка: каждое следующее сообщение на миллисекунду позже, последнее — `now`.
+        ...(now ? { nextAt: new Date(now.getTime() - (messages.length - 1 - i)) } : {}),
       })),
     )
     .onConflictDoNothing({ target: telegramOutbox.dedupeKey })
@@ -100,7 +102,8 @@ export async function claimOutbox(
   o: { now: Date; limit: number; leaseSeconds: number; ids?: readonly string[] },
 ): Promise<ClaimedOutbox[]> {
   if (o.ids && !o.ids.length) return [];
-  // Получатель отвязал или сменил Telegram, его заблокировали — строка не уходит в прежний чат.
+  // Получатель отвязал или сменил Telegram, его заблокировали — строка не уходит в прежний чат. Строка в
+  // общий чат фирмы (вид `group`, задача Т8) уходит, пока группа подключена к организации и бот в ней.
   await tx
     .update(telegramOutbox)
     .set({ status: 'error', lastError: OUTBOX_UNDELIVERABLE })
@@ -109,22 +112,28 @@ export async function claimOutbox(
         eq(telegramOutbox.status, 'pending'),
         lte(telegramOutbox.nextAt, o.now),
         o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
-        sql`not exists (select 1 from ${telegramLinks} inner join ${users} on ${users.id} = ${telegramLinks.userId} where ${telegramLinks.userId} = ${telegramOutbox.userId} and ${telegramLinks.chatId} = ${telegramOutbox.chatId} and not ${users.blocked})`,
+        sql`case when ${telegramOutbox.kind} = 'group' then not exists (select 1 from ${telegramGroups} where ${telegramGroups.orgId} = ${telegramOutbox.orgId} and ${telegramGroups.chatId} = ${telegramOutbox.chatId} and ${telegramGroups.goneAt} is null) else not exists (select 1 from ${telegramLinks} inner join ${users} on ${users.id} = ${telegramLinks.userId} where ${telegramLinks.userId} = ${telegramOutbox.userId} and ${telegramLinks.chatId} = ${telegramOutbox.chatId} and not ${users.blocked}) end`,
       ),
     );
-  const due = tx
-    .select({ id: telegramOutbox.id })
-    .from(telegramOutbox)
-    .where(
-      and(
-        eq(telegramOutbox.status, 'pending'),
-        lte(telegramOutbox.nextAt, o.now),
-        o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
-      ),
-    )
-    .orderBy(asc(telegramOutbox.nextAt), asc(telegramOutbox.createdAt))
-    .limit(o.limit)
-    .for('update', { skipLocked: true });
+  // Сначала — по порядку очереди: строки блокируются здесь, порядок отправки — этот же (сообщения одного
+  // напоминания идут друг за другом: сообщение дня, потом сообщения с кнопками).
+  const due = (
+    await tx
+      .select({ id: telegramOutbox.id })
+      .from(telegramOutbox)
+      .where(
+        and(
+          eq(telegramOutbox.status, 'pending'),
+          lte(telegramOutbox.nextAt, o.now),
+          o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
+        ),
+      )
+      .orderBy(asc(telegramOutbox.nextAt), asc(telegramOutbox.createdAt), asc(telegramOutbox.id))
+      .limit(o.limit)
+      .for('update', { skipLocked: true })
+  ).map((r) => r.id);
+  if (!due.length) return [];
+  const order = new Map(due.map((id, i) => [id, i]));
   const lease = new Date(o.now.getTime() + o.leaseSeconds * 1000);
   const rows = await tx
     .update(telegramOutbox)
@@ -136,12 +145,14 @@ export async function claimOutbox(
       kind: telegramOutbox.kind,
       text: telegramOutbox.text,
       tries: telegramOutbox.tries,
-      nextAt: telegramOutbox.nextAt,
       userId: telegramOutbox.userId,
       payload: telegramOutbox.payload,
     });
-  // «Сообщения простым текстом» получателей — только у строк с описанием сообщения.
-  const rich = [...new Set(rows.filter((r) => r.payload).map((r) => r.userId))];
+  // «Сообщения простым текстом» получателей — только у строк с описанием сообщения; у строки в общий чат
+  // фирмы получатель — группа, а не владелец, который её подключил.
+  const rich = [
+    ...new Set(rows.filter((r) => r.payload && r.kind !== 'group').map((r) => r.userId)),
+  ];
   const plain = new Set(
     rich.length
       ? (
@@ -153,7 +164,7 @@ export async function claimOutbox(
       : [],
   );
   return rows
-    .sort((a, b) => a.nextAt.getTime() - b.nextAt.getTime())
+    .sort((a, b) => order.get(a.id)! - order.get(b.id)!)
     .map((r) => ({
       id: r.id,
       chatId: r.chatId,
@@ -161,7 +172,7 @@ export async function claimOutbox(
       text: r.text ?? '',
       tries: r.tries,
       message: asBotMessage(r.payload),
-      plain: plain.has(r.userId),
+      plain: r.kind !== 'group' && plain.has(r.userId),
     }));
 }
 
@@ -194,8 +205,10 @@ export async function finishOutbox(tx: Tx, outcomes: readonly OutboxOutcome[]): 
 }
 
 /**
- * Служебное сообщение бота отправлено (или нет) — в журнал (функция `app.telegram_log`, работает и без
- * организации). У кода восстановления текст не пишется.
+ * Сообщение бота, отправленное сразу, — в журнал (функция `app.telegram_log`, работает и без организации;
+ * без описания и номера сообщения — их пишет `logBotMessage`). У кода восстановления текст не пишется.
+ * Прежний вариант функции с шестью параметрами принимал только служебные виды — ответы бота (`bot_cmd`,
+ * `bot_reply`, сообщения общего чата) в журнал не попадали.
  */
 const isCodeKind = (kind: OutboxKind) => (CODE_KINDS as readonly OutboxKind[]).includes(kind);
 
@@ -212,7 +225,7 @@ export async function logTelegram(
 ): Promise<void> {
   await db.execute(
     // Текст кода в базу не передаётся вовсе (его не пишет и функция): не попадёт и в журнал PostgreSQL.
-    sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${isCodeKind(entry.kind) ? null : entry.text}, ${entry.ok}, ${entry.error ?? null})`,
+    sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${isCodeKind(entry.kind) ? null : entry.text}, ${entry.ok}, ${entry.error ?? null}, null::jsonb, null::bigint)`,
   );
 }
 
