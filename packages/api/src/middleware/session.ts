@@ -35,7 +35,7 @@ const PUBLIC_PATHS = new Set([
  * (прототип v79): обложка, чем играть, запуск и «досмотрел» — только видео с отметкой «На лендинге».
  */
 const PUBLIC_PATTERNS: readonly RegExp[] = [
-  /^\/api\/page\/[^/]+\/[^/]+(?:\/code|\/telegram|\/files\/[^/]+)?$/,
+  /^\/api\/page\/[^/]+\/[^/]+(?:\/code|\/telegram|\/files\/[^/]+|\/sent|\/sent\/complete)?$/,
   /^\/api\/landing\/videos\/[a-z0-9][a-z0-9_-]{0,63}\/(?:cover|play|start|watched)$/,
 ];
 

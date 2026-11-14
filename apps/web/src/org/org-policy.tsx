@@ -203,7 +203,12 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
                 </Hint>
               </CheckRow>
               {f === 'cppage' && policy.features.cppage ? (
-                <PageSections policy={policy} disabled={off} onToggle={togglePage} />
+                <PageSections
+                  policy={policy}
+                  disabled={off}
+                  onToggle={togglePage}
+                  onUpload={(on) => void save({ cpFilesUpload: on }, t('org.saved'))}
+                />
               ) : null}
             </Fragment>
           );
@@ -293,10 +298,13 @@ function PageSections({
   policy,
   disabled,
   onToggle,
+  onUpload,
 }: {
   policy: OrgPolicy;
   disabled: boolean;
   onToggle: (section: PageSection, on: boolean) => void;
+  /** «Контрагент может отправлять файлы» под разделом «Файлы» (прототип v112 `pol-cpup`). */
+  onUpload: (on: boolean) => void;
 }) {
   const t = useT();
   return (
@@ -306,20 +314,36 @@ function PageSections({
         const needs = PAGE_SECTION_FEATURE[s];
         const unavailable = needs !== undefined && !policy.features[needs];
         return (
-          <CheckRow
-            key={s}
-            kind="check"
-            compact
-            data-page-section={s}
-            checked={policy.pageSections.includes(s)}
-            disabled={disabled || unavailable}
-            onChange={(on) => onToggle(s, on)}
-            label={t(`org.page.section.${s}`)}
-          >
-            {unavailable ? (
-              <Hint>{t('org.page.needs', { name: t(`org.feature.${needs}`) })}</Hint>
+          <Fragment key={s}>
+            <CheckRow
+              kind="check"
+              compact
+              data-page-section={s}
+              checked={policy.pageSections.includes(s)}
+              disabled={disabled || unavailable}
+              onChange={(on) => onToggle(s, on)}
+              label={t(`org.page.section.${s}`)}
+            >
+              {unavailable ? (
+                <Hint>{t('org.page.needs', { name: t(`org.feature.${needs}`) })}</Hint>
+              ) : null}
+            </CheckRow>
+            {s === 'files' ? (
+              <div className="ml-7">
+                <CheckRow
+                  kind="check"
+                  compact
+                  data-page-upload=""
+                  checked={policy.cpFilesUpload}
+                  disabled={disabled || unavailable}
+                  onChange={onUpload}
+                  label={t('files.sent.upload')}
+                >
+                  <Hint>{t('files.sent.upload.policy_hint')}</Hint>
+                </CheckRow>
+              </div>
             ) : null}
-          </CheckRow>
+          </Fragment>
         );
       })}
     </div>

@@ -280,6 +280,11 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     title: 'nav.files',
     short: 'nav.short.files',
     desc: 'nav.desc.files',
+    // Прототип v112 `filesTabs`: вкладки — только при «Странице контрагента по ссылке».
+    tabs: [
+      { id: 'all', icon: 'folder', label: 'files.tab.all', when: (a) => a.feature('cppage') },
+      { id: 'sent', icon: 'upload', label: 'files.tab.sent', when: (a) => a.feature('cppage') },
+    ],
     add: [
       {
         id: 'upload',

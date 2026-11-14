@@ -54,7 +54,7 @@ import type { PublicPageBody } from '@buhuchet/shared';
  */
 
 // Раздел «Telegram» (задача К3) добавляет обработчик страницы: ему нужен подключённый бот.
-type Body = Omit<PublicPageBody, 'asOf' | 'contractor' | 'org' | 'sections' | 'telegram'>;
+type Body = Omit<PublicPageBody, 'asOf' | 'contractor' | 'org' | 'sections' | 'telegram' | 'sent'>;
 
 /** Разделы страницы и телефон организации для шапки «Ваш бухгалтер» и «Контактов». */
 export type ContractorPageBody = Body & { orgPhone: PublicPageBody['org']['phone'] };

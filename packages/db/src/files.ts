@@ -23,6 +23,7 @@ import {
 } from './list';
 import {
   contractors,
+  contractorSentFiles,
   employees,
   files,
   indicators,
@@ -255,7 +256,8 @@ export async function changeFile(
 
 /**
  * Файлы удаляемого контрагента — в той же транзакции, что и удаление: загруженные получают отметку
- * «удалён» с автором и временем, незаконченные загрузки стираются. Иначе по `on delete set null` они
+ * «удалён» с автором и временем, незаконченные загрузки стираются; файлы, которые он сам отправил, уйдут
+ * из хранилища вместе с остальными. Иначе по `on delete set null` они
  * стали бы общими файлами организации, видными всем. Ответ — ключи хранилища: файлы оттуда удаляют
  * после фиксации.
  */
@@ -276,7 +278,13 @@ export async function deleteContractorFiles(tx: Tx, contractorId: string): Promi
     .delete(files)
     .where(and(eq(files.contractorId, contractorId), eq(files.state, 'pending')))
     .returning({ storageKey: files.storageKey });
-  return [...ready, ...pending].map((f) => f.storageKey);
+  // Отправленные контрагентом файлы (доработки 14.11.2026, блок 2): строки удалит каскад вместе с
+  // контрагентом, их файлы в хранилище — вызывающий после фиксации.
+  const sent = await tx
+    .select({ storageKey: contractorSentFiles.storageKey })
+    .from(contractorSentFiles)
+    .where(eq(contractorSentFiles.contractorId, contractorId));
+  return [...ready, ...pending, ...sent].map((f) => f.storageKey);
 }
 
 /**
@@ -425,6 +433,14 @@ export function manualFilesPart(t: ListTexts): FileListPart {
  */
 export function contractorFilesPart(t: ListTexts): FileListPart {
   return { visible: undefined, source: sql`${dictLiteral(t('files.src.regdocs'))}::text` };
+}
+
+/**
+ * Файлы, принятые от контрагента (доработки 14.11.2026, блок 2; прототип v112 `allFiles`: вид
+ * «Контрагент», источник «От контрагента»): видны в области контрагента, как загруженные вручную.
+ */
+export function sentFilesPart(t: ListTexts): FileListPart {
+  return { visible: undefined, source: sql`${dictLiteral(t('files.src.sent'))}::text` };
 }
 
 /**

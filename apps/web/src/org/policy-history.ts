@@ -50,6 +50,9 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
     // «Напоминать контрагентам о долге» (доработки 13.11.2026, К5).
     case 'cpTgDebt':
       return [t('cppage.org.toggled', { name: t('cppage.org.debt'), state: state(change.to) })];
+    // «Контрагент может отправлять файлы» (доработки 14.11.2026, блок 2; прототип v112 `pol-cpup`).
+    case 'cpFilesUpload':
+      return [t('files.sent.hist.upload', { state: state(change.to) })];
     // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).
     case 'confirmWaitDays':
       return [

@@ -24,7 +24,7 @@ import { PageList } from './page-parts';
  */
 
 /** Значок по типу файла (прототип `pubFIc`). */
-function fileIcon(name: string): IconName {
+export function fileIcon(name: string): IconName {
   const ext = (fileExtension(name) ?? '').toUpperCase();
   if (/^(JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(ext)) return 'image';
   if (/^(XLSX?|CSV)$/.test(ext)) return 'table';

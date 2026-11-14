@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { missingSummaryQuery } from '../kpi/kpi-data';
 import { contractorTabCountsQuery } from '../contractors/contractor-data';
+import { sentCountQuery } from '../files/sent-data';
 import { finSummaryQuery } from '../finance/journal-data';
 import { leadSummaryQuery } from '../admin/leads-data';
 import { useT } from '../l10n/provider';
@@ -45,6 +46,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
     enabled: modules.includes('kbadm'),
   });
   const leads = useQuery({ ...leadSummaryQuery, enabled: modules.includes('orgs') });
+  const sent = useQuery({ ...sentCountQuery, enabled: modules.includes('files') });
   return useMemo(
     () => ({
       ...(cps.data ? { cps: cps.data } : {}),
@@ -61,6 +63,8 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
         : {}),
       // «Заявки» — новых заявок с сайта (прототип registry.js: `count: leadNew()`).
       ...(leads.data ? { orgs: { leads: { value: leads.data.fresh } } } : {}),
+      // «Файлы от контрагентов» — новых файлов (прототип v112 `filesTabs`: `count: sntNew() || null`).
+      ...(sent.data ? { files: { sent: { value: sent.data, title: t('files.sent.badge') } } } : {}),
     }),
     [
       cps.data,
@@ -74,6 +78,7 @@ export function useTabCounts(modules: readonly MenuModuleId[]): TabCounts {
       kbadm.data,
       videoStatus.data,
       leads.data,
+      sent.data,
       t,
     ],
   );
@@ -107,7 +112,14 @@ export function kpiMissingCount(t: Translate, s: KpiMissingSummary): ShellCount 
 const MODULE_COUNT_TAB: Partial<Record<MenuModuleId, string>> = {
   reports: 'overdue',
   kpi: 'missing',
+  files: 'sent',
 };
+
+/**
+ * Модули, у которых счётчик вкладки виден и без цвета (прототип ui/shell.js: новые файлы от
+ * контрагентов у «Файлового менеджера» — обычный счётчик).
+ */
+const MODULE_PLAIN_COUNT: ReadonlySet<MenuModuleId> = new Set(['files']);
 
 /** Модуль меню с числами у вкладок. */
 export function withTabCounts(
@@ -119,8 +131,11 @@ export function withTabCounts(
   const own = tab ? counts[tab] : undefined;
   return {
     ...module,
-    // У модуля — только ненулевой цветной счётчик (прототип: `cn.overdue ? badge : ''`).
-    ...(own?.tone && own.value ? { count: own } : {}),
+    // У модуля — только ненулевой цветной счётчик (прототип: `cn.overdue ? badge : ''`), у «Файлового
+    // менеджера» — и без цвета.
+    ...(own?.value && (own.tone || MODULE_PLAIN_COUNT.has(module.id as MenuModuleId))
+      ? { count: own }
+      : {}),
     tabs: module.tabs.map((tab) => {
       const count = counts[tab.id];
       return count ? { ...tab, count } : tab;

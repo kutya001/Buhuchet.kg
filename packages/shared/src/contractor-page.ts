@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
+import { PageSent } from './files-sent';
 import { OrgLogoLink, PageSectionSchema } from './org';
 
 /*
@@ -372,6 +373,11 @@ export const PublicPageBody = z.object({
   reports: z.object({ types: z.array(PageReportType), items: z.array(PageReport) }).nullable(),
   /** «Файлы»: сначала новые; только при показанном разделе. */
   files: z.array(PageFilesItem).nullable(),
+  /**
+   * «Отправить файл» и «Отправленные вами» раздела «Файлы» (доработки 14.11.2026, блок 2): только при
+   * показанном разделе «Файлы»; null — раздела нет или отправлять нельзя и ничего не отправлено.
+   */
+  sent: PageSent.nullable(),
   money: PageMoney.nullable(),
   fee: PageFee.nullable(),
   kpi: PageKpi.nullable(),

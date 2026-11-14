@@ -10,7 +10,7 @@ import { OrgsList } from '../admin/orgs-list';
 import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
-import { FilesManager } from '../files/files-manager';
+import { FilesScreen } from '../files/files-manager';
 import { StaffBonusTab } from '../finance/staff-bonuses';
 import { FinanceScreen } from '../finance/finance-screen';
 import { KbArticlesTab } from '../kb/kb-articles';
@@ -67,7 +67,7 @@ export function ModuleScreen({
     return <HomeSummaryTab />;
   }
   if (moduleId === 'kpi') return <KpiScreen tab={tabId ?? 'month'} />;
-  if (moduleId === 'files') return <FilesManager />;
+  if (moduleId === 'files') return <FilesScreen tab={tabId} />;
   if (moduleId === 'staff') {
     const tab = tabId ?? 'list';
     if (tab === 'list') return <StaffList />;

@@ -6,12 +6,15 @@ import {
   contractorPageOrg,
   contractorPageState,
   getContractorPage,
+  listContractorSentFiles,
   pageContractorFacts,
   pageFiles,
   pageReportFile,
+  sentUploadState,
   tryContractorPageCode,
   withOrgContext,
   writeContractorPageOpen,
+  type Tx,
 } from '@buhuchet/db';
 import {
   bishkekDate,
@@ -26,6 +29,9 @@ import {
   PAGE_COOKIE,
   PAGE_COOKIE_SECURE,
   PAGE_REMEMBER_DAYS,
+  sentFileDaysLeft,
+  sentUploadOn,
+  type IsoDate,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -77,7 +83,7 @@ export function pageCookieName(deps: ApiDeps): string {
   return pageCookie(deps).name;
 }
 
-function pageTokenHash(c: Context<AppEnv>, deps: ApiDeps): string | null {
+export function pageTokenHash(c: Context<AppEnv>, deps: ApiDeps): string | null {
   const value = getCookie(c, pageCookie(deps).name);
   return value && isSessionTokenShape(value) ? hashSessionToken(value) : null;
 }
@@ -89,7 +95,7 @@ function pageTokenHash(c: Context<AppEnv>, deps: ApiDeps): string | null {
  * заголовка (локально, в тестах) — общий счёт «unknown»; на стенде и рабочем сайте это ошибка
  * настройки прокси — пишется предупреждение.
  */
-function clientIpHash(c: Context<AppEnv>, deps: ApiDeps): string {
+export function clientIpHash(c: Context<AppEnv>, deps: ApiDeps): string {
   const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
   if (!forwarded && (deps.config.APP_ENV === 'staging' || deps.config.APP_ENV === 'production')) {
     deps.logger.warn(
@@ -150,6 +156,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     const device = pageDevice(c.req.header('user-agent') ?? '');
     const t = await translateOf(deps);
     const now = deps.clock.now();
+    const today = bishkekDate(now);
     const page = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {
       const [header, org, own] = await Promise.all([
         contractorPageHeader(tx, contractorId),
@@ -168,12 +175,16 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
         contractorId,
         sections,
         features: org.features,
-        today: bishkekDate(now),
+        today,
         t,
       });
       if (!body) return null;
       await writeContractorPageOpen(tx, contractorId, device);
       const tg = sections.includes('tg') ? await contractorTelegramCounts(tx, contractorId) : null;
+      // «Удалится через N дней» — по настоящим часам: время отправки ставит база (как `files/sent.ts`).
+      const sent = sections.includes('files')
+        ? await pageSent(tx, contractorId, bishkekDate(new Date()))
+        : null;
       const { orgPhone, ...rest } = body;
       return {
         ...rest,
@@ -186,10 +197,36 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
         },
         sections,
         telegram: tg && { ...tg, full: tg.on + tg.wait >= CP_TG_MAX },
+        sent,
       };
     });
     if (!page) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
     return c.json({ state: 'open', page } as PublicPageBody, 200);
+  };
+}
+
+/**
+ * «Отправить файл» и «Отправленные вами» раздела «Файлы» (доработки 14.11.2026, блок 2; прототип v112
+ * `pubSentHtml`): отправлять можно — кнопка, отправленные со страницы и из Telegram — от новых к старым
+ * со статусом, причиной отказа и «Удалится через N дней». Нечего показать — null. Кто принял или
+ * отклонил, комментарий сотрудника и имя в Telegram странице не отдаются.
+ */
+async function pageSent(tx: Tx, contractorId: string, today: IsoDate) {
+  const state = await sentUploadState(tx, contractorId);
+  const upload = !!state && sentUploadOn(state);
+  const items = await listContractorSentFiles(tx, contractorId);
+  if (!upload && !items.length) return null;
+  return {
+    upload,
+    items: items.map((x) => ({
+      id: x.id,
+      name: x.name,
+      sentAt: x.createdAt.toISOString(),
+      comment: x.comment,
+      status: x.status,
+      reason: x.status === 'rejected' ? x.rejectReason : null,
+      daysLeft: sentFileDaysLeft(x, today),
+    })),
   };
 }
 

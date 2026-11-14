@@ -519,6 +519,7 @@ export const GRID_KEYS = [
   'kpi.missing',
   // «Файловый менеджер»: вкладок нет.
   'files.list',
+  'files.sent',
   'kb.team',
   // «Видео» и «Просмотры видео» (прототип v79).
   'kb.video',
