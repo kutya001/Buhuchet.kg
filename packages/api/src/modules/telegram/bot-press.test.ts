@@ -679,4 +679,19 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     expect(await errorCode(res)).toBe('bot_test_limit');
     expect(tg.sent).toHaveLength(from);
   });
+
+  it('«Проверить бота»: Telegram не принял сообщение — 502 со своим кодом, не кодом входа в Админку', async () => {
+    deps = createTestDeps({ db: t.app.db, telegram: tg });
+    app = createApp(deps);
+    const cookie = await signIn(app, 'owner-a', PASSWORD);
+    tg.failNext({
+      ok: false,
+      errorCode: 403,
+      description: 'Forbidden: bot was blocked by the user',
+      permanent: true,
+    });
+    const res = await apiRequest(app, 'POST', '/api/telegram/test', cookie);
+    expect(res.status).toBe(502);
+    expect(await errorCode(res)).toBe('bot_test_failed');
+  });
 });

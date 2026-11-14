@@ -541,7 +541,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
     expect(tg.sent.slice(next).map((m) => m.chatId)).toEqual([5005, 5006]);
     // Знак смены направления текста убран, эмодзи на границе не разрезан пополам.
     expect(tg.sent[next]!.text).toContain(
-      'код для привязки другого Telegram «Поддержка Buhuchet: перешлите \u{1F600}…» к учётной записи',
+      'Новый Telegram: «Поддержка Buhuchet: перешлите \u{1F600}…».',
     );
     // И в «привязан другой Telegram» в прежний чат — так же коротко, одной строкой.
     const done = tg.sent.length;

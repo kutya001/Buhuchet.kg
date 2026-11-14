@@ -13,6 +13,7 @@ type Policy = {
   features: Record<string, boolean>;
   remindDays: number[];
   overdueRepeat: boolean;
+  telegramActions: boolean;
   timezone: string;
   defaultRoleId: string | null;
   defaultRoleName: string | null;
@@ -255,6 +256,57 @@ test.describe('Этап 1: Моя организация — правки вла
         overdueRepeat: before.overdueRepeat,
         timezone: before.timezone,
         ...(before.defaultRoleId ? { defaultRoleId: before.defaultRoleId } : {}),
+      });
+    }
+  });
+
+  test('(пакет заказчика 13.11.2026) «Действия из Telegram»: владелец выключает и включает переключателем — сохраняется сразу, несохранённые поля формы остаются', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const before = await policy(page.request);
+    const toastOf = (on: boolean) =>
+      page.getByRole('status').filter({
+        hasText: on ? 'Действия из Telegram включены' : 'Действия из Telegram выключены',
+      });
+    try {
+      await page.goto('/app/org/settings');
+      const main = page.locator('main');
+      const row = main.locator('[data-telegram-actions]');
+      const actions = row.getByRole('switch');
+      await expect(row).toContainText('Действия из Telegram');
+      await expect(row).toContainText('пишется в историю с пометкой «через Telegram»');
+      await expect(row).toContainText('Выключите, если действия должны быть только на сайте');
+      await expect(actions).toBeChecked({ checked: before.telegramActions });
+
+      // Соседнее поле изменено, но не сохранено: переключатель сохраняется сам и поле не сбрасывает.
+      const timezone = main.getByLabel('Часовой пояс');
+      const other = before.timezone === 'Asia/Almaty' ? 'Asia/Tashkent' : 'Asia/Almaty';
+      await timezone.selectOption(other);
+      await actions.click();
+      await expect(toastOf(!before.telegramActions)).toBeVisible();
+      await expect
+        .poll(async () => (await policy(page.request)).telegramActions)
+        .toBe(!before.telegramActions);
+      expect((await policy(page.request)).timezone).toBe(before.timezone);
+      await expect(timezone).toHaveValue(other);
+      await expect(actions).toBeChecked({ checked: !before.telegramActions });
+
+      // После перезагрузки выбор на месте; обратно — так же сразу.
+      await page.reload();
+      await expect(actions).toBeChecked({ checked: !before.telegramActions });
+      await expect(timezone).toHaveValue(before.timezone);
+      await actions.click();
+      await expect(toastOf(before.telegramActions)).toBeVisible();
+      await expect
+        .poll(async () => (await policy(page.request)).telegramActions)
+        .toBe(before.telegramActions);
+    } finally {
+      await patchPolicy(page.request, origin, {
+        telegramActions: before.telegramActions,
+        timezone: before.timezone,
       });
     }
   });

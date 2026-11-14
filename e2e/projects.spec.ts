@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, showStats, signIn } from './helpers';
+import { DEMO_PASSWORD, pickContractor, showStats, signIn } from './helpers';
 import { asOwner, newContractor } from './reports';
 
 // «Проекты контрагентов» (задача 2.26, #82, часть 1) через настоящий сайт. Демо-организация: владелец
@@ -58,7 +58,7 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await expect(project).toBeVisible();
     // Контрагент не выбран — сначала его.
     await expect.poll(() => optionsOf(project)).toEqual(['— сначала выберите контрагента —']);
-    await form.getByLabel(/^Контрагент/).selectOption({ label: 'ОсОО «Ала-Тоо Трейд»' });
+    await pickContractor(form.getByLabel(/^Контрагент/), 'Ала-Тоо Трейд');
     await expect
       .poll(() => optionsOf(project))
       .toEqual(['— выберите проект —', 'Восстановление учёта 2024–2025']);
@@ -67,11 +67,11 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await expect(form).toContainText('Выберите проект или снимите галочку «Проект»');
     await project.selectOption({ label: 'Восстановление учёта 2024–2025' });
     // У другого контрагента — его проекты; выбранный проект снимается.
-    await form.getByLabel(/^Контрагент/).selectOption({ label: 'ОсОО «Манас Авто Плюс»' });
+    await pickContractor(form.getByLabel(/^Контрагент/), 'Манас Авто Плюс');
     await expect
       .poll(() => optionsOf(project))
       .toEqual(['— выберите проект —', 'Переход на единый налог']);
-    await form.getByLabel(/^Контрагент/).selectOption({ label: 'ОсОО «Ала-Тоо Трейд»' });
+    await pickContractor(form.getByLabel(/^Контрагент/), 'Ала-Тоо Трейд');
     await project.selectOption({ label: 'Восстановление учёта 2024–2025' });
     await form.getByRole('button', { name: 'Поставить задачу' }).click();
     await expect(form).toBeHidden();
@@ -195,7 +195,7 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await expect(dlg).toContainText('Введите название');
     await expect(dlg).toContainText('Выберите контрагента');
     await dlg.locator('[data-pd-name]').fill(name);
-    await dlg.locator('[data-pd-cp]').selectOption(cp.id);
+    await pickContractor(dlg.locator('[data-pd-cp]'), cp.inn);
     await dlg.locator('[data-pd-plan]').fill('50000');
     await dlg.locator('[data-pd-work-add]').click();
     await dlg.locator('[data-pd-work-name]').last().fill('Подготовить документы к освоению');

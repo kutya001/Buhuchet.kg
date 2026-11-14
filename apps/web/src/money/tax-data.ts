@@ -54,6 +54,7 @@ export const receiptContractorsQuery = queryOptions({
     return ContractorList.parse(await res.json()).items.map((c) => ({
       id: c.id,
       name: c.name,
+      inn: c.inn,
       oneOff: c.kind === 'oneoff',
     }));
   },

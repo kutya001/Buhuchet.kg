@@ -159,6 +159,7 @@ export const ORG_TEXTS = {
   'org.page.section.fee': { ru: 'Оплата за обслуживание', section: S },
   'org.page.section.kpi': { ru: 'Показатели', section: S },
   'org.page.section.contacts': { ru: 'Контакты', section: S },
+  'org.page.section.tg': { ru: 'Telegram', section: S },
   'org.page.needs': {
     ru: 'Появится на странице, когда включена функция «{name}»',
     section: S,
@@ -255,6 +256,18 @@ export const ORG_TEXTS = {
     ru: 'Все напоминания одному человеку за день собираются в одно сообщение.',
     section: S,
   },
+  'org.settings.tg_actions': { ru: 'Действия из Telegram', section: S },
+  'org.settings.tg_actions_hint': {
+    ru: 'Сотрудники отмечают отчёты и задачи кнопками под сообщениями бота, не заходя на сайт. Каждое нажатие проверяется по правам и области сотрудника и пишется в историю с пометкой «через Telegram». Деньги и удаление — только на сайте.',
+    section: S,
+  },
+  'org.settings.tg_actions_owner': {
+    ru: 'Выключите, если действия должны быть только на сайте: кнопки «Открыть» и копирование останутся.',
+    section: S,
+  },
+  'org.settings.tg_actions_other': { ru: 'Меняет только владелец организации.', section: S },
+  'org.settings.tg_actions_on': { ru: 'Действия из Telegram включены', section: S },
+  'org.settings.tg_actions_off': { ru: 'Действия из Telegram выключены', section: S },
   'org.settings.telegram_off': {
     ru: 'Напоминания в Telegram отключены в учётной политике.',
     section: S,

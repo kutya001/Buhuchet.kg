@@ -39,6 +39,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.relink_code': { ru: 'Код замены Telegram', section: S },
   'telegram.kind.page_closed': { ru: 'Страница контрагента закрыта', section: S },
   'telegram.kind.bot_test': { ru: 'Проверка бота', section: S },
+  'telegram.kind.cp_tg_request': { ru: 'Telegram контрагента', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },
   'profile.notify.modes': { ru: 'Какие уведомления получать', section: P },
   'profile.notify.mode.all': { ru: 'Все', section: P },
@@ -88,6 +89,24 @@ export const TELEGRAM_TEXTS = {
   'profile.notify.history_kind': { ru: 'Уведомления: «{kind}» {state}', section: P },
   'profile.notify.history_on': { ru: 'включено', section: P },
   'profile.notify.history_off': { ru: 'отключено', section: P },
+  'profile.tg_test': { ru: 'Проверить бота', section: P },
+  'profile.tg_test_sent': { ru: 'Бот прислал проверочное сообщение в {name}', section: P },
+  'profile.tg_plain': { ru: 'Сообщения простым текстом', section: P },
+  'profile.tg_plain_hint': {
+    ru: 'Бот присылает таблицы и раскрывающиеся разделы. Включите, если в вашем Telegram они показываются неверно (старая версия приложения). Кнопки под сообщениями останутся.',
+    section: P,
+  },
+  'profile.tg_plain_on': { ru: 'Бот будет присылать простой текст', section: P },
+  'profile.tg_plain_off': { ru: 'Бот будет присылать таблицы', section: P },
+  'err.bot_test_limit': {
+    ru: 'Слишком много проверок бота. Попробуйте через час',
+    section: 'Ошибки',
+  },
+  'err.bot_test_failed': {
+    ru: 'Telegram не принял сообщение. Попробуйте позже',
+    section: 'Ошибки',
+  },
+  'err.telegram_not_linked': { ru: 'Сначала привяжите Telegram', section: 'Ошибки' },
   'err.notify_boss_only': {
     ru: 'Режим и уведомления по отчётам других сотрудников — только владельцу и главному бухгалтеру',
     section: 'Ошибки',

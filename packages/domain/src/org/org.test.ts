@@ -25,7 +25,7 @@ describe('defaultOrgPolicy — как TemDB.json прототипа', () => {
       taskConfirm: true,
       reportConfirm: true,
       payBeforeSubmit: true,
-      pageSections: ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts'],
+      pageSections: ['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts', 'tg'],
     });
   });
 

@@ -227,6 +227,8 @@ describe.skipIf(!databaseAvailable())(
       expect(ids).toContain(cpA);
       expect(ids).toContain(cpHr);
       expect(ids).not.toContain(cpArch);
+      // ИНН — для поиска в списке формы (прототип v93).
+      expect(form.contractors.every((c) => /^\d{14}$/.test(c.inn))).toBe(true);
       // Прототип serviceDlg: исполнитель — ответственный контрагента.
       expect(form.performer).toBe(employee('acc-a'));
       expect(form.today).toBe('2026-10-18');

@@ -42,6 +42,10 @@ function changeText(t: Translate, c: HistoryChange): string | null {
       ? t('accounts.card.hist.tg_replaced', { from: c.from, to: c.to })
       : t('accounts.card.hist.tg_linked', { name: c.to });
   }
+  // «Сообщения простым текстом» в «Мой профиль» (прототип profile.js, `#pf-tgplain`).
+  if (c.field === 'telegramPlain' && typeof c.to === 'boolean') {
+    return t(c.to ? 'accounts.card.hist.tg_plain_on' : 'accounts.card.hist.tg_plain_off');
+  }
   // Блокировка сотрудника владельцем: `active` false — заблокирован.
   if (c.field === 'active' && typeof c.to === 'boolean') {
     return t(c.to ? 'accounts.card.hist.unblocked' : 'accounts.card.hist.blocked');

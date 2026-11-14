@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, pickContractor, signIn } from './helpers';
 import { asOwner, manualReport, newContractor, reportsOf } from './reports';
 
 // «Кто что сдаёт», массовое назначение, «Календарь», «сменить» ответственного и перенос срока «Разового
@@ -198,7 +198,7 @@ test.describe('Этап 2: отчёты — «Кто что сдаёт», мас
     await expect(page.locator('[data-grid]')).toBeVisible();
     await addMenu(page, 'Разовый отчёт');
     const dialog = page.getByRole('dialog', { name: 'Разовый отчёт' });
-    await dialog.getByLabel('Контрагент').selectOption(cp.id);
+    await pickContractor(dialog.getByLabel('Контрагент'), cp.inn);
     await dialog.getByLabel('Вид отчёта').selectOption('t1m');
     await dialog.getByLabel('Месяц периода').fill('2026-09');
     await expect(dialog).toContainText('Срок на нерабочий день переносится на ближайший рабочий');

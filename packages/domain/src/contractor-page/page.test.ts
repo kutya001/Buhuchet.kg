@@ -102,6 +102,14 @@ describe('страница контрагента по ссылке', () => {
     );
   });
 
+  it('«Telegram» (прототип v92) — последним, только при «Напоминаниях в Telegram» (docs/deviations.md п. К-2)', () => {
+    const sections = ['pay', 'reports', 'contacts', 'tg'] as const;
+    expect(pageOrgSections(sections, { ...all, telegram: true })).toEqual(sections);
+    expect(pageOrgSections(['tg', 'pay'], { ...all, telegram: true })).toEqual(['pay', 'tg']);
+    expect(pageOrgSections(sections, all)).not.toContain('tg');
+    expect(pageVisibleSections(sections, { ...all, telegram: true }, ['tg'])).not.toContain('tg');
+  });
+
   it('управлять — по праву, не у архивного; отправить — и ответственному, только включённую', () => {
     const manager = { canManage: true, isResponsible: false };
     const responsible = { canManage: false, isResponsible: true };

@@ -56,6 +56,7 @@ export * from './contractors/start-date';
 export * from './contractor-page/page';
 export * from './contractor-page/view';
 export * from './contractor-page/files';
+export * from './contractor-page/telegram';
 export * from './reports/periods';
 export * from './reports/due';
 export * from './reports/rules';

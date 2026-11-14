@@ -50,7 +50,7 @@ export const botTestRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     409: { description: 'Telegram не привязан (`telegram_not_linked`)', content: error },
     429: { description: 'Слишком часто (`bot_test_limit`)', content: error },
-    502: { description: 'Telegram не принял сообщение (`telegram_send_failed`)', content: error },
+    502: { description: 'Telegram не принял сообщение (`bot_test_failed`)', content: error },
     503: { description: 'Telegram-бот не подключён', content: error },
   },
 });
@@ -84,7 +84,7 @@ export function botTestHandler(deps: ApiDeps): RouteHandler<typeof botTestRoute,
     );
     if (!sent) {
       return c.json(
-        apiError('telegram_send_failed', 'Telegram не принял сообщение. Попробуйте позже'),
+        apiError('bot_test_failed', 'Telegram не принял сообщение. Попробуйте позже'),
         502,
       );
     }
