@@ -1137,17 +1137,27 @@ export async function reportSummary(
   };
 }
 
-/** Отчёт месяца для правила «По месяцам» (`monthPlanItem` домена) и его контрагент. */
-export type ReportMonthPlanRow = MonthPlanReport & { contractorId: string };
+/**
+ * Отчёт месяца для правила «По месяцам» (`monthPlanItem` домена), его контрагент и короткое название
+ * вида. Строки идут в порядке создания отчётов (прототип `rmToPay`: при равном сроке — по номеру отчёта).
+ */
+export type ReportMonthPlanRow = MonthPlanReport & { contractorId: string; typeShort: string };
 
 /**
  * Отчёты месяца в области сотрудника — только то, что нужно правилу «к сдаче и к оплате по месяцам»
  * (`monthPlanGroup`, `monthPlanQuick` домена; прототип v90 `rmRender`: итог месяца и числа «Все / Сдать
  * / Уплатить»). Те же отчёты, что в списке вкладки «По месяцам»: без прежних версий и «Не требуется».
+ * `contractorId` — только отчёты одного контрагента («К оплате клиенту» в его карточке).
  */
 export async function reportMonthPlanRows(
   tx: Tx,
-  o: { scope: SQL | undefined; today: IsoDate; taxpay: boolean; month: YearMonth },
+  o: {
+    scope: SQL | undefined;
+    today: IsoDate;
+    taxpay: boolean;
+    month: YearMonth;
+    contractorId?: string;
+  },
 ): Promise<ReportMonthPlanRow[]> {
   return tx
     .select({
@@ -1164,10 +1174,20 @@ export async function reportMonthPlanRows(
       paid: reports.paid,
       overdue: sql<boolean>`${overdueOf(o.today)}`,
       payOverdue: sql<boolean>`${payOverdueOf(o.today, o.taxpay)}`,
+      typeShort: reportTypes.shortName,
     })
     .from(reports)
     .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-    .where(and(eq(reports.superseded, false), o.scope, monthCondition(o.month)));
+    .innerJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
+    .where(
+      and(
+        eq(reports.superseded, false),
+        o.scope,
+        monthCondition(o.month),
+        o.contractorId ? eq(reports.contractorId, o.contractorId) : undefined,
+      ),
+    )
+    .orderBy(asc(reports.createdAt), asc(reports.id));
 }
 
 /**

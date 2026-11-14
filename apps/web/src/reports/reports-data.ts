@@ -2,6 +2,7 @@
 
 import {
   AssignmentMassOptions,
+  ContractorMonthPay,
   DueChangeReasons,
   ManualReportOptions,
   ReportCalendar,
@@ -66,6 +67,24 @@ export const contractorMonthReportsQuery = (contractorId: string) =>
       json(
         await api.api.reports.$get({ query: { tab: 'all', contractorId, size: 'all' } }),
         (v) => ReportList.parse(v).items,
+      ),
+  });
+
+/**
+ * «К оплате клиенту» месяца в карточке контрагента (задача К4; прототип v94 `rmToPay`, `rmPayText`):
+ * строки, итог, реквизит для налогов и текст для клиента — с сервера. Ключ — под планом месяцев
+ * карточки: после действия с отчётом перечитывается вместе с ним.
+ */
+export const contractorMonthPayQuery = (contractorId: string, month: string) =>
+  queryOptions({
+    queryKey: ['list', 'cps.reports', 'months', contractorId, 'pay', month],
+    queryFn: async () =>
+      json(
+        await api.api.contractors[':id']['month-pay'].$get({
+          param: { id: contractorId },
+          query: { month },
+        }),
+        (v) => ContractorMonthPay.parse(v),
       ),
   });
 

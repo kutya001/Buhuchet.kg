@@ -1,5 +1,6 @@
 import {
   ASSIGNMENT_DUE_DAYS,
+  MONTH_PAY_REFUSALS,
   PAYMENT_STATUSES,
   REPORT_ACTS,
   REPORT_LINE_KINDS,
@@ -313,6 +314,29 @@ export const ReportMonthSummary = z.object({
   quick: QuickCounts,
 });
 export type ReportMonthSummary = z.infer<typeof ReportMonthSummary>;
+
+/**
+ * «К оплате клиенту» за месяц в карточке контрагента (доработки 13.11.2026, К4; прототип v94 `rmToPay`,
+ * `rmPayHtml`): налоги месяца с остатками от ближайшего срока оплаты, итог, срок, сколько отчётов без
+ * суммы (в текст не входят), реквизит для налогов и готовый текст «Скопировать для клиента» (платить
+ * нечего — `null`). `refusal` — почему текста нет, хотя платить есть что: реквизит ответственного
+ * сотруднику не виден или часть отчётов месяца — вне его области (код ошибки — он же ключ словаря).
+ */
+export const ContractorMonthPay = z.object({
+  month: ReportMonth,
+  rows: z.array(z.object({ reportId: Uuid, name: z.string(), left: Tyiyn, due: IsoDate })),
+  total: Tyiyn,
+  noAmount: Count,
+  due: IsoDate.nullable(),
+  requisite: z.string().nullable(),
+  text: z.string().nullable(),
+  refusal: z.enum(MONTH_PAY_REFUSALS).nullable(),
+});
+export type ContractorMonthPay = z.infer<typeof ContractorMonthPay>;
+
+/** «Скопировать для клиента»: за какой месяц текст. */
+export const ContractorMonthPayCopied = z.object({ month: ReportMonth });
+export type ContractorMonthPayCopied = z.infer<typeof ContractorMonthPayCopied>;
 
 /**
  * Счётчики вкладок, плашки и числа быстрого фильтра в области сотрудника (прототип counts,

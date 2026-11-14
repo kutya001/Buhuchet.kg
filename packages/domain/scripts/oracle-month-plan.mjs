@@ -1,5 +1,5 @@
 // Эталон правила «к сдаче и к оплате по месяцам» (прототип v90 modules/report-months.js: `rmYm`,
-// `rmItem`, `rmGroup`, `rmPlan`). Данные — отчёты demoDB.json и тот же набор с правками, которые проходят
+// `rmItem`, `rmGroup`, `rmPlan`) и «К оплате клиенту» (v94 modules/cp-telegram.js: `rmToPay`, `rmPayList`). Данные — отчёты demoDB.json и тот же набор с правками, которые проходят
 // остальные ветки (прежняя версия отчёта, «Не требуется», сумма не указана и нулевая, «Уплата» у вида
 // «Сдача + уплата», отчёт по событию, частичная оплата и переплата); «сегодня» — две даты, «Учёт оплаты
 // налогов» включён и выключен. Вход записывается полями продукта. Запуск:
@@ -19,6 +19,7 @@ const DATA = 'spec/prototype/src/js/core/data.js';
 const ORG = 'spec/prototype/src/js/core/org.js';
 const MONTHS_JS = 'spec/prototype/src/js/modules/report-months.js';
 const CARD = 'spec/prototype/src/js/modules/contractor-card.js';
+const CP_TG = 'spec/prototype/src/js/modules/cp-telegram.js';
 const pick = (file, wanted) =>
   read(file)
     .split('\n')
@@ -38,7 +39,7 @@ const block = (file, name) => {
 };
 
 const source = `
-  ${pick(DATA, /^const (D|toIso|mkDate|diffDays|addDays|ym|addMonths|lastDay|MONTHS|MONTHS_G|minIso|som)=/)}
+  ${pick(DATA, /^const (D|toIso|mkDate|diffDays|addDays|ym|addMonths|lastDay|MONTHS|MONTHS_G|minIso|som|fmtD)=/)}
   ${block(DATA, 'fmtM')}
   ${read('spec/prototype/src/js/core/reference.js').replace("'use strict';", '')}
   ${pick(ORG, /^const (inService|cpStatus|curTariff)=/)}
@@ -47,6 +48,9 @@ const source = `
   ${pick(CARD, /^const OPK=/)}
   ${pick(MONTHS_JS, /^const RM_ADD=/)}
   ${['rmYm', 'rmItem', 'rmPlan', 'rmGroup'].map((n) => block(MONTHS_JS, n)).join('\n')}
+  const pgTaxAcc = () => null;
+  ${block(CP_TG, 'rmToPay')}
+  ${pick(CP_TG, /^const rmPayList=/)}
 `;
 
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -128,6 +132,10 @@ function run(db, today, taxpay) {
       // контрагент | месяц | отчёты по порядку | сдать | сдано | уплатить | оплачено | без суммы | к уплате | оплачено | осталось | просрочено | закрыт | первый срок | последний срок
       groups: plans.flatMap(([cp, plan]) => plan.map((g) =>
         j(cp, g.m, g.items.map((x) => x.r.id).join(','), g.subN, g.subDone, g.payN, g.payDone, g.noSum, t(g.sum), t(g.paid), t(g.left), g.late, g.done, g.from, g.to))),
+      // «К оплате клиенту» (месяцы, где есть что платить или суммы не указаны):
+      // контрагент | месяц | отчёты по порядку | остатки | сроки | итого | без суммы | ближайший срок | список для текста
+      pays: plans.flatMap(([cp, plan]) => plan.map((g) => rmToPay(CPM[cp], g.m)).filter((p) => p.rows.length || p.noSum).map((p) =>
+        j(cp, p.m, p.rows.map((x) => x.r.id).join(','), p.rows.map((x) => t(x.left)).join(','), p.rows.map((x) => x.due).join(','), t(p.total), p.noSum, p.due, rmPayList(p)))),
     };`,
     context,
   );
@@ -138,7 +146,7 @@ function run(db, today, taxpay) {
 function input(db) {
   const types = ref.reportTypes;
   const T = Object.fromEntries(types.map((t) => [t.id, t]));
-  // отчёт | контрагент | что сделать | статус | периодичность | начало периода | дата события | к уплате | оплачено | заменён | место вида в каталоге
+  // отчёт | контрагент | что сделать | статус | периодичность | начало периода | дата события | к уплате | оплачено | заменён | место вида в каталоге | короткое название вида
   return db.reports.map((r) =>
     [
       r.id,
@@ -152,6 +160,7 @@ function input(db) {
       t100(r.paid ?? 0),
       r.superseded ? 1 : 0,
       types.indexOf(T[r.t]),
+      T[r.t].short,
     ].join('|'),
   );
 }
@@ -170,12 +179,15 @@ const datasets = [
   runs: RUNS.map(({ today, taxpay }) => ({ today, taxpay, ...run(clone(db), today, taxpay) })),
 }));
 
-const fixture = { source: 'modules/report-months.js, core/derive.js', datasets };
+const fixture = {
+  source: 'modules/report-months.js, modules/cp-telegram.js, core/derive.js',
+  datasets,
+};
 const out = fileURLToPath(new URL('../src/reports/__fixtures__/month-plan.json', import.meta.url));
 writeFileSync(
   out,
   await format(JSON.stringify(fixture), { ...(await resolveConfig(out)), filepath: out }),
 );
 console.log(
-  `month-plan.json: ${datasets.map((d) => `${d.name} — ${d.reports.length} отчётов, ${d.runs[0].groups.length} месяцев`).join('; ')}`,
+  `month-plan.json: ${datasets.map((d) => `${d.name} — ${d.reports.length} отчётов, ${d.runs[0].groups.length} месяцев, к оплате — ${d.runs[0].pays.length}`).join('; ')}`,
 );

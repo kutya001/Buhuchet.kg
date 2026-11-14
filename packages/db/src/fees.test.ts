@@ -125,6 +125,7 @@ describe.skipIf(!databaseAvailable())('Плата за обслуживание:
   const access = (fee: boolean): ContractorHistoryAccess => ({
     fee,
     reports: undefined,
+    monthPay: undefined,
     tasks: true,
     kpi: false,
     files: false,

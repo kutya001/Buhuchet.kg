@@ -29,6 +29,7 @@ export * from './contractor-page-view';
 export * from './contractor-telegram';
 export * from './reports';
 export * from './report-pick';
+export * from './month-pay';
 export * from './report-list';
 export * from './report-matrix';
 export * from './report-submit';

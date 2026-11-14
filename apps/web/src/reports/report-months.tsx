@@ -4,11 +4,13 @@ import {
   addMonths,
   bishkekDate,
   currentPlanMonth,
+  formatDateRu,
   formatSom,
   formatSomWithUnit,
   pluralForm,
   type GridViewSettings,
   type ListSort,
+  type MonthPay,
   type MonthPlanGroup,
   type MonthPlanItem,
   type MonthPlanQuick,
@@ -29,14 +31,16 @@ import {
   Tag,
   TOUCH_AREA,
   useMediaQuery,
+  useToast,
   type ActionEntry,
   type GridColumn,
   type MiniColumn,
   type MiniRow,
 } from '@buhuchet/ui';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { api, apiFailure, ApiFailure } from '../api-client';
+import { api, apiFailure, ApiFailure, callApi } from '../api-client';
+import { contractorHistoryQuery } from '../contractors/contractor-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -59,6 +63,7 @@ import {
   type ReportsMode,
 } from './report-months-model';
 import {
+  contractorMonthPayQuery,
   contractorMonthReportsQuery,
   reportMonthSummaryQuery,
   reportSummaryQuery,
@@ -148,6 +153,111 @@ const WIDTHS: Readonly<Record<string, number>> = {
 };
 
 /**
+ * «К оплате клиенту» под таблицей месяца в карточке контрагента (задача К4; прототип v94 `rmPayHtml`,
+ * `rmPayMount`): итог и ближайший срок, налоги с остатками, реквизит для налогов и «Скопировать для
+ * клиента» — текст по шаблону считает сервер, нажатие пишется в историю контрагента. Числа — из плана
+ * карточки (те же, что в таблице месяца); порядок строк, реквизит и текст — из ответа сервера.
+ */
+function MonthPayBlock({
+  contractorId,
+  title,
+  pay,
+}: {
+  contractorId: string;
+  title: string;
+  pay: MonthPay<ReportRow>;
+}) {
+  const t = useT();
+  const toast = useToast();
+  const errorText = useErrorText();
+  const client = useQueryClient();
+  const query = useQuery(contractorMonthPayQuery(contractorId, pay.month));
+  const data = query.data;
+  const rows = data?.rows ?? pay.rows.map((x) => ({ name: x.report.type.shortName, left: x.left }));
+  const hint = [
+    ...rows.map((x) => `${x.name} ${formatSom(x.left)}`),
+    ...(pay.noAmount ? [t('report.months.pay.no_amount', { n: pay.noAmount })] : []),
+    ...(data?.requisite ? [data.requisite] : []),
+  ].join(' · ');
+  // Пока план перечитывается после действия с отчётом, прежний текст не копируется.
+  const text = query.isFetching ? null : (data?.text ?? null);
+  // Почему текста нет: реквизит ответственного не виден, часть отчётов вне области или ответ не пришёл.
+  const why = data?.refusal
+    ? t(`err.${data.refusal}`)
+    : query.isError && !query.isFetching
+      ? query.error instanceof ApiFailure
+        ? errorText(query.error.error)
+        : t('report.months.pay.load_error')
+      : null;
+  const copy = async () => {
+    if (why) {
+      toast(why, { icon: 'lock', bad: true });
+      return;
+    }
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // ОТКЛОНЕНИЕ: docs/deviations.md#К-3 — буфер обмена недоступен: копировать нечем, в историю не пишем.
+      return;
+    }
+    toast(t('report.months.pay.copied'), { icon: 'copy' });
+    const res = await callApi(() =>
+      api.api.contractors[':id']['month-pay'].copied.$post({
+        param: { id: contractorId },
+        json: { month: pay.month },
+      }),
+    );
+    if (!res.ok) {
+      toast(errorText(res.error), { bad: true });
+      return;
+    }
+    void client.invalidateQueries({ queryKey: contractorHistoryQuery(contractorId).queryKey });
+  };
+  return (
+    <div
+      role="group"
+      aria-label={t('report.months.pay.label', { title: title.toLowerCase() })}
+      data-month-pay={pay.month}
+      className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-[10px] border border-dashed border-line px-2.5 py-2"
+    >
+      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span className="inline-flex text-muted">
+          <Icon name="wallet" size="sm" />
+        </span>
+        <b>{t('report.months.pay.title')}</b>
+        <b className="tabular-nums" data-month-pay-total="">
+          {formatSomWithUnit(pay.total)}
+        </b>
+        {pay.due ? (
+          <span className="text-[11.5px] leading-[1.4] text-faint">
+            {t('report.months.pay.due', { date: formatDateRu(pay.due) })}
+          </span>
+        ) : null}
+      </span>
+      <span
+        className="order-3 min-w-0 flex-[1_1_100%] text-[11.5px] leading-[1.4] text-faint"
+        data-month-pay-list=""
+      >
+        {hint}
+      </span>
+      <button
+        type="button"
+        data-month-pay-copy=""
+        disabled={!why && !text}
+        aria-disabled={why ? true : undefined}
+        title={why ?? undefined}
+        className={`${buttonClass('default', 'sm')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none max-md:flex-auto max-md:justify-center`}
+        onClick={() => void copy()}
+      >
+        <Icon name="copy" size="sm" />
+        <span>{t('report.months.pay.copy')}</span>
+      </button>
+    </div>
+  );
+}
+
+/**
  * Месяц плана (прототип `rmMonthHtml`, `rmRowHtml`): заголовок с итогом и таблица отчётов — что сделать,
  * срок и статус сдачи, сумма, срок оплаты и «Оплачено в бюджет» (при «Учёте оплаты налогов»). Чего по
  * отчёту делать не нужно — «—». Строка открывает карточку отчёта, «⋯» — те же действия, что в списке.
@@ -160,7 +270,10 @@ function MonthBlock({
   taxpay,
   reports,
   onMenu,
+  after,
 }: {
+  /** Под таблицей раскрытого месяца: «К оплате клиенту» в карточке контрагента. */
+  after?: ReactNode;
   g: MonthPlanGroup<ReportRow>;
   open: boolean;
   onToggle: () => void;
@@ -301,6 +414,7 @@ function MonthBlock({
           }}
         />
       ) : null}
+      {open ? after : null}
     </section>
   );
 }
@@ -441,6 +555,15 @@ export function ContractorReportMonths({
               taxpay={taxpay}
               reports={reports}
               onMenu={(el, items) => setMenu({ el, items })}
+              after={
+                plan.pay.has(g.month) ? (
+                  <MonthPayBlock
+                    contractorId={contractorId}
+                    title={monthTitle(t, g.month)}
+                    pay={plan.pay.get(g.month)!}
+                  />
+                ) : null
+              }
             />
           );
         })}

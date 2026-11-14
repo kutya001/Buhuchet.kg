@@ -1,6 +1,8 @@
+import { MONTH_PAY_MESSAGES } from '../reports/month-pay';
 import type { UiTextDefault } from './texts';
 
 const S = 'Отчеты для сдачи';
+const E = 'Ошибки';
 
 /**
  * «К сдаче и к оплате по месяцам» (решение заказчика 13.11.2026, прототип v90
@@ -49,6 +51,22 @@ export const REPORT_MONTHS_TEXTS = {
     section: S,
   },
   'report.months.load_error': { ru: 'Не удалось загрузить отчёты', section: S },
+  // Блок «К оплате клиенту» под месяцем в карточке контрагента (задача К4; прототип v94 `rmPayHtml`,
+  // `rmPayMount`).
+  'report.months.pay.title': { ru: 'К оплате клиенту', section: S },
+  'report.months.pay.label': { ru: 'К оплате клиенту {title}', section: S },
+  'report.months.pay.due': { ru: 'до {date}', section: S },
+  'report.months.pay.no_amount': { ru: 'без суммы {n} — в сообщение не войдут', section: S },
+  'report.months.pay.copy': { ru: 'Скопировать для клиента', section: S },
+  'report.months.pay.copied': { ru: 'Текст для клиента скопирован', section: S },
+  'report.months.pay.hist': { ru: 'Скопирован текст «К оплате» за {month}: {total}', section: S },
+  'err.month_pay_empty': { ru: MONTH_PAY_MESSAGES.month_pay_empty, section: E },
+  'err.month_pay_requisite_hidden': {
+    ru: MONTH_PAY_MESSAGES.month_pay_requisite_hidden,
+    section: E,
+  },
+  'err.month_pay_partial': { ru: MONTH_PAY_MESSAGES.month_pay_partial, section: E },
+  'report.months.pay.load_error': { ru: 'Не удалось подготовить текст для клиента', section: S },
   // Вкладка «По месяцам» модуля (прототип `rmRender`).
   'report.months.now': { ru: 'Прошлый месяц', section: S },
   'report.months.now_title': { ru: 'Месяц, отчёты за который сдаются сейчас', section: S },

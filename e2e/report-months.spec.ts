@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { asOwner, manualReport, newContractor } from './reports';
+import { asOwner, manualReport, newContractor, prepay } from './reports';
 
 // «К сдаче и к оплате по месяцам» (доработки заказчика 13.11.2026, задача К2; прототип v90
 // modules/report-months.js) через настоящий сайт: вкладка «Отчёты к сдаче» карточки контрагента и
@@ -283,5 +283,92 @@ test.describe('Доработки 13.11.2026, К2: отчёты и налоги 
       await page.locator('[data-months-move="0"]').click();
       await expect(title).toHaveText(`За ${MONTHS[prev.m]} ${prev.y}`);
     }
+  });
+});
+
+// «К оплате клиенту» (доработки 13.11.2026, задача К4; прототип v94 modules/cp-telegram.js: rmToPay,
+// rmPayHtml, rmPayMount): блок под месяцем в карточке контрагента и «Скопировать для клиента».
+test.describe('Доработки 13.11.2026, К4: «К оплате клиенту» в карточке контрагента', () => {
+  /** «Указать сумму» через API. */
+  async function setAmount(api: APIRequestContext, origin: string, id: string, amount: number) {
+    const card = await api.get(`/api/reports/${id}`);
+    expect(card.status(), await card.text()).toBe(200);
+    const { version } = (await card.json()) as { version: number };
+    const res = await api.post(`/api/reports/${id}/amount`, {
+      headers: { origin },
+      data: { version, amount },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+  }
+
+  test('(доработки 13.11.2026, К4) под месяцем в карточке контрагента — «К оплате клиенту»: неоплаченные налоги месяца, итог и ближайший срок; «Скопировать для клиента» кладёт текст в буфер и пишет в историю; всё оплачено — блока нет', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.setTimeout(120_000);
+    const origin = await asOwner(page.request, baseURL);
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+    const word = uniqueWord('Коплате');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(page.request, origin, { name });
+    const report = (reportTypeCode: string, month: string) =>
+      manualReport(page.request, origin, {
+        contractorId: cp.id,
+        reportTypeCode,
+        month,
+        due: '2030-01-15',
+      });
+    // Сентябрь: НДС оплачен частично, патент не оплачен, 1-Т только сдаётся. Август: сумма не указана.
+    const nds = await report('nds', '2026-09-01');
+    const pat = await report('pat', '2026-09-01');
+    await report('t1m', '2026-09-01');
+    await report('pat', '2026-08-01');
+    await prepay(page.request, origin, nds, 500_000, 120_000);
+    await setAmount(page.request, origin, pat, 87_050);
+
+    const card = await openReportsTab(page, isMobile, word);
+    const months = card.locator('[data-contractor-months]');
+    const block = months.locator('[data-month-pay="2026-09"]');
+    const copy = block.locator('[data-month-pay-copy]');
+
+    await test.step('блок под сентябрём: итог неоплаченного, срок и налоги с остатками; где суммы нет — блока нет', async () => {
+      await expect(block).toContainText('К оплате клиенту');
+      await expect(block.locator('[data-month-pay-total]')).toHaveText(/^4\s670,50\sсом$/);
+      await expect(block).toContainText(/до \d\d\.\d\d\.\d{4}/);
+      const list = block.locator('[data-month-pay-list]');
+      await expect(list).toContainText(/3\s800,00/);
+      await expect(list).toContainText('870,50');
+      // В августе сумма патента не указана — платить пока нечего.
+      await expect(months.locator('[data-report-month="2026-08"]')).toBeVisible();
+      await expect(months.locator('[data-month-pay="2026-08"]')).toHaveCount(0);
+      // Блок — по всем налогам месяца, какая бы плашка ни была выбрана.
+      await months.locator('[data-months-quick] [data-quick="sub"]').click();
+      await expect(block.locator('[data-month-pay-total]')).toHaveText(/^4\s670,50\sсом$/);
+      await months.locator('[data-months-quick] [data-quick="all"]').click();
+    });
+
+    await test.step('«Скопировать для клиента»: текст по шаблону — в буфере, запись — в истории контрагента', async () => {
+      await expect(copy).toBeEnabled();
+      await copy.click();
+      await expect(page.getByText('Текст для клиента скопирован')).toBeVisible();
+      const text = await page.evaluate(() => navigator.clipboard.readText());
+      expect(text).toContain(`Уважаемые ${name}! Налоги к оплате за сентябрь 2026: `);
+      expect(text).toMatch(/Итого — 4\s670,50\sсом\. Просим перечислить до \d\d\.\d\d\.\d{4} на: /);
+      expect(text).toMatch(/3\s800\sсом \(до \d\d\.\d\d\.\d{4}\)/);
+      await toCardTab(page, card, isMobile, /^История/);
+      await expect(
+        card.getByText(/Скопирован текст «К оплате» за сентябрь 2026: 4\s670,50\sсом/),
+      ).toBeVisible();
+    });
+
+    await test.step('налоги оплачены — блока «К оплате клиенту» нет', async () => {
+      await prepay(page.request, origin, nds, 500_000, 380_000);
+      await prepay(page.request, origin, pat, 87_050);
+      await page.reload();
+      const again = await openReportsTab(page, isMobile, word);
+      await expect(again.locator('[data-report-month="2026-09"]')).toBeVisible();
+      await expect(again.locator('[data-month-pay]')).toHaveCount(0);
+    });
   });
 });

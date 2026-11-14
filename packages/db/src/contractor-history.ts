@@ -215,6 +215,11 @@ export interface ContractorHistoryAccess {
   fee: boolean;
   /** Отчёты и назначения («Просматривать отчёты»). */
   reports: SQL | undefined | false;
+  /**
+   * «Скопирован текст «К оплате»» с суммой налогов месяца (docs/deviations.md п. К-3): «Просматривать
+   * отчёты» и контрагент в области, где сотрудник видит все его отчёты; иначе запись не отдаётся.
+   */
+  monthPay: SQL | undefined | false;
   /** Задачи (функция «Задачи»). */
   tasks: boolean;
   /** Показатели (функция «Показатели контрагентов» и право их смотреть). */
@@ -258,6 +263,8 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   'feeTotal',
   'feeAllocations',
 ]);
+/** Сумма налогов месяца в записи «Скопирован текст «К оплате»» (задача К4). */
+const MONTH_PAY_FIELDS: ReadonlySet<string> = new Set(['payText']);
 const KPI_ENTITIES = ['indicator', 'indicator_value'] as const;
 const FILE_ACTIONS = ['file_attach', 'file_delete', 'file_hide', 'file_show'] as const;
 
@@ -395,8 +402,11 @@ const SERVICE_BONUS_FIELDS: ReadonlySet<string> = new Set(['bonuses']);
 function visibleChanges<T extends { entity: string; changes: HistoryChange[] }>(
   r: T,
   access: ContractorHistoryAccess,
+  monthPay: boolean,
 ): T | null {
-  const fee = access.fee ? r : withoutFields(r, FEE_FIELDS);
+  const seen = monthPay ? r : withoutFields(r, MONTH_PAY_FIELDS);
+  if (!seen) return seen;
+  const fee = access.fee ? seen : withoutFields(seen, FEE_FIELDS);
   if (!fee) return fee;
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-75
   // «Услуга создана» остаётся без строки бонусов; отдельная запись «Бонусы сотрудникам» убирается целиком.
@@ -419,6 +429,15 @@ export async function contractorHistory(
     .where(and(eq(contractors.id, id), o.scope));
   if (!found) return null;
   const visible = await visibleEntries(tx, id, o.access);
+  const monthPay =
+    o.access.monthPay !== false &&
+    (!o.access.monthPay ||
+      (
+        await tx
+          .select({ id: contractors.id })
+          .from(contractors)
+          .where(and(eq(contractors.id, id), o.access.monthPay))
+      ).length > 0);
   const rows = await tx
     .select({
       id: auditLog.id,
@@ -436,7 +455,7 @@ export async function contractorHistory(
     .where(and(eq(auditLog.contractorId, id), visible))
     .orderBy(desc(auditLog.at), desc(auditLog.id))
     .limit(o.limit ?? 200)
-    .then((list) => list.flatMap((r) => visibleChanges(r, o.access) ?? []));
+    .then((list) => list.flatMap((r) => visibleChanges(r, o.access, monthPay) ?? []));
   const [names, subjects] = await Promise.all([
     namesOf(tx, referencesOf(rows)),
     subjectsOf(tx, id, rows, o.t),
