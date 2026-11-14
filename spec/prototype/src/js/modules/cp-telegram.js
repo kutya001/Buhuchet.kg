@@ -195,10 +195,10 @@ tgAct('cp-req',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgC
 tgAct('cp-nodebt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l;x.noDebt=true;
   pgTgClientLog(c,`Напоминания о долге в Telegram выключены контрагентом («${x.name}»)`);return {done:'✓ Напоминания выключены',eph:tplFill('tgCpNoDebtOk',{})}}});
 // Карточка контрагента: «Напоминать о долге в Telegram» у этого контрагента и макет напоминания
-const pgDebtWhy=c=>!can('cpPage')?'Нужно право «Управлять страницей контрагента»':!ORG.tgCpDebt?'Напоминания о долге выключены для всей организации: «Моя организация» → «Настройки» → «Telegram контрагентов»':'';
+const pgDebtWhy=c=>!can('cpPage')?'Нужно право «Управлять страницей контрагента»':!ORG.tgCpDebt?'Напоминания о долге выключены для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание»':'';
 function pgDebtRow(c){if(!rmPayTgOn()||!(feat('fee')||feat('taxpay')))return '';const w=pgDebtWhy(c),on=!!ORG.tgCpDebt&&!c.tgNoDebt,d=pgDebt(c),to=pgDebtTo(c);
   const dw=to.length?'':!ORG.tgCpDebt?'Напоминания о долге выключены в настройках организации':c.tgNoDebt?'Напоминание о долге у этого контрагента выключено':!d.sum?'У контрагента нет недостачи на налоги и долга за обслуживание':!pgTgN(c,'on')?'Контрагент не подключил Telegram':'Клиент выключил напоминания кнопкой «Не напоминать»';
-  return `<div class="row pg-tg-debt"><label class="check-row grow"><input type="checkbox" class="sw" data-pg-tg="debt:0" ${on?'checked':''} ${w?`aria-disabled="true" title="${esc(w)}"`:''}><span class="grow">Напоминать о долге в Telegram<div class="hint">${ORG.tgCpDebt?`Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание${d.sum?` — сейчас ${som(d.sum)}`:' — сейчас долга нет'}.`:'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram контрагентов».'}</div></span></label>
+  return `<div class="row pg-tg-debt"><label class="check-row grow"><input type="checkbox" class="sw" data-pg-tg="debt:0" ${on?'checked':''} ${w?`aria-disabled="true" title="${esc(w)}"`:''}><span class="grow">Напоминать о долге в Telegram<div class="hint">${ORG.tgCpDebt?`Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание${d.sum?` — сейчас ${som(d.sum)}`:' — сейчас долга нет'}.`:'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание».'}</div></span></label>
     <button type="button" class="btn sm ghost ${dw?'dis':''}" data-pg-tg="demo:0" ${dw?`aria-disabled="true" data-why="${esc(dw)}" title="${esc(dw)}"`:''}>${ic('tg','sm')}<span class="bl">Прототип: показать напоминание</span></button></div>`}
 /* ═════════════ «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5) ═════════════ */
 // Вкладка «Обслуживание» карточки контрагента, рядом с «Напомнить в WhatsApp»: видна при долге за обслуживание, если подключён хотя бы один Telegram; права — те же, что у WhatsApp.
@@ -234,10 +234,16 @@ tgAct('cp-feepaid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill(
   return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{})}}});
 const pgDebtDlg=(c,x)=>pgChatDlg(c,x,pgDebtMsg(c,x),{title:'Прототип: напоминание о долге в Telegram клиента',sub:esc(c.name),
   note:'Так напоминание о долге выглядит у клиента: оно приходит раз в неделю, в понедельник в 10:00, пока есть недостача на налоги или долг за обслуживание.'});
-// Настройки организации: «Моя организация» → «Настройки» → «Telegram контрагентов»
-function pgTgOrgHtml(ro){if(!rmPayTgOn())return '';const sw=(id,on,t,h)=>`<label class="check-row"><input type="checkbox" class="sw" id="${id}" ${on?'checked':''} ${ro?'disabled':''}><span class="grow">${t}<div class="hint">${h}</div></span></label>`;
-  return `<div class="box" id="org-cptg"><h3>Telegram контрагентов</h3>${sw('st-cppay',ORG.tgCpPay,'Отправлять «К оплате» контрагентам',`Сообщение с налогами месяца приходит клиенту за ${PG_PAY_DAYS} дней до ближайшего срока оплаты, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».`)}
-    ${sw('st-cpdebt',ORG.tgCpDebt,'Напоминать контрагентам о долге','Раз в неделю, в понедельник в 10:00: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».')}
-    <span class="hint">Сообщения получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.</span></div>`}
-function pgTgOrgMount(body){[['st-cppay','tgCpPay','Отправлять «К оплате» контрагентам'],['st-cpdebt','tgCpDebt','Напоминать контрагентам о долге']].forEach(([id,k,t])=>{const x=$('#'+id,body);if(!x)return;
-  x.onchange=()=>{ORG[k]=x.checked;log('org','settings',`${t}: ${x.checked?'включено':'выключено'}`);toast(`${t}: ${x.checked?'включено':'выключено'}`,'tg')}})}
+// Строки «К оплате» и «Оплата за обслуживание» блока «Telegram-уведомления» (пакет 14.11.2026, блок 3; до этого — блок «Telegram контрагентов»):
+// видны при включённых «Напоминаниях в Telegram» и «Странице контрагента»; включает только владелец, сразу, без «Сохранить», с записью в историю.
+// Этап 1 — перенос без изменения работы: «К оплате» — за 5 дней (PG_PAY_DAYS) в 10:00, долг — по понедельникам в 10:00; дни и час строк — этап 2 (поток К).
+const PG_TG_ROWS=[['cpPay','tgCpPay','«К оплате»','Отправлять «К оплате» контрагентам'],['cpFee','tgCpDebt','Оплата за обслуживание','Напоминать контрагентам о долге']];
+function pgTgNoticeRows(own){if(!rmPayTgOn())return [];const who=own?'':'Меняет только владелец организации',only=' Получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.';
+  return [tgnRow({id:'cpPay',title:'«К оплате»',to:'cp',on:!!ORG.tgCpPay,dis:!own,why:who,
+      hint:`Сообщение с налогами месяца, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».${only}`,
+      days:`За ${PG_PAY_DAYS} дней до ближайшего срока оплаты месяца`,at:'10:00',often:'Раз в месяц'}),
+    tgnRow({id:'cpFee',title:'Оплата за обслуживание',to:'cp',on:!!ORG.tgCpDebt,dis:!own,why:who,
+      hint:`Напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».${only}`,
+      days:'По понедельникам',at:'10:00',often:'Раз в неделю, пока есть долг'})]}
+function pgTgNoticeMount(body){const own=tgnOwn();PG_TG_ROWS.forEach(([id,k,,t])=>{const x=body.querySelector(`[data-tgn-sw="${id}"]`);if(!x)return;
+  x.onchange=()=>{if(!own)return;ORG[k]=x.checked;log('org','settings',`${t}: ${x.checked?'включено':'выключено'}`);renderPage();toast(`${t}: ${x.checked?'включено':'выключено'}`,'tg')}})}
