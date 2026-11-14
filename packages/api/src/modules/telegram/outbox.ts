@@ -5,6 +5,7 @@ import {
   finishOutbox,
   finishPlatformOutbox,
   telegramBotRich,
+  telegramBotTopics,
   telegramOutboxOrgs,
   withOrgContext,
   type ClaimedOutbox,
@@ -12,11 +13,22 @@ import {
   type OutboxOutcome,
   type Tx,
 } from '@buhuchet/db';
-import { redactBotToken, type TelegramSendOptions } from '@buhuchet/adapters';
+import {
+  platformFileKey,
+  redactBotToken,
+  type TelegramPhotoResult,
+  type TelegramSendOptions,
+  type TelegramSendResult,
+} from '@buhuchet/adapters';
 import {
   botHasMarkup,
   botKeyboard,
+  botPlainText,
   botRichHtml,
+  botTopicOf,
+  CAST_IMAGES_SECTION,
+  castImageName,
+  castImageType,
   OUTBOX_BATCH,
   OUTBOX_LEASE_SECONDS,
   OUTBOX_MAX_BATCHES,
@@ -26,6 +38,7 @@ import {
   type BotMessage,
 } from '@buhuchet/domain';
 import type { Job, JobContext } from '../../deps';
+import { sendInTopic, threadOption } from './topics';
 
 /*
  * Очередь Telegram (ТЗ «Уведомления в Telegram», Админка → «Модуль Телеграмм»; прототип
@@ -46,8 +59,8 @@ const realPause: Pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms
  */
 export { redactBotToken };
 
-/** Строка очереди: у строк организации — ещё описание сообщения и «простым текстом» получателя. */
-type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'text' | 'tries'> &
+/** Строка очереди: у сообщения с таблицами и кнопками — ещё описание и «простым текстом» получателя. */
+type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'kind' | 'text' | 'tries'> &
   Partial<Pick<ClaimedOutbox, 'message' | 'plain'>>;
 
 /**
@@ -67,11 +80,71 @@ export function botSendOptions(
   };
 }
 
-/** Отправить одну строку и решить, что с ней дальше. */
+/**
+ * Номера картинок рассылки у Telegram (поток Т, задача Т6): картинка грузится один раз, остальным
+ * получателям уходит по номеру. Только в памяти процесса и не больше `PHOTO_IDS_MAX` — потерянный номер
+ * значит лишь ещё одну загрузку.
+ */
+const photoIds = new Map<string, string>();
+const PHOTO_IDS_MAX = 50;
+
+/** Отказ без обращения к Telegram (картинки нет в хранилище) — как постоянная ошибка Telegram. */
+const refusedPhoto = (description: string): Extract<TelegramSendResult, { ok: false }> => ({
+  ok: false,
+  errorCode: 0,
+  description,
+  permanent: true,
+});
+
+/**
+ * Сообщение с картинкой: подпись — заголовок и текст (с разметкой или простым текстом), кнопки — под
+ * картинкой. Сначала по номеру файла у Telegram, если картинку уже отправляли; не принял — загрузка.
+ */
+async function sendPhotoRow(
+  ctx: JobContext,
+  row: QueuedRow,
+  message: BotMessage & { image: string },
+  plain: boolean,
+  threadId: number | undefined,
+): Promise<TelegramPhotoResult> {
+  const telegram = ctx.telegram!;
+  const o = botSendOptions(message, { plain });
+  const options = {
+    caption: o.rich ?? botPlainText(message),
+    ...(o.rich ? { html: true } : {}),
+    ...(o.keyboard ? { keyboard: o.keyboard } : {}),
+    ...threadOption(threadId),
+  };
+  const known = photoIds.get(message.image);
+  if (known) {
+    const res = await telegram.sendPhoto(row.chatId, { fileId: known }, options);
+    if (res.ok || !res.permanent) return res;
+    photoIds.delete(message.image);
+  }
+  const bytes = await ctx.storage.get(platformFileKey(CAST_IMAGES_SECTION, message.image));
+  if (!bytes) return refusedPhoto('Картинка рассылки не найдена в хранилище');
+  const type = castImageType(bytes);
+  if (!type) return refusedPhoto('Картинка рассылки — не JPG, PNG и не WebP');
+  const res = await telegram.sendPhoto(
+    row.chatId,
+    { bytes, name: castImageName(type), contentType: type },
+    options,
+  );
+  if (res.ok && res.fileId) {
+    if (photoIds.size >= PHOTO_IDS_MAX) photoIds.delete(photoIds.keys().next().value!);
+    photoIds.set(message.image, res.fileId);
+  }
+  return res;
+}
+
+/**
+ * Отправить одну строку и решить, что с ней дальше. Темы в чате с ботом (задача Т7): строка уходит в
+ * тему своего вида; `topicsOn` — переключатель платформы, прочитанный раз на пачку.
+ */
 async function sendOne(
   ctx: JobContext,
   row: QueuedRow,
-  rich: boolean,
+  o: { rich: boolean; topicsOn: boolean; orgId: string | null },
   now: () => Date,
 ): Promise<OutboxOutcome> {
   const fail = (error: string, permanent: boolean, retryAfter?: number): OutboxOutcome =>
@@ -83,12 +156,25 @@ async function sendOne(
           error,
           at: new Date(now().getTime() + outboxRetryDelaySeconds(row.tries, retryAfter) * 1000),
         };
-  if (!ctx.telegram) return fail('Telegram-бот не подключён', false);
+  const telegram = ctx.telegram;
+  if (!telegram) return fail('Telegram-бот не подключён', false);
   try {
-    const res = await ctx.telegram.sendMessage(row.chatId, row.text, {
-      disableLinkPreview: true,
-      ...(row.message ? botSendOptions(row.message, { plain: !rich || row.plain === true }) : {}),
-    });
+    const plain = !o.rich || row.plain === true;
+    const message = row.message;
+    const res = await sendInTopic(
+      ctx,
+      row.chatId,
+      { kind: row.kind, orgId: o.orgId },
+      (threadId) =>
+        message?.image !== undefined
+          ? sendPhotoRow(ctx, row, { ...message, image: message.image }, plain, threadId)
+          : telegram.sendMessage(row.chatId, row.text, {
+              disableLinkPreview: true,
+              ...(message ? botSendOptions(message, { plain }) : {}),
+              ...threadOption(threadId),
+            }),
+      { topicsOn: o.topicsOn },
+    );
     if (res.ok) {
       // Номер сообщения нужен только сообщению с кнопками: по нему бот находит его при нажатии.
       return {
@@ -128,7 +214,14 @@ async function sendBatches(
     const outcomes: OutboxOutcome[] = [];
     // «Сообщения с таблицами» платформы читаются раз на пачку и только если в ней есть такие сообщения.
     const rich = rows.some((r) => r.message) ? await telegramBotRich(ctx.db) : true;
-    for (const row of rows) outcomes.push(await sendOne(ctx, row, rich, now));
+    // «Темы в чате с ботом» — так же: раз на пачку и только если в ней есть сообщения с темой.
+    const topicsOn =
+      ctx.telegram && rows.some((r) => botTopicOf(r.kind))
+        ? await telegramBotTopics(ctx.db)
+        : false;
+    for (const row of rows) {
+      outcomes.push(await sendOne(ctx, row, { rich, topicsOn, orgId: q.orgId }, now));
+    }
     await q.finish(outcomes);
     sent += outcomes.filter((x) => x.result === 'sent').length;
     for (const x of outcomes) {
@@ -174,9 +267,10 @@ export function sendOrgOutbox(
 }
 
 /**
- * Строки без организации — сообщения администраторам платформы, которые Админка → «Телеграм» снова
- * поставила в очередь «Повторить отправку» (задача 2.41): под RLS их не видно ни в одной организации,
- * поэтому их берут и отмечают функции базы.
+ * Строки без организации — сообщения администраторам платформы: заявка с сайта с кнопками (поток Т,
+ * задача Т6) и те, что Админка → «Телеграм» снова поставила в очередь «Повторить отправку» (задача
+ * 2.41). Под RLS их не видно ни в одной организации, поэтому их берут и отмечают функции базы; у
+ * сообщения с кнопками запоминается номер в чате — по нему бот принимает нажатие.
  */
 export function sendPlatformOutbox(
   ctx: JobContext,

@@ -122,9 +122,35 @@ export interface WeekContractor {
   over: string[];
 }
 
+/** Строка сводки недели руководителю: сотрудник (null — отчёты без ответственного) и его числа. */
+export interface WeekEmployeeRow {
+  employeeId: string | null;
+  /** Сдать до конца недели. */
+  sub: number;
+  /** Просрочено: несданные отчёты и неоплаченные налоги. */
+  over: number;
+  /** Сдачи ждут подтверждения. */
+  wait: number;
+}
+
+/**
+ * Сводка недели руководителю по сотрудникам (поток Т, задача Т3; прототип v100 `tgWeekRows`): итоги
+ * недели и строки сотрудников, у которых есть что сдать, просроченное или ждущее подтверждения.
+ */
+export interface WeekSummary {
+  from: IsoDate;
+  to: IsoDate;
+  sub: number;
+  pay: number;
+  over: number;
+  rows: WeekEmployeeRow[];
+}
+
 export interface ReminderMessage {
   employeeId: string;
   lines: ReminderLine[];
+  /** Понедельник: сводка недели владельцу и главному бухгалтеру отдельным сообщением с таблицей. */
+  week?: WeekSummary;
 }
 
 type When = 'today' | 'over' | number | null;
@@ -138,7 +164,7 @@ function whenOf(due: IsoDate, days: readonly number[], p: ReminderPolicy): When 
 }
 
 const subOpen = (r: ReminderReport) => r.open && r.act !== 'pay' && !r.paused;
-const payOpen = (r: ReminderReport, p: ReminderPolicy) =>
+const payOpen = (r: ReminderReport, p: Pick<ReminderPolicy, 'taxpay'>) =>
   p.taxpay && r.act !== 'sub' && r.unpaid && r.payDue !== null && !r.paused;
 
 interface Bucket {
@@ -201,10 +227,10 @@ function weekLine(
   p: ReminderPolicy,
 ): ReminderLine | null {
   const week = p.week;
-  if (!week) return null;
-  if (person.boss ? !notifyOn(person.settings, true, 'week') : false) return null;
-  const mine = (r: ReminderReport) =>
-    r.responsibleId === person.employeeId || (person.boss && inView(person, r));
+  // Владелец и главный бухгалтер получают сводку отдельным сообщением с таблицей по сотрудникам
+  // (`weekSummary`), строки в сообщении дня у них нет.
+  if (!week || person.boss) return null;
+  const mine = (r: ReminderReport) => r.responsibleId === person.employeeId;
   const byName = new Map<string, WeekContractor>();
   const at = (name: string) => {
     let c = byName.get(name);
@@ -238,6 +264,76 @@ function weekLine(
   if (!sub && !pay && !over) return null;
   const byContractor = [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
   return { key: 'tgWeek', from: week.from, to: week.to, sub, pay, over, byContractor };
+}
+
+/**
+ * Сводка недели руководителю (прототип v100 `tgWeekRows`): владельцу и главному бухгалтеру с включённой
+ * «Сводкой за неделю», по понедельникам. Отчёты — свои и чужие в области получателя (`inView`); по
+ * сотруднику-ответственному — сколько сдать до конца недели, сколько просрочено (сдача и оплата налога)
+ * и сколько сдач ждут подтверждения. Оплата на неделе входит только в итог. null — сводка не положена.
+ */
+export function weekSummary(
+  person: ReminderPerson,
+  reports: readonly ReminderReport[],
+  p: ReminderPolicy,
+): WeekSummary | null {
+  const week = p.week;
+  if (!week || !person.boss || !notifyOn(person.settings, true, 'week')) return null;
+  const byId = new Map<string | null, WeekEmployeeRow>();
+  const at = (employeeId: string | null) => {
+    let row = byId.get(employeeId);
+    if (!row) byId.set(employeeId, (row = { employeeId, sub: 0, over: 0, wait: 0 }));
+    return row;
+  };
+  let sub = 0;
+  let pay = 0;
+  let over = 0;
+  for (const r of reports) {
+    if (r.responsibleId !== person.employeeId && !inView(person, r)) continue;
+    if (subOpen(r)) {
+      if (r.dueDate < p.today) {
+        at(r.responsibleId).over++;
+        over++;
+      } else if (r.dueDate <= week.to) {
+        at(r.responsibleId).sub++;
+        sub++;
+      }
+    }
+    if (payOpen(r, p)) {
+      if (r.payDue! < p.today) {
+        at(r.responsibleId).over++;
+        over++;
+      } else if (r.payDue! <= week.to) pay++;
+    }
+    if (p.reportConfirm && r.waitingSince && !r.paused) at(r.responsibleId).wait++;
+  }
+  const rows = [...byId.values()].filter((x) => x.sub || x.over || x.wait);
+  return { from: week.from, to: week.to, sub, pay, over, rows };
+}
+
+/** Просроченное сотрудника: несданный отчёт или неоплаченный налог (`pay`) и его срок. */
+export interface OverdueItem {
+  report: ReminderReport;
+  due: IsoDate;
+  pay: boolean;
+}
+
+/**
+ * Просроченное сотрудника для «Напомнить» (прототип v100 `tgOverOf`): его несданные отчёты со сроком в
+ * прошлом и неоплаченные налоги с прошедшим сроком оплаты, самые давние первыми.
+ */
+export function overdueOf(
+  employeeId: string,
+  reports: readonly ReminderReport[],
+  p: Pick<ReminderPolicy, 'today' | 'taxpay'>,
+): OverdueItem[] {
+  const out: OverdueItem[] = [];
+  for (const r of reports) {
+    if (r.responsibleId !== employeeId) continue;
+    if (subOpen(r) && r.dueDate < p.today) out.push({ report: r, due: r.dueDate, pay: false });
+    if (payOpen(r, p) && r.payDue! < p.today) out.push({ report: r, due: r.payDue!, pay: true });
+  }
+  return out.sort((a, b) => a.due.localeCompare(b.due) || a.report.id.localeCompare(b.report.id));
 }
 
 /** Напоминания одного человека за день; пустой список — сегодня ему писать нечего. */
@@ -340,7 +436,10 @@ export function dailyReminders(
   for (const person of people) {
     if (!person.linked) continue;
     const lines = remindersFor(person, { ...data, people: byId }, p);
-    if (lines.length) out.push({ employeeId: person.employeeId, lines });
+    const week = weekSummary(person, data.reports, p);
+    if (lines.length || week) {
+      out.push({ employeeId: person.employeeId, lines, ...(week ? { week } : {}) });
+    }
   }
   return out;
 }
@@ -412,14 +511,17 @@ function lineText(line: ReminderLine, t: ReminderTexts): string {
   });
 }
 
-/** Текст сообщения: части по порядку, затем ссылка на список; длинный текст обрезается. */
+/**
+ * Текст сообщения: части по порядку, затем ссылка на список; длинный текст обрезается. Без `link`
+ * ссылки нет: под сообщением с таблицами её заменяет кнопка «Открыть отчёты на сайте».
+ */
 export function reminderText(
   message: Pick<ReminderMessage, 'lines'>,
   t: ReminderTexts,
-  link: string,
+  link: string | null,
 ): string {
   const body = message.lines.map((l) => lineText(l, t)).join('\n\n');
-  const tail = `\n\n${fill(t.open, { link })}`;
+  const tail = link === null ? '' : `\n\n${fill(t.open, { link })}`;
   const max = REMINDER_TEXT_MAX - tail.length;
   return (body.length > max ? `${body.slice(0, max - 1)}…` : body) + tail;
 }

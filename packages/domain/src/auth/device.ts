@@ -52,7 +52,8 @@ export function sessionDevice(userAgent: string | null | undefined): string | nu
 
 /**
  * Чем закрыт сеанс — подпись в журнале сеансов (миграция 0112): выход, срок, «Завершить все сеансы»
- * администратором платформы, блокировка, смена своего пароля, сброс пароля; `closed` — прочее.
+ * администратором платформы, блокировка, смена своего пароля, сброс пароля, «Это не я» под сообщением
+ * бота о безопасности (поток Т, задача Т4); `closed` — прочее.
  */
 export const SESSION_END_REASONS = [
   'logout',
@@ -61,6 +62,7 @@ export const SESSION_END_REASONS = [
   'blocked',
   'password',
   'reset',
+  'not_me',
   'closed',
 ] as const;
 export type SessionEndReason = (typeof SESSION_END_REASONS)[number];

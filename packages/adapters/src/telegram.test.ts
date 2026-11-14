@@ -153,6 +153,109 @@ describe('createTelegramBotApi', () => {
     expect(await refused.editKeyboard(100, 7, [])).toBe(false);
   });
 
+  it('loadFile: getFile и скачивание по пути файла; содержимое — без адреса с токеном', async () => {
+    const fetch = vi.fn(async (url: string, _init: RequestInit) =>
+      url.endsWith('/getFile')
+        ? new Response(
+            JSON.stringify({
+              ok: true,
+              result: { file_path: 'documents/file 1.pdf', file_size: 3 },
+            }),
+          )
+        : new Response(new Uint8Array([1, 2, 3])),
+    );
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    const res = await bot.loadFile('FILE', 20);
+    expect(res).toEqual({ ok: true, body: new Uint8Array([1, 2, 3]) });
+    expect(fetch.mock.calls[0]![0]).toBe('https://api.telegram.org/bot1:abc/getFile');
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({ file_id: 'FILE' });
+    expect(fetch.mock.calls[1]![0]).toBe(
+      'https://api.telegram.org/file/bot1:abc/documents/file%201.pdf',
+    );
+    // Перенаправление не принимается: адрес с токеном не уходит на другой сервер.
+    expect(fetch.mock.calls[1]![1]).toMatchObject({ method: 'GET', redirect: 'error' });
+    expect(fetch.mock.calls[1]![1].signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('loadFile: больше предела — по словам Telegram, по заголовку и по фактическому размеру', async () => {
+    const file = (info: unknown, body: Response) =>
+      createTelegramBotApi({
+        token: 't',
+        fetch: vi.fn(async (url: string) =>
+          url.endsWith('/getFile') ? new Response(JSON.stringify(info)) : body,
+        ),
+      });
+    const tooLarge = { ok: false, reason: 'too_large', description: '' };
+    const path = { ok: true, result: { file_path: 'a.pdf' } };
+    expect(
+      await file(
+        { ok: true, result: { file_path: 'a.pdf', file_size: 11 } },
+        new Response(),
+      ).loadFile('f', 10),
+    ).toEqual(tooLarge);
+    expect(
+      await file(
+        { ok: false, error_code: 400, description: 'Bad Request: file is too big' },
+        new Response(),
+      ).loadFile('f', 10),
+    ).toEqual(tooLarge);
+    expect(
+      await file(
+        path,
+        new Response(new Uint8Array(2), { headers: { 'content-length': '11' } }),
+      ).loadFile('f', 10),
+    ).toEqual(tooLarge);
+    expect(await file(path, new Response(new Uint8Array(11))).loadFile('f', 10)).toEqual(tooLarge);
+    // Тело идёт частями без заголовка размера: сверх предела не дочитывается.
+    let pulled = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++;
+        controller.enqueue(new Uint8Array(6));
+      },
+    });
+    expect(await file(path, new Response(endless)).loadFile('f', 10)).toEqual(tooLarge);
+    expect(pulled).toBeLessThan(10);
+  });
+
+  it('loadFile: ошибка Telegram, чужой путь и сбой сети — отказ без токена в тексте', async () => {
+    const bot = (fetch: (url: string) => Promise<Response>) =>
+      createTelegramBotApi({ token: '1:secret', fetch: vi.fn(fetch) });
+    const info = (result: unknown) => new Response(JSON.stringify(result));
+    expect(
+      await bot(async () =>
+        info({ ok: false, error_code: 400, description: 'wrong file_id' }),
+      ).loadFile('f', 10),
+    ).toEqual({ ok: false, reason: 'failed', description: 'getFile: 400 wrong file_id' });
+    // Путь встаёт в адрес после токена: «..», начало с «/» и посторонние знаки не принимаются.
+    for (const path of ['../bot2:x/getMe', '/etc/passwd', 'a?b=1', 'a#b', 'a\\b']) {
+      const calls: string[] = [];
+      const res = await bot(async (url) => {
+        calls.push(url);
+        return info({ ok: true, result: { file_path: path } });
+      }).loadFile('f', 10);
+      expect(res).toMatchObject({ ok: false, reason: 'failed' });
+      expect(calls).toHaveLength(1);
+    }
+    expect(
+      await bot(async (url) =>
+        url.endsWith('/getFile')
+          ? info({ ok: true, result: { file_path: 'a.pdf' } })
+          : new Response('', { status: 404 }),
+      ).loadFile('f', 10),
+    ).toEqual({ ok: false, reason: 'failed', description: 'файл: HTTP 404' });
+    const down = await bot(async (url) => {
+      if (url.endsWith('/getFile')) return info({ ok: true, result: { file_path: 'a.pdf' } });
+      throw new TypeError(`fetch failed ${url}`);
+    }).loadFile('f', 10);
+    expect(down).toEqual({
+      ok: false,
+      reason: 'failed',
+      description: 'fetch failed https://api.telegram.org/file/bot<скрыт>/a.pdf',
+    });
+    expect(JSON.stringify(down)).not.toContain('1:secret');
+  });
+
   it('не ждёт Telegram дольше заданного: запрос прерывается', async () => {
     const hanging = vi.fn(
       (_url: string, init: RequestInit) =>
@@ -231,6 +334,41 @@ describe('createTelegramBotApi', () => {
     await expect(failing.setWebhook('x', 'y')).rejects.toThrow(/bad url/);
   });
 
+  it('кнопки меню под полем ввода: ряды подписей, пустой список убирает; с кнопками под сообщением не идут', async () => {
+    const fetch = fetchReturning({ ok: true, result: { message_id: 1 } });
+    const tg = createTelegramBotApi({ token: 't', fetch, apiBase: 'http://tg.local' });
+    const markup = (i: number) => JSON.parse(String(fetch.mock.calls[i]![1].body)).reply_markup;
+    await tg.sendMessage(1, 'а', { menu: [['Сегодня', 'Неделя'], [], ['Просрочено']] });
+    expect(markup(0)).toEqual({
+      keyboard: [[{ text: 'Сегодня' }, { text: 'Неделя' }], [{ text: 'Просрочено' }]],
+      resize_keyboard: true,
+      is_persistent: true,
+    });
+    await tg.sendMessage(1, 'б', { menu: [] });
+    expect(markup(1)).toEqual({ remove_keyboard: true });
+    await tg.sendMessage(1, 'в', { menu: [['Сегодня']], keyboard: [[{ text: 'к', data: 'x' }]] });
+    expect(markup(2)).toEqual({ inline_keyboard: [[{ text: 'к', callback_data: 'x' }]] });
+    await tg.sendMessage(1, 'г');
+    expect(markup(3)).toBeUndefined();
+  });
+
+  it('setCommands: команды меню для личных чатов; ошибка Bot API — исключение', async () => {
+    const fetch = fetchReturning({ ok: true, result: true });
+    await createTelegramBotApi({ token: 't', fetch, apiBase: 'http://tg.local' }).setCommands([
+      { command: 'today', description: 'Сегодня' },
+    ]);
+    expect(fetch.mock.calls[0]![0]).toBe('http://tg.local/bott/setMyCommands');
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({
+      commands: [{ command: 'today', description: 'Сегодня' }],
+      scope: { type: 'all_private_chats' },
+    });
+    const failing = createTelegramBotApi({
+      token: 't',
+      fetch: fetchReturning({ ok: false, description: 'bad command' }),
+    });
+    await expect(failing.setCommands([])).rejects.toThrow(/bad command/);
+  });
+
   it('getWebhookInfo: адрес, последняя ошибка и её время; ошибка Bot API — исключение', async () => {
     const fetch = fetchReturning({
       ok: true,
@@ -266,7 +404,100 @@ describe('createTelegramBotApi', () => {
   });
 });
 
+describe('sendPhoto (оформленная рассылка, задача Т6)', () => {
+  it('первая отправка — файлом (multipart) с подписью и кнопками; ответ — номер сообщения и файла у Telegram', async () => {
+    const fetch = fetchReturning({
+      ok: true,
+      result: { message_id: 9, photo: [{ file_id: 'small' }, { file_id: 'big' }] },
+    });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    const res = await bot.sendPhoto(
+      100,
+      {
+        bytes: new Uint8Array([0xff, 0xd8, 0xff, 0x00]),
+        name: 'image.jpg',
+        contentType: 'image/jpeg',
+      },
+      {
+        caption: '<b>Плановые работы</b>',
+        html: true,
+        keyboard: [[{ text: 'Подробнее', url: 'https://buhuchet.kg/x' }]],
+      },
+    );
+    expect(res).toEqual({ ok: true, messageId: 9, fileId: 'big' });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://api.telegram.org/bot1:abc/sendPhoto');
+    const form = init.body as FormData;
+    expect(form.get('chat_id')).toBe('100');
+    expect(form.get('caption')).toBe('<b>Плановые работы</b>');
+    expect(form.get('parse_mode')).toBe('HTML');
+    expect(JSON.parse(String(form.get('reply_markup')))).toEqual({
+      inline_keyboard: [[{ text: 'Подробнее', url: 'https://buhuchet.kg/x' }]],
+    });
+    const file = form.get('photo') as File;
+    expect(file.name).toBe('image.jpg');
+    expect(file.type).toBe('image/jpeg');
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(
+      new Uint8Array([0xff, 0xd8, 0xff, 0x00]),
+    );
+  });
+
+  it('следующие — по номеру файла у Telegram, телом JSON; без подписи — без разметки; отказ — как у sendMessage', async () => {
+    const fetch = fetchReturning({
+      ok: false,
+      error_code: 429,
+      description: 'Too Many Requests',
+      parameters: { retry_after: 3 },
+    });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    const res = await bot.sendPhoto(100, { fileId: 'big' }, { html: true });
+    expect(res).toEqual({
+      ok: false,
+      errorCode: 429,
+      description: 'Too Many Requests',
+      retryAfterSeconds: 3,
+      permanent: false,
+    });
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({
+      chat_id: 100,
+      photo: 'big',
+    });
+  });
+
+  it('ошибка сети — исключение без токена бота', async () => {
+    const bot = createTelegramBotApi({
+      token: '1:abc',
+      fetch: async (url) => {
+        throw new Error(`fetch failed: ${url}`);
+      },
+    });
+    await expect(
+      bot.sendPhoto(100, { bytes: new Uint8Array([1]), name: 'a.png', contentType: 'image/png' }),
+    ).rejects.toThrow('/bot<скрыт>/sendPhoto');
+  });
+});
+
 describe('createFakeTelegram', () => {
+  it('картинка: первая — файлом, дальше — по номеру; неизвестный номер — отказ 400', async () => {
+    const tg = createFakeTelegram();
+    const first = await tg.sendPhoto(
+      1,
+      { bytes: new Uint8Array([1]), name: 'a.png', contentType: 'image/png' },
+      { caption: 'Привет' },
+    );
+    expect(first).toMatchObject({ ok: true, fileId: 'tg-photo-1' });
+    expect(await tg.sendPhoto(2, { fileId: 'tg-photo-1' })).toMatchObject({
+      ok: true,
+      fileId: 'tg-photo-1',
+    });
+    expect(await tg.sendPhoto(3, { fileId: 'чужой' })).toMatchObject({ ok: false, errorCode: 400 });
+    expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
+      [1, 'Привет'],
+      [2, ''],
+    ]);
+    expect(tg.photos).toHaveLength(2);
+  });
+
   it('запоминает сообщения и имитирует ошибки', async () => {
     const tg = createFakeTelegram();
     tg.failNext({
@@ -288,6 +519,8 @@ describe('createFakeTelegram', () => {
     ]);
     await tg.setWebhook('u', 's');
     expect(tg.webhook).toEqual({ url: 'u', secretToken: 's' });
+    await tg.setCommands([{ command: 'today', description: 'Сегодня' }]);
+    expect(tg.commands).toEqual([{ command: 'today', description: 'Сегодня' }]);
     expect(await tg.getWebhookInfo()).toEqual({
       url: 'u',
       pendingUpdates: 0,
@@ -298,6 +531,11 @@ describe('createFakeTelegram', () => {
     expect((await tg.getWebhookInfo()).lastError).toBe('x');
     tg.webhookInfo = new Error('down');
     await expect(tg.getWebhookInfo()).rejects.toThrow('down');
+    // Файлы, «присланные боту»: содержимое по номеру файла, предел размера.
+    tg.files.set('f1', new Uint8Array(5));
+    expect(await tg.loadFile('f1', 5)).toEqual({ ok: true, body: new Uint8Array(5) });
+    expect(await tg.loadFile('f1', 4)).toMatchObject({ ok: false, reason: 'too_large' });
+    expect(await tg.loadFile('нет', 5)).toMatchObject({ ok: false, reason: 'failed' });
   });
 });
 

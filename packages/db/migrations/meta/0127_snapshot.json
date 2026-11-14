@@ -1,6 +1,6 @@
 {
-  "id": "4132eca2-fa3c-4b7f-984f-624ba94caf4f",
-  "prevId": "07565e15-cfd7-4148-ad9a-373fa2ed1f35",
+  "id": "702d2648-6dd3-461d-bc73-a84364e2d17a",
+  "prevId": "d24e0295-3d1a-41e8-8d3f-6c507aba2de5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3316,13 +3316,6 @@
           "notNull": true,
           "default": "'{}'"
         },
-        "tg_debt_off": {
-          "name": "tg_debt_off",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "failures": {
           "name": "failures",
           "type": "integer",
@@ -3530,13 +3523,6 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
-        },
-        "no_debt": {
-          "name": "no_debt",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
         },
         "updated_by": {
           "name": "updated_by",
@@ -3808,12 +3794,6 @@
           "notNull": true,
           "default": false
         },
-        "week": {
-          "name": "week",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
         "payload": {
           "name": "payload",
           "type": "jsonb",
@@ -3888,28 +3868,6 @@
           ],
           "isUnique": true,
           "where": "\"contractor_telegram_messages\".\"kind\" = 'pay' and \"contractor_telegram_messages\".\"auto\"",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "contractor_telegram_messages_debt_key": {
-          "name": "contractor_telegram_messages_debt_key",
-          "columns": [
-            {
-              "expression": "link_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "week",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"contractor_telegram_messages\".\"kind\" = 'debt'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4006,15 +3964,11 @@
       "checkConstraints": {
         "contractor_telegram_messages_kind_check": {
           "name": "contractor_telegram_messages_kind_check",
-          "value": "\"contractor_telegram_messages\".\"kind\" in ('pay', 'ask', 'debt')"
+          "value": "\"contractor_telegram_messages\".\"kind\" in ('pay', 'ask')"
         },
         "contractor_telegram_messages_month_check": {
           "name": "contractor_telegram_messages_month_check",
           "value": "\"contractor_telegram_messages\".\"month\" is null or \"contractor_telegram_messages\".\"month\" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'"
-        },
-        "contractor_telegram_messages_debt_check": {
-          "name": "contractor_telegram_messages_debt_check",
-          "value": "(\"contractor_telegram_messages\".\"kind\" = 'debt') = (\"contractor_telegram_messages\".\"week\" is not null) and (\"contractor_telegram_messages\".\"kind\" <> 'debt' or (\"contractor_telegram_messages\".\"total\" is not null and \"contractor_telegram_messages\".\"total\" > 0))"
         },
         "contractor_telegram_messages_pay_check": {
           "name": "contractor_telegram_messages_pay_check",
@@ -6029,13 +5983,6 @@
         },
         "cp_tg_pay": {
           "name": "cp_tg_pay",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "cp_tg_debt": {
-          "name": "cp_tg_debt",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

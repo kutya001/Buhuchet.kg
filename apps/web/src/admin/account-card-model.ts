@@ -1,4 +1,11 @@
-import { bishkekDate, bishkekTime, formatDateRu, type SessionEndReason } from '@buhuchet/domain';
+import {
+  bishkekDate,
+  bishkekTime,
+  formatDateRu,
+  SECURITY_NOTICE_DEFS,
+  SECURITY_NOTICES,
+  type SessionEndReason,
+} from '@buhuchet/domain';
 import type { UiTextKey } from '@buhuchet/domain';
 import type { AdminUserCard } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
@@ -59,6 +66,25 @@ function changeText(t: Translate, c: HistoryChange): string | null {
 }
 
 /**
+ * «Это не я» под сообщением бота о безопасности (поток Т, задача Т4; прототип v101 tg-security.js,
+ * запись истории): под каким сообщением нажали, сколько сеансов завершено, отвязан ли другой Telegram.
+ * У администратора платформы вход не закрывается — «Все сеансы завершены».
+ */
+function notMeText(t: Translate, h: HistoryEntry): string {
+  const of = (field: string) => h.changes.find((c) => c.field === field);
+  const notice = of('notMe')?.to;
+  const known = SECURITY_NOTICES.find((n) => n === notice);
+  const event = known ? t(SECURITY_NOTICE_DEFS[known].event) : '';
+  const locked = of('loginLocked')?.to === true;
+  const sessions = Number(of('sessionsEnded')?.to) || 0;
+  return [
+    t(locked ? 'accounts.card.hist.not_me' : 'accounts.card.hist.not_me_admin', { event }),
+    ...(sessions ? [t('accounts.card.hist.not_me_sessions', { n: sessions })] : []),
+    ...(of('telegram') ? [t('accounts.card.hist.not_me_cut')] : []),
+  ].join(', ');
+}
+
+/**
  * Что произошло — строкой «Истории». У действий с пояснением (сброс пароля, блокировка, открытие
  * карточки, завершение сеансов) — само пояснение; у остальных — по виду записи и изменениям: со
  * значениями «было → стало», где они есть (ТЗ: «кто, когда, было → стало»), остальные — «Изменено: …».
@@ -77,6 +103,7 @@ export function accountHistoryText(t: Translate, h: HistoryEntry): string {
     );
   }
   if (h.action === 'login_lock') return t('accounts.card.hist.login_lock');
+  if (h.action === 'not_me') return notMeText(t, h);
   const valued = new Set<string>();
   const named = new Set<string>();
   const plain = new Set<string>();

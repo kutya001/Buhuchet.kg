@@ -198,5 +198,6 @@ export function reportHistoryItem(
     time: bishkekTime(at),
     text: reportHistoryText(t, entry, revision),
     who: entry.actor ?? t('status.system'),
+    via: entry.via === 'telegram' ? t('telegram.via') : null,
   };
 }

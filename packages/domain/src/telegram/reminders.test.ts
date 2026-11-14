@@ -4,10 +4,12 @@ import { TELEGRAM_TEMPLATE_DEFAULTS } from './messages';
 import { DEFAULT_NOTIFY_SETTINGS, withNotifyKind, withNotifyMode } from './notify';
 import {
   dailyReminders,
+  overdueOf,
   REMINDER_LIST_MAX,
   REMINDER_TEXT_MAX,
   reminderText,
   remindersFor,
+  weekSummary,
   type ReminderPerson,
   type ReminderPolicy,
   type ReminderReport,
@@ -197,7 +199,12 @@ describe('напоминания за день (ТЗ «Уведомления в
     const own = { ...chief, viewReports: 'own' as const };
     const lines = linesOf(own, { reports: [mine, foreign], people: map }, week);
     expect(lines.flatMap((l) => ('items' in l ? l.items.map((i) => i.id) : []))).toEqual([mine.id]);
-    expect(lines.find((l) => l.key === 'tgWeek')).toMatchObject({ sub: 1 });
+    // Сводка недели руководителю — отдельно, по сотрудникам, тоже только в его области.
+    expect(keys(lines)).not.toContain('tgWeek');
+    expect(weekSummary(own, [mine, foreign], policy(week))).toMatchObject({
+      sub: 1,
+      rows: [{ employeeId: 'acc', sub: 1, over: 0, wait: 0 }],
+    });
     const blind = { ...chief, viewReports: null };
     expect(linesOf(blind, { reports: [mine, foreign], people: map }, week)).toEqual([]);
     // Свои отчёты (где он ответственный) приходят всегда.
@@ -322,15 +329,84 @@ describe('напоминания за день (ТЗ «Уведомления в
     expect(text).toBe(
       '🗓 Неделя 02.11–08.11: сдать 1, оплатить 1, просрочено 1.\n• ОсОО «А»: оплатить Патент 06.11; просрочено Соцфонд\n• ОсОО «Б»: сдать НДС 04.11\n\nОткрыть в Buhuchet.kg: https://x',
     );
-    // Главный бухгалтер видит всю организацию; переключатель «Сводка» снят — сводки нет.
-    expect(
-      linesOf(chief, { reports }, { today: monday, week }).find((l) => l.key === 'tgWeek'),
-    ).toMatchObject({ sub: 2 });
-    const noWeek = { ...chief, settings: withNotifyKind(DEFAULT_NOTIFY_SETTINGS, 'week', false) };
-    expect(keys(linesOf(noWeek, { reports }, { today: monday, week }))).not.toContain('tgWeek');
+    // Главному бухгалтеру строки в сообщении дня нет: его сводка — отдельным сообщением с таблицей.
+    expect(keys(linesOf(chief, { reports }, { today: monday, week }))).not.toContain('tgWeek');
     // Не понедельник — сводки нет; на неделе ничего нет — тоже.
     expect(keys(linesOf(acc, { reports }, { today: monday }))).not.toContain('tgWeek');
     expect(linesOf(acc, { reports: [] }, { today: monday, week })).toEqual([]);
+  });
+
+  it('сводка недели руководителю — по сотрудникам: сдать, просрочено (сдача и оплата), ждут подтверждения (прототип v100 tgWeekRows)', () => {
+    const monday: IsoDate = '2026-11-02';
+    const p = policy({ today: monday, week: { from: monday, to: addDays(monday, 6) } });
+    const reports = [
+      report({ dueDate: addDays(monday, 2), remindDays: [] }),
+      report({ dueDate: addDays(monday, -3), remindDays: [] }),
+      // Оплата на неделе — только в итог; просроченная оплата — в «Просрочено» сотрудника.
+      report({ act: 'pay', payDue: addDays(monday, 4), unpaid: true, remindDays: [] }),
+      report({ act: 'pay', payDue: addDays(monday, -1), unpaid: true, responsibleId: 'b' }),
+      report({ open: false, waitingSince: addDays(monday, -1), responsibleId: 'b' }),
+      report({ dueDate: addDays(monday, 1), responsibleId: null, contractorResponsibleId: null }),
+      // Дальше конца недели — не в сводке.
+      report({ dueDate: addDays(monday, 20), remindDays: [] }),
+    ];
+    const w = weekSummary(chief, reports, p)!;
+    expect(w).toMatchObject({ from: monday, to: addDays(monday, 6), sub: 2, pay: 1, over: 2 });
+    expect(w.rows).toEqual([
+      { employeeId: 'acc', sub: 1, over: 1, wait: 0 },
+      { employeeId: 'b', sub: 0, over: 1, wait: 1 },
+      { employeeId: null, sub: 1, over: 0, wait: 0 },
+    ]);
+    // Подтверждение сдачи выключено — «Ждут» не считается; учёт оплаты выключен — оплаты нет.
+    expect(
+      weekSummary(chief, reports, { ...p, reportConfirm: false, taxpay: false }),
+    ).toMatchObject({
+      pay: 0,
+      over: 1,
+      rows: [
+        { employeeId: 'acc', sub: 1, over: 1, wait: 0 },
+        { employeeId: null, sub: 1, over: 0, wait: 0 },
+      ],
+    });
+    // Не понедельник, не руководитель, «Сводка за неделю» выключена — сводки нет.
+    expect(weekSummary(chief, reports, policy({ today: monday }))).toBeNull();
+    expect(weekSummary(acc, reports, p)).toBeNull();
+    const noWeek = { ...chief, settings: withNotifyKind(DEFAULT_NOTIFY_SETTINGS, 'week', false) };
+    expect(weekSummary(noWeek, reports, p)).toBeNull();
+    // Сообщение руководителю есть и без строк дня: в нём сводка.
+    const out = dailyReminders([chief], { reports: [reports[6]!], tasks: [] }, p);
+    expect(out).toEqual([
+      { employeeId: 'chief', lines: [], week: expect.objectContaining({ sub: 0 }) },
+    ]);
+    expect(dailyReminders([noWeek], { reports: [reports[6]!], tasks: [] }, p)).toEqual([]);
+  });
+
+  it('просроченное сотрудника для «Напомнить»: несданные отчёты и неоплаченные налоги, самые давние первыми', () => {
+    const late = report({ dueDate: addDays(TODAY, -5) });
+    const pay = report({ act: 'pay', payDue: addDays(TODAY, -9), unpaid: true });
+    const both = report({
+      act: 'both',
+      dueDate: addDays(TODAY, -2),
+      payDue: addDays(TODAY, -1),
+      unpaid: true,
+    });
+    const reports = [
+      late,
+      pay,
+      both,
+      report({ dueDate: TODAY }),
+      report({ dueDate: addDays(TODAY, -5), responsibleId: 'other' }),
+      report({ dueDate: addDays(TODAY, -5), open: false }),
+    ];
+    const p = { today: TODAY, taxpay: true };
+    expect(overdueOf('acc', reports, p).map((x) => [x.report.id, x.due, x.pay])).toEqual([
+      [pay.id, addDays(TODAY, -9), true],
+      [late.id, addDays(TODAY, -5), false],
+      [both.id, addDays(TODAY, -2), false],
+      [both.id, addDays(TODAY, -1), true],
+    ]);
+    expect(overdueOf('acc', reports, { today: TODAY, taxpay: false })).toHaveLength(2);
+    expect(overdueOf('nobody', reports, p)).toEqual([]);
   });
 
   it('все части — в одном сообщении; длинный список — «и ещё N», текст не длиннее предела', () => {

@@ -31,8 +31,11 @@ function accLockFail(u){if(!u||u.id==='admin'||u.pwLocked)return;u.pwBad=(u.pwBa
   if(EMP.includes(u))log('emp',u.id,'Вход заблокирован: 10 неверных паролей подряд',null,{who:'system'});
   // «Telegram: вход заблокирован» — самому пользователю; «…вход сотрудника заблокирован» — владельцам организации; «…вход владельца заблокирован» — администраторам платформы
   tgSvc(tgOf(u),'Вход заблокирован',{org});(own?leadAdmins():accOwners(u)).forEach(w=>tgSvc(tgOf(w),'Вход заблокирован',{org:own?'':org}))}
+// Вход закрывает и кнопка «Это не я» под сообщением бота о безопасности (поток Т, задача Т4, 13.11.2026; tg-security.js): та же блокировка pwLocked с причиной pwLockWhy='notme',
+// при этом все сеансы завершаются. Текст на странице входа — свой, показывается так же только после верного пароля
+Object.assign(LG_T,{notMe:'Вход закрыт кнопкой «Это не я» в Telegram. Обратитесь к владельцу организации — он выдаст новый пароль.',notMeOwner:'Вход закрыт кнопкой «Это не я» в Telegram. Обратитесь к администратору платформы — он выдаст новый пароль.'});
 // Новый пароль от владельца или администратора платформы снимает блокировку и счёт неверных паролей
-const accUnlock=u=>{if(u){u.pwBad=0;delete u.pwLocked}};
+const accUnlock=u=>{if(u){u.pwBad=0;delete u.pwLocked;delete u.pwLockWhy}};
 // Вход администратора платформы — с кодом из Telegram после пароля (решение заказчика 07.11.2026): код из 6 цифр действует 5 минут и 5 вводов, новый вход отменяет прежний код; кодов не больше 3 за 15 минут и 10 за сутки без входа (коды, по которым вошли, в суточный предел не считаются). Код привязан к паролю: после смены пароля прежний код не подходит, пределы считаются заново. В продукте код нужен на стенде и рабочем сайте; в макете бот подключён и всегда принимает сообщение, счётчики живут до перезагрузки страницы
 const ADMC={sent:[],code:null},ADM_TTL=5*60*1000,ADM_TRIES=5,ADM_Q=3,ADM_QT=15*60*1000,ADM_DAY=10,ADM_CODE='731604';
 Object.assign(LG_T,{admBad:'Код неверный или истёк. После 5 неверных кодов войдите заново.',admQ:'Слишком много кодов для входа. Попробуйте через 15 минут.',admDay:'Слишком много кодов для входа за сутки. Если вы не входили, кто-то знает ваш пароль: смените его кнопкой «Забыли пароль?» — вход откроется.',
@@ -75,7 +78,7 @@ function showLogin(step='login',ctx={}){
       if(!(u||ou)||p!==lgPass(u||ou)){accLockFail(u||ou);f=LG_FAIL[l]=f||{n:0,till:0};if(++f.n>=LG_MAX){f.till=now+LG_LOCK;return msg(LG_T.lock)}return msg(LG_T.bad)}
       delete LG_FAIL[l];
       // О блокировке сотрудника, организации и о закрытом входе — только после верного пароля и без названия организации; верный пароль обнуляет счёт неверных, если вход не закрыт
-      const lk=a=>{if(a.pwLocked){msg(accIsOwner(a)?LG_T.accOwner:LG_T.acc);return true}a.pwBad=0;return false};
+      const lk=a=>{if(a.pwLocked){const nm=a.pwLockWhy==='notme';msg(accIsOwner(a)?(nm?LG_T.notMeOwner:LG_T.accOwner):(nm?LG_T.notMe:LG_T.acc));return true}a.pwBad=0;return false};
       if(ou){const org=ORGS.find(o=>o.id===ou.org);if(org&&org.active===false)return msg(LG_T.org);if(ou.active===false)return msg(LG_T.user);if(lk(ou))return;return msg(LG_T.demo)}
       if(u.active===false)return msg(LG_T.user);
       if(u.id==='admin')return admStart(l,msg);
@@ -113,5 +116,5 @@ function showLogin(step='login',ctx={}){
       // Каждый ввод кода считается; верный код после 5 вводов уже не подходит
       const st=fgSt(l);let e='';if(st.till)e=LG_T.fgLock;else if(st.tries>=FG_TRIES)e=LG_T.fgDead;else{st.tries++;if(!(k==='482913'&&u&&u.tg&&!u.pwLocked)){st.bad.push(Date.now());e=st.bad.length>=FG_BAD?(st.till=Date.now()+FG_DAY,LG_T.fgLock):st.tries>=FG_TRIES?LG_T.fgDead:'Код неверный или истёк'}}
       if(!setErr(el,'fg-code',e))return;
-      delete FG[l];LG_PW[u.login]=p;delete u.tmpPass;u.pwBad=0;if(u.id==='admin')admReset();tgSvc(u,'Пароль изменён');showLogin('login',{login:ctx.login});toast('Пароль изменён. Войдите с новым паролем.','key')};$('#fg-code',el).focus()}
+      delete FG[l];LG_PW[u.login]=p;delete u.tmpPass;u.pwBad=0;if(u.id==='admin')admReset();tgSecSend(u,'pass');showLogin('login',{login:ctx.login});toast('Пароль изменён. Войдите с новым паролем.','key')};$('#fg-code',el).focus()}
 }

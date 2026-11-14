@@ -8,7 +8,14 @@ import {
   seedAccessReference,
   type TestDatabase,
 } from '@buhuchet/db/testing';
-import { fillTemplate, TELEGRAM_TEMPLATE_DEFAULTS } from '@buhuchet/domain';
+import {
+  botPressData,
+  fillTemplate,
+  NOT_ME_ACTION,
+  notMeArg,
+  TELEGRAM_TEMPLATE_DEFAULTS,
+  UI_TEXTS,
+} from '@buhuchet/domain';
 import {
   ApiError,
   MeResponse,
@@ -39,6 +46,23 @@ const {
   users,
 } = schema;
 const TPL = TELEGRAM_TEMPLATE_DEFAULTS;
+/** Кнопки меню команд бота под полем ввода (поток Т, задача Т5). */
+const MENU = [
+  ['Сегодня', 'Неделя'],
+  ['Просрочено', 'Найти контрагента'],
+];
+/** Кнопка «Это не я» под сообщением о замене и отвязке Telegram: в записи — момент отправки (часы тестов). */
+const notMe = (notice: 'relink' | 'unlink', inert = false) => ({
+  keyboard: [
+    [
+      {
+        text: TPL.tgBtnNotMe,
+        data: botPressData(NOT_ME_ACTION, notMeArg(notice, NOTICE_SENT, inert)),
+      },
+    ],
+  ],
+});
+const NOTICE_SENT = new Date('2026-10-18T03:00:00Z');
 
 const PASSWORD = 'Верный-пароль-1';
 type App = ReturnType<typeof createApp>;
@@ -172,7 +196,8 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 5001,
         text: TELEGRAM_TEMPLATE_DEFAULTS.tgLinked.replace('{логин}', 'owner-a'),
-        options: {},
+        // С подтверждением привязки приходят кнопки меню команд под полем ввода (задача Т5).
+        options: { menu: MENU },
       },
     ]);
     expect((await me(app, cookie)).telegram).toMatchObject({ name: '@erkin_s' });
@@ -254,9 +279,13 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7001,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@new_tg' }),
-        options: {},
+        options: notMe('relink'),
       },
-      { chatId: 7003, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
+      {
+        chatId: 7003,
+        text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }),
+        options: { menu: MENU },
+      },
     ]);
     expect((await me(app, cookie)).telegram).toMatchObject({ name: '@new_tg' });
     const history = await t.admin.db
@@ -268,8 +297,9 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       changes: [{ field: 'telegram', from: 'Алишер', to: '@new_tg' }],
     });
     // Код одноразовый; в журнал отправок Telegram он не попадает.
+    // Чат уже привязан: на непонятное сообщение — подсказка о командах (задача Т5).
     await sendToBot(app, telegramUpdate(code, 7003));
-    expect(lastText()).toBe(TPL.tgStart);
+    expect(lastText()).toBe(UI_TEXTS['telegram.cmd.menu_hint'].ru);
     const logged = await t.admin.db
       .select()
       .from(telegramOutbox)
@@ -330,9 +360,13 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7003,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@third_tg' }),
-        options: {},
+        options: notMe('relink'),
       },
-      { chatId: 7004, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
+      {
+        chatId: 7004,
+        text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }),
+        options: { menu: MENU },
+      },
     ]);
     expect((await me(app, cookie)).telegram).toMatchObject({ name: '@third_tg' });
   });
@@ -385,9 +419,14 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 7004,
         text: fillTemplate(TPL.tgRelinked, { логин: 'acc-a', телеграм: '@lost_tg' }),
-        options: {},
+        // Привязка без кода после сброса пароля: кнопка в прежнем чате вход не закрывает.
+        options: notMe('relink', true),
       },
-      { chatId: 7005, text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }), options: {} },
+      {
+        chatId: 7005,
+        text: fillTemplate(TPL.tgLinked, { логин: 'acc-a' }),
+        options: { menu: MENU },
+      },
     ]);
     expect((await me(app, cookie)).telegram).toMatchObject({ name: '@lost_tg' });
     // Разрешение одноразовое: следующая замена — снова кодом из прежнего чата.
@@ -454,7 +493,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
       {
         chatId: 5001,
         text: `Организация Б\n${TELEGRAM_TEMPLATE_DEFAULTS.tgUnlinked.replace('{логин}', 'owner-b')}`,
-        options: {},
+        options: notMe('unlink'),
       },
     ]);
     expect((await post(app, '/api/telegram/link', cookie, 'DELETE')).status).toBe(200);
@@ -552,7 +591,7 @@ describe.skipIf(!databaseAvailable())('Telegram: привязка по ссыл�
         логин: 'owner-a',
         телеграм: 'Поддержка Buhuchet: перешлите \u{1F600}…',
       }),
-      options: {},
+      options: notMe('relink'),
     });
   });
 });

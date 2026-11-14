@@ -5,23 +5,29 @@ import {
   messageTemplates,
   telegramBotRich,
   telegramChat,
+  telegramNotMeInert,
   telegramPlainText,
   type Db,
   type Tx,
 } from '@buhuchet/db';
 import {
+  bishkekTime,
   botMessageProblem,
   botPlainText,
   botTemplate,
   codeBotMessage,
   fillTemplate,
+  SECURITY_NOTICE_DEFS,
+  securityBotMessage,
   withOrganization,
   type BotMessage,
   type OutboxKind,
+  type SecurityNotice,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
 import { botSendOptions, redactBotToken } from './outbox';
+import { sendInTopic, threadOption } from './topics';
 
 /**
  * Текст сообщения бота: шаблон «Справочников платформы» с этим ключом, а пока его там нет — текст по
@@ -57,7 +63,10 @@ export async function sendNow(
   let ok = false;
   let error = '';
   try {
-    const res = await deps.telegram.sendMessage(chatId, text, options);
+    const tg = deps.telegram;
+    const res = await sendInTopic(deps, chatId, log ?? null, (threadId) =>
+      tg.sendMessage(chatId, text, { ...options, ...threadOption(threadId) }),
+    );
     ok = res.ok;
     if (!res.ok) {
       error = `${res.errorCode}: ${res.description}`;
@@ -92,6 +101,8 @@ export async function sendBotMessage(
   message: BotMessage,
   kind: OutboxKind,
   purpose: string,
+  /** Кнопки меню под полем ввода: уйдут с сообщением, если под ним самим кнопок нет (задача Т5). */
+  options: Pick<TelegramSendOptions, 'menu'> = {},
 ): Promise<boolean> {
   const problem = botMessageProblem(message);
   if (problem) throw new Error(`Сообщение бота (${purpose}): ${problem}`);
@@ -103,10 +114,13 @@ export async function sendBotMessage(
   try {
     const plain =
       !(await telegramBotRich(deps.db)) || (await telegramPlainText(deps.db, to.userId));
-    const res = await deps.telegram.sendMessage(
-      to.chatId,
-      text,
-      botSendOptions(message, { plain }),
+    const tg = deps.telegram;
+    const res = await sendInTopic(deps, to.chatId, { kind, userId: to.userId }, (threadId) =>
+      tg.sendMessage(to.chatId, text, {
+        ...botSendOptions(message, { plain }),
+        ...(options.menu ? { menu: options.menu } : {}),
+        ...threadOption(threadId),
+      }),
     );
     ok = res.ok;
     if (res.ok) messageId = res.messageId;
@@ -150,6 +164,38 @@ export async function sendCodeMessage(
 }
 
 /**
+ * Сообщение о безопасности с кнопкой «Это не я» (поток Т, задача Т4; прототип v101 `tgSecSend`): «Пароль
+ * изменён» — в привязанный чат, «Привязан другой Telegram» и «Telegram отвязан» — в прежний. Уходит
+ * сразу; описание с кнопкой пишется в журнал отправок и для прежнего, уже не привязанного чата
+ * (миграция 0127) — по нему бот примет нажатие. В записи кнопки — момент отправки: кнопка действует
+ * `NOT_ME_HOURS` часов. Организация в начале — если Telegram привязан к нескольким логинам.
+ *
+ * После сброса пароля владельцем или администратором платформы прежнему чату доверять нельзя (он мог
+ * остаться у постороннего): пока у пользователя временный пароль или действует разрешение привязать
+ * Telegram без кода, и под сообщением о привязке по такому разрешению (`inert`) кнопка ничего не
+ * закрывает — бот отвечает, что делать (docs/deviations.md п. Т-7).
+ */
+export async function sendSecurityNotice(
+  deps: ApiDeps,
+  to: { userId: string; chatId: number; shared: boolean; orgName: string | null },
+  notice: SecurityNotice,
+  values: Readonly<Record<string, string | number>>,
+  purpose: string,
+  options: { inert?: boolean } = {},
+): Promise<boolean> {
+  const def = SECURITY_NOTICE_DEFS[notice];
+  const now = deps.clock.now();
+  const inert = options.inert === true || (await telegramNotMeInert(deps.db, to.userId));
+  const text = withOrganization(
+    await botText(deps, def.template, { ...values, время: bishkekTime(now) }),
+    to.orgName,
+    to.shared,
+  );
+  const message = securityBotMessage(text, notice, now, await botText(deps, 'tgBtnNotMe'), inert);
+  return sendBotMessage(deps, to, message, def.kind, purpose);
+}
+
+/**
  * Бот сообщает о каждой смене пароля, чтобы пользователь заметил чужую попытку (ТЗ «Восстановление
  * пароля через Telegram»); resetBy — кто выдал временный пароль. false — Telegram не привязан или
  * сообщение не ушло.
@@ -158,14 +204,26 @@ export async function notifyPasswordChanged(
   deps: ApiDeps,
   user: { userId: string; login: string; orgName: string | null },
   resetBy?: string,
+  /** Заменён временный пароль: кнопка под сообщением ничего не закрывает (`sendSecurityNotice`). */
+  temporaryReplaced = false,
 ): Promise<boolean> {
   if (!deps.telegram) return false;
   const chat = await telegramChat(deps.db, user.userId);
   if (!chat) return false;
+  // Пароль сменил сам пользователь — под сообщением кнопка «Это не я»; под «Пароль сброшен» её нет:
+  // пароль сбросил владелец или администратор платформы.
+  if (resetBy === undefined) {
+    return sendSecurityNotice(
+      deps,
+      { userId: user.userId, chatId: chat.chatId, shared: chat.shared, orgName: user.orgName },
+      'pass',
+      { логин: user.login },
+      'password_changed',
+      { inert: temporaryReplaced },
+    );
+  }
   const text = withOrganization(
-    resetBy === undefined
-      ? await botText(deps, 'tgPassChanged', { логин: user.login })
-      : await botText(deps, 'tgPassReset', { логин: user.login, кто: resetBy }),
+    await botText(deps, 'tgPassReset', { логин: user.login, кто: resetBy }),
     user.orgName,
     chat.shared,
   );
@@ -175,9 +233,6 @@ export async function notifyPasswordChanged(
     text,
     'password_changed',
     {},
-    {
-      userId: user.userId,
-      kind: resetBy === undefined ? 'pass_changed' : 'pass_reset',
-    },
+    { userId: user.userId, kind: 'pass_reset' },
   );
 }

@@ -1,13 +1,13 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { hashSessionToken, newLinkToken } from '@buhuchet/adapters/tokens';
 import { createTelegramLinkToken, unlinkTelegram, writeHistory } from '@buhuchet/db';
-import { telegramName, withOrganization } from '@buhuchet/domain';
+import { telegramName } from '@buhuchet/domain';
 import { ApiError, OkResponse, TelegramLinkResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { asSessionUser } from '../../middleware/access';
-import { botText, sendNow } from './bot';
+import { sendSecurityNotice } from './bot';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -66,7 +66,7 @@ export const unlinkRoute = createRoute({
 
 /**
  * «Отвязать» в «Мой профиль»: напоминания и «Забыли пароль?» перестают работать, ожидающий код
- * отменяется; пишется в историю, бот сообщает об отвязке в отвязанный чат.
+ * отменяется; пишется в историю, бот сообщает об отвязке в отвязанный чат — с кнопкой «Это не я».
  */
 export function unlinkHandler(deps: ApiDeps): RouteHandler<typeof unlinkRoute, AppEnv> {
   return async (c) => {
@@ -85,14 +85,18 @@ export function unlinkHandler(deps: ApiDeps): RouteHandler<typeof unlinkRoute, A
       return chat;
     });
     if (removed) {
-      const notice = await botText(deps, 'tgUnlinked', { логин: session.login });
-      await sendNow(
+      // В отвязанный чат — с кнопкой «Это не я» (поток Т, задача Т4).
+      await sendSecurityNotice(
         deps,
-        removed.chatId,
-        withOrganization(notice, session.orgName, removed.shared),
+        {
+          userId: session.userId,
+          chatId: removed.chatId,
+          shared: removed.shared,
+          orgName: session.orgName,
+        },
+        'unlink',
+        { логин: session.login },
         'telegram_unlinked',
-        {},
-        { userId: session.userId, kind: 'unlinked' },
       );
     }
     return c.json({ ok: true as const }, 200);

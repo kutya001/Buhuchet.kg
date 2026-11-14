@@ -89,5 +89,6 @@ export function taskHistoryItem(
     time: bishkekTime(at),
     text: taskHistoryText(t, entry),
     who: entry.actor ?? t('status.system'),
+    via: entry.via === 'telegram' ? t('telegram.via') : null,
   };
 }

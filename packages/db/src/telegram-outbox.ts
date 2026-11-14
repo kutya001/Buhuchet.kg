@@ -49,7 +49,7 @@ export interface OutboxMessage {
 /**
  * Поставить в очередь организации из контекста; повтор с тем же ключом пропускается. Номера новых строк.
  * `now` — часы приложения: с этого момента строку можно отправлять (в тестах и на демо-стенде часы стоят
- * на месте, поэтому время базы не годится).
+ * на месте, поэтому время базы не годится). Сообщения одного вызова уходят в порядке списка.
  */
 export async function enqueueTelegram(
   tx: Tx,
@@ -60,7 +60,7 @@ export async function enqueueTelegram(
   const rows = await tx
     .insert(telegramOutbox)
     .values(
-      messages.map((m) => ({
+      messages.map((m, i) => ({
         orgId: sql`app.current_org_id()`,
         userId: m.userId,
         chatId: m.chatId,
@@ -68,7 +68,8 @@ export async function enqueueTelegram(
         text: m.text,
         dedupeKey: m.dedupeKey ?? null,
         payload: m.message ?? null,
-        ...(now ? { nextAt: now } : {}),
+        // Порядок отправки — порядок списка: каждое следующее сообщение на миллисекунду позже, последнее — `now`.
+        ...(now ? { nextAt: new Date(now.getTime() - (messages.length - 1 - i)) } : {}),
       })),
     )
     .onConflictDoNothing({ target: telegramOutbox.dedupeKey })
@@ -112,19 +113,25 @@ export async function claimOutbox(
         sql`not exists (select 1 from ${telegramLinks} inner join ${users} on ${users.id} = ${telegramLinks.userId} where ${telegramLinks.userId} = ${telegramOutbox.userId} and ${telegramLinks.chatId} = ${telegramOutbox.chatId} and not ${users.blocked})`,
       ),
     );
-  const due = tx
-    .select({ id: telegramOutbox.id })
-    .from(telegramOutbox)
-    .where(
-      and(
-        eq(telegramOutbox.status, 'pending'),
-        lte(telegramOutbox.nextAt, o.now),
-        o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
-      ),
-    )
-    .orderBy(asc(telegramOutbox.nextAt), asc(telegramOutbox.createdAt))
-    .limit(o.limit)
-    .for('update', { skipLocked: true });
+  // Сначала — по порядку очереди: строки блокируются здесь, порядок отправки — этот же (сообщения одного
+  // напоминания идут друг за другом: сообщение дня, потом сообщения с кнопками).
+  const due = (
+    await tx
+      .select({ id: telegramOutbox.id })
+      .from(telegramOutbox)
+      .where(
+        and(
+          eq(telegramOutbox.status, 'pending'),
+          lte(telegramOutbox.nextAt, o.now),
+          o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
+        ),
+      )
+      .orderBy(asc(telegramOutbox.nextAt), asc(telegramOutbox.createdAt), asc(telegramOutbox.id))
+      .limit(o.limit)
+      .for('update', { skipLocked: true })
+  ).map((r) => r.id);
+  if (!due.length) return [];
+  const order = new Map(due.map((id, i) => [id, i]));
   const lease = new Date(o.now.getTime() + o.leaseSeconds * 1000);
   const rows = await tx
     .update(telegramOutbox)
@@ -136,7 +143,6 @@ export async function claimOutbox(
       kind: telegramOutbox.kind,
       text: telegramOutbox.text,
       tries: telegramOutbox.tries,
-      nextAt: telegramOutbox.nextAt,
       userId: telegramOutbox.userId,
       payload: telegramOutbox.payload,
     });
@@ -153,7 +159,7 @@ export async function claimOutbox(
       : [],
   );
   return rows
-    .sort((a, b) => a.nextAt.getTime() - b.nextAt.getTime())
+    .sort((a, b) => order.get(a.id)! - order.get(b.id)!)
     .map((r) => ({
       id: r.id,
       chatId: r.chatId,

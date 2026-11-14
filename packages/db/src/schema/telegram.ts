@@ -307,3 +307,23 @@ export const telegramDigestDays = pgTable(
     orgIsolation('telegram_digest_days_isolation', t.orgId),
   ],
 ).enableRLS();
+
+/**
+ * Темы личного чата с ботом (поток Т, задача Т7; docs/decisions.md п. Т-7): какой теме чата какой номер
+ * темы у Telegram. Ключ — тема по виду (`rep`, `task`, `lead`, `sec`) или организации (`org:<id>`).
+ * Строка — про чат, а не про организацию: роль приложения таблицу не видит, читает и пишет её только
+ * функциями `app.telegram_topic_*` (миграция `telegram_topics_functions`).
+ */
+export const telegramTopics = pgTable(
+  'telegram_topics',
+  {
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    key: text('key').notNull(),
+    threadId: integer('thread_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'telegram_topics_pk', columns: [t.chatId, t.key] }),
+    check('telegram_topics_key_check', sql`${t.key} ~ '^(rep|task|lead|sec|org:[0-9a-f-]{36})$'`),
+  ],
+).enableRLS();

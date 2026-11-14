@@ -114,7 +114,7 @@ export function changePasswordHandler(
       await withUserContext(deps.db, session.userId, change);
     }
     writeSessionCookie(c, deps, token);
-    await notifyPasswordChanged(deps, session);
+    await notifyPasswordChanged(deps, session, undefined, account.mustChangePassword);
     return c.json({ ok: true as const }, 200);
   };
 }

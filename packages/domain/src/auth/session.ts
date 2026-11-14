@@ -47,6 +47,10 @@ export const PASSWORD_MIN_LENGTH = 8;
 /** Верхняя граница — чтобы очень длинная строка не нагружала argon2. */
 export const PASSWORD_MAX_LENGTH = 128;
 
+/** Чем закрыт вход, кроме неверных паролей подряд (столбец `users.login_lock_reason`). */
+export const LOGIN_LOCK_REASONS = ['not_me'] as const;
+export type LoginLockReason = (typeof LOGIN_LOCK_REASONS)[number];
+
 /** Состояние учётной записи при входе. */
 export interface AccountState {
   isPlatformAdmin: boolean;
@@ -61,6 +65,11 @@ export interface AccountState {
    * сеанс блокировка не закрывает — она против подбора пароля, а не против того, кто уже вошёл.
    */
   loginLocked?: boolean;
+  /**
+   * Чем закрыт вход: `not_me` — кнопкой «Это не я» под сообщением бота (поток Т, задача Т4); пусто —
+   * неверными паролями. От причины зависит только текст отказа.
+   */
+  loginLockReason?: LoginLockReason | null;
 }
 
 export type LoginDenial = 'org_blocked' | 'user_blocked' | 'employee_blocked' | 'account_locked';

@@ -1,3 +1,4 @@
+import { LOGIN_LOCK_REASONS } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -14,6 +15,8 @@ import {
 import { recordVersion, timestamps } from './columns';
 import { organizations } from './organizations';
 import { orgIsolation } from './rls';
+
+const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
 
 /** Текст без учёта регистра (расширение citext из миграции 0000). */
 export const citext = customType<{ data: string }>({ dataType: () => 'citext' });
@@ -56,6 +59,12 @@ export const users = pgTable(
      * владельца (сотруднику) или администратора платформы (владельцу). Пусто — вход открыт.
      */
     loginLockedAt: timestamp('login_locked_at', { withTimezone: true }),
+    /**
+     * Чем закрыт вход, если не неверными паролями: `not_me` — кнопкой «Это не я» под сообщением бота о
+     * безопасности (поток Т, задача Т4). Пишет функция `app.telegram_not_me`, снимает новый пароль
+     * (`app.auth_account_unlock`). От причины зависит только текст на странице входа и в Админке.
+     */
+    loginLockReason: text('login_lock_reason', { enum: LOGIN_LOCK_REASONS }),
     ...timestamps(),
     version: recordVersion(),
   },
@@ -66,6 +75,10 @@ export const users = pgTable(
     check(
       'users_org_or_platform_admin',
       sql`(${t.isPlatformAdmin} and ${t.orgId} is null) or (not ${t.isPlatformAdmin} and ${t.orgId} is not null)`,
+    ),
+    check(
+      'users_login_lock_reason_check',
+      sql`${t.loginLockReason} is null or (${t.loginLockedAt} is not null and ${t.loginLockReason} in (${inList(LOGIN_LOCK_REASONS)}))`,
     ),
     orgIsolation('users_isolation', t.orgId),
   ],

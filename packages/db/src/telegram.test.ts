@@ -762,12 +762,15 @@ describe.skipIf(!databaseAvailable())('Telegram и «Забыли пароль?�
     });
     await locked.fired;
     const lateLink = withOrgContext(t.app.db, y, (tx) => createTelegramLinkToken(tx, newHash()));
+    // Проверку отказа подключаем сразу: ссылка может получить отказ раньше, чем закончится `await reset`,
+    // и без обработчика это был бы «необработанный отказ» в общем прогоне.
+    const lateLinkRefused = expect(lateLink).rejects.toMatchObject({
+      cause: { message: expect.stringContaining('временный пароль') },
+    });
     await new Promise((resolve) => setTimeout(resolve, 100));
     commit.fire();
     await reset;
-    await expect(lateLink).rejects.toMatchObject({
-      cause: { message: expect.stringContaining('временный пароль') },
-    });
+    await lateLinkRefused;
     const [guard] = await t.admin.db
       .select()
       .from(telegramLinkGuards)

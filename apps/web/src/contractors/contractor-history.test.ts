@@ -339,6 +339,12 @@ describe('история контрагента', () => {
       time: '10:30',
       text: 'Контрагент создан',
       who: 'Система',
+      via: null,
     });
+  });
+
+  it('действие из чата бота — отметка «через Telegram» (прототип histVia)', () => {
+    const item = contractorHistoryItem(t, entry({ action: 'create', via: 'telegram' }), names);
+    expect(item.via).toBe('через Telegram');
   });
 });

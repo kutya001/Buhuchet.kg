@@ -12,8 +12,8 @@ const leadTgText=(o,rep)=>(LAND.test?'🧪 Тестовый стенд ':'')+((r
 function leadNotify(){leadAdmins().forEach(u=>tgSvc(u,'Заявка с сайта',{org:LAND.test?'Тестовый стенд':'Платформа'}))}
 // История заявки — внутри самой заявки: «Удалить» стирает её целиком
 function leadLog(o,what,who){const w=who||S.me,at=nowStamp();(o.hist=o.hist||[]).push({at,who:w,what});o._ub=w;o._ua=at}
-// Смена статуса: в историю — кто, когда, с какого статуса на какой, причина или комментарий (suf — « (причина)» или «, комментарий»)
-function leadSet(o,to,suf){const st=o.status;if(to==='Отказ')o.prevSt=st;else delete o.prevSt;o.status=to;leadLog(o,`Статус: ${st} → ${to}${suf||''}`)}
+// Смена статуса: в историю — кто, когда, с какого статуса на какой, причина или комментарий (suf — « (причина)» или «, комментарий»); who — администратор, нажавший кнопку в Telegram (tg-leads.js)
+function leadSet(o,to,suf,who){const st=o.status;if(to==='Отказ')o.prevSt=st;else delete o.prevSt;o.status=to;leadLog(o,`Статус: ${st} → ${to}${suf||''}`,who)}
 // Ставит и меняет статус только администратор платформы
 function leadStep(o,to){if(!isAdmin())return toast('Статус заявки меняет администратор платформы','lock',true);
   if(to==='Подключена')return confirmDlg({title:'Отметить заявку «Подключена»?',text:`${esc(o.firm)}: клиент подключён. Если организацию ещё нужно создать, выберите в меню строки «Создать организацию» — статус поставится сам.`,ok:'Подключена',run:()=>{leadSet(o,to);refreshAll();toast('Заявка «Подключена»')}});
@@ -25,6 +25,7 @@ function leadDel(o){confirmDlg({title:'Удалить заявку?',text:'Им�
 const leadOrg=o=>addOrgDlg({lead:o,name:o.firm,fio:o.name});
 function leadActions(o){const bk=scBack('lead',o.status,o),bkT=typeof bk==='string'?bk:null;
   return [{label:'Открыть заявку',icon:'file',run:()=>openLead(o)},
+    {label:'Сообщение бота в Telegram',icon:'tg',sub:'С кнопками «Взять в работу» и «Отклонить»',run:()=>leadTgDlg(o,false,true)},
     o.status==='Новая'?{label:'В работу',icon:'hourglass',run:()=>leadStep(o,'В работе')}:null,
     !o.org?{label:'Создать организацию',icon:'building',run:()=>leadOrg(o)}:null,
     o.status==='В работе'&&!o.org?{label:'Отметить «Подключена»',icon:'check',run:()=>leadStep(o,'Подключена')}:null,
@@ -42,14 +43,14 @@ function openLead(o){openModal({size:'mid',lead:o.id,render:()=>{if(!LEADS.inclu
       <div><span class="k">Комментарий</span><span class="v" style="white-space:pre-wrap">${o.note?esc(o.note):'<span class="faint">—</span>'}</span></div><div><span class="k">Организация</span><span class="v">${leadOrgHtml(o)}</span></div></div></div>
     <div class="box">${fld('Заметка администратора',`<textarea class="inp" id="ld-note" style="min-height:64px" placeholder="Например: позвонили, показ программы в понедельник">${esc(o.adminNote||'')}</textarea>`,{id:'ld-note',full:true,hint:'Видит только администратор платформы'})}<div class="row"><div class="grow"></div><button class="btn sm" id="ld-note-ok">Сохранить заметку</button></div></div>
     <div class="box"><h3>История статусов</h3>${statusHistHtml('lead',o)}</div>
-    <div class="box"><h3>История</h3><ul class="tl">${o.hist.slice().reverse().map(h=>`<li><span class="t">${fmtD(h.at.slice(0,10))}<br>${h.at.slice(11)}</span><span>${esc(h.what)}<br><span class="w">${esc(whoName(h.who))}</span></span></li>`).join('')}</ul></div>`,
+    <div class="box"><h3>История</h3><ul class="tl">${o.hist.slice().reverse().map(h=>`<li><span class="t">${fmtD(h.at.slice(0,10))}<br>${h.at.slice(11)}</span><span>${esc(h.what)}${histVia(h)}<br><span class="w">${esc(whoName(h.who))}</span></span></li>`).join('')}</ul></div>`,
   foot:`<button class="btn" id="ld-more">${ic('more','sm')}Ещё действия</button><div class="grow"></div>${main?`<button class="btn cta" id="ld-main">${ic(main.i,'sm')}${main.l}</button>`:''}`,
   mount(el,m){$('#ld-more',el).onclick=e=>menu(e.currentTarget,leadActions(o).filter(x=>x.label!=='Открыть заявку'));if(main)$('#ld-main',el).onclick=main.f;
     $('#ld-note-ok',el).onclick=()=>{const v=$('#ld-note',el).value.trim();if(v===(o.adminNote||''))return toast('Изменений нет');o.adminNote=v;leadLog(o,'Заметка администратора изменена');m.draw();renderPage();toast('Заметка сохранена')}}}}})}
 document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('[data-lead-org]');if(!b)return;e.preventDefault();e.stopPropagation();MODALS.slice().forEach(m=>m.close());go('orgs','list');orgCard(b.dataset.leadOrg)},true);
 // Столбцы — от новых к старым; на вкладке — счётчик новых заявок
 function renderLeads(body,fresh){
-  body.innerHTML=`${leadAdmins().length?'':`<div class="note warn" id="ld-notg">${ic('alert')}<span>О новых заявках некому сообщить: привяжите Telegram в «Мой профиль».</span><button class="btn sm" id="ld-pf">${ic('user','sm')}Мой профиль</button></div>`}<div class="note">${ic('info')}<span>Заявки с лендинга buhuchet.kg. О каждой новой и повторной заявке бот сразу пишет администраторам платформы с привязанным Telegram. Статус ставит и меняет только администратор платформы; «Создать организацию» в меню строки сам ставит «Подключена».</span></div><div id="ldg"></div>`;
+  body.innerHTML=`${leadAdmins().length?'':`<div class="note warn" id="ld-notg">${ic('alert')}<span>О новых заявках некому сообщить: привяжите Telegram в «Мой профиль».</span><button class="btn sm" id="ld-pf">${ic('user','sm')}Мой профиль</button></div>`}<div class="note">${ic('info')}<span>Заявки с лендинга buhuchet.kg. О каждой новой и повторной заявке бот сразу пишет администраторам платформы с привязанным Telegram; под сообщением — кнопки «Взять в работу» и «Отклонить». Статус ставит и меняет только администратор платформы; «Создать организацию» в меню строки сам ставит «Подключена».</span></div><div id="ldg"></div>`;
   grid($('#ldg',body),{id:'adm-leads',rid:x=>x.id,cols:[{key:'at',label:'Дата',type:'text',w:130,val:x=>x.at,html:x=>`<span class="tnum">${fmtDT(x.at)}</span>`},{key:'name',label:'Имя',type:'text',w:190,val:x=>x.name,html:x=>`<span class="strong">${esc(x.name)}</span>`},{key:'firm',label:'Фирма',type:'text',w:220,val:x=>x.firm},
     {key:'phone',label:'Телефон',type:'text',w:170,val:x=>fmtPhone(x.phone),html:x=>phoneHtml(x.phone)},{key:'size',label:'Клиентов',type:'enum',w:110,val:x=>x.size||''},{key:'tg',label:'Telegram',type:'text',w:130,val:x=>x.tg||''},{key:'note',label:'Комментарий',type:'text',w:240,val:x=>x.note||''},
     {key:'status',label:'Статус',type:'enum',w:170,val:x=>x.status,html:x=>scaleMini('lead',x.status,x)},{key:'org',label:'Организация',type:'text',w:200,val:x=>x.org?orgName(x.org):'',html:leadOrgHtml}],

@@ -76,9 +76,15 @@ export const platformLeadEvents = pgTable(
     toStatus: text('to_status', { enum: LEAD_STATUSES }),
     /** Причина отката и отказа, название созданной организации; у повторной заявки — её комментарий. */
     text: text('text'),
+    /**
+     * Откуда сделана запись, если не с сайта: `telegram` — кнопкой или ответом в чате бота («через
+     * Telegram»; поток Т, задача Т6). Ставит база из отметки транзакции `app.via` (`markViaTelegram`).
+     */
+    via: text('via').default(sql`nullif(current_setting('app.via', true), '')`),
   },
   (t) => [
     index('platform_lead_events_lead_idx').on(t.leadId, t.at),
     check('platform_lead_events_kind_check', sql`${t.kind} in (${inList(LEAD_EVENT_KINDS)})`),
+    check('platform_lead_events_via_check', sql`${t.via} is null or ${t.via} = 'telegram'`),
   ],
 ).enableRLS();
