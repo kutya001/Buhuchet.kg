@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'drizzle-orm';
 import { withOrgContext } from './context';
 import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   banks,
   dictChangeRequests,
@@ -170,7 +170,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['bik']);
   });
 
-  it('с --update уходит то, что прототип убрал: новость «Версия 104», шаблоны и тексты тем в чате с ботом (п. Т-10)', async () => {
+  it('с --update уходит то, что прототип убрал: новость «Версия 104», шаблоны и тексты тем в чате с ботом (п. Т-10), прежние кнопки реквизитов (v110)', async () => {
     const db = t.admin.db;
     const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
     const [sample] = newsSeedRows(refDB.news);
@@ -187,11 +187,11 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .values(RETIRED.uiTexts.map((key) => ({ key, text: 'Темы', section: 'Телеграм' })));
     const count = async () =>
       (await db.$count(news, sql`${news.id} = 'v104'`)) +
-      (await db.$count(messageTemplateTexts, sql`${messageTemplateTexts.key} like 'tgTopic%'`)) +
       (await db.$count(
-        uiTexts,
-        sql`${uiTexts.key} like 'tgadm.view.topics%' or ${uiTexts.key} like 'pdicts.tpl.label.tg_topic_%'`,
-      ));
+        messageTemplateTexts,
+        inArray(messageTemplateTexts.key, [...RETIRED.messageTemplates]),
+      )) +
+      (await db.$count(uiTexts, inArray(uiTexts.key, [...RETIRED.uiTexts])));
     const total = 1 + RETIRED.messageTemplates.length + RETIRED.uiTexts.length;
     expect(await count()).toBe(total);
     // Без --update ничего не удаляется.
