@@ -52,6 +52,11 @@ const NAME_ENUM: ListColumns = {
   name: { type: 'enum', label: 'test.name', value: items.name },
 };
 
+/** Столбец с контрагентами: значение находится и по цифрам (ИНН) — здесь цифры берутся из телефона. */
+const NAME_DIGITS: ListColumns = {
+  name: { type: 'enum', label: 'test.name', value: items.name, digits: items.phone },
+};
+
 /** Столбец с 620 значениями — больше, чем приходит в фильтр-галочки (`LIST_VALUES_LIMIT`). */
 const MANY = 620;
 const many = pgTable('list_test_many', { id: integer('id').primaryKey(), name: text('name') });
@@ -420,6 +425,63 @@ describe.skipIf(!databaseAvailable())('страница списка на сер
       const res = await found(q);
       expect(res.items.map((i) => i.label).sort(), q).toEqual([...new Set(labels)].sort());
     }
+  });
+
+  it('столбец с контрагентами: «Название или ИНН» находит значение и по цифрам подряд, как matchesValue', async () => {
+    const found = async (q?: string) =>
+      selectListValues({ columns: NAME_DIGITS, key: 'name', scope: undefined, from, q });
+    const all = await found();
+    expect(all.byDigits).toBe(true);
+    expect(all.items.find((i) => i.value === 'Док 10')).toEqual({
+      value: 'Док 10',
+      label: 'Док 10',
+      count: 1,
+      digits: '+996555100200',
+    });
+    // У значения без цифр поля `digits` нет; у обычного столбца нет и отметки `byDigits`.
+    expect(all.items.find((i) => i.value === 'Док 1')).toEqual({
+      value: 'Док 1',
+      label: 'Док 1',
+      count: 1,
+    });
+    expect(
+      await selectListValues({ columns: NAME_ENUM, key: 'name', scope: undefined, from }),
+    ).not.toHaveProperty('byDigits');
+    for (const q of ['555', '5 5 5', '100', '1', 'док 1', '+996', '99655', 'ел', '0000']) {
+      const expected = ROWS.filter((r) => matchesValue(r.name || null, q, r.phone)).map(
+        (r) => r.name ?? '',
+      );
+      const res = await found(q);
+      expect(res.items.map((i) => i.value).sort(), q).toEqual([...new Set(expected)].sort());
+    }
+    // Шаг «Выбрать все» по цифрам отмечает те же записи, что эталон enumChecked.
+    const selection: EnumSelection = {
+      vals: ['Ель_синяя'],
+      steps: [
+        { on: true, match: '555' },
+        { on: false, match: '5551' },
+      ],
+    };
+    const res = await selectListPage({
+      query: { sort: null, page: 1, size: 25, filters: { name: { type: 'enum', ...selection } } },
+      columns: NAME_DIGITS,
+      natural: [items.id],
+      scope: undefined,
+      select: ({ window, where, orderBy, limit, offset }) =>
+        t.app.db
+          .select({ id: items.id, ...window })
+          .from(items)
+          .where(where)
+          .orderBy(...orderBy)
+          .limit(limit)
+          .offset(offset),
+    });
+    expect(res.rows.map((r) => r.id)).toEqual(
+      ROWS.filter((r) => enumChecked(selection, r.name ?? '', r.name || null, r.phone)).map(
+        (r) => r.id,
+      ),
+    );
+    expect(res.rows.map((r) => r.id)).toEqual([5, 7]);
   });
 
   it('значений больше 500 — пришли первые 500, всего — сколько подходит; поиск находит и не пришедшие', async () => {

@@ -28,8 +28,13 @@ const options: TaskFormOptions = {
     { id: RESP, shortName: 'Бухгалтер Б.' },
   ],
   contractors: [
-    { id: CP, name: 'ОсОО «Ала-Тоо»', responsibleEmployeeId: RESP },
-    { id: CP_BLOCKED_RESP, name: 'ИП Садыков', responsibleEmployeeId: BLOCKED },
+    { id: CP, name: 'ОсОО «Ала-Тоо»', inn: '01203199810045', responsibleEmployeeId: RESP },
+    {
+      id: CP_BLOCKED_RESP,
+      name: 'ИП Садыков',
+      inn: '22807198500321',
+      responsibleEmployeeId: BLOCKED,
+    },
   ],
   confirmDefault: true,
   filesOn: true,

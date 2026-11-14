@@ -127,6 +127,7 @@ const LABELS: GridLabels = {
   filterUntil: 'По дату',
   filterBadNumber: 'Введите число, например 1 250,50',
   filterFind: 'Найти значение',
+  filterFindDigits: 'Название или ИНН',
   filterAll: 'Выбрать все',
   empty: '(Пусто)',
   filterLoading: 'Загружаю значения…',

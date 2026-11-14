@@ -1886,7 +1886,7 @@ export async function createManualReport(
 /** Что можно выбрать в окне «Разовый отчёт». */
 export interface ManualReportOptions {
   /** Контрагенты в области «Свои» группы «Отчеты для сдачи», кроме архивных (прототип visCps). */
-  contractors: { id: string; name: string }[];
+  contractors: { id: string; name: string; inn: string }[];
   /** Подключённые в организации и действующие виды по порядку каталога, с правилом срока. */
   types: (DueRule & {
     code: string;
@@ -1903,7 +1903,7 @@ export async function manualReportOptions(
 ): Promise<ManualReportOptions> {
   const [cps, types] = await Promise.all([
     tx
-      .select({ id: contractors.id, name: contractors.name })
+      .select({ id: contractors.id, name: contractors.name, inn: contractors.inn })
       .from(contractors)
       .where(and(ne(contractors.serviceStatus, 'archived'), scope))
       .orderBy(asc(contractors.name), asc(contractors.id)),

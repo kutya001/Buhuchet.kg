@@ -238,7 +238,8 @@ export function listPageSchema<T extends z.ZodType>(item: T) {
  * значение (код), подпись как на экране (null — пусто) и сколько записей с ним во всём списке.
  * `q` — «Найти значение»: только значения, подпись которых его содержит (`matchesValue`), — поиск по
  * всем значениям, а не по пришедшим (ТЗ «Поиск и фильтры»). `total` — сколько всего подходящих
- * значений, `more` — их больше, чем пришло.
+ * значений, `more` — их больше, чем пришло. У столбца с контрагентами (`byDigits`) значение находится
+ * и по ИНН цифрами подряд, поле поиска — «Название или ИНН» (прототип v93); `digits` — ИНН значения.
  */
 export const ListValuesQuery = z.object({
   col: ColumnKey,
@@ -250,10 +251,12 @@ export const ListValues = z.object({
       value: z.string(),
       label: z.string().nullable(),
       count: z.number().int().nonnegative(),
+      digits: z.string().optional(),
     }),
   ),
   total: z.number().int().nonnegative(),
   more: z.boolean(),
+  byDigits: z.boolean().optional(),
 });
 export type ListValues = z.infer<typeof ListValues>;
 

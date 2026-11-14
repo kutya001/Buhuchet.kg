@@ -118,12 +118,24 @@ function roleText(t: Translate, h: HistoryEntry): string {
  */
 export function orgHistoryText(t: Translate, h: HistoryEntry): string {
   if (h.entity === 'org_settings') {
+    // «Действия из Telegram» (вкладка «Настройки», прототип org.js `#st-tgact`).
+    const actions = h.changes.find((c) => c.field === 'telegramActions');
+    const own =
+      actions && typeof actions.to === 'boolean'
+        ? t(actions.to ? 'orgs.card.hist.tg_actions_on' : 'orgs.card.hist.tg_actions_off')
+        : null;
+    // Экран шлёт переключатель отдельно, но метод принимает его и вместе с другими полями: остальные
+    // изменения той же записи не теряются.
+    const rest = h.changes.filter((c) => c !== actions);
+    if (own && rest.length === 0) return own;
     const item = policyHistoryItem(
-      { at: h.at, actor: h.actor, action: h.action, changes: h.changes, reason: h.reason },
+      { at: h.at, actor: h.actor, action: h.action, changes: rest, reason: h.reason },
       0,
       t,
     );
-    return typeof item.text === 'string' && item.text ? item.text : t('orgs.card.hist.policy');
+    const text =
+      typeof item.text === 'string' && item.text ? item.text : t('orgs.card.hist.policy');
+    return own ? `${own}; ${text}` : text;
   }
   if (h.entity === 'role') return roleText(t, h);
   if (h.action === 'create') return t('orgs.card.hist.created');

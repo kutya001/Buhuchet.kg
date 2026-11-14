@@ -85,7 +85,7 @@ export function enumSelectionOf(filter: ListFilterValue | undefined): EnumSelect
  */
 export function enumFilterOf(
   selection: EnumSelection,
-  all: readonly { value: string; label: string | null }[] | null,
+  all: readonly { value: string; label: string | null; digits?: string }[] | null,
 ): ListFilterValue | null {
   const stepped: ListFilterValue | null = isEnumAll(selection)
     ? null
@@ -93,7 +93,9 @@ export function enumFilterOf(
       ? { type: 'enum', vals: selection.vals, steps: selection.steps }
       : { type: 'enum', vals: selection.vals };
   if (!all) return stepped;
-  const on = all.filter((i) => enumChecked(selection, i.value, i.label)).map((i) => i.value);
+  const on = all
+    .filter((i) => enumChecked(selection, i.value, i.label, i.digits))
+    .map((i) => i.value);
   if (on.length === all.length) return null;
   const listed: ListFilterValue = { type: 'enum', vals: on };
   if (enumFilterFits(listed)) return listed;
