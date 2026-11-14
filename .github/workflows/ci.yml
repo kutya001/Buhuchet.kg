@@ -139,8 +139,8 @@ jobs:
     needs: scope
     runs-on: ubuntu-24.04
     # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не
-    # всей задачей, и шаги журналов ниже успевают выполниться (сбой 13.11.2026, docs/decisions.md п. О-46).
-    # Сквозных тестов после доработок 13.11 стало больше (около 45 минут), отсюда 65 и 75 минут.
+    # всей задачей, и шаги журналов ниже успевают выполниться (docs/decisions.md п. О-47).
+    # В этой задаче — только значения из .env.example: журналы и отчёт публичны, секреты сюда не добавлять.
     timeout-minutes: 75
     steps:
       - name: Короткий путь — сквозные тесты не нужны
@@ -181,16 +181,18 @@ jobs:
         if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
         timeout-minutes: 2
         run: |
-          docker compose exec -T postgres psql -U postgres -d buhuchet -c "select pid, usename, application_name, state, wait_event_type, wait_event, now() - xact_start as in_tx, now() - state_change as in_state, left(query, 200) as query from pg_stat_activity where datname = 'buhuchet' order by xact_start nulls last" || true
+          docker compose exec -T postgres psql -U postgres -d buhuchet -c "select pid, usename, application_name, state, wait_event_type, wait_event, now() - xact_start as in_tx, now() - state_change as in_state, left(query, 200) as query from pg_stat_activity where datname = 'buhuchet' and pid <> pg_backend_pid() order by xact_start nulls last" || true
       - name: Журналы контейнеров
         if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
         timeout-minutes: 3
         run: docker compose --profile app logs --no-color --timestamps --tail=500 || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        timeout-minutes: 3
         with:
           name: playwright-report
           path: playwright-report/
+          if-no-files-found: ignore
           retention-days: 7
 
   # Известные уязвимости в зависимостях рабочего сайта (без инструментов разработки) — только в ночном и
