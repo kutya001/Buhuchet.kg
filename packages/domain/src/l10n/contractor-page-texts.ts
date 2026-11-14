@@ -209,6 +209,7 @@ export const CONTRACTOR_PAGE_TEXTS = {
   // Заголовки сообщений сотруднику (прототип tgAct('cp-paid'), pgTgAsk).
   'cppage.tg.staff.paid_heading': { ru: 'Контрагент сообщил об оплате', section: S },
   'cppage.tg.staff.ask_heading': { ru: 'Вопрос контрагента', section: S },
+  'cppage.tg.staff.noreq_heading': { ru: '«К оплате» не отправлено', section: S },
   // Ответ сотрудника на вопрос клиента (прототип pgTgAnswer): заголовок сообщения клиенту и что бот
   // пишет сотруднику (docs/deviations.md п. К-4).
   'cppage.tg.answer_heading': { ru: 'Ответ бухгалтера', section: S },
@@ -255,6 +256,30 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.tg.debt.short': { ru: 'Не хватает на налоги этого месяца', section: S },
   'cppage.tg.debt.fee': { ru: 'Долг за обслуживание', section: S },
   'cppage.tg.nodebt_done': { ru: '✓ Напоминания выключены', section: S },
+  // Реквизиты для перевода в сообщениях клиенту (доработки 14.11.2026, блок 4; прототип v110 pgRqLines).
+  'cppage.tg.rq.phone': { ru: 'Перевод по номеру телефона', section: S },
+  'cppage.tg.rq.banks': { ru: 'Банки и кошельки', section: S },
+  'cppage.tg.rq.bank': { ru: 'Банк', section: S },
+  'cppage.tg.rq.wallet': { ru: 'Банк или кошелёк', section: S },
+  'cppage.tg.rq.account': { ru: 'Счёт', section: S },
+  'cppage.tg.rq.bik': { ru: 'БИК', section: S },
+  'cppage.tg.rq.holder': { ru: 'Получатель', section: S },
+  'cppage.tg.req.tax': { ru: 'Для налогов', section: S },
+  'cppage.tg.req.fee': { ru: 'Для обслуживания', section: S },
+  'cppage.tg.rq.no_resp': { ru: 'ответственный сотрудник', section: S },
+  'cppage.tg.req_limit': {
+    ru: 'Реквизиты уже отправлены несколько раз за час — они в сообщениях выше. Попробуйте позже.',
+    section: S,
+  },
+  'cppage.tg.rq.org_hint': {
+    ru: 'Добавьте основной счёт для налогов: «Моя организация» → «Реквизиты».',
+    section: S,
+  },
+  'cppage.tg.rq.emp_hint': { ru: 'Реквизиты добавляет {employee} в «Мой профиль».', section: S },
+  'cppage.tg.rq.hidden_staff': {
+    ru: 'Раздел «Как оплатить» скрыт на странице контрагента: без реквизитов для перевода «К оплате» не уходит.',
+    section: S,
+  },
   // В прототипе команды «Напоминать» нет (шаблон `tgCpNoDebtOk` её только обещает) — docs/deviations.md п. К-5.
   'cppage.tg.debt_on': {
     ru: 'Напоминания о долге снова включены: {contractor}.',
@@ -527,6 +552,18 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'err.month_pay_send_not_linked': {
     ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_not_linked,
+    section: E,
+  },
+  'err.month_pay_send_no_req_org': {
+    ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_no_req_org,
+    section: E,
+  },
+  'err.month_pay_send_no_req_emp': {
+    ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_no_req_emp,
+    section: E,
+  },
+  'err.month_pay_send_req_hidden': {
+    ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_req_hidden,
     section: E,
   },
   'err.month_pay_send_off': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_off, section: E },

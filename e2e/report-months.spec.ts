@@ -452,7 +452,6 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     expect(passwordSet.status()).toBe(200);
     const staffChat = uniqueChat();
     await linkTelegram(staff, origin, staffChat);
-    await staff.dispose();
 
     await asOwner(page.request, baseURL);
     const word = uniqueWord('Телеоплата');
@@ -518,6 +517,34 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     );
     expect(approved.status(), await approved.text()).toBe(200);
 
+    await test.step('(доработки 14.11.2026, блок 4) без реквизитов для перевода «К оплате» не уходит: кнопка говорит, кто их добавляет', async () => {
+      await page.reload();
+      const again = await openReportsTab(page, isMobile, word);
+      const button = again.locator('[data-month-pay="2026-09"] [data-month-pay-send]');
+      await expect(button).toHaveAttribute('aria-disabled', 'true');
+      await expect(button).toHaveAttribute(
+        'title',
+        new RegExp(
+          `^Не отправлено «К оплате»: у ${name} нет реквизитов для перевода\\. Реквизиты добавляет .+ в «Мой профиль»\\.$`,
+        ),
+      );
+      // Ответственный добавляет свой реквизит — номер телефона в M-Bank.
+      const wallet = await staff.post('/api/profile/wallets', {
+        headers: { origin },
+        data: {
+          kind: 'phone',
+          bankCode: null,
+          accountNo: null,
+          phone: '+996555123456',
+          phoneBanks: ['БНК-13'],
+          holderName: 'Входов С.',
+          isMain: true,
+        },
+      });
+      expect(wallet.status(), await wallet.text()).toBeLessThan(300);
+      await staff.dispose();
+    });
+
     await test.step('«Отправить в Telegram»: вопрос с суммой, сроком и числом получателей; клиенту — сообщение с таблицей и кнопками', async () => {
       await page.reload();
       const again = await openReportsTab(page, isMobile, word);
@@ -553,9 +580,22 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
       expect(payMessage.text).toMatch(/3\s800,00/);
       expect(payMessage.text).toContain('870,50');
       expect(payMessage.text).toMatch(/Итого — 4\s670,50/);
+      // Реквизиты ответственного — блоком в тексте и кнопкой копирования по виду реквизита
+      // (доработки 14.11.2026, блок 4).
+      expect(payMessage.text).toContain(
+        [
+          'Реквизиты для перевода — сотрудника Входов Сквозной Тестович',
+          'Перевод по номеру телефона: 0555 123 456',
+          'Банки и кошельки: M-Bank',
+          'Получатель: Входов С.',
+        ].join('\n'),
+      );
       const buttons = (payMessage.keyboard ?? []).flat();
       expect(buttons.map((b) => b.text)).toEqual(
-        expect.arrayContaining(['Оплатил', 'Вопрос бухгалтеру']),
+        expect.arrayContaining(['Скопировать номер телефона', 'Оплатил', 'Вопрос бухгалтеру']),
+      );
+      expect(buttons.find((b) => b.text === 'Скопировать номер телефона')!.copy_text?.text).toBe(
+        '0555123456',
       );
       expect(buttons.find((b) => b.text === 'Оплатил')!.callback_data).toBe('cpPaid:2026-09');
     });

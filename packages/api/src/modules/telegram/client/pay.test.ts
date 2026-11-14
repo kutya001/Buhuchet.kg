@@ -6,8 +6,11 @@ import {
   CP_TG_ANSWER_ACTION,
   CP_TG_PAY_SENDS_PER_HOUR,
   CP_TG_QUESTIONS_PER_HOUR,
+  CP_TG_REQ_PER_HOUR,
   fillTemplate,
   formatSomWithUnit,
+  formatText,
+  MONTH_PAY_SEND_MESSAGES,
   TELEGRAM_TEMPLATE_DEFAULTS,
   UI_TEXTS,
   type BotMessage,
@@ -44,7 +47,20 @@ type Report = typeof schema.reports.$inferInsert;
 const som = formatSomWithUnit;
 /** M-Bank — код refDB.json. */
 const MBANK = 'БНК-13';
-const REQUISITE = 'Перевод по номеру 0555 123 456 (M-Bank), получатель Бухгалтер А.';
+/** Optima Bank — код refDB.json. */
+const OPTIMA = 'БНК-14';
+/**
+ * Реквизит ответственного в сообщении клиенту (доработки 14.11.2026, блок 4; прототип v110 pgRqText):
+ * блок «Реквизиты для перевода — сотрудника <ФИО>» и кнопка «Скопировать номер телефона» — только цифры.
+ */
+const REQUISITE_BLOCK = [
+  'Реквизиты для перевода — сотрудника Сотрудник acc-a',
+  'Перевод по номеру телефона: 0555 123 456',
+  'Банки и кошельки: M-Bank',
+  'Получатель: Бухгалтер А.',
+].join('\n');
+const COPY_PHONE = { text: TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpCopyPhone, copy: '0555123456' };
+const CP_A = 'ОсОО «Ала-Тоо Трейд»';
 
 /** Чаты сотрудников (привязаны к учётным записям) и чаты клиентов. */
 const CHAT_ACC = 7001;
@@ -260,7 +276,9 @@ describe.skipIf(!databaseAvailable())(
       await f.t.admin.db.execute(
         sql`delete from audit_log where action in ('page_tg_pay', 'page_tg_paid', 'page_tg_question', 'page_tg_answer')`,
       );
-      await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_tg_ask'`);
+      await f.t.admin.db.execute(
+        sql`delete from rate_limits where kind in ('cp_tg_ask', 'cp_tg_req')`,
+      );
       await f.t.admin.db.delete(schema.telegramOutbox);
       tg.sent.length = 0;
       tg.messageIds.length = 0;
@@ -313,6 +331,17 @@ describe.skipIf(!databaseAvailable())(
         isMain: true,
       });
       expect(wallet.status, await wallet.clone().text()).toBeLessThan(300);
+      // У бухгалтера организации Б — тоже: без реквизитов «К оплате» не уходит (блок 4 доработок 14.11).
+      const walletB = await call(accB, 'POST', '/api/profile/wallets', {
+        kind: 'phone',
+        bankCode: null,
+        accountNo: null,
+        phone: '+996555765432',
+        phoneBanks: [MBANK],
+        holderName: 'Бухгалтер Б.',
+        isMain: true,
+      });
+      expect(walletB.status, await walletB.clone().text()).toBeLessThan(300);
 
       const sep = { period: 'M' as const, periodStart: '2026-09-01' };
       const mine = { contractorId: cpA, responsibleEmployeeId: employee('acc-a'), ...sep };
@@ -366,17 +395,19 @@ describe.skipIf(!databaseAvailable())(
     });
 
     it('карточка: «Отправить в Telegram» — число получателей и что мешает', async () => {
-      expect((await pay(owner, cpA)).send).toEqual({ refusal: null, recipients: 2 });
-      expect((await pay(chief, cpA)).send).toEqual({ refusal: null, recipients: 2 });
+      expect((await pay(owner, cpA)).send).toEqual({ refusal: null, recipients: 2, params: null });
+      expect((await pay(chief, cpA)).send).toEqual({ refusal: null, recipients: 2, params: null });
       // Бухгалтер: права «Управлять страницей контрагента» нет.
       expect((await pay(acc, cpA)).send).toEqual({
         refusal: 'month_pay_send_right',
         recipients: 2,
+        params: null,
       });
       // Никто не подключил Telegram.
       expect((await pay(owner, cpEmpty)).send).toEqual({
         refusal: 'month_pay_send_not_linked',
         recipients: 0,
+        params: null,
       });
       // Контрагент в архиве — раньше, чем «не подключил».
       await f.t.admin.db
@@ -417,6 +448,7 @@ describe.skipIf(!databaseAvailable())(
         expect((await pay(owner, cpA)).send).toEqual({
           refusal: 'month_pay_send_not_linked',
           recipients: 0,
+          params: null,
         });
         const res = await send(owner, cpA);
         expect(res.status).toBe(409);
@@ -498,11 +530,13 @@ describe.skipIf(!databaseAvailable())(
       for (const part of [patName!, ndsName!, '870,50', '3 800,00', '4 670,50', '20.10', '25.10']) {
         expect(first!.text.replace(/\s/g, ' ')).toContain(part);
       }
+      // Под текстом — реквизиты ответственного блоком «Реквизиты для перевода — …».
+      expect(first!.text).toContain(REQUISITE_BLOCK);
       // Чужих контрагентов и организаций в сообщении нет.
       expect(first!.text).not.toContain('Садыков');
       expect(first!.text).not.toContain('Бишкек');
       expect(first!.options?.keyboard).toEqual([
-        [{ text: text('tgBtnCpReq'), copy: REQUISITE }],
+        [COPY_PHONE],
         [
           { text: text('tgBtnCpPaid'), data: paidData },
           { text: text('tgBtnCpQ'), data: askData },
@@ -593,7 +627,7 @@ describe.skipIf(!databaseAvailable())(
           chatId: CLIENT_1,
           messageId,
           keyboard: [
-            [{ text: text('tgBtnCpReq'), copy: REQUISITE }],
+            [COPY_PHONE],
             [
               { text: '✓ Сообщили бухгалтеру', data: 'off', disabled: true },
               { text: text('tgBtnCpQ'), data: askData },
@@ -740,30 +774,97 @@ describe.skipIf(!databaseAvailable())(
       expect(await press(paidData, CLIENT_1, m1)).toMatchObject({ text: text('tgCpPaidOk') });
     });
 
-    it('раздел «Как оплатить» скрыт — реквизит клиенту не уходит и в Telegram', async () => {
-      await f.t.admin.db
+    /** Поля контрагента для теста реквизитов: кому переводит деньги на налоги и ответственный. */
+    const setContractor = (
+      cp: string,
+      values: Partial<
+        Pick<typeof schema.contractors.$inferInsert, 'paysTo' | 'responsibleEmployeeId'>
+      >,
+    ) => f.t.admin.db.update(schema.contractors).set(values).where(eq(schema.contractors.id, cp));
+    const hidePage = (cp: string, sections: string[]) =>
+      f.t.admin.db
         .update(schema.contractorPages)
-        .set({ hiddenSections: ['pay'] })
-        .where(eq(schema.contractorPages.contractorId, cpA));
+        .set({ hiddenSections: sections })
+        .where(eq(schema.contractorPages.contractorId, cp));
+    /** Основной счёт организации для налогов (расчётный счёт с БИК). */
+    const TAX_ACCOUNT = {
+      kind: 'acc',
+      bankCode: OPTIMA,
+      accountNo: '1091820004567012',
+      bik: '109018',
+      phone: null,
+      phoneBanks: [],
+      holderName: 'Организация А',
+      purpose: 'tax',
+      mainTax: true,
+      mainFee: false,
+    };
+    const TAX_ACCOUNT_LINES = [
+      'Банк: Optima Bank',
+      'Счёт: 1091820004567012',
+      'БИК: 109018',
+      'Получатель: Организация А',
+    ];
+
+    it('без реквизитов для перевода «К оплате» не уходит: «Как оплатить» скрыт, нет счёта организации или реквизита сотрудника', async () => {
+      const refused = async (code: string, params: { contractor: string; employee: string }) => {
+        expect((await pay(owner, cpA)).send).toEqual({ refusal: code, recipients: 2, params });
+        const res = await send(owner, cpA);
+        expect(res.status).toBe(409);
+        expect(await failure(res)).toEqual({
+          code,
+          message: formatText(
+            MONTH_PAY_SEND_MESSAGES[code as keyof typeof MONTH_PAY_SEND_MESSAGES],
+            params,
+          ),
+          details: params,
+        });
+      };
+      const params = { contractor: CP_A, employee: 'acc-a' };
+      // Раздел «Как оплатить» скрыт: реквизиты в Telegram не уходят, а без них — и само «К оплате».
+      await hidePage(cpA, ['pay']);
       try {
-        expect(await sent(owner, cpA)).toEqual({ recipients: 2, delivered: 2 });
-        for (const m of tg.sent) {
-          expect(m.text).not.toContain('0555');
-          expect(JSON.stringify(m.options ?? {})).not.toContain('0555');
-          expect(m.options?.keyboard).toEqual([
-            [
-              { text: text('tgBtnCpPaid'), data: paidData },
-              { text: text('tgBtnCpQ'), data: askData },
-            ],
-          ]);
-        }
-        expect(JSON.stringify(await messages(cpA))).not.toContain('0555');
+        await refused('month_pay_send_req_hidden', params);
       } finally {
-        await f.t.admin.db
-          .update(schema.contractorPages)
-          .set({ hiddenSections: [] })
-          .where(eq(schema.contractorPages.contractorId, cpA));
+        await hidePage(cpA, []);
       }
+      // Деньги на налоги переводят организации, а основного счёта для налогов нет.
+      await setContractor(cpA, { paysTo: 'org' });
+      try {
+        await refused('month_pay_send_no_req_org', params);
+        // Счёт добавлен — «К оплате» уходит с реквизитами организации и кнопкой «Скопировать
+        // реквизиты для перевода»: банк, счёт, БИК и получатель.
+        const account = await call(owner, 'POST', '/api/org/accounts', TAX_ACCOUNT);
+        expect(account.status, await account.clone().text()).toBe(200);
+        expect((await pay(owner, cpA)).send).toEqual({
+          refusal: null,
+          recipients: 2,
+          params: null,
+        });
+        expect(await sent(owner, cpA)).toEqual({ recipients: 2, delivered: 2 });
+        expect(tg.sent[0]!.text).toContain(
+          ['Реквизиты для перевода — организации Организация А', ...TAX_ACCOUNT_LINES].join('\n'),
+        );
+        expect(tg.sent[0]!.options?.keyboard?.[0]).toEqual([
+          { text: text('tgBtnCpCopyReq'), copy: TAX_ACCOUNT_LINES.join('\n') },
+        ]);
+      } finally {
+        await setContractor(cpA, { paysTo: 'emp' });
+        await f.t.admin.db
+          .delete(schema.orgAccounts)
+          .where(eq(schema.orgAccounts.orgId, f.a.orgId));
+      }
+      await wipe();
+      // У ответственного сотрудника нет реквизитов: подсказка — кто их добавляет.
+      await setContractor(cpA, { responsibleEmployeeId: employee('chief-a') });
+      try {
+        await refused('month_pay_send_no_req_emp', { contractor: CP_A, employee: 'chief-a' });
+      } finally {
+        await setContractor(cpA, { responsibleEmployeeId: employee('acc-a') });
+      }
+      expect(tg.sent).toEqual([]);
+      expect(await messages(cpA)).toEqual([]);
+      expect(await history(cpA)).toEqual([]);
     });
 
     it('«Вопрос бухгалтеру»: бот просит написать вопрос, вопрос уходит ответственному и в историю', async () => {
@@ -1096,9 +1197,8 @@ describe.skipIf(!databaseAvailable())(
         expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_2]);
         expect(tg.sent[0]!.text).toContain('Налоги к оплате до 20.10.2026');
         expect(tg.sent[0]!.text).toContain(som(TOTAL));
-        expect(tg.sent[0]!.options?.keyboard?.[0]).toEqual([
-          { text: text('tgBtnCpReq'), copy: REQUISITE },
-        ]);
+        expect(tg.sent[0]!.options?.keyboard?.[0]).toEqual([COPY_PHONE]);
+        expect(tg.sent[0]!.text).toContain(REQUISITE_BLOCK);
         // До повтора сумма патента выросла: не ушедшее сообщение собирается заново — клиент получает
         // сегодняшнюю сумму, а не вчерашнюю.
         await f.t.admin.db
@@ -1154,6 +1254,51 @@ describe.skipIf(!databaseAvailable())(
           .update(schema.reports)
           .set({ amount: 87_050 })
           .where(eq(schema.reports.id, ids.pat!));
+      }
+    });
+
+    it('само «К оплате» без реквизитов не уходит: ответственному — «не отправлено» с подсказкой, один раз на месяц', async () => {
+      const notice = (hint: string) =>
+        `${UI_TEXTS['cppage.tg.staff.noreq_heading'].ru}\n${text('tgCpNoReq', { контрагент: CP_A })} ${hint}`;
+      await autoPay(f.a.orgId, true);
+      try {
+        // «Как оплатить» скрыт.
+        await hidePage(cpA, ['pay']);
+        await runJob();
+        await runJob();
+        expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
+          [CHAT_ACC, notice(UI_TEXTS['cppage.tg.rq.hidden_staff'].ru)],
+        ]);
+        await hidePage(cpA, []);
+        await wipe();
+        // Деньги на налоги переводят организации, счёта для налогов нет.
+        await setContractor(cpA, { paysTo: 'org' });
+        await runJob();
+        await runJob();
+        expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
+          [CHAT_ACC, notice(UI_TEXTS['cppage.tg.rq.org_hint'].ru)],
+        ]);
+        await setContractor(cpA, { paysTo: 'emp' });
+        await wipe();
+        // Реквизитов нет у ответственного; ответственный без Telegram — сообщение владельцу.
+        await setContractor(cpA, { responsibleEmployeeId: employee('chief-a') });
+        await runJob();
+        expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
+          [
+            CHAT_OWNER,
+            notice(formatText(UI_TEXTS['cppage.tg.rq.emp_hint'].ru, { employee: 'chief-a' })),
+          ],
+        ]);
+        await setContractor(cpA, { responsibleEmployeeId: employee('acc-a') });
+        // Клиентам ничего не ушло и не записано; реквизиты появились — «К оплате» уходит.
+        expect(await messages(cpA)).toEqual([]);
+        await runJob();
+        expect(sentTo(CLIENT_1)).toHaveLength(1);
+        expect(sentTo(CLIENT_1)[0]!.text).toContain(REQUISITE_BLOCK);
+      } finally {
+        await autoPay(f.a.orgId, false);
+        await hidePage(cpA, []);
+        await setContractor(cpA, { paysTo: 'emp', responsibleEmployeeId: employee('acc-a') });
       }
     });
 
@@ -1300,6 +1445,7 @@ describe.skipIf(!databaseAvailable())(
       const FEE = 4 * 300_000;
       const FEE_REQUISITE_PART = '0555 987 654';
       const noDebtData = botPressData('cpNoDebt');
+      const reqData = (arg: string) => botPressData('cpReq', arg);
 
       const runDebt = (now = MONDAY) =>
         contractorDebtJob.run({ ...f.deps, clock: fixedClock(now) }, new Date(now));
@@ -1399,16 +1545,13 @@ describe.skipIf(!databaseAvailable())(
         expect(message.text).toContain('Не хватает на налоги этого месяца');
         expect(message.text).toContain('Долг за обслуживание');
         const keyboard = message.options?.keyboard ?? [];
-        expect(keyboard.map((row) => row.map((b) => b.text))).toEqual([
-          [text('tgBtnCpReqTax')],
-          [text('tgBtnCpReqFee')],
-          [text('tgBtnCpNoDebt')],
+        // Одна кнопка «Показать реквизиты для перевода» на обе части долга (прототип v110):
+        // реквизиты в самом напоминании не приходят.
+        expect(keyboard).toEqual([
+          [{ text: text('tgBtnCpShowReq'), data: reqData('tax-fee') }],
+          [{ text: text('tgBtnCpNoDebt'), data: noDebtData }],
         ]);
-        expect(keyboard[0]![0]).toEqual({ text: text('tgBtnCpReqTax'), copy: REQUISITE });
-        expect(keyboard[1]![0]).toMatchObject({
-          copy: expect.stringContaining(FEE_REQUISITE_PART),
-        });
-        expect(keyboard[2]![0]).toEqual({ text: text('tgBtnCpNoDebt'), data: noDebtData });
+        expect(message.text).not.toContain('0555');
         // Повтор и догоняющий запуск второго напоминания за неделю не создают.
         await runDebt();
         await runDebt(TUESDAY);
@@ -1431,6 +1574,77 @@ describe.skipIf(!databaseAvailable())(
         // Следующий понедельник — новое напоминание.
         await runDebt('2026-10-26T04:00:00Z');
         expect(tg.sent).toHaveLength(4);
+      });
+
+      it('«Показать реквизиты для перевода»: реквизиты на момент нажатия по каждой части долга с кнопкой копирования; кнопка не гаснет', async () => {
+        await runDebt();
+        const messageId = tg.messageIds[0]!;
+        tg.sent.length = 0;
+        tg.messageIds.length = 0;
+        expect(await press(reqData('tax-fee'), CLIENT_1, messageId)).toEqual({
+          callbackId: expect.any(String),
+          text: undefined,
+          alert: false,
+        });
+        // Два сообщения: «Для налогов» — реквизит ответственного, «Для обслуживания» — основной счёт
+        // организации для обслуживания; у каждого — своя кнопка копирования.
+        expect(tg.sent.map((m) => [m.chatId, m.text, m.options?.keyboard])).toEqual([
+          [CLIENT_1, ['Для налогов', CP_A, REQUISITE_BLOCK].join('\n'), [[COPY_PHONE]]],
+          [
+            CLIENT_1,
+            [
+              'Для обслуживания',
+              CP_A,
+              'Реквизиты для перевода — организации Организация А',
+              `Перевод по номеру телефона: ${FEE_REQUISITE_PART}`,
+              'Банки и кошельки: M-Bank',
+              'Получатель: Организация А',
+            ].join('\n'),
+            [[{ text: text('tgBtnCpCopyPhone'), copy: '0555987654' }]],
+          ],
+        ]);
+        // Кнопка не гаснет, сообщения с реквизитами не записываются (нажимать на них нечего), истории нет.
+        expect(tg.edits).toEqual([]);
+        expect((await messages(cpA)).map((r) => [r.chatId, r.kind])).toEqual([
+          [CLIENT_1, 'debt'],
+          [CLIENT_2, 'debt'],
+        ]);
+        expect(await history(cpA)).toEqual([]);
+
+        // Без «Платы за обслуживание» — только реквизиты для налогов.
+        tg.sent.length = 0;
+        await features(f.a.orgId, { cppage: true, telegram: true, taxpay: true });
+        await press(reqData('tax-fee'), CLIENT_1, messageId);
+        await features(f.a.orgId, ALL_ON);
+        expect(tg.sent.map((m) => m.text.split('\n')[0])).toEqual(['Для налогов']);
+        // «Как оплатить» скрыли после напоминания — реквизитов клиент не получает.
+        tg.sent.length = 0;
+        await hide(cpA, ['pay']);
+        expect(await press(reqData('tax-fee'), CLIENT_1, messageId)).toMatchObject({
+          text: text('tgCpNoReq', { контрагент: CP_A }),
+          alert: true,
+        });
+        await hide(cpA, []);
+        // Данные кнопки подделаны (такой кнопки в напоминании нет) и чужой чат — ничего.
+        expect(await press(reqData('fee'), CLIENT_1, messageId)).toMatchObject({
+          text: text('tgActStale'),
+          alert: true,
+        });
+        await press(reqData('tax-fee'), CLIENT_1, messageId, STRANGER);
+        expect(tg.sent.filter((m) => m.chatId === CLIENT_1)).toEqual([]);
+
+        // Не больше 10 раз в час с одного подключения.
+        await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_tg_req'`);
+        for (let i = 0; i < CP_TG_REQ_PER_HOUR; i += 1) {
+          await press(reqData('tax-fee'), CLIENT_1, messageId);
+        }
+        expect(tg.sent.filter((m) => m.chatId === CLIENT_1)).toHaveLength(2 * CP_TG_REQ_PER_HOUR);
+        tg.sent.length = 0;
+        expect(await press(reqData('tax-fee'), CLIENT_1, messageId)).toMatchObject({
+          text: UI_TEXTS['cppage.tg.req_limit'].ru,
+          alert: true,
+        });
+        expect(tg.sent).toEqual([]);
       });
 
       it('задача идёт каждый день в 10:00 по Бишкеку; не в понедельник новых напоминаний нет', async () => {
@@ -1521,13 +1735,15 @@ describe.skipIf(!databaseAvailable())(
         // Раздел «Оплата за обслуживание» скрыт — только недостача на налоги.
         await hide(cpA, ['fee']);
         await runDebt();
-        expect(rows()[0]).toEqual([true, false, [text('tgBtnCpReqTax'), text('tgBtnCpNoDebt')]]);
+        expect(rows()[0]).toEqual([true, false, [text('tgBtnCpShowReq'), text('tgBtnCpNoDebt')]]);
+        expect(tg.sent[0]!.options?.keyboard?.[0]?.[0]).toMatchObject({ data: reqData('tax') });
         expect(tg.sent[0]!.text).toContain(text('tgCpDebt', { сумма: som(SHORT) }));
         await wipe();
         // «Деньги на налоги» скрыты — только долг за обслуживание.
         await hide(cpA, ['money']);
         await runDebt();
-        expect(rows()[0]).toEqual([false, true, [text('tgBtnCpReqFee'), text('tgBtnCpNoDebt')]]);
+        expect(rows()[0]).toEqual([false, true, [text('tgBtnCpShowReq'), text('tgBtnCpNoDebt')]]);
+        expect(tg.sent[0]!.options?.keyboard?.[0]?.[0]).toMatchObject({ data: reqData('fee') });
         expect(tg.sent[0]!.text).toContain(text('tgCpDebt', { сумма: som(FEE) }));
         await wipe();
         // «Как оплатить» скрыт — реквизитов нет и в Telegram.
@@ -1546,7 +1762,7 @@ describe.skipIf(!databaseAvailable())(
         // Функции организации: без «Платы за обслуживание» — только налоги; без обеих — ничего.
         await features(f.a.orgId, { cppage: true, telegram: true, taxpay: true });
         await runDebt();
-        expect(rows()[0]).toEqual([true, false, [text('tgBtnCpReqTax'), text('tgBtnCpNoDebt')]]);
+        expect(rows()[0]).toEqual([true, false, [text('tgBtnCpShowReq'), text('tgBtnCpNoDebt')]]);
         await wipe();
         const partly: Record<string, boolean>[] = [
           { cppage: true, telegram: true },

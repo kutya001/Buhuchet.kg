@@ -267,13 +267,14 @@ describe.skipIf(!databaseAvailable())(
       expect(await codeOf(res)).toBe('month_pay_empty');
     });
 
-    it('без «Учёта оплаты налогов» — вся сумма и без реквизита', async () => {
+    it('без «Учёта оплаты налогов» — вся сумма, реквизит — по полю «Деньги на налоги переводит» (прототип v110)', async () => {
       await taxpay(false);
       try {
         const p = await pay(owner, cpA, '2026-09');
         expect(p.rows.map((x) => x.left)).toEqual([87_050, 500_000]);
-        expect(p).toMatchObject({ total: 587_050, requisite: null });
-        expect(p.text).toMatch(/на: —$/);
+        const requisite = 'Перевод по номеру 0555 123 456 (M-Bank), получатель Бухгалтер А.';
+        expect(p).toMatchObject({ total: 587_050, requisite });
+        expect(p.text?.endsWith(requisite)).toBe(true);
         // Оплаченный август без учёта оплаты тоже «к оплате»: оплата не отмечается.
         expect((await pay(owner, cpA, '2026-08')).total).toBe(300_000);
       } finally {

@@ -66,6 +66,7 @@ export * from './contractor-page/files';
 export * from './contractor-page/telegram';
 export * from './contractor-page/telegram-debt';
 export * from './contractor-page/telegram-pay';
+export * from './contractor-page/telegram-requisite';
 export * from './reports/periods';
 export * from './reports/due';
 export * from './reports/rules';
