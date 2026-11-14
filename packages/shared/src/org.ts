@@ -138,8 +138,13 @@ export const OrgPolicy = z.object({
   /** «Отправлять «К оплате» контрагентам»: бот сам пишет клиенту за 5 дней до срока оплаты. */
   cpTgPay: z.boolean(),
   cpTgDebt: z.boolean(),
-  /** Время еженедельной сводки по понедельникам, ЧЧ:ММ. */
+  /**
+   * «Час напоминаний», ЧЧ:ММ по Бишкеку: в этот час каждый день уходят напоминания о сроках, недельная
+   * сводка (в свой день) и сводка дня в общий чат (блок «Telegram-уведомления», прототип v111).
+   */
   digestTime: z.string(),
+  /** День недельной сводки: 1 — понедельник … 7 — воскресенье (по умолчанию понедельник). */
+  weekDay: z.number().int(),
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: Uuid.nullable(),
   /** Её название — для «Настроек» только для просмотра (список ролей видит тот, кто меняет). */
@@ -185,6 +190,8 @@ export const UpdateOrgPolicyRequest = z.object({
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
     .optional(),
+  /** День недельной сводки, 1–7 (понедельник … воскресенье). */
+  weekDay: z.number().int().min(1).max(7).optional(),
   defaultRoleId: Uuid.optional(),
 });
 export type UpdateOrgPolicyRequest = z.infer<typeof UpdateOrgPolicyRequest>;

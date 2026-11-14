@@ -1,14 +1,12 @@
 'use client';
 
-import { CP_PAY_DAYS, isDigestTime, ORG_TIMEZONES, type OrgTimezone } from '@buhuchet/domain';
+import { ORG_TIMEZONES, type OrgTimezone } from '@buhuchet/domain';
 import { OrgPolicy, type UpdateOrgPolicyRequest } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
-  CheckRow,
   Field,
   FormGrid,
-  Hint,
   inputClass,
   Note,
   RecordChangedNotice,
@@ -21,13 +19,14 @@ import { FilesStorageBox } from '../files/storage-box';
 import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
-import { TelegramGroupBox } from '../telegram/group-box';
+import { TelegramNoticesBox, type NoticeSave } from '../telegram/notices';
 import { policyQuery, roleOptionsQuery, useOrgRefresh } from './org-data';
 
 type RoleOption = { id: string; name: string };
 
 /**
- * Несохранённые поля формы: «Действия из Telegram» сохраняются сразу, остальное при этом не теряется.
+ * Несохранённые поля формы: строки блока «Telegram-уведомления» сохраняются сразу, часовой пояс и роль
+ * по умолчанию при этом не теряются.
  * Черновик годится только для той версии политики, которую вернуло это сохранение: пришла другая
  * версия (правка в другой вкладке, опросник) — он не применяется, иначе поверх свежей записи легли бы
  * старые значения полей мимо проверки версии.
@@ -36,16 +35,13 @@ interface Drafts {
   version: number;
   timezone: string;
   roleId: string;
-  overdueRepeat: boolean;
-  digestTime: string;
 }
 
 /**
- * «Моя организация» → «Настройки» (прототип modules/org.js, renderOrg → settings): часовой пояс, роль по
- * умолчанию для новых сотрудников, повтор напоминания при просрочке и время еженедельной сводки
- * (если включены «Напоминания в Telegram»); «Сохранить настройки». Без права «Настройки и учётная
- * политика» поля только для просмотра. Вверху — «Хранилище файлов» (задача 2.29). «Действия из
- * Telegram» (поток Т, задача Т1; прототип `#st-tgact`) сохраняются сразу, меняет только владелец.
+ * «Моя организация» → «Настройки» (прототип modules/org.js, renderOrg → settings): часовой пояс и роль по
+ * умолчанию для новых сотрудников — «Сохранить настройки»; ниже — блок «Telegram-уведомления» (пакет
+ * 14.11.2026, блок 3; прототип v111): его строки сохраняются сразу. Без права «Настройки и учётная
+ * политика» (оно только у владельца) всё только для просмотра. Вверху — «Хранилище файлов» (задача 2.29).
  */
 export function OrgSettingsTab() {
   const t = useT();
@@ -81,7 +77,7 @@ function SettingsForm({
   policy: OrgPolicy;
   roles: readonly RoleOption[];
   readOnly: boolean;
-  /** Поля, которые правили до переключения «Действий из Telegram» (форма после него создаётся заново). */
+  /** Поля, которые правили до правки блока «Telegram-уведомления» (форма после неё создаётся заново). */
   drafts: Drafts | null;
   onDrafts: (drafts: Drafts | null) => void;
 }) {
@@ -94,27 +90,14 @@ function SettingsForm({
   const id = useId();
   const [timezone, setTimezone] = useState(drafts?.timezone ?? policy.timezone);
   const [roleId, setRoleId] = useState(drafts?.roleId ?? policy.defaultRoleId ?? '');
-  const [overdueRepeat, setOverdueRepeat] = useState(drafts?.overdueRepeat ?? policy.overdueRepeat);
-  const [digestTime, setDigestTime] = useState(drafts?.digestTime ?? policy.digestTime);
-  const [actions, setActions] = useState(policy.telegramActions);
-  const [digestError, setDigestError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
-  const telegram = policy.features.telegram;
   const off = readOnly || busy || changed;
 
   const save = async () => {
     const patch: Omit<UpdateOrgPolicyRequest, 'version'> = {};
     if (timezone !== policy.timezone) patch.timezone = timezone as OrgTimezone;
     if (roleId && roleId !== policy.defaultRoleId) patch.defaultRoleId = roleId;
-    if (telegram && overdueRepeat !== policy.overdueRepeat) patch.overdueRepeat = overdueRepeat;
-    if (telegram && !isDigestTime(digestTime)) {
-      // Пустое время сводки не сохраняется молча: ошибка под полем.
-      setDigestError(t('org.settings.digest_required'));
-      document.getElementById(`${id}-digest`)?.focus();
-      return;
-    }
-    if (telegram && digestTime !== policy.digestTime) patch.digestTime = digestTime;
     if (Object.keys(patch).length === 0) {
       // Без изменений истории нет — шаг «Проверить часовой пояс…» засчитывается самим сохранением.
       kb.hit('settings');
@@ -135,50 +118,23 @@ function SettingsForm({
     toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
 
-  /** «Действия из Telegram» сохраняются сразу (прототип `#st-tgact`), остальные поля — кнопкой. */
-  const toggleActions = async (next: boolean) => {
-    setActions(next);
+  /**
+   * Строка блока «Telegram-уведомления» сохраняется сразу (прототип v111 `tgnMount`, `#st-tgact`,
+   * `pgTgNoticeMount`): одно поле с версией политики; несохранённые часовой пояс и роль остаются.
+   */
+  const saveNow: NoticeSave = async (patch, done) => {
+    if (readOnly || busy || changed) return;
     setBusy(true);
     const res = await callApi(() =>
-      api.api.org.policy.$patch({ json: { version: policy.version, telegramActions: next } }),
+      api.api.org.policy.$patch({ json: { version: policy.version, ...patch } }),
     );
     setBusy(false);
     if (res.ok) {
       const saved = OrgPolicy.parse(res.data);
-      onDrafts({ version: saved.version, timezone, roleId, overdueRepeat, digestTime });
+      onDrafts({ version: saved.version, timezone, roleId });
       client.setQueryData(policyQuery.queryKey, saved);
       refresh(false);
-      return toast(t(next ? 'org.settings.tg_actions_on' : 'org.settings.tg_actions_off'), {
-        icon: 'tg',
-      });
-    }
-    setActions(!next);
-    if (res.error.code === 'record_changed') return setChanged(true);
-    toast(errorText(res.error), { bad: true, icon: 'alert' });
-  };
-
-  // «Telegram контрагентов» (доработки 13.11.2026, К4 и К5; прототип pgTgOrgMount): переключатели
-  // «Отправлять «К оплате» контрагентам» и «Напоминать контрагентам о долге» сохраняются сразу, без
-  // «Сохранить настройки».
-  const toggleCpTg = async (field: 'cpTgPay' | 'cpTgDebt', on: boolean) => {
-    setBusy(true);
-    const res = await callApi(() =>
-      api.api.org.policy.$patch({ json: { version: policy.version, [field]: on } }),
-    );
-    setBusy(false);
-    if (res.ok) {
-      const saved = OrgPolicy.parse(res.data);
-      onDrafts({ version: saved.version, timezone, roleId, overdueRepeat, digestTime });
-      client.setQueryData(policyQuery.queryKey, saved);
-      // Запись в истории учётной политики видна сразу, как в прототипе.
-      refresh(false);
-      return toast(
-        t('cppage.org.toggled', {
-          name: t(field === 'cpTgPay' ? 'cppage.org.pay' : 'cppage.org.debt'),
-          state: t(on ? 'org.history.on' : 'org.history.off'),
-        }),
-        { icon: 'tg' },
-      );
+      return toast(done, { icon: 'tg' });
     }
     if (res.error.code === 'record_changed') return setChanged(true);
     toast(errorText(res.error), { bad: true, icon: 'alert' });
@@ -240,80 +196,6 @@ function SettingsForm({
           </Field>
         </FormGrid>
       </Box>
-      <Box title={t('org.settings.telegram')}>
-        {telegram ? (
-          <>
-            <CheckRow
-              plain
-              checked={overdueRepeat}
-              disabled={off}
-              onChange={setOverdueRepeat}
-              label={t('org.settings.overdue_repeat')}
-            >
-              <Hint>{t('org.settings.overdue_repeat_hint')}</Hint>
-            </CheckRow>
-            <FormGrid>
-              <Field id={`${id}-digest`} label={t('org.settings.digest')} error={digestError}>
-                {(c) => (
-                  <input
-                    {...c}
-                    type="time"
-                    value={digestTime}
-                    disabled={off}
-                    onChange={(e) => {
-                      setDigestTime(e.target.value);
-                      setDigestError(undefined);
-                    }}
-                    className={inputClass()}
-                  />
-                )}
-              </Field>
-            </FormGrid>
-            <Hint>{t('org.settings.digest_hint')}</Hint>
-            <CheckRow
-              plain
-              checked={actions}
-              disabled={off}
-              onChange={(next) => void toggleActions(next)}
-              label={t('org.settings.tg_actions')}
-              data-telegram-actions=""
-            >
-              <Hint>
-                {t('org.settings.tg_actions_hint')}{' '}
-                {t(readOnly ? 'org.settings.tg_actions_other' : 'org.settings.tg_actions_owner')}
-              </Hint>
-            </CheckRow>
-          </>
-        ) : (
-          <Note icon="info">{t('org.settings.telegram_off')}</Note>
-        )}
-      </Box>
-      {telegram ? <TelegramGroupBox /> : null}
-      {telegram && policy.features.cppage ? (
-        <div data-org-cptg="">
-          <Box title={t('cppage.org.title')}>
-            <CheckRow
-              plain
-              checked={policy.cpTgPay}
-              disabled={off}
-              onChange={(on) => void toggleCpTg('cpTgPay', on)}
-              label={t('cppage.org.pay')}
-            >
-              <Hint>{t('cppage.org.pay_hint', { n: CP_PAY_DAYS })}</Hint>
-            </CheckRow>
-            <CheckRow
-              plain
-              checked={policy.cpTgDebt}
-              disabled={off}
-              onChange={(on) => void toggleCpTg('cpTgDebt', on)}
-              label={t('cppage.org.debt')}
-            >
-              <Hint>{t('cppage.org.debt_hint')}</Hint>
-            </CheckRow>
-            <Hint>{t('cppage.org.hint')}</Hint>
-          </Box>
-        </div>
-      ) : null}
       {readOnly ? null : (
         <div className="flex">
           <div className="grow" />
@@ -327,6 +209,7 @@ function SettingsForm({
           </button>
         </div>
       )}
+      <TelegramNoticesBox policy={policy} own={!readOnly} busy={off} save={saveNow} />
     </div>
   );
 }

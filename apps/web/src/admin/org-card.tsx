@@ -16,6 +16,7 @@ import {
   type ReportPeriod,
   type Tyiyn,
   type UiTextKey,
+  weekDayOf,
   type YearMonth,
 } from '@buhuchet/domain';
 import { AdminOrgCard, type AdminOrganization } from '@buhuchet/shared';
@@ -821,11 +822,17 @@ function SettingsTab({ t, settings }: { t: Translate; settings: AdminOrgCard['se
               label: t('orgs.card.set.remind'),
               value: remindText(t, settings.remindDays),
             },
+            // Пакет 14.11.2026, блок 3 (прототип v111 admin-cards.js): день и час недельной сводки
+            // и «Час напоминаний» организации.
             {
               id: 'digest',
               label: t('orgs.card.set.digest'),
-              value: t('orgs.card.set.digest_value', { time: settings.digestTime }),
+              value: t('orgs.card.set.digest_value', {
+                day: t(`tgn.wd.${weekDayOf(settings.weekDay)}`),
+                time: settings.digestTime,
+              }),
             },
+            { id: 'hour', label: t('orgs.card.set.hour'), value: settings.digestTime },
             {
               id: 'overdue-repeat',
               label: t('orgs.card.set.overdue_repeat'),

@@ -136,11 +136,12 @@ export function productUp(proto: string): string | null {
  * форма продукта какой форме прототипа соответствует. Форма на странице — по экрану, окно формы — по
  * ключу словаря его заголовка (название записи в кавычках не сравнивается). Задача экрана с формой
  * добавляет свою строку; у формы без строки пояснение берётся, только если поле с таким названием в
- * справочнике одно.
+ * справочнике одно. Несколько форм прототипа на одном экране — коды через «|» (на «Настройках» — поля
+ * вкладки `st-…` и блока «Telegram-уведомления» `tgn-…`, прототип v111).
  */
 const KB_FIELD_SCREENS: Readonly<Record<string, string>> = {
   'org.main': 'og',
-  'org.settings': 'st',
+  'org.settings': 'st|tgn',
 };
 
 const KB_FIELD_WINDOWS: Readonly<Partial<Record<UiTextKey, string>>> = {
@@ -195,6 +196,9 @@ export function fieldText(
   const own = Object.hasOwn(fields, label) ? fields[label]?.x : undefined;
   if (own) return own;
   const same = Object.entries(fields).filter(([, v]) => v.n === label && v.x);
-  if (prefix) return same.find(([k]) => k.startsWith(`${prefix}-`))?.[1].x;
+  if (prefix) {
+    const forms = prefix.split('|');
+    return same.find(([k]) => forms.some((f) => k.startsWith(`${f}-`)))?.[1].x;
+  }
   return same.length === 1 ? same[0]![1].x : undefined;
 }

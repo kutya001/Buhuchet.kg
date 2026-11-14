@@ -14,6 +14,8 @@ type Policy = {
   remindDays: number[];
   overdueRepeat: boolean;
   telegramActions: boolean;
+  digestTime: string;
+  weekDay: number;
   timezone: string;
   defaultRoleId: string | null;
   defaultRoleName: string | null;
@@ -159,7 +161,7 @@ test.describe('Этап 1: Моя организация — правки вла
     }
   });
 
-  test('дни напоминаний добавляются вводом и убираются крестиком, неверный день — ошибка под полем; настройки сохраняются кнопкой', async ({
+  test('дни напоминаний добавляются вводом и убираются крестиком, неверный день — ошибка под полем; «Повторять при просрочке» в блоке «Telegram-уведомления» сохраняется сразу', async ({
     page,
     baseURL,
   }) => {
@@ -199,12 +201,21 @@ test.describe('Этап 1: Моя организация — правки вла
       await page.goto('/app/org/settings');
       const repeat = main.getByRole('switch', { name: /Повторять при просрочке/ });
       await expect(repeat).toBeChecked({ checked: before.overdueRepeat });
+      // Пакет 14.11.2026, блок 3: строка «Напоминания сотрудникам о сроках» — дни из учётной политики,
+      // повтор сохраняется сразу, без «Сохранить настройки».
+      const remind = main.locator('[data-tgn="remind"]');
+      await expect(remind).toContainText(`За ${before.remindDays.join(', ')}`);
       await repeat.click();
-      await main.getByRole('button', { name: 'Сохранить настройки' }).click();
       await expect(
-        page.getByRole('status').filter({ hasText: 'Настройки сохранены' }),
+        page.getByRole('status').filter({
+          hasText: before.overdueRepeat
+            ? 'Повтор при просрочке выключен'
+            : 'Повтор при просрочке включён',
+        }),
       ).toBeVisible();
-      expect((await policy(page.request)).overdueRepeat).toBe(!before.overdueRepeat);
+      await expect
+        .poll(async () => (await policy(page.request)).overdueRepeat)
+        .toBe(!before.overdueRepeat);
     } finally {
       await patchPolicy(page.request, origin, {
         remindDays: before.remindDays,
@@ -306,6 +317,73 @@ test.describe('Этап 1: Моя организация — правки вла
     } finally {
       await patchPolicy(page.request, origin, {
         telegramActions: before.telegramActions,
+        timezone: before.timezone,
+      });
+    }
+  });
+
+  test('(пакет 14.11.2026, блок 3) «Telegram-уведомления»: владелец выбирает день недельной сводки и «Час напоминаний» — сохраняется сразу, строки показывают новые день и время; несохранённый часовой пояс остаётся', async ({
+    page,
+    baseURL,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const before = await policy(page.request);
+    expect(before.features.telegram).toBe(true);
+    const nextDay = before.weekDay === 5 ? 3 : 5;
+    const [dayName, dayPlural] =
+      nextDay === 5 ? ['Пятница', 'по пятницам'] : ['Среда', 'по средам'];
+    const nextHour = before.digestTime === '08:30' ? '07:45' : '08:30';
+    try {
+      await page.goto('/app/org/settings');
+      const main = page.locator('main');
+      const box = main.locator('[data-tgn-box]');
+      await expect(box.getByRole('heading', { name: 'Telegram-уведомления' })).toBeVisible();
+      for (const row of ['remind', 'week', 'actions', 'group', 'cpPay', 'cpFee']) {
+        await expect(box.locator(`[data-tgn="${row}"]`)).toBeVisible();
+      }
+      // Прежних отдельных блоков больше нет.
+      await expect(main.getByRole('heading', { name: 'Напоминания в Telegram' })).toHaveCount(0);
+      await expect(main.getByRole('heading', { name: 'Telegram контрагентов' })).toHaveCount(0);
+
+      // Несохранённый часовой пояс не сбрасывается правкой блока.
+      const timezone = main.getByLabel('Часовой пояс');
+      const other = before.timezone === 'Asia/Almaty' ? 'Asia/Tashkent' : 'Asia/Almaty';
+      await timezone.selectOption(other);
+
+      const week = box.locator('[data-tgn="week"]');
+      await week.getByLabel('День сводки').selectOption({ label: dayName });
+      await expect(
+        page.getByRole('status').filter({ hasText: `Недельная сводка — ${dayPlural}` }),
+      ).toBeVisible();
+      await expect.poll(async () => (await policy(page.request)).weekDay).toBe(nextDay);
+      await expect(week.locator('[data-tgn-kv="days"]')).toContainText(
+        dayPlural.charAt(0).toUpperCase() + dayPlural.slice(1),
+      );
+      await expect(timezone).toHaveValue(other);
+
+      const hour = box.getByLabel('Час напоминаний');
+      await hour.fill(nextHour);
+      await hour.press('Enter');
+      await expect(
+        page.getByRole('status').filter({ hasText: `Напоминания будут приходить в ${nextHour}` }),
+      ).toBeVisible();
+      await expect.poll(async () => (await policy(page.request)).digestTime).toBe(nextHour);
+      await expect(week.locator('[data-tgn-kv="at"]')).toContainText(
+        `${nextHour}, в час напоминаний`,
+      );
+      await expect(box.locator('[data-tgn="group"] [data-tgn-kv="at"]')).toContainText(nextHour);
+      expect((await policy(page.request)).timezone).toBe(before.timezone);
+
+      // Ничего не прокручивается вбок (на телефоне — тоже).
+      const wide = await page.evaluate(
+        () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      );
+      expect(wide).toBe(false);
+    } finally {
+      await patchPolicy(page.request, origin, {
+        weekDay: before.weekDay,
+        digestTime: before.digestTime,
         timezone: before.timezone,
       });
     }

@@ -7,11 +7,21 @@ import {
   type HistoryChange,
   type OrgPolicy,
   type PageSection,
+  type WeekDay,
+  weekDayOf,
 } from '@buhuchet/domain';
 import { and, desc, eq, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
-import { auditLog, employees, organizations, orgSettings, roles } from './schema';
+import {
+  auditLog,
+  employees,
+  organizations,
+  orgSettings,
+  orgTelegramNotices,
+  roles,
+} from './schema';
+import { STAFF_WEEK_NOTICE } from './telegram-notices';
 import type { AuditRecord } from './staff';
 
 /**
@@ -34,6 +44,8 @@ export interface OrgProfileRecord {
 }
 
 export interface OrgPolicyRecord extends OrgPolicy {
+  /** День недельной сводки (строка `staff_week` блока «Telegram-уведомления»; нет — понедельник). */
+  weekDay: WeekDay;
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: string | null;
   defaultRoleName: string | null;
@@ -117,11 +129,19 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
   const [r] = await tx
     .select({
       settings: orgSettings,
+      weekDay: orgTelegramNotices.weekday,
       defaultRoleName: roles.name,
       createdByName: creator.shortName,
       updatedByName: updater.shortName,
     })
     .from(orgSettings)
+    .leftJoin(
+      orgTelegramNotices,
+      and(
+        eq(orgTelegramNotices.orgId, orgSettings.orgId),
+        eq(orgTelegramNotices.code, STAFF_WEEK_NOTICE),
+      ),
+    )
     .leftJoin(roles, eq(roles.id, orgSettings.defaultRoleId))
     .leftJoin(creator, eq(creator.userId, orgSettings.createdBy))
     .leftJoin(updater, eq(updater.userId, orgSettings.updatedBy))
@@ -137,6 +157,7 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     cpTgDebt: s.cpTgDebt,
     // В базе — time «09:00:00», в интерфейсе — «09:00».
     digestTime: s.digestTime.slice(0, 5),
+    weekDay: weekDayOf(r.weekDay),
     timezone: s.timezone,
     confirmWaitDays: s.confirmWaitDays,
     taskConfirm: s.taskConfirm,

@@ -14,7 +14,6 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
-  addDays,
   botDayMonth,
   BOT_TEXT_MAX,
   botDayWords,
@@ -31,6 +30,7 @@ import {
   groupSummary,
   groupSummaryMessage,
   hasPermission,
+  isWeekSummaryDay,
   isWorkingDay,
   moreOnSiteMessage,
   morningTables,
@@ -42,6 +42,7 @@ import {
   reportBotMessage,
   scopeOf,
   STAFF_BOT_BUTTONS_MAX,
+  summaryWeek,
   taskOpen,
   TELEGRAM_TEMPLATE_DEFAULTS,
   weekBotMessage,
@@ -179,7 +180,9 @@ export async function buildDailyReminders(
       confirmWaitDays: data.confirmWaitDays,
       taxpay: data.features.taxpay === true,
       tasks: data.features.tasks === true,
-      week: weekdayMondayFirst(day) === 0 ? { from: day, to: addDays(day, 6) } : null,
+      // Недельная сводка — в день организации (блок «Telegram-уведомления», по умолчанию понедельник):
+      // неделя — как `weekRange` прототипа (неделя дня сводки, в выходные — следующая).
+      week: isWeekSummaryDay(day, data.weekDay) ? summaryWeek(day) : null,
       nextWorkingDay: (d) => nextWorkingDay(calendar, d),
     },
   );

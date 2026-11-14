@@ -1,8 +1,9 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { DEMO_PASSWORD, signIn } from './helpers';
 
-// «Telegram контрагентов» в настройках организации (доработки 13.11.2026, задача К4; прототип v94
-// modules/cp-telegram.js: pgTgOrgHtml, pgTgOrgMount). Тест меняет общую запись демо-организации, поэтому
+// Строки «К оплате» и «Оплата за обслуживание» блока «Telegram-уведомления» в настройках организации
+// (доработки 13.11.2026, задачи К4 и К5; с пакета 14.11.2026, блок 3, — в общем блоке; прототип v111
+// modules/cp-telegram.js: pgTgNoticeRows, pgTgNoticeMount). Тест меняет общую запись демо-организации, поэтому
 // файл *.shared.spec.ts: идёт после остальных тестов и по одному. Изменённое возвращается как было.
 
 test.describe.configure({ mode: 'serial' });
@@ -32,19 +33,19 @@ test.describe('Доработки 13.11, К4: «Telegram контрагенто�
     expect(before.features.telegram && before.features.cppage).toBe(true);
     try {
       await page.goto('/app/org/settings');
-      const box = page.locator('[data-org-cptg]');
-      await expect(box.getByRole('heading', { name: 'Telegram контрагентов' })).toBeVisible();
-      await expect(
-        box.getByText(
-          'Сообщение с налогами месяца приходит клиенту за 5 дней до ближайшего срока оплаты, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».',
-        ),
-      ).toBeVisible();
-      await expect(
-        box.getByText(
-          'Сообщения получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.',
-        ),
-      ).toBeVisible();
-      const toggle = box.getByRole('switch', { name: /Отправлять «К оплате» контрагентам/ });
+      const box = page.locator('[data-tgn="cpPay"]');
+      await expect(box).toContainText('Контрагентам');
+      await expect(box).toContainText(
+        'Сообщение с налогами месяца, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».',
+      );
+      await expect(box).toContainText(
+        'Получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.',
+      );
+      await expect(box.locator('[data-tgn-kv="days"]')).toContainText(
+        'За 5 дней до ближайшего срока оплаты месяца',
+      );
+      await expect(box.locator('[data-tgn-kv="at"]')).toContainText('10:00');
+      const toggle = box.getByRole('switch', { name: '«К оплате»' });
       await expect(toggle).toBeChecked({ checked: before.cpTgPay });
 
       // Несохранённые поля «Настроек» переключатель не сбрасывает (в прототипе форма не перерисовывается).
@@ -112,16 +113,16 @@ test.describe('Доработки 13.11, К5: «Напоминать контр�
     const state = (on: boolean) => (on ? 'включено' : 'выключено');
     try {
       await page.goto('/app/org/settings');
-      const box = page.locator('[data-org-cptg]');
-      await expect(
-        box.getByText(
-          'Раз в неделю, в понедельник в 10:00: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
-        ),
-      ).toBeVisible();
-      const toggle = box.getByRole('switch', { name: /Напоминать контрагентам о долге/ });
+      const box = page.locator('[data-tgn="cpFee"]');
+      await expect(box).toContainText(
+        'Напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
+      );
+      await expect(box.locator('[data-tgn-kv="days"]')).toContainText('По понедельникам');
+      await expect(box.locator('[data-tgn-kv="at"]')).toContainText('10:00');
+      const toggle = box.getByRole('switch', { name: 'Оплата за обслуживание' });
       await expect(toggle).toBeChecked({ checked: before.cpTgDebt });
       // Соседний переключатель «К оплате» от этого не меняется.
-      const pay = box.getByRole('switch', { name: /Отправлять «К оплате» контрагентам/ });
+      const pay = page.locator('[data-tgn="cpPay"]').getByRole('switch');
       await expect(pay).toBeChecked({ checked: before.cpTgPay });
 
       await toggle.click();

@@ -3,11 +3,8 @@
 import { bishkekDate, bishkekTime, formatDateRu, GROUP_LINK_MINUTES } from '@buhuchet/domain';
 import { TelegramGroupLinkResponse, TelegramGroupResponse } from '@buhuchet/shared';
 import {
-  Box,
   buttonClass,
-  CheckRow,
   ConfirmDialog,
-  Hint,
   Icon,
   Modal,
   MONO_CLASS,
@@ -19,6 +16,7 @@ import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
+import { NoticeRow } from './notice-row';
 
 export const telegramGroupQuery = queryOptions({
   queryKey: ['telegram', 'group'],
@@ -33,14 +31,15 @@ export const telegramGroupQuery = queryOptions({
 const POLL_MS = 3000;
 
 /**
- * «Общий чат фирмы в Telegram» в «Моя организация» → «Настройки» (поток Т, задача Т8; прототип v105
- * modules/tg-group.js — `tgGrpHtml`, `tgGrpMount`, `tgGrpLinkDlg`): подключённая группа, «Сводка дня в
- * группу», «Отключить группу»; без группы — «Подключить группу» одноразовой ссылкой. Видят все
- * сотрудники, меняет только владелец (сервер проверяет сам). Блок стоит, только когда включены
- * «Напоминания в Telegram». «Показать пример» и «В макете: бота удалили» прототипа — только макет.
+ * Строка «Общий чат фирмы» блока «Telegram-уведомления» в «Моя организация» → «Настройки» (пакет
+ * 14.11.2026, блок 3; прототип v111 modules/tg-group.js — `tgGrpRow`, `tgGrpMount`, `tgGrpLinkDlg`; до
+ * этого — отдельный блок «Общий чат фирмы в Telegram», задача Т8). Переключатель строки — «Сводка дня в
+ * группу» (только у подключённой группы); без группы — «Подключить группу» одноразовой ссылкой; бота
+ * удалили — «Забыть группу» и «Подключить заново». Видят все сотрудники, меняет только владелец (сервер
+ * проверяет сам). «Показать пример» и «В макете: бота удалили» прототипа — только макет.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-12
-export function TelegramGroupBox() {
+export function TelegramGroupRow({ hour }: { hour: string }) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -134,89 +133,94 @@ export function TelegramGroupBox() {
     </button>
   );
 
+  const head = g ? (
+    <div className="flex basis-full flex-wrap items-center gap-2">
+      {g.gone ? (
+        <Pill tone="bad" icon="alert">
+          {t('tggrp.gone')}
+        </Pill>
+      ) : (
+        <Pill tone="ok" icon="check">
+          {t('tggrp.linked')}
+        </Pill>
+      )}
+      <b data-tggrp-title="" className="min-w-0 [overflow-wrap:anywhere]">
+        {g.title}
+      </b>
+      <span className="text-[11.5px] text-faint">
+        {t('tggrp.by', {
+          name: g.linkedByName ?? '—',
+          date: formatDateRu(bishkekDate(new Date(g.linkedAt))),
+        })}
+      </span>
+    </div>
+  ) : null;
+
+  const row = {
+    id: 'group',
+    title: t('tgn.group.title'),
+    to: 'group',
+    icon: 'chat',
+    hint: t('tgn.group.hint'),
+    days: t('tgn.group.days'),
+    at: t('tgn.at_hour', { time: hour }),
+    often: t('tgn.group.often'),
+    'data-tggrp': '',
+  } as const;
+
   return (
-    <Box title={t('tggrp.title')}>
-      <div data-tggrp="" className="flex flex-col gap-2">
-        <Hint>{t('tggrp.intro')}</Hint>
-        {!g ? (
-          <div className="flex flex-wrap items-center gap-2.5">
-            <span className="grow text-[12.5px] text-muted">
-              {t(own ? 'tggrp.none' : 'tggrp.none_owner_only')}
-            </span>
-            {linkButton(t('tggrp.link'))}
+    <>
+      {!g ? (
+        <NoticeRow {...row}>
+          <span className="text-[11.5px] text-faint">
+            {t(own ? 'tggrp.none' : 'tggrp.none_owner_only')}
+          </span>
+          {linkButton(t('tggrp.link'))}
+        </NoticeRow>
+      ) : g.gone ? (
+        <NoticeRow {...row}>
+          {head}
+          <div className="basis-full">
+            <Note icon="info">{t('tggrp.gone_note')}</Note>
           </div>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center gap-2.5">
-              {g.gone ? (
-                <Pill tone="bad" icon="alert">
-                  {t('tggrp.gone')}
-                </Pill>
-              ) : (
-                <Pill tone="ok" icon="check">
-                  {t('tggrp.linked')}
-                </Pill>
-              )}
-              <b data-tggrp-title="" className="min-w-0 [overflow-wrap:anywhere]">
-                {g.title}
-              </b>
+          <div className="flex basis-full flex-wrap items-center gap-2">
+            <div className="grow" />
+            <button
+              type="button"
+              className={buttonClass('default', 'sm')}
+              disabled={!own || busy}
+              onClick={() => setConfirmOff(true)}
+            >
+              {t('tggrp.forget')}
+            </button>
+            {linkButton(t('tggrp.relink'), true)}
+          </div>
+        </NoticeRow>
+      ) : (
+        <NoticeRow
+          {...row}
+          on={g.summary}
+          disabled={!own || busy}
+          why={own ? undefined : t('tgn.owner_only')}
+          onToggle={(on) => void setSummary(on)}
+        >
+          {head}
+          {own ? (
+            <div className="flex basis-full flex-wrap items-center gap-2">
               <div className="grow" />
-              <span className="text-[12px] text-muted">
-                {t('tggrp.by', {
-                  name: g.linkedByName ?? '—',
-                  date: formatDateRu(bishkekDate(new Date(g.linkedAt))),
-                })}
-              </span>
+              <button
+                type="button"
+                className={buttonClass('danger', 'sm')}
+                disabled={busy}
+                onClick={() => setConfirmOff(true)}
+                data-tggrp-off=""
+              >
+                {t('tggrp.off')}
+              </button>
             </div>
-            {g.gone ? (
-              <>
-                <Note icon="info">{t('tggrp.gone_note')}</Note>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="grow" />
-                  <button
-                    type="button"
-                    className={buttonClass('default', 'sm')}
-                    disabled={!own || busy}
-                    onClick={() => setConfirmOff(true)}
-                  >
-                    {t('tggrp.forget')}
-                  </button>
-                  {linkButton(t('tggrp.relink'), true)}
-                </div>
-              </>
-            ) : (
-              <>
-                <CheckRow
-                  checked={g.summary}
-                  disabled={!own || busy}
-                  onChange={(on) => void setSummary(on)}
-                  label={t('tggrp.summary')}
-                  data-tggrp-summary=""
-                >
-                  <Hint>
-                    {t('tggrp.summary_hint', { time: data.time })}
-                    {own ? '' : ` ${t('tggrp.owner_only')}`}
-                  </Hint>
-                </CheckRow>
-                {own ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="grow" />
-                    <button
-                      type="button"
-                      className={buttonClass('danger', 'sm')}
-                      disabled={busy}
-                      onClick={() => setConfirmOff(true)}
-                      data-tggrp-off=""
-                    >
-                      {t('tggrp.off')}
-                    </button>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </>
-        )}
-      </div>
+          ) : null}
+        </NoticeRow>
+      )}
       <ConfirmDialog
         open={confirmOff}
         onClose={() => setConfirmOff(false)}
@@ -231,7 +235,7 @@ export function TelegramGroupBox() {
         replace={g && !g.gone ? g.title : null}
         onClose={() => setLink(null)}
       />
-    </Box>
+    </>
   );
 }
 

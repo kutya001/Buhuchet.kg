@@ -77,7 +77,7 @@ test.describe('Доработки 13.11. Т8: общий чат фирмы', () 
       .toContain('Ссылка для подключения группы устарела или уже использована.');
 
     // «Сводка дня в группу» — выключить.
-    await box.locator('[data-tggrp-summary] input[role="switch"]').click();
+    await box.locator('[data-tgn-sw="group"]').click();
     await expect(page.getByText('Сводка дня выключена')).toBeVisible();
     const state = (await (await page.request.get('/api/telegram/group')).json()) as {
       group: { summary: boolean };
