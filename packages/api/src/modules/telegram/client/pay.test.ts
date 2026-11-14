@@ -8,6 +8,7 @@ import {
   fillTemplate,
   formatSomWithUnit,
   TELEGRAM_TEMPLATE_DEFAULTS,
+  UI_TEXTS,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -1461,11 +1462,12 @@ describe.skipIf(!databaseAvailable())(
         await toBot('напоминать', CLIENT_2, 'client_two');
         expect(sentTo(CLIENT_2).at(-1)!.text).toBe('Напоминания о долге уже включены.');
         expect(await debtHistory(cpA)).toHaveLength(2);
-        // Чат, не подключённый к контрагенту, и чат сотрудника — обычная подсказка бота.
+        // Чат, не подключённый к контрагенту, и чат сотрудника — обычная подсказка бота (сотруднику —
+        // подсказка меню команд, задача Т5).
         await toBot('Напоминать', STRANGER);
         expect(sentTo(STRANGER).at(-1)!.text).toBe(text('tgStart'));
         await toBot('Напоминать', CHAT_ACC, 'acc_a');
-        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(text('tgStart'));
+        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(UI_TEXTS['telegram.cmd.menu_hint'].ru);
         expect(await debtHistory(cpA)).toHaveLength(2);
         // Раздел «Telegram» страницы скрыт — подключение не действует: команда отметку клиента не
         // снимает («Не напоминать» в это время тоже не работает), бот отвечает обычной подсказкой.
