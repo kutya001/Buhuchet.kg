@@ -68,7 +68,7 @@ export function TelegramNoticesBox({
 
   // «Час напоминаний» сохраняется, когда поле оставили (или Enter). Пустое время не сохраняется молча:
   // ошибка под полем, прежнее значение остаётся (прототип `#tgn-at`).
-  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-15
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-16
   const commitHour = () => {
     if (!own) return;
     if (!isDigestTime(hour)) {

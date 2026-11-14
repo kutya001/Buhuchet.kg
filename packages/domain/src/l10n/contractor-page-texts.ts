@@ -267,7 +267,7 @@ export const CONTRACTOR_PAGE_TEXTS = {
     section: S,
   },
   'cppage.debt.hint_org_off': {
-    ru: 'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram контрагентов».',
+    ru: 'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание».',
     section: S,
   },
   'cppage.debt.toast_on': { ru: 'Напоминание о долге: включено', section: S },
