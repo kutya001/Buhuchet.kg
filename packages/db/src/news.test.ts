@@ -410,6 +410,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14), не наполняются; v109 — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
+    // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
+    expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
       sql`select count(*)::integer as n from news where id = 'v1'`,
     )) as unknown as [{ n: number }];

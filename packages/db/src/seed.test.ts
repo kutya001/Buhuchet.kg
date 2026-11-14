@@ -9,6 +9,8 @@ import {
   employees,
   gkedItems,
   loginAttempts,
+  messageTemplateTexts,
+  news,
   organizations,
   passwordResetCodes,
   platformReference,
@@ -18,16 +20,20 @@ import {
   taskCategories,
   telegramLinks,
   telegramOutbox,
+  uiTexts,
   users,
 } from './schema';
 import {
   checksumOf,
   DEMO_ORG_ID,
   demoId,
+  newsSeedRows,
   referenceSections,
+  RETIRED,
   seedAll,
   seedPermissions,
   seedPlatformReference,
+  seedRemoveRetired,
   TABLE_SECTIONS,
 } from './seed';
 import { readSpecJson } from './spec-data';
@@ -162,6 +168,44 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
     expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['bik']);
+  });
+
+  it('с --update уходит то, что прототип убрал: новость «Версия 104», шаблоны и тексты тем в чате с ботом (п. Т-10)', async () => {
+    const db = t.admin.db;
+    const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+    const [sample] = newsSeedRows(refDB.news);
+    await db
+      .insert(news)
+      .values({ ...sample!, id: 'v104', title: 'Версия 104: темы в чате с ботом' });
+    await db
+      .insert(messageTemplateTexts)
+      .values(
+        RETIRED.messageTemplates.map((key, i) => ({ key, text: 'Отчёты', sortOrder: 900 + i })),
+      );
+    await db
+      .insert(uiTexts)
+      .values(RETIRED.uiTexts.map((key) => ({ key, text: 'Темы', section: 'Телеграм' })));
+    const count = async () =>
+      (await db.$count(news, sql`${news.id} = 'v104'`)) +
+      (await db.$count(messageTemplateTexts, sql`${messageTemplateTexts.key} like 'tgTopic%'`)) +
+      (await db.$count(
+        uiTexts,
+        sql`${uiTexts.key} like 'tgadm.view.topics%' or ${uiTexts.key} like 'pdicts.tpl.label.tg_topic_%'`,
+      ));
+    const total = 1 + RETIRED.messageTemplates.length + RETIRED.uiTexts.length;
+    expect(await count()).toBe(total);
+    // Без --update ничего не удаляется.
+    expect(await seedRemoveRetired(db, { update: false })).toEqual({ removed: 0 });
+    expect(await count()).toBe(total);
+    // Новость, которую правил администратор платформы, остаётся — это уже его запись.
+    const [admin] = await db.select({ id: users.id }).from(users).limit(1);
+    await db.update(news).set({ updatedBy: admin!.id }).where(eq(news.id, 'v104'));
+    expect(await seedRemoveRetired(db, { update: true })).toEqual({ removed: total - 1 });
+    expect(await count()).toBe(1);
+    await db.update(news).set({ updatedBy: null }).where(eq(news.id, 'v104'));
+    const again = await seedAll(db, { update: true, demo: false });
+    expect(again.retired).toEqual({ removed: 1 });
+    expect(await count()).toBe(0);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {

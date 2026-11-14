@@ -6,6 +6,7 @@ import { seedPlatformAdmin, type PlatformAdminReport, type PlatformAdminSeed } f
 import { seedDemoOrganization, type DemoSeedReport } from './demo';
 import { seedUiTexts } from './l10n';
 import { seedNews } from './news';
+import { seedRemoveRetired } from './retired';
 import { seedGked, seedPlatformReference, type SeedReport } from './platform';
 import { seedPlatformDicts, type PlatformDictsReport } from './platform-dicts';
 import { seedMessageTemplates, seedStatusTones } from './system-dicts';
@@ -22,6 +23,7 @@ export {
 } from './demo';
 export { seedUiTexts, uiTextSeedRows, type UiTextSeedRow } from './l10n';
 export { newsSeedRows, seedNews } from './news';
+export { RETIRED, seedRemoveRetired } from './retired';
 export {
   referenceSections,
   seedGked,
@@ -48,6 +50,8 @@ export interface SeedAllResult {
   messageTemplates: SeedReport;
   uiTexts: SeedReport;
   news: SeedReport;
+  /** Убранное прототипом, что завело прежнее наполнение (только с `update`). */
+  retired: { removed: number };
   demo: DemoSeedReport | null;
   platformAdmin: PlatformAdminReport | null;
 }
@@ -85,6 +89,7 @@ export async function seedAll(
     );
     const uiTexts = await seedUiTexts(t, refDB.localization, options);
     const newsReport = await seedNews(t, refDB.news, options);
+    const retired = await seedRemoveRetired(t, options);
     const demo = options.demo
       ? await seedDemoOrganization(t, await readSpecJson('data/demoDB.json'), {
           update: options.update,
@@ -104,6 +109,7 @@ export async function seedAll(
       messageTemplates,
       uiTexts,
       news: newsReport,
+      retired,
       demo,
       platformAdmin,
     };
