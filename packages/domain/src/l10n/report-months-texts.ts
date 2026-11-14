@@ -47,7 +47,7 @@ export const REPORT_MONTHS_TEXTS = {
     section: S,
   },
   'report.months.hint': {
-    ru: 'Месяц отчёта — месяц, которым заканчивается его период: квартальные и годовые отчёты стоят в последнем месяце периода. Нажмите на отчёт — откроется его карточка; «⋯» — действия: статус, сумма, оплата.',
+    ru: 'Месяц отчёта — месяц, которым заканчивается его период: квартальные и годовые отчёты стоят в последнем месяце периода. Нажмите на отчёт — откроется его карточка; «⋯», правая кнопка мыши или долгое нажатие на телефоне — действия: статус, сумма, оплата.',
     section: S,
   },
   'report.months.load_error': { ru: 'Не удалось загрузить отчёты', section: S },
@@ -83,6 +83,22 @@ export const REPORT_MONTHS_TEXTS = {
     ru: '«К оплате» отправлено в Telegram: получателей — {n}',
     section: S,
   },
+  // «Принять деньги» за месяц и за весь период (доработки 14.11.2026, блок 5; прототип v110
+  // `rmRecvBtn`, `rmRecvWhy`).
+  'report.months.recv.month': { ru: 'Принять деньги', section: S },
+  'report.months.recv.all': { ru: 'Принять деньги за весь период', section: S },
+  'report.months.recv.no_amount': { ru: 'Сначала введите сумму: {reports}', section: S },
+  'report.months.recv.no_amount_all': { ru: 'Сначала введите сумму за {months}', section: S },
+  'report.months.recv.received': {
+    ru: 'Деньги на налоги этого месяца уже получены от контрагента',
+    section: S,
+  },
+  'report.months.recv.received_all': {
+    ru: 'Деньги на налоги всех месяцев уже получены от контрагента',
+    section: S,
+  },
+  'report.months.recv.note': { ru: 'Деньги за {month}', section: S },
+  'report.months.recv.note_all': { ru: 'Деньги за весь период: {months}', section: S },
   // Вкладка «По месяцам» модуля (прототип `rmRender`).
   'report.months.now': { ru: 'Прошлый месяц', section: S },
   'report.months.now_title': { ru: 'Месяц, отчёты за который сдаются сейчас', section: S },

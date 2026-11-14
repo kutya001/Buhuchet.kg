@@ -1,9 +1,11 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
   botMessages,
+  finger,
   hire,
   linkTelegram,
   pressStart,
+  settledBox,
   signIn,
   uniqueChat,
   uniqueLogin,
@@ -658,6 +660,124 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
         await page.request.get(`/api/contractors/${cp.id}/history`)
       ).json()) as { items: { action: string }[] };
       expect(history.items.filter((h) => h.action === 'page_tg_paid')).toHaveLength(1);
+    });
+  });
+});
+
+test.describe('Доработки 14.11.2026, блок 5: «Принять деньги» по месяцам и меню строки', () => {
+  /** «Указать сумму» через API. */
+  async function setAmount(api: APIRequestContext, origin: string, id: string, amount: number) {
+    const card = await api.get(`/api/reports/${id}`);
+    expect(card.status(), await card.text()).toBe(200);
+    const { version } = (await card.json()) as { version: number };
+    const res = await api.post(`/api/reports/${id}/amount`, {
+      headers: { origin },
+      data: { version, amount },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+  }
+
+  test('(доработки 14.11.2026, блок 5) «Принять деньги за весь период» и за месяц: форма поступления с отчётами месяцев от старых к новым, правка суммы пересчитывает распределение; после приёма кнопки говорят, что деньги уже получены; правая кнопка мыши и долгое нажатие на строке — меню действий', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    test.setTimeout(120_000);
+    const origin = await asOwner(page.request, baseURL);
+    const word = uniqueWord('Принять');
+    const cp = await newContractor(page.request, origin, { name: `ОсОО «${word}»` });
+    const report = (reportTypeCode: string, month: string) =>
+      manualReport(page.request, origin, {
+        contractorId: cp.id,
+        reportTypeCode,
+        month,
+        due: '2030-01-15',
+      });
+    // Сентябрь: НДС — 3 800, патент — 870,50. Октябрь: патент — 300.
+    // Август: сумма патента не указана — неоплаченного нет, период он не запирает.
+    const nds = await report('nds', '2026-09-01');
+    const patSep = await report('pat', '2026-09-01');
+    const patOct = await report('pat', '2026-10-01');
+    await report('pat', '2026-08-01');
+    await setAmount(page.request, origin, nds, 380_000);
+    await setAmount(page.request, origin, patSep, 87_050);
+    await setAmount(page.request, origin, patOct, 30_000);
+
+    const card = await openReportsTab(page, isMobile, word);
+    const months = card.locator('[data-contractor-months]');
+    const all = months.locator('[data-months-bar] [data-months-receive="all"]');
+    const sepBtn = months.locator('[data-month-pay="2026-09"] [data-months-receive="2026-09"]');
+    const receipt = page.getByRole('dialog', { name: 'Поступление от контрагента' });
+    const line = (id: string) => receipt.locator(`[data-receipt-row="${id}"]`);
+    const menu = page.getByRole('menu', { name: 'Действия' });
+    const row = (id: string) => months.locator(`[data-mini-row="${id}"]`);
+
+    await test.step('кнопки: за весь период — над месяцами, за месяц — в «К оплате клиенту»; у августа без суммы кнопки нет', async () => {
+      await expect(all).toHaveText('Принять деньги за весь период');
+      await expect(all).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(sepBtn).toHaveText('Принять деньги');
+      await expect(months.locator('[data-months-receive="2026-08"]')).toHaveCount(0);
+    });
+
+    await test.step('за месяц: форма с отчётами сентября на то, что ещё не получено', async () => {
+      await sepBtn.click();
+      await expect(receipt.locator('[data-receipt-list-note]')).toContainText(
+        'Деньги за сентябрь 2026.',
+      );
+      await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/^4\s670,50$/);
+      await expect(line(nds)).toHaveValue(/^3\s800$/);
+      await expect(line(patSep)).toHaveValue('870,50');
+      await expect(line(patOct)).toHaveValue('');
+      await receipt.getByRole('button', { name: 'Отмена' }).click();
+      await expect(receipt).toBeHidden();
+    });
+
+    await test.step('за весь период: сентябрь и октябрь; меньшая сумма закрывает старый месяц первым', async () => {
+      await all.click();
+      await expect(receipt.locator('[data-receipt-list-note]')).toContainText(
+        'Деньги за весь период: сентябрь 2026, октябрь 2026.',
+      );
+      await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/^4\s970,50$/);
+      await expect(line(patOct)).toHaveValue('300');
+      await receipt.locator('[data-receipt-total]').fill('4670,50');
+      await expect(line(nds)).toHaveValue(/^3\s800$/);
+      await expect(line(patSep)).toHaveValue('870,50');
+      await expect(line(patOct)).toHaveValue('');
+      await receipt.locator('[data-receipt-total]').fill('4970,50');
+      await expect(line(patOct)).toHaveValue('300');
+      await receipt.getByRole('button', { name: 'Записать поступление' }).click();
+      await expect(receipt).toBeHidden();
+      await expect(page.getByText('Поступление записано')).toBeVisible();
+    });
+
+    await test.step('деньги получены — кнопки заперты и называют причину', async () => {
+      await expect(all).toHaveAttribute('aria-disabled', 'true');
+      await expect(all).toHaveAttribute(
+        'title',
+        'Деньги на налоги всех месяцев уже получены от контрагента',
+      );
+      await all.click();
+      await expect(
+        page.getByText('Деньги на налоги всех месяцев уже получены от контрагента').last(),
+      ).toBeVisible();
+      await expect(receipt).toBeHidden();
+      await expect(sepBtn).toHaveAttribute(
+        'title',
+        'Деньги на налоги этого месяца уже получены от контрагента',
+      );
+    });
+
+    await test.step('правая кнопка мыши (на телефоне — долгое нажатие) по строке — то же меню, что «⋯»; карточка отчёта не открывается', async () => {
+      if (isMobile) {
+        const box = await settledBox(row(nds).locator('td').first());
+        await (await finger(page)).hold({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+      } else {
+        await row(nds).locator('td').first().click({ button: 'right' });
+      }
+      await menu.getByRole('menuitem', { name: 'Взять в работу' }).click();
+      await expect(row(nds)).toContainText('В работе');
+      // Открыта только карточка контрагента: карточка отчёта после меню не открылась.
+      await expect(page.getByRole('dialog')).toHaveCount(1);
     });
   });
 });

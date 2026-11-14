@@ -76,6 +76,7 @@ export * from './reports/submit';
 export * from './reports/calendar';
 export * from './reports/month-pay';
 export * from './reports/month-plan';
+export * from './reports/month-receive';
 export * from './tasks/rules';
 export * from './money/requisites';
 export * from './money/tax';
