@@ -92,6 +92,10 @@ export interface BotSent {
     copy_text?: { text: string };
     url?: string;
   }[][];
+  /** Кнопки меню под полем ввода (ряды подписей; `[]` — меню убрано); у сообщения без меню нет. */
+  menu?: string[][];
+  /** Картинка (оформленная рассылка, задача Т6): номер файла и размер, если файл загружали. */
+  photo?: { fileId: string; bytes?: number };
 }
 
 /** Что бот сайта отправил в чат — вместе с видом и кнопками (основа бота, поток Т). */
@@ -168,6 +172,73 @@ export function tellBot(api: APIRequestContext, chat: number, text: string) {
       },
     },
   });
+}
+
+/**
+ * Файл, который человек пришлёт боту (поток Т, задача Т2): подделка Telegram отдаст его сайту по
+ * `getFile`. Возвращает номер файла для `sendToBot`.
+ */
+export async function botFile(
+  api: APIRequestContext,
+  file: { name: string; content: string | Buffer; tooBig?: boolean },
+): Promise<string> {
+  const id = `e2e-file-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const res = await api.post(`${FAKE_TELEGRAM}/files`, {
+    data: {
+      id,
+      name: file.name,
+      base64: Buffer.from(file.content).toString('base64'),
+      tooBig: file.tooBig === true,
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+  return id;
+}
+
+/**
+ * Человек написал боту в личном чате: текст, документ (`botFile`) или ответ на сообщение бота
+ * (`replyTo` — номер сообщения в чате).
+ */
+export async function sendToBot(
+  api: APIRequestContext,
+  chat: number,
+  message: {
+    text?: string;
+    document?: { fileId: string; name: string; size?: number };
+    caption?: string;
+    replyTo?: number;
+  },
+) {
+  // Номер сообщения — свой у каждого, как у Telegram: одно сообщение бот принимает один раз.
+  const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const res = await api.post('/api/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    data: {
+      update_id: id,
+      message: {
+        message_id: id,
+        ...(message.text !== undefined ? { text: message.text } : {}),
+        ...(message.caption !== undefined ? { caption: message.caption } : {}),
+        ...(message.document
+          ? {
+              document: {
+                file_id: message.document.fileId,
+                file_name: message.document.name,
+                ...(message.document.size !== undefined
+                  ? { file_size: message.document.size }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(message.replyTo !== undefined
+          ? { reply_to_message: { message_id: message.replyTo } }
+          : {}),
+        chat: { id: chat, type: 'private' },
+        from: { id: chat, is_bot: false, username: `e2e_${chat}`, first_name: 'Сквозной' },
+      },
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
 }
 
 /** Вошедший пользователь привязывает Telegram по ссылке из профиля. */
@@ -339,17 +410,4 @@ export async function newOrgOwner(api: APIRequestContext, origin: string) {
   });
   expect(changed.status(), await changed.text()).toBe(200);
   return login;
-}
-
-/**
- * Выбрать контрагента в поле «Контрагент» формы — общий список с поиском (доработки 13.11, задача И3;
- * прототип v93): открыть список, найти по части названия или по цифрам ИНН и нажать на первую строку.
- */
-export async function pickContractor(field: Locator, query: string) {
-  const page = field.page();
-  await field.click();
-  await page.getByRole('combobox', { name: 'Поиск контрагента по названию или ИНН' }).fill(query);
-  const list = page.getByRole('listbox');
-  await list.getByRole('option').first().click();
-  await expect(list).toBeHidden();
 }

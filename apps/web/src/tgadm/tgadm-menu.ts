@@ -7,6 +7,7 @@ const REFUSAL_TEXT = {
   outbox_not_error: 'tgadm.retry.not_error',
   outbox_code: 'tgadm.retry.code',
   outbox_relink_code: 'tgadm.retry.relink_code',
+  outbox_bot_cmd: 'tgadm.retry.bot_cmd',
 } as const;
 
 /** Почему строку нельзя повторить (прототип `tgNoRetry`); пусто — можно. */

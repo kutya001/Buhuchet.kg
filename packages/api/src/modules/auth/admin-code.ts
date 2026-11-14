@@ -209,6 +209,9 @@ export function adminCodeHandler(deps: ApiDeps): RouteHandler<typeof adminCodeRo
       return c.json(ADMIN_CODE_ERRORS.invalid(), 400);
     }
     deps.logger.info({ userId: account.userId }, 'вход администратора платформы по коду');
-    return c.json(await openSession(c, deps, account), 200);
+    // У администратора платформы вход не закрывается: null здесь — только пропавшая учётная запись.
+    const me = await openSession(c, deps, account);
+    if (!me) return c.json(ADMIN_CODE_ERRORS.invalid(), 400);
+    return c.json(me, 200);
   };
 }

@@ -253,6 +253,225 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,
   },
+  'pdicts.tpl.label.tg_btn_work': { ru: 'Telegram: кнопка «В работе» у отчёта', section: S },
+  'pdicts.tpl.label.tg_btn_done': { ru: 'Telegram: кнопка «Сдан» у отчёта', section: S },
+  'pdicts.tpl.label.tg_btn_open': { ru: 'Telegram: кнопка «Открыть» у отчёта', section: S },
+  'pdicts.tpl.label.tg_btn_open_reports': {
+    ru: 'Telegram: кнопка «Открыть отчёты на сайте»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cancel': {
+    ru: 'Telegram: кнопка «Отмена» под просьбой бота',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_task_work': {
+    ru: 'Telegram: кнопка «Взять в работу» у задачи',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_task_done': { ru: 'Telegram: кнопка «Выполнена» у задачи', section: S },
+  'pdicts.tpl.label.tg_btn_task_open': { ru: 'Telegram: кнопка «Открыть задачу»', section: S },
+  'pdicts.tpl.label.tg_btn_conf_ok': { ru: 'Telegram: кнопка «Подтвердить» сдачу', section: S },
+  'pdicts.tpl.label.tg_btn_conf_back': { ru: 'Telegram: кнопка «Вернуть» сдачу', section: S },
+  'pdicts.tpl.label.tg_act_rep_work': {
+    ru: 'Telegram: скрытый ответ — отчёт в работе',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_done': { ru: 'Telegram: скрытый ответ — отчёт сдан', section: S },
+  'pdicts.tpl.label.tg_act_rep_wait': {
+    ru: 'Telegram: скрытый ответ — отчёт сдан, ждёт подтверждения',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_sum': {
+    ru: 'Telegram: скрытый ответ — нужна сумма налога',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_pay': {
+    ru: 'Telegram: скрытый ответ — сначала оплата налога',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_rep_site': {
+    ru: 'Telegram: скрытый ответ — отметьте на сайте',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_ask_wait': {
+    ru: 'Telegram: скрытый ответ — бот уже ждёт ответ',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_cancelled': { ru: 'Telegram: скрытый ответ — отменено', section: S },
+  'pdicts.tpl.label.tg_act_task_work': {
+    ru: 'Telegram: скрытый ответ — задача в работе',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_task_done': {
+    ru: 'Telegram: скрытый ответ — задача выполнена',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_task_wait': {
+    ru: 'Telegram: скрытый ответ — задача ждёт подтверждения',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_conf_ok': {
+    ru: 'Telegram: скрытый ответ — сдача подтверждена',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_conf_own': {
+    ru: 'Telegram: скрытый ответ — свой отчёт не подтверждается',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_conf_rcpt': {
+    ru: 'Telegram: скрытый ответ — нужна квитанция',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_failed': { ru: 'Telegram: скрытый ответ — сбой действия', section: S },
+  'pdicts.tpl.label.tg_rep_ask_file': { ru: 'Telegram: просьба прислать файл отчёта', section: S },
+  'pdicts.tpl.label.tg_task_ask_file': { ru: 'Telegram: просьба прислать файл задачи', section: S },
+  'pdicts.tpl.label.tg_conf_ask_why': {
+    ru: 'Telegram: просьба написать причину возврата',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_conf_back_ok': {
+    ru: 'Telegram: отчёт возвращён на исправление',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_ask_need_file': { ru: 'Telegram: нужен файл, а не текст', section: S },
+  'pdicts.tpl.label.tg_ask_need_text': { ru: 'Telegram: нужен текст, а не файл', section: S },
+  'pdicts.tpl.label.tg_file_big': { ru: 'Telegram: файл слишком большой', section: S },
+  'pdicts.tpl.label.tg_file_type': { ru: 'Telegram: файл такого типа не принимается', section: S },
+  'pdicts.tpl.label.tg_more_on_site': { ru: 'Telegram: остальные записи — на сайте', section: S },
+  'pdicts.tpl.label.tg_conf_head': { ru: 'Telegram: ждут вашего подтверждения', section: S },
+  'pdicts.tpl.label.tg_task_took': {
+    ru: 'Telegram постановщику: задача взята в работу',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_task_done_by': { ru: 'Telegram постановщику: задача выполнена', section: S },
+  'pdicts.tpl.label.tg_task_wait_by': {
+    ru: 'Telegram постановщику: задача ждёт подтверждения',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_morn_head': { ru: 'Telegram: утреннее напоминание — заголовок', section: S },
+  'pdicts.tpl.label.tg_morn_sub': {
+    ru: 'Telegram: утреннее напоминание — строка итогов',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_sec_over': { ru: 'Telegram: раздел «Просрочено»', section: S },
+  'pdicts.tpl.label.tg_sec_today': { ru: 'Telegram: раздел «Сегодня»', section: S },
+  'pdicts.tpl.label.tg_sec_before': { ru: 'Telegram: раздел «Через N дн.»', section: S },
+  'pdicts.tpl.label.tg_sec_pay': { ru: 'Telegram: раздел «Оплата налогов»', section: S },
+  'pdicts.tpl.label.tg_week_head': {
+    ru: 'Telegram: сводка недели руководителю — заголовок',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_week_sub': {
+    ru: 'Telegram: сводка недели руководителю — строка итогов',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_sec_debt': { ru: 'Telegram: раздел «Долги за обслуживание»', section: S },
+  'pdicts.tpl.label.tg_btn_nudge': { ru: 'Telegram: кнопка «Напомнить» сотруднику', section: S },
+  'pdicts.tpl.label.tg_btn_fee_copy': {
+    ru: 'Telegram: кнопка «Скопировать напоминание» о долге',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_nudge': {
+    ru: 'Telegram: напоминание сотруднику от руководителя',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_nudge_ok': {
+    ru: 'Telegram: скрытый ответ — напоминание отправлено',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_nudge_wait': {
+    ru: 'Telegram: скрытый ответ — сегодня уже напоминали',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_nudge_no_tg': {
+    ru: 'Telegram: скрытый ответ — у сотрудника нет Telegram',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_not_me': { ru: 'Telegram: кнопка «Это не я»', section: S },
+  'pdicts.tpl.label.tg_not_me_done': {
+    ru: 'Telegram: ответ на «Это не я» — вход закрыт',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_not_me_admin': {
+    ru: 'Telegram: ответ на «Это не я» администратору платформы',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_not_me_staff': { ru: 'Telegram: сотрудник нажал «Это не я»', section: S },
+  'pdicts.tpl.label.tg_not_me_owner': {
+    ru: 'Telegram: владелец организации нажал «Это не я»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_not_me_late': {
+    ru: 'Telegram: скрытый ответ — «Это не я» нажато поздно',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cmd_today': { ru: 'Telegram: команда «Сегодня»', section: S },
+  'pdicts.tpl.label.tg_cmd_week': { ru: 'Telegram: команда «Неделя»', section: S },
+  'pdicts.tpl.label.tg_cmd_over': { ru: 'Telegram: команда «Просрочено»', section: S },
+  'pdicts.tpl.label.tg_cmd_find': { ru: 'Telegram: команда «Найти контрагента»', section: S },
+  'pdicts.tpl.label.tg_today_head': { ru: 'Telegram: «Сегодня» — заголовок', section: S },
+  'pdicts.tpl.label.tg_today_sub': { ru: 'Telegram: «Сегодня» — строка итогов', section: S },
+  'pdicts.tpl.label.tg_today_none': { ru: 'Telegram: «Сегодня» — ничего нет', section: S },
+  'pdicts.tpl.label.tg_week_none': { ru: 'Telegram: «Неделя» — ничего нет', section: S },
+  'pdicts.tpl.label.tg_over_none': { ru: 'Telegram: «Просрочено» — ничего нет', section: S },
+  'pdicts.tpl.label.tg_find_ask': { ru: 'Telegram: «Найти контрагента» — просьба', section: S },
+  'pdicts.tpl.label.tg_find_short': {
+    ru: 'Telegram: «Найти контрагента» — запрос короткий',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_find_none': { ru: 'Telegram: «Найти контрагента» — не найден', section: S },
+  'pdicts.tpl.label.tg_find_many': { ru: 'Telegram: «Найти контрагента» — несколько', section: S },
+  'pdicts.tpl.label.tg_find_more': {
+    ru: 'Telegram: «Найти контрагента» — слишком много',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_card_sub': {
+    ru: 'Telegram: карточка контрагента — строка под названием',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_card_debt': {
+    ru: 'Telegram: карточка контрагента — долг за обслуживание',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_card_no_reports': {
+    ru: 'Telegram: карточка контрагента — отчётов нет',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_open_cp': {
+    ru: 'Telegram: кнопка «Открыть на сайте» у контрагента',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_head': { ru: 'Telegram: заявка с сайта — заголовок', section: S },
+  'pdicts.tpl.label.tg_lead_rep_head': {
+    ru: 'Telegram: заявка с сайта — заголовок повторной',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_lead_work': {
+    ru: 'Telegram: заявка с сайта — кнопка «Взять в работу»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_lead_no': {
+    ru: 'Telegram: заявка с сайта — кнопка «Отклонить»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_lead_open': {
+    ru: 'Telegram: заявка с сайта — кнопка «Открыть в Админке»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_act_lead_work': {
+    ru: 'Telegram: скрытый ответ — заявка взята в работу',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_ask_why': {
+    ru: 'Telegram: заявка с сайта — просьба указать причину отказа',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_refused': {
+    ru: 'Telegram: заявка с сайта — отказ записан',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_more': { ru: 'Telegram: кнопка «Подробнее»', section: S },
+  'pdicts.tpl.label.tg_btn_video': { ru: 'Telegram: кнопка «Смотреть видео»', section: S },
   'pdicts.tpl.vars': { ru: 'Подстановки: {list}', section: S },
   'pdicts.tpl.no_vars': { ru: 'Без подстановок', section: S },
   'pdicts.tpl.save': { ru: 'Сохранить шаблоны', section: S },

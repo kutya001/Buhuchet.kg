@@ -30,12 +30,13 @@ import {
 } from '../../testing';
 import { sendBotMessage } from './bot';
 import { flushEvents, queueEvents } from './outbox';
-import type { BotAction, BotPressContext } from './press';
+import { BOT_PRESS_RATE_LIMIT, type BotAction, type BotPressContext } from './press';
 
 const {
   auditLog,
   employees,
   organizations,
+  rateLimits,
   telegramLinkGuards,
   telegramLinks,
   telegramOutbox,
@@ -678,6 +679,26 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
     expect(res.status).toBe(429);
     expect(await errorCode(res)).toBe('bot_test_limit');
     expect(tg.sent).toHaveLength(from);
+  });
+
+  it('нажатия, меняющие данные, — не чаще предела с одного чата: дальше отказ, действие без изменений отвечает', async () => {
+    await t.admin.db.delete(rateLimits).where(eq(rateLimits.kind, BOT_PRESS_RATE_LIMIT.kind));
+    await t.admin.db
+      .insert(telegramLinks)
+      .values({ userId: adminId, orgId: null, chatId: 6009 })
+      .onConflictDoNothing();
+    const id = await send(adminId, 6009, extra);
+    for (let i = 0; i < BOT_PRESS_RATE_LIMIT.max; i += 1) await press('who', 6009, id);
+    expect(tg.answers).toHaveLength(BOT_PRESS_RATE_LIMIT.max);
+    expect(new Set(tg.answers.map((x) => x.text))).toEqual(
+      new Set(['не сотрудник; администратор платформы: true']),
+    );
+    await press('who', 6009, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActFailed, alert: true });
+    // Действие, которое данные не меняет, в предел не входит.
+    await press('perm', 6009, id);
+    expect(lastAnswer()).toMatchObject({ text: TPL.tgActNoRight, alert: true });
+    await t.admin.db.delete(rateLimits).where(eq(rateLimits.kind, BOT_PRESS_RATE_LIMIT.kind));
   });
 
   it('«Проверить бота»: Telegram не принял сообщение — 502 со своим кодом, не кодом входа в Админку', async () => {

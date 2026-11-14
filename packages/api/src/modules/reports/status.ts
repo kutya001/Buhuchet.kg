@@ -45,6 +45,7 @@ import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
+import { fixView } from '../telegram/staff-view';
 import { subjectOf, todayOf } from '../contractors/common';
 import { assigneeScopeOf, error, reportScopeOf, withReportErrors } from './common';
 
@@ -276,7 +277,7 @@ export function fixReportHandler(deps: ApiDeps): RouteHandler<typeof fixReportRo
     const r = await run(deps, c, async (tx, ctx) => {
       const fixed = await returnReportForFix(tx, id, reason, { ...ctx, version });
       const by = subjectOf(c).employeeId;
-      queued = await queueTelegramEvents(deps, tx, await fixEvent(tx, ctx, id, reason, by));
+      queued = await queueTelegramEvents(deps, tx, await fixEvent(deps, tx, ctx, id, reason, by));
       return fixed;
     });
     await flushEvents(deps, orgContextOf(c).orgId, queued);
@@ -289,6 +290,7 @@ export function fixReportHandler(deps: ApiDeps): RouteHandler<typeof fixReportRo
  * исправление» — ответственному, с причиной»; прототип: «… получит сообщение в Telegram»).
  */
 async function fixEvent(
+  deps: ApiDeps,
   tx: Tx,
   ctx: ReportConfirmContext,
   id: string,
@@ -313,6 +315,8 @@ async function fixEvent(
         автор: await employeeShortName(tx, by),
       },
       link: 'reports',
+      // Кнопки отчёта под сообщением: «Сдан», «Открыть» (поток Т, задача Т2; прототип `tgFixMsg`).
+      ...(await fixView(deps, id, tx)),
     },
   ];
 }

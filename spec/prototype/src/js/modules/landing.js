@@ -155,10 +155,8 @@ function leadAdd(v){const day=Date.now()-24*36e5,at=nowStamp();const dup=LEADS.f
   const id='L'+(Math.max(0,...LEADS.map(x=>+String(x.id).slice(1)||0))+1);
   const o={id,at,name:v.name,firm:v.firm,phone:v.phone,size:v.size,tg:v.tg,note:v.note,status:'Новая',org:null,adminNote:'',hist:[{at,who:'guest',what:'Заявка с сайта'+(LAND.test?' (тестовый стенд)':'')}],_cb:'guest',_ca:at,_ub:'guest',_ua:at};
   LEADS.unshift(o);leadNotify();dbSoon();return o}
-// Сообщение администраторам платформы в Telegram в прототипе показывается окном предпросмотра
-function leadTgPreview(o,rep){const to=leadAdmins();openModal({render:()=>({title:'Прототип: сообщение в Telegram',sub:LAND.test?'Тестовый стенд: от бота стенда администраторам стенда, в Telegram рабочего сайта не уходит':'Администраторам платформы с привязанным Telegram',
-  body:`${to.length?'':`<div class="note warn">${ic('alert')}<span>Сообщение некому отправить: ни у одного администратора платформы не привязан Telegram. Над вкладкой «Заявки» — предупреждение.</span></div>`}<div class="lp-tg"><div class="row" style="gap:8px;color:var(--muted);font-size:12.5px">${ic('tg','sm')}<b>${LAND.test?'Бот тестового стенда':'Бот платформы'}</b>${to.length?`<span>→ ${to.map(u=>esc(u.tg)).join(', ')}</span>`:''}</div><div class="box" style="white-space:pre-wrap">${esc(leadTgText(o,rep))}</div></div><div class="note">${ic('info')}<span>Шаблон «${rep?'Telegram: повторная заявка с сайта':'Telegram: новая заявка с сайта'}» — Админка → Справочники платформы → Шаблоны.${to.length?' Отправка записана в журнал «Телеграм» с типом «Заявка с сайта».':''} Заявка — в Админке → «Организации» → «Заявки».</span></div>`,
-  foot:'<button class="btn ghost" data-close>Закрыть</button><button class="btn cta" id="lp-adm">Открыть «Заявки» в Админке</button>',mount(el,m){$('#lp-adm',el).onclick=()=>{m.close();landToAdmin()}}})})}
+// Сообщение администраторам платформы в Telegram в прототипе показывается окном предпросмотра: чат бота с кнопками «Взять в работу», «Отклонить», «Открыть в Админке» (поток Т, задача Т6 — admin/tg-leads.js)
+function leadTgPreview(o,rep){leadTgDlg(o,rep)}
 function landToAdmin(){landHide();const lg=$('#login');if(lg)lg.remove();S.loggedIn=true;if(S.me!=='admin')switchUser('admin');go('orgs','leads')}
 
 /* ═════════════ Анимации лендинга: отсылки к гербу бухгалтеров (v78, Кутман 08.11.2026) ═════════════ */
@@ -240,6 +238,20 @@ function landFxStop(){LAND.tm.forEach(t=>{clearInterval(t);clearTimeout(t)});LAN
 function landCount(b){const n=+b.dataset.lpCount;if(!n)return;const t0=performance.now(),dur=1200;const f=t=>{if(!b.isConnected)return;const k=Math.min(1,(t-t0)/dur);b.textContent=Math.round(n*(1-Math.pow(1-k,3)));if(k<1)requestAnimationFrame(f)};b.textContent='0';requestAnimationFrame(f)}
 // Сквозная линия: от «Листайте вниз» идёт вниз через всю страницу, плавно переходя с левого поля на правое и обратно между блоками;
 // у заголовка каждого блока закручивается двойной спиралью Бернулли (как спираль логотипа). Конец линии (солнце) плавно догоняет прокрутку
+// Ломаная по командам пути (M, L, Q, C с абсолютными координатами), шаг около 4 px: где кончик линии на любой её длине — без вопросов к браузеру.
+// getPointAtLength при каждом вызове проходит линию с начала: 2 400 вызовов по линии со спиралями — секунды простоя страницы при загрузке.
+function lpPoly(){const px=[],py=[],pl=[];let x=0,y=0,len=0;const to=(nx,ny)=>{len+=Math.hypot(nx-x,ny-y);x=nx;y=ny;px.push(x);py.push(y);pl.push(len)};
+  return {add(d){for(const m of d.matchAll(/([MLQC])([^MLQC]*)/g)){const v=m[2].trim().split(/[\s,]+/).map(Number);
+      if(m[1]==='M'){x=v[0];y=v[1];px.push(x);py.push(y);pl.push(len)}
+      else if(m[1]==='L')to(v[0],v[1]);
+      else{const q=m[1]==='Q',ex=q?v[2]:v[4],ey=q?v[3]:v[5],ax=q?x+(v[0]-x)*2/3:v[0],ay=q?y+(v[1]-y)*2/3:v[1],bx=q?ex+(v[0]-ex)*2/3:v[2],by=q?ey+(v[1]-ey)*2/3:v[3],sx=x,sy=y;
+        const n=Math.max(4,Math.min(160,Math.ceil((Math.hypot(ax-sx,ay-sy)+Math.hypot(bx-ax,by-ay)+Math.hypot(ex-bx,ey-by))/4)));
+        for(let k=1;k<=n;k++){const t=k/n,u=1-t;to(u*u*u*sx+3*u*u*t*ax+3*u*t*t*bx+t*t*t*ex,u*u*u*sy+3*u*u*t*ay+3*u*t*t*by+t*t*t*ey)}}}},
+    len:()=>len,
+    // n точек через равный шаг step по длине линии; k — во сколько раз длина линии по счёту браузера больше длины ломаной
+    sample(step,n,k){const xs=new Float32Array(n),ys=new Float32Array(n),last=px.length-1;let j=0;
+      for(let i=0;i<n&&last>=0;i++){const at=i*step/k;while(j<last&&pl[j+1]<at)j++;const a=pl[j],j2=Math.min(last,j+1),b=pl[j2],t=b>a?Math.max(0,Math.min(1,(at-a)/(b-a))):0;xs[i]=px[j]+(px[j2]-px[j])*t;ys[i]=py[j]+(py[j2]-py[j])*t}
+      return {xs,ys}}}}
 function landPathCalc(el){const page=$('#land-page',el),svg=$('#lp-path',el),w=$('#lp-emb .lp-wrap',el),cue=$('.lp-scroll i',el);if(!page||!svg||!w||!cue||!page.clientWidth)return;
   const pr=page.getBoundingClientRect(),st=page.scrollTop,W=page.clientWidth,H=page.scrollHeight,Y=r=>r.top-pr.top+st,X=r=>r.left-pr.left;
   svg.setAttribute('width',W);svg.setAttribute('height',H);svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.style.height=H+'px';
@@ -254,18 +266,19 @@ function landPathCalc(el){const page=$('#land-page',el),svg=$('#lp-path',el),w=$
   if(sb&&x0-px>40){const bt=Y(sb.getBoundingClientRect())+.5,r=Math.max(2,Math.min(26,bt-y0)),r2=Math.max(2,Math.min(30,(e0[1]-bt)/2));d=`M${f(x0)} ${f(Math.min(y0,bt-r))}L${f(x0)} ${f(bt-r)}Q${f(x0)} ${f(bt)} ${f(x0-r)} ${f(bt)}L${f(px+r2)} ${f(bt)}Q${f(px)} ${f(bt)} ${f(px)} ${f(bt+r2)}`;cy=bt+r2}
   else{d=`M${f(x0)} ${f(y0)}C${f(x0)} ${f(y0+70)} ${f(px)} ${f(y0+10)} ${f(px)} ${f(y0+90)}`;cy=y0+90}
   const p0=$('.lp-p0',svg),p1=$('.lp-p1',svg),kn=[],kl=[];
+  const poly=lpPoly();let fed=0;const feed=()=>{poly.add(d.slice(fed));fed=d.length};
   secs.forEach((s,i)=>{const e=s.k.in,o=s.k.out;
     if(Math.abs(px-e[0])<2){if(e[1]>cy)d+=`L${f(e[0])} ${f(e[1])}`}
     else{// переход на другое поле: по своему полю вниз до конца предыдущего блока, потом плавная волна через страницу к спирали следующего
       const pv=secs[i-1],ys=Math.max(cy,Math.min(e[1]-70,pv?pv.bot-pv.pb-48:cy)),h=(e[1]-ys)*.78;if(ys>cy)d+=`L${f(px)} ${f(ys)}`;d+=`C${f(px)} ${f(ys+h)} ${f(e[0])} ${f(e[1]-h)} ${f(e[0])} ${f(e[1])}`}
-    d+=s.k.d1;p0.setAttribute('d',d);kl.push(p0.getTotalLength());kn.push(s.c);d+=s.k.d2;px=o[0];cy=o[1]});
+    d+=s.k.d1;feed();kl.push(poly.len());kn.push(s.c);d+=s.k.d2;px=o[0];cy=o[1]});
   const ft=$('.lp-foot',el);if(ft){const fy=Y(ft.getBoundingClientRect());if(fy-12>cy)d+=`L${f(px)} ${f(fy-12)}`}
-  p0.setAttribute('d',d);p1.setAttribute('d',d);
-  const L=p1.getTotalLength(),step=Math.max(6,L/2400),n=Math.floor(L/step)+1,xs=new Float32Array(n),ys=new Float32Array(n);
-  for(let i=0;i<n;i++){const q=p1.getPointAtLength(i*step);xs[i]=q.x;ys[i]=q.y}
+  feed();p0.setAttribute('d',d);p1.setAttribute('d',d);
+  // длину всей линии браузер считает один раз (по ней рисуется штрих); ломаная чуть короче кривой — её длины приводятся к длине браузера
+  const L=p1.getTotalLength(),sc=poly.len()>0&&L>0?L/poly.len():1,step=Math.max(6,L/2400),n=Math.floor(L/step)+1,{xs,ys}=poly.sample(step,n,sc);
   p1.style.strokeDasharray=`${L} ${L+40}`;
   const g=$('.lp-knots',svg);g.innerHTML=kn.map(([x,y])=>`<circle cx="${f(x)}" cy="${f(y)}" r="${R>12?4.5:3}"/>`).join('');const ks=[...g.children];
-  const knots=kn.map((c,i)=>({len:Math.min(kl[i],L),el:ks[i]}));
+  const knots=kn.map((c,i)=>({len:Math.min(kl[i]*sc,L),el:ks[i]}));
   // опорные точки «высота экрана → длина линии»: в центре каждой спирали кончик линии оказывается ровно тогда, когда заголовок блока на 62 % высоты экрана;
   // между ними линия рисуется равномерно (и переход через страницу, и витки спирали), конец линии успевает дорисоваться у подвала
   const A=[{y:y0,l:0},...kn.map(([,y],i)=>({y,l:knots[i].len})),{y:ys[n-1],l:L}],tmax=H-page.clientHeight*.38-2;

@@ -5,6 +5,7 @@ import {
   LEAD_REPEAT_HOURS,
   PLATFORM_ADMIN_NAME,
   scaleStatuses,
+  type BotMessage,
   type LeadEventKind,
   type LeadStatus,
   type ListQuery,
@@ -68,6 +69,8 @@ export const adminLeadEventsView = app
     fromStatus: text('from_status').$type<LeadStatus>(),
     toStatus: text('to_status').$type<LeadStatus>(),
     text: text('text'),
+    /** Откуда сделано: `telegram` — кнопкой или ответом в чате бота; пусто — на сайте. */
+    via: text('via').$type<'telegram'>(),
   })
   .existing();
 
@@ -93,48 +96,81 @@ export interface LeadSubmission {
   fromStand: boolean;
   /** Заполнено поле-ловушка: засчитывается в предел по адресу, но не сохраняется (`trap`). */
   trap: boolean;
-  /** Сообщение администраторам платформы в Telegram о новой заявке; null — не отправлять. */
-  telegramText: string | null;
   /**
-   * Сообщение о повторной заявке с того же телефона за сутки; null — не отправлять. Вместо фирмы, имени
-   * и «клиентов» — метки `LEAD_REPEAT_MARKS`: их заменяют значения сохранённой заявки.
+   * Сообщение администраторам платформы в Telegram о новой и о повторной заявке: его собирает
+   * вызывающий по сохранённой заявке (у повторной — фирма, имя и «клиентов» первой заявки, а не второй
+   * формы; прототип `leadMsg(o.dup ? o.lead : o)`). null — не отправлять.
    */
-  telegramRepeatText: string | null;
+  notify: ((saved: SavedLead) => LeadNotice | null) | null;
   now: Date;
 }
 
-/**
- * Метки в тексте о повторной заявке: функция базы заменяет их фирмой, именем и «клиентов» сохранённой
- * заявки, а не второй формы (прототип v74 `leadTgPreview(o.dup ? o.lead : o)`; миграция 0092). Знак
- * U+0001 в поля формы не пропускает проверка однострочных полей.
- */
-export const LEAD_REPEAT_MARKS = {
-  firm: '\u0001фирма\u0001',
-  name: '\u0001имя\u0001',
-  size: '\u0001клиентов\u0001',
-} as const;
+/** Заявка, как она сохранена: новая или та, к которой дописан повтор с того же телефона. */
+export interface SavedLead {
+  id: string;
+  repeat: boolean;
+  firm: string;
+  name: string;
+  size: string;
+  status: LeadStatus;
+}
+
+/** Сообщение о заявке: простой текст и описание с таблицей и кнопками. */
+export interface LeadNotice {
+  text: string;
+  message: BotMessage;
+}
 
 export type LeadSubmitOutcome = 'created' | 'repeat' | 'trap' | 'limited';
 
 /**
- * Заявка гостя с лендинга: предел по адресу, повтор с того же телефона за сутки, очередь Telegram
- * администраторам платформы о новой и о повторной заявке — одной функцией базы в одной транзакции
- * (миграции 0089, 0092).
+ * Заявка гостя с лендинга: предел по адресу, повтор с того же телефона за сутки (`app.lead_submit`) и
+ * очередь Telegram администраторам платформы о новой и о повторной заявке (`app.lead_notify`) — в одной
+ * транзакции: сообщение не уходит без заявки, заявка не остаётся без сообщения (миграции 0089, 0092 и
+ * задача Т6). `queued` — сколько сообщений поставлено в очередь.
  */
 export async function submitLead(
   db: Db,
   s: LeadSubmission,
-): Promise<{ outcome: LeadSubmitOutcome; leadId: string | null }> {
-  const rows = await db.execute<{ outcome: LeadSubmitOutcome; lead_id: string | null }>(sql`
-    select outcome, lead_id from app.lead_submit(
-      ${s.ipSubject}, ${s.name}, ${s.firm}, ${s.phone}, ${s.size}, ${s.telegram}, ${s.note},
-      ${s.fromStand}, ${s.trap}, ${s.telegramText}, ${s.telegramRepeatText},
-      ${s.now.toISOString()}::timestamptz,
-      ${LEAD_IP_LIMIT}, ${LEAD_IP_WINDOW_SECONDS}, ${LEAD_REPEAT_HOURS}, ${LEAD_NOTE_TOTAL_MAX}
-    )`);
-  const row = rows[0];
-  if (!row) throw new Error('app.lead_submit: нет ответа');
-  return { outcome: row.outcome, leadId: row.lead_id };
+): Promise<{ outcome: LeadSubmitOutcome; leadId: string | null; queued: number }> {
+  return db.transaction(async (tx) => {
+    const now = s.now.toISOString();
+    const rows = await tx.execute<{
+      outcome: LeadSubmitOutcome;
+      lead_id: string | null;
+      event_id: string | number | null;
+      firm: string | null;
+      name: string | null;
+      size: string | null;
+      status: LeadStatus | null;
+    }>(sql`
+      select outcome, lead_id, event_id, firm, name, size, status from app.lead_submit(
+        ${s.ipSubject}, ${s.name}, ${s.firm}, ${s.phone}, ${s.size}, ${s.telegram}, ${s.note},
+        ${s.fromStand}, ${s.trap}, ${null}::text, ${null}::text,
+        ${now}::timestamptz,
+        ${LEAD_IP_LIMIT}, ${LEAD_IP_WINDOW_SECONDS}, ${LEAD_REPEAT_HOURS}, ${LEAD_NOTE_TOTAL_MAX}
+      )`);
+    const row = rows[0];
+    if (!row) throw new Error('app.lead_submit: нет ответа');
+    let queued = 0;
+    if (s.notify && row.lead_id && (row.outcome === 'created' || row.outcome === 'repeat')) {
+      const notice = s.notify({
+        id: row.lead_id,
+        repeat: row.outcome === 'repeat',
+        firm: row.firm ?? '',
+        name: row.name ?? '',
+        size: row.size ?? '',
+        status: row.status ?? 'new',
+      });
+      if (notice) {
+        const sent = await tx.execute<{ n: number }>(sql`
+          select app.lead_notify(${row.lead_id}::uuid, ${row.event_id}::bigint, ${notice.text},
+            ${JSON.stringify(notice.message)}::jsonb, ${now}::timestamptz) as n`);
+        queued = Number(sent[0]?.n ?? 0);
+      }
+    }
+    return { outcome: row.outcome, leadId: row.lead_id, queued };
+  });
 }
 
 const v = adminLeadsView;

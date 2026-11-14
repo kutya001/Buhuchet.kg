@@ -75,6 +75,10 @@ export const ADMIN_ACCOUNT_CARD_TEXTS = {
   'accounts.card.state.blocked_admin': { ru: 'Заблокирован администратором', section: S },
   'accounts.card.state.blocked_owner': { ru: 'Заблокирован владельцем', section: S },
   'accounts.card.state.login_locked': { ru: 'Вход закрыт: {n} неверных паролей', section: S },
+  'accounts.card.state.login_locked_not_me': {
+    ru: 'Вход закрыт: «Это не я» из Telegram',
+    section: S,
+  },
   'accounts.card.state.temp_password': { ru: 'Не сменил временный пароль', section: S },
   'accounts.card.admin_hint': {
     ru: 'Учётные записи администраторов платформы из Админки не меняются',
@@ -158,6 +162,7 @@ export const ADMIN_ACCOUNT_CARD_TEXTS = {
   },
   'accounts.card.ses.reason.reset': { ru: 'Завершён: пароль сброшен', section: S },
   'accounts.card.ses.reason.password': { ru: 'Завершён: пароль изменён', section: S },
+  'accounts.card.ses.reason.not_me': { ru: 'Завершён: «Это не я» из Telegram', section: S },
   'accounts.card.ses.reason.closed': { ru: 'Завершён', section: S },
   'accounts.card.ses.device_none': { ru: 'Не определено', section: S },
   'accounts.card.ses.empty': { ru: 'Сеансов пока нет', section: S },
@@ -204,6 +209,17 @@ export const ADMIN_ACCOUNT_CARD_TEXTS = {
   'accounts.card.hist.user_created': { ru: 'Учётная запись создана', section: S },
   'accounts.card.hist.employee_created': { ru: 'Сотрудник добавлен', section: S },
   'accounts.card.hist.login_lock': { ru: 'Вход закрыт: неверные пароли подряд', section: S },
+  // «Это не я» под сообщением бота о безопасности (прототип v101 tg-security.js, запись истории).
+  'accounts.card.hist.not_me': {
+    ru: 'Вход закрыт кнопкой «Это не я» под сообщением бота «{event}»',
+    section: S,
+  },
+  'accounts.card.hist.not_me_admin': {
+    ru: 'Все сеансы завершены кнопкой «Это не я» под сообщением бота «{event}»',
+    section: S,
+  },
+  'accounts.card.hist.not_me_sessions': { ru: 'завершено сеансов: {n}', section: S },
+  'accounts.card.hist.not_me_cut': { ru: 'другой Telegram отвязан', section: S },
   'accounts.card.hist.updated': { ru: 'Изменено: {fields}', section: S },
   'accounts.card.hist.changed': { ru: 'Запись изменена', section: S },
   'accounts.card.hist.value': { ru: '{field}: {from} → {to}', section: S },

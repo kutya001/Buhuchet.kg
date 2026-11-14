@@ -34,6 +34,7 @@ import { serverTexts } from '../l10n/texts';
 import { projectWhere, taskProjectsOn } from '../projects/common';
 import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
+import { taskView } from '../telegram/staff-view';
 import { taskOut } from './card';
 import {
   actorOf,
@@ -188,7 +189,9 @@ export function createTaskHandler(deps: ApiDeps): RouteHandler<typeof createTask
       const fields = await fieldsOf(tx, subject, body, settings.files, null, features);
       const id = await createTask(tx, fields, subject.employeeId);
       const task = (await getTask(tx, id, undefined))!;
-      queued = await queueTelegramEvents(deps, tx, [newTaskEvent(task, subject.employeeId, t)]);
+      queued = await queueTelegramEvents(deps, tx, [
+        await newTaskEvent(deps, tx, task, subject.employeeId, t),
+      ]);
       return taskOut(tx, task, { today, filesOn: settings.files, subject });
     });
     await flushEvents(deps, orgContextOf(c).orgId, queued);
@@ -266,7 +269,9 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
       const task = (await getTask(tx, id, undefined))!;
       // Задачу передали другому исполнителю — для него это новая задача.
       if (task.executor.id !== visible.executor.id) {
-        queued = await queueTelegramEvents(deps, tx, [newTaskEvent(task, subject.employeeId, t)]);
+        queued = await queueTelegramEvents(deps, tx, [
+          await newTaskEvent(deps, tx, task, subject.employeeId, t),
+        ]);
       }
       return taskOut(tx, task, { today, filesOn: settings.files, subject });
     });
@@ -276,21 +281,32 @@ export function updateTaskHandler(deps: ApiDeps): RouteHandler<typeof updateTask
 }
 
 /**
- * «Новая задача от {автор}: {задача}, срок {срок}.» исполнителю (ТЗ: «сообщение о новой задаче …
- * приходит сразу»); у задачи на месяц срок — «до 31.10.2026».
+ * Название задачи и «Новая задача от {автор} · срок {срок}» исполнителю (ТЗ: «сообщение о новой
+ * задаче … приходит сразу»; прототип v97 `tgTaskMsg`: название — заголовком, под сообщением — кнопки
+ * исполнителя); у задачи на месяц срок —
+ * «до 31.10.2026».
  */
-function newTaskEvent(task: TaskRecord, by: string, t: (key: string) => string): TelegramEvent {
+async function newTaskEvent(
+  deps: ApiDeps,
+  tx: Tx,
+  task: TaskRecord,
+  by: string,
+  t: (key: string) => string,
+): Promise<TelegramEvent> {
   const date = formatDateRu(task.dueDate);
   return {
     kind: 'task_new',
     to: task.executor.id,
     by,
     template: 'tgTask',
+    heading: task.title,
     values: {
       автор: task.author.shortName,
       задача: task.title,
       срок: task.term === 'month' ? formatText(t('task.date.month'), { date }) : date,
     },
     link: 'tasks',
+    // Кнопки под сообщением: «Взять в работу», «Выполнена», «Открыть задачу» (поток Т, задача Т2).
+    ...(await taskView(deps, { id: task.id, title: task.title, todo: task.status === 'todo' }, tx)),
   };
 }

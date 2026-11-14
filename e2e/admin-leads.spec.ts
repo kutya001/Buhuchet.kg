@@ -1,6 +1,16 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search, uniqueInn } from './admin';
-import { botMessages, linkTelegram, showStats, uniqueChat, uniqueLogin } from './helpers';
+import {
+  botAnswers,
+  botMessages,
+  botSent,
+  linkTelegram,
+  pressBotButton,
+  sendToBot,
+  showStats,
+  uniqueChat,
+  uniqueLogin,
+} from './helpers';
 
 const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 /** Сообщение администраторам платформы уходит из очереди задачей «telegram.send» раз в минуту. */
@@ -169,6 +179,13 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await platformAdmin(page.request, origin);
     const chat = uniqueChat();
     await linkTelegram(page.request, origin, chat);
+    // Простым текстом — прежнее сообщение одной строкой со ссылкой; вид с заголовком, таблицей и
+    // кнопками (поток Т, задача Т6) проверяет тест «идея 14» ниже.
+    const plain = await page.request.put('/api/telegram/plain', {
+      headers: { origin },
+      data: { plain: true },
+    });
+    expect(plain.status(), await plain.text()).toBe(200);
     // Сквозные тесты идут не на стенде: пометку «🧪 Тестовый стенд», ссылку стенда и «Тестовый стенд»
     // в журнале проверяют тесты API и базы (docs/deviations.md п. О-6).
 
@@ -220,6 +237,96 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     if (!isMobile) {
       await expect(rows.filter({ hasText: 'Платформа' })).toHaveCount(await rows.count());
     }
+  });
+
+  test('(пакет заказчика 13.11.2026, идея 14) заявка с сайта приходит администратору заголовком, таблицей и кнопками; «Взять в работу» — «В работе» с отметкой «через Telegram», второе нажатие — «Кнопка устарела»; «Отклонить» просит причину ответом и без причины заявку не меняет', async ({
+    page,
+    baseURL,
+  }) => {
+    test.setTimeout(180_000);
+    const origin = new URL(baseURL!).origin;
+    await platformAdmin(page.request, origin);
+    const chat = uniqueChat();
+    await linkTelegram(page.request, origin, chat);
+    const plain = await page.request.put('/api/telegram/plain', {
+      headers: { origin },
+      data: { plain: false },
+    });
+    expect(plain.status(), await plain.text()).toBe(200);
+    const work = `ОсОО «${uniqueLogin('Кнопки')}»`;
+    const refuse = `ОсОО «${uniqueLogin('Отказ')}»`;
+    expect(
+      (await sendLead(page.request, origin, { firm: work, phone: uniquePhone() })).status(),
+    ).toBe(200);
+    expect(
+      (await sendLead(page.request, origin, { firm: refuse, phone: uniquePhone() })).status(),
+    ).toBe(200);
+    const about = async (firm: string) =>
+      (await botSent(page.request, chat)).filter((m) => m.text.includes(firm));
+    await expect
+      .poll(async () => {
+        await tick(page.request);
+        return (await about(work)).length + (await about(refuse)).length;
+      }, TG_POLL)
+      .toBe(2);
+    const [message] = await about(work);
+    // Заголовок и таблица «Фирма / Контрагентов / Контакт»; кнопки — «Взять в работу» и «Отклонить»
+    // (ссылка «Открыть в Админке» — только у сайта по https, у сквозного теста сайт по http).
+    expect(message!.html).toContain('Новая заявка с сайта');
+    expect(message!.text).toContain(`Фирма — ${work}`);
+    expect(message!.text).toContain('Контрагентов — 21–50');
+    expect(message!.text).toContain('Контакт — Сквозная Заявка, +996');
+    expect(message!.keyboard![0]!.map((b) => b.text)).toEqual(['Взять в работу', 'Отклонить']);
+    const workData = message!.keyboard![0]![0]!.callback_data!;
+    const leadId = workData.split(':')[1]!;
+
+    const pressed = await pressBotButton(page.request, chat, message!.messageId, workData);
+    await expect
+      .poll(async () => (await botAnswers(page.request)).find((a) => a.id === pressed)?.text)
+      .toBe(`Заявка «${work}» — «В работе». Запись добавлена в историю заявки.`);
+    const card = async (id: string) => {
+      const res = await page.request.get(`/api/admin/leads/${id}`);
+      expect(res.status(), await res.text()).toBe(200);
+      return (await res.json()) as {
+        status: string;
+        statusHistory: { to: string; via?: string | null; reason: string | null }[];
+      };
+    };
+    const taken = await card(leadId);
+    expect(taken.status).toBe('in_progress');
+    expect(taken.statusHistory.at(-1)).toMatchObject({ to: 'in_progress', via: 'telegram' });
+    // Кнопка погасла; второе нажатие (другим администратором или повторно) — «Кнопка устарела».
+    const again = await pressBotButton(page.request, chat, message!.messageId, workData);
+    await expect
+      .poll(async () => (await botAnswers(page.request)).find((a) => a.id === again)?.text)
+      .toContain('Кнопка устарела');
+
+    // «Отклонить»: бот просит причину ответом на своё сообщение; пустая причина — просьба повторить.
+    const [second] = await about(refuse);
+    const noData = second!.keyboard![0]![1]!.callback_data!;
+    const refuseId = noData.split(':')[1]!;
+    await pressBotButton(page.request, chat, second!.messageId, noData);
+    const ask = async () =>
+      (await about(refuse)).find((m) => m.text.includes('Напишите причину отказа'));
+    await expect.poll(async () => !!(await ask())).toBe(true);
+    const asked = (await ask())!;
+    await sendToBot(page.request, chat, { text: '( )', replyTo: asked.messageId });
+    await expect
+      .poll(async () => (await botMessages(page.request, chat)).at(-1))
+      .toContain('Нужна причина текстом');
+    expect((await card(refuseId)).status).toBe('new');
+    await sendToBot(page.request, chat, {
+      text: 'Нужна программа с проводками',
+      replyTo: asked.messageId,
+    });
+    await expect.poll(async () => (await card(refuseId)).status).toBe('rejected');
+    expect((await card(refuseId)).statusHistory.at(-1)).toMatchObject({
+      to: 'rejected',
+      via: 'telegram',
+    });
+    expect((await botMessages(page.request, chat)).at(-1)).toBe(
+      `Заявка «${refuse}» — «Отказ». Причина: Нужна программа с проводками. Снять отказ можно в Админке.`,
+    );
   });
 
   test('(лендинг, повтор) четвёртая заявка за час с одного адреса не принимается — «Слишком много заявок…»; повторная заявка с тем же телефоном не создаёт вторую строку: комментарий дописан', async ({

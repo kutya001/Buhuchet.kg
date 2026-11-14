@@ -1,5 +1,11 @@
+import { BOT_CARD_ACTION, BOT_FIND_ACTION, NOT_ME_ACTION, STAFF_BOT_NUDGE } from '@buhuchet/domain';
 import { testAction } from './bot-test';
+import { contractorCardAction, findContractorAction } from './command-actions';
+import { LEAD_BOT_HANDLERS } from './lead-actions';
 import type { BotAction } from './press';
+import { notMeAction } from './security-actions';
+import { STAFF_BOT_HANDLERS } from './staff-actions';
+import { nudgeAction } from './staff-nudge';
 
 /**
  * Реестр действий по кнопкам бота: код действия → обработчик (как `FILE_SOURCES` у файлов). Поток,
@@ -12,4 +18,10 @@ import type { BotAction } from './press';
  */
 export const BOT_ACTIONS: Readonly<Record<string, BotAction>> = {
   test: testAction,
+  ...STAFF_BOT_HANDLERS,
+  [STAFF_BOT_NUDGE]: nudgeAction,
+  [NOT_ME_ACTION]: notMeAction,
+  [BOT_FIND_ACTION]: findContractorAction,
+  [BOT_CARD_ACTION]: contractorCardAction,
+  ...LEAD_BOT_HANDLERS,
 };

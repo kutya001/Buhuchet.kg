@@ -37,6 +37,8 @@ export interface ContractorHistoryRow {
   id: number;
   at: Date;
   actor: string | null;
+  /** `telegram` — сделано в чате бота («через Telegram»); пусто — на сайте. */
+  via: 'telegram' | null;
   entity: string;
   action: string;
   reason: string | null;
@@ -425,6 +427,7 @@ export async function contractorHistory(
       at: auditLog.at,
       actorUserId: auditLog.actorUserId,
       actorName: actor.shortName,
+      via: auditLog.via,
       entity: auditLog.entity,
       entityId: auditLog.entityId,
       action: auditLog.action,
@@ -446,6 +449,7 @@ export async function contractorHistory(
       id: r.id,
       at: r.at,
       actor: auditActorName(r.actorUserId, r.actorName),
+      via: r.via === 'telegram' ? r.via : null,
       entity: r.entity,
       action: r.action,
       reason: r.reason,

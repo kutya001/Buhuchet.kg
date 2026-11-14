@@ -15,7 +15,7 @@ function acUser(login){const u=allUsers().find(x=>x.login===login);if(!u)return 
 // Состояние учётной записи цветной меткой (может быть несколько: заблокирован и не сменил временный пароль)
 function acStates(c){if(c.kind==='admin')return [['Активен','green','check']];const s=c.src,out=[];
   if(!c.u.active)out.push([(s.blockedBy||(c.kind==='emp'?'owner':'admin'))==='admin'?'Заблокирован администратором':'Заблокирован владельцем','red','lock']);
-  if(s.pwLocked)out.push(['Вход закрыт: 10 неверных паролей','red','ban']);
+  if(s.pwLocked)out.push([s.pwLockWhy==='notme'?'Вход закрыт: «Это не я» из Telegram':'Вход закрыт: 10 неверных паролей','red','ban']);
   if(s.tmpPass)out.push(['Не сменил временный пароль','yellow','key']);
   if(!out.length)out.push(['Активен','green','check']);return out}
 const acPills=l=>l.map(([t,c,i])=>`<span class="pill ${c}">${ic(i)}${esc(t)}</span>`).join('');

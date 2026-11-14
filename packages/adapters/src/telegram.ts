@@ -18,6 +18,18 @@ export type TelegramSendResult =
     };
 
 /**
+ * Картинка сообщения (оформленная рассылка, поток Т, задача Т6): сам файл или номер файла у Telegram —
+ * его Telegram возвращает после первой отправки, и остальным получателям картинка уходит без загрузки.
+ */
+export type TelegramPhoto =
+  { fileId: string } | { bytes: Uint8Array; name: string; contentType: string };
+
+/** Итог отправки картинки: номер сообщения и номер файла у Telegram (для следующих отправок). */
+export type TelegramPhotoResult =
+  | { ok: true; messageId: number; fileId: string | null }
+  | Extract<TelegramSendResult, { ok: false }>;
+
+/**
  * Кнопка под сообщением (inline keyboard): нажатие с данными (`data`, до 64 байт — приходит боту как
  * callback_query), копирование текста (`copy`) или ссылка (`url`). `disabled` — кнопка неактивна.
  */
@@ -41,6 +53,12 @@ export interface TelegramSendOptions {
   /** Ряды кнопок под сообщением. */
   keyboard?: readonly (readonly TelegramButton[])[];
   /**
+   * Кнопки меню под полем ввода (ряды подписей; поток Т, задача Т5): нажатие шлёт боту подпись обычным
+   * сообщением. Остаются у человека, пока бот их не заменит. Вместе с кнопками под сообщением не
+   * отправляются — Telegram принимает одно из двух, и `keyboard` важнее. Пустой список — убрать меню.
+   */
+  menu?: readonly (readonly string[])[];
+  /**
    * Вид с таблицами и раскрывающимися разделами (HTML для sendRichMessage). Если Telegram такое
    * сообщение не принял, уходит обычное сообщение с текстом `text`: напоминание должно дойти всегда.
    */
@@ -50,11 +68,27 @@ export interface TelegramSendOptions {
 }
 
 const DEFAULT_TIMEOUT_MS = 10_000;
+/** Сколько ждать файл, присланный боту, мс: до 20 МБ с серверов Telegram. */
+const FILE_TIMEOUT_MS = 30_000;
+
+/**
+ * Файл, присланный боту (поток Т, задача Т2): содержимое либо почему его нет — файл больше предела
+ * (`too_large`) или Telegram его не отдал (`failed`: устаревший номер файла, сбой сети).
+ */
+export type TelegramFileResult =
+  | { ok: true; body: Uint8Array }
+  | { ok: false; reason: 'too_large' | 'failed'; description: string };
 
 /**
  * Состояние вебхука по ответу Telegram (getWebhookInfo): адрес, куда Telegram шлёт обновления (пусто —
  * вебхук не поставлен), последняя ошибка доставки и сколько обновлений ждут доставки.
  */
+/** Команда меню бота: латиница, цифры и «_» (до 32 знаков) и подпись (до 256 знаков). */
+export interface TelegramCommand {
+  command: string;
+  description: string;
+}
+
 export interface TelegramWebhookInfo {
   url: string;
   pendingUpdates: number;
@@ -68,6 +102,15 @@ export interface Telegram {
     text: string,
     options?: TelegramSendOptions,
   ): Promise<TelegramSendResult>;
+  /**
+   * Картинка с подписью (до 1024 знаков) и кнопками под ней. `html` — подпись с разметкой HTML (её
+   * экранирует вызывающий). Ошибка сети — исключение с вычищенным текстом, как у `sendMessage`.
+   */
+  sendPhoto(
+    chatId: string | number,
+    photo: TelegramPhoto,
+    options?: Pick<TelegramSendOptions, 'html' | 'keyboard' | 'timeoutMs'> & { caption?: string },
+  ): Promise<TelegramPhotoResult>;
   /**
    * Ответ на нажатие кнопки: без текста — просто снять ожидание; с текстом — скрытый ответ (до 200
    * знаков), его видит только нажавший; `alert` — окном. false — Telegram ответ не принял.
@@ -83,7 +126,18 @@ export interface Telegram {
     messageId: number,
     keyboard: readonly (readonly TelegramButton[])[],
   ): Promise<boolean>;
+  /**
+   * Скачать файл, присланный боту, по его номеру из сообщения (`file_id`): не больше `maxBytes`.
+   * Адрес файла содержит токен бота, поэтому наружу он не отдаётся — только содержимое. Ошибка сети —
+   * не исключение, а `failed` с вычищенным текстом.
+   */
+  loadFile(fileId: string, maxBytes: number): Promise<TelegramFileResult>;
   setWebhook(url: string, secretToken: string): Promise<void>;
+  /**
+   * Команды бота в его меню в личных чатах («/today — Сегодня»; поток Т, задача Т5): список заменяется
+   * целиком. Ошибка Bot API — исключение.
+   */
+  setCommands(commands: readonly TelegramCommand[]): Promise<void>;
   /** Состояние вебхука (Админка → «Телеграм» → «Проверить вебхук»); ошибка Bot API — исключение. */
   getWebhookInfo(): Promise<TelegramWebhookInfo>;
 }
@@ -105,6 +159,49 @@ export function redactBotToken(message: string): string {
 
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/**
+ * Тело ответа не больше предела: читается по частям, сверх предела не дочитывается (заголовку размера
+ * верить нельзя). null — тело больше предела.
+ */
+async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array | null> {
+  if (!res.body) {
+    const all = new Uint8Array(await res.arrayBuffer());
+    return all.byteLength > maxBytes ? null : all;
+  }
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return body;
+}
+
+/** Кнопки меню под полем ввода в виде Bot API; пустой список — убрать их. */
+function menuMarkup(menu: readonly (readonly string[])[]) {
+  const rows = menu.filter((row) => row.length > 0);
+  return rows.length
+    ? {
+        keyboard: rows.map((row) => row.map((text) => ({ text }))),
+        resize_keyboard: true,
+        is_persistent: true,
+      }
+    : { remove_keyboard: true };
+}
 
 /** Клавиатура в виде Bot API. Неактивная кнопка — `disabled` (Bot API 10.3), данные остаются. */
 function replyMarkup(keyboard: readonly (readonly TelegramButton[])[] | undefined) {
@@ -131,6 +228,7 @@ export function createTelegramBotApi(options: {
 }): Telegram {
   const doFetch: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
   const base = `${options.apiBase ?? 'https://api.telegram.org'}/bot${options.token}`;
+  const fileBase = `${options.apiBase ?? 'https://api.telegram.org'}/file/bot${options.token}`;
 
   async function call<T>(
     method: string,
@@ -154,9 +252,87 @@ export function createTelegramBotApi(options: {
     }
   }
 
+  /** Ответ Bot API об отказе — в виде, который понимает очередь. */
+  const failure = (data: BotApiResponse<unknown>): Extract<TelegramSendResult, { ok: false }> => {
+    const errorCode = data.error_code ?? 0;
+    return {
+      ok: false,
+      errorCode,
+      description: data.description ?? 'unknown error',
+      ...(data.parameters?.retry_after !== undefined
+        ? { retryAfterSeconds: data.parameters.retry_after }
+        : {}),
+      permanent: errorCode === 400 || errorCode === 403,
+    };
+  };
+
+  /** Запрос с файлом (multipart): поля — строки, файл — содержимое с именем и типом. */
+  async function callForm<T>(
+    method: string,
+    fields: Readonly<Record<string, string>>,
+    file: { field: string; bytes: Uint8Array; name: string; contentType: string },
+    timeoutMs: number,
+  ): Promise<BotApiResponse<T>> {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    form.set(file.field, new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.name);
+    try {
+      const res = await doFetch(`${base}/${method}`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      return (await res.json()) as BotApiResponse<T>;
+    } catch (err) {
+      const safe = new Error(redactBotToken(err instanceof Error ? err.message : String(err)));
+      safe.name = err instanceof Error ? err.name : 'Error';
+      throw safe;
+    }
+  }
+
   return {
+    async sendPhoto(chatId, photo, opts = {}) {
+      type Sent = { message_id: number; photo?: { file_id?: string }[] };
+      const markup = opts.keyboard?.length ? replyMarkup(opts.keyboard) : null;
+      const caption: Record<string, string> = opts.caption ? { caption: opts.caption } : {};
+      const mode: Record<string, string> = opts.html && opts.caption ? { parse_mode: 'HTML' } : {};
+      const data =
+        'fileId' in photo
+          ? await call<Sent>(
+              'sendPhoto',
+              {
+                chat_id: chatId,
+                photo: photo.fileId,
+                ...caption,
+                ...mode,
+                ...(markup ? { reply_markup: markup } : {}),
+              },
+              opts.timeoutMs,
+            )
+          : await callForm<Sent>(
+              'sendPhoto',
+              {
+                chat_id: String(chatId),
+                ...caption,
+                ...mode,
+                ...(markup ? { reply_markup: JSON.stringify(markup) } : {}),
+              },
+              { field: 'photo', ...photo },
+              opts.timeoutMs ?? FILE_TIMEOUT_MS,
+            );
+      if (data.ok && data.result) {
+        // Telegram отдаёт картинку в нескольких размерах; номер самого большого — для следующих отправок.
+        const fileId = data.result.photo?.at(-1)?.file_id ?? null;
+        return { ok: true, messageId: data.result.message_id, fileId };
+      }
+      return failure(data);
+    },
     async sendMessage(chatId, text, opts = {}) {
-      const markup = opts.keyboard?.length ? { reply_markup: replyMarkup(opts.keyboard) } : {};
+      const markup = opts.keyboard?.length
+        ? { reply_markup: replyMarkup(opts.keyboard) }
+        : opts.menu
+          ? { reply_markup: menuMarkup(opts.menu) }
+          : {};
       let data: BotApiResponse<{ message_id: number }> | null = null;
       if (opts.rich !== undefined) {
         data = await call<{ message_id: number }>(
@@ -189,16 +365,7 @@ export function createTelegramBotApi(options: {
         );
       }
       if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
-      const errorCode = data.error_code ?? 0;
-      return {
-        ok: false,
-        errorCode,
-        description: data.description ?? 'unknown error',
-        ...(data.parameters?.retry_after !== undefined
-          ? { retryAfterSeconds: data.parameters.retry_after }
-          : {}),
-        permanent: errorCode === 400 || errorCode === 403,
-      };
+      return failure(data);
     },
     async answerCallback(callbackId, text, opts = {}) {
       const data = await call<boolean>('answerCallbackQuery', {
@@ -215,6 +382,45 @@ export function createTelegramBotApi(options: {
       });
       return data.ok;
     },
+    async loadFile(fileId, maxBytes) {
+      const failed = (description: string): TelegramFileResult => ({
+        ok: false,
+        reason: 'failed',
+        description: redactBotToken(description),
+      });
+      const tooLarge: TelegramFileResult = { ok: false, reason: 'too_large', description: '' };
+      try {
+        const info = await call<{ file_path?: string; file_size?: number }>('getFile', {
+          file_id: fileId,
+        });
+        if (!info.ok || !info.result?.file_path) {
+          // Файл больше 20 МБ Bot API не отдаёт: «Bad Request: file is too big».
+          if (/too big/i.test(info.description ?? '')) return tooLarge;
+          return failed(`getFile: ${info.error_code ?? 0} ${info.description ?? ''}`);
+        }
+        if ((info.result.file_size ?? 0) > maxBytes) return tooLarge;
+        // Путь приходит от Telegram и встаёт в адрес после токена: только обычные знаки пути.
+        const path = info.result.file_path;
+        if (!/^[\w.\-/ ]+$/.test(path) || path.includes('..') || path.startsWith('/')) {
+          return failed('getFile: неожиданный путь файла');
+        }
+        const res = await doFetch(
+          `${fileBase}/${path.split('/').map(encodeURIComponent).join('/')}`,
+          {
+            method: 'GET',
+            // Перенаправление увело бы запрос с токеном в адресе на другой сервер.
+            redirect: 'error',
+            signal: AbortSignal.timeout(FILE_TIMEOUT_MS),
+          },
+        );
+        if (!res.ok) return failed(`файл: HTTP ${res.status}`);
+        if (Number(res.headers.get('content-length') ?? 0) > maxBytes) return tooLarge;
+        const body = await readCapped(res, maxBytes);
+        return body ? { ok: true, body } : tooLarge;
+      } catch (err) {
+        return failed(err instanceof Error ? err.message : String(err));
+      }
+    },
     async setWebhook(url, secretToken) {
       const data = await call<boolean>('setWebhook', {
         url,
@@ -222,6 +428,15 @@ export function createTelegramBotApi(options: {
         allowed_updates: ['message', 'callback_query'],
       });
       if (!data.ok) throw new Error(`Telegram setWebhook: ${data.description ?? data.error_code}`);
+    },
+    async setCommands(commands) {
+      const data = await call<boolean>('setMyCommands', {
+        commands: commands.map((c) => ({ command: c.command, description: c.description })),
+        scope: { type: 'all_private_chats' },
+      });
+      if (!data.ok) {
+        throw new Error(`Telegram setMyCommands: ${data.description ?? data.error_code}`);
+      }
     },
     async getWebhookInfo() {
       const data = await call<{
@@ -246,7 +461,16 @@ export function createTelegramBotApi(options: {
 
 export interface FakeTelegram extends Telegram {
   /** Отправленные сообщения; кнопки — в `options.keyboard`, вид с таблицами — в `options.rich`. */
-  readonly sent: Array<{ chatId: string | number; text: string; options: TelegramSendOptions }>;
+  readonly sent: Array<{
+    chatId: string | number;
+    text: string;
+    options: TelegramSendOptions & { photo?: TelegramPhoto };
+  }>;
+  /**
+   * Отправленные картинки (в `sent` они тоже есть: текст — подпись, `options.photo` — что отправлено).
+   * Номер файла у «Telegram» — `tg-photo-<n>`; отправка по неизвестному номеру — отказ 400.
+   */
+  readonly photos: Array<{ chatId: string | number; photo: TelegramPhoto; fileId: string }>;
   /** Номера отправленных сообщений — в том же порядке, что `sent` (для нажатий кнопок в тестах). */
   readonly messageIds: number[];
   /** Ответы на нажатия кнопок (скрытые ответы). */
@@ -257,7 +481,11 @@ export interface FakeTelegram extends Telegram {
     messageId: number;
     keyboard: readonly (readonly TelegramButton[])[];
   }>;
+  /** Файлы, которые «прислали боту»: номер файла → содержимое (для `loadFile`). */
+  readonly files: Map<string, Uint8Array>;
   webhook?: { url: string; secretToken: string };
+  /** Команды меню бота, заданные последним `setCommands`. */
+  commands?: readonly TelegramCommand[];
   /** Что ответит getWebhookInfo: по умолчанию — поставленный адрес без ошибок; `Error` — исключение. */
   webhookInfo?: Partial<TelegramWebhookInfo> | Error;
   /** Следующие отправки вернут эти ответы (по очереди), затем — успех. */
@@ -273,6 +501,28 @@ export function createFakeTelegram(): FakeTelegram {
     messageIds: [],
     answers: [],
     edits: [],
+    files: new Map(),
+    photos: [],
+    async sendPhoto(chatId, photo, options = {}) {
+      const failed = failures.shift();
+      if (failed) return failed;
+      const known = fake.photos.map((p) => p.fileId);
+      if ('fileId' in photo && !known.includes(photo.fileId)) {
+        return {
+          ok: false,
+          errorCode: 400,
+          description: 'Bad Request: wrong file identifier',
+          permanent: true,
+        };
+      }
+      const fileId = 'fileId' in photo ? photo.fileId : `tg-photo-${fake.photos.length + 1}`;
+      const messageId = nextId++;
+      const { caption, ...rest } = options;
+      fake.photos.push({ chatId, photo, fileId });
+      fake.sent.push({ chatId, text: caption ?? '', options: { ...rest, photo } });
+      fake.messageIds.push(messageId);
+      return { ok: true, messageId, fileId };
+    },
     async sendMessage(chatId, text, options = {}) {
       const failure = failures.shift();
       if (failure) return failure;
@@ -289,8 +539,17 @@ export function createFakeTelegram(): FakeTelegram {
       fake.edits.push({ chatId, messageId, keyboard });
       return true;
     },
+    async loadFile(fileId, maxBytes) {
+      const body = fake.files.get(fileId);
+      if (!body) return { ok: false, reason: 'failed', description: 'нет такого файла' };
+      if (body.byteLength > maxBytes) return { ok: false, reason: 'too_large', description: '' };
+      return { ok: true, body };
+    },
     async setWebhook(url, secretToken) {
       fake.webhook = { url, secretToken };
+    },
+    async setCommands(commands) {
+      fake.commands = commands.map((c) => ({ ...c }));
     },
     async getWebhookInfo() {
       if (fake.webhookInfo instanceof Error) throw fake.webhookInfo;

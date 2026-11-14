@@ -8,6 +8,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { isModuleId, MODULES } from '../shell/modules';
 import { kbArticlesQuery } from './kb-data';
+import { useKbLinkParam } from './kb-link-param';
 import { useKb } from './kb-provider';
 
 /** Отрывок без поиска — первые 150 знаков. */
@@ -42,6 +43,10 @@ export function KbArticlesTab() {
   const kb = useKb();
   const query = useQuery(kbArticlesQuery);
   const [search, setSearch] = useState('');
+  // «Подробнее» под сообщением рассылки бота: `?article=<код>` открывает статью.
+  useKbLinkParam('arts', 'article', !!query.data, (id) => {
+    if (query.data?.some((a) => a.id === id)) kb.openArticle({ id });
+  });
   if (query.isError) return <Note tone="bad">{t('kb.load_error')}</Note>;
   if (!query.data) return null;
   const q = search.trim().toLowerCase();

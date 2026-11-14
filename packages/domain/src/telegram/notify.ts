@@ -38,6 +38,19 @@ export const OUTBOX_KINDS = [
   'page_closed',
   // «Проверить бота» в «Мой профиль»: сообщение с таблицей и кнопкой (поток Т, задача Т1).
   'bot_test',
+  // Действия из чата бота (поток Т, задача Т2): постановщику — «задача взята в работу» и «задача
+  // выполнена»; просьба бота прислать файл или причину ответом на сообщение.
+  'task_started',
+  'task_done',
+  'bot_ask',
+  // «Напомнить» под сводкой недели (поток Т, задача Т3): сотруднику — список его просроченного.
+  'nudge',
+  // «Это не я» под сообщением о безопасности (поток Т, задача Т4): ответ нажавшему и сообщение тем,
+  // кто выдаёт новый пароль.
+  'not_me',
+  // Ответ на команду меню бота: «Сегодня», «Неделя», «Просрочено», карточка контрагента (поток Т,
+  // задача Т5).
+  'bot_cmd',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
@@ -88,10 +101,13 @@ export function outboxRetryDelaySeconds(tries: number, retryAfterSeconds?: numbe
 export function outboxRetryRefusal(row: {
   status: OutboxStatus;
   kind: string;
-}): 'outbox_not_error' | 'outbox_code' | 'outbox_relink_code' | null {
+}): 'outbox_not_error' | 'outbox_code' | 'outbox_relink_code' | 'outbox_bot_cmd' | null {
   if (row.status !== 'error') return 'outbox_not_error';
   if (row.kind === 'code') return 'outbox_code';
   if (row.kind === 'relink_code') return 'outbox_relink_code';
+  // Ответ на команду бота собран по правам и области сотрудника на момент запроса (задача Т5): позже
+  // их могли снять, поэтому он не повторяется — человек запросит его снова (как `app.admin_telegram_retry`).
+  if (row.kind === 'bot_cmd') return 'outbox_bot_cmd';
   // Новый вид кода без своего текста: всё равно не повторяется (как `app.admin_telegram_retry`).
   if ((CODE_KINDS as readonly string[]).includes(row.kind)) return 'outbox_code';
   return null;

@@ -33,8 +33,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Организаци
       note: 'Перезвоните после обеда',
       fromStand: false,
       trap: false,
-      telegramText: null,
-      telegramRepeatText: null,
+      notify: null,
       // Раньше часов приложения в тестах (18.10.2026 09:00 по Бишкеку): смены статуса — после заявки.
       now: new Date(Date.parse('2026-10-18T02:00:00Z') + 60_000 * n),
       ...over,

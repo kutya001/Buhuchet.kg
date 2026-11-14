@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Pill } from './form';
 
 export interface TimelineItem {
   id: string;
@@ -9,6 +10,8 @@ export interface TimelineItem {
   text: ReactNode;
   /** Кто — под текстом серым. */
   who: string;
+  /** Отметка после имени: «через Telegram» — действие сделано в чате бота (прототип `histVia`). */
+  via?: string | null | undefined;
 }
 
 /**
@@ -32,7 +35,17 @@ export function Timeline({ items, label }: { items: readonly TimelineItem[]; lab
           <span className="min-w-0 [overflow-wrap:anywhere]">
             {item.text}
             <br />
-            <span className="text-[12px] text-muted">{item.who}</span>
+            <span className="text-[12px] text-muted">
+              {item.who}
+              {item.via ? (
+                <>
+                  {' '}
+                  <Pill tone="info" icon="tg">
+                    {item.via}
+                  </Pill>
+                </>
+              ) : null}
+            </span>
           </span>
         </li>
       ))}
