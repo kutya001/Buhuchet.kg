@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { newOrgOwner, uniqueInn } from './helpers';
+import { newOrgOwner, stillElement, uniqueInn } from './helpers';
 
 // «Показатели контрагентов» (задача 2.27, #83). Месяцы считаются от сегодняшнего дня по Бишкеку, а
 // каждый тест — со своей новой организацией (`newOrgOwner`): показатели у неё выключены, пока владелец
@@ -411,6 +411,8 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     const bubble = page.locator('[data-tour-bubble]');
     await expect(bubble.locator('b').first()).toHaveText('Настроить показатели');
     await expect(page.locator('[data-tour-count]')).toHaveText(/^1 из \d+$/);
+    // Облачко сначала переезжает к элементу — нажатие по движущейся кнопке теряется (№ 32).
+    await stillElement(bubble);
     await bubble.getByRole('button', { name: 'Закончить показ', exact: true }).last().click();
     await expect(bubble).toHaveCount(0);
     await page.goto('/app/kb/lessons');

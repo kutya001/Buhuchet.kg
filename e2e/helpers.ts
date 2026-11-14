@@ -374,6 +374,37 @@ export async function settledBox(locator: Locator) {
   return (await locator.boundingBox())!;
 }
 
+/**
+ * Элемент стоит на месте: `ms` мс без сдвига и без своих идущих анимаций и переходов (не дольше 5 с).
+ * Нужен перед нажатием по элементу, который переезжает CSS-переходом: нажатие по движущейся кнопке
+ * теряется молча (типовая ошибка № 32).
+ */
+export async function stillElement(locator: Locator, ms = 120) {
+  await locator.evaluate(
+    (el, still) =>
+      new Promise<void>((resolve, reject) => {
+        const start = performance.now();
+        let last = '';
+        let since = start;
+        const tick = () => {
+          const r = el.getBoundingClientRect();
+          const at = `${r.left},${r.top},${r.width},${r.height}`;
+          const moving = el.getAnimations().some((a) => a.playState === 'running');
+          const now = performance.now();
+          if (at !== last || moving) {
+            last = at;
+            since = now;
+          }
+          if (now - since >= still) resolve();
+          else if (now - start > 5_000) reject(new Error(`элемент не успокоился: ${at}`));
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    ms,
+  );
+}
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */

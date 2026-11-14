@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { newOrgOwner, uniqueLogin } from './helpers';
+import { newOrgOwner, stillElement, uniqueLogin } from './helpers';
 import { connectAllTypes } from './orgs';
 import { manualReport } from './reports';
 
@@ -27,20 +27,32 @@ const bubble = (page: Page) => page.locator('[data-tour-bubble]');
 const nextButton = (page: Page) => page.locator('[data-tour-next]');
 const titleOf = (page: Page) => bubble(page).locator('b').first();
 
-/** Облачко готово («Далее» доступна): «N из M». */
+/**
+ * Облачко стоит на месте. Оно переезжает к элементу за 250 мс и ставится ещё раз через 260 мс
+ * (packages/ui/src/tour.tsx): нажатие по переезжающей кнопке теряется молча (типовая ошибка № 32).
+ */
+const bubbleSettled = (page: Page) => stillElement(bubble(page));
+
+/** Облачко готово («Далее» доступна, облачко не переезжает): «N из M». */
 async function position(page: Page) {
   await expect(nextButton(page)).toBeEnabled();
+  await bubbleSettled(page);
   const text = (await page.locator('[data-tour-count]').textContent()) ?? '';
   const m = /^(\d+) из (\d+)$/.exec(text);
   expect(m, text).not.toBeNull();
   return { i: Number(m![1]), n: Number(m![2]) };
 }
 
-/** «Далее» и дождаться следующего облачка. */
+/**
+ * «Далее» и дождаться следующего облачка. Подготовка облачка со сменой экрана или окна на медленной
+ * машине идёт до ~8 с (закрыть окна, перейти, дождаться загрузки — apps/web/src/kb/tour/tour-dom.ts).
+ */
 async function forward(page: Page) {
   const { i, n } = await position(page);
   await nextButton(page).click();
-  await expect(page.locator('[data-tour-count]')).not.toHaveText(`${i} из ${n}`);
+  await expect(page.locator('[data-tour-count]')).not.toHaveText(`${i} из ${n}`, {
+    timeout: 10_000,
+  });
 }
 
 /**
@@ -67,8 +79,10 @@ const knownSaved = (page: Page) =>
     (r) => r.url().endsWith('/api/kb/known') && r.request().method() === 'POST' && r.ok(),
   );
 
-const endShow = (page: Page) =>
-  bubble(page).getByRole('button', { name: 'Закончить показ', exact: true }).last().click();
+async function endShow(page: Page) {
+  await bubbleSettled(page);
+  await bubble(page).getByRole('button', { name: 'Закончить показ', exact: true }).last().click();
+}
 
 async function showStep(page: Page, id: string) {
   await page.goto('/app/kb/lessons');
@@ -214,6 +228,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     await expect(titleOf(page)).toHaveText('Всё на этом экране вам уже знакомо');
     await expect(nextButton(page)).toHaveText('Готово');
     await expect(skipped).toContainText(`Пропущено знакомых элементов: ${roles.titles.length - 2}`);
+    await bubbleSettled(page);
     await bubble(page).getByRole('button', { name: 'Показать всё' }).click();
     await expect(page.locator('[data-tour-count]')).toHaveText(`1 из ${roles.titles.length}`);
     await expect(skipped).toHaveCount(0);
