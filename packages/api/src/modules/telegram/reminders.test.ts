@@ -196,6 +196,22 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
   });
 
   it('п. 41: исполнитель получает в Telegram новую задачу и возврат на доработку с причиной; выключил «Ручные задачи» — не получает', async () => {
+    // Название в несколько строк не выдаёт себя за текст бота: в сообщении оно одной строкой.
+    const lines = await call('POST', '/api/tasks', chief, {
+      title: 'Сверка\nс банком\u202e',
+      description: '',
+      categoryCode: 'КАТ-001',
+      contractorId: null,
+      executorEmployeeId: employee('acc-a'),
+      term: 'day',
+      dueDate: '2026-10-25',
+      needFile: false,
+      confirm: false,
+    });
+    expect(lines.status, await lines.clone().text()).toBe(201);
+    expect(to(CHAT.acc).at(-1)).toContain(
+      'Сверка с банком\nНовая задача от chief-a · срок 25.10.2026',
+    );
     const created = await call('POST', '/api/tasks', chief, {
       title: 'Собрать первичку за октябрь',
       description: '',
@@ -210,7 +226,7 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     expect(created.status, await created.clone().text()).toBe(201);
     const task = Task.parse(await created.json());
     expect(to(CHAT.acc).at(-1)).toContain(
-      'Новая задача от chief-a: Собрать первичку за октябрь, срок 25.10.2026.',
+      'Собрать первичку за октябрь\nНовая задача от chief-a · срок 25.10.2026',
     );
     expect((await call('POST', `/api/tasks/${task.id}/done`, acc, {})).status).toBe(200);
     const back = await call('POST', `/api/tasks/${task.id}/rework`, chief, {

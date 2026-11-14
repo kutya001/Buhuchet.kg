@@ -45,11 +45,25 @@ export interface TelegramEvent {
   by: string | null;
   template: TelegramTemplateKey;
   values: Readonly<Record<string, string | number>>;
+  /** Первая строка сообщения: название задачи (в шаблоне «Новой задачи» его нет, прототип v97). */
+  heading?: string;
   /** Куда ведёт ссылка: список задач или отчётов. */
   link: 'tasks' | 'reports';
 }
 
 const LINKS = { tasks: '/app/tasks/mine', reports: '/app/reports/all' } as const;
+
+/**
+ * Первая строка сообщения — название, которое написал пользователь: одной строкой, без переводов
+ * строк, управляющих и невидимых знаков (смена направления текста) — чтобы его нельзя было выдать за
+ * текст бота. Соединитель эмодзи (U+200D) остаётся, иначе составной эмодзи распался бы на части.
+ */
+function headingLine(text: string): string {
+  return text
+    .replace(/(?!\u200d)[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /** Поставить сообщения о событиях в очередь в транзакции действия; номера строк — для `flushEvents`. */
 export async function queueTelegramEvents(
@@ -74,10 +88,11 @@ export async function queueTelegramEvents(
     if (!notifyOn(target.settings, target.boss, kind)) continue;
     const chat = await telegramChat(tx, target.userId);
     if (!chat) continue;
-    const body = fillTemplate(
-      templates[e.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.template],
-      e.values,
-    );
+    const template = templates[e.template] ?? TELEGRAM_TEMPLATE_DEFAULTS[e.template];
+    const filled = fillTemplate(template, e.values);
+    // Название не повторяется, если администратор платформы оставил его в тексте шаблона.
+    const heading = e.heading && !template.includes('{задача}') ? headingLine(e.heading) : '';
+    const body = heading ? `${heading}\n${filled}` : filled;
     const link = formatText(t('telegram.open'), {
       link: new URL(LINKS[e.link], deps.config.APP_BASE_URL).href,
     });
