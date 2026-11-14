@@ -12,6 +12,7 @@ import {
   type MonthPlanReport,
   type MonthReceiveOffer,
   type UiTextKey,
+  type YearMonth,
 } from '@buhuchet/domain';
 import type { IconName } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
@@ -139,7 +140,13 @@ export interface ContractorPlan<R extends PlanRow> {
 // ОТКЛОНЕНИЕ: docs/deviations.md#К-1 — в прототипе при равном сроке порядок видов каталога, здесь — по краткому названию.
 export function contractorPlan<R extends PlanRow>(
   rows: readonly R[],
-  o: { taxpay: boolean; quick: MonthPlanQuick; showClosed: boolean },
+  o: {
+    taxpay: boolean;
+    quick: MonthPlanQuick;
+    showClosed: boolean;
+    /** «Прошлый месяц» по Бишкеку: прошедший месяц без сумм запирает «Принять деньги за весь период». */
+    lastMonth: YearMonth;
+  },
 ): ContractorPlan<R> {
   const rs = rows.filter(inMonthPlan);
   const names = [...new Set(rs.map((r) => r.type.shortName))].sort((a, b) =>
@@ -151,7 +158,11 @@ export function contractorPlan<R extends PlanRow>(
   // Уже принято под отчёт — как у «Принять деньги» отчёта (`openReceive`); при равном сроке оплаты — тот
   // же порядок, что у строк месяца.
   // ОТКЛОНЕНИЕ: docs/deviations.md#К-8 — при равном сроке оплаты по краткому названию вида, а не по номеру отчёта.
-  const recv = { received: (r: R) => r.receivedFor, tie: (a: R, b: R) => order(a) - order(b) };
+  const recv = {
+    received: (r: R) => r.receivedFor,
+    tie: (a: R, b: R) => order(a) - order(b),
+    lastMonth: o.lastMonth,
+  };
   const count = (q: MonthPlanQuick) => rs.filter((r) => monthPlanQuick(r, q)).length;
   const months =
     o.quick === 'all'

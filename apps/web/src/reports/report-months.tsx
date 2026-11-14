@@ -587,9 +587,11 @@ export function ContractorReportMonths({
       ),
     [t, access.reportConfirm, phone, taxpay, onReceive],
   );
+  // «Прошлый месяц» (прототип `rmNow`): прошедший месяц без сумм запирает «Принять деньги за весь период».
+  const lastMonth = currentPlanMonth(bishkekDate(new Date()));
   const plan = useMemo(
-    () => contractorPlan(query.data ?? [], { taxpay, quick, showClosed }),
-    [query.data, taxpay, quick, showClosed],
+    () => contractorPlan(query.data ?? [], { taxpay, quick, showClosed, lastMonth }),
+    [query.data, taxpay, quick, showClosed, lastMonth],
   );
   // «Принять деньги» за месяц и за весь период (прототип `rmRecvOn`).
   const receiveFor = receiveShown({ taxpay, canReceive: !!reports.receiveFor, archived })

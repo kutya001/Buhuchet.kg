@@ -33,6 +33,8 @@ const report = (over: Partial<Row> = {}): Row => ({
 
 const plan = (rows: Row[]) => monthPlan(rows, { taxpay: true });
 const received = (r: Row) => r.received;
+// «Прошлый месяц» — октябрь: сейчас ноябрь 2026.
+const opts = { received, lastMonth: '2026-10' };
 
 describe('receiveLeft — сколько ещё принять по отчёту (прототип rmRecvLeft)', () => {
   it('к уплате минус большее из оплаченного и полученного; не меньше нуля', () => {
@@ -104,7 +106,7 @@ describe('receiveMonths и monthReceiveOffer — кнопка «Принять �
   it('весь период — месяцы с неоплаченным остатком; будущий месяц без суммы не запирает', () => {
     const groups = plan(rows);
     expect(receiveMonths(groups, 'all').map((g) => g.month)).toEqual(['2026-09', '2026-10']);
-    const offer = monthReceiveOffer(groups, 'all', { received });
+    const offer = monthReceiveOffer(groups, 'all', opts);
     expect(offer).toMatchObject({
       scope: 'all',
       months: ['2026-09', '2026-10'],
@@ -116,13 +118,13 @@ describe('receiveMonths и monthReceiveOffer — кнопка «Принять �
 
   it('за месяц — только его отчёты; месяца без остатка нет — кнопки нет', () => {
     const groups = plan(rows);
-    expect(monthReceiveOffer(groups, '2026-10', { received })).toMatchObject({
+    expect(monthReceiveOffer(groups, '2026-10', opts)).toMatchObject({
       months: ['2026-10'],
       total: 200_000,
       refusal: null,
     });
-    expect(monthReceiveOffer(groups, '2026-11', { received })).toBeNull();
-    expect(monthReceiveOffer(plan([report({ paid: 500_000 })]), 'all', { received })).toBeNull();
+    expect(monthReceiveOffer(groups, '2026-11', opts)).toBeNull();
+    expect(monthReceiveOffer(plan([report({ paid: 500_000 })]), 'all', opts)).toBeNull();
   });
 
   it('у отчёта месяца с остатком нет суммы — заперто: за месяц названы отчёты, за период — месяцы', () => {
@@ -131,25 +133,45 @@ describe('receiveMonths и monthReceiveOffer — кнопка «Принять �
       report({ id: 'sep-none', amount: null }),
       report({ id: 'oct-none', periodStart: '2026-10-01', amount: null }),
     ]);
-    const month = monthReceiveOffer(groups, '2026-09', { received });
+    const month = monthReceiveOffer(groups, '2026-09', opts);
     expect(month!.refusal).toMatchObject({ code: 'no_amount', months: ['2026-09'] });
     expect(month!.refusal?.code === 'no_amount' && month!.refusal.reports.map((r) => r.id)).toEqual(
       ['sep-none'],
     );
-    expect(monthReceiveOffer(groups, 'all', { received })!.refusal).toMatchObject({
+    expect(monthReceiveOffer(groups, 'all', opts)!.refusal).toMatchObject({
       code: 'no_amount',
       months: ['2026-09', '2026-10'],
     });
   });
 
+  it('прошедший месяц без сумм (до «Прошлого месяца» включительно) запирает «за весь период», текущий и будущие — нет (решение заказчика 14.11.2026)', () => {
+    const groups = plan([
+      report({ id: 'aug-none', periodStart: '2026-08-01', amount: null }),
+      ...rows,
+    ]);
+    // Неоплаченного у августа нет: в период он не входит, но принять деньги без его суммы нельзя.
+    expect(receiveMonths(groups, 'all').map((g) => g.month)).toEqual(['2026-09', '2026-10']);
+    expect(monthReceiveOffer(groups, 'all', opts)).toMatchObject({
+      months: ['2026-09', '2026-10'],
+      refusal: { code: 'no_amount', months: ['2026-08'] },
+    });
+    // За месяц запирает только свой месяц.
+    expect(monthReceiveOffer(groups, '2026-09', opts)!.refusal).toBeNull();
+    // Ноябрь без сумм: пока он текущий — не запирает, когда стал «Прошлым месяцем» — запирает.
+    expect(monthReceiveOffer(plan(rows), 'all', opts)!.refusal).toBeNull();
+    expect(
+      monthReceiveOffer(plan(rows), 'all', { received, lastMonth: '2026-11' })!.refusal,
+    ).toMatchObject({ code: 'no_amount', months: ['2026-11'] });
+  });
+
   it('деньги на налоги уже получены от контрагента — заперто, хотя в бюджет ещё не оплачено', () => {
     const groups = plan([report({ received: 500_000 })]);
-    expect(monthReceiveOffer(groups, '2026-09', { received })).toMatchObject({
+    expect(monthReceiveOffer(groups, '2026-09', opts)).toMatchObject({
       lines: [],
       total: 0,
       refusal: { code: 'received' },
     });
-    expect(monthReceiveOffer(groups, 'all', { received })!.refusal).toEqual({ code: 'received' });
+    expect(monthReceiveOffer(groups, 'all', opts)!.refusal).toEqual({ code: 'received' });
   });
 });
 

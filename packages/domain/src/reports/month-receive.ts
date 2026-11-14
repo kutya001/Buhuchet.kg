@@ -25,7 +25,8 @@ export type MonthReceiveScope = YearMonth | 'all';
 /**
  * Месяцы, за которые принимают деньги (прототип `rmRecvMonths`, `rmRecvOpen`): один месяц или все
  * месяцы с неоплаченным остатком. Будущие месяцы, где суммы ещё не рассчитаны и неоплаченного нет, в
- * период не входят и кнопку не запирают.
+ * период не входят и кнопку не запирают; прошедший месяц без сумм запирает «за весь период»
+ * (`monthReceiveOffer`).
  */
 export function receiveMonths<R extends MonthPlanReport>(
   groups: readonly MonthPlanGroup<R>[],
@@ -101,15 +102,34 @@ export type MonthReceiveOffer<R extends MonthPlanReport = MonthPlanReport> = Mon
   refusal: MonthReceiveRefusal<R> | null;
 };
 
+export type MonthReceiveOfferOptions<R extends MonthPlanReport> = MonthReceiveOptions<R> & {
+  /**
+   * «Прошлый месяц» (прототип `rmNow`: месяц, отчёты за который сдаются сейчас) — по Бишкеку. Месяц до
+   * него включительно, где у отчётов с оплатой сумм нет вовсе, запирает «за весь период»: неоплаченного
+   * у него нет, но принять деньги без него нельзя.
+   */
+  lastMonth: YearMonth;
+};
+
+/**
+ * Пока сумма за месяц не введена, принять нельзя (решение заказчика 14.11.2026; прототип v110,
+ * исправление, `rmRecvNoSum`): кнопку запирает месяц с неоплаченным остатком и отчётом без суммы, а «за
+ * весь период» — ещё и прошедший месяц без сумм.
+ */
+const locksReceive = (g: MonthPlanGroup, scope: MonthReceiveScope, lastMonth: YearMonth) =>
+  g.noAmount > 0 && (g.left > 0 || (scope === 'all' && g.month <= lastMonth));
+
 export function monthReceiveOffer<R extends MonthPlanReport>(
   groups: readonly MonthPlanGroup<R>[],
   scope: MonthReceiveScope,
-  options: MonthReceiveOptions<R>,
+  options: MonthReceiveOfferOptions<R>,
 ): MonthReceiveOffer<R> | null {
   const open = receiveMonths(groups, scope);
   if (!open.length) return null;
   const plan = monthReceivePlan(open, options);
-  const noAmount = open.filter((g) => g.noAmount > 0);
+  const noAmount = (scope === 'all' ? groups : open).filter((g) =>
+    locksReceive(g, scope, options.lastMonth),
+  );
   const refusal: MonthReceiveRefusal<R> | null = noAmount.length
     ? {
         code: 'no_amount',

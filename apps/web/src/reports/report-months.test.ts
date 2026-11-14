@@ -20,6 +20,8 @@ import {
 // modules/report-months.js: rmTitle, rmSumHtml, rmCardHtml).
 
 const t = makeTranslate(defaultUiTexts());
+// «Прошлый месяц» — октябрь 2026: сейчас ноябрь.
+const LAST_MONTH = '2026-10';
 
 /** Сумма на экране — с неразрывным пробелом между разрядами: в сравнении — обычный. */
 const plain = (s: string) => s.replace(/\s/g, ' ');
@@ -131,32 +133,57 @@ describe('contractorPlan — план вкладки «Отчёты к сдач�
   ];
 
   it('«Все»: закрытые месяцы — только по галочке; числа плашек и «Осталось оплатить»', () => {
-    const plan = contractorPlan(rows, { taxpay: true, quick: 'all', showClosed: false });
+    const plan = contractorPlan(rows, {
+      taxpay: true,
+      quick: 'all',
+      showClosed: false,
+      lastMonth: LAST_MONTH,
+    });
     expect(plan.none).toBe(false);
     expect(plan.months.map((g) => g.month)).toEqual(['2026-10']);
     expect(plan.closed).toBe(1);
     expect(plan.left).toBe(100_000);
     expect(plan.counts).toEqual({ all: 3, sub: 2, pay: 1 });
-    const withClosed = contractorPlan(rows, { taxpay: true, quick: 'all', showClosed: true });
+    const withClosed = contractorPlan(rows, {
+      taxpay: true,
+      quick: 'all',
+      showClosed: true,
+      lastMonth: LAST_MONTH,
+    });
     expect(withClosed.months.map((g) => g.month)).toEqual(['2026-09', '2026-10']);
   });
 
   it('при равном сроке — по краткому названию вида', () => {
-    const plan = contractorPlan(rows, { taxpay: true, quick: 'all', showClosed: false });
+    const plan = contractorPlan(rows, {
+      taxpay: true,
+      quick: 'all',
+      showClosed: false,
+      lastMonth: LAST_MONTH,
+    });
     expect(plan.months[0]!.items.map((x) => x.report.id)).toEqual(['t1-10', 'nds-10']);
   });
 
   it('«Сдать» и «Уплатить» — только несделанное, закрытых месяцев нет', () => {
-    const sub = contractorPlan(rows, { taxpay: true, quick: 'sub', showClosed: false });
+    const sub = contractorPlan(rows, {
+      taxpay: true,
+      quick: 'sub',
+      showClosed: false,
+      lastMonth: LAST_MONTH,
+    });
     expect(sub.months.flatMap((g) => g.items.map((x) => x.report.id))).toEqual(['t1-10', 'nds-10']);
-    const pay = contractorPlan(rows, { taxpay: true, quick: 'pay', showClosed: true });
+    const pay = contractorPlan(rows, {
+      taxpay: true,
+      quick: 'pay',
+      showClosed: true,
+      lastMonth: LAST_MONTH,
+    });
     expect(pay.months.flatMap((g) => g.items.map((x) => x.report.id))).toEqual(['nds-10']);
   });
 
   it('без «Учёта оплаты налогов» месяц закрывает сдача', () => {
     const plan = contractorPlan(
       [row('a', { status: 'submitted' }), row('b', { act: 'sub', status: 'submitted' })],
-      { taxpay: false, quick: 'all', showClosed: false },
+      { taxpay: false, quick: 'all', showClosed: false, lastMonth: LAST_MONTH },
     );
     expect(plan.months).toEqual([]);
     expect(plan.closed).toBe(1);
@@ -164,7 +191,12 @@ describe('contractorPlan — план вкладки «Отчёты к сдач�
 
   it('«К оплате клиенту» (К4): по всем отчётам месяца, какая бы плашка ни была выбрана', () => {
     for (const quick of ['all', 'sub', 'pay'] as const) {
-      const plan = contractorPlan(rows, { taxpay: true, quick, showClosed: false });
+      const plan = contractorPlan(rows, {
+        taxpay: true,
+        quick,
+        showClosed: false,
+        lastMonth: LAST_MONTH,
+      });
       // Сентябрь оплачен — блока нет; в октябре к оплате НДС, «1-Т» только сдаётся.
       expect([...plan.pay.keys()]).toEqual(['2026-10']);
       const pay = plan.pay.get('2026-10')!;
@@ -174,7 +206,12 @@ describe('contractorPlan — план вкладки «Отчёты к сдач�
       expect(pay).toMatchObject({ total: 100_000, noAmount: 0, due: '2026-11-20' });
     }
     // Без «Учёта оплаты налогов» оплата не отмечается: к оплате и оплаченный сентябрь, вся сумма.
-    const off = contractorPlan(rows, { taxpay: false, quick: 'all', showClosed: false });
+    const off = contractorPlan(rows, {
+      taxpay: false,
+      quick: 'all',
+      showClosed: false,
+      lastMonth: LAST_MONTH,
+    });
     expect([...off.pay.keys()]).toEqual(['2026-09', '2026-10']);
     expect(off.pay.get('2026-09')!.total).toBe(100_000);
   });
@@ -184,6 +221,7 @@ describe('contractorPlan — план вкладки «Отчёты к сдач�
       taxpay: true,
       quick: 'all',
       showClosed: false,
+      lastMonth: LAST_MONTH,
     });
     expect(plan).toMatchObject({ none: true, months: [], closed: 0, left: 0 });
   });
@@ -201,7 +239,7 @@ describe('«Принять деньги» за месяц и за весь пе�
         row('paid-08', { periodStart: '2026-08-01', amount: 1_000, paid: 1_000 }),
       ],
       // Какая бы плашка ни была выбрана.
-      { taxpay: true, quick: 'sub', showClosed: false },
+      { taxpay: true, quick: 'sub', showClosed: false, lastMonth: LAST_MONTH },
     );
     expect([...plan.receive.keys()]).toEqual(['2026-09', '2026-10']);
     const all = plan.receiveAll!;
@@ -226,7 +264,7 @@ describe('«Принять деньги» за месяц и за весь пе�
         row('none-10', { amount: null, type: { shortName: 'ЕН' } }),
         row('nds-09', { ...sep, receivedFor: 100_000 }),
       ],
-      { taxpay: true, quick: 'all', showClosed: false },
+      { taxpay: true, quick: 'all', showClosed: false, lastMonth: LAST_MONTH },
     );
     expect(receiveWhy(t, plan.receive.get('2026-10')!)).toBe('Сначала введите сумму: ЕН');
     expect(receiveWhy(t, plan.receiveAll!)).toBe('Сначала введите сумму за октябрь 2026');
@@ -237,10 +275,34 @@ describe('«Принять деньги» за месяц и за весь пе�
       taxpay: true,
       quick: 'all',
       showClosed: false,
+      lastMonth: LAST_MONTH,
     });
     expect(receiveWhy(t, got.receiveAll!)).toBe(
       'Деньги на налоги всех месяцев уже получены от контрагента',
     );
+  });
+
+  it('прошедший месяц без сумм запирает «за весь период», текущий — нет (решение заказчика 14.11.2026)', () => {
+    const rows = [
+      row('nds-10'),
+      row('none-08', { periodStart: '2026-08-01', amount: null, type: { shortName: 'ЕН' } }),
+      row('none-11', { periodStart: '2026-11-01', amount: null }),
+    ];
+    const plan = contractorPlan(rows, {
+      taxpay: true,
+      quick: 'all',
+      showClosed: false,
+      lastMonth: LAST_MONTH,
+    });
+    expect(receiveWhy(t, plan.receiveAll!)).toBe('Сначала введите сумму за август 2026');
+    expect(receiveWhy(t, plan.receive.get('2026-10')!)).toBeNull();
+    const now = contractorPlan(rows.slice(0, 1).concat(rows.slice(2)), {
+      taxpay: true,
+      quick: 'all',
+      showClosed: false,
+      lastMonth: LAST_MONTH,
+    });
+    expect(receiveWhy(t, now.receiveAll!)).toBeNull();
   });
 
   it('всё оплачено — кнопок нет; «октябрь 2026» — название месяца', () => {
@@ -248,6 +310,7 @@ describe('«Принять деньги» за месяц и за весь пе�
       taxpay: true,
       quick: 'all',
       showClosed: true,
+      lastMonth: LAST_MONTH,
     });
     expect(paid.receive.size).toBe(0);
     expect(paid.receiveAll).toBeNull();

@@ -694,12 +694,12 @@ test.describe('Доработки 14.11.2026, блок 5: «Принять де�
         month,
         due: '2030-01-15',
       });
-    // Сентябрь: НДС — 3 800, патент — 870,50. Октябрь: патент — 300.
-    // Август: сумма патента не указана — неоплаченного нет, период он не запирает.
+    // Сентябрь: НДС — 3 800, патент — 870,50. Октябрь: патент — 300. Август: сумма патента сначала не
+    // указана — неоплаченного нет, но прошедший месяц без сумм запирает «за весь период»; потом — 100.
     const nds = await report('nds', '2026-09-01');
     const patSep = await report('pat', '2026-09-01');
     const patOct = await report('pat', '2026-10-01');
-    await report('pat', '2026-08-01');
+    const patAug = await report('pat', '2026-08-01');
     await setAmount(page.request, origin, nds, 380_000);
     await setAmount(page.request, origin, patSep, 87_050);
     await setAmount(page.request, origin, patOct, 30_000);
@@ -713,11 +713,17 @@ test.describe('Доработки 14.11.2026, блок 5: «Принять де�
     const menu = page.getByRole('menu', { name: 'Действия' });
     const row = (id: string) => months.locator(`[data-mini-row="${id}"]`);
 
-    await test.step('кнопки: за весь период — над месяцами, за месяц — в «К оплате клиенту»; у августа без суммы кнопки нет', async () => {
+    await test.step('кнопки: за весь период — над месяцами, за месяц — в «К оплате клиенту»; у августа без суммы кнопки нет, но он запирает «за весь период»', async () => {
       await expect(all).toHaveText('Принять деньги за весь период');
-      await expect(all).not.toHaveAttribute('aria-disabled', 'true');
+      await expect(all).toHaveAttribute('aria-disabled', 'true');
+      await expect(all).toHaveAttribute('title', 'Сначала введите сумму за август 2026');
       await expect(sepBtn).toHaveText('Принять деньги');
+      await expect(sepBtn).not.toHaveAttribute('aria-disabled', 'true');
       await expect(months.locator('[data-months-receive="2026-08"]')).toHaveCount(0);
+      // Сумма августа введена — кнопка открыта (карточку открываем заново: сумма менялась не на экране).
+      await setAmount(page.request, origin, patAug, 10_000);
+      await openReportsTab(page, isMobile, word);
+      await expect(all).not.toHaveAttribute('aria-disabled', 'true');
     });
 
     await test.step('за месяц: форма с отчётами сентября на то, что ещё не получено', async () => {
@@ -733,18 +739,20 @@ test.describe('Доработки 14.11.2026, блок 5: «Принять де�
       await expect(receipt).toBeHidden();
     });
 
-    await test.step('за весь период: сентябрь и октябрь; меньшая сумма закрывает старый месяц первым', async () => {
+    await test.step('за весь период: август, сентябрь и октябрь; меньшая сумма закрывает старые месяцы первыми', async () => {
       await all.click();
       await expect(receipt.locator('[data-receipt-list-note]')).toContainText(
-        'Деньги за весь период: сентябрь 2026, октябрь 2026.',
+        'Деньги за весь период: август 2026, сентябрь 2026, октябрь 2026.',
       );
-      await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/^4\s970,50$/);
+      await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/^5\s070,50$/);
+      await expect(line(patAug)).toHaveValue('100');
       await expect(line(patOct)).toHaveValue('300');
-      await receipt.locator('[data-receipt-total]').fill('4670,50');
+      await receipt.locator('[data-receipt-total]').fill('4770,50');
+      await expect(line(patAug)).toHaveValue('100');
       await expect(line(nds)).toHaveValue(/^3\s800$/);
       await expect(line(patSep)).toHaveValue('870,50');
       await expect(line(patOct)).toHaveValue('');
-      await receipt.locator('[data-receipt-total]').fill('4970,50');
+      await receipt.locator('[data-receipt-total]').fill('5070,50');
       await expect(line(patOct)).toHaveValue('300');
       await receipt.getByRole('button', { name: 'Записать поступление' }).click();
       await expect(receipt).toBeHidden();
@@ -766,9 +774,25 @@ test.describe('Доработки 14.11.2026, блок 5: «Принять де�
     await test.step('правая кнопка мыши (на телефоне — долгое нажатие) по строке — то же меню, что «⋯»; карточка отчёта не открывается', async () => {
       if (isMobile) {
         // Палец касается точки на экране: строку сначала прокрутить в видимую часть карточки.
-        await row(nds).locator('td').first().scrollIntoViewIfNeeded();
-        const box = await settledBox(row(nds).locator('td').first());
-        await (await finger(page)).hold({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+        const cell = row(nds).locator('td').first();
+        await cell.scrollIntoViewIfNeeded();
+        const box = await settledBox(cell);
+        const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        // Касание через протокол отладки, в отличие от `click`, не ждёт, пока точку перестанут
+        // закрывать уведомления внизу экрана (после приёма денег их два): ждём, что в точке — строка.
+        await expect
+          .poll(() =>
+            page.evaluate(
+              ({ x, y }) =>
+                document
+                  .elementFromPoint(x, y)
+                  ?.closest('[data-mini-row]')
+                  ?.getAttribute('data-mini-row') ?? null,
+              at,
+            ),
+          )
+          .toBe(nds);
+        await (await finger(page)).hold(at);
       } else {
         await row(nds).locator('td').first().click({ button: 'right' });
       }
