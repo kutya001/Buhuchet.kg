@@ -30,6 +30,14 @@ export function checkPrPolicy(body, { author, headSha } = {}) {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^##\s*Отчёт ревьюеров\s*$/.test(l));
   if (start === -1) {
+    // PR Dependabot приходит без отчёта: красный pr-policy у него — норма, пока его не проверил Claude
+    // (скилл dependabot-review), а не поломка (п. О-53).
+    if (UNATTENDED_AUTHORS.includes(author)) {
+      return [
+        `PR от ${author} ждёт проверки Claude (скилл dependabot-review): сессия допишет «## Отчёт ревьюеров» ` +
+          'со строкой «- проверен коммит: <SHA головы PR>», сливает заказчик. Пока отчёта нет, pr-policy красный — так и задумано.',
+      ];
+    }
     return [
       'В описании PR нет раздела «## Отчёт ревьюеров» (выводы агентов spec-reviewer и security-reviewer).',
     ];

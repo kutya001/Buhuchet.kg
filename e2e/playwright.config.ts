@@ -5,16 +5,28 @@ const MOBILE = { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } };
 /** Тесты, которые меняют общую запись демо-организации. */
 const SHARED = /\.shared\.spec\.ts$/;
 
+/**
+ * Имя запуска для отчётов. В CI машина запускает Playwright трижды подряд (`.github/workflows/ci.yml`):
+ * у каждого запуска свои папки, иначе следующий запуск стирает отчёт и следы предыдущего.
+ */
+const RUN = process.env.E2E_RUN ?? 'all';
+
 // Сквозные тесты идут против уже запущенного приложения: в CI — docker-compose (как на VPS),
 // локально — `pnpm dev` или `docker compose --profile app up`. Адрес — E2E_BASE_URL.
 export default defineConfig({
   testDir: '.',
-  outputDir: '../test-results',
+  outputDir: `../test-results/${RUN}`,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
+  // В CI ещё и json: по нему scripts/e2e-summary.mjs пишет сводку прогона — что упало, что прошло только
+  // со второй попытки и что не запускалось (docs/typical-mistakes.md № 10, 18).
   reporter: process.env.CI
-    ? [['github'], ['html', { outputFolder: '../playwright-report', open: 'never' }]]
+    ? [
+        ['github'],
+        ['html', { outputFolder: `../playwright-report/${RUN}`, open: 'never' }],
+        ['json', { outputFile: `../playwright-report/${RUN}.json` }],
+      ]
     : 'list',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',

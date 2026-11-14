@@ -67,3 +67,15 @@ test('PR Dependabot: отчёт привязан к коммиту головы 
   assert.deepEqual(checkPrPolicy(ok, { author: 'kutya001', headSha: sha }), []);
   assert.deepEqual(checkPrPolicy(ok), []);
 });
+
+test('PR Dependabot без отчёта: понятно, что ждёт проверки Claude, а не сломан', () => {
+  const problems = checkPrPolicy('Bumps the actions group with 2 updates.', {
+    author: 'dependabot[bot]',
+    headSha: '0123456789abcdef0123456789abcdef01234567',
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0], /ждёт проверки Claude/);
+  assert.match(problems[0], /так и задумано/);
+  // У остальных — прежний текст.
+  assert.match(checkPrPolicy('Без отчёта', { author: 'kutya001' })[0], /нет раздела/);
+});

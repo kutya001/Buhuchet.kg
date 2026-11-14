@@ -8,7 +8,12 @@ import {
 import { hashPassword } from '@buhuchet/adapters/password';
 import { schema, type Db } from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
-import { createTestDatabase, seedAccessReference, seedPhoneCodes } from '@buhuchet/db/testing';
+import {
+  createTestDatabase,
+  seedAccessReference,
+  seedPhoneCodes,
+  testTextsDbOf,
+} from '@buhuchet/db/testing';
 import { SCOPE_GROUPS } from '@buhuchet/domain';
 import { eq } from 'drizzle-orm';
 import { createApp } from './app';
@@ -45,6 +50,11 @@ export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
     jobs: [],
     resetResponseFloorMs: 0,
     l10nRecheckMs: 0,
+    // Словарь — на своём соединении, как у сайта (п. О-46): иначе при пуле из одного соединения
+    // (TEST_DATABASE_POOL_MAX=1 в CI, п. О-53) словарь внутри транзакции ждал бы занятый пул.
+    ...(overrides.db && testTextsDbOf(overrides.db)
+      ? { textsDb: testTextsDbOf(overrides.db) }
+      : {}),
     ...overrides,
   };
 }

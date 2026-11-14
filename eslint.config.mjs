@@ -9,6 +9,15 @@ const VENDOR_IMPORTS = {
     'Привязка к поставщику: @supabase/* и @vercel/* разрешены только в packages/adapters (см. CLAUDE.md).',
 };
 
+/**
+ * Тело функции, которую зовут в открытой транзакции: `withOrgContext(db, ctx, (tx) => …)`,
+ * `withUserContext(…, (tx) => …)`, `ctx.asUser((tx) => …)`, `db.transaction((tx) => …)`.
+ */
+const IN_TX =
+  ':matches(CallExpression[callee.name=/^(withOrgContext|withUserContext)$/], CallExpression[callee.property.name=/^(asUser|transaction)$/]) > :function';
+const TX_ONLY_MESSAGE =
+  'Внутри открытой транзакции к базе — только через tx: запрос к пулу (deps.db) ждёт свободное соединение, а все они могут быть заняты такими же транзакциями — сайт зависнет (docs/decisions.md п. О-46, О-53). Данные — до транзакции или через tx.';
+
 /** Русские буквы в строке кода интерфейса — текст мимо словаря. */
 const CYRILLIC = '/[А-яЁё]/';
 const L10N_MESSAGE =
@@ -47,6 +56,24 @@ export default tseslint.config(
   {
     files: ['packages/adapters/**'],
     rules: { 'no-restricted-imports': 'off' },
+  },
+  {
+    // Второе соединение пула внутри открытой транзакции (п. О-46, О-53): ловится здесь, а не зависшим
+    // сайтом. Функции, которой передали весь deps, правило не видит — для этого агент security-reviewer.
+    files: ['packages/api/src/**/*.ts', 'packages/db/src/**/*.ts', 'apps/worker/src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `${IN_TX} MemberExpression[property.name='db'][object.name='deps']`,
+          message: TX_ONLY_MESSAGE,
+        },
+        {
+          selector: `${IN_TX} MemberExpression[property.name='db'][object.property.name='deps']`,
+          message: TX_ONLY_MESSAGE,
+        },
+      ],
+    },
   },
   {
     files: ['packages/domain/src/**'],

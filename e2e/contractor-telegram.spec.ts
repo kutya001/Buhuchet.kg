@@ -276,10 +276,11 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
     await client.dispose();
     // Второй запрос подтверждён (владелец вошёл в `request` при создании контрагента).
     const listed = async () =>
-      (await (
-        await request.get(`/api/contractors/${cp.id}/page/telegram`)
-      ).json()) as TelegramList & {
-        items: { id: string; version: number }[];
+      (await (await request.get(`/api/contractors/${cp.id}/page/telegram`)).json()) as Omit<
+        TelegramList,
+        'items'
+      > & {
+        items: (TelegramList['items'][number] & { id: string; version: number })[];
       };
     const waiting = (await listed()).items.find((i) => i.name === linkedClient.name)!;
     const approved = await request.post(`/api/contractors/${cp.id}/page/telegram/${waiting.id}`, {

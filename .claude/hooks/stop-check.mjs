@@ -1,4 +1,5 @@
-// В конце ответа: типы и быстрые тесты изменённых пакетов и pnpm check:portability.
+// В конце ответа: типы и быстрые тесты изменённых пакетов, pnpm check:portability, а при правке e2e/ —
+// типы и загрузка сквозных тестов.
 // Красное — Claude продолжает работу и чинит. Если с прошлой зелёной проверки ничего не менялось — пропуск.
 import { execSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -49,6 +50,10 @@ const steps = [
     ],
   ],
 ];
+// Папка e2e/ — не пакет, turbo её не видит: типы и загрузку сквозных тестов проверяем отдельно (п. О-53).
+if (code.some((f) => f.startsWith('e2e/'))) {
+  steps.push(['pnpm', ['typecheck:e2e']], ['pnpm', ['check:e2e-list']]);
+}
 for (const [cmd, args] of steps) {
   const res = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
   if (res.status !== 0) {

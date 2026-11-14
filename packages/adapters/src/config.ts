@@ -31,6 +31,12 @@ const DatabaseFields = z.object({
   DATABASE_ADMIN_URL: z.string().min(1).optional(),
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(5),
   /**
+   * Только для тестов: соединений пула роли приложения у временной базы (`createTestDatabase`). В CI
+   * тесты API идут с одним: запрос к пулу из открытой транзакции тогда сразу виснет и тест падает,
+   * а не вешает сайт на стенде (docs/decisions.md п. О-46, О-53).
+   */
+  TEST_DATABASE_POOL_MAX: z.coerce.number().int().positive().default(2),
+  /**
    * Корневой сертификат сервера базы (PEM, у Supabase — «SSL Configuration → Download certificate»).
    * Задан — соединения проверяют сертификат и имя сервера (как sslmode=verify-full), без него —
    * только шифруют (sslmode из адреса; ревью безопасности 06.11.2026, п. Р-14). Строку можно вставить

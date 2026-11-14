@@ -99,9 +99,14 @@ jobs:
       - name: Окружение как локально (.env из .env.example)
         if: needs.scope.outputs.landing_only != 'true'
         run: cp .env.example .env
+      # Типы — вместе с папкой e2e/ (typecheck:e2e), и сквозные тесты загружаются: пропавший при слиянии
+      # помощник видно здесь за минуту, а не на машинах сквозных тестов (п. О-53).
       - name: Типы
         if: needs.scope.outputs.landing_only != 'true'
         run: pnpm typecheck
+      - name: Сквозные тесты загружаются
+        if: needs.scope.outputs.landing_only != 'true'
+        run: pnpm check:e2e-list
       - name: Линтер и форматирование
         if: needs.scope.outputs.landing_only != 'true'
         run: pnpm lint && pnpm format:check
@@ -138,6 +143,8 @@ jobs:
       matrix:
         part: ['domain, api, adapters', 'остальные пакеты']
     steps:
+      - name: Время начала
+        run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -153,12 +160,28 @@ jobs:
         run: docker compose up -d --wait postgres minio
       - name: Миграции и наполнение на чистой базе
         run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
+      # Пул роли приложения у временных баз тестов — одно соединение (п. О-53): запрос к пулу из открытой
+      # транзакции (п. О-46) сразу виснет и тест падает здесь, а не вешает стенд под нагрузкой.
       - name: Тесты и покрытие (domain, api и adapters — не ниже 80 %)
         if: matrix.part == 'domain, api, adapters'
+        env:
+          TEST_DATABASE_POOL_MAX: '1'
         run: pnpm test:coverage
       - name: Тесты остальных пакетов
         if: matrix.part == 'остальные пакеты'
         run: pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
+      # Часть дольше 2/3 предела задачи (13 из 20 минут) — предупреждение: тестов стало больше, чем
+      # рассчитано, и скоро прогон оборвётся по пределу (п. О-53).
+      - name: Запас времени
+        if: always()
+        env:
+          PART: ${{ matrix.part }}
+        run: |
+          took=$(( ($(date +%s) - JOB_START) / 60 ))
+          echo "Часть «$PART»: $took мин из 20."
+          if [ "$took" -ge 13 ]; then
+            echo "::warning title=check · $PART близко к пределу::Часть шла $took мин из 20 — разделить тесты или поднять предел, пока прогон не оборвался (п. О-53)."
+          fi
 
   # Обязательная проверка check — итог машин выше. Идёт всегда, и при отмене: пропущенную по условию
   # обязательную проверку Ruleset засчитал бы пройденной.
@@ -240,7 +263,12 @@ jobs:
       # проекты-зависимости на каждой машине. --no-deps — порядок задают сами запуски; у машины может
       # не оказаться тестов *.shared — это не ошибка. Подделка Telegram запущена заранее одна на все три
       # запуска (Playwright берёт уже запущенную): сообщения в ней живут весь прогон, как в одном запуске.
+      # Все три запуска идут до конца, даже если первый упал, итог — по всем трём: иначе падения тестов
+      # *.shared этой машины видны только в следующем прогоне (п. О-53). У каждого запуска свой отчёт
+      # (E2E_RUN, e2e/playwright.config.ts). Шаг дольше 2/3 своего предела — предупреждение: машину пора
+      # разгрузить, пока тесты не упёрлись в предел.
       - name: Сквозные тесты на ПК и телефоне
+        id: e2e
         timeout-minutes: 30
         env:
           E2E_BASE_URL: http://localhost:3000
@@ -248,9 +276,23 @@ jobs:
         run: |
           (cd e2e && node fake-telegram.ts > /dev/null 2>&1 &)
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8091/health > /dev/null 2>&1 && break; sleep 1; done
-          pnpm test:e2e --project=desktop --project=mobile --shard="$SHARD"
-          pnpm test:e2e --project=desktop-shared --no-deps --pass-with-no-tests --shard="$SHARD"
-          pnpm test:e2e --project=mobile-shared --no-deps --pass-with-no-tests --shard="$SHARD"
+          start=$(date +%s)
+          rc=0
+          E2E_RUN=main pnpm test:e2e --project=desktop --project=mobile --shard="$SHARD" || rc=1
+          E2E_RUN=desktop-shared pnpm test:e2e --project=desktop-shared --no-deps --pass-with-no-tests --shard="$SHARD" || rc=1
+          E2E_RUN=mobile-shared pnpm test:e2e --project=mobile-shared --no-deps --pass-with-no-tests --shard="$SHARD" || rc=1
+          took=$(( ($(date +%s) - start) / 60 ))
+          echo "Сквозные тесты машины $SHARD: $took мин из 30."
+          if [ "$took" -ge 20 ]; then
+            echo "::warning title=Машина $SHARD близко к пределу::Сквозные тесты шли $took мин из 30 — разгрузить машину или ускорить тесты, пока прогон не оборвался по пределу (п. О-53)."
+          fi
+          exit $rc
+      # Сводка: что упало, что прошло только со второй попытки, что не запускалось и какой запуск оборван.
+      - name: Сводка сквозных тестов
+        if: always() && steps.e2e.conclusion != 'skipped'
+        timeout-minutes: 2
+        continue-on-error: true
+        run: node scripts/e2e-summary.mjs playwright-report "${{ matrix.shard }}/6" main desktop-shared mobile-shared
       # Журналы — и при падении, и при отмене: зависший прогон без них не разобрать.
       - name: Соединения базы (кто чего ждёт)
         if: failure() || cancelled()
