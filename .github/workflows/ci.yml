@@ -223,6 +223,16 @@ jobs:
       - name: Задачи по расписанию с секретом
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env | cut -d= -f2)" http://localhost:3000/api/cron/tick
+      # Для разбора падений: запросы базы дольше секунды и ожидания блокировок — в журнал PostgreSQL,
+      # без значений параметров (журнал публичный).
+      - name: Журнал медленных запросов базы
+        run: >-
+          docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1
+          -c "alter system set log_min_duration_statement = 1000"
+          -c "alter system set log_lock_waits = on"
+          -c "alter system set log_parameter_max_length = 0"
+          -c "alter system set log_parameter_max_length_on_error = 0"
+          -c "select pg_reload_conf()"
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       # Три запуска по порядку вместо зависимостей проектов: при --shard Playwright целиком повторяет
@@ -249,13 +259,24 @@ jobs:
       - name: Журналы контейнеров
         if: failure() || cancelled()
         timeout-minutes: 3
-        run: docker compose --profile app logs --no-color --timestamps --tail=500 || true
+        # Весь журнал — в файл отчёта; в журнал задания — ошибки и долгие запросы за весь прогон (сброс
+        # пароля отвечает не быстрее 1,5 с — не в счёт) и последние строки.
+        run: |
+          docker compose --profile app logs --no-color --timestamps > container-logs.txt 2>&1 || true
+          echo "Сайт и задачи: ошибки и запросы от 1 с за весь прогон"
+          grep -E '"level":[456]0|"ms":[0-9]{4,}' container-logs.txt | grep -v '/api/auth/password-reset' | tail -n 300 || true
+          echo "База: ошибки, запросы от 1 с, ожидания блокировок"
+          grep -E '^postgres-1' container-logs.txt | grep -E 'ERROR|FATAL|duration:|lock|STATEMENT' | tail -n 300 || true
+          echo "Последние строки"
+          tail -n 500 container-logs.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure() || cancelled()
         timeout-minutes: 3
         with:
           name: playwright-report-${{ matrix.shard }}
-          path: playwright-report/
+          path: |
+            playwright-report/
+            container-logs.txt
           if-no-files-found: ignore
           retention-days: 7
 
