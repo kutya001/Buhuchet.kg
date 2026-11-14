@@ -17,7 +17,9 @@
 //   Карточка: ответственный, с какого числа обслуживается, просроченные отчёты и отчёты со сроком в этом месяце (отчёт, срок, статус), долг за обслуживание.
 const TG_FIND_MAX=5,TG_FIND_MIN=2,TG_FIND_Q_MAX=60;
 // Команда: код, шаблон подписи, подпись по умолчанию, команда меню Telegram, право
-const TG_CMDS=[['today','tgCmdToday','Сегодня','/today','repView'],['week','tgCmdWeek','Неделя','/week','repView'],['over','tgCmdOver','Просрочено','/overdue','repView'],['find','tgCmdFind','Найти контрагента','/find','cpView']];
+const TG_CMDS=[['today','tgCmdToday','Сегодня','/today','repView'],['week','tgCmdWeek','Неделя','/week','repView'],['over','tgCmdOver','Просрочено','/overdue','repView'],['find','tgCmdFind','Найти контрагента','/find','cpView'],
+  // Виджет «Мои отчёты на неделю» (задача Т9, tg-widget.js)
+  ['widget','tgCmdWidget','Мои на неделю','/myweek','repView']];
 const tgCmdLabel=c=>tgBtnT(c[1],c[2]);
 // Строка кнопок меню под перепиской (в Telegram — кнопки под полем ввода)
 const tgcMenuHtml=()=>`<div class="tgc-menu" role="group" aria-label="Меню команд бота">${TG_CMDS.map(c=>`<button type="button" class="tgc-k" data-tgc-cmd="${c[0]}" title="${c[3]}">${esc(tgCmdLabel(c))}</button>`).join('')}</div>`;
@@ -76,6 +78,7 @@ function tgCmd(u,chat,id){const c=TG_CMDS.find(x=>x[0]===id);if(!c)return;const 
   chat.list.push({me:true,t:tgCmdLabel(c),at});
   if(!u||!u.tg)return say(tplFill('tgStart',{}));
   if(u.active===false||u.id==='admin'||!feat('telegram')||!can(c[4]))return say(tplFill('tgActNoRight',{}));
+  if(id==='widget')return tgWidgetCmd(u,chat,at);
   if(id!=='find')return chat.list.push({today:tgTodayMsg,week:tgWeekDaysMsg,over:tgOverMsg}[id](at));
   // Новая просьба отменяет прежнюю: бот ждёт один ответ
   chat.list.forEach(m=>{if(tgAskLive(m)&&m.ask.act==='cpFind')tgAskClose(m)});
