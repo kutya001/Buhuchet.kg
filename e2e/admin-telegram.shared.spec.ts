@@ -135,6 +135,9 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await expect(preview.getByRole('button', { name: 'Подробнее' })).toBeVisible();
     await page.locator('[data-tg-cast-plain]').click();
     await expect(preview.locator('[data-chat-image]')).toBeVisible();
+    // Уведомление первой рассылки живёт 3,5 с: если её доставили быстро, оно ещё на экране, и ниже
+    // «В очереди: 1 сообщение» нашлось бы дважды. Ждём, пока уйдёт.
+    await expect(page.getByText('В очереди: 1 сообщение')).toHaveCount(0);
     await page.locator('[data-tg-cast-go]').click();
     await confirm.getByRole('button', { name: 'Поставить в очередь' }).click();
     await expect(page.getByText('В очереди: 1 сообщение')).toBeVisible();
