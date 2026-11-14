@@ -56,6 +56,7 @@ import {
   formatDateRu,
   formatSomWithUnit,
   formatText,
+  canSeeContractor,
   hasPermission,
   monthLabel,
   monthPayAutoDue,
@@ -322,9 +323,17 @@ export async function logMonthPaySent(
   );
 }
 
-/** Видит ли сотрудник плату за обслуживание: право «Видеть плату за обслуживание». */
-function seesFee(access: Awaited<ReturnType<typeof loadEmployeeAccess>>): boolean {
-  return !!access && hasPermission(access.subject, 'fee');
+/**
+ * Видит ли сотрудник плату за обслуживание этого контрагента: право «Видеть плату за обслуживание» и
+ * контрагент в его области группы «Контрагенты» (как у методов платы).
+ */
+function seesFee(
+  access: Awaited<ReturnType<typeof loadEmployeeAccess>>,
+  cp: { responsibleEmployeeId: string | null },
+): boolean {
+  return (
+    !!access && hasPermission(access.subject, 'fee') && canSeeContractor(access.subject, 'cps', cp)
+  );
 }
 
 /**
@@ -491,6 +500,11 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           // Функцию «Плата за обслуживание» выключили после отправки — кнопка устарела.
           const { features } = await orgMenuSettings(tx, target.orgId);
           if (!features.fee) return { refusal: 'tgActStale' };
+          const cp = await getContractor(tx, target.contractorId, {
+            scope: undefined,
+            today: bishkekDate(deps.clock.now()),
+          });
+          if (!cp) return { refusal: 'tgActStale' };
           const { total } = current;
           await logContractorTelegramPay(tx, target.contractorId, 'page_tg_paid', [
             { field: 'tgFeePaid', to: { total, name: current.name } },
@@ -510,7 +524,12 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
             // видит (право «Видеть плату за обслуживание»): ответственному без права — первому
             // владельцу с Telegram (ТЗ: «без права эти поля скрыты везде»; прототип pgTgStaff не
             // проверяет).
-            { allowed: async (employeeId) => seesFee(await loadEmployeeAccess(tx, employeeId)) },
+            {
+              allowed: async (employeeId) =>
+                seesFee(await loadEmployeeAccess(tx, employeeId), {
+                  responsibleEmployeeId: cp.responsible?.id ?? null,
+                }),
+            },
           );
           const done = t('cppage.tg.paid_done');
           const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });
