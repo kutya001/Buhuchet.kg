@@ -88,7 +88,13 @@ describe('/api/cron/tick без базы', () => {
     // Меню команд бота задача читает из шаблонов: у базы без своих шаблонов — подписи по умолчанию.
     const db = { select: () => ({ from: async () => [] }) } as unknown as ApiDeps['db'];
     await withBot.at(-1)!.run(createTestDeps({ telegram, db }), new Date());
-    expect(telegram.commands?.map((c) => c.command)).toEqual(['today', 'week', 'overdue', 'find']);
+    expect(telegram.commands?.map((c) => c.command)).toEqual([
+      'today',
+      'week',
+      'overdue',
+      'find',
+      'myweek',
+    ]);
     expect(telegram.webhook).toEqual({
       url: 'https://test.buhuchet.kg/api/telegram/webhook',
       secretToken: 'webhook-secret-0000',

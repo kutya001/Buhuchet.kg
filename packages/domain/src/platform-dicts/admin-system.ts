@@ -394,6 +394,17 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgGrpMineNone: [],
   tgGrpMineToast: [],
   tgGrpNoLink: [],
+  tgCmdWidget: [],
+  tgWgCaption: ['даты', 'сдать', 'просрочено'],
+  tgWgHead: ['даты'],
+  tgWgUpd: ['время'],
+  tgWgOver: [],
+  tgWgNone: [],
+  tgWgMore: ['n'],
+  tgWgDone: ['отчёт'],
+  tgWgFile: ['отчёт'],
+  tgWgOld: [],
+  tgBtnWgRefresh: [],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -575,6 +586,17 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgGrpMineNone',
   'tgGrpMineToast',
   'tgGrpNoLink',
+  'tgCmdWidget',
+  'tgWgCaption',
+  'tgWgHead',
+  'tgWgUpd',
+  'tgWgOver',
+  'tgWgNone',
+  'tgWgMore',
+  'tgWgDone',
+  'tgWgFile',
+  'tgWgOld',
+  'tgBtnWgRefresh',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

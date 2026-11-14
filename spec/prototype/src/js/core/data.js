@@ -400,6 +400,9 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // Поток Т, задача Т8 (пакет заказчика 13.11.2026, идея 11): общий чат фирмы — сводка дня и «Мои»
   if(!db.meta.tgT8){db.meta.tgT8=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgGrpLinked','tgGrpLinkBad','tgGrpOff','tgGrpHead','tgGrpSub','tgBtnGrpMine','tgGrpMineHead','tgGrpMineNone','tgGrpMineToast','tgGrpNoLink'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток Т, задача Т9 (пакет заказчика 13.11.2026, идея 5): виджет «Мои отчёты на неделю»
+  if(!db.meta.tgT9){db.meta.tgT9=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCmdWidget','tgWgCaption','tgWgHead','tgWgUpd','tgWgOver','tgWgNone','tgWgMore','tgWgDone','tgWgFile','tgWgOld','tgBtnWgRefresh'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

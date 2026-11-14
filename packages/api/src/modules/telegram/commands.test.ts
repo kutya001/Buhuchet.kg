@@ -40,10 +40,7 @@ const CHAT = {
   nobody: 7900,
   flood: 7901,
 } as const;
-const MENU = [
-  ['Сегодня', 'Неделя'],
-  ['Просрочено', 'Найти контрагента'],
-];
+const MENU = [['Сегодня', 'Неделя'], ['Просрочено', 'Найти контрагента'], ['Мои на неделю']];
 const CP_ACC = 'ОсОО «Ала-Тоо Трейд»';
 const CP_CHIEF = 'ИП Садыков Трейд';
 const NO_RIGHT = TPL.tgActNoRight;
@@ -621,6 +618,7 @@ describe.skipIf(!databaseAvailable())(
         { command: 'week', description: 'Неделя' },
         { command: 'overdue', description: 'Просрочено' },
         { command: 'find', description: 'Найти контрагента' },
+        { command: 'myweek', description: 'Мои на неделю' },
       ]);
     });
 

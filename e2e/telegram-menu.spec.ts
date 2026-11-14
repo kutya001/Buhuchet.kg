@@ -23,10 +23,7 @@ import { newContractor } from './reports';
 
 const OWN_PASSWORD = 'Свой-пароль-e2e-1';
 const DAY = 86_400_000;
-const MENU = [
-  ['Сегодня', 'Неделя'],
-  ['Просрочено', 'Найти контрагента'],
-];
+const MENU = [['Сегодня', 'Неделя'], ['Просрочено', 'Найти контрагента'], ['Мои на неделю']];
 const bishkekToday = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10);
 const addDays = (iso: string, n: number) =>
   new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);

@@ -170,6 +170,24 @@ export interface Telegram {
   getWebhookInfo(): Promise<TelegramWebhookInfo>;
   /** Выйти из группы (поток Т, задача Т8: общий чат фирмы отключён). false — Telegram не принял. */
   leaveChat(chatId: string | number): Promise<boolean>;
+  /**
+   * Виджет в личном чате (поток Т, задача Т9; Bot API 10.4 `sendWidget`): HTML (до 32 КБ, до 4 КБ после
+   * сжатия), данные виджета `chatData` (до 1 КБ) и подпись — её показывает старое приложение Telegram.
+   * Виджет отправляется с запретом пересылки и копирования; запросы виджета к боту разрешены.
+   */
+  sendWidget(chatId: string | number, widget: TelegramWidget): Promise<TelegramSendResult>;
+  /** Новые данные отправленного виджета (`editMessageWidgetData`); HTML не меняется. */
+  editWidgetData(chatId: string | number, messageId: number, chatData: string): Promise<boolean>;
+  /** Ответ на запрос виджета (`answerWidgetQuery`, до 1 КБ): его получает только спросивший виджет. */
+  answerWidgetQuery(queryId: string, data?: string): Promise<boolean>;
+}
+
+/** Виджет для `sendWidget`. */
+export interface TelegramWidget {
+  html: string;
+  chatData: string;
+  caption: string;
+  threadId?: number;
 }
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -474,6 +492,35 @@ export function createTelegramBotApi(options: {
       const data = await call<boolean>('leaveChat', { chat_id: chatId });
       return data.ok;
     },
+    async sendWidget(chatId, widget) {
+      const data = await call<{ message_id: number }>('sendWidget', {
+        chat_id: chatId,
+        html: widget.html,
+        chat_data: widget.chatData,
+        caption: widget.caption,
+        allow_queries: true,
+        protect_content: true,
+        ...(widget.threadId !== undefined ? { message_thread_id: widget.threadId } : {}),
+      });
+      if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
+      return failure(data);
+    },
+    async editWidgetData(chatId, messageId, chatData) {
+      const data = await call<unknown>('editMessageWidgetData', {
+        chat_id: chatId,
+        message_id: messageId,
+        chat_data: chatData,
+      });
+      // «message is not modified» — данные уже такие.
+      return data.ok || /not modified/i.test(data.description ?? '');
+    },
+    async answerWidgetQuery(queryId, text) {
+      const data = await call<boolean>('answerWidgetQuery', {
+        widget_query_id: queryId,
+        ...(text ? { data: text } : {}),
+      });
+      return data.ok;
+    },
     async editKeyboard(chatId, messageId, keyboard) {
       const data = await call<unknown>('editMessageReplyMarkup', {
         chat_id: chatId,
@@ -598,6 +645,10 @@ export interface FakeTelegram extends Telegram {
   deleteTopic(threadId: number): void;
   /** Группы, из которых бот вышел (поток Т, задача Т8). */
   readonly left: Array<string | number>;
+  /** Виджеты (поток Т, задача Т9): отправленные, правки данных, ответы на запросы. */
+  readonly widgets: Array<TelegramWidget & { chatId: string | number; messageId: number }>;
+  readonly widgetEdits: Array<{ chatId: string | number; messageId: number; chatData: string }>;
+  readonly widgetAnswers: Array<{ queryId: string; data: string | undefined }>;
 }
 
 /** Бот для тестов: запоминает сообщения, умеет имитировать ошибки. */
@@ -625,8 +676,26 @@ export function createFakeTelegram(): FakeTelegram {
     topics: [],
     topicsOn: true,
     left: [],
+    widgets: [],
+    widgetEdits: [],
+    widgetAnswers: [],
     async leaveChat(chatId) {
       fake.left.push(chatId);
+      return true;
+    },
+    async sendWidget(chatId, widget) {
+      const failed = failures.shift();
+      if (failed) return failed;
+      const messageId = nextId++;
+      fake.widgets.push({ ...widget, chatId, messageId });
+      return { ok: true, messageId };
+    },
+    async editWidgetData(chatId, messageId, chatData) {
+      fake.widgetEdits.push({ chatId, messageId, chatData });
+      return true;
+    },
+    async answerWidgetQuery(queryId, data) {
+      fake.widgetAnswers.push({ queryId, data });
       return true;
     },
     deleteTopic(threadId) {

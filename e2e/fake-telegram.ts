@@ -20,6 +20,9 @@ import { createServer, type ServerResponse } from 'node:http';
 //   /bot<токен>/sendPhoto — картинка с подписью (оформленная рассылка, поток Т, задача Т6): файлом
 //   (multipart) или номером файла, который подделка выдала раньше; в /messages — `photo` (номер файла и
 //   размер загруженного), `text` — подпись без разметки.
+//   /bot<токен>/sendWidget, /bot<токен>/editMessageWidgetData, /bot<токен>/answerWidgetQuery — виджет
+//   «Мои отчёты на неделю» (поток Т, задача Т9): в /messages — `widget` (данные виджета сейчас), `text` —
+//   подпись; GET /widget-answers — ответы бота на запросы виджета.
 
 const PORT = Number(process.env.FAKE_TELEGRAM_PORT ?? 8091);
 
@@ -37,6 +40,8 @@ interface Sent {
   photo?: { fileId: string; bytes?: number };
   /** Скрытое сообщение в группе: кто его видит (поток Т, задача Т8). */
   receiver?: number;
+  /** Виджет (поток Т, задача Т9): данные виджета сейчас (`chat_data`). */
+  widget?: string;
 }
 
 const sent: Sent[] = [];
@@ -46,6 +51,8 @@ const files = new Map<string, { path: string; body: Buffer; tooBig: boolean }>()
 const answers: { id: string; text: string; alert: boolean }[] = [];
 // Группы, из которых бот вышел (`leaveChat`, поток Т, задача Т8).
 const left: string[] = [];
+// Ответы бота на запросы виджета (`answerWidgetQuery`, поток Т, задача Т9).
+const widgetAnswers: { id: string; data: string | null }[] = [];
 let commands: unknown = [];
 let nextId = 1;
 // Картинки, которые загружали: номер файла → размер.
@@ -107,6 +114,9 @@ createServer((req, res) => {
   if (req.method === 'GET' && url.pathname === '/health') return reply(res, 200, { ok: true });
   if (req.method === 'GET' && url.pathname === '/answers') return reply(res, 200, answers);
   if (req.method === 'GET' && url.pathname === '/left') return reply(res, 200, left);
+  if (req.method === 'GET' && url.pathname === '/widget-answers') {
+    return reply(res, 200, widgetAnswers);
+  }
   if (req.method === 'GET' && url.pathname === '/commands') return reply(res, 200, commands);
   if (req.method === 'GET' && url.pathname === '/messages') {
     const chat = url.searchParams.get('chat');
@@ -190,6 +200,10 @@ createServer((req, res) => {
       name?: string;
       base64?: string;
       tooBig?: boolean;
+      html?: string;
+      chat_data?: string;
+      widget_query_id?: string;
+      data?: string;
     };
     try {
       data = JSON.parse(body || '{}') as typeof data;
@@ -240,6 +254,37 @@ createServer((req, res) => {
         keyboard,
         photo: { fileId },
       });
+    }
+    if (method === 'sendWidget') {
+      const messageId = nextId++;
+      sent.push({
+        chatId: String(data.chat_id),
+        messageId,
+        text: String(data.caption ?? ''),
+        html: String(data.html ?? ''),
+        widget: String(data.chat_data ?? ''),
+      });
+      return reply(res, 200, { ok: true, result: { message_id: messageId } });
+    }
+    if (method === 'editMessageWidgetData') {
+      const message = sent.find(
+        (m) =>
+          m.chatId === String(data.chat_id) &&
+          m.messageId === data.message_id &&
+          m.widget !== undefined,
+      );
+      if (!message) {
+        return reply(res, 400, { ok: false, error_code: 400, description: 'message not found' });
+      }
+      message.widget = String(data.chat_data ?? '');
+      return reply(res, 200, { ok: true, result: true });
+    }
+    if (method === 'answerWidgetQuery') {
+      widgetAnswers.push({
+        id: String(data.widget_query_id ?? ''),
+        data: data.data === undefined ? null : String(data.data),
+      });
+      return reply(res, 200, { ok: true, result: true });
     }
     if (method === 'answerCallbackQuery') {
       answers.push({

@@ -24,6 +24,8 @@ function tgcTable(t){const nm=new Set(t.num||[]),c=i=>nm.has(i)?' class="num"':'
 function tgcMsg(m,i,plain){
   // Скрытое сообщение с таблицей (задача Т8, «Мои» в общем чате фирмы): m.eph — описание {h, tables}
   if(m.eph)return `<div class="tgc-eph" role="status"><b>${ic('eyeoff','sm')}Видно только вам</b>${typeof m.eph==='string'?esc(m.eph):plain?`<p>${esc(tgPlain(m.eph))}</p>`:`${m.eph.h?`<p class="tgc-h">${esc(m.eph.h)}</p>`:''}${(m.eph.tables||[]).map(tgcTable).join('')}`}</div>`;
+  // Виджет «Мои отчёты на неделю» (задача Т9, tg-widget.js)
+  if(m.wg)return tgcWidget(m,i,plain);
   if(m.day)return `<span class="tgc-day">${esc(m.day)}</span>`;
   const at=m.at?`<span class="tgc-at">${esc(m.at)}</span>`:'';
   if(m.me)return `<div class="tgc-m me${m.re||m.file?' say':''}"><div class="tgc-b">${m.re?`<p class="tgc-re">${ic('chat','sm')}${esc(m.re)}</p>`:''}${m.file?`<p class="tgc-file">${ic('file','sm')}<span>${esc(m.file.name)}</span><span class="tgc-fs">${fmtSize(m.file.size)}</span></p>`:''}${m.t?`<p>${esc(m.t)}</p>`:''}${at}</div></div>`;
@@ -96,6 +98,8 @@ function tgcBind(root,chat,redraw,u){const box=root.querySelector('[data-tgchat]
   // После нажатия и ответа переписка прокручивается к последнему сообщению — как в Telegram
   if(chat.jump){chat.jump=false;const l=box.lastElementChild;if(l&&l.scrollIntoView)l.scrollIntoView({block:'nearest'})}
   box.onclick=e=>{const c=e.target.closest('[data-tgc-copy]');if(c)return copyText(c.dataset.tgcCopy,'Код скопирован',true);
+    // Нажатие внутри виджета (задача Т9): вкладка дня, галочка «Сдан», «Обновить», «Открыть на сайте»
+    const g=e.target.closest('[data-tgw]');if(g){if(g.disabled)return;const[i,kind,arg]=g.dataset.tgw.split(':'),m=chat.list[+i];if(!m||!m.wg)return;tgWgPress(u,chat,m,kind,arg);tgTopicTag(chat);if(kind==='tick')chat.jump=true;return redraw()}
     const k=e.target.closest('[data-tgc]');if(!k||k.disabled)return;const[i,ri,ci]=k.dataset.tgc.split(':').map(Number),m=chat.list[i],b=m&&m.btns[ri][ci];if(!b)return;
     if(b.copy)return copyText(b.copy,b.copied||'Скопировано',true);
     if(b.url)return b.go?b.go():toast('В Telegram кнопка откроет сайт: '+b.url,'link');

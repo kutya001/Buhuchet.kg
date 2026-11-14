@@ -22,7 +22,13 @@ import { TELEGRAM_TEMPLATE_DEFAULTS, fillTemplate } from './messages';
 
 // Ответы по запросу (поток Т, задача Т5; прототип v102 modules/tg-menu.js).
 
-const LABELS = { today: 'Сегодня', week: 'Неделя', over: 'Просрочено', find: 'Найти контрагента' };
+const LABELS = {
+  today: 'Сегодня',
+  week: 'Неделя',
+  over: 'Просрочено',
+  find: 'Найти контрагента',
+  widget: 'Мои на неделю',
+};
 const DOW = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const T: CommandTexts = {
   tpl: (key, values = {}) => fillTemplate(TELEGRAM_TEMPLATE_DEFAULTS[key], values),
@@ -67,6 +73,8 @@ describe('команда меню бота', () => {
     expect(parseBotCommand(' /OVERDUE@buhuchet_bot ', LABELS)?.code).toBe('over');
     expect(parseBotCommand('неделя', LABELS)?.code).toBe('week');
     expect(parseBotCommand('Найти контрагента', LABELS)?.code).toBe('find');
+    expect(parseBotCommand('/myweek', LABELS)?.code).toBe('widget');
+    expect(parseBotCommand('Мои на неделю', LABELS)?.code).toBe('widget');
   });
 
   it('подпись берётся из действующих шаблонов; остальное — не команда', () => {
@@ -83,6 +91,7 @@ describe('команда меню бота', () => {
       ['week', 'week', 'repView'],
       ['over', 'overdue', 'repView'],
       ['find', 'find', 'cpView'],
+      ['widget', 'myweek', 'repView'],
     ]);
   });
 });
