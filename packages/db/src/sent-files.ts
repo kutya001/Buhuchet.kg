@@ -156,7 +156,10 @@ export async function getSentFile(
   return row ? toRecord(row as RecordRow) : null;
 }
 
-/** Начатые загрузки контрагента по номерам (закончить отправку может только та же страница). */
+/**
+ * Начатые со страницы загрузки контрагента по номерам (закончить отправку может только та же страница;
+ * загрузку из Telegram сервер заканчивает сам).
+ */
 export async function pendingSentFiles(
   tx: Tx,
   contractorId: string,
@@ -167,6 +170,7 @@ export async function pendingSentFiles(
     .where(
       and(
         eq(contractorSentFiles.contractorId, contractorId),
+        eq(contractorSentFiles.source, 'page'),
         eq(contractorSentFiles.state, 'pending'),
         inArray(contractorSentFiles.id, [...ids]),
       ),
@@ -212,9 +216,10 @@ export async function lockSentFilesOf(tx: Tx, contractorId: string): Promise<voi
 
 /**
  * Сколько файлов контрагент отправил за последние 24 часа — со страницы и из Telegram вместе (ТЗ: «не
- * больше 20 файлов в сутки от одного контрагента»), и начатые загрузки последних 10 минут (ссылка на
- * хранилище действует 2 минуты: брошенная загрузка лимит не занимает).
+ * больше 20 файлов в сутки от одного контрагента»), вместе с начатыми загрузками: незаконченная занимает
+ * место, пока задача по расписанию не удалила её вместе с файлами в хранилище (`SENT_PENDING_TTL_MS`).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
 export async function sentFilesLastDay(tx: Tx, contractorId: string): Promise<number> {
   const [row] = await tx
     .select({ n: sql<number>`count(*)::int` })
@@ -222,16 +227,7 @@ export async function sentFilesLastDay(tx: Tx, contractorId: string): Promise<nu
     .where(
       and(
         eq(contractorSentFiles.contractorId, contractorId),
-        or(
-          and(
-            eq(contractorSentFiles.state, 'ready'),
-            gt(contractorSentFiles.createdAt, sql`now() - interval '24 hours'`),
-          ),
-          and(
-            eq(contractorSentFiles.state, 'pending'),
-            gt(contractorSentFiles.createdAt, sql`now() - interval '10 minutes'`),
-          ),
-        ),
+        gt(contractorSentFiles.createdAt, sql`now() - interval '24 hours'`),
       ),
     );
   return row?.n ?? 0;

@@ -108,6 +108,7 @@ export async function finishSentFiles(
  * заблокирован, без Telegram) — первому владельцу с Telegram. Как `tgSvc` прототипа, не зависит от
  * переключателей напоминаний; ошибка не мешает отправке файлов.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
 export async function notifySentFiles(
   deps: ApiDeps,
   orgId: string,
@@ -167,6 +168,7 @@ export interface SentFileBody {
  * `SentFilesRefused` (текст — `sentFileRefusalText`), положенные объекты при отказе удаляются.
  * Чат и имя отправителя проверяет вызывающий (чат подключён к этому контрагенту этой организации).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
 export async function addSentFiles(
   deps: ApiDeps,
   o: {

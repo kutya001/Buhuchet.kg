@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorPageState,
-  dropPendingSentFiles,
   insertPendingSentFiles,
   pendingSentFiles,
   sentUploadState,
@@ -22,6 +21,7 @@ import {
   sentFileNote,
   sentFileRefusalText,
   sentFilesSendRefusal,
+  sentUploadKey,
   sentUploadOn,
   type SentFileRefusal,
 } from '@buhuchet/domain';
@@ -50,8 +50,9 @@ import {
  * «Отправить файл» на странице контрагента по ссылке (доработки 14.11.2026, блок 2; прототип v112
  * `pubUpDlg`): без входа, только в браузере, где страница открыта по коду (cookie этой ссылки), — как
  * файлы и Telegram страницы. Файл идёт мимо API: браузер кладёт его в хранилище по подписанной ссылке на
- * 2 минуты, «закончить» сверяет размер и тип по содержимому и делает файлы «Новыми». Всё, что страница
- * не может делать, — одинаково «Страница недоступна».
+ * 2 минуты (под ключ загрузки `sentUploadKey`), «закончить» копирует его, сверяет размер и тип копии по
+ * содержимому и делает файлы «Новыми». Всё, что страница не может делать, — одинаково «Страница
+ * недоступна».
  */
 
 /** Начатые отправки браузера за час: не больше 30 (сами файлы — ещё и 20 в сутки на контрагента). */
@@ -175,7 +176,8 @@ export function pageSentStartHandler(
     const expiresAt = new Date(Date.now() + FILE_UPLOAD_LINK_SECONDS * 1000).toISOString();
     const items = [];
     for (const row of rows) {
-      const upload = await deps.storage.signedUploadUrl(row.storageKey, {
+      // Ссылка — на ключ загрузки, не на ключ файла: после проверки её ещё можно использовать.
+      const upload = await deps.storage.signedUploadUrl(sentUploadKey(row.storageKey), {
         expiresInSeconds: FILE_UPLOAD_LINK_SECONDS,
         contentType: row.contentType,
         size: row.sizeBytes,
@@ -218,25 +220,47 @@ export const pageSentCompleteRoute = createRoute({
   },
 });
 
-/** Что не так с положенным файлом: не дошёл, не тот размер или тип, другое содержимое. */
-async function storedProblem(
+type StoredProblem = 'missing' | 'large' | 'content';
+
+/** Ключ проверочной копии: свой у каждого запроса, ссылки на него нет ни у кого. */
+const checkKeyOf = (row: SentFileRecord) => `${row.storageKey}.chk-${randomUUID()}`;
+
+/**
+ * Копия загруженного файла под ключом проверки и что с ней не так: не дошёл, не тот размер или тип,
+ * другое содержимое. Проверяется копия, а не загрузка: загрузку по ссылке можно перезаписать, копию —
+ * нет.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
+async function checkedCopy(
   deps: ApiDeps,
   row: SentFileRecord,
-): Promise<'missing' | 'large' | 'content' | null> {
-  const stored = await deps.storage.stat(row.storageKey);
+  checkKey: string,
+): Promise<StoredProblem | null> {
+  if (!(await deps.storage.copy(sentUploadKey(row.storageKey), checkKey))) return 'missing';
+  const stored = await deps.storage.stat(checkKey);
   if (!stored) return 'missing';
   if (stored.size > FILE_MAX_BYTES) return 'large';
   if (stored.size !== row.sizeBytes || stored.contentType !== row.contentType) return 'missing';
-  const head = await deps.storage.getRange(row.storageKey, 0, FILE_SNIFF_BYTES);
+  const head = await deps.storage.getRange(checkKey, 0, FILE_SNIFF_BYTES);
   if (!head) return 'missing';
   return fileContentProblem(row.name, head) ? 'content' : null;
 }
 
+/** Удалить объекты хранилища; не вышло — в журнал (остаток уберёт задача по расписанию). */
+async function removeObjects(deps: ApiDeps, keys: readonly string[]): Promise<void> {
+  for (const key of keys) {
+    await deps.storage.delete(key).catch((err: unknown) => {
+      deps.logger.error({ err }, 'файлы от контрагентов: файл не удалён из хранилища');
+    });
+  }
+}
+
 /**
  * Закончить отправку: все файлы лежат в хранилище, их размер — заявленный, содержимое — того типа, что
- * в имени, и это не программа и не веб-страница. Хоть один не такой — отправка не принимается целиком:
- * строки и файлы удаляются, ответ называет плохие файлы. Иначе — «Новые», история и сообщение
- * ответственному.
+ * в имени, и это не программа и не веб-страница. Проверяется копия каждого файла, и под ключ файла
+ * ложится только она. Хоть один не такой — отправка не принимается целиком: ответ называет плохие
+ * файлы, загрузки остаются незаконченными (их и оставшиеся файлы удалит задача по расписанию, а до
+ * того они занимают место в пределе за сутки). Иначе — «Новые», история и сообщение ответственному.
  */
 export function pageSentCompleteHandler(
   deps: ApiDeps,
@@ -253,19 +277,30 @@ export function pageSentCompleteHandler(
     if (rows.length !== unique.length) {
       return apiFail(404, 'not_found', 'Нет такой начатой отправки');
     }
-    const problems = await Promise.all(rows.map((r) => storedProblem(deps, r)));
-    const drop = async () => {
-      await withOrgContext(deps.db, ctx, (tx) => dropPendingSentFiles(tx, unique));
-      for (const row of rows) {
-        await deps.storage.delete(row.storageKey).catch((err: unknown) => {
-          deps.logger.error({ err }, 'файлы от контрагентов: файл не удалён из хранилища');
-        });
+    const checkKeys = rows.map(checkKeyOf);
+    const problems: (StoredProblem | null)[] = [];
+    const written: string[] = [];
+    try {
+      problems.push(
+        ...(await Promise.all(rows.map((r, i) => checkedCopy(deps, r, checkKeys[i]!)))),
+      );
+      if (!problems.some((p) => p !== null)) {
+        for (const [i, row] of rows.entries()) {
+          if (!(await deps.storage.copy(checkKeys[i]!, row.storageKey))) {
+            problems[i] = 'missing';
+            break;
+          }
+          written.push(row.storageKey);
+        }
       }
-    };
-    const named = (p: 'large' | 'content') =>
-      rows.filter((_, i) => problems[i] === p).map((r) => r.name);
+    } finally {
+      // Загрузки и проверочные копии больше не нужны (загрузку по ссылке ещё могут положить заново —
+      // её удалит задача по расписанию вместе со строкой).
+      await removeObjects(deps, [...rows.map((r) => sentUploadKey(r.storageKey)), ...checkKeys]);
+    }
+    const named = (p: StoredProblem) => rows.filter((_, i) => problems[i] === p).map((r) => r.name);
     if (problems.some((p) => p !== null)) {
-      await drop();
+      await removeObjects(deps, written);
       if (named('content').length) refuse(400, { code: 'sent_forbidden', files: named('content') });
       if (named('large').length) refuse(400, { code: 'sent_too_large', files: named('large') });
       apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
@@ -284,7 +319,7 @@ export function pageSentCompleteHandler(
       return true;
     });
     if (!done) {
-      await drop();
+      await removeObjects(deps, written);
       refuse(409, { code: 'sent_off' });
     }
     await notifySentFiles(

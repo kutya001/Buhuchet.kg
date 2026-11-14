@@ -211,6 +211,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
  * со статусом, причиной отказа и «Удалится через N дней». Нечего показать — null. Кто принял или
  * отклонил, комментарий сотрудника и имя в Telegram странице не отдаются.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
 async function pageSent(tx: Tx, contractorId: string, today: IsoDate) {
   const state = await sentUploadState(tx, contractorId);
   const upload = !!state && sentUploadOn(state);

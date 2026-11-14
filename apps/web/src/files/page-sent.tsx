@@ -190,7 +190,7 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
   const [all, setAll] = useState(false);
   if (!sent.upload && !sent.items.length) return null;
   return (
-    <div data-pub-sent="" className="flex flex-col gap-2.5">
+    <div data-pub-sent="" className="mb-3.5 flex flex-col gap-2.5 border-b border-line pb-3.5">
       {sent.upload ? (
         <div className="flex flex-wrap items-center gap-2.5">
           <button
@@ -210,7 +210,7 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
       ) : null}
       {sent.items.length ? (
         <>
-          <b className="text-[13px]">{t('pub.sent.list')}</b>
+          <b className="text-[13px] font-semibold text-muted">{t('pub.sent.list')}</b>
           <PageList
             count={sent.items.length}
             all={all}
@@ -221,7 +221,7 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
               <div
                 key={f.id}
                 data-pub-sent-row={f.status}
-                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-line bg-raised px-3 py-[9px] max-md:gap-2 max-md:px-2.5 max-md:py-2"
+                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-line bg-raised px-3 py-[9px] max-md:flex-wrap max-md:gap-2 max-md:px-2.5 max-md:py-2"
               >
                 <Icon name={fileIcon(f.name)} className="flex-none text-muted" />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -236,7 +236,8 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
                     </span>
                   ) : null}
                 </span>
-                <span className="flex flex-none flex-col items-end gap-0.5 text-right text-[12px] text-faint">
+                {/* Телефон (прототип `.pub-srow .pub-fs`): статус и срок — строкой под именем. */}
+                <span className="flex flex-none flex-col items-end gap-[3px] whitespace-nowrap text-right text-[12px] text-faint max-md:w-full max-md:flex-row max-md:flex-wrap max-md:items-center max-md:gap-x-2 max-md:gap-y-1 max-md:pl-7 max-md:text-left max-md:whitespace-normal">
                   <SentStatusPill status={f.status} />
                   {f.daysLeft !== null ? <span>{sentLeftText(t, f.daysLeft)}</span> : null}
                 </span>

@@ -14,6 +14,35 @@ const hostOf = (url: string | null): string | null => {
   }
 };
 
+/**
+ * Тело запроса, но не больше `max` байт: заявленную длину видно сразу, остальное читается по кускам и
+ * обрывается на пределе (у обработчиков маршрутов Next.js своего предела тела нет). Больше — null.
+ */
+async function readLimited(req: NextRequest, max: number): Promise<string | null> {
+  if (Number(req.headers.get('content-length') ?? 0) > max) return null;
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const all = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    all.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(all);
+}
+
 const json = (status: number, code: string) =>
   NextResponse.json(
     { error: { code, message: '' } },
@@ -44,8 +73,8 @@ export async function proxySent(
   const from = hostOf(origin);
   const own = [hostOf(siteInfo().baseUrl), req.headers.get('host')];
   if (!origin || !from || !own.includes(from)) return json(403, 'page_unavailable');
-  const text = await req.text();
-  if (text.length > BODY_MAX) return json(400, 'validation_failed');
+  const text = await readLimited(req, BODY_MAX);
+  if (text === null) return json(400, 'validation_failed');
   let body: unknown;
   try {
     body = JSON.parse(text);

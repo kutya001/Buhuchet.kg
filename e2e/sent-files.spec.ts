@@ -6,6 +6,7 @@ import {
   DEMO_PASSWORD,
   hire,
   linkTelegram,
+  showStats,
   signIn,
   uniqueChat,
   uniqueLogin,
@@ -166,6 +167,8 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     baseURL,
     isMobile,
   }) => {
+    // Длинный сценарий: новый сотрудник с Telegram, два входа, карточка и страница контрагента.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     const texts = await dictionary(request);
     // Ответственный — новый сотрудник с Telegram (демо-сотрудникам Telegram не привязывается).
@@ -182,6 +185,8 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     // Клиент: «Отправить файл» в разделе «Файлы» своей страницы.
     const section = await openFilesSection(page, cp, name, isMobile);
     await expect(section.getByText(text(texts, 'pub.sent.hint'))).toBeVisible();
+    // Подвал страницы, где можно отправлять файлы, — свой (прототип v112).
+    await expect(page.locator('footer')).toHaveText(text(texts, 'pub.foot.upload'));
     await section.locator('[data-pub-up]').click();
     const send = page.getByRole('dialog', { name: text(texts, 'pub.sent.send') });
     await expect(send.getByText(text(texts, 'pub.sent.dlg.files_hint'))).toBeVisible();
@@ -208,9 +213,10 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     expect(wide).toBe(false);
 
     // Ответственному — сообщение в Telegram: контрагент и имя файла.
+    const notice = text(texts, 'files.sent.tg.one', { contractor: name, names: fileName });
     await expect
-      .poll(async () => (await botMessages(request, staff.chat)).at(-1) ?? '')
-      .toContain(text(texts, 'files.sent.tg.one', { contractor: name, names: fileName }));
+      .poll(async () => (await botMessages(request, staff.chat)).some((m) => m.includes(notice)))
+      .toBe(true);
 
     // Бухгалтер: карточка → «Файлы» → «Отправленные файлы», строка «Новый».
     await page.goto('about:blank');
@@ -272,6 +278,8 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     baseURL,
     isMobile,
   }) => {
+    // Длинный сценарий: новый сотрудник, отправка по шагам, окно файла, карточка и страница контрагента.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     const texts = await dictionary(request);
     const staffApi = await playwright.request.newContext({ baseURL });
@@ -295,6 +303,12 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
       data: start,
     });
     expect(foreign.status()).toBe(403);
+    // Тело больше 64 КБ сайт не дочитывает.
+    const huge = await stranger.post(`${cp.path}/sent`, {
+      headers: { origin, 'content-type': 'application/json' },
+      data: JSON.stringify({ files: [{ name: 'x'.repeat(70_000), size: 1 }] }),
+    });
+    expect(huge.status()).toBe(400);
     await stranger.dispose();
 
     // Браузер клиента: код введён, файл отправлен (начать → PUT в хранилище → закончить).
@@ -327,8 +341,12 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     expect(await done.json()).toEqual({ sent: 1 });
     await client.dispose();
 
-    // Бухгалтер: «Файловый менеджер» → «Файлы от контрагентов», своя строка «Новый».
+    // Бухгалтер: «Файловый менеджер» открывается на «Все файлы» — со «Статистикой», как раньше.
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/files');
+    await expect(page).toHaveURL(/\/app\/files\/all$/);
+    if (!isMobile) await showStats(page);
+    // «Файлы от контрагентов», своя строка «Новый».
     await page.goto('/app/files/sent');
     const grid = page.locator('[data-files-sent] [data-grid]');
     await expect(grid).toBeVisible();

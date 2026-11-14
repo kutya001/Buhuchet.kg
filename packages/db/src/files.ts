@@ -5,6 +5,7 @@ import {
   pageFileCategory,
   RecordChangedError,
   RecordNotFoundError,
+  sentUploadKey,
   type FileSourceKind,
   type ListQuery,
 } from '@buhuchet/domain';
@@ -279,12 +280,15 @@ export async function deleteContractorFiles(tx: Tx, contractorId: string): Promi
     .where(and(eq(files.contractorId, contractorId), eq(files.state, 'pending')))
     .returning({ storageKey: files.storageKey });
   // Отправленные контрагентом файлы (доработки 14.11.2026, блок 2): строки удалит каскад вместе с
-  // контрагентом, их файлы в хранилище — вызывающий после фиксации.
+  // контрагентом, их файлы в хранилище — вызывающий после фиксации; и ключ загрузки со страницы.
   const sent = await tx
     .select({ storageKey: contractorSentFiles.storageKey })
     .from(contractorSentFiles)
     .where(eq(contractorSentFiles.contractorId, contractorId));
-  return [...ready, ...pending, ...sent].map((f) => f.storageKey);
+  return [
+    ...[...ready, ...pending].map((f) => f.storageKey),
+    ...sent.flatMap((f) => [f.storageKey, sentUploadKey(f.storageKey)]),
+  ];
 }
 
 /**

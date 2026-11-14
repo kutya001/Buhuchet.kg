@@ -16,9 +16,8 @@ import {
   SentFileListPage,
   SentUploadState,
 } from '@buhuchet/shared';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createApp } from '../../app';
 import {
   apiRequest,
   createStaffFixture,
@@ -419,14 +418,16 @@ describe.skipIf(!databaseAvailable())(
       const err = await failure(done.res);
       expect(err.code).toBe('sent_forbidden');
       expect(err.message).toContain('Счёт.pdf, readme.txt');
-      // Строк и файлов нет — ни одного, и хорошего тоже.
+      // Ни одного файла — и хорошего тоже: загрузки остались незаконченными (их удалит задача), в
+      // хранилище нет ни файлов, ни загрузок, ни проверочных копий.
       const rows = await f.t.admin.db
         .select()
         .from(contractorSentFiles)
         .where(eq(contractorSentFiles.contractorId, cpAcc.id));
-      expect(rows.filter((r) => r.status !== 'accepted')).toHaveLength(0);
+      expect(rows.map((r) => r.state)).toEqual(['pending', 'pending', 'pending']);
+      expect((await cardList(acc, cpAcc)).items).toEqual([]);
       for (const id of done.ids) {
-        expect([...storage.files.keys()].some((k) => k.endsWith(`/sent/${id}`))).toBe(false);
+        expect([...storage.files.keys()].some((k) => k.includes(`/sent/${id}`))).toBe(false);
       }
       // Не тот размер, что заявлен, — «файл не дошёл».
       const short = [{ name: 'Акт.pdf', body: PDF(), size: 999 }];
@@ -446,6 +447,103 @@ describe.skipIf(!databaseAvailable())(
         ids: ticket.items.map((x) => x.id),
       });
       expect(none.status).toBe(409);
+    });
+
+    it('ссылка на хранилище — только на загрузку: файл, положенный по ней после проверки, не подменяет принятый', async () => {
+      const [id] = await send('org-a', cpAcc, grantAcc, [{ name: 'Договор.pdf', body: PDF('v1') }]);
+      const key = (await keyOf(id!))!;
+      expect(storage.files.has(`${key}.up`)).toBe(false);
+      expect([...storage.files.keys()].filter((k) => k.startsWith(`${key}.`))).toEqual([]);
+      // Ссылка ещё действует: по ней кладут программу — она ложится рядом, а не в файл.
+      await storage.put(`${key}.up`, EXE, { contentType: 'application/pdf' });
+      expect(new TextDecoder().decode(storage.files.get(key)!.body)).toBe('%PDF-1.7\nv1');
+      // Повторно закончить нельзя: загрузка уже закончена.
+      const again = await pagePost(`/api/page/org-a/${cpAcc.inn}/sent/complete`, grantAcc, {
+        ids: [id],
+      });
+      expect(again.status).toBe(404);
+      // «Принять» копирует проверенный файл и убирает загрузку.
+      const ok = await decide(acc, id!, 'accept', { version: await versionOf(acc, cpAcc, id!) });
+      expect(ok.status, await ok.clone().text()).toBe(200);
+      const [accepted] = await f.t.admin.db
+        .select({ key: files.storageKey })
+        .from(files)
+        .where(eq(files.id, SentFileItem.parse(await ok.json()).fileId!));
+      expect(new TextDecoder().decode(storage.files.get(accepted!.key)!.body)).toBe('%PDF-1.7\nv1');
+      expect(storage.files.has(key)).toBe(false);
+      expect(storage.files.has(`${key}.up`)).toBe(false);
+    });
+
+    it('незаконченная загрузка занимает место в пределе за сутки, пока задача не удалила её через 30 минут вместе с файлами', async () => {
+      const ten = (p: string) =>
+        Array.from({ length: 10 }, (_, i) => ({ name: `${p}${i}.pdf`, body: PDF() }));
+      // Начали и бросили: файлы положены, «закончить» не было.
+      const res = await start('org-a', cpAcc, grantAcc, ten('a'));
+      expect(res.status).toBe(201);
+      const ticket = PageSentTicket.parse(await res.json());
+      for (const item of ticket.items) {
+        const url = new URL(item.upload.url);
+        await storage.put(url.host + url.pathname, PDF(), { contentType: 'application/pdf' });
+      }
+      await send('org-a', cpAcc, grantAcc, ten('b'));
+      const full = await start('org-a', cpAcc, grantAcc, [{ name: 'c.pdf', body: PDF() }]);
+      expect(full.status).toBe(429);
+      expect((await failure(full)).code).toBe('sent_day_limit');
+      // Молодую загрузку задача не трогает.
+      expect(await purgeSentFiles(f.deps)).toBe(0);
+      const abandoned = ticket.items.map((x) => x.id);
+      await f.t.admin.db
+        .update(contractorSentFiles)
+        .set({ createdAt: sql`now() - interval '31 minutes'` })
+        .where(inArray(contractorSentFiles.id, abandoned));
+      expect(await purgeSentFiles(f.deps)).toBe(10);
+      for (const id of abandoned) {
+        expect([...storage.files.keys()].some((k) => k.includes(`/sent/${id}`))).toBe(false);
+      }
+      // Брошенная загрузка — не отправка: в истории её нет, место в пределе освободилось.
+      expect((await history(cpAcc.id)).filter((h) => h.action === 'sent_file_purge')).toEqual([]);
+      await send('org-a', cpAcc, grantAcc, [{ name: 'c.pdf', body: PDF() }]);
+    });
+
+    it('без входа — 401, неверные данные — 400 по схеме', async () => {
+      const [id] = await send('org-a', cpAcc, grantAcc, [{ name: 'Акт.pdf', body: PDF() }]);
+      for (const [method, path] of [
+        ['GET', '/api/files/sent'],
+        ['GET', '/api/files/sent/values?col=st'],
+        ['GET', '/api/files/sent/count'],
+        ['GET', `/api/files/sent/${id}/link`],
+        ['POST', `/api/files/sent/${id}/accept`],
+        ['POST', `/api/files/sent/${id}/reject`],
+        ['GET', `/api/contractors/${cpAcc.id}/sent-files`],
+        ['GET', `/api/contractors/${cpAcc.id}/page/sent-upload`],
+        ['POST', `/api/contractors/${cpAcc.id}/page/sent-upload`],
+      ] as const) {
+        const res = await call(
+          method,
+          path,
+          undefined,
+          method === 'POST' ? { version: 1 } : undefined,
+        );
+        expect(res.status, `${method} ${path}`).toBe(401);
+      }
+      for (const [path, body] of [
+        [`/api/files/sent/${id}/accept`, {}],
+        [`/api/files/sent/${id}/reject`, { reason: 'Не тот месяц' }],
+        ['/api/files/sent/не-номер/accept', { version: 1 }],
+      ] as const) {
+        const res = await call('POST', path, acc, body);
+        expect(res.status, path).toBe(400);
+        expect((await failure(res)).code, path).toBe('validation_failed');
+      }
+      for (const [path, body] of [
+        [`/api/page/org-a/${cpAcc.inn}/sent/complete`, {}],
+        [`/api/page/org-a/${cpAcc.inn}/sent/complete`, { ids: ['не-номер'] }],
+        [`/api/page/org-a/${cpAcc.inn}/sent`, { files: [{ name: 'a.pdf' }] }],
+      ] as const) {
+        const res = await pagePost(path, grantAcc, body);
+        expect(res.status, path).toBe(400);
+        expect((await failure(res)).code, path).toBe('validation_failed');
+      }
     });
 
     it('проверки до загрузки: ни одного, больше 10, больше 20 МБ, запрещённое расширение', async () => {

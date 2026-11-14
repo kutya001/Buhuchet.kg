@@ -207,9 +207,24 @@ describe.skipIf(!databaseAvailable())('Отправленные файлы ко�
     const row = newSent(a.orgId, cpA, 'Выписка.pdf');
     await asGuest(a.orgId, (tx) => insertPendingSentFiles(tx, [row]));
     expect(await inA((tx) => sentFilesLastDay(tx, cpA))).toBe(1);
-    // Начатая загрузка в списке не видна; закончить можно только у своего контрагента.
+    // Начатая загрузка в списке не видна; закончить можно только у своего контрагента и только
+    // загрузку со страницы (из Telegram её заканчивает сервер).
     expect(await inA((tx) => listContractorSentFiles(tx, cpA))).toEqual([]);
     expect(await asGuest(a.orgId, (tx) => pendingSentFiles(tx, cpA2, [row.id]))).toEqual([]);
+    const fromTg = {
+      ...newSent(a.orgId, cpA, 'Чек.jpg'),
+      source: 'telegram' as const,
+      tgChatId: 501,
+    };
+    await asGuest(a.orgId, (tx) => insertPendingSentFiles(tx, [fromTg]));
+    expect(await asGuest(a.orgId, (tx) => pendingSentFiles(tx, cpA, [fromTg.id]))).toEqual([]);
+    await asGuest(a.orgId, (tx) => dropPendingSentFiles(tx, [fromTg.id]));
+    // Брошенная загрузка занимает место в пределе за сутки, пока её не удалили.
+    await db.admin.db
+      .update(contractorSentFiles)
+      .set({ createdAt: sql`now() - interval '20 hours'` })
+      .where(eq(contractorSentFiles.id, row.id));
+    expect(await inA((tx) => sentFilesLastDay(tx, cpA))).toBe(1);
     const [pending] = await asGuest(a.orgId, (tx) => pendingSentFiles(tx, cpA, [row.id]));
     expect(pending).toMatchObject({ id: row.id, state: 'pending', status: 'new' });
     await asGuest(a.orgId, (tx) => markSentFilesReady(tx, [row.id]));
@@ -414,6 +429,8 @@ describe.skipIf(!databaseAvailable())('Отправленные файлы ко�
     const sent = await send(b.orgId, cpB, 'Б.pdf');
     const keys = await inB((tx) => deleteContractorFiles(tx, cpB));
     expect(keys).toContain(sent.storageKey);
+    // И ключ загрузки со страницы: по ссылке её могли положить и после проверки.
+    expect(keys).toContain(`${sent.storageKey}.up`);
     // Чужие ключи не попадают.
     expect(await inB((tx) => deleteContractorFiles(tx, cpA))).toEqual([]);
   });

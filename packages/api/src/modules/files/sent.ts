@@ -38,6 +38,7 @@ import {
   SENT_FILE_MESSAGES,
   sentFileDaysLeft,
   sentFileReason,
+  sentUploadKey,
   type AccessSubject,
   type IsoDate,
 } from '@buhuchet/domain';
@@ -88,6 +89,7 @@ const notFound = (): never => apiFail(404, 'not_found', 'Файл не найд�
  * «Сегодня» для «Удалится через N дней»: время отправки ставит база по настоящим часам, поэтому и день —
  * по ним, а не по часам демо-стенда (FIXED_NOW); так же считает удаление (`sent-purge.ts`).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
 const sentToday = () => bishkekDate(realNow());
 const cppageOff = (): never =>
   apiFail(
@@ -475,12 +477,15 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
       });
       throw err;
     }
-    await deps.storage.delete(seen.storageKey).catch((err: unknown) => {
-      deps.logger.error(
-        { err },
-        'файлы от контрагентов: принятый файл не удалён из «отправленных»',
-      );
-    });
+    // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас.
+    for (const sentKey of [seen.storageKey, sentUploadKey(seen.storageKey)]) {
+      await deps.storage.delete(sentKey).catch((err: unknown) => {
+        deps.logger.error(
+          { err },
+          'файлы от контрагентов: принятый файл не удалён из «отправленных»',
+        );
+      });
+    }
     return c.json(body, 200);
   };
 }

@@ -136,6 +136,7 @@ export function sentFilePurgeUpTo(today: IsoDate): IsoDate {
  * Имя принятого файла среди файлов контрагента (прототип `sntAccept`): занятое имя получает « (2)»,
  * « (3)»… перед расширением. Имена сравниваются без учёта регистра (так их видит Windows).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-7
 export function acceptedFileName(name: string, taken: Iterable<string>): string {
   const busy = new Set([...taken].map((n) => n.toLowerCase()));
   if (!busy.has(name.toLowerCase())) return name;
