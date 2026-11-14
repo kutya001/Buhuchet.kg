@@ -392,3 +392,36 @@ export const telegramGroupTokens = pgTable(
     orgIsolation('telegram_group_tokens_isolation', t.orgId),
   ],
 ).enableRLS();
+
+/**
+ * Виджет «Мои отчёты на неделю» (поток Т, задача Т9; прототип v106 modules/tg-widget.js): у сотрудника —
+ * один действующий виджет, последний присланный (прежний бот помечает «устарел»). `items` — номера
+ * отчётов строк виджета по порядку: виджет присылает боту номер строки, а не номер отчёта. `data` —
+ * данные виджета (`chat_data`) в том виде, в каком они сейчас в чате.
+ */
+export const telegramWidgets = pgTable(
+  'telegram_widgets',
+  {
+    userId: uuid('user_id').primaryKey(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    messageId: integer('message_id').notNull(),
+    items: jsonb('items').$type<string[]>().notNull(),
+    data: text('data').notNull(),
+    sentOn: date('sent_on', { mode: 'string' }).notNull(),
+    ...timestamps(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'telegram_widgets_user_org_fk',
+      columns: [t.userId, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    check('telegram_widgets_chat_check', sql`${t.chatId} > 0`),
+    check('telegram_widgets_data_check', sql`octet_length(${t.data}) <= 1024`),
+    index('telegram_widgets_org_idx').on(t.orgId, t.sentOn),
+    orgIsolation('telegram_widgets_isolation', t.orgId),
+  ],
+).enableRLS();

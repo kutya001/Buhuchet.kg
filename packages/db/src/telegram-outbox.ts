@@ -205,8 +205,10 @@ export async function finishOutbox(tx: Tx, outcomes: readonly OutboxOutcome[]): 
 }
 
 /**
- * Служебное сообщение бота отправлено (или нет) — в журнал (функция `app.telegram_log`, работает и без
- * организации). У кода восстановления текст не пишется.
+ * Сообщение бота, отправленное сразу, — в журнал (функция `app.telegram_log`, работает и без организации;
+ * без описания и номера сообщения — их пишет `logBotMessage`). У кода восстановления текст не пишется.
+ * Прежний вариант функции с шестью параметрами принимал только служебные виды — ответы бота (`bot_cmd`,
+ * `bot_reply`, сообщения общего чата) в журнал не попадали.
  */
 const isCodeKind = (kind: OutboxKind) => (CODE_KINDS as readonly OutboxKind[]).includes(kind);
 
@@ -223,7 +225,7 @@ export async function logTelegram(
 ): Promise<void> {
   await db.execute(
     // Текст кода в базу не передаётся вовсе (его не пишет и функция): не попадёт и в журнал PostgreSQL.
-    sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${isCodeKind(entry.kind) ? null : entry.text}, ${entry.ok}, ${entry.error ?? null})`,
+    sql`select app.telegram_log(${entry.userId}, ${entry.chatId}, ${entry.kind}, ${isCodeKind(entry.kind) ? null : entry.text}, ${entry.ok}, ${entry.error ?? null}, null::jsonb, null::bigint)`,
   );
 }
 

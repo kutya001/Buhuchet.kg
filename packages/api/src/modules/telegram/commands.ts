@@ -8,8 +8,11 @@ import {
   orgMenuSettings,
   saveBotPress,
   takeRateLimit,
+  telegramBotRich,
+  telegramPlainText,
   withOrgContext,
   type BotChatUser,
+  type Tx,
 } from '@buhuchet/db';
 import {
   askBotMessage,
@@ -47,6 +50,7 @@ import {
 import { BOT_PRESS_RATE_LIMIT } from './press';
 import { BOT_REPLY_ONCE } from './reply';
 import { replyTopicOrg } from './topics';
+import { sendWeekWidget } from './widget';
 
 /*
  * Меню команд бота (поток Т, задача Т5; пакет заказчика 13.11.2026, идея 4; прототип v102
@@ -156,6 +160,13 @@ async function answerCommand(run: CommandRun, user: BotChatUser): Promise<void> 
     return;
   }
   const stale = command.code === 'find' ? await openFindAsks(deps, chatId, user.userId, today) : [];
+  // «Мои на неделю» (задача Т9): виджет; простой текст (свой или платформы) — ответ «Неделя».
+  const widget =
+    command.code === 'widget' &&
+    (await telegramBotRich(deps.db)) &&
+    !(await telegramPlainText(deps.db, user.userId));
+  const week = (tx: Tx, subject: Parameters<typeof reportsCommandMessage>[2]['subject']) =>
+    reportsCommandMessage(deps, tx, { subject, orgId }, 'week', { today, t, tr });
   const outcome = await withOrgContext(deps.db, { orgId, userId: user.userId }, async (tx) => {
     const [access, { features }] = [
       await loadEmployeeAccess(tx, employeeId),
@@ -163,6 +174,9 @@ async function answerCommand(run: CommandRun, user: BotChatUser): Promise<void> 
     ];
     if (!access || !features.telegram || !hasPermission(access.subject, command.permission)) {
       return null;
+    }
+    if (command.code === 'widget') {
+      return { message: widget ? null : await week(tx, access.subject), closed: [] };
     }
     if (command.code !== 'find') {
       const message = await reportsCommandMessage(
@@ -194,6 +208,25 @@ async function answerCommand(run: CommandRun, user: BotChatUser): Promise<void> 
     await refuse();
     return;
   }
+  let message = outcome.message;
+  if (!message) {
+    const sent = await sendWeekWidget(deps, {
+      user: { ...user, orgId, employeeId },
+      chatId,
+      today,
+      shared,
+    });
+    if (sent) return;
+    // Telegram виджет не принял (старый сервер Bot API) — ответ «Неделя».
+    message = await withOrgContext(deps.db, { orgId, userId: user.userId }, async (tx) => {
+      const access = await loadEmployeeAccess(tx, employeeId);
+      return access ? week(tx, access.subject) : null;
+    });
+    if (!message) {
+      await refuse();
+      return;
+    }
+  }
   for (const ask of outcome.closed) {
     try {
       await deps.telegram?.editKeyboard(chatId, ask.messageId, botKeyboard(ask.message));
@@ -204,7 +237,7 @@ async function answerCommand(run: CommandRun, user: BotChatUser): Promise<void> 
   await sendBotMessage(
     deps,
     { userId: user.userId, chatId },
-    commandMessageFor(outcome.message, user.orgName, shared),
+    commandMessageFor(message, user.orgName, shared),
     command.code === 'find' ? 'bot_ask' : 'bot_cmd',
     'bot_cmd',
     { menu },

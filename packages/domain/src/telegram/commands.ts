@@ -27,6 +27,8 @@ export const BOT_COMMANDS = [
   { code: 'week', template: 'tgCmdWeek', slash: 'week', permission: 'repView' },
   { code: 'over', template: 'tgCmdOver', slash: 'overdue', permission: 'repView' },
   { code: 'find', template: 'tgCmdFind', slash: 'find', permission: 'cpView' },
+  // Виджет «Мои отчёты на неделю» (задача Т9, `./widget`; прототип v106 `TG_CMDS`).
+  { code: 'widget', template: 'tgCmdWidget', slash: 'myweek', permission: 'repView' },
 ] as const satisfies readonly {
   code: string;
   template: TelegramTemplateKey;

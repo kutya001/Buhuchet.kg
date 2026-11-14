@@ -960,6 +960,13 @@
       "when": 1794623444359,
       "tag": "0136_telegram_groups_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794626593335,
+      "tag": "0137_telegram_widgets",
+      "breakpoints": true
     }
   ]
 }

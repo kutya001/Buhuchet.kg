@@ -41,6 +41,7 @@ import { handleGroupPress, handleGroupUpdate } from './group';
 import { handleBotPress } from './press';
 import { handleBotReply, type BotIncoming } from './reply';
 import { inReplyThread } from './topics';
+import { handleWidgetQuery } from './widget';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -105,12 +106,21 @@ const ButtonPress = z.object({
     .optional(),
 });
 
+/** Запрос виджета к боту (поток Т, задача Т9; Bot API 10.4 `widget_query`). */
+const WidgetQuery = z.object({
+  id: z.string().min(1).max(128),
+  from: z.object({ id: z.number().int(), is_bot: z.boolean().optional() }),
+  chat: z.object({ id: z.number().int(), type: z.string().max(32) }),
+  message_id: z.number().int(),
+  data: z.string().max(256),
+});
+
 export const webhookRoute = createRoute({
   method: 'post',
   path: '/telegram/webhook',
   tags: ['telegram'],
   summary:
-    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями, ответ на просьбу бота (файл или текст), общий чат фирмы',
+    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями, ответ на просьбу бота (файл или текст), общий чат фирмы, запросы виджета «Мои отчёты на неделю»',
   request: {
     body: { required: true, content: { 'application/json': { schema: TelegramUpdate } } },
   },
@@ -382,7 +392,26 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       message?: unknown;
       callback_query?: unknown;
       my_chat_member?: unknown;
+      widget_query?: unknown;
     };
+    // Галочка и «Обновить» в виджете «Мои отчёты на неделю» (задача Т9). Сбой не роняет вебхук.
+    const widgetQuery = WidgetQuery.safeParse(update.widget_query);
+    if (widgetQuery.success) {
+      const q = widgetQuery.data;
+      try {
+        await handleWidgetQuery(deps, {
+          id: q.id,
+          fromId: q.from.is_bot ? 0 : q.from.id,
+          chatId: q.chat.id,
+          chatType: q.chat.type,
+          messageId: q.message_id,
+          data: q.data,
+        });
+      } catch (err) {
+        deps.logger.error({ err }, 'Telegram: запрос виджета не обработан');
+      }
+      return ok;
+    }
     // Нажатие кнопки под сообщением (поток Т, задача Т1). Сбой не роняет вебхук: иначе Telegram
     // повторял бы доставку нажатия, а действие могло уже выполниться.
     const press = ButtonPress.safeParse(update.callback_query);

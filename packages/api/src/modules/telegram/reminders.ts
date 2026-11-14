@@ -59,6 +59,7 @@ import {
   type WeekDebt,
 } from '@buhuchet/domain';
 import type { Job, JobContext } from '../../deps';
+import { refreshOrgWidgets } from './widget';
 import { scopeSqlOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { sendOrgOutbox, type Pause } from './outbox';
@@ -548,12 +549,20 @@ export function telegramRemindersJob(baseUrl: string, pause?: Pause): Job {
       for (const { orgId, day } of await telegramDigestOrgs(ctx.db, ctx.clock.now())) {
         try {
           const n = await withOrgContext(ctx.db, { orgId, kind: 'job' }, async (tx) => {
-            if (!(await markDigestDay(tx, day))) return 0;
+            if (!(await markDigestDay(tx, day))) return null;
             const messages = await buildDailyReminders(ctx, tx, day as IsoDate, baseUrl);
             return (await enqueueTelegram(tx, messages, ctx.clock.now())).length;
           });
+          if (n === null) continue;
           queued += n;
           if (n) await sendOrgOutbox(ctx, orgId, pause ? { pause } : {});
+          // Виджеты «Мои отчёты на неделю» (задача Т9) — свежий список без нового сообщения. Сбой
+          // обновления не отменяет напоминаний: они уже в очереди.
+          try {
+            await refreshOrgWidgets(ctx, orgId, day as IsoDate);
+          } catch (err) {
+            ctx.logger.warn({ job: 'telegram.reminders', orgId, err }, 'виджеты не обновлены');
+          }
         } catch (err) {
           failed.push(orgId);
           ctx.logger.error(

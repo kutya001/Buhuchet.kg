@@ -42,6 +42,8 @@ export const TELEGRAM_TEXTS = {
   'telegram.table.employee': { ru: 'Сотрудник', section: S },
   'telegram.table.today': { ru: 'Сегодня', section: S },
   'telegram.table.today_word': { ru: 'сегодня', section: S },
+  // Виджет «Мои отчёты на неделю» (задача Т9): у просроченного отчёта — срок вместо статуса.
+  'telegram.widget.due': { ru: 'срок {date}', section: S },
   'telegram.table.to_submit': { ru: 'Сдать', section: S },
   'telegram.table.overdue': { ru: 'Просроч.', section: S },
   'telegram.table.waiting': { ru: 'Ждут', section: S },

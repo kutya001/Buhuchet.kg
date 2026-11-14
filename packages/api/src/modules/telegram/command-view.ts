@@ -100,7 +100,10 @@ export const commandLabel = (templates: Readonly<Record<string, string>>, c: Bot
 /** Кнопки меню под полем ввода: подписи команд, по две в ряд. */
 export function botMenuRows(templates: Readonly<Record<string, string>>): string[][] {
   const labels = BOT_COMMANDS.map((c) => commandLabel(templates, c));
-  return [labels.slice(0, 2), labels.slice(2)];
+  // По две кнопки в ряд; пятая команда («Мои на неделю», задача Т9) — отдельным рядом.
+  const rows: string[][] = [];
+  for (let i = 0; i < labels.length; i += 2) rows.push(labels.slice(i, i + 2));
+  return rows;
 }
 
 /** Команды меню бота для Telegram (`setCommands`): «/today — Сегодня». */
@@ -130,7 +133,7 @@ export function commandMessageFor(
 }
 
 /** Ячейка «Отчёт»: «НДС, окт.» (как в таблицах напоминаний). */
-const reportCell = (r: CommandReportRow, today: IsoDate, tr: Translate): string =>
+export const reportCell = (r: CommandReportRow, today: IsoDate, tr: Translate): string =>
   botReportRow(r, null, false, today, tr).report;
 
 /** Отчёт в виде правил ответа: открытый срок сдачи и открытый срок оплаты — как в напоминаниях. */
@@ -160,7 +163,7 @@ export async function reportsCommandMessage(
   deps: ApiDeps,
   tx: Tx,
   asker: CommandAsker,
-  code: Exclude<BotCommandCode, 'find'>,
+  code: Exclude<BotCommandCode, 'find' | 'widget'>,
   o: { today: IsoDate; t: CommandTexts; tr: Translate },
 ): Promise<BotMessage> {
   const [{ features }, rows] = await Promise.all([
