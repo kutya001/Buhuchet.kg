@@ -63,6 +63,21 @@ describe('pageHistoryText', () => {
     );
   });
 
+  it('напоминание о долге в Telegram: переключатель в карточке и выбор клиента (К5)', () => {
+    const toggled = (from: boolean, to: boolean) =>
+      pageHistoryText(t, { action: 'update', changes: [{ field: 'tgDebtOff', from, to }] });
+    expect(toggled(false, true)).toBe('Напоминание о долге в Telegram: выключено');
+    expect(toggled(true, false)).toBe('Напоминание о долге в Telegram: включено');
+    const client = (action: string) =>
+      pageHistoryText(t, { action, changes: [{ field: 'telegram', to: '@aibek' }] });
+    expect(client('page_tg_nodebt')).toBe(
+      'Напоминания о долге в Telegram выключены контрагентом («@aibek»)',
+    );
+    expect(client('page_tg_debt_on')).toBe(
+      'Напоминания о долге в Telegram включены контрагентом («@aibek»)',
+    );
+  });
+
   it('открытие и перерыв делает контрагент', () => {
     expect(pageHistoryActor(t, null)).toBe('Контрагент');
     expect(pageHistoryActor(t, 'Иванова А.')).toBe('Иванова А.');

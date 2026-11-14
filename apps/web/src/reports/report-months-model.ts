@@ -4,6 +4,8 @@ import {
   inMonthPlan,
   monthPlan,
   monthPlanQuick,
+  monthToPay,
+  type MonthPay,
   type MonthPlanGroup,
   type MonthPlanQuick,
   type MonthPlanReport,
@@ -110,6 +112,11 @@ export interface ContractorPlan<R extends PlanRow> {
   left: number;
   /** Месяцы на экране: при «Все» закрытые — только по галочке «Закрытые месяцы». */
   months: MonthPlanGroup<R>[];
+  /**
+   * «К оплате клиенту» по месяцам (прототип v94 `rmToPay`): по всем отчётам месяца, какая бы плашка ни
+   * была выбрана; месяцев, за которые платить нечего, здесь нет.
+   */
+  pay: ReadonlyMap<string, MonthPay<R>>;
 }
 
 /**
@@ -142,6 +149,18 @@ export function contractorPlan<R extends PlanRow>(
     closed: all.filter((g) => g.done).length,
     left: all.reduce((a, g) => a + g.left, 0),
     months,
+    pay: new Map(
+      all
+        // При равном сроке оплаты — тот же порядок, что у строк месяца: по краткому названию вида.
+        .map(
+          (g) =>
+            [
+              g.month,
+              monthToPay(g, { taxpay: o.taxpay, tie: (a, b) => order(a) - order(b) }),
+            ] as const,
+        )
+        .filter(([, p]) => p.rows.length > 0),
+    ),
   };
 }
 

@@ -1,4 +1,7 @@
 import type { EmployeeAccess, SessionRecord } from '@buhuchet/db';
+// Тип переменной `requestId` (её ставит `requestId()` в app.ts) объявлен в этом модуле hono: подключаем
+// объявление здесь, чтобы `c.get('requestId')` проверялся и там, где app.ts не участвует (исполнитель задач).
+import type {} from 'hono/request-id';
 
 /** Действующий сеанс запроса: запись из базы и хеш токена из cookie. */
 export interface AuthSession extends SessionRecord {

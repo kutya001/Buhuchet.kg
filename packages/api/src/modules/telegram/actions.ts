@@ -1,3 +1,4 @@
+import { cpTelegramActions } from '../contractor-page/telegram-bot';
 import { testAction } from './bot-test';
 import type { BotAction } from './press';
 
@@ -12,4 +13,6 @@ import type { BotAction } from './press';
  */
 export const BOT_ACTIONS: Readonly<Record<string, BotAction>> = {
   test: testAction,
+  // «Подтвердить» и «Отклонить» под запросом на подключение Telegram контрагента (поток К, задача К5).
+  ...cpTelegramActions,
 };

@@ -117,6 +117,9 @@ const DemoFile = z.object({
     taskConfirm: z.boolean().optional(),
     repConfirm: z.boolean().optional(),
     payFirst: z.boolean().optional(),
+    // «Telegram контрагентов» в настройках организации (прототип v94 ORG.tgCpPay, ORG.tgCpDebt).
+    tgCpPay: z.boolean().optional(),
+    tgCpDebt: z.boolean().optional(),
     types: z.record(z.string(), DemoReportType).default({}),
   }),
   roles: z.array(
@@ -302,6 +305,8 @@ export async function seedDemoOrganization(
       taskConfirm: org.taskConfirm ?? defaults.taskConfirm,
       reportConfirm: org.repConfirm ?? defaults.reportConfirm,
       payBeforeSubmit: org.payFirst ?? defaults.payBeforeSubmit,
+      cpTgPay: org.tgCpPay ?? defaults.cpTgPay,
+      cpTgDebt: org.tgCpDebt ?? defaults.cpTgDebt,
       pageSections: defaults.pageSections,
     })
     .onConflictDoNothing();

@@ -1,6 +1,6 @@
 'use client';
 
-import { isDigestTime, ORG_TIMEZONES, type OrgTimezone } from '@buhuchet/domain';
+import { CP_PAY_DAYS, isDigestTime, ORG_TIMEZONES, type OrgTimezone } from '@buhuchet/domain';
 import { OrgPolicy, type UpdateOrgPolicyRequest } from '@buhuchet/shared';
 import {
   Box,
@@ -156,6 +156,33 @@ function SettingsForm({
     toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
 
+  // «Telegram контрагентов» (доработки 13.11.2026, К4 и К5; прототип pgTgOrgMount): переключатели
+  // «Отправлять «К оплате» контрагентам» и «Напоминать контрагентам о долге» сохраняются сразу, без
+  // «Сохранить настройки».
+  const toggleCpTg = async (field: 'cpTgPay' | 'cpTgDebt', on: boolean) => {
+    setBusy(true);
+    const res = await callApi(() =>
+      api.api.org.policy.$patch({ json: { version: policy.version, [field]: on } }),
+    );
+    setBusy(false);
+    if (res.ok) {
+      const saved = OrgPolicy.parse(res.data);
+      onDrafts({ version: saved.version, timezone, roleId, overdueRepeat, digestTime });
+      client.setQueryData(policyQuery.queryKey, saved);
+      // Запись в истории учётной политики видна сразу, как в прототипе.
+      refresh(false);
+      return toast(
+        t('cppage.org.toggled', {
+          name: t(field === 'cpTgPay' ? 'cppage.org.pay' : 'cppage.org.debt'),
+          state: t(on ? 'org.history.on' : 'org.history.off'),
+        }),
+        { icon: 'tg' },
+      );
+    }
+    if (res.error.code === 'record_changed') return setChanged(true);
+    toast(errorText(res.error), { bad: true, icon: 'alert' });
+  };
+
   return (
     <div className="flex flex-col gap-3.5">
       {changed ? (
@@ -260,6 +287,31 @@ function SettingsForm({
           <Note icon="info">{t('org.settings.telegram_off')}</Note>
         )}
       </Box>
+      {telegram && policy.features.cppage ? (
+        <div data-org-cptg="">
+          <Box title={t('cppage.org.title')}>
+            <CheckRow
+              plain
+              checked={policy.cpTgPay}
+              disabled={off}
+              onChange={(on) => void toggleCpTg('cpTgPay', on)}
+              label={t('cppage.org.pay')}
+            >
+              <Hint>{t('cppage.org.pay_hint', { n: CP_PAY_DAYS })}</Hint>
+            </CheckRow>
+            <CheckRow
+              plain
+              checked={policy.cpTgDebt}
+              disabled={off}
+              onChange={(on) => void toggleCpTg('cpTgDebt', on)}
+              label={t('cppage.org.debt')}
+            >
+              <Hint>{t('cppage.org.debt_hint')}</Hint>
+            </CheckRow>
+            <Hint>{t('cppage.org.hint')}</Hint>
+          </Box>
+        </div>
+      ) : null}
       {readOnly ? null : (
         <div className="flex">
           <div className="grow" />

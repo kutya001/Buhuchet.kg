@@ -10,6 +10,7 @@ import {
   tellBot,
   uniqueChat,
   uniqueLogin,
+  WEBHOOK_SECRET,
 } from './helpers';
 
 // Telegram контрагента (доработки 13.11.2026, задача К3; прототип v92 modules/cp-telegram.js): клиент
@@ -343,5 +344,216 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
         .filter((a) => a.startsWith('page_tg_'))
         .sort(),
     ).toEqual(['page_tg_no', 'page_tg_off', 'page_tg_on', 'page_tg_request', 'page_tg_request']);
+  });
+});
+
+// Задача К5 (прототип v94 modules/cp-telegram.js: pgTgStaffMsg, tgAct('cptg-ok'), pgDebtRow): кнопки
+// «Подтвердить» и «Отклонить» под запросом в чате сотрудника и «Напоминать о долге в Telegram» в карточке.
+const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
+
+interface BotSent {
+  messageId: number;
+  text: string;
+  keyboard?: { text: string; callback_data?: string }[][];
+}
+
+/** Сообщения бота в чате вместе с кнопками и номером сообщения. */
+async function chatMessages(api: APIRequestContext, chat: number): Promise<BotSent[]> {
+  const res = await api.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`);
+  expect(res.status()).toBe(200);
+  return (await res.json()) as BotSent[];
+}
+
+/** Нажата кнопка под сообщением бота: Telegram присылает вебхуком `callback_query`. */
+function pressButton(api: APIRequestContext, chat: number, messageId: number, data: string) {
+  return api.post('/api/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    data: {
+      update_id: Date.now(),
+      callback_query: {
+        id: `e2e-${chat}-${Date.now()}`,
+        from: { id: chat, is_bot: false, first_name: 'Сквозной' },
+        chat_instance: 'e2e',
+        data,
+        message: { message_id: messageId, date: 0, chat: { id: chat, type: 'private' } },
+      },
+    },
+  });
+}
+
+test.describe('Доработки 13.11, К5: запрос на подключение в чате сотрудника и напоминание о долге', () => {
+  test.beforeEach(async ({ page }) => {
+    const part = () => Math.floor(Math.random() * 256);
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
+  });
+
+  test('(доработки 13.11.2026, К5) сотрудник подтверждает запрос кнопкой «Подтвердить» под сообщением бота; в карточке контрагента «Напоминать о долге в Telegram» выключается и включается сразу', async ({
+    page,
+    request,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    // Ответственный — новый главный бухгалтер с Telegram: у роли есть «Управлять страницей контрагента».
+    const staff = await playwright.request.newContext({ baseURL });
+    const login = uniqueLogin('e2e-cp-debt');
+    const { employee, temporaryPassword } = await hire(
+      staff,
+      origin,
+      login,
+      null,
+      'Главный бухгалтер',
+    );
+    await signIn(staff, origin, login, temporaryPassword);
+    const passwordSet = await staff.post('/api/auth/password', {
+      headers: { origin },
+      data: { currentPassword: temporaryPassword, newPassword: 'Свой-пароль-e2e-1' },
+    });
+    expect(passwordSet.status()).toBe(200);
+    const staffChat = uniqueChat();
+    await linkTelegram(staff, origin, staffChat);
+    await staff.dispose();
+
+    const name = `ОсОО «Долг ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}»`;
+    const cp = await enabledPage(request, origin, name, employee.id);
+
+    // Клиент с кодом страницы просит подключение.
+    const part = () => Math.floor(Math.random() * 256);
+    const client = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: { 'x-forwarded-for': `198.18.${part()}.${part()}` },
+    });
+    const opened = await client.post(`/api/page/${SLUG}/${cp.inn}/code`, {
+      headers: { origin },
+      data: { code: cp.code },
+    });
+    expect(opened.status(), await opened.text()).toBe(200);
+    const link = await client.post(`${cp.path}/telegram`, { headers: { origin } });
+    expect(link.status(), await link.text()).toBe(200);
+    const { url } = (await link.json()) as { url: string };
+    await client.dispose();
+    const clientChat = uniqueChat();
+    const telegramName = `@e2e_${clientChat}`;
+    expect((await pressStart(request, url, clientChat)).status()).toBe(200);
+
+    // Сотруднику — сообщение «Telegram контрагента» с кнопками «Подтвердить» и «Отклонить».
+    await expect
+      .poll(async () => (await chatMessages(request, staffChat)).at(-1)?.text ?? '')
+      .toContain(`${name}: запрос на подключение Telegram от «${telegramName}».`);
+    const asked = (await chatMessages(request, staffChat)).at(-1)!;
+    expect(asked.text.startsWith('Telegram контрагента\n')).toBe(true);
+    expect(asked.keyboard?.map((row) => row.map((b) => b.text))).toEqual([
+      ['Подтвердить', 'Отклонить'],
+    ]);
+    const ok = asked.keyboard![0]![0]!.callback_data!;
+    expect(ok.startsWith('cptgOk:')).toBe(true);
+
+    // Чужой чат с теми же данными кнопки ничего не подтверждает.
+    expect((await pressButton(request, clientChat, asked.messageId, ok)).status()).toBe(200);
+    const listed = async () =>
+      (await (
+        await request.get(`/api/contractors/${cp.id}/page/telegram`)
+      ).json()) as TelegramList & { debt: { on: boolean; orgOn: boolean } | null };
+    expect(await listed()).toMatchObject({ on: 0, wait: 1 });
+
+    // «Подтвердить»: Telegram подключён, клиенту — сообщение, кнопки под запросом погасли.
+    expect((await pressButton(request, staffChat, asked.messageId, ok)).status()).toBe(200);
+    await expect
+      .poll(async () => (await botMessages(request, clientChat)).at(-1) ?? '')
+      .toBe(
+        `Telegram подключён: ${name}. Сюда будут приходить суммы налогов к оплате и напоминания. Чтобы отключиться, отправьте боту «Отключить».`,
+      );
+    await expect
+      .poll(async () =>
+        (await chatMessages(request, staffChat))
+          .find((m) => m.messageId === asked.messageId)
+          ?.keyboard?.map((row) => row.map((b) => b.text)),
+      )
+      .toEqual([['✓ Подтверждён', 'Отклонить']]);
+    const linked = await listed();
+    expect(linked).toMatchObject({ on: 1, wait: 0 });
+    expect(linked.items[0]).toMatchObject({ name: telegramName, status: 'on', byClient: false });
+    expect(linked.items[0]!.decidedBy).not.toBeNull();
+    // Повторное нажатие ничего не меняет.
+    expect((await pressButton(request, staffChat, asked.messageId, ok)).status()).toBe(200);
+    expect(await listed()).toMatchObject({ on: 1, wait: 0 });
+
+    // Карточка контрагента: «Напоминать о долге в Telegram» (в демо-организации напоминания включены).
+    expect(linked.debt).toMatchObject({ on: true, orgOn: true });
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const openCard = async () => {
+      await page.goto('/app/cps/all');
+      const rows = page.locator('[data-grid] [data-id]');
+      await expect(rows.first()).toBeVisible();
+      await search(page, isMobile, name);
+      await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
+    };
+    await openCard();
+    const box = page.getByRole('dialog', { name }).locator('[data-cp-tg]');
+    await expect(box.getByText('подключено 1 из 5')).toBeVisible();
+    const debt = box.locator('[data-cp-tg-debt]');
+    const toggle = debt.getByRole('switch', { name: /Напоминать о долге в Telegram/ });
+    await expect(toggle).toBeChecked();
+    await expect(
+      debt.getByText(
+        'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас долга нет.',
+      ),
+    ).toBeVisible();
+
+    await toggle.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Напоминание о долге: выключено' }),
+    ).toBeVisible();
+    await expect(toggle).not.toBeChecked();
+    expect((await listed()).debt).toMatchObject({ on: false, orgOn: true });
+    // Переключатель и галочки «Разделы страницы» хранятся в одной записи, но друг другу не мешают:
+    // в открытой карточке их можно менять подряд в любом порядке (прототип pgTgBoxClick).
+    const section = page
+      .getByRole('dialog', { name })
+      .locator('[data-cp-page-section]:not([data-cp-page-section="tg"])')
+      .first();
+    await expect(section).toBeChecked();
+    await section.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Раздел скрыт на странице' }),
+    ).toBeVisible();
+    await expect(section).not.toBeChecked();
+    await toggle.click();
+    await expect(toggle).toBeChecked();
+    expect((await listed()).debt).toMatchObject({ on: true });
+    await section.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Раздел показывается на странице' }),
+    ).toBeVisible();
+    await expect(section).toBeChecked();
+    await toggle.click();
+    await expect(toggle).not.toBeChecked();
+    expect((await listed()).debt).toMatchObject({ on: false });
+    await expect(page.getByText('Запись изменена другим пользователем')).toHaveCount(0);
+    // Карточка открыта заново — переключатель в том же положении.
+    await openCard();
+    await expect(toggle).not.toBeChecked();
+    await toggle.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Напоминание о долге: включено' }),
+    ).toBeVisible();
+    await expect(toggle).toBeChecked();
+    expect((await listed()).debt).toMatchObject({ on: true, orgOn: true });
+    // Ничего не прокручивается вбок (на телефоне — тоже).
+    const wide = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(wide).toBe(false);
+
+    const history = (await (await request.get(`/api/contractors/${cp.id}/history`)).json()) as {
+      items: { action: string }[];
+    };
+    expect(
+      history.items
+        .map((h) => h.action)
+        .filter((a) => a.startsWith('page_tg_'))
+        .sort(),
+    ).toEqual(['page_tg_on', 'page_tg_request']);
   });
 });

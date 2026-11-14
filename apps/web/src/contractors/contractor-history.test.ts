@@ -263,6 +263,19 @@ describe('история контрагента', () => {
         ),
       ),
     ).toBe('Напоминание в WhatsApp о долге за обслуживание');
+    // «Скопировать для клиента» (задача К4; прототип v94 `rmPayMount`).
+    expect(
+      plain(
+        contractorHistoryText(
+          t,
+          entry({
+            action: 'pay_text_copy',
+            changes: [{ field: 'payText', to: { month: '2026-10', total: 500_000 } }],
+          }),
+          names,
+        ),
+      ),
+    ).toBe('Скопирован текст «К оплате» за октябрь 2026: 5 000 сом');
     const pay = (allocation: unknown, amount = 1_600_000) =>
       plain(
         contractorHistoryText(

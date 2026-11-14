@@ -50,6 +50,14 @@ export const ALERTS_TEXTS = {
     ru: 'Очистка запомненных браузеров страницы контрагента',
     section: S,
   },
+  'alert.job.contractor_page_telegram_pay': {
+    ru: '«К оплате» контрагентам в Telegram',
+    section: S,
+  },
+  'alert.job.contractor_page_telegram_debt': {
+    ru: 'Напоминания контрагентам о долге в Telegram',
+    section: S,
+  },
   'alert.job.reports_create_due': { ru: 'Создание отчётов к сроку', section: S },
   'alert.job.files_cleanup_pending': { ru: 'Очистка незаконченных загрузок файлов', section: S },
   'alert.job.kb_cleanup_video_uploads': {
