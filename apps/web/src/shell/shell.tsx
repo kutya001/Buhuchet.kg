@@ -284,7 +284,12 @@ function ShellPage({
     };
     return {
       bottom: split.bottom.map((id) => pick(id, t(MODULES[id].short))),
-      other: split.other.map((id) => pick(id, t(MODULES[id].title))),
+      // В «Других модулях» число новых файлов от контрагентов не показывается (прототип v112
+      // renderSheet: у «Файлового менеджера» значка нет, только в левой и нижней панели).
+      other: split.other.map((id) => {
+        const m = pick(id, t(MODULES[id].title));
+        return id === 'files' ? { ...m, count: undefined } : m;
+      }),
     };
   }, [me.modules, access.admin, modules, t]);
 
