@@ -224,8 +224,9 @@ jobs:
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env | cut -d= -f2)" http://localhost:3000/api/cron/tick
       # Для разбора падений: запросы базы дольше секунды и ожидания блокировок — в журнал PostgreSQL,
-      # без значений параметров (журнал публичный).
+      # без значений параметров (журнал публичный). Только для разбора: не сработал — тесты всё равно идут.
       - name: Журнал медленных запросов базы
+        continue-on-error: true
         run: >-
           docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1
           -c "alter system set log_min_duration_statement = 1000"
@@ -259,14 +260,16 @@ jobs:
       - name: Журналы контейнеров
         if: failure() || cancelled()
         timeout-minutes: 3
-        # Весь журнал — в файл отчёта; в журнал задания — ошибки и долгие запросы за весь прогон (сброс
-        # пароля отвечает не быстрее 1,5 с — не в счёт) и последние строки.
+        # Весь журнал — в файл отчёта; в журнал задания — предупреждения, ошибки и долгие запросы за весь
+        # прогон (сброс пароля нарочно отвечает не быстрее 1,5 с — не в счёт) и последние строки. Журнал
+        # задания и отчёт публичны (репозиторий открытый): настоящих секретов в окружении этого задания нет
+        # и не добавлять.
         run: |
           docker compose --profile app logs --no-color --timestamps > container-logs.txt 2>&1 || true
-          echo "Сайт и задачи: ошибки и запросы от 1 с за весь прогон"
+          echo "Сайт и задачи: предупреждения, ошибки и запросы от 1 с за весь прогон"
           grep -E '"level":[456]0|"ms":[0-9]{4,}' container-logs.txt | grep -v '/api/auth/password-reset' | tail -n 300 || true
           echo "База: ошибки, запросы от 1 с, ожидания блокировок"
-          grep -E '^postgres-1' container-logs.txt | grep -E 'ERROR|FATAL|duration:|lock|STATEMENT' | tail -n 300 || true
+          grep -E '^postgres-1' container-logs.txt | grep -E 'ERROR|FATAL|duration:|Lock on|STATEMENT' | tail -n 300 || true
           echo "Последние строки"
           tail -n 500 container-logs.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
