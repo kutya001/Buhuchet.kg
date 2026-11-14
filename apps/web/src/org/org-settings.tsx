@@ -288,6 +288,7 @@ function SettingsForm({
           <Note icon="info">{t('org.settings.telegram_off')}</Note>
         )}
       </Box>
+      {telegram ? <TelegramGroupBox /> : null}
       {telegram && policy.features.cppage ? (
         <div data-org-cptg="">
           <Box title={t('cppage.org.title')}>
@@ -313,7 +314,6 @@ function SettingsForm({
           </Box>
         </div>
       ) : null}
-      {telegram ? <TelegramGroupBox /> : null}
       {readOnly ? null : (
         <div className="flex">
           <div className="grow" />

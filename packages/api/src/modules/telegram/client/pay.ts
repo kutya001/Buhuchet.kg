@@ -1,4 +1,5 @@
 import {
+  botChatUsers,
   answerContractorTelegramAsk,
   autoPayLinkIds,
   contextOrgName,
@@ -525,6 +526,12 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
   // Без ответа на просьбу код замены Telegram сотрудника вопросом не считается: тот же чат может
   // быть привязан и к учётной записи.
   if (replyTo === null && relinkCodeOf(text)) return false;
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-79
+  // Чат привязан и к учётной записи сотрудника (любой организации): без ответа на просьбу текст —
+  // для бота сотрудника (команда, ответ на его просьбу), а не вопрос клиента.
+  if (replyTo === null && (await botChatUsers(deps.db, chat.id)).length > 0) return false;
+  // Команда бота («/today») без ответа на просьбу — не вопрос: её разбирает меню бота.
+  if (replyTo === null && text.trimStart().startsWith('/')) return false;
   const target = await contractorTelegramAskTarget(deps.db, chat.id, replyTo);
   if (!target) return false;
   const question = cpTgQuestion(text);

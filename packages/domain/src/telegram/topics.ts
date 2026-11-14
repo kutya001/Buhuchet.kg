@@ -30,8 +30,6 @@ const KIND_TOPICS: Partial<Record<OutboxKind, BotTopic>> = {
   reminders: 'rep',
   report_fix: 'rep',
   nudge: 'rep',
-  // Запрос клиента на подключение Telegram контрагента (поток К) — ответственному, в «Отчёты».
-  cp_tg_request: 'rep',
   task_new: 'task',
   task_on_confirm: 'task',
   task_confirmed: 'task',

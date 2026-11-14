@@ -1625,5 +1625,27 @@ describe.skipIf(!databaseAvailable())(
         expect(ContractorTelegram.parse(await on.json()).debt).toMatchObject({ on: true });
       });
     });
+
+    // Последним: чат клиента становится ещё и чатом сотрудника другой организации (общая сборка 13.11).
+    it('чат, привязанный и к сотруднику: без ответа на просьбу текст — не вопрос клиента (п. О-79)', async () => {
+      await sent(owner, cpA);
+      await press(askData, CLIENT_1, tg.messageIds[0]!);
+      const askId = lastMessageId(CLIENT_1);
+      // Чат только клиента: команда без ответа на просьбу — не вопрос, в ответ — подсказка клиенту.
+      await toBot('/today', CLIENT_1, 'client_one');
+      expect(sentTo(CLIENT_1).at(-1)!.text).toContain('ОсОО «Ала-Тоо Трейд»');
+      expect(sentTo(CLIENT_1).at(-1)!.text).not.toBe(text('tgStart'));
+      await linkTelegram(f.app, ownerB, CLIENT_1, 'client_one');
+      const questions = async () =>
+        (await history(cpA)).filter((h) => h.action === 'page_tg_question');
+
+      // Текст для бота сотрудника (команда, причина, просто текст) в организацию А не уходит.
+      await toBot('/today', CLIENT_1, 'client_one');
+      await toBot('Причина возврата отчёта', CLIENT_1, 'client_one');
+      expect(await questions()).toEqual([]);
+      // Ответом на просьбу бота — вопрос клиента, как обычно.
+      await toBot('Вопрос по оплате', CLIENT_1, 'client_one', askId);
+      expect(await questions()).toHaveLength(1);
+    });
   },
 );
