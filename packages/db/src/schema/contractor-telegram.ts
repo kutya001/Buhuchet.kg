@@ -152,8 +152,8 @@ export const contractorTelegramMessages = pgTable(
     /** Понедельник недели напоминания о долге (задача К5): одно напоминание на неделю и чат. */
     week: date('week'),
     /**
-     * День отправки по Бишкеку (доработки 14.11.2026, блок 3): у «Оплата за обслуживание до …» — одно
-     * сообщение на чат в день, само и ручное вместе.
+     * День отправки по Бишкеку (доработки 14.11.2026, блок 3): у «Оплата за обслуживание до …»; у самого
+     * — одно сообщение на чат в день.
      */
     day: date('day', { mode: 'string' }),
     /** Описание сообщения с кнопками (`BotMessage`): нажатая кнопка в нём гаснет. */
@@ -193,9 +193,11 @@ export const contractorTelegramMessages = pgTable(
       'contractor_telegram_messages_pay_check',
       sql`${t.kind} <> 'pay' or (${t.month} is not null and ${t.total} is not null and ${t.total} > 0)`,
     ),
+    // День — и у других видов (поток К переводит на него «К оплате» «за 5 … за 1 день», этап 2), поэтому
+    // проверка односторонняя. У самого — месяц начисления: после «Оплатил» за месяц следующие не уходят.
     check(
       'contractor_telegram_messages_fee_check',
-      sql`${t.kind} <> 'fee' or (${t.day} is not null and ${t.total} is not null and ${t.total} > 0)`,
+      sql`${t.kind} <> 'fee' or (${t.day} is not null and ${t.total} is not null and ${t.total} > 0 and (not ${t.auto} or ${t.month} is not null))`,
     ),
     uniqueIndex('contractor_telegram_messages_chat_key')
       .on(t.chatId, t.messageId)
@@ -208,10 +210,12 @@ export const contractorTelegramMessages = pgTable(
     uniqueIndex('contractor_telegram_messages_debt_key')
       .on(t.linkId, t.week)
       .where(sql`${t.kind} = 'debt'`),
-    // «Оплата за обслуживание до …» — одно на чат в день: повтор задачи и второе ручное не создаются.
+    // Само «Оплата за обслуживание до …» — одно на чат в день: повтор задачи второе не создаёт. Ручное
+    // «Напомнить в Telegram» — не чаще раза в сутки на контрагента (проверяет код под блокировкой
+    // контрагента) и на само не влияет (прототип v110 `c.tgFeeAt`).
     uniqueIndex('contractor_telegram_messages_fee_key')
       .on(t.linkId, t.day)
-      .where(sql`${t.kind} = 'fee'`),
+      .where(sql`${t.kind} = 'fee' and ${t.auto}`),
     index('contractor_telegram_messages_contractor_idx').on(t.orgId, t.contractorId, t.createdAt),
     // Для составного ключа «Я оплатил»: оплаченное сообщение — только своего контрагента.
     uniqueIndex('contractor_telegram_messages_scope_key').on(t.id, t.orgId, t.contractorId),
@@ -224,13 +228,14 @@ const oneOf = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`)
 /**
  * «Я оплатил» со страницы контрагента и «Оплатил» в Telegram (доработки 14.11.2026, блоки 4 и 6): клиент
  * сообщает, что перевёл деньги. Пока бухгалтер не принял деньги, у месяца — «Ожидает подтверждения», и
- * следующие «К оплате» за этот месяц не уходят. Чек — строка «Отправленных файлов» (`sent_file_id`; ключ
- * с ON DELETE SET NULL (sent_file_id) — в миграции 0147: непринятый чек через 30 дней удаляется, а
- * сообщение об оплате остаётся). У «Оплатил» в боте сумма и месяц — из оплаченного сообщения.
+ * следующие «К оплате» за этот месяц не уходят. Чек — отправленный файл того же контрагента (`sent_file_id`;
+ * ключ с ON DELETE SET NULL (sent_file_id) — в миграции 0147: непринятый чек через 30 дней удаляется,
+ * а сообщение об оплате остаётся). У «Оплатил» в боте сумма и месяц — из оплаченного
+ * сообщения.
  *
  * Строку создаёт страница без входа и бот — функциями базы задач блоков 4 и 6; роль приложения
- * вставляет только ждущую подтверждения, меняет только решение (права на столбцы — в миграции 0147) и
- * не удаляет.
+ * вставляет только ждущую подтверждения, меняет только решение — один раз и от своего имени (права на
+ * столбцы — в миграции 0147) — и не удаляет.
  */
 export const contractorPayClaims = pgTable(
   'contractor_pay_claims',
@@ -313,6 +318,14 @@ export const contractorPayClaims = pgTable(
       for: 'insert',
       to: appRole,
       withCheck: sql`${t.status} = 'wait'`,
+    }),
+    // Решение — один раз и от своего имени: страница и бот (без пользователя) решить не могут.
+    pgPolicy('contractor_pay_claims_update_guard', {
+      as: 'restrictive',
+      for: 'update',
+      to: appRole,
+      using: sql`${t.status} = 'wait'`,
+      withCheck: sql`${t.status} = 'wait' or ${t.decidedBy} = app.current_user_id()`,
     }),
   ],
 ).enableRLS();

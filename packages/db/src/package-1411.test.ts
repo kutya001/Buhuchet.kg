@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { CP_TG_MESSAGE_KINDS, OUTBOX_KINDS } from '@buhuchet/domain';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
@@ -14,6 +15,10 @@ import {
   files,
   organizations,
   orgTelegramNotices,
+  passwordSetupTokens,
+  platformLeadDocs,
+  platformLeads,
+  platformLeadTgTokens,
 } from './schema';
 import {
   createTestDatabase,
@@ -33,6 +38,7 @@ const code = (c: string) =>
 const denied = code('42501');
 const checkFailed = code('23514');
 const duplicate = code('23505');
+const fkFailed = code('23503');
 
 const contractor = (inn: string, name: string): ContractorFields => ({
   name,
@@ -67,6 +73,7 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
   let a: CreatedOrganization;
   let b: CreatedOrganization;
   let cpA = '';
+  let cpA2 = '';
   let cpB = '';
   const inA = <T>(fn: Parameters<typeof withOrgContext<T>>[2]) =>
     withOrgContext(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, fn);
@@ -111,6 +118,9 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
     });
     cpA = await inA((tx) =>
       createContractor(tx, a.orgId, contractor('03807819461915', 'ОсОО «А»'), null),
+    );
+    cpA2 = await inA((tx) =>
+      createContractor(tx, a.orgId, contractor('03807819461917', 'ОсОО «А-2»'), null),
     );
     cpB = await inB((tx) =>
       createContractor(tx, b.orgId, contractor('03807819461916', 'ОсОО «Б»'), null),
@@ -216,7 +226,7 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
     ).rejects.toThrow(denied);
     await expect(
       inB((tx) => tx.insert(contractorSentFiles).values(sentFile(b.orgId, cpA))),
-    ).rejects.toThrow();
+    ).rejects.toThrow(fkFailed);
     expect(await db.app.db.select().from(contractorSentFiles)).toEqual([]);
     expect(await inA((tx) => tx.select().from(contractorSentFiles))).toHaveLength(1);
   });
@@ -251,6 +261,15 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
         .set({ state: 'ready' })
         .where(eq(contractorSentFiles.id, f.id)),
     );
+    // Загруженный не возвращается в загрузку (иначе его можно подменить по новой ссылке).
+    await expect(
+      asGuest(a.orgId, (tx) =>
+        tx
+          .update(contractorSentFiles)
+          .set({ state: 'pending' })
+          .where(eq(contractorSentFiles.id, f.id)),
+      ),
+    ).rejects.toThrow(checkFailed);
     // Имя файла и комментарий после отправки не меняются.
     await expect(
       inA((tx) =>
@@ -292,20 +311,34 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           .where(eq(contractorSentFiles.id, f.id)),
       ),
     ).rejects.toThrow(checkFailed);
-    const fileId = randomUUID();
-    await db.admin.db.insert(files).values({
-      id: fileId,
-      orgId: a.orgId,
-      sourceKind: 'sent_file',
-      sourceId: f.id,
-      contractorId: cpA,
-      name: 'Акт.pdf',
-      contentType: 'application/pdf',
-      sizeBytes: 1200,
-      storageKey: `org/${a.orgId}/files/${fileId}`,
-      state: 'ready',
-      createdBy: a.ownerUserId,
-    });
+    const contractorFile = async (contractorId: string) => {
+      const id = randomUUID();
+      await db.admin.db.insert(files).values({
+        id,
+        orgId: a.orgId,
+        sourceKind: 'sent_file',
+        sourceId: f.id,
+        contractorId,
+        name: 'Акт.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 1200,
+        storageKey: `org/${a.orgId}/files/${id}`,
+        state: 'ready',
+        createdBy: a.ownerUserId,
+      });
+      return id;
+    };
+    // Файл другого контрагента той же организации — нет.
+    const otherFile = await contractorFile(cpA2);
+    await expect(
+      inA((tx) =>
+        tx
+          .update(contractorSentFiles)
+          .set({ status: 'accepted', decidedBy: a.ownerUserId, decidedAt: now, fileId: otherFile })
+          .where(eq(contractorSentFiles.id, f.id)),
+      ),
+    ).rejects.toThrow(fkFailed);
+    const fileId = await contractorFile(cpA);
     await inA((tx) =>
       tx
         .update(contractorSentFiles)
@@ -325,6 +358,46 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
         await tx.delete(contractorSentFiles).where(eq(contractorSentFiles.id, f.id)).returning(),
       ).toEqual([]);
     });
+    // Отклонённый — окончательно: в «Новый» не возвращается ни у сотрудника, ни со страницы.
+    const g = sentFile(a.orgId, cpA);
+    await asGuest(a.orgId, (tx) => tx.insert(contractorSentFiles).values(g));
+    await asGuest(a.orgId, (tx) =>
+      tx
+        .update(contractorSentFiles)
+        .set({ state: 'ready' })
+        .where(eq(contractorSentFiles.id, g.id)),
+    );
+    await inA((tx) =>
+      tx
+        .update(contractorSentFiles)
+        .set({
+          status: 'rejected',
+          rejectReason: 'Не тот файл',
+          decidedBy: a.ownerUserId,
+          decidedAt: now,
+        })
+        .where(eq(contractorSentFiles.id, g.id)),
+    );
+    for (const run of [
+      inA,
+      <T>(fn: Parameters<typeof withOrgContext<T>>[2]) => asGuest(a.orgId, fn),
+    ]) {
+      expect(
+        await run((tx) =>
+          tx
+            .update(contractorSentFiles)
+            .set({ status: 'new', rejectReason: null, decidedBy: null, decidedAt: null })
+            .where(eq(contractorSentFiles.id, g.id))
+            .returning(),
+        ),
+      ).toEqual([]);
+    }
+    // Непринятый удаляется (через 30 дней).
+    expect(
+      await inA((tx) =>
+        tx.delete(contractorSentFiles).where(eq(contractorSentFiles.id, g.id)).returning(),
+      ),
+    ).toHaveLength(1);
   });
 
   it('«Я оплатил»: изоляция, вставка только ждущего, меняется только решение, чек удаляется — сообщение остаётся', async () => {
@@ -371,7 +444,7 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           .values({ orgId: a.orgId, contractorId: cpA, source: 'page', purpose: 'tax', amount: 0 }),
       ),
     ).rejects.toThrow(checkFailed);
-    // Чек — только отправленный файл своей организации.
+    // Чек — только отправленный файл того же контрагента своей организации.
     await expect(
       inB((tx) =>
         tx.insert(contractorPayClaims).values({
@@ -382,7 +455,18 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           sentFileId: receipt.id,
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(fkFailed);
+    await expect(
+      asGuest(a.orgId, (tx) =>
+        tx.insert(contractorPayClaims).values({
+          orgId: a.orgId,
+          contractorId: cpA2,
+          source: 'page',
+          purpose: 'tax',
+          sentFileId: receipt.id,
+        }),
+      ),
+    ).rejects.toThrow(fkFailed);
     await inB(async (tx) => {
       expect(await tx.select().from(contractorPayClaims)).toEqual([]);
       expect(
@@ -406,12 +490,39 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
     await expect(
       inA((tx) => tx.delete(contractorPayClaims).where(eq(contractorPayClaims.id, claim!.id))),
     ).rejects.toThrow(denied);
+    // Страница и бот (без пользователя) решить не могут, решение — только от своего имени.
+    await expect(
+      asGuest(a.orgId, (tx) =>
+        tx
+          .update(contractorPayClaims)
+          .set({ status: 'done', decidedAt: new Date() })
+          .where(eq(contractorPayClaims.id, claim!.id)),
+      ),
+    ).rejects.toThrow(denied);
+    await expect(
+      inA((tx) =>
+        tx
+          .update(contractorPayClaims)
+          .set({ status: 'done', decidedAt: new Date() })
+          .where(eq(contractorPayClaims.id, claim!.id)),
+      ),
+    ).rejects.toThrow(denied);
     await inA((tx) =>
       tx
         .update(contractorPayClaims)
         .set({ status: 'done', decidedBy: a.ownerUserId, decidedAt: new Date() })
         .where(eq(contractorPayClaims.id, claim!.id)),
     );
+    // Решение — один раз: обратно в «ждёт» не вернуть.
+    expect(
+      await inA((tx) =>
+        tx
+          .update(contractorPayClaims)
+          .set({ status: 'wait', decidedBy: null, decidedAt: null })
+          .where(eq(contractorPayClaims.id, claim!.id))
+          .returning(),
+      ),
+    ).toEqual([]);
     // Непринятый чек удалили через 30 дней — сообщение об оплате остаётся без чека.
     await inA((tx) => tx.delete(contractorSentFiles).where(eq(contractorSentFiles.id, receipt.id)));
     const [left] = await inA((tx) =>
@@ -423,7 +534,7 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
     expect(left).toEqual({ status: 'done', sentFileId: null });
   });
 
-  it('«Оплата за обслуживание до …» — одно сообщение на чат в день; «Оплатил» — только своего контрагента', async () => {
+  it('«Оплата за обслуживание до …»: само — одно на чат в день, ручное — отдельно; «Оплатил» — только своего контрагента', async () => {
     const link = async (orgId: string, contractorId: string, chatId: number) => {
       const [row] = await db.admin.db
         .insert(contractorTelegramLinks)
@@ -441,6 +552,8 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
       kind: 'fee' as const,
       total: 150_000,
       day,
+      auto: true,
+      month: '2026-11',
       payload: { text: 'Оплата за обслуживание до 01.12.2026' },
     });
     const [msg] = await asGuest(a.orgId, (tx) =>
@@ -449,16 +562,32 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
         .values({ orgId: a.orgId, ...fee(linkA, cpA, 7101, '2026-11-26') })
         .returning({ id: contractorTelegramMessages.id }),
     );
-    // Второе в тот же день, в том числе ручное, — нет.
+    // Второе само в тот же день — нет; ручное «Напомнить в Telegram» в тот же день — можно (его предел
+    // «раз в сутки на контрагента» проверяет код).
     await expect(
-      inA((tx) =>
-        tx.insert(contractorTelegramMessages).values({
-          orgId: a.orgId,
-          ...fee(linkA, cpA, 7101, '2026-11-26'),
-          sentBy: a.ownerUserId,
-        }),
+      asGuest(a.orgId, (tx) =>
+        tx
+          .insert(contractorTelegramMessages)
+          .values({ orgId: a.orgId, ...fee(linkA, cpA, 7101, '2026-11-26') }),
       ),
     ).rejects.toThrow(duplicate);
+    await inA((tx) =>
+      tx.insert(contractorTelegramMessages).values({
+        orgId: a.orgId,
+        ...fee(linkA, cpA, 7101, '2026-11-26'),
+        auto: false,
+        month: null,
+        sentBy: a.ownerUserId,
+      }),
+    );
+    // Само — с месяцем начисления: после «Оплатил» за месяц следующие не уходят.
+    await expect(
+      asGuest(a.orgId, (tx) =>
+        tx
+          .insert(contractorTelegramMessages)
+          .values({ orgId: a.orgId, ...fee(linkA, cpA, 7101, '2026-11-27'), month: null }),
+      ),
+    ).rejects.toThrow(checkFailed);
     // Без дня — нет.
     await expect(
       asGuest(a.orgId, (tx) =>
@@ -484,7 +613,7 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           tgMessageId: msg!.id,
         }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(fkFailed);
     await asGuest(a.orgId, (tx) =>
       tx.insert(contractorPayClaims).values({
         orgId: a.orgId,
@@ -537,6 +666,12 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           .where(and(eq(orgTelegramNotices.orgId, a.orgId), eq(orgTelegramNotices.code, 'cp_pay')))
           .returning(),
       ).toEqual([]);
+      expect(
+        await tx
+          .delete(orgTelegramNotices)
+          .where(eq(orgTelegramNotices.orgId, a.orgId))
+          .returning(),
+      ).toEqual([]);
     });
     await expect(
       inB((tx) =>
@@ -552,8 +687,116 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           .insert(orgTelegramNotices)
           .values({ orgId: b.orgId, code: 'staff_week', weekday: 2, updatedBy: a.ownerUserId }),
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(fkFailed);
     expect(await db.app.db.select().from(orgTelegramNotices)).toEqual([]);
     expect(await inA((tx) => tx.select().from(orgTelegramNotices))).toHaveLength(3);
+  });
+
+  it('виды очереди Telegram и сообщений клиенту в базе — те же, что в домене', async () => {
+    const def = async (name: string) => {
+      const [row] = await db.admin.db.execute<{ def: string }>(
+        sql`select pg_get_constraintdef(oid) as def from pg_constraint where conname = ${name}`,
+      );
+      return row!.def;
+    };
+    const outbox = await def('telegram_outbox_kind_check');
+    for (const kind of OUTBOX_KINDS) expect(outbox).toContain(`'${kind}'`);
+    const messages = await def('contractor_telegram_messages_kind_check');
+    for (const kind of CP_TG_MESSAGE_KINDS) expect(messages).toContain(`'${kind}'`);
+  });
+
+  it('заявка с документами: форма, ИНН, ОКПО, Telegram заявителя, только PDF, один файл вида, ключ хранилища', async () => {
+    const lead = (over: Record<string, unknown> = {}) => ({
+      name: 'Асель Токтогулова',
+      firm: 'ОсОО «Заявитель»',
+      phone: '+996555000111',
+      size: 'до 50',
+      ...over,
+    });
+    const admin = db.admin.db;
+    const [ok] = await admin
+      .insert(platformLeads)
+      .values(
+        lead({
+          legalForm: 'osoo',
+          inn: '01811201810999',
+          okpo: '12345678',
+          docsState: 'pending',
+          tgChatId: 9001,
+          tgLinkedAt: new Date(),
+        }),
+      )
+      .returning({ id: platformLeads.id });
+    for (const bad of [
+      { inn: '123' },
+      { okpo: '1234567' },
+      { docsState: 'pending' },
+      { legalForm: 'ooo' },
+      { tgChatId: 9002 },
+      { address: 'а'.repeat(301) },
+    ]) {
+      await expect(admin.insert(platformLeads).values(lead(bad))).rejects.toThrow(checkFailed);
+    }
+    const doc = (
+      kind: 'extract' | 'minjust_cert' | 'gns_cert',
+      over: Record<string, unknown> = {},
+    ) => {
+      const id = randomUUID();
+      return {
+        id,
+        leadId: ok!.id,
+        kind,
+        name: 'Выписка.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 5000,
+        storageKey: `leads/${ok!.id}/${id}`,
+        ...over,
+      };
+    };
+    await admin.insert(platformLeadDocs).values(doc('extract'));
+    await expect(admin.insert(platformLeadDocs).values(doc('extract'))).rejects.toThrow(duplicate);
+    for (const bad of [
+      doc('minjust_cert', { contentType: 'image/png' }),
+      doc('minjust_cert', { storageKey: `leads/${ok!.id}/${randomUUID()}` }),
+      doc('minjust_cert', { sizeBytes: 21 * 1048576 }),
+      doc('minjust_cert', { state: 'deleted' }),
+    ]) {
+      await expect(admin.insert(platformLeadDocs).values(bad)).rejects.toThrow(checkFailed);
+    }
+    // Ссылка Telegram: чат — только у использованной.
+    await expect(
+      admin.insert(platformLeadTgTokens).values({
+        tokenHash: 'x'.repeat(64),
+        leadId: ok!.id,
+        expiresAt: new Date(),
+        usedChatId: 9001,
+      }),
+    ).rejects.toThrow(checkFailed);
+    // Ссылка «задать пароль» — только сотруднику своей организации.
+    await expect(
+      admin.insert(passwordSetupTokens).values({
+        tokenHash: 'y'.repeat(64),
+        userId: a.ownerUserId,
+        orgId: b.orgId,
+        expiresAt: new Date(),
+      }),
+    ).rejects.toThrow(fkFailed);
+    // Роль приложения не меняет и не создаёт строки этих таблиц.
+    await expect(
+      inA((tx) =>
+        tx.insert(passwordSetupTokens).values({
+          tokenHash: 'z'.repeat(64),
+          userId: a.ownerUserId,
+          orgId: a.orgId,
+          expiresAt: new Date(),
+        }),
+      ),
+    ).rejects.toThrow(denied);
+    await expect(
+      inA((tx) => tx.delete(platformLeadDocs).where(eq(platformLeadDocs.leadId, ok!.id))),
+    ).rejects.toThrow(denied);
+    // Заявка стирается с документами.
+    await admin.delete(platformLeads).where(eq(platformLeads.id, ok!.id));
+    expect(await admin.select().from(platformLeadDocs)).toEqual([]);
   });
 });

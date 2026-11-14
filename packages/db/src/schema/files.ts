@@ -20,6 +20,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { recordVersion, timestamps } from './columns';
@@ -100,6 +101,8 @@ export const files = pgTable(
   },
   (t) => [
     unique('files_id_org_unique').on(t.id, t.orgId),
+    // Для составного ключа принятого отправленного файла: файл — того же контрагента.
+    unique('files_id_org_contractor_unique').on(t.id, t.orgId, t.contractorId),
     foreignKey({
       name: 'files_created_by_fk',
       columns: [t.createdBy, t.orgId],
@@ -173,8 +176,8 @@ const oneOf = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`)
  * отправки удаляются вместе с файлом в хранилище.
  *
  * Строку создаёт загрузка без входа (страница по коду, бот) — функциями базы задачи блока 2; роль
- * приложения вставляет только начатую новую загрузку, меняет только загрузку и решение по файлу
- * (права на столбцы — в миграции), принятый файл не меняет и не удаляет.
+ * приложения вставляет только начатую новую загрузку, меняет только загрузку и решение по новому файлу
+ * (права на столбцы — в миграции 0147), принятый файл не удаляет.
  */
 export const contractorSentFiles = pgTable(
   'contractor_sent_files',
@@ -209,6 +212,8 @@ export const contractorSentFiles = pgTable(
   },
   (t) => [
     unique('contractor_sent_files_id_org_unique').on(t.id, t.orgId),
+    // Для составного ключа чека «Я оплатил»: чек — отправленный файл того же контрагента.
+    unique('contractor_sent_files_scope_unique').on(t.id, t.orgId, t.contractorId),
     foreignKey({
       name: 'contractor_sent_files_contractor_fk',
       columns: [t.contractorId, t.orgId],
@@ -219,11 +224,12 @@ export const contractorSentFiles = pgTable(
       columns: [t.decidedBy, t.orgId],
       foreignColumns: [users.id, users.orgId],
     }).onDelete('restrict'),
+    // Принятый — файл того же контрагента своей организации.
     foreignKey({
       name: 'contractor_sent_files_file_fk',
-      columns: [t.fileId, t.orgId],
-      foreignColumns: [files.id, files.orgId],
-    }).onDelete('restrict'),
+      columns: [t.fileId, t.orgId, t.contractorId],
+      foreignColumns: [files.id, files.orgId, files.contractorId],
+    }),
     check('contractor_sent_files_source_check', sql`${t.source} in (${oneOf(SENT_FILE_SOURCES)})`),
     check(
       'contractor_sent_files_tg_check',
@@ -263,6 +269,10 @@ export const contractorSentFiles = pgTable(
       sql`(${t.status} = 'accepted') = (${t.fileId} is not null)`,
     ),
     index('contractor_sent_files_contractor_idx').on(t.orgId, t.contractorId, t.createdAt.desc()),
+    // Один файл контрагента — из одного принятого; и поиск по ключу при удалении строки `files`.
+    uniqueIndex('contractor_sent_files_file_key')
+      .on(t.fileId)
+      .where(sql`${t.fileId} is not null`),
     // Удаление непринятых через 30 дней.
     index('contractor_sent_files_purge_idx')
       .on(t.orgId, t.createdAt)
@@ -275,12 +285,14 @@ export const contractorSentFiles = pgTable(
       to: appRole,
       withCheck: sql`${t.state} = 'pending' and ${t.status} = 'new'`,
     }),
-    // Принятый файл не меняется: на него ссылается файл контрагента и история. Решает тот, кто вошёл.
+    // Меняется только новый файл (загрузка и решение): принятый и отклонённый — окончательно, на них
+    // ссылаются файл контрагента и история. Решает тот, кто вошёл. Загруженный не становится снова
+    // незаконченным — триггер `contractor_sent_files_state_guard` (миграция 0147).
     pgPolicy('contractor_sent_files_update_guard', {
       as: 'restrictive',
       for: 'update',
       to: appRole,
-      using: sql`${t.status} <> 'accepted'`,
+      using: sql`${t.status} = 'new'`,
       withCheck: sql`${t.status} = 'new' or ${t.decidedBy} = app.current_user_id()`,
     }),
     // Стираются только непринятые (через 30 дней) и незаконченные загрузки.

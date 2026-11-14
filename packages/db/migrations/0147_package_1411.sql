@@ -1,7 +1,10 @@
 -- Общая основа пакета доработок 14.11.2026 (этап 0, ТЗ «Доработки 14.11.2026» → «Порядок работ и стыки
--- блоков»): все новые таблицы и поля пакета одной миграцией — документы и Telegram заявки, ссылка «задать
--- пароль», «Форма» и «ОКПО» организации, отправленные файлы контрагентов, «Я оплатил», строки блока
--- «Telegram-уведомления»; ниже — ручная часть.
+-- блоков»; docs/decisions.md п. О-54): все новые таблицы и поля пакета одной миграцией — документы и
+-- Telegram заявки, ссылка «задать пароль», «Форма» и «ОКПО» организации, отправленные файлы контрагентов,
+-- «Я оплатил», строки блока «Telegram-уведомления»; ниже — ручная часть.
+-- Блокировки таблиц ждём не дольше 10 с: если выпуск совпал с долгой транзакцией, миграция падает и
+-- задание выпуска перезапускают, а не держит контрагентов и организации, пока ждёт.
+SET LOCAL lock_timeout = '10s';--> statement-breakpoint
 CREATE TABLE "platform_lead_docs" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"lead_id" uuid NOT NULL,
@@ -114,6 +117,7 @@ CREATE TABLE "contractor_sent_files" (
 	"version" integer DEFAULT 1 NOT NULL,
 	CONSTRAINT "contractor_sent_files_storage_key_unique" UNIQUE("storage_key"),
 	CONSTRAINT "contractor_sent_files_id_org_unique" UNIQUE("id","org_id"),
+	CONSTRAINT "contractor_sent_files_scope_unique" UNIQUE("id","org_id","contractor_id"),
 	CONSTRAINT "contractor_sent_files_source_check" CHECK ("contractor_sent_files"."source" in ('page', 'telegram')),
 	CONSTRAINT "contractor_sent_files_tg_check" CHECK (("contractor_sent_files"."source" = 'telegram') = ("contractor_sent_files"."tg_chat_id" is not null) and char_length(coalesce("contractor_sent_files"."sender_name", '')) <= 64),
 	CONSTRAINT "contractor_sent_files_comment_check" CHECK (char_length(coalesce("contractor_sent_files"."comment", '')) <= 300),
@@ -161,7 +165,9 @@ ALTER TABLE "org_telegram_notices" ADD CONSTRAINT "org_telegram_notices_updated_
 ALTER TABLE "contractor_sent_files" ADD CONSTRAINT "contractor_sent_files_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contractor_sent_files" ADD CONSTRAINT "contractor_sent_files_contractor_fk" FOREIGN KEY ("contractor_id","org_id") REFERENCES "public"."contractors"("id","org_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "contractor_sent_files" ADD CONSTRAINT "contractor_sent_files_decided_by_fk" FOREIGN KEY ("decided_by","org_id") REFERENCES "public"."users"("id","org_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "contractor_sent_files" ADD CONSTRAINT "contractor_sent_files_file_fk" FOREIGN KEY ("file_id","org_id") REFERENCES "public"."files"("id","org_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+-- Уникальный ключ — до составной ссылки принятого файла на файл контрагента.
+ALTER TABLE "files" ADD CONSTRAINT "files_id_org_contractor_unique" UNIQUE("id","org_id","contractor_id");--> statement-breakpoint
+ALTER TABLE "contractor_sent_files" ADD CONSTRAINT "contractor_sent_files_file_fk" FOREIGN KEY ("file_id","org_id","contractor_id") REFERENCES "public"."files"("id","org_id","contractor_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "platform_lead_tg_tokens_lead_idx" ON "platform_lead_tg_tokens" USING btree ("lead_id");--> statement-breakpoint
 CREATE INDEX "platform_lead_tg_tokens_expires_idx" ON "platform_lead_tg_tokens" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "contractor_pay_claims_contractor_idx" ON "contractor_pay_claims" USING btree ("org_id","contractor_id","created_at");--> statement-breakpoint
@@ -170,9 +176,10 @@ CREATE INDEX "contractor_pay_claims_file_idx" ON "contractor_pay_claims" USING b
 CREATE INDEX "password_setup_tokens_user_idx" ON "password_setup_tokens" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "password_setup_tokens_expires_idx" ON "password_setup_tokens" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "contractor_sent_files_contractor_idx" ON "contractor_sent_files" USING btree ("org_id","contractor_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE UNIQUE INDEX "contractor_sent_files_file_key" ON "contractor_sent_files" USING btree ("file_id") WHERE "contractor_sent_files"."file_id" is not null;--> statement-breakpoint
 CREATE INDEX "contractor_sent_files_purge_idx" ON "contractor_sent_files" USING btree ("org_id","created_at") WHERE "contractor_sent_files"."status" <> 'accepted';--> statement-breakpoint
 CREATE INDEX "platform_leads_docs_purge_idx" ON "platform_leads" USING btree ("docs_purge_at") WHERE "platform_leads"."docs_purge_at" is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "contractor_telegram_messages_fee_key" ON "contractor_telegram_messages" USING btree ("link_id","day") WHERE "contractor_telegram_messages"."kind" = 'fee';--> statement-breakpoint
+CREATE UNIQUE INDEX "contractor_telegram_messages_fee_key" ON "contractor_telegram_messages" USING btree ("link_id","day") WHERE "contractor_telegram_messages"."kind" = 'fee' and "contractor_telegram_messages"."auto";--> statement-breakpoint
 ALTER TABLE "organizations" ADD CONSTRAINT "organizations_legal_form_check" CHECK ("organizations"."legal_form" is null or "organizations"."legal_form" in ('osoo', 'ip'));--> statement-breakpoint
 ALTER TABLE "organizations" ADD CONSTRAINT "organizations_okpo_check" CHECK ("organizations"."okpo" is null or "organizations"."okpo" ~ '^[0-9]{8}$');--> statement-breakpoint
 ALTER TABLE "platform_leads" ADD CONSTRAINT "platform_leads_legal_form_check" CHECK ("platform_leads"."legal_form" is null or "platform_leads"."legal_form" in ('osoo', 'ip'));--> statement-breakpoint
@@ -181,47 +188,70 @@ ALTER TABLE "platform_leads" ADD CONSTRAINT "platform_leads_okpo_check" CHECK ("
 ALTER TABLE "platform_leads" ADD CONSTRAINT "platform_leads_doc_fields_check" CHECK (char_length(coalesce("platform_leads"."address", '')) <= 300 and char_length(coalesce("platform_leads"."head", '')) <= 200);--> statement-breakpoint
 ALTER TABLE "platform_leads" ADD CONSTRAINT "platform_leads_docs_state_check" CHECK ("platform_leads"."docs_state" is null or ("platform_leads"."docs_state" in ('pending', 'ready') and "platform_leads"."legal_form" is not null));--> statement-breakpoint
 ALTER TABLE "platform_leads" ADD CONSTRAINT "platform_leads_tg_check" CHECK (("platform_leads"."tg_chat_id" is null) = ("platform_leads"."tg_linked_at" is null) and ("platform_leads"."tg_chat_id" is null or "platform_leads"."tg_chat_id" > 0));--> statement-breakpoint
-ALTER TABLE "contractor_telegram_messages" ADD CONSTRAINT "contractor_telegram_messages_fee_check" CHECK ("contractor_telegram_messages"."kind" <> 'fee' or ("contractor_telegram_messages"."day" is not null and "contractor_telegram_messages"."total" is not null and "contractor_telegram_messages"."total" > 0));--> statement-breakpoint
+ALTER TABLE "contractor_telegram_messages" ADD CONSTRAINT "contractor_telegram_messages_fee_check" CHECK ("contractor_telegram_messages"."kind" <> 'fee' or ("contractor_telegram_messages"."day" is not null and "contractor_telegram_messages"."total" is not null and "contractor_telegram_messages"."total" > 0 and (not "contractor_telegram_messages"."auto" or "contractor_telegram_messages"."month" is not null)));--> statement-breakpoint
 ALTER TABLE "contractor_telegram_messages" ADD CONSTRAINT "contractor_telegram_messages_kind_check" CHECK ("contractor_telegram_messages"."kind" in ('pay', 'ask', 'debt', 'fee'));--> statement-breakpoint
 ALTER TABLE "telegram_outbox" ADD CONSTRAINT "telegram_outbox_kind_check" CHECK ("telegram_outbox"."kind" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_pay_noreq', 'cp_file'));--> statement-breakpoint
 CREATE POLICY "contractor_pay_claims_isolation" ON "contractor_pay_claims" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("contractor_pay_claims"."org_id" = app.current_org_id()) WITH CHECK ("contractor_pay_claims"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "contractor_pay_claims_insert_guard" ON "contractor_pay_claims" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("contractor_pay_claims"."status" = 'wait');--> statement-breakpoint
+CREATE POLICY "contractor_pay_claims_update_guard" ON "contractor_pay_claims" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING ("contractor_pay_claims"."status" = 'wait') WITH CHECK ("contractor_pay_claims"."status" = 'wait' or "contractor_pay_claims"."decided_by" = app.current_user_id());--> statement-breakpoint
+CREATE POLICY "password_setup_tokens_isolation" ON "password_setup_tokens" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("password_setup_tokens"."org_id" = app.current_org_id()) WITH CHECK ("password_setup_tokens"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "org_telegram_notices_isolation" ON "org_telegram_notices" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("org_telegram_notices"."org_id" = app.current_org_id()) WITH CHECK ("org_telegram_notices"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "contractor_sent_files_isolation" ON "contractor_sent_files" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("contractor_sent_files"."org_id" = app.current_org_id()) WITH CHECK ("contractor_sent_files"."org_id" = app.current_org_id());--> statement-breakpoint
 CREATE POLICY "contractor_sent_files_insert_guard" ON "contractor_sent_files" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("contractor_sent_files"."state" = 'pending' and "contractor_sent_files"."status" = 'new');--> statement-breakpoint
-CREATE POLICY "contractor_sent_files_update_guard" ON "contractor_sent_files" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING ("contractor_sent_files"."status" <> 'accepted') WITH CHECK ("contractor_sent_files"."status" = 'new' or "contractor_sent_files"."decided_by" = app.current_user_id());--> statement-breakpoint
+CREATE POLICY "contractor_sent_files_update_guard" ON "contractor_sent_files" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING ("contractor_sent_files"."status" = 'new') WITH CHECK ("contractor_sent_files"."status" = 'new' or "contractor_sent_files"."decided_by" = app.current_user_id());--> statement-breakpoint
 CREATE POLICY "contractor_sent_files_delete_guard" ON "contractor_sent_files" AS RESTRICTIVE FOR DELETE TO "buhuchet_app" USING ("contractor_sent_files"."status" <> 'accepted');
 --> statement-breakpoint
 -- Ручная часть миграции (общая основа пакета доработок 14.11.2026, этап 0): права роли приложения,
--- ключ, которого Drizzle не умеет, и удаление тем в чате с ботом.
+-- ключ, которого Drizzle не умеет, защита загрузки и удаление тем в чате с ботом.
 --
--- «ОКПО» меняет владелец в «Моя организация» → «Основное»; «Форму», как и ИНН, — только администратор
--- платформы (функциями Админки), поэтому права на столбец legal_form у роли приложения нет.
+-- «ОКПО» меняет владелец в «Моя организация» → «Основное»; «Форму» — только администратор платформы
+-- (функциями Админки), поэтому права на столбец legal_form у роли приложения нет. ИНН по тому же пункту
+-- ТЗ (блок 1, пункт 4) закрывает для владельца задача блока 1 вместе с полем экрана.
 GRANT UPDATE (okpo) ON TABLE public.organizations TO buhuchet_app;--> statement-breakpoint
 -- «Контрагент может отправлять файлы» у контрагента — сотрудник в блоке «Страница контрагента».
 GRANT UPDATE (files_upload) ON TABLE public.contractor_pages TO buhuchet_app;--> statement-breakpoint
 -- Отправленные файлы: роль приложения меняет только загрузку и решение по файлу (политики — в схеме:
--- вставка только начатой новой загрузки, принятый не меняется и не удаляется).
+-- вставка только начатой новой загрузки, меняется только новый файл, принятый не удаляется).
 REVOKE UPDATE ON TABLE public.contractor_sent_files FROM buhuchet_app;--> statement-breakpoint
 GRANT UPDATE (state, status, reject_reason, decided_by, decided_at, file_id, updated_at, version)
   ON TABLE public.contractor_sent_files TO buhuchet_app;--> statement-breakpoint
+-- Загруженный файл не становится снова незаконченной загрузкой: иначе по новой подписанной ссылке его
+-- можно было бы подменить после того, как его посмотрел сотрудник.
+CREATE FUNCTION app.contractor_sent_file_guard()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    IF OLD.state = 'ready' AND NEW.state <> 'ready' THEN
+      RAISE EXCEPTION 'contractor_sent_files: загруженный файл не возвращается в загрузку'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+  END
+  $$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.contractor_sent_file_guard() FROM PUBLIC, buhuchet_app;--> statement-breakpoint
+CREATE TRIGGER contractor_sent_files_state_guard
+  BEFORE UPDATE OF state ON public.contractor_sent_files
+  FOR EACH ROW
+  EXECUTE FUNCTION app.contractor_sent_file_guard();--> statement-breakpoint
 -- «Я оплатил»: роль приложения меняет только решение и не удаляет (строки стираются только вместе с
 -- контрагентом).
 REVOKE UPDATE, DELETE ON TABLE public.contractor_pay_claims FROM buhuchet_app;--> statement-breakpoint
 GRANT UPDATE (status, decided_by, decided_at, updated_at, version)
   ON TABLE public.contractor_pay_claims TO buhuchet_app;--> statement-breakpoint
--- Чек «Я оплатил» — отправленный файл своей организации; непринятый чек через 30 дней удаляется, а
+-- Чек «Я оплатил» — отправленный файл того же контрагента; непринятый чек через 30 дней удаляется, а
 -- сообщение об оплате остаётся без чека (Drizzle не умеет SET NULL части составного ключа).
 ALTER TABLE public.contractor_pay_claims ADD CONSTRAINT contractor_pay_claims_sent_file_fk
-  FOREIGN KEY (sent_file_id, org_id)
-  REFERENCES public.contractor_sent_files (id, org_id) ON DELETE SET NULL (sent_file_id);--> statement-breakpoint
+  FOREIGN KEY (sent_file_id, org_id, contractor_id)
+  REFERENCES public.contractor_sent_files (id, org_id, contractor_id) ON DELETE SET NULL (sent_file_id);--> statement-breakpoint
 -- Документы и Telegram заявки, ссылки «задать пароль»: роль приложения таблиц не видит и не меняет
--- (RLS без политик и без прав); работают с ними только функции базы задач блока 1.
+-- (без прав); работают с ними только функции базы задач блока 1.
 REVOKE ALL ON TABLE public.platform_lead_docs, public.platform_lead_tg_tokens, public.password_setup_tokens
   FROM buhuchet_app;--> statement-breakpoint
 -- Темы в чате с ботом убраны (решение заказчика 14.11.2026; docs/decisions.md п. Т-10): код их не
--- читает и не пишет с PR #251 (выпуск 14.11.2026), здесь удаляются функции, таблица и настройка бота
--- платформы `topics` (правило двух PR).
+-- читает и не пишет с PR #251 (на рабочем сайте с 14.11.2026), здесь удаляются функции, таблица и
+-- настройка бота платформы `topics` (правило двух PR).
 DROP FUNCTION app.telegram_topic_thread(bigint, text);--> statement-breakpoint
 DROP FUNCTION app.telegram_topic_key(bigint, integer);--> statement-breakpoint
 DROP FUNCTION app.telegram_topic_save(bigint, text, integer);--> statement-breakpoint

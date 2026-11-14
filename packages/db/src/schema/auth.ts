@@ -159,5 +159,7 @@ export const passwordSetupTokens = pgTable(
     }).onDelete('cascade'),
     index('password_setup_tokens_user_idx').on(t.userId, t.createdAt),
     index('password_setup_tokens_expires_idx').on(t.expiresAt),
+    // У роли приложения прав на таблицу нет (миграция 0147); политика — как у всех таблиц с org_id.
+    orgIsolation('password_setup_tokens_isolation', t.orgId),
   ],
 ).enableRLS();

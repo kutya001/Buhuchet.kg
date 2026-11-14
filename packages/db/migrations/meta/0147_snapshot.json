@@ -1,5 +1,5 @@
 {
-  "id": "10b0d0f2-8ad9-4b7a-8237-82b8f00dd503",
+  "id": "d7c8a037-f60e-4d4b-b80e-5ccbdad2bf9c",
   "prevId": "6581d959-01e8-4b15-bba1-193bb3f2c365",
   "version": "7",
   "dialect": "postgresql",
@@ -4091,6 +4091,16 @@
             "buhuchet_app"
           ],
           "withCheck": "\"contractor_pay_claims\".\"status\" = 'wait'"
+        },
+        "contractor_pay_claims_update_guard": {
+          "name": "contractor_pay_claims_update_guard",
+          "as": "RESTRICTIVE",
+          "for": "UPDATE",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_pay_claims\".\"status\" = 'wait'",
+          "withCheck": "\"contractor_pay_claims\".\"status\" = 'wait' or \"contractor_pay_claims\".\"decided_by\" = app.current_user_id()"
         }
       },
       "checkConstraints": {
@@ -4603,7 +4613,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"contractor_telegram_messages\".\"kind\" = 'fee'",
+          "where": "\"contractor_telegram_messages\".\"kind\" = 'fee' and \"contractor_telegram_messages\".\"auto\"",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -4743,7 +4753,7 @@
         },
         "contractor_telegram_messages_fee_check": {
           "name": "contractor_telegram_messages_fee_check",
-          "value": "\"contractor_telegram_messages\".\"kind\" <> 'fee' or (\"contractor_telegram_messages\".\"day\" is not null and \"contractor_telegram_messages\".\"total\" is not null and \"contractor_telegram_messages\".\"total\" > 0)"
+          "value": "\"contractor_telegram_messages\".\"kind\" <> 'fee' or (\"contractor_telegram_messages\".\"day\" is not null and \"contractor_telegram_messages\".\"total\" is not null and \"contractor_telegram_messages\".\"total\" > 0 and (not \"contractor_telegram_messages\".\"auto\" or \"contractor_telegram_messages\".\"month\" is not null))"
         }
       },
       "isRLSEnabled": true
@@ -7804,7 +7814,18 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
+      "policies": {
+        "password_setup_tokens_isolation": {
+          "name": "password_setup_tokens_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"password_setup_tokens\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"password_setup_tokens\".\"org_id\" = app.current_org_id()"
+        }
+      },
       "checkConstraints": {},
       "isRLSEnabled": true
     },
@@ -20492,6 +20513,22 @@
           "method": "btree",
           "with": {}
         },
+        "contractor_sent_files_file_key": {
+          "name": "contractor_sent_files_file_key",
+          "columns": [
+            {
+              "expression": "file_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"contractor_sent_files\".\"file_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "contractor_sent_files_purge_idx": {
           "name": "contractor_sent_files_purge_idx",
           "columns": [
@@ -20565,13 +20602,15 @@
           "tableTo": "files",
           "columnsFrom": [
             "file_id",
-            "org_id"
+            "org_id",
+            "contractor_id"
           ],
           "columnsTo": [
             "id",
-            "org_id"
+            "org_id",
+            "contractor_id"
           ],
-          "onDelete": "restrict",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -20590,6 +20629,15 @@
           "columns": [
             "id",
             "org_id"
+          ]
+        },
+        "contractor_sent_files_scope_unique": {
+          "name": "contractor_sent_files_scope_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "org_id",
+            "contractor_id"
           ]
         }
       },
@@ -20620,7 +20668,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "using": "\"contractor_sent_files\".\"status\" <> 'accepted'",
+          "using": "\"contractor_sent_files\".\"status\" = 'new'",
           "withCheck": "\"contractor_sent_files\".\"status\" = 'new' or \"contractor_sent_files\".\"decided_by\" = app.current_user_id()"
         },
         "contractor_sent_files_delete_guard": {
@@ -21004,6 +21052,15 @@
           "columns": [
             "id",
             "org_id"
+          ]
+        },
+        "files_id_org_contractor_unique": {
+          "name": "files_id_org_contractor_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "org_id",
+            "contractor_id"
           ]
         }
       },
