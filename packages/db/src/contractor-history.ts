@@ -264,6 +264,9 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   'feeReminder',
   'feeTotal',
   'feeAllocations',
+  // «Напомнить в Telegram» об оплате за обслуживание и «Оплатил» клиента под ним (доработки 14.11.2026).
+  'tgFee',
+  'tgFeePaid',
 ]);
 /**
  * Сумма налогов месяца в записях «Скопирован текст «К оплате»», ««К оплате» отправлено в Telegram» и

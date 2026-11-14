@@ -36,6 +36,12 @@ import {
   publicPageTelegramHandler,
   publicPageTelegramRoute,
 } from './telegram';
+import {
+  contractorFeeTelegramHandler,
+  contractorFeeTelegramRoute,
+  contractorFeeTelegramSendHandler,
+  contractorFeeTelegramSendRoute,
+} from '../telegram/client/fee';
 
 /**
  * Модуль «Страница контрагента по ссылке» (задача 2.42): блок карточки — включить, выключить, сменить
@@ -63,5 +69,8 @@ export function contractorPageModule(deps: ApiDeps) {
       .openapi(debtPageTelegramRoute, debtPageTelegramHandler(deps))
       .openapi(decidePageTelegramRoute, decidePageTelegramHandler(deps))
       .openapi(publicPageTelegramRoute, publicPageTelegramHandler(deps))
+      // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5).
+      .openapi(contractorFeeTelegramRoute, contractorFeeTelegramHandler(deps))
+      .openapi(contractorFeeTelegramSendRoute, contractorFeeTelegramSendHandler(deps))
   );
 }

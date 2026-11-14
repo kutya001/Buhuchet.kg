@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  BOT_COPY_MAX,
   botKeyboard,
   botMessageProblem,
   botPlainText,
@@ -24,17 +23,48 @@ import {
 } from './telegram-pay';
 
 describe('«Отправить в Telegram»: что мешает (прототип rmPaySendWhy)', () => {
-  const ok = { canManagePage: true, archived: false, recipients: 2 };
+  const ok = {
+    canManagePage: true,
+    archived: false,
+    recipients: 2,
+    requisite: 'ok' as const,
+    paysTo: 'org' as const,
+  };
 
-  it('порядок причин: право, архив, никто не подключил', () => {
+  it('порядок причин: право, архив, никто не подключил, реквизиты', () => {
     expect(monthPaySendRefusal(ok)).toBeNull();
-    expect(monthPaySendRefusal({ canManagePage: false, archived: true, recipients: 0 })).toBe(
-      'month_pay_send_right',
-    );
-    expect(monthPaySendRefusal({ ...ok, archived: true, recipients: 0 })).toBe(
+    expect(
+      monthPaySendRefusal({
+        ...ok,
+        canManagePage: false,
+        archived: true,
+        recipients: 0,
+        requisite: 'none',
+      }),
+    ).toBe('month_pay_send_right');
+    expect(monthPaySendRefusal({ ...ok, archived: true, recipients: 0, requisite: 'none' })).toBe(
       'month_pay_send_archived',
     );
-    expect(monthPaySendRefusal({ ...ok, recipients: 0 })).toBe('month_pay_send_not_linked');
+    expect(monthPaySendRefusal({ ...ok, recipients: 0, requisite: 'none' })).toBe(
+      'month_pay_send_not_linked',
+    );
+  });
+
+  it('(доработки 14.11.2026, блок 4) без реквизитов не уходит: подсказка — по полю «Деньги на налоги переводит»; раздел «Как оплатить» скрыт — своя причина', () => {
+    expect(monthPaySendRefusal({ ...ok, requisite: 'none' })).toBe('month_pay_send_no_req_org');
+    expect(monthPaySendRefusal({ ...ok, requisite: 'none', paysTo: 'emp' })).toBe(
+      'month_pay_send_no_req_emp',
+    );
+    expect(monthPaySendRefusal({ ...ok, requisite: 'hidden', paysTo: 'emp' })).toBe(
+      'month_pay_send_req_hidden',
+    );
+    // Текст — как у шаблона tgCpNoReq прототипа и подсказки pgNoReqWhy.
+    expect(MONTH_PAY_SEND_MESSAGES.month_pay_send_no_req_emp).toBe(
+      'Не отправлено «К оплате»: у {contractor} нет реквизитов для перевода. Реквизиты добавляет {employee} в «Мой профиль».',
+    );
+    expect(MONTH_PAY_SEND_MESSAGES.month_pay_send_no_req_org).toBe(
+      'Не отправлено «К оплате»: у {contractor} нет реквизитов для перевода. Добавьте основной счёт для налогов: «Моя организация» → «Реквизиты».',
+    );
   });
 
   it('у каждой причины есть текст', () => {
@@ -118,7 +148,7 @@ describe('Ответ сотрудника на вопрос клиента (пр
   });
 });
 
-describe('Сообщение «К оплате» (прототип pgPayMsg)', () => {
+describe('Сообщение «К оплате» (прототип v110 pgPayMsg)', () => {
   const labels = {
     heading: 'Налоги к оплате до',
     accountant: 'бухгалтер',
@@ -126,9 +156,12 @@ describe('Сообщение «К оплате» (прототип pgPayMsg)', (
     amount: 'Сумма',
     due: 'Срок',
     total: 'Итого',
-    copy: 'Скопировать реквизиты',
     paid: 'Оплатил',
     ask: 'Вопрос бухгалтеру',
+  };
+  const requisite = {
+    text: 'Реквизиты для перевода — организации ОсОО «Бухгалтер Плюс»\nПеревод по номеру телефона: 0555 123 456\nПолучатель: ОсОО «Бухгалтер Плюс»',
+    copy: { text: 'Скопировать номер телефона', copy: '0555123456' },
   };
   const base = {
     contractor: 'ОсОО «Ала-Тоо Трейд»',
@@ -140,17 +173,18 @@ describe('Сообщение «К оплате» (прототип pgPayMsg)', (
     ],
     total: 625_050,
     due: '2026-11-20',
-    requisite: 'Перевод по номеру 0555 123 456 (M-Bank)',
+    requisite,
     text: 'Налоги за октябрь 2026: к оплате 6 250,50 сом до 20.11.2026.',
     labels,
   } as const;
 
-  it('заголовок со сроком, контрагент и бухгалтер, таблица налогов с итогом, кнопки', () => {
+  it('заголовок со сроком, контрагент и бухгалтер, текст с реквизитами, таблица налогов с итогом, кнопки', () => {
     const m = monthPayBotMessage(base);
     expect(botMessageProblem(m)).toBeNull();
     expect(m.heading).toBe('Налоги к оплате до 20.11.2026');
     expect(m.sub).toBe('ОсОО «Ала-Тоо Трейд» · бухгалтер Асанова А.');
-    expect(m.text).toBe(base.text);
+    // Прототип v110: текст шаблона, пустая строка и блок «Реквизиты для перевода — …».
+    expect(m.text).toBe(`${base.text}\n\n${requisite.text}`);
     expect(m.tables).toEqual(
       [
         {
@@ -169,7 +203,7 @@ describe('Сообщение «К оплате» (прототип pgPayMsg)', (
       })),
     );
     expect(botKeyboard(m)).toEqual([
-      [{ text: 'Скопировать реквизиты', copy: base.requisite }],
+      [{ text: 'Скопировать номер телефона', copy: '0555123456' }],
       [
         { text: 'Оплатил', data: 'cpPaid:2026-10' },
         { text: 'Вопрос бухгалтеру', data: 'cpAsk:2026-10' },
@@ -181,26 +215,19 @@ describe('Сообщение «К оплате» (прототип pgPayMsg)', (
     expect(findBotButton(m, CP_TG_PAID_ACTION, '2026-09')).toBeFalsy();
     const plain = botPlainText(m);
     expect(plain).toContain('Налоги к оплате до 20.11.2026');
+    expect(plain).toContain('Реквизиты для перевода — организации ОсОО «Бухгалтер Плюс»');
     expect(plain).toContain('ЕН');
     expect(plain).toContain('Итого');
   });
 
-  it('без ответственного — только контрагент; без реквизита — без кнопки копирования', () => {
-    const m = monthPayBotMessage({ ...base, accountant: null, requisite: null });
+  it('без ответственного — только контрагент; реквизит не помещается в кнопку копирования — кнопки нет, реквизиты в тексте', () => {
+    const m = monthPayBotMessage({
+      ...base,
+      accountant: null,
+      requisite: { text: requisite.text, copy: null },
+    });
     expect(m.sub).toBe('ОсОО «Ала-Тоо Трейд»');
-    expect(m.text).toBe(base.text);
-    expect(botKeyboard(m)).toHaveLength(1);
-    expect(botMessageProblem(m)).toBeNull();
-  });
-
-  it('реквизит длиннее предела кнопки копирования — в тексте сообщения', () => {
-    const fits = 'р'.repeat(BOT_COPY_MAX);
-    expect(botKeyboard(monthPayBotMessage({ ...base, requisite: fits }))[0]).toEqual([
-      { text: 'Скопировать реквизиты', copy: fits },
-    ]);
-    const long = 'р'.repeat(BOT_COPY_MAX + 1);
-    const m = monthPayBotMessage({ ...base, requisite: long });
-    expect(m.text).toBe(`${base.text}\n${long}`);
+    expect(m.text).toContain(requisite.text);
     expect(botKeyboard(m)).toHaveLength(1);
     expect(botMessageProblem(m)).toBeNull();
   });

@@ -1,9 +1,11 @@
 import { addDays, formatDateRu, type IsoDate } from '../common/dates';
 import { formatSom, type Tyiyn } from '../common/money';
 import type { YearMonth } from '../common/months';
+import type { PaysTo } from '../money/requisites';
 import type { MonthPay, MonthPayLine } from '../reports/month-pay';
 import type { MonthPlanReport } from '../reports/month-plan';
-import { BOT_COPY_MAX, type BotButton, type BotMessage } from '../telegram/bot-message';
+import type { BotButton, BotMessage } from '../telegram/bot-message';
+import type { TransferBlock } from './telegram-requisite';
 
 /*
  * «К оплате» клиенту в Telegram (доработки 13.11.2026, задача К4; прототип v94 modules/cp-telegram.js:
@@ -26,10 +28,16 @@ export const CP_TG_PAID_ACTION = 'cpPaid';
 export const CP_TG_ASK_ACTION = 'cpAsk';
 /** «Не напоминать» под напоминанием о долге (задача К5, `telegram-debt.ts`). */
 export const CP_TG_NODEBT_ACTION = 'cpNoDebt';
+/**
+ * «Показать реквизиты для перевода» под напоминанием о долге (доработки 14.11.2026, блок 4, пункт 3;
+ * прототип v110 `cp-req`; `telegram-requisite.ts`).
+ */
+export const CP_TG_REQ_ACTION = 'cpReq';
 export const CP_TG_CLIENT_ACTIONS = [
   CP_TG_PAID_ACTION,
   CP_TG_ASK_ACTION,
   CP_TG_NODEBT_ACTION,
+  CP_TG_REQ_ACTION,
 ] as const;
 
 /**
@@ -47,12 +55,25 @@ export const CP_TG_QUESTION_HISTORY_MAX = 200;
 export const CP_TG_PAY_SENDS_PER_HOUR = 10;
 /** Вопросов бухгалтеру из одного чата — не больше стольких в час: историю и чат сотрудника не завалить. */
 export const CP_TG_QUESTIONS_PER_HOUR = 10;
+/**
+ * «Показать реквизиты для перевода» с одного подключения Telegram к контрагенту — не больше стольких в
+ * час: каждое нажатие присылает новые сообщения (docs/deviations.md п. К-9).
+ */
+export const CP_TG_REQ_PER_HOUR = 10;
 
-/** Что мешает «Отправить в Telegram» (прототип rmPaySendWhy): код — ключ словаря `err.<код>`. */
+/**
+ * Что мешает «Отправить в Telegram» (прототип rmPaySendWhy): код — ключ словаря `err.<код>`. Без
+ * реквизитов для перевода «К оплате» не уходит (доработки 14.11.2026, блок 4, пункт 1; прототип v110
+ * `pgNoReqWhy`): у счёта организации и у реквизита сотрудника — своя подсказка, где их добавить;
+ * раздел «Как оплатить» скрыт на странице контрагента — реквизиты в Telegram не уходят (п. К-9).
+ */
 export const MONTH_PAY_SEND_REFUSALS = [
   'month_pay_send_right',
   'month_pay_send_archived',
   'month_pay_send_not_linked',
+  'month_pay_send_no_req_org',
+  'month_pay_send_no_req_emp',
+  'month_pay_send_req_hidden',
 ] as const;
 export type MonthPaySendRefusal = (typeof MONTH_PAY_SEND_REFUSALS)[number];
 
@@ -61,21 +82,42 @@ export const MONTH_PAY_SEND_MESSAGES = {
   month_pay_send_archived: 'Контрагент в архиве',
   month_pay_send_not_linked:
     'Контрагент не подключил Telegram: кнопка «Подключить Telegram» — на его странице, в разделе «Telegram»',
+  month_pay_send_no_req_org:
+    'Не отправлено «К оплате»: у {contractor} нет реквизитов для перевода. Добавьте основной счёт для налогов: «Моя организация» → «Реквизиты».',
+  month_pay_send_no_req_emp:
+    'Не отправлено «К оплате»: у {contractor} нет реквизитов для перевода. Реквизиты добавляет {employee} в «Мой профиль».',
+  month_pay_send_req_hidden:
+    'Не отправлено «К оплате»: у {contractor} на странице скрыт раздел «Как оплатить», а без реквизитов для перевода сообщение не уходит. Покажите раздел в блоке «Страница контрагента».',
   month_pay_send_off:
     'Отправка в Telegram выключена: нужны «Напоминания в Telegram» и «Страница контрагента по ссылке»',
   month_pay_send_limit: 'Слишком много сообщений этому контрагенту. Попробуйте через час',
   month_pay_send_failed: 'Не удалось отправить сообщение в Telegram. Попробуйте позже',
 } as const;
 
-/** Отказ отправке (прототип rmPaySendWhy): сначала право, потом архив, потом «не подключил». */
+/**
+ * Реквизиты для «К оплате»: есть (`ok`), нет (`none`) или раздел «Как оплатить» клиенту не показан
+ * (`hidden`) — тогда реквизиты в Telegram не уходят.
+ */
+export type PayRequisiteState = 'ok' | 'none' | 'hidden';
+
+/**
+ * Отказ отправке (прототип rmPaySendWhy): сначала право, потом архив, потом «не подключил», потом
+ * реквизиты — подсказка по полю «Деньги на налоги переводит» (`pgNoReqWhy`).
+ */
 export function monthPaySendRefusal(o: {
   canManagePage: boolean;
   archived: boolean;
   recipients: number;
+  requisite: PayRequisiteState;
+  paysTo: PaysTo;
 }): MonthPaySendRefusal | null {
   if (!o.canManagePage) return 'month_pay_send_right';
   if (o.archived) return 'month_pay_send_archived';
   if (o.recipients < 1) return 'month_pay_send_not_linked';
+  if (o.requisite === 'hidden') return 'month_pay_send_req_hidden';
+  if (o.requisite === 'none') {
+    return o.paysTo === 'emp' ? 'month_pay_send_no_req_emp' : 'month_pay_send_no_req_org';
+  }
   return null;
 }
 
@@ -119,10 +161,11 @@ export function monthPayAutoDue<R extends MonthPlanReport>(
 const shortDate = (date: IsoDate) => formatDateRu(date).slice(0, 5);
 
 /**
- * Сообщение «К оплате» (прототип pgPayMsg): заголовок со сроком, контрагент и бухгалтер, текст шаблона
- * `tgCpPay`, таблица налогов с итогом, кнопки «Скопировать реквизиты» (если реквизит есть и помещается
- * в кнопку копирования), «Оплатил» и «Вопрос бухгалтеру». `arg` кнопок — месяц: сумму и контрагента бот
- * берёт из своей записи о сообщении, а не из данных кнопки.
+ * Сообщение «К оплате» (прототип v110 pgPayMsg): заголовок со сроком, контрагент и бухгалтер, текст
+ * шаблона `tgCpPay` и под ним блок «Реквизиты для перевода — …», таблица налогов с итогом, кнопка
+ * копирования по виду реквизита, «Оплатил» и «Вопрос бухгалтеру». Без реквизитов «К оплате» не уходит
+ * (доработки 14.11.2026, блок 4, пункт 1). `arg` кнопок — месяц: сумму и контрагента бот берёт из своей
+ * записи о сообщении, а не из данных кнопки.
  */
 export function monthPayBotMessage(o: {
   contractor: string;
@@ -132,7 +175,8 @@ export function monthPayBotMessage(o: {
   lines: readonly MonthPayLine[];
   total: Tyiyn;
   due: IsoDate;
-  requisite: string | null;
+  /** Реквизиты для перевода: блок текста и кнопка копирования (`transferBlock`). */
+  requisite: TransferBlock;
   /** Заполненный шаблон `tgCpPay`. */
   text: string;
   labels: {
@@ -142,14 +186,13 @@ export function monthPayBotMessage(o: {
     amount: string;
     due: string;
     total: string;
-    copy: string;
     paid: string;
     ask: string;
   };
 }): BotMessage {
-  const copy = o.requisite && o.requisite.length <= BOT_COPY_MAX ? o.requisite : null;
+  const copy = o.requisite.copy;
   const buttons: BotButton[][] = [
-    ...(copy ? [[{ text: o.labels.copy, copy }]] : []),
+    ...(copy ? [[copy]] : []),
     [
       { text: o.labels.paid, action: CP_TG_PAID_ACTION, arg: o.month },
       { text: o.labels.ask, action: CP_TG_ASK_ACTION, arg: o.month },
@@ -158,8 +201,7 @@ export function monthPayBotMessage(o: {
   return {
     heading: `${o.labels.heading} ${formatDateRu(o.due)}`,
     sub: o.accountant ? `${o.contractor} · ${o.labels.accountant} ${o.accountant}` : o.contractor,
-    // Реквизит длиннее предела кнопки копирования — в тексте сообщения, чтобы клиент его не потерял.
-    text: o.requisite && !copy ? `${o.text}\n${o.requisite}` : o.text,
+    text: `${o.text}\n\n${o.requisite.text}`,
     tables: [
       {
         head: [o.labels.tax, o.labels.amount, o.labels.due],

@@ -267,13 +267,14 @@ describe.skipIf(!databaseAvailable())(
       expect(await codeOf(res)).toBe('month_pay_empty');
     });
 
-    it('без «Учёта оплаты налогов» — вся сумма и без реквизита', async () => {
+    it('без «Учёта оплаты налогов» — вся сумма, реквизит — по полю «Деньги на налоги переводит» (прототип v110)', async () => {
       await taxpay(false);
       try {
         const p = await pay(owner, cpA, '2026-09');
         expect(p.rows.map((x) => x.left)).toEqual([87_050, 500_000]);
-        expect(p).toMatchObject({ total: 587_050, requisite: null });
-        expect(p.text).toMatch(/на: —$/);
+        const requisite = 'Перевод по номеру 0555 123 456 (M-Bank), получатель Бухгалтер А.';
+        expect(p).toMatchObject({ total: 587_050, requisite });
+        expect(p.text?.endsWith(requisite)).toBe(true);
         // Оплаченный август без учёта оплаты тоже «к оплате»: оплата не отмечается.
         expect((await pay(owner, cpA, '2026-08')).total).toBe(300_000);
       } finally {
@@ -378,6 +379,11 @@ describe.skipIf(!databaseAvailable())(
         // Номера отчётов — случайные UUID и сами могут содержать «555»: телефон ищется в остальном ответе.
         const rows = p.rows.map(({ reportId: _id, ...row }) => row);
         expect(JSON.stringify({ ...p, rows })).not.toContain('555');
+        // Ни реквизита, ни получателя — и в причине кнопки «Отправить в Telegram» (`send`): в её
+        // подстановках только название контрагента и краткое имя ответственного.
+        expect(JSON.stringify(p)).not.toContain('Бухгалтер А.');
+        if (p.send?.params)
+          expect(Object.keys(p.send.params).sort()).toEqual(['contractor', 'employee']);
         const res = await copied(hr, cpA, '2026-09');
         expect(res.status).toBe(409);
         expect(await codeOf(res)).toBe('month_pay_requisite_hidden');

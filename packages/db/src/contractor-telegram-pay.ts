@@ -1,5 +1,7 @@
 import {
   asBotMessage,
+  CP_TG_FEE_SENDING_MINUTES,
+  CP_TG_MESSAGE_KINDS,
   pageVisibleSections,
   type BotMessage,
   type CpTgMessageKind,
@@ -115,6 +117,8 @@ export interface ContractorTelegramMessageInput {
   auto?: boolean;
   /** Понедельник недели — у напоминания о долге (одно на неделю и чат). */
   week?: IsoDate | null;
+  /** День отправки по Бишкеку — у сообщения об оплате за обслуживание (`fee`). */
+  day?: IsoDate | null;
   payload: BotMessage;
 }
 
@@ -138,6 +142,7 @@ export async function insertContractorTelegramMessage(
       total: input.total ?? null,
       auto: input.auto ?? false,
       week: input.week ?? null,
+      day: input.day ?? null,
       payload: input.payload,
       sentBy: sql`app.current_user_id()`,
     })
@@ -168,6 +173,41 @@ export async function recentManualPaySends(tx: Tx, contractorId: string): Promis
       ),
     );
   return row?.n ?? 0;
+}
+
+/**
+ * Когда сегодня (`day` по Бишкеку) этому контрагенту уже отправили «Напомнить в Telegram» об оплате за
+ * обслуживание (прототип `c.tgFeeAt`): не чаще раза в сутки. Считается отправка, которая ушла хотя бы в
+ * один чат или ещё идёт (записана недавно и попыток не было) — не ушедшая из-за Telegram повторить не
+ * мешает. С `lock` (отправка) отправки одного контрагента идут по одной (блокировка до конца
+ * транзакции), поэтому две вкладки дважды не отправят. `null` — сегодня не напоминали.
+ */
+export async function manualFeeSentAt(
+  tx: Tx,
+  contractorId: string,
+  day: IsoDate,
+  opts: { lock?: boolean } = {},
+): Promise<Date | null> {
+  if (opts.lock) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended('cp_tg_fee:' || ${contractorId}, 0))`,
+    );
+  }
+  const [row] = await tx
+    .select({ at: contractorTelegramMessages.createdAt })
+    .from(contractorTelegramMessages)
+    .where(
+      and(
+        eq(contractorTelegramMessages.contractorId, contractorId),
+        eq(contractorTelegramMessages.kind, 'fee'),
+        eq(contractorTelegramMessages.auto, false),
+        eq(contractorTelegramMessages.day, day),
+        sql`(${contractorTelegramMessages.messageId} is not null or (${contractorTelegramMessages.attempts} = 0 and ${contractorTelegramMessages.createdAt} > now() - make_interval(mins => ${CP_TG_FEE_SENDING_MINUTES})))`,
+      ),
+    )
+    .orderBy(sql`${contractorTelegramMessages.createdAt} desc`)
+    .limit(1);
+  return row?.at ?? null;
 }
 
 /** Отметить попытку отправки: номер сообщения в чате (ушло) или только счёт попыток (не ушло). */
@@ -277,7 +317,9 @@ const targetOf = (row: {
   orgId: row.org_id,
   contractorId: row.contractor_id,
   linkId: row.link_id,
-  kind: row.kind === 'ask' ? 'ask' : row.kind === 'debt' ? 'debt' : 'pay',
+  kind: (CP_TG_MESSAGE_KINDS as readonly string[]).includes(row.kind)
+    ? (row.kind as CpTgMessageKind)
+    : 'pay',
   linked: row.linked,
 });
 
