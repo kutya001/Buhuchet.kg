@@ -19,6 +19,11 @@ import {
 const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
 const POLL = { timeout: 120_000, intervals: [2_000, 5_000, 10_000] };
+/** Картинка рассылки: подпись PNG и немного данных (сервер узнаёт тип по первым байтам). */
+const PNG = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  Buffer.alloc(56),
+]);
 
 async function tick(api: APIRequestContext) {
   const res = await api.post('/api/cron/tick', {
@@ -95,7 +100,11 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await page.locator('[data-tg-cast-to]').selectOption({ label: orgName });
     const first = `Плановые работы ${ownerLogin}`;
     await page.locator('[data-tg-cast-text]').fill(first);
-    await page.getByRole('button', { name: 'Поставить в очередь' }).click();
+    // Перед очередью — подтверждение с числом получателей (поток Т, задача Т6; прототип v103).
+    await page.locator('[data-tg-cast-go]').click();
+    const confirm = page.getByRole('dialog', { name: 'Поставить рассылку в очередь?' });
+    await expect(confirm).toContainText(`получат 1 пользователь — организации «${orgName}»`);
+    await confirm.getByRole('button', { name: 'Поставить в очередь' }).click();
     await expect(page.getByText('В очереди: 1 сообщение')).toBeVisible();
     await expect(page.locator('[data-tg-cast-text]')).toHaveValue('');
     const delivered = async () => {
@@ -103,6 +112,37 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
       return (await botMessages(page.request, chat)).filter((m) => m === first);
     };
     await expect.poll(delivered, POLL).toHaveLength(1);
+
+    // Оформленная рассылка (задача Т6): «Заполнить из новости», заголовок, картинка; предпросмотр — как
+    // в Telegram, «Показать простым текстом» — тот же текст без выделения; уходит картинкой с подписью.
+    await page.locator('[data-tg-cast-news]').selectOption({ index: 1 });
+    await expect(page.getByText('Поля заполнены из новости')).toBeVisible();
+    await expect(page.locator('[data-tg-cast-more]')).not.toHaveValue('');
+    const heading = `Рассылка с картинкой ${ownerLogin}`;
+    await page.locator('[data-tg-cast-title]').fill(heading);
+    await page.locator('[data-tg-cast-image]').setInputFiles({
+      name: 'cast.png',
+      mimeType: 'image/png',
+      buffer: PNG,
+    });
+    await expect(page.locator('[data-tg-cast-image-name]')).toHaveText('cast.png');
+    const preview = page.locator('[data-tg-cast-preview] [data-chat-message]');
+    await expect(preview.locator('[data-chat-image]')).toBeVisible();
+    await expect(preview).toContainText(heading);
+    await expect(preview.getByRole('button', { name: 'Подробнее' })).toBeVisible();
+    await page.locator('[data-tg-cast-plain]').click();
+    await expect(preview.locator('[data-chat-image]')).toBeVisible();
+    await page.locator('[data-tg-cast-go]').click();
+    await confirm.getByRole('button', { name: 'Поставить в очередь' }).click();
+    await expect(page.getByText('В очереди: 1 сообщение')).toBeVisible();
+    await expect(page.locator('[data-tg-cast-title]')).toHaveValue('');
+    const photo = async () => {
+      await tick(page.request);
+      return (await botSent(page.request, chat))
+        .filter((m) => m.photo && m.text.startsWith(heading))
+        .map((m) => m.photo!.bytes);
+    };
+    await expect.poll(photo, POLL).toEqual([PNG.byteLength]);
 
     // Второе объявление ждёт в очереди, а получатель тем временем отвязал Telegram: в прежний чат оно
     // не уходит — «Ошибка» с пояснением.

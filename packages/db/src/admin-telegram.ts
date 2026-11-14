@@ -302,29 +302,58 @@ export async function adminTelegramRetry(
 /**
  * «Рассылка» → «Поставить в очередь»: объявление каждому активному сотруднику действующей организации
  * (`orgId` — только этой; null — всем) с привязанным Telegram. Отвечает числом сообщений в очереди;
- * null — организация не найдена или заблокирована (или в контексте не администратор). Кто, когда, кому
- * и с каким текстом поставил объявление — в историю платформы в той же транзакции.
+ * null — организация не найдена или заблокирована (или в контексте не администратор). Оформленная
+ * рассылка (поток Т, задача Т6) — с описанием сообщения `message`: картинка, заголовок, кнопки-ссылки;
+ * `text` — простой текст того же сообщения. Кто, когда, кому и что поставил — в историю платформы в той
+ * же транзакции (картинка — номером файла, кнопки — записью сайта).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Д-31 — кому уходит объявление.
 export async function adminTelegramBroadcast(
   tx: Tx,
-  input: { orgId: string | null; text: string; now: Date },
+  input: {
+    orgId: string | null;
+    text: string;
+    now: Date;
+    message?: BotMessage | null;
+    /** Для истории: заголовок, картинка, «Подробнее» и «Смотреть видео» (вид:номер записи). */
+    cast?: { title: string; image: string | null; more: string | null; video: string | null };
+  },
 ): Promise<number | null> {
+  const payload = input.message ? JSON.stringify(input.message) : null;
   const [row] = await tx.execute<{ n: number | null }>(
-    sql`select app.admin_telegram_broadcast(${input.orgId}::uuid, ${input.text}, ${input.now.toISOString()}::timestamptz) as n`,
+    sql`select app.admin_telegram_broadcast(${input.orgId}::uuid, ${input.text}, ${payload}::jsonb, ${input.now.toISOString()}::timestamptz) as n`,
   );
   const queued = row?.n ?? null;
   if (queued === null) return null;
+  const cast = input.cast;
   await writePlatformHistory(tx, {
     entity: 'telegram_broadcast',
     entityId: input.orgId ?? 'all',
     action: 'create',
     changes: [
+      ...(cast?.title ? [{ field: 'title', to: cast.title }] : []),
       { field: 'text', to: input.text },
+      ...(cast?.image ? [{ field: 'image', to: cast.image }] : []),
+      ...(cast?.more ? [{ field: 'more', to: cast.more }] : []),
+      ...(cast?.video ? [{ field: 'video', to: cast.video }] : []),
       { field: 'queued', to: queued },
     ],
   });
   return queued;
+}
+
+/**
+ * Сколько получателей у рассылки сейчас — для окна подтверждения (прототип `tgCastCount`): то же
+ * условие, что у постановки в очередь. null — организация не найдена или заблокирована.
+ */
+export async function adminTelegramBroadcastCount(
+  tx: Tx,
+  orgId: string | null,
+): Promise<number | null> {
+  const [row] = await tx.execute<{ n: number | null }>(
+    sql`select app.admin_telegram_broadcast_count(${orgId}::uuid) as n`,
+  );
+  return row?.n ?? null;
 }
 
 /** Действующие организации для «Кому» (прототип `ORGS.filter(o => o.active)`), по названию. */

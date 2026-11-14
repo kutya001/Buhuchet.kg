@@ -12,11 +12,21 @@ import {
   type OutboxOutcome,
   type Tx,
 } from '@buhuchet/db';
-import { redactBotToken, type TelegramSendOptions } from '@buhuchet/adapters';
+import {
+  platformFileKey,
+  redactBotToken,
+  type TelegramPhotoResult,
+  type TelegramSendOptions,
+  type TelegramSendResult,
+} from '@buhuchet/adapters';
 import {
   botHasMarkup,
   botKeyboard,
+  botPlainText,
   botRichHtml,
+  CAST_IMAGES_SECTION,
+  castImageName,
+  castImageType,
   OUTBOX_BATCH,
   OUTBOX_LEASE_SECONDS,
   OUTBOX_MAX_BATCHES,
@@ -67,6 +77,61 @@ export function botSendOptions(
   };
 }
 
+/**
+ * Номера картинок рассылки у Telegram (поток Т, задача Т6): картинка грузится один раз, остальным
+ * получателям уходит по номеру. Только в памяти процесса и не больше `PHOTO_IDS_MAX` — потерянный номер
+ * значит лишь ещё одну загрузку.
+ */
+const photoIds = new Map<string, string>();
+const PHOTO_IDS_MAX = 50;
+
+/** Отказ без обращения к Telegram (картинки нет в хранилище) — как постоянная ошибка Telegram. */
+const refusedPhoto = (description: string): Extract<TelegramSendResult, { ok: false }> => ({
+  ok: false,
+  errorCode: 0,
+  description,
+  permanent: true,
+});
+
+/**
+ * Сообщение с картинкой: подпись — заголовок и текст (с разметкой или простым текстом), кнопки — под
+ * картинкой. Сначала по номеру файла у Telegram, если картинку уже отправляли; не принял — загрузка.
+ */
+async function sendPhotoRow(
+  ctx: JobContext,
+  row: QueuedRow,
+  message: BotMessage & { image: string },
+  plain: boolean,
+): Promise<TelegramPhotoResult> {
+  const telegram = ctx.telegram!;
+  const o = botSendOptions(message, { plain });
+  const options = {
+    caption: o.rich ?? botPlainText(message),
+    ...(o.rich ? { html: true } : {}),
+    ...(o.keyboard ? { keyboard: o.keyboard } : {}),
+  };
+  const known = photoIds.get(message.image);
+  if (known) {
+    const res = await telegram.sendPhoto(row.chatId, { fileId: known }, options);
+    if (res.ok || !res.permanent) return res;
+    photoIds.delete(message.image);
+  }
+  const bytes = await ctx.storage.get(platformFileKey(CAST_IMAGES_SECTION, message.image));
+  if (!bytes) return refusedPhoto('Картинка рассылки не найдена в хранилище');
+  const type = castImageType(bytes);
+  if (!type) return refusedPhoto('Картинка рассылки — не JPG, PNG и не WebP');
+  const res = await telegram.sendPhoto(
+    row.chatId,
+    { bytes, name: castImageName(type), contentType: type },
+    options,
+  );
+  if (res.ok && res.fileId) {
+    if (photoIds.size >= PHOTO_IDS_MAX) photoIds.delete(photoIds.keys().next().value!);
+    photoIds.set(message.image, res.fileId);
+  }
+  return res;
+}
+
 /** Отправить одну строку и решить, что с ней дальше. */
 async function sendOne(
   ctx: JobContext,
@@ -85,10 +150,15 @@ async function sendOne(
         };
   if (!ctx.telegram) return fail('Telegram-бот не подключён', false);
   try {
-    const res = await ctx.telegram.sendMessage(row.chatId, row.text, {
-      disableLinkPreview: true,
-      ...(row.message ? botSendOptions(row.message, { plain: !rich || row.plain === true }) : {}),
-    });
+    const plain = !rich || row.plain === true;
+    const message = row.message;
+    const res =
+      message?.image !== undefined
+        ? await sendPhotoRow(ctx, row, { ...message, image: message.image }, plain)
+        : await ctx.telegram.sendMessage(row.chatId, row.text, {
+            disableLinkPreview: true,
+            ...(message ? botSendOptions(message, { plain }) : {}),
+          });
     if (res.ok) {
       // Номер сообщения нужен только сообщению с кнопками: по нему бот находит его при нажатии.
       return {

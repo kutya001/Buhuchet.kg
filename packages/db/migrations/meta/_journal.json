@@ -925,6 +925,13 @@
       "when": 1794603819150,
       "tag": "0131_telegram_lead_bot",
       "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1794618446855,
+      "tag": "0132_telegram_cast",
+      "breakpoints": true
     }
   ]
 }

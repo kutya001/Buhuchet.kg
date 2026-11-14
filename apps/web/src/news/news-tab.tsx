@@ -6,6 +6,7 @@ import { Box, EmptyState, Icon, inputClass, linkButtonClass, Note, useToast } fr
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { ApiFailure } from '../api-client';
+import { useKbLinkParam } from '../kb/kb-link-param';
 import { useErrorText, useT } from '../l10n/provider';
 import { markAllNewsRead, markNewsRead, newsFeedQuery, newsUnreadQuery } from './news-data';
 import { NewsRow } from './news-provider';
@@ -34,6 +35,19 @@ export function KbNewsTab() {
   // Самая новая — по свежей ленте: пока лента из прошлого входа обновляется, ждём ответа.
   const newest = feed.isFetching ? undefined : feed.data?.[0];
   if (newest && !top) setTop({ id: newest.id, unread: !newest.read });
+
+  // «Подробнее» под сообщением рассылки бота: `?news=<код>` раскрывает новость и прокручивает к ней.
+  useKbLinkParam('news', 'news', !!feed.data, (id) => {
+    const n = feed.data?.find((x) => x.id === id);
+    if (!n) return;
+    setToggled((was) => ({ ...was, [id]: true }));
+    if (!n.read) void markNewsRead(client, [id]).catch(() => {});
+    requestAnimationFrame(() =>
+      root.current
+        ?.querySelector(`[data-news="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'start' }),
+    );
+  });
 
   // Число непрочитанных у модуля и вкладки — по свежей ленте.
   useEffect(() => {

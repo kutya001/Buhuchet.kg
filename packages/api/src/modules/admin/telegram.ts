@@ -36,6 +36,7 @@ import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { castMessage } from './telegram-cast';
 
 /*
  * Админка → «Телеграм» (ТЗ «Админка» → «Модуль Телеграмм»; прототип admin/telegram.js; задача 2.41,
@@ -352,7 +353,11 @@ export const telegramBroadcastRoute = createRoute({
       content: json(AdminTelegramBroadcastResult),
     },
     400: { description: 'Неверные данные: пустой или слишком длинный текст', content: error },
-    409: { description: 'Организация не найдена или заблокирована', content: error },
+    409: {
+      description:
+        'Организация не найдена или заблокирована; новость, статья, видео или картинка недоступны',
+      content: error,
+    },
     ...denied,
   },
 });
@@ -361,15 +366,28 @@ export const telegramBroadcastRoute = createRoute({
  * «Рассылка» → «Поставить в очередь» (ТЗ: «Рассылка объявлений всем пользователям или одной
  * организации»; прототип: «Сообщение получат только те, кто привязал Telegram»): по сообщению каждому
  * активному сотруднику действующей организации с привязанным Telegram; уходят обычной очередью.
+ * Оформленная рассылка (поток Т, задача Т6) — с картинкой, заголовком и кнопками-ссылками на сайт.
  */
 export function telegramBroadcastHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof telegramBroadcastRoute, AppEnv> {
   return async (c) => {
     const body = c.req.valid('json');
-    const queued = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      adminTelegramBroadcast(tx, { orgId: body.org, text: body.text, now: deps.clock.now() }),
-    );
+    const queued = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => {
+      const cast = await castMessage(deps, tx, body);
+      return adminTelegramBroadcast(tx, {
+        orgId: body.org,
+        text: cast.text,
+        now: deps.clock.now(),
+        message: cast.message,
+        cast: {
+          title: body.title,
+          image: body.image,
+          more: body.more ? `${body.more.kind}:${body.more.id}` : null,
+          video: body.video,
+        },
+      });
+    });
     if (queued === null) {
       return apiFail(409, 'broadcast_org', 'Организация не найдена или заблокирована');
     }

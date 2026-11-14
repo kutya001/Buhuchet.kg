@@ -22,7 +22,8 @@ import { useT } from '../l10n/provider';
 /** Строка макета: метка дня, сообщение бота или скрытый ответ на нажатие («Видно только вам»). */
 export type BotChatItem =
   | { kind: 'day'; text: string }
-  | { kind: 'message'; message: BotMessage; at?: string }
+  /** `imageSrc` — адрес картинки для макета (у `message.image` — номер файла в хранилище). */
+  | { kind: 'message'; message: BotMessage; at?: string; imageSrc?: string }
   | { kind: 'hidden'; text: string };
 
 /** Что делает действие кнопки в макете: скрытый ответ и новая подпись нажатой кнопки. */
@@ -265,6 +266,15 @@ export function BotChat({
         return (
           <div key={index} className={SIDE} data-chat-message="">
             <div className={BUBBLE}>
+              {item.imageSrc ? (
+                // Картинка рассылки (задача Т6) — над подписью, как в Telegram.
+                <img
+                  src={item.imageSrc}
+                  alt=""
+                  data-chat-image=""
+                  className="-mx-[11px] -mt-2 mb-1.5 block max-h-[260px] w-[calc(100%+22px)] max-w-none rounded-t-[13px] object-cover"
+                />
+              ) : null}
               {body(m)}
               {item.at ? (
                 <span className="mt-0.5 block text-right text-[11px] text-faint">{item.at}</span>

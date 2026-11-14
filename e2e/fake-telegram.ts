@@ -16,6 +16,9 @@ import { createServer, type ServerResponse } from 'node:http';
 //   (ряды подписей; поток Т, задача Т5), `messageId` — номер в чате; GET /commands — команды меню бота;
 //   GET /answers — скрытые ответы на нажатия; GET /health;
 //   POST /webhook-info {url, error} — что ответит getWebhookInfo (Админка → «Телеграм» → «Бот платформы»).
+//   /bot<токен>/sendPhoto — картинка с подписью (оформленная рассылка, поток Т, задача Т6): файлом
+//   (multipart) или номером файла, который подделка выдала раньше; в /messages — `photo` (номер файла и
+//   размер загруженного), `text` — подпись без разметки.
 
 const PORT = Number(process.env.FAKE_TELEGRAM_PORT ?? 8091);
 
@@ -29,6 +32,8 @@ interface Sent {
   keyboard?: unknown;
   /** Кнопки меню под полем ввода — ряды подписей из `reply_markup.keyboard`; `[]` — меню убрано. */
   menu?: string[][];
+  /** Картинка: номер файла у «Telegram» и размер, если файл загружали (иначе — отправлен по номеру). */
+  photo?: { fileId: string; bytes?: number };
 }
 
 const sent: Sent[] = [];
@@ -38,6 +43,8 @@ const files = new Map<string, { path: string; body: Buffer; tooBig: boolean }>()
 const answers: { id: string; text: string; alert: boolean }[] = [];
 let commands: unknown = [];
 let nextId = 1;
+// Картинки, которые загружали: номер файла → размер.
+const photos = new Map<string, number>();
 
 /** Текст сообщения с разметкой HTML — как его видит человек: без тегов, строки таблицы — с новой строки. */
 function plainOf(html: string): string {
@@ -51,6 +58,32 @@ function plainOf(html: string): string {
     .replace(/&amp;/g, '&')
     .replace(/\n{2,}/g, '\n')
     .trim();
+}
+
+/** Картинка с подписью — в список сообщений чата; ответ — как у Bot API (номер файла — в `photo`). */
+function sendPhoto(
+  res: ServerResponse,
+  m: {
+    chatId: string;
+    caption: string;
+    html: boolean;
+    keyboard: unknown;
+    photo: Sent['photo'] & {};
+  },
+) {
+  const messageId = nextId++;
+  sent.push({
+    chatId: m.chatId,
+    messageId,
+    text: m.html ? plainOf(m.caption) : m.caption,
+    ...(m.html ? { html: m.caption } : {}),
+    ...(m.keyboard ? { keyboard: m.keyboard } : {}),
+    photo: m.photo,
+  });
+  return reply(res, 200, {
+    ok: true,
+    result: { message_id: messageId, photo: [{ file_id: m.photo.fileId }] },
+  });
 }
 
 // Состояние вебхука: адрес из setWebhook или /webhook-info, последняя ошибка доставки (время — сейчас).
@@ -94,12 +127,38 @@ createServer((req, res) => {
         ? 'files'
         : /^\/bot[^/]+\/(\w+)$/.exec(url.pathname)?.[1];
   if (req.method !== 'POST' || !method) return reply(res, 404, notFound);
-  let body = '';
-  req.setEncoding('utf8');
-  req.on('data', (chunk: string) => {
-    body += chunk;
+  const chunks: Buffer[] = [];
+  req.on('data', (chunk: Buffer) => {
+    chunks.push(chunk);
   });
   req.on('end', () => {
+    const raw = Buffer.concat(chunks);
+    const type = String(req.headers['content-type'] ?? '');
+    if (method === 'sendPhoto' && type.startsWith('multipart/form-data')) {
+      void new Response(raw, { headers: { 'content-type': type } })
+        .formData()
+        .then(async (form) => {
+          const file = form.get('photo');
+          if (!(file instanceof Blob)) {
+            return reply(res, 400, { ok: false, error_code: 400, description: 'no photo' });
+          }
+          const fileId = `photo-${photos.size + 1}`;
+          photos.set(fileId, (await file.arrayBuffer()).byteLength);
+          const markup = form.get('reply_markup');
+          return sendPhoto(res, {
+            chatId: String(form.get('chat_id') ?? ''),
+            caption: String(form.get('caption') ?? ''),
+            html: form.get('parse_mode') === 'HTML',
+            keyboard: markup
+              ? (JSON.parse(String(markup)) as { inline_keyboard?: unknown }).inline_keyboard
+              : undefined,
+            photo: { fileId, bytes: photos.get(fileId)! },
+          });
+        })
+        .catch(() => reply(res, 400, { ok: false, error_code: 400, description: 'Bad Request' }));
+      return;
+    }
+    const body = raw.toString('utf8');
     let data: {
       chat_id?: number | string;
       text?: string;
@@ -117,6 +176,8 @@ createServer((req, res) => {
       callback_query_id?: string;
       show_alert?: boolean;
       file_id?: string;
+      photo?: string;
+      caption?: string;
       id?: string;
       name?: string;
       base64?: string;
@@ -145,6 +206,23 @@ createServer((req, res) => {
         ...(menu ? { menu } : {}),
       });
       return reply(res, 200, { ok: true, result: { message_id: messageId } });
+    }
+    if (method === 'sendPhoto') {
+      const fileId = String(data.photo ?? '');
+      if (!photos.has(fileId)) {
+        return reply(res, 400, {
+          ok: false,
+          error_code: 400,
+          description: 'Bad Request: wrong file identifier',
+        });
+      }
+      return sendPhoto(res, {
+        chatId: String(data.chat_id),
+        caption: String(data.caption ?? ''),
+        html: data.parse_mode === 'HTML',
+        keyboard,
+        photo: { fileId },
+      });
     }
     if (method === 'answerCallbackQuery') {
       answers.push({

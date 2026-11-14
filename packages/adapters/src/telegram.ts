@@ -18,6 +18,18 @@ export type TelegramSendResult =
     };
 
 /**
+ * Картинка сообщения (оформленная рассылка, поток Т, задача Т6): сам файл или номер файла у Telegram —
+ * его Telegram возвращает после первой отправки, и остальным получателям картинка уходит без загрузки.
+ */
+export type TelegramPhoto =
+  { fileId: string } | { bytes: Uint8Array; name: string; contentType: string };
+
+/** Итог отправки картинки: номер сообщения и номер файла у Telegram (для следующих отправок). */
+export type TelegramPhotoResult =
+  | { ok: true; messageId: number; fileId: string | null }
+  | Extract<TelegramSendResult, { ok: false }>;
+
+/**
  * Кнопка под сообщением (inline keyboard): нажатие с данными (`data`, до 64 байт — приходит боту как
  * callback_query), копирование текста (`copy`) или ссылка (`url`). `disabled` — кнопка неактивна.
  */
@@ -90,6 +102,15 @@ export interface Telegram {
     text: string,
     options?: TelegramSendOptions,
   ): Promise<TelegramSendResult>;
+  /**
+   * Картинка с подписью (до 1024 знаков) и кнопками под ней. `html` — подпись с разметкой HTML (её
+   * экранирует вызывающий). Ошибка сети — исключение с вычищенным текстом, как у `sendMessage`.
+   */
+  sendPhoto(
+    chatId: string | number,
+    photo: TelegramPhoto,
+    options?: Pick<TelegramSendOptions, 'html' | 'keyboard' | 'timeoutMs'> & { caption?: string },
+  ): Promise<TelegramPhotoResult>;
   /**
    * Ответ на нажатие кнопки: без текста — просто снять ожидание; с текстом — скрытый ответ (до 200
    * знаков), его видит только нажавший; `alert` — окном. false — Telegram ответ не принял.
@@ -231,7 +252,81 @@ export function createTelegramBotApi(options: {
     }
   }
 
+  /** Ответ Bot API об отказе — в виде, который понимает очередь. */
+  const failure = (data: BotApiResponse<unknown>): Extract<TelegramSendResult, { ok: false }> => {
+    const errorCode = data.error_code ?? 0;
+    return {
+      ok: false,
+      errorCode,
+      description: data.description ?? 'unknown error',
+      ...(data.parameters?.retry_after !== undefined
+        ? { retryAfterSeconds: data.parameters.retry_after }
+        : {}),
+      permanent: errorCode === 400 || errorCode === 403,
+    };
+  };
+
+  /** Запрос с файлом (multipart): поля — строки, файл — содержимое с именем и типом. */
+  async function callForm<T>(
+    method: string,
+    fields: Readonly<Record<string, string>>,
+    file: { field: string; bytes: Uint8Array; name: string; contentType: string },
+    timeoutMs: number,
+  ): Promise<BotApiResponse<T>> {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    form.set(file.field, new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.name);
+    try {
+      const res = await doFetch(`${base}/${method}`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      return (await res.json()) as BotApiResponse<T>;
+    } catch (err) {
+      const safe = new Error(redactBotToken(err instanceof Error ? err.message : String(err)));
+      safe.name = err instanceof Error ? err.name : 'Error';
+      throw safe;
+    }
+  }
+
   return {
+    async sendPhoto(chatId, photo, opts = {}) {
+      type Sent = { message_id: number; photo?: { file_id?: string }[] };
+      const markup = opts.keyboard?.length ? replyMarkup(opts.keyboard) : null;
+      const caption: Record<string, string> = opts.caption ? { caption: opts.caption } : {};
+      const mode: Record<string, string> = opts.html && opts.caption ? { parse_mode: 'HTML' } : {};
+      const data =
+        'fileId' in photo
+          ? await call<Sent>(
+              'sendPhoto',
+              {
+                chat_id: chatId,
+                photo: photo.fileId,
+                ...caption,
+                ...mode,
+                ...(markup ? { reply_markup: markup } : {}),
+              },
+              opts.timeoutMs,
+            )
+          : await callForm<Sent>(
+              'sendPhoto',
+              {
+                chat_id: String(chatId),
+                ...caption,
+                ...mode,
+                ...(markup ? { reply_markup: JSON.stringify(markup) } : {}),
+              },
+              { field: 'photo', ...photo },
+              opts.timeoutMs ?? FILE_TIMEOUT_MS,
+            );
+      if (data.ok && data.result) {
+        // Telegram отдаёт картинку в нескольких размерах; номер самого большого — для следующих отправок.
+        const fileId = data.result.photo?.at(-1)?.file_id ?? null;
+        return { ok: true, messageId: data.result.message_id, fileId };
+      }
+      return failure(data);
+    },
     async sendMessage(chatId, text, opts = {}) {
       const markup = opts.keyboard?.length
         ? { reply_markup: replyMarkup(opts.keyboard) }
@@ -270,16 +365,7 @@ export function createTelegramBotApi(options: {
         );
       }
       if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
-      const errorCode = data.error_code ?? 0;
-      return {
-        ok: false,
-        errorCode,
-        description: data.description ?? 'unknown error',
-        ...(data.parameters?.retry_after !== undefined
-          ? { retryAfterSeconds: data.parameters.retry_after }
-          : {}),
-        permanent: errorCode === 400 || errorCode === 403,
-      };
+      return failure(data);
     },
     async answerCallback(callbackId, text, opts = {}) {
       const data = await call<boolean>('answerCallbackQuery', {
@@ -375,7 +461,16 @@ export function createTelegramBotApi(options: {
 
 export interface FakeTelegram extends Telegram {
   /** Отправленные сообщения; кнопки — в `options.keyboard`, вид с таблицами — в `options.rich`. */
-  readonly sent: Array<{ chatId: string | number; text: string; options: TelegramSendOptions }>;
+  readonly sent: Array<{
+    chatId: string | number;
+    text: string;
+    options: TelegramSendOptions & { photo?: TelegramPhoto };
+  }>;
+  /**
+   * Отправленные картинки (в `sent` они тоже есть: текст — подпись, `options.photo` — что отправлено).
+   * Номер файла у «Telegram» — `tg-photo-<n>`; отправка по неизвестному номеру — отказ 400.
+   */
+  readonly photos: Array<{ chatId: string | number; photo: TelegramPhoto; fileId: string }>;
   /** Номера отправленных сообщений — в том же порядке, что `sent` (для нажатий кнопок в тестах). */
   readonly messageIds: number[];
   /** Ответы на нажатия кнопок (скрытые ответы). */
@@ -407,6 +502,27 @@ export function createFakeTelegram(): FakeTelegram {
     answers: [],
     edits: [],
     files: new Map(),
+    photos: [],
+    async sendPhoto(chatId, photo, options = {}) {
+      const failed = failures.shift();
+      if (failed) return failed;
+      const known = fake.photos.map((p) => p.fileId);
+      if ('fileId' in photo && !known.includes(photo.fileId)) {
+        return {
+          ok: false,
+          errorCode: 400,
+          description: 'Bad Request: wrong file identifier',
+          permanent: true,
+        };
+      }
+      const fileId = 'fileId' in photo ? photo.fileId : `tg-photo-${fake.photos.length + 1}`;
+      const messageId = nextId++;
+      const { caption, ...rest } = options;
+      fake.photos.push({ chatId, photo, fileId });
+      fake.sent.push({ chatId, text: caption ?? '', options: { ...rest, photo } });
+      fake.messageIds.push(messageId);
+      return { ok: true, messageId, fileId };
+    },
     async sendMessage(chatId, text, options = {}) {
       const failure = failures.shift();
       if (failure) return failure;

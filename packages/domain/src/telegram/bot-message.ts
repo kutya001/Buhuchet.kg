@@ -73,7 +73,18 @@ export interface BotMessage {
    * напоминание в простом виде остаётся прежними строками, а не строками таблиц.
    */
   plain?: string;
+  /**
+   * Картинка сообщения (оформленная рассылка, задача Т6; прототип v103 `m.img`): номер файла в хранилище
+   * платформы. Сообщение уходит картинкой с подписью — заголовок и текст; таблиц у него нет. Картинка
+   * остаётся и в простом виде.
+   */
+  image?: string;
 }
+
+/** Номер картинки сообщения — UUID, который выдал сервер при загрузке. */
+const IMAGE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** Подпись к картинке в Telegram — не длиннее 1024 знаков. */
+export const BOT_CAPTION_MAX = 1024;
 
 /** Пределы Telegram: текст простого сообщения, данные и подпись кнопки, текст копирования, столбцы. */
 export const BOT_TEXT_MAX = 4096;
@@ -276,6 +287,11 @@ export function pressBotButton(
 export function botMessageProblem(m: BotMessage): string | null {
   if (!botPlainText(m).trim()) return 'пустое сообщение';
   if (m.code !== undefined && !(m.text ?? '').includes(m.code)) return 'кода нет в тексте';
+  if (m.image !== undefined) {
+    if (!IMAGE_RE.test(m.image)) return 'номер картинки';
+    if ((m.tables ?? []).length) return 'у сообщения с картинкой нет таблиц';
+    if (botPlainText(m).length > BOT_CAPTION_MAX) return 'подпись к картинке длиннее 1024 знаков';
+  }
   for (const t of m.tables ?? []) {
     const width = Math.max(
       t.head?.length ?? 0,
@@ -325,7 +341,9 @@ const isString = (x: unknown) => typeof x === 'string';
 export function asBotMessage(value: unknown): BotMessage | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const m = value as Record<string, unknown>;
-  if (![m.heading, m.sub, m.text, m.code, m.plain].every((x) => optional(x, isString))) return null;
+  if (![m.heading, m.sub, m.text, m.code, m.plain, m.image].every((x) => optional(x, isString))) {
+    return null;
+  }
   const tablesOk = optional(
     m.tables,
     (ts) =>

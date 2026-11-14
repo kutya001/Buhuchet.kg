@@ -66,6 +66,14 @@ import {
   telegramSummaryRoute,
 } from './telegram';
 import {
+  telegramCastCountHandler,
+  telegramCastCountRoute,
+  telegramCastImageHandler,
+  telegramCastImageRoute,
+  telegramCastOptionsHandler,
+  telegramCastOptionsRoute,
+} from './telegram-cast';
+import {
   blockUserRoute,
   exportUsersHandler,
   exportUsersRoute,
@@ -162,5 +170,8 @@ export function adminModule(deps: ApiDeps) {
       .openapi(telegramBotViewRoute, telegramBotViewHandler(deps))
       .openapi(telegramOrgsRoute, telegramOrgsHandler(deps))
       .openapi(telegramBroadcastRoute, telegramBroadcastHandler(deps))
+      .openapi(telegramCastCountRoute, telegramCastCountHandler(deps))
+      .openapi(telegramCastOptionsRoute, telegramCastOptionsHandler(deps))
+      .openapi(telegramCastImageRoute, telegramCastImageHandler(deps))
   );
 }

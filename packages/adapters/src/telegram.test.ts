@@ -404,7 +404,100 @@ describe('createTelegramBotApi', () => {
   });
 });
 
+describe('sendPhoto (оформленная рассылка, задача Т6)', () => {
+  it('первая отправка — файлом (multipart) с подписью и кнопками; ответ — номер сообщения и файла у Telegram', async () => {
+    const fetch = fetchReturning({
+      ok: true,
+      result: { message_id: 9, photo: [{ file_id: 'small' }, { file_id: 'big' }] },
+    });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    const res = await bot.sendPhoto(
+      100,
+      {
+        bytes: new Uint8Array([0xff, 0xd8, 0xff, 0x00]),
+        name: 'image.jpg',
+        contentType: 'image/jpeg',
+      },
+      {
+        caption: '<b>Плановые работы</b>',
+        html: true,
+        keyboard: [[{ text: 'Подробнее', url: 'https://buhuchet.kg/x' }]],
+      },
+    );
+    expect(res).toEqual({ ok: true, messageId: 9, fileId: 'big' });
+    const [url, init] = fetch.mock.calls[0]!;
+    expect(url).toBe('https://api.telegram.org/bot1:abc/sendPhoto');
+    const form = init.body as FormData;
+    expect(form.get('chat_id')).toBe('100');
+    expect(form.get('caption')).toBe('<b>Плановые работы</b>');
+    expect(form.get('parse_mode')).toBe('HTML');
+    expect(JSON.parse(String(form.get('reply_markup')))).toEqual({
+      inline_keyboard: [[{ text: 'Подробнее', url: 'https://buhuchet.kg/x' }]],
+    });
+    const file = form.get('photo') as File;
+    expect(file.name).toBe('image.jpg');
+    expect(file.type).toBe('image/jpeg');
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(
+      new Uint8Array([0xff, 0xd8, 0xff, 0x00]),
+    );
+  });
+
+  it('следующие — по номеру файла у Telegram, телом JSON; без подписи — без разметки; отказ — как у sendMessage', async () => {
+    const fetch = fetchReturning({
+      ok: false,
+      error_code: 429,
+      description: 'Too Many Requests',
+      parameters: { retry_after: 3 },
+    });
+    const bot = createTelegramBotApi({ token: '1:abc', fetch });
+    const res = await bot.sendPhoto(100, { fileId: 'big' }, { html: true });
+    expect(res).toEqual({
+      ok: false,
+      errorCode: 429,
+      description: 'Too Many Requests',
+      retryAfterSeconds: 3,
+      permanent: false,
+    });
+    expect(JSON.parse(String(fetch.mock.calls[0]![1].body))).toEqual({
+      chat_id: 100,
+      photo: 'big',
+    });
+  });
+
+  it('ошибка сети — исключение без токена бота', async () => {
+    const bot = createTelegramBotApi({
+      token: '1:abc',
+      fetch: async (url) => {
+        throw new Error(`fetch failed: ${url}`);
+      },
+    });
+    await expect(
+      bot.sendPhoto(100, { bytes: new Uint8Array([1]), name: 'a.png', contentType: 'image/png' }),
+    ).rejects.toThrow('/bot<скрыт>/sendPhoto');
+  });
+});
+
 describe('createFakeTelegram', () => {
+  it('картинка: первая — файлом, дальше — по номеру; неизвестный номер — отказ 400', async () => {
+    const tg = createFakeTelegram();
+    const first = await tg.sendPhoto(
+      1,
+      { bytes: new Uint8Array([1]), name: 'a.png', contentType: 'image/png' },
+      { caption: 'Привет' },
+    );
+    expect(first).toMatchObject({ ok: true, fileId: 'tg-photo-1' });
+    expect(await tg.sendPhoto(2, { fileId: 'tg-photo-1' })).toMatchObject({
+      ok: true,
+      fileId: 'tg-photo-1',
+    });
+    expect(await tg.sendPhoto(3, { fileId: 'чужой' })).toMatchObject({ ok: false, errorCode: 400 });
+    expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
+      [1, 'Привет'],
+      [2, ''],
+    ]);
+    expect(tg.photos).toHaveLength(2);
+  });
+
   it('запоминает сообщения и имитирует ошибки', async () => {
     const tg = createFakeTelegram();
     tg.failNext({
