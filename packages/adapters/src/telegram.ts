@@ -423,7 +423,29 @@ export function createTelegramBotApi(options: {
           opts.timeoutMs,
         );
       }
-      if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
+      if (data.ok && data.result) {
+        const result = data.result as { message_id: number; ephemeral_message_id?: number };
+        // Скрытое сообщение (задача Т8): Telegram отдаёт его с номером 0 и `ephemeral_message_id`.
+        // Нет этих признаков — сервер Bot API поле не знает, и сообщение увидели все в чате: оно
+        // сразу удаляется, а отправка считается неудачной (защита — строже, docs/deviations.md п. Т-12).
+        if (
+          opts.ephemeral &&
+          result.message_id !== 0 &&
+          result.ephemeral_message_id === undefined
+        ) {
+          await call<boolean>('deleteMessage', {
+            chat_id: chatId,
+            message_id: result.message_id,
+          }).catch(() => null);
+          return {
+            ok: false,
+            errorCode: 0,
+            description: 'ephemeral message is not supported',
+            permanent: true,
+          };
+        }
+        return { ok: true, messageId: result.message_id };
+      }
       return failure(data);
     },
     async createTopic(chatId, name) {

@@ -216,7 +216,13 @@ createServer((req, res) => {
           ? { receiver: data.ephemeral_message_parameters.receiver_user_id }
           : {}),
       });
-      return reply(res, 200, { ok: true, result: { message_id: messageId } });
+      // Скрытое сообщение Telegram отдаёт с номером 0 и своим `ephemeral_message_id`.
+      return reply(res, 200, {
+        ok: true,
+        result: data.ephemeral_message_parameters
+          ? { message_id: 0, ephemeral_message_id: messageId }
+          : { message_id: messageId },
+      });
     }
     if (method === 'sendPhoto') {
       const fileId = String(data.photo ?? '');

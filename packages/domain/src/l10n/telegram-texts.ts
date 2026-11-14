@@ -262,7 +262,7 @@ export const TELEGRAM_TEXTS = {
   'tggrp.dlg_open': { ru: 'Открыть Telegram', section: G },
   'tggrp.dlg_copy': { ru: 'Скопировать ссылку', section: G },
   'tggrp.dlg_copied': { ru: 'Ссылка скопирована', section: G },
-  'org.history.tg_group_on': { ru: 'Общий чат Telegram «{title}» подключён', section: G },
+  'org.history.tg_group_on': { ru: 'Подключён общий чат Telegram «{title}»', section: G },
   'org.history.tg_group_off': { ru: 'Общий чат Telegram «{title}» отключён', section: G },
   'org.history.tg_group_gone': {
     ru: 'Бота удалили из общего чата Telegram «{title}»',

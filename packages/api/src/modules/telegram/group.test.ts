@@ -276,6 +276,9 @@ describe.skipIf(!databaseAvailable())('Общий чат фирмы в Telegram 
       text: TPL.tgGrpMineNone,
       options: { ephemeral: { receiverUserId: CHAT.owner } },
     });
+    // Telegram не подтвердил скрытое сообщение (переходник его удалил) — «Не удалось», а не «готово».
+    tg.failNext({ ok: false, errorCode: 0, description: 'ephemeral', permanent: true });
+    expect(await pressMine(CHAT.acc)).toMatchObject({ text: TPL.tgActFailed, alert: true });
     // Не привязан к организации группы (другая организация и ничей Telegram) — отказ окном.
     const count = sent(GROUP).length;
     expect(await pressMine(CHAT.accB)).toMatchObject({ text: TPL.tgGrpNoLink, alert: true });

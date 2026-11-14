@@ -496,21 +496,33 @@ export async function handleGroupPress(deps: ApiDeps, press: GroupPress): Promis
   );
   if (typeof outcome === 'string') return refuse(outcome);
   const ephemeral = { receiverUserId: press.fromId, callbackQueryId: press.callbackId };
+  // Скрытым сообщение делает только Telegram: переходник проверяет признак скрытого сообщения в
+  // ответе и, если его нет, сразу удаляет сообщение из группы — тогда нажавший видит «Не удалось».
+  let shown = false;
   try {
+    let result;
     if (outcome.text !== undefined) {
-      await deps.telegram?.sendMessage(press.chatId, outcome.text, { ephemeral });
+      result = await deps.telegram?.sendMessage(press.chatId, outcome.text, { ephemeral });
     } else {
       const problem = botMessageProblem(outcome.message);
       if (problem) throw new Error(`Telegram: «Мои» — ${problem}`);
       const plain =
         !(await telegramBotRich(deps.db)) || (await telegramPlainText(deps.db, user.userId));
-      await deps.telegram?.sendMessage(press.chatId, botPlainText(outcome.message), {
+      result = await deps.telegram?.sendMessage(press.chatId, botPlainText(outcome.message), {
         ...botSendOptions(outcome.message, { plain }),
         ephemeral,
       });
     }
+    shown = result?.ok === true;
+    if (result && !result.ok) {
+      deps.logger.warn(
+        { purpose: 'group_mine', errorCode: result.errorCode, description: result.description },
+        'Telegram: скрытый ответ «Мои» не отправлен',
+      );
+    }
   } catch (err) {
     deps.logger.warn({ err, purpose: 'group_mine' }, 'Telegram: скрытый ответ «Мои» не отправлен');
   }
+  if (!shown) return refuse('tgActFailed');
   await answer(await botText(deps, 'tgGrpMineToast'));
 }
