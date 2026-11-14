@@ -142,6 +142,22 @@ function contract(name: string, make: () => Promise<Storage>, opts: { skip?: boo
       ).rejects.toThrow(RangeError);
     });
 
+    it('копирует файл под другим ключом с тем же типом; нет исходного — false', async () => {
+      const storage = await make();
+      const from = orgFileKey('test', 'sent', randomUUID());
+      const to = orgFileKey('test', 'files', randomUUID());
+      expect(await storage.copy(from, to)).toBe(false);
+      expect(await storage.exists(to)).toBe(false);
+      await storage.put(from, Uint8Array.from([7, 8, 9]), { contentType: 'application/pdf' });
+      expect(await storage.copy(from, to)).toBe(true);
+      expect([...((await storage.get(to)) ?? [])]).toEqual([7, 8, 9]);
+      expect(await storage.stat(to)).toEqual({ size: 3, contentType: 'application/pdf' });
+      // Копия независима: исходный удалён — копия осталась.
+      await storage.delete(from);
+      expect(await storage.exists(to)).toBe(true);
+      await storage.delete(to);
+    });
+
     it('кусок файла по байтам: с начала, из середины, за концом; нет файла — null', async () => {
       const storage = await make();
       const key = platformFileKey('contract', randomUUID());

@@ -22,6 +22,7 @@ export type CountKey =
   | 'kpi.period.count'
   | 'kpi.missing.count'
   | 'files.count'
+  | 'files.sent.count'
   | 'accounts.count'
   | 'orgs.count'
   | 'leads.count'

@@ -60,6 +60,10 @@ export const ALERTS_TEXTS = {
   },
   'alert.job.reports_create_due': { ru: 'Создание отчётов к сроку', section: S },
   'alert.job.files_cleanup_pending': { ru: 'Очистка незаконченных загрузок файлов', section: S },
+  'alert.job.files_sent_purge': {
+    ru: 'Удаление непринятых файлов от контрагентов через 30 дней',
+    section: S,
+  },
   'alert.job.kb_cleanup_video_uploads': {
     ru: 'Очистка брошенных загрузок видео',
     section: S,

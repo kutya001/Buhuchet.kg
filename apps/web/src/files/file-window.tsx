@@ -37,11 +37,20 @@ const viewQuery = (id: string) => ({
   staleTime: 5 * 60_000,
 });
 
-/** Просмотр в окне: картинка или PDF; остальное — значок, тип и размер. */
-function Preview({ file }: { file: FileManagerRow }) {
+/**
+ * Просмотр в окне: картинка или PDF; остальное — значок, тип и размер. `view` — запрос ссылки на
+ * просмотр (у файла записи — `…/view`, у отправленного контрагентом — `/files/sent/{id}/link`).
+ */
+export function FilePreview({
+  file,
+  view,
+}: {
+  file: { name: string; contentType: string; size: number };
+  view: { queryKey: readonly unknown[]; queryFn: () => Promise<FileLink>; staleTime?: number };
+}) {
   const t = useT();
   const kind = filePreviewKind(file.contentType);
-  const link = useQuery({ ...viewQuery(file.id), enabled: kind !== null });
+  const link = useQuery({ ...view, enabled: kind !== null });
   const meta = t('files.window.meta', {
     ext: fileTypeText(t, file.name),
     size: fileSizeText(t, file.size),
@@ -217,7 +226,7 @@ export function FileWindow({
       }
     >
       <div data-file-window={file.id} className="flex flex-col gap-3.5">
-        <Preview file={file} />
+        <FilePreview file={file} view={viewQuery(file.id)} />
         <Box>
           <KeyValues items={items} />
         </Box>

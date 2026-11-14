@@ -1,6 +1,7 @@
 import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
+  CopyObjectCommand,
   CreateBucketCommand,
   CreateMultipartUploadCommand,
   DeleteObjectCommand,
@@ -29,6 +30,11 @@ export interface Storage {
   get(key: string): Promise<Uint8Array | null>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
+  /**
+   * Копия файла под другим ключом на стороне хранилища, с тем же типом (принятый файл от контрагента
+   * становится файлом контрагента); нет исходного файла — false.
+   */
+  copy(fromKey: string, toKey: string): Promise<boolean>;
   /**
    * Временная ссылка на скачивание (только после проверки права). Файл отдаётся вложением, а не
    * открывается в браузере: загруженный HTML или SVG не выполнится на домене хранилища. `inline` —
@@ -275,6 +281,17 @@ export function createS3Storage(config: StorageConfig): Storage {
         throw error;
       }
     },
+    async copy(fromKey, toKey) {
+      try {
+        // Источник — «корзина/ключ» с кодированием частей ключа; тип и метаданные копируются.
+        const source = `${Bucket}/${fromKey.split('/').map(encodeURIComponent).join('/')}`;
+        await client.send(new CopyObjectCommand({ Bucket, Key: toKey, CopySource: source }));
+        return true;
+      } catch (error) {
+        if (isNotFound(error)) return false;
+        throw error;
+      }
+    },
     async signedDownloadUrl(key, { expiresInSeconds, fileName, inline }) {
       checkExpiry(expiresInSeconds);
       checkInline(inline);
@@ -479,6 +496,12 @@ export function createMemoryStorage(): MemoryStorage {
     },
     async exists(key) {
       return files.has(key);
+    },
+    async copy(fromKey, toKey) {
+      const file = files.get(fromKey);
+      if (!file) return false;
+      files.set(toKey, { body: file.body.slice(), contentType: file.contentType });
+      return true;
     },
     async signedDownloadUrl(key, { expiresInSeconds, fileName, inline }) {
       checkExpiry(expiresInSeconds);
