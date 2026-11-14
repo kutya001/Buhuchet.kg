@@ -72,6 +72,9 @@ const STEP = {
   not_required: { path: 'not-required', to: 'not_required', icon: 'ban' },
 } as const;
 
+/** Окно «Поступление от контрагента»: чей и как сразу распределить. */
+type ReceiveSlot = { contractorId: string; preset: ReceiptPreset | null };
+
 /**
  * Действия с отчётом (прототип modules/reports.js, `reportActions`, `repAdd`, массовые действия
  * списка; modules/report-card.js, `openReport`; ui/status-scale.js — окна сдачи, подтверждения, отката):
@@ -98,6 +101,11 @@ export function useReportActions(): {
   newReport: () => void;
   /** «Принять» в строке списка: с «Учётом оплаты налогов» и правом «Учёт денег», иначе null. */
   receive: ((r: ReportRow) => void) | null;
+  /**
+   * «Принять деньги» за месяц и за весь период во вкладке «Отчёты к сдаче» (прототип v110 `inDlg` с
+   * `pre.list`): форма поступления контрагента сразу с распределением; права — как у `receive`.
+   */
+  receiveFor: ((contractorId: string, preset: ReceiptPreset) => void) | null;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -125,10 +133,7 @@ export function useReportActions(): {
   const [backError, setBackError] = useState<string | undefined>();
   const moneyRefresh = useMoneyRefresh();
   const [pay, setPay] = useState<DialogSlot<ReportCard> | null>(null);
-  const [receive, setReceive] = useState<DialogSlot<{
-    contractorId: string;
-    preset: ReceiptPreset | null;
-  }> | null>(null);
+  const [receive, setReceive] = useState<DialogSlot<ReceiveSlot> | null>(null);
   const [cancelPay, setCancelPay] = useState<DialogSlot<ReportCard> | null>(null);
   const [remind, setRemind] = useState<DialogSlot<string> | null>(null);
   // Отчёты, по которым запрос ещё идёт: повторное нажатие не шлёт второй запрос.
@@ -247,11 +252,15 @@ export function useReportActions(): {
     const sum = r.amount ?? 0;
     const amount = Math.max(0, sum - Math.max(r.paid, r.receivedFor)) || sum - r.paid;
     setReceive(
-      openSlot({
+      openSlot<ReceiveSlot>({
         contractorId: r.contractor.id,
         preset: amount > 0 ? { reportId: r.id, amount } : null,
       }),
     );
+  }, []);
+
+  const openReceiveFor = useCallback((contractorId: string, preset: ReceiptPreset) => {
+    setReceive(openSlot<ReceiveSlot>({ contractorId, preset }));
   }, []);
 
   const cancelPayment = async (reason: string) => {
@@ -607,6 +616,7 @@ export function useReportActions(): {
     bulk,
     newReport: () => void newReport(),
     receive: actor?.taxpay && actor.can.money ? openReceive : null,
+    receiveFor: actor?.taxpay && actor.can.money ? openReceiveFor : null,
     dialogs,
   };
 }

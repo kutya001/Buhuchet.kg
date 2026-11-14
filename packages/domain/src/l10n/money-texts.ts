@@ -324,6 +324,11 @@ export const TAX_MONEY_TEXTS = {
   'money.in.date': { ru: 'Дата', section: S },
   'money.in.detail': { ru: 'Детализация: за что эти деньги', section: S },
   'money.in.auto': { ru: 'Распределить по срокам', section: S },
+  // «Принять деньги» за месяц и за весь период во вкладке «Отчёты к сдаче» (прототип v110 `inDlg`, `pre.list`).
+  'money.in.list_note': {
+    ru: 'Сумма разнесена по отчётам от старых месяцев к новым; поправьте общую сумму — распределение пересчитается. Излишек останется авансом контрагента — «Поступило и не потрачено».',
+    section: S,
+  },
   'money.in.col_report': { ru: 'Отчёт', section: S },
   'money.in.col_period': { ru: 'Период', section: S },
   'money.in.col_pay_due': { ru: 'Срок оплаты', section: S },

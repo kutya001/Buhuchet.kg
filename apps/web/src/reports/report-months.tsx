@@ -14,6 +14,7 @@ import {
   type MonthPlanGroup,
   type MonthPlanItem,
   type MonthPlanQuick,
+  type MonthReceiveOffer,
 } from '@buhuchet/domain';
 import { ContractorMonthPaySent, ListValues, ReportList, type ReportRow } from '@buhuchet/shared';
 import {
@@ -35,6 +36,7 @@ import {
   useToast,
   type ActionEntry,
   type GridColumn,
+  type MenuPlace,
   type MiniColumn,
   type MiniRow,
 } from '@buhuchet/ui';
@@ -58,6 +60,9 @@ import {
   monthPills,
   monthTitle,
   parseReportsMode,
+  receiveNote,
+  receiveShown,
+  receiveWhy,
   reportsModeCookie,
   type MonthTotals,
   type MonthsCardView,
@@ -163,10 +168,13 @@ function MonthPayBlock({
   contractorId,
   title,
   pay,
+  receive,
 }: {
   contractorId: string;
   title: string;
   pay: MonthPay<ReportRow>;
+  /** «Принять деньги» за месяц (прототип v110 `rmRecvBtn`): перед «Скопировать для клиента». */
+  receive: ReactNode;
 }) {
   const t = useT();
   const toast = useToast();
@@ -277,6 +285,7 @@ function MonthPayBlock({
       >
         {hint}
       </span>
+      {receive}
       <button
         type="button"
         data-month-pay-copy=""
@@ -346,7 +355,7 @@ function MonthBlock({
   columns: ReadonlyMap<string, GridColumn<ReportRow>>;
   taxpay: boolean;
   reports: ReportActions;
-  onMenu: (el: HTMLElement, items: ActionEntry[]) => void;
+  onMenu: (place: MenuPlace, items: ActionEntry[]) => void;
 }) {
   const t = useT();
   const title = monthTitle(t, g.month);
@@ -376,6 +385,7 @@ function MonthBlock({
     return {
       key: r.id,
       late: x.late,
+      menu: items.length > 0,
       blank,
       cells: {
         type: (
@@ -406,7 +416,7 @@ function MonthBlock({
             title={t('grid.actions')}
             onClick={(e) => {
               e.stopPropagation();
-              onMenu(e.currentTarget, items);
+              onMenu({ anchor: e.currentTarget }, items);
             }}
             onKeyDown={(e) => e.stopPropagation()}
           >
@@ -478,10 +488,49 @@ function MonthBlock({
             const r = byId.get(id);
             if (r) reports.openCard(r);
           }}
+          // Правая кнопка мыши и долгое нажатие на телефоне — то же меню, что «⋯» (доработки 14.11.2026, блок 5).
+          onMenu={(id, place) => {
+            const r = byId.get(id);
+            if (r) onMenu(place, reports.actions(r));
+          }}
         />
       ) : null}
       {open ? after : null}
     </section>
+  );
+}
+
+/**
+ * «Принять деньги» за месяц и «Принять деньги за весь период» (доработки 14.11.2026, блок 5; прототип
+ * v110 `rmRecvBtn`): открывает форму поступления сразу со всеми отчётами месяцев с суммой. Заперта —
+ * причина подсказкой и сообщением по нажатию (у месяца нет суммы, деньги уже получены).
+ */
+function ReceiveButton({
+  offer,
+  onReceive,
+}: {
+  offer: MonthReceiveOffer<ReportRow>;
+  onReceive: (offer: MonthReceiveOffer<ReportRow>) => void;
+}) {
+  // На телефоне кнопка месяца тянется, как соседние в «К оплате клиенту»; кнопка периода — по тексту.
+  const phone = offer.scope === 'all' ? '' : 'max-md:flex-auto max-md:justify-center';
+  const t = useT();
+  const toast = useToast();
+  const why = receiveWhy(t, offer);
+  return (
+    <button
+      type="button"
+      data-months-receive={offer.scope}
+      aria-disabled={why ? true : undefined}
+      title={why ?? undefined}
+      className={`${buttonClass('default', 'sm')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none ${phone}`}
+      onClick={() => (why ? toast(why, { icon: 'lock', bad: true }) : onReceive(offer))}
+    >
+      <Icon name="download" size="sm" />
+      <span>
+        {t(offer.scope === 'all' ? 'report.months.recv.all' : 'report.months.recv.month')}
+      </span>
+    </button>
   );
 }
 
@@ -494,16 +543,21 @@ function monthEmptyKey(none: boolean, quick: MonthPlanQuick) {
  * «По месяцам» вкладки «Отчёты к сдаче» карточки контрагента (решение заказчика 13.11.2026; прототип
  * v90 `rmCardHtml`, `rmCardMount`): за каждый месяц — что сдать и что оплатить, суммы и сроки. Плашки
  * «Все / Сдать / Уплатить» с числами, «Осталось оплатить», закрытые месяцы — по галочке; открытые
- * месяцы раскрыты, закрытые свёрнуты. `lead` — переключатель «По месяцам / Списком».
+ * месяцы раскрыты, закрытые свёрнуты. `lead` — переключатель «По месяцам / Списком». «Принять деньги»
+ * за месяц и за весь период (прототип v110) — при «Учёте оплаты налогов», с правом «Учёт денег» и у
+ * контрагента не в архиве.
  */
 export function ContractorReportMonths({
   contractorId,
+  archived,
   reports,
   lead,
   view,
   onView,
 }: {
   contractorId: string;
+  /** Контрагент в архиве: деньги от него не принимаются (прототип `rmRecvOn`). */
+  archived: boolean;
   reports: ReportActions;
   lead: ReactNode;
   /** Выбор вкладки: хранит карточка, поэтому смена вкладки и вида его не сбрасывает. */
@@ -516,7 +570,7 @@ export function ContractorReportMonths({
   const phone = useMediaQuery(PHONE_QUERY);
   const taxpay = access.feature('taxpay');
   const { quick, showClosed, toggled } = view;
-  const [menu, setMenu] = useState<{ el: HTMLElement; items: ActionEntry[] } | null>(null);
+  const [menu, setMenu] = useState<{ place: MenuPlace; items: ActionEntry[] } | null>(null);
   const query = useQuery(contractorMonthReportsQuery(contractorId));
   const onReceive = reports.receive;
   const columns = useMemo(
@@ -537,6 +591,17 @@ export function ContractorReportMonths({
     () => contractorPlan(query.data ?? [], { taxpay, quick, showClosed }),
     [query.data, taxpay, quick, showClosed],
   );
+  // «Принять деньги» за месяц и за весь период (прототип `rmRecvOn`).
+  const receiveFor = receiveShown({ taxpay, canReceive: !!reports.receiveFor, archived })
+    ? reports.receiveFor
+    : null;
+  const takeMoney = receiveFor
+    ? (offer: MonthReceiveOffer<ReportRow>) =>
+        receiveFor(contractorId, {
+          list: offer.lines.map((x) => ({ reportId: x.report.id, amount: x.amount })),
+          note: receiveNote(t, offer),
+        })
+    : null;
 
   const bar = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-months-bar="">
@@ -569,6 +634,9 @@ export function ContractorReportMonths({
           {t('report.months.left_all')}{' '}
           <b className="tabular-nums">{formatSomWithUnit(plan.left)}</b>
         </span>
+      ) : null}
+      {takeMoney && plan.receiveAll ? (
+        <ReceiveButton offer={plan.receiveAll} onReceive={takeMoney} />
       ) : null}
       {plan.closed && quick === 'all' ? (
         <label className="inline-flex cursor-pointer items-center gap-1.5 text-[12.5px] whitespace-nowrap text-muted">
@@ -620,13 +688,18 @@ export function ContractorReportMonths({
               columns={columns}
               taxpay={taxpay}
               reports={reports}
-              onMenu={(el, items) => setMenu({ el, items })}
+              onMenu={(place, items) => setMenu({ place, items })}
               after={
                 plan.pay.has(g.month) ? (
                   <MonthPayBlock
                     contractorId={contractorId}
                     title={monthTitle(t, g.month)}
                     pay={plan.pay.get(g.month)!}
+                    receive={
+                      takeMoney && plan.receive.has(g.month) ? (
+                        <ReceiveButton offer={plan.receive.get(g.month)!} onReceive={takeMoney} />
+                      ) : null
+                    }
                   />
                 ) : null
               }
@@ -645,7 +718,7 @@ export function ContractorReportMonths({
       {menu ? (
         <ActionMenu
           items={menu.items}
-          place={{ anchor: menu.el }}
+          place={menu.place}
           label={t('grid.actions')}
           onClose={() => setMenu(null)}
         />

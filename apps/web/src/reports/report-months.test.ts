@@ -5,8 +5,12 @@ import {
   contractorPlan,
   monthDueText,
   monthPills,
+  monthName,
   monthTitle,
   parseReportsMode,
+  receiveNote,
+  receiveShown,
+  receiveWhy,
   REPORTS_MODE_COOKIE,
   reportsModeCookie,
   type MonthTotals,
@@ -32,7 +36,7 @@ const totals = (over: Partial<MonthTotals> = {}): MonthTotals => ({
   ...over,
 });
 
-type Row = MonthPlanReport & { type: { shortName: string } };
+type Row = MonthPlanReport & { type: { shortName: string }; receivedFor: number };
 
 const row = (id: string, over: Partial<Row> = {}): Row => ({
   id,
@@ -48,6 +52,7 @@ const row = (id: string, over: Partial<Row> = {}): Row => ({
   overdue: false,
   payOverdue: false,
   type: { shortName: 'НДС' },
+  receivedFor: 0,
   ...over,
 });
 
@@ -181,6 +186,79 @@ describe('contractorPlan — план вкладки «Отчёты к сдач�
       showClosed: false,
     });
     expect(plan).toMatchObject({ none: true, months: [], closed: 0, left: 0 });
+  });
+});
+
+describe('«Принять деньги» за месяц и за весь период (доработки 14.11.2026, блок 5; прототип v110)', () => {
+  const sep = { periodStart: '2026-09-01', dueDate: '2026-10-20', payDue: '2026-10-20' } as const;
+
+  it('кнопки — у месяцев с неоплаченным остатком и за весь период; отчёты от старых к новым', () => {
+    const plan = contractorPlan(
+      [
+        row('nds-10', { amount: 300_000 }),
+        row('sf-09', { ...sep, amount: 87_050, paid: 20_000, type: { shortName: 'Соцфонд' } }),
+        row('nds-09', { ...sep, amount: 500_000, receivedFor: 100_000 }),
+        row('paid-08', { periodStart: '2026-08-01', amount: 1_000, paid: 1_000 }),
+      ],
+      // Какая бы плашка ни была выбрана.
+      { taxpay: true, quick: 'sub', showClosed: false },
+    );
+    expect([...plan.receive.keys()]).toEqual(['2026-09', '2026-10']);
+    const all = plan.receiveAll!;
+    // В сентябре при равном сроке — по краткому названию вида: НДС, потом Соцфонд.
+    expect(all.lines.map((x) => [x.report.id, x.amount])).toEqual([
+      ['nds-09', 400_000],
+      ['sf-09', 67_050],
+      ['nds-10', 300_000],
+    ]);
+    expect(all).toMatchObject({ total: 767_050, refusal: null });
+    expect(receiveWhy(t, all)).toBeNull();
+    expect(receiveNote(t, all)).toBe('Деньги за весь период: сентябрь 2026, октябрь 2026');
+    const oct = plan.receive.get('2026-10')!;
+    expect(oct.total).toBe(300_000);
+    expect(receiveNote(t, oct)).toBe('Деньги за октябрь 2026');
+  });
+
+  it('заперто: без суммы — за месяц названы отчёты, за период — месяцы; деньги уже получены', () => {
+    const plan = contractorPlan(
+      [
+        row('nds-10'),
+        row('none-10', { amount: null, type: { shortName: 'ЕН' } }),
+        row('nds-09', { ...sep, receivedFor: 100_000 }),
+      ],
+      { taxpay: true, quick: 'all', showClosed: false },
+    );
+    expect(receiveWhy(t, plan.receive.get('2026-10')!)).toBe('Сначала введите сумму: ЕН');
+    expect(receiveWhy(t, plan.receiveAll!)).toBe('Сначала введите сумму за октябрь 2026');
+    expect(receiveWhy(t, plan.receive.get('2026-09')!)).toBe(
+      'Деньги на налоги этого месяца уже получены от контрагента',
+    );
+    const got = contractorPlan([row('nds-10', { receivedFor: 100_000 })], {
+      taxpay: true,
+      quick: 'all',
+      showClosed: false,
+    });
+    expect(receiveWhy(t, got.receiveAll!)).toBe(
+      'Деньги на налоги всех месяцев уже получены от контрагента',
+    );
+  });
+
+  it('всё оплачено — кнопок нет; «октябрь 2026» — название месяца', () => {
+    const paid = contractorPlan([row('a', { paid: 100_000 })], {
+      taxpay: true,
+      quick: 'all',
+      showClosed: true,
+    });
+    expect(paid.receive.size).toBe(0);
+    expect(paid.receiveAll).toBeNull();
+    expect(monthName(t, '2026-01')).toBe('январь 2026');
+  });
+
+  it('кнопки есть только при «Учёте оплаты налогов», праве «Учёт денег» и не в архиве', () => {
+    expect(receiveShown({ taxpay: true, canReceive: true, archived: false })).toBe(true);
+    expect(receiveShown({ taxpay: false, canReceive: true, archived: false })).toBe(false);
+    expect(receiveShown({ taxpay: true, canReceive: false, archived: false })).toBe(false);
+    expect(receiveShown({ taxpay: true, canReceive: true, archived: true })).toBe(false);
   });
 });
 

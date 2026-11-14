@@ -41,6 +41,7 @@ import { api, callApi } from '../api-client';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
+import { presetLines, reallocate, type ReceiptPreset } from './receipt-preset';
 import { ContractorSelect } from '../shell/contractor-select';
 import { reportSub } from '../reports/report-menu';
 import { useShell } from '../shell/context';
@@ -331,11 +332,7 @@ export function PaymentDialog({
 
 /* ───────────── «Поступление от контрагента» ───────────── */
 
-/** Под какой отчёт сразу распределить (из карточки отчёта и «Принять» в списке). */
-export interface ReceiptPreset {
-  reportId: string;
-  amount: number;
-}
+export type { ReceiptPreset } from './receipt-preset';
 
 /**
  * «Поступление от контрагента» (прототип inDlg): общая сумма и дата, детализация по неоплаченным
@@ -498,7 +495,12 @@ function ReceiptModal({
   const toast = useToast();
   const errorText = useErrorText();
   const id = useId();
-  const presetOk = !!preset && !!form?.rows.some((r) => r.reportId === preset.reportId);
+  // «Принять деньги» за месяц и за весь период: распределение по списку, правка общей суммы его пересчитывает.
+  const lines = edit ? [] : presetLines(preset, form?.rows ?? []);
+  const single = preset && 'reportId' in preset ? preset : null;
+  const presetOk = single
+    ? !!form?.rows.some((r) => r.reportId === single.reportId)
+    : lines.length > 0;
   // «Платит одной суммой»: деление на налоги и обслуживание подставляется само (не для «Оплатить» и
   // не при изменении).
   const one = !presetOk && !edit && !!form?.fee && form.contractor.oneSum;
@@ -507,19 +509,23 @@ function ReceiptModal({
   const [total, setTotal] = useState(() =>
     edit
       ? som(edit.total)
-      : presetOk && preset
-        ? som(preset.amount)
-        : split?.total
-          ? som(split.total)
-          : '',
+      : presetOk && single
+        ? som(single.amount)
+        : lines.length
+          ? som(lines.reduce((a, x) => a + x.amount, 0))
+          : split?.total
+            ? som(split.total)
+            : '',
   );
   const [date, setDate] = useState(() => edit?.date ?? todayBishkek());
   const [alloc, setAlloc] = useState<Record<string, string>>(() =>
     edit
       ? Object.fromEntries(edit.rows.map((x) => [x.reportId, som(x.amount)]))
-      : presetOk && preset
-        ? { [preset.reportId]: som(preset.amount) }
-        : (split?.alloc ?? {}),
+      : presetOk && single
+        ? { [single.reportId]: som(single.amount) }
+        : lines.length
+          ? Object.fromEntries(lines.map((x) => [x.reportId, som(x.amount)]))
+          : (split?.alloc ?? {}),
   );
   const [feeAlloc, setFeeAlloc] = useState<Record<string, string>>(() =>
     edit
@@ -833,6 +839,13 @@ function ReceiptModal({
             </Field>
           </FormGrid>
         ) : null}
+        {lines.length && preset && 'list' in preset ? (
+          <Note icon="coins">
+            <span data-receipt-list-note="">
+              <b>{preset.note}.</b> {t('money.in.list_note')}
+            </span>
+          </Note>
+        ) : null}
         {one ? (
           <Note icon="coins">
             <b>{t('fee.receipt.one_sum_title')}</b> {t('fee.receipt.one_sum_text')}
@@ -858,6 +871,7 @@ function ReceiptModal({
                 onChange={(e) => {
                   setTotal(e.target.value);
                   setErrors((x) => ({ ...x, total: undefined }));
+                  if (lines.length) setAlloc((a) => reallocate(a, lines, e.target.value));
                 }}
               />
             )}

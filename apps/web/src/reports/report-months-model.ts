@@ -4,11 +4,13 @@ import {
   inMonthPlan,
   monthPlan,
   monthPlanQuick,
+  monthReceiveOffer,
   monthToPay,
   type MonthPay,
   type MonthPlanGroup,
   type MonthPlanQuick,
   type MonthPlanReport,
+  type MonthReceiveOffer,
   type UiTextKey,
 } from '@buhuchet/domain';
 import type { IconName } from '@buhuchet/ui';
@@ -27,6 +29,11 @@ export function monthTitle(t: Translate, month: string): string {
     month: t(`report.month.${Number(month.slice(5, 7))}` as UiTextKey).toLowerCase(),
     y: month.slice(0, 4),
   });
+}
+
+/** «октябрь 2026» (прототип `rmMonthTxt`). */
+export function monthName(t: Translate, month: string): string {
+  return `${t(`report.month.${Number(month.slice(5, 7))}` as UiTextKey).toLowerCase()} ${month.slice(0, 4)}`;
 }
 
 /** Итоги месяца, которых хватает строке итога: у группы плана и у ответа `month-summary`. */
@@ -100,7 +107,7 @@ export function monthDueText(t: Translate, g: Pick<MonthTotals, 'from' | 'to'>):
     : t('report.months.due_range', { from: short(g.from), to: formatDateRu(g.to) });
 }
 
-type PlanRow = MonthPlanReport & { type: { shortName: string } };
+type PlanRow = MonthPlanReport & { type: { shortName: string }; receivedFor: number };
 
 export interface ContractorPlan<R extends PlanRow> {
   /** Отчётов в плане нет совсем. */
@@ -117,6 +124,12 @@ export interface ContractorPlan<R extends PlanRow> {
    * была выбрана; месяцев, за которые платить нечего, здесь нет.
    */
   pay: ReadonlyMap<string, MonthPay<R>>;
+  /**
+   * «Принять деньги» за месяц (у месяцев с неоплаченным остатком) и «Принять деньги за весь период»
+   * (прототип v110 `rmRecvBtn`): по всем отчётам, какая бы плашка ни была выбрана; `null` — кнопки нет.
+   */
+  receive: ReadonlyMap<string, MonthReceiveOffer<R>>;
+  receiveAll: MonthReceiveOffer<R> | null;
 }
 
 /**
@@ -135,6 +148,10 @@ export function contractorPlan<R extends PlanRow>(
   const order = (r: R) => names.indexOf(r.type.shortName);
   const options = { taxpay: o.taxpay, order };
   const all = monthPlan(rs, options);
+  // Уже принято под отчёт — как у «Принять деньги» отчёта (`openReceive`); при равном сроке оплаты — тот
+  // же порядок, что у строк месяца.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#К-8 — при равном сроке оплаты по краткому названию вида, а не по номеру отчёта.
+  const recv = { received: (r: R) => r.receivedFor, tie: (a: R, b: R) => order(a) - order(b) };
   const count = (q: MonthPlanQuick) => rs.filter((r) => monthPlanQuick(r, q)).length;
   const months =
     o.quick === 'all'
@@ -161,7 +178,49 @@ export function contractorPlan<R extends PlanRow>(
         )
         .filter(([, p]) => p.rows.length > 0),
     ),
+    receive: new Map(
+      all
+        .map((g) => [g.month, monthReceiveOffer(all, g.month, recv)] as const)
+        .filter((x): x is readonly [string, MonthReceiveOffer<R>] => x[1] !== null),
+    ),
+    receiveAll: monthReceiveOffer(all, 'all', recv),
   };
+}
+
+/**
+ * Есть ли кнопки «Принять деньги» во вкладке (прототип `rmRecvOn`): «Учёт оплаты налогов» включён, у
+ * сотрудника право «Учёт денег» (то же, что у «Принять деньги» отчёта) и контрагент не в архиве.
+ * Запись поступления всё равно проверяет сервер.
+ */
+export const receiveShown = (o: { taxpay: boolean; canReceive: boolean; archived: boolean }) =>
+  o.taxpay && o.canReceive && !o.archived;
+
+/** Почему «Принять деньги» заперта (прототип `rmRecvWhy`); не заперта — `null`. */
+export function receiveWhy<R extends PlanRow>(
+  t: Translate,
+  offer: MonthReceiveOffer<R>,
+): string | null {
+  const all = offer.scope === 'all';
+  const refusal = offer.refusal;
+  if (!refusal) return null;
+  if (refusal.code === 'received')
+    return t(all ? 'report.months.recv.received_all' : 'report.months.recv.received');
+  return all
+    ? t('report.months.recv.no_amount_all', {
+        months: refusal.months.map((m) => monthName(t, m)).join(', '),
+      })
+    : t('report.months.recv.no_amount', {
+        reports: refusal.reports.map((r) => r.type.shortName).join(', '),
+      });
+}
+
+/** Пояснение в окне поступления (прототип `inDlg` `pre.note`): «Деньги за октябрь 2026». */
+export function receiveNote<R extends PlanRow>(t: Translate, offer: MonthReceiveOffer<R>): string {
+  return offer.scope === 'all'
+    ? t('report.months.recv.note_all', {
+        months: offer.months.map((m) => monthName(t, m)).join(', '),
+      })
+    : t('report.months.recv.note', { month: monthName(t, offer.scope) });
 }
 
 /**

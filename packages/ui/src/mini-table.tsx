@@ -1,4 +1,8 @@
+'use client';
+
 import type { KeyboardEvent, ReactNode } from 'react';
+import type { MenuPlace } from './action-menu';
+import { useRowEvents } from './grid/row-events';
 
 /** Столбец маленькой таблицы карточки: ключ, подпись, число справа. */
 export interface MiniColumn {
@@ -23,6 +27,8 @@ export interface MiniRow {
   total?: boolean;
   /** Просроченная строка (прототип `tr.rm-late`): на ПК — красная полоска слева, на телефоне — красная рамка карточки. */
   late?: boolean;
+  /** У строки есть меню действий: правый клик и долгое нажатие открывают его (`onMenu` таблицы). */
+  menu?: boolean;
 }
 
 /** Значение длиннее стольких знаков на телефоне занимает всю ширину карточки (прототип `MC_LONG`). */
@@ -39,7 +45,10 @@ export const miniWide = (texts: Readonly<Record<string, string>>): string[] =>
  * правом верхнем углу. Пустая — одна строка с серым текстом. С `onOpen` строка открывает запись
  * (нажатием или Enter), как строка списка. С `phoneCards={false}` — таблица и на телефоне, узкая
  * прокручивается вбок (прототип `table.mini` без `m-cards`: строки распределения в окнах оплаты). С
- * `fixed` — столбцы по заданной ширине; `late` у строки — отметка просрочки.
+ * `fixed` — столбцы по заданной ширине; `late` у строки — отметка просрочки. С `onMenu` у строк с
+ * `menu` правый клик, долгое нажатие пальцем, ContextMenu и Shift+F10 открывают меню действий, как в
+ * общих списках (`useRowEvents`; прототип v110 `.rm-list`): нажатие на кнопку внутри строки её не
+ * открывает, отпускание пальца после долгого нажатия — тоже.
  */
 export function MiniTable({
   columns,
@@ -50,6 +59,7 @@ export function MiniTable({
   phoneCards = true,
   fixed = false,
   onOpen,
+  onMenu,
 }: {
   columns: readonly MiniColumn[];
   rows: readonly MiniRow[];
@@ -68,7 +78,14 @@ export function MiniTable({
   phoneCards?: boolean;
   /** Открыть запись строки (ключ строки). */
   onOpen?: (key: string) => void;
+  /** Открыть меню действий строки (ключ строки) в точке нажатия или у строки; только у строк с `menu`. */
+  onMenu?: (key: string, place: MenuPlace) => void;
 }) {
+  const events = useRowEvents<MiniRow>({
+    onOpen: onOpen ? (row) => onOpen(row.key) : undefined,
+    onMenu: onMenu ? (row, place) => onMenu(row.key, place) : undefined,
+    hasMenu: (row) => !!row.menu && !row.total,
+  });
   if (!phoneCards)
     return (
       <PlainMiniTable
@@ -127,18 +144,24 @@ export function MiniTable({
                 data-mini-row={row.key}
                 {...(row.total ? { 'data-mini-total': '' } : {})}
                 {...(row.late ? { 'data-mini-late': '' } : {})}
-                {...(onOpen && !row.total
+                {...(onMenu && !row.total
                   ? {
-                      'data-open': '',
-                      tabIndex: 0,
-                      onClick: () => onOpen(row.key),
-                      onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
-                        if (e.key !== 'Enter') return;
-                        e.preventDefault();
-                        onOpen(row.key);
-                      },
+                      ...events.handlers(row),
+                      ...(onOpen ? { 'data-open': '' } : {}),
+                      ...(onOpen || events.hasMenu(row) ? { tabIndex: 0 } : {}),
                     }
-                  : {})}
+                  : onOpen && !row.total
+                    ? {
+                        'data-open': '',
+                        tabIndex: 0,
+                        onClick: () => onOpen(row.key),
+                        onKeyDown: (e: KeyboardEvent<HTMLTableRowElement>) => {
+                          if (e.key !== 'Enter') return;
+                          e.preventDefault();
+                          onOpen(row.key);
+                        },
+                      }
+                    : {})}
                 className="data-open:cursor-pointer data-open:hover:bg-row-hover data-open:focus-visible:bg-row-hover data-open:focus-visible:outline-none data-mini-total:font-bold md:last:[&>td]:border-b-0 max-md:relative max-md:mb-2 max-md:grid max-md:grid-cols-2 max-md:gap-x-3 max-md:gap-y-1.5 max-md:rounded-lg max-md:border max-md:border-line max-md:bg-pane max-md:px-3 max-md:py-2.5 max-md:last:mb-0 max-md:data-mini-total:bg-pane-alt md:data-mini-late:[&>td:first-child]:shadow-[inset_3px_0_0_var(--color-danger)] max-md:data-mini-late:border-danger"
               >
                 {columns.map((c, i) => (
