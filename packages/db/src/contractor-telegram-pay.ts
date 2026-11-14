@@ -402,14 +402,40 @@ export async function answerContractorTelegramAsk(tx: Tx, id: string): Promise<b
 }
 
 /**
- * История контрагента о «К оплате» в Telegram (прототип `pgPaySend`, `tgAct('cp-paid')`, `pgTgAsk`):
- * отправка — от имени сотрудника (у задачи по расписанию автора нет — «Система»), «Оплатил» и вопрос —
- * от клиента (автора нет, вид записи говорит, что это контрагент).
+ * Вопрос клиента, на который отвечает сотрудник из Telegram (прототип `pgTgAnswer`): просьба «напишите
+ * ваш вопрос», на которую клиент уже ответил. Ищется в организации из контекста (RLS): номер из
+ * сообщения сотруднику сам ничего не открывает. `null` — такого вопроса нет.
+ */
+export async function contractorTelegramQuestionOf(
+  tx: Tx,
+  id: string,
+): Promise<{ contractorId: string; chatId: number } | null> {
+  const [row] = await tx
+    .select({
+      contractorId: contractorTelegramMessages.contractorId,
+      chatId: contractorTelegramMessages.chatId,
+    })
+    .from(contractorTelegramMessages)
+    .where(
+      and(
+        eq(contractorTelegramMessages.id, id),
+        eq(contractorTelegramMessages.kind, 'ask'),
+        sql`${contractorTelegramMessages.answeredAt} is not null`,
+      ),
+    );
+  return row ?? null;
+}
+
+/**
+ * История контрагента о «К оплате» в Telegram (прототип `pgPaySend`, `tgAct('cp-paid')`, `pgTgAsk`,
+ * `pgTgAnswer`): отправка — от имени сотрудника (у задачи по расписанию автора нет — «Система»),
+ * «Оплатил» и вопрос — от клиента (автора нет, вид записи говорит, что это контрагент), ответ на вопрос —
+ * от сотрудника, который ответил в Telegram.
  */
 export async function logContractorTelegramPay(
   tx: Tx,
   contractorId: string,
-  action: 'page_tg_pay' | 'page_tg_paid' | 'page_tg_question',
+  action: 'page_tg_pay' | 'page_tg_paid' | 'page_tg_question' | 'page_tg_answer',
   changes: HistoryChange[],
 ): Promise<void> {
   await writeContractorPageHistory(tx, contractorId, action, { changes });

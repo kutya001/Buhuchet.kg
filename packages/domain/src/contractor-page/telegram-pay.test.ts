@@ -8,7 +8,9 @@ import {
 } from '../telegram/bot-message';
 import {
   CP_PAY_DAYS,
+  CP_TG_ANSWER_ACTION,
   CP_TG_ASK_ACTION,
+  CP_TG_CLIENT_ACTIONS,
   CP_TG_PAID_ACTION,
   CP_TG_QUESTION_HISTORY_MAX,
   CP_TG_QUESTION_MAX,
@@ -94,6 +96,25 @@ describe('Вопрос клиента бухгалтеру', () => {
     const cut = cpTgQuestionForHistory('😀'.repeat(CP_TG_QUESTION_HISTORY_MAX + 5));
     expect([...cut]).toHaveLength(CP_TG_QUESTION_HISTORY_MAX);
     expect(cut).toBe('😀'.repeat(CP_TG_QUESTION_HISTORY_MAX));
+  });
+});
+
+describe('Ответ сотрудника на вопрос клиента (прототип pgTgAnswer)', () => {
+  it('просьба бота в сообщении сотруднику: действие с номером вопроса помещается в данные нажатия', () => {
+    const ask = {
+      heading: 'Вопрос контрагента',
+      text: 'ОсОО «Ала-Тоо»: вопрос от «@client». Можно частями?',
+      ask: {
+        action: CP_TG_ANSWER_ACTION,
+        arg: '0f8fad5b-d9cb-469f-a165-70867728950e',
+        kind: 'text' as const,
+      },
+    };
+    expect(botMessageProblem(ask)).toBeNull();
+  });
+
+  it('это действие сотрудника (права и область), а не кнопка клиента', () => {
+    expect(CP_TG_CLIENT_ACTIONS as readonly string[]).not.toContain(CP_TG_ANSWER_ACTION);
   });
 });
 
