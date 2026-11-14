@@ -61,6 +61,7 @@ import {
   monthTitle,
   parseReportsMode,
   receiveNote,
+  receiveShown,
   receiveWhy,
   reportsModeCookie,
   type MonthTotals,
@@ -590,15 +591,17 @@ export function ContractorReportMonths({
     () => contractorPlan(query.data ?? [], { taxpay, quick, showClosed }),
     [query.data, taxpay, quick, showClosed],
   );
-  const receiveFor = reports.receiveFor;
-  const takeMoney =
-    taxpay && receiveFor && !archived
-      ? (offer: MonthReceiveOffer<ReportRow>) =>
-          receiveFor(contractorId, {
-            list: offer.lines.map((x) => ({ reportId: x.report.id, amount: x.amount })),
-            note: receiveNote(t, offer),
-          })
-      : null;
+  // «Принять деньги» за месяц и за весь период (прототип `rmRecvOn`).
+  const receiveFor = receiveShown({ taxpay, canReceive: !!reports.receiveFor, archived })
+    ? reports.receiveFor
+    : null;
+  const takeMoney = receiveFor
+    ? (offer: MonthReceiveOffer<ReportRow>) =>
+        receiveFor(contractorId, {
+          list: offer.lines.map((x) => ({ reportId: x.report.id, amount: x.amount })),
+          note: receiveNote(t, offer),
+        })
+    : null;
 
   const bar = (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-months-bar="">

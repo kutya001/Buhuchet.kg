@@ -9,6 +9,7 @@ import {
   monthTitle,
   parseReportsMode,
   receiveNote,
+  receiveShown,
   receiveWhy,
   REPORTS_MODE_COOKIE,
   reportsModeCookie,
@@ -251,6 +252,13 @@ describe('«Принять деньги» за месяц и за весь пе�
     expect(paid.receive.size).toBe(0);
     expect(paid.receiveAll).toBeNull();
     expect(monthName(t, '2026-01')).toBe('январь 2026');
+  });
+
+  it('кнопки есть только при «Учёте оплаты налогов», праве «Учёт денег» и не в архиве', () => {
+    expect(receiveShown({ taxpay: true, canReceive: true, archived: false })).toBe(true);
+    expect(receiveShown({ taxpay: false, canReceive: true, archived: false })).toBe(false);
+    expect(receiveShown({ taxpay: true, canReceive: false, archived: false })).toBe(false);
+    expect(receiveShown({ taxpay: true, canReceive: true, archived: true })).toBe(false);
   });
 });
 

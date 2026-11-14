@@ -187,6 +187,14 @@ export function contractorPlan<R extends PlanRow>(
   };
 }
 
+/**
+ * Есть ли кнопки «Принять деньги» во вкладке (прототип `rmRecvOn`): «Учёт оплаты налогов» включён, у
+ * сотрудника право «Учёт денег» (то же, что у «Принять деньги» отчёта) и контрагент не в архиве.
+ * Запись поступления всё равно проверяет сервер.
+ */
+export const receiveShown = (o: { taxpay: boolean; canReceive: boolean; archived: boolean }) =>
+  o.taxpay && o.canReceive && !o.archived;
+
 /** Почему «Принять деньги» заперта (прототип `rmRecvWhy`); не заперта — `null`. */
 export function receiveWhy<R extends PlanRow>(
   t: Translate,
