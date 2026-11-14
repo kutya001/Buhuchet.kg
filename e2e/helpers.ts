@@ -284,7 +284,7 @@ export async function finger(page: Page) {
     /**
      * Долгое нажатие: палец стоит на месте `ms` миллисекунд. Отпускается `touchCancel`: в headless
      * Chromium жеста долгого нажатия нет, и `touchEnd` дал бы click в точке касания — по пункту меню,
-     * открытого под пальцем (docs/typical-mistakes.md № 27); на телефоне после долгого нажатия click нет.
+     * открытого под пальцем (docs/typical-mistakes.md № 30); на телефоне после долгого нажатия click нет.
      */
     async hold(at: Point, ms = 700) {
       await send('touchStart', at);

@@ -38,8 +38,9 @@ function somPattern(tyiyn: number): string {
   return `${whole}${cents ? `,${String(cents).padStart(2, '0')}` : ''}\\sсом`;
 }
 
+// Чтения идут после шагов в браузере — с повтором при обрыве соединения (типовая ошибка № 26).
 async function json<T>(api: APIRequestContext, path: string): Promise<T> {
-  const res = await api.get(path);
+  const res = await api.get(path, { maxRetries: 2 });
   expect(res.status(), await res.text()).toBe(200);
   return (await res.json()) as T;
 }
@@ -199,7 +200,9 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
       });
 
       await test.step('клиенту — «Оплата за обслуживание до …» с текстом сотрудника, реквизитами и кнопками', async () => {
-        const res = await request.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`);
+        const res = await request.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`, {
+          maxRetries: 2,
+        });
         expect(res.status()).toBe(200);
         const messages = (await res.json()) as {
           text: string;
