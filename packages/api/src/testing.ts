@@ -6,9 +6,14 @@ import {
   fixedClock,
 } from '@buhuchet/adapters';
 import { hashPassword } from '@buhuchet/adapters/password';
-import { schema, type Db } from '@buhuchet/db';
+import { createDb, schema, type Db } from '@buhuchet/db';
 import { createOrganization, type CreatedOrganization } from '@buhuchet/db/organizations';
-import { createTestDatabase, seedAccessReference, seedPhoneCodes } from '@buhuchet/db/testing';
+import {
+  createTestDatabase,
+  seedAccessReference,
+  seedPhoneCodes,
+  testTextsDbOf,
+} from '@buhuchet/db/testing';
 import { SCOPE_GROUPS } from '@buhuchet/domain';
 import { eq } from 'drizzle-orm';
 import { createApp } from './app';
@@ -45,8 +50,26 @@ export function createTestDeps(overrides: Partial<ApiDeps> = {}): ApiDeps {
     jobs: [],
     resetResponseFloorMs: 0,
     l10nRecheckMs: 0,
+    // Словарь — на своём соединении, как у сайта (п. О-46): иначе при пуле из одного соединения
+    // (TEST_DATABASE_POOL_MAX=1 в CI, п. О-53) словарь внутри транзакции ждал бы занятый пул.
+    ...(overrides.db && testTextsDbOf(overrides.db)
+      ? { textsDb: testTextsDbOf(overrides.db) }
+      : {}),
     ...overrides,
   };
+}
+
+/**
+ * Приложение с теми же настройками на своём пуле из четырёх соединений — для теста одновременных
+ * запросов (гонка, взаимная блокировка). Пул тестов в CI — одно соединение (`TEST_DATABASE_POOL_MAX=1`,
+ * п. О-53): на нём транзакции идут строго по очереди, и гонку тест бы не увидел. Словарь — на
+ * соединении словаря основного пула. После теста — `await race.close()`.
+ */
+export function createRaceApp(appUrl: string, deps: ApiDeps) {
+  const pool = createDb(appUrl, { max: 4, applicationName: 'buhuchet-test-race' });
+  const textsDb = deps.textsDb ?? testTextsDbOf(deps.db);
+  const app = createApp({ ...deps, db: pool.db, ...(textsDb ? { textsDb } : {}) });
+  return { app, close: () => pool.close() };
 }
 
 /** Origin, с которым тесты шлют изменяющие запросы (`app.request` идёт на http://localhost). */

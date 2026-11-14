@@ -39,6 +39,18 @@ export interface TestDatabase {
   drop(): Promise<void>;
 }
 
+/**
+ * Своё соединение словаря текстов у пула приложения временной базы — как `textsDb` сайта (п. О-46):
+ * тесты API получают его в `createTestDeps` сами, и при пуле из одного соединения (п. О-53) словарь
+ * внутри транзакции не ждёт занятый пул.
+ */
+const textsDbs = new WeakMap<Db, Db>();
+
+/** Соединение словаря для пула приложения временной базы, если это он. */
+export function testTextsDbOf(db: Db): Db | undefined {
+  return textsDbs.get(db);
+}
+
 function withDatabase(url: string, name: string): string {
   const u = new URL(url);
   u.pathname = `/${name}`;
@@ -70,7 +82,12 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   }
 
   const admin = createDb(adminUrl, { max: 2, applicationName: 'buhuchet-test-admin' });
-  const app = createDb(appUrl, { max: 2, applicationName: 'buhuchet-test-app' });
+  const app = createDb(appUrl, {
+    max: config.TEST_DATABASE_POOL_MAX,
+    applicationName: 'buhuchet-test-app',
+  });
+  const texts = createDb(appUrl, { max: 1, applicationName: 'buhuchet-test-texts' });
+  textsDbs.set(app.db, texts.db);
   return {
     name,
     adminUrl,
@@ -78,7 +95,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
     admin,
     app,
     async drop() {
-      await Promise.all([admin.close(), app.close()]);
+      await Promise.all([admin.close(), app.close(), texts.close()]);
       const m = createDb(serverAdminUrl, { max: 1, applicationName: 'buhuchet-test' });
       await m.sql.unsafe(`drop database if exists "${name}" with (force)`);
       await m.close();

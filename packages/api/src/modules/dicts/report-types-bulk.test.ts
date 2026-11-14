@@ -3,7 +3,13 @@ import { databaseAvailable, seedPlatformDictionaries } from '@buhuchet/db/testin
 import { OrgReportTypesBulkResult, OrgReportTypeSettings } from '@buhuchet/shared';
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
+import {
+  apiRequest,
+  createRaceApp,
+  createStaffFixture,
+  signIn,
+  TEST_PASSWORD,
+} from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -228,11 +234,15 @@ describe.skipIf(!databaseAvailable())('«Виды отчётов»: массов
     const before = Object.keys(await byCode(owner));
     const fresh = codes.filter((code) => !before.includes(code));
     expect(fresh.length).toBeGreaterThanOrEqual(2);
+    // Свой пул из нескольких соединений: на пуле из одного транзакции шли бы по очереди, без блокировки.
+    const race = createRaceApp(f.t.appUrl, f.deps);
+    const raceBulk = (body: Record<string, unknown>) =>
+      apiRequest(race.app, 'POST', '/api/org-report-types/bulk', owner, body);
     const answers = await Promise.all([
-      bulk(owner, { action: 'connect', codes }),
-      bulk(owner, { action: 'connect', codes: [...codes].reverse() }),
-      bulk(owner, { action: 'setup', codes, needReceipt: true, connect: true }),
-    ]);
+      raceBulk({ action: 'connect', codes }),
+      raceBulk({ action: 'connect', codes: [...codes].reverse() }),
+      raceBulk({ action: 'setup', codes, needReceipt: true, connect: true }),
+    ]).finally(() => race.close());
     // Опоздавший получает «запись изменена другим пользователем», а не ошибку сервера.
     for (const res of answers) expect([200, 409]).toContain(res.status);
     expect(answers.some((res) => res.status === 200)).toBe(true);
