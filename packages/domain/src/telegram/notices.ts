@@ -1,0 +1,29 @@
+import { weekdayMondayFirst, type IsoDate } from '../common/dates';
+
+/**
+ * Блок «Telegram-уведомления» в «Моя организация» → «Настройки» (пакет 14.11.2026, блок 3; прототип v111
+ * `modules/tg-notify.js`). Все автоматические сообщения бота одним списком; одно время — «Час напоминаний»
+ * (`digestTime` учётной политики): в этот час каждый день уходят напоминания о сроках, недельная сводка
+ * (в свой день) и сводка дня в общий чат. У недельной сводки — только свой день недели.
+ */
+
+/** День недельной сводки: 1 — понедельник … 7 — воскресенье (ISO). */
+export type WeekDay = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** По умолчанию — понедельник, как было до блока (прототип `tgnWeekDay`). */
+export const WEEK_DAY_DEFAULT: WeekDay = 1;
+
+/** День сводки из базы: вне 1–7 или нет строки — понедельник. */
+export function weekDayOf(value: number | null | undefined): WeekDay {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 7
+    ? (value as WeekDay)
+    : WEEK_DAY_DEFAULT;
+}
+
+/** Сегодня — день недельной сводки организации. */
+export function isWeekSummaryDay(day: IsoDate, weekDay: number): boolean {
+  return weekdayMondayFirst(day) === weekDayOf(weekDay) - 1;
+}
+
+/** Сообщения контрагентам «К оплате» и о долге уходят в 10:00 по Бишкеку (этап 1 — как было). */
+export const CP_TG_TIME = '10:00';

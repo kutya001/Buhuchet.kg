@@ -195,7 +195,7 @@ test.describe('Этап 1: Моя организация', () => {
     expect(await version(page.request, '/api/org/policy')).toBe(before);
   });
 
-  test('«Настройки»: пустое время сводки не сохраняется — ошибка под полем', async ({
+  test('«Настройки» → «Telegram-уведомления»: пустой «Час напоминаний» не сохраняется — ошибка под полем, прежнее время остаётся', async ({
     page,
     baseURL,
   }) => {
@@ -203,12 +203,14 @@ test.describe('Этап 1: Моя организация', () => {
     const before = await version(page.request, '/api/org/policy');
     await page.goto('/app/org/settings');
     const main = page.locator('main');
-    const digest = main.getByLabel('Еженедельная сводка, понедельник');
+    const digest = main.getByLabel('Час напоминаний');
     await expect(digest).toHaveValue(/^\d\d:\d\d$/);
+    const was = await digest.inputValue();
     await digest.fill('');
-    await main.getByRole('button', { name: 'Сохранить настройки' }).click();
-    await expect(main.getByText('Укажите время сводки')).toBeVisible();
+    await digest.press('Enter');
+    await expect(main.getByText('Укажите время', { exact: true })).toBeVisible();
     await expect(digest).toHaveAttribute('aria-invalid', 'true');
+    await expect(digest).toHaveValue(was);
     expect(await version(page.request, '/api/org/policy')).toBe(before);
   });
 

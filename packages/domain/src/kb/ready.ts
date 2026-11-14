@@ -95,7 +95,7 @@ export const KB_STEP_RULES: Readonly<Record<string, KbStepRule>> = {
   remind: { module: 'org', done: orgSettings('remindDays') },
   settings: {
     module: 'org',
-    done: orgSettings('timezone', 'digestTime', 'overdueRepeat', 'defaultRoleId'),
+    done: orgSettings('timezone', 'digestTime', 'weekDay', 'overdueRepeat', 'defaultRoleId'),
     savedUnchanged: true,
   },
   // «Хранилище файлов» на вкладке «Настройки» (задача 2.29).

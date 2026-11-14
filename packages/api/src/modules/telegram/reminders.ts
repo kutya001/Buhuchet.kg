@@ -31,6 +31,7 @@ import {
   groupSummary,
   groupSummaryMessage,
   hasPermission,
+  isWeekSummaryDay,
   isWorkingDay,
   moreOnSiteMessage,
   morningTables,
@@ -179,7 +180,9 @@ export async function buildDailyReminders(
       confirmWaitDays: data.confirmWaitDays,
       taxpay: data.features.taxpay === true,
       tasks: data.features.tasks === true,
-      week: weekdayMondayFirst(day) === 0 ? { from: day, to: addDays(day, 6) } : null,
+      // Недельная сводка — в день организации (блок «Telegram-уведомления», по умолчанию понедельник):
+      // неделя — семь дней с этого дня.
+      week: isWeekSummaryDay(day, data.weekDay) ? { from: day, to: addDays(day, 6) } : null,
       nextWorkingDay: (d) => nextWorkingDay(calendar, d),
     },
   );

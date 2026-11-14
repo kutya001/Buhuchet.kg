@@ -581,7 +581,24 @@ describe.skipIf(!databaseAvailable())(
       // Не понедельник — сводки нет.
       clock.advance(24 * 3600_000);
       expect(await weekOf(f.a.ownerUserId)).toBeNull();
+      // День сводки — у каждой организации свой (пакет 14.11.2026, блок 3): вторник другой
+      // организации сюда не попадает.
+      const notices = schema.orgTelegramNotices;
+      await f.t.admin.db
+        .insert(notices)
+        .values({ orgId: f.b.orgId, code: 'staff_week', weekday: 2 });
+      expect(await weekOf(f.a.ownerUserId)).toBeNull();
+      // Своя организация выбрала вторник: во вторник сводка есть, в понедельник — нет.
+      await f.t.admin.db
+        .insert(notices)
+        .values({ orgId: f.a.orgId, code: 'staff_week', weekday: 2 });
+      expect(await weekOf(f.a.ownerUserId)).not.toBeNull();
       clock.set('2026-10-19T03:00:00Z');
+      expect(await weekOf(f.a.ownerUserId)).toBeNull();
+      // Строки нет (организации, которые день не меняли) — по понедельникам, как раньше.
+      await f.t.admin.db.delete(notices).where(eq(notices.orgId, f.a.orgId));
+      expect(await weekOf(f.a.ownerUserId)).not.toBeNull();
+      await f.t.admin.db.delete(notices);
     });
   },
 );
