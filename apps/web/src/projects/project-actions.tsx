@@ -353,8 +353,13 @@ export function useProjectActions(): {
     actions: (p) => entries(p, false),
     openCard: openProjectCard,
     drop,
+    // Окно — после загрузки его данных (apps/web/CLAUDE.md): окно «загрузка», сменяясь готовым, снимает
+    // заглушку истории, и её запоздалое «Назад» закрывает список, открытый сразу (docs/typical-mistakes.md № 28).
     newProject: (contractor) =>
-      setForm(openSlot<FormSlot>({ contractor: contractor ?? null, edit: null })),
+      void client
+        .fetchQuery(projectFormQuery(contractor?.id ?? null))
+        .catch(() => null)
+        .then(() => setForm(openSlot<FormSlot>({ contractor: contractor ?? null, edit: null }))),
     card: {
       menu: (p) => entries(p, true),
       onStep: (p, to) => setAskStep({ p, to: to as ProjectStatus }),
