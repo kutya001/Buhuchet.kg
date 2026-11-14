@@ -4,7 +4,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
 import { enableContractorPage } from './contractor-page';
-import { createContractor, type ContractorFields } from './contractors';
+import { createContractor, deleteContractor, type ContractorFields } from './contractors';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   contractorPages,
@@ -636,6 +636,93 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
         }),
       ),
     ).rejects.toThrow(checkFailed);
+  });
+
+  it('удаление контрагента: уходят его отправленные файлы (и принятые), «Я оплатил» и сообщения', async () => {
+    const cp = await inA((tx) =>
+      createContractor(tx, a.orgId, contractor('03807819461918', 'ОсОО «Удаляемый»'), null),
+    );
+    const [ln] = await db.admin.db
+      .insert(contractorTelegramLinks)
+      .values({ orgId: a.orgId, contractorId: cp, chatId: 7301, name: '@c7301', status: 'on' })
+      .returning({ id: contractorTelegramLinks.id });
+    const [msg] = await asGuest(a.orgId, (tx) =>
+      tx
+        .insert(contractorTelegramMessages)
+        .values({
+          orgId: a.orgId,
+          contractorId: cp,
+          linkId: ln!.id,
+          chatId: 7301,
+          kind: 'fee',
+          total: 150_000,
+          day: '2026-11-26',
+          auto: true,
+          month: '2026-11',
+          payload: { text: 'Оплата за обслуживание до 01.12.2026' },
+        })
+        .returning({ id: contractorTelegramMessages.id }),
+    );
+    const sent = sentFile(a.orgId, cp, { comment: 'Чек: обслуживание' });
+    await asGuest(a.orgId, (tx) => tx.insert(contractorSentFiles).values(sent));
+    await asGuest(a.orgId, (tx) =>
+      tx
+        .update(contractorSentFiles)
+        .set({ state: 'ready' })
+        .where(eq(contractorSentFiles.id, sent.id)),
+    );
+    const fileId = randomUUID();
+    await db.admin.db.insert(files).values({
+      id: fileId,
+      orgId: a.orgId,
+      sourceKind: 'sent_file',
+      sourceId: sent.id,
+      contractorId: cp,
+      name: 'Чек.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1200,
+      storageKey: `org/${a.orgId}/files/${fileId}`,
+      state: 'ready',
+      createdBy: a.ownerUserId,
+    });
+    await inA((tx) =>
+      tx
+        .update(contractorSentFiles)
+        .set({ status: 'accepted', decidedBy: a.ownerUserId, decidedAt: new Date(), fileId })
+        .where(eq(contractorSentFiles.id, sent.id)),
+    );
+    await asGuest(a.orgId, (tx) =>
+      tx.insert(contractorPayClaims).values({
+        orgId: a.orgId,
+        contractorId: cp,
+        source: 'telegram',
+        purpose: 'fee',
+        amount: 150_000,
+        sentFileId: sent.id,
+        tgMessageId: msg!.id,
+      }),
+    );
+    await inA((tx) =>
+      deleteContractor(tx, { id: cp, name: 'ОсОО «Удаляемый»', inn: '03807819461918' }),
+    );
+    await inA(async (tx) => {
+      const of = (t: typeof contractorSentFiles | typeof contractorPayClaims) =>
+        tx.select({ id: t.id }).from(t).where(eq(t.contractorId, cp));
+      expect(await of(contractorSentFiles)).toEqual([]);
+      expect(await of(contractorPayClaims)).toEqual([]);
+      expect(
+        await tx
+          .select({ id: contractorTelegramMessages.id })
+          .from(contractorTelegramMessages)
+          .where(eq(contractorTelegramMessages.contractorId, cp)),
+      ).toEqual([]);
+      // Файл в «Файловом менеджере» остаётся без контрагента, как у других файлов удалённого.
+      const [file] = await tx
+        .select({ contractorId: files.contractorId })
+        .from(files)
+        .where(eq(files.id, fileId));
+      expect(file).toEqual({ contractorId: null });
+    });
   });
 
   it('строки «Telegram-уведомления»: изоляция и допустимые дни, день недели, час', async () => {

@@ -114,7 +114,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.not_me': { ru: 'Нажато «Это не я»', section: S },
   'telegram.kind.bot_cmd': { ru: 'Ответ на команду бота', section: S },
   'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
-  // Доработки 14.11.2026: блок 4, пункт 1 и блок 2, пункт 2.
+  // Доработки 14.11.2026: блок 2, пункт 2.
   'telegram.kind.cp_file': { ru: 'Файл от контрагента', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
