@@ -228,7 +228,7 @@ function MonthPayBlock({
   // «Отправить в Telegram» (прототип rmPayHtml, rmPayMount): кнопка есть, пока у организации включены
   // «Напоминания в Telegram» и «Страница контрагента по ссылке»; что мешает — подсказкой и сообщением.
   const send = query.isFetching ? null : (data?.send ?? null);
-  const sendWhy = send?.refusal ? t(`err.${send.refusal}`) : null;
+  const sendWhy = send?.refusal ? t(`err.${send.refusal}`, send.params ?? undefined) : null;
   const askSend = () => {
     if (sendWhy) {
       toast(sendWhy, { icon: 'lock', bad: true });

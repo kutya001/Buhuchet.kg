@@ -1,7 +1,8 @@
 import { addDays, weekdayMondayFirst, type IsoDate } from '../common/dates';
 import { formatSom, type Tyiyn } from '../common/money';
-import { BOT_COPY_MAX, type BotButton, type BotMessage } from '../telegram/bot-message';
-import { CP_TG_NODEBT_ACTION } from './telegram-pay';
+import type { BotButton, BotMessage } from '../telegram/bot-message';
+import { CP_TG_NODEBT_ACTION, CP_TG_REQ_ACTION } from './telegram-pay';
+import { cpReqArg, type CpReqParts } from './telegram-requisite';
 
 /*
  * Напоминание клиенту о долге в Telegram (доработки 13.11.2026, задача К5; прототип v94
@@ -77,16 +78,16 @@ export function cpTgDebtOnCommand(text: string): boolean {
 }
 
 /**
- * Напоминание о долге (прототип pgDebtMsg): заголовок, контрагент, текст шаблона `tgCpDebt`, таблица
- * «Что оплатить / Сумма, сом», кнопки «Реквизиты для налогов» и «Реквизиты для обслуживания» (если
- * реквизит есть и помещается в кнопку копирования) и «Не напоминать».
+ * Напоминание о долге (прототип v110 pgDebtMsg): заголовок, контрагент, текст шаблона `tgCpDebt`,
+ * таблица «Что оплатить / Сумма, сом», кнопка «Показать реквизиты для перевода» — одна на оба вида
+ * долга, если реквизиты хотя бы для одного есть (доработки 14.11.2026, блок 4, пункт 3), — и «Не
+ * напоминать». Сами реквизиты бот присылает по нажатию, на момент нажатия (`CP_TG_REQ_ACTION`).
  */
 export function debtBotMessage(o: {
   contractor: string;
   debt: CpDebt;
-  /** Реквизит для налогов — только при недостаче; для обслуживания — только при долге. */
-  taxRequisite: string | null;
-  feeRequisite: string | null;
+  /** Есть реквизиты для налогов (при недостаче) и для обслуживания (при долге). */
+  requisites: CpReqParts;
   /** Заполненный шаблон `tgCpDebt`. */
   text: string;
   labels: {
@@ -95,31 +96,27 @@ export function debtBotMessage(o: {
     amount: string;
     short: string;
     fee: string;
-    copyTax: string;
-    copyFee: string;
+    showRequisites: string;
     noDebt: string;
   };
 }): BotMessage {
   const rows: string[][] = [];
   if (o.debt.short) rows.push([o.labels.short, formatSom(o.debt.short)]);
   if (o.debt.fee) rows.push([o.labels.fee, formatSom(o.debt.fee)]);
-  const tax = o.debt.short ? o.taxRequisite : null;
-  const fee = o.debt.fee ? o.feeRequisite : null;
-  const fits = (x: string | null): x is string => !!x && x.length <= BOT_COPY_MAX;
+  const show: CpReqParts = {
+    tax: !!o.debt.short && o.requisites.tax,
+    fee: !!o.debt.fee && o.requisites.fee,
+  };
   const buttons: BotButton[][] = [
-    ...(fits(tax) ? [[{ text: o.labels.copyTax, copy: tax }]] : []),
-    ...(fits(fee) ? [[{ text: o.labels.copyFee, copy: fee }]] : []),
+    ...(show.tax || show.fee
+      ? [[{ text: o.labels.showRequisites, action: CP_TG_REQ_ACTION, arg: cpReqArg(show) }]]
+      : []),
     [{ text: o.labels.noDebt, action: CP_TG_NODEBT_ACTION }],
   ];
-  // Реквизит длиннее предела кнопки копирования — в тексте сообщения, чтобы клиент его не потерял.
-  const long = [
-    tax && !fits(tax) ? `${o.labels.copyTax}: ${tax}` : null,
-    fee && !fits(fee) ? `${o.labels.copyFee}: ${fee}` : null,
-  ].filter((x): x is string => !!x);
   return {
     heading: o.labels.heading,
     sub: o.contractor,
-    text: [o.text, ...long].join('\n'),
+    text: o.text,
     tables: [{ head: [o.labels.what, o.labels.amount], rows, numeric: [1] }],
     buttons,
   };

@@ -1,4 +1,4 @@
-import { defaultUiTexts } from '@buhuchet/domain';
+import { defaultUiTexts, formatSomWithUnit } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
 import { makeTranslate } from '../l10n/translate';
 import { pageHistoryActor, pageHistoryText } from './page-history';
@@ -28,6 +28,26 @@ describe('pageHistoryText', () => {
         changes: [{ field: 'device', to: 'Телефон · Safari' }],
       }),
     ).toBe('Страница контрагента открыта: Телефон · Safari');
+  });
+
+  it('«Напомнить в Telegram» об оплате за обслуживание и «Оплатил» под ним (прототип v110)', () => {
+    expect(
+      pageHistoryText(t, {
+        action: 'page_tg_pay',
+        changes: [{ field: 'tgFee', to: { total: 1_250_050, recipients: 2 } }],
+      }),
+    ).toBe(
+      `Напоминание об оплате за обслуживание отправлено в Telegram: ${formatSomWithUnit(1_250_050)}, получателей — 2`,
+    );
+    expect(
+      pageHistoryText(t, {
+        action: 'page_tg_paid',
+        changes: [{ field: 'tgFeePaid', to: { total: 500_000, name: 'Айбек' } }],
+      }),
+    ).toBe(
+      `Контрагент сообщил в Telegram об оплате за обслуживание: ${formatSomWithUnit(500_000)} («Айбек»)`,
+    );
+    expect(pageHistoryActor(t, null, 'page_tg_paid')).toBe('Контрагент');
   });
 
   it('разделы страницы — по разделу: скрыт или показывается', () => {

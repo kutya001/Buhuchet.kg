@@ -3,8 +3,6 @@ import {
   answerContractorTelegramAsk,
   autoPayLinkIds,
   contextOrgName,
-  contractorPageSectionShown,
-  contractorTaxRequisiteText,
   contractorTelegramAskTarget,
   contractorTelegramPayOn,
   contractorTelegramPressTarget,
@@ -48,6 +46,8 @@ import {
   CP_TG_NODEBT_ACTION,
   CP_TG_PAID_ACTION,
   CP_TG_QUESTIONS_PER_HOUR,
+  CP_TG_REQ_ACTION,
+  CP_TG_REQ_PER_HOUR,
   cpTgQuestion,
   cpTgQuestionForHistory,
   fillTemplate,
@@ -59,14 +59,17 @@ import {
   monthPayAutoDue,
   monthPayBotMessage,
   parseBotPress,
+  parseCpReqArg,
   pressBotButton,
   relinkCodeOf,
+  transferBotMessage,
   withOrganization,
   type BotAsk,
   type BotMessage,
   type IsoDate,
   type MonthPayLine,
   type TelegramTemplateKey,
+  type TransferBlock,
   type Translate,
   type Tyiyn,
   type YearMonth,
@@ -77,6 +80,7 @@ import { serverTexts } from '../../l10n/texts';
 import { monthPayRows } from '../../reports/month-pay-rows';
 import { botSendOptions, flushEvents, queueEvents } from '../outbox';
 import type { BotPress } from '../press';
+import { feeRequisite, payRequisite } from './requisite';
 
 /*
  * «К оплате» клиенту в Telegram (доработки 13.11.2026, задача К4; прототип v94 modules/cp-telegram.js:
@@ -91,6 +95,16 @@ import type { BotPress } from '../press';
 export const CP_TG_ASK_RATE_LIMIT: RateLimit = {
   kind: 'cp_tg_ask',
   max: CP_TG_QUESTIONS_PER_HOUR,
+  windowSeconds: 3600,
+};
+
+/**
+ * «Показать реквизиты для перевода» из одного подключения — не больше стольких в час: каждое нажатие
+ * присылает новые сообщения, чат клиента не завалить.
+ */
+export const CP_TG_REQ_RATE_LIMIT: RateLimit = {
+  kind: 'cp_tg_req',
+  max: CP_TG_REQ_PER_HOUR,
   windowSeconds: 3600,
 };
 
@@ -183,11 +197,11 @@ export interface ClientMonthPay {
 }
 
 /**
- * Сообщение «К оплате» (прототип pgPayMsg): реквизит для налогов — тот же, что в разделе «Как
- * оплатить» страницы контрагента, и только пока этот раздел клиенту показан (скрыт — реквизита нет и
- * в Telegram: бот не отдаёт того, чего не отдаёт страница). Сотрудник, который отправляет сообщение,
- * реквизита в ответе не получает — его видит только клиент. Тексты словаря (`t`) читаются до
- * транзакции: внутри неё второе соединение не занимается.
+ * Сообщение «К оплате» (прототип v110 pgPayMsg): под текстом — блок «Реквизиты для перевода — …» с
+ * кнопкой копирования по виду реквизита (`payRequisite`: тот же реквизит, что в разделе «Как оплатить»
+ * страницы контрагента). Сотрудник, который отправляет сообщение, реквизита в ответе не получает — его
+ * видит только клиент. Тексты словаря (`t`) читаются до транзакции: внутри неё второе соединение не
+ * занимается.
  */
 async function payMessage(
   tx: Tx,
@@ -195,28 +209,18 @@ async function payMessage(
   cp: {
     id: string;
     name: string;
-    paysTo: 'emp' | 'org';
     responsible: { id: string; shortName: string } | null;
   },
   pay: ClientMonthPay,
-  taxpay: boolean,
+  requisite: TransferBlock,
 ): Promise<BotMessage> {
-  const requisite =
-    taxpay && (await contractorPageSectionShown(tx, cp.id, 'pay'))
-      ? await contractorTaxRequisiteText(
-          tx,
-          { paysTo: cp.paysTo, responsibleId: cp.responsible?.id ?? null },
-          t,
-        )
-      : null;
-  const [text, copy, paid, ask] = await Promise.all([
+  const [text, paid, ask] = await Promise.all([
     templateText(tx, 'tgCpPay', {
       контрагент: cp.name,
       месяц: monthLabel(pay.month),
       сумма: formatSomWithUnit(pay.total),
       срок: formatDateRu(pay.due),
     }),
-    templateText(tx, 'tgBtnCpReq'),
     templateText(tx, 'tgBtnCpPaid'),
     templateText(tx, 'tgBtnCpQ'),
   ]);
@@ -236,7 +240,6 @@ async function payMessage(
       amount: t('cppage.tg.pay.col_amount'),
       due: t('cppage.tg.pay.col_due'),
       total: t('cppage.tg.pay.total'),
-      copy,
       paid,
       ask,
     },
@@ -250,7 +253,8 @@ async function payMessage(
  * Записать «К оплате» каждому получателю (до отправки): строка сообщения клиенту с месяцем и итогом.
  * У самого сообщения (`auto`) повтор задачи вторую строку не создаёт — такой получатель пропускается;
  * не ушедшее с прошлого запуска (`retry`) собирается заново — в строке остаются сегодняшние итог и
- * сообщение. `t` — тексты словаря, прочитанные до транзакции.
+ * сообщение. `t` — тексты словаря, прочитанные до транзакции. Без реквизитов для перевода «К оплате»
+ * не уходит (доработки 14.11.2026, блок 4, пункт 1): их проверяет вызывающий (`payRequisite`).
  */
 export async function prepareMonthPay(
   tx: Tx,
@@ -259,18 +263,17 @@ export async function prepareMonthPay(
     contractor: {
       id: string;
       name: string;
-      paysTo: 'emp' | 'org';
       responsible: { id: string; shortName: string } | null;
     };
     pay: ClientMonthPay;
-    taxpay: boolean;
+    requisite: TransferBlock;
     recipients: readonly { linkId: string; chatId: number }[];
     auto: boolean;
     retry?: readonly { id: string; chatId: number }[];
   },
 ): Promise<PreparedClientMessage[]> {
   if (!o.recipients.length && !o.retry?.length) return [];
-  const message = await payMessage(tx, t, o.contractor, o.pay, o.taxpay);
+  const message = await payMessage(tx, t, o.contractor, o.pay, o.requisite);
   const prepared: PreparedClientMessage[] = [];
   for (const r of o.retry ?? []) {
     const fresh = await refreshContractorTelegramMessage(tx, r.id, {
@@ -320,7 +323,8 @@ export async function logMonthPaySent(
 /**
  * Сообщение ответственному сотруднику (без него, заблокированному или без Telegram — первому
  * владельцу с Telegram; прототип pgTgStaff) с заголовком: строка очереди в транзакции действия
- * клиента. `ask` — бот ждёт ответ сотрудника на это сообщение (вопрос клиента). Ответ — номера строк
+ * клиента или задачи. `ask` — бот ждёт ответ сотрудника на это сообщение (вопрос клиента);
+ * `dedupeKey` — одно такое сообщение: повтор с тем же ключом строки не добавляет. Ответ — номера строк
  * очереди: после транзакции их отправляет `flushEvents`.
  */
 async function queueStaffNotice(
@@ -329,8 +333,9 @@ async function queueStaffNotice(
   contractorId: string,
   heading: string,
   build: (contractor: string) => Promise<string>,
-  ask?: BotAsk,
+  opts: { ask?: BotAsk; dedupeKey?: string } = {},
 ): Promise<string[]> {
+  const { ask, dedupeKey } = opts;
   const notice = await pageClosedNotice(tx, contractorId);
   if (!notice) return [];
   for (const employeeId of notice.employeeIds) {
@@ -354,6 +359,7 @@ async function queueStaffNotice(
           kind: 'cp_tg_request',
           text: botPlainText(message),
           message,
+          ...(dedupeKey ? { dedupeKey } : {}),
         },
       ],
       ctx.clock.now(),
@@ -363,14 +369,50 @@ async function queueStaffNotice(
 }
 
 type PressOutcome =
-  | { refusal: TelegramTemplateKey }
+  | { refusal: TelegramTemplateKey; values?: Readonly<Record<string, string>> }
   | {
       reply?: string;
       after: BotMessage | null;
       staff: string[];
       /** Сообщение клиенту после действия («напишите ваш вопрос»). */
       send: PreparedClientMessage | null;
+      /** Сообщения клиенту без действий на кнопках (реквизиты): сразу, без записи о сообщении. */
+      direct?: readonly BotMessage[];
     };
+
+/**
+ * Сообщения клиенту, на которых нечего принимать (только кнопки копирования), — сразу после
+ * транзакции, мимо таблицы сообщений и журнала «Телеграм» (клиент — не пользователь). Ошибка Telegram
+ * метод не роняет.
+ */
+async function sendDirect(
+  deps: ApiDeps,
+  chatId: number,
+  messages: readonly BotMessage[],
+): Promise<void> {
+  if (!deps.telegram || !messages.length) return;
+  const plain = !(await telegramBotRich(deps.db));
+  for (const message of messages) {
+    try {
+      const res = await deps.telegram.sendMessage(
+        chatId,
+        botPlainText(message),
+        botSendOptions(message, { plain }),
+      );
+      if (!res.ok) {
+        deps.logger.warn(
+          { purpose: 'cp_requisite', errorCode: res.errorCode, description: res.description },
+          'Telegram: реквизиты контрагенту не отправлены',
+        );
+      }
+    } catch (err) {
+      deps.logger.warn(
+        { err, purpose: 'cp_requisite' },
+        'Telegram: реквизиты контрагенту не отправлены',
+      );
+    }
+  }
+}
 
 /**
  * Нажатие кнопки клиентом. true — нажатие относится к сообщению клиенту и обработано здесь (ответ
@@ -391,7 +433,8 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
       deps.logger.warn({ err, purpose: 'cp_press' }, 'Telegram: ответ на нажатие не отправлен');
     }
   };
-  const refuse = async (key: TelegramTemplateKey) => answer(await templateText(deps.db, key), true);
+  const refuse = async (key: TelegramTemplateKey, values?: Readonly<Record<string, string>>) =>
+    answer(await templateText(deps.db, key, values), true);
 
   const parsed = parseBotPress(press.data);
   const action = parsed?.action;
@@ -402,6 +445,14 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
   if (!target.linked) {
     await refuse('tgCpNotLinked');
     return true;
+  }
+  // Каждое «Показать реквизиты» присылает новые сообщения: не больше стольких в час с подключения.
+  if (action === CP_TG_REQ_ACTION) {
+    const limit = await takeRateLimit(deps.db, CP_TG_REQ_RATE_LIMIT, target.linkId);
+    if (!limit.ok) {
+      await answer((await serverTexts(deps))('cppage.tg.req_limit'), true);
+      return true;
+    }
   }
 
   let outcome: PressOutcome;
@@ -418,6 +469,32 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           return { refusal: 'tgActStale' };
         }
         if (!current.linked) return { refusal: 'tgCpNotLinked' };
+
+        // «Оплатил» под напоминанием об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5;
+        // прототип v110 tgAct('cp-feepaid')): сумма — из записи сообщения (долг на момент отправки).
+        if (parsed.action === CP_TG_PAID_ACTION && target.kind === 'fee') {
+          if (!current.total) return { refusal: 'tgActStale' };
+          const { total } = current;
+          await logContractorTelegramPay(tx, target.contractorId, 'page_tg_paid', [
+            { field: 'tgFeePaid', to: { total, name: current.name } },
+          ]);
+          const staff = await queueStaffNotice(
+            tx,
+            deps,
+            target.contractorId,
+            t('cppage.tg.staff.paid_heading'),
+            (contractor) =>
+              templateText(tx, 'tgCpFeePaidStaff', {
+                контрагент: contractor,
+                телеграм: current.name,
+                сумма: formatSomWithUnit(total),
+              }),
+          );
+          const done = t('cppage.tg.paid_done');
+          const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });
+          await saveContractorTelegramMessage(tx, target.id, after);
+          return { reply: await templateText(tx, 'tgCpPaidOk'), after, staff, send: null };
+        }
 
         if (parsed.action === CP_TG_PAID_ACTION) {
           if (!current.month || !current.total) return { refusal: 'tgActStale' };
@@ -458,6 +535,46 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           return { reply: await templateText(tx, 'tgCpNoDebtOk'), after, staff: [], send: null };
         }
 
+        // «Показать реквизиты для перевода» под напоминанием о долге (доработки 14.11.2026, блок 4,
+        // пункт 3; прототип v110 tgAct('cp-req')): по каждой сумме долга из напоминания — реквизиты на
+        // момент нажатия отдельным сообщением с подписью, чьи они, и кнопкой копирования. Какие суммы —
+        // из сохранённой кнопки (`findBotButton` выше), реквизиты — только пока клиенту показан «Как
+        // оплатить». Кнопка не гаснет: реквизиты можно попросить снова.
+        if (parsed.action === CP_TG_REQ_ACTION) {
+          const parts = parseCpReqArg(parsed.arg);
+          const today = bishkekDate(deps.clock.now());
+          const cp = await getContractor(tx, target.contractorId, { scope: undefined, today });
+          if (!cp) return { refusal: 'tgActStale' };
+          const { features } = await orgMenuSettings(tx, target.orgId);
+          const direct: BotMessage[] = [];
+          if (parts.tax) {
+            const req = await payRequisite(tx, t, cp);
+            if (req.state === 'ok') {
+              direct.push(
+                transferBotMessage({
+                  heading: t('cppage.tg.req.tax'),
+                  contractor: cp.name,
+                  block: req.block,
+                }),
+              );
+            }
+          }
+          if (parts.fee && features.fee) {
+            const block = await feeRequisite(tx, t, cp);
+            if (block) {
+              direct.push(
+                transferBotMessage({ heading: t('cppage.tg.req.fee'), contractor: cp.name, block }),
+              );
+            }
+          }
+          if (!direct.length) return { refusal: 'tgCpNoReq', values: { контрагент: cp.name } };
+          for (const m of direct) {
+            const problem = botMessageProblem(m);
+            if (problem) throw new Error(`Реквизиты контрагенту: ${problem}`);
+          }
+          return { after: null, staff: [], send: null, direct };
+        }
+
         // «Вопрос бухгалтеру»: бот просит написать вопрос ответом на своё сообщение. Просьба уже
         // открыта (клиент нажал кнопку второй раз) — новая не создаётся, бот повторяет подсказку.
         const how = await templateText(tx, 'tgCpAskHow');
@@ -490,7 +607,7 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
     return true;
   }
   if ('refusal' in outcome) {
-    await refuse(outcome.refusal);
+    await refuse(outcome.refusal, outcome.values);
     return true;
   }
 
@@ -505,6 +622,7 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
   if (outcome.send) {
     await deliverClientMessages(deps, { orgId: target.orgId, userId: null }, [outcome.send]);
   }
+  if (outcome.direct) await sendDirect(deps, press.chatId, outcome.direct);
   await flushEvents(deps, target.orgId, outcome.staff);
   return true;
 }
@@ -589,7 +707,7 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
             телеграм: current.name,
             вопрос: question,
           }),
-        { action: CP_TG_ANSWER_ACTION, arg: target.id, kind: 'text' },
+        { ask: { action: CP_TG_ANSWER_ACTION, arg: target.id, kind: 'text' } },
       );
       return { staff };
     },
@@ -636,24 +754,68 @@ export async function sendClientAnswer(
   return false;
 }
 
+/** Что отправить одной организации: «К оплате» клиентам и сообщения сотрудникам («не отправлено»). */
+interface AutoPayPlan {
+  batches: {
+    contractorId: string;
+    month: YearMonth;
+    total: Tyiyn;
+    prepared: PreparedClientMessage[];
+  }[];
+  staff: string[];
+}
+
+/**
+ * «Не отправлено «К оплате»: у <контрагент> нет реквизитов для перевода» ответственному (прототип v110
+ * `pgNoReqWhy`) с подсказкой, где их добавить; раздел «Как оплатить» скрыт — подсказка о нём. Одно
+ * сообщение на контрагента и месяц (ключ очереди): повтор задачи второго не ставит.
+ */
+async function queueNoRequisite(
+  tx: Tx,
+  ctx: Ctx,
+  t: Translate,
+  cp: { id: string; paysTo: 'emp' | 'org'; responsible: { shortName: string } | null },
+  month: YearMonth,
+  state: 'none' | 'hidden',
+): Promise<string[]> {
+  const hint =
+    state === 'hidden'
+      ? t('cppage.tg.rq.hidden_staff')
+      : cp.paysTo === 'emp'
+        ? t('cppage.tg.rq.emp_hint', {
+            employee: cp.responsible?.shortName || t('cppage.tg.rq.no_resp'),
+          })
+        : t('cppage.tg.rq.org_hint');
+  return queueStaffNotice(
+    tx,
+    ctx,
+    cp.id,
+    t('cppage.tg.staff.noreq_heading'),
+    async (contractor) =>
+      `${await templateText(tx, 'tgCpNoReq', { контрагент: contractor })} ${hint}`,
+    { dedupeKey: `cp_pay_noreq:${cp.id}:${month}` },
+  );
+}
+
 /** Само «К оплате» одной организации: что отправить. Всё — в одной транзакции задачи. */
 async function prepareAutoPay(
   tx: Tx,
+  ctx: Ctx,
   t: Translate,
   orgId: string,
   today: IsoDate,
-): Promise<
-  { contractorId: string; month: YearMonth; total: Tyiyn; prepared: PreparedClientMessage[] }[]
-> {
-  if (!(await contractorTelegramPayOn(tx))) return [];
+): Promise<AutoPayPlan> {
+  const out: AutoPayPlan = { batches: [], staff: [] };
+  if (!(await contractorTelegramPayOn(tx))) return out;
   const { features } = await orgMenuSettings(tx, orgId);
   const taxpay = features.taxpay;
-  const out: Awaited<ReturnType<typeof prepareAutoPay>> = [];
   for (const contractorId of await contractorsWithTelegram(tx)) {
     const cp = await getContractor(tx, contractorId, { scope: undefined, today });
     if (!cp) continue;
     const recipients = await contractorTelegramRecipients(tx, contractorId);
     if (!recipients.length) continue;
+    // Реквизиты — один раз на контрагента и только когда есть что отправить.
+    let requisite: Awaited<ReturnType<typeof payRequisite>> | null = null;
     // Месяцы ищутся по срокам оплаты ближайших дней, а не отсчётом от сегодняшнего: месяц годового
     // отчёта — декабрь, а платить по нему в марте — мае.
     const months = await reportPayDueMonths(tx, {
@@ -675,15 +837,27 @@ async function prepareAutoPay(
       // Не ушедшее с прошлого запуска — повторяется (до трёх попыток) сегодняшним сообщением и только
       // действующим получателям; новое — записывается.
       const unsent = await unsentAutoPayMessages(tx, contractorId, month, AUTO_PAY_MAX_ATTEMPTS);
+      const fresh = recipients.filter((r) => !done.has(r.linkId));
+      const retry = unsent.filter((m) => recipients.some((r) => r.linkId === m.linkId));
+      if (!fresh.length && !retry.length) continue;
+      requisite ??= await payRequisite(tx, t, cp);
+      // Без реквизитов для перевода «К оплате» не уходит и само (доработки 14.11.2026, блок 4,
+      // пункт 1): ответственному — «не отправлено» с подсказкой, один раз на месяц.
+      if (requisite.state !== 'ok') {
+        if (fresh.length) {
+          out.staff.push(...(await queueNoRequisite(tx, ctx, t, cp, month, requisite.state)));
+        }
+        continue;
+      }
       const prepared = await prepareMonthPay(tx, t, {
         contractor: cp,
         pay: { month, lines: rows, total: pay.total, due: pay.due },
-        taxpay,
-        recipients: recipients.filter((r) => !done.has(r.linkId)),
+        requisite: requisite.block,
+        recipients: fresh,
         auto: true,
-        retry: unsent.filter((m) => recipients.some((r) => r.linkId === m.linkId)),
+        retry,
       });
-      if (prepared.length) out.push({ contractorId, month, total: pay.total, prepared });
+      if (prepared.length) out.batches.push({ contractorId, month, total: pay.total, prepared });
     }
   }
   return out;
@@ -710,10 +884,11 @@ export const contractorPayJob: Job = {
     const t = await translateOf(ctx);
     for (const orgId of await orgIds(ctx.db)) {
       try {
-        const batches = await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) =>
-          prepareAutoPay(tx, t, orgId, today),
+        const plan = await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) =>
+          prepareAutoPay(tx, ctx, t, orgId, today),
         );
-        for (const b of batches) {
+        await flushEvents(ctx, orgId, plan.staff);
+        for (const b of plan.batches) {
           const delivered = await deliverClientMessages(ctx, { orgId, userId: null }, b.prepared);
           sent += delivered;
           if (delivered > 0) {

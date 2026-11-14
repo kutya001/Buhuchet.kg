@@ -2,7 +2,6 @@ import {
   contractorDebtSwitch,
   contractorMoneyOf,
   contractorsWithTelegram,
-  contractorTaxRequisiteText,
   contractorTelegramChats,
   contractorTelegramDebtSettings,
   contractorPageSectionShown,
@@ -11,7 +10,8 @@ import {
   feeSubject,
   getContractor,
   insertContractorTelegramMessage,
-  mainFeeRequisite,
+  contractorTaxTransfer,
+  feeTransfer,
   messageTemplates,
   orgIds,
   refreshContractorTelegramMessage,
@@ -100,8 +100,10 @@ export async function contractorClientDebt(
 }
 
 /**
- * Напоминание о долге (прототип pgDebtMsg). Реквизиты — те же, что в разделе «Как оплатить» страницы
- * контрагента, и только пока этот раздел клиенту показан. Тексты словаря (`t`) читаются до транзакции.
+ * Напоминание о долге (прототип v110 pgDebtMsg): кнопка «Показать реквизиты для перевода» — одна на
+ * обе части долга, если реквизиты хотя бы для одной есть и клиенту показан раздел «Как оплатить»;
+ * сами реквизиты бот присылает по нажатию (`clientPress`, доработки 14.11.2026, блок 4, пункт 3).
+ * Тексты словаря (`t`) читаются до транзакции.
  */
 async function debtMessage(
   tx: Tx,
@@ -115,27 +117,24 @@ async function debtMessage(
   debt: CpDebt,
 ): Promise<BotMessage> {
   const payShown = await contractorPageSectionShown(tx, cp.id, 'pay');
-  const [taxRequisite, feeRequisite] = await Promise.all([
+  const [tax, fee] = await Promise.all([
     payShown && debt.short
-      ? contractorTaxRequisiteText(
-          tx,
-          { paysTo: cp.paysTo, responsibleId: cp.responsible?.id ?? null },
-          t,
-        )
+      ? contractorTaxTransfer(tx, {
+          paysTo: cp.paysTo,
+          responsibleId: cp.responsible?.id ?? null,
+        })
       : null,
-    payShown && debt.fee ? mainFeeRequisite(tx, t).then((r) => r?.text ?? null) : null,
+    payShown && debt.fee ? feeTransfer(tx) : null,
   ]);
-  const [text, copyTax, copyFee, noDebt] = await Promise.all([
+  const [text, showRequisites, noDebt] = await Promise.all([
     templateText(tx, 'tgCpDebt', { контрагент: cp.name, сумма: formatSomWithUnit(debt.sum) }),
-    templateText(tx, 'tgBtnCpReqTax'),
-    templateText(tx, 'tgBtnCpReqFee'),
+    templateText(tx, 'tgBtnCpShowReq'),
     templateText(tx, 'tgBtnCpNoDebt'),
   ]);
   const message = debtBotMessage({
     contractor: cp.name,
     debt,
-    taxRequisite,
-    feeRequisite,
+    requisites: { tax: !!tax, fee: !!fee },
     text,
     labels: {
       heading: t('cppage.tg.debt.heading'),
@@ -143,8 +142,7 @@ async function debtMessage(
       amount: t('cppage.tg.debt.amount'),
       short: t('cppage.tg.debt.short'),
       fee: t('cppage.tg.debt.fee'),
-      copyTax,
-      copyFee,
+      showRequisites,
       noDebt,
     },
   });
