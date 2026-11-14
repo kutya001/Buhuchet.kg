@@ -16,7 +16,14 @@ describe('Темы в чате с ботом (прототип v104 tg-topics.js
     expect(botTopicOf('lead')).toBe('lead');
     for (const k of ['code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'not_me'] as const)
       expect(botTopicOf(k), k).toBe('sec');
-    for (const k of ['broadcast', 'bot_test', 'bot_cmd', 'bot_ask', 'alert'] as const)
+    for (const k of [
+      'broadcast',
+      'bot_test',
+      'bot_cmd',
+      'bot_ask',
+      'alert',
+      'cp_tg_request',
+    ] as const)
       expect(botTopicOf(k), k).toBeNull();
     expect(botTopicOf('unknown_kind')).toBeNull();
     // Каждый вид журнала разобран: тема или явное «без темы».
