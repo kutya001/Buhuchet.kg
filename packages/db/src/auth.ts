@@ -46,7 +46,7 @@ export interface LoginRecord {
   orgName: string | null;
   /** Вход закрыт после 10 неверных паролей подряд (миграция 0095). */
   loginLocked: boolean;
-  /** Чем закрыт вход: `not_me` — кнопкой «Это не я» в Telegram (миграция 0127); пусто — паролями. */
+  /** Чем закрыт вход: `not_me` — кнопкой «Это не я» в Telegram (миграция 0135); пусто — паролями. */
   loginLockReason: LoginLockReason | null;
   /** Владелец организации: его блокировку входа снимает администратор платформы. */
   isOwner: boolean;

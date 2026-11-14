@@ -11,7 +11,7 @@ import { createTestDatabase, databaseAvailable, type TestDatabase } from './test
 
 const ORG = '0b0e1a52-6e0f-4c11-9a0e-1d1f3c2b4a5d';
 
-// Темы в чате с ботом (поток Т, задача Т7; миграции 0133–0134, docs/decisions.md п. Т-7).
+// Темы в чате с ботом (поток Т, задача Т7; миграции 0141–0142, docs/decisions.md п. Т-7).
 describe.skipIf(!databaseAvailable())('Темы в чате с ботом: номера тем', () => {
   let t: TestDatabase;
 
