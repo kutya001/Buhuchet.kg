@@ -57,6 +57,7 @@ export function PublicPageScreen({
       main = (
         <OpenPage
           page={state.page}
+          address={{ slug, inn }}
           fileHref={(id) => `/${slug}/inn/${inn}/files/${encodeURIComponent(id)}`}
         />
       );

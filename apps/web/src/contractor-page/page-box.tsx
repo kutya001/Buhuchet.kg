@@ -33,6 +33,7 @@ import { api, callApi, type ApiResult } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { contractorPageQuery } from './page-data';
+import { ContractorTelegramBox, contractorTelegramQuery } from './page-telegram';
 
 /*
  * Блок «Страница контрагента» на вкладке «Основное» карточки контрагента (задача 2.42; прототип
@@ -89,8 +90,12 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
   const why = (code: ContractorPage['manage']) => (code ? t(`err.${code}`) : null);
   const manage = why(page.manage);
   const send = why(page.send);
-  const put = (data: unknown) =>
+  const put = (data: unknown) => {
     client.setQueryData(contractorPageQuery(contractorId).queryKey, ContractorPage.parse(data));
+    // Блок «Telegram контрагента» живёт от той же страницы (включена ли она, показан ли раздел) —
+    // перечитать его сразу, как перерисовка блока в прототипе.
+    void client.invalidateQueries({ queryKey: contractorTelegramQuery(contractorId).queryKey });
+  };
 
   const run = async (action: Action): Promise<ContractorPage | null> => {
     const param = { param: { id: contractorId } };
@@ -254,6 +259,7 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
         ) : (
           <Hint>{t(page.archived ? 'cppage.archived_hint' : 'cppage.off_hint')}</Hint>
         )}
+        <ContractorTelegramBox contractorId={contractorId} />
         <div className="flex flex-wrap items-center gap-2">
           {page.enabled ? (
             <>

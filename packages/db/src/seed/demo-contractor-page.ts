@@ -1,7 +1,13 @@
-import { PAGE_SECTIONS, type HistoryAction, type HistoryValue } from '@buhuchet/domain';
+import {
+  CP_TG_NAME_MAX,
+  CP_TG_STATUSES,
+  PAGE_SECTIONS,
+  type HistoryAction,
+  type HistoryValue,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import type { Db } from '../client';
-import { auditLog, contractorPages } from '../schema';
+import { auditLog, contractorPages, contractorTelegramLinks } from '../schema';
 import type { DemoIdOf } from './demo';
 
 const Stamp = z.string().regex(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
@@ -18,9 +24,30 @@ const DemoPage = z.object({
   hide: z.array(z.enum(PAGE_SECTIONS)).default([]),
 });
 
+/**
+ * Telegram контрагента демо-организации (`contractors[].tgs`, прототип v92 c.tgs): имя в Telegram,
+ * когда пришёл запрос, статус, кто и когда решил (`by` — сотрудник или `client`).
+ */
+const DemoTelegram = z.object({
+  id: z.number().int().positive(),
+  name: z.string().min(1).max(CP_TG_NAME_MAX),
+  at: Stamp,
+  st: z.enum(CP_TG_STATUSES),
+  by: z.string().optional(),
+  doneAt: Stamp.optional(),
+});
+
 const DemoFile = z.object({
   contractors: z
-    .array(z.object({ id: z.number().int(), page: DemoPage.optional() }).passthrough())
+    .array(
+      z
+        .object({
+          id: z.number().int(),
+          page: DemoPage.optional(),
+          tgs: z.array(DemoTelegram).default([]),
+        })
+        .passthrough(),
+    )
     .default([]),
   history: z
     .array(
@@ -45,6 +72,7 @@ const SECTION_OF: Readonly<Record<string, (typeof PAGE_SECTIONS)[number]>> = {
   'Оплата за обслуживание': 'fee',
   Показатели: 'kpi',
   Контакты: 'contacts',
+  Telegram: 'tg',
 };
 
 interface PageHistoryRow {
@@ -97,6 +125,7 @@ export async function seedDemoContractorPages(
   const { orgId, demoId } = ids;
   const user = (protoId: string) =>
     ids.employees.includes(protoId) ? demoId('user', protoId) : null;
+  await seedDemoContractorTelegram(db, contractors, ids);
   const pages = contractors.flatMap((c) => (c.page ? [{ id: c.id, page: c.page }] : []));
   if (pages.length === 0) return 0;
   const inserted = await db
@@ -138,4 +167,40 @@ export async function seedDemoContractorPages(
   });
   if (rows.length) await db.insert(auditLog).values(rows);
   return inserted.length;
+}
+
+/**
+ * Telegram контрагентов демо-организации (доработки 13.11.2026, задача К3): строки списка «Telegram
+ * контрагента» из demoDB.json. Настоящих чатов у демо-клиентов нет: номер чата — отрицательный (в
+ * Telegram это не личный чат), сообщение по нему никому не уйдёт. Постоянный uuid строки — повторный
+ * запуск и `--update` её не задваивают.
+ */
+async function seedDemoContractorTelegram(
+  db: Db,
+  contractors: z.infer<typeof DemoFile>['contractors'],
+  ids: { orgId: string; demoId: DemoIdOf; employees: readonly string[] },
+): Promise<void> {
+  const { orgId, demoId } = ids;
+  const rows = contractors.flatMap((c) =>
+    c.tgs.map((x) => {
+      const decidedBy = x.by && ids.employees.includes(x.by) ? demoId('user', x.by) : null;
+      const decidedAt = x.doneAt ? stampOf(x.doneAt) : null;
+      return {
+        id: demoId('contractor_telegram', `${c.id}-${x.id}`),
+        orgId,
+        contractorId: demoId('contractor', String(c.id)),
+        chatId: -(c.id * 1000 + x.id),
+        name: x.name,
+        status: x.st,
+        requestedAt: stampOf(x.at),
+        decidedBy,
+        byClient: x.by === 'client',
+        decidedAt,
+        updatedBy: decidedBy,
+        createdAt: stampOf(x.at),
+        updatedAt: decidedAt ?? stampOf(x.at),
+      };
+    }),
+  );
+  if (rows.length) await db.insert(contractorTelegramLinks).values(rows).onConflictDoNothing();
 }

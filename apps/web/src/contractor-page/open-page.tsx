@@ -49,6 +49,7 @@ import {
 } from './page-parts';
 import { usePageFilesSection, usePageFileViewer, type OpenPageFile } from './page-files';
 import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-reports';
+import { PageTelegramBody, pageTelegramSum, type PageAddress } from './page-telegram';
 
 /*
  * Открытая страница контрагента (задача 2.43; ТЗ «Страница контрагента по ссылке» → «Что видит
@@ -59,7 +60,8 @@ import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-report
  */
 
 type Page = PublicPageBody;
-type SecId = 'main' | 'pay' | 'acc' | 'reports' | 'files' | 'money' | 'fee' | 'kpi' | 'contacts';
+type SecId =
+  'main' | 'pay' | 'acc' | 'reports' | 'files' | 'money' | 'fee' | 'kpi' | 'contacts' | 'tg';
 
 const STATE_CLASS = {
   ok: 'bg-ok-bg text-ok font-semibold',
@@ -86,15 +88,22 @@ const KPI_TOTAL_KEY = {
 const linkBtn =
   'inline cursor-pointer border-0 bg-transparent p-0 text-left font-semibold text-inherit underline decoration-1 underline-offset-2';
 
-export function OpenPage({ page, fileHref }: { page: Page; fileHref: (id: string) => string }) {
+interface OpenPageProps {
+  page: Page;
+  /** Адрес страницы: по нему раздел «Telegram» просит одноразовую ссылку на бота. */
+  address: PageAddress;
+  fileHref: (id: string) => string;
+}
+
+export function OpenPage({ page, address, fileHref }: OpenPageProps) {
   return (
     <PageTextsContext.Provider value={page.texts}>
-      <OpenPageBody page={page} fileHref={fileHref} />
+      <OpenPageBody page={page} address={address} fileHref={fileHref} />
     </PageTextsContext.Provider>
   );
 }
 
-function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) => string }) {
+function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   const t = useT();
   const tx = usePageText();
   const toast = useToast();
@@ -904,6 +913,18 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
     });
   }
 
+  // «Telegram» (доработки 13.11.2026, задача К3; прототип v92 pgTgPub): клиент подключает свой Telegram
+  // к боту, подключение подтверждает бухгалтер.
+  if (page.telegram) {
+    H.tg = sec(
+      'tg',
+      'tg',
+      t('pub.sec.tg'),
+      <PageTelegramBody telegram={page.telegram} address={address} what={tx('secs.tg')} />,
+      { sum: pageTelegramSum(t, page.telegram) },
+    );
+  }
+
   const nav = pageNav(new Set(Object.keys(H).filter((k): k is PageNavItem => k in NAV_ICON)));
   const col = (ks: string[]) => ks.map((k) => H[k] ?? null);
 
@@ -951,7 +972,7 @@ function OpenPageBody({ page, fileHref }: { page: Page; fileHref: (id: string) =
           {col(['main', 'reports', 'files', 'kpi'])}
         </div>
         <div className="flex min-w-0 flex-col gap-3.5 max-md:contents">
-          {col(['pay', 'acc', 'money', 'fee', 'contacts'])}
+          {col(['pay', 'acc', 'tg', 'money', 'fee', 'contacts'])}
         </div>
       </div>
       {nav.length ? (

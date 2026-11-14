@@ -1,6 +1,7 @@
 import type { AppConfig } from '@buhuchet/adapters';
 import {
   cleanupContractorPageGrants,
+  cleanupContractorTelegramLinks,
   cleanupLoginAttempts,
   cleanupRateLimits,
   schema,
@@ -66,6 +67,8 @@ export const cleanupContractorPageGrantsJob: Job = {
   lookbackMinutes: 24 * 60,
   async run(ctx) {
     await cleanupContractorPageGrants(ctx.db);
+    // Одноразовые ссылки «Подключить Telegram» с истёкшим сроком (задача К3).
+    await cleanupContractorTelegramLinks(ctx.db);
   },
 };
 

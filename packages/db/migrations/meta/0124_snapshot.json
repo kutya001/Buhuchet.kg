@@ -1,6 +1,6 @@
 {
-  "id": "583feb48-932a-4531-bef7-189778fd98dd",
-  "prevId": "e281a737-5ee1-43ab-b386-14ae36a06caf",
+  "id": "6df4d326-77a2-492c-aea0-a9a4f6a6d9e9",
+  "prevId": "55498c29-309d-42f5-9abc-9c7bfb0c6545",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3447,13 +3447,392 @@
         },
         "contractor_pages_hidden_check": {
           "name": "contractor_pages_hidden_check",
-          "value": "\"contractor_pages\".\"hidden_sections\" <@ array['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts']::text[]"
+          "value": "\"contractor_pages\".\"hidden_sections\" <@ array['pay', 'reports', 'files', 'money', 'fee', 'kpi', 'contacts', 'tg']::text[]"
         },
         "contractor_pages_failures_check": {
           "name": "contractor_pages_failures_check",
           "value": "\"contractor_pages\".\"failures\" >= 0"
         }
       },
+      "isRLSEnabled": true
+    },
+    "public.contractor_telegram_links": {
+      "name": "contractor_telegram_links",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chat_id": {
+          "name": "chat_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'wait'"
+        },
+        "requested_at": {
+          "name": "requested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "decided_by": {
+          "name": "decided_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "by_client": {
+          "name": "by_client",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        }
+      },
+      "indexes": {
+        "contractor_telegram_links_contractor_idx": {
+          "name": "contractor_telegram_links_contractor_idx",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "contractor_telegram_links_active_key": {
+          "name": "contractor_telegram_links_active_key",
+          "columns": [
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"contractor_telegram_links\".\"status\" in ('wait', 'on')",
+          "concurrently": false
+        },
+        "contractor_telegram_links_chat_idx": {
+          "name": "contractor_telegram_links_chat_idx",
+          "columns": [
+            {
+              "expression": "chat_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "where": "\"contractor_telegram_links\".\"status\" = 'on'",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "contractor_telegram_links_org_id_organizations_id_fk": {
+          "name": "contractor_telegram_links_org_id_organizations_id_fk",
+          "tableFrom": "contractor_telegram_links",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        },
+        "contractor_telegram_links_decided_by_users_id_fk": {
+          "name": "contractor_telegram_links_decided_by_users_id_fk",
+          "tableFrom": "contractor_telegram_links",
+          "columnsFrom": [
+            "decided_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contractor_telegram_links_updated_by_users_id_fk": {
+          "name": "contractor_telegram_links_updated_by_users_id_fk",
+          "tableFrom": "contractor_telegram_links",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "contractor_telegram_links_contractor_fk": {
+          "name": "contractor_telegram_links_contractor_fk",
+          "tableFrom": "contractor_telegram_links",
+          "columnsFrom": [
+            "contractor_id",
+            "org_id"
+          ],
+          "tableTo": "contractors",
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contractor_telegram_links_isolation": {
+          "name": "contractor_telegram_links_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_telegram_links\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"contractor_telegram_links\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {
+        "contractor_telegram_links_status_check": {
+          "name": "contractor_telegram_links_status_check",
+          "value": "\"contractor_telegram_links\".\"status\" in ('wait', 'on', 'no', 'off')"
+        },
+        "contractor_telegram_links_name_check": {
+          "name": "contractor_telegram_links_name_check",
+          "value": "char_length(\"contractor_telegram_links\".\"name\") between 1 and 32"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.contractor_telegram_tokens": {
+      "name": "contractor_telegram_tokens",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contractor_id": {
+          "name": "contractor_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "used_at": {
+          "name": "used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "used_chat_id": {
+          "name": "used_chat_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "contractor_telegram_tokens_contractor_idx": {
+          "name": "contractor_telegram_tokens_contractor_idx",
+          "columns": [
+            {
+              "expression": "contractor_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "contractor_telegram_tokens_expires_idx": {
+          "name": "contractor_telegram_tokens_expires_idx",
+          "columns": [
+            {
+              "expression": "expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "contractor_telegram_tokens_org_id_organizations_id_fk": {
+          "name": "contractor_telegram_tokens_org_id_organizations_id_fk",
+          "tableFrom": "contractor_telegram_tokens",
+          "columnsFrom": [
+            "org_id"
+          ],
+          "tableTo": "organizations",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        },
+        "contractor_telegram_tokens_contractor_id_contractor_pages_contractor_id_fk": {
+          "name": "contractor_telegram_tokens_contractor_id_contractor_pages_contractor_id_fk",
+          "tableFrom": "contractor_telegram_tokens",
+          "columnsFrom": [
+            "contractor_id"
+          ],
+          "tableTo": "contractor_pages",
+          "columnsTo": [
+            "contractor_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "contractor_telegram_tokens_contractor_fk": {
+          "name": "contractor_telegram_tokens_contractor_fk",
+          "tableFrom": "contractor_telegram_tokens",
+          "columnsFrom": [
+            "contractor_id",
+            "org_id"
+          ],
+          "tableTo": "contractors",
+          "columnsTo": [
+            "id",
+            "org_id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {
+        "contractor_telegram_tokens_isolation": {
+          "name": "contractor_telegram_tokens_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"contractor_telegram_tokens\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"contractor_telegram_tokens\".\"org_id\" = app.current_org_id()"
+        }
+      },
+      "checkConstraints": {},
       "isRLSEnabled": true
     },
     "public.assignments": {
@@ -5325,7 +5704,7 @@
           "type": "text[]",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{pay,reports,files,money,fee,kpi,contacts}'"
+          "default": "'{pay,reports,files,money,fee,kpi,contacts,tg}'"
         },
         "created_by": {
           "name": "created_by",
@@ -7425,7 +7804,7 @@
       "checkConstraints": {
         "telegram_outbox_kind_check": {
           "name": "telegram_outbox_kind_check",
-          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test')"
+          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request')"
         },
         "telegram_outbox_status_check": {
           "name": "telegram_outbox_status_check",
@@ -18275,24 +18654,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "replaces_id": {
-          "name": "replaces_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "replaced_at": {
-          "name": "replaced_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "replaced_by": {
-          "name": "replaced_by",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "state": {
           "name": "state",
           "type": "text",
@@ -18448,19 +18809,6 @@
           "onUpdate": "no action",
           "onDelete": "restrict"
         },
-        "files_replaced_by_users_id_fk": {
-          "name": "files_replaced_by_users_id_fk",
-          "tableFrom": "files",
-          "columnsFrom": [
-            "replaced_by"
-          ],
-          "tableTo": "users",
-          "columnsTo": [
-            "id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
-        },
         "files_updated_by_users_id_fk": {
           "name": "files_updated_by_users_id_fk",
           "tableFrom": "files",
@@ -18501,21 +18849,6 @@
           ],
           "onUpdate": "no action",
           "onDelete": "restrict"
-        },
-        "files_replaces_fk": {
-          "name": "files_replaces_fk",
-          "tableFrom": "files",
-          "columnsFrom": [
-            "replaces_id",
-            "org_id"
-          ],
-          "tableTo": "files",
-          "columnsTo": [
-            "id",
-            "org_id"
-          ],
-          "onUpdate": "no action",
-          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -18593,17 +18926,9 @@
           "name": "files_name_check",
           "value": "char_length(\"files\".\"name\") between 1 and 255"
         },
-        "files_replaces_check": {
-          "name": "files_replaces_check",
-          "value": "\"files\".\"replaces_id\" is null or \"files\".\"state\" = 'pending'"
-        },
-        "files_replaced_check": {
-          "name": "files_replaced_check",
-          "value": "(\"files\".\"replaced_at\" is null) = (\"files\".\"replaced_by\" is null)"
-        },
         "files_key_check": {
           "name": "files_key_check",
-          "value": "\"files\".\"storage_key\" ~ ('^org/' || \"files\".\"org_id\"::text || '/files/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')"
+          "value": "\"files\".\"storage_key\" = 'org/' || \"files\".\"org_id\"::text || '/files/' || \"files\".\"id\"::text"
         },
         "files_deleted_check": {
           "name": "files_deleted_check",

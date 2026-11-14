@@ -159,6 +159,7 @@ export const ORG_TEXTS = {
   'org.page.section.fee': { ru: 'Оплата за обслуживание', section: S },
   'org.page.section.kpi': { ru: 'Показатели', section: S },
   'org.page.section.contacts': { ru: 'Контакты', section: S },
+  'org.page.section.tg': { ru: 'Telegram', section: S },
   'org.page.needs': {
     ru: 'Появится на странице, когда включена функция «{name}»',
     section: S,
