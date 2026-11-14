@@ -314,6 +314,8 @@ export const telegramDigestDays = pgTable(
  * темы у Telegram. Ключ — тема по виду (`rep`, `task`, `lead`, `sec`) или организации (`org:<id>`).
  * Строка — про чат, а не про организацию: роль приложения таблицу не видит, читает и пишет её только
  * функциями `app.telegram_topic_*` (миграция `telegram_topics_functions`).
+ * Темы убраны по решению заказчика 14.11.2026 (прототип v109, docs/decisions.md п. Т-10): код таблицу
+ * больше не читает и не пишет; таблица и функции удаляются отдельной миграцией следующим PR (правило двух PR).
  */
 export const telegramTopics = pgTable(
   'telegram_topics',

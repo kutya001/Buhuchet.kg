@@ -50,7 +50,6 @@ import {
 } from './command-view';
 import { BOT_PRESS_RATE_LIMIT } from './press';
 import { BOT_REPLY_ONCE } from './reply';
-import { replyTopicOrg } from './topics';
 import { sendWeekWidget } from './widget';
 
 /*
@@ -278,11 +277,7 @@ export async function handleBotCommand(deps: ApiDeps, msg: BotCommandMessage): P
     await sendNow(deps, msg.chatId, hint, 'bot_cmd', { menu: [] });
     return true;
   }
-  // В теме организации (чат нескольких организаций, задача Т7) — ответ по учётным записям этой
-  // организации.
-  const topicOrg = await replyTopicOrg(deps, msg.chatId);
-  const own = topicOrg ? all.filter((u) => u.orgId === topicOrg) : [];
-  const users = own.length ? own : all;
+  const users = all;
   const dict = await serverTexts(deps);
   const tr: Translate = (key, params) => formatText(dict(key), params);
   const run: CommandRun = {

@@ -634,5 +634,19 @@ describe.skipIf(!databaseAvailable())(
       expect(last(CHAT.flood).text).toBe(TPL.tgStart);
       expect((await say(CHAT.flood, '/today'))[0]!.text).toBe(TPL.tgActFailed);
     });
+
+    it('сообщение из темы, которую бот создавал раньше (темы убраны, п. Т-10), — обычная команда, ответ без темы', async () => {
+      const update = telegramUpdate('/today', CHAT.owner);
+      const inTopic = {
+        ...update,
+        message: { ...update.message, message_thread_id: 77, is_topic_message: true },
+      };
+      const before = sent(CHAT.owner).length;
+      expect((await sendToBot(app, inTopic)).status).toBe(200);
+      const replies = sent(CHAT.owner).slice(before);
+      expect(replies).toHaveLength(1);
+      expect(replies[0]!.options.rich).toContain('Сегодня, 13 ноября');
+      expect(JSON.stringify(replies[0]!.options)).not.toMatch(/thread/i);
+    });
   },
 );

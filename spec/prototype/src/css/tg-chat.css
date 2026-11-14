@@ -56,12 +56,6 @@
 .tgc-menu .tgc-k{flex:1 1 auto}
 /* Картинка в сообщении рассылки (задача Т6) */
 .tgc-img{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:9px;margin:0 0 6px;background:var(--pane-alt)}
-/* Темы в чате с ботом (задача Т7): вкладки тем над перепиской */
-.tgc-topics{display:flex;gap:4px;overflow-x:auto;padding-bottom:6px;border-bottom:1px dashed var(--border-strong);scrollbar-width:thin}
-.tgc-tp{display:inline-flex;align-items:center;gap:5px;flex:none;max-width:220px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--pane);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
-.tgc-tp span:first-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tgc-tp.on{background:var(--sel);border-color:var(--blue);font-weight:600}
-.tgc-tp .tgc-n{flex:none}
 /* Виджет «Мои отчёты на неделю» (задача Т9): маленький экран в чате — вкладки дней, галочки «Сдан», строка итога. Вкладки переносятся, а не прокручиваются: в виджете Telegram прокрутки нет */
 .tgc-b.tgw{width:min(360px,100%);padding:9px 10px}
 .tgw-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:6px}

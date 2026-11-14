@@ -1,7 +1,6 @@
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   adminSetTelegramBotRich,
-  adminSetTelegramBotTopics,
   adminTelegramBroadcast,
   adminTelegramOrgs,
   adminTelegramRetry,
@@ -10,14 +9,12 @@ import {
   listAdminTelegramLogPage,
   listAdminTelegramLogValues,
   telegramBotRich,
-  telegramBotTopics,
   withUserContext,
   type AdminTelegramLogRecord,
 } from '@buhuchet/db';
 import { bishkekDate, webhookState } from '@buhuchet/domain';
 import {
   AdminTelegramBot,
-  AdminTelegramBotTopics,
   AdminTelegramBotView,
   AdminTelegramBroadcastRequest,
   AdminTelegramBroadcastResult,
@@ -33,7 +30,6 @@ import {
   ListValues,
   ListValuesQuery,
 } from '@buhuchet/shared';
-import { redactBotToken } from '@buhuchet/adapters';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
@@ -286,20 +282,8 @@ export function telegramBotHandler(deps: ApiDeps): RouteHandler<typeof telegramB
     }
     const now = deps.clock.now();
     const state = webhookState(info, url, now);
-    const [rich, topics] = [await telegramBotRich(deps.db), await telegramBotTopics(deps.db)];
-    // Темы у бота в @BotFather (задача Т7): по ответу Telegram (getMe); не ответил — неизвестно.
-    let topicsReady: boolean | null = null;
-    if (deps.telegram) {
-      try {
-        topicsReady = await deps.telegram.topicsEnabled();
-      } catch (err) {
-        deps.logger.warn(
-          { err: redactBotToken(err instanceof Error ? err.message : String(err)) },
-          'Telegram: getMe не ответил',
-        );
-      }
-    }
-    return c.json({ url, ...state, checkedAt: now.toISOString(), rich, topics, topicsReady }, 200);
+    const rich = await telegramBotRich(deps.db);
+    return c.json({ url, ...state, checkedAt: now.toISOString(), rich }, 200);
   };
 }
 
@@ -332,39 +316,6 @@ export function telegramBotViewHandler(
     );
     if (was === null) apiFail(403, 'forbidden', 'Не администратор платформы');
     return c.json({ rich }, 200);
-  };
-}
-
-export const telegramBotTopicsRoute = createRoute({
-  method: 'put',
-  path: '/admin/telegram/bot/topics',
-  tags: ['admin'],
-  summary: 'Бот платформы: «Темы в чате с ботом» — включить или выключить для всех',
-  middleware: [requirePlatformAdmin] as const,
-  request: { body: { required: true, content: json(AdminTelegramBotTopics) } },
-  responses: {
-    200: { description: 'Сохранено', content: json(AdminTelegramBotTopics) },
-    400: { description: 'Неверные данные', content: error },
-    ...denied,
-  },
-});
-
-/**
- * «Темы в чате с ботом» (поток Т, задача Т7; прототип v104 admin/telegram.js `#tg-topics`): включено —
- * бот раскладывает сообщения по темам «Отчёты», «Задачи», «Заявки», «Безопасность» (в чате нескольких
- * организаций — по темам организаций); темы у бота не включены в @BotFather — бот пишет без тем. Запись
- * — в историю платформы.
- */
-export function telegramBotTopicsHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof telegramBotTopicsRoute, AppEnv> {
-  return async (c) => {
-    const { topics } = c.req.valid('json');
-    const was = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      adminSetTelegramBotTopics(tx, topics),
-    );
-    if (was === null) apiFail(403, 'forbidden', 'Не администратор платформы');
-    return c.json({ topics }, 200);
   };
 }
 

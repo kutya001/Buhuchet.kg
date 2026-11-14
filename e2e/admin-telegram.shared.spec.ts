@@ -260,7 +260,7 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await expect(dialog).toHaveCount(0);
   });
 
-  test('(пакет заказчика 13.11.2026) «Вид сообщений и кнопки»: примеры сообщений с кодом и таблицей; таблицы выключены — «Проверить бота» приходит простым текстом с кнопкой, включены — снова таблицей; «Темы в чате с ботом» включаются и выключаются, видно состояние тем в @BotFather', async ({
+  test('(пакет заказчика 13.11.2026) «Вид сообщений и кнопки»: примеры сообщений с кодом и таблицей; таблицы выключены — «Проверить бота» приходит простым текстом с кнопкой, включены — снова таблицей; «Темы в чате с ботом» убраны', async ({
     page,
     baseURL,
     playwright,
@@ -352,33 +352,15 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
       const tables = await testBot();
       expect(tables.html).toContain('<table');
 
-      // «Темы в чате с ботом» (задача Т7): по умолчанию выключено; темы у бота в @BotFather — по
-      // ответу Telegram (подставной бот: включены). Включили и выключили — подсказка и запись сразу.
-      const topics = view.locator('[data-tg-topics]').getByRole('switch');
-      await expect(topics).not.toBeChecked();
-      await expect(view).toContainText('Сначала включите темы для бота в @BotFather');
-      await expect(view).toContainText('Темы в @BotFather');
-      await expect(view).toContainText('Включены');
-      await topics.click();
-      await expect(
-        page.getByRole('status').filter({ hasText: 'Бот раскладывает сообщения по темам' }),
-      ).toBeVisible();
-      await page.reload();
-      await expect(topics).toBeChecked();
-      await topics.click();
-      await expect(page.getByRole('status').filter({ hasText: 'Бот пишет без тем' })).toBeVisible();
-      await expect(topics).not.toBeChecked();
+      // «Темы в чате с ботом» убраны по решению заказчика 14.11.2026 (прототип v109): переключателя нет.
+      await expect(view.locator('[data-tg-topics]')).toHaveCount(0);
+      await expect(view).not.toContainText('Темы в чате с ботом');
     } finally {
       const back = await page.request.put('/api/admin/telegram/bot/view', {
         headers: { origin },
         data: { rich: true },
       });
       expect(back.status(), await back.text()).toBe(200);
-      const noTopics = await page.request.put('/api/admin/telegram/bot/topics', {
-        headers: { origin },
-        data: { topics: false },
-      });
-      expect(noTopics.status(), await noTopics.text()).toBe(200);
       await staff.dispose();
     }
   });

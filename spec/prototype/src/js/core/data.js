@@ -394,15 +394,19 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // Поток Т, задача Т6 (пакет заказчика 13.11.2026, идеи 14 и 15): заявка с сайта в Telegram с кнопками и кнопки оформленной рассылки
   if(!db.meta.tgT6){db.meta.tgT6=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgLeadHead', 'tgLeadRepHead', 'tgBtnLeadWork', 'tgBtnLeadNo', 'tgBtnLeadOpen', 'tgActLeadWork', 'tgLeadAskWhy', 'tgLeadRefused', 'tgBtnMore', 'tgBtnVideo'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n){ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});['tgLead','tgLeadRep'].forEach(k=>{if(rn[k]!=null)n[k]=rn[k]})}}
-  // Поток Т, задача Т7 (пакет заказчика 13.11.2026, идея 6): названия тем чата с ботом
-  if(!db.meta.tgT7){db.meta.tgT7=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgTopicReports','tgTopicTasks','tgTopicLeads','tgTopicSecurity'];
-    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // Поток Т, задача Т8 (пакет заказчика 13.11.2026, идея 11): общий чат фирмы — сводка дня и «Мои»
   if(!db.meta.tgT8){db.meta.tgT8=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgGrpLinked','tgGrpLinkBad','tgGrpOff','tgGrpHead','tgGrpSub','tgBtnGrpMine','tgGrpMineHead','tgGrpMineNone','tgGrpMineToast','tgGrpNoLink'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // Поток Т, задача Т9 (пакет заказчика 13.11.2026, идея 5): виджет «Мои отчёты на неделю»
   if(!db.meta.tgT9){db.meta.tgT9=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCmdWidget','tgWgCaption','tgWgHead','tgWgUpd','tgWgOver','tgWgNone','tgWgMore','tgWgDone','tgWgFile','tgWgOld','tgBtnWgRefresh'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Справочник «БИК банков» (решение заказчика 14.11.2026): у данных, сохранённых раньше, справочник и «Код банка в БИК» у провайдеров берутся из refDB.json, вкладка — в группе «Органы и банки»
+  if(!db.meta.bik1){db.meta.bik1=1;const dd=db.ref.dictionaries,rd=r.dictionaries||{};if(dd&&rd.bik&&!dd.bik)dd.bik=structuredClone(rd.bik);
+    if(dd&&dd.banks&&rd.banks)dd.banks.items.forEach(x=>{const f=rd.banks.items.find(y=>y.code===x.code);if(f&&f.bikCode&&x.bikCode==null)x.bikCode=f.bikCode});
+    const g=(db.ref.dictGroups||[]).find(x=>x.group==='Органы и банки'),fg=(r.dictGroups||[]).find(x=>x.group==='Органы и банки'),ft=fg&&fg.tabs.find(x=>x.tab==='БИК банков');
+    if(g&&ft&&!g.tabs.some(x=>x.tab==='БИК банков')){const i=g.tabs.findIndex(x=>x.tab==='Банки');g.tabs.splice(i<0?g.tabs.length:i+1,0,structuredClone(ft))}}
+  // Темы в чате с ботом убраны (v109, решение заказчика 14.11.2026): названия тем — из сохранённых шаблонов
+  if(!db.meta.tgT7off){db.meta.tgT7off=1;['tgTopicReports','tgTopicTasks','tgTopicLeads','tgTopicSecurity'].forEach(k=>{if(db.ref.messageTemplates)delete db.ref.messageTemplates[k];if(db.ref.templateNotes)delete db.ref.templateNotes[k]})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

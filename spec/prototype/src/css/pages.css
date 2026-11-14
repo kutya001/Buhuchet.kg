@@ -258,3 +258,11 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
 .bn-list{display:flex;flex-direction:column;gap:6px}.bn-list:empty{display:none}
 .bn-row{display:grid;grid-template-columns:minmax(0,1fr) 150px 30px;gap:8px;align-items:center}
 @media (max-width:767px){.act-nav{width:100%;justify-content:space-between}.act-nav b{min-width:0}.act-note{display:none}.act-ch{height:120px;gap:1px}.bn-row{grid-template-columns:minmax(0,1fr) 110px 30px}}
+
+/* Расчётный счёт: банк и филиал по БИК */
+.bik-info{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:13px;line-height:1.45;color:var(--muted)}.bik-info>.ic{flex:none}.bik-info .hint{flex-basis:100%}
+.bik-dd{margin-top:4px;border:1px solid var(--border);border-radius:var(--r-s);background:var(--pane);max-height:300px;overflow:auto;padding:4px;box-shadow:0 6px 20px rgba(0,0,0,.08)}
+.bik-it{display:flex;align-items:center;gap:10px;width:100%;padding:7px 8px;border:0;background:none;color:var(--text);text-align:left;border-radius:var(--r-s);cursor:pointer;font:inherit}
+.bik-it:hover,.bik-it.on{background:var(--hover)}.bik-it .bik-c{flex:none;width:58px;font-size:13px;color:var(--muted)}
+.bik-it .bik-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.bik-it .bik-t b{font-weight:600;font-size:13px}.bik-it .bik-t small{font-size:12px;color:var(--muted)}
+.bik-more{padding:8px;font-size:12px;color:var(--muted)}

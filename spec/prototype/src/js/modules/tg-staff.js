@@ -93,7 +93,7 @@ function tgFixMsg(r,at){return {t:tplFill('tgFix',{отчёт:tgRepFull(r),пр�
 
 // Чат сотрудника в макете: что бот прислал бы ему сегодня. В макете в него попадают все его несданные отчёты со сроком в ближайшие дни напоминания, все ждущие подтверждения и все новые задачи —
 // чтобы было что нажать; в продукте напоминание приходит в свои дни (за N дней, в день срока, при просрочке), о задаче — когда её поставили, о подтверждении — когда сдача ждёт дольше заданного
-function tgStaffList(u){const L=[{day:'Сегодня'}],put=(k,m)=>L.push(tgIn(k,m)),list=rs=>rs.map(r=>`${tgRepName(r)} — ${CPM[r.cp].name}`).join(', ');
+function tgStaffList(u){const L=[{day:'Сегодня'}],list=rs=>rs.map(r=>`${tgRepName(r)} — ${CPM[r.cp].name}`).join(', ');
   if(feat('telegram')){
     const days=r=>{const o=ORG.types[r.t];return Math.max(0,...((o&&o.days)||ORG.remind||[]))};
     const mine=visReports().filter(r=>r.resp===u.id&&tgRepOpen(r)&&!CPM[r.cp].archived&&diffDays(r.due,TODAY)<=days(r)).sort((a,b)=>a.due<b.due?-1:a.due>b.due?1:a.id-b.id);
@@ -103,21 +103,21 @@ function tgStaffList(u){const L=[{day:'Сегодня'}],put=(k,m)=>L.push(tgIn(
     if(mine.length||pay.length){const by={},pby={};bf.forEach(r=>{const d=diffDays(r.due,TODAY);(by[d]=by[d]||[]).push(r)});pay.forEach(r=>{const d=diffDays(r.payDue,TODAY);(pby[d]=pby[d]||[]).push(r)});
       // Утреннее напоминание — таблицей с разделами (tgMornMsg); простой текст — прежние строки
       const plain=[ov.length?tplFill('tgOver',{список:list(ov)}):'',td.length?tplFill('tgToday',{список:list(td)}):'',...Object.keys(by).map(d=>tplFill('tgBefore',{дней:d,список:list(by[d])})),...Object.keys(pby).map(d=>tplFill('tgPay',{дней:d,список:list(pby[d])}))].filter(Boolean).join('\n');
-      put('rep',tgMornMsg({ov,td,by,pay,plain},'08:00'));
-      mine.slice(0,TG_BTN_MAX).forEach(r=>put('rep',tgRepMsg(r,'08:00')));
-      if(mine.length>TG_BTN_MAX)put('rep',{t:tplFill('tgMoreOnSite',{n:TG_BTN_MAX,ещё:mine.length-TG_BTN_MAX}),at:'08:00',btns:[[{t:tgBtnT('tgBtnOpenReports','Открыть отчёты на сайте'),url:`${TG_SITE}/reports/all`}]]})}
+      L.push(tgMornMsg({ov,td,by,pay,plain},'08:00'));
+      mine.slice(0,TG_BTN_MAX).forEach(r=>L.push(tgRepMsg(r,'08:00')));
+      if(mine.length>TG_BTN_MAX)L.push({t:tplFill('tgMoreOnSite',{n:TG_BTN_MAX,ещё:mine.length-TG_BTN_MAX}),at:'08:00',btns:[[{t:tgBtnT('tgBtnOpenReports','Открыть отчёты на сайте'),url:`${TG_SITE}/reports/all`}]]})}
     const fx=visReports().filter(r=>r.resp===u.id&&r.status==='Требует исправления'&&r.fixWhy&&r.fixBy!==u.id&&(r.fixAt||'').slice(0,10)===TODAY&&!mine.slice(0,TG_BTN_MAX).includes(r));
-    fx.forEach(r=>put('rep',tgFixMsg(r,(r.fixAt||'').slice(11)||'08:00')));
+    fx.forEach(r=>L.push(tgFixMsg(r,(r.fixAt||'').slice(11)||'08:00')));
     if(can('repConfirm')){const w=repWaitList().filter(r=>!tgConfOwn(r)&&!CPM[r.cp].archived).sort((a,b)=>(a.subAt||'')<(b.subAt||'')?-1:1);
-      if(w.length){put('rep',{t:tplFill('tgConfHead',{n:w.length}),at:'08:00'});w.slice(0,TG_BTN_MAX).forEach(r=>put('rep',tgConfMsg(r,'08:00')));
-        if(w.length>TG_BTN_MAX)put('rep',{t:tplFill('tgMoreOnSite',{n:TG_BTN_MAX,ещё:w.length-TG_BTN_MAX}),at:'08:00',btns:[[{t:tgBtnT('tgBtnOpenReports','Открыть отчёты на сайте'),url:`${TG_SITE}/reports/wait`}]]})}}}
+      if(w.length){L.push({t:tplFill('tgConfHead',{n:w.length}),at:'08:00'});w.slice(0,TG_BTN_MAX).forEach(r=>L.push(tgConfMsg(r,'08:00')));
+        if(w.length>TG_BTN_MAX)L.push({t:tplFill('tgMoreOnSite',{n:TG_BTN_MAX,ещё:w.length-TG_BTN_MAX}),at:'08:00',btns:[[{t:tgBtnT('tgBtnOpenReports','Открыть отчёты на сайте'),url:`${TG_SITE}/reports/wait`}]]})}}}
   // Сводка недели руководителю: в продукте — по понедельникам, в макете — всегда, чтобы было что открыть (задача Т3)
-  if(feat('telegram')&&tgIsBoss(u)&&tgNotifyOn(u,'week')){const w=tgWeekMsg(u,'08:00');if(w)put('rep',w)}
+  if(feat('telegram')&&tgIsBoss(u)&&tgNotifyOn(u,'week')){const w=tgWeekMsg(u,'08:00');if(w)L.push(w)}
   // «Напомнить» от руководителя: сотрудник видит своё просроченное списком
-  if(feat('telegram')&&u.nudge&&u.nudge.day===TODAY&&tgOverOf(u.id).length)put('rep',tgNudgeMsg(u,u.nudge.at||'09:00'));
-  if(feat('tasks'))TASKS.filter(t=>t.exec===u.id&&t.status==='К выполнению').slice(0,5).forEach(t=>put('task',tgTaskMsg(t,(t._ca||'').slice(0,10)===TODAY?(t._ca||'').slice(11):'09:00')));
+  if(feat('telegram')&&u.nudge&&u.nudge.day===TODAY&&tgOverOf(u.id).length)L.push(tgNudgeMsg(u,u.nudge.at||'09:00'));
+  if(feat('tasks'))TASKS.filter(t=>t.exec===u.id&&t.status==='К выполнению').slice(0,5).forEach(t=>L.push(tgTaskMsg(t,(t._ca||'').slice(0,10)===TODAY?(t._ca||'').slice(11):'09:00')));
   // Сообщения о безопасности с кнопкой «Это не я» (задача Т4): приходят всегда, их нельзя отключить
-  tgSecOf(u,u.tg).forEach(m=>put('sec',m));
+  tgSecOf(u,u.tg).forEach(m=>L.push(m));
   return L}
 function tgStaffDlg(){const u=me(),L=tgStaffList(u);
   tgBotDlg(u,L,{live:true,menu:true,title:'Прототип: чат с ботом',sub:L.length>1?'Утреннее напоминание и сводка недели — таблицами; отчёты, задачи и подтверждение сдачи — кнопками; внизу — меню команд':'Сегодня бот ничего не прислал: срочных отчётов и новых задач нет. Внизу — меню команд',

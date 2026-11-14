@@ -92,8 +92,16 @@ const DX={
     upd:(x,v)=>{const nk=v.kind||x.kind,nr=v.rule||(/^\d\d-\d\d$/.test(x.key)?'Каждый год':'Только в этом году');if(x.kind==='Рабочая суббота')WORK_SAT.delete(x.d);else delete HOLIDAYS[x.key];DX.calendar.add(Object.assign({d:x.d,name:x.name},v,{kind:nk,rule:nr}))},
     add:v=>{if(v.kind==='Рабочая суббота')WORK_SAT.add(v.d);else HOLIDAYS[v.rule==='Каждый год'?v.d.slice(5):v.d]=v.kind==='Перенос'&&!/^Перенос/.test(v.name)?'Перенос: '+v.name:v.name}}};
 
-const VX={forms:[['full','Полное название',x=>x.full||'',v=>v],['short','Кратко',x=>x.short||'',v=>v],['end','Для ЕНД',x=>END_L[x.end]||'',v=>{const e=Object.keys(END_L).find(k=>norm(END_L[k])===norm(v));return e||(v?{err:'«Для ЕНД»: Организация или ИП'}:'org')}]],banks:[['type','Тип',x=>x.type||'Банк',v=>BANK_T.find(t=>norm(t)===norm(v))||{err:'тип: Банк или Электронный кошелёк'}],['byPhone','Переводы по номеру',x=>YN(x.byPhone),v=>{const b=parseYN(v);return b===undefined?{err:'«Переводы по номеру»: да или нет'}:b===true}],['note','Пояснение',x=>x.note||'',v=>v]]};
+const VX={forms:[['full','Полное название',x=>x.full||'',v=>v],['short','Кратко',x=>x.short||'',v=>v],['end','Для ЕНД',x=>END_L[x.end]||'',v=>{const e=Object.keys(END_L).find(k=>norm(END_L[k])===norm(v));return e||(v?{err:'«Для ЕНД»: Организация или ИП'}:'org')}]],banks:[['type','Тип',x=>x.type||'Банк',v=>BANK_T.find(t=>norm(t)===norm(v))||{err:'тип: Банк или Электронный кошелёк'}],['bikCode','Код банка в БИК',x=>x.bikCode||'',v=>{v=String(v||'').trim();return !v||/^\d{3}$/.test(v)?v:{err:'код банка в БИК — 3 цифры или пусто'}}],['byPhone','Переводы по номеру',x=>YN(x.byPhone),v=>{const b=parseYN(v);return b===undefined?{err:'«Переводы по номеру»: да или нет'}:b===true}],['note','Пояснение',x=>x.note||'',v=>v]]};
 ['forms','organs','banks','cats','reasons'].forEach(k=>DX[k].cols=[['code','Код',x=>x.code,v=>v],['name','Название',x=>x.name,v=>v||{err:'нет названия'}],...(VX[k]||[]),['active','Активно',x=>YN(x.active),v=>{const b=parseYN(v);return b===undefined?{err:'«Активно»: да или нет'}:b!==false}]]);
+DX.bik={title:'БИК банков',key:'bik',loose:true,items:()=>DICT.bik.items,cols:[
+  ['bik','БИК',x=>x.bik,v=>{v=String(v||'').trim();return !v?'':/^\d{6}$/.test(v)?v:{err:'БИК — 6 цифр'}}],['swift','БИК SWIFT',x=>x.swift||'',v=>String(v||'').trim().toUpperCase()],
+  ['type','Тип участника',x=>x.type||'',v=>{v=String(v||'').trim();return BIK_T_N[v]||BIK_T.find(t=>norm(t)===norm(v))||{err:'тип участника: НБКР, Банк, Филиал банка, ЦК КР, Нерезидент или код 1, 2, 3, 4, 7'}}],
+  ['name','Наименование',x=>x.name,v=>v||{err:'нет наименования'}],['addr','Адрес',x=>x.addr||'',v=>v],
+  ['status','Статус',x=>x.status||'',v=>{v=String(v||'').trim();return !v?'':BIK_ST_N[v]||BIK_ST.find(t=>norm(t)===norm(v))||{err:'статус: Активный, Введены ограничения, Приостановлен, Закрыт или код 1, 2, 3, 0'}}],
+  ['succ','БИК преемника',x=>x.succ||'',v=>{v=String(v||'').trim();return !v||/^\d{6}$/.test(v)?v:{err:'БИК преемника — 6 цифр'}}],
+  ['bank','Банк',x=>(bikProv(x)||{}).name||'',v=>{v=String(v||'').trim();if(!v)return '';const b=DICT.banks.items.find(y=>norm(y.name)===norm(v)||y.code===v);return b?b.code:{err:`банка «${v}» нет в «Банковских провайдерах»`}}]],
+  check:x=>x.succ&&x.succ===x.bik?'БИК преемника совпадает с самим БИК':'',add:v=>d_bikAdd(v)};
 const PD_LOADS=DB.ref.dictLoads;
 const AUD_L={biz:'Организациям',adm:'Администраторам платформы',all:'Всем'};
 const ynIn=l=>v=>{const b=parseYN(v);return b===undefined?{err:`«${l}»: да или нет`}:b!==false};
@@ -164,20 +172,22 @@ function exportDlg(k){const d=DX[k];const txt=dxText(k);
 // Справочник на момент «Сравнить»: если до «Применить» его изменили, загрузка ничего не записывает (решение заказчика 30.10.2026)
 const dxFp=d=>JSON.stringify(d.items());
 function importDictDlg(k){const d=DX[k];const st={text:'',diff:null};
-  const compare=()=>{const first=st.text.split(/\r?\n/).find(l=>l.trim())||'';const dl=first.includes('\t')?'\t':';';const lines=dxRows(st.text,dl);if(lines.length<2){st.diff={fatal:'Нужна строка заголовков и хотя бы одна строка данных'};return}
-    const head=lines[0].map(h=>norm(h.trim()));const idx=d.cols.map(c=>head.indexOf(norm(c[1])));
+  const compare=()=>{const top=st.text.split(/\r?\n/).filter(l=>l.trim()).slice(0,10);const dl=top.some(l=>l.includes('\t'))?'\t':';';const lines=dxRows(st.text,dl);if(lines.length<2){st.diff={fatal:'Нужна строка заголовков и хотя бы одна строка данных'};return}
+    const hn=h=>norm(String(h).trim().replace(/\*+$/,''));let hi=lines.slice(0,10).findIndex(l=>l.some(h=>hn(h)===norm(d.cols[0][1])));if(hi<0)hi=0;const H=lines.splice(0,hi+1).pop();lines.unshift(H);
+    const head=H.map(hn);const idx=d.cols.map(c=>head.indexOf(norm(c[1])));
     if(idx[0]<0){st.diff={fatal:`Нет колонки «${d.cols[0][1]}»: без кода строки не сопоставить`};return}
     const seen=new Set();const out={add:[],chg:[],off:[],same:0,err:[],rows:lines.length-1};
     lines.slice(1).forEach((l,li)=>{const cells=l.map(x=>x.trim());const v={},e=[];
+      if(d.loose&&!/\d/.test(cells[idx[0]]||'')){out.skip=(out.skip||0)+1;return}
       d.cols.forEach((c,ci)=>{if(idx[ci]<0)return;const r=c[3](cells[idx[ci]]??'');if(r&&typeof r==='object'&&r.err)e.push(r.err);else v[c[0]]=r});
-      const code=v[d.cols[0][0]];if(!code)e.push('нет кода');else if(seen.has(code))e.push('код повторяется в файле');seen.add(code);
+      const code=v[d.cols[0][0]];if(d.loose&&!e.length&&(!code||seen.has(code))){out.skip=(out.skip||0)+1;return}if(!code)e.push('нет кода');else if(seen.has(code))e.push('код повторяется в файле');seen.add(code);
       if(d.check&&!e.length){const base=d.items().find(i=>i[d.key]===code)||{};const nv=Object.assign({},base);Object.keys(v).forEach(f=>{if(v[f]!=null)nv[f]=v[f]});const ce=d.check(nv);if(ce)e.push(ce)}
-      if(e.length){out.err.push({n:li+2,code:code||'—',e});return}
+      if(e.length){out.err.push({n:li+2+hi,code:code||'—',e});return}
       const x=d.items().find(i=>i[d.key]===code);
-      if(!x){if(k==='types'&&!/^[a-z0-9_]+$/i.test(code)){out.err.push({n:li+2,code,e:['код вида — латиница и цифры']});return}out.add.push({code,v});return}
+      if(!x){if(d.loose&&!v.status)v.status='Активный';if(k==='types'&&!/^[a-z0-9_]+$/i.test(code)){out.err.push({n:li+2+hi,code,e:['код вида — латиница и цифры']});return}out.add.push({code,v});return}
       const ch=[];d.cols.forEach((c,ci)=>{if(idx[ci]<0||ci===0)return;const nx=Object.assign({},x,v);if(c[0]==='after'||c[0]==='ym'){if((v.per||x.per)==='Y'?c[0]==='after':c[0]==='ym')return}const a=String(c[2](x)??''),b=String(c[2](nx)??'');if(a!==b)ch.push([c[1],a,b])});
       if(!ch.length){out.same++;return}
-      const off=x.active&&v.active===false;(off?out.off:out.chg).push({code,x,v,ch})});
+      const off=d.loose?x.status!=='Закрыт'&&v.status==='Закрыт':x.active&&v.active===false;(off?out.off:out.chg).push({code,x,v,ch})});
     // Сколько сроков пересчитается после загрузки — заранее, так же как при сохранении (продукт пп. Д-17, Д-18)
     const DF={types:['per','day','after','ym','from','shift'],benefits:['dueOverride','active']}[k],pk=(v,fs)=>Object.fromEntries(fs.filter(f=>v[f]!=null).map(f=>[f,v[f]]));
     if(DF)out.dues=duePreview(()=>tmpAll([...out.chg,...out.off].map(r=>tmpSet(r.x,pk(r.v,DF)))));
@@ -187,16 +197,17 @@ function importDictDlg(k){const d=DX[k];const st={text:'',diff:null};
     st.diff=out};
   openModal({size:'wide',live:true,render:m=>{const df=st.diff;const ok=df&&!df.fatal;const n=ok?df.add.length+df.chg.length+df.off.length:0;
     const row=(cls,lbl,r,txt)=>`<tr><td><span class="pill sm ${cls}">${lbl}</span></td><td class="mono">${esc(r.code)}</td><td style="white-space:normal">${txt}</td></tr>`;
-    return {title:`Загрузка: ${esc(d.title)}`,sub:'Вставьте строки из Excel или выберите файл в формате выгрузки',body:!df||df.fatal?`${fld('Данные',`<textarea class="inp mono" id="id-ta" style="min-height:220px;font-size:12px" placeholder="Вставьте строки с заголовками (Ctrl+V)">${esc(st.text)}</textarea>`,{full:true,id:'id-ta',hint:df&&df.fatal?'':`Колонки: ${d.cols.map(c=>c[1]).join(', ')}. Удаление через загрузку не делается — чтобы убрать значение, поставьте «Нет» в колонке «${d.cols[d.cols.length-1][1]}».`})}
+    return {title:`Загрузка: ${esc(d.title)}`,sub:'Вставьте строки из Excel или выберите файл в формате выгрузки',body:!df||df.fatal?`${fld('Данные',`<textarea class="inp mono" id="id-ta" style="min-height:220px;font-size:12px" placeholder="Вставьте строки с заголовками (Ctrl+V)">${esc(st.text)}</textarea>`,{full:true,id:'id-ta',hint:df&&df.fatal?'':`Колонки: ${d.cols.map(c=>c[1]).join(', ')}. ${d.loose?'Подходит выгрузка НБКР как есть: строка заголовков ищется сама, тип участника и статус — словами или кодами НБКР, строки без БИК и повтор БИК пропускаются. БИК через загрузку не удаляется — закрытому ставится статус «Закрыт».':`Удаление через загрузку не делается — чтобы убрать значение, поставьте «Нет» в колонке «${d.cols[d.cols.length-1][1]}».`}`})}
       <div class="row"><label class="btn sm" style="cursor:pointer">${ic('upload','sm')}Файл Excel/CSV<input type="file" id="id-f" accept=".csv,.tsv,.txt" hidden></label><button class="linkbtn" id="id-cur">Подставить текущую выгрузку</button></div>`
-      :`<div class="plates">${plate({id:'a',icon:'plus',color:'green',label:'Будет добавлено',value:df.add.length})}${plate({id:'c',icon:'edit',color:'blue',label:'Будет изменено',value:df.chg.length})}${plate({id:'o',icon:'ban',color:'orange',label:'Будет отключено',value:df.off.length})}${plate({id:'e',icon:'alert',color:df.err.length?'red':'green',label:'Строк с ошибками',value:df.err.length,sub:df.err.length?'не загрузятся':'ошибок нет'})}</div>
+      :`<div class="plates">${plate({id:'a',icon:'plus',color:'green',label:'Будет добавлено',value:df.add.length})}${plate({id:'c',icon:'edit',color:'blue',label:'Будет изменено',value:df.chg.length})}${plate({id:'o',icon:'ban',color:'orange',label:d.loose?'Будет закрыто':'Будет отключено',value:df.off.length})}${plate({id:'e',icon:'alert',color:df.err.length?'red':'green',label:'Строк с ошибками',value:df.err.length,sub:df.err.length?'не загрузятся':'ошибок нет'})}</div>
+      ${df.skip?`<div class="note">${ic('info')}<span>Пропущено строк без БИК или с повтором БИК: ${df.skip}.</span></div>`:''}
       ${df.actR?`<div class="note">${ic('info')}<span>«Что нужно сделать» меняется у ${df.actT} ${plural(df.actT,'вида','видов','видов')}: по ${df.actT>1?'ним':'нему'} уже создано ${df.actR} ${plural(df.actR,'отчёт','отчёта','отчётов')}, они не изменятся. Новое значение действует для новых периодов.</span></div>`:''}
       ${df.dues!=null?`<div class="note warn" id="id-due">${ic('alert')}<span>${dueNote(df.dues)}</span></div>`:''}
       <div class="tbl-wrap" style="max-height:340px;overflow:auto"><table class="mini"><thead><tr><th style="width:130px">Что будет</th><th style="width:110px">Код</th><th>Подробно</th></tr></thead><tbody>
       ${df.err.map(r=>`<tr><td><span class="pill sm red">${ic('alert')}ошибка</span></td><td class="mono">${esc(r.code)}</td><td style="white-space:normal">Строка ${r.n}: ${esc(r.e.join('; '))}</td></tr>`).join('')}
       ${df.add.map(r=>row('green','добавится',r,esc(r.v.name||''))).join('')}
       ${df.chg.map(r=>row('blue','изменится',r,r.ch.map(([l,a,b])=>`${esc(l)}: <s class="faint">${esc(a)||'пусто'}</s> → <b>${esc(b)||'пусто'}</b>`).join('<br>'))).join('')}
-      ${df.off.map(r=>row('orange','отключится',r,esc(r.x.name)+(r.ch.length>1?'<br>'+r.ch.filter(c=>c[0]!==d.cols[d.cols.length-1][1]).map(([l,a,b])=>`${esc(l)}: ${esc(a)} → <b>${esc(b)}</b>`).join('<br>'):''))).join('')}
+      ${df.off.map(r=>row('orange',d.loose?'закроется':'отключится',r,esc(r.x.name)+(r.ch.length>1?'<br>'+r.ch.filter(c=>c[0]!==d.cols[d.cols.length-1][1]).map(([l,a,b])=>`${esc(l)}: ${esc(a)} → <b>${esc(b)}</b>`).join('<br>'):''))).join('')}
       ${!n&&!df.err.length?`<tr><td colspan="3" class="faint">Отличий нет: ${df.same} ${plural(df.same,'строка совпадает','строки совпадают','строк совпадают')} со справочником.</td></tr>`:''}
       </tbody></table></div><div class="hint">Без изменений: ${df.same}. Значения, которых нет в файле, остаются как есть — удаление через загрузку не делается.</div>`,
     foot:!df||df.fatal?`${df&&df.fatal?`<span class="red">${ic('alert','sm')} ${esc(df.fatal)}</span>`:''}<div class="grow"></div><button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="id-cmp">Сравнить</button>`:`<button class="btn ghost" id="id-back">${ic('left','sm')}Изменить данные</button><div class="grow"></div><button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="id-ok" ${n?'':'disabled'}>ОК, применить ${n||''}</button>`,
