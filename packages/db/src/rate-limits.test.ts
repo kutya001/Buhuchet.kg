@@ -1,11 +1,17 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
-import { QUERY_TIMEOUT_MS, withOrgContext, type QueryKind } from './context';
+import { createDb } from './client';
+import {
+  IDLE_IN_TRANSACTION_TIMEOUT_MS,
+  QUERY_TIMEOUT_MS,
+  withOrgContext,
+  type QueryKind,
+} from './context';
 import { queryTimedOut } from './errors';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { cleanupRateLimits, releaseRateLimit, takeRateLimit, type RateLimit } from './rate-limits';
-import { rateLimits } from './schema';
+import { organizations, rateLimits } from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
@@ -91,6 +97,109 @@ describe.skipIf(!databaseAvailable())('защита тяжёлых запрос�
       expect(queryTimedOut(new Error('другая ошибка'))).toBe(false);
       expect(queryTimedOut({ cause: { code: '23505' } })).toBe(false);
     });
+  });
+
+  describe('предел простоя открытой транзакции', () => {
+    const idle = sql`select current_setting('idle_in_transaction_session_timeout') as v`;
+
+    it.each<[QueryKind | undefined, string]>([
+      [undefined, '30s'],
+      ['request', '30s'],
+      ['export', '1min'],
+      ['job', '4min'],
+    ])('withOrgContext с видом работы %s — %s', async (kind, shown) => {
+      const ms = IDLE_IN_TRANSACTION_TIMEOUT_MS[kind ?? 'request'];
+      expect(ms % 60_000 === 0 ? `${ms / 60_000}min` : `${ms / 1000}s`).toBe(shown);
+      const value = await withOrgContext(
+        t.app.db,
+        { orgId: a.orgId, userId: a.ownerUserId, ...(kind ? { kind } : {}) },
+        async (tx) => (await tx.execute<{ v: string }>(idle))[0]!.v,
+      );
+      expect(value).toBe(shown);
+    });
+
+    it('withUserContext ставит тот же предел, после транзакции на том же соединении — прежнее значение', async () => {
+      // Одно соединение: значение до и после транзакции читается там же, где шла транзакция.
+      const one = createDb(t.appUrl, { max: 1, applicationName: 'buhuchet-test-idle' });
+      try {
+        const outside = async () => (await one.db.execute<{ v: string }>(idle))[0]!.v;
+        const before = await outside();
+        const read = (kind?: QueryKind) =>
+          withUserContext(
+            one.db,
+            a.ownerUserId,
+            async (tx) => (await tx.execute<{ v: string }>(idle))[0]!.v,
+            kind,
+          );
+        expect(await read()).toBe('30s');
+        expect(await outside()).toBe(before);
+        expect(await read('job')).toBe('4min');
+        expect(await outside()).toBe(before);
+      } finally {
+        await one.close();
+      }
+    });
+
+    /** Код ошибки по цепочке `cause`: drizzle оборачивает ошибку postgres.js. */
+    const codeOf = (e: unknown): string | undefined => {
+      for (let x = e as { code?: unknown; cause?: unknown } | undefined; x;) {
+        if (typeof x.code === 'string') return x.code;
+        x = x.cause as typeof x | undefined;
+      }
+      return undefined;
+    };
+    // База обрывает простой (25P03) и закрывает соединение; postgres.js может сообщить и о закрытии.
+    const ABORTED = ['25P03', 'CONNECTION_CLOSED', 'CONNECTION_ENDED', 'CONNECTION_DESTROYED'];
+    const orgName = async () =>
+      (
+        await t.admin.db
+          .select({ name: organizations.name })
+          .from(organizations)
+          .where(eq(organizations.id, a.orgId))
+      )[0]!.name;
+
+    it('транзакция, простоявшая дольше предела, обрывается целиком, а пул работает дальше', async () => {
+      const name = await orgName();
+      const error = await withOrgContext(t.app.db, { orgId: a.orgId }, async (tx) => {
+        await tx.execute(sql`set local idle_in_transaction_session_timeout = 200`);
+        await tx
+          .update(organizations)
+          .set({ name: `${name} — не сохранится` })
+          .where(eq(organizations.id, a.orgId));
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await tx.execute(sql`select 1`);
+        return 'не оборвалась';
+      }).catch((e: unknown) => e);
+      expect(ABORTED).toContain(codeOf(error));
+      // Правка до простоя откатилась вместе с транзакцией.
+      expect(await orgName()).toBe(name);
+      // Соединение оборванной транзакции закрыто базой — пул открывает новое.
+      const rows = await Promise.all([
+        t.app.db.execute<{ n: number }>(sql`select 1 as n`),
+        t.app.db.execute<{ n: number }>(sql`select 2 as n`),
+        withOrgContext(t.app.db, { orgId: a.orgId }, async (tx) =>
+          tx.execute<{ n: number }>(sql`select 3 as n`),
+        ),
+      ]);
+      expect(rows.map((r) => r[0]!.n)).toEqual([1, 2, 3]);
+    });
+
+    it('запрос к пулу изнутри транзакции, занявшей весь пул, не вешает сайт навсегда (п. О-46)', async () => {
+      // Пул из одного соединения: транзакция заняла его и ждёт второе — без предела простоя это навсегда.
+      const one = createDb(t.appUrl, { max: 1, applicationName: 'buhuchet-test-idle' });
+      try {
+        const error = await withOrgContext(one.db, { orgId: a.orgId }, async (tx) => {
+          await tx.execute(sql`set local idle_in_transaction_session_timeout = 300`);
+          await one.db.execute(sql`select 1`);
+          return 'дождалась';
+        }).catch((e: unknown) => e);
+        expect(ABORTED).toContain(codeOf(error));
+        // Пул снова отвечает.
+        expect((await one.db.execute<{ n: number }>(sql`select 4 as n`))[0]!.n).toBe(4);
+      } finally {
+        await one.close();
+      }
+    }, 15_000);
   });
 
   describe('частота действий', () => {
