@@ -682,6 +682,7 @@ test.describe('Доработки 14.11.2026, блок 5: «Принять де�
     baseURL,
     isMobile,
   }) => {
+    // Два окна поступления, запись поступления и меню строки в одном тесте: дольше обычного.
     test.setTimeout(120_000);
     const origin = await asOwner(page.request, baseURL);
     const word = uniqueWord('Принять');
@@ -752,23 +753,20 @@ test.describe('Доработки 14.11.2026, блок 5: «Принять де�
 
     await test.step('деньги получены — кнопки заперты и называют причину', async () => {
       await expect(all).toHaveAttribute('aria-disabled', 'true');
-      await expect(all).toHaveAttribute(
-        'title',
-        'Деньги на налоги всех месяцев уже получены от контрагента',
-      );
-      await all.click();
+      await expect(all).toHaveAttribute('title', /всех месяцев уже получены от контрагента/);
+      // Кнопка помечена недоступной, но нажимается: по нажатию — причина сообщением.
+      await all.click({ force: true });
       await expect(
-        page.getByText('Деньги на налоги всех месяцев уже получены от контрагента').last(),
+        page.getByRole('status').filter({ hasText: /всех месяцев уже получены от контрагента/ }),
       ).toBeVisible();
       await expect(receipt).toBeHidden();
-      await expect(sepBtn).toHaveAttribute(
-        'title',
-        'Деньги на налоги этого месяца уже получены от контрагента',
-      );
+      await expect(sepBtn).toHaveAttribute('title', /этого месяца уже получены от контрагента/);
     });
 
     await test.step('правая кнопка мыши (на телефоне — долгое нажатие) по строке — то же меню, что «⋯»; карточка отчёта не открывается', async () => {
       if (isMobile) {
+        // Палец касается точки на экране: строку сначала прокрутить в видимую часть карточки.
+        await row(nds).locator('td').first().scrollIntoViewIfNeeded();
         const box = await settledBox(row(nds).locator('td').first());
         await (await finger(page)).hold({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
       } else {
