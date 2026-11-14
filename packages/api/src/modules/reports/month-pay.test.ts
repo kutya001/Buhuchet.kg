@@ -375,7 +375,9 @@ describe.skipIf(!databaseAvailable())(
           text: null,
           refusal: 'month_pay_requisite_hidden',
         });
-        expect(JSON.stringify(p)).not.toContain('555');
+        // Номера отчётов — случайные UUID и сами могут содержать «555»: телефон ищется в остальном ответе.
+        const rows = p.rows.map(({ reportId: _id, ...row }) => row);
+        expect(JSON.stringify({ ...p, rows })).not.toContain('555');
         const res = await copied(hr, cpA, '2026-09');
         expect(res.status).toBe(409);
         expect(await codeOf(res)).toBe('month_pay_requisite_hidden');
