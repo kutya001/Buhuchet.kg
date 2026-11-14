@@ -143,6 +143,7 @@ export function TelegramNoticesBox({
             <Icon name="calendar" size="sm" />
             <span>
               {t('tgn.remind.links')}{' '}
+              {/* ОТКЛОНЕНИЕ: docs/deviations.md#Т-16 — без подсветки поля «+ день» */}
               <Link href={tabHref('org', 'policy')} className={linkButtonClass()}>
                 {t('tgn.remind.link_policy')}
               </Link>

@@ -172,7 +172,7 @@ export function TelegramGroupRow({ hour }: { hour: string }) {
     <>
       {!g ? (
         <NoticeRow {...row}>
-          <span className="text-[11.5px] text-faint">
+          <span className="grow text-[11.5px] text-faint">
             {t(own ? 'tggrp.none' : 'tggrp.none_owner_only')}
           </span>
           {linkButton(t('tggrp.link'))}
