@@ -1,3 +1,4 @@
+import { ORG_LEGAL_FORMS } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -31,6 +32,14 @@ export const organizations = pgTable(
     phone: text('phone'),
     /** Руководитель. */
     head: text('head'),
+    /**
+     * «Форма»: ОсОО или ИП (доработки 14.11.2026, блок 1, пункт 4). Меняет только администратор
+     * платформы — у роли приложения нет права менять столбец (ИНН по тому же пункту ТЗ закрывает для
+     * владельца задача блока 1); у организаций, созданных до 14.11.2026, пусто.
+     */
+    legalForm: text('legal_form', { enum: ORG_LEGAL_FORMS }),
+    /** «ОКПО» — 8 цифр (доработки 14.11.2026, блок 1, пункт 4); меняет владелец в «Основное». */
+    okpo: text('okpo'),
     /** Ключ логотипа в хранилище: org/<org_id>/logo/<id>; картинка — по подписанной ссылке. */
     logoKey: text('logo_key'),
     isDemo: boolean('is_demo').notNull().default(false),
@@ -50,6 +59,11 @@ export const organizations = pgTable(
   },
   (t) => [
     check('organizations_status_check', sql`${t.status} in ('active', 'blocked')`),
+    check(
+      'organizations_legal_form_check',
+      sql`${t.legalForm} is null or ${t.legalForm} in (${sql.raw(ORG_LEGAL_FORMS.map((v) => `'${v}'`).join(', '))})`,
+    ),
+    check('organizations_okpo_check', sql`${t.okpo} is null or ${t.okpo} ~ '^[0-9]{8}$'`),
     orgIsolation('organizations_isolation', t.id),
     // Новую организацию роль приложения создаёт только активной, без причины блокировки и не демо:
     // статус и блокировку ведёт администратор платформы (app.admin_set_org_status), демо — наполнение.

@@ -56,6 +56,8 @@ export const OUTBOX_KINDS = [
   'bot_cmd',
   // Общий чат фирмы (поток Т, задача Т8): сводка дня, «подключён» и «отключён» — в группу.
   'group',
+  // Доработки 14.11.2026: ответственному — «новый файл от контрагента» (блок 2, пункт 2).
+  'cp_file',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
