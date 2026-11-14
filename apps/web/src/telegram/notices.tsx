@@ -2,7 +2,7 @@
 
 import { isDigestTime, pluralForm, weekDayOf, type UiTextKey } from '@buhuchet/domain';
 import type { OrgPolicy, UpdateOrgPolicyRequest } from '@buhuchet/shared';
-import { Box, CheckRow, Field, Hint, Icon, inputClass, Note } from '@buhuchet/ui';
+import { Box, CheckRow, Field, Hint, Icon, inputClass, linkButtonClass, Note } from '@buhuchet/ui';
 import Link from 'next/link';
 import { useId, useState } from 'react';
 import { ContractorNoticeRows } from '../contractor-page/notice-rows';
@@ -18,7 +18,6 @@ export type NoticeSave = (
 ) => Promise<void>;
 
 const WEEK_DAYS = [1, 2, 3, 4, 5, 6, 7] as const;
-const LINK_CLASS = 'text-accent underline-offset-2 hover:underline';
 
 /**
  * Блок «Telegram-уведомления» в «Моя организация» → «Настройки» (пакет 14.11.2026, блок 3; прототип v111
@@ -145,11 +144,11 @@ export function TelegramNoticesBox({
             <Icon name="calendar" size="sm" />
             <span>
               {t('tgn.remind.links')}{' '}
-              <Link href={tabHref('org', 'policy')} className={LINK_CLASS}>
+              <Link href={tabHref('org', 'policy')} className={linkButtonClass()}>
                 {t('tgn.remind.link_policy')}
               </Link>
               {t('tgn.remind.links_types')}{' '}
-              <Link href={tabHref('dicts', 'types')} className={LINK_CLASS}>
+              <Link href={tabHref('dicts', 'types')} className={linkButtonClass()}>
                 {t('tgn.remind.link_types')}
               </Link>
             </span>

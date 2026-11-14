@@ -1,8 +1,11 @@
 'use client';
 
-import { Hint, Icon, Pill, SWITCH_CLASS, type IconName } from '@buhuchet/ui';
+import { Hint, Icon, Pill, pillClass, SWITCH_CLASS, type IconName } from '@buhuchet/ui';
 import type { ReactNode } from 'react';
 import { useT } from '../l10n/provider';
+
+/** «Выключено» (`.pill.sm.faint` прототипа): бледная метка с рамкой и кружком. */
+const OFF_PILL = `${pillClass('sm')} bg-faint-pill-bg text-label shadow-[inset_0_0_0_1px_var(--bu-border)]`;
 
 /** Кому уходит сообщение: метка строки (прототип `TGN_TO`). */
 const TO = {
@@ -101,9 +104,10 @@ export function NoticeRow({
               {t(`tgn.to.${to}`)}
             </Pill>
             {on === false ? (
-              <Pill size="sm" tone="plain">
+              <span data-pill="" className={OFF_PILL}>
+                <Icon name="circle" size="sm" />
                 {t('tgn.state_off')}
-              </Pill>
+              </span>
             ) : null}
           </div>
           {hint ? <Hint>{hint}</Hint> : null}
