@@ -26,7 +26,7 @@ jobs:
   # п. О-5): check — типы, линтер, переносимость, форматирование и тесты сайта, docker-e2e — без шагов;
   # main целиком проверяет ночной прогон. Решение принимается здесь, одно на обе проверки, до установки
   # пакетов и без кода PR; правило лежит в .github/, поэтому PR, который его меняет, сам не сливается.
-  # Не сработал этот шаг — check и docker-e2e пропущены, не зелёные, и автослияния нет.
+  # Не сработал этот шаг — check пропущен, docker-e2e красный (п. О-49), автослияния нет.
   scope:
     name: scope
     runs-on: ubuntu-24.04
@@ -171,13 +171,16 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       # Три запуска по порядку вместо зависимостей проектов: при --shard Playwright целиком повторяет
       # проекты-зависимости на каждой машине. --no-deps — порядок задают сами запуски; у машины может
-      # не оказаться тестов *.shared — это не ошибка.
+      # не оказаться тестов *.shared — это не ошибка. Подделка Telegram запущена заранее одна на все три
+      # запуска (Playwright берёт уже запущенную): сообщения в ней живут весь прогон, как в одном запуске.
       - name: Сквозные тесты на ПК и телефоне
         timeout-minutes: 30
         env:
           E2E_BASE_URL: http://localhost:3000
           SHARD: ${{ matrix.shard }}/6
         run: |
+          (cd e2e && node fake-telegram.ts > /dev/null 2>&1 &)
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8091/health > /dev/null 2>&1 && break; sleep 1; done
           pnpm test:e2e --project=desktop --project=mobile --shard="$SHARD"
           pnpm test:e2e --project=desktop-shared --no-deps --pass-with-no-tests --shard="$SHARD"
           pnpm test:e2e --project=mobile-shared --no-deps --pass-with-no-tests --shard="$SHARD"
