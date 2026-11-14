@@ -511,6 +511,8 @@ function ReceiveButton({
   offer: MonthReceiveOffer<ReportRow>;
   onReceive: (offer: MonthReceiveOffer<ReportRow>) => void;
 }) {
+  // На телефоне кнопка месяца тянется, как соседние в «К оплате клиенту»; кнопка периода — по тексту.
+  const phone = offer.scope === 'all' ? '' : 'max-md:flex-auto max-md:justify-center';
   const t = useT();
   const toast = useToast();
   const why = receiveWhy(t, offer);
@@ -520,7 +522,7 @@ function ReceiveButton({
       data-months-receive={offer.scope}
       aria-disabled={why ? true : undefined}
       title={why ?? undefined}
-      className={`${buttonClass('default', 'sm')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none max-md:flex-auto max-md:justify-center`}
+      className={`${buttonClass('default', 'sm')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none ${phone}`}
       onClick={() => (why ? toast(why, { icon: 'lock', bad: true }) : onReceive(offer))}
     >
       <Icon name="download" size="sm" />
