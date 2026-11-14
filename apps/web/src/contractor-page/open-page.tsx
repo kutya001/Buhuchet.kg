@@ -985,10 +985,13 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
           {col(['pay', 'acc', 'tg', 'money', 'fee', 'contacts'])}
         </div>
       </div>
+      {/* Нижняя панель — под окнами (z-50), всплывающими окошками (z-[70]) и уведомлениями: в прототипе
+          на странице окна поднимаются над ней (pages.css: body.pub-on .cover{z-index:88}), иначе на
+          телефоне панель закрывает кнопки внизу окна («Отправить» в «Отправить файл»). */}
       {nav.length ? (
         <nav
           aria-label={t('pub.nav.label')}
-          className="fixed inset-x-0 bottom-0 z-[86] hidden border-t border-line bg-raised px-1 pt-0.5 pb-[calc(2px+env(safe-area-inset-bottom,0px))] max-md:flex"
+          className="fixed inset-x-0 bottom-0 z-[45] hidden border-t border-line bg-raised px-1 pt-0.5 pb-[calc(2px+env(safe-area-inset-bottom,0px))] max-md:flex"
         >
           {nav.map((k) => (
             <button
