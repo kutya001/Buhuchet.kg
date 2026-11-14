@@ -35,7 +35,7 @@ const fNoteLog=note=>note?'. Примечание: '+note:'';
 const fNoteHtml=(cp,n)=>{const t=fNoteOf(cp,n);return t?`<div class="f-note" title="Примечание к файлу">${esc(t)}</div>`:''};
 // Переименование: название меняется в списке файлов записи и везде, где прототип помнит файл по названию
 function fRenIn(arr,n,n2){if(!arr)return;const i=arr.indexOf(n);if(i>=0)arr[i]=n2}
-function fRenMeta(cp,n,n2){const o=fmOwner(cp);if(o.fmeta&&o.fmeta[n]){o.fmeta[n2]=o.fmeta[n];delete o.fmeta[n]}if(cp&&CPM[cp]){const c=CPM[cp];if((c.pgHide||[]).includes(n))c.pgHide=c.pgHide.map(x=>x===n?n2:x);fRenIn(c.regFiles,n,n2)}if(FUP.has(n))FUP.add(n2)}
+function fRenMeta(cp,n,n2){const o=fmOwner(cp);if(o.fmeta&&o.fmeta[n]){o.fmeta[n2]=o.fmeta[n];delete o.fmeta[n]}if(cp&&CPM[cp]){const c=CPM[cp];if((c.pgHide||[]).includes(n))c.pgHide=c.pgHide.map(x=>x===n?n2:x);fRenIn(c.regFiles,n,n2);fRenIn(c.fromCp,n,n2)}if(FUP.has(n))FUP.add(n2)}
 // Окно «Прикрепить файлы»: после выбора файлов — их список и необязательное примечание. files — выбранные в поле файлы, run(примечание) — прикрепить
 function attachDlg(files,run,sub){if(!files.length)return;const big=files.filter(x=>x.size>FILE_MAX_MB*1048576);
   openModal({form:true,noMax:true,render:()=>({title:files.length>1?`Прикрепить файлы: ${files.length}`:'Прикрепить файл',sub:sub?esc(sub):'',
@@ -67,7 +67,7 @@ function fileEditDlg(f,done){const cut=n=>{const i=n.lastIndexOf('.');return i>0
         if(f.manual&&did.length)touch(f.manual);
         m.close();if(!did.length)return;refreshAll();const top=MODALS[MODALS.length-1];if(top&&top.draw)top.draw();toast(did.includes('rep')?'Файл заменён':'Файл изменён','edit');done&&done(n2)}}})})}
 function allFiles(){const out=[];const vc=new Set(visCps(true,'files').map(c=>c.id));const add=(o)=>{const fm=o.manual||fmGet(o.cp,o.name);o.size=fm.size!=null?fm.size:fsize(o.name);o.note=fm.note||'';o.rep=fm.rep||null;out.push(o)};
-  CPS.forEach(c=>{if(!vc.has(c.id))return;(c.files||[]).forEach((n,i)=>add({id:`c${c.id}:${i}`,name:n,cp:c.id,kind:'Контрагент',src:(c.regFiles||[]).includes(n)?'Из свидетельства и выписки':'Карточка контрагента',date:(c._ua||c.start).slice(0,10),by:c._ub||c.resp,h:['cp',c.id],open:()=>openCp(c,'files'),rm:()=>fRm(c.files,n,'cp',c.id,c.id),ren:n2=>fRenIn(c.files,n,n2)}))});
+  CPS.forEach(c=>{if(!vc.has(c.id))return;(c.files||[]).forEach((n,i)=>add({id:`c${c.id}:${i}`,name:n,cp:c.id,kind:'Контрагент',src:(c.regFiles||[]).includes(n)?'Из свидетельства и выписки':(c.fromCp||[]).includes(n)?'От контрагента':'Карточка контрагента',date:(c._ua||c.start).slice(0,10),by:c._ub||c.resp,h:['cp',c.id],open:()=>openCp(c,'files'),rm:()=>fRm(c.files,n,'cp',c.id,c.id),ren:n2=>fRenIn(c.files,n,n2)}))});
   REPORTS.forEach(r=>{if(!vc.has(r.cp)||!r.files.length)return;r.files.forEach((n,i)=>add({id:`r${r.id}:${i}`,name:n,cp:r.cp,kind:'Отчёт',src:`${T[r.t].short} · ${r.plabel}`,date:r.subDate||TODAY,by:r.resp,h:['r',r.id],open:()=>openReport(r),rm:()=>fRm(r.files,n,'r',r.id,r.cp),ren:n2=>fRenIn(r.files,n,n2)}))});
   if(feat('tasks'))TASKS.forEach(t=>{if(!t.file||(t.cp&&!vc.has(t.cp)))return;add({id:`t${t.id}`,name:t.file,cp:t.cp,kind:'Задача',src:t.title,date:t.doneAt||t.created,by:t.exec,h:['t',t.id],open:()=>openTask(t),rm:()=>{const n=t.file;t.file='';log('t',t.id,'Удалён файл: '+n,t.cp)},ren:n2=>{t.file=n2}})});
   if(taxVis())OPS.forEach(o=>{if(o.kind!=='pay'||!vc.has(o.cp))return;const r=REPORTS.find(y=>y.id===o.report);(o.files||[]).forEach((n,i)=>add({id:`x${o.id}:${i}`,name:n,cp:o.cp,kind:'Оплата налога',src:`Оплата ${r?T[r.t].short+' '+r.plabel:''} — ${som(o.amount)} от ${fmtD(o.date)}`,date:o.date,by:o.by,h:r?['r',r.id]:['cp',o.cp],open:r?()=>openReport(r):null,rm:()=>fRm(o.files,n,r?'r':'cp',r?r.id:o.cp,o.cp),ren:n2=>fRenIn(o.files,n,n2)}))});
@@ -80,7 +80,7 @@ function allFiles(){const out=[];const vc=new Set(visCps(true,'files').map(c=>c.
 function fRm(arr,n,ent,id,cp){if(!arr)return;const i=arr.indexOf(n);if(i>=0)arr.splice(i,1);log(ent,id,'Удалён файл: '+n,cp)}
 const FKIND_L={'Загружен вручную':'Загружено вручную','Контрагент':'Карточки контрагентов','Отчёт':'К отчётам','Задача':'К задачам','Поступление':'К поступлениям','Оплата налога':'К оплатам налогов','Разовая услуга':'К разовым услугам','Проект':'К проектам'};
 function filesAdd(){return can('filesUpload')?[{label:'Загрузить файл',icon:'upload',run:()=>uploadDlg()}]:[]}
-function renderFiles(body,tab,fresh){const all=allFiles();
+function renderFiles(body,tab,fresh){if(tab==='sent')return renderSent(body,fresh);const all=allFiles();
   body.innerHTML=`<div class="plates">${Object.keys(FKIND).filter(k=>k==='Загружен вручную'||all.some(f=>f.kind===k)).map(k=>plate({id:k,icon:FKIND[k],color:k==='Загружен вручную'?'purple':'blue',label:FKIND_L[k]||k,value:all.filter(f=>f.kind===k).length})).join('')}</div><div id="flg"></div>`;
   body.querySelector('.plates').onclick=e=>{const b=e.target.closest('[data-plate]');if(!b)return;const g=GS.files;if(!g)return;g.filters={kind:{type:'enum',vals:[b.dataset.plate]}};g.page=0;renderPage()};
   grid($('#flg',body),{id:'files',audit:x=>x.manual||{_ca:x.date+' 09:00',_cb:x.by},cols:[
