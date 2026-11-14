@@ -172,11 +172,13 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» �
       { id: 'nlive', title: 'Новость nlive', short: 'Коротко nlive', video: 'v-intro' },
     ]);
     expect(options.videos).toEqual([{ id: 'v-intro', title: 'Знакомство' }]);
-    const count = async (q = '') =>
-      call('GET', `/api/admin/telegram/broadcast/count${q}`).then(async (r) => ({
+    const count = async (q = '') => {
+      const r = await call('GET', `/api/admin/telegram/broadcast/count${q}`);
+      return {
         status: r.status,
         body: r.status === 200 ? AdminTelegramCastCount.parse(await r.json()) : await r.json(),
-      }));
+      };
+    };
     expect(await count()).toEqual({ status: 200, body: { count: 2 } });
     expect(await count(`?org=${f.b.orgId}`)).toEqual({ status: 200, body: { count: 1 } });
     expect((await count('?org=x')).status).toBe(400);
@@ -196,7 +198,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» �
       [{ ...base, more: { kind: 'news', id: 'nadm' } }, 'cast_more'],
       [{ ...base, more: { kind: 'news', id: 'ndraft' } }, 'cast_more'],
       [{ ...base, more: { kind: 'news', id: 'nlater' } }, 'cast_more'],
-      [{ ...base, more: { kind: 'article', id: 'нет' } }, 'cast_more'],
+      [{ ...base, more: { kind: 'article', id: 'no-such' } }, 'cast_more'],
       [{ ...base, video: 'v-adm' }, 'cast_video'],
       [{ ...base, video: 'v-draft' }, 'cast_video'],
       [{ ...base, image: '0b7f8a52-8a36-4a8e-9a43-1f1f4b7a1c11' }, 'cast_image'],
@@ -297,5 +299,31 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» �
       .where(eq(schema.telegramOutbox.kind, 'broadcast'));
     expect(rows.find((r) => r.text === 'С картинкой')).toMatchObject({ status: 'error' });
     expect(rows.find((r) => r.text === 'Просто')).toMatchObject({ status: 'sent', payload: null });
+  });
+
+  it('«Отправить в Telegram» у новости старше 20 последних: она приходит в списке, черновик и «только для Админки» — нет', async () => {
+    const fresh = Array.from({ length: 20 }, (_, i) => ({
+      id: `nfresh${i}`,
+      title: `Свежая ${i}`,
+      type: 'announce',
+      publishDate: '2026-10-01',
+      short: 'Коротко',
+      md: 'Текст',
+      status: 'published',
+      // Тот же день, вышли позже — в списке выше всех прежних.
+      publishedAt: new Date(Date.parse('2026-10-01T03:00:00Z') + (i + 1) * 60_000),
+    }));
+    await f.t.admin.db.insert(schema.news).values(fresh);
+    const ids = async (q: string) =>
+      AdminTelegramCastOptions.parse(
+        await (await call('GET', `/api/admin/telegram/cast-options${q}`)).json(),
+      ).news.map((n) => n.id);
+    expect(await ids('')).not.toContain('nlive');
+    expect(await ids('?news=nlive')).toContain('nlive');
+    expect(await ids('?news=nlive')).toHaveLength(21);
+    expect(await ids('?news=nadm')).toHaveLength(20);
+    expect(await ids('?news=ndraft')).toHaveLength(20);
+    expect((await call('GET', '/api/admin/telegram/cast-options?news=a%2Fb')).status).toBe(400);
+    await f.t.admin.db.delete(schema.news).where(sql`${schema.news.id} like 'nfresh%'`);
   });
 });

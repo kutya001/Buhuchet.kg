@@ -132,6 +132,30 @@ CREATE FUNCTION app.lead_notify(
     IF p_text IS NULL OR p_payload IS NULL OR jsonb_typeof(p_payload) <> 'object' THEN
       RETURN 0;
     END IF;
+    -- Кнопки — только действия заявки с её номером и ссылки https (запас прочности: описание собирает
+    -- сервер, но функция открыта форме заявки).
+    IF p_payload ? 'buttons' AND (
+      jsonb_typeof(p_payload -> 'buttons') <> 'array'
+      OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p_payload -> 'buttons') r(v)
+        WHERE jsonb_typeof(r.v) <> 'array'
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements(p_payload -> 'buttons') r(v),
+          jsonb_array_elements(r.v) b(v)
+        WHERE jsonb_typeof(r.v) = 'array' AND NOT coalesce(
+          jsonb_typeof(b.v) = 'object' AND NOT (b.v ? 'copy') AND (
+            (b.v ->> 'action' IN ('leadWork', 'leadNo') AND b.v ->> 'arg' = p_lead::text
+              AND NOT (b.v ? 'url'))
+            OR (NOT (b.v ? 'action') AND b.v ->> 'url' LIKE 'https://%')
+          ),
+          false
+        )
+      )
+    ) THEN
+      RETURN 0;
+    END IF;
     IF p_event IS NULL THEN
       IF NOT EXISTS (
         SELECT 1 FROM public.platform_leads l WHERE l.id = p_lead AND l.created_at = p_now

@@ -46,7 +46,7 @@ import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { pdictsTemplatesQuery } from '../platform-dicts/pdicts-data';
 import { BotChat, type BotChatItem } from './bot-chat';
-import { takeCastRequest } from './cast-store';
+import { peekCastRequest, takeCastRequest } from './cast-store';
 
 const orgsQuery = queryOptions({
   queryKey: ['admin', 'tg-orgs'],
@@ -57,16 +57,22 @@ const orgsQuery = queryOptions({
   },
 });
 
-/** Новости, статьи и видео для кнопок и «Заполнить из новости» — свежие при каждом открытии. */
-const optionsQuery = queryOptions({
-  queryKey: ['admin', 'tg-cast-options'],
-  queryFn: async () => {
-    const res = await api.api.admin.telegram['cast-options'].$get();
-    if (!res.ok) throw await apiFailure(res);
-    return AdminTelegramCastOptions.parse(await res.json());
-  },
-  staleTime: 0,
-});
+/**
+ * Новости, статьи и видео для кнопок и «Заполнить из новости» — свежие при каждом открытии; `asked` —
+ * новость из «Отправить в Telegram» (приходит, даже если не входит в 20 последних).
+ */
+const optionsQuery = (asked: string | null) =>
+  queryOptions({
+    queryKey: ['admin', 'tg-cast-options', asked],
+    queryFn: async () => {
+      const res = await api.api.admin.telegram['cast-options'].$get({
+        query: asked ? { news: asked } : {},
+      });
+      if (!res.ok) throw await apiFailure(res);
+      return AdminTelegramCastOptions.parse(await res.json());
+    },
+    staleTime: 0,
+  });
 
 /** Ошибка текста объявления до запроса: пусто — «Введите текст» (прототип), длиннее 900 знаков. */
 export function castTextError(t: Translate, text: string): string | undefined {
@@ -120,7 +126,9 @@ export function TgAdmCast({ textRef }: { textRef: RefObject<HTMLTextAreaElement 
   const client = useQueryClient();
   const id = useId();
   const orgs = useQuery(orgsQuery);
-  const options = useQuery(optionsQuery);
+  // «Отправить в Telegram» из меню новости: просьба забирается один раз, при открытии экрана.
+  const [asked] = useState(peekCastRequest);
+  const options = useQuery(optionsQuery(asked));
   const templates = useQuery(pdictsTemplatesQuery);
   const fileInput = useRef<HTMLInputElement>(null);
   const [to, setTo] = useState('all');
@@ -159,12 +167,12 @@ export function TgAdmCast({ textRef }: { textRef: RefObject<HTMLTextAreaElement 
   };
 
   // «Отправить в Telegram» из меню новости: поля — из новости, когда список новостей пришёл.
-  const asked = useRef<string | null | undefined>(undefined);
+  const filled = useRef(false);
   const fillAsked = useEffectEvent(() => {
-    if (asked.current === undefined) asked.current = takeCastRequest();
-    if (!asked.current || !options.data) return;
-    if (fillFromNews(asked.current)) toast(t('tgadm.cast.filled'), { icon: 'tg' });
-    asked.current = null;
+    if (!asked || !options.data || filled.current) return;
+    filled.current = true;
+    takeCastRequest();
+    if (fillFromNews(asked)) toast(t('tgadm.cast.filled_news'), { icon: 'tg' });
   });
   useEffect(() => {
     fillAsked();
@@ -247,7 +255,7 @@ export function TgAdmCast({ textRef }: { textRef: RefObject<HTMLTextAreaElement 
     }
     if (err.code === 'cast_image') setImage(null);
     if (err.code === 'cast_more' || err.code === 'cast_video') {
-      void client.invalidateQueries({ queryKey: optionsQuery.queryKey });
+      void client.invalidateQueries({ queryKey: ['admin', 'tg-cast-options'] });
     }
     toast(errorText(err), { bad: true });
   };
@@ -285,7 +293,7 @@ export function TgAdmCast({ textRef }: { textRef: RefObject<HTMLTextAreaElement 
   const select = `${inputClass()} cursor-pointer`;
 
   return (
-    <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)]">
+    <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-3.5 max-[900px]:grid-cols-[minmax(0,1fr)]">
       <Box title={t('tgadm.cast.message')}>
         <form onSubmit={(e) => void submit(e)} noValidate className="flex flex-col gap-2.5">
           <Field

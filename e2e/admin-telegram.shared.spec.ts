@@ -144,6 +144,29 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     };
     await expect.poll(photo, POLL).toEqual([PNG.byteLength]);
 
+    // «Отправить в Telegram» из меню новости (прототип v103 admin/news.js): открывается «Рассылка» с
+    // полями из новости.
+    const castNews = (
+      (await (await page.request.get('/api/admin/telegram/cast-options')).json()) as {
+        news: { id: string; title: string }[];
+      }
+    ).news[0]!;
+    await page.goto('/app/kbadm/news');
+    await search(page, isMobile, castNews.title);
+    const newsRow = page.locator(`[data-grid] [data-id="${castNews.id}"]`);
+    await newsRow.locator('[data-row-menu]').click();
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: /^Отправить в Telegram/ })
+      .click();
+    await expect(page).toHaveURL(/\/app\/tg\/cast$/);
+    await expect(page.getByText('Поля рассылки заполнены из новости')).toBeVisible();
+    // Заголовок рассылки — до 80 знаков (длиннее — обрезан с «…»).
+    if (castNews.title.length <= 80) {
+      await expect(page.locator('[data-tg-cast-title]')).toHaveValue(castNews.title);
+    }
+    await expect(page.locator('[data-tg-cast-more]')).toHaveValue(`news:${castNews.id}`);
+
     // Второе объявление ждёт в очереди, а получатель тем временем отвязал Telegram: в прежний чат оно
     // не уходит — «Ошибка» с пояснением.
     const second = `Второе объявление ${ownerLogin}`;

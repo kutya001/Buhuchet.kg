@@ -194,6 +194,7 @@ export const TELEGRAM_ADMIN_TEXTS = {
     section: S,
   },
   'tgadm.cast.filled': { ru: 'Поля заполнены из новости', section: S },
+  'tgadm.cast.filled_news': { ru: 'Поля рассылки заполнены из новости', section: S },
   'tgadm.cast.title': { ru: 'Заголовок', section: S },
   'tgadm.cast.title.placeholder': { ru: 'Например: Плановые работы 15 ноября', section: S },
   'tgadm.cast.title.hint': { ru: 'Необязательно; до {n} знаков', section: S },

@@ -16,3 +16,8 @@ export function takeCastRequest(): string | null {
   pending = null;
   return id;
 }
+
+/** Посмотреть просьбу, не забирая (начальное значение экрана: в StrictMode оно считается дважды). */
+export function peekCastRequest(): string | null {
+  return pending;
+}

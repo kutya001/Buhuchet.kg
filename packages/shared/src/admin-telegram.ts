@@ -83,10 +83,17 @@ export const AdminTelegramOrgs = z.object({
 });
 export type AdminTelegramOrgs = z.infer<typeof AdminTelegramOrgs>;
 
+/** Номер новости, статьи или видео платформы: латиница, цифры, «-» и «_». */
+const CastRecordId = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/);
+
 /** Запись сайта для «Подробнее» (поток Т, задача Т6): новость или статья Базы знаний. */
 export const AdminTelegramCastMore = z.strictObject({
   kind: z.enum(['news', 'article']),
-  id: z.string().min(1).max(64),
+  id: CastRecordId,
 });
 export type AdminTelegramCastMore = z.infer<typeof AdminTelegramCastMore>;
 
@@ -102,7 +109,7 @@ export const AdminTelegramBroadcastRequest = z.strictObject({
   text: z.string().trim().min(1).max(BROADCAST_TEXT_MAX),
   image: Uuid.nullable().default(null),
   more: AdminTelegramCastMore.nullable().default(null),
-  video: z.string().min(1).max(64).nullable().default(null),
+  video: CastRecordId.nullable().default(null),
 });
 export type AdminTelegramBroadcastRequest = z.input<typeof AdminTelegramBroadcastRequest>;
 
@@ -111,9 +118,18 @@ export const AdminTelegramCastCountQuery = z.object({ org: Uuid.optional() });
 export const AdminTelegramCastCount = z.object({ count: z.number().int().nonnegative() });
 export type AdminTelegramCastCount = z.infer<typeof AdminTelegramCastCount>;
 
+/**
+ * `news` — новость, из меню которой открыли «Рассылку» («Отправить в Telegram»): она приходит в списке,
+ * даже если не входит в 20 последних.
+ */
+export const AdminTelegramCastOptionsQuery = z.object({ news: CastRecordId.optional() });
+
 /** Что можно поставить в кнопки рассылки и в «Заполнить из новости». */
 export const AdminTelegramCastOptions = z.object({
-  /** Опубликованные новости «для всех», новые сверху, не больше 20; `video` — видео из ссылки новости. */
+  /**
+   * Опубликованные новости «для всех», новые сверху, не больше 20 (и запрошенная `news`, если она вышла и
+   * для всех); `video` — видео из ссылки новости.
+   */
   news: z.array(
     z.object({
       id: z.string(),

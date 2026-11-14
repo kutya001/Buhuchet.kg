@@ -34,6 +34,7 @@ import {
   AdminTelegramCastCountQuery,
   AdminTelegramCastImage,
   AdminTelegramCastOptions,
+  AdminTelegramCastOptionsQuery,
   ApiError,
   type AdminTelegramCastMore,
 } from '@buhuchet/shared';
@@ -71,8 +72,15 @@ const sendableVideo = (v: Parameters<typeof videoVisibilityOf>[0]) => {
   return videoLive(vis) && vis.audience !== 'adm';
 };
 
-/** Что можно поставить в кнопки рассылки (прототип `tgCastNews`, `tgCastArts`, `tgCastVids`). */
-export async function castOptions(tx: Tx, now: Date): Promise<AdminTelegramCastOptions> {
+/**
+ * Что можно поставить в кнопки рассылки (прототип `tgCastNews`, `tgCastArts`, `tgCastVids`). `asked` —
+ * новость из «Отправить в Telegram»: прототип заполняет поля из любой вышедшей новости, не только из 20.
+ */
+export async function castOptions(
+  tx: Tx,
+  now: Date,
+  asked: string | null = null,
+): Promise<AdminTelegramCastOptions> {
   const [news, articles, videos] = await Promise.all([
     allNewsForAdmin(tx),
     adminKbArticles(tx),
@@ -84,6 +92,9 @@ export async function castOptions(tx: Tx, now: Date): Promise<AdminTelegramCastO
     news.filter((n) => liveNews(n, now)),
     (n) => ({ date: n.date, publishedAt: n.publishedAt, version: n.release }),
   ).slice(0, CAST_NEWS_MAX);
+  const extra =
+    asked && !live.some((n) => n.id === asked) ? news.find((n) => n.id === asked) : null;
+  if (extra && liveNews(extra, now)) live.push(extra);
   return {
     news: live.map((n) => ({
       id: n.id,
@@ -170,11 +181,13 @@ export const telegramCastOptionsRoute = createRoute({
   tags: ['admin'],
   summary: 'Рассылка: новости, статьи и видео для кнопок и «Заполнить из новости»',
   middleware: [requirePlatformAdmin] as const,
+  request: { query: AdminTelegramCastOptionsQuery },
   responses: {
     200: {
       description: 'Записи, на которые могут вести кнопки',
       content: json(AdminTelegramCastOptions),
     },
+    400: { description: 'Неверный номер новости', content: error },
     ...denied,
   },
 });
@@ -183,8 +196,9 @@ export function telegramCastOptionsHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof telegramCastOptionsRoute, AppEnv> {
   return async (c) => {
+    const { news } = c.req.valid('query');
     const body = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      castOptions(tx, deps.clock.now()),
+      castOptions(tx, deps.clock.now(), news ?? null),
     );
     return c.json(body, 200);
   };

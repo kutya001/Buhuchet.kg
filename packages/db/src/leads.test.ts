@@ -420,6 +420,36 @@ describe.skipIf(!databaseAvailable())('заявки с лендинга', () => 
     );
     expect(Number(bad[0]!.n)).toBe(0);
     expect(await db.admin.db.$count(telegramOutbox)).toBe(1);
+    // Кнопки — только «Взять в работу» и «Отклонить» этой заявки и ссылки https.
+    await db.admin.db.delete(telegramOutbox);
+    const withButtons = async (buttons: unknown) => {
+      const rows = await db.app.db.execute<{ n: number }>(
+        sql`select app.lead_notify(${res.leadId}::uuid, null, 'текст', ${JSON.stringify({ text: 'текст', buttons })}::jsonb, ${NOW.toISOString()}::timestamptz) as n`,
+      );
+      return Number(rows[0]!.n);
+    };
+    const id = res.leadId!;
+    for (const buttons of [
+      'x',
+      [{ text: 'a', action: 'leadWork', arg: id }],
+      [[{ text: 'a', action: 'leadWork', arg: '00000000-0000-4000-8000-000000000000' }]],
+      [[{ text: 'a', action: 'notMe', arg: id }]],
+      [[{ text: 'a', action: 'leadNo', arg: id, url: 'https://x.kg' }]],
+      [[{ text: 'a', url: 'http://x.kg' }]],
+      [[{ text: 'a', copy: 'x' }]],
+      [['a']],
+    ]) {
+      expect(await withButtons(buttons), JSON.stringify(buttons)).toBe(0);
+    }
+    expect(
+      await withButtons([
+        [
+          { text: 'a', action: 'leadWork', arg: id },
+          { text: 'b', action: 'leadNo', arg: id },
+        ],
+        [{ text: 'c', url: 'https://test.buhuchet.kg/app/admin/leads' }],
+      ]),
+    ).toBe(1);
   });
 
   it('смена статуса из чата бота помечается в истории заявки «через Telegram», с сайта — без отметки (задача Т6)', async () => {
