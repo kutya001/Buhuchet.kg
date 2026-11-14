@@ -88,7 +88,7 @@ function tgPress(u,chat,m,b){const a=TG_ACTS[b.act],no=tgRefusal(u,a,b.arg);
   // Выполненное действие: кнопка становится неактивной с новой подписью, соседние кнопки ряда гаснут, если действие их отменяет
   if(r.done){b.t=r.done;b.off=true}
   if(r.off)(m.btns||[]).forEach(row=>row.forEach(x=>{if(r.off.includes(x.act))x.off=true}));
-  if(r.msg)chat.list.push(r.msg);
+  if(r.msg)chat.list.push(r.msg);if(r.msgs)chat.list.push(...r.msgs);
   // Действию нужен ответ: бот просит его отдельным сообщением с кнопкой «Отмена»; нажатая кнопка пока не меняется — она погаснет, когда ответ будет принят
   if(r.ask){if(chat.list.some(x=>tgAskLive(x)&&x.ask.act===r.ask.act&&x.ask.arg===r.ask.arg))r.eph=tplFill('tgActAskWait',{});
     else chat.list.push({t:r.ask.t,at:bishkekNow().hm,ask:Object.assign({day:TODAY,src:{m,b}},r.ask),btns:[[{t:tgBtnT('tgBtnCancel','Отмена'),act:'askCancel',icon:'x'}]]})}

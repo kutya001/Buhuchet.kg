@@ -27,3 +27,13 @@ export function isWeekSummaryDay(day: IsoDate, weekDay: number): boolean {
 
 /** Сообщения контрагентам «К оплате» и о долге уходят в 10:00 по Бишкеку (этап 1 — как было). */
 export const CP_TG_TIME = '10:00';
+
+/**
+ * Строки с днями и часом: недельная сводка сотрудникам, «К оплате» и «Оплата за обслуживание»
+ * контрагентам.
+ */
+export const TG_NOTICE_CODES = ['staff_week', 'cp_pay', 'cp_fee'] as const;
+export type TgNoticeCode = (typeof TG_NOTICE_CODES)[number];
+
+/** Галочки «за 5» … «за 1 день» до срока оплаты. */
+export const TG_NOTICE_DAYS = [1, 2, 3, 4, 5] as const;

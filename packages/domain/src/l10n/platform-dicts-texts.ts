@@ -210,10 +210,6 @@ const SYSTEM_TEXTS = {
   'pdicts.tpl.label.tg_cp_link_bad': { ru: 'Telegram контрагента: ссылка устарела', section: S },
   'pdicts.tpl.label.wa_pay_month': { ru: 'WhatsApp: налоги к оплате за месяц', section: S },
   'pdicts.tpl.label.tg_cp_pay': { ru: 'Telegram контрагента: «К оплате» за месяц', section: S },
-  'pdicts.tpl.label.tg_btn_cp_req': {
-    ru: 'Telegram контрагента: кнопка «Скопировать реквизиты»',
-    section: S,
-  },
   'pdicts.tpl.label.tg_btn_cp_paid': { ru: 'Telegram контрагента: кнопка «Оплатил»', section: S },
   'pdicts.tpl.label.tg_btn_cp_q': {
     ru: 'Telegram контрагента: кнопка «Вопрос бухгалтеру»',
@@ -241,12 +237,35 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram контрагента: ответ на «Не напоминать»',
     section: S,
   },
-  'pdicts.tpl.label.tg_btn_cp_req_tax': {
-    ru: 'Telegram контрагента: кнопка «Реквизиты для налогов»',
+  'pdicts.tpl.label.tg_rq_head': { ru: 'Telegram контрагента: реквизиты для перевода', section: S },
+  'pdicts.tpl.label.tg_rq_org': { ru: 'Telegram контрагента: реквизиты организации', section: S },
+  'pdicts.tpl.label.tg_rq_emp': { ru: 'Telegram контрагента: реквизиты сотрудника', section: S },
+  'pdicts.tpl.label.tg_btn_cp_copy_phone': {
+    ru: 'Telegram контрагента: кнопка «Скопировать номер телефона»',
     section: S,
   },
-  'pdicts.tpl.label.tg_btn_cp_req_fee': {
-    ru: 'Telegram контрагента: кнопка «Реквизиты для обслуживания»',
+  'pdicts.tpl.label.tg_btn_cp_copy_req': {
+    ru: 'Telegram контрагента: кнопка «Скопировать реквизиты для перевода»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_show_req': {
+    ru: 'Telegram контрагента: кнопка «Показать реквизиты для перевода»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_fee_head': {
+    ru: 'Telegram контрагента: «Оплата за обслуживание до …»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_fee_remind': {
+    ru: 'Telegram контрагента: напоминание об оплате за обслуживание',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_fee_paid_staff': {
+    ru: 'Telegram контрагента: сотруднику — «Оплатил» за обслуживание',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_no_req': {
+    ru: 'Telegram контрагента: нет реквизитов для перевода',
     section: S,
   },
   'pdicts.tpl.label.tg_act_no_link': {

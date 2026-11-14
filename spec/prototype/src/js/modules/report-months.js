@@ -51,10 +51,10 @@ function rmCardHtml(c,st){const mode=store.get('cp.repmode','months')==='list'?'
   const all=rmPlan(rs),closed=all.filter(g=>g.done).length,left=Math.round(all.reduce((a,g)=>a+g.left,0)*100)/100;
   const vis=(q==='all'?all:rmPlan(rs.filter(r=>actQ(r,q)))).filter(g=>q!=='all'||st.rmAll||!g.done);
   const bar=`<div class="row rm-bar">${sw}<div class="chipsel actq" role="group" aria-label="Что нужно сделать">${[['all','Все'],['sub','Сдать'],['pay','Уплатить']].map(([k,l])=>`<button type="button" data-rm-q="${k}" class="${q===k?'on':''}" aria-pressed="${q===k}">${l}<span class="n">${n(k)}</span></button>`).join('')}</div>
-    <span class="grow"></span>${feat('taxpay')&&left>0?`<span class="muted rm-left">Осталось оплатить: <b class="tnum">${som(left)}</b></span>`:''}${closed&&q==='all'?`<label class="rm-all"><input type="checkbox" id="rm-all" ${st.rmAll?'checked':''}> Закрытые месяцы · ${closed}</label>`:''}</div>`;
+    <span class="grow"></span>${feat('taxpay')&&left>0?`<span class="muted rm-left">Осталось оплатить: <b class="tnum">${som(left)}</b></span>`:''}${rmRecvBtn(c,all,'all')}${closed&&q==='all'?`<label class="rm-all"><input type="checkbox" id="rm-all" ${st.rmAll?'checked':''}> Закрытые месяцы · ${closed}</label>`:''}</div>`;
   const body=vis.length?vis.map(g=>rmMonthHtml(g,g.m in st.rmTg?st.rmTg[g.m]:!g.done,c)).join('')
     :`<div class="box rm-empty">${ic('ok')}<span>${!rs.length?'Отчётов у контрагента пока нет: назначьте их на вкладке «Подбор отчётов»':q==='sub'?'Все отчёты сданы':q==='pay'?'Неоплаченных налогов нет':'Всё сдано и оплачено. Прошлые месяцы — по галочке «Закрытые месяцы»'}</span></div>`;
-  return `${bar}<div class="rm-list">${body}</div><div class="hint rm-hint">Месяц отчёта — месяц, которым заканчивается его период: квартальные и годовые отчёты стоят в последнем месяце периода. Нажмите на отчёт — откроется его карточка; «⋯» — действия: статус, сумма, оплата.</div>`}
+  return `${bar}<div class="rm-list">${body}</div><div class="hint rm-hint">Месяц отчёта — месяц, которым заканчивается его период: квартальные и годовые отчёты стоят в последнем месяце периода. Нажмите на отчёт — откроется его карточка; «⋯», правая кнопка мыши или долгое нажатие на телефоне — действия: статус, сумма, оплата.</div>`}
 function rmCardMount(el,c,st,mm){const q=s=>el.querySelector(s);
   $$('[data-rm-mode]',el).forEach(b=>b.onclick=()=>{store.set('cp.repmode',b.dataset.rmMode);mm.draw()});
   if(q('#cpr')){repGrid(q('#cpr'),'cp-rep',()=>REPORTS.filter(r=>r.cp===c.id&&!r.superseded),{compact:true,cfg:{search:false,preset:null,sort:{key:'due',dir:-1},simulateLoad:false}});return}
@@ -64,8 +64,42 @@ function rmCardMount(el,c,st,mm){const q=s=>el.querySelector(s);
   // «⋯» — те же действия, что в меню отчёта общего списка; после действия карточка перерисовывается сама (refreshAll)
   $$('[data-rm-menu]',el).forEach(b=>b.onclick=e=>{e.stopPropagation();const r=REPORTS.find(x=>x.id===+b.dataset.rmMenu);if(r)menu(b,reportActions(r))});
   $$('.rm-tbl [data-recv]',el).forEach(b=>b.onclick=e=>e.stopPropagation());
+  // Правая кнопка мыши по строке отчёта — то же меню, что «⋯»; на телефоне — долгое нажатие, как в общих списках (доработки 14.11.2026, блок 5)
+  const lst=q('.rm-list');if(lst){const rowOf=e=>e.target.closest('a,button,input')?null:e.target.closest('tr[data-rep]'),
+    open=(tr,pt)=>{const r=REPORTS.find(x=>x.id===+tr.dataset.rep);if(r)menu(tr,reportActions(r),pt)};
+    lst.oncontextmenu=e=>{const tr=rowOf(e);if(!tr)return;e.preventDefault();open(tr,{x:e.clientX,y:e.clientY})};
+    let lp=null,lx=0,ly=0;const stop=()=>clearTimeout(lp);
+    lst.onpointerdown=e=>{if(e.pointerType!=='touch')return;const tr=rowOf(e);if(!tr)return;lx=e.clientX;ly=e.clientY;
+      lp=setTimeout(()=>{tr.dataset.lp='1';open(tr,{x:lx,y:ly});if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){}},550)};
+    lst.onpointerup=stop;lst.onpointercancel=stop;lst.onpointermove=e=>{if(e.pointerType==='touch'&&Math.hypot(e.clientX-lx,e.clientY-ly)>8)stop()}}
+  // «Принять деньги» за месяц (блок «К оплате клиенту») и «Принять деньги за весь период» (над месяцами)
+  $$('[data-rm-recv]',el).forEach(b=>b.onclick=e=>{e.stopPropagation();if(b.dataset.why){toast(b.dataset.why,'lock',true);return}
+    const k=b.dataset.rmRecv,gs=rmRecvMonths(c,k),p=rmRecvPlan(gs);if(!p.list.length)return;
+    inDlg(c,null,{list:p.list,total:p.total,note:k==='all'?`Деньги за весь период: ${gs.map(g=>rmMonthTxt(g.m)).join(', ')}`:`Деньги за ${rmMonthTxt(k)}`})});
   // Блок «К оплате клиенту» под таблицей месяца: «Скопировать для клиента» и «Отправить в Telegram» (cp-telegram.js)
   rmPayMount(el,c)}
+
+/* «Принять деньги» за месяц и за весь период (доработки 14.11.2026, блок 5): та же форма поступления, что «Принять деньги» у отчёта (inDlg),
+   сразу со всеми отчётами месяцев с суммой; деньги распределяются по отчётам от старых месяцев к новым, излишек остаётся авансом — «Поступило и не потрачено».
+   Кнопки есть при «Учёте оплаты налогов» и с правом «Принять деньги» (money), у контрагента не в архиве; без права кнопок нет */
+const rmRecvOn=c=>feat('taxpay')&&can('money')&&!c.archived;
+// Сколько ещё принять по отчёту — как у «Принять деньги» отчёта (recvDlg): к уплате минус уже полученное от контрагента или уже оплаченное
+const rmRecvLeft=r=>Math.max(0,Math.round((r.sum-Math.max(r.paid||0,r.recv||0))*100)/100);
+// Месяцы, за которые принимают деньги: один месяц или весь период — все месяцы вкладки с неоплаченной суммой («осталось» больше нуля).
+// Будущие месяцы, где суммы ещё не рассчитаны и неоплаченного нет, в период не входят и кнопку не запирают
+const rmRecvOpen=g=>g.left>0;
+function rmRecvMonths(c,k){const rs=REPORTS.filter(r=>r.cp===c.id&&!r.superseded&&r.status!=='Не требуется');
+  return rmPlan(rs).filter(g=>(k==='all'||g.m===k)&&rmRecvOpen(g))}
+// Распределение: месяцы от старых к новым, внутри месяца — по сроку оплаты
+const rmRecvByDue=(a,b)=>(a.r.payDue||'')<(b.r.payDue||'')?-1:(a.r.payDue||'')>(b.r.payDue||'')?1:a.r.id-b.r.id;
+function rmRecvPlan(gs){const list=[];gs.forEach(g=>g.items.filter(x=>x.pay&&x.sum>0).sort(rmRecvByDue).forEach(x=>{const a=rmRecvLeft(x.r);if(a>0)list.push({r:x.r.id,amt:a})}));
+  return {list,total:Math.round(list.reduce((s,x)=>s+x.amt,0)*100)/100}}
+// Почему нельзя: у отчёта месяца не указана сумма (за период — перечень таких месяцев) или деньги на налоги уже получены
+function rmRecvWhy(gs,k){const ns=gs.filter(g=>g.noSum);
+  if(ns.length)return k==='all'?`Сначала введите сумму за ${ns.map(g=>rmMonthTxt(g.m)).join(', ')}`:`Сначала введите сумму: ${ns[0].items.filter(x=>x.noSum).map(x=>T[x.r.t].short).join(', ')}`;
+  return rmRecvPlan(gs).list.length?'':k==='all'?'Деньги на налоги всех месяцев уже получены от контрагента':'Деньги на налоги этого месяца уже получены от контрагента'}
+function rmRecvBtn(c,gs,k){if(!rmRecvOn(c))return '';gs=gs.filter(g=>(k==='all'||g.m===k)&&rmRecvOpen(g));if(!gs.length)return '';const w=rmRecvWhy(gs,k);
+  return `<button type="button" class="btn sm ${w?'dis':''}" data-rm-recv="${k}" ${w?`aria-disabled="true" data-why="${esc(w)}" title="${esc(w)}"`:''}>${ic('download','sm')}<span class="bl">${k==='all'?'Принять деньги за весь период':'Принять деньги'}</span></button>`}
 
 /* Вкладка «По месяцам» модуля «Отчеты для сдачи»: один месяц по всем контрагентам. Общий список сгруппирован по контрагенту:
    у каждого видно, что сдать и что оплатить за месяц, суммы и сроки. По умолчанию — прошлый месяц: отчёты за него сдаются сейчас */

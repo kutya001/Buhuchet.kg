@@ -228,7 +228,8 @@ const advOf=o=>Math.max(0,o.amount-(o.alloc||[]).reduce((a,x)=>a+x.a,0));
 /* Поступление от контрагента: одна общая сумма + детализация по отчётам (и, если нужно, за обслуживание) */
 function inDlg(c0,edit,pre){
   const st={cp:c0?c0.id:(visCps().find(c=>c.kind!=='oneoff')||{}).id,total:edit?(edit.total??edit.amount):'',date:edit?edit.date:TODAY,alloc:{},fee:{},acc:edit?edit.holder:null,why:''};
-  if(pre&&c0){st.alloc[pre.r]=pre.amt;st.total=pre.amt;st.pre=c0.id}
+  // pre — «Принять деньги» у отчёта {r, amt} или за месяц и за весь период «По месяцам» {list:[{r, amt}] от старых к новым, total, note}
+  if(pre&&c0){(pre.list||[{r:pre.r,amt:pre.amt}]).forEach(x=>{st.alloc[x.r]=x.amt});st.total=pre.list?pre.total:pre.amt;st.pre=c0.id}
   const prevFee={},own={};if(edit){(edit.alloc||[]).forEach(x=>{st.alloc[x.r]=x.a;own[x.r]=x.a});(edit.feeAlloc||[]).forEach(x=>{st.fee[x.m]=x.a;prevFee[x.m]=x.a})}
   const fv=v=>v==null||v===''?'':String(v);
   // Уже получено под отчёт без этого поступления: при изменении его собственная часть (и оплата из неё) не считается чужой
@@ -246,7 +247,7 @@ function inDlg(c0,edit,pre){
       fms.filter(mm=>mm<=ym(TODAY)).forEach(mm=>{const x=fLeft(mm);if(x>0){st.fee[mm]=x;tot+=x}});st.total=tot||''}
     const iStyle='style="max-width:130px;margin-left:auto;text-align:right"';
     return {title:edit?'Изменить поступление':'Поступление от контрагента',sub:c?`${esc(c.name)} · на ${c.paysTo==='org'?'счёт организации':'счёт '+esc(empName(c.resp))}${fms.length?' · плата за обслуживание — на счёт организации':''}`:'',
-    body:`${edit?inEditNote(edit):''}${one?`<div class="note">${ic('coins')}<span><b>Платит одной суммой: налоги и обслуживание вместе.</b> Деление подставлено само: обслуживание за текущий месяц и налоги со сроком до конца месяца. Поправьте суммы, если контрагент перевёл иначе.</span></div>`:''}<div class="form">${c0||edit?'':fld('Контрагент',cpSel('in-cp',visCps(),st.cp),{req:true,full:true,id:'in-cp'})}
+    body:`${edit?inEditNote(edit):''}${pre&&pre.list?`<div class="note">${ic('coins')}<span><b>${esc(pre.note)}.</b> Сумма разнесена по отчётам от старых месяцев к новым; поправьте общую сумму — распределение пересчитается. Излишек останется авансом контрагента — «Поступило и не потрачено».</span></div>`:''}${one?`<div class="note">${ic('coins')}<span><b>Платит одной суммой: налоги и обслуживание вместе.</b> Деление подставлено само: обслуживание за текущий месяц и налоги со сроком до конца месяца. Поправьте суммы, если контрагент перевёл иначе.</span></div>`:''}<div class="form">${c0||edit?'':fld('Контрагент',cpSel('in-cp',visCps(),st.cp),{req:true,full:true,id:'in-cp'})}
       ${fld('Общая сумма, сом',inp('in-sum',fv(st.total),'inputmode="decimal" class="inp tnum" placeholder="15 000"'),{req:true,id:'in-sum',hint:'Сколько всего перевёл контрагент'})}${fld('Дата',inp('in-date',st.date,`type="date" max="${TODAY}"`),{req:true,id:'in-date'})}</div>
     <div class="box flat"><h3>Детализация: за что эти деньги<span class="grow"></span><button class="btn sm" id="in-auto" type="button">${ic('list','sm')}Распределить по срокам</button></h3>
       ${reps.length||fms.length?`<div class="tbl-wrap"><table class="mini"><thead><tr><th>Отчёт</th><th>Период</th><th>Срок оплаты</th><th class="num">К уплате</th><th class="num" title="Уже получено от контрагента под этот отчёт (или уже оплачено)">Уже получено</th><th class="num" style="width:150px">Распределить сейчас</th><th class="num">Осталось</th></tr></thead><tbody>
@@ -266,7 +267,10 @@ function inDlg(c0,edit,pre){
         sl.innerHTML=`<span>Детализация: <b class="tnum">${fmtM(d)}</b>${f?` <span class="muted">(налоги ${fmtM(a)}, обслуживание ${fmtM(f)})</span>`:''}</span><div class="grow"></div>${d>T_?`<span class="pill red">${ic('alert')}больше общей суммы на ${fmtM(d-T_)}</span>`:T_-d>0?`<span class="pill blue">${ic('info')}аванс ${fmtM(T_-d)}</span>`:T_>0?`<span class="pill green">${ic('ok')}сходится</span>`:''}`;return {tot,a,f,d}};
       calc();
       if($('#in-cp',el))$('#in-cp',el).onchange=e=>{st.cp=+e.target.value;st.alloc={};st.fee={};st.total='';mm.draw()};
-      $('#in-sum',el).oninput=e=>{st.total=e.target.value;calc()};$('#in-date',el).oninput=e=>{st.date=e.target.value};
+      // За месяц и за весь период: при правке общей суммы распределение по отчётам пересчитывается от старых месяцев к новым
+      const reAlloc=()=>{let t=parseNum(st.total);t=isNaN(t)||t<0?0:t;pre.list.forEach(x=>{const a=Math.round(Math.min(t,x.amt)*100)/100;if(a>0){st.alloc[x.r]=a;t-=a}else delete st.alloc[x.r]});
+        $$('[data-al]',el).forEach(i=>{i.value=fv(st.alloc[i.dataset.al])})};
+      $('#in-sum',el).oninput=e=>{st.total=e.target.value;if(pre&&pre.list)reAlloc();calc()};$('#in-date',el).oninput=e=>{st.date=e.target.value};
       if($('#in-why',el)){$('#in-why',el).oninput=e=>{st.why=e.target.value};$('#in-acc',el).onchange=e=>{st.acc=e.target.value}}
       $$('[data-al]',el).forEach(i=>i.oninput=()=>{const n=parseNum(i.value);if(isNaN(n))delete st.alloc[i.dataset.al];else st.alloc[i.dataset.al]=n;calc()});
       $$('[data-fm]',el).forEach(i=>i.oninput=()=>{const n=parseNum(i.value);if(isNaN(n))delete st.fee[i.dataset.fm];else st.fee[i.dataset.fm]=n;calc()});

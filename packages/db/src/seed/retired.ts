@@ -9,10 +9,21 @@ import type { SeedOptions } from './platform';
  * 14.11.2026 (прототип v109, docs/decisions.md п. Т-10): новость «Версия 104», шаблоны названий тем,
  * тексты переключателя Админки и подписи шаблонов. Новость, которую правил администратор платформы
  * (`updated_by` задан), остаётся — это уже его запись; шаблоны и тексты нигде не используются.
+ * Прототип v110 (пакет 14.11, блок 4) заменил кнопки «Скопировать реквизиты», «Реквизиты для налогов» и
+ * «Реквизиты для обслуживания» кнопками по виду реквизита: их шаблоны и подписи убраны; пока сообщения
+ * не перешли на новые кнопки, бот берёт прежние подписи из текстов по умолчанию (`TELEGRAM_TEMPLATE_DEFAULTS`).
  */
 export const RETIRED = {
   news: ['v104'],
-  messageTemplates: ['tgTopicReports', 'tgTopicTasks', 'tgTopicLeads', 'tgTopicSecurity'],
+  messageTemplates: [
+    'tgTopicReports',
+    'tgTopicTasks',
+    'tgTopicLeads',
+    'tgTopicSecurity',
+    'tgBtnCpReq',
+    'tgBtnCpReqTax',
+    'tgBtnCpReqFee',
+  ],
   uiTexts: [
     'tgadm.view.topics',
     'tgadm.view.topics_hint',
@@ -26,6 +37,9 @@ export const RETIRED = {
     'pdicts.tpl.label.tg_topic_tasks',
     'pdicts.tpl.label.tg_topic_leads',
     'pdicts.tpl.label.tg_topic_security',
+    'pdicts.tpl.label.tg_btn_cp_req',
+    'pdicts.tpl.label.tg_btn_cp_req_tax',
+    'pdicts.tpl.label.tg_btn_cp_req_fee',
   ],
 } as const;
 

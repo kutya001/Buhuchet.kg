@@ -192,6 +192,8 @@ describe('Тексты бота и коды действий', () => {
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgCpNoDebtOk).toBe(
       'Напоминания о долге выключены. Чтобы включить снова, отправьте боту «Напоминать».',
     );
+    // Прежние кнопки реквизитов: из справочника убраны в v110, до перехода сообщений — текст по умолчанию.
+    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpReq).toBe('Скопировать реквизиты');
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpReqTax).toBe('Реквизиты для налогов');
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpReqFee).toBe('Реквизиты для обслуживания');
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpOk).toBe('Подтвердить');
