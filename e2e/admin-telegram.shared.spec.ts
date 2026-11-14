@@ -196,15 +196,16 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     const sent = rows.filter({ hasText: 'Объявление' }).filter({ hasText: 'Отправлено' });
     // На телефоне у плиток подпись «Ошибка» есть у всех — ищем по пояснению.
     const error = rows.filter({ hasText: 'Получатель отвязал или сменил Telegram' });
-    await expect(sent).toHaveCount(1);
+    // Отправлены два объявления: простое и с картинкой (задача Т6).
+    await expect(sent).toHaveCount(2);
     await expect(error).toHaveCount(1);
     await expect(error).toContainText('Объявление');
     await expect(rows.filter({ hasText: 'Telegram привязан' })).toHaveCount(1);
     await expect(rows.filter({ hasText: 'Telegram отвязан' })).toHaveCount(1);
-    await expect(sent).toContainText(orgName);
+    await expect(sent.first()).toContainText(orgName);
 
     const menu = page.getByRole('menu', { name: 'Действия' });
-    await sent.locator('[data-row-menu]').click();
+    await sent.first().locator('[data-row-menu]').click();
     await expect(menu.getByRole('menuitem', { name: 'Повторить отправку' })).toBeDisabled();
     await expect(menu).toContainText('Повтор доступен только для ошибок');
     await page.keyboard.press('Escape');
