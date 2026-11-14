@@ -228,8 +228,16 @@ export async function addSentFiles(
       }),
     );
   } catch (err) {
-    await withOrgContext(deps.db, ctx, (tx) => dropPendingSentFiles(tx, ids)).catch(() => {});
-    for (const row of rows) await deps.storage.delete(row.storageKey).catch(() => {});
+    await withOrgContext(deps.db, ctx, (tx) => dropPendingSentFiles(tx, ids)).catch(
+      (e: unknown) => {
+        deps.logger.error({ err: e }, 'файлы от контрагентов: загрузка не стёрта после отказа');
+      },
+    );
+    for (const row of rows) {
+      await deps.storage.delete(row.storageKey).catch((e: unknown) => {
+        deps.logger.error({ err: e }, 'файлы от контрагентов: файл не удалён из хранилища');
+      });
+    }
     throw err;
   }
   await notifySentFiles(

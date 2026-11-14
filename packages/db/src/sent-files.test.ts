@@ -219,12 +219,17 @@ describe.skipIf(!databaseAvailable())('Отправленные файлы ко�
     await asGuest(a.orgId, (tx) => insertPendingSentFiles(tx, [fromTg]));
     expect(await asGuest(a.orgId, (tx) => pendingSentFiles(tx, cpA, [fromTg.id]))).toEqual([]);
     await asGuest(a.orgId, (tx) => dropPendingSentFiles(tx, [fromTg.id]));
-    // Брошенная загрузка занимает место в пределе за сутки, пока её не удалили.
+    // Закончить можно только в первые 20 минут: позже загрузку удалит задача по расписанию.
+    const late = newSent(a.orgId, cpA, 'Поздно.pdf');
+    await asGuest(a.orgId, (tx) => insertPendingSentFiles(tx, [late]));
     await db.admin.db
       .update(contractorSentFiles)
-      .set({ createdAt: sql`now() - interval '20 hours'` })
-      .where(eq(contractorSentFiles.id, row.id));
-    expect(await inA((tx) => sentFilesLastDay(tx, cpA))).toBe(1);
+      .set({ createdAt: sql`now() - interval '21 minutes'` })
+      .where(eq(contractorSentFiles.id, late.id));
+    expect(await asGuest(a.orgId, (tx) => pendingSentFiles(tx, cpA, [late.id]))).toEqual([]);
+    // Брошенная загрузка занимает место в пределе за сутки, пока её не удалили.
+    expect(await inA((tx) => sentFilesLastDay(tx, cpA))).toBe(2);
+    await asGuest(a.orgId, (tx) => dropPendingSentFiles(tx, [late.id]));
     const [pending] = await asGuest(a.orgId, (tx) => pendingSentFiles(tx, cpA, [row.id]));
     expect(pending).toMatchObject({ id: row.id, state: 'pending', status: 'new' });
     await asGuest(a.orgId, (tx) => markSentFilesReady(tx, [row.id]));
@@ -411,6 +416,16 @@ describe.skipIf(!databaseAvailable())('Отправленные файлы ко�
     expect(ids).not.toContain(took.id);
     // Чужая организация чужие строки не удаляет.
     expect(await inB((tx) => dropSentFiles(tx, stale))).toBe(0);
+    // Строка, которая сменила состояние после выборки, не удаляется.
+    const changed = stale.map((s) => (s.id === hung.id ? { ...s, state: 'ready' as const } : s));
+    expect(
+      await withOrgContext(db.app.db, job, (tx) =>
+        dropSentFiles(
+          tx,
+          changed.filter((s) => s.id === hung.id),
+        ),
+      ),
+    ).toBe(0);
     expect(await withOrgContext(db.app.db, job, (tx) => dropSentFiles(tx, stale))).toBe(3);
     expect(await inA((tx) => getSentFile(tx, old.id))).toBeNull();
     expect(await inA((tx) => getSentFile(tx, took.id))).not.toBeNull();

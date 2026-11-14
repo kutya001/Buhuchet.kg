@@ -305,6 +305,8 @@ export function pageSentCompleteHandler(
       if (named('large').length) refuse(400, { code: 'sent_too_large', files: named('large') });
       apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
     }
+    // Строка не «Новая» после ошибки — незаконченная: её файлы удалит задача по расписанию (её не
+    // встретит «закончить»: `SENT_COMPLETE_MINUTES`); закончила другая такая же отправка — файл её.
     const done = await withOrgContext(deps.db, ctx, async (tx) => {
       // Галочку могли выключить, пока файл загружался: тогда отправка не принимается.
       const state = await sentUploadState(tx, page.contractorId);

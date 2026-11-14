@@ -41,3 +41,9 @@ export const sentUploadKey = (storageKey: string): string => `${storageKey}.up`;
  * действует 2 минуты: позже положить файл уже нельзя.
  */
 export const SENT_PENDING_TTL_MS = 30 * 60_000;
+
+/**
+ * Закончить отправку со страницы можно в течение 20 минут после начала — заметно раньше, чем задача
+ * удаляет незаконченные (`SENT_PENDING_TTL_MS`): «закончить» и удаление не встречаются на одной строке.
+ */
+export const SENT_COMPLETE_MINUTES = 20;

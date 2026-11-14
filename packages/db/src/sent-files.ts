@@ -3,6 +3,7 @@ import {
   pageVisibleSections,
   RecordChangedError,
   RecordNotFoundError,
+  SENT_COMPLETE_MINUTES,
   SENT_FILE_KEEP_DAYS,
   type IsoDate,
   type ListQuery,
@@ -158,7 +159,7 @@ export async function getSentFile(
 
 /**
  * Начатые со страницы загрузки контрагента по номерам (закончить отправку может только та же страница;
- * загрузку из Telegram сервер заканчивает сам).
+ * загрузку из Telegram сервер заканчивает сам), не старше `SENT_COMPLETE_MINUTES`.
  */
 export async function pendingSentFiles(
   tx: Tx,
@@ -172,6 +173,10 @@ export async function pendingSentFiles(
         eq(contractorSentFiles.contractorId, contractorId),
         eq(contractorSentFiles.source, 'page'),
         eq(contractorSentFiles.state, 'pending'),
+        gt(
+          contractorSentFiles.createdAt,
+          sql`now() - make_interval(mins => ${SENT_COMPLETE_MINUTES})`,
+        ),
         inArray(contractorSentFiles.id, [...ids]),
       ),
     )
@@ -461,20 +466,20 @@ export async function staleSentFiles(
 /**
  * Удалить строки, файлы которых уже убраны из хранилища (прототип `sntPurge`): у загруженного — запись
  * в историю контрагента от имени системы. Принятый (решение успели принять между выборкой и удалением)
- * не удаляется. Ответ — сколько удалено.
+ * и строка, которая сменила состояние после выборки, не удаляются. Ответ — сколько удалено.
  */
 export async function dropSentFiles(tx: Tx, stale: readonly StaleSentFile[]): Promise<number> {
   if (!stale.length) return 0;
+  const inState = (state: SentFileState) => {
+    const ids = stale.filter((s) => s.state === state).map((s) => s.id);
+    return ids.length
+      ? and(inArray(contractorSentFiles.id, ids), eq(contractorSentFiles.state, state))
+      : undefined;
+  };
   const gone = await tx
     .delete(contractorSentFiles)
     .where(
-      and(
-        inArray(
-          contractorSentFiles.id,
-          stale.map((s) => s.id),
-        ),
-        ne(contractorSentFiles.status, 'accepted'),
-      ),
+      and(or(inState('pending'), inState('ready')), ne(contractorSentFiles.status, 'accepted')),
     )
     .returning({
       id: contractorSentFiles.id,
