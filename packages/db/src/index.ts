@@ -13,6 +13,7 @@ export * from './auth';
 export * from './telegram';
 export * from './telegram-bot';
 export * from './telegram-commands';
+export * from './telegram-groups';
 export * from './telegram-outbox';
 export * from './telegram-reminders';
 export * from './staff';

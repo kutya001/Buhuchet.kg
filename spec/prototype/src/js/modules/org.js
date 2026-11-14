@@ -80,11 +80,14 @@ function renderOrg(body,tab){
   <div class="box"><h3>Напоминания в Telegram</h3>${feat('telegram')?`<label class="check-row"><input type="checkbox" class="sw" id="st-rep" ${ORG.overdueRepeat?'checked':''} ${ro?'disabled':''}><span class="grow">Повторять при просрочке каждый день<div class="hint">Ответственному, главному бухгалтеру и владельцу — пока отчёт не сдан</div></span></label>
   <div class="form">${fld('Еженедельная сводка, понедельник',inp('st-dg',ORG.digest,`type="time" ${ro?'disabled':''}`),{id:'st-dg'})}</div><span class="hint">Все напоминания одному человеку за день собираются в одно сообщение.</span>
   <label class="check-row"><input type="checkbox" class="sw" id="st-tgact" ${ORG.tgActions!==false?'checked':''} ${me().role==='owner'?'':'disabled'}><span class="grow">Действия из Telegram<div class="hint">Сотрудники отмечают отчёты и задачи кнопками под сообщениями бота, не заходя на сайт. Каждое нажатие проверяется по правам и области сотрудника и пишется в историю с пометкой «через Telegram». Деньги и удаление — только на сайте. ${me().role==='owner'?'Выключите, если действия должны быть только на сайте: кнопки «Открыть» и копирование останутся.':'Меняет только владелец организации.'}</div></span></label>`:`<div class="note">${ic('info')}<span>Напоминания в Telegram отключены в учётной политике.</span></div>`}</div>
+  ${tgGrpHtml()}
   ${pgTgOrgHtml(ro)}
   ${ro?'':`<div class="row"><div class="grow"></div><button class="btn cta" id="st-save">Сохранить настройки</button></div>`}`;
   // Часовой пояс сохраняется вместе с остальными настройками (расхождение продукта п. 18, 27.10.2026)
   // Поток Т (13.11.2026): «Действия из Telegram» включает и выключает только владелец, сразу, без «Сохранить»; выключено — на нажатие бот отвечает скрытым ответом «Действия из Telegram отключены»
   const ta=$('#st-tgact',body);if(ta)ta.onchange=()=>{if(me().role!=='owner')return;ORG.tgActions=ta.checked;log('org','settings',`Действия из Telegram: ${ta.checked?'включены':'выключены'}`);toast(ta.checked?'Действия из Telegram включены':'Действия из Telegram выключены','tg')};
+  // Поток Т, задача Т8 (14.11.2026): «Общий чат фирмы в Telegram» — подключает и отключает владелец, сразу, без «Сохранить»
+  tgGrpMount(body);
   // Поток К (13.11.2026): «Telegram контрагентов» — «К оплате» и напоминание о долге клиентам; включается сразу, без «Сохранить»
   pgTgOrgMount(body);
   const sv=$('#st-save',body);if(sv)sv.onclick=()=>{const tz=val(body,'st-tz');if(tz&&tz!==ORG.tz){log('org','settings',`Часовой пояс: ${ORG.tz} → ${tz}`);ORG.tz=tz}ORG.defaultRole=val(body,'st-role');if($('#st-rep',body)){ORG.overdueRepeat=$('#st-rep',body).checked;ORG.digest=val(body,'st-dg')}log('org','settings','Изменены настройки');toast('Настройки сохранены')};

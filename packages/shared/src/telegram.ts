@@ -55,3 +55,41 @@ export type NotifySettingsRequest = z.infer<typeof NotifySettingsRequest>;
 /** «Сообщения простым текстом» в «Мой профиль» (поток Т, задача Т1): без таблиц и раскрывающихся разделов. */
 export const TelegramPlainRequest = z.strictObject({ plain: z.boolean() });
 export type TelegramPlainRequest = z.infer<typeof TelegramPlainRequest>;
+
+/**
+ * «Общий чат фирмы в Telegram» в «Моя организация» → «Настройки» (поток Т, задача Т8; прототип v105
+ * modules/tg-group.js): подключённая группа или null; `canEdit` — владелец (право «Настройки и учётная
+ * политика»); `bot` — бот подключён к платформе (без него ссылку не создать).
+ */
+export const TelegramGroupResponse = z.object({
+  group: z
+    .object({
+      title: z.string(),
+      linkedByName: z.string().nullable(),
+      linkedAt: z.iso.datetime(),
+      summary: z.boolean(),
+      gone: z.boolean(),
+      version: z.number().int().positive(),
+    })
+    .nullable(),
+  /** «Время сводки» учётной политики (ЧЧ:ММ): сводка в группу уходит вместе с напоминаниями за день. */
+  time: z.string(),
+  canEdit: z.boolean(),
+  bot: z.boolean(),
+});
+export type TelegramGroupResponse = z.infer<typeof TelegramGroupResponse>;
+
+/** Ссылка подключения группы: t.me/бот?startgroup=g_…, одноразовая, 15 минут. */
+export const TelegramGroupLinkResponse = TelegramLinkResponse;
+export type TelegramGroupLinkResponse = TelegramLinkResponse;
+
+/** «Сводка дня в группу» — включить или выключить, с версией записи. */
+export const TelegramGroupSummaryRequest = z.strictObject({
+  version: z.number().int().positive(),
+  summary: z.boolean(),
+});
+export type TelegramGroupSummaryRequest = z.infer<typeof TelegramGroupSummaryRequest>;
+
+/** «Отключить группу» с версией записи. */
+export const TelegramGroupUnlinkRequest = z.strictObject({ version: z.number().int().positive() });
+export type TelegramGroupUnlinkRequest = z.infer<typeof TelegramGroupUnlinkRequest>;

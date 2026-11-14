@@ -22,16 +22,17 @@ function tgcTable(t){const nm=new Set(t.num||[]),c=i=>nm.has(i)?' class="num"':'
   const tb=`<table class="tgc-t">${t.head?`<thead><tr>${t.head.map((x,i)=>`<th${c(i)}>${esc(x)}</th>`).join('')}</tr></thead>`:''}<tbody>${t.rows.map(r=>`<tr>${r.map((x,i)=>`<td${c(i)}>${esc(x)}</td>`).join('')}</tr>`).join('')}</tbody>${t.foot?`<tfoot><tr>${t.foot.map((x,i)=>`<td${c(i)}>${esc(x)}</td>`).join('')}</tr></tfoot>`:''}</table>`;
   return t.title?`<details${t.open?' open':''}><summary>${esc(t.title)} <span class="tgc-n">${t.n??t.rows.length}</span></summary>${tb}</details>`:tb}
 function tgcMsg(m,i,plain){
-  if(m.eph)return `<div class="tgc-eph" role="status"><b>${ic('eyeoff','sm')}Видно только вам</b>${esc(m.eph)}</div>`;
+  // Скрытое сообщение с таблицей (задача Т8, «Мои» в общем чате фирмы): m.eph — описание {h, tables}
+  if(m.eph)return `<div class="tgc-eph" role="status"><b>${ic('eyeoff','sm')}Видно только вам</b>${typeof m.eph==='string'?esc(m.eph):plain?`<p>${esc(tgPlain(m.eph))}</p>`:`${m.eph.h?`<p class="tgc-h">${esc(m.eph.h)}</p>`:''}${(m.eph.tables||[]).map(tgcTable).join('')}`}</div>`;
   if(m.day)return `<span class="tgc-day">${esc(m.day)}</span>`;
   const at=m.at?`<span class="tgc-at">${esc(m.at)}</span>`:'';
   if(m.me)return `<div class="tgc-m me${m.re||m.file?' say':''}"><div class="tgc-b">${m.re?`<p class="tgc-re">${ic('chat','sm')}${esc(m.re)}</p>`:''}${m.file?`<p class="tgc-file">${ic('file','sm')}<span>${esc(m.file.name)}</span><span class="tgc-fs">${fmtSize(m.file.size)}</span></p>`:''}${m.t?`<p>${esc(m.t)}</p>`:''}${at}</div></div>`;
   const body=plain?`<p>${tgcText(tgPlain(m),m.code)}</p>`:`${m.h?`<p class="tgc-h">${esc(m.h)}</p>`:''}${m.sub?`<p class="tgc-sub">${esc(m.sub)}</p>`:''}${m.t?`<p>${tgcText(m.t,m.code)}</p>`:''}${(m.tables||[]).map(tgcTable).join('')}`;
   const kb=(m.btns||[]).length?`<div class="tgc-kb">${m.btns.map((r,ri)=>`<div class="tgc-row">${r.map((b,ci)=>`<button type="button" class="tgc-k" data-tgc="${i}:${ri}:${ci}" ${b.off?'disabled':''}>${b.icon?ic(b.icon,'sm'):b.copy?ic('copy','sm'):b.url?ic('link','sm'):''}<span>${esc(b.t)}</span></button>`).join('')}</div>`).join('')}</div>`:'';
   return `<div class="tgc-m"><div class="tgc-b">${m.img?`<img class="tgc-img" src="${esc(m.img.src)}" alt="${esc(m.img.name||'Картинка')}">`:''}${body}${tgAskLive(m)?`<p class="tgc-wait">${ic('hourglass','sm')}Бот ждёт ответ на это сообщение</p>`:''}${at}</div>${kb}</div>`}
-// chat: {who, list, plain, menu — строка команд под перепиской (задача Т5, tg-menu.js), topics, cur, byOrg — темы чата и открытая тема (задача Т7, tg-topics.js)}
+// chat: {who, list, plain, group — общий чат фирмы (задача Т8, tg-group.js), menu — строка команд под перепиской (задача Т5, tg-menu.js), topics, cur, byOrg — темы чата и открытая тема (задача Т7, tg-topics.js)}
 function tgcHtml(chat){const shown=chat.list.map((m,i)=>tgTopicShown(chat,m)?tgcMsg(m,i,chat.plain):''),any=chat.list.some(m=>!m.day&&tgTopicShown(chat,m)),alien=chat.topics&&chat.cur.startsWith('org:')&&chat.cur!=='org:'+ORG.id;
-  return `<div class="tgc" data-tgchat><div class="tgc-head"><span class="tgc-ava">B</span><b>${esc(chat.who||'Buhuchet.kg')}</b><span>бот</span></div>${chat.topics?tgcTopicsHtml(chat):''}${any?shown.join(''):'<span class="tgc-empty">Сообщений нет</span>'}${alien?'<span class="tgc-empty">Здесь — сообщения и ответы на команды учётной записи этой организации. В макете её данных нет</span>':`${tgcAskHtml(chat)}${chat.menu?tgcMenuHtml():''}`}</div>`}
+  return `<div class="tgc" data-tgchat><div class="tgc-head"><span class="tgc-ava">${chat.group?ic('users','sm'):'B'}</span><b>${esc(chat.who||'Buhuchet.kg')}</b><span>${chat.group?'группа · бот Buhuchet.kg':'бот'}</span></div>${chat.topics?tgcTopicsHtml(chat):''}${any?shown.join(''):'<span class="tgc-empty">Сообщений нет</span>'}${alien?'<span class="tgc-empty">Здесь — сообщения и ответы на команды учётной записи этой организации. В макете её данных нет</span>':`${tgcAskHtml(chat)}${chat.menu?tgcMenuHtml():''}`}</div>`}
 
 // Ответ боту (поток Т, задача Т2; решение заказчика 13.11.2026: «если нужно прикрепить файл — отправить файл боту, нет файла — не сдано»).
 // Действию нужен файл или текст — бот просит ответить на своё сообщение и ждёт до конца дня; под просьбой кнопка «Отмена». Пока ответа нет, запись не меняется.
@@ -64,13 +65,13 @@ function tgAskClose(m){m.ask.off=true;(m.btns||[]).forEach(row=>row.forEach(x=>{
 // Отказ бот показывает скрытым ответом — его видит только нажавший, в переписке он не остаётся. Данные меняют только обратимые действия; деньги и удаление — только на сайте.
 // Каждое выполненное действие пишется в историю записи с пометкой «через Telegram» (tgLog).
 const TG_ACTS={};
-// def: {change — меняет данные (выключается владельцем), prev — работает и в отвязанном чате, perm — право, scope(u,arg) — запись в области, stale(u,arg) — запись уже изменена, run(u,arg,m,b) → {eph, msg, done}}
+// def: {change — меняет данные (выключается владельцем), prev — работает и в отвязанном чате, noLink — свой шаблон отказа «не привязан» (общий чат фирмы, задача Т8), perm — право, scope(u,arg) — запись в области, stale(u,arg) — запись уже изменена, run(u,arg,m,b) → {eph, msg, done}}
 function tgAct(id,def){TG_ACTS[id]=def}
 // «Отмена» под просьбой бота: бот перестаёт ждать ответ, запись не меняется
 tgAct('askCancel',{run:(u,arg,m)=>{if(!tgAskLive(m))return {eph:tplFill('tgActStale',{})};tgAskClose(m);return {done:'Отменено',eph:tplFill('tgActCancelled',{})}}});
 function tgRefusal(u,a,arg){
   if(!a)return tplFill('tgActStale',{});
-  if(!u||(!u.tg&&!a.prev))return tplFill('tgActNoLink',{});
+  if(!u||(!u.tg&&!a.prev))return tplFill(a.noLink||'tgActNoLink',{});
   if(u.active===false)return tplFill('tgActNoRight',{});
   if(a.change&&u.id!=='admin'&&ORG.tgActions===false)return tplFill('tgActOff',{});
   if(a.perm&&!can(a.perm))return tplFill('tgActNoRight',{});
@@ -118,9 +119,10 @@ tgAct('test',{run:()=>({eph:tplFill('tgTestOk',{})})});
 function tgTestMsg(){return {h:'Проверка бота',t:tplFill('tgTest',{}),tables:[{head:['Что проверяем','Как должно быть'],rows:[['Таблица','столбцами, как здесь'],['Кнопки','под сообщением'],['Скрытый ответ','после нажатия кнопки']]}],at:bishkekNow().hm,btns:[[{t:tgBtnT('tgBtnTest','Проверить кнопки'),act:'test',icon:'check'}]]}}
 
 // Окно «Чат с ботом»: макет переписки. o: {title, sub, note, who}
-function tgBotDlg(u,list,o={}){const chat={who:o.who||'Buhuchet.kg',list,plain:tgIsPlain(u),menu:!!o.menu};
+function tgBotDlg(u,list,o={}){const chat={who:o.who||'Buhuchet.kg',list,plain:tgIsPlain(u),menu:!!o.menu,group:!!o.group};
   // Темы (задача Т7): сообщения без темы — в «Общем»; открывается тема последнего сообщения
-  if(TG_BOT.topics){chat.topics=tgTopicsFor(u,o);chat.byOrg=!!tgOrgsOf(u,o).length;list.forEach(m=>{if(m.topic===undefined&&!m.day)m.topic=''});tgTopicStart(chat)}
+  // В общем чате фирмы (задача Т8) тем нет: темы — только в личном чате с ботом
+  if(TG_BOT.topics&&!o.group){chat.topics=tgTopicsFor(u,o);chat.byOrg=!!tgOrgsOf(u,o).length;list.forEach(m=>{if(m.topic===undefined&&!m.day)m.topic=''});tgTopicStart(chat)}
   // После «Это не я» сеанс нажавшего завершён: когда окно переписки закроют, макет покажет страницу входа (tgSecLeave, tg-security.js)
   openModal({size:'mid',live:true,onClose:()=>{tgSecLeave();if(o.onClose)o.onClose()},render:m=>({title:o.title||'Прототип: чат с ботом',sub:o.sub||'Так сообщения бота выглядят в Telegram',
     body:`<label class="check-row"><input type="checkbox" class="sw" id="tgc-plain" ${chat.plain?'checked':''}><span class="grow">Показать простым текстом<div class="hint">Запасной вид: без таблиц и разделов. Его получает тот, кто включил «Сообщения простым текстом» в «Мой профиль»${TG_BOT.rich?'':'; сейчас так получают все — таблицы выключены в Админке'}. Кнопки остаются.</div></span></label>${chat.topics&&u&&u.id!=='admin'?`<label class="check-row"><input type="checkbox" class="sw" id="tgc-orgs" ${chat.byOrg?'checked':''}><span class="grow">Демо: этот Telegram привязан и к учётной записи в другой организации<div class="hint">Тогда темы — по организациям: отчёты и задачи каждой организации в своей теме, «Безопасность» — общая.</div></span></label>`:''}${tgcHtml(chat)}<div class="note">${ic('info')}<span>${o.note||'Это макет: шрифты и форма кнопок в приложении Telegram немного другие. Тексты, подписи кнопок и скрытые ответы — Справочники платформы → «Шаблоны».'}</span></div>`,

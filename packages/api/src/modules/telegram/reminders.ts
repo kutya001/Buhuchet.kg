@@ -6,6 +6,7 @@ import {
   markDigestDay,
   messageTemplates,
   productionCalendarEntries,
+  readTelegramGroup,
   telegramChat,
   telegramDigestOrgs,
   withOrgContext,
@@ -27,7 +28,10 @@ import {
   feeReminder,
   fillTemplate,
   formatText,
+  groupSummary,
+  groupSummaryMessage,
   hasPermission,
+  isWorkingDay,
   moreOnSiteMessage,
   morningTables,
   nextWorkingDay,
@@ -454,7 +458,81 @@ export async function buildDailyReminders(
       }
     }
   }
+  const group = await groupSummaryRow(ctx, tx, {
+    day,
+    working: isWorkingDay(calendar, day),
+    reports,
+    names,
+    taxpay: data.features.taxpay === true,
+    reportConfirm: data.reportConfirm,
+    tpl,
+    tr,
+    more: tableTexts.more,
+  });
+  if (group) out.push(group);
   return out;
+}
+
+/**
+ * Сводка дня в общий чат фирмы (поток Т, задача Т8; прототип v105 `tgGrpMsg`): по рабочим дням, если
+ * группа подключена, бот в ней и сводка включена; сдавать сегодня нечего и просроченного нет — не
+ * отправляется. Только числа и имена сотрудников — без контрагентов и сумм. В очереди получатель —
+ * владелец, который подключил группу; уходит строка, пока группа подключена к организации.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-12
+async function groupSummaryRow(
+  ctx: JobContext,
+  tx: Tx,
+  o: {
+    day: IsoDate;
+    working: boolean;
+    reports: readonly ReminderReport[];
+    names: ReadonlyMap<string, string>;
+    taxpay: boolean;
+    reportConfirm: boolean;
+    tpl: (key: TelegramTemplateKey, values?: Record<string, string | number>) => string;
+    tr: Translate;
+    more: (n: number) => string;
+  },
+): Promise<OutboxMessage | null> {
+  if (!o.working) return null;
+  const group = await readTelegramGroup(tx);
+  if (!group || group.goneAt || !group.summary) return null;
+  const summary = groupSummary(o.reports, {
+    today: o.day,
+    taxpay: o.taxpay,
+    reportConfirm: o.reportConfirm,
+  });
+  if (!summary) return null;
+  const message = groupSummaryMessage(summary, o.names, {
+    heading: o.tpl('tgGrpHead', { день: botDayWords(o.day, weekdayMondayFirst(o.day), o.tr) }),
+    sub: o.tpl('tgGrpSub', {
+      сегодня: summary.today,
+      просрочено: summary.over,
+      ждут: summary.wait,
+    }),
+    employee: o.tr('telegram.table.employee'),
+    today: o.tr('telegram.table.today'),
+    overdue: o.tr('telegram.table.overdue'),
+    unassigned: o.tr('telegram.table.unassigned'),
+    mine: o.tpl('tgBtnGrpMine'),
+    more: o.more,
+  });
+  const problem =
+    botMessageProblem(message) ??
+    (botPlainText(message).length > BOT_TEXT_MAX ? 'текст длиннее предела Telegram' : null);
+  if (problem) {
+    ctx.logger.warn({ job: 'telegram.reminders', problem }, 'Telegram: сводка в общий чат');
+    return null;
+  }
+  return {
+    userId: group.linkedBy,
+    chatId: group.chatId,
+    kind: 'group',
+    text: botPlainText(message),
+    message,
+    dedupeKey: `group:${o.day}`,
+  };
 }
 
 /** Напоминания за день — задача расписания (каждую минуту; собирает только тем, кому пора). */

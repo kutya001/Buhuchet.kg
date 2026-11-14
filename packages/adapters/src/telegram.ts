@@ -70,6 +70,12 @@ export interface TelegramSendOptions {
    * эту тему. Темы удалили — Telegram отвечает 400 «message thread not found» (`isThreadMissing`).
    */
   threadId?: number;
+  /**
+   * Скрытое сообщение в группе (поток Т, задача Т8; Bot API 10.3 `ephemeral_message_parameters`): его
+   * видит только `receiverUserId`; в ответ на нажатие — с номером нажатия (`callbackQueryId`), тогда у
+   * бота 15 секунд. Telegram доставляет его без гарантии и может убрать сам.
+   */
+  ephemeral?: { receiverUserId: number; callbackQueryId?: string };
 }
 
 /** Итог создания темы в личном чате с ботом (createForumTopic): номер темы или отказ Telegram. */
@@ -162,6 +168,8 @@ export interface Telegram {
   setCommands(commands: readonly TelegramCommand[]): Promise<void>;
   /** Состояние вебхука (Админка → «Телеграм» → «Проверить вебхук»); ошибка Bot API — исключение. */
   getWebhookInfo(): Promise<TelegramWebhookInfo>;
+  /** Выйти из группы (поток Т, задача Т8: общий чат фирмы отключён). false — Telegram не принял. */
+  leaveChat(chatId: string | number): Promise<boolean>;
 }
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -364,7 +372,19 @@ export function createTelegramBotApi(options: {
         : opts.menu
           ? { reply_markup: menuMarkup(opts.menu) }
           : {};
-      const thread = opts.threadId !== undefined ? { message_thread_id: opts.threadId } : {};
+      const thread = {
+        ...(opts.threadId !== undefined ? { message_thread_id: opts.threadId } : {}),
+        ...(opts.ephemeral
+          ? {
+              ephemeral_message_parameters: {
+                receiver_user_id: opts.ephemeral.receiverUserId,
+                ...(opts.ephemeral.callbackQueryId
+                  ? { callback_query_id: opts.ephemeral.callbackQueryId }
+                  : {}),
+              },
+            }
+          : {}),
+      };
       let data: BotApiResponse<{ message_id: number }> | null = null;
       if (opts.rich !== undefined) {
         data = await call<{ message_id: number }>(
@@ -403,7 +423,29 @@ export function createTelegramBotApi(options: {
           opts.timeoutMs,
         );
       }
-      if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
+      if (data.ok && data.result) {
+        const result = data.result as { message_id: number; ephemeral_message_id?: number };
+        // Скрытое сообщение (задача Т8): Telegram отдаёт его с номером 0 и `ephemeral_message_id`.
+        // Нет этих признаков — сервер Bot API поле не знает, и сообщение увидели все в чате: оно
+        // сразу удаляется, а отправка считается неудачной (защита — строже, docs/deviations.md п. Т-12).
+        if (
+          opts.ephemeral &&
+          result.message_id !== 0 &&
+          result.ephemeral_message_id === undefined
+        ) {
+          await call<boolean>('deleteMessage', {
+            chat_id: chatId,
+            message_id: result.message_id,
+          }).catch(() => null);
+          return {
+            ok: false,
+            errorCode: 0,
+            description: 'ephemeral message is not supported',
+            permanent: true,
+          };
+        }
+        return { ok: true, messageId: result.message_id };
+      }
       return failure(data);
     },
     async createTopic(chatId, name) {
@@ -426,6 +468,10 @@ export function createTelegramBotApi(options: {
         callback_query_id: callbackId,
         ...(text ? { text, show_alert: opts.alert === true } : {}),
       });
+      return data.ok;
+    },
+    async leaveChat(chatId) {
+      const data = await call<boolean>('leaveChat', { chat_id: chatId });
       return data.ok;
     },
     async editKeyboard(chatId, messageId, keyboard) {
@@ -550,6 +596,8 @@ export interface FakeTelegram extends Telegram {
   topicsOn: boolean;
   /** Человек удалил тему: отправка в неё — 400 «message thread not found». */
   deleteTopic(threadId: number): void;
+  /** Группы, из которых бот вышел (поток Т, задача Т8). */
+  readonly left: Array<string | number>;
 }
 
 /** Бот для тестов: запоминает сообщения, умеет имитировать ошибки. */
@@ -576,6 +624,11 @@ export function createFakeTelegram(): FakeTelegram {
     photos: [],
     topics: [],
     topicsOn: true,
+    left: [],
+    async leaveChat(chatId) {
+      fake.left.push(chatId);
+      return true;
+    },
     deleteTopic(threadId) {
       deleted.add(threadId);
     },

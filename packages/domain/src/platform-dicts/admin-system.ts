@@ -384,6 +384,16 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgTopicTasks: [],
   tgTopicLeads: [],
   tgTopicSecurity: [],
+  tgGrpLinked: ['группа', 'организация'],
+  tgGrpLinkBad: [],
+  tgGrpOff: [],
+  tgGrpHead: ['день'],
+  tgGrpSub: ['сегодня', 'просрочено', 'ждут'],
+  tgBtnGrpMine: [],
+  tgGrpMineHead: ['сегодня', 'просрочено'],
+  tgGrpMineNone: [],
+  tgGrpMineToast: [],
+  tgGrpNoLink: [],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -555,6 +565,16 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgTopicTasks',
   'tgTopicLeads',
   'tgTopicSecurity',
+  'tgGrpLinked',
+  'tgGrpLinkBad',
+  'tgGrpOff',
+  'tgGrpHead',
+  'tgGrpSub',
+  'tgBtnGrpMine',
+  'tgGrpMineHead',
+  'tgGrpMineNone',
+  'tgGrpMineToast',
+  'tgGrpNoLink',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

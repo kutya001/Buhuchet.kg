@@ -80,6 +80,24 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
       return typeof change.to === 'string' && /^\d{4}-\d{2}$/.test(change.to)
         ? [t('org.history.month_closed', { month: monthLabel(change.to as YearMonth) })]
         : [];
+    // Общий чат фирмы в Telegram (поток Т, задача Т8; прототип v105 modules/tg-group.js): подключён —
+    // новое название, отключён — прежнее; «бота удалили» и сводка дня.
+    case 'telegramGroup':
+      return typeof change.to === 'string'
+        ? [t('org.history.tg_group_on', { title: change.to })]
+        : typeof change.from === 'string'
+          ? [t('org.history.tg_group_off', { title: change.from })]
+          : [];
+    case 'telegramGroupGone':
+      return [t('org.history.tg_group_gone', { title: String(change.to ?? '') })];
+    case 'telegramGroupSummary':
+      return [
+        t('org.history.tg_group_summary', {
+          state: t(
+            change.to ? 'org.history.tg_group_summary_on' : 'org.history.tg_group_summary_off',
+          ),
+        }),
+      ];
     default:
       return [];
   }

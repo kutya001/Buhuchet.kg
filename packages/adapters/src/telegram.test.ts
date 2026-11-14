@@ -119,6 +119,33 @@ describe('createTelegramBotApi', () => {
     expect(limited.mock.calls).toHaveLength(1);
   });
 
+  it('скрытое сообщение (Т8): Telegram подтвердил — успех; не подтвердил — сообщение удаляется, отправка неудачна', async () => {
+    const ephemeral = { receiverUserId: 77, callbackQueryId: 'cb' };
+    const hidden = fetchReturning({ ok: true, result: { message_id: 0, ephemeral_message_id: 5 } });
+    const ok = await createTelegramBotApi({ token: '1:abc', fetch: hidden }).sendMessage(
+      -100,
+      'Мои',
+      { ephemeral },
+    );
+    expect(ok).toEqual({ ok: true, messageId: 0 });
+    expect(JSON.parse(String(hidden.mock.calls[0]![1].body))).toMatchObject({
+      ephemeral_message_parameters: { receiver_user_id: 77, callback_query_id: 'cb' },
+    });
+
+    const open = fetchReturning({ ok: true, result: { message_id: 31 } });
+    const failed = await createTelegramBotApi({ token: '1:abc', fetch: open }).sendMessage(
+      -100,
+      'Мои',
+      { ephemeral },
+    );
+    expect(failed).toMatchObject({ ok: false, permanent: true });
+    expect(open.mock.calls[1]![0]).toBe('https://api.telegram.org/bot1:abc/deleteMessage');
+    expect(JSON.parse(String(open.mock.calls[1]![1].body))).toEqual({
+      chat_id: -100,
+      message_id: 31,
+    });
+  });
+
   it('ответ на нажатие и правка кнопок', async () => {
     const fetch = fetchReturning({ ok: true, result: true });
     const bot = createTelegramBotApi({ token: '1:abc', fetch });

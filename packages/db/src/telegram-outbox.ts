@@ -15,6 +15,7 @@ import { and, asc, eq, inArray, lte, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import {
   telegramDigestDays,
+  telegramGroups,
   telegramLinks,
   telegramNotifySettings,
   telegramOutbox,
@@ -101,7 +102,8 @@ export async function claimOutbox(
   o: { now: Date; limit: number; leaseSeconds: number; ids?: readonly string[] },
 ): Promise<ClaimedOutbox[]> {
   if (o.ids && !o.ids.length) return [];
-  // Получатель отвязал или сменил Telegram, его заблокировали — строка не уходит в прежний чат.
+  // Получатель отвязал или сменил Telegram, его заблокировали — строка не уходит в прежний чат. Строка в
+  // общий чат фирмы (вид `group`, задача Т8) уходит, пока группа подключена к организации и бот в ней.
   await tx
     .update(telegramOutbox)
     .set({ status: 'error', lastError: OUTBOX_UNDELIVERABLE })
@@ -110,7 +112,7 @@ export async function claimOutbox(
         eq(telegramOutbox.status, 'pending'),
         lte(telegramOutbox.nextAt, o.now),
         o.ids ? inArray(telegramOutbox.id, [...o.ids]) : undefined,
-        sql`not exists (select 1 from ${telegramLinks} inner join ${users} on ${users.id} = ${telegramLinks.userId} where ${telegramLinks.userId} = ${telegramOutbox.userId} and ${telegramLinks.chatId} = ${telegramOutbox.chatId} and not ${users.blocked})`,
+        sql`case when ${telegramOutbox.kind} = 'group' then not exists (select 1 from ${telegramGroups} where ${telegramGroups.orgId} = ${telegramOutbox.orgId} and ${telegramGroups.chatId} = ${telegramOutbox.chatId} and ${telegramGroups.goneAt} is null) else not exists (select 1 from ${telegramLinks} inner join ${users} on ${users.id} = ${telegramLinks.userId} where ${telegramLinks.userId} = ${telegramOutbox.userId} and ${telegramLinks.chatId} = ${telegramOutbox.chatId} and not ${users.blocked}) end`,
       ),
     );
   // Сначала — по порядку очереди: строки блокируются здесь, порядок отправки — этот же (сообщения одного
@@ -146,8 +148,11 @@ export async function claimOutbox(
       userId: telegramOutbox.userId,
       payload: telegramOutbox.payload,
     });
-  // «Сообщения простым текстом» получателей — только у строк с описанием сообщения.
-  const rich = [...new Set(rows.filter((r) => r.payload).map((r) => r.userId))];
+  // «Сообщения простым текстом» получателей — только у строк с описанием сообщения; у строки в общий чат
+  // фирмы получатель — группа, а не владелец, который её подключил.
+  const rich = [
+    ...new Set(rows.filter((r) => r.payload && r.kind !== 'group').map((r) => r.userId)),
+  ];
   const plain = new Set(
     rich.length
       ? (
@@ -167,7 +172,7 @@ export async function claimOutbox(
       text: r.text ?? '',
       tries: r.tries,
       message: asBotMessage(r.payload),
-      plain: plain.has(r.userId),
+      plain: r.kind !== 'group' && plain.has(r.userId),
     }));
 }
 

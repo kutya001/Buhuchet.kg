@@ -21,7 +21,9 @@ import {
   cpTgStartToken,
   formatDateRu,
   formatText,
+  GROUP_MINE,
   loginDenial,
+  parseBotPress,
   parseStartCommand,
   relinkCodeOf,
   TELEGRAM_RELINK_CODE_TTL_MINUTES,
@@ -40,6 +42,7 @@ import { clientStart, clientText } from './client';
 import { clientDebtOn } from './client/debt';
 import { clientPress, clientQuestion } from './client/pay';
 import { botMenu, handleBotCommand, sendBotHint } from './commands';
+import { handleGroupPress, handleGroupUpdate } from './group';
 import { handleBotPress } from './press';
 import { handleBotReply, type BotIncoming } from './reply';
 import { inReplyThread } from './topics';
@@ -112,7 +115,7 @@ export const webhookRoute = createRoute({
   path: '/telegram/webhook',
   tags: ['telegram'],
   summary:
-    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями, ответ на просьбу бота (файл или текст)',
+    'Вебхук бота: привязка Telegram по ссылке /start <токен>, код замены из прежнего чата, нажатия кнопок под сообщениями, ответ на просьбу бота (файл или текст), общий чат фирмы',
   request: {
     body: { required: true, content: { 'application/json': { schema: TelegramUpdate } } },
   },
@@ -380,13 +383,34 @@ async function incomingFile(
 export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute, AppEnv> {
   return async (c) => {
     const ok = c.json({ ok: true as const }, 200);
-    const update = c.req.valid('json') as { message?: unknown; callback_query?: unknown };
+    const update = c.req.valid('json') as {
+      message?: unknown;
+      callback_query?: unknown;
+      my_chat_member?: unknown;
+    };
     // Нажатие кнопки под сообщением (поток Т, задача Т1). Сбой не роняет вебхук: иначе Telegram
     // повторял бы доставку нажатия, а действие могло уже выполниться.
     const press = ButtonPress.safeParse(update.callback_query);
     if (press.success) {
       const q = press.data;
       try {
+        // «Мои» под сводкой в общем чате фирмы (поток Т, задача Т8) — своё правило, не ядро нажатий;
+        // любое другое нажатие в группе ядро по-прежнему молча отклоняет.
+        const type = q.message?.chat.type;
+        if (
+          q.message &&
+          !q.from.is_bot &&
+          (type === 'group' || type === 'supergroup') &&
+          parseBotPress(q.data ?? '')?.action === GROUP_MINE
+        ) {
+          await handleGroupPress(deps, {
+            callbackId: q.id,
+            fromId: q.from.id,
+            chatId: q.message.chat.id,
+            data: q.data ?? '',
+          });
+          return ok;
+        }
         const pressed = {
           callbackId: q.id,
           fromId: q.from.id,
@@ -403,6 +427,13 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       } catch (err) {
         deps.logger.error({ err }, 'Telegram: нажатие кнопки не обработано');
       }
+      return ok;
+    }
+    // Общий чат фирмы (поток Т, задача Т8): подключение по ссылке, «бота удалили», новый номер группы.
+    try {
+      if (await handleGroupUpdate(deps, update)) return ok;
+    } catch (err) {
+      deps.logger.error({ err }, 'Telegram: обновление из группы не обработано');
       return ok;
     }
     const message = PrivateMessage.safeParse(update.message);
