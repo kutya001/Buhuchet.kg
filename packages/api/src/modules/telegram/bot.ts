@@ -27,7 +27,6 @@ import {
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
 import { botSendOptions, redactBotToken } from './outbox';
-import { sendInTopic, threadOption } from './topics';
 
 /**
  * Текст сообщения бота: шаблон «Справочников платформы» с этим ключом, а пока его там нет — текст по
@@ -64,9 +63,7 @@ export async function sendNow(
   let error = '';
   try {
     const tg = deps.telegram;
-    const res = await sendInTopic(deps, chatId, log ?? null, (threadId) =>
-      tg.sendMessage(chatId, text, { ...options, ...threadOption(threadId) }),
-    );
+    const res = await tg.sendMessage(chatId, text, options);
     ok = res.ok;
     if (!res.ok) {
       error = `${res.errorCode}: ${res.description}`;
@@ -115,13 +112,10 @@ export async function sendBotMessage(
     const plain =
       !(await telegramBotRich(deps.db)) || (await telegramPlainText(deps.db, to.userId));
     const tg = deps.telegram;
-    const res = await sendInTopic(deps, to.chatId, { kind, userId: to.userId }, (threadId) =>
-      tg.sendMessage(to.chatId, text, {
-        ...botSendOptions(message, { plain }),
-        ...(options.menu ? { menu: options.menu } : {}),
-        ...threadOption(threadId),
-      }),
-    );
+    const res = await tg.sendMessage(to.chatId, text, {
+      ...botSendOptions(message, { plain }),
+      ...(options.menu ? { menu: options.menu } : {}),
+    });
     ok = res.ok;
     if (res.ok) messageId = res.messageId;
     else {

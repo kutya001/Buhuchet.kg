@@ -37,7 +37,6 @@ export * from './telegram/reminders';
 export * from './telegram/security';
 export * from './telegram/staff-bot';
 export * from './telegram/tables';
-export * from './telegram/topics';
 export * from './l10n/texts';
 export * from './platform-dicts/catalog';
 export * from './platform-dicts/calendar';

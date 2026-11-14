@@ -96,20 +96,6 @@ export const TELEGRAM_ADMIN_TEXTS = {
     ru: 'Выключите, если Telegram возвращает ошибки или таблицы показываются неверно: все пользователи сразу начнут получать простой текст. Кнопки под сообщениями и копирование кода останутся. Отдельный пользователь переключает вид сам: «Мой профиль» → «Сообщения простым текстом».',
     section: S,
   },
-  'tgadm.view.topics': { ru: 'Темы в чате с ботом', section: S },
-  'tgadm.view.topics_hint': {
-    ru: 'Бот раскладывает сообщения по темам «Отчёты», «Задачи» и «Безопасность»; если Telegram привязан к учётным записям в нескольких организациях — по темам организаций. Чат меняется у всех пользователей сразу. Сначала включите темы для бота в @BotFather: без этого бот пишет без тем, как раньше.',
-    section: S,
-  },
-  'tgadm.view.topics_ready': { ru: 'Темы в @BotFather', section: S },
-  'tgadm.view.topics_ready_on': { ru: 'Включены', section: S },
-  'tgadm.view.topics_ready_off': {
-    ru: 'Не включены: бот пишет без тем. Включите темы для бота в @BotFather',
-    section: S,
-  },
-  'tgadm.view.topics_ready_unknown': { ru: 'Telegram не ответил', section: S },
-  'tgadm.view.topics_on': { ru: 'Бот раскладывает сообщения по темам', section: S },
-  'tgadm.view.topics_off': { ru: 'Бот пишет без тем', section: S },
   'tgadm.view.press': { ru: 'Нажатия кнопок', section: S },
   'tgadm.view.press_v': {
     ru: 'проверяются: чат привязан, вход не закрыт, право и область, запись не изменилась',

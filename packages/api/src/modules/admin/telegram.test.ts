@@ -310,17 +310,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       actualUrl: null,
       checkedAt: f.deps.clock.now().toISOString(),
       rich: true,
-      topics: false,
-      topicsReady: true,
     });
-    // Темы у бота не включены в @BotFather — «Не включены»; getMe не ответил — неизвестно.
-    tg().topicsOn = false;
-    expect(await check()).toMatchObject({ topics: false, topicsReady: false });
-    tg().topicsOn = true;
-    const topicsEnabled = tg().topicsEnabled;
-    tg().topicsEnabled = () => Promise.reject(new Error('fetch failed: /bot123:SECRET/getMe'));
-    expect(await check()).toMatchObject({ topicsReady: null });
-    tg().topicsEnabled = topicsEnabled;
     tg().webhookInfo = {
       lastErrorAt: new Date(f.deps.clock.now().getTime() - 5 * 60_000),
       lastError: 'Wrong response from the webhook: 502 Bad Gateway',
@@ -393,40 +383,14 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     ]);
   });
 
-  it('«Темы в чате с ботом»: переключает только администратор платформы; неверное тело — 400; запись в историю платформы; «Сообщения с таблицами» не затирает', async () => {
-    const path = '/api/admin/telegram/bot/topics';
-    const put = (body: unknown, cookie = admin) => apiRequest(f.app, 'PUT', path, cookie, body);
-    const state = async () =>
-      AdminTelegramBot.parse(await (await get('/api/admin/telegram/bot')).json());
-    expect((await put({ topics: true }, owner)).status).toBe(403);
-    expect((await put({ topics: true }, '')).status).toBe(401);
-    for (const body of [{}, { topics: 'да' }, { topics: true, extra: 1 }]) {
-      expect((await put(body)).status, JSON.stringify(body)).toBe(400);
-    }
-    expect(await state()).toMatchObject({ topics: false, rich: true });
-    expect((await put({ topics: true })).status).toBe(200);
-    expect(await state()).toMatchObject({ topics: true, rich: true });
-    // «Сообщения с таблицами» и темы — в одном разделе настроек: одно не сбрасывает другое.
-    const view = (rich: boolean) =>
-      apiRequest(f.app, 'PUT', '/api/admin/telegram/bot/view', admin, { rich });
-    expect((await view(false)).status).toBe(200);
-    expect(await state()).toMatchObject({ topics: true, rich: false });
-    expect((await put({ topics: true })).status).toBe(200);
-    expect((await put({ topics: false })).status).toBe(200);
-    expect((await view(true)).status).toBe(200);
-    expect(await state()).toMatchObject({ topics: false, rich: true });
-    const history = await f.t.admin.db
-      .select({ changes: schema.platformAuditLog.changes })
-      .from(schema.platformAuditLog)
-      .where(eq(schema.platformAuditLog.entity, 'telegram_bot'))
-      .orderBy(schema.platformAuditLog.at, schema.platformAuditLog.id);
-    // Раньше в этом файле — две записи «Сообщений с таблицами».
-    expect(history.slice(-4).map((h) => h.changes)).toEqual([
-      [{ field: 'topics', from: false, to: true }],
-      [{ field: 'rich', from: true, to: false }],
-      [{ field: 'topics', from: true, to: false }],
-      [{ field: 'rich', from: false, to: true }],
-    ]);
+  it('«Темы в чате с ботом» убраны (прототип v109): переключателя нет, в состоянии бота тем нет', async () => {
+    const res = await apiRequest(f.app, 'PUT', '/api/admin/telegram/bot/topics', admin, {
+      topics: true,
+    });
+    expect(res.status).toBe(404);
+    const state = (await (await get('/api/admin/telegram/bot')).json()) as Record<string, unknown>;
+    expect(state).not.toHaveProperty('topics');
+    expect(state).not.toHaveProperty('topicsReady');
   });
 
   it('«Рассылка»: всем, одной организации; пустой и длинный текст — 400, заблокированная организация — 409', async () => {

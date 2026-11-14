@@ -66,14 +66,15 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(result.uiTexts.inserted).toBeGreaterThan(0);
 
     // Разделы со своими таблицами в platform_reference не копируются; у `dictionaries` справочников без
-    // своей таблицы не осталось (категории задач — с задачи 2.23).
+    // своей таблицы не осталось (категории задач — с задачи 2.23), кроме «БИК банков» прототипа v107:
+    // он лежит здесь, пока его не перенесут в продукт (docs/deviations.md п. Т-14).
     const keys = (await t.admin.db.select().from(platformReference)).map((r) => r.key);
     for (const key of TABLE_SECTIONS) expect(keys).not.toContain(key);
     const [dictionaries] = await t.admin.db
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([]);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['bik']);
     expect(await t.admin.db.$count(reportTypes)).toBe((refDB.reportTypes as unknown[]).length);
     expect(await t.admin.db.$count(banks)).toBe(
       (refDB.dictionaries as { banks: { items: unknown[] } }).banks.items.length,
@@ -160,7 +161,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       .select()
       .from(platformReference)
       .where(sql`${platformReference.key} = 'dictionaries'`);
-    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual([]);
+    expect(Object.keys(dictionaries!.payload as object).sort()).toEqual(['bik']);
   });
 
   it('справочники платформы читаются ролью приложения, демо-организация — только в своём контексте', async () => {

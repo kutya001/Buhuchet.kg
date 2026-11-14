@@ -373,6 +373,9 @@ const BankSchema = z
     name: z.string().min(1),
     type: z.enum(['Банк', 'Электронный кошелёк']),
     byPhone: z.boolean().default(false),
+    // Код банка в БИК (прототип v107, справочник «БИК банков»): столбца у банков пока нет — поле
+    // принимается и не сохраняется, пока БИК не перенесён в продукт.
+    bikCode: z.string().optional(),
     note: z.string().default(''),
     active: z.boolean(),
     ...audit,

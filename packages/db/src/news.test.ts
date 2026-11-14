@@ -24,7 +24,7 @@ import { markWelcomeSeen } from './onboarding';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { readPlatformHistory } from './platform-history';
 import { news, newsReads, platformAuditLog, users } from './schema';
-import { newsSeedRows } from './seed/news';
+import { NEWS_NOT_YET, newsSeedRows } from './seed/news';
 import { readSpecJson } from './spec-data';
 import {
   createTestDatabase,
@@ -407,6 +407,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     });
     // Ссылка на видео прототипа (vd-intro) не переносится: видео в базу не заливаются (п. О-53).
     expect(rows.find((r) => r.id === 'v79')).toMatchObject({ linkKind: null, linkId: null });
+    // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14), не наполняются; v109 — да.
+    expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
+    expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
       sql`select count(*)::integer as n from news where id = 'v1'`,
     )) as unknown as [{ n: number }];

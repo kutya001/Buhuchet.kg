@@ -70,7 +70,6 @@ import {
   type BotPressContext,
 } from './press';
 import { botSiteUrl } from './staff-view';
-import { sendInTopic, threadOption } from './topics';
 
 /*
  * Виджет «Мои отчёты на неделю» (поток Т, задача Т9; пакет заказчика 13.11.2026, идея 5; прототип v106
@@ -194,12 +193,7 @@ export async function sendWeekWidget(
   let error = '';
   let messageId: number | null = null;
   try {
-    const res = await sendInTopic(
-      deps,
-      chatId,
-      { kind: 'bot_cmd', userId: user.userId, orgId: user.orgId },
-      (threadId) => tg.sendWidget(chatId, { html, chatData, caption, ...threadOption(threadId) }),
-    );
+    const res = await tg.sendWidget(chatId, { html, chatData, caption });
     if (res.ok) messageId = res.messageId;
     else error = `${res.errorCode}: ${res.description}`;
   } catch (err) {

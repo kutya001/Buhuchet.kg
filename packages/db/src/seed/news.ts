@@ -38,14 +38,23 @@ function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
 }
 
 /**
- * Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи). Ссылка
+ * Новости версий прототипа, работа которых ещё не перенесена в продукт: пока её нет, они не
+ * наполняются — иначе «Что нового» при входе описывало бы то, чего на сайте нет (справочник «БИК
+ * банков» v107–v108, docs/deviations.md п. Т-14). PR переноса версии убирает её отсюда.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-14
+export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108']);
+
+/**
+ * Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи) без
+ * `NEWS_NOT_YET`. Ссылка
  * «▶ Смотреть видео» на видео из refDB.videos не переносится: видео прототипа в базу продукта не
  * заливаются, их файлов нет (docs/deviations.md п. О-53).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-53
 export function newsSeedRows(section: unknown) {
   return NewsSection.parse(section ?? [])
-    .filter((n) => n.status === 'Опубликовано')
+    .filter((n) => n.status === 'Опубликовано' && !NEWS_NOT_YET.has(n.id))
     .map((n) => {
       const type = NEWS_TYPE_BY_NAME[n.type];
       if (!type) throw new Error(`Новость ${n.id}: неизвестный тип «${n.type}»`);

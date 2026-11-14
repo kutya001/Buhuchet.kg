@@ -149,9 +149,10 @@ describe('createTelegramBotApi', () => {
   it('виджет (Т9): sendWidget с запретом пересылки и запросами, правка данных, ответ на запрос', async () => {
     const fetch = fetchReturning({ ok: true, result: { message_id: 12 } });
     const bot = createTelegramBotApi({ token: '1:abc', fetch });
-    expect(
-      await bot.sendWidget(77, { html: '<b>x</b>', chatData: '{}', caption: 'Мои', threadId: 5 }),
-    ).toEqual({ ok: true, messageId: 12 });
+    expect(await bot.sendWidget(77, { html: '<b>x</b>', chatData: '{}', caption: 'Мои' })).toEqual({
+      ok: true,
+      messageId: 12,
+    });
     await bot.editWidgetData(77, 12, '{"o":"старый"}');
     await bot.answerWidgetQuery('q1', 'Готово');
     const calls = fetch.mock.calls.map(([url, init]) => [
@@ -168,7 +169,6 @@ describe('createTelegramBotApi', () => {
           caption: 'Мои',
           allow_queries: true,
           protect_content: true,
-          message_thread_id: 5,
         },
       ],
       ['editMessageWidgetData', { chat_id: 77, message_id: 12, chat_data: '{"o":"старый"}' }],

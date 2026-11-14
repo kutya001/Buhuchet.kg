@@ -66,25 +66,12 @@ export interface TelegramSendOptions {
   /** Сколько ждать ответа Telegram, мс (по умолчанию 10 с); дольше — ошибка, запрос прерывается. */
   timeoutMs?: number;
   /**
-   * Тема личного чата с ботом (поток Т, задача Т7; Bot API `message_thread_id`): сообщение уходит в
-   * эту тему. Темы удалили — Telegram отвечает 400 «message thread not found» (`isThreadMissing`).
-   */
-  threadId?: number;
-  /**
    * Скрытое сообщение в группе (поток Т, задача Т8; Bot API 10.3 `ephemeral_message_parameters`): его
    * видит только `receiverUserId`; в ответ на нажатие — с номером нажатия (`callbackQueryId`), тогда у
    * бота 15 секунд. Telegram доставляет его без гарантии и может убрать сам.
    */
   ephemeral?: { receiverUserId: number; callbackQueryId?: string };
 }
-
-/** Итог создания темы в личном чате с ботом (createForumTopic): номер темы или отказ Telegram. */
-export type TelegramTopicResult =
-  { ok: true; threadId: number } | Extract<TelegramSendResult, { ok: false }>;
-
-/** Отказ Telegram значит, что темы больше нет (человек её удалил) — её можно создать заново. */
-export const isThreadMissing = (r: { ok: boolean; description?: string }): boolean =>
-  !r.ok && /thread not found|topic.*(deleted|not found)/i.test(r.description ?? '');
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 /** Сколько ждать файл, присланный боту, мс: до 20 МБ с серверов Telegram. */
@@ -128,17 +115,10 @@ export interface Telegram {
   sendPhoto(
     chatId: string | number,
     photo: TelegramPhoto,
-    options?: Pick<TelegramSendOptions, 'html' | 'keyboard' | 'timeoutMs' | 'threadId'> & {
+    options?: Pick<TelegramSendOptions, 'html' | 'keyboard' | 'timeoutMs'> & {
       caption?: string;
     },
   ): Promise<TelegramPhotoResult>;
-  /**
-   * Создать тему в личном чате с ботом (поток Т, задача Т7; createForumTopic, название до 128 знаков).
-   * Темы у бота не включены в @BotFather — отказ Telegram.
-   */
-  createTopic(chatId: string | number, name: string): Promise<TelegramTopicResult>;
-  /** Включены ли у бота темы в личных чатах (getMe `has_topics_enabled`); ошибка Bot API — исключение. */
-  topicsEnabled(): Promise<boolean>;
   /**
    * Ответ на нажатие кнопки: без текста — просто снять ожидание; с текстом — скрытый ответ (до 200
    * знаков), его видит только нажавший; `alert` — окном. false — Telegram ответ не принял.
@@ -187,7 +167,6 @@ export interface TelegramWidget {
   html: string;
   chatData: string;
   caption: string;
-  threadId?: number;
 }
 
 type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
@@ -347,7 +326,6 @@ export function createTelegramBotApi(options: {
       type Sent = { message_id: number; photo?: { file_id?: string }[] };
       const markup = opts.keyboard?.length ? replyMarkup(opts.keyboard) : null;
       const caption: Record<string, string> = opts.caption ? { caption: opts.caption } : {};
-      const thread = opts.threadId !== undefined ? { message_thread_id: opts.threadId } : {};
       const mode: Record<string, string> = opts.html && opts.caption ? { parse_mode: 'HTML' } : {};
       const data =
         'fileId' in photo
@@ -356,7 +334,6 @@ export function createTelegramBotApi(options: {
               {
                 chat_id: chatId,
                 photo: photo.fileId,
-                ...thread,
                 ...caption,
                 ...mode,
                 ...(markup ? { reply_markup: markup } : {}),
@@ -367,9 +344,6 @@ export function createTelegramBotApi(options: {
               'sendPhoto',
               {
                 chat_id: String(chatId),
-                ...(opts.threadId !== undefined
-                  ? { message_thread_id: String(opts.threadId) }
-                  : {}),
                 ...caption,
                 ...mode,
                 ...(markup ? { reply_markup: JSON.stringify(markup) } : {}),
@@ -390,35 +364,26 @@ export function createTelegramBotApi(options: {
         : opts.menu
           ? { reply_markup: menuMarkup(opts.menu) }
           : {};
-      const thread = {
-        ...(opts.threadId !== undefined ? { message_thread_id: opts.threadId } : {}),
-        ...(opts.ephemeral
-          ? {
-              ephemeral_message_parameters: {
-                receiver_user_id: opts.ephemeral.receiverUserId,
-                ...(opts.ephemeral.callbackQueryId
-                  ? { callback_query_id: opts.ephemeral.callbackQueryId }
-                  : {}),
-              },
-            }
-          : {}),
-      };
+      const ephemeral = opts.ephemeral
+        ? {
+            ephemeral_message_parameters: {
+              receiver_user_id: opts.ephemeral.receiverUserId,
+              ...(opts.ephemeral.callbackQueryId
+                ? { callback_query_id: opts.ephemeral.callbackQueryId }
+                : {}),
+            },
+          }
+        : {};
       let data: BotApiResponse<{ message_id: number }> | null = null;
       if (opts.rich !== undefined) {
         data = await call<{ message_id: number }>(
           'sendRichMessage',
-          { chat_id: chatId, ...thread, rich_message: { html: opts.rich }, ...markup },
+          { chat_id: chatId, ...ephemeral, rich_message: { html: opts.rich }, ...markup },
           opts.timeoutMs,
         );
         // Сообщение с таблицей не принято (старый сервер Bot API, неверная разметка) — тот же текст
-        // уходит обычным сообщением. Лимит и блокировка бота — не про вид сообщения: их не повторяем;
-        // удалённая тема — тоже (её создадут заново и отправят снова).
-        if (
-          !data.ok &&
-          (data.error_code === 400 || data.error_code === 404) &&
-          !isThreadMissing({ ok: false, description: data.description ?? '' })
-        )
-          data = null;
+        // уходит обычным сообщением. Лимит и блокировка бота — не про вид сообщения: их не повторяем.
+        if (!data.ok && (data.error_code === 400 || data.error_code === 404)) data = null;
       }
       if (!data) {
         const code = opts.code;
@@ -432,7 +397,7 @@ export function createTelegramBotApi(options: {
           'sendMessage',
           {
             chat_id: chatId,
-            ...thread,
+            ...ephemeral,
             text: body ?? text,
             ...(opts.html || body !== null ? { parse_mode: 'HTML' } : {}),
             link_preview_options: { is_disabled: opts.disableLinkPreview ?? true },
@@ -466,21 +431,6 @@ export function createTelegramBotApi(options: {
       }
       return failure(data);
     },
-    async createTopic(chatId, name) {
-      const data = await call<{ message_thread_id: number }>('createForumTopic', {
-        chat_id: chatId,
-        name,
-      });
-      if (data.ok && data.result) return { ok: true, threadId: data.result.message_thread_id };
-      return failure(data);
-    },
-    async topicsEnabled() {
-      const data = await call<{ has_topics_enabled?: boolean }>('getMe', {});
-      if (!data.ok || !data.result) {
-        throw new Error(`Telegram getMe: ${data.description ?? data.error_code}`);
-      }
-      return data.result.has_topics_enabled === true;
-    },
     async answerCallback(callbackId, text, opts = {}) {
       const data = await call<boolean>('answerCallbackQuery', {
         callback_query_id: callbackId,
@@ -500,7 +450,6 @@ export function createTelegramBotApi(options: {
         caption: widget.caption,
         allow_queries: true,
         protect_content: true,
-        ...(widget.threadId !== undefined ? { message_thread_id: widget.threadId } : {}),
       });
       if (data.ok && data.result) return { ok: true, messageId: data.result.message_id };
       return failure(data);
@@ -637,12 +586,6 @@ export interface FakeTelegram extends Telegram {
   webhookInfo?: Partial<TelegramWebhookInfo> | Error;
   /** Следующие отправки вернут эти ответы (по очереди), затем — успех. */
   failNext(...results: Extract<TelegramSendResult, { ok: false }>[]): void;
-  /** Темы, созданные ботом (поток Т, задача Т7): чат, название, номер. */
-  readonly topics: Array<{ chatId: string | number; name: string; threadId: number }>;
-  /** Включены ли темы у бота в @BotFather (по умолчанию да); нет — createTopic отказывает. */
-  topicsOn: boolean;
-  /** Человек удалил тему: отправка в неё — 400 «message thread not found». */
-  deleteTopic(threadId: number): void;
   /** Группы, из которых бот вышел (поток Т, задача Т8). */
   readonly left: Array<string | number>;
   /** Виджеты (поток Т, задача Т9): отправленные, правки данных, ответы на запросы. */
@@ -654,18 +597,7 @@ export interface FakeTelegram extends Telegram {
 /** Бот для тестов: запоминает сообщения, умеет имитировать ошибки. */
 export function createFakeTelegram(): FakeTelegram {
   const failures: Extract<TelegramSendResult, { ok: false }>[] = [];
-  const deleted = new Set<number>();
-  const threadGone = (threadId: number | undefined) =>
-    threadId !== undefined && deleted.has(threadId)
-      ? ({
-          ok: false,
-          errorCode: 400,
-          description: 'Bad Request: message thread not found',
-          permanent: true,
-        } as const)
-      : null;
   let nextId = 1;
-  let nextThread = 1000;
   const fake: FakeTelegram = {
     sent: [],
     messageIds: [],
@@ -673,8 +605,6 @@ export function createFakeTelegram(): FakeTelegram {
     edits: [],
     files: new Map(),
     photos: [],
-    topics: [],
-    topicsOn: true,
     left: [],
     widgets: [],
     widgetEdits: [],
@@ -698,28 +628,7 @@ export function createFakeTelegram(): FakeTelegram {
       fake.widgetAnswers.push({ queryId, data });
       return true;
     },
-    deleteTopic(threadId) {
-      deleted.add(threadId);
-    },
-    async createTopic(chatId, name) {
-      if (!fake.topicsOn) {
-        return {
-          ok: false,
-          errorCode: 400,
-          description: 'Bad Request: the chat is not a forum',
-          permanent: true,
-        };
-      }
-      const threadId = nextThread++;
-      fake.topics.push({ chatId, name, threadId });
-      return { ok: true, threadId };
-    },
-    async topicsEnabled() {
-      return fake.topicsOn;
-    },
     async sendPhoto(chatId, photo, options = {}) {
-      const gone = threadGone(options.threadId);
-      if (gone) return gone;
       const failed = failures.shift();
       if (failed) return failed;
       const known = fake.photos.map((p) => p.fileId);
@@ -740,8 +649,6 @@ export function createFakeTelegram(): FakeTelegram {
       return { ok: true, messageId, fileId };
     },
     async sendMessage(chatId, text, options = {}) {
-      const gone = threadGone(options.threadId);
-      if (gone) return gone;
       const failure = failures.shift();
       if (failure) return failure;
       const messageId = nextId++;
