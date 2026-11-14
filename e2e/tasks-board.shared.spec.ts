@@ -134,10 +134,17 @@ test.describe('Этап 3: вид «Доска» в задачах', () => {
       ).toBeVisible();
       await expect(column('on_confirm').locator(cardOf)).toBeVisible();
 
-      // «Столбцы: Исполнитель»: та же доска по сотрудникам; выбор запоминается.
+      // «Столбцы: Исполнитель»: та же доска по сотрудникам; выбор запоминается — перезагрузка
+      // после того, как он дошёл до сервера (сохранение через 300 мс, типовая ошибка № 28).
+      const saved = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'PUT' &&
+          new URL(r.url()).pathname === `/api/view-settings/${GRID_KEY}`,
+      );
       await grid.locator('[data-grid-board-by]').click();
       await page.getByRole('menu').getByText('Исполнитель', { exact: true }).click();
       await expect(own.locator('header')).toContainText('Алишер Т.');
+      expect((await saved).status()).toBe(200);
       await page.reload();
       await expect(own.locator('header')).toContainText('Алишер Т.');
 

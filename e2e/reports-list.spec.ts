@@ -324,9 +324,17 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     const toggle = page.locator('[data-stats-toggle]');
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('[data-plates]')).toHaveCount(0);
+    // Выбор уходит на сервер через 300 мс; перезагрузка раньше — новая страница читает настройки
+    // быстрее, чем доходит сохранение при уходе (типовая ошибка № 28).
+    const saved = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'PUT' &&
+        new URL(r.url()).pathname === '/api/view-settings/stats.reports',
+    );
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('[data-plates]')).toHaveCount(1);
+    expect((await saved).status()).toBe(200);
     // Выбор запомнен: после перезагрузки плашки показаны.
     await page.reload();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
