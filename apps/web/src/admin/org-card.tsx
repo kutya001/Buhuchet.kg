@@ -828,7 +828,7 @@ function SettingsTab({ t, settings }: { t: Translate; settings: AdminOrgCard['se
               id: 'digest',
               label: t('orgs.card.set.digest'),
               value: t('orgs.card.set.digest_value', {
-                day: t(`telegram.weekday.${weekDayOf(settings.weekDay) - 1}` as UiTextKey),
+                day: t(`tgn.wd.${weekDayOf(settings.weekDay)}`),
                 time: settings.digestTime,
               }),
             },

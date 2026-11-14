@@ -261,8 +261,14 @@ export const TELEGRAM_TEXTS = {
   'tgn.week.often': { ru: 'Раз в неделю', section: G },
   'tgn.week.day': { ru: 'День сводки', section: G },
   'tgn.week.saved': { ru: 'Недельная сводка — {days}', section: G },
-  // День недели во множественном числе: 1 — понедельник … 7 — воскресенье (названия дней в списке —
-  // «telegram.weekday.*», 0 — понедельник).
+  // День недели: 1 — понедельник … 7 — воскресенье (прототип TGN_WD, TGN_WD_PL).
+  'tgn.wd.1': { ru: 'понедельник', section: G },
+  'tgn.wd.2': { ru: 'вторник', section: G },
+  'tgn.wd.3': { ru: 'среда', section: G },
+  'tgn.wd.4': { ru: 'четверг', section: G },
+  'tgn.wd.5': { ru: 'пятница', section: G },
+  'tgn.wd.6': { ru: 'суббота', section: G },
+  'tgn.wd.7': { ru: 'воскресенье', section: G },
   'tgn.wdpl.1': { ru: 'по понедельникам', section: G },
   'tgn.wdpl.2': { ru: 'по вторникам', section: G },
   'tgn.wdpl.3': { ru: 'по средам', section: G },
@@ -375,6 +381,8 @@ export const TELEGRAM_TEXTS = {
   },
   'org.history.tg_group_summary_on': { ru: 'включена', section: G },
   'org.history.tg_group_summary_off': { ru: 'выключена', section: G },
+  'org.history.digest_time': { ru: 'Час напоминаний: {from} → {to}', section: G },
+  'org.history.week_day': { ru: 'Недельная сводка: {from} → {to}', section: G },
   'err.telegram_off': {
     ru: 'Напоминания в Telegram выключены в учётной политике',
     section: 'Ошибки',

@@ -95,8 +95,24 @@ describe('карточка организации: «История»', () => {
       'Учётная политика по умолчанию',
     );
     expect(
-      orgHistoryText(t, entry({ entity: 'org_settings', changes: [{ field: 'digestTime' }] })),
+      orgHistoryText(t, entry({ entity: 'org_settings', changes: [{ field: 'timezone' }] })),
     ).toBe('Учётная политика изменена');
+    // Блок «Telegram-уведомления» (пакет 14.11.2026, блок 3): час и день недельной сводки — словами.
+    expect(
+      orgHistoryText(
+        t,
+        entry({
+          entity: 'org_settings',
+          changes: [{ field: 'digestTime', from: '09:00:00', to: '08:30' }],
+        }),
+      ),
+    ).toBe('Час напоминаний: 09:00 → 08:30');
+    expect(
+      orgHistoryText(
+        t,
+        entry({ entity: 'org_settings', changes: [{ field: 'weekDay', from: 1, to: 5 }] }),
+      ),
+    ).toBe('Недельная сводка: понедельник → пятница');
   });
 
   it('«Действия из Telegram»: включены и выключены; другие поля той же записи не теряются', () => {

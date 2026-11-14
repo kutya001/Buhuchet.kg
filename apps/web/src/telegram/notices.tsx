@@ -1,6 +1,6 @@
 'use client';
 
-import { isDigestTime, pluralForm, weekDayOf, type UiTextKey } from '@buhuchet/domain';
+import { isDigestTime, pluralForm, weekDayOf } from '@buhuchet/domain';
 import type { OrgPolicy, UpdateOrgPolicyRequest } from '@buhuchet/shared';
 import { Box, CheckRow, Field, Hint, Icon, inputClass, linkButtonClass, Note } from '@buhuchet/ui';
 import Link from 'next/link';
@@ -57,7 +57,6 @@ export function TelegramNoticesBox({
     );
   }
 
-  const dayName = (n: number) => t(`telegram.weekday.${n - 1}` as UiTextKey);
   const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const days = policy.remindDays;
   const remindDays = days.length
@@ -184,7 +183,7 @@ export function TelegramNoticesBox({
                 >
                   {WEEK_DAYS.map((n) => (
                     <option key={n} value={n}>
-                      {upper(dayName(n))}
+                      {upper(t(`tgn.wd.${n}`))}
                     </option>
                   ))}
                 </select>
