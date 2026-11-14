@@ -84,6 +84,13 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
     expect(connected.status(), await connected.text()).toBe(200);
     const chat = uniqueChat();
     await linkTelegram(request, origin, chat);
+    // С задачи Т3 сообщение дня — таблица (её проверяет тест Т3 в telegram-staff-bot.spec.ts); прежние
+    // строки напоминания получает сотрудник с «Сообщениями простым текстом» — они и проверяются здесь.
+    const plain = await request.put('/api/telegram/plain', {
+      headers: { origin },
+      data: { plain: true },
+    });
+    expect(plain.status(), await plain.text()).toBe(200);
     const name = `ОсОО «Напоминание ${Date.now().toString(36)}»`;
     const cp = await newContractor(request, origin, { tariff: false, name });
     const today = bishkekToday();
@@ -131,8 +138,8 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
     expect(text).toContain(`⏰ Через ${days} дн. срок сдачи: `);
     expect(text).toContain(`1-Т за `);
     expect(text).toContain(`НДС за `);
-    // По понедельникам в то же сообщение входит сводка недели («🗓 Неделя …»), и в ней имя ещё раз:
-    // оба отчёта контрагента считаются в строке напоминания, до сводки.
+    // Оба отчёта контрагента — в строке напоминания, до строки сводки недели («🗓 Неделя …»: владельцу
+    // она с задачи Т3 приходит по понедельникам отдельным сообщением, сотруднику — в этом же).
     expect(text!.split('🗓')[0]!.split(name)).toHaveLength(3);
     expect(text).toMatch(/Открыть в Buhuchet\.kg: \S+\/app\/reports\/week$/);
     // Ещё запуски в тот же день — второго сообщения нет.

@@ -499,9 +499,11 @@ test.describe('Доработки 13.11. Т3: таблицы в сообщени
     expect(morning!.html).toMatch(/<details open><summary>⏰ Через \d+ дн\. · 1<\/summary>/);
     expect(morning!.html).toContain(`<td>${name}</td><td>1-Т, `);
     expect(morning!.html).toContain('<th>Контрагент</th><th>Отчёт</th><th align="right">Срок</th>');
-    // Простой текст — прежняя строка напоминания.
-    expect(morning!.text).toMatch(/⏰ Через \d+ дн\. срок сдачи: 1-Т за /);
-    expect(morning!.text).toContain(name);
+    // Так таблицу видит человек: строки — с новой строки, ячейки — через «—», разметки в тексте нет.
+    // Прежние строки напоминания простым текстом («Сообщения простым текстом») — сквозной тест п. 8
+    // (e2e/telegram-reminders.spec.ts).
+    expect(morning!.text).toMatch(/⏰ Через \d+ дн\. · 1/);
+    expect(morning!.text).toContain(`${name} — 1-Т, `);
     expect(morning!.text).not.toContain('<');
 
     // Сводка недели владельцу: только в понедельник (день — по Бишкеку, на момент сбора напоминаний).
