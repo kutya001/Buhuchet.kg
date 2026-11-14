@@ -22,7 +22,7 @@ const TG_SEC_MSGS={};
 const tgSecOf=(u,chat)=>(TG_SEC_MSGS[u.login]||[]).filter(x=>x.chat===chat).map(x=>x.m);
 // Сообщение о безопасности с кнопкой. kind: pass — пароль изменён, relink — привязан другой Telegram, unlink — Telegram отвязан; o.chat — прежний чат, o.tg — имя нового Telegram
 function tgSecMsg(u,kind,o={}){const at=bishkekNow().hm,chat=o.chat||u.tg;
-  return {t:tplFill(TG_SEC[kind][0],{логин:u.login,время:at,телеграм:o.tg||''}),at,btns:[[{t:tgBtnT('tgBtnNotMe','Это не я'),icon:'ban',act:'notMe',arg:{kind,chat,at:Date.now()}}]]}}
+  return tgIn('sec',{t:tplFill(TG_SEC[kind][0],{логин:u.login,время:at,телеграм:o.tg||''}),at,btns:[[{t:tgBtnT('tgBtnNotMe','Это не я'),icon:'ban',act:'notMe',arg:{kind,chat,at:Date.now()}}]]})}
 // Отправка: строка журнала «Телеграм» и сообщение в переписке макета. Чата нет — сообщения нет
 function tgSecSend(u,kind,o={}){const chat=o.chat||u.tg;if(!chat)return null;
   tgSvc(u,TG_SEC[kind][1],o.chat?{chat}:{});const m=tgSecMsg(u,kind,o);(TG_SEC_MSGS[u.login]=TG_SEC_MSGS[u.login]||[]).push({chat,m});return m}
