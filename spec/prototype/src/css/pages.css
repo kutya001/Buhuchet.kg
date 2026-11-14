@@ -82,6 +82,8 @@ textarea.f-note-i{min-height:58px}
 @media (max-width:767px){.pg-tg-act{white-space:normal;text-align:left;display:flex;gap:6px;flex-wrap:wrap}.pg-tg-act .btn+.btn{margin-left:0}}
 .pg-secs{display:flex;flex-wrap:wrap;gap:4px 14px}.pg-secs .row{gap:6px;font-size:13px}
 .pg-pol{margin:-4px 0 6px 52px;display:flex;flex-direction:column;gap:2px}.pg-pol .check-row{padding:4px 0}
+.pg-pol .pg-pol-sub{padding-left:28px}
+.snt-acts{display:inline-flex;flex-direction:column;gap:4px;align-items:stretch}
 .pub{position:fixed;inset:0;z-index:85;background:var(--frame);display:flex;flex-direction:column;overflow:hidden}
 .pub[hidden]{display:none}
 body.pub-on{overflow:hidden}
@@ -187,6 +189,9 @@ img.pub-logo{background:none;border:1px solid var(--border)}
 .pub-frow:hover{border-color:var(--b-blue,var(--border-strong,var(--border)))}.pub-frow>.ic{color:var(--muted);flex:none}
 .pub-fm{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.pub-fm b{overflow-wrap:anywhere;font-weight:600}
 .pub-fs{display:flex;flex-direction:column;align-items:flex-end;flex:none;white-space:nowrap;text-align:right}
+/* Файлы от контрагента (v112): «Отправить файл» и «Отправленные вами» над файлами бухгалтера */
+.pub-sent{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.pub-sent>.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pub-sl-h{font-size:13px;color:var(--muted);font-weight:600}.pub-srow{cursor:default}.pub-srow:hover{border-color:var(--border)}.pub-srow .pub-fs{gap:3px}.pub-fm .bad{color:var(--red,#c0392b)}
 .pub-fv{display:flex;align-items:center;justify-content:center;min-height:260px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--pane-alt);color:var(--muted)}
 .pub-fv.img .ic{transform:scale(3)}
 .pub-fvp{display:flex;flex-direction:column;gap:9px;width:min(220px,70%);padding:22px 18px;background:var(--raised);border:1px solid var(--border);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
@@ -202,6 +207,7 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
   .pub-grid{display:flex;flex-direction:column;align-items:stretch;gap:10px}.pub-col{display:contents}
   .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=files]{order:5}.pub-s[data-sec=money]{order:6}.pub-s[data-sec=fee]{order:7}.pub-s[data-sec=kpi]{order:8}.pub-s[data-sec=contacts]{order:9}.pub-s[data-sec=tg]{order:10}
   .pub-frow{padding:8px 10px;gap:8px}.pub-fq{max-width:none}
+  .pub-srow{flex-wrap:wrap}.pub-srow .pub-fs{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 8px;width:100%;padding-left:28px;white-space:normal;text-align:left}
   .pub-s{padding:12px 14px}.pub-fd .pub-tg{cursor:pointer;min-height:28px}.pub-tg>.ic:last-child:not(:first-child){display:inline-block}
   .pub-fd:not(.fold) .pub-tg>.ic:last-child{transform:rotate(180deg)}
   .pub-s.fold .pub-sb,.pub-s.fold .pub-ex{display:none}

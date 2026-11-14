@@ -26,7 +26,8 @@ function pgBox(c){if(!feat('cppage'))return '';const p=c.page||{},on=pgOn(c),why
     ${on?`<div class="kv"><div><span class="k">Ссылка</span><span class="v"><a class="mono pg-link" href="#/${esc(pgPath(c))}" title="Открыть страницу так, как её увидит контрагент">${esc(pgUrl(c))}</a></span></div>
       <div><span class="k">Код доступа</span><span class="v"><button type="button" class="pg-code mono strong" data-pg="codecopy" title="Нажмите, чтобы скопировать код" aria-label="Код доступа ${esc(pgCodeTxt(p.code))}: скопировать">${pgCodeTxt(p.code)}${ic('copy','sm')}</button></span></div>
       <div><span class="k">Последнее открытие</span><span class="v">${p.last?`${fmtDT(p.last)}${p.lastDev?` <span class="hint">· ${esc(p.lastDev)}</span>`:''}`:'<span class="faint">контрагент ещё не открывал</span>'}</span></div>
-      ${secs.length?`<div class="pg-secs-row"><span class="k">Разделы страницы</span><span class="v"><span class="pg-secs">${secs.map(([k,l])=>`<label class="row"><input type="checkbox" data-pg-sec="${k}" ${(p.hide||[]).includes(k)?'':'checked'} ${why?'disabled':''}> ${esc(l)}</label>`).join('')}</span><span class="hint">«Ваш бухгалтер» видно всегда. Разделы для всех контрагентов — в учётной политике</span></span></div>`:''}</div>`
+      ${secs.length?`<div class="pg-secs-row"><span class="k">Разделы страницы</span><span class="v"><span class="pg-secs">${secs.map(([k,l])=>`<label class="row"><input type="checkbox" data-pg-sec="${k}" ${(p.hide||[]).includes(k)?'':'checked'} ${why?'disabled':''}> ${esc(l)}</label>`).join('')}</span><span class="hint">«Ваш бухгалтер» видно всегда. Разделы для всех контрагентов — в учётной политике</span></span></div>`:''}
+      ${secs.some(s=>s[0]==='files')?`<div class="pg-secs-row"><span class="k">Файлы от контрагента</span><span class="v"><label class="row"><input type="checkbox" data-pg-up ${!p.noUp&&ORG.cpUpload!==false?'checked':''} ${why||ORG.cpUpload===false?'disabled':''}> Контрагент может отправлять файлы</label><span class="hint">${ORG.cpUpload===false?'Выключено для всех контрагентов в учётной политике':'Кнопка «Отправить файл» в разделе «Файлы» страницы и приём файлов в Telegram'}</span></span></div>`:''}</div>`
     :`<span class="hint">${c.archived?'Контрагент в архиве — страница выключена.':'Контрагент откроет по ссылке и коду из 6 цифр свои отчёты, показатели и оплату за обслуживание — только для просмотра, без входа в программу.'}</span>`}
     ${pgTgBox(c)}
     ${on&&p.closed?`<div class="note bad">${ic('lock','sm')}<span>Страница закрыта: за сутки было 5 неверных кодов. Нажмите «Сменить код» (нет права — попросите владельца или главного бухгалтера) и отправьте контрагенту новый код.</span></div>`:''}
@@ -36,12 +37,13 @@ function pgMount(el,c,redraw){const b=$('#cp-page',el);if(!b)return;
     if(k==='on')pgEnable([c],redraw);else if(k==='off')pgOffDlg(c,redraw);else if(k==='code')pgCodeDlg(c,redraw);
     else if(k==='codecopy'){copyText(c.page.code,`Код ${pgCodeTxt(c.page.code)} скопирован`,true);log('cp',c.id,'Скопирован код доступа страницы контрагента',c.id)}
     else if(k==='copy'){copyText('https://'+pgUrl(c),'Ссылка скопирована',true);log('cp',c.id,'Скопирована ссылка на страницу контрагента',c.id)}else if(k==='wa')waDlg({cp:c,page:true})};
-  b.onchange=e=>{const x=e.target.closest('[data-pg-sec]');if(!x)return;const k=x.dataset.pgSec,p=c.page,h=new Set(p.hide||[]);x.checked?h.delete(k):h.add(k);p.hide=[...h];
+  b.onchange=e=>{const u=e.target.closest('[data-pg-up]');if(u){c.page.noUp=!u.checked;log('cp',c.id,`Контрагент может отправлять файлы: ${u.checked?'включено':'выключено'}`,c.id);toast(u.checked?'Контрагент может отправлять файлы':'Контрагент не может отправлять файлы');return}
+    const x=e.target.closest('[data-pg-sec]');if(!x)return;const k=x.dataset.pgSec,p=c.page,h=new Set(p.hide||[]);x.checked?h.delete(k):h.add(k);p.hide=[...h];
     log('cp',c.id,`Страница контрагента: раздел «${PG_SECS.find(s=>s[0]===k)[1]}» ${x.checked?'показывается':'скрыт'}`,c.id);toast(x.checked?'Раздел показывается на странице':'Раздел скрыт на странице')}}
 // Включить — у каждого свой код; уже включённые и архивные пропускаются
 function pgEnable(cs,done){const a=cs.filter(c=>!c.archived&&!(c.page&&c.page.on)),skip=cs.length-a.length;
   if(!a.length){toast(cs.length>1?'У выбранных контрагентов страница уже включена или они в архиве':'Страница уже включена','info');return}
-  const run=()=>{a.forEach(c=>{const p=c.page||{};c.page={on:true,code:pgNewCode(),at:nowStamp(),by:S.me,codeAt:nowStamp(),hide:p.hide||[],last:null,lastDev:'',fails:0,lock:0};log('cp',c.id,'Страница контрагента включена: создан код доступа',c.id)});
+  const run=()=>{a.forEach(c=>{const p=c.page||{};c.page={on:true,code:pgNewCode(),at:nowStamp(),by:S.me,codeAt:nowStamp(),hide:p.hide||[],...(p.noUp?{noUp:true}:{}),last:null,lastDev:'',fails:0,lock:0};log('cp',c.id,'Страница контрагента включена: создан код доступа',c.id)});
     done&&done();refreshAll();ckHit('cppage');
     toast(a.length>1?`Страница включена у ${a.length} ${plural(a.length,'контрагента','контрагентов','контрагентов')}, у каждого свой код${skip?`. Пропущено: ${skip} — уже включена или в архиве`:''}`:`Страница включена. Код доступа: ${pgCodeTxt(a[0].page.code)}`,'link')};
   if(a.length>1)confirmDlg({title:`Включить страницу у ${a.length} ${plural(a.length,'контрагента','контрагентов','контрагентов')}?`,text:`У каждого появится своя ссылка и свой код из 6 цифр. Отправить их контрагенту можно из его карточки: «Основное» → «Страница контрагента» → «Отправить в WhatsApp».${skip?` Пропущено: ${skip} — страница уже включена или контрагент в архиве.`:''}`,ok:'Включить',run});else run()}
@@ -68,14 +70,14 @@ const pubCp=({slug,inn})=>feat('cppage')&&slug===ORG.slug?CPS.find(c=>c.inn===in
 function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.open,c=pubCp(o),sc=$('.pub-page',el),top=keep&&sc?sc.scrollTop:0;
   const bar=`<div class="pub-bar"><span class="pub-proto">${ic('eye','sm')}<span>Прототип: страница, которую контрагент откроет по ссылке</span></span><span class="pub-url">${ic('lock','sm')}<span class="mono">www.buhuchet.kg/${esc(o.slug)}/inn/${esc(o.inn)}</span></span><button type="button" class="btn sm" id="pub-x">${ic('x','sm')}Вернуться в программу</button></div>`;
   const brand=`<div class="pub-brand">${ic('book')}<b>Buhuchet.kg</b></div>`;
-  let main;
+  let main,inside=false;
   if(!c)main=`<div class="pub-gate">${brand}<h1>Страница недоступна</h1><p class="muted">Обратитесь к вашему бухгалтеру.</p></div>`;
   else{const p=c.page,mem=pgMem()[o.slug+'|'+o.inn];
     if(p.closed)main=`<div class="pub-gate">${brand}<h1>Страница закрыта</h1><p class="muted">Было ${PG_DAY} неверных кодов за сутки. Попросите новый код у вашего бухгалтера.</p></div>`;
-    else if(mem&&mem.code===p.code&&mem.until>Date.now())main=pubBody(c);
+    else if(mem&&mem.code===p.code&&mem.until>Date.now()){main=pubBody(c);inside=true}
     else if(p.lock>Date.now())main=`<div class="pub-gate">${brand}<h1>Ввод кода временно закрыт</h1><p class="muted">Было ${PG_TRY} неверных кодов подряд. Попробуйте снова после ${pgHm(p.lock)} или попросите код у вашего бухгалтера.</p></div>`;
     else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код доступа</h1><p class="muted">Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.</p>${fld('Код доступа',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button><span class="hint">В этом браузере код запомнится на 30 дней.</span></form>`}
-  el.innerHTML=bar+`<div class="pub-page">${main}<footer class="pub-foot">Страница только для просмотра. Вопросы — вашему бухгалтеру.</footer></div>`;
+  el.innerHTML=bar+`<div class="pub-page">${main}<footer class="pub-foot">${inside&&sntUpOn(c)?'На странице можно смотреть свои данные и отправлять файлы бухгалтеру. Вопросы — вашему бухгалтеру.':'Страница только для просмотра. Вопросы — вашему бухгалтеру.'}</footer></div>`;
   if(top)$('.pub-page',el).scrollTop=top;
   $('#pub-x',el).onclick=pubClose;
   if(c&&c.page.on&&$('.pub-body',el)&&!o.logged){o.logged=true;pubSeen(c)}
@@ -97,7 +99,8 @@ function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)retur
 // Обновление страницы в том же браузере в течение минуты новым открытием не считается (решение заказчика 30.10.2026, Е-3)
 function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
-function pubClick(e){const x=e.target.closest('[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo]');if(!x)return;const d=x.dataset;
+function pubClick(e){const x=e.target.closest('[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo],[data-pub-up]');if(!x)return;const d=x.dataset;
+  if(d.pubUp!=null){const c=pubCp(PUB.open);if(c)pubUpDlg(c);return}
   if(d.pubTgon!=null){const c=pubCp(PUB.open);if(d.why)toast(d.why,'lock',true);else if(c)pgTgDlg(c);return}
   if(d.pubFo!=null){const f=PUB.fl[+d.pubFo];if(f)pubFileOpen(f.name,f);return}
   if(d.pubFf!=null){PUB.ff=PUB.ff===d.pubFf?'':d.pubFf;pubDraw(true);return}
@@ -155,7 +158,7 @@ const PG_FCAT=[['rep','Отчёты'],['doc','Документы компани�
 const PG_FCATL=Object.fromEntries(PG_FCAT);
 function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,rel,date)=>{if(!n||hid.has(n))return;out.push({cat,name:n,rel:rel||'',date:String(date||TODAY).slice(0,10),size:fsize(n)})},tp=has('money');
   if(has('reports'))REPORTS.forEach(r=>{if(r.cp!==c.id)return;(r.files||[]).forEach(n=>add('rep',n,`${T[r.t].short} · ${r.plabel}`,r.subDate||r.due))});
-  (c.files||[]).forEach(n=>add('doc',n,(c.regFiles||[]).includes(n)?'Из свидетельства и выписки':'',c._ua||c.start));
+  (c.files||[]).forEach(n=>add('doc',n,(c.regFiles||[]).includes(n)?'Из свидетельства и выписки':(c.fromCp||[]).includes(n)?'Отправлен вами':'',c._ua||c.start));
   if(tp)OPS.forEach(o=>{if(o.cp!==c.id||o.del||!(o.files||[]).length)return;const r=o.kind==='pay'&&REPORTS.find(y=>y.id===o.report);
     if(o.kind==='pay')o.files.forEach(n=>add('pay',n,`${r?T[r.t].short+' · '+r.plabel+', ':''}оплата ${som(o.amount)} от ${fmtD(o.date)}`,o.date));
     else if(o.kind==='in')o.files.forEach(n=>add('in',n,`Поступление ${som(o.total??o.amount)} от ${fmtD(o.date)}`,o.date))});
@@ -232,10 +235,10 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
       {extra:sel('pub-y',ys.map(x=>[x,x+' год']),y,'aria-label="Год срока сдачи"')})}
   if(has('files')){const fs=pubFiles(c,has,fee),cats=PG_FCAT.filter(([k])=>fs.some(f=>f.cat===k)),ff=cats.some(([k])=>k===PUB.ff)?PUB.ff:'',vis=fs.filter(f=>!ff||f.cat===ff);PUB.fl=vis;
     const pl=(k,l,n)=>`<button type="button" class="plate${ff===k?' on':''}" data-pub-ff="${k}" aria-pressed="${ff===k}"><span class="pl-top">${esc(l)}</span><span class="pl-val">${n}</span></button>`;
-    H.files=pubSec('files','folder','Файлы',fs.length?`${fs.length} ${plural(fs.length,'файл','файла','файлов')}`:'',fs.length?`<div class="plates pub-pl pub-fpl">${pl('','Все',fs.length)}${cats.map(([k,l])=>pl(k,l,fs.filter(f=>f.cat===k).length)).join('')}</div>
+    H.files=pubSec('files','folder','Файлы',fs.length?`${fs.length} ${plural(fs.length,'файл','файла','файлов')}`:'',pubSentHtml(c)+(fs.length?`<div class="plates pub-pl pub-fpl">${pl('','Все',fs.length)}${cats.map(([k,l])=>pl(k,l,fs.filter(f=>f.cat===k).length)).join('')}</div>
       <div class="pub-tools"><input class="inp pub-fq" id="pub-fq" type="search" placeholder="Поиск по названию" value="${esc(PUB.fq||'')}" aria-label="Поиск файла по названию" autocomplete="off"></div>
       <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name))}" title="${pubFView(f.name)?'Открыть для просмотра':'Скачать'}">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span></span><span class="pub-fs hint"><span>${fmtD(f.date)}</span><span>${fmtSize(f.size)}</span></span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием нет</span>`
-      :'<span class="faint">Файлов пока нет</span>')}
+      :'<span class="faint">Файлов пока нет</span>'))}
   if(M){const v=M.diff<0?['short','alert','Недостача',som(-M.diff)]:M.diff===0?['ok','ok','Достаточно',som(0)]:M.needSum?['ok','ok','Достаточно, излишек','+'+som(M.diff)]:['over','info','Излишек','+'+som(M.diff)];
     const kv=(l,key,val)=>`<div><span class="k">${l}${PGT('money',key)?tipI(PGT('money',key)):''}</span><span class="v tnum">${val}</span></div>`;
     H.money=pubSec('money','wallet','Деньги на налоги',M.diff<0?`недостача ${som(-M.diff)}`:v[2].toLowerCase(),
