@@ -84,6 +84,13 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(
       await t.admin.db.$count(gkedItems, sql`${gkedItems.level} = 'subclass'`),
     ).toBeGreaterThan(0);
+
+    // Статистика всех таблиц собрана сразу после наполнения (п. О-52): у таблицы, которую ещё ни разу
+    // не анализировали, reltuples = -1, и планировщик гадает о её размере.
+    const unanalyzed = await t.admin.db.execute<{ relname: string }>(
+      sql`select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r' and c.reltuples < 0 order by 1`,
+    );
+    expect(unanalyzed.map((r) => r.relname)).toEqual([]);
   });
 
   it('повторный запуск ничего не дублирует и не меняет', async () => {

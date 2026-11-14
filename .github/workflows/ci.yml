@@ -26,7 +26,7 @@ jobs:
   # п. О-5): check — типы, линтер, переносимость, форматирование и тесты сайта, docker-e2e — без шагов;
   # main целиком проверяет ночной прогон. Решение принимается здесь, одно на обе проверки, до установки
   # пакетов и без кода PR; правило лежит в .github/, поэтому PR, который его меняет, сам не сливается.
-  # Не сработал этот шаг — check и docker-e2e пропущены, не зелёные, и автослияния нет.
+  # Не сработал этот шаг — check и docker-e2e красные (п. О-49, О-50), автослияния нет.
   scope:
     name: scope
     runs-on: ubuntu-24.04
@@ -68,11 +68,14 @@ jobs:
           echo "landing_only=$only" >> "$GITHUB_OUTPUT"
           echo "Короткий путь (только лендинг): $only"
 
-  check:
-    name: check
+  # Проверка check — на трёх машинах параллельно (docs/decisions.md п. О-50): статические проверки,
+  # тесты с порогом покрытия (domain, api, adapters) и тесты остальных пакетов. Обязательная проверка
+  # check (имя не меняется: Ruleset и scripts/automerge.mjs) — итог этих машин.
+  check-static:
+    name: check · типы, линтер, миграции
     needs: scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,9 +99,6 @@ jobs:
       - name: Окружение как локально (.env из .env.example)
         if: needs.scope.outputs.landing_only != 'true'
         run: cp .env.example .env
-      - name: PostgreSQL и MinIO из docker-compose.yml
-        if: needs.scope.outputs.landing_only != 'true'
-        run: docker compose up -d --wait postgres minio
       - name: Типы
         if: needs.scope.outputs.landing_only != 'true'
         run: pnpm typecheck
@@ -114,9 +114,6 @@ jobs:
       - name: Применённые миграции и spec/ не тронуты
         if: github.event_name == 'pull_request' && needs.scope.outputs.landing_only != 'true'
         run: node scripts/check-protected.mjs HEAD^1
-      - name: Миграции и наполнение на чистой базе
-        if: needs.scope.outputs.landing_only != 'true'
-        run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
       - name: Миграции не отстали от схемы
         if: needs.scope.outputs.landing_only != 'true'
         run: |
@@ -126,74 +123,192 @@ jobs:
             git status --porcelain packages/db/migrations
             exit 1
           fi
-      - name: Тесты и покрытие (domain, api и adapters — не ниже 80 %)
-        # Пакеты с порогом покрытия — test:coverage; все остальные (db с RLS и наполнением, web, shared
-        # и любые новые) — обычным test, чтобы новый пакет не выпал из проверки.
-        if: needs.scope.outputs.landing_only != 'true'
-        run: |
-          pnpm test:coverage
-          pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
 
-  docker-e2e:
-    name: docker-e2e
+  # Тесты пакетов — на двух машинах, у каждой своя база с миграциями и наполнением. Пакеты с порогом
+  # покрытия — test:coverage; все остальные (db с RLS и наполнением, web, shared и любые новые) — обычным
+  # test, чтобы новый пакет не выпал из проверки.
+  check-tests:
+    name: check · тесты ${{ matrix.part }}
     needs: scope
+    if: needs.scope.outputs.landing_only != 'true'
     runs-on: ubuntu-24.04
-    # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не
-    # всей задачей, и шаги журналов ниже успевают выполниться (docs/decisions.md п. О-47).
-    # В этой задаче — только значения из .env.example: журналы и отчёт публичны, секреты сюда не добавлять.
-    timeout-minutes: 75
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ['domain, api, adapters', 'остальные пакеты']
     steps:
-      - name: Короткий путь — сквозные тесты не нужны
-        if: needs.scope.outputs.landing_only == 'true'
-        run: echo "Правка только лендинга — сквозные тесты пропущены (docs/decisions.md п. О-5); main проверит ночной прогон."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.scope.outputs.landing_only != 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-        if: needs.scope.outputs.landing_only != 'true'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: needs.scope.outputs.landing_only != 'true'
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Окружение как локально (.env из .env.example)
+        run: cp .env.example .env
+      - name: PostgreSQL и MinIO из docker-compose.yml
+        run: docker compose up -d --wait postgres minio
+      - name: Миграции и наполнение на чистой базе
+        run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
+      - name: Тесты и покрытие (domain, api и adapters — не ниже 80 %)
+        if: matrix.part == 'domain, api, adapters'
+        run: pnpm test:coverage
+      - name: Тесты остальных пакетов
+        if: matrix.part == 'остальные пакеты'
+        run: pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
+
+  # Обязательная проверка check — итог машин выше. Идёт всегда, и при отмене: пропущенную по условию
+  # обязательную проверку Ruleset засчитал бы пройденной.
+  check:
+    name: check
+    needs: [scope, check-static, check-tests]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Итог проверки check
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          LANDING_ONLY: ${{ needs.scope.outputs.landing_only }}
+          STATIC: ${{ needs.check-static.result }}
+          TESTS: ${{ needs.check-tests.result }}
+        run: |
+          if [ "$SCOPE" != success ]; then
+            echo "Задание scope: $SCOPE — проверки не запускались."; exit 1
+          fi
+          if [ "$STATIC" != success ]; then
+            echo "Типы, линтер, миграции: $STATIC."; exit 1
+          fi
+          if [ "$LANDING_ONLY" = true ]; then
+            echo "Правка только лендинга — короткий путь (docs/decisions.md п. О-5) зелёный."; exit 0
+          fi
+          if [ "$TESTS" != success ]; then
+            echo "Тесты пакетов: $TESTS — подробности в задачах «check · тесты»."; exit 1
+          fi
+          echo "Все части check зелёные."
+
+  # Сквозные тесты — на 6 машинах параллельно (docs/decisions.md п. О-49): у каждой свой Docker со своей
+  # базой, поэтому тесты *.shared.spec.ts, которые меняют общую запись демо-организации, идут на той же
+  # машине после остальных, сначала ПК, потом телефон, как в одном прогоне. Больше 6 машин не берём: с тремя
+  # частями check это 9 долгих задач на PR: два PR одновременно — 18 из 20 задач GitHub, третий (п. О-45) ждёт.
+  # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не всей
+  # задачей, и шаги журналов ниже успевают выполниться (п. О-47).
+  # В этой задаче — только значения из .env.example: журналы и отчёт публичны, секреты сюда не добавлять.
+  e2e:
+    name: e2e ${{ matrix.shard }}/6
+    needs: scope
+    if: needs.scope.outputs.landing_only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    strategy:
+      # Упавшая машина не останавливает остальные: все падения видны за один прогон.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: cp .env.example .env
-        if: needs.scope.outputs.landing_only != 'true'
       - name: Всё приложение в Docker, как на VPS
-        if: needs.scope.outputs.landing_only != 'true'
         run: docker compose --profile app up -d --build --wait
       - name: Задачи по расписанию с секретом
-        if: needs.scope.outputs.landing_only != 'true'
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env | cut -d= -f2)" http://localhost:3000/api/cron/tick
+      # Для разбора падений: запросы базы дольше секунды и ожидания блокировок — в журнал PostgreSQL,
+      # без значений параметров (журнал публичный). Только для разбора: не сработал — тесты всё равно идут.
+      - name: Журнал медленных запросов базы
+        continue-on-error: true
+        run: >-
+          docker compose exec -T postgres psql -U postgres -v ON_ERROR_STOP=1
+          -c "alter system set log_min_duration_statement = 1000"
+          -c "alter system set log_lock_waits = on"
+          -c "alter system set log_parameter_max_length = 0"
+          -c "alter system set log_parameter_max_length_on_error = 0"
+          -c "select pg_reload_conf()"
       - run: pnpm install --frozen-lockfile
-        if: needs.scope.outputs.landing_only != 'true'
       - run: pnpm exec playwright install --with-deps chromium
-        if: needs.scope.outputs.landing_only != 'true'
+      # Три запуска по порядку вместо зависимостей проектов: при --shard Playwright целиком повторяет
+      # проекты-зависимости на каждой машине. --no-deps — порядок задают сами запуски; у машины может
+      # не оказаться тестов *.shared — это не ошибка. Подделка Telegram запущена заранее одна на все три
+      # запуска (Playwright берёт уже запущенную): сообщения в ней живут весь прогон, как в одном запуске.
       - name: Сквозные тесты на ПК и телефоне
-        if: needs.scope.outputs.landing_only != 'true'
-        timeout-minutes: 65
-        run: pnpm test:e2e
+        timeout-minutes: 30
         env:
           E2E_BASE_URL: http://localhost:3000
+          SHARD: ${{ matrix.shard }}/6
+        run: |
+          (cd e2e && node fake-telegram.ts > /dev/null 2>&1 &)
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8091/health > /dev/null 2>&1 && break; sleep 1; done
+          pnpm test:e2e --project=desktop --project=mobile --shard="$SHARD"
+          pnpm test:e2e --project=desktop-shared --no-deps --pass-with-no-tests --shard="$SHARD"
+          pnpm test:e2e --project=mobile-shared --no-deps --pass-with-no-tests --shard="$SHARD"
       # Журналы — и при падении, и при отмене: зависший прогон без них не разобрать.
       - name: Соединения базы (кто чего ждёт)
-        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        if: failure() || cancelled()
         timeout-minutes: 2
         run: |
           docker compose exec -T postgres psql -U postgres -d buhuchet -c "select pid, usename, application_name, state, wait_event_type, wait_event, now() - xact_start as in_tx, now() - state_change as in_state, left(query, 200) as query from pg_stat_activity where datname = 'buhuchet' and pid <> pg_backend_pid() order by xact_start nulls last" || true
       - name: Журналы контейнеров
-        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        if: failure() || cancelled()
         timeout-minutes: 3
-        run: docker compose --profile app logs --no-color --timestamps --tail=500 || true
+        # Весь журнал — в файл отчёта; в журнал задания — предупреждения, ошибки и долгие запросы за весь
+        # прогон (сброс пароля нарочно отвечает не быстрее 1,5 с — не в счёт) и последние строки. Журнал
+        # задания и отчёт публичны (репозиторий открытый): настоящих секретов в окружении этого задания нет
+        # и не добавлять.
+        run: |
+          docker compose --profile app logs --no-color --timestamps > container-logs.txt 2>&1 || true
+          echo "Сайт и задачи: предупреждения, ошибки и запросы от 1 с за весь прогон"
+          grep -E '"level":[456]0|"ms":[0-9]{4,}' container-logs.txt | grep -v '/api/auth/password-reset' | tail -n 300 || true
+          echo "База: ошибки, запросы от 1 с, ожидания блокировок"
+          grep -E '^postgres-1' container-logs.txt | grep -E 'ERROR|FATAL|duration:|Lock on|STATEMENT' | tail -n 300 || true
+          echo "Последние строки"
+          tail -n 500 container-logs.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        if: failure() || cancelled()
         timeout-minutes: 3
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: playwright-report-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            container-logs.txt
           if-no-files-found: ignore
           retention-days: 7
+
+  # Обязательная проверка docker-e2e (имя не меняется: Ruleset и scripts/automerge.mjs) — итог машин e2e.
+  # Зелёная, только когда зелёные все 6 машин или это короткий путь лендинга (п. О-5). Идёт всегда, и при
+  # отмене тоже: пропущенную по условию обязательную проверку Ruleset засчитал бы пройденной.
+  docker-e2e:
+    name: docker-e2e
+    needs: [scope, e2e]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Итог сквозных тестов
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          LANDING_ONLY: ${{ needs.scope.outputs.landing_only }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          if [ "$SCOPE" != success ]; then
+            echo "Задание scope: $SCOPE — сквозные тесты не запускались."; exit 1
+          fi
+          if [ "$LANDING_ONLY" = true ]; then
+            echo "Правка только лендинга — сквозные тесты пропущены (docs/decisions.md п. О-5); main проверит ночной прогон."; exit 0
+          fi
+          if [ "$E2E" != success ]; then
+            echo "Сквозные тесты: $E2E — подробности в задачах e2e N/6."; exit 1
+          fi
+          echo "Сквозные тесты зелёные на всех 6 машинах."
 
   # Известные уязвимости в зависимостях рабочего сайта (без инструментов разработки) — только в ночном и
   # ручном прогоне, не в PR: новая запись в базе уязвимостей не должна останавливать чужие PR. Красный

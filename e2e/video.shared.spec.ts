@@ -173,7 +173,8 @@ test.describe('Видео платформы (прототип v79)', () => {
     baseURL,
     playwright,
   }) => {
-    // Справочники лендинга сервер хранит в памяти до минуты: новое видео появляется не сразу.
+    // Справочники лендинга сервер хранит в памяти до минуты: новое видео появляется не сразу, а сразу
+    // после того же теста на ПК (на той же машине CI) в памяти ещё может быть его видео, уже удалённое.
     test.setTimeout(150_000);
     const origin = new URL(baseURL!).origin;
     const admin = await playwright.request.newContext({ baseURL });
@@ -193,10 +194,13 @@ test.describe('Видео платформы (прототип v79)', () => {
       expect(shown.status(), await shown.text()).toBe(200);
 
       const block = page.locator('#lp-video');
+      // Ждём своё видео в первом экране, а не любой блок: блок может быть из памяти с видео прошлого теста.
+      const lead = page.locator(`#lp-hero [data-lp-vid="${created.id}"]`);
       await expect(async () => {
         await page.goto('/');
-        await expect(block).toBeVisible({ timeout: 2_000 });
+        await expect(lead).toBeVisible({ timeout: 2_000 });
       }).toPass({ timeout: 100_000, intervals: [5_000] });
+      await expect(block).toBeVisible();
       await expect(block.getByRole('heading', { name: 'Видео о Buhuchet.kg' })).toBeVisible();
       // Обложка — своя, без адресов YouTube.
       await expect(page.locator('img[src*="ytimg"]')).toHaveCount(0);
