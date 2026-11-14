@@ -26,7 +26,7 @@ jobs:
   # п. О-5): check — типы, линтер, переносимость, форматирование и тесты сайта, docker-e2e — без шагов;
   # main целиком проверяет ночной прогон. Решение принимается здесь, одно на обе проверки, до установки
   # пакетов и без кода PR; правило лежит в .github/, поэтому PR, который его меняет, сам не сливается.
-  # Не сработал этот шаг — check пропущен, docker-e2e красный (п. О-49), автослияния нет.
+  # Не сработал этот шаг — check и docker-e2e красные (п. О-49, О-50), автослияния нет.
   scope:
     name: scope
     runs-on: ubuntu-24.04
@@ -68,11 +68,14 @@ jobs:
           echo "landing_only=$only" >> "$GITHUB_OUTPUT"
           echo "Короткий путь (только лендинг): $only"
 
-  check:
-    name: check
+  # Проверка check — на трёх машинах параллельно (docs/decisions.md п. О-50): статические проверки,
+  # тесты с порогом покрытия (domain, api, adapters) и тесты остальных пакетов. Обязательная проверка
+  # check (имя не меняется: Ruleset и scripts/automerge.mjs) — итог этих машин.
+  check-static:
+    name: check · типы, линтер, миграции
     needs: scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,9 +99,6 @@ jobs:
       - name: Окружение как локально (.env из .env.example)
         if: needs.scope.outputs.landing_only != 'true'
         run: cp .env.example .env
-      - name: PostgreSQL и MinIO из docker-compose.yml
-        if: needs.scope.outputs.landing_only != 'true'
-        run: docker compose up -d --wait postgres minio
       - name: Типы
         if: needs.scope.outputs.landing_only != 'true'
         run: pnpm typecheck
@@ -114,9 +114,6 @@ jobs:
       - name: Применённые миграции и spec/ не тронуты
         if: github.event_name == 'pull_request' && needs.scope.outputs.landing_only != 'true'
         run: node scripts/check-protected.mjs HEAD^1
-      - name: Миграции и наполнение на чистой базе
-        if: needs.scope.outputs.landing_only != 'true'
-        run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
       - name: Миграции не отстали от схемы
         if: needs.scope.outputs.landing_only != 'true'
         run: |
@@ -126,18 +123,77 @@ jobs:
             git status --porcelain packages/db/migrations
             exit 1
           fi
+
+  # Тесты пакетов — на двух машинах, у каждой своя база с миграциями и наполнением. Пакеты с порогом
+  # покрытия — test:coverage; все остальные (db с RLS и наполнением, web, shared и любые новые) — обычным
+  # test, чтобы новый пакет не выпал из проверки.
+  check-tests:
+    name: check · тесты ${{ matrix.part }}
+    needs: scope
+    if: needs.scope.outputs.landing_only != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ['domain, api, adapters', 'остальные пакеты']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Окружение как локально (.env из .env.example)
+        run: cp .env.example .env
+      - name: PostgreSQL и MinIO из docker-compose.yml
+        run: docker compose up -d --wait postgres minio
+      - name: Миграции и наполнение на чистой базе
+        run: pnpm db:migrate && pnpm db:seed && pnpm db:seed --update && pnpm storage:init
       - name: Тесты и покрытие (domain, api и adapters — не ниже 80 %)
-        # Пакеты с порогом покрытия — test:coverage; все остальные (db с RLS и наполнением, web, shared
-        # и любые новые) — обычным test, чтобы новый пакет не выпал из проверки.
-        if: needs.scope.outputs.landing_only != 'true'
+        if: matrix.part == 'domain, api, adapters'
+        run: pnpm test:coverage
+      - name: Тесты остальных пакетов
+        if: matrix.part == 'остальные пакеты'
+        run: pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
+
+  # Обязательная проверка check — итог машин выше. Идёт всегда, и при отмене: пропущенную по условию
+  # обязательную проверку Ruleset засчитал бы пройденной.
+  check:
+    name: check
+    needs: [scope, check-static, check-tests]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Итог проверки check
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          LANDING_ONLY: ${{ needs.scope.outputs.landing_only }}
+          STATIC: ${{ needs.check-static.result }}
+          TESTS: ${{ needs.check-tests.result }}
         run: |
-          pnpm test:coverage
-          pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
+          if [ "$SCOPE" != success ]; then
+            echo "Задание scope: $SCOPE — проверки не запускались."; exit 1
+          fi
+          if [ "$STATIC" != success ]; then
+            echo "Типы, линтер, миграции: $STATIC."; exit 1
+          fi
+          if [ "$LANDING_ONLY" = true ]; then
+            echo "Правка только лендинга — короткий путь (docs/decisions.md п. О-5) зелёный."; exit 0
+          fi
+          if [ "$TESTS" != success ]; then
+            echo "Тесты пакетов: $TESTS — подробности в задачах «check · тесты»."; exit 1
+          fi
+          echo "Все части check зелёные."
 
   # Сквозные тесты — на 6 машинах параллельно (docs/decisions.md п. О-49): у каждой свой Docker со своей
   # базой, поэтому тесты *.shared.spec.ts, которые меняют общую запись демо-организации, идут на той же
-  # машине после остальных, сначала ПК, потом телефон, как в одном прогоне. Больше 6 машин PR не ускоряет:
-  # check идёт ~12 минут, а 6 машин на PR при двух линиях укладываются в 20 одновременных задач.
+  # машине после остальных, сначала ПК, потом телефон, как в одном прогоне. Больше 6 машин не берём: с тремя
+  # частями check это 9 долгих задач на PR, при двух линиях — 18 из 20 одновременных задач GitHub.
   # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не всей
   # задачей, и шаги журналов ниже успевают выполниться (п. О-47).
   # В этой задаче — только значения из .env.example: журналы и отчёт публичны, секреты сюда не добавлять.
