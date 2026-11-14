@@ -1,6 +1,26 @@
-import { LEAD_EVENT_KINDS, LEAD_STATUSES } from '@buhuchet/domain';
+import {
+  FILE_MAX_BYTES,
+  FILE_NAME_MAX_LENGTH,
+  LEAD_ADDRESS_MAX,
+  LEAD_DOC_CONTENT_TYPE,
+  LEAD_DOC_KINDS,
+  LEAD_EVENT_KINDS,
+  LEAD_HEAD_MAX,
+  LEAD_STATUSES,
+  ORG_LEGAL_FORMS,
+} from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, check, index, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  boolean,
+  check,
+  index,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { recordVersion } from './columns';
 import { organizations } from './organizations';
 import { users } from './users';
@@ -42,6 +62,32 @@ export const platformLeads = pgTable(
     adminNote: text('admin_note'),
     /** Заявка с тестового стенда: в истории «Заявка с сайта (тестовый стенд)». */
     fromStand: boolean('from_stand').notNull().default(false),
+    /**
+     * Регистрация по документам (доработки 14.11.2026, блок 1): «Форма» и данные из выписки и
+     * свидетельства, которые заявитель проверил и поправил до отправки. Название — `firm`. У заявок до
+     * 14.11.2026 и без документов — пусто (у них «Создать организацию», а не «Одобрить»).
+     */
+    legalForm: text('legal_form', { enum: ORG_LEGAL_FORMS }),
+    inn: text('inn'),
+    okpo: text('okpo'),
+    address: text('address'),
+    head: text('head'),
+    /**
+     * Документы заявки: `pending` — заявка создана, файлы ещё грузятся (Админка её не показывает);
+     * `ready` — все файлы загружены и проверены. Пусто — заявка без документов.
+     */
+    docsState: text('docs_state'),
+    /**
+     * Когда удалить файлы заявки: через 30 дней после отправки, после отказа — через 7 дней; после
+     * «Одобрить» файлы переходят в организацию и отметка снимается.
+     */
+    docsPurgeAt: timestamp('docs_purge_at', { withTimezone: true }),
+    /**
+     * Telegram заявителя (блок 1, пункт 2): чат, нажавший «Старт» по одноразовой ссылке заявки, — туда
+     * придут решение и ссылка для входа. Пусто — «Telegram не подключён», «Одобрить» недоступна.
+     */
+    tgChatId: bigint('tg_chat_id', { mode: 'number' }),
+    tgLinkedAt: timestamp('tg_linked_at', { withTimezone: true }),
     version: recordVersion(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
@@ -53,6 +99,104 @@ export const platformLeads = pgTable(
     check(
       'platform_leads_status_before_check',
       sql`${t.statusBefore} is null or ${t.statusBefore} in (${inList(LEAD_STATUSES)})`,
+    ),
+    check(
+      'platform_leads_legal_form_check',
+      sql`${t.legalForm} is null or ${t.legalForm} in (${inList(ORG_LEGAL_FORMS)})`,
+    ),
+    check('platform_leads_inn_check', sql`${t.inn} is null or ${t.inn} ~ '^[0-9]{14}$'`),
+    check('platform_leads_okpo_check', sql`${t.okpo} is null or ${t.okpo} ~ '^[0-9]{8}$'`),
+    check(
+      'platform_leads_doc_fields_check',
+      sql`char_length(coalesce(${t.address}, '')) <= ${sql.raw(String(LEAD_ADDRESS_MAX))} and char_length(coalesce(${t.head}, '')) <= ${sql.raw(String(LEAD_HEAD_MAX))}`,
+    ),
+    // Документы есть только у заявки с формой: ИП или ОсОО определяет, какие файлы нужны.
+    check(
+      'platform_leads_docs_state_check',
+      sql`${t.docsState} is null or (${t.docsState} in ('pending', 'ready') and ${t.legalForm} is not null)`,
+    ),
+    check(
+      'platform_leads_tg_check',
+      sql`(${t.tgChatId} is null) = (${t.tgLinkedAt} is null) and (${t.tgChatId} is null or ${t.tgChatId} > 0)`,
+    ),
+    index('platform_leads_docs_purge_idx')
+      .on(t.docsPurgeAt)
+      .where(sql`${t.docsPurgeAt} is not null`),
+  ],
+).enableRLS();
+
+/**
+ * Документы заявки (доработки 14.11.2026, блок 1, пункт 1): ИП — «Свидетельство ГНС», ОсОО — «Выписка» и
+ * «Свидетельство Минюста»; только PDF до 20 МБ. Файл лежит в хранилище под ключом
+ * `leads/<заявка>/<номер файла>` — вне папок организаций, его видит только администратор платформы.
+ * Загрузка идёт мимо API по подписанной ссылке: строка `pending`, после проверки размера и первых байтов
+ * — `ready`. Роль приложения таблицу не видит и не меняет (RLS без политик): пишут и читают только
+ * функции базы метода без входа и Админки (их добавляют задачи блока 1). Стирается вместе с заявкой.
+ */
+export const platformLeadDocs = pgTable(
+  'platform_lead_docs',
+  {
+    /** Номер задаёт API до вставки: из него строится ключ хранилища. */
+    id: uuid('id').primaryKey(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => platformLeads.id, { onDelete: 'cascade' }),
+    kind: text('kind', { enum: LEAD_DOC_KINDS }).notNull(),
+    name: text('name').notNull(),
+    contentType: text('content_type').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    storageKey: text('storage_key').notNull().unique(),
+    state: text('state').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Один файл каждого вида у заявки.
+    unique('platform_lead_docs_kind_key').on(t.leadId, t.kind),
+    check('platform_lead_docs_kind_check', sql`${t.kind} in (${inList(LEAD_DOC_KINDS)})`),
+    check(
+      'platform_lead_docs_name_check',
+      sql`char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))}`,
+    ),
+    check(
+      'platform_lead_docs_type_check',
+      sql`${t.contentType} = '${sql.raw(LEAD_DOC_CONTENT_TYPE)}'`,
+    ),
+    check(
+      'platform_lead_docs_size_check',
+      sql`${t.sizeBytes} between 0 and ${sql.raw(String(FILE_MAX_BYTES))}`,
+    ),
+    check('platform_lead_docs_state_check', sql`${t.state} in ('pending', 'ready')`),
+    check(
+      'platform_lead_docs_key_check',
+      sql`${t.storageKey} = ('leads/' || ${t.leadId}::text || '/' || ${t.id}::text)`,
+    ),
+  ],
+).enableRLS();
+
+/**
+ * Одноразовые ссылки «Подключить Telegram» заявителя (доработки 14.11.2026, блок 1, пункт 2): здесь —
+ * только SHA-256 токена; ссылка действует 24 часа и один раз. Роль приложения таблицу не видит и не
+ * меняет (RLS без политик): только функции базы метода без входа и бота.
+ */
+export const platformLeadTgTokens = pgTable(
+  'platform_lead_tg_tokens',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    leadId: uuid('lead_id')
+      .notNull()
+      .references(() => platformLeads.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    /** Чат, который использовал ссылку: повтор того же сообщения от Telegram остаётся без ответа. */
+    usedChatId: bigint('used_chat_id', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('platform_lead_tg_tokens_lead_idx').on(t.leadId),
+    index('platform_lead_tg_tokens_expires_idx').on(t.expiresAt),
+    check(
+      'platform_lead_tg_tokens_used_check',
+      sql`${t.usedChatId} is null or ${t.usedAt} is not null`,
     ),
   ],
 ).enableRLS();

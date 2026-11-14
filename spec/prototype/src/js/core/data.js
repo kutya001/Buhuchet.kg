@@ -412,6 +412,9 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   if(!db.meta.tgK14){db.meta.tgK14=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgRqHead', 'tgRqOrg', 'tgRqEmp', 'tgBtnCpCopyPhone', 'tgBtnCpCopyReq', 'tgBtnCpShowReq', 'tgCpFeeHead', 'tgCpFeeRemind', 'tgCpFeePaidStaff', 'tgCpNoReq'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});
     ['tgBtnCpReq', 'tgBtnCpReqTax', 'tgBtnCpReqFee'].forEach(k=>{if(a)delete a[k];if(n)delete n[k]})}
+  // Блок «Telegram-уведомления» (v111, пакет 14.11.2026, блок 3): путь к общему чату в шаблоне «ссылка устарела» — если администратор не менял текст
+  if(!db.meta.tgN1){db.meta.tgN1=1;const a=db.ref.messageTemplates,rm=r.messageTemplates||{};if(a&&a.tgGrpLinkBad==='Ссылка для подключения группы устарела или уже использована. Владелец организации может создать новую: «Моя организация» → «Настройки» → «Общий чат фирмы в Telegram».'&&rm.tgGrpLinkBad)a.tgGrpLinkBad=rm.tgGrpLinkBad;
+    const n=db.ref.templateNotes,rn=r.templateNotes||{};if(n&&rn.tgActOff&&n.tgActOff&&!n.tgActOff.includes('Telegram-уведомления'))n.tgActOff=rn.tgActOff}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;
