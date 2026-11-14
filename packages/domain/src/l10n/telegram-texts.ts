@@ -115,7 +115,6 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.bot_cmd': { ru: 'Ответ на команду бота', section: S },
   'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
   // Доработки 14.11.2026: блок 4, пункт 1 и блок 2, пункт 2.
-  'telegram.kind.cp_pay_noreq': { ru: 'Нет реквизитов для «К оплате»', section: S },
   'telegram.kind.cp_file': { ru: 'Файл от контрагента', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
