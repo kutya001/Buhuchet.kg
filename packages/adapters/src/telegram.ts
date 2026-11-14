@@ -275,7 +275,11 @@ export function createTelegramBotApi(options: {
   ): Promise<BotApiResponse<T>> {
     const form = new FormData();
     for (const [key, value] of Object.entries(fields)) form.set(key, value);
-    form.set(file.field, new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.name);
+    form.set(
+      file.field,
+      new Blob([new Uint8Array(file.bytes)], { type: file.contentType }),
+      file.name,
+    );
     try {
       const res = await doFetch(`${base}/${method}`, {
         method: 'POST',
