@@ -70,12 +70,20 @@ export const AdminTelegramBot = z.object({
   checkedAt: z.iso.datetime(),
   /** «Сообщения с таблицами»: выключено — все получают простой текст (кнопки остаются). */
   rich: z.boolean(),
+  /** «Темы в чате с ботом» (поток Т, задача Т7): включено — бот раскладывает сообщения по темам. */
+  topics: z.boolean(),
+  /** Темы у бота включены в @BotFather (getMe); null — Telegram не ответил или бота нет. */
+  topicsReady: z.boolean().nullable(),
 });
 export type AdminTelegramBot = z.infer<typeof AdminTelegramBot>;
 
 /** «Вид сообщений и кнопки» → «Сообщения с таблицами» (поток Т, задача Т1). */
 export const AdminTelegramBotView = z.strictObject({ rich: z.boolean() });
 export type AdminTelegramBotView = z.infer<typeof AdminTelegramBotView>;
+
+/** «Вид сообщений и кнопки» → «Темы в чате с ботом» (поток Т, задача Т7). */
+export const AdminTelegramBotTopics = z.strictObject({ topics: z.boolean() });
+export type AdminTelegramBotTopics = z.infer<typeof AdminTelegramBotTopics>;
 
 /** Действующие организации для «Кому». */
 export const AdminTelegramOrgs = z.object({

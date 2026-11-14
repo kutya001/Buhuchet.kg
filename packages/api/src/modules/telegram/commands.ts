@@ -46,6 +46,7 @@ import {
 } from './command-view';
 import { BOT_PRESS_RATE_LIMIT } from './press';
 import { BOT_REPLY_ONCE } from './reply';
+import { replyTopicOrg } from './topics';
 
 /*
  * Меню команд бота (поток Т, задача Т5; пакет заказчика 13.11.2026, идея 4; прототип v102
@@ -234,11 +235,16 @@ export async function handleBotCommand(deps: ApiDeps, msg: BotCommandMessage): P
     const once = await takeRateLimit(deps.db, BOT_REPLY_ONCE, `${msg.chatId}:${msg.messageId}`);
     if (!once.ok) return true;
   }
-  const users = await botChatUsers(deps.db, msg.chatId);
-  if (!users.length) {
+  const all = await botChatUsers(deps.db, msg.chatId);
+  if (!all.length) {
     await sendNow(deps, msg.chatId, tpl('tgStart'), 'bot_cmd', { menu: [] });
     return true;
   }
+  // В теме организации (чат нескольких организаций, задача Т7) — ответ по учётным записям этой
+  // организации.
+  const topicOrg = await replyTopicOrg(deps, msg.chatId);
+  const own = topicOrg ? all.filter((u) => u.orgId === topicOrg) : [];
+  const users = own.length ? own : all;
   const dict = await serverTexts(deps);
   const tr: Translate = (key, params) => formatText(dict(key), params);
   const run: CommandRun = {

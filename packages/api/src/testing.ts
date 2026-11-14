@@ -96,6 +96,8 @@ export function telegramUpdate(
     /** Фото: размеры одной картинки, как их присылает Telegram. */
     photo?: { fileId: string; size: number }[];
     caption?: string;
+    /** Сообщение в теме чата с ботом (задача Т7). */
+    threadId?: number;
   } = {},
 ) {
   return {
@@ -106,6 +108,7 @@ export function telegramUpdate(
       ...(text === null ? {} : { text }),
       ...(options.caption ? { caption: options.caption } : {}),
       ...(options.replyTo ? { reply_to_message: { message_id: options.replyTo } } : {}),
+      ...(options.threadId ? { message_thread_id: options.threadId, is_topic_message: true } : {}),
       ...(options.document
         ? {
             document: {
@@ -137,7 +140,7 @@ export function telegramPress(
   data: string,
   chatId: number,
   messageId: number,
-  options: { chatType?: string; fromId?: number; callbackId?: string } = {},
+  options: { chatType?: string; fromId?: number; callbackId?: string; threadId?: number } = {},
 ) {
   const id = nextUpdateId++;
   return {
@@ -150,6 +153,9 @@ export function telegramPress(
       message: {
         message_id: messageId,
         date: 1_792_972_800,
+        ...(options.threadId
+          ? { message_thread_id: options.threadId, is_topic_message: true }
+          : {}),
         chat: { id: chatId, type: options.chatType ?? 'private' },
       },
     },

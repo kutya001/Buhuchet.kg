@@ -204,6 +204,11 @@ export const TELEGRAM_TEMPLATE_DEFAULTS = {
   tgLeadRefused: 'Заявка «{фирма}» — «Отказ». Причина: {причина}. Снять отказ можно в Админке.',
   tgBtnMore: 'Подробнее',
   tgBtnVideo: 'Смотреть видео',
+  // Темы в чате с ботом (поток Т, задача Т7): названия тем, до 128 знаков.
+  tgTopicReports: 'Отчёты',
+  tgTopicTasks: 'Задачи',
+  tgTopicLeads: 'Заявки',
+  tgTopicSecurity: 'Безопасность',
 } as const;
 
 export type TelegramTemplateKey = keyof typeof TELEGRAM_TEMPLATE_DEFAULTS;

@@ -5,6 +5,7 @@ import {
   finishOutbox,
   finishPlatformOutbox,
   telegramBotRich,
+  telegramBotTopics,
   telegramOutboxOrgs,
   withOrgContext,
   type ClaimedOutbox,
@@ -24,6 +25,7 @@ import {
   botKeyboard,
   botPlainText,
   botRichHtml,
+  botTopicOf,
   CAST_IMAGES_SECTION,
   castImageName,
   castImageType,
@@ -36,6 +38,7 @@ import {
   type BotMessage,
 } from '@buhuchet/domain';
 import type { Job, JobContext } from '../../deps';
+import { sendInTopic, threadOption } from './topics';
 
 /*
  * Очередь Telegram (ТЗ «Уведомления в Telegram», Админка → «Модуль Телеграмм»; прототип
@@ -57,7 +60,7 @@ const realPause: Pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms
 export { redactBotToken };
 
 /** Строка очереди: у сообщения с таблицами и кнопками — ещё описание и «простым текстом» получателя. */
-type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'text' | 'tries'> &
+type QueuedRow = Pick<ClaimedOutbox, 'id' | 'chatId' | 'kind' | 'text' | 'tries'> &
   Partial<Pick<ClaimedOutbox, 'message' | 'plain'>>;
 
 /**
@@ -102,6 +105,7 @@ async function sendPhotoRow(
   row: QueuedRow,
   message: BotMessage & { image: string },
   plain: boolean,
+  threadId: number | undefined,
 ): Promise<TelegramPhotoResult> {
   const telegram = ctx.telegram!;
   const o = botSendOptions(message, { plain });
@@ -109,6 +113,7 @@ async function sendPhotoRow(
     caption: o.rich ?? botPlainText(message),
     ...(o.rich ? { html: true } : {}),
     ...(o.keyboard ? { keyboard: o.keyboard } : {}),
+    ...threadOption(threadId),
   };
   const known = photoIds.get(message.image);
   if (known) {
@@ -132,11 +137,14 @@ async function sendPhotoRow(
   return res;
 }
 
-/** Отправить одну строку и решить, что с ней дальше. */
+/**
+ * Отправить одну строку и решить, что с ней дальше. Темы в чате с ботом (задача Т7): строка уходит в
+ * тему своего вида; `topicsOn` — переключатель платформы, прочитанный раз на пачку.
+ */
 async function sendOne(
   ctx: JobContext,
   row: QueuedRow,
-  rich: boolean,
+  o: { rich: boolean; topicsOn: boolean; orgId: string | null },
   now: () => Date,
 ): Promise<OutboxOutcome> {
   const fail = (error: string, permanent: boolean, retryAfter?: number): OutboxOutcome =>
@@ -148,17 +156,25 @@ async function sendOne(
           error,
           at: new Date(now().getTime() + outboxRetryDelaySeconds(row.tries, retryAfter) * 1000),
         };
-  if (!ctx.telegram) return fail('Telegram-бот не подключён', false);
+  const telegram = ctx.telegram;
+  if (!telegram) return fail('Telegram-бот не подключён', false);
   try {
-    const plain = !rich || row.plain === true;
+    const plain = !o.rich || row.plain === true;
     const message = row.message;
-    const res =
-      message?.image !== undefined
-        ? await sendPhotoRow(ctx, row, { ...message, image: message.image }, plain)
-        : await ctx.telegram.sendMessage(row.chatId, row.text, {
-            disableLinkPreview: true,
-            ...(message ? botSendOptions(message, { plain }) : {}),
-          });
+    const res = await sendInTopic(
+      ctx,
+      row.chatId,
+      { kind: row.kind, orgId: o.orgId },
+      (threadId) =>
+        message?.image !== undefined
+          ? sendPhotoRow(ctx, row, { ...message, image: message.image }, plain, threadId)
+          : telegram.sendMessage(row.chatId, row.text, {
+              disableLinkPreview: true,
+              ...(message ? botSendOptions(message, { plain }) : {}),
+              ...threadOption(threadId),
+            }),
+      { topicsOn: o.topicsOn },
+    );
     if (res.ok) {
       // Номер сообщения нужен только сообщению с кнопками: по нему бот находит его при нажатии.
       return {
@@ -198,7 +214,14 @@ async function sendBatches(
     const outcomes: OutboxOutcome[] = [];
     // «Сообщения с таблицами» платформы читаются раз на пачку и только если в ней есть такие сообщения.
     const rich = rows.some((r) => r.message) ? await telegramBotRich(ctx.db) : true;
-    for (const row of rows) outcomes.push(await sendOne(ctx, row, rich, now));
+    // «Темы в чате с ботом» — так же: раз на пачку и только если в ней есть сообщения с темой.
+    const topicsOn =
+      ctx.telegram && rows.some((r) => botTopicOf(r.kind))
+        ? await telegramBotTopics(ctx.db)
+        : false;
+    for (const row of rows) {
+      outcomes.push(await sendOne(ctx, row, { rich, topicsOn, orgId: q.orgId }, now));
+    }
     await q.finish(outcomes);
     sent += outcomes.filter((x) => x.result === 'sent').length;
     for (const x of outcomes) {

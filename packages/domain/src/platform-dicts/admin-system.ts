@@ -110,6 +110,8 @@ export function isPeriodRowCode(value: string): value is PeriodRowCode {
 export const SYSTEM_NAME_MAX = 100;
 /** Описание права — не длиннее. */
 export const PERMISSION_DESCRIPTION_MAX = 500;
+/** Название темы чата с ботом — не длиннее (предел Telegram для createForumTopic). */
+export const TOPIC_NAME_MAX = 128;
 /** Текст шаблона сообщения — не длиннее (длинное сообщение Telegram режет на части). */
 export const MESSAGE_TEMPLATE_MAX = 2000;
 
@@ -120,6 +122,9 @@ export const MESSAGE_TEMPLATE_MAX = 2000;
 export function messageTemplateMax(key: string): number {
   if (/^tgBtn/.test(key)) return 40;
   if (/^(tgAct|tgTestOk$)/.test(key)) return 200;
+  // Название темы чата с ботом — до 128 знаков (предел Telegram; поток Т, задача Т7).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-11
+  if (/^tgTopic/.test(key)) return TOPIC_NAME_MAX;
   return MESSAGE_TEMPLATE_MAX;
 }
 
@@ -375,6 +380,10 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgLeadRefused: ['фирма', 'причина'],
   tgBtnMore: [],
   tgBtnVideo: [],
+  tgTopicReports: [],
+  tgTopicTasks: [],
+  tgTopicLeads: [],
+  tgTopicSecurity: [],
 };
 
 /** Подстановки шаблона; у неизвестного ключа (в том числе `constructor`) — нет. */
@@ -542,6 +551,10 @@ export const MESSAGE_TEMPLATE_ORDER = [
   'tgLeadRefused',
   'tgBtnMore',
   'tgBtnVideo',
+  'tgTopicReports',
+  'tgTopicTasks',
+  'tgTopicLeads',
+  'tgTopicSecurity',
 ] as const;
 
 /** Ключ словаря подписи шаблона: `tgConfWait` → `pdicts.tpl.label.tg_conf_wait`. */

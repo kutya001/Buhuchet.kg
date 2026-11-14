@@ -37,6 +37,7 @@ import { botText, sendCodeMessage, sendNow, sendSecurityNotice } from './bot';
 import { botMenu, handleBotCommand, sendBotHint } from './commands';
 import { handleBotPress } from './press';
 import { handleBotReply, type BotIncoming } from './reply';
+import { inReplyThread } from './topics';
 
 const error = { 'application/json': { schema: ApiError } };
 
@@ -54,6 +55,17 @@ const IncomingFile = z.object({
 });
 
 /**
+ * Тема личного чата с ботом (поток Т, задача Т7): сообщение или кнопка — в теме, ответ бота — туда же.
+ * Номер темы берётся, только если Telegram пометил сообщение как сообщение темы.
+ */
+const TopicFields = {
+  message_thread_id: z.number().int().positive().max(2_147_483_647).optional(),
+  is_topic_message: z.boolean().optional(),
+};
+const topicThreadOf = (m?: { message_thread_id?: number; is_topic_message?: boolean }) =>
+  m?.is_topic_message === true ? m.message_thread_id : undefined;
+
+/**
  * Сообщение человека в личном чате: текст (ссылка привязки, код замены, ответ на просьбу бота) или файл
  * — документ либо фото с подписью (ответ на просьбу бота прислать файл, задача Т2).
  */
@@ -64,6 +76,7 @@ const PrivateMessage = z.object({
   document: IncomingFile.optional(),
   photo: z.array(IncomingFile).max(20).optional(),
   reply_to_message: z.looseObject({ message_id: z.number().int() }).optional(),
+  ...TopicFields,
   chat: z.object({ id: z.number().int(), type: z.literal('private') }),
   from: z
     .object({
@@ -83,6 +96,7 @@ const ButtonPress = z.object({
   message: z
     .object({
       message_id: z.number().int(),
+      ...TopicFields,
       chat: z.object({ id: z.number().int(), type: z.string().max(32) }),
     })
     .optional(),
@@ -368,14 +382,16 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     if (press.success) {
       const q = press.data;
       try {
-        await handleBotPress(deps, {
-          callbackId: q.id,
-          fromId: q.from.id,
-          chatId: q.message?.chat.id ?? 0,
-          chatType: q.from.is_bot ? '' : (q.message?.chat.type ?? ''),
-          messageId: q.message?.message_id ?? 0,
-          data: q.data ?? '',
-        });
+        await inReplyThread(q.message?.chat.id ?? 0, topicThreadOf(q.message), () =>
+          handleBotPress(deps, {
+            callbackId: q.id,
+            fromId: q.from.id,
+            chatId: q.message?.chat.id ?? 0,
+            chatType: q.from.is_bot ? '' : (q.message?.chat.type ?? ''),
+            messageId: q.message?.message_id ?? 0,
+            data: q.data ?? '',
+          }),
+        );
       } catch (err) {
         deps.logger.error({ err }, 'Telegram: нажатие кнопки не обработано');
       }
@@ -383,90 +399,94 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     }
     const message = PrivateMessage.safeParse(update.message);
     if (!message.success || message.data.from?.is_bot) return ok;
-    const { chat, from } = message.data;
-    const text = message.data.text ?? null;
-    const reply = async (body: string) => {
-      await sendNow(deps, chat.id, body, 'bot_reply');
-      return ok;
-    };
+    const data = message.data;
+    // Темы в чате с ботом (задача Т7): ответы бота в этот чат — в ту же тему, где написал человек.
+    return inReplyThread(data.chat.id, topicThreadOf(data), async () => {
+      const { chat, from } = data;
+      const text = data.text ?? null;
+      const reply = async (body: string) => {
+        await sendNow(deps, chat.id, body, 'bot_reply');
+        return ok;
+      };
 
-    const command = text === null ? null : parseStartCommand(text);
-    if (!command) {
-      // Код замены Telegram, если бот ждёт его в этом чате, — раньше ответа на просьбу: шесть цифр не
-      // должны уйти причиной возврата отчёта.
-      const code = text === null ? null : relinkCodeOf(text);
-      if (code && (await confirmRelink(deps, chat.id, code, reply))) return ok;
-      // Команда меню бота: «/today» или подпись кнопки под полем ввода (поток Т, задача Т5) — раньше
-      // ответа на просьбу: «Сегодня» не должно уйти запросом поиска контрагента. Сбой не роняет вебхук.
-      if (text !== null) {
+      const command = text === null ? null : parseStartCommand(text);
+      if (!command) {
+        // Код замены Telegram, если бот ждёт его в этом чате, — раньше ответа на просьбу: шесть цифр не
+        // должны уйти причиной возврата отчёта.
+        const code = text === null ? null : relinkCodeOf(text);
+        if (code && (await confirmRelink(deps, chat.id, code, reply))) return ok;
+        // Команда меню бота: «/today» или подпись кнопки под полем ввода (поток Т, задача Т5) — раньше
+        // ответа на просьбу: «Сегодня» не должно уйти запросом поиска контрагента. Сбой не роняет вебхук.
+        if (text !== null) {
+          try {
+            const handled = await handleBotCommand(deps, {
+              chatId: chat.id,
+              fromId: from?.id ?? 0,
+              messageId: data.message_id ?? null,
+              reply: data.reply_to_message != null,
+              text,
+            });
+            if (handled) return ok;
+          } catch (err) {
+            deps.logger.error({ err }, 'Telegram: команда меню бота не обработана');
+            return ok;
+          }
+        }
+        // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
+        // Telegram повторял бы доставку, а действие могло уже выполниться.
         try {
-          const handled = await handleBotCommand(deps, {
+          const handled = await handleBotReply(deps, {
             chatId: chat.id,
             fromId: from?.id ?? 0,
-            messageId: message.data.message_id ?? null,
-            reply: message.data.reply_to_message != null,
+            messageId: data.message_id ?? null,
+            replyTo: data.reply_to_message?.message_id ?? null,
             text,
+            file: await incomingFile(deps, data),
+            caption: data.caption ?? null,
           });
           if (handled) return ok;
         } catch (err) {
-          deps.logger.error({ err }, 'Telegram: команда меню бота не обработана');
+          deps.logger.error({ err }, 'Telegram: ответ на просьбу бота не обработан');
           return ok;
         }
-      }
-      // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
-      // Telegram повторял бы доставку, а действие могло уже выполниться.
-      try {
-        const handled = await handleBotReply(deps, {
-          chatId: chat.id,
-          fromId: from?.id ?? 0,
-          messageId: message.data.message_id ?? null,
-          replyTo: message.data.reply_to_message?.message_id ?? null,
-          text,
-          file: await incomingFile(deps, message.data),
-          caption: message.data.caption ?? null,
-        });
-        if (handled) return ok;
-      } catch (err) {
-        deps.logger.error({ err }, 'Telegram: ответ на просьбу бота не обработан');
+        // Файл, которого бот не ждал, остаётся без ответа — как раньше; на текст — подсказка.
+        if (text !== null) await sendBotHint(deps, chat.id);
         return ok;
       }
-      // Файл, которого бот не ждал, остаётся без ответа — как раньше; на текст — подсказка.
-      if (text !== null) await sendBotHint(deps, chat.id);
-      return ok;
-    }
-    if (!command.token) {
-      await sendBotHint(deps, chat.id);
-      return ok;
-    }
-    if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
-    const tokenHash = hashSessionToken(command.token);
-    const target = await peekTelegramLink(deps.db, tokenHash);
-    if (!target) return reply(await botText(deps, 'tgLinkInvalid'));
-    // Telegram повторил то же сообщение после привязки или запроса кода — второй раз не отвечаем.
-    if (target.used && (target.linkedChatId === chat.id || target.relinkChatId === chat.id)) {
-      return ok;
-    }
-    if (target.used || target.expired || loginDenial(target)) {
-      return reply(await botText(deps, 'tgLinkInvalid'));
-    }
+      if (!command.token) {
+        await sendBotHint(deps, chat.id);
+        return ok;
+      }
+      if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
+      const tokenHash = hashSessionToken(command.token);
+      const target = await peekTelegramLink(deps.db, tokenHash);
+      if (!target) return reply(await botText(deps, 'tgLinkInvalid'));
+      // Telegram повторил то же сообщение после привязки или запроса кода — второй раз не отвечаем.
+      if (target.used && (target.linkedChatId === chat.id || target.relinkChatId === chat.id)) {
+        return ok;
+      }
+      if (target.used || target.expired || loginDenial(target)) {
+        return reply(await botText(deps, 'tgLinkInvalid'));
+      }
 
-    const link: LinkChat = {
-      chatId: chat.id,
-      username: from?.username ?? null,
-      firstName: from?.first_name ?? null,
-    };
-    if (telegramRelinkNeedsCode(target, chat.id)) {
-      const asked = await askRelinkCode(deps, target, tokenHash, link, reply);
-      if (asked === 'asked') return ok;
-    }
-    const done = await linked(
-      deps,
-      target,
-      link,
-      (tx) => useTelegramLink(tx, { tokenHash, ...link }),
-      target.relinkFree,
-    );
-    if (!done) return reply(await botText(deps, 'tgLinkInvalid'));
-    return ok;
+      const link: LinkChat = {
+        chatId: chat.id,
+        username: from?.username ?? null,
+        firstName: from?.first_name ?? null,
+      };
+      if (telegramRelinkNeedsCode(target, chat.id)) {
+        const asked = await askRelinkCode(deps, target, tokenHash, link, reply);
+        if (asked === 'asked') return ok;
+      }
+      const done = await linked(
+        deps,
+        target,
+        link,
+        (tx) => useTelegramLink(tx, { tokenHash, ...link }),
+        target.relinkFree,
+      );
+      if (!done) return reply(await botText(deps, 'tgLinkInvalid'));
+      return ok;
+    });
   };
 }

@@ -87,6 +87,7 @@ function sendPhoto(
 }
 
 // Состояние вебхука: адрес из setWebhook или /webhook-info, последняя ошибка доставки (время — сейчас).
+let topicSeq = 1000;
 const webhook: { url: string; error: string } = { url: '', error: '' };
 
 function reply(res: ServerResponse, status: number, body: unknown) {
@@ -292,6 +293,20 @@ createServer((req, res) => {
               }
             : {}),
         },
+      });
+    }
+    // Темы в чате с ботом (поток Т, задача Т7): у подставного бота они включены, номер темы — по порядку.
+    if (method === 'getMe') {
+      return reply(res, 200, {
+        ok: true,
+        result: { id: 1, is_bot: true, first_name: 'Buhuchet', has_topics_enabled: true },
+      });
+    }
+    if (method === 'createForumTopic') {
+      topicSeq += 1;
+      return reply(res, 200, {
+        ok: true,
+        result: { message_thread_id: topicSeq, name: String(data.name ?? '') },
       });
     }
     if (method === 'webhookInfo') {
