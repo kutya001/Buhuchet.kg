@@ -42,6 +42,7 @@ import {
   botPlainText,
   botTemplate,
   CP_PAY_DAYS,
+  CP_TG_ANSWER_ACTION,
   CP_TG_ASK_ACTION,
   CP_TG_CLIENT_ACTIONS,
   CP_TG_NODEBT_ACTION,
@@ -61,6 +62,7 @@ import {
   pressBotButton,
   relinkCodeOf,
   withOrganization,
+  type BotAsk,
   type BotMessage,
   type IsoDate,
   type MonthPayLine,
@@ -318,7 +320,8 @@ export async function logMonthPaySent(
 /**
  * Сообщение ответственному сотруднику (без него, заблокированному или без Telegram — первому
  * владельцу с Telegram; прототип pgTgStaff) с заголовком: строка очереди в транзакции действия
- * клиента. Ответ — номера строк очереди: после транзакции их отправляет `flushEvents`.
+ * клиента. `ask` — бот ждёт ответ сотрудника на это сообщение (вопрос клиента). Ответ — номера строк
+ * очереди: после транзакции их отправляет `flushEvents`.
  */
 async function queueStaffNotice(
   tx: Tx,
@@ -326,6 +329,7 @@ async function queueStaffNotice(
   contractorId: string,
   heading: string,
   build: (contractor: string) => Promise<string>,
+  ask?: BotAsk,
 ): Promise<string[]> {
   const notice = await pageClosedNotice(tx, contractorId);
   if (!notice) return [];
@@ -339,6 +343,7 @@ async function queueStaffNotice(
     const message: BotMessage = {
       heading,
       text: withOrganization(await build(notice.contractor), orgName, chat.shared),
+      ...(ask ? { ask } : {}),
     };
     return queueEvents(
       tx,
@@ -514,8 +519,8 @@ const ClientTextMessage = z.object({
 /**
  * Текст клиента после «Вопрос бухгалтеру» (прототип pgTgAsk): вопрос уходит ответственному сотруднику
  * с названием контрагента и пишется в историю контрагента; клиенту бот отвечает «Вопрос передан».
- * Отвечает сотрудник пока сам — по телефону или в своём мессенджере (docs/deviations.md п. К-4).
- * Принимается ответ на просьбу бота, а без ответа — текст в течение суток после просьбы, кроме команды
+ * Сообщение сотруднику — просьба бота без дня (действие `CP_TG_ANSWER_ACTION`): его ответ на это
+ * сообщение уходит клиенту (`contractor-page/telegram-bot.ts`, прототип pgTgAnswer). Принимается ответ на просьбу бота, а без ответа — текст в течение суток после просьбы, кроме команды
  * с «/» и кроме чата, привязанного и к учётной записи сотрудника (docs/deviations.md п. О-79). true — текст
  * принят как вопрос (или отклонён пределом); false — бот вопроса не ждёт, отвечает обычный разбор.
  */
@@ -572,20 +577,19 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
       await logContractorTelegramPay(tx, target.contractorId, 'page_tg_question', [
         { field: 'tgQuestion', to: { name: current.name, text: cpTgQuestionForHistory(question) } },
       ]);
-      // ОТКЛОНЕНИЕ: docs/deviations.md#К-4 — ответить клиенту из Telegram сотрудник пока не может
-      // (ответ клиенту на «ответе боту» Т2 — следующая правка потока К), поэтому вместо шаблонов `tgCpAskStaff` и `tgCpAskSent`
-      // («Ответьте на это сообщение — ответ уйдёт клиенту», «Ответ придёт сюда») — тексты без обещания.
+      // Ответ сотрудника на это сообщение уходит клиенту: просьба без дня ждёт ответа именно на него.
       const staff = await queueStaffNotice(
         tx,
         deps,
         target.contractorId,
         t('cppage.tg.staff.ask_heading'),
-        async (contractor) =>
-          formatText(t('cppage.tg.ask_staff'), {
-            contractor,
-            name: current.name,
-            text: question,
+        (contractor) =>
+          templateText(tx, 'tgCpAskStaff', {
+            контрагент: contractor,
+            телеграм: current.name,
+            вопрос: question,
           }),
+        { action: CP_TG_ANSWER_ACTION, arg: target.id, kind: 'text' },
       );
       return { staff };
     },
@@ -596,9 +600,40 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
     await send(await templateText(deps.db, 'tgCpNotLinked'));
     return true;
   }
-  await send(t('cppage.tg.ask_sent'));
+  await send(await templateText(deps.db, 'tgCpAskSent'));
   await flushEvents(deps, target.orgId, result.staff);
   return true;
+}
+
+/**
+ * Ответ сотрудника клиенту (прототип pgTgAnswer) — сразу, из транзакции ответа сотрудника: у ответа боту
+ * нет шага «после транзакции» для чата, который не привязан к пользователю. Сообщение без кнопок: в
+ * таблицу сообщений клиенту оно не пишется (принимать на нём нечего), в журнал «Телеграм» — тоже
+ * (клиент — не пользователь, docs/deviations.md п. К-4). true — Telegram принял сообщение.
+ */
+export async function sendClientAnswer(
+  deps: ApiDeps,
+  tx: Tx,
+  chatId: number,
+  message: BotMessage,
+): Promise<boolean> {
+  if (!deps.telegram) return false;
+  const plain = !(await telegramBotRich(tx));
+  try {
+    const res = await deps.telegram.sendMessage(
+      chatId,
+      botPlainText(message),
+      botSendOptions(message, { plain }),
+    );
+    if (res.ok) return true;
+    deps.logger.warn(
+      { purpose: 'cp_answer', errorCode: res.errorCode, description: res.description },
+      'Telegram: ответ контрагенту не отправлен',
+    );
+  } catch (err) {
+    deps.logger.warn({ err, purpose: 'cp_answer' }, 'Telegram: ответ контрагенту не отправлен');
+  }
+  return false;
 }
 
 /** Само «К оплате» одной организации: что отправить. Всё — в одной транзакции задачи. */

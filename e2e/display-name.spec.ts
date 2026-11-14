@@ -115,7 +115,10 @@ test.describe('Этап 3: отображаемое имя сотрудника 
     const word = `Акты-${Date.now().toString(36)}`;
     const { contractorId, taskId } = await giveWork(page.request, origin, meerim.id, word);
 
-    // Сотрудник входит и в «Мой профиль» меняет имя на «Мээрим».
+    // Сотрудник входит и в «Мой профиль» меняет имя на «Мээрим». Сначала уходим со страницы
+    // программы: её запрос, отвеченный «не вошёл» уже после смены входа, стёр бы новую cookie сеанса,
+    // и проверка входа следующей страницы увела бы на /login.
+    await page.goto('about:blank');
     await page.request.post('/api/auth/logout', { headers: { origin } });
     await signIn(page.request, origin, login, temporary);
     const own = ownerPassword();
@@ -154,7 +157,9 @@ test.describe('Этап 3: отображаемое имя сотрудника 
     await profile.getByRole('button', { name: 'Готово' }).click();
     await expect(profile).toBeHidden();
 
-    // Владелец: в списках и фильтре — «Мээрим», в карточке сотрудника — полное ФИО.
+    // Владелец: в списках и фильтре — «Мээрим», в карточке сотрудника — полное ФИО. Со страницы
+    // сотрудника уходим до смены входа — по той же причине.
+    await page.goto('about:blank');
     await page.request.post('/api/auth/logout', { headers: { origin } });
     await signIn(page.request, origin, ownerLogin, 'Свой-пароль-e2e-1');
 

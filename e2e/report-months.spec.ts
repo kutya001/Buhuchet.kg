@@ -432,7 +432,7 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     });
   }
 
-  test('(доработки 13.11.2026, К4) «Отправить в Telegram»: клиент с подключённым Telegram получает «К оплате» с налогами месяца и кнопками; «Оплатил» и «Вопрос бухгалтеру» доходят до ответственного бухгалтера и пишутся в историю контрагента', async ({
+  test('(доработки 13.11.2026, К4) «Отправить в Telegram»: клиент с подключённым Telegram получает «К оплате» с налогами месяца и кнопками; «Оплатил» и «Вопрос бухгалтеру» доходят до ответственного бухгалтера, его ответ на вопрос из Telegram — до клиента; всё пишется в историю контрагента', async ({
     page,
     playwright,
     baseURL,
@@ -604,13 +604,30 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
       ).toBe(200);
       await expect
         .poll(async () => (await botMessages(page.request, clientChat)).at(-1) ?? '')
-        .toBe('Вопрос передан вашему бухгалтеру. Он свяжется с вами.');
+        .toBe('Вопрос передан вашему бухгалтеру. Ответ придёт сюда.');
       await expect
         .poll(async () => (await botMessages(page.request, staffChat)).at(-1) ?? '')
-        .toContain(`${name}: вопрос от «${telegramName}». Можно оплатить частями?`);
+        .toContain(
+          `${name}: вопрос от «${telegramName}». Можно оплатить частями? Ответьте на это сообщение — ответ уйдёт клиенту.`,
+        );
     });
 
-    await test.step('история контрагента: отправка, «оплатил» и вопрос', async () => {
+    await test.step('бухгалтер отвечает на вопрос в Telegram: ответ приходит клиенту, бухгалтеру — «Ответ отправлен»', async () => {
+      const question = (await chatMessages(page.request, staffChat)).at(-1)!;
+      expect(
+        (
+          await replyToBot(page.request, staffChat, question.messageId, 'Да, можно двумя частями')
+        ).status(),
+      ).toBe(200);
+      await expect
+        .poll(async () => (await botMessages(page.request, clientChat)).at(-1) ?? '')
+        .toMatch(/^Ответ бухгалтера\n.+: Да, можно двумя частями$/);
+      await expect
+        .poll(async () => (await botMessages(page.request, staffChat)).at(-1) ?? '')
+        .toBe('Ответ отправлен клиенту в Telegram.');
+    });
+
+    await test.step('история контрагента: отправка, «оплатил», вопрос и ответ', async () => {
       await page.reload();
       const again = await openReportsTab(page, isMobile, word);
       await toCardTab(page, again, isMobile, /^История/);
@@ -629,6 +646,11 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
       await expect(
         again.getByText(
           `Вопрос бухгалтеру из Telegram («${telegramName}»): Можно оплатить частями?`,
+        ),
+      ).toBeVisible();
+      await expect(
+        again.getByText(
+          `Ответ контрагенту в Telegram («${telegramName}»): Да, можно двумя частями`,
         ),
       ).toBeVisible();
       // Подделанное нажатие второй записи об оплате не добавило.

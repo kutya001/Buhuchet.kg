@@ -78,6 +78,22 @@ describe('pageHistoryText', () => {
     );
   });
 
+  it('вопрос клиента и ответ сотрудника в Telegram — строками прототипа v94 (pgTgAsk, pgTgAnswer)', () => {
+    const entry = (action: string, field: string) =>
+      pageHistoryText(t, {
+        action,
+        changes: [{ field, to: { name: '@aibek', text: 'Можно оплатить частями?' } }],
+      });
+    expect(entry('page_tg_question', 'tgQuestion')).toBe(
+      'Вопрос бухгалтеру из Telegram («@aibek»): Можно оплатить частями?',
+    );
+    expect(entry('page_tg_answer', 'tgAnswer')).toBe(
+      'Ответ контрагенту в Telegram («@aibek»): Можно оплатить частями?',
+    );
+    // Ответ пишет сотрудник — автор записи он, а не контрагент.
+    expect(pageHistoryActor(t, 'Иванова А.', 'page_tg_answer')).toBe('Иванова А.');
+  });
+
   it('открытие и перерыв делает контрагент', () => {
     expect(pageHistoryActor(t, null)).toBe('Контрагент');
     expect(pageHistoryActor(t, 'Иванова А.')).toBe('Иванова А.');
