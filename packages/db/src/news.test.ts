@@ -407,7 +407,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     });
     // Ссылка на видео прототипа (vd-intro) не переносится: видео в базу не заливаются (п. О-53).
     expect(rows.find((r) => r.id === 'v79')).toMatchObject({ linkKind: null, linkId: null });
-    // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14), не наполняются; v109 — да.
+    // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14; v110), не наполняются; v109 — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
