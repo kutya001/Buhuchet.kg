@@ -134,66 +134,97 @@ jobs:
           pnpm test:coverage
           pnpm exec turbo run test --filter='!@buhuchet/domain' --filter='!@buhuchet/api' --filter='!@buhuchet/adapters'
 
-  docker-e2e:
-    name: docker-e2e
+  # Сквозные тесты — на 6 машинах параллельно (docs/decisions.md п. О-49): у каждой свой Docker со своей
+  # базой, поэтому тесты *.shared.spec.ts, которые меняют общую запись демо-организации, идут на той же
+  # машине после остальных, сначала ПК, потом телефон, как в одном прогоне. Больше 6 машин PR не ускоряет:
+  # check идёт ~12 минут, а 6 машин на PR при двух линиях укладываются в 20 одновременных задач.
+  # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не всей
+  # задачей, и шаги журналов ниже успевают выполниться (п. О-47).
+  # В этой задаче — только значения из .env.example: журналы и отчёт публичны, секреты сюда не добавлять.
+  e2e:
+    name: e2e ${{ matrix.shard }}/6
     needs: scope
+    if: needs.scope.outputs.landing_only != 'true'
     runs-on: ubuntu-24.04
-    # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не
-    # всей задачей, и шаги журналов ниже успевают выполниться (docs/decisions.md п. О-47).
-    # В этой задаче — только значения из .env.example: журналы и отчёт публичны, секреты сюда не добавлять.
-    timeout-minutes: 75
+    timeout-minutes: 40
+    strategy:
+      # Упавшая машина не останавливает остальные: все падения видны за один прогон.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
-      - name: Короткий путь — сквозные тесты не нужны
-        if: needs.scope.outputs.landing_only == 'true'
-        run: echo "Правка только лендинга — сквозные тесты пропущены (docs/decisions.md п. О-5); main проверит ночной прогон."
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: needs.scope.outputs.landing_only != 'true'
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-        if: needs.scope.outputs.landing_only != 'true'
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: needs.scope.outputs.landing_only != 'true'
         with:
           node-version-file: .nvmrc
           cache: pnpm
       - run: cp .env.example .env
-        if: needs.scope.outputs.landing_only != 'true'
       - name: Всё приложение в Docker, как на VPS
-        if: needs.scope.outputs.landing_only != 'true'
         run: docker compose --profile app up -d --build --wait
       - name: Задачи по расписанию с секретом
-        if: needs.scope.outputs.landing_only != 'true'
         run: |
           curl -fsS -X POST -H "Authorization: Bearer $(grep ^CRON_SECRET= .env | cut -d= -f2)" http://localhost:3000/api/cron/tick
       - run: pnpm install --frozen-lockfile
-        if: needs.scope.outputs.landing_only != 'true'
       - run: pnpm exec playwright install --with-deps chromium
-        if: needs.scope.outputs.landing_only != 'true'
+      # Три запуска по порядку вместо зависимостей проектов: при --shard Playwright целиком повторяет
+      # проекты-зависимости на каждой машине. --no-deps — порядок задают сами запуски; у машины может
+      # не оказаться тестов *.shared — это не ошибка.
       - name: Сквозные тесты на ПК и телефоне
-        if: needs.scope.outputs.landing_only != 'true'
-        timeout-minutes: 65
-        run: pnpm test:e2e
+        timeout-minutes: 30
         env:
           E2E_BASE_URL: http://localhost:3000
+          SHARD: ${{ matrix.shard }}/6
+        run: |
+          pnpm test:e2e --project=desktop --project=mobile --shard="$SHARD"
+          pnpm test:e2e --project=desktop-shared --no-deps --pass-with-no-tests --shard="$SHARD"
+          pnpm test:e2e --project=mobile-shared --no-deps --pass-with-no-tests --shard="$SHARD"
       # Журналы — и при падении, и при отмене: зависший прогон без них не разобрать.
       - name: Соединения базы (кто чего ждёт)
-        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        if: failure() || cancelled()
         timeout-minutes: 2
         run: |
           docker compose exec -T postgres psql -U postgres -d buhuchet -c "select pid, usename, application_name, state, wait_event_type, wait_event, now() - xact_start as in_tx, now() - state_change as in_state, left(query, 200) as query from pg_stat_activity where datname = 'buhuchet' and pid <> pg_backend_pid() order by xact_start nulls last" || true
       - name: Журналы контейнеров
-        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        if: failure() || cancelled()
         timeout-minutes: 3
         run: docker compose --profile app logs --no-color --timestamps --tail=500 || true
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        if: failure() || cancelled()
         timeout-minutes: 3
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           if-no-files-found: ignore
           retention-days: 7
+
+  # Обязательная проверка docker-e2e (имя не меняется: Ruleset и scripts/automerge.mjs) — итог машин e2e.
+  # Зелёная, только когда зелёные все 6 машин или это короткий путь лендинга (п. О-5).
+  docker-e2e:
+    name: docker-e2e
+    needs: [scope, e2e]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Итог сквозных тестов
+        env:
+          SCOPE: ${{ needs.scope.result }}
+          LANDING_ONLY: ${{ needs.scope.outputs.landing_only }}
+          E2E: ${{ needs.e2e.result }}
+        run: |
+          if [ "$SCOPE" != success ]; then
+            echo "Задание scope: $SCOPE — сквозные тесты не запускались."; exit 1
+          fi
+          if [ "$LANDING_ONLY" = true ]; then
+            echo "Правка только лендинга — сквозные тесты пропущены (docs/decisions.md п. О-5); main проверит ночной прогон."; exit 0
+          fi
+          if [ "$E2E" != success ]; then
+            echo "Сквозные тесты: $E2E — подробности в задачах e2e N/6."; exit 1
+          fi
+          echo "Сквозные тесты зелёные на всех 6 машинах."
 
   # Известные уязвимости в зависимостях рабочего сайта (без инструментов разработки) — только в ночном и
   # ручном прогоне, не в PR: новая запись в базе уязвимостей не должна останавливать чужие PR. Красный
