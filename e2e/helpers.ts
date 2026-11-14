@@ -64,7 +64,7 @@ export async function defaultResponsible(api: APIRequestContext): Promise<string
 }
 
 /** Подделка Telegram Bot API (fake-telegram.ts): её запускает Playwright на этом компьютере. */
-const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
+export const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
 /** Секрет вебхука бота сайта — тот же, что в .env (по умолчанию из .env.example). */
 export const WEBHOOK_SECRET =
   process.env.TELEGRAM_WEBHOOK_SECRET ?? 'local-webhook-secret-change-me';

@@ -946,6 +946,20 @@
       "when": 1794621001188,
       "tag": "0134_telegram_topics_functions",
       "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1794623415793,
+      "tag": "0135_telegram_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1794623444359,
+      "tag": "0136_telegram_groups_functions",
+      "breakpoints": true
     }
   ]
 }

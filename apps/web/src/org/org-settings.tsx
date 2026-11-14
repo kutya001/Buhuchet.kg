@@ -21,6 +21,7 @@ import { FilesStorageBox } from '../files/storage-box';
 import { useKb } from '../kb/kb-provider';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
+import { TelegramGroupBox } from '../telegram/group-box';
 import { policyQuery, roleOptionsQuery, useOrgRefresh } from './org-data';
 
 type RoleOption = { id: string; name: string };
@@ -260,6 +261,7 @@ function SettingsForm({
           <Note icon="info">{t('org.settings.telegram_off')}</Note>
         )}
       </Box>
+      {telegram ? <TelegramGroupBox /> : null}
       {readOnly ? null : (
         <div className="flex">
           <div className="grow" />

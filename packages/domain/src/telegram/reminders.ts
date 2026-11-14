@@ -336,6 +336,78 @@ export function overdueOf(
   return out.sort((a, b) => a.due.localeCompare(b.due) || a.report.id.localeCompare(b.report.id));
 }
 
+/** Строка сводки общего чата фирмы: сотрудник (null — без ответственного), сдать сегодня, просрочено. */
+export interface GroupEmployeeRow {
+  employeeId: string | null;
+  today: number;
+  over: number;
+}
+
+/** Сводка дня в общий чат фирмы (поток Т, задача Т8; прототип v105 `tgGrpRows`). */
+export interface GroupSummary {
+  today: number;
+  over: number;
+  wait: number;
+  rows: GroupEmployeeRow[];
+}
+
+/**
+ * Сводка дня в общий чат фирмы (прототип v105 `tgGrpRows`): по всей организации — сколько отчётов сдать
+ * сегодня, сколько просрочено (сдача и оплата налога) и сколько сдач ждут подтверждения; по сотрудникам —
+ * сегодня и просрочено. Только числа: названия контрагентов в группу не идут. Приостановленные — как в
+ * напоминаниях, без них. null — сдавать сегодня нечего и просроченного нет: сводка не отправляется.
+ */
+export function groupSummary(
+  reports: readonly ReminderReport[],
+  p: Pick<ReminderPolicy, 'today' | 'taxpay' | 'reportConfirm'>,
+): GroupSummary | null {
+  const byId = new Map<string | null, GroupEmployeeRow>();
+  const at = (employeeId: string | null) => {
+    let row = byId.get(employeeId);
+    if (!row) byId.set(employeeId, (row = { employeeId, today: 0, over: 0 }));
+    return row;
+  };
+  let today = 0;
+  let over = 0;
+  let wait = 0;
+  for (const r of reports) {
+    if (subOpen(r)) {
+      if (r.dueDate < p.today) {
+        at(r.responsibleId).over++;
+        over++;
+      } else if (r.dueDate === p.today) {
+        at(r.responsibleId).today++;
+        today++;
+      }
+    }
+    if (payOpen(r, p) && r.payDue! < p.today) {
+      at(r.responsibleId).over++;
+      over++;
+    }
+    if (p.reportConfirm && r.waitingSince && !r.paused) wait++;
+  }
+  if (!today && !over) return null;
+  return { today, over, wait, rows: [...byId.values()].filter((x) => x.today || x.over) };
+}
+
+/**
+ * «Мои» в общем чате фирмы (прототип v105 `tgAct('grpMine')`): отчёты, где сотрудник ответственный, —
+ * несданные со сроком сегодня и просроченные, неоплаченные налоги с прошедшим сроком; давние первыми.
+ */
+export function groupMineOf(
+  employeeId: string,
+  reports: readonly ReminderReport[],
+  p: Pick<ReminderPolicy, 'today' | 'taxpay'>,
+): OverdueItem[] {
+  const out: OverdueItem[] = [];
+  for (const r of reports) {
+    if (r.responsibleId !== employeeId) continue;
+    if (subOpen(r) && r.dueDate <= p.today) out.push({ report: r, due: r.dueDate, pay: false });
+    if (payOpen(r, p) && r.payDue! < p.today) out.push({ report: r, due: r.payDue!, pay: true });
+  }
+  return out.sort((a, b) => a.due.localeCompare(b.due) || a.report.id.localeCompare(b.report.id));
+}
+
 /** Напоминания одного человека за день; пустой список — сегодня ему писать нечего. */
 export function remindersFor(
   person: ReminderPerson,

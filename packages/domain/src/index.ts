@@ -28,6 +28,7 @@ export * from './auth/device';
 export * from './auth/reset';
 export * from './telegram/bot-message';
 export * from './telegram/commands';
+export * from './telegram/group';
 export * from './telegram/lead-bot';
 export * from './telegram/messages';
 export * from './telegram/notify';

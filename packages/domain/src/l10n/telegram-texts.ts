@@ -1,6 +1,7 @@
 import type { UiTextDefault } from './texts';
 
 const S = 'Telegram';
+const G = 'Моя организация';
 const P = 'Профиль';
 
 /**
@@ -39,6 +40,8 @@ export const TELEGRAM_TEXTS = {
   'telegram.table.pay_mark': { ru: '{report} — оплата', section: S },
   'telegram.table.more': { ru: 'ещё {n} — на сайте', section: S },
   'telegram.table.employee': { ru: 'Сотрудник', section: S },
+  'telegram.table.today': { ru: 'Сегодня', section: S },
+  'telegram.table.today_word': { ru: 'сегодня', section: S },
   'telegram.table.to_submit': { ru: 'Сдать', section: S },
   'telegram.table.overdue': { ru: 'Просроч.', section: S },
   'telegram.table.waiting': { ru: 'Ждут', section: S },
@@ -106,6 +109,7 @@ export const TELEGRAM_TEXTS = {
   // «Это не я» под сообщениями о безопасности (поток Т, задача Т4; прототип v101 tg-security.js).
   'telegram.kind.not_me': { ru: 'Нажато «Это не я»', section: S },
   'telegram.kind.bot_cmd': { ru: 'Ответ на команду бота', section: S },
+  'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },
@@ -193,6 +197,85 @@ export const TELEGRAM_TEXTS = {
   'err.telegram_not_linked': { ru: 'Сначала привяжите Telegram', section: 'Ошибки' },
   'err.notify_boss_only': {
     ru: 'Режим и уведомления по отчётам других сотрудников — только владельцу и главному бухгалтеру',
+    section: 'Ошибки',
+  },
+  // Общий чат фирмы (поток Т, задача Т8; прототип v105 modules/tg-group.js).
+  'tggrp.title': { ru: 'Общий чат фирмы в Telegram', section: G },
+  'tggrp.intro': {
+    ru: 'Бот пишет в рабочую группу фирмы короткую сводку дня — без названий контрагентов. Кнопка «Мои» под сводкой показывает каждому его список: его видит только нажавший.',
+    section: G,
+  },
+  'tggrp.none': { ru: 'Группа не подключена.', section: G },
+  'tggrp.none_owner_only': {
+    ru: 'Группа не подключена. Подключает владелец организации.',
+    section: G,
+  },
+  'tggrp.link': { ru: 'Подключить группу', section: G },
+  'tggrp.relink': { ru: 'Подключить заново', section: G },
+  'tggrp.linked': { ru: 'Подключена', section: G },
+  'tggrp.gone': { ru: 'Бот удалён из группы', section: G },
+  'tggrp.by': { ru: '{name}, {date}', section: G },
+  'tggrp.gone_note': {
+    ru: 'Бота удалили из группы — сводки туда не приходят. Подключите группу заново.',
+    section: G,
+  },
+  'tggrp.forget': { ru: 'Забыть группу', section: G },
+  'tggrp.summary': { ru: 'Сводка дня в группу', section: G },
+  'tggrp.summary_hint': {
+    ru: 'По рабочим дням в {time}; нечего сдавать и нет просроченного — сводки нет.',
+    section: G,
+  },
+  'tggrp.owner_only': { ru: 'Меняет только владелец организации.', section: G },
+  'tggrp.summary_on': { ru: 'Сводка дня включена', section: G },
+  'tggrp.summary_off': { ru: 'Сводка дня выключена', section: G },
+  'tggrp.off': { ru: 'Отключить группу', section: G },
+  'tggrp.off_title': { ru: 'Отключить общий чат?', section: G },
+  'tggrp.off_text': {
+    ru: 'Бот напишет в группе «{title}», что отключён, и выйдет из неё. Сводки туда больше не придут.',
+    section: G,
+  },
+  'tggrp.off_text_gone': { ru: 'Группа будет забыта: бота в ней уже нет.', section: G },
+  'tggrp.off_ok': { ru: 'Отключить', section: G },
+  'tggrp.off_done': { ru: 'Общий чат отключён', section: G },
+  'tggrp.dlg_title': { ru: 'Подключить общий чат фирмы', section: G },
+  'tggrp.dlg_sub': { ru: 'Бот войдёт в рабочую группу фирмы в Telegram', section: G },
+  'tggrp.dlg_step1': {
+    ru: 'Нажмите «Открыть Telegram» на телефоне или компьютере, где у вас Telegram.',
+    section: G,
+  },
+  'tggrp.dlg_step2': {
+    ru: 'Telegram предложит выбрать группу — выберите рабочую группу фирмы и добавьте бота.',
+    section: G,
+  },
+  'tggrp.dlg_step3': {
+    ru: 'Бот напишет в группе, что подключён. Здесь появится название группы.',
+    section: G,
+  },
+  'tggrp.dlg_note': {
+    ru: 'Ссылка одноразовая и действует до {time} ({minutes} минут). В группе могут быть посторонние: бот пишет туда только числа и имена сотрудников, без контрагентов и сумм.',
+    section: G,
+  },
+  'tggrp.dlg_replace': {
+    ru: 'Сейчас подключена группа «{title}»: новая группа заменит её, а из прежней бот выйдет.',
+    section: G,
+  },
+  'tggrp.dlg_open': { ru: 'Открыть Telegram', section: G },
+  'tggrp.dlg_copy': { ru: 'Скопировать ссылку', section: G },
+  'tggrp.dlg_copied': { ru: 'Ссылка скопирована', section: G },
+  'org.history.tg_group_on': { ru: 'Общий чат Telegram «{title}» подключён', section: G },
+  'org.history.tg_group_off': { ru: 'Общий чат Telegram «{title}» отключён', section: G },
+  'org.history.tg_group_gone': {
+    ru: 'Бота удалили из общего чата Telegram «{title}»',
+    section: G,
+  },
+  'org.history.tg_group_summary': {
+    ru: 'Сводка дня в общий чат Telegram: {state}',
+    section: G,
+  },
+  'org.history.tg_group_summary_on': { ru: 'включена', section: G },
+  'org.history.tg_group_summary_off': { ru: 'выключена', section: G },
+  'err.telegram_off': {
+    ru: 'Напоминания в Telegram выключены в учётной политике',
     section: 'Ошибки',
   },
 } as const satisfies Record<string, UiTextDefault>;

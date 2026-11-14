@@ -14,7 +14,8 @@ import { createServer, type ServerResponse } from 'node:http';
 //   GET /messages?chat=<id> — что бот отправил в этот чат: `text` — текст без разметки (как его видит
 //   человек), `html` — вид с таблицами, `keyboard` — кнопки сейчас, `menu` — кнопки меню под полем ввода
 //   (ряды подписей; поток Т, задача Т5), `messageId` — номер в чате; GET /commands — команды меню бота;
-//   GET /answers — скрытые ответы на нажатия; GET /health;
+//   GET /answers — скрытые ответы на нажатия; GET /left — группы, из которых бот вышел (`leaveChat`), у
+//   скрытого сообщения в группе — `receiver` (поток Т, задача Т8); GET /health;
 //   POST /webhook-info {url, error} — что ответит getWebhookInfo (Админка → «Телеграм» → «Бот платформы»).
 //   /bot<токен>/sendPhoto — картинка с подписью (оформленная рассылка, поток Т, задача Т6): файлом
 //   (multipart) или номером файла, который подделка выдала раньше; в /messages — `photo` (номер файла и
@@ -34,6 +35,8 @@ interface Sent {
   menu?: string[][];
   /** Картинка: номер файла у «Telegram» и размер, если файл загружали (иначе — отправлен по номеру). */
   photo?: { fileId: string; bytes?: number };
+  /** Скрытое сообщение в группе: кто его видит (поток Т, задача Т8). */
+  receiver?: number;
 }
 
 const sent: Sent[] = [];
@@ -41,6 +44,8 @@ const sent: Sent[] = [];
 // 20 МБ, такой Bot API не отдаёт («file is too big»).
 const files = new Map<string, { path: string; body: Buffer; tooBig: boolean }>();
 const answers: { id: string; text: string; alert: boolean }[] = [];
+// Группы, из которых бот вышел (`leaveChat`, поток Т, задача Т8).
+const left: string[] = [];
 let commands: unknown = [];
 let nextId = 1;
 // Картинки, которые загружали: номер файла → размер.
@@ -101,6 +106,7 @@ createServer((req, res) => {
   const url = new URL(req.url ?? '/', 'http://fake-telegram');
   if (req.method === 'GET' && url.pathname === '/health') return reply(res, 200, { ok: true });
   if (req.method === 'GET' && url.pathname === '/answers') return reply(res, 200, answers);
+  if (req.method === 'GET' && url.pathname === '/left') return reply(res, 200, left);
   if (req.method === 'GET' && url.pathname === '/commands') return reply(res, 200, commands);
   if (req.method === 'GET' && url.pathname === '/messages') {
     const chat = url.searchParams.get('chat');
@@ -176,6 +182,7 @@ createServer((req, res) => {
       message_id?: number;
       callback_query_id?: string;
       show_alert?: boolean;
+      ephemeral_message_parameters?: { receiver_user_id?: number };
       file_id?: string;
       photo?: string;
       caption?: string;
@@ -205,6 +212,9 @@ createServer((req, res) => {
         ...(html !== undefined ? { html } : {}),
         ...(keyboard ? { keyboard } : {}),
         ...(menu ? { menu } : {}),
+        ...(data.ephemeral_message_parameters?.receiver_user_id !== undefined
+          ? { receiver: data.ephemeral_message_parameters.receiver_user_id }
+          : {}),
       });
       return reply(res, 200, { ok: true, result: { message_id: messageId } });
     }
@@ -271,6 +281,10 @@ createServer((req, res) => {
           file_size: file.body.byteLength,
         },
       });
+    }
+    if (method === 'leaveChat') {
+      left.push(String(data.chat_id));
+      return reply(res, 200, { ok: true, result: true });
     }
     if (method === 'setWebhook') {
       webhook.url = String(data.url ?? '');
