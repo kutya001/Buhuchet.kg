@@ -923,6 +923,10 @@ describe.skipIf(!databaseAvailable())(
       ]);
       expect(sentTo(CLIENT_1).at(-1)!.text).toBe(text('tgCpAskSent'));
       const before = sentTo(CLIENT_1).length;
+      // Просьба открыта, но текст прислан в чат не ответом на сообщение — клиенту он не уходит.
+      await toBot('Ответ без ответа', CHAT_ACC, 'acc_a');
+      expect(sentTo(CLIENT_1)).toHaveLength(before);
+      expect(await answers()).toEqual([]);
 
       await toBot('Да,  можно\nдвумя частями', CHAT_ACC, 'acc_a', q.staffMessage);
       expect(
@@ -949,9 +953,6 @@ describe.skipIf(!databaseAvailable())(
       await toBot('И ещё', CHAT_ACC, 'acc_a', q.staffMessage);
       expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
       expect(await answers()).toHaveLength(1);
-      // Просто текст в чат сотрудника без ответа на сообщение — тоже не ответ клиенту.
-      await toBot('Ответ без ответа', CHAT_ACC, 'acc_a');
-      expect(sentTo(CLIENT_1)).toHaveLength(before + 1);
     });
 
     it('«Ответить»: чужая организация, область «Свои» и право проверяются; подключение должно действовать', async () => {
@@ -1002,6 +1003,17 @@ describe.skipIf(!databaseAvailable())(
       } finally {
         await hide([]);
       }
+      // Функция «Страница контрагента по ссылке» выключена — тоже «не подключён».
+      await features(f.a.orgId, { telegram: true, taxpay: true, fee: true });
+      try {
+        const off = await giveAsk('acc-a', CHAT_ACC, q.id);
+        await toBot('Ответ без страницы', CHAT_ACC, 'acc_a', off);
+        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(
+          'Ответ не отправлен: этот Telegram больше не подключён к контрагенту.',
+        );
+      } finally {
+        await features(f.a.orgId, ALL_ON);
+      }
       expect(sentTo(CLIENT_1)).toHaveLength(before);
       expect(await answers()).toEqual([]);
 
@@ -1028,15 +1040,26 @@ describe.skipIf(!databaseAvailable())(
         'Ответ не отправлен: Telegram не принял сообщение. Попробуйте ответить ещё раз позже.',
       );
       expect(await answers()).toEqual([]);
-      await toBot('Сумма в сообщении', CHAT_ACC, 'acc_a', q.staffMessage);
+      // Повтор — длинным ответом: клиенту — до 500 знаков с «…», в историю — первые 200.
+      const long = `Сумма в сообщении. ${'Подробности. '.repeat(60)}`;
+      await toBot(long, CHAT_ACC, 'acc_a', q.staffMessage);
+      const shown = `${[...long.trim()].slice(0, 499).join('')}…`;
+      expect([...shown]).toHaveLength(500);
       expect(
         sentTo(CLIENT_1)
           .slice(before)
           .map((m) => m.text),
-      ).toEqual([
-        `${ANSWER_HEADING}\n${text('tgCpAnswer', { бухгалтер: 'acc-a', ответ: 'Сумма в сообщении' })}`,
+      ).toEqual([`${ANSWER_HEADING}\n${text('tgCpAnswer', { бухгалтер: 'acc-a', ответ: shown })}`]);
+      expect(await answers()).toEqual([
+        expect.objectContaining({
+          changes: [
+            {
+              field: 'tgAnswer',
+              to: { name: '@client_one', text: [...shown].slice(0, 200).join('') },
+            },
+          ],
+        }),
       ]);
-      expect(await answers()).toHaveLength(1);
     });
 
     it('само «К оплате» за 5 дней до срока: только при включённой настройке, один раз на месяц и чат', async () => {

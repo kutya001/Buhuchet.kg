@@ -110,7 +110,11 @@ const decide = (action: 'approve' | 'reject'): BotAction => ({
  * Принятый ответ закрывает просьбу (основа бота): одна просьба — один ответ, как в прототипе. Текст —
  * как у вопроса: одной строкой, до 500 знаков, в истории — первые 200; история — от имени сотрудника,
  * с пометкой «через Telegram». Telegram не принял сообщение — просьба остаётся открытой, истории нет.
+ * «Действия из Telegram» организации выключены — ответить из чата нельзя, как и другие действия.
  */
+/** Telegram не принял ответ клиенту: точка сохранения с записью истории откатывается. */
+class AnswerNotSent extends Error {}
+
 const answer: BotAction = {
   change: true,
   permission: 'cpView',
@@ -142,12 +146,23 @@ const answer: BotAction = {
         heading: ctx.tr('cppage.tg.answer_heading'),
         text: await ctx.text('tgCpAnswer', { бухгалтер: access.shortName, ответ: text }),
       };
-      if (!(await sendClientAnswer(ctx.deps, tx, question.chatId, message))) {
-        return { again: ctx.tr('cppage.tg.bot.answer_failed') };
-      }
-      await logContractorTelegramPay(tx, question.contractorId, 'page_tg_answer', [
-        { field: 'tgAnswer', to: { name: current.name, text: cpTgQuestionForHistory(text) } },
-      ]);
+      // История пишется до отправки, в точке сохранения: запись не легла — клиенту ничего не уходит;
+      // Telegram не принял сообщение — запись откатывается, а просьба ждёт ответ дальше.
+      const sent = await tx
+        .transaction(async (sp) => {
+          await logContractorTelegramPay(sp, question.contractorId, 'page_tg_answer', [
+            { field: 'tgAnswer', to: { name: current.name, text: cpTgQuestionForHistory(text) } },
+          ]);
+          if (!(await sendClientAnswer(ctx.deps, sp, question.chatId, message))) {
+            throw new AnswerNotSent();
+          }
+          return true;
+        })
+        .catch((err: unknown) => {
+          if (err instanceof AnswerNotSent) return false;
+          throw err;
+        });
+      if (!sent) return { again: ctx.tr('cppage.tg.bot.answer_failed') };
       return { say: ctx.tr('cppage.tg.bot.answer_sent') };
     }),
 };
