@@ -88,19 +88,51 @@ export async function payRequisite(
 }
 
 /**
- * Реквизиты для обслуживания (прототип `pgFeeAcc`): основной счёт организации для обслуживания, пока
- * клиенту показан «Как оплатить»; null — нет. Функцию «Плата за обслуживание» проверяет вызывающий.
- * Как на странице (`showFee`): ещё и пока показан раздел «Оплата за обслуживание» и контрагент не
- * разовый — бот не отдаёт того, чего не отдаёт страница (docs/deviations.md п. К-9).
+ * Реквизиты для обслуживания для клиента: есть (`ok`), нет (`none`) или скрыт раздел страницы, без
+ * которого они клиенту не уходят (`hidden`: «Как оплатить» или «Оплата за обслуживание»; у разового
+ * контрагента раздела платы нет).
  */
+export type FeeRequisite =
+  | { state: 'ok'; block: TransferBlock }
+  | { state: 'none' }
+  | { state: 'hidden'; section: 'pay' | 'fee' };
+
+async function feeTransferOf(
+  tx: Tx,
+  cp: { id: string; oneOff: boolean },
+): Promise<
+  { state: 'ok'; of: TransferOf } | { state: 'none' } | { state: 'hidden'; section: 'pay' | 'fee' }
+> {
+  if (!(await contractorPageSectionShown(tx, cp.id, 'pay')))
+    return { state: 'hidden', section: 'pay' };
+  if (cp.oneOff || !(await contractorPageSectionShown(tx, cp.id, 'fee'))) {
+    return { state: 'hidden', section: 'fee' };
+  }
+  const of = await feeTransfer(tx);
+  return of ? { state: 'ok', of } : { state: 'none' };
+}
+
+/**
+ * Реквизиты для обслуживания (прототип `pgFeeAcc`): основной счёт организации для обслуживания, пока
+ * клиенту показан «Как оплатить». Функцию «Плата за обслуживание» проверяет вызывающий. Как на странице
+ * (`showFee`): ещё и пока показан раздел «Оплата за обслуживание» и контрагент не разовый — бот не
+ * отдаёт того, чего не отдаёт страница (docs/deviations.md п. К-9).
+ */
+export async function feeRequisiteOf(
+  tx: Tx,
+  t: Translate,
+  cp: { id: string; oneOff: boolean },
+): Promise<FeeRequisite> {
+  const r = await feeTransferOf(tx, cp);
+  return r.state === 'ok' ? { state: 'ok', block: await blockOf(tx, t, r.of) } : r;
+}
+
+/** Реквизиты для обслуживания блоком для сообщения; null — нет или клиенту не показаны. */
 export async function feeRequisite(
   tx: Tx,
   t: Translate,
   cp: { id: string; kind: ContractorKind },
 ): Promise<TransferBlock | null> {
-  if (cp.kind === 'oneoff') return null;
-  if (!(await contractorPageSectionShown(tx, cp.id, 'pay'))) return null;
-  if (!(await contractorPageSectionShown(tx, cp.id, 'fee'))) return null;
-  const of = await feeTransfer(tx);
-  return of ? blockOf(tx, t, of) : null;
+  const r = await feeRequisiteOf(tx, t, { id: cp.id, oneOff: cp.kind === 'oneoff' });
+  return r.state === 'ok' ? r.block : null;
 }

@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, showStats, signIn } from './helpers';
-import { asOwner, newContractor, staffIds } from './reports';
+import { DEMO_PASSWORD, FAKE_TELEGRAM, pressStart, showStats, signIn, uniqueChat } from './helpers';
+import { asOwner, editContractor, newContractor, staffIds } from './reports';
 
 // «Контрагенты» → плата за обслуживание (задача 2.21, #77) через настоящий сайт. Демо-организация:
 // «Плата за обслуживание» включена, владелец erkin видит плату и меняет журнал тарифов, бухгалтер
@@ -299,5 +299,129 @@ test.describe('Этап 2: плата за обслуживание', () => {
     await expect(card).toContainText(
       /Удалена ставка 70\s000\sсом в месяц с .+ \(ещё не действовала\)\. Причина: внесли по ошибке/,
     );
+  });
+
+  test('(доработки 14.11.2026, блок 4, пункт 5) «Напомнить в Telegram» на вкладке «Обслуживание»: окно с получателем, текстом по шаблону и реквизитами для обслуживания; клиенту — «Оплата за обслуживание до …» с текстом сотрудника, реквизитами и «Оплатил»; отправка — в истории; второй раз за день кнопка неактивна — «Сегодня уже напоминали в ЧЧ:ММ»', async ({
+    page,
+    playwright,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    test.setTimeout(120_000);
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Телеплата');
+    const name = `ОсОО «${word}»`;
+    const created = await newContractor(request, origin, { name, tariffAmount: 6_000_000 });
+    // День оплаты — 1-е: срок идущего месяца уже наступил, долг за обслуживание — 60 000 сом.
+    const cp = { ...created, ...(await editContractor(request, origin, created, { feeDay: 1 })) };
+    expect((await feesOf(request, cp.id)).debt).toBe(6_000_000);
+
+    // Клиент вводит код своей страницы и подключает Telegram, владелец подтверждает.
+    const enabled = await request.post(`/api/contractors/${cp.id}/page/enable`, {
+      headers: { origin },
+    });
+    expect(enabled.status(), await enabled.text()).toBe(200);
+    const { code } = (await enabled.json()) as { code: string };
+    const part = () => Math.floor(Math.random() * 256);
+    const client = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: { 'x-forwarded-for': `198.18.${part()}.${part()}` },
+    });
+    const opened = await client.post(`/api/page/buhgalter-plyus/${cp.inn}/code`, {
+      headers: { origin },
+      data: { code },
+    });
+    expect(opened.status(), await opened.text()).toBe(200);
+    const link = await client.post(`/buhgalter-plyus/inn/${cp.inn}/telegram`, {
+      headers: { origin },
+    });
+    expect(link.status(), await link.text()).toBe(200);
+    const chat = uniqueChat();
+    const { url } = (await link.json()) as { url: string };
+    expect((await pressStart(request, url, chat)).status()).toBe(200);
+    await client.dispose();
+    const list = (await (await request.get(`/api/contractors/${cp.id}/page/telegram`)).json()) as {
+      items: { id: string; name: string; version: number }[];
+    };
+    const waiting = list.items.find((i) => i.name === `@e2e_${chat}`)!;
+    const approved = await request.post(`/api/contractors/${cp.id}/page/telegram/${waiting.id}`, {
+      headers: { origin },
+      data: { action: 'approve', version: waiting.version },
+    });
+    expect(approved.status(), await approved.text()).toBe(200);
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await openList(page, isMobile, word);
+    const card = await openCard(page, cp.id, name);
+    await toTab(page, card, isMobile, /Обслуживание/);
+    const button = card.locator('[data-fee-tab] [data-fee-telegram]');
+    const own = `Напоминаем об оплате за обслуживание, ${word}.`;
+
+    await test.step('окно: получатель, текст по шаблону долга, реквизиты для обслуживания; поправил текст и отправил', async () => {
+      await expect(button).toBeVisible();
+      await expect(button).not.toHaveAttribute('aria-disabled', 'true');
+      await button.click();
+      const dialog = page.getByRole('dialog', { name: 'Напомнить в Telegram' });
+      await expect(dialog.locator('[data-fee-telegram-to]')).toContainText(`@e2e_${chat}`);
+      const text = dialog.locator('[data-fee-telegram-text]');
+      await expect(text).toHaveValue(
+        /^Долг за обслуживание — 60\s000\sсом \([а-я]+ \d{4}\)\. Пожалуйста, оплатите до \d\d\.\d\d\.\d{4}\.$/,
+      );
+      await expect(dialog.locator('[data-fee-telegram-requisite]')).toContainText(
+        'Реквизиты для перевода — организации',
+      );
+      await expect(dialog.locator('[data-fee-telegram-requisite]')).toContainText(
+        'Под сообщением — кнопки «Скопировать номер телефона» и «Оплатил».',
+      );
+      // Пустой текст не отправляется.
+      await text.fill('  ');
+      await dialog.locator('[data-fee-telegram-send]').click();
+      await expect(dialog).toContainText('Введите текст сообщения');
+      await text.fill(own);
+      await dialog.locator('[data-fee-telegram-send]').click();
+      await expect(
+        page
+          .getByRole('status')
+          .filter({ hasText: 'Напоминание отправлено в Telegram: получателей — 1' }),
+      ).toBeVisible();
+      await expect(dialog).toBeHidden();
+    });
+
+    await test.step('клиенту — «Оплата за обслуживание до …» с текстом сотрудника, реквизитами и кнопками', async () => {
+      const res = await request.get(`${FAKE_TELEGRAM}/messages?chat=${chat}`);
+      expect(res.status()).toBe(200);
+      const messages = (await res.json()) as {
+        text: string;
+        keyboard?: { text: string }[][];
+      }[];
+      const sent = messages.filter((m) => m.text.includes('Оплата за обслуживание до'));
+      expect(sent).toHaveLength(1);
+      expect(sent[0]!.text).toContain(name);
+      expect(sent[0]!.text).toContain(own);
+      expect(sent[0]!.text).toContain('Реквизиты для перевода — организации');
+      expect(sent[0]!.keyboard?.flat().map((b) => b.text)).toEqual([
+        'Скопировать номер телефона',
+        'Оплатил',
+      ]);
+    });
+
+    await test.step('второй раз за день кнопка неактивна: «Сегодня уже напоминали в ЧЧ:ММ»', async () => {
+      await expect(button).toHaveAttribute('aria-disabled', 'true');
+      await expect(button).toHaveAttribute('title', /^Сегодня уже напоминали в \d\d:\d\d$/);
+      // Кнопка помечена недоступной, но нажимается: по нажатию — причина сообщением, окна нет.
+      await button.click({ force: true });
+      await expect(
+        page.getByRole('status').filter({ hasText: /Сегодня уже напоминали в \d\d:\d\d/ }),
+      ).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Напомнить в Telegram' })).toHaveCount(0);
+    });
+
+    await test.step('отправка — в истории контрагента', async () => {
+      await toTab(page, card, isMobile, /История/);
+      await expect(card).toContainText(
+        /Напоминание об оплате за обслуживание отправлено в Telegram: 60\s000\sсом, получателей — 1/,
+      );
+    });
   });
 });

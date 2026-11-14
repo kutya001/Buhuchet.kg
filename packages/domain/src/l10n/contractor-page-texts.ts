@@ -1,6 +1,7 @@
 import { PAGE_MESSAGES } from '../contractor-page/page';
 import { CP_TG_MESSAGES } from '../contractor-page/telegram';
 import { DEBT_TOGGLE_MESSAGES } from '../contractor-page/telegram-debt';
+import { CP_TG_FEE_MESSAGES } from '../contractor-page/telegram-fee';
 import { MONTH_PAY_SEND_MESSAGES } from '../contractor-page/telegram-pay';
 import type { UiTextDefault } from './texts';
 
@@ -269,6 +270,39 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.tg.rq.no_resp': { ru: 'ответственный сотрудник', section: S },
   'cppage.tg.req_limit': {
     ru: 'Реквизиты уже отправлены несколько раз за час — они в сообщениях выше. Попробуйте позже.',
+    section: S,
+  },
+  // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
+  // pgFeeTgBtn, pgFeeTgDlg, pgFeeSend, tgAct('cp-feepaid')): кнопка вкладки «Обслуживание», окно, история.
+  'cppage.fee_tg.btn': { ru: 'Напомнить в Telegram', section: S },
+  'cppage.fee_tg.title': { ru: 'Напомнить в Telegram', section: S },
+  'cppage.fee_tg.sub': { ru: '{contractor} · долг за обслуживание {debt}', section: S },
+  'cppage.fee_tg.recipients': { ru: 'Получатели · {n}', section: S },
+  'cppage.fee_tg.off': {
+    ru: 'Не получат: {n} — выключили напоминания кнопкой «Не напоминать».',
+    section: S,
+  },
+  'cppage.fee_tg.text': { ru: 'Текст сообщения', section: S },
+  'cppage.fee_tg.text_required': { ru: 'Введите текст сообщения', section: S },
+  'cppage.fee_tg.text_hint': {
+    ru: 'Шаблон ведёт администратор платформы. Здесь текст можно поправить перед отправкой.',
+    section: S,
+  },
+  'cppage.fee_tg.req': { ru: 'Реквизиты для перевода — в конце сообщения', section: S },
+  'cppage.fee_tg.req_btns': { ru: 'Под сообщением — кнопки «{copy}» и «{paid}».', section: S },
+  'cppage.fee_tg.req_btn': { ru: 'Под сообщением — кнопка «{paid}».', section: S },
+  'cppage.fee_tg.note': {
+    ru: 'Напомнить в Telegram можно не чаще раза в сутки. Отправка записывается в историю контрагента.',
+    section: S,
+  },
+  'cppage.fee_tg.send': { ru: 'Отправить', section: S },
+  'cppage.fee_tg.sent': { ru: 'Напоминание отправлено в Telegram: получателей — {n}', section: S },
+  'cppage.hist.page_tg_fee': {
+    ru: 'Напоминание об оплате за обслуживание отправлено в Telegram: {total}, получателей — {n}',
+    section: S,
+  },
+  'cppage.hist.page_tg_fee_paid': {
+    ru: 'Контрагент сообщил в Telegram об оплате за обслуживание: {total} («{name}»)',
     section: S,
   },
   'cppage.tg.rq.org_hint': {
@@ -569,4 +603,12 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.month_pay_send_off': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_off, section: E },
   'err.month_pay_send_limit': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_limit, section: E },
   'err.month_pay_send_failed': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_failed, section: E },
+  'err.cp_tg_fee_archived': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_archived, section: E },
+  'err.cp_tg_fee_today': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_today, section: E },
+  'err.cp_tg_fee_no_req': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_no_req, section: E },
+  'err.cp_tg_fee_req_hidden': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_req_hidden, section: E },
+  'err.cp_tg_fee_tg_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_tg_off, section: E },
+  'err.cp_tg_fee_all_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_all_off, section: E },
+  'err.cp_tg_fee_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_off, section: E },
+  'err.cp_tg_fee_failed': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_failed, section: E },
 } as const satisfies Record<string, UiTextDefault>;

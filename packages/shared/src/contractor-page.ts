@@ -1,5 +1,7 @@
 import {
   CP_TG_ACTIONS,
+  CP_TG_FEE_REFUSALS,
+  CP_TG_FEE_TEXT_MAX,
   CP_TG_STATUSES,
   DEBT_TOGGLE_REFUSALS,
   INDICATOR_TOTALS,
@@ -331,6 +333,45 @@ export const ContractorTelegram = z.object({
     .nullable(),
 });
 export type ContractorTelegram = z.infer<typeof ContractorTelegram>;
+
+const Count = z.number().int().nonnegative();
+
+/**
+ * «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
+ * `pgFeeTgShow`, `pgFeeTgWhy`, `pgFeeTgDlg`): `shown` — есть ли кнопка; `refusal` — что мешает (ключ
+ * словаря `err.<код>`) с подстановками `params`; `dialog` — данные окна, когда отправке ничего не
+ * мешает: получатели (имена подключённых Telegram, как в списке «Telegram контрагента»), сколько не
+ * получат («Не напоминать»), текст по шаблону, реквизиты для обслуживания и подписи кнопок под
+ * сообщением.
+ */
+export const ContractorFeeTelegram = z.object({
+  shown: z.boolean(),
+  refusal: z.enum(CP_TG_FEE_REFUSALS).nullable(),
+  params: z.object({ contractor: z.string(), time: z.string(), section: z.string() }).nullable(),
+  dialog: z
+    .object({
+      contractor: z.string(),
+      debt: Tyiyn,
+      recipients: z.array(z.string()),
+      off: Count,
+      text: z.string(),
+      requisite: z.string(),
+      copy: z.string().nullable(),
+      paid: z.string(),
+    })
+    .nullable(),
+});
+export type ContractorFeeTelegram = z.infer<typeof ContractorFeeTelegram>;
+
+/** «Отправить» в окне «Напомнить в Telegram»: текст, который сотрудник мог поправить. */
+export const ContractorFeeTelegramSend = z.object({
+  text: z.string().trim().min(1, 'cppage.fee_tg.text_required').max(CP_TG_FEE_TEXT_MAX),
+});
+export type ContractorFeeTelegramSend = z.infer<typeof ContractorFeeTelegramSend>;
+
+/** Напоминание отправлено: скольким подключённым Telegram записано и скольким ушло. */
+export const ContractorFeeTelegramSent = z.object({ recipients: Count, delivered: Count });
+export type ContractorFeeTelegramSent = z.infer<typeof ContractorFeeTelegramSent>;
 
 /** Переключить «Напоминать о долге в Telegram» у контрагента — с версией записи страницы. */
 export const ContractorTelegramDebtInput = z.object({

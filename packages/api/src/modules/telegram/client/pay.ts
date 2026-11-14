@@ -470,6 +470,32 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
         }
         if (!current.linked) return { refusal: 'tgCpNotLinked' };
 
+        // «Оплатил» под напоминанием об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5;
+        // прототип v110 tgAct('cp-feepaid')): сумма — из записи сообщения (долг на момент отправки).
+        if (parsed.action === CP_TG_PAID_ACTION && target.kind === 'fee') {
+          if (!current.total) return { refusal: 'tgActStale' };
+          const { total } = current;
+          await logContractorTelegramPay(tx, target.contractorId, 'page_tg_paid', [
+            { field: 'tgFeePaid', to: { total, name: current.name } },
+          ]);
+          const staff = await queueStaffNotice(
+            tx,
+            deps,
+            target.contractorId,
+            t('cppage.tg.staff.paid_heading'),
+            (contractor) =>
+              templateText(tx, 'tgCpFeePaidStaff', {
+                контрагент: contractor,
+                телеграм: current.name,
+                сумма: formatSomWithUnit(total),
+              }),
+          );
+          const done = t('cppage.tg.paid_done');
+          const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });
+          await saveContractorTelegramMessage(tx, target.id, after);
+          return { reply: await templateText(tx, 'tgCpPaidOk'), after, staff, send: null };
+        }
+
         if (parsed.action === CP_TG_PAID_ACTION) {
           if (!current.month || !current.total) return { refusal: 'tgActStale' };
           const { month, total } = current;
