@@ -39,10 +39,9 @@ export const FileUploadStart = z
      */
     page: z.boolean().optional(),
   })
-  .refine(
-    (b) => b.source.kind === 'manual' || (!b.contractorId && b.page === undefined),
-    { message: 'Контрагент и показ на странице — только у ручной загрузки' },
-  );
+  .refine((b) => b.source.kind === 'manual' || (!b.contractorId && b.page === undefined), {
+    message: 'Контрагент и показ на странице — только у ручной загрузки',
+  });
 export type FileUploadStart = z.infer<typeof FileUploadStart>;
 
 /**

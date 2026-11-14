@@ -109,10 +109,7 @@ export const files = pgTable(
     }).onDelete('cascade'),
     // Замену начинают только для загруженного файла, и она остаётся начатой загрузкой.
     check('files_replaces_check', sql`${t.replacesId} is null or ${t.state} = 'pending'`),
-    check(
-      'files_replaced_check',
-      sql`(${t.replacedAt} is null) = (${t.replacedBy} is null)`,
-    ),
+    check('files_replaced_check', sql`(${t.replacedAt} is null) = (${t.replacedBy} is null)`),
     check(
       'files_key_check',
       sql`${t.storageKey} ~ ('^org/' || ${t.orgId}::text || '/files/[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')`,
