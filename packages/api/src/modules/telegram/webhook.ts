@@ -478,7 +478,11 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       if (command.token.startsWith(CP_TG_START_PREFIX)) {
         await clientStart(
           deps,
-          { chatId: chat.id, username: from?.username ?? null, firstName: from?.first_name ?? null },
+          {
+            chatId: chat.id,
+            username: from?.username ?? null,
+            firstName: from?.first_name ?? null,
+          },
           cpTgStartToken(command.token),
         );
         return ok;
