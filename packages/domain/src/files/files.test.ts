@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cleanFileNote,
   FILE_MAX_BYTES,
   FILE_NAME_MAX_LENGTH,
   fileContentType,
   fileDeleteRefusal,
   fileExtension,
+  fileNameParts,
+  fileRenameProblem,
   fileSizeParts,
   fileUploadProblem,
   isFileSourceKind,
@@ -113,5 +116,34 @@ describe('файлы записей', () => {
     expect(isFileSourceKind('contractor')).toBe(true);
     expect(isFileSourceKind('constructor')).toBe(false);
     expect(isFileSourceKind('unknown_kind')).toBe(false);
+  });
+
+  it('«Изменить файл» (прототип v95): название и расширение, примечание одной строкой', () => {
+    expect(fileNameParts('Договор.pdf')).toEqual(['Договор', '.pdf']);
+    expect(fileNameParts('архив.tar.gz')).toEqual(['архив.tar', '.gz']);
+    expect(fileNameParts('README')).toEqual(['README', '']);
+    expect(fileNameParts('.env')).toEqual(['.env', '']);
+    expect(cleanFileNote('  Договор\n за 2026 \t год ')).toBe('Договор за 2026 год');
+    expect(cleanFileNote(' \n ')).toBe('');
+    // Управляющие знаки (нулевой база не принимает) — пробелом.
+    expect(cleanFileNote('а\u0000б\u0007 в')).toBe('а б в');
+  });
+
+  it('новое название файла: пустое, знаки, длина; расширение и тип не меняются', () => {
+    expect(fileRenameProblem('Договор 2026', '.pdf')).toBeNull();
+    expect(fileRenameProblem('  ', '.pdf')).toBe('file_name_empty');
+    for (const ch of ['\\', '/', ':', '*', '?', '"', '<', '>', '|']) {
+      expect(fileRenameProblem(`акт${ch}сверки`, '.pdf'), ch).toBe('file_name_chars');
+    }
+    expect(fileRenameProblem('я'.repeat(251), '.pdf')).toBeNull();
+    expect(fileRenameProblem('я'.repeat(252), '.pdf')).toBe('file_name_long');
+    // У файла без расширения точка в названии дала бы расширение — и другой тип файла.
+    expect(fileRenameProblem('Акт.exe', '')).toBe('file_name_invalid');
+    expect(fileRenameProblem('Акт', '')).toBeNull();
+    // Двойное расширение остаётся названием: тип — по последнему.
+    expect(fileRenameProblem('Акт.exe', '.pdf')).toBeNull();
+    // Знаки смены направления текста и точка в конце — как при загрузке.
+    expect(fileRenameProblem('акт‮fdp', '.pdf')).toBe('file_name_invalid');
+    expect(fileRenameProblem('акт.', '')).toBe('file_name_invalid');
   });
 });

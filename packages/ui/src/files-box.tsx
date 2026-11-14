@@ -8,8 +8,12 @@ export interface FilesBoxItem {
   id: string;
   name: string;
   meta: string;
+  /** Примечание к файлу (прототип v95 `fNoteHtml`): строка под «тип · размер»; нет — строки нет. */
+  note?: string | null;
   /** Можно ли этому пользователю удалить файл: без права кнопки «Удалить» нет. */
   canDelete: boolean;
+  /** «Изменить файл» (название, примечание, замена): без права кнопки нет. */
+  canEdit?: boolean;
   /**
    * Кнопка «глаз» — показ на странице контрагента (прототип v74 `pgFileBtn`): открытый — файл виден
    * контрагенту, перечёркнутый — скрыт; `label` — подсказка («Виден на странице контрагента. Скрыть»).
@@ -28,6 +32,11 @@ export interface FilesBoxLabels {
   download: (name: string) => string;
   remove: (name: string) => string;
   removeTitle: string;
+  /** Кнопка «Изменить файл»: подпись для диктора и подсказка. */
+  edit: (name: string) => string;
+  editTitle: string;
+  /** Подсказка строки примечания («Примечание к файлу»). */
+  noteTitle: string;
 }
 
 export interface FilesBoxProps {
@@ -44,12 +53,14 @@ export interface FilesBoxProps {
   onDelete: (item: FilesBoxItem) => void;
   /** «Глаз»: скрыть со страницы контрагента или снова показать. */
   onPage?: (item: FilesBoxItem) => void;
+  /** «Изменить файл» — окно открывает приложение. */
+  onEdit?: (item: FilesBoxItem) => void;
 }
 
 /**
  * Блок «Файлы» карточки записи (прототип modules/services.js `filesBox`, стили `.box`, `.list`, `.li`):
  * заголовок «Файлы · N» с кнопкой «Прикрепить» (выбор нескольких файлов), строки — значок, имя,
- * «тип · размер», «Скачать» и «Удалить»; пусто — «Файлов пока нет».
+ * «тип · размер», примечание (курсивом), «Скачать», «Изменить» и «Удалить»; пусто — «Файлов пока нет».
  */
 export function FilesBox({
   items,
@@ -60,6 +71,7 @@ export function FilesBox({
   onDownload,
   onDelete,
   onPage,
+  onEdit,
 }: FilesBoxProps) {
   const input = useRef<HTMLInputElement>(null);
   const picked = (e: ChangeEvent<HTMLInputElement>) => {
@@ -101,6 +113,15 @@ export function FilesBox({
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-semibold text-ink">{item.name}</div>
                 <div className="truncate text-xs text-faint">{item.meta}</div>
+                {item.note ? (
+                  <div
+                    data-file-note=""
+                    title={labels.noteTitle}
+                    className="text-xs font-normal text-muted italic [overflow-wrap:anywhere]"
+                  >
+                    {item.note}
+                  </div>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -111,6 +132,18 @@ export function FilesBox({
               >
                 <Icon name="download" size="sm" />
               </button>
+              {item.canEdit && onEdit ? (
+                <button
+                  type="button"
+                  data-file-edit=""
+                  className={`${iconButtonClass('sm')} ${TOUCH_AREA}`}
+                  aria-label={labels.edit(item.name)}
+                  title={labels.editTitle}
+                  onClick={() => onEdit(item)}
+                >
+                  <Icon name="edit" size="sm" />
+                </button>
+              ) : null}
               {item.page && onPage ? (
                 <button
                   type="button"

@@ -1,0 +1,59 @@
+-- Меню команд бота (поток Т, задача Т5; прототип v102 modules/tg-menu.js): «Сегодня», «Неделя»,
+-- «Просрочено», «Найти контрагента». Команда приходит обычным сообщением в чат: вебхук работает без
+-- входа и без организации, поэтому учётные записи, к которым привязан чат, находит эта функция — только
+-- то, что нужно для отказов ядра бота (как `app.telegram_press_target` у нажатия кнопки). Сами данные
+-- читаются дальше от имени найденного пользователя в его организации (RLS).
+-- Один чат может быть привязан к нескольким учётным записям: строка на каждую, по порядку привязки.
+CREATE FUNCTION app.telegram_chat_users(p_chat bigint)
+  RETURNS TABLE (
+    user_id uuid,
+    org_id uuid,
+    employee_id uuid,
+    org_name text,
+    must_change_password boolean,
+    relink_free boolean,
+    is_platform_admin boolean,
+    user_blocked boolean,
+    employee_active boolean,
+    org_status text
+  )
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    SELECT u.id, u.org_id, e.id, o.name,
+           u.must_change_password,
+           EXISTS (SELECT 1 FROM public.telegram_link_guards g
+                   WHERE g.user_id = u.id AND g.free_until > now()),
+           u.is_platform_admin, u.blocked, e.active, o.status
+    FROM public.telegram_links l
+    JOIN public.users u ON u.id = l.user_id
+    LEFT JOIN public.employees e ON e.user_id = u.id
+    LEFT JOIN public.organizations o ON o.id = u.org_id
+    WHERE l.chat_id = p_chat
+    ORDER BY l.linked_at, u.id
+    LIMIT 20
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.telegram_chat_users(bigint) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app.telegram_chat_users(bigint) TO buhuchet_app;
+
+--> statement-breakpoint
+-- «Повторить отправку» Админки (как в 0102): ответ на команду бота, как и код, повторно не отправляется.
+-- Ответ собран по правам и области сотрудника на момент запроса; повтор позже ушёл бы без этой проверки
+-- (сотрудника уволили, сняли право, сменили область). Человек запросит ответ снова.
+CREATE OR REPLACE FUNCTION app.admin_telegram_retry(p_ids uuid[], p_now timestamptz)
+  RETURNS integer
+  LANGUAGE sql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    WITH queued AS (
+      UPDATE public.telegram_outbox
+        SET status = 'pending', tries = 0, last_error = NULL, sent_at = NULL, next_at = p_now
+        WHERE id = ANY (p_ids) AND status = 'error'
+          AND kind NOT IN ('code', 'relink_code', 'bot_cmd')
+          AND (SELECT app.is_platform_admin())
+        RETURNING 1
+    )
+    SELECT count(*)::integer FROM queued
+  $$;

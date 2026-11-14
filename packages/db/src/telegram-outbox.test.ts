@@ -165,7 +165,7 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
     ).rejects.toEqual(permissionDenied);
   });
 
-  it('служебное сообщение пишется в журнал после отправки; у кода текста нет; не служебное — отказ', async () => {
+  it('сообщение бота пишется в журнал после отправки; у кода текста нет', async () => {
     await logTelegram(t.app.db, {
       userId: b.ownerUserId,
       chatId: 7001,
@@ -198,15 +198,19 @@ describe.skipIf(!databaseAvailable())('Журнал отправок и очер
         }),
       ),
     ).rejects.toThrow();
-    await expect(
-      logTelegram(t.app.db, {
-        userId: b.ownerUserId,
-        chatId: 7001,
-        kind: 'reminders',
-        text: 'x',
-        ok: true,
-      }),
-    ).rejects.toThrow();
+    // Ответ бота сразу (не служебный вид) тоже пишется в журнал — без описания и номера сообщения
+    // (поток Т, задача Т9: прежний вариант функции такие записи терял).
+    await logTelegram(t.app.db, {
+      userId: b.ownerUserId,
+      chatId: 7001,
+      kind: 'bot_cmd',
+      text: 'Неделя',
+      ok: true,
+    });
+    const [reply] = await withOrgContext(t.app.db, ctxB(), (tx) =>
+      tx.select().from(telegramOutbox).where(eq(telegramOutbox.kind, 'bot_cmd')),
+    );
+    expect(reply).toMatchObject({ text: 'Неделя', status: 'sent', payload: null, messageId: null });
   });
 
   it('чужая организация не видна: журнал, настройки уведомлений и отметки дня', async () => {

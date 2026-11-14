@@ -91,10 +91,19 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
   const manage = why(page.manage);
   const send = why(page.send);
   const put = (data: unknown) => {
-    client.setQueryData(contractorPageQuery(contractorId).queryKey, ContractorPage.parse(data));
-    // Блок «Telegram контрагента» живёт от той же страницы (включена ли она, показан ли раздел) —
-    // перечитать его сразу, как перерисовка блока в прототипе.
-    void client.invalidateQueries({ queryKey: contractorTelegramQuery(contractorId).queryKey });
+    const next = ContractorPage.parse(data);
+    client.setQueryData(contractorPageQuery(contractorId).queryKey, next);
+    // Блок «Telegram контрагента» живёт от той же записи страницы (версия для «Напоминать о долге»,
+    // действует ли раздел): версию отдать ему сразу и перечитать — иначе его следующее действие
+    // упрётся в «запись изменена».
+    const telegramKey = contractorTelegramQuery(contractorId).queryKey;
+    const version = next.version;
+    if (version != null) {
+      client.setQueryData(telegramKey, (old) =>
+        old?.debt ? { ...old, debt: { ...old.debt, version } } : old,
+      );
+    }
+    void client.invalidateQueries({ queryKey: telegramKey });
   };
 
   const run = async (action: Action): Promise<ContractorPage | null> => {

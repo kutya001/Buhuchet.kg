@@ -623,7 +623,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(byName['Платёжка НДС.pdf']!.rel.replace(/\u00a0/g, ' ')).toBe(
       'НДС · 09.2026, оплата 1 250,50 сом от 15.10.2026',
     );
-    expect(byName['Устав.pdf']!.rel).toBe('Устав в новой редакции');
+    // Примечание к файлу видно только сотрудникам (docs/deviations.md п. И-4): на странице его нет.
+    expect(byName['Устав.pdf']!.rel).toBe('');
+    expect(JSON.stringify(page)).not.toContain('Устав в новой редакции');
     expect(byName['Свидетельство.jpg']).toMatchObject({
       rel: 'Из свидетельства и выписки',
       preview: 'image',

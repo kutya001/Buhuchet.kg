@@ -333,6 +333,15 @@ describe('«История статусов» (прототип statusHistHtml)'
     expect(html).toMatch(/<thead class="max-md:hidden">/);
   });
 
+  it('статус сменён в чате бота — плашка «через Telegram» после имени (прототип histVia)', () => {
+    const html = (via?: string) =>
+      renderToStaticMarkup(
+        <StatusHistory rows={[{ ...rows[1]!, via }]} totals={[]} labels={historyLabels} />,
+      );
+    expect(html()).not.toContain('через Telegram');
+    expect(html('через Telegram')).toContain('через Telegram');
+  });
+
   it('ссылка на файл — только путь сайта или https:, иначе одно имя', () => {
     expect(safeHref('/api/files/1')).toBe(true);
     expect(safeHref('https://s3.example/f.pdf?sig=1')).toBe(true);

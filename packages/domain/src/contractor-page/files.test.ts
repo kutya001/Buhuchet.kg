@@ -57,8 +57,8 @@ describe('раздел «Файлы» страницы контрагента (�
     const report = { type: 'НДС', period: 'M' as const, start: '2026-09-01', event: null };
     expect(pageFileRel({ kind: 'report', ...report }, t)).toBe('НДС · 09.2026');
     expect(pageFileRel({ kind: 'regdocs' }, t)).toBe('Из свидетельства и выписки');
-    expect(pageFileRel({ kind: 'manual', note: ' Договор ' }, t)).toBe('Договор');
-    expect(pageFileRel({ kind: 'manual', note: null }, t)).toBe('');
+    // Примечание файла, загруженного вручную, контрагенту не показывается (docs/deviations.md п. И-4).
+    expect(pageFileRel({ kind: 'manual' }, t)).toBe('');
     expect(
       pageFileRel({ kind: 'tax_payment', report, amount: 300_000, date: '2026-10-20' }, t),
     ).toBe('НДС · 09.2026, оплата 3 000 сом от 20.10.2026');

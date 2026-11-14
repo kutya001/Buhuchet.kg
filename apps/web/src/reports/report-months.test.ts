@@ -157,6 +157,23 @@ describe('contractorPlan — план вкладки «Отчёты к сдач�
     expect(plan.closed).toBe(1);
   });
 
+  it('«К оплате клиенту» (К4): по всем отчётам месяца, какая бы плашка ни была выбрана', () => {
+    for (const quick of ['all', 'sub', 'pay'] as const) {
+      const plan = contractorPlan(rows, { taxpay: true, quick, showClosed: false });
+      // Сентябрь оплачен — блока нет; в октябре к оплате НДС, «1-Т» только сдаётся.
+      expect([...plan.pay.keys()]).toEqual(['2026-10']);
+      const pay = plan.pay.get('2026-10')!;
+      expect(pay.rows.map((x) => [x.report.id, x.left, x.due])).toEqual([
+        ['nds-10', 100_000, '2026-11-20'],
+      ]);
+      expect(pay).toMatchObject({ total: 100_000, noAmount: 0, due: '2026-11-20' });
+    }
+    // Без «Учёта оплаты налогов» оплата не отмечается: к оплате и оплаченный сентябрь, вся сумма.
+    const off = contractorPlan(rows, { taxpay: false, quick: 'all', showClosed: false });
+    expect([...off.pay.keys()]).toEqual(['2026-09', '2026-10']);
+    expect(off.pay.get('2026-09')!.total).toBe(100_000);
+  });
+
   it('отчётов нет — «none»', () => {
     const plan = contractorPlan([row('x', { status: 'not_required' })], {
       taxpay: true,

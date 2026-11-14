@@ -126,8 +126,9 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
 
   it('п. 8: одно сообщение за 3 дня до срока со всеми своими отчётами, в понедельник — сводка на неделю; повтор — без дублей', async () => {
     await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
+    // Сообщение дня и следом — по сообщению с кнопками на каждый свой отчёт (поток Т, задача Т2).
     const mine = to(CHAT.acc);
-    expect(mine).toHaveLength(1);
+    expect(mine).toHaveLength(3);
     const text = mine[0]!;
     expect(text).toContain('⏰ Через 3 дн. срок сдачи: ');
     expect(text).toContain('1-Т за Сентябрь 2026 — ОсОО «Ала-Тоо Трейд»');
@@ -137,13 +138,23 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     expect(text).toMatch(/Открыть в Buhuchet\.kg: http:\/\/localhost:3000\/app\/reports\/week$/);
     // Ответственный без Telegram: его отчёт приходит владельцу с пометкой.
     const boss = to(CHAT.owner);
-    expect(boss).toHaveLength(1);
+    expect(boss).toHaveLength(2);
     expect(boss[0]).toContain('ИП Садыков (chief-a: не привязан Telegram)');
+    expect(boss[0]).not.toContain('🗓 Неделя ');
+    // Владельцу сводка недели — отдельным сообщением с таблицей по сотрудникам (поток Т, задача Т3).
+    expect(boss[1]).toBe(
+      [
+        '🗓 Неделя 19.10–25.10',
+        'Сдать 3 · оплатить 0 · просрочено 0',
+        '• acc-a — Сдать 2 — Просроч. 0 — Ждут 0',
+        '• chief-a — Сдать 1 — Просроч. 0 — Ждут 0',
+      ].join('\n'),
+    );
     // Повтор в тот же день (и через минуту) ничего не добавляет.
     await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
     clock.advance(60_000);
     await telegramRemindersJob(BASE, noPause).run(deps, clock.now());
-    expect(tg.sent).toHaveLength(2);
+    expect(tg.sent).toHaveLength(5);
     clock.set('2026-10-19T03:00:00Z');
   });
 

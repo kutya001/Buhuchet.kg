@@ -1,13 +1,13 @@
 {
  "meta": {
   "title": "База данных Buhuchet.kg",
-  "schemaVersion": 66,
-  "updated": "2026-11-13",
+  "schemaVersion": 67,
+  "updated": "2026-11-14",
   "sources": [
    {
     "name": "Продукт kutya001/Buhuchet.kg",
-    "ref": "main 85b0884",
-    "what": "Фактические миграции 0000–0122: организации и их профиль, пользователи, сеансы входа и их журнал, коды входа администратора платформы, счёт неверных паролей по логину, привязка Telegram (с подтверждением замены кодом из прежнего чата) и коды «Забыли пароль?», сотрудники, роли и права, контрагенты (дополнительные ГКЭД, льготы, основания, журнал ставок), назначения отчётов, отчёты, изменения сроков и строки расчёта налога, шаблоны ролей, цвета статусов и шаблоны сообщений, учётная политика, подключённые виды отчётов и запросы «Попросить добавить», прогресс обучения в «Базе знаний» (шаги, прочитанные статьи, уровни, знакомые элементы показов), новости платформы и их прочтения, видео платформы, их загрузки, просмотры и открытия сотрудников и общий счёт просмотров гостей лендинга, история изменений (организаций и платформы) и история статусов, настройки вида списков, ГКЭД, справочники платформы для контрагентов и отчётов (органы, режимы, основания, УГНС, виды отчётов, льготы и их связи, производственный календарь, формы собственности, ставки единого налога, причины изменения срока, банковские провайдеры, категории задач), мелкие справочники (JSON), реквизиты организации и сотрудников, файлы, ручные задачи и комментарии, показатели контрагентов, операции с деньгами на налоги и детализация поступлений, оплата за обслуживание и её распределение по месяцам, закрытые месяцы финансов, разовые услуги, их оплаты и бонусы сотрудникам, списания бонусов, очередь и журнал Telegram, настройки уведомлений, проекты контрагентов (ответственные, работы, транши), словарь текстов интерфейса, журнал расписания и состояние задач расписания (оповещения о сбоях), очередь пересчёта сроков, загрузки справочников из Excel, журнал частоты действий, заявки с сайта и их история; RLS, роль buhuchet_app, функции и представления Админки «Организации», «Учётные записи», «Локализация» и «Справочники платформы» (перечень app.platform_dict_specs) и «Телеграм», функции базы и правило сортировки app.ru_natural."
+    "ref": "main d65e0a1",
+    "what": "Фактические миграции 0000–0124: организации и их профиль, пользователи, сеансы входа и их журнал, коды входа администратора платформы, счёт неверных паролей по логину, привязка Telegram (с подтверждением замены кодом из прежнего чата) и коды «Забыли пароль?», сотрудники, роли и права, контрагенты (дополнительные ГКЭД, льготы, основания, журнал ставок), назначения отчётов, отчёты, изменения сроков и строки расчёта налога, шаблоны ролей, цвета статусов и шаблоны сообщений, учётная политика, подключённые виды отчётов и запросы «Попросить добавить», прогресс обучения в «Базе знаний» (шаги, прочитанные статьи, уровни, знакомые элементы показов), новости платформы и их прочтения, видео платформы, их загрузки, просмотры и открытия сотрудников и общий счёт просмотров гостей лендинга, история изменений (организаций и платформы) и история статусов, настройки вида списков, ГКЭД, справочники платформы для контрагентов и отчётов (органы, режимы, основания, УГНС, виды отчётов, льготы и их связи, производственный календарь, формы собственности, ставки единого налога, причины изменения срока, банковские провайдеры, категории задач), мелкие справочники (JSON), реквизиты организации и сотрудников, файлы, ручные задачи и комментарии, показатели контрагентов, операции с деньгами на налоги и детализация поступлений, оплата за обслуживание и её распределение по месяцам, закрытые месяцы финансов, разовые услуги, их оплаты и бонусы сотрудникам, списания бонусов, очередь и журнал Telegram, настройки уведомлений, проекты контрагентов (ответственные, работы, транши), словарь текстов интерфейса, журнал расписания и состояние задач расписания (оповещения о сбоях), очередь пересчёта сроков, загрузки справочников из Excel, журнал частоты действий, заявки с сайта и их история; RLS, роль buhuchet_app, функции и представления Админки «Организации», «Учётные записи», «Локализация» и «Справочники платформы» (перечень app.platform_dict_specs) и «Телеграм», функции базы и правило сортировки app.ru_natural."
    },
    {
     "name": "Прототип kutya001/DevBuhUchet.kg",
@@ -3056,8 +3056,8 @@
      "ru": "Разделы страницы контрагента",
      "type": "text[]",
      "null": false,
-     "default": "'{pay,reports,files,money,fee,kpi,contacts}'",
-     "desc": "Разделы страницы контрагента по ссылке, в порядке страницы: pay «Как оплатить», reports «Отчёты», files «Файлы» (с 0093; организациям, созданным раньше, добавлен отмеченным), money «Деньги на налоги», fee «Оплата за обслуживание», kpi «Показатели», contacts «Контакты». Раздел с функцией (money — taxpay, fee — fee, kpi — indicators) виден, только когда функция включена.",
+     "default": "'{pay,reports,files,money,fee,kpi,contacts,tg}'",
+     "desc": "Разделы страницы контрагента по ссылке, в порядке страницы: pay «Как оплатить», reports «Отчёты», files «Файлы» (с 0093; организациям, созданным раньше, добавлен отмеченным), money «Деньги на налоги», fee «Оплата за обслуживание», kpi «Показатели», contacts «Контакты», tg «Telegram» (с 0123; действующим организациям добавлен включённым, 0124). Раздел с функцией (money — taxpay, fee — fee, kpi — indicators) виден, только когда функция включена.",
      "status": "actual"
     },
     {
@@ -4527,13 +4527,14 @@
    "rls": "Включена. Политика contractor_pages_isolation: только своя организация; ограничительная contractor_pages_insert_own — строку вставляет сотрудник от своего имени (created_by = текущий пользователь). UPDATE, DELETE и TRUNCATE отозваны (0059); UPDATE возвращён только на столбцы включения, кода, разделов, счёта неверных кодов и служебные. Удаляется только каскадом с контрагентом.",
    "issue": "#98 (сделано); разделы страницы — #99",
    "source": "demoDB.contractors[].page; modules/cp-page.js; ТЗ «Контрагенты» → «Страница контрагента по ссылке»; packages/db/src/schema/contractor-page.ts; docs/decisions.md п. Е-1 продукта",
-   "migration": "0058_contractor_page, 0059_contractor_page_guards, 0066_contractor_page_tries_left (функция проверки кода), 0093_files_page_hidden, 0101_telegram_relink_page_closed, 0102_telegram_relink_functions",
+   "migration": "0058_contractor_page, 0059_contractor_page_guards, 0066_contractor_page_tries_left (функция проверки кода), 0093_files_page_hidden, 0101_telegram_relink_page_closed, 0102_telegram_relink_functions, 0123_contractor_telegram, 0124_contractor_telegram_guards (раздел tg, триггер contractor_pages_telegram_revoke)",
    "logic": [
     "Для всех случаев (нет страницы, выключена, неизвестные адрес или ИНН, архивный контрагент, функция выключена в учётной политике, организация заблокирована) ответ одинаковый: «Страница недоступна».",
     "Неверные коды: 5 подряд по ссылке — перерыв 15 минут и «ввод закрыт» в истории контрагента (audit_log, page_lock); 3 неверных за час с одного IP по всем ссылкам — закрыто на час (решение заказчика 30.10.2026; rate_limits cp_page_ip, cp_page_ip_lock; IP — хешем). «Осталось попыток» — меньший из остатков по ссылке и по адресу (docs/deviations.md п. О-1 продукта, 0066).",
     "Верный код запоминается в браузере на 30 дней (contractor_page_grants); «Сменить код», выключение и новое включение повышают code_version и сразу закрывают запомненные браузеры.",
     "Код хранится как есть и виден сотруднику в карточке, как в ТЗ (docs/deviations.md п. Е-1 продукта, вопрос заказчику).",
-    "Общий предел по ссылке (0102, Р-5 А): каждый неверный код пишется в rate_limits (вид cp_page_fail, по ссылке и номеру кода); 5-й за сутки закрывает страницу (closed_at, запись «страница закрыта» в истории контрагента), ответственному уходит сообщение page_closed. «Осталось попыток» — меньший из остатков: подряд по ссылке, по адресу и по ссылке за сутки."
+    "Общий предел по ссылке (0102, Р-5 А): каждый неверный код пишется в rate_limits (вид cp_page_fail, по ссылке и номеру кода); 5-й за сутки закрывает страницу (closed_at, запись «страница закрыта» в истории контрагента), ответственному уходит сообщение page_closed. «Осталось попыток» — меньший из остатков: подряд по ссылке, по адресу и по ссылке за сутки.",
+    "Раздел «Telegram» (tg, 0123–0124): клиент получает одноразовую ссылку на бота и просит подключить свой чат (contractor_telegram_links, contractor_telegram_tokens). Смена кода, выключение и закрытие страницы удаляют неиспользованные ссылки (триггер contractor_pages_telegram_revoke)."
    ],
    "columns": [
     {
@@ -4588,7 +4589,7 @@
      "type": "text[]",
      "null": false,
      "default": "'{}'",
-     "desc": "Из pay, reports, files, money, fee, kpi, contacts (contractor_pages_hidden_check; files — с 0093); скрытое сервер не отправляет.",
+     "desc": "Из pay, reports, files, money, fee, kpi, contacts, tg (contractor_pages_hidden_check; files — с 0093, tg — с 0123); скрытое сервер не отправляет.",
      "status": "actual"
     },
     {
@@ -4720,6 +4721,235 @@
      "type": "timestamptz",
      "null": false,
      "desc": "30 дней с ввода кода.",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "contractor_telegram_links",
+   "ru": "Telegram контрагента",
+   "group": "contractors",
+   "status": "actual",
+   "desc": "Запрос на подключение и подключение чата клиента к контрагенту (доработки 13.11.2026, задача К3). Клиент открывает одноразовую ссылку со своей страницы по ссылке и нажимает «Старт» в боте — появляется строка «ждёт подтверждения»; подключает её только сотрудник организации. Чат запоминается по номеру чата Telegram, имя — только для показа сотруднику.",
+   "rls": "Включена. Политика contractor_telegram_links_isolation: только своя организация. У роли приложения отозваны INSERT, UPDATE, DELETE и TRUNCATE (0124); UPDATE возвращён только на столбцы решения (status, decided_by, by_client, decided_at, updated_by, updated_at, version). Строку создаёт только функция app.contractor_telegram_start по одноразовой ссылке; удаляется только каскадом с контрагентом.",
+   "issue": "К3 плана «Три потока — доработки 13.11.2026» (PR #242 продукта, сделано)",
+   "source": "прототип v92 modules/cp-telegram.js (c.tgs); пакет заказчика 13.11.2026 (Telegram контрагента); packages/db/src/schema/contractor-telegram.ts; docs/deviations.md п. К-2 продукта",
+   "migration": "0123_contractor_telegram, 0124_contractor_telegram_guards",
+   "logic": [
+    "Подключать можно, когда организация работает, включены «Страница контрагента по ссылке» и «Напоминания в Telegram», раздел «Telegram» (tg) включён в учётной политике и не скрыт у контрагента, страница включена и не закрыта, контрагент не в архиве (app.contractor_telegram_on).",
+    "Подключённых и ждущих подтверждения у контрагента вместе — не больше 5; один чат у контрагента — одна действующая строка (contractor_telegram_links_active_key).",
+    "Сотрудник в карточке контрагента (блок «Telegram контрагента») подтверждает, отклоняет или отключает — право «Управлять страницей контрагента» с областью, версия записи, запись в истории контрагента; о новом запросе ответственному уходит сообщение бота cp_tg_request.",
+    "Клиент сам отключается командой «Отключить» в боте (by_client = true; список его подключений — app.contractor_telegram_chat)."
+   ],
+   "indexes": [
+    "contractor_telegram_links_contractor_idx (org_id, contractor_id)",
+    "contractor_telegram_links_chat_idx (chat_id) WHERE status = 'on'"
+   ],
+   "uniques": [
+    "contractor_telegram_links_active_key (contractor_id, chat_id) WHERE status in ('wait', 'on')"
+   ],
+   "columns": [
+    {
+     "name": "id",
+     "ru": "Код",
+     "type": "uuid",
+     "null": false,
+     "pk": true,
+     "default": "gen_random_uuid()",
+     "status": "actual"
+    },
+    {
+     "name": "org_id",
+     "ru": "Организация",
+     "type": "uuid",
+     "null": false,
+     "fk": "organizations.id",
+     "onDelete": "restrict",
+     "desc": "Чья запись. По этому полю работает защита RLS.",
+     "status": "actual"
+    },
+    {
+     "name": "contractor_id",
+     "ru": "Контрагент",
+     "type": "uuid",
+     "null": false,
+     "fk": "contractors.id",
+     "onDelete": "cascade",
+     "desc": "Составной внешний ключ contractor_telegram_links_contractor_fk (contractor_id, org_id) → contractors (id, org_id); удаляется вместе с контрагентом.",
+     "status": "actual"
+    },
+    {
+     "name": "chat_id",
+     "ru": "Чат Telegram",
+     "type": "bigint",
+     "null": false,
+     "desc": "Номер чата клиента в Telegram.",
+     "status": "actual"
+    },
+    {
+     "name": "name",
+     "ru": "Имя в Telegram",
+     "type": "text",
+     "null": false,
+     "desc": "Имя на момент запроса, только для показа сотруднику; задаёт клиент, поэтому одной строкой и от 1 до 32 знаков (contractor_telegram_links_name_check).",
+     "status": "actual"
+    },
+    {
+     "name": "status",
+     "ru": "Состояние",
+     "type": "text",
+     "null": false,
+     "default": "'wait'",
+     "desc": "wait — ждёт подтверждения, on — подключён, no — отклонён, off — отключён (contractor_telegram_links_status_check).",
+     "status": "actual"
+    },
+    {
+     "name": "requested_at",
+     "ru": "Запрошено",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "decided_by",
+     "ru": "Кто решил",
+     "type": "uuid",
+     "null": true,
+     "fk": "users.id",
+     "desc": "Сотрудник, который подтвердил, отклонил или отключил; пусто — ещё не решали или отключился сам клиент.",
+     "status": "actual"
+    },
+    {
+     "name": "by_client",
+     "ru": "Отключил клиент",
+     "type": "boolean",
+     "null": false,
+     "default": "false",
+     "desc": "true — клиент отключился сам командой бота «Отключить».",
+     "status": "actual"
+    },
+    {
+     "name": "decided_at",
+     "ru": "Когда решено",
+     "type": "timestamptz",
+     "null": true,
+     "status": "actual"
+    },
+    {
+     "name": "updated_by",
+     "ru": "Кто изменил",
+     "type": "uuid",
+     "null": true,
+     "fk": "users.id",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "updated_at",
+     "ru": "Изменено",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "version",
+     "ru": "Версия записи",
+     "type": "integer",
+     "null": false,
+     "default": "1",
+     "desc": "Растёт при каждом сохранении: защита от одновременной правки.",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "contractor_telegram_tokens",
+   "ru": "Ссылки «Подключить Telegram»",
+   "group": "contractors",
+   "status": "actual",
+   "desc": "Одноразовые ссылки t.me/бот?start=cp_<токен> со страницы контрагента: здесь — только SHA-256 токена. Ссылку выдаёт функция app.contractor_telegram_issue и только браузеру, где запомнен код страницы; действует 24 часа и один раз.",
+   "rls": "Включена. Политика contractor_telegram_tokens_isolation: только своя организация. У роли приложения отозваны все права (0124): читают и пишут только функции app.contractor_telegram_* (SECURITY DEFINER).",
+   "issue": "К3 плана «Три потока — доработки 13.11.2026» (PR #242 продукта, сделано)",
+   "source": "прототип v92 modules/cp-telegram.js (c.tgs); пакет заказчика 13.11.2026 (Telegram контрагента); packages/db/src/schema/contractor-telegram.ts; docs/deviations.md п. К-2 продукта",
+   "migration": "0123_contractor_telegram, 0124_contractor_telegram_guards",
+   "logic": [
+    "Неиспользованных ссылок у контрагента немного: самая старая заменяется новой; нет свободного места для подключения — ссылка не выдаётся («full»).",
+    "«Сменить код», выключение и закрытие страницы удаляют неиспользованные ссылки (триггер contractor_pages_telegram_revoke); использованные остаются до уборки — по ним бот не отвечает второй раз на повтор сообщения.",
+    "Ссылки с истёкшим сроком удаляет задача по расписанию вместе с запомненными браузерами страницы (app.contractor_telegram_cleanup)."
+   ],
+   "indexes": [
+    "contractor_telegram_tokens_contractor_idx (contractor_id)",
+    "contractor_telegram_tokens_expires_idx (expires_at)"
+   ],
+   "columns": [
+    {
+     "name": "token_hash",
+     "ru": "Хеш токена",
+     "type": "text",
+     "null": false,
+     "pk": true,
+     "desc": "SHA-256 токена из ссылки; сам токен не хранится.",
+     "status": "actual"
+    },
+    {
+     "name": "org_id",
+     "ru": "Организация",
+     "type": "uuid",
+     "null": false,
+     "fk": "organizations.id",
+     "onDelete": "restrict",
+     "desc": "Чья запись. По этому полю работает защита RLS.",
+     "status": "actual"
+    },
+    {
+     "name": "contractor_id",
+     "ru": "Страница",
+     "type": "uuid",
+     "null": false,
+     "fk": "contractor_pages.contractor_id",
+     "onDelete": "cascade",
+     "desc": "Удаляется вместе со страницей; составной внешний ключ contractor_telegram_tokens_contractor_fk (contractor_id, org_id) → contractors (id, org_id).",
+     "status": "actual"
+    },
+    {
+     "name": "expires_at",
+     "ru": "Действует до",
+     "type": "timestamptz",
+     "null": false,
+     "desc": "24 часа с выдачи.",
+     "status": "actual"
+    },
+    {
+     "name": "used_at",
+     "ru": "Использована",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Когда клиент нажал «Старт»; ссылка действует один раз.",
+     "status": "actual"
+    },
+    {
+     "name": "used_chat_id",
+     "ru": "Чат, который использовал",
+     "type": "bigint",
+     "null": true,
+     "desc": "Повтор того же сообщения от Telegram из этого чата остаётся без ответа.",
      "status": "actual"
     },
     {
@@ -13511,7 +13741,7 @@
      "ru": "Вид сообщения",
      "type": "text",
      "null": false,
-     "desc": "reminders, task_new, task_on_confirm, task_confirmed, task_rework, task_cancelled, report_fix, code, linked, relinked, unlinked, pass_changed, pass_reset, broadcast, lead — новая заявка с сайта администраторам платформы, без организации (0088), login_locked — «Вход заблокирован» пользователю и тем, кто снимает блокировку (0095), alert — оповещение администраторам платформы о сбое (задача расписания, вебхук Telegram; без организации, 0096–0097), relink_code — код замены Telegram в прежний чат, page_closed — страница контрагента закрыта после неверных кодов (0101), bot_test — проверочное сообщение бота с таблицей и кнопками (0121) (telegram_outbox_kind_check).",
+     "desc": "reminders, task_new, task_on_confirm, task_confirmed, task_rework, task_cancelled, report_fix, code, linked, relinked, unlinked, pass_changed, pass_reset, broadcast, lead — новая заявка с сайта администраторам платформы, без организации (0088), login_locked — «Вход заблокирован» пользователю и тем, кто снимает блокировку (0095), alert — оповещение администраторам платформы о сбое (задача расписания, вебхук Telegram; без организации, 0096–0097), relink_code — код замены Telegram в прежний чат, page_closed — страница контрагента закрыта после неверных кодов (0101), bot_test — проверочное сообщение бота с таблицей и кнопками (0121), cp_tg_request — ответственному о запросе клиента подключить Telegram контрагента (0123) (telegram_outbox_kind_check).",
      "status": "actual"
     },
     {
@@ -14252,6 +14482,55 @@
    "migration": "0059_contractor_page_guards",
    "definer": true,
    "desc": "Удаляет выдачи с истёкшим сроком, со старым номером кода и у выключенных страниц; отвечает числом удалённых. Вызывает задача по расписанию contractor-page.cleanup-grants."
+  },
+  {
+   "name": "app.contractor_telegram_on(org, contractor)",
+   "ru": "Можно ли подключать Telegram у контрагента",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "Организация работает, включены «Страница контрагента по ссылке» и «Напоминания в Telegram», раздел tg включён и не скрыт, страница включена и не закрыта, контрагент не в архиве. Только для функций app.contractor_telegram_*; роли приложения не выдана."
+  },
+  {
+   "name": "app.contractor_telegram_issue(slug, inn, grant_hash, token_hash, ttl_hours, max_links, max_tokens)",
+   "ru": "Выдать ссылку «Подключить Telegram»",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "Только браузеру с открытой страницей (то же условие, что у app.contractor_page_state) и пока есть место (подключённые и ждущие — не больше max_links); неиспользованных ссылок не больше max_tokens, старшая заменяется. Итог: ok, full, unavailable."
+  },
+  {
+   "name": "app.contractor_telegram_peek(token_hash, chat_id)",
+   "ru": "Чья это ссылка",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "До транзакции организации: ok (действует), repeat (Telegram повторил сообщение из того же чата), иначе строк нет — «Ссылка устарела»."
+  },
+  {
+   "name": "app.contractor_telegram_start(token_hash, chat_id, name, max_links)",
+   "ru": "Клиент нажал «Старт» по ссылке",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "Ссылка использована один раз, создаётся запрос «ждёт подтверждения». Итог: asked, pending, already, limit, invalid. Вызывается в транзакции организации ссылки (иначе invalid) — историю контрагента сервер пишет в ней же."
+  },
+  {
+   "name": "app.contractor_telegram_chat(chat_id)",
+   "ru": "К каким контрагентам подключён чат",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "Для команды клиента «Отключить»: подключения чата (status on) с названием контрагента, архивный тоже, не больше 20."
+  },
+  {
+   "name": "app.contractor_telegram_revoke() (триггер contractor_pages_telegram_revoke)",
+   "ru": "Отозвать неиспользованные ссылки",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "После смены кода, выключения или закрытия страницы удаляет неиспользованные ссылки контрагента. Роли приложения не выдана."
+  },
+  {
+   "name": "app.contractor_telegram_cleanup()",
+   "ru": "Убрать просроченные ссылки",
+   "migration": "0124_contractor_telegram_guards",
+   "definer": true,
+   "desc": "Удаляет ссылки с истёкшим сроком (задача по расписанию вместе с запомненными браузерами страницы); отдаёт число удалённых."
   },
   {
    "name": "app.contractor_initial_service_period() (триггер)",

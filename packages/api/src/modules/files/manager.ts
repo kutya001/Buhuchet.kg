@@ -122,6 +122,12 @@ function rowBody(
   now: Date,
   cppage: boolean,
 ) {
+  const canDelete =
+    fileDeleteRefusal(
+      { uploadedBy: r.createdBy, uploadedAt: r.createdAt },
+      { userId, canDeleteAny: hasPermission(subject, 'filesDelete'), now },
+    ) === null;
+  const canEdit = hasPermission(subject, 'filesUpload');
   const body: FileManagerRowBody = {
     id: r.id,
     name: r.name,
@@ -136,11 +142,11 @@ function rowBody(
     note: r.note,
     uploadedBy: r.uploadedBy,
     uploadedAt: r.createdAt.toISOString(),
-    canDelete:
-      fileDeleteRefusal(
-        { uploadedBy: r.createdBy, uploadedAt: r.createdAt },
-        { userId, canDeleteAny: hasPermission(subject, 'filesDelete'), now },
-      ) === null,
+    canDelete,
+    // «Изменить» (прототип v95 `fEditOk`): право «Загружать файлы»; право менять запись проверит правка.
+    canEdit,
+    canReplace: canEdit && canDelete,
+    replaced: r.replaced ? { by: r.replaced.by, at: r.replaced.at.toISOString() } : null,
     page: filePageOf(
       {
         sourceKind: r.sourceKind,

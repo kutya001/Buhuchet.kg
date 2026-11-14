@@ -184,6 +184,8 @@ export interface ContractorTelegramRow {
   /** Кто решил: краткое ФИО сотрудника; null — контрагент (`byClient`) или решения ещё нет. */
   decidedBy: string | null;
   byClient: boolean;
+  /** Клиент выключил напоминания о долге кнопкой «Не напоминать» (задача К5). */
+  noDebt: boolean;
   version: number;
 }
 
@@ -203,6 +205,7 @@ export async function listContractorTelegram(
       decidedAt: contractorTelegramLinks.decidedAt,
       decidedBy: employees.shortName,
       byClient: contractorTelegramLinks.byClient,
+      noDebt: contractorTelegramLinks.noDebt,
       version: contractorTelegramLinks.version,
     })
     .from(contractorTelegramLinks)
@@ -234,6 +237,26 @@ export async function contractorTelegramCounts(
     .groupBy(contractorTelegramLinks.status);
   const of = (s: CpTgStatus) => rows.find((r) => r.status === s)?.n ?? 0;
   return { on: of('on'), wait: of('wait') };
+}
+
+/**
+ * Запрос на подключение по номеру строки (кнопки «Подтвердить» и «Отклонить» под сообщением бота
+ * сотруднику, задача К5): чей он, статус и версия — для решения тем же правилом, что в карточке.
+ */
+export async function contractorTelegramLinkOf(
+  tx: Tx,
+  linkId: string,
+): Promise<{ contractorId: string; status: CpTgStatus; name: string; version: number } | null> {
+  const [row] = await tx
+    .select({
+      contractorId: contractorTelegramLinks.contractorId,
+      status: contractorTelegramLinks.status,
+      name: contractorTelegramLinks.name,
+      version: contractorTelegramLinks.version,
+    })
+    .from(contractorTelegramLinks)
+    .where(eq(contractorTelegramLinks.id, linkId));
+  return row ? { ...row, status: row.status as CpTgStatus } : null;
 }
 
 /** Что сообщить клиенту после решения сотрудника. */

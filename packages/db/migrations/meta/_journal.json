@@ -876,6 +876,160 @@
       "when": 1794580529772,
       "tag": "0124_contractor_telegram_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 125,
+      "version": "7",
+      "when": 1794580589772,
+      "tag": "0125_file_edit",
+      "breakpoints": true
+    },
+    {
+      "idx": 126,
+      "version": "7",
+      "when": 1794580649772,
+      "tag": "0126_file_edit_grants",
+      "breakpoints": true
+    },
+    {
+      "idx": 127,
+      "version": "7",
+      "when": 1794580709772,
+      "tag": "0127_contractor_telegram_pay",
+      "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "7",
+      "when": 1794580769772,
+      "tag": "0128_contractor_telegram_pay_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 129,
+      "version": "7",
+      "when": 1794580829772,
+      "tag": "0129_contractor_telegram_debt",
+      "breakpoints": true
+    },
+    {
+      "idx": 130,
+      "version": "7",
+      "when": 1794580889772,
+      "tag": "0130_contractor_telegram_debt_guards",
+      "breakpoints": true
+    },
+    {
+      "idx": 131,
+      "version": "7",
+      "when": 1794580949772,
+      "tag": "0131_telegram_staff_bot",
+      "breakpoints": true
+    },
+    {
+      "idx": 132,
+      "version": "7",
+      "when": 1794581009772,
+      "tag": "0132_telegram_staff_bot_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 133,
+      "version": "7",
+      "when": 1794581069772,
+      "tag": "0133_telegram_nudge",
+      "breakpoints": true
+    },
+    {
+      "idx": 134,
+      "version": "7",
+      "when": 1794581129772,
+      "tag": "0134_telegram_not_me",
+      "breakpoints": true
+    },
+    {
+      "idx": 135,
+      "version": "7",
+      "when": 1794581189772,
+      "tag": "0135_telegram_not_me_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 136,
+      "version": "7",
+      "when": 1794581249772,
+      "tag": "0136_telegram_bot_cmd",
+      "breakpoints": true
+    },
+    {
+      "idx": 137,
+      "version": "7",
+      "when": 1794581309772,
+      "tag": "0137_telegram_commands",
+      "breakpoints": true
+    },
+    {
+      "idx": 138,
+      "version": "7",
+      "when": 1794581369772,
+      "tag": "0138_lead_events_via",
+      "breakpoints": true
+    },
+    {
+      "idx": 139,
+      "version": "7",
+      "when": 1794581429772,
+      "tag": "0139_telegram_lead_bot",
+      "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1794581489772,
+      "tag": "0140_telegram_cast",
+      "breakpoints": true
+    },
+    {
+      "idx": 141,
+      "version": "7",
+      "when": 1794581549772,
+      "tag": "0141_telegram_topics",
+      "breakpoints": true
+    },
+    {
+      "idx": 142,
+      "version": "7",
+      "when": 1794581609772,
+      "tag": "0142_telegram_topics_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1794581669772,
+      "tag": "0143_telegram_groups",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1794581729772,
+      "tag": "0144_telegram_groups_functions",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1794581789772,
+      "tag": "0145_telegram_widgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1794629072187,
+      "tag": "0146_telegram_outbox_kinds",
+      "breakpoints": true
     }
   ]
 }

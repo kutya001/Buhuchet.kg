@@ -27,6 +27,7 @@ import {
   type GridColumn,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -37,6 +38,8 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import { tabHref } from '../shell/modules';
+import { requestCastFromNews } from '../tgadm/cast-store';
 import {
   ADMIN_NEWS_GRID,
   adminNewsQuery,
@@ -167,6 +170,8 @@ export interface NewsMenuRun {
   restore: (n: AdminNews) => void;
   takeOff: (n: AdminNews) => void;
   remove: (n: AdminNews) => void;
+  /** «Отправить в Telegram» (поток Т, задача Т6): «Рассылка» с полями из новости. */
+  cast?: (n: AdminNews) => void;
 }
 
 /**
@@ -178,6 +183,7 @@ export function newsMenu(t: Translate, run: NewsMenuRun): (n: AdminNews) => Acti
   return (n) => [
     { id: 'edit', label: t('news.act.edit'), icon: 'edit', run: () => run.edit(n) },
     { id: 'preview', label: t('news.act.preview'), icon: 'eye', run: () => run.preview(n) },
+    ...(run.cast ? [castEntry(t, n, run.cast)] : []),
     { id: 'sep', separator: true },
     n.status === 'draft'
       ? { id: 'publish', label: t('news.act.publish'), icon: 'send', run: () => run.publish(n) }
@@ -207,6 +213,30 @@ export function newsMenu(t: Translate, run: NewsMenuRun): (n: AdminNews) => Acti
   ];
 }
 
+/**
+ * «Отправить в Telegram» (поток Т, задача Т6; прототип v103 `newsActs`): только у вышедшей новости «для
+ * всех»; иначе пункт недоступен с причиной.
+ */
+function castEntry(t: Translate, n: AdminNews, cast: (n: AdminNews) => void): ActionEntry {
+  const reason =
+    n.audience === 'adm'
+      ? t('tgadm.newsmenu.adm')
+      : n.state === 'live'
+        ? undefined
+        : n.state === 'scheduled'
+          ? t('tgadm.newsmenu.later')
+          : t('tgadm.newsmenu.draft');
+  return {
+    id: 'cast',
+    label: t('tgadm.newsmenu.cast'),
+    icon: 'tg',
+    sub: t('tgadm.newsmenu.cast_sub'),
+    disabled: reason !== undefined,
+    reason,
+    run: () => cast(n),
+  };
+}
+
 /** «+ Добавить» → «Новость» (прототип kbAdmAdd). */
 function useNewsAddRequest(run: () => void) {
   const { addRequest, clearAddRequest } = useShell();
@@ -232,6 +262,7 @@ export function NewsAdminList({ ioBar }: { ioBar?: ReactNode } = {}) {
   const toast = useToast();
   const errorText = useErrorText();
   const client = useQueryClient();
+  const router = useRouter();
   const labels = useGridLabels('news.count');
   const columns = useMemo(() => newsColumns(t), [t]);
   const view = useViewSettings(ADMIN_NEWS_GRID);
@@ -302,6 +333,10 @@ export function NewsAdminList({ ioBar }: { ioBar?: ReactNode } = {}) {
 
   const run: NewsMenuRun = {
     edit: (n) => void edit(n),
+    cast: (n) => {
+      requestCastFromNews(n.id);
+      router.push(tabHref('tg', 'cast'));
+    },
     preview: (n) => void load(n).then((record) => record && setPreview(openSlot(record))),
     publish: (n) =>
       void act(

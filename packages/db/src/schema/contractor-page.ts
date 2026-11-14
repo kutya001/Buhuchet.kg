@@ -49,6 +49,11 @@ export const contractorPages = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'`),
+    /**
+     * «Напоминать о долге в Telegram» выключено у этого контрагента (доработки 13.11.2026, задача К5;
+     * прототип v94 `c.tgNoDebt`): выключает сотрудник в карточке.
+     */
+    tgDebtOff: boolean('tg_debt_off').notNull().default(false),
     /** Неверные коды подряд по этой ссылке — счёт ведёт функция проверки кода. */
     failures: integer('failures').notNull().default(0),
     /** До какого момента ввод кода по ссылке закрыт (5 неверных подряд — 15 минут). */

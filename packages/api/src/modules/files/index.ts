@@ -7,12 +7,16 @@ import {
   deleteFileRoute,
   downloadFileHandler,
   downloadFileRoute,
+  editFileHandler,
+  editFileRoute,
   fileLinkHandler,
   fileLinkRoute,
   filePageHandler,
   filePageRoute,
   listFilesHandler,
   listFilesRoute,
+  startReplaceHandler,
+  startReplaceRoute,
   startUploadHandler,
   startUploadRoute,
 } from './files';
@@ -35,7 +39,8 @@ import {
 
 /**
  * Файлы записей (задача 2.04): блок «Файлы» карточки — список файлов записи, загрузка мимо API по
- * подписанной ссылке, скачивание по ссылке на 15 минут, удаление. Записи-источники — `FILE_SOURCES`.
+ * подписанной ссылке, скачивание по ссылке на 15 минут, правка (название, примечание, замена файла —
+ * прототип v95), удаление. Записи-источники — `FILE_SOURCES`.
  * Модуль «Файловый менеджер» (задача 2.29): список всех файлов с плашками и выгрузкой, просмотр в окне,
  * контрагенты ручной загрузки, занятый объём.
  */
@@ -47,6 +52,8 @@ export function filesModule(deps: ApiDeps) {
     .openapi(fileLinkRoute, fileLinkHandler(deps))
     .openapi(downloadFileRoute, downloadFileHandler(deps))
     .openapi(filePageRoute, filePageHandler(deps))
+    .openapi(startReplaceRoute, startReplaceHandler(deps))
+    .openapi(editFileRoute, editFileHandler(deps))
     .openapi(deleteFileRoute, deleteFileHandler(deps))
     .openapi(listManagerRoute, listManagerHandler(deps))
     .openapi(managerValuesRoute, managerValuesHandler(deps))

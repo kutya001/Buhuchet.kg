@@ -67,6 +67,8 @@ export interface StatusHistoryItem {
   rollback: boolean;
   reason: string | null;
   actor: string | null;
+  /** `telegram` — статус сменён в чате бота («через Telegram»); пусто — на сайте. */
+  via: 'telegram' | null;
   /** Файл к смене статуса; `available` — не удалён (его можно скачать). */
   file: { id: string; name: string; available: boolean } | null;
 }
@@ -92,6 +94,7 @@ export async function readStatusHistory(
       reason: statusHistory.reason,
       actorUserId: statusHistory.actorUserId,
       actorName: actor.shortName,
+      via: statusHistory.via,
       fileId: files.id,
       fileName: files.name,
       fileState: files.state,
@@ -101,8 +104,9 @@ export async function readStatusHistory(
     .leftJoin(files, eq(files.id, statusHistory.fileId))
     .where(and(eq(statusHistory.scale, scale), eq(statusHistory.entityId, entityId)))
     .orderBy(asc(statusHistory.at), asc(statusHistory.id));
-  return rows.map(({ actorUserId, actorName, fileId, fileName, fileState, ...r }) => ({
+  return rows.map(({ actorUserId, actorName, fileId, fileName, fileState, via, ...r }) => ({
     ...r,
+    via: via === 'telegram' ? via : null,
     actor: auditActorName(actorUserId, actorName),
     file:
       fileId && fileName ? { id: fileId, name: fileName, available: fileState === 'ready' } : null,

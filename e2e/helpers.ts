@@ -64,7 +64,7 @@ export async function defaultResponsible(api: APIRequestContext): Promise<string
 }
 
 /** Подделка Telegram Bot API (fake-telegram.ts): её запускает Playwright на этом компьютере. */
-const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
+export const FAKE_TELEGRAM = `http://127.0.0.1:${process.env.FAKE_TELEGRAM_PORT ?? 8091}`;
 /** Секрет вебхука бота сайта — тот же, что в .env (по умолчанию из .env.example). */
 export const WEBHOOK_SECRET =
   process.env.TELEGRAM_WEBHOOK_SECRET ?? 'local-webhook-secret-change-me';
@@ -92,6 +92,10 @@ export interface BotSent {
     copy_text?: { text: string };
     url?: string;
   }[][];
+  /** Кнопки меню под полем ввода (ряды подписей; `[]` — меню убрано); у сообщения без меню нет. */
+  menu?: string[][];
+  /** Картинка (оформленная рассылка, задача Т6): номер файла и размер, если файл загружали. */
+  photo?: { fileId: string; bytes?: number };
 }
 
 /** Что бот сайта отправил в чат — вместе с видом и кнопками (основа бота, поток Т). */
@@ -168,6 +172,73 @@ export function tellBot(api: APIRequestContext, chat: number, text: string) {
       },
     },
   });
+}
+
+/**
+ * Файл, который человек пришлёт боту (поток Т, задача Т2): подделка Telegram отдаст его сайту по
+ * `getFile`. Возвращает номер файла для `sendToBot`.
+ */
+export async function botFile(
+  api: APIRequestContext,
+  file: { name: string; content: string | Buffer; tooBig?: boolean },
+): Promise<string> {
+  const id = `e2e-file-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const res = await api.post(`${FAKE_TELEGRAM}/files`, {
+    data: {
+      id,
+      name: file.name,
+      base64: Buffer.from(file.content).toString('base64'),
+      tooBig: file.tooBig === true,
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
+  return id;
+}
+
+/**
+ * Человек написал боту в личном чате: текст, документ (`botFile`) или ответ на сообщение бота
+ * (`replyTo` — номер сообщения в чате).
+ */
+export async function sendToBot(
+  api: APIRequestContext,
+  chat: number,
+  message: {
+    text?: string;
+    document?: { fileId: string; name: string; size?: number };
+    caption?: string;
+    replyTo?: number;
+  },
+) {
+  // Номер сообщения — свой у каждого, как у Telegram: одно сообщение бот принимает один раз.
+  const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const res = await api.post('/api/telegram/webhook', {
+    headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
+    data: {
+      update_id: id,
+      message: {
+        message_id: id,
+        ...(message.text !== undefined ? { text: message.text } : {}),
+        ...(message.caption !== undefined ? { caption: message.caption } : {}),
+        ...(message.document
+          ? {
+              document: {
+                file_id: message.document.fileId,
+                file_name: message.document.name,
+                ...(message.document.size !== undefined
+                  ? { file_size: message.document.size }
+                  : {}),
+              },
+            }
+          : {}),
+        ...(message.replyTo !== undefined
+          ? { reply_to_message: { message_id: message.replyTo } }
+          : {}),
+        chat: { id: chat, type: 'private' },
+        from: { id: chat, is_bot: false, username: `e2e_${chat}`, first_name: 'Сквозной' },
+      },
+    },
+  });
+  expect(res.status(), await res.text()).toBe(200);
 }
 
 /** Вошедший пользователь привязывает Telegram по ссылке из профиля. */

@@ -6,6 +6,7 @@ import {
   formatSomWithUnit,
 } from '@buhuchet/domain';
 import type { TimelineItem } from '@buhuchet/ui';
+import { fileHistoryText } from '../files/file-history';
 import type { Translate } from '../l10n/translate';
 
 /** Запись истории проекта: что сделано и поля «было → стало»; `paymentId` — запись о транше. */
@@ -29,6 +30,9 @@ const num = (v: unknown) => (typeof v === 'number' ? v : Number(v ?? 0) || 0);
  * 15.10.2026. Причина: …». Файлы — как в карточке отчёта.
  */
 export function projectPaymentHistoryText(t: Translate, e: ProjectHistoryEntry): string {
+  // Прикрепление с примечанием и «Изменить файл» (прототип v95) — одинаково во всех карточках.
+  const shared = fileHistoryText(t, e);
+  if (shared !== null) return shared;
   if (e.action === 'file_attach')
     return t('report.hist.file_attach', { name: str(valueOf(e, 'file', 'to')) });
   if (e.action === 'file_delete')
@@ -106,7 +110,10 @@ export function projectHistoryText(
       break;
     }
     case 'file_attach':
-      text = t('report.hist.file_attach', { name: str(valueOf(e, 'file', 'to')) });
+    case 'file_edit':
+      text =
+        fileHistoryText(t, e) ??
+        t('report.hist.file_attach', { name: str(valueOf(e, 'file', 'to')) });
       break;
     case 'file_delete':
       text = t('report.hist.file_delete', { name: str(valueOf(e, 'file', 'from')) });

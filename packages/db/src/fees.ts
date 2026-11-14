@@ -345,6 +345,34 @@ export async function feeLedgers(
   );
 }
 
+/** Должник за обслуживание: контрагент, день оплаты и его начисления с долгом. */
+export interface FeeDebtor {
+  id: string;
+  name: string;
+  feeDay: number;
+  fees: ContractorFees;
+}
+
+/**
+ * Должники за обслуживание в области `scope` — раздел «Долги за обслуживание» сводки недели в Telegram
+ * (поток Т, задача Т3; прототип v100 `tgDebtors`): контрагенты не в архиве с долгом больше нуля, долг — по
+ * тем же правилам домена, что вкладка «Обслуживание» и столбец «Долг» списка.
+ */
+export async function feeDebtorList(
+  tx: Tx,
+  o: { scope: SQL | undefined; today: IsoDate },
+): Promise<FeeDebtor[]> {
+  const subjects = await feeSubjects(tx, null, o.scope);
+  const payments = await feePaymentsOf(tx, [...subjects.keys()]);
+  const out: FeeDebtor[] = [];
+  for (const s of subjects.values()) {
+    if (s.archived) continue;
+    const fees = contractorFees(s, payments.get(s.id) ?? [], o.today);
+    if (fees.debt > 0) out.push({ id: s.id, name: s.name, feeDay: s.feeDay, fees });
+  }
+  return out;
+}
+
 /** Журналы тарифов и периоды обслуживания контрагентов по id (карточка организации в Админке). */
 export function feeSubjectsOf(tx: Tx, ids: readonly string[]): Promise<Map<string, FeeSubject>> {
   return ids.length ? feeSubjects(tx, ids) : Promise.resolve(new Map());

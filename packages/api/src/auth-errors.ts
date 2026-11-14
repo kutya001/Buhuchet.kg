@@ -14,12 +14,27 @@ const EMPLOYEE_BLOCKED = 'Учётная запись заблокирована
  */
 export function denialError(
   denial: LoginDenial,
-  account: { isPlatformAdmin: boolean; isOwner?: boolean },
+  account: { isPlatformAdmin: boolean; isOwner?: boolean; loginLockReason?: string | null },
 ) {
   switch (denial) {
     // Вход закрыт после 10 неверных паролей подряд: сотруднику
     // блокировку снимает владелец, владельцу — администратор платформы, выдав новый пароль.
     case 'account_locked':
+      // Вход закрыт кнопкой «Это не я» под сообщением бота (поток Т, задача Т4; прототип v101
+      // core/login.js, `LG_T.notMe`): свой текст, открывает вход тот же новый пароль.
+      if (account.loginLockReason === 'not_me') {
+        return account.isOwner
+          ? apiError(
+              denial,
+              'Вход закрыт кнопкой «Это не я» в Telegram. Обратитесь к администратору платформы — он выдаст новый пароль.',
+              { variant: 'not_me_owner' },
+            )
+          : apiError(
+              denial,
+              'Вход закрыт кнопкой «Это не я» в Telegram. Обратитесь к владельцу организации — он выдаст новый пароль.',
+              { variant: 'not_me' },
+            );
+      }
       return account.isOwner
         ? apiError(
             denial,

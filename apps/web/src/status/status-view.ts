@@ -44,6 +44,8 @@ export interface StatusEvent {
   reason: string | null;
   /** Краткое ФИО; null — система. */
   actor: string | null;
+  /** `telegram` — статус сменён в чате бота. */
+  via?: 'telegram' | null | undefined;
   file?: { name: string; href?: string } | null;
 }
 
@@ -261,6 +263,7 @@ export function historyView(
       from: e.from ? statusName(t, scale, e.from) : null,
       to: statusPillView(t, scale, e.to),
       actor: e.actor ?? t('status.system'),
+      via: e.via === 'telegram' ? t('telegram.via') : null,
       note: e.reason,
       rollback: e.rollback,
       file: e.file ?? null,

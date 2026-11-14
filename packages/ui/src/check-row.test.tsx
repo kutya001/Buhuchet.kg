@@ -72,5 +72,26 @@ describe('лента истории', () => {
     expect(html).toContain('Включена функция');
     expect(html).toContain('Эркин С.');
     expect(html.match(/data-timeline-item/g)).toHaveLength(1);
+    expect(html).not.toContain('через Telegram');
+  });
+
+  it('отметка «через Telegram» — плашкой после имени (прототип histVia)', () => {
+    const html = renderToStaticMarkup(
+      <Timeline
+        label="История"
+        items={[
+          {
+            id: 'a',
+            date: '26.10.2026',
+            time: '10:05',
+            text: 'Отчёт сдан',
+            who: 'Эркин С.',
+            via: 'через Telegram',
+          },
+        ]}
+      />,
+    );
+    expect(html.indexOf('Эркин С.')).toBeLessThan(html.indexOf('через Telegram'));
+    expect(html).toContain('<svg');
   });
 });

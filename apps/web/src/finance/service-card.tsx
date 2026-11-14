@@ -37,6 +37,7 @@ import { ApiFailure } from '../api-client';
 import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { RecordFiles } from '../files/record-files';
+import { fileHistoryText } from '../files/file-history';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { statusPillView } from '../status/status-view';
@@ -76,13 +77,14 @@ function historyText(t: Translate, h: HistoryRow): string {
       reason: h.reason,
     },
     () =>
-      h.action === 'file_attach'
+      fileHistoryText(t, h) ??
+      (h.action === 'file_attach'
         ? t('report.hist.file_attach', { name: file('to') })
         : h.action === 'file_hide'
           ? t('files.hist.page_hide', { name: file('to') })
           : h.action === 'file_show'
             ? t('files.hist.page_show', { name: file('to') })
-            : t('report.hist.file_delete', { name: file('from') }),
+            : t('report.hist.file_delete', { name: file('from') })),
   );
 }
 

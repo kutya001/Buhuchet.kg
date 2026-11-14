@@ -112,6 +112,8 @@ export const AdminLeadEvent = z.object({
   to: LeadStatusCode.nullable(),
   /** Причина отказа и отката, название созданной организации, комментарий повторной заявки. */
   text: z.string().nullable(),
+  /** Откуда сделано: `telegram` — кнопкой или ответом в чате бота («через Telegram»); пусто — на сайте. */
+  via: z.enum(['telegram']).nullable(),
 });
 export type AdminLeadEvent = z.infer<typeof AdminLeadEvent>;
 

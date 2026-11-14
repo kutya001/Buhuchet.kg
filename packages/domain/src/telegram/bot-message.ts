@@ -29,8 +29,34 @@ export interface BotTable {
   head?: readonly string[];
   rows: readonly (readonly string[])[];
   foot?: readonly string[];
-  /** Номера числовых столбцов (с нуля): выравниваются вправо. */
+  /**
+   * Номера числовых столбцов (с нуля): выравниваются вправо, а в простом тексте идут с названием столбца
+   * («Сдать 6»), иначе число в строке непонятно (задача Т3; прототип v100 `tgPlain`).
+   */
   numeric?: readonly number[];
+  /** Сколько записей всего, когда в таблице показаны не все: счётчик раздела «Название · n». */
+  n?: number;
+}
+
+/**
+ * Бот ждёт ответ на это сообщение (поток Т, задача Т2; прототип v97 `m.ask`, `tgReply`): файл или текст.
+ * Ответ получает обработчик действия `action` с записью `arg`. Просьба закрывается принятым ответом,
+ * кнопкой «Отмена» или концом дня `day`; без дня она ждёт, пока не ответят, но только ответом именно на
+ * это сообщение.
+ */
+export interface BotAsk {
+  action: string;
+  arg?: string;
+  kind: 'file' | 'text';
+  /** День по Бишкеку (`YYYY-MM-DD`), до конца которого бот ждёт ответ. */
+  day?: string;
+  /** Ответ принят или просьба отменена. */
+  off?: boolean;
+  /**
+   * Сообщение и кнопка, нажатием которой просьба открыта: когда ответ принят, эта кнопка гаснет с новой
+   * подписью — как после обычного нажатия.
+   */
+  src?: { messageId: number; action: string };
 }
 
 export interface BotMessage {
@@ -41,7 +67,24 @@ export interface BotMessage {
   code?: string;
   tables?: readonly BotTable[];
   buttons?: readonly (readonly BotButton[])[];
+  ask?: BotAsk;
+  /**
+   * Свой простой текст вместо собранного из описания (задача Т3; прототип v100 `m.plain`): утреннее
+   * напоминание в простом виде остаётся прежними строками, а не строками таблиц.
+   */
+  plain?: string;
+  /**
+   * Картинка сообщения (оформленная рассылка, задача Т6; прототип v103 `m.img`): номер файла в хранилище
+   * платформы. Сообщение уходит картинкой с подписью — заголовок и текст; таблиц у него нет. Картинка
+   * остаётся и в простом виде.
+   */
+  image?: string;
 }
+
+/** Номер картинки сообщения — UUID, который выдал сервер при загрузке. */
+const IMAGE_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** Подпись к картинке в Telegram — не длиннее 1024 знаков. */
+export const BOT_CAPTION_MAX = 1024;
 
 /** Пределы Telegram: текст простого сообщения, данные и подпись кнопки, текст копирования, столбцы. */
 export const BOT_TEXT_MAX = 4096;
@@ -50,6 +93,13 @@ export const BOT_PRESS_DATA_MAX = 64;
 export const BOT_BUTTON_TEXT_MAX = 64;
 export const BOT_COPY_MAX = 256;
 export const BOT_TABLE_COLUMNS_MAX = 20;
+/** Строк в таблице сообщения — не больше (прототип v100 `TG_ROWS_MAX`); остальное — «ещё N — на сайте». */
+export const BOT_TABLE_ROWS_MAX = 20;
+/**
+ * Название контрагента в ячейке таблицы — не длиннее (в прототипе не режется): название бывает до 300
+ * знаков, а простой текст сообщения с 20 строками должен уместиться в `BOT_TEXT_MAX`.
+ */
+export const BOT_TABLE_NAME_MAX = 60;
 /** Скрытый ответ на нажатие (ответ Telegram на нажатие кнопки) — не длиннее 200 знаков. */
 export const BOT_HIDDEN_REPLY_MAX = 200;
 
@@ -61,15 +111,42 @@ const ARG_RE = /^[A-Za-z0-9_.-]{1,40}$/;
 
 const filled = (cells: readonly string[]) => cells.filter((x) => x !== '' && x != null);
 
-/** Запасной простой текст: строка таблицы — «• ячейка — ячейка», раздел — «Название · число строк». */
+/**
+ * Подпись кнопки и ячейка таблицы не длиннее предела: лишнее — многоточием (прототип `tgClip`). Длина —
+ * как её считают Telegram и `botMessageProblem` (единицы UTF-16), знак из двух единиц (эмодзи) пополам
+ * не режется.
+ */
+export function botClip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let out = '';
+  for (const ch of text) {
+    if (out.length + ch.length > max - 1) break;
+    out += ch;
+  }
+  return `${out}…`;
+}
+
+/**
+ * Запасной простой текст: строка таблицы — «• ячейка — ячейка», раздел — «Название · число записей»;
+ * число в числовом столбце — с названием столбца («Сдать 6»). У сообщения со своим простым текстом
+ * (`plain`) — он.
+ */
 export function botPlainText(m: BotMessage): string {
+  if (m.plain !== undefined) return m.plain;
   const lines: string[] = [];
   if (m.heading) lines.push(m.heading);
   if (m.sub) lines.push(m.sub);
   if (m.text) lines.push(m.text);
   for (const t of m.tables ?? []) {
-    if (t.title) lines.push(`${t.title} · ${t.rows.length}`);
-    for (const row of t.rows) lines.push(`• ${filled(row).join(' — ')}`);
+    const numeric = new Set(t.numeric ?? []);
+    const cell = (x: string, i: number) =>
+      numeric.has(i) && t.head?.[i] ? `${t.head[i]} ${x}` : x;
+    if (t.title) lines.push(`${t.title} · ${t.n ?? t.rows.length}`);
+    for (const row of t.rows) {
+      lines.push(
+        `• ${row.flatMap((x, i) => (x === '' || x == null ? [] : [cell(x, i)])).join(' — ')}`,
+      );
+    }
     if (t.foot) lines.push(filled(t.foot).join(' — '));
   }
   return lines.join('\n');
@@ -102,7 +179,7 @@ function tableHtml(t: BotTable): string {
       : '') +
     '</table>';
   return t.title
-    ? `<details${t.open ? ' open' : ''}><summary>${botEscape(t.title)} · ${t.rows.length}</summary>${table}</details>`
+    ? `<details${t.open ? ' open' : ''}><summary>${botEscape(t.title)} · ${t.n ?? t.rows.length}</summary>${table}</details>`
     : table;
 }
 
@@ -210,6 +287,11 @@ export function pressBotButton(
 export function botMessageProblem(m: BotMessage): string | null {
   if (!botPlainText(m).trim()) return 'пустое сообщение';
   if (m.code !== undefined && !(m.text ?? '').includes(m.code)) return 'кода нет в тексте';
+  if (m.image !== undefined) {
+    if (!IMAGE_RE.test(m.image)) return 'номер картинки';
+    if ((m.tables ?? []).length) return 'у сообщения с картинкой нет таблиц';
+    if (botPlainText(m).length > BOT_CAPTION_MAX) return 'подпись к картинке длиннее 1024 знаков';
+  }
   for (const t of m.tables ?? []) {
     const width = Math.max(
       t.head?.length ?? 0,
@@ -217,6 +299,13 @@ export function botMessageProblem(m: BotMessage): string | null {
       ...t.rows.map((r) => r.length),
     );
     if (width > BOT_TABLE_COLUMNS_MAX) return 'в таблице больше 20 столбцов';
+  }
+  if (m.ask) {
+    try {
+      botPressData(m.ask.action, m.ask.arg);
+    } catch {
+      return 'просьба бота: действие или запись';
+    }
   }
   for (const row of m.buttons ?? []) {
     for (const b of row) {
@@ -252,7 +341,9 @@ const isString = (x: unknown) => typeof x === 'string';
 export function asBotMessage(value: unknown): BotMessage | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const m = value as Record<string, unknown>;
-  if (![m.heading, m.sub, m.text, m.code].every((x) => optional(x, isString))) return null;
+  if (![m.heading, m.sub, m.text, m.code, m.plain, m.image].every((x) => optional(x, isString))) {
+    return null;
+  }
   const tablesOk = optional(
     m.tables,
     (ts) =>
@@ -264,6 +355,7 @@ export function asBotMessage(value: unknown): BotMessage | null {
           optional(x.title, isString) &&
           optional(x.head, isStrings) &&
           optional(x.foot, isStrings) &&
+          optional(x.n, (n) => Number.isSafeInteger(n) && (n as number) >= 0) &&
           Array.isArray(x.rows) &&
           x.rows.every(isStrings)
         );
@@ -286,7 +378,53 @@ export function asBotMessage(value: unknown): BotMessage | null {
           }),
       ),
   );
-  return tablesOk && buttonsOk ? (value as BotMessage) : null;
+  const askOk = optional(m.ask, (ask) => {
+    if (!ask || typeof ask !== 'object' || Array.isArray(ask)) return false;
+    const x = ask as Record<string, unknown>;
+    const src = x.src as Record<string, unknown> | undefined;
+    return (
+      typeof x.action === 'string' &&
+      (x.kind === 'file' || x.kind === 'text') &&
+      [x.arg, x.day].every((y) => optional(y, isString)) &&
+      optional(x.off, (y) => typeof y === 'boolean') &&
+      optional(
+        src,
+        (y) =>
+          !!y &&
+          typeof y === 'object' &&
+          Number.isSafeInteger((y as { messageId?: unknown }).messageId) &&
+          typeof (y as { action?: unknown }).action === 'string',
+      )
+    );
+  });
+  return tablesOk && buttonsOk && askOk ? (value as BotMessage) : null;
+}
+
+/** Действие кнопки «Отмена» под просьбой бота: бот перестаёт ждать ответ, запись не меняется. */
+export const BOT_ASK_CANCEL = 'askCancel';
+
+/** Бот всё ещё ждёт ответ на это сообщение (`today` — сегодня по Бишкеку). */
+export function botAskLive(m: BotMessage, today: string): boolean {
+  return !!m.ask && !m.ask.off && (m.ask.day === undefined || m.ask.day === today);
+}
+
+/** Та же просьба (то же действие с той же записью) уже открыта этим сообщением. */
+export function sameBotAsk(m: BotMessage, action: string, arg: string | null): boolean {
+  return !!m.ask && m.ask.action === action && (m.ask.arg ?? null) === (arg || null);
+}
+
+/** Сообщение после ответа или отмены: бот больше не ждёт, кнопка «Отмена» гаснет. */
+export function closeBotAsk(m: BotMessage): BotMessage {
+  if (!m.ask) return m;
+  const buttons = (m.buttons ?? []).map((row) =>
+    row.map((b): BotButton => (b.action === BOT_ASK_CANCEL ? { ...b, off: true } : b)),
+  );
+  return { ...m, ask: { ...m.ask, off: true }, ...(m.buttons ? { buttons } : {}) };
+}
+
+/** Просьба бота прислать файл или текст ответом на сообщение; под ней — кнопка «Отмена». */
+export function askBotMessage(text: string, ask: BotAsk, cancelLabel: string): BotMessage {
+  return { text, ask, buttons: [[{ text: cancelLabel, action: BOT_ASK_CANCEL }]] };
 }
 
 /**

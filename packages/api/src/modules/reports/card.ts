@@ -73,6 +73,7 @@ import { reportRowBody } from './list';
 const FILE_ACTIONS: ReadonlySet<string> = new Set([
   'file_attach',
   'file_delete',
+  'file_edit',
   'file_hide',
   'file_show',
 ]);

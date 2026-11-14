@@ -1,4 +1,10 @@
-import { PAGE_SECTIONS, type PageSection } from '@buhuchet/domain';
+import {
+  formatSomWithUnit,
+  isYearMonth,
+  monthLabel,
+  PAGE_SECTIONS,
+  type PageSection,
+} from '@buhuchet/domain';
 import type { Translate } from '../l10n/translate';
 
 /** Запись истории контрагента о его странице (сущность `contractor_page`). */
@@ -25,6 +31,9 @@ const TELEGRAM_TEXT = {
   page_tg_no: 'cppage.hist.page_tg_no',
   page_tg_off: 'cppage.hist.page_tg_off',
   page_tg_leave: 'cppage.hist.page_tg_leave',
+  // Напоминания о долге: клиент выключил кнопкой «Не напоминать» и включил командой «Напоминать» (К5).
+  page_tg_nodebt: 'cppage.hist.page_tg_nodebt',
+  page_tg_debt_on: 'cppage.hist.page_tg_debt_on',
 } as const;
 
 const sectionsOf = (value: unknown): PageSection[] =>
@@ -49,9 +58,40 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
       name: typeof name === 'string' ? name : '',
     });
   }
+  // «К оплате» клиенту в Telegram (задача К4; прототип v94 pgPaySend, tgAct('cp-paid'), pgTgAsk).
+  if (entry.action === 'page_tg_pay' || entry.action === 'page_tg_paid') {
+    const field = entry.action === 'page_tg_pay' ? 'tgPay' : 'tgPaid';
+    const p = (entry.changes.find((c) => c.field === field)?.to ?? {}) as Record<string, unknown>;
+    const values = {
+      month: isYearMonth(String(p.month)) ? monthLabel(String(p.month)) : '',
+      total: typeof p.total === 'number' ? formatSomWithUnit(p.total) : '',
+    };
+    return entry.action === 'page_tg_pay'
+      ? t('cppage.hist.page_tg_pay', {
+          ...values,
+          n: typeof p.recipients === 'number' ? p.recipients : 0,
+        })
+      : t('cppage.hist.page_tg_paid', {
+          ...values,
+          name: typeof p.name === 'string' ? p.name : '',
+        });
+  }
+  if (entry.action === 'page_tg_question') {
+    const p = (entry.changes.find((c) => c.field === 'tgQuestion')?.to ?? {}) as Record<
+      string,
+      unknown
+    >;
+    return t('cppage.hist.page_tg_question', {
+      name: typeof p.name === 'string' ? p.name : '',
+      text: typeof p.text === 'string' ? p.text : '',
+    });
+  }
   if (entry.action in ACTION_TEXT) {
     return t(ACTION_TEXT[entry.action as keyof typeof ACTION_TEXT]);
   }
+  // «Напоминать о долге в Telegram» у контрагента (задача К5; прототип pgTgBoxClick, `debt`).
+  const debt = entry.changes.find((c) => c.field === 'tgDebtOff');
+  if (debt) return t(debt.to === true ? 'cppage.hist.debt_off' : 'cppage.hist.debt_on');
   const change = entry.changes.find((c) => c.field === 'hiddenSections');
   if (!change) return '';
   const before = sectionsOf(change.from);
@@ -67,6 +107,8 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
 }
 
 /** Кто сделал: открытие страницы и перерыв после неверных кодов — «Контрагент», без сотрудника. */
-export function pageHistoryActor(t: Translate, actor: string | null): string {
+export function pageHistoryActor(t: Translate, actor: string | null, action?: string): string {
+  // «К оплате» без автора отправила задача по расписанию (за 5 дней до срока), а не контрагент.
+  if (!actor && action === 'page_tg_pay') return t('status.system');
   return actor ?? t('cppage.hist.client');
 }

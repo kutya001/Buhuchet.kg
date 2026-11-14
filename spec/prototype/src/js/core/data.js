@@ -382,6 +382,27 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // Поток Т, задача Т3 (пакет заказчика 13.11.2026): шаблоны таблиц бота — утреннее напоминание, сводка недели руководителю, долги за обслуживание, «Напомнить»
   if(!db.meta.tgT3){db.meta.tgT3=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgMornHead', 'tgMornSub', 'tgSecOver', 'tgSecToday', 'tgSecBefore', 'tgSecPay', 'tgWeekHead', 'tgWeekSub', 'tgSecDebt', 'tgBtnNudge', 'tgBtnFeeCopy', 'tgNudge', 'tgActNudgeOk', 'tgActNudgeWait', 'tgActNudgeNoTg'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток Т, задача Т4 (пакет заказчика 13.11.2026, идея 9): кнопка «Это не я» под сообщениями о безопасности — шаблоны кнопки и ответов бота;
+  // «Пароль изменён» — со временем смены, «Привязан другой Telegram» и «Telegram отвязан» — с советом нажать кнопку: прежний текст заменяется, если администратор его не менял
+  if(!db.meta.tgT4){db.meta.tgT4=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgBtnNotMe', 'tgNotMeDone', 'tgNotMeAdmin', 'tgNotMeStaff', 'tgNotMeOwner', 'tgActNotMeLate'],
+      old={tgPassChanged:'🔑 Пароль учётной записи {логин} изменён. Если вы его не меняли, восстановите доступ кнопкой «Забыли пароль?» на странице входа.',tgRelinked:'⚠️ К учётной записи {логин} привязан другой Telegram: {телеграм}. Сюда больше не придут напоминания и коды. Если это сделали не вы, попросите владельца организации (владельцу — администратора платформы) сбросить пароль: все сеансы завершатся, и свой Telegram можно будет привязать снова в «Мой профиль».',tgUnlinked:'Telegram отвязан от учётной записи {логин}: напоминания и коды восстановления пароля сюда больше не придут. Если это сделали не вы, смените пароль — все сеансы завершатся.'};
+    if(a){ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});Object.keys(old).forEach(k=>{if(a[k]===old[k]&&rm[k]){a[k]=rm[k];if(n&&rn[k])n[k]=rn[k]}})}
+    if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток Т, задача Т5 (пакет заказчика 13.11.2026, идея 4): ответы бота по запросу — команды меню «Сегодня», «Неделя», «Просрочено», «Найти контрагента» и тексты ответов
+  if(!db.meta.tgT5){db.meta.tgT5=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCmdToday', 'tgCmdWeek', 'tgCmdOver', 'tgCmdFind', 'tgTodayHead', 'tgTodaySub', 'tgTodayNone', 'tgWeekNone', 'tgOverNone', 'tgFindAsk', 'tgFindShort', 'tgFindNone', 'tgFindMany', 'tgFindMore', 'tgCardSub', 'tgCardDebt', 'tgCardNoReports', 'tgBtnOpenCp'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток Т, задача Т6 (пакет заказчика 13.11.2026, идеи 14 и 15): заявка с сайта в Telegram с кнопками и кнопки оформленной рассылки
+  if(!db.meta.tgT6){db.meta.tgT6=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgLeadHead', 'tgLeadRepHead', 'tgBtnLeadWork', 'tgBtnLeadNo', 'tgBtnLeadOpen', 'tgActLeadWork', 'tgLeadAskWhy', 'tgLeadRefused', 'tgBtnMore', 'tgBtnVideo'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n){ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});['tgLead','tgLeadRep'].forEach(k=>{if(rn[k]!=null)n[k]=rn[k]})}}
+  // Поток Т, задача Т7 (пакет заказчика 13.11.2026, идея 6): названия тем чата с ботом
+  if(!db.meta.tgT7){db.meta.tgT7=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgTopicReports','tgTopicTasks','tgTopicLeads','tgTopicSecurity'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток Т, задача Т8 (пакет заказчика 13.11.2026, идея 11): общий чат фирмы — сводка дня и «Мои»
+  if(!db.meta.tgT8){db.meta.tgT8=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgGrpLinked','tgGrpLinkBad','tgGrpOff','tgGrpHead','tgGrpSub','tgBtnGrpMine','tgGrpMineHead','tgGrpMineNone','tgGrpMineToast','tgGrpNoLink'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток Т, задача Т9 (пакет заказчика 13.11.2026, идея 5): виджет «Мои отчёты на неделю»
+  if(!db.meta.tgT9){db.meta.tgT9=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCmdWidget','tgWgCaption','tgWgHead','tgWgUpd','tgWgOver','tgWgNone','tgWgMore','tgWgDone','tgWgFile','tgWgOld','tgBtnWgRefresh'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

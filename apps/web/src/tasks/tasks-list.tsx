@@ -4,6 +4,7 @@ import { formatCount, type GridKey, type ListFilterValue, type UiTextKey } from 
 import { ListValues, TaskList, type TaskListRow, type TaskSummary } from '@buhuchet/shared';
 import { DataGrid, EmptyState, Plate, Plates, Tag } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
@@ -14,6 +15,7 @@ import { usePresetFilters } from '../lists/preset';
 import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useShell } from '../shell/context';
 import { useTaskActions } from './task-actions';
 import {
@@ -127,6 +129,16 @@ export function TasksList({ tab }: { tab: TaskTab }) {
     [tab],
   );
   const tasks = useTaskActions();
+  // Ссылка «Открыть задачу» из сообщения бота: карточка задачи и адрес без `?task=`.
+  const taskParam = useSearchParams().get('task');
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('task');
+    const id = linkedRecordId(value);
+    if (id) tasks.openById(id);
+  });
+  useEffect(() => {
+    if (taskParam) openLinked(taskParam);
+  }, [taskParam]);
   // Столбцы сотрудников без задач — тому, кто видит задачи всех (прототип `taskKanban`, `show.exec`).
   const boardOptions = useQuery({ ...taskBoardOptionsQuery, enabled: access.can('tasksAll') });
   const kanban = taskKanban<TaskListRow>(t, boardOptions.data?.executors ?? [], tasks.drop);

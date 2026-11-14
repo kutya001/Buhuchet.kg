@@ -195,6 +195,8 @@ export interface AdminUserCardRecord {
     mustChangePassword: boolean;
     loginFailures: number;
     loginLocked: boolean;
+    /** Чем закрыт вход: `not_me` — кнопкой «Это не я» в Telegram; пусто — неверными паролями. */
+    loginLockReason: string | null;
     createdAt: Date;
     role: { name: string; permissions: PermissionId[]; scopes: Record<ScopeGroupId, Scope> } | null;
     telegram: { username: string | null; firstName: string | null; linkedAt: Date } | null;
@@ -260,6 +262,9 @@ const HISTORY_VALUE_FIELDS: ReadonlySet<string> = new Set([
   'blocked',
   'loginLocked',
   'telegram',
+  // «Это не я» под сообщением бота (задача Т4): под каким сообщением и сколько сеансов завершено.
+  'notMe',
+  'sessionsEnded',
 ]);
 
 const historyValue = (v: unknown): HistoryValue =>
@@ -370,6 +375,7 @@ export async function adminEmployeeCard(
       mustChangePassword: users.mustChangePassword,
       loginFailures: users.loginFailures,
       loginLockedAt: users.loginLockedAt,
+      loginLockReason: users.loginLockReason,
     })
     .from(employees)
     .innerJoin(users, eq(users.id, employees.userId))
@@ -578,6 +584,7 @@ export async function adminEmployeeCard(
       mustChangePassword: e.mustChangePassword,
       loginFailures: e.loginFailures,
       loginLocked: e.loginLockedAt !== null,
+      loginLockReason: e.loginLockReason,
       createdAt: e.createdAt,
       role: role ? { name: role.name, permissions: role.permissions, scopes: role.scopes } : null,
       telegram: tg ?? null,

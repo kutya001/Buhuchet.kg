@@ -137,36 +137,76 @@ export function fileSizeText(t: Translate, size: number): string {
   return t(`files.size.${unit}`, { n: value });
 }
 
-/**
- * Загрузить один файл к записи: API начинает загрузку и подписывает ссылку, браузер кладёт файл в
- * хранилище (`PUT`), API проверяет размер и показывает файл в записи.
- */
-export async function uploadFile(
-  source: FileSource,
-  file: File,
-  manual?: { contractorId: string | null; note: string; page?: boolean },
-): Promise<{ ok: true; item: FileItem } | { ok: false; error: ApiErrorLike }> {
-  const started = await callApi(() =>
-    api.api.files.uploads.$post({
-      json: { source, name: file.name, size: file.size, ...manual },
-    }),
-  );
-  if (!started.ok) return started;
-  const ticket = FileUploadTicket.parse(started.data);
-  let put: Response;
+/** Положить файл в хранилище по подписанной ссылке (мимо API). */
+async function putToStorage(ticket: FileUploadTicket, file: File): Promise<ApiErrorLike | null> {
   try {
-    put = await fetch(ticket.upload.url, {
+    const put = await fetch(ticket.upload.url, {
       method: ticket.upload.method,
       headers: ticket.upload.headers,
       body: file,
     });
+    return put.ok ? null : { code: 'file_not_uploaded', message: '' };
   } catch {
-    return { ok: false, error: { code: 'network', message: '' } };
+    return { code: 'network', message: '' };
   }
-  if (!put.ok) return { ok: false, error: { code: 'file_not_uploaded', message: '' } };
+}
+
+/**
+ * Загрузить один файл к записи: API начинает загрузку и подписывает ссылку, браузер кладёт файл в
+ * хранилище (`PUT`), API проверяет размер и показывает файл в записи. `extra.note` — примечание
+ * (прототип v95 `attachDlg`), контрагент и показ на странице — только у ручной загрузки.
+ */
+export async function uploadFile(
+  source: FileSource,
+  file: File,
+  extra?: { contractorId?: string | null; note?: string; page?: boolean },
+): Promise<{ ok: true; item: FileItem } | { ok: false; error: ApiErrorLike }> {
+  const started = await callApi(() =>
+    api.api.files.uploads.$post({
+      json: { source, name: file.name, size: file.size, ...extra },
+    }),
+  );
+  if (!started.ok) return started;
+  const ticket = FileUploadTicket.parse(started.data);
+  const failed = await putToStorage(ticket, file);
+  if (failed) return { ok: false, error: failed };
   const done = await callApi(() =>
     api.api.files[':id'].complete.$post({ param: { id: ticket.id } }),
   );
   if (!done.ok) return done;
   return { ok: true, item: FileItem.parse(done.data) };
+}
+
+/**
+ * «Изменить файл» (прототип v95 `fileEditDlg`): название целиком и примечание; с `replacement` —
+ * сначала новый файл кладётся в хранилище (начать замену → `PUT`), затем одно сохранение ставит его
+ * на место прежнего. `status` 409 — файл изменил другой пользователь.
+ */
+export async function saveFileEdit(
+  file: { id: string; version: number },
+  edit: { name: string; note: string; replacement: File | null },
+): Promise<{ ok: true; item: FileItem } | { ok: false; status: number; error: ApiErrorLike }> {
+  let uploadId: string | undefined;
+  if (edit.replacement) {
+    const picked = edit.replacement;
+    const started = await callApi(() =>
+      api.api.files[':id'].replacement.$post({
+        param: { id: file.id },
+        json: { name: picked.name, size: picked.size },
+      }),
+    );
+    if (!started.ok) return started;
+    const ticket = FileUploadTicket.parse(started.data);
+    const failed = await putToStorage(ticket, picked);
+    if (failed) return { ok: false, status: 0, error: failed };
+    uploadId = ticket.id;
+  }
+  const saved = await callApi(() =>
+    api.api.files[':id'].$patch({
+      param: { id: file.id },
+      json: { version: file.version, name: edit.name, note: edit.note, uploadId },
+    }),
+  );
+  if (!saved.ok) return saved;
+  return { ok: true, item: FileItem.parse(saved.data) };
 }

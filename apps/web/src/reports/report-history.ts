@@ -7,6 +7,7 @@ import {
 } from '@buhuchet/domain';
 import type { ReportHistoryEntry } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
+import { fileHistoryText } from '../files/file-history';
 import type { Translate } from '../l10n/translate';
 
 type Change = ReportHistoryEntry['changes'][number];
@@ -162,7 +163,8 @@ export function reportHistoryText(
       break;
     }
     case 'file_attach':
-      text = t('report.hist.file_attach', { name: file('to') });
+    case 'file_edit':
+      text = fileHistoryText(t, entry) ?? t('report.hist.file_attach', { name: file('to') });
       break;
     case 'file_delete':
       text = t('report.hist.file_delete', { name: file('from') });
@@ -196,5 +198,6 @@ export function reportHistoryItem(
     time: bishkekTime(at),
     text: reportHistoryText(t, entry, revision),
     who: entry.actor ?? t('status.system'),
+    via: entry.via === 'telegram' ? t('telegram.via') : null,
   };
 }

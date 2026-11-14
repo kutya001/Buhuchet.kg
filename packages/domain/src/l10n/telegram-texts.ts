@@ -1,6 +1,7 @@
 import type { UiTextDefault } from './texts';
 
 const S = 'Telegram';
+const G = 'Моя организация';
 const P = 'Профиль';
 
 /**
@@ -15,6 +16,70 @@ export const TELEGRAM_TEXTS = {
   'telegram.unlinked': { ru: '{report} ({name}: не привязан Telegram)', section: S },
   'telegram.unassigned': { ru: '{report} (ответственный не назначен)', section: S },
   'telegram.item.report': { ru: '{type} за {period} — {contractor}', section: S },
+  // Сообщение об одном отчёте с кнопками (прототип v97 `tgRepMsg`, `tgConfMsg`, `tgDueTxt`).
+  'telegram.item.report_name': { ru: '{type} за {period}', section: S },
+  'telegram.item.report_full': { ru: '{name}, {contractor}', section: S },
+  'telegram.item.due': { ru: 'срок {date}', section: S },
+  'telegram.item.due_over': { ru: 'просрочен на {n} дн.', section: S },
+  'telegram.item.due_today': { ru: 'сегодня последний день', section: S },
+  'telegram.item.due_in': { ru: 'через {n} дн.', section: S },
+  'telegram.item.submitted': { ru: 'сдан {date}', section: S },
+  'telegram.done.work': { ru: '✓ В работе', section: S },
+  'telegram.done.submitted': { ru: '✓ Сдан', section: S },
+  'telegram.done.task': { ru: '✓ Выполнена', section: S },
+  'telegram.done.confirmed': { ru: '✓ Подтверждено', section: S },
+  'telegram.done.returned': { ru: '↩ Возвращён', section: S },
+  'telegram.done.cancelled': { ru: 'Отменено', section: S },
+  'telegram.done.nudged': { ru: '✓ Напомнили', section: S },
+  // Таблицы в сообщениях бота (поток Т, задача Т3; прототип v100 modules/tg-tables.js): столбцы таблиц
+  // утреннего напоминания, сводки недели и долгов; названия разделов и подписи кнопок — шаблоны.
+  'telegram.table.contractor': { ru: 'Контрагент', section: S },
+  'telegram.table.report': { ru: 'Отчёт', section: S },
+  'telegram.table.due': { ru: 'Срок', section: S },
+  'telegram.table.report_cell': { ru: '{type}, {period}', section: S },
+  'telegram.table.pay_mark': { ru: '{report} — оплата', section: S },
+  'telegram.table.more': { ru: 'ещё {n} — на сайте', section: S },
+  'telegram.table.employee': { ru: 'Сотрудник', section: S },
+  'telegram.table.today': { ru: 'Сегодня', section: S },
+  'telegram.table.today_word': { ru: 'сегодня', section: S },
+  // Виджет «Мои отчёты на неделю» (задача Т9): у просроченного отчёта — срок вместо статуса.
+  'telegram.widget.due': { ru: 'срок {date}', section: S },
+  'telegram.table.to_submit': { ru: 'Сдать', section: S },
+  'telegram.table.overdue': { ru: 'Просроч.', section: S },
+  'telegram.table.waiting': { ru: 'Ждут', section: S },
+  'telegram.table.unassigned': { ru: 'Без ответственного', section: S },
+  'telegram.table.debt': { ru: 'Долг, сом', section: S },
+  'telegram.table.months': { ru: 'Мес.', section: S },
+  'telegram.table.months_n': { ru: '{n} мес.', section: S },
+  'telegram.table.total': { ru: 'Всего', section: S },
+  'telegram.table.total_of': { ru: 'Всего у {n} контрагентов', section: S },
+  // День недели в заголовке «Отчёты на пятницу, 13 ноября»: 0 — понедельник.
+  // Ответы по запросу (поток Т, задача Т5; прототип v102 modules/tg-menu.js): столбцы таблиц команд
+  // «Сегодня», «Неделя», «Просрочено» и карточки контрагента; заголовки и подписи кнопок — шаблоны.
+  'telegram.table.status': { ru: 'Статус', section: S },
+  'telegram.table.payment': { ru: 'Оплата', section: S },
+  'telegram.table.day': { ru: 'День', section: S },
+  'telegram.table.to_pay': { ru: 'Оплатить', section: S },
+  'telegram.cmd.counted': { ru: '{head} · {n}', section: S },
+  'telegram.cmd.menu_hint': {
+    ru: 'Команды бота — в меню и на кнопках под полем ввода.',
+    section: S,
+  },
+  'telegram.card.nobody': { ru: 'не назначен', section: S },
+  'telegram.card.paused': { ru: '{sub} · обслуживание приостановлено', section: S },
+  'telegram.card.debt': { ru: '{sum} сом за {n} мес.', section: S },
+  'telegram.card.no_debt': { ru: 'нет', section: S },
+  'telegram.weekday.0': { ru: 'понедельник', section: S },
+  'telegram.weekday.1': { ru: 'вторник', section: S },
+  'telegram.weekday.2': { ru: 'среду', section: S },
+  'telegram.weekday.3': { ru: 'четверг', section: S },
+  'telegram.weekday.4': { ru: 'пятницу', section: S },
+  'telegram.weekday.5': { ru: 'субботу', section: S },
+  'telegram.weekday.6': { ru: 'воскресенье', section: S },
+  // Отметка у записи истории, сделанной кнопкой или ответом в чате бота (прототип `histVia`).
+  'telegram.via': { ru: 'через Telegram', section: S },
+  'telegram.photo_name': { ru: 'Фото из Telegram {date}.jpg', section: S },
+  'telegram.file_name': { ru: 'Файл из Telegram {date}', section: S },
   'telegram.week.contractor': { ru: '• {contractor}: {what}', section: S },
   'telegram.week.sub': { ru: 'сдать {list}', section: S },
   'telegram.week.pay': { ru: 'оплатить {list}', section: S },
@@ -40,6 +105,33 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.page_closed': { ru: 'Страница контрагента закрыта', section: S },
   'telegram.kind.bot_test': { ru: 'Проверка бота', section: S },
   'telegram.kind.cp_tg_request': { ru: 'Telegram контрагента', section: S },
+
+  'telegram.kind.task_started': { ru: 'Задача взята в работу', section: S },
+  'telegram.kind.task_done': { ru: 'Задача выполнена', section: S },
+  'telegram.kind.bot_ask': { ru: 'Просьба бота прислать ответ', section: S },
+  'telegram.kind.nudge': { ru: 'Напоминание о просроченном', section: S },
+  // «Это не я» под сообщениями о безопасности (поток Т, задача Т4; прототип v101 tg-security.js).
+  'telegram.kind.not_me': { ru: 'Нажато «Это не я»', section: S },
+  'telegram.kind.bot_cmd': { ru: 'Ответ на команду бота', section: S },
+  'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
+  'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
+  'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
+  'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },
+  'telegram.notme.who.owner': { ru: 'владелец организации', section: S },
+  'telegram.notme.who.admin': { ru: 'администратор платформы', section: S },
+  'telegram.notme.after_reset': {
+    ru: 'Пароль этой учётной записи недавно сброшен, поэтому кнопка не действует. Если это сделали не вы, попросите сбросить пароль ещё раз.',
+    section: S,
+  },
+  'telegram.done.not_me': { ru: '✓ Вход закрыт', section: S },
+  'telegram.done.not_me_admin': { ru: '✓ Сеансы завершены', section: S },
+  // Заявка с сайта в Telegram — с кнопками (поток Т, задача Т6; прототип v103 admin/tg-leads.js):
+  // строки таблицы сообщения и подпись погашенной кнопки; заголовок и подписи кнопок — шаблоны.
+  'telegram.lead.firm': { ru: 'Фирма', section: S },
+  'telegram.lead.size': { ru: 'Контрагентов', section: S },
+  'telegram.lead.contact': { ru: 'Контакт', section: S },
+  'telegram.lead.status': { ru: 'Статус', section: S },
+  'telegram.done.lead_no': { ru: '✓ Отказ', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },
   'profile.notify.modes': { ru: 'Какие уведомления получать', section: P },
   'profile.notify.mode.all': { ru: 'Все', section: P },
@@ -109,6 +201,85 @@ export const TELEGRAM_TEXTS = {
   'err.telegram_not_linked': { ru: 'Сначала привяжите Telegram', section: 'Ошибки' },
   'err.notify_boss_only': {
     ru: 'Режим и уведомления по отчётам других сотрудников — только владельцу и главному бухгалтеру',
+    section: 'Ошибки',
+  },
+  // Общий чат фирмы (поток Т, задача Т8; прототип v105 modules/tg-group.js).
+  'tggrp.title': { ru: 'Общий чат фирмы в Telegram', section: G },
+  'tggrp.intro': {
+    ru: 'Бот пишет в рабочую группу фирмы короткую сводку дня — без названий контрагентов. Кнопка «Мои» под сводкой показывает каждому его список: его видит только нажавший.',
+    section: G,
+  },
+  'tggrp.none': { ru: 'Группа не подключена.', section: G },
+  'tggrp.none_owner_only': {
+    ru: 'Группа не подключена. Подключает владелец организации.',
+    section: G,
+  },
+  'tggrp.link': { ru: 'Подключить группу', section: G },
+  'tggrp.relink': { ru: 'Подключить заново', section: G },
+  'tggrp.linked': { ru: 'Подключена', section: G },
+  'tggrp.gone': { ru: 'Бот удалён из группы', section: G },
+  'tggrp.by': { ru: '{name}, {date}', section: G },
+  'tggrp.gone_note': {
+    ru: 'Бота удалили из группы — сводки туда не приходят. Подключите группу заново.',
+    section: G,
+  },
+  'tggrp.forget': { ru: 'Забыть группу', section: G },
+  'tggrp.summary': { ru: 'Сводка дня в группу', section: G },
+  'tggrp.summary_hint': {
+    ru: 'По рабочим дням в {time}; нечего сдавать и нет просроченного — сводки нет.',
+    section: G,
+  },
+  'tggrp.owner_only': { ru: 'Меняет только владелец организации.', section: G },
+  'tggrp.summary_on': { ru: 'Сводка дня включена', section: G },
+  'tggrp.summary_off': { ru: 'Сводка дня выключена', section: G },
+  'tggrp.off': { ru: 'Отключить группу', section: G },
+  'tggrp.off_title': { ru: 'Отключить общий чат?', section: G },
+  'tggrp.off_text': {
+    ru: 'Бот напишет в группе «{title}», что отключён, и выйдет из неё. Сводки туда больше не придут.',
+    section: G,
+  },
+  'tggrp.off_text_gone': { ru: 'Группа будет забыта: бота в ней уже нет.', section: G },
+  'tggrp.off_ok': { ru: 'Отключить', section: G },
+  'tggrp.off_done': { ru: 'Общий чат отключён', section: G },
+  'tggrp.dlg_title': { ru: 'Подключить общий чат фирмы', section: G },
+  'tggrp.dlg_sub': { ru: 'Бот войдёт в рабочую группу фирмы в Telegram', section: G },
+  'tggrp.dlg_step1': {
+    ru: 'Нажмите «Открыть Telegram» на телефоне или компьютере, где у вас Telegram.',
+    section: G,
+  },
+  'tggrp.dlg_step2': {
+    ru: 'Telegram предложит выбрать группу — выберите рабочую группу фирмы и добавьте бота.',
+    section: G,
+  },
+  'tggrp.dlg_step3': {
+    ru: 'Бот напишет в группе, что подключён. Здесь появится название группы.',
+    section: G,
+  },
+  'tggrp.dlg_note': {
+    ru: 'Ссылка одноразовая и действует до {time} ({minutes} минут). В группе могут быть посторонние: бот пишет туда только числа и имена сотрудников, без контрагентов и сумм.',
+    section: G,
+  },
+  'tggrp.dlg_replace': {
+    ru: 'Сейчас подключена группа «{title}»: новая группа заменит её, а из прежней бот выйдет.',
+    section: G,
+  },
+  'tggrp.dlg_open': { ru: 'Открыть Telegram', section: G },
+  'tggrp.dlg_copy': { ru: 'Скопировать ссылку', section: G },
+  'tggrp.dlg_copied': { ru: 'Ссылка скопирована', section: G },
+  'org.history.tg_group_on': { ru: 'Подключён общий чат Telegram «{title}»', section: G },
+  'org.history.tg_group_off': { ru: 'Общий чат Telegram «{title}» отключён', section: G },
+  'org.history.tg_group_gone': {
+    ru: 'Бота удалили из общего чата Telegram «{title}»',
+    section: G,
+  },
+  'org.history.tg_group_summary': {
+    ru: 'Сводка дня в общий чат Telegram: {state}',
+    section: G,
+  },
+  'org.history.tg_group_summary_on': { ru: 'включена', section: G },
+  'org.history.tg_group_summary_off': { ru: 'выключена', section: G },
+  'err.telegram_off': {
+    ru: 'Напоминания в Telegram выключены в учётной политике',
     section: 'Ошибки',
   },
 } as const satisfies Record<string, UiTextDefault>;

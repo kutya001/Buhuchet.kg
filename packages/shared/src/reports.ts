@@ -1,5 +1,7 @@
 import {
   ASSIGNMENT_DUE_DAYS,
+  MONTH_PAY_REFUSALS,
+  MONTH_PAY_SEND_REFUSALS,
   PAYMENT_STATUSES,
   REPORT_ACTS,
   REPORT_LINE_KINDS,
@@ -315,6 +317,44 @@ export const ReportMonthSummary = z.object({
 export type ReportMonthSummary = z.infer<typeof ReportMonthSummary>;
 
 /**
+ * «К оплате клиенту» за месяц в карточке контрагента (доработки 13.11.2026, К4; прототип v94 `rmToPay`,
+ * `rmPayHtml`): налоги месяца с остатками от ближайшего срока оплаты, итог, срок, сколько отчётов без
+ * суммы (в текст не входят), реквизит для налогов и готовый текст «Скопировать для клиента» (платить
+ * нечего — `null`). `refusal` — почему текста нет, хотя платить есть что: реквизит ответственного
+ * сотруднику не виден или часть отчётов месяца — вне его области (код ошибки — он же ключ словаря).
+ */
+export const ContractorMonthPay = z.object({
+  month: ReportMonth,
+  rows: z.array(z.object({ reportId: Uuid, name: z.string(), left: Tyiyn, due: IsoDate })),
+  total: Tyiyn,
+  noAmount: Count,
+  due: IsoDate.nullable(),
+  requisite: z.string().nullable(),
+  text: z.string().nullable(),
+  refusal: z.enum(MONTH_PAY_REFUSALS).nullable(),
+  /**
+   * «Отправить в Telegram» (прототип v94 `rmPaySendWhy`): null — кнопки нет (выключены «Напоминания в
+   * Telegram» или «Страница контрагента по ссылке»); `refusal` — что мешает отправке (ключ словаря
+   * `err.<код>`), `recipients` — сколько Telegram подключено у контрагента.
+   */
+  send: z
+    .object({
+      refusal: z.enum([...MONTH_PAY_SEND_REFUSALS, 'month_pay_partial']).nullable(),
+      recipients: Count,
+    })
+    .nullable(),
+});
+export type ContractorMonthPay = z.infer<typeof ContractorMonthPay>;
+
+/** «Отправить в Telegram»: скольким подключённым Telegram контрагента сообщение записано и ушло. */
+export const ContractorMonthPaySent = z.object({ recipients: Count, delivered: Count });
+export type ContractorMonthPaySent = z.infer<typeof ContractorMonthPaySent>;
+
+/** «Скопировать для клиента»: за какой месяц текст. */
+export const ContractorMonthPayCopied = z.object({ month: ReportMonth });
+export type ContractorMonthPayCopied = z.infer<typeof ContractorMonthPayCopied>;
+
+/**
  * Счётчики вкладок, плашки и числа быстрого фильтра в области сотрудника (прототип counts,
  * renderReports): `month` — первое число текущего месяца, `weekFrom` и `weekTo` — «На этой неделе»,
  * `waitDays` — через сколько дней ожидания старшим бухгалтерам уходит напоминание (учётная политика),
@@ -369,6 +409,8 @@ export const ReportLineDef = z.object({
 export const ReportHistoryEntry = z.object({
   at: z.iso.datetime(),
   actor: z.string().nullable(),
+  /** Откуда сделано: `telegram` — кнопкой или ответом в чате бота («через Telegram»); пусто — на сайте. */
+  via: z.enum(['telegram']).nullable().optional(),
   action: z.string(),
   reason: z.string().nullable(),
   changes: z.array(

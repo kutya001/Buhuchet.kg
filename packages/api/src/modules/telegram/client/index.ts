@@ -10,14 +10,20 @@ import {
   startContractorTelegram,
   telegramChat,
   withOrgContext,
+  type Db,
+  type Tx,
 } from '@buhuchet/db';
 import {
+  botPlainText,
   botTemplate,
+  CP_TG_NO_ACTION,
+  CP_TG_OK_ACTION,
   cpTgLeaveCommand,
   cpTgName,
   fillTemplate,
   formatText,
   withOrganization,
+  type BotMessage,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../../deps';
@@ -43,8 +49,10 @@ async function reply(
   chatId: number,
   key: TelegramTemplateKey,
   values: Readonly<Record<string, string | number>> = {},
+  /** Внутри открытой транзакции — она сама (docs/decisions.md п. О-46). */
+  db: Db | Tx = deps.db,
 ): Promise<void> {
-  await sendNow(deps, chatId, await botText(deps, key, values), 'cp_telegram');
+  await sendNow(deps, chatId, await botText(deps, key, values, db), 'cp_telegram');
 }
 
 /**
@@ -56,8 +64,10 @@ export async function notifyContractorTelegramClient(
   chatId: number,
   key: 'tgCpOn' | 'tgCpNo' | 'tgCpOff',
   contractor: string,
+  /** Решение из кнопки бота пишется в транзакции нажатия — шаблон читается ею же. */
+  db: Db | Tx = deps.db,
 ): Promise<void> {
-  await reply(deps, chatId, key, { контрагент: contractor });
+  await reply(deps, chatId, key, { контрагент: contractor }, db);
 }
 
 /**
@@ -69,7 +79,7 @@ async function notifyStaff(
   deps: ApiDeps,
   orgId: string,
   contractorId: string,
-  name: string,
+  request: { linkId: string; name: string },
 ): Promise<void> {
   try {
     // Словарь читается до транзакции: внутри неё он занял бы второе соединение пула.
@@ -85,11 +95,31 @@ async function notifyStaff(
         const [templates, orgName] = await Promise.all([messageTemplates(tx), contextOrgName(tx)]);
         const body = fillTemplate(botTemplate('tgCpReq', templates.tgCpReq), {
           контрагент: notice.contractor,
-          телеграм: name,
+          телеграм: request.name,
         });
         const link = formatText(t('telegram.open'), {
           link: new URL(CONTRACTORS_PATH, deps.config.APP_BASE_URL).href,
         });
+        // Кнопки «Подтвердить» и «Отклонить» (задача К5; прототип pgTgStaffMsg): решение — тем же
+        // правилом, что в карточке (право, область, версия записи) — `cpTelegramActions`.
+        const message: BotMessage = {
+          heading: t('cppage.tg.title'),
+          text: withOrganization(`${body}\n\n${link}`, orgName, chat.shared),
+          buttons: [
+            [
+              {
+                text: botTemplate('tgBtnCpOk', templates.tgBtnCpOk),
+                action: CP_TG_OK_ACTION,
+                arg: request.linkId,
+              },
+              {
+                text: botTemplate('tgBtnCpNo', templates.tgBtnCpNo),
+                action: CP_TG_NO_ACTION,
+                arg: request.linkId,
+              },
+            ],
+          ],
+        };
         return queueEvents(
           tx,
           [
@@ -97,7 +127,8 @@ async function notifyStaff(
               userId: target.userId,
               chatId: chat.chatId,
               kind: 'cp_tg_request',
-              text: withOrganization(`${body}\n\n${link}`, orgName, chat.shared),
+              text: botPlainText(message),
+              message,
             },
           ],
           deps.clock.now(),
@@ -139,7 +170,24 @@ export async function clientStart(
   if (res.outcome === 'limit') return reply(deps, chat.chatId, 'tgCpLimit', values);
   if (res.outcome === 'already') return reply(deps, chat.chatId, 'tgCpAlready', values);
   await reply(deps, chat.chatId, 'tgCpAsk', values);
-  if (res.outcome === 'asked') await notifyStaff(deps, target.orgId, res.contractorId, name);
+  if (res.outcome === 'asked') {
+    await notifyStaff(deps, target.orgId, res.contractorId, { linkId: res.linkId, name });
+  }
+}
+
+/**
+ * Подсказка для чата клиента (договорённость с потоком Т, задача Т5): бот отвечает ею вместо «привяжите
+ * Telegram» на текст или команду сотрудника из чата, подключённого к контрагенту. null — чат ни к кому
+ * не подключён: отвечает обычная подсказка бота. Тексты читаются вне транзакций (docs/decisions.md
+ * п. О-46).
+ */
+export async function clientChatHint(deps: ApiDeps, chatId: number): Promise<string | null> {
+  const links = await contractorTelegramChats(deps.db, chatId);
+  if (links.length === 0) return null;
+  const t = await serverTexts(deps);
+  return formatText(t('cppage.tg.client_hint'), {
+    contractors: links.map((l) => l.contractor).join(', '),
+  });
 }
 
 /**

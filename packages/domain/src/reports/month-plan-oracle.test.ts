@@ -2,15 +2,16 @@ import { describe, expect, it } from 'vitest';
 import type { IsoDate } from '../common/dates';
 import type { ReportAct, ReportPeriod } from '../platform-dicts/catalog';
 import fixture from './__fixtures__/month-plan.json';
+import { monthPayList, monthToPay } from './month-pay';
 import { monthPlan, type MonthPlanGroup, type MonthPlanReport } from './month-plan';
 import type { ReportStatus } from './rules';
 
 // Сверка правила «к сдаче и к оплате по месяцам» с прототипом (modules/report-months.js: rmYm, rmItem,
-// rmGroup, rmPlan) на отчётах demoDB.json и наборе с правками. Эталон пишет
+// rmGroup, rmPlan; «К оплате клиенту» — modules/cp-telegram.js: rmToPay, rmPayList) на отчётах demoDB.json и наборе с правками. Эталон пишет
 // scripts/oracle-month-plan.mjs (скилл prototype-oracle); сроки и просрочку отчёта прототип считает сам —
 // продукт получает их готовыми, как от расчёта сроков.
 
-type Row = MonthPlanReport & { contractor: string; order: number };
+type Row = MonthPlanReport & { contractor: string; order: number; short: string };
 
 const flag = (v: string) => v === '1';
 const text = (v: string | number | boolean | null) =>
@@ -21,20 +22,33 @@ const line = (...values: (string | number | boolean | null)[]) => values.map(tex
 function reportsOf(reports: readonly string[], dues: readonly string[]): Row[] {
   const due = new Map(dues.map((d) => [d.split('|')[0]!, d.split('|')]));
   return reports.map((row) => {
-    const [id, contractor, act, status, period, start, event, amount, paid, superseded, order] =
-      row.split('|') as [
-        string,
-        string,
-        ReportAct,
-        ReportStatus,
-        ReportPeriod,
-        IsoDate,
-        string,
-        string,
-        string,
-        string,
-        string,
-      ];
+    const [
+      id,
+      contractor,
+      act,
+      status,
+      period,
+      start,
+      event,
+      amount,
+      paid,
+      superseded,
+      order,
+      short,
+    ] = row.split('|') as [
+      string,
+      string,
+      ReportAct,
+      ReportStatus,
+      ReportPeriod,
+      IsoDate,
+      string,
+      string,
+      string,
+      string,
+      string,
+      string,
+    ];
     const [, dueDate, payDue, overdue, payOverdue] = due.get(id)!;
     return {
       id,
@@ -52,6 +66,7 @@ function reportsOf(reports: readonly string[], dues: readonly string[]): Row[] {
       payOverdue: flag(payOverdue!),
       superseded: flag(superseded),
       order: Number(order),
+      short,
     };
   });
 }
@@ -124,6 +139,33 @@ describe('план по месяцам — ответы прототипа (rmPl
           ),
         );
         expect(groups).toEqual(run.groups);
+      });
+
+      it(`${name}: «К оплате клиенту» — налоги с остатками, итог, срок и список для текста`, () => {
+        const pays = plans.flatMap(([cp, plan]) =>
+          plan
+            .map((g) =>
+              // При равном сроке оплаты — по номеру отчёта (прототип rmToPay).
+              monthToPay(g, { taxpay: run.taxpay, tie: (a, b) => Number(a.id) - Number(b.id) }),
+            )
+            .filter((p) => p.rows.length > 0 || p.noAmount > 0)
+            .map((p) =>
+              line(
+                cp,
+                p.month,
+                p.rows.map((x) => x.report.id).join(','),
+                p.rows.map((x) => x.left).join(','),
+                p.rows.map((x) => x.due).join(','),
+                p.total,
+                p.noAmount,
+                p.due,
+                monthPayList(
+                  p.rows.map((x) => ({ name: x.report.short, left: x.left, due: x.due })),
+                ),
+              ),
+            ),
+        );
+        expect(pays).toEqual(run.pays);
       });
     }
   }

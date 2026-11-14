@@ -1,6 +1,7 @@
 import { bishkekDate, bishkekTime, formatDateRu, type UiTextKey } from '@buhuchet/domain';
 import type { TaskHistoryEntry } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
+import { fileHistoryText } from '../files/file-history';
 import type { Translate } from '../l10n/translate';
 import { statusName } from '../status/status-view';
 
@@ -65,7 +66,9 @@ export function taskHistoryText(t: Translate, entry: TaskHistoryEntry): string {
     case 'create':
       return t('task.hist.created');
     case 'file_attach':
-      return t('task.hist.file_attach', { name: file('to') });
+      return fileHistoryText(t, entry) ?? t('task.hist.file_attach', { name: file('to') });
+    case 'file_edit':
+      return fileHistoryText(t, entry) ?? '';
     case 'file_delete':
       return t('task.hist.file_delete', { name: file('from') });
     default:
@@ -86,5 +89,6 @@ export function taskHistoryItem(
     time: bishkekTime(at),
     text: taskHistoryText(t, entry),
     who: entry.actor ?? t('status.system'),
+    via: entry.via === 'telegram' ? t('telegram.via') : null,
   };
 }

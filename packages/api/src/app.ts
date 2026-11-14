@@ -11,6 +11,7 @@ import { originCheck } from './middleware/origin';
 import { sessionGuard } from './middleware/session';
 import { createModuleApp } from './module';
 import { adminModule } from './modules/admin';
+import { CAST_IMAGE_UPLOAD_PATH } from './modules/admin/telegram-cast';
 import { authModule } from './modules/auth';
 import { contractorPageModule } from './modules/contractor-page';
 import { contractorsModule } from './modules/contractors';
@@ -48,12 +49,14 @@ const API_BODY_LIMIT = 1024 * 1024;
  * Логотип организации и картинки новостей (до 2 МБ) идут через API: сервер проверяет, что это
  * картинка, до сохранения. Файл «Ввода из Excel» показателей (до 4 МБ) разбирается сервером и нигде
  * не хранится. Обложка видео (JPEG до 2 МБ) — так же; сам видеофайл идёт в хранилище по частям.
+ * Картинка рассылки Telegram (до 2 МБ, поток Т, задача Т6) — как картинка новости.
  */
 const OWN_BODY_LIMIT_PATHS: ReadonlySet<string> = new Set([
   LOGO_PATH,
   VIDEO_COVER_UPLOAD_PATH,
   ...KPI_IMPORT_UPLOAD_PATHS,
   NEWS_IMAGE_UPLOAD_PATH,
+  CAST_IMAGE_UPLOAD_PATH,
 ]);
 
 /** Приложение API. Монтируется по пути /api (Next.js catch-all или отдельный сервер). */

@@ -14,6 +14,14 @@ import {
 } from './assignments';
 import { reportCalendarHandler, reportCalendarRoute } from './calendar';
 import {
+  contractorMonthPayCopiedHandler,
+  contractorMonthPayCopiedRoute,
+  contractorMonthPaySendHandler,
+  contractorMonthPaySendRoute,
+  contractorMonthPayHandler,
+  contractorMonthPayRoute,
+} from './month-pay';
+import {
   changeReportDueHandler,
   changeReportDueRoute,
   changeReportResponsibleHandler,
@@ -102,6 +110,9 @@ export function reportsModule(deps: ApiDeps) {
       .openapi(bulkAssignRoute, bulkAssignHandler(deps))
       .openapi(responsibleOptionsRoute, responsibleOptionsHandler(deps))
       .openapi(assignmentEndPreviewRoute, assignmentEndPreviewHandler(deps))
+      .openapi(contractorMonthPayRoute, contractorMonthPayHandler(deps))
+      .openapi(contractorMonthPayCopiedRoute, contractorMonthPayCopiedHandler(deps))
+      .openapi(contractorMonthPaySendRoute, contractorMonthPaySendHandler(deps))
       .openapi(listReportsRoute, listReportsHandler(deps))
       // Раньше `/reports/{id}`: иначе «values», «export», «tab-counts», «manual-options», «manual-due»,
       // «due-shift», «matrix» и «calendar» разбирались бы как номер отчёта.
