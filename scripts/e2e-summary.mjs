@@ -8,7 +8,8 @@ import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const ANSI = /\u001b\[[0-9;]*m/g;
+/** Цвета терминала в тексте ошибки (ESC [ … m). */
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 /** Начало ошибки (до трёх строк) без цветов, одной строкой не длиннее 240 знаков. */
 function firstLine(text) {
@@ -32,12 +33,21 @@ function collect(report) {
       for (const test of spec.tests ?? []) {
         const results = test.results ?? [];
         const failed = results.filter((r) => r.status !== 'passed' && r.status !== 'skipped');
+        // Шёл, когда шаг оборвали по пределу времени, — скорее всего, он и завис.
+        const interrupted = results.some((r) => r.status === 'interrupted');
+        // Не запускался: очередь не дошла (результатов нет) или тест последовательной группы после
+        // упавшего соседа (результат «skipped», хотя тест не помечен пропущенным нарочно).
+        const notRun =
+          !interrupted &&
+          test.status === 'skipped' &&
+          (test.expectedStatus ? test.expectedStatus !== 'skipped' : results.length === 0);
         out.push({
           where: `${spec.file}:${spec.line}`,
           title: [...here, spec.title].join(' › '),
           project: test.projectName,
           status: test.status,
-          notRun: results.length === 0,
+          notRun,
+          interrupted,
           error: firstLine(failed[0]?.error?.message ?? failed[0]?.errors?.[0]?.message),
         });
       }
@@ -58,6 +68,7 @@ export function summarize(machine, reports) {
   const failed = [];
   const flaky = [];
   const notRun = [];
+  const interrupted = [];
   let total = 0;
   for (const [run, report] of Object.entries(reports)) {
     if (!report) {
@@ -78,13 +89,14 @@ export function summarize(machine, reports) {
     for (const t of collect(report)) {
       total += 1;
       const row = { run, ...t };
-      if (t.notRun) notRun.push(row);
+      if (t.interrupted) interrupted.push(row);
+      else if (t.notRun) notRun.push(row);
       else if (t.status === 'unexpected') failed.push(row);
       else if (t.status === 'flaky') flaky.push(row);
     }
   }
   lines.push(
-    `- Всего тестов в отчётах: ${total}; упало: ${failed.length}; со второй попытки: ${flaky.length}; не запускалось: ${notRun.length}.`,
+    `- Всего тестов в отчётах: ${total}; упало: ${failed.length}; со второй попытки: ${flaky.length}; не запускалось: ${notRun.length}${interrupted.length ? `; оборвано на ходу: ${interrupted.length}` : ''}.`,
     '',
   );
   const table = (title, rows, withError) => {
@@ -96,7 +108,10 @@ export function summarize(machine, reports) {
       withError ? '| --- | --- | --- |' : '| --- | --- |',
     );
     for (const r of rows) {
-      const cell = (v) => String(v).replace(/\|/g, '\\|');
+      const cell = (v) =>
+        String(v)
+          .replace(/[\r\n]+/g, ' ')
+          .replace(/\|/g, '\\|');
       lines.push(
         withError
           ? `| ${cell(r.where)} ${cell(r.title)} | ${cell(r.project)} | ${cell(r.error)} |`
@@ -106,12 +121,20 @@ export function summarize(machine, reports) {
     lines.push('');
   };
   table('Упало', failed, true);
+  table(
+    'Оборвано на ходу — шёл, когда шаг оборвали по пределу времени (вероятно, завис)',
+    interrupted,
+    false,
+  );
   table('Прошло только со второй попытки — причину найти в этом же PR', flaky, true);
   table('Не запускалось — может упасть в следующем прогоне', notRun, false);
   for (const r of flaky) {
-    annotations.push(
-      `::warning title=Тест прошёл только со второй попытки::${r.where} [${r.project}] ${r.title} — ${r.error}`,
-    );
+    // Команды GitHub: перевод строки и «%» в тексте — экранировать, иначе название теста станет новой командой.
+    const escaped = `${r.where} [${r.project}] ${r.title} — ${r.error}`
+      .replace(/%/g, '%25')
+      .replace(/\r/g, '%0D')
+      .replace(/\n/g, '%0A');
+    annotations.push(`::warning title=Тест прошёл только со второй попытки::${escaped}`);
   }
   return { markdown: lines.join('\n'), annotations };
 }

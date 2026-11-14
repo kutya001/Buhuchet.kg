@@ -4,7 +4,7 @@ import { UI_TEXTS } from '@buhuchet/domain';
 import { schema } from '@buhuchet/db';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from '@buhuchet/db/testing';
 import { ApiError, CronTickResponse } from '@buhuchet/shared';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { createApp } from './app';
 import type { ApiDeps, Job } from './deps';
 import {
@@ -15,7 +15,7 @@ import {
   jobsFor,
   telegramWebhookJob,
 } from './jobs/registry';
-import { createTestDeps } from './testing';
+import { createRaceApp, createTestDeps } from './testing';
 
 const SECRET = 'test-cron-secret-0000';
 const auth = { authorization: `Bearer ${SECRET}` };
@@ -123,7 +123,10 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     const run = vi.fn(async () => {});
     const job: Job = { name: 'test.daily', cron: '0 9 * * *', lookbackMinutes: 120, run };
     const clock = fixedClock('2026-10-18T03:20:00Z'); // 09:20 по Бишкеку
-    const app = createApp(createTestDeps({ db: t.app.db, clock, jobs: [job] }));
+    // Свой пул из нескольких соединений: на пуле из одного вызовы шли бы по очереди, без гонки.
+    const race = createRaceApp(t.appUrl, createTestDeps({ db: t.app.db, clock, jobs: [job] }));
+    onTestFinished(() => race.close());
+    const app = race.app;
 
     const [a, b] = await Promise.all([
       app.request('/api/cron/tick', { headers: auth }),

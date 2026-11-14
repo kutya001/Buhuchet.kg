@@ -292,7 +292,9 @@ jobs:
         if: always() && steps.e2e.conclusion != 'skipped'
         timeout-minutes: 2
         continue-on-error: true
-        run: node scripts/e2e-summary.mjs playwright-report "${{ matrix.shard }}/6" main desktop-shared mobile-shared
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: node scripts/e2e-summary.mjs playwright-report "$SHARD/6" main desktop-shared mobile-shared
       # Журналы — и при падении, и при отмене: зависший прогон без них не разобрать.
       - name: Соединения базы (кто чего ждёт)
         if: failure() || cancelled()

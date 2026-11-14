@@ -23,6 +23,7 @@ import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
 import {
   apiRequest,
+  createRaceApp,
   createStaffFixture,
   createTestDeps,
   linkTelegram,
@@ -415,10 +416,12 @@ describe.skipIf(!databaseAvailable())(
         rows: (await outbox('nudge', acc.userId)).length,
         answers: tg.answers.length,
       };
+      // Свой пул из нескольких соединений: на пуле из одного нажатия шли бы по очереди, без гонки.
+      const race = createRaceApp(f.t.appUrl, deps);
       const responses = await Promise.all([
-        sendToBot(app, telegramPress(nudge(acc.employeeId), CHAT.owner, fromOwner.id)),
-        sendToBot(app, telegramPress(nudge(acc.employeeId), CHAT.chief, fromChief.id)),
-      ]);
+        sendToBot(race.app, telegramPress(nudge(acc.employeeId), CHAT.owner, fromOwner.id)),
+        sendToBot(race.app, telegramPress(nudge(acc.employeeId), CHAT.chief, fromChief.id)),
+      ]).finally(() => race.close());
       expect(responses.map((r) => r.status)).toEqual([200, 200]);
       // Один получил «получит напоминание», второй — «уже получил напоминание сегодня».
       const answers = tg.answers.slice(before.answers).map((a) => a.text ?? '');

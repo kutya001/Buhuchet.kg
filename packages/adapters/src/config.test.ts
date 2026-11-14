@@ -8,6 +8,7 @@ import {
   loadConfig,
   loadDatabaseConfig,
   loadStorageConfig,
+  runningInCi,
 } from './config';
 
 const base = {
@@ -29,6 +30,17 @@ describe('loadConfig', () => {
     expect(cfg.S3_FORCE_PATH_STYLE).toBe(true);
     expect(cfg.DATABASE_POOL_MAX).toBe(5);
     expect(cfg.LOG_LEVEL).toBe('info');
+  });
+
+  it('CI — только при CI=true', () => {
+    expect(runningInCi({ CI: 'true' })).toBe(true);
+    expect(runningInCi({})).toBe(false);
+  });
+
+  it('пул тестов: по умолчанию 2, из окружения — число, ноль — ошибка (п. О-53)', () => {
+    expect(loadConfig(base).TEST_DATABASE_POOL_MAX).toBe(2);
+    expect(loadConfig({ ...base, TEST_DATABASE_POOL_MAX: '1' }).TEST_DATABASE_POOL_MAX).toBe(1);
+    expect(() => loadConfig({ ...base, TEST_DATABASE_POOL_MAX: '0' })).toThrow(ConfigError);
   });
 
   it('перечисляет все недостающие настройки сразу', () => {

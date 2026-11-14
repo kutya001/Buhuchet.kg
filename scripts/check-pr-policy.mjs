@@ -35,7 +35,8 @@ export function checkPrPolicy(body, { author, headSha } = {}) {
     if (UNATTENDED_AUTHORS.includes(author)) {
       return [
         `PR от ${author} ждёт проверки Claude (скилл dependabot-review): сессия допишет «## Отчёт ревьюеров» ` +
-          'со строкой «- проверен коммит: <SHA головы PR>», сливает заказчик. Пока отчёта нет, pr-policy красный — так и задумано.',
+          'со строкой «- проверен коммит: <SHA головы PR>»; потом PR с пакетами сливается сам, PR с .github/ сливает заказчик. ' +
+          'Пока отчёта нет, pr-policy красный — так и задумано.',
       ];
     }
     return [

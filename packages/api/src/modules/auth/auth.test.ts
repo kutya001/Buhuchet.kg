@@ -17,7 +17,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
-import { cookieOf, createTestDeps, signIn, TEST_ORIGIN as ORIGIN } from '../../testing';
+import {
+  cookieOf,
+  createRaceApp,
+  createTestDeps,
+  signIn,
+  TEST_ORIGIN as ORIGIN,
+} from '../../testing';
 
 const { auditLog, employees, loginAttempts, organizations, sessions, users } = schema;
 
@@ -291,9 +297,11 @@ describe.skipIf(!databaseAvailable())('вход, сеансы и проверк�
   });
 
   it('одновременные неверные пароли: проверяются только пять, остальным — «вход закрыт»', async () => {
+    // Свой пул из нескольких соединений: на пуле из одного попытки шли бы по очереди, без гонки.
+    const wide = createRaceApp(t.appUrl, deps);
     const results = await Promise.all(
-      Array.from({ length: 20 }, (_, i) => login(app, 'race-a', `неверный-${i}`)),
-    );
+      Array.from({ length: 20 }, (_, i) => login(wide.app, 'race-a', `неверный-${i}`)),
+    ).finally(() => wide.close());
     const statuses = results.map((r) => r.status);
     expect(statuses.filter((s) => s === 401)).toHaveLength(4);
     expect(statuses.filter((s) => s === 429)).toHaveLength(16);

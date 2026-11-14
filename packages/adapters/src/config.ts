@@ -342,6 +342,11 @@ export function hasDatabaseEnv(env: Env = process.env): boolean {
   return Boolean(env.DATABASE_URL && env.DATABASE_ADMIN_URL);
 }
 
+/** Тесты идут в GitHub Actions (`CI=true`): там у тестов API пул из одного соединения (п. О-53). */
+export function runningInCi(env: Env = process.env): boolean {
+  return env.CI === 'true';
+}
+
 /** В CI интеграционные тесты обязательны: без окружения они падают, а не пропускаются. */
 export function integrationTestsRequired(env: Env = process.env): boolean {
   return env.REQUIRE_INTEGRATION_TESTS === '1';
