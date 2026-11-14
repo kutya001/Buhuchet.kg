@@ -138,7 +138,10 @@ jobs:
     name: docker-e2e
     needs: scope
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Предел шага сквозных тестов меньше предела задачи: зависший прогон обрывается шагом, а не
+    # всей задачей, и шаги журналов ниже успевают выполниться (сбой 13.11.2026, docs/decisions.md п. О-46).
+    # Сквозных тестов после доработок 13.11 стало больше (около 45 минут), отсюда 65 и 75 минут.
+    timeout-minutes: 75
     steps:
       - name: Короткий путь — сквозные тесты не нужны
         if: needs.scope.outputs.landing_only == 'true'
@@ -169,14 +172,22 @@ jobs:
         if: needs.scope.outputs.landing_only != 'true'
       - name: Сквозные тесты на ПК и телефоне
         if: needs.scope.outputs.landing_only != 'true'
+        timeout-minutes: 65
         run: pnpm test:e2e
         env:
           E2E_BASE_URL: http://localhost:3000
+      # Журналы — и при падении, и при отмене: зависший прогон без них не разобрать.
+      - name: Соединения базы (кто чего ждёт)
+        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        timeout-minutes: 2
+        run: |
+          docker compose exec -T postgres psql -U postgres -d buhuchet -c "select pid, usename, application_name, state, wait_event_type, wait_event, now() - xact_start as in_tx, now() - state_change as in_state, left(query, 200) as query from pg_stat_activity where datname = 'buhuchet' order by xact_start nulls last" || true
       - name: Журналы контейнеров
-        if: failure()
-        run: docker compose --profile app logs --no-color --tail=200
+        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
+        timeout-minutes: 3
+        run: docker compose --profile app logs --no-color --timestamps --tail=500 || true
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure()
+        if: (failure() || cancelled()) && needs.scope.outputs.landing_only != 'true'
         with:
           name: playwright-report
           path: playwright-report/
