@@ -460,17 +460,23 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect((await policy(acc)).weekDay).toBe(5);
       expect((await policy(ownerB)).weekDay).toBe(1);
       const [history] = await f.t.admin.db
-        .select({ changes: auditLog.changes })
+        .select({ changes: auditLog.changes, by: auditLog.actorUserId })
         .from(auditLog)
         .where(and(eq(auditLog.entity, 'org_settings'), eq(auditLog.entityId, f.a.orgId)))
         .orderBy(desc(auditLog.id))
         .limit(1);
       expect(history?.changes).toEqual([{ field: 'weekDay', from: 1, to: 5 }]);
       const rows = await f.t.admin.db
-        .select({ orgId: orgTelegramNotices.orgId, weekday: orgTelegramNotices.weekday })
+        .select({
+          orgId: orgTelegramNotices.orgId,
+          weekday: orgTelegramNotices.weekday,
+          by: orgTelegramNotices.updatedBy,
+        })
         .from(orgTelegramNotices)
         .where(eq(orgTelegramNotices.code, 'staff_week'));
-      expect(rows).toEqual([{ orgId: f.a.orgId, weekday: 5 }]);
+      // Автор строки — владелец, который сохранил (и при первой записи).
+      expect(history?.by).toBeTruthy();
+      expect(rows).toEqual([{ orgId: f.a.orgId, weekday: 5, by: history?.by }]);
 
       // Тот же день — без новой версии; устаревшая версия — 409, день не меняется.
       const same = await patchPolicy({ weekDay: 5 });

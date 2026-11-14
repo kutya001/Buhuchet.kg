@@ -113,6 +113,15 @@ describe('карточка организации: «История»', () => {
         entry({ entity: 'org_settings', changes: [{ field: 'weekDay', from: 1, to: 5 }] }),
       ),
     ).toBe('Недельная сводка: понедельник → пятница');
+    expect(
+      orgHistoryText(
+        t,
+        entry({
+          entity: 'org_settings',
+          changes: [{ field: 'overdueRepeat', from: false, to: true }],
+        }),
+      ),
+    ).toBe('Повторять напоминание при просрочке каждый день: включено');
   });
 
   it('«Действия из Telegram»: включены и выключены; другие поля той же записи не теряются', () => {

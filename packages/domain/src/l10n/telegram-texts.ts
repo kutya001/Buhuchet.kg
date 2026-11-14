@@ -385,6 +385,10 @@ export const TELEGRAM_TEXTS = {
   'org.history.tg_group_summary_off': { ru: 'выключена', section: G },
   'org.history.digest_time': { ru: 'Час напоминаний: {from} → {to}', section: G },
   'org.history.week_day': { ru: 'Недельная сводка: {from} → {to}', section: G },
+  'org.history.overdue_repeat': {
+    ru: 'Повторять напоминание при просрочке каждый день: {state}',
+    section: G,
+  },
   'err.telegram_off': {
     ru: 'Напоминания в Telegram выключены в учётной политике',
     section: 'Ошибки',

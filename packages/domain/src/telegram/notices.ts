@@ -1,4 +1,4 @@
-import { weekdayMondayFirst, type IsoDate } from '../common/dates';
+import { addDays, weekdayMondayFirst, type IsoDate } from '../common/dates';
 
 /**
  * Блок «Telegram-уведомления» в «Моя организация» → «Настройки» (пакет 14.11.2026, блок 3; прототип v111
@@ -23,6 +23,16 @@ export function weekDayOf(value: number | null | undefined): WeekDay {
 /** Сегодня — день недельной сводки организации. */
 export function isWeekSummaryDay(day: IsoDate, weekDay: number): boolean {
   return weekdayMondayFirst(day) === weekDayOf(weekDay) - 1;
+}
+
+/**
+ * Неделя сводки, как `weekRange` прототипа: с понедельника по воскресенье недели дня сводки, а в субботу
+ * и воскресенье — следующая неделя. В понедельник — те же семь дней с этого дня, что и раньше.
+ */
+export function summaryWeek(day: IsoDate): { from: IsoDate; to: IsoDate } {
+  const wd = weekdayMondayFirst(day);
+  const monday = addDays(day, wd >= 5 ? 7 - wd : -wd);
+  return { from: monday, to: addDays(monday, 6) };
 }
 
 /** Сообщения контрагентам «К оплате» и о долге уходят в 10:00 по Бишкеку (этап 1 — как было). */

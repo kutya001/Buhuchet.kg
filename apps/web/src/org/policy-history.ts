@@ -110,6 +110,9 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
             }),
           ]
         : [];
+    // «Повторять напоминание при просрочке каждый день: включено» (прототип v111 `tgnMount`).
+    case 'overdueRepeat':
+      return [t('org.history.overdue_repeat', { state: state(change.to) })];
     case 'weekDay':
       return [
         t('org.history.week_day', {

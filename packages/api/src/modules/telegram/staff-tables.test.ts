@@ -592,7 +592,9 @@ describe.skipIf(!databaseAvailable())(
       await f.t.admin.db
         .insert(notices)
         .values({ orgId: f.a.orgId, code: 'staff_week', weekday: 2 });
-      expect(await weekOf(f.a.ownerUserId)).not.toBeNull();
+      const tuesday = await weekOf(f.a.ownerUserId);
+      // Неделя сводки — как в прототипе: неделя дня сводки (вторник 20.10 — неделя 19.10–25.10).
+      expect(JSON.stringify(tuesday)).toContain('🗓 Неделя 19.10–25.10');
       clock.set('2026-10-19T03:00:00Z');
       expect(await weekOf(f.a.ownerUserId)).toBeNull();
       // Строки нет (организации, которые день не меняли) — по понедельникам, как раньше.

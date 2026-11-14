@@ -1,5 +1,5 @@
 import { weekDayOf, type WeekDay } from '@buhuchet/domain';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from './client';
 import { orgTelegramNotices } from './schema';
 
@@ -13,12 +13,20 @@ import { orgTelegramNotices } from './schema';
 /** Код строки недельной сводки сотрудникам. */
 export const STAFF_WEEK_NOTICE = 'staff_week';
 
-/** День недельной сводки организации из контекста; строки нет — понедельник, как было. */
+/**
+ * День недельной сводки организации из контекста (`app.current_org_id()`, кроме RLS — и условием
+ * запроса); строки нет — понедельник, как было.
+ */
 export async function staffWeekDay(tx: Tx): Promise<WeekDay> {
   const [row] = await tx
     .select({ weekday: orgTelegramNotices.weekday })
     .from(orgTelegramNotices)
-    .where(eq(orgTelegramNotices.code, STAFF_WEEK_NOTICE));
+    .where(
+      and(
+        eq(orgTelegramNotices.orgId, sql`app.current_org_id()`),
+        eq(orgTelegramNotices.code, STAFF_WEEK_NOTICE),
+      ),
+    );
   return weekDayOf(row?.weekday);
 }
 
@@ -30,7 +38,12 @@ export async function staffWeekDay(tx: Tx): Promise<WeekDay> {
 export async function setStaffWeekDay(tx: Tx, orgId: string, weekDay: WeekDay): Promise<void> {
   await tx
     .insert(orgTelegramNotices)
-    .values({ orgId, code: STAFF_WEEK_NOTICE, weekday: weekDay })
+    .values({
+      orgId,
+      code: STAFF_WEEK_NOTICE,
+      weekday: weekDay,
+      updatedBy: sql`app.current_user_id()`,
+    })
     .onConflictDoUpdate({
       target: [orgTelegramNotices.orgId, orgTelegramNotices.code],
       set: {
