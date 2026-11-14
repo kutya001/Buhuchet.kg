@@ -53,7 +53,8 @@ import type { PublicPageBody } from '@buhuchet/shared';
  * строки состояния считаются только по показанным разделам.
  */
 
-type Body = Omit<PublicPageBody, 'asOf' | 'contractor' | 'org' | 'sections'>;
+// Раздел «Telegram» (задача К3) добавляет обработчик страницы: ему нужен подключённый бот.
+type Body = Omit<PublicPageBody, 'asOf' | 'contractor' | 'org' | 'sections' | 'telegram'>;
 
 /** Разделы страницы и телефон организации для шапки «Ваш бухгалтер» и «Контактов». */
 export type ContractorPageBody = Body & { orgPhone: PublicPageBody['org']['phone'] };

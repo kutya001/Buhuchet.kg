@@ -2,6 +2,7 @@ import { hashSessionToken, isSessionTokenShape, newSessionToken } from '@buhuche
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorPageHeader,
+  contractorTelegramCounts,
   contractorPageOrg,
   contractorPageState,
   getContractorPage,
@@ -14,6 +15,7 @@ import {
 } from '@buhuchet/db';
 import {
   bishkekDate,
+  CP_TG_MAX,
   filePreviewKind,
   isPageAddress,
   pageDevice,
@@ -155,7 +157,12 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
         getContractorPage(tx, contractorId),
       ]);
       if (!header || !org || !own) return null;
-      const sections = pageVisibleSections(org.pageSections, org.features, own.hiddenSections);
+      // Раздел «Telegram» есть, только когда бот подключён (задача К3).
+      const sections = pageVisibleSections(
+        org.pageSections,
+        org.features,
+        own.hiddenSections,
+      ).filter((s) => s !== 'tg' || (!!deps.telegram && !!deps.config.TELEGRAM_BOT_USERNAME));
       const body = await contractorPageBody(tx, {
         orgId,
         contractorId,
@@ -166,6 +173,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
       });
       if (!body) return null;
       await writeContractorPageOpen(tx, contractorId, device);
+      const tg = sections.includes('tg') ? await contractorTelegramCounts(tx, contractorId) : null;
       const { orgPhone, ...rest } = body;
       return {
         ...rest,
@@ -177,6 +185,7 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
           phone: orgPhone,
         },
         sections,
+        telegram: tg && { ...tg, full: tg.on + tg.wait >= CP_TG_MAX },
       };
     });
     if (!page) return c.json({ state: 'unavailable' } as PublicPageBody, 200);

@@ -1,4 +1,6 @@
 import {
+  CP_TG_ACTIONS,
+  CP_TG_STATUSES,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   PAGE_FILE_CATEGORIES,
@@ -265,6 +267,57 @@ export const PageContacts = z.object({
 const PageTipIdSchema = z.enum(Object.keys(PAGE_TIPS) as [PageTipId, ...PageTipId[]]);
 
 /**
+ * Раздел «Telegram» страницы (прототип v92 pgTgPub): только числа — имён подключённых Telegram
+ * страница не показывает (её открывают по коду, имена видит только организация). `full` — мест нет.
+ */
+export const PageTelegram = z.object({
+  on: z.number().int().nonnegative(),
+  wait: z.number().int().nonnegative(),
+  full: z.boolean(),
+});
+export type PageTelegram = z.infer<typeof PageTelegram>;
+
+/** «Подключить Telegram»: одноразовая ссылка на бота (24 часа) — только адрес t.me с ключом страницы. */
+export const PublicPageTelegramLink = z.object({
+  url: z.string().regex(/^https:\/\/t\.me\/[A-Za-z0-9_]{3,64}\?start=cp_[A-Za-z0-9_-]{43}$/),
+});
+
+/** Строка списка «Telegram контрагента» в карточке (прототип pgTgBox). Номера чата в ответе нет. */
+export const ContractorTelegramItem = z.object({
+  id: Uuid,
+  name: z.string(),
+  status: z.enum(CP_TG_STATUSES),
+  requestedAt: z.iso.datetime(),
+  decidedAt: z.iso.datetime().nullable(),
+  /** Краткое ФИО сотрудника, который решил; null — решил сам контрагент или решения ещё нет. */
+  decidedBy: z.string().nullable(),
+  byClient: z.boolean(),
+  version: RecordVersion,
+});
+export type ContractorTelegramItem = z.infer<typeof ContractorTelegramItem>;
+
+/** Список «Telegram контрагента» блока «Страница контрагента» карточки. */
+export const ContractorTelegram = z.object({
+  /** Название контрагента — для окон подтверждения. */
+  contractor: z.string(),
+  /** Раздел «Telegram» включён: страница включена, раздел не скрыт, бот подключён. */
+  sectionOn: z.boolean(),
+  items: z.array(ContractorTelegramItem),
+  on: z.number().int().nonnegative(),
+  wait: z.number().int().nonnegative(),
+  max: z.number().int().positive(),
+  /** Подтвердить, отклонить, отключить — и почему нельзя (нет права). */
+  manage: z.literal('page_manage_right').nullable(),
+});
+export type ContractorTelegram = z.infer<typeof ContractorTelegram>;
+
+/** Решение сотрудника по строке: подтвердить, отклонить, отключить — с версией строки. */
+export const ContractorTelegramDecisionInput = z.object({
+  action: z.enum(CP_TG_ACTIONS),
+  version: RecordVersion,
+});
+
+/**
  * Открытая страница (прототип pubBody): шапка, строка состояния, «Главное», «Ваш бухгалтер» — всегда;
  * содержимое остальных разделов приходит, только если раздел показан (ТЗ «Разделы, скрытые в учётной
  * политике или в карточке контрагента, сервер не передаёт на страницу вовсе»), иначе — null.
@@ -296,6 +349,8 @@ export const PublicPageBody = z.object({
   fee: PageFee.nullable(),
   kpi: PageKpi.nullable(),
   contacts: PageContacts.nullable(),
+  /** Раздел «Telegram»; только при показанном разделе и подключённом боте. */
+  telegram: PageTelegram.nullable(),
   /** Пояснения страницы из «Текстов элементов экрана» (группа → подпись → текст). */
   /** Пояснения «ⓘ» по обозначениям страницы (PAGE_TIPS). */
   texts: z.partialRecord(PageTipIdSchema, z.string()),

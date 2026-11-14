@@ -312,6 +312,7 @@ export const PAGE_TIPS = {
   'secs.fee': ['secs', 'Оплата за обслуживание'],
   'secs.kpi': ['secs', 'Показатели'],
   'secs.contacts': ['secs', 'Контакты'],
+  'secs.tg': ['secs', 'Telegram'],
   'state.ok': ['state', 'Всё в порядке'],
   'state.attention': ['state', 'Нужно внимание'],
   'main.reports': ['main', 'Отчёты'],

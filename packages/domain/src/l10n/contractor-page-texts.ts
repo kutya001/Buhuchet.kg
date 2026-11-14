@@ -1,4 +1,5 @@
 import { PAGE_MESSAGES } from '../contractor-page/page';
+import { CP_TG_MESSAGES } from '../contractor-page/telegram';
 import type { UiTextDefault } from './texts';
 
 const S = 'Страница контрагента';
@@ -126,6 +127,53 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.hist.shown': { ru: 'Страница контрагента: раздел «{section}» показывается', section: S },
   'cppage.hist.hidden': { ru: 'Страница контрагента: раздел «{section}» скрыт', section: S },
   'cppage.hist.client': { ru: 'Контрагент', section: S },
+  // Telegram контрагента (доработки 13.11.2026, задача К3; прототип v92 modules/cp-telegram.js, pgTgBox).
+  'cppage.tg.title': { ru: 'Telegram контрагента', section: S },
+  'cppage.tg.wait': { ru: 'ждёт подтверждения: {n}', section: S },
+  'cppage.tg.count': { ru: 'подключено {n} из {max}', section: S },
+  'cppage.tg.col.name': { ru: 'Имя в Telegram', section: S },
+  'cppage.tg.col.at': { ru: 'Запрос', section: S },
+  'cppage.tg.col.status': { ru: 'Статус', section: S },
+  'cppage.tg.status.wait': { ru: 'Ждёт подтверждения', section: S },
+  'cppage.tg.status.on': { ru: 'Подключён', section: S },
+  'cppage.tg.status.no': { ru: 'Отклонён', section: S },
+  'cppage.tg.status.off': { ru: 'Отключён', section: S },
+  'cppage.tg.by_client': { ru: 'контрагент', section: S },
+  'cppage.tg.btn.approve': { ru: 'Подтвердить', section: S },
+  'cppage.tg.btn.reject': { ru: 'Отклонить', section: S },
+  'cppage.tg.btn.unlink': { ru: 'Отключить', section: S },
+  'cppage.tg.empty': {
+    ru: 'Контрагент ещё не подключал Telegram. Кнопка «Подключить Telegram» — на его странице, в разделе «Telegram».',
+    section: S,
+  },
+  'cppage.tg.hint': {
+    ru: 'Подключённый Telegram получает суммы налогов к оплате и напоминания о долге — только по этому контрагенту. Подтверждайте запрос, только если знаете, чей это Telegram.',
+    section: S,
+  },
+  'cppage.tg.approve.title': { ru: 'Подтвердить Telegram контрагента?', section: S },
+  'cppage.tg.approve.text': {
+    ru: '«{name}» будет получать в Telegram суммы налогов к оплате и напоминания по контрагенту «{contractor}». Подтверждайте, только если знаете, что это Telegram вашего клиента.',
+    section: S,
+  },
+  'cppage.tg.unlink.title': { ru: 'Отключить Telegram контрагента?', section: S },
+  'cppage.tg.unlink.text': {
+    ru: '«{name}» перестанет получать сообщения по контрагенту «{contractor}». Подключиться снова клиент сможет на своей странице — с новым подтверждением.',
+    section: S,
+  },
+  'cppage.tg.toast.approve': { ru: 'Telegram «{name}» подключён', section: S },
+  'cppage.tg.toast.reject': { ru: 'Запрос отклонён', section: S },
+  'cppage.tg.toast.unlink': { ru: 'Telegram «{name}» отключён', section: S },
+  'cppage.hist.page_tg_request': {
+    ru: 'Telegram контрагента: запрос на подключение от «{name}»',
+    section: S,
+  },
+  'cppage.hist.page_tg_on': { ru: 'Telegram контрагента «{name}»: подключён', section: S },
+  'cppage.hist.page_tg_no': { ru: 'Telegram контрагента «{name}»: запрос отклонён', section: S },
+  'cppage.hist.page_tg_off': { ru: 'Telegram контрагента «{name}»: отключён', section: S },
+  'cppage.hist.page_tg_leave': {
+    ru: 'Telegram контрагента «{name}»: отключён контрагентом',
+    section: S,
+  },
   // Страница без входа (прототип pubDraw).
   'pub.meta_title': { ru: 'Страница контрагента', section: S },
   'pub.unavailable.title': { ru: 'Страница недоступна', section: S },
@@ -174,6 +222,18 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.sec.fee': { ru: 'Оплата за обслуживание', section: S },
   'pub.sec.kpi': { ru: 'Показатели', section: S },
   'pub.sec.contacts': { ru: 'Контакты', section: S },
+  // Раздел «Telegram» (прототип pgTgPub).
+  'pub.sec.tg': { ru: 'Telegram', section: S },
+  'pub.tg.sum.on': { ru: 'подключено {n}', section: S },
+  'pub.tg.sum.wait': { ru: 'ждёт подтверждения', section: S },
+  'pub.tg.text': { ru: 'Получайте в Telegram суммы налогов к оплате и напоминания.', section: S },
+  'pub.tg.on': { ru: 'подключено: {n}', section: S },
+  'pub.tg.wait': { ru: 'ждёт подтверждения бухгалтера: {n}', section: S },
+  'pub.tg.connect': { ru: 'Подключить Telegram', section: S },
+  'pub.tg.hint': {
+    ru: 'Кнопка откроет бота Buhuchet.kg в Telegram — нажмите в нём «Старт». Подключение подтверждает ваш бухгалтер. Ссылка действует {hours} часа и только один раз. Отключиться можно в любой момент командой «Отключить» в боте.',
+    section: S,
+  },
   'pub.late.one': { ru: 'просрочен {n}', section: S },
   'pub.late.few': { ru: 'просрочено {n}', section: S },
   'pub.late.many': { ru: 'просрочено {n}', section: S },
@@ -332,4 +392,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.page_locked': { ru: 'Ввод кода временно закрыт', section: E },
   'err.page_ip_locked': { ru: 'Ввод кода временно закрыт', section: E },
   'err.page_closed': { ru: 'Страница закрыта', section: E },
+  'err.cp_tg_done': { ru: CP_TG_MESSAGES.cp_tg_done, section: E },
+  'err.cp_tg_not_on': { ru: CP_TG_MESSAGES.cp_tg_not_on, section: E },
+  'err.cp_tg_limit': { ru: CP_TG_MESSAGES.cp_tg_limit, section: E },
+  'err.cp_tg_section_off': { ru: CP_TG_MESSAGES.cp_tg_section_off, section: E },
+  'err.cp_tg_full': { ru: CP_TG_MESSAGES.cp_tg_full, section: E },
+  'err.cp_tg_link_limit': { ru: CP_TG_MESSAGES.cp_tg_link_limit, section: E },
 } as const satisfies Record<string, UiTextDefault>;

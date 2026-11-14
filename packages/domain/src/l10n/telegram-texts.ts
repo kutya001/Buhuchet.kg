@@ -39,6 +39,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.relink_code': { ru: 'Код замены Telegram', section: S },
   'telegram.kind.page_closed': { ru: 'Страница контрагента закрыта', section: S },
   'telegram.kind.bot_test': { ru: 'Проверка бота', section: S },
+  'telegram.kind.cp_tg_request': { ru: 'Telegram контрагента', section: S },
   'profile.notify': { ru: 'Уведомления в Telegram', section: P },
   'profile.notify.modes': { ru: 'Какие уведомления получать', section: P },
   'profile.notify.mode.all': { ru: 'Все', section: P },

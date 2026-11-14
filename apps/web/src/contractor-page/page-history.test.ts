@@ -47,6 +47,22 @@ describe('pageHistoryText', () => {
     );
   });
 
+  it('Telegram контрагента — строками прототипа v92 с именем в Telegram', () => {
+    const text = (action: string, from: string | null, to: string | null) =>
+      pageHistoryText(t, { action, changes: [{ field: 'telegram', from, to }] });
+    expect(text('page_tg_request', null, '@aibek')).toBe(
+      'Telegram контрагента: запрос на подключение от «@aibek»',
+    );
+    expect(text('page_tg_on', null, '@aibek')).toBe('Telegram контрагента «@aibek»: подключён');
+    expect(text('page_tg_no', null, '@aibek')).toBe(
+      'Telegram контрагента «@aibek»: запрос отклонён',
+    );
+    expect(text('page_tg_off', '@aibek', null)).toBe('Telegram контрагента «@aibek»: отключён');
+    expect(text('page_tg_leave', '@aibek', null)).toBe(
+      'Telegram контрагента «@aibek»: отключён контрагентом',
+    );
+  });
+
   it('открытие и перерыв делает контрагент', () => {
     expect(pageHistoryActor(t, null)).toBe('Контрагент');
     expect(pageHistoryActor(t, 'Иванова А.')).toBe('Иванова А.');

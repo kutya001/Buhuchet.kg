@@ -45,6 +45,7 @@ export type DemoKind =
   | 'user'
   | 'role'
   | 'contractor'
+  | 'contractor_telegram'
   | 'tariff'
   | 'assignment'
   | 'report'

@@ -38,6 +38,8 @@ export const OUTBOX_KINDS = [
   'page_closed',
   // «Проверить бота» в «Мой профиль»: сообщение с таблицей и кнопкой (поток Т, задача Т1).
   'bot_test',
+  // Telegram контрагента (прототип v92): запрос на подключение — ответственному сотруднику.
+  'cp_tg_request',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 

@@ -26,6 +26,14 @@ import {
   publicPageHandler,
   publicPageRoute,
 } from './public';
+import {
+  decidePageTelegramHandler,
+  decidePageTelegramRoute,
+  getPageTelegramHandler,
+  getPageTelegramRoute,
+  publicPageTelegramHandler,
+  publicPageTelegramRoute,
+} from './telegram';
 
 /**
  * Модуль «Страница контрагента по ссылке» (задача 2.42): блок карточки — включить, выключить, сменить
@@ -33,17 +41,23 @@ import {
  * показать по ссылке и ввод кода; разделы самой страницы и файлы отчётов с неё (задача 2.43).
  */
 export function contractorPageModule(deps: ApiDeps) {
-  return createModuleApp()
-    .openapi(getPageRoute, getPageHandler(deps))
-    .openapi(enablePageRoute, enablePageHandler(deps))
-    .openapi(disablePageRoute, disablePageHandler(deps))
-    .openapi(changePageCodeRoute, changePageCodeHandler(deps))
-    .openapi(pageSectionsRoute, pageSectionsHandler(deps))
-    .openapi(pageCopiedRoute, pageLogHandler(deps, 'page_copy'))
-    .openapi(pageCodeCopiedRoute, pageLogHandler(deps, 'page_code_copy'))
-    .openapi(pageSentRoute, pageLogHandler(deps, 'page_send'))
-    .openapi(enablePagesRoute, enablePagesHandler(deps))
-    .openapi(publicPageRoute, publicPageHandler(deps))
-    .openapi(publicPageCodeRoute, publicPageCodeHandler(deps))
-    .openapi(publicPageFileRoute, publicPageFileHandler(deps));
+  return (
+    createModuleApp()
+      .openapi(getPageRoute, getPageHandler(deps))
+      .openapi(enablePageRoute, enablePageHandler(deps))
+      .openapi(disablePageRoute, disablePageHandler(deps))
+      .openapi(changePageCodeRoute, changePageCodeHandler(deps))
+      .openapi(pageSectionsRoute, pageSectionsHandler(deps))
+      .openapi(pageCopiedRoute, pageLogHandler(deps, 'page_copy'))
+      .openapi(pageCodeCopiedRoute, pageLogHandler(deps, 'page_code_copy'))
+      .openapi(pageSentRoute, pageLogHandler(deps, 'page_send'))
+      .openapi(enablePagesRoute, enablePagesHandler(deps))
+      .openapi(publicPageRoute, publicPageHandler(deps))
+      .openapi(publicPageCodeRoute, publicPageCodeHandler(deps))
+      .openapi(publicPageFileRoute, publicPageFileHandler(deps))
+      // Telegram контрагента (задача К3): список и решения в карточке, ссылка на бота со страницы.
+      .openapi(getPageTelegramRoute, getPageTelegramHandler(deps))
+      .openapi(decidePageTelegramRoute, decidePageTelegramHandler(deps))
+      .openapi(publicPageTelegramRoute, publicPageTelegramHandler(deps))
+  );
 }
