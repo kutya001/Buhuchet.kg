@@ -57,6 +57,7 @@ export * from './contractor-page/page';
 export * from './contractor-page/view';
 export * from './contractor-page/files';
 export * from './contractor-page/telegram';
+export * from './contractor-page/telegram-debt';
 export * from './contractor-page/telegram-pay';
 export * from './reports/periods';
 export * from './reports/due';

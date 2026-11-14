@@ -206,6 +206,7 @@ async function insertOrganization(
     overdueRepeat: policy.overdueRepeat,
     telegramActions: policy.telegramActions,
     cpTgPay: policy.cpTgPay,
+    cpTgDebt: policy.cpTgDebt,
     digestTime: policy.digestTime,
     timezone: policy.timezone,
     confirmWaitDays: policy.confirmWaitDays,

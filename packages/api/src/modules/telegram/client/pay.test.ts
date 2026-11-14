@@ -1,4 +1,4 @@
-import { parseCron, type FakeTelegram } from '@buhuchet/adapters';
+import { fixedClock, parseCron, type FakeTelegram } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
@@ -18,7 +18,7 @@ import {
   ContractorTelegram,
   PublicPageTelegramLink,
 } from '@buhuchet/shared';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   apiRequest,
@@ -31,6 +31,7 @@ import {
   TEST_ORIGIN,
   TEST_PASSWORD,
 } from '../../../testing';
+import { contractorDebtJob } from './debt';
 import { contractorPayJob } from './pay';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
@@ -1081,6 +1082,546 @@ describe.skipIf(!databaseAvailable())(
         await autoPay(f.a.orgId, false);
         await autoPay(f.b.orgId, false);
       }
+    });
+
+    /*
+     * Напоминание клиенту о долге (доработки 13.11.2026, задача К5; прототип v94 cp-telegram.js:
+     * pgDebt, pgDebtTo, pgDebtMsg, tgAct('cp-nodebt')). Сегодня в тестах — воскресенье 18.10.2026;
+     * задача напоминаний запускается с часами понедельника 19.10 и вторника 20.10.
+     */
+    describe('напоминание о долге (К5)', () => {
+      const MONDAY = '2026-10-19T04:00:00Z';
+      const TUESDAY = '2026-10-20T04:00:00Z';
+      const WEEK = '2026-10-19';
+      /** Недостача на налоги октября: остаток НДС и патент — денег от контрагента нет. */
+      const SHORT = TOTAL;
+      /** Долг за обслуживание: 3 000 сом в месяц с июля, срок оплаты октября (10-е) прошёл. */
+      const FEE = 4 * 300_000;
+      const FEE_REQUISITE_PART = '0555 987 654';
+      const noDebtData = botPressData('cpNoDebt');
+
+      const runDebt = (now = MONDAY) =>
+        contractorDebtJob.run({ ...f.deps, clock: fixedClock(now) }, new Date(now));
+      const orgDebt = (orgId: string, on: boolean) =>
+        f.t.admin.db
+          .update(schema.orgSettings)
+          .set({ cpTgDebt: on })
+          .where(eq(schema.orgSettings.orgId, orgId));
+      const hide = (cp: string, sections: string[]) =>
+        f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ hiddenSections: sections })
+          .where(eq(schema.contractorPages.contractorId, cp));
+      const debtHistory = async (contractorId: string) =>
+        (
+          await f.t.admin.db
+            .select({
+              action: schema.auditLog.action,
+              userId: schema.auditLog.actorUserId,
+              changes: schema.auditLog.changes,
+            })
+            .from(schema.auditLog)
+            .where(
+              and(
+                eq(schema.auditLog.contractorId, contractorId),
+                eq(schema.auditLog.entity, 'contractor_page'),
+              ),
+            )
+            .orderBy(asc(schema.auditLog.at), asc(schema.auditLog.id))
+        ).filter((h) => ['page_tg_nodebt', 'page_tg_debt_on'].includes(h.action));
+      const card = async (cookie: string, cp: string) => {
+        const res = await call(cookie, 'GET', `/api/contractors/${cp}/page/telegram`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        return ContractorTelegram.parse(await res.json());
+      };
+      const toggle = (cookie: string | undefined, cp: string, on: unknown, version: unknown) =>
+        call(cookie, 'POST', `/api/contractors/${cp}/page/telegram/debt`, { on, version });
+
+      beforeAll(async () => {
+        // Начисления идут с месяца создания контрагента: в тестах часы стоят на октябре 2026,
+        // поэтому контрагент «создан» в июне — иначе долга за обслуживание нет.
+        await f.t.admin.db
+          .update(schema.contractors)
+          .set({ createdAt: new Date('2026-06-20T10:00:00+06:00') })
+          .where(eq(schema.contractors.id, cpA));
+        await f.t.admin.db.insert(schema.contractorTariffs).values({
+          orgId: f.a.orgId,
+          contractorId: cpA,
+          amount: 300_000,
+          period: 'M',
+          validFrom: '2026-07-01',
+        });
+        // Основной счёт организации для платы за обслуживание.
+        const account = await call(owner, 'POST', '/api/org/accounts', {
+          kind: 'phone',
+          bankCode: null,
+          accountNo: null,
+          bik: null,
+          phone: '+996555987654',
+          phoneBanks: [MBANK],
+          holderName: 'Организация А',
+          purpose: 'fee',
+          mainTax: false,
+          mainFee: true,
+        });
+        expect(account.status, await account.clone().text()).toBe(200);
+      });
+
+      beforeEach(async () => {
+        await f.t.admin.db.execute(
+          sql`delete from audit_log where action in ('page_tg_nodebt', 'page_tg_debt_on')`,
+        );
+        await f.t.admin.db.update(schema.contractorTelegramLinks).set({ noDebt: false });
+        await f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ tgDebtOff: false, hiddenSections: [] });
+        await orgDebt(f.a.orgId, true);
+        await orgDebt(f.b.orgId, false);
+      });
+
+      afterAll(async () => {
+        await orgDebt(f.a.orgId, false);
+        await f.t.admin.db
+          .delete(schema.contractorTariffs)
+          .where(eq(schema.contractorTariffs.contractorId, cpA));
+      });
+
+      it('в понедельник в 10:00 — каждому подключённому: недостача на налоги и долг за обслуживание, реквизиты, «Не напоминать»', async () => {
+        await runDebt();
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_2]);
+        const message = tg.sent[0]!;
+        expect(message.text.split('\n').slice(0, 3)).toEqual([
+          'Напоминание об оплате',
+          'ОсОО «Ала-Тоо Трейд»',
+          text('tgCpDebt', { сумма: som(SHORT + FEE) }),
+        ]);
+        expect(message.text).toContain('Не хватает на налоги этого месяца');
+        expect(message.text).toContain('Долг за обслуживание');
+        const keyboard = message.options?.keyboard ?? [];
+        expect(keyboard.map((row) => row.map((b) => b.text))).toEqual([
+          [text('tgBtnCpReqTax')],
+          [text('tgBtnCpReqFee')],
+          [text('tgBtnCpNoDebt')],
+        ]);
+        expect(keyboard[0]![0]).toEqual({ text: text('tgBtnCpReqTax'), copy: REQUISITE });
+        expect(keyboard[1]![0]).toMatchObject({
+          copy: expect.stringContaining(FEE_REQUISITE_PART),
+        });
+        expect(keyboard[2]![0]).toEqual({ text: text('tgBtnCpNoDebt'), data: noDebtData });
+        // Повтор и догоняющий запуск второго напоминания за неделю не создают.
+        await runDebt();
+        await runDebt(TUESDAY);
+        expect(tg.sent).toHaveLength(2);
+        expect(
+          (await messages(cpA)).map((r) => [
+            r.chatId,
+            r.kind,
+            r.week,
+            r.total,
+            r.attempts,
+            r.sentBy,
+          ]),
+        ).toEqual([
+          [CLIENT_1, 'debt', WEEK, SHORT + FEE, 1, null],
+          [CLIENT_2, 'debt', WEEK, SHORT + FEE, 1, null],
+        ]);
+        // Сотрудникам и организации Б (у неё напоминания выключены) ничего не ушло.
+        expect(await messages(cpB)).toEqual([]);
+        // Следующий понедельник — новое напоминание.
+        await runDebt('2026-10-26T04:00:00Z');
+        expect(tg.sent).toHaveLength(4);
+      });
+
+      it('задача идёт каждый день в 10:00 по Бишкеку; не в понедельник новых напоминаний нет', async () => {
+        // Расписания задач читаются по времени Бишкека (UTC+6).
+        const schedule = parseCron(contractorDebtJob.cron);
+        expect(schedule.matches(new Date('2026-10-19T04:00:00Z'))).toBe(true);
+        expect(schedule.matches(new Date('2026-10-20T04:00:00Z'))).toBe(true);
+        expect(schedule.matches(new Date('2026-10-19T10:00:00Z'))).toBe(false);
+        for (const day of ['2026-10-18T04:00:00Z', TUESDAY, '2026-10-24T04:00:00Z']) {
+          await runDebt(day);
+        }
+        expect(tg.sent).toEqual([]);
+        expect(await messages(cpA)).toEqual([]);
+        // Запуск понедельника догоняется во вторник утром (исполнитель стоял): день недели берётся
+        // из расписания, а не по часам — напоминания этой недели создаются.
+        await contractorDebtJob.run(
+          { ...f.deps, clock: fixedClock('2026-10-20T02:00:00Z') },
+          new Date(MONDAY),
+        );
+        expect(tg.sent.map((m) => m.chatId).sort()).toEqual([CLIENT_1, CLIENT_2].sort());
+        expect((await messages(cpA)).map((r) => r.week)).toEqual([WEEK, WEEK]);
+      });
+
+      it('не ушедшее в понедельник повторяется в другие дни сегодняшним сообщением — до трёх попыток', async () => {
+        tg.failNext({
+          ok: false,
+          errorCode: 500,
+          description: 'Internal Server Error',
+          permanent: false,
+        });
+        await runDebt();
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_2]);
+        // За день патент оплатили: во вторник первому клиенту уходит уже меньший долг.
+        await f.t.admin.db
+          .update(schema.reports)
+          .set({ paid: 87_050 })
+          .where(eq(schema.reports.id, ids.pat!));
+        try {
+          await runDebt(TUESDAY);
+          expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_2, CLIENT_1]);
+          expect(tg.sent[1]!.text).toContain(
+            text('tgCpDebt', { сумма: som(SHORT - 87_050 + FEE) }),
+          );
+          expect((await messages(cpA)).map((r) => [r.chatId, r.total, r.attempts])).toEqual([
+            [CLIENT_1, SHORT - 87_050 + FEE, 2],
+            [CLIENT_2, SHORT + FEE, 1],
+          ]);
+          await runDebt(TUESDAY);
+          expect(tg.sent).toHaveLength(2);
+        } finally {
+          await f.t.admin.db
+            .update(schema.reports)
+            .set({ paid: 0 })
+            .where(eq(schema.reports.id, ids.pat!));
+        }
+      });
+
+      it('три выключателя: организация, сотрудник у контрагента, клиент у своего чата', async () => {
+        // Организация выключила.
+        await orgDebt(f.a.orgId, false);
+        await runDebt();
+        expect(tg.sent).toEqual([]);
+        await orgDebt(f.a.orgId, true);
+        // Сотрудник выключил у контрагента.
+        await f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ tgDebtOff: true })
+          .where(eq(schema.contractorPages.contractorId, cpA));
+        await runDebt();
+        expect(tg.sent).toEqual([]);
+        await f.t.admin.db.update(schema.contractorPages).set({ tgDebtOff: false });
+        // Клиент нажал «Не напоминать» — второму чату напоминание идёт.
+        await f.t.admin.db
+          .update(schema.contractorTelegramLinks)
+          .set({ noDebt: true })
+          .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_1));
+        await runDebt();
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_2]);
+      });
+
+      it('клиент получает только то, что видит на своей странице; без долга, функций и у заблокированной организации напоминаний нет', async () => {
+        const rows = () =>
+          tg.sent.map((m) => [
+            m.text.includes('Не хватает на налоги этого месяца'),
+            m.text.includes('Долг за обслуживание'),
+            (m.options?.keyboard ?? []).map((row) => row[0]!.text),
+          ]);
+        // Раздел «Оплата за обслуживание» скрыт — только недостача на налоги.
+        await hide(cpA, ['fee']);
+        await runDebt();
+        expect(rows()[0]).toEqual([true, false, [text('tgBtnCpReqTax'), text('tgBtnCpNoDebt')]]);
+        expect(tg.sent[0]!.text).toContain(text('tgCpDebt', { сумма: som(SHORT) }));
+        await wipe();
+        // «Деньги на налоги» скрыты — только долг за обслуживание.
+        await hide(cpA, ['money']);
+        await runDebt();
+        expect(rows()[0]).toEqual([false, true, [text('tgBtnCpReqFee'), text('tgBtnCpNoDebt')]]);
+        expect(tg.sent[0]!.text).toContain(text('tgCpDebt', { сумма: som(FEE) }));
+        await wipe();
+        // «Как оплатить» скрыт — реквизитов нет и в Telegram.
+        await hide(cpA, ['pay']);
+        await runDebt();
+        expect(rows()[0]).toEqual([true, true, [text('tgBtnCpNoDebt')]]);
+        expect(tg.sent[0]!.text).not.toContain('0555');
+        await wipe();
+        // Оба раздела скрыты, раздел «Telegram» скрыт — напоминаний нет.
+        for (const sections of [['fee', 'money'], ['tg']]) {
+          await hide(cpA, sections);
+          await runDebt();
+          expect(tg.sent).toEqual([]);
+        }
+        await hide(cpA, []);
+        // Функции организации: без «Платы за обслуживание» — только налоги; без обеих — ничего.
+        await features(f.a.orgId, { cppage: true, telegram: true, taxpay: true });
+        await runDebt();
+        expect(rows()[0]).toEqual([true, false, [text('tgBtnCpReqTax'), text('tgBtnCpNoDebt')]]);
+        await wipe();
+        const partly: Record<string, boolean>[] = [
+          { cppage: true, telegram: true },
+          { cppage: true, taxpay: true, fee: true },
+          { telegram: true, taxpay: true, fee: true },
+        ];
+        for (const off of partly) {
+          await features(f.a.orgId, off);
+          await runDebt();
+          expect(tg.sent).toEqual([]);
+        }
+        await features(f.a.orgId, ALL_ON);
+        // Контрагент в архиве и заблокированная организация.
+        await f.t.admin.db
+          .update(schema.contractors)
+          .set({ serviceStatus: 'archived' })
+          .where(eq(schema.contractors.id, cpA));
+        await runDebt();
+        await f.t.admin.db
+          .update(schema.contractors)
+          .set({ serviceStatus: 'active' })
+          .where(eq(schema.contractors.id, cpA));
+        await f.t.admin.db
+          .update(schema.organizations)
+          .set({ status: 'blocked' })
+          .where(eq(schema.organizations.id, f.a.orgId));
+        await runDebt();
+        await f.t.admin.db
+          .update(schema.organizations)
+          .set({ status: 'active' })
+          .where(eq(schema.organizations.id, f.a.orgId));
+        expect(tg.sent).toEqual([]);
+        expect(await messages(cpA)).toEqual([]);
+      });
+
+      it('долга нет — напоминания нет; чужая организация получает только свой долг', async () => {
+        await orgDebt(f.a.orgId, false);
+        await orgDebt(f.b.orgId, true);
+        await runDebt();
+        // У контрагента организации Б — только недостача на его НДС.
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_B]);
+        expect(tg.sent[0]!.text).toContain('ОсОО «Бишкек»');
+        expect(tg.sent[0]!.text).toContain(text('tgCpDebt', { сумма: som(250_000) }));
+        expect(tg.sent[0]!.text).not.toContain('Ала-Тоо');
+        expect(await messages(cpA)).toEqual([]);
+        await wipe();
+        // НДС оплачен — долга нет.
+        await f.t.admin.db
+          .update(schema.reports)
+          .set({ paid: 250_000 })
+          .where(eq(schema.reports.id, ids.ndsB!));
+        try {
+          await runDebt();
+          expect(tg.sent).toEqual([]);
+          expect(await messages(cpB)).toEqual([]);
+        } finally {
+          await f.t.admin.db
+            .update(schema.reports)
+            .set({ paid: 0 })
+            .where(eq(schema.reports.id, ids.ndsB!));
+        }
+      });
+
+      it('«Не напоминать»: отметка у своего чата, история, кнопка гаснет; «Напоминать» включает снова', async () => {
+        await runDebt();
+        const [m1, m2] = tg.messageIds as [number, number];
+        tg.sent.length = 0;
+        // Чужой чат и подделанные данные кнопки напоминания не выключают.
+        expect(await press(noDebtData, CLIENT_2, m1)).toMatchObject({ text: text('tgActStale') });
+        expect(await press(noDebtData, CLIENT_B, m1)).toMatchObject({ text: text('tgActStale') });
+        expect(await press(botPressData('cpNoDebt', cpB), CLIENT_1, m1)).toMatchObject({
+          text: text('tgActStale'),
+        });
+        expect(await debtHistory(cpA)).toEqual([]);
+
+        const answer = await press(noDebtData, CLIENT_1, m1);
+        expect(answer).toMatchObject({ text: text('tgCpNoDebtOk'), alert: false });
+        expect(tg.edits.at(-1)).toMatchObject({ chatId: CLIENT_1, messageId: m1 });
+        expect(tg.edits.at(-1)!.keyboard.at(-1)).toEqual([
+          { text: '✓ Напоминания выключены', data: 'off', disabled: true },
+        ]);
+        expect(await debtHistory(cpA)).toEqual([
+          {
+            action: 'page_tg_nodebt',
+            userId: null,
+            changes: [{ field: 'telegram', to: '@client_one' }],
+          },
+        ]);
+        // Второе нажатие — «кнопка устарела», второй записи нет.
+        expect(await press(noDebtData, CLIENT_1, m1)).toMatchObject({ text: text('tgActStale') });
+        expect(await debtHistory(cpA)).toHaveLength(1);
+        // В карточке у подключения — «напоминания о долге выключил клиент».
+        expect((await card(owner, cpA)).items.map((i) => [i.name, i.noDebt]).sort()).toEqual([
+          ['@client_one', true],
+          ['@client_two', false],
+        ]);
+        // Сотрудникам ничего не уходит; на следующей неделе напоминание — только второму чату.
+        expect(tg.sent).toEqual([]);
+        await runDebt('2026-10-26T04:00:00Z');
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_2]);
+        tg.sent.length = 0;
+
+        // «Напоминать» из чата клиента включает напоминания снова.
+        await toBot('Напоминать', CLIENT_1, 'client_one');
+        expect(sentTo(CLIENT_1).map((m) => m.text)).toEqual([
+          'Напоминания о долге снова включены: ОсОО «Ала-Тоо Трейд».',
+        ]);
+        expect((await debtHistory(cpA)).map((h) => h.action)).toEqual([
+          'page_tg_nodebt',
+          'page_tg_debt_on',
+        ]);
+        // Уже включены — бот так и отвечает, истории нет.
+        await toBot('напоминать', CLIENT_2, 'client_two');
+        expect(sentTo(CLIENT_2).at(-1)!.text).toBe('Напоминания о долге уже включены.');
+        expect(await debtHistory(cpA)).toHaveLength(2);
+        // Чат, не подключённый к контрагенту, и чат сотрудника — обычная подсказка бота.
+        await toBot('Напоминать', STRANGER);
+        expect(sentTo(STRANGER).at(-1)!.text).toBe(text('tgStart'));
+        await toBot('Напоминать', CHAT_ACC, 'acc_a');
+        expect(sentTo(CHAT_ACC).at(-1)!.text).toBe(text('tgStart'));
+        expect(await debtHistory(cpA)).toHaveLength(2);
+        // Раздел «Telegram» страницы скрыт — подключение не действует: команда отметку клиента не
+        // снимает («Не напоминать» в это время тоже не работает), бот отвечает обычной подсказкой.
+        expect(await press(noDebtData, CLIENT_2, m2)).toMatchObject({ text: text('tgCpNoDebtOk') });
+        await hide(cpA, ['tg']);
+        try {
+          await toBot('Напоминать', CLIENT_2, 'client_two');
+          expect(sentTo(CLIENT_2).at(-1)!.text).not.toContain('Напоминания о долге');
+          expect((await debtHistory(cpA)).map((h) => h.action)).toEqual([
+            'page_tg_nodebt',
+            'page_tg_debt_on',
+            'page_tg_nodebt',
+          ]);
+        } finally {
+          await hide(cpA, []);
+        }
+        // Функция «Страница контрагента по ссылке» выключена — то же самое.
+        await features(f.a.orgId, { ...ALL_ON, cppage: false });
+        try {
+          await toBot('Напоминать', CLIENT_2, 'client_two');
+          expect(sentTo(CLIENT_2).at(-1)!.text).not.toContain('Напоминания о долге');
+          expect(await debtHistory(cpA)).toHaveLength(3);
+        } finally {
+          await features(f.a.orgId, ALL_ON);
+        }
+        // Второе напоминание недели первому чату не уходит — оно будет в следующий понедельник.
+        expect(m2).toBeGreaterThan(m1);
+      });
+
+      it('«Не напоминать» не работает, когда раздел «Telegram» страницы скрыт', async () => {
+        await runDebt();
+        const [m1] = tg.messageIds as [number];
+        await hide(cpA, ['tg']);
+        expect(await press(noDebtData, CLIENT_1, m1)).toMatchObject({
+          text: text('tgCpNotLinked'),
+          alert: true,
+        });
+        expect(await debtHistory(cpA)).toEqual([]);
+        await hide(cpA, []);
+        expect(await press(noDebtData, CLIENT_1, m1)).toMatchObject({ text: text('tgCpNoDebtOk') });
+      });
+
+      it('карточка: «Напоминать о долге в Telegram» — состояние, сумма и что мешает', async () => {
+        const debt = (await card(owner, cpA)).debt!;
+        expect(debt).toEqual({
+          on: true,
+          orgOn: true,
+          refusal: null,
+          sum: SHORT + FEE,
+          version: expect.any(Number),
+        });
+        expect((await card(chief, cpA)).debt).toMatchObject({ refusal: null, sum: SHORT + FEE });
+        // Бухгалтер: права «Управлять страницей контрагента» нет; плату за обслуживание он не видит —
+        // суммы долга в ответе нет.
+        expect((await card(acc, cpA)).debt).toMatchObject({
+          on: true,
+          refusal: 'page_debt_right',
+          sum: null,
+        });
+        // «Старший»: контрагенты — все, права на плату и на финансовые операции есть, но финансы —
+        // только своих контрагентов: суммы долга чужого контрагента нет (иначе из неё вычислялась бы
+        // недостача на налоги, закрытая областью). Область «Все» — сумма видна.
+        const finScope = (scope: 'own' | 'all') =>
+          f.t.admin.db
+            .update(schema.roleScopes)
+            .set({ scope })
+            .where(
+              and(
+                eq(schema.roleScopes.roleId, f.roleIds.senior),
+                eq(schema.roleScopes.permGroup, 'fin'),
+              ),
+            );
+        const grants = ['fee', 'finView'];
+        await f.t.admin.db.insert(schema.rolePermissions).values(
+          grants.map((permissionId) => ({
+            orgId: f.a.orgId,
+            roleId: f.roleIds.senior,
+            permissionId,
+          })),
+        );
+        try {
+          await finScope('own');
+          expect((await card(senior, cpA)).debt).toMatchObject({ on: true, sum: null });
+          await finScope('all');
+          expect((await card(senior, cpA)).debt).toMatchObject({ on: true, sum: SHORT + FEE });
+        } finally {
+          await f.t.admin.db
+            .delete(schema.rolePermissions)
+            .where(
+              and(
+                eq(schema.rolePermissions.roleId, f.roleIds.senior),
+                inArray(schema.rolePermissions.permissionId, grants),
+              ),
+            );
+        }
+        // Выключено у организации.
+        await orgDebt(f.a.orgId, false);
+        expect((await card(owner, cpA)).debt).toMatchObject({
+          on: false,
+          orgOn: false,
+          refusal: 'page_debt_org_off',
+          sum: null,
+        });
+        await orgDebt(f.a.orgId, true);
+        // Ни «Платы за обслуживание», ни «Учёта оплаты налогов» — строки нет.
+        await features(f.a.orgId, { cppage: true, telegram: true });
+        expect((await card(owner, cpA)).debt).toBeNull();
+        await features(f.a.orgId, ALL_ON);
+      });
+
+      it('переключатель в карточке: вход, право, область, чужая организация, версия, история', async () => {
+        const { version } = (await card(owner, cpA)).debt!;
+        expect((await toggle(undefined, cpA, false, version)).status).toBe(401);
+        const noRight = await toggle(acc, cpA, false, version);
+        expect(noRight.status).toBe(403);
+        expect((await failure(noRight)).code).toBe('page_debt_right');
+        // Чужая организация и контрагент вне области — «не найдено».
+        expect((await toggle(ownerB, cpA, false, version)).status).toBe(404);
+        expect((await toggle(acc, cpEmpty, false, version)).status).toBe(404);
+        expect((await toggle(owner, cpA, 'нет', version)).status).toBe(400);
+        const stale = await toggle(owner, cpA, false, version + 5);
+        expect(stale.status).toBe(409);
+        expect((await failure(stale)).code).toBe('record_changed');
+        // Выключено у организации — переключатель не работает.
+        await orgDebt(f.a.orgId, false);
+        const orgOff = await toggle(owner, cpA, false, version);
+        expect(orgOff.status).toBe(409);
+        expect((await failure(orgOff)).code).toBe('page_debt_org_off');
+        await orgDebt(f.a.orgId, true);
+        expect((await card(owner, cpA)).debt).toMatchObject({ on: true, version });
+
+        const off = await toggle(owner, cpA, false, version);
+        expect(off.status, await off.clone().text()).toBe(200);
+        expect(ContractorTelegram.parse(await off.json()).debt).toMatchObject({
+          on: false,
+          orgOn: true,
+          version: version + 1,
+        });
+        // Напоминание этому контрагенту не уходит.
+        await runDebt();
+        expect(tg.sent).toEqual([]);
+        // История контрагента: «Напоминание о долге в Telegram: выключено», от имени сотрудника.
+        const shown = await call(owner, 'GET', `/api/contractors/${cpA}/history`);
+        expect(shown.status, await shown.clone().text()).toBe(200);
+        const last = ContractorHistory.parse(await shown.json()).items.find((i) =>
+          i.changes.some((c) => c.field === 'tgDebtOff'),
+        );
+        expect(last).toMatchObject({
+          entity: 'contractor_page',
+          action: 'update',
+          changes: [{ field: 'tgDebtOff', from: false, to: true }],
+        });
+        const on = await toggle(owner, cpA, true, version + 1);
+        expect(on.status).toBe(200);
+        expect(ContractorTelegram.parse(await on.json()).debt).toMatchObject({ on: true });
+      });
     });
   },
 );

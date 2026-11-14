@@ -1,7 +1,12 @@
 import type { FakeTelegram } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { CP_TG_MAX, fillTemplate, TELEGRAM_TEMPLATE_DEFAULTS } from '@buhuchet/domain';
+import {
+  botPressData,
+  CP_TG_MAX,
+  fillTemplate,
+  TELEGRAM_TEMPLATE_DEFAULTS,
+} from '@buhuchet/domain';
 import {
   ApiError,
   Contractor,
@@ -20,6 +25,7 @@ import {
   linkTelegram,
   sendToBot,
   signIn,
+  telegramPress,
   telegramUpdate,
   TEST_ORIGIN,
   TEST_PASSWORD,
@@ -109,6 +115,7 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
     await f.t.admin.db.delete(schema.contractorTelegramTokens);
     await f.t.admin.db.execute(sql`delete from rate_limits where kind like 'cp_tg_link%'`);
     tg.sent.length = 0;
+    tg.messageIds.length = 0;
   };
 
   /** Страница без входа: «Подключить Telegram» из браузера с cookie страницы. */
@@ -326,16 +333,25 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
     await toBot(`/start ${token}`, CLIENT_1, 'client_one');
     expect(sentTo(CLIENT_1)).toEqual([text('tgCpAsk', { контрагент: cpAcc.name })]);
     // Ответственному бухгалтеру — запрос со ссылкой на «Контрагентов»; владельцу — ничего.
-    expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toEqual([
-      {
-        chatId: CHAT_ACC,
-        text: `${text('tgCpReq', {
-          контрагент: cpAcc.name,
-          телеграм: '@client_one',
-        })}\n\nОткрыть в Buhuchet.kg: http://localhost:3000/app/cps/all`,
-        options: { disableLinkPreview: true },
-      },
-    ]);
+    // Под сообщением — «Подтвердить» и «Отклонить» с номером запроса (К5).
+    const request = tg.sent.filter((m) => m.chatId === CHAT_ACC);
+    const linkId = (await listed(owner, cpAcc.id)).items[0]!.id;
+    expect(request).toHaveLength(1);
+    expect(request[0]!.text).toBe(
+      `Telegram контрагента\n${text('tgCpReq', {
+        контрагент: cpAcc.name,
+        телеграм: '@client_one',
+      })}\n\nОткрыть в Buhuchet.kg: http://localhost:3000/app/cps/all`,
+    );
+    expect(request[0]!.options).toMatchObject({
+      disableLinkPreview: true,
+      keyboard: [
+        [
+          { text: text('tgBtnCpOk'), data: botPressData('cptgOk', linkId) },
+          { text: text('tgBtnCpNo'), data: botPressData('cptgNo', linkId) },
+        ],
+      ],
+    });
     expect(sentTo(CHAT_OWNER)).toEqual([]);
     expect(await history(cpAcc.id)).toEqual([{ action: 'page_tg_request', userId: null }]);
     expect(await pageBody('org-a', cpAcc.inn, grantAcc)).toMatchObject({
@@ -562,7 +578,7 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
     // Ответственный за cpOther (главный бухгалтер) Telegram не привязал.
     await start('org-a', cpOther, grantOther, CLIENT_3, 'client_three');
     expect(sentTo(CHAT_OWNER)).toEqual([
-      `${text('tgCpReq', {
+      `Telegram контрагента\n${text('tgCpReq', {
         контрагент: cpOther.name,
         телеграм: '@client_three',
       })}\n\nОткрыть в Buhuchet.kg: http://localhost:3000/app/cps/all`,
@@ -632,5 +648,285 @@ describe.skipIf(!databaseAvailable())('Telegram контрагента: мето
     expect((await listed(owner, cpAcc.id)).on).toBe(0);
     expect(await clientChatHint(f.deps, CLIENT_1)).toBeNull();
     await wipe();
+  });
+
+  describe('кнопки «Подтвердить» и «Отклонить» под запросом в чате сотрудника (К5)', () => {
+    const CHAT_OWNER_B = 7003;
+    const press = async (data: string, chatId: number, messageId: number) => {
+      const res = await sendToBot(f.app, telegramPress(data, chatId, messageId));
+      expect(res.status).toBe(200);
+      return tg.answers.at(-1);
+    };
+    /** Забыть отправленное: список сообщений и их номера идут парой. */
+    const clear = () => {
+      tg.sent.length = 0;
+      tg.messageIds.length = 0;
+    };
+    /** Номер последнего сообщения бота в чате (по нему приходит нажатие). */
+    const lastMessageId = (chatId: number) => {
+      const i = tg.sent.map((m) => m.chatId).lastIndexOf(chatId);
+      return tg.messageIds[i]!;
+    };
+    /** Запрос клиента к контрагенту бухгалтера: номер запроса и номер сообщения бота бухгалтеру. */
+    const request = async (chatId: number, name: string) => {
+      await start('org-a', cpAcc, grantAcc, chatId, name);
+      const wait = (await listed(owner, cpAcc.id)).items.find(
+        (i) => i.status === 'wait' && i.name === `@${name}`,
+      )!;
+      return { id: wait.id, messageId: lastMessageId(CHAT_ACC) };
+    };
+    const statusOf = async (linkId: string) =>
+      (
+        await f.t.admin.db
+          .select({ status: schema.contractorTelegramLinks.status })
+          .from(schema.contractorTelegramLinks)
+          .where(eq(schema.contractorTelegramLinks.id, linkId))
+      )[0]!.status;
+    const userId = async (login: string) =>
+      (
+        await f.t.admin.db
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .where(eq(schema.users.login, login))
+      )[0]!.id;
+    const historyVia = async (contractorId: string) =>
+      (
+        await f.t.admin.db
+          .select({
+            action: schema.auditLog.action,
+            userId: schema.auditLog.actorUserId,
+            via: schema.auditLog.via,
+          })
+          .from(schema.auditLog)
+          .where(
+            and(
+              eq(schema.auditLog.contractorId, contractorId),
+              eq(schema.auditLog.entity, 'contractor_page'),
+            ),
+          )
+          .orderBy(asc(schema.auditLog.at), asc(schema.auditLog.id))
+      ).filter((h) => h.action.startsWith('page_tg_'));
+    const accRole = () => f.templateRole(f.a, 'acc');
+    /** Право «Управлять страницей контрагента» роли «Бухгалтер» организации А. */
+    const grantPage = (on: boolean) =>
+      on
+        ? f.t.admin.db
+            .insert(schema.rolePermissions)
+            .values({ orgId: f.a.orgId, roleId: accRole(), permissionId: 'cpPage' })
+        : f.t.admin.db
+            .delete(schema.rolePermissions)
+            .where(
+              and(
+                eq(schema.rolePermissions.roleId, accRole()),
+                eq(schema.rolePermissions.permissionId, 'cpPage'),
+              ),
+            );
+    const page = (set: Partial<typeof schema.contractorPages.$inferInsert>) =>
+      f.t.admin.db
+        .update(schema.contractorPages)
+        .set(set)
+        .where(eq(schema.contractorPages.contractorId, cpAcc.id));
+
+    beforeAll(async () => {
+      await wipe();
+      await f.t.admin.db.execute(sql`delete from audit_log where action like 'page_tg_%'`);
+    });
+
+    it('«Подтвердить»: право «Управлять страницей», своя кнопка; клиенту — сообщение, история «через Telegram»', async () => {
+      const { id, messageId } = await request(CLIENT_1, 'client_one');
+      const ok = botPressData('cptgOk', id);
+      clear();
+      // Без права «Управлять страницей контрагента» — «нет права», запрос ждёт.
+      expect(await press(ok, CHAT_ACC, messageId)).toMatchObject({
+        text: text('tgActNoRight'),
+        alert: true,
+      });
+      expect(await statusOf(id)).toBe('wait');
+      await grantPage(true);
+      try {
+        // Те же данные кнопки из чата владельца и из чата клиента: такой кнопки там нет.
+        expect(await press(ok, CHAT_OWNER, messageId)).toMatchObject({ text: text('tgActStale') });
+        expect(await press(ok, CLIENT_1, messageId)).toMatchObject({ text: text('tgActStale') });
+        // Подделанный номер запроса под своим сообщением — «кнопка устарела».
+        expect(
+          await press(botPressData('cptgOk', crypto.randomUUID()), CHAT_ACC, messageId),
+        ).toMatchObject({ text: text('tgActStale') });
+        expect(await statusOf(id)).toBe('wait');
+        expect(tg.sent).toEqual([]);
+
+        const answer = await press(ok, CHAT_ACC, messageId);
+        expect(answer).toMatchObject({
+          text: `Telegram «@client_one» подключён к «${cpAcc.name}»`,
+          alert: false,
+        });
+        expect(await statusOf(id)).toBe('on');
+        // Обе кнопки погасли: нажатая стала «✓ Подтверждён».
+        expect(tg.edits.at(-1)).toMatchObject({ chatId: CHAT_ACC, messageId });
+        expect(tg.edits.at(-1)!.keyboard).toEqual([
+          [
+            { text: '✓ Подтверждён', data: 'off', disabled: true },
+            { text: text('tgBtnCpNo'), data: 'off', disabled: true },
+          ],
+        ]);
+        expect(sentTo(CLIENT_1)).toEqual([text('tgCpOn', { контрагент: cpAcc.name })]);
+        expect(await historyVia(cpAcc.id)).toEqual([
+          { action: 'page_tg_request', userId: null, via: null },
+          { action: 'page_tg_on', userId: await userId('acc-a'), via: 'telegram' },
+        ]);
+        const card = await listed(owner, cpAcc.id);
+        expect(card).toMatchObject({ on: 1, wait: 0 });
+        expect(card.items[0]).toMatchObject({ status: 'on', decidedBy: 'acc-a' });
+        // Второе нажатие и «Отклонить» после решения — «кнопка устарела».
+        expect(await press(ok, CHAT_ACC, messageId)).toMatchObject({ text: text('tgActStale') });
+        expect(await press(botPressData('cptgNo', id), CHAT_ACC, messageId)).toMatchObject({
+          text: text('tgActStale'),
+        });
+        expect(await statusOf(id)).toBe('on');
+      } finally {
+        await grantPage(false);
+        await wipe();
+      }
+    });
+
+    it('«Действия из Telegram» выключены, раздел скрыт, чужой контрагент, страница выключена — отказ; «Отклонить» работает', async () => {
+      const { id, messageId } = await request(CLIENT_2, 'client_two');
+      const ok = botPressData('cptgOk', id);
+      const no = botPressData('cptgNo', id);
+      const policy = (telegramActions: boolean) =>
+        f.t.admin.db
+          .update(schema.orgSettings)
+          .set({ telegramActions })
+          .where(eq(schema.orgSettings.orgId, f.a.orgId));
+      const responsible = (login: string) =>
+        f.t.admin.db
+          .update(schema.contractors)
+          .set({ responsibleEmployeeId: employee(login) })
+          .where(eq(schema.contractors.id, cpAcc.id));
+      clear();
+      await grantPage(true);
+      try {
+        // Владелец выключил «Действия из Telegram».
+        await policy(false);
+        expect(await press(ok, CHAT_ACC, messageId)).toMatchObject({ text: text('tgActOff') });
+        await policy(true);
+        // Раздел «Telegram» страницы скрыт: подтвердить нельзя (как в карточке).
+        await page({ hiddenSections: ['tg'] });
+        expect(await press(ok, CHAT_ACC, messageId)).toMatchObject({
+          text: 'Раздел «Telegram» на странице контрагента сейчас не показан: подключить нельзя',
+          alert: true,
+        });
+        await page({ hiddenSections: [] });
+        // Контрагента передали другому сотруднику: область «Свои контрагенты» — «нет права».
+        await responsible('chief-a');
+        for (const data of [ok, no]) {
+          expect(await press(data, CHAT_ACC, messageId)).toMatchObject({
+            text: text('tgActNoRight'),
+          });
+        }
+        await responsible('acc-a');
+        // Страница выключена — «кнопка устарела».
+        await page({ enabled: false });
+        for (const data of [ok, no]) {
+          expect(await press(data, CHAT_ACC, messageId)).toMatchObject({
+            text: text('tgActStale'),
+          });
+        }
+        await page({ enabled: true });
+        // Контрагент в архиве — его страница не действует: обе кнопки устарели (прототип `pgOn`).
+        const archive = (serviceStatus: 'active' | 'archived') =>
+          f.t.admin.db
+            .update(schema.contractors)
+            .set({ serviceStatus })
+            .where(eq(schema.contractors.id, cpAcc.id));
+        await archive('archived');
+        for (const data of [ok, no]) {
+          expect(await press(data, CHAT_ACC, messageId)).toMatchObject({
+            text: text('tgActStale'),
+          });
+        }
+        await archive('active');
+        expect(await statusOf(id)).toBe('wait');
+        expect(tg.sent).toEqual([]);
+
+        const answer = await press(no, CHAT_ACC, messageId);
+        expect(answer).toMatchObject({ text: 'Запрос отклонён', alert: false });
+        expect(await statusOf(id)).toBe('no');
+        expect(tg.edits.at(-1)!.keyboard).toEqual([
+          [
+            { text: text('tgBtnCpOk'), data: 'off', disabled: true },
+            { text: '✓ Отклонён', data: 'off', disabled: true },
+          ],
+        ]);
+        expect(sentTo(CLIENT_2)).toEqual([text('tgCpNo', { контрагент: cpAcc.name })]);
+        expect((await historyVia(cpAcc.id)).at(-1)).toEqual({
+          action: 'page_tg_no',
+          userId: await userId('acc-a'),
+          via: 'telegram',
+        });
+
+        // Запрос рассмотрели на сайте — кнопка под сообщением устарела.
+        const later = await request(CLIENT_3, 'client_three');
+        const row = (await listed(owner, cpAcc.id)).items.find((i) => i.id === later.id)!;
+        await decided(owner, cpAcc.id, later.id, 'reject', row.version);
+        expect(
+          await press(botPressData('cptgOk', later.id), CHAT_ACC, later.messageId),
+        ).toMatchObject({ text: text('tgActStale') });
+        expect(await statusOf(later.id)).toBe('no');
+      } finally {
+        await policy(true);
+        await page({ hiddenSections: [], enabled: true });
+        await responsible('acc-a');
+        await grantPage(false);
+        await wipe();
+      }
+    });
+
+    it('чужая организация: номер чужого запроса в своей кнопке ничего не решает', async () => {
+      await linkTelegram(f.app, ownerB, CHAT_OWNER_B, 'owner_b');
+      const { id } = await request(CLIENT_1, 'client_one');
+      // Свой запрос организации Б: владельцу Б приходит сообщение с кнопками.
+      await start('org-b', cpB, grantB, CLIENT_2, 'client_two');
+      const own = (await listed(ownerB, cpB.id)).items.find((i) => i.status === 'wait')!;
+      const messageId = lastMessageId(CHAT_OWNER_B);
+      expect(await press(botPressData('cptgOk', id), CHAT_OWNER_B, messageId)).toMatchObject({
+        text: text('tgActStale'),
+      });
+      expect(await statusOf(id)).toBe('wait');
+      // Даже если номер чужого запроса стоит в самой кнопке сохранённого сообщения (основа бота
+      // нажатие пропускает), обработчик ищет запрос в организации нажавшего и чужого не находит.
+      const swap = (from: string, to: string) =>
+        f.t.admin.db.execute(
+          sql`update telegram_outbox set payload = replace(payload::text, ${from}, ${to})::jsonb
+              where chat_id = ${CHAT_OWNER_B} and message_id = ${messageId}`,
+        );
+      await swap(own.id, id);
+      const [stored] = await f.t.admin.db
+        .select({ payload: schema.telegramOutbox.payload })
+        .from(schema.telegramOutbox)
+        .where(
+          and(
+            eq(schema.telegramOutbox.chatId, CHAT_OWNER_B),
+            eq(schema.telegramOutbox.messageId, messageId),
+          ),
+        );
+      // Подмена состоялась: под сообщением владельца Б теперь кнопки с номером запроса организации А.
+      expect(JSON.stringify(stored!.payload)).toContain(id);
+      expect(JSON.stringify(stored!.payload)).not.toContain(own.id);
+      expect(await press(botPressData('cptgOk', id), CHAT_OWNER_B, messageId)).toMatchObject({
+        text: text('tgActStale'),
+      });
+      expect(await press(botPressData('cptgNo', id), CHAT_OWNER_B, messageId)).toMatchObject({
+        text: text('tgActStale'),
+      });
+      expect(await statusOf(id)).toBe('wait');
+      await swap(id, own.id);
+      // Своя кнопка работает и чужой запрос не трогает.
+      expect(await press(botPressData('cptgOk', own.id), CHAT_OWNER_B, messageId)).toMatchObject({
+        text: `Telegram «@client_two» подключён к «${cpB.name}»`,
+      });
+      expect(await statusOf(own.id)).toBe('on');
+      expect(await statusOf(id)).toBe('wait');
+      await wipe();
+    });
   });
 });

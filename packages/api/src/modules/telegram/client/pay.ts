@@ -23,6 +23,7 @@ import {
   reportMonthPlanRows,
   reportPayDueMonths,
   saveContractorTelegramMessage,
+  setContractorTelegramNoDebt,
   takeRateLimit,
   telegramBotRich,
   telegramChat,
@@ -42,6 +43,7 @@ import {
   CP_PAY_DAYS,
   CP_TG_ASK_ACTION,
   CP_TG_CLIENT_ACTIONS,
+  CP_TG_NODEBT_ACTION,
   CP_TG_PAID_ACTION,
   CP_TG_QUESTIONS_PER_HOUR,
   cpTgQuestion,
@@ -434,6 +436,20 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });
           await saveContractorTelegramMessage(tx, target.id, after);
           return { reply: await templateText(tx, 'tgCpPaidOk'), after, staff, send: null };
+        }
+
+        // «Не напоминать» под напоминанием о долге (задача К5; прототип tgAct('cp-nodebt')): клиент
+        // выключает напоминания у своего чата; история контрагента — в той же транзакции.
+        if (parsed.action === CP_TG_NODEBT_ACTION) {
+          await setContractorTelegramNoDebt(tx, {
+            linkId: target.linkId,
+            chatId: press.chatId,
+            noDebt: true,
+          });
+          const done = t('cppage.tg.nodebt_done');
+          const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });
+          await saveContractorTelegramMessage(tx, target.id, after);
+          return { reply: await templateText(tx, 'tgCpNoDebtOk'), after, staff: [], send: null };
         }
 
         // «Вопрос бухгалтеру»: бот просит написать вопрос ответом на своё сообщение. Просьба уже

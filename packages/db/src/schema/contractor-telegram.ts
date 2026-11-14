@@ -4,6 +4,7 @@ import {
   bigint,
   boolean,
   check,
+  date,
   foreignKey,
   index,
   jsonb,
@@ -49,6 +50,11 @@ export const contractorTelegramLinks = pgTable(
     decidedBy: uuid('decided_by').references(() => users.id),
     byClient: boolean('by_client').notNull().default(false),
     decidedAt: timestamp('decided_at', { withTimezone: true }),
+    /**
+     * Клиент выключил напоминания о долге кнопкой «Не напоминать» (задача К5; прототип `x.noDebt`).
+     * Новое подключение этого чата — новая строка, напоминания в ней снова включены.
+     */
+    noDebt: boolean('no_debt').notNull().default(false),
     updatedBy: uuid('updated_by').references(() => users.id),
     ...timestamps(),
     version: recordVersion(),
@@ -133,6 +139,8 @@ export const contractorTelegramMessages = pgTable(
     total: bigint('total', { mode: 'number' }),
     /** Отправлено само, за 5 дней до срока: один раз на месяц и чат. */
     auto: boolean('auto').notNull().default(false),
+    /** Понедельник недели напоминания о долге (задача К5): одно напоминание на неделю и чат. */
+    week: date('week'),
     /** Описание сообщения с кнопками (`BotMessage`): нажатая кнопка в нём гаснет. */
     payload: jsonb('payload').$type<BotMessage>().notNull(),
     /** Сколько раз пробовали отправить: задача по расписанию повторяет до трёх раз. */
@@ -163,6 +171,10 @@ export const contractorTelegramMessages = pgTable(
       sql`${t.month} is null or ${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`,
     ),
     check(
+      'contractor_telegram_messages_debt_check',
+      sql`(${t.kind} = 'debt') = (${t.week} is not null) and (${t.kind} <> 'debt' or (${t.total} is not null and ${t.total} > 0))`,
+    ),
+    check(
       'contractor_telegram_messages_pay_check',
       sql`${t.kind} <> 'pay' or (${t.month} is not null and ${t.total} is not null and ${t.total} > 0)`,
     ),
@@ -173,6 +185,10 @@ export const contractorTelegramMessages = pgTable(
     uniqueIndex('contractor_telegram_messages_auto_key')
       .on(t.linkId, t.month)
       .where(sql`${t.kind} = 'pay' and ${t.auto}`),
+    // Напоминание о долге — одно на неделю и чат: повтор задачи второе не создаёт.
+    uniqueIndex('contractor_telegram_messages_debt_key')
+      .on(t.linkId, t.week)
+      .where(sql`${t.kind} = 'debt'`),
     index('contractor_telegram_messages_contractor_idx').on(t.orgId, t.contractorId, t.createdAt),
     orgIsolation('contractor_telegram_messages_isolation', t.orgId),
   ],

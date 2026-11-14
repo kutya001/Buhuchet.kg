@@ -47,6 +47,9 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
     // контрагентам: включено»).
     case 'cpTgPay':
       return [t('cppage.org.toggled', { name: t('cppage.org.pay'), state: state(change.to) })];
+    // «Напоминать контрагентам о долге» (доработки 13.11.2026, К5).
+    case 'cpTgDebt':
+      return [t('cppage.org.toggled', { name: t('cppage.org.debt'), state: state(change.to) })];
     // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).
     case 'confirmWaitDays':
       return [

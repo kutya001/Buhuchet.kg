@@ -33,6 +33,7 @@ import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
 import { botText, sendCodeMessage, sendNow } from './bot';
 import { clientStart, clientText } from './client';
+import { clientDebtOn } from './client/debt';
 import { clientPress, clientQuestion } from './client/pay';
 import { handleBotPress } from './press';
 
@@ -345,6 +346,8 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
     if (!command) {
       // Telegram контрагента (поток К): «Отключить» от клиента, подключившего чат к контрагенту.
       if (await clientText(deps, chat.id, text)) return ok;
+      // «Напоминать» — клиент снова включает напоминания о долге (поток К, задача К5).
+      if (await clientDebtOn(deps, chat.id, text)) return ok;
       // Вопрос клиента бухгалтеру — ответом на просьбу бота (поток К, задача К4).
       if (await clientQuestion(deps, update.message)) return ok;
       const code = relinkCodeOf(text);

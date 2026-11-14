@@ -1,5 +1,6 @@
 import { PAGE_MESSAGES } from '../contractor-page/page';
 import { CP_TG_MESSAGES } from '../contractor-page/telegram';
+import { DEBT_TOGGLE_MESSAGES } from '../contractor-page/telegram-debt';
 import { MONTH_PAY_SEND_MESSAGES } from '../contractor-page/telegram-pay';
 import type { UiTextDefault } from './texts';
 
@@ -164,6 +165,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.tg.toast.approve': { ru: 'Telegram «{name}» подключён', section: S },
   'cppage.tg.toast.reject': { ru: 'Запрос отклонён', section: S },
   'cppage.tg.toast.unlink': { ru: 'Telegram «{name}» отключён', section: S },
+  // Кнопки под сообщением бота сотруднику о запросе (задача К5; прототип tgAct('cptg-ok'), ('cptg-no')).
+  'cppage.tg.bot.done_ok': { ru: '✓ Подтверждён', section: S },
+  'cppage.tg.bot.done_no': { ru: '✓ Отклонён', section: S },
+  'cppage.tg.bot.approved': { ru: 'Telegram «{name}» подключён к «{contractor}»', section: S },
   'cppage.hist.page_tg_request': {
     ru: 'Telegram контрагента: запрос на подключение от «{name}»',
     section: S,
@@ -186,6 +191,11 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'cppage.org.hint': {
     ru: 'Сообщения получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.',
+    section: S,
+  },
+  'cppage.org.debt': { ru: 'Напоминать контрагентам о долге', section: S },
+  'cppage.org.debt_hint': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
     section: S,
   },
   'cppage.org.toggled': { ru: '{name}: {state}', section: S },
@@ -229,6 +239,53 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'cppage.hist.page_tg_question': {
     ru: 'Вопрос бухгалтеру из Telegram («{name}»): {text}',
+    section: S,
+  },
+  // Напоминание клиенту о долге (задача К5; прототип v94 cp-telegram.js: pgDebtMsg, pgDebtRow,
+  // tgAct('cp-nodebt')): сообщение бота, строка в карточке контрагента, история.
+  'cppage.tg.debt.heading': { ru: 'Напоминание об оплате', section: S },
+  'cppage.tg.debt.what': { ru: 'Что оплатить', section: S },
+  'cppage.tg.debt.amount': { ru: 'Сумма, сом', section: S },
+  'cppage.tg.debt.short': { ru: 'Не хватает на налоги этого месяца', section: S },
+  'cppage.tg.debt.fee': { ru: 'Долг за обслуживание', section: S },
+  'cppage.tg.nodebt_done': { ru: '✓ Напоминания выключены', section: S },
+  // В прототипе команды «Напоминать» нет (шаблон `tgCpNoDebtOk` её только обещает) — docs/deviations.md п. К-5.
+  'cppage.tg.debt_on': {
+    ru: 'Напоминания о долге снова включены: {contractor}.',
+    section: S,
+  },
+  'cppage.tg.debt_on_already': {
+    ru: 'Напоминания о долге уже включены.',
+    section: S,
+  },
+  'cppage.debt.label': { ru: 'Напоминать о долге в Telegram', section: S },
+  'cppage.debt.hint': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас {sum}.',
+    section: S,
+  },
+  'cppage.debt.hint_none': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас долга нет.',
+    section: S,
+  },
+  'cppage.debt.hint_plain': {
+    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание.',
+    section: S,
+  },
+  'cppage.debt.hint_org_off': {
+    ru: 'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram контрагентов».',
+    section: S,
+  },
+  'cppage.debt.toast_on': { ru: 'Напоминание о долге: включено', section: S },
+  'cppage.debt.toast_off': { ru: 'Напоминание о долге: выключено', section: S },
+  'cppage.tg.no_debt': { ru: 'напоминания о долге выключил клиент', section: S },
+  'cppage.hist.debt_on': { ru: 'Напоминание о долге в Telegram: включено', section: S },
+  'cppage.hist.debt_off': { ru: 'Напоминание о долге в Telegram: выключено', section: S },
+  'cppage.hist.page_tg_nodebt': {
+    ru: 'Напоминания о долге в Telegram выключены контрагентом («{name}»)',
+    section: S,
+  },
+  'cppage.hist.page_tg_debt_on': {
+    ru: 'Напоминания о долге в Telegram включены контрагентом («{name}»)',
     section: S,
   },
   // Страница без входа (прототип pubDraw).
@@ -453,6 +510,8 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.cp_tg_not_on': { ru: CP_TG_MESSAGES.cp_tg_not_on, section: E },
   'err.cp_tg_limit': { ru: CP_TG_MESSAGES.cp_tg_limit, section: E },
   'err.cp_tg_section_off': { ru: CP_TG_MESSAGES.cp_tg_section_off, section: E },
+  'err.page_debt_right': { ru: DEBT_TOGGLE_MESSAGES.page_debt_right, section: E },
+  'err.page_debt_org_off': { ru: DEBT_TOGGLE_MESSAGES.page_debt_org_off, section: E },
   'err.cp_tg_full': { ru: CP_TG_MESSAGES.cp_tg_full, section: E },
   'err.cp_tg_link_limit': { ru: CP_TG_MESSAGES.cp_tg_link_limit, section: E },
   'err.month_pay_send_right': { ru: MONTH_PAY_SEND_MESSAGES.month_pay_send_right, section: E },

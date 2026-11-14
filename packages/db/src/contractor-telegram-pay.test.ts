@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { defaultOrgPolicy, type BotMessage } from '@buhuchet/domain';
+import {
+  defaultOrgPolicy,
+  RecordChangedError,
+  RecordNotFoundError,
+  type BotMessage,
+} from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withOrgContext } from './context';
@@ -10,6 +15,14 @@ import {
   peekContractorTelegramLink,
   startContractorTelegram,
 } from './contractor-telegram';
+import {
+  contractorDebtSwitch,
+  contractorTelegramDebtSettings,
+  debtLinkIds,
+  setContractorDebtOff,
+  setContractorTelegramNoDebt,
+  unsentDebtMessages,
+} from './contractor-telegram-debt';
 import {
   answerContractorTelegramAsk,
   autoPayLinkIds,
@@ -27,6 +40,7 @@ import {
   unsentAutoPayMessages,
 } from './contractor-telegram-pay';
 import { createContractor, type ContractorFields } from './contractors';
+import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   contractorPages,
@@ -219,8 +233,8 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     const recipients = () => inA((tx) => contractorTelegramRecipients(tx, cpA));
     const withTelegram = () => inA((tx) => contractorsWithTelegram(tx));
     expect(await recipients()).toEqual([
-      { linkId: linkA, chatId: CHAT_A, name: `@chat${CHAT_A}` },
-      { linkId: linkA2, chatId: CHAT_A2, name: `@chat${CHAT_A2}` },
+      { linkId: linkA, chatId: CHAT_A, name: `@chat${CHAT_A}`, noDebt: false },
+      { linkId: linkA2, chatId: CHAT_A2, name: `@chat${CHAT_A2}`, noDebt: false },
     ]);
     expect(await withTelegram()).toEqual([cpA]);
 
@@ -682,5 +696,225 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     // Номер сообщения в чате не повторяется.
     await db.admin.db.update(contractorTelegramMessages).set({ messageId: 42 });
     await expect(bad({ messageId: 42 })).rejects.toThrow();
+  });
+
+  /*
+   * Напоминание клиенту о долге (доработки 13.11.2026, задача К5): три выключателя — организация,
+   * сотрудник у контрагента, клиент у своего чата — и одно сообщение на неделю и чат.
+   */
+  const DEBT: BotMessage = {
+    heading: 'Напоминание об оплате',
+    text: 'К оплате 6 250,50 сом.',
+    buttons: [[{ text: 'Не напоминать', action: 'cpNoDebt' }]],
+  };
+  const debtInput = (linkId: string, chatId: number, week: `${number}-${number}-${number}`) => ({
+    contractorId: cpA,
+    linkId,
+    chatId,
+    kind: 'debt' as const,
+    total: 625_050,
+    week,
+    payload: DEBT,
+  });
+  const orgDebt = (orgId: string, on: boolean) =>
+    db.admin.db.update(orgSettings).set({ cpTgDebt: on }).where(eq(orgSettings.orgId, orgId));
+
+  it('«Напоминать контрагентам о долге»: настройка организации и функции', async () => {
+    const settings = () => inA((tx) => contractorTelegramDebtSettings(tx));
+    // По умолчанию выключено; «Плата за обслуживание» и «Учёт оплаты налогов» — из чего долг.
+    await features(a.orgId, { fee: true, taxpay: true });
+    try {
+      expect(await settings()).toEqual({ on: false, fee: true, taxpay: true, available: true });
+      await orgDebt(a.orgId, true);
+      expect(await settings()).toEqual({ on: true, fee: true, taxpay: true, available: true });
+      // Настройка организации А организацию Б не включает.
+      expect((await inB((tx) => contractorTelegramDebtSettings(tx))).on).toBe(false);
+      await features(a.orgId, { fee: true, taxpay: false });
+      expect(await settings()).toEqual({ on: true, fee: true, taxpay: false, available: true });
+      // Ни платы за обслуживание, ни учёта оплаты налогов — напоминать не о чем.
+      await features(a.orgId, { fee: false, taxpay: false });
+      expect(await settings()).toEqual({ on: false, fee: false, taxpay: false, available: false });
+      await features(a.orgId, { fee: true, taxpay: true, telegram: false });
+      expect((await settings()).on).toBe(false);
+      await features(a.orgId, { fee: true, taxpay: true, cppage: false });
+      expect((await settings()).on).toBe(false);
+    } finally {
+      await features(a.orgId, {});
+      await orgDebt(a.orgId, false);
+    }
+  });
+
+  it('выключатель у контрагента: по версии записи страницы, с историей; чужая организация не меняет', async () => {
+    const own = await inA((tx) => contractorDebtSwitch(tx, cpA));
+    expect(own).toEqual({ off: false, version: expect.any(Number) });
+    // Чужая организация страницы не видит и не меняет.
+    expect(await inB((tx) => contractorDebtSwitch(tx, cpA))).toBeNull();
+    await expect(
+      inB((tx) => setContractorDebtOff(tx, cpA, true, own!.version)),
+    ).rejects.toBeInstanceOf(RecordNotFoundError);
+    // Устаревшая версия — «запись изменена другим пользователем».
+    await expect(
+      inA((tx) => setContractorDebtOff(tx, cpA, true, own!.version + 5)),
+    ).rejects.toBeInstanceOf(RecordChangedError);
+    expect((await inA((tx) => contractorDebtSwitch(tx, cpA)))!.off).toBe(false);
+
+    await inA((tx) => setContractorDebtOff(tx, cpA, true, own!.version));
+    const off = await inA((tx) => contractorDebtSwitch(tx, cpA));
+    expect(off).toEqual({ off: true, version: own!.version + 1 });
+    const history = await inA((tx) => readHistory(tx, 'contractor_page', cpA));
+    expect(history.at(-1)).toMatchObject({
+      action: 'update',
+      changes: [{ field: 'tgDebtOff', from: false, to: true }],
+    });
+    // Повтор того же значения ничего не пишет и версию не меняет.
+    await inA((tx) => setContractorDebtOff(tx, cpA, true, off!.version));
+    expect(await inA((tx) => contractorDebtSwitch(tx, cpA))).toEqual(off);
+    await inA((tx) => setContractorDebtOff(tx, cpA, false, off!.version));
+    expect((await inA((tx) => contractorDebtSwitch(tx, cpA)))!.off).toBe(false);
+  });
+
+  it('«Не напоминать» и «Напоминать»: только свой подключённый чат, с историей контрагента', async () => {
+    const noDebtOf = async () =>
+      (await inA((tx) => contractorTelegramRecipients(tx, cpA))).map((r) => r.noDebt);
+    const set = (orgId: string, linkId: string, chatId: number, noDebt: boolean) =>
+      asBot(orgId, (tx) => setContractorTelegramNoDebt(tx, { linkId, chatId, noDebt }));
+    try {
+      // Чужой чат, чужая организация и уже включённые напоминания — ничего не меняют.
+      expect(await set(a.orgId, linkA, CHAT_A2, true)).toBeNull();
+      expect(await set(b.orgId, linkA, CHAT_A, true)).toBeNull();
+      expect(await set(a.orgId, linkA, CHAT_A, false)).toBeNull();
+      expect(await noDebtOf()).toEqual([false, false]);
+
+      expect(await set(a.orgId, linkA, CHAT_A, true)).toEqual({
+        contractorId: cpA,
+        name: `@chat${CHAT_A}`,
+      });
+      expect(await noDebtOf()).toEqual([true, false]);
+      // Второе нажатие отметку не меняет и второй записи в историю не пишет.
+      expect(await set(a.orgId, linkA, CHAT_A, true)).toBeNull();
+      expect(await set(a.orgId, linkA, CHAT_A, false)).toEqual({
+        contractorId: cpA,
+        name: `@chat${CHAT_A}`,
+      });
+      expect(await noDebtOf()).toEqual([false, false]);
+      const history = await inA((tx) => readHistory(tx, 'contractor_page', cpA));
+      expect(history.slice(-2).map((h) => [h.action, h.changes])).toEqual([
+        ['page_tg_nodebt', [{ field: 'telegram', to: `@chat${CHAT_A}` }]],
+        ['page_tg_debt_on', [{ field: 'telegram', to: `@chat${CHAT_A}` }]],
+      ]);
+
+      // Отключённый чат напоминания не выключает.
+      await db.admin.db
+        .update(contractorTelegramLinks)
+        .set({ status: 'off' })
+        .where(eq(contractorTelegramLinks.id, linkA2));
+      expect(await set(a.orgId, linkA2, CHAT_A2, true)).toBeNull();
+    } finally {
+      await db.admin.db
+        .update(contractorTelegramLinks)
+        .set({ status: 'on', noDebt: false })
+        .where(eq(contractorTelegramLinks.contractorId, cpA));
+    }
+    // Роль приложения меняет у подключения только эту отметку и решение — имя и чат не трогает.
+    for (const patch of [{ name: 'x' }, { chatId: CHAT_B }]) {
+      await expect(
+        inA((tx) =>
+          tx
+            .update(contractorTelegramLinks)
+            .set(patch)
+            .where(eq(contractorTelegramLinks.id, linkA)),
+        ),
+      ).rejects.toEqual(permissionDenied);
+    }
+    // Отметка «Не напоминать» — выбор клиента: транзакция сотрудника её не меняет (защита в базе).
+    await expect(
+      inA((tx) =>
+        tx
+          .update(contractorTelegramLinks)
+          .set({ noDebt: true })
+          .where(eq(contractorTelegramLinks.id, linkA)),
+      ),
+    ).rejects.toEqual(permissionDenied);
+    await expect(
+      inA((tx) => setContractorTelegramNoDebt(tx, { linkId: linkA, chatId: CHAT_A, noDebt: true })),
+    ).rejects.toEqual(permissionDenied);
+    expect(await noDebtOf()).toEqual([false, false]);
+  });
+
+  it('напоминание о долге — одна строка на подключение и неделю; не ушедшее повторяется до предела попыток', async () => {
+    const WEEK = '2026-11-16';
+    const first = await inA((tx) =>
+      insertContractorTelegramMessage(tx, debtInput(linkA, CHAT_A, WEEK)),
+    );
+    expect(first).toEqual(expect.any(String));
+    // Повтор задачи и одновременный запуск второй строки не создают.
+    expect(
+      await inA((tx) => insertContractorTelegramMessage(tx, debtInput(linkA, CHAT_A, WEEK))),
+    ).toBeNull();
+    // Другая неделя и другой чат — свои строки.
+    expect(
+      await inA((tx) =>
+        insertContractorTelegramMessage(tx, debtInput(linkA, CHAT_A, '2026-11-23')),
+      ),
+    ).toEqual(expect.any(String));
+    const second = await inA((tx) =>
+      insertContractorTelegramMessage(tx, debtInput(linkA2, CHAT_A2, WEEK)),
+    );
+    expect(await inA((tx) => debtLinkIds(tx, cpA, WEEK))).toEqual(new Set([linkA, linkA2]));
+    expect(await inA((tx) => debtLinkIds(tx, cpA, '2026-11-09'))).toEqual(new Set());
+
+    // Ушло первое; второе Telegram не принял — оно ждёт повтора, пока попытки не кончились.
+    await inA((tx) => markContractorTelegramMessage(tx, first!, 801));
+    await inA((tx) => markContractorTelegramMessage(tx, second!, null));
+    const unsent = () => inA((tx) => unsentDebtMessages(tx, cpA, WEEK, 3));
+    expect(await unsent()).toEqual([{ id: second, linkId: linkA2, chatId: CHAT_A2 }]);
+    // Перед повтором сообщение собирается заново — сегодняшний долг; ушедшее не меняется.
+    expect(
+      await inA((tx) =>
+        refreshContractorTelegramMessage(tx, second!, { total: 100, payload: DEBT }),
+      ),
+    ).toBe(true);
+    expect(
+      await inA((tx) =>
+        refreshContractorTelegramMessage(tx, first!, { total: 100, payload: DEBT }),
+      ),
+    ).toBe(false);
+    await inA((tx) => markContractorTelegramMessage(tx, second!, null));
+    await inA((tx) => markContractorTelegramMessage(tx, second!, null));
+    expect(await unsent()).toEqual([]);
+
+    // Нажатие «Не напоминать» находит сообщение по своему чату и номеру.
+    expect(await contractorTelegramPressTarget(db.app.db, CHAT_A, 801)).toEqual({
+      id: first,
+      orgId: a.orgId,
+      contractorId: cpA,
+      linkId: linkA,
+      kind: 'debt',
+      linked: true,
+    });
+    expect(await contractorTelegramPressTarget(db.app.db, CHAT_A2, 801)).toBeNull();
+    // Чужая организация напоминаний не видит.
+    expect(await inB((tx) => debtLinkIds(tx, cpA, WEEK))).toEqual(new Set());
+    expect(await inB((tx) => unsentDebtMessages(tx, cpA, WEEK, 3))).toEqual([]);
+  });
+
+  it('проверки строки напоминания: неделя — только у напоминания, сумма больше нуля', async () => {
+    const WEEK = '2026-11-16';
+    const admin = (patch: Record<string, unknown>) =>
+      db.admin.db.insert(contractorTelegramMessages).values({
+        orgId: a.orgId,
+        ...debtInput(linkA, CHAT_A, WEEK),
+        ...patch,
+      } as typeof contractorTelegramMessages.$inferInsert);
+    await expect(admin({ week: null })).rejects.toThrow();
+    await expect(admin({ total: null })).rejects.toThrow();
+    await expect(admin({ total: 0 })).rejects.toThrow();
+    await expect(admin({ kind: 'pay', month: '2026-10' })).rejects.toThrow();
+    await expect(admin({ kind: 'ask', total: null })).rejects.toThrow();
+    await admin({});
+    // Неделю отправленного и неотправленного напоминания роль приложения не меняет.
+    await expect(
+      inA((tx) => tx.update(contractorTelegramMessages).set({ week: '2026-11-23' })),
+    ).rejects.toEqual(permissionDenied);
   });
 });

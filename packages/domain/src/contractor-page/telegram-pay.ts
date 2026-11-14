@@ -15,13 +15,19 @@ import { BOT_COPY_MAX, type BotButton, type BotMessage } from '../telegram/bot-m
 export const CP_PAY_DAYS = 5;
 
 /** Виды сообщений клиенту, под которыми бот принимает нажатия и ответы. */
-export const CP_TG_MESSAGE_KINDS = ['pay', 'ask'] as const;
+export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt'] as const;
 export type CpTgMessageKind = (typeof CP_TG_MESSAGE_KINDS)[number];
 
 /** Коды действий кнопок клиента (латиница, до 16 знаков — `botPressData`). */
 export const CP_TG_PAID_ACTION = 'cpPaid';
 export const CP_TG_ASK_ACTION = 'cpAsk';
-export const CP_TG_CLIENT_ACTIONS = [CP_TG_PAID_ACTION, CP_TG_ASK_ACTION] as const;
+/** «Не напоминать» под напоминанием о долге (задача К5, `telegram-debt.ts`). */
+export const CP_TG_NODEBT_ACTION = 'cpNoDebt';
+export const CP_TG_CLIENT_ACTIONS = [
+  CP_TG_PAID_ACTION,
+  CP_TG_ASK_ACTION,
+  CP_TG_NODEBT_ACTION,
+] as const;
 
 /** Вопрос клиента бухгалтеру — не длиннее 500 знаков (прототип: поле вопроса `maxlength="500"`). */
 export const CP_TG_QUESTION_MAX = 500;

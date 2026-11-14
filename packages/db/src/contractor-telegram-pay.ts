@@ -4,6 +4,7 @@ import {
   type BotMessage,
   type CpTgMessageKind,
   type HistoryChange,
+  type IsoDate,
   type PageSection,
   type Tyiyn,
   type YearMonth,
@@ -53,12 +54,14 @@ const sectionOn = and(
 export async function contractorTelegramRecipients(
   tx: Tx,
   contractorId: string,
-): Promise<{ linkId: string; chatId: number; name: string }[]> {
+): Promise<{ linkId: string; chatId: number; name: string; noDebt: boolean }[]> {
   return tx
     .select({
       linkId: contractorTelegramLinks.id,
       chatId: contractorTelegramLinks.chatId,
       name: contractorTelegramLinks.name,
+      // Клиент нажал «Не напоминать» (задача К5): напоминания о долге этому чату не идут.
+      noDebt: contractorTelegramLinks.noDebt,
     })
     .from(contractorTelegramLinks)
     .innerJoin(contractors, eq(contractors.id, contractorTelegramLinks.contractorId))
@@ -110,6 +113,8 @@ export interface ContractorTelegramMessageInput {
   month?: YearMonth | null;
   total?: Tyiyn | null;
   auto?: boolean;
+  /** Понедельник недели — у напоминания о долге (одно на неделю и чат). */
+  week?: IsoDate | null;
   payload: BotMessage;
 }
 
@@ -132,6 +137,7 @@ export async function insertContractorTelegramMessage(
       month: input.month ?? null,
       total: input.total ?? null,
       auto: input.auto ?? false,
+      week: input.week ?? null,
       payload: input.payload,
       sentBy: sql`app.current_user_id()`,
     })
@@ -271,7 +277,7 @@ const targetOf = (row: {
   orgId: row.org_id,
   contractorId: row.contractor_id,
   linkId: row.link_id,
-  kind: row.kind === 'ask' ? 'ask' : 'pay',
+  kind: row.kind === 'ask' ? 'ask' : row.kind === 'debt' ? 'debt' : 'pay',
   linked: row.linked,
 });
 

@@ -1,6 +1,7 @@
 import {
   CP_TG_ACTIONS,
   CP_TG_STATUSES,
+  DEBT_TOGGLE_REFUSALS,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
   PAGE_FILE_CATEGORIES,
@@ -292,6 +293,8 @@ export const ContractorTelegramItem = z.object({
   /** Краткое ФИО сотрудника, который решил; null — решил сам контрагент или решения ещё нет. */
   decidedBy: z.string().nullable(),
   byClient: z.boolean(),
+  /** Клиент выключил напоминания о долге кнопкой «Не напоминать». */
+  noDebt: z.boolean(),
   version: RecordVersion,
 });
 export type ContractorTelegramItem = z.infer<typeof ContractorTelegramItem>;
@@ -308,8 +311,32 @@ export const ContractorTelegram = z.object({
   max: z.number().int().positive(),
   /** Подтвердить, отклонить, отключить — и почему нельзя (нет права). */
   manage: z.literal('page_manage_right').nullable(),
+  /**
+   * «Напоминать о долге в Telegram» у этого контрагента (доработки 13.11.2026, К5; прототип pgDebtRow);
+   * null — напоминать не о чем: у организации нет ни «Платы за обслуживание», ни «Учёта оплаты налогов».
+   */
+  debt: z
+    .object({
+      /** Напоминание включено: у организации и у этого контрагента. */
+      on: z.boolean(),
+      /** «Напоминать контрагентам о долге» включено у организации. */
+      orgOn: z.boolean(),
+      /** Что мешает переключить (нет права, выключено у организации). */
+      refusal: z.enum(DEBT_TOGGLE_REFUSALS).nullable(),
+      /** Долг сейчас, тыйыны; null — сотрудник сумм не видит. */
+      sum: Tyiyn.nullable(),
+      /** Версия записи страницы контрагента — для переключения. */
+      version: RecordVersion,
+    })
+    .nullable(),
 });
 export type ContractorTelegram = z.infer<typeof ContractorTelegram>;
+
+/** Переключить «Напоминать о долге в Telegram» у контрагента — с версией записи страницы. */
+export const ContractorTelegramDebtInput = z.object({
+  on: z.boolean(),
+  version: RecordVersion,
+});
 
 /** Решение сотрудника по строке: подтвердить, отклонить, отключить — с версией строки. */
 export const ContractorTelegramDecisionInput = z.object({

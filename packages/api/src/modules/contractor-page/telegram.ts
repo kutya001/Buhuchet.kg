@@ -1,14 +1,20 @@
 import { hashSessionToken, isSessionTokenShape, newSessionToken } from '@buhuchet/adapters/tokens';
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
+  contractorDebtSwitch,
+  contractorPageOrg,
   contractorPageState,
+  contractorTelegramDebtSettings,
   ContractorTelegramRefusedError,
   decideContractorTelegram,
+  getContractor,
   getContractorPage,
   issueContractorTelegramLink,
   listContractorTelegram,
+  setContractorDebtOff,
   takeRateLimit,
   withOrgContext,
+  type ContractorRecord,
   type RateLimit,
   type Tx,
 } from '@buhuchet/db';
@@ -16,14 +22,19 @@ import {
   CP_TG_MAX,
   CP_TG_MESSAGES,
   CP_TG_START_PREFIX,
+  DEBT_TOGGLE_MESSAGES,
+  debtToggleRefusal,
   hasPermission,
   isPageAddress,
   PAGE_MESSAGES,
   pageVisibleSections,
+  scopeOf,
+  type AccessSubject,
 } from '@buhuchet/domain';
 import {
   ApiError,
   ContractorTelegram,
+  ContractorTelegramDebtInput,
   ContractorTelegramDecisionInput,
   PublicPageParams,
   PublicPageTelegramLink,
@@ -36,27 +47,40 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { scopeSqlOf, todayOf } from '../contractors/common';
 import { notifyContractorTelegramClient } from '../telegram/client';
-import { contractorOf, subjectOf } from './card';
+import { contractorClientDebt } from '../telegram/client/debt';
+import { subjectOf } from './card';
 import { pageCookieName } from './public';
 
 /*
  * Telegram контрагента (доработки 13.11.2026, задача К3; прототип v92 modules/cp-telegram.js — pgTgBox,
  * pgTgDecide, pgTgPub). Карточка: список «Telegram контрагента» видит тот, кто видит контрагента (право
- * «Видеть контрагентов», область группы «Контрагенты»); подтвердить, отклонить и отключить — право
+ * «Просматривать контрагентов», область группы «Контрагенты»); подтвердить, отклонить и отключить — право
  * «Управлять страницей контрагента». Страница без входа: ссылку «Подключить Telegram» получает только
  * браузер с запомненным кодом страницы — это проверяет база (`app.contractor_telegram_issue`).
  */
 
 const error = { 'application/json': { schema: ApiError } };
 
+/** Кто действует: организация и права сотрудника (запрос сайта или нажатие кнопки бота). */
+export interface TelegramActor {
+  orgId: string;
+  subject: AccessSubject;
+}
+
 /**
  * Раздел «Telegram» страницы сейчас показан клиенту: бот настроен (с именем — как на самой странице),
  * страница включена и не закрыта, контрагент не в архиве, раздел включён в учётной политике (вместе с
- * «Напоминаниями в Telegram») и не скрыт у контрагента. Заодно — контрагент в области сотрудника.
+ * «Напоминаниями в Telegram») и не скрыт у контрагента. Заодно — контрагент в области сотрудника:
+ * `off` — функция «Страница контрагента по ссылке» выключена, `hidden` — контрагента нет или он вне
+ * области. Одно правило для карточки и для кнопок бота под запросом на подключение.
  */
-async function telegramSection(tx: Tx, deps: ApiDeps, c: Context<AppEnv>, id: string) {
-  const { org, cp } = await contractorOf(tx, deps, c, id);
+export async function telegramSectionFor(tx: Tx, deps: ApiDeps, who: TelegramActor, id: string) {
+  const org = await contractorPageOrg(tx, who.orgId);
+  if (!org?.features.cppage) return 'off' as const;
+  const cp = await getContractor(tx, id, { scope: scopeSqlOf(who.subject), today: todayOf(deps) });
+  if (!cp) return 'hidden' as const;
   const page = await getContractorPage(tx, id);
   const sectionOn =
     !!deps.telegram &&
@@ -65,7 +89,75 @@ async function telegramSection(tx: Tx, deps: ApiDeps, c: Context<AppEnv>, id: st
     !page.closed &&
     cp.serviceStatus !== 'archived' &&
     pageVisibleSections(org.pageSections, org.features, page.hiddenSections).includes('tg');
-  return { cp, sectionOn };
+  // Страница архивного контрагента не действует (прототип `pgOn`: включена и контрагент не в архиве).
+  return { cp, sectionOn, pageOn: !!page?.enabled && cp.serviceStatus !== 'archived' };
+}
+
+async function telegramSection(tx: Tx, deps: ApiDeps, c: Context<AppEnv>, id: string) {
+  const found = await telegramSectionFor(
+    tx,
+    deps,
+    { orgId: orgContextOf(c).orgId, subject: subjectOf(c) },
+    id,
+  );
+  if (found === 'off') {
+    apiFail(
+      403,
+      'cppage_off',
+      'Функция «Страница контрагента по ссылке» выключена в учётной политике',
+    );
+  }
+  if (found === 'hidden') apiFail(404, 'contractor_not_found', 'Контрагент не найден');
+  return found;
+}
+
+/**
+ * «Напоминать о долге в Telegram» у контрагента (задача К5; прототип pgDebtRow). Сумму долга видит
+ * только тот, кто видит её части в карточке: долг за обслуживание — право «Видеть плату за
+ * обслуживание», недостачу на налоги — «Просматривать финансовые операции» или «Учёт денег и оплата
+ * налогов», и только у контрагента из своей области «Финансовые операции» (в прототипе сумму видит
+ * каждый, кто открыл карточку).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-5
+async function debtOut(
+  tx: Tx,
+  deps: ApiDeps,
+  subject: AccessSubject,
+  cp: ContractorRecord,
+): Promise<ContractorTelegramBody['debt']> {
+  const settings = await contractorTelegramDebtSettings(tx);
+  if (!settings.available) return null;
+  const own = await contractorDebtSwitch(tx, cp.id);
+  if (!own) return null;
+  // Деньги контрагента закрыты ещё и областью группы «Финансовые операции» (как вкладка «Деньги»):
+  // чужой контрагент при области «Свои» — без суммы, иначе недостача вычислялась бы из неё.
+  const inFinScope = scopeOf(subject, 'fin') === 'all' || cp.responsible?.id === subject.employeeId;
+  const seesSum =
+    (!settings.fee || hasPermission(subject, 'fee')) &&
+    (!settings.taxpay ||
+      ((hasPermission(subject, 'finView') || hasPermission(subject, 'money')) && inFinScope));
+  const sum =
+    settings.on && seesSum
+      ? (
+          await contractorClientDebt(tx, {
+            contractorId: cp.id,
+            oneOff: cp.kind === 'oneoff',
+            today: todayOf(deps),
+            fee: settings.fee,
+            taxpay: settings.taxpay,
+          })
+        ).sum
+      : null;
+  return {
+    on: settings.on && !own.off,
+    orgOn: settings.on,
+    refusal: debtToggleRefusal({
+      canManagePage: hasPermission(subject, 'cpPage'),
+      orgOn: settings.on,
+    }),
+    sum,
+    version: own.version,
+  };
 }
 
 /** Список для ответа; `sectionOn` — раздел «Telegram» страницы сейчас показан клиенту. */
@@ -85,6 +177,7 @@ async function telegramOut(
     wait: items.filter((i) => i.status === 'wait').length,
     max: CP_TG_MAX,
     manage: hasPermission(subjectOf(c), 'cpPage') ? null : 'page_manage_right',
+    debt: await debtOut(tx, deps, subjectOf(c), cp),
   };
 }
 
@@ -190,6 +283,58 @@ export function decidePageTelegramHandler(
       decision.contractor,
     );
     return c.json(result.body, 200);
+  };
+}
+
+export const debtPageTelegramRoute = createRoute({
+  method: 'post',
+  path: '/contractors/{id}/page/telegram/debt',
+  tags: ['contractor-page'],
+  summary: '«Напоминать о долге в Telegram» у контрагента: включить или выключить',
+  middleware: [requirePermission('cpView')] as const,
+  request: {
+    params: z.object({ id: Uuid }),
+    body: {
+      required: true,
+      content: { 'application/json': { schema: ContractorTelegramDebtInput } },
+    },
+  },
+  responses: {
+    ...telegramResponses('Сохранено — обновлённый список'),
+    ...versionedSaveResponses,
+    409: {
+      description:
+        'Напоминания о долге выключены для всей организации (`page_debt_org_off`) или запись изменена',
+      content: error,
+    },
+  },
+});
+
+/**
+ * Сотрудник включает или выключает напоминание о долге у контрагента (прототип pgTgBoxClick, `debt`).
+ * Право «Управлять страницей контрагента» и область «Свои / Все контрагенты» проверяются до изменения;
+ * пока напоминания выключены у организации, переключатель не работает. История — в той же транзакции.
+ */
+export function debtPageTelegramHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof debtPageTelegramRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const input = c.req.valid('json');
+    const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
+      await telegramSection(tx, deps, c, id);
+      const settings = await contractorTelegramDebtSettings(tx);
+      const refusal = debtToggleRefusal({
+        canManagePage: hasPermission(subjectOf(c), 'cpPage'),
+        orgOn: settings.on,
+      });
+      if (refusal) {
+        apiFail(refusal === 'page_debt_right' ? 403 : 409, refusal, DEBT_TOGGLE_MESSAGES[refusal]);
+      }
+      await setContractorDebtOff(tx, id, !input.on, input.version);
+      return telegramOut(tx, deps, c, id);
+    });
+    return c.json(body, 200);
   };
 }
 

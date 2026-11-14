@@ -27,6 +27,8 @@ import {
   publicPageRoute,
 } from './public';
 import {
+  debtPageTelegramHandler,
+  debtPageTelegramRoute,
   decidePageTelegramHandler,
   decidePageTelegramRoute,
   getPageTelegramHandler,
@@ -57,6 +59,8 @@ export function contractorPageModule(deps: ApiDeps) {
       .openapi(publicPageFileRoute, publicPageFileHandler(deps))
       // Telegram контрагента (задача К3): список и решения в карточке, ссылка на бота со страницы.
       .openapi(getPageTelegramRoute, getPageTelegramHandler(deps))
+      // Раньше «…/telegram/{linkId}»: иначе «debt» разбирается как номер подключения.
+      .openapi(debtPageTelegramRoute, debtPageTelegramHandler(deps))
       .openapi(decidePageTelegramRoute, decidePageTelegramHandler(deps))
       .openapi(publicPageTelegramRoute, publicPageTelegramHandler(deps))
   );

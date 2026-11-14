@@ -49,6 +49,11 @@ export const orgSettings = pgTable(
      * отправляет клиенту «К оплате» за 5 дней до ближайшего срока оплаты месяца. По умолчанию выключено.
      */
     cpTgPay: boolean('cp_tg_pay').notNull().default(false),
+    /**
+     * «Напоминать контрагентам о долге» (доработки 13.11.2026, задача К5; прототип v94 `ORG.tgCpDebt`):
+     * раз в неделю, в понедельник в 10:00, — недостача на налоги месяца и долг за обслуживание.
+     */
+    cpTgDebt: boolean('cp_tg_debt').notNull().default(false),
     /** Разделы страницы контрагента по ссылке (`PAGE_SECTIONS` из @buhuchet/domain), по порядку. */
     pageSections: text('page_sections')
       .array()

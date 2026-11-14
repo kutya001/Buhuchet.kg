@@ -156,12 +156,13 @@ function SettingsForm({
     toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
 
-  // «Telegram контрагентов» (доработки 13.11.2026, К4; прототип pgTgOrgMount): включается сразу, без
-  // «Сохранить настройки»; набранные поля не теряются (как у «Действий из Telegram»).
-  const toggleCpTgPay = async (on: boolean) => {
+  // «Telegram контрагентов» (доработки 13.11.2026, К4 и К5; прототип pgTgOrgMount): переключатели
+  // «Отправлять «К оплате» контрагентам» и «Напоминать контрагентам о долге» сохраняются сразу, без
+  // «Сохранить настройки».
+  const toggleCpTg = async (field: 'cpTgPay' | 'cpTgDebt', on: boolean) => {
     setBusy(true);
     const res = await callApi(() =>
-      api.api.org.policy.$patch({ json: { version: policy.version, cpTgPay: on } }),
+      api.api.org.policy.$patch({ json: { version: policy.version, [field]: on } }),
     );
     setBusy(false);
     if (res.ok) {
@@ -172,7 +173,7 @@ function SettingsForm({
       refresh(false);
       return toast(
         t('cppage.org.toggled', {
-          name: t('cppage.org.pay'),
+          name: t(field === 'cpTgPay' ? 'cppage.org.pay' : 'cppage.org.debt'),
           state: t(on ? 'org.history.on' : 'org.history.off'),
         }),
         { icon: 'tg' },
@@ -293,10 +294,19 @@ function SettingsForm({
               plain
               checked={policy.cpTgPay}
               disabled={off}
-              onChange={(on) => void toggleCpTgPay(on)}
+              onChange={(on) => void toggleCpTg('cpTgPay', on)}
               label={t('cppage.org.pay')}
             >
               <Hint>{t('cppage.org.pay_hint', { n: CP_PAY_DAYS })}</Hint>
+            </CheckRow>
+            <CheckRow
+              plain
+              checked={policy.cpTgDebt}
+              disabled={off}
+              onChange={(on) => void toggleCpTg('cpTgDebt', on)}
+              label={t('cppage.org.debt')}
+            >
+              <Hint>{t('cppage.org.debt_hint')}</Hint>
             </CheckRow>
             <Hint>{t('cppage.org.hint')}</Hint>
           </Box>

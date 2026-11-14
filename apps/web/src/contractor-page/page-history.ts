@@ -31,6 +31,9 @@ const TELEGRAM_TEXT = {
   page_tg_no: 'cppage.hist.page_tg_no',
   page_tg_off: 'cppage.hist.page_tg_off',
   page_tg_leave: 'cppage.hist.page_tg_leave',
+  // Напоминания о долге: клиент выключил кнопкой «Не напоминать» и включил командой «Напоминать» (К5).
+  page_tg_nodebt: 'cppage.hist.page_tg_nodebt',
+  page_tg_debt_on: 'cppage.hist.page_tg_debt_on',
 } as const;
 
 const sectionsOf = (value: unknown): PageSection[] =>
@@ -86,6 +89,9 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
   if (entry.action in ACTION_TEXT) {
     return t(ACTION_TEXT[entry.action as keyof typeof ACTION_TEXT]);
   }
+  // «Напоминать о долге в Telegram» у контрагента (задача К5; прототип pgTgBoxClick, `debt`).
+  const debt = entry.changes.find((c) => c.field === 'tgDebtOff');
+  if (debt) return t(debt.to === true ? 'cppage.hist.debt_off' : 'cppage.hist.debt_on');
   const change = entry.changes.find((c) => c.field === 'hiddenSections');
   if (!change) return '';
   const before = sectionsOf(change.from);
