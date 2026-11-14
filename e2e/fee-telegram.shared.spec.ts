@@ -20,7 +20,13 @@ type FeeTelegram = {
   refusal: string | null;
   dialog: { debt: number; text: string; requisite: string } | null;
 };
-type PageBlock = { enabled: boolean; closed: boolean; code: string | null };
+type PageBlock = {
+  enabled: boolean;
+  closed: boolean;
+  code: string | null;
+  hiddenSections: string[];
+  version: number | null;
+};
 type TgList = { items: { id: string; name: string; status: string; version: number }[] };
 
 /** Сумма в сомах, как на экране: «280 000 сом» — с неразрывными пробелами, без «,00». */
@@ -123,7 +129,10 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
 
       // Долг за обслуживание есть, отправке ничто не мешает: текст и реквизиты окна — для сверки.
       const state = await json<FeeTelegram>(request, `/api/contractors/${cp.id}/fee-telegram`);
-      expect(state).toMatchObject({ shown: true, refusal: null });
+      expect(
+        state,
+        'отказ «Сегодня уже напоминали» здесь — повтор теста после отправки: раз в сутки на контрагента',
+      ).toMatchObject({ shown: true, refusal: null });
       const { debt, text: template, requisite } = state.dialog!;
       expect(debt).toBeGreaterThan(0);
       const sum = somPattern(debt);
@@ -133,6 +142,15 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
       const card = await openCard(page, isMobile, cp.id, cp.name);
       await toTab(page, card, isMobile, /Обслуживание/);
       const button = card.locator('[data-fee-tab] [data-fee-telegram]');
+      /** Скрыть у контрагента разделы страницы (с версией строки страницы). */
+      const hide = async (sections: string[]) => {
+        const { version } = await json<PageBlock>(request, `/api/contractors/${cp.id}/page`);
+        const res = await request.put(`/api/contractors/${cp.id}/page/sections`, {
+          headers: { origin },
+          data: { hiddenSections: sections, version },
+        });
+        expect(res.status(), await res.text()).toBe(200);
+      };
 
       await test.step('окно: получатель, текст по шаблону долга, реквизиты для обслуживания; поправил текст и отправил', async () => {
         await expect(button).toBeVisible();
@@ -150,14 +168,27 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
         const req = dialog.locator('[data-fee-telegram-requisite]');
         await expect(req).toContainText('Реквизиты для перевода — организации');
         await expect(req).toContainText(requisite.split('\n')[0]!);
+        // Кнопка копирования — по виду основного счёта для обслуживания (его меняет money.shared).
         await expect(req).toContainText(
-          'Под сообщением — кнопки «Скопировать номер телефона» и «Оплатил».',
+          /Под сообщением — кнопки «Скопировать [^»]+» и «Оплатил»\./,
         );
         // Пустой текст не отправляется.
         await text.fill('  ');
         await dialog.locator('[data-fee-telegram-send]').click();
         await expect(dialog).toContainText('Введите текст сообщения');
         await text.fill(own);
+        // Пока окно открыто, «Как оплатить» скрыли: отказ сообщением, окно с текстом остаётся открытым.
+        await hide(['pay']);
+        try {
+          await dialog.locator('[data-fee-telegram-send]').click();
+          await expect(
+            page.getByRole('status').filter({ hasText: /на странице скрыт раздел «Как оплатить»/ }),
+          ).toBeVisible();
+          await expect(dialog).toBeVisible();
+          await expect(text).toHaveValue(own);
+        } finally {
+          await hide(before.hiddenSections);
+        }
         await dialog.locator('[data-fee-telegram-send]').click();
         await expect(
           page
@@ -179,10 +210,10 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
         expect(sent[0]!.text).toContain(cp.name);
         expect(sent[0]!.text).toContain(own);
         expect(sent[0]!.text).toContain(requisite.split('\n')[0]!);
-        expect(sent[0]!.keyboard?.flat().map((b) => b.text)).toEqual([
-          'Скопировать номер телефона',
-          'Оплатил',
-        ]);
+        const buttons = sent[0]!.keyboard?.flat().map((b) => b.text) ?? [];
+        expect(buttons).toHaveLength(2);
+        expect(buttons[0]).toMatch(/^Скопировать /);
+        expect(buttons[1]).toBe('Оплатил');
       });
 
       await test.step('второй раз за день кнопка неактивна: «Сегодня уже напоминали в ЧЧ:ММ»', async () => {
