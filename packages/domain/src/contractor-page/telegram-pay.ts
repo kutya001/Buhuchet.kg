@@ -14,8 +14,11 @@ import { BOT_COPY_MAX, type BotButton, type BotMessage } from '../telegram/bot-m
 /** За сколько дней до ближайшего срока оплаты месяца сообщение уходит само (прототип PG_PAY_DAYS). */
 export const CP_PAY_DAYS = 5;
 
-/** Виды сообщений клиенту, под которыми бот принимает нажатия и ответы. */
-export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt'] as const;
+/**
+ * Виды сообщений клиенту, под которыми бот принимает нажатия и ответы; `fee` — «Оплата за обслуживание
+ * до …» (доработки 14.11.2026, блок 3 и блок 4, пункт 5): само и ручное, одно на чат в день.
+ */
+export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee'] as const;
 export type CpTgMessageKind = (typeof CP_TG_MESSAGE_KINDS)[number];
 
 /** Коды действий кнопок клиента (латиница, до 16 знаков — `botPressData`). */

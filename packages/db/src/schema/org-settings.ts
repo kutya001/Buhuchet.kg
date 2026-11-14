@@ -54,6 +54,12 @@ export const orgSettings = pgTable(
      * раз в неделю, в понедельник в 10:00, — недостача на налоги месяца и долг за обслуживание.
      */
     cpTgDebt: boolean('cp_tg_debt').notNull().default(false),
+    /**
+     * «Контрагент может отправлять файлы» в учётной политике, под разделом «Файлы» страницы (доработки
+     * 14.11.2026, блок 2, пункт 1): по умолчанию включено; у контрагента — своя галочка
+     * (`contractor_pages.files_upload`).
+     */
+    cpFilesUpload: boolean('cp_files_upload').notNull().default(true),
     /** Разделы страницы контрагента по ссылке (`PAGE_SECTIONS` из @buhuchet/domain), по порядку. */
     pageSections: text('page_sections')
       .array()

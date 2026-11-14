@@ -90,8 +90,11 @@ export const contractors = pgTable(
     startDate: date('start_date', { mode: 'string' }).notNull(),
     /** «Первый неполный месяц»; без поля в форме — «Полный месяц» (docs/deviations.md п. А-1). */
     firstMonthMode: text('first_month_mode', { enum: FIRST_MONTH_MODES }).notNull().default('full'),
-    /** День оплаты обслуживания в месяце. */
-    feeDay: smallint('fee_day').notNull().default(10),
+    /**
+     * «День оплаты обслуживания» в месяце; по умолчанию 1-е число (решение заказчика 14.11.2026,
+     * доработки 14.11.2026, блок 3; у заведённых раньше остаётся свой день).
+     */
+    feeDay: smallint('fee_day').notNull().default(1),
     /** Куда переводит деньги на налоги (поток В, задача 2.18). */
     paysTo: text('pays_to', { enum: PAYS_TO }).notNull().default('emp'),
     /** «Файл при поступлении: обязательно требовать» — поступление без файла не сохраняется (2.19). */

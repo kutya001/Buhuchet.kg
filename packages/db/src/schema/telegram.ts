@@ -4,6 +4,8 @@ import {
   NOTIFY_MODES,
   OUTBOX_KINDS,
   OUTBOX_STATUSES,
+  TG_NOTICE_CODES,
+  TG_NOTICE_DAYS,
   type BotMessage,
 } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
@@ -18,7 +20,9 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  smallint,
   text,
+  time,
   timestamp,
   unique,
   uuid,
@@ -310,24 +314,55 @@ export const telegramDigestDays = pgTable(
 ).enableRLS();
 
 /**
- * Темы личного чата с ботом (поток Т, задача Т7; docs/decisions.md п. Т-7): какой теме чата какой номер
- * темы у Telegram. Ключ — тема по виду (`rep`, `task`, `lead`, `sec`) или организации (`org:<id>`).
- * Строка — про чат, а не про организацию: роль приложения таблицу не видит, читает и пишет её только
- * функциями `app.telegram_topic_*` (миграция `telegram_topics_functions`).
- * Темы убраны по решению заказчика 14.11.2026 (прототип v109, docs/decisions.md п. Т-10): код таблицу
- * больше не читает и не пишет; таблица и функции удаляются отдельной миграцией следующим PR (правило двух PR).
+ * Строки блока «Telegram-уведомления» в настройках организации (доработки 14.11.2026, блок 3): в какие
+ * дни и во сколько уходят недельная сводка сотрудникам, «К оплате» и «Оплата за обслуживание»
+ * контрагентам. Включено или нет — по-прежнему в учётной политике (`org_settings`) и у общего чата
+ * (`telegram_groups`). Нет строки — значения по умолчанию, как работало до блока: сводка — понедельник в
+ * общий час напоминаний, «К оплате» — за 5 дней в 10:00, обслуживание — за 5 дней в 10:00 и долг по
+ * понедельникам в 10:00. Меняет только владелец организации, изменение пишется в историю организации.
  */
-export const telegramTopics = pgTable(
-  'telegram_topics',
+export const orgTelegramNotices = pgTable(
+  'org_telegram_notices',
   {
-    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
-    key: text('key').notNull(),
-    threadId: integer('thread_id').notNull(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    code: text('code', { enum: TG_NOTICE_CODES }).notNull(),
+    /** Галочки «за N дней» до срока оплаты (1–5). */
+    days: smallint('days')
+      .array()
+      .notNull()
+      .default(sql`'{}'::smallint[]`),
+    /** День недели по ISO (1 — понедельник): у сводки и напоминания о долге после срока. */
+    weekday: smallint('weekday'),
+    /** Час по Бишкеку; пусто у сводки — общий час напоминаний (`org_settings.digest_time`). */
+    atTime: time('at_time'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: uuid('updated_by'),
+    version: recordVersion(),
   },
   (t) => [
-    primaryKey({ name: 'telegram_topics_pk', columns: [t.chatId, t.key] }),
-    check('telegram_topics_key_check', sql`${t.key} ~ '^(rep|task|lead|sec|org:[0-9a-f-]{36})$'`),
+    primaryKey({ name: 'org_telegram_notices_pk', columns: [t.orgId, t.code] }),
+    foreignKey({
+      name: 'org_telegram_notices_updated_by_fk',
+      columns: [t.updatedBy, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('restrict'),
+    check('org_telegram_notices_code_check', sql`${t.code} in (${inList(TG_NOTICE_CODES)})`),
+    check(
+      'org_telegram_notices_days_check',
+      sql`${t.days} <@ '{${sql.raw(TG_NOTICE_DAYS.join(','))}}'::smallint[] and (${t.code} <> 'staff_week' or cardinality(${t.days}) = 0)`,
+    ),
+    check(
+      'org_telegram_notices_weekday_check',
+      sql`(${t.weekday} is null or ${t.weekday} between 1 and 7) and (${t.code} <> 'cp_pay' or ${t.weekday} is null)`,
+    ),
+    check(
+      'org_telegram_notices_time_check',
+      sql`${t.code} = 'staff_week' or ${t.atTime} is not null`,
+    ),
+    orgIsolation('org_telegram_notices_isolation', t.orgId),
   ],
 ).enableRLS();
 

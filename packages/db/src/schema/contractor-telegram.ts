@@ -1,4 +1,13 @@
-import { CP_TG_MESSAGE_KINDS, CP_TG_STATUSES, type BotMessage } from '@buhuchet/domain';
+import {
+  CP_TG_MESSAGE_KINDS,
+  CP_TG_STATUSES,
+  MONEY_AMOUNT_MAX,
+  PAY_CLAIM_COMMENT_MAX,
+  PAY_CLAIM_PURPOSES,
+  PAY_CLAIM_SOURCES,
+  PAY_CLAIM_STATUSES,
+  type BotMessage,
+} from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -8,6 +17,7 @@ import {
   foreignKey,
   index,
   jsonb,
+  pgPolicy,
   pgTable,
   smallint,
   text,
@@ -15,11 +25,11 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { recordVersion, timestamps } from './columns';
+import { money, recordVersion, timestamps } from './columns';
 import { contractorPages } from './contractor-page';
 import { contractors } from './contractors';
 import { organizations } from './organizations';
-import { orgIsolation } from './rls';
+import { appRole, orgIsolation } from './rls';
 import { users } from './users';
 
 const orgColumn = () =>
@@ -141,6 +151,11 @@ export const contractorTelegramMessages = pgTable(
     auto: boolean('auto').notNull().default(false),
     /** Понедельник недели напоминания о долге (задача К5): одно напоминание на неделю и чат. */
     week: date('week'),
+    /**
+     * День отправки по Бишкеку (доработки 14.11.2026, блок 3): у «Оплата за обслуживание до …» — одно
+     * сообщение на чат в день, само и ручное вместе.
+     */
+    day: date('day', { mode: 'string' }),
     /** Описание сообщения с кнопками (`BotMessage`): нажатая кнопка в нём гаснет. */
     payload: jsonb('payload').$type<BotMessage>().notNull(),
     /** Сколько раз пробовали отправить: задача по расписанию повторяет до трёх раз. */
@@ -178,6 +193,10 @@ export const contractorTelegramMessages = pgTable(
       'contractor_telegram_messages_pay_check',
       sql`${t.kind} <> 'pay' or (${t.month} is not null and ${t.total} is not null and ${t.total} > 0)`,
     ),
+    check(
+      'contractor_telegram_messages_fee_check',
+      sql`${t.kind} <> 'fee' or (${t.day} is not null and ${t.total} is not null and ${t.total} > 0)`,
+    ),
     uniqueIndex('contractor_telegram_messages_chat_key')
       .on(t.chatId, t.messageId)
       .where(sql`${t.messageId} is not null`),
@@ -189,7 +208,111 @@ export const contractorTelegramMessages = pgTable(
     uniqueIndex('contractor_telegram_messages_debt_key')
       .on(t.linkId, t.week)
       .where(sql`${t.kind} = 'debt'`),
+    // «Оплата за обслуживание до …» — одно на чат в день: повтор задачи и второе ручное не создаются.
+    uniqueIndex('contractor_telegram_messages_fee_key')
+      .on(t.linkId, t.day)
+      .where(sql`${t.kind} = 'fee'`),
     index('contractor_telegram_messages_contractor_idx').on(t.orgId, t.contractorId, t.createdAt),
+    // Для составного ключа «Я оплатил»: оплаченное сообщение — только своего контрагента.
+    uniqueIndex('contractor_telegram_messages_scope_key').on(t.id, t.orgId, t.contractorId),
     orgIsolation('contractor_telegram_messages_isolation', t.orgId),
+  ],
+).enableRLS();
+
+const oneOf = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
+
+/**
+ * «Я оплатил» со страницы контрагента и «Оплатил» в Telegram (доработки 14.11.2026, блоки 4 и 6): клиент
+ * сообщает, что перевёл деньги. Пока бухгалтер не принял деньги, у месяца — «Ожидает подтверждения», и
+ * следующие «К оплате» за этот месяц не уходят. Чек — строка «Отправленных файлов» (`sent_file_id`; ключ
+ * с ON DELETE SET NULL (sent_file_id) — в миграции 0147: непринятый чек через 30 дней удаляется, а
+ * сообщение об оплате остаётся). У «Оплатил» в боте сумма и месяц — из оплаченного сообщения.
+ *
+ * Строку создаёт страница без входа и бот — функциями базы задач блоков 4 и 6; роль приложения
+ * вставляет только ждущую подтверждения, меняет только решение (права на столбцы — в миграции 0147) и
+ * не удаляет.
+ */
+export const contractorPayClaims = pgTable(
+  'contractor_pay_claims',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: orgColumn(),
+    contractorId: uuid('contractor_id').notNull(),
+    source: text('source', { enum: PAY_CLAIM_SOURCES }).notNull(),
+    purpose: text('purpose', { enum: PAY_CLAIM_PURPOSES }).notNull(),
+    /** Месяц «ГГГГ-ММ»: у «Перечислить» и «Оплатил» под «К оплате»; у обслуживания — пусто. */
+    month: text('month'),
+    amount: money('amount'),
+    comment: text('comment'),
+    sentFileId: uuid('sent_file_id'),
+    /** Сообщение «К оплате» или «Оплата за обслуживание», под которым нажали «Оплатил». */
+    tgMessageId: uuid('tg_message_id'),
+    status: text('status', { enum: PAY_CLAIM_STATUSES }).notNull().default('wait'),
+    decidedBy: uuid('decided_by'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    ...timestamps(),
+    version: recordVersion(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'contractor_pay_claims_contractor_fk',
+      columns: [t.contractorId, t.orgId],
+      foreignColumns: [contractors.id, contractors.orgId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'contractor_pay_claims_message_fk',
+      columns: [t.tgMessageId, t.orgId, t.contractorId],
+      foreignColumns: [
+        contractorTelegramMessages.id,
+        contractorTelegramMessages.orgId,
+        contractorTelegramMessages.contractorId,
+      ],
+    }),
+    foreignKey({
+      name: 'contractor_pay_claims_decided_by_fk',
+      columns: [t.decidedBy, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('restrict'),
+    check('contractor_pay_claims_source_check', sql`${t.source} in (${oneOf(PAY_CLAIM_SOURCES)})`),
+    check(
+      'contractor_pay_claims_purpose_check',
+      sql`${t.purpose} in (${oneOf(PAY_CLAIM_PURPOSES)})`,
+    ),
+    check('contractor_pay_claims_status_check', sql`${t.status} in (${oneOf(PAY_CLAIM_STATUSES)})`),
+    check(
+      'contractor_pay_claims_month_check',
+      sql`${t.month} is null or ${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`,
+    ),
+    check(
+      'contractor_pay_claims_amount_check',
+      sql`${t.amount} is null or (${t.amount} > 0 and ${t.amount} <= ${sql.raw(String(MONEY_AMOUNT_MAX))})`,
+    ),
+    check(
+      'contractor_pay_claims_comment_check',
+      sql`char_length(coalesce(${t.comment}, '')) <= ${sql.raw(String(PAY_CLAIM_COMMENT_MAX))}`,
+    ),
+    check(
+      'contractor_pay_claims_message_check',
+      sql`${t.source} = 'telegram' or ${t.tgMessageId} is null`,
+    ),
+    check(
+      'contractor_pay_claims_decided_check',
+      sql`(${t.status} = 'wait') = (${t.decidedAt} is null) and (${t.decidedBy} is null or ${t.decidedAt} is not null)`,
+    ),
+    index('contractor_pay_claims_contractor_idx').on(t.orgId, t.contractorId, t.createdAt),
+    // «Ожидает подтверждения» у месяцев контрагента.
+    index('contractor_pay_claims_wait_idx')
+      .on(t.orgId, t.contractorId, t.month)
+      .where(sql`${t.status} = 'wait'`),
+    index('contractor_pay_claims_file_idx')
+      .on(t.sentFileId)
+      .where(sql`${t.sentFileId} is not null`),
+    orgIsolation('contractor_pay_claims_isolation', t.orgId),
+    pgPolicy('contractor_pay_claims_insert_guard', {
+      as: 'restrictive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`${t.status} = 'wait'`,
+    }),
   ],
 ).enableRLS();

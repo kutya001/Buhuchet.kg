@@ -128,3 +128,36 @@ export const adminLoginCodes = pgTable(
   },
   (t) => [index('admin_login_codes_user_idx').on(t.userId, t.createdAt)],
 ).enableRLS();
+
+/**
+ * Одноразовые ссылки «задать пароль» (доработки 14.11.2026, блок 1, пункт 3): после «Одобрить» бот
+ * присылает владельцу новой организации ссылку, по которой он задаёт пароль; действует 7 дней, истекла —
+ * администратор платформы отправляет новую из карточки организации. Здесь — только SHA-256 токена.
+ * Роль приложения таблицу не видит и не меняет (RLS без политик): страница ссылки открывается без входа,
+ * поэтому выдают и проверяют ссылку только функции базы (их добавляют задачи блока 1).
+ */
+export const passwordSetupTokens = pgTable(
+  'password_setup_tokens',
+  {
+    tokenHash: text('token_hash').primaryKey(),
+    userId: uuid('user_id').notNull(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    /** Пароль задан или выдана новая ссылка — эта больше не действует. */
+    usedAt: timestamp('used_at', { withTimezone: true }),
+    /** Администратор платформы, выдавший ссылку; пусто — выдана при «Одобрить». */
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    foreignKey({
+      name: 'password_setup_tokens_user_org_fk',
+      columns: [t.userId, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('cascade'),
+    index('password_setup_tokens_user_idx').on(t.userId, t.createdAt),
+    index('password_setup_tokens_expires_idx').on(t.expiresAt),
+  ],
+).enableRLS();
