@@ -14,7 +14,8 @@ const changeOf = (e: SentHistoryEntry, field: string) =>
 
 /**
  * Что произошло с файлом от контрагента — строкой, как в прототипе v112 (`pubUpDlg`, `sntAccept`,
- * `sntRejectDlg`, `sntPurge`): «Контрагент отправил со страницы файлы: …. Комментарий: …», «Принят файл
+ * `sntRejectDlg`, `sntPurge`) и v115 (`pgFileIn`): «Контрагент отправил со страницы файлы: ….
+ * Комментарий: …», «Контрагент отправил через Telegram («@имя») чек: …», «Принят файл
  * от контрагента «…» (сохранён как «…»)», «Отклонён файл от контрагента «…»: причина», «Удалён
  * непринятый файл от контрагента «…»: прошло 30 дней после отправки».
  */
@@ -25,12 +26,15 @@ export function sentHistoryText(t: Translate, e: SentHistoryEntry): string {
       const files = changeOf(e, 'files');
       const names = Array.isArray(files) ? files.map(str) : [];
       const form = names.length > 1 ? 'many' : 'one';
-      const text = t(
+      // Из Telegram — с именем чата и «чек» у чека (прототип v115 `pgFileIn`).
+      const who = str(changeOf(e, 'sender'));
+      const text =
         changeOf(e, 'source') === 'telegram'
-          ? `files.sent.hist.send_tg.${form}`
-          : `files.sent.hist.send.${form}`,
-        { names: names.join(', ') },
-      );
+          ? t(
+              `files.sent.hist.${who ? 'send_tg' : 'send_tg_anon'}.${changeOf(e, 'receipt') === true ? 'receipt' : form}`,
+              { names: names.join(', '), who },
+            )
+          : t(`files.sent.hist.send.${form}`, { names: names.join(', ') });
       const note = str(changeOf(e, 'comment'));
       return note ? t('files.sent.hist.note', { text, note }) : text;
     }

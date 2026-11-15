@@ -7,9 +7,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { FeePaymentDialog, type FeePaymentPreset } from '../fees/fee-dialogs';
-import { useFeesRefresh } from '../fees/fees-data';
+import { feePaymentFormQuery, useFeesRefresh } from '../fees/fees-data';
 import { useT } from '../l10n/provider';
-import { useMoneyRefresh } from '../money/tax-data';
+import { receiptFormQuery, useMoneyRefresh } from '../money/tax-data';
 import { ReceiptDialog, type ReceiptPreset } from '../money/tax-dialogs';
 import { contractorMonthReportsQuery } from '../reports/reports-data';
 import { useShell } from '../shell/context';
@@ -40,8 +40,15 @@ export function useReceiptMoney(): {
 
   const take = useCallback(
     async (contractorId: string, pay: SentFilePay) => {
+      // Окно с полями открывается, когда его форма загружена (apps/web/CLAUDE.md, № 28): иначе оно
+      // рисуется дважды. Не загрузилось — файл всё равно принят, деньги можно принять во вкладке.
       if (pay.purpose === 'fee') {
         if (!access.feature('fee') || !access.can('fee') || !access.can('tariff')) return;
+        try {
+          await client.fetchQuery({ ...feePaymentFormQuery(contractorId), staleTime: 0 });
+        } catch {
+          return;
+        }
         setFee(
           openSlot({ contractorId, preset: { amount: pay.amount, note: feeReceiptNote(t, pay) } }),
         );
@@ -50,12 +57,11 @@ export function useReceiptMoney(): {
       if (!pay.month || !access.feature('taxpay') || !access.can('money')) return;
       let rows;
       try {
-        rows = await client.fetchQuery({
-          ...contractorMonthReportsQuery(contractorId),
-          staleTime: 0,
-        });
+        [rows] = await Promise.all([
+          client.fetchQuery({ ...contractorMonthReportsQuery(contractorId), staleTime: 0 }),
+          client.fetchQuery({ ...receiptFormQuery(contractorId), staleTime: 0 }),
+        ]);
       } catch {
-        // Отчёты не загрузились — файл всё равно принят, деньги можно принять во вкладке.
         return;
       }
       const lastMonth = currentPlanMonth(bishkekDate(new Date()));

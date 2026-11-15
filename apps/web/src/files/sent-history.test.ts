@@ -43,7 +43,30 @@ describe('файлы от контрагентов: тексты истории 
           { field: 'source', to: 'telegram' },
         ]),
       ),
-    ).toBe('Контрагент прислал в Telegram файл: Чек.jpg');
+    ).toBe('Контрагент отправил через Telegram файл: Чек.jpg');
+    // Из Telegram — с именем чата; чек — «чек» (прототип v115 pgFileIn).
+    expect(
+      sentHistoryText(
+        t,
+        entry('sent_file_send', [
+          { field: 'files', to: ['Акт.pdf'] },
+          { field: 'source', to: 'telegram' },
+          { field: 'sender', to: '@client' },
+          { field: 'comment', to: 'Акт сверки' },
+        ]),
+      ),
+    ).toBe('Контрагент отправил через Telegram («@client») файл: Акт.pdf. Комментарий: Акт сверки');
+    expect(
+      sentHistoryText(
+        t,
+        entry('sent_file_send', [
+          { field: 'files', to: ['Чек.pdf'] },
+          { field: 'source', to: 'telegram' },
+          { field: 'sender', to: '@client' },
+          { field: 'receipt', to: true },
+        ]),
+      ),
+    ).toBe('Контрагент отправил через Telegram («@client») чек: Чек.pdf');
   });
 
   it('«Принять» (с «сохранён как»), «Отклонить» с причиной, удаление через 30 дней', () => {

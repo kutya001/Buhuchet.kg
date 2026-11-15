@@ -342,6 +342,7 @@ async function sendClientFile(
       senderName: o.senderName,
       tgChatId: o.chatId,
       comment: o.comment,
+      receipt: o.receipt,
       files: [{ name: o.name, bytes: loaded.body }],
     });
   } catch (err) {

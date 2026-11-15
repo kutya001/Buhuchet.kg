@@ -160,6 +160,8 @@ export const PageSentFile = z.object({
   id: Uuid,
   name: z.string(),
   sentAt: z.iso.datetime(),
+  /** Прислан через бота (прототип v115 `pubSentHtml`: « · из Telegram»). */
+  telegram: z.boolean(),
   comment: z.string().nullable(),
   status: SentFileStatusSchema,
   reason: z.string().nullable(),

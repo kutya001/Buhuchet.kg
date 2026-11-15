@@ -185,7 +185,11 @@ async function prepareFeeSoon(
   const found = await feeSubject(tx, cp.id, undefined);
   if (!found) return [];
   // Начисления — с запасом до конца следующего месяца: «ближайшее» бывает и следующего месяца.
-  const fees = contractorFees(found.subject, found.payments, lastDayOf(addMonths(monthOf(today), 1)));
+  const fees = contractorFees(
+    found.subject,
+    found.payments,
+    lastDayOf(addMonths(monthOf(today), 1)),
+  );
   const soon = feeSoon(fees.months, today, await payClaimMonths(tx, cp.id, 'fee'));
   if (!soon || !cpNoticeDayDue(today, soon.due, days)) return [];
   const done = await autoFeeLinkIds(tx, cp.id, today);
@@ -261,6 +265,8 @@ async function prepareDebt(
     if (!recipients.length) continue;
     const cp = await getContractor(tx, contractorId, { scope: undefined, today });
     if (!cp) continue;
+    // «До срока» — не напоминание о долге: выключатель сотрудника «Напоминать о долге в Telegram» его
+    // не останавливает (прототип v115 pgFeeSoon → pgFeeTo смотрит только «Не напоминать» клиента).
     if (settings.fee) {
       out.push(...(await prepareFeeSoon(tx, t, cp, recipients, today, notices.feeDays)));
     }

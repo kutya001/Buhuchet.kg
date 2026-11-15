@@ -22,9 +22,45 @@ type Policy = {
 };
 
 async function policy(api: APIRequestContext) {
-  const res = await api.get('/api/org/policy');
+  // Чтение повторяется при обрыве простаивающего соединения (docs/typical-mistakes.md № 26).
+  const res = await api.get('/api/org/policy', { maxRetries: 2 });
   expect(res.status()).toBe(200);
   return (await res.json()) as Policy;
+}
+
+type Notices = Pick<Policy, 'cpPayDays' | 'cpPayAt' | 'cpFeeDays' | 'cpFeeAt' | 'cpDebtWeekDay'>;
+
+/** Дни, время и день долга строк контрагентов — как по умолчанию у демо-организации. */
+const DEFAULT_NOTICES: Notices = {
+  cpPayDays: [5],
+  cpPayAt: '10:00',
+  cpFeeDays: [5],
+  cpFeeAt: '10:00',
+  cpDebtWeekDay: 1,
+};
+
+/**
+ * Поставить дни и время строк: сохранение по версии, поэтому при «запись изменена» (сохранение от
+ * нажатия ещё шло) — перечитать версию и повторить.
+ */
+async function setNotices(api: APIRequestContext, origin: string, to: Notices) {
+  await expect(async () => {
+    const now = await policy(api);
+    if (
+      now.cpPayDays.join() === to.cpPayDays.join() &&
+      now.cpFeeDays.join() === to.cpFeeDays.join() &&
+      now.cpPayAt === to.cpPayAt &&
+      now.cpFeeAt === to.cpFeeAt &&
+      now.cpDebtWeekDay === to.cpDebtWeekDay
+    ) {
+      return;
+    }
+    const res = await api.patch('/api/org/policy', {
+      headers: { origin },
+      data: { version: now.version, ...to },
+    });
+    expect(res.status(), await res.text()).toBe(200);
+  }).toPass({ timeout: 15_000 });
 }
 
 test.describe('Доработки 13.11, К4: «Telegram контрагентов» в настройках организации', () => {
@@ -47,10 +83,13 @@ test.describe('Доработки 13.11, К4: «Telegram контрагенто�
       await expect(box).toContainText(
         'Получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.',
       );
-      await expect(box.locator('[data-tgn-kv="days"]')).toContainText(
-        'За 5 дней до ближайшего срока оплаты месяца',
-      );
-      await expect(box.locator('[data-tgn-kv="at"]')).toContainText('10:00');
+      // Дни и время — как сохранены у организации (по умолчанию «за 5» и 10:00).
+      if (before.cpPayDays.join() === '5') {
+        await expect(box.locator('[data-tgn-kv="days"]')).toContainText(
+          'За 5 дней до ближайшего срока оплаты месяца',
+        );
+      }
+      await expect(box.locator('[data-tgn-kv="at"]')).toContainText(before.cpPayAt);
       const toggle = box.getByRole('switch', { name: '«К оплате»' });
       await expect(toggle).toBeChecked({ checked: before.cpTgPay });
 
@@ -124,10 +163,12 @@ test.describe('Доработки 13.11, К5: «Напоминать контр�
       await expect(box).toContainText(
         'После срока — напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
       );
-      await expect(box.locator('[data-tgn-kv="days"]')).toContainText(
-        'За 5 дней до дня оплаты; после срока — по понедельникам',
-      );
-      await expect(box.locator('[data-tgn-kv="at"]')).toContainText('10:00');
+      if (before.cpFeeDays.join() === '5' && before.cpDebtWeekDay === 1) {
+        await expect(box.locator('[data-tgn-kv="days"]')).toContainText(
+          'За 5 дней до дня оплаты; после срока — по понедельникам',
+        );
+      }
+      await expect(box.locator('[data-tgn-kv="at"]')).toContainText(before.cpFeeAt);
       const toggle = box.getByRole('switch', { name: 'Оплата за обслуживание' });
       await expect(toggle).toBeChecked({ checked: before.cpTgDebt });
       // Соседний переключатель «К оплате» от этого не меняется.
@@ -197,32 +238,25 @@ test.describe('Доработки 14.11, этап 2: дни и время «К �
     const saved = (text: string) =>
       expect(page.getByRole('status').filter({ hasText: text })).toBeVisible();
     try {
-      // Начинаем с «за 5» у обеих строк и понедельника — так стоит по умолчанию.
-      if (
-        before.cpPayDays.join() !== '5' ||
-        before.cpFeeDays.join() !== '5' ||
-        before.cpDebtWeekDay !== 1
-      ) {
-        const res = await page.request.patch('/api/org/policy', {
-          headers: { origin },
-          data: { version: before.version, cpPayDays: [5], cpFeeDays: [5], cpDebtWeekDay: 1 },
-        });
-        expect(res.status(), await res.text()).toBe(200);
-      }
+      // Начинаем с «за 5» у обеих строк, 10:00 и понедельника — так стоит по умолчанию.
+      await setNotices(page.request, origin, DEFAULT_NOTICES);
       await page.goto('/app/org/settings');
       const pay = page.locator('[data-tgn="cpPay"]');
       const fee = page.locator('[data-tgn="cpFee"]');
 
       // «К оплате»: отметить «за 3» — сразу сохранено, строка «Дни» — новыми днями.
-      await pay.locator('[data-tgn-day="p:3"]').check();
+      // Галочка сохраняется на сервере и отмечается по ответу: click, а не check (check ждёт смены сразу).
+      await pay.locator('[data-tgn-day="p:3"]').click();
       await saved('«К оплате»: за 5, 3 дня до срока');
+      await expect(pay.locator('[data-tgn-day="p:3"]')).toBeChecked();
       await expect(pay.locator('[data-tgn-kv="days"]')).toContainText(
         'За 5, 3 дня до ближайшего срока оплаты месяца',
       );
       expect((await policy(page.request)).cpPayDays).toEqual([5, 3]);
       // Последний отмеченный день снять нельзя.
-      await pay.locator('[data-tgn-day="p:5"]').uncheck();
+      await pay.locator('[data-tgn-day="p:5"]').click();
       await saved('«К оплате»: за 3 дня до срока');
+      await expect(pay.locator('[data-tgn-day="p:5"]')).not.toBeChecked();
       await pay.locator('[data-tgn-day="p:3"]').click();
       await expect(pay.getByText('Отметьте хотя бы один день')).toBeVisible();
       await expect(pay.locator('[data-tgn-day="p:3"]')).toBeChecked();
@@ -237,8 +271,9 @@ test.describe('Доработки 14.11, этап 2: дни и время «К �
       expect((await policy(page.request)).cpPayAt).toBe('09:30');
 
       // «Оплата за обслуживание»: дни до дня оплаты и день напоминания о долге.
-      await fee.locator('[data-tgn-day="f:1"]').check();
+      await fee.locator('[data-tgn-day="f:1"]').click();
       await saved('Оплата за обслуживание: за 5, 1 день до срока');
+      await expect(fee.locator('[data-tgn-day="f:1"]')).toBeChecked();
       await fee.locator('[data-tgn-fwd]').selectOption('3');
       await saved('Напоминание о долге — по средам');
       await expect(fee.locator('[data-tgn-kv="days"]')).toContainText(
@@ -268,19 +303,14 @@ test.describe('Доработки 14.11, этап 2: дни и время «К �
       await staff.dispose();
       expect((await policy(page.request)).cpPayDays).toEqual([3]);
     } finally {
-      const now = await policy(page.request);
-      const res = await page.request.patch('/api/org/policy', {
-        headers: { origin },
-        data: {
-          version: now.version,
-          cpPayDays: before.cpPayDays,
-          cpPayAt: before.cpPayAt,
-          cpFeeDays: before.cpFeeDays,
-          cpFeeAt: before.cpFeeAt,
-          cpDebtWeekDay: before.cpDebtWeekDay,
-        },
+      // Сохранение от последнего нажатия могло ещё идти — возврат по свежей версии, с повтором.
+      await setNotices(page.request, origin, {
+        cpPayDays: before.cpPayDays,
+        cpPayAt: before.cpPayAt,
+        cpFeeDays: before.cpFeeDays,
+        cpFeeAt: before.cpFeeAt,
+        cpDebtWeekDay: before.cpDebtWeekDay,
       });
-      expect(res.status(), await res.text()).toBe(200);
     }
   });
 });

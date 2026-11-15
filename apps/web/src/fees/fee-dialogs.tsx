@@ -584,9 +584,12 @@ function FeePaymentModal({
             label={t('fee.pay.amount')}
             required
             hint={
-              form?.debt
-                ? t('fee.pay.amount_hint', { amount: formatSomWithUnit(form.debt) })
-                : undefined
+              // Чек из Telegram: сумма — из сообщения (прототип v115 `feePayDlg`, `pre`).
+              presetSum != null
+                ? t('fee.pay.amount_hint_tg', { amount: formatSomWithUnit(presetSum) })
+                : form?.debt
+                  ? t('fee.pay.amount_hint', { amount: formatSomWithUnit(form.debt) })
+                  : undefined
             }
             error={errors.amount}
           >

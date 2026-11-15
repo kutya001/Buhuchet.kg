@@ -2283,13 +2283,26 @@ describe.skipIf(!databaseAvailable())(
 
       it('карточка: «Напоминать о долге в Telegram» — состояние, сумма и что мешает', async () => {
         const debt = (await card(owner, cpA)).debt!;
+        // Когда уходит — день недели и время строки «Оплата за обслуживание» (по умолчанию — понедельник, 10:00).
         expect(debt).toEqual({
           on: true,
           orgOn: true,
           refusal: null,
           sum: SHORT + FEE,
+          weekDay: 1,
+          at: '10:00',
           version: expect.any(Number),
         });
+        await f.t.admin.db
+          .insert(schema.orgTelegramNotices)
+          .values({ orgId: f.a.orgId, code: 'cp_fee', days: [5], weekday: 4, atTime: '09:30' });
+        try {
+          expect((await card(owner, cpA)).debt).toMatchObject({ weekDay: 4, at: '09:30' });
+        } finally {
+          await f.t.admin.db
+            .delete(schema.orgTelegramNotices)
+            .where(eq(schema.orgTelegramNotices.orgId, f.a.orgId));
+        }
         expect((await card(chief, cpA)).debt).toMatchObject({ refusal: null, sum: SHORT + FEE });
         // Бухгалтер: права «Управлять страницей контрагента» нет; плату за обслуживание он не видит —
         // суммы долга в ответе нет.

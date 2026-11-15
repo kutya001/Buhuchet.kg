@@ -223,6 +223,7 @@ async function pageSent(tx: Tx, contractorId: string, today: IsoDate) {
       id: x.id,
       name: x.name,
       sentAt: x.createdAt.toISOString(),
+      telegram: x.source === 'telegram',
       comment: x.comment,
       status: x.status,
       reason: x.status === 'rejected' ? x.rejectReason : null,

@@ -443,6 +443,8 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     baseURL,
     isMobile,
   }) => {
+    // Около 20 шагов через экран и API («К оплате», «Оплатил», вопрос и ответ, история) и три шага бота
+    // этапа 2 (файл, чек, «Принять» у чека с окном денег): каждый ждёт ответа сервера или чата.
     test.setTimeout(210_000);
     const origin = new URL(baseURL!).origin;
     // Ответственный — новый сотрудник с Telegram (демо-сотрудникам Telegram не привязывается).
@@ -461,7 +463,13 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     await asOwner(page.request, baseURL);
     const word = uniqueWord('Телеоплата');
     const name = `ОсОО «${word}»`;
-    const cp = await newContractor(page.request, origin, { name, responsible: employee.id });
+    // Без ставки: «Оплата за обслуживание до …» (задача раз в 5 минут) не придёт в этот чат посреди
+    // теста — тест ждёт последним сообщением своё.
+    const cp = await newContractor(page.request, origin, {
+      name,
+      responsible: employee.id,
+      tariff: false,
+    });
     const report = (reportTypeCode: string) =>
       manualReport(page.request, origin, {
         contractorId: cp.id,
