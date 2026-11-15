@@ -179,6 +179,8 @@ describe('вкладки и «+ Добавить» по правам и учёт
     expect(ids(addActions('kbadm', access, 'news'))).toEqual(['news', ...io]);
     expect(ids(addActions('kbadm', access, 'steps'))).toEqual(['step', ...io]);
     expect(ids(addActions('kbadm', access, 'shows'))).toEqual(['show', ...io]);
+    // «Страница контрагента» (прототип v120 cphAdmAdd): «Вопрос», «Слово» и Excel своего раздела.
+    expect(ids(addActions('kbadm', access, 'cppage'))).toEqual(['cph_faq', 'cph_word', ...io]);
     expect(ids(addActions('kbadm', access, 'arts'))).toEqual(['art', ...io]);
     expect(addActions('kbadm', access, 'arts').find((a) => a.id === 'io_export')?.sep).toBe(true);
     expect(addActions('kbadm', access, 'levels')).toEqual([]);

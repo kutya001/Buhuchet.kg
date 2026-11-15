@@ -107,7 +107,7 @@ const feeVis: When = (a) => a.feature('fee') && a.can('fee');
 
 /** Вкладки «Справочников платформы» с «Выгрузить в Excel» и «Загрузить из Excel». */
 const IO_TABS: readonly string[] = [...ADMIN_VALUE_DICTS, 'calendar'];
-const KBADM_IO_TABS: readonly string[] = ['steps', 'shows', 'arts', 'news'];
+const KBADM_IO_TABS: readonly string[] = ['steps', 'shows', 'cppage', 'arts', 'news'];
 
 /** Группы вкладок «Справочников платформы» (ТЗ «Группы справочников»). */
 const G = {
@@ -461,6 +461,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     tabs: [
       { id: 'steps', icon: 'list', label: 'tab.kbadm.steps' },
       { id: 'shows', icon: 'play', label: 'tab.kbadm.shows' },
+      // Подсказки и обучение на странице контрагента (доработки 15.11.2026, прототип v120).
+      { id: 'cppage', icon: 'building', label: 'tab.kbadm.cppage' },
       { id: 'arts', icon: 'book', label: 'tab.kbadm.arts' },
       { id: 'levels', icon: 'grad', label: 'tab.kbadm.levels' },
       { id: 'news', icon: 'bell', label: 'tab.kbadm.news' },
@@ -472,6 +474,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     add: [
       { id: 'step', icon: 'plus', label: 'add.kbadm.step', tabs: ['steps'] },
       { id: 'show', icon: 'play', label: 'add.kbadm.show', tabs: ['shows'] },
+      { id: 'cph_faq', icon: 'help', label: 'add.kbadm.cph_faq', tabs: ['cppage'] },
+      { id: 'cph_word', icon: 'book', label: 'add.kbadm.cph_word', tabs: ['cppage'] },
       { id: 'art', icon: 'book', label: 'add.kbadm.art', tabs: ['arts'] },
       { id: 'news', icon: 'bell', label: 'add.kbadm.news', tabs: ['news'] },
       { id: 'video', icon: 'film', label: 'add.kbadm.video', tabs: ['video'] },

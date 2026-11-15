@@ -21,6 +21,7 @@ import { KbVideoTab } from '../kb/video/kb-video-tab';
 import { VideoViewsTab } from '../kb/video/video-views';
 import { KpiScreen } from '../kpi/kpi-screen';
 import { KbAdmArtsTab } from '../kbadm/kbadm-arts';
+import { KbAdmCpPageTab } from '../kbadm/kbadm-cppage';
 import { KbAdmNewsTab } from '../kbadm/kbadm-io';
 import { KbAdmLevelsTab } from '../kbadm/kbadm-levels';
 import { KbAdmShowsTab } from '../kbadm/kbadm-shows';
@@ -127,6 +128,7 @@ export function ModuleScreen({
     const tab = tabId ?? 'steps';
     if (tab === 'steps') return <KbAdmStepsTab />;
     if (tab === 'shows') return <KbAdmShowsTab />;
+    if (tab === 'cppage') return <KbAdmCpPageTab />;
     if (tab === 'arts') return <KbAdmArtsTab />;
     if (tab === 'levels') return <KbAdmLevelsTab />;
     if (tab === 'news') return <KbAdmNewsTab />;
