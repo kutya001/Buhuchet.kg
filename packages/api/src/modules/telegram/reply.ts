@@ -345,7 +345,10 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
     try {
       await result.afterCommit();
     } catch (err) {
-      deps.logger.error({ err, action: ask.action }, 'Telegram: действие после ответа не выполнено');
+      deps.logger.error(
+        { err, action: ask.action },
+        'Telegram: действие после ответа не выполнено',
+      );
     }
   }
   return true;

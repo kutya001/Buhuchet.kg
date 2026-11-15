@@ -1,4 +1,9 @@
-import { NOTIFY_KINDS, NOTIFY_MODES, PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '@buhuchet/domain';
+import {
+  NOTIFY_KINDS,
+  NOTIFY_MODES,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import { RecordVersion } from './common';
 
