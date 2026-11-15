@@ -689,6 +689,7 @@ export const CONTRACTOR_PAGE_TEXTS = {
     section: E,
   },
   'err.page_paid_invalid': { ru: 'Проверьте поля «Я оплатил»', section: E },
+  'err.page_paid_busy': { ru: 'Этот чек уже отправляется', section: E },
   'err.page_forgot_limit': {
     ru: 'Слишком много запросов. Попробуйте позже или спросите код у вашего бухгалтера',
     section: E,
@@ -758,4 +759,8 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'org.history.cp_days': { ru: '{name}: дни {from} → {to} до срока', section: S },
   'org.history.cp_at': { ru: '{name}: время {from} → {to}', section: S },
   'org.history.cp_debt_wd': { ru: 'Напоминание о долге: {from} → {to}', section: S },
+  // Принятый чек в поле «Файлы» окна денег (прототип v119 `rcptFileRow`).
+  'cppage.rcpt.file_hint': { ru: '— чек контрагента, прикрепится при сохранении', section: S },
+  'cppage.rcpt.file_remove': { ru: 'Убрать', section: S },
+  'cppage.rcpt.file_remove_title': { ru: 'Не прикреплять чек', section: S },
 } as const satisfies Record<string, UiTextDefault>;

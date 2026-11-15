@@ -14,6 +14,7 @@ import { ReceiptDialog, type ReceiptPreset } from '../money/tax-dialogs';
 import { contractorMonthReportsQuery } from '../reports/reports-data';
 import { useShell } from '../shell/context';
 import { feeReceiptNote, taxReceiptPreset, taxReceivedText } from './receipt-money-model';
+import type { SentReceipt } from './receipt-file';
 
 type TaxSlot = { contractorId: string; preset: ReceiptPreset };
 type FeeSlot = { contractorId: string; preset: FeePaymentPreset };
@@ -24,9 +25,11 @@ type FeeSlot = { contractorId: string; preset: FeePaymentPreset };
  * оплаченного сообщения (налоги месяца, без месяца — все месяцы с остатком) или «Принять оплату за
  * обслуживание». Что оплачено, сервер отдаёт только тому, кто
  * может принять эти деньги; нет — файл просто принят. `take` — после принятия, `dialogs` — в разметку.
+ * Сам чек (`receipt`) уже стоит в поле файлов окна и прикрепляется к деньгам после сохранения (прототип
+ * v119, просьба заказчика 15.11.2026).
  */
 export function useReceiptMoney(): {
-  take: (contractorId: string, pay: SentFilePay) => Promise<void>;
+  take: (contractorId: string, pay: SentFilePay, receipt?: SentReceipt) => Promise<void>;
   dialogs: ReactNode;
 } {
   const t = useT();
@@ -40,7 +43,7 @@ export function useReceiptMoney(): {
   const filesOn = access.feature('files');
 
   const take = useCallback(
-    async (contractorId: string, pay: SentFilePay) => {
+    async (contractorId: string, pay: SentFilePay, receipt?: SentReceipt) => {
       // Окно с полями открывается, когда его форма загружена (apps/web/CLAUDE.md, № 28): иначе оно
       // рисуется дважды. Не загрузилось — файл всё равно принят, деньги можно принять во вкладке.
       if (pay.purpose === 'fee') {
@@ -51,7 +54,14 @@ export function useReceiptMoney(): {
           return;
         }
         setFee(
-          openSlot({ contractorId, preset: { amount: pay.amount, note: feeReceiptNote(t, pay) } }),
+          openSlot({
+            contractorId,
+            preset: {
+              amount: pay.amount,
+              note: feeReceiptNote(t, pay),
+              ...(receipt ? { receipt } : {}),
+            },
+          }),
         );
         return;
       }
@@ -67,7 +77,14 @@ export function useReceiptMoney(): {
       }
       const lastMonth = currentPlanMonth(bishkekDate(new Date()));
       const preset = taxReceiptPreset(t, rows, pay, lastMonth);
-      if (preset) setTax(openSlot({ contractorId, preset }));
+      // Чек — только у списка месяцев (пресет чека всегда такой).
+      if (preset)
+        setTax(
+          openSlot({
+            contractorId,
+            preset: receipt && 'list' in preset ? { ...preset, receipt } : preset,
+          }),
+        );
       else toast(taxReceivedText(t, pay.month), { icon: 'info' });
     },
     [access, client, t, toast],

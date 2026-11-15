@@ -334,7 +334,7 @@ export function pagePaidCompleteHandler(
     const page = await openPage(deps, c, slug, inn);
     const lease = await takeRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, body.id);
     if (!lease.ok) {
-      if (lease.reason === 'busy') apiFail(409, 'paid_busy', 'Этот чек уже отправляется');
+      if (lease.reason === 'busy') apiFail(409, 'page_paid_busy', 'Этот чек уже отправляется');
       apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     }
     try {

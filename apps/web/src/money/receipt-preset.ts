@@ -1,4 +1,5 @@
 import { allocateInOrder, formatSom, parseSom } from '@buhuchet/domain';
+import type { SentReceipt } from '../contractor-page/receipt-file';
 
 /*
  * Что окно «Поступление от контрагента» распределяет сразу (прототип `inDlg`, `pre`): «Принять деньги»
@@ -21,6 +22,8 @@ export type ReceiptPreset =
        * `inDlg` с `pre.total`) — сумма из оплаченного сообщения, по строкам — от старых к новым.
        */
       total?: number;
+      /** Принятый чек (прототип v119 `inDlg` с `pre.file`): уже в поле «Файлы», прикрепляется после сохранения. */
+      receipt?: SentReceipt;
     };
 
 /**

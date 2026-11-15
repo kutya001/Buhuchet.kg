@@ -801,7 +801,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
   });
 
-  test('(приёмка блока 6) на странице контрагента «Я оплатил» без чека не отправляется; с чеком у месяца «Ожидает подтверждения», после «Принять деньги» — «Оплачено»', async ({
+  test('(приёмка блока 6) на странице контрагента «Я оплатил» без чека не отправляется; с чеком у месяца «Ожидает подтверждения»; «Принять» у чека открывает «Поступление от контрагента» с этим чеком в файлах, после записи чек — у поступления, у месяца — «Оплачено»', async ({
     page,
     request,
     baseURL,
@@ -887,14 +887,61 @@ test.describe('Доработки 14.11, блок 6: страница контр
     );
     expect(wide).toBe(false);
 
-    // Бухгалтер принял деньги под отчёт месяца («Принять деньги»): месяц оплачен.
-    const today = bishkek();
-    const got = await request.post(`/api/contractors/${cp.id}/receipts`, {
-      headers: { origin: o.origin },
-      data: { total: 467_050, date: today, rows: [{ reportId: nds, amount: 467_050 }] },
+    // Бухгалтер (вход владельца — в том же браузере) в «Отправленных файлах» принимает чек: открывается
+    // «Поступление от контрагента» с суммой месяца, и чек уже стоит в поле файлов (прототип v119
+    // `rcptFileRow`) — при сохранении он прикрепляется к поступлению без повторной загрузки.
+    await page.context().addCookies((await request.storageState()).cookies);
+    await page.goto('/app/files/sent');
+    const grid = page.locator('[data-files-sent] [data-grid]');
+    await expect(grid).toBeVisible();
+    // Ответ поиска — до нажатия в строке (docs/typical-mistakes.md № 27).
+    const found = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
     });
-    expect(got.status(), await got.text()).toBe(201);
-    await page.reload();
+    await search(page, isMobile, tag);
+    expect((await found).status()).toBe(200);
+    const line = grid.locator('[data-id]').filter({ hasText: fileName });
+    await expect(line).toContainText(text(texts, 'files.sent.st.new'));
+    await line.getByText(fileName, { exact: true }).click();
+    await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
+    const money = page.getByRole('dialog', { name: text(texts, 'money.in.title') });
+    await expect(money.locator('[data-receipt-total]')).toHaveValue(som('4 670,50'));
+    await expect(money.locator(`[data-receipt-row="${nds}"]`)).toHaveValue(som('4 670,50'));
+    const chip = money.locator('[data-sent-receipt]');
+    await expect(chip).toContainText(fileName);
+    await expect(chip).toContainText(text(texts, 'cppage.rcpt.file_hint'));
+    await expect(chip.locator('[data-sent-receipt-remove]')).toHaveText(
+      text(texts, 'cppage.rcpt.file_remove'),
+    );
+    const saved = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/contractors/${cp.id}/receipts`,
+    );
+    const attached = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname),
+    );
+    await money.getByRole('button', { name: text(texts, 'money.in.ok') }).click();
+    const savedRes = await saved;
+    expect(savedRes.status()).toBe(201);
+    const receiptId = ((await savedRes.json()) as { id: string }).id;
+    expect((await attached).status()).toBe(201);
+    await expect(money).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'money.in.done') }),
+    ).toBeVisible();
+    await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
+    // Чек — среди файлов поступления (копия: в «Отправленных файлах» он тоже остался).
+    const receiptFiles = (await (
+      await request.get(`/api/files?kind=receipt&id=${receiptId}`, { maxRetries: 2 })
+    ).json()) as { items: { name: string }[] };
+    expect(receiptFiles.items.map((f) => f.name)).toEqual([fileName]);
+
+    // Месяц на странице контрагента — оплачен.
+    await page.goto(cp.path);
     await pageReady(page);
     const again = await unfold(page, 'reports', isMobile);
     await again.getByRole('button', { name: text(texts, 'pub.rep.by_month') }).click();

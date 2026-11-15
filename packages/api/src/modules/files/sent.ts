@@ -177,7 +177,7 @@ const canDecideOf = (subject: AccessSubject) => hasPermission(subject, 'filesUpl
  * Загруженный отправленный файл контрагента, которого сотрудник видит в области группы «Файловый
  * менеджер»; иначе — 404 (чужой и вне области не отличить от несуществующего).
  */
-async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
+export async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
   const file = await getSentFile(tx, id);
   if (!file || file.state !== 'ready') return notFound();
   const contractor = await sentContractor(tx, file.contractorId);

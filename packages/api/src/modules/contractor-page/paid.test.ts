@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FakeTelegram, MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
@@ -18,6 +19,7 @@ import {
   PageSentTicket,
   PublicPage,
   PublicPageTelegramLink,
+  SentFileAttached,
   SentFileList,
 } from '@buhuchet/shared';
 import { and, asc, eq, sql } from 'drizzle-orm';
@@ -519,6 +521,120 @@ describe.skipIf(!databaseAvailable())(
       );
     });
 
+    it('принятый чек — к поступлению и оплате за обслуживание того же контрагента без повторной загрузки (v119); чужим и непринятым — нет', async () => {
+      const month = (await publicPage('org-a', INN_A, grantA)).reports!.months![0]!.month;
+      const done = await paid(grantA, { purpose: 'tax', month, amount: 100_000 });
+      expect(done.res.status, await done.res.clone().text()).toBe(200);
+      const sentList = async () =>
+        SentFileList.parse(
+          await (await call(owner, 'GET', `/api/contractors/${cpA}/sent-files`)).json(),
+        ).items;
+      const [file] = await sentList();
+      const op = async (cp: string) => {
+        const [row] = await f.t.admin.db
+          .insert(schema.moneyOperations)
+          .values({
+            orgId: f.a.orgId,
+            contractorId: cp,
+            kind: 'in',
+            amount: 100_000,
+            total: 100_000,
+            opDate: '2026-11-10',
+            holderKind: 'org',
+          })
+          .returning({ id: schema.moneyOperations.id });
+        return row!.id;
+      };
+      const receipt = await op(cpA);
+      const attach = (
+        cookie: string,
+        kind: 'receipt' | 'fee_payment',
+        id: string,
+        sent = file!.id,
+      ) => call(cookie, 'POST', `/api/files/sent/${sent}/attach`, { source: { kind, id } });
+      const filesOf = async (kind: string, id: string) => {
+        const res = await call(owner, 'GET', `/api/files?kind=${kind}&id=${id}`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        return ((await res.json()) as { items: { id: string; name: string }[] }).items;
+      };
+      // Не принятый чек не прикрепить.
+      expect((await attach(owner, 'receipt', receipt)).status).toBe(404);
+      const accepted = await call(owner, 'POST', `/api/files/sent/${file!.id}/accept`, {
+        version: file!.version,
+      });
+      expect(accepted.status, await accepted.clone().text()).toBe(200);
+
+      const res = await attach(acc, 'receipt', receipt);
+      expect(res.status, await res.clone().text()).toBe(201);
+      const out = SentFileAttached.parse(await res.json());
+      expect(out.name).toBe('Чек.pdf');
+      expect((await filesOf('receipt', receipt)).map((x) => [x.id, x.name])).toEqual([
+        [out.id, 'Чек.pdf'],
+      ]);
+      // Копия — свой объект хранилища с содержимым чека; файл контрагента остался.
+      const keys = await f.t.admin.db
+        .select({ id: schema.files.id, key: schema.files.storageKey })
+        .from(schema.files)
+        .where(eq(schema.files.contractorId, cpA));
+      const copyKey = keys.find((k) => k.id === out.id)!.key;
+      expect(await storage.get(copyKey)).toEqual(PDF);
+      const acceptedId = (await sentList())[0]!.fileId!;
+      expect(await storage.exists(keys.find((k) => k.id === acceptedId)!.key)).toBe(true);
+      // В истории поступления — «Прикреплён файл».
+      const attachedHistory = await f.t.admin.db
+        .select({ entity: schema.auditLog.entity, changes: schema.auditLog.changes })
+        .from(schema.auditLog)
+        .where(
+          and(eq(schema.auditLog.entityId, receipt), eq(schema.auditLog.action, 'file_attach')),
+        );
+      expect(attachedHistory).toEqual([
+        { entity: 'money_operation', changes: [{ field: 'file', to: 'Чек.pdf' }] },
+      ]);
+
+      // Оплата за обслуживание того же контрагента — тоже.
+      const [fee] = await f.t.admin.db
+        .insert(schema.feePayments)
+        .values({
+          orgId: f.a.orgId,
+          contractorId: cpA,
+          amount: 100_000,
+          paidOn: '2026-11-10',
+          toKind: 'org',
+        })
+        .returning({ id: schema.feePayments.id });
+      const feeRes = await attach(owner, 'fee_payment', fee!.id);
+      expect(feeRes.status, await feeRes.clone().text()).toBe(201);
+      expect((await filesOf('fee_payment', fee!.id)).map((x) => x.name)).toEqual(['Чек.pdf']);
+
+      // Деньги другого контрагента, чужая организация, несуществующая запись — 404, копии не остаётся.
+      const objects = () => storage.files.size;
+      const before = objects();
+      expect((await attach(owner, 'receipt', await op(cpA2))).status).toBe(404);
+      expect((await attach(ownerB, 'receipt', receipt)).status).toBe(404);
+      expect((await attach(owner, 'receipt', randomUUID())).status).toBe(404);
+      expect(objects()).toBe(before);
+      expect((await filesOf('receipt', receipt)).length).toBe(1);
+      // Только поступление и оплата за обслуживание.
+      const wrong = await call(owner, 'POST', `/api/files/sent/${file!.id}/attach`, {
+        source: { kind: 'report', id: receipt },
+      });
+      expect(wrong.status).toBe(400);
+      // «Файлы в карточках» выключены — 403.
+      await features(f.a.orgId, { ...ON, files: false });
+      try {
+        expect((await attach(owner, 'receipt', receipt)).status).toBe(403);
+      } finally {
+        await features(f.a.orgId, ON);
+      }
+      // Файл контрагента удалили — прикреплять нечего.
+      await f.t.admin.db
+        .update(schema.files)
+        .set({ state: 'deleted', deletedAt: new Date(), deletedBy: f.people['acc-a']!.userId })
+        .where(eq(schema.files.id, acceptedId));
+      expect((await attach(owner, 'receipt', receipt)).status).toBe(404);
+      expect(objects()).toBe(before);
+    });
+
     it('«Я оплатил» за обслуживание: месяц с долгом, «Ожидает подтверждения» у месяца; сумма — тому, кто видит плату', async () => {
       const page = await publicPage('org-a', INN_A, grantA);
       const open = page.fee!.months.filter((m) => m.charge - m.got > 0).map((m) => m.month);
@@ -619,7 +735,7 @@ describe.skipIf(!databaseAvailable())(
         await atGate;
         const second = await complete();
         expect(second.status).toBe(409);
-        expect((await failure(second)).code).toBe('paid_busy');
+        expect((await failure(second)).code).toBe('page_paid_busy');
         release();
         expect((await first).status).toBe(200);
       } finally {

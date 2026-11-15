@@ -96,6 +96,18 @@ export const SentFileReject = z.strictObject({
   reason: z.string().max(SENT_FILE_REASON_MAX * 4),
 });
 
+/**
+ * Принятый чек — к записи денег, открытой после «Принять» (прототип v119 `pgRcptMoney` → поле «Файлы»):
+ * поступлению от контрагента или оплате за обслуживание того же контрагента.
+ */
+export const SentFileAttach = z.strictObject({
+  source: z.strictObject({ kind: z.enum(['receipt', 'fee_payment']), id: Uuid }),
+});
+export type SentFileAttach = z.infer<typeof SentFileAttach>;
+/** Прикреплённая копия: файл записи денег. */
+export const SentFileAttached = z.object({ id: Uuid, name: z.string() });
+export type SentFileAttached = z.infer<typeof SentFileAttached>;
+
 /** Ссылка на файл: `download=1` — скачать, иначе картинка и PDF открываются в браузере. */
 export const SentFileLinkQuery = z.strictObject({ download: z.enum(['1']).optional() });
 
