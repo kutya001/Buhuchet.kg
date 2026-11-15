@@ -147,9 +147,16 @@ async function moveLeadDocs(
     }
   }
   if (ok.length) {
-    await leadDocsReady(deps.db, leadId, ok).catch((err: unknown) =>
-      deps.logger.error({ err }, 'заявка: документы не отмечены загруженными'),
-    );
+    const state = await leadDocsReady(deps.db, leadId, ok).catch((err: unknown) => {
+      deps.logger.error({ err }, 'заявка: документы не отмечены загруженными');
+      return undefined;
+    });
+    // Заявку уже удалили: строк документов нет, и копии никто не найдёт — удаляются сразу.
+    if (state === null)
+      await removeLeadObjects(
+        deps,
+        ok.map((id) => leadDocKey(leadId, id)),
+      );
   }
   if (ok.length < docs.length) {
     deps.logger.warn(
