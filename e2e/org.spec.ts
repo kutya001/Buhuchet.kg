@@ -8,7 +8,8 @@ import { DEMO_PASSWORD, signIn } from './helpers';
 const ORG_NAME = 'ОсОО «Бухгалтер Плюс»';
 
 async function version(api: APIRequestContext, path: '/api/org' | '/api/org/policy') {
-  const res = await api.get(path);
+  // Чтение после шагов на странице — с повтором (docs/typical-mistakes.md № 26).
+  const res = await api.get(path, { maxRetries: 2 });
   expect(res.status()).toBe(200);
   return ((await res.json()) as { version: number }).version;
 }

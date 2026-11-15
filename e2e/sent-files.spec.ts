@@ -251,7 +251,10 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     expect(cardWide).toBe(false);
 
     // Отправка и отказ — в истории контрагента: отправка от имени контрагента, отказ — бухгалтера.
-    const history = (await (await request.get(`/api/contractors/${cp.id}/history`)).json()) as {
+    // Чтение после долгих шагов в браузере — с повтором (docs/typical-mistakes.md № 26).
+    const history = (await (
+      await request.get(`/api/contractors/${cp.id}/history`, { maxRetries: 2 })
+    ).json()) as {
       items: { entity: string; action: string; actor: string | null }[];
     };
     const sent = history.items.filter((h) => h.entity === 'sent_file');
@@ -350,7 +353,14 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     await page.goto('/app/files/sent');
     const grid = page.locator('[data-files-sent] [data-grid]');
     await expect(grid).toBeVisible();
+    // Ответ поиска — до нажатия в строке: иначе он приходит после «Принять» со старым статусом
+    // (docs/typical-mistakes.md № 27).
+    const found = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
+    });
     await search(page, isMobile, tag);
+    expect((await found).status()).toBe(200);
     const line = grid.locator(`[data-id="${ticket.items[0]!.id}"]`);
     await expect(line).toContainText(name);
     await expect(line).toContainText(text(texts, 'files.sent.st.new'));
