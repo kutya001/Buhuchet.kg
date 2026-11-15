@@ -463,12 +463,13 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     await asOwner(page.request, baseURL);
     const word = uniqueWord('Телеоплата');
     const name = `ОсОО «${word}»`;
-    // Без ставки: «Оплата за обслуживание до …» (задача раз в 5 минут) не придёт в этот чат посреди
-    // теста — тест ждёт последним сообщением своё.
+    // Ставка 0 (у владельца, который видит плату, ставка обязательна): начислений нет — «Оплата за
+    // обслуживание до …» и напоминание о долге (задачи раз в 5 минут) не придут в этот чат посреди
+    // теста, тест ждёт последним сообщением своё.
     const cp = await newContractor(page.request, origin, {
       name,
       responsible: employee.id,
-      tariff: false,
+      tariffAmount: 0,
     });
     const report = (reportTypeCode: string) =>
       manualReport(page.request, origin, {

@@ -410,13 +410,13 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
       insertContractorTelegramMessage(tx, { ...payInput(linkA2, CHAT_A2, true), day: null }),
     );
     expect(legacy).toBeTruthy();
-    const [{ day: legacyDay }] = await inA((tx) =>
+    const [legacyRow] = await inA((tx) =>
       tx
         .select({ day: contractorTelegramMessages.day })
         .from(contractorTelegramMessages)
         .where(eq(contractorTelegramMessages.id, legacy!)),
     );
-    expect(legacyDay).toBe(bishkekDate(new Date()));
+    expect(legacyRow?.day).toBe(bishkekDate(new Date()));
     await inA((tx) => markContractorTelegramMessage(tx, legacy!, 700));
     expect(
       await inA((tx) =>
