@@ -268,6 +268,10 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.tg.receipt_note.fee': { ru: 'Чек к «Оплата за обслуживание» за {month}', section: S },
   'cppage.tg.receipt_note.fee_any': { ru: 'Чек к «Оплата за обслуживание»', section: S },
   'cppage.tg.receipt_done': { ru: '✓ Чек отправлен', section: S },
+  'cppage.tg.receipt_limit': {
+    ru: 'Чек уже просили прислать несколько раз за час. Ответьте чеком на сообщение выше или попробуйте позже.',
+    section: S,
+  },
   'cppage.tg.file_to_done': { ru: '✓ {contractor}', section: S },
   'cppage.tg.file_limit': {
     ru: 'Файлов из этого чата слишком много за час. Попробуйте позже.',

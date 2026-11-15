@@ -147,7 +147,7 @@ function itemOf(
  * области «Контрагентов» (как «Принять оплату за обслуживание», прототип `feeAccOk`). Контрагент в архиве
  * — без денег.
  */
-function payFor(
+export function payFor(
   pay: SentFilePay | undefined,
   o: {
     subject: AccessSubject;

@@ -257,7 +257,9 @@ describe.skipIf(!databaseAvailable())(
       await f.t.admin.db.delete(schema.contractorPayClaims);
       await f.t.admin.db.delete(schema.contractorSentFiles);
       await f.t.admin.db.delete(schema.contractorTelegramMessages);
-      await f.t.admin.db.execute(sql`delete from rate_limits where kind like 'cp_tg_file%'`);
+      await f.t.admin.db.execute(
+        sql`delete from rate_limits where kind like 'cp_tg_file%' or kind = 'cp_tg_receipt'`,
+      );
       await f.t.admin.db.delete(schema.telegramOutbox);
       tg.sent.length = 0;
       tg.messageIds.length = 0;
@@ -350,7 +352,7 @@ describe.skipIf(!databaseAvailable())(
         source: 'telegram',
         senderName: '@client_two',
         tgChatId: CLIENT_2,
-        comment: 'Чек к «Оплата за обслуживание». Перевёл с карты',
+        comment: 'Чек к «Оплата за обслуживание» за сентябрь 2026. Перевёл с карты',
         status: 'new',
       });
       expect(file!.name).toMatch(/^Фото из Telegram .+\.jpg$/);
@@ -387,7 +389,7 @@ describe.skipIf(!databaseAvailable())(
       expect(lastText(CLIENT_2)).toBe(text('tgCpFileOk'));
       expect(await claims(cpA)).toHaveLength(1);
       expect((await sentFiles(cpA)).map((x) => x.comment)).toEqual([
-        'Чек к «Оплата за обслуживание». Перевёл с карты',
+        'Чек к «Оплата за обслуживание» за сентябрь 2026. Перевёл с карты',
         null,
       ]);
     });
@@ -435,9 +437,10 @@ describe.skipIf(!databaseAvailable())(
       // Владелец — сразу «Принять оплату за обслуживание» с суммой из сообщения.
       const byOwner = await accept(owner, second!);
       expect(byOwner.status, await byOwner.clone().text()).toBe(200);
+      // Месяц — последний месяц долга (прототип v115 `pgFeeMsg`).
       expect(SentFileAccepted.parse(await byOwner.json()).pay).toEqual({
         purpose: 'fee',
-        month: null,
+        month: '2026-09',
         amount: DEBT,
       });
       // Контрагент в архиве — без денег. Напоминание — раз в сутки: прежнее — будто вчерашнее.
@@ -619,9 +622,27 @@ describe.skipIf(!databaseAvailable())(
       expect(tg.edits.at(-1)).toEqual({
         chatId: CLIENT_1,
         messageId: askId,
-        keyboard: [[{ text: `✓ ${CP_B}`, data: 'off', disabled: true }]],
+        // Все кнопки гаснут и остаются видны (прототип: `off:['cp-file-to']`).
+        keyboard: [
+          [{ text: CP_A, data: 'off', disabled: true }],
+          [{ text: `✓ ${CP_B}`, data: 'off', disabled: true }],
+          [{ text: CP_A2, data: 'off', disabled: true }],
+        ],
       });
       expect(lastText(CLIENT_1)).toBe(text('tgCpFileOk'));
+      // Строки вопроса во всех организациях отвечены, файла у Telegram, имени и подписи в них нет.
+      const left = await f.t.admin.db
+        .select({
+          payload: schema.contractorTelegramMessages.payload,
+          answeredAt: schema.contractorTelegramMessages.answeredAt,
+        })
+        .from(schema.contractorTelegramMessages)
+        .where(eq(schema.contractorTelegramMessages.chatId, CLIENT_1));
+      expect(left).toHaveLength(3);
+      for (const row of left) {
+        expect(row.answeredAt).not.toBeNull();
+        expect(row.payload).not.toHaveProperty('fileTo');
+      }
       expect((await sentFiles(cpB)).map((x) => [x.name, x.comment, x.senderName])).toEqual([
         ['Договор.pdf', 'Подписанный договор', '@client_one'],
       ]);
@@ -688,6 +709,72 @@ describe.skipIf(!databaseAvailable())(
         const unlink = await call(hr, 'DELETE', '/api/telegram/link');
         expect(unlink.status, await unlink.clone().text()).toBeLessThan(300);
       }
+    });
+
+    it('чат нескольких фирм: файл без ответа на «Пришлите чек» — не чек, а «От какой компании?»; ответом — чек', async () => {
+      await feeMessage();
+      await press(receiptData, CLIENT_1, lastMessageId(CLIENT_1));
+      const askId = lastMessageId(CLIENT_1);
+      // Клиент мог отправить файл другой фирме: без ответа на просьбу он её чеком не становится.
+      await sendFile(CLIENT_1, { name: 'Акт.pdf' });
+      expect(lastText(CLIENT_1)).toBe(text('tgCpFileWhich'));
+      expect(await sentFiles(cpA)).toEqual([]);
+      expect(await claims(cpA)).toEqual([]);
+      await sendFile(CLIENT_1, { name: 'Чек.pdf', replyTo: askId });
+      expect(lastText(CLIENT_1)).toBe(text('tgCpReceiptOk'));
+      expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Чек.pdf']);
+      expect(await claims(cpA)).toHaveLength(1);
+      expect(await sentFiles(cpB)).toEqual([]);
+    });
+
+    it('«Прислать чек»: подделанные данные кнопки и чужой чат — «устарела»; не чаще 10 раз в час с подключения', async () => {
+      await feeMessage();
+      const feeId = lastMessageId(CLIENT_2);
+      // Номер чужого сообщения в данных кнопки и «к налогам» под «Оплата за обслуживание» — кнопки такой нет.
+      const forged = botPressData(CP_TG_RECEIPT_ACTION, 'tax.00000000-0000-4000-8000-000000000000');
+      expect(await press(forged, CLIENT_2, feeId)).toMatchObject({
+        text: text('tgActStale'),
+        alert: true,
+      });
+      expect(await press(receiptData, CLIENT_B, feeId)).toMatchObject({
+        text: text('tgActStale'),
+        alert: true,
+      });
+      expect(await claims(cpA)).toEqual([]);
+      // Просьба и «Отмена» по кругу чат не заваливают.
+      for (let i = 0; i < 5; i += 1) {
+        expect(await press(receiptData, CLIENT_2, feeId)).toMatchObject({ text: undefined });
+        expect(
+          await press(botPressData(BOT_ASK_CANCEL), CLIENT_2, lastMessageId(CLIENT_2)),
+        ).toMatchObject({ text: text('tgActCancelled') });
+      }
+      // Считаются нажатия «Прислать чек» с подключения, и подделанное тоже: 1 + 5 + 3 + 1 = 10, одиннадцатое
+      // — отказ без нового сообщения.
+      for (let i = 0; i < 3; i += 1) await press(receiptData, CLIENT_2, feeId);
+      const count = tg.sent.length;
+      expect(await press(receiptData, CLIENT_2, feeId)).toMatchObject({
+        text: text('tgActAskWait'),
+      });
+      const limited = await press(receiptData, CLIENT_2, feeId);
+      expect(limited).toMatchObject({ alert: true });
+      expect(limited!.text).toContain('несколько раз за час');
+      expect(tg.sent.length).toBe(count);
+    });
+
+    it('файлов из одного чата — не больше 30 в час; после 20 за сутки — «лимит», после 30 — «слишком много»', async () => {
+      for (let i = 1; i <= 20; i += 1) {
+        await sendFile(CLIENT_2, { name: `Скан ${i}.pdf` });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpFileOk'));
+      }
+      for (let i = 21; i <= 30; i += 1) {
+        await sendFile(CLIENT_2, { name: `Скан ${i}.pdf` });
+        expect(lastText(CLIENT_2)).toBe(text('tgCpFileLimit', { лимит: 20 }));
+      }
+      await sendFile(CLIENT_2, { name: 'Скан 31.pdf' });
+      expect(lastText(CLIENT_2)).toBe(
+        'Файлов из этого чата слишком много за час. Попробуйте позже.',
+      );
+      expect(await sentFiles(cpA)).toHaveLength(20);
     });
   },
 );

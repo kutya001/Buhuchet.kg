@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
+  bishkekDate,
   defaultOrgPolicy,
   RecordChangedError,
   RecordNotFoundError,
@@ -397,18 +398,31 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(
       await inA((tx) => insertContractorTelegramMessage(tx, payInput(linkA, CHAT_A))),
     ).toBeTruthy();
-    // Другой отмеченный день — своя строка (здесь сразу ушедшая); без дня само «К оплате» не
-    // записывается.
+    // Другой отмеченный день — своя строка (здесь сразу ушедшая).
     const nextDay = await inA((tx) =>
       insertContractorTelegramMessage(tx, { ...payInput(linkA, CHAT_A, true), day: NEXT_DAY }),
     );
     expect(nextDay).toBeTruthy();
     await inA((tx) => markContractorTelegramMessage(tx, nextDay!, 600));
-    await expect(
-      inA((tx) =>
-        insertContractorTelegramMessage(tx, { ...payInput(linkA, CHAT_A, true), day: null }),
+    // Прежняя версия сайта пишет само «К оплате» без дня (миграции идут до выкладки, откат версии базу
+    // не откатывает): день ставит база — сегодняшний по Бишкеку, второе в тот же день не записывается.
+    const legacy = await inA((tx) =>
+      insertContractorTelegramMessage(tx, { ...payInput(linkA2, CHAT_A2, true), day: null }),
+    );
+    expect(legacy).toBeTruthy();
+    const [{ day: legacyDay }] = await inA((tx) =>
+      tx
+        .select({ day: contractorTelegramMessages.day })
+        .from(contractorTelegramMessages)
+        .where(eq(contractorTelegramMessages.id, legacy!)),
+    );
+    expect(legacyDay).toBe(bishkekDate(new Date()));
+    await inA((tx) => markContractorTelegramMessage(tx, legacy!, 700));
+    expect(
+      await inA((tx) =>
+        insertContractorTelegramMessage(tx, { ...payInput(linkA2, CHAT_A2, true), day: null }),
       ),
-    ).rejects.toThrow();
+    ).toBeNull();
     expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10', DAY))).toEqual(
       new Set([linkA, linkA2]),
     );
@@ -790,6 +804,9 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
         .where(eq(contractorPayClaims.contractorId, cpA))
         .orderBy(contractorPayClaims.createdAt);
     const msg = await sentPay(linkA, CHAT_A, 501);
+    const checkViolation = expect.objectContaining({
+      cause: expect.objectContaining({ code: '23514' }),
+    });
     const input = {
       contractorId: cpA,
       purpose: 'tax' as const,
@@ -827,9 +844,24 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
             .set({ sentFileId: second })
             .where(eq(contractorPayClaims.id, paid!.id)),
         ),
-      ).rejects.toThrow(
-        expect.objectContaining({ cause: expect.objectContaining({ code: '23514' }) }),
-      );
+      ).rejects.toThrow(checkViolation);
+      await expect(
+        inA((tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: second })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
+      // И в два шага (снять, потом поставить другой) — тоже: чек снимает только удаление файла.
+      await expect(
+        asBot(a.orgId, (tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: null })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
       // Чужая организация чек не ставит.
       const third = await sent('Чек 3.pdf');
       expect(
@@ -844,6 +876,15 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
       // Непринятый чек удалили — «Оплатил» остаётся без чека, и чек можно прислать снова.
       await db.admin.db.delete(contractorSentFiles).where(eq(contractorSentFiles.id, first));
       expect((await claims())[0]!.sentFileId).toBeNull();
+      // Чек ставит только бот: сотрудник к «Оплатил» чек не подставит.
+      await expect(
+        inA((tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: third })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
       expect(
         await asBot(a.orgId, (tx) => attachPayClaimReceipt(tx, { ...input, sentFileId: third })),
       ).toBe(paid!.id);

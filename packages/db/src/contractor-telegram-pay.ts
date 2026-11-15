@@ -11,7 +11,7 @@ import {
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { writeContractorPageHistory } from './contractor-page';
 import { featureSet } from './org';
@@ -403,6 +403,43 @@ export async function openReceiptAsks(
         sql`coalesce(${m.payload} -> 'ask' ->> 'off', 'false') <> 'true'`,
       ),
     );
+}
+
+/**
+ * Вопрос «От какой компании?» отвечен (`q` — номер вопроса из `fileTo`): строки этого вопроса в
+ * организации из контекста (RLS) отмечаются отвеченными, а файл у Telegram, его имя и подпись из них
+ * стираются — файл, отправленный другой фирме, у этой не остаётся. Возвращает строки вопроса в порядке
+ * записи с названием контрагента — для кнопок вопроса после выбора.
+ */
+export async function closePendingClientFiles(
+  tx: Tx,
+  chatId: number,
+  q: string,
+): Promise<{ id: string; contractor: string; createdAt: Date }[]> {
+  const m = contractorTelegramMessages;
+  const rows = await tx
+    .update(m)
+    .set({
+      answeredAt: sql`coalesce(${m.answeredAt}, now())`,
+      payload: sql`${m.payload} - 'fileTo'`,
+    })
+    .where(
+      and(eq(m.chatId, chatId), eq(m.kind, 'file'), sql`${m.payload} -> 'fileTo' ->> 'q' = ${q}`),
+    )
+    .returning({ id: m.id, contractorId: m.contractorId, createdAt: m.createdAt });
+  if (!rows.length) return [];
+  const names = await tx
+    .select({ id: contractors.id, name: contractors.name })
+    .from(contractors)
+    .where(inArray(contractors.id, [...new Set(rows.map((r) => r.contractorId))]));
+  const nameOf = new Map(names.map((n) => [n.id, n.name]));
+  return rows
+    .map((r) => ({
+      id: r.id,
+      contractor: nameOf.get(r.contractorId) ?? '',
+      createdAt: r.createdAt,
+    }))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
 }
 
 /**

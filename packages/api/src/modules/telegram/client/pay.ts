@@ -120,6 +120,16 @@ export const CP_TG_REQ_RATE_LIMIT: RateLimit = {
   windowSeconds: 3600,
 };
 
+/**
+ * «Прислать чек» из одного подключения — не больше стольких в час: каждое нажатие после «Отмены» — новая
+ * просьба и новое сообщение в чате.
+ */
+export const CP_TG_RECEIPT_RATE_LIMIT: RateLimit = {
+  kind: 'cp_tg_receipt',
+  max: CP_TG_REQ_PER_HOUR,
+  windowSeconds: 3600,
+};
+
 /** Сколько раз задача пробует отправить само «К оплате». */
 const AUTO_PAY_MAX_ATTEMPTS = 3;
 
@@ -496,6 +506,13 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
       return true;
     }
   }
+  if (action === CP_TG_RECEIPT_ACTION) {
+    const limit = await takeRateLimit(deps.db, CP_TG_RECEIPT_RATE_LIMIT, target.linkId);
+    if (!limit.ok) {
+      await answer((await serverTexts(deps))('cppage.tg.receipt_limit'), true);
+      return true;
+    }
+  }
 
   let outcome: PressOutcome;
   try {
@@ -530,7 +547,7 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           ]);
           // Сообщение «ждёт подтверждения» (доработки 14.11.2026, блок 4, пункт 4, этап 2): пока его не
           // отклонили, «Оплата за обслуживание до …» за месяц начисления больше не уходит; у ручного
-          // напоминания месяца нет.
+          // напоминания месяц — последний месяц долга или текущий (прототип v115 `pgFeeMsg`).
           await insertTelegramPayClaim(tx, {
             contractorId: target.contractorId,
             purpose: 'fee',

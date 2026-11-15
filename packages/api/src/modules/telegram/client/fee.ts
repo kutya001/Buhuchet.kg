@@ -18,6 +18,7 @@ import {
   CP_TG_FEE_MESSAGES,
   feeBotMessage,
   feeTelegramDue,
+  monthOf,
   feeTelegramRefusal,
   feeTelegramShown,
   fillTemplate,
@@ -290,6 +291,9 @@ export function contractorFeeTelegramSendHandler(
           linkId: r.linkId,
           chatId: r.chatId,
           kind: 'fee',
+          // Месяц — последний месяц долга, а без него — текущий (прототип v115 `pgFeeMsg`): к нему
+          // относятся «Оплатил» и чек, и «Оплата за обслуживание до …» за него больше не уходит.
+          month: due.months.at(-1) ?? monthOf(today),
           total: s.fees.debt,
           auto: false,
           day: today,

@@ -87,7 +87,12 @@ export async function attachPayClaimReceipt(
   if (open) {
     await tx
       .update(contractorPayClaims)
-      .set({ sentFileId: o.sentFileId, updatedAt: sql`now()` })
+      // Версия растёт: сотрудник, открывший «Оплатил» до чека, получит «запись изменена».
+      .set({
+        sentFileId: o.sentFileId,
+        updatedAt: sql`now()`,
+        version: sql`${contractorPayClaims.version} + 1`,
+      })
       .where(eq(contractorPayClaims.id, open.id));
     return open.id;
   }

@@ -3,17 +3,31 @@
 -- его без пользователя (клиент — не сотрудник); политика `contractor_pay_claims_update_guard` уже
 -- пускает только ждущее подтверждения.
 GRANT UPDATE (sent_file_id) ON TABLE public.contractor_pay_claims TO buhuchet_app;--> statement-breakpoint
--- Чек, который уже стоит, другим не заменяется: второй чек — новое «Оплатил». Пусто можно: так
--- непринятый чек снимает удаление файла (внешний ключ с SET NULL).
+-- Чек, который уже стоит, другим не заменяется: второй чек — новое «Оплатил». Снять чек прямой правкой
+-- нельзя (иначе замена прошла бы в два шага): пусто — только когда файла уже нет, так непринятый чек
+-- снимает удаление файла (внешний ключ с SET NULL). Ставит чек только транзакция без пользователя — бот.
 CREATE FUNCTION app.contractor_pay_claim_receipt_guard()
   RETURNS trigger
   LANGUAGE plpgsql
   SET search_path = pg_catalog, pg_temp
   AS $$
   BEGIN
-    IF OLD.sent_file_id IS NOT NULL AND NEW.sent_file_id IS NOT NULL
-       AND NEW.sent_file_id IS DISTINCT FROM OLD.sent_file_id THEN
+    IF NEW.sent_file_id IS NOT DISTINCT FROM OLD.sent_file_id THEN
+      RETURN NEW;
+    END IF;
+    IF NEW.sent_file_id IS NULL THEN
+      IF EXISTS (SELECT 1 FROM public.contractor_sent_files f WHERE f.id = OLD.sent_file_id) THEN
+        RAISE EXCEPTION 'contractor_pay_claims: чек сообщения об оплате снимает только удаление файла'
+          USING ERRCODE = 'check_violation';
+      END IF;
+      RETURN NEW;
+    END IF;
+    IF OLD.sent_file_id IS NOT NULL THEN
       RAISE EXCEPTION 'contractor_pay_claims: чек сообщения об оплате не заменяется'
+        USING ERRCODE = 'check_violation';
+    END IF;
+    IF app.current_user_id() IS NOT NULL THEN
+      RAISE EXCEPTION 'contractor_pay_claims: чек ставит только бот'
         USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;

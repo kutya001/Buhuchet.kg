@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import {
   answerContractorTelegramAsk,
   attachPayClaimReceipt,
   botChatUsers,
+  closePendingClientFiles,
   contractorPageSectionShown,
   contractorTelegramChats,
   contractorTelegramPressTarget,
@@ -388,7 +390,14 @@ export async function clientFile(deps: ApiDeps, msg: BotIncoming): Promise<boole
       : await contractorTelegramPressTarget(deps.db, msg.chatId, msg.replyTo);
   if (replied?.kind !== 'receipt') {
     const ask = await contractorTelegramReceiptTarget(deps.db, msg.chatId, null, today);
-    if (ask) return receiptReply(deps, msg, ask, today);
+    // Без ответа файл — чек открытой просьбы, только если чат подключён к одному контрагенту: иначе
+    // клиент мог отправить его другой фирме — тогда «От какой компании?» (защита — строже прототипа).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#К-11
+    if (ask) {
+      const chats = await contractorTelegramChats(deps.db, msg.chatId);
+      const sole = chats.every((c) => c.orgId === ask.orgId && c.contractorId === ask.contractorId);
+      if (sole) return receiptReply(deps, msg, ask, today);
+    }
   }
   return freeFile(deps, msg, today);
 }
@@ -502,11 +511,20 @@ async function receiptReply(
   }
 
   // Чек принят: он — чек сообщения «ждёт подтверждения», просьба закрыта, кнопка «Прислать чек» гаснет.
+  // Сначала — просьба: второй файл ответом на ту же просьбу (пришёл почти сразу) её уже закрытой застанет
+  // и останется просто файлом, без второго «Оплатил».
   const source =
     pre.src === null ? null : await contractorTelegramPressTarget(deps.db, msg.chatId, pre.src);
   const done = (await serverTexts(deps))('cppage.tg.receipt_done');
+  let attached = false;
   try {
     const edits = await withOrgContext(deps.db, org, async (tx) => {
+      const out: { messageId: number; message: BotMessage }[] = [];
+      const current = await lockContractorTelegramMessage(tx, ask.id, msg.chatId);
+      if (!current || !(await answerContractorTelegramAsk(tx, ask.id))) return out;
+      const closed = closeBotAsk(current.message);
+      await saveContractorTelegramMessage(tx, ask.id, closed);
+      out.push({ messageId: ask.messageId, message: closed });
       await attachPayClaimReceipt(tx, {
         contractorId: ask.contractorId,
         purpose: pre.purpose,
@@ -515,13 +533,7 @@ async function receiptReply(
         tgMessageId: pre.paidId,
         sentFileId: sent.ids[0]!,
       });
-      const out: { messageId: number; message: BotMessage }[] = [];
-      const current = await lockContractorTelegramMessage(tx, ask.id, msg.chatId);
-      if (current && (await answerContractorTelegramAsk(tx, ask.id))) {
-        const closed = closeBotAsk(current.message);
-        await saveContractorTelegramMessage(tx, ask.id, closed);
-        out.push({ messageId: ask.messageId, message: closed });
-      }
+      attached = true;
       if (source && source.orgId === ask.orgId && pre.src !== null) {
         const src = await lockContractorTelegramMessage(tx, source.id, msg.chatId);
         const button = src?.message.buttons
@@ -542,8 +554,9 @@ async function receiptReply(
     // Файл уже у бухгалтера в «Отправленных файлах»; не записана только связь с «Оплатил».
     deps.logger.error({ err }, 'Telegram: чек контрагента не связан с сообщением об оплате');
     deps.errors?.capture(err);
+    attached = true;
   }
-  await say({ key: 'tgCpReceiptOk' });
+  await say({ key: attached ? 'tgCpReceiptOk' : 'tgCpFileOk' });
   return true;
 }
 
@@ -636,6 +649,8 @@ async function toContractor(
 /** Что ждёт ответа «От какой компании?»: файл у Telegram и подпись к нему. */
 const PendingFile = z.object({
   fileTo: z.object({
+    /** Номер вопроса: одинаковый у строк всех организаций одного «От какой компании?». */
+    q: z.string().uuid(),
     fileId: z.string().min(1).max(256),
     name: z.string().min(1).max(1024),
     size: z.number().int().nonnegative(),
@@ -658,6 +673,7 @@ async function askWhich(
   const file = msg.file!;
   const text = await botTemplateText(deps.db, 'tgCpFileWhich');
   const fileTo = {
+    q: randomUUID(),
     fileId: file.fileId,
     name: file.name.trim(),
     size: file.size,
@@ -704,8 +720,9 @@ const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /**
  * Ответ на «От какой компании?» (прототип `tgAct('cp-file-to')`): кнопка — строка файла в организации
  * выбранного контрагента; её ищем в организациях подключений этого чата (RLS), сверяем, что подключение
- * действует. Отказ до скачивания — скрытым ответом на нажатие, после — сообщением в чат. Принят — кнопки
- * гаснут, на выбранной — «✓ <контрагент>».
+ * действует. Отказ до скачивания — скрытым ответом на нажатие, после — сообщением в чат. После выбора
+ * строки вопроса во всех организациях отвечены, файл из них стёрт; принят — кнопки гаснут, остаются
+ * видны, на выбранной — «✓ <контрагент>» (прототип: `done`, `off:['cp-file-to']`).
  */
 export async function clientFileToPress(
   deps: ApiDeps,
@@ -780,22 +797,33 @@ export async function clientFileToPress(
     file.name,
     file.caption,
   );
+  // Строки вопроса — в каждой организации чата (своя транзакция, RLS): отвечены, файл из них стёрт.
+  const rows: Awaited<ReturnType<typeof closePendingClientFiles>> = [];
+  for (const orgId of new Set(chats.map((c) => c.orgId))) {
+    rows.push(
+      ...(await withOrgContext(deps.db, { orgId, userId: null }, (tx) =>
+        closePendingClientFiles(tx, press.chatId, file.q),
+      )),
+    );
+  }
   if ('key' in out) {
     await sayTo(deps, press.chatId, await botTemplateText(deps.db, out.key, out.values));
     return;
   }
   const t = await serverTexts(deps);
-  await editButtons(deps, press.chatId, press.messageId, {
-    buttons: [
-      [
-        {
-          text: formatText(t('cppage.tg.file_to_done'), { contractor: link.contractor }),
-          action: CP_TG_FILE_TO_ACTION,
-          arg,
-          off: true,
-        },
-      ],
-    ],
+  rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  const asked = fileToBotMessage({
+    text: '',
+    links: rows.map((r) => ({ arg: r.id, name: r.contractor })),
   });
+  await editButtons(
+    deps,
+    press.chatId,
+    press.messageId,
+    pressBotButton(asked, CP_TG_FILE_TO_ACTION, arg, {
+      done: formatText(t('cppage.tg.file_to_done'), { contractor: link.contractor }),
+      off: [CP_TG_FILE_TO_ACTION],
+    }),
+  );
   await sayTo(deps, press.chatId, await botTemplateText(deps.db, 'tgCpFileOk'));
 }
