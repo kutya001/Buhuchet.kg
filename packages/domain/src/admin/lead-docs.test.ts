@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { UI_TEXTS } from '../l10n/texts';
 import {
   LEAD_DOCS_BY_FORM,
+  LEAD_DOCS_KEEP_DAYS,
+  LEAD_DOCS_KEEP_REJECTED_DAYS,
   leadApproveRefusal,
   leadDocsMissing,
   leadDocValues,
@@ -114,5 +117,13 @@ describe('leadOwnerLogin — логин владельца в окне «Одо�
     const login = leadOwnerLogin('Абдыкадырова Айпери Нурбековна-Токтогулова', '', none);
     expect(login.length).toBeLessThanOrEqual(24);
     expect(login).not.toMatch(/\.$/);
+  });
+});
+
+describe('сроки хранения документов заявки в тексте согласия лендинга', () => {
+  it('«после отказа — через 7 дней, без решения — через 30 дней» совпадает с правилом удаления', () => {
+    const text = UI_TEXTS['land.consent.docs']?.ru ?? '';
+    expect(text).toContain(`После отказа они удаляются через ${LEAD_DOCS_KEEP_REJECTED_DAYS} дней`);
+    expect(text).toContain(`без решения — через ${LEAD_DOCS_KEEP_DAYS} дней`);
   });
 });
