@@ -1,11 +1,13 @@
 // Перед командой: запрет опасного — force-push, push в main и production, drizzle-kit push, команды к рабочей базе,
 // удаление данных, выкладка на рабочий сайт мимо выпуска.
 import { block, readInput } from './lib.mjs';
+import { GIT_GLOBAL_OPTS } from './push-target.mjs';
 
 const command = readInput().tool_input?.command ?? '';
 const c = command.replace(/\s+/g, ' ');
-// git push, в том числе git -C <папка> push и git -c <настройка> push.
-const GIT_PUSH = String.raw`\bgit(\s+-[Cc]\s+\S+)*\s+push\b`;
+// git push, в том числе с глобальными опциями до него: git -C <папка> push, git -c <настройка> push,
+// git --no-pager push, git -P push, git --git-dir=<путь> push.
+const GIT_PUSH = String.raw`\bgit${GIT_GLOBAL_OPTS}\s+push\b`;
 
 const rules = [
   [
