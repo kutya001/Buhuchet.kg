@@ -8,8 +8,10 @@ import {
   contractorTelegramPressTarget,
   contractorTelegramRecipients,
   contractorsWithTelegram,
+  cpNoticeSettingsOf,
   getContractor,
   insertContractorTelegramMessage,
+  insertTelegramPayClaim,
   loadEmployeeAccess,
   lockContractorTelegramMessage,
   logContractorTelegramPay,
@@ -19,6 +21,7 @@ import {
   orgIds,
   orgMenuSettings,
   pageClosedNotice,
+  payClaimMonths,
   refreshContractorTelegramMessage,
   reportMonthPlanRows,
   reportPayDueMonths,
@@ -49,6 +52,8 @@ import {
   CP_TG_QUESTIONS_PER_HOUR,
   CP_TG_REQ_ACTION,
   CP_TG_REQ_PER_HOUR,
+  cpNoticeDay,
+  cpNoticeDayDue,
   cpTgQuestion,
   cpTgQuestionForHistory,
   fillTemplate,
@@ -272,6 +277,8 @@ export async function prepareMonthPay(
     requisite: TransferBlock;
     recipients: readonly { linkId: string; chatId: number }[];
     auto: boolean;
+    /** День отправки самого «К оплате»: одно на подключение, месяц и день (ключ в базе). */
+    day?: IsoDate;
     retry?: readonly { id: string; chatId: number }[];
   },
 ): Promise<PreparedClientMessage[]> {
@@ -294,6 +301,7 @@ export async function prepareMonthPay(
       month: o.pay.month,
       total: o.pay.total,
       auto: o.auto,
+      ...(o.day ? { day: o.day } : {}),
       payload: message,
     });
     if (id) prepared.push({ id, chatId: r.chatId, message });
@@ -509,6 +517,16 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           await logContractorTelegramPay(tx, target.contractorId, 'page_tg_paid', [
             { field: 'tgFeePaid', to: { total, name: current.name } },
           ]);
+          // Сообщение «ждёт подтверждения» (доработки 14.11.2026, блок 4, пункт 4, этап 2): пока его не
+          // отклонили, «Оплата за обслуживание до …» за месяц начисления больше не уходит; у ручного
+          // напоминания месяца нет.
+          await insertTelegramPayClaim(tx, {
+            contractorId: target.contractorId,
+            purpose: 'fee',
+            month: current.month,
+            amount: total,
+            tgMessageId: target.id,
+          });
           const staff = await queueStaffNotice(
             tx,
             deps,
@@ -543,6 +561,14 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           await logContractorTelegramPay(tx, target.contractorId, 'page_tg_paid', [
             { field: 'tgPaid', to: { month, total, name: current.name } },
           ]);
+          // Пока сообщение не отклонили, само «К оплате» за этот месяц больше не уходит.
+          await insertTelegramPayClaim(tx, {
+            contractorId: target.contractorId,
+            purpose: 'tax',
+            month,
+            amount: total,
+            tgMessageId: target.id,
+          });
           const staff = await queueStaffNotice(
             tx,
             deps,
@@ -838,16 +864,24 @@ async function queueNoRequisite(
   );
 }
 
-/** Само «К оплате» одной организации: что отправить. Всё — в одной транзакции задачи. */
+/**
+ * Само «К оплате» одной организации: что отправить. Всё — в одной транзакции задачи. null — у
+ * организации время отправки не в этом запуске (строка «К оплате» блока «Telegram-уведомления»).
+ */
 async function prepareAutoPay(
   tx: Tx,
   ctx: Ctx,
   t: Translate,
   orgId: string,
-  today: IsoDate,
-): Promise<AutoPayPlan> {
+  slot: Date,
+): Promise<AutoPayPlan | null> {
+  if (!(await contractorTelegramPayOn(tx))) return null;
+  const settings = await cpNoticeSettingsOf(tx, orgId);
+  // День, за который уходит «К оплате», — день времени отправки (запуск 00:00 отправляет за 23:56–23:59
+  // прошлого дня).
+  const today = cpNoticeDay(settings.payAt, slot);
+  if (!today) return null;
   const out: AutoPayPlan = { batches: [], staff: [] };
-  if (!(await contractorTelegramPayOn(tx))) return out;
   const { features } = await orgMenuSettings(tx, orgId);
   const taxpay = features.taxpay;
   for (const contractorId of await contractorsWithTelegram(tx)) {
@@ -857,6 +891,9 @@ async function prepareAutoPay(
     if (!recipients.length) continue;
     // Реквизиты — один раз на контрагента и только когда есть что отправить.
     let requisite: Awaited<ReturnType<typeof payRequisite>> | null = null;
+    // Клиент сообщил «Оплатил» за месяц (и сообщение не отклонено) — само «К оплате» за него больше не
+    // уходит (прототип v115 pgPaidMark).
+    let paid: Set<YearMonth> | null = null;
     // Месяцы ищутся по срокам оплаты ближайших дней, а не отсчётом от сегодняшнего: месяц годового
     // отчёта — декабрь, а платить по нему в марте — мае.
     const months = await reportPayDueMonths(tx, {
@@ -874,12 +911,18 @@ async function prepareAutoPay(
       });
       const { pay, rows } = monthPayRows(reports, month, taxpay);
       if (!pay.due || !monthPayAutoDue(pay, today)) continue;
-      const done = await autoPayLinkIds(tx, contractorId, month);
-      // Не ушедшее с прошлого запуска — повторяется (до трёх попыток) сегодняшним сообщением и только
-      // действующим получателям; новое — записывается.
+      paid ??= await payClaimMonths(tx, contractorId, 'tax');
+      if (paid.has(month)) continue;
+      // Новое — только в отмеченный день «за N» до ближайшего срока оплаты, одно на подключение,
+      // месяц и день; не ушедшее в прошлый раз — повторяется (до трёх попыток) сегодняшним сообщением и
+      // только действующим получателям, в какой бы день ни пришёлся запуск.
+      const ticked = cpNoticeDayDue(today, pay.due, settings.payDays);
       const unsent = await unsentAutoPayMessages(tx, contractorId, month, AUTO_PAY_MAX_ATTEMPTS);
-      const fresh = recipients.filter((r) => !done.has(r.linkId));
       const retry = unsent.filter((m) => recipients.some((r) => r.linkId === m.linkId));
+      const done = ticked ? await autoPayLinkIds(tx, contractorId, month, today) : null;
+      const fresh = done
+        ? recipients.filter((r) => !done.has(r.linkId) && !retry.some((m) => m.linkId === r.linkId))
+        : [];
       if (!fresh.length && !retry.length) continue;
       requisite ??= await payRequisite(tx, t, cp);
       // Без реквизитов для перевода «К оплате» не уходит и само (доработки 14.11.2026, блок 4,
@@ -896,6 +939,7 @@ async function prepareAutoPay(
         requisite: requisite.block,
         recipients: fresh,
         auto: true,
+        day: today,
         retry,
       });
       if (prepared.length) out.batches.push({ contractorId, month, total: pay.total, prepared });
@@ -905,29 +949,32 @@ async function prepareAutoPay(
 }
 
 /**
- * «Отправлять «К оплате» контрагентам» (прототип: «приходит клиенту за 5 дней до ближайшего срока
- * оплаты, если все суммы месяца указаны»): раз в день по всем организациям, каждая — своей транзакцией.
- * Одно сообщение на месяц и подключение (ключ в базе): повтор и одновременный запуск второй строки не
- * создают, пропущенный день догоняется, пока срок не прошёл. Если Telegram сообщение принял, а отметка
- * об этом не записалась, оно уйдёт ещё раз при следующем запуске — потерять сообщение хуже, чем
- * повторить. Заблокированной организации бот не пишет. Организация, у которой запуск упал, остальным
- * не мешает.
+ * «Отправлять «К оплате» контрагентам» (строка «К оплате» блока «Telegram-уведомления», прототип v115:
+ * «в отмеченные дни до ближайшего срока оплаты месяца, пока месяц не оплачен, если все суммы месяца
+ * указаны»): запуск каждые 5 минут, организация — в запуск, на который приходится её время отправки,
+ * каждая — своей транзакцией. Одно сообщение на месяц, подключение и день (ключ в базе): повтор и
+ * одновременный запуск второй строки не создают. Если Telegram сообщение принял, а отметка об этом не
+ * записалась, оно уйдёт ещё раз при следующем запуске — потерять сообщение хуже, чем повторить.
+ * Заблокированной организации бот не пишет. Организация, у которой запуск упал, остальным не мешает.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-11
 export const contractorPayJob: Job = {
   name: 'contractor-page.telegram-pay',
-  // 10:05 по Бишкеку (расписания задач — по времени Бишкека).
-  cron: '5 10 * * *',
-  lookbackMinutes: 24 * 60,
-  async run(ctx) {
-    const today = bishkekDate(ctx.clock.now());
+  // Каждые 5 минут по Бишкеку: время отправки организации — любая минута суток (`cpNoticeDay`).
+  cron: '*/5 * * * *',
+  lookbackMinutes: 60,
+  async run(ctx, slot) {
     const failed: string[] = [];
     let sent = 0;
+    let orgs = 0;
     const t = await translateOf(ctx);
     for (const orgId of await orgIds(ctx.db)) {
       try {
         const plan = await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) =>
-          prepareAutoPay(tx, ctx, t, orgId, today),
+          prepareAutoPay(tx, ctx, t, orgId, slot),
         );
+        if (!plan) continue;
+        orgs += 1;
         await flushEvents(ctx, orgId, plan.staff);
         for (const b of plan.batches) {
           const delivered = await deliverClientMessages(ctx, { orgId, userId: null }, b.prepared);
@@ -949,7 +996,9 @@ export const contractorPayJob: Job = {
         );
       }
     }
-    ctx.logger.info({ job: 'contractor-page.telegram-pay', today, sent }, '«К оплате» отправлено');
+    if (orgs) {
+      ctx.logger.info({ job: 'contractor-page.telegram-pay', orgs, sent }, '«К оплате» отправлено');
+    }
     if (failed.length) {
       throw new Error(`contractor-page.telegram-pay: не отправлено организаций: ${failed.length}`);
     }

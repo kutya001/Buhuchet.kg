@@ -8,6 +8,7 @@ import {
   orgPolicyHistory,
   orgRoleOptions,
   schema,
+  setCpNotice,
   setStaffWeekDay,
   updateWithHistory,
   withOrgContext,
@@ -15,6 +16,7 @@ import {
 } from '@buhuchet/db';
 import {
   CONFIRM_WAIT_DAYS_MESSAGE,
+  cpNoticeDays,
   featureChangeProblem,
   isValidConfirmWaitDays,
   isValidRemindDays,
@@ -62,6 +64,11 @@ function orgPolicyBody(p: OrgPolicyRecord): OrgPolicy {
     cpFilesUpload: p.cpFilesUpload,
     digestTime: p.digestTime,
     weekDay: p.weekDay,
+    cpPayDays: p.cpPayDays,
+    cpPayAt: p.cpPayAt,
+    cpFeeDays: p.cpFeeDays,
+    cpFeeAt: p.cpFeeAt,
+    cpDebtWeekDay: p.cpDebtWeekDay,
     defaultRoleId: p.defaultRoleId,
     defaultRoleName: p.defaultRoleName,
     audit: {
@@ -179,7 +186,8 @@ export const updateOrgPolicyRoute = createRoute({
     400: {
       description:
         'Функция нужна другой, включённой, или требует выключенную; дни вне 1–60 или 1–30; ' +
-        'роль по умолчанию — не роль организации или роль владельца; день недельной сводки вне 1–7',
+        'роль по умолчанию — не роль организации или роль владельца; день недельной сводки вне 1–7; ' +
+        'у «К оплате» и «Оплаты за обслуживание» нет ни одного дня, день вне 1–5 или время не «ЧЧ:ММ»',
       content: error,
     },
     401: { description: 'Нет входа', content: error },
@@ -255,6 +263,22 @@ export function updateOrgPolicyHandler(
         body.weekDay !== undefined && body.weekDay !== current.weekDay
           ? weekDayOf(body.weekDay)
           : undefined;
+      // Строки «К оплате» и «Оплата за обслуживание» (поток К, этап 2; прототип v115 pgTgNoticeMount):
+      // дни, время и день напоминания о долге — строки «cp_pay» и «cp_fee» той же таблицы; в историю и
+      // версию — так же запись учётной политики. Дни — по порядку строки от «за 5».
+      const cp = {
+        cpPayDays: changed(body.cpPayDays && cpNoticeDays(body.cpPayDays), current.cpPayDays),
+        cpPayAt: changed(body.cpPayAt, current.cpPayAt),
+        cpFeeDays: changed(body.cpFeeDays && cpNoticeDays(body.cpFeeDays), current.cpFeeDays),
+        cpFeeAt: changed(body.cpFeeAt, current.cpFeeAt),
+        cpDebtWeekDay: changed(
+          body.cpDebtWeekDay === undefined ? undefined : weekDayOf(body.cpDebtWeekDay),
+          current.cpDebtWeekDay,
+        ),
+      };
+      const cpChanges = (Object.keys(cp) as (keyof typeof cp)[])
+        .filter((field) => cp[field] !== undefined)
+        .map((field) => ({ field, from: current[field], to: cp[field] }));
       await updateWithHistory(tx, {
         table: orgSettings,
         entity: 'org_settings',
@@ -289,9 +313,23 @@ export function updateOrgPolicyHandler(
           ...(weekDay !== undefined
             ? [{ field: 'weekDay', from: current.weekDay, to: weekDay }]
             : []),
+          ...cpChanges,
         ],
       });
       if (weekDay !== undefined) await setStaffWeekDay(tx, ctx.orgId, weekDay);
+      if (cp.cpPayDays !== undefined || cp.cpPayAt !== undefined) {
+        await setCpNotice(tx, ctx.orgId, 'cp_pay', {
+          days: cp.cpPayDays ?? current.cpPayDays,
+          at: cp.cpPayAt ?? current.cpPayAt,
+        });
+      }
+      if (cp.cpFeeDays !== undefined || cp.cpFeeAt !== undefined || cp.cpDebtWeekDay !== undefined) {
+        await setCpNotice(tx, ctx.orgId, 'cp_fee', {
+          days: cp.cpFeeDays ?? current.cpFeeDays,
+          at: cp.cpFeeAt ?? current.cpFeeAt,
+          weekDay: cp.cpDebtWeekDay ?? current.cpDebtWeekDay,
+        });
+      }
       // Включили — сданные без подтверждения его не ждут (прототип repConfSet).
       if (!current.reportConfirm && body.reportConfirm === true) {
         await confirmSubmittedWhileOff(

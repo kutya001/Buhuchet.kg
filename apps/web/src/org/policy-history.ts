@@ -12,6 +12,7 @@ import {
 } from '@buhuchet/domain';
 import type { OrgPolicyHistory } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
+import { cpDaysText } from '../contractor-page/notice-days';
 import type { Translate } from '../l10n/translate';
 
 type HistoryItem = OrgPolicyHistory['items'][number];
@@ -21,6 +22,9 @@ const flags = (value: unknown): Partial<Record<Feature, boolean>> =>
   value && typeof value === 'object' ? (value as Partial<Record<Feature, boolean>>) : {};
 
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+const numbers = (value: unknown): number[] =>
+  list(value).filter((v): v is number => typeof v === 'number');
 
 /** Строки одного изменения — словами, как записи прототипа (modules/org.js: log('org', 'policy', …)). */
 function changeLines(change: HistoryChange, t: Translate): string[] {
@@ -119,6 +123,34 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
     case 'weekDay':
       return [
         t('org.history.week_day', {
+          from: t(`tgn.wd.${weekDayOf(Number(change.from))}`),
+          to: t(`tgn.wd.${weekDayOf(Number(change.to))}`),
+        }),
+      ];
+    // Строки «К оплате» и «Оплата за обслуживание» (поток К, этап 2; прототип v115 pgTgNoticeMount):
+    // ««К оплате»: дни за 5 дней → за 5, 1 день до срока», «…: время 10:00 → 09:30»,
+    // «Напоминание о долге: понедельник → пятница».
+    case 'cpPayDays':
+    case 'cpFeeDays':
+      return [
+        t('org.history.cp_days', {
+          name: t(change.field === 'cpPayDays' ? 'tgn.cp_pay.title' : 'tgn.cp_fee.title'),
+          from: cpDaysText(t, numbers(change.from)),
+          to: cpDaysText(t, numbers(change.to)),
+        }),
+      ];
+    case 'cpPayAt':
+    case 'cpFeeAt':
+      return [
+        t('org.history.cp_at', {
+          name: t(change.field === 'cpPayAt' ? 'tgn.cp_pay.title' : 'tgn.cp_fee.title'),
+          from: typeof change.from === 'string' ? change.from : '—',
+          to: typeof change.to === 'string' ? change.to : '—',
+        }),
+      ];
+    case 'cpDebtWeekDay':
+      return [
+        t('org.history.cp_debt_wd', {
           from: t(`tgn.wd.${weekDayOf(Number(change.from))}`),
           to: t(`tgn.wd.${weekDayOf(Number(change.to))}`),
         }),

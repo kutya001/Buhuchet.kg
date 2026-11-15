@@ -147,13 +147,13 @@ export const contractorTelegramMessages = pgTable(
     /** Месяц отчёта «ГГГГ-ММ» и итог в тыйынах на момент отправки — у «К оплате». */
     month: text('month'),
     total: bigint('total', { mode: 'number' }),
-    /** Отправлено само, за 5 дней до срока: один раз на месяц и чат. */
+    /** Отправлено само — в отмеченные дни «за N» до срока: одно на месяц, чат и день. */
     auto: boolean('auto').notNull().default(false),
     /** Понедельник недели напоминания о долге (задача К5): одно напоминание на неделю и чат. */
     week: date('week'),
     /**
-     * День отправки по Бишкеку (доработки 14.11.2026, блок 3): у «Оплата за обслуживание до …»; у самого
-     * — одно сообщение на чат в день.
+     * День отправки по Бишкеку (доработки 14.11.2026, блок 3): у «Оплата за обслуживание до …» и у самого
+     * «К оплате»; у самих — одно сообщение на чат в день (у «К оплате» — и на месяц).
      */
     day: date('day', { mode: 'string' }),
     /** Описание сообщения с кнопками (`BotMessage`): нажатая кнопка в нём гаснет. */
@@ -196,15 +196,20 @@ export const contractorTelegramMessages = pgTable(
     // День — и у других видов (поток К переводит на него «К оплате» «за 5 … за 1 день», этап 2), поэтому
     // проверка односторонняя. У самого — месяц начисления: после «Оплатил» за месяц следующие не уходят.
     check(
+      'contractor_telegram_messages_pay_day_check',
+      sql`${t.kind} <> 'pay' or not ${t.auto} or ${t.day} is not null`,
+    ),
+    check(
       'contractor_telegram_messages_fee_check',
       sql`${t.kind} <> 'fee' or (${t.day} is not null and ${t.total} is not null and ${t.total} > 0 and (not ${t.auto} or ${t.month} is not null))`,
     ),
     uniqueIndex('contractor_telegram_messages_chat_key')
       .on(t.chatId, t.messageId)
       .where(sql`${t.messageId} is not null`),
-    // Само «К оплате» уходит один раз на месяц и чат: повтор задачи второе не создаёт.
+    // Само «К оплате» уходит в каждый отмеченный день «за N» (доработки 14.11.2026, блок 3, этап 2) —
+    // одно на месяц, чат и день: повтор задачи второе не создаёт. День у самого — всегда.
     uniqueIndex('contractor_telegram_messages_auto_key')
-      .on(t.linkId, t.month)
+      .on(t.linkId, t.month, t.day)
       .where(sql`${t.kind} = 'pay' and ${t.auto}`),
     // Напоминание о долге — одно на неделю и чат: повтор задачи второе не создаёт.
     uniqueIndex('contractor_telegram_messages_debt_key')
@@ -245,7 +250,10 @@ export const contractorPayClaims = pgTable(
     contractorId: uuid('contractor_id').notNull(),
     source: text('source', { enum: PAY_CLAIM_SOURCES }).notNull(),
     purpose: text('purpose', { enum: PAY_CLAIM_PURPOSES }).notNull(),
-    /** Месяц «ГГГГ-ММ»: у «Перечислить» и «Оплатил» под «К оплате»; у обслуживания — пусто. */
+    /**
+     * Месяц «ГГГГ-ММ»: у «Перечислить» и «Оплатил» под «К оплате»; у обслуживания — месяц начисления
+     * «Оплата за обслуживание до …» (у «Оплатил» под ручным напоминанием о долге — пусто).
+     */
     month: text('month'),
     amount: money('amount'),
     comment: text('comment'),

@@ -1,4 +1,5 @@
 import {
+  autoFeeLinkIds,
   contractorDebtSwitch,
   contractorMoneyOf,
   contractorsWithTelegram,
@@ -6,6 +7,7 @@ import {
   contractorTelegramDebtSettings,
   contractorPageSectionShown,
   contractorTelegramRecipients,
+  cpNoticeSettingsOf,
   debtLinkIds,
   feeSubject,
   getContractor,
@@ -14,6 +16,7 @@ import {
   feeTransfer,
   messageTemplates,
   orgIds,
+  payClaimMonths,
   refreshContractorTelegramMessage,
   setContractorTelegramNoDebt,
   unsentDebtMessages,
@@ -21,19 +24,25 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
-  bishkekDate,
+  addMonths,
   botMessageProblem,
   botTemplate,
   contractorFees,
   cpDebt,
+  cpNoticeDay,
+  cpNoticeDayDue,
   cpTgDebtOnCommand,
   debtBotMessage,
   debtReminderDue,
   debtWeek,
+  feeSoon,
+  feeSoonBotMessage,
   fillTemplate,
+  formatDateRu,
   formatSomWithUnit,
   formatText,
   lastDayOf,
+  monthLabel,
   monthOf,
   monthReconciliation,
   weekdayMondayFirst,
@@ -48,12 +57,15 @@ import type { ApiDeps, Job, JobContext } from '../../../deps';
 import { serverTexts } from '../../l10n/texts';
 import { sendNow } from '../bot';
 import { deliverClientMessages, type PreparedClientMessage } from './pay';
+import { clientFilesOn } from './receipt';
+import { feeRequisiteOf } from './requisite';
 
 /*
  * Напоминание клиенту о долге в Telegram (доработки 13.11.2026, задача К5; прототип v94
  * modules/cp-telegram.js: `pgDebt`, `pgDebtTo`, `pgDebtMsg`, `tgAct('cp-nodebt')`). Раз в неделю, в
- * понедельник в 10:00, подключившим Telegram: недостача денег на налоги этого месяца и долг за
- * обслуживание. Клиент получает только то, что видит на своей странице: часть долга, раздел которой
+ * день и время строки «Оплата за обслуживание» блока «Telegram-уведомления» (по умолчанию — в
+ * понедельник в 10:00; прототип v115), подключившим Telegram: недостача денег на налоги этого месяца и
+ * долг за обслуживание; в отмеченные дни до срока — «Оплата за обслуживание до …». Клиент получает только то, что видит на своей странице: часть долга, раздел которой
  * ему не показан, в напоминание не входит, реквизиты — только пока показан раздел «Как оплатить».
  */
 
@@ -152,36 +164,114 @@ async function debtMessage(
 }
 
 /**
- * Напоминания одной организации: что отправить. Всё — в одной транзакции задачи. В понедельник
- * (`create`) записываются новые; в остальные дни недели — только повтор не ушедших в понедельник,
- * сегодняшним сообщением (долг погашен — повтора нет).
+ * «Оплата за обслуживание до …» одному контрагенту (доработки 14.11.2026, блок 3, пункт 3, этап 2;
+ * прототип v115 `pgFeeSoon`, `pgFeeSoonMsg`): в отмеченный день «за N» до дня оплаты обслуживания —
+ * ближайшее неоплаченное начисление этого или следующего месяца, пока клиент не нажал «Оплатил» за этот
+ * месяц (и сообщение не отклонено) и деньги за него не приняты. Одно на чат в день (ключ в базе).
+ * Клиенту — только пока ему показан раздел «Оплата за обслуживание» страницы: бот не пишет того, чего
+ * клиент не видит на своей странице; реквизиты — пока показан и «Как оплатить».
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-11
+async function prepareFeeSoon(
+  tx: Tx,
+  t: Translate,
+  cp: { id: string; name: string; kind: string; serviceStatus: string },
+  recipients: readonly { linkId: string; chatId: number }[],
+  today: IsoDate,
+  days: readonly number[],
+): Promise<PreparedClientMessage[]> {
+  if (cp.kind === 'oneoff' || cp.serviceStatus === 'archived') return [];
+  if (!(await contractorPageSectionShown(tx, cp.id, 'fee'))) return [];
+  const found = await feeSubject(tx, cp.id, undefined);
+  if (!found) return [];
+  // Начисления — с запасом до конца следующего месяца: «ближайшее» бывает и следующего месяца.
+  const fees = contractorFees(found.subject, found.payments, lastDayOf(addMonths(monthOf(today), 1)));
+  const soon = feeSoon(fees.months, today, await payClaimMonths(tx, cp.id, 'fee'));
+  if (!soon || !cpNoticeDayDue(today, soon.due, days)) return [];
+  const done = await autoFeeLinkIds(tx, cp.id, today);
+  const fresh = recipients.filter((r) => !done.has(r.linkId));
+  if (!fresh.length) return [];
+  const requisite = await feeRequisiteOf(tx, t, { id: cp.id, oneOff: false });
+  const [heading, text, paid, receipt] = await Promise.all([
+    templateText(tx, 'tgCpFeeHead', { срок: formatDateRu(soon.due) }),
+    templateText(tx, 'tgCpFeeSoon', {
+      контрагент: cp.name,
+      месяц: monthLabel(soon.month).toLowerCase(),
+      сумма: formatSomWithUnit(soon.sum),
+      срок: formatDateRu(soon.due),
+    }),
+    templateText(tx, 'tgBtnCpPaid'),
+    clientFilesOn(tx, cp.id).then((on) => (on ? templateText(tx, 'tgBtnCpReceipt') : null)),
+  ]);
+  const message = feeSoonBotMessage({
+    heading,
+    contractor: cp.name,
+    text,
+    requisite: requisite.state === 'ok' ? requisite.block : null,
+    paid,
+    receipt,
+  });
+  const problem = botMessageProblem(message);
+  if (problem) throw new Error(`«Оплата за обслуживание до …» контрагенту: ${problem}`);
+  const out: PreparedClientMessage[] = [];
+  for (const r of fresh) {
+    const id = await insertContractorTelegramMessage(tx, {
+      contractorId: cp.id,
+      linkId: r.linkId,
+      chatId: r.chatId,
+      kind: 'fee',
+      month: soon.month,
+      total: soon.sum,
+      auto: true,
+      day: today,
+      payload: message,
+    });
+    if (id) out.push({ id, chatId: r.chatId, message });
+  }
+  return out;
+}
+
+/**
+ * Строка «Оплата за обслуживание» одной организации: что отправить. Всё — в одной транзакции задачи.
+ * null — время отправки организации не в этом запуске. В выбранный день недели (`create`) записываются
+ * новые напоминания о долге; в остальные дни — только повтор не ушедших в тот день, сегодняшним
+ * сообщением (долг погашен — повтора нет). «Оплата за обслуживание до …» — в отмеченные дни до срока.
  */
 async function prepareDebt(
   tx: Tx,
   t: Translate,
-  today: IsoDate,
-  create: boolean,
-): Promise<PreparedClientMessage[]> {
+  orgId: string,
+  slot: Date,
+): Promise<PreparedClientMessage[] | null> {
   const settings = await contractorTelegramDebtSettings(tx);
-  if (!settings.on) return [];
+  if (!settings.on) return null;
+  const notices = await cpNoticeSettingsOf(tx, orgId);
+  const today = cpNoticeDay(notices.feeAt, slot);
+  if (!today) return null;
+  // День недели — по дню времени отправки, а не по часам запуска: запуск 00:00 отправляет за 23:56–23:59
+  // прошлого дня.
+  const create = weekdayMondayFirst(today) + 1 === notices.debtWeekDay;
   const week = debtWeek(today);
   const out: PreparedClientMessage[] = [];
   for (const contractorId of await contractorsWithTelegram(tx)) {
-    const own = await contractorDebtSwitch(tx, contractorId);
-    if (!own || own.off) continue;
-    // Клиент нажал «Не напоминать» — этому чату напоминания не идут.
+    // Клиент нажал «Не напоминать» — этому чату не идут ни напоминания о долге, ни «до срока».
     const recipients = (await contractorTelegramRecipients(tx, contractorId)).filter(
       (r) => !r.noDebt,
     );
     if (!recipients.length) continue;
+    const cp = await getContractor(tx, contractorId, { scope: undefined, today });
+    if (!cp) continue;
+    if (settings.fee) {
+      out.push(...(await prepareFeeSoon(tx, t, cp, recipients, today, notices.feeDays)));
+    }
+    const own = await contractorDebtSwitch(tx, contractorId);
+    if (!own || own.off) continue;
     const done = await debtLinkIds(tx, contractorId, week);
     const fresh = create ? recipients.filter((r) => !done.has(r.linkId)) : [];
     const retry = (await unsentDebtMessages(tx, contractorId, week, DEBT_MAX_ATTEMPTS)).filter(
       (m) => recipients.some((r) => r.linkId === m.linkId),
     );
     if (!fresh.length && !retry.length) continue;
-    const cp = await getContractor(tx, contractorId, { scope: undefined, today });
-    if (!cp) continue;
     const debt = await contractorClientDebt(tx, {
       contractorId,
       oneOff: cp.kind === 'oneoff',
@@ -221,32 +311,34 @@ async function prepareDebt(
 }
 
 /**
- * «Напоминать контрагентам о долге» (прототип: «раз в неделю, в понедельник в 10:00»): по всем
- * организациям, каждая — своей транзакцией. Одно напоминание на неделю и подключение (ключ в базе):
- * повтор и одновременный запуск второй строки не создают. Задача идёт каждый день: в понедельник
- * записывает и отправляет напоминания, в остальные дни только повторяет то, что в понедельник не ушло
- * (до трёх попыток) — сбой Telegram в понедельник не оставляет клиента без напоминания на неделю.
- * Заблокированной организации бот не пишет. Организация, у которой запуск упал, остальным не мешает.
+ * «Напоминать контрагентам о долге» (строка «Оплата за обслуживание» блока «Telegram-уведомления»,
+ * прототип v115: «раз в неделю в выбранный день в своё время, пока есть долг; до срока — в отмеченные
+ * дни»): запуск каждые 5 минут, организация — в запуск, на который приходится её время отправки, каждая
+ * — своей транзакцией. Одно напоминание на неделю и подключение, одно «до срока» на подключение и день
+ * (ключи в базе): повтор и одновременный запуск второй строки не создают. В остальные дни недели
+ * задача только повторяет то, что в выбранный день не ушло (до трёх попыток), — сбой Telegram не
+ * оставляет клиента без напоминания на неделю. Заблокированной организации бот не пишет. Организация, у
+ * которой запуск упал, остальным не мешает.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-11
 export const contractorDebtJob: Job = {
   name: 'contractor-page.telegram-debt',
-  // 10:00 по Бишкеку (расписания задач — по времени Бишкека).
-  cron: '0 10 * * *',
-  lookbackMinutes: 24 * 60,
+  // Каждые 5 минут по Бишкеку: время отправки организации — любая минута суток (`cpNoticeDay`).
+  cron: '*/5 * * * *',
+  lookbackMinutes: 60,
   async run(ctx, slot) {
-    const today = bishkekDate(ctx.clock.now());
-    // «Понедельник» — по времени запуска из расписания, а не по часам: запуск понедельника, который
-    // догоняется во вторник (исполнитель стоял), всё равно создаёт напоминания этой недели.
-    const create = weekdayMondayFirst(bishkekDate(slot)) === 0;
     const texts = await serverTexts(ctx);
     const t: Translate = (key, params) => formatText(texts(key), params);
     const failed: string[] = [];
     let sent = 0;
+    let orgs = 0;
     for (const orgId of await orgIds(ctx.db)) {
       try {
         const prepared = await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) =>
-          prepareDebt(tx, t, today, create),
+          prepareDebt(tx, t, orgId, slot),
         );
+        if (!prepared) continue;
+        orgs += 1;
         sent += await deliverClientMessages(ctx, { orgId, userId: null }, prepared);
       } catch (err) {
         failed.push(orgId);
@@ -256,10 +348,12 @@ export const contractorDebtJob: Job = {
         );
       }
     }
-    ctx.logger.info(
-      { job: 'contractor-page.telegram-debt', today, sent },
-      'Напоминания о долге отправлены',
-    );
+    if (orgs) {
+      ctx.logger.info(
+        { job: 'contractor-page.telegram-debt', orgs, sent },
+        'Напоминания о долге отправлены',
+      );
+    }
     if (failed.length) {
       throw new Error(`contractor-page.telegram-debt: не отправлено организаций: ${failed.length}`);
     }

@@ -175,6 +175,8 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     return res.linkId;
   }
 
+  const DAY = '2026-10-18';
+  const NEXT_DAY = '2026-10-19';
   const payInput = (linkId: string, chatId: number, auto = false) => ({
     contractorId: cpA,
     linkId,
@@ -183,6 +185,8 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     month: '2026-10' as const,
     total: 625_050,
     auto,
+    // Само «К оплате» — одно на подключение, месяц и день отправки (доработки 14.11.2026, этап 2).
+    ...(auto ? { day: DAY } : {}),
     payload: PAY,
   });
   /** Записать сообщение и отметить отправленным с этим номером. */
@@ -364,7 +368,7 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(await inA((tx) => recentManualPaySends(tx, cpA))).toBe(2);
   });
 
-  it('само «К оплате» — одна строка на подключение и месяц; не ушедшее повторяется до предела попыток', async () => {
+  it('само «К оплате» — одна строка на подключение, месяц и день; не ушедшее повторяется до предела попыток', async () => {
     const first = await inA((tx) =>
       insertContractorTelegramMessage(tx, payInput(linkA, CHAT_A, true)),
     );
@@ -387,7 +391,24 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(
       await inA((tx) => insertContractorTelegramMessage(tx, payInput(linkA, CHAT_A))),
     ).toBeTruthy();
-    expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10'))).toEqual(new Set([linkA, linkA2]));
+    // Другой отмеченный день — своя строка (здесь сразу ушедшая); без дня само «К оплате» не
+    // записывается.
+    const nextDay = await inA((tx) =>
+      insertContractorTelegramMessage(tx, { ...payInput(linkA, CHAT_A, true), day: NEXT_DAY }),
+    );
+    expect(nextDay).toBeTruthy();
+    await inA((tx) => markContractorTelegramMessage(tx, nextDay!, 600));
+    await expect(
+      inA((tx) =>
+        insertContractorTelegramMessage(tx, { ...payInput(linkA, CHAT_A, true), day: null }),
+      ),
+    ).rejects.toThrow();
+    expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10', DAY))).toEqual(
+      new Set([linkA, linkA2]),
+    );
+    expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10', NEXT_DAY))).toEqual(
+      new Set([linkA]),
+    );
     // Ручные отправки само сообщение не считает, и наоборот.
     expect(await inA((tx) => recentManualPaySends(tx, cpA))).toBe(1);
 
@@ -602,7 +623,7 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(await inB((tx) => contractorTelegramRecipients(tx, cpA))).toEqual([]);
     expect(await inB((tx) => contractorsWithTelegram(tx))).toEqual([cpB]);
     expect(await inB((tx) => recentManualPaySends(tx, cpA))).toBe(0);
-    expect(await inB((tx) => autoPayLinkIds(tx, cpA, '2026-10'))).toEqual(new Set());
+    expect(await inB((tx) => autoPayLinkIds(tx, cpA, '2026-10', DAY))).toEqual(new Set());
     // Отметка из чужой организации строку не меняет.
     await inB((tx) => markContractorTelegramMessage(tx, id, 999));
     expect(

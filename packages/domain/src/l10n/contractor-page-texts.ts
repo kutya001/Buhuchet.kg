@@ -600,4 +600,29 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.cp_tg_fee_all_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_all_off, section: E },
   'err.cp_tg_fee_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_off, section: E },
   'err.cp_tg_fee_failed': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_failed, section: E },
+  // Строки «К оплате» и «Оплата за обслуживание» блока «Telegram-уведомления», этап 2 (доработки
+  // 14.11.2026, блок 3; прототип v115 pgTgNoticeRows, pgTgNoticeMount, pgDaysTxt).
+  'tgn.cp.days_list': { ru: 'за {list} {word}', section: S },
+  'tgn.cp.days_label': { ru: 'Дни до срока', section: S },
+  'tgn.cp.day': { ru: 'за {n}', section: S },
+  'tgn.cp.day_1': { ru: 'за 1 день', section: S },
+  'tgn.cp.at_label': { ru: 'Время отправки', section: S },
+  'tgn.cp.debt_wd': { ru: 'День напоминания о долге', section: S },
+  'tgn.cp.days_required': { ru: 'Отметьте хотя бы один день', section: S },
+  'tgn.cp.at_required': { ru: 'Укажите время', section: S },
+  'tgn.cp.days_saved': { ru: '{name}: {days} до срока', section: S },
+  'tgn.cp.at_saved': { ru: '{name}: в {time}', section: S },
+  'tgn.cp.debt_wd_saved': { ru: 'Напоминание о долге — {days}', section: S },
+  'tgn.cp_fee.hint_soon': {
+    ru: 'До срока — «Оплата за обслуживание до <дата>» с суммой начисления за месяц и реквизитами для обслуживания; срок — «День оплаты обслуживания» в карточке контрагента. После срока — напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
+    section: S,
+  },
+  'tgn.cp_fee.days_soon': { ru: '{days} до дня оплаты; после срока — {wd}', section: S },
+  'tgn.cp_fee.often_soon': {
+    ru: 'В отмеченные дни до срока; после срока — раз в неделю, пока есть долг',
+    section: S,
+  },
+  'org.history.cp_days': { ru: '{name}: дни {from} → {to} до срока', section: S },
+  'org.history.cp_at': { ru: '{name}: время {from} → {to}', section: S },
+  'org.history.cp_debt_wd': { ru: 'Напоминание о долге: {from} → {to}', section: S },
 } as const satisfies Record<string, UiTextDefault>;

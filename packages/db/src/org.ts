@@ -21,6 +21,7 @@ import {
   orgTelegramNotices,
   roles,
 } from './schema';
+import { cpNoticeSettingsOf } from './contractor-telegram-notices';
 import { STAFF_WEEK_NOTICE } from './telegram-notices';
 import type { AuditRecord } from './staff';
 
@@ -46,6 +47,15 @@ export interface OrgProfileRecord {
 export interface OrgPolicyRecord extends OrgPolicy {
   /** День недельной сводки (строка `staff_week` блока «Telegram-уведомления»; нет — понедельник). */
   weekDay: WeekDay;
+  /**
+   * Строки «К оплате» и «Оплата за обслуживание» (поток К, этап 2): дни до срока, время, день
+   * напоминания о долге; нет строк — «за 5 дней» в 10:00, по понедельникам.
+   */
+  cpPayDays: number[];
+  cpPayAt: string;
+  cpFeeDays: number[];
+  cpFeeAt: string;
+  cpDebtWeekDay: WeekDay;
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: string | null;
   defaultRoleName: string | null;
@@ -148,6 +158,7 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     .where(eq(orgSettings.orgId, orgId));
   if (!r) return null;
   const s = r.settings;
+  const cp = await cpNoticeSettingsOf(tx, orgId);
   return {
     features: featureSet(s.features),
     remindDays: s.remindDays,
@@ -159,6 +170,11 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     // В базе — time «09:00:00», в интерфейсе — «09:00».
     digestTime: s.digestTime.slice(0, 5),
     weekDay: weekDayOf(r.weekDay),
+    cpPayDays: cp.payDays,
+    cpPayAt: cp.payAt,
+    cpFeeDays: cp.feeDays,
+    cpFeeAt: cp.feeAt,
+    cpDebtWeekDay: cp.debtWeekDay,
     timezone: s.timezone,
     confirmWaitDays: s.confirmWaitDays,
     taskConfirm: s.taskConfirm,

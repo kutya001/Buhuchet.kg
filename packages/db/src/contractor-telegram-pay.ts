@@ -274,11 +274,12 @@ export async function refreshContractorTelegramMessage(
   return rows.length > 0;
 }
 
-/** Каким подключениям само «К оплате» за месяц уже записано (ушло или ждёт повтора). */
+/** Каким подключениям само «К оплате» за месяц в этот день уже записано (ушло или ждёт повтора). */
 export async function autoPayLinkIds(
   tx: Tx,
   contractorId: string,
   month: YearMonth,
+  day: string,
 ): Promise<Set<string>> {
   const rows = await tx
     .select({ linkId: contractorTelegramMessages.linkId })
@@ -289,6 +290,7 @@ export async function autoPayLinkIds(
         eq(contractorTelegramMessages.kind, 'pay'),
         eq(contractorTelegramMessages.auto, true),
         eq(contractorTelegramMessages.month, month),
+        eq(contractorTelegramMessages.day, day),
       ),
     );
   return new Set(rows.map((r) => r.linkId));

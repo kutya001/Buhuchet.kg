@@ -18,9 +18,10 @@ export const CP_PAY_DAYS = 5;
 
 /**
  * Виды сообщений клиенту, под которыми бот принимает нажатия и ответы; `fee` — «Оплата за обслуживание
- * до …» (доработки 14.11.2026, блок 3 и блок 4, пункт 5): само и ручное, одно на чат в день.
+ * до …» (доработки 14.11.2026, блок 3 и блок 4, пункт 5): само и ручное, одно на чат в день; `receipt` —
+ * «Хотите прислать чек?» после «Оплатил» и просьба «Пришлите чек» (блок 4, пункт 4, этап 2).
  */
-export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee'] as const;
+export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee', 'receipt'] as const;
 export type CpTgMessageKind = (typeof CP_TG_MESSAGE_KINDS)[number];
 
 /** Коды действий кнопок клиента (латиница, до 16 знаков — `botPressData`). */
@@ -33,11 +34,22 @@ export const CP_TG_NODEBT_ACTION = 'cpNoDebt';
  * прототип v110 `cp-req`; `telegram-requisite.ts`).
  */
 export const CP_TG_REQ_ACTION = 'cpReq';
+/**
+ * «Прислать чек» после «Оплатил» и под «Оплата за обслуживание до …» (доработки 14.11.2026, блок 4,
+ * пункт 4, этап 2; прототип v115 `tgAct('cp-receipt')`).
+ */
+export const CP_TG_RECEIPT_ACTION = 'cpReceipt';
+/**
+ * Кнопка «От какой компании?» под файлом без просьбы из чата нескольких контрагентов (блок 2, пункт 1,
+ * этап 2; прототип v115 `tgAct('cp-file-to')`): данные — номер подключения.
+ */
+export const CP_TG_FILE_TO_ACTION = 'cpFileTo';
 export const CP_TG_CLIENT_ACTIONS = [
   CP_TG_PAID_ACTION,
   CP_TG_ASK_ACTION,
   CP_TG_NODEBT_ACTION,
   CP_TG_REQ_ACTION,
+  CP_TG_RECEIPT_ACTION,
 ] as const;
 
 /**
