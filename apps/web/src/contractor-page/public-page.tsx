@@ -2,7 +2,7 @@
 
 import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
 import { PageForgot, PublicPageCodeInput, type PublicPage } from '@buhuchet/shared';
-import { buttonClass, Field, Icon, inputClass } from '@buhuchet/ui';
+import { buttonClass, Field, Icon, inputClass, useMounted } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
@@ -34,6 +34,9 @@ export function PublicPageScreen({
   state: PublicPage;
 }) {
   const t = useT();
+  // Страница подхвачена React — нажатия работают (метка для сквозных тестов, docs/typical-mistakes.md
+  // № 41: до подхвата кнопки из HTML сервера видны, но нажатие теряется молча).
+  const ready = useMounted();
   let main: ReactNode;
   switch (state.state) {
     case 'unavailable':
@@ -73,6 +76,7 @@ export function PublicPageScreen({
     <UiProviders initialMax={parseMaxPrefs(undefined)}>
       <main
         data-pub-page=""
+        data-pub-ready={ready ? '' : undefined}
         className={`flex min-h-dvh flex-col items-center gap-[18px] bg-frame px-4 pt-6 pb-8 max-md:gap-3.5 max-md:px-3 max-md:pt-3.5 ${navPad}`}
       >
         {main}
@@ -118,6 +122,8 @@ function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
   const t = useT();
   const errorText = useErrorText();
   const router = useRouter();
+  // До подхвата страницы React нажатие потерялось бы молча (docs/typical-mistakes.md № 41).
+  const ready = useMounted();
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<{ text: string; ok: boolean } | null>(null);
   const ask = async () => {
@@ -141,7 +147,7 @@ function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
       <button
         type="button"
         data-pub-forgot=""
-        disabled={busy}
+        disabled={busy || !ready}
         onClick={() => void ask()}
         className="inline-flex cursor-pointer items-center gap-1 self-center border-0 bg-transparent p-0 font-[550] text-link disabled:cursor-default disabled:opacity-60"
       >
@@ -173,6 +179,8 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
   const errorText = useErrorText();
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
+  // «Открыть» до подхвата страницы React ушло бы обычной отправкой формы (docs/typical-mistakes.md № 41).
+  const ready = useMounted();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -243,7 +251,11 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
           />
         )}
       </Field>
-      <button type="submit" className={`${buttonClass('cta')} justify-center`} disabled={busy}>
+      <button
+        type="submit"
+        className={`${buttonClass('cta')} justify-center`}
+        disabled={busy || !ready}
+      >
         {t('pub.code.open')}
       </button>
       <span className="text-[11.5px] leading-[1.4] text-faint">{t('pub.code.remember')}</span>

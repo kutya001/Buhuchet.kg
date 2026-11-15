@@ -109,6 +109,7 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
 
     // Клиент вводит код и открывает раздел «Telegram» своей страницы.
     await page.goto(cp.path);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(cp.code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();

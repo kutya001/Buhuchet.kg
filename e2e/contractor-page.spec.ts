@@ -90,6 +90,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
     // Без кода не видно ничего, даже названия контрагента.
     await expect(page.getByText(name)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     const input = page.getByLabel('Код доступа');
     await input.fill('12');
     await page.getByRole('button', { name: 'Открыть' }).click();
@@ -130,6 +131,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     const name = `ОсОО «Выключение ${Date.now().toString(36)}»`;
     const { origin, id, code, path } = await enabledPage(request, baseURL, name);
     await page.goto(path);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name })).toBeVisible();
@@ -178,6 +180,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     const { origin, id, code, path, inn } = await enabledPage(request, baseURL, name, employee.id);
     // Браузер контрагента запомнил код.
     await page.goto(path);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name })).toBeVisible();
@@ -384,12 +387,19 @@ const versionOf = async (api: APIRequestContext, id: string) =>
 /** Ввести код в браузере: открывается страница контрагента. */
 async function openByCode(page: Page, path: string, code: string, name: string) {
   await page.goto(path);
+  // «Открыть» доступна, когда React подхватил страницу: раньше поле заполнять нельзя (№ 41).
+  const open = page.getByRole('button', { name: 'Открыть' });
+  await expect(open).toBeEnabled();
   await page.getByLabel('Код доступа').fill(code);
-  await page.getByRole('button', { name: 'Открыть' }).click();
+  await open.click();
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
 const section = (page: Page, key: string) => page.locator(`[data-sec="${key}"]`);
+
+/** Страница по ссылке подхвачена React: после `goto` и `reload` нажатие раньше этого теряется (№ 41). */
+const pageReady = (page: Page) =>
+  expect(page.locator('[data-pub-page]')).toHaveAttribute('data-pub-ready', '');
 
 test.describe('Этап 2: страница контрагента по ссылке — разделы и компоновка', () => {
   test.beforeEach(async ({ page }) => {
@@ -774,7 +784,11 @@ async function unfold(page: Page, key: string, isMobile: boolean) {
   const sec = section(page, key);
   if (isMobile) {
     await expect(sec).toHaveAttribute('data-folded', '');
-    await sec.locator('[data-pub-toggle]').click();
+    // «Свёрнуто» видно уже в HTML сервера, а нажатие работает, когда React подхватил страницу и узнал
+    // телефон: тогда `aria-expanded` — false (№ 41).
+    const toggle = sec.locator('[data-pub-toggle]');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
   }
   await expect(sec).not.toHaveAttribute('data-folded', '');
   return sec;
@@ -874,6 +888,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     });
     expect(got.status(), await got.text()).toBe(201);
     await page.reload();
+    await pageReady(page);
     const again = await unfold(page, 'reports', isMobile);
     await again.getByRole('button', { name: text(texts, 'pub.rep.by_month') }).click();
     const done = again
@@ -907,6 +922,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     // Верный код: «В этом браузере код запомнится на 1 день», cookie этой ссылки — на сутки.
     await page.goto(path);
     await expect(page.getByText(text(texts, 'pub.code.remember'))).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
@@ -947,6 +963,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     const forgot = page.locator('[data-pub-forgot]');
     const answer = page.locator('[data-pub-forgot-answer]');
     await expect(forgot).toHaveText(text(texts, 'pub.forgot'));
+    await expect(forgot).toBeEnabled();
     for (let n = 1; n <= 3; n++) {
       await forgot.click();
       await expect(answer).toHaveAttribute('data-pub-forgot-answer', 'sent');

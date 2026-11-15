@@ -410,8 +410,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14), не наполняются; v109,
     // v110 (вся работа v110 — в продукте, п. К-10), v111 (блок «Telegram-уведомления», п. Т-15), v112
     // («Файлы от контрагентов», п. И-7), v113 (Telegram заявителя и пароль по ссылке, п. Т-18), v114
-    // (регистрация по документам, п. И-9) и v115 («К оплате» по дням, файлы и чеки через бота, п. К-11)
-    // — да; v116 («Я оплатил», оплата по месяцам и код на странице контрагента, п. К-13) — пока нет.
+    // (регистрация по документам, п. И-9), v115 («К оплате» по дням, файлы и чеки через бота, п. К-11)
+    // и v116 («Я оплатил», оплата по месяцам и код на странице контрагента, п. К-14) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -420,10 +420,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v113')).toMatchObject({ release: '113' });
     expect(rows.find((r) => r.id === 'v114')).toMatchObject({ release: '114' });
     expect(rows.find((r) => r.id === 'v115')).toMatchObject({ release: '115', showOnLogin: true });
-    expect(rows.find((r) => r.id === 'v116')).toBeUndefined();
-    // v116 не наполняется из-за NEWS_NOT_YET, а не потому, что её нет в refDB или она черновик.
-    const source = refDB.news as { id: string; status: string }[];
-    expect(source.find((x) => x.id === 'v116')?.status).toBe('Опубликовано');
+    expect(rows.find((r) => r.id === 'v116')).toMatchObject({ release: '116', showOnLogin: true });
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
