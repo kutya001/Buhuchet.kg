@@ -34,6 +34,7 @@ import {
   TEST_ORIGIN,
   TEST_PASSWORD,
 } from '../../testing';
+import { retryStorageDeletes } from '../files/storage-retry';
 
 /*
  * Страница контрагента: «Я оплатил», «По месяцам» с оплатой и код в Telegram (доработки 14.11.2026,
@@ -639,6 +640,27 @@ describe.skipIf(!databaseAvailable())(
       expect((await attach(owner, 'receipt', randomUUID())).status).toBe(404);
       expect(objects()).toBe(before);
       expect((await filesOf('receipt', receipt)).length).toBe(1);
+      // Хранилище не удаляет копию после отказа — она идёт на повторное удаление (п. И-10).
+      const del = storage.delete;
+      storage.delete = async () => {
+        throw new Error('S3 недоступно');
+      };
+      try {
+        expect((await attach(owner, 'receipt', await op(cpA2))).status).toBe(404);
+      } finally {
+        storage.delete = del;
+      }
+      try {
+        const retries = await f.t.admin.db
+          .select({ key: schema.storageDeleteRetries.key })
+          .from(schema.storageDeleteRetries);
+        expect(retries).toHaveLength(1);
+        expect(objects()).toBe(before + 1);
+        expect(await retryStorageDeletes(f.deps)).toBe(1);
+        expect(objects()).toBe(before);
+      } finally {
+        await f.t.admin.db.delete(schema.storageDeleteRetries);
+      }
       // Только поступление и оплата за обслуживание.
       const wrong = await call(owner, 'POST', `/api/files/sent/${file!.id}/attach`, {
         source: { kind: 'report', id: receipt },

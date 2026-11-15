@@ -9,15 +9,9 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { attachStoredFile } from './attach';
-import {
-  dropObjects,
-  error,
-  FILES_SECTION,
-  subjectOf,
-  UPLOAD_RATE_LIMIT,
-  visibleSource,
-} from './files';
+import { error, FILES_SECTION, subjectOf, UPLOAD_RATE_LIMIT, visibleSource } from './files';
 import { requireSentTab, visibleSent } from './sent';
+import { removeStoredObjects } from './storage-retry';
 
 /*
  * Принятый чек — сразу к деньгам (просьба заказчика 15.11.2026, прототип v119): «Принять» у чека из
@@ -118,7 +112,8 @@ export function sentAttachHandler(deps: ApiDeps): RouteHandler<typeof sentAttach
       });
       return c.json(attached, 201);
     } catch (err) {
-      await dropObjects(deps, [key]);
+      // Не удалилось — на повторное удаление: строки у копии нет, задача по сроку её не найдёт (п. И-10).
+      await removeStoredObjects(deps, [key], 'принятый чек к деньгам: копия после отказа');
       throw err;
     }
   };
