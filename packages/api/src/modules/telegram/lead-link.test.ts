@@ -32,6 +32,7 @@ import {
   apiRequest,
   createStaffFixture,
   createTestDeps,
+  leadDocDraft,
   sendToBot,
   signIn,
   telegramPress,
@@ -328,6 +329,16 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
           'x-forwarded-for': `203.0.113.${n}, 10.0.0.1`,
         },
         body: JSON.stringify({
+          // Форма с документами (поток И): ИП, ИНН и черновик со свидетельством ГНС — документ «не
+          // прочитался», поля заполнены вручную.
+          form: 'ip',
+          inn: '21811201810002',
+          okpo: '',
+          address: '',
+          head: '',
+          draft: (
+            await leadDocDraft(app, deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }])
+          ).draft,
           name: 'Айгуль Садыкова',
           firm: FIRM,
           phone,
@@ -339,21 +350,14 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         }),
       });
       expect(res.status).toBe(200);
+      // Ссылку «Подключить Telegram» выдаёт сама подача заявки (стык с потоком И) — в ответе формы.
+      const { tg: link } = (await res.json()) as { tg: { url: string } | null };
       await telegramSendJob(noPause).run(deps, clock.now());
       const [saved] = await f.t.admin.db
         .select()
         .from(schema.platformLeads)
         .where(eq(schema.platformLeads.phone, phone));
-      const link = await f.t.app.db.transaction((tx) =>
-        issueLeadTgLink(tx, {
-          leadId: saved!.id,
-          repeat: false,
-          prior: null,
-          now: clock.now(),
-          botUsername: BOT,
-        }),
-      );
-      const key = LINK_RE.exec(link && 'url' in link ? link.url : '')![1]!;
+      const key = LINK_RE.exec(link?.url ?? '')![1]!;
       await start(key, 9221);
 
       const notice = tg.sent
