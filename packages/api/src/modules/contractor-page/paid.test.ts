@@ -4,6 +4,7 @@ import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/tes
 import {
   fillTemplate,
   formatSomWithUnit,
+  monthLabel,
   PAGE_CODE_TG_MAX,
   pageCodeText,
   TELEGRAM_TEMPLATE_DEFAULTS,
@@ -76,8 +77,12 @@ describe.skipIf(!databaseAvailable())(
     let grantB = '';
 
     const employee = (login: string) => f.people[login]!.employeeId;
-    const call = (cookie: string | undefined, method: 'GET' | 'POST', path: string, body?: unknown) =>
-      apiRequest(f.app, method, path, cookie, body);
+    const call = (
+      cookie: string | undefined,
+      method: 'GET' | 'POST',
+      path: string,
+      body?: unknown,
+    ) => apiRequest(f.app, method, path, cookie, body);
     const failure = async (res: Response) => ApiError.parse(await res.json()).error;
     const features = (orgId: string, value: Record<string, boolean>) =>
       f.t.admin.db
@@ -129,7 +134,11 @@ describe.skipIf(!databaseAvailable())(
         body: JSON.stringify({ code }),
       });
       expect(res.status, await res.clone().text()).toBe(200);
-      return { cookie: (res.headers.get('set-cookie') ?? '').split(';')[0]!, raw: res, code: code! };
+      return {
+        cookie: (res.headers.get('set-cookie') ?? '').split(';')[0]!,
+        raw: res,
+        code: code!,
+      };
     }
     /** Подключить чат клиента к контрагенту: ссылка со страницы, «Старт», «Подтвердить». */
     async function linkClient(cookie: string, cp: string, inn: string, slug: string, chat: number) {
@@ -202,7 +211,8 @@ describe.skipIf(!databaseAvailable())(
         }),
       };
     };
-    const forgot = (slug: string, inn: string) => pagePost(`/api/page/${slug}/${inn}/forgot`, undefined);
+    const forgot = (slug: string, inn: string) =>
+      pagePost(`/api/page/${slug}/${inn}/forgot`, undefined);
     const forgotOutcome = async (slug: string, inn: string) => {
       const res = await forgot(slug, inn);
       expect(res.status, await res.clone().text()).toBe(200);
@@ -352,6 +362,21 @@ describe.skipIf(!databaseAvailable())(
       expect(page.pay?.tax).toMatchObject({ waiting: null });
       expect(page.pay?.tax?.head).toContain('Сотрудник acc-a');
       expect(page.pay?.tax?.copy).toBe('0555123456');
+      // Свободный остаток (поступление без детализации по отчётам) в «оплачено» не входит: прототип
+      // `pgMonthPay` берёт принятое под отчёт (`r.recv`), а не «Получено от контрагента» по сверке.
+      await f.t.admin.db.insert(schema.moneyOperations).values({
+        orgId: f.a.orgId,
+        contractorId: cpA,
+        kind: 'in',
+        amount: 100_000,
+        total: 100_000,
+        opDate: '2026-10-18',
+        holderKind: 'org',
+      });
+      expect((await publicPage('org-a', INN_A, grantA)).reports!.months![0]).toMatchObject({
+        got: 120_000,
+        left: 467_050,
+      });
       // Без «Учёта оплаты налогов» месяцев с оплатой нет.
       await features(f.a.orgId, { ...ON, taxpay: false });
       try {
@@ -408,13 +433,14 @@ describe.skipIf(!databaseAvailable())(
           status: 'wait',
         },
       ]);
-      // Чек — «Новый» в «Отправленных файлах» с комментарием «Чек: налоги, 4 670,50 сом. …».
-      const list = SentFileList.parse(
-        await (await call(acc, 'GET', `/api/contractors/${cpA}/sent-files`)).json(),
-      );
+      // Чек — «Новый» в «Отправленных файлах» с комментарием «Чек: налоги за <месяц>. …» без суммы:
+      // список видят и те, кому сумма налогов не положена (п. К-14).
+      const listed = await (await call(acc, 'GET', `/api/contractors/${cpA}/sent-files`)).json();
+      const list = SentFileList.parse(listed);
       expect(list.items.map((x) => [x.name, x.status, x.comment])).toEqual([
-        ['Чек.pdf', 'new', `Чек: налоги, ${formatSomWithUnit(467_050)}. перевёл с карты`],
+        ['Чек.pdf', 'new', `Чек: налоги за ${monthLabel(month).toLowerCase()}. перевёл с карты`],
       ]);
+      expect(JSON.stringify(listed)).not.toContain(formatSomWithUnit(467_050));
       // История — одна запись от имени контрагента, без автора.
       expect(await history(cpA, 'page_paid')).toEqual([
         {
@@ -513,9 +539,15 @@ describe.skipIf(!databaseAvailable())(
 
     it('что можно сообщить считает сервер: скрытый «Как оплатить», выключенная отправка файлов, чужой чек, без кода', async () => {
       const month = (await publicPage('org-a', INN_A, grantA)).reports!.months![0]!.month;
-      // Другая сумма при «закончить» — не тот чек.
-      const swapped = await paid(grantA, { purpose: 'tax', month, amount: 100_000 }, { amount: 1 });
+      // Другой месяц при «закончить» — не тот чек (сумму заново проверяет сервер, как при «начать»).
+      const swapped = await paid(
+        grantA,
+        { purpose: 'tax', month, amount: 100_000 },
+        { month: null },
+      );
       expect(swapped.res.status).toBe(404);
+      const zero = await paid(grantA, { purpose: 'tax', month, amount: 100_000 }, { amount: 0 });
+      expect(await failure(zero.res)).toMatchObject({ details: { field: 'sum', problem: 'sum' } });
       expect(await claims(cpA)).toEqual([]);
       // Без «Отчётов» месяцев налогов нет — только «без месяца».
       await setPage(cpA, { hiddenSections: ['reports'] });
@@ -566,9 +598,7 @@ describe.skipIf(!databaseAvailable())(
       );
       // Код моноширинным, «Скопировать код» копирует 6 цифр.
       expect(msg!.options.code).toBe(pageCodeText(code));
-      expect(msg!.options.keyboard).toEqual([
-        [expect.objectContaining({ copy: code })],
-      ]);
+      expect(msg!.options.keyboard).toEqual([[expect.objectContaining({ copy: code })]]);
       // Код — мимо журнала отправок; в истории — куда и как, без кода.
       const outbox = await f.t.admin.db.select().from(schema.telegramOutbox);
       expect(JSON.stringify(outbox)).not.toContain(code);
@@ -633,6 +663,17 @@ describe.skipIf(!databaseAvailable())(
       await codeCommand(STRANGER);
       expect(sentTo(STRANGER).at(-1)!.text).toBe(tpl('tgCpCodeNone', {}));
       expect(await history(cpB, 'page_code_tg')).toHaveLength(1);
+      // Чат сотрудника без подключений к страницам — команду разбирает бот сотрудника (п. О-79).
+      await codeCommand(CHAT_ACC);
+      expect(sentTo(CHAT_ACC).map((m) => m.text)).not.toContain(tpl('tgCpCodeNone', {}));
+    });
+
+    it('«Забыли код?» с одного адреса — не больше 10 в час, неизвестные адреса тоже считаются', async () => {
+      for (let i = 0; i < 10; i++) expect((await forgot('nope', INN_A)).status).toBe(404);
+      const res = await forgot('org-a', INN_A);
+      expect(res.status).toBe(429);
+      expect((await failure(res)).code).toBe('page_forgot_limit');
+      expect(sentTo(CLIENT_1)).toEqual([]);
     });
   },
 );

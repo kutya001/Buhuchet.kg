@@ -125,6 +125,8 @@ export async function contractorPageBody(
     : null;
   const money = taxpay && needReports ? await contractorMoneyOf(tx, contractorId) : null;
   const typeOf = new Map(rep?.types.map((x) => [x.code, x]) ?? []);
+  // Принято под отчёт детализацией поступлений (прототип `r.recv`) — для «оплачено» месяца.
+  const recvOf = new Map(money?.reports.map((x) => [x.id, x.received]) ?? []);
   const rows = (rep?.reports ?? []).map((r) => {
     const type = typeOf.get(r.typeCode);
     const sum = r.amount;
@@ -134,6 +136,7 @@ export async function contractorPageBody(
       hasSum: hasTaxSum(r.act),
       // «Получено от контрагента» по сверке (прототип `r.got`).
       got: money?.money.reports.get(r.id)?.received ?? 0,
+      recv: recvOf.get(r.id) ?? 0,
       payStatus:
         taxpay && hasTaxSum(r.act) && (sum ?? 0) > 0
           ? (paymentStatus({ act: r.act, status: r.status, sum, paid: r.paid }) as
@@ -148,8 +151,9 @@ export async function contractorPageBody(
   const waiting: WaitingPayClaim[] =
     has('reports') || has('pay') || showFee ? await waitingPayClaims(tx, contractorId) : [];
   const lastWaiting = (purpose: 'tax' | 'fee', month?: string) =>
-    waiting.filter((x) => x.purpose === purpose && (month === undefined || x.month === month)).pop() ??
-    null;
+    waiting
+      .filter((x) => x.purpose === purpose && (month === undefined || x.month === month))
+      .pop() ?? null;
 
   const late = has('reports')
     ? rows.filter((x) => pageReportMark({ status: x.r.status, due: x.r.dueDate }, today) === 'late')
@@ -390,6 +394,7 @@ type PageRow = {
   };
   type?: { short: string } | undefined;
   got: number;
+  recv: number;
   month: string;
 };
 
@@ -417,7 +422,8 @@ function monthsPay(
           act: x.r.act,
           amount: x.r.amount,
           paid: x.r.paid,
-          received: x.got,
+          // Как в прототипе (`pgMonthPay`: `x.r.recv`): принятое под отчёт, без доли свободного остатка.
+          received: x.recv,
           payDue: x.r.payDue,
         })),
         !!lastWaiting('tax', month),

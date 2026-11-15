@@ -161,9 +161,24 @@ function checkPaid(
   return ctx;
 }
 
-/** Комментарий чека в «Отправленных файлах»: «Чек: налоги, 5 000 сом. <комментарий>». */
-const paidNote = (t: Translate, purpose: PayClaimPurpose, amount: number, comment: string | null) =>
-  pagePaidSentNote(t(`pub.paid.note.${purpose}`, { sum: formatSomWithUnit(amount) }), comment);
+/**
+ * Комментарий чека в «Отправленных файлах»: «Чек: налоги за сентябрь 2026. <комментарий>» — без суммы.
+ * Его видят все, кому видны «Отправленные файлы», а сумма налогов и платы за обслуживание — только тем,
+ * кто может принять эти деньги (`payFor`), поэтому она остаётся в сообщении об оплате.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-14
+const paidNote = (
+  t: Translate,
+  purpose: PayClaimPurpose,
+  month: YearMonth | null,
+  comment: string | null,
+) =>
+  pagePaidSentNote(
+    month
+      ? t(`pub.paid.note.${purpose}_month`, { month: monthLabel(month).toLowerCase() })
+      : t(`pub.paid.note.${purpose}`),
+    comment,
+  );
 
 export const pagePaidStartRoute = createRoute({
   method: 'post',
@@ -195,7 +210,7 @@ export const pagePaidStartRoute = createRoute({
 
 /**
  * Начать «Я оплатил»: страница этого браузера, что можно сообщить, пределы файлов и частоты — как у
- * «Отправить файл»; чек — незаконченная загрузка с комментарием «Чек: …». Сообщение об оплате появится
+ * «Отправить файл»; чек — незаконченная загрузка с комментарием «Чек: …» без суммы. Сообщение об оплате появится
  * после `…/paid/complete`.
  */
 export function pagePaidStartHandler(
@@ -221,7 +236,7 @@ export function pagePaidStartHandler(
       id,
       contractorId: page.contractorId,
       source: 'page' as const,
-      comment: paidNote(t, body.purpose, body.amount, comment),
+      comment: paidNote(t, body.purpose, body.month, comment),
       name: file.name,
       contentType: fileContentType(file.name),
       sizeBytes: file.size,
@@ -290,7 +305,7 @@ export const pagePaidCompleteRoute = createRoute({
 });
 
 /**
- * Закончить «Я оплатил»: чек этого браузера с теми же суммой и назначением (комментарий чека совпадает
+ * Закончить «Я оплатил»: чек этого браузера с тем же назначением и месяцем (комментарий чека совпадает
  * с посчитанным заново), проверка копии чека, затем одной транзакцией — чек «Новый», сообщение об
  * оплате «ждёт подтверждения» с этим чеком и запись в историю от имени контрагента. Ответственному —
  * сообщение в Telegram после транзакции (прототип `tgSvc(…, 'Контрагент сообщил об оплате')`).
@@ -306,11 +321,13 @@ export function pagePaidCompleteHandler(
     const t = await translateOf(deps);
     const today = bishkekDate(deps.clock.now());
     const comment = sentFileNote(body.comment ?? '') || null;
-    const note = paidNote(t, body.purpose, body.amount, comment);
+    const note = paidNote(t, body.purpose, body.month, comment);
     const ownRow = (rows: SentFileRecord[]) => {
       const row = rows[0];
-      // Чек начат не этим «Я оплатил» (другая сумма, назначение или обычная отправка) — его нет.
-      if (!row || row.comment !== note) return apiFail(404, 'not_found', 'Нет такого начатого чека');
+      // Чек начат не этим «Я оплатил» (другие назначение и месяц или обычная отправка) — его нет;
+      // сумму заново проверяет `checkPaid`.
+      if (!row || row.comment !== note)
+        return apiFail(404, 'not_found', 'Нет такого начатого чека');
       return row;
     };
     const row = await withOrgContext(deps.db, ctxDb, async (tx) => {
@@ -426,8 +443,7 @@ export function pageForgotHandler(deps: ApiDeps): RouteHandler<typeof pageForgot
     const { slug, inn } = c.req.valid('param');
     c.header('Cache-Control', 'no-store');
     if (!isPageAddress(slug, inn)) return unavailable();
-    const target = await contractorPageTarget(deps.db, slug, inn);
-    if (!target) return unavailable();
+    // Предел с адреса — до поиска страницы: подбор адресов и ИНН тоже его тратит.
     const ip = await takeRateLimit(deps.db, PAGE_FORGOT_IP_RATE_LIMIT, clientIpHash(c, deps));
     if (!ip.ok) {
       return apiFail(
@@ -436,6 +452,8 @@ export function pageForgotHandler(deps: ApiDeps): RouteHandler<typeof pageForgot
         'Слишком много запросов. Попробуйте позже или спросите код у вашего бухгалтера',
       );
     }
+    const target = await contractorPageTarget(deps.db, slug, inn);
+    if (!target) return unavailable();
     const r = await sendPageCode(deps, { ...target, via: 'page' });
     if (r.outcome === 'unavailable') return unavailable();
     return c.json({ outcome: r.outcome, limit: PAGE_CODE_TG_MAX }, 200);

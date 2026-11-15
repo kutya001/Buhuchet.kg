@@ -583,6 +583,7 @@ test.describe('Этап 2: страница контрагента по ссыл
       due: lastWorkday(),
     });
     await page.reload();
+    await pageReady(page);
     await expect(state).toHaveAttribute('data-pub-state', 'bad');
     await expect(state).toContainText('просрочен 1 отчёт');
     // Замечание ведёт в «Отчёты» с плашкой «Просрочено».
@@ -789,8 +790,8 @@ async function unfold(page: Page, key: string, isMobile: boolean) {
     const toggle = sec.locator('[data-pub-toggle]');
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await toggle.click();
+    await expect(sec).not.toHaveAttribute('data-folded', '');
   }
-  await expect(sec).not.toHaveAttribute('data-folded', '');
   return sec;
 }
 
@@ -813,11 +814,15 @@ test.describe('Доработки 14.11, блок 6: страница контр
     const tag = Date.now().toString(36);
     const name = `ОсОО «Оплата ${tag}»`;
     const cp = await pageOf(request, o, name, 'org');
+    // НДС за прошлый месяц со сроком в этом году: «Отчёты» показывают год срока сдачи.
+    const prev = new Date(`${bishkek()}T00:00:00Z`);
+    prev.setUTCDate(1);
+    prev.setUTCMonth(prev.getUTCMonth() - 1);
     const nds = await manualReport(request, o.origin, {
       contractorId: cp.id,
       reportTypeCode: 'nds',
-      month: '2026-09-01',
-      due: lastWorkday(),
+      month: prev.toISOString().slice(0, 10),
+      due: `${bishkek().slice(0, 4)}-12-21`,
     });
     const amount = await request.post(`/api/reports/${nds}/amount`, {
       headers: { origin: o.origin },
@@ -926,7 +931,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await page.getByLabel('Код доступа').fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
-    const cookie = (await page.context().cookies()).find((c) => c.name === 'bh_page');
+    const cookie = (await page.context().cookies()).find((c) => c.name.endsWith('bh_page'));
     expect(cookie).toBeTruthy();
     const left = cookie!.expires * 1000 - Date.now();
     expect(left).toBeGreaterThan(86_400_000 - 600_000);

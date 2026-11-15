@@ -118,7 +118,8 @@ export function pagePaidProblems(o: {
 
 /**
  * Комментарий чека в «Отправленных файлах» (прототип: «Чек: налоги, 5 000 сом. <комментарий>»): `head`
- * — «Чек: налоги, 5 000 сом» текстом словаря; всё вместе — не длиннее комментария отправленного файла.
+ * — «Чек: налоги за сентябрь 2026» текстом словаря (без суммы, docs/deviations.md п. К-14); всё вместе —
+ * не длиннее комментария отправленного файла.
  */
 export function pagePaidSentNote(head: string, comment: string | null): string {
   const text = comment ? `${head}. ${comment}` : head;

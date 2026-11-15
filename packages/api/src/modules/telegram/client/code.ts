@@ -1,4 +1,5 @@
 import {
+  botChatUsers,
   contractorTelegramChats,
   logPageCodeSent,
   messageTemplates,
@@ -41,7 +42,11 @@ export const PAGE_CODE_TG_RATE_LIMIT: RateLimit = {
 };
 
 /** Команда из одного сообщения клиента разбирается один раз: Telegram повторяет доставку. */
-export const CP_TG_CODE_ONCE: RateLimit = { kind: 'cp_tg_code_once', max: 1, windowSeconds: 43_200 };
+export const CP_TG_CODE_ONCE: RateLimit = {
+  kind: 'cp_tg_code_once',
+  max: 1,
+  windowSeconds: 43_200,
+};
 
 /** Команд «Код от страницы» с одного чата за час — ответы на них уходят и при пределе страницы. */
 export const CP_TG_CODE_CMD_RATE_LIMIT: RateLimit = {
@@ -129,13 +134,17 @@ export async function clientCodeCommand(
   if (!isPageCodeCommand(msg.text, botTemplate('tgCmdCpCode', templates.tgCmdCpCode))) {
     return false;
   }
+  const links = await contractorTelegramChats(deps.db, msg.chatId);
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-79
+  // Чат привязан к учётной записи сотрудника и ни к одной странице не подключён — это не клиент: его
+  // текст разбирает бот сотрудника («спросите код у бухгалтера» ему ни к чему).
+  if (!links.length && (await botChatUsers(deps.db, msg.chatId)).length > 0) return false;
   if (msg.messageId !== null) {
     const once = await takeRateLimit(deps.db, CP_TG_CODE_ONCE, `${msg.chatId}:${msg.messageId}`);
     if (!once.ok) return true;
   }
   const slot = await takeRateLimit(deps.db, CP_TG_CODE_CMD_RATE_LIMIT, String(msg.chatId));
   if (!slot.ok) return true;
-  const links = await contractorTelegramChats(deps.db, msg.chatId);
   let answered = false;
   for (const link of links) {
     const r = await sendPageCode(deps, {

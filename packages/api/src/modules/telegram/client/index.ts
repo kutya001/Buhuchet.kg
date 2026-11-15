@@ -1,5 +1,6 @@
 import { hashSessionToken } from '@buhuchet/adapters/tokens';
 import {
+  botChatUsers,
   contextOrgName,
   contractorTelegramChats,
   leaveContractorTelegram,
@@ -69,9 +70,14 @@ export async function notifyContractorTelegramClient(
 ): Promise<void> {
   const text = await botText(deps, key, { контрагент: contractor }, db);
   // Подключённому — кнопка меню «Код от страницы» под полем ввода (доработки 14.11.2026, блок 6;
-  // прототип v116 `tgc-menu`), отключённому — без кнопок.
-  const menu = key === 'tgCpOn' ? await clientMenuRows(db) : [];
-  await sendNow(deps, chatId, text, 'cp_telegram', { menu });
+  // прототип v116 `tgc-menu`). Чат привязан и к учётной записи сотрудника — его кнопки меню остаются
+  // (команду «/code» там разбирает бот клиента, п. О-79); отказ и отключение кнопок не меняют.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#К-14
+  const menu =
+    key === 'tgCpOn' && !(await botChatUsers(db, chatId)).length
+      ? await clientMenuRows(db)
+      : undefined;
+  await sendNow(deps, chatId, text, 'cp_telegram', menu ? { menu } : {});
 }
 
 /** Кнопка меню чата клиента: «Код от страницы» (шаблон `tgCmdCpCode`). */

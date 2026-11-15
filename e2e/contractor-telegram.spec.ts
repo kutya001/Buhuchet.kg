@@ -166,6 +166,8 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
       ]);
     // На странице клиента — «ждёт подтверждения бухгалтера».
     await page.reload();
+    // Нажатие работает, когда React подхватил страницу (№ 41).
+    await expect(page.locator('[data-pub-page]')).toHaveAttribute('data-pub-ready', '');
     if (isMobile)
       await section
         .getByRole('button', { name: /Telegram/ })

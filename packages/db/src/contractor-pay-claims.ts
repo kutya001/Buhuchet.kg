@@ -1,7 +1,12 @@
 import type { PayClaimPurpose, PayClaimSource, Tyiyn, YearMonth } from '@buhuchet/domain';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Tx } from './client';
-import { contractorPayClaims, contractorTelegramMessages, feePayments, moneyOperations } from './schema';
+import {
+  contractorPayClaims,
+  contractorTelegramMessages,
+  feePayments,
+  moneyOperations,
+} from './schema';
 
 /**
  * «Оплатил» в Telegram и чек к нему (доработки 14.11.2026, блок 4, пункт 4, этап 2, поток К; таблица
@@ -11,7 +16,11 @@ import { contractorPayClaims, contractorTelegramMessages, feePayments, moneyOper
  * только ждущее подтверждения и меняет у него только чек.
  */
 
-/** Месяцы, за которые клиент сообщил об оплате и сообщение не отклонено. */
+/**
+ * Месяцы, за которые клиент сообщил об оплате в Telegram и сообщение не отклонено. «Я оплатил» на
+ * странице контрагента сообщения бота не останавливает — как в прототипе v116 (`pubPaidDlg` не ставит
+ * `tgPaid`, его ставит только «Оплатил» под сообщением бота).
+ */
 export async function payClaimMonths(
   tx: Tx,
   contractorId: string,
@@ -24,6 +33,7 @@ export async function payClaimMonths(
       and(
         eq(contractorPayClaims.contractorId, contractorId),
         eq(contractorPayClaims.purpose, purpose),
+        eq(contractorPayClaims.source, 'telegram'),
         isNotNull(contractorPayClaims.month),
         inArray(contractorPayClaims.status, ['wait', 'done']),
       ),

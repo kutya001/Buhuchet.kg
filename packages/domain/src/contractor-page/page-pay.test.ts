@@ -116,9 +116,11 @@ describe('«Я оплатил» (прототип v116 pubPaidDlg)', () => {
   });
 
   it('комментарий чека: «Чек: …» и комментарий клиента, не длиннее комментария файла', () => {
-    expect(pagePaidSentNote('Чек: налоги, 5 000 сом', null)).toBe('Чек: налоги, 5 000 сом');
-    expect(pagePaidSentNote('Чек: налоги, 5 000 сом', 'за НДС')).toBe(
-      'Чек: налоги, 5 000 сом. за НДС',
+    expect(pagePaidSentNote('Чек: налоги за сентябрь 2026', null)).toBe(
+      'Чек: налоги за сентябрь 2026',
+    );
+    expect(pagePaidSentNote('Чек: налоги за сентябрь 2026', 'за НДС')).toBe(
+      'Чек: налоги за сентябрь 2026. за НДС',
     );
     expect(pagePaidSentNote('Чек', 'я'.repeat(400))).toHaveLength(SENT_FILE_COMMENT_MAX);
   });

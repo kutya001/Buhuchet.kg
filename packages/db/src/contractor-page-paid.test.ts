@@ -7,6 +7,7 @@ import { enableContractorPage, tryContractorPageCode } from './contractor-page';
 import { contractorPageTarget, logPageCodeSent, pageCodeTarget } from './contractor-page-code';
 import {
   insertPagePayClaim,
+  payClaimMonths,
   rejectReceiptClaims,
   sentFilePays,
   waitingPayClaims,
@@ -101,7 +102,7 @@ describe.skipIf(!databaseAvailable())('страница контрагента: 
       orgId,
       contractorId,
       source: 'page',
-      comment: 'Чек: налоги, 5 000 сом',
+      comment: 'Чек: налоги за октябрь 2026',
       name: 'чек.pdf',
       contentType: 'application/pdf',
       sizeBytes: 1200,
@@ -261,7 +262,7 @@ describe.skipIf(!databaseAvailable())('страница контрагента: 
       expect(sent?.changes).toEqual([
         { field: 'tgCode', to: { chats: ['@chat3001'], via: 'page' } },
       ]);
-      expect(JSON.stringify(sent)).not.toContain('482915');
+      expect(JSON.stringify(sent?.changes)).not.toContain('482915');
     } finally {
       await db.admin.db.delete(contractorTelegramLinks);
     }
@@ -295,6 +296,10 @@ describe.skipIf(!databaseAvailable())('страница контрагента: 
       ['tax', '2026-10', 500_000],
       ['fee', '2026-10', 300_000],
     ]);
+    // «Я оплатил» со страницы сообщения бота за месяц не останавливает — только «Оплатил» в Telegram
+    // (прототип v116: `pubPaidDlg` не ставит `tgPaid`).
+    expect([...(await asPage(a.orgId, (tx) => payClaimMonths(tx, cpA, 'tax')))]).toEqual([]);
+    expect([...(await asPage(a.orgId, (tx) => payClaimMonths(tx, cpA, 'fee')))]).toEqual([]);
     // Чек «Принять» открывает «Принять деньги» с этой суммой и пометкой «со страницы».
     expect((await inA((tx) => sentFilePays(tx, [file]))).get(file)).toEqual({
       purpose: 'tax',

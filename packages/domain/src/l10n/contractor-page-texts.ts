@@ -563,9 +563,12 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.paid.err.file': { ru: 'Приложите чек', section: S },
   'pub.paid.err.file_type': { ru: 'Чек — фото или PDF', section: S },
   'pub.paid.err.file_big': { ru: 'Файл больше {mb} МБ', section: S },
-  // Комментарий чека в «Отправленных файлах» (прототип: «Чек: налоги, 5 000 сом»).
-  'pub.paid.note.tax': { ru: 'Чек: налоги, {sum}', section: S },
-  'pub.paid.note.fee': { ru: 'Чек: обслуживание, {sum}', section: S },
+  // Комментарий чека в «Отправленных файлах» — без суммы (прототип: «Чек: налоги, 5 000 сом»;
+  // docs/deviations.md п. К-14: «Отправленные файлы» видят и те, кому сумма не положена).
+  'pub.paid.note.tax': { ru: 'Чек: налоги', section: S },
+  'pub.paid.note.tax_month': { ru: 'Чек: налоги за {month}', section: S },
+  'pub.paid.note.fee': { ru: 'Чек: обслуживание', section: S },
+  'pub.paid.note.fee_month': { ru: 'Чек: обслуживание за {month}', section: S },
   // {что} сообщения ответственному (шаблон `tgCpPagePaidStaff`): «об оплате налогов за октябрь 2026».
   'pub.paid.staff.tax': { ru: 'налогов', section: S },
   'pub.paid.staff.tax_month': { ru: 'налогов за {month}', section: S },
