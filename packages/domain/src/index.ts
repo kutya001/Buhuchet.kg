@@ -76,6 +76,7 @@ export * from './contractor-page/pay-claims';
 export * from './contractor-page/page-pay';
 export * from './contractor-page/telegram-notices';
 export * from './contractor-page/telegram-receipt';
+export * from './contractor-page/help';
 export * from './reports/periods';
 export * from './reports/due';
 export * from './reports/rules';

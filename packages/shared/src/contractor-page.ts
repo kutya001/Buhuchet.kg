@@ -18,6 +18,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
+import { CpCodeHelp, CpHelpSchema } from './contractor-page-help';
 import { PageSent, PageSentStartFile } from './files-sent';
 import { OrgLogoLink, PageSectionSchema } from './org';
 
@@ -491,6 +492,11 @@ export const PublicPageBody = z.object({
   /** Пояснения страницы из «Текстов элементов экрана» (группа → подпись → текст). */
   /** Пояснения «ⓘ» по обозначениям страницы (PAGE_TIPS). */
   texts: z.partialRecord(PageTipIdSchema, z.string()),
+  /**
+   * Подсказки и обучение (доработки 15.11.2026; прототип v120 `KBUI.cpHelp`): «Добро пожаловать»,
+   * облачка обзора и вопросы «Помощи» — только включённые, «Словарик», подсказки в окнах.
+   */
+  help: CpHelpSchema,
 });
 export type PublicPageBody = z.infer<typeof PublicPageBody>;
 
@@ -501,7 +507,7 @@ export type PublicPageBody = z.infer<typeof PublicPageBody>;
  */
 export const PublicPage = z.discriminatedUnion('state', [
   z.object({ state: z.literal('unavailable') }),
-  z.object({ state: z.literal('code') }),
+  z.object({ state: z.literal('code'), help: CpCodeHelp }),
   z.object({ state: z.literal('locked'), lockedUntil: z.iso.datetime() }),
   z.object({ state: z.literal('closed') }),
   z.object({ state: z.literal('open'), page: PublicPageBody }),
