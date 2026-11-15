@@ -172,6 +172,13 @@ export const MessageTemplateText = z
   .min(1, message('pdicts.err.text_required'))
   .max(MESSAGE_TEMPLATE_MAX, message('form.too_long'));
 
+/**
+ * Шаблонов в одном «Сохранить шаблоны» — не больше: вкладка шлёт все шаблоны разом, а их число растёт с
+ * каждой версией прототипа (v116 — 206). Предел — с большим запасом; тест сверяет его с числом шаблонов
+ * (`MESSAGE_TEMPLATE_ORDER`).
+ */
+export const MESSAGE_TEMPLATES_FORM_MAX = 500;
+
 /** «Сохранить шаблоны»: тексты всех шаблонов вкладки с версиями. */
 export const AdminMessageTemplatesForm = z.object({
   items: z
@@ -183,7 +190,7 @@ export const AdminMessageTemplatesForm = z.object({
       }),
     )
     .min(1)
-    .max(200),
+    .max(MESSAGE_TEMPLATES_FORM_MAX),
 });
 export type AdminMessageTemplatesForm = z.infer<typeof AdminMessageTemplatesForm>;
 

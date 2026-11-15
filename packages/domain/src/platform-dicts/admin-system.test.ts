@@ -164,6 +164,11 @@ describe('Админка → «Шаблоны» сообщений', () => {
     ]);
     expect(messageTemplateVariables('tgCpFileLimit')).toEqual(['лимит']);
     expect(messageTemplateVariables('tgCpFileNo')).toEqual(['мб']);
+    // Шаблоны v116 (страница контрагента: код в Telegram, «Я оплатил») — как TPL_VARS прототипа.
+    expect(messageTemplateVariables('tgCpCode')).toEqual(['контрагент', 'код', 'ссылка']);
+    expect(messageTemplateVariables('tgCpCodeLimit')).toEqual(['контрагент', 'лимит']);
+    expect(messageTemplateVariables('tgCpCodeClosed')).toEqual(['контрагент']);
+    expect(messageTemplateVariables('tgCpPagePaidStaff')).toEqual(['контрагент', 'что', 'сумма']);
     for (const key of [
       'tgBtnCpReceipt',
       'tgCpReceiptOffer',
@@ -173,6 +178,8 @@ describe('Админка → «Шаблоны» сообщений', () => {
       'tgCpFileOk',
       'tgCpFileWhich',
       'tgCpFileOff',
+      'tgCpCodeNone',
+      'tgCmdCpCode',
     ]) {
       expect(messageTemplateVariables(key), key).toEqual([]);
     }

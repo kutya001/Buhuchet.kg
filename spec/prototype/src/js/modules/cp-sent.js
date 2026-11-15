@@ -28,12 +28,12 @@ function sntNotify(c,n){const to=pgTgStaff(c);if(to)tgSvc(to,n>1?`Новые ф�
 function sntAccept(x){const c=CPM[x.cp];if(!c||x.st!=='new')return;let n=x.name;if((c.files||[]).includes(n)){const i=n.lastIndexOf('.'),b=i>0?n.slice(0,i):n,e=i>0?n.slice(i):'';let k=2;while(c.files.includes(`${b} (${k})${e}`))k++;n=`${b} (${k})${e}`}
   Object.assign(x,{st:'ok',dBy:S.me,dAt:nowStamp(),fname:n});c.files=c.files||[];c.files.push(n);c.fromCp=[...(c.fromCp||[]),n];fmSet(c.id,n,{size:x.size,note:x.note||''});FUP.add(n);
   log('cp',c.id,`Принят файл от контрагента «${x.name}»${n!==x.name?` (сохранён как «${n}»)`:''}`,c.id);refreshAll();toast('Файл принят: он среди файлов контрагента','check');
-  // Чек из Telegram (блок 4, пункт 4): сразу «Принять деньги» с суммой из оплаченного сообщения
-  if(x.pay)pgRcptMoney(c,x.pay)}
+  // Чек из Telegram (блок 4, пункт 4) и со страницы (блок 6, пункт 2): сразу «Принять деньги» с суммой из сообщения об оплате
+  if(x.pay)pgRcptMoney(c,x.pay,x.src)}
 function sntRejectDlg(x,done){openModal({form:true,noMax:true,render:()=>({title:'Отклонить файл',sub:esc(x.name),body:`<div class="form">${fld('Причина',`<textarea class="inp" id="snt-why" maxlength="${SNT_NOTE}" placeholder="Например: не тот месяц, пришлите выписку за октябрь"></textarea>`,{req:true,full:true,id:'snt-why',hint:'Контрагент увидит причину на своей странице. Отклонённый файл удалится через '+SNT_KEEP+' дней после отправки'})}</div>`,
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn danger" id="snt-ok">Отклонить</button>',
   mount(el,m){$('#snt-ok',el).onclick=()=>{const why=val(el,'snt-why').replace(/\s+/g,' ').trim();if(!setErr(el,'snt-why',why?'':'Укажите причину'))return;
-    Object.assign(x,{st:'rej',why,dBy:S.me,dAt:nowStamp()});log('cp',x.cp,`Отклонён файл от контрагента «${x.name}»: ${why}`,x.cp);m.close();refreshAll();done&&done();toast('Файл отклонён, контрагент увидит причину','ban')}}})})}
+    Object.assign(x,{st:'rej',why,dBy:S.me,dAt:nowStamp()});if(CPM[x.cp])pgClaimReject(CPM[x.cp],x.id);log('cp',x.cp,`Отклонён файл от контрагента «${x.name}»: ${why}`,x.cp);m.close();refreshAll();done&&done();toast('Файл отклонён, контрагент увидит причину','ban')}}})})}
 function sntActs(x){const ok=x.st==='new',c=CPM[x.cp];return [{label:'Открыть',icon:'eye',run:()=>sntOpen(x)},{label:'Скачать',icon:'download',run:()=>toast('Скачивание: '+x.name,'download')},
   ...(ok?[{label:'Принять',icon:'check',disabled:!sntCan(),reason:SNT_WHY,run:()=>sntAccept(x)},{label:'Отклонить',icon:'ban',danger:true,disabled:!sntCan(),reason:SNT_WHY,run:()=>sntRejectDlg(x)}]:[]),
   ...(c?[{sep:true},{label:'Открыть контрагента',icon:'building',run:()=>openCp(c,'files')}]:[])]}

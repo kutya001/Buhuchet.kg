@@ -303,6 +303,27 @@ const SYSTEM_TEXTS = {
     section: S,
   },
   'pdicts.tpl.label.tg_cp_file_no': { ru: 'Telegram контрагента: файл не принят', section: S },
+  'pdicts.tpl.label.tg_cp_code': { ru: 'Telegram контрагента: код от страницы', section: S },
+  'pdicts.tpl.label.tg_cp_code_none': {
+    ru: 'Telegram контрагента: код — Telegram не подключён',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_code_limit': {
+    ru: 'Telegram контрагента: код — уже 3 раза за сутки',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_code_closed': {
+    ru: 'Telegram контрагента: код — страница закрыта',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cmd_cp_code': {
+    ru: 'Telegram контрагента: команда «Код от страницы»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_page_paid_staff': {
+    ru: 'Telegram: контрагент сообщил об оплате на странице',
+    section: S,
+  },
   'pdicts.tpl.label.tg_act_no_link': {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,

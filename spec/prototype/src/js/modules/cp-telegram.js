@@ -159,9 +159,10 @@ let pgTgStaffOut=null,pgTgAskOn=null;
 tgAct('cp-paid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l,to=pgTgStaff(c);
   pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате налогов ${rmTitle(a.m).toLowerCase()}: ${som(a.sum)} («${x.name}»)`);
   if(to){tgSvc(to,PG_TG_KIND);pgTgStaffOut&&pgTgStaffOut({h:'Контрагент сообщил об оплате',t:tplFill('tgCpPaidStaff',{контрагент:c.name,телеграм:x.name,месяц:rmMonthTxt(a.m),сумма:som(a.sum)}),at:bishkekNow().hm})}
-  pgPaidMark(c,'tax',a.m);return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{}),msg:pgRcptOffer(c,{...a,kind:'tax'})}}});
-// После «Оплатил» за этот месяц сами сообщения больше не уходят: «К оплате» (налоги) и «Оплата за обслуживание до …» (обслуживание) — как после принятия денег
-const pgPaidMark=(c,k,m)=>{if(!m)return;(c.tgPaid||(c.tgPaid={}))[`${k}:${m}`]=nowStamp();dbSoon()};
+  pgPaidMark(c,'tax',a.m,a.sum);return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{}),msg:pgRcptOffer(c,{...a,kind:'tax'})}}});
+// После «Оплатил» за этот месяц сами сообщения больше не уходят: «К оплате» (налоги) и «Оплата за обслуживание до …» (обслуживание) — как после принятия денег.
+// «Оплатил» — сообщение клиента об оплате (c.claims, cp-paid.js): на странице у месяца «Ожидает подтверждения», пока бухгалтер не примет деньги
+const pgPaidMark=(c,k,m,sum)=>{pgClaimAdd(c,{src:'tg',k,m:m||null,sum:sum||0});if(!m)return;(c.tgPaid||(c.tgPaid={}))[`${k}:${m}`]=nowStamp();dbSoon()};
 /* ═════════════ Файлы и чеки через бота (доработки 14.11.2026, блок 2, пункт 1; блок 4, пункт 4; этап 2, поток К) ═════════════ */
 // Бот принимает файл, пока действуют страница и её раздел «Telegram» и контрагент может отправлять файлы (галочка в учётной политике и у контрагента), иначе —
 // «Ваш бухгалтер не принимает файлы через бота». Лимит в сутки — общий со страницей; типы и размер — как везде на сайте
@@ -192,12 +193,17 @@ tgAct('cp-receipt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill(
   reply:(u,a,p)=>{const l=pgTgLinked(a);if(!l)return {say:tplFill('tgCpNotLinked',{})};if(!p.file)return {again:tplFill('tgAskNeedFile',{})};
     const bad=tgFileWhy(p.file),i=p.file.name.lastIndexOf('.');if(bad)return {again:bad};if(i<1||!PG_RCPT_EXT.has(p.file.name.slice(i+1).toLowerCase()))return {again:tplFill('tgCpReceiptType',{})};
     const no=pgFileIn(l.c,l.x,[p.file],pgRcptNote(a)+(p.cap?'. '+p.cap:''),{kind:a.kind,m:a.m,sum:a.sum});if(no)return {say:no};
+    // Чек — к последнему «Оплатил» за этот месяц без чека; такого нет — чек сам становится сообщением об оплате
+    const sf=SENT[SENT.length-1],cl=(l.c.claims||[]).filter(y=>y.src==='tg'&&y.k===a.kind&&y.m===(a.m||null)&&y.st==='wait'&&!y.file).pop();
+    if(cl)cl.file=sf.id;else pgClaimAdd(l.c,{src:'tg',k:a.kind,m:a.m||null,sum:a.sum||0,file:sf.id});
     return {done:'✓ Чек отправлен',say:tplFill('tgCpReceiptOk',{})}}});
 // «Принять» у чека: сразу «Принять деньги» с суммой из оплаченного сообщения — налоги месяца разнесены по отчётам от старых к новым, излишек — аванс;
 // за обслуживание — «Принять оплату за обслуживание». Нет права или деньги месяца уже получены — файл просто принят
-function pgRcptMoney(c,p){if(p.kind==='fee'){if(feeAccOk(c))feePayDlg(c,null,{sum:p.sum,note:`По чеку из Telegram${p.m?' за '+ymLabel(p.m).toLowerCase():''}`});return}
-  if(!rmRecvOn(c))return;const pl=rmRecvPlan(rmRecvMonths(c,p.m));if(!pl.list.length)return toast(`Деньги на налоги за ${rmMonthTxt(p.m)} уже получены от контрагента`,'info');
-  inDlg(c,null,{list:pl.list,total:p.sum,note:`Деньги за ${rmMonthTxt(p.m)} — по чеку из Telegram`})}
+// Чек со страницы («Я оплатил», cp-paid.js) — так же; у чека налогов без месяца — все месяцы с остатком
+function pgRcptMoney(c,p,src){const from=src==='page'?'со страницы':'из Telegram';
+  if(p.kind==='fee'){if(feeAccOk(c))feePayDlg(c,null,{sum:p.sum,note:`По чеку ${from}${p.m?' за '+ymLabel(p.m).toLowerCase():''}`});return}
+  if(!rmRecvOn(c))return;const k=p.m||'all',pl=rmRecvPlan(rmRecvMonths(c,k));if(!pl.list.length)return toast(p.m?`Деньги на налоги за ${rmMonthTxt(p.m)} уже получены от контрагента`:'Деньги на налоги уже получены от контрагента','info');
+  inDlg(c,null,{list:pl.list,total:p.sum,note:`${p.m?`Деньги за ${rmMonthTxt(p.m)}`:'Деньги на налоги'} — по чеку ${from}`})}
 tgAct('cp-ask',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};pgTgAskOn&&pgTgAskOn(l);return {msg:{t:tplFill('tgCpAskHow',{}),at:bishkekNow().hm}}}});
 // Вопрос клиента уходит ответственному бухгалтеру с названием контрагента; ответ бухгалтера возвращается клиенту
 function pgTgAsk(c,x,q){const to=pgTgStaff(c);pgTgClientLog(c,`Вопрос бухгалтеру из Telegram («${x.name}»): ${q.slice(0,200)}`);if(to)tgSvc(to,PG_TG_KIND);pgTgToClient(c,x);
@@ -208,12 +214,15 @@ function pgChatDlg(c,x,first,o){const A=[{day:'Сегодня'},first],B=[{day:'
   const CA={who:`Чат клиента · ${x.name}`,list:A},CB={who:to?`Чат бухгалтера · ${to.short||to.fio}`:'Чат бухгалтера',list:B};
   openModal({size:'mid',live:true,onClose(){pgTgStaffOut=pgTgAskOn=null},render:m=>{pgTgStaffOut=msg=>B.push(msg);pgTgAskOn=()=>{ask=true};return {title:o.title,sub:o.sub,
     body:`<div class="tgc-wrap two"><div id="pc-a">${tgcHtml(CA)}</div><div id="pc-b">${tgcHtml(CB)}</div></div>
+      <div class="tgc-menu" role="group" aria-label="Меню бота в чате клиента"><button type="button" class="tgc-k" id="pc-code" title="/code">${esc(tgBtnT('tgCmdCpCode','Код от страницы'))}</button></div>
       ${ask?`<div class="row" style="flex-wrap:wrap">${inp('pc-q','','maxlength="500" placeholder="Вопрос бухгалтеру" aria-label="Вопрос бухгалтеру" style="flex:1;min-width:200px"')}<button class="btn cta" id="pc-qs">${ic('send','sm')}Ответить боту от клиента</button></div>`:''}
       ${asked&&to?`<div class="row" style="flex-wrap:wrap">${inp('pc-r','','maxlength="500" placeholder="Ответ клиенту" aria-label="Ответ клиенту" style="flex:1;min-width:200px"')}<button class="btn" id="pc-rs">${ic('send','sm')}Ответить боту от бухгалтера</button></div>`:''}
       ${tgAskOpen(CA)?'':`<div class="row" style="flex-wrap:wrap"><input type="file" class="inp" id="pc-f" aria-label="Файл боту от клиента" style="flex:1;min-width:180px">${inp('pc-cap','',`maxlength="${SNT_NOTE}" placeholder="Подпись к файлу — станет комментарием" aria-label="Подпись к файлу" style="flex:1;min-width:180px"`)}<button class="btn" id="pc-fs">${ic('clip','sm')}Прислать боту файл от клиента</button><button type="button" class="linkbtn" id="pc-fd">В макете: пример «Выписка за октябрь.pdf»</button></div>`}
       <div class="note">${ic('info')}<span>${o.note} Кнопки в чате клиента работают. Файл, присланный боту, попадает в «Отправленные файлы» на вкладке «Файлы» карточки контрагента. Сообщения записаны в журнал «Телеграм» с типом «${PG_TG_MSG}». Тексты — Справочники платформы → «Шаблоны».</span></div>`,
     foot:'<button class="btn cta" data-close>Готово</button>',
     mount(el){tgcBind($('#pc-a',el),CA,()=>{m.draw();refreshAll()},u);
+      // Команда меню бота «Код от страницы» (блок 6, пункт 6, cp-paid.js)
+      $('#pc-code',el).onclick=()=>{A.push({me:true,t:tgBtnT('tgCmdCpCode','Код от страницы'),at:bishkekNow().hm});pgCodeCmd(x.name).forEach(mm=>A.push(mm));CA.jump=true;m.draw();refreshAll()};
       const q=$('#pc-q',el),qs=$('#pc-qs',el),r=$('#pc-r',el),rs=$('#pc-rs',el);
       if(qs){const go=()=>{const t=q.value.replace(/\s+/g,' ').trim();if(!t){q.focus();return}A.push({t,me:true});const l=pgTgLinked({cp:c.id,tg:x.id});
           if(!l)A.push({eph:tplFill('tgCpNotLinked',{})});else{const a=pgTgAsk(c,x,t);if(a.staff)B.push(a.staff);A.push({t:a.bot,at:bishkekNow().hm});asked=true}ask=false;m.draw();refreshAll()};
@@ -289,7 +298,7 @@ function pgFeeTgDlg(c){const w=pgFeeTgWhy(c);if(w){toast(w,'lock',true);return}c
 function pgFeeSend(c,t){const to=pgFeeTo(c);c.tgFeeAt=nowStamp();to.forEach(x=>tgSvc({short:c.name},PG_TG_MSG,{chat:x.name}));
   log('cp',c.id,`Напоминание об оплате за обслуживание отправлено в Telegram: ${som(c.feeDebt)}, получателей — ${to.length}`,c.id);return {to,t}}
 tgAct('cp-feepaid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l,to=pgTgStaff(c);
-  pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате за обслуживание: ${som(a.sum)} («${x.name}»)`);pgPaidMark(c,'fee',a.m);
+  pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате за обслуживание: ${som(a.sum)} («${x.name}»)`);pgPaidMark(c,'fee',a.m,a.sum);
   if(to){tgSvc(to,PG_TG_KIND);pgTgStaffOut&&pgTgStaffOut({h:'Контрагент сообщил об оплате',t:tplFill('tgCpFeePaidStaff',{контрагент:c.name,телеграм:x.name,сумма:som(a.sum)}),at:bishkekNow().hm})}
   return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{})}}});
 const pgDebtDlg=(c,x)=>pgChatDlg(c,x,pgDebtMsg(c,x),{title:'Прототип: напоминание о долге в Telegram клиента',sub:esc(c.name),
