@@ -61,7 +61,12 @@ const MPAY_LOOK: Record<PageMonthPayStatus, { tone: StatusTone; icon: IconName }
 /** «Оплачено», «Ожидает подтверждения», «Частично», «Не оплачено». */
 export function MonthPayPill({ status }: { status: PageMonthPayStatus }) {
   const t = useT();
-  return <StatusPill {...MPAY_LOOK[status]} label={t(`pub.mpay.${status}`)} size="sm" />;
+  // Метка — для проверок: «Не оплачено» есть и у пометки оплаты отчёта внутри месяца.
+  return (
+    <span data-pub-mpay={status} className="contents">
+      <StatusPill {...MPAY_LOOK[status]} label={t(`pub.mpay.${status}`)} size="sm" />
+    </span>
+  );
 }
 
 /** Скопировать в буфер и сказать об этом. */

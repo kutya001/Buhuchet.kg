@@ -343,11 +343,14 @@ export function pagePaidCompleteHandler(
       month
         ? t(`pub.paid.staff.${purpose}_month`, { month: monthLabel(month) })
         : t(`pub.paid.staff.${purpose}`);
+    // Отказ после загрузки (страницу или раздел скрыли, месяц оплачен) — положенный чек удаляется.
     const done = await withOrgContext(deps.db, ctxDb, async (tx) => {
       // Галочку могли выключить, пока чек загружался: тогда сообщение не принимается.
       const ctx = await paidContext(tx, { ...page, today, t });
       if (!ctx?.upload) return null;
       ownRow(await pendingSentFiles(tx, page.contractorId, [row.id]));
+      // Раздел и месяцы — заново: за время загрузки «Как оплатить» могли скрыть, месяц — оплатить.
+      checkPaid(ctx, { ...body, file: { name: row.name, size: row.sizeBytes } });
       // Чек — «Новый»: в «Отправленных файлах» его видно с комментарием «Чек: …» (как в прототипе,
       // одна запись истории — об оплате).
       await markSentFilesReady(tx, [row.id]);
@@ -399,6 +402,9 @@ export function pagePaidCompleteHandler(
             }
           : {},
       );
+    }).catch(async (e: unknown) => {
+      await removeObjects(deps, written);
+      throw e;
     });
     if (!done) {
       await removeObjects(deps, written);

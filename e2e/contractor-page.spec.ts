@@ -847,7 +847,8 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await expect(month.locator('[data-pub-month-pay]')).toHaveText(
       som('к оплате 4 670,50 · оплачено 0 · осталось 4 670,50'),
     );
-    await expect(month).toContainText(text(texts, 'pub.mpay.unpaid'));
+    await expect(month.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'unpaid');
+    await expect(month.locator('[data-pub-mpay]')).toHaveText(text(texts, 'pub.mpay.unpaid'));
 
     // «Перечислить»: остаток месяца и «Я оплатил» — окно с суммой остатка.
     await month.locator('[data-pub-send]').click();
@@ -872,7 +873,8 @@ test.describe('Доработки 14.11, блок 6: страница контр
     ).toBeVisible();
 
     // У месяца — «Ожидает подтверждения», у карточки «Налоги» — когда и сколько сообщили.
-    await expect(month).toContainText(text(texts, 'pub.mpay.wait'));
+    await expect(month.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'wait');
+    await expect(month.locator('[data-pub-mpay]')).toHaveText(text(texts, 'pub.mpay.wait'));
     await expect(tax.locator('[data-pay-wait]')).toContainText(text(texts, 'pub.mpay.wait'));
     await expect(tax.locator('[data-pay-wait]')).toContainText(som('4 670,50 сом'));
     // Чек — в «Отправленных вами».
@@ -902,7 +904,8 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await expect(done.locator('[data-pub-month-pay]')).toHaveText(
       som('к оплате 4 670,50 · оплачено 4 670,50 · осталось 0'),
     );
-    await expect(done).toContainText(text(texts, 'pub.mpay.paid'));
+    await expect(done.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'paid');
+    await expect(done.locator('[data-pub-mpay]')).toHaveText(text(texts, 'pub.mpay.paid'));
     await expect(done.locator('[data-pub-send]')).toHaveCount(0);
     await expect(section(page, 'pay').locator('[data-pay="tax"] [data-pay-wait]')).toHaveCount(0);
 
@@ -946,7 +949,9 @@ test.describe('Доработки 14.11, блок 6: страница контр
         await pressStart(request, ((await link.json()) as { url: string }).url, clientChat)
       ).status(),
     ).toBe(200);
-    const list = (await (await request.get(`/api/contractors/${id}/page/telegram`)).json()) as {
+    const list = (await (
+      await request.get(`/api/contractors/${id}/page/telegram`, { maxRetries: 2 })
+    ).json()) as {
       items: { id: string; name: string; version: number }[];
     };
     const waiting = list.items.find((i) => i.name === `@e2e_${clientChat}`)!;

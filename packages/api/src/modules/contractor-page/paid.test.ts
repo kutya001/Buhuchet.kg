@@ -535,6 +535,20 @@ describe.skipIf(!databaseAvailable())(
       expect(sentTo(CHAT_ACC)).toEqual([]);
       expect(sentTo(CHAT_OWNER)).toHaveLength(1);
       expect(sentTo(CHAT_OWNER)[0]!.text).toContain('обслуживания за ');
+      // Запись «Контрагент сообщил со страницы об оплате» за обслуживание в «Истории» — тоже только
+      // тому, кто видит плату (п. К-10).
+      const fields = async (cookie: string) => {
+        const res = await call(cookie, 'GET', `/api/contractors/${cpA}/history`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        const body = (await res.json()) as {
+          items: { action: string; changes: { field: string }[] }[];
+        };
+        return body.items
+          .filter((h) => h.action === 'page_paid')
+          .flatMap((h) => h.changes.map((x) => x.field));
+      };
+      expect(await fields(owner)).toContain('pagePaidFee');
+      expect(await fields(acc)).not.toContain('pagePaidFee');
     });
 
     it('что можно сообщить считает сервер: скрытый «Как оплатить», выключенная отправка файлов, чужой чек, без кода', async () => {
@@ -674,6 +688,32 @@ describe.skipIf(!databaseAvailable())(
       expect(res.status).toBe(429);
       expect((await failure(res)).code).toBe('page_forgot_limit');
       expect(sentTo(CLIENT_1)).toEqual([]);
+    });
+
+    it('кнопка «Код от страницы» под полем ввода — клиенту после подключения; в чате сотрудника меню не заменяется', async () => {
+      const menu = JSON.stringify([[TELEGRAM_TEMPLATE_DEFAULTS.tgCmdCpCode]]);
+      const withCodeMenu = (chat: number) =>
+        sentTo(chat).filter((m) => JSON.stringify(m.options?.menu) === menu);
+      const client = 9302;
+      await linkClient(owner, cpA2, INN_A2, 'org-a', client);
+      expect(withCodeMenu(client).map((m) => m.text)).toEqual([
+        expect.stringContaining('Telegram подключён'),
+      ]);
+      // Подсказка бота клиенту на непонятный текст и на чужую команду — с той же кнопкой.
+      tg.sent.length = 0;
+      await sendToBot(f.app, telegramUpdate('здравствуйте', client));
+      await sendToBot(f.app, telegramUpdate('/today', client));
+      expect(withCodeMenu(client)).toHaveLength(2);
+      // Чат привязан к учётной записи владельца: «Telegram подключён» приходит без кнопки клиента.
+      try {
+        await linkClient(owner, cpA2, INN_A2, 'org-a', CHAT_OWNER);
+        expect(sentTo(CHAT_OWNER).some((m) => m.text.includes('Telegram подключён'))).toBe(true);
+        expect(withCodeMenu(CHAT_OWNER)).toEqual([]);
+      } finally {
+        await f.t.admin.db
+          .delete(schema.contractorTelegramLinks)
+          .where(eq(schema.contractorTelegramLinks.chatId, CHAT_OWNER));
+      }
     });
   },
 );
