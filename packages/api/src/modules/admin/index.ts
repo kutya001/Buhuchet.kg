@@ -85,6 +85,7 @@ import {
   userValuesRoute,
 } from './users';
 import { orgCardHandler, orgCardRoute, orgLookupHandler, orgLookupRoute } from './org-card';
+import { ownerSetupHandler, ownerSetupRoute } from './owner-setup';
 import {
   apiMethodCardHandler,
   apiMethodCardRoute,
@@ -140,6 +141,7 @@ export function adminModule(deps: ApiDeps) {
       .openapi(orgActivityExportRoute, orgActivityExportHandler(deps))
       .openapi(orgLookupRoute, orgLookupHandler(deps))
       .openapi(orgCardRoute, orgCardHandler(deps))
+      .openapi(ownerSetupRoute, ownerSetupHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))
       .openapi(apiMethodValuesRoute, apiMethodValuesHandler(deps))
       .openapi(exportApiMethodsRoute, exportApiMethodsHandler(deps))

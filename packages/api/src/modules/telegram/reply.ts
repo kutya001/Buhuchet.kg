@@ -341,5 +341,12 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
     );
   }
   if (target.orgId) await flushEvents(deps, target.orgId, queued);
+  if (result.afterCommit) {
+    try {
+      await result.afterCommit();
+    } catch (err) {
+      deps.logger.error({ err, action: ask.action }, 'Telegram: действие после ответа не выполнено');
+    }
+  }
   return true;
 }

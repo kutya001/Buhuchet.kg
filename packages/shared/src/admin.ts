@@ -372,7 +372,19 @@ export const AdminOrgCard = z.object({
     /** Счета организации строкой. */
     accounts: z.array(z.string()),
   }),
-  owner: z.object({ userId: Uuid, login: z.string(), fullName: z.string() }).nullable(),
+  /**
+   * `passwordUnset` — владелец ещё не задал пароль по ссылке из Telegram (доработки 14.11.2026, блок 1);
+   * `telegram` — у него привязан Telegram: «Отправить новую ссылку для пароля» доступна.
+   */
+  owner: z
+    .object({
+      userId: Uuid,
+      login: z.string(),
+      fullName: z.string(),
+      passwordUnset: z.boolean(),
+      telegram: z.boolean(),
+    })
+    .nullable(),
   /** Заявка с сайта, по которой создана организация; null — создана без заявки. */
   lead: z.object({ id: Uuid, title: z.string(), at: z.iso.datetime() }).nullable(),
   summary: z.object({

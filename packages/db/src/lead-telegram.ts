@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
+import { employees, roles } from './schema';
 
 /*
  * Telegram заявителя и пароль владельца по ссылке (доработки 14.11.2026, блок 1; поток Т; прототип v113
@@ -145,4 +146,16 @@ export async function completePasswordSetup(
       ${iso(p.now)}::timestamptz) as login`,
   );
   return row?.login ?? null;
+}
+
+/** Владелец организации из контекста (`withOrgContext`); null — нет. */
+export async function orgOwnerUserId(tx: Tx): Promise<string | null> {
+  const [row] = await tx
+    .select({ userId: employees.userId })
+    .from(employees)
+    .innerJoin(roles, and(eq(roles.id, employees.roleId), eq(roles.orgId, employees.orgId)))
+    .where(eq(roles.isOwner, true))
+    .orderBy(asc(employees.createdAt), asc(employees.id))
+    .limit(1);
+  return row?.userId ?? null;
 }

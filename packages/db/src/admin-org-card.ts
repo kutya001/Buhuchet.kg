@@ -58,7 +58,17 @@ export interface AdminOrgCardRecord {
     /** Банки счетов организации — только названия, как в прототипе: номеров и получателей нет. */
     accounts: string[];
   };
-  owner: { userId: string; login: string; fullName: string } | null;
+  /**
+   * `passwordUnset` — пароль ещё не задан, ссылка «Задать пароль» выдавалась (доработки 14.11.2026,
+   * блок 1); `telegram` — у владельца привязан Telegram (куда отправить новую ссылку).
+   */
+  owner: {
+    userId: string;
+    login: string;
+    fullName: string;
+    passwordUnset: boolean;
+    telegram: boolean;
+  } | null;
   /** Заявка с сайта, по которой создана организация. */
   lead: { id: string; title: string; at: Date } | null;
   summary: {
@@ -84,6 +94,7 @@ export interface AdminOrgCardRecord {
     loginLocked: boolean;
     loginLockReason: string | null;
     mustChangePassword: boolean;
+    passwordUnset: boolean;
   }>;
   contractors: CardList<{
     id: string;
@@ -297,6 +308,8 @@ export async function adminOrgCard(
       userId: users.id,
       login: sql<string>`${users.login}::text`,
       fullName: employees.fullName,
+      passwordUnset: sql<boolean>`app.password_unset(${users.id})`,
+      telegram: sql<boolean>`exists (select 1 from ${telegramLinks} k where k.user_id = ${users.id})`,
     })
     .from(employees)
     .innerJoin(roles, eq(roles.id, employees.roleId))
@@ -379,6 +392,7 @@ export async function adminOrgCard(
         loginLocked: sql<boolean>`${users.loginLockedAt} is not null`,
         loginLockReason: users.loginLockReason,
         mustChangePassword: users.mustChangePassword,
+        passwordUnset: sql<boolean>`app.password_unset(${users.id})`,
       })
       .from(employees)
       .innerJoin(users, eq(users.id, employees.userId))
