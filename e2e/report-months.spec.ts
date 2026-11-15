@@ -365,8 +365,15 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
 
     await test.step('«Скопировать для клиента»: текст по шаблону — в буфере, запись — в истории контрагента', async () => {
       await expect(copy).toBeEnabled();
+      // Запись в историю уходит после уведомления: «История» открывается, когда она записана
+      // (docs/typical-mistakes.md № 44), и упавшая запись видна своим ответом, а не пропавшей строкой.
+      const copied = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && r.url().endsWith('/month-pay/copied'),
+      );
       await copy.click();
       await expect(page.getByText('Текст для клиента скопирован')).toBeVisible();
+      const copiedRes = await copied;
+      expect(copiedRes.status(), await copiedRes.text()).toBe(200);
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toContain(`Уважаемые ${name}! Налоги к оплате за сентябрь 2026: `);
       expect(text).toMatch(/Итого — 4\s670,50\sсом\. Просим перечислить до \d\d\.\d\d\.\d{4} на: /);
