@@ -1951,6 +1951,12 @@ describe.skipIf(!databaseAvailable())(
         const NOV = '2026-11';
         // «Прислать чек» — когда контрагент может отправлять файлы (функция «Файлы в карточках»).
         await features(f.a.orgId, { ...ALL_ON, files: true });
+        // «До срока» — не напоминание о долге: выключатель сотрудника у контрагента его не останавливает
+        // (прототип v115 pgFeeSoon → pgFeeTo).
+        await f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ tgDebtOff: true })
+          .where(eq(schema.contractorPages.contractorId, cpA));
         try {
           // 28.10 — «за 4»: не уходит; 27.10 — «за 5».
           await runOn('2026-10-28');
@@ -2012,6 +2018,7 @@ describe.skipIf(!databaseAvailable())(
           expect(tg.sent).toEqual([]);
         } finally {
           await features(f.a.orgId, ALL_ON);
+          await f.t.admin.db.update(schema.contractorPages).set({ tgDebtOff: false });
           await f.t.admin.db
             .delete(schema.orgTelegramNotices)
             .where(

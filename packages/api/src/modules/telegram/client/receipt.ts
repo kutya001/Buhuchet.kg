@@ -13,6 +13,7 @@ import {
   lockContractorTelegramMessage,
   lockPendingClientFile,
   openReceiptAsks,
+  releaseRateLimit,
   saveContractorTelegramMessage,
   sentFilesLastDay,
   sentUploadState,
@@ -87,11 +88,16 @@ export const CP_TG_FILE_ONCE: RateLimit = {
   windowSeconds: 43_200,
 };
 
-/** «От какой компании?» — одно принятое нажатие на сообщение: файл не уйдёт двум контрагентам. */
+/**
+ * «От какой компании?» — нажатия одного вопроса по одному (`leaseSeconds`: пока файл передаётся, второе
+ * нажатие — «устарела»), не больше 10 попыток: файл не уйдёт двум контрагентам, а не переданный (Telegram
+ * не отдал файл) можно отправить снова.
+ */
 export const CP_TG_FILE_TO_ONCE: RateLimit = {
   kind: 'cp_tg_file_to',
-  max: 1,
+  max: 10,
   windowSeconds: 43_200,
+  leaseSeconds: 300,
 };
 
 const MB = FILE_MAX_BYTES / 1048576;
@@ -721,9 +727,10 @@ const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /**
  * Ответ на «От какой компании?» (прототип `tgAct('cp-file-to')`): кнопка — строка файла в организации
  * выбранного контрагента; её ищем в организациях подключений этого чата (RLS), сверяем, что подключение
- * действует. Отказ до скачивания — скрытым ответом на нажатие, после — сообщением в чат. После выбора
- * строки вопроса во всех организациях отвечены, файл из них стёрт; принят — кнопки гаснут, остаются
- * видны, на выбранной — «✓ <контрагент>» (прототип: `done`, `off:['cp-file-to']`).
+ * действует. Отказ до скачивания — скрытым ответом на нажатие, после — сообщением в чат; при отказе
+ * вопрос остаётся открытым — можно выбрать снова (прототип: `{eph:no}`). Файл принят — строки вопроса во
+ * всех организациях отвечены, файл из них стёрт, кнопки гаснут, остаются видны, на выбранной —
+ * «✓ <контрагент>» (прототип: `done`, `off:['cp-file-to']`).
  */
 export async function clientFileToPress(
   deps: ApiDeps,
@@ -742,6 +749,28 @@ export async function clientFileToPress(
     await refuse({ key: 'tgActStale' });
     return;
   }
+  // Нажатия одного вопроса — по одному: пока одно передаёт файл, второе его не отправит второму
+  // контрагенту; после него строки вопроса уже отвечены («устарела») или открыты (отказ — можно снова).
+  const subject = `${press.chatId}:${press.messageId}`;
+  const lease = await takeRateLimit(deps.db, CP_TG_FILE_TO_ONCE, subject);
+  if (!lease.ok) {
+    await refuse({ key: 'tgActStale' });
+    return;
+  }
+  try {
+    await fileToChosen(deps, press, arg, answer, refuse);
+  } finally {
+    await releaseRateLimit(deps.db, CP_TG_FILE_TO_ONCE, subject, lease.ticket);
+  }
+}
+
+async function fileToChosen(
+  deps: ApiDeps,
+  press: BotPress,
+  arg: string,
+  answer: (text?: string) => Promise<void>,
+  refuse: (r: Refusal) => Promise<void>,
+): Promise<void> {
   const chats = await contractorTelegramChats(deps.db, press.chatId);
   type Found = { link: ActiveLink; file: z.infer<typeof PendingFile>['fileTo'] } | Refusal | null;
   let found: Found = null;
@@ -764,7 +793,6 @@ export async function clientFileToPress(
       if ((await sentFilesLastDay(tx, row.contractorId)) >= SENT_FILES_PER_DAY) {
         return refusalOf({ code: 'sent_day_limit' }, false);
       }
-      await answerContractorTelegramAsk(tx, arg);
       return { link: { ...chat, sender: on.name }, file: parsed.data.fileTo };
     });
     if (found) break;
@@ -775,16 +803,6 @@ export async function clientFileToPress(
   }
   if ('key' in found) {
     await refuse(found);
-    return;
-  }
-  // Одно принятое нажатие на сообщение: вторая кнопка того же вопроса файл второму не отправит.
-  const once = await takeRateLimit(
-    deps.db,
-    CP_TG_FILE_TO_ONCE,
-    `${press.chatId}:${press.messageId}`,
-  );
-  if (!once.ok) {
-    await refuse({ key: 'tgActStale' });
     return;
   }
   // Ответ на нажатие — до скачивания: Telegram ждёт его недолго.
@@ -798,6 +816,11 @@ export async function clientFileToPress(
     file.name,
     file.caption,
   );
+  if ('key' in out) {
+    // Файл не принят — вопрос остаётся: выбрать можно снова (этого или другого контрагента).
+    await sayTo(deps, press.chatId, await botTemplateText(deps.db, out.key, out.values));
+    return;
+  }
   // Строки вопроса — в каждой организации чата (своя транзакция, RLS): отвечены, файл из них стёрт.
   const rows: Awaited<ReturnType<typeof closePendingClientFiles>> = [];
   for (const orgId of new Set(chats.map((c) => c.orgId))) {
@@ -806,10 +829,6 @@ export async function clientFileToPress(
         closePendingClientFiles(tx, press.chatId, file.q),
       )),
     );
-  }
-  if ('key' in out) {
-    await sayTo(deps, press.chatId, await botTemplateText(deps.db, out.key, out.values));
-    return;
   }
   const t = await serverTexts(deps);
   rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));

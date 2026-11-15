@@ -677,6 +677,44 @@ describe.skipIf(!databaseAvailable())(
       expect(await sentFiles(cpA2)).toEqual([]);
     });
 
+    it('«От какой компании?»: Telegram не отдал файл — вопрос остаётся, выбрать можно снова', async () => {
+      await sendFile(CLIENT_1, { name: 'Акт.pdf' });
+      const askId = lastMessageId(CLIENT_1);
+      const fileId = [...tg.files.keys()].at(-1)!;
+      const rows = await f.t.admin.db
+        .select({
+          id: schema.contractorTelegramMessages.id,
+          contractorId: schema.contractorTelegramMessages.contractorId,
+        })
+        .from(schema.contractorTelegramMessages)
+        .where(eq(schema.contractorTelegramMessages.chatId, CLIENT_1));
+      const choose = (cp: string) =>
+        botPressData(CP_TG_FILE_TO_ACTION, rows.find((r) => r.contractorId === cp)!.id);
+      const body = tg.files.get(fileId)!;
+      tg.files.delete(fileId);
+      const edits = tg.edits.length;
+      expect(await press(choose(cpA), CLIENT_1, askId)).toMatchObject({ text: undefined });
+      expect(lastText(CLIENT_1)).toBe(text('tgActFailed'));
+      expect(await sentFiles(cpA)).toEqual([]);
+      // Кнопки не погашены, строки вопроса не отвечены.
+      expect(tg.edits).toHaveLength(edits);
+      const open = await f.t.admin.db
+        .select({ answeredAt: schema.contractorTelegramMessages.answeredAt })
+        .from(schema.contractorTelegramMessages)
+        .where(eq(schema.contractorTelegramMessages.chatId, CLIENT_1));
+      expect(open.every((r) => r.answeredAt === null)).toBe(true);
+      // Telegram снова отдаёт файл — тот же выбор проходит, второй — «устарела».
+      tg.files.set(fileId, body);
+      expect(await press(choose(cpA), CLIENT_1, askId)).toMatchObject({ text: undefined });
+      expect(lastText(CLIENT_1)).toBe(text('tgCpFileOk'));
+      expect((await sentFiles(cpA)).map((x) => x.name)).toEqual(['Акт.pdf']);
+      expect(await press(choose(cpA2), CLIENT_1, askId)).toMatchObject({
+        text: text('tgActStale'),
+        alert: true,
+      });
+      expect(await sentFiles(cpA2)).toEqual([]);
+    });
+
     it('чат не подключён к контрагенту — файл без ответа, как раньше; подделанные данные кнопки — «устарела»', async () => {
       await sendFile(STRANGER);
       expect(sentTo(STRANGER)).toEqual([]);

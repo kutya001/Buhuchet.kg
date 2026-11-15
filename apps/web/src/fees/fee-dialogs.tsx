@@ -47,6 +47,13 @@ import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
+import {
+  feeOrderedMonths,
+  feePayAmountHint,
+  feePresetAllocation,
+  feePresetSum,
+  type FeePaymentPreset,
+} from './fee-pay-preset';
 import { useShell } from '../shell/context';
 import {
   addTariff,
@@ -306,7 +313,7 @@ export function FeePaymentDialog({
 }
 
 /** Что окно «Принять оплату за обслуживание» подставляет сразу: сумма (больше нуля) и примечание. */
-export type FeePaymentPreset = { amount: number | null; note: string };
+export type { FeePaymentPreset };
 
 /**
  * «Изменить оплату за обслуживание» (прототип `feePayDlg` с `edit`): то же окно с тем, что вводили, и
@@ -345,12 +352,6 @@ export function FeePaymentEditDialog({
 
 type FeeEdit = FeePaymentEditForm['edit'];
 
-/** Месяцы окна в порядке распределения суммы (от старых к новым, как прислал сервер). */
-function orderedMonths(form: FeePaymentForm) {
-  const byMonth = new Map(form.months.map((m) => [m.month, m]));
-  return form.order.map((m) => byMonth.get(m)).filter((m): m is NonNullable<typeof m> => !!m);
-}
-
 function FeePaymentModal({
   t,
   form,
@@ -379,7 +380,7 @@ function FeePaymentModal({
   const allocRows = (list: readonly { month: string; amount: number }[]) =>
     Object.fromEntries(list.map((x) => [x.month, toText(x.amount)]));
   // Чек из Telegram: сумма из сообщения (прототип `feePayDlg` с `pre.sum`), строки — на неё от старых к новым.
-  const presetSum = !edit && preset?.amount != null && preset.amount > 0 ? preset.amount : null;
+  const presetSum = feePresetSum(preset, !!edit);
   const [sum, setSum] = useState(() =>
     presetSum != null ? toText(presetSum) : form?.amount != null ? toText(form.amount) : '',
   );
@@ -391,7 +392,7 @@ function FeePaymentModal({
   const [rows, setRows] = useState<Record<string, string>>(() =>
     form
       ? presetSum != null
-        ? allocRows(autoAllocate(orderedMonths(form), presetSum))
+        ? allocRows(feePresetAllocation(form, presetSum))
         : allocRows(form.allocation)
       : {},
   );
@@ -408,7 +409,7 @@ function FeePaymentModal({
   }>({});
   const [busy, setBusy] = useState(false);
   const months = form?.months ?? [];
-  const ordered = form ? orderedMonths(form) : [];
+  const ordered = form ? feeOrderedMonths(form) : [];
   const valueOf = (month: string) => parseSom(rows[month] ?? '');
   const allocation = months
     .map((m) => ({ month: m.month, amount: valueOf(m.month) ?? 0 }))
@@ -583,14 +584,7 @@ function FeePaymentModal({
             id={`${id}-sum`}
             label={t('fee.pay.amount')}
             required
-            hint={
-              // Чек из Telegram: сумма — из сообщения (прототип v115 `feePayDlg`, `pre`).
-              presetSum != null
-                ? t('fee.pay.amount_hint_tg', { amount: formatSomWithUnit(presetSum) })
-                : form?.debt
-                  ? t('fee.pay.amount_hint', { amount: formatSomWithUnit(form.debt) })
-                  : undefined
-            }
+            hint={feePayAmountHint(t, presetSum, form?.debt ?? 0)}
             error={errors.amount}
           >
             {(control) => (
