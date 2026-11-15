@@ -58,6 +58,9 @@ export const OUTBOX_KINDS = [
   'group',
   // Доработки 14.11.2026: ответственному — «новый файл от контрагента» (блок 2, пункт 2).
   'cp_file',
+  // Доработки 14.11.2026, блок 1: владельцу — «Организация создана» и «Задать пароль» с одноразовой
+  // ссылкой. Как код — без текста и кнопок в журнале и без повтора (прототип v113 «Ссылка, чтобы задать пароль»).
+  'setup_link',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
@@ -70,13 +73,18 @@ export const SERVICE_KINDS: readonly OutboxKind[] = [
   'pass_changed',
   'pass_reset',
   'relink_code',
+  'setup_link',
 ];
 
 /**
  * Сообщения с кодом: в журнал отправок пишутся без текста и повторно не отправляются
  * (docs/deviations.md, п. 12).
  */
-export const CODE_KINDS = ['code', 'relink_code'] as const satisfies readonly OutboxKind[];
+export const CODE_KINDS = [
+  'code',
+  'relink_code',
+  'setup_link',
+] as const satisfies readonly OutboxKind[];
 
 /** Пачка отправки и пауза между пачками (прототип: «отправляются пачками»; предел Telegram — 30 в секунду). */
 export const OUTBOX_BATCH = 25;

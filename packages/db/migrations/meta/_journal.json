@@ -1037,6 +1037,20 @@
       "when": 1794684677921,
       "tag": "0147_package_1411",
       "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1794704837428,
+      "tag": "0148_lead_telegram",
+      "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1794704944306,
+      "tag": "0149_lead_telegram_functions",
+      "breakpoints": true
     }
   ]
 }

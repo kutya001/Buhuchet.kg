@@ -116,6 +116,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
   // Доработки 14.11.2026: блок 2, пункт 2.
   'telegram.kind.cp_file': { ru: 'Файл от контрагента', section: S },
+  'telegram.kind.setup_link': { ru: 'Ссылка, чтобы задать пароль', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },

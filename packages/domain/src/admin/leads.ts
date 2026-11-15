@@ -40,7 +40,16 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number];
  * Что записано в историю заявки: заявка с сайта, повтор с того же телефона, смена статуса, откат
  * статуса с причиной (в «Истории статусов» — с пометкой «Откат»), заметка, создана организация.
  */
-export const LEAD_EVENT_KINDS = ['created', 'repeat', 'status', 'rollback', 'note', 'org'] as const;
+/** `tg` — заявитель подключил Telegram «Стартом» по ссылке (доработки 14.11.2026, блок 1); текст — имя в Telegram. */
+export const LEAD_EVENT_KINDS = [
+  'created',
+  'repeat',
+  'status',
+  'rollback',
+  'note',
+  'org',
+  'tg',
+] as const;
 export type LeadEventKind = (typeof LEAD_EVENT_KINDS)[number];
 
 /**

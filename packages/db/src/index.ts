@@ -19,6 +19,7 @@ export * from './telegram-widgets';
 export * from './telegram-outbox';
 export * from './telegram-reminders';
 export * from './telegram-notices';
+export * from './lead-telegram';
 export * from './staff';
 export * from './contractors';
 export * from './contractor-history';
