@@ -130,6 +130,9 @@ export const FILES_SENT_TEXTS = {
     ru: 'Новые файлы от контрагента: {n}\n{contractor}: {names}',
     section: S,
   },
+  // Тому, кто файлы на сайте не видит, — без контрагента и имён, как текст `sntNotify` прототипа.
+  'files.sent.tg.one.bare': { ru: 'Новый файл от контрагента', section: S },
+  'files.sent.tg.many.bare': { ru: 'Новые файлы от контрагента: {n}', section: S },
   // История контрагента (прототип `pubUpDlg`, `sntAccept`, `sntRejectDlg`, `sntPurge`).
   'files.sent.hist.send.one': { ru: 'Контрагент отправил со страницы файл: {names}', section: S },
   'files.sent.hist.send.many': {

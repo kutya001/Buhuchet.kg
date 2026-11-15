@@ -1,6 +1,7 @@
 import type { FakeTelegram, MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
+import { UI_TEXTS } from '@buhuchet/domain';
 import {
   ApiError,
   Contractor,
@@ -26,8 +27,10 @@ import {
   TEST_ORIGIN,
   TEST_PASSWORD,
 } from '../../testing';
+import { createApp } from '../../app';
 import { addSentFiles, SentFilesRefused } from './sent-add';
 import { purgeSentFiles } from './sent-purge';
+import { retryStorageDeletes } from './storage-retry';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -35,6 +38,8 @@ const { auditLog, contractorSentFiles, files, orgSettings } = schema;
 
 const CHAT_ACC = 7101;
 const CHAT_OWNER = 7102;
+/** Telegram клиента, подключённый к контрагенту ответственного бухгалтера. */
+const CLIENT_CHAT = 9101;
 
 /** Содержимое по типу: PDF, картинка JPEG, программа Windows и веб-страница. */
 const enc = (s: string) => new TextEncoder().encode(s);
@@ -230,6 +235,16 @@ describe.skipIf(!databaseAvailable())(
       grantB = await openPage(ownerB, cpB, 'org-b');
       await linkTelegram(f.app, acc, CHAT_ACC, 'acc_a');
       await linkTelegram(f.app, owner, CHAT_OWNER, 'owner_a');
+      // Telegram клиента, подключённый к контрагенту: файлы из него принимает «Добавить отправленный
+      // файл» (подключение по ссылке — тесты потока К).
+      await f.t.admin.db.insert(schema.contractorTelegramLinks).values({
+        orgId: f.a.orgId,
+        contractorId: cpAcc.id,
+        chatId: CLIENT_CHAT,
+        name: 'Айнура',
+        status: 'on',
+        decidedAt: new Date('2026-10-18T03:00:00Z'),
+      });
     });
 
     afterAll(async () => {
@@ -561,6 +576,8 @@ describe.skipIf(!databaseAvailable())(
       ]);
       expect(await codeOf([{ name: 'setup.exe', body: EXE }])).toEqual([400, 'sent_forbidden']);
       expect(await codeOf([{ name: 'page.html', body: HTML }])).toEqual([400, 'sent_forbidden']);
+      // Документ с макросами от контрагента не принимается (п. И-10).
+      expect(await codeOf([{ name: 'Расчёт.xlsm', body: PDF() }])).toEqual([400, 'sent_forbidden']);
     });
 
     it('не больше 20 файлов в сутки от контрагента — со страницы и из Telegram вместе', async () => {
@@ -575,7 +592,7 @@ describe.skipIf(!databaseAvailable())(
         contractorId: cpAcc.id,
         source: 'telegram',
         senderName: 'Айнура',
-        tgChatId: 9101,
+        tgChatId: CLIENT_CHAT,
         files: Array.from({ length: 8 }, (_, i) => ({ name: `t${i}.pdf`, bytes: PDF() })),
       });
       const left = await start(
@@ -603,7 +620,7 @@ describe.skipIf(!databaseAvailable())(
           orgId: f.a.orgId,
           contractorId: cpAcc.id,
           source: 'telegram',
-          tgChatId: 9101,
+          tgChatId: CLIENT_CHAT,
           files: [{ name: 'фото.jpg', bytes: EXE }],
         }),
       ).rejects.toBeInstanceOf(SentFilesRefused);
@@ -612,7 +629,7 @@ describe.skipIf(!databaseAvailable())(
         contractorId: cpAcc.id,
         source: 'telegram',
         senderName: '  Айнура Турдубаева ',
-        tgChatId: 9101,
+        tgChatId: CLIENT_CHAT,
         comment: 'Табель за октябрь',
         files: [{ name: 'Табель.jpg', bytes: JPEG }],
       });
@@ -644,10 +661,197 @@ describe.skipIf(!databaseAvailable())(
           orgId: f.a.orgId,
           contractorId: cpAcc.id,
           source: 'telegram',
-          tgChatId: 9101,
+          tgChatId: CLIENT_CHAT,
           files: [{ name: 'a.pdf', bytes: PDF() }],
         }),
       ).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('из Telegram — только из чата, подключённого к этому контрагенту сейчас: чужой и отключённый чат — «не принимает файлы»', async () => {
+      const add = (chatId: number) =>
+        addSentFiles(f.deps, {
+          orgId: f.a.orgId,
+          contractorId: cpAcc.id,
+          source: 'telegram',
+          tgChatId: chatId,
+          files: [{ name: 'Акт.pdf', bytes: PDF() }],
+        });
+      const keys = () => [...storage.files.keys()].filter((k) => k.includes('/sent/')).sort();
+      const before = keys();
+      await expect(add(9199)).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+      // Сотрудник отключил Telegram клиента, пока файл скачивался.
+      await f.t.admin.db
+        .update(schema.contractorTelegramLinks)
+        .set({ status: 'off' })
+        .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_CHAT));
+      try {
+        await expect(add(CLIENT_CHAT)).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+      } finally {
+        await f.t.admin.db
+          .update(schema.contractorTelegramLinks)
+          .set({ status: 'on' })
+          .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_CHAT));
+      }
+      expect((await cardList(acc, cpAcc)).items).toEqual([]);
+      expect(keys()).toEqual(before);
+      const { ids } = await add(CLIENT_CHAT);
+      expect(ids).toHaveLength(1);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    describe('повторное удаление из хранилища', () => {
+      const retries = async () =>
+        (
+          await f.t.admin.db
+            .select({ key: schema.storageDeleteRetries.key })
+            .from(schema.storageDeleteRetries)
+        )
+          .map((r) => r.key)
+          .sort();
+      /** Хранилище, в котором удаление не удаётся (S3 недоступно). */
+      const noDelete = () => {
+        const s = Object.create(storage) as MemoryStorage;
+        s.delete = async () => {
+          throw new Error('S3 недоступно');
+        };
+        return s;
+      };
+
+      it('«Принять», когда хранилище не удаляет: загрузка — на повторное удаление, задача удаляет её, а копию в файлах контрагента не трогает', async () => {
+        const [id] = await send('org-a', cpAcc, grantAcc, [
+          { name: 'Акт сверки.pdf', body: PDF() },
+        ]);
+        const key = (await keyOf(id!))!;
+        const flakyApp = createApp({ ...f.deps, storage: noDelete() });
+        try {
+          const ok = await apiRequest(flakyApp, 'POST', `/api/files/sent/${id}/accept`, acc, {
+            version: await versionOf(acc, cpAcc, id!),
+          });
+          expect(ok.status, await ok.clone().text()).toBe(200);
+          const [copy] = await f.t.admin.db
+            .select({ key: files.storageKey })
+            .from(files)
+            .where(eq(files.id, SentFileItem.parse(await ok.json()).fileId!));
+          expect(storage.files.has(key)).toBe(true);
+          expect(await retries()).toEqual([key, `${key}.up`].sort());
+          // Ключ копии (её строка жива) на повтор попасть может — задача его не удалит.
+          await f.t.admin.db.insert(schema.storageDeleteRetries).values({ key: copy!.key });
+          expect(await retryStorageDeletes(f.deps)).toBe(2);
+          expect(storage.files.has(key)).toBe(false);
+          expect(storage.files.has(copy!.key)).toBe(true);
+          expect(await retries()).toEqual([]);
+        } finally {
+          await f.t.admin.db.delete(schema.storageDeleteRetries);
+        }
+      });
+
+      it('«Добавить отправленный файл» не удался, и хранилище не удаляет: положенный файл — на повторное удаление', async () => {
+        const s = noDelete();
+        let puts = 0;
+        s.put = async (...args: Parameters<typeof storage.put>) => {
+          puts += 1;
+          if (puts > 1) throw new Error('S3 недоступно');
+          return storage.put(...args);
+        };
+        const before = [...storage.files.keys()];
+        try {
+          await expect(
+            addSentFiles(
+              { ...f.deps, storage: s },
+              {
+                orgId: f.a.orgId,
+                contractorId: cpAcc.id,
+                source: 'telegram',
+                tgChatId: CLIENT_CHAT,
+                files: [
+                  { name: 'Акт.pdf', bytes: PDF() },
+                  { name: 'Счёт.pdf', bytes: PDF() },
+                ],
+              },
+            ),
+          ).rejects.toThrow('S3 недоступно');
+          const left = [...storage.files.keys()].filter((k) => !before.includes(k));
+          expect(left).toHaveLength(1);
+          expect(await retries()).toHaveLength(2);
+          expect(await retries()).toContain(left[0]);
+          expect(await retryStorageDeletes(f.deps)).toBe(2);
+          expect(storage.files.has(left[0]!)).toBe(false);
+          expect((await cardList(acc, cpAcc)).items).toEqual([]);
+        } finally {
+          await f.t.admin.db.delete(schema.storageDeleteRetries);
+        }
+      });
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('из Telegram: подключение отключили, пока файл шёл в хранилище, — файл не записан и удалён', async () => {
+      const keys = () => [...storage.files.keys()].filter((k) => k.includes('/sent/')).sort();
+      const before = keys();
+      const link = eq(schema.contractorTelegramLinks.chatId, CLIENT_CHAT);
+      const racing = Object.create(storage) as typeof storage;
+      racing.put = async (...args: Parameters<typeof storage.put>) => {
+        await f.t.admin.db
+          .update(schema.contractorTelegramLinks)
+          .set({ status: 'off' })
+          .where(link);
+        return storage.put(...args);
+      };
+      try {
+        await expect(
+          addSentFiles(
+            { ...f.deps, storage: racing },
+            {
+              orgId: f.a.orgId,
+              contractorId: cpAcc.id,
+              source: 'telegram',
+              tgChatId: CLIENT_CHAT,
+              files: [{ name: 'Акт.pdf', bytes: PDF() }],
+            },
+          ),
+        ).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+      } finally {
+        await f.t.admin.db.update(schema.contractorTelegramLinks).set({ status: 'on' }).where(link);
+      }
+      expect((await cardList(acc, cpAcc)).items).toEqual([]);
+      expect(keys()).toEqual(before);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('имена файлов в Telegram — только тому, кто видит файлы: ответственный без «Просматривать файлы» получает текст прототипа без имён', async () => {
+      const role = f.templateRole(f.a, 'acc');
+      const [had] = await f.t.admin.db
+        .select()
+        .from(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, role),
+            eq(schema.rolePermissions.permissionId, 'filesView'),
+          ),
+        );
+      expect(had).toBeDefined();
+      await f.t.admin.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, role),
+            eq(schema.rolePermissions.permissionId, 'filesView'),
+          ),
+        );
+      const n0 = tg.sent.length;
+      try {
+        await send('org-a', cpAcc, grantAcc, [{ name: 'Выписка_ноябрь.pdf', body: PDF() }]);
+        const sent = tg.sent.slice(n0);
+        expect(sent.filter((m) => m.chatId === CHAT_OWNER)).toEqual([]);
+        const toAcc = sent.filter((m) => m.chatId === CHAT_ACC);
+        expect(toAcc).toHaveLength(1);
+        expect(toAcc[0]!.text).toContain(UI_TEXTS['files.sent.tg.one.bare']!.ru);
+        expect(toAcc[0]!.text).not.toContain('Выписка_ноябрь');
+        expect(toAcc[0]!.text).not.toContain(cpAcc.name);
+        expect(toAcc[0]!.text).not.toContain('/files');
+      } finally {
+        await f.t.admin.db.insert(schema.rolePermissions).values(had!);
+      }
     });
 
     it('галочки «Контрагент может отправлять файлы»: учётная политика и карточка; без права — нельзя', async () => {

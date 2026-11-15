@@ -5,6 +5,7 @@ import {
   LEAD_DOCS_KEEP_DAYS,
   LEAD_DOCS_KEEP_REJECTED_DAYS,
   leadApproveRefusal,
+  leadDocStoredName,
   leadDocsMissing,
   leadDocValues,
   leadOwnerLogin,
@@ -125,5 +126,34 @@ describe('сроки хранения документов заявки в те�
     const text = UI_TEXTS['land.consent.docs']?.ru ?? '';
     expect(text).toContain(`После отказа они удаляются через ${LEAD_DOCS_KEEP_REJECTED_DAYS} дней`);
     expect(text).toContain(`без решения — через ${LEAD_DOCS_KEEP_DAYS} дней`);
+  });
+});
+
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+describe('leadDocStoredName — имя документа заявки, под которым он хранится и переходит в файлы', () => {
+  it('содержимое — PDF, поэтому и имя оканчивается на «.pdf»', () => {
+    expect(leadDocStoredName(' Выписка.pdf ')).toBe('Выписка.pdf');
+    expect(leadDocStoredName('СВИДЕТЕЛЬСТВО.PDF')).toBe('СВИДЕТЕЛЬСТВО.PDF');
+    expect(leadDocStoredName('скан')).toBe('скан.pdf');
+    expect(leadDocStoredName('Выписка.bat')).toBe('Выписка.bat.pdf');
+    expect(leadDocStoredName('страница.html')).toBe('страница.html.pdf');
+    const long = leadDocStoredName(`${'я'.repeat(255)}`);
+    expect(long).toHaveLength(255);
+    expect(long!.endsWith('я.pdf')).toBe(true);
+  });
+
+  it('маскировка под «.pdf» и неверные знаки — null', () => {
+    for (const name of [
+      'Выписка\u202Efdp.bat',
+      'Выписка\u2066.pdf',
+      'Выписка.pdf.',
+      'папка/a.pdf',
+      'a\\b.pdf',
+      'a\u0000.pdf',
+      '',
+      '   ',
+    ]) {
+      expect(leadDocStoredName(name), JSON.stringify(name)).toBeNull();
+    }
   });
 });
