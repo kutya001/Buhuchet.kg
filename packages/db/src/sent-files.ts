@@ -210,6 +210,39 @@ export async function dropPendingSentFiles(tx: Tx, ids: readonly string[]): Prom
 }
 
 /**
+ * Какие строки загрузки остались после отказа «закончить» (их файлы не удалять): «Новые» — их закончил
+ * другой такой же запрос, и с `erase: false` — ещё незаконченные (их файлы удалит задача по
+ * расписанию). С `erase: true` незаконченные стираются под блокировкой (по порядку номеров — два таких
+ * запроса не ждут друг друга по кругу): после транзакции их уже никто не закончит. Загруженная строка
+ * в незаконченную не возвращается (`contractor_sent_files_state_guard`), поэтому «Новые» читаются
+ * после блокировки и без неё: закончившая параллельно строка блокировку не получит, но здесь видна.
+ */
+export async function keptSentFiles(
+  tx: Tx,
+  ids: readonly string[],
+  o: { erase: boolean },
+): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const ofIds = inArray(contractorSentFiles.id, [...ids]);
+  const pending = await tx
+    .select({ id: contractorSentFiles.id })
+    .from(contractorSentFiles)
+    .where(and(ofIds, eq(contractorSentFiles.state, 'pending')))
+    .orderBy(contractorSentFiles.id)
+    .for('update');
+  if (o.erase)
+    await dropPendingSentFiles(
+      tx,
+      pending.map((r) => r.id),
+    );
+  const ready = await tx
+    .select({ id: contractorSentFiles.id })
+    .from(contractorSentFiles)
+    .where(and(ofIds, eq(contractorSentFiles.state, 'ready')));
+  return new Set([...ready, ...(o.erase ? [] : pending)].map((r) => r.id));
+}
+
+/**
  * Отправки одного контрагента — по одной до конца транзакции: две одновременные не обойдут лимит
  * «20 в сутки» (проверка и вставка — под этой блокировкой).
  */

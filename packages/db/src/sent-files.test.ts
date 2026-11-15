@@ -15,6 +15,7 @@ import {
   dropSentFiles,
   getSentFile,
   insertPendingSentFiles,
+  keptSentFiles,
   listContractorSentFiles,
   listSentFilesPage,
   listSentFileValues,
@@ -270,6 +271,29 @@ describe.skipIf(!databaseAvailable())('Отправленные файлы ко�
     const done = await send(a.orgId, cpA2);
     await asGuest(a.orgId, (tx) => dropPendingSentFiles(tx, [done.id]));
     expect(await inA((tx) => getSentFile(tx, done.id))).not.toBeNull();
+  });
+
+  it('после отказа «закончить»: «Новые» остаются, незаконченные стираются только с `erase`; чужая организация не трогается', async () => {
+    const done = await send(a.orgId, cpA2);
+    const left = newSent(a.orgId, cpA2);
+    await asGuest(a.orgId, (tx) => insertPendingSentFiles(tx, [left]));
+    const ids = [done.id, left.id];
+    // Без `erase` (сбой транзакции «закончить») незаконченная остаётся — её удалит задача.
+    const kept = await asGuest(a.orgId, (tx) => keptSentFiles(tx, ids, { erase: false }));
+    expect([...kept].sort()).toEqual([...ids].sort());
+    expect(await inA((tx) => getSentFile(tx, left.id))).not.toBeNull();
+    // Чужая организация ничего не видит и не стирает.
+    expect(await inB((tx) => keptSentFiles(tx, ids, { erase: true }))).toEqual(new Set());
+    expect(await inA((tx) => getSentFile(tx, left.id))).not.toBeNull();
+    // С `erase` незаконченная стёрта, «Новая» — на месте.
+    const erased = await asGuest(a.orgId, (tx) => keptSentFiles(tx, ids, { erase: true }));
+    expect([...erased]).toEqual([done.id]);
+    expect(await inA((tx) => getSentFile(tx, left.id))).toBeNull();
+    expect(await inA((tx) => getSentFile(tx, done.id))).not.toBeNull();
+    // Стёртую уже никто не закончит.
+    await expect(asGuest(a.orgId, (tx) => markSentFilesReady(tx, [left.id]))).rejects.toThrow(
+      RecordNotFoundError,
+    );
   });
 
   it('«Принять»: файл контрагента с источником «От контрагента», решение от своего имени, один раз', async () => {

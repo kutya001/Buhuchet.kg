@@ -537,6 +537,153 @@ describe.skipIf(!databaseAvailable())(
       expect(left).toEqual([]);
     });
 
+    /** Начатая отправка одного файла, уже положенного по ссылке: ключ файла и «закончить». */
+    const prepared = async (name: string) => {
+      const res = await start('org-a', cpAcc, grantAcc, [{ name, body: PDF(name) }]);
+      expect(res.status, await res.clone().text()).toBe(201);
+      const [item] = PageSentTicket.parse(await res.json()).items;
+      const url = new URL(item!.upload.url);
+      await storage.put(url.host + url.pathname, PDF(name), {
+        contentType: item!.upload.headers['content-type']!,
+      });
+      return {
+        id: item!.id,
+        key: (await keyOf(item!.id))!,
+        complete: () =>
+          pagePost(`/api/page/org-a/${cpAcc.inn}/sent/complete`, grantAcc, { ids: [item!.id] }),
+      };
+    };
+    /**
+     * Первый «закончить» держится перед тем, как положит проверенную копию под ключ файла (загрузка
+     * и его проверочная копия ещё на месте); остальные проходят. `run` получает его и `release`.
+     */
+    const withHeldCopy = async (
+      p: Awaited<ReturnType<typeof prepared>>,
+      run: (first: Promise<Response>, release: () => void) => Promise<void>,
+    ) => {
+      const copy = storage.copy;
+      let release = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      let reached = () => {};
+      const atGate = new Promise<void>((r) => (reached = r));
+      let held = false;
+      storage.copy = async (from, to) => {
+        if (to === p.key && !held) {
+          held = true;
+          reached();
+          await gate;
+        }
+        return copy(from, to);
+      };
+      const first = Promise.resolve(p.complete());
+      try {
+        await Promise.race([
+          atGate,
+          first.then((r) => {
+            throw new Error(`«закончить» ответил ${r.status} раньше копии файла`);
+          }),
+        ]);
+        await run(first, release);
+      } finally {
+        storage.copy = copy;
+        release();
+        await first.catch(() => undefined);
+      }
+    };
+    const pageUpload = (on: boolean) =>
+      f.t.admin.db
+        .update(schema.contractorPages)
+        .set({ filesUpload: on })
+        .where(eq(schema.contractorPages.contractorId, cpAcc.id));
+    const rowOf = async (id: string) =>
+      (
+        await f.t.admin.db
+          .select({ state: contractorSentFiles.state })
+          .from(contractorSentFiles)
+          .where(eq(contractorSentFiles.id, id))
+      )[0];
+    /** Объекты хранилища файла: сам файл и всё рядом с ним (загрузка, проверочные копии). */
+    const objectsOf = (key: string) =>
+      [...storage.files.keys()].filter((k) => k === key || k.startsWith(`${key}.`));
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('отправку выключили, пока файл копировался: «sent_off», файл и незаконченная строка убраны', async () => {
+      const before = (await history(cpAcc.id)).length;
+      const p = await prepared('Договор.pdf');
+      await withHeldCopy(p, async (first, release) => {
+        await pageUpload(false);
+        release();
+        const res = await first;
+        expect(res.status).toBe(409);
+        expect((await failure(res)).code).toBe('sent_off');
+      });
+      expect(objectsOf(p.key)).toEqual([]);
+      expect(await rowOf(p.id)).toBeUndefined();
+      expect((await cardList(acc, cpAcc)).items).toEqual([]);
+      expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toEqual([]);
+      expect(await history(cpAcc.id)).toHaveLength(before);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('ту же отправку закончил другой запрос того же браузера — отказ первого не удаляет его файл', async () => {
+      // Второй закончил, потом отправку выключили: первый — «sent_off», файл второго на месте.
+      const sends = async () =>
+        (await history(cpAcc.id)).filter((h) => h.action === 'sent_file_send').length;
+      const sendsBefore = await sends();
+      const off = await prepared('Акт.pdf');
+      await withHeldCopy(off, async (first, release) => {
+        const second = await off.complete();
+        expect(second.status, await second.clone().text()).toBe(200);
+        await pageUpload(false);
+        release();
+        const res = await first;
+        expect(res.status).toBe(409);
+        expect((await failure(res)).code).toBe('sent_off');
+      });
+      expect(objectsOf(off.key)).toEqual([off.key]);
+      expect((await rowOf(off.id))?.state).toBe('ready');
+      await pageUpload(true);
+
+      // Оба при включённой отправке: первый — «нет такой записи», файл второго на месте.
+      const both = await prepared('Счёт.pdf');
+      await withHeldCopy(both, async (first, release) => {
+        const second = await both.complete();
+        expect(second.status, await second.clone().text()).toBe(200);
+        release();
+        expect((await first).status).toBe(404);
+      });
+      expect(objectsOf(both.key)).toEqual([both.key]);
+      expect((await rowOf(both.id))?.state).toBe('ready');
+      expect(new TextDecoder().decode(storage.files.get(both.key)!.body)).toBe(
+        '%PDF-1.7\nСчёт.pdf',
+      );
+      // Каждая отправка — «Новая» и одно сообщение ответственному.
+      expect((await cardList(acc, cpAcc)).items.map((x) => [x.name, x.status])).toEqual(
+        expect.arrayContaining([
+          ['Акт.pdf', 'new'],
+          ['Счёт.pdf', 'new'],
+        ]),
+      );
+      expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toHaveLength(2);
+      expect(await sends()).toBe(sendsBefore + 2);
+
+      // Второй получил отказ и стёр строку, потом отправку включили: первый кладёт файл, но строки
+      // уже нет — 404, и положенный им файл убран (он ничей).
+      const gone = await prepared('Выписка.pdf');
+      await withHeldCopy(gone, async (first, release) => {
+        await pageUpload(false);
+        const second = await gone.complete();
+        expect(second.status).toBe(409);
+        expect((await failure(second)).code).toBe('sent_off');
+        expect(await rowOf(gone.id)).toBeUndefined();
+        await pageUpload(true);
+        release();
+        expect((await first).status).toBe(404);
+      });
+      expect(objectsOf(gone.key)).toEqual([]);
+      expect(await rowOf(gone.id)).toBeUndefined();
+    });
+
     it('незаконченная загрузка занимает место в пределе за сутки, пока задача не удалила её через 30 минут вместе с файлами', async () => {
       const ten = (p: string) =>
         Array.from({ length: 10 }, (_, i) => ({ name: `${p}${i}.pdf`, body: PDF() }));

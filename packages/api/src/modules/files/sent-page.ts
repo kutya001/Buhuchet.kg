@@ -3,6 +3,7 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorPageState,
   insertPendingSentFiles,
+  keptSentFiles,
   pendingSentFiles,
   sentUploadState,
   takeRateLimit,
@@ -257,6 +258,42 @@ export async function removeObjects(deps: ApiDeps, keys: readonly string[]): Pro
 }
 
 /**
+ * Отправку не приняли после того, как её файлы легли под ключи файлов: удалить только файлы строк,
+ * которые не стали «Новыми». Ту же отправку мог закончить другой запрос того же браузера (оба нашли
+ * строки незаконченными) — тогда файл его, как у «Я оплатил» (`dropWritten`). С `erase` незаконченные
+ * строки стираются в той же транзакции, что их проверяет: после неё их уже никто не закончит и не
+ * останется «Нового» без файла. Без `erase` (сбой транзакции «закончить») незаконченные остаются вместе
+ * с файлами — их удалит задача по расписанию, а стёртые другим отказом — удаляются сразу. Сбой самой
+ * проверки не прячет исходный отказ: файлы тогда уберёт задача по расписанию.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+async function dropUnfinished(
+  deps: ApiDeps,
+  ctx: { orgId: string; userId: null },
+  rows: readonly SentFileRecord[],
+  written: readonly string[],
+  o: { erase: boolean },
+): Promise<void> {
+  if (!written.length) return;
+  try {
+    const kept = await withOrgContext(deps.db, ctx, (tx) =>
+      keptSentFiles(
+        tx,
+        rows.map((r) => r.id),
+        o,
+      ),
+    );
+    const own = new Set(written);
+    await removeObjects(
+      deps,
+      rows.filter((r) => own.has(r.storageKey) && !kept.has(r.id)).map((r) => r.storageKey),
+    );
+  } catch (err) {
+    deps.logger.error({ err }, 'файлы от контрагентов: положенные файлы не убраны после отказа');
+  }
+}
+
+/**
  * Проверить загруженные со страницы файлы и положить каждый под ключ файла (для «Отправить файл» и
  * «Я оплатил», блок 6): проверяется копия каждого файла, и под ключ файла ложится только она. Хоть один
  * не такой — отказ целиком (положенное удаляется), ответ называет плохие файлы. Загрузки и проверочные
@@ -341,9 +378,12 @@ export function pageSentCompleteHandler(
         comment: rows[0]!.comment,
       });
       return true;
+    }).catch(async (e: unknown) => {
+      await dropUnfinished(deps, ctx, rows, written, { erase: false });
+      throw e;
     });
     if (!done) {
-      await removeObjects(deps, written);
+      await dropUnfinished(deps, ctx, rows, written, { erase: true });
       refuse(409, { code: 'sent_off' });
     }
     await notifySentFiles(
