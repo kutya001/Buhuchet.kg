@@ -210,6 +210,24 @@ export async function dropPendingSentFiles(tx: Tx, ids: readonly string[]): Prom
 }
 
 /**
+ * Строки загрузки, чьи файлы не удалять после отказа «закончить»: незаконченные (их удалит задача по
+ * расписанию вместе с загрузкой, которую ещё могут положить по живой ссылке, — или закончит другой
+ * такой же запрос) и «Новые» или отклонённые (их закончил другой запрос). Нет строки (её уже удалила
+ * задача по сроку) или файл принят (отправленный объект «Принять» уже удалил, принятый задача не
+ * удаляет) — положенный файл ничей.
+ */
+export async function keptSentFiles(tx: Tx, ids: readonly string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const rows = await tx
+    .select({ id: contractorSentFiles.id })
+    .from(contractorSentFiles)
+    .where(
+      and(inArray(contractorSentFiles.id, [...ids]), ne(contractorSentFiles.status, 'accepted')),
+    );
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
  * Отправки одного контрагента — по одной до конца транзакции: две одновременные не обойдут лимит
  * «20 в сутки» (проверка и вставка — под этой блокировкой).
  */

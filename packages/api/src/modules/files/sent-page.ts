@@ -3,8 +3,11 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorPageState,
   insertPendingSentFiles,
+  isStorageRetryKey,
+  keptSentFiles,
   pendingSentFiles,
   sentUploadState,
+  storageRetryAdd,
   takeRateLimit,
   withOrgContext,
   type RateLimit,
@@ -257,6 +260,45 @@ export async function removeObjects(deps: ApiDeps, keys: readonly string[]): Pro
 }
 
 /**
+ * Отправку не приняли после того, как её файлы легли под ключи файлов (выключили отправку, сбой
+ * транзакции «закончить», опоздали к уже законченной): удалить только ничьи файлы (`keptSentFiles`).
+ * Незаконченная строка остаётся со своим файлом задаче по расписанию: её мог закончить другой такой
+ * же запрос того же браузера, а по ещё живой ссылке могут заново положить загрузку — задача удалит
+ * обе вместе со строкой. «Новые» — файл того, кто их закончил. Сбой самой проверки не прячет исходный
+ * отказ: файлы идут на повторное удаление, а оно само снимает ключи живых строк (те же правила).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+async function dropUnfinished(
+  deps: ApiDeps,
+  ctx: { orgId: string; userId: null },
+  rows: readonly SentFileRecord[],
+  written: readonly string[],
+): Promise<void> {
+  if (!written.length) return;
+  try {
+    const kept = await withOrgContext(deps.db, ctx, (tx) =>
+      keptSentFiles(
+        tx,
+        rows.map((r) => r.id),
+      ),
+    );
+    const own = new Set(written);
+    await removeObjects(
+      deps,
+      rows.filter((r) => own.has(r.storageKey) && !kept.has(r.id)).map((r) => r.storageKey),
+    );
+  } catch (err) {
+    deps.logger.error({ err }, 'файлы от контрагентов: положенные файлы не проверены после отказа');
+    await storageRetryAdd(deps.db, written.filter(isStorageRetryKey)).catch((e: unknown) =>
+      deps.logger.error(
+        { err: e },
+        'файлы от контрагентов: файлы не поставлены на повторное удаление',
+      ),
+    );
+  }
+}
+
+/**
  * Проверить загруженные со страницы файлы и положить каждый под ключ файла (для «Отправить файл» и
  * «Я оплатил», блок 6): проверяется копия каждого файла, и под ключ файла ложится только она. Хоть один
  * не такой — отказ целиком (положенное удаляется), ответ называет плохие файлы. Загрузки и проверочные
@@ -341,9 +383,12 @@ export function pageSentCompleteHandler(
         comment: rows[0]!.comment,
       });
       return true;
+    }).catch(async (e: unknown) => {
+      await dropUnfinished(deps, ctx, rows, written);
+      throw e;
     });
     if (!done) {
-      await removeObjects(deps, written);
+      await dropUnfinished(deps, ctx, rows, written);
       refuse(409, { code: 'sent_off' });
     }
     await notifySentFiles(

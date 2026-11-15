@@ -15,6 +15,7 @@ import {
   dropSentFiles,
   getSentFile,
   insertPendingSentFiles,
+  keptSentFiles,
   listContractorSentFiles,
   listSentFilesPage,
   listSentFileValues,
@@ -270,6 +271,26 @@ describe.skipIf(!databaseAvailable())('Отправленные файлы ко�
     const done = await send(a.orgId, cpA2);
     await asGuest(a.orgId, (tx) => dropPendingSentFiles(tx, [done.id]));
     expect(await inA((tx) => getSentFile(tx, done.id))).not.toBeNull();
+  });
+
+  it('после отказа «закончить»: файлы незаконченных, «Новых» и отклонённых не удалять; принятых и удалённых — ничьи', async () => {
+    const done = await send(a.orgId, cpA2, 'Новый.pdf');
+    const left = newSent(a.orgId, cpA2);
+    await asGuest(a.orgId, (tx) => insertPendingSentFiles(tx, [left]));
+    const taken = await send(a.orgId, cpA2, 'Принят.pdf');
+    const current = (await inA((tx) => getSentFile(tx, taken.id)))!;
+    const file = acceptedFile(a.orgId, cpA2, taken.id, 'Принят.pdf');
+    await inA((tx) => acceptSentFile(tx, { id: taken.id, version: current.version, file }));
+    const refused = await send(a.orgId, cpA2, 'Отклонён.pdf');
+    const version = (await inA((tx) => getSentFile(tx, refused.id)))!.version;
+    await inA((tx) => rejectSentFile(tx, { id: refused.id, version, reason: 'Не тот месяц' }));
+    const missing = randomUUID();
+    const ids = [done.id, left.id, taken.id, refused.id, missing];
+    const kept = await asGuest(a.orgId, (tx) => keptSentFiles(tx, ids));
+    expect([...kept].sort()).toEqual([done.id, left.id, refused.id].sort());
+    // Чужая организация ничего не видит: для неё все строки ничьи, но ключи — только из своих строк.
+    expect(await inB((tx) => keptSentFiles(tx, ids))).toEqual(new Set());
+    expect(await asGuest(a.orgId, (tx) => keptSentFiles(tx, []))).toEqual(new Set());
   });
 
   it('«Принять»: файл контрагента с источником «От контрагента», решение от своего имени, один раз', async () => {
