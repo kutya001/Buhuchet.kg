@@ -39,7 +39,9 @@ function renderOrgs(body,tab,fresh){
 }
 function orgActions(o,after){const done=()=>{renderPage();if(after)after()};
   return [o.active?{label:'Заблокировать',icon:'lock',danger:true,disabled:o.id==='o1',reason:o.id==='o1'?'Демо-организация стенда':'',run:()=>confirmDlg({title:`Заблокировать ${esc(o.name)}?`,text:'Никто из сотрудников организации не сможет войти. Данные сохранятся, разблокировать можно в любой момент.',ok:'Заблокировать',danger:true,run:()=>{o.active=false;touch(o);o.note='Заблокирована администратором';log('porg',o.id,'Организация заблокирована: '+o.note);done();toast('Организация заблокирована','lock')}})}
-    :{label:'Разблокировать',icon:'key',run:()=>{o.active=true;touch(o);log('porg',o.id,'Организация разблокирована'+(o.note?` (была: ${o.note})`:''));delete o.note;done();toast('Организация разблокирована')}}]}
+    :{label:'Разблокировать',icon:'key',run:()=>{o.active=true;touch(o);log('porg',o.id,'Организация разблокирована'+(o.note?` (была: ${o.note})`:''));delete o.note;done();toast('Организация разблокирована')}},
+    // ИНН и форму (ОсОО или ИП) меняет только администратор платформы (Доработки 14.11.2026, блок 1, пункт 4)
+    {label:'ИНН и форма',icon:'edit',run:()=>ldInnFormDlg(o,done)}]}
 // Из заявки с сайта (pre.lead): название фирмы и ФИО подставлены, после сохранения заявка получает «Подключена» и ссылку на организацию
 // Показатели по умолчанию новой организации — из пустого шаблона TemDB.json (решение заказчика 06.11.2026)
 const kpiDefNames=()=>{const n=(DBSRC.empty.db.indicators||[]).filter(i=>!i.archived).map(i=>`«${esc(i.name)}»`);return n.length>1?n.slice(0,-1).join(', ')+' и '+n[n.length-1]:n.join('')};

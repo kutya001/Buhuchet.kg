@@ -109,6 +109,12 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-form{background:var(--raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:24px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;position:relative}
 .lp-form .full,.lp-form .lp-check-f,.lp-form .lp-send,.lp-form #lf-msg{grid-column:1/-1}
 .lp-form textarea{min-height:88px;resize:vertical}
+/* Доработки 14.11.2026, блок 1: форма организации, документы в PDF и данные из них */
+.lf-form-seg{align-self:flex-start}.lf-form-seg button{min-height:34px;padding:6px 20px;font-size:14px}
+.lf-docs{display:flex;flex-direction:column;gap:12px}.lf-docs:empty{display:none}
+.lf-docs-in{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+.lf-mark{margin-left:4px;vertical-align:1px}
+.lp-ok-b{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
 .lp-check{display:flex;gap:9px;align-items:flex-start;font-size:14px;cursor:pointer}
 .lp-check input{width:18px;height:18px;margin:1px 0 0;flex:none;accent-color:var(--accent)}
 .lp-send{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -605,6 +611,7 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-slide .lsh-ph{zoom:.85}
   .lp-lead-in{grid-template-columns:minmax(0,1fr)}
   .lp-form{grid-template-columns:minmax(0,1fr);padding:18px 16px}
+  .lf-docs-in{grid-template-columns:minmax(0,1fr)}
   .lp-send .btn{flex:1 1 100%}
   .lp-foot-l{margin-left:0}
   .lp-foot{padding-bottom:96px}

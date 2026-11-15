@@ -290,4 +290,9 @@ body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
 .tgn-set .row.grow{flex:1 1 100%;flex-wrap:wrap;gap:8px;align-items:center}
 .tgn-set .note{flex:1 1 100%;margin:0}
 .tgn-row.off .tgn-kv{opacity:.6}
+/* Строки «К оплате» и «Оплата за обслуживание» (v113): галочки «за 5» … «за 1 день» */
+.tgn-set .fld.tgn-dfld{width:auto;flex:1 1 100%}
+.tgn-days{display:flex;flex-wrap:wrap;gap:6px 16px;padding:4px 0}
+.tgn-day{display:inline-flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;min-height:28px}
+.tgn-day input{margin:0}
 @media (max-width:767px){.tgn-kv,.tgn-set{margin-left:0}}
