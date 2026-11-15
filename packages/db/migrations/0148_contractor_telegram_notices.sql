@@ -1,12 +1,14 @@
 -- «К оплате» и «Оплата за обслуживание» по дням (доработки 14.11.2026, блок 3, этап 2, поток К). Само
 -- «К оплате» уходит в каждый отмеченный день «за N» — одно на месяц, чат и день. Прежнее само (одно на
 -- месяц и чат) получает день отправки по Бишкеку: в этот день оно уже ушло, второго в тот же день не будет.
--- Блокировки таблицы ждём не дольше 10 с, как в 0147: её трогают нажатия клиентов и задачи.
+-- Блокировки таблицы ждём не дольше 10 с, как в 0147: её трогают нажатия клиентов и задачи. День
+-- прежним строкам ставится уже под исключительной блокировкой (её берёт DROP CONSTRAINT): иначе прежняя
+-- задача успела бы записать строку без дня до проверки `pay_day_check`.
 SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+ALTER TABLE "contractor_telegram_messages" DROP CONSTRAINT "contractor_telegram_messages_kind_check";--> statement-breakpoint
 UPDATE "contractor_telegram_messages"
   SET "day" = ("created_at" AT TIME ZONE 'Asia/Bishkek')::date
   WHERE "kind" = 'pay' AND "auto" AND "day" IS NULL;--> statement-breakpoint
-ALTER TABLE "contractor_telegram_messages" DROP CONSTRAINT "contractor_telegram_messages_kind_check";--> statement-breakpoint
 DROP INDEX "contractor_telegram_messages_auto_key";--> statement-breakpoint
 CREATE UNIQUE INDEX "contractor_telegram_messages_auto_key" ON "contractor_telegram_messages" USING btree ("link_id","month","day") WHERE "contractor_telegram_messages"."kind" = 'pay' and "contractor_telegram_messages"."auto";--> statement-breakpoint
 -- Прежняя версия сайта пишет само «К оплате» без дня (day = null): миграции идут до выкладки нового кода,

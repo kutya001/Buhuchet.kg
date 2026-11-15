@@ -873,9 +873,17 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
             .returning(),
         ),
       ).toEqual([]);
-      // Непринятый чек удалили — «Оплатил» остаётся без чека, и чек можно прислать снова.
-      await db.admin.db.delete(contractorSentFiles).where(eq(contractorSentFiles.id, first));
+      // Непринятый чек сотрудник удалил — «Оплатил» остаётся без чека, и чек можно прислать снова.
+      await inA((tx) => tx.delete(contractorSentFiles).where(eq(contractorSentFiles.id, first)));
       expect((await claims())[0]!.sentFileId).toBeNull();
+      // Новое «Оплатил» с чеком сотрудник тоже не запишет — только бот (или страница контрагента).
+      await expect(
+        inA((tx) =>
+          tx
+            .insert(contractorPayClaims)
+            .values({ orgId: a.orgId, source: 'telegram', ...input, sentFileId: third }),
+        ),
+      ).rejects.toThrow(checkViolation);
       // Чек ставит только бот: сотрудник к «Оплатил» чек не подставит.
       await expect(
         inA((tx) =>

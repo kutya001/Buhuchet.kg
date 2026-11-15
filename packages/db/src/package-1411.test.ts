@@ -444,9 +444,10 @@ describe.skipIf(!databaseAvailable())('Пакет 14.11: новые таблиц
           .values({ orgId: a.orgId, contractorId: cpA, source: 'page', purpose: 'tax', amount: 0 }),
       ),
     ).rejects.toThrow(checkFailed);
-    // Чек — только отправленный файл того же контрагента своей организации.
+    // Чек — только отправленный файл того же контрагента своей организации (ставит его бот или страница —
+    // без пользователя: сотруднику чек не даёт поставить защита миграции 0150).
     await expect(
-      inB((tx) =>
+      asGuest(b.orgId, (tx) =>
         tx.insert(contractorPayClaims).values({
           orgId: b.orgId,
           contractorId: cpB,

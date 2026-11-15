@@ -5,13 +5,21 @@
 GRANT UPDATE (sent_file_id) ON TABLE public.contractor_pay_claims TO buhuchet_app;--> statement-breakpoint
 -- Чек, который уже стоит, другим не заменяется: второй чек — новое «Оплатил». Снять чек прямой правкой
 -- нельзя (иначе замена прошла бы в два шага): пусто — только когда файла уже нет, так непринятый чек
--- снимает удаление файла (внешний ключ с SET NULL). Ставит чек только транзакция без пользователя — бот.
+-- снимает удаление файла (внешний ключ с SET NULL). Ставит чек — и в новом «Оплатил», и в ждущем — только
+-- транзакция без пользователя: бот или страница контрагента, не сотрудник.
 CREATE FUNCTION app.contractor_pay_claim_receipt_guard()
   RETURNS trigger
   LANGUAGE plpgsql
   SET search_path = pg_catalog, pg_temp
   AS $$
   BEGIN
+    IF TG_OP = 'INSERT' THEN
+      IF NEW.sent_file_id IS NOT NULL AND app.current_user_id() IS NOT NULL THEN
+        RAISE EXCEPTION 'contractor_pay_claims: чек ставит только бот'
+          USING ERRCODE = 'check_violation';
+      END IF;
+      RETURN NEW;
+    END IF;
     IF NEW.sent_file_id IS NOT DISTINCT FROM OLD.sent_file_id THEN
       RETURN NEW;
     END IF;
@@ -35,7 +43,7 @@ CREATE FUNCTION app.contractor_pay_claim_receipt_guard()
   $$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION app.contractor_pay_claim_receipt_guard() FROM PUBLIC, buhuchet_app;--> statement-breakpoint
 CREATE TRIGGER contractor_pay_claims_receipt_guard
-  BEFORE UPDATE OF sent_file_id ON public.contractor_pay_claims
+  BEFORE INSERT OR UPDATE OF sent_file_id ON public.contractor_pay_claims
   FOR EACH ROW
   EXECUTE FUNCTION app.contractor_pay_claim_receipt_guard();--> statement-breakpoint
 -- Открытая просьба «Пришлите чек» в чате клиента — до транзакции организации (файл приходит без
