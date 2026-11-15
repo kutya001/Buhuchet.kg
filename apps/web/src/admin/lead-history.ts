@@ -1,4 +1,11 @@
-import { bishkekDate, bishkekTime, formatDateRu, type LeadStatus } from '@buhuchet/domain';
+import {
+  bishkekDate,
+  bishkekTime,
+  formatDateRu,
+  LEAD_DOCS_KEEP_DAYS,
+  LEAD_DOCS_KEEP_REJECTED_DAYS,
+  type LeadStatus,
+} from '@buhuchet/domain';
 import type { AdminLeadCard, AdminLeadEvent } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
@@ -8,7 +15,13 @@ import { statusName } from '../status/status-view';
 // повтор с того же телефона).
 
 /** Что произошло — строкой «Истории» (прототип: тексты `leadLog`). */
-export function leadEventText(t: Translate, e: AdminLeadEvent, fromStand: boolean): string {
+export function leadEventText(
+  t: Translate,
+  e: AdminLeadEvent,
+  fromStand: boolean,
+  /** Заявка с документами: организацию по ней создаёт «Одобрить» (прототип v114: «Одобрена: …»). */
+  approved = false,
+): string {
   const name = (code: LeadStatus | null) => (code ? statusName(t, 'lead', code) : '—');
   const from = name(e.from);
   const to = name(e.to);
@@ -19,17 +32,41 @@ export function leadEventText(t: Translate, e: AdminLeadEvent, fromStand: boolea
       return t(e.text ? 'leads.hist.repeat_note' : 'leads.hist.repeat');
     case 'note':
       return t('leads.hist.note');
+    // Заявитель нажал «Старт» по ссылке «Подключить Telegram» (доработки 14.11.2026, блок 1, пункт 2).
+    case 'tg':
+      return t('leads.hist.tg', { name: e.text ?? '' });
     case 'rollback':
       return t('leads.hist.rollback', { from, to, reason: e.text ?? '' });
     case 'org':
       return e.from && e.from !== e.to
-        ? t('leads.hist.org_status', { from, to, name: e.text ?? '' })
-        : t('leads.hist.org', { name: e.text ?? '' });
+        ? t(approved ? 'leads.hist.approved_status' : 'leads.hist.org_status', {
+            from,
+            to,
+            name: e.text ?? '',
+          })
+        : t(approved ? 'leads.hist.approved' : 'leads.hist.org', { name: e.text ?? '' });
+    // Файлы заявки удалены по сроку (прототип v114 ldPurge): после отказа или без решения.
+    case 'docs':
+      return e.text === 'rejected'
+        ? t('leads.hist.docs_rejected', { days: LEAD_DOCS_KEEP_REJECTED_DAYS })
+        : t('leads.hist.docs_kept', { days: LEAD_DOCS_KEEP_DAYS });
     case 'status':
       return e.text
         ? t('leads.hist.status_reason', { from, to, reason: e.text })
         : t('leads.hist.status', { from, to });
   }
+}
+
+/** Пояснение под файлами заявки (прототип ldCardBox `.hint`): срок, «удалены», «переданы организации». */
+export function leadDocsHint(t: Translate, l: AdminLeadCard): string {
+  const dateOf = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
+  if (l.docsGoneAt) return t('leads.docs.gone_at', { date: dateOf(l.docsGoneAt) });
+  if (l.org) return t('leads.docs.to_org', { name: l.org.name });
+  if (!l.docsPurgeAt) return '';
+  const date = dateOf(l.docsPurgeAt);
+  return l.status === 'rejected'
+    ? t('leads.docs.till_rejected', { date, days: LEAD_DOCS_KEEP_REJECTED_DAYS })
+    : t('leads.docs.till', { date });
 }
 
 /** «История» — сверху новые (прототип: `o.hist.slice().reverse()`). */
@@ -41,7 +78,7 @@ export function leadHistoryItems(t: Translate, l: AdminLeadCard): TimelineItem[]
         id: `${e.at}-${i}`,
         date: formatDateRu(bishkekDate(at)),
         time: bishkekTime(at),
-        text: leadEventText(t, e, l.fromStand),
+        text: leadEventText(t, e, l.fromStand, l.legalForm !== null),
         who: e.actor,
         via: e.via === 'telegram' ? t('telegram.via') : null,
       };

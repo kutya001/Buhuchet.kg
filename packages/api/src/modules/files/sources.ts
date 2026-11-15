@@ -2,6 +2,7 @@ import {
   contractorFilesPart,
   fileContractor,
   indicatorFilesPart,
+  leadFilesPart,
   manualFilesPart,
   moneyFileSource,
   moneyFilesPart,
@@ -154,6 +155,24 @@ export const sentFileSource: FileListSource = {
   list: ({ t }) => sentFilesPart(t),
 };
 
+/**
+ * «Заявка на подключение» (доработки 14.11.2026, блок 1; прототип v114 LEAD_SRC): документы заявки
+ * с лендинга, переданные организации при «Одобрить». Появляются только так (`ownUpload`); дальше — как
+ * общий файл организации, загруженный вручную: история у самого файла.
+ */
+export const leadSource: FileListSource = {
+  ownUpload: true,
+  resolve: async (_tx, _subject, id) =>
+    id !== null
+      ? null
+      : {
+          contractor: null,
+          editable: true,
+          history: (fileId) => ({ entity: 'file', entityId: fileId, contractorId: null }),
+        },
+  list: ({ t }) => leadFilesPart(t),
+};
+
 /** Файлы отчётов в списке: право «Просматривать отчёты»; видны отчёты области «Свои». */
 function reportFilesList({ subject, t }: FileListContext): FileListPart | null {
   return hasPermission(subject, 'repView') ? reportFilesPart(reportScopeOf(subject), t) : null;
@@ -239,4 +258,5 @@ export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   project_payment: projectPaymentFiles,
   task: { ...taskFileSource, list: taskFilesList },
   indicator_value: { ...indicatorValueSource, list: indicatorFilesList },
+  lead: leadSource,
 };

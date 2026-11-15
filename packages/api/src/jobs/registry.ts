@@ -9,6 +9,7 @@ import {
 import { formatMomentRu } from '@buhuchet/domain';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
+import { purgeLeadDocsJob } from '../modules/admin/lead-purge';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
 import { purgeSentFilesJob } from '../modules/files/sent-purge';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
@@ -110,6 +111,7 @@ export const jobs: readonly Job[] = [
   purgeSentFilesJob,
   duesRecalcJob,
   cleanupVideoUploadsJob,
+  purgeLeadDocsJob,
 ];
 
 /** Ошибки доставки вебхуку — не чаще одного оповещения за столько часов. */

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
-import { DEMO_PASSWORD } from './helpers';
+import { DEMO_PASSWORD, uniqueInn } from './helpers';
+import { IP_CERT, leadDocsDraft, leadDocsFields } from './lead-docs';
 
 // Лендинг buhuchet.kg для гостей, вход с возвратом на ссылку и демо-версия /demo (задача #165, ТЗ
 // «Лендинг — buhuchet.kg для гостей»). Тексты — словарь, группа «Лендинг» (refDB.json).
@@ -33,6 +34,9 @@ const uniquePhone = () =>
   `7${String(Date.now()).slice(-5)}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
 
 async function signInByForm(page: Page, login: string, password: string) {
+  // «Войти» лендинга — обычная ссылка: страница входа грузится заново, поля видны раньше, чем React их
+  // подхватил; «Войти» доступна только после этого (docs/typical-mistakes.md № 41).
+  await expect(page.getByRole('button', { name: 'Войти' })).toBeEnabled();
   await page.getByLabel('Логин').fill(login);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await Promise.all([
@@ -42,6 +46,12 @@ async function signInByForm(page: Page, login: string, password: string) {
 }
 
 const leadForm = (page: Page) => page.locator('#lp-lead form');
+
+/** Первое поле формы заявки (прототип v114): кнопка «ОсОО» поля «Форма организации». */
+const firstLeadField = (page: Page) =>
+  leadForm(page)
+    .getByRole('group', { name: 'Форма организации' })
+    .getByRole('button', { name: 'ОсОО' });
 
 /**
  * Заставки с логотипом (прототип v78) в браузере под управлением тестов нет (`navigator.webdriver`,
@@ -53,8 +63,20 @@ const withIntro = (page: Page) =>
     Object.defineProperty(Navigator.prototype, 'webdriver', { get: () => false }),
   );
 
+/**
+ * Заявка ИП (доработки 14.11.2026, блок 1): форма, свидетельство ГНС (из него подставляются название,
+ * ИНН и адрес), затем поля заявителя.
+ */
 async function fillLead(page: Page, phone: string) {
   const form = leadForm(page);
+  await form
+    .getByRole('group', { name: 'Форма организации' })
+    .getByRole('button', { name: 'ИП' })
+    .click();
+  await form.getByLabel('Свидетельство ГНС').setInputFiles(IP_CERT);
+  await expect(
+    form.getByText('Данные из документов подставлены в поля — проверьте и поправьте, если нужно'),
+  ).toBeVisible({ timeout: 30_000 });
   await form.getByLabel('Имя и фамилия').fill('Сквозная Заявка');
   await form.getByLabel('Название фирмы').fill('ОсОО «Сквозной тест»');
   await form.getByLabel('Телефон').fill(phone);
@@ -72,8 +94,15 @@ test.describe('Этап 3: лендинг для гостей (задача #165
       await expect(page.getByRole('heading', { level: 2, name })).toBeAttached();
     }
     const form = leadForm(page);
-    for (const label of ['Имя и фамилия', 'Название фирмы', 'Телефон', 'Сколько клиентов ведёте']) {
-      await expect(form.getByLabel(label)).toBeAttached();
+    await expect(form.getByRole('group', { name: 'Форма организации' })).toBeAttached();
+    for (const label of [
+      'Название фирмы',
+      'ИНН',
+      'Имя и фамилия',
+      'Телефон',
+      'Сколько клиентов ведёте',
+    ]) {
+      await expect(form.getByLabel(label).first()).toBeAttached();
     }
     await expect(form.getByRole('button', { name: 'Отправить заявку' })).toBeAttached();
     // Числа полосы цифр — из справочников платформы, а не вручную.
@@ -118,8 +147,8 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await page.getByRole('heading', { level: 2, name: 'Возможности' }).scrollIntoViewIfNeeded();
     await expect(fab).toBeVisible();
     await fab.getByRole('button', { name: 'Оставить заявку' }).click();
-    // Прокрутка к форме и курсор в первом поле; над формой кнопки нет.
-    await expect(leadForm(page).getByLabel('Имя и фамилия')).toBeFocused();
+    // Прокрутка к форме и курсор в первом поле («Форма организации», прототип v114); над формой кнопки нет.
+    await expect(firstLeadField(page)).toBeFocused();
     await expect(fab).toBeHidden();
     // Панель «≡»: ссылки на блоки, «Оставить заявку» и «Посмотреть на демо-организацию».
     await page.getByRole('button', { name: 'Меню' }).click();
@@ -191,15 +220,18 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await expect(html).toHaveAttribute('data-theme', 'dark');
   });
 
-  test('(проверка задачи #165) форма заявки: пустая — ошибки под полями, без галочки — «Нужно согласие…»; нет связи — «Не удалось отправить…», введённое не пропадает; с галочкой — «Спасибо!»', async ({
+  test('(проверка задачи #165, доработки 14.11.2026, блок 1) форма заявки: пустая — ошибки под полями, курсор в «Форме организации», без галочки — «Нужно согласие…»; нет связи — «Не удалось отправить…», введённое не пропадает; с галочкой — «Заявка отправлена. Подключите Telegram…» и кнопка на бота', async ({
     page,
   }) => {
     await ownAddress(page);
     await page.goto('/#lead');
     const form = leadForm(page);
-    await expect(form.getByLabel('Имя и фамилия')).toBeFocused();
+    await expect(firstLeadField(page)).toBeFocused();
     await form.getByRole('button', { name: 'Отправить заявку' }).click();
+    await expect(firstLeadField(page)).toBeFocused();
     for (const text of [
+      'Выберите форму организации',
+      'ИНН — 14 цифр',
       'Введите имя и фамилию',
       'Введите название фирмы',
       'Номер — 9 цифр после кода страны',
@@ -228,10 +260,17 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await page.unroute('**/api/leads');
 
     await form.getByRole('button', { name: 'Отправить заявку' }).click();
-    const formatted = `+996 ${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6)}`;
-    await expect(page.locator('#lp-lead').getByRole('status')).toHaveText(
-      `Спасибо! Заявка отправлена. Мы свяжемся с вами по номеру ${formatted} в рабочее время.`,
+    // У сайта есть бот (TELEGRAM_BOT_USERNAME в .env.example) — как в прототипе v114 (`ldOkHtml`):
+    // «Заявка отправлена. Подключите Telegram…», кнопка на бота и срок ссылки, без «Спасибо! … по номеру».
+    const sent = page.locator('#lp-lead').getByRole('status');
+    await expect(sent).toContainText(
+      'Заявка отправлена. Подключите Telegram, чтобы узнать решение',
     );
+    await expect(sent).not.toContainText('Спасибо!');
+    const bot = sent.getByRole('link', { name: 'Подключить Telegram' });
+    await expect(bot).toHaveAttribute('href', /^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=l_/);
+    await expect(bot).toHaveAttribute('target', '_blank');
+    await expect(sent).toContainText('Ссылка на бота действует до');
   });
 
   test('(проверка задачи #165) четвёртая заявка за час с одного адреса: «Отправляем…», затем «Слишком много заявок…» с телефоном для связи; введённое не пропадает', async ({
@@ -240,11 +279,13 @@ test.describe('Этап 3: лендинг для гостей (задача #165
   }) => {
     const address = await ownAddress(page);
     const origin = new URL(baseURL!).origin;
-    // Три заявки с этого адреса уже пришли (как с другой вкладки).
+    // Три заявки с этого адреса уже пришли (как с другой вкладки), у каждой — свои документы.
     for (let i = 0; i < 3; i += 1) {
+      const draft = await leadDocsDraft(page.request, origin, address);
       const res = await page.request.post('/api/leads', {
         headers: { origin, 'x-forwarded-for': address },
         data: {
+          ...leadDocsFields(draft, uniqueInn()),
           name: 'Сквозная Заявка',
           firm: 'ОсОО «Сквозной тест»',
           phone: `+996${uniquePhone()}`,
@@ -345,7 +386,7 @@ test.describe('Этап 3: лендинг для гостей (задача #165
       page.waitForURL((url) => url.pathname === '/'),
       strip.getByRole('button', { name: 'Оставить заявку' }).click(),
     ]);
-    await expect(leadForm(page).getByLabel('Имя и фамилия')).toBeFocused();
+    await expect(firstLeadField(page)).toBeFocused();
   });
 
   test('(проверка задачи #165) /demo — запрет исходящих запросов и без индексации; лендинг рабочего сайта — с превью ссылки', async ({

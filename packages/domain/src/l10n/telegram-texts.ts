@@ -3,6 +3,7 @@ import type { UiTextDefault } from './texts';
 const S = 'Telegram';
 const G = 'Моя организация';
 const P = 'Профиль';
+const SP = 'Задать пароль';
 
 /**
  * Тексты уведомлений в Telegram (задача 2.25; ТЗ «Уведомления в Telegram»): части сообщения за день и
@@ -116,6 +117,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
   // Доработки 14.11.2026: блок 2, пункт 2.
   'telegram.kind.cp_file': { ru: 'Файл от контрагента', section: S },
+  'telegram.kind.setup_link': { ru: 'Ссылка, чтобы задать пароль', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },
@@ -390,6 +392,44 @@ export const TELEGRAM_TEXTS = {
   },
   'err.telegram_off': {
     ru: 'Напоминания в Telegram выключены в учётной политике',
+    section: 'Ошибки',
+  },
+  // Страница «Задать пароль» по ссылке из Telegram и «Отправить новую ссылку для пароля» карточки
+  // организации в Админке (доработки 14.11.2026, блок 1, пункт 3; прототип v113 setPassPage, ownerSetupAct).
+  'setpass.meta_title': { ru: 'Задать пароль', section: SP },
+  'setpass.title': { ru: 'Задайте пароль', section: SP },
+  // {login} на странице — моноширинным жирным (прототип: <b class="mono">).
+  'setpass.lead': {
+    ru: 'Логин для входа: {login}. Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
+    section: SP,
+  },
+  'setpass.lead_org': {
+    ru: 'Организация: {org}. Логин для входа: {login}. Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
+    section: SP,
+  },
+  'setpass.submit': { ru: 'Задать пароль', section: SP },
+  'setpass.invalid.title': { ru: 'Ссылка устарела', section: SP },
+  'setpass.invalid.text': {
+    ru: 'Ссылка, чтобы задать пароль, действует {days} дней и только один раз. Попросите администратора платформы отправить новую — она придёт в Telegram.',
+    section: SP,
+  },
+  'setpass.to_login': { ru: 'Ко входу', section: SP },
+  'setpass.loading': { ru: 'Проверяем ссылку…', section: SP },
+  'setpass.done': { ru: 'Пароль задан. Вход — с логином {login}', section: SP },
+  'orgs.card.owner_setup': { ru: 'Отправить новую ссылку для пароля', section: SP },
+  'orgs.card.owner_setup.no_tg': { ru: 'У владельца не привязан Telegram', section: SP },
+  'orgs.card.owner_setup.sent': {
+    ru: 'Новая ссылка отправлена в Telegram владельца',
+    section: SP,
+  },
+  'err.setup_link_invalid': { ru: 'Ссылка устарела', section: 'Ошибки' },
+  'err.owner_setup_unavailable': {
+    ru: 'Владелец уже задал пароль или ссылка ему не положена',
+    section: 'Ошибки',
+  },
+  'err.owner_no_telegram': { ru: 'У владельца не привязан Telegram', section: 'Ошибки' },
+  'err.owner_setup_send_failed': {
+    ru: 'Telegram не принял сообщение. Попробуйте ещё раз через минуту.',
     section: 'Ошибки',
   },
 } as const satisfies Record<string, UiTextDefault>;

@@ -6,14 +6,17 @@ import { useId, useState } from 'react';
 import { useT } from '../l10n/provider';
 
 /**
- * «Отказ по заявке» (прототип admin/leads.js, leadRefuse): обязательная «Причина отказа», под ней —
- * «Отказ» — конечная отметка вне шкалы, снять её можно откатом с причиной. Пустая причина — «Укажите
- * причину отказа» под полем. Окно открывают заново (новый `key`) — поле пустое.
+ * «Отклонить заявку» (прототип v114 admin/leads.js, leadRefuse): обязательная «Причина отказа», под ней —
+ * «Отказ» — конечная отметка вне шкалы, снять её можно откатом с причиной; заявителю с Telegram бот
+ * пришлёт причину, файлы заявки с документами удалятся через 7 дней. Пустая причина — «Укажите причину
+ * отказа» под полем. Окно открывают заново (новый `key`) — поле пустое.
  */
 export function LeadRefuseDialog({
   open,
   onClose,
   sub,
+  tg,
+  docs,
   busy,
   error,
   onConfirm,
@@ -22,6 +25,10 @@ export function LeadRefuseDialog({
   onClose: () => void;
   /** «Фирма · Имя». */
   sub: string;
+  /** Заявитель подключил Telegram: бот пришлёт ему причину. */
+  tg: boolean;
+  /** У заявки есть документы: удалятся через 7 дней после отказа. */
+  docs: boolean;
   busy: boolean;
   error?: string | undefined;
   onConfirm: (reason: string) => void;
@@ -81,7 +88,15 @@ export function LeadRefuseDialog({
           />
         )}
       </Field>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{t('leads.refuse.hint')}</div>
+      <div className="text-[11.5px] leading-[1.4] text-faint">
+        {[
+          t('leads.refuse.hint'),
+          tg ? t('leads.refuse.hint_tg') : '',
+          docs ? t('leads.refuse.hint_docs') : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      </div>
     </Modal>
   );
 }

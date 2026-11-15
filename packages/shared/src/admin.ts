@@ -5,8 +5,10 @@ import {
   FULL_NAME_MAX_LENGTH,
   isValidLogin,
   isValidOrgInn,
+  LEAD_DOC_KINDS,
   LOGIN_MAX_LENGTH,
   normalizeLogin,
+  ORG_LEGAL_FORMS,
   ORG_NAME_MAX_LENGTH,
   PASSWORD_MAX_LENGTH,
   SESSION_END_REASONS,
@@ -27,6 +29,8 @@ export const AdminOrganization = z.object({
   id: Uuid,
   name: z.string(),
   inn: z.string().nullable(),
+  /** ОсОО или ИП (доработки 14.11.2026, блок 1); null — не указана. */
+  legalForm: z.enum(ORG_LEGAL_FORMS).nullable(),
   slug: z.string(),
   /** null — у организации ещё нет владельца (не бывает у созданной Админкой). */
   ownerLogin: z.string().nullable(),
@@ -364,6 +368,9 @@ const OrgCardHistoryEntry = z.object({
 export const AdminOrgCard = z.object({
   org: AdminOrganization,
   profile: z.object({
+    /** Форма и ОКПО (доработки 14.11.2026, блок 1): форму и ИНН меняет только администратор платформы. */
+    legalForm: z.enum(ORG_LEGAL_FORMS).nullable(),
+    okpo: z.string().nullable(),
     address: z.string().nullable(),
     /** Телефон по маске страны. */
     phone: z.string().nullable(),
@@ -372,9 +379,30 @@ export const AdminOrgCard = z.object({
     /** Счета организации строкой. */
     accounts: z.array(z.string()),
   }),
-  owner: z.object({ userId: Uuid, login: z.string(), fullName: z.string() }).nullable(),
+  /**
+   * `passwordUnset` — владелец ещё не задал пароль по ссылке из Telegram (доработки 14.11.2026, блок 1);
+   * `telegram` — у него привязан Telegram: «Отправить новую ссылку для пароля» доступна.
+   */
+  owner: z
+    .object({
+      userId: Uuid,
+      login: z.string(),
+      fullName: z.string(),
+      passwordUnset: z.boolean(),
+      telegram: z.boolean(),
+    })
+    .nullable(),
   /** Заявка с сайта, по которой создана организация; null — создана без заявки. */
   lead: z.object({ id: Uuid, title: z.string(), at: z.iso.datetime() }).nullable(),
+  /** Документы заявки, по которой организацию одобрили (прототип v114 ocFiles); иначе пусто. */
+  leadFiles: z.array(
+    z.object({
+      kind: z.enum(LEAD_DOC_KINDS),
+      name: z.string(),
+      bytes: Count,
+      at: z.iso.datetime(),
+    }),
+  ),
   summary: z.object({
     staff: Count,
     staffBlocked: Count,

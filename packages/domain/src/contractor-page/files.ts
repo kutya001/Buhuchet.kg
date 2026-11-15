@@ -40,6 +40,8 @@ const CATEGORY_OF: Readonly<Record<FileSourceKind, PageFileCategory | null>> = {
   project_payment: 'prj',
   task: null,
   indicator_value: null,
+  // Документы заявки на подключение — файлы самой организации, не контрагента.
+  lead: null,
 };
 
 export function pageFileCategory(kind: string): PageFileCategory | null {

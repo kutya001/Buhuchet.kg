@@ -38,6 +38,18 @@ describe('карточка организации: «История»', () => {
     expect(
       orgHistoryText(t, entry({ action: 'card_view', reason: 'Открыта карточка организации' })),
     ).toBe('Открыта карточка организации');
+    // «Одобрить» заявки с сайта (прототип v114 ldApproveDlg).
+    expect(
+      orgHistoryText(
+        t,
+        entry({
+          action: 'create',
+          changes: [{ field: 'fromLead', from: null, to: 'nurlan.kasymov' }],
+        }),
+      ),
+    ).toBe(
+      'Организация создана по заявке с сайта: владелец nurlan.kasymov, файлы заявки — в «Файловом менеджере» (Заявка на подключение)',
+    );
   });
 
   it('блокировка — с причиной, разблокировка — с прежней причиной', () => {
@@ -81,6 +93,22 @@ describe('карточка организации: «История»', () => {
       'Название: ОсОО «Альфа» → ОсОО «Альфа плюс»; Адрес: г. Бишкек; Руководитель: Иванов И. → —; Изменено: логотип',
     );
     expect(orgHistoryText(t, entry({}))).toBe('Запись изменена');
+  });
+
+  it('(прототип v114 ldInnFormDlg) «ИНН и форма»: «ИНН: А → Б; Форма: ОсОО → ИП», ОКПО — значением', () => {
+    const h = entry({
+      changes: [
+        { field: 'inn', from: '01234567890123', to: '01234567890124' },
+        { field: 'legalForm', from: 'osoo', to: 'ip' },
+      ],
+    });
+    expect(orgHistoryText(t, h)).toBe('ИНН: 01234567890123 → 01234567890124; Форма: ОсОО → ИП');
+    expect(
+      orgHistoryText(t, entry({ changes: [{ field: 'legalForm', from: null, to: 'osoo' }] })),
+    ).toBe('Форма: — → ОсОО');
+    expect(
+      orgHistoryText(t, entry({ changes: [{ field: 'okpo', from: null, to: '12345678' }] })),
+    ).toBe('ОКПО: 12345678');
   });
 
   it('учётная политика — словами её истории', () => {

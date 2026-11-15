@@ -58,4 +58,15 @@ describe('меню организации в Админке', () => {
     expect(entries[0]).toMatchObject({ label: 'Открыть карточку', icon: 'building' });
     expect(orgHeadActions(entries.slice(1)).map((e) => e.id)).toEqual(['block']);
   });
+
+  it('«ИНН и форма» — последним пунктом, у активной и заблокированной (прототип v114 orgActions)', () => {
+    const innForm = vi.fn();
+    const active = orgMenu({ t, run: { ...run(), innForm } })(org());
+    expect(active.map((e) => e.id)).toEqual(['block', 'inn-form']);
+    expect(active[1]).toMatchObject({ label: 'ИНН и форма', icon: 'edit' });
+    (active[1] as ActionItem).run();
+    expect(innForm).toHaveBeenCalledWith(expect.objectContaining({ name: 'ОсОО «Альфа»' }));
+    const blocked = orgMenu({ t, run: { ...run(), innForm } })(org({ active: false }));
+    expect(blocked.map((e) => e.id)).toEqual(['unblock', 'inn-form']);
+  });
 });

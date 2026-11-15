@@ -33,6 +33,7 @@ export * from './telegram/commands';
 export * from './telegram/group';
 export * from './telegram/widget';
 export * from './telegram/lead-bot';
+export * from './telegram/lead-link';
 export * from './telegram/messages';
 export * from './telegram/notices';
 export * from './telegram/notify';

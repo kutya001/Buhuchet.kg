@@ -58,6 +58,9 @@ export const OUTBOX_KINDS = [
   'group',
   // Доработки 14.11.2026: ответственному — «новый файл от контрагента» (блок 2, пункт 2).
   'cp_file',
+  // Доработки 14.11.2026, блок 1: владельцу — «Организация создана» и «Задать пароль» с одноразовой
+  // ссылкой. Как код — без текста и кнопок в журнале и без повтора (прототип v113 «Ссылка, чтобы задать пароль»).
+  'setup_link',
 ] as const;
 export type OutboxKind = (typeof OUTBOX_KINDS)[number];
 
@@ -70,13 +73,18 @@ export const SERVICE_KINDS: readonly OutboxKind[] = [
   'pass_changed',
   'pass_reset',
   'relink_code',
+  'setup_link',
 ];
 
 /**
  * Сообщения с кодом: в журнал отправок пишутся без текста и повторно не отправляются
  * (docs/deviations.md, п. 12).
  */
-export const CODE_KINDS = ['code', 'relink_code'] as const satisfies readonly OutboxKind[];
+export const CODE_KINDS = [
+  'code',
+  'relink_code',
+  'setup_link',
+] as const satisfies readonly OutboxKind[];
 
 /** Пачка отправки и пауза между пачками (прототип: «отправляются пачками»; предел Telegram — 30 в секунду). */
 export const OUTBOX_BATCH = 25;
@@ -108,10 +116,19 @@ export function outboxRetryDelaySeconds(tries: number, retryAfterSeconds?: numbe
 export function outboxRetryRefusal(row: {
   status: OutboxStatus;
   kind: string;
-}): 'outbox_not_error' | 'outbox_code' | 'outbox_relink_code' | 'outbox_bot_cmd' | null {
+}):
+  | 'outbox_not_error'
+  | 'outbox_code'
+  | 'outbox_relink_code'
+  | 'outbox_setup_link'
+  | 'outbox_bot_cmd'
+  | null {
   if (row.status !== 'error') return 'outbox_not_error';
   if (row.kind === 'code') return 'outbox_code';
   if (row.kind === 'relink_code') return 'outbox_relink_code';
+  // Ссылка «Задать пароль» (доработки 14.11.2026, блок 1, пункт 3): новую отправляют из карточки
+  // организации, прежняя при этом гаснет (docs/deviations.md п. Т-18).
+  if (row.kind === 'setup_link') return 'outbox_setup_link';
   // Ответ на команду бота собран по правам и области сотрудника на момент запроса (задача Т5): позже
   // их могли снять, поэтому он не повторяется — человек запросит его снова (как `app.admin_telegram_retry`).
   if (row.kind === 'bot_cmd') return 'outbox_bot_cmd';

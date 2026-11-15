@@ -168,6 +168,7 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
         loginLocked: e?.loginLocked ?? false,
         loginLockReason: e?.loginLockReason ?? null,
         mustChangePassword: e?.mustChangePassword ?? false,
+        passwordUnset: e?.passwordUnset ?? false,
       }),
       employee: e
         ? {

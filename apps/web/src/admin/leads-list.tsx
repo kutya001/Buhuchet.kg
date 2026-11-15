@@ -48,6 +48,8 @@ const DEFAULT_VISIBLE = [
   'at',
   'name',
   'firm',
+  'form',
+  'docs',
   'phone',
   'size',
   'telegram',
@@ -109,6 +111,21 @@ function leadColumns(
       cell: (l) => <span className="font-semibold">{l.name}</span>,
     },
     { key: 'firm', label: t('leads.col.firm'), type: 'text', width: 220, text: (l) => l.firm },
+    // Доработки 14.11.2026, блок 1 (прототип v114 renderLeads): у заявок с документами.
+    {
+      key: 'form',
+      label: t('leads.col.form'),
+      type: 'enum',
+      width: 100,
+      text: (l) => (l.legalForm ? t(`land.f.form.${l.legalForm}`) : ''),
+    },
+    {
+      key: 'docs',
+      label: t('leads.col.docs'),
+      type: 'text',
+      width: 120,
+      text: (l) => (l.docs === null ? '' : l.docs === 0 ? t('leads.docs.gone') : String(l.docs)),
+    },
     {
       key: 'phone',
       label: t('leads.col.phone'),
@@ -118,12 +135,15 @@ function leadColumns(
       cell: (l) => <PhoneLinks t={t} phone={l.phone} text={phone(l.phone)} />,
     },
     { key: 'size', label: t('leads.col.size'), type: 'enum', width: 110, text: (l) => l.size },
+    // Подключил ли заявитель бота по ссылке после заявки (прототип v114); ник из формы — в окне заявки.
     {
       key: 'telegram',
       label: t('leads.col.telegram'),
-      type: 'text',
-      width: 130,
-      text: (l) => l.telegram ?? '',
+      type: 'enum',
+      width: 140,
+      text: (l) => t(l.tgLinked ? 'leads.tg.on' : 'leads.tg.off'),
+      cell: (l) =>
+        l.tgLinked ? t('leads.tg.on') : <span className="text-faint">{t('leads.tg.off')}</span>,
     },
     {
       key: 'note',

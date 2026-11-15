@@ -25,6 +25,20 @@ import {
   orgActivityValuesHandler,
   orgActivityValuesRoute,
 } from './org-activity';
+import {
+  approveLeadHandler,
+  approveLeadRoute,
+  leadDocLinkHandler,
+  leadDocLinkRoute,
+  orgInnFormHandler,
+  orgInnFormRoute,
+} from './lead-approve';
+import {
+  leadUploadReadHandler,
+  leadUploadReadRoute,
+  leadUploadStartHandler,
+  leadUploadStartRoute,
+} from './lead-uploads';
 import { submitLeadHandler, submitLeadRoute } from './leads';
 import {
   deleteLeadHandler,
@@ -85,6 +99,7 @@ import {
   userValuesRoute,
 } from './users';
 import { orgCardHandler, orgCardRoute, orgLookupHandler, orgLookupRoute } from './org-card';
+import { ownerSetupHandler, ownerSetupRoute } from './owner-setup';
 import {
   apiMethodCardHandler,
   apiMethodCardRoute,
@@ -140,6 +155,7 @@ export function adminModule(deps: ApiDeps) {
       .openapi(orgActivityExportRoute, orgActivityExportHandler(deps))
       .openapi(orgLookupRoute, orgLookupHandler(deps))
       .openapi(orgCardRoute, orgCardHandler(deps))
+      .openapi(ownerSetupRoute, ownerSetupHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))
       .openapi(apiMethodValuesRoute, apiMethodValuesHandler(deps))
       .openapi(exportApiMethodsRoute, exportApiMethodsHandler(deps))
@@ -151,7 +167,11 @@ export function adminModule(deps: ApiDeps) {
       .openapi(createOrganizationRoute, createOrganizationHandler(deps))
       .openapi(blockOrganizationRoute, organizationStatusHandler(deps, 'block'))
       .openapi(unblockOrganizationRoute, organizationStatusHandler(deps, 'unblock'))
+      .openapi(orgInnFormRoute, orgInnFormHandler(deps))
       .openapi(submitLeadRoute, submitLeadHandler(deps))
+      // Документы формы заявки (без входа): начать загрузку и прочитать.
+      .openapi(leadUploadStartRoute, leadUploadStartHandler(deps))
+      .openapi(leadUploadReadRoute, leadUploadReadHandler(deps))
       // Вкладка «Заявки»: адреса без номера — раньше окна заявки `/admin/leads/{id}`.
       .openapi(listLeadsRoute, listLeadsHandler(deps))
       .openapi(leadValuesRoute, leadValuesHandler(deps))
@@ -161,6 +181,8 @@ export function adminModule(deps: ApiDeps) {
       .openapi(leadStatusRoute, leadStatusHandler(deps))
       .openapi(leadNoteRoute, leadNoteHandler(deps))
       .openapi(deleteLeadRoute, deleteLeadHandler(deps))
+      .openapi(approveLeadRoute, approveLeadHandler(deps))
+      .openapi(leadDocLinkRoute, leadDocLinkHandler(deps))
       .openapi(telegramLogRoute, telegramLogHandler(deps))
       .openapi(telegramLogValuesRoute, telegramLogValuesHandler(deps))
       .openapi(telegramLogExportRoute, telegramLogExportHandler(deps))

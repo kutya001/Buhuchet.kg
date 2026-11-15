@@ -112,10 +112,13 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect((await profile()).name).toBe('Организация А');
     });
 
-    it('владелец меняет название, ИНН, адрес, телефон и руководителя — с историей и версией', async () => {
+    it('владелец меняет название, ОКПО, адрес, телефон и руководителя — с историей и версией; ИНН и форму не меняет', async () => {
       const res = await patchProfile({
         name: '  ОсОО «Ахти»  ',
+        // Доработки 14.11.2026, блок 1, пункт 4: ИНН и форму меняет только администратор платформы.
         inn: '01811201810999',
+        legalForm: 'ip',
+        okpo: '12345678',
         address: 'г. Бишкек, ул. Токтогула, 1',
         phone: '+996555100200',
         head: 'Ахтиев Ахти',
@@ -123,7 +126,9 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect(res.status, await res.clone().text()).toBe(200);
       expect(OrgProfile.parse(await res.json())).toMatchObject({
         name: 'ОсОО «Ахти»',
-        inn: '01811201810999',
+        inn: '01811201810456',
+        legalForm: null,
+        okpo: '12345678',
         address: 'г. Бишкек, ул. Токтогула, 1',
         phone: '+996555100200',
         head: 'Ахтиев Ахти',
@@ -136,7 +141,7 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
         .where(and(eq(auditLog.entity, 'organization'), eq(auditLog.action, 'update')));
       expect(entry?.changes.map((c) => c.field)).toEqual([
         'name',
-        'inn',
+        'okpo',
         'address',
         'phone',
         'head',
@@ -150,8 +155,8 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
     it('неверные данные — тексты прототипа', async () => {
       const cases: [Record<string, unknown>, string, string][] = [
         [{ name: '  ' }, 'name_required', 'Введите название'],
-        [{ inn: '123' }, 'inn_invalid', 'ИНН — 14 цифр'],
-        [{ inn: '02811201810457' }, 'inn_taken', 'Организация с таким ИНН уже есть'],
+        [{ okpo: '123' }, 'okpo_invalid', 'Код ОКПО — 8 цифр'],
+        [{ okpo: '1234567a' }, 'okpo_invalid', 'Код ОКПО — 8 цифр'],
         [{ phone: '+99655510020' }, 'invalid_phone', 'Номер — 9 цифр после кода страны'],
       ];
       for (const [body, code, message] of cases) {

@@ -4,7 +4,7 @@ import { OrgMainForm, OrgSlugField } from './org';
 describe('форма «Основное» в «Моей организации»', () => {
   const ok = {
     name: '  ОсОО «Бухгалтер Плюс» ',
-    inn: ' 01203201910123 ',
+    okpo: ' 12345678 ',
     address: ' г. Бишкек ',
     head: '',
     slug: 'buhgalter-plyus',
@@ -17,19 +17,21 @@ describe('форма «Основное» в «Моей организации»
   it('пробелы по краям убираются', () => {
     expect(OrgMainForm.parse(ok)).toEqual({
       name: 'ОсОО «Бухгалтер Плюс»',
-      inn: '01203201910123',
+      okpo: '12345678',
       address: 'г. Бишкек',
       head: '',
       slug: 'buhgalter-plyus',
     });
   });
 
-  it('ошибки — ключи словаря с текстами прототипа: «Введите название», «ИНН — 14 цифр»', () => {
-    expect(messages({ ...ok, name: '   ', inn: '0120320191012' })).toEqual([
+  it('ошибки — ключи словаря с текстами прототипа: «Введите название», «Код ОКПО — 8 цифр»', () => {
+    expect(messages({ ...ok, name: '   ', okpo: '1234567' })).toEqual([
       'name: err.name_required',
-      'inn: err.inn_invalid',
+      'okpo: err.okpo_invalid',
     ]);
-    expect(messages({ ...ok, inn: '0120320191012a' })).toEqual(['inn: err.inn_invalid']);
+    expect(messages({ ...ok, okpo: '1234567a' })).toEqual(['okpo: err.okpo_invalid']);
+    // ОКПО необязателен (прототип v114 og-save); ИНН формы больше не проверяет — его не меняет владелец.
+    expect(messages({ ...ok, okpo: '' })).toEqual([]);
     expect(messages({ ...ok, address: 'а'.repeat(501) })).toEqual(['address: form.too_long']);
   });
 });

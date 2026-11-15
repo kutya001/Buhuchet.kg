@@ -6,6 +6,7 @@ import { routePath } from 'hono/route';
 import { secureHeaders } from 'hono/secure-headers';
 import type { ApiDeps } from './deps';
 import { apiError, recordErrorResponse } from './errors';
+import { logPath } from './log-path';
 import { requirePlatformAdmin } from './middleware/access';
 import { originCheck } from './middleware/origin';
 import { sessionGuard } from './middleware/session';
@@ -75,7 +76,7 @@ export function createApp(deps: ApiDeps) {
       {
         requestId: c.get('requestId'),
         method: c.req.method,
-        path: c.req.path,
+        path: logPath(c.req.path),
         status: c.res.status,
         ms: Math.round(performance.now() - started),
       },
@@ -135,7 +136,7 @@ export function createApp(deps: ApiDeps) {
     // Очередь argon2 переполнена (ревью безопасности п. Р-4): «занято, повторите», а не 500.
     if (err instanceof PasswordBusyError) {
       deps.logger.warn(
-        { requestId: c.get('requestId'), path: c.req.path },
+        { requestId: c.get('requestId'), path: logPath(c.req.path) },
         'очередь паролей полна',
       );
       c.header('retry-after', '5');
@@ -152,13 +153,16 @@ export function createApp(deps: ApiDeps) {
       // Чтобы по журналу было видно, какие запросы упираются в предел времени.
       if (record.status === 503) {
         deps.logger.warn(
-          { requestId: c.get('requestId'), path: c.req.path },
+          { requestId: c.get('requestId'), path: logPath(c.req.path) },
           'запрос дольше предела',
         );
       }
       return c.json(record.body, record.status);
     }
-    deps.logger.error({ err, requestId: c.get('requestId'), path: c.req.path }, 'ошибка API');
+    deps.logger.error(
+      { err, requestId: c.get('requestId'), path: logPath(c.req.path) },
+      'ошибка API',
+    );
     // В Sentry (если задан SENTRY_DSN) — шаблон маршрута (`/api/page/:slug/:inn`), а не сам путь:
     // в пути бывают адрес страницы и ИНН контрагента; строка параметров не уходит тоже.
     await deps.errors?.capture(err, {

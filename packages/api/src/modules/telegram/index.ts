@@ -13,6 +13,12 @@ import {
 } from './group';
 import { createLinkHandler, createLinkRoute, unlinkHandler, unlinkRoute } from './link';
 import { getNotifyHandler, getNotifyRoute, saveNotifyHandler, saveNotifyRoute } from './notify';
+import {
+  setupCompleteHandler,
+  setupCompleteRoute,
+  setupPeekHandler,
+  setupPeekRoute,
+} from './setup-password';
 import { webhookGuard, webhookHandler, webhookRoute } from './webhook';
 
 /**
@@ -35,5 +41,7 @@ export function telegramModule(deps: ApiDeps) {
     .openapi(createGroupLinkRoute, createGroupLinkHandler(deps))
     .openapi(saveGroupRoute, saveGroupHandler(deps))
     .openapi(unlinkGroupRoute, unlinkGroupHandler(deps))
+    .openapi(setupPeekRoute, setupPeekHandler(deps))
+    .openapi(setupCompleteRoute, setupCompleteHandler(deps))
     .openapi(webhookRoute, webhookHandler(deps));
 }

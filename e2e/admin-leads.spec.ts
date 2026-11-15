@@ -11,6 +11,7 @@ import {
   uniqueChat,
   uniqueLogin,
 } from './helpers';
+import { IP_CERT, IP_CERT_INN, leadDocsDraft, leadDocsFields } from './lead-docs';
 
 const CRON_SECRET = process.env.CRON_SECRET ?? 'local-cron-secret-change-me';
 /** Сообщение администраторам платформы уходит из очереди задачей «telegram.send» раз в минуту. */
@@ -36,15 +37,21 @@ const address = () =>
 const uniquePhone = () =>
   `7${String(Date.now()).slice(-5)}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
 
-/** Заявка гостя через метод лендинга (как форма «Оставить заявку»). */
+/**
+ * Заявка гостя через методы лендинга (как форма «Оставить заявку»): ИП со свидетельством ГНС
+ * (прототип v114 — документы обязательны), ИНН — свой на каждую заявку.
+ */
 async function sendLead(
   api: APIRequestContext,
   origin: string,
   lead: { firm: string; phone: string; note?: string; from?: string },
 ) {
+  const from = lead.from ?? address();
+  const draft = await leadDocsDraft(api, origin, from);
   return api.post('/api/leads', {
-    headers: { origin, 'x-forwarded-for': lead.from ?? address() },
+    headers: { origin, 'x-forwarded-for': from },
     data: {
+      ...leadDocsFields(draft, uniqueInn()),
       name: 'Сквозная Заявка',
       firm: lead.firm,
       phone: `+996${lead.phone}`,
@@ -68,7 +75,7 @@ async function leadRow(page: Page, isMobile: boolean, firm: string) {
 }
 
 test.describe('Этап 3: заявки с сайта в Админке (задача #165)', () => {
-  test('(лендинг, заявка) без галочки согласия — «Нужно согласие…», с галочкой — «Спасибо!»; в Админке на вкладке «Заявки» строка «Новая», администратору — сообщение в Telegram; «Создать организацию» — форма с названием и ФИО из заявки, после сохранения заявка «Подключена»', async ({
+  test('(доработки 14.11.2026, блок 1) гость выбрал «ИП» и приложил свидетельство ГНС: название, ИНН и адрес подставлены с отметкой «из документов»; поправил адрес и отправил — «Заявка отправлена»; в Админке у заявки «ИП», документ и «не подключён», в окне — «Данные из документов» с файлом и «Открыть», «Одобрить» неактивна: «Заявитель ещё не подключил Telegram»; администратору — сообщение в Telegram', async ({
     page,
     browser,
     baseURL,
@@ -82,22 +89,48 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await linkTelegram(page.request, origin, chat);
 
     // Гость — в своём браузере, без входа.
-    const firm = `ОсОО «${uniqueLogin('Заявка')}»`;
+    const name = `Айгуль ${uniqueLogin('Сквозная')}`;
+    const legal = 'г. Бишкек, ул. Сквозная, 7';
     const guest = await browser.newContext();
     const landing = await guest.newPage();
     await landing.setExtraHTTPHeaders({ 'x-forwarded-for': address() });
     await landing.goto('/#lead');
     const form = landing.locator('#lp-lead form');
-    await form.getByLabel('Имя и фамилия').fill('Айгуль Сквозная');
-    await form.getByLabel('Название фирмы').fill(firm);
+    // «Форма организации» — первое поле (прототип v114): курсор на «ОсОО».
+    const forms = form.getByRole('group', { name: 'Форма организации' });
+    await expect(forms.getByRole('button', { name: 'ОсОО' })).toBeFocused();
+    await forms.getByRole('button', { name: 'ИП' }).click();
+    await expect(form.getByLabel('Выписка')).toHaveCount(0);
+    await form.getByLabel('Свидетельство ГНС').setInputFiles(IP_CERT);
+    await expect(
+      form.getByText('Данные из документов подставлены в поля — проверьте и поправьте, если нужно'),
+    ).toBeVisible({ timeout: 30_000 });
+    const firmInput = form.getByLabel(/^Название фирмы/);
+    const innInput = form.getByLabel(/^ИНН/);
+    const addressInput = form.getByLabel(/^Юридический адрес/);
+    await expect(innInput).toHaveValue(IP_CERT_INN);
+    await expect(firmInput).not.toHaveValue('');
+    await expect(addressInput).not.toHaveValue('');
+    const mark = (field: string) =>
+      form.locator(`label[for="${field}"]`).getByText('из документов');
+    await expect(mark('lf-inn')).toBeVisible();
+    await expect(mark('lf-addr')).toBeVisible();
+    // Поправленное поле теряет отметку.
+    await addressInput.fill(legal);
+    await expect(mark('lf-addr')).toBeHidden();
+    const firm = await firmInput.inputValue();
+
+    await form.getByLabel('Имя и фамилия').fill(name);
     await form.getByLabel('Телефон').fill(uniquePhone());
     await form.getByLabel('Сколько клиентов ведёте').selectOption('21–50');
     await form.getByRole('button', { name: 'Отправить заявку' }).click();
     await expect(form.getByText('Нужно согласие на обработку персональных данных')).toBeVisible();
     await form.getByLabel(/Согласен на/).check();
     await form.getByRole('button', { name: 'Отправить заявку' }).click();
+    // Без бота заявителя (поток Т) — «Спасибо! Заявка отправлена…», с ботом — «Заявка отправлена.
+    // Подключите Telegram…»: общее у обоих — «Заявка отправлена».
     await expect(landing.locator('#lp-lead').getByRole('status')).toContainText(
-      'Спасибо! Заявка отправлена.',
+      'Заявка отправлена',
     );
     await guest.close();
 
@@ -106,7 +139,7 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect
       .poll(async () => {
         await tick(page.request);
-        return (await botMessages(page.request, chat)).some((m) => m.includes(firm));
+        return (await botMessages(page.request, chat)).some((m) => m.includes(name));
       }, TG_POLL)
       .toBe(true);
 
@@ -118,54 +151,53 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect(page).toHaveURL(/\/app\/orgs\/leads$/);
     await expect(page.getByText('Заявки с лендинга buhuchet.kg.')).toBeVisible();
 
-    const row = await leadRow(page, isMobile, firm);
+    const row = await leadRow(page, isMobile, name);
     await expect(row).toContainText('Новая');
-    await expect(row).toContainText('Айгуль Сквозная');
+    await expect(row).toContainText('ИП');
+    await expect(row).toContainText('не подключён');
 
-    // «Создать организацию» в меню строки: название фирмы и ФИО — из заявки.
-    await row.locator('[data-row-menu]').click();
-    await page
-      .getByRole('menu', { name: 'Действия' })
-      .getByRole('menuitem', { name: 'Создать организацию' })
-      .click();
-    const dialog = page.getByRole('dialog', { name: 'Новая организация' });
-    await expect(dialog).toContainText('по заявке с сайта от');
-    await expect(dialog.getByLabel('Название')).toHaveValue(firm);
-    await expect(dialog.getByLabel('ФИО владельца')).toHaveValue('Айгуль Сквозная');
-    await dialog.getByLabel('ИНН').fill(uniqueInn());
-    await dialog.getByLabel('Логин владельца').fill(uniqueLogin('e2e-lead'));
-    await dialog.getByRole('button', { name: 'Создать' }).click();
-    await expect(dialog).toBeHidden();
-    await expect(
-      page
-        .getByRole('status')
-        .filter({ hasText: 'Организация и владелец созданы, заявка «Подключена»' }),
-    ).toBeVisible();
-    await expect(row).toContainText('Подключена');
-    await expect(row.locator('[data-lead-org]')).toHaveText(firm);
-
-    // В окне заявки: «Подключена» с организацией не откатывается — пункт неактивен с причиной.
+    // Окно заявки: «Данные из документов» — как проверил заявитель, файл с «Открыть».
     await row.click();
     const card = page.getByRole('dialog', { name: firm });
-    await expect(card).toContainText('По заявке создана организация');
-    await expect(card).toContainText(`Статус: Новая → Подключена, создана организация «${firm}»`);
+    const docs = card.locator('[data-lead-docs]');
+    await expect(docs).toContainText(IP_CERT_INN);
+    await expect(docs).toContainText(legal);
+    await expect(docs).toContainText('Telegram заявителя');
+    await expect(docs).toContainText('не подключён');
+    const file = card.locator('[data-lead-doc="gns_cert"]');
+    await expect(file).toContainText('Свидетельство ГНС');
+    await expect(card.locator('[data-lead-docs-hint]')).toContainText('если заявку не одобрить');
+    // «Открыть» — новая вкладка и ссылка на файл на 15 минут (просмотр PDF у браузера тестов может
+    // стать загрузкой, поэтому проверяется ответ ссылки, а не адрес вкладки).
+    const [link, tab] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          /\/api\/admin\/leads\/[^/]+\/docs\/[^/]+\/link$/.test(new URL(r.url()).pathname) &&
+          r.request().method() === 'GET',
+      ),
+      page.context().waitForEvent('page'),
+      file.locator('[data-lead-doc-open]').click(),
+    ]);
+    expect(link.status()).toBe(200);
+    expect(((await link.json()) as { url: string }).url).toMatch(/^https?:\/\//);
+    await tab.close();
+
+    // «В работу», затем главная кнопка — «Одобрить»: без Telegram заявителя неактивна с причиной.
+    await card.getByRole('button', { name: 'В работу' }).click();
+    const approve = card.getByRole('button', { name: 'Одобрить' });
+    await expect(approve).toHaveAttribute('aria-disabled', 'true');
+    // Неактивная кнопка с причиной: нажатие показывает причину (Playwright такую кнопку сам не нажимает).
+    await approve.click({ force: true });
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Заявитель ещё не подключил Telegram' }),
+    ).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Одобрить заявку' })).toHaveCount(0);
+    // В «Ещё действия» — «Одобрить» неактивна, «Создать организацию» у заявки с документами нет.
     await card.getByRole('button', { name: 'Ещё действия' }).click();
     const more = page.getByRole('menu', { name: 'Ещё действия' });
-    await expect(more.getByRole('menuitem', { name: 'Откатить в «—»' })).toBeDisabled();
+    await expect(more.getByRole('menuitem', { name: /Одобрить/ })).toBeDisabled();
     await expect(more.getByRole('menuitem', { name: 'Создать организацию' })).toHaveCount(0);
     await page.keyboard.press('Escape');
-
-    // Организация в окне заявки открывает «Организации» с карточкой этой организации (прототип v83);
-    // в карточке — ссылка на заявку, по которой организация создана.
-    await card.locator('[data-lead-org]').click();
-    await expect(page).toHaveURL(/\/app\/orgs(\/list)?$/);
-    const orgCard = page.locator('[data-org-card]');
-    await expect(orgCard.locator('[data-org-states]')).toHaveText('Активна');
-    await expect(orgCard.locator('[data-org-lead]')).toContainText(firm);
-    await orgCard.locator('[data-org-lead]').click();
-    await expect(
-      page.getByRole('dialog', { name: firm }).filter({ hasText: 'По заявке создана организация' }),
-    ).toBeVisible();
   });
 
   test('(прототип v74) гость отправил заявку: администратору с привязанным Telegram пришло «📩 Новая заявка с сайта: …» со ссылкой на «Заявки», повторная с того же телефона — «🔁 Повторная заявка с сайта»; в журнале «Телеграм» записи «Заявка с сайта» со статусом «Отправлено»', async ({
@@ -311,9 +343,12 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect.poll(async () => !!(await ask())).toBe(true);
     const asked = (await ask())!;
     await sendToBot(page.request, chat, { text: '( )', replyTo: asked.messageId });
+    // Не последнее сообщение чата: задача расписания шлёт администраторам и «Новую заявку» других тестов.
     await expect
-      .poll(async () => (await botMessages(page.request, chat)).at(-1))
-      .toContain('Нужна причина текстом');
+      .poll(async () =>
+        (await botMessages(page.request, chat)).some((m) => m.includes('Нужна причина текстом')),
+      )
+      .toBe(true);
     expect((await card(refuseId)).status).toBe('new');
     await sendToBot(page.request, chat, {
       text: 'Нужна программа с проводками',
@@ -324,7 +359,7 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
       to: 'rejected',
       via: 'telegram',
     });
-    expect((await botMessages(page.request, chat)).at(-1)).toBe(
+    expect(await botMessages(page.request, chat)).toContain(
       `Заявка «${refuse}» — «Отказ». Причина: Нужна программа с проводками. Снять отказ можно в Админке.`,
     );
   });
@@ -361,7 +396,7 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect(card).toContainText('Повторная заявка с того же телефона: комментарий дописан');
   });
 
-  test('(проверка задачи #165) статусы заявки: «В работу», «Отказ» только с причиной, «Снять «Отказ»» с причиной — обратно «В работе», «Отметить «Подключена»» с подтверждением; заметка администратора — в историю; «Удалить» с подтверждением', async ({
+  test('(проверка задачи #165, доработки 14.11.2026) статусы заявки: «В работу», «Отклонить» только с причиной, «Снять «Отказ»» с причиной — обратно «В работе»; у заявки с документами «Отметить «Подключена»» ведёт в «Одобрить» и без Telegram заявителя отказывает с причиной; заметка администратора — в историю; «Удалить» с подтверждением', async ({
     page,
     baseURL,
     isMobile,
@@ -382,19 +417,22 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     // Главная кнопка новой заявки — «В работу».
     await card.getByRole('button', { name: 'В работу' }).click();
     await expect(toast.filter({ hasText: 'Заявка: В работе' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Создать организацию' })).toBeVisible();
+    // У заявки с документами главная кнопка — «Одобрить» (прототип v114), а не «Создать организацию».
+    await expect(card.getByRole('button', { name: 'Одобрить' })).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Создать организацию' })).toHaveCount(0);
 
-    // «Отказ» — только с причиной.
+    // «Отклонить» — только с причиной; в подсказке окна — когда удалятся файлы заявки.
     const menu = page.getByRole('menu', { name: 'Ещё действия' });
     await card.getByRole('button', { name: 'Ещё действия' }).click();
-    await menu.getByRole('menuitem', { name: 'Отказ', exact: true }).click();
-    const refuse = page.getByRole('dialog', { name: 'Отказ по заявке' });
-    await refuse.getByRole('button', { name: 'Отказ', exact: true }).click();
+    await menu.getByRole('menuitem', { name: 'Отклонить', exact: true }).click();
+    const refuse = page.getByRole('dialog', { name: 'Отклонить заявку' });
+    await expect(refuse).toContainText('Файлы заявки удалятся через 7 дней.');
+    await refuse.getByRole('button', { name: 'Отклонить', exact: true }).click();
     await expect(refuse).toContainText('Укажите причину отказа');
     await refuse.getByLabel('Причина отказа').fill('Нужны проводки');
-    await refuse.getByRole('button', { name: 'Отказ', exact: true }).click();
+    await refuse.getByRole('button', { name: 'Отклонить', exact: true }).click();
     await expect(refuse).toBeHidden();
-    await expect(toast.filter({ hasText: 'Заявка: отказ' })).toBeVisible();
+    await expect(toast.filter({ hasText: 'Заявка отклонена' })).toBeVisible();
     await expect(card).toContainText('Отказ — шкала не ведётся');
     await expect(card).toContainText('Статус: В работе → Отказ (Нужны проводки)');
 
@@ -407,13 +445,15 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect(back).toBeHidden();
     await expect(card).toContainText('Статус: Отказ → В работе (откат: Передумали)');
 
-    // «Отметить «Подключена»» — после вопроса.
+    // «Отметить «Подключена»» у заявки с документами — это «Одобрить» (прототип v114 leadStep): по свежей
+    // заявке, без Telegram заявителя — уведомление с причиной, статус не меняется.
     await card.getByRole('button', { name: 'Ещё действия' }).click();
     await menu.getByRole('menuitem', { name: 'Отметить «Подключена»' }).click();
-    const ask = page.getByRole('dialog', { name: 'Отметить заявку «Подключена»?' });
-    await expect(ask).toContainText(`${firm}: клиент подключён.`);
-    await ask.getByRole('button', { name: 'Подключена' }).click();
-    await expect(toast.filter({ hasText: 'Заявка «Подключена»' })).toBeVisible();
+    await expect(toast.filter({ hasText: 'Заявитель ещё не подключил Telegram' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Отметить заявку «Подключена»?' })).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole('dialog', { name: 'Одобрить заявку' })).toHaveCount(0);
 
     // Заметка администратора: без изменений — «Изменений нет», иначе — запись в историю.
     await card.getByRole('button', { name: 'Сохранить заметку' }).click();

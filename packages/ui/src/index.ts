@@ -72,7 +72,7 @@ export {
   type ToastOptions,
 } from './toast';
 export { useSwipeDown, type SwipeDownOptions } from './use-swipe-down';
-export { PHONE_QUERY, useMediaQuery } from './use-media';
+export { PHONE_QUERY, useMediaQuery, useMounted } from './use-media';
 export { canMaximize, type MaxPrefs, type WindowKind } from './window-stack';
 export type { ShellCount, ShellLink, ShellLinkProps, ShellModule, ShellTab } from './shell/types';
 export {

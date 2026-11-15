@@ -1,5 +1,5 @@
 {
-  "id": "c96d13ed-55ea-45d6-93da-28f13d3db731",
+  "id": "fe6f4b1a-cd6e-43b3-acc2-6aacda65f8ce",
   "prevId": "d7c8a037-f60e-4d4b-b80e-5ccbdad2bf9c",
   "version": "7",
   "dialect": "postgresql",
@@ -459,7 +459,7 @@
       "checkConstraints": {
         "platform_lead_events_kind_check": {
           "name": "platform_lead_events_kind_check",
-          "value": "\"platform_lead_events\".\"kind\" in ('created', 'repeat', 'status', 'rollback', 'note', 'org')"
+          "value": "\"platform_lead_events\".\"kind\" in ('created', 'repeat', 'status', 'rollback', 'note', 'org', 'tg')"
         },
         "platform_lead_events_via_check": {
           "name": "platform_lead_events_via_check",
@@ -705,6 +705,24 @@
         "tg_linked_at": {
           "name": "tg_linked_at",
           "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tg_username": {
+          "name": "tg_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tg_first_name": {
+          "name": "tg_first_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tg_refusal_event": {
+          "name": "tg_refusal_event",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": false
         },
@@ -4566,12 +4584,6 @@
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            },
-            {
-              "expression": "day",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
             }
           ],
           "isUnique": true,
@@ -4743,7 +4755,7 @@
       "checkConstraints": {
         "contractor_telegram_messages_kind_check": {
           "name": "contractor_telegram_messages_kind_check",
-          "value": "\"contractor_telegram_messages\".\"kind\" in ('pay', 'ask', 'debt', 'fee', 'receipt')"
+          "value": "\"contractor_telegram_messages\".\"kind\" in ('pay', 'ask', 'debt', 'fee')"
         },
         "contractor_telegram_messages_month_check": {
           "name": "contractor_telegram_messages_month_check",
@@ -4756,10 +4768,6 @@
         "contractor_telegram_messages_pay_check": {
           "name": "contractor_telegram_messages_pay_check",
           "value": "\"contractor_telegram_messages\".\"kind\" <> 'pay' or (\"contractor_telegram_messages\".\"month\" is not null and \"contractor_telegram_messages\".\"total\" is not null and \"contractor_telegram_messages\".\"total\" > 0)"
-        },
-        "contractor_telegram_messages_pay_day_check": {
-          "name": "contractor_telegram_messages_pay_day_check",
-          "value": "\"contractor_telegram_messages\".\"kind\" <> 'pay' or not \"contractor_telegram_messages\".\"auto\" or \"contractor_telegram_messages\".\"day\" is not null"
         },
         "contractor_telegram_messages_fee_check": {
           "name": "contractor_telegram_messages_fee_check",
@@ -9440,7 +9448,7 @@
       "checkConstraints": {
         "telegram_outbox_kind_check": {
           "name": "telegram_outbox_kind_check",
-          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_file')"
+          "value": "\"telegram_outbox\".\"kind\" in ('reminders', 'task_new', 'task_on_confirm', 'task_confirmed', 'task_rework', 'task_cancelled', 'report_fix', 'code', 'linked', 'relinked', 'unlinked', 'pass_changed', 'pass_reset', 'broadcast', 'lead', 'login_locked', 'alert', 'relink_code', 'page_closed', 'bot_test', 'cp_tg_request', 'task_started', 'task_done', 'bot_ask', 'nudge', 'not_me', 'bot_cmd', 'group', 'cp_file', 'setup_link')"
         },
         "telegram_outbox_status_check": {
           "name": "telegram_outbox_status_check",
@@ -9452,11 +9460,11 @@
         },
         "telegram_outbox_code_text_check": {
           "name": "telegram_outbox_code_text_check",
-          "value": "\"telegram_outbox\".\"kind\" not in ('code', 'relink_code') or \"telegram_outbox\".\"text\" is null"
+          "value": "\"telegram_outbox\".\"kind\" not in ('code', 'relink_code', 'setup_link') or \"telegram_outbox\".\"text\" is null"
         },
         "telegram_outbox_code_payload_check": {
           "name": "telegram_outbox_code_payload_check",
-          "value": "\"telegram_outbox\".\"kind\" not in ('code', 'relink_code') or \"telegram_outbox\".\"payload\" is null"
+          "value": "\"telegram_outbox\".\"kind\" not in ('code', 'relink_code', 'setup_link') or \"telegram_outbox\".\"payload\" is null"
         }
       },
       "isRLSEnabled": true

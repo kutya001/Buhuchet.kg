@@ -39,12 +39,11 @@ import {
   ScrollPath,
   Shield,
   SpiralIcon,
-  Stamp,
   type EmblemPart,
 } from './landing-art';
 import type { DemoScreens } from './landing-data';
 import { playTile, reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
-import { LeadForm } from './lead-form';
+import { LeadForm, LeadSentBox, type LeadSentTg } from './lead-form';
 import { CardScreen, DeskScreen, PhoneScreen } from './mini-screens';
 import './landing.css';
 
@@ -198,7 +197,7 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
   const alt = (on: boolean) => ((lead ? !on : on) ? ' alt' : '');
   const [menu, setMenu] = useState(false);
   const [shot, setShot] = useState(0);
-  const [sent, setSent] = useState<string | null>(null);
+  const [sent, setSent] = useState<{ phone: string; tg: LeadSentTg } | null>(null);
   const [consent, setConsent] = useState(false);
   const [fab, setFab] = useState(false);
   const [bal, setBal] = useState(false);
@@ -213,7 +212,10 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
   const logo = useRef<HTMLButtonElement>(null);
   const track = useRef<HTMLDivElement>(null);
 
-  /** Плавно к блоку; `focus` — курсор в первое поле формы заявки. */
+  /**
+   * Плавно к блоку; `focus` — курсор в первое поле формы заявки: кнопка «ОсОО» поля «Форма организации»
+   * (прототип v114 landGo), без неё — «Имя и фамилия».
+   */
   const go = useCallback((id: string, focus = false) => {
     setMenu(false);
     const target = document.getElementById(`lp-${id}`);
@@ -222,7 +224,11 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
     target.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'start' });
     if (focus) {
       window.setTimeout(
-        () => document.getElementById('lf-name')?.focus({ preventScroll: true }),
+        () =>
+          (
+            document.querySelector<HTMLElement>('#lf-form button') ??
+            document.getElementById('lf-name')
+          )?.focus({ preventScroll: true }),
         instant ? 0 : 450,
       );
     }
@@ -864,12 +870,13 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
           <div className="lp-lead-in">
             <div className="lp-fold rv">
               {sent ? (
-                <div className="lp-ok" role="status">
-                  <Stamp />
-                  <span>{t('land.ok', { телефон: sent })}</span>
-                </div>
+                <LeadSentBox phone={sent.phone} tg={sent.tg} />
               ) : (
-                <LeadForm codes={codes} onSent={setSent} onConsent={() => setConsent(true)} />
+                <LeadForm
+                  codes={codes}
+                  onSent={(phone, tg) => setSent({ phone, tg })}
+                  onConsent={() => setConsent(true)}
+                />
               )}
             </div>
             {links.length > 0 ? (
@@ -936,6 +943,9 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
         }
       >
         <p className="m-0 leading-[1.55]">{t('land.consent.text')}</p>
+        {t('land.consent.docs') ? (
+          <p className="m-0 mt-2.5 leading-[1.55]">{t('land.consent.docs')}</p>
+        ) : null}
       </Modal>
     </div>
   );
