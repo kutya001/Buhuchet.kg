@@ -606,8 +606,18 @@ describe.skipIf(!databaseAvailable())(
     const objectsOf = (key: string) =>
       [...storage.files.keys()].filter((k) => k === key || k.startsWith(`${key}.`));
 
+    /** Через 30 минут задача удаляет незаконченную строку вместе с файлом. */
+    const purgeLater = async (id: string) => {
+      await f.t.admin.db
+        .update(contractorSentFiles)
+        .set({ createdAt: sql`now() - interval '31 minutes'` })
+        .where(eq(contractorSentFiles.id, id));
+      expect(await purgeSentFiles(f.deps)).toBe(1);
+      expect(await rowOf(id)).toBeUndefined();
+    };
+
     // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
-    it('отправку выключили, пока файл копировался: «sent_off», файл и незаконченная строка убраны', async () => {
+    it('отправку выключили, пока файл копировался: «sent_off», строка с файлом — незаконченная до задачи по сроку', async () => {
       const before = (await history(cpAcc.id)).length;
       const p = await prepared('Договор.pdf');
       await withHeldCopy(p, async (first, release) => {
@@ -617,19 +627,50 @@ describe.skipIf(!databaseAvailable())(
         expect(res.status).toBe(409);
         expect((await failure(res)).code).toBe('sent_off');
       });
-      expect(objectsOf(p.key)).toEqual([]);
-      expect(await rowOf(p.id)).toBeUndefined();
+      // Файл никому не виден и не «Новый»: в карточке пусто, сообщения и истории нет.
+      expect((await rowOf(p.id))?.state).toBe('pending');
       expect((await cardList(acc, cpAcc)).items).toEqual([]);
       expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toEqual([]);
       expect(await history(cpAcc.id)).toHaveLength(before);
+      // По ещё живой ссылке загрузку кладут заново — задача удалит её вместе со строкой и файлом.
+      await storage.put(`${p.key}.up`, PDF('снова'), { contentType: 'application/pdf' });
+      expect(objectsOf(p.key).sort()).toEqual([p.key, `${p.key}.up`]);
+      await purgeLater(p.id);
+      expect(objectsOf(p.key)).toEqual([]);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('сбой транзакции «закончить»: строка остаётся незаконченной вместе с файлом — их удалит задача по сроку', async () => {
+      const p = await prepared('Справка.pdf');
+      // Запись истории отправки падает — транзакция «закончить» откатывается целиком.
+      await f.t.admin.db.execute(sql`
+        create function public.test_sent_history_fail() returns trigger language plpgsql as $$
+        begin
+          if new.entity = 'sent_file' then raise exception 'сбой записи истории'; end if;
+          return new;
+        end $$`);
+      await f.t.admin.db.execute(
+        sql`create trigger test_sent_history_fail before insert on audit_log for each row execute function public.test_sent_history_fail()`,
+      );
+      try {
+        expect((await p.complete()).status).toBe(500);
+      } finally {
+        await f.t.admin.db.execute(sql`drop trigger test_sent_history_fail on audit_log`);
+        await f.t.admin.db.execute(sql`drop function public.test_sent_history_fail()`);
+      }
+      expect((await rowOf(p.id))?.state).toBe('pending');
+      expect(objectsOf(p.key)).toEqual([p.key]);
+      expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toEqual([]);
+      await purgeLater(p.id);
+      expect(objectsOf(p.key)).toEqual([]);
     });
 
     // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
     it('ту же отправку закончил другой запрос того же браузера — отказ первого не удаляет его файл', async () => {
-      // Второй закончил, потом отправку выключили: первый — «sent_off», файл второго на месте.
       const sends = async () =>
         (await history(cpAcc.id)).filter((h) => h.action === 'sent_file_send').length;
       const sendsBefore = await sends();
+      // Второй закончил, потом отправку выключили: первый — «sent_off», файл второго на месте.
       const off = await prepared('Акт.pdf');
       await withHeldCopy(off, async (first, release) => {
         const second = await off.complete();
@@ -667,21 +708,31 @@ describe.skipIf(!databaseAvailable())(
       expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toHaveLength(2);
       expect(await sends()).toBe(sendsBefore + 2);
 
-      // Второй получил отказ и стёр строку, потом отправку включили: первый кладёт файл, но строки
-      // уже нет — 404, и положенный им файл убран (он ничей).
+      // Пока первый держался, второй закончил, а сотрудник принял файл: «Принять» убрал отправленный
+      // объект, первый положил его заново — 404, и положенное им убрано (принятый задача не удаляет).
+      const taken = await prepared('Платёжка.pdf');
+      await withHeldCopy(taken, async (first, release) => {
+        const second = await taken.complete();
+        expect(second.status, await second.clone().text()).toBe(200);
+        const ok = await decide(acc, taken.id, 'accept', {
+          version: await versionOf(acc, cpAcc, taken.id),
+        });
+        expect(ok.status, await ok.clone().text()).toBe(200);
+        expect(storage.files.has(taken.key)).toBe(false);
+        release();
+        expect((await first).status).toBe(404);
+      });
+      expect(objectsOf(taken.key)).toEqual([]);
+
+      // Строку, пока первый держался, удалила задача по сроку: первый положил файл, строки нет —
+      // 404, и положенный им файл убран (он ничей).
       const gone = await prepared('Выписка.pdf');
       await withHeldCopy(gone, async (first, release) => {
-        await pageUpload(false);
-        const second = await gone.complete();
-        expect(second.status).toBe(409);
-        expect((await failure(second)).code).toBe('sent_off');
-        expect(await rowOf(gone.id)).toBeUndefined();
-        await pageUpload(true);
+        await f.t.admin.db.delete(contractorSentFiles).where(eq(contractorSentFiles.id, gone.id));
         release();
         expect((await first).status).toBe(404);
       });
       expect(objectsOf(gone.key)).toEqual([]);
-      expect(await rowOf(gone.id)).toBeUndefined();
     });
 
     it('незаконченная загрузка занимает место в пределе за сутки, пока задача не удалила её через 30 минут вместе с файлами', async () => {

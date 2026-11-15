@@ -3,9 +3,11 @@ import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
   contractorPageState,
   insertPendingSentFiles,
+  isStorageRetryKey,
   keptSentFiles,
   pendingSentFiles,
   sentUploadState,
+  storageRetryAdd,
   takeRateLimit,
   withOrgContext,
   type RateLimit,
@@ -258,13 +260,12 @@ export async function removeObjects(deps: ApiDeps, keys: readonly string[]): Pro
 }
 
 /**
- * Отправку не приняли после того, как её файлы легли под ключи файлов: удалить только файлы строк,
- * которые не стали «Новыми». Ту же отправку мог закончить другой запрос того же браузера (оба нашли
- * строки незаконченными) — тогда файл его, как у «Я оплатил» (`dropWritten`). С `erase` незаконченные
- * строки стираются в той же транзакции, что их проверяет: после неё их уже никто не закончит и не
- * останется «Нового» без файла. Без `erase` (сбой транзакции «закончить») незаконченные остаются вместе
- * с файлами — их удалит задача по расписанию, а стёртые другим отказом — удаляются сразу. Сбой самой
- * проверки не прячет исходный отказ: файлы тогда уберёт задача по расписанию.
+ * Отправку не приняли после того, как её файлы легли под ключи файлов (выключили отправку, сбой
+ * транзакции «закончить», опоздали к уже законченной): удалить только ничьи файлы (`keptSentFiles`).
+ * Незаконченная строка остаётся со своим файлом задаче по расписанию: её мог закончить другой такой
+ * же запрос того же браузера, а по ещё живой ссылке могут заново положить загрузку — задача удалит
+ * обе вместе со строкой. «Новые» — файл того, кто их закончил. Сбой самой проверки не прячет исходный
+ * отказ: файлы идут на повторное удаление, а оно само снимает ключи живых строк (те же правила).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
 async function dropUnfinished(
@@ -272,7 +273,6 @@ async function dropUnfinished(
   ctx: { orgId: string; userId: null },
   rows: readonly SentFileRecord[],
   written: readonly string[],
-  o: { erase: boolean },
 ): Promise<void> {
   if (!written.length) return;
   try {
@@ -280,7 +280,6 @@ async function dropUnfinished(
       keptSentFiles(
         tx,
         rows.map((r) => r.id),
-        o,
       ),
     );
     const own = new Set(written);
@@ -289,7 +288,13 @@ async function dropUnfinished(
       rows.filter((r) => own.has(r.storageKey) && !kept.has(r.id)).map((r) => r.storageKey),
     );
   } catch (err) {
-    deps.logger.error({ err }, 'файлы от контрагентов: положенные файлы не убраны после отказа');
+    deps.logger.error({ err }, 'файлы от контрагентов: положенные файлы не проверены после отказа');
+    await storageRetryAdd(deps.db, written.filter(isStorageRetryKey)).catch((e: unknown) =>
+      deps.logger.error(
+        { err: e },
+        'файлы от контрагентов: файлы не поставлены на повторное удаление',
+      ),
+    );
   }
 }
 
@@ -379,11 +384,11 @@ export function pageSentCompleteHandler(
       });
       return true;
     }).catch(async (e: unknown) => {
-      await dropUnfinished(deps, ctx, rows, written, { erase: false });
+      await dropUnfinished(deps, ctx, rows, written);
       throw e;
     });
     if (!done) {
-      await dropUnfinished(deps, ctx, rows, written, { erase: true });
+      await dropUnfinished(deps, ctx, rows, written);
       refuse(409, { code: 'sent_off' });
     }
     await notifySentFiles(

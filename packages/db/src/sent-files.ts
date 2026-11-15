@@ -210,36 +210,21 @@ export async function dropPendingSentFiles(tx: Tx, ids: readonly string[]): Prom
 }
 
 /**
- * Какие строки загрузки остались после отказа «закончить» (их файлы не удалять): «Новые» — их закончил
- * другой такой же запрос, и с `erase: false` — ещё незаконченные (их файлы удалит задача по
- * расписанию). С `erase: true` незаконченные стираются под блокировкой (по порядку номеров — два таких
- * запроса не ждут друг друга по кругу): после транзакции их уже никто не закончит. Загруженная строка
- * в незаконченную не возвращается (`contractor_sent_files_state_guard`), поэтому «Новые» читаются
- * после блокировки и без неё: закончившая параллельно строка блокировку не получит, но здесь видна.
+ * Строки загрузки, чьи файлы не удалять после отказа «закончить»: незаконченные (их удалит задача по
+ * расписанию вместе с загрузкой, которую ещё могут положить по живой ссылке, — или закончит другой
+ * такой же запрос) и «Новые» или отклонённые (их закончил другой запрос). Нет строки (её уже удалила
+ * задача по сроку) или файл принят (отправленный объект «Принять» уже удалил, принятый задача не
+ * удаляет) — положенный файл ничей.
  */
-export async function keptSentFiles(
-  tx: Tx,
-  ids: readonly string[],
-  o: { erase: boolean },
-): Promise<Set<string>> {
+export async function keptSentFiles(tx: Tx, ids: readonly string[]): Promise<Set<string>> {
   if (!ids.length) return new Set();
-  const ofIds = inArray(contractorSentFiles.id, [...ids]);
-  const pending = await tx
+  const rows = await tx
     .select({ id: contractorSentFiles.id })
     .from(contractorSentFiles)
-    .where(and(ofIds, eq(contractorSentFiles.state, 'pending')))
-    .orderBy(contractorSentFiles.id)
-    .for('update');
-  if (o.erase)
-    await dropPendingSentFiles(
-      tx,
-      pending.map((r) => r.id),
+    .where(
+      and(inArray(contractorSentFiles.id, [...ids]), ne(contractorSentFiles.status, 'accepted')),
     );
-  const ready = await tx
-    .select({ id: contractorSentFiles.id })
-    .from(contractorSentFiles)
-    .where(and(ofIds, eq(contractorSentFiles.state, 'ready')));
-  return new Set([...ready, ...(o.erase ? [] : pending)].map((r) => r.id));
+  return new Set(rows.map((r) => r.id));
 }
 
 /**
