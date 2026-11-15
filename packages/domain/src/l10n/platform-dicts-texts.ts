@@ -489,6 +489,18 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram: заявка с сайта — отказ записан',
     section: S,
   },
+  'pdicts.tpl.label.tg_lead_got': { ru: 'Telegram заявителя: заявка получена', section: S },
+  'pdicts.tpl.label.tg_lead_link_bad': { ru: 'Telegram заявителя: ссылка устарела', section: S },
+  'pdicts.tpl.label.tg_lead_no': { ru: 'Telegram заявителя: отказ по заявке', section: S },
+  'pdicts.tpl.label.tg_lead_done': { ru: 'Telegram заявителя: организация создана', section: S },
+  'pdicts.tpl.label.tg_set_pass_new': {
+    ru: 'Telegram заявителя: новая ссылка, чтобы задать пароль',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_set_pass': {
+    ru: 'Telegram заявителя: кнопка «Задать пароль»',
+    section: S,
+  },
   'pdicts.tpl.label.tg_btn_more': { ru: 'Telegram: кнопка «Подробнее»', section: S },
   'pdicts.tpl.label.tg_btn_video': { ru: 'Telegram: кнопка «Смотреть видео»', section: S },
   'pdicts.tpl.label.tg_grp_linked': { ru: 'Telegram: общий чат фирмы подключён', section: S },

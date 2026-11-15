@@ -88,6 +88,9 @@ const rmRecvLeft=r=>Math.max(0,Math.round((r.sum-Math.max(r.paid||0,r.recv||0))*
 // Месяцы, за которые принимают деньги: один месяц или весь период — все месяцы вкладки с неоплаченной суммой («осталось» больше нуля).
 // Будущие месяцы, где суммы ещё не рассчитаны и неоплаченного нет, в период не входят и кнопку не запирают
 const rmRecvOpen=g=>g.left>0;
+// Пока сумма за месяц не введена — принять нельзя (решение заказчика 14.11.2026): кнопку запирает месяц с неоплаченным остатком и отчётом без суммы,
+// а «за весь период» — ещё и прошедший месяц (до «Прошлого месяца» включительно), где сумм нет вовсе: неоплаченного у него нет, но пропустить его нельзя
+const rmRecvNoSum=(g,k)=>g.noSum>0&&(rmRecvOpen(g)||k==='all'&&g.m<=rmNow());
 function rmRecvMonths(c,k){const rs=REPORTS.filter(r=>r.cp===c.id&&!r.superseded&&r.status!=='Не требуется');
   return rmPlan(rs).filter(g=>(k==='all'||g.m===k)&&rmRecvOpen(g))}
 // Распределение: месяцы от старых к новым, внутри месяца — по сроку оплаты
@@ -95,10 +98,10 @@ const rmRecvByDue=(a,b)=>(a.r.payDue||'')<(b.r.payDue||'')?-1:(a.r.payDue||'')>(
 function rmRecvPlan(gs){const list=[];gs.forEach(g=>g.items.filter(x=>x.pay&&x.sum>0).sort(rmRecvByDue).forEach(x=>{const a=rmRecvLeft(x.r);if(a>0)list.push({r:x.r.id,amt:a})}));
   return {list,total:Math.round(list.reduce((s,x)=>s+x.amt,0)*100)/100}}
 // Почему нельзя: у отчёта месяца не указана сумма (за период — перечень таких месяцев) или деньги на налоги уже получены
-function rmRecvWhy(gs,k){const ns=gs.filter(g=>g.noSum);
+function rmRecvWhy(gs,k,all){const ns=(all||gs).filter(g=>rmRecvNoSum(g,k));
   if(ns.length)return k==='all'?`Сначала введите сумму за ${ns.map(g=>rmMonthTxt(g.m)).join(', ')}`:`Сначала введите сумму: ${ns[0].items.filter(x=>x.noSum).map(x=>T[x.r.t].short).join(', ')}`;
   return rmRecvPlan(gs).list.length?'':k==='all'?'Деньги на налоги всех месяцев уже получены от контрагента':'Деньги на налоги этого месяца уже получены от контрагента'}
-function rmRecvBtn(c,gs,k){if(!rmRecvOn(c))return '';gs=gs.filter(g=>(k==='all'||g.m===k)&&rmRecvOpen(g));if(!gs.length)return '';const w=rmRecvWhy(gs,k);
+function rmRecvBtn(c,all,k){if(!rmRecvOn(c))return '';const gs=all.filter(g=>(k==='all'||g.m===k)&&rmRecvOpen(g));if(!gs.length)return '';const w=rmRecvWhy(gs,k,k==='all'?all:null);
   return `<button type="button" class="btn sm ${w?'dis':''}" data-rm-recv="${k}" ${w?`aria-disabled="true" data-why="${esc(w)}" title="${esc(w)}"`:''}>${ic('download','sm')}<span class="bl">${k==='all'?'Принять деньги за весь период':'Принять деньги'}</span></button>`}
 
 /* Вкладка «По месяцам» модуля «Отчеты для сдачи»: один месяц по всем контрагентам. Общий список сгруппирован по контрагенту:

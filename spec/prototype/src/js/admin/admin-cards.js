@@ -17,6 +17,7 @@ function acStates(c){if(c.kind==='admin')return [['Активен','green','chec
   if(!c.u.active)out.push([(s.blockedBy||(c.kind==='emp'?'owner':'admin'))==='admin'?'Заблокирован администратором':'Заблокирован владельцем','red','lock']);
   if(s.pwLocked)out.push([s.pwLockWhy==='notme'?'Вход закрыт: «Это не я» из Telegram':'Вход закрыт: 10 неверных паролей','red','ban']);
   if(s.tmpPass)out.push(['Не сменил временный пароль','yellow','key']);
+  if(s.noPass)out.push(['Пароль не задан: ссылка в Telegram','yellow','key']);
   if(!out.length)out.push(['Активен','green','check']);return out}
 const acPills=l=>l.map(([t,c,i])=>`<span class="pill ${c}">${ic(i)}${esc(t)}</span>`).join('');
 const acKv=(k,v,full)=>`<div${full?' class="full"':''}><span class="k">${k}</span><span class="v">${v}</span></div>`;
@@ -122,13 +123,15 @@ function orgCard(id,tab){const o=ORGS.find(x=>x.id===id);if(!o){toast('Тако�
     const tabs=[['main','Основное','landmark'],['sum','Сводка','gauge'],['staff','Сотрудники','users',us.length],['cps','Контрагенты','building'],['rep','Отчёты','file',sm.rep.over||'',sm.rep.over?1:0],['money','Деньги','coins'],['set','Настройки','sliders'],['files','Файлы','folder'],['hist','История','history']];
     const b=st.tab==='main'?ocMain(o):st.tab==='sum'?ocSum(o,sm):st.tab==='staff'?'<div id="oc-staff"></div>':st.tab==='cps'?ocCps(o):st.tab==='rep'?ocRep(o):st.tab==='money'?ocMoney(o):st.tab==='set'?ocSet(o):st.tab==='files'?ocFiles(o,sm):ocHist(o);
     const acts=orgActions(o,()=>m.draw());const own=OTHER_USERS.find(u=>u.login===o.owner)||(o.self?allUsers().find(u=>u.login===o.owner):null);
+    // Владелец по заявке ещё не задал пароль — «Отправить новую ссылку для пароля» (tg-lead.js)
+    const spa=own&&!o.self?ownerSetupAct(o,own):null;
     const sl=orgSlug(o);
     return {title:esc(o.name),sub:`ИНН <span class="mono">${esc(o.inn)}</span>${sl?` · <span class="mono">buhuchet.kg/${esc(sl)}</span>`:''} · подключена ${fmtD(o.created)}`,
-      head:[...acts,own?{label:'Сбросить пароль владельцу',icon:'key',run:()=>accResetPass(own),after:1}:null].filter(Boolean).map((a,i)=>`<button class="btn sm hd-btn ${a.danger?'danger':''}" data-ocact="${i}" ${a.disabled?'disabled':''} title="${esc(a.disabled&&a.reason?a.reason:a.label)}">${ic(a.icon,'sm')}<span class="bl">${esc(a.label)}</span></button>`).join(''),
+      head:[...acts,own?{label:'Сбросить пароль владельцу',icon:'key',run:()=>accResetPass(own),after:1}:null,spa].filter(Boolean).map((a,i)=>`<button class="btn sm hd-btn ${a.danger?'danger':''}" data-ocact="${i}" ${a.disabled?'disabled':''} title="${esc(a.disabled&&a.reason?a.reason:a.label)}">${ic(a.icon,'sm')}<span class="bl">${esc(a.label)}</span></button>`).join(''),
       body:`<div class="ac-st">${o.active?`<span class="pill green">${ic('check')}Активна</span>`:`<span class="pill red">${ic('lock')}${o.note?esc(o.note):'Заблокирована'}</span>`}${o.self?`<span class="pill purple">${ic('star')}Демо</span>`:''}</div>${cardTabs(tabs,st.tab,'oct')}<div class="ac-b">${b}</div>`,
       foot:`<span class="hint" style="margin:0">Только просмотр: администратор не меняет контрагентов, отчёты и настройки организации</span><div class="grow"></div><button class="btn cta" data-close>Готово</button>`,
       mount(el){bindCardTabs(el,'oct',k=>{st.tab=k;m.draw();const x=el.querySelector('.mb');if(x)x.scrollTop=0});
-        const all=[...acts,own?{run:()=>accResetPass(own)}:null].filter(Boolean);$$('[data-ocact]',el).forEach(x=>x.onclick=()=>{const a=all[+x.dataset.ocact];if(a&&a.run)a.run()});
+        const all=[...acts,own?{run:()=>accResetPass(own)}:null,spa].filter(Boolean);$$('[data-ocact]',el).forEach(x=>x.onclick=()=>{const a=all[+x.dataset.ocact];if(a&&a.run)a.run()});
         $$('[data-ocgo]',el).forEach(x=>x.onclick=()=>{st.tab=x.dataset.ocgo;m.draw()});
         $$('[data-plate]',el).forEach(x=>{const t={staff:'staff',cps:'cps',rep:'rep',tasks:'sum',files:'files',tg:'staff',log:'staff'}[x.dataset.plate];if(t&&t!==st.tab)x.onclick=()=>{st.tab=t;m.draw()}});
         $$('[data-acu]',el).forEach(x=>x.onclick=()=>accCard(x.dataset.acu));
