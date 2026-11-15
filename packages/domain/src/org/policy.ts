@@ -12,6 +12,11 @@ export interface OrgPolicy {
   cpTgPay: boolean;
   /** «Напоминать контрагентам о долге» (доработки 13.11.2026, К5): раз в неделю, в понедельник в 10:00. */
   cpTgDebt: boolean;
+  /**
+   * «Контрагент может отправлять файлы» (доработки 14.11.2026, блок 2; прототип v112 `ORG.cpUpload`): кнопка
+   * «Отправить файл» страницы и приём файлов в Telegram; у контрагента выключается в его карточке.
+   */
+  cpFilesUpload: boolean;
   /** Время сводки, ЧЧ:ММ по часовому поясу организации. */
   digestTime: string;
   timezone: string;
@@ -39,6 +44,7 @@ export function defaultOrgPolicy(): OrgPolicy {
     telegramActions: true,
     cpTgPay: false,
     cpTgDebt: false,
+    cpFilesUpload: true,
     digestTime: '09:00',
     timezone: 'Asia/Bishkek',
     confirmWaitDays: 3,

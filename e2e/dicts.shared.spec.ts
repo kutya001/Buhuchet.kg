@@ -50,10 +50,19 @@ async function restore(
   expect(res.status(), await res.text()).toBe(200);
 }
 
-/** Общий поиск по вкладке (на телефоне — кнопкой «Поиск» в верхней панели). */
+/**
+ * Общий поиск по вкладке (на телефоне — кнопкой «Поиск» в верхней панели). Ждёт ответ списка с этим
+ * поиском: он уходит через 300 мс после последней буквы, и нажатие в строке раньше него показывает
+ * старое значение (docs/typical-mistakes.md № 27).
+ */
 async function search(page: Page, isMobile: boolean, text: string) {
   if (isMobile) await page.getByRole('button', { name: 'Поиск', exact: true }).click();
+  const found = page.waitForResponse((r) => {
+    const url = new URL(r.url());
+    return url.pathname === '/api/org-report-types' && url.searchParams.get('q') === text;
+  });
   await page.getByRole('searchbox').first().fill(text);
+  expect((await found).status()).toBe(200);
 }
 
 /** «Подключить из каталога»: на ПК — отдельная кнопка рядом с «+ Добавить», на телефоне — в меню «+». */

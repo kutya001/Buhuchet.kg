@@ -344,6 +344,9 @@ export function ReportTypesList() {
       } else {
         toast(errorText(res.error), { bad: true, icon: 'alert' });
       }
+      // Список, запрошенный до сохранения (поиск уходит через 300 мс после последней буквы), отменить:
+      // иначе обновление дождётся его и покажет старое значение (docs/typical-mistakes.md № 27).
+      await client.cancelQueries({ queryKey: ['list', 'dicts.types'] });
       await Promise.all([
         client.invalidateQueries({ queryKey: ['list', 'dicts.types'] }),
         client.invalidateQueries({ queryKey: typeSettingsQuery.queryKey }),

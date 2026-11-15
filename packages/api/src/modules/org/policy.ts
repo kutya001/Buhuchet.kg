@@ -8,6 +8,7 @@ import {
   orgPolicyHistory,
   orgRoleOptions,
   schema,
+  setStaffWeekDay,
   updateWithHistory,
   withOrgContext,
   type OrgPolicyRecord,
@@ -24,6 +25,7 @@ import {
   REMIND_DAYS_MESSAGE,
   sameHistoryValue,
   toHistoryValue,
+  weekDayOf,
   type Feature,
 } from '@buhuchet/domain';
 import {
@@ -57,7 +59,9 @@ function orgPolicyBody(p: OrgPolicyRecord): OrgPolicy {
     telegramActions: p.telegramActions,
     cpTgPay: p.cpTgPay,
     cpTgDebt: p.cpTgDebt,
+    cpFilesUpload: p.cpFilesUpload,
     digestTime: p.digestTime,
+    weekDay: p.weekDay,
     defaultRoleId: p.defaultRoleId,
     defaultRoleName: p.defaultRoleName,
     audit: {
@@ -175,7 +179,7 @@ export const updateOrgPolicyRoute = createRoute({
     400: {
       description:
         'Функция нужна другой, включённой, или требует выключенную; дни вне 1–60 или 1–30; ' +
-        'роль по умолчанию — не роль организации или роль владельца',
+        'роль по умолчанию — не роль организации или роль владельца; день недельной сводки вне 1–7',
       content: error,
     },
     401: { description: 'Нет входа', content: error },
@@ -244,6 +248,13 @@ export function updateOrgPolicyHandler(
         current.reportConfirm && body.reportConfirm === false
           ? await confirmWaitingReports(tx, (await serverTexts(deps))('report.reason.confirm_off'))
           : 0;
+      // День недельной сводки (блок «Telegram-уведомления», пакет 14.11.2026): хранится строкой
+      // «staff_week» таблицы org_telegram_notices, а в историю и версию — запись учётной политики, как
+      // «Час напоминаний»: одна версия на весь блок, устаревшая правка — 409.
+      const weekDay =
+        body.weekDay !== undefined && body.weekDay !== current.weekDay
+          ? weekDayOf(body.weekDay)
+          : undefined;
       await updateWithHistory(tx, {
         table: orgSettings,
         entity: 'org_settings',
@@ -269,11 +280,18 @@ export function updateOrgPolicyHandler(
           telegramActions: body.telegramActions,
           cpTgPay: body.cpTgPay,
           cpTgDebt: body.cpTgDebt,
+          cpFilesUpload: body.cpFilesUpload,
           digestTime: changed(body.digestTime, current.digestTime),
           defaultRoleId: body.defaultRoleId,
         },
-        changes: confirmed ? [{ field: 'confirmedReports', to: confirmed }] : [],
+        changes: [
+          ...(confirmed ? [{ field: 'confirmedReports', to: confirmed }] : []),
+          ...(weekDay !== undefined
+            ? [{ field: 'weekDay', from: current.weekDay, to: weekDay }]
+            : []),
+        ],
       });
+      if (weekDay !== undefined) await setStaffWeekDay(tx, ctx.orgId, weekDay);
       // Включили — сданные без подтверждения его не ждут (прототип repConfSet).
       if (!current.reportConfirm && body.reportConfirm === true) {
         await confirmSubmittedWhileOff(

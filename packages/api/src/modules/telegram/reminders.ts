@@ -14,7 +14,6 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
-  addDays,
   botDayMonth,
   BOT_TEXT_MAX,
   botDayWords,
@@ -31,6 +30,7 @@ import {
   groupSummary,
   groupSummaryMessage,
   hasPermission,
+  isWeekSummaryDay,
   isWorkingDay,
   moreOnSiteMessage,
   morningTables,
@@ -42,6 +42,7 @@ import {
   reportBotMessage,
   scopeOf,
   STAFF_BOT_BUTTONS_MAX,
+  summaryWeek,
   taskOpen,
   TELEGRAM_TEMPLATE_DEFAULTS,
   weekBotMessage,
@@ -66,7 +67,7 @@ import { sendOrgOutbox, type Pause } from './outbox';
 import { botReportNames, botReportRow, botSiteUrl, reportTableTexts } from './staff-view';
 
 /*
- * Напоминания за день и сводка по понедельникам (ТЗ «Уведомления в Telegram»; задача 2.25,
+ * Напоминания за день и недельная сводка (ТЗ «Уведомления в Telegram»; задача 2.25,
  * docs/decisions.md, п. Б-5): каждую минуту задача спрашивает базу, каким организациям пора — время
  * сводки из «Моей организации» по их часовому поясу наступило, «Напоминания в Telegram» включены, есть
  * привязанный Telegram, а за этот день ещё не собрано. Для такой организации в одной транзакции —
@@ -81,10 +82,10 @@ import { botReportNames, botReportRow, botSiteUrl, reportTableTexts } from './st
  *
  * Таблицы (поток Т, задача Т3; прототип v100 modules/tg-tables.js): сообщение дня с отчётами — таблицами
  * по разделам «Просрочено», «Сегодня», «Через N дн.», «Оплата налогов» (простой текст — прежние строки);
- * по понедельникам владельцу и главному бухгалтеру — отдельное сообщение «Сводка недели» с таблицей по
- * сотрудникам, кнопками «Напомнить» и разделом «Долги за обслуживание» с кнопками «Скопировать
- * напоминание». Долги видит только тот, у кого есть право «Видеть плату за обслуживание», и только по
- * контрагентам своей области.
+ * в «День сводки» организации (по умолчанию понедельник) владельцу и главному бухгалтеру — отдельное
+ * сообщение «Сводка недели» с таблицей по сотрудникам, кнопками «Напомнить» и разделом «Долги за
+ * обслуживание» с кнопками «Скопировать напоминание». Долги видит только тот, у кого есть право «Видеть
+ * плату за обслуживание», и только по контрагентам своей области.
  */
 
 /** Строки сообщения дня, которые уходят в таблицы; остальные остаются текстом над ними. */
@@ -179,7 +180,9 @@ export async function buildDailyReminders(
       confirmWaitDays: data.confirmWaitDays,
       taxpay: data.features.taxpay === true,
       tasks: data.features.tasks === true,
-      week: weekdayMondayFirst(day) === 0 ? { from: day, to: addDays(day, 6) } : null,
+      // Недельная сводка — в день организации (блок «Telegram-уведомления», по умолчанию понедельник):
+      // неделя — как `weekRange` прототипа (неделя дня сводки, в выходные — следующая).
+      week: isWeekSummaryDay(day, data.weekDay) ? summaryWeek(day) : null,
       nextWorkingDay: (d) => nextWorkingDay(calendar, d),
     },
   );

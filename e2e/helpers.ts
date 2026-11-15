@@ -284,7 +284,7 @@ export async function finger(page: Page) {
     /**
      * Долгое нажатие: палец стоит на месте `ms` миллисекунд. Отпускается `touchCancel`: в headless
      * Chromium жеста долгого нажатия нет, и `touchEnd` дал бы click в точке касания — по пункту меню,
-     * открытого под пальцем (docs/typical-mistakes.md № 30); на телефоне после долгого нажатия click нет.
+     * открытого под пальцем (docs/typical-mistakes.md № 32); на телефоне после долгого нажатия click нет.
      */
     async hold(at: Point, ms = 700) {
       await send('touchStart', at);
@@ -377,7 +377,7 @@ export async function settledBox(locator: Locator) {
 /**
  * Элемент стоит на месте: `ms` мс без сдвига и без своих идущих анимаций и переходов (не дольше 5 с).
  * Нужен перед нажатием по элементу, который переезжает CSS-переходом: нажатие по движущейся кнопке
- * теряется молча (типовая ошибка № 32).
+ * теряется молча (типовая ошибка № 34).
  */
 export async function stillElement(locator: Locator, ms = 120) {
   await locator.evaluate(

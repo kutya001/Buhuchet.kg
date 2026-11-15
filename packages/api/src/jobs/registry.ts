@@ -10,6 +10,7 @@ import { formatMomentRu } from '@buhuchet/domain';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
+import { purgeSentFilesJob } from '../modules/files/sent-purge';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
@@ -91,7 +92,7 @@ export const cleanupPendingFilesJob: Job = {
 
 /**
  * Все задачи по расписанию. Модули добавляют сюда свои: создание отчётов, напоминания 7 и 3 дня
- * и в день срока, сводка по понедельникам, отправка очереди Telegram. Данные организации задача
+ * и в день срока, недельная сводка в день организации, отправка очереди Telegram. Данные организации задача
  * читает и меняет в `withOrgContext(ctx.db, { orgId, kind: 'job' })`: предел времени запроса у задач
  * больше, чем у методов API (docs/decisions.md, п. 38).
  */
@@ -106,6 +107,7 @@ export const jobs: readonly Job[] = [
   contractorDebtJob,
   createDueReportsJob,
   cleanupPendingFilesJob,
+  purgeSentFilesJob,
   duesRecalcJob,
   cleanupVideoUploadsJob,
 ];

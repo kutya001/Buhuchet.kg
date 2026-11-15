@@ -108,6 +108,13 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
   // «Напоминать о долге в Telegram» у контрагента (задача К5; прототип pgTgBoxClick, `debt`).
   const debt = entry.changes.find((c) => c.field === 'tgDebtOff');
   if (debt) return t(debt.to === true ? 'cppage.hist.debt_off' : 'cppage.hist.debt_on');
+  // «Контрагент может отправлять файлы» у контрагента (доработки 14.11.2026, блок 2; прототип v112 `data-pg-up`).
+  const upload = entry.changes.find((c) => c.field === 'filesUpload');
+  if (upload) {
+    return t('files.sent.hist.upload', {
+      state: t(upload.to === true ? 'org.history.on' : 'org.history.off'),
+    });
+  }
   const change = entry.changes.find((c) => c.field === 'hiddenSections');
   if (!change) return '';
   const before = sectionsOf(change.from);

@@ -475,7 +475,7 @@ export async function pageFiles(
         fileId === undefined ? undefined : eq(files.id, fileId),
         // Запись-источник жива: у вида с записью она нашлась по условиям присоединения.
         or(
-          inArray(kind, ['manual', 'contractor']),
+          inArray(kind, ['manual', 'contractor', 'sent_file']),
           and(eq(kind, 'report'), sql`${reports.id} is not null`),
           and(inArray(kind, ['receipt', 'tax_payment']), sql`${moneyOperations.id} is not null`),
           and(eq(kind, 'fee_payment'), sql`${feePayments.id} is not null`),
@@ -567,6 +567,9 @@ function pageFileSourceOf(r: {
         : null;
     case 'contractor':
       return { kind: 'regdocs' };
+    case 'sent_file':
+      // Принятый файл от контрагента (доработки 14.11.2026, блок 2): «Отправлен вами».
+      return { kind: 'sent' };
     case 'manual':
       // Примечание к файлу — только сотрудникам (docs/deviations.md п. И-4): на страницу не уходит.
       return { kind: 'manual' };

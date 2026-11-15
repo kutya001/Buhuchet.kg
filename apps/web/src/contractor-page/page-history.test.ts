@@ -83,6 +83,13 @@ describe('pageHistoryText', () => {
     );
   });
 
+  it('«Контрагент может отправлять файлы» у контрагента (доработки 14.11.2026, блок 2; прототип v112)', () => {
+    const toggled = (from: boolean, to: boolean) =>
+      pageHistoryText(t, { action: 'update', changes: [{ field: 'filesUpload', from, to }] });
+    expect(toggled(true, false)).toBe('Контрагент может отправлять файлы: выключено');
+    expect(toggled(false, true)).toBe('Контрагент может отправлять файлы: включено');
+  });
+
   it('напоминание о долге в Telegram: переключатель в карточке и выбор клиента (К5)', () => {
     const toggled = (from: boolean, to: boolean) =>
       pageHistoryText(t, { action: 'update', changes: [{ field: 'tgDebtOff', from, to }] });

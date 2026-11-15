@@ -303,7 +303,8 @@ test.describe('Доработки 13.11.2026, К2: отчёты и налоги 
 test.describe('Доработки 13.11.2026, К4: «К оплате клиенту» в карточке контрагента', () => {
   /** «Указать сумму» через API. */
   async function setAmount(api: APIRequestContext, origin: string, id: string, amount: number) {
-    const card = await api.get(`/api/reports/${id}`);
+    // Первое чтение после шагов в браузере — с повтором (docs/typical-mistakes.md № 26).
+    const card = await api.get(`/api/reports/${id}`, { maxRetries: 2 });
     expect(card.status(), await card.text()).toBe(200);
     const { version } = (await card.json()) as { version: number };
     const res = await api.post(`/api/reports/${id}/amount`, {
@@ -707,7 +708,8 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
 test.describe('Доработки 14.11.2026, блок 5: «Принять деньги» по месяцам и меню строки', () => {
   /** «Указать сумму» через API. */
   async function setAmount(api: APIRequestContext, origin: string, id: string, amount: number) {
-    const card = await api.get(`/api/reports/${id}`);
+    // Первое чтение после шагов в браузере — с повтором (docs/typical-mistakes.md № 26).
+    const card = await api.get(`/api/reports/${id}`, { maxRetries: 2 });
     expect(card.status(), await card.text()).toBe(200);
     const { version } = (await card.json()) as { version: number };
     const res = await api.post(`/api/reports/${id}/amount`, {

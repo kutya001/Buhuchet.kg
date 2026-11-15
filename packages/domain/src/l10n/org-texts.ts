@@ -244,34 +244,6 @@ export const ORG_TEXTS = {
   'org.settings.timezone': { ru: 'Часовой пояс', section: S },
   'org.settings.timezone_hint': { ru: '«Сегодня» и «эта неделя» считаются по нему', section: S },
   'org.settings.default_role': { ru: 'Роль по умолчанию для новых сотрудников', section: S },
-  'org.settings.telegram': { ru: 'Напоминания в Telegram', section: S },
-  'org.settings.overdue_repeat': { ru: 'Повторять при просрочке каждый день', section: S },
-  'org.settings.overdue_repeat_hint': {
-    ru: 'Ответственному, главному бухгалтеру и владельцу — пока отчёт не сдан',
-    section: S,
-  },
-  'org.settings.digest': { ru: 'Еженедельная сводка, понедельник', section: S },
-  'org.settings.digest_required': { ru: 'Укажите время сводки', section: S },
-  'org.settings.digest_hint': {
-    ru: 'Все напоминания одному человеку за день собираются в одно сообщение.',
-    section: S,
-  },
-  'org.settings.tg_actions': { ru: 'Действия из Telegram', section: S },
-  'org.settings.tg_actions_hint': {
-    ru: 'Сотрудники отмечают отчёты и задачи кнопками под сообщениями бота, не заходя на сайт. Каждое нажатие проверяется по правам и области сотрудника и пишется в историю с пометкой «через Telegram». Деньги и удаление — только на сайте.',
-    section: S,
-  },
-  'org.settings.tg_actions_owner': {
-    ru: 'Выключите, если действия должны быть только на сайте: кнопки «Открыть» и копирование останутся.',
-    section: S,
-  },
-  'org.settings.tg_actions_other': { ru: 'Меняет только владелец организации.', section: S },
-  'org.settings.tg_actions_on': { ru: 'Действия из Telegram включены', section: S },
-  'org.settings.tg_actions_off': { ru: 'Действия из Telegram выключены', section: S },
-  'org.settings.telegram_off': {
-    ru: 'Напоминания в Telegram отключены в учётной политике.',
-    section: S,
-  },
   'org.settings.save': { ru: 'Сохранить настройки', section: S },
   'org.settings.saved': { ru: 'Настройки сохранены', section: S },
 

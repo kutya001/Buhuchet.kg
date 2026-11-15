@@ -44,7 +44,7 @@ export type DebtToggleRefusal = (typeof DEBT_TOGGLE_REFUSALS)[number];
 export const DEBT_TOGGLE_MESSAGES: Record<DebtToggleRefusal, string> = {
   page_debt_right: 'Нужно право «Управлять страницей контрагента»',
   page_debt_org_off:
-    'Напоминания о долге выключены для всей организации: «Моя организация» → «Настройки» → «Telegram контрагентов»',
+    'Напоминания о долге выключены для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание»',
 };
 
 export function debtToggleRefusal(o: {

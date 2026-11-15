@@ -32,6 +32,7 @@ import { useState, type ReactNode } from 'react';
 import { api, callApi, type ApiResult } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { SentUploadRow } from '../files/sent-files';
 import { contractorPageQuery } from './page-data';
 import { ContractorTelegramBox, contractorTelegramQuery } from './page-telegram';
 
@@ -263,6 +264,10 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
                 disabled={manage !== null}
                 onToggle={(s, shown) => void toggleSection(s, shown)}
               />
+            ) : null}
+            {/* Доработки 14.11.2026, блок 2 (поток И): «Файлы от контрагента». */}
+            {page.sections.includes('files') ? (
+              <SentUploadRow contractorId={contractorId} pageVersion={page.version} />
             ) : null}
           </>
         ) : (

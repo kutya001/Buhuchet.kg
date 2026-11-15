@@ -9,6 +9,7 @@ import { FILE_SOURCE_KINDS, fileExtension, type FileSourceKind } from './files';
 export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   manual: 'upload',
   contractor: 'building',
+  sent_file: 'building',
   report: 'file',
   receipt: 'wallet',
   tax_payment: 'send',
@@ -28,6 +29,8 @@ export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
  * «Проект».
  */
 export const FILE_LIST_KIND_OF: Readonly<Partial<Record<FileSourceKind, FileSourceKind>>> = {
+  // Принятый файл от контрагента — вид «Контрагент», как в прототипе (`allFiles`: `src` «От контрагента»).
+  sent_file: 'contractor',
   one_off_service_payment: 'one_off_service',
   project_payment: 'project',
 };

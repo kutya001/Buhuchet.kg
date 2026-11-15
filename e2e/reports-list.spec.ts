@@ -325,7 +325,7 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('[data-plates]')).toHaveCount(0);
     // Выбор уходит на сервер через 300 мс; перезагрузка раньше — новая страница читает настройки
-    // быстрее, чем доходит сохранение при уходе (типовая ошибка № 31).
+    // быстрее, чем доходит сохранение при уходе (типовая ошибка № 33).
     const saved = page.waitForResponse(
       (r) =>
         r.request().method() === 'PUT' &&

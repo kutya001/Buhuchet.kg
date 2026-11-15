@@ -440,6 +440,59 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       ).toMatchObject({ code: 'record_changed' });
     });
 
+    it('(пакет 14.11.2026, блок 3) день недельной сводки: по умолчанию понедельник; меняет только владелец, с версией и записью в историю организации; чужая организация не меняется; неверный день — 400', async () => {
+      const { orgTelegramNotices } = schema;
+      expect((await policy(acc)).weekDay).toBe(1);
+      for (const cookie of [acc, hr, admin]) {
+        expect((await patchPolicy({ weekDay: 3 }, cookie)).status).toBe(403);
+      }
+      for (const weekDay of [0, 8, 2.5, '5']) {
+        const bad = await patchPolicy({ weekDay });
+        expect(bad.status, String(weekDay)).toBe(400);
+        expect((await apiErr(bad)).code).toBe('validation_failed');
+      }
+
+      const before = await policy();
+      const res = await patchPolicy({ weekDay: 5 });
+      expect(res.status, await res.clone().text()).toBe(200);
+      const saved = OrgPolicy.parse(await res.json());
+      expect(saved).toMatchObject({ weekDay: 5, version: before.version + 1 });
+      expect((await policy(acc)).weekDay).toBe(5);
+      expect((await policy(ownerB)).weekDay).toBe(1);
+      const [history] = await f.t.admin.db
+        .select({ changes: auditLog.changes, by: auditLog.actorUserId })
+        .from(auditLog)
+        .where(and(eq(auditLog.entity, 'org_settings'), eq(auditLog.entityId, f.a.orgId)))
+        .orderBy(desc(auditLog.id))
+        .limit(1);
+      expect(history?.changes).toEqual([{ field: 'weekDay', from: 1, to: 5 }]);
+      const rows = await f.t.admin.db
+        .select({
+          orgId: orgTelegramNotices.orgId,
+          weekday: orgTelegramNotices.weekday,
+          by: orgTelegramNotices.updatedBy,
+        })
+        .from(orgTelegramNotices)
+        .where(eq(orgTelegramNotices.code, 'staff_week'));
+      // Автор строки — владелец, который сохранил (и при первой записи).
+      expect(history?.by).toBeTruthy();
+      expect(rows).toEqual([{ orgId: f.a.orgId, weekday: 5, by: history?.by }]);
+
+      // Тот же день — без новой версии; устаревшая версия — 409, день не меняется.
+      const same = await patchPolicy({ weekDay: 5 });
+      expect(OrgPolicy.parse(await same.json()).version).toBe(saved.version);
+      const stale = await call('PATCH', '/api/org/policy', owner, {
+        version: before.version,
+        weekDay: 2,
+      });
+      expect(stale.status).toBe(409);
+      expect((await policy()).weekDay).toBe(5);
+
+      // Обратно на понедельник — строка остаётся, день — понедельник.
+      expect((await patchPolicy({ weekDay: 1 })).status).toBe(200);
+      expect((await policy()).weekDay).toBe(1);
+    });
+
     it('роли для «Роли по умолчанию» — тому, кто меняет настройки: без владельца, только своей организации', async () => {
       const res = await call('GET', '/api/org/role-options', owner);
       expect(res.status).toBe(200);
@@ -493,7 +546,7 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
 
       // Изменения вкладки «Настройки» — не в истории учётной политики (как в прототипе).
       const fields = items.flatMap((h) => h.changes.map((c) => c.field));
-      for (const field of ['timezone', 'digestTime', 'overdueRepeat', 'defaultRoleId']) {
+      for (const field of ['timezone', 'digestTime', 'weekDay', 'overdueRepeat', 'defaultRoleId']) {
         expect(fields).not.toContain(field);
       }
       expect(await patchPolicy({ timezone: 'Europe/Moscow' }).then((r) => r.status)).toBe(200);

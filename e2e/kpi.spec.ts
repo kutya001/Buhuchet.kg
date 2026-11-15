@@ -411,7 +411,7 @@ test.describe('Этап 2: Показатели контрагентов', () =>
     const bubble = page.locator('[data-tour-bubble]');
     await expect(bubble.locator('b').first()).toHaveText('Настроить показатели');
     await expect(page.locator('[data-tour-count]')).toHaveText(/^1 из \d+$/);
-    // Облачко сначала переезжает к элементу — нажатие по движущейся кнопке теряется (№ 32).
+    // Облачко сначала переезжает к элементу — нажатие по движущейся кнопке теряется (№ 34).
     await stillElement(bubble);
     await bubble.getByRole('button', { name: 'Закончить показ', exact: true }).last().click();
     await expect(bubble).toHaveCount(0);

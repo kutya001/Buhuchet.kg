@@ -455,7 +455,10 @@ export const AdminOrgCard = z.object({
         }),
       ),
       remindDays: z.array(z.number().int()),
+      /** «Час напоминаний», ЧЧ:ММ. */
       digestTime: z.string(),
+      /** День недельной сводки: 1 — понедельник … 7 — воскресенье. */
+      weekDay: z.number().int(),
       overdueRepeat: z.boolean(),
     })
     .nullable(),

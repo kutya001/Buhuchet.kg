@@ -13,7 +13,7 @@ import {
   type IconName,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
 import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
@@ -40,6 +40,7 @@ import {
 } from './file-columns';
 import { FileEditDialog } from './file-edit-dialog';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
+import { SentFilesTab } from './sent-files';
 import {
   managerSummaryQuery,
   pickedFilesProblem,
@@ -76,6 +77,81 @@ function useUploadRequest(run: () => void) {
 }
 
 /**
+ * «Загрузить файл» модуля (прототип `uploadDlg`): окно выбора файлов, контрагента и примечания и сама
+ * загрузка; `start` открывает окно, `dialog` — в разметку экрана. Его зовут «+ Добавить» и пустой
+ * список на обеих вкладках Файлового менеджера.
+ */
+export function useManualUpload() {
+  const t = useT();
+  const toast = useToast();
+  const errorText = useErrorText();
+  const refresh = useFilesRefresh();
+  const { access } = useShell();
+  const cppage = access.feature('cppage');
+  const [upload, setUpload] = useState<DialogSlot<null> | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const start = useCallback(() => setUpload(openSlot(null)), []);
+  useUploadRequest(start);
+
+  const problemOf = (files: File[]): string | null => {
+    const problem = pickedFilesProblem(files);
+    if (!problem) return null;
+    return 'names' in problem
+      ? t('files.too_large', { names: problem.names })
+      : t('files.upload_failed', {
+          name: problem.name,
+          error: errorText({ code: problem.code, message: '' }),
+        });
+  };
+
+  const send = async (choice: UploadChoice) => {
+    setUploading(true);
+    let done = 0;
+    for (const file of choice.files) {
+      const res = await uploadFile(MANUAL, file, {
+        contractorId: choice.contractorId,
+        note: choice.note,
+        ...(cppage && choice.contractorId ? { page: choice.page } : {}),
+      });
+      if (res.ok) done++;
+      else
+        toast(t('files.upload_failed', { name: file.name, error: errorText(res.error) }), {
+          bad: true,
+          icon: 'alert',
+        });
+    }
+    await refresh();
+    setUploading(false);
+    if (done) {
+      setUpload(closeSlot);
+      toast(t('files.upload.done', { n: done }), { icon: 'upload' });
+    }
+  };
+
+  const dialog = upload ? (
+    <UploadDialog
+      key={`upload-${upload.n}`}
+      open={upload.open}
+      onClose={() => setUpload(closeSlot)}
+      busy={uploading}
+      problemOf={problemOf}
+      onUpload={(choice) => void send(choice)}
+      cppage={cppage}
+    />
+  ) : null;
+  return { start, dialog };
+}
+
+/**
+ * Экран «Файлового менеджера» (прототип v112 `filesTabs`): при «Странице контрагента по ссылке» —
+ * вкладки «Все файлы» и «Файлы от контрагентов», иначе — один список.
+ */
+export function FilesScreen({ tab }: { tab: string | null }) {
+  const upload = useManualUpload();
+  return tab === 'sent' ? <SentFilesTab after={upload.dialog} /> : <FilesManager upload={upload} />;
+}
+
+/**
  * «Файловый менеджер» (задача 2.29; ТЗ «Файловый менеджер»; прототип modules/files.js, `renderFiles`):
  * плашки по видам источника («К задачам», «Загружено вручную»…; нажатие — фильтр «Откуда»), общий
  * список всех видимых файлов с поиском, фильтрами, группировкой и «В Excel». Строка открывает окно
@@ -83,7 +159,7 @@ function useUploadRequest(run: () => void) {
  * (свой файл — в течение суток, чужой — с правом «Удалять файлы»). «Загрузить файл» — из «+ Добавить»
  * и пустого списка.
  */
-export function FilesManager() {
+export function FilesManager({ upload }: { upload: { start: () => void; dialog: ReactNode } }) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -101,9 +177,7 @@ export function FilesManager() {
   const reports = useReportActions();
   const kpi = useKpiEntry();
   const [card, setCard] = useState<DialogSlot<FileManagerRow> | null>(null);
-  const [upload, setUpload] = useState<DialogSlot<null> | null>(null);
   const [service, setService] = useState<DialogSlot<string> | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [ask, setAsk] = useState<FileManagerRow | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -134,8 +208,7 @@ export function FilesManager() {
   );
   const exporter = useListExport(sendExport);
   const canUpload = access.can('filesUpload');
-  const startUpload = () => setUpload(openSlot(null));
-  useUploadRequest(startUpload);
+  const startUpload = upload.start;
 
   const download = async (file: FileManagerRow) => {
     const res = await callApi(() => api.api.files[':id'].link.$get({ param: { id: file.id } }));
@@ -256,41 +329,6 @@ export function FilesManager() {
     else toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
 
-  const problemOf = (files: File[]): string | null => {
-    const problem = pickedFilesProblem(files);
-    if (!problem) return null;
-    return 'names' in problem
-      ? t('files.too_large', { names: problem.names })
-      : t('files.upload_failed', {
-          name: problem.name,
-          error: errorText({ code: problem.code, message: '' }),
-        });
-  };
-
-  const send = async (choice: UploadChoice) => {
-    setUploading(true);
-    let done = 0;
-    for (const file of choice.files) {
-      const res = await uploadFile(MANUAL, file, {
-        contractorId: choice.contractorId,
-        note: choice.note,
-        ...(cppage && choice.contractorId ? { page: choice.page } : {}),
-      });
-      if (res.ok) done++;
-      else
-        toast(t('files.upload_failed', { name: file.name, error: errorText(res.error) }), {
-          bad: true,
-          icon: 'alert',
-        });
-    }
-    await refresh();
-    setUploading(false);
-    if (done) {
-      setUpload(closeSlot);
-      toast(t('files.upload.done', { n: done }), { icon: 'upload' });
-    }
-  };
-
   const plates = summary.data?.plates ?? [];
   const addAction = canUpload
     ? [
@@ -391,17 +429,7 @@ export function FilesManager() {
         }
         onClose={() => setEditId(null)}
       />
-      {upload ? (
-        <UploadDialog
-          key={`upload-${upload.n}`}
-          open={upload.open}
-          onClose={() => setUpload(closeSlot)}
-          busy={uploading}
-          problemOf={problemOf}
-          onUpload={(choice) => void send(choice)}
-          cppage={cppage}
-        />
-      ) : null}
+      {upload.dialog}
       <ConfirmDialog
         open={ask !== null}
         onClose={() => setAsk(null)}

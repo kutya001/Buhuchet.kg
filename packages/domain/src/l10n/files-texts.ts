@@ -1,4 +1,5 @@
 import { FILE_MESSAGES, type FileProblem } from '../files/files';
+import { FILES_SENT_TEXTS } from './files-sent-texts';
 import type { UiTextDefault } from './texts';
 
 const S = 'Файлы';
@@ -202,6 +203,8 @@ export const FILES_TEXTS = {
     ru: 'Общие файлы организации. Файлы сохраняются по-настоящему: их видят все, у кого есть право «Просматривать файлы».',
     section: 'Образцы',
   },
+  // Файлы от контрагентов (доработки 14.11.2026, блок 2).
+  ...FILES_SENT_TEXTS,
   ...(Object.fromEntries(
     Object.entries(FILE_MESSAGES).map(([code, ru]) => [`err.${code}`, { ru, section: 'Ошибки' }]),
   ) as Record<`err.${FileProblem}`, UiTextDefault>),

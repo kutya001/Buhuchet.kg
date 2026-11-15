@@ -29,7 +29,7 @@ const titleOf = (page: Page) => bubble(page).locator('b').first();
 
 /**
  * Облачко стоит на месте. Оно переезжает к элементу за 250 мс и ставится ещё раз через 260 мс
- * (packages/ui/src/tour.tsx): нажатие по переезжающей кнопке теряется молча (типовая ошибка № 32).
+ * (packages/ui/src/tour.tsx): нажатие по переезжающей кнопке теряется молча (типовая ошибка № 34).
  */
 const bubbleSettled = (page: Page) => stillElement(bubble(page));
 
