@@ -269,6 +269,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
         'pay',
         'reports',
         'sections',
+        // «Отправить файл» и «Отправленные вами» раздела «Файлы» (доработки 14.11.2026, блок 2).
+        'sent',
         'telegram',
         'texts',
         'today',

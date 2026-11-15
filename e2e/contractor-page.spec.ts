@@ -104,9 +104,9 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByText(inn)).toBeVisible();
     await expect(page.getByText('ваша бухгалтерская компания')).toBeVisible();
     await expect(page.getByText(/^Данные на \d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/)).toBeVisible();
-    await expect(
-      page.getByText('Страница только для просмотра. Вопросы — вашему бухгалтеру.'),
-    ).toBeVisible();
+    // Подвал: у организации, которая принимает файлы от контрагентов, — «…и отправлять файлы
+    // бухгалтеру» (доработки 14.11.2026, блок 2); общая часть — одна.
+    await expect(page.getByText(/Вопросы — вашему бухгалтеру\.$/)).toBeVisible();
     // Ничего не прокручивается вбок (на телефоне — тоже).
     const wide = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

@@ -359,7 +359,12 @@ export function ContractorCardWindow(props: ContractorCardProps) {
           />
         ) : null}
         {shownTab === 'reports' ? (
-          <ReportsTab contractorId={id} view={monthsView} onView={setMonthsView} />
+          <ReportsTab
+            contractorId={id}
+            archived={archived}
+            view={monthsView}
+            onView={setMonthsView}
+          />
         ) : null}
         {shownTab === 'pick' ? <ReportPickTab contractorId={id} onDirty={setPickDirty} /> : null}
         {shownTab === 'money' ? <ContractorMoneyTab contractorId={id} /> : null}
@@ -1118,10 +1123,12 @@ function ReportsListTab({
  */
 function ReportsTab({
   contractorId,
+  archived,
   view,
   onView,
 }: {
   contractorId: string;
+  archived: boolean;
   view: MonthsCardView;
   onView: (view: MonthsCardView) => void;
 }) {
@@ -1133,6 +1140,7 @@ function ReportsTab({
       {mode === 'months' ? (
         <ContractorReportMonths
           contractorId={contractorId}
+          archived={archived}
           reports={reports}
           lead={lead}
           view={view}

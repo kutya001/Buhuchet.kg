@@ -69,14 +69,15 @@ async function receive(
   expect(res.status(), await res.text()).toBe(201);
 }
 
+// Чтения после шагов в браузере — с повтором при обрыве соединения (типовая ошибка № 26).
 async function balanceOf(api: APIRequestContext, contractorId: string): Promise<Balance> {
-  const res = await api.get(`/api/contractors/${contractorId}/money`);
+  const res = await api.get(`/api/contractors/${contractorId}/money`, { maxRetries: 2 });
   expect(res.status(), await res.text()).toBe(200);
   return ((await res.json()) as { balance: Balance }).balance;
 }
 
 async function accountRow(api: APIRequestContext, employeeId: string, contractorId: string) {
-  const res = await api.get(`/api/staff/${employeeId}/account`);
+  const res = await api.get(`/api/staff/${employeeId}/account`, { maxRetries: 2 });
   expect(res.status(), await res.text()).toBe(200);
   return ((await res.json()) as Account).rows.find((r) => r.contractorId === contractorId);
 }

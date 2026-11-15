@@ -7,6 +7,7 @@ import {
   PAGE_SECTIONS,
   type Feature,
   type PageSection,
+  weekDayOf,
   type YearMonth,
 } from '@buhuchet/domain';
 import type { OrgPolicyHistory } from '@buhuchet/shared';
@@ -50,6 +51,9 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
     // «Напоминать контрагентам о долге» (доработки 13.11.2026, К5).
     case 'cpTgDebt':
       return [t('cppage.org.toggled', { name: t('cppage.org.debt'), state: state(change.to) })];
+    // «Контрагент может отправлять файлы» (доработки 14.11.2026, блок 2; прототип v112 `pol-cpup`).
+    case 'cpFilesUpload':
+      return [t('files.sent.hist.upload', { state: state(change.to) })];
     // Было → стало (ТЗ «История изменений учётной политики»; прототип пишет только новое значение).
     case 'confirmWaitDays':
       return [
@@ -96,6 +100,27 @@ function changeLines(change: HistoryChange, t: Translate): string[] {
           state: t(
             change.to ? 'org.history.tg_group_summary_on' : 'org.history.tg_group_summary_off',
           ),
+        }),
+      ];
+    // Блок «Telegram-уведомления» (пакет 14.11.2026, блок 3; прототип v111 `tgnMount`): «Час
+    // напоминаний: 09:00 → 08:30», «Недельная сводка: понедельник → пятница».
+    case 'digestTime':
+      return typeof change.to === 'string'
+        ? [
+            t('org.history.digest_time', {
+              from: typeof change.from === 'string' ? change.from.slice(0, 5) : '—',
+              to: change.to.slice(0, 5),
+            }),
+          ]
+        : [];
+    // «Повторять напоминание при просрочке каждый день: включено» (прототип v111 `tgnMount`).
+    case 'overdueRepeat':
+      return [t('org.history.overdue_repeat', { state: state(change.to) })];
+    case 'weekDay':
+      return [
+        t('org.history.week_day', {
+          from: t(`tgn.wd.${weekDayOf(Number(change.from))}`),
+          to: t(`tgn.wd.${weekDayOf(Number(change.to))}`),
         }),
       ];
     default:

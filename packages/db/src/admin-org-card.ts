@@ -135,6 +135,7 @@ export interface AdminOrgCardRecord {
     roles: { id: string; name: string; isOwner: boolean; permissions: number; employees: number }[];
     remindDays: number[];
     digestTime: string;
+    weekDay: number;
     overdueRepeat: boolean;
   } | null;
   files: {
@@ -648,6 +649,7 @@ export async function adminOrgCard(
           roles: roleRows,
           remindDays: policy.remindDays,
           digestTime: policy.digestTime,
+          weekDay: policy.weekDay,
           overdueRepeat: policy.overdueRepeat,
         }
       : null,

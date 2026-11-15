@@ -228,10 +228,19 @@ describe('адрес страницы за входом', () => {
     });
   });
 
+  // Без «Страницы контрагента по ссылке» у «Файлового менеджера» вкладок нет (прототип v112 `filesTabs`).
+  const noPage = { ...ALL_FEATURES, cppage: false };
+
   it('адрес модуля — сразу на первой видимой вкладке; без вкладок — сам модуль', () => {
     const access = shellAccess(me());
     expect(moduleHref('reports', access)).toBe('/app/reports/week');
-    expect(moduleHref('files', access)).toBe('/app/files');
+    expect(moduleHref('files', access)).toBe('/app/files/all');
+    expect(moduleHref('files', shellAccess(me({ features: noPage })))).toBe('/app/files');
+  });
+
+  it('«Файловый менеджер»: «Все файлы» и «Файлы от контрагентов» — только со «Страницей контрагента»', () => {
+    expect(ids(visibleTabs('files', shellAccess(me())))).toEqual(['all', 'sent']);
+    expect(ids(visibleTabs('files', shellAccess(me({ features: noPage }))))).toEqual([]);
   });
 
   it('открытый модуль и видимая вкладка — показываются', () => {
@@ -239,9 +248,15 @@ describe('адрес страницы за входом', () => {
       moduleId: 'reports',
       tabId: 'overdue',
     });
-    expect(resolveAppRoute(me({ modules: ['files'] }), 'files', undefined)).toEqual({
+    expect(
+      resolveAppRoute(me({ modules: ['files'], features: noPage }), 'files', undefined),
+    ).toEqual({
       moduleId: 'files',
       tabId: null,
+    });
+    expect(resolveAppRoute(me({ modules: ['files'] }), 'files', ['sent'])).toEqual({
+      moduleId: 'files',
+      tabId: 'sent',
     });
   });
 
@@ -275,8 +290,11 @@ describe('адрес страницы за входом', () => {
     expect(resolveAppRoute(me(), 'reports', ['week', 'x'])).toEqual({
       redirect: '/app/reports/week',
     });
-    expect(resolveAppRoute(me({ modules: ['files'] }), 'files', ['x'])).toEqual({
+    expect(resolveAppRoute(me({ modules: ['files'], features: noPage }), 'files', ['x'])).toEqual({
       redirect: '/app/files',
+    });
+    expect(resolveAppRoute(me({ modules: ['files'] }), 'files', ['x'])).toEqual({
+      redirect: '/app/files/all',
     });
   });
 

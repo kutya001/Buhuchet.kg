@@ -29,6 +29,7 @@ import { useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { FeeTelegramButton, feeTelegramQuery } from '../contractor-page/fee-telegram';
 import { FeePaymentWindowDialog } from '../finance/fee-payment-window';
 import { useReportActions } from '../reports/report-actions';
 import { statusPillView } from '../status/status-view';
@@ -267,6 +268,8 @@ export function ContractorFeesTab({
 }) {
   const t = useT();
   const query = useQuery(contractorFeesQuery(contractorId));
+  // «Напомнить в Telegram» (прототип v110 pgFeeTgBtn): есть ли кнопка — по ответу сервера.
+  const telegram = useQuery(feeTelegramQuery(contractorId)).data?.shown ?? false;
   const refresh = useFeesRefresh();
   const [tariff, setTariff] = useState<DialogSlot<null> | null>(null);
   const [tariffEdit, setTariffEdit] = useState<DialogSlot<TariffRow> | null>(null);
@@ -277,7 +280,8 @@ export function ContractorFeesTab({
   if (!f) return null;
   const ct = f.current;
   const debtSub = t(f.debt ? 'fee.plate.debt_late' : 'fee.plate.debt_none');
-  const iconsOnPhone = f.canAccept || (f.canTariff && f.canRemind);
+  const iconsOnPhone =
+    f.canAccept || [f.canTariff, f.canRemind, telegram].filter(Boolean).length > 1;
   const label = iconsOnPhone ? 'max-md:hidden' : undefined;
   return (
     <div data-fee-tab="" className="flex min-w-0 flex-col gap-3.5">
@@ -309,7 +313,7 @@ export function ContractorFeesTab({
         Прототип `.row.acts` (`mActsFit`): на телефоне одна строка; если кнопки с подписями не помещаются
         (есть главная «Принять оплату…» или обе другие), у кнопок кроме главной — только значок.
       */}
-      {f.canTariff || f.canRemind || f.canAccept ? (
+      {f.canTariff || f.canRemind || f.canAccept || telegram ? (
         <div className="flex flex-wrap items-center justify-end gap-2 max-md:flex-nowrap max-md:[&>button]:min-h-10">
           {f.canTariff ? (
             <button
@@ -337,6 +341,7 @@ export function ContractorFeesTab({
               <span className={label}>{t('fee.btn.remind')}</span>
             </button>
           ) : null}
+          <FeeTelegramButton contractorId={contractorId} iconOnPhone={iconsOnPhone} />
           {f.canAccept ? (
             <button
               type="button"

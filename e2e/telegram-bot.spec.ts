@@ -167,8 +167,14 @@ test.describe('Доработки 13.11. Т1: основа бота Telegram', (
     const row = page.locator('[data-telegram-actions]');
     await expect(row).toContainText('Действия из Telegram');
     await expect(row).toContainText('Деньги и удаление — только на сайте.');
-    await expect(row).toContainText('Меняет только владелец организации.');
+    await expect(page.locator('[data-tgn-box]')).toContainText(
+      'Меняет только владелец организации.',
+    );
     await expect(row.getByRole('switch')).toBeDisabled();
+    // Остальные строки блока «Telegram-уведомления» (пакет 14.11.2026, блок 3) — тоже только просмотр.
+    await expect(page.getByLabel('Час напоминаний')).toBeDisabled();
+    await expect(page.getByLabel('День сводки')).toBeDisabled();
+    await expect(page.getByRole('switch', { name: /Повторять при просрочке/ })).toBeDisabled();
     // И мимо экрана — отказ сервера.
     const policy = (await (await page.request.get('/api/org/policy')).json()) as {
       version: number;

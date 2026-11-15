@@ -6,6 +6,7 @@ import {
   moneyFileSource,
   moneyFilesPart,
   reportFilesPart,
+  sentFilesPart,
   taskFilesPart,
   type FileListPart,
   type ListTexts,
@@ -142,6 +143,17 @@ export const contractorSource: FileListSource = {
   list: ({ t }) => contractorFilesPart(t),
 };
 
+/**
+ * «От контрагента» (доработки 14.11.2026, блок 2; прототип v112 `sntAccept`, `allFiles`): принятый файл
+ * от контрагента — файл самого контрагента без записи; появляется только «Принять» (`files/sent.ts`).
+ * Изменить и удалить его можно, как загруженный вручную; история — у файла с контрагентом.
+ */
+export const sentFileSource: FileListSource = {
+  ownUpload: true,
+  resolve: contractorSource.resolve,
+  list: ({ t }) => sentFilesPart(t),
+};
+
 /** Файлы отчётов в списке: право «Просматривать отчёты»; видны отчёты области «Свои». */
 function reportFilesList({ subject, t }: FileListContext): FileListPart | null {
   return hasPermission(subject, 'repView') ? reportFilesPart(reportScopeOf(subject), t) : null;
@@ -216,6 +228,7 @@ function moneySource(kind: 'receipt' | 'tax_payment'): FileListSource {
 export const FILE_SOURCES: Readonly<Record<FileSourceKind, FileListSource>> = {
   manual: manualSource,
   contractor: contractorSource,
+  sent_file: sentFileSource,
   report: { ...reportFileSource, list: reportFilesList },
   receipt: moneySource('receipt'),
   tax_payment: moneySource('tax_payment'),

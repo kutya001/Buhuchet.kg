@@ -14,6 +14,7 @@ import {
 } from '@buhuchet/db';
 import {
   CP_TG_PAY_SENDS_PER_HOUR,
+  formatText,
   hasPermission,
   MONTH_PAY_MESSAGES,
   MONTH_PAY_SEND_MESSAGES,
@@ -39,6 +40,7 @@ import { apiFail } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { scopeSqlOf, subjectOf, todayOf, translateOf } from '../contractors/common';
 import { deliverClientMessages, logMonthPaySent, prepareMonthPay } from '../telegram/client/pay';
+import { payRequisite, payRequisiteState } from '../telegram/client/requisite';
 import { error, ownReportsEmployeeOf, reportScopeOf } from './common';
 import { monthPayRows } from './month-pay-rows';
 
@@ -77,18 +79,18 @@ const notFound = {
   content: error,
 };
 
-/**
- * Расчёт месяца для одного контрагента: одно правило домена `monthToPay` поверх строк «по месяцам».
- * Реквизит для налогов — только при «Учёте оплаты налогов» (прототип `pgTaxAcc`); текст — по шаблону
- * waPayMonth справочника платформы; платить нечего — текста нет.
- */
 /** Расчёт месяца: ответ блока и данные для «Отправить в Telegram». */
 interface MonthPayResult {
   body: ContractorMonthPay;
   contractor: ContractorRecord;
-  taxpay: boolean;
 }
 
+/**
+ * Расчёт месяца для одного контрагента: одно правило домена `monthToPay` поверх строк «по месяцам».
+ * Реквизит для налогов — по полю «Деньги на налоги переводит», и без «Учёта оплаты налогов» тоже
+ * (прототип v110 `pgTaxAcc`, доработки 14.11.2026, блок 4); текст — по шаблону waPayMonth справочника
+ * платформы; платить нечего — текста нет.
+ */
 async function monthPayOf(
   tx: Tx,
   o: {
@@ -117,7 +119,7 @@ async function monthPayOf(
     });
   const reports = await monthRows(reportScopeOf(o.subject));
   const { pay, rows } = monthPayRows(reports, o.month, taxpay);
-  const hidden = taxpay && requisiteHidden(cp, o.subject);
+  const hidden = requisiteHidden(cp, o.subject);
   // Область отчётов «Свои», а контрагент чужой: сотрудник видит только отчёты, которые ведёт сам.
   // Есть ли у месяца другие отчёты — считаем без сумм, только число.
   const own = ownReportsEmployeeOf(o.subject);
@@ -131,7 +133,7 @@ async function monthPayOf(
         ? 'month_pay_partial'
         : null;
   const requisite =
-    taxpay && rows.length && !hidden
+    rows.length && !hidden
       ? await contractorTaxRequisiteText(
           tx,
           { paysTo: cp.paysTo, responsibleId: cp.responsible?.id ?? null },
@@ -150,18 +152,25 @@ async function monthPayOf(
         })
       : null;
   // «Отправить в Telegram» (прототип rmPaySendWhy): кнопка есть, пока включены «Напоминания в
-  // Telegram» и «Страница контрагента по ссылке»; неполный итог клиенту не уходит.
+  // Telegram» и «Страница контрагента по ссылке»; неполный итог клиенту не уходит, без реквизитов для
+  // перевода — тоже (доработки 14.11.2026, блок 4, пункт 1). Реквизит уходит только клиенту: здесь —
+  // только есть ли он.
   const sendOn = features.telegram && features.cppage;
   const recipients = sendOn ? (await contractorTelegramRecipients(tx, cp.id)).length : 0;
+  const sendRefusal = sendOn
+    ? (monthPaySendRefusal({
+        canManagePage: hasPermission(o.subject, 'cpPage'),
+        archived: cp.serviceStatus === 'archived',
+        recipients,
+        requisite: await payRequisiteState(tx, cp),
+        paysTo: cp.paysTo,
+      }) ?? (partial ? ('month_pay_partial' as const) : null))
+    : null;
   const send = sendOn
     ? {
-        refusal:
-          monthPaySendRefusal({
-            canManagePage: hasPermission(o.subject, 'cpPage'),
-            archived: cp.serviceStatus === 'archived',
-            recipients,
-          }) ?? (partial ? ('month_pay_partial' as const) : null),
+        refusal: sendRefusal,
         recipients,
+        params: sendParams(sendRefusal, cp, o.t),
       }
     : null;
   return {
@@ -177,7 +186,25 @@ async function monthPayOf(
       send,
     },
     contractor: cp,
-    taxpay,
+  };
+}
+
+/** Подстановки текста отказа «нет реквизитов»: контрагент и ответственный сотрудник. */
+function sendParams(
+  refusal: string | null,
+  cp: ContractorRecord,
+  t: Translate,
+): { contractor: string; employee: string } | null {
+  if (
+    refusal !== 'month_pay_send_no_req_org' &&
+    refusal !== 'month_pay_send_no_req_emp' &&
+    refusal !== 'month_pay_send_req_hidden'
+  ) {
+    return null;
+  }
+  return {
+    contractor: cp.name,
+    employee: cp.responsible?.shortName || t('cppage.tg.rq.no_resp'),
   };
 }
 
@@ -316,7 +343,7 @@ export const contractorMonthPaySendRoute = createRoute({
     404: notFound,
     409: {
       description:
-        'Отправка в Telegram выключена; контрагент в архиве; Telegram не подключён; за месяц платить нечего; часть отчётов месяца — вне области сотрудника; сообщение не ушло',
+        'Отправка в Telegram выключена; контрагент в архиве; Telegram не подключён; нет реквизитов для перевода или раздел «Как оплатить» скрыт на странице контрагента; за месяц платить нечего; часть отчётов месяца — вне области сотрудника; сообщение не ушло',
       content: error,
     },
     429: { description: 'Слишком много сообщений этому контрагенту за час', content: error },
@@ -359,7 +386,13 @@ export function contractorMonthPaySendHandler(
         apiFail(409, pay.send.refusal, MONTH_PAY_MESSAGES.month_pay_partial);
       }
       if (pay.send.refusal) {
-        apiFail(409, pay.send.refusal, MONTH_PAY_SEND_MESSAGES[pay.send.refusal]);
+        const params = pay.send.params ?? undefined;
+        apiFail(
+          409,
+          pay.send.refusal,
+          formatText(MONTH_PAY_SEND_MESSAGES[pay.send.refusal], params),
+          params,
+        );
       }
       if (!pay.rows.length || !pay.due) {
         apiFail(409, 'month_pay_empty', MONTH_PAY_MESSAGES.month_pay_empty);
@@ -370,10 +403,14 @@ export function contractorMonthPaySendHandler(
       if (recent >= CP_TG_PAY_SENDS_PER_HOUR) {
         apiFail(429, 'month_pay_send_limit', MONTH_PAY_SEND_MESSAGES.month_pay_send_limit);
       }
+      // Реквизиты уже проверены (`send.refusal`) в этой же транзакции — здесь они есть всегда.
+      const requisite = await payRequisite(tx, t, result.contractor);
+      if (requisite.state !== 'ok')
+        throw new Error('«К оплате»: реквизиты для перевода не найдены');
       const messages = await prepareMonthPay(tx, t, {
         contractor: result.contractor,
         pay: { month, lines: pay.rows, total: pay.total, due: pay.due },
-        taxpay: result.taxpay,
+        requisite: requisite.block,
         recipients,
         auto: false,
       });

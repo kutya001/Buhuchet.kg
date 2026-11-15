@@ -14,6 +14,7 @@ import {
 import type { ContractorHistory } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import { pageHistoryActor, pageHistoryText } from '../contractor-page/page-history';
+import { sentHistoryActor, sentHistoryText } from '../files/sent-history';
 import {
   feePaymentDeletedText,
   feePaymentEditedText,
@@ -454,6 +455,10 @@ export function contractorHistoryText(t: Translate, e: Entry, names: Names): str
     case 'contractor_page':
       lines = [pageHistoryText(t, e)];
       break;
+    // Файлы от контрагентов (доработки 14.11.2026, блок 2): отправка, «Принять», «Отклонить» с
+    // причиной в тексте, удаление через 30 дней.
+    case 'sent_file':
+      return sentHistoryText(t, e);
     // Файл контрагента — загруженный вручную или из свидетельства и выписки: «Прикреплён файл «…»»,
     // «Удалён файл «…»», как в карточке отчёта.
     case 'file':
@@ -506,7 +511,9 @@ export function contractorHistoryItem(t: Translate, e: Entry, names: Names): Tim
     who:
       e.entity === 'contractor_page'
         ? pageHistoryActor(t, e.actor, e.action)
-        : (e.actor ?? t('status.system')),
+        : e.entity === 'sent_file'
+          ? sentHistoryActor(t, e)
+          : (e.actor ?? t('status.system')),
     via: e.via === 'telegram' ? t('telegram.via') : null,
   };
 }

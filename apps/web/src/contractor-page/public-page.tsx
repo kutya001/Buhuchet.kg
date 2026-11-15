@@ -74,7 +74,10 @@ export function PublicPageScreen({
         className={`flex min-h-dvh flex-col items-center gap-[18px] bg-frame px-4 pt-6 pb-8 max-md:gap-3.5 max-md:px-3 max-md:pt-3.5 ${navPad}`}
       >
         {main}
-        <footer className="text-center text-[12px] text-faint">{t('pub.foot')}</footer>
+        <footer className="text-center text-[12px] text-faint">
+          {/* Прототип v112: бухгалтер принимает файлы со страницы — другая строка подвала. */}
+          {t(state.state === 'open' && state.page.sent?.upload ? 'pub.foot.upload' : 'pub.foot')}
+        </footer>
       </main>
     </UiProviders>
   );

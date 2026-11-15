@@ -264,6 +264,9 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   'feeReminder',
   'feeTotal',
   'feeAllocations',
+  // «Напомнить в Telegram» об оплате за обслуживание и «Оплатил» клиента под ним (доработки 14.11.2026).
+  'tgFee',
+  'tgFeePaid',
 ]);
 /**
  * Сумма налогов месяца в записях «Скопирован текст «К оплате»», ««К оплате» отправлено в Telegram» и
@@ -319,7 +322,8 @@ async function visibleEntries(
   }
   if (access.tasks) own.push(eq(auditLog.entity, 'task'));
   if (kpi) own.push(inArray(auditLog.entity, [...KPI_ENTITIES]));
-  if (files) own.push(eq(auditLog.entity, 'file'));
+  // Файлы от контрагента (доработки 14.11.2026, блок 2) — тем же, кто видит файлы контрагента.
+  if (files) own.push(inArray(auditLog.entity, ['file', 'sent_file']));
   // ОТКЛОНЕНИЕ: docs/deviations.md#В-19
   // Поступление только за обслуживание (часть на налоги 0) — только тому, кто видит плату.
   if (money) {

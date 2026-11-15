@@ -28,6 +28,7 @@ export type PageFileCategory = (typeof PAGE_FILE_CATEGORIES)[number];
 const CATEGORY_OF: Readonly<Record<FileSourceKind, PageFileCategory | null>> = {
   manual: 'doc',
   contractor: 'doc',
+  sent_file: 'doc',
   report: 'rep',
   receipt: 'in',
   tax_payment: 'pay',
@@ -84,6 +85,7 @@ export const PAGE_FILE_LINK_SECONDS = 5 * 60;
 export type PageFileSource =
   | { kind: 'report'; type: string; period: ReportPeriod; start: IsoDate; event: IsoDate | null }
   | { kind: 'regdocs' }
+  | { kind: 'sent' }
   | { kind: 'manual' }
   | {
       kind: 'tax_payment';
@@ -113,6 +115,9 @@ export function pageFileRel(src: PageFileSource, t: Translate): string {
       return report(src);
     case 'regdocs':
       return t('files.src.regdocs');
+    // Принятый файл, который контрагент сам прислал (прототип v112 `pubFiles`: «Отправлен вами»).
+    case 'sent':
+      return t('pub.files.rel.sent');
     // Примечание к файлу видно только сотрудникам (прототип v95, docs/deviations.md п. И-4).
     case 'manual':
       return '';

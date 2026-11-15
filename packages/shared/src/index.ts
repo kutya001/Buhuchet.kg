@@ -24,6 +24,7 @@ export * from './kb-admin';
 export * from './l10n';
 export * from './status';
 export * from './files';
+export * from './files-sent';
 export * from './platform-dicts';
 export * from './admin';
 export * from './admin-techdocs';
