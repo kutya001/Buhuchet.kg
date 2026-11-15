@@ -39,11 +39,19 @@ import {
   TipPill,
   usePageText,
 } from './page-parts';
-import { PageSentBlock } from '../files/page-sent';
+import { PageSentBlock, usePageUpload } from '../files/page-sent';
 import { usePageFilesSection, usePageFileViewer, type OpenPageFile } from './page-files';
+import { usePageHelp, type PageHelpActions } from './page-help';
+import { PageHelpContext, usePageHint } from './page-help-context';
+import { pageHelpView } from './page-help-model';
 import { MonthPayPill, PayCard, usePagePaid } from './page-pay';
 import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-reports';
-import { PageTelegramBody, pageTelegramSum, type PageAddress } from './page-telegram';
+import {
+  PageTelegramBody,
+  pageTelegramSum,
+  usePageTelegramConnect,
+  type PageAddress,
+} from './page-telegram';
 
 /*
  * Открытая страница контрагента (задача 2.43; ТЗ «Страница контрагента по ссылке» → «Что видит
@@ -92,7 +100,9 @@ interface OpenPageProps {
 export function OpenPage({ page, address, fileHref }: OpenPageProps) {
   return (
     <PageTextsContext.Provider value={page.texts}>
-      <OpenPageBody page={page} address={address} fileHref={fileHref} />
+      <PageHelpContext.Provider value={page.help}>
+        <OpenPageBody page={page} address={address} fileHref={fileHref} />
+      </PageHelpContext.Provider>
     </PageTextsContext.Provider>
   );
 }
@@ -100,6 +110,7 @@ export function OpenPage({ page, address, fileHref }: OpenPageProps) {
 function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   const t = useT();
   const tx = usePageText();
+  const hint = usePageHint();
   const { org, contractor, today } = page;
   const year = today.slice(0, 4);
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
@@ -116,7 +127,10 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   const viewer = usePageFileViewer(fileHref);
   const paidDialogs = usePagePaid(page, address);
   const reports = useReportsSectionSafe(page, view, setView, viewer.openFile, paidDialogs.send);
-  const filesSection = usePageFilesSection(page.files, viewer.openFile);
+  const filesSection = usePageFilesSection(page.files, viewer.openFile, !!page.sent?.upload);
+  const upload = usePageUpload(address);
+  const telegram = usePageTelegramConnect(page.telegram, address);
+  const root = useRef<HTMLDivElement>(null);
 
   const open = (k: string) => setUnfolded((s) => new Set([...s, k]));
   const toggle = (k: string) =>
@@ -555,7 +569,7 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
             })}
           </PageList>
         ) : (
-          <span className="text-faint">{t('pub.money.none')}</span>
+          <span className="text-faint">{hint('emptyMoney', t('pub.money.none'))}</span>
         )}
       </>,
       {
@@ -780,7 +794,7 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
           })}
         </div>
       ) : (
-        <span className="text-faint">{t('pub.kpi.none')}</span>
+        <span className="text-faint">{hint('emptyKpi', t('pub.kpi.none'))}</span>
       ),
       {
         sum: n ? t(`pub.kpi.count.${pluralForm(n)}`, { n }) : '',
@@ -857,7 +871,7 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
       'folder',
       t('pub.sec.files'),
       <>
-        {page.sent ? <PageSentBlock sent={page.sent} address={address} /> : null}
+        {page.sent ? <PageSentBlock sent={page.sent} onSend={upload.open} /> : null}
         {filesSection.body}
       </>,
       { sum: filesSection.sum },
@@ -871,7 +885,7 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
       'tg',
       'tg',
       t('pub.sec.tg'),
-      <PageTelegramBody telegram={page.telegram} address={address} what={tx('secs.tg')} />,
+      <PageTelegramBody telegram={page.telegram} what={tx('secs.tg')} connect={telegram} />,
       { sum: pageTelegramSum(t, page.telegram) },
     );
   }
@@ -879,8 +893,30 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   const nav = pageNav(new Set(Object.keys(H).filter((k): k is PageNavItem => k in NAV_ICON)));
   const col = (ks: string[]) => ks.map((k) => H[k] ?? null);
 
+  // Подсказки и обучение (доработки 15.11.2026): что видно на странице и какие окна можно открыть.
+  const onPaid = paidDialogs.paid;
+  const helpActions: PageHelpActions = {
+    go: (k) => go(k),
+    paid: onPaid ? (purpose, pick) => onPaid(purpose, null, pick) : null,
+    up: page.sent?.upload && H.files ? upload.open : null,
+    tg: page.telegram && !telegram.full ? () => void telegram.connect() : null,
+  };
+  const help = usePageHelp({
+    page,
+    address,
+    view: pageHelpView(page, Object.keys(H), { paid: !!onPaid }),
+    actions: helpActions,
+    unfolded,
+    setUnfolded,
+    root,
+  });
+
   return (
-    <div data-pub-body="" className="flex w-[min(1120px,100%)] flex-col gap-3.5 max-md:gap-2.5">
+    <div
+      ref={root}
+      data-pub-body=""
+      className="flex w-[min(1120px,100%)] flex-col gap-3.5 max-md:gap-2.5"
+    >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           {org.logo ? (
@@ -902,9 +938,13 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
             <span className="text-[11.5px] text-faint">{t('pub.org_hint')}</span>
           </span>
         </div>
-        <span className="inline-flex items-center gap-1 text-[11.5px] text-faint">
-          {t('pub.as_of', { at: formatMomentRu(new Date(page.asOf)) })}
-          <PageTip label={t('pub.as_of', { at: '' }).trim()} text={tx('head.as_of')} />
+        {/* Справа — «Данные на» и «Помощь» (прототип v120 `.pub-hr`). */}
+        <span className="flex flex-wrap items-center gap-2.5">
+          <span className="inline-flex items-center gap-1 text-[11.5px] text-faint">
+            {t('pub.as_of', { at: formatMomentRu(new Date(page.asOf)) })}
+            <PageTip label={t('pub.as_of', { at: '' }).trim()} text={tx('head.as_of')} />
+          </span>
+          {help.button}
         </span>
       </header>
       <div>
@@ -949,6 +989,8 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
       ) : null}
       {viewer.viewer}
       {paidDialogs.dialogs}
+      {upload.dialog}
+      {help.layer}
     </div>
   );
 }

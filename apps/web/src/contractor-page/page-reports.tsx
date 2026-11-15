@@ -35,6 +35,7 @@ import {
   usePageText,
 } from './page-parts';
 import type { OpenPageFile } from './page-files';
+import { usePageHint } from './page-help-context';
 import { MonthPayPill } from './page-pay';
 
 type Reports = NonNullable<PublicPageBody['reports']>;
@@ -108,6 +109,7 @@ export function useReportsSection(
 ) {
   const t = useT();
   const tx = usePageText();
+  const hint = usePageHint();
   const [allOf, setAllOf] = useState<ReadonlySet<string>>(new Set());
   const years = pageReportYears(reports.items, today);
   const year = view.year && years.includes(view.year) ? view.year : today.slice(0, 4);
@@ -465,7 +467,8 @@ export function useReportsSection(
           <span className="text-faint">
             {view.filter
               ? t('pub.rep.none_mark', { mark: t(`pub.rep.${view.filter}`), y: year })
-              : t('pub.rep.none', { y: year })}
+              : // Пустой раздел объясняет, что здесь появится (доработки 15.11.2026, пункт 5.5).
+                hint('emptyReports', t('pub.rep.none', { y: year }), { год: year })}
           </span>
         )}
       </>

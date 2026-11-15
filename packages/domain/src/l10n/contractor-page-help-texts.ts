@@ -45,6 +45,9 @@ export const CONTRACTOR_PAGE_HELP_TEXTS = {
   'cph.up.done_one': { ru: 'Файл отправлен', section: S },
   'cph.up.done_many': { ru: 'Файлы отправлены: {n}', section: S },
   'cph.code.what': { ru: 'Что это за страница?', section: S },
+  'cph.legend.late': { ru: 'Просрочен', section: S },
+  'cph.paid.pick': { ru: 'Что вы оплатили?', section: S },
+  'cph.paid.file_default': { ru: 'Фото или PDF чека из банка или кошелька', section: S },
   // История контрагента (прототип cphTourEnd).
   'cppage.hist.page_tour_full': { ru: 'Контрагент посмотрел обзор страницы', section: S },
   'cppage.hist.page_tour_step': {
@@ -82,7 +85,10 @@ export const CONTRACTOR_PAGE_HELP_TEXTS = {
   'cph.adm.hint.act_up': { ru: 'Кнопка ответа: «Отправить файл»', section: A },
   'cph.adm.hint.act_go_files': { ru: 'Кнопка ответа: перейти к «Файлы»', section: A },
   'cph.adm.hint.act_go_money': { ru: 'Кнопка ответа: перейти к «Деньги на налоги»', section: A },
-  'cph.adm.hint.act_go_fee': { ru: 'Кнопка ответа: перейти к «Оплата за обслуживание»', section: A },
+  'cph.adm.hint.act_go_fee': {
+    ru: 'Кнопка ответа: перейти к «Оплата за обслуживание»',
+    section: A,
+  },
   'cph.adm.hint.act_go_reports': { ru: 'Кнопка ответа: перейти к «Отчёты»', section: A },
   'cph.adm.hint.act_tg': { ru: 'Кнопка ответа: «Подключить Telegram»', section: A },
   'cph.adm.hint.act_code': { ru: 'Кнопка ответа: «Прислать код в Telegram»', section: A },

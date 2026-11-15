@@ -1,15 +1,16 @@
 'use client';
 
 import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
-import { PageForgot, PublicPageCodeInput, type PublicPage } from '@buhuchet/shared';
+import { PublicPageCodeInput, type CpCodeHelp, type PublicPage } from '@buhuchet/shared';
 import { buttonClass, Field, Icon, inputClass, useMounted } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { parseMaxPrefs } from '../shell/prefs';
 import { UiProviders } from '../shell/ui-providers';
 import { OpenPage } from './open-page';
+import { usePageForgot } from './page-forgot';
 
 /** «после 14:35» — время по Бишкеку, как у страницы (прототип pgHm). */
 const timeOf = (iso: string) => bishkekTime(new Date(iso));
@@ -56,7 +57,7 @@ export function PublicPageScreen({
       main = <Gate title={t('pub.closed.title')} text={t('pub.closed.text')} />;
       break;
     case 'code':
-      main = <CodeGate slug={slug} inn={inn} />;
+      main = <CodeGate slug={slug} inn={inn} help={state.help} />;
       break;
     case 'open':
       main = (
@@ -112,36 +113,12 @@ function Gate({ title, text, children }: { title: string; text: string; children
   );
 }
 
-/**
- * «Забыли код? Прислать в Telegram» (доработки 14.11.2026, блок 6, пункт 6; прототип v116
- * `pubForgotHtml`, `pubForgot`): код уходит только в Telegram, подключённый к этой странице, не больше
- * 3 раз за сутки; ответ — строкой под ссылкой. Cookie страницы для этого не нужен — запрос идёт прямо в
- * API.
- */
+/** «Забыли код? Прислать в Telegram» — на вводе кода и на обоих «Ввод кода временно закрыт». */
 function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
   const t = useT();
-  const errorText = useErrorText();
-  const router = useRouter();
   // До подхвата страницы React нажатие потерялось бы молча (docs/typical-mistakes.md № 41).
   const ready = useMounted();
-  const [busy, setBusy] = useState(false);
-  const [answer, setAnswer] = useState<{ text: string; ok: boolean } | null>(null);
-  const ask = async () => {
-    setBusy(true);
-    const res = await callApi(() =>
-      api.api.page[':slug'][':inn'].forgot.$post({ param: { slug, inn } }),
-    );
-    setBusy(false);
-    if (!res.ok) {
-      if (res.error.code === 'page_unavailable') return router.refresh();
-      return setAnswer({ text: errorText(res.error), ok: false });
-    }
-    const r = PageForgot.parse(res.data);
-    setAnswer({
-      text: t(`pub.forgot.${r.outcome}`, { n: r.limit }),
-      ok: r.outcome === 'sent',
-    });
-  };
+  const { ask, busy, answer } = usePageForgot(slug, inn);
   return (
     <>
       <button
@@ -174,7 +151,7 @@ function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
  * за час с одного адреса — час (docs/deviations.md п. Е-2); 5 неверных за сутки — страница закрыта до
  * смены кода (п. О-21).
  */
-function CodeGate({ slug, inn }: { slug: string; inn: string }) {
+function CodeGate({ slug, inn, help }: { slug: string; inn: string; help: CpCodeHelp }) {
   const t = useT();
   const errorText = useErrorText();
   const router = useRouter();
@@ -260,6 +237,40 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
       </button>
       <span className="text-[11.5px] leading-[1.4] text-faint">{t('pub.code.remember')}</span>
       <ForgotCode slug={slug} inn={inn} />
+      <CodeWhat help={help} />
     </form>
+  );
+}
+
+/**
+ * «Что это за страница?» под вводом кода (доработки 15.11.2026, пункт 5.4; прототип v120
+ * `cphCodeWhat`): нажатие раскрывает объяснение под ссылкой. Тексты — из «Подсказок в окнах».
+ */
+function CodeWhat({ help }: { help: CpCodeHelp }) {
+  const t = useT();
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        data-pub-what=""
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+        className="inline-flex cursor-pointer items-center gap-1.5 self-center border-0 bg-transparent p-0 font-[550] text-link max-md:min-h-11"
+      >
+        <Icon name="help" size="sm" />
+        {help.what || t('cph.code.what')}
+      </button>
+      <p
+        id={id}
+        data-pub-what-text=""
+        hidden={!open}
+        className="m-0 text-center text-[13.5px] leading-[1.5] text-muted max-md:text-[16px]"
+      >
+        {help.whatX}
+      </p>
+    </>
   );
 }

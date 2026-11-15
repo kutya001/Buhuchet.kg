@@ -13,6 +13,7 @@ import { buttonClass, Icon, inputClass, Modal, Note, type IconName } from '@buhu
 import { useState, type ReactNode } from 'react';
 import { fileSizeText } from '../files/files-data';
 import { useT } from '../l10n/provider';
+import { usePageHint } from './page-help-context';
 import { PageList } from './page-parts';
 
 /*
@@ -188,14 +189,21 @@ export function usePageFileViewer(fileHref: (id: string) => string): {
 export function usePageFilesSection(
   files: readonly PageFilesItem[] | null,
   openFile: OpenPageFile,
+  /** Бухгалтер принимает файлы со страницы: пустой раздел говорит и об отправленных. */
+  upload = false,
 ): { sum: string; body: ReactNode } | null {
   const t = useT();
+  const hint = usePageHint();
   const [filter, setFilter] = useState<PageFileCategory | ''>('');
   const [query, setQuery] = useState('');
   const [all, setAll] = useState(false);
   if (!files) return null;
   const n = files.length;
-  if (!n) return { sum: '', body: <span className="text-faint">{t('pub.files.none')}</span> };
+  if (!n) {
+    // Пустой раздел объясняет, что здесь появится (доработки 15.11.2026, пункт 5.5).
+    const none = hint(upload ? 'emptyFiles' : 'emptyFilesView', t('pub.files.none'));
+    return { sum: '', body: <span className="text-faint">{none}</span> };
+  }
 
   const cats = PAGE_FILE_CATEGORIES.filter((k) => files.some((f) => f.category === k));
   const ff = cats.includes(filter as PageFileCategory) ? filter : '';

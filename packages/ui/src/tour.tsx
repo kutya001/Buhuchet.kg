@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonClass, iconButtonClass, linkButtonClass } from './button';
 import { Icon } from './icon';
@@ -104,6 +104,10 @@ export interface TourOverlayProps {
   step: { label: string; part: number } | null;
   title: string;
   text: string;
+  /** Под пояснением — своё (метки «Отчётов» в обзоре страницы контрагента, прототип v120 `cphLegend`). */
+  extra?: ReactNode;
+  /** Ссылка «Закончить показ» рядом с кнопками; нет — только крестик (последнее облачко обзора). */
+  endLink?: boolean;
   /** «Пропущено знакомых элементов: N» и «Показать всё» (ссылкой; `solo` — кнопкой рядом с «Готово»). */
   skipped?: { text: string; showAll: string; solo: boolean } | null;
   /** Кнопка вперёд: «Далее», «Готово», «Сделать сейчас», «Понятно, заполню». */
@@ -122,7 +126,8 @@ const visible = (el: HTMLElement | null): el is HTMLElement =>
   !!el && el.isConnected && el.getClientRects().length > 0;
 
 export function TourOverlay(props: TourOverlayProps) {
-  const { open, target, step, title, text, skipped, next, canBack, busy, labels } = props;
+  const { open, target, step, title, text, extra, skipped, next, canBack, busy, labels } = props;
+  const endLink = props.endLink ?? true;
   const root = useRef<HTMLDivElement>(null);
   const holeRef = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
@@ -272,6 +277,7 @@ export function TourOverlay(props: TourOverlayProps) {
         <p className="m-0 mb-1.5 text-[13.5px] leading-[1.55] text-muted max-md:max-h-[30vh] max-md:overflow-auto">
           {text}
         </p>
+        {extra}
         {skipped ? (
           <div
             data-tour-skipped=""
@@ -288,9 +294,11 @@ export function TourOverlay(props: TourOverlayProps) {
         ) : null}
         {step ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
-            <button type="button" className={linkButtonClass()} onClick={props.onEnd}>
-              {labels.end}
-            </button>
+            {endLink ? (
+              <button type="button" className={linkButtonClass()} onClick={props.onEnd}>
+                {labels.end}
+              </button>
+            ) : null}
             <span className="grow" />
             {canBack ? (
               <button

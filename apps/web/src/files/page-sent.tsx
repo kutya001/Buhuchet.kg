@@ -3,17 +3,21 @@
 import {
   bishkekDate,
   bishkekTime,
+  FILE_MAX_BYTES,
   formatDateRu,
   SENT_FILE_COMMENT_MAX,
+  SENT_FILES_PER_SEND,
   sentFilesSendRefusal,
   type SentFileRefusal,
 } from '@buhuchet/domain';
 import { PageSentTicket, type PageSent } from '@buhuchet/shared';
-import { buttonClass, Field, FormGrid, Icon, inputClass, Modal, useToast } from '@buhuchet/ui';
+import { buttonClass, Field, FormGrid, Icon, inputClass, Modal } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { callApi } from '../api-client';
+import { useDoneDialog } from '../contractor-page/page-done';
 import { fileIcon } from '../contractor-page/page-files';
+import { usePageHint } from '../contractor-page/page-help-context';
 import { PageList } from '../contractor-page/page-parts';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike } from '../l10n/translate';
@@ -93,6 +97,7 @@ function SendDialog({
   onSent: (n: number) => void;
 }) {
   const t = useT();
+  const hint = usePageHint();
   const errorText = useErrorText();
   const id = useId();
   const [files, setFiles] = useState<File[]>([]);
@@ -141,7 +146,10 @@ function SendDialog({
           label={t('pub.sent.dlg.files')}
           required
           full
-          hint={t('pub.sent.dlg.files_hint')}
+          hint={hint('upHint', t('pub.sent.dlg.files_hint'), {
+            мб: FILE_MAX_BYTES / 1048576,
+            файлов: SENT_FILES_PER_SEND,
+          })}
           error={error}
         >
           {(control) => (
@@ -177,16 +185,58 @@ function SendDialog({
 }
 
 /**
- * Начало раздела «Файлы» страницы (прототип `pubSentHtml`): «Отправить файл», пока бухгалтер принимает
- * файлы, и «Отправленные вами» — статус, причина отказа и «Удалится через N дней». Нет ни того, ни
- * другого — ничего.
+ * Окно «Отправить файл» страницы: `open()` открывает его (кнопка раздела «Файлы» и «Отправить файл» в
+ * «Помощи»), `dialog` — в разметку страницы. После отправки — окно с итогом «что дальше» (доработки
+ * 15.11.2026, пункт 5.1; прототип v120 `cphDone`) и данные страницы с сервера заново.
  */
-export function PageSentBlock({ sent, address }: { sent: PageSent; address: Address }) {
+export function usePageUpload(address: Address): { open: () => void; dialog: ReactNode } {
   const t = useT();
-  const toast = useToast();
+  const hint = usePageHint();
   const router = useRouter();
-  const [dialog, setDialog] = useState(0);
-  const [open, setOpen] = useState(false);
+  const done = useDoneDialog();
+  const [n, setN] = useState(0);
+  const [isOpen, setOpen] = useState(false);
+  const dialog = (
+    <>
+      {n ? (
+        <SendDialog
+          key={`pub-up-${n}`}
+          address={address}
+          open={isOpen}
+          onClose={() => setOpen(false)}
+          onSent={(count) => {
+            setOpen(false);
+            done.show(
+              count > 1 ? t('cph.up.done_many', { n: count }) : t('cph.up.done_one'),
+              hint(
+                'upDone',
+                count > 1 ? t('pub.sent.done.many', { n: count }) : t('pub.sent.done.one'),
+              ),
+            );
+            // Список «Отправленные вами» и данные страницы — с сервера заново.
+            router.refresh();
+          }}
+        />
+      ) : null}
+      {done.dialog}
+    </>
+  );
+  return {
+    open: () => {
+      setN((x) => x + 1);
+      setOpen(true);
+    },
+    dialog,
+  };
+}
+
+/**
+ * Начало раздела «Файлы» страницы (прототип `pubSentHtml`): «Отправить файл», пока бухгалтер принимает
+ * файлы (`onSend` открывает окно `usePageUpload`), и «Отправленные вами» — статус, причина отказа и
+ * «Удалится через N дней». Нет ни того, ни другого — ничего.
+ */
+export function PageSentBlock({ sent, onSend }: { sent: PageSent; onSend: () => void }) {
+  const t = useT();
   const [all, setAll] = useState(false);
   if (!sent.upload && !sent.items.length) return null;
   return (
@@ -197,10 +247,7 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
             type="button"
             data-pub-up=""
             className={buttonClass('cta', 'sm')}
-            onClick={() => {
-              setDialog((n) => n + 1);
-              setOpen(true);
-            }}
+            onClick={onSend}
           >
             <Icon name="upload" size="sm" />
             {t('pub.sent.send')}
@@ -225,8 +272,11 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
               >
                 <Icon name={fileIcon(f.name)} className="flex-none text-muted" />
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <b className="font-semibold [overflow-wrap:anywhere]">{f.name}</b>
-                  <span className="text-[12px] text-faint">
+                  {/* Имя файла и комментарий клиента — его слова: «Словарик» их не трогает. */}
+                  <b data-no-gloss="" className="font-semibold [overflow-wrap:anywhere]">
+                    {f.name}
+                  </b>
+                  <span data-no-gloss="" className="text-[12px] text-faint">
                     {momentText(f.sentAt)}
                     {f.telegram ? ` · ${t('pub.sent.tg')}` : ''}
                     {f.comment ? ` · ${f.comment}` : ''}
@@ -246,22 +296,6 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
             ))}
           </PageList>
         </>
-      ) : null}
-      {dialog ? (
-        <SendDialog
-          key={`pub-up-${dialog}`}
-          address={address}
-          open={open}
-          onClose={() => setOpen(false)}
-          onSent={(n) => {
-            setOpen(false);
-            toast(n > 1 ? t('pub.sent.done.many', { n }) : t('pub.sent.done.one'), {
-              icon: 'upload',
-            });
-            // Список «Отправленные вами» и данные страницы — с сервера заново.
-            router.refresh();
-          }}
-        />
       ) : null}
     </div>
   );

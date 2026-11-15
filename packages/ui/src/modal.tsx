@@ -132,7 +132,7 @@ export function useWindow(): CurrentWindow {
   return useContext(CurrentWindowContext);
 }
 
-export type ModalSize = 'narrow' | 'mid' | 'wide' | 'large';
+export type ModalSize = 'narrow' | 'mid' | 'wide' | 'large' | 'side';
 
 export interface ModalProps {
   open: boolean;
@@ -150,7 +150,9 @@ export interface ModalProps {
   kind?: WindowKind;
   /**
    * Ширина на ПК: 580, 780 или 1100 px (у широкого окна и высота — до 860 px); `large` — приветствие:
-   * 860 px, высота до 760 px, на телефоне — на весь экран (прототип `.wl-card`).
+   * 860 px, высота до 760 px, на телефоне — на весь экран (прототип `.wl-card`); `side` — панель справа
+   * во всю высоту, 460 px, на телефоне — на весь экран («Помощь» страницы контрагента, прототип v120
+   * `.modal.pgside`).
    */
   size?: ModalSize;
   /**
@@ -425,6 +427,7 @@ const DIALOG_SIZE: Record<ModalSize, string> = {
   mid: 'w-[min(780px,100%)] max-h-[calc(100dvh-48px)]',
   wide: 'w-[min(1100px,100%)] h-[min(860px,calc(100dvh-48px))] max-h-[calc(100dvh-48px)]',
   large: 'w-[min(860px,100%)] max-h-[min(760px,calc(100dvh-48px))]',
+  side: 'w-[min(460px,100%)] h-dvh max-h-dvh md:rounded-r-none md:border-r-0',
 };
 
 /** Во весь экран телефона: развёрнутое окно и приветствие. */
@@ -445,7 +448,7 @@ export function dialogClass(
 ): string {
   const desktop = max ? 'w-full h-[calc(100dvh-24px)] max-h-none' : DIALOG_SIZE[size];
   const phone =
-    max || phoneFull || size === 'large'
+    max || phoneFull || size === 'large' || size === 'side'
       ? PHONE_FULL
       : `max-md:w-full max-md:max-h-[92dvh] ${size === 'wide' ? 'max-md:h-[92dvh]' : 'max-md:h-auto'} max-md:rounded-b-none max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom,0px)]`;
   return `relative flex min-w-0 touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${slide ? 'animate-slide-up' : ''} ${desktop} ${phone}`;
@@ -532,7 +535,7 @@ export function WindowFrame({
   return (
     <div
       data-max={max}
-      className={`fixed inset-0 z-50 grid place-items-center max-md:items-end max-md:justify-items-stretch max-md:p-0 ${max ? 'p-3' : 'px-4 py-6'}`}
+      className={`fixed inset-0 z-50 grid max-md:items-end max-md:justify-items-stretch max-md:p-0 ${size === 'side' && !max ? 'items-stretch justify-items-end p-0' : `place-items-center ${max ? 'p-3' : 'px-4 py-6'}`}`}
     >
       {/* Фон отдельно от окна: пока окно тянут вниз, светлеет только фон, окно остаётся непрозрачным. */}
       <div

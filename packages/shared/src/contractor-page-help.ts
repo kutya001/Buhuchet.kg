@@ -55,6 +55,7 @@ export type CpHelpData = z.infer<typeof CpHelpSchema>;
 
 /** Экран ввода кода: «Что это за страница?» и объяснение под ней (до кода — только эти два текста). */
 export const CpCodeHelp = z.object({ what: z.string(), whatX: z.string() });
+export type CpCodeHelp = z.infer<typeof CpCodeHelp>;
 
 /**
  * «Контрагент посмотрел обзор страницы» или «…закрыл обзор на шаге N из M» — строка истории

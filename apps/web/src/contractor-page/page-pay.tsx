@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  cpPaidSteps,
   formatDateRu,
   formatMomentRu,
   formatSom,
@@ -23,6 +24,7 @@ import {
 } from '@buhuchet/shared';
 import {
   buttonClass,
+  ChipSelect,
   Field,
   FormGrid,
   Icon,
@@ -37,6 +39,8 @@ import { useId, useState, type ReactNode } from 'react';
 import { callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike } from '../l10n/translate';
+import { useDoneDialog } from './page-done';
+import { usePageHint } from './page-help-context';
 import { PageTip, usePageText } from './page-parts';
 import type { PageAddress } from './page-telegram';
 
@@ -277,15 +281,48 @@ function serverProblem(e: ApiErrorLike): PagePaidProblem | null {
 }
 
 /**
- * Окно «Я оплатил» (прототип `pubPaidDlg`): за какой месяц (налоги — при нескольких месяцах с остатком
- * и без заданного), что оплачено, сумма, чек — фото или PDF, комментарий. Без чека «Отправить»
- * неактивна; проверки — те же, что у сервера (`pagePaidProblems`).
+ * Три шага «Как сообщить об оплате» сверху окна «Я оплатил» (доработки 15.11.2026, пункт 3.3; прототип
+ * v120 `cphSteps`): шаги из «Подсказок в окнах» через «|», пусто — шагов нет.
+ */
+function PaidSteps() {
+  const t = useT();
+  const hint = usePageHint();
+  const steps = cpPaidSteps(hint('paidSteps'));
+  if (!steps.length) return null;
+  return (
+    <ol
+      data-pub-paid-steps=""
+      aria-label={t('cph.paid.steps')}
+      className="col-span-full m-0 flex list-none flex-wrap gap-2 p-0"
+    >
+      {steps.map((x, i) => (
+        <li
+          key={i}
+          className="flex flex-[1_1_150px] items-center gap-2 rounded-lg bg-pane-alt px-2.5 py-2 text-[13px] leading-[1.35] font-semibold max-md:text-[16px]"
+        >
+          <span className="grid h-[22px] w-[22px] flex-none place-items-center rounded-full bg-accent text-[12px] text-on-accent">
+            {i + 1}
+          </span>
+          <span>{x}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Окно «Я оплатил» (прототип `pubPaidDlg`): шаги «Как сообщить об оплате», при `pick` — «Налоги» или
+ * «Обслуживание» (из «Помощи», когда показаны обе карточки «Как оплатить»; доработки 15.11.2026,
+ * пункт 3.4), за какой месяц (налоги — при нескольких месяцах с остатком и без заданного), что
+ * оплачено, сумма, чек — фото или PDF, комментарий. Без чека «Отправить» неактивна; проверки — те же,
+ * что у сервера (`pagePaidProblems`).
  */
 function PaidDialog({
   page,
   address,
-  purpose,
+  purpose: first,
   preset,
+  pick,
   open,
   onClose,
   onSent,
@@ -295,20 +332,34 @@ function PaidDialog({
   purpose: PayClaimPurpose;
   /** Месяц из «Перечислить»: выбора месяца нет. */
   preset: string | null;
+  /** Сверху — выбор «Налоги» или «Обслуживание». */
+  pick: boolean;
   open: boolean;
   onClose: () => void;
   onSent: () => void;
 }) {
   const t = useT();
+  const hint = usePageHint();
   const errorText = useErrorText();
   const id = useId();
+  const [purpose, setPurpose] = useState(first);
   const tax = purpose === 'tax';
   const { taxOpen, feeOpen, def } = paidChoices(page);
-  const [month, setMonth] = useState<string | null>(
-    tax ? (preset ?? taxOpen[0]?.month ?? null) : (feeOpen[0] ?? null),
-  );
+  const firstMonth = (k: PayClaimPurpose) =>
+    k === 'tax' ? (preset ?? taxOpen[0]?.month ?? null) : (feeOpen[0] ?? null);
+  const [month, setMonth] = useState<string | null>(() => firstMonth(first));
   const [own, setOwn] = useState(false);
-  const [sum, setSum] = useState(() => fieldSum(def(purpose, month)));
+  const [sum, setSum] = useState(() => fieldSum(def(first, month)));
+  /** Другой вид оплаты — месяц и сумма заново (прототип `reset`). */
+  const switchTo = (k: PayClaimPurpose) => {
+    if (k === purpose) return;
+    const m = firstMonth(k);
+    setPurpose(k);
+    setMonth(m);
+    setOwn(false);
+    setSum(fieldSum(def(k, m)));
+    setErrors({});
+  };
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -370,6 +421,23 @@ function PaidDialog({
       }
     >
       <FormGrid>
+        <PaidSteps />
+        {pick ? (
+          <Field id={`${id}-k`} label={hint('paidPick', t('cph.paid.pick'))} full>
+            {(control) => (
+              <ChipSelect
+                id={control.id}
+                label={hint('paidPick', t('cph.paid.pick'))}
+                value={purpose}
+                onChange={switchTo}
+                options={[
+                  { value: 'tax', label: t('pub.pay.tax') },
+                  { value: 'fee', label: t('pub.pay.fee') },
+                ]}
+              />
+            )}
+          </Field>
+        ) : null}
         {choose ? (
           <Field id={`${id}-m`} label={t('pub.paid.month')} full error={errors.month}>
             {(control) => (
@@ -443,7 +511,10 @@ function PaidDialog({
           label={t('pub.paid.file')}
           required
           full
-          hint={t('pub.paid.file_hint', { mb })}
+          hint={t('cph.paid.file_hint', {
+            text: hint('paidFile', t('cph.paid.file_default')),
+            mb,
+          })}
           error={errors.file}
         >
           {(control) => (
@@ -501,8 +572,10 @@ function SendDialog({
   onPaid: (() => void) | null;
 }) {
   const t = useT();
+  const hint = usePageHint();
   const copy = useCopy();
   const a = page.pay?.tax;
+  const sendHint = hint('sendSum', '', { месяц: monthLabel(pay.month).toLowerCase() });
   const types = new Map((page.reports?.types ?? []).map((x) => [x.code, x]));
   return (
     <Modal
@@ -546,6 +619,15 @@ function SendDialog({
             {t('pub.send.copy')}
           </button>
         </div>
+        {/* Куда перечислять одной строкой (доработки 15.11.2026, пункт 3.5; прототип v120 `.pub-sendw`). */}
+        {sendHint ? (
+          <span
+            data-pub-send-hint=""
+            className="-mt-1.5 text-[11.5px] text-faint max-md:text-[13px]"
+          >
+            {sendHint}
+          </span>
+        ) : null}
         <div className="flex flex-col gap-1.5">
           {pay.rows.map((r) => {
             const late = r.payDue !== null && r.payDue < page.today;
@@ -580,17 +662,19 @@ function SendDialog({
 }
 
 type SlotData =
-  | { kind: 'paid'; purpose: PayClaimPurpose; preset: string | null }
+  | { kind: 'paid'; purpose: PayClaimPurpose; preset: string | null; pick: boolean }
   | { kind: 'send'; month: string };
 type Slot = SlotData & { n: number };
 
 /**
- * Окна «Я оплатил» и «Перечислить» страницы: `paid(вид, месяц)` и `send(месяц)` открывают их,
- * `dialogs` — в разметку страницы. После «Я оплатил» — уведомление и данные страницы с сервера заново.
+ * Окна «Я оплатил» и «Перечислить» страницы: `paid(вид, месяц, выбор вида)` и `send(месяц)` открывают
+ * их, `dialogs` — в разметку страницы. После «Я оплатил» — окно с итогом «что дальше» (доработки
+ * 15.11.2026, пункт 5.1) и данные страницы с сервера заново.
  */
 export function usePagePaid(page: Page, address: PageAddress) {
   const t = useT();
-  const toast = useToast();
+  const hint = usePageHint();
+  const done = useDoneDialog();
   const router = useRouter();
   const [slot, setSlot] = useState<Slot | null>(null);
   const [open, setOpen] = useState(false);
@@ -599,8 +683,8 @@ export function usePagePaid(page: Page, address: PageAddress) {
     setSlot({ ...s, n: (slot?.n ?? 0) + 1 });
     setOpen(true);
   };
-  const paid = (purpose: PayClaimPurpose, preset: string | null = null) =>
-    show({ kind: 'paid', purpose, preset });
+  const paid = (purpose: PayClaimPurpose, preset: string | null = null, pick = false) =>
+    show({ kind: 'paid', purpose, preset, pick });
   const send = (month: string) => show({ kind: 'send', month });
   const sendPay =
     slot?.kind === 'send' ? page.reports?.months?.find((m) => m.month === slot.month) : undefined;
@@ -613,11 +697,12 @@ export function usePagePaid(page: Page, address: PageAddress) {
         address={address}
         purpose={slot.purpose}
         preset={slot.preset}
+        pick={slot.pick}
         open={open}
         onClose={() => setOpen(false)}
         onSent={() => {
           setOpen(false);
-          toast(t('pub.paid.done'), { icon: 'check' });
+          done.show(t('cph.paid.done_t'), hint('paidDone', t('pub.paid.done')));
           // Пометки «Ожидает подтверждения» и «Отправленные вами» — с сервера заново.
           router.refresh();
         }}
@@ -636,5 +721,14 @@ export function usePagePaid(page: Page, address: PageAddress) {
       />
     );
   }
-  return { paid: upload ? paid : null, send, dialogs };
+  return {
+    paid: upload ? paid : null,
+    send,
+    dialogs: (
+      <>
+        {dialogs}
+        {done.dialog}
+      </>
+    ),
+  };
 }
