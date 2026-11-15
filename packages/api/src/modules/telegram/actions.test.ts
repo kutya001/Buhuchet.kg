@@ -1,6 +1,7 @@
-import { CP_TG_CLIENT_ACTIONS, CP_TG_FILE_TO_ACTION, GROUP_MINE } from '@buhuchet/domain';
+import { createFakeTelegram, takeFakeTelegramProblems } from '@buhuchet/adapters';
+import { CP_TG_CLIENT_ACTIONS } from '@buhuchet/domain';
 import { describe, expect, it } from 'vitest';
-import { BOT_ACTIONS } from './actions';
+import { BOT_ACTIONS, HANDLED_PRESS_ACTIONS } from './actions';
 
 /*
  * Старые кнопки продолжают работать (пакет 14.11.2026, этап 3, поток Т): под уже отправленными
@@ -46,21 +47,35 @@ const SHIPPED_PRESS_ACTIONS = [
   'grpMine',
 ] as const;
 
-const handled = new Set<string>([
-  ...Object.keys(BOT_ACTIONS),
-  ...CP_TG_CLIENT_ACTIONS,
-  CP_TG_FILE_TO_ACTION,
-  GROUP_MINE,
-]);
-
 describe('коды кнопок бота', () => {
   it('каждый код, уже ушедший в Telegram, по-прежнему разбирается', () => {
-    expect(SHIPPED_PRESS_ACTIONS.filter((code) => !handled.has(code))).toEqual([]);
+    expect(SHIPPED_PRESS_ACTIONS.filter((code) => !HANDLED_PRESS_ACTIONS.has(code))).toEqual([]);
   });
 
   it('новый код кнопки записан в список отправленных', () => {
     const shipped = new Set<string>(SHIPPED_PRESS_ACTIONS);
-    expect([...handled].filter((code) => !shipped.has(code))).toEqual([]);
+    expect([...HANDLED_PRESS_ACTIONS].filter((code) => !shipped.has(code))).toEqual([]);
+  });
+
+  it('общая проверка подключена: подставной бот тестов API ловит чужой код кнопки и подстановку', async () => {
+    // Проверку кодов задаёт только src/test-setup.ts: без него (нет `setupFiles`) тест падает.
+    const tg = createFakeTelegram();
+    await tg.sendMessage(1, 'Срок {срок}', {
+      keyboard: [
+        [
+          { text: 'В работу', data: 'repWork:r1' },
+          { text: 'Старая', data: 'zzz:1' },
+          { text: 'Сдан ✓', data: 'off', disabled: true },
+        ],
+      ],
+    });
+    expect(takeFakeTelegramProblems()).toEqual([
+      {
+        method: 'sendMessage',
+        problems: ['placeholder:{срок}', 'button_action:zzz:1'],
+        text: 'Срок {срок}',
+      },
+    ]);
   });
 
   it('у кнопки клиента и действия сотрудника коды не пересекаются, кроме «Отмены»', () => {

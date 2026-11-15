@@ -8,7 +8,9 @@ if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
-    // Сообщения бота по правилам Telegram — после каждого теста (src/test-setup.ts).
+    // Сообщения бота по правилам Telegram — после каждого теста (src/test-setup.ts). Список нарушений
+    // подставного бота — общий на файл: файлы изолированы (по умолчанию `isolate: true`); без изоляции
+    // нарушения одного файла достались бы другому.
     setupFiles: ['src/test-setup.ts'],
     testTimeout: 60_000,
     hookTimeout: 120_000,
