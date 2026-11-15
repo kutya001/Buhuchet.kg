@@ -2,7 +2,7 @@
 // Лендинг buhuchet.kg для гостей (ТЗ «Лендинг — buhuchet.kg для гостей», решение заказчика 01.11.2026)
 /* ═════════════ Лендинг ═════════════ */
 // В прототипе открывается поверх программы по адресу #landing и ссылкой «О платформе» на экране входа. Все тексты — группа «Лендинг» в «Локализации» (Админка)
-const LAND={open:false,back:'',title0:'',test:false,netErr:false,sent:null,menu:false,shot:0,io:null,vis:{},rv:null,ro:null,tm:[],raf:0,braf:0,more:{},intro:false};
+const LAND={open:false,back:'',title0:'',test:false,netErr:false,sent:null,sentLead:null,menu:false,shot:0,io:null,vis:{},rv:null,ro:null,tm:[],raf:0,braf:0,more:{},intro:false};
 const LT=(k,v)=>{const x=L10N.find(y=>y.key===k);let t=x?x.ru:'';if(v)Object.entries(v).forEach(([a,b])=>{t=t.split('{'+a+'}').join(b)});return t};
 const LE=(k,v)=>esc(LT(k,v));
 const landRM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -99,21 +99,23 @@ function landDraw(){const el=$('#land');if(!el||!LAND.open)return;const D=landDe
   el.innerHTML=bar+`<div class="land-page" id="land-page">${LAND.test?`<div class="lp-test">${LE('land.test')}</div>`:''}${head}${path}<main>${hero}${stats}${landAlt([emb,who,chg,feat,shot,vid,start,secu,faq,lead])}</main>${foot}${fab}</div>${bal}`;
   landBind(el)}
 const landFormHtml=()=>{const opts=LT('land.f.size.opts').split('|').map(s=>s.trim()).filter(Boolean);
-  return `<form class="lp-form" id="lp-form" novalidate autocomplete="on">${fld(LE('land.f.name'),inp('lf-name','','autocomplete="name" maxlength="120"'),{req:true,id:'lf-name'})}${fld(LE('land.f.firm'),inp('lf-firm','','autocomplete="organization" maxlength="160"'),{req:true,id:'lf-firm',hint:LE('land.f.firm.hint')})}
-    ${fld(LE('land.f.phone'),phoneInput('lf-phone',null),{req:true,id:'lf-phone'})}${fld(LE('land.f.size'),sel('lf-size',[['',LT('land.f.size.ph')],...opts.map(o=>[o,o])],''),{req:true,id:'lf-size'})}
+  // Доработки 14.11.2026, блок 1: «ОсОО» или «ИП» первым полем, документы в PDF и данные из них (modules/lead-docs.js), дальше — прежние поля
+  return `<form class="lp-form" id="lp-form" novalidate autocomplete="on">${ldTopHtml()}${fld(`${LE('land.f.firm')} ${ldFirmMark()}`,inp('lf-firm','','autocomplete="organization" maxlength="160"'),{req:true,id:'lf-firm'})}${ldRegHtml()}
+    ${fld(LE('land.f.name'),inp('lf-name','','autocomplete="name" maxlength="120"'),{req:true,id:'lf-name'})}${fld(LE('land.f.phone'),phoneInput('lf-phone',null),{req:true,id:'lf-phone'})}${fld(LE('land.f.size'),sel('lf-size',[['',LT('land.f.size.ph')],...opts.map(o=>[o,o])],''),{req:true,id:'lf-size'})}
     ${fld(LE('land.f.tg'),inp('lf-tg','',`autocomplete="off" maxlength="64" placeholder="${LE('land.f.tg.ph')}"`),{id:'lf-tg'})}<div></div>
     ${fld(LE('land.f.note'),`<textarea class="inp" id="lf-note"></textarea>`,{id:'lf-note',full:true,hint:'До 1 000 знаков'})}
     <div class="lp-hp" aria-hidden="true"><label for="lf-site">Сайт</label><input id="lf-site" tabindex="-1" autocomplete="off"></div>
     <div class="fld lp-check-f" data-f="lf-ok"><label class="lp-check"><input type="checkbox" id="lf-ok"><span>${LE('land.f.consent.a')} <button type="button" class="linkbtn" data-lp-consent style="display:inline;padding:0">${LE('land.f.consent.b')}</button></span></label><div class="err" hidden></div></div>
-    <div class="note bad" id="lf-msg" role="alert" hidden></div><div class="lp-send"><button type="submit" class="btn cta lp-lg" id="lf-send">${LE('land.f.send')}</button></div></form>`};
-const landOkHtml=()=>`<div class="lp-ok" role="status"><svg class="lp-stamp" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="29"/><circle class="i" cx="32" cy="32" r="23"/><path class="k" d="M21 33l7 7 15-16"/></svg><span>${LE('land.ok',{телефон:LAND.sent})}</span></div>`;
+    <div class="note bad" id="lf-msg" role="alert" hidden></div><div class="note lp-tgline full">${ic('tg')}<span>${LE('land.f.tgline')}</span></div><div class="lp-send"><button type="submit" class="btn cta lp-lg" id="lf-send">${LE('land.f.send')}</button></div></form>`};
+const landOkHtml=()=>{const o=LAND.sentLead&&LEADS.find(x=>x.id===LAND.sentLead);return o&&leadHasDocs(o)?ldOkHtml(o):landOkHtml0()};
+const landOkHtml0=()=>`<div class="lp-ok" role="status"><svg class="lp-stamp" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><circle cx="32" cy="32" r="29"/><circle class="i" cx="32" cy="32" r="23"/><path class="k" d="M21 33l7 7 15-16"/></svg><span>${LE('land.ok',{телефон:LAND.sent})}</span></div>`;
 function landGo(id,focus){const t=$('#lp-'+id);if(!t)return;if(LAND.menu){LAND.menu=false;landMenuSync()}t.scrollIntoView({behavior:landRM()?'auto':'smooth',block:'start'});
-  if(focus){const f=$('#lf-name');if(f)setTimeout(()=>f.focus({preventScroll:true}),landRM()?0:450)}}
+  if(focus){const f=$('#lf-form [data-lf-form]')||$('#lf-name');if(f)setTimeout(()=>f.focus({preventScroll:true}),landRM()?0:450)}}
 function landMenuSync(){const el=$('#land');if(!el)return;const m=$('#lp-menu',el),b=$('[data-lp-menu]',el);if(m)m.hidden=!LAND.menu;if(b){b.setAttribute('aria-expanded',LAND.menu);b.innerHTML=ic(LAND.menu?'x':'menu')}}
 // Блоки через один на светлом фоне («alt»): когда блока «Видео» нет, чередование не сбивается
 const landAlt=a=>a.filter(Boolean).map((h,i)=>h.replace(/^<section class="([^"]*)"/,(m,c)=>`<section class="${c.split(' ').filter(x=>x!=='alt').concat(i%2?['alt']:[]).join(' ')}"`)).join('');
 function landShotSync(){$$('[data-lp-shot]').forEach(b=>b.setAttribute('aria-selected',+b.dataset.lpShot===LAND.shot))}
-function landConsent(){openModal({render:()=>({title:LE('land.consent.title'),body:`<p style="margin:0;line-height:1.55">${LE('land.consent.text')}</p>`,foot:'<button class="btn cta" data-close>Понятно</button>'})})}
+function landConsent(){openModal({render:()=>({title:LE('land.consent.title'),body:`<p style="margin:0;line-height:1.55">${LE('land.consent.text')}</p>${LT('land.consent.docs')?`<p style="margin:10px 0 0;line-height:1.55">${LE('land.consent.docs')}</p>`:''}`,foot:'<button class="btn cta" data-close>Понятно</button>'})})}
 function landBind(el){const page=$('#land-page',el);
   $('#land-x',el).onclick=landClose;
   $('#lp-test',el).onchange=e=>{LAND.test=e.target.checked;const top=page.scrollTop;landDraw();$('#land-page').scrollTop=top};
@@ -136,24 +138,27 @@ function landBind(el){const page=$('#land-page',el);
   if(LAND.io)LAND.io.disconnect();LAND.vis={'lp-hero':true,'lp-lead':false};const fab=$('#lp-fab',el);
   if('IntersectionObserver' in window){LAND.io=new IntersectionObserver(en=>{en.forEach(x=>LAND.vis[x.target.id]=x.isIntersecting);fab.hidden=LAND.vis['lp-hero']||LAND.vis['lp-lead'];const bl=$('#lp-bal',el);if(bl)bl.hidden=!!LAND.vis['lp-hero']},{root:page,threshold:0});['lp-hero','lp-lead'].forEach(id=>LAND.io.observe($('#'+id,el)))}
   landFormBind(el);landFx(el)}
-function landFormBind(el){const f=$('#lp-form',el);if(!f)return;bindPhone(f,'lf-phone');
+function landFormBind(el){const f=$('#lp-form',el);if(!f)return;bindPhone(f,'lf-phone');ldReset();ldBind(f);
   const clr=id=>()=>setErr(f,id,'');['lf-name','lf-firm','lf-phone','lf-tg','lf-note'].forEach(id=>{const i=$('#'+id,f);if(i)i.addEventListener('input',clr(id))});$('#lf-size',f).onchange=clr('lf-size');$('#lf-ok',f).onchange=clr('lf-ok');
   f.onsubmit=e=>{e.preventDefault();const btn=$('#lf-send',f);if(btn.disabled)return;const msg=$('#lf-msg',f);msg.hidden=true;
     const v={name:val(f,'lf-name'),firm:val(f,'lf-firm'),size:val(f,'lf-size'),tg:val(f,'lf-tg'),note:$('#lf-note',f).value.trim()};const p=readPhone(f,'lf-phone');
-    const ok=[setErr(f,'lf-name',v.name?'':LT('land.e.name')),setErr(f,'lf-firm',v.firm?'':LT('land.e.firm')),setErr(f,'lf-phone',p.ok?'':LT('land.e.phone',{цифр:p.need})),setErr(f,'lf-size',v.size?'':LT('land.e.size')),setErr(f,'lf-note',v.note.length>1000?LT('land.e.note'):''),setErr(f,'lf-ok',$('#lf-ok',f).checked?'':LT('land.e.consent'))];
-    if(!ok.every(Boolean)){const b=f.querySelector('.fld.bad input,.fld.bad select,.fld.bad textarea');if(b)b.focus();return}
+    const dv=ldCheck(f);Object.assign(v,dv.v);
+    const ok=[dv.ok,setErr(f,'lf-name',v.name?'':LT('land.e.name')),setErr(f,'lf-firm',v.firm?'':LT('land.e.firm')),setErr(f,'lf-phone',p.ok?'':LT('land.e.phone',{цифр:p.need})),setErr(f,'lf-size',v.size?'':LT('land.e.size')),setErr(f,'lf-note',v.note.length>1000?LT('land.e.note'):''),setErr(f,'lf-ok',$('#lf-ok',f).checked?'':LT('land.e.consent'))];
+    if(!ok.every(Boolean)){const b=f.querySelector('.fld.bad input,.fld.bad select,.fld.bad textarea,.fld.bad button');if(b)b.focus();return}
+    if(LD.busy){msg.hidden=false;msg.innerHTML=ic('hourglass','sm')+`<span>${LE('land.e.busy')}</span>`;return}
     v.phone=p.ph;const trap=!!$('#lf-site',f).value;
     btn.disabled=true;btn.textContent=LT('land.f.sending');
     // Отправка заявки — единственный запрос лендинга к серверу; в прототипе — пауза и запись в TemDB
     setTimeout(()=>{if(!LAND.open)return;
       if(LAND.netErr){btn.disabled=false;btn.textContent=LT('land.f.send');msg.hidden=false;msg.innerHTML=ic('alert','sm')+`<span>${LE('land.e.net')}</span>`;return}
       // Поле-ловушка заполнено (так делают боты): заявка не сохраняется, ответ — обычное «Спасибо!»
-      const o=trap?null:leadAdd(v);LAND.sent=fmtPhone(v.phone);$('#lp-fbox').innerHTML=landOkHtml();if(o)leadTgPreview(o.dup?o.lead:o,!!o.dup)},700)}}
+      const o=trap?null:leadAdd(v);LAND.sent=fmtPhone(v.phone);LAND.sentLead=o?(o.dup?o.lead:o).id:null;$('#lp-fbox').innerHTML=landOkHtml();if(o)leadTgPreview(o.dup?o.lead:o,!!o.dup)},700)}}
 // Новая заявка: повтор с тем же телефоном в течение суток новой не создаётся — комментарий дописывается к первой заявке
 function leadAdd(v){const day=Date.now()-24*36e5,at=nowStamp();const dup=LEADS.find(x=>x.phone&&x.phone.digits===v.phone.digits&&stAt(x.at)>=day);
-  if(dup){if(v.note)dup.note=(dup.note?dup.note+'\n':'')+v.note;leadLog(dup,'Повторная заявка с того же телефона'+(v.note?': комментарий дописан':''),'guest');leadNotify();dbSoon();return {dup:true,lead:dup}}
+  if(dup){if(v.note)dup.note=(dup.note?dup.note+'\n':'')+v.note;const docs=!leadHasDocs(dup)&&!dup.org&&v.form;if(docs)Object.assign(dup,{form:v.form,docs:v.docs,inn:v.inn,okpo:v.okpo,addr:v.addr,head:v.head,firm:v.firm});
+    leadLog(dup,'Повторная заявка с того же телефона'+[v.note?'комментарий дописан':'',docs?'приложены документы':''].filter(Boolean).map((t,i)=>(i?', ':': ')+t).join(''),'guest');leadNotify();dbSoon();return {dup:true,lead:dup}}
   const id='L'+(Math.max(0,...LEADS.map(x=>+String(x.id).slice(1)||0))+1);
-  const o={id,at,name:v.name,firm:v.firm,phone:v.phone,size:v.size,tg:v.tg,note:v.note,status:'Новая',org:null,adminNote:'',hist:[{at,who:'guest',what:'Заявка с сайта'+(LAND.test?' (тестовый стенд)':'')}],_cb:'guest',_ca:at,_ub:'guest',_ua:at};
+  const o={id,at,name:v.name,firm:v.firm,phone:v.phone,size:v.size,tg:v.tg,note:v.note,form:v.form,docs:v.docs,inn:v.inn,okpo:v.okpo,addr:v.addr,head:v.head,status:'Новая',org:null,adminNote:'',hist:[{at,who:'guest',what:'Заявка с сайта'+(LAND.test?' (тестовый стенд)':'')}],_cb:'guest',_ca:at,_ub:'guest',_ua:at};
   LEADS.unshift(o);leadNotify();dbSoon();return o}
 // Сообщение администраторам платформы в Telegram в прототипе показывается окном предпросмотра: чат бота с кнопками «Взять в работу», «Отклонить», «Открыть в Админке» (поток Т, задача Т6 — admin/tg-leads.js)
 function leadTgPreview(o,rep){leadTgDlg(o,rep)}
