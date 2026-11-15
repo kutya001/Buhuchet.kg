@@ -34,8 +34,11 @@ export const PAGE_IP_LOCK_MINUTES = 60;
 export const PAGE_DAY_MAX_FAILURES = 5;
 export const PAGE_DAY_WINDOW_HOURS = 24;
 
-/** Верный код запоминается в этом браузере (ТЗ; прототип PG_KEEP). */
-export const PAGE_REMEMBER_DAYS = 30;
+/**
+ * Верный код запоминается в этом браузере на 1 день с момента ввода (решение заказчика 14.11.2026,
+ * доработки 14.11.2026, блок 6; прототип v116 PG_KEEP; было 30 дней). Вход сотрудников не меняется.
+ */
+export const PAGE_REMEMBER_DAYS = 1;
 
 /** Cookie страницы с запомненным кодом: по https — с приставкой `__Secure-`. */
 export const PAGE_COOKIE = 'bh_page';

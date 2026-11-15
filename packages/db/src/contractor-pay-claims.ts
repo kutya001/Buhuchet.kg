@@ -1,7 +1,7 @@
-import type { PayClaimPurpose, Tyiyn, YearMonth } from '@buhuchet/domain';
+import type { PayClaimPurpose, PayClaimSource, Tyiyn, YearMonth } from '@buhuchet/domain';
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Tx } from './client';
-import { contractorPayClaims, contractorTelegramMessages } from './schema';
+import { contractorPayClaims, contractorTelegramMessages, feePayments, moneyOperations } from './schema';
 
 /**
  * «Оплатил» в Telegram и чек к нему (доработки 14.11.2026, блок 4, пункт 4, этап 2, поток К; таблица
@@ -99,11 +99,112 @@ export async function attachPayClaimReceipt(
   return insertTelegramPayClaim(tx, o);
 }
 
+/**
+ * «Я оплатил» на странице контрагента (доработки 14.11.2026, блок 6, этап 3; прототип v116
+ * `pubPaidDlg`): сообщение об оплате вместе с чеком — отправленным файлом со страницы. Только в
+ * транзакции организации без пользователя (страница — не сотрудник). Возвращает номер.
+ */
+export async function insertPagePayClaim(
+  tx: Tx,
+  o: {
+    contractorId: string;
+    purpose: PayClaimPurpose;
+    month: YearMonth | null;
+    amount: Tyiyn;
+    comment: string | null;
+    sentFileId: string;
+  },
+): Promise<string> {
+  const [row] = await tx
+    .insert(contractorPayClaims)
+    .values({
+      orgId: sql`app.current_org_id()`,
+      contractorId: o.contractorId,
+      source: 'page',
+      purpose: o.purpose,
+      month: o.month,
+      amount: o.amount,
+      comment: o.comment,
+      sentFileId: o.sentFileId,
+    })
+    .returning({ id: contractorPayClaims.id });
+  return row!.id;
+}
+
+/** Сообщение об оплате, которое ждёт подтверждения: что, за какой месяц, сколько и когда. */
+export interface WaitingPayClaim {
+  purpose: PayClaimPurpose;
+  month: YearMonth | null;
+  amount: Tyiyn | null;
+  createdAt: Date;
+}
+
+/**
+ * Сообщения клиента об оплате, которые ещё ждут (прототип v116 `pgClaimDone`, `pgClaimWait`): не
+ * отклонены и после них бухгалтер не принимал деньги этого вида — поступление на налоги (не отменённое)
+ * или оплату за обслуживание (не удалённую). Со страницы и из Telegram вместе, от старых к новым.
+ * «Оплачено» на странице считается только по принятым деньгам — сколько, видно по суммам месяца.
+ */
+export async function waitingPayClaims(tx: Tx, contractorId: string): Promise<WaitingPayClaim[]> {
+  const rows = await tx
+    .select({
+      purpose: contractorPayClaims.purpose,
+      month: contractorPayClaims.month,
+      amount: contractorPayClaims.amount,
+      createdAt: contractorPayClaims.createdAt,
+    })
+    .from(contractorPayClaims)
+    .where(
+      and(
+        eq(contractorPayClaims.contractorId, contractorId),
+        eq(contractorPayClaims.status, 'wait'),
+        sql`not exists (
+          select 1 from ${moneyOperations} o
+           where ${contractorPayClaims.purpose} = 'tax'
+             and o.contractor_id = ${contractorPayClaims.contractorId}
+             and o.kind = 'in' and o.cancelled_at is null
+             and o.created_at >= ${contractorPayClaims.createdAt})`,
+        sql`not exists (
+          select 1 from ${feePayments} f
+           where ${contractorPayClaims.purpose} = 'fee'
+             and f.contractor_id = ${contractorPayClaims.contractorId}
+             and f.deleted_at is null
+             and f.created_at >= ${contractorPayClaims.createdAt})`,
+      ),
+    )
+    .orderBy(contractorPayClaims.createdAt, contractorPayClaims.id);
+  return rows.map((r) => ({ ...r, month: r.month as YearMonth | null }));
+}
+
+/**
+ * Отклонённый чек — и сообщение об оплате с ним отклонено (прототип v116 `pgClaimReject`): у месяца
+ * снова «Не оплачено» или «Частично». Решение — от имени сотрудника, который отклонил файл, в той же
+ * транзакции.
+ */
+export async function rejectReceiptClaims(tx: Tx, sentFileId: string): Promise<number> {
+  const rows = await tx
+    .update(contractorPayClaims)
+    .set({
+      status: 'rejected',
+      decidedBy: sql`app.current_user_id()`,
+      decidedAt: sql`now()`,
+      updatedAt: sql`now()`,
+      version: sql`${contractorPayClaims.version} + 1`,
+    })
+    .where(
+      and(eq(contractorPayClaims.sentFileId, sentFileId), eq(contractorPayClaims.status, 'wait')),
+    )
+    .returning({ id: contractorPayClaims.id });
+  return rows.length;
+}
+
 /** Чек к оплате: что оплачено, за какой месяц и сколько (для «Принять» в «Файлах от контрагентов»). */
 export interface SentFilePay {
   purpose: PayClaimPurpose;
   month: YearMonth | null;
   amount: Tyiyn | null;
+  /** Откуда сообщение: «по чеку со страницы» или «по чеку из Telegram» (прототип v116 `pgRcptMoney`). */
+  source: PayClaimSource;
 }
 
 /** Чеки среди отправленных файлов: номер файла → что оплачено. */
@@ -118,11 +219,15 @@ export async function sentFilePays(
       purpose: contractorPayClaims.purpose,
       month: contractorPayClaims.month,
       amount: contractorPayClaims.amount,
+      source: contractorPayClaims.source,
     })
     .from(contractorPayClaims)
     .where(inArray(contractorPayClaims.sentFileId, [...sentFileIds]));
   return new Map(
-    rows.map((r) => [r.fileId!, { purpose: r.purpose, month: r.month, amount: r.amount }]),
+    rows.map((r) => [
+      r.fileId!,
+      { purpose: r.purpose, month: r.month, amount: r.amount, source: r.source },
+    ]),
   );
 }
 

@@ -67,7 +67,17 @@ export async function notifyContractorTelegramClient(
   /** Решение из кнопки бота пишется в транзакции нажатия — шаблон читается ею же. */
   db: Db | Tx = deps.db,
 ): Promise<void> {
-  await reply(deps, chatId, key, { контрагент: contractor }, db);
+  const text = await botText(deps, key, { контрагент: contractor }, db);
+  // Подключённому — кнопка меню «Код от страницы» под полем ввода (доработки 14.11.2026, блок 6;
+  // прототип v116 `tgc-menu`), отключённому — без кнопок.
+  const menu = key === 'tgCpOn' ? await clientMenuRows(db) : [];
+  await sendNow(deps, chatId, text, 'cp_telegram', { menu });
+}
+
+/** Кнопка меню чата клиента: «Код от страницы» (шаблон `tgCmdCpCode`). */
+export async function clientMenuRows(db: Db | Tx): Promise<string[][]> {
+  const templates = await messageTemplates(db);
+  return [[botTemplate('tgCmdCpCode', templates.tgCmdCpCode)]];
 }
 
 /**

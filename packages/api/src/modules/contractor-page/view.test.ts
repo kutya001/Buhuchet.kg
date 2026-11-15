@@ -312,6 +312,10 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       banks: ['Бакай Банк', 'M-Bank'],
       bik: null,
       holder: 'Организация А',
+      // Подпись «Реквизиты для перевода — …» и кнопка — как в Telegram (прототип v116 `pubPay`).
+      head: 'Реквизиты для перевода — организации Организация А',
+      copyLabel: 'Скопировать номер телефона',
+      waiting: null,
     };
     expect(page.pay).toEqual({ tax: card, fee: card });
   });

@@ -349,7 +349,7 @@ export async function logMonthPaySent(
  * Видит ли сотрудник плату за обслуживание этого контрагента: право «Видеть плату за обслуживание» и
  * контрагент в его области группы «Контрагенты» (как у методов платы).
  */
-function seesFee(
+export function seesFee(
   access: Awaited<ReturnType<typeof loadEmployeeAccess>>,
   cp: { responsibleEmployeeId: string | null },
 ): boolean {
@@ -366,7 +366,7 @@ function seesFee(
  * сообщение можно (не проходит — следующему по порядку). Ответ — номера строк очереди: после
  * транзакции их отправляет `flushEvents`.
  */
-async function queueStaffNotice(
+export async function queueStaffNotice(
   tx: Tx,
   ctx: Ctx,
   contractorId: string,

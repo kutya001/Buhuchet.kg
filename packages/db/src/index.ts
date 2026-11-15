@@ -33,6 +33,7 @@ export * from './contractor-service';
 export * from './contractor-start';
 export * from './service-periods';
 export * from './contractor-page';
+export * from './contractor-page-code';
 export * from './contractor-page-view';
 export * from './contractor-telegram';
 export * from './contractor-telegram-debt';

@@ -11,6 +11,7 @@ import {
   listSentFilesPage,
   listSentFileValues,
   orgMenuSettings,
+  rejectReceiptClaims,
   rejectSentFile,
   SentFileDecidedError,
   sentContractor,
@@ -569,6 +570,9 @@ export function sentRejectHandler(deps: ApiDeps): RouteHandler<typeof sentReject
         await requireFilesFeature(tx, ctx.orgId);
         const { file, contractor } = await visibleSent(tx, subject, id);
         await rejectSentFile(tx, { id, version: input.version, reason });
+        // Отклонённый чек — и сообщение об оплате с ним отклонено: у месяца снова «Не оплачено» или
+        // «Частично» (доработки 14.11.2026, блок 6; прототип v116 `pgClaimReject`).
+        await rejectReceiptClaims(tx, id);
         await writeHistory(tx, {
           entity: 'sent_file',
           entityId: id,

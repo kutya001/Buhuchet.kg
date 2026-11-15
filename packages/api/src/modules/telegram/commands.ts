@@ -40,7 +40,7 @@ import {
 import type { ApiDeps } from '../../deps';
 import { serverTexts } from '../l10n/texts';
 import { sendBotMessage, sendNow } from './bot';
-import { clientChatHint } from './client';
+import { clientChatHint, clientMenuRows } from './client';
 import {
   botMenuRows,
   commandLabel,
@@ -97,10 +97,12 @@ export async function sendBotHint(deps: ApiDeps, chatId: number): Promise<void> 
   ]);
   if (!users.length) {
     // Чат подключён к контрагенту (поток К) — подсказка клиенту вместо «привяжите Telegram».
-    const text =
-      (await clientChatHint(deps, chatId)) ??
-      fillTemplate(botTemplate('tgStart', templates.tgStart), {});
-    await sendNow(deps, chatId, text, 'bot_reply', { menu: [] });
+    // У клиента под полем ввода — «Код от страницы» (поток К, доработки 14.11.2026, блок 6).
+    const hint = await clientChatHint(deps, chatId);
+    const text = hint ?? fillTemplate(botTemplate('tgStart', templates.tgStart), {});
+    await sendNow(deps, chatId, text, 'bot_reply', {
+      menu: hint ? await clientMenuRows(deps.db) : [],
+    });
     return;
   }
   const dict = await serverTexts(deps);
@@ -273,8 +275,10 @@ export async function handleBotCommand(deps: ApiDeps, msg: BotCommandMessage): P
   }
   const all = await botChatUsers(deps.db, msg.chatId);
   if (!all.length) {
-    const hint = (await clientChatHint(deps, msg.chatId)) ?? tpl('tgStart');
-    await sendNow(deps, msg.chatId, hint, 'bot_cmd', { menu: [] });
+    const client = await clientChatHint(deps, msg.chatId);
+    await sendNow(deps, msg.chatId, client ?? tpl('tgStart'), 'bot_cmd', {
+      menu: client ? await clientMenuRows(deps.db) : [],
+    });
     return true;
   }
   const users = all;

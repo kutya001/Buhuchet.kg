@@ -1,5 +1,6 @@
 import {
   PAY_CLAIM_PURPOSES,
+  PAY_CLAIM_SOURCES,
   SENT_FILE_COMMENT_MAX,
   SENT_FILE_REASON_MAX,
   SENT_FILE_SOURCES,
@@ -58,6 +59,8 @@ export const SentFilePay = z.object({
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
     .nullable(),
   amount: Tyiyn.nullable(),
+  /** Откуда чек: со страницы контрагента («Я оплатил») или из Telegram — для примечания денег. */
+  source: z.enum(PAY_CLAIM_SOURCES),
 });
 export type SentFilePay = z.infer<typeof SentFilePay>;
 
