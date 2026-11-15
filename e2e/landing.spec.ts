@@ -217,7 +217,7 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await expect(html).toHaveAttribute('data-theme', 'dark');
   });
 
-  test('(проверка задачи #165, доработки 14.11.2026, блок 1) форма заявки: пустая — ошибки под полями, курсор в «Форме организации», без галочки — «Нужно согласие…»; нет связи — «Не удалось отправить…», введённое не пропадает; с галочкой — «Спасибо!»', async ({
+  test('(проверка задачи #165, доработки 14.11.2026, блок 1) форма заявки: пустая — ошибки под полями, курсор в «Форме организации», без галочки — «Нужно согласие…»; нет связи — «Не удалось отправить…», введённое не пропадает; с галочкой — «Заявка отправлена. Подключите Telegram…» и кнопка на бота', async ({
     page,
   }) => {
     await ownAddress(page);
@@ -257,10 +257,17 @@ test.describe('Этап 3: лендинг для гостей (задача #165
     await page.unroute('**/api/leads');
 
     await form.getByRole('button', { name: 'Отправить заявку' }).click();
-    const formatted = `+996 ${phone.slice(0, 3)} ${phone.slice(3, 6)} ${phone.slice(6)}`;
-    await expect(page.locator('#lp-lead').getByRole('status')).toHaveText(
-      `Спасибо! Заявка отправлена. Мы свяжемся с вами по номеру ${formatted} в рабочее время.`,
+    // У сайта есть бот (TELEGRAM_BOT_USERNAME в .env.example) — как в прототипе v114 (`ldOkHtml`):
+    // «Заявка отправлена. Подключите Telegram…», кнопка на бота и срок ссылки, без «Спасибо! … по номеру».
+    const sent = page.locator('#lp-lead').getByRole('status');
+    await expect(sent).toContainText(
+      'Заявка отправлена. Подключите Telegram, чтобы узнать решение',
     );
+    await expect(sent).not.toContainText('Спасибо!');
+    const bot = sent.getByRole('link', { name: 'Подключить Telegram' });
+    await expect(bot).toHaveAttribute('href', /^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=l_/);
+    await expect(bot).toHaveAttribute('target', '_blank');
+    await expect(sent).toContainText('Ссылка на бота действует до');
   });
 
   test('(проверка задачи #165) четвёртая заявка за час с одного адреса: «Отправляем…», затем «Слишком много заявок…» с телефоном для связи; введённое не пропадает', async ({

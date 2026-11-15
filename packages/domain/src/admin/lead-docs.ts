@@ -29,12 +29,6 @@ export const LEAD_DOCS_BY_FORM: Readonly<Record<OrgLegalForm, readonly LeadDocKi
 /** Документ — только PDF, до 20 МБ (общий предел файлов платформы). */
 export const LEAD_DOC_CONTENT_TYPE = 'application/pdf';
 
-/** Одноразовая ссылка «Подключить Telegram» заявителя действует 24 часа. */
-export const LEAD_TG_LINK_HOURS = 24;
-
-/** Ссылка владельца «задать пароль» после «Одобрить» действует 7 дней. */
-export const PASSWORD_SETUP_LINK_DAYS = 7;
-
 /** Файлы отклонённой заявки удаляются через 7 дней после отказа, неразобранной — через 30 дней. */
 export const LEAD_DOCS_KEEP_REJECTED_DAYS = 7;
 export const LEAD_DOCS_KEEP_DAYS = 30;

@@ -345,7 +345,8 @@ CREATE VIEW app.admin_lead_docs WITH (security_barrier = true) AS
   SELECT d.id, d.lead_id, d.kind, d.name, d.size_bytes, d.state, d.storage_key, d.created_at
   FROM public.platform_lead_docs d
   WHERE (SELECT app.is_platform_admin());--> statement-breakpoint
--- Заявки для Админки: прежние столбцы и данные из документов, Telegram заявителя, число документов.
+-- Заявки для Админки: прежние столбцы и данные из документов, Telegram заявителя, число документов,
+-- имя заявителя в Telegram (0148 потока Т) — «подключён · @имя» в «Данных из документов».
 CREATE OR REPLACE VIEW app.admin_leads WITH (security_barrier = true) AS
   SELECT
     l.id,
@@ -373,7 +374,9 @@ CREATE OR REPLACE VIEW app.admin_leads WITH (security_barrier = true) AS
     l.docs_state,
     l.docs_purge_at,
     l.tg_linked_at,
-    (SELECT count(*)::integer FROM public.platform_lead_docs d WHERE d.lead_id = l.id) AS docs_count
+    (SELECT count(*)::integer FROM public.platform_lead_docs d WHERE d.lead_id = l.id) AS docs_count,
+    l.tg_username,
+    l.tg_first_name
   FROM public.platform_leads l
   LEFT JOIN public.organizations g ON g.id = l.created_org_id
   WHERE (SELECT app.is_platform_admin());--> statement-breakpoint

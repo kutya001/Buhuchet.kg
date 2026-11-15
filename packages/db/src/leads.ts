@@ -70,6 +70,9 @@ export const adminLeadsView = app
     /** Когда заявитель подключил бота по ссылке из формы; null — «Telegram не подключён». */
     tgLinkedAt: timestamp('tg_linked_at', { withTimezone: true }),
     docsCount: integer('docs_count').notNull(),
+    /** Имя заявителя в Telegram (миграция 0148): «подключён · @имя» в «Данных из документов». */
+    tgUsername: text('tg_username'),
+    tgFirstName: text('tg_first_name'),
   })
   .existing();
 
@@ -335,6 +338,8 @@ const LEAD_FIELDS = {
   docsPurgeAt: v.docsPurgeAt,
   tgLinkedAt: v.tgLinkedAt,
   docsCount: v.docsCount,
+  tgUsername: v.tgUsername,
+  tgFirstName: v.tgFirstName,
   updatedByGuest: BY_GUEST,
   statusAt: STATUS_AT,
   statusByGuest: STATUS_BY_GUEST,

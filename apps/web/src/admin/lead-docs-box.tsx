@@ -25,11 +25,15 @@ function docMeta(t: Translate, d: AdminLeadDoc): string {
   return `${t(LEAD_DOC_TEXT_KEYS[d.kind] as UiTextKey)} · ${t(`files.size.${unit}`, { n: value })}`;
 }
 
-/** «Telegram заявителя»: подключён (зелёная) или нет (жёлтая) — прототип ldTgPill. */
-export function LeadTgPill({ t, on }: { t: Translate; on: boolean }) {
+/**
+ * «Telegram заявителя»: подключён (зелёная; в «Данных из документов» — с именем подключившего) или нет
+ * (жёлтая) — прототип ldTgPill.
+ */
+export function LeadTgPill({ t, on, name }: { t: Translate; on: boolean; name?: string | null }) {
   return (
     <Pill tone={on ? 'ok' : 'warn'} size="sm" icon="tg">
       {t(on ? 'leads.tg.on' : 'leads.tg.off')}
+      {on && name ? ` · ${name}` : null}
     </Pill>
   );
 }
@@ -47,7 +51,11 @@ export function LeadDocsBox({ t, l }: { t: Translate; l: AdminLeadCard }) {
     { id: 'okpo', label: t('leads.docs.okpo'), value: mono(l.okpo) },
     { id: 'address', label: t('leads.docs.address'), value: l.address || faint },
     { id: 'head', label: t('leads.docs.head'), value: l.head || faint },
-    { id: 'tg', label: t('leads.docs.tg'), value: <LeadTgPill t={t} on={l.tgLinked} /> },
+    {
+      id: 'tg',
+      label: t('leads.docs.tg'),
+      value: <LeadTgPill t={t} on={l.tgLinked} name={l.tgName} />,
+    },
   ];
 
   /**

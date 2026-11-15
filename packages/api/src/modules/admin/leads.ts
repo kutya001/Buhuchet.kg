@@ -18,7 +18,7 @@ import {
   formatPhone,
   LEAD_DOC_MAX_BYTES,
   LEAD_DOC_TEXT_KEYS,
-  LEAD_TG_LINK_HOURS,
+  LEAD_TG_TTL_HOURS,
   leadBotMessage,
   leadDocsMissing,
   leadSizeOptions,
@@ -103,7 +103,8 @@ function leadTgCookie(c: Context<AppEnv>, deps: ApiDeps, token: string): void {
     secure,
     sameSite: 'Strict',
     path: '/api/leads',
-    maxAge: LEAD_TG_LINK_HOURS * 3600,
+    // Срок cookie — срок самой ссылки «Подключить Telegram» (одна константа, `telegram/lead-link.ts`).
+    maxAge: LEAD_TG_TTL_HOURS * 3600,
   });
 }
 

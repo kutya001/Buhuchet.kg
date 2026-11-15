@@ -343,9 +343,12 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     await expect.poll(async () => !!(await ask())).toBe(true);
     const asked = (await ask())!;
     await sendToBot(page.request, chat, { text: '( )', replyTo: asked.messageId });
+    // Не последнее сообщение чата: задача расписания шлёт администраторам и «Новую заявку» других тестов.
     await expect
-      .poll(async () => (await botMessages(page.request, chat)).at(-1))
-      .toContain('Нужна причина текстом');
+      .poll(async () =>
+        (await botMessages(page.request, chat)).some((m) => m.includes('Нужна причина текстом')),
+      )
+      .toBe(true);
     expect((await card(refuseId)).status).toBe('new');
     await sendToBot(page.request, chat, {
       text: 'Нужна программа с проводками',
@@ -356,7 +359,7 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
       to: 'rejected',
       via: 'telegram',
     });
-    expect((await botMessages(page.request, chat)).at(-1)).toBe(
+    expect(await botMessages(page.request, chat)).toContain(
       `Заявка «${refuse}» — «Отказ». Причина: Нужна программа с проводками. Снять отказ можно в Админке.`,
     );
   });

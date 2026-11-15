@@ -26,6 +26,7 @@ import {
   leadOwnerLogin,
   leadOwnerLoginBase,
   leadStatusChange,
+  leadTgName,
   PLATFORM_ADMIN_NAME,
   RecordChangedError,
   type UiTextParams,
@@ -112,6 +113,11 @@ export function leadBody(r: AdminLeadRecord, t: Texts): AdminLead {
     head: r.head,
     docs: r.legalForm ? r.docsCount : null,
     tgLinked: r.tgLinkedAt !== null,
+    // Имя подключившего — как в истории заявки «Telegram подключён: @имя» (прототип `ldTgPill(o, true)`).
+    tgName:
+      r.tgLinkedAt === null
+        ? null
+        : leadTgName({ username: r.tgUsername, firstName: r.tgFirstName }),
     audit: {
       createdAt: r.createdAt.toISOString(),
       createdBy: t('leads.guest'),

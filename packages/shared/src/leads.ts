@@ -183,6 +183,8 @@ export const AdminLead = z.object({
   docs: z.number().int().nonnegative().nullable(),
   /** Заявитель подключил бота по ссылке из формы («Telegram подключён»). */
   tgLinked: z.boolean(),
+  /** Имя подключившего в Telegram («@имя» или имя из профиля); null — не подключён. */
+  tgName: z.string().nullable(),
   audit: RecordAudit,
   version: RecordVersion,
 });

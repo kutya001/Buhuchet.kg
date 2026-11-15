@@ -297,6 +297,10 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         and(eq(schema.platformLeadEvents.leadId, l.id), eq(schema.platformLeadEvents.kind, 'tg')),
       );
     expect(event).toMatchObject({ text: '@aigul_s', via: 'telegram', actorUserId: null });
+    // Окно заявки Админки, «Данные из документов»: «подключён · @aigul_s» (прототип v114 `ldTgPill`).
+    const card = await apiRequest(app, 'GET', `/api/admin/leads/${l.id}`, admin);
+    expect(card.status).toBe(200);
+    expect(await card.json()).toMatchObject({ tgLinked: true, tgName: '@aigul_s' });
 
     const count = sent(9211).length;
     await start(l.key, 9211);
@@ -352,6 +356,7 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       expect(res.status).toBe(200);
       // Ссылку «Подключить Telegram» выдаёт сама подача заявки (стык с потоком И) — в ответе формы.
       const { tg: link } = (await res.json()) as { tg: { url: string } | null };
+      expect(link?.url).toMatch(LINK_RE);
       await telegramSendJob(noPause).run(deps, clock.now());
       const [saved] = await f.t.admin.db
         .select()
@@ -464,6 +469,139 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(body.staff.rows.find((r) => r.userId === org.ownerUserId)?.states).toContain(
       'no_password',
     );
+  });
+
+  it('повтор заявки через форму: ту же ссылку получает только браузер с cookie; без cookie — без кнопки; после «Старта» — «подключён»', async () => {
+    n += 1;
+    const phone = `+9967004${String(10000 + n)}`;
+    let ip = 0;
+    const post = async (cookie?: string) => {
+      ip += 1;
+      const res = await app.request('/api/leads', {
+        method: 'POST',
+        headers: {
+          origin: TEST_ORIGIN,
+          'content-type': 'application/json',
+          'x-forwarded-for': `198.51.${100 + (n % 100)}.${ip}, 10.0.0.1`,
+          ...(cookie ? { cookie } : {}),
+        },
+        body: JSON.stringify({
+          form: 'ip',
+          inn: '21811201810002',
+          okpo: '',
+          address: '',
+          head: '',
+          draft: (
+            await leadDocDraft(app, deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }])
+          ).draft,
+          name: 'Айгуль Садыкова',
+          firm: FIRM,
+          phone,
+          size: '21–50',
+          telegram: '',
+          note: '',
+          consent: true,
+          website: '',
+        }),
+      });
+      expect(res.status, await res.clone().text()).toBe(200);
+      const { tg: link } = (await res.json()) as {
+        tg: { url: string } | { linked: true } | null;
+      };
+      return { link, setCookie: res.headers.get('set-cookie') };
+    };
+
+    const first = await post();
+    expect(first.link).toMatchObject({ url: expect.stringMatching(LINK_RE) });
+    // Ключ ссылки — только в cookie этого браузера: HttpOnly, SameSite=Strict, путь формы, Secure (https).
+    const raw = first.setCookie ?? '';
+    expect(raw).toMatch(/^bu_lead_tg=[A-Za-z0-9_-]{43};/);
+    expect(raw).toMatch(/; HttpOnly/i);
+    expect(raw).toMatch(/; SameSite=Strict/i);
+    expect(raw).toMatch(/; Path=\/api\/leads/i);
+    expect(raw).toMatch(/; Secure/i);
+    const cookie = raw.split(';')[0]!;
+    const url = (first.link as { url: string }).url;
+
+    expect((await post(cookie)).link).toMatchObject({ url });
+    expect((await post()).link).toBeNull();
+
+    const key = LINK_RE.exec(url)![1]!;
+    expect((await start(key, 9241)).status).toBe(200);
+    expect((await post(cookie)).link).toEqual({ linked: true });
+  });
+
+  it('стык с потоком И: заявка с документами → «Старт» → «Одобрить» методом Админки — Telegram заявителя у владельца, «Организация создана» с «Задать пароль»', async () => {
+    n += 1;
+    const phone = `+9967003${String(10000 + n)}`;
+    const firm = `ИП «Стык ${n}»`;
+    const res = await app.request('/api/leads', {
+      method: 'POST',
+      headers: {
+        origin: TEST_ORIGIN,
+        'content-type': 'application/json',
+        'x-forwarded-for': `203.0.113.${n}, 10.0.0.1`,
+      },
+      body: JSON.stringify({
+        form: 'ip',
+        inn: `2181120181${String(1000 + n).slice(-4)}`,
+        okpo: '',
+        address: '',
+        head: '',
+        draft: (await leadDocDraft(app, deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }]))
+          .draft,
+        name: 'Айгуль Садыкова',
+        firm,
+        phone,
+        size: '21–50',
+        telegram: '',
+        note: '',
+        consent: true,
+        website: '',
+      }),
+    });
+    expect(res.status, await res.clone().text()).toBe(200);
+    const { tg: link } = (await res.json()) as { tg: { url: string } | null };
+    expect(link?.url).toMatch(LINK_RE);
+    const key = LINK_RE.exec(link?.url ?? '')![1]!;
+    chat += 1;
+    const applicant = chat;
+    expect((await start(key, applicant)).status).toBe(200);
+    const [saved] = await f.t.admin.db
+      .select()
+      .from(schema.platformLeads)
+      .where(eq(schema.platformLeads.phone, phone));
+
+    const cardRes = await apiRequest(app, 'GET', `/api/admin/leads/${saved!.id}`, admin);
+    expect(cardRes.status).toBe(200);
+    const card = (await cardRes.json()) as {
+      version: number;
+      tgLinked: boolean;
+      approve: { refusal: string | null } | null;
+    };
+    expect(card).toMatchObject({ tgLinked: true, approve: { refusal: null } });
+    const login = `ltg-joint-${n}`;
+    const approved = await apiRequest(app, 'POST', `/api/admin/leads/${saved!.id}/approve`, admin, {
+      login,
+      version: card.version,
+    });
+    expect(approved.status, await approved.clone().text()).toBe(201);
+    const done = (await approved.json()) as { orgId: string; ownerUserId: string; setup: string };
+    expect(done.setup).toBe('sent');
+
+    // Telegram заявителя — Telegram владельца; ему «Организация создана» с кнопкой «Задать пароль».
+    const [ownerLink] = await f.t.admin.db
+      .select()
+      .from(schema.telegramLinks)
+      .where(eq(schema.telegramLinks.userId, done.ownerUserId));
+    expect(ownerLink).toMatchObject({ chatId: applicant, orgId: done.orgId });
+    const msg = last(applicant)!;
+    expect(msg.text).toBe(
+      fillTemplate(TPL.tgLeadDone, { организация: firm, логин: login, дней: 7 }),
+    );
+    expect((msg.options.keyboard ?? []).flat()).toEqual([
+      { text: TPL.tgBtnSetPass, url: expect.stringMatching(SETUP_RE) },
+    ]);
   });
 
   it('страница «Задать пароль»: открыть — не тратит; пароль — один раз, сеансы завершены, вход с новым паролем', async () => {

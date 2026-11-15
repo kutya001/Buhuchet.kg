@@ -197,7 +197,8 @@ test('(доработки 14.11.2026, блок 1, пункты 1–3) заявк
   await expect(row).not.toContainText('не подключён');
   const docs = card.locator('[data-lead-docs]');
   await expect(docs).toContainText(inn);
-  await expect(docs).toContainText('подключён');
+  // «Данные из документов» — с именем подключившего (прототип v114 `ldTgPill(o, true)`).
+  await expect(docs).toContainText(`подключён · @e2e_${chat}`);
   await expect(docs).not.toContainText('не подключён');
   await expect(card).toContainText(`Telegram подключён: @e2e_${chat}`);
 
@@ -211,18 +212,27 @@ test('(доработки 14.11.2026, блок 1, пункты 1–3) заявк
   await approve.getByLabel('Логин владельца').fill(login);
   await approve.getByRole('button', { name: 'Одобрить' }).click();
   await expect(approve).toBeHidden();
+  // Сайт тестов — по http: кнопка-ссылка «Задать пароль» не уходит (только https), об этом — уведомление,
+  // а заявителю после «Заявка получена» ничего не пришло.
   await expect(
-    page.getByRole('status').filter({ hasText: 'Организация и владелец созданы' }),
+    page.getByRole('status').filter({ hasText: 'ссылка для пароля не ушла' }),
   ).toBeVisible();
+  expect(await botMessages(page.request, chat)).toEqual([
+    `✅ Заявка получена, о решении сообщим здесь. Фирма: ${firm}.`,
+  ]);
 
   // «Организация» в окне заявки открывает её карточку в «Организациях», «Из заявки» — снова заявку.
   const orgLink = card.locator('[data-lead-org]');
   await expect(orgLink).toHaveText(firm);
   await orgLink.click();
   await expect(page).toHaveURL(/\/app\/orgs(\/list)?$/);
+  // Открылась карточка именно этой организации: название — заголовок окна, ИНН — под ним.
+  const orgCard = page.getByRole('dialog').filter({ has: page.locator('[data-org-card]') });
+  await expect(orgCard).toContainText(firm);
+  await expect(orgCard).toContainText(inn);
   // Пароля у владельца ещё нет, Telegram привязан — «Отправить новую ссылку для пароля» доступна.
-  await expect(page.locator('[data-org-action="owner-setup"]')).toBeEnabled();
-  await page.locator('[data-org-lead]').click();
+  await expect(orgCard.locator('[data-org-action="owner-setup"]')).toBeEnabled();
+  await orgCard.locator('[data-org-lead]').click();
   await expect(page.locator('[data-lead-card]').filter({ hasText: inn })).toBeVisible();
 
   // Карточка владельца: «Пароль не задан: ссылка в Telegram»; временный пароль — для входа ниже.
@@ -251,7 +261,9 @@ test('(доработки 14.11.2026, блок 1, пункты 1–3) заявк
     const ownInn = main.getByLabel('ИНН', { exact: true });
     await expect(ownInn).toHaveValue(inn);
     await expect(ownInn).toHaveAttribute('readonly', '');
-    await expect(main.getByLabel('Форма', { exact: true })).toHaveValue('ip');
+    const ownForm = main.getByLabel('Форма', { exact: true });
+    await expect(ownForm).toHaveValue('ip');
+    await expect(ownForm).toBeDisabled();
     const ownAddress = main.getByLabel('Адрес', { exact: true });
     await expect(ownAddress).toHaveValue(legal);
     await ownAddress.fill('г. Бишкек, ул. Новая, 10');
@@ -292,7 +304,7 @@ test('(доработки 14.11.2026, блок 1, пункт 2) «Отклони
     await guest.close();
   }
   const earlyChat = uniqueChat();
-  const lateChat = earlyChat + 1;
+  const lateChat = uniqueChat();
   await sendToBot(page.request, earlyChat, { text: `/start ${earlyStart}` });
   await expect
     .poll(() => botMessages(page.request, earlyChat))
@@ -303,8 +315,18 @@ test('(доработки 14.11.2026, блок 1, пункт 2) «Отклони
     .poll(async () => (await botMessages(page.request, earlyChat)).at(-1))
     .toBe(`Отказ по заявке. Фирма: ${early}. Причина: Не наш регион.`);
   await refuseLead(page, isMobile, late, 'Дубль заявки');
-  // Заявитель второй заявки бота ещё не открывал — ему ничего не уходит, пока он не нажмёт «Старт».
-  expect(await botMessages(page.request, lateChat)).toEqual([]);
+  // Заявитель второй заявки бота ещё не открывал: у заявки Telegram не подключён, причина ждёт «Старта».
+  const lateRows = await page.request.get('/api/admin/leads', {
+    params: { q: late },
+    maxRetries: 2,
+  });
+  expect(lateRows.status()).toBe(200);
+  const { items: lateList } = (await lateRows.json()) as {
+    items: { firm: string; status: string; tgLinked: boolean }[];
+  };
+  expect(lateList).toEqual([
+    expect.objectContaining({ firm: late, status: 'rejected', tgLinked: false }),
+  ]);
   await sendToBot(page.request, lateChat, { text: `/start ${lateStart}` });
   await expect
     .poll(() => botMessages(page.request, lateChat))

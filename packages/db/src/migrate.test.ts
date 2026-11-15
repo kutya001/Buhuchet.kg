@@ -1,6 +1,38 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { ensureAppLoginRole, roleFromUrl, scramSha256Verifier } from './migrate';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
+
+/**
+ * Журнал миграций (общая сборка этапа 2, перенумерация): мигратор Drizzle на стенде и рабочей базе
+ * применяет миграцию, только если её `when` больше, чем у последней применённой, — иначе молча
+ * пропускает; прогон на пустой базе этого не заметит. Поэтому номера идут подряд, файл есть у каждой
+ * записи, а `when` строго растёт.
+ */
+describe('журнал миграций', () => {
+  const dir = new URL('../migrations/', import.meta.url);
+  const journal = JSON.parse(readFileSync(new URL('meta/_journal.json', dir), 'utf8')) as {
+    entries: { idx: number; tag: string; when: number }[];
+  };
+
+  it('номера подряд, у каждой записи свой файл, лишних файлов нет', () => {
+    const { entries } = journal;
+    expect(entries.map((e) => e.idx)).toEqual(entries.map((_, i) => i));
+    for (const e of entries)
+      expect(e.tag.startsWith(String(e.idx).padStart(4, '0') + '_')).toBe(true);
+    const files = readdirSync(dir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
+    expect(files).toEqual(entries.map((e) => `${e.tag}.sql`));
+  });
+
+  it('`when` строго растёт — новую миграцию мигратор не пропустит', () => {
+    const { entries } = journal;
+    for (let i = 1; i < entries.length; i += 1) {
+      expect(entries[i]!.when, entries[i]!.tag).toBeGreaterThan(entries[i - 1]!.when);
+    }
+  });
+});
 
 describe('roleFromUrl', () => {
   it('берёт имя роли из строки подключения', () => {
