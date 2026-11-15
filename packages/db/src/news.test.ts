@@ -419,6 +419,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v113')).toBeUndefined();
     expect(rows.find((r) => r.id === 'v114')).toBeUndefined();
     expect(rows.find((r) => r.id === 'v115')).toBeUndefined();
+    // v115 не наполняется из-за NEWS_NOT_YET, а не потому, что её нет в refDB или она черновик.
+    const source = refDB.news as { id: string; status: string }[];
+    expect(source.find((x) => x.id === 'v115')?.status).toBe('Опубликовано');
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
