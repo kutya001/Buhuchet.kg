@@ -28,6 +28,10 @@ CMD ["pnpm", "db:migrate"]
 FROM node:22-alpine AS web
 WORKDIR /app
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+# Простаивающее соединение сайт держит 125 с, а не 5 с по умолчанию Node: дольше, чем его держит
+# обратный прокси (Caddy — 2 мин), иначе прокси и сквозные тесты шлют запрос в уже закрытое соединение
+# («socket hang up», 502; docs/decisions.md п. О-55, docs/typical-mistakes.md № 26).
+ENV KEEP_ALIVE_TIMEOUT=125000
 COPY --from=build --chown=node:node /repo/apps/web/.next/standalone ./
 COPY --from=build --chown=node:node /repo/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build --chown=node:node /repo/apps/web/public ./apps/web/public
