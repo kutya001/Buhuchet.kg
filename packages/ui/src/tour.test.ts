@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tourBubblePlace, tourHole } from './tour';
+import { tourBubblePlace, tourHole, tourPagePlace } from './tour';
 
 const VIEW = { w: 1280, h: 800 };
 const PHONE = { w: 390, h: 844 };
@@ -65,5 +65,42 @@ describe('показ «Показать как»: подсветка и мест
     expect(tourBubblePlace(bar, bubble, PHONE, { phone: true })).toEqual({ x: 12, y: 538 });
     const tall = { left: 4, top: 60, width: 382, height: 760 };
     expect(tourBubblePlace(tall, bubble, PHONE, { phone: true })).toEqual({ x: 12, y: 12 });
+  });
+});
+
+describe('обзор страницы контрагента: облачко не закрывает подсвеченный раздел (прототип v120 cphTourPlace)', () => {
+  it('на телефоне облачко всегда внизу, а подсветка высокого раздела обрезается над облачком', () => {
+    const bubble = { w: 366, h: 220 };
+    const tall = { left: 4, top: 12, width: 382, height: 900 };
+    expect(tourPagePlace(tall, bubble, PHONE, true)).toEqual({
+      hole: { left: 4, top: 6, width: 382, height: 594 },
+      x: 12,
+      y: 612,
+    });
+    // Раздел целиком над облачком — рамка как обычно.
+    const small = { left: 10, top: 100, width: 370, height: 60 };
+    expect(tourPagePlace(small, bubble, PHONE, true)).toEqual({
+      hole: { left: 4, top: 94, width: 382, height: 72 },
+      x: 12,
+      y: 612,
+    });
+    // Раздел ниже облачка — рамка не меньше 8 px, облачко на месте.
+    const low = { left: 10, top: 700, width: 370, height: 60 };
+    expect(tourPagePlace(low, bubble, PHONE, true).y).toBe(612);
+    expect(tourPagePlace(low, bubble, PHONE, true).hole?.height).toBe(8);
+  });
+
+  it('на ПК: сбоку от раздела, нет места сбоку — под или над ним, иначе в правом нижнем углу; без раздела — посередине', () => {
+    expect(tourPagePlace(null, BUBBLE, VIEW, false)).toEqual({ hole: null, x: 450, y: 300 });
+    const narrow = { left: 100, top: 100, width: 400, height: 200 };
+    expect(tourPagePlace(narrow, BUBBLE, VIEW, false)).toMatchObject({ x: 522, y: 94 });
+    const rightSide = { left: 700, top: 100, width: 500, height: 200 };
+    expect(tourPagePlace(rightSide, BUBBLE, VIEW, false)).toMatchObject({ x: 298, y: 94 });
+    const wide = { left: 100, top: 100, width: 1080, height: 200 };
+    expect(tourPagePlace(wide, BUBBLE, VIEW, false)).toMatchObject({ x: 94, y: 318 });
+    const wideLow = { left: 100, top: 500, width: 1080, height: 200 };
+    expect(tourPagePlace(wideLow, BUBBLE, VIEW, false)).toMatchObject({ x: 94, y: 282 });
+    const huge = { left: 100, top: 100, width: 1080, height: 600 };
+    expect(tourPagePlace(huge, BUBBLE, VIEW, false)).toMatchObject({ x: 888, y: 588 });
   });
 });

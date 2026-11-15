@@ -7,8 +7,8 @@ import { expect, type BrowserContext, type Page } from '@playwright/test';
 // «Добро пожаловать» открывается при первом входе по коду и закрыло бы страницу в чужих проверках.
 // Отметку «уже видели» страница ставит cookie `bh_pgwel=1` под адресом страницы и читает в
 // `document.cookie` (`welcomeSeen`, apps/web/src/contractor-page/page-help-model.ts): у всех тестов она
-// уже есть — под всем сайтом (`storageState` в playwright.config.ts). Само окно проверяет
-// contractor-page-help.spec.ts — он эту отметку убирает (`forgetWelcome`).
+// уже есть — под всем сайтом (`storageState` в playwright.config.ts). Само окно проверяют
+// тесты «Доработки 15.11» в contractor-page.spec.ts — они эту отметку убирают (`forgetWelcome`).
 
 /** Имя cookie отметки. */
 export const WELCOME_COOKIE = 'bh_pgwel';

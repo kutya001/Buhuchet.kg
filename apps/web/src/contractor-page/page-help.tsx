@@ -267,6 +267,7 @@ function HelpPanel({
       sub={page.contractor.name}
       size="side"
       noMax
+      touch
     >
       <div data-pub-help-panel="" className="flex flex-col gap-3.5">
         <button
@@ -384,6 +385,7 @@ function WelcomeDialog({
       title={w.t || t('cph.welcome.t')}
       kind="message"
       noMax
+      touch
       footer={
         <>
           <button
@@ -563,11 +565,13 @@ function usePageTour({
             : null
         }
         endLink={tour.i < tour.list.length - 1}
+        page
         next={{ label: t(tour.i === tour.list.length - 1 ? 'cph.tour.done' : 'cph.tour.next') }}
         canBack={tour.i > 0}
         busy={busy}
         labels={{
           end: t('cph.tour.end'),
+          endAria: t('cph.tour.end_aria'),
           endHint: t('cph.tour.end_hint'),
           back: t('cph.tour.back'),
           keys: t('cph.tour.keys'),

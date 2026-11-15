@@ -45,6 +45,16 @@ const json = <T>(schema: T) => ({ 'application/json': { schema } });
 // ОТКЛОНЕНИЕ: docs/deviations.md#К-16
 export const PAGE_TOUR_RATE_LIMIT: RateLimit = { kind: 'cp_tour', max: 10, windowSeconds: 3600 };
 
+/**
+ * И на контрагента из всех браузеров — не больше стольких за час: новый ввод кода даёт новый браузер
+ * и новый счёт, а история контрагента одна.
+ */
+export const PAGE_TOUR_CONTRACTOR_RATE_LIMIT: RateLimit = {
+  kind: 'cp_tour_cp',
+  max: 30,
+  windowSeconds: 3600,
+};
+
 export const publicPageTourRoute = createRoute({
   method: 'post',
   path: '/page/{slug}/{inn}/tour',
@@ -61,7 +71,10 @@ export const publicPageTourRoute = createRoute({
       description: 'Страница недоступна или код в этом браузере не запомнен',
       content: error,
     },
-    429: { description: 'Слишком много записей из этого браузера за час', content: error },
+    429: {
+      description: 'Слишком много записей за час из этого браузера или у этого контрагента',
+      content: error,
+    },
   },
 });
 
@@ -88,9 +101,12 @@ export function publicPageTourHandler(
     const help = await readCpHelp(deps.db);
     const steps = help.tour.filter((s) => s.sec === 'end' || s.on).length;
     if (tour.of > steps) apiFail(400, 'validation_failed', 'Шаг обзора больше числа шагов');
-    const slot = await takeRateLimit(deps.db, PAGE_TOUR_RATE_LIMIT, grantHash);
-    if (!slot.ok) apiFail(429, 'rate_limited', 'Слишком много запросов');
     const { orgId, contractorId } = state;
+    const slot = await takeRateLimit(deps.db, PAGE_TOUR_RATE_LIMIT, grantHash);
+    const cpSlot = slot.ok
+      ? await takeRateLimit(deps.db, PAGE_TOUR_CONTRACTOR_RATE_LIMIT, contractorId)
+      : slot;
+    if (!slot.ok || !cpSlot.ok) apiFail(429, 'rate_limited', 'Слишком много запросов');
     await withOrgContext(deps.db, { orgId, userId: null }, (tx) =>
       writeContractorPageTour(tx, contractorId, tour),
     );

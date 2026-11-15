@@ -8,6 +8,7 @@ import {
   linkTelegram,
   pressStart,
   signIn,
+  stillElement,
   uniqueChat,
   uniqueLogin,
 } from './helpers';
@@ -782,10 +783,11 @@ const som = (value: string) =>
   new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s'));
 
 /** Шаги «Я оплатил»: у каждого — номер в кружке и текст из подсказки `paidSteps`. */
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const paidSteps = () =>
   pageHint('paidSteps')
     .split('|')
-    .map((s) => new RegExp(`^\\d+${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+    .map((s) => new RegExp(`^\\d+${reEsc(s)}$`));
 
 /** Настоящий PDF по содержимому: сервер проверяет начало файла, а не расширение. */
 const pdfBytes = () =>
@@ -869,6 +871,10 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await month.locator('[data-pub-send]').click();
     const send = page.getByRole('dialog').filter({ has: page.locator('[data-pub-send-dlg]') });
     await expect(send.locator('[data-pub-send-left]')).toHaveText(som('4 670,50 сом'));
+    // Под суммой — что это за деньги (доработки 15.11.2026, пункт 5.2).
+    await expect(send.locator('[data-pub-send-hint]')).toHaveText(
+      new RegExp(`^${pageHint('sendSum').split('{месяц}').map(reEsc).join('\\S+( \\d{4})?')}$`),
+    );
     await send.locator('[data-pub-send-paid]').click();
     const paid = page.getByRole('dialog', { name: text(texts, 'pub.paid.title') });
     await expect(paid.locator('[data-pub-paid-sum]')).toHaveValue(som('4 670,50'));
@@ -1197,6 +1203,7 @@ test.describe('Доработки 15.11: подсказки на страниц�
     await expect(what).toHaveText(pageHint('codeWhat'));
     await expect(page.locator('[data-pub-what-text]')).toBeHidden();
     await what.click();
+    await expect(page.locator('[data-pub-what-text]')).toBeVisible();
     await expect(page.locator('[data-pub-what-text]')).toHaveText(pageHint('codeWhatX'));
 
     await openByCode(page, cp.path, cp.code, name);
@@ -1204,9 +1211,9 @@ test.describe('Доработки 15.11: подсказки на страниц�
     await expect(welcome.locator('[data-pub-welcome]')).toContainText(PAGE_HELP.welcome.lead!);
     // Карточки — только разделов, которые видны: отчёты, оплата и файлы.
     await expect(welcome.locator('[data-pub-welcome-card]')).toHaveText([
-      new RegExp(PAGE_HELP.welcome.repT!),
-      new RegExp(PAGE_HELP.welcome.payT!),
-      new RegExp(PAGE_HELP.welcome.filesT!),
+      new RegExp(reEsc(PAGE_HELP.welcome.repT!)),
+      new RegExp(reEsc(PAGE_HELP.welcome.payT!)),
+      new RegExp(reEsc(PAGE_HELP.welcome.filesT!)),
     ]);
     await welcome.locator('[data-pub-welcome-go]').click();
     await expect(welcome).toBeHidden();
@@ -1223,6 +1230,11 @@ test.describe('Доработки 15.11: подсказки на страниц�
     // Название облачка — его подпись для чтения с экрана.
     const bubble = page.locator('[data-tour-bubble]');
     const next = bubble.locator('[data-tour-next]');
+    // Облачко стоит на месте: нажатие по переезжающей кнопке теряется молча (№ 34).
+    const settled = async () => {
+      await expect(next).toBeEnabled();
+      await stillElement(bubble);
+    };
     const reportsStep = PAGE_HELP.tour.find((s) => s.sec === 'reports')!;
     const endStep = PAGE_HELP.tour.find((s) => s.sec === 'end')!;
     await expect(bubble).toHaveAttribute('aria-label', PAGE_HELP.tour[0]!.t);
@@ -1236,6 +1248,7 @@ test.describe('Доработки 15.11: подсказки на страниц�
       titles.push(title);
       if (title === reportsStep.t) await expect(bubble.locator('[data-pub-legend]')).toBeVisible();
       await expect(next).toHaveText(text(texts, n === m ? 'cph.tour.done' : 'cph.tour.next'));
+      await settled();
       await next.click();
     }
     await expect(bubble).toBeHidden();
@@ -1252,14 +1265,17 @@ test.describe('Доработки 15.11: подсказки на страниц�
     await expect(page.locator('[data-tour-count]')).toHaveText(
       text(texts, 'cph.tour.of', { n: 1, m }),
     );
+    await settled();
     await next.click();
     await expect(page.locator('[data-tour-count]')).toHaveText(
       text(texts, 'cph.tour.of', { n: 2, m }),
     );
+    await settled();
     await next.click();
     await expect(page.locator('[data-tour-count]')).toHaveText(
       text(texts, 'cph.tour.of', { n: 3, m }),
     );
+    await settled();
     // «Закончить» под текстом облачка (у крестика в углу — та же подпись, но без текста).
     await bubble.getByText(text(texts, 'cph.tour.end'), { exact: true }).click();
     await expect(bubble).toBeHidden();
@@ -1282,9 +1298,21 @@ test.describe('Доработки 15.11: подсказки на страниц�
     const o = await pageOrg(request, baseURL);
     const name = `ОсОО «Помощь ${Date.now().toString(36)}»`;
     const cp = await pageOf(request, o, name, 'org');
+    // «Посмотрю сам» — приветствие закрывается и под адресом этой страницы больше не появляется.
+    await forgetWelcome(page.context());
     await openByCode(page, cp.path, cp.code, name);
-    // Приветствие этот браузер уже видел (playwright.config.ts): страница сразу открыта.
-    await expect(page.locator('[data-pub-welcome]')).toHaveCount(0);
+    const welcome = page.getByRole('dialog', { name: PAGE_HELP.welcome.t! });
+    await welcome.locator('[data-pub-welcome-skip]').click();
+    await expect(welcome).toBeHidden();
+    await expect
+      .poll(async () =>
+        (await page.context().cookies()).some(
+          (c) => c.name === WELCOME_COOKIE && c.path === cp.path,
+        ),
+      )
+      .toBe(true);
+    await page.reload();
+    await pageReady(page);
 
     const openHelp = async () => {
       await page.locator('[data-pub-help]').click();
@@ -1298,9 +1326,18 @@ test.describe('Доработки 15.11: подсказки на страниц�
 
     // Вопросы — о том, что на странице есть: оплата налогов и обслуживания, отправка файла.
     let panel = await openHelp();
+    // После перезагрузки открыта только «Помощь»: приветствия нет.
+    await expect(page.getByRole('dialog')).toHaveCount(1);
     for (const q of [faq('goPay').q, faq('paid').q, faq('up').q]) {
       await expect(question(panel, q)).toHaveCount(1);
     }
+    // «Перейти к …»: панель закрывается, нужный раздел — на экране.
+    const goQ = question(panel, faq('goPay').q);
+    await goQ.getByRole('button', { name: faq('goPay').q }).click();
+    await goQ.locator('[data-pub-faq-act="goPay"]').click();
+    await expect(panel).toBeHidden();
+    await expect(page.locator('#pub-pay')).toBeInViewport();
+    panel = await openHelp();
     // Ответ раскрывается по нажатию; кнопка ответа открывает «Я оплатил» с выбором, что оплачено.
     const paidQ = question(panel, faq('paid').q);
     await paidQ.getByRole('button', { name: faq('paid').q }).click();
@@ -1353,5 +1390,9 @@ test.describe('Доработки 15.11: подсказки на страниц�
     expect(PAGE_HELP.gloss.map((g) => g.x)).toContain(explained);
     await page.keyboard.press('Escape');
     await expect(pop).toBeHidden();
+
+    // Пустой раздел «Файлы» объясняет, что здесь появится и как прислать файл (пункт 5.5).
+    await unfold(page, 'files', isMobile);
+    await expect(section(page, 'files')).toContainText(pageHint('emptyFiles'));
   });
 });

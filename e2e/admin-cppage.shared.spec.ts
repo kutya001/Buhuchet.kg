@@ -3,7 +3,7 @@ import { platformAdmin } from './admin';
 import { orgWithTypes } from './orgs';
 
 // Админка → «База знаний (содержимое)» → «Страница контрагента» (доработки 15.11.2026, пункт 6; прототип
-// v120 admin/kb-cppage.js): тексты подсказок страницы контрагента правит администратор платформы, и они
+// v120 admin/cp-help-admin.js): тексты подсказок страницы контрагента правит администратор платформы, и они
 // сразу видны на всех страницах. Тексты общие для всех организаций, поэтому файл — *.shared.spec.ts
 // (идёт после остальных и по одному): вопрос теста в конце удаляется, даже если проверка упала.
 
@@ -99,6 +99,8 @@ test.describe('Доработки 15.11: Админка → «Страница �
     const history = page.locator('[data-kbadm-history="cppage"]');
     /** «Помощь» на странице контрагента: вопрос теста и его ответ. */
     const helpQuestion = async () => {
+      // Страница подхвачена React: раньше нажатие «Помощь» теряется (№ 41).
+      await expect(page.locator('[data-pub-page]')).toHaveAttribute('data-pub-ready', '');
       await page.locator('[data-pub-help]').click();
       const panel = page.locator('[data-pub-help-panel]');
       await expect(panel).toBeVisible();
@@ -158,7 +160,7 @@ test.describe('Доработки 15.11: Админка → «Страница �
       await expect(mine).toHaveCount(0);
     } finally {
       // Вопрос теста не остаётся на страницах всех контрагентов, даже если проверка упала посередине.
-      const view = await page.request.get('/api/admin/kb/cppage');
+      const view = await page.request.get('/api/admin/kb/cppage', { maxRetries: 2 });
       if (view.ok()) {
         const body = (await view.json()) as AdminCpHelpLite;
         const left = body.help.faq.find((f) => f.q === q);
@@ -167,7 +169,8 @@ test.describe('Доработки 15.11: Админка → «Страница �
             headers: { origin },
             data: { op: 'faqDelete', id: left.id, version: body.version },
           });
-          expect(res.status(), await res.text()).toBe(200);
+          // Мягкая проверка: исходное падение теста не скрывается.
+          expect.soft(res.status(), await res.text()).toBe(200);
         }
       }
     }

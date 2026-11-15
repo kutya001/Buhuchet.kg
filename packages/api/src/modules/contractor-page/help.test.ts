@@ -130,12 +130,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       '03744097401861',
       f.people['acc-a']!.employeeId,
     );
-    cpB = await contractor(
-      ownerB,
-      'ОсОО «Другая»',
-      '03744097401862',
-      f.b.ownerEmployeeId,
-    );
+    cpB = await contractor(ownerB, 'ОсОО «Другая»', '03744097401862', f.b.ownerEmployeeId);
     cookie = await enter(`org-a/${cp.inn}`, await enable(owner, cp.id));
     await enable(ownerB, cpB.id);
   });
@@ -229,6 +224,50 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const over = await tour(path, { full: true, step: 1, of: 1 }, cookie);
     expect(over.status).toBe(429);
     expect((await failure(over)).code).toBe('rate_limited');
+  });
+
+  it('конец обзора: и на контрагента из всех браузеров — не больше 30 за час', async () => {
+    const path = `org-a/${cp.inn}`;
+    await f.t.admin.db.execute(sql`delete from rate_limits where kind like 'cp_tour%'`);
+    const before = (await tourHistory(cp.id)).length;
+    // Счёт браузера обнуляем, как у нового браузера после нового ввода кода.
+    for (let i = 0; i < 30; i++) {
+      if (i % 10 === 0)
+        await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_tour'`);
+      expect((await tour(path, { full: true, step: 1, of: 1 }, cookie)).status).toBe(200);
+    }
+    await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_tour'`);
+    const over = await tour(path, { full: true, step: 1, of: 1 }, cookie);
+    expect(over.status).toBe(429);
+    expect((await failure(over)).code).toBe('rate_limited');
+    expect((await tourHistory(cp.id)).length).toBe(before + 30);
+    await f.t.admin.db.execute(sql`delete from rate_limits where kind like 'cp_tour%'`);
+  });
+
+  it('конец обзора: страница выключена или код сменён — прежний cookie не пишет в историю', async () => {
+    const off = await contractor(
+      owner,
+      'ОсОО «Выключенная»',
+      '03744097401863',
+      f.people['acc-a']!.employeeId,
+    );
+    const path = `org-a/${off.inn}`;
+    const offCookie = await enter(path, await enable(owner, off.id));
+    expect((await tour(path, { full: true, step: 1, of: 1 }, offCookie)).status).toBe(200);
+    expect(await tourHistory(off.id)).toHaveLength(1);
+    // «Сменить код» — прежний браузер кода не помнит.
+    expect((await call('POST', `/api/contractors/${off.id}/page/code`, owner)).status).toBe(200);
+    const changed = await tour(path, { full: true, step: 1, of: 1 }, offCookie);
+    expect(changed.status).toBe(404);
+    expect((await failure(changed)).code).toBe('page_unavailable');
+    // «Выключить» — тоже «Страница недоступна» и с новым кодом.
+    const res = await call('POST', `/api/contractors/${off.id}/page/code`, owner);
+    const fresh = await enter(path, ContractorPage.parse(await res.json()).code!);
+    expect((await call('POST', `/api/contractors/${off.id}/page/disable`, owner)).status).toBe(200);
+    const disabled = await tour(path, { full: true, step: 1, of: 1 }, fresh);
+    expect(disabled.status).toBe(404);
+    expect((await failure(disabled)).code).toBe('page_unavailable');
+    expect(await tourHistory(off.id)).toHaveLength(1);
   });
 
   it('вкладка Админки: только администратор платформы; правка той версии, что видел администратор', async () => {

@@ -250,6 +250,8 @@ function CodeWhat({ help }: { help: CpCodeHelp }) {
   const t = useT();
   const id = useId();
   const [open, setOpen] = useState(false);
+  // До подхвата страницы React нажатие потерялось бы молча (docs/typical-mistakes.md № 41).
+  const ready = useMounted();
   return (
     <>
       <button
@@ -257,8 +259,9 @@ function CodeWhat({ help }: { help: CpCodeHelp }) {
         data-pub-what=""
         aria-expanded={open}
         aria-controls={id}
+        disabled={!ready}
         onClick={() => setOpen(!open)}
-        className="inline-flex cursor-pointer items-center gap-1.5 self-center border-0 bg-transparent p-0 font-[550] text-link max-md:min-h-11"
+        className="inline-flex cursor-pointer items-center gap-1.5 self-center border-0 bg-transparent p-0 font-[550] text-link disabled:cursor-default disabled:opacity-60 max-md:min-h-11"
       >
         <Icon name="help" size="sm" />
         {help.what || t('cph.code.what')}

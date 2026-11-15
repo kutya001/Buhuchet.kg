@@ -341,7 +341,7 @@ export function cpGlossIndex(gloss: readonly CpGloss[]): CpGlossIndex {
     const body = esc(s).replace(/[её]/g, '[её]').replace(/\s+/g, '\\s+');
     return `(?<![\\p{L}\\p{N}])${body}${stem ? '\\p{L}*' : ''}(?![\\p{L}\\p{N}])`;
   };
-  let rx: RegExp | null = null;
+  let rx: RegExp | null;
   try {
     rx = alts.length ? new RegExp(alts.map((a) => `(${pat(a)})`).join('|'), 'giu') : null;
   } catch {

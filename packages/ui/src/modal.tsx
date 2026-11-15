@@ -168,6 +168,11 @@ export interface ModalProps {
   swipeHead?: boolean;
   /** На телефоне — на весь экран, а не шторкой (окна подбора: прототип `.modal.pickm`). */
   phoneFull?: boolean;
+  /**
+   * На телефоне крестик и «На весь экран» не меньше 44 px (окна страницы контрагента для клиентов:
+   * «Помощь», «Добро пожаловать», окна итога; прототип v120 cp-help.css).
+   */
+  touch?: boolean;
   /** Вкладки карточки записи: ряд закреплён вверху содержимого, свайп вбок листает их. */
   tabs?: {
     items: readonly CardTab[];
@@ -239,6 +244,7 @@ export function Modal({
   noMax = false,
   swipeHead = false,
   phoneFull = false,
+  touch = false,
   tabs,
 }: ModalProps) {
   const windows = useWindowsValue();
@@ -397,6 +403,7 @@ export function Modal({
         max={max}
         slide={!openedMax}
         phoneFull={phoneFull}
+        touch={touch}
         phone={phone}
         labels={windows.labels}
         tabs={tabs}
@@ -487,6 +494,8 @@ export interface WindowFrameProps {
   slide?: boolean;
   /** На телефоне — на весь экран. */
   phoneFull?: boolean;
+  /** На телефоне кнопки шапки не меньше 44 px. */
+  touch?: boolean;
   phone: boolean;
   labels: WindowLabels;
   tabs?: ModalProps['tabs'];
@@ -515,6 +524,7 @@ export function WindowFrame({
   max,
   slide = true,
   phoneFull = false,
+  touch = false,
   phone,
   labels,
   tabs,
@@ -523,6 +533,7 @@ export function WindowFrame({
   onCoverDown,
 }: WindowFrameProps) {
   const maxLabel = max ? labels.restore : labels.maximize;
+  const headButton = `${iconButtonClass()}${touch ? ' max-md:min-h-11 max-md:min-w-11' : ''}`;
   const column = max
     ? narrow
       ? '*:mx-auto *:w-full *:max-w-[980px]'
@@ -586,7 +597,7 @@ export function WindowFrame({
                 aria-label={maxLabel}
                 title={phone ? maxLabel : `${maxLabel} ${labels.maximizeHint}`}
                 onClick={onToggleMax}
-                className={iconButtonClass()}
+                className={headButton}
                 data-window-max
               >
                 <Icon name={max ? 'minimize' : 'maximize'} />
@@ -597,7 +608,7 @@ export function WindowFrame({
               data-window-close
               aria-label={labels.close}
               onClick={onClose}
-              className={iconButtonClass()}
+              className={headButton}
             >
               <Icon name="x" />
             </button>

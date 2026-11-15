@@ -28,6 +28,7 @@ export function useDoneDialog(): {
       title={done.title}
       kind="message"
       noMax
+      touch
       footer={
         <button
           type="button"
