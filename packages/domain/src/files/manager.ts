@@ -21,6 +21,7 @@ export const FILE_KIND_ICONS: Readonly<Record<FileSourceKind, string>> = {
   project_payment: 'briefcase',
   task: 'task',
   indicator_value: 'gauge',
+  lead: 'building',
 };
 
 /**

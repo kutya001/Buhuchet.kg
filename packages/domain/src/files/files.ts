@@ -70,6 +70,9 @@ export const FILE_SOURCE_KINDS = [
   'project_payment',
   'task',
   'indicator_value',
+  // Заявка на подключение (доработки 14.11.2026, блок 1): документы заявки с лендинга, переданные
+  // организации при «Одобрить»; записи нет, загрузил — владелец.
+  'lead',
 ] as const;
 export type FileSourceKind = (typeof FILE_SOURCE_KINDS)[number];
 

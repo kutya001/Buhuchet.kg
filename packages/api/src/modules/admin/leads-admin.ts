@@ -1,7 +1,10 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   adminLeadById,
+  adminLeadDocs,
   adminLeadEvents,
+  adminLoginsLike,
+  adminOrgByInn,
   adminLeadRecipients,
   adminNewLeadCount,
   deleteLead,
@@ -17,7 +20,11 @@ import {
 } from '@buhuchet/db';
 import {
   formatText,
+  LEAD_APPROVE_MESSAGES,
   LEAD_MESSAGES,
+  leadApproveRefusal,
+  leadOwnerLogin,
+  leadOwnerLoginBase,
   leadStatusChange,
   PLATFORM_ADMIN_NAME,
   RecordChangedError,
@@ -44,6 +51,8 @@ import { apiFail, listQueryOf, listQueryResponses, versionedSaveResponses } from
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
+import { sendLeadRefused } from '../telegram/lead-link';
+import { removeLeadObjects } from './lead-uploads';
 
 /*
  * Админка → «Организации» → «Заявки» (ТЗ «Админка» → «Вкладка «Заявки»»; прототип admin/leads.js):
@@ -62,9 +71,9 @@ const denied = {
 const IdParam = z.object({ id: Uuid });
 
 /** Тексты словаря с подстановками (`{name}`); годятся и спискам (`ListTexts`). */
-type Texts = (key: string, params?: UiTextParams) => string;
+export type Texts = (key: string, params?: UiTextParams) => string;
 
-async function textsOf(deps: ApiDeps): Promise<Texts> {
+export async function textsOf(deps: ApiDeps): Promise<Texts> {
   const raw = await serverTexts(deps);
   return (key, params) => formatText(raw(key), params);
 }
@@ -73,6 +82,10 @@ async function textsOf(deps: ApiDeps): Promise<Texts> {
 const GUEST_KINDS: ReadonlySet<string> = new Set(['created', 'repeat']);
 
 const actorOf = (t: Texts, guest: boolean) => (guest ? t('leads.guest') : PLATFORM_ADMIN_NAME);
+
+/** Автор записи истории: посетитель сайта, система (файлы удалены по сроку) или администратор. */
+const eventActor = (t: Texts, kind: string) =>
+  kind === 'docs' ? t('org.history.system') : actorOf(t, GUEST_KINDS.has(kind));
 
 /** Заявка для ответа API: «Создал» — посетитель сайта, «Изменил» — он же или администратор. */
 export function leadBody(r: AdminLeadRecord, t: Texts): AdminLead {
@@ -92,6 +105,13 @@ export function leadBody(r: AdminLeadRecord, t: Texts): AdminLead {
     lastStatus: r.statusAt
       ? { at: r.statusAt.toISOString(), by: actorOf(t, r.statusByGuest) }
       : null,
+    legalForm: r.legalForm,
+    inn: r.inn,
+    okpo: r.okpo,
+    address: r.address,
+    head: r.head,
+    docs: r.legalForm ? r.docsCount : null,
+    tgLinked: r.tgLinkedAt !== null,
     audit: {
       createdAt: r.createdAt.toISOString(),
       createdBy: t('leads.guest'),
@@ -110,6 +130,8 @@ export function leadBody(r: AdminLeadRecord, t: Texts): AdminLead {
 export function leadStatusHistory(
   events: readonly AdminLeadEventRecord[],
   t: Texts,
+  /** Заявка с документами: организацию по ней создаёт «Одобрить» (прототип v114: «одобрена: …»). */
+  approved = false,
 ): StatusHistoryEntry[] {
   return events.flatMap((e): StatusHistoryEntry[] => {
     const at = e.at.toISOString();
@@ -121,7 +143,9 @@ export function leadStatusHistory(
     if (!e.fromStatus || !e.toStatus || e.fromStatus === e.toStatus) return [];
     if (e.kind !== 'status' && e.kind !== 'rollback' && e.kind !== 'org') return [];
     const reason =
-      e.kind === 'org' ? t('leads.hist.org_note', { name: e.text ?? '' }) : (e.text ?? null);
+      e.kind === 'org'
+        ? t(approved ? 'leads.hist.approved_note' : 'leads.hist.org_note', { name: e.text ?? '' })
+        : (e.text ?? null);
     return [
       {
         at,
@@ -137,18 +161,62 @@ export function leadStatusHistory(
   });
 }
 
+/**
+ * «Одобрить» заявки с документами без организации (прототип v114 ldApproveWhy, ldLoginOf): почему
+ * неактивна — по порядку прототипа, с ИНН и названием уже созданной организации; логин владельца — по
+ * имени заявителя, свободный на платформе.
+ */
+export async function leadApproveInfo(tx: Tx, lead: AdminLeadRecord, t: Texts) {
+  const taken = lead.inn ? await adminOrgByInn(tx, lead.inn) : null;
+  const refusal = leadApproveRefusal({
+    hasOrg: lead.createdOrgId !== null,
+    status: lead.status,
+    tgLinked: lead.tgLinkedAt !== null,
+    docsState: lead.docsState,
+    inn: lead.inn,
+    innTaken: taken !== null,
+  });
+  const logins = await adminLoginsLike(tx, leadOwnerLoginBase(lead.name, lead.firm));
+  return {
+    refusal,
+    message: refusal
+      ? formatText(t(`err.${refusal}`) || LEAD_APPROVE_MESSAGES[refusal], {
+          inn: lead.inn ?? '',
+          name: taken?.name ?? '',
+        })
+      : null,
+    login: leadOwnerLogin(lead.name, lead.firm, (l) => logins.has(l)),
+    takenOrg: taken,
+  };
+}
+
 /** Окно заявки; заявки нет (или не администратор) — 404. */
 async function leadCard(tx: Tx, id: string, t: Texts): Promise<AdminLeadCard> {
   const lead = await adminLeadById(tx, id);
   if (!lead) apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
   const events = await adminLeadEvents(tx, id);
+  const docs = lead.legalForm ? await adminLeadDocs(tx, id) : [];
+  const gone = events.findLast((e) => e.kind === 'docs');
+  const approve = lead.legalForm && !lead.createdOrgId ? await leadApproveInfo(tx, lead, t) : null;
   return {
     ...leadBody(lead, t),
     adminNote: lead.adminNote ?? '',
-    statusHistory: leadStatusHistory(events, t),
+    docFiles: docs.map((d) => ({
+      id: d.id,
+      kind: d.kind,
+      name: d.name,
+      size: d.sizeBytes,
+      pending: d.state !== 'ready',
+    })),
+    docsPurgeAt: lead.docsPurgeAt?.toISOString() ?? null,
+    docsGoneAt: lead.legalForm && lead.docsCount === 0 && gone ? gone.at.toISOString() : null,
+    approve: approve
+      ? { refusal: approve.refusal, message: approve.message, login: approve.login }
+      : null,
+    statusHistory: leadStatusHistory(events, t, lead.legalForm !== null),
     history: events.map((e) => ({
       at: e.at.toISOString(),
-      actor: actorOf(t, GUEST_KINDS.has(e.kind)),
+      actor: eventActor(t, e.kind),
       kind: e.kind,
       from: e.fromStatus,
       to: e.toStatus,
@@ -340,7 +408,7 @@ export const leadStatusRoute = createRoute({
     ...versionedSaveResponses,
     409: {
       description:
-        'Такой смены статуса нет, «Подключена» с организацией не откатывается или заявку изменили',
+        'Такой смены статуса нет, «Подключена» с организацией не откатывается, у заявки с документами «Подключена» ставит «Одобрить» или заявку изменили',
       content: error,
     },
   },
@@ -358,7 +426,8 @@ export function leadStatusHandler(deps: ApiDeps): RouteHandler<typeof leadStatus
     const { id } = c.req.valid('param');
     const { to, version, reason } = c.req.valid('json');
     const t = await textsOf(deps);
-    const card = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => {
+    const adminId = c.get('session')!.userId;
+    const card = await withUserContext(deps.db, adminId, async (tx) => {
       const lead = await adminLeadById(tx, id);
       if (!lead) apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
       if (lead.version !== version) throw new RecordChangedError('lead', id, lead.version);
@@ -368,6 +437,10 @@ export function leadStatusHandler(deps: ApiDeps): RouteHandler<typeof leadStatus
       );
       if (change === 'locked') apiFail(409, 'lead_back_locked', LEAD_MESSAGES.lead_back_locked);
       if (!change) apiFail(409, 'lead_status_invalid', LEAD_MESSAGES.lead_status_invalid);
+      // «Подключена» у заявки с документами без организации — только «Одобрить» (прототип v114 leadStep).
+      if (change.kind === 'step' && to === 'connected' && lead.legalForm && !lead.createdOrgId) {
+        apiFail(409, 'lead_has_docs', LEAD_APPROVE_MESSAGES.lead_has_docs);
+      }
       if (change.kind === 'reject' && !reason) {
         apiFail(400, 'lead_reason_required', LEAD_MESSAGES.lead_reason_required, {
           field: 'reason',
@@ -388,9 +461,11 @@ export function leadStatusHandler(deps: ApiDeps): RouteHandler<typeof leadStatus
         now: deps.clock.now(),
       });
       if (next === null) throw new RecordChangedError('lead', id, version);
-      return leadCard(tx, id, t);
+      return { card: await leadCard(tx, id, t), rejected: change.kind === 'reject' };
     });
-    return c.json(card, 200);
+    // «Отклонить»: заявителю с подключённым Telegram — причина отказа (поток Т; не бросает).
+    if (card.rejected) await sendLeadRefused(deps, { leadId: id, adminId });
+    return c.json(card.card, 200);
   };
 }
 
@@ -452,12 +527,19 @@ export const deleteLeadRoute = createRoute({
   },
 });
 
-/** «Удалить» (прототип leadDel): «Имя и телефон будут стёрты» — заявка стирается полностью. */
+/**
+ * «Удалить» (прототип leadDel): «Имя и телефон будут стёрты» — заявка стирается полностью, вместе с
+ * документами: файлы удаляются из хранилища после транзакции (доработки 14.11.2026, блок 1).
+ */
 export function deleteLeadHandler(deps: ApiDeps): RouteHandler<typeof deleteLeadRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const ok = await withUserContext(deps.db, c.get('session')!.userId, (tx) => deleteLead(tx, id));
-    if (!ok) apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
+    const keys = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => {
+      const docs = await adminLeadDocs(tx, id);
+      return (await deleteLead(tx, id)) ? docs.map((d) => d.storageKey) : null;
+    });
+    if (!keys) apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
+    await removeLeadObjects(deps, keys);
     deps.logger.info({ requestId: c.get('requestId'), lead: id }, 'заявка удалена');
     return c.json({ ok: true as const }, 200);
   };

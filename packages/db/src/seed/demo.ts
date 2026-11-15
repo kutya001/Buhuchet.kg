@@ -6,6 +6,8 @@ import {
   normalizeRemindDays,
   normalizeRolePermissions,
   normalizeScopes,
+  OKPO_PATTERN,
+  ORG_LEGAL_FORMS,
   SCOPE_GROUPS,
 } from '@buhuchet/domain';
 import { eq, inArray, sql } from 'drizzle-orm';
@@ -102,6 +104,9 @@ const DemoFile = z.object({
   organization: z.object({
     name: z.string(),
     inn: z.string().optional(),
+    /** «Форма» и ОКПО (прототип v114; доработки 14.11.2026, блок 1, пункт 4). */
+    form: z.enum(ORG_LEGAL_FORMS).optional(),
+    okpo: z.string().regex(OKPO_PATTERN).optional(),
     address: z.string().optional(),
     phone: Phone,
     head: z.string().optional(),
@@ -171,6 +176,8 @@ export async function seedDemoOrganization(
   const org = demo.organization;
   const orgId = DEMO_ORG_ID;
   const profile = {
+    legalForm: org.form ?? null,
+    okpo: org.okpo ?? null,
     address: org.address ?? null,
     phone: org.phone ? `+${org.phone.digits}` : null,
     head: org.head ?? null,
@@ -195,6 +202,8 @@ export async function seedDemoOrganization(
     await db
       .update(organizations)
       .set({
+        legalForm: sql`coalesce(${organizations.legalForm}, ${profile.legalForm})`,
+        okpo: sql`coalesce(${organizations.okpo}, ${profile.okpo})`,
         address: sql`coalesce(${organizations.address}, ${profile.address})`,
         phone: sql`coalesce(${organizations.phone}, ${profile.phone})`,
         head: sql`coalesce(${organizations.head}, ${profile.head})`,

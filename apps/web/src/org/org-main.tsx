@@ -8,6 +8,7 @@ import {
   joinPhone,
   LOGO_LINK_SECONDS,
   LOGO_MAX_BYTES,
+  ORG_LEGAL_FORMS,
   splitPhone,
 } from '@buhuchet/domain';
 import {
@@ -49,8 +50,7 @@ import { orgProfileQuery, policyQuery, useOrgRefresh } from './org-data';
 /** Отказы сервера, которые показываются под своим полем. */
 const FIELD_OF: Record<string, keyof OrgMainFormInput> = {
   name_required: 'name',
-  inn_invalid: 'inn',
-  inn_taken: 'inn',
+  okpo_invalid: 'okpo',
   slug_invalid: 'slug',
   slug_reserved: 'slug',
   slug_taken: 'slug',
@@ -60,7 +60,9 @@ const LOGO_TYPES = new Set(['image/png', 'image/jpeg']);
 
 /**
  * «Моя организация» → «Основное» (прототип modules/org.js, renderOrg → main). С правом «Настройки и
- * учётная политика» — форма: название, ИНН, телефон, адрес, руководитель, «Адрес страницы организации»
+ * учётная политика» — форма: название, ИНН и «Форма» (только для просмотра: их меняет администратор
+ * платформы — доработки 14.11.2026, блок 1, пункт 4; прототип v114), ОКПО, телефон, адрес,
+ * руководитель, «Адрес страницы организации»
  * (если включена «Страница контрагента по ссылке») и логотип с предпросмотром; без права — те же
  * сведения только для просмотра. Ниже — «Реквизиты для приёма денег от контрагентов» (задача 2.18).
  */
@@ -110,6 +112,12 @@ export function OrgMainView({
   const items: KeyValueItem[] = [
     { id: 'name', label: t('org.field.name'), value: profile.name },
     { id: 'inn', label: t('org.field.inn'), value: dash(profile.inn), mono: true },
+    {
+      id: 'form',
+      label: t('org.field.form'),
+      value: profile.legalForm ? t(`org.form.${profile.legalForm}`) : '—',
+    },
+    { id: 'okpo', label: t('org.field.okpo'), value: dash(profile.okpo), mono: true },
     { id: 'address', label: t('org.field.address'), value: dash(profile.address) },
     {
       id: 'phone',
@@ -170,7 +178,7 @@ function OrgLogo({ link, alt }: { link: NonNullable<OrgProfile['logo']>; alt: st
 /** Значения формы из сохранённого «Основного». */
 const formValues = (p: OrgProfile): OrgMainFormInput => ({
   name: p.name,
-  inn: p.inn ?? '',
+  okpo: p.okpo ?? '',
   address: p.address ?? '',
   head: p.head ?? '',
   slug: p.slug,
@@ -186,7 +194,7 @@ function changedFields(
   const before = formValues(saved);
   const patch: Omit<UpdateOrgProfileRequest, 'version'> = {};
   if (values.name !== before.name) patch.name = values.name;
-  if (values.inn !== before.inn) patch.inn = values.inn;
+  if (values.okpo !== before.okpo) patch.okpo = values.okpo;
   if (values.address !== before.address) patch.address = values.address;
   if (values.head !== before.head) patch.head = values.head;
   if (phone !== saved.phone) patch.phone = phone;
@@ -240,7 +248,7 @@ function OrgMainEdit({
   // Поля регистрируются по порядку на экране: при ошибках фокус встаёт на первое неверное.
   const fields = {
     name: register('name'),
-    inn: register('inn'),
+    okpo: register('okpo'),
     address: register('address'),
     head: register('head'),
     slug: register('slug'),
@@ -402,19 +410,39 @@ function OrgMainEdit({
             >
               {(c) => <input {...c} {...fields.name} type="text" className={inputClass()} />}
             </Field>
-            <Field
-              id={`${id}-inn`}
-              label={t('org.field.inn')}
-              required
-              error={fieldError(t, errors.inn)}
-            >
+            <Field id={`${id}-inn`} label={t('org.field.inn')} hint={t('org.field.admin_hint')}>
               {(c) => (
                 <input
                   {...c}
-                  {...fields.inn}
+                  type="text"
+                  readOnly
+                  aria-readonly="true"
+                  value={profile.inn ?? ''}
+                  className={inputClass({ mono: true })}
+                />
+              )}
+            </Field>
+            <Field id={`${id}-form`} label={t('org.field.form')} hint={t('org.field.admin_hint')}>
+              {(c) => (
+                <select {...c} disabled value={profile.legalForm ?? ''} className={inputClass()}>
+                  <option value="">{t('org.field.form_none')}</option>
+                  {ORG_LEGAL_FORMS.map((f) => (
+                    <option key={f} value={f}>
+                      {t(`org.form.${f}`)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Field>
+            <Field id={`${id}-okpo`} label={t('org.field.okpo')} error={fieldError(t, errors.okpo)}>
+              {(c) => (
+                <input
+                  {...c}
+                  {...fields.okpo}
                   type="text"
                   inputMode="numeric"
-                  maxLength={14}
+                  maxLength={8}
+                  placeholder={t('org.field.okpo_ph')}
                   className={inputClass({ mono: true })}
                 />
               )}

@@ -8,6 +8,8 @@ export interface OrgMenuRun {
   open?: (o: AdminOrganization) => void;
   block: (o: AdminOrganization) => void;
   unblock: (o: AdminOrganization) => void;
+  /** «ИНН и форма» (доработки 14.11.2026, блок 1, пункт 4): меняет только администратор платформы. */
+  innForm?: (o: AdminOrganization) => void;
 }
 
 /**
@@ -15,7 +17,8 @@ export interface OrgMenuRun {
  * активной — «Заблокировать» (красным, после вопроса), у заблокированной — «Разблокировать» (сразу).
  * Демо-организацию стенда не блокируют: пункт виден, но недоступен с причиной «Демо-организация
  * стенда» (в прототипе — «Демо-организация прототипа», docs/deviations.md). В меню строки списка
- * первым идёт «Открыть карточку» и черта (прототип v83, renderOrgs).
+ * первым идёт «Открыть карточку» и черта (прототип v83, renderOrgs). Последним — «ИНН и форма»
+ * (прототип v114 orgActions → ldInnFormDlg).
  */
 export function orgMenu({
   t,
@@ -25,6 +28,7 @@ export function orgMenu({
   run: OrgMenuRun;
 }): (o: AdminOrganization) => ActionEntry[] {
   const open = run.open;
+  const innForm = run.innForm;
   return (o) => [
     ...(open
       ? ([
@@ -48,6 +52,16 @@ export function orgMenu({
           icon: 'key',
           run: () => run.unblock(o),
         },
+    ...(innForm
+      ? ([
+          {
+            id: 'inn-form',
+            label: t('orgs.action.inn_form'),
+            icon: 'edit',
+            run: () => innForm(o),
+          },
+        ] satisfies ActionEntry[])
+      : []),
   ];
 }
 
