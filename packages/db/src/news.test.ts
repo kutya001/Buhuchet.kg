@@ -412,7 +412,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // («Файлы от контрагентов», п. И-7), v113 (Telegram заявителя и пароль по ссылке, п. Т-18), v114
     // (регистрация по документам, п. И-9), v115 («К оплате» по дням, файлы и чеки через бота, п. К-11)
     // и v117 (тексты лендинга) — да; v116 («Я оплатил», оплата по месяцам и код на странице
-    // контрагента, п. К-13) — пока нет.
+    // контрагента, п. К-13), v118 (проверка сообщений бота) и v119 (принятый чек в окне денег,
+    // п. О-80) — пока нет.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -423,12 +424,17 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v115')).toMatchObject({ release: '115', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v116')).toBeUndefined();
     expect(rows.find((r) => r.id === 'v117')).toMatchObject({ release: '117', showOnLogin: true });
-    // v116 не наполняется из-за NEWS_NOT_YET, а не потому, что её нет в refDB или она черновик.
-    const source = refDB.news as { id: string; status: string }[];
-    expect(source.find((x) => x.id === 'v116')?.status).toBe('Опубликовано');
-    // Черновик прототипа («Версия 118: план») не наполняется.
-    expect(source.find((x) => x.id === 'v118')?.status).toBe('Черновик');
     expect(rows.find((r) => r.id === 'v118')).toBeUndefined();
+    expect(rows.find((r) => r.id === 'v119')).toBeUndefined();
+    // v116, v118 и v119 не наполняются из-за NEWS_NOT_YET, а не потому, что их нет в refDB или они
+    // черновики.
+    const source = refDB.news as { id: string; status: string }[];
+    for (const id of ['v116', 'v118', 'v119']) {
+      expect(source.find((x) => x.id === id)?.status).toBe('Опубликовано');
+    }
+    // Черновик прототипа («Версия 120: план») не наполняется.
+    expect(source.find((x) => x.id === 'v120')?.status).toBe('Черновик');
+    expect(rows.find((r) => r.id === 'v120')).toBeUndefined();
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(

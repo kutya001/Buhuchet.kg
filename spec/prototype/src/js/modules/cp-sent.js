@@ -28,8 +28,9 @@ function sntNotify(c,n){const to=pgTgStaff(c);if(to)tgSvc(to,n>1?`Новые ф�
 function sntAccept(x){const c=CPM[x.cp];if(!c||x.st!=='new')return;let n=x.name;if((c.files||[]).includes(n)){const i=n.lastIndexOf('.'),b=i>0?n.slice(0,i):n,e=i>0?n.slice(i):'';let k=2;while(c.files.includes(`${b} (${k})${e}`))k++;n=`${b} (${k})${e}`}
   Object.assign(x,{st:'ok',dBy:S.me,dAt:nowStamp(),fname:n});c.files=c.files||[];c.files.push(n);c.fromCp=[...(c.fromCp||[]),n];fmSet(c.id,n,{size:x.size,note:x.note||''});FUP.add(n);
   log('cp',c.id,`Принят файл от контрагента «${x.name}»${n!==x.name?` (сохранён как «${n}»)`:''}`,c.id);refreshAll();toast('Файл принят: он среди файлов контрагента','check');
-  // Чек из Telegram (блок 4, пункт 4) и со страницы (блок 6, пункт 2): сразу «Принять деньги» с суммой из сообщения об оплате
-  if(x.pay)pgRcptMoney(c,x.pay,x.src)}
+  // Чек из Telegram (блок 4, пункт 4) и со страницы (блок 6, пункт 2): сразу «Принять деньги» с суммой из сообщения об оплате,
+  // а сам чек — уже в поле «Файлы» окна (v119): при сохранении прикрепляется к поступлению или оплате, второй раз загружать не нужно
+  if(x.pay)pgRcptMoney(c,x.pay,x.src,x.name)}
 function sntRejectDlg(x,done){openModal({form:true,noMax:true,render:()=>({title:'Отклонить файл',sub:esc(x.name),body:`<div class="form">${fld('Причина',`<textarea class="inp" id="snt-why" maxlength="${SNT_NOTE}" placeholder="Например: не тот месяц, пришлите выписку за октябрь"></textarea>`,{req:true,full:true,id:'snt-why',hint:'Контрагент увидит причину на своей странице. Отклонённый файл удалится через '+SNT_KEEP+' дней после отправки'})}</div>`,
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn danger" id="snt-ok">Отклонить</button>',
   mount(el,m){$('#snt-ok',el).onclick=()=>{const why=val(el,'snt-why').replace(/\s+/g,' ').trim();if(!setErr(el,'snt-why',why?'':'Укажите причину'))return;
