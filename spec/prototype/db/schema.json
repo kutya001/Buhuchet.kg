@@ -1,13 +1,13 @@
 {
  "meta": {
   "title": "База данных Buhuchet.kg",
-  "schemaVersion": 68,
+  "schemaVersion": 69,
   "updated": "2026-11-14",
   "sources": [
    {
     "name": "Продукт kutya001/Buhuchet.kg",
-    "ref": "main e465e69",
-    "what": "Фактические миграции 0000–0146: организации и их профиль, пользователи, сеансы входа и их журнал, коды входа администратора платформы, счёт неверных паролей по логину, привязка Telegram (с подтверждением замены кодом из прежнего чата) и коды «Забыли пароль?», сотрудники, роли и права, контрагенты (дополнительные ГКЭД, льготы, основания, журнал ставок), назначения отчётов, отчёты, изменения сроков и строки расчёта налога, шаблоны ролей, цвета статусов и шаблоны сообщений, учётная политика, подключённые виды отчётов и запросы «Попросить добавить», прогресс обучения в «Базе знаний» (шаги, прочитанные статьи, уровни, знакомые элементы показов), новости платформы и их прочтения, видео платформы, их загрузки, просмотры и открытия сотрудников и общий счёт просмотров гостей лендинга, история изменений (организаций и платформы) и история статусов, настройки вида списков, ГКЭД, справочники платформы для контрагентов и отчётов (органы, режимы, основания, УГНС, виды отчётов, льготы и их связи, производственный календарь, формы собственности, ставки единого налога, причины изменения срока, банковские провайдеры, категории задач), мелкие справочники (JSON), реквизиты организации и сотрудников, файлы, ручные задачи и комментарии, показатели контрагентов, операции с деньгами на налоги и детализация поступлений, оплата за обслуживание и её распределение по месяцам, закрытые месяцы финансов, разовые услуги, их оплаты и бонусы сотрудникам, списания бонусов, очередь и журнал Telegram, настройки уведомлений, проекты контрагентов (ответственные, работы, транши), словарь текстов интерфейса, журнал расписания и состояние задач расписания (оповещения о сбоях), очередь пересчёта сроков, загрузки справочников из Excel, журнал частоты действий, заявки с сайта и их история; RLS, роль buhuchet_app, функции и представления Админки «Организации», «Учётные записи», «Локализация» и «Справочники платформы» (перечень app.platform_dict_specs) и «Телеграм», функции базы и правило сортировки app.ru_natural."
+    "ref": "main 1c0af1a",
+    "what": "Фактические миграции 0000–0147: организации и их профиль, пользователи, сеансы входа и их журнал, коды входа администратора платформы, счёт неверных паролей по логину, привязка Telegram (с подтверждением замены кодом из прежнего чата) и коды «Забыли пароль?», сотрудники, роли и права, контрагенты (дополнительные ГКЭД, льготы, основания, журнал ставок), назначения отчётов, отчёты, изменения сроков и строки расчёта налога, шаблоны ролей, цвета статусов и шаблоны сообщений, учётная политика, подключённые виды отчётов и запросы «Попросить добавить», прогресс обучения в «Базе знаний» (шаги, прочитанные статьи, уровни, знакомые элементы показов), новости платформы и их прочтения, видео платформы, их загрузки, просмотры и открытия сотрудников и общий счёт просмотров гостей лендинга, история изменений (организаций и платформы) и история статусов, настройки вида списков, ГКЭД, справочники платформы для контрагентов и отчётов (органы, режимы, основания, УГНС, виды отчётов, льготы и их связи, производственный календарь, формы собственности, ставки единого налога, причины изменения срока, банковские провайдеры, категории задач), мелкие справочники (JSON), реквизиты организации и сотрудников, файлы, ручные задачи и комментарии, показатели контрагентов, операции с деньгами на налоги и детализация поступлений, оплата за обслуживание и её распределение по месяцам, закрытые месяцы финансов, разовые услуги, их оплаты и бонусы сотрудникам, списания бонусов, очередь и журнал Telegram, настройки уведомлений, проекты контрагентов (ответственные, работы, транши), словарь текстов интерфейса, журнал расписания и состояние задач расписания (оповещения о сбоях), очередь пересчёта сроков, загрузки справочников из Excel, журнал частоты действий, заявки с сайта и их история, документы и Telegram заявителя, ссылки «задать пароль», файлы от контрагентов, «Я оплатил» и «Оплатил», строки «Telegram-уведомлений» (пакет 14.11, этап 0); RLS, роль buhuchet_app, функции и представления Админки «Организации», «Учётные записи», «Локализация» и «Справочники платформы» (перечень app.platform_dict_specs) и «Телеграм», функции базы и правило сортировки app.ru_natural."
    },
    {
     "name": "Прототип kutya001/DevBuhUchet.kg",
@@ -680,6 +680,22 @@
      "status": "actual"
     },
     {
+     "name": "legal_form",
+     "ru": "Форма",
+     "type": "text",
+     "null": true,
+     "desc": "osoo — ОсОО, ip — ИП (organizations_legal_form_check; пакет 14.11, блок 1). Меняет только администратор платформы: права на столбец у роли приложения нет.",
+     "status": "actual"
+    },
+    {
+     "name": "okpo",
+     "ru": "ОКПО",
+     "type": "text",
+     "null": true,
+     "desc": "8 цифр (organizations_okpo_check). Меняет владелец в «Моя организация» → «Основное» (GRANT UPDATE (okpo), 0147).",
+     "status": "actual"
+    },
+    {
      "name": "address",
      "ru": "Адрес",
      "type": "text",
@@ -793,10 +809,10 @@
     "«Моя организация» → «Основное»: название (обязательно, до 200 символов), ИНН (14 цифр, не занят другой организацией), адрес, телефон, руководитель, логотип. Изменения пишутся в историю; устаревшее сохранение — «Запись изменена другим пользователем».",
     "Админка видит все организации через представление app.admin_organizations: строки есть, только если в контексте — незаблокированный администратор платформы; сотруднику организации и запросу без контекста оно пусто. Блокировка и разблокировка — app.admin_set_org_status со сверкой версии; историю пишет API в той же транзакции."
    ],
-   "rls": "Включена. Политика organizations_isolation: роль приложения видит только строку своей организации (id = app.current_org_id()). Менять роль приложения может только столбцы name, inn, slug, address, phone, head, logo_key, updated_by, updated_at, version (миграция 0015): состояние, причину блокировки, отметку демо и автора создания ведёт администратор платформы (Админка): функцией app.admin_set_org_status. Ограничивающая политика organizations_insert_guard (миграция 0025): роль приложения создаёт организацию только активной, без причины блокировки и не демо — демо заводит только наполнение.",
+   "rls": "Включена. Политика organizations_isolation: роль приложения видит только строку своей организации (id = app.current_org_id()). Менять роль приложения может только столбцы name, inn, slug, address, phone, head, logo_key, updated_by, updated_at, version (миграция 0015): состояние, причину блокировки, отметку демо и автора создания ведёт администратор платформы (Админка): функцией app.admin_set_org_status. Ограничивающая политика organizations_insert_guard (миграция 0025): роль приложения создаёт организацию только активной, без причины блокировки и не демо — демо заводит только наполнение. 0147: роль приложения меняет ещё okpo; legal_form («Форма») — только администратор платформы.",
    "issue": "#8 (сделано), #18, Админка → Организации (PR #54, сделано)",
    "source": "Прототип: demoDB.organization, admin/accounts-orgs.js; ТЗ «Модуль Моя организация», «Админка → Модуль организаций»",
-   "migration": "0001_foundation_tables, 0003 (ИНН уникален), 0008 (состояние и блокировка), 0014_org_profile (профиль), 0015 (права на столбцы), 0025_organizations_insert_guard (политика вставки)"
+   "migration": "0001_foundation_tables, 0003 (ИНН уникален), 0008 (состояние и блокировка), 0014_org_profile (профиль), 0015 (права на столбцы), 0025_organizations_insert_guard (политика вставки), 0147_package_1411 (Форма, ОКПО)"
   },
   {
    "name": "users",
@@ -1906,6 +1922,78 @@
      "status": "actual"
     },
     {
+     "name": "legal_form",
+     "ru": "Форма",
+     "type": "text",
+     "null": true,
+     "desc": "osoo — ОсОО, ip — ИП (platform_leads_legal_form_check); заявка с документами (пакет 14.11, блок 1).",
+     "status": "actual"
+    },
+    {
+     "name": "inn",
+     "ru": "ИНН",
+     "type": "text",
+     "null": true,
+     "desc": "14 цифр (platform_leads_inn_check).",
+     "status": "actual"
+    },
+    {
+     "name": "okpo",
+     "ru": "ОКПО",
+     "type": "text",
+     "null": true,
+     "desc": "8 цифр (platform_leads_okpo_check).",
+     "status": "actual"
+    },
+    {
+     "name": "address",
+     "ru": "Юридический адрес",
+     "type": "text",
+     "null": true,
+     "desc": "До 300 знаков (platform_leads_doc_fields_check).",
+     "status": "actual"
+    },
+    {
+     "name": "head",
+     "ru": "Руководитель",
+     "type": "text",
+     "null": true,
+     "desc": "До 200 знаков (platform_leads_doc_fields_check).",
+     "status": "actual"
+    },
+    {
+     "name": "docs_state",
+     "ru": "Документы",
+     "type": "text",
+     "null": true,
+     "desc": "pending — документы загружаются, ready — все документы формы загружены; пусто — заявка без документов. Только вместе с «Формой» (platform_leads_docs_state_check).",
+     "status": "actual"
+    },
+    {
+     "name": "docs_purge_at",
+     "ru": "Удалить файлы после",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Когда задача по расписанию удалит файлы документов: через 7 дней после «Отказа», через 30 дней после «Подключена» (индекс platform_leads_docs_purge_idx).",
+     "status": "actual"
+    },
+    {
+     "name": "tg_chat_id",
+     "ru": "Telegram заявителя",
+     "type": "bigint",
+     "null": true,
+     "desc": "Чат заявителя после «Подключить Telegram» (ссылка platform_lead_tg_tokens); только вместе с tg_linked_at (platform_leads_tg_check).",
+     "status": "actual"
+    },
+    {
+     "name": "tg_linked_at",
+     "ru": "Telegram подключён",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Когда заявитель подключил Telegram.",
+     "status": "actual"
+    },
+    {
      "name": "status",
      "ru": "Статус",
      "type": "text",
@@ -1982,16 +2070,18 @@
     "Пишет заявку только app.lead_submit — единственный метод API без входа: не больше 3 заявок в час с одного адреса (rate_limits, вид lead, адрес — хешем), поле-ловушка (заявка засчитывается в предел, но не сохраняется, ответ тот же), повтор с тем же телефоном за сутки — к первой заявке («Повторная заявка с того же телефона» в истории).",
     "Уведомление обязательно (0092, решение заказчика 06.11.2026, прототип v74 leadNotify): новая заявка ставит сообщение tgLead, а повторная с того же телефона за сутки — своё («Telegram: повторная заявка с сайта», фирма, имя и «клиентов» — сохранённой заявки) в очередь Telegram (telegram_outbox, вид lead, без организации) каждому незаблокированному администратору платформы с привязанным Telegram, в том числе на стенде; ловушка и заявка сверх предела сообщений не дают. Ключ сообщения — lead:<заявка>:…, поэтому «Удалить» стирает из журнала и их.",
     "Смена статуса, откат, «Отказ» с причиной, «Снять «Отказ»», «Подключена» после «Создать организацию» — app.admin_lead_status; заметка — app.admin_lead_note; «Удалить» — app.admin_lead_delete стирает заявку полностью, с историей и сообщениями о ней в журнале Telegram.",
-    "История статусов заявки — не в status_history (таблица организации), а в platform_lead_events."
+    "История статусов заявки — не в status_history (таблица организации), а в platform_lead_events.",
+    "Заявка с документами (пакет 14.11, блок 1; 0147 — только данные): «Форма», ИНН, ОКПО, адрес, руководитель, файлы документов (platform_lead_docs) и Telegram заявителя. Функции лендинга и Админки для них добавляет задача блока 1 (поток И) своей миграцией."
    ],
    "rls": "Включена, политик нет; у роли приложения сняты все права на таблицу (REVOKE, 0089). Читать можно только представлением app.admin_leads, менять — функциями app.lead_submit и app.admin_lead_* (SECURITY DEFINER, администратор платформы — незаблокированный, app.is_platform_admin).",
    "indexes": [
     "platform_leads_created_idx (created_at) — список по времени",
-    "platform_leads_phone_idx (phone, created_at) — повторная заявка с того же телефона за сутки"
+    "platform_leads_phone_idx (phone, created_at) — повторная заявка с того же телефона за сутки",
+    "platform_leads_docs_purge_idx (docs_purge_at) WHERE docs_purge_at is not null — уборка файлов документов"
    ],
    "issue": "#165 (часть 1 сделана, PR #167)",
    "source": "modules/landing.js, admin/leads.js; ТЗ «Лендинг — buhuchet.kg для гостей», «Админка» → «Вкладка «Заявки»»; packages/db/src/schema/leads.ts",
-   "migration": "0088_platform_leads, 0089_platform_leads_functions, 0092_lead_notify"
+   "migration": "0088_platform_leads, 0089_platform_leads_functions, 0092_lead_notify, 0147_package_1411 (документы и Telegram заявителя)"
   },
   {
    "name": "platform_lead_events",
@@ -3105,6 +3195,15 @@
      "status": "actual"
     },
     {
+     "name": "cp_files_upload",
+     "ru": "Контрагент может отправлять файлы",
+     "type": "boolean",
+     "null": false,
+     "default": "true",
+     "desc": "Галочка учётной политики (пакет 14.11, блок 2): по умолчанию включена.",
+     "status": "actual"
+    },
+    {
      "name": "created_at",
      "ru": "Создано",
      "type": "timestamptz",
@@ -3157,7 +3256,7 @@
    "rls": "Включена. Политика org_settings_isolation: роль приложения видит и меняет только строки своей организации (org_id = app.current_org_id()).",
    "issue": "#3, #8 (сделано), поток Е",
    "source": "demoDB.organization (features, remind, digest, waitDays, taskConfirm, repConfirm, pageSec, payFirst); ТЗ «Модуль Моя организация → Учётная политика»",
-   "migration": "0003_users_staff_roles, 0014_org_profile (разделы страницы), 0093_files_page_hidden, 0121_telegram_bot, 0127_contractor_telegram_pay, 0129_contractor_telegram_debt"
+   "migration": "0003_users_staff_roles, 0014_org_profile (разделы страницы), 0093_files_page_hidden, 0121_telegram_bot, 0127_contractor_telegram_pay, 0129_contractor_telegram_debt, 0147_package_1411 (cp_files_upload)"
   },
   {
    "name": "org_report_types",
@@ -3620,7 +3719,7 @@
    ],
    "issue": "#61 (сделано); тариф Соцфонда — #64 (сделано); приостановка и архив — #68 (сделано); экраны — #65 (форма), #66 (список), #67 (карточка)",
    "source": "demoDB.contractors; ТЗ «Модуль Контрагенты» → «Регистрация контрагентов», «Сверка с ГКЭД», «Ответственный», «Плата за обслуживание»; прототип modules/contractors.js (addCpDlg, editCpDlg, transferDlg, cpActions), core/gked.js (gkCheck); packages/db/src/schema/contractors.ts; docs/decisions.md п. А-1 продукта",
-   "migration": "0039_contractors, 0040_contractors_guards, 0054_contractors_socfund, 0061_contractor_service_init, 0070_money_operations, 0072_fees, 0108_socfund_pay",
+   "migration": "0039_contractors, 0040_contractors_guards, 0054_contractors_socfund, 0061_contractor_service_init, 0070_money_operations, 0072_fees, 0108_socfund_pay, 0147_package_1411 (fee_day по умолчанию 1)",
    "logic": [
     "Проверки сохранения одни для создания и «Изменить» (checkContractor): ИНН, телефон по «Кодам телефонов», поля, только действующие значения справочников, ГКЭД только подклассы, дубль ИНН (называет найденного, в том числе в архиве), сверка с ГКЭД. Создание — одна транзакция.",
     "Сверка с ГКЭД — порт прототипа gkCheck (packages/domain/src/contractors/gked.ts): запрет режима — 400 gked_blocked; вопрос о праве на режим — 400 gked_confirm_required, пока форма не подтвердит; подтверждение хранится в gked_confirmation и сбрасывается при смене ГКЭД, режима, формы.",
@@ -3821,8 +3920,8 @@
      "ru": "День оплаты обслуживания",
      "type": "smallint",
      "null": false,
-     "default": "10",
-     "desc": "Число месяца от 1 до 28 (contractors_fee_day_check).",
+     "default": "1",
+     "desc": "Число месяца от 1 до 28 (contractors_fee_day_check). В базе по умолчанию 1-е число с 0147 (решение заказчика 14.11.2026; до этого 10); у заведённых контрагентов день не меняется.",
      "status": "actual"
     },
     {
@@ -4559,10 +4658,10 @@
    "group": "contractors",
    "status": "actual",
    "desc": "Страница контрагента только для просмотра: buhuchet.kg/<адрес организации>/inn/<ИНН>, вход по 6-значному коду. Строка — у контрагента, которому страницу хоть раз включали; выключение строку не удаляет, повторное включение — с новым кодом. Страницу без входа находит и сверяет код только база (app.contractor_page_*): код наружу не отдаётся.",
-   "rls": "Включена. Политика contractor_pages_isolation: только своя организация; ограничительная contractor_pages_insert_own — строку вставляет сотрудник от своего имени (created_by = текущий пользователь). UPDATE, DELETE и TRUNCATE отозваны (0059); UPDATE возвращён только на столбцы включения, кода, разделов, счёта неверных кодов и служебные. Удаляется только каскадом с контрагентом. 0130: UPDATE возвращён ещё на tg_debt_off.",
+   "rls": "Включена. Политика contractor_pages_isolation: только своя организация; ограничительная contractor_pages_insert_own — строку вставляет сотрудник от своего имени (created_by = текущий пользователь). UPDATE, DELETE и TRUNCATE отозваны (0059); UPDATE возвращён только на столбцы включения, кода, разделов, счёта неверных кодов и служебные. Удаляется только каскадом с контрагентом. 0130: UPDATE возвращён ещё на tg_debt_off. 0147: UPDATE возвращён ещё на files_upload.",
    "issue": "#98 (сделано); разделы страницы — #99",
    "source": "demoDB.contractors[].page; modules/cp-page.js; ТЗ «Контрагенты» → «Страница контрагента по ссылке»; packages/db/src/schema/contractor-page.ts; docs/decisions.md п. Е-1 продукта",
-   "migration": "0058_contractor_page, 0059_contractor_page_guards, 0066_contractor_page_tries_left (функция проверки кода), 0093_files_page_hidden, 0101_telegram_relink_page_closed, 0102_telegram_relink_functions, 0123_contractor_telegram, 0124_contractor_telegram_guards (раздел tg, триггер contractor_pages_telegram_revoke), 0129_contractor_telegram_debt, 0130_contractor_telegram_debt_guards",
+   "migration": "0058_contractor_page, 0059_contractor_page_guards, 0066_contractor_page_tries_left (функция проверки кода), 0093_files_page_hidden, 0101_telegram_relink_page_closed, 0102_telegram_relink_functions, 0123_contractor_telegram, 0124_contractor_telegram_guards (раздел tg, триггер contractor_pages_telegram_revoke), 0129_contractor_telegram_debt, 0130_contractor_telegram_debt_guards, 0147_package_1411 (files_upload)",
    "logic": [
     "Для всех случаев (нет страницы, выключена, неизвестные адрес или ИНН, архивный контрагент, функция выключена в учётной политике, организация заблокирована) ответ одинаковый: «Страница недоступна».",
     "Неверные коды: 5 подряд по ссылке — перерыв 15 минут и «ввод закрыт» в истории контрагента (audit_log, page_lock); 3 неверных за час с одного IP по всем ссылкам — закрыто на час (решение заказчика 30.10.2026; rate_limits cp_page_ip, cp_page_ip_lock; IP — хешем). «Осталось попыток» — меньший из остатков по ссылке и по адресу (docs/deviations.md п. О-1 продукта, 0066).",
@@ -4651,6 +4750,15 @@
      "type": "timestamptz",
      "null": true,
      "desc": "5 неверных подряд — на 15 минут.",
+     "status": "actual"
+    },
+    {
+     "name": "files_upload",
+     "ru": "Контрагент может отправлять файлы",
+     "type": "boolean",
+     "null": false,
+     "default": "true",
+     "desc": "Галочка у контрагента (пакет 14.11, блок 2): меняет сотрудник в блоке «Страница контрагента» (GRANT UPDATE (files_upload), 0147).",
      "status": "actual"
     },
     {
@@ -5021,11 +5129,11 @@
    "ru": "Сообщения бота клиенту",
    "group": "contractors",
    "status": "actual",
-   "desc": "Сообщения бота клиенту, под которыми он нажимает кнопки и отвечает (доработки 13.11.2026, задачи К4–К5; прототип v94 pgPayMsg, tgAct cp-paid и cp-ask): pay — «К оплате» за месяц, ask — «напишите ваш вопрос», debt — напоминание о долге. Клиент — не пользователь, поэтому журнал отправок сотрудникам (telegram_outbox) такие сообщения не хранит.",
+   "desc": "Сообщения бота клиенту, под которыми он нажимает кнопки и отвечает (доработки 13.11.2026, задачи К4–К5; прототип v94 pgPayMsg, tgAct cp-paid и cp-ask): pay — «К оплате» за месяц, ask — «напишите ваш вопрос», debt — напоминание о долге, fee — «Оплата за обслуживание до …» (пакет 14.11, 0147). Клиент — не пользователь, поэтому журнал отправок сотрудникам (telegram_outbox) такие сообщения не хранит.",
    "rls": "Включена. Политика contractor_telegram_messages_isolation: только своя организация; ограничительная contractor_telegram_messages_insert_guard — строку вставляют только от своего имени (sent_by = текущий пользователь; у задачи по расписанию и у клиента — пусто). UPDATE, DELETE и TRUNCATE отозваны (0128); UPDATE возвращён только на message_id, payload, attempts, answered_at, total.",
    "issue": "К4, К5 плана «Три потока — доработки 13.11.2026» (общая сборка, PR #245 продукта, сделано)",
    "source": "прототип v94 modules/cp-telegram.js; packages/db/src/schema/contractor-telegram.ts",
-   "migration": "0127_contractor_telegram_pay, 0128_contractor_telegram_pay_guards, 0129_contractor_telegram_debt, 0130_contractor_telegram_debt_guards",
+   "migration": "0127_contractor_telegram_pay, 0128_contractor_telegram_pay_guards, 0129_contractor_telegram_debt, 0130_contractor_telegram_debt_guards, 0147_package_1411 (вид fee, день)",
    "logic": [
     "Нажатие кнопки бот сверяет с этой записью (app.contractor_telegram_message): чат, номер сообщения и что подключение ещё действует; месяц и сумму берёт из записи, а не из данных кнопки.",
     "Само «К оплате» — один раз на месяц и чат (contractor_telegram_messages_auto_key); напоминание о долге — одно на неделю и чат (contractor_telegram_messages_debt_key). Неотправленное задача по расписанию повторяет до трёх раз.",
@@ -5038,7 +5146,9 @@
    "uniques": [
     "contractor_telegram_messages_chat_key (chat_id, message_id) WHERE message_id is not null",
     "contractor_telegram_messages_auto_key (link_id, month) WHERE kind = 'pay' and auto",
-    "contractor_telegram_messages_debt_key (link_id, week) WHERE kind = 'debt'"
+    "contractor_telegram_messages_debt_key (link_id, week) WHERE kind = 'debt'",
+    "contractor_telegram_messages_fee_key (link_id, day) WHERE kind = 'fee' and auto — само «Оплата за обслуживание» одно на чат в день; ручное «Напомнить в Telegram» ограничивает код («раз в сутки на контрагента»)",
+    "contractor_telegram_messages_scope_key (id, org_id, contractor_id) — цель ссылки «Оплатил» (contractor_pay_claims.tg_message_id)"
    ],
    "columns": [
     {
@@ -5100,7 +5210,7 @@
      "ru": "Вид",
      "type": "text",
      "null": false,
-     "desc": "pay — «К оплате», ask — «напишите ваш вопрос», debt — напоминание о долге (contractor_telegram_messages_kind_check).",
+     "desc": "pay — «К оплате», ask — «напишите ваш вопрос», debt — напоминание о долге, fee — «Оплата за обслуживание до …» (0147) (contractor_telegram_messages_kind_check).",
      "status": "actual"
     },
     {
@@ -5176,6 +5286,14 @@
      "type": "date",
      "null": true,
      "desc": "Понедельник недели напоминания о долге (задача К5, 0129): есть ровно у debt (contractor_telegram_messages_debt_check).",
+     "status": "actual"
+    },
+    {
+     "name": "day",
+     "ru": "День",
+     "type": "date",
+     "null": true,
+     "desc": "День отправки «Оплаты за обслуживание до …»; обязателен у вида fee вместе с итогом больше нуля, а у самого (auto) — и месяц начисления (contractor_telegram_messages_fee_check, 0147).",
      "status": "actual"
     }
    ]
@@ -8678,11 +8796,12 @@
    "rls": "Включена. Политика files_isolation: только своя организация. Ограничительные: files_insert_guard — новый файл только от текущего пользователя и в состоянии pending; files_update_guard — удалённый файл не меняется и не возвращается, удаляет (deleted_by) тот, кто вошёл; files_delete_pending — строку можно удалить, только пока загрузка не закончена. Менять роль приложения может только state, contractor_id, note, deleted_at, deleted_by, updated_by, updated_at и version (REVOKE UPDATE и GRANT UPDATE по столбцам, миграция 0037); TRUNCATE отозван. 0126: UPDATE возвращён ещё на name, content_type, size_bytes, storage_key, replaced_at, replaced_by («Изменить файл»); источник и автора загрузки не меняет никто, удалённый файл не меняется (files_update_guard).",
    "uniques": [
     "files_storage_key_unique (storage_key)",
-    "files_id_org_unique (id, org_id) — цель составных ссылок на файл из той же организации"
+    "files_id_org_unique (id, org_id) — цель составных ссылок на файл из той же организации",
+    "files_id_org_contractor_unique (id, org_id, contractor_id) — цель ссылки принятого файла от контрагента (contractor_sent_files.file_id): файл того же контрагента"
    ],
    "issue": "#60 (сделано)",
    "source": "ТЗ «Файловый менеджер»; прототип modules/files.js, modules/services.js filesBox; demoDB.files; packages/db/src/schema/files.ts",
-   "migration": "0036_files, 0037_files_column_grants, 0040_contractors_guards, 0093_files_page_hidden, 0125_file_edit, 0126_file_edit_grants",
+   "migration": "0036_files, 0037_files_column_grants, 0040_contractors_guards, 0093_files_page_hidden, 0125_file_edit, 0126_file_edit_grants, 0147_package_1411 (files_id_org_contractor_unique)",
    "logic": [
     "Загрузка идёт мимо API: запись создаётся pending, браузер кладёт файл в хранилище по подписанной ссылке (2 минуты), затем API проверяет размер и делает файл ready. Не больше 300 начатых загрузок в час от пользователя.",
     "Скачивание — по временной ссылке на 15 минут.",
@@ -10165,7 +10284,7 @@
    "group": "dicts",
    "status": "actual",
    "desc": "Мелкие разделы refDB.json прототипа, каждый — одной строкой как JSON. Разделы, на которые ссылаются контрагенты и отчёты, задача #20 разложила по своим таблицам (органы, режимы, основания, УГНС, виды отчётов, льготы, производственный календарь); банки — #74 (banks), категории задач — #79 (task_categories); коды стран телефонов — #92 (phone_codes).",
-   "rls": "Включена. Политика platform_reference_read: роль приложения только читает (SELECT для всех строк). Пишут команда загрузки pnpm db:seed и функция администратора платформы app.admin_set_reference (только разделы taxes, propertyRates, gkedGroups — 0068; kbSteps, kbArticles, kbLevels, kbShows — 0069). Раздел telegramBot («Сообщения с таблицами» бота платформы) пишет app.admin_set_telegram_rich (0122). 0142: в разделе telegramBot ещё ключ topics («Темы в чате с ботом», app.admin_set_telegram_topics); настройки раздела не затирают друг друга.",
+   "rls": "Включена. Политика platform_reference_read: роль приложения только читает (SELECT для всех строк). Пишут команда загрузки pnpm db:seed и функция администратора платформы app.admin_set_reference (только разделы taxes, propertyRates, gkedGroups — 0068; kbSteps, kbArticles, kbLevels, kbShows — 0069). Раздел telegramBot («Сообщения с таблицами» бота платформы) пишет app.admin_set_telegram_rich (0122). Ключ topics («Темы в чате с ботом», 0142) из раздела telegramBot убран миграцией 0147 вместе с app.admin_set_telegram_topics (решение заказчика 14.11.2026).",
    "issue": "этап 0 (сделано), #20 (сделано: разделы разложены по таблицам)",
    "source": "packages/db/src/schema/platform.ts",
    "migration": "0001_foundation_tables, 0051_admin_platform_dicts_more, 0062_admin_platform_dicts_system, 0068_admin_gked, 0069_admin_kb, 0122_telegram_bot_functions (раздел telegramBot)",
@@ -13986,7 +14105,7 @@
      "ru": "Вид сообщения",
      "type": "text",
      "null": false,
-     "desc": "reminders, task_new, task_on_confirm, task_confirmed, task_rework, task_cancelled, report_fix, code, linked, relinked, unlinked, pass_changed, pass_reset, broadcast, lead — новая заявка с сайта администраторам платформы, без организации (0088), login_locked — «Вход заблокирован» пользователю и тем, кто снимает блокировку (0095), alert — оповещение администраторам платформы о сбое (задача расписания, вебхук Telegram; без организации, 0096–0097), relink_code — код замены Telegram в прежний чат, page_closed — страница контрагента закрыта после неверных кодов (0101), bot_test — проверочное сообщение бота с таблицей и кнопками (0121), cp_tg_request — ответственному о запросе клиента подключить Telegram контрагента (0123), task_started и task_done — постановщику «задача взята в работу» и «выполнена», bot_ask — просьба бота прислать файл или причину ответом на сообщение (0131), nudge — «Напомнить» под сводкой недели (0133), not_me — ответ на «Это не я» и сообщение тем, кто выдаёт новый пароль (0134), bot_cmd — ответ на команду меню бота, повторно не отправляется (0136–0137), group — сообщение в общий чат фирмы (0143); итоговый список — 0146 (telegram_outbox_kind_check).",
+     "desc": "reminders, task_new, task_on_confirm, task_confirmed, task_rework, task_cancelled, report_fix, code, linked, relinked, unlinked, pass_changed, pass_reset, broadcast, lead — новая заявка с сайта администраторам платформы, без организации (0088), login_locked — «Вход заблокирован» пользователю и тем, кто снимает блокировку (0095), alert — оповещение администраторам платформы о сбое (задача расписания, вебхук Telegram; без организации, 0096–0097), relink_code — код замены Telegram в прежний чат, page_closed — страница контрагента закрыта после неверных кодов (0101), bot_test — проверочное сообщение бота с таблицей и кнопками (0121), cp_tg_request — ответственному о запросе клиента подключить Telegram контрагента (0123), task_started и task_done — постановщику «задача взята в работу» и «выполнена», bot_ask — просьба бота прислать файл или причину ответом на сообщение (0131), nudge — «Напомнить» под сводкой недели (0133), not_me — ответ на «Это не я» и сообщение тем, кто выдаёт новый пароль (0134), bot_cmd — ответ на команду меню бота, повторно не отправляется (0136–0137), group — сообщение в общий чат фирмы (0143), cp_file — ответственному о новом файле от контрагента (0147); итоговый список — 0147 (telegram_outbox_kind_check).",
      "status": "actual"
     },
     {
@@ -14094,7 +14213,7 @@
    "uniques": [
     "telegram_outbox_dedupe_key (dedupe_key)"
    ],
-   "migration": "0078_telegram_outbox, 0079_telegram_outbox_functions, 0084_admin_telegram, 0088_platform_leads, 0092_lead_notify, 0095_account_login_lock, 0096_scheduler_retry_alerts, 0101_telegram_relink_page_closed, 0121_telegram_bot, 0122_telegram_bot_functions, 0131–0137, 0143, 0146 (виды сообщений), 0132 (telegram_outbox_ask_idx)"
+   "migration": "0078_telegram_outbox, 0079_telegram_outbox_functions, 0084_admin_telegram, 0088_platform_leads, 0092_lead_notify, 0095_account_login_lock, 0096_scheduler_retry_alerts, 0101_telegram_relink_page_closed, 0121_telegram_bot, 0122_telegram_bot_functions, 0131–0137, 0143, 0146, 0147 (виды сообщений), 0132 (telegram_outbox_ask_idx)"
   },
   {
    "name": "telegram_notify_settings",
@@ -14223,59 +14342,6 @@
    "issue": "#80 (сделано, PR #155)",
    "source": "packages/db/src/schema/telegram.ts",
    "migration": "0078_telegram_outbox, 0079_telegram_outbox_functions"
-  },
-  {
-   "name": "telegram_topics",
-   "ru": "Темы чата с ботом",
-   "group": "system",
-   "status": "actual",
-   "desc": "Темы личного чата с ботом (задача Т7; docs/decisions.md п. Т-7 продукта): какой теме чата какой номер темы у Telegram. Ключ — тема по виду (rep, task, lead, sec) или организации (org:<id>). Строка — про чат, а не про организацию, поэтому org_id нет. Включает администратор платформы («Темы в чате с ботом», по умолчанию выключено).",
-   "rls": "Включена, политик нет; у роли приложения отозваны все права (0142): читают и пишут только функции app.telegram_topic_* (SECURITY DEFINER).",
-   "issue": "Т7 плана «Три потока — доработки 13.11.2026» (общая сборка, PR #245 продукта, сделано)",
-   "source": "прототип v104; packages/db/src/schema/telegram.ts",
-   "migration": "0141_telegram_topics, 0142_telegram_topics_functions",
-   "logic": [
-    "Ответ на нажатие или команду идёт в ту же тему; в теме организации команда отвечает по учётной записи этой организации (app.telegram_topic_key).",
-    "Человек удалил тему — строку убирает только тот, кто знает её прежний номер (app.telegram_topic_forget)."
-   ],
-   "uniques": [
-    "telegram_topics_pk (chat_id, key) — первичный ключ"
-   ],
-   "columns": [
-    {
-     "name": "chat_id",
-     "ru": "Чат Telegram",
-     "type": "bigint",
-     "null": false,
-     "pk": true,
-     "status": "actual"
-    },
-    {
-     "name": "key",
-     "ru": "Тема",
-     "type": "text",
-     "null": false,
-     "pk": true,
-     "desc": "rep, task, lead, sec или org:<uuid> (telegram_topics_key_check).",
-     "status": "actual"
-    },
-    {
-     "name": "thread_id",
-     "ru": "Номер темы",
-     "type": "integer",
-     "null": false,
-     "desc": "Номер темы у Telegram.",
-     "status": "actual"
-    },
-    {
-     "name": "created_at",
-     "ru": "Создано",
-     "type": "timestamptz",
-     "null": false,
-     "default": "now()",
-     "status": "actual"
-    }
-   ]
   },
   {
    "name": "telegram_groups",
@@ -14550,6 +14616,720 @@
      "type": "timestamptz",
      "null": false,
      "default": "now()",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "platform_lead_docs",
+   "ru": "Документы заявки",
+   "group": "core",
+   "status": "actual",
+   "desc": "Файлы документов заявки с лендинга (пакет 14.11, блок 1): свидетельство ГНС, выписка, справка Минюста — по одному файлу вида, только PDF до 20 МБ. Данные платформы, без org_id; файл в хранилище — leads/<заявка>/<файл>.",
+   "rls": "Включена, политик нет; у роли приложения сняты все права (REVOKE ALL, 0147). Читать и писать будут только функции лендинга и Админки (SECURITY DEFINER) задачи блока 1.",
+   "issue": "Этап 0 пакета «Доработки 14.11.2026» (PR #255 продукта, сделано)",
+   "source": "ТЗ «Доработки 14.11.2026», блок 1; packages/db/src/schema/leads.ts; packages/domain/src/admin/lead-docs.ts",
+   "migration": "0147_package_1411",
+   "logic": [
+    "Один файл каждого вида у заявки (platform_lead_docs_kind_key); какие виды нужны — по «Форме» (LEAD_DOCS_BY_FORM в домене).",
+    "Ключ хранилища строго leads/<lead_id>/<id> (platform_lead_docs_key_check): чужой путь записать нельзя.",
+    "Удаляется вместе с заявкой (каскад); файлы в хранилище убирает задача по расписанию по platform_leads.docs_purge_at."
+   ],
+   "uniques": [
+    "platform_lead_docs_storage_key_unique (storage_key)",
+    "platform_lead_docs_kind_key (lead_id, kind)"
+   ],
+   "columns": [
+    {
+     "name": "id",
+     "ru": "Номер файла",
+     "type": "uuid",
+     "null": false,
+     "pk": true,
+     "desc": "Задаёт сервер до загрузки: он же — последняя часть ключа хранилища.",
+     "status": "actual"
+    },
+    {
+     "name": "lead_id",
+     "ru": "Заявка",
+     "type": "uuid",
+     "null": false,
+     "fk": "platform_leads.id",
+     "onDelete": "cascade",
+     "status": "actual"
+    },
+    {
+     "name": "kind",
+     "ru": "Вид документа",
+     "type": "text",
+     "null": false,
+     "desc": "gns_cert — свидетельство ГНС, extract — выписка, minjust_cert — справка Минюста (platform_lead_docs_kind_check).",
+     "status": "actual"
+    },
+    {
+     "name": "name",
+     "ru": "Имя файла",
+     "type": "text",
+     "null": false,
+     "desc": "1–255 знаков (platform_lead_docs_name_check).",
+     "status": "actual"
+    },
+    {
+     "name": "content_type",
+     "ru": "Тип",
+     "type": "text",
+     "null": false,
+     "desc": "Только application/pdf (platform_lead_docs_type_check).",
+     "status": "actual"
+    },
+    {
+     "name": "size_bytes",
+     "ru": "Размер, байт",
+     "type": "bigint",
+     "null": false,
+     "desc": "До 20 МБ (platform_lead_docs_size_check).",
+     "status": "actual"
+    },
+    {
+     "name": "storage_key",
+     "ru": "Ключ в хранилище",
+     "type": "text",
+     "null": false,
+     "unique": true,
+     "desc": "leads/<lead_id>/<id> (platform_lead_docs_key_check).",
+     "status": "actual"
+    },
+    {
+     "name": "state",
+     "ru": "Состояние",
+     "type": "text",
+     "null": false,
+     "default": "'pending'",
+     "desc": "pending — загружается, ready — загружен (platform_lead_docs_state_check).",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "platform_lead_tg_tokens",
+   "ru": "Ссылки «Подключить Telegram» заявителя",
+   "group": "core",
+   "status": "actual",
+   "desc": "Одноразовые ссылки на бота для заявителя с лендинга (пакет 14.11, блок 1): здесь — только SHA-256 токена, ссылка действует 24 часа.",
+   "rls": "Включена, политик нет; у роли приложения сняты все права (REVOKE ALL, 0147). Работать с ними будут только функции задачи блока 1 (SECURITY DEFINER).",
+   "issue": "Этап 0 пакета «Доработки 14.11.2026» (PR #255 продукта, сделано)",
+   "source": "ТЗ «Доработки 14.11.2026», блок 1; packages/db/src/schema/leads.ts",
+   "migration": "0147_package_1411",
+   "logic": [
+    "Чат, который использовал ссылку, записывается только вместе с отметкой использования (platform_lead_tg_tokens_used_check).",
+    "Удаляются вместе с заявкой (каскад)."
+   ],
+   "indexes": [
+    "platform_lead_tg_tokens_lead_idx (lead_id)",
+    "platform_lead_tg_tokens_expires_idx (expires_at)"
+   ],
+   "columns": [
+    {
+     "name": "token_hash",
+     "ru": "Хеш токена",
+     "type": "text",
+     "null": false,
+     "pk": true,
+     "desc": "SHA-256 токена из ссылки; сам токен не хранится.",
+     "status": "actual"
+    },
+    {
+     "name": "lead_id",
+     "ru": "Заявка",
+     "type": "uuid",
+     "null": false,
+     "fk": "platform_leads.id",
+     "onDelete": "cascade",
+     "status": "actual"
+    },
+    {
+     "name": "expires_at",
+     "ru": "Действует до",
+     "type": "timestamptz",
+     "null": false,
+     "desc": "24 часа с выдачи.",
+     "status": "actual"
+    },
+    {
+     "name": "used_at",
+     "ru": "Использована",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Когда заявитель нажал «Старт»; ссылка действует один раз.",
+     "status": "actual"
+    },
+    {
+     "name": "used_chat_id",
+     "ru": "Чат, который использовал",
+     "type": "bigint",
+     "null": true,
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "password_setup_tokens",
+   "ru": "Ссылки «Задать пароль»",
+   "group": "core",
+   "status": "actual",
+   "desc": "Ссылка владельцу новой организации, созданной по заявке с документами, чтобы он сам задал пароль (пакет 14.11, блок 1): здесь — только SHA-256 токена, ссылка действует 7 дней.",
+   "rls": "Включена. Политика password_setup_tokens_isolation: только своя организация. У роли приложения сняты все права (REVOKE ALL, 0147): работать будут только функции задачи блока 1 (SECURITY DEFINER).",
+   "issue": "Этап 0 пакета «Доработки 14.11.2026» (PR #255 продукта, сделано)",
+   "source": "ТЗ «Доработки 14.11.2026», блок 1; packages/db/src/schema/auth.ts",
+   "migration": "0147_package_1411",
+   "logic": [
+    "Ссылка — на пользователя своей организации: составной ключ password_setup_tokens_user_org_fk (user_id, org_id) → users (id, org_id), удаляется вместе с пользователем."
+   ],
+   "indexes": [
+    "password_setup_tokens_user_idx (user_id, created_at)",
+    "password_setup_tokens_expires_idx (expires_at)"
+   ],
+   "columns": [
+    {
+     "name": "token_hash",
+     "ru": "Хеш токена",
+     "type": "text",
+     "null": false,
+     "pk": true,
+     "desc": "SHA-256 токена из ссылки; сам токен не хранится.",
+     "status": "actual"
+    },
+    {
+     "name": "user_id",
+     "ru": "Пользователь",
+     "type": "uuid",
+     "null": false,
+     "fk": "users.id",
+     "onDelete": "cascade",
+     "desc": "Кому задать пароль; составной ключ (user_id, org_id) → users, каскад.",
+     "status": "actual"
+    },
+    {
+     "name": "org_id",
+     "ru": "Организация",
+     "type": "uuid",
+     "null": false,
+     "fk": "organizations.id",
+     "onDelete": "restrict",
+     "desc": "Чья запись. По этому полю работает защита RLS.",
+     "status": "actual"
+    },
+    {
+     "name": "expires_at",
+     "ru": "Действует до",
+     "type": "timestamptz",
+     "null": false,
+     "desc": "7 дней с выдачи.",
+     "status": "actual"
+    },
+    {
+     "name": "used_at",
+     "ru": "Использована",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Когда пароль задан; ссылка действует один раз.",
+     "status": "actual"
+    },
+    {
+     "name": "created_by",
+     "ru": "Кто выдал",
+     "type": "uuid",
+     "null": true,
+     "fk": "users.id",
+     "onDelete": "set null",
+     "desc": "Администратор платформы.",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "contractor_sent_files",
+   "ru": "Файлы от контрагентов",
+   "group": "files",
+   "status": "actual",
+   "desc": "Файлы, которые клиент отправил со страницы контрагента или боту (пакет 14.11, блок 2): ждут решения сотрудника «Принять» или «Отклонить». Принятый становится файлом контрагента (files) и хранится как обычный; непринятые удаляются через 30 дней. Файл в хранилище — org/<org_id>/sent/<id>.",
+   "rls": "Включена. Политика contractor_sent_files_isolation: только своя организация. Ограничительные: contractor_sent_files_insert_guard — вставка только начатой новой загрузки (state pending, status new); contractor_sent_files_update_guard — меняется только новый файл, решение пишет тот, кто вошёл (decided_by = текущий пользователь); contractor_sent_files_delete_guard — принятый не удаляется. UPDATE у роли приложения — только на state, status, reject_reason, decided_by, decided_at, file_id, updated_at, version (0147).",
+   "issue": "Этап 0 пакета «Доработки 14.11.2026» (PR #255 продукта, сделано)",
+   "source": "ТЗ «Доработки 14.11.2026», блок 2; прототип v112; packages/db/src/schema/files.ts; packages/domain/src/files/sent-files.ts",
+   "migration": "0147_package_1411",
+   "logic": [
+    "Загруженный файл (ready) не возвращается в загрузку (pending): триггер contractor_sent_files_state_guard — иначе по новой подписанной ссылке его можно было бы подменить после того, как его посмотрел сотрудник.",
+    "Принятый и отклонённый окончательны; у отклонённого обязательна причина 1–300 знаков (contractor_sent_files_reason_check).",
+    "Принять можно только с файлом того же контрагента: contractor_sent_files_file_fk (file_id, org_id, contractor_id) → files (id, org_id, contractor_id); один файл — одному отправленному (contractor_sent_files_file_key).",
+    "Ключ хранилища строго org/<org_id>/sent/<id> (contractor_sent_files_key_check). Удаляется вместе с контрагентом (каскад).",
+    "Правила, методы API и функции страницы и бота (SECURITY DEFINER) добавляет задача блока 2 (поток И) своей миграцией."
+   ],
+   "indexes": [
+    "contractor_sent_files_contractor_idx (org_id, contractor_id, created_at desc)",
+    "contractor_sent_files_purge_idx (org_id, created_at) WHERE status <> 'accepted' — уборка непринятых через 30 дней"
+   ],
+   "uniques": [
+    "contractor_sent_files_storage_key_unique (storage_key)",
+    "contractor_sent_files_id_org_unique (id, org_id)",
+    "contractor_sent_files_scope_unique (id, org_id, contractor_id) — цель ссылки чека «Я оплатил»",
+    "contractor_sent_files_file_key (file_id) WHERE file_id is not null"
+   ],
+   "columns": [
+    {
+     "name": "id",
+     "ru": "Номер",
+     "type": "uuid",
+     "null": false,
+     "pk": true,
+     "desc": "Задаёт сервер до загрузки: он же — последняя часть ключа хранилища.",
+     "status": "actual"
+    },
+    {
+     "name": "org_id",
+     "ru": "Организация",
+     "type": "uuid",
+     "null": false,
+     "fk": "organizations.id",
+     "onDelete": "restrict",
+     "desc": "Чья запись. По этому полю работает защита RLS.",
+     "status": "actual"
+    },
+    {
+     "name": "contractor_id",
+     "ru": "Контрагент",
+     "type": "uuid",
+     "null": false,
+     "fk": "contractors.id",
+     "onDelete": "cascade",
+     "desc": "Составной ключ contractor_sent_files_contractor_fk (contractor_id, org_id) → contractors, каскад.",
+     "status": "actual"
+    },
+    {
+     "name": "source",
+     "ru": "Откуда",
+     "type": "text",
+     "null": false,
+     "desc": "page — страница контрагента, telegram — бот (contractor_sent_files_source_check).",
+     "status": "actual"
+    },
+    {
+     "name": "sender_name",
+     "ru": "Отправитель",
+     "type": "text",
+     "null": true,
+     "desc": "Имя в Telegram, до 64 знаков (contractor_sent_files_tg_check).",
+     "status": "actual"
+    },
+    {
+     "name": "tg_chat_id",
+     "ru": "Чат Telegram",
+     "type": "bigint",
+     "null": true,
+     "desc": "Только у файлов из бота и обязательно у них (contractor_sent_files_tg_check).",
+     "status": "actual"
+    },
+    {
+     "name": "comment",
+     "ru": "Комментарий клиента",
+     "type": "text",
+     "null": true,
+     "desc": "До 300 знаков (contractor_sent_files_comment_check).",
+     "status": "actual"
+    },
+    {
+     "name": "name",
+     "ru": "Имя файла",
+     "type": "text",
+     "null": false,
+     "desc": "1–255 знаков (contractor_sent_files_name_check).",
+     "status": "actual"
+    },
+    {
+     "name": "content_type",
+     "ru": "Тип",
+     "type": "text",
+     "null": false,
+     "status": "actual"
+    },
+    {
+     "name": "size_bytes",
+     "ru": "Размер, байт",
+     "type": "bigint",
+     "null": false,
+     "desc": "До 20 МБ (contractor_sent_files_size_check).",
+     "status": "actual"
+    },
+    {
+     "name": "storage_key",
+     "ru": "Ключ в хранилище",
+     "type": "text",
+     "null": false,
+     "unique": true,
+     "desc": "org/<org_id>/sent/<id> (contractor_sent_files_key_check).",
+     "status": "actual"
+    },
+    {
+     "name": "state",
+     "ru": "Загрузка",
+     "type": "text",
+     "null": false,
+     "default": "'pending'",
+     "desc": "pending — загружается, ready — загружен (contractor_sent_files_state_check).",
+     "status": "actual"
+    },
+    {
+     "name": "status",
+     "ru": "Статус",
+     "type": "text",
+     "null": false,
+     "default": "'new'",
+     "desc": "new — «Новый», accepted — «Принят», rejected — «Отклонён»; решение — только по загруженному (contractor_sent_files_status_check).",
+     "status": "actual"
+    },
+    {
+     "name": "reject_reason",
+     "ru": "Причина отклонения",
+     "type": "text",
+     "null": true,
+     "desc": "Обязательна у отклонённого, 1–300 знаков.",
+     "status": "actual"
+    },
+    {
+     "name": "decided_by",
+     "ru": "Кто решил",
+     "type": "uuid",
+     "null": true,
+     "fk": "users.id",
+     "onDelete": "restrict",
+     "desc": "Составной ключ (decided_by, org_id) → users; только вместе с decided_at (contractor_sent_files_decided_check).",
+     "status": "actual"
+    },
+    {
+     "name": "decided_at",
+     "ru": "Когда решил",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Пусто только у нового.",
+     "status": "actual"
+    },
+    {
+     "name": "file_id",
+     "ru": "Файл контрагента",
+     "type": "uuid",
+     "null": true,
+     "fk": "files.id",
+     "desc": "У принятого — файл в «Файлах» того же контрагента (contractor_sent_files_accepted_check, contractor_sent_files_file_fk).",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "updated_at",
+     "ru": "Изменено",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "version",
+     "ru": "Версия",
+     "type": "integer",
+     "null": false,
+     "default": "1",
+     "desc": "Защита от одновременной правки: устаревшее сохранение — «Запись изменена другим пользователем».",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "contractor_pay_claims",
+   "ru": "«Я оплатил» и «Оплатил»",
+   "group": "money",
+   "status": "actual",
+   "desc": "Сообщения клиента об оплате (пакет 14.11, блоки 4 и 6): «Я оплатил» со страницы контрагента и «Оплатил» под сообщением бота — за налоги месяца или за обслуживание. Ждут подтверждения сотрудника.",
+   "rls": "Включена. Политика contractor_pay_claims_isolation: только своя организация. Ограничительные: contractor_pay_claims_insert_guard — вставка только ждущего (status wait); contractor_pay_claims_update_guard — меняется только ждущее, решение пишет тот, кто вошёл (decided_by = текущий пользователь). UPDATE у роли приложения — только на status, decided_by, decided_at, updated_at, version; DELETE отозван (0147).",
+   "issue": "Этап 0 пакета «Доработки 14.11.2026» (PR #255 продукта, сделано)",
+   "source": "ТЗ «Доработки 14.11.2026», блоки 4 и 6; прототип v110; packages/db/src/schema/contractor-telegram.ts; packages/domain/src/contractor-page/pay-claims.ts",
+   "migration": "0147_package_1411",
+   "logic": [
+    "Решение принимается один раз: «подтверждено» и «отклонено» окончательны; страница и бот (без пользователя) решить не могут.",
+    "Чек — отправленный файл того же контрагента: contractor_pay_claims_sent_file_fk (sent_file_id, org_id, contractor_id) → contractor_sent_files ON DELETE SET NULL (sent_file_id) — непринятый чек через 30 дней удаляется, а сообщение об оплате остаётся без чека.",
+    "Сообщение бота — того же контрагента: contractor_pay_claims_message_fk (tg_message_id, org_id, contractor_id) → contractor_telegram_messages; только у source telegram.",
+    "Строки удаляются только вместе с контрагентом (каскад). Правила и методы API добавляют задачи блоков 4 и 6 (поток К)."
+   ],
+   "indexes": [
+    "contractor_pay_claims_contractor_idx (org_id, contractor_id, created_at)",
+    "contractor_pay_claims_wait_idx (org_id, contractor_id, month) WHERE status = 'wait'",
+    "contractor_pay_claims_file_idx (sent_file_id) WHERE sent_file_id is not null"
+   ],
+   "columns": [
+    {
+     "name": "id",
+     "ru": "Номер записи",
+     "type": "uuid",
+     "null": false,
+     "pk": true,
+     "default": "gen_random_uuid()",
+     "desc": "Уникальный номер записи, создаётся базой.",
+     "status": "actual"
+    },
+    {
+     "name": "org_id",
+     "ru": "Организация",
+     "type": "uuid",
+     "null": false,
+     "fk": "organizations.id",
+     "onDelete": "restrict",
+     "desc": "Чья запись. По этому полю работает защита RLS.",
+     "status": "actual"
+    },
+    {
+     "name": "contractor_id",
+     "ru": "Контрагент",
+     "type": "uuid",
+     "null": false,
+     "fk": "contractors.id",
+     "onDelete": "cascade",
+     "desc": "Составной ключ contractor_pay_claims_contractor_fk (contractor_id, org_id) → contractors, каскад.",
+     "status": "actual"
+    },
+    {
+     "name": "source",
+     "ru": "Откуда",
+     "type": "text",
+     "null": false,
+     "desc": "page — «Я оплатил» на странице, telegram — «Оплатил» в боте (contractor_pay_claims_source_check).",
+     "status": "actual"
+    },
+    {
+     "name": "purpose",
+     "ru": "За что",
+     "type": "text",
+     "null": false,
+     "desc": "tax — налоги, fee — обслуживание (contractor_pay_claims_purpose_check).",
+     "status": "actual"
+    },
+    {
+     "name": "month",
+     "ru": "Месяц",
+     "type": "text",
+     "null": true,
+     "desc": "YYYY-MM (contractor_pay_claims_month_check); у «Оплатил» за обслуживание может быть пусто.",
+     "status": "actual"
+    },
+    {
+     "name": "amount",
+     "ru": "Сумма, тыйын",
+     "type": "bigint",
+     "null": true,
+     "desc": "Больше нуля (contractor_pay_claims_amount_check).",
+     "status": "actual"
+    },
+    {
+     "name": "comment",
+     "ru": "Комментарий",
+     "type": "text",
+     "null": true,
+     "desc": "До 300 знаков.",
+     "status": "actual"
+    },
+    {
+     "name": "sent_file_id",
+     "ru": "Чек",
+     "type": "uuid",
+     "null": true,
+     "fk": "contractor_sent_files.id",
+     "onDelete": "set null",
+     "desc": "Отправленный файл того же контрагента; при его удалении — пусто.",
+     "status": "actual"
+    },
+    {
+     "name": "tg_message_id",
+     "ru": "Сообщение бота",
+     "type": "uuid",
+     "null": true,
+     "fk": "contractor_telegram_messages.id",
+     "desc": "Под каким сообщением нажато «Оплатил»; только у source telegram (contractor_pay_claims_message_check).",
+     "status": "actual"
+    },
+    {
+     "name": "status",
+     "ru": "Статус",
+     "type": "text",
+     "null": false,
+     "default": "'wait'",
+     "desc": "wait — ждёт подтверждения, done — подтверждено, rejected — отклонено (contractor_pay_claims_status_check).",
+     "status": "actual"
+    },
+    {
+     "name": "decided_by",
+     "ru": "Кто решил",
+     "type": "uuid",
+     "null": true,
+     "fk": "users.id",
+     "onDelete": "restrict",
+     "desc": "Составной ключ (decided_by, org_id) → users.",
+     "status": "actual"
+    },
+    {
+     "name": "decided_at",
+     "ru": "Когда решил",
+     "type": "timestamptz",
+     "null": true,
+     "desc": "Пусто только у ждущего (contractor_pay_claims_decided_check).",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "updated_at",
+     "ru": "Изменено",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "version",
+     "ru": "Версия",
+     "type": "integer",
+     "null": false,
+     "default": "1",
+     "desc": "Защита от одновременной правки: устаревшее сохранение — «Запись изменена другим пользователем».",
+     "status": "actual"
+    }
+   ]
+  },
+  {
+   "name": "org_telegram_notices",
+   "ru": "Строки «Telegram-уведомлений»",
+   "group": "system",
+   "status": "actual",
+   "desc": "Блок «Telegram-уведомления» в настройках организации (пакет 14.11, блок 3): в какие дни и во сколько уходят недельная сводка сотрудникам (staff_week), «К оплате» (cp_pay) и «Оплата за обслуживание» (cp_fee) контрагентам. Включено или нет — по-прежнему в учётной политике (org_settings) и у общего чата.",
+   "rls": "Включена. Политика org_telegram_notices_isolation: только своя организация. «Меняет только владелец» проверяет API (задача блока 3, поток Т).",
+   "issue": "Этап 0 пакета «Доработки 14.11.2026» (PR #255 продукта, сделано)",
+   "source": "ТЗ «Доработки 14.11.2026», блок 3; прототип v111 (tg-notify.js); packages/db/src/schema/telegram.ts; packages/domain/src/telegram/notices.ts",
+   "migration": "0147_package_1411",
+   "logic": [
+    "Нет строки — значения по умолчанию из ТЗ: сводка — понедельник в общий час напоминаний, «К оплате» — за 5 дней в 10:00, «Оплата за обслуживание» — за 5 дней в 10:00. Данные действующих организаций не переносятся.",
+    "Дни «за N» — из 1–5, у сводки пусто (org_telegram_notices_days_check); день недели 1–7, у «К оплате» пусто (org_telegram_notices_weekday_check); час обязателен у всех, кроме сводки (org_telegram_notices_time_check)."
+   ],
+   "columns": [
+    {
+     "name": "org_id",
+     "ru": "Организация",
+     "type": "uuid",
+     "null": false,
+     "pk": true,
+     "fk": "organizations.id",
+     "onDelete": "cascade",
+     "desc": "Чья строка; первичный ключ (org_id, code). Удаляется вместе с организацией.",
+     "status": "actual"
+    },
+    {
+     "name": "code",
+     "ru": "Уведомление",
+     "type": "text",
+     "null": false,
+     "pk": true,
+     "desc": "staff_week — сводка сотрудникам на неделю, cp_pay — «К оплате», cp_fee — «Оплата за обслуживание» (org_telegram_notices_code_check).",
+     "status": "actual"
+    },
+    {
+     "name": "days",
+     "ru": "За сколько дней",
+     "type": "smallint[]",
+     "null": false,
+     "default": "'{}'",
+     "desc": "Набор из 1–5 («за 5 … за 1 день»).",
+     "status": "actual"
+    },
+    {
+     "name": "weekday",
+     "ru": "День недели",
+     "type": "smallint",
+     "null": true,
+     "desc": "1 — понедельник … 7 — воскресенье.",
+     "status": "actual"
+    },
+    {
+     "name": "at_time",
+     "ru": "Время",
+     "type": "time",
+     "null": true,
+     "desc": "Во сколько отправлять; у сводки пусто — общий час напоминаний.",
+     "status": "actual"
+    },
+    {
+     "name": "created_at",
+     "ru": "Создано",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "updated_at",
+     "ru": "Изменено",
+     "type": "timestamptz",
+     "null": false,
+     "default": "now()",
+     "status": "actual"
+    },
+    {
+     "name": "updated_by",
+     "ru": "Кто изменил",
+     "type": "uuid",
+     "null": true,
+     "fk": "users.id",
+     "onDelete": "restrict",
+     "desc": "Составной ключ (updated_by, org_id) → users.",
+     "status": "actual"
+    },
+    {
+     "name": "version",
+     "ru": "Версия",
+     "type": "integer",
+     "null": false,
+     "default": "1",
+     "desc": "Защита от одновременной правки: устаревшее сохранение — «Запись изменена другим пользователем».",
      "status": "actual"
     }
    ]
@@ -15425,34 +16205,6 @@
    "desc": "Для команд меню бота (задача Т5): учётные записи, к которым привязан чат, по порядку привязки, не больше 20 — только то, что нужно для отказов ядра бота; данные дальше читаются от имени найденного пользователя (RLS)."
   },
   {
-   "name": "app.telegram_topic_thread(chat, key)",
-   "ru": "Номер темы чата",
-   "migration": "0142_telegram_topics_functions",
-   "definer": true,
-   "desc": "Номер темы Telegram по ключу темы (задача Т7)."
-  },
-  {
-   "name": "app.telegram_topic_key(chat, thread)",
-   "ru": "Ключ темы по номеру",
-   "migration": "0142_telegram_topics_functions",
-   "definer": true,
-   "desc": "Тема, в которой нажали кнопку или написали команду."
-  },
-  {
-   "name": "app.telegram_topic_save(chat, key, thread)",
-   "ru": "Запомнить тему",
-   "migration": "0142_telegram_topics_functions",
-   "definer": true,
-   "desc": "Вставляет или обновляет номер темы."
-  },
-  {
-   "name": "app.telegram_topic_forget(chat, key, thread)",
-   "ru": "Забыть удалённую тему",
-   "migration": "0142_telegram_topics_functions",
-   "definer": true,
-   "desc": "Удаляет строку, только если номер совпадает (тему могли уже создать заново)."
-  },
-  {
    "name": "app.telegram_group_token(hash)",
    "ru": "Ссылка подключения общего чата",
    "migration": "0144_telegram_groups_functions",
@@ -15509,11 +16261,11 @@
    "desc": "Админка → «Телеграм» → «Бот платформы»: пишет раздел telegramBot в platform_reference; только администратор платформы. Отдаёт прежнее значение (раздела ещё нет — включено), пусто — в контексте не администратор. 0142: не затирает другие настройки раздела."
   },
   {
-   "name": "app.admin_set_telegram_topics(on)",
-   "ru": "«Темы в чате с ботом»",
-   "migration": "0142_telegram_topics_functions",
-   "definer": true,
-   "desc": "Пишет ключ topics раздела telegramBot в platform_reference (по умолчанию выключено); только администратор платформы; отдаёт прежнее значение."
+   "name": "app.contractor_sent_file_guard()",
+   "ru": "Загруженный файл от контрагента не возвращается в загрузку",
+   "migration": "0147_package_1411",
+   "definer": false,
+   "desc": "Триггер contractor_sent_files_state_guard (BEFORE UPDATE OF state): ready → pending — ошибка check_violation. Роли приложения вызывать нельзя (REVOKE ALL … FROM PUBLIC, buhuchet_app)."
   }
  ]
 }

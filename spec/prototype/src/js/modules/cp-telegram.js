@@ -101,7 +101,15 @@ function pgTgDlg(c){const A=[{day:'Сегодня'}],B=[{day:'Сегодня'}],
 /* ═════════════ «К оплате» клиенту (К4) ═════════════ */
 // Что клиенту оплатить за месяц отчёта m (правило rmYm): неоплаченные суммы налогов этого месяца. Один расчёт — для блока «К оплате клиенту» в карточке,
 // текста «Скопировать для клиента» и сообщения «К оплате» в Telegram. Суммы «ещё не указана» в расчёт не входят — считаются отдельно (noSum)
-const PG_TG_MSG='Сообщение контрагенту',PG_PAY_DAYS=5;
+const PG_TG_MSG='Сообщение контрагенту';
+// Когда сообщения клиенту уходят сами (доработки 14.11.2026, блок 3, пункт 3; этап 2, поток К) — строки «К оплате» и «Оплата за обслуживание» блока «Telegram-уведомления»:
+// галочки «за 5» … «за 1 день» до срока и час по Бишкеку, у долга — ещё день недели. Не задано — как до этапа 2: «за 5» в 10:00, долг по понедельникам в 10:00
+const PG_DAYS=[5,4,3,2,1],PG_AT='10:00';
+const pgDaysOf=v=>{const l=Array.isArray(v)?PG_DAYS.filter(d=>v.includes(d)):[];return l.length?l:[5]};
+const pgPayDays=()=>pgDaysOf(ORG.tgCpPayDays),pgFeeDays=()=>pgDaysOf(ORG.tgCpFeeDays);
+const pgPayAt=()=>ORG.tgCpPayAt||PG_AT,pgFeeAt=()=>ORG.tgCpFeeAt||PG_AT;
+const pgDebtWd=()=>ORG.tgCpDebtWd>=1&&ORG.tgCpDebtWd<=7?ORG.tgCpDebtWd:1;
+const pgDaysTxt=ds=>`за ${ds.join(', ')} ${plural(ds[ds.length-1],'день','дня','дней')}`;
 const rmMonthTxt=m=>rmTitle(m).slice(3);
 // Реквизиты для налогов — те же, что в разделе «Как оплатить» страницы: основной реквизит ответственного или основной счёт организации для налогов.
 // Без «Учёта оплаты налогов» — тоже по полю «Деньги на налоги переводит» (как в «Напомнить в WhatsApp»): «К оплате» без реквизитов не уходит (доработки 14.11.2026, блок 4)
@@ -151,7 +159,45 @@ let pgTgStaffOut=null,pgTgAskOn=null;
 tgAct('cp-paid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l,to=pgTgStaff(c);
   pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате налогов ${rmTitle(a.m).toLowerCase()}: ${som(a.sum)} («${x.name}»)`);
   if(to){tgSvc(to,PG_TG_KIND);pgTgStaffOut&&pgTgStaffOut({h:'Контрагент сообщил об оплате',t:tplFill('tgCpPaidStaff',{контрагент:c.name,телеграм:x.name,месяц:rmMonthTxt(a.m),сумма:som(a.sum)}),at:bishkekNow().hm})}
-  return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{})}}});
+  pgPaidMark(c,'tax',a.m);return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{}),msg:pgRcptOffer(c,{...a,kind:'tax'})}}});
+// После «Оплатил» за этот месяц сами сообщения больше не уходят: «К оплате» (налоги) и «Оплата за обслуживание до …» (обслуживание) — как после принятия денег
+const pgPaidMark=(c,k,m)=>{if(!m)return;(c.tgPaid||(c.tgPaid={}))[`${k}:${m}`]=nowStamp();dbSoon()};
+/* ═════════════ Файлы и чеки через бота (доработки 14.11.2026, блок 2, пункт 1; блок 4, пункт 4; этап 2, поток К) ═════════════ */
+// Бот принимает файл, пока действуют страница и её раздел «Telegram» и контрагент может отправлять файлы (галочка в учётной политике и у контрагента), иначе —
+// «Ваш бухгалтер не принимает файлы через бота». Лимит в сутки — общий со страницей; типы и размер — как везде на сайте
+const pgFileOn=c=>pgTgOn(c)&&sntUpOn(c);
+const pgFileBad=f=>{const i=f.name.lastIndexOf('.');return f.size>FILE_MAX_MB*1048576||i>0&&TG_FILE_NO.has(f.name.slice(i+1).toLowerCase())?tplFill('tgCpFileNo',{мб:FILE_MAX_MB}):''};
+// Файлы — в «Отправленные файлы» контрагента со статусом «Новый»: «Откуда» — Telegram, «Кто отправил» — имя в Telegram; запись в историю от имени контрагента,
+// ответственному — «Новый файл от контрагента». pay — чек {kind: 'tax' | 'fee', m, sum}: «Принять» у него сразу открывает «Принять деньги» (pgRcptMoney). Возвращает отказ бота или ''
+function pgFileIn(c,x,fs,note,pay){if(!pgFileOn(c))return tplFill('tgCpFileOff',{});const bad=fs.map(pgFileBad).find(Boolean);if(bad)return bad;
+  if(fs.length>SNT_DAY-sntDayCnt(c))return tplFill('tgCpFileLimit',{лимит:SNT_DAY});
+  const at=nowStamp(),n=String(note||'').replace(/\s+/g,' ').trim().slice(0,SNT_NOTE);
+  fs.forEach((f,i)=>SENT.push({id:'sf'+Date.now().toString(36)+'t'+i,cp:c.id,name:f.name.slice(0,FNAME_MAX),size:f.size,src:'tg',who:x.name,at,note:n,st:'new',...(pay?{pay:{...pay}}:{})}));
+  pgTgClientLog(c,`Контрагент отправил через Telegram («${x.name}») ${pay?'чек':fs.length>1?'файлы':'файл'}: ${fs.map(f=>f.name).join(', ')}${n?'. Комментарий: '+n:''}`);sntNotify(c,fs.length);return ''}
+// Файл, присланный боту без просьбы: подпись к нему — комментарий. Telegram подключён к нескольким контрагентам — бот спрашивает «От какой компании?» кнопками с названиями
+const pgTgAllLinks=name=>CPS.filter(c=>!c.archived).flatMap(c=>(c.tgs||[]).filter(x=>x.st==='on'&&x.name===name).map(x=>({c,x})));
+function pgFileFromTg(c,x,f,cap){const at=bishkekNow().hm,bad=pgFileBad(f);if(bad)return {t:bad,at};const ls=pgTgAllLinks(x.name);
+  if(ls.length>1)return {t:tplFill('tgCpFileWhich',{}),at,btns:ls.map(l=>[{t:l.c.name,act:'cp-file-to',arg:{cp:l.c.id,tg:l.x.id,f,cap},icon:'building'}])};
+  return {t:pgFileIn(c,x,[f],cap)||tplFill('tgCpFileOk',{}),at}}
+tgAct('cp-file-to',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const no=pgFileIn(l.c,l.x,[a.f],a.cap);
+  return no?{eph:no}:{done:'✓ '+l.c.name,off:['cp-file-to'],msg:{t:tplFill('tgCpFileOk',{}),at:bishkekNow().hm}}}});
+// «Прислать чек» — после «Оплатил» под «К оплате» и прямо под «Оплата за обслуживание до …»; необязателен: «Оплатил» работает и без него.
+// Чек — фото или PDF; он относится к контрагенту оплаченного сообщения, без вопроса «От какой компании?», комментарий — «Чек к «К оплате» за <месяц>»
+const PG_RCPT_EXT=new Set(['pdf','jpg','jpeg','png','heic','heif','webp']);
+const pgRcptBtn=a=>({t:tgBtnT('tgBtnCpReceipt','Прислать чек'),act:'cp-receipt',arg:a,icon:'clip'});
+const pgRcptOffer=(c,a)=>pgFileOn(c)?{t:tplFill('tgCpReceiptOffer',{}),at:bishkekNow().hm,btns:[[pgRcptBtn(a)]]}:null;
+const pgRcptNote=a=>a.kind==='fee'?`Чек к «Оплата за обслуживание» за ${ymLabel(a.m).toLowerCase()}`:`Чек к «К оплате» за ${rmMonthTxt(a.m)}`;
+tgAct('cp-receipt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};if(!pgFileOn(l.c))return {eph:tplFill('tgCpFileOff',{})};
+    return {ask:{act:'cp-receipt',arg:a,kind:'file',re:pgRcptNote(a),t:tplFill('tgCpReceiptAsk',{})}}},
+  reply:(u,a,p)=>{const l=pgTgLinked(a);if(!l)return {say:tplFill('tgCpNotLinked',{})};if(!p.file)return {again:tplFill('tgAskNeedFile',{})};
+    const bad=tgFileWhy(p.file),i=p.file.name.lastIndexOf('.');if(bad)return {again:bad};if(i<1||!PG_RCPT_EXT.has(p.file.name.slice(i+1).toLowerCase()))return {again:tplFill('tgCpReceiptType',{})};
+    const no=pgFileIn(l.c,l.x,[p.file],pgRcptNote(a)+(p.cap?'. '+p.cap:''),{kind:a.kind,m:a.m,sum:a.sum});if(no)return {say:no};
+    return {done:'✓ Чек отправлен',say:tplFill('tgCpReceiptOk',{})}}});
+// «Принять» у чека: сразу «Принять деньги» с суммой из оплаченного сообщения — налоги месяца разнесены по отчётам от старых к новым, излишек — аванс;
+// за обслуживание — «Принять оплату за обслуживание». Нет права или деньги месяца уже получены — файл просто принят
+function pgRcptMoney(c,p){if(p.kind==='fee'){if(feeAccOk(c))feePayDlg(c,null,{sum:p.sum,note:`По чеку из Telegram${p.m?' за '+ymLabel(p.m).toLowerCase():''}`});return}
+  if(!rmRecvOn(c))return;const pl=rmRecvPlan(rmRecvMonths(c,p.m));if(!pl.list.length)return toast(`Деньги на налоги за ${rmMonthTxt(p.m)} уже получены от контрагента`,'info');
+  inDlg(c,null,{list:pl.list,total:p.sum,note:`Деньги за ${rmMonthTxt(p.m)} — по чеку из Telegram`})}
 tgAct('cp-ask',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};pgTgAskOn&&pgTgAskOn(l);return {msg:{t:tplFill('tgCpAskHow',{}),at:bishkekNow().hm}}}});
 // Вопрос клиента уходит ответственному бухгалтеру с названием контрагента; ответ бухгалтера возвращается клиенту
 function pgTgAsk(c,x,q){const to=pgTgStaff(c);pgTgClientLog(c,`Вопрос бухгалтеру из Telegram («${x.name}»): ${q.slice(0,200)}`);if(to)tgSvc(to,PG_TG_KIND);pgTgToClient(c,x);
@@ -164,7 +210,8 @@ function pgChatDlg(c,x,first,o){const A=[{day:'Сегодня'},first],B=[{day:'
     body:`<div class="tgc-wrap two"><div id="pc-a">${tgcHtml(CA)}</div><div id="pc-b">${tgcHtml(CB)}</div></div>
       ${ask?`<div class="row" style="flex-wrap:wrap">${inp('pc-q','','maxlength="500" placeholder="Вопрос бухгалтеру" aria-label="Вопрос бухгалтеру" style="flex:1;min-width:200px"')}<button class="btn cta" id="pc-qs">${ic('send','sm')}Ответить боту от клиента</button></div>`:''}
       ${asked&&to?`<div class="row" style="flex-wrap:wrap">${inp('pc-r','','maxlength="500" placeholder="Ответ клиенту" aria-label="Ответ клиенту" style="flex:1;min-width:200px"')}<button class="btn" id="pc-rs">${ic('send','sm')}Ответить боту от бухгалтера</button></div>`:''}
-      <div class="note">${ic('info')}<span>${o.note} Кнопки в чате клиента работают. Сообщения записаны в журнал «Телеграм» с типом «${PG_TG_MSG}». Тексты — Справочники платформы → «Шаблоны».</span></div>`,
+      ${tgAskOpen(CA)?'':`<div class="row" style="flex-wrap:wrap"><input type="file" class="inp" id="pc-f" aria-label="Файл боту от клиента" style="flex:1;min-width:180px">${inp('pc-cap','',`maxlength="${SNT_NOTE}" placeholder="Подпись к файлу — станет комментарием" aria-label="Подпись к файлу" style="flex:1;min-width:180px"`)}<button class="btn" id="pc-fs">${ic('clip','sm')}Прислать боту файл от клиента</button><button type="button" class="linkbtn" id="pc-fd">В макете: пример «Выписка за октябрь.pdf»</button></div>`}
+      <div class="note">${ic('info')}<span>${o.note} Кнопки в чате клиента работают. Файл, присланный боту, попадает в «Отправленные файлы» на вкладке «Файлы» карточки контрагента. Сообщения записаны в журнал «Телеграм» с типом «${PG_TG_MSG}». Тексты — Справочники платформы → «Шаблоны».</span></div>`,
     foot:'<button class="btn cta" data-close>Готово</button>',
     mount(el){tgcBind($('#pc-a',el),CA,()=>{m.draw();refreshAll()},u);
       const q=$('#pc-q',el),qs=$('#pc-qs',el),r=$('#pc-r',el),rs=$('#pc-rs',el);
@@ -172,18 +219,23 @@ function pgChatDlg(c,x,first,o){const A=[{day:'Сегодня'},first],B=[{day:'
           if(!l)A.push({eph:tplFill('tgCpNotLinked',{})});else{const a=pgTgAsk(c,x,t);if(a.staff)B.push(a.staff);A.push({t:a.bot,at:bishkekNow().hm});asked=true}ask=false;m.draw();refreshAll()};
         qs.onclick=go;q.onkeydown=e=>{if(e.key==='Enter')go()};q.focus()}
       if(rs){const go=()=>{const t=r.value.replace(/\s+/g,' ').trim();if(!t){r.focus();return}B.push({t,me:true});A.push(pgTgAnswer(c,x,t,to));asked=false;m.draw();refreshAll()};
-        rs.onclick=go;r.onkeydown=e=>{if(e.key==='Enter')go()}}}}}})}
+        rs.onclick=go;r.onkeydown=e=>{if(e.key==='Enter')go()}}
+      // Клиент присылает боту файл без просьбы бота (блок 2, пункт 1)
+      const fsend=f=>{const cap=fNoteClean($('#pc-cap',el).value).slice(0,SNT_NOTE),l=pgTgLinked({cp:c.id,tg:x.id});A.push({me:true,file:f,t:cap,at:bishkekNow().hm});
+        A.push(l?pgFileFromTg(c,x,f,cap):{eph:tplFill('tgCpNotLinked',{})});CA.jump=true;m.draw();refreshAll()};
+      if($('#pc-fs',el)){$('#pc-fs',el).onclick=()=>{const f=$('#pc-f',el).files[0];if(!f)return toast('Выберите файл','alert',true);fsend({name:f.name,size:f.size})};
+        $('#pc-fd',el).onclick=()=>fsend({name:'Выписка за октябрь.pdf',size:241664})}}}}})}
 const pgPayDlg=(c,p,x)=>pgChatDlg(c,x,pgPayMsg(c,p,x),{title:'Прототип: «К оплате» в Telegram клиента',sub:`${esc(c.name)} · налоги ${esc(rmTitle(p.m).toLowerCase())}`,
-  note:`Так сообщение «К оплате» выглядит у клиента. Само оно приходит за ${PG_PAY_DAYS} дней до ближайшего срока оплаты месяца, если организация включила «Отправлять «К оплате» контрагентам» и все суммы месяца указаны.`});
+  note:`Так сообщение «К оплате» выглядит у клиента. Само оно приходит ${pgDaysTxt(pgPayDays())} до ближайшего срока оплаты месяца в ${pgPayAt()}, пока месяц не оплачен, если организация включила «К оплате» в «Telegram-уведомлениях» и все суммы месяца указаны. После «Оплатил» бот предлагает прислать чек.`});
 
 /* ═════════════ Напоминание клиенту о долге (К5) ═════════════ */
-// Раз в неделю, в понедельник в 10:00, подключившим Telegram: недостача денег на налоги этого месяца и долг за обслуживание.
+// Раз в неделю, в день и час строки «Оплата за обслуживание» (по умолчанию понедельник, 10:00), подключившим Telegram: недостача денег на налоги этого месяца и долг за обслуживание.
 // Включает организация («Напоминать контрагентам о долге»), у отдельного контрагента выключает сотрудник в карточке, у себя — сам клиент кнопкой «Не напоминать»
 function pgDebt(c){const fee=feat('fee')&&c.feeDebt>0?c.feeDebt:0,M=feat('taxpay')?pubMoney(c):null,short=M&&M.diff<0?-M.diff:0;return {fee,short,sum:Math.round((fee+short)*100)/100}}
 const pgDebtTo=c=>ORG.tgCpDebt&&!c.tgNoDebt&&!c.archived&&pgDebt(c).sum>0?(c.tgs||[]).filter(x=>x.st==='on'&&!x.noDebt):[];
 function pgDebtMsg(c,x){const d=pgDebt(c),fa=d.fee?orgMain('fee'):null,ta=d.short?pgTaxAcc(c):null,rows=[];
   if(d.short)rows.push(['Не хватает на налоги этого месяца',fmtM(d.short)]);if(d.fee)rows.push(['Долг за обслуживание',fmtM(d.fee)]);
-  return {h:'Напоминание об оплате',sub:c.name,t:tplFill('tgCpDebt',{контрагент:c.name,сумма:som(d.sum)}),tables:[{head:['Что оплатить','Сумма, сом'],rows,num:[1]}],at:'10:00',
+  return {h:'Напоминание об оплате',sub:c.name,t:tplFill('tgCpDebt',{контрагент:c.name,сумма:som(d.sum)}),tables:[{head:['Что оплатить','Сумма, сом'],rows,num:[1]}],at:pgFeeAt(),
     btns:[...(ta||fa?[[{t:tgBtnT('tgBtnCpShowReq','Показать реквизиты для перевода'),act:'cp-req',arg:{cp:c.id,tg:x.id,tax:!!ta,fee:!!fa},icon:'wallet'}]]:[]),
       [{t:tgBtnT('tgBtnCpNoDebt','Не напоминать'),act:'cp-nodebt',arg:{cp:c.id,tg:x.id},icon:'ban'}]]}}
 // «Показать реквизиты для перевода» (доработки 14.11.2026, блок 4, пункт 3): одна кнопка на оба вида; бот присылает реквизиты по каждой сумме долга из напоминания —
@@ -198,7 +250,7 @@ tgAct('cp-nodebt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('
 const pgDebtWhy=c=>!can('cpPage')?'Нужно право «Управлять страницей контрагента»':!ORG.tgCpDebt?'Напоминания о долге выключены для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание»':'';
 function pgDebtRow(c){if(!rmPayTgOn()||!(feat('fee')||feat('taxpay')))return '';const w=pgDebtWhy(c),on=!!ORG.tgCpDebt&&!c.tgNoDebt,d=pgDebt(c),to=pgDebtTo(c);
   const dw=to.length?'':!ORG.tgCpDebt?'Напоминания о долге выключены в настройках организации':c.tgNoDebt?'Напоминание о долге у этого контрагента выключено':!d.sum?'У контрагента нет недостачи на налоги и долга за обслуживание':!pgTgN(c,'on')?'Контрагент не подключил Telegram':'Клиент выключил напоминания кнопкой «Не напоминать»';
-  return `<div class="row pg-tg-debt"><label class="check-row grow"><input type="checkbox" class="sw" data-pg-tg="debt:0" ${on?'checked':''} ${w?`aria-disabled="true" title="${esc(w)}"`:''}><span class="grow">Напоминать о долге в Telegram<div class="hint">${ORG.tgCpDebt?`Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание${d.sum?` — сейчас ${som(d.sum)}`:' — сейчас долга нет'}.`:'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание».'}</div></span></label>
+  return `<div class="row pg-tg-debt"><label class="check-row grow"><input type="checkbox" class="sw" data-pg-tg="debt:0" ${on?'checked':''} ${w?`aria-disabled="true" title="${esc(w)}"`:''}><span class="grow">Напоминать о долге в Telegram<div class="hint">${ORG.tgCpDebt?`Раз в неделю, ${TGN_WD_PL[pgDebtWd()-1]} в ${pgFeeAt()}: недостача на налоги этого месяца и долг за обслуживание${d.sum?` — сейчас ${som(d.sum)}`:' — сейчас долга нет'}.`:'Выключено для всей организации: «Моя организация» → «Настройки» → «Telegram-уведомления» → «Оплата за обслуживание».'}</div></span></label>
     <button type="button" class="btn sm ghost ${dw?'dis':''}" data-pg-tg="demo:0" ${dw?`aria-disabled="true" data-why="${esc(dw)}" title="${esc(dw)}"`:''}>${ic('tg','sm')}<span class="bl">Прототип: показать напоминание</span></button></div>`}
 /* ═════════════ «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5) ═════════════ */
 // Вкладка «Обслуживание» карточки контрагента, рядом с «Напомнить в WhatsApp»: видна при долге за обслуживание, если подключён хотя бы один Telegram; права — те же, что у WhatsApp.
@@ -212,9 +264,17 @@ const pgFeeTgBtn=c=>{if(!pgFeeTgShow(c))return '';const w=pgFeeTgWhy(c);
 // Месяцы долга и срок — как в «Напомнить в WhatsApp»: месяцы с прошедшим сроком, срок — день оплаты следующего месяца, не раньше завтрашнего дня
 function pgFeeDue(c){const ms=feeMonths(c).filter(m=>feeDue(c,m)<=TODAY&&(feeCharge(c,m)-feeGot(c,m))>0),m=ms[ms.length-1],d=m?mkDate(+m.slice(0,4),+m.slice(5,7)+1,c.feeDay):TODAY;
   return {ms,due:d<=TODAY?addDays(TODAY,1):d}}
+// Кнопки под «Оплата за обслуживание до …»: копирование реквизита, «Оплатил» и «Прислать чек» (этап 2 — когда контрагент может отправлять файлы через бота)
+function pgFeeBtns(c,x,fa,m,sum){const a={cp:c.id,tg:x.id,m,sum};
+  return [...(fa?[[pgRqBtn(fa)]]:[]),[{t:tgBtnT('tgBtnCpPaid','Оплатил'),act:'cp-feepaid',arg:a},...(pgFileOn(c)?[pgRcptBtn({...a,kind:'fee'})]:[])]]}
 function pgFeeMsg(c,x,text){const fa=pgFeeAcc(),f=pgFeeDue(c);
-  return {h:tplFill('tgCpFeeHead',{срок:fmtD(f.due)}),sub:c.name,t:text+(fa?'\n\n'+pgRqText(c,fa):''),at:bishkekNow().hm,
-    btns:[...(fa?[[pgRqBtn(fa)]]:[]),[{t:tgBtnT('tgBtnCpPaid','Оплатил'),act:'cp-feepaid',arg:{cp:c.id,tg:x.id,sum:c.feeDebt}}]]}}
+  return {h:tplFill('tgCpFeeHead',{срок:fmtD(f.due)}),sub:c.name,t:text+(fa?'\n\n'+pgRqText(c,fa):''),at:bishkekNow().hm,btns:pgFeeBtns(c,x,fa,f.ms[f.ms.length-1]||ym(TODAY),c.feeDebt)}}
+// До срока (блок 3, пункт 3): само, в отмеченные дни до дня оплаты обслуживания — ближайшее неоплаченное начисление (этот месяц или следующий) с суммой начисления
+function pgFeeSoon(c){if(c.kind==='oneoff'||!feat('fee'))return null;const m0=ym(TODAY);
+  for(const m of [m0,addMonths(m0,1)]){if(!inService(c,m))continue;const d=feeDue(c,m),left=Math.round((feeCharge(c,m)-feeGot(c,m))*100)/100;if(d>TODAY&&left>0&&!(c.tgPaid||{})['fee:'+m])return {m,due:d,sum:left}}
+  return null}
+function pgFeeSoonMsg(c,x,s){const fa=pgFeeAcc();
+  return {h:tplFill('tgCpFeeHead',{срок:fmtD(s.due)}),sub:c.name,t:tplFill('tgCpFeeSoon',{контрагент:c.name,месяц:ymLabel(s.m).toLowerCase(),сумма:som(s.sum),срок:fmtD(s.due)})+(fa?'\n\n'+pgRqText(c,fa):''),at:pgFeeAt(),btns:pgFeeBtns(c,x,fa,s.m,s.sum)}}
 function pgFeeTgDlg(c){const w=pgFeeTgWhy(c);if(w){toast(w,'lock',true);return}const f=pgFeeDue(c),fa=pgFeeAcc(),to=pgFeeTo(c),off=pgTgN(c,'on')-to.length;
   const txt=tplFill('tgCpFeeRemind',{контрагент:c.name,месяц:f.ms.map(ymLabel).join(', ')||ymLabel(ym(TODAY)),сумма:som(c.feeDebt),срок:fmtD(f.due)});
   openModal({form:true,size:'mid',render:m=>({title:'Напомнить в Telegram',sub:`${esc(c.name)} · долг за обслуживание ${som(c.feeDebt)}`,
@@ -229,21 +289,46 @@ function pgFeeTgDlg(c){const w=pgFeeTgWhy(c);if(w){toast(w,'lock',true);return}c
 function pgFeeSend(c,t){const to=pgFeeTo(c);c.tgFeeAt=nowStamp();to.forEach(x=>tgSvc({short:c.name},PG_TG_MSG,{chat:x.name}));
   log('cp',c.id,`Напоминание об оплате за обслуживание отправлено в Telegram: ${som(c.feeDebt)}, получателей — ${to.length}`,c.id);return {to,t}}
 tgAct('cp-feepaid',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};const{c,x}=l,to=pgTgStaff(c);
-  pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате за обслуживание: ${som(a.sum)} («${x.name}»)`);
+  pgTgClientLog(c,`Контрагент сообщил в Telegram об оплате за обслуживание: ${som(a.sum)} («${x.name}»)`);pgPaidMark(c,'fee',a.m);
   if(to){tgSvc(to,PG_TG_KIND);pgTgStaffOut&&pgTgStaffOut({h:'Контрагент сообщил об оплате',t:tplFill('tgCpFeePaidStaff',{контрагент:c.name,телеграм:x.name,сумма:som(a.sum)}),at:bishkekNow().hm})}
   return {done:'✓ Сообщили бухгалтеру',eph:tplFill('tgCpPaidOk',{})}}});
 const pgDebtDlg=(c,x)=>pgChatDlg(c,x,pgDebtMsg(c,x),{title:'Прототип: напоминание о долге в Telegram клиента',sub:esc(c.name),
-  note:'Так напоминание о долге выглядит у клиента: оно приходит раз в неделю, в понедельник в 10:00, пока есть недостача на налоги или долг за обслуживание.'});
+  note:`Так напоминание о долге выглядит у клиента: оно приходит раз в неделю, ${TGN_WD_PL[pgDebtWd()-1]} в ${pgFeeAt()}, пока есть недостача на налоги или долг за обслуживание.`});
 // Строки «К оплате» и «Оплата за обслуживание» блока «Telegram-уведомления» (пакет 14.11.2026, блок 3; до этого — блок «Telegram контрагентов»):
-// видны при включённых «Напоминаниях в Telegram» и «Странице контрагента»; включает только владелец, сразу, без «Сохранить», с записью в историю.
-// Этап 1 — перенос без изменения работы: «К оплате» — за 5 дней (PG_PAY_DAYS) в 10:00, долг — по понедельникам в 10:00; дни и час строк — этап 2 (поток К).
+// видны при включённых «Напоминаниях в Telegram» и «Странице контрагента»; меняет только владелец, сразу, без «Сохранить», с записью в историю организации.
+// Этап 2 (поток К): галочки «за 5» … «за 1 день» до срока (хотя бы одна), час отправки по Бишкеку, у долга — день недели; пустое время не сохраняется — «Укажите время».
+// «К оплате» уходит в каждый отмеченный день, пока месяц не оплачен; «Оплата за обслуживание до …» — в отмеченные дни до дня оплаты обслуживания (поле карточки контрагента),
+// после срока — напоминание о долге раз в неделю. После «Оплатил» или принятия денег за месяц оставшиеся сообщения этого месяца не уходят
 const PG_TG_ROWS=[['cpPay','tgCpPay','«К оплате»','Отправлять «К оплате» контрагентам'],['cpFee','tgCpDebt','Оплата за обслуживание','Напоминать контрагентам о долге']];
-function pgTgNoticeRows(own){if(!rmPayTgOn())return [];const who=own?'':'Меняет только владелец организации',only=' Получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.';
+const PG_TG_SET={p:['tgCpPayDays','tgCpPayAt','«К оплате»',pgPayDays,pgPayAt],f:['tgCpFeeDays','tgCpFeeAt','Оплата за обслуживание',pgFeeDays,pgFeeAt]};
+const pgDaysSet=(k,ds,dis)=>`<div class="fld tgn-dfld" data-f="tgn-${k}d"><label>Дни до срока</label><div class="tgn-days">${PG_DAYS.map(d=>`<label class="tgn-day"><input type="checkbox" data-tgn-day="${k}:${d}" ${ds.includes(d)?'checked':''} ${dis}><span>за ${d}${d===1?' день':''}</span></label>`).join('')}</div><div class="err" hidden></div></div>`;
+const pgAtSet=(k,v,dis)=>`<div class="fld" data-f="tgn-${k}t"><label for="tgn-${k}t">Время отправки</label><input class="inp" id="tgn-${k}t" type="time" value="${esc(v)}" ${dis}><div class="err" hidden></div></div>`;
+// Прототип: «Оплата за обслуживание до …» у первого контрагента, которому оно ушло бы
+const pgFeeDemo=()=>{for(const c of visCps()){if(c.archived)continue;const x=pgFeeTo(c)[0],s=x&&pgFeeSoon(c);if(s)return {c,x,s}}return null};
+function pgTgNoticeRows(own){if(!rmPayTgOn())return [];const who=own?'':'Меняет только владелец организации',dis=own?'':'disabled',only=' Получают только контрагенты, которые подключили Telegram на своей странице, и только по своим данным.';
+  const pd=pgPayDays(),fd=pgFeeDays(),wd=pgDebtWd(),fee=feat('fee'),dm=fee?pgFeeDemo():null,dw=dm?'':'Нет контрагента, которому оно ушло бы: нужен подключённый Telegram и неоплаченное начисление за обслуживание до срока';
   return [tgnRow({id:'cpPay',title:'«К оплате»',to:'cp',on:!!ORG.tgCpPay,dis:!own,why:who,
-      hint:`Сообщение с налогами месяца, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».${only}`,
-      days:`За ${PG_PAY_DAYS} дней до ближайшего срока оплаты месяца`,at:'10:00',often:'Раз в месяц'}),
+      hint:`Сообщение с налогами месяца и реквизитами для перевода, если все суммы месяца указаны. После «Оплатил» в Telegram или принятия денег за месяц следующие не уходят. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».${only}`,
+      days:`${pgDaysTxt(pd)} до ближайшего срока оплаты месяца`,at:pgPayAt(),often:'В отмеченные дни, пока месяц не оплачен',
+      set:pgDaysSet('p',pd,dis)+pgAtSet('p',pgPayAt(),dis)}),
     tgnRow({id:'cpFee',title:'Оплата за обслуживание',to:'cp',on:!!ORG.tgCpDebt,dis:!own,why:who,
-      hint:`Напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».${only}`,
-      days:'По понедельникам',at:'10:00',often:'Раз в неделю, пока есть долг'})]}
-function pgTgNoticeMount(body){const own=tgnOwn();PG_TG_ROWS.forEach(([id,k,,t])=>{const x=body.querySelector(`[data-tgn-sw="${id}"]`);if(!x)return;
-  x.onchange=()=>{if(!own)return;ORG[k]=x.checked;log('org','settings',`${t}: ${x.checked?'включено':'выключено'}`);renderPage();toast(`${t}: ${x.checked?'включено':'выключено'}`,'tg')}})}
+      hint:`${fee?'До срока — «Оплата за обслуживание до &lt;дата&gt;» с суммой начисления за месяц и реквизитами для обслуживания; срок — «День оплаты обслуживания» в карточке контрагента. После срока — ':''}напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».${only}`,
+      days:fee?`${pgDaysTxt(fd)} до дня оплаты; после срока — ${TGN_WD_PL[wd-1]}`:TGN_WD_PL[wd-1],at:pgFeeAt(),often:fee?'В отмеченные дни до срока; после срока — раз в неделю, пока есть долг':'Раз в неделю, пока есть долг',
+      set:(fee?pgDaysSet('f',fd,dis):'')+pgAtSet('f',pgFeeAt(),dis)+fld('День напоминания о долге',sel('tgn-fwd',TGN_WD.map((d,i)=>[i+1,d[0].toUpperCase()+d.slice(1)]),wd,dis),{id:'tgn-fwd'})
+        +(fee?`<button type="button" class="btn sm ghost ${dw?'dis':''}" data-tgn-fdemo ${dw?`aria-disabled="true" data-why="${esc(dw)}" title="${esc(dw)}"`:''}>${ic('tg','sm')}<span class="bl">Прототип: показать сообщение до срока</span></button>`:'')})]}
+function pgTgNoticeMount(body){const own=tgnOwn(),q=s=>body.querySelector(s);
+  const dm=q('[data-tgn-fdemo]');if(dm)dm.onclick=()=>{if(dm.dataset.why){toast(dm.dataset.why,'lock',true);return}const d=pgFeeDemo();if(!d)return;
+    pgChatDlg(d.c,d.x,pgFeeSoonMsg(d.c,d.x,d.s),{title:'Прототип: «Оплата за обслуживание до …» в Telegram клиента',sub:esc(d.c.name),
+      note:`Так сообщение до срока оплаты обслуживания выглядит у клиента: оно приходит ${pgDaysTxt(pgFeeDays())} до дня оплаты (у этого контрагента — ${d.c.feeDay}-е число) в ${pgFeeAt()}, пока начисление месяца не оплачено.`})};
+  if(!own)return;
+  PG_TG_ROWS.forEach(([id,k,,t])=>{const x=q(`[data-tgn-sw="${id}"]`);if(!x)return;
+    x.onchange=()=>{ORG[k]=x.checked;log('org','settings',`${t}: ${x.checked?'включено':'выключено'}`);renderPage();toast(`${t}: ${x.checked?'включено':'выключено'}`,'tg')}});
+  // Галочки дней: хотя бы одна остаётся отмеченной
+  $$('[data-tgn-day]',body).forEach(b=>b.onchange=()=>{const[k,d]=b.dataset.tgnDay.split(':'),[dk,,t,get]=PG_TG_SET[k],was=get(),ds=PG_DAYS.filter(x=>x===+d?b.checked:was.includes(x));
+    if(!setErr(body,`tgn-${k}d`,ds.length?'':'Отметьте хотя бы один день')){b.checked=true;return}
+    ORG[dk]=ds;log('org','settings',`${t}: дни ${pgDaysTxt(was)} → ${pgDaysTxt(ds)} до срока`);renderPage();toast(`${t}: ${pgDaysTxt(ds)} до срока`,'tg')});
+  Object.keys(PG_TG_SET).forEach(k=>{const at=q(`#tgn-${k}t`);if(!at)return;const[,tk,t,,get]=PG_TG_SET[k];
+    at.onchange=()=>{const v=at.value,w=get();if(!setErr(body,`tgn-${k}t`,/^\d\d:\d\d$/.test(v)?'':'Укажите время')){at.value=w;return}if(v===w)return;
+      ORG[tk]=v;log('org','settings',`${t}: время ${w} → ${v}`);renderPage();toast(`${t}: в ${v}`,'tg')}});
+  const wd=q('#tgn-fwd');if(wd)wd.onchange=()=>{const n=+wd.value,w=pgDebtWd();if(n===w)return;ORG.tgCpDebtWd=n;
+    log('org','settings',`Напоминание о долге: ${TGN_WD[w-1]} → ${TGN_WD[n-1]}`);renderPage();toast(`Напоминание о долге — ${TGN_WD_PL[n-1]}`,'tg')}}

@@ -268,6 +268,41 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram контрагента: нет реквизитов для перевода',
     section: S,
   },
+  'pdicts.tpl.label.tg_cp_fee_soon': {
+    ru: 'Telegram контрагента: оплата за обслуживание до срока',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_receipt': {
+    ru: 'Telegram контрагента: кнопка «Прислать чек»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_offer': {
+    ru: 'Telegram контрагента: предложение прислать чек',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_ask': {
+    ru: 'Telegram контрагента: просьба прислать чек',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_type': {
+    ru: 'Telegram контрагента: чек не фото и не PDF',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_ok': { ru: 'Telegram контрагента: чек передан', section: S },
+  'pdicts.tpl.label.tg_cp_file_ok': { ru: 'Telegram контрагента: файл передан', section: S },
+  'pdicts.tpl.label.tg_cp_file_which': {
+    ru: 'Telegram контрагента: «От какой компании?»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_file_off': {
+    ru: 'Telegram контрагента: файлы не принимаются',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_file_limit': {
+    ru: 'Telegram контрагента: лимит файлов за сутки',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_file_no': { ru: 'Telegram контрагента: файл не принят', section: S },
   'pdicts.tpl.label.tg_act_no_link': {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,
@@ -487,6 +522,18 @@ const SYSTEM_TEXTS = {
   },
   'pdicts.tpl.label.tg_lead_refused': {
     ru: 'Telegram: заявка с сайта — отказ записан',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_lead_got': { ru: 'Telegram заявителя: заявка получена', section: S },
+  'pdicts.tpl.label.tg_lead_link_bad': { ru: 'Telegram заявителя: ссылка устарела', section: S },
+  'pdicts.tpl.label.tg_lead_no': { ru: 'Telegram заявителя: отказ по заявке', section: S },
+  'pdicts.tpl.label.tg_lead_done': { ru: 'Telegram заявителя: организация создана', section: S },
+  'pdicts.tpl.label.tg_set_pass_new': {
+    ru: 'Telegram заявителя: новая ссылка, чтобы задать пароль',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_set_pass': {
+    ru: 'Telegram заявителя: кнопка «Задать пароль»',
     section: S,
   },
   'pdicts.tpl.label.tg_btn_more': { ru: 'Telegram: кнопка «Подробнее»', section: S },

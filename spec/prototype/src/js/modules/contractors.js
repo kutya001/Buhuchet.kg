@@ -229,7 +229,8 @@ const advOf=o=>Math.max(0,o.amount-(o.alloc||[]).reduce((a,x)=>a+x.a,0));
 function inDlg(c0,edit,pre){
   const st={cp:c0?c0.id:(visCps().find(c=>c.kind!=='oneoff')||{}).id,total:edit?(edit.total??edit.amount):'',date:edit?edit.date:TODAY,alloc:{},fee:{},acc:edit?edit.holder:null,why:''};
   // pre — «Принять деньги» у отчёта {r, amt} или за месяц и за весь период «По месяцам» {list:[{r, amt}] от старых к новым, total, note}
-  if(pre&&c0){(pre.list||[{r:pre.r,amt:pre.amt}]).forEach(x=>{st.alloc[x.r]=x.amt});st.total=pre.list?pre.total:pre.amt;st.pre=c0.id}
+  // Общая сумма разносится по списку от старых к новым: у «Принять деньги» за месяц она равна сумме списка, у чека из Telegram — сумме оплаченного «К оплате» (излишек — аванс)
+  if(pre&&c0){if(pre.list){let t=pre.total;pre.list.forEach(x=>{const a=Math.round(Math.min(t,x.amt)*100)/100;if(a>0){st.alloc[x.r]=a;t-=a}})}else st.alloc[pre.r]=pre.amt;st.total=pre.list?pre.total:pre.amt;st.pre=c0.id}
   const prevFee={},own={};if(edit){(edit.alloc||[]).forEach(x=>{st.alloc[x.r]=x.a;own[x.r]=x.a});(edit.feeAlloc||[]).forEach(x=>{st.fee[x.m]=x.a;prevFee[x.m]=x.a})}
   const fv=v=>v==null||v===''?'':String(v);
   // Уже получено под отчёт без этого поступления: при изменении его собственная часть (и оплата из неё) не считается чужой

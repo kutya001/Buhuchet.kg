@@ -417,11 +417,17 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   if(!db.meta.tgK14){db.meta.tgK14=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgRqHead', 'tgRqOrg', 'tgRqEmp', 'tgBtnCpCopyPhone', 'tgBtnCpCopyReq', 'tgBtnCpShowReq', 'tgCpFeeHead', 'tgCpFeeRemind', 'tgCpFeePaidStaff', 'tgCpNoReq'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});
     ['tgBtnCpReq', 'tgBtnCpReqTax', 'tgBtnCpReqFee'].forEach(k=>{if(a)delete a[k];if(n)delete n[k]})}
+  // Поток К, доработки 14.11.2026, этап 2 (v113): файлы и чеки через бота, «Прислать чек», «Оплата за обслуживание до …» до срока
+  if(!db.meta.tgK15){db.meta.tgK15=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCpFeeSoon', 'tgBtnCpReceipt', 'tgCpReceiptOffer', 'tgCpReceiptAsk', 'tgCpReceiptType', 'tgCpReceiptOk', 'tgCpFileOk', 'tgCpFileWhich', 'tgCpFileOff', 'tgCpFileLimit', 'tgCpFileNo'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // Блок «Telegram-уведомления» (v111, пакет 14.11.2026, блок 3): путь к общему чату в шаблоне «ссылка устарела» — если администратор не менял текст
   if(!db.meta.tgN1){db.meta.tgN1=1;const a=db.ref.messageTemplates,rm=r.messageTemplates||{};if(a&&a.tgGrpLinkBad==='Ссылка для подключения группы устарела или уже использована. Владелец организации может создать новую: «Моя организация» → «Настройки» → «Общий чат фирмы в Telegram».'&&rm.tgGrpLinkBad)a.tgGrpLinkBad=rm.tgGrpLinkBad;
     const n=db.ref.templateNotes,rn=r.templateNotes||{};if(n&&rn.tgActOff&&n.tgActOff&&!n.tgActOff.includes('Telegram-уведомления'))n.tgActOff=rn.tgActOff}
   // v111 (исправление): поле «Еженедельная сводка, понедельник» (st-dg) заменили «Час напоминаний» и «День сводки» — и в статье «Модуль «Моя организация»»
   if(!db.meta.tgN2){db.meta.tgN2=1;const u=db.ref.kbUi;if(u){if(u.fields)delete u.fields['st-dg'];const a=(u.artForms||[]).find(x=>x.mod==='org'&&Array.isArray(x.fields)&&x.fields.includes('st-dg'));if(a)a.fields.splice(a.fields.indexOf('st-dg'),1,...['tgn-at','tgn-wd'].filter(k=>!a.fields.includes(k)))}}
+  // Telegram заявителя (v113, доработки 14.11.2026, блок 1): ответы бота заявителю, «Организация создана» и ссылка, чтобы задать пароль
+  if(!db.meta.tgL1){db.meta.tgL1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgLeadGot','tgLeadLinkBad','tgLeadNo','tgLeadDone','tgSetPassNew','tgBtnSetPass'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

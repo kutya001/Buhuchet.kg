@@ -33,7 +33,8 @@ tgAct('leadNo',{scope:leadAdm,stale:leadNoStale,
 // Причина — текст до 300 знаков, скобки убираются (в истории причина стоит в скобках). Ответ проходит те же проверки, что и нажатие
 tgAct('leadNoWhy',{scope:leadAdm,stale:leadNoStale,
   reply:(u,id,p)=>{const o=leadById(id),why=String(p.text||'').replace(/[()]/g,'').replace(/\s+/g,' ').trim().slice(0,LEAD_WHY_MAX);if(!why)return {again:tplFill('tgAskNeedText',{})};
-    leadTgSet(o,'Отказ',` (${why})`,u);return {done:'✓ Отказ',off:['leadWork'],say:tplFill('tgLeadRefused',{фирма:leadFirm(o),причина:why})}}});
+    // Заявителю с подключённым Telegram бот присылает причину (доработки 14.11.2026, блок 1, пункт 3; tg-lead.js)
+    leadTgSet(o,'Отказ',` (${why})`,u);tgLeadRefused(o,why);return {done:'✓ Отказ',off:['leadWork'],say:tplFill('tgLeadRefused',{фирма:leadFirm(o),причина:why})}}});
 
 // Окно «Сообщение администратору в Telegram»: после заявки на лендинге и из меню строки «Заявок» (live — список под окном перерисовывается после нажатия)
 function leadTgDlg(o,rep,live){const to=leadAdmins(),sub=LAND.test?'Тестовый стенд: от бота стенда администраторам стенда, в Telegram рабочего сайта не уходит':'Администраторам платформы с привязанным Telegram';
