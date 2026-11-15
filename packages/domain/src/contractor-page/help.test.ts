@@ -105,7 +105,11 @@ describe('обзор страницы (cphTourList)', () => {
     expect(cpTourMove(t, 'state', -1)).toBeNull();
     expect(cpTourMove(t, 'help', 1)).toBeNull();
     expect(cpTourMove(t, 'end', -1)).toBeNull();
-    expect(cpTourMove(t, 'main', -1)?.map((x) => x.id).slice(0, 2)).toEqual(['main', 'state']);
+    expect(
+      cpTourMove(t, 'main', -1)
+        ?.map((x) => x.id)
+        .slice(0, 2),
+    ).toEqual(['main', 'state']);
   });
 });
 
@@ -138,9 +142,11 @@ describe('«Помощь»: вопросы и кнопки (cphQVis, cphActOn)',
 
   it('кнопка ответа — только когда действие доступно, иначе «Спросите вашего бухгалтера»', () => {
     const v = view();
-    expect(['goPay', 'paid', 'up', 'goFiles', 'goMoney', 'tg', 'code'].map((a) => cpFaqActOn(a as never, v))).toEqual(
-      [true, true, true, true, true, true, true],
-    );
+    expect(
+      ['goPay', 'paid', 'up', 'goFiles', 'goMoney', 'tg', 'code'].map((a) =>
+        cpFaqActOn(a as never, v),
+      ),
+    ).toEqual([true, true, true, true, true, true, true]);
     expect(cpFaqActOn('goFee', v)).toBe(false);
     expect(cpFaqActOn('goReports', v)).toBe(true);
     expect(cpFaqActOn('tg', view({ tgFull: true }))).toBe(false);
@@ -154,7 +160,13 @@ describe('«Помощь»: вопросы и кнопки (cphQVis, cphActOn)',
 
   it('метки отчётов — строки «Метка» — объяснение', () => {
     const rows = cpLegendRows(help.faq.find((q) => q.act === 'colors')!.a);
-    expect(rows.map((r) => r.label)).toEqual(['Сдан', 'В работе', 'К сдаче', 'Впереди', 'Просрочен']);
+    expect(rows.map((r) => r.label)).toEqual([
+      'Сдан',
+      'В работе',
+      'К сдаче',
+      'Впереди',
+      'Просрочен',
+    ]);
     expect(rows[0]?.text).toBe('бухгалтер отправил отчёт в орган, делать ничего не нужно.');
     expect(cpLegendRows('просто текст\n\n «А» - б ')).toEqual([
       { label: '', text: 'просто текст' },

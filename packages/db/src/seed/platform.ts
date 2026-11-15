@@ -25,7 +25,7 @@ export interface SeedReport {
 export function referenceSections(refDB: Record<string, unknown>): Record<string, unknown> {
   const tableSections = new Set<string>(TABLE_SECTIONS);
   const tableDictionaries = new Set<string>(TABLE_DICTIONARIES);
-  return Object.fromEntries(
+  const sections: Record<string, unknown> = Object.fromEntries(
     Object.entries(refDB)
       .filter(([key]) => !tableSections.has(key))
       .map(([key, payload]) =>
@@ -39,6 +39,15 @@ export function referenceSections(refDB: Record<string, unknown>): Record<string
           : [key, payload],
       ),
   );
+  // Подсказки страницы контрагента (`kbUi.cpHelp`, прототип v120) — своей строкой `cpHelp`: их правит
+  // Админка, а правка раздела останавливает его наполнение — остальной `kbUi` пусть обновляется.
+  const ui = sections.kbUi;
+  if (ui && typeof ui === 'object' && 'cpHelp' in ui) {
+    const { cpHelp, ...rest } = ui as Record<string, unknown>;
+    sections.kbUi = rest;
+    sections.cpHelp = cpHelp;
+  }
+  return sections;
 }
 
 /**

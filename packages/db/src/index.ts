@@ -36,6 +36,7 @@ export * from './service-periods';
 export * from './contractor-page';
 export * from './contractor-page-code';
 export * from './contractor-page-view';
+export * from './contractor-page-help';
 export * from './contractor-telegram';
 export * from './contractor-telegram-debt';
 export * from './contractor-telegram-pay';

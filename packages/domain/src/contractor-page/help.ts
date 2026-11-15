@@ -336,9 +336,7 @@ export function cpGlossIndex(gloss: readonly CpGloss[]): CpGlossIndex {
     let s = a.f.toLowerCase();
     const stem = !/\s/.test(s) && !a.up;
     if (stem && s.length >= 5 && /[аеёиоуыэюяьй]$/.test(s)) s = s.slice(0, -1);
-    const body = esc(s)
-      .replace(/[её]/g, '[её]')
-      .replace(/\s+/g, '\\s+');
+    const body = esc(s).replace(/[её]/g, '[её]').replace(/\s+/g, '\\s+');
     return `(?<![\\p{L}\\p{N}])${body}${stem ? '\\p{L}*' : ''}(?![\\p{L}\\p{N}])`;
   };
   let rx: RegExp | null = null;
@@ -440,7 +438,11 @@ export function cpFaqNextOrd(faq: readonly CpFaq[]): number {
  * Облачко «выше» или «ниже» (прототип: стрелки строки обзора): последнее «Готово!» не двигается и
  * остаётся последним. null — двигать некуда.
  */
-export function cpTourMove(tour: readonly CpTourStep[], id: string, dir: -1 | 1): CpTourStep[] | null {
+export function cpTourMove(
+  tour: readonly CpTourStep[],
+  id: string,
+  dir: -1 | 1,
+): CpTourStep[] | null {
   const k = tour.findIndex((s) => s.id === id);
   const j = k + dir;
   if (k < 0 || j < 0 || j >= tour.length) return null;
@@ -462,5 +464,7 @@ export function cpFaqMove(faq: readonly CpFaq[], id: string, dir: -1 | 1): CpFaq
   const b = list[j]!;
   // Одинаковый «Порядок» (после загрузки из Excel): сосед получает соседний номер.
   const [oa, ob] = a.ord === b.ord ? [b.ord + dir, a.ord] : [b.ord, a.ord];
-  return faq.map((q) => (q.id === a.id ? { ...q, ord: oa } : q.id === b.id ? { ...q, ord: ob } : q));
+  return faq.map((q) =>
+    q.id === a.id ? { ...q, ord: oa } : q.id === b.id ? { ...q, ord: ob } : q,
+  );
 }

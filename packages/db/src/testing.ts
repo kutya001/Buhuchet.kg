@@ -8,7 +8,7 @@ import { createDb, type Db, type DbHandle } from './client';
 import { ensureAppLoginRole, runMigrations } from './migrate';
 import { countryPhoneCodes, platformReference } from './schema';
 import { seedPermissions, seedRoleTemplates } from './seed/access';
-import { seedGked, seedPlatformReference } from './seed/platform';
+import { referenceSections, seedGked, seedPlatformReference } from './seed/platform';
 import { platformDictRows, seedPlatformDicts } from './seed/platform-dicts';
 import { seedUiTexts } from './seed/l10n';
 import { seedMessageTemplates, seedStatusTones } from './seed/system-dicts';
@@ -159,7 +159,8 @@ export async function seedAllPlatformDictionaries(db: Db): Promise<void> {
  * приветствия с опросником (`onboarding`).
  */
 export async function seedKbReference(db: Db): Promise<void> {
-  const refDB = await readSpecJson<Record<string, unknown>>('data/refDB.json');
+  // Как наполнение: подсказки страницы контрагента (`kbUi.cpHelp`) — своей строкой `cpHelp`.
+  const refDB = referenceSections(await readSpecJson<Record<string, unknown>>('data/refDB.json'));
   const keys = [
     'kbSteps',
     'kbGroups',
@@ -168,6 +169,7 @@ export async function seedKbReference(db: Db): Promise<void> {
     'kbUi',
     'kbShows',
     'onboarding',
+    'cpHelp',
   ] as const;
   await db
     .insert(platformReference)
