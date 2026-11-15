@@ -72,8 +72,11 @@ export const CONTRACTOR_TEXT_MAX = {
 /** День оплаты обслуживания в месяце: с 1-го по 28-е (прототип editCpDlg: «Число от 1 до 28»). */
 export const FEE_DAY_MIN = 1;
 export const FEE_DAY_MAX = 28;
-/** День оплаты по умолчанию (прототип addCpDlg: feeDay 10). */
-export const DEFAULT_FEE_DAY = 10;
+/**
+ * День оплаты по умолчанию (прототип v115 addCpDlg и загрузка из Excel: feeDay 1; доработки 14.11.2026,
+ * блок 3 — «Оплата за обслуживание до …» считает дни до него).
+ */
+export const DEFAULT_FEE_DAY = 1;
 
 /** Форма собственности новой записи в форме создания (прототип addCpDlg: `form:'ОсОО'`). */
 export const NEW_CONTRACTOR_FORM = 'ФС-01';

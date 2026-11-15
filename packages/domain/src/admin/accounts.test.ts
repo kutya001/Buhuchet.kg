@@ -54,6 +54,15 @@ describe('карточка пользователя: состояния и вк�
     expect(accountStates({ ...base, loginLockReason: 'not_me' })).toEqual(['active']);
   });
 
+  it('пароль не задан — владелец задаёт его по ссылке из Telegram (доработки 14.11.2026, блок 1)', () => {
+    expect(accountStates({ ...base, passwordUnset: true })).toEqual(['no_password']);
+    expect(accountStates({ ...base, blocked: true, passwordUnset: true })).toEqual([
+      'blocked_admin',
+      'no_password',
+    ]);
+    expect(accountStates({ ...base, passwordUnset: false })).toEqual(['active']);
+  });
+
   it('администратор платформы: одно состояние и три вкладки', () => {
     expect(accountStates({ ...base, isPlatformAdmin: true, mustChangePassword: true })).toEqual([
       'active',

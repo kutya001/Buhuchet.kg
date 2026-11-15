@@ -652,7 +652,8 @@ describe.skipIf(!databaseAvailable())('Контрагенты: методы API'
     // Создал бухгалтер без права на плату — «Полный месяц» (решение заказчика 27.10.2026, п. А-1).
     const byAcc = await created(acc, { tariff: null });
     expect(byAcc).toMatchObject({ feeDay: null, firstMonthMode: null });
-    expect(await card(owner, byAcc.id)).toMatchObject({ feeDay: 10, firstMonthMode: 'full' });
+    // День оплаты по умолчанию — 1-е (прототип v115 addCpDlg).
+    expect(await card(owner, byAcc.id)).toMatchObject({ feeDay: 1, firstMonthMode: 'full' });
 
     expect((await post(acc, { tariff: null, feeDay: 12 })).status).toBe(403);
     expect((await post(acc, { tariff: null, firstMonthMode: 'full' })).status).toBe(403);

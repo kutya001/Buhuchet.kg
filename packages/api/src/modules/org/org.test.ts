@@ -11,7 +11,7 @@ import {
   OrgProfile,
   OrgRoleOptions,
 } from '@buhuchet/shared';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_ORIGIN, TEST_PASSWORD } from '../../testing';
 
@@ -112,10 +112,13 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect((await profile()).name).toBe('Организация А');
     });
 
-    it('владелец меняет название, ИНН, адрес, телефон и руководителя — с историей и версией', async () => {
+    it('владелец меняет название, ОКПО, адрес, телефон и руководителя — с историей и версией; ИНН и форму не меняет', async () => {
       const res = await patchProfile({
         name: '  ОсОО «Ахти»  ',
+        // Доработки 14.11.2026, блок 1, пункт 4: ИНН и форму меняет только администратор платформы.
         inn: '01811201810999',
+        legalForm: 'ip',
+        okpo: '12345678',
         address: 'г. Бишкек, ул. Токтогула, 1',
         phone: '+996555100200',
         head: 'Ахтиев Ахти',
@@ -123,7 +126,9 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       expect(res.status, await res.clone().text()).toBe(200);
       expect(OrgProfile.parse(await res.json())).toMatchObject({
         name: 'ОсОО «Ахти»',
-        inn: '01811201810999',
+        inn: '01811201810456',
+        legalForm: null,
+        okpo: '12345678',
         address: 'г. Бишкек, ул. Токтогула, 1',
         phone: '+996555100200',
         head: 'Ахтиев Ахти',
@@ -136,7 +141,7 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
         .where(and(eq(auditLog.entity, 'organization'), eq(auditLog.action, 'update')));
       expect(entry?.changes.map((c) => c.field)).toEqual([
         'name',
-        'inn',
+        'okpo',
         'address',
         'phone',
         'head',
@@ -150,8 +155,8 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
     it('неверные данные — тексты прототипа', async () => {
       const cases: [Record<string, unknown>, string, string][] = [
         [{ name: '  ' }, 'name_required', 'Введите название'],
-        [{ inn: '123' }, 'inn_invalid', 'ИНН — 14 цифр'],
-        [{ inn: '02811201810457' }, 'inn_taken', 'Организация с таким ИНН уже есть'],
+        [{ okpo: '123' }, 'okpo_invalid', 'Код ОКПО — 8 цифр'],
+        [{ okpo: '1234567a' }, 'okpo_invalid', 'Код ОКПО — 8 цифр'],
         [{ phone: '+99655510020' }, 'invalid_phone', 'Номер — 9 цифр после кода страны'],
       ];
       for (const [body, code, message] of cases) {
@@ -491,6 +496,134 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
       // Обратно на понедельник — строка остаётся, день — понедельник.
       expect((await patchPolicy({ weekDay: 1 })).status).toBe(200);
       expect((await policy()).weekDay).toBe(1);
+    });
+
+    it('(пакет 14.11.2026, блок 3, этап 2) «К оплате» и «Оплата за обслуживание»: по умолчанию «за 5 дней» в 10:00, долг — по понедельникам; дни, время и день долга меняет только владелец, с версией и историей; чужая организация не меняется; неверное — 400', async () => {
+      const { orgTelegramNotices } = schema;
+      expect(await policy(acc)).toMatchObject({
+        cpPayDays: [5],
+        cpPayAt: '10:00',
+        cpFeeDays: [5],
+        cpFeeAt: '10:00',
+        cpDebtWeekDay: 1,
+      });
+      for (const cookie of [acc, hr, admin]) {
+        expect((await patchPolicy({ cpPayDays: [3] }, cookie)).status).toBe(403);
+        expect((await patchPolicy({ cpFeeAt: '09:00' }, cookie)).status).toBe(403);
+      }
+      const bad: Record<string, unknown>[] = [
+        { cpPayDays: [] },
+        { cpPayDays: [0] },
+        { cpPayDays: [6] },
+        { cpPayDays: [2, 2] },
+        { cpPayDays: [1.5] },
+        { cpFeeDays: ['5'] },
+        { cpPayAt: '' },
+        { cpPayAt: '24:00' },
+        { cpFeeAt: '9:00' },
+        { cpDebtWeekDay: 0 },
+        { cpDebtWeekDay: 8 },
+      ];
+      for (const body of bad) {
+        const res = await patchPolicy(body);
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        expect((await apiErr(res)).code).toBe('validation_failed');
+      }
+
+      const before = await policy();
+      const res = await patchPolicy({ cpPayDays: [1, 5, 3], cpFeeAt: '18:30', cpDebtWeekDay: 5 });
+      expect(res.status, await res.clone().text()).toBe(200);
+      const saved = OrgPolicy.parse(await res.json());
+      // Дни — по порядку строки, от «за 5».
+      expect(saved).toMatchObject({
+        cpPayDays: [5, 3, 1],
+        cpPayAt: '10:00',
+        cpFeeDays: [5],
+        cpFeeAt: '18:30',
+        cpDebtWeekDay: 5,
+        version: before.version + 1,
+      });
+      expect(await policy(acc)).toMatchObject({ cpPayDays: [5, 3, 1], cpDebtWeekDay: 5 });
+      expect(await policy(ownerB)).toMatchObject({
+        cpPayDays: [5],
+        cpFeeAt: '10:00',
+        cpDebtWeekDay: 1,
+      });
+      const [history] = await f.t.admin.db
+        .select({ changes: auditLog.changes, by: auditLog.actorUserId })
+        .from(auditLog)
+        .where(and(eq(auditLog.entity, 'org_settings'), eq(auditLog.entityId, f.a.orgId)))
+        .orderBy(desc(auditLog.id))
+        .limit(1);
+      expect(history?.changes).toEqual([
+        { field: 'cpPayDays', from: [5], to: [5, 3, 1] },
+        { field: 'cpFeeAt', from: '10:00', to: '18:30' },
+        { field: 'cpDebtWeekDay', from: 1, to: 5 },
+      ]);
+      const rows = await f.t.admin.db
+        .select({
+          orgId: orgTelegramNotices.orgId,
+          code: orgTelegramNotices.code,
+          days: orgTelegramNotices.days,
+          atTime: orgTelegramNotices.atTime,
+          weekday: orgTelegramNotices.weekday,
+          by: orgTelegramNotices.updatedBy,
+        })
+        .from(orgTelegramNotices)
+        .where(inArray(orgTelegramNotices.code, ['cp_pay', 'cp_fee']))
+        .orderBy(orgTelegramNotices.code);
+      expect(rows).toEqual([
+        {
+          orgId: f.a.orgId,
+          code: 'cp_fee',
+          days: [5],
+          atTime: '18:30:00',
+          weekday: 5,
+          by: history?.by,
+        },
+        {
+          orgId: f.a.orgId,
+          code: 'cp_pay',
+          days: [5, 3, 1],
+          atTime: '10:00:00',
+          weekday: null,
+          by: history?.by,
+        },
+      ]);
+
+      // То же — без новой версии и записи истории; устаревшая версия — 409, ничего не меняется.
+      const same = await patchPolicy({ cpPayDays: [3, 1, 5], cpFeeAt: '18:30' });
+      expect(OrgPolicy.parse(await same.json()).version).toBe(saved.version);
+      const stale = await call('PATCH', '/api/org/policy', owner, {
+        version: before.version,
+        cpPayAt: '08:00',
+      });
+      expect(stale.status).toBe(409);
+      expect((await policy()).cpPayAt).toBe('10:00');
+
+      // Время «К оплате» и дни «Оплаты за обслуживание» — свои строки не теряют прежнего.
+      const next = OrgPolicy.parse(
+        await (await patchPolicy({ cpPayAt: '07:05', cpFeeDays: [2, 1] })).json(),
+      );
+      expect(next).toMatchObject({
+        cpPayDays: [5, 3, 1],
+        cpPayAt: '07:05',
+        cpFeeDays: [2, 1],
+        cpFeeAt: '18:30',
+        cpDebtWeekDay: 5,
+      });
+      // Обратно как было.
+      expect(
+        (
+          await patchPolicy({
+            cpPayDays: [5],
+            cpPayAt: '10:00',
+            cpFeeDays: [5],
+            cpFeeAt: '10:00',
+            cpDebtWeekDay: 1,
+          })
+        ).status,
+      ).toBe(200);
     });
 
     it('роли для «Роли по умолчанию» — тому, кто меняет настройки: без владельца, только своей организации', async () => {

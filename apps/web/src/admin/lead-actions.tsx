@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  leadApproveRefusal,
   leadBack,
   leadCanConnect,
   leadCanCreateOrg,
@@ -12,9 +13,11 @@ import { AdminLeadCard, type AdminLead } from '@buhuchet/shared';
 import { ConfirmDialog, RollbackDialog, useToast, type ActionEntry } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
+import { ApiFailure } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
+import { freshApprovableLead, LeadApproveDialog } from './lead-approve-dialog';
 import { LeadCardDialog } from './lead-card';
 import { LeadRefuseDialog } from './lead-refuse-dialog';
 import { leadCardQuery, leadState, removeLead, setLeadStatus, useLeadsRefresh } from './leads-data';
@@ -33,7 +36,9 @@ type Move = 'step' | 'reject' | 'rollback';
  * после вопроса; «Отказ» — окном с причиной; откат и «Снять «Отказ»» — окном с причиной («Подключена»
  * с созданной организацией не откатывается — пункт неактивен с причиной); «Создать организацию» —
  * форма с фирмой и ФИО из заявки; «Удалить» — после вопроса, окно заявки закрывается. Отказ сервера —
- * уведомлением или под полем причины.
+ * уведомлением или под полем причины. У заявки с документами (доработки 14.11.2026, блок 1; прототип v114
+ * leadActions, leadStep) вместо «Создать организацию» — «Одобрить» (в окне заявки неактивна с причиной),
+ * и «Подключена» без организации тоже открывает «Одобрить».
  */
 export function useLeadActions(): {
   actions: (l: AdminLead) => ActionEntry[];
@@ -48,6 +53,7 @@ export function useLeadActions(): {
   const [card, setCard] = useState<DialogSlot<string> | null>(null);
   const [org, setOrg] = useState<DialogSlot<OrgFromLead> | null>(null);
   const [refuse, setRefuse] = useState<DialogSlot<AdminLead> | null>(null);
+  const [approve, setApprove] = useState<DialogSlot<AdminLeadCard> | null>(null);
   const [connect, setConnect] = useState<AdminLead | null>(null);
   const [remove, setRemove] = useState<AdminLead | null>(null);
   const [back, setBack] = useState<DialogSlot<{ l: AdminLead; to: LeadStatus }> | null>(null);
@@ -90,9 +96,30 @@ export function useLeadActions(): {
     return true;
   };
 
-  /** Шаг вперёд (меню, шкала, главная кнопка): «Подключена» — после вопроса. */
+  /**
+   * «Одобрить»: окно — по свежей заявке; неактивна — уведомление с причиной (прототип ldApproveDlg).
+   */
+  const startApprove = async (l: AdminLead) => {
+    const res = await once(`approve-${l.id}`, () => freshApprovableLead(client, l.id));
+    if (!res) return;
+    if ('lead' in res) return setApprove(openSlot(res.lead));
+    refresh();
+    if ('refusal' in res) {
+      if (res.refusal) toast(res.refusal, { bad: true, icon: 'lock' });
+      return;
+    }
+    const error =
+      res.failed instanceof ApiFailure ? res.failed.error : { code: 'unknown', message: '' };
+    toast(errorText(error), { bad: true });
+  };
+
+  /**
+   * Шаг вперёд (меню, шкала, главная кнопка): «Подключена» — после вопроса, у заявки с документами без
+   * организации — «Одобрить» (прототип v114 leadStep).
+   */
   const step = (l: AdminLead, to: LeadStatus) => {
-    if (to === 'connected') setConnect(l);
+    if (to === 'connected' && l.legalForm && !l.org) void startApprove(l);
+    else if (to === 'connected') setConnect(l);
     else void move(l, to, 'step');
   };
 
@@ -120,8 +147,31 @@ export function useLeadActions(): {
     toast(t('leads.toast.deleted'), { icon: 'trash' });
   };
 
-  /** Пункты меню (прототип `leadActions`); в окне заявки — без «Открыть заявку». */
-  const entries = (l: AdminLead, inCard: boolean): ActionEntry[] => {
+  /** «Создать организацию» или «Одобрить» — по тому, есть ли у заявки документы. */
+  const startOrgOrApprove = (l: AdminLead) => (l.legalForm ? void startApprove(l) : startOrg(l));
+
+  /**
+   * Почему «Одобрить» неактивна в строке списка (прототип ldApproveWhy) — по данным строки; занятый ИНН
+   * и незагрузившиеся документы покажет нажатие по свежей заявке (docs/deviations.md п. И-9).
+   */
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-9
+  const rowApproveWhy = (l: AdminLead): string => {
+    const refusal = leadApproveRefusal({
+      hasOrg: l.org !== null,
+      status: l.status,
+      tgLinked: l.tgLinked,
+      docsState: l.docs ? 'ready' : null,
+      inn: l.inn,
+      innTaken: false,
+    });
+    return refusal ? t(`err.${refusal}`, { inn: l.inn ?? '', name: '' }) : '';
+  };
+
+  /**
+   * Пункты меню (прототип `leadActions`); в окне заявки — без «Открыть заявку»; «Одобрить» неактивна
+   * с причиной — в окне по ответу сервера, в списке по данным строки.
+   */
+  const entries = (l: AdminLead | AdminLeadCard, inCard: boolean): ActionEntry[] => {
     const s = leadState(l);
     const items: ActionEntry[] = [];
     if (!inCard)
@@ -138,7 +188,17 @@ export function useLeadActions(): {
         icon: 'hourglass',
         run: () => step(l, 'in_progress'),
       });
-    if (leadCanCreateOrg(s))
+    if (leadCanCreateOrg(s) && l.legalForm) {
+      const why = 'approve' in l ? (l.approve?.message ?? '') : rowApproveWhy(l);
+      items.push({
+        id: 'approve',
+        label: t('leads.act.approve'),
+        icon: 'building',
+        disabled: why !== '',
+        reason: why,
+        run: () => void startApprove(l),
+      });
+    } else if (leadCanCreateOrg(s))
       items.push({
         id: 'org',
         label: t('leads.act.org'),
@@ -198,7 +258,7 @@ export function useLeadActions(): {
           menu={(l) => entries(l, true)}
           onStep={step}
           onBack={startBack}
-          onOrg={startOrg}
+          onOrg={startOrgOrApprove}
         />
       ) : null}
       {org ? (
@@ -216,6 +276,8 @@ export function useLeadActions(): {
           open={refuse.open}
           onClose={() => setRefuse(closeSlot)}
           sub={leadSub(refuse.data)}
+          tg={refuse.data.tgLinked}
+          docs={refuse.data.legalForm !== null}
           busy={busy}
           error={dialogError}
           onConfirm={(reason) => {
@@ -225,6 +287,15 @@ export function useLeadActions(): {
               if (ok) setRefuse(closeSlot);
             });
           }}
+        />
+      ) : null}
+      {approve ? (
+        <LeadApproveDialog
+          key={`lead-approve-${approve.n}`}
+          lead={approve.data}
+          open={approve.open}
+          onClose={() => setApprove(closeSlot)}
+          onDone={refresh}
         />
       ) : null}
       <ConfirmDialog

@@ -9,6 +9,7 @@ import {
   type LeadStatus,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
+import { sendLeadRefused } from './lead-link';
 import type { BotAction, BotPressResult, BotReplyContext, BotReplyResult } from './press';
 
 /*
@@ -140,6 +141,8 @@ const leadNoWhy: BotAction = {
           фирма: leadBotFirm(lead.firm),
           причина: reason,
         }),
+        // Причина — и заявителю, если он подключил Telegram (доработки 14.11.2026, блок 1).
+        afterCommit: () => sendLeadRefused(ctx.deps, { leadId: lead.id, adminId: ctx.user.userId }),
       };
     }),
 };

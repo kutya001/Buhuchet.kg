@@ -213,10 +213,13 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
         expect(sent[0]!.text).toContain(cp.name);
         expect(sent[0]!.text).toContain(own);
         expect(sent[0]!.text).toContain(requisite.split('\n')[0]!);
+        // Клиенту можно отправлять файлы — рядом с «Оплатил» «Прислать чек» (пакет 14.11, этап 2;
+        // прототип v115 pgFeeBtns). Окно, как в прототипе, называет только копирование и «Оплатил».
         const buttons = sent[0]!.keyboard?.flat().map((b) => b.text) ?? [];
-        expect(buttons).toHaveLength(2);
+        expect(buttons).toHaveLength(3);
         expect(buttons[0]).toMatch(/^Скопировать /);
         expect(buttons[1]).toBe('Оплатил');
+        expect(buttons[2]).toBe('Прислать чек');
       });
 
       await test.step('второй раз за день кнопка неактивна: «Сегодня уже напоминали в ЧЧ:ММ»', async () => {

@@ -79,7 +79,8 @@ describe('slugProblem — адрес страницы организации (п
   it('занятые слова — «Этот адрес занят, выберите другой»', () => {
     expect(slugProblem('admin')).toBe('slug_reserved');
     expect(slugProblem('buhuchet')).toBe('slug_reserved');
-    expect(RESERVED_SLUGS).toHaveLength(25);
+    expect(slugProblem('setpass')).toBe('slug_reserved');
+    expect(RESERVED_SLUGS).toHaveLength(26);
     for (const word of RESERVED_SLUGS) expect(slugProblem(word), word).toBe('slug_reserved');
   });
 });

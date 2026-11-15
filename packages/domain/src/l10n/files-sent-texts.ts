@@ -108,6 +108,7 @@ export const FILES_SENT_TEXTS = {
   },
   'pub.sent.list': { ru: 'Отправленные вами', section: S },
   'pub.sent.reason': { ru: 'Причина: {reason}', section: S },
+  'pub.sent.tg': { ru: 'из Telegram', section: S },
   'pub.sent.dlg.sub': { ru: 'Файлы получит ваш бухгалтер', section: S },
   'pub.sent.dlg.files': { ru: 'Файлы', section: S },
   'pub.sent.dlg.files_hint': {
@@ -135,9 +136,29 @@ export const FILES_SENT_TEXTS = {
     ru: 'Контрагент отправил со страницы файлы: {names}',
     section: S,
   },
-  'files.sent.hist.send_tg.one': { ru: 'Контрагент прислал в Telegram файл: {names}', section: S },
+  // Из Telegram (прототип v115 `pgFileIn`): с именем чата в Telegram; чек — «чек».
+  'files.sent.hist.send_tg.one': {
+    ru: 'Контрагент отправил через Telegram («{who}») файл: {names}',
+    section: S,
+  },
   'files.sent.hist.send_tg.many': {
-    ru: 'Контрагент прислал в Telegram файлы: {names}',
+    ru: 'Контрагент отправил через Telegram («{who}») файлы: {names}',
+    section: S,
+  },
+  'files.sent.hist.send_tg.receipt': {
+    ru: 'Контрагент отправил через Telegram («{who}») чек: {names}',
+    section: S,
+  },
+  'files.sent.hist.send_tg_anon.one': {
+    ru: 'Контрагент отправил через Telegram файл: {names}',
+    section: S,
+  },
+  'files.sent.hist.send_tg_anon.many': {
+    ru: 'Контрагент отправил через Telegram файлы: {names}',
+    section: S,
+  },
+  'files.sent.hist.send_tg_anon.receipt': {
+    ru: 'Контрагент отправил через Telegram чек: {names}',
     section: S,
   },
   'files.sent.hist.note': { ru: '{text}. Комментарий: {note}', section: S },

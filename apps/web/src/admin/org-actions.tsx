@@ -5,7 +5,9 @@ import { ConfirmDialog, useToast, type ActionEntry, type ActionItem } from '@buh
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
+import { innFormDataOf, OrgInnFormDialog, type OrgInnFormData } from './org-inn-form-dialog';
 import { orgHeadActions, orgMenu } from './orgs-menu';
 
 /** Ключ запроса карточки организации: после действия карточка перечитывается. */
@@ -34,7 +36,8 @@ export function useOrgsRefresh() {
 
 /**
  * Действия над организацией в Админке (прототип admin/accounts-orgs.js, orgActions): «Заблокировать»
- * после вопроса (демо-организацию стенда не блокируют) и «Разблокировать» сразу. Одни и те же пункты —
+ * после вопроса (демо-организацию стенда не блокируют), «Разблокировать» сразу и «ИНН и форма» окном
+ * (доработки 14.11.2026, блок 1, пункт 4). Одни и те же пункты —
  * в меню строки списка и кнопками в шапке карточки организации; `open` добавляет в меню строки
  * «Открыть карточку». `dialogs` ставится в разметку экрана.
  */
@@ -49,6 +52,7 @@ export function useOrgActions(options: { open?: (o: AdminOrganization) => void }
   const errorText = useErrorText();
   const refresh = useOrgsRefresh();
   const [askBlock, setAskBlock] = useState<AdminOrganization | null>(null);
+  const [innForm, setInnForm] = useState<DialogSlot<OrgInnFormData> | null>(null);
   // Организации, по которым запрос ещё идёт: повторное нажатие не шлёт второй запрос.
   const [pending, setPending] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -73,21 +77,36 @@ export function useOrgActions(options: { open?: (o: AdminOrganization) => void }
     });
   };
 
-  const run = { block: setAskBlock, unblock: (o: AdminOrganization) => void setActive(o, true) };
+  const run = {
+    block: setAskBlock,
+    unblock: (o: AdminOrganization) => void setActive(o, true),
+    innForm: (o: AdminOrganization) => setInnForm(openSlot(innFormDataOf(o))),
+  };
   const actions = orgMenu({ t, run: { ...run, open: options.open } });
   const menu = orgMenu({ t, run });
   const cardActions = (o: AdminOrganization) => orgHeadActions(menu(o));
 
   const dialogs = (
-    <ConfirmDialog
-      open={askBlock !== null}
-      onClose={() => setAskBlock(null)}
-      title={t('orgs.block.title', { name: askBlock?.name ?? '' })}
-      text={t('orgs.block.text')}
-      ok={t('orgs.action.block')}
-      danger
-      onConfirm={() => askBlock && void setActive(askBlock, false)}
-    />
+    <>
+      <ConfirmDialog
+        open={askBlock !== null}
+        onClose={() => setAskBlock(null)}
+        title={t('orgs.block.title', { name: askBlock?.name ?? '' })}
+        text={t('orgs.block.text')}
+        ok={t('orgs.action.block')}
+        danger
+        onConfirm={() => askBlock && void setActive(askBlock, false)}
+      />
+      {innForm ? (
+        <OrgInnFormDialog
+          key={`org-innform-${innForm.n}`}
+          org={innForm.data}
+          open={innForm.open}
+          onClose={() => setInnForm(closeSlot)}
+          onDone={refresh}
+        />
+      ) : null}
+    </>
   );
   return { actions, cardActions, dialogs };
 }

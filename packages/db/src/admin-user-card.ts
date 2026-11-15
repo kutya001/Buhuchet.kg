@@ -193,6 +193,8 @@ export interface AdminUserCardRecord {
     phoneText: string | null;
     isOwner: boolean;
     mustChangePassword: boolean;
+    /** Пароль не задан: ссылка «Задать пароль» в Telegram (доработки 14.11.2026, блок 1). */
+    passwordUnset: boolean;
     loginFailures: number;
     loginLocked: boolean;
     /** Чем закрыт вход: `not_me` — кнопкой «Это не я» в Telegram; пусто — неверными паролями. */
@@ -373,6 +375,7 @@ export async function adminEmployeeCard(
       isOwner: roles.isOwner,
       createdAt: employees.createdAt,
       mustChangePassword: users.mustChangePassword,
+      passwordUnset: sql<boolean>`app.password_unset(${users.id})`,
       loginFailures: users.loginFailures,
       loginLockedAt: users.loginLockedAt,
       loginLockReason: users.loginLockReason,
@@ -582,6 +585,7 @@ export async function adminEmployeeCard(
       phoneText: e.phone ? formatPhone(e.phone, await phoneCodes(tx)) : null,
       isOwner: e.isOwner,
       mustChangePassword: e.mustChangePassword,
+      passwordUnset: e.passwordUnset,
       loginFailures: e.loginFailures,
       loginLocked: e.loginLockedAt !== null,
       loginLockReason: e.loginLockReason,

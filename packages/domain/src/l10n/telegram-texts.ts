@@ -3,6 +3,7 @@ import type { UiTextDefault } from './texts';
 const S = 'Telegram';
 const G = 'Моя организация';
 const P = 'Профиль';
+const SP = 'Задать пароль';
 
 /**
  * Тексты уведомлений в Telegram (задача 2.25; ТЗ «Уведомления в Telegram»): части сообщения за день и
@@ -116,6 +117,7 @@ export const TELEGRAM_TEXTS = {
   'telegram.kind.group': { ru: 'Общий чат фирмы', section: S },
   // Доработки 14.11.2026: блок 2, пункт 2.
   'telegram.kind.cp_file': { ru: 'Файл от контрагента', section: S },
+  'telegram.kind.setup_link': { ru: 'Ссылка, чтобы задать пароль', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },
@@ -307,17 +309,16 @@ export const TELEGRAM_TEXTS = {
   },
   'tgn.cp_pay.title': { ru: '«К оплате»', section: G },
   'tgn.cp_pay.hint': {
-    ru: 'Сообщение с налогами месяца, если все суммы месяца указаны. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».',
+    ru: 'Сообщение с налогами месяца и реквизитами для перевода, если все суммы месяца указаны. После «Оплатил» в Telegram или принятия денег за месяц следующие не уходят. Вручную его отправляет кнопка «Отправить в Telegram» в карточке контрагента, на вкладке «Отчёты к сдаче».',
     section: G,
   },
-  'tgn.cp_pay.days': { ru: 'За {n} дней до ближайшего срока оплаты месяца', section: G },
-  'tgn.cp_pay.often': { ru: 'Раз в месяц', section: G },
+  'tgn.cp_pay.days': { ru: '{days} до ближайшего срока оплаты месяца', section: G },
+  'tgn.cp_pay.often': { ru: 'В отмеченные дни, пока месяц не оплачен', section: G },
   'tgn.cp_fee.title': { ru: 'Оплата за обслуживание', section: G },
   'tgn.cp_fee.hint': {
     ru: 'Напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
     section: G,
   },
-  'tgn.cp_fee.days': { ru: 'По понедельникам', section: G },
   'tgn.cp_fee.often': { ru: 'Раз в неделю, пока есть долг', section: G },
   // Общий чат фирмы (поток Т, задача Т8; прототип v105 modules/tg-group.js).
   'tggrp.none': { ru: 'Группа не подключена.', section: G },
@@ -391,6 +392,44 @@ export const TELEGRAM_TEXTS = {
   },
   'err.telegram_off': {
     ru: 'Напоминания в Telegram выключены в учётной политике',
+    section: 'Ошибки',
+  },
+  // Страница «Задать пароль» по ссылке из Telegram и «Отправить новую ссылку для пароля» карточки
+  // организации в Админке (доработки 14.11.2026, блок 1, пункт 3; прототип v113 setPassPage, ownerSetupAct).
+  'setpass.meta_title': { ru: 'Задать пароль', section: SP },
+  'setpass.title': { ru: 'Задайте пароль', section: SP },
+  // {login} на странице — моноширинным жирным (прототип: <b class="mono">).
+  'setpass.lead': {
+    ru: 'Логин для входа: {login}. Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
+    section: SP,
+  },
+  'setpass.lead_org': {
+    ru: 'Организация: {org}. Логин для входа: {login}. Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
+    section: SP,
+  },
+  'setpass.submit': { ru: 'Задать пароль', section: SP },
+  'setpass.invalid.title': { ru: 'Ссылка устарела', section: SP },
+  'setpass.invalid.text': {
+    ru: 'Ссылка, чтобы задать пароль, действует {days} дней и только один раз. Попросите администратора платформы отправить новую — она придёт в Telegram.',
+    section: SP,
+  },
+  'setpass.to_login': { ru: 'Ко входу', section: SP },
+  'setpass.loading': { ru: 'Проверяем ссылку…', section: SP },
+  'setpass.done': { ru: 'Пароль задан. Вход — с логином {login}', section: SP },
+  'orgs.card.owner_setup': { ru: 'Отправить новую ссылку для пароля', section: SP },
+  'orgs.card.owner_setup.no_tg': { ru: 'У владельца не привязан Telegram', section: SP },
+  'orgs.card.owner_setup.sent': {
+    ru: 'Новая ссылка отправлена в Telegram владельца',
+    section: SP,
+  },
+  'err.setup_link_invalid': { ru: 'Ссылка устарела', section: 'Ошибки' },
+  'err.owner_setup_unavailable': {
+    ru: 'Владелец уже задал пароль или ссылка ему не положена',
+    section: 'Ошибки',
+  },
+  'err.owner_no_telegram': { ru: 'У владельца не привязан Telegram', section: 'Ошибки' },
+  'err.owner_setup_send_failed': {
+    ru: 'Telegram не принял сообщение. Попробуйте ещё раз через минуту.',
     section: 'Ошибки',
   },
 } as const satisfies Record<string, UiTextDefault>;

@@ -1,4 +1,5 @@
 import {
+  PAY_CLAIM_PURPOSES,
   SENT_FILE_COMMENT_MAX,
   SENT_FILE_REASON_MAX,
   SENT_FILE_SOURCES,
@@ -6,7 +7,7 @@ import {
   SENT_FILES_PER_SEND,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { IsoDate, RecordVersion, Uuid } from './common';
+import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
 import { listPageSchema } from './list';
 
 /*
@@ -44,6 +45,25 @@ export const SentFileItem = z.object({
   version: RecordVersion,
 });
 export type SentFileItem = z.infer<typeof SentFileItem>;
+
+/**
+ * Чек к оплате (доработки 14.11.2026, блок 4, пункт 4; прототип v115 `pgRcptMoney`): что оплачено, за
+ * какой месяц и сколько — из сообщения, под которым клиент нажал «Оплатил» или «Прислать чек». Приходит
+ * только в ответе «Принять» и только тому, кто может сразу принять эти деньги.
+ */
+export const SentFilePay = z.object({
+  purpose: z.enum(PAY_CLAIM_PURPOSES),
+  month: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .nullable(),
+  amount: Tyiyn.nullable(),
+});
+export type SentFilePay = z.infer<typeof SentFilePay>;
+
+/** Ответ «Принять»: принятый файл и — у чека — что оплачено. */
+export const SentFileAccepted = SentFileItem.extend({ pay: SentFilePay.nullable() });
+export type SentFileAccepted = z.infer<typeof SentFileAccepted>;
 
 /** Раздел «Отправленные файлы» карточки контрагента: от новых к старым и сколько новых. */
 export const SentFileList = z.object({
@@ -140,6 +160,8 @@ export const PageSentFile = z.object({
   id: Uuid,
   name: z.string(),
   sentAt: z.iso.datetime(),
+  /** Прислан через бота (прототип v115 `pubSentHtml`: « · из Telegram»). */
+  telegram: z.boolean(),
   comment: z.string().nullable(),
   status: SentFileStatusSchema,
   reason: z.string().nullable(),

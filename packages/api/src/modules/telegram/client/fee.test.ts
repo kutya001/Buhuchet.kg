@@ -260,6 +260,7 @@ describe.skipIf(!databaseAvailable())(
           asc(schema.contractorTelegramMessages.chatId),
         );
     const wipe = async () => {
+      await f.t.admin.db.delete(schema.contractorPayClaims);
       await f.t.admin.db.delete(schema.contractorTelegramMessages);
       await f.t.admin.db.execute(
         sql`delete from audit_log where action in ('page_tg_pay', 'page_tg_paid')`,

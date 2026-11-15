@@ -87,6 +87,8 @@ export function fieldControl(
  */
 export interface FieldMark {
   node?: ReactNode;
+  /** Отметка в подписи после текста (прототип v114 `.lf-mark` — «из документов» формы заявки). */
+  label?: ReactNode;
   need?: boolean;
 }
 
@@ -123,6 +125,8 @@ export function Field(props: FieldProps) {
     >
       <label htmlFor={id} className="text-[12px] font-semibold tracking-[.01em] text-muted">
         {label}
+        {/* Отметка поля — до звёздочки: у прототипа «*» стоит в конце подписи (`.req::after`). */}
+        {mark?.label ? <span className="ml-1 align-[1px]">{mark.label}</span> : null}
         {required ? (
           <span aria-hidden="true" className="text-danger">
             {' *'}

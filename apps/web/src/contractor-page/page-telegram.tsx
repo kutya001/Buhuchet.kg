@@ -4,6 +4,7 @@ import {
   CP_TG_LINK_TTL_HOURS,
   formatMomentRu,
   formatSomWithUnit,
+  weekDayOf,
   type CpTgStatus,
 } from '@buhuchet/domain';
 import {
@@ -247,15 +248,19 @@ export function ContractorTelegramBox({ contractorId }: { contractorId: string }
     void client.invalidateQueries({ queryKey: ['contractors', 'history', contractorId] });
     toast(t(on ? 'cppage.debt.toast_on' : 'cppage.debt.toast_off'), { icon: 'tg' });
   };
+  // День недели и время — из «Telegram-уведомлений» организации (прототип v115 pgDebtRow).
+  const when = debt
+    ? { weekday: t(`tgn.wdpl.${weekDayOf(debt.weekDay)}`), at: debt.at }
+    : { weekday: '', at: '' };
   const debtHint = !debt
     ? ''
     : !debt.orgOn
       ? t('cppage.debt.hint_org_off')
       : debt.sum === null
-        ? t('cppage.debt.hint_plain')
+        ? t('cppage.debt.hint_plain', when)
         : debt.sum > 0
-          ? t('cppage.debt.hint', { sum: formatSomWithUnit(debt.sum) })
-          : t('cppage.debt.hint_none');
+          ? t('cppage.debt.hint', { ...when, sum: formatSomWithUnit(debt.sum) })
+          : t('cppage.debt.hint_none', when);
   const press = (item: ContractorTelegramItem, action: Decision) => {
     const why = whyNot(action);
     if (why) return toast(why, { icon: 'lock', bad: true });

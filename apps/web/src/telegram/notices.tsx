@@ -210,21 +210,7 @@ export function TelegramNoticesBox({
         />
         <TelegramGroupRow hour={policy.digestTime} />
         {policy.features.cppage ? (
-          <ContractorNoticeRows
-            pay={policy.cpTgPay}
-            debt={policy.cpTgDebt}
-            own={own}
-            busy={busy}
-            onToggle={(field, on) =>
-              void save(
-                { [field]: on },
-                t('cppage.org.toggled', {
-                  name: t(field === 'cpTgPay' ? 'cppage.org.pay' : 'cppage.org.debt'),
-                  state: t(on ? 'org.history.on' : 'org.history.off'),
-                }),
-              )
-            }
-          />
+          <ContractorNoticeRows policy={policy} own={own} busy={busy} save={save} />
         ) : null}
       </Box>
     </div>

@@ -558,6 +558,43 @@
   font-size: 16px;
   line-height: 1.5;
 }
+/* Доработки 14.11.2026, блок 1 (прототип v114 css/landing.css): форма организации, документы, экран
+   «Подключите Telegram». */
+.lf-form-seg {
+  align-self: flex-start;
+}
+.lf-form-seg button {
+  min-height: 34px;
+  padding: 6px 20px;
+  font-size: 14px;
+}
+.lf-docs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lf-docs-in {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.lp-ok-b {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+/* Значок кнопки «Подключить Telegram» — не печать экрана (`.lp-ok svg`). */
+.lp-ok .lp-ok-b svg {
+  width: 13px;
+  height: 13px;
+  color: currentColor;
+}
+@media (max-width: 767px) {
+  .lf-docs-in {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .lp-ok svg {
   color: var(--bu-green);
   width: 26px;

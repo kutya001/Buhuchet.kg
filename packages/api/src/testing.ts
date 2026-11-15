@@ -350,3 +350,55 @@ export function unzipTexts(file: Uint8Array): Record<string, string> {
   }
   return out;
 }
+
+/** Номер адреса для черновиков документов заявки: у каждого черновика свой (пределы — по адресу). */
+let leadDraftNo = 0;
+
+/**
+ * Черновик документов формы «Оставить заявку» (доработки 14.11.2026, блок 1), как его готовит браузер:
+ * начать загрузку, положить файл в хранилище по ссылке, прочитать. `content` — содержимое файла
+ * (подделка чтения PDF в `deps.documents` отдаёт по нему текст; не с «%PDF-» — не PDF). Ответ
+ * последнего чтения — итог по всему черновику.
+ */
+export async function leadDocDraft(
+  app: RequestApp,
+  storage: ApiDeps['storage'],
+  docs: readonly { kind: string; content: string; name?: string; size?: number }[],
+  draft: string | null = null,
+): Promise<{ draft: string; ids: string[]; read: Response }> {
+  leadDraftNo += 1;
+  const ip = `10.77.${Math.floor(leadDraftNo / 250)}.${(leadDraftNo % 250) + 1}`;
+  const headers = {
+    origin: TEST_ORIGIN,
+    'content-type': 'application/json',
+    'x-forwarded-for': ip,
+  };
+  const ids: string[] = [];
+  let read: Response | null = null;
+  let current = draft;
+  for (const doc of docs) {
+    const bytes = new TextEncoder().encode(doc.content);
+    const started = await app.request('/api/leads/uploads', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        draft: current,
+        kind: doc.kind,
+        name: doc.name ?? `${doc.kind}.pdf`,
+        size: doc.size ?? bytes.length,
+      }),
+    });
+    if (started.status !== 201) throw new Error(`загрузка не началась: ${await started.text()}`);
+    const ticket = (await started.json()) as { id: string; draft: string };
+    current = ticket.draft;
+    ids.push(ticket.id);
+    await storage.put(`leads/upload/${ticket.id}`, bytes, { contentType: 'application/pdf' });
+    read = await app.request(`/api/leads/uploads/${ticket.id}/read`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ draft: current }),
+    });
+  }
+  if (!current || !read) throw new Error('черновик без документов');
+  return { draft: current, ids, read };
+}

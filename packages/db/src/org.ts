@@ -5,6 +5,7 @@ import {
   type Feature,
   type HistoryAction,
   type HistoryChange,
+  type OrgLegalForm,
   type OrgPolicy,
   type PageSection,
   type WeekDay,
@@ -21,6 +22,7 @@ import {
   orgTelegramNotices,
   roles,
 } from './schema';
+import { cpNoticeSettingsOf } from './contractor-telegram-notices';
 import { STAFF_WEEK_NOTICE } from './telegram-notices';
 import type { AuditRecord } from './staff';
 
@@ -33,6 +35,9 @@ export interface OrgProfileRecord {
   id: string;
   name: string;
   inn: string | null;
+  /** «Форма» (ОсОО или ИП) и «ОКПО» — доработки 14.11.2026, блок 1, пункт 4; форму и ИНН меняет только администратор платформы. */
+  legalForm: OrgLegalForm | null;
+  okpo: string | null;
   address: string | null;
   phone: string | null;
   head: string | null;
@@ -46,6 +51,15 @@ export interface OrgProfileRecord {
 export interface OrgPolicyRecord extends OrgPolicy {
   /** День недельной сводки (строка `staff_week` блока «Telegram-уведомления»; нет — понедельник). */
   weekDay: WeekDay;
+  /**
+   * Строки «К оплате» и «Оплата за обслуживание» (поток К, этап 2): дни до срока, время, день
+   * напоминания о долге; нет строк — «за 5 дней» в 10:00, по понедельникам.
+   */
+  cpPayDays: number[];
+  cpPayAt: string;
+  cpFeeDays: number[];
+  cpFeeAt: string;
+  cpDebtWeekDay: WeekDay;
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: string | null;
   defaultRoleName: string | null;
@@ -63,6 +77,8 @@ export async function getOrgProfile(tx: Tx, orgId: string): Promise<OrgProfileRe
       id: organizations.id,
       name: organizations.name,
       inn: organizations.inn,
+      legalForm: organizations.legalForm,
+      okpo: organizations.okpo,
       address: organizations.address,
       phone: organizations.phone,
       head: organizations.head,
@@ -85,6 +101,8 @@ export async function getOrgProfile(tx: Tx, orgId: string): Promise<OrgProfileRe
     id: r.id,
     name: r.name,
     inn: r.inn,
+    legalForm: r.legalForm,
+    okpo: r.okpo,
     address: r.address,
     phone: r.phone,
     head: r.head,
@@ -148,6 +166,7 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     .where(eq(orgSettings.orgId, orgId));
   if (!r) return null;
   const s = r.settings;
+  const cp = await cpNoticeSettingsOf(tx, orgId);
   return {
     features: featureSet(s.features),
     remindDays: s.remindDays,
@@ -159,6 +178,11 @@ export async function getOrgPolicy(tx: Tx, orgId: string): Promise<OrgPolicyReco
     // В базе — time «09:00:00», в интерфейсе — «09:00».
     digestTime: s.digestTime.slice(0, 5),
     weekDay: weekDayOf(r.weekDay),
+    cpPayDays: cp.payDays,
+    cpPayAt: cp.payAt,
+    cpFeeDays: cp.feeDays,
+    cpFeeAt: cp.feeAt,
+    cpDebtWeekDay: cp.debtWeekDay,
     timezone: s.timezone,
     confirmWaitDays: s.confirmWaitDays,
     taskConfirm: s.taskConfirm,

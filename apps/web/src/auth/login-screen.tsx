@@ -25,6 +25,7 @@ import {
   Note,
   PasswordInput,
   ToastProvider,
+  useMounted,
   useToast,
 } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
@@ -64,10 +65,16 @@ const LINK_LEFT = `${linkButtonClass()} self-start`;
 export function LoginScreen({
   me,
   returnTo = '/app',
+  start,
 }: {
   me: MeResponse | null;
   /** Куда после входа: /app или страница программы из ссылки (задача #165). */
   returnTo?: string;
+  /**
+   * Вход сразу после «Задать пароль» по ссылке из Telegram (прототип v113 setPassPage): логин
+   * подставлен, сверху — уведомление.
+   */
+  start?: { login: string; toast: string };
 }) {
   const t = useT();
   const labels = useMemo(
@@ -76,17 +83,30 @@ export function LoginScreen({
   );
   return (
     <ToastProvider labels={labels}>
-      <LoginCard me={me} returnTo={returnTo} />
+      <LoginCard me={me} returnTo={returnTo} start={start} />
     </ToastProvider>
   );
 }
 
-function LoginCard({ me, returnTo }: { me: MeResponse | null; returnTo: string }) {
+function LoginCard({
+  me,
+  returnTo,
+  start,
+}: {
+  me: MeResponse | null;
+  returnTo: string;
+  start: { login: string; toast: string } | undefined;
+}) {
   const t = useT();
   const router = useRouter();
+  const toast = useToast();
   const [step, setStep] = useState<Step>(
-    me ? { id: 'change', me, current: null } : { id: 'login', login: '' },
+    me ? { id: 'change', me, current: null } : { id: 'login', login: start?.login ?? '' },
   );
+  const startToast = start?.toast;
+  useEffect(() => {
+    if (startToast) toast(startToast, { icon: 'key' });
+  }, [startToast, toast]);
   // После входа рабочая страница один раз покажет «Что нового» (задача 2.32).
   const enter = useCallback(() => {
     markSignedIn();
@@ -200,6 +220,9 @@ function LoginStep({
     resolver: zodResolver(LoginForm),
     defaultValues: { login: initialLogin, password: '' },
   });
+  // «Войти» — только после того, как React подхватил страницу: раньше нажатие (или Enter в поле) ушло бы
+  // обычной отправкой формы — логин и пароль в адресе страницы, без входа (docs/typical-mistakes.md № 41).
+  const ready = useMounted();
   // Ошибка входа — общей плашкой над «Войти», а не под полем (прототип core/login.js `#lg-msg`):
   // по ней не видно, логин неверный или пароль. Пустые поля — под полями.
   const [message, setMessage] = useState('');
@@ -254,7 +277,7 @@ function LoginStep({
           {message}
         </Note>
       ) : null}
-      <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
+      <button type="submit" className={WIDE_CTA} disabled={isSubmitting || !ready}>
         {t('auth.sign_in')}
       </button>
       {/* «О платформе» — лендинг для гостей (прототип core/login.js `#lg-about`, задача #165). */}

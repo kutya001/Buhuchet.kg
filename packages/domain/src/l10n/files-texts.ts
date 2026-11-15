@@ -90,6 +90,8 @@ export const FILES_TEXTS = {
   'files.kind.tax_payment': { ru: 'Оплата налога', section: FM },
   'files.kind.task': { ru: 'Задача', section: FM },
   'files.kind.indicator_value': { ru: 'Показатель', section: FM },
+  // Документы заявки на подключение после «Одобрить» (доработки 14.11.2026, блок 1; прототип v114 LEAD_SRC).
+  'files.kind.lead': { ru: 'Заявка на подключение', section: FM },
   'files.plate.manual': { ru: 'Загружено вручную', section: FM },
   'files.plate.contractor': { ru: 'Карточки контрагентов', section: FM },
   'files.plate.report': { ru: 'К отчётам', section: FM },
@@ -97,6 +99,7 @@ export const FILES_TEXTS = {
   'files.plate.tax_payment': { ru: 'К оплатам налогов', section: FM },
   'files.plate.task': { ru: 'К задачам', section: FM },
   'files.plate.indicator_value': { ru: 'К показателям', section: FM },
+  'files.plate.lead': { ru: 'Заявка на подключение', section: FM },
   'files.col.name': { ru: 'Файл', section: FM },
   'files.col.ext': { ru: 'Тип', section: FM },
   'files.col.kind': { ru: 'Откуда', section: FM },

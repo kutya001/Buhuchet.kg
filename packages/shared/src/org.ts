@@ -1,9 +1,11 @@
 import {
+  CP_NOTICE_DAYS,
   FEATURES,
   isValidOrgInn,
   MENU_MODULE_IDS,
   ORG_ADDRESS_MAX_LENGTH,
   ORG_HEAD_MAX_LENGTH,
+  ORG_LEGAL_FORMS,
   ORG_NAME_MAX_LENGTH,
   ORG_TIMEZONE_IDS,
   PAGE_SECTIONS,
@@ -44,8 +46,12 @@ export type OrgLogoLink = z.infer<typeof OrgLogoLink>;
 export const OrgProfile = z.object({
   id: Uuid,
   name: z.string(),
-  /** 14 цифр; у организаций, созданных без ИНН, — null. */
+  /** 14 цифр; у организаций, созданных без ИНН, — null. Меняет только администратор платформы. */
   inn: z.string().nullable(),
+  /** «Форма» — ОсОО или ИП (доработки 14.11.2026, блок 1, пункт 4): меняет только администратор платформы. */
+  legalForm: z.enum(ORG_LEGAL_FORMS).nullable(),
+  /** «ОКПО» — 8 цифр. */
+  okpo: z.string().nullable(),
   address: z.string().nullable(),
   phone: z.string().nullable(),
   head: z.string().nullable(),
@@ -60,12 +66,14 @@ export type OrgProfile = z.infer<typeof OrgProfile>;
 
 /**
  * Сохранить «Основное». Не переданное поле не меняется; пустая строка в необязательном поле очищает
- * его. Название, ИНН, телефон и адрес страницы сервер проверяет с текстами прототипа.
+ * его. Название, ОКПО, телефон и адрес страницы сервер проверяет с текстами прототипа. ИНН и форму
+ * владелец не меняет (доработки 14.11.2026, блок 1, пункт 4): их в запросе нет, присланные — не меняются
+ * (как прочие лишние поля) — «ИНН и форма» Админки.
  */
 export const UpdateOrgProfileRequest = z.object({
   version: RecordVersion,
   name: z.string().trim().max(ORG_NAME_MAX_LENGTH).optional(),
-  inn: z.string().trim().max(20).optional(),
+  okpo: z.string().trim().max(20).nullable().optional(),
   address: z.string().trim().max(ORG_ADDRESS_MAX_LENGTH).nullable().optional(),
   phone: Phone.nullable().optional(),
   head: z.string().trim().max(ORG_HEAD_MAX_LENGTH).nullable().optional(),
@@ -87,7 +95,10 @@ export const OrgMainForm = z.object({
     .trim()
     .min(1, message('err.name_required'))
     .max(ORG_NAME_MAX_LENGTH, message('form.too_long')),
-  inn: z.string().trim().refine(isValidOrgInn, message('err.inn_invalid')),
+  okpo: z
+    .string()
+    .trim()
+    .regex(/^([0-9]{8})?$/, message('err.okpo_invalid')),
   address: z.string().trim().max(ORG_ADDRESS_MAX_LENGTH, message('form.too_long')),
   head: z.string().trim().max(ORG_HEAD_MAX_LENGTH, message('form.too_long')),
   slug: z.string(),
@@ -147,6 +158,16 @@ export const OrgPolicy = z.object({
   digestTime: z.string(),
   /** День недельной сводки: 1 — понедельник … 7 — воскресенье (по умолчанию понедельник). */
   weekDay: z.number().int(),
+  /**
+   * Строка «К оплате» (поток К, этап 2): галочки «за 5» … «за 1 день» до ближайшего срока оплаты месяца
+   * (от большего к меньшему, хотя бы одна) и время отправки «ЧЧ:ММ» по Бишкеку.
+   */
+  cpPayDays: z.array(z.number().int()),
+  cpPayAt: z.string(),
+  /** Строка «Оплата за обслуживание»: дни до дня оплаты, время (оба сообщения) и день долга (1–7). */
+  cpFeeDays: z.array(z.number().int()),
+  cpFeeAt: z.string(),
+  cpDebtWeekDay: z.number().int(),
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: Uuid.nullable(),
   /** Её название — для «Настроек» только для просмотра (список ролей видит тот, кто меняет). */
@@ -172,6 +193,16 @@ export type OrgRoleOptions = z.infer<typeof OrgRoleOptions>;
 export const OrgWaitingReports = z.object({ count: z.number().int().nonnegative() });
 export type OrgWaitingReports = z.infer<typeof OrgWaitingReports>;
 
+/** Время отправки «ЧЧ:ММ» (00:00–23:59). */
+const NoticeTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/** Галочки «за 5» … «за 1 день»: числа 1–5 без повторов, хотя бы одна. */
+const CpNoticeDays = z
+  .array(z.number().int().min(1).max(CP_NOTICE_DAYS.length))
+  .min(1)
+  .max(CP_NOTICE_DAYS.length)
+  .refine((days) => new Set(days).size === days.length);
+
 /** Сохранить учётную политику или настройки: только переданные поля; функции — только переданные. */
 export const UpdateOrgPolicyRequest = z.object({
   version: RecordVersion,
@@ -189,12 +220,15 @@ export const UpdateOrgPolicyRequest = z.object({
   cpTgPay: z.boolean().optional(),
   cpTgDebt: z.boolean().optional(),
   cpFilesUpload: z.boolean().optional(),
-  digestTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-    .optional(),
+  digestTime: NoticeTime.optional(),
   /** День недельной сводки, 1–7 (понедельник … воскресенье). */
   weekDay: z.number().int().min(1).max(7).optional(),
+  /** Галочки «за N дней» строки «К оплате»: 1–5, хотя бы одна. Меняет только владелец организации. */
+  cpPayDays: CpNoticeDays.optional(),
+  cpPayAt: NoticeTime.optional(),
+  cpFeeDays: CpNoticeDays.optional(),
+  cpFeeAt: NoticeTime.optional(),
+  cpDebtWeekDay: z.number().int().min(1).max(7).optional(),
   defaultRoleId: Uuid.optional(),
 });
 export type UpdateOrgPolicyRequest = z.infer<typeof UpdateOrgPolicyRequest>;
@@ -224,3 +258,21 @@ export const OrgPolicyHistory = z.object({
   ),
 });
 export type OrgPolicyHistory = z.infer<typeof OrgPolicyHistory>;
+
+/**
+ * «ИНН и форма» организации в Админке (прототип v114 ldInnFormDlg; доработки 14.11.2026, блок 1,
+ * пункт 4): меняет только администратор платформы, с версией записи.
+ */
+export const OrgInnFormRequest = z.strictObject({
+  inn: z.string().trim().refine(isValidOrgInn, message('err.inn_invalid')),
+  legalForm: z.enum(ORG_LEGAL_FORMS, message('err.org_form_required')),
+  version: RecordVersion,
+});
+export type OrgInnFormRequest = z.infer<typeof OrgInnFormRequest>;
+
+/** «ИНН и форма» сохранены: новая версия организации; `changed` false — «Изменений нет». */
+export const OrgInnFormSaved = z.object({
+  changed: z.boolean(),
+  version: z.number().int().nonnegative(),
+});
+export type OrgInnFormSaved = z.infer<typeof OrgInnFormSaved>;

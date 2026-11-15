@@ -1,4 +1,9 @@
-import { NOTIFY_KINDS, NOTIFY_MODES } from '@buhuchet/domain';
+import {
+  NOTIFY_KINDS,
+  NOTIFY_MODES,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '@buhuchet/domain';
 import { z } from 'zod';
 import { RecordVersion } from './common';
 
@@ -93,3 +98,17 @@ export type TelegramGroupSummaryRequest = z.infer<typeof TelegramGroupSummaryReq
 /** «Отключить группу» с версией записи. */
 export const TelegramGroupUnlinkRequest = z.strictObject({ version: z.number().int().positive() });
 export type TelegramGroupUnlinkRequest = z.infer<typeof TelegramGroupUnlinkRequest>;
+
+/*
+ * Страница «Задать пароль» по ссылке из Telegram (доработки 14.11.2026, блок 1; прототип v113
+ * setPassPage): без входа. Ключ — в пути; пароль — по тем же правилам, что при смене временного.
+ */
+export const PasswordSetupParams = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
+export const PasswordSetupInfo = z.object({ login: z.string(), organization: z.string() });
+export type PasswordSetupInfo = z.infer<typeof PasswordSetupInfo>;
+export const PasswordSetupRequest = z.strictObject({
+  password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+});
+export type PasswordSetupRequest = z.infer<typeof PasswordSetupRequest>;
+export const PasswordSetupDone = z.object({ ok: z.literal(true), login: z.string() });
+export type PasswordSetupDone = z.infer<typeof PasswordSetupDone>;

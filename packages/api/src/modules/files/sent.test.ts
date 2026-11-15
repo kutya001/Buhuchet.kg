@@ -281,10 +281,10 @@ describe.skipIf(!databaseAvailable())(
       // Страница: «Отправить файл» и «Отправленные вами».
       const page = await publicPage('org-a', cpAcc, grantAcc);
       expect(page.sent?.upload).toBe(true);
-      expect(page.sent?.items.map((x) => [x.name, x.status, x.daysLeft])).toEqual(
+      expect(page.sent?.items.map((x) => [x.name, x.status, x.daysLeft, x.telegram])).toEqual(
         expect.arrayContaining([
-          ['Выписка_октябрь.pdf', 'new', 30],
-          ['Чек.jpg', 'new', 30],
+          ['Выписка_октябрь.pdf', 'new', 30, false],
+          ['Чек.jpg', 'new', 30, false],
         ]),
       );
       expect(ids).toHaveLength(2);
@@ -624,6 +624,16 @@ describe.skipIf(!databaseAvailable())(
         status: 'new',
       });
       expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toHaveLength(1);
+      // История: имя в Telegram — для строки «Контрагент отправил через Telegram («<имя>») файл»
+      // (прототип v115 pgFileIn); на странице контрагента — «· из Telegram» (pubSentHtml).
+      expect((await history(cpAcc.id)).at(-1)!.changes).toEqual(
+        expect.arrayContaining([
+          { field: 'source', to: 'telegram' },
+          { field: 'sender', to: 'Айнура Турдубаева' },
+        ]),
+      );
+      const page = await publicPage('org-a', cpAcc, grantAcc);
+      expect(page.sent?.items.find((x) => x.id === ids[0])).toMatchObject({ telegram: true });
       // Отправка выключена у контрагента — отказ `sent_off`.
       await f.t.admin.db
         .update(schema.contractorPages)

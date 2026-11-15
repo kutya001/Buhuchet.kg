@@ -261,6 +261,30 @@ export const CONTRACTOR_PAGE_TEXTS = {
     ru: 'Реквизиты уже отправлены несколько раз за час — они в сообщениях выше. Попробуйте позже.',
     section: S,
   },
+  // Чек и файлы клиента через бота (доработки 14.11.2026, блок 2, пункт 1 и блок 4, пункт 4, этап 2;
+  // прототип v115 cp-telegram.js: pgRcptNote, tgAct('cp-receipt'), tgAct('cp-file-to')): комментарий
+  // чека в «Отправленных файлах» и подписи погасших кнопок.
+  'cppage.tg.receipt_note.tax': { ru: 'Чек к «К оплате» за {month}', section: S },
+  'cppage.tg.receipt_note.fee': { ru: 'Чек к «Оплата за обслуживание» за {month}', section: S },
+  'cppage.tg.receipt_note.fee_any': { ru: 'Чек к «Оплата за обслуживание»', section: S },
+  'cppage.tg.receipt_done': { ru: '✓ Чек отправлен', section: S },
+  'cppage.tg.receipt_limit': {
+    ru: 'Чек уже просили прислать несколько раз за час. Ответьте чеком на сообщение выше или попробуйте позже.',
+    section: S,
+  },
+  'cppage.tg.file_to_done': { ru: '✓ {contractor}', section: S },
+  'cppage.tg.file_limit': {
+    ru: 'Файлов из этого чата слишком много за час. Попробуйте позже.',
+    section: S,
+  },
+  // «Принять» у чека из Telegram (прототип v115 `pgRcptMoney`).
+  'cppage.receipt.tax_note': { ru: 'Деньги за {month} — по чеку из Telegram', section: S },
+  'cppage.receipt.fee_note': { ru: 'По чеку из Telegram за {month}', section: S },
+  'cppage.receipt.fee_note_any': { ru: 'По чеку из Telegram', section: S },
+  'cppage.receipt.received': {
+    ru: 'Деньги на налоги за {month} уже получены от контрагента',
+    section: S,
+  },
   // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
   // pgFeeTgBtn, pgFeeTgDlg, pgFeeSend, tgAct('cp-feepaid')): кнопка вкладки «Обслуживание», окно, история.
   'cppage.fee_tg.btn': { ru: 'Напомнить в Telegram', section: S },
@@ -314,15 +338,15 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'cppage.debt.label': { ru: 'Напоминать о долге в Telegram', section: S },
   'cppage.debt.hint': {
-    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас {sum}.',
+    ru: 'Раз в неделю, {weekday} в {at}: недостача на налоги этого месяца и долг за обслуживание — сейчас {sum}.',
     section: S,
   },
   'cppage.debt.hint_none': {
-    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание — сейчас долга нет.',
+    ru: 'Раз в неделю, {weekday} в {at}: недостача на налоги этого месяца и долг за обслуживание — сейчас долга нет.',
     section: S,
   },
   'cppage.debt.hint_plain': {
-    ru: 'Раз в неделю, в понедельник в 10:00: недостача на налоги этого месяца и долг за обслуживание.',
+    ru: 'Раз в неделю, {weekday} в {at}: недостача на налоги этого месяца и долг за обслуживание.',
     section: S,
   },
   'cppage.debt.hint_org_off': {
@@ -600,4 +624,29 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.cp_tg_fee_all_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_all_off, section: E },
   'err.cp_tg_fee_off': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_off, section: E },
   'err.cp_tg_fee_failed': { ru: CP_TG_FEE_MESSAGES.cp_tg_fee_failed, section: E },
+  // Строки «К оплате» и «Оплата за обслуживание» блока «Telegram-уведомления», этап 2 (доработки
+  // 14.11.2026, блок 3; прототип v115 pgTgNoticeRows, pgTgNoticeMount, pgDaysTxt).
+  'tgn.cp.days_list': { ru: 'за {list} {word}', section: S },
+  'tgn.cp.days_label': { ru: 'Дни до срока', section: S },
+  'tgn.cp.day': { ru: 'за {n}', section: S },
+  'tgn.cp.day_1': { ru: 'за 1 день', section: S },
+  'tgn.cp.at_label': { ru: 'Время отправки', section: S },
+  'tgn.cp.debt_wd': { ru: 'День напоминания о долге', section: S },
+  'tgn.cp.days_required': { ru: 'Отметьте хотя бы один день', section: S },
+  'tgn.cp.at_required': { ru: 'Укажите время', section: S },
+  'tgn.cp.days_saved': { ru: '{name}: {days} до срока', section: S },
+  'tgn.cp.at_saved': { ru: '{name}: в {time}', section: S },
+  'tgn.cp.debt_wd_saved': { ru: 'Напоминание о долге — {days}', section: S },
+  'tgn.cp_fee.hint_soon': {
+    ru: 'До срока — «Оплата за обслуживание до <дата>» с суммой начисления за месяц и реквизитами для обслуживания; срок — «День оплаты обслуживания» в карточке контрагента. После срока — напоминание о долге: недостача денег на налоги этого месяца и долг за обслуживание. У отдельного контрагента напоминание выключается в его карточке; клиент может выключить его сам кнопкой «Не напоминать».',
+    section: S,
+  },
+  'tgn.cp_fee.days_soon': { ru: '{days} до дня оплаты; после срока — {wd}', section: S },
+  'tgn.cp_fee.often_soon': {
+    ru: 'В отмеченные дни до срока; после срока — раз в неделю, пока есть долг',
+    section: S,
+  },
+  'org.history.cp_days': { ru: '{name}: дни {from} → {to} до срока', section: S },
+  'org.history.cp_at': { ru: '{name}: время {from} → {to}', section: S },
+  'org.history.cp_debt_wd': { ru: 'Напоминание о долге: {from} → {to}', section: S },
 } as const satisfies Record<string, UiTextDefault>;
