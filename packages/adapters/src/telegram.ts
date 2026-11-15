@@ -6,6 +6,7 @@ import {
   telegramCaptionProblems,
   telegramKeyboardProblems,
   telegramSendProblems,
+  telegramWidgetDataProblems,
 } from './telegram-rules';
 
 export * from './telegram-rules';
@@ -441,6 +442,7 @@ export function createTelegramBotApi(options: {
       }
       return failure(data);
     },
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-19
     async answerCallback(callbackId, text, opts = {}) {
       // Скрытый ответ длиннее 200 знаков Telegram не принимает, и кнопка «крутится»: шаблон ответа
       // администратор может удлинить до общего предела — лишнее обрезается здесь, для всех нажатий.
@@ -683,16 +685,25 @@ export function createFakeTelegram(): FakeTelegram {
     async sendWidget(chatId, widget) {
       const failed = failures.shift();
       if (failed) return failed;
-      check('sendWidget', telegramCaptionProblems(widget.caption, false), widget.caption);
+      check(
+        'sendWidget',
+        [
+          ...telegramCaptionProblems(widget.caption, false),
+          ...telegramWidgetDataProblems(widget.chatData),
+        ],
+        widget.caption,
+      );
       const messageId = nextId++;
       fake.widgets.push({ ...widget, chatId, messageId });
       return { ok: true, messageId };
     },
     async editWidgetData(chatId, messageId, chatData) {
+      check('editWidgetData', telegramWidgetDataProblems(chatData), chatData);
       fake.widgetEdits.push({ chatId, messageId, chatData });
       return true;
     },
     async answerWidgetQuery(queryId, data) {
+      check('answerWidgetQuery', telegramWidgetDataProblems(data), data ?? '');
       fake.widgetAnswers.push({ queryId, data });
       return true;
     },

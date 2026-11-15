@@ -11,6 +11,7 @@ import {
   telegramHtmlProblem,
   telegramKeyboardProblems,
   telegramSendProblems,
+  telegramWidgetDataProblems,
 } from './telegram-rules';
 
 afterEach(() => {
@@ -103,6 +104,13 @@ describe('правила Bot API для сообщения бота', () => {
     expect(telegramSendProblems('Таблица', { rich: '<p>{n}</p>' })).toEqual(['placeholder:{n}']);
   });
 
+  it('данные виджета и ответ на его запрос — до 1 КБ, без незаполненных подстановок', () => {
+    expect(telegramWidgetDataProblems(undefined)).toEqual([]);
+    expect(telegramWidgetDataProblems('{"h":"Неделя","r":[{"t":"НДС"}]}')).toEqual([]);
+    expect(telegramWidgetDataProblems('{"h":"Неделя {даты}"}')).toEqual(['placeholder:{даты}']);
+    expect(telegramWidgetDataProblems('я'.repeat(513))).toEqual(['widget_data_too_long:1026']);
+  });
+
   it('обрезка текста: лишнее — многоточием, половина эмодзи не остаётся', () => {
     expect(clipTelegramText('коротко', 200)).toBe('коротко');
     expect(clipTelegramText('абвгд', 4)).toBe('абв…');
@@ -125,6 +133,8 @@ describe('подставной бот проверяет каждое сообщ
     await tg.answerCallback('cb', 'а'.repeat(201));
     await tg.editKeyboard(1, 1, [[{ text: 'к', data: 'я'.repeat(40) }]]);
     await tg.sendWidget(1, { html: '<p></p>', chatData: '{}', caption: '{даты}' });
+    await tg.editWidgetData(1, 4, '{"u":"Обновлено в {время}"}');
+    await tg.answerWidgetQuery('q', '{"ok":true}');
     await tg.answerCallback('cb2');
     await tg.sendMessage(1, 'Всё верно');
     const expected = [
@@ -137,6 +147,11 @@ describe('подставной бот проверяет каждое сообщ
       { method: 'answerCallback', problems: ['text_too_long:201'], text: 'а'.repeat(120) },
       { method: 'editKeyboard', problems: ['button_data:80'], text: '' },
       { method: 'sendWidget', problems: ['placeholder:{даты}'], text: '{даты}' },
+      {
+        method: 'editWidgetData',
+        problems: ['placeholder:{время}'],
+        text: '{"u":"Обновлено в {время}"}',
+      },
     ];
     expect(tg.problems).toEqual(expected);
     expect(takeFakeTelegramProblems()).toEqual(expected);

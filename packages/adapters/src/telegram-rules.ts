@@ -21,6 +21,8 @@ export const TELEGRAM_COPY_TEXT_MAX = 256;
 /** Кнопок в ряду и всего под сообщением. */
 export const TELEGRAM_ROW_BUTTONS_MAX = 8;
 export const TELEGRAM_BUTTONS_MAX = 100;
+/** Данные виджета и ответ на его запрос (Bot API 10.4), байт (UTF-8). */
+export const TELEGRAM_WIDGET_DATA_MAX = 1024;
 
 /** Теги, которые Telegram принимает в `parse_mode: HTML`. */
 const HTML_TAGS = new Set([
@@ -148,6 +150,20 @@ export function telegramSendProblems(text: string, options: TelegramSendOptions 
   for (const row of options.menu ?? []) {
     for (const label of row) if (!label.trim()) problems.push('menu_text_empty');
   }
+  return problems;
+}
+
+/**
+ * Данные виджета (`sendWidget`, `editWidgetData`) и ответ на его запрос (`answerWidgetQuery`): до 1 КБ и
+ * без незаполненных подстановок — в них тексты шаблонов «Мои на неделю». Разметку HTML виджета не
+ * проверяем: в его коде фигурные скобки — обычное дело.
+ */
+export function telegramWidgetDataProblems(data: string | undefined): string[] {
+  if (data === undefined || data === '') return [];
+  const problems: string[] = [];
+  const bytes = new TextEncoder().encode(data).byteLength;
+  if (bytes > TELEGRAM_WIDGET_DATA_MAX) problems.push(`widget_data_too_long:${bytes}`);
+  if (PLACEHOLDER.test(data)) problems.push(`placeholder:${PLACEHOLDER.exec(data)![0]}`);
   return problems;
 }
 
