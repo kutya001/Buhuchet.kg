@@ -151,6 +151,12 @@ img.pub-logo{background:none;border:1px solid var(--border)}
 .pub-pn .mono{font-size:22px;font-weight:700;letter-spacing:.02em;overflow-wrap:anywhere}
 .pub-pb,.pub-pk{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
 .pub-pay .pub-what{margin:0}
+.pub-pw{margin-top:-4px}
+.pub-paid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;border-top:1px dashed var(--border)}
+.pub-gpay{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;border-radius:var(--r-m);background:var(--pane-alt)}
+.pub-send{display:flex;flex-direction:column;gap:12px}.pub-sendsum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.pub-sendsum b{font-size:24px}
+.pp-what{display:flex;align-items:center;background:var(--pane-alt);color:var(--text)}
+.pub-fg{align-self:center}.pub-fgm{text-align:center}.pub-fgm.ok{color:var(--green)}
 /* Плитки видов отчётов, месяцев и показателей; строки периодов */
 .pub-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .plates.pub-pl{grid-template-columns:repeat(3,minmax(0,1fr))}

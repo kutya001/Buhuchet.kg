@@ -420,6 +420,11 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // Поток К, доработки 14.11.2026, этап 2 (v113): файлы и чеки через бота, «Прислать чек», «Оплата за обслуживание до …» до срока
   if(!db.meta.tgK15){db.meta.tgK15=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCpFeeSoon', 'tgBtnCpReceipt', 'tgCpReceiptOffer', 'tgCpReceiptAsk', 'tgCpReceiptType', 'tgCpReceiptOk', 'tgCpFileOk', 'tgCpFileWhich', 'tgCpFileOff', 'tgCpFileLimit', 'tgCpFileNo'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // Поток К, доработки 14.11.2026, этап 3 (v116): страница контрагента — код через Telegram, команда бота «Код от страницы», «Я оплатил»; текст плитки лендинга и пояснение «Как оплатить» — если их не меняли
+  if(!db.meta.tgK16){db.meta.tgK16=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgCpCode', 'tgCpCodeNone', 'tgCpCodeLimit', 'tgCpCodeClosed', 'tgCmdCpCode', 'tgCpPagePaidStaff'];
+    if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});
+    const lt=(db.ref.localization||[]).find(x=>x.key==='land.feat.8.d'),rt=(r.localization||[]).find(x=>x.key==='land.feat.8.d');if(lt&&rt&&lt.ru==='По ссылке и коду клиент видит свои отчёты, сроки и что оплатить — только просмотр')lt.ru=rt.ru;
+    const u=db.ref.kbUi,ru=r.kbUi;if(u&&u.page&&u.page.secs&&ru&&ru.page&&/кнопкой «Скопировать»\.$/.test(u.page.secs['Как оплатить']||''))u.page.secs['Как оплатить']=ru.page.secs['Как оплатить']}
   // Блок «Telegram-уведомления» (v111, пакет 14.11.2026, блок 3): путь к общему чату в шаблоне «ссылка устарела» — если администратор не менял текст
   if(!db.meta.tgN1){db.meta.tgN1=1;const a=db.ref.messageTemplates,rm=r.messageTemplates||{};if(a&&a.tgGrpLinkBad==='Ссылка для подключения группы устарела или уже использована. Владелец организации может создать новую: «Моя организация» → «Настройки» → «Общий чат фирмы в Telegram».'&&rm.tgGrpLinkBad)a.tgGrpLinkBad=rm.tgGrpLinkBad;
     const n=db.ref.templateNotes,rn=r.templateNotes||{};if(n&&rn.tgActOff&&n.tgActOff&&!n.tgActOff.includes('Telegram-уведомления'))n.tgActOff=rn.tgActOff}

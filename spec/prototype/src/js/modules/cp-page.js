@@ -1,9 +1,11 @@
 'use strict';
-// Страница контрагента по ссылке (v56, решение заказчика 24.10.2026): www.buhuchet.kg/<адрес организации>/inn/<ИНН>, вход по коду из 6 цифр, только просмотр
+// Страница контрагента по ссылке (v56, решение заказчика 24.10.2026): www.buhuchet.kg/<адрес организации>/inn/<ИНН>, вход по коду из 6 цифр.
+// С 14.11.2026 (блок 6) клиент на странице не только смотрит: отправляет файлы и сообщает об оплате с чеком (cp-sent.js, cp-paid.js)
 /* ═════════════ Страница контрагента по ссылке ═════════════ */
 // Разделы страницы: [ключ, название, функция учётной политики, без которой раздела нет]; «Главное» и «Ваш бухгалтер» показываются всегда
 const PG_SECS=[['pay','Как оплатить'],['reports','Отчёты'],['files','Файлы'],['money','Деньги на налоги','taxpay'],['fee','Оплата за обслуживание','fee'],['kpi','Показатели','indicators'],['contacts','Контакты'],['tg','Telegram']];
-const PG_TRY=5,PG_LOCK=15*60e3,PG_KEEP=30*864e5;
+// Верный код запоминается в браузере на 1 день с момента ввода (решение заказчика 14.11.2026; было 30 дней) — только у страницы контрагента, вход сотрудников не меняется
+const PG_TRY=5,PG_LOCK=15*60e3,PG_KEEP=864e5;
 // Кроме 5 неверных подряд — не больше 5 неверных кодов за сутки по одной ссылке с любых адресов: пятый закрывает страницу до «Сменить код» или «Выключить» и «Включить» (решение заказчика 07.11.2026). Счёт идёт по коду (p.day — время неверных вводов), верный код между неверными его не сбрасывает; закрытая страница не открывается никому, в том числе в браузерах с запомненным кодом
 const PG_DAY=5,PG_DAYMS=864e5;
 const pgDay=p=>{const now=Date.now();p.day=(p.day||[]).filter(t=>now-t<PG_DAYMS);return p.day};
@@ -66,6 +68,8 @@ function pubHide(){const el=$('#pub');if(el)el.hidden=true;document.body.classLi
 function pubClose(){const b=PUB.back||'#home';pubHide();PUB.back='';if(location.hash!==b)location.hash=b;else route();refreshAll()}
 // Выключенная страница, неизвестный ИНН, архивный контрагент и чужой адрес организации — одна и та же страница без данных
 const pubCp=({slug,inn})=>feat('cppage')&&slug===ORG.slug?CPS.find(c=>c.inn===inn&&pgOn(c))||null:null;
+// «Забыли код? Прислать в Telegram» (блок 6, пункт 6, cp-paid.js): ответ — строкой под ссылкой
+const pubForgotHtml=()=>`<button type="button" class="linkbtn pub-fg" id="pub-fg">${ic('send','sm')}Забыли код? Прислать в Telegram</button><span class="hint pub-fgm" id="pub-fgm" role="status" hidden></span>`;
 // keep — перерисовка той же страницы (год, фильтр, вид): прокрутка остаётся на месте
 function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.open,c=pubCp(o),sc=$('.pub-page',el),top=keep&&sc?sc.scrollTop:0;
   const bar=`<div class="pub-bar"><span class="pub-proto">${ic('eye','sm')}<span>Прототип: страница, которую контрагент откроет по ссылке</span></span><span class="pub-url">${ic('lock','sm')}<span class="mono">www.buhuchet.kg/${esc(o.slug)}/inn/${esc(o.inn)}</span></span><button type="button" class="btn sm" id="pub-x">${ic('x','sm')}Вернуться в программу</button></div>`;
@@ -75,11 +79,13 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
   else{const p=c.page,mem=pgMem()[o.slug+'|'+o.inn];
     if(p.closed)main=`<div class="pub-gate">${brand}<h1>Страница закрыта</h1><p class="muted">Было ${PG_DAY} неверных кодов за сутки. Попросите новый код у вашего бухгалтера.</p></div>`;
     else if(mem&&mem.code===p.code&&mem.until>Date.now()){main=pubBody(c);inside=true}
-    else if(p.lock>Date.now())main=`<div class="pub-gate">${brand}<h1>Ввод кода временно закрыт</h1><p class="muted">Было ${PG_TRY} неверных кодов подряд. Попробуйте снова после ${pgHm(p.lock)} или попросите код у вашего бухгалтера.</p></div>`;
-    else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код доступа</h1><p class="muted">Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.</p>${fld('Код доступа',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button><span class="hint">В этом браузере код запомнится на 30 дней.</span></form>`}
-  el.innerHTML=bar+`<div class="pub-page">${main}<footer class="pub-foot">${inside&&sntUpOn(c)?'На странице можно смотреть свои данные и отправлять файлы бухгалтеру. Вопросы — вашему бухгалтеру.':'Страница только для просмотра. Вопросы — вашему бухгалтеру.'}</footer></div>`;
+    else if(p.lock>Date.now())main=`<div class="pub-gate">${brand}<h1>Ввод кода временно закрыт</h1><p class="muted">Было ${PG_TRY} неверных кодов подряд. Попробуйте снова после ${pgHm(p.lock)} или попросите код у вашего бухгалтера.</p>${pubForgotHtml()}</div>`;
+    else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код доступа</h1><p class="muted">Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.</p>${fld('Код доступа',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button><span class="hint">В этом браузере код запомнится на 1 день.</span>${pubForgotHtml()}</form>`}
+  el.innerHTML=bar+`<div class="pub-page">${main}<footer class="pub-foot">${inside&&sntUpOn(c)?'На странице можно смотреть свои данные, отправлять файлы бухгалтеру и сообщать об оплате. Вопросы — вашему бухгалтеру.':'Страница только для просмотра. Вопросы — вашему бухгалтеру.'}</footer></div>`;
   if(top)$('.pub-page',el).scrollTop=top;
   $('#pub-x',el).onclick=pubClose;
+  const fg=$('#pub-fg',el);if(fg)fg.onclick=()=>{const r=pubForgot(c),o=$('#pub-fgm',el);o.hidden=false;o.className='hint pub-fgm'+(r.ok?' ok':'');
+    o.innerHTML=esc(r.t)+(r.ok?` <button type="button" class="linkbtn" id="pub-fgd">${ic('eye','sm')}В макете: сообщение в Telegram</button>`:'');const d=$('#pub-fgd',el);if(d)d.onclick=()=>pgCodeDemo(c,r.to[0])};
   if(c&&c.page.on&&$('.pub-body',el)&&!o.logged){o.logged=true;pubSeen(c)}
   const f=$('#pub-f',el);if(f){const k=$('#pub-k',f);setTimeout(()=>k.focus(),30);k.oninput=()=>{k.value=k.value.replace(/\D/g,'').slice(0,6);setErr(f,'pub-k','')};
     f.onsubmit=e=>{e.preventDefault();const p=c.page,v=k.value.trim();if(!/^\d{6}$/.test(v)){setErr(f,'pub-k','Введите 6 цифр');return}
@@ -99,8 +105,10 @@ function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)retur
 // Обновление страницы в том же браузере в течение минуты новым открытием не считается (решение заказчика 30.10.2026, Е-3)
 function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
-function pubClick(e){const x=e.target.closest('[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo],[data-pub-up]');if(!x)return;const d=x.dataset;
+function pubClick(e){const x=e.target.closest('[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo],[data-pub-up],[data-pub-paid],[data-pub-send]');if(!x)return;const d=x.dataset;
   if(d.pubUp!=null){const c=pubCp(PUB.open);if(c)pubUpDlg(c);return}
+  if(d.pubPaid){const c=pubCp(PUB.open);if(c)pubPaidDlg(c,d.pubPaid);return}
+  if(d.pubSend){const c=pubCp(PUB.open);if(c)pubSendDlg(c,d.pubSend);return}
   if(d.pubTgon!=null){const c=pubCp(PUB.open);if(d.why)toast(d.why,'lock',true);else if(c)pgTgDlg(c);return}
   if(d.pubFo!=null){const f=PUB.fl[+d.pubFo];if(f)pubFileOpen(f.name,f);return}
   if(d.pubFf!=null){PUB.ff=PUB.ff===d.pubFf?'':d.pubFf;pubDraw(true);return}
@@ -135,16 +143,19 @@ function pubMoney(c){const pm=ym(TODAY);const need=REPORTS.filter(r=>r.cp===c.id
 // Мини-график показателя: столбик на месяц, последний месяц со значением — цветом акцента, пустой месяц — чёрточка у основания, будущие месяцы пустые
 function pubSpark(i,ms,vals){const H=30,mx=Math.max(0,...vals.filter(x=>x!=null).map(Math.abs)),last=vals.reduce((a,x,j)=>x!=null?j:a,-1);
   return `<svg class="pub-sp" viewBox="0 0 96 ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(i.name)} по месяцам">${ms.map((m,j)=>{const x=vals[j];if(x===undefined)return '';const h=x==null||!mx?1.5:Math.max(1.5,Math.abs(x)/mx*(H-2));return `<rect x="${j*8+1}" y="${H-h}" width="6" height="${h}" rx="1" class="${x==null?'e':j===last?'c':''}"><title>${esc(ymLabel(m))}: ${x==null?'нет данных':kNum(i,x)}</title></rect>`}).join('')}</svg>`}
-// Карточка «Как оплатить»: номер телефона или счёт крупно с «Скопировать», банки и кошельки, получатель, пояснение
-function pubPay(k,title,icon,a,org){const ph=a.kind==='phone',num=rqNum(a),raw=String(num).replace(/\s/g,'');
-  const cp=(v,ok,l)=>`<button type="button" class="btn sm" data-pub-copy="${esc(v)}" data-pub-ok="${esc(ok)}" aria-label="${esc(l)}">${ic('copy','sm')}Скопировать</button>`;
+// Карточка «Как оплатить»: подпись «Реквизиты для перевода — организации …» или «— сотрудника <ФИО>», номер телефона или счёт крупно,
+// кнопка копирования по виду реквизита — как в Telegram: «Скопировать номер телефона» (только номер) или «Скопировать реквизиты для перевода» (банк, счёт, БИК, получатель),
+// банки и кошельки, получатель, пояснение; paid — кнопка «Я оплатил» (блок 6, пункт 2, cp-paid.js)
+function pubPay(k,title,icon,a,org,c,o={}){const ph=a.kind==='phone',num=rqNum(a),cb=pgRqBtn(a),w=o.paid&&pgClaimWait(c,k);
   return `<div class="pub-pay" data-pay="${k}"><div class="pub-pt">${ic(icon)}<b>${esc(title)}</b><span class="hint">${esc(rqKindL(a,org))}</span></div>
+    <span class="hint pub-pw">${esc(tplFill('tgRqHead',{чьи:pgRqWho(c,a)}))}</span>
     ${ph?'':`<span class="pub-pbn">${esc(a.bank||a.prov||'')}</span>`}
-    <div class="pub-pn"><span class="mono">${esc(num)}</span>${cp(raw,ph?'Номер скопирован':'Номер счёта скопирован',ph?'Скопировать номер':'Скопировать счёт')}</div>
+    <div class="pub-pn"><span class="mono">${esc(num)}</span><button type="button" class="btn sm" data-pub-copy="${esc(cb.copy)}" data-pub-ok="${esc(cb.copied)}">${ic('copy','sm')}${esc(cb.t)}</button></div>
     ${ph?`<div class="pub-pb"><span class="hint">Перевод из</span>${rqBanksDict(a.banks).map(b=>`<span class="pill sm">${esc(b)}</span>`).join('')}${PGT('pay','Банки и кошельки')?tipI(PGT('pay','Банки и кошельки')):''}</div>`:''}
-    ${a.bank&&a.bik?`<div class="pub-pk"><span class="hint">БИК</span><span class="mono">${esc(a.bik)}</span>${cp(a.bik,'БИК скопирован','Скопировать БИК')}</div>`:''}
+    ${a.bank&&a.bik?`<div class="pub-pk"><span class="hint">БИК</span><span class="mono">${esc(a.bik)}</span></div>`:''}
     ${a.name?`<div class="pub-pk"><span class="hint">Получатель</span><b>${esc(a.name)}</b></div>`:''}
-    ${PGT('pay',title)?`<p class="pub-what">${esc(PGT('pay',title))}</p>`:''}</div>`}
+    ${PGT('pay',title)?`<p class="pub-what">${esc(PGT('pay',title))}</p>`:''}
+    ${o.paid?`<div class="pub-paid">${w?`<span class="pill sm blue">${ic('hourglass')}Ожидает подтверждения</span><span class="hint">вы сообщили об оплате ${fmtDT(w.at)} — ${som(w.sum)}</span>`:''}<span class="grow"></span><button type="button" class="btn sm cta" data-pub-paid="${k}">${ic('check','sm')}Я оплатил</button></div>`:''}</div>`}
 // Раздел: заголовок (на телефоне — кнопка свернуть или раскрыть, в свёрнутом — итог раздела), строка «что это», содержимое
 function pubSec(k,icon,title,sum,body,{extra='',fold=true}={}){const f=fold&&!PUB.unf.has(k),what=PGT('secs',title);
   const head=`${ic(icon)}<span class="pub-tt">${esc(title)}</span>${sum?`<span class="pub-sum">${sum}</span>`:''}`;
@@ -202,8 +213,8 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
   if(T1.length)H.main=pubSec('main','home','Главное','',`<div class="pub-tiles">${T1.join('')}</div>`,{fold:false});
   // «Как оплатить» — налоги: основной реквизит ответственного бухгалтера или основной счёт организации для налогов, смотря что выбрано у контрагента
   if(has('pay')){const P=[];
-    if(tp){const h=c.paysTo==='emp'?EM[c.resp]:null,ws=h&&h.wallets||[],a=c.paysTo==='org'?orgMain('tax'):ws.find(w=>w.main)||ws[0];if(a)P.push(pubPay('tax','Налоги','wallet',a,c.paysTo==='org'))}
-    if(fee){const a=orgMain('fee');if(a)P.push(pubPay('fee','Обслуживание','coins',a,true))}
+    if(tp){const h=c.paysTo==='emp'?EM[c.resp]:null,ws=h&&h.wallets||[],a=c.paysTo==='org'?orgMain('tax'):ws.find(w=>w.main)||ws[0];if(a)P.push(pubPay('tax','Налоги','wallet',a,c.paysTo==='org',c,{paid:pgPaidOn(c)}))}
+    if(fee){const a=orgMain('fee');if(a)P.push(pubPay('fee','Обслуживание','coins',a,true,c,{paid:pgPaidOn(c)}))}
     if(P.length)H.pay=pubSec('pay','wallet','Как оплатить','',`<div class="pub-pays">${P.join('')}</div>`,{fold:false})}
   H.acc=pubSec('acc','user','Ваш бухгалтер',e?esc(e.fio):'',e?`<div class="pub-person"><b>${esc(e.fio)}</b><span class="hint">${esc(role(e))}</span>${e.phone&&e.phone.digits?`<span class="mono">${esc(fmtPhone(e.phone))}</span>`:''}</div><div class="row">${tel(e.phone)}</div>`:`<span class="faint">Бухгалтер пока не назначен. Позвоните в ${esc(ORG.name)}${ORG.phone&&ORG.phone.digits?`: <a class="mono" href="tel:+${ORG.phone.digits}">${esc(fmtPhone(ORG.phone))}</a>`:''}</span>`);
   // «Отчёты» — плитки по видам отчётов (или группы по месяцам срока), плашки — фильтры
@@ -215,11 +226,12 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
         <div class="pub-r2"><span class="${lt?'red strong':''}">${lt?ic('alert','sm'):''}срок ${fmtD(r.due)}</span>${st==='Сдан'&&r.subDate?`<span>сдан ${fmtD(r.subDate)}</span>`:''}${t.sum?`<span>${r.sum!=null?`к уплате <b class="tnum">${pubM(r.sum)}</b>`:'<span class="faint">сумма ещё не рассчитана</span>'}</span>${tp&&r.sum>0?pubTp(pill(r.payStatus,PST),PGT('taxPay',r.payStatus)):''}`:''}</div>
         ${rf(r).length?`<div class="pub-files">${rf(r).map(n=>`<a href="#" class="pub-file" data-pub-file="${esc(n)}">${ic('download','sm')}${esc(n)}</a>`).join('')}</div>`:''}</div>`};
     let list;
-    // «По срокам» — группы по месяцу срока сдачи; «По месяцам» — по месяцу, за который отчёт (правило rmYm, общее с карточкой контрагента и сообщением «К оплате»): в шапке группы — сколько налогов к уплате за месяц
+    // «По срокам» — группы по месяцу срока сдачи; «По месяцам» — по месяцу, за который отчёт (правило rmYm, общее с карточкой контрагента и сообщением «К оплате»): в шапке группы —
+// «к оплате», «оплачено», «осталось» и пометка оплаты месяца, у месяца с остатком — «Перечислить» (блок 6, пункт 3, cp-paid.js; без «Учёта оплаты налогов» — только «к оплате»)
     if(PUB.mode==='due'||PUB.mode==='month'){const bm=PUB.mode==='month',gk=bm?rmYm:r=>ym(r.due),now=bm?addMonths(ym(TODAY),-1):ym(TODAY);
       const ms=[...new Set(vis.map(gk))].sort(),op=PUB.rm||new Set([ms.find(m=>m>=now)||ms[ms.length-1]]);
-      list=ms.map(m=>{const rs=vis.filter(r=>gk(r)===m),l=rs.filter(r=>fk(r)==='late').length,o=op.has(m),g=bm?rmGroup(m,rs.map(rmItem)):null;
-        return `<div class="pub-grp${o?' open':''}"><button type="button" class="pub-gh" data-pub-rm="${m}" aria-expanded="${o}"><span class="pub-rt1"><b>${esc(bm?rmTitle(m):ymLabel(m))}</b><span class="hint">${rs.length} ${plural(rs.length,'отчёт','отчёта','отчётов')}</span>${g&&g.sum>0?`<span class="hint pub-gsum">к уплате <b class="tnum">${pubM(g.sum)}</b>${tp&&g.left>0&&g.left<g.sum?`, осталось ${pubM(g.left)}`:tp&&g.left===0?', оплачено':''}</span>`:''}${l?`<span class="red strong">${ic('alert','sm')}${plural(l,'просрочен','просрочено','просрочено')} ${l}</span>`:''}<span class="grow"></span>${ic('down','sm')}</span></button><div class="pub-gb pub-list">${rs.map(r=>row(r,true)).join('')}${pubMore(rs.length)}</div></div>`}).join('')}
+      list=ms.map(m=>{const rs=vis.filter(r=>gk(r)===m),l=rs.filter(r=>fk(r)==='late').length,o=op.has(m),g=bm?rmGroup(m,rs.map(rmItem)):null,pp=bm&&tp?pgMonthPay(c,m):null;
+        return `<div class="pub-grp${o?' open':''}"><button type="button" class="pub-gh" data-pub-rm="${m}" aria-expanded="${o}"><span class="pub-rt1"><b>${esc(bm?rmTitle(m):ymLabel(m))}</b><span class="hint">${rs.length} ${plural(rs.length,'отчёт','отчёта','отчётов')}</span>${pp&&pp.sum>0?`<span class="hint pub-gsum">к оплате <b class="tnum">${pubM(pp.sum)}</b> · оплачено <b class="tnum">${pubM(pp.got)}</b> · осталось <b class="tnum">${pubM(pp.left)}</b></span>${pill(pp.st,PG_MPAY)}`:g&&g.sum>0?`<span class="hint pub-gsum">к оплате <b class="tnum">${pubM(g.sum)}</b></span>`:''}${l?`<span class="red strong">${ic('alert','sm')}${plural(l,'просрочен','просрочено','просрочено')} ${l}</span>`:''}<span class="grow"></span>${ic('down','sm')}</span></button><div class="pub-gb pub-list">${pp&&pp.left>0&&pgSendOn(c)?`<div class="pub-gpay"><span>Осталось оплатить <b class="tnum">${som(pp.left)}</b></span><span class="grow"></span><button type="button" class="btn sm cta" data-pub-send="${m}">${ic('send','sm')}Перечислить</button></div>`:''}${rs.map(r=>row(r,true)).join('')}${pubMore(rs.length)}</div></div>`}).join('')}
     else{const soon=addDays(TODAY,30),rk=id=>{const rs=yr.filter(r=>r.t===id);return rs.some(r=>fk(r)==='late')?0:rs.some(r=>fk(r)==='next'&&r.due<=soon)?1:2};
       const ts=[...new Set(vis.map(r=>r.t))].sort((a,b)=>rk(a)-rk(b)||RT.indexOf(T[a])-RT.indexOf(T[b]));
       list=`<div class="pub-list pub-rts">${ts.map(id=>{const t=T[id],rs=vis.filter(r=>r.t===id),ty=yr.filter(r=>r.t===id),n=ty.filter(isSub).length,l=ty.filter(r=>fk(r)==='late').length,nx=ty.find(r=>fk(r)==='next'),o=PUB.rt.has(id),nt=pubNote(t);
@@ -248,7 +260,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
   if(fee){const ct=curTariff(c),ms=feeMonths(c).filter(m=>feeCharge(c,m)>0||c.feePaid[m]).reverse(),till=pubFeeTill(c);
     H.fee=pubSec('fee','coins','Оплата за обслуживание',c.feeDebt>0?`долг ${som(c.feeDebt)}`:till?`оплачено по ${ymLabel(till).toLowerCase()}`:'',
       `<div class="kv"><div><span class="k">Текущая ставка${PGT('fee','Текущая ставка')?tipI(PGT('fee','Текущая ставка')):''}</span><span class="v tnum">${ct?`${som(ct.amount)} ${ct.per==='Y'?'в год':'в месяц'}<div class="hint">оплата до ${c.feeDay}-го числа</div>`:'—'}</span></div><div><span class="k">Долг${PGT('fee','Долг')?tipI(PGT('fee','Долг')):''}</span><span class="v tnum ${c.feeDebt?'red strong':''}">${som(c.feeDebt)}</span></div></div>
-      ${ms.length?`<div class="pub-list">${ms.map(m=>{const ch=feeCharge(c,m),p=feeGot(c,m),stx=p>=ch?'Оплачено':p>0?'Оплачено частично':'Не оплачено';return `<div class="pub-row"><div class="pub-r1"><span>${esc(ymLabel(m))}</span><span class="grow"></span>${pubTp(pill(stx,PST),PGT('fee',stx))}</div><div class="pub-r2"><span>начислено <b class="tnum">${som(ch)}</b></span><span>оплачено <b class="tnum">${som(p)}</b></span></div></div>`}).join('')}${pubMore(ms.length)}</div>`:''}
+      ${ms.length?`<div class="pub-list">${ms.map(m=>{const ch=feeCharge(c,m),p=feeGot(c,m),stx=p>=ch?'Оплачено':pgClaimWait(c,'fee',m)?'Ожидает подтверждения':p>0?'Оплачено частично':'Не оплачено';return `<div class="pub-row"><div class="pub-r1"><span>${esc(ymLabel(m))}</span><span class="grow"></span>${pubTp(pill(stx,{...PST,'Ожидает подтверждения':PG_MPAY['Ожидает подтверждения']}),PGT('fee',stx))}</div><div class="pub-r2"><span>начислено <b class="tnum">${som(ch)}</b></span><span>оплачено <b class="tnum">${som(p)}</b></span></div></div>`}).join('')}${pubMore(ms.length)}</div>`:''}
       ${H.pay&&H.pay.includes('data-pay="fee"')?`<button type="button" class="linkbtn" data-pub-go="pay">${ic('wallet','sm')}Реквизиты для оплаты — в разделе «Как оплатить»</button>`:''}`)}
   // «Показатели» — плитка на показатель: итог за год крупно и мини-график, значения по месяцам раскрываются по нажатию
   if(has('kpi')){const inds=IND.filter(i=>!i.archived&&kOn(i,c)).sort((a,b)=>(a.order||0)-(b.order||0));const ys=[...new Set([cy,...IVALS.filter(v=>v.cp===c.id).map(v=>v.m.slice(0,4))])].sort().reverse(),y=ys.includes(PUB.ky)?PUB.ky:cy;

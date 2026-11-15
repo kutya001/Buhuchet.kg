@@ -272,7 +272,7 @@ test.describe('Админка: справочники платформы — р�
       );
     } finally {
       const now = await all();
-      await page.request.put(`${P}/templates`, {
+      const res = await page.request.put(`${P}/templates`, {
         headers: { origin },
         data: {
           items: now.map((x) => ({
@@ -282,6 +282,8 @@ test.describe('Админка: справочники платформы — р�
           })),
         },
       });
+      // Возврат общей записи не должен молча не пройти: иначе следующие тесты идут на чужом тексте.
+      expect(res.ok()).toBe(true);
     }
   });
 });
