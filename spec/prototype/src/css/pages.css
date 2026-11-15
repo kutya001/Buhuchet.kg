@@ -125,7 +125,7 @@ img.pub-logo{background:none;border:1px solid var(--border)}
 .pub-sb{display:flex;flex-direction:column;gap:10px;min-width:0}
 .pub-what{margin:-2px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
 .pub-s h4{margin:6px 0 0;font-size:13px}
-.pub-flash{animation:pub-flash 1.4s}
+.pub-flash{animation:pub-flash 2s}
 @keyframes pub-flash{0%{box-shadow:0 0 0 3px var(--b-blue)}100%{box-shadow:0 0 0 3px transparent}}
 /* «Главное» — плитки-итоги с крупными цифрами */
 .pub-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}

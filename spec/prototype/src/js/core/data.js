@@ -436,6 +436,8 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
   // Telegram заявителя (v113, доработки 14.11.2026, блок 1): ответы бота заявителю, «Организация создана» и ссылка, чтобы задать пароль
   if(!db.meta.tgL1){db.meta.tgL1=1;const a=db.ref.messageTemplates,n=db.ref.templateNotes,rm=r.messageTemplates||{},rn=r.templateNotes||{},ks=['tgLeadGot','tgLeadLinkBad','tgLeadNo','tgLeadDone','tgSetPassNew','tgBtnSetPass'];
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
+  // v120 (поток К, доработки 15.11.2026): подсказки и обучение на странице контрагента — тексты в справочнике текстов элементов экрана kbUi.cpHelp
+  if(!db.meta.cpH1){db.meta.cpH1=1;const u=db.ref&&db.ref.kbUi,ru=r.kbUi;if(u&&ru&&ru.cpHelp&&!u.cpHelp)u.cpHelp=structuredClone(ru.cpHelp)}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

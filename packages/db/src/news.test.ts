@@ -413,7 +413,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // (регистрация по документам, п. И-9), v115 («К оплате» по дням, файлы и чеки через бота, п. К-11),
     // v116 («Я оплатил», оплата по месяцам и код на странице контрагента, п. К-14), v117 (тексты
     // лендинга), v118 (проверка сообщений бота, п. Т-13) и v119 (принятый чек в окне денег, п. К-14)
-    // — да.
+    // — да; v120 (подсказки и обучение на странице контрагента, п. К-15) — пока нет.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -422,12 +422,21 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v113')).toMatchObject({ release: '113' });
     expect(rows.find((r) => r.id === 'v114')).toMatchObject({ release: '114' });
     expect(rows.find((r) => r.id === 'v115')).toMatchObject({ release: '115', showOnLogin: true });
-    expect(rows.find((r) => r.id === 'v116')).toMatchObject({ release: '116', showOnLogin: true });
+    // Ссылка «Подробнее» «Версии 116» — на модуль «Контрагенты» (прототип v120, п. К-15).
+    expect(rows.find((r) => r.id === 'v116')).toMatchObject({
+      release: '116',
+      showOnLogin: true,
+      linkKind: 'mod',
+      linkId: 'cps',
+    });
     expect(rows.find((r) => r.id === 'v117')).toMatchObject({ release: '117', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v118')).toMatchObject({ release: '118' });
     expect(rows.find((r) => r.id === 'v119')).toMatchObject({ release: '119' });
+    expect(rows.find((r) => r.id === 'v120')).toBeUndefined();
     const source = refDB.news as { id: string; status: string }[];
-    // Черновики прототипа (сейчас «Версия 120: план») не наполняются.
+    // v120 не наполняется из-за NEWS_NOT_YET, а не потому, что её нет в refDB или она черновик.
+    expect(source.find((x) => x.id === 'v120')?.status).toBe('Опубликовано');
+    // Черновики прототипа (сейчас «Версия 121: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
     expect(drafts.length).toBeGreaterThan(0);
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
