@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { formatSom } from '../common/money';
 import { UI_TEXTS } from '../l10n/texts';
 import {
-  BOT_COPY_MAX,
   botKeyboard,
   botMessageProblem,
   botPlainText,
@@ -19,7 +18,8 @@ import {
   debtToggleRefusal,
   debtWeek,
 } from './telegram-debt';
-import { CP_TG_CLIENT_ACTIONS, CP_TG_NODEBT_ACTION } from './telegram-pay';
+import { CP_TG_CLIENT_ACTIONS, CP_TG_NODEBT_ACTION, CP_TG_REQ_ACTION } from './telegram-pay';
+import { parseCpReqArg } from './telegram-requisite';
 
 /*
  * Напоминание клиенту о долге (доработки 13.11.2026, задача К5; прототип v94 modules/cp-telegram.js:
@@ -32,8 +32,7 @@ const labels = {
   amount: 'Сумма, сом',
   short: 'Не хватает на налоги этого месяца',
   fee: 'Долг за обслуживание',
-  copyTax: 'Реквизиты для налогов',
-  copyFee: 'Реквизиты для обслуживания',
+  showRequisites: 'Показать реквизиты для перевода',
   noDebt: 'Не напоминать',
 };
 
@@ -114,17 +113,21 @@ describe('Команда «Напоминать»', () => {
   });
 });
 
-describe('Сообщение (прототип pgDebtMsg)', () => {
+describe('Сообщение (прототип v110 pgDebtMsg)', () => {
   const base = {
     contractor: 'ОсОО «Ала-Тоо Трейд»',
     debt: cpDebt({ fee: 500_000, short: 1_250_50 }),
-    taxRequisite: 'Счёт 1280016012345678, БИК 128001',
-    feeRequisite: 'Счёт 1090123456789012, БИК 109012',
+    requisites: { tax: true, fee: true },
     text: 'К оплате 6 250,50 сом. Пожалуйста, оплатите или напишите вашему бухгалтеру.',
     labels,
   };
+  const show = (arg: string) => ({
+    text: 'Показать реквизиты для перевода',
+    action: CP_TG_REQ_ACTION,
+    arg,
+  });
 
-  it('заголовок, контрагент, текст, таблица и кнопки — как в прототипе', () => {
+  it('заголовок, контрагент, текст, таблица; одна кнопка «Показать реквизиты для перевода» на оба вида долга и «Не напоминать»', () => {
     const m = debtBotMessage(base);
     expect(m.heading).toBe('Напоминание об оплате');
     expect(m.sub).toBe('ОсОО «Ала-Тоо Трейд»');
@@ -140,46 +143,41 @@ describe('Сообщение (прототип pgDebtMsg)', () => {
       },
     ]);
     expect(m.buttons).toEqual([
-      [{ text: 'Реквизиты для налогов', copy: base.taxRequisite }],
-      [{ text: 'Реквизиты для обслуживания', copy: base.feeRequisite }],
+      [show('tax-fee')],
       [{ text: 'Не напоминать', action: CP_TG_NODEBT_ACTION }],
     ]);
     expect(botMessageProblem(m)).toBeNull();
+    expect(findBotButton(m, CP_TG_REQ_ACTION, 'tax-fee')).not.toBeNull();
     expect(findBotButton(m, CP_TG_NODEBT_ACTION, null)).not.toBeNull();
-    expect(botKeyboard(m)).toHaveLength(3);
+    expect(botKeyboard(m)).toEqual([
+      [{ text: 'Показать реквизиты для перевода', data: 'cpReq:tax-fee' }],
+      [{ text: 'Не напоминать', data: 'cpNoDebt' }],
+    ]);
     expect(botPlainText(m)).toContain('Напоминание об оплате');
   });
 
-  it('только долг за обслуживание: строки и реквизита для налогов нет', () => {
-    const m = debtBotMessage({ ...base, debt: cpDebt({ fee: 500_000, short: 0 }) });
-    expect(m.tables?.[0]?.rows).toEqual([['Долг за обслуживание', formatSom(500_000)]]);
-    expect(m.buttons?.map((r) => r[0]?.text)).toEqual([
-      'Реквизиты для обслуживания',
-      'Не напоминать',
-    ]);
+  it('только долг за обслуживание — реквизиты только для обслуживания; только недостача — только для налогов', () => {
+    const fee = debtBotMessage({ ...base, debt: cpDebt({ fee: 500_000, short: 0 }) });
+    expect(fee.tables?.[0]?.rows).toEqual([['Долг за обслуживание', formatSom(500_000)]]);
+    expect(fee.buttons?.[0]).toEqual([show('fee')]);
+    const tax = debtBotMessage({ ...base, debt: cpDebt({ fee: 0, short: 100 }) });
+    expect(tax.tables?.[0]?.rows).toEqual([['Не хватает на налоги этого месяца', '1,00']]);
+    expect(tax.buttons?.[0]).toEqual([show('tax')]);
   });
 
-  it('только недостача на налоги: реквизита для обслуживания нет', () => {
-    const m = debtBotMessage({ ...base, debt: cpDebt({ fee: 0, short: 100 }) });
-    expect(m.tables?.[0]?.rows).toEqual([['Не хватает на налоги этого месяца', '1,00']]);
-    expect(m.buttons?.map((r) => r[0]?.text)).toEqual(['Реквизиты для налогов', 'Не напоминать']);
-  });
-
-  it('реквизита нет — кнопки копирования нет, «Не напоминать» остаётся', () => {
-    const m = debtBotMessage({ ...base, taxRequisite: null, feeRequisite: null });
+  it('реквизитов нет ни для одного вида — кнопки «Показать реквизиты» нет, «Не напоминать» остаётся', () => {
+    const m = debtBotMessage({ ...base, requisites: { tax: false, fee: false } });
     expect(m.buttons).toEqual([[{ text: 'Не напоминать', action: CP_TG_NODEBT_ACTION }]]);
-    expect(m.text).toBe(base.text);
+    expect(debtBotMessage({ ...base, requisites: { tax: false, fee: true } }).buttons?.[0]).toEqual(
+      [show('fee')],
+    );
   });
 
-  it('реквизит длиннее предела кнопки копирования — строкой в тексте', () => {
-    const long = 'Р'.repeat(BOT_COPY_MAX + 1);
-    const m = debtBotMessage({ ...base, taxRequisite: long });
-    expect(m.buttons?.map((r) => r[0]?.text)).toEqual([
-      'Реквизиты для обслуживания',
-      'Не напоминать',
-    ]);
-    expect(m.text).toBe(`${base.text}\nРеквизиты для налогов: ${long}`);
-    expect(botMessageProblem(m)).toBeNull();
+  it('`arg` кнопки разбирается обратно; неизвестное — ничего', () => {
+    expect(parseCpReqArg('tax-fee')).toEqual({ tax: true, fee: true });
+    expect(parseCpReqArg('fee')).toEqual({ tax: false, fee: true });
+    expect(parseCpReqArg('x')).toEqual({ tax: false, fee: false });
+    expect(parseCpReqArg(undefined)).toEqual({ tax: false, fee: false });
   });
 });
 
@@ -192,15 +190,19 @@ describe('Тексты бота и коды действий', () => {
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgCpNoDebtOk).toBe(
       'Напоминания о долге выключены. Чтобы включить снова, отправьте боту «Напоминать».',
     );
-    // Прежние кнопки реквизитов: из справочника убраны в v110, до перехода сообщений — текст по умолчанию.
-    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpReq).toBe('Скопировать реквизиты');
-    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpReqTax).toBe('Реквизиты для налогов');
-    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpReqFee).toBe('Реквизиты для обслуживания');
+    // Прототип v110: прежние кнопки реквизитов убраны, вместо них — кнопки по виду реквизита.
+    expect(TELEGRAM_TEMPLATE_DEFAULTS).not.toHaveProperty('tgBtnCpReq');
+    expect(TELEGRAM_TEMPLATE_DEFAULTS).not.toHaveProperty('tgBtnCpReqTax');
+    expect(TELEGRAM_TEMPLATE_DEFAULTS).not.toHaveProperty('tgBtnCpReqFee');
+    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpShowReq).toBe('Показать реквизиты для перевода');
+    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpCopyPhone).toBe('Скопировать номер телефона');
+    expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpCopyReq).toBe('Скопировать реквизиты для перевода');
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpOk).toBe('Подтвердить');
     expect(TELEGRAM_TEMPLATE_DEFAULTS.tgBtnCpNo).toBe('Отклонить');
   });
 
-  it('«Не напоминать» — действие клиента', () => {
+  it('«Не напоминать» и «Показать реквизиты для перевода» — действия клиента', () => {
     expect(CP_TG_CLIENT_ACTIONS).toContain(CP_TG_NODEBT_ACTION);
+    expect(CP_TG_CLIENT_ACTIONS).toContain(CP_TG_REQ_ACTION);
   });
 });

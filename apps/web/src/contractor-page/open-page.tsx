@@ -47,6 +47,7 @@ import {
   TipPill,
   usePageText,
 } from './page-parts';
+import { PageSentBlock } from '../files/page-sent';
 import { usePageFilesSection, usePageFileViewer, type OpenPageFile } from './page-files';
 import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-reports';
 import { PageTelegramBody, pageTelegramSum, type PageAddress } from './page-telegram';
@@ -907,10 +908,19 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   }
 
   // «Файлы» (решение заказчика 06.11.2026, прототип v74): на телефоне свёрнут, в заголовке — число файлов.
+  // «Отправить файл» и «Отправленные вами» — в начале раздела (доработки 14.11.2026, блок 2; прототип
+  // v112 `pubSentHtml`).
   if (filesSection) {
-    H.files = sec('files', 'folder', t('pub.sec.files'), filesSection.body, {
-      sum: filesSection.sum,
-    });
+    H.files = sec(
+      'files',
+      'folder',
+      t('pub.sec.files'),
+      <>
+        {page.sent ? <PageSentBlock sent={page.sent} address={address} /> : null}
+        {filesSection.body}
+      </>,
+      { sum: filesSection.sum },
+    );
   }
 
   // «Telegram» (доработки 13.11.2026, задача К3; прототип v92 pgTgPub): клиент подключает свой Telegram
@@ -975,10 +985,13 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
           {col(['pay', 'acc', 'tg', 'money', 'fee', 'contacts'])}
         </div>
       </div>
+      {/* Нижняя панель — под окнами (z-50), всплывающими окошками (z-[70]) и уведомлениями: в прототипе
+          на странице окна поднимаются над ней (pages.css: body.pub-on .cover{z-index:88}), иначе на
+          телефоне панель закрывает кнопки внизу окна («Отправить» в «Отправить файл»). */}
       {nav.length ? (
         <nav
           aria-label={t('pub.nav.label')}
-          className="fixed inset-x-0 bottom-0 z-[86] hidden border-t border-line bg-raised px-1 pt-0.5 pb-[calc(2px+env(safe-area-inset-bottom,0px))] max-md:flex"
+          className="fixed inset-x-0 bottom-0 z-[45] hidden border-t border-line bg-raised px-1 pt-0.5 pb-[calc(2px+env(safe-area-inset-bottom,0px))] max-md:flex"
         >
           {nav.map((k) => (
             <button

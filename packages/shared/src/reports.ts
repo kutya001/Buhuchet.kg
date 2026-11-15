@@ -335,12 +335,15 @@ export const ContractorMonthPay = z.object({
   /**
    * «Отправить в Telegram» (прототип v94 `rmPaySendWhy`): null — кнопки нет (выключены «Напоминания в
    * Telegram» или «Страница контрагента по ссылке»); `refusal` — что мешает отправке (ключ словаря
-   * `err.<код>`), `recipients` — сколько Telegram подключено у контрагента.
+   * `err.<код>`), `recipients` — сколько Telegram подключено у контрагента, `params` — подстановки
+   * текста отказа «нет реквизитов для перевода» (контрагент и ответственный; доработки 14.11.2026,
+   * блок 4), у других отказов — null.
    */
   send: z
     .object({
       refusal: z.enum([...MONTH_PAY_SEND_REFUSALS, 'month_pay_partial']).nullable(),
       recipients: Count,
+      params: z.object({ contractor: z.string(), employee: z.string() }).nullable(),
     })
     .nullable(),
 });

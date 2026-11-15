@@ -49,6 +49,7 @@ describe('/api/cron/tick без базы', () => {
         'contractors.sync-service-status',
         'reports.create-due',
         'files.cleanup-pending',
+        'files.sent-purge',
       ]),
     );
   });

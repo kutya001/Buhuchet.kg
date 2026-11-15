@@ -68,6 +68,13 @@ describe('история учётной политики словами', () => 
     expect(text([{ field: 'cpTgDebt', from: true, to: false }])).toBe(
       'Напоминать контрагентам о долге: выключено',
     );
+    // «Контрагент может отправлять файлы» (доработки 14.11.2026, блок 2; прототип v112 `pol-cpup`).
+    expect(text([{ field: 'cpFilesUpload', from: true, to: false }])).toBe(
+      'Контрагент может отправлять файлы: выключено',
+    );
+    expect(text([{ field: 'cpFilesUpload', from: false, to: true }])).toBe(
+      'Контрагент может отправлять файлы: включено',
+    );
     // Выключили подтверждение сдачи — сколько ждущих отчётов подтверждено (прототип repConfSet).
     expect(
       text([

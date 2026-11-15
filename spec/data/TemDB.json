@@ -1162,5 +1162,6 @@
  "videoViews": [],
  "videoGuest": {},
  "sessions": [],
- "bonusOps": []
+ "bonusOps": [],
+ "sentFiles": []
 }

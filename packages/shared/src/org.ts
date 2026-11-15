@@ -138,6 +138,8 @@ export const OrgPolicy = z.object({
   /** «Отправлять «К оплате» контрагентам»: бот сам пишет клиенту за 5 дней до срока оплаты. */
   cpTgPay: z.boolean(),
   cpTgDebt: z.boolean(),
+  /** «Контрагент может отправлять файлы» — для всех контрагентов. */
+  cpFilesUpload: z.boolean(),
   /**
    * «Час напоминаний», ЧЧ:ММ по Бишкеку: в этот час каждый день уходят напоминания о сроках, недельная
    * сводка (в свой день) и сводка дня в общий чат (блок «Telegram-уведомления», прототип v111).
@@ -186,6 +188,7 @@ export const UpdateOrgPolicyRequest = z.object({
   telegramActions: z.boolean().optional(),
   cpTgPay: z.boolean().optional(),
   cpTgDebt: z.boolean().optional(),
+  cpFilesUpload: z.boolean().optional(),
   digestTime: z
     .string()
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/)

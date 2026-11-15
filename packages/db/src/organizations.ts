@@ -207,6 +207,7 @@ async function insertOrganization(
     telegramActions: policy.telegramActions,
     cpTgPay: policy.cpTgPay,
     cpTgDebt: policy.cpTgDebt,
+    cpFilesUpload: policy.cpFilesUpload,
     digestTime: policy.digestTime,
     timezone: policy.timezone,
     confirmWaitDays: policy.confirmWaitDays,

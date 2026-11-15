@@ -20,6 +20,7 @@ import { FileEditDialog } from '../files/file-edit-dialog';
 import { FileWindow } from '../files/file-window';
 import { fileKindText, filePageText } from '../files/file-columns';
 import { fileSizeText, uploadFile, useFilePageToggle, useFilesRefresh } from '../files/files-data';
+import { ContractorSentBox } from '../files/sent-files';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 
@@ -140,6 +141,8 @@ export function ContractorFilesTab({
   const editFile = data.items.find((f) => f.id === editId) ?? null;
   return (
     <div className="flex flex-col gap-3" data-cp-files="">
+      {/* Прототип v112 `sntBox`: «Отправленные файлы» — над документами, только при «Странице контрагента». */}
+      {cppage ? <ContractorSentBox contractorId={contractorId} /> : null}
       {data.total === 0 ? (
         <EmptyState icon="clip" title={t('cp.files.empty')} text={t('cp.files.empty_text')}>
           {button}

@@ -58,6 +58,22 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
       name: typeof name === 'string' ? name : '',
     });
   }
+  // «Напомнить в Telegram» об оплате за обслуживание и «Оплатил» под ним (доработки 14.11.2026, блок 4,
+  // пункт 5; прототип v110 pgFeeSend, tgAct('cp-feepaid')): у сотрудника без права на плату записи нет.
+  const fee = entry.changes.find((c) => c.field === 'tgFee' || c.field === 'tgFeePaid');
+  if (fee && (entry.action === 'page_tg_pay' || entry.action === 'page_tg_paid')) {
+    const p = (fee.to ?? {}) as Record<string, unknown>;
+    const total = typeof p.total === 'number' ? formatSomWithUnit(p.total) : '';
+    return fee.field === 'tgFee'
+      ? t('cppage.hist.page_tg_fee', {
+          total,
+          n: typeof p.recipients === 'number' ? p.recipients : 0,
+        })
+      : t('cppage.hist.page_tg_fee_paid', {
+          total,
+          name: typeof p.name === 'string' ? p.name : '',
+        });
+  }
   // «К оплате» клиенту в Telegram (задача К4; прототип v94 pgPaySend, tgAct('cp-paid'), pgTgAsk).
   if (entry.action === 'page_tg_pay' || entry.action === 'page_tg_paid') {
     const field = entry.action === 'page_tg_pay' ? 'tgPay' : 'tgPaid';
@@ -92,6 +108,13 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
   // «Напоминать о долге в Telegram» у контрагента (задача К5; прототип pgTgBoxClick, `debt`).
   const debt = entry.changes.find((c) => c.field === 'tgDebtOff');
   if (debt) return t(debt.to === true ? 'cppage.hist.debt_off' : 'cppage.hist.debt_on');
+  // «Контрагент может отправлять файлы» у контрагента (доработки 14.11.2026, блок 2; прототип v112 `data-pg-up`).
+  const upload = entry.changes.find((c) => c.field === 'filesUpload');
+  if (upload) {
+    return t('files.sent.hist.upload', {
+      state: t(upload.to === true ? 'org.history.on' : 'org.history.off'),
+    });
+  }
   const change = entry.changes.find((c) => c.field === 'hiddenSections');
   if (!change) return '';
   const before = sectionsOf(change.from);

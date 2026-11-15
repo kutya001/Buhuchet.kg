@@ -12,7 +12,9 @@ type KbMe = {
 };
 
 async function kbMe(api: APIRequestContext) {
-  const res = await api.get('/api/kb/me');
+  // Чтение — повтор безопасен: после паузы ~5 с сайт закрывает простаивающее соединение, и запрос в
+  // него обрывается «socket hang up» (docs/typical-mistakes.md № 26).
+  const res = await api.get('/api/kb/me', { maxRetries: 2 });
   expect(res.status(), await res.text()).toBe(200);
   return (await res.json()) as KbMe;
 }

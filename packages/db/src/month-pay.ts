@@ -1,8 +1,10 @@
 import {
   localPhoneText,
   mainTaxRequisite,
+  orgMainAccount,
   requisiteText,
   type PaysTo,
+  type TransferRequisite,
   type Translate,
   type Tyiyn,
   type YearMonth,
@@ -11,9 +13,10 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Tx } from './client';
 import { bankNamesOf } from './fees';
 import { writeHistory } from './history';
-import { listEmployeeWallets, listOrgAccounts } from './money';
-import { auditLog } from './schema';
+import { listEmployeeWallets, listOrgAccounts, type RequisiteFields } from './money';
+import { auditLog, employees } from './schema';
 import { phoneCodeList } from './staff';
+import { contextOrgName } from './telegram-reminders';
 
 /*
  * «К оплате клиенту» за месяц (доработки 13.11.2026, задача К4; прототип v94 modules/cp-telegram.js:
@@ -58,6 +61,82 @@ export async function contractorTaxRequisiteText(
     o.paysTo === 'org' ? 'org' : 'employee',
     t,
   );
+}
+
+/** Реквизит для перевода в сообщении клиенту и чей он: название организации или ФИО сотрудника полностью. */
+export interface TransferOf {
+  requisite: TransferRequisite;
+  ownerName: string;
+}
+
+/** Реквизит в виде для сообщения клиенту (`transferLines` домена): названия банков, номер по маске. */
+async function transferOf(
+  tx: Tx,
+  a: Pick<
+    RequisiteFields,
+    'kind' | 'bankCode' | 'accountNo' | 'phone' | 'phoneBanks' | 'holderName'
+  > & {
+    bik?: string | null;
+  },
+  owner: TransferRequisite['owner'],
+): Promise<TransferRequisite> {
+  const [codes, names] = await Promise.all([
+    phoneCodeList(tx),
+    bankNamesOf(tx, a.kind === 'phone' ? a.phoneBanks : a.bankCode ? [a.bankCode] : []),
+  ]);
+  return {
+    owner,
+    kind: a.kind,
+    phoneText: a.phone ? localPhoneText(a.phone, codes) : '',
+    bankNames:
+      a.kind === 'phone'
+        ? a.phoneBanks.map((c) => names.get(c) ?? c)
+        : a.bankCode
+          ? [names.get(a.bankCode) ?? a.bankCode]
+          : [],
+    accountNo: a.accountNo,
+    bik: a.bik ?? null,
+    holderName: a.holderName,
+  };
+}
+
+/**
+ * Реквизит для налогов контрагента для сообщения в Telegram (доработки 14.11.2026, блок 4; прототип v110
+ * `pgTaxAcc`, `pgRqWho`): по полю «Деньги на налоги переводит» — основной счёт организации для налогов
+ * («организации <название>») или основной реквизит ответственного, без отметки — первый («сотрудника
+ * <ФИО полностью>»). Тот же реквизит, что в «Как оплатить» страницы и `contractorTaxRequisiteText`;
+ * показать ли его клиенту, решает вызывающий. null — реквизита нет.
+ */
+export async function contractorTaxTransfer(
+  tx: Tx,
+  o: { paysTo: PaysTo; responsibleId: string | null },
+): Promise<TransferOf | null> {
+  if (o.paysTo === 'org') {
+    const a = mainTaxRequisite('org', await listOrgAccounts(tx), []);
+    if (!a) return null;
+    return {
+      requisite: await transferOf(tx, a, 'org'),
+      ownerName: (await contextOrgName(tx)) ?? '',
+    };
+  }
+  if (!o.responsibleId) return null;
+  const w = mainTaxRequisite('emp', [], await listEmployeeWallets(tx, o.responsibleId));
+  if (!w) return null;
+  const [emp] = await tx
+    .select({ fullName: employees.fullName })
+    .from(employees)
+    .where(eq(employees.id, o.responsibleId));
+  return { requisite: await transferOf(tx, w, 'employee'), ownerName: emp?.fullName ?? '' };
+}
+
+/**
+ * Реквизит для обслуживания (прототип v110 `pgFeeAcc`): основной счёт организации для обслуживания —
+ * «организации <название>»; null — счетов для обслуживания нет.
+ */
+export async function feeTransfer(tx: Tx): Promise<TransferOf | null> {
+  const a = orgMainAccount(await listOrgAccounts(tx), 'fee');
+  if (!a) return null;
+  return { requisite: await transferOf(tx, a, 'org'), ownerName: (await contextOrgName(tx)) ?? '' };
 }
 
 /** Сколько минут повтор того же «Скопировать для клиента» не пишется в историю второй раз. */

@@ -264,7 +264,7 @@ export interface Point {
  */
 export async function finger(page: Page) {
   const cdp = await page.context().newCDPSession(page);
-  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd', p?: Point) =>
+  const send = (type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel', p?: Point) =>
     cdp.send('Input.dispatchTouchEvent', { type, touchPoints: p ? [p] : [] });
   return {
     async drag(from: Point, to: Point, holding?: () => Promise<void>) {
@@ -281,11 +281,15 @@ export async function finger(page: Page) {
       await holding?.();
       await send('touchEnd');
     },
-    /** Долгое нажатие: палец стоит на месте `ms` миллисекунд. */
+    /**
+     * Долгое нажатие: палец стоит на месте `ms` миллисекунд. Отпускается `touchCancel`: в headless
+     * Chromium жеста долгого нажатия нет, и `touchEnd` дал бы click в точке касания — по пункту меню,
+     * открытого под пальцем (docs/typical-mistakes.md № 32); на телефоне после долгого нажатия click нет.
+     */
     async hold(at: Point, ms = 700) {
       await send('touchStart', at);
       await page.waitForTimeout(ms);
-      await send('touchEnd');
+      await send('touchCancel');
     },
     flick: (from: Point, to: Point) =>
       page.evaluate(
@@ -368,6 +372,37 @@ export async function settledBox(locator: Locator) {
     })
     .toBe(true);
   return (await locator.boundingBox())!;
+}
+
+/**
+ * Элемент стоит на месте: `ms` мс без сдвига и без своих идущих анимаций и переходов (не дольше 5 с).
+ * Нужен перед нажатием по элементу, который переезжает CSS-переходом: нажатие по движущейся кнопке
+ * теряется молча (типовая ошибка № 34).
+ */
+export async function stillElement(locator: Locator, ms = 120) {
+  await locator.evaluate(
+    (el, still) =>
+      new Promise<void>((resolve, reject) => {
+        const start = performance.now();
+        let last = '';
+        let since = start;
+        const tick = () => {
+          const r = el.getBoundingClientRect();
+          const at = `${r.left},${r.top},${r.width},${r.height}`;
+          const moving = el.getAnimations().some((a) => a.playState === 'running');
+          const now = performance.now();
+          if (at !== last || moving) {
+            last = at;
+            since = now;
+          }
+          if (now - since >= still) resolve();
+          else if (now - start > 5_000) reject(new Error(`элемент не успокоился: ${at}`));
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    ms,
+  );
 }
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
