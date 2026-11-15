@@ -270,7 +270,15 @@ export async function storePageUploads(
   const problems: (StoredProblem | null)[] = [];
   const written: string[] = [];
   try {
-    problems.push(...(await Promise.all(rows.map((r, i) => checkedCopy(deps, r, checkKeys[i]!)))));
+    // Все копии — до конца, даже если одна упала: иначе уборка ниже пройдёт раньше, чем остальные
+    // положат свои проверочные копии, и они останутся в хранилище.
+    const checked = await Promise.allSettled(
+      rows.map((r, i) => checkedCopy(deps, r, checkKeys[i]!)),
+    );
+    for (const one of checked) {
+      if (one.status === 'rejected') throw one.reason;
+      problems.push(one.value);
+    }
     if (!problems.some((p) => p !== null)) {
       for (const [i, row] of rows.entries()) {
         if (!(await deps.storage.copy(checkKeys[i]!, row.storageKey))) {

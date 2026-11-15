@@ -1,15 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { createRoute, type RouteHandler } from '@hono/zod-openapi';
+import { createRoute, type RouteHandler, type z } from '@hono/zod-openapi';
 import {
   contractorPageOrg,
   contractorPageTarget,
   getContractorPage,
+  getSentFile,
   insertPagePayClaim,
   insertPendingSentFiles,
   loadEmployeeAccess,
   markSentFilesReady,
   pageContractorFacts,
   pendingSentFiles,
+  releaseRateLimit,
   sentUploadState,
   takeRateLimit,
   withOrgContext,
@@ -298,11 +300,24 @@ export const pagePaidCompleteRoute = createRoute({
       content: error,
     },
     409: {
-      description: 'Чек не дошёл до хранилища или контрагенту сейчас нельзя отправлять файлы',
+      description:
+        'Чек не дошёл до хранилища, этот чек уже отправляется или контрагенту сейчас нельзя отправлять файлы',
       content: error,
     },
+    429: { description: 'Слишком много попыток закончить этот чек', content: error },
   },
 });
+
+/**
+ * «Закончить» одного чека — по одному (`leaseSeconds`: пока чек кладётся в хранилище, второй такой же
+ * запрос — «уже отправляется»): второй не удалит положенный первым чек, если сам получит отказ.
+ */
+export const PAGE_PAID_COMPLETE_ONCE: RateLimit = {
+  kind: 'cp_paid_done',
+  max: 10,
+  windowSeconds: 3600,
+  leaseSeconds: 300,
+};
 
 /**
  * Закончить «Я оплатил»: чек этого браузера с тем же назначением и месяцем (комментарий чека совпадает
@@ -317,102 +332,124 @@ export function pagePaidCompleteHandler(
     const { slug, inn } = c.req.valid('param');
     const body = c.req.valid('json');
     const page = await openPage(deps, c, slug, inn);
-    const ctxDb = { orgId: page.orgId, userId: null };
-    const t = await translateOf(deps);
-    const today = bishkekDate(deps.clock.now());
-    const comment = sentFileNote(body.comment ?? '') || null;
-    const note = paidNote(t, body.purpose, body.month, comment);
-    const ownRow = (rows: SentFileRecord[]) => {
-      const row = rows[0];
-      // Чек начат не этим «Я оплатил» (другие назначение и месяц или обычная отправка) — его нет;
-      // сумму заново проверяет `checkPaid`.
-      if (!row || row.comment !== note)
-        return apiFail(404, 'not_found', 'Нет такого начатого чека');
-      return row;
-    };
-    const row = await withOrgContext(deps.db, ctxDb, async (tx) => {
-      const found = ownRow(await pendingSentFiles(tx, page.contractorId, [body.id]));
-      checkPaid(await paidContext(tx, { ...page, today, t }), {
-        ...body,
-        file: { name: found.name, size: found.sizeBytes },
-      });
-      return found;
-    });
-    const written = await storePageUploads(deps, [row]);
-    const what = (purpose: PayClaimPurpose, month: YearMonth | null) =>
-      month
-        ? t(`pub.paid.staff.${purpose}_month`, { month: monthLabel(month) })
-        : t(`pub.paid.staff.${purpose}`);
-    // Отказ после загрузки (страницу или раздел скрыли, месяц оплачен) — положенный чек удаляется.
-    const done = await withOrgContext(deps.db, ctxDb, async (tx) => {
-      // Галочку могли выключить, пока чек загружался: тогда сообщение не принимается.
-      const ctx = await paidContext(tx, { ...page, today, t });
-      if (!ctx?.upload) return null;
-      ownRow(await pendingSentFiles(tx, page.contractorId, [row.id]));
-      // Раздел и месяцы — заново: за время загрузки «Как оплатить» могли скрыть, месяц — оплатить.
-      checkPaid(ctx, { ...body, file: { name: row.name, size: row.sizeBytes } });
-      // Чек — «Новый»: в «Отправленных файлах» его видно с комментарием «Чек: …» (как в прототипе,
-      // одна запись истории — об оплате).
-      await markSentFilesReady(tx, [row.id]);
-      await insertPagePayClaim(tx, {
-        contractorId: page.contractorId,
-        purpose: body.purpose,
-        month: body.month,
-        amount: body.amount,
-        comment,
-        sentFileId: row.id,
-      });
-      await writeContractorPageHistory(tx, page.contractorId, 'page_paid', {
-        changes: [
-          {
-            field: body.purpose === 'tax' ? 'pagePaid' : 'pagePaidFee',
-            to: {
-              purpose: body.purpose,
-              month: body.month,
-              amount: body.amount,
-              file: row.name,
-              note: comment,
-            },
-          },
-        ],
-      });
-      return queueStaffNotice(
-        tx,
-        deps,
-        page.contractorId,
-        t('cppage.tg.staff.paid_heading'),
-        (contractor) =>
-          botText(
-            deps,
-            'tgCpPagePaidStaff',
-            {
-              контрагент: contractor,
-              что: what(body.purpose, body.month),
-              сумма: formatSomWithUnit(body.amount),
-            },
-            tx,
-          ),
-        // ОТКЛОНЕНИЕ: docs/deviations.md#К-10 — сумма платы за обслуживание только тому, кто её видит.
-        body.purpose === 'fee'
-          ? {
-              allowed: async (employeeId) =>
-                seesFee(await loadEmployeeAccess(tx, employeeId), {
-                  responsibleEmployeeId: ctx.responsibleEmployeeId,
-                }),
-            }
-          : {},
-      );
-    }).catch(async (e: unknown) => {
-      await removeObjects(deps, written);
-      throw e;
-    });
-    if (!done) {
-      await removeObjects(deps, written);
-      refuse(409, { code: 'sent_off' });
+    const lease = await takeRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, body.id);
+    if (!lease.ok) {
+      if (lease.reason === 'busy') apiFail(409, 'paid_busy', 'Этот чек уже отправляется');
+      apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     }
-    await flushEvents(deps, page.orgId, done);
-    return c.json({ ok: true as const }, 200);
+    try {
+      return await completePaid(deps, c, page, body);
+    } finally {
+      await releaseRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, body.id, lease.ticket);
+    }
   };
+}
+
+async function completePaid(
+  deps: ApiDeps,
+  c: Parameters<RouteHandler<typeof pagePaidCompleteRoute, AppEnv>>[0],
+  page: Awaited<ReturnType<typeof openPage>>,
+  body: z.infer<typeof PagePaidComplete>,
+) {
+  const ctxDb = { orgId: page.orgId, userId: null };
+  const t = await translateOf(deps);
+  const today = bishkekDate(deps.clock.now());
+  const comment = sentFileNote(body.comment ?? '') || null;
+  const note = paidNote(t, body.purpose, body.month, comment);
+  const ownRow = (rows: SentFileRecord[]) => {
+    const row = rows[0];
+    // Чек начат не этим «Я оплатил» (другие назначение и месяц или обычная отправка) — его нет;
+    // сумму заново проверяет `checkPaid`.
+    if (!row || row.comment !== note) return apiFail(404, 'not_found', 'Нет такого начатого чека');
+    return row;
+  };
+  const row = await withOrgContext(deps.db, ctxDb, async (tx) => {
+    const found = ownRow(await pendingSentFiles(tx, page.contractorId, [body.id]));
+    checkPaid(await paidContext(tx, { ...page, today, t }), {
+      ...body,
+      file: { name: found.name, size: found.sizeBytes },
+    });
+    return found;
+  });
+  const written = await storePageUploads(deps, [row]);
+  // Чек уже «Новый» (его закончил другой запрос, когда аренда истекла) — объект его, не удалять.
+  const dropWritten = async () => {
+    const now = await withOrgContext(deps.db, ctxDb, (tx) => getSentFile(tx, row.id));
+    if (now?.state !== 'ready') await removeObjects(deps, written);
+  };
+  const what = (purpose: PayClaimPurpose, month: YearMonth | null) =>
+    month
+      ? t(`pub.paid.staff.${purpose}_month`, { month: monthLabel(month) })
+      : t(`pub.paid.staff.${purpose}`);
+  // Отказ после загрузки (страницу или раздел скрыли, месяц оплачен) — положенный чек удаляется.
+  const done = await withOrgContext(deps.db, ctxDb, async (tx) => {
+    // Галочку могли выключить, пока чек загружался: тогда сообщение не принимается.
+    const ctx = await paidContext(tx, { ...page, today, t });
+    if (!ctx?.upload) return null;
+    ownRow(await pendingSentFiles(tx, page.contractorId, [row.id]));
+    // Раздел и месяцы — заново: за время загрузки «Как оплатить» могли скрыть, месяц — оплатить.
+    checkPaid(ctx, { ...body, file: { name: row.name, size: row.sizeBytes } });
+    // Чек — «Новый»: в «Отправленных файлах» его видно с комментарием «Чек: …» (как в прототипе,
+    // одна запись истории — об оплате).
+    await markSentFilesReady(tx, [row.id]);
+    await insertPagePayClaim(tx, {
+      contractorId: page.contractorId,
+      purpose: body.purpose,
+      month: body.month,
+      amount: body.amount,
+      comment,
+      sentFileId: row.id,
+    });
+    await writeContractorPageHistory(tx, page.contractorId, 'page_paid', {
+      changes: [
+        {
+          field: body.purpose === 'tax' ? 'pagePaid' : 'pagePaidFee',
+          to: {
+            purpose: body.purpose,
+            month: body.month,
+            amount: body.amount,
+            file: row.name,
+            note: comment,
+          },
+        },
+      ],
+    });
+    return queueStaffNotice(
+      tx,
+      deps,
+      page.contractorId,
+      t('cppage.tg.staff.paid_heading'),
+      (contractor) =>
+        botText(
+          deps,
+          'tgCpPagePaidStaff',
+          {
+            контрагент: contractor,
+            что: what(body.purpose, body.month),
+            сумма: formatSomWithUnit(body.amount),
+          },
+          tx,
+        ),
+      // ОТКЛОНЕНИЕ: docs/deviations.md#К-10 — сумма платы за обслуживание только тому, кто её видит.
+      body.purpose === 'fee'
+        ? {
+            allowed: async (employeeId) =>
+              seesFee(await loadEmployeeAccess(tx, employeeId), {
+                responsibleEmployeeId: ctx.responsibleEmployeeId,
+              }),
+          }
+        : {},
+    );
+  }).catch(async (e: unknown) => {
+    await dropWritten();
+    throw e;
+  });
+  if (!done) {
+    await dropWritten();
+    refuse(409, { code: 'sent_off' });
+  }
+  await flushEvents(deps, page.orgId, done);
+  return c.json({ ok: true as const }, 200);
 }
 
 /** «Забыли код?» с одного адреса за час — со всех страниц вместе. */

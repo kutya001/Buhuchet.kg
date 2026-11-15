@@ -585,6 +585,54 @@ describe.skipIf(!databaseAvailable())(
       expect((await paidStart(grantB, { purpose: 'tax', month, amount: 100 })).status).toBe(404);
     });
 
+    it('два одновременных «закончить» одного чека: второй — «уже отправляется», чек первого остаётся в хранилище', async () => {
+      const month = (await publicPage('org-a', INN_A, grantA)).reports!.months![0]!.month;
+      const o = { purpose: 'tax' as const, month, amount: 100_000 };
+      const res = await paidStart(grantA, o);
+      expect(res.status).toBe(201);
+      const [item] = PageSentTicket.parse(await res.json()).items;
+      const url = new URL(item!.upload.url);
+      await storage.put(url.host + url.pathname, PDF, {
+        contentType: item!.upload.headers['content-type']!,
+      });
+      const [row] = await f.t.admin.db
+        .select({ key: schema.contractorSentFiles.storageKey })
+        .from(schema.contractorSentFiles)
+        .where(eq(schema.contractorSentFiles.id, item!.id));
+      const complete = () =>
+        pagePost(`/api/page/org-a/${INN_A}/paid/complete`, grantA, { ...o, id: item!.id });
+      // Первый запрос держим перед тем, как он положит проверенный чек под ключ файла.
+      const copy = storage.copy;
+      let release = () => {};
+      const gate = new Promise<void>((r) => (release = r));
+      let reached = () => {};
+      const atGate = new Promise<void>((r) => (reached = r));
+      storage.copy = async (from, to) => {
+        if (to === row!.key) {
+          reached();
+          await gate;
+        }
+        return copy(from, to);
+      };
+      try {
+        const first = complete();
+        await atGate;
+        const second = await complete();
+        expect(second.status).toBe(409);
+        expect((await failure(second)).code).toBe('paid_busy');
+        release();
+        expect((await first).status).toBe(200);
+      } finally {
+        storage.copy = copy;
+        release();
+      }
+      expect(await storage.exists(row!.key)).toBe(true);
+      expect((await claims(cpA)).map((x) => x.sentFileId)).toEqual([item!.id]);
+      // Чек уже «Новый»: ещё одно «закончить» — «нет такого начатого чека», чек на месте.
+      expect((await complete()).status).toBe(404);
+      expect(await storage.exists(row!.key)).toBe(true);
+    });
+
     it('код запоминается в браузере на 1 день', async () => {
       const g = await grant(owner, cpA, INN_A, 'org-a');
       expect(g.raw.headers.get('set-cookie')).toMatch(/Max-Age=86400/);
