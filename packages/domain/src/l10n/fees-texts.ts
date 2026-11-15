@@ -149,6 +149,10 @@ export const FEE_TEXTS = {
   'fee.pay.sub_advance': { ru: '{text} · аванс {amount}', section: S },
   'fee.pay.amount': { ru: 'Сумма, сом', section: S },
   'fee.pay.amount_hint': { ru: 'Подставлен долг за обслуживание: {amount}', section: S },
+  'fee.pay.amount_hint_tg': {
+    ru: 'Подставлена сумма из сообщения в Telegram: {amount}',
+    section: S,
+  },
   'fee.pay.date': { ru: 'Дата', section: S },
   'fee.pay.to': { ru: 'Куда поступили деньги', section: S },
   'fee.pay.to_hint': {

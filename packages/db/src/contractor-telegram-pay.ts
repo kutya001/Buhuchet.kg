@@ -11,7 +11,7 @@ import {
   type Tyiyn,
   type YearMonth,
 } from '@buhuchet/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { writeContractorPageHistory } from './contractor-page';
 import { featureSet } from './org';
@@ -274,11 +274,12 @@ export async function refreshContractorTelegramMessage(
   return rows.length > 0;
 }
 
-/** Каким подключениям само «К оплате» за месяц уже записано (ушло или ждёт повтора). */
+/** Каким подключениям само «К оплате» за месяц в этот день уже записано (ушло или ждёт повтора). */
 export async function autoPayLinkIds(
   tx: Tx,
   contractorId: string,
   month: YearMonth,
+  day: string,
 ): Promise<Set<string>> {
   const rows = await tx
     .select({ linkId: contractorTelegramMessages.linkId })
@@ -289,6 +290,7 @@ export async function autoPayLinkIds(
         eq(contractorTelegramMessages.kind, 'pay'),
         eq(contractorTelegramMessages.auto, true),
         eq(contractorTelegramMessages.month, month),
+        eq(contractorTelegramMessages.day, day),
       ),
     );
   return new Set(rows.map((r) => r.linkId));
@@ -353,6 +355,126 @@ export async function contractorTelegramAskTarget(
     sql`select * from app.contractor_telegram_ask(${chatId}, ${replyTo})`,
   );
   return row ? targetOf(row) : null;
+}
+
+/**
+ * Открытая просьба «Пришлите чек» в чате клиента (доработки 14.11.2026, блок 4, пункт 4, этап 2): та, на
+ * которую он ответил (`replyTo`), а без ответа — последняя за день `day` (по Бишкеку). Вызывается без
+ * контекста организации; `null` — бот чека не ждёт; `linked: false` — ждал, но подключение больше не
+ * действует.
+ */
+export async function contractorTelegramReceiptTarget(
+  db: Db,
+  chatId: number,
+  replyTo: number | null,
+  day: IsoDate,
+): Promise<(ContractorTelegramTarget & { messageId: number }) | null> {
+  const [row] = await db.execute<Parameters<typeof targetOf>[0] & { message_id: number | string }>(
+    sql`select * from app.contractor_telegram_receipt(${chatId}, ${replyTo}, ${day})`,
+  );
+  return row ? { ...targetOf(row), messageId: Number(row.message_id) } : null;
+}
+
+/**
+ * Открытые просьбы «Пришлите чек» этого чата за день `day` в организации из контекста (RLS): что каждая
+ * ждёт — данные нажатой кнопки «Прислать чек». Без блокировки: только чтобы не открыть ту же просьбу
+ * второй раз.
+ */
+export async function openReceiptAsks(
+  tx: Tx,
+  chatId: number,
+  day: IsoDate,
+): Promise<{ id: string; linkId: string; arg: string | null }[]> {
+  const m = contractorTelegramMessages;
+  return tx
+    .select({
+      id: m.id,
+      linkId: m.linkId,
+      arg: sql<string | null>`${m.payload} -> 'ask' ->> 'arg'`,
+    })
+    .from(m)
+    .where(
+      and(
+        eq(m.chatId, chatId),
+        eq(m.kind, 'receipt'),
+        sql`${m.messageId} is not null`,
+        sql`${m.answeredAt} is null`,
+        sql`${m.payload} -> 'ask' ->> 'day' = ${day}`,
+        sql`coalesce(${m.payload} -> 'ask' ->> 'off', 'false') <> 'true'`,
+      ),
+    );
+}
+
+/**
+ * Вопрос «От какой компании?» отвечен (`q` — номер вопроса из `fileTo`): строки этого вопроса в
+ * организации из контекста (RLS) отмечаются отвеченными, а файл у Telegram, его имя и подпись из них
+ * стираются — файл, отправленный другой фирме, у этой не остаётся. Возвращает строки вопроса в порядке
+ * записи с названием контрагента — для кнопок вопроса после выбора.
+ */
+export async function closePendingClientFiles(
+  tx: Tx,
+  chatId: number,
+  q: string,
+): Promise<{ id: string; contractor: string; createdAt: Date }[]> {
+  const m = contractorTelegramMessages;
+  const rows = await tx
+    .update(m)
+    .set({
+      answeredAt: sql`coalesce(${m.answeredAt}, now())`,
+      payload: sql`${m.payload} - 'fileTo'`,
+    })
+    .where(
+      and(eq(m.chatId, chatId), eq(m.kind, 'file'), sql`${m.payload} -> 'fileTo' ->> 'q' = ${q}`),
+    )
+    .returning({ id: m.id, contractorId: m.contractorId, createdAt: m.createdAt });
+  if (!rows.length) return [];
+  const names = await tx
+    .select({ id: contractors.id, name: contractors.name })
+    .from(contractors)
+    .where(inArray(contractors.id, [...new Set(rows.map((r) => r.contractorId))]));
+  const nameOf = new Map(names.map((n) => [n.id, n.name]));
+  return rows
+    .map((r) => ({
+      id: r.id,
+      contractor: nameOf.get(r.contractorId) ?? '',
+      createdAt: r.createdAt,
+    }))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+}
+
+/**
+ * Файл без просьбы, который ждёт ответа «От какой компании?» (строка вида `file` этого чата в
+ * организации из контекста, RLS), под блокировкой до конца транзакции. `null` — такой строки нет.
+ */
+export async function lockPendingClientFile(
+  tx: Tx,
+  id: string,
+  chatId: number,
+): Promise<{
+  linkId: string;
+  contractorId: string;
+  payload: unknown;
+  answered: boolean;
+} | null> {
+  const m = contractorTelegramMessages;
+  const [row] = await tx
+    .select({
+      linkId: m.linkId,
+      contractorId: m.contractorId,
+      payload: m.payload,
+      answeredAt: m.answeredAt,
+    })
+    .from(m)
+    .where(and(eq(m.id, id), eq(m.chatId, chatId), eq(m.kind, 'file')))
+    .for('update');
+  return row
+    ? {
+        linkId: row.linkId,
+        contractorId: row.contractorId,
+        payload: row.payload,
+        answered: row.answeredAt !== null,
+      }
+    : null;
 }
 
 /** Сообщение клиенту на момент нажатия: под блокировкой строки до конца транзакции. */

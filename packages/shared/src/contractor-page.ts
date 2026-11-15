@@ -328,6 +328,12 @@ export const ContractorTelegram = z.object({
       refusal: z.enum(DEBT_TOGGLE_REFUSALS).nullable(),
       /** Долг сейчас, тыйыны; null — сотрудник сумм не видит. */
       sum: Tyiyn.nullable(),
+      /**
+       * Когда уходит напоминание (доработки 14.11.2026, блок 3; прототип v115 `pgDebtRow`): день недели
+       * (1 — понедельник … 7 — воскресенье) и время строки «Оплата за обслуживание».
+       */
+      weekDay: z.number().int().min(1).max(7),
+      at: z.string().regex(/^\d{2}:\d{2}$/),
       /** Версия записи страницы контрагента — для переключения. */
       version: RecordVersion,
     })

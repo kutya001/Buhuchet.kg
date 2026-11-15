@@ -1,10 +1,12 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+  botFile,
   botMessages,
   finger,
   hire,
   linkTelegram,
   pressStart,
+  sendToBot,
   settledBox,
   signIn,
   uniqueChat,
@@ -435,13 +437,15 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     });
   }
 
-  test('(доработки 13.11.2026, К4) «Отправить в Telegram»: клиент с подключённым Telegram получает «К оплате» с налогами месяца и кнопками; «Оплатил» и «Вопрос бухгалтеру» доходят до ответственного бухгалтера, его ответ на вопрос из Telegram — до клиента; всё пишется в историю контрагента', async ({
+  test('(доработки 13.11.2026, К4) «Отправить в Telegram»: клиент с подключённым Telegram получает «К оплате» с налогами месяца и кнопками; «Оплатил» и «Вопрос бухгалтеру» доходят до ответственного бухгалтера, его ответ на вопрос из Telegram — до клиента; всё пишется в историю контрагента; файл боту и чек после «Оплатил» — в «Отправленных файлах», «Принять» у чека открывает «Поступление от контрагента»', async ({
     page,
     playwright,
     baseURL,
     isMobile,
   }) => {
-    test.setTimeout(150_000);
+    // Около 20 шагов через экран и API («К оплате», «Оплатил», вопрос и ответ, история) и три шага бота
+    // этапа 2 (файл, чек, «Принять» у чека с окном денег): каждый ждёт ответа сервера или чата.
+    test.setTimeout(210_000);
     const origin = new URL(baseURL!).origin;
     // Ответственный — новый сотрудник с Telegram (демо-сотрудникам Telegram не привязывается).
     const staff = await playwright.request.newContext({ baseURL });
@@ -459,7 +463,13 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     await asOwner(page.request, baseURL);
     const word = uniqueWord('Телеоплата');
     const name = `ОсОО «${word}»`;
-    const cp = await newContractor(page.request, origin, { name, responsible: employee.id });
+    // Без ставки: «Оплата за обслуживание до …» (задача раз в 5 минут) не придёт в этот чат посреди
+    // теста — тест ждёт последним сообщением своё.
+    const cp = await newContractor(page.request, origin, {
+      name,
+      responsible: employee.id,
+      tariff: false,
+    });
     const report = (reportTypeCode: string) =>
       manualReport(page.request, origin, {
         contractorId: cp.id,
@@ -701,6 +711,88 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
         await page.request.get(`/api/contractors/${cp.id}/history`)
       ).json()) as { items: { action: string }[] };
       expect(history.items.filter((h) => h.action === 'page_tg_paid')).toHaveLength(1);
+    });
+
+    // Файлы и чек через бота (доработки 14.11.2026, блок 2, пункт 1 и блок 4, пункт 4; прототип v115
+    // `pgFileFromTg`, `pgRcptOffer`, `tgAct('cp-receipt')`, `pgRcptMoney`). Настоящий PDF по
+    // содержимому: сервер проверяет начало файла, а не расширение.
+    const pdf = '%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n';
+    const fileName = `акт-${word}.pdf`;
+    const receiptName = `чек-${word}.pdf`;
+
+    await test.step('(доработки 14.11.2026, блок 2, пункт 1) файл, присланный боту без просьбы, — в «Отправленные файлы» контрагента; клиенту — «Файл передан вашему бухгалтеру»', async () => {
+      const fileId = await botFile(page.request, { name: fileName, content: pdf });
+      await sendToBot(page.request, clientChat, { document: { fileId, name: fileName } });
+      await expect
+        .poll(async () => (await botMessages(page.request, clientChat)).at(-1) ?? '')
+        .toBe('Файл передан вашему бухгалтеру.');
+    });
+
+    await test.step('(доработки 14.11.2026, блок 4, пункт 4) после «Оплатил» — «Прислать чек»: бот просит чек ответом; PDF-чек — в «Отправленные файлы», клиенту — «Чек передан вашему бухгалтеру»', async () => {
+      const offer = (await chatMessages(page.request, clientChat)).find(
+        (m) =>
+          m.text === 'Если есть чек об оплате, пришлите его — фото или PDF. Это необязательно.',
+      );
+      expect(offer).toBeTruthy();
+      const button = (offer!.keyboard ?? []).flat().find((b) => b.text === 'Прислать чек');
+      expect(button?.callback_data).toMatch(/^cpReceipt:tax\./);
+      const pressed = await pressButton(
+        page.request,
+        clientChat,
+        offer!.messageId,
+        button!.callback_data!,
+      );
+      expect(pressed.status()).toBe(200);
+      await expect
+        .poll(async () => (await chatMessages(page.request, clientChat)).at(-1)?.text ?? '')
+        .toBe('Пришлите чек ответом на это сообщение: фото или PDF.');
+      const ask = (await chatMessages(page.request, clientChat)).at(-1)!;
+      const fileId = await botFile(page.request, { name: receiptName, content: pdf });
+      await sendToBot(page.request, clientChat, {
+        document: { fileId, name: receiptName },
+        replyTo: ask.messageId,
+      });
+      await expect
+        .poll(async () => (await botMessages(page.request, clientChat)).at(-1) ?? '')
+        .toBe('Чек передан вашему бухгалтеру.');
+      const after = (await chatMessages(page.request, clientChat)).find(
+        (m) => m.messageId === offer!.messageId,
+      )!;
+      expect((after.keyboard ?? []).flat().map((b) => b.text)).toContain('✓ Чек отправлен');
+    });
+
+    await test.step('(доработки 14.11.2026, блок 4, пункт 4) «Принять» у чека сразу открывает «Поступление от контрагента»: сумма «К оплате» разнесена по отчётам месяца', async () => {
+      await page.goto('/app/files/sent');
+      const grid = page.locator('[data-files-sent] [data-grid]');
+      await expect(grid).toBeVisible();
+      // Ответ поиска — до нажатия в строке (docs/typical-mistakes.md № 27).
+      const found = page.waitForResponse((r) => {
+        const url = new URL(r.url());
+        return url.pathname === '/api/files/sent' && url.searchParams.get('q') === word;
+      });
+      await search(page, isMobile, word);
+      expect((await found).status()).toBe(200);
+      await expect(grid.locator('[data-id]').filter({ hasText: fileName })).toContainText('Новый');
+      const line = grid.locator('[data-id]').filter({ hasText: receiptName });
+      await expect(line).toContainText('Новый');
+      await line.getByText(receiptName, { exact: true }).click();
+      await page
+        .getByRole('dialog', { name: receiptName })
+        .locator('[data-sent-window-accept]')
+        .click();
+      const receipt = page.getByRole('dialog', { name: 'Поступление от контрагента' });
+      await expect(receipt.locator('[data-receipt-list-note]')).toContainText(
+        'Деньги за сентябрь 2026 — по чеку из Telegram.',
+      );
+      await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/^4\s670,50$/);
+      await expect(receipt.locator(`[data-receipt-row="${nds}"]`)).toHaveValue(/^3\s800$/);
+      await expect(receipt.locator(`[data-receipt-row="${pat}"]`)).toHaveValue('870,50');
+      await receipt.getByRole('button', { name: 'Записать поступление' }).click();
+      await expect(receipt).toBeHidden();
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Поступление записано' }),
+      ).toBeVisible();
+      await expect(line).toContainText('Принят');
     });
   });
 });

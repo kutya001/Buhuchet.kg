@@ -1,4 +1,5 @@
 import {
+  CP_NOTICE_DAYS,
   FEATURES,
   isValidOrgInn,
   MENU_MODULE_IDS,
@@ -157,6 +158,16 @@ export const OrgPolicy = z.object({
   digestTime: z.string(),
   /** День недельной сводки: 1 — понедельник … 7 — воскресенье (по умолчанию понедельник). */
   weekDay: z.number().int(),
+  /**
+   * Строка «К оплате» (поток К, этап 2): галочки «за 5» … «за 1 день» до ближайшего срока оплаты месяца
+   * (от большего к меньшему, хотя бы одна) и время отправки «ЧЧ:ММ» по Бишкеку.
+   */
+  cpPayDays: z.array(z.number().int()),
+  cpPayAt: z.string(),
+  /** Строка «Оплата за обслуживание»: дни до дня оплаты, время (оба сообщения) и день долга (1–7). */
+  cpFeeDays: z.array(z.number().int()),
+  cpFeeAt: z.string(),
+  cpDebtWeekDay: z.number().int(),
   /** Роль по умолчанию для новых сотрудников; null — не выбрана. */
   defaultRoleId: Uuid.nullable(),
   /** Её название — для «Настроек» только для просмотра (список ролей видит тот, кто меняет). */
@@ -182,6 +193,16 @@ export type OrgRoleOptions = z.infer<typeof OrgRoleOptions>;
 export const OrgWaitingReports = z.object({ count: z.number().int().nonnegative() });
 export type OrgWaitingReports = z.infer<typeof OrgWaitingReports>;
 
+/** Время отправки «ЧЧ:ММ» (00:00–23:59). */
+const NoticeTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/** Галочки «за 5» … «за 1 день»: числа 1–5 без повторов, хотя бы одна. */
+const CpNoticeDays = z
+  .array(z.number().int().min(1).max(CP_NOTICE_DAYS.length))
+  .min(1)
+  .max(CP_NOTICE_DAYS.length)
+  .refine((days) => new Set(days).size === days.length);
+
 /** Сохранить учётную политику или настройки: только переданные поля; функции — только переданные. */
 export const UpdateOrgPolicyRequest = z.object({
   version: RecordVersion,
@@ -199,12 +220,15 @@ export const UpdateOrgPolicyRequest = z.object({
   cpTgPay: z.boolean().optional(),
   cpTgDebt: z.boolean().optional(),
   cpFilesUpload: z.boolean().optional(),
-  digestTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
-    .optional(),
+  digestTime: NoticeTime.optional(),
   /** День недельной сводки, 1–7 (понедельник … воскресенье). */
   weekDay: z.number().int().min(1).max(7).optional(),
+  /** Галочки «за N дней» строки «К оплате»: 1–5, хотя бы одна. Меняет только владелец организации. */
+  cpPayDays: CpNoticeDays.optional(),
+  cpPayAt: NoticeTime.optional(),
+  cpFeeDays: CpNoticeDays.optional(),
+  cpFeeAt: NoticeTime.optional(),
+  cpDebtWeekDay: z.number().int().min(1).max(7).optional(),
   defaultRoleId: Uuid.optional(),
 });
 export type UpdateOrgPolicyRequest = z.infer<typeof UpdateOrgPolicyRequest>;

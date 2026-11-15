@@ -4,7 +4,7 @@ import type { YearMonth } from '../common/months';
 import type { PaysTo } from '../money/requisites';
 import type { MonthPay, MonthPayLine } from '../reports/month-pay';
 import type { MonthPlanReport } from '../reports/month-plan';
-import type { BotButton, BotMessage } from '../telegram/bot-message';
+import { BOT_ASK_CANCEL, type BotButton, type BotMessage } from '../telegram/bot-message';
 import type { TransferBlock } from './telegram-requisite';
 
 /*
@@ -18,9 +18,12 @@ export const CP_PAY_DAYS = 5;
 
 /**
  * Виды сообщений клиенту, под которыми бот принимает нажатия и ответы; `fee` — «Оплата за обслуживание
- * до …» (доработки 14.11.2026, блок 3 и блок 4, пункт 5): само и ручное, одно на чат в день.
+ * до …» (доработки 14.11.2026, блок 3 и блок 4, пункт 5): само и ручное, одно на чат в день; `receipt` —
+ * «Хотите прислать чек?» после «Оплатил» и просьба «Пришлите чек» (блок 4, пункт 4, этап 2); `file` —
+ * файл без просьбы из чата нескольких контрагентов, который ждёт ответа «От какой компании?» (блок 2,
+ * пункт 1, этап 2): строка у каждого подключения чата, номера сообщения в чате у неё нет.
  */
-export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee'] as const;
+export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee', 'receipt', 'file'] as const;
 export type CpTgMessageKind = (typeof CP_TG_MESSAGE_KINDS)[number];
 
 /** Коды действий кнопок клиента (латиница, до 16 знаков — `botPressData`). */
@@ -33,11 +36,24 @@ export const CP_TG_NODEBT_ACTION = 'cpNoDebt';
  * прототип v110 `cp-req`; `telegram-requisite.ts`).
  */
 export const CP_TG_REQ_ACTION = 'cpReq';
+/**
+ * «Прислать чек» после «Оплатил» и под «Оплата за обслуживание до …» (доработки 14.11.2026, блок 4,
+ * пункт 4, этап 2; прототип v115 `tgAct('cp-receipt')`).
+ */
+export const CP_TG_RECEIPT_ACTION = 'cpReceipt';
+/**
+ * Кнопка «От какой компании?» под файлом без просьбы из чата нескольких контрагентов (блок 2, пункт 1,
+ * этап 2; прототип v115 `tgAct('cp-file-to')`): данные — номер подключения.
+ */
+export const CP_TG_FILE_TO_ACTION = 'cpFileTo';
 export const CP_TG_CLIENT_ACTIONS = [
   CP_TG_PAID_ACTION,
   CP_TG_ASK_ACTION,
   CP_TG_NODEBT_ACTION,
   CP_TG_REQ_ACTION,
+  CP_TG_RECEIPT_ACTION,
+  // «Отмена» под просьбой «Пришлите чек» (прототип tgAct('askCancel')).
+  BOT_ASK_CANCEL,
 ] as const;
 
 /**
@@ -146,8 +162,9 @@ export function cpTgQuestionForHistory(question: string): string {
 /**
  * Пора ли отправить «К оплате» самому (прототип: «приходит за 5 дней до ближайшего срока оплаты
  * месяца, если все суммы месяца указаны»): есть что платить, отчётов без суммы нет, до ближайшего
- * срока осталось не больше 5 дней и он не прошёл. Отправка — один раз на месяц и чат (ключ в базе),
- * поэтому пропущенный день догоняется, пока срок не прошёл.
+ * срока осталось не больше 5 дней и он не прошёл. В какие из этих дней оно уходит — отмеченные в строке
+ * «К оплате» (`cpNoticeDayDue`, этап 2 доработок 14.11.2026; docs/deviations.md п. К-11), одно на месяц,
+ * чат и день (ключ в базе).
  */
 export function monthPayAutoDue<R extends MonthPlanReport>(
   pay: Pick<MonthPay<R>, 'due' | 'noAmount' | 'total'>,

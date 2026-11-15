@@ -23,6 +23,7 @@ import {
   ContractorPage,
   ContractorTelegram,
   PublicPageTelegramLink,
+  SentFileAccepted,
 } from '@buhuchet/shared';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -272,6 +273,7 @@ describe.skipIf(!databaseAvailable())(
         );
     /** Начать тест с чистого листа: без сообщений клиентам, записей истории о них и счётчиков. */
     const wipe = async () => {
+      await f.t.admin.db.delete(schema.contractorPayClaims);
       await f.t.admin.db.delete(schema.contractorTelegramMessages);
       await f.t.admin.db.execute(
         sql`delete from audit_log where action in ('page_tg_pay', 'page_tg_paid', 'page_tg_question', 'page_tg_answer')`,
@@ -292,6 +294,16 @@ describe.skipIf(!databaseAvailable())(
       await seedAllPlatformDictionaries(f.t.admin.db);
       await features(f.a.orgId, ALL_ON);
       await features(f.b.orgId, ALL_ON);
+      // Само «К оплате» — в каждый день «за 5» … «за 1» до срока в 09:00 по Бишкеку: в это время
+      // стоят часы тестов (воскресенье 18.10.2026, срок оплаты — 20.10).
+      await f.t.admin.db.insert(schema.orgTelegramNotices).values(
+        [f.a.orgId, f.b.orgId].map((orgId) => ({
+          orgId,
+          code: 'cp_pay' as const,
+          days: [5, 4, 3, 2, 1],
+          atTime: '09:00',
+        })),
+      );
       // «Старший» видит всех контрагентов, но ни отчётов, ни права «Управлять страницей» у него нет.
       await f.t.admin.db
         .update(schema.roleScopes)
@@ -667,6 +679,106 @@ describe.skipIf(!databaseAvailable())(
       expect(again).toMatchObject({ text: text('tgActStale'), alert: true });
       expect(await history(cpA)).toHaveLength(2);
       expect(tg.sent).toHaveLength(1);
+    });
+
+    it('«Оплатил», когда клиент может отправлять файлы: бот предлагает прислать чек; чек — к сообщению «ждёт подтверждения» (п. 4 блока 4, этап 2)', async () => {
+      await features(f.a.orgId, { ...ALL_ON, files: true });
+      try {
+        await sent(owner, cpA);
+        const messageId = tg.messageIds[0]!;
+        tg.sent.length = 0;
+        tg.messageIds.length = 0;
+        expect(await press(paidData, CLIENT_1, messageId)).toMatchObject({
+          text: text('tgCpPaidOk'),
+        });
+        const [payRow] = (await messages(cpA)).filter(
+          (m) => m.kind === 'pay' && m.chatId === CLIENT_1,
+        );
+        // Предложение — клиенту, нажавшему «Оплатил»: в кнопке — номер оплаченного сообщения.
+        const receiptData = botPressData('cpReceipt', `tax.${payRow!.id}`);
+        expect(sentTo(CLIENT_1).map((m) => [m.text, m.options.keyboard])).toEqual([
+          [text('tgCpReceiptOffer'), [[{ text: text('tgBtnCpReceipt'), data: receiptData }]]],
+        ]);
+        const offerId = lastMessageId(CLIENT_1);
+        expect(await press(receiptData, CLIENT_1, offerId)).toMatchObject({ text: undefined });
+        expect(sentTo(CLIENT_1).at(-1)).toMatchObject({
+          text: text('tgCpReceiptAsk'),
+          options: { keyboard: [[{ text: text('tgBtnCancel'), data: 'askCancel' }]] },
+        });
+        const askId = lastMessageId(CLIENT_1);
+        tg.files.set('pay-receipt', new TextEncoder().encode('%PDF-1.7\nчек'));
+        const res = await sendToBot(
+          f.app,
+          telegramUpdate(null, CLIENT_1, {
+            replyTo: askId,
+            document: { fileId: 'pay-receipt', name: 'Чек.pdf', size: 12 },
+          }),
+        );
+        expect(res.status).toBe(200);
+        expect(sentTo(CLIENT_1).at(-1)!.text).toBe(text('tgCpReceiptOk'));
+        const [file] = await f.t.admin.db
+          .select()
+          .from(schema.contractorSentFiles)
+          .where(eq(schema.contractorSentFiles.contractorId, cpA));
+        expect(file).toMatchObject({
+          source: 'telegram',
+          name: 'Чек.pdf',
+          senderName: '@client_one',
+          tgChatId: CLIENT_1,
+          comment: 'Чек к «К оплате» за сентябрь 2026',
+          status: 'new',
+        });
+        // Чек стал чеком того же «Оплатил»: второго сообщения об оплате нет.
+        expect(
+          await f.t.admin.db
+            .select({
+              purpose: schema.contractorPayClaims.purpose,
+              month: schema.contractorPayClaims.month,
+              amount: schema.contractorPayClaims.amount,
+              sentFileId: schema.contractorPayClaims.sentFileId,
+              tgMessageId: schema.contractorPayClaims.tgMessageId,
+              status: schema.contractorPayClaims.status,
+            })
+            .from(schema.contractorPayClaims)
+            .where(eq(schema.contractorPayClaims.contractorId, cpA)),
+        ).toEqual([
+          {
+            purpose: 'tax',
+            month: SEP,
+            amount: TOTAL,
+            sentFileId: file!.id,
+            tgMessageId: payRow!.id,
+            status: 'wait',
+          },
+        ]);
+        // «Прислать чек» под предложением погасла с подписью, «Отмена» под просьбой — тоже.
+        expect(tg.edits.slice(-2)).toEqual([
+          {
+            chatId: CLIENT_1,
+            messageId: askId,
+            keyboard: [[{ text: text('tgBtnCancel'), data: 'off', disabled: true }]],
+          },
+          {
+            chatId: CLIENT_1,
+            messageId: offerId,
+            keyboard: [[{ text: '✓ Чек отправлен', data: 'off', disabled: true }]],
+          },
+        ]);
+        // «Принять» у чека — что оплачено: сразу «Принять деньги» за сентябрь с суммой сообщения.
+        const accepted = await call(owner, 'POST', `/api/files/sent/${file!.id}/accept`, {
+          version: file!.version,
+        });
+        expect(accepted.status, await accepted.clone().text()).toBe(200);
+        expect(SentFileAccepted.parse(await accepted.json()).pay).toEqual({
+          purpose: 'tax',
+          month: SEP,
+          amount: TOTAL,
+        });
+      } finally {
+        await f.t.admin.db.delete(schema.contractorPayClaims);
+        await f.t.admin.db.delete(schema.contractorSentFiles);
+        await features(f.a.orgId, ALL_ON);
+      }
     });
 
     it('нажатие сверяется с записью бота: чужой чат, подделанные данные, отключённый Telegram', async () => {
@@ -1170,7 +1282,7 @@ describe.skipIf(!databaseAvailable())(
       ]);
     });
 
-    it('само «К оплате» за 5 дней до срока: только при включённой настройке, один раз на месяц и чат', async () => {
+    it('само «К оплате» в отмеченный день до срока: только при включённой настройке, одно на месяц, чат и день', async () => {
       // Настройка выключена — ничего не уходит.
       await runJob();
       expect(tg.sent).toEqual([]);
@@ -1309,12 +1421,88 @@ describe.skipIf(!databaseAvailable())(
       }
     });
 
-    it('само «К оплате» уходит в 10:05 по Бишкеку', () => {
-      // Расписания задач читаются по времени Бишкека (UTC+6): 10:05 в Бишкеке — это 04:05 UTC.
+    it('задача «К оплате» идёт каждые 5 минут; организация — в запуск своего времени отправки', async () => {
+      // Расписания задач читаются по времени Бишкека (UTC+6).
       const schedule = parseCron(contractorPayJob.cron);
-      expect(schedule.matches(new Date('2026-10-18T04:05:00Z'))).toBe(true);
-      expect(schedule.matches(new Date('2026-10-18T10:05:00Z'))).toBe(false);
-      expect(schedule.matches(new Date('2026-10-17T22:05:00Z'))).toBe(false);
+      expect(schedule.matches(new Date('2026-10-18T03:00:00Z'))).toBe(true);
+      expect(schedule.matches(new Date('2026-10-18T03:05:00Z'))).toBe(true);
+      expect(schedule.matches(new Date('2026-10-18T03:07:00Z'))).toBe(false);
+      await autoPay(f.b.orgId, true);
+      try {
+        // 08:55 и 09:05 — не время организации Б (09:00): ничего не уходит.
+        for (const slot of ['2026-10-18T02:55:00Z', '2026-10-18T03:05:00Z']) {
+          await contractorPayJob.run(f.deps, new Date(slot));
+        }
+        expect(tg.sent).toEqual([]);
+        // Время отправки — 08:57: уходит в запуск 09:00 (минуты 08:56–09:00 — его).
+        await f.t.admin.db
+          .update(schema.orgTelegramNotices)
+          .set({ atTime: '08:57' })
+          .where(eq(schema.orgTelegramNotices.orgId, f.b.orgId));
+        await contractorPayJob.run(f.deps, new Date('2026-10-18T03:00:00Z'));
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_B]);
+        expect((await messages(cpB)).map((r) => r.day)).toEqual(['2026-10-18']);
+      } finally {
+        await f.t.admin.db
+          .update(schema.orgTelegramNotices)
+          .set({ atTime: '09:00' })
+          .where(eq(schema.orgTelegramNotices.orgId, f.b.orgId));
+        await autoPay(f.b.orgId, false);
+      }
+    });
+
+    it('само «К оплате» — в каждый отмеченный день «за N» до срока; после «Оплатил» за месяц больше не уходит', async () => {
+      await autoPay(f.b.orgId, true);
+      const days = (value: number[]) =>
+        f.t.admin.db
+          .update(schema.orgTelegramNotices)
+          .set({ days: value })
+          .where(eq(schema.orgTelegramNotices.orgId, f.b.orgId));
+      // Запуск 09:00 по Бишкеку в день `day` (срок оплаты — 20.10).
+      const runOn = (day: string) => contractorPayJob.run(f.deps, new Date(`${day}T03:00:00Z`));
+      try {
+        // Отмечены «за 3» и «за 1»: 18.10 — «за 2», не уходит; 17.10 — «за 3» и 19.10 — «за 1».
+        await days([3, 1]);
+        await runOn('2026-10-18');
+        expect(tg.sent).toEqual([]);
+        await runOn('2026-10-17');
+        await runOn('2026-10-19');
+        // Повтор запуска в тот же день второго не отправляет.
+        await runOn('2026-10-19');
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_B, CLIENT_B]);
+        expect((await messages(cpB)).map((r) => [r.month, r.day, r.auto])).toEqual([
+          [SEP, '2026-10-17', true],
+          [SEP, '2026-10-19', true],
+        ]);
+        // «Оплатил» под сообщением: клиент сообщил об оплате — сообщение «ждёт подтверждения».
+        expect(await press(paidData, CLIENT_B, lastMessageId(CLIENT_B))).toMatchObject({
+          text: text('tgCpPaidOk'),
+        });
+        const [claim] = await f.t.admin.db.select().from(schema.contractorPayClaims);
+        expect(claim).toMatchObject({
+          orgId: f.b.orgId,
+          contractorId: cpB,
+          source: 'telegram',
+          purpose: 'tax',
+          month: SEP,
+          status: 'wait',
+          sentFileId: null,
+        });
+        expect(claim!.amount).toBeGreaterThan(0);
+        // Отмечены все дни: за сентябрь сообщение больше не уходит, пока «Оплатил» не отклонили.
+        await days([5, 4, 3, 2, 1]);
+        tg.sent.length = 0;
+        await runOn('2026-10-18');
+        expect(tg.sent).toEqual([]);
+        await f.t.admin.db
+          .update(schema.contractorPayClaims)
+          .set({ status: 'rejected', decidedAt: new Date() });
+        await runOn('2026-10-18');
+        expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_B]);
+      } finally {
+        await days([5, 4, 3, 2, 1]);
+        await autoPay(f.b.orgId, false);
+      }
     });
 
     it('само «К оплате» по годовому отчёту: месяц отчёта — декабрь, а срок оплаты — через несколько дней', async () => {
@@ -1374,6 +1562,7 @@ describe.skipIf(!databaseAvailable())(
           'Налоги к оплате до 22.10.2026',
         ]);
       } finally {
+        await f.t.admin.db.delete(schema.contractorPayClaims);
         await f.t.admin.db.delete(schema.contractorTelegramMessages);
         for (const key of ['yearB', 'juneB', 'mayB', 'aprB']) {
           await f.t.admin.db.delete(schema.reports).where(eq(schema.reports.id, ids[key]!));
@@ -1686,25 +1875,159 @@ describe.skipIf(!databaseAvailable())(
         expect(tg.sent).toEqual([]);
       });
 
-      it('задача идёт каждый день в 10:00 по Бишкеку; не в понедельник новых напоминаний нет', async () => {
+      it('задача идёт каждые 5 минут; организация — в своё время (по умолчанию 10:00), новые — только в выбранный день недели', async () => {
         // Расписания задач читаются по времени Бишкека (UTC+6).
         const schedule = parseCron(contractorDebtJob.cron);
         expect(schedule.matches(new Date('2026-10-19T04:00:00Z'))).toBe(true);
-        expect(schedule.matches(new Date('2026-10-20T04:00:00Z'))).toBe(true);
-        expect(schedule.matches(new Date('2026-10-19T10:00:00Z'))).toBe(false);
-        for (const day of ['2026-10-18T04:00:00Z', TUESDAY, '2026-10-24T04:00:00Z']) {
+        expect(schedule.matches(new Date('2026-10-19T04:05:00Z'))).toBe(true);
+        expect(schedule.matches(new Date('2026-10-19T04:03:00Z'))).toBe(false);
+        // Не понедельник — новых нет; понедельник не в 10:00 — тоже.
+        for (const day of [
+          '2026-10-18T04:00:00Z',
+          TUESDAY,
+          '2026-10-24T04:00:00Z',
+          '2026-10-19T03:55:00Z',
+          '2026-10-19T04:05:00Z',
+        ]) {
           await runDebt(day);
         }
         expect(tg.sent).toEqual([]);
         expect(await messages(cpA)).toEqual([]);
-        // Запуск понедельника догоняется во вторник утром (исполнитель стоял): день недели берётся
-        // из расписания, а не по часам — напоминания этой недели создаются.
+        // Запуск понедельника 10:00 догоняется позже (исполнитель стоял): день — по времени запуска из
+        // расписания, а не по часам — напоминания этой недели создаются.
         await contractorDebtJob.run(
           { ...f.deps, clock: fixedClock('2026-10-20T02:00:00Z') },
           new Date(MONDAY),
         );
         expect(tg.sent.map((m) => m.chatId).sort()).toEqual([CLIENT_1, CLIENT_2].sort());
         expect((await messages(cpA)).map((r) => r.week)).toEqual([WEEK, WEEK]);
+      });
+
+      it('день недели и время — из строки «Оплата за обслуживание»: пятница в 18:30', async () => {
+        await f.t.admin.db.insert(schema.orgTelegramNotices).values({
+          orgId: f.a.orgId,
+          code: 'cp_fee',
+          days: [5],
+          atTime: '18:30',
+          weekday: 5,
+        });
+        try {
+          // Понедельник 10:00 и пятница 10:00 — не время организации.
+          await runDebt(MONDAY);
+          await runDebt('2026-10-23T04:00:00Z');
+          expect(tg.sent).toEqual([]);
+          // Пятница 18:30 по Бишкеку — 12:30 UTC.
+          await runDebt('2026-10-23T12:30:00Z');
+          expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_2]);
+          expect((await messages(cpA)).map((r) => [r.kind, r.week])).toEqual([
+            ['debt', WEEK],
+            ['debt', WEEK],
+          ]);
+          // Суббота в то же время — только повтор не ушедших, новых нет.
+          await runDebt('2026-10-24T12:30:00Z');
+          expect(tg.sent).toHaveLength(2);
+        } finally {
+          await f.t.admin.db
+            .delete(schema.orgTelegramNotices)
+            .where(
+              and(
+                eq(schema.orgTelegramNotices.orgId, f.a.orgId),
+                eq(schema.orgTelegramNotices.code, 'cp_fee'),
+              ),
+            );
+        }
+      });
+
+      it('«Оплата за обслуживание до …» — в отмеченные дни до дня оплаты; после «Оплатил» за месяц не уходит', async () => {
+        // Срок оплаты ноября — 01.11 (день оплаты контрагента — 1-е); отмечены «за 5» и «за 3».
+        await f.t.admin.db.insert(schema.orgTelegramNotices).values({
+          orgId: f.a.orgId,
+          code: 'cp_fee',
+          days: [5, 3],
+          atTime: '10:00',
+          weekday: 1,
+        });
+        const runOn = (day: string) => runDebt(`${day}T04:00:00Z`);
+        const NOV = '2026-11';
+        // «Прислать чек» — когда контрагент может отправлять файлы (функция «Файлы в карточках»).
+        await features(f.a.orgId, { ...ALL_ON, files: true });
+        // «До срока» — не напоминание о долге: выключатель сотрудника у контрагента его не останавливает
+        // (прототип v115 pgFeeSoon → pgFeeTo).
+        await f.t.admin.db
+          .update(schema.contractorPages)
+          .set({ tgDebtOff: true })
+          .where(eq(schema.contractorPages.contractorId, cpA));
+        try {
+          // 28.10 — «за 4»: не уходит; 27.10 — «за 5».
+          await runOn('2026-10-28');
+          expect(tg.sent).toEqual([]);
+          await runOn('2026-10-27');
+          await runOn('2026-10-27');
+          expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1, CLIENT_2]);
+          const message = tg.sent[0]!;
+          expect(message.text.split('\n').slice(0, 3)).toEqual([
+            text('tgCpFeeHead', { срок: '01.11.2026' }),
+            CP_A,
+            text('tgCpFeeSoon', { месяц: 'ноябрь 2026', сумма: som(300_000), срок: '01.11.2026' }),
+          ]);
+          expect(message.text).toContain(`Перевод по номеру телефона: ${FEE_REQUISITE_PART}`);
+          expect(message.options?.keyboard).toEqual([
+            [{ text: text('tgBtnCpCopyPhone'), copy: '0555987654' }],
+            [
+              { text: text('tgBtnCpPaid'), data: botPressData('cpPaid', 'fee') },
+              { text: text('tgBtnCpReceipt'), data: botPressData('cpReceipt', 'fee') },
+            ],
+          ]);
+          expect(
+            (await messages(cpA)).map((r) => [r.chatId, r.kind, r.month, r.total, r.auto, r.day]),
+          ).toEqual([
+            [CLIENT_1, 'fee', NOV, 300_000, true, '2026-10-27'],
+            [CLIENT_2, 'fee', NOV, 300_000, true, '2026-10-27'],
+          ]);
+          // Клиент выключил напоминания кнопкой «Не напоминать» — его чату не уходит.
+          await f.t.admin.db
+            .update(schema.contractorTelegramLinks)
+            .set({ noDebt: true })
+            .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_2));
+          // «Оплатил» под сообщением: за ноябрь «до срока» больше не уходит, пока его не отклонили.
+          expect(
+            await press(botPressData('cpPaid', 'fee'), CLIENT_1, tg.messageIds[0]!),
+          ).toMatchObject({ text: text('tgCpPaidOk') });
+          const [claim] = await f.t.admin.db.select().from(schema.contractorPayClaims);
+          expect(claim).toMatchObject({
+            contractorId: cpA,
+            purpose: 'fee',
+            month: NOV,
+            amount: 300_000,
+            status: 'wait',
+          });
+          tg.sent.length = 0;
+          await runOn('2026-10-29');
+          expect(tg.sent).toEqual([]);
+          await f.t.admin.db
+            .update(schema.contractorPayClaims)
+            .set({ status: 'rejected', decidedAt: new Date() });
+          await runOn('2026-10-29');
+          expect(tg.sent.map((m) => m.chatId)).toEqual([CLIENT_1]);
+          // Раздел «Оплата за обслуживание» страницы скрыт — клиент не получает того, чего не видит.
+          tg.sent.length = 0;
+          await f.t.admin.db.delete(schema.contractorPayClaims);
+          await f.t.admin.db.delete(schema.contractorTelegramMessages);
+          await hide(cpA, ['fee']);
+          await runOn('2026-10-29');
+          expect(tg.sent).toEqual([]);
+        } finally {
+          await features(f.a.orgId, ALL_ON);
+          await f.t.admin.db.update(schema.contractorPages).set({ tgDebtOff: false });
+          await f.t.admin.db
+            .delete(schema.orgTelegramNotices)
+            .where(
+              and(
+                eq(schema.orgTelegramNotices.orgId, f.a.orgId),
+                eq(schema.orgTelegramNotices.code, 'cp_fee'),
+              ),
+            );
+        }
       });
 
       it('не ушедшее в понедельник повторяется в другие дни сегодняшним сообщением — до трёх попыток', async () => {
@@ -1967,13 +2290,26 @@ describe.skipIf(!databaseAvailable())(
 
       it('карточка: «Напоминать о долге в Telegram» — состояние, сумма и что мешает', async () => {
         const debt = (await card(owner, cpA)).debt!;
+        // Когда уходит — день недели и время строки «Оплата за обслуживание» (по умолчанию — понедельник, 10:00).
         expect(debt).toEqual({
           on: true,
           orgOn: true,
           refusal: null,
           sum: SHORT + FEE,
+          weekDay: 1,
+          at: '10:00',
           version: expect.any(Number),
         });
+        await f.t.admin.db
+          .insert(schema.orgTelegramNotices)
+          .values({ orgId: f.a.orgId, code: 'cp_fee', days: [5], weekday: 4, atTime: '09:30' });
+        try {
+          expect((await card(owner, cpA)).debt).toMatchObject({ weekDay: 4, at: '09:30' });
+        } finally {
+          await f.t.admin.db
+            .delete(schema.orgTelegramNotices)
+            .where(eq(schema.orgTelegramNotices.orgId, f.a.orgId));
+        }
         expect((await card(chief, cpA)).debt).toMatchObject({ refusal: null, sum: SHORT + FEE });
         // Бухгалтер: права «Управлять страницей контрагента» нет; плату за обслуживание он не видит —
         // суммы долга в ответе нет.

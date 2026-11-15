@@ -20,6 +20,8 @@ export * from './telegram-outbox';
 export * from './telegram-reminders';
 export * from './telegram-notices';
 export * from './lead-telegram';
+export * from './contractor-telegram-notices';
+export * from './contractor-pay-claims';
 export * from './staff';
 export * from './contractors';
 export * from './contractor-history';

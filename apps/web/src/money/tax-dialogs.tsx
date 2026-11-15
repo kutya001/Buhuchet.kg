@@ -506,13 +506,16 @@ function ReceiptModal({
   const one = !presetOk && !edit && !!form?.fee && form.contractor.oneSum;
   const [split] = useState(() => (one && form ? oneSumSplit(form) : null));
   const som = (v: number) => formatSom(v, 'auto');
+  // Чек из Telegram: общая сумма — из сообщения, строки — от старых месяцев к новым на неё.
+  const listTotal =
+    lines.length && preset && 'list' in preset && preset.total != null ? preset.total : null;
   const [total, setTotal] = useState(() =>
     edit
       ? som(edit.total)
       : presetOk && single
         ? som(single.amount)
         : lines.length
-          ? som(lines.reduce((a, x) => a + x.amount, 0))
+          ? som(listTotal ?? lines.reduce((a, x) => a + x.amount, 0))
           : split?.total
             ? som(split.total)
             : '',
@@ -524,7 +527,9 @@ function ReceiptModal({
       : presetOk && single
         ? { [single.reportId]: som(single.amount) }
         : lines.length
-          ? Object.fromEntries(lines.map((x) => [x.reportId, som(x.amount)]))
+          ? listTotal != null
+            ? reallocate({}, lines, som(listTotal))
+            : Object.fromEntries(lines.map((x) => [x.reportId, som(x.amount)]))
           : (split?.alloc ?? {}),
   );
   const [feeAlloc, setFeeAlloc] = useState<Record<string, string>>(() =>

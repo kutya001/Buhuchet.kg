@@ -3,6 +3,12 @@
 -- Telegram владельца) и отметка, какую причину отказа бот уже прислал заявителю; в истории заявки — запись
 -- «Telegram подключён» (вид tg); вид очереди setup_link — «Организация создана» и «Задать пароль» с
 -- одноразовой ссылкой: как код, без текста и кнопок в журнале. Функции — в 0149.
+-- Общая сборка этапа 2 (потоки Т, И, К): миграции выпуска идут одной транзакцией, и эта — первая, что
+-- трогает заявки. Блокировок ждём не дольше 10 с; заявки — раньше истории заявок и очереди Telegram,
+-- в том же порядке, что их берёт отправка заявки (иначе взаимная блокировка с отправкой заявки во время
+-- выпуска; docs/deviations.md п. И-9).
+SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+LOCK TABLE public.platform_leads IN ACCESS EXCLUSIVE MODE;--> statement-breakpoint
 ALTER TABLE "platform_lead_events" DROP CONSTRAINT "platform_lead_events_kind_check";--> statement-breakpoint
 ALTER TABLE "telegram_outbox" DROP CONSTRAINT "telegram_outbox_kind_check";--> statement-breakpoint
 ALTER TABLE "telegram_outbox" DROP CONSTRAINT "telegram_outbox_code_text_check";--> statement-breakpoint

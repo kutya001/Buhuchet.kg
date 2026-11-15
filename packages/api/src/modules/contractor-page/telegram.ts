@@ -6,6 +6,7 @@ import {
   contractorPageState,
   contractorTelegramDebtSettings,
   ContractorTelegramRefusedError,
+  cpNoticeSettingsOf,
   decideContractorTelegram,
   getContractor,
   getContractorPage,
@@ -148,6 +149,8 @@ async function debtOut(
           })
         ).sum
       : null;
+  // День недели и время — из строки «Оплата за обслуживание» блока «Telegram-уведомления» (прототип v115).
+  const notices = await cpNoticeSettingsOf(tx);
   return {
     on: settings.on && !own.off,
     orgOn: settings.on,
@@ -156,6 +159,8 @@ async function debtOut(
       orgOn: settings.on,
     }),
     sum,
+    weekDay: notices.debtWeekDay,
+    at: notices.feeAt,
     version: own.version,
   };
 }

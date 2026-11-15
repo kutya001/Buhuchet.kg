@@ -228,6 +228,7 @@ export function PageSentBlock({ sent, address }: { sent: PageSent; address: Addr
                   <b className="font-semibold [overflow-wrap:anywhere]">{f.name}</b>
                   <span className="text-[12px] text-faint">
                     {momentText(f.sentAt)}
+                    {f.telegram ? ` · ${t('pub.sent.tg')}` : ''}
                     {f.comment ? ` · ${f.comment}` : ''}
                   </span>
                   {f.status === 'rejected' && f.reason ? (

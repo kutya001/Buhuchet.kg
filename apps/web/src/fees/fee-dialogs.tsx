@@ -47,6 +47,13 @@ import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
+import {
+  feeOrderedMonths,
+  feePayAmountHint,
+  feePresetAllocation,
+  feePresetSum,
+  type FeePaymentPreset,
+} from './fee-pay-preset';
 import { useShell } from '../shell/context';
 import {
   addTariff,
@@ -274,11 +281,14 @@ export function TariffDialog({
  */
 export function FeePaymentDialog({
   contractorId,
+  preset = null,
   open,
   onClose,
   onDone,
 }: {
   contractorId: string;
+  /** «Принять» у чека из Telegram (прототип v115 `pgRcptMoney`): сумма из сообщения и примечание. */
+  preset?: FeePaymentPreset | null;
   open: boolean;
   onClose: () => void;
   onDone: () => void;
@@ -297,9 +307,13 @@ export function FeePaymentDialog({
       open={open}
       onClose={onClose}
       onDone={onDone}
+      preset={preset}
     />
   );
 }
+
+/** Что окно «Принять оплату за обслуживание» подставляет сразу: сумма (больше нуля) и примечание. */
+export type { FeePaymentPreset };
 
 /**
  * «Изменить оплату за обслуживание» (прототип `feePayDlg` с `edit`): то же окно с тем, что вводили, и
@@ -347,6 +361,7 @@ function FeePaymentModal({
   onClose,
   onDone,
   edit = null,
+  preset = null,
 }: {
   t: Translate;
   form: FeePaymentForm | null;
@@ -356,6 +371,7 @@ function FeePaymentModal({
   onClose: () => void;
   onDone: () => void;
   edit?: FeeEdit | null;
+  preset?: FeePaymentPreset | null;
 }) {
   const toast = useToast();
   const errorText = useErrorText();
@@ -363,14 +379,22 @@ function FeePaymentModal({
   const toText = (v: number) => formatSom(v, 'auto');
   const allocRows = (list: readonly { month: string; amount: number }[]) =>
     Object.fromEntries(list.map((x) => [x.month, toText(x.amount)]));
-  const [sum, setSum] = useState(() => (form?.amount != null ? toText(form.amount) : ''));
+  // Чек из Telegram: сумма из сообщения (прототип `feePayDlg` с `pre.sum`), строки — на неё от старых к новым.
+  const presetSum = feePresetSum(preset, !!edit);
+  const [sum, setSum] = useState(() =>
+    presetSum != null ? toText(presetSum) : form?.amount != null ? toText(form.amount) : '',
+  );
   const [date, setDate] = useState(() => edit?.date ?? todayBishkek());
   const [to, setTo] = useState(() => edit?.to ?? form?.to[0]?.key ?? '');
-  const [note, setNote] = useState(() => edit?.note ?? '');
+  const [note, setNote] = useState(() => edit?.note ?? preset?.note ?? '');
   const [reason, setReason] = useState('');
   const [changed, setChanged] = useState(false);
   const [rows, setRows] = useState<Record<string, string>>(() =>
-    form ? allocRows(form.allocation) : {},
+    form
+      ? presetSum != null
+        ? allocRows(feePresetAllocation(form, presetSum))
+        : allocRows(form.allocation)
+      : {},
   );
   // Строки правили руками — сумма их больше не перераспределяет (прототип `st.manual`).
   const [manual, setManual] = useState(false);
@@ -385,10 +409,7 @@ function FeePaymentModal({
   }>({});
   const [busy, setBusy] = useState(false);
   const months = form?.months ?? [];
-  const byMonth = new Map(months.map((m) => [m.month, m]));
-  const ordered = (form?.order ?? [])
-    .map((m) => byMonth.get(m))
-    .filter((m): m is NonNullable<typeof m> => !!m);
+  const ordered = form ? feeOrderedMonths(form) : [];
   const valueOf = (month: string) => parseSom(rows[month] ?? '');
   const allocation = months
     .map((m) => ({ month: m.month, amount: valueOf(m.month) ?? 0 }))
@@ -563,11 +584,7 @@ function FeePaymentModal({
             id={`${id}-sum`}
             label={t('fee.pay.amount')}
             required
-            hint={
-              form?.debt
-                ? t('fee.pay.amount_hint', { amount: formatSomWithUnit(form.debt) })
-                : undefined
-            }
+            hint={feePayAmountHint(t, presetSum, form?.debt ?? 0)}
             error={errors.amount}
           >
             {(control) => (

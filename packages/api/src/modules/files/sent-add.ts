@@ -87,6 +87,9 @@ export async function finishSentFiles(
     names: readonly string[];
     source: SentFileSource;
     comment: string | null;
+    /** Из Telegram: имя чата и чек ли это (прототип v115 `pgFileIn`) — для строки истории. */
+    sender?: string | null;
+    receipt?: boolean;
   },
 ): Promise<void> {
   await markSentFilesReady(tx, o.ids);
@@ -98,6 +101,8 @@ export async function finishSentFiles(
     changes: [
       { field: 'files', to: [...o.names] },
       { field: 'source', to: o.source },
+      ...(o.sender ? [{ field: 'sender', to: o.sender }] : []),
+      ...(o.receipt ? [{ field: 'receipt', to: true }] : []),
       ...(o.comment ? [{ field: 'comment', to: o.comment }] : []),
     ],
   });
@@ -178,6 +183,8 @@ export async function addSentFiles(
     senderName?: string | null;
     tgChatId?: number | null;
     comment?: string | null;
+    /** Чек к оплате (поток К): в истории — «чек», а не «файл». */
+    receipt?: boolean;
     files: readonly SentFileBody[];
   },
 ): Promise<{ ids: string[] }> {
@@ -225,6 +232,8 @@ export async function addSentFiles(
         names: rows.map((r) => r.name),
         source: o.source,
         comment,
+        sender: o.source === 'telegram' ? senderName : null,
+        receipt: o.receipt ?? false,
       }),
     );
   } catch (err) {

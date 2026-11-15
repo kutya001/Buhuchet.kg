@@ -1,6 +1,7 @@
 import { pluralForm } from '@buhuchet/domain';
 import {
   FileLink,
+  SentFileAccepted,
   SentFileCount,
   SentFileItem,
   SentFileList,
@@ -90,15 +91,21 @@ export function useSentRefresh() {
 
 type Saved = { ok: true; item: SentFileItem } | { ok: false; status: number; error: ApiErrorLike };
 
-/** «Принять» (прототип `sntAccept`): файл становится файлом контрагента с источником «От контрагента». */
-export async function acceptSent(file: { id: string; version: number }): Promise<Saved> {
+/**
+ * «Принять» (прототип `sntAccept`): файл становится файлом контрагента с источником «От контрагента»;
+ * у чека из Telegram — ещё и что оплачено (`item.pay`, прототип v115 `pgRcptMoney`).
+ */
+export async function acceptSent(file: {
+  id: string;
+  version: number;
+}): Promise<{ ok: true; item: SentFileAccepted } | Exclude<Saved, { ok: true }>> {
   const res = await callApi(() =>
     api.api.files.sent[':id'].accept.$post({
       param: { id: file.id },
       json: { version: file.version },
     }),
   );
-  return res.ok ? { ok: true, item: SentFileItem.parse(res.data) } : res;
+  return res.ok ? { ok: true, item: SentFileAccepted.parse(res.data) } : res;
 }
 
 /** «Отклонить» с причиной (прототип `sntRejectDlg`): контрагент увидит её на своей странице. */

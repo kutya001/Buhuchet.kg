@@ -40,6 +40,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { contractorPageQuery } from '../contractor-page/page-data';
+import { useReceiptMoney } from '../contractor-page/receipt-money';
 import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
@@ -343,14 +344,18 @@ export function useSentActions(o: { withContractor: boolean }) {
     [toast, errorText],
   );
 
+  // Чек из Telegram: после «Принять» — сразу «Принять деньги» (прототип v115 `sntAccept` → `pgRcptMoney`).
+  const money = useReceiptMoney();
+  const takeMoney = money.take;
   const accept = useCallback(
     async (file: SentFileItem) => {
       const res = await acceptSent(file);
       await refresh();
-      if (res.ok) toast(t('files.sent.accepted'), { icon: 'check' });
-      else toast(errorText(res.error), { bad: true, icon: 'alert' });
+      if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
+      toast(t('files.sent.accepted'), { icon: 'check' });
+      if (res.item.pay) await takeMoney(file.contractor.id, res.item.pay);
     },
-    [refresh, toast, t, errorText],
+    [refresh, toast, t, errorText, takeMoney],
   );
 
   const open = useCallback((file: SentFileItem) => setCard(openSlot(file)), []);
@@ -430,6 +435,7 @@ export function useSentActions(o: { withContractor: boolean }) {
           onDone={() => {}}
         />
       ) : null}
+      {money.dialogs}
     </>
   );
 

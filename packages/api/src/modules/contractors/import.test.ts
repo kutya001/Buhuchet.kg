@@ -222,7 +222,7 @@ describe.skipIf(!databaseAvailable())('Загрузка контрагентов
       note: 'из Excel',
       startDate: '2026-10-01',
       firstMonthMode: 'full',
-      feeDay: 10,
+      feeDay: 1,
       paysTo: 'emp',
     });
     expect(cp.socfundFlags).toEqual({ pay: 'mixed' });

@@ -1,5 +1,6 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
+  bishkekDate,
   defaultOrgPolicy,
   RecordChangedError,
   RecordNotFoundError,
@@ -23,6 +24,7 @@ import {
   setContractorTelegramNoDebt,
   unsentDebtMessages,
 } from './contractor-telegram-debt';
+import { attachPayClaimReceipt } from './contractor-pay-claims';
 import {
   answerContractorTelegramAsk,
   autoPayLinkIds,
@@ -30,10 +32,13 @@ import {
   contractorTelegramAskTarget,
   contractorTelegramPayOn,
   contractorTelegramPressTarget,
+  contractorTelegramReceiptTarget,
   contractorTelegramRecipients,
   insertContractorTelegramMessage,
   lockContractorTelegramMessage,
+  lockPendingClientFile,
   markContractorTelegramMessage,
+  openReceiptAsks,
   recentManualPaySends,
   refreshContractorTelegramMessage,
   saveContractorTelegramMessage,
@@ -44,7 +49,9 @@ import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   contractorPages,
+  contractorPayClaims,
   contractors,
+  contractorSentFiles,
   contractorTelegramLinks,
   contractorTelegramMessages,
   organizations,
@@ -175,6 +182,8 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     return res.linkId;
   }
 
+  const DAY = '2026-10-18';
+  const NEXT_DAY = '2026-10-19';
   const payInput = (linkId: string, chatId: number, auto = false) => ({
     contractorId: cpA,
     linkId,
@@ -183,6 +192,8 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     month: '2026-10' as const,
     total: 625_050,
     auto,
+    // Само «К оплате» — одно на подключение, месяц и день отправки (доработки 14.11.2026, этап 2).
+    ...(auto ? { day: DAY } : {}),
     payload: PAY,
   });
   /** Записать сообщение и отметить отправленным с этим номером. */
@@ -364,7 +375,7 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(await inA((tx) => recentManualPaySends(tx, cpA))).toBe(2);
   });
 
-  it('само «К оплате» — одна строка на подключение и месяц; не ушедшее повторяется до предела попыток', async () => {
+  it('само «К оплате» — одна строка на подключение, месяц и день; не ушедшее повторяется до предела попыток', async () => {
     const first = await inA((tx) =>
       insertContractorTelegramMessage(tx, payInput(linkA, CHAT_A, true)),
     );
@@ -387,7 +398,37 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(
       await inA((tx) => insertContractorTelegramMessage(tx, payInput(linkA, CHAT_A))),
     ).toBeTruthy();
-    expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10'))).toEqual(new Set([linkA, linkA2]));
+    // Другой отмеченный день — своя строка (здесь сразу ушедшая).
+    const nextDay = await inA((tx) =>
+      insertContractorTelegramMessage(tx, { ...payInput(linkA, CHAT_A, true), day: NEXT_DAY }),
+    );
+    expect(nextDay).toBeTruthy();
+    await inA((tx) => markContractorTelegramMessage(tx, nextDay!, 600));
+    // Прежняя версия сайта пишет само «К оплате» без дня (миграции идут до выкладки, откат версии базу
+    // не откатывает): день ставит база — сегодняшний по Бишкеку, второе в тот же день не записывается.
+    const legacy = await inA((tx) =>
+      insertContractorTelegramMessage(tx, { ...payInput(linkA2, CHAT_A2, true), day: null }),
+    );
+    expect(legacy).toBeTruthy();
+    const [{ day: legacyDay }] = await inA((tx) =>
+      tx
+        .select({ day: contractorTelegramMessages.day })
+        .from(contractorTelegramMessages)
+        .where(eq(contractorTelegramMessages.id, legacy!)),
+    );
+    expect(legacyDay).toBe(bishkekDate(new Date()));
+    await inA((tx) => markContractorTelegramMessage(tx, legacy!, 700));
+    expect(
+      await inA((tx) =>
+        insertContractorTelegramMessage(tx, { ...payInput(linkA2, CHAT_A2, true), day: null }),
+      ),
+    ).toBeNull();
+    expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10', DAY))).toEqual(
+      new Set([linkA, linkA2]),
+    );
+    expect(await inA((tx) => autoPayLinkIds(tx, cpA, '2026-10', NEXT_DAY))).toEqual(
+      new Set([linkA]),
+    );
     // Ручные отправки само сообщение не считает, и наоборот.
     expect(await inA((tx) => recentManualPaySends(tx, cpA))).toBe(1);
 
@@ -596,13 +637,282 @@ describe.skipIf(!databaseAvailable())('«К оплате» клиенту в Tel
     expect(await contractorTelegramAskTarget(db.app.db, CHAT_A, 701)).toBeNull();
   });
 
+  it('просьба «Пришлите чек»: по ответу на неё или последняя за день; отменённая, отвеченная и чужая — нет', async () => {
+    const receiptAsk = (arg: string, day = DAY, off = false): BotMessage => ({
+      text: 'Пришлите чек ответом на это сообщение',
+      ask: { action: 'cpReceipt', arg, kind: 'file', day, ...(off ? { off: true } : {}) },
+    });
+    const ask = async (
+      linkId: string,
+      chatId: number,
+      messageId: number | null,
+      payload: BotMessage,
+      kind: 'receipt' | 'ask' = 'receipt',
+    ) =>
+      asBot(a.orgId, async (tx) => {
+        const id = (await insertContractorTelegramMessage(tx, {
+          contractorId: cpA,
+          linkId,
+          chatId,
+          kind,
+          payload,
+        }))!;
+        if (messageId !== null) await markContractorTelegramMessage(tx, id, messageId);
+        return id;
+      });
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, null, DAY)).toBeNull();
+    const first = await ask(linkA, CHAT_A, 801, receiptAsk('fee'));
+    // Не отправленная просьба чека не ждёт; просьба «напишите вопрос» — не просьба чека.
+    await ask(linkA2, CHAT_A2, null, receiptAsk('fee'));
+    await ask(linkA2, CHAT_A2, 811, receiptAsk('fee'), 'ask');
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A2, null, DAY)).toBeNull();
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A2, 811, DAY)).toBeNull();
+
+    const target = {
+      id: first,
+      orgId: a.orgId,
+      contractorId: cpA,
+      linkId: linkA,
+      kind: 'receipt',
+      linked: true,
+      messageId: 801,
+    };
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, null, DAY)).toEqual(target);
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, 801, DAY)).toEqual(target);
+    // Ответ на другое сообщение, чужой чат и другой день — не чек к этой просьбе.
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, 802, DAY)).toBeNull();
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_B, 801, DAY)).toBeNull();
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, 801, NEXT_DAY)).toBeNull();
+
+    // Без ответа на просьбу — последняя за день; та, на которую ответили, — она сама.
+    const tax = `tax.${randomUUID()}`;
+    const second = await ask(linkA, CHAT_A, 802, receiptAsk(tax));
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, null, DAY)).toMatchObject({
+      id: second,
+      messageId: 802,
+    });
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, 801, DAY)).toMatchObject({
+      id: first,
+    });
+    expect(
+      (await asBot(a.orgId, (tx) => openReceiptAsks(tx, CHAT_A, DAY))).sort((x, y) =>
+        x.id.localeCompare(y.id),
+      ),
+    ).toEqual(
+      [
+        { id: first, linkId: linkA, arg: 'fee' },
+        { id: second, linkId: linkA, arg: tax },
+      ].sort((x, y) => x.id.localeCompare(y.id)),
+    );
+    expect(await asBot(a.orgId, (tx) => openReceiptAsks(tx, CHAT_A, NEXT_DAY))).toEqual([]);
+    // Чужая организация просьб не видит.
+    expect(await asBot(b.orgId, (tx) => openReceiptAsks(tx, CHAT_A, DAY))).toEqual([]);
+
+    // «Отмена» закрывает просьбу; отвеченная тоже закрыта.
+    await db.admin.db
+      .update(contractorTelegramMessages)
+      .set({ payload: receiptAsk(tax, DAY, true) })
+      .where(eq(contractorTelegramMessages.id, second));
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, 802, DAY)).toBeNull();
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, null, DAY)).toMatchObject({
+      id: first,
+    });
+    expect(await asBot(a.orgId, (tx) => answerContractorTelegramAsk(tx, first))).toBe(true);
+    expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, null, DAY)).toBeNull();
+    expect(await asBot(a.orgId, (tx) => openReceiptAsks(tx, CHAT_A, DAY))).toEqual([]);
+
+    // Отключённый Telegram: просьба находится, но подключение не действует.
+    const third = await ask(linkA, CHAT_A, 803, receiptAsk('fee'));
+    await db.admin.db
+      .update(contractorTelegramLinks)
+      .set({ status: 'off' })
+      .where(eq(contractorTelegramLinks.id, linkA));
+    try {
+      expect(await contractorTelegramReceiptTarget(db.app.db, CHAT_A, 803, DAY)).toMatchObject({
+        id: third,
+        linked: false,
+      });
+    } finally {
+      await db.admin.db
+        .update(contractorTelegramLinks)
+        .set({ status: 'on' })
+        .where(eq(contractorTelegramLinks.id, linkA));
+    }
+  });
+
+  it('файл без просьбы ждёт ответа «От какой компании?» только в своём чате и своей организации', async () => {
+    const payload = {
+      text: 'От какой компании этот файл?',
+      fileTo: { fileId: 'tg-file-1', name: 'Акт.pdf', size: 1200, caption: null, day: DAY },
+    } as unknown as BotMessage;
+    const id = (await asBot(a.orgId, (tx) =>
+      insertContractorTelegramMessage(tx, {
+        contractorId: cpA,
+        linkId: linkA,
+        chatId: CHAT_A,
+        kind: 'file',
+        payload,
+      }),
+    ))!;
+    const pay = await sentPay(linkA, CHAT_A, 501);
+    expect(await asBot(a.orgId, (tx) => lockPendingClientFile(tx, id, CHAT_A))).toEqual({
+      linkId: linkA,
+      contractorId: cpA,
+      payload,
+      answered: false,
+    });
+    // Другой чат, чужая организация и сообщение другого вида — нет.
+    expect(await asBot(a.orgId, (tx) => lockPendingClientFile(tx, id, CHAT_A2))).toBeNull();
+    expect(await asBot(b.orgId, (tx) => lockPendingClientFile(tx, id, CHAT_A))).toBeNull();
+    expect(await asBot(a.orgId, (tx) => lockPendingClientFile(tx, pay, CHAT_A))).toBeNull();
+    // Нажатие находит сообщение только по номеру в чате, а у этой строки его нет.
+    expect(await contractorTelegramPressTarget(db.app.db, CHAT_A, 0)).toBeNull();
+    // Выбор принимается один раз.
+    expect(await asBot(a.orgId, (tx) => answerContractorTelegramAsk(tx, id))).toBe(true);
+    expect(await asBot(a.orgId, (tx) => lockPendingClientFile(tx, id, CHAT_A))).toMatchObject({
+      answered: true,
+    });
+  });
+
+  it('чек к «Оплатил»: ложится в ждущее без чека, второй — новым «Оплатил»; стоящий чек не заменить', async () => {
+    const sent = async (name: string) => {
+      const id = randomUUID();
+      await db.admin.db.insert(contractorSentFiles).values({
+        id,
+        orgId: a.orgId,
+        contractorId: cpA,
+        source: 'telegram',
+        senderName: '@chat1001',
+        tgChatId: CHAT_A,
+        comment: 'Чек к «К оплате» за октябрь 2026',
+        name,
+        contentType: 'application/pdf',
+        sizeBytes: 1200,
+        storageKey: `org/${a.orgId}/sent/${id}`,
+      });
+      return id;
+    };
+    const claims = () =>
+      db.admin.db
+        .select({
+          id: contractorPayClaims.id,
+          sentFileId: contractorPayClaims.sentFileId,
+          month: contractorPayClaims.month,
+          amount: contractorPayClaims.amount,
+        })
+        .from(contractorPayClaims)
+        .where(eq(contractorPayClaims.contractorId, cpA))
+        .orderBy(contractorPayClaims.createdAt);
+    const msg = await sentPay(linkA, CHAT_A, 501);
+    const checkViolation = expect.objectContaining({
+      cause: expect.objectContaining({ code: '23514' }),
+    });
+    const input = {
+      contractorId: cpA,
+      purpose: 'tax' as const,
+      month: '2026-10' as const,
+      amount: 625_050,
+      tgMessageId: msg,
+    };
+    try {
+      // «Оплатил» без чека, потом чек — тот же «Оплатил».
+      const [paid] = await asBot(a.orgId, (tx) =>
+        tx
+          .insert(contractorPayClaims)
+          .values({ orgId: a.orgId, source: 'telegram', ...input })
+          .returning({ id: contractorPayClaims.id }),
+      );
+      const first = await sent('Чек 1.pdf');
+      expect(
+        await asBot(a.orgId, (tx) => attachPayClaimReceipt(tx, { ...input, sentFileId: first })),
+      ).toBe(paid!.id);
+      // Второй чек — новое «Оплатил» с ним.
+      const second = await sent('Чек 2.pdf');
+      const other = await asBot(a.orgId, (tx) =>
+        attachPayClaimReceipt(tx, { ...input, sentFileId: second }),
+      );
+      expect(other).not.toBe(paid!.id);
+      expect(await claims()).toEqual([
+        { id: paid!.id, sentFileId: first, month: '2026-10', amount: 625_050 },
+        { id: other, sentFileId: second, month: '2026-10', amount: 625_050 },
+      ]);
+      // Чек, который уже стоит, другим не заменяется — ни ботом, ни сотрудником.
+      await expect(
+        asBot(a.orgId, (tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: second })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
+      await expect(
+        inA((tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: second })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
+      // И в два шага (снять, потом поставить другой) — тоже: чек снимает только удаление файла.
+      await expect(
+        asBot(a.orgId, (tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: null })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
+      // Чужая организация чек не ставит.
+      const third = await sent('Чек 3.pdf');
+      expect(
+        await inB((tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: third })
+            .where(eq(contractorPayClaims.contractorId, cpA))
+            .returning(),
+        ),
+      ).toEqual([]);
+      // Непринятый чек сотрудник удалил — «Оплатил» остаётся без чека, и чек можно прислать снова.
+      await inA((tx) => tx.delete(contractorSentFiles).where(eq(contractorSentFiles.id, first)));
+      expect((await claims())[0]!.sentFileId).toBeNull();
+      // Новое «Оплатил» с чеком сотрудник тоже не запишет — только бот (или страница контрагента).
+      await expect(
+        inA((tx) =>
+          tx
+            .insert(contractorPayClaims)
+            .values({ orgId: a.orgId, source: 'telegram', ...input, sentFileId: third }),
+        ),
+      ).rejects.toThrow(checkViolation);
+      // Чек ставит только бот: сотрудник к «Оплатил» чек не подставит.
+      await expect(
+        inA((tx) =>
+          tx
+            .update(contractorPayClaims)
+            .set({ sentFileId: third })
+            .where(eq(contractorPayClaims.id, paid!.id)),
+        ),
+      ).rejects.toThrow(checkViolation);
+      expect(
+        await asBot(a.orgId, (tx) => attachPayClaimReceipt(tx, { ...input, sentFileId: third })),
+      ).toBe(paid!.id);
+    } finally {
+      await db.admin.db
+        .delete(contractorPayClaims)
+        .where(eq(contractorPayClaims.contractorId, cpA));
+      await db.admin.db
+        .delete(contractorSentFiles)
+        .where(eq(contractorSentFiles.contractorId, cpA));
+    }
+  });
+
   it('чужая организация не видна: сообщения, получатели, отметки', async () => {
     const id = await sentPay(linkA, CHAT_A, 501);
     expect(await inB((tx) => tx.select().from(contractorTelegramMessages))).toEqual([]);
     expect(await inB((tx) => contractorTelegramRecipients(tx, cpA))).toEqual([]);
     expect(await inB((tx) => contractorsWithTelegram(tx))).toEqual([cpB]);
     expect(await inB((tx) => recentManualPaySends(tx, cpA))).toBe(0);
-    expect(await inB((tx) => autoPayLinkIds(tx, cpA, '2026-10'))).toEqual(new Set());
+    expect(await inB((tx) => autoPayLinkIds(tx, cpA, '2026-10', DAY))).toEqual(new Set());
     // Отметка из чужой организации строку не меняет.
     await inB((tx) => markContractorTelegramMessage(tx, id, 999));
     expect(
