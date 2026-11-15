@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { welcomeSeenState } from './page-help';
 
 const DESKTOP = { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } };
 const MOBILE = { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } };
@@ -10,6 +11,8 @@ const SHARED = /\.shared\.spec\.ts$/;
  * у каждого запуска свои папки, иначе следующий запуск стирает отчёт и следы предыдущего.
  */
 const RUN = process.env.E2E_RUN ?? 'all';
+
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
 
 // Сквозные тесты идут против уже запущенного приложения: в CI — docker-compose (как на VPS),
 // локально — `pnpm dev` или `docker compose --profile app up`. Адрес — E2E_BASE_URL.
@@ -29,7 +32,9 @@ export default defineConfig({
       ]
     : 'list',
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
+    baseURL: BASE_URL,
+    // «Добро пожаловать» страницы контрагента у всех тестов уже видено (e2e/page-help.ts).
+    storageState: welcomeSeenState(BASE_URL),
     locale: 'ru-RU',
     timezoneId: 'Asia/Bishkek',
     trace: 'retain-on-failure',

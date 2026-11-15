@@ -80,6 +80,7 @@ const SUB_DICT: Readonly<Record<Sub, CpHelpDict>> = {
 };
 
 /** Выбранный раздел — до перезагрузки страницы (прототип `store('cphadm.sub')`). */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-16
 const remembered: { sub: Sub } = { sub: 'wel' };
 
 type Help = AdminCpHelp['help'];

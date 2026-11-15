@@ -85,6 +85,7 @@ export function welcomeSeen(cookies: string): boolean {
  * Отметка «Добро пожаловать» показано: только под адресом этой страницы — у другой страницы своя, на
  * год (прототип запоминает в браузере навсегда, отдельно от кода, который живёт 1 день).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-16
 export function welcomeCookie(address: { slug: string; inn: string }, secure: boolean): string {
   const path = `/${encodeURIComponent(address.slug)}/inn/${encodeURIComponent(address.inn)}`;
   return `${WELCOME_COOKIE}=1; Path=${path}; Max-Age=${365 * 24 * 60 * 60}; SameSite=Lax${secure ? '; Secure' : ''}`;

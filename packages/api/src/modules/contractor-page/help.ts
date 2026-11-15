@@ -42,6 +42,7 @@ const json = <T>(schema: T) => ({ 'application/json': { schema } });
  * Записей «посмотрел обзор» из одного браузера — не больше стольких за час: запрос без входа, иначе
  * знающий код засыплет историю контрагента одинаковыми строками.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-16
 export const PAGE_TOUR_RATE_LIMIT: RateLimit = { kind: 'cp_tour', max: 10, windowSeconds: 3600 };
 
 export const publicPageTourRoute = createRoute({

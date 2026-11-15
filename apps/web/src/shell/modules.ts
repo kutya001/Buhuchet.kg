@@ -474,6 +474,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     add: [
       { id: 'step', icon: 'plus', label: 'add.kbadm.step', tabs: ['steps'] },
       { id: 'show', icon: 'play', label: 'add.kbadm.show', tabs: ['shows'] },
+      // «Вопрос» и «Слово» — на всей вкладке, выбор переключает раздел.
+      // ОТКЛОНЕНИЕ: docs/deviations.md#К-16
       { id: 'cph_faq', icon: 'help', label: 'add.kbadm.cph_faq', tabs: ['cppage'] },
       { id: 'cph_word', icon: 'book', label: 'add.kbadm.cph_word', tabs: ['cppage'] },
       { id: 'art', icon: 'book', label: 'add.kbadm.art', tabs: ['arts'] },
