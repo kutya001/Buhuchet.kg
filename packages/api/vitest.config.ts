@@ -8,6 +8,8 @@ if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 export default defineConfig({
   test: {
     include: ['src/**/*.test.ts'],
+    // Сообщения бота по правилам Telegram — после каждого теста (src/test-setup.ts).
+    setupFiles: ['src/test-setup.ts'],
     testTimeout: 60_000,
     hookTimeout: 120_000,
     coverage: {
@@ -22,6 +24,7 @@ export default defineConfig({
         'src/web.ts',
         'src/standalone.ts',
         'src/testing.ts',
+        'src/test-setup.ts',
       ],
       thresholds: { lines: 80, functions: 80, branches: 80, statements: 80 },
     },

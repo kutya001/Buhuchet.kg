@@ -1,4 +1,14 @@
 import { timingSafeEqual } from 'node:crypto';
+import {
+  clipTelegramText,
+  TELEGRAM_CALLBACK_TEXT_MAX,
+  telegramCallbackTextProblems,
+  telegramCaptionProblems,
+  telegramKeyboardProblems,
+  telegramSendProblems,
+} from './telegram-rules';
+
+export * from './telegram-rules';
 
 /**
  * Telegram: отправка сообщений ботом и проверка вебхука. Очередь, повторы и паузы под лимиты Telegram
@@ -432,9 +442,12 @@ export function createTelegramBotApi(options: {
       return failure(data);
     },
     async answerCallback(callbackId, text, opts = {}) {
+      // Скрытый ответ длиннее 200 знаков Telegram не принимает, и кнопка «крутится»: шаблон ответа
+      // администратор может удлинить до общего предела — лишнее обрезается здесь, для всех нажатий.
+      const shown = text ? clipTelegramText(text, TELEGRAM_CALLBACK_TEXT_MAX) : text;
       const data = await call<boolean>('answerCallbackQuery', {
         callback_query_id: callbackId,
-        ...(text ? { text, show_alert: opts.alert === true } : {}),
+        ...(shown ? { text: shown, show_alert: opts.alert === true } : {}),
       });
       return data.ok;
     },
@@ -592,13 +605,67 @@ export interface FakeTelegram extends Telegram {
   readonly widgets: Array<TelegramWidget & { chatId: string | number; messageId: number }>;
   readonly widgetEdits: Array<{ chatId: string | number; messageId: number; chatData: string }>;
   readonly widgetAnswers: Array<{ queryId: string; data: string | undefined }>;
+  /**
+   * Сообщения против правил Telegram (`telegram-rules.ts`): длина, разметка, кнопки, незаполненные
+   * подстановки. Подставной бот их принимает, как раньше, и только записывает — сюда и в общий список
+   * `takeFakeTelegramProblems`.
+   */
+  readonly problems: FakeTelegramProblem[];
+  /**
+   * Сверять ли коды кнопок с реестром (`setFakeTelegramPressCheck`); false — у теста свои действия
+   * (`deps.botActions`), которых в реестре нет. Остальные правила Telegram проверяются всегда.
+   */
+  pressCheck: boolean;
+}
+
+/** Нарушение правил Telegram в сообщении, отправленном подставному боту. */
+export interface FakeTelegramProblem {
+  method: string;
+  problems: string[];
+  /** Начало текста — чтобы найти сообщение. */
+  text: string;
+}
+
+/** Нарушения всех подставных ботов с прошлого вызова (тесты API проверяют их после каждого теста). */
+const fakeProblems: FakeTelegramProblem[] = [];
+
+export function takeFakeTelegramProblems(): FakeTelegramProblem[] {
+  return fakeProblems.splice(0);
+}
+
+/** Проверка данных кнопки-действия у всех подставных ботов: текст нарушения или null. */
+let pressDataCheck: ((data: string) => string | null) | null = null;
+
+/**
+ * Задать проверку данных кнопок (тесты API: код действия есть в реестре — иначе нажатие ответит
+ * «Кнопка устарела»); null — не проверять.
+ */
+export function setFakeTelegramPressCheck(check: ((data: string) => string | null) | null): void {
+  pressDataCheck = check;
 }
 
 /** Бот для тестов: запоминает сообщения, умеет имитировать ошибки. */
 export function createFakeTelegram(): FakeTelegram {
   const failures: Extract<TelegramSendResult, { ok: false }>[] = [];
   let nextId = 1;
+  const keyboardProblems = (keyboard: readonly (readonly TelegramButton[])[] = []) => [
+    ...telegramKeyboardProblems(keyboard),
+    ...keyboard
+      .flat()
+      .map((b) =>
+        b.data !== undefined && pressDataCheck && fake.pressCheck ? pressDataCheck(b.data) : null,
+      )
+      .filter((p): p is string => p !== null),
+  ];
+  const check = (method: string, problems: string[], text: string) => {
+    if (!problems.length) return;
+    const found = { method, problems, text: text.slice(0, 120) };
+    fake.problems.push(found);
+    fakeProblems.push(found);
+  };
   const fake: FakeTelegram = {
+    problems: [],
+    pressCheck: true,
     sent: [],
     messageIds: [],
     answers: [],
@@ -616,6 +683,7 @@ export function createFakeTelegram(): FakeTelegram {
     async sendWidget(chatId, widget) {
       const failed = failures.shift();
       if (failed) return failed;
+      check('sendWidget', telegramCaptionProblems(widget.caption, false), widget.caption);
       const messageId = nextId++;
       fake.widgets.push({ ...widget, chatId, messageId });
       return { ok: true, messageId };
@@ -640,6 +708,14 @@ export function createFakeTelegram(): FakeTelegram {
           permanent: true,
         };
       }
+      check(
+        'sendPhoto',
+        [
+          ...telegramCaptionProblems(options.caption ?? '', options.html === true),
+          ...keyboardProblems(options.keyboard),
+        ],
+        options.caption ?? '',
+      );
       const fileId = 'fileId' in photo ? photo.fileId : `tg-photo-${fake.photos.length + 1}`;
       const messageId = nextId++;
       const { caption, ...rest } = options;
@@ -651,16 +727,26 @@ export function createFakeTelegram(): FakeTelegram {
     async sendMessage(chatId, text, options = {}) {
       const failure = failures.shift();
       if (failure) return failure;
+      check(
+        'sendMessage',
+        [
+          ...telegramSendProblems(text, { ...options, keyboard: undefined }),
+          ...keyboardProblems(options.keyboard),
+        ],
+        text,
+      );
       const messageId = nextId++;
       fake.sent.push({ chatId, text, options });
       fake.messageIds.push(messageId);
       return { ok: true, messageId };
     },
     async answerCallback(callbackId, text, options = {}) {
+      check('answerCallback', telegramCallbackTextProblems(text), text ?? '');
       fake.answers.push({ callbackId, text, alert: options.alert === true });
       return true;
     },
     async editKeyboard(chatId, messageId, keyboard) {
+      check('editKeyboard', keyboardProblems(keyboard), '');
       fake.edits.push({ chatId, messageId, keyboard });
       return true;
     },

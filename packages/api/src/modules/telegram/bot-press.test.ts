@@ -199,6 +199,8 @@ describe.skipIf(!databaseAvailable())('Основа бота: сообщения
 
   beforeEach(() => {
     tg = createFakeTelegram();
+    // У теста свои действия (`deps.botActions`): с общим реестром коды его кнопок не сверяются.
+    tg.pressCheck = false;
     seen = [];
     deps = createTestDeps({ db: t.app.db, telegram: tg, botActions: actions });
     app = createApp(deps);
