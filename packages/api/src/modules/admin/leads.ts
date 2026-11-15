@@ -324,7 +324,7 @@ export function submitLeadHandler(deps: ApiDeps): RouteHandler<typeof submitLead
           docs = out.docs.map((id) => ({ id, size: sizes.get(id) ?? -1 }));
           drop = out.dropped;
         } else {
-          // Повтор с того же телефона документов не получает (docs/deviations.md п. И-8), ловушка — тоже.
+          // Повтор с того же телефона документов не получает (docs/deviations.md п. И-9), ловушка — тоже.
           drop = await discardLeadDraft(tx, form.draft);
         }
         const tg = await issueLeadTgLink(tx, {

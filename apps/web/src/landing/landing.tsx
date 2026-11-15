@@ -212,7 +212,10 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
   const logo = useRef<HTMLButtonElement>(null);
   const track = useRef<HTMLDivElement>(null);
 
-  /** Плавно к блоку; `focus` — курсор в первое поле формы заявки. */
+  /**
+   * Плавно к блоку; `focus` — курсор в первое поле формы заявки: кнопка «ОсОО» поля «Форма организации»
+   * (прототип v114 landGo), без неё — «Имя и фамилия».
+   */
   const go = useCallback((id: string, focus = false) => {
     setMenu(false);
     const target = document.getElementById(`lp-${id}`);
@@ -221,7 +224,11 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
     target.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'start' });
     if (focus) {
       window.setTimeout(
-        () => document.getElementById('lf-name')?.focus({ preventScroll: true }),
+        () =>
+          (
+            document.querySelector<HTMLElement>('#lf-form button') ??
+            document.getElementById('lf-name')
+          )?.focus({ preventScroll: true }),
         instant ? 0 : 450,
       );
     }

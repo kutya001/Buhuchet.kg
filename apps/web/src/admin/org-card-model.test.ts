@@ -83,6 +83,22 @@ describe('карточка организации: «История»', () => {
     expect(orgHistoryText(t, entry({}))).toBe('Запись изменена');
   });
 
+  it('(прототип v114 ldInnFormDlg) «ИНН и форма»: «ИНН: А → Б; Форма: ОсОО → ИП», ОКПО — значением', () => {
+    const h = entry({
+      changes: [
+        { field: 'inn', from: '01234567890123', to: '01234567890124' },
+        { field: 'legalForm', from: 'osoo', to: 'ip' },
+      ],
+    });
+    expect(orgHistoryText(t, h)).toBe('ИНН: 01234567890123 → 01234567890124; Форма: ОсОО → ИП');
+    expect(
+      orgHistoryText(t, entry({ changes: [{ field: 'legalForm', from: null, to: 'osoo' }] })),
+    ).toBe('Форма: ОсОО');
+    expect(
+      orgHistoryText(t, entry({ changes: [{ field: 'okpo', from: null, to: '12345678' }] })),
+    ).toBe('ОКПО: 12345678');
+  });
+
   it('учётная политика — словами её истории', () => {
     const h = entry({
       entity: 'org_settings',

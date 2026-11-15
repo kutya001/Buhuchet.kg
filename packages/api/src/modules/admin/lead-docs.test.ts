@@ -316,7 +316,7 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       expect((await f.t.admin.db.select().from(schema.platformLeads)).length).toBe(before);
     });
 
-    it('повтор с того же телефона документов не получает: файлы черновика удалены (п. И-8)', async () => {
+    it('повтор с того же телефона документов не получает: файлы черновика удалены (п. И-9)', async () => {
       const lead = await ipLead();
       const { draft, ids } = await leadDocDraft(app, storage, [
         { kind: 'gns_cert', content: '%PDF-ipsv' },

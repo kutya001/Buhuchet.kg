@@ -291,17 +291,15 @@ export function LeadForm({
     [t, errorText],
   );
 
-  /** «из документов» под полем, пока в нём то, что подставил разбор (прототип ldMarkSync). */
+  /** «из документов» в подписи поля, пока в нём то, что подставил разбор (прототип ldMark, ldMarkSync). */
   const marks = (id: string) => {
     const f = LEAD_REG_FIELDS.find((x) => ID[x] === id);
     if (!f || !auto[f] || values[f].trim() !== auto[f]) return null;
     return {
-      node: (
-        <span>
-          <Pill tone="info" size="sm">
-            {t('land.f.fromdocs')}
-          </Pill>
-        </span>
+      label: (
+        <Pill tone="info" size="sm">
+          {t('land.f.fromdocs')}
+        </Pill>
       ),
     };
   };
@@ -429,13 +427,8 @@ export function LeadForm({
             ) : null}
           </div>
         ) : null}
-        <Field
-          id={ID.firm}
-          label={t('land.f.firm')}
-          required
-          hint={t('land.f.firm.hint')}
-          error={errors.firm}
-        >
+        {/* Подсказки у «Названия фирмы» в v114 нет: название подставляют документы. */}
+        <Field id={ID.firm} label={t('land.f.firm')} required error={errors.firm}>
           {(c) => (
             <input
               {...c}

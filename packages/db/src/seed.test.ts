@@ -219,6 +219,9 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
       address: 'г. Бишкек, ул. Киевская, 95, офис 12',
       phone: '+996312901234',
       head: 'Садыков Эркин Маратович',
+      // Форма и ОКПО — из demoDB.json (прототип v114, доработки 14.11.2026, блок 1, пункт 4).
+      legalForm: 'osoo',
+      okpo: '29876543',
       createdAt: new Date('2025-02-13T18:00:00Z'),
     });
   });
@@ -226,7 +229,7 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
   it('--update досоздаёт пустые поля профиля демо-организации и не трогает изменённые', async () => {
     await t.admin.db
       .update(organizations)
-      .set({ address: null, head: 'Новый руководитель' })
+      .set({ address: null, head: 'Новый руководитель', legalForm: null, okpo: '11112222' })
       .where(eq(organizations.id, DEMO_ORG_ID));
     await seedAll(t.admin.db, { update: true, demo: true });
     const [org] = await t.admin.db
@@ -236,6 +239,8 @@ describe.skipIf(!databaseAvailable())('начальное наполнение �
     expect(org).toMatchObject({
       address: 'г. Бишкек, ул. Киевская, 95, офис 12',
       head: 'Новый руководитель',
+      legalForm: 'osoo',
+      okpo: '11112222',
     });
   });
 

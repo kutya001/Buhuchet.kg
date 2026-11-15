@@ -1,5 +1,11 @@
-import { bishkekDate, bishkekTime, formatDateRu, pluralForm } from '@buhuchet/domain';
-import type { UiTextKey } from '@buhuchet/domain';
+import {
+  bishkekDate,
+  bishkekTime,
+  formatDateRu,
+  ORG_LEGAL_FORMS,
+  pluralForm,
+} from '@buhuchet/domain';
+import type { OrgLegalForm, UiTextKey } from '@buhuchet/domain';
 import type { AdminOrgCard } from '@buhuchet/shared';
 import type { TimelineItem } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
@@ -39,6 +45,8 @@ type HistoryChange = HistoryEntry['changes'][number];
 const FIELD_KEYS: Readonly<Record<string, UiTextKey>> = {
   name: 'orgs.card.hist.field.name',
   inn: 'orgs.card.hist.field.inn',
+  legalForm: 'orgs.card.hist.field.form',
+  okpo: 'orgs.card.hist.field.okpo',
   address: 'orgs.card.hist.field.address',
   phone: 'orgs.card.hist.field.phone',
   head: 'orgs.card.hist.field.head',
@@ -47,6 +55,7 @@ const FIELD_KEYS: Readonly<Record<string, UiTextKey>> = {
 };
 
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+const isLegalForm = (v: unknown): v is OrgLegalForm => ORG_LEGAL_FORMS.includes(v as OrgLegalForm);
 const label = (t: Translate, field: string): string =>
   FIELD_KEYS[field] ? t(FIELD_KEYS[field]) : field;
 
@@ -69,8 +78,11 @@ function profileText(t: Translate, changes: readonly HistoryChange[]): string {
   const valued: string[] = [];
   const plain: string[] = [];
   for (const c of changes) {
-    const from = text(c.from);
-    const to = text(c.to);
+    // Форма — словами, как ldFormT прототипа v114: «Форма: ОсОО → ИП».
+    const shown = (v: unknown) =>
+      c.field === 'legalForm' && isLegalForm(v) ? t(`org.form.${v}`) : text(v);
+    const from = shown(c.from);
+    const to = shown(c.to);
     const field = label(t, c.field);
     if (from && to) valued.push(t('orgs.card.hist.value', { field, from, to }));
     else if (to) valued.push(t('orgs.card.hist.value_set', { field, to }));

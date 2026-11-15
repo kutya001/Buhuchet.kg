@@ -450,6 +450,8 @@ export const ADMIN_ORG_CARD_TEXTS = {
   'orgs.card.hist.role_changed': { ru: 'изменена', section: S },
   'orgs.card.hist.field.name': { ru: 'Название', section: S },
   'orgs.card.hist.field.inn': { ru: 'ИНН', section: S },
+  'orgs.card.hist.field.form': { ru: 'Форма', section: S },
+  'orgs.card.hist.field.okpo': { ru: 'ОКПО', section: S },
   'orgs.card.hist.field.address': { ru: 'Адрес', section: S },
   'orgs.card.hist.field.phone': { ru: 'Телефон', section: S },
   'orgs.card.hist.field.head': { ru: 'Руководитель', section: S },

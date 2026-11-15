@@ -87,6 +87,8 @@ export function fieldControl(
  */
 export interface FieldMark {
   node?: ReactNode;
+  /** Отметка в подписи после текста (прототип v114 `.lf-mark` — «из документов» формы заявки). */
+  label?: ReactNode;
   need?: boolean;
 }
 
@@ -128,6 +130,7 @@ export function Field(props: FieldProps) {
             {' *'}
           </span>
         ) : null}
+        {mark?.label ? <span className="ml-1 align-[1px]">{mark.label}</span> : null}
       </label>
       {typeof children === 'function' ? children(fieldControl(props)) : children}
       {mark?.node}
