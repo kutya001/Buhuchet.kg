@@ -43,7 +43,7 @@ import {
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { api, apiFailure, ApiFailure, callApi } from '../api-client';
-import { contractorHistoryQuery } from '../contractors/contractor-data';
+import { refreshContractorHistory } from '../contractors/contractor-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -223,7 +223,7 @@ function MonthPayBlock({
       toast(errorText(res.error), { bad: true });
       return;
     }
-    void client.invalidateQueries({ queryKey: contractorHistoryQuery(contractorId).queryKey });
+    void refreshContractorHistory(client, contractorId);
   };
   // «Отправить в Telegram» (прототип rmPayHtml, rmPayMount): кнопка есть, пока у организации включены
   // «Напоминания в Telegram» и «Страница контрагента по ссылке»; что мешает — подсказкой и сообщением.
@@ -256,7 +256,7 @@ function MonthPayBlock({
     toast(t('report.months.pay.sent', { n: done.success ? done.data.delivered : 0 }), {
       icon: 'tg',
     });
-    void client.invalidateQueries({ queryKey: contractorHistoryQuery(contractorId).queryKey });
+    void refreshContractorHistory(client, contractorId);
   };
   return (
     <div

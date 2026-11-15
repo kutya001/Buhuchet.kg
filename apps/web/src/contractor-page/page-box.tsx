@@ -30,6 +30,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, callApi, type ApiResult } from '../api-client';
+import { refreshContractorHistory } from '../contractors/contractor-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { SentUploadRow } from '../files/sent-files';
@@ -129,6 +130,9 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
       return null;
     }
     put(res.data);
+    // Каждое действие блока пишет в «Историю» контрагента; «Скопировать ссылку» и «Скопировать код»
+    // показывают уведомление до ответа (docs/typical-mistakes.md № 44).
+    void refreshContractorHistory(client, contractorId);
     return ContractorPage.parse(res.data);
   };
 

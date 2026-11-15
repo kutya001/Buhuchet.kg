@@ -29,6 +29,7 @@ import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
+import { refreshContractorHistory } from '../contractors/contractor-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { contractorPageQuery } from './page-data';
@@ -214,7 +215,7 @@ export function ContractorTelegramBox({ contractorId }: { contractorId: string }
     await client.cancelQueries({ queryKey: key });
     client.setQueryData(key, ContractorTelegram.parse(res.data));
     // Решение пишется в историю контрагента.
-    void client.invalidateQueries({ queryKey: ['contractors', 'history', contractorId] });
+    void refreshContractorHistory(client, contractorId);
     toast(t(`cppage.tg.toast.${action}`, { name: item.name }), { icon: 'tg' });
   };
   // «Напоминать о долге в Telegram» у этого контрагента (задача К5; прототип pgDebtRow, pgTgBoxClick).
@@ -245,7 +246,7 @@ export function ContractorTelegramBox({ contractorId }: { contractorId: string }
         old ? { ...old, version } : old,
       );
     }
-    void client.invalidateQueries({ queryKey: ['contractors', 'history', contractorId] });
+    void refreshContractorHistory(client, contractorId);
     toast(t(on ? 'cppage.debt.toast_on' : 'cppage.debt.toast_off'), { icon: 'tg' });
   };
   // День недели и время — из «Telegram-уведомлений» организации (прототип v115 pgDebtRow).

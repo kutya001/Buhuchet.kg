@@ -16,7 +16,12 @@ import {
   type ContractorSocfundCheckRequest,
 } from '@buhuchet/shared';
 import type { ShellCount } from '@buhuchet/ui';
-import { keepPreviousData, queryOptions, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  queryOptions,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { api, apiFailure } from '../api-client';
 
@@ -176,6 +181,18 @@ export const contractorHistoryQuery = (id: string) =>
       return ContractorHistory.parse(await res.json());
     },
   });
+
+/**
+ * Перечитать «Историю» после действия, которое пишет в неё. Вкладку могли открыть, пока шёл запрос
+ * действия: её первая загрузка ещё идёт и прочитана до записи, а `invalidateQueries` у запроса без
+ * данных не начинает новую загрузку — ждёт идущую (TanStack Query), и строка действия не видна до
+ * `staleTime`. Идущую загрузку сначала отменяем (docs/typical-mistakes.md № 44).
+ */
+export async function refreshContractorHistory(client: QueryClient, id: string): Promise<void> {
+  const { queryKey } = contractorHistoryQuery(id);
+  await client.cancelQueries({ queryKey });
+  await client.invalidateQueries({ queryKey });
+}
 
 /** Блок «Сдаёт отчёты» карточки: назначения контрагента. */
 export const assignmentsQuery = (id: string) =>
