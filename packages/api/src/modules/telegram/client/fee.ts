@@ -45,6 +45,7 @@ import { orgContextOf, requirePermission } from '../../../middleware/access';
 import { error, scopeSqlOf, subjectOf, todayOf, translateOf } from '../../contractors/common';
 import { inFee } from '../../fees/common';
 import { deliverClientMessages, type PreparedClientMessage } from './pay';
+import { clientFilesOn } from './receipt';
 import { feeRequisiteOf } from './requisite';
 
 /*
@@ -266,9 +267,11 @@ export function contractorFeeTelegramSendHandler(
       if (s.refusal) feeTgFail(409, s.refusal, s.params ?? undefined);
       if (s.requisite.state !== 'ok') throw new Error('Напоминание: реквизиты не найдены');
       const due = feeTelegramDue(s.fees, s.cp.feeDay, today);
-      const [heading, paid] = await Promise.all([
+      const [heading, paid, receipt] = await Promise.all([
         templateText(tx, 'tgCpFeeHead', { срок: formatDateRu(due.payBy) }),
         templateText(tx, 'tgBtnCpPaid'),
+        // «Прислать чек» — пока клиент может отправлять файлы (прототип v115 pgFeeBtns).
+        clientFilesOn(tx, s.cp.id).then((on) => (on ? templateText(tx, 'tgBtnCpReceipt') : null)),
       ]);
       const message = feeBotMessage({
         heading,
@@ -276,6 +279,7 @@ export function contractorFeeTelegramSendHandler(
         text,
         requisite: s.requisite.block,
         paid,
+        receipt,
       });
       const problem = botMessageProblem(message);
       if (problem) throw new Error(`Напоминание об оплате за обслуживание: ${problem}`);

@@ -4,7 +4,7 @@ import type { ContractorFees } from '../fees/charges';
 import type { Tyiyn } from '../common/money';
 import type { BotButton, BotMessage } from '../telegram/bot-message';
 import type { TransferBlock } from './telegram-requisite';
-import { CP_TG_PAID_ACTION } from './telegram-pay';
+import { CP_TG_PAID_ACTION, CP_TG_RECEIPT_ACTION } from './telegram-pay';
 
 /*
  * «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
@@ -122,10 +122,18 @@ export function feeBotMessage(o: {
   text: string;
   requisite: TransferBlock;
   paid: string;
+  /**
+   * Подпись «Прислать чек» (доработки 14.11.2026, блок 4, пункт 4, этап 2; прототип v115 `pgFeeBtns`):
+   * только пока клиент может отправлять файлы; null или нет — кнопки нет.
+   */
+  receipt?: string | null;
 }): BotMessage {
   const buttons: BotButton[][] = [
     ...(o.requisite.copy ? [[o.requisite.copy]] : []),
-    [{ text: o.paid, action: CP_TG_PAID_ACTION, arg: 'fee' }],
+    [
+      { text: o.paid, action: CP_TG_PAID_ACTION, arg: 'fee' },
+      ...(o.receipt ? [{ text: o.receipt, action: CP_TG_RECEIPT_ACTION, arg: 'fee' }] : []),
+    ],
   ];
   return {
     heading: o.heading,

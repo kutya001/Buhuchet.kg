@@ -41,6 +41,7 @@ import { botText, sendCodeMessage, sendNow, sendSecurityNotice } from './bot';
 import { clientStart, clientText } from './client';
 import { clientDebtOn } from './client/debt';
 import { clientPress, clientQuestion } from './client/pay';
+import { clientFile } from './client/receipt';
 import { botMenu, handleBotCommand, sendBotHint } from './commands';
 import { handleGroupPress, handleGroupUpdate } from './group';
 import { handleBotPress } from './press';
@@ -490,18 +491,27 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
           return ok;
         }
       }
+      const incoming = {
+        chatId: chat.id,
+        fromId: from?.id ?? 0,
+        messageId: data.message_id ?? null,
+        replyTo: data.reply_to_message?.message_id ?? null,
+        text,
+        file: await incomingFile(deps, data),
+        caption: data.caption ?? null,
+      };
+      // Чек ответом на «Пришлите чек» и файл без просьбы от клиента (поток К, доработки 14.11.2026,
+      // этап 2). Сбой не роняет вебхук.
+      try {
+        if (await clientFile(deps, incoming)) return ok;
+      } catch (err) {
+        deps.logger.error({ err }, 'Telegram: файл контрагента не обработан');
+        return ok;
+      }
       // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
       // Telegram повторял бы доставку, а действие могло уже выполниться.
       try {
-        const handled = await handleBotReply(deps, {
-          chatId: chat.id,
-          fromId: from?.id ?? 0,
-          messageId: data.message_id ?? null,
-          replyTo: data.reply_to_message?.message_id ?? null,
-          text,
-          file: await incomingFile(deps, data),
-          caption: data.caption ?? null,
-        });
+        const handled = await handleBotReply(deps, incoming);
         if (handled) return ok;
       } catch (err) {
         deps.logger.error({ err }, 'Telegram: ответ на просьбу бота не обработан');

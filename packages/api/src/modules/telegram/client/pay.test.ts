@@ -295,16 +295,14 @@ describe.skipIf(!databaseAvailable())(
       await features(f.b.orgId, ALL_ON);
       // Само «К оплате» — в каждый день «за 5» … «за 1» до срока в 09:00 по Бишкеку: в это время
       // стоят часы тестов (воскресенье 18.10.2026, срок оплаты — 20.10).
-      await f.t.admin.db
-        .insert(schema.orgTelegramNotices)
-        .values(
-          [f.a.orgId, f.b.orgId].map((orgId) => ({
-            orgId,
-            code: 'cp_pay' as const,
-            days: [5, 4, 3, 2, 1],
-            atTime: '09:00',
-          })),
-        );
+      await f.t.admin.db.insert(schema.orgTelegramNotices).values(
+        [f.a.orgId, f.b.orgId].map((orgId) => ({
+          orgId,
+          code: 'cp_pay' as const,
+          days: [5, 4, 3, 2, 1],
+          atTime: '09:00',
+        })),
+      );
       // «Старший» видит всех контрагентов, но ни отчётов, ни права «Управлять страницей» у него нет.
       await f.t.admin.db
         .update(schema.roleScopes)
@@ -680,6 +678,96 @@ describe.skipIf(!databaseAvailable())(
       expect(again).toMatchObject({ text: text('tgActStale'), alert: true });
       expect(await history(cpA)).toHaveLength(2);
       expect(tg.sent).toHaveLength(1);
+    });
+
+    it('«Оплатил», когда клиент может отправлять файлы: бот предлагает прислать чек; чек — к сообщению «ждёт подтверждения» (п. 4 блока 4, этап 2)', async () => {
+      await features(f.a.orgId, { ...ALL_ON, files: true });
+      try {
+        await sent(owner, cpA);
+        const messageId = tg.messageIds[0]!;
+        tg.sent.length = 0;
+        tg.messageIds.length = 0;
+        expect(await press(paidData, CLIENT_1, messageId)).toMatchObject({
+          text: text('tgCpPaidOk'),
+        });
+        const [payRow] = (await messages(cpA)).filter(
+          (m) => m.kind === 'pay' && m.chatId === CLIENT_1,
+        );
+        // Предложение — клиенту, нажавшему «Оплатил»: в кнопке — номер оплаченного сообщения.
+        const receiptData = botPressData('cpReceipt', `tax.${payRow!.id}`);
+        expect(sentTo(CLIENT_1).map((m) => [m.text, m.options.keyboard])).toEqual([
+          [text('tgCpReceiptOffer'), [[{ text: text('tgBtnCpReceipt'), data: receiptData }]]],
+        ]);
+        const offerId = lastMessageId(CLIENT_1);
+        expect(await press(receiptData, CLIENT_1, offerId)).toMatchObject({ text: undefined });
+        expect(sentTo(CLIENT_1).at(-1)).toMatchObject({
+          text: text('tgCpReceiptAsk'),
+          options: { keyboard: [[{ text: text('tgBtnCancel'), data: 'askCancel' }]] },
+        });
+        const askId = lastMessageId(CLIENT_1);
+        tg.files.set('pay-receipt', new TextEncoder().encode('%PDF-1.7\nчек'));
+        const res = await sendToBot(
+          f.app,
+          telegramUpdate(null, CLIENT_1, {
+            replyTo: askId,
+            document: { fileId: 'pay-receipt', name: 'Чек.pdf', size: 12 },
+          }),
+        );
+        expect(res.status).toBe(200);
+        expect(sentTo(CLIENT_1).at(-1)!.text).toBe(text('tgCpReceiptOk'));
+        const [file] = await f.t.admin.db
+          .select()
+          .from(schema.contractorSentFiles)
+          .where(eq(schema.contractorSentFiles.contractorId, cpA));
+        expect(file).toMatchObject({
+          source: 'telegram',
+          name: 'Чек.pdf',
+          senderName: '@client_one',
+          tgChatId: CLIENT_1,
+          comment: 'Чек к «К оплате» за сентябрь 2026',
+          status: 'new',
+        });
+        // Чек стал чеком того же «Оплатил»: второго сообщения об оплате нет.
+        expect(
+          await f.t.admin.db
+            .select({
+              purpose: schema.contractorPayClaims.purpose,
+              month: schema.contractorPayClaims.month,
+              amount: schema.contractorPayClaims.amount,
+              sentFileId: schema.contractorPayClaims.sentFileId,
+              tgMessageId: schema.contractorPayClaims.tgMessageId,
+              status: schema.contractorPayClaims.status,
+            })
+            .from(schema.contractorPayClaims)
+            .where(eq(schema.contractorPayClaims.contractorId, cpA)),
+        ).toEqual([
+          {
+            purpose: 'tax',
+            month: SEP,
+            amount: TOTAL,
+            sentFileId: file!.id,
+            tgMessageId: payRow!.id,
+            status: 'wait',
+          },
+        ]);
+        // «Прислать чек» под предложением погасла с подписью, «Отмена» под просьбой — тоже.
+        expect(tg.edits.slice(-2)).toEqual([
+          {
+            chatId: CLIENT_1,
+            messageId: askId,
+            keyboard: [[{ text: text('tgBtnCancel'), data: 'off', disabled: true }]],
+          },
+          {
+            chatId: CLIENT_1,
+            messageId: offerId,
+            keyboard: [[{ text: '✓ Чек отправлен', data: 'off', disabled: true }]],
+          },
+        ]);
+      } finally {
+        await f.t.admin.db.delete(schema.contractorPayClaims);
+        await f.t.admin.db.delete(schema.contractorSentFiles);
+        await features(f.a.orgId, ALL_ON);
+      }
     });
 
     it('нажатие сверяется с записью бота: чужой чат, подделанные данные, отключённый Telegram', async () => {
@@ -1360,8 +1448,7 @@ describe.skipIf(!databaseAvailable())(
           .set({ days: value })
           .where(eq(schema.orgTelegramNotices.orgId, f.b.orgId));
       // Запуск 09:00 по Бишкеку в день `day` (срок оплаты — 20.10).
-      const runOn = (day: string) =>
-        contractorPayJob.run(f.deps, new Date(`${day}T03:00:00Z`));
+      const runOn = (day: string) => contractorPayJob.run(f.deps, new Date(`${day}T03:00:00Z`));
       try {
         // Отмечены «за 3» и «за 1»: 18.10 — «за 2», не уходит; 17.10 — «за 3» и 19.10 — «за 1».
         await days([3, 1]);
@@ -1886,9 +1973,9 @@ describe.skipIf(!databaseAvailable())(
             .set({ noDebt: true })
             .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_2));
           // «Оплатил» под сообщением: за ноябрь «до срока» больше не уходит, пока его не отклонили.
-          expect(await press(botPressData('cpPaid', 'fee'), CLIENT_1, tg.messageIds[0]!)).toMatchObject(
-            { text: text('tgCpPaidOk') },
-          );
+          expect(
+            await press(botPressData('cpPaid', 'fee'), CLIENT_1, tg.messageIds[0]!),
+          ).toMatchObject({ text: text('tgCpPaidOk') });
           const [claim] = await f.t.admin.db.select().from(schema.contractorPayClaims);
           expect(claim).toMatchObject({
             contractorId: cpA,

@@ -14,7 +14,7 @@ import {
   feeTelegramRefusal,
   feeTelegramShown,
 } from './telegram-fee';
-import { CP_TG_PAID_ACTION } from './telegram-pay';
+import { CP_TG_PAID_ACTION, CP_TG_RECEIPT_ACTION } from './telegram-pay';
 
 /*
  * «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
@@ -168,5 +168,22 @@ describe('feeBotMessage — сообщение клиенту (pgFeeMsg)', () =>
       paid: 'Оплатил',
     });
     expect(m.buttons).toEqual([[{ text: 'Оплатил', action: CP_TG_PAID_ACTION, arg: 'fee' }]]);
+  });
+
+  it('клиент может отправлять файлы — рядом с «Оплатил» «Прислать чек» (прототип v115 pgFeeBtns)', () => {
+    const m = feeBotMessage({
+      heading: 'h',
+      contractor: 'c',
+      text: 't',
+      requisite: { ...requisite, copy: null },
+      paid: 'Оплатил',
+      receipt: 'Прислать чек',
+    });
+    expect(m.buttons).toEqual([
+      [
+        { text: 'Оплатил', action: CP_TG_PAID_ACTION, arg: 'fee' },
+        { text: 'Прислать чек', action: CP_TG_RECEIPT_ACTION, arg: 'fee' },
+      ],
+    ]);
   });
 });

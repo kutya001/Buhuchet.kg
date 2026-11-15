@@ -38,6 +38,7 @@ import {
 import {
   addDays,
   bishkekDate,
+  BOT_ASK_CANCEL,
   BOT_HIDDEN_REPLY_MAX,
   botKeyboard,
   botMessageProblem,
@@ -47,9 +48,11 @@ import {
   CP_TG_ANSWER_ACTION,
   CP_TG_ASK_ACTION,
   CP_TG_CLIENT_ACTIONS,
+  CP_TG_FILE_TO_ACTION,
   CP_TG_NODEBT_ACTION,
   CP_TG_PAID_ACTION,
   CP_TG_QUESTIONS_PER_HOUR,
+  CP_TG_RECEIPT_ACTION,
   CP_TG_REQ_ACTION,
   CP_TG_REQ_PER_HOUR,
   cpNoticeDay,
@@ -88,6 +91,7 @@ import { serverTexts } from '../../l10n/texts';
 import { monthPayRows } from '../../reports/month-pay-rows';
 import { botSendOptions, flushEvents, queueEvents } from '../outbox';
 import type { BotPress } from '../press';
+import { clientFileToPress, receiptCancel, receiptOffer, receiptPress } from './receipt';
 import { feeRequisite, payRequisite } from './requisite';
 
 /*
@@ -452,6 +456,13 @@ async function sendDirect(
 export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boolean> {
   // Кнопки работают только в личном чате, и нажать может только его хозяин (как у основы бота).
   if (press.chatType !== 'private' || press.fromId !== press.chatId) return false;
+  // «От какой компании?» под файлом без просьбы (доработки 14.11.2026, блок 2, пункт 1, этап 2): у этого
+  // сообщения строки с номером в чате нет — кнопка ведёт к строке файла в организации контрагента.
+  const early = parseBotPress(press.data);
+  if (early?.action === CP_TG_FILE_TO_ACTION) {
+    await clientFileToPress(deps, press, early.arg);
+    return true;
+  }
   const target = await contractorTelegramPressTarget(deps.db, press.chatId, press.messageId);
   if (!target) return false;
 
@@ -569,6 +580,16 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
             amount: total,
             tgMessageId: target.id,
           });
+          // «Если есть чек об оплате, пришлите его» (доработки 14.11.2026, блок 4, пункт 4, этап 2;
+          // прототип v115 pgRcptOffer) — пока клиент может отправлять файлы.
+          const offer = await receiptOffer(tx, {
+            contractorId: target.contractorId,
+            linkId: target.linkId,
+            chatId: press.chatId,
+            paidId: target.id,
+            month,
+            total,
+          });
           const staff = await queueStaffNotice(
             tx,
             deps,
@@ -585,7 +606,31 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
           const done = t('cppage.tg.paid_done');
           const after = pressBotButton(current.message, parsed.action, parsed.arg, { done });
           await saveContractorTelegramMessage(tx, target.id, after);
-          return { reply: await templateText(tx, 'tgCpPaidOk'), after, staff, send: null };
+          return { reply: await templateText(tx, 'tgCpPaidOk'), after, staff, send: offer };
+        }
+
+        // «Прислать чек» и «Отмена» под просьбой прислать его (доработки 14.11.2026, блок 4, пункт 4,
+        // этап 2; прототип v115 tgAct('cp-receipt'), tgAct('askCancel')).
+        if (parsed.action === CP_TG_RECEIPT_ACTION || parsed.action === BOT_ASK_CANCEL) {
+          const today = bishkekDate(deps.clock.now());
+          const r =
+            parsed.action === CP_TG_RECEIPT_ACTION
+              ? await receiptPress(tx, {
+                  target,
+                  current,
+                  arg: parsed.arg,
+                  chatId: press.chatId,
+                  messageId: press.messageId,
+                  today,
+                })
+              : await receiptCancel(tx, {
+                  target,
+                  current,
+                  today,
+                  done: t('telegram.done.cancelled'),
+                });
+          if ('refusal' in r) return r;
+          return { reply: r.reply, after: r.after, staff: [], send: r.send };
         }
 
         // «Не напоминать» под напоминанием о долге (задача К5; прототип tgAct('cp-nodebt')): клиент

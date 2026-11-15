@@ -4,7 +4,7 @@ import type { YearMonth } from '../common/months';
 import type { PaysTo } from '../money/requisites';
 import type { MonthPay, MonthPayLine } from '../reports/month-pay';
 import type { MonthPlanReport } from '../reports/month-plan';
-import type { BotButton, BotMessage } from '../telegram/bot-message';
+import { BOT_ASK_CANCEL, type BotButton, type BotMessage } from '../telegram/bot-message';
 import type { TransferBlock } from './telegram-requisite';
 
 /*
@@ -19,9 +19,11 @@ export const CP_PAY_DAYS = 5;
 /**
  * Виды сообщений клиенту, под которыми бот принимает нажатия и ответы; `fee` — «Оплата за обслуживание
  * до …» (доработки 14.11.2026, блок 3 и блок 4, пункт 5): само и ручное, одно на чат в день; `receipt` —
- * «Хотите прислать чек?» после «Оплатил» и просьба «Пришлите чек» (блок 4, пункт 4, этап 2).
+ * «Хотите прислать чек?» после «Оплатил» и просьба «Пришлите чек» (блок 4, пункт 4, этап 2); `file` —
+ * файл без просьбы из чата нескольких контрагентов, который ждёт ответа «От какой компании?» (блок 2,
+ * пункт 1, этап 2): строка у каждого подключения чата, номера сообщения в чате у неё нет.
  */
-export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee', 'receipt'] as const;
+export const CP_TG_MESSAGE_KINDS = ['pay', 'ask', 'debt', 'fee', 'receipt', 'file'] as const;
 export type CpTgMessageKind = (typeof CP_TG_MESSAGE_KINDS)[number];
 
 /** Коды действий кнопок клиента (латиница, до 16 знаков — `botPressData`). */
@@ -50,6 +52,8 @@ export const CP_TG_CLIENT_ACTIONS = [
   CP_TG_NODEBT_ACTION,
   CP_TG_REQ_ACTION,
   CP_TG_RECEIPT_ACTION,
+  // «Отмена» под просьбой «Пришлите чек» (прототип tgAct('askCancel')).
+  BOT_ASK_CANCEL,
 ] as const;
 
 /**

@@ -261,6 +261,18 @@ export const CONTRACTOR_PAGE_TEXTS = {
     ru: 'Реквизиты уже отправлены несколько раз за час — они в сообщениях выше. Попробуйте позже.',
     section: S,
   },
+  // Чек и файлы клиента через бота (доработки 14.11.2026, блок 2, пункт 1 и блок 4, пункт 4, этап 2;
+  // прототип v115 cp-telegram.js: pgRcptNote, tgAct('cp-receipt'), tgAct('cp-file-to')): комментарий
+  // чека в «Отправленных файлах» и подписи погасших кнопок.
+  'cppage.tg.receipt_note.tax': { ru: 'Чек к «К оплате» за {month}', section: S },
+  'cppage.tg.receipt_note.fee': { ru: 'Чек к «Оплата за обслуживание» за {month}', section: S },
+  'cppage.tg.receipt_note.fee_any': { ru: 'Чек к «Оплата за обслуживание»', section: S },
+  'cppage.tg.receipt_done': { ru: '✓ Чек отправлен', section: S },
+  'cppage.tg.file_to_done': { ru: '✓ {contractor}', section: S },
+  'cppage.tg.file_limit': {
+    ru: 'Файлов из этого чата слишком много за час. Попробуйте позже.',
+    section: S,
+  },
   // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
   // pgFeeTgBtn, pgFeeTgDlg, pgFeeSend, tgAct('cp-feepaid')): кнопка вкладки «Обслуживание», окно, история.
   'cppage.fee_tg.btn': { ru: 'Напомнить в Telegram', section: S },

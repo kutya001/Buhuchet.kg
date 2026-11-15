@@ -357,6 +357,89 @@ export async function contractorTelegramAskTarget(
   return row ? targetOf(row) : null;
 }
 
+/**
+ * Открытая просьба «Пришлите чек» в чате клиента (доработки 14.11.2026, блок 4, пункт 4, этап 2): та, на
+ * которую он ответил (`replyTo`), а без ответа — последняя за день `day` (по Бишкеку). Вызывается без
+ * контекста организации; `null` — бот чека не ждёт; `linked: false` — ждал, но подключение больше не
+ * действует.
+ */
+export async function contractorTelegramReceiptTarget(
+  db: Db,
+  chatId: number,
+  replyTo: number | null,
+  day: IsoDate,
+): Promise<(ContractorTelegramTarget & { messageId: number }) | null> {
+  const [row] = await db.execute<Parameters<typeof targetOf>[0] & { message_id: number | string }>(
+    sql`select * from app.contractor_telegram_receipt(${chatId}, ${replyTo}, ${day})`,
+  );
+  return row ? { ...targetOf(row), messageId: Number(row.message_id) } : null;
+}
+
+/**
+ * Открытые просьбы «Пришлите чек» этого чата за день `day` в организации из контекста (RLS): что каждая
+ * ждёт — данные нажатой кнопки «Прислать чек». Без блокировки: только чтобы не открыть ту же просьбу
+ * второй раз.
+ */
+export async function openReceiptAsks(
+  tx: Tx,
+  chatId: number,
+  day: IsoDate,
+): Promise<{ id: string; linkId: string; arg: string | null }[]> {
+  const m = contractorTelegramMessages;
+  return tx
+    .select({
+      id: m.id,
+      linkId: m.linkId,
+      arg: sql<string | null>`${m.payload} -> 'ask' ->> 'arg'`,
+    })
+    .from(m)
+    .where(
+      and(
+        eq(m.chatId, chatId),
+        eq(m.kind, 'receipt'),
+        sql`${m.messageId} is not null`,
+        sql`${m.answeredAt} is null`,
+        sql`${m.payload} -> 'ask' ->> 'day' = ${day}`,
+        sql`coalesce(${m.payload} -> 'ask' ->> 'off', 'false') <> 'true'`,
+      ),
+    );
+}
+
+/**
+ * Файл без просьбы, который ждёт ответа «От какой компании?» (строка вида `file` этого чата в
+ * организации из контекста, RLS), под блокировкой до конца транзакции. `null` — такой строки нет.
+ */
+export async function lockPendingClientFile(
+  tx: Tx,
+  id: string,
+  chatId: number,
+): Promise<{
+  linkId: string;
+  contractorId: string;
+  payload: unknown;
+  answered: boolean;
+} | null> {
+  const m = contractorTelegramMessages;
+  const [row] = await tx
+    .select({
+      linkId: m.linkId,
+      contractorId: m.contractorId,
+      payload: m.payload,
+      answeredAt: m.answeredAt,
+    })
+    .from(m)
+    .where(and(eq(m.id, id), eq(m.chatId, chatId), eq(m.kind, 'file')))
+    .for('update');
+  return row
+    ? {
+        linkId: row.linkId,
+        contractorId: row.contractorId,
+        payload: row.payload,
+        answered: row.answeredAt !== null,
+      }
+    : null;
+}
+
 /** Сообщение клиенту на момент нажатия: под блокировкой строки до конца транзакции. */
 export interface LockedContractorTelegramMessage {
   message: BotMessage;
