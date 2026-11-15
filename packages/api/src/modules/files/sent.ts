@@ -76,6 +76,7 @@ import { contractorOf } from '../contractor-page/card';
 import { serverTexts } from '../l10n/texts';
 import { error, FILES_SECTION, realNow, requireFilesFeature, subjectOf } from './files';
 import { filesScopeOf } from './manager';
+import { removeStoredObjects } from './storage-retry';
 
 /*
  * Файлы от контрагентов глазами сотрудника (доработки 14.11.2026, блок 2; прототип v112
@@ -513,20 +514,16 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
         }),
       );
     } catch (err) {
-      await deps.storage.delete(key).catch((e: unknown) => {
-        deps.logger.error({ err: e }, 'файлы от контрагентов: копия не удалена после отказа');
-      });
+      await removeStoredObjects(deps, [key], 'файлы от контрагентов: копия после отказа');
       throw err;
     }
-    // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас.
-    for (const sentKey of [seen.storageKey, sentUploadKey(seen.storageKey)]) {
-      await deps.storage.delete(sentKey).catch((err: unknown) => {
-        deps.logger.error(
-          { err },
-          'файлы от контрагентов: принятый файл не удалён из «отправленных»',
-        );
-      });
-    }
+    // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас; не
+    // удалось — повторит задача `files.storage-retry`.
+    await removeStoredObjects(
+      deps,
+      [seen.storageKey, sentUploadKey(seen.storageKey)],
+      'файлы от контрагентов: принятый в «отправленных»',
+    );
     return c.json(body, 200);
   };
 }

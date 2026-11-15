@@ -57,6 +57,14 @@ describe('файлы от контрагентов: отправка', () => {
     expect(sentFilesSendRefusal([f('ровно.pdf', FILE_MAX_BYTES)], 0)).toBeNull();
   });
 
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+  it('документы с макросами от контрагента не принимаются; обычные документы и таблицы — да', () => {
+    expect(sentFilesSendRefusal([f('Расчёт.xlsm'), f('Договор.DOCM'), f('Отчёт.xlsx')], 0)).toEqual(
+      { code: 'sent_forbidden', files: ['Расчёт.xlsm', 'Договор.DOCM'] },
+    );
+    expect(sentFilesSendRefusal([f('Отчёт.xlsx'), f('Договор.docx'), f('Акт.xls')], 0)).toBeNull();
+  });
+
   it('не больше 20 файлов за сутки: сколько осталось или «попробуйте завтра»', () => {
     expect(sentFilesSendRefusal([f('a.pdf'), f('b.pdf')], 18)).toBeNull();
     expect(sentFilesSendRefusal([f('a.pdf'), f('b.pdf'), f('c.pdf')], 18)).toEqual({

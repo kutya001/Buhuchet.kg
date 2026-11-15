@@ -35,6 +35,8 @@ const { auditLog, contractorSentFiles, files, orgSettings } = schema;
 
 const CHAT_ACC = 7101;
 const CHAT_OWNER = 7102;
+/** Telegram клиента, подключённый к контрагенту ответственного бухгалтера. */
+const CLIENT_CHAT = 9101;
 
 /** Содержимое по типу: PDF, картинка JPEG, программа Windows и веб-страница. */
 const enc = (s: string) => new TextEncoder().encode(s);
@@ -230,6 +232,16 @@ describe.skipIf(!databaseAvailable())(
       grantB = await openPage(ownerB, cpB, 'org-b');
       await linkTelegram(f.app, acc, CHAT_ACC, 'acc_a');
       await linkTelegram(f.app, owner, CHAT_OWNER, 'owner_a');
+      // Telegram клиента, подключённый к контрагенту: файлы из него принимает «Добавить отправленный
+      // файл» (подключение по ссылке — тесты потока К).
+      await f.t.admin.db.insert(schema.contractorTelegramLinks).values({
+        orgId: f.a.orgId,
+        contractorId: cpAcc.id,
+        chatId: CLIENT_CHAT,
+        name: 'Айнура',
+        status: 'on',
+        decidedAt: new Date('2026-10-18T03:00:00Z'),
+      });
     });
 
     afterAll(async () => {
@@ -561,6 +573,8 @@ describe.skipIf(!databaseAvailable())(
       ]);
       expect(await codeOf([{ name: 'setup.exe', body: EXE }])).toEqual([400, 'sent_forbidden']);
       expect(await codeOf([{ name: 'page.html', body: HTML }])).toEqual([400, 'sent_forbidden']);
+      // Документ с макросами от контрагента не принимается (п. И-10).
+      expect(await codeOf([{ name: 'Расчёт.xlsm', body: PDF() }])).toEqual([400, 'sent_forbidden']);
     });
 
     it('не больше 20 файлов в сутки от контрагента — со страницы и из Telegram вместе', async () => {
@@ -575,7 +589,7 @@ describe.skipIf(!databaseAvailable())(
         contractorId: cpAcc.id,
         source: 'telegram',
         senderName: 'Айнура',
-        tgChatId: 9101,
+        tgChatId: CLIENT_CHAT,
         files: Array.from({ length: 8 }, (_, i) => ({ name: `t${i}.pdf`, bytes: PDF() })),
       });
       const left = await start(
@@ -603,7 +617,7 @@ describe.skipIf(!databaseAvailable())(
           orgId: f.a.orgId,
           contractorId: cpAcc.id,
           source: 'telegram',
-          tgChatId: 9101,
+          tgChatId: CLIENT_CHAT,
           files: [{ name: 'фото.jpg', bytes: EXE }],
         }),
       ).rejects.toBeInstanceOf(SentFilesRefused);
@@ -612,7 +626,7 @@ describe.skipIf(!databaseAvailable())(
         contractorId: cpAcc.id,
         source: 'telegram',
         senderName: '  Айнура Турдубаева ',
-        tgChatId: 9101,
+        tgChatId: CLIENT_CHAT,
         comment: 'Табель за октябрь',
         files: [{ name: 'Табель.jpg', bytes: JPEG }],
       });
@@ -644,10 +658,74 @@ describe.skipIf(!databaseAvailable())(
           orgId: f.a.orgId,
           contractorId: cpAcc.id,
           source: 'telegram',
-          tgChatId: 9101,
+          tgChatId: CLIENT_CHAT,
           files: [{ name: 'a.pdf', bytes: PDF() }],
         }),
       ).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('из Telegram — только из чата, подключённого к этому контрагенту сейчас: чужой и отключённый чат — «не принимает файлы»', async () => {
+      const add = (chatId: number) =>
+        addSentFiles(f.deps, {
+          orgId: f.a.orgId,
+          contractorId: cpAcc.id,
+          source: 'telegram',
+          tgChatId: chatId,
+          files: [{ name: 'Акт.pdf', bytes: PDF() }],
+        });
+      const keys = () => [...storage.files.keys()].filter((k) => k.includes('/sent/')).sort();
+      const before = keys();
+      await expect(add(9199)).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+      // Сотрудник отключил Telegram клиента, пока файл скачивался.
+      await f.t.admin.db
+        .update(schema.contractorTelegramLinks)
+        .set({ status: 'off' })
+        .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_CHAT));
+      try {
+        await expect(add(CLIENT_CHAT)).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+      } finally {
+        await f.t.admin.db
+          .update(schema.contractorTelegramLinks)
+          .set({ status: 'on' })
+          .where(eq(schema.contractorTelegramLinks.chatId, CLIENT_CHAT));
+      }
+      expect((await cardList(acc, cpAcc)).items).toEqual([]);
+      expect(keys()).toEqual(before);
+      const { ids } = await add(CLIENT_CHAT);
+      expect(ids).toHaveLength(1);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('имена файлов в Telegram — только тому, кто видит файлы: у ответственного без «Просматривать файлы» сообщение уходит владельцу', async () => {
+      const role = f.templateRole(f.a, 'acc');
+      const [had] = await f.t.admin.db
+        .select()
+        .from(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, role),
+            eq(schema.rolePermissions.permissionId, 'filesView'),
+          ),
+        );
+      expect(had).toBeDefined();
+      await f.t.admin.db
+        .delete(schema.rolePermissions)
+        .where(
+          and(
+            eq(schema.rolePermissions.roleId, role),
+            eq(schema.rolePermissions.permissionId, 'filesView'),
+          ),
+        );
+      try {
+        await send('org-a', cpAcc, grantAcc, [{ name: 'Выписка_ноябрь.pdf', body: PDF() }]);
+        expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toEqual([]);
+        const toOwner = tg.sent.filter((m) => m.chatId === CHAT_OWNER);
+        expect(toOwner).toHaveLength(1);
+        expect(toOwner[0]!.text).toContain('Выписка_ноябрь.pdf');
+      } finally {
+        await f.t.admin.db.insert(schema.rolePermissions).values(had!);
+      }
     });
 
     it('галочки «Контрагент может отправлять файлы»: учётная политика и карточка; без права — нельзя', async () => {

@@ -1,4 +1,5 @@
 import type { RdKind } from '../contractors/regdocs';
+import { FILE_NAME_MAX_LENGTH, fileUploadProblem } from '../files/files';
 import type { OrgLegalForm } from '../org/legal-form';
 import { slugOf } from '../org/slug';
 import type { LeadStatus } from './leads';
@@ -55,6 +56,23 @@ export const LEAD_DOC_OF_RD = {
 /** Предел PDF документа заявки — 20 МБ (решение заказчика 14.11.2026). */
 export const LEAD_DOC_MAX_BYTES = 20 * 1024 * 1024;
 
+const PDF_EXT = '.pdf';
+
+/**
+ * Имя, под которым документ заявки хранится и потом переходит в «Файловый менеджер» организации:
+ * содержимое проверено как PDF, поэтому и имя оканчивается на «.pdf» — иначе «Выписка.bat» с «%PDF-» в
+ * начале скачивалась бы как программа («Выписка.bat» → «Выписка.bat.pdf», «скан» → «скан.pdf»). Имя
+ * со знаками смены направления письма, управляющими знаками, «/» и «\» или с точкой в конце — null
+ * (так маскируют «…bat» под «…pdf»), как у файлов со страницы контрагента (`fileUploadProblem`).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+export function leadDocStoredName(raw: string): string | null {
+  const name = raw.trim();
+  if (fileUploadProblem({ name, size: 0 }) === 'file_name_invalid') return null;
+  if (name.toLowerCase().endsWith(PDF_EXT)) return name;
+  return name.slice(0, FILE_NAME_MAX_LENGTH - PDF_EXT.length) + PDF_EXT;
+}
+
 /** Документов в черновике — не больше видов документов (новый файл того же вида заменяет прежний). */
 export const LEAD_DRAFT_DOCS_MAX = LEAD_DOC_KINDS.length;
 
@@ -66,6 +84,14 @@ export const LEAD_UPLOAD_LIMIT = 10;
 /** Разобрать документ: не больше 20 за час с одного адреса и по одному одновременно. */
 export const LEAD_READ_LIMIT = 20;
 export const LEAD_READ_WINDOW_SECONDS = 3600;
+/**
+ * Разборов документов со всех адресов за час: разбор идёт в процессе сайта, с многих адресов его не
+ * загрузить. Столько же, сколько начатых загрузок со всех адресов: прочитанный документ второй раз не
+ * разбирается.
+ */
+export const LEAD_READ_ALL_LIMIT = 300;
+/** Начатых загрузок со всех адресов за час: место в хранилище не забить с многих адресов сразу. */
+export const LEAD_UPLOAD_ALL_LIMIT = 300;
 /** Разбор одного документа на лендинге — не дольше 20 секунд (без распознавания сканов). */
 export const LEAD_READ_TIMEOUT_MS = 20_000;
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { fixedClock, type MemoryStorage } from '@buhuchet/adapters';
 import { createFakeDocumentReader, type DocumentText } from '@buhuchet/adapters/documents';
-import { releaseRateLimit, schema, submitLead, takeRateLimit } from '@buhuchet/db';
+import { releaseRateLimit, schema, storageRetryAdd, submitLead, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import {
   LEAD_DOC_MAX_BYTES,
@@ -32,8 +32,13 @@ import {
   TEST_PASSWORD,
 } from '../../testing';
 import fixture from '../contractors/__fixtures__/regdocs-docs.json';
+import { retryStorageDeletes, STORAGE_RETRY_STUCK_ATTEMPTS } from '../files/storage-retry';
 import { purgeLeadDocs } from './lead-purge';
-import { LEAD_READ_RATE_LIMIT, LEAD_UPLOAD_ALL_RATE_LIMIT } from './lead-uploads';
+import {
+  LEAD_READ_ALL_RATE_LIMIT,
+  LEAD_READ_RATE_LIMIT,
+  LEAD_UPLOAD_ALL_RATE_LIMIT,
+} from './lead-uploads';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -325,6 +330,53 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         code: 'lead_read_limit',
         message: LEAD_UPLOAD_MESSAGES.lead_read_limit,
       });
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('имя документа: без «.pdf» на конце — с «.pdf»; со знаками смены направления, «/», «\\» или точкой в конце — «Только PDF» до ссылки', async () => {
+      const ip = '198.18.1.6';
+      for (const name of ['Выписка\u202Efdp.bat', 'Выписка.pdf.', 'папка/a.pdf', 'a\\b.pdf']) {
+        const res = await guest(
+          '/api/leads/uploads',
+          { draft: null, kind: 'gns_cert', name, size: 9 },
+          ip,
+        );
+        expect([name, res.status]).toEqual([name, 400]);
+        expect(await failure(res)).toMatchObject({ code: 'lead_doc_pdf', message: 'Только PDF' });
+      }
+      const names = async (name: string) => {
+        const { read } = await leadDocDraft(app, storage, [
+          { kind: 'gns_cert', content: '%PDF-ipsv', name },
+        ]);
+        return LeadDocsRead.parse(await read.json()).docs.map((d) => d.name);
+      };
+      // «%PDF-» в начале .bat не делает его документом: имя — с «.pdf», скачивается как PDF.
+      expect(await names('Выписка.bat')).toEqual(['Выписка.bat.pdf']);
+      expect(await names('свидетельство')).toEqual(['свидетельство.pdf']);
+      expect(await names('СВИДЕТЕЛЬСТВО.PDF')).toEqual(['СВИДЕТЕЛЬСТВО.PDF']);
+      const long = `${'я'.repeat(252)}.x`;
+      const [kept] = await names(long);
+      expect(kept!.length).toBe(255);
+      expect(kept!.endsWith('.pdf')).toBe(true);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('прочитанный документ второй раз не разбирается: повтор отвечает по сохранённому разбору', async () => {
+      const { draft, ids, read } = await leadDocDraft(app, storage, [
+        { kind: 'gns_cert', content: '%PDF-ipsv' },
+      ]);
+      expect(LeadDocsRead.parse(await read.json()).found).toBe('found');
+      const calls = reader.calls;
+      // Файл подменили по ещё живой ссылке — повтор чтения его не скачивает и не разбирает.
+      await storage.put(`leads/upload/${ids[0]}`, new TextEncoder().encode('%PDF-other'), {
+        contentType: 'application/pdf',
+      });
+      const again = await guest(`/api/leads/uploads/${ids[0]}/read`, { draft }, '198.18.1.7');
+      expect(again.status, await again.clone().text()).toBe(200);
+      const body = LeadDocsRead.parse(await again.json());
+      expect(body.found).toBe('found');
+      expect(body.values.inn).toBe('21503199000123');
+      expect(reader.calls).toBe(calls);
     });
   });
 
@@ -785,6 +837,98 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
     });
   });
 
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+  describe('повторное удаление файлов из хранилища', () => {
+    const retries = () =>
+      f.t.admin.db
+        .select({
+          key: schema.storageDeleteRetries.key,
+          attempts: schema.storageDeleteRetries.attempts,
+        })
+        .from(schema.storageDeleteRetries);
+    /** Хранилище, в котором удаление не удаётся (S3 недоступно), пока `down`. */
+    const flaky = () => {
+      const state = { down: true };
+      const s = Object.create(storage) as MemoryStorage;
+      s.delete = async (key: string) => {
+        if (state.down) throw new Error('S3 недоступно');
+        return storage.delete(key);
+      };
+      return { storage: s, state };
+    };
+
+    it('«Удалить» заявку, когда хранилище недоступно: файлы — на повторное удаление, задача удаляет их, когда хранилище снова работает', async () => {
+      const lead = await ipLead();
+      const docs = await leadDocs(lead.id);
+      const [doc] = docs;
+      await storage.put(doc!.storageKey, new TextEncoder().encode('%PDF-ipsv'), {
+        contentType: 'application/pdf',
+      });
+      const s = flaky();
+      const flakyApp = createApp({ ...f.deps, storage: s.storage, documents: reader });
+      const res = await apiRequest(flakyApp, 'DELETE', `/api/admin/leads/${lead.id}`, admin);
+      expect(res.status, await res.clone().text()).toBe(200);
+      // Заявка стёрта, файл остался — его ключ запомнен.
+      expect(await leadDocs(lead.id)).toEqual([]);
+      expect(storage.files.has(doc!.storageKey)).toBe(true);
+      expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 0 }]);
+      const job = { ...f.deps, storage: s.storage };
+      // Хранилище ещё недоступно: попытка засчитана, ключ остаётся.
+      expect(await retryStorageDeletes(job)).toBe(0);
+      expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 1 }]);
+      // Повтор раньше чем через 50 минут ключ не трогает.
+      s.state.down = false;
+      expect(await retryStorageDeletes(job)).toBe(0);
+      expect(storage.files.has(doc!.storageKey)).toBe(true);
+      const later = {
+        ...job,
+        clock: fixedClock(new Date(f.deps.clock.now().getTime() + 3600_000)),
+      };
+      expect(await retryStorageDeletes(later)).toBe(1);
+      expect(storage.files.has(doc!.storageKey)).toBe(false);
+      expect(await retries()).toEqual([]);
+    });
+
+    it('сутки не удаётся удалить — оповещение администратору платформы, не чаще раза в сутки', async () => {
+      const [adminUser] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'platform-admin'));
+      await f.t.admin.db
+        .insert(schema.telegramLinks)
+        .values({ userId: adminUser!.id, orgId: null, chatId: 7_199_001 });
+      const alerts = () =>
+        f.t.admin.db
+          .select({ text: schema.telegramOutbox.text })
+          .from(schema.telegramOutbox)
+          .where(eq(schema.telegramOutbox.kind, 'alert'));
+      const key = 'leads/upload/00000000-0000-4000-8000-000000000001';
+      try {
+        await storageRetryAdd(f.deps.db, [key]);
+        await f.t.admin.db
+          .update(schema.storageDeleteRetries)
+          .set({ attempts: STORAGE_RETRY_STUCK_ATTEMPTS - 1 });
+        const s = flaky();
+        const job = { ...f.deps, storage: s.storage };
+        await retryStorageDeletes(job);
+        const sent = (await alerts()).filter((a) => a.text.includes('Хранилище'));
+        expect(sent).toHaveLength(1);
+        expect(sent[0]!.text).toContain('1 файлов');
+        const later = {
+          ...job,
+          clock: fixedClock(new Date(f.deps.clock.now().getTime() + 3600_000)),
+        };
+        await retryStorageDeletes(later);
+        expect((await alerts()).filter((a) => a.text.includes('Хранилище'))).toHaveLength(1);
+      } finally {
+        await f.t.admin.db.delete(schema.storageDeleteRetries);
+        await f.t.admin.db
+          .delete(schema.telegramLinks)
+          .where(eq(schema.telegramLinks.userId, adminUser!.id));
+      }
+    });
+  });
+
   // Последним в файле: предел платформы на час общий для всех тестов файла.
   describe('предел загрузок на всю платформу', () => {
     it('больше 300 загрузок за час со всех адресов — 429 и с нового адреса', async () => {
@@ -805,6 +949,56 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         await f.t.admin.db
           .delete(schema.rateLimits)
           .where(eq(schema.rateLimits.kind, LEAD_UPLOAD_ALL_RATE_LIMIT.kind));
+      }
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('больше 300 разборов за час со всех адресов — 429; о сработавшем общем пределе — оповещение администратору платформы', async () => {
+      const [adminUser] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'platform-admin'));
+      await f.t.admin.db
+        .insert(schema.telegramLinks)
+        .values({ userId: adminUser!.id, orgId: null, chatId: 7_199_002 });
+      const ip = '198.18.9.2';
+      try {
+        const started = await guest(
+          '/api/leads/uploads',
+          { draft: null, kind: 'gns_cert', name: 'a.pdf', size: 9 },
+          ip,
+        );
+        expect(started.status).toBe(201);
+        const ticket = LeadUploadTicket.parse(await started.json());
+        await storage.put(`leads/upload/${ticket.id}`, new TextEncoder().encode('%PDF-ipsv'), {
+          contentType: 'application/pdf',
+        });
+        let taken = 0;
+        while ((await takeRateLimit(f.deps.db, LEAD_READ_ALL_RATE_LIMIT, 'all')).ok) {
+          taken += 1;
+          expect(taken).toBeLessThanOrEqual(LEAD_READ_ALL_RATE_LIMIT.max);
+        }
+        const calls = reader.calls;
+        const res = await guest(
+          `/api/leads/uploads/${ticket.id}/read`,
+          { draft: ticket.draft },
+          ip,
+        );
+        expect(res.status).toBe(429);
+        expect((await failure(res)).code).toBe('lead_read_limit');
+        expect(reader.calls).toBe(calls);
+        const alerts = await f.t.admin.db
+          .select({ text: schema.telegramOutbox.text })
+          .from(schema.telegramOutbox)
+          .where(eq(schema.telegramOutbox.kind, 'alert'));
+        expect(alerts.filter((a) => a.text.includes('Заявки с лендинга'))).toHaveLength(1);
+      } finally {
+        await f.t.admin.db
+          .delete(schema.rateLimits)
+          .where(eq(schema.rateLimits.kind, LEAD_READ_ALL_RATE_LIMIT.kind));
+        await f.t.admin.db
+          .delete(schema.telegramLinks)
+          .where(eq(schema.telegramLinks.userId, adminUser!.id));
       }
     });
   });

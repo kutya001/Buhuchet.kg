@@ -12,6 +12,7 @@ import type { Job } from '../deps';
 import { purgeLeadDocsJob } from '../modules/admin/lead-purge';
 import { cleanupPendingFiles } from '../modules/files/cleanup';
 import { purgeSentFilesJob } from '../modules/files/sent-purge';
+import { storageRetryJob } from '../modules/files/storage-retry';
 import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
@@ -109,6 +110,7 @@ export const jobs: readonly Job[] = [
   createDueReportsJob,
   cleanupPendingFilesJob,
   purgeSentFilesJob,
+  storageRetryJob,
   duesRecalcJob,
   cleanupVideoUploadsJob,
   purgeLeadDocsJob,

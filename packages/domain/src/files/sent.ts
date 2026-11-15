@@ -8,6 +8,7 @@ import { addDays, diffDays, type IsoDate } from '../common/dates';
 import type { PageSection } from '../org/policy';
 import {
   cleanFileNote,
+  fileExtension,
   FILE_MAX_BYTES,
   FILE_NAME_MAX_LENGTH,
   fileUploadProblem,
@@ -67,6 +68,25 @@ export function sentFileRefusalText(r: SentFileRefusal): string {
     .replace('{n}', String(r.n ?? 0));
 }
 
+/**
+ * Документы с макросами от контрагента (со страницы по ссылке и из Telegram) не принимаются: макрос
+ * выполняется у сотрудника, открывшего файл, а прислать файл может любой, кто знает ссылку и код.
+ * Сотрудники такие файлы загружают сами, как прежде.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+export const SENT_BLOCKED_EXTENSIONS: ReadonlySet<string> = new Set([
+  'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm', 'potm', 'ppam', 'ppsm', 'sldm',
+]); // prettier-ignore
+
+/** Что не так с файлом от контрагента: как у любой загрузки, и ещё документы с макросами. */
+function sentFileProblem(name: string): FileProblem | null {
+  const problem = fileUploadProblem({ name, size: 0 });
+  if (problem) return problem;
+  return SENT_BLOCKED_EXTENSIONS.has(fileExtension(name.trim()) ?? '')
+    ? 'file_type_forbidden'
+    : null;
+}
+
 const BY_FILE: Partial<Record<FileProblem, SentFileProblem>> = {
   file_name_invalid: 'sent_name_invalid',
   file_type_forbidden: 'sent_forbidden',
@@ -87,7 +107,7 @@ export function sentFilesSendRefusal(
   // Размер проверяется отдельно от имени и типа: «big.exe» больше 20 МБ — сначала «больше 20 МБ», как в прототипе.
   const problems = files.map((f) => ({
     name: f.name,
-    p: f.size > FILE_MAX_BYTES ? 'file_too_large' : fileUploadProblem({ name: f.name, size: 0 }),
+    p: f.size > FILE_MAX_BYTES ? 'file_too_large' : sentFileProblem(f.name),
   }));
   for (const p of ['file_name_invalid', 'file_too_large', 'file_type_forbidden'] as const) {
     const bad = problems.filter((x) => x.p === p).map((x) => x.name);

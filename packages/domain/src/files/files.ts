@@ -123,6 +123,9 @@ export const FILE_BLOCKED_EXTENSIONS: ReadonlySet<string> = new Set([
   'php', 'phtml', 'asp', 'aspx', 'jsp',
   'chm', 'iso', 'img', 'vhd', 'vhdx', 'msc', 'url', 'scf', 'xll', 'ws', 'wsc', 'sct',
   'appx', 'msix', 'appinstaller', 'application', 'jnlp', 'settingcontent-ms', 'library-ms',
+  'searchconnector-ms', 'ps1xml', 'ps2', 'ps2xml', 'psc1', 'psc2', 'psd1', 'msh', 'msh1', 'msh2',
+  'mshxml', 'msh1xml', 'msh2xml', 'py', 'pyw', 'pyc', 'pyo', 'pl', 'rb', 'vb', 'vbp', 'one', 'iqy',
+  'slk', 'mde', 'mda', 'accde', 'ade', 'adp', 'website', 'desktop', 'gadget', 'diagcab',
 ]); // prettier-ignore
 
 /** Тип содержимого по расширению: под ним файл лежит в хранилище и отдаётся при скачивании. */

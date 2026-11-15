@@ -10,6 +10,7 @@ export * from './platform-history';
 export * from './status';
 export * from './files';
 export * from './sent-files';
+export * from './storage-retries';
 export * from './auth';
 export * from './telegram';
 export * from './telegram-bot';
