@@ -34,6 +34,17 @@ describe('история заявки', () => {
     );
   });
 
+  it('заявитель подключил Telegram по ссылке — «Telegram подключён: <имя>» через Telegram (прототип v113)', () => {
+    const tg = event({ kind: 'tg', actor: GUEST, text: '@ivanov', via: 'telegram' });
+    expect(leadEventText(t, tg, false)).toBe('Telegram подключён: @ivanov');
+    expect(
+      leadHistoryItems(t, { history: [tg], fromStand: false } as unknown as AdminLeadCard)[0],
+    ).toMatchObject({
+      who: GUEST,
+      via: t('telegram.via'),
+    });
+  });
+
   it('смена статуса, «Отказ» с причиной, откат, организация по заявке, заметка', () => {
     const status = (over: Partial<AdminLeadEvent>) => leadEventText(t, event(over), false);
     expect(status({ from: 'new', to: 'in_progress' })).toBe('Статус: Новая → В работе');

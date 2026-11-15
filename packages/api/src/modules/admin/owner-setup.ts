@@ -44,7 +44,10 @@ export const ownerSetupRoute = createRoute({
         'Пароль уже задан или ссылка не положена (`owner_setup_unavailable`); у владельца не привязан Telegram (`owner_no_telegram`)',
       content: error,
     },
-    503: { description: 'Telegram не принял сообщение (`telegram_send_failed`)', content: error },
+    503: {
+      description: 'Telegram не принял сообщение (`owner_setup_send_failed`)',
+      content: error,
+    },
   },
 });
 
@@ -66,9 +69,10 @@ export function ownerSetupHandler(deps: ApiDeps): RouteHandler<typeof ownerSetup
         days: OWNER_SETUP_DAYS,
       });
       if (issued?.outcome === 'ok') {
+        // В историю организации — её видно во вкладке «История» карточки (прототип: log('porg', …)).
         await writeHistory(tx, {
-          entity: 'user',
-          entityId: ownerId,
+          entity: 'organization',
+          entityId: id,
           action: 'update',
           changes: [],
           reason: `Владельцу ${issued.login} отправлена новая ссылка, чтобы задать пароль; прежняя больше не действует`,
@@ -87,7 +91,7 @@ export function ownerSetupHandler(deps: ApiDeps): RouteHandler<typeof ownerSetup
     }
     const sent = await sendSetupMessage(deps, result.ownerId, result.issued, token);
     if (sent !== 'sent') {
-      return c.json(apiError('telegram_send_failed', 'Telegram не принял сообщение'), 503);
+      return c.json(apiError('owner_setup_send_failed', 'Telegram не принял сообщение'), 503);
     }
     return c.json({ ok: true as const }, 200);
   };

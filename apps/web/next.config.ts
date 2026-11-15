@@ -2,7 +2,14 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
-import { DEMO_HEADERS, DEMO_PATHS, SECURITY_HEADERS, SITE_PAGES } from './src/site-headers';
+import {
+  DEMO_HEADERS,
+  DEMO_PATHS,
+  SECURITY_HEADERS,
+  SETPASS_HEADERS,
+  SETPASS_PATH,
+  SITE_PAGES,
+} from './src/site-headers';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PNPM = '../../node_modules/.pnpm';
@@ -19,6 +26,7 @@ const config: NextConfig = {
     return [
       { source: SITE_PAGES, headers: SECURITY_HEADERS },
       ...DEMO_PATHS.map((source) => ({ source, headers: DEMO_HEADERS })),
+      { source: SETPASS_PATH, headers: SETPASS_HEADERS },
     ];
   },
   async rewrites() {

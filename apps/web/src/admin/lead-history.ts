@@ -19,6 +19,9 @@ export function leadEventText(t: Translate, e: AdminLeadEvent, fromStand: boolea
       return t(e.text ? 'leads.hist.repeat_note' : 'leads.hist.repeat');
     case 'note':
       return t('leads.hist.note');
+    // Заявитель нажал «Старт» по ссылке «Подключить Telegram» (доработки 14.11.2026, блок 1, пункт 2).
+    case 'tg':
+      return t('leads.hist.tg', { name: e.text ?? '' });
     case 'rollback':
       return t('leads.hist.rollback', { from, to, reason: e.text ?? '' });
     case 'org':

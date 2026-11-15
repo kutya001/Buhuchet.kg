@@ -196,7 +196,13 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
 
     const before = await f.t.admin.db.$count(schema.platformLeadTgTokens);
     const trap = await f.t.app.db.transaction((tx) =>
-      issueLeadTgLink(tx, { leadId: null, repeat: false, prior: null, now: clock.now(), botUsername: BOT }),
+      issueLeadTgLink(tx, {
+        leadId: null,
+        repeat: false,
+        prior: null,
+        now: clock.now(),
+        botUsername: BOT,
+      }),
     );
     expect(trap).toEqual({
       url: expect.stringMatching(LINK_RE),
@@ -208,7 +214,13 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     const res = await submitLead(f.t.app.db, lead());
     expect(
       await f.t.app.db.transaction((tx) =>
-        issueLeadTgLink(tx, { leadId: res.leadId, repeat: false, prior: null, now: clock.now(), botUsername: '' }),
+        issueLeadTgLink(tx, {
+          leadId: res.leadId,
+          repeat: false,
+          prior: null,
+          now: clock.now(),
+          botUsername: '',
+        }),
       ),
     ).toBeNull();
   });
@@ -221,14 +233,23 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       const res = await submitLead(f.t.app.db, s);
       expect(res.outcome).toBe('repeat');
       return f.t.app.db.transaction((tx) =>
-        issueLeadTgLink(tx, { leadId: res.leadId, repeat: true, prior, now: s.now, botUsername: BOT }),
+        issueLeadTgLink(tx, {
+          leadId: res.leadId,
+          repeat: true,
+          prior,
+          now: s.now,
+          botUsername: BOT,
+        }),
       );
     };
     expect(await repeat(null)).toBeNull();
     clock.advance(60_000);
     expect(await repeat('мусор')).toBeNull();
     clock.advance(60_000);
-    expect(await repeat(l.key)).toMatchObject({ url: l.link && 'url' in l.link ? l.link.url : '', token: l.key });
+    expect(await repeat(l.key)).toMatchObject({
+      url: l.link && 'url' in l.link ? l.link.url : '',
+      token: l.key,
+    });
     expect((await start(l.key, 9201)).status).toBe(200);
     clock.advance(60_000);
     expect(await repeat(l.key)).toEqual({ linked: true });
@@ -246,7 +267,9 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     const [event] = await f.t.admin.db
       .select()
       .from(schema.platformLeadEvents)
-      .where(and(eq(schema.platformLeadEvents.leadId, l.id), eq(schema.platformLeadEvents.kind, 'tg')));
+      .where(
+        and(eq(schema.platformLeadEvents.leadId, l.id), eq(schema.platformLeadEvents.kind, 'tg')),
+      );
     expect(event).toMatchObject({ text: '@aigul_s', via: 'telegram', actorUserId: null });
 
     const count = sent(9211).length;
@@ -294,32 +317,58 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         .from(schema.platformLeads)
         .where(eq(schema.platformLeads.phone, phone));
       const link = await f.t.app.db.transaction((tx) =>
-        issueLeadTgLink(tx, { leadId: saved!.id, repeat: false, prior: null, now: clock.now(), botUsername: BOT }),
+        issueLeadTgLink(tx, {
+          leadId: saved!.id,
+          repeat: false,
+          prior: null,
+          now: clock.now(),
+          botUsername: BOT,
+        }),
       );
       const key = LINK_RE.exec(link && 'url' in link ? link.url : '')![1]!;
       await start(key, 9221);
 
-      const notice = tg.sent.map((m, i) => ({ ...m, id: tg.messageIds[i]! })).filter((m) => m.chatId === 9220).at(-1)!;
-      await sendToBot(app, telegramPress(botPressData(LEAD_BOT_ACTIONS.no, saved!.id), 9220, notice.id));
-      const ask = tg.sent.map((m, i) => ({ ...m, id: tg.messageIds[i]! })).filter((m) => m.chatId === 9220).at(-1)!;
+      const notice = tg.sent
+        .map((m, i) => ({ ...m, id: tg.messageIds[i]! }))
+        .filter((m) => m.chatId === 9220)
+        .at(-1)!;
+      await sendToBot(
+        app,
+        telegramPress(botPressData(LEAD_BOT_ACTIONS.no, saved!.id), 9220, notice.id),
+      );
+      const ask = tg.sent
+        .map((m, i) => ({ ...m, id: tg.messageIds[i]! }))
+        .filter((m) => m.chatId === 9220)
+        .at(-1)!;
       await sendToBot(app, telegramUpdate('Не наш регион', 9220, { replyTo: ask.id }));
       expect(last(9221)?.text).toBe(
         fillTemplate(TPL.tgLeadNo, { фирма: FIRM, причина: 'Не наш регион' }),
       );
       expect(await sendLeadRefused(deps, { leadId: saved!.id })).toBe('not_linked');
     } finally {
-      await f.t.admin.db.delete(schema.telegramLinks).where(eq(schema.telegramLinks.userId, platform!.userId));
+      await f.t.admin.db
+        .delete(schema.telegramLinks)
+        .where(eq(schema.telegramLinks.userId, platform!.userId));
     }
   });
 
   it('отказ на сайте до «Старта»: причина приходит в ответ на «Старт»; после — sendLeadRefused её не повторяет', async () => {
     const l = await submitted();
     await withUserContext(f.t.app.db, adminId, (tx) =>
-      setLeadStatus(tx, { id: l.id, version: null, to: 'rejected', before: 'new', text: 'Дубль заявки', now: clock.now() }),
+      setLeadStatus(tx, {
+        id: l.id,
+        version: null,
+        to: 'rejected',
+        before: 'new',
+        text: 'Дубль заявки',
+        now: clock.now(),
+      }),
     );
     expect(await sendLeadRefused(deps, { leadId: l.id })).toBe('not_linked');
     await start(l.key, 9231);
-    expect(last(9231)?.text).toBe(fillTemplate(TPL.tgLeadNo, { фирма: FIRM, причина: 'Дубль заявки' }));
+    expect(last(9231)?.text).toBe(
+      fillTemplate(TPL.tgLeadNo, { фирма: FIRM, причина: 'Дубль заявки' }),
+    );
     expect(await sendLeadRefused(deps, { leadId: l.id })).toBe('not_linked');
   });
 
@@ -329,7 +378,11 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(await sendOwnerSetup(deps, { userId: org.ownerUserId, adminId })).toBe('sent');
     const msg = last(c)!;
     expect(msg.text).toBe(
-      fillTemplate(TPL.tgLeadDone, { организация: 'ОсОО «ltg-api-a»', логин: 'ltg-api-a-owner', дней: 7 }),
+      fillTemplate(TPL.tgLeadDone, {
+        организация: 'ОсОО «ltg-api-a»',
+        логин: 'ltg-api-a-owner',
+        дней: 7,
+      }),
     );
     expect((msg.options.keyboard ?? []).flat()).toEqual([
       { text: TPL.tgBtnSetPass, url: expect.stringMatching(SETUP_RE) },
@@ -349,7 +402,9 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       staff: { rows: { userId: string; states: string[] }[] };
     };
     expect(body.owner).toMatchObject({ passwordUnset: true, telegram: true });
-    expect(body.staff.rows.find((r) => r.userId === org.ownerUserId)?.states).toContain('no_password');
+    expect(body.staff.rows.find((r) => r.userId === org.ownerUserId)?.states).toContain(
+      'no_password',
+    );
   });
 
   it('страница «Задать пароль»: открыть — не тратит; пароль — один раз, сеансы завершены, вход с новым паролем', async () => {
@@ -360,7 +415,10 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(view.status).toBe(200);
     expect(view.headers.get('cache-control')).toBe('no-store');
     expect(view.headers.get('referrer-policy')).toBe('no-referrer');
-    expect(await view.json()).toEqual({ login: 'ltg-api-b-owner', organization: 'ОсОО «ltg-api-b»' });
+    expect(await view.json()).toEqual({
+      login: 'ltg-api-b-owner',
+      organization: 'ОсОО «ltg-api-b»',
+    });
     expect((await peek(key)).status).toBe(200);
 
     expect((await setPassword(key, 'Корот7')).status).toBe(400);
@@ -376,9 +434,22 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     const [history] = await f.t.admin.db
       .select()
       .from(schema.auditLog)
-      .where(and(eq(schema.auditLog.entityId, org.ownerUserId), eq(schema.auditLog.action, 'update')))
+      .where(
+        and(eq(schema.auditLog.entityId, org.ownerUserId), eq(schema.auditLog.action, 'update')),
+      )
       .orderBy(desc(schema.auditLog.at));
     expect(history?.reason).toBe('Пароль задан по ссылке из Telegram');
+    // И в истории организации, которую видит Админка (прототип: log('porg', …)).
+    const card = await apiRequest(
+      app,
+      'GET',
+      `/api/admin/organizations/${org.orgId}/card?refresh=1`,
+      admin,
+    );
+    const { history: orgHistory } = (await card.json()) as { history: { reason: string | null }[] };
+    expect(orgHistory.map((h) => h.reason)).toContain(
+      'Владелец ltg-api-b-owner задал пароль по ссылке из Telegram',
+    );
     expect((await peek('C'.repeat(43))).status).toBe(404);
   });
 
@@ -391,17 +462,24 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect((await apiRequest(app, 'POST', path, owner)).status).toBe(403);
     const res = await apiRequest(app, 'POST', path, admin);
     expect(res.status).toBe(200);
-    expect(last(c)?.text).toBe(fillTemplate(TPL.tgSetPassNew, { логин: 'ltg-api-c-owner', дней: 7 }));
+    expect(last(c)?.text).toBe(
+      fillTemplate(TPL.tgSetPassNew, { логин: 'ltg-api-c-owner', дней: 7 }),
+    );
     const second = setupKeyOf(c);
     expect(second).not.toBe(first);
     expect((await peek(first)).status).toBe(404);
     expect((await peek(second)).status).toBe(200);
-    const [history] = await f.t.admin.db
-      .select()
-      .from(schema.auditLog)
-      .where(eq(schema.auditLog.entityId, org.ownerUserId))
-      .orderBy(desc(schema.auditLog.at));
-    expect(history?.reason).toContain('отправлена новая ссылка, чтобы задать пароль');
+    // Отправка — в истории организации (вкладка «История» карточки в Админке).
+    const card = await apiRequest(
+      app,
+      'GET',
+      `/api/admin/organizations/${org.orgId}/card?refresh=1`,
+      admin,
+    );
+    const { history } = (await card.json()) as { history: { reason: string | null }[] };
+    expect(history.map((h) => h.reason)).toContain(
+      'Владельцу ltg-api-c-owner отправлена новая ссылка, чтобы задать пароль; прежняя больше не действует',
+    );
 
     expect((await setPassword(second, 'Новый-пароль-1')).status).toBe(200);
     const after = await apiRequest(app, 'POST', path, admin);
@@ -410,12 +488,24 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
 
     const plain = await approved('ltg-api-d', '06811201810451', false);
     expect(plain.linked).toBe(false);
-    expect(await sendOwnerSetup(deps, { userId: plain.org.ownerUserId, adminId })).toBe('no_telegram');
-    const none = await apiRequest(app, 'POST', `/api/admin/organizations/${plain.org.orgId}/owner-setup`, admin);
+    expect(await sendOwnerSetup(deps, { userId: plain.org.ownerUserId, adminId })).toBe(
+      'no_telegram',
+    );
+    const none = await apiRequest(
+      app,
+      'POST',
+      `/api/admin/organizations/${plain.org.orgId}/owner-setup`,
+      admin,
+    );
     expect(none.status).toBe(409);
     expect(await none.json()).toMatchObject({ error: { code: 'owner_no_telegram' } });
     // Организация без заявки — ссылка не положена.
-    const other = await apiRequest(app, 'POST', `/api/admin/organizations/${f.a.orgId}/owner-setup`, admin);
+    const other = await apiRequest(
+      app,
+      'POST',
+      `/api/admin/organizations/${f.a.orgId}/owner-setup`,
+      admin,
+    );
     expect(other.status).toBe(409);
   });
 });

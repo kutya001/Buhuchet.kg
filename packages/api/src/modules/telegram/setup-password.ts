@@ -123,6 +123,14 @@ export function setupCompleteHandler(
           changes: [{ field: 'passwordHash' }],
           reason: 'Пароль задан по ссылке из Telegram',
         });
+        // И в историю организации — как в прототипе (`log('porg', …)`): её видит Админка.
+        await writeHistory(tx, {
+          entity: 'organization',
+          entityId: found.orgId,
+          action: 'update',
+          changes: [],
+          reason: `Владелец ${done} задал пароль по ссылке из Telegram`,
+        });
         return done;
       },
     );

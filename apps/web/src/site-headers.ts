@@ -12,6 +12,17 @@ export const SECURITY_HEADERS = [
 export const SITE_PAGES = '/((?!api/|demo(?:\\.html)?$).*)';
 
 /**
+ * Страница «Задать пароль» по ссылке из Telegram (`/setpass/<ключ>`, доработки 14.11.2026, блок 1,
+ * пункт 3): ключ ссылки — в адресе, поэтому он не уходит на другие сайты в заголовке Referer, а
+ * поисковики страницу не индексируют. Идёт после общих заголовков и заменяет их Referrer-Policy.
+ */
+export const SETPASS_PATH = '/setpass/:token';
+export const SETPASS_HEADERS = [
+  { key: 'Referrer-Policy', value: 'no-referrer' },
+  { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+];
+
+/**
  * Демо-организация buhuchet.kg/demo (ТЗ «Лендинг» → «Демо-организация»): готовый файл прототипа
  * (`public/demo.html`, собирает scripts/build-demo.mjs), который работает только в браузере гостя.
  * Всё нужное демо-версии встроено в файл (скрипты, стили, шрифты, чтение PDF), поэтому сайт отдаёт его
