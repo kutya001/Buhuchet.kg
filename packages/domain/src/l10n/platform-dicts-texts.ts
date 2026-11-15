@@ -268,6 +268,41 @@ const SYSTEM_TEXTS = {
     ru: 'Telegram контрагента: нет реквизитов для перевода',
     section: S,
   },
+  'pdicts.tpl.label.tg_cp_fee_soon': {
+    ru: 'Telegram контрагента: оплата за обслуживание до срока',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_btn_cp_receipt': {
+    ru: 'Telegram контрагента: кнопка «Прислать чек»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_offer': {
+    ru: 'Telegram контрагента: предложение прислать чек',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_ask': {
+    ru: 'Telegram контрагента: просьба прислать чек',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_type': {
+    ru: 'Telegram контрагента: чек не фото и не PDF',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_receipt_ok': { ru: 'Telegram контрагента: чек передан', section: S },
+  'pdicts.tpl.label.tg_cp_file_ok': { ru: 'Telegram контрагента: файл передан', section: S },
+  'pdicts.tpl.label.tg_cp_file_which': {
+    ru: 'Telegram контрагента: «От какой компании?»',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_file_off': {
+    ru: 'Telegram контрагента: файлы не принимаются',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_file_limit': {
+    ru: 'Telegram контрагента: лимит файлов за сутки',
+    section: S,
+  },
+  'pdicts.tpl.label.tg_cp_file_no': { ru: 'Telegram контрагента: файл не принят', section: S },
   'pdicts.tpl.label.tg_act_no_link': {
     ru: 'Telegram: скрытый ответ — Telegram не привязан',
     section: S,

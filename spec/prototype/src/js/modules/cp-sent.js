@@ -1,5 +1,5 @@
 'use strict';
-// «Файлы от контрагентов» (доработки 14.11.2026, блок 2; прототип v112). Контрагент отправляет файлы со своей страницы (из Telegram — этап 2, поток К);
+// «Файлы от контрагентов» (доработки 14.11.2026, блок 2; прототип v112). Контрагент отправляет файлы со своей страницы и через бота (v113, поток К: pgFileIn, cp-telegram.js);
 // у контрагента — раздел «Отправленные файлы» на вкладке «Файлы» карточки, в «Файловом менеджере» — вкладка «Файлы от контрагентов».
 // Статусы: «Новый» → «Принят» или «Отклонён» (с обязательной причиной); принятый становится обычным файлом контрагента с источником «От контрагента».
 // Непринятые («Новый» и «Отклонён») через 30 дней после отправки удаляются полностью, вместе с файлом в хранилище, без напоминания (решение заказчика 14.11.2026).
@@ -27,7 +27,9 @@ const sntUpOn=c=>pgOn(c)&&pgSecs(c).includes('files')&&ORG.cpUpload!==false&&!(c
 function sntNotify(c,n){const to=pgTgStaff(c);if(to)tgSvc(to,n>1?`Новые файлы от контрагента: ${n}`:'Новый файл от контрагента')}
 function sntAccept(x){const c=CPM[x.cp];if(!c||x.st!=='new')return;let n=x.name;if((c.files||[]).includes(n)){const i=n.lastIndexOf('.'),b=i>0?n.slice(0,i):n,e=i>0?n.slice(i):'';let k=2;while(c.files.includes(`${b} (${k})${e}`))k++;n=`${b} (${k})${e}`}
   Object.assign(x,{st:'ok',dBy:S.me,dAt:nowStamp(),fname:n});c.files=c.files||[];c.files.push(n);c.fromCp=[...(c.fromCp||[]),n];fmSet(c.id,n,{size:x.size,note:x.note||''});FUP.add(n);
-  log('cp',c.id,`Принят файл от контрагента «${x.name}»${n!==x.name?` (сохранён как «${n}»)`:''}`,c.id);refreshAll();toast('Файл принят: он среди файлов контрагента','check')}
+  log('cp',c.id,`Принят файл от контрагента «${x.name}»${n!==x.name?` (сохранён как «${n}»)`:''}`,c.id);refreshAll();toast('Файл принят: он среди файлов контрагента','check');
+  // Чек из Telegram (блок 4, пункт 4): сразу «Принять деньги» с суммой из оплаченного сообщения
+  if(x.pay)pgRcptMoney(c,x.pay)}
 function sntRejectDlg(x,done){openModal({form:true,noMax:true,render:()=>({title:'Отклонить файл',sub:esc(x.name),body:`<div class="form">${fld('Причина',`<textarea class="inp" id="snt-why" maxlength="${SNT_NOTE}" placeholder="Например: не тот месяц, пришлите выписку за октябрь"></textarea>`,{req:true,full:true,id:'snt-why',hint:'Контрагент увидит причину на своей странице. Отклонённый файл удалится через '+SNT_KEEP+' дней после отправки'})}</div>`,
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn danger" id="snt-ok">Отклонить</button>',
   mount(el,m){$('#snt-ok',el).onclick=()=>{const why=val(el,'snt-why').replace(/\s+/g,' ').trim();if(!setErr(el,'snt-why',why?'':'Укажите причину'))return;
@@ -67,10 +69,11 @@ function renderSent(body,fresh){body.innerHTML='<div id="sntg"></div>';
 function filesTabs(){if(!feat('cppage'))return [];const n=sntNew();return [{id:'all',label:'Все файлы',icon:'folder'},{id:'sent',label:'Файлы от контрагентов',icon:'upload',count:n||null}]}
 
 /* Страница контрагента: «Отправить файл» и список отправленного со статусом, причиной отказа и «Удалится через N дн.» */
-const sntDayCnt=c=>SENT.filter(x=>x.cp===c.id&&x.src==='page'&&Date.now()-new Date(String(x.at).replace(' ','T')+':00+06:00').getTime()<864e5).length;
+// Не больше 20 файлов в сутки от одного контрагента — со страницы и из Telegram вместе
+const sntDayCnt=c=>SENT.filter(x=>x.cp===c.id&&Date.now()-new Date(String(x.at).replace(' ','T')+':00+06:00').getTime()<864e5).length;
 function pubSentHtml(c){const up=sntUpOn(c),l=SENT.filter(x=>x.cp===c.id).sort((a,b)=>String(b.at).localeCompare(String(a.at)));if(!up&&!l.length)return '';
   return `<div class="pub-sent">${up?`<div class="row"><button type="button" class="btn sm cta" data-pub-up>${ic('upload','sm')}Отправить файл</button><span class="hint">Документы для бухгалтера: до ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый</span></div>`:''}
-    ${l.length?`<b class="pub-sl-h">Отправленные вами</b><div class="pub-list pub-sl">${l.map(x=>`<div class="pub-frow pub-srow">${ic(pubFIc(x.name))}<span class="pub-fm"><b>${esc(x.name)}</b><span class="hint">${fmtDT(x.at)}${x.note?' · '+esc(x.note):''}</span>${x.st==='rej'&&x.why?`<span class="hint bad">Причина: ${esc(x.why)}</span>`:''}</span><span class="pub-fs">${pill(SNT_ST[x.st],SNT_PILL)}${x.st!=='ok'?`<span class="hint">${sntLeftTxt(x)}</span>`:''}</span></div>`).join('')}${pubMore(l.length)}</div>`:''}</div>`}
+    ${l.length?`<b class="pub-sl-h">Отправленные вами</b><div class="pub-list pub-sl">${l.map(x=>`<div class="pub-frow pub-srow">${ic(pubFIc(x.name))}<span class="pub-fm"><b>${esc(x.name)}</b><span class="hint">${fmtDT(x.at)}${x.src==='tg'?' · из Telegram':''}${x.note?' · '+esc(x.note):''}</span>${x.st==='rej'&&x.why?`<span class="hint bad">Причина: ${esc(x.why)}</span>`:''}</span><span class="pub-fs">${pill(SNT_ST[x.st],SNT_PILL)}${x.st!=='ok'?`<span class="hint">${sntLeftTxt(x)}</span>`:''}</span></div>`).join('')}${pubMore(l.length)}</div>`:''}</div>`}
 function pubUpDlg(c){if(!sntUpOn(c)){toast('Ваш бухгалтер сейчас не принимает файлы через страницу','lock',true);return}
   openModal({form:true,noMax:true,render:()=>({title:'Отправить файл',sub:'Файлы получит ваш бухгалтер',body:`<div class="form">${fld('Файлы',`<input class="inp" type="file" id="pu-f" multiple>`,{req:true,full:true,id:'pu-f',hint:`До ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый. Программы, сценарии и веб-страницы не принимаются`})}
     ${fld('Комментарий',`<textarea class="inp" id="pu-note" maxlength="${SNT_NOTE}" placeholder="Необязательно: что это за документы"></textarea>`,{full:true,id:'pu-note'})}</div>`,
