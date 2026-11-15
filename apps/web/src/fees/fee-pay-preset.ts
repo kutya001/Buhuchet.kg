@@ -1,9 +1,13 @@
 import { autoAllocate, formatSomWithUnit } from '@buhuchet/domain';
 import type { FeePaymentForm } from '@buhuchet/shared';
+import type { SentReceipt } from '../contractor-page/receipt-file';
 import type { Translate } from '../l10n/translate';
 
-/** Что подставить в «Принять оплату за обслуживание» по чеку из Telegram: сумма и примечание. */
-export type FeePaymentPreset = { amount: number | null; note: string };
+/**
+ * Что подставить в «Принять оплату за обслуживание» по чеку из Telegram: сумма и примечание, сам чек —
+ * в поле «Файл» (прототип v119 `feePayDlg` с `pre.file`), прикрепляется после сохранения.
+ */
+export type FeePaymentPreset = { amount: number | null; note: string; receipt?: SentReceipt };
 
 /** Месяцы окна в порядке распределения суммы (от старых к новым, как прислал сервер). */
 export function feeOrderedMonths(form: FeePaymentForm) {

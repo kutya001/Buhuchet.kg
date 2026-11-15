@@ -674,6 +674,8 @@ export const MESSAGE_TEMPLATE_REQUIRED: Readonly<Record<string, readonly string[
   tgCode: ['код'],
   tgAdminCode: ['код'],
   tgRelinkCode: ['код'],
+  // Код от страницы контрагента (прототип v116): без кода сообщение бесполезно.
+  tgCpCode: ['код'],
 };
 
 /** Обязательные подстановки шаблона, которых нет в тексте. */

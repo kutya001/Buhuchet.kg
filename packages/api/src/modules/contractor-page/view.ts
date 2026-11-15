@@ -1,6 +1,8 @@
 import {
   contractorMoneyOf,
+  contractorTaxTransfer,
   feeSubject,
+  feeTransfer,
   kpiData,
   listIndicators,
   loadTargets,
@@ -12,7 +14,9 @@ import {
   pageReports,
   pageScreenTexts,
   pageYearMoney,
+  waitingPayClaims,
   type Tx,
+  type WaitingPayClaim,
 } from '@buhuchet/db';
 import {
   contractorFees,
@@ -28,6 +32,7 @@ import {
   pageFileCategories,
   pageFileRel,
   pageKpiYears,
+  pageMonthPay,
   pagePeriodicity,
   pageReportMark,
   pageTaxTotals,
@@ -37,12 +42,14 @@ import {
   paymentStatus,
   periodFull,
   periodLabel,
+  reportMonth,
   type Feature,
   type IsoDate,
   type PageSection,
   type Translate,
 } from '@buhuchet/domain';
 import type { PublicPageBody } from '@buhuchet/shared';
+import { pageTransferOf } from '../telegram/client/requisite';
 
 /*
  * Разделы открытой страницы контрагента (задача 2.43; ТЗ «Страница контрагента по ссылке» → «Что
@@ -118,6 +125,8 @@ export async function contractorPageBody(
     : null;
   const money = taxpay && needReports ? await contractorMoneyOf(tx, contractorId) : null;
   const typeOf = new Map(rep?.types.map((x) => [x.code, x]) ?? []);
+  // Принято под отчёт детализацией поступлений (прототип `r.recv`) — для «оплачено» месяца.
+  const recvOf = new Map(money?.reports.map((x) => [x.id, x.received]) ?? []);
   const rows = (rep?.reports ?? []).map((r) => {
     const type = typeOf.get(r.typeCode);
     const sum = r.amount;
@@ -127,14 +136,24 @@ export async function contractorPageBody(
       hasSum: hasTaxSum(r.act),
       // «Получено от контрагента» по сверке (прототип `r.got`).
       got: money?.money.reports.get(r.id)?.received ?? 0,
+      recv: recvOf.get(r.id) ?? 0,
       payStatus:
         taxpay && hasTaxSum(r.act) && (sum ?? 0) > 0
           ? (paymentStatus({ act: r.act, status: r.status, sum, paid: r.paid }) as
               'unpaid' | 'partial' | 'paid')
           : null,
       period: lowerFirst(periodText(r, type?.eventLabel ?? '', t)),
+      month: reportMonth(r),
     };
   });
+  // Сообщения клиента об оплате, которые ждут подтверждения (блок 6; прототип v116 `pgClaimWait`):
+  // со страницы и из Telegram — для «Ожидает подтверждения» у месяцев и карточек «Как оплатить».
+  const waiting: WaitingPayClaim[] =
+    has('reports') || has('pay') || showFee ? await waitingPayClaims(tx, contractorId) : [];
+  const lastWaiting = (purpose: 'tax' | 'fee', month?: string) =>
+    waiting
+      .filter((x) => x.purpose === purpose && (month === undefined || x.month === month))
+      .pop() ?? null;
 
   const late = has('reports')
     ? rows.filter((x) => pageReportMark({ status: x.r.status, due: x.r.dueDate }, today) === 'late')
@@ -180,7 +199,15 @@ export async function contractorPageBody(
         months: fees.months
           .filter((m) => m.charge > 0 || m.paid > 0)
           .reverse()
-          .map((m) => ({ month: m.month, charge: m.charge, got: m.got, status: m.status })),
+          .map((m) => ({
+            month: m.month,
+            charge: m.charge,
+            got: m.got,
+            // Оплачено полностью — «Оплачено»; клиент сообщил об оплате месяца — «Ожидает
+            // подтверждения» (прототип v116: `p>=ch?…:pgClaimWait(c,'fee',m)?…`).
+            status:
+              m.status !== 'paid' && lastWaiting('fee', m.month) ? ('wait' as const) : m.status,
+          })),
       };
     }
   }
@@ -208,8 +235,36 @@ export async function contractorPageBody(
       tax: taxpay,
       fee: showFee,
     });
-    if (found.tax || found.fee) pay = found;
+    // Подпись «Реквизиты для перевода — …» и кнопка копирования — как в Telegram (прототип v116 `pubPay`).
+    const transfer = async (kind: 'tax' | 'fee') => {
+      const of =
+        kind === 'tax'
+          ? await contractorTaxTransfer(tx, {
+              paysTo: facts.paysTo,
+              responsibleId: facts.responsibleEmployeeId,
+            })
+          : await feeTransfer(tx);
+      return of ? pageTransferOf(tx, t, of) : null;
+    };
+    const card = async (kind: 'tax' | 'fee') => {
+      const a = found[kind];
+      if (!a) return null;
+      const tr = await transfer(kind);
+      const w = lastWaiting(kind);
+      return {
+        ...a,
+        head: tr?.head ?? '',
+        copy: tr?.copy ?? a.copy,
+        copyLabel: tr?.copyLabel ?? '',
+        waiting: w ? { at: w.createdAt.toISOString(), amount: w.amount } : null,
+      };
+    };
+    const [tax, fee] = [await card('tax'), await card('fee')];
+    if (tax || fee) pay = { tax, fee };
   }
+
+  // «По месяцам» с оплатой (прототип v116 `pgMonthPay`): только при «Учёте оплаты налогов».
+  const months = taxpay && has('reports') ? monthsPay(rows, lastWaiting, t) : null;
 
   const responsible = people.people.find((p) => p.id === facts.responsibleEmployeeId) ?? null;
   const person = (p: (typeof people.people)[number]) => ({
@@ -275,6 +330,7 @@ export async function contractorPageBody(
               hasSum: x.hasSum,
               sum: x.r.amount,
               payStatus: x.payStatus,
+              month: x.month,
               // Картинка и PDF открываются в окне просмотра страницы (прототип v74 `pubFileOpen`).
               files: (rep.files.get(x.r.id) ?? []).map((f) => ({
                 id: f.id,
@@ -282,6 +338,8 @@ export async function contractorPageBody(
                 preview: filePreviewKind(f.contentType),
               })),
             })),
+            months,
+            send: !!months && !!pay?.tax,
           }
         : null,
     files: has('files')
@@ -320,6 +378,72 @@ export async function contractorPageBody(
       : null,
     texts: pageTipTexts(texts),
   };
+}
+
+type PageRow = {
+  r: {
+    id: string;
+    act: Parameters<typeof pageMonthPay>[1][number]['act'];
+    amount: number | null;
+    paid: number;
+    payDue: IsoDate | null;
+    typeCode: string;
+    period: 'M' | 'Q' | 'H' | 'Y';
+    periodStart: IsoDate;
+    eventDate: IsoDate | null;
+  };
+  type?: { short: string } | undefined;
+  got: number;
+  recv: number;
+  month: string;
+};
+
+/**
+ * Оплата по месяцам для клиента (доработки 14.11.2026, блок 6, пункт 3; прототип v116 `pgMonthPay`):
+ * «к оплате», «оплачено» (принятое от клиента под отчёты месяца или уплаченное в бюджет, не больше
+ * суммы), «осталось», пометка и строки «Перечислить»; месяцы без сумм к оплате не приходят.
+ */
+function monthsPay(
+  rows: readonly PageRow[],
+  lastWaiting: (purpose: 'tax', month: string) => WaitingPayClaim | null,
+  t: Translate,
+): NonNullable<NonNullable<Body['reports']>['months']> {
+  const byMonth = new Map<string, PageRow[]>();
+  for (const x of rows) byMonth.set(x.month, [...(byMonth.get(x.month) ?? []), x]);
+  const byId = new Map(rows.map((x) => [x.r.id, x]));
+  return [...byMonth.keys()]
+    .sort()
+    .map((month) => {
+      const list = byMonth.get(month)!;
+      const p = pageMonthPay(
+        month as `${number}-${number}`,
+        list.map((x) => ({
+          id: x.r.id,
+          act: x.r.act,
+          amount: x.r.amount,
+          paid: x.r.paid,
+          // Как в прототипе (`pgMonthPay`: `x.r.recv`): принятое под отчёт, без доли свободного остатка.
+          received: x.recv,
+          payDue: x.r.payDue,
+        })),
+        !!lastWaiting('tax', month),
+      );
+      return {
+        ...p,
+        rows: p.rows.map((row) => {
+          const x = byId.get(row.id)!;
+          return {
+            ...row,
+            type: x.type?.short ?? x.r.typeCode,
+            period: periodLabel(
+              { period: x.r.period, start: x.r.periodStart, event: x.r.eventDate },
+              t,
+            ),
+          };
+        }),
+      };
+    })
+    .filter((m) => m.sum > 0);
 }
 
 /**

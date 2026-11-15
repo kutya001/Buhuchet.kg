@@ -238,6 +238,18 @@ export const CONTRACTOR_PAGE_TEXTS = {
     ru: 'Ответ контрагенту в Telegram («{name}»): {text}',
     section: S,
   },
+  // Доработки 14.11.2026, блок 6 (прототип v116 pubPaidDlg, pgCodeSend).
+  'cppage.hist.page_paid': {
+    ru: 'Контрагент сообщил со страницы об оплате: {what} — {sum}, чек «{file}»',
+    section: S,
+  },
+  'cppage.hist.page_paid_note': { ru: '. Комментарий: {note}', section: S },
+  'cppage.hist.page_code_tg': {
+    ru: 'Код страницы контрагента отправлен в Telegram {chats}: {via}',
+    section: S,
+  },
+  'cppage.hist.code_via.page': { ru: 'по ссылке «Забыли код?» на странице', section: S },
+  'cppage.hist.code_via.cmd': { ru: 'командой бота «Код от страницы»', section: S },
   // Напоминание клиенту о долге (задача К5; прототип v94 cp-telegram.js: pgDebtMsg, pgDebtRow,
   // tgAct('cp-nodebt')): сообщение бота, строка в карточке контрагента, история.
   'cppage.tg.debt.heading': { ru: 'Напоминание об оплате', section: S },
@@ -281,8 +293,19 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.receipt.tax_note': { ru: 'Деньги за {month} — по чеку из Telegram', section: S },
   'cppage.receipt.fee_note': { ru: 'По чеку из Telegram за {month}', section: S },
   'cppage.receipt.fee_note_any': { ru: 'По чеку из Telegram', section: S },
+  // Чек «Я оплатил» со страницы контрагента (прототип v116 `pgRcptMoney(c, p, 'page')`).
+  'cppage.receipt.tax_note_page': { ru: 'Деньги за {month} — по чеку со страницы', section: S },
+  'cppage.receipt.fee_note_page': { ru: 'По чеку со страницы за {month}', section: S },
+  'cppage.receipt.fee_note_any_page': { ru: 'По чеку со страницы', section: S },
   'cppage.receipt.received': {
     ru: 'Деньги на налоги за {month} уже получены от контрагента',
+    section: S,
+  },
+  // Чек за налоги без месяца — на все месяцы с остатком (прототип v116 `pgRcptMoney`, `p.m || 'all'`).
+  'cppage.receipt.tax_note_all': { ru: 'Деньги на налоги — по чеку из Telegram', section: S },
+  'cppage.receipt.tax_note_all_page': { ru: 'Деньги на налоги — по чеку со страницы', section: S },
+  'cppage.receipt.received_all': {
+    ru: 'Деньги на налоги уже получены от контрагента',
     section: S,
   },
   // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
@@ -374,7 +397,19 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.code.text': { ru: 'Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.', section: S },
   'pub.code.label': { ru: 'Код доступа', section: S },
   'pub.code.open': { ru: 'Открыть', section: S },
-  'pub.code.remember': { ru: 'В этом браузере код запомнится на 30 дней.', section: S },
+  'pub.code.remember': { ru: 'В этом браузере код запомнится на 1 день.', section: S },
+  // «Забыли код? Прислать в Telegram» (доработки 14.11.2026, блок 6; прототип v116 pubForgot).
+  'pub.forgot': { ru: 'Забыли код? Прислать в Telegram', section: S },
+  'pub.forgot.sent': { ru: 'Код отправлен в Telegram, подключённый к этой странице', section: S },
+  'pub.forgot.none': { ru: 'Спросите код у вашего бухгалтера', section: S },
+  'pub.forgot.limit': {
+    ru: 'Код уже присылали {n} раза за сутки. Спросите код у вашего бухгалтера',
+    section: S,
+  },
+  'pub.forgot.closed': {
+    ru: 'Страница закрыта. Попросите новый код у вашего бухгалтера',
+    section: S,
+  },
   'pub.code.format': { ru: 'Введите 6 цифр', section: S },
   'pub.locked.title': { ru: 'Ввод кода временно закрыт', section: S },
   'pub.locked.text': {
@@ -453,13 +488,9 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.pay.kind.phone': { ru: 'Перевод по номеру телефона', section: S },
   'pub.pay.kind.account': { ru: 'Расчётный счёт', section: S },
   'pub.pay.kind.wallet': { ru: 'Счёт или кошелёк', section: S },
-  'pub.pay.copy': { ru: 'Скопировать', section: S },
-  'pub.pay.copy_phone': { ru: 'Скопировать номер', section: S },
-  'pub.pay.copy_account': { ru: 'Скопировать счёт', section: S },
-  'pub.pay.copy_bik': { ru: 'Скопировать БИК', section: S },
-  'pub.pay.copied_phone': { ru: 'Номер скопирован', section: S },
-  'pub.pay.copied_account': { ru: 'Номер счёта скопирован', section: S },
-  'pub.pay.copied_bik': { ru: 'БИК скопирован', section: S },
+  // Подпись кнопки копирования приходит с сервера (`copyLabel`, шаблоны бота; прототип v116 `pgRqBtn`).
+  'pub.pay.copied_phone': { ru: 'Номер телефона скопирован', section: S },
+  'pub.pay.copied_account': { ru: 'Реквизиты для перевода скопированы', section: S },
   'pub.pay.from': { ru: 'Перевод из', section: S },
   'pub.pay.bik': { ru: 'БИК', section: S },
   'pub.pay.holder': { ru: 'Получатель', section: S },
@@ -474,6 +505,75 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.rep.mode_label': { ru: 'Как показать отчёты', section: S },
   'pub.rep.by_type': { ru: 'По видам', section: S },
   'pub.rep.by_due': { ru: 'По срокам', section: S },
+  // «По месяцам» (прототип v90 rmYm, v116 pgMonthPay; доработки 14.11.2026, блок 6, пункт 3).
+  'pub.rep.by_month': { ru: 'По месяцам', section: S },
+  'pub.rep.month_title': { ru: 'За {month}', section: S },
+  'pub.rep.month_sum': { ru: 'к оплате {sum}', section: S },
+  'pub.rep.month_pay': { ru: 'к оплате {sum} · оплачено {got} · осталось {left}', section: S },
+  'pub.mpay.paid': { ru: 'Оплачено', section: S },
+  'pub.mpay.wait': { ru: 'Ожидает подтверждения', section: S },
+  'pub.mpay.partial': { ru: 'Частично', section: S },
+  'pub.mpay.unpaid': { ru: 'Не оплачено', section: S },
+  // «Перечислить» (прототип v116 pubSendDlg).
+  'pub.send.left': { ru: 'Осталось оплатить', section: S },
+  'pub.send.btn': { ru: 'Перечислить', section: S },
+  'pub.send.title': { ru: 'Перечислить за {month}', section: S },
+  'pub.send.copy': { ru: 'Скопировать сумму', section: S },
+  'pub.send.copied': { ru: 'Сумма скопирована', section: S },
+  'pub.send.due': { ru: 'оплатить до {date}', section: S },
+  'pub.send.hint': {
+    ru: 'После перевода нажмите «Я оплатил» и приложите чек: бухгалтер проверит поступление и отметит оплату.',
+    section: S,
+  },
+  'pub.send.close': { ru: 'Закрыть', section: S },
+  // «Я оплатил» (прототип v116 pubPaidDlg).
+  'pub.paid.btn': { ru: 'Я оплатил', section: S },
+  'pub.paid.wait_note': { ru: 'вы сообщили об оплате {at} — {sum}', section: S },
+  'pub.paid.wait_at': { ru: 'вы сообщили об оплате {at}', section: S },
+  'pub.paid.title': { ru: 'Я оплатил', section: S },
+  'pub.paid.month': { ru: 'За какой месяц', section: S },
+  'pub.paid.month_opt': { ru: 'За {month} — осталось {left}', section: S },
+  'pub.paid.what': { ru: 'Что оплачено', section: S },
+  'pub.paid.what.tax': { ru: 'Налоги', section: S },
+  'pub.paid.what.tax_month': { ru: 'Налоги за {month}', section: S },
+  'pub.paid.what.fee': { ru: 'Обслуживание', section: S },
+  'pub.paid.what.fee_month': { ru: 'Обслуживание за {month}', section: S },
+  'pub.paid.sum': { ru: 'Сумма, сом', section: S },
+  'pub.paid.sum_hint': { ru: 'Сколько вы перевели', section: S },
+  'pub.paid.sum_ph': { ru: '5 000', section: S },
+  'pub.paid.file': { ru: 'Чек', section: S },
+  'pub.paid.file_hint': {
+    ru: 'Фото или PDF чека из банка или кошелька, до {mb} МБ',
+    section: S,
+  },
+  'pub.paid.note': { ru: 'Комментарий', section: S },
+  'pub.paid.note_ph': {
+    ru: 'Необязательно: например, за какие налоги перевод',
+    section: S,
+  },
+  'pub.paid.info': {
+    ru: 'Это не оплата: деньги вы переводите в своём банке или кошельке по реквизитам из «Как оплатить». Бухгалтер проверит поступление и отметит оплату — до этого у месяца «Ожидает подтверждения».',
+    section: S,
+  },
+  'pub.paid.send': { ru: 'Отправить', section: S },
+  'pub.paid.done': { ru: 'Сообщение об оплате и чек отправлены бухгалтеру', section: S },
+  'pub.paid.err.sum': { ru: 'Укажите сумму больше нуля', section: S },
+  'pub.paid.err.sum_big': { ru: 'Слишком большая сумма', section: S },
+  'pub.paid.err.month': { ru: 'Выберите месяц из списка', section: S },
+  'pub.paid.err.file': { ru: 'Приложите чек', section: S },
+  'pub.paid.err.file_type': { ru: 'Чек — фото или PDF', section: S },
+  'pub.paid.err.file_big': { ru: 'Файл больше {mb} МБ', section: S },
+  // Комментарий чека в «Отправленных файлах» — без суммы (прототип: «Чек: налоги, 5 000 сом»;
+  // docs/deviations.md п. К-14: «Отправленные файлы» видят и те, кому сумма не положена).
+  'pub.paid.note.tax': { ru: 'Чек: налоги', section: S },
+  'pub.paid.note.tax_month': { ru: 'Чек: налоги за {month}', section: S },
+  'pub.paid.note.fee': { ru: 'Чек: обслуживание', section: S },
+  'pub.paid.note.fee_month': { ru: 'Чек: обслуживание за {month}', section: S },
+  // {что} сообщения ответственному (шаблон `tgCpPagePaidStaff`): «об оплате налогов за октябрь 2026».
+  'pub.paid.staff.tax': { ru: 'налогов', section: S },
+  'pub.paid.staff.tax_month': { ru: 'налогов за {month}', section: S },
+  'pub.paid.staff.fee': { ru: 'обслуживания', section: S },
+  'pub.paid.staff.fee_month': { ru: 'обслуживания за {month}', section: S },
   'pub.rep.show_all': { ru: 'Показать все', section: S },
   'pub.rep.sum': { ru: 'сдано {n} из {m}', section: S },
   'pub.rep.none_mark': { ru: 'Отчётов с отметкой «{mark}» в {y} году нет', section: S },
@@ -584,6 +684,16 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'err.page_locked': { ru: 'Ввод кода временно закрыт', section: E },
   'err.page_ip_locked': { ru: 'Ввод кода временно закрыт', section: E },
   'err.page_closed': { ru: 'Страница закрыта', section: E },
+  'err.page_paid_off': {
+    ru: 'Ваш бухгалтер сейчас не принимает файлы через страницу',
+    section: E,
+  },
+  'err.page_paid_invalid': { ru: 'Проверьте поля «Я оплатил»', section: E },
+  'err.page_paid_busy': { ru: 'Этот чек уже отправляется', section: E },
+  'err.page_forgot_limit': {
+    ru: 'Слишком много запросов. Попробуйте позже или спросите код у вашего бухгалтера',
+    section: E,
+  },
   'err.cp_tg_done': { ru: CP_TG_MESSAGES.cp_tg_done, section: E },
   'err.cp_tg_not_on': { ru: CP_TG_MESSAGES.cp_tg_not_on, section: E },
   'err.cp_tg_limit': { ru: CP_TG_MESSAGES.cp_tg_limit, section: E },
@@ -649,4 +759,8 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'org.history.cp_days': { ru: '{name}: дни {from} → {to} до срока', section: S },
   'org.history.cp_at': { ru: '{name}: время {from} → {to}', section: S },
   'org.history.cp_debt_wd': { ru: 'Напоминание о долге: {from} → {to}', section: S },
+  // Принятый чек в поле «Файлы» окна денег (прототип v119 `rcptFileRow`).
+  'cppage.rcpt.file_hint': { ru: '— чек контрагента, прикрепится при сохранении', section: S },
+  'cppage.rcpt.file_remove': { ru: 'Убрать', section: S },
+  'cppage.rcpt.file_remove_title': { ru: 'Не прикреплять чек', section: S },
 } as const satisfies Record<string, UiTextDefault>;

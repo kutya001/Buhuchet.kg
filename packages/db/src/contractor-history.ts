@@ -267,12 +267,14 @@ const FEE_FIELDS: ReadonlySet<string> = new Set([
   // «Напомнить в Telegram» об оплате за обслуживание и «Оплатил» клиента под ним (доработки 14.11.2026).
   'tgFee',
   'tgFeePaid',
+  // «Я оплатил» на странице контрагента за обслуживание (доработки 14.11.2026, блок 6).
+  'pagePaidFee',
 ]);
 /**
  * Сумма налогов месяца в записях «Скопирован текст «К оплате»», ««К оплате» отправлено в Telegram» и
- * «Контрагент сообщил об оплате» (задача К4).
+ * «Контрагент сообщил об оплате» (задача К4), в том числе «Я оплатил» на странице (блок 6).
  */
-const MONTH_PAY_FIELDS: ReadonlySet<string> = new Set(['payText', 'tgPay', 'tgPaid']);
+const MONTH_PAY_FIELDS: ReadonlySet<string> = new Set(['payText', 'tgPay', 'tgPaid', 'pagePaid']);
 const KPI_ENTITIES = ['indicator', 'indicator_value'] as const;
 const FILE_ACTIONS = ['file_attach', 'file_delete', 'file_edit', 'file_hide', 'file_show'] as const;
 

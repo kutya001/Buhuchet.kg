@@ -11,6 +11,7 @@ import {
   fillTemplate,
   type ContractorKind,
   transferBlock,
+  transferLines,
   type PaysTo,
   type TelegramTemplateKey,
   type TransferBlock,
@@ -26,8 +27,8 @@ import {
  * (его и так видит любой сотрудник в счетах организации; docs/deviations.md п. К-10).
  */
 
-/** Блок «Реквизиты для перевода — …» и кнопка копирования: подписи — из словаря и шаблонов бота. */
-async function blockOf(tx: Tx, t: Translate, of: TransferOf): Promise<TransferBlock> {
+/** Заголовок «Реквизиты для перевода — …» и подписи строк: из словаря и шаблонов бота. */
+async function labelsOf(tx: Tx, t: Translate, of: TransferOf) {
   const templates = await messageTemplates(tx);
   const fill = (key: TelegramTemplateKey, values: Readonly<Record<string, string>> = {}) =>
     fillTemplate(botTemplate(key, templates[key]), values);
@@ -35,17 +36,48 @@ async function blockOf(tx: Tx, t: Translate, of: TransferOf): Promise<TransferBl
     of.requisite.owner === 'org'
       ? fill('tgRqOrg', { организация: of.ownerName })
       : fill('tgRqEmp', { сотрудник: of.ownerName });
-  return transferBlock(of.requisite, fill('tgRqHead', { чьи: who }), {
-    phone: t('cppage.tg.rq.phone'),
-    banks: t('cppage.tg.rq.banks'),
-    bank: t('cppage.tg.rq.bank'),
-    wallet: t('cppage.tg.rq.wallet'),
-    account: t('cppage.tg.rq.account'),
-    bik: t('cppage.tg.rq.bik'),
-    holder: t('cppage.tg.rq.holder'),
-    copyPhone: fill('tgBtnCpCopyPhone'),
-    copyRequisites: fill('tgBtnCpCopyReq'),
-  });
+  return {
+    head: fill('tgRqHead', { чьи: who }),
+    labels: {
+      phone: t('cppage.tg.rq.phone'),
+      banks: t('cppage.tg.rq.banks'),
+      bank: t('cppage.tg.rq.bank'),
+      wallet: t('cppage.tg.rq.wallet'),
+      account: t('cppage.tg.rq.account'),
+      bik: t('cppage.tg.rq.bik'),
+      holder: t('cppage.tg.rq.holder'),
+      copyPhone: fill('tgBtnCpCopyPhone'),
+      copyRequisites: fill('tgBtnCpCopyReq'),
+    },
+  };
+}
+
+/** Блок «Реквизиты для перевода — …» и кнопка копирования: подписи — из словаря и шаблонов бота. */
+async function blockOf(tx: Tx, t: Translate, of: TransferOf): Promise<TransferBlock> {
+  const { head, labels } = await labelsOf(tx, t, of);
+  return transferBlock(of.requisite, head, labels);
+}
+
+/**
+ * Карточка «Как оплатить» страницы контрагента (прототип v116 `pubPay`: подпись `tgRqHead`, кнопка
+ * `pgRqBtn`): «Реквизиты для перевода — организации …» или «— сотрудника …» и кнопка копирования по виду
+ * реквизита, как в Telegram: у номера телефона — «Скопировать номер телефона» (только номер), у счёта —
+ * «Скопировать реквизиты для перевода» (банк, счёт, БИК, получатель). Кому показать, решает страница.
+ */
+export async function pageTransferOf(
+  tx: Tx,
+  t: Translate,
+  of: TransferOf,
+): Promise<{ head: string; copy: string; copyLabel: string }> {
+  const { head, labels } = await labelsOf(tx, t, of);
+  const phone = of.requisite.kind === 'phone';
+  return {
+    head,
+    copy: phone
+      ? of.requisite.phoneText.replace(/\s/g, '')
+      : transferLines(of.requisite, labels).join('\n'),
+    copyLabel: phone ? labels.copyPhone : labels.copyRequisites,
+  };
 }
 
 /**

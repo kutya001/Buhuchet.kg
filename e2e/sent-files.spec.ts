@@ -119,6 +119,8 @@ async function openFilesSection(
 ): Promise<Locator> {
   await page.goto(cp.path);
   if (cp.code) {
+    // «Открыть» доступна, когда React подхватил страницу: раньше поле заполнять нельзя (№ 41).
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(cp.code);
     await page.getByRole('button', { name: 'Открыть' }).click();
   }
@@ -126,6 +128,8 @@ async function openFilesSection(
   const section = page.locator('[data-sec="files"]');
   if (isMobile) {
     await expect(section).toHaveAttribute('data-folded', '');
+    // Свёрнуто видно уже в HTML сервера; нажатие работает, когда React узнал телефон (№ 41).
+    await expect(section.locator('[data-pub-toggle]')).toHaveAttribute('aria-expanded', 'false');
     await section.locator('[data-pub-toggle]').click();
   }
   await expect(section.locator('[data-pub-sent]')).toBeVisible();

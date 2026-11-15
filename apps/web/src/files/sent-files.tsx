@@ -353,7 +353,8 @@ export function useSentActions(o: { withContractor: boolean }) {
       await refresh();
       if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
       toast(t('files.sent.accepted'), { icon: 'check' });
-      if (res.item.pay) await takeMoney(file.contractor.id, res.item.pay);
+      if (res.item.pay)
+        await takeMoney(file.contractor.id, res.item.pay, { sentId: file.id, name: file.name });
     },
     [refresh, toast, t, errorText, takeMoney],
   );

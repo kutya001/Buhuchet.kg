@@ -11,6 +11,7 @@ import {
   listSentFilesPage,
   listSentFileValues,
   orgMenuSettings,
+  rejectReceiptClaims,
   rejectSentFile,
   SentFileDecidedError,
   sentContractor,
@@ -177,7 +178,7 @@ const canDecideOf = (subject: AccessSubject) => hasPermission(subject, 'filesUpl
  * Загруженный отправленный файл контрагента, которого сотрудник видит в области группы «Файловый
  * менеджер»; иначе — 404 (чужой и вне области не отличить от несуществующего).
  */
-async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
+export async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
   const file = await getSentFile(tx, id);
   if (!file || file.state !== 'ready') return notFound();
   const contractor = await sentContractor(tx, file.contractorId);
@@ -186,7 +187,7 @@ async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
 }
 
 /** Вкладка и счётчик — при «Файлах в карточках» и «Странице контрагента по ссылке». */
-async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
+export async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
   const features = await requireFilesFeature(tx, orgId);
   if (!features.cppage) cppageOff();
 }
@@ -566,6 +567,9 @@ export function sentRejectHandler(deps: ApiDeps): RouteHandler<typeof sentReject
         await requireFilesFeature(tx, ctx.orgId);
         const { file, contractor } = await visibleSent(tx, subject, id);
         await rejectSentFile(tx, { id, version: input.version, reason });
+        // Отклонённый чек — и сообщение об оплате с ним отклонено: у месяца снова «Не оплачено» или
+        // «Частично» (доработки 14.11.2026, блок 6; прототип v116 `pgClaimReject`).
+        await rejectReceiptClaims(tx, id);
         await writeHistory(tx, {
           entity: 'sent_file',
           entityId: id,

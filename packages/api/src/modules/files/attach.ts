@@ -27,8 +27,11 @@ export type AttachRefusal = 'files_off' | 'not_found' | 'forbidden';
 export interface StoredFile {
   /** Номер файла от сервера (он же — последняя часть ключа хранилища). */
   id: string;
-  /** Запись, к которой прикрепляется файл: отчёт или задача. */
-  source: { kind: 'report' | 'task'; id: string };
+  /**
+   * Запись, к которой прикрепляется файл: отчёт или задача (файл из Telegram), поступление или оплата
+   * за обслуживание (принятый чек контрагента, `sent-attach.ts`).
+   */
+  source: { kind: 'report' | 'task' | 'receipt' | 'fee_payment'; id: string };
   name: string;
   /** Фактический размер положенного объекта. */
   size: number;

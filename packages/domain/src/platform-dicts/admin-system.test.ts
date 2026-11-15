@@ -188,12 +188,14 @@ describe('Админка → «Шаблоны» сообщений', () => {
     expect(unknownTemplateVariables('__proto__', '{код}')).toEqual(['код']);
   });
 
-  it('у кодов восстановления пароля, входа в Админку и замены Telegram {код} обязателен; у остальных — ничего', () => {
+  it('у кодов восстановления пароля, входа в Админку, замены Telegram и страницы контрагента {код} обязателен; у остальных — ничего', () => {
     expect(Object.keys(MESSAGE_TEMPLATE_REQUIRED).sort()).toEqual([
       'tgAdminCode',
       'tgCode',
+      'tgCpCode',
       'tgRelinkCode',
     ]);
+    expect(missingTemplateVariables('tgCpCode', 'Код от страницы «{контрагент}»')).toEqual(['код']);
     expect(missingTemplateVariables('tgCode', 'Код для восстановления пароля готов')).toEqual([
       'код',
     ]);

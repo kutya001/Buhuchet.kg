@@ -121,6 +121,51 @@ describe('pageHistoryText', () => {
     expect(pageHistoryActor(t, 'Иванова А.', 'page_tg_answer')).toBe('Иванова А.');
   });
 
+  it('«Я оплатил» со страницы и код в Telegram — строками прототипа v116 (pubPaidDlg, pgCodeSend)', () => {
+    expect(
+      pageHistoryText(t, {
+        action: 'page_paid',
+        changes: [
+          {
+            field: 'pagePaid',
+            to: { purpose: 'tax', month: '2026-09', amount: 467_050, file: 'чек.pdf', note: null },
+          },
+        ],
+      }),
+    ).toBe(
+      `Контрагент сообщил со страницы об оплате: налоги за сентябрь 2026 — ${formatSomWithUnit(467_050)}, чек «чек.pdf»`,
+    );
+    expect(
+      pageHistoryText(t, {
+        action: 'page_paid',
+        changes: [
+          {
+            field: 'pagePaidFee',
+            to: { purpose: 'fee', month: null, amount: 900_000, file: 'фото.jpg', note: 'за два' },
+          },
+        ],
+      }),
+    ).toBe(
+      `Контрагент сообщил со страницы об оплате: обслуживание — ${formatSomWithUnit(900_000)}, чек «фото.jpg». Комментарий: за два`,
+    );
+    expect(
+      pageHistoryText(t, {
+        action: 'page_code_tg',
+        changes: [{ field: 'tgCode', to: { chats: ['Айбек', 'Офис'], via: 'page' } }],
+      }),
+    ).toBe(
+      'Код страницы контрагента отправлен в Telegram «Айбек», «Офис»: по ссылке «Забыли код?» на странице',
+    );
+    expect(
+      pageHistoryText(t, {
+        action: 'page_code_tg',
+        changes: [{ field: 'tgCode', to: { chats: ['Айбек'], via: 'cmd' } }],
+      }),
+    ).toBe(
+      'Код страницы контрагента отправлен в Telegram «Айбек»: командой бота «Код от страницы»',
+    );
+  });
+
   it('открытие и перерыв делает контрагент', () => {
     expect(pageHistoryActor(t, null)).toBe('Контрагент');
     expect(pageHistoryActor(t, 'Иванова А.')).toBe('Иванова А.');

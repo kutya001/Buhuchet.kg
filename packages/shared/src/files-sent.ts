@@ -1,5 +1,6 @@
 import {
   PAY_CLAIM_PURPOSES,
+  PAY_CLAIM_SOURCES,
   SENT_FILE_COMMENT_MAX,
   SENT_FILE_REASON_MAX,
   SENT_FILE_SOURCES,
@@ -58,6 +59,8 @@ export const SentFilePay = z.object({
     .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
     .nullable(),
   amount: Tyiyn.nullable(),
+  /** Откуда чек: со страницы контрагента («Я оплатил») или из Telegram — для примечания денег. */
+  source: z.enum(PAY_CLAIM_SOURCES),
 });
 export type SentFilePay = z.infer<typeof SentFilePay>;
 
@@ -92,6 +95,18 @@ export const SentFileReject = z.strictObject({
   version: RecordVersion,
   reason: z.string().max(SENT_FILE_REASON_MAX * 4),
 });
+
+/**
+ * Принятый чек — к записи денег, открытой после «Принять» (прототип v119 `pgRcptMoney` → поле «Файлы»):
+ * поступлению от контрагента или оплате за обслуживание того же контрагента.
+ */
+export const SentFileAttach = z.strictObject({
+  source: z.strictObject({ kind: z.enum(['receipt', 'fee_payment']), id: Uuid }),
+});
+export type SentFileAttach = z.infer<typeof SentFileAttach>;
+/** Прикреплённая копия: файл записи денег. */
+export const SentFileAttached = z.object({ id: Uuid, name: z.string() });
+export type SentFileAttached = z.infer<typeof SentFileAttached>;
 
 /** Ссылка на файл: `download=1` — скачать, иначе картинка и PDF открываются в браузере. */
 export const SentFileLinkQuery = z.strictObject({ download: z.enum(['1']).optional() });

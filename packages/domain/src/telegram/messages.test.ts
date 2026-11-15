@@ -60,6 +60,9 @@ describe('шаблоны сообщений бота', () => {
     expect(botTemplate('tgRelinkCode', 'Привязать {телеграм}?')).toBe(
       TELEGRAM_TEMPLATE_DEFAULTS.tgRelinkCode,
     );
+    expect(botTemplate('tgCpCode', 'Код от страницы «{контрагент}»')).toBe(
+      TELEGRAM_TEMPLATE_DEFAULTS.tgCpCode,
+    );
   });
 
   it('неизвестная подстановка остаётся как есть, лишние значения не мешают', () => {

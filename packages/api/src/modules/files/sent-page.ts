@@ -68,14 +68,14 @@ const unavailable = (): never =>
   apiFail(404, 'page_unavailable', 'Страница недоступна. Обратитесь к вашему бухгалтеру.');
 
 /** Отказ отправки: код, текст и подстановки (`files`, `n`) для текста словаря на экране. */
-function refuse(status: 400 | 409 | 429, r: SentFileRefusal): never {
+export function refuse(status: 400 | 409 | 429, r: SentFileRefusal): never {
   return apiFail(status, r.code, sentFileRefusalText(r), {
     ...(r.files ? { files: r.files.join(', ') } : {}),
     ...(r.n !== undefined ? { n: r.n } : {}),
   });
 }
 
-const REFUSAL_STATUS: Record<SentFileRefusal['code'], 400 | 409 | 429> = {
+export const REFUSAL_STATUS: Record<SentFileRefusal['code'], 400 | 409 | 429> = {
   sent_none: 400,
   sent_too_many: 400,
   sent_too_large: 400,
@@ -90,7 +90,7 @@ const REFUSAL_STATUS: Record<SentFileRefusal['code'], 400 | 409 | 429> = {
 };
 
 /** Открытая страница этого браузера: организация и контрагент; иначе — «Страница недоступна». */
-async function openPage(deps: ApiDeps, c: Context<AppEnv>, slug: string, inn: string) {
+export async function openPage(deps: ApiDeps, c: Context<AppEnv>, slug: string, inn: string) {
   c.header('Cache-Control', 'no-store');
   if (!isPageAddress(slug, inn)) return unavailable();
   const grantHash = pageTokenHash(c, deps);
@@ -247,12 +247,60 @@ async function checkedCopy(
 }
 
 /** Удалить объекты хранилища; не вышло — в журнал (остаток уберёт задача по расписанию). */
-async function removeObjects(deps: ApiDeps, keys: readonly string[]): Promise<void> {
+export async function removeObjects(deps: ApiDeps, keys: readonly string[]): Promise<void> {
   for (const key of keys) {
     await deps.storage.delete(key).catch((err: unknown) => {
       deps.logger.error({ err }, 'файлы от контрагентов: файл не удалён из хранилища');
     });
   }
+}
+
+/**
+ * Проверить загруженные со страницы файлы и положить каждый под ключ файла (для «Отправить файл» и
+ * «Я оплатил», блок 6): проверяется копия каждого файла, и под ключ файла ложится только она. Хоть один
+ * не такой — отказ целиком (положенное удаляется), ответ называет плохие файлы. Загрузки и проверочные
+ * копии удаляются в любом случае. Возвращает положенные ключи — их удаляет вызывающий, если отправку
+ * потом не приняли.
+ */
+export async function storePageUploads(
+  deps: ApiDeps,
+  rows: readonly SentFileRecord[],
+): Promise<string[]> {
+  const checkKeys = rows.map(checkKeyOf);
+  const problems: (StoredProblem | null)[] = [];
+  const written: string[] = [];
+  try {
+    // Все копии — до конца, даже если одна упала: иначе уборка ниже пройдёт раньше, чем остальные
+    // положат свои проверочные копии, и они останутся в хранилище.
+    const checked = await Promise.allSettled(
+      rows.map((r, i) => checkedCopy(deps, r, checkKeys[i]!)),
+    );
+    for (const one of checked) {
+      if (one.status === 'rejected') throw one.reason;
+      problems.push(one.value);
+    }
+    if (!problems.some((p) => p !== null)) {
+      for (const [i, row] of rows.entries()) {
+        if (!(await deps.storage.copy(checkKeys[i]!, row.storageKey))) {
+          problems[i] = 'missing';
+          break;
+        }
+        written.push(row.storageKey);
+      }
+    }
+  } finally {
+    // Загрузки и проверочные копии больше не нужны (загрузку по ссылке ещё могут положить заново —
+    // её удалит задача по расписанию вместе со строкой).
+    await removeObjects(deps, [...rows.map((r) => sentUploadKey(r.storageKey)), ...checkKeys]);
+  }
+  const named = (p: StoredProblem) => rows.filter((_, i) => problems[i] === p).map((r) => r.name);
+  if (problems.some((p) => p !== null)) {
+    await removeObjects(deps, written);
+    if (named('content').length) refuse(400, { code: 'sent_forbidden', files: named('content') });
+    if (named('large').length) refuse(400, { code: 'sent_too_large', files: named('large') });
+    apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
+  }
+  return written;
 }
 
 /**
@@ -277,34 +325,7 @@ export function pageSentCompleteHandler(
     if (rows.length !== unique.length) {
       return apiFail(404, 'not_found', 'Нет такой начатой отправки');
     }
-    const checkKeys = rows.map(checkKeyOf);
-    const problems: (StoredProblem | null)[] = [];
-    const written: string[] = [];
-    try {
-      problems.push(
-        ...(await Promise.all(rows.map((r, i) => checkedCopy(deps, r, checkKeys[i]!)))),
-      );
-      if (!problems.some((p) => p !== null)) {
-        for (const [i, row] of rows.entries()) {
-          if (!(await deps.storage.copy(checkKeys[i]!, row.storageKey))) {
-            problems[i] = 'missing';
-            break;
-          }
-          written.push(row.storageKey);
-        }
-      }
-    } finally {
-      // Загрузки и проверочные копии больше не нужны (загрузку по ссылке ещё могут положить заново —
-      // её удалит задача по расписанию вместе со строкой).
-      await removeObjects(deps, [...rows.map((r) => sentUploadKey(r.storageKey)), ...checkKeys]);
-    }
-    const named = (p: StoredProblem) => rows.filter((_, i) => problems[i] === p).map((r) => r.name);
-    if (problems.some((p) => p !== null)) {
-      await removeObjects(deps, written);
-      if (named('content').length) refuse(400, { code: 'sent_forbidden', files: named('content') });
-      if (named('large').length) refuse(400, { code: 'sent_too_large', files: named('large') });
-      apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-    }
+    const written = await storePageUploads(deps, rows);
     // Строка не «Новая» после ошибки — незаконченная: её файлы удалит задача по расписанию (её не
     // встретит «закончить»: `SENT_COMPLETE_MINUTES`); закончила другая такая же отправка — файл её.
     const done = await withOrgContext(deps.db, ctx, async (tx) => {
