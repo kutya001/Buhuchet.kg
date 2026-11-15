@@ -14,7 +14,9 @@ if (typeof input.base === 'string' && input.base !== 'main') process.exit(0);
 const problems = checkPrPolicy(input.body);
 if (problems.length) {
   block(
-    `Описание PR не пройдёт pr-policy — поправьте до отправки (скилл pr-body):\n- ${problems.join('\n- ')}`,
+    'Описание PR не пройдёт pr-policy (скилл pr-body). Ошибка формы — строку агента взять первой строкой его ответа; ' +
+      '«нашёл то, что нельзя сливать» — исправить код и запустить агента снова, строку агента не переписывать:\n- ' +
+      problems.join('\n- '),
   );
 }
 process.exit(0);
