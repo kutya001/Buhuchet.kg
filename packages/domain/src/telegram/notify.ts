@@ -116,10 +116,19 @@ export function outboxRetryDelaySeconds(tries: number, retryAfterSeconds?: numbe
 export function outboxRetryRefusal(row: {
   status: OutboxStatus;
   kind: string;
-}): 'outbox_not_error' | 'outbox_code' | 'outbox_relink_code' | 'outbox_bot_cmd' | null {
+}):
+  | 'outbox_not_error'
+  | 'outbox_code'
+  | 'outbox_relink_code'
+  | 'outbox_setup_link'
+  | 'outbox_bot_cmd'
+  | null {
   if (row.status !== 'error') return 'outbox_not_error';
   if (row.kind === 'code') return 'outbox_code';
   if (row.kind === 'relink_code') return 'outbox_relink_code';
+  // Ссылка «Задать пароль» (доработки 14.11.2026, блок 1, пункт 3): новую отправляют из карточки
+  // организации, прежняя при этом гаснет (docs/deviations.md п. Т-18).
+  if (row.kind === 'setup_link') return 'outbox_setup_link';
   // Ответ на команду бота собран по правам и области сотрудника на момент запроса (задача Т5): позже
   // их могли снять, поэтому он не повторяется — человек запросит его снова (как `app.admin_telegram_retry`).
   if (row.kind === 'bot_cmd') return 'outbox_bot_cmd';
