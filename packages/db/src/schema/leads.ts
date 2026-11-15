@@ -88,6 +88,14 @@ export const platformLeads = pgTable(
      */
     tgChatId: bigint('tg_chat_id', { mode: 'number' }),
     tgLinkedAt: timestamp('tg_linked_at', { withTimezone: true }),
+    /** Имя из Telegram подключившего: после «Одобрить» переходит в привязку Telegram владельца. */
+    tgUsername: text('tg_username'),
+    tgFirstName: text('tg_first_name'),
+    /**
+     * Запись истории «Отказ», причину которой бот уже прислал заявителю: каждую причину — один раз,
+     * при отказе или при «Старте» после него (функции `app.lead_tg_refusal_take`, `app.lead_tg_start`).
+     */
+    tgRefusalEvent: bigint('tg_refusal_event', { mode: 'number' }),
     version: recordVersion(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),

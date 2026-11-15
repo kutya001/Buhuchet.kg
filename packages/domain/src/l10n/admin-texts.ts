@@ -80,6 +80,7 @@ export const ADMIN_ACCOUNT_CARD_TEXTS = {
     section: S,
   },
   'accounts.card.state.temp_password': { ru: 'Не сменил временный пароль', section: S },
+  'accounts.card.state.no_password': { ru: 'Пароль не задан: ссылка в Telegram', section: S },
   'accounts.card.admin_hint': {
     ru: 'Учётные записи администраторов платформы из Админки не меняются',
     section: S,

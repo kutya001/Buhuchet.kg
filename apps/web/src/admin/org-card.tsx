@@ -46,9 +46,9 @@ import {
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { api, ApiFailure, apiFailure } from '../api-client';
+import { api, ApiFailure, apiFailure, callApi } from '../api-client';
 import { fileSizeText } from '../files/files-data';
-import { useT } from '../l10n/provider';
+import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { statusName } from '../status/status-view';
 import { ORG_CARD_KEY } from './org-actions';
@@ -155,6 +155,20 @@ export function OrgCard({
       : {}),
   }));
   const owner = card?.owner ?? null;
+  // «Отправить новую ссылку для пароля» (доработки 14.11.2026, блок 1, пункт 3; прототип v113
+  // ownerSetupAct): владельцу организации по заявке, пока он не задал пароль.
+  const errorText = useErrorText();
+  const [sending, setSending] = useState(false);
+  const ownerSetup = async () => {
+    setSending(true);
+    const res = await callApi(() =>
+      api.api.admin.organizations[':id']['owner-setup'].$post({ param: { id } }),
+    );
+    setSending(false);
+    if (res.ok) toast(t('orgs.card.owner_setup.sent'), { icon: 'tg' });
+    else toast(errorText(res.error), { bad: true });
+    void query.refetch();
+  };
   const buttons: ActionItem[] = org
     ? [
         ...actions(org),
@@ -165,6 +179,18 @@ export function OrgCard({
                 label: t('orgs.card.reset_owner'),
                 icon: 'key' as const,
                 run: () => onResetOwner(owner),
+              },
+            ]
+          : []),
+        ...(owner?.passwordUnset && card && !card.org.isDemo
+          ? [
+              {
+                id: 'owner-setup',
+                label: t('orgs.card.owner_setup'),
+                icon: 'link' as const,
+                disabled: !owner.telegram || sending,
+                ...(owner.telegram ? {} : { reason: t('orgs.card.owner_setup.no_tg') }),
+                run: () => void ownerSetup(),
               },
             ]
           : []),

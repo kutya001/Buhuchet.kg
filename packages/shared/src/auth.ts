@@ -230,3 +230,10 @@ export const ChangePasswordForm = z
     ...message('auth.err.same'),
   });
 export type ChangePasswordForm = z.infer<typeof ChangePasswordForm>;
+
+/**
+ * Страница «Задать пароль» по ссылке из Telegram (доработки 14.11.2026, блок 1, пункт 3; прототип v113
+ * setPassPage): новый пароль и повтор — по тем же правилам, что при смене временного.
+ */
+export const PasswordSetupForm = z.object(newPasswordFields).refine(samePasswords, mismatch);
+export type PasswordSetupForm = z.infer<typeof PasswordSetupForm>;

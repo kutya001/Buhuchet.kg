@@ -118,6 +118,7 @@ export const LEADS_TEXTS = {
   },
   'leads.hist.org_note': { ru: 'создана организация «{name}»', section: S },
   'leads.hist.note': { ru: 'Заметка администратора изменена', section: S },
+  'leads.hist.tg': { ru: 'Telegram подключён: {name}', section: S },
   'err.lead_not_found': { ru: LEAD_MESSAGES.lead_not_found, section: E },
   'err.lead_status_invalid': { ru: LEAD_MESSAGES.lead_status_invalid, section: E },
   'err.lead_back_locked': { ru: LEAD_MESSAGES.lead_back_locked, section: E },

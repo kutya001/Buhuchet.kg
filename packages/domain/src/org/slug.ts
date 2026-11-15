@@ -86,6 +86,9 @@ export const RESERVED_SLUGS: readonly string[] = [
   'dev',
   'demo',
   'buhuchet',
+  // Страница «Задать пароль» buhuchet.kg/setpass/<ключ> (доработки 14.11.2026, блок 1, пункт 3).
+  // ОТКЛОНЕНИЕ: docs/deviations.md#Т-18
+  'setpass',
 ];
 
 /**

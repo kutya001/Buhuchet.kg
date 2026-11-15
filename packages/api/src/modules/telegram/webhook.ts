@@ -22,6 +22,8 @@ import {
   formatDateRu,
   formatText,
   GROUP_MINE,
+  isLeadTgStart,
+  leadTgStartToken,
   loginDenial,
   parseBotPress,
   parseStartCommand,
@@ -39,6 +41,7 @@ import { apiError } from '../../errors';
 import { serverTexts } from '../l10n/texts';
 import { botText, sendCodeMessage, sendNow, sendSecurityNotice } from './bot';
 import { clientStart, clientText } from './client';
+import { leadTgStart } from './lead-link';
 import { clientDebtOn } from './client/debt';
 import { clientPress, clientQuestion } from './client/pay';
 import { botMenu, handleBotCommand, sendBotHint } from './commands';
@@ -527,6 +530,24 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
         },
         cpTgStartToken(command.token),
       );
+      return ok;
+    }
+    // Telegram заявителя (доработки 14.11.2026, блок 1): ссылка после заявки — «/start l_<ключ>».
+    // Испорченная ссылка заявителя (ключ не той длины) — тоже заявителю: «Ссылка устарела».
+    if (isLeadTgStart(command.token)) {
+      try {
+        await leadTgStart(
+          deps,
+          {
+            chatId: chat.id,
+            username: from?.username ?? null,
+            firstName: from?.first_name ?? null,
+          },
+          leadTgStartToken(command.token),
+        );
+      } catch (err) {
+        deps.logger.error({ err }, 'Telegram: «Старт» заявителя не обработан');
+      }
       return ok;
     }
     if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));

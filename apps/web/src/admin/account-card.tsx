@@ -70,6 +70,7 @@ const STATE_PILLS: Readonly<
   login_locked: { tone: 'bad', icon: 'ban' },
   login_locked_not_me: { tone: 'bad', icon: 'ban' },
   temp_password: { tone: 'warn', icon: 'key' },
+  no_password: { tone: 'warn', icon: 'key' },
 };
 
 const moment = (iso: string | null) => (iso ? formatMomentRu(new Date(iso)) : '');

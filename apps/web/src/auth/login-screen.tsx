@@ -64,10 +64,16 @@ const LINK_LEFT = `${linkButtonClass()} self-start`;
 export function LoginScreen({
   me,
   returnTo = '/app',
+  start,
 }: {
   me: MeResponse | null;
   /** Куда после входа: /app или страница программы из ссылки (задача #165). */
   returnTo?: string;
+  /**
+   * Вход сразу после «Задать пароль» по ссылке из Telegram (прототип v113 setPassPage): логин
+   * подставлен, сверху — уведомление.
+   */
+  start?: { login: string; toast: string };
 }) {
   const t = useT();
   const labels = useMemo(
@@ -76,17 +82,30 @@ export function LoginScreen({
   );
   return (
     <ToastProvider labels={labels}>
-      <LoginCard me={me} returnTo={returnTo} />
+      <LoginCard me={me} returnTo={returnTo} start={start} />
     </ToastProvider>
   );
 }
 
-function LoginCard({ me, returnTo }: { me: MeResponse | null; returnTo: string }) {
+function LoginCard({
+  me,
+  returnTo,
+  start,
+}: {
+  me: MeResponse | null;
+  returnTo: string;
+  start: { login: string; toast: string } | undefined;
+}) {
   const t = useT();
   const router = useRouter();
+  const toast = useToast();
   const [step, setStep] = useState<Step>(
-    me ? { id: 'change', me, current: null } : { id: 'login', login: '' },
+    me ? { id: 'change', me, current: null } : { id: 'login', login: start?.login ?? '' },
   );
+  const startToast = start?.toast;
+  useEffect(() => {
+    if (startToast) toast(startToast, { icon: 'key' });
+  }, [startToast, toast]);
   // После входа рабочая страница один раз покажет «Что нового» (задача 2.32).
   const enter = useCallback(() => {
     markSignedIn();
