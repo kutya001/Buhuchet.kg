@@ -34,6 +34,9 @@ const uniquePhone = () =>
   `7${String(Date.now()).slice(-5)}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`;
 
 async function signInByForm(page: Page, login: string, password: string) {
+  // «Войти» лендинга — обычная ссылка: страница входа грузится заново, поля видны раньше, чем React их
+  // подхватил; «Войти» доступна только после этого (docs/typical-mistakes.md № 41).
+  await expect(page.getByRole('button', { name: 'Войти' })).toBeEnabled();
   await page.getByLabel('Логин').fill(login);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await Promise.all([

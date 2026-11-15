@@ -25,6 +25,7 @@ import {
   Note,
   PasswordInput,
   ToastProvider,
+  useMounted,
   useToast,
 } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
@@ -219,6 +220,9 @@ function LoginStep({
     resolver: zodResolver(LoginForm),
     defaultValues: { login: initialLogin, password: '' },
   });
+  // «Войти» — только после того, как React подхватил страницу: раньше нажатие (или Enter в поле) ушло бы
+  // обычной отправкой формы — логин и пароль в адресе страницы, без входа (docs/typical-mistakes.md № 41).
+  const ready = useMounted();
   // Ошибка входа — общей плашкой над «Войти», а не под полем (прототип core/login.js `#lg-msg`):
   // по ней не видно, логин неверный или пароль. Пустые поля — под полями.
   const [message, setMessage] = useState('');
@@ -273,7 +277,7 @@ function LoginStep({
           {message}
         </Note>
       ) : null}
-      <button type="submit" className={WIDE_CTA} disabled={isSubmitting}>
+      <button type="submit" className={WIDE_CTA} disabled={isSubmitting || !ready}>
         {t('auth.sign_in')}
       </button>
       {/* «О платформе» — лендинг для гостей (прототип core/login.js `#lg-about`, задача #165). */}
