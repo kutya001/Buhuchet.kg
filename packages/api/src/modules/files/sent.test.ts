@@ -1,6 +1,7 @@
 import type { FakeTelegram, MemoryStorage } from '@buhuchet/adapters';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
+import { UI_TEXTS } from '@buhuchet/domain';
 import {
   ApiError,
   Contractor,
@@ -26,8 +27,10 @@ import {
   TEST_ORIGIN,
   TEST_PASSWORD,
 } from '../../testing';
+import { createApp } from '../../app';
 import { addSentFiles, SentFilesRefused } from './sent-add';
 import { purgeSentFiles } from './sent-purge';
+import { retryStorageDeletes } from './storage-retry';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -697,7 +700,125 @@ describe.skipIf(!databaseAvailable())(
     });
 
     // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
-    it('имена файлов в Telegram — только тому, кто видит файлы: у ответственного без «Просматривать файлы» сообщение уходит владельцу', async () => {
+    describe('повторное удаление из хранилища', () => {
+      const retries = async () =>
+        (
+          await f.t.admin.db
+            .select({ key: schema.storageDeleteRetries.key })
+            .from(schema.storageDeleteRetries)
+        )
+          .map((r) => r.key)
+          .sort();
+      /** Хранилище, в котором удаление не удаётся (S3 недоступно). */
+      const noDelete = () => {
+        const s = Object.create(storage) as MemoryStorage;
+        s.delete = async () => {
+          throw new Error('S3 недоступно');
+        };
+        return s;
+      };
+
+      it('«Принять», когда хранилище не удаляет: загрузка — на повторное удаление, задача удаляет её, а копию в файлах контрагента не трогает', async () => {
+        const [id] = await send('org-a', cpAcc, grantAcc, [
+          { name: 'Акт сверки.pdf', body: PDF() },
+        ]);
+        const key = (await keyOf(id!))!;
+        const flakyApp = createApp({ ...f.deps, storage: noDelete() });
+        try {
+          const ok = await apiRequest(flakyApp, 'POST', `/api/files/sent/${id}/accept`, acc, {
+            version: await versionOf(acc, cpAcc, id!),
+          });
+          expect(ok.status, await ok.clone().text()).toBe(200);
+          const [copy] = await f.t.admin.db
+            .select({ key: files.storageKey })
+            .from(files)
+            .where(eq(files.id, SentFileItem.parse(await ok.json()).fileId!));
+          expect(storage.files.has(key)).toBe(true);
+          expect(await retries()).toEqual([key, `${key}.up`].sort());
+          // Ключ копии (её строка жива) на повтор попасть может — задача его не удалит.
+          await f.t.admin.db.insert(schema.storageDeleteRetries).values({ key: copy!.key });
+          expect(await retryStorageDeletes(f.deps)).toBe(2);
+          expect(storage.files.has(key)).toBe(false);
+          expect(storage.files.has(copy!.key)).toBe(true);
+          expect(await retries()).toEqual([]);
+        } finally {
+          await f.t.admin.db.delete(schema.storageDeleteRetries);
+        }
+      });
+
+      it('«Добавить отправленный файл» не удался, и хранилище не удаляет: положенный файл — на повторное удаление', async () => {
+        const s = noDelete();
+        let puts = 0;
+        s.put = async (...args: Parameters<typeof storage.put>) => {
+          puts += 1;
+          if (puts > 1) throw new Error('S3 недоступно');
+          return storage.put(...args);
+        };
+        const before = [...storage.files.keys()];
+        try {
+          await expect(
+            addSentFiles(
+              { ...f.deps, storage: s },
+              {
+                orgId: f.a.orgId,
+                contractorId: cpAcc.id,
+                source: 'telegram',
+                tgChatId: CLIENT_CHAT,
+                files: [
+                  { name: 'Акт.pdf', bytes: PDF() },
+                  { name: 'Счёт.pdf', bytes: PDF() },
+                ],
+              },
+            ),
+          ).rejects.toThrow('S3 недоступно');
+          const left = [...storage.files.keys()].filter((k) => !before.includes(k));
+          expect(left).toHaveLength(1);
+          expect(await retries()).toHaveLength(2);
+          expect(await retries()).toContain(left[0]);
+          expect(await retryStorageDeletes(f.deps)).toBe(2);
+          expect(storage.files.has(left[0]!)).toBe(false);
+          expect((await cardList(acc, cpAcc)).items).toEqual([]);
+        } finally {
+          await f.t.admin.db.delete(schema.storageDeleteRetries);
+        }
+      });
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('из Telegram: подключение отключили, пока файл шёл в хранилище, — файл не записан и удалён', async () => {
+      const keys = () => [...storage.files.keys()].filter((k) => k.includes('/sent/')).sort();
+      const before = keys();
+      const link = eq(schema.contractorTelegramLinks.chatId, CLIENT_CHAT);
+      const racing = Object.create(storage) as typeof storage;
+      racing.put = async (...args: Parameters<typeof storage.put>) => {
+        await f.t.admin.db
+          .update(schema.contractorTelegramLinks)
+          .set({ status: 'off' })
+          .where(link);
+        return storage.put(...args);
+      };
+      try {
+        await expect(
+          addSentFiles(
+            { ...f.deps, storage: racing },
+            {
+              orgId: f.a.orgId,
+              contractorId: cpAcc.id,
+              source: 'telegram',
+              tgChatId: CLIENT_CHAT,
+              files: [{ name: 'Акт.pdf', bytes: PDF() }],
+            },
+          ),
+        ).rejects.toMatchObject({ refusal: { code: 'sent_off' } });
+      } finally {
+        await f.t.admin.db.update(schema.contractorTelegramLinks).set({ status: 'on' }).where(link);
+      }
+      expect((await cardList(acc, cpAcc)).items).toEqual([]);
+      expect(keys()).toEqual(before);
+    });
+
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('имена файлов в Telegram — только тому, кто видит файлы: ответственный без «Просматривать файлы» получает текст прототипа без имён', async () => {
       const role = f.templateRole(f.a, 'acc');
       const [had] = await f.t.admin.db
         .select()
@@ -717,12 +838,17 @@ describe.skipIf(!databaseAvailable())(
             eq(schema.rolePermissions.permissionId, 'filesView'),
           ),
         );
+      const n0 = tg.sent.length;
       try {
         await send('org-a', cpAcc, grantAcc, [{ name: 'Выписка_ноябрь.pdf', body: PDF() }]);
-        expect(tg.sent.filter((m) => m.chatId === CHAT_ACC)).toEqual([]);
-        const toOwner = tg.sent.filter((m) => m.chatId === CHAT_OWNER);
-        expect(toOwner).toHaveLength(1);
-        expect(toOwner[0]!.text).toContain('Выписка_ноябрь.pdf');
+        const sent = tg.sent.slice(n0);
+        expect(sent.filter((m) => m.chatId === CHAT_OWNER)).toEqual([]);
+        const toAcc = sent.filter((m) => m.chatId === CHAT_ACC);
+        expect(toAcc).toHaveLength(1);
+        expect(toAcc[0]!.text).toContain(UI_TEXTS['files.sent.tg.one.bare']!.ru);
+        expect(toAcc[0]!.text).not.toContain('Выписка_ноябрь');
+        expect(toAcc[0]!.text).not.toContain(cpAcc.name);
+        expect(toAcc[0]!.text).not.toContain('/files');
       } finally {
         await f.t.admin.db.insert(schema.rolePermissions).values(had!);
       }

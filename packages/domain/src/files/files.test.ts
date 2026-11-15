@@ -88,6 +88,7 @@ describe('файлы записей', () => {
       'Акт\u202efdp.exe',
       'a\u2066b.pdf',
       'a\u200fb.pdf',
+      'a\u061cb.pdf',
     ]) {
       expect(fileUploadProblem({ name, size: 1 }), JSON.stringify(name)).toBe('file_name_invalid');
     }

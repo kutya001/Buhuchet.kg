@@ -62,6 +62,11 @@ describe('файлы от контрагентов: отправка', () => {
     expect(sentFilesSendRefusal([f('Расчёт.xlsm'), f('Договор.DOCM'), f('Отчёт.xlsx')], 0)).toEqual(
       { code: 'sent_forbidden', files: ['Расчёт.xlsm', 'Договор.DOCM'] },
     );
+    // Надстройки — всегда код.
+    expect(sentFilesSendRefusal([f('Помощник.xla'), f('Шаблон.ppa')], 0)).toEqual({
+      code: 'sent_forbidden',
+      files: ['Помощник.xla', 'Шаблон.ppa'],
+    });
     expect(sentFilesSendRefusal([f('Отчёт.xlsx'), f('Договор.docx'), f('Акт.xls')], 0)).toBeNull();
   });
 

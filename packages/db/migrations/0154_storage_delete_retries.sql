@@ -12,9 +12,9 @@ CREATE INDEX "storage_delete_retries_created_idx" ON "storage_delete_retries" US
 -- Ручная часть. Ключи на повторное удаление роль приложения не видит и не меняет: только функции ниже.
 REVOKE ALL ON TABLE public.storage_delete_retries FROM buhuchet_app;--> statement-breakpoint
 -- Запомнить ключи, которые не удалось удалить из хранилища (после «Одобрить» и «Удалить» заявки, после
--- «Принять» отправленного файла, после отказа загрузки): только ключи публичных загрузок — другой ключ
--- отклоняет ограничение storage_delete_retries_key_check; не больше 100 за раз. Уже записанный ключ не
--- меняется. Отвечает, сколько записано.
+-- «Принять» отправленного файла, после отказа загрузки): только ключи публичных загрузок и копий
+-- принятого файла — другой ключ отклоняет ограничение storage_delete_retries_key_check; не больше 100 за
+-- раз. Уже записанный ключ не меняется. Отвечает, сколько записано.
 CREATE FUNCTION app.storage_retry_add(p_keys text[])
   RETURNS integer
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -34,16 +34,35 @@ CREATE FUNCTION app.storage_retry_add(p_keys text[])
   END
   $$;--> statement-breakpoint
 -- Что повторить (задача по расписанию): ключи, которые ещё не пробовали или пробовали не позже чем
--- p_every_minutes минут назад, старые первыми.
+-- p_every_minutes минут назад, старые первыми. Ключ, на который ещё ссылается живая строка (файл не
+-- удалён, отправленный файл не принят или его загрузка идёт, документ заявки без организации — после
+-- «Одобрить» строки документов остаются описанием заявки, а файлы уже у организации, — загрузка черновика
+-- не убрана), не удаляется, а снимается с повтора: объект ещё нужен (например, «Принять» на деле сохранилось,
+-- а ответ базы потерялся), уберёт его обычное удаление этой строки.
 CREATE FUNCTION app.storage_retry_due(p_now timestamptz, p_every_minutes integer, p_limit integer)
   RETURNS SETOF text
-  LANGUAGE sql STABLE SECURITY DEFINER
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
-    SELECT r.key FROM public.storage_delete_retries r
-    WHERE r.tried_at IS NULL OR r.tried_at <= p_now - make_interval(mins => p_every_minutes)
-    ORDER BY r.created_at, r.key
-    LIMIT p_limit
+  BEGIN
+    DELETE FROM public.storage_delete_retries r
+      WHERE EXISTS (SELECT 1 FROM public.files f WHERE f.storage_key = r.key AND f.state <> 'deleted')
+        OR EXISTS (SELECT 1 FROM public.contractor_sent_files s
+          WHERE s.storage_key = r.key AND s.status <> 'accepted')
+        OR EXISTS (SELECT 1 FROM public.contractor_sent_files s
+          WHERE r.key LIKE '%.up' AND s.storage_key = left(r.key, -3) AND s.state = 'pending')
+        OR EXISTS (SELECT 1 FROM public.platform_lead_docs d
+          JOIN public.platform_leads l ON l.id = d.lead_id
+          WHERE d.storage_key = r.key AND l.created_org_id IS NULL)
+        OR EXISTS (SELECT 1 FROM public.platform_lead_uploads u
+          WHERE u.id = CASE WHEN r.key LIKE 'leads/upload/%' THEN substr(r.key, 14)::uuid END
+            AND u.state <> 'gone');
+    RETURN QUERY
+      SELECT r.key FROM public.storage_delete_retries r
+      WHERE r.tried_at IS NULL OR r.tried_at <= p_now - make_interval(mins => p_every_minutes)
+      ORDER BY r.created_at, r.key
+      LIMIT p_limit;
+  END
   $$;--> statement-breakpoint
 -- Итог попытки: удалённые ключи убираются, у не удалённых — ещё одна попытка. Отвечает, сколько ключей
 -- осталось и сколько из них не удаётся удалить уже p_stuck_attempts раз и больше (для оповещения).
@@ -133,4 +152,28 @@ CREATE OR REPLACE FUNCTION app.lead_submit_docs(
         c.id
       FROM cur c JOIN gone g ON g.id = c.id;
   END
-  $$;
+  $$;--> statement-breakpoint
+-- Имена документов заявок и загрузок черновиков, начатых до этой правки, — как у новых (leadDocStoredName):
+-- без управляющих знаков и знаков направления, без «/» и «\», без точки и пробела в конце, с «.pdf».
+UPDATE public.platform_lead_docs d SET name = f.name
+  FROM (
+    SELECT x.id, CASE WHEN lower(x.n) LIKE '%.pdf' THEN x.n ELSE left(x.n, 251) || '.pdf' END AS name
+    FROM (
+      SELECT id, coalesce(nullif(rtrim(btrim(regexp_replace(name,
+        '[\u0001-\u001f\u007f/\\\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]', '', 'g')), '. '), ''),
+        'документ') AS n
+      FROM public.platform_lead_docs
+    ) x
+  ) f
+  WHERE f.id = d.id AND f.name <> d.name;--> statement-breakpoint
+UPDATE public.platform_lead_uploads u SET name = f.name
+  FROM (
+    SELECT x.id, CASE WHEN lower(x.n) LIKE '%.pdf' THEN x.n ELSE left(x.n, 251) || '.pdf' END AS name
+    FROM (
+      SELECT id, coalesce(nullif(rtrim(btrim(regexp_replace(name,
+        '[\u0001-\u001f\u007f/\\\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]', '', 'g')), '. '), ''),
+        'документ') AS n
+      FROM public.platform_lead_uploads
+    ) x
+  ) f
+  WHERE f.id = u.id AND f.name <> u.name;

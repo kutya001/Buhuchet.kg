@@ -4,11 +4,13 @@ import { createFakeDocumentReader, type DocumentText } from '@buhuchet/adapters/
 import { releaseRateLimit, schema, storageRetryAdd, submitLead, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import {
+  formatText,
   LEAD_DOC_MAX_BYTES,
   LEAD_DRAFT_HOURS,
   LEAD_READ_LIMIT,
   LEAD_UPLOAD_MESSAGES,
   pageIpSubject,
+  UI_TEXTS,
 } from '@buhuchet/domain';
 import {
   AdminLeadCard,
@@ -20,7 +22,7 @@ import {
   LeadUploadTicket,
   OrgInnFormSaved,
 } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import {
@@ -69,6 +71,22 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
   });
 
   const failure = async (res: Response) => ApiError.parse(await res.json()).error;
+  /** Оповещения администратору платформы вида `key` (ключ очереди `alert:<key>:<момент>`). */
+  const alertsOf = (key: string) =>
+    f.t.admin.db
+      .select({ id: schema.telegramOutbox.id, text: schema.telegramOutbox.text })
+      .from(schema.telegramOutbox)
+      .where(like(schema.telegramOutbox.dedupeKey, `alert:${key}:%`));
+  const dropAlerts = (key: string) =>
+    f.t.admin.db
+      .delete(schema.telegramOutbox)
+      .where(like(schema.telegramOutbox.dedupeKey, `alert:${key}:%`));
+  /** Сдвинуть момент постановки оповещений вида `key` на `hours` часов назад (предел — по часам базы). */
+  const ageAlerts = (key: string, hours: number) =>
+    f.t.admin.db
+      .update(schema.telegramOutbox)
+      .set({ createdAt: sql`clock_timestamp() - make_interval(hours => ${hours})` })
+      .where(like(schema.telegramOutbox.dedupeKey, `alert:${key}:%`));
   const guest = (path: string, body: unknown, ip: string) =>
     app.request(path, {
       method: 'POST',
@@ -857,6 +875,38 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       return { storage: s, state };
     };
 
+    it('«Одобрить», когда хранилище не удаляет: копия заявки — на повторное удаление, задача удаляет её, а файл организации, который ещё нужен, не трогает', async () => {
+      const lead = await ipLead();
+      await tgLinked(lead.id);
+      const ready = await card(lead.id);
+      const s = flaky();
+      const flakyApp = createApp({ ...f.deps, storage: s.storage, documents: reader });
+      const res = await apiRequest(flakyApp, 'POST', `/api/admin/leads/${lead.id}/approve`, admin, {
+        login: `ip.retry.${lead.id.slice(0, 8)}`,
+        version: ready.version,
+      });
+      expect(res.status, await res.clone().text()).toBe(201);
+      const done = LeadApproved.parse(await res.json());
+      const [doc] = await leadDocs(lead.id);
+      const [file] = await f.t.admin.db
+        .select()
+        .from(schema.files)
+        .where(eq(schema.files.orgId, done.orgId));
+      try {
+        // Строка документа остаётся описанием заявки, но файл уже у организации — на повтор.
+        expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 0 }]);
+        // Ключ живого файла организации (например, ответ на «Одобрить» потерялся) задача не удаляет.
+        await storageRetryAdd(f.deps.db, [file!.storageKey]);
+        s.state.down = false;
+        expect(await retryStorageDeletes({ ...f.deps, storage: s.storage })).toBe(1);
+        expect(storage.files.has(doc!.storageKey)).toBe(false);
+        expect(storage.files.has(file!.storageKey)).toBe(true);
+        expect(await retries()).toEqual([]);
+      } finally {
+        await f.t.admin.db.delete(schema.storageDeleteRetries);
+      }
+    });
+
     it('«Удалить» заявку, когда хранилище недоступно: файлы — на повторное удаление, задача удаляет их, когда хранилище снова работает', async () => {
       const lead = await ipLead();
       const docs = await leadDocs(lead.id);
@@ -866,27 +916,31 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       });
       const s = flaky();
       const flakyApp = createApp({ ...f.deps, storage: s.storage, documents: reader });
-      const res = await apiRequest(flakyApp, 'DELETE', `/api/admin/leads/${lead.id}`, admin);
-      expect(res.status, await res.clone().text()).toBe(200);
-      // Заявка стёрта, файл остался — его ключ запомнен.
-      expect(await leadDocs(lead.id)).toEqual([]);
-      expect(storage.files.has(doc!.storageKey)).toBe(true);
-      expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 0 }]);
-      const job = { ...f.deps, storage: s.storage };
-      // Хранилище ещё недоступно: попытка засчитана, ключ остаётся.
-      expect(await retryStorageDeletes(job)).toBe(0);
-      expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 1 }]);
-      // Повтор раньше чем через 50 минут ключ не трогает.
-      s.state.down = false;
-      expect(await retryStorageDeletes(job)).toBe(0);
-      expect(storage.files.has(doc!.storageKey)).toBe(true);
-      const later = {
-        ...job,
-        clock: fixedClock(new Date(f.deps.clock.now().getTime() + 3600_000)),
-      };
-      expect(await retryStorageDeletes(later)).toBe(1);
-      expect(storage.files.has(doc!.storageKey)).toBe(false);
-      expect(await retries()).toEqual([]);
+      try {
+        const res = await apiRequest(flakyApp, 'DELETE', `/api/admin/leads/${lead.id}`, admin);
+        expect(res.status, await res.clone().text()).toBe(200);
+        // Заявка стёрта, файл остался — его ключ запомнен.
+        expect(await leadDocs(lead.id)).toEqual([]);
+        expect(storage.files.has(doc!.storageKey)).toBe(true);
+        expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 0 }]);
+        const job = { ...f.deps, storage: s.storage };
+        // Хранилище ещё недоступно: попытка засчитана, ключ остаётся.
+        expect(await retryStorageDeletes(job)).toBe(0);
+        expect(await retries()).toEqual([{ key: doc!.storageKey, attempts: 1 }]);
+        // Повтор раньше чем через 50 минут ключ не трогает.
+        s.state.down = false;
+        expect(await retryStorageDeletes(job)).toBe(0);
+        expect(storage.files.has(doc!.storageKey)).toBe(true);
+        const later = {
+          ...job,
+          clock: fixedClock(new Date(f.deps.clock.now().getTime() + 3600_000).toISOString()),
+        };
+        expect(await retryStorageDeletes(later)).toBe(1);
+        expect(storage.files.has(doc!.storageKey)).toBe(false);
+        expect(await retries()).toEqual([]);
+      } finally {
+        await f.t.admin.db.delete(schema.storageDeleteRetries);
+      }
     });
 
     it('сутки не удаётся удалить — оповещение администратору платформы, не чаще раза в сутки', async () => {
@@ -897,30 +951,37 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       await f.t.admin.db
         .insert(schema.telegramLinks)
         .values({ userId: adminUser!.id, orgId: null, chatId: 7_199_001 });
-      const alerts = () =>
-        f.t.admin.db
-          .select({ text: schema.telegramOutbox.text })
-          .from(schema.telegramOutbox)
-          .where(eq(schema.telegramOutbox.kind, 'alert'));
       const key = 'leads/upload/00000000-0000-4000-8000-000000000001';
+      const s = flaky();
+      /** Запуск задачи через `hours` часов: повтор — не раньше чем через 50 минут после прошлого. */
+      const runAt = (hours: number) =>
+        retryStorageDeletes({
+          ...f.deps,
+          storage: s.storage,
+          clock: fixedClock(
+            new Date(f.deps.clock.now().getTime() + hours * 3600_000).toISOString(),
+          ),
+        });
       try {
         await storageRetryAdd(f.deps.db, [key]);
         await f.t.admin.db
           .update(schema.storageDeleteRetries)
           .set({ attempts: STORAGE_RETRY_STUCK_ATTEMPTS - 1 });
-        const s = flaky();
-        const job = { ...f.deps, storage: s.storage };
-        await retryStorageDeletes(job);
-        const sent = (await alerts()).filter((a) => a.text.includes('Хранилище'));
+        await runAt(0);
+        const sent = await alertsOf('storage-retry');
         expect(sent).toHaveLength(1);
-        expect(sent[0]!.text).toContain('1 файлов');
-        const later = {
-          ...job,
-          clock: fixedClock(new Date(f.deps.clock.now().getTime() + 3600_000)),
-        };
-        await retryStorageDeletes(later);
-        expect((await alerts()).filter((a) => a.text.includes('Хранилище'))).toHaveLength(1);
+        expect(sent[0]!.text).toContain(formatText(UI_TEXTS['alert.storage_retry']!.ru, { n: 1 }));
+        // Через час и спустя 23 часа после первого — без нового оповещения, спустя 25 часов — новое.
+        await runAt(1);
+        expect(await alertsOf('storage-retry')).toHaveLength(1);
+        await ageAlerts('storage-retry', 23);
+        await runAt(2);
+        expect(await alertsOf('storage-retry')).toHaveLength(1);
+        await ageAlerts('storage-retry', 25);
+        await runAt(3);
+        expect(await alertsOf('storage-retry')).toHaveLength(2);
       } finally {
+        await dropAlerts('storage-retry');
         await f.t.admin.db.delete(schema.storageDeleteRetries);
         await f.t.admin.db
           .delete(schema.telegramLinks)
@@ -931,7 +992,15 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
 
   // Последним в файле: предел платформы на час общий для всех тестов файла.
   describe('предел загрузок на всю платформу', () => {
-    it('больше 300 загрузок за час со всех адресов — 429 и с нового адреса', async () => {
+    // ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+    it('больше 300 загрузок за час со всех адресов — 429 и с нового адреса; администратору платформы — оповещение', async () => {
+      const [adminUser] = await f.t.admin.db
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .where(eq(schema.users.login, 'platform-admin'));
+      await f.t.admin.db
+        .insert(schema.telegramLinks)
+        .values({ userId: adminUser!.id, orgId: null, chatId: 7_199_003 });
       try {
         let taken = 0;
         while ((await takeRateLimit(f.deps.db, LEAD_UPLOAD_ALL_RATE_LIMIT, 'all')).ok) {
@@ -945,10 +1014,31 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         );
         expect(res.status).toBe(429);
         expect((await failure(res)).code).toBe('lead_upload_limit');
+        const sent = await alertsOf('lead-uploads');
+        expect(sent).toHaveLength(1);
+        expect(sent[0]!.text).toContain(
+          formatText(UI_TEXTS['alert.lead_uploads']!.ru, {
+            max: LEAD_UPLOAD_ALL_RATE_LIMIT.max,
+            readMax: LEAD_READ_ALL_RATE_LIMIT.max,
+          }),
+        );
+        // Второй отказ в тот же час — без нового оповещения.
+        const again = await guest(
+          '/api/leads/uploads',
+          { draft: null, kind: 'gns_cert', name: 'a.pdf', size: 10 },
+          '198.18.9.3',
+        );
+        expect(again.status).toBe(429);
+        expect(await alertsOf('lead-uploads')).toHaveLength(1);
       } finally {
         await f.t.admin.db
           .delete(schema.rateLimits)
           .where(eq(schema.rateLimits.kind, LEAD_UPLOAD_ALL_RATE_LIMIT.kind));
+        // Оповещение не чаще раза в час — по записям очереди: следующий тест ждёт своё.
+        await dropAlerts('lead-uploads');
+        await f.t.admin.db
+          .delete(schema.telegramLinks)
+          .where(eq(schema.telegramLinks.userId, adminUser!.id));
       }
     });
 
@@ -979,6 +1069,24 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
           expect(taken).toBeLessThanOrEqual(LEAD_READ_ALL_RATE_LIMIT.max);
         }
         const calls = reader.calls;
+        // Не PDF общий предел не тратит и упирается не в него: «Только PDF».
+        const other = await guest(
+          '/api/leads/uploads',
+          { draft: ticket.draft, kind: 'extract', name: 'b.pdf', size: 4 },
+          ip,
+        );
+        expect(other.status).toBe(201);
+        const otherTicket = LeadUploadTicket.parse(await other.json());
+        await storage.put(`leads/upload/${otherTicket.id}`, new TextEncoder().encode('MZ!!'), {
+          contentType: 'application/pdf',
+        });
+        const notPdf = await guest(
+          `/api/leads/uploads/${otherTicket.id}/read`,
+          { draft: ticket.draft },
+          ip,
+        );
+        expect(notPdf.status).toBe(400);
+        expect((await failure(notPdf)).code).toBe('lead_doc_pdf');
         const res = await guest(
           `/api/leads/uploads/${ticket.id}/read`,
           { draft: ticket.draft },
@@ -987,15 +1095,12 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         expect(res.status).toBe(429);
         expect((await failure(res)).code).toBe('lead_read_limit');
         expect(reader.calls).toBe(calls);
-        const alerts = await f.t.admin.db
-          .select({ text: schema.telegramOutbox.text })
-          .from(schema.telegramOutbox)
-          .where(eq(schema.telegramOutbox.kind, 'alert'));
-        expect(alerts.filter((a) => a.text.includes('Заявки с лендинга'))).toHaveLength(1);
+        expect(await alertsOf('lead-uploads')).toHaveLength(1);
       } finally {
         await f.t.admin.db
           .delete(schema.rateLimits)
           .where(eq(schema.rateLimits.kind, LEAD_READ_ALL_RATE_LIMIT.kind));
+        await dropAlerts('lead-uploads');
         await f.t.admin.db
           .delete(schema.telegramLinks)
           .where(eq(schema.telegramLinks.userId, adminUser!.id));

@@ -1,7 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { storageDeleteRetries } from './schema';
-import { storageRetryAdd, storageRetryDone, storageRetryDue } from './storage-retries';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { platformLeadUploads, storageDeleteRetries } from './schema';
+import {
+  isStorageRetryKey,
+  storageRetryAdd,
+  storageRetryDone,
+  storageRetryDue,
+} from './storage-retries';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
 const permissionDenied = expect.objectContaining({
@@ -26,6 +31,11 @@ describe.skipIf(!databaseAvailable())('повторное удаление фа�
     await t?.drop();
   });
 
+  // Упавший посередине тест не оставляет ключей следующему.
+  afterEach(async () => {
+    await t?.admin.db.delete(storageDeleteRetries);
+  });
+
   it('роль приложения таблицу не видит и не меняет — только функции', async () => {
     await expect(t.app.db.select().from(storageDeleteRetries)).rejects.toEqual(permissionDenied);
     await expect(
@@ -45,6 +55,7 @@ describe.skipIf(!databaseAvailable())('повторное удаление фа�
       `org/${U(4)}/sent/${U(5)}.chk-${U(6)}`,
       `org/${U(4)}/files/${U(7)}`,
     ];
+    expect(ok.every(isStorageRetryKey)).toBe(true);
     expect(await storageRetryAdd(t.app.db, ok)).toBe(ok.length);
     // Повтор того же ключа — без изменений.
     expect(await storageRetryAdd(t.app.db, [ok[0]!])).toBe(0);
@@ -55,6 +66,7 @@ describe.skipIf(!databaseAvailable())('повторное удаление фа�
       `leads/upload/${U(1)}\nleads/x`,
       `kb/videos/${U(9)}`,
     ]) {
+      expect(isStorageRetryKey(bad), bad).toBe(false);
       await expect(storageRetryAdd(t.app.db, [bad]), bad).rejects.toEqual(checkFailed);
     }
     await expect(
@@ -65,7 +77,6 @@ describe.skipIf(!databaseAvailable())('повторное удаление фа�
     // Больше 100 — частями.
     const many = Array.from({ length: 150 }, (_, i) => `leads/upload/${U(1000 + i)}`);
     expect(await storageRetryAdd(t.app.db, many)).toBe(150);
-    await t.admin.db.delete(storageDeleteRetries);
   });
 
   it('повтор: сначала не пробованные, затем не раньше чем через заданные минуты; удалённые убираются, неудачи считаются', async () => {
@@ -85,6 +96,31 @@ describe.skipIf(!databaseAvailable())('повторное удаление фа�
     expect(
       await storageRetryDone(t.app.db, { now: later, done: [], failed: [b], stuckAttempts: 2 }),
     ).toEqual({ left: 1, stuck: 1 });
-    await t.admin.db.delete(storageDeleteRetries);
+  });
+
+  it('ключ, который ещё нужен живой строке, не удаляется, а снимается с повтора', async () => {
+    const now = new Date('2026-11-15T10:00:00Z');
+    const upload = (n: number, state: string) => ({
+      id: U(n),
+      draftId: U(30),
+      kind: 'extract' as const,
+      name: 'Выписка.pdf',
+      sizeBytes: 10,
+      state,
+    });
+    // Живая загрузка черновика и убранная (её файл уже не нужен).
+    await t.admin.db.insert(platformLeadUploads).values([upload(31, 'ready'), upload(32, 'gone')]);
+    const live = `leads/upload/${U(31)}`;
+    const gone = `leads/upload/${U(32)}`;
+    try {
+      await storageRetryAdd(t.app.db, [live, gone]);
+      expect(await storageRetryDue(t.app.db, now, 50, 10)).toEqual([gone]);
+      const rows = await t.admin.db
+        .select({ key: storageDeleteRetries.key })
+        .from(storageDeleteRetries);
+      expect(rows.map((r) => r.key)).toEqual([gone]);
+    } finally {
+      await t.admin.db.delete(platformLeadUploads);
+    }
   });
 });

@@ -133,9 +133,9 @@ async function seesSentFiles(
 
 /**
  * Сообщение о новых файлах (прототип `sntNotify`, `pgTgStaff`): ответственному, а без него (или он
- * заблокирован, без Telegram) — первому владельцу с Telegram. Имена файлов уходят только тому, кто их
- * видит на сайте (право «Просматривать файлы» с областью «Файлового менеджера»): ответственный без права
- * пропускается — следующему по порядку. Как `tgSvc` прототипа, не зависит от переключателей
+ * заблокирован, без Telegram) — первому владельцу с Telegram. Контрагент и имена файлов уходят только
+ * тому, кто видит эти файлы на сайте (право «Просматривать файлы» с областью «Файлового менеджера»);
+ * остальным — текст прототипа без имён и без ссылки. Как `tgSvc` прототипа, не зависит от переключателей
  * напоминаний; ошибка не мешает отправке файлов.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#И-7
@@ -156,17 +156,17 @@ export async function notifySentFiles(
       for (const employeeId of notice.employeeIds) {
         const target = await notifyTarget(tx, employeeId);
         if (!target?.chatId) continue;
-        if (!(await seesSentFiles(tx, employeeId, contractor))) continue;
         const chat = await telegramChat(tx, target.userId);
         if (!chat) continue;
+        const sees = await seesSentFiles(tx, employeeId, contractor);
         const values = { contractor: notice.contractor, names: names.join(', '), n: names.length };
-        const body = formatText(
-          t(names.length > 1 ? 'files.sent.tg.many' : 'files.sent.tg.one'),
-          values,
-        );
-        const link = formatText(t('telegram.open'), {
-          link: new URL(SENT_PATH, deps.config.APP_BASE_URL).href,
-        });
+        const key = names.length > 1 ? 'files.sent.tg.many' : 'files.sent.tg.one';
+        const body = formatText(t(sees ? key : `${key}.bare`), values);
+        const link = sees
+          ? `\n\n${formatText(t('telegram.open'), {
+              link: new URL(SENT_PATH, deps.config.APP_BASE_URL).href,
+            })}`
+          : '';
         return queueEvents(
           tx,
           [
@@ -174,7 +174,7 @@ export async function notifySentFiles(
               userId: target.userId,
               chatId: chat.chatId,
               kind: 'cp_file',
-              text: withOrganization(`${body}\n\n${link}`, await contextOrgName(tx), chat.shared),
+              text: withOrganization(`${body}${link}`, await contextOrgName(tx), chat.shared),
             },
           ],
           deps.clock.now(),
@@ -270,8 +270,10 @@ export async function addSentFiles(
     for (const [i, row] of rows.entries()) {
       await deps.storage.put(row.storageKey, o.files[i]!.bytes, { contentType: row.contentType });
     }
-    await withOrgContext(deps.db, ctx, (tx) =>
-      finishSentFiles(tx, {
+    await withOrgContext(deps.db, ctx, async (tx) => {
+      // Подключение могли отключить, пока файл шёл в хранилище: проверка — и в транзакции записи.
+      if (o.source === 'telegram') await requireActiveChat(tx, o.contractorId, o.tgChatId ?? null);
+      await finishSentFiles(tx, {
         contractorId: o.contractorId,
         ids,
         names: rows.map((r) => r.name),
@@ -279,8 +281,8 @@ export async function addSentFiles(
         comment,
         sender: o.source === 'telegram' ? senderName : null,
         receipt: o.receipt ?? false,
-      }),
-    );
+      });
+    });
   } catch (err) {
     await withOrgContext(deps.db, ctx, (tx) => dropPendingSentFiles(tx, ids)).catch(
       (e: unknown) => {

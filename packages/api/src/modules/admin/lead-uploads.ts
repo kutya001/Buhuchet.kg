@@ -231,7 +231,11 @@ export const leadUploadReadRoute = createRoute({
     },
     404: { description: 'Нет такой загрузки в этом черновике', content: error },
     409: { description: 'Файл не дошёл до хранилища', content: error },
-    429: { description: 'Идёт прежнее чтение с этого адреса или за час их уже 20', content: error },
+    429: {
+      description:
+        'Идёт прежнее чтение с этого адреса, за час их уже 20 или со всех адресов разобрано 300 документов',
+      content: error,
+    },
   },
 });
 
@@ -294,11 +298,6 @@ async function readLeadUpload(
   draft: string,
   sizeBytes: number,
 ): Promise<void> {
-  const all = await takeRateLimit(deps.db, LEAD_READ_ALL_RATE_LIMIT, 'all');
-  if (!all.ok) {
-    await leadLimitAlert(deps);
-    apiFail(429, 'lead_read_limit', LEAD_UPLOAD_MESSAGES.lead_read_limit);
-  }
   const key = leadUploadKey(id);
   const stored = await deps.storage.stat(key);
   if (!stored) return apiFail(409, 'lead_upload_missing', LEAD_UPLOAD_MESSAGES.lead_upload_missing);
@@ -316,6 +315,13 @@ async function readLeadUpload(
     return apiFail(409, 'lead_upload_missing', LEAD_UPLOAD_MESSAGES.lead_upload_missing);
   }
   if (!(await isStoredPdf(deps, key))) return await refuse('lead_doc_pdf');
+  // Общий предел — только перед разбором настоящего PDF: чтения без файла и не PDF его не тратят, а
+  // число PDF ограничивает предел загрузок.
+  const all = await takeRateLimit(deps.db, LEAD_READ_ALL_RATE_LIMIT, 'all');
+  if (!all.ok) {
+    await leadLimitAlert(deps);
+    apiFail(429, 'lead_read_limit', LEAD_UPLOAD_MESSAGES.lead_read_limit);
+  }
   const bytes = await deps.storage.get(key);
   if (!bytes || bytes.length !== sizeBytes) {
     return apiFail(409, 'lead_upload_missing', LEAD_UPLOAD_MESSAGES.lead_upload_missing);

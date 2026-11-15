@@ -1,4 +1,9 @@
-import { storageRetryAdd, storageRetryDone, storageRetryDue } from '@buhuchet/db';
+import {
+  isStorageRetryKey,
+  storageRetryAdd,
+  storageRetryDone,
+  storageRetryDue,
+} from '@buhuchet/db';
 import { alertTexts, sendPlatformAlert } from '../../jobs/alerts';
 import type { ApiDeps, Job, JobContext } from '../../deps';
 
@@ -39,13 +44,19 @@ export async function removeStoredObjects(
     }
   }
   if (!failed.length) return;
-  try {
-    await storageRetryAdd(deps.db, failed);
-  } catch (err) {
+  // Ключ не публичной загрузки таблица повторов не примет — он только в журнале (ошибка кода).
+  const retry = failed.filter(isStorageRetryKey);
+  if (retry.length < failed.length) {
     deps.logger.error(
-      { err, n: failed.length },
-      `${what}: файл не поставлен на повторное удаление`,
+      { n: failed.length - retry.length },
+      `${what}: ключ не для повторного удаления — файл остался в хранилище`,
     );
+  }
+  if (!retry.length) return;
+  try {
+    await storageRetryAdd(deps.db, retry);
+  } catch (err) {
+    deps.logger.error({ err, n: retry.length }, `${what}: файл не поставлен на повторное удаление`);
   }
 }
 

@@ -170,7 +170,7 @@ export function fileContentType(name: string): string {
  * при сохранении, и «Акт.exe.» стал бы программой.
  */
 // eslint-disable-next-line no-control-regex
-const BAD_NAME = /[\u0000-\u001f\u007f/\\\u200e\u200f\u202a-\u202e\u2066-\u2069]|\.$/;
+const BAD_NAME = /[\u0000-\u001f\u007f/\\\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]|\.$/;
 
 /** Что не так с загружаемым файлом: имя, тип, затем размер. */
 export function fileUploadProblem(file: { name: string; size: number }): FileProblem | null {

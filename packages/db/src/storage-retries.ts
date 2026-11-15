@@ -1,14 +1,24 @@
 import { sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
+import { STORAGE_RETRY_KEY_RE } from './schema/files';
 
 /*
  * Повторное удаление файлов из хранилища (доработки 14.11.2026, этап 3; миграция 0154): ключи публичных
  * загрузок, которые не удалось удалить сразу, — после «Одобрить» и «Удалить» заявки, после «Принять»
  * отправленного файла, после отказа загрузки. Таблицу `storage_delete_retries` роль приложения не видит:
- * только функции `app.storage_retry_*`. Ключи — только публичных загрузок (ограничение таблицы).
+ * только функции `app.storage_retry_*`. Ключи — только публичных загрузок и копий принятого файла
+ * (ограничение таблицы); ключ, на который ещё ссылается живая строка, задача не удаляет.
  */
 
 type Exec = Db | Tx;
+
+const RETRY_KEY = new RegExp(STORAGE_RETRY_KEY_RE);
+
+/**
+ * Примет ли ключ таблица повторов (то же выражение, что у ограничения `storage_delete_retries_key_check`):
+ * один неверный ключ иначе отказал бы всей пачке.
+ */
+export const isStorageRetryKey = (key: string): boolean => RETRY_KEY.test(key);
 
 /** Сколько ключей можно записать за раз (как в `app.storage_retry_add`). */
 export const STORAGE_RETRY_ADD_MAX = 100;
@@ -34,7 +44,10 @@ export async function storageRetryAdd(db: Exec, keys: readonly string[]): Promis
   return added;
 }
 
-/** Какие ключи повторить: ещё не пробовали или пробовали не позже чем `everyMinutes` минут назад. */
+/**
+ * Какие ключи повторить: ещё не пробовали или пробовали не позже чем `everyMinutes` минут назад. Ключи,
+ * которые ещё нужны живой строке, функция снимает с повтора и не отдаёт.
+ */
 export async function storageRetryDue(
   db: Exec,
   now: Date,
