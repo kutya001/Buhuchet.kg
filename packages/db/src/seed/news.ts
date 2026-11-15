@@ -50,7 +50,6 @@ function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
  * лендинга v117 (поток И) перенесены вместе с синхронизацией spec/.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-14
-// ОТКЛОНЕНИЕ: docs/deviations.md#О-80
 export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108']);
 
 /**
