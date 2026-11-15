@@ -186,7 +186,7 @@ export async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
 }
 
 /** Вкладка и счётчик — при «Файлах в карточках» и «Странице контрагента по ссылке». */
-async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
+export async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
   const features = await requireFilesFeature(tx, orgId);
   if (!features.cppage) cppageOff();
 }

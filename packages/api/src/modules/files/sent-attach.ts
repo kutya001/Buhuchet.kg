@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { orgFileKey } from '@buhuchet/adapters';
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import { takeRateLimit, withOrgContext } from '@buhuchet/db';
-import { FILE_MESSAGES } from '@buhuchet/domain';
+import { FILE_MESSAGES, fileUploadProblem } from '@buhuchet/domain';
 import { SentFileAttach, SentFileAttached, SentFileIdParam } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -13,12 +13,11 @@ import {
   dropObjects,
   error,
   FILES_SECTION,
-  requireFilesFeature,
   subjectOf,
   UPLOAD_RATE_LIMIT,
   visibleSource,
 } from './files';
-import { visibleSent } from './sent';
+import { requireSentTab, visibleSent } from './sent';
 
 /*
  * Принятый чек — сразу к деньгам (просьба заказчика 15.11.2026, прототип v119): «Принять» у чека из
@@ -50,7 +49,7 @@ export const sentAttachRoute = createRoute({
     401: { description: 'Нет входа', content: error },
     403: {
       description:
-        'Нет права «Просматривать файлы» или «Загружать файлы», нельзя менять запись денег или «Файлы в карточках» выключены',
+        'Нет права «Просматривать файлы» или «Загружать файлы», нельзя менять запись денег, «Файлы в карточках» или «Страница контрагента по ссылке» выключены, имя или размер файла не годятся для файлов записей',
       content: error,
     },
     404: {
@@ -77,10 +76,15 @@ export function sentAttachHandler(deps: ApiDeps): RouteHandler<typeof sentAttach
     const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
     if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
     const seen = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
+      // Как у остальных действий «Отправленных файлов»: функции «Файлы в карточках» и «Страница
+      // контрагента по ссылке».
+      await requireSentTab(tx, ctx.orgId);
       return (await visibleSent(tx, subject, id)).file;
     });
     if (seen.status !== 'accepted' || !seen.fileStorageKey) return notFound();
+    // Правила файлов записей (имя, тип, размер) — как у загрузки с сайта и файла из Telegram.
+    const problem = fileUploadProblem({ name: seen.name, size: seen.sizeBytes });
+    if (problem) apiFail(403, problem, FILE_MESSAGES[problem]);
     const fileId = randomUUID();
     const key = orgFileKey(ctx.orgId, FILES_SECTION, fileId);
     if (!(await deps.storage.copy(seen.fileStorageKey, key))) {

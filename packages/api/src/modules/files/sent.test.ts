@@ -474,6 +474,54 @@ describe.skipIf(!databaseAvailable())(
       expect(storage.files.has(`${key}.up`)).toBe(false);
     });
 
+    it('проверочная копия одного файла упала — уборка ждёт остальные копии: ни загрузок, ни проверочных копий не остаётся', async () => {
+      const list = [
+        { name: 'Первый.pdf', body: PDF('1') },
+        { name: 'Второй.pdf', body: PDF('2') },
+      ];
+      const started = await start('org-a', cpAcc, grantAcc, list);
+      const copy = storage.copy;
+      let checks = 0;
+      let firstFailed = () => {};
+      const failed = new Promise<void>((r) => (firstFailed = r));
+      let secondDone = () => {};
+      const second = new Promise<void>((r) => (secondDone = r));
+      // Первая проверочная копия падает, вторая кладётся позже этого отказа.
+      storage.copy = async (from, to) => {
+        if (!to.includes('.chk-')) return copy(from, to);
+        checks += 1;
+        if (checks === 1) {
+          firstFailed();
+          throw new Error('хранилище недоступно');
+        }
+        // Копия уже идёт (источник прочитан) и ляжет, даже если загрузку тем временем удалили.
+        const source = storage.files.get(from);
+        await failed;
+        await new Promise((r) => setTimeout(r, 20));
+        try {
+          if (!source) return copy(from, to);
+          await storage.put(to, source.body, { contentType: source.contentType });
+          return true;
+        } finally {
+          secondDone();
+        }
+      };
+      let ids: string[] | undefined;
+      try {
+        const done = await finish('org-a', cpAcc, grantAcc, started, list);
+        ids = done.ids;
+        expect(done.res.status).toBe(500);
+        await second;
+      } finally {
+        storage.copy = copy;
+      }
+      expect(checks).toBe(2);
+      const keys = (await Promise.all((ids ?? []).map(keyOf))).map((k) => k!);
+      expect(keys).toHaveLength(2);
+      const left = [...storage.files.keys()].filter((x) => keys.some((k) => x.startsWith(k)));
+      expect(left).toEqual([]);
+    });
+
     it('незаконченная загрузка занимает место в пределе за сутки, пока задача не удалила её через 30 минут вместе с файлами', async () => {
       const ten = (p: string) =>
         Array.from({ length: 10 }, (_, i) => ({ name: `${p}${i}.pdf`, body: PDF() }));

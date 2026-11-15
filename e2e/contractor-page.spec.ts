@@ -807,7 +807,8 @@ test.describe('Доработки 14.11, блок 6: страница контр
     baseURL,
     isMobile,
   }) => {
-    // Своя организация, отчёт с суммой, два открытия страницы и окна «Перечислить» и «Я оплатил».
+    // Своя организация, отчёт с суммой, два открытия страницы, окна «Перечислить» и «Я оплатил», у
+    // сотрудника — «Отправленные файлы», окно чека и «Поступление от контрагента» с прикреплением.
     test.slow();
     const texts = await dictionary(request);
     const o = await pageOrg(request, baseURL);
@@ -889,7 +890,18 @@ test.describe('Доработки 14.11, блок 6: страница контр
 
     // Бухгалтер (вход владельца — в том же браузере) в «Отправленных файлах» принимает чек: открывается
     // «Поступление от контрагента» с суммой месяца, и чек уже стоит в поле файлов (прототип v119
-    // `rcptFileRow`) — при сохранении он прикрепляется к поступлению без повторной загрузки.
+    // `rcptFileRow`) — при сохранении он прикрепляется к поступлению без повторной загрузки. У контрагента
+    // «Файл к поступлению обязателен»: принятый чек его засчитывает, другого файла не нужно.
+    const moneyCard = (await (
+      await request.get(`/api/contractors/${cp.id}/money`, { maxRetries: 2 })
+    ).json()) as { contractor: { version: number } };
+    const needFile = await request.patch(`/api/contractors/${cp.id}/money-settings`, {
+      headers: { origin: o.origin },
+      data: { version: moneyCard.contractor.version, needReceiptFile: true },
+    });
+    expect(needFile.status(), await needFile.text()).toBe(200);
+    // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
+    await page.goto('about:blank');
     await page.context().addCookies((await request.storageState()).cookies);
     await page.goto('/app/files/sent');
     const grid = page.locator('[data-files-sent] [data-grid]');
@@ -935,9 +947,11 @@ test.describe('Доработки 14.11, блок 6: страница контр
     ).toBeVisible();
     await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
     // Чек — среди файлов поступления (копия: в «Отправленных файлах» он тоже остался).
-    const receiptFiles = (await (
-      await request.get(`/api/files?kind=receipt&id=${receiptId}`, { maxRetries: 2 })
-    ).json()) as { items: { name: string }[] };
+    const receiptRes = await request.get(`/api/files?kind=receipt&id=${receiptId}`, {
+      maxRetries: 2,
+    });
+    expect(receiptRes.status(), await receiptRes.text()).toBe(200);
+    const receiptFiles = (await receiptRes.json()) as { items: { name: string }[] };
     expect(receiptFiles.items.map((f) => f.name)).toEqual([fileName]);
 
     // Месяц на странице контрагента — оплачен.
@@ -963,6 +977,90 @@ test.describe('Доработки 14.11, блок 6: страница контр
     const claim = history.items.find((h) => h.action === 'page_paid');
     expect(claim).toBeTruthy();
     expect(claim!.actor).toBeNull();
+  });
+
+  test('(прототип v119) «Я оплатил» за обслуживание: «Принять» у чека открывает «Принять оплату за обслуживание» с этим чеком в поле файлов; после «Убрать» оплата записана без файла, чек остался принятым', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    // Своя организация, страница клиента и окно денег у сотрудника в одном тесте.
+    test.slow();
+    const texts = await dictionary(request);
+    const o = await pageOrg(request, baseURL);
+    const tag = Date.now().toString(36);
+    const name = `ОсОО «Обслуживание ${tag}»`;
+    const cp = await pageOf(request, o, name, 'org');
+
+    // Клиент: «Как оплатить» → «Обслуживание» → «Я оплатил» с чеком (месяц и сумма — по умолчанию).
+    await openByCode(page, cp.path, cp.code, name);
+    const fee = section(page, 'pay').locator('[data-pay="fee"]');
+    await fee.locator('[data-pub-paid="fee"]').click();
+    const paid = page.getByRole('dialog', { name: text(texts, 'pub.paid.title') });
+    const fileName = `чек-обслуживание-${tag}.pdf`;
+    await paid
+      .locator('[data-pub-paid-file]')
+      .setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBytes() });
+    await paid.locator('[data-pub-paid-ok]').click();
+    await expect(paid).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'pub.paid.done') }),
+    ).toBeVisible();
+
+    // Сотрудник (вход владельца — в том же браузере): «Принять» у чека — окно оплаты с чеком.
+    // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
+    await page.goto('about:blank');
+    await page.context().addCookies((await request.storageState()).cookies);
+    await page.goto('/app/files/sent');
+    const grid = page.locator('[data-files-sent] [data-grid]');
+    await expect(grid).toBeVisible();
+    // Ответ поиска — до нажатия в строке (docs/typical-mistakes.md № 27).
+    const found = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
+    });
+    await search(page, isMobile, tag);
+    expect((await found).status()).toBe(200);
+    const line = grid.locator('[data-id]').filter({ hasText: fileName });
+    await expect(line).toContainText(text(texts, 'files.sent.st.new'));
+    await line.getByText(fileName, { exact: true }).click();
+    await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
+    const money = page.getByRole('dialog', { name: text(texts, 'fee.pay.title') });
+    const chip = money.locator('[data-sent-receipt]');
+    await expect(chip).toContainText(fileName);
+    await expect(chip).toContainText(text(texts, 'cppage.rcpt.file_hint'));
+
+    // «Убрать»: строки чека нет, при сохранении чек к оплате не прикрепляется.
+    await chip.locator('[data-sent-receipt-remove]').click();
+    await expect(chip).toHaveCount(0);
+    const attaches: string[] = [];
+    page.on('request', (r) => {
+      if (/^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname)) {
+        attaches.push(r.url());
+      }
+    });
+    const saved = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/contractors/${cp.id}/fee-payments`,
+    );
+    await money.getByRole('button', { name: text(texts, 'fee.pay.ok') }).click();
+    const savedRes = await saved;
+    expect(savedRes.status()).toBe(201);
+    const paymentId = ((await savedRes.json()) as { id: string }).id;
+    await expect(money).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'fee.pay.saved') }),
+    ).toBeVisible();
+    await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
+    expect(attaches).toEqual([]);
+    const paymentRes = await request.get(`/api/files?kind=fee_payment&id=${paymentId}`, {
+      maxRetries: 2,
+    });
+    expect(paymentRes.status(), await paymentRes.text()).toBe(200);
+    const paymentFiles = (await paymentRes.json()) as { items: unknown[] };
+    expect(paymentFiles.items).toEqual([]);
   });
 
   test('(приёмка блока 6) код страницы запоминается на сутки; «Забыли код? Прислать в Telegram» — код пришёл в подключённый Telegram, четвёртый раз за сутки не приходит', async ({

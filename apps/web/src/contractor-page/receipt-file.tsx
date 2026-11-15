@@ -25,8 +25,8 @@ export function SentReceiptRow({
 }) {
   const t = useT();
   return (
-    <div data-sent-receipt="" className="mb-1.5 flex flex-wrap items-center gap-1.5 text-[13px]">
-      <Icon name="clip" size="sm" className="text-muted" />
+    <div data-sent-receipt="" className="mb-1.5 flex flex-wrap items-center gap-1.5">
+      <Icon name="clip" size="sm" />
       <b className="text-ink">{receipt.name}</b>
       <span className="text-faint">{t('cppage.rcpt.file_hint')}</span>
       <span className="grow" />

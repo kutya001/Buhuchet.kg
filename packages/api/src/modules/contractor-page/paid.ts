@@ -332,17 +332,18 @@ export function pagePaidCompleteHandler(
     const { slug, inn } = c.req.valid('param');
     const body = c.req.valid('json');
     const page = await openPage(deps, c, slug, inn);
-    const lease = await takeRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, body.id);
-    if (!lease.ok) {
-      if (lease.reason === 'busy') apiFail(409, 'page_paid_busy', 'Этот чек уже отправляется');
-      apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
-    }
-    try {
-      return await completePaid(deps, c, page, body);
-    } finally {
-      await releaseRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, body.id, lease.ticket);
-    }
+    return completePaid(deps, c, page, body);
   };
+}
+
+/**
+ * Начатый чек этого «Я оплатил»: начат не им (другие назначение и месяц или обычная отправка) — его
+ * нет; сумму заново проверяет `checkPaid`.
+ */
+function ownPaidRow(rows: SentFileRecord[], note: string): SentFileRecord {
+  const row = rows[0];
+  if (!row || row.comment !== note) return apiFail(404, 'not_found', 'Нет такого начатого чека');
+  return row;
 }
 
 async function completePaid(
@@ -356,26 +357,62 @@ async function completePaid(
   const today = bishkekDate(deps.clock.now());
   const comment = sentFileNote(body.comment ?? '') || null;
   const note = paidNote(t, body.purpose, body.month, comment);
-  const ownRow = (rows: SentFileRecord[]) => {
-    const row = rows[0];
-    // Чек начат не этим «Я оплатил» (другие назначение и месяц или обычная отправка) — его нет;
-    // сумму заново проверяет `checkPaid`.
-    if (!row || row.comment !== note) return apiFail(404, 'not_found', 'Нет такого начатого чека');
-    return row;
-  };
   const row = await withOrgContext(deps.db, ctxDb, async (tx) => {
-    const found = ownRow(await pendingSentFiles(tx, page.contractorId, [body.id]));
+    const found = ownPaidRow(await pendingSentFiles(tx, page.contractorId, [body.id]), note);
     checkPaid(await paidContext(tx, { ...page, today, t }), {
       ...body,
       file: { name: found.name, size: found.sizeBytes },
     });
     return found;
   });
+  // Чек — по одному запросу: аренда берётся, когда чек этой страницы найден (случайный номер строк
+  // в пределах не пишет), и держится до конца завершения.
+  const lease = await takeRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, row.id);
+  if (!lease.ok) {
+    if (lease.reason === 'busy') apiFail(409, 'page_paid_busy', 'Этот чек уже отправляется');
+    apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
+  }
+  try {
+    return await finishPaid(deps, c, page, body, { row, note, comment, ctxDb, today, t });
+  } finally {
+    await releaseRateLimit(deps.db, PAGE_PAID_COMPLETE_ONCE, row.id, lease.ticket).catch(
+      (err: unknown) => deps.logger.error({ err }, 'я оплатил: аренда чека не снята'),
+    );
+  }
+}
+
+/** Вторая половина «закончить» под арендой чека: копия чека, транзакция сообщения об оплате. */
+async function finishPaid(
+  deps: ApiDeps,
+  c: Parameters<RouteHandler<typeof pagePaidCompleteRoute, AppEnv>>[0],
+  page: Awaited<ReturnType<typeof openPage>>,
+  body: z.infer<typeof PagePaidComplete>,
+  {
+    row,
+    note,
+    comment,
+    ctxDb,
+    today,
+    t,
+  }: {
+    row: SentFileRecord;
+    note: string;
+    comment: string | null;
+    ctxDb: { orgId: string; userId: null };
+    today: IsoDate;
+    t: Translate;
+  },
+) {
   const written = await storePageUploads(deps, [row]);
   // Чек уже «Новый» (его закончил другой запрос, когда аренда истекла) — объект его, не удалять.
+  // Сбой самой проверки не прячет исходный отказ: объект тогда уберёт задача по расписанию.
   const dropWritten = async () => {
-    const now = await withOrgContext(deps.db, ctxDb, (tx) => getSentFile(tx, row.id));
-    if (now?.state !== 'ready') await removeObjects(deps, written);
+    try {
+      const now = await withOrgContext(deps.db, ctxDb, (tx) => getSentFile(tx, row.id));
+      if (now?.state !== 'ready') await removeObjects(deps, written);
+    } catch (err) {
+      deps.logger.error({ err }, 'я оплатил: чек не убран после отказа');
+    }
   };
   const what = (purpose: PayClaimPurpose, month: YearMonth | null) =>
     month
@@ -386,7 +423,7 @@ async function completePaid(
     // Галочку могли выключить, пока чек загружался: тогда сообщение не принимается.
     const ctx = await paidContext(tx, { ...page, today, t });
     if (!ctx?.upload) return null;
-    ownRow(await pendingSentFiles(tx, page.contractorId, [row.id]));
+    ownPaidRow(await pendingSentFiles(tx, page.contractorId, [row.id]), note);
     // Раздел и месяцы — заново: за время загрузки «Как оплатить» могли скрыть, месяц — оплатить.
     checkPaid(ctx, { ...body, file: { name: row.name, size: row.sizeBytes } });
     // Чек — «Новый»: в «Отправленных файлах» его видно с комментарием «Чек: …» (как в прототипе,

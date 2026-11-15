@@ -22,7 +22,7 @@ import {
   SentFileAttached,
   SentFileList,
 } from '@buhuchet/shared';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   apiRequest,
@@ -329,10 +329,16 @@ describe.skipIf(!databaseAvailable())(
     beforeEach(async () => {
       await f.t.admin.db.delete(schema.contractorPayClaims);
       await f.t.admin.db.delete(schema.contractorSentFiles);
+      // Записи денег и их файлы (принятый чек к деньгам) — свои у каждого теста: долг за обслуживание
+      // не зависит от порядка тестов.
+      await f.t.admin.db
+        .delete(schema.files)
+        .where(inArray(schema.files.sourceKind, ['receipt', 'fee_payment']));
+      await f.t.admin.db.delete(schema.feePayments);
       await f.t.admin.db.delete(schema.moneyOperations);
       await f.t.admin.db.delete(schema.telegramOutbox);
       await f.t.admin.db.execute(
-        sql`delete from rate_limits where kind like 'cp_sent%' or kind like 'cp_code%' or kind like 'cp_tg_code%' or kind = 'cp_forgot_ip'`,
+        sql`delete from rate_limits where kind like 'cp_sent%' or kind like 'cp_code%' or kind like 'cp_tg_code%' or kind = 'cp_forgot_ip' or kind = 'cp_paid_done'`,
       );
       await f.t.admin.db.update(schema.contractorPages).set({
         filesUpload: true,
@@ -547,7 +553,7 @@ describe.skipIf(!databaseAvailable())(
       };
       const receipt = await op(cpA);
       const attach = (
-        cookie: string,
+        cookie: string | undefined,
         kind: 'receipt' | 'fee_payment',
         id: string,
         sent = file!.id,
@@ -571,6 +577,25 @@ describe.skipIf(!databaseAvailable())(
       expect((await filesOf('receipt', receipt)).map((x) => [x.id, x.name])).toEqual([
         [out.id, 'Чек.pdf'],
       ]);
+      // Без входа — 401, без прав на файлы — 403; бухгалтер с областью «Свои» и чужой контрагент —
+      // 404 (тот же запрос только что прошёл, пока контрагент был его).
+      const stored = storage.files.size;
+      expect((await attach(undefined, 'receipt', receipt)).status).toBe(401);
+      const senior = await signIn(f.app, 'senior-a', TEST_PASSWORD);
+      expect((await attach(senior, 'receipt', receipt)).status).toBe(403);
+      const responsible = (id: string) =>
+        f.t.admin.db
+          .update(schema.contractors)
+          .set({ responsibleEmployeeId: id })
+          .where(eq(schema.contractors.id, cpA));
+      await responsible(employee('chief-a'));
+      try {
+        expect((await attach(acc, 'receipt', receipt)).status).toBe(404);
+      } finally {
+        await responsible(employee('acc-a'));
+      }
+      expect(storage.files.size).toBe(stored);
+      expect((await filesOf('receipt', receipt)).length).toBe(1);
       // Копия — свой объект хранилища с содержимым чека; файл контрагента остался.
       const keys = await f.t.admin.db
         .select({ id: schema.files.id, key: schema.files.storageKey })
@@ -701,7 +726,8 @@ describe.skipIf(!databaseAvailable())(
       expect((await paidStart(grantB, { purpose: 'tax', month, amount: 100 })).status).toBe(404);
     });
 
-    it('два одновременных «закончить» одного чека: второй — «уже отправляется», чек первого остаётся в хранилище', async () => {
+    /** «Я оплатил» начат и чек загружен браузером: номер, ключ чека и «закончить». */
+    async function startedPaid() {
       const month = (await publicPage('org-a', INN_A, grantA)).reports!.months![0]!.month;
       const o = { purpose: 'tax' as const, month, amount: 100_000 };
       const res = await paidStart(grantA, o);
@@ -715,38 +741,96 @@ describe.skipIf(!databaseAvailable())(
         .select({ key: schema.contractorSentFiles.storageKey })
         .from(schema.contractorSentFiles)
         .where(eq(schema.contractorSentFiles.id, item!.id));
-      const complete = () =>
-        pagePost(`/api/page/org-a/${INN_A}/paid/complete`, grantA, { ...o, id: item!.id });
-      // Первый запрос держим перед тем, как он положит проверенный чек под ключ файла.
+      return {
+        id: item!.id,
+        key: row!.key,
+        complete: () =>
+          pagePost(`/api/page/org-a/${INN_A}/paid/complete`, grantA, { ...o, id: item!.id }),
+      };
+    }
+
+    /**
+     * Первый запрос «закончить» держится перед тем, как положит проверенный чек под ключ файла;
+     * остальные проходят. `run` получает запрос, который уже дошёл до задержки, и `release`.
+     */
+    async function withHeldCopy(
+      key: string,
+      start: () => Response | Promise<Response>,
+      run: (first: Promise<Response>, release: () => void) => Promise<void>,
+    ) {
       const copy = storage.copy;
       let release = () => {};
       const gate = new Promise<void>((r) => (release = r));
       let reached = () => {};
       const atGate = new Promise<void>((r) => (reached = r));
+      let held = false;
       storage.copy = async (from, to) => {
-        if (to === row!.key) {
+        if (to === key && !held) {
+          held = true;
           reached();
           await gate;
         }
         return copy(from, to);
       };
+      const first = Promise.resolve(start());
       try {
-        const first = complete();
-        await atGate;
-        const second = await complete();
+        // Ответ раньше задержки — сразу понятная ошибка, а не ожидание до предела теста.
+        await Promise.race([
+          atGate,
+          first.then((r) => {
+            throw new Error(`«закончить» ответил ${r.status} раньше копии чека`);
+          }),
+        ]);
+        await run(first, release);
+      } finally {
+        storage.copy = copy;
+        release();
+        await first.catch(() => undefined);
+      }
+    }
+
+    it('два одновременных «закончить» одного чека: второй — «уже отправляется», чек первого остаётся в хранилище', async () => {
+      const p = await startedPaid();
+      await withHeldCopy(p.key, p.complete, async (first, release) => {
+        const second = await p.complete();
         expect(second.status).toBe(409);
         expect((await failure(second)).code).toBe('page_paid_busy');
         release();
         expect((await first).status).toBe(200);
-      } finally {
-        storage.copy = copy;
-        release();
-      }
-      expect(await storage.exists(row!.key)).toBe(true);
-      expect((await claims(cpA)).map((x) => x.sentFileId)).toEqual([item!.id]);
+      });
+      expect(await storage.exists(p.key)).toBe(true);
+      expect((await claims(cpA)).map((x) => x.sentFileId)).toEqual([p.id]);
       // Чек уже «Новый»: ещё одно «закончить» — «нет такого начатого чека», чек на месте.
-      expect((await complete()).status).toBe(404);
-      expect(await storage.exists(row!.key)).toBe(true);
+      expect((await p.complete()).status).toBe(404);
+      expect(await storage.exists(p.key)).toBe(true);
+    });
+
+    it('отказ после копии чека: сообщение не записано — чек убран; чек уже закончил другой запрос (аренда истекла) — чек остаётся', async () => {
+      // Отправку файлов со страницы выключили, пока чек копировался: 409, сообщения нет, чека нет.
+      const off = await startedPaid();
+      await withHeldCopy(off.key, off.complete, async (first, release) => {
+        await setPage(cpA, { filesUpload: false });
+        release();
+        const res = await first;
+        expect(res.status).toBe(409);
+        expect((await failure(res)).code).toBe('sent_off');
+      });
+      expect(await storage.exists(off.key)).toBe(false);
+      expect(await claims(cpA)).toEqual([]);
+      await setPage(cpA, { filesUpload: true });
+
+      // Первый запрос задержан дольше аренды: второй закончил чек, первый получает «нет такого
+      // начатого чека» и не удаляет уже «Новый» чек.
+      const late = await startedPaid();
+      await withHeldCopy(late.key, late.complete, async (first, release) => {
+        await f.t.admin.db.execute(sql`delete from rate_limits where kind = 'cp_paid_done'`);
+        const second = await late.complete();
+        expect(second.status, await second.clone().text()).toBe(200);
+        release();
+        expect((await first).status).toBe(404);
+      });
+      expect(await storage.exists(late.key)).toBe(true);
+      expect((await claims(cpA)).map((x) => x.sentFileId)).toEqual([late.id]);
     });
 
     it('код запоминается в браузере на 1 день', async () => {
