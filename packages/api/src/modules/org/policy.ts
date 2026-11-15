@@ -323,7 +323,11 @@ export function updateOrgPolicyHandler(
           at: cp.cpPayAt ?? current.cpPayAt,
         });
       }
-      if (cp.cpFeeDays !== undefined || cp.cpFeeAt !== undefined || cp.cpDebtWeekDay !== undefined) {
+      if (
+        cp.cpFeeDays !== undefined ||
+        cp.cpFeeAt !== undefined ||
+        cp.cpDebtWeekDay !== undefined
+      ) {
         await setCpNotice(tx, ctx.orgId, 'cp_fee', {
           days: cp.cpFeeDays ?? current.cpFeeDays,
           at: cp.cpFeeAt ?? current.cpFeeAt,

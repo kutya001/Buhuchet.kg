@@ -568,8 +568,22 @@ describe.skipIf(!databaseAvailable())('Моя организация: API', () =
         .where(inArray(orgTelegramNotices.code, ['cp_pay', 'cp_fee']))
         .orderBy(orgTelegramNotices.code);
       expect(rows).toEqual([
-        { orgId: f.a.orgId, code: 'cp_fee', days: [5], atTime: '18:30:00', weekday: 5, by: history?.by },
-        { orgId: f.a.orgId, code: 'cp_pay', days: [5, 3, 1], atTime: '10:00:00', weekday: null, by: history?.by },
+        {
+          orgId: f.a.orgId,
+          code: 'cp_fee',
+          days: [5],
+          atTime: '18:30:00',
+          weekday: 5,
+          by: history?.by,
+        },
+        {
+          orgId: f.a.orgId,
+          code: 'cp_pay',
+          days: [5, 3, 1],
+          atTime: '10:00:00',
+          weekday: null,
+          by: history?.by,
+        },
       ]);
 
       // То же — без новой версии и записи истории; устаревшая версия — 409, ничего не меняется.
