@@ -292,7 +292,7 @@ export const MESSAGE_TEMPLATE_VARIABLES: Readonly<Record<string, readonly string
   tgCpFeePaidStaff: ['контрагент', 'телеграм', 'сумма'],
   tgCpNoReq: ['контрагент'],
   // Оплата за обслуживание до срока, «Прислать чек» и файлы клиента через бота (прототип v115).
-  tgCpFeeSoon: ['месяц', 'сумма', 'срок'],
+  tgCpFeeSoon: ['контрагент', 'месяц', 'сумма', 'срок'],
   tgBtnCpReceipt: [],
   tgCpReceiptOffer: [],
   tgCpReceiptAsk: [],
