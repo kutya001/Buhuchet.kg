@@ -360,7 +360,10 @@ export const LANDING_PRODUCT_TEXTS = {
   'land.e.inn': { ru: 'ИНН — 14 цифр', section: S },
   'land.e.okpo': { ru: 'ОКПО — 8 цифр', section: S },
   'land.e.busy': { ru: 'Документы ещё читаются — подождите несколько секунд', section: S },
-  'land.ok.docs': { ru: 'Заявка отправлена. Подключите Telegram, чтобы узнать решение', section: S },
+  'land.ok.docs': {
+    ru: 'Заявка отправлена. Подключите Telegram, чтобы узнать решение',
+    section: S,
+  },
   'land.ok.tgon': { ru: 'Заявка отправлена. Решение по заявке придёт в Telegram', section: S },
   'land.ok.till': { ru: 'Ссылка на бота действует до {до}', section: S },
   'land.btn.tg': { ru: 'Подключить Telegram', section: S },

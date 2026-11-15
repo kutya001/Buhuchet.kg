@@ -120,7 +120,10 @@ export const leadUploadStartRoute = createRoute({
       description: 'Загрузка начата: куда и с какими заголовками положить PDF, черновик документов',
       content: { 'application/json': { schema: LeadUploadTicket } },
     },
-    400: { description: 'Неверные данные: вид документа, имя, размер больше 20 МБ', content: error },
+    400: {
+      description: 'Неверные данные: вид документа, имя, размер больше 20 МБ',
+      content: error,
+    },
     429: { description: 'Слишком много загрузок с этого адреса за час', content: error },
   },
 });
@@ -184,7 +187,10 @@ export const leadUploadReadRoute = createRoute({
         'Документ проверен; что нашёл разбор по всем документам черновика: данные, ничего или документы разных организаций',
       content: { 'application/json': { schema: LeadDocsRead } },
     },
-    400: { description: 'Не PDF или файл больше 20 МБ («Только PDF», «Файл больше 20 МБ»)', content: error },
+    400: {
+      description: 'Не PDF или файл больше 20 МБ («Только PDF», «Файл больше 20 МБ»)',
+      content: error,
+    },
     404: { description: 'Нет такой загрузки в этом черновике', content: error },
     409: { description: 'Файл не дошёл до хранилища', content: error },
     429: { description: 'Идёт прежнее чтение с этого адреса или за час их уже 20', content: error },
@@ -217,7 +223,8 @@ export function leadUploadReadHandler(
       if (!upload) return apiFail(404, 'not_found', 'Нет такой загрузки');
       const key = leadUploadKey(id);
       const stored = await deps.storage.stat(key);
-      if (!stored) return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
+      if (!stored)
+        return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
       const refuse = async (code: 'lead_doc_pdf' | 'lead_doc_big'): Promise<never> => {
         await dropLeadUpload(deps.db, id, draft);
         await removeLeadObjects(deps, [key]);

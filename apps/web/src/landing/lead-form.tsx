@@ -288,8 +288,6 @@ export function LeadForm({
           if (pending.current === 0) setBusy(false);
         });
     },
-    // applyRead меняет только состояние формы через функции обновления.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, errorText],
   );
 
@@ -388,117 +386,117 @@ export function LeadForm({
   return (
     <form ref={form} className="lp-form" noValidate autoComplete="on" onSubmit={submit}>
       <FieldMarks.Provider value={marks}>
-      <Field id={ID.form} label={t('land.f.form')} required full error={errors.form}>
-        <div id={ID.form} className="lf-form-seg">
-          <Segments<OrgLegalForm | ''>
-            label={t('land.f.form')}
-            options={ORG_LEGAL_FORMS.map((f) => ({ value: f, label: t(`land.f.form.${f}`) }))}
-            value={legalForm}
-            onChange={(f) => {
-              if (f) pickForm(f);
-            }}
-          />
-        </div>
-      </Field>
-      {legalForm ? (
-        <div className="lp-full lf-docs">
-          <div className="lf-docs-in">
-            {kinds.map((k) => (
-              <Field
-                key={`${legalForm}-${k}`}
-                id={ID[docField(k)]}
-                label={t(LEAD_DOC_TEXT_KEYS[k] as UiTextKey)}
-                required
-                hint={t('land.f.doc.hint')}
-                error={errors[docField(k)]}
-              >
-                {(c) => (
-                  <input
-                    {...c}
-                    type="file"
-                    className={inputClass({ file: true })}
-                    accept="application/pdf,.pdf"
-                    onChange={(e) => void pickDoc(k, e)}
-                  />
-                )}
-              </Field>
-            ))}
+        <Field id={ID.form} label={t('land.f.form')} required full error={errors.form}>
+          <div id={ID.form} className="lf-form-seg">
+            <Segments<OrgLegalForm | ''>
+              label={t('land.f.form')}
+              options={ORG_LEGAL_FORMS.map((f) => ({ value: f, label: t(`land.f.form.${f}`) }))}
+              value={legalForm}
+              onChange={(f) => {
+                if (f) pickForm(f);
+              }}
+            />
           </div>
-          {note ? (
-            <Note tone={note.tone} icon={note.icon}>
-              {t(note.key)}
-            </Note>
-          ) : null}
-        </div>
-      ) : null}
-      <Field
-        id={ID.firm}
-        label={t('land.f.firm')}
-        required
-        hint={t('land.f.firm.hint')}
-        error={errors.firm}
-      >
-        {(c) => (
-          <input
-            {...c}
-            className={inputClass()}
-            autoComplete="organization"
-            maxLength={LEAD_FIRM_MAX}
-            value={values.firm}
-            onChange={(e) => set('firm', e.target.value)}
-          />
-        )}
-      </Field>
-      <Field id={ID.inn} label={t('land.f.inn')} required error={errors.inn}>
-        {(c) => (
-          <input
-            {...c}
-            className={inputClass({ mono: true })}
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={14}
-            value={values.inn}
-            onChange={(e) => set('inn', e.target.value)}
-          />
-        )}
-      </Field>
-      <Field id={ID.okpo} label={t('land.f.okpo')} error={errors.okpo}>
-        {(c) => (
-          <input
-            {...c}
-            className={inputClass({ mono: true })}
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={8}
-            value={values.okpo}
-            onChange={(e) => set('okpo', e.target.value)}
-          />
-        )}
-      </Field>
-      <Field id={ID.head} label={t('land.f.head')} error={errors.head}>
-        {(c) => (
-          <input
-            {...c}
-            className={inputClass()}
-            autoComplete="off"
-            maxLength={LEAD_HEAD_MAX}
-            value={values.head}
-            onChange={(e) => set('head', e.target.value)}
-          />
-        )}
-      </Field>
-      <Field id={ID.address} label={t('land.f.addr')} full error={errors.address}>
-        {(c) => (
-          <input
-            {...c}
-            className={inputClass()}
-            autoComplete="off"
-            maxLength={LEAD_ADDRESS_MAX}
-            value={values.address}
-            onChange={(e) => set('address', e.target.value)}
-          />
-        )}
-      </Field>
+        </Field>
+        {legalForm ? (
+          <div className="lp-full lf-docs">
+            <div className="lf-docs-in">
+              {kinds.map((k) => (
+                <Field
+                  key={`${legalForm}-${k}`}
+                  id={ID[docField(k)]}
+                  label={t(LEAD_DOC_TEXT_KEYS[k] as UiTextKey)}
+                  required
+                  hint={t('land.f.doc.hint')}
+                  error={errors[docField(k)]}
+                >
+                  {(c) => (
+                    <input
+                      {...c}
+                      type="file"
+                      className={inputClass({ file: true })}
+                      accept="application/pdf,.pdf"
+                      onChange={(e) => void pickDoc(k, e)}
+                    />
+                  )}
+                </Field>
+              ))}
+            </div>
+            {note ? (
+              <Note tone={note.tone} icon={note.icon}>
+                {t(note.key)}
+              </Note>
+            ) : null}
+          </div>
+        ) : null}
+        <Field
+          id={ID.firm}
+          label={t('land.f.firm')}
+          required
+          hint={t('land.f.firm.hint')}
+          error={errors.firm}
+        >
+          {(c) => (
+            <input
+              {...c}
+              className={inputClass()}
+              autoComplete="organization"
+              maxLength={LEAD_FIRM_MAX}
+              value={values.firm}
+              onChange={(e) => set('firm', e.target.value)}
+            />
+          )}
+        </Field>
+        <Field id={ID.inn} label={t('land.f.inn')} required error={errors.inn}>
+          {(c) => (
+            <input
+              {...c}
+              className={inputClass({ mono: true })}
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={14}
+              value={values.inn}
+              onChange={(e) => set('inn', e.target.value)}
+            />
+          )}
+        </Field>
+        <Field id={ID.okpo} label={t('land.f.okpo')} error={errors.okpo}>
+          {(c) => (
+            <input
+              {...c}
+              className={inputClass({ mono: true })}
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              value={values.okpo}
+              onChange={(e) => set('okpo', e.target.value)}
+            />
+          )}
+        </Field>
+        <Field id={ID.head} label={t('land.f.head')} error={errors.head}>
+          {(c) => (
+            <input
+              {...c}
+              className={inputClass()}
+              autoComplete="off"
+              maxLength={LEAD_HEAD_MAX}
+              value={values.head}
+              onChange={(e) => set('head', e.target.value)}
+            />
+          )}
+        </Field>
+        <Field id={ID.address} label={t('land.f.addr')} full error={errors.address}>
+          {(c) => (
+            <input
+              {...c}
+              className={inputClass()}
+              autoComplete="off"
+              maxLength={LEAD_ADDRESS_MAX}
+              value={values.address}
+              onChange={(e) => set('address', e.target.value)}
+            />
+          )}
+        </Field>
       </FieldMarks.Provider>
       <Field id={ID.name} label={t('land.f.name')} required error={errors.name}>
         {(c) => (

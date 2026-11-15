@@ -61,6 +61,7 @@ export function adminOrganizationBody(o: AdminOrganizationRecord): AdminOrganiza
     id: o.id,
     name: o.name,
     inn: o.inn,
+    legalForm: o.legalForm,
     slug: o.slug,
     ownerLogin: o.ownerLogin,
     contractors: o.contractors,

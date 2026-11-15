@@ -143,11 +143,7 @@ function leadColumns(
       width: 140,
       text: (l) => t(l.tgLinked ? 'leads.tg.on' : 'leads.tg.off'),
       cell: (l) =>
-        l.tgLinked ? (
-          t('leads.tg.on')
-        ) : (
-          <span className="text-faint">{t('leads.tg.off')}</span>
-        ),
+        l.tgLinked ? t('leads.tg.on') : <span className="text-faint">{t('leads.tg.off')}</span>,
     },
     {
       key: 'note',

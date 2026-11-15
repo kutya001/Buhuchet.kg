@@ -175,7 +175,8 @@ export function approveLeadHandler(deps: ApiDeps): RouteHandler<typeof approveLe
       await removeLeadObjects(deps, copied);
       if (err instanceof OrganizationInputError) approveInputFail(err, t);
       if (err instanceof LeadLinkError) {
-        if (err.reason === 'not_found') apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
+        if (err.reason === 'not_found')
+          apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
         apiFail(409, 'lead_org_exists', LEAD_APPROVE_MESSAGES.lead_org_exists);
       }
       throw err;
@@ -222,7 +223,8 @@ export const leadDocLinkRoute = createRoute({
     200: { description: 'Ссылка на просмотр документа', content: json(FileLink) },
     ...denied,
     404: {
-      description: 'Нет заявки или документа, файл ещё не загрузился, удалён по сроку или передан организации',
+      description:
+        'Нет заявки или документа, файл ещё не загрузился, удалён по сроку или передан организации',
       content: error,
     },
   },
@@ -290,7 +292,8 @@ export function orgInnFormHandler(deps: ApiDeps): RouteHandler<typeof orgInnForm
       const saved = await withOrgContext(deps.db, ctx, async (tx) => {
         const org = await getOrgProfile(tx, id);
         if (!org) throw new RecordNotFoundError('organization', id);
-        if (org.version !== body.version) throw new RecordChangedError('organization', id, org.version);
+        if (org.version !== body.version)
+          throw new RecordChangedError('organization', id, org.version);
         const changes = [
           ...(org.inn !== body.inn ? [{ field: 'inn', from: org.inn, to: body.inn }] : []),
           ...(org.legalForm !== body.legalForm

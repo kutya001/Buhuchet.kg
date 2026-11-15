@@ -407,3 +407,38 @@ GRANT EXECUTE ON FUNCTION
   app.lead_docs_to_org(uuid, uuid, uuid, jsonb),
   app.admin_set_org_inn_form(uuid, text, text, integer)
   TO buhuchet_app;
+--> statement-breakpoint
+-- Список организаций Админки отдаёт ещё форму (ОсОО/ИП): окно «ИНН и форма» из меню строки
+-- подставляет нынешнюю (прототип v114 orgActions → ldInnFormDlg). Новый столбец — в конце, права
+-- представления (0024) остаются.
+CREATE OR REPLACE VIEW app.admin_organizations WITH (security_barrier = true) AS
+  SELECT
+    o.id,
+    o.name,
+    o.inn,
+    o.slug,
+    o.status,
+    o.blocked_reason,
+    o.is_demo,
+    o.created_at,
+    o.updated_at,
+    o.created_by,
+    o.updated_by,
+    o.version,
+    (
+      SELECT u.login::text
+      FROM public.employees e
+      JOIN public.roles r ON r.id = e.role_id AND r.is_owner
+      JOIN public.users u ON u.id = e.user_id
+      WHERE e.org_id = o.id
+      ORDER BY e.created_at
+      LIMIT 1
+    ) AS owner_login,
+    (
+      SELECT count(*)::integer FROM public.employees e WHERE e.org_id = o.id AND e.active
+    ) AS employees,
+    (SELECT e.short_name FROM public.employees e WHERE e.user_id = o.created_by) AS created_by_name,
+    (SELECT e.short_name FROM public.employees e WHERE e.user_id = o.updated_by) AS updated_by_name,
+    o.legal_form
+  FROM public.organizations o
+  WHERE app.is_platform_admin();

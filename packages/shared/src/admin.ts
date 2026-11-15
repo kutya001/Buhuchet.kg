@@ -29,6 +29,8 @@ export const AdminOrganization = z.object({
   id: Uuid,
   name: z.string(),
   inn: z.string().nullable(),
+  /** ОсОО или ИП (доработки 14.11.2026, блок 1); null — не указана. */
+  legalForm: z.enum(ORG_LEGAL_FORMS).nullable(),
   slug: z.string(),
   /** null — у организации ещё нет владельца (не бывает у созданной Админкой). */
   ownerLogin: z.string().nullable(),

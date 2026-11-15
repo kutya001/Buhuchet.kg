@@ -47,6 +47,7 @@ import {
   statusEvents,
   statusName,
 } from '../status/status-view';
+import { LeadDocsBox } from './lead-docs-box';
 import { leadHistoryItems } from './lead-history';
 import { leadCardQuery, leadState, saveLeadNote, useLeadsRefresh } from './leads-data';
 import { requestOrgCard } from './org-card-store';
@@ -57,7 +58,9 @@ import { requestOrgCard } from './org-card-store';
  * данные заявки, «Заметка администратора» с «Сохранить заметку», «История статусов», «История». Внизу —
  * «Ещё действия» (меню без «Открыть заявку») и главная кнопка: «В работу» у новой, иначе «Создать
  * организацию», пока её не создали (у «Отказа» — нет). Ссылка на организацию закрывает окно и ведёт в
- * список организаций с карточкой этой организации (прототип v83).
+ * список организаций с карточкой этой организации (прототип v83). У заявки с документами (доработки
+ * 14.11.2026, блок 1; прототип v114 openLead, ldCardBox) — блок «Данные из документов» и главная кнопка
+ * «Одобрить», неактивная с причиной (нажатие показывает причину).
  */
 
 const faint = <span className="text-faint">—</span>;
@@ -84,6 +87,7 @@ export function LeadCardDialog({
   onOrg: (l: AdminLeadCard) => void;
 }) {
   const t = useT();
+  const toast = useToast();
   const errorText = useErrorText();
   const query = useQuery(leadCardQuery(id));
   const [more, setMore] = useState<HTMLElement | null>(null);
@@ -98,7 +102,10 @@ export function LeadCardDialog({
           query.error instanceof ApiFailure ? query.error.error : { code: 'unknown', message: '' },
         )
       : null;
-  const main = l ? leadMainAction(leadState(l)) : null;
+  const action = l ? leadMainAction(leadState(l)) : null;
+  // Прототип v114 openLead: у заявки с документами вместо «Создать организацию» — «Одобрить».
+  const main = action === 'org' && l?.legalForm ? 'approve' : action;
+  const why = main === 'approve' ? (l?.approve?.message ?? '') : '';
 
   if (gone)
     return (
@@ -137,11 +144,23 @@ export function LeadCardDialog({
         <button
           type="button"
           data-lead-main={main}
-          className={buttonClass('cta')}
-          onClick={() => (main === 'start' ? onStep(l, 'in_progress') : onOrg(l))}
+          className={`${buttonClass('cta')} aria-disabled:opacity-50 aria-disabled:shadow-none`}
+          aria-disabled={why ? true : undefined}
+          title={why || undefined}
+          onClick={() => {
+            if (why) return toast(why, { bad: true, icon: 'lock' });
+            if (main === 'start') onStep(l, 'in_progress');
+            else onOrg(l);
+          }}
         >
           <Icon name={main === 'start' ? 'hourglass' : 'building'} size="sm" />
-          {t(main === 'start' ? 'leads.act.start' : 'leads.act.org')}
+          {t(
+            main === 'start'
+              ? 'leads.act.start'
+              : main === 'approve'
+                ? 'leads.act.approve'
+                : 'leads.act.org',
+          )}
         </button>
       ) : null}
     </>
@@ -284,6 +303,7 @@ function CardBody({
       <Box>
         <KeyValues items={items} />
       </Box>
+      <LeadDocsBox t={t} l={l} />
       <AdminNoteBox key={`${l.id}-${l.version}`} t={t} l={l} />
       <Box title={t('leads.card.status_hist')}>
         <StatusHistory rows={history.rows} totals={history.totals} labels={historyLabels(t)} />

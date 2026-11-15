@@ -141,7 +141,10 @@ export const LEADS_TEXTS = {
     ru: 'Файлы заявки удалены: прошло {days} дней после отказа',
     section: S,
   },
-  'leads.hist.docs_kept': { ru: 'Файлы заявки удалены: прошло {days} дней после отправки', section: S },
+  'leads.hist.docs_kept': {
+    ru: 'Файлы заявки удалены: прошло {days} дней после отправки',
+    section: S,
+  },
   // Блок заявки с документами (прототип v114 ldCardBox): видит только администратор платформы.
   'leads.docs.title': { ru: 'Данные из документов', section: S },
   'leads.docs.form': { ru: 'Форма', section: S },

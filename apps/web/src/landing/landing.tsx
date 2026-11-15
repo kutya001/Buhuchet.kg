@@ -39,7 +39,6 @@ import {
   ScrollPath,
   Shield,
   SpiralIcon,
-  Stamp,
   type EmblemPart,
 } from './landing-art';
 import type { DemoScreens } from './landing-data';

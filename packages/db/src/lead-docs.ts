@@ -309,7 +309,10 @@ export async function adminSetOrgInnForm(
  * Организация платформы с этим ИНН (причина «Одобрить» неактивна, прототип v114 ldApproveWhy); null —
  * нет или в контексте не администратор платформы.
  */
-export async function adminOrgByInn(tx: Tx, inn: string): Promise<{ id: string; name: string } | null> {
+export async function adminOrgByInn(
+  tx: Tx,
+  inn: string,
+): Promise<{ id: string; name: string } | null> {
   const [row] = await tx
     .select({ id: adminOrganizations.id, name: adminOrganizations.name })
     .from(adminOrganizations)

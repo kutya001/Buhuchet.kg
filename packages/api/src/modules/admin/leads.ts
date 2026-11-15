@@ -110,7 +110,9 @@ function leadTgCookie(c: Context<AppEnv>, deps: ApiDeps, token: string): void {
 /** Ссылка на бота для ответа формы: срок — для «Ссылка на бота действует до …». */
 function tgOut(tg: LeadTgLink) {
   if (!tg) return null;
-  return 'linked' in tg ? { linked: true as const } : { url: tg.url, expiresAt: tg.expiresAt.toISOString() };
+  return 'linked' in tg
+    ? { linked: true as const }
+    : { url: tg.url, expiresAt: tg.expiresAt.toISOString() };
 }
 
 /**
@@ -150,7 +152,10 @@ async function moveLeadDocs(
     );
   }
   if (ok.length < docs.length) {
-    deps.logger.warn({ lead: leadId, moved: ok.length, docs: docs.length }, 'заявка: не все документы перенесены');
+    deps.logger.warn(
+      { lead: leadId, moved: ok.length, docs: docs.length },
+      'заявка: не все документы перенесены',
+    );
   }
 }
 

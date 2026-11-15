@@ -400,7 +400,11 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
     });
     // Срок ещё не наступил: документы заявки не трогаются.
     const early = await leadPurgeDue(db.app.db, at(6 + 24), 100);
-    expect(early).toContainEqual({ kind: 'upload', id: stale, storageKey: `leads/upload/${stale}` });
+    expect(early).toContainEqual({
+      kind: 'upload',
+      id: stale,
+      storageKey: `leads/upload/${stale}`,
+    });
     expect(early.some((x) => x.kind === 'doc' && docs.includes(x.id))).toBe(false);
     // Строку, которую пора удалять, не удалённую из хранилища, функция не удаляет без её номера.
     const due = await leadPurgeDue(db.app.db, at(6 + 7 * 24), 100);
@@ -415,7 +419,12 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
       ),
     ).toBe(1);
     const row = await asAdmin((tx) => adminLeadById(tx, leadId));
-    expect(row).toMatchObject({ docsState: null, docsPurgeAt: null, docsCount: 0, legalForm: 'ip' });
+    expect(row).toMatchObject({
+      docsState: null,
+      docsPurgeAt: null,
+      docsCount: 0,
+      legalForm: 'ip',
+    });
     const events = await asAdmin((tx) => adminLeadEvents(tx, leadId));
     expect(events.at(-1)).toMatchObject({ kind: 'docs', text: 'rejected', actorUserId: null });
     expect(await leadPurgeDue(db.app.db, at(6 + 7 * 24), 100)).not.toContainEqual(

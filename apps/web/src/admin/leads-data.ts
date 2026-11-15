@@ -7,6 +7,7 @@ import {
   AdminLeadSummary,
   ListValues,
   type AdminLead,
+  type LeadApproveRequest,
   type LeadNoteRequest,
   type LeadStatusRequest,
 } from '@buhuchet/shared';
@@ -69,6 +70,16 @@ export function saveLeadNote(id: string, body: LeadNoteRequest) {
 
 export function removeLead(id: string) {
   return callApi(() => leads[':id'].$delete({ param: { id } }));
+}
+
+/** «Одобрить» (прототип v114 ldApproveDlg): организация и владелец из заявки с документами. */
+export function approveLead(id: string, body: LeadApproveRequest) {
+  return callApi(() => leads[':id'].approve.$post({ param: { id }, json: body }));
+}
+
+/** Ссылка на просмотр документа заявки (15 минут). */
+export function leadDocLink(id: string, docId: string) {
+  return callApi(() => leads[':id'].docs[':docId'].link.$get({ param: { id, docId } }));
 }
 
 /**

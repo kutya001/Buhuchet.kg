@@ -197,8 +197,7 @@ async function leadCard(tx: Tx, id: string, t: Texts): Promise<AdminLeadCard> {
   const events = await adminLeadEvents(tx, id);
   const docs = lead.legalForm ? await adminLeadDocs(tx, id) : [];
   const gone = events.findLast((e) => e.kind === 'docs');
-  const approve =
-    lead.legalForm && !lead.createdOrgId ? await leadApproveInfo(tx, lead, t) : null;
+  const approve = lead.legalForm && !lead.createdOrgId ? await leadApproveInfo(tx, lead, t) : null;
   return {
     ...leadBody(lead, t),
     adminNote: lead.adminNote ?? '',

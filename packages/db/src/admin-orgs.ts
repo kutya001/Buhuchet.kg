@@ -1,4 +1,9 @@
-import { auditActorName, type ListQuery } from '@buhuchet/domain';
+import {
+  auditActorName,
+  ORG_LEGAL_FORMS,
+  type ListQuery,
+  type OrgLegalForm,
+} from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
 import { boolean, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
@@ -39,6 +44,8 @@ export const adminOrganizations = pgSchema('app')
     employees: integer('employees').notNull(),
     createdByName: text('created_by_name'),
     updatedByName: text('updated_by_name'),
+    // Форма организации (миграция 0148): окно «ИНН и форма» Админки.
+    legalForm: text('legal_form', { enum: ORG_LEGAL_FORMS }),
   })
   .existing();
 
@@ -49,6 +56,8 @@ export interface AdminOrganizationRecord {
   id: string;
   name: string;
   inn: string | null;
+  /** ОсОО или ИП; null — не указана (организации до 15.11.2026). */
+  legalForm: OrgLegalForm | null;
   slug: string;
   ownerLogin: string | null;
   /** Контрагентов — появится с модулем «Контрагенты» (поток А); пока 0. */
@@ -79,6 +88,7 @@ const fields = {
   employees: v.employees,
   createdByName: v.createdByName,
   updatedByName: v.updatedByName,
+  legalForm: v.legalForm,
 };
 
 type Row = {
@@ -90,6 +100,7 @@ function toRecord(r: Row): AdminOrganizationRecord {
     id: r.id!,
     name: r.name!,
     inn: r.inn,
+    legalForm: r.legalForm,
     slug: r.slug!,
     ownerLogin: r.ownerLogin,
     contractors: 0,

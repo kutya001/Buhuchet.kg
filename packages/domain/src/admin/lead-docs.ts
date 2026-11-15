@@ -113,10 +113,7 @@ export function leadDocValues(
 }
 
 /** Каких документов формы не хватает (прототип ldCheck): по порядку формы. */
-export function leadDocsMissing(
-  form: OrgLegalForm,
-  kinds: readonly LeadDocKind[],
-): LeadDocKind[] {
+export function leadDocsMissing(form: OrgLegalForm, kinds: readonly LeadDocKind[]): LeadDocKind[] {
   return LEAD_DOCS_BY_FORM[form].filter((k) => !kinds.includes(k));
 }
 

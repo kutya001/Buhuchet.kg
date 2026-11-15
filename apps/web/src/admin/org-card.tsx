@@ -9,6 +9,7 @@ import {
   formatMomentRu,
   formatSom,
   formatSomWithUnit,
+  LEAD_DOC_TEXT_KEYS,
   monthLabel,
   ORG_TIMEZONES,
   periodLabel,
@@ -262,7 +263,12 @@ export function OrgCard({
             ) : null}
             {tab === 'set' ? <SettingsTab t={t} settings={card.settings} /> : null}
             {tab === 'files' ? (
-              <FilesTab t={t} files={card.files} bytes={card.summary.files.bytes} />
+              <FilesTab
+                t={t}
+                files={card.files}
+                leadFiles={card.leadFiles}
+                bytes={card.summary.files.bytes}
+              />
             ) : null}
             {tab === 'hist' ? (
               <Box>
@@ -313,6 +319,13 @@ function MainTab({
   const main: KeyValueItem[] = [
     { id: 'name', label: t('orgs.card.main.name'), value: o.name },
     { id: 'inn', label: t('orgs.col.inn'), value: o.inn ?? DASH, mono: Boolean(o.inn) },
+    // Доработки 14.11.2026, блок 1, пункт 4 (прототип v114 admin-cards.js ocMain): форма и ОКПО.
+    {
+      id: 'form',
+      label: t('orgs.card.main.form'),
+      value: p.legalForm ? t(`org.form.${p.legalForm}`) : DASH,
+    },
+    { id: 'okpo', label: t('orgs.card.main.okpo'), value: p.okpo ?? DASH, mono: Boolean(p.okpo) },
     { id: 'address', label: t('orgs.card.main.address'), value: p.address ?? DASH },
     {
       id: 'phone',
@@ -845,14 +858,19 @@ function SettingsTab({ t, settings }: { t: Translate; settings: AdminOrgCard['se
   );
 }
 
-/** «Файлы» (прототип ocFiles): объём по категориям «Файлового менеджера» и последние загрузки. */
+/**
+ * «Файлы» (прототип ocFiles): объём по категориям «Файлового менеджера» и последние загрузки; у
+ * организации из заявки с документами — её документы (прототип v114: «Заявка на подключение»).
+ */
 function FilesTab({
   t,
   files,
+  leadFiles,
   bytes,
 }: {
   t: Translate;
   files: AdminOrgCard['files'];
+  leadFiles: AdminOrgCard['leadFiles'];
   bytes: number;
 }) {
   const kind = (k: string) => t(`files.kind.${k}` as UiTextKey);
@@ -908,6 +926,27 @@ function FilesTab({
           />
         </div>
       </Box>
+      {leadFiles.length ? (
+        <Box title={t('orgs.card.files.lead')}>
+          <ul data-org-lead-files="" className="m-0 flex list-none flex-col p-0">
+            {leadFiles.map((f, i) => (
+              <li
+                key={`${f.kind}-${i}`}
+                className="flex min-w-0 items-center gap-2.5 border-b border-line px-0.5 py-[9px] last:border-b-0"
+              >
+                <Icon name="file" className="flex-none text-muted" />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-semibold text-ink">{f.name}</div>
+                  <div className="truncate text-xs text-faint">
+                    {`${t(LEAD_DOC_TEXT_KEYS[f.kind] as UiTextKey)} · ${fileSizeText(t, f.bytes)}`}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <Hint>{t('orgs.card.files.lead_hint')}</Hint>
+        </Box>
+      ) : null}
     </>
   );
 }

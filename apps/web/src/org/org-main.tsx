@@ -424,12 +424,7 @@ function OrgMainEdit({
             </Field>
             <Field id={`${id}-form`} label={t('org.field.form')} hint={t('org.field.admin_hint')}>
               {(c) => (
-                <select
-                  {...c}
-                  disabled
-                  value={profile.legalForm ?? ''}
-                  className={inputClass()}
-                >
+                <select {...c} disabled value={profile.legalForm ?? ''} className={inputClass()}>
                   <option value="">{t('org.field.form_none')}</option>
                   {ORG_LEGAL_FORMS.map((f) => (
                     <option key={f} value={f}>
