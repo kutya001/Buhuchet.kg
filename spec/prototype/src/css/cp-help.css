@@ -1,0 +1,79 @@
+/* Подсказки и обучение на странице контрагента (доработки 15.11.2026): обзор страницы, «Помощь», «Словарик», «Добро пожаловать», подсказки в окнах */
+/* Обзор страницы: тот же вид, что «Показать как» у сотрудников (.tour-hole и .tour-bub — kb.css) */
+#pgtour{position:fixed;inset:0;z-index:95}
+#pgtour[hidden]{display:none}
+#pgtour .tour-bub{max-height:calc(100dvh - 24px);overflow:auto}
+.pgt-leg{display:flex;flex-wrap:wrap;gap:6px;margin:-2px 0 6px}
+/* Кнопка «Помощь» в шапке; когда шапка уехала вверх — круглая кнопка в углу экрана */
+.pub-hr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pub-help{gap:6px}
+.pub-helpf{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:87;width:48px;height:48px;border-radius:50%;border:1px solid var(--border-strong);background:var(--raised);color:var(--accent);box-shadow:var(--shadow-l);display:grid;place-items:center;cursor:pointer;padding:0}
+.pub-helpf[hidden]{display:none}
+.pub-helpf .ic{width:22px;height:22px}
+.pub-helpf:hover{border-color:var(--accent)}
+/* Панель «Помощь»: на ПК справа во всю высоту, на телефоне снизу на весь экран */
+.cover:has(>.modal.pgside){place-items:stretch end;padding:0}
+.modal.pgside{width:min(460px,100%);height:100dvh;max-height:100dvh;border-radius:var(--r-xl) 0 0 var(--r-xl);border-right:0;animation:pgh-in .25s forwards}
+@keyframes pgh-in{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+.pgh-tour{align-self:flex-start}
+.pgh-h{margin:4px 0 -4px;font-size:14px}
+.pgh-faq{display:flex;flex-direction:column;gap:8px}
+.pgh-q{border:1px solid var(--border);border-radius:var(--r-l);background:var(--raised);overflow:hidden}
+.pgh-qh{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;min-height:44px;background:none;border:0;font:inherit;font-weight:600;color:inherit;text-align:left;cursor:pointer}
+.pgh-qh>span{flex:1}
+.pgh-qh .ic{color:var(--faint);transition:transform .2s;flex:none}
+.pgh-q.open>.pgh-qh .ic{transform:rotate(180deg)}
+.pgh-qh:hover{background:var(--row-hover)}
+.pgh-a{display:none;flex-direction:column;gap:10px;padding:0 14px 14px;font-size:14px;line-height:1.55;color:var(--text)}
+.pgh-q.open>.pgh-a{display:flex}
+.pgh-a p{margin:0}
+.pgh-steps{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:4px}
+.pgh-leg{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.pgh-leg li{display:flex;align-items:flex-start;gap:8px}
+.pgh-leg .pill{flex:none}
+.pgh-act{display:flex;gap:8px;flex-wrap:wrap}
+.pgh-ask1{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-weight:600}
+.pgh-res.ok{color:var(--green)}
+.pgh-ask{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:var(--r-l);background:var(--pane-alt)}
+.pgh-ask .row{display:flex;gap:8px;flex-wrap:wrap}
+.pgh-dl{margin:0;display:flex;flex-direction:column;gap:10px}
+.pgh-dl dt{font-weight:650}
+.pgh-dl dd{margin:2px 0 0;color:var(--muted)}
+/* «Словарик»: слово с пунктиром, по нажатию — облачко с объяснением */
+.pub-gl{display:inline;padding:0;margin:0;border:0;background:none;font:inherit;color:inherit;text-decoration:underline dotted;text-decoration-thickness:1.5px;text-underline-offset:3px;text-decoration-color:var(--faint);cursor:help;border-radius:3px;text-align:inherit}
+.pub-gl:hover,.pub-gl:focus-visible{text-decoration-color:currentColor;background:var(--row-hover)}
+.pgl-pop{max-width:min(320px,calc(100vw - 24px))}
+.pgl{display:flex;flex-direction:column;gap:6px}
+.pgl-h{display:flex;align-items:center;gap:8px}.pgl-h b{flex:1;font-size:14px}
+.pgl p{margin:0;font-size:13.5px;line-height:1.5}
+/* «Добро пожаловать» и итог после отправки */
+.pgw{display:flex;flex-direction:column;gap:14px}
+.pgw-lead{margin:0;font-size:15px;line-height:1.5;color:var(--muted)}
+.pgw-cards{display:flex;flex-direction:column;gap:10px}
+.pgw-card{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:var(--pane-alt)}
+.pgw-ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--sel);color:var(--accent);flex:none}
+.pgw-tx{display:flex;flex-direction:column;gap:2px}.pgw-tx span{color:var(--muted);font-size:13.5px;line-height:1.45}
+.pgw-done{display:flex;align-items:flex-start;gap:12px}.pgw-done>.ic{color:var(--green);width:28px;height:28px;flex:none}.pgw-done p{margin:0;font-size:15px;line-height:1.55}
+/* Подсказки в окнах: три шага «Я оплатил», «Что это за страница?» на экране кода */
+.pub-steps{list-style:none;margin:0;padding:0;display:flex;gap:8px;flex-wrap:wrap;grid-column:1/-1}
+.pub-steps li{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:var(--r-m);background:var(--pane-alt);font-size:13px;font-weight:600;flex:1 1 150px;line-height:1.35}
+.pub-stn{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-size:12px;flex:none}
+.pub-what-q{align-self:center}.pub-wqx{margin:0;text-align:center;font-size:13.5px;line-height:1.5}
+.pub-sendw{margin-top:-6px}
+@media (prefers-reduced-motion:reduce){.modal.pgside{animation:none}.pgh-qh .ic{transition:none}}
+/* Телефон: текст подсказок не мельче 16 px, кнопки не меньше 44 px */
+@media (max-width:767px){
+  .cover:has(>.modal.pgside){place-items:end stretch}
+  .modal.pgside{width:100%;height:100dvh;max-height:100dvh;border-radius:0;border:0;padding-top:env(safe-area-inset-top,0px);animation:slideUp .25s forwards}
+  .btn.sm.pub-help{min-height:44px;padding:0 14px;font-size:15px}
+  .pub-helpf{bottom:calc(66px + env(safe-area-inset-bottom,0px));right:12px}
+  #pgtour .tour-bub p,.pgh-a,.pgl p,.pgw-lead,.pgw-tx span,.pgw-done p,.pub-wqx{font-size:16px}
+  #pgtour .tour-bub b{font-size:17px}
+  #pgtour .tour-bub .btn,#pgtour .tour-bub .icon-btn,.pgh-act .btn,.pgh-ask .btn,.pgh-tour,.pgl-h .icon-btn{min-height:44px;min-width:44px}
+  #pgtour .tour-nav .linkbtn{min-height:44px}
+  .modal:has(.pgw,.pgw-done) .btn,.modal:is(.pgside,:has(.pgw,.pgw-done)) .icon-btn{min-height:44px;min-width:44px}
+  .pub-what-q{display:inline-flex;align-items:center;gap:6px;min-height:44px}
+  .pub-steps li{font-size:15px}
+  .pgh-tour{align-self:stretch;justify-content:center}
+}
+@media (prefers-reduced-motion:reduce) and (max-width:767px){.modal.pgside{animation:none}}

@@ -57,14 +57,14 @@ function pgCodeDlg(c,done){confirmDlg({title:'Сменить код доступ
 /* Сама страница — как её откроет контрагент по ссылке. В прототипе открывается поверх программы по адресу #/<адрес организации>/inn/<ИНН> */
 const PUB={back:'',open:null};
 // Состояние просмотра: годы «Отчётов» и «Показателей», фильтр-плашка и вид «Отчётов», раскрытые плитки, раскрытые на телефоне разделы
-const pubReset=()=>Object.assign(PUB,{y:null,ky:null,lateY:null,f:'',mode:'type',rt:new Set(),rm:null,ki:new Set(),unf:new Set(),ff:'',fq:'',fl:[]});
+const pubReset=()=>Object.assign(PUB,{y:null,ky:null,lateY:null,f:'',mode:'type',rt:new Set(),rm:null,ki:new Set(),unf:new Set(),ff:'',fq:'',fl:[],hq:null,wel:false});
 const pgMem=()=>{const m=store.get('pgmem',{});return m&&typeof m==='object'?m:{}};
 const pgDev=()=>{const u=navigator.userAgent||'';const b=/Edg\//.test(u)?'Edge':/OPR\/|Opera/.test(u)?'Opera':/YaBrowser/.test(u)?'Яндекс Браузер':/Firefox\//.test(u)?'Firefox':/Chrome\//.test(u)?'Chrome':/Safari\//.test(u)?'Safari':'браузер';return (/Mobi|Android|iPhone|iPad/.test(u)||isMobile()?'Телефон':'ПК')+' · '+b};
 const pgHm=ms=>new Date(ms).toLocaleTimeString('ru-RU',{timeZone:'Asia/Bishkek',hour:'2-digit',minute:'2-digit'});
 function pubRoute(){const m=location.hash.match(/^#\/([^/]+)\/inn\/(\d+)\/?$/);if(!m)return false;pubShow(decodeURIComponent(m[1]),m[2]);return true}
 function pubShow(slug,inn){let el=$('#pub');if(!el){el=document.createElement('div');el.id='pub';el.className='pub';el.setAttribute('role','dialog');el.setAttribute('aria-modal','true');el.setAttribute('aria-label','Страница контрагента');document.body.append(el)}
   if(!PUB.open)PUB.back=S.mod?'#'+S.mod+(S.tab?'.'+S.tab:''):'#home';PUB.open={slug,inn,logged:false};pubReset();el.hidden=false;document.body.classList.add('pub-on');pubDraw()}
-function pubHide(){const el=$('#pub');if(el)el.hidden=true;document.body.classList.remove('pub-on');PUB.open=null}
+function pubHide(){if(CPHT.on)cphTourEnd(false,true);if(PUB.io){PUB.io.disconnect();PUB.io=null}const el=$('#pub');if(el)el.hidden=true;document.body.classList.remove('pub-on');PUB.open=null}
 function pubClose(){const b=PUB.back||'#home';pubHide();PUB.back='';if(location.hash!==b)location.hash=b;else route();refreshAll()}
 // Выключенная страница, неизвестный ИНН, архивный контрагент и чужой адрес организации — одна и та же страница без данных
 const pubCp=({slug,inn})=>feat('cppage')&&slug===ORG.slug?CPS.find(c=>c.inn===inn&&pgOn(c))||null:null;
@@ -80,10 +80,10 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
     if(p.closed)main=`<div class="pub-gate">${brand}<h1>Страница закрыта</h1><p class="muted">Было ${PG_DAY} неверных кодов за сутки. Попросите новый код у вашего бухгалтера.</p></div>`;
     else if(mem&&mem.code===p.code&&mem.until>Date.now()){main=pubBody(c);inside=true}
     else if(p.lock>Date.now())main=`<div class="pub-gate">${brand}<h1>Ввод кода временно закрыт</h1><p class="muted">Было ${PG_TRY} неверных кодов подряд. Попробуйте снова после ${pgHm(p.lock)} или попросите код у вашего бухгалтера.</p>${pubForgotHtml()}</div>`;
-    else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код доступа</h1><p class="muted">Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.</p>${fld('Код доступа',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button><span class="hint">В этом браузере код запомнится на 1 день.</span>${pubForgotHtml()}</form>`}
+    else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код доступа</h1><p class="muted">Код из 6 цифр прислал ваш бухгалтер вместе со ссылкой.</p>${fld('Код доступа',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button><span class="hint">В этом браузере код запомнится на 1 день.</span>${pubForgotHtml()}${cphCodeWhat()}</form>`}
   el.innerHTML=bar+`<div class="pub-page">${main}<footer class="pub-foot">${inside&&sntUpOn(c)?'На странице можно смотреть свои данные, отправлять файлы бухгалтеру и сообщать об оплате. Вопросы — вашему бухгалтеру.':'Страница только для просмотра. Вопросы — вашему бухгалтеру.'}</footer></div>`;
   if(top)$('.pub-page',el).scrollTop=top;
-  $('#pub-x',el).onclick=pubClose;
+  $('#pub-x',el).onclick=pubClose;cphCodeMount(el);
   const fg=$('#pub-fg',el);if(fg)fg.onclick=()=>{const r=pubForgot(c),o=$('#pub-fgm',el);o.hidden=false;o.className='hint pub-fgm'+(r.ok?' ok':'');
     o.innerHTML=esc(r.t)+(r.ok?` <button type="button" class="linkbtn" id="pub-fgd">${ic('eye','sm')}В макете: сообщение в Telegram</button>`:'');const d=$('#pub-fgd',el);if(d)d.onclick=()=>pgCodeDemo(c,r.to[0])};
   if(c&&c.page.on&&$('.pub-body',el)&&!o.logged){o.logged=true;pubSeen(c)}
@@ -97,7 +97,9 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
   const y=$('#pub-y',el);if(y)y.onchange=()=>{PUB.y=y.value;PUB.rm=null;pubDraw(true)};const ky=$('#pub-ky',el);if(ky)ky.onchange=()=>{PUB.ky=ky.value;pubDraw(true)};
   const b=$('.pub-body',el);if(b)b.onclick=pubClick;
   $$('[data-pub-file]',el).forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();pubFileOpen(a.dataset.pubFile)});
-  const fq=$('#pub-fq',el);if(fq){fq.oninput=()=>{PUB.fq=fq.value;pubFq(el)};pubFq(el)}}
+  const fq=$('#pub-fq',el);if(fq){fq.oninput=()=>{PUB.fq=fq.value;pubFq(el)};pubFq(el)}
+  // Подсказки и обучение (доработки 15.11.2026, cp-help.js): пунктир «Словарика», кнопка «Помощь», «Добро пожаловать» после первого верного кода
+  if(b&&c){cphGloss(b);cphMount(el,c);cphWelcomeAuto(c)}}
 // Поиск по названию в «Файлах»: строки скрываются на месте, поле не теряет фокус; при поиске список показывается целиком
 function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)return;let n=0;$$('[data-pub-fo]',l).forEach(r=>{const on=!q||r.dataset.n.includes(q);r.hidden=!on;if(on)n++});
   l.classList.toggle('all',!!q);const mb=$('.pub-more',l);if(mb)mb.hidden=!!q;const no=$('.pub-fnone',el);if(no)no.hidden=!!n}
@@ -105,7 +107,8 @@ function pubFq(el){const q=norm(PUB.fq||'').trim(),l=$('.pub-fl',el);if(!l)retur
 // Обновление страницы в том же браузере в течение минуты новым открытием не считается (решение заказчика 30.10.2026, Е-3)
 function pubSeen(c){const k=PUB.open.slug+'|'+PUB.open.inn,sn=store.get('pgseen',{})||{},now=Date.now();if(sn[k]&&now-sn[k]<60e3)return;sn[k]=now;store.set('pgseen',sn);const d=pgDev();Object.assign(c.page,{last:nowStamp(),lastDev:d});HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Страница контрагента открыта: ${d}`});dbSoon()}
 // Нажатия на странице: плитки «Главного» и замечания строки состояния ведут в свой раздел; плашки — фильтр «Отчётов»; плитки видов, месяцев и показателей раскрываются
-function pubClick(e){const x=e.target.closest('[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo],[data-pub-up],[data-pub-paid],[data-pub-send]');if(!x)return;const d=x.dataset;
+function pubClick(e){const x=e.target.closest('[data-pub-gl],[data-pub-tgon],[data-pub-go],[data-pub-tg],[data-pub-f],[data-pub-mode],[data-pub-rt],[data-pub-rm],[data-pub-ki],[data-pub-more],[data-pub-copy],[data-pub-ff],[data-pub-fo],[data-pub-up],[data-pub-paid],[data-pub-send]');if(!x)return;const d=x.dataset;
+  if(d.pubGl!=null){cphGlossPop(x);return}
   if(d.pubUp!=null){const c=pubCp(PUB.open);if(c)pubUpDlg(c);return}
   if(d.pubPaid){const c=pubCp(PUB.open);if(c)pubPaidDlg(c,d.pubPaid);return}
   if(d.pubSend){const c=pubCp(PUB.open);if(c)pubSendDlg(c,d.pubSend);return}
@@ -243,20 +246,20 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
     H.reports=pubSec('reports','file','Отчёты',`сдано ${cnt.sub} из ${yr.length}${cnt.late?` · ${cnt.late} ${plural(cnt.late,'просрочен','просрочено','просрочено')}`:''}`,
       `<div class="plates pub-pl">${pl('sub','check','green','Сдано')}${pl('next','clock','blue','Впереди')}${pl('late','alert',cnt.late?'red':'green','Просрочено')}</div>
       <div class="pub-tools"><div class="chipsel" role="group" aria-label="Как показать отчёты">${[['type','По видам'],['month','По месяцам'],['due','По срокам']].map(([k,l])=>`<button type="button" data-pub-mode="${k}" class="${PUB.mode===k?'on':''}" aria-pressed="${PUB.mode===k}">${l}</button>`).join('')}</div>${f?`<button type="button" class="linkbtn" data-pub-f="${f}">${ic('x','sm')}Показать все</button>`:''}</div>
-      ${vis.length?list:`<span class="faint">${f?`Отчётов с отметкой «${{sub:'Сдано',next:'Впереди',late:'Просрочено'}[f]}» в ${y} году нет`:`Отчётов со сроком в ${y} году нет`}</span>`}`,
+      ${vis.length?list:`<span class="faint">${f?`Отчётов с отметкой «${{sub:'Сдано',next:'Впереди',late:'Просрочено'}[f]}» в ${y} году нет`:esc(cphFill(cphT('emptyReports',`Отчётов со сроком в ${y} году нет`),{год:y}))}</span>`}`,
       {extra:sel('pub-y',ys.map(x=>[x,x+' год']),y,'aria-label="Год срока сдачи"')})}
   if(has('files')){const fs=pubFiles(c,has,fee),cats=PG_FCAT.filter(([k])=>fs.some(f=>f.cat===k)),ff=cats.some(([k])=>k===PUB.ff)?PUB.ff:'',vis=fs.filter(f=>!ff||f.cat===ff);PUB.fl=vis;
     const pl=(k,l,n)=>`<button type="button" class="plate${ff===k?' on':''}" data-pub-ff="${k}" aria-pressed="${ff===k}"><span class="pl-top">${esc(l)}</span><span class="pl-val">${n}</span></button>`;
     H.files=pubSec('files','folder','Файлы',fs.length?`${fs.length} ${plural(fs.length,'файл','файла','файлов')}`:'',pubSentHtml(c)+(fs.length?`<div class="plates pub-pl pub-fpl">${pl('','Все',fs.length)}${cats.map(([k,l])=>pl(k,l,fs.filter(f=>f.cat===k).length)).join('')}</div>
       <div class="pub-tools"><input class="inp pub-fq" id="pub-fq" type="search" placeholder="Поиск по названию" value="${esc(PUB.fq||'')}" aria-label="Поиск файла по названию" autocomplete="off"></div>
       <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name))}" title="${pubFView(f.name)?'Открыть для просмотра':'Скачать'}">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span></span><span class="pub-fs hint"><span>${fmtD(f.date)}</span><span>${fmtSize(f.size)}</span></span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием нет</span>`
-      :'<span class="faint">Файлов пока нет</span>'))}
+      :`<span class="faint">${esc(cphT(sntUpOn(c)?'emptyFiles':'emptyFilesView','Файлов пока нет'))}</span>`))}
   if(M){const v=M.diff<0?['short','alert','Недостача',som(-M.diff)]:M.diff===0?['ok','ok','Достаточно',som(0)]:M.needSum?['ok','ok','Достаточно, излишек','+'+som(M.diff)]:['over','info','Излишек','+'+som(M.diff)];
     const kv=(l,key,val)=>`<div><span class="k">${l}${PGT('money',key)?tipI(PGT('money',key)):''}</span><span class="v tnum">${val}</span></div>`;
     H.money=pubSec('money','wallet','Деньги на налоги',M.diff<0?`недостача ${som(-M.diff)}`:v[2].toLowerCase(),
       `<div class="verdict ${v[0]}">${ic(v[1])}<span>${v[2]}</span>${PGT('money',v[2])?tipI(PGT('money',v[2])):''}<span class="big">${v[3]}</span></div>
       <div class="kv">${kv(`Нужно оплатить до ${fmtD(lastDay(M.pm))}`,'Нужно оплатить',`<b>${som(M.needSum)}</b>`)}${kv(`Поступило от вас в ${M.y0} году`,'Поступило от вас',som(M.got))}${kv(`Оплачено в бюджет в ${M.y0} году`,'Оплачено в бюджет',som(M.paid))}</div>
-      ${M.need.length?`<div class="pub-list">${M.need.map(r=>{const lt=r.payDue<TODAY;return `<div class="pub-row${lt?' late':''}"><div class="pub-r1"><b>${esc(T[r.t].short)}</b><span class="faint">·</span><span>${esc(r.plabel)}</span><span class="grow"></span><b class="tnum">${som(r.sum-r.paid)}</b></div><div class="pub-r2"><span class="${lt?'red strong':''}">${lt?ic('alert','sm'):''}оплатить до ${fmtD(r.payDue)}</span></div></div>`}).join('')}${pubMore(M.need.length)}</div>`:'<span class="faint">Неоплаченных налогов в этом месяце нет</span>'}`)}
+      ${M.need.length?`<div class="pub-list">${M.need.map(r=>{const lt=r.payDue<TODAY;return `<div class="pub-row${lt?' late':''}"><div class="pub-r1"><b>${esc(T[r.t].short)}</b><span class="faint">·</span><span>${esc(r.plabel)}</span><span class="grow"></span><b class="tnum">${som(r.sum-r.paid)}</b></div><div class="pub-r2"><span class="${lt?'red strong':''}">${lt?ic('alert','sm'):''}оплатить до ${fmtD(r.payDue)}</span></div></div>`}).join('')}${pubMore(M.need.length)}</div>`:`<span class="faint">${esc(cphT('emptyMoney','Неоплаченных налогов в этом месяце нет'))}</span>`}`)}
   if(fee){const ct=curTariff(c),ms=feeMonths(c).filter(m=>feeCharge(c,m)>0||c.feePaid[m]).reverse(),till=pubFeeTill(c);
     H.fee=pubSec('fee','coins','Оплата за обслуживание',c.feeDebt>0?`долг ${som(c.feeDebt)}`:till?`оплачено по ${ymLabel(till).toLowerCase()}`:'',
       `<div class="kv"><div><span class="k">Текущая ставка${PGT('fee','Текущая ставка')?tipI(PGT('fee','Текущая ставка')):''}</span><span class="v tnum">${ct?`${som(ct.amount)} ${ct.per==='Y'?'в год':'в месяц'}<div class="hint">оплата до ${c.feeDay}-го числа</div>`:'—'}</span></div><div><span class="k">Долг${PGT('fee','Долг')?tipI(PGT('fee','Долг')):''}</span><span class="v tnum ${c.feeDebt?'red strong':''}">${som(c.feeDebt)}</span></div></div>
@@ -268,7 +271,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
     H.kpi=pubSec('kpi','gauge','Показатели',inds.length?`${inds.length} ${plural(inds.length,'показатель','показателя','показателей')}`:'',
       inds.length&&ms.length?`<div class="pub-ks">${inds.map(i=>{const a=kAgg(ms.map(m=>v(i,m))),k=i.main||'sum',o=PUB.ki.has(i.id);
         return `<div class="pub-k${o?' open':''}"><button type="button" class="pub-gh" data-pub-ki="${esc(i.id)}" aria-expanded="${o}"><span class="pub-rt1"><b>${esc(i.name)}</b>${i.unit?`<span class="hint">${esc(i.unit)}</span>`:''}<span class="grow"></span>${ic('down','sm')}</span><span class="pub-kv">${a.n?kNum(i,Math.round(a[k]*100)/100):'—'}</span><span class="hint">${esc((KAGG[k]||'').toLowerCase())} за ${y} год</span>${pubSpark(i,m12,m12.map(m=>m<=ym(TODAY)?v(i,m):undefined))}</button>
-          <div class="pub-gb pub-list">${ms.slice().reverse().map(m=>{const x=v(i,m);return `<div class="pub-row"><div class="pub-r1"><span>${esc(ymLabel(m))}</span><span class="grow"></span><b class="tnum">${x==null?'<span class="faint">—</span>':kNum(i,x)}</b></div></div>`}).join('')}${pubMore(ms.length)}</div></div>`}).join('')}</div>`:'<span class="faint">Показателей за этот год нет</span>',
+          <div class="pub-gb pub-list">${ms.slice().reverse().map(m=>{const x=v(i,m);return `<div class="pub-row"><div class="pub-r1"><span>${esc(ymLabel(m))}</span><span class="grow"></span><b class="tnum">${x==null?'<span class="faint">—</span>':kNum(i,x)}</b></div></div>`}).join('')}${pubMore(ms.length)}</div></div>`}).join('')}</div>`:`<span class="faint">${esc(cphT('emptyKpi','Показателей за этот год нет'))}</span>`,
       {extra:sel('pub-ky',ys.map(x=>[x,x+' год']),y,'aria-label="Год показателей"')})}
   if(has('contacts')){const ids=[c.resp,...c.assign.filter(a=>!a.to&&a.resp).map(a=>a.resp)].filter((x,i,a)=>x&&EM[x]&&EM[x].active!==false&&a.indexOf(x)===i);
     const what=id=>{const ts=c.assign.filter(a=>!a.to&&(a.resp||c.resp)===id).map(a=>T[a.t]&&T[a.t].short).filter(Boolean);return id===c.resp?'ответственный'+(ts.length?' · '+ts.join(', '):''):ts.join(', ')};
@@ -280,7 +283,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
   // На ПК две колонки; на телефоне разделы идут один под другим в порядке: «Главное», «Как оплатить», «Ваш бухгалтер», «Отчёты», «Файлы», «Деньги на налоги», «Оплата за обслуживание», «Показатели», «Контакты», «Telegram»
   const col=ks=>ks.map(k=>H[k]||'').join('');
   const nav=[['main','Главное','home'],['pay','Оплата','wallet'],['reports','Отчёты','file'],['kpi','Показатели','gauge'],['contacts','Контакты','users']].filter(([k])=>H[k]);
-  return `<div class="pub-body"><header class="pub-h"><div class="pub-org">${logo}<span><b>${esc(ORG.name)}</b><span class="hint">ваша бухгалтерская компания</span></span></div><span class="hint">Данные на ${fmtD(TODAY)} ${bishkekNow().hm}${PGT('head','Данные на')?tipI(PGT('head','Данные на')):''}</span></header>
+  return `<div class="pub-body"><header class="pub-h"><div class="pub-org">${logo}<span><b>${esc(ORG.name)}</b><span class="hint">ваша бухгалтерская компания</span></span></div><span class="pub-hr"><span class="hint">Данные на ${fmtD(TODAY)} ${bishkekNow().hm}${PGT('head','Данные на')?tipI(PGT('head','Данные на')):''}</span>${cphHelpBtn()}</span></header>
     <div class="pub-title"><h1>${esc(c.name)}</h1><span class="muted">ИНН <span class="mono">${c.inn}</span> · ${esc(c.regime?REGIME_FULL[c.regime]||c.regime:'режим налогообложения не указан')}</span></div>
     ${state}
     <div class="pub-grid"><div class="pub-col">${col(['main','reports','files','kpi'])}</div><div class="pub-col">${col(['pay','acc','tg','money','fee','contacts'])}</div></div>

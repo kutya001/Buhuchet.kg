@@ -76,7 +76,7 @@ function pubSentHtml(c){const up=sntUpOn(c),l=SENT.filter(x=>x.cp===c.id).sort((
   return `<div class="pub-sent">${up?`<div class="row"><button type="button" class="btn sm cta" data-pub-up>${ic('upload','sm')}Отправить файл</button><span class="hint">Документы для бухгалтера: до ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый</span></div>`:''}
     ${l.length?`<b class="pub-sl-h">Отправленные вами</b><div class="pub-list pub-sl">${l.map(x=>`<div class="pub-frow pub-srow">${ic(pubFIc(x.name))}<span class="pub-fm"><b>${esc(x.name)}</b><span class="hint">${fmtDT(x.at)}${x.src==='tg'?' · из Telegram':''}${x.note?' · '+esc(x.note):''}</span>${x.st==='rej'&&x.why?`<span class="hint bad">Причина: ${esc(x.why)}</span>`:''}</span><span class="pub-fs">${pill(SNT_ST[x.st],SNT_PILL)}${x.st!=='ok'?`<span class="hint">${sntLeftTxt(x)}</span>`:''}</span></div>`).join('')}${pubMore(l.length)}</div>`:''}</div>`}
 function pubUpDlg(c){if(!sntUpOn(c)){toast('Ваш бухгалтер сейчас не принимает файлы через страницу','lock',true);return}
-  openModal({form:true,noMax:true,render:()=>({title:'Отправить файл',sub:'Файлы получит ваш бухгалтер',body:`<div class="form">${fld('Файлы',`<input class="inp" type="file" id="pu-f" multiple>`,{req:true,full:true,id:'pu-f',hint:`До ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый. Программы, сценарии и веб-страницы не принимаются`})}
+  openModal({form:true,noMax:true,render:()=>({title:'Отправить файл',sub:'Файлы получит ваш бухгалтер',body:`<div class="form">${fld('Файлы',`<input class="inp" type="file" id="pu-f" multiple>`,{req:true,full:true,id:'pu-f',hint:esc(cphFill(cphT('upHint',`До ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый`),{мб:FILE_MAX_MB,файлов:SNT_PER}))})}
     ${fld('Комментарий',`<textarea class="inp" id="pu-note" maxlength="${SNT_NOTE}" placeholder="Необязательно: что это за документы"></textarea>`,{full:true,id:'pu-note'})}</div>`,
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="pu-ok">Отправить</button>',
   mount(el,m){$('#pu-ok',el).onclick=()=>{const fs=[...$('#pu-f',el).files],left=SNT_DAY-sntDayCnt(c);
@@ -85,4 +85,6 @@ function pubUpDlg(c){if(!sntUpOn(c)){toast('Ваш бухгалтер сейча
     if(!setErr(el,'pu-f',e))return;const note=val(el,'pu-note').replace(/\s+/g,' ').trim().slice(0,SNT_NOTE),at=nowStamp();
     fs.forEach((x,i)=>SENT.push({id:'sf'+Date.now().toString(36)+i,cp:c.id,name:x.name.slice(0,FNAME_MAX),size:x.size,src:'page',at,note,st:'new'}));
     HIST.push({at,who:'client',ent:'cp',id:c.id,cp:c.id,what:`Контрагент отправил со страницы ${fs.length>1?'файлы':'файл'}: ${fs.map(x=>x.name).join(', ')}${note?'. Комментарий: '+note:''}`});
-    sntNotify(c,fs.length);dbSoon();m.close();pubDraw(true);toast(fs.length>1?`Файлы отправлены бухгалтеру: ${fs.length}`:'Файл отправлен бухгалтеру','upload')}}})})}
+    sntNotify(c,fs.length);dbSoon();m.close();pubDraw(true);
+    // Итог простыми словами: что будет дальше (доработки 15.11.2026, пункт 5.3)
+    cphDone(fs.length>1?`Файлы отправлены: ${fs.length}`:'Файл отправлен',cphT('upDone','Файлы отправлены бухгалтеру'))}}})})}
