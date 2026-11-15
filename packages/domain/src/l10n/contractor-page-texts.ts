@@ -273,6 +273,14 @@ export const CONTRACTOR_PAGE_TEXTS = {
     ru: 'Файлов из этого чата слишком много за час. Попробуйте позже.',
     section: S,
   },
+  // «Принять» у чека из Telegram (прототип v115 `pgRcptMoney`).
+  'cppage.receipt.tax_note': { ru: 'Деньги за {month} — по чеку из Telegram', section: S },
+  'cppage.receipt.fee_note': { ru: 'По чеку из Telegram за {month}', section: S },
+  'cppage.receipt.fee_note_any': { ru: 'По чеку из Telegram', section: S },
+  'cppage.receipt.received': {
+    ru: 'Деньги на налоги за {month} уже получены от контрагента',
+    section: S,
+  },
   // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
   // pgFeeTgBtn, pgFeeTgDlg, pgFeeSend, tgAct('cp-feepaid')): кнопка вкладки «Обслуживание», окно, история.
   'cppage.fee_tg.btn': { ru: 'Напомнить в Telegram', section: S },

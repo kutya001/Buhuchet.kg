@@ -13,7 +13,15 @@ import { allocateInOrder, formatSom, parseSom } from '@buhuchet/domain';
  */
 export type ReceiptPreset =
   | { reportId: string; amount: number }
-  | { list: readonly { reportId: string; amount: number }[]; note: string };
+  | {
+      list: readonly { reportId: string; amount: number }[];
+      note: string;
+      /**
+       * Общая сумма, если не сумма строк: «Принять» у чека из Telegram (прототип v115 `pgRcptMoney`,
+       * `inDlg` с `pre.total`) — сумма из оплаченного сообщения, по строкам — от старых к новым.
+       */
+      total?: number;
+    };
 
 /**
  * Строки распределения «за месяц» и «за весь период», которые форма может принять: отчёт ещё ждёт денег

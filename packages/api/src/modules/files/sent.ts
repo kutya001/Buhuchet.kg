@@ -14,6 +14,7 @@ import {
   rejectSentFile,
   SentFileDecidedError,
   sentContractor,
+  sentFilePays,
   sentFilesNewCount,
   sentUploadState,
   updateWithHistory,
@@ -21,6 +22,7 @@ import {
   writeHistory,
   schema,
   type ListTexts,
+  type SentFilePay,
   type SentFileRecord,
   type Tx,
 } from '@buhuchet/db';
@@ -40,6 +42,7 @@ import {
   sentFileReason,
   sentUploadKey,
   type AccessSubject,
+  type Feature,
   type IsoDate,
 } from '@buhuchet/domain';
 import {
@@ -50,6 +53,7 @@ import {
   ListValuesQuery,
   SentContractorParam,
   SentFileAccept,
+  SentFileAccepted,
   SentFileCount,
   SentFileIdParam,
   SentFileItem,
@@ -59,6 +63,7 @@ import {
   SentFileReject,
   SentUploadState,
   SentUploadSwitch,
+  type SentFileAccepted as SentFileAcceptedBody,
   type SentFileItem as SentFileItemBody,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -132,6 +137,36 @@ function itemOf(
     canDecide,
     version: r.version,
   };
+}
+
+/**
+ * Чек к оплате у принятого файла (доработки 14.11.2026, блок 4, пункт 4; прототип v115 `pgRcptMoney`):
+ * его сумма уходит только тому, кто может сразу принять эти деньги, — иначе файл просто принят. Налоги —
+ * «Учёт оплаты налогов» и право «Учёт денег» в области «Финансовых операций» (как окно «Поступление от
+ * контрагента»); обслуживание — «Плата за обслуживание» и права «Видеть плату» и «Менять ставку» в
+ * области «Контрагентов» (как «Принять оплату за обслуживание», прототип `feeAccOk`). Контрагент в архиве
+ * — без денег.
+ */
+function payFor(
+  pay: SentFilePay | undefined,
+  o: {
+    subject: AccessSubject;
+    features: Readonly<Record<Feature, boolean>>;
+    contractor: { responsibleEmployeeId: string | null; archived: boolean };
+  },
+): SentFilePay | null {
+  if (!pay || o.contractor.archived) return null;
+  const { subject, features, contractor } = o;
+  const ok =
+    pay.purpose === 'tax'
+      ? features.taxpay &&
+        hasPermission(subject, 'money') &&
+        canSeeContractor(subject, 'fin', contractor)
+      : features.fee &&
+        hasPermission(subject, 'fee') &&
+        hasPermission(subject, 'tariff') &&
+        canSeeContractor(subject, 'cps', contractor);
+  return ok ? pay : null;
 }
 
 /** Принять и отклонить — у того, кто видит файл и может загружать файлы (прототип `sntCan`). */
@@ -402,8 +437,9 @@ export const sentAcceptRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»)',
-      content: { 'application/json': { schema: SentFileItem } },
+      description:
+        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); у чека — что оплачено',
+      content: { 'application/json': { schema: SentFileAccepted } },
     },
     ...decideResponses,
   },
@@ -432,11 +468,11 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
       apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
     }
     const today = sentToday();
-    let body: SentFileItemBody;
+    let body: SentFileAcceptedBody;
     try {
       body = await decided(() =>
         withOrgContext(deps.db, ctx, async (tx) => {
-          await requireFilesFeature(tx, ctx.orgId);
+          const features = await requireFilesFeature(tx, ctx.orgId);
           const { file, contractor } = await visibleSent(tx, subject, id);
           const name = acceptedFileName(
             file.name,
@@ -468,7 +504,12 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
             ],
           });
           const after = (await getSentFile(tx, id))!;
-          return itemOf(after, contractor, today, true);
+          const pay = payFor((await sentFilePays(tx, [id])).get(id), {
+            subject,
+            features,
+            contractor,
+          });
+          return { ...itemOf(after, contractor, today, true), pay };
         }),
       );
     } catch (err) {

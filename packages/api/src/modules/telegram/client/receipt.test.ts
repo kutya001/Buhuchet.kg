@@ -10,7 +10,12 @@ import {
   fillTemplate,
   TELEGRAM_TEMPLATE_DEFAULTS,
 } from '@buhuchet/domain';
-import { ContractorPage, ContractorTelegram, PublicPageTelegramLink } from '@buhuchet/shared';
+import {
+  ContractorPage,
+  ContractorTelegram,
+  PublicPageTelegramLink,
+  SentFileAccepted,
+} from '@buhuchet/shared';
 import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -407,6 +412,57 @@ describe.skipIf(!databaseAvailable())(
       // Чек — тому контрагенту, к которому сообщение: без вопроса «От какой компании?».
       expect(await sentFiles(cpA2)).toEqual([]);
       expect(await sentFiles(cpB)).toEqual([]);
+    });
+
+    it('«Принять» у чека: что оплачено — только тому, кто может сразу принять эти деньги', async () => {
+      await feeMessage();
+      for (const chat of [CLIENT_1, CLIENT_2]) {
+        await press(receiptData, chat, lastMessageId(chat));
+        await sendFile(chat, { name: `Чек ${chat}.pdf`, replyTo: lastMessageId(chat) });
+        expect(lastText(chat)).toBe(text('tgCpReceiptOk'));
+      }
+      const [first, second] = await sentFiles(cpA);
+      const accept = (cookie: string, file: { id: string; version: number }) =>
+        call(cookie, 'POST', `/api/files/sent/${file.id}/accept`, { version: file.version });
+      // Бухгалтер принимает файлы, но платы за обслуживание не видит — файл просто принят.
+      const acc = await signIn(f.app, 'acc-a', TEST_PASSWORD);
+      const byAcc = await accept(acc, first!);
+      expect(byAcc.status, await byAcc.clone().text()).toBe(200);
+      expect(SentFileAccepted.parse(await byAcc.json())).toMatchObject({
+        status: 'accepted',
+        pay: null,
+      });
+      // Владелец — сразу «Принять оплату за обслуживание» с суммой из сообщения.
+      const byOwner = await accept(owner, second!);
+      expect(byOwner.status, await byOwner.clone().text()).toBe(200);
+      expect(SentFileAccepted.parse(await byOwner.json()).pay).toEqual({
+        purpose: 'fee',
+        month: null,
+        amount: DEBT,
+      });
+      // Контрагент в архиве — без денег. Напоминание — раз в сутки: прежнее — будто вчерашнее.
+      await f.t.admin.db
+        .update(schema.contractorTelegramMessages)
+        .set({ day: '2026-10-17' })
+        .where(eq(schema.contractorTelegramMessages.kind, 'fee'));
+      await feeMessage();
+      await press(receiptData, CLIENT_2, lastMessageId(CLIENT_2));
+      await sendFile(CLIENT_2, { name: 'Чек 3.pdf', replyTo: lastMessageId(CLIENT_2) });
+      const third = (await sentFiles(cpA)).find((x) => x.name === 'Чек 3.pdf')!;
+      await f.t.admin.db
+        .update(schema.contractors)
+        .set({ serviceStatus: 'archived' })
+        .where(eq(schema.contractors.id, cpA));
+      try {
+        const archived = await accept(owner, third);
+        expect(archived.status, await archived.clone().text()).toBe(200);
+        expect(SentFileAccepted.parse(await archived.json()).pay).toBeNull();
+      } finally {
+        await f.t.admin.db
+          .update(schema.contractors)
+          .set({ serviceStatus: 'active' })
+          .where(eq(schema.contractors.id, cpA));
+      }
     });
 
     it('«Отмена»: бот больше не ждёт чек, файл после неё — обычный файл; повторная «Отмена» — «устарела»', async () => {

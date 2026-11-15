@@ -285,16 +285,25 @@ export async function sentUploadState(
 export async function sentContractor(
   tx: Tx,
   id: string,
-): Promise<{ id: string; name: string; responsibleEmployeeId: string | null } | null> {
+): Promise<{
+  id: string;
+  name: string;
+  responsibleEmployeeId: string | null;
+  /** В архиве: деньги по чеку от него сразу не принимаются (прототип v115 `pgRcptMoney`). */
+  archived: boolean;
+} | null> {
   const [row] = await tx
     .select({
       id: contractors.id,
       name: contractors.name,
       responsibleEmployeeId: contractors.responsibleEmployeeId,
+      serviceStatus: contractors.serviceStatus,
     })
     .from(contractors)
     .where(eq(contractors.id, id));
-  return row ?? null;
+  if (!row) return null;
+  const { serviceStatus, ...rest } = row;
+  return { ...rest, archived: serviceStatus === 'archived' };
 }
 
 /** Загруженные отправленные файлы контрагента — от новых к старым (раздел карточки и страница). */

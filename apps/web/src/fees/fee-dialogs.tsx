@@ -274,11 +274,14 @@ export function TariffDialog({
  */
 export function FeePaymentDialog({
   contractorId,
+  preset = null,
   open,
   onClose,
   onDone,
 }: {
   contractorId: string;
+  /** «Принять» у чека из Telegram (прототип v115 `pgRcptMoney`): сумма из сообщения и примечание. */
+  preset?: FeePaymentPreset | null;
   open: boolean;
   onClose: () => void;
   onDone: () => void;
@@ -297,9 +300,13 @@ export function FeePaymentDialog({
       open={open}
       onClose={onClose}
       onDone={onDone}
+      preset={preset}
     />
   );
 }
+
+/** Что окно «Принять оплату за обслуживание» подставляет сразу: сумма (больше нуля) и примечание. */
+export type FeePaymentPreset = { amount: number | null; note: string };
 
 /**
  * «Изменить оплату за обслуживание» (прототип `feePayDlg` с `edit`): то же окно с тем, что вводили, и
@@ -338,6 +345,12 @@ export function FeePaymentEditDialog({
 
 type FeeEdit = FeePaymentEditForm['edit'];
 
+/** Месяцы окна в порядке распределения суммы (от старых к новым, как прислал сервер). */
+function orderedMonths(form: FeePaymentForm) {
+  const byMonth = new Map(form.months.map((m) => [m.month, m]));
+  return form.order.map((m) => byMonth.get(m)).filter((m): m is NonNullable<typeof m> => !!m);
+}
+
 function FeePaymentModal({
   t,
   form,
@@ -347,6 +360,7 @@ function FeePaymentModal({
   onClose,
   onDone,
   edit = null,
+  preset = null,
 }: {
   t: Translate;
   form: FeePaymentForm | null;
@@ -356,6 +370,7 @@ function FeePaymentModal({
   onClose: () => void;
   onDone: () => void;
   edit?: FeeEdit | null;
+  preset?: FeePaymentPreset | null;
 }) {
   const toast = useToast();
   const errorText = useErrorText();
@@ -363,14 +378,22 @@ function FeePaymentModal({
   const toText = (v: number) => formatSom(v, 'auto');
   const allocRows = (list: readonly { month: string; amount: number }[]) =>
     Object.fromEntries(list.map((x) => [x.month, toText(x.amount)]));
-  const [sum, setSum] = useState(() => (form?.amount != null ? toText(form.amount) : ''));
+  // Чек из Telegram: сумма из сообщения (прототип `feePayDlg` с `pre.sum`), строки — на неё от старых к новым.
+  const presetSum = !edit && preset?.amount != null && preset.amount > 0 ? preset.amount : null;
+  const [sum, setSum] = useState(() =>
+    presetSum != null ? toText(presetSum) : form?.amount != null ? toText(form.amount) : '',
+  );
   const [date, setDate] = useState(() => edit?.date ?? todayBishkek());
   const [to, setTo] = useState(() => edit?.to ?? form?.to[0]?.key ?? '');
-  const [note, setNote] = useState(() => edit?.note ?? '');
+  const [note, setNote] = useState(() => edit?.note ?? preset?.note ?? '');
   const [reason, setReason] = useState('');
   const [changed, setChanged] = useState(false);
   const [rows, setRows] = useState<Record<string, string>>(() =>
-    form ? allocRows(form.allocation) : {},
+    form
+      ? presetSum != null
+        ? allocRows(autoAllocate(orderedMonths(form), presetSum))
+        : allocRows(form.allocation)
+      : {},
   );
   // Строки правили руками — сумма их больше не перераспределяет (прототип `st.manual`).
   const [manual, setManual] = useState(false);
@@ -385,10 +408,7 @@ function FeePaymentModal({
   }>({});
   const [busy, setBusy] = useState(false);
   const months = form?.months ?? [];
-  const byMonth = new Map(months.map((m) => [m.month, m]));
-  const ordered = (form?.order ?? [])
-    .map((m) => byMonth.get(m))
-    .filter((m): m is NonNullable<typeof m> => !!m);
+  const ordered = form ? orderedMonths(form) : [];
   const valueOf = (month: string) => parseSom(rows[month] ?? '');
   const allocation = months
     .map((m) => ({ month: m.month, amount: valueOf(m.month) ?? 0 }))
