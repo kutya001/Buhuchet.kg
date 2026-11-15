@@ -1331,12 +1331,16 @@ test.describe('Доработки 15.11: подсказки на страниц�
     for (const q of [faq('goPay').q, faq('paid').q, faq('up').q]) {
       await expect(question(panel, q)).toHaveCount(1);
     }
-    // «Перейти к …»: панель закрывается, нужный раздел — на экране.
-    const goQ = question(panel, faq('goPay').q);
-    await goQ.getByRole('button', { name: faq('goPay').q }).click();
-    await goQ.locator('[data-pub-faq-act="goPay"]').click();
+    // «Перейти к …»: панель закрывается, нужный раздел («Файлы» — внизу страницы) — на экране, на
+    // телефоне раскрыт.
+    const files = section(page, 'files');
+    await expect(files).not.toBeInViewport();
+    const goQ = question(panel, faq('goFiles').q);
+    await goQ.getByRole('button', { name: faq('goFiles').q }).click();
+    await goQ.locator('[data-pub-faq-act="goFiles"]').click();
     await expect(panel).toBeHidden();
-    await expect(page.locator('#pub-pay')).toBeInViewport();
+    await expect(files).toBeInViewport();
+    await expect(files).not.toHaveAttribute('data-folded', '');
     panel = await openHelp();
     // Ответ раскрывается по нажатию; кнопка ответа открывает «Я оплатил» с выбором, что оплачено.
     const paidQ = question(panel, faq('paid').q);
@@ -1391,8 +1395,7 @@ test.describe('Доработки 15.11: подсказки на страниц�
     await page.keyboard.press('Escape');
     await expect(pop).toBeHidden();
 
-    // Пустой раздел «Файлы» объясняет, что здесь появится и как прислать файл (пункт 5.5).
-    await unfold(page, 'files', isMobile);
-    await expect(section(page, 'files')).toContainText(pageHint('emptyFiles'));
+    // Пустой раздел «Файлы» (раскрыт переходом из «Помощи») объясняет, что здесь появится (пункт 5.5).
+    await expect(files).toContainText(pageHint('emptyFiles'));
   });
 });
