@@ -2,7 +2,7 @@ import type { MemoryStorage } from '@buhuchet/adapters';
 import { createFakeDocumentReader, type DocumentText } from '@buhuchet/adapters/documents';
 import { schema, submitLead } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { LEAD_DOC_MAX_BYTES } from '@buhuchet/domain';
+import { LEAD_DOC_MAX_BYTES, LEAD_DRAFT_HOURS } from '@buhuchet/domain';
 import {
   AdminLeadCard,
   AdminOrgCard,
@@ -186,19 +186,20 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       expect(LeadDocsRead.parse(await read.json()).found).toBe('diff');
     });
 
-    it('не PDF по содержимому — «Только PDF»: строка и файл убраны; больше 20 МБ — отказ до ссылки', async () => {
+    it('не PDF по содержимому — «Только PDF»: загрузка и файл убраны; больше 20 МБ — отказ до ссылки', async () => {
       const { draft, ids, read } = await leadDocDraft(app, storage, [
         { kind: 'gns_cert', content: 'MZ это не PDF', name: 'scan.pdf' },
       ]);
       expect(read.status).toBe(400);
       expect(await failure(read)).toMatchObject({ code: 'lead_doc_pdf', message: 'Только PDF' });
       expect(storage.files.has(`leads/upload/${ids[0]}`)).toBe(false);
+      // Строка остаётся отметкой `gone` — задача по сроку удалит и файл, положенный по старой ссылке.
       expect(
         await f.t.admin.db
-          .select()
+          .select({ state: schema.platformLeadUploads.state, doc: schema.platformLeadUploads.doc })
           .from(schema.platformLeadUploads)
           .where(eq(schema.platformLeadUploads.draftId, draft)),
-      ).toEqual([]);
+      ).toEqual([{ state: 'gone', doc: null }]);
       const big = await guest(
         '/api/leads/uploads',
         { draft: null, kind: 'gns_cert', name: 'big.pdf', size: LEAD_DOC_MAX_BYTES + 1 },
@@ -641,6 +642,31 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       expect(c.approve?.refusal).toBe('lead_docs_gone');
       expect(c.history.some((h) => h.kind === 'docs')).toBe(true);
       expect(await purgeLeadDocs(ctx)).toBe(0);
+    });
+
+    it('файл, положенный по старой ссылке после замены, «Только PDF» и отправки заявки, удаляется через сутки (п. И-9)', async () => {
+      const bytes = new TextEncoder().encode('%PDF-late');
+      const first = await leadDocDraft(app, storage, [{ kind: 'gns_cert', content: '%PDF-scan' }]);
+      await leadDocDraft(app, storage, [{ kind: 'gns_cert', content: '%PDF-scan' }], first.draft);
+      const notPdf = await leadDocDraft(app, storage, [{ kind: 'gns_cert', content: 'MZ не PDF' }]);
+      const lead = await ipLead();
+      const [doc] = await leadDocs(lead.id);
+      const late = [first.ids[0]!, notPdf.ids[0]!, doc!.id].map((id) => `leads/upload/${id}`);
+      for (const key of late) {
+        expect(storage.files.has(key)).toBe(false);
+        await storage.put(key, bytes, { contentType: 'application/pdf' });
+      }
+      const now = f.deps.clock.now().getTime();
+      const after = (hours: number) => ({
+        ...f.deps,
+        clock: { now: () => new Date(now + hours * 3_600_000) },
+      });
+      // Пока ссылка на загрузку могла действовать (до срока черновика), файлы не трогаются.
+      await purgeLeadDocs(after(LEAD_DRAFT_HOURS - 1));
+      expect(late.filter((key) => storage.files.has(key))).toEqual(late);
+      await purgeLeadDocs(after(LEAD_DRAFT_HOURS + 1));
+      expect(late.filter((key) => storage.files.has(key))).toEqual([]);
+      expect(storage.files.has(doc!.storageKey)).toBe(true);
     });
   });
 });

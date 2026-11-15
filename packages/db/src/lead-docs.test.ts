@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { UI_TEXTS, type ListQuery } from '@buhuchet/domain';
+import {
+  LEAD_DOCS_BY_FORM,
+  LEAD_DOCS_KEEP_DAYS,
+  LEAD_DOCS_KEEP_REJECTED_DAYS,
+  LEAD_DRAFT_HOURS,
+  UI_TEXTS,
+  type ListQuery,
+  type OrgLegalForm,
+} from '@buhuchet/domain';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
@@ -103,14 +111,14 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
     return { draft: draft!, ids };
   }
 
-  /** Новая заявка ИП с документами черновика; ответ — номер заявки и документов. */
-  async function docsLead(now: Date, inn = '21503198700123') {
-    const { draft, ids } = await readyDraft(['gns_cert'], now);
+  /** Новая заявка с документами черновика (по умолчанию ИП); ответ — номер заявки и документов. */
+  async function docsLead(now: Date, inn = '21503198700123', form: OrgLegalForm = 'ip') {
+    const { draft, ids } = await readyDraft([...LEAD_DOCS_BY_FORM[form]], now);
     const saved = await submitLead(db.app.db, lead(now), (tx, r) =>
       submitLeadDocs(tx, {
         leadId: r.leadId!,
         now,
-        form: 'ip',
+        form,
         inn,
         okpo: '12345678',
         address: 'г. Бишкек, ул. Токтогула, 1',
@@ -119,8 +127,8 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
       }),
     );
     expect(saved.outcome).toBe('created');
-    expect(saved.extra).toEqual({ missing: false, docs: ids, dropped: [] });
-    return { leadId: saved.leadId!, docs: ids };
+    expect(saved.extra).toEqual({ missing: false, docs: expect.arrayContaining(ids), dropped: [] });
+    return { leadId: saved.leadId!, docs: ids, draft };
   }
 
   beforeAll(async () => {
@@ -144,7 +152,7 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
   });
 
   it('черновик и документы заявки роль приложения не читает и не меняет напрямую', async () => {
-    await expect(db.app.db.execute(sql`select * from platform_lead_uploads`)).rejects.toThrow();
+    await expect(db.app.db.execute(sql`select * from platform_lead_uploads`)).rejects.toEqual(denied);
     await expect(db.app.db.select().from(platformLeadDocs)).rejects.toEqual(denied);
   });
 
@@ -305,7 +313,7 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
       head: null,
       docsState: 'pending',
       docsCount: 2,
-      docsPurgeAt: at(30 * 24),
+      docsPurgeAt: at(LEAD_DOCS_KEEP_DAYS * 24),
       tgLinkedAt: null,
     });
     const docs = await asAdmin((tx) => adminLeadDocs(tx, saved.leadId!));
@@ -346,6 +354,7 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
   });
 
   it('«Отказ» — срок файлов 7 дней с отказа, снят «Отказ» — снова 30 дней с отправки', async () => {
+    expect([LEAD_DOCS_KEEP_REJECTED_DAYS, LEAD_DOCS_KEEP_DAYS]).toEqual([7, 30]);
     const { leadId } = await docsLead(at(4), '21503198700992');
     const v1 = await asAdmin((tx) =>
       setLeadStatus(tx, {
@@ -359,7 +368,7 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
     );
     expect(v1).not.toBeNull();
     expect((await asAdmin((tx) => adminLeadById(tx, leadId)))!.docsPurgeAt).toEqual(
-      at(10 + 7 * 24),
+      at(10 + LEAD_DOCS_KEEP_REJECTED_DAYS * 24),
     );
     await asAdmin((tx) =>
       setLeadStatus(tx, {
@@ -373,7 +382,7 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
       }),
     );
     expect((await asAdmin((tx) => adminLeadById(tx, leadId)))!.docsPurgeAt).toEqual(
-      at(4 + 30 * 24),
+      at(4 + LEAD_DOCS_KEEP_DAYS * 24),
     );
   });
 
@@ -437,6 +446,63 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
     expect(gone.rows.map((x) => x.id)).toContain(leadId);
   });
 
+  it('убранная загрузка (замена, «Только PDF», отправка, отброшенный черновик) удаляется по сроку вместе с файлом, положенным по старой ссылке', async () => {
+    const base = at(40);
+    const start = async (draft: string | null, kind: 'gns_cert' | 'extract') => {
+      const id = randomUUID();
+      const started = await startLeadUpload(db.app.db, {
+        draft,
+        id,
+        kind,
+        name: 'f.pdf',
+        size: 10,
+        now: base,
+      });
+      return { ...started, id };
+    };
+    // Замена: прежняя загрузка того же вида — `gone`, её больше не видно и не прочитать.
+    const { draft, id: a } = await start(null, 'gns_cert');
+    expect(await start(draft, 'gns_cert')).toMatchObject({ draft, replaced: a });
+    expect(await leadUploadOf(db.app.db, a, draft)).toBeNull();
+    expect(await markLeadUploadRead(db.app.db, a, draft, null)).toBe(false);
+    expect(await dropLeadUpload(db.app.db, a, draft)).toBe(false);
+    // «Только PDF»: убранная загрузка не возвращается и не мешает новой того же вида.
+    const { id: cId, draft: same } = await start(draft, 'extract');
+    expect(same).toBe(draft);
+    expect(await dropLeadUpload(db.app.db, cId, draft)).toBe(true);
+    expect(await dropLeadUpload(db.app.db, cId, draft)).toBe(false);
+    expect((await start(draft, 'extract')).replaced).toBeNull();
+    expect((await leadDraftDocs(db.app.db, draft, base)).map((d) => d.id)).not.toContain(a);
+    // Черновик только из убранных загрузок — не живой: номер новый.
+    const { id: loneId, ...lone } = await start(null, 'gns_cert');
+    expect(await dropLeadUpload(db.app.db, loneId, lone.draft)).toBe(true);
+    expect((await start(lone.draft, 'gns_cert')).draft).not.toBe(lone.draft);
+    // Отброшенный черновик: повторно номера не отдаются.
+    const thrown = await start(null, 'gns_cert');
+    const thrownIds = await discardLeadDraft(db.app.db, thrown.draft);
+    expect(thrownIds).toHaveLength(1);
+    expect(await discardLeadDraft(db.app.db, thrown.draft)).toEqual([]);
+    // Отправленная заявка: загрузки черновика — `gone`.
+    const sent = await docsLead(base, '21503198700996');
+    expect(await leadDraftDocs(db.app.db, sent.draft, base)).toEqual([]);
+
+    const gone = [a, cId, loneId, ...thrownIds, ...sent.docs];
+    const keys = (rows: Awaited<ReturnType<typeof leadPurgeDue>>) =>
+      rows.filter((x) => x.kind === 'upload' && gone.includes(x.id)).map((x) => x.storageKey);
+    // Раньше срока черновика их не удаляют: ссылка на загрузку могла ещё действовать.
+    expect(keys(await leadPurgeDue(db.app.db, at(40 + LEAD_DRAFT_HOURS - 1), 1000))).toEqual([]);
+    const later = at(40 + LEAD_DRAFT_HOURS + 1);
+    const due = await leadPurgeDue(db.app.db, later, 1000);
+    expect(keys(due).sort()).toEqual(gone.map((id) => `leads/upload/${id}`).sort());
+    await leadPurgeDone(
+      db.app.db,
+      later,
+      due.filter((x) => x.kind === 'upload').map((x) => x.id),
+      [],
+    );
+    expect(keys(await leadPurgeDue(db.app.db, later, 1000))).toEqual([]);
+  });
+
   it('«Одобрить»: организация из заявки, владелец без пароля, документы — файлы организации', async () => {
     const { leadId, docs } = await docsLead(at(7), '21503198700994');
     await leadDocsReady(db.app.db, leadId, docs);
@@ -498,7 +564,7 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
       docsPurgeAt: null,
     });
     expect(await leadPurgeDue(db.app.db, at(24 * 400), 1000)).not.toContainEqual(
-      expect.objectContaining({ id: docs[0] }),
+      expect.objectContaining({ kind: 'doc', id: docs[0] }),
     );
     // Файл — в организации: владелец его видит, чужая организация — нет.
     const own = await withOrgContext(db.app.db, { orgId, userId: created.ownerUserId }, (tx) =>
@@ -536,6 +602,33 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
       }),
     ).rejects.toThrow();
     expect((await asAdmin((tx) => adminLeadById(tx, leadId)))!.createdOrgId).toBeNull();
+    // Один документ дважды вместо двух разных — тоже «не все».
+    const two = await docsLead(at(9), '01811201810995', 'osoo');
+    await leadDocsReady(db.app.db, two.leadId, two.docs);
+    await expect(
+      createOrganization(db.app.db, {
+        name: 'ОсОО «Дубль»',
+        inn: '01811201810995',
+        slug: 'docs-twice',
+        owner: { fullName: 'Дублев Дубль', login: 'docs.twice', passwordHash: 'h' },
+        createdBy: adminId,
+        lead: { id: two.leadId, now: at(10) },
+        within: async (tx, made) => {
+          await leadDocsToOrganization(tx, {
+            leadId: two.leadId,
+            orgId: made.orgId,
+            ownerUserId: made.ownerUserId,
+            files: [
+              { doc: two.docs[0]!, file: randomUUID() },
+              { doc: two.docs[0]!, file: randomUUID() },
+            ],
+          });
+        },
+      }),
+    ).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: expect.stringMatching(/не все документы/) }),
+    });
+    expect((await asAdmin((tx) => adminLeadById(tx, two.leadId)))!.createdOrgId).toBeNull();
     // Владелец чужой организации документов заявки не переносит.
     await expect(
       withOrgContext(db.app.db, { orgId: org.orgId, userId: org.ownerUserId }, (tx) =>

@@ -3,6 +3,9 @@
 -- (документы — в файлы организации), удаление файлов заявки по сроку, «ИНН и форма» организации только
 -- у администратора платформы; ниже — ручная часть.
 SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+-- Заявки — раньше истории заявок: так же их берут отправка заявки и смена статуса (иначе взаимная
+-- блокировка с отправкой заявки во время выпуска).
+LOCK TABLE public.platform_leads IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint
 CREATE TABLE "platform_lead_uploads" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"draft_id" uuid NOT NULL,
@@ -12,16 +15,16 @@ CREATE TABLE "platform_lead_uploads" (
 	"state" text DEFAULT 'pending' NOT NULL,
 	"doc" jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "platform_lead_uploads_kind_key" UNIQUE("draft_id","kind"),
 	CONSTRAINT "platform_lead_uploads_kind_check" CHECK ("platform_lead_uploads"."kind" in ('gns_cert', 'extract', 'minjust_cert')),
 	CONSTRAINT "platform_lead_uploads_name_check" CHECK (char_length("platform_lead_uploads"."name") between 1 and 255),
 	CONSTRAINT "platform_lead_uploads_size_check" CHECK ("platform_lead_uploads"."size_bytes" between 1 and 20971520),
-	CONSTRAINT "platform_lead_uploads_state_check" CHECK ("platform_lead_uploads"."state" in ('pending', 'ready')),
+	CONSTRAINT "platform_lead_uploads_state_check" CHECK ("platform_lead_uploads"."state" in ('pending', 'ready', 'gone')),
 	CONSTRAINT "platform_lead_uploads_doc_check" CHECK ("platform_lead_uploads"."doc" is null or ("platform_lead_uploads"."state" = 'ready' and pg_column_size("platform_lead_uploads"."doc") <= 65536))
 );
 --> statement-breakpoint
 ALTER TABLE "platform_lead_uploads" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "platform_lead_events" DROP CONSTRAINT "platform_lead_events_kind_check";--> statement-breakpoint
+CREATE UNIQUE INDEX "platform_lead_uploads_kind_key" ON "platform_lead_uploads" USING btree ("draft_id","kind") WHERE "platform_lead_uploads"."state" <> 'gone';--> statement-breakpoint
 CREATE INDEX "platform_lead_uploads_created_idx" ON "platform_lead_uploads" USING btree ("created_at");--> statement-breakpoint
 ALTER TABLE "platform_lead_events" ADD CONSTRAINT "platform_lead_events_kind_check" CHECK ("platform_lead_events"."kind" in ('created', 'repeat', 'status', 'rollback', 'note', 'org', 'docs'));
 --> statement-breakpoint
@@ -30,6 +33,8 @@ REVOKE ALL ON TABLE public.platform_lead_uploads FROM buhuchet_app;--> statement
 -- Начать загрузку документа формы: строка черновика с видом, именем и размером. Черновик — живой (есть
 -- загрузка моложе p_draft_hours часов), иначе — новый номер: номер чужого старого черновика ничего не
 -- даёт. Новый файл того же вида заменяет прежний — его номер возвращается, чтобы API удалило файл.
+-- Убранная загрузка (`gone`) не удаляется: по её ссылке файл ещё могут положить, а задача по расписанию
+-- через p_draft_hours часов удаляет по строке и такой файл (app.lead_purge_due).
 CREATE FUNCTION app.lead_upload_start(
   p_draft uuid, p_id uuid, p_kind text, p_name text, p_size bigint, p_now timestamptz,
   p_draft_hours integer
@@ -46,7 +51,8 @@ CREATE FUNCTION app.lead_upload_start(
       PERFORM pg_advisory_xact_lock(hashtextextended('lead_draft:' || v_draft::text, 0));
       IF NOT EXISTS (
         SELECT 1 FROM public.platform_lead_uploads u
-        WHERE u.draft_id = v_draft AND u.created_at > p_now - make_interval(hours => p_draft_hours)
+        WHERE u.draft_id = v_draft AND u.state <> 'gone'
+          AND u.created_at > p_now - make_interval(hours => p_draft_hours)
       ) THEN
         v_draft := NULL;
       END IF;
@@ -54,8 +60,8 @@ CREATE FUNCTION app.lead_upload_start(
     IF v_draft IS NULL THEN
       v_draft := gen_random_uuid();
     END IF;
-    DELETE FROM public.platform_lead_uploads u
-      WHERE u.draft_id = v_draft AND u.kind = p_kind
+    UPDATE public.platform_lead_uploads u SET state = 'gone', doc = NULL
+      WHERE u.draft_id = v_draft AND u.kind = p_kind AND u.state <> 'gone'
       RETURNING u.id INTO v_old;
     INSERT INTO public.platform_lead_uploads (id, draft_id, kind, name, size_bytes, created_at)
       VALUES (p_id, v_draft, p_kind, p_name, p_size, p_now);
@@ -70,7 +76,7 @@ CREATE FUNCTION app.lead_upload_of(p_id uuid, p_draft uuid)
   AS $$
     SELECT u.kind, u.name, u.size_bytes, u.state, u.created_at
     FROM public.platform_lead_uploads u
-    WHERE u.id = p_id AND u.draft_id = p_draft
+    WHERE u.id = p_id AND u.draft_id = p_draft AND u.state <> 'gone'
   $$;--> statement-breakpoint
 -- Файл проверен (PDF нужного размера) и разобран: найденное — в черновик.
 CREATE FUNCTION app.lead_upload_read(p_id uuid, p_draft uuid, p_doc jsonb)
@@ -80,19 +86,20 @@ CREATE FUNCTION app.lead_upload_read(p_id uuid, p_draft uuid, p_doc jsonb)
   AS $$
     WITH x AS (
       UPDATE public.platform_lead_uploads u SET state = 'ready', doc = p_doc
-      WHERE u.id = p_id AND u.draft_id = p_draft
+      WHERE u.id = p_id AND u.draft_id = p_draft AND u.state <> 'gone'
       RETURNING 1
     )
     SELECT count(*) > 0 FROM x
   $$;--> statement-breakpoint
--- Файл не PDF или не загрузился: строка убирается (файл в хранилище удаляет API).
+-- Файл не PDF или больше 20 МБ: загрузка убирается (`gone`; файл в хранилище удаляет API).
 CREATE FUNCTION app.lead_upload_drop(p_id uuid, p_draft uuid)
   RETURNS boolean
   LANGUAGE sql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
     WITH x AS (
-      DELETE FROM public.platform_lead_uploads u WHERE u.id = p_id AND u.draft_id = p_draft
+      UPDATE public.platform_lead_uploads u SET state = 'gone', doc = NULL
+      WHERE u.id = p_id AND u.draft_id = p_draft AND u.state <> 'gone'
       RETURNING 1
     )
     SELECT count(*) > 0 FROM x
@@ -105,24 +112,27 @@ CREATE FUNCTION app.lead_upload_docs(p_draft uuid, p_now timestamptz, p_draft_ho
   AS $$
     SELECT u.id, u.kind, u.name, u.size_bytes, u.state, u.doc
     FROM public.platform_lead_uploads u
-    WHERE u.draft_id = p_draft AND u.created_at > p_now - make_interval(hours => p_draft_hours)
+    WHERE u.draft_id = p_draft AND u.state <> 'gone'
+      AND u.created_at > p_now - make_interval(hours => p_draft_hours)
     ORDER BY u.created_at, u.id
   $$;--> statement-breakpoint
--- Черновик не стал документами заявки (повтор с того же телефона, ловушка): строки убираются, номера —
--- чтобы API удалило файлы.
+-- Черновик не стал документами заявки (повтор с того же телефона, ловушка): загрузки убираются
+-- (`gone`), номера — чтобы API удалило файлы.
 CREATE FUNCTION app.lead_upload_discard(p_draft uuid)
   RETURNS SETOF uuid
   LANGUAGE sql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
-    DELETE FROM public.platform_lead_uploads u WHERE u.draft_id = p_draft RETURNING u.id
+    UPDATE public.platform_lead_uploads u SET state = 'gone', doc = NULL
+    WHERE u.draft_id = p_draft AND u.state <> 'gone'
+    RETURNING u.id
   $$;--> statement-breakpoint
 -- Новая заявка с документами: вызывается сразу после app.lead_submit в той же транзакции и только для
 -- заявки, созданной в этот же момент p_now (как app.lead_notify). Все документы формы p_need должны быть
 -- в черновике проверенными — иначе 'missing' и ничего не меняется (API откатывает заявку). Заявка
 -- получает форму, ИНН, ОКПО, адрес и руководителя, документы — строки `pending` под ключами заявки (файлы
--- копирует API после транзакции), срок хранения — p_keep_days дней; черновик убирается: 'doc' —
--- документ заявки, 'drop' — лишний файл черновика (другой формы).
+-- копирует API после транзакции), срок хранения — p_keep_days дней; загрузки черновика убираются
+-- (`gone`): 'doc' — документ заявки, 'drop' — лишний файл черновика (другой формы).
 CREATE FUNCTION app.lead_submit_docs(
   p_lead uuid, p_now timestamptz, p_form text, p_inn text, p_okpo text, p_address text,
   p_head text, p_draft uuid, p_need text[], p_keep_days integer, p_draft_hours integer
@@ -166,12 +176,16 @@ CREATE FUNCTION app.lead_submit_docs(
       FROM public.platform_lead_uploads u
       WHERE u.draft_id = p_draft AND u.state = 'ready' AND u.kind = ANY (p_need);
     RETURN QUERY
-      WITH gone AS (
-        DELETE FROM public.platform_lead_uploads u WHERE u.draft_id = p_draft
-        RETURNING u.id, u.kind, u.state
+      WITH cur AS (
+        SELECT u.id, u.kind, u.state FROM public.platform_lead_uploads u
+        WHERE u.draft_id = p_draft AND u.state <> 'gone'
+      ), gone AS (
+        UPDATE public.platform_lead_uploads u SET state = 'gone', doc = NULL
+        FROM cur WHERE u.id = cur.id
+        RETURNING u.id
       )
-      SELECT CASE WHEN g.state = 'ready' AND g.kind = ANY (p_need) THEN 'doc' ELSE 'drop' END, g.id
-      FROM gone g;
+      SELECT CASE WHEN c.state = 'ready' AND c.kind = ANY (p_need) THEN 'doc' ELSE 'drop' END, c.id
+      FROM cur c JOIN gone g ON g.id = c.id;
   END
   $$;--> statement-breakpoint
 -- Файлы документов скопированы под ключи заявки и проверены: документы — `ready`, у заявки — `ready`,
@@ -219,7 +233,8 @@ CREATE TRIGGER platform_leads_docs_keep
   BEFORE UPDATE OF status ON public.platform_leads
   FOR EACH ROW
   EXECUTE FUNCTION app.lead_docs_keep();--> statement-breakpoint
--- Что пора удалить (задача по расписанию): черновики старше p_draft_hours часов и документы заявок,
+-- Что пора удалить (задача по расписанию): загрузки черновиков старше p_draft_hours часов, в том числе
+-- убранные (`gone`: по их ссылке файл могли положить и после удаления), и документы заявок,
 -- у которых наступил срок хранения и по которым не создана организация. Ключи хранилища — чтобы задача
 -- сначала удалила файлы, потом строки (сбой посередине — строки останутся и удалятся в следующий раз).
 CREATE FUNCTION app.lead_purge_due(p_now timestamptz, p_draft_hours integer, p_limit integer)
@@ -313,7 +328,9 @@ CREATE FUNCTION app.lead_docs_to_org(p_lead uuid, p_org uuid, p_owner uuid, p_fi
       JOIN public.platform_lead_docs d ON d.id = x.doc AND d.lead_id = p_lead AND d.state = 'ready';
     GET DIAGNOSTICS n = ROW_COUNT;
     SELECT count(*) INTO v_all FROM public.platform_lead_docs d WHERE d.lead_id = p_lead;
-    IF n <> v_all OR n <> jsonb_array_length(p_files) THEN
+    IF n <> v_all OR n <> jsonb_array_length(p_files)
+      OR (SELECT count(DISTINCT x.doc) FROM jsonb_to_recordset(p_files) AS x(doc uuid, file uuid))
+        <> v_all THEN
       RAISE EXCEPTION 'lead_docs_to_org: перенесены не все документы заявки'
         USING ERRCODE = 'check_violation';
     END IF;

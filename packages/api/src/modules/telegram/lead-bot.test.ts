@@ -4,6 +4,7 @@ import {
   type FakeTelegram,
   type FixedClock,
 } from '@buhuchet/adapters';
+import { createFakeDocumentReader } from '@buhuchet/adapters/documents';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import {
@@ -21,6 +22,7 @@ import {
   apiRequest,
   createStaffFixture,
   createTestDeps,
+  leadDocDraft,
   linkTelegram,
   sendToBot,
   signIn,
@@ -100,10 +102,27 @@ describe.skipIf(!databaseAvailable())(
         )
         .then((rows) => rows.filter((r) => r.dedupeKey?.startsWith(`lead:${leadId}:`)));
 
+    /**
+     * Поля формы с документами (доработки 14.11.2026, блок 1): форма, ИНН и черновик со свидетельством
+     * ИП (документ «не прочитался» — поля заполнены вручную).
+     */
+    const docsFields = async (draft?: string) => ({
+      form: 'ip',
+      inn: '21811201810001',
+      okpo: '',
+      address: '',
+      head: '',
+      draft:
+        draft ??
+        (await leadDocDraft(app, deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }]))
+          .draft,
+    });
+
     /** Заявка с сайта и отправка очереди: что пришло каждому администратору. */
     const submit = async (over: Record<string, unknown> = {}) => {
       n += 1;
       const phone = `+9967001${String(10000 + n)}`;
+      const docs = await docsFields();
       const res = await app.request('/api/leads', {
         method: 'POST',
         headers: {
@@ -120,10 +139,11 @@ describe.skipIf(!databaseAvailable())(
           note: 'Перезвоните после обеда',
           consent: true,
           website: '',
+          ...docs,
           ...over,
         }),
       });
-      expect(res.status).toBe(200);
+      expect(res.status, await res.clone().text()).toBe(200);
       await telegramSendJob(noPause).run(deps, clock.now());
       const [lead] = await f.t.admin.db
         .select()
@@ -144,6 +164,7 @@ describe.skipIf(!databaseAvailable())(
         telegram: tg,
         clock,
         config: { ...base, APP_BASE_URL: SITE },
+        documents: createFakeDocumentReader({}),
       });
       app = createApp(deps);
       const [admin] = await f.t.admin.db
@@ -301,6 +322,15 @@ describe.skipIf(!databaseAvailable())(
 
     it('пока бот ждал причину, заявку взяли в работу на сайте и подключили: ответ — «Кнопка устарела»', async () => {
       const { lead, admin } = await submit();
+      // Заявка без документов (отправлена до доработок 14.11.2026): «Подключена» ставится вручную —
+      // у заявки с документами её ставит только «Одобрить».
+      await f.t.admin.db
+        .delete(schema.platformLeadDocs)
+        .where(eq(schema.platformLeadDocs.leadId, lead.id));
+      await f.t.admin.db
+        .update(schema.platformLeads)
+        .set({ legalForm: null, inn: null, docsState: null, docsPurgeAt: null })
+        .where(eq(schema.platformLeads.id, lead.id));
       await press(CHAT.admin, admin.id, no(lead.id));
       const ask = last(CHAT.admin);
       const cookie = await signIn(app, 'platform-admin', TEST_PASSWORD);
@@ -312,7 +342,7 @@ describe.skipIf(!databaseAvailable())(
           to,
           version,
         });
-        expect(res.status).toBe(200);
+        expect(res.status, await res.clone().text()).toBe(200);
       }
       expect((await say(CHAT.admin, 'Дорого', ask.id)).text).toBe(TPL.tgActStale);
       expect(await leadOf(lead.id)).toMatchObject({ status: 'connected', version: 3 });
@@ -420,6 +450,7 @@ describe.skipIf(!databaseAvailable())(
           note: '',
           consent: true,
           website: 'http://spam.example',
+          ...(await docsFields()),
         }),
       });
       expect(trap.status).toBe(200);
