@@ -41,13 +41,28 @@ async function cleanup(api: APIRequestContext, origin: string, dict: string, nam
   }
 }
 
-/** Строка списка по коду; на телефоне и ПК — `[data-id]`. */
-async function row(page: Page, isMobile: boolean, text: string, code: string) {
+/**
+ * Строка списка по коду; на телефоне и ПК — `[data-id]`. `list` — адрес списка вкладки: тогда строка
+ * берётся после ответа поиска с этим текстом. Без него строку из прежнего ответа (прежний поиск — начало
+ * нового, или список без поиска) можно нажать раньше, чем придёт ответ поиска (поиск уходит через
+ * 300 мс) — меню строки открывается по прежней записи (docs/typical-mistakes.md № 27).
+ */
+async function row(page: Page, isMobile: boolean, text: string, code: string, list?: string) {
+  const searched = list
+    ? page.waitForResponse((r) => {
+        const url = new URL(r.url());
+        return url.pathname === list && url.searchParams.get('q') === text;
+      })
+    : null;
   await search(page, isMobile, text);
+  if (searched) expect((await searched).status()).toBe(200);
   const found = page.locator(`[data-grid] [data-id="${code}"]`);
   await expect(found).toHaveCount(1);
   return found;
 }
+
+/** Список вкладки «Органы». */
+const ORGANS_LIST = '/api/admin/platform-dicts/organs';
 
 /** Пункт меню «Действия» строки. */
 async function rowAction(page: Page, found: ReturnType<Page['locator']>, name: string) {
@@ -167,7 +182,7 @@ test.describe('Админка: справочники платформы', () =>
       expect(created.n).toBe(before.length + 1);
       // Сайт без протокола сохраняется с https:// — у организации он открывается ссылкой.
       expect(created.data.site).toBe('https://mineconom.gov.kg');
-      let found = await row(page, isMobile, name, created.code);
+      let found = await row(page, isMobile, name, created.code, ORGANS_LIST);
       // «№» — первый столбец таблицы (вид закреплён: «Таблица» и на телефоне, как в прототипе);
       // перед ним — галочка массовых действий, у ячеек данных есть title.
       const n = found.locator('td[title]').first();
@@ -193,7 +208,7 @@ test.describe('Админка: справочники платформы', () =>
       await expect(edit).toBeHidden();
       await expect(history).toContainText(`Органы: «${name}» → «${name} (ред.)»`);
 
-      found = await row(page, isMobile, `${name} (ред.)`, created.code);
+      found = await row(page, isMobile, `${name} (ред.)`, created.code, ORGANS_LIST);
       await (await rowAction(page, found, 'Отключить')).click();
       await expect(toast('Значение отключено')).toBeVisible();
       await expect(found).toContainText('Отключено');
