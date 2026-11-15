@@ -20,16 +20,8 @@ import {
   type PageNavItem,
   type PageTipId,
 } from '@buhuchet/domain';
-import type { PagePay, PublicPageBody } from '@buhuchet/shared';
-import {
-  buttonClass,
-  Icon,
-  inputClass,
-  KeyValues,
-  StatusPill,
-  useToast,
-  type IconName,
-} from '@buhuchet/ui';
+import type { PublicPageBody } from '@buhuchet/shared';
+import { buttonClass, Icon, inputClass, KeyValues, StatusPill, type IconName } from '@buhuchet/ui';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { statusPillView } from '../status/status-view';
@@ -49,6 +41,7 @@ import {
 } from './page-parts';
 import { PageSentBlock } from '../files/page-sent';
 import { usePageFilesSection, usePageFileViewer, type OpenPageFile } from './page-files';
+import { MonthPayPill, PayCard, usePagePaid } from './page-pay';
 import { REPORTS_VIEW, useReportsSection, type ReportsView } from './page-reports';
 import { PageTelegramBody, pageTelegramSum, type PageAddress } from './page-telegram';
 
@@ -107,7 +100,6 @@ export function OpenPage({ page, address, fileHref }: OpenPageProps) {
 function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   const t = useT();
   const tx = usePageText();
-  const toast = useToast();
   const { org, contractor, today } = page;
   const year = today.slice(0, 4);
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
@@ -122,7 +114,8 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   useEffect(() => () => clearTimeout(flashTimer.current), []);
   // Окно просмотра файлов — одно на страницу: «Файлы» и файлы периодов «Отчётов».
   const viewer = usePageFileViewer(fileHref);
-  const reports = useReportsSectionSafe(page, view, setView, viewer.openFile);
+  const paidDialogs = usePagePaid(page, address);
+  const reports = useReportsSectionSafe(page, view, setView, viewer.openFile, paidDialogs.send);
   const filesSection = usePageFilesSection(page.files, viewer.openFile);
 
   const open = (k: string) => setUnfolded((s) => new Set([...s, k]));
@@ -146,16 +139,6 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
     clearTimeout(flashTimer.current);
     setFlash(k);
     flashTimer.current = setTimeout(() => setFlash(null), 1400);
-  };
-  // ОТКЛОНЕНИЕ: docs/deviations.md#Е-6
-  const copy = async (value: string, done: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      // Буфер обмена недоступен: номер виден крупно, его можно выделить.
-      return;
-    }
-    toast(done, { icon: 'copy' });
   };
   const sec = (
     id: SecId,
@@ -392,8 +375,32 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
   // «Как оплатить» — налоги и обслуживание.
   if (page.pay) {
     const P: ReactNode[] = [];
-    if (page.pay.tax) P.push(payCard('tax', t('pub.pay.tax'), 'wallet', page.pay.tax));
-    if (page.pay.fee) P.push(payCard('fee', t('pub.pay.fee'), 'coins', page.pay.fee));
+    // «Я оплатил» — пока бухгалтер принимает файлы со страницы: чек — обязательная часть сообщения.
+    const onPaid = paidDialogs.paid;
+    if (page.pay.tax) {
+      P.push(
+        <PayCard
+          key="tax"
+          k="tax"
+          title={t('pub.pay.tax')}
+          icon="wallet"
+          a={page.pay.tax}
+          {...(onPaid ? { paid: () => onPaid('tax') } : {})}
+        />,
+      );
+    }
+    if (page.pay.fee) {
+      P.push(
+        <PayCard
+          key="fee"
+          k="fee"
+          title={t('pub.pay.fee')}
+          icon="coins"
+          a={page.pay.fee}
+          {...(onPaid ? { paid: () => onPaid('fee') } : {})}
+        />,
+      );
+    }
     if (P.length) {
       H.pay = sec(
         'pay',
@@ -406,77 +413,6 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
       );
     }
   }
-  function payCard(k: 'tax' | 'fee', title: string, icon: IconName, a: PagePay) {
-    const phone = a.kind === 'phone';
-    const btn = (value: string, done: string, label: string) => (
-      <button
-        type="button"
-        aria-label={label}
-        onClick={() => void copy(value, done)}
-        className={buttonClass('default', 'sm')}
-      >
-        <Icon name="copy" size="sm" />
-        {t('pub.pay.copy')}
-      </button>
-    );
-    const what = tx(`pay.${k}`);
-    return (
-      <div
-        key={k}
-        data-pay={k}
-        className="flex flex-col gap-2 rounded-xl border border-line bg-pane-alt px-3.5 py-3"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <Icon name={icon} className="text-accent" />
-          <b>{title}</b>
-          <span className="ml-auto text-[11.5px] text-faint">{t(`pub.pay.kind.${a.kind}`)}</span>
-        </div>
-        {phone ? null : <span className="font-semibold">{a.bank}</span>}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span
-            data-pay-number=""
-            className="font-mono text-[22px] font-bold tracking-[.02em] [overflow-wrap:anywhere] max-md:text-[20px]"
-          >
-            {a.number}
-          </span>
-          {btn(
-            a.copy,
-            phone ? t('pub.pay.copied_phone') : t('pub.pay.copied_account'),
-            phone ? t('pub.pay.copy_phone') : t('pub.pay.copy_account'),
-          )}
-        </div>
-        {phone ? (
-          <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
-            <span className="text-[11.5px] text-faint">{t('pub.pay.from')}</span>
-            {a.banks.map((b) => (
-              <span
-                key={b}
-                className="rounded-full bg-label-bg px-2 py-px text-[11.5px] font-semibold text-label"
-              >
-                {b}
-              </span>
-            ))}
-            <PageTip label={t('pub.pay.from')} text={tx('pay.banks')} />
-          </div>
-        ) : null}
-        {a.bik ? (
-          <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
-            <span className="text-[11.5px] text-faint">{t('pub.pay.bik')}</span>
-            <span className="font-mono">{a.bik}</span>
-            {btn(a.bik, t('pub.pay.copied_bik'), t('pub.pay.copy_bik'))}
-          </div>
-        ) : null}
-        {a.holder ? (
-          <div className="flex flex-wrap items-center gap-1.5 text-[13px]">
-            <span className="text-[11.5px] text-faint">{t('pub.pay.holder')}</span>
-            <b>{a.holder}</b>
-          </div>
-        ) : null}
-        {what ? <p className="m-0 text-[13px] leading-[1.45] text-muted">{what}</p> : null}
-      </div>
-    );
-  }
-
   // «Ваш бухгалтер» — всегда.
   const acc = page.accountant;
   const tel = (phone: { text: string; digits: string } | null) =>
@@ -680,17 +616,22 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
             more={t('pub.more', { n: F.months.length - 5 })}
           >
             {F.months.map((m) => {
-              const pill = statusPillView(t, 'payment', m.status);
+              const pill = m.status === 'wait' ? null : statusPillView(t, 'payment', m.status);
               return (
                 <PageRow key={m.month}>
                   <div className={ROW1}>
                     <span>{monthLabel(m.month)}</span>
                     <span className="grow" />
-                    <TipPill
-                      pill={<StatusPill {...pill} size="sm" />}
-                      label={pill.label}
-                      text={tx(`fee.${m.status}`)}
-                    />
+                    {/* Клиент сообщил об оплате месяца, деньги ещё не приняты (прототип v116). */}
+                    {m.status === 'wait' || !pill ? (
+                      <MonthPayPill status="wait" />
+                    ) : (
+                      <TipPill
+                        pill={<StatusPill {...pill} size="sm" />}
+                        label={pill.label}
+                        text={tx(`fee.${m.status}`)}
+                      />
+                    )}
                   </div>
                   <div className={ROW2}>
                     <span>
@@ -1007,6 +948,7 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
         </nav>
       ) : null}
       {viewer.viewer}
+      {paidDialogs.dialogs}
     </div>
   );
 }
@@ -1017,14 +959,16 @@ function useReportsSectionSafe(
   view: ReportsView,
   setView: (v: ReportsView) => void,
   openFile: OpenPageFile,
+  send: (month: string) => void,
 ) {
   const taxpay = page.reports?.items.some((r) => r.payStatus !== null) ?? false;
   return useReportsSection(
-    page.reports ?? { types: [], items: [] },
+    page.reports ?? { types: [], items: [], months: null, send: false },
     page.today,
     taxpay,
     view,
     setView,
     openFile,
+    send,
   );
 }

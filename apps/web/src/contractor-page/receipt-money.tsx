@@ -19,9 +19,10 @@ type TaxSlot = { contractorId: string; preset: ReceiptPreset };
 type FeeSlot = { contractorId: string; preset: FeePaymentPreset };
 
 /**
- * «Принять» у чека из Telegram (доработки 14.11.2026, блок 4, пункт 4, этап 2; прототип v115
- * `pgRcptMoney`): после «Принять» файла — сразу «Принять деньги» с суммой из оплаченного сообщения
- * (налоги месяца) или «Принять оплату за обслуживание». Что оплачено, сервер отдаёт только тому, кто
+ * «Принять» у чека из Telegram или со страницы контрагента (доработки 14.11.2026, блок 4, пункт 4, и
+ * блок 6; прототип v115–v116 `pgRcptMoney`): после «Принять» файла — сразу «Принять деньги» с суммой из
+ * оплаченного сообщения (налоги месяца, без месяца — все месяцы с остатком) или «Принять оплату за
+ * обслуживание». Что оплачено, сервер отдаёт только тому, кто
  * может принять эти деньги; нет — файл просто принят. `take` — после принятия, `dialogs` — в разметку.
  */
 export function useReceiptMoney(): {
@@ -54,7 +55,7 @@ export function useReceiptMoney(): {
         );
         return;
       }
-      if (!pay.month || !access.feature('taxpay') || !access.can('money')) return;
+      if (!access.feature('taxpay') || !access.can('money')) return;
       let rows;
       try {
         [rows] = await Promise.all([

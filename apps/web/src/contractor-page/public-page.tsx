@@ -1,7 +1,7 @@
 'use client';
 
 import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
-import { PublicPageCodeInput, type PublicPage } from '@buhuchet/shared';
+import { PageForgot, PublicPageCodeInput, type PublicPage } from '@buhuchet/shared';
 import { buttonClass, Field, Icon, inputClass } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -44,7 +44,9 @@ export function PublicPageScreen({
         <Gate
           title={t('pub.locked.title')}
           text={t('pub.locked.text', { time: timeOf(state.lockedUntil) })}
-        />
+        >
+          <ForgotCode slug={slug} inn={inn} />
+        </Gate>
       );
       break;
     case 'closed':
@@ -95,19 +97,73 @@ function PageBrand() {
   );
 }
 
-function Gate({ title, text }: { title: string; text: string }) {
+function Gate({ title, text, children }: { title: string; text: string; children?: ReactNode }) {
   return (
     <div className={GATE} role="status">
       <PageBrand />
       <h1 className="m-0 text-[20px] font-[720]">{title}</h1>
       <p className="m-0 text-muted">{text}</p>
+      {children}
     </div>
   );
 }
 
 /**
+ * «Забыли код? Прислать в Telegram» (доработки 14.11.2026, блок 6, пункт 6; прототип v116
+ * `pubForgotHtml`, `pubForgot`): код уходит только в Telegram, подключённый к этой странице, не больше
+ * 3 раз за сутки; ответ — строкой под ссылкой. Cookie страницы для этого не нужен — запрос идёт прямо в
+ * API.
+ */
+function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
+  const t = useT();
+  const errorText = useErrorText();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [answer, setAnswer] = useState<{ text: string; ok: boolean } | null>(null);
+  const ask = async () => {
+    setBusy(true);
+    const res = await callApi(() =>
+      api.api.page[':slug'][':inn'].forgot.$post({ param: { slug, inn } }),
+    );
+    setBusy(false);
+    if (!res.ok) {
+      if (res.error.code === 'page_unavailable') return router.refresh();
+      return setAnswer({ text: errorText(res.error), ok: false });
+    }
+    const r = PageForgot.parse(res.data);
+    setAnswer({
+      text: t(`pub.forgot.${r.outcome}`, { n: r.limit }),
+      ok: r.outcome === 'sent',
+    });
+  };
+  return (
+    <>
+      <button
+        type="button"
+        data-pub-forgot=""
+        disabled={busy}
+        onClick={() => void ask()}
+        className="inline-flex cursor-pointer items-center gap-1 self-center border-0 bg-transparent p-0 font-[550] text-link disabled:cursor-default disabled:opacity-60"
+      >
+        <Icon name="send" size="sm" />
+        {t('pub.forgot')}
+      </button>
+      {answer ? (
+        <span
+          data-pub-forgot-answer={answer.ok ? 'sent' : ''}
+          role="status"
+          className={`text-center text-[11.5px] leading-[1.4] ${answer.ok ? 'text-ok' : 'text-faint'}`}
+        >
+          {answer.text}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * «Введите код доступа»: 6 цифр (только цифры, не больше шести); верный код — сервер запоминает этот
- * браузер на 30 дней, страница перечитывается; неверный — «Осталось попыток» (меньший из остатков по
+ * браузер на 1 день (доработки 14.11.2026, блок 6, пункт 5), страница перечитывается; неверный — «Осталось попыток» (меньший из остатков по
  * ссылке и по адресу, docs/deviations.md п. О-1); 5 неверных подряд — перерыв на 15 минут, 3 неверных
  * за час с одного адреса — час (docs/deviations.md п. Е-2); 5 неверных за сутки — страница закрыта до
  * смены кода (п. О-21).
@@ -127,7 +183,9 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
       <Gate
         title={t('pub.locked.title')}
         text={t('pub.ip_locked.text', { time: timeOf(ipLockedUntil) })}
-      />
+      >
+        <ForgotCode slug={slug} inn={inn} />
+      </Gate>
     );
   }
 
@@ -189,6 +247,7 @@ function CodeGate({ slug, inn }: { slug: string; inn: string }) {
         {t('pub.code.open')}
       </button>
       <span className="text-[11.5px] leading-[1.4] text-faint">{t('pub.code.remember')}</span>
+      <ForgotCode slug={slug} inn={inn} />
     </form>
   );
 }

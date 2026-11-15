@@ -293,8 +293,19 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.receipt.tax_note': { ru: 'Деньги за {month} — по чеку из Telegram', section: S },
   'cppage.receipt.fee_note': { ru: 'По чеку из Telegram за {month}', section: S },
   'cppage.receipt.fee_note_any': { ru: 'По чеку из Telegram', section: S },
+  // Чек «Я оплатил» со страницы контрагента (прототип v116 `pgRcptMoney(c, p, 'page')`).
+  'cppage.receipt.tax_note_page': { ru: 'Деньги за {month} — по чеку со страницы', section: S },
+  'cppage.receipt.fee_note_page': { ru: 'По чеку со страницы за {month}', section: S },
+  'cppage.receipt.fee_note_any_page': { ru: 'По чеку со страницы', section: S },
   'cppage.receipt.received': {
     ru: 'Деньги на налоги за {month} уже получены от контрагента',
+    section: S,
+  },
+  // Чек за налоги без месяца — на все месяцы с остатком (прототип v116 `pgRcptMoney`, `p.m || 'all'`).
+  'cppage.receipt.tax_note_all': { ru: 'Деньги на налоги — по чеку из Telegram', section: S },
+  'cppage.receipt.tax_note_all_page': { ru: 'Деньги на налоги — по чеку со страницы', section: S },
+  'cppage.receipt.received_all': {
+    ru: 'Деньги на налоги уже получены от контрагента',
     section: S,
   },
   // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
@@ -477,13 +488,9 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.pay.kind.phone': { ru: 'Перевод по номеру телефона', section: S },
   'pub.pay.kind.account': { ru: 'Расчётный счёт', section: S },
   'pub.pay.kind.wallet': { ru: 'Счёт или кошелёк', section: S },
-  'pub.pay.copy': { ru: 'Скопировать', section: S },
-  'pub.pay.copy_phone': { ru: 'Скопировать номер', section: S },
-  'pub.pay.copy_account': { ru: 'Скопировать счёт', section: S },
-  'pub.pay.copy_bik': { ru: 'Скопировать БИК', section: S },
-  'pub.pay.copied_phone': { ru: 'Номер скопирован', section: S },
-  'pub.pay.copied_account': { ru: 'Номер счёта скопирован', section: S },
-  'pub.pay.copied_bik': { ru: 'БИК скопирован', section: S },
+  // Подпись кнопки копирования приходит с сервера (`copyLabel`, шаблоны бота; прототип v116 `pgRqBtn`).
+  'pub.pay.copied_phone': { ru: 'Номер телефона скопирован', section: S },
+  'pub.pay.copied_account': { ru: 'Реквизиты для перевода скопированы', section: S },
   'pub.pay.from': { ru: 'Перевод из', section: S },
   'pub.pay.bik': { ru: 'БИК', section: S },
   'pub.pay.holder': { ru: 'Получатель', section: S },
@@ -522,6 +529,7 @@ export const CONTRACTOR_PAGE_TEXTS = {
   // «Я оплатил» (прототип v116 pubPaidDlg).
   'pub.paid.btn': { ru: 'Я оплатил', section: S },
   'pub.paid.wait_note': { ru: 'вы сообщили об оплате {at} — {sum}', section: S },
+  'pub.paid.wait_at': { ru: 'вы сообщили об оплате {at}', section: S },
   'pub.paid.title': { ru: 'Я оплатил', section: S },
   'pub.paid.month': { ru: 'За какой месяц', section: S },
   'pub.paid.month_opt': { ru: 'За {month} — осталось {left}', section: S },
