@@ -430,11 +430,12 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // черновики.
     const source = refDB.news as { id: string; status: string }[];
     for (const id of ['v116', 'v118', 'v119']) {
-      expect(source.find((x) => x.id === id)?.status).toBe('Опубликовано');
+      expect(source.find((x) => x.id === id)?.status, id).toBe('Опубликовано');
     }
-    // Черновик прототипа («Версия 120: план») не наполняется.
-    expect(source.find((x) => x.id === 'v120')?.status).toBe('Черновик');
-    expect(rows.find((r) => r.id === 'v120')).toBeUndefined();
+    // Черновики прототипа (сейчас «Версия 120: план») не наполняются.
+    const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
+    expect(drafts.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
