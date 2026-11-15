@@ -45,6 +45,7 @@ import {
   sentFileKey,
   sentLimitCheck,
 } from './sent-add';
+import { removeStoredObjects } from './storage-retry';
 
 /*
  * «Отправить файл» на странице контрагента по ссылке (доработки 14.11.2026, блок 2; прототип v112
@@ -246,13 +247,13 @@ async function checkedCopy(
   return fileContentProblem(row.name, head) ? 'content' : null;
 }
 
-/** Удалить объекты хранилища; не вышло — в журнал (остаток уберёт задача по расписанию). */
+/**
+ * Удалить объекты хранилища; не вышло — в журнал и на повторное удаление (загрузку `.up` и проверочную
+ * копию `.chk-…` задача по сроку не найдёт: строки у них нет).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
 export async function removeObjects(deps: ApiDeps, keys: readonly string[]): Promise<void> {
-  for (const key of keys) {
-    await deps.storage.delete(key).catch((err: unknown) => {
-      deps.logger.error({ err }, 'файлы от контрагентов: файл не удалён из хранилища');
-    });
-  }
+  await removeStoredObjects(deps, keys, 'файлы от контрагентов: загрузка со страницы');
 }
 
 /**
