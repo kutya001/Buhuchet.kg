@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import refDB from '../../../../spec/data/refDB.json';
 import {
+  MESSAGE_TEMPLATE_VARIABLES,
+  messageTemplateMax,
+  unknownTemplateVariables,
+} from '../platform-dicts/admin-system';
+import {
   botTemplate,
   fillTemplate,
   parseStartCommand,
@@ -28,6 +33,19 @@ describe('шаблоны сообщений бота', () => {
     const own: Record<string, string> = refDB.messageTemplates;
     for (const [key, text] of Object.entries(TELEGRAM_TEMPLATE_DEFAULTS)) {
       if (Object.hasOwn(own, key)) expect(text, key).toBe(own[key]);
+    }
+  });
+
+  it('тексты по умолчанию — в пределах длины шаблона и только со своими подстановками (этап 3, поток Т)', () => {
+    // Подпись кнопки — до 40 знаков, скрытый ответ — до 200 (так их и правит Админка). Подстановки
+    // сверяются у шаблонов, которые Админка показывает; у остальных их проверяет подставной бот в
+    // тестах API (ни одной незаполненной подстановки в отправленном сообщении).
+    for (const [key, text] of Object.entries(TELEGRAM_TEMPLATE_DEFAULTS)) {
+      expect(text.trim(), key).not.toBe('');
+      expect(text.length, key).toBeLessThanOrEqual(messageTemplateMax(key));
+      if (Object.hasOwn(MESSAGE_TEMPLATE_VARIABLES, key)) {
+        expect(unknownTemplateVariables(key, text), key).toEqual([]);
+      }
     }
   });
 

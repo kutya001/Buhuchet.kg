@@ -925,3 +925,6 @@
 - «Удалить» заявку, когда хранилище недоступно: файл — на повторное удаление, задача удаляет его, когда хранилище снова работает; сутки не удаётся — оповещение не чаще раза в сутки; ключи — только публичных загрузок, роль приложения таблицу не видит — `packages/api/src/modules/admin/lead-docs.test.ts`, `packages/db/src/storage-retries.test.ts`.
 - Имена файлов от контрагента в Telegram — только тому, у кого «Просматривать файлы»; файл из бота — только из подключённого сейчас чата; документ с макросами от контрагента и сценарии (`py`, `one`, `iqy`…) не принимаются — `packages/api/src/modules/files/sent.test.ts`, `packages/domain/src/files/sent.test.ts`, `packages/domain/src/files/files.test.ts`.
 
+## Доработки 14.11. Т (этап 3): общая проверка сообщений бота, старых и новых (пакет заказчика 14.11.2026, «Порядок работ»; прототип v118)
+
+Отдельного пункта приёмки у этапа нет: проверка идёт в каждом тесте API, который шлёт сообщение боту. Правила Bot API — `packages/adapters/src/telegram-rules.ts` (тесты — `telegram-rules.test.ts`), проверка после каждого теста — `packages/api/src/test-setup.ts`, коды старых кнопок — `packages/api/src/modules/telegram/actions.test.ts`, тексты по умолчанию — `packages/domain/src/telegram/messages.test.ts`. docs/decisions.md п. Т-13.

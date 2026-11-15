@@ -1,4 +1,12 @@
-import { BOT_CARD_ACTION, BOT_FIND_ACTION, NOT_ME_ACTION, STAFF_BOT_NUDGE } from '@buhuchet/domain';
+import {
+  BOT_CARD_ACTION,
+  BOT_FIND_ACTION,
+  CP_TG_CLIENT_ACTIONS,
+  CP_TG_FILE_TO_ACTION,
+  GROUP_MINE,
+  NOT_ME_ACTION,
+  STAFF_BOT_NUDGE,
+} from '@buhuchet/domain';
 import { cpTelegramActions } from '../contractor-page/telegram-bot';
 import { testAction } from './bot-test';
 import { contractorCardAction, findContractorAction } from './command-actions';
@@ -28,3 +36,15 @@ export const BOT_ACTIONS: Readonly<Record<string, BotAction>> = {
   [BOT_CARD_ACTION]: contractorCardAction,
   ...LEAD_BOT_HANDLERS,
 };
+
+/**
+ * Все коды кнопок, которые разбирает вебхук: реестр основы, кнопки клиента (`clientPress`) и «Мои» в
+ * общем чате фирмы (`handleGroupPress`). Тесты сверяют с ним каждую отправленную кнопку и список кодов,
+ * уже ушедших в Telegram (docs/decisions.md п. Т-13).
+ */
+export const HANDLED_PRESS_ACTIONS: ReadonlySet<string> = new Set([
+  ...Object.keys(BOT_ACTIONS),
+  ...CP_TG_CLIENT_ACTIONS,
+  CP_TG_FILE_TO_ACTION,
+  GROUP_MINE,
+]);
