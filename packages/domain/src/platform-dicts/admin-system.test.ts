@@ -154,6 +154,28 @@ describe('Админка → «Шаблоны» сообщений', () => {
     expect(
       unknownTemplateVariables('tgWeek', 'сдать {n1}, оплатить {n2}, просрочено {n3}'),
     ).toEqual([]);
+    // Подстановки шаблонов v115 — как TPL_VARS прототипа (ui/status-scale.js): текст refDB может их
+    // не содержать, поэтому сверка с текстом выше такую ошибку не ловит.
+    expect(messageTemplateVariables('tgCpFeeSoon')).toEqual([
+      'контрагент',
+      'месяц',
+      'сумма',
+      'срок',
+    ]);
+    expect(messageTemplateVariables('tgCpFileLimit')).toEqual(['лимит']);
+    expect(messageTemplateVariables('tgCpFileNo')).toEqual(['мб']);
+    for (const key of [
+      'tgBtnCpReceipt',
+      'tgCpReceiptOffer',
+      'tgCpReceiptAsk',
+      'tgCpReceiptType',
+      'tgCpReceiptOk',
+      'tgCpFileOk',
+      'tgCpFileWhich',
+      'tgCpFileOff',
+    ]) {
+      expect(messageTemplateVariables(key), key).toEqual([]);
+    }
     // Ключ из запроса не достаёт свойства объекта: у неизвестного шаблона подстановок нет.
     expect(messageTemplateVariables('constructor')).toEqual([]);
     expect(unknownTemplateVariables('__proto__', '{код}')).toEqual(['код']);

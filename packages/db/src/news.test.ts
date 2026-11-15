@@ -410,7 +410,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // Новости версий, которых в продукте ещё нет (БИК v107–v108, п. Т-14), не наполняются; v109,
     // v110 (вся работа v110 — в продукте, п. К-10), v111 (блок «Telegram-уведомления», п. Т-15) и v112
     // («Файлы от контрагентов», п. И-7) и v114 (регистрация по документам, п. И-9) — да; v113 (Telegram
-    // заявителя, п. Т-17) — пока нет.
+    // заявителя, п. Т-17) и v115 («К оплате» по дням, файлы и чеки через бота, п. К-12) — пока нет.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -418,6 +418,10 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v112')).toMatchObject({ release: '112' });
     expect(rows.find((r) => r.id === 'v113')).toBeUndefined();
     expect(rows.find((r) => r.id === 'v114')).toMatchObject({ release: '114' });
+    expect(rows.find((r) => r.id === 'v115')).toBeUndefined();
+    // v115 не наполняется из-за NEWS_NOT_YET, а не потому, что её нет в refDB или она черновик.
+    const source = refDB.news as { id: string; status: string }[];
+    expect(source.find((x) => x.id === 'v115')?.status).toBe('Опубликовано');
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(

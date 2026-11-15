@@ -43,10 +43,12 @@ function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
  * банков» v107–v108, docs/deviations.md п. Т-14). PR переноса версии убирает её отсюда (v110 потока К
  * убрана с «Напомнить в Telegram», п. К-10; блок «Telegram-уведомления» v111 — п. Т-15; «Файлы от
  * контрагентов» v112 — п. И-7; регистрация организации по выписке и свидетельству v114 — п. И-9).
- * Telegram заявителя и пароль по ссылке v113 — п. Т-17.
+ * Telegram заявителя и пароль по ссылке v113 — п. Т-17; «К оплате» по дням, файлы и чеки через бота
+ * v115 — п. К-12.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-14
-export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108', 'v113']);
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-12
+export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108', 'v113', 'v115']);
 
 /**
  * Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи) без

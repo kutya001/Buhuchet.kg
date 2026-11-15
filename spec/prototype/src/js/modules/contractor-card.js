@@ -142,25 +142,26 @@ function tariffDlg(c){const nm=addMonths(ym(TODAY),1);const ct=curTariff(c);
       const per=val(el,'tf-per')||'M';c.tariffs.push({amount:n,per,from:f,by:S.me,at:TODAY,note:val(el,'tf-note')});log('cp',c.id,`Новая ставка ${som(n)} ${per==='Y'?'в год':'в месяц'} с ${ymG(f)}`,c.id);m.close();refreshAll();toast('Ставка добавлена в журнал')}}})});
 }
 /* «Принять оплату за обслуживание» (решение заказчика 24.10.2026): сумма по умолчанию — долг, делится на неоплаченные начисления от старых к новым,
-   излишек — аванс, он сам засчитывается в следующие начисления. edit — та же форма для «Изменить» в окне оплаты */
+   излишек — аванс, он сам засчитывается в следующие начисления. edit — та же форма для «Изменить» в окне оплаты;
+   pre — «Принять» у чека из Telegram (доработки 14.11.2026, блок 4, пункт 4): {sum — сумма из оплаченного сообщения, note — примечание} */
 const feeAccOk=c=>feat('fee')&&can('fee')&&can('tariff')&&!!c&&c.kind!=='oneoff'&&!c.archived&&feeMonths(c).some(m=>feeCharge(c,m)>0);
 // Куда поступила оплата за обслуживание: счета организации с назначением «Обслуживание» (основной — первым), ключ — accKey: «acc:<счёт>» или «ph:<номер>»
 const fpTo=()=>{const l=orgAccs('fee').slice().sort((a,b)=>(b.mainFee?1:0)-(a.mainFee?1:0));return [...l.map(a=>[accKey(a),`Счёт организации · ${rqProv(a)}${a.kind==='phone'?' · по номеру '+rqNum(a):''}${a.mainFee?' (основной)':''}`]),...(l.length?[]:[['org','Счёт организации']]),['owner','Владельцу организации']]};
 const fpToName=t=>t==='owner'?'владельцу организации':(()=>{const a=t&&/^(acc|ph):/.test(t)&&ORG.accounts.find(x=>accKey(x)===t);return a?`счёт организации · ${rqProv(a)}, ${a.kind==='phone'?'по номеру '+rqNum(a):'р/с '+a.acc}`:'счёт организации'})();
 function fpWhat(f){const al=fpAlloc(f),adv=fpAdv(f);return (al.length?'Обслуживание за '+al.map(x=>ymLabel(x.m)).join(', '):'Аванс за обслуживание')+(al.length&&adv?` · аванс ${som(adv)}`:'')}
-function feePayDlg(c,edit){if(!c)return;const own={};if(edit)fpAlloc(edit).forEach(x=>{own[x.m]=(own[x.m]||0)+x.a});
+function feePayDlg(c,edit,pre){if(!c)return;const own={};if(edit)fpAlloc(edit).forEach(x=>{own[x.m]=(own[x.m]||0)+x.a});
   // Сколько уже получено за месяц без этой оплаты: свои оплаты месяца и чужой аванс
   const base=m=>(c.feePaid[m]||0)-(own[m]||0);const sp=feeAdvSplit(c,FEEPAYS.filter(f=>f.cp===c.id&&!f.del&&f!==edit).reduce((a,f)=>a+fpAdv(f),0),base);
   const got=m=>base(m)+(sp.use[m]||0),left=m=>Math.max(0,Math.round((feeCharge(c,m)-got(m))*100)/100);
   const ms=feeMonths(c).filter(m=>left(m)>0||own[m]);const debt=ms.reduce((a,m)=>a+left(m),0);
-  const st={sum:edit?edit.amount:(c.feeDebt||debt||''),date:edit?edit.date:TODAY,to:edit?edit.to||'org':(fpTo()[0]||[])[0],note:edit?edit.note||'':'',why:'',rows:{},manual:false};
+  const st={sum:edit?edit.amount:pre&&pre.sum>0?pre.sum:(c.feeDebt||debt||''),date:edit?edit.date:TODAY,to:edit?edit.to||'org':(fpTo()[0]||[])[0],note:edit?edit.note||'':pre&&pre.note||'',why:'',rows:{},manual:false};
   // От старых к новым; при изменении сначала месяцы, которые эта оплата уже закрывала
   const order=edit?[...ms.filter(m=>own[m]),...ms.filter(m=>!own[m])]:ms;
   const auto=()=>{let t=parseNum(st.sum);if(isNaN(t))t=0;st.rows={};order.forEach(m=>{const x=Math.min(t,left(m));if(x>0){st.rows[m]=Math.round(x*100)/100;t-=x}})};
   if(edit)fpAlloc(edit).forEach(x=>{st.rows[x.m]=(st.rows[x.m]||0)+x.a});else auto();
   const sel0=fpTo();if(edit&&!sel0.some(o=>o[0]===st.to))sel0.unshift([st.to,fpToName(st.to)]);
   openModal({form:true,size:'mid',render:mm=>({title:edit?'Изменить оплату за обслуживание':'Принять оплату за обслуживание',sub:`${esc(c.name)} · ${c.feeDebt?`долг ${som(c.feeDebt)}`:debt?`к оплате ${som(debt)}`:'долгов нет'}${c.feeAdv&&!edit?` · аванс ${som(c.feeAdv)}`:''}`,
-    body:`<div class="form">${fld('Сумма, сом',inp('fp-sum',st.sum===''?'':String(st.sum),'inputmode="decimal" class="inp tnum"'),{req:true,id:'fp-sum',hint:c.feeDebt?`Подставлен долг за обслуживание: ${som(c.feeDebt)}`:''})}${fld('Дата',inp('fp-date',st.date,`type="date" max="${TODAY}"`),{req:true,id:'fp-date'})}
+    body:`<div class="form">${fld('Сумма, сом',inp('fp-sum',st.sum===''?'':String(st.sum),'inputmode="decimal" class="inp tnum"'),{req:true,id:'fp-sum',hint:pre&&pre.sum>0?`Подставлена сумма из сообщения в Telegram: ${som(pre.sum)}`:c.feeDebt?`Подставлен долг за обслуживание: ${som(c.feeDebt)}`:''})}${fld('Дата',inp('fp-date',st.date,`type="date" max="${TODAY}"`),{req:true,id:'fp-date'})}
       ${fld('Куда поступили деньги',sel('fp-to',sel0,st.to),{id:'fp-to',full:true,hint:'Плата за обслуживание поступает только организации: на её счёт или владельцу'})}</div>
     <div class="box flat"><h3>За какие месяцы<span class="grow"></span>${ms.length?`<button class="btn sm" id="fp-auto" type="button">${ic('list','sm')}От старых к новым</button>`:''}</h3>
       ${ms.length?`<div class="tbl-wrap"><table class="mini"><thead><tr><th>Месяц</th><th class="num">Начислено</th><th class="num">Уже оплачено</th><th class="num" style="width:140px">Распределить</th><th>Станет</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${esc(ymLabel(m))}${feeDue(c,m)<TODAY&&left(m)>0?' <span class="tag red">просрочено</span>':''}</td><td class="num">${fmtM(feeCharge(c,m))}</td><td class="num">${fmtM(got(m))}</td><td class="num"><input class="inp tnum" data-fpm="${m}" value="${st.rows[m]!=null?st.rows[m]:''}" inputmode="decimal" style="max-width:120px;margin-left:auto;text-align:right" aria-label="Распределить на ${esc(ymLabel(m))}"></td><td data-fps="${m}"></td></tr>`).join('')}</tbody></table></div>`:'<span class="faint">Неоплаченных начислений нет — вся сумма станет авансом и сама засчитается в следующие начисления.</span>'}
