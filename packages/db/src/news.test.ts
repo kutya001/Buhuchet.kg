@@ -422,10 +422,13 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v114')).toMatchObject({ release: '114' });
     expect(rows.find((r) => r.id === 'v115')).toMatchObject({ release: '115', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v116')).toBeUndefined();
-    expect(rows.find((r) => r.id === 'v117')).toMatchObject({ release: '117' });
+    expect(rows.find((r) => r.id === 'v117')).toMatchObject({ release: '117', showOnLogin: true });
     // v116 не наполняется из-за NEWS_NOT_YET, а не потому, что её нет в refDB или она черновик.
     const source = refDB.news as { id: string; status: string }[];
     expect(source.find((x) => x.id === 'v116')?.status).toBe('Опубликовано');
+    // Черновик прототипа («Версия 118: план») не наполняется.
+    expect(source.find((x) => x.id === 'v118')?.status).toBe('Черновик');
+    expect(rows.find((r) => r.id === 'v118')).toBeUndefined();
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
