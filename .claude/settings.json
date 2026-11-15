@@ -29,6 +29,20 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-bash.mjs"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-push.mjs",
+            "timeout": 900
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__github__create_pull_request|mcp__github__update_pull_request",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/guard-pr-body.mjs"
           }
         ]
       }
