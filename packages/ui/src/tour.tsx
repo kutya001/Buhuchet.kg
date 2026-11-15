@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonClass, iconButtonClass, linkButtonClass } from './button';
 import { Icon } from './icon';
@@ -85,9 +85,48 @@ export function tourBubblePlace(
   return { x, y };
 }
 
+/**
+ * Обзор страницы контрагента (прототип v120 `cphTourPlace`): облачко не закрывает подсвеченный
+ * элемент. На телефоне облачко всегда внизу экрана, а подсветка обрезается над ним; на ПК — сбоку от
+ * элемента, не помещается — под ним или над ним, иначе в правом нижнем углу; без элемента — посередине.
+ * `r` — место элемента на экране (без отступа рамки), ширина облачка уже по экрану.
+ */
+export function tourPagePlace(
+  r: Rect | null,
+  bubble: { w: number; h: number },
+  view: { w: number; h: number },
+  phone: boolean,
+): { hole: Rect | null; x: number; y: number } {
+  const { w: W, h: H } = view;
+  const { w: bw, h: bh } = bubble;
+  let hole: Rect | null = null;
+  if (r) {
+    const left = Math.max(4, r.left - HOLE_PAD);
+    const top = Math.max(4, r.top - HOLE_PAD);
+    const right = Math.min(W - 4, r.left + r.width + HOLE_PAD);
+    let bottom = Math.min(H - 4, r.top + r.height + HOLE_PAD);
+    if (phone) bottom = Math.min(bottom, H - bh - 24);
+    if (bottom < top + 8) bottom = top + 8;
+    hole = { left, top, width: right - left, height: bottom - top };
+  }
+  if (phone) return { hole, x: (W - bw) / 2, y: H - bh - GAP };
+  if (!hole) return { hole, x: (W - bw) / 2, y: (H - bh) / 2 };
+  const right = hole.left + hole.width;
+  const bottom = hole.top + hole.height;
+  const cy = Math.max(GAP, Math.min(H - bh - GAP, hole.top));
+  const under = Math.min(W - bw - GAP, Math.max(GAP, hole.left));
+  if (right + 16 + bw <= W - GAP) return { hole, x: right + 16, y: cy };
+  if (hole.left - 16 - bw >= GAP) return { hole, x: hole.left - 16 - bw, y: cy };
+  if (bottom + GAP + bh <= H - GAP) return { hole, x: under, y: bottom + GAP };
+  if (hole.top - GAP - bh >= GAP) return { hole, x: under, y: hole.top - GAP - bh };
+  return { hole, x: W - bw - GAP, y: H - bh - GAP };
+}
+
 export interface TourLabels {
   /** «Закончить показ». */
   end: string;
+  /** Подпись крестика для чтения с экрана; нет — как `end` («Закончить обзор» у обзора страницы). */
+  endAria?: string;
   /** Подсказка крестика: «Закончить показ (Esc)». */
   endHint: string;
   back: string;
@@ -104,6 +143,15 @@ export interface TourOverlayProps {
   step: { label: string; part: number } | null;
   title: string;
   text: string;
+  /** Под пояснением — своё (метки «Отчётов» в обзоре страницы контрагента, прототип v120 `cphLegend`). */
+  extra?: ReactNode;
+  /** Ссылка «Закончить показ» рядом с кнопками; нет — только крестик (последнее облачко обзора). */
+  endLink?: boolean;
+  /**
+   * Обзор страницы контрагента (прототип v120, cp-help.css): облачко — по `tourPagePlace`, на
+   * телефоне по ширине экрана, текст не мельче 16 px, кнопки не меньше 44 px.
+   */
+  page?: boolean;
   /** «Пропущено знакомых элементов: N» и «Показать всё» (ссылкой; `solo` — кнопкой рядом с «Готово»). */
   skipped?: { text: string; showAll: string; solo: boolean } | null;
   /** Кнопка вперёд: «Далее», «Готово», «Сделать сейчас», «Понятно, заполню». */
@@ -122,7 +170,9 @@ const visible = (el: HTMLElement | null): el is HTMLElement =>
   !!el && el.isConnected && el.getClientRects().length > 0;
 
 export function TourOverlay(props: TourOverlayProps) {
-  const { open, target, step, title, text, skipped, next, canBack, busy, labels } = props;
+  const { open, target, step, title, text, extra, skipped, next, canBack, busy, labels } = props;
+  const endLink = props.endLink ?? true;
+  const page = props.page ?? false;
   const root = useRef<HTMLDivElement>(null);
   const holeRef = useRef<HTMLDivElement>(null);
   const bubble = useRef<HTMLDivElement>(null);
@@ -140,7 +190,27 @@ export function TourOverlay(props: TourOverlayProps) {
     const el = visible(target) ? target : null;
     const view = { w: window.innerWidth, h: window.innerHeight };
     const mob = window.matchMedia(PHONE_QUERY).matches;
-    const h = el ? tourHole(el.getBoundingClientRect(), view) : null;
+    const b = bubble.current;
+    const bw = page && mob ? view.w - 24 : Math.min(BUBBLE_W, view.w - 24);
+    if (b) b.style.width = `${bw}px`;
+    const size = { w: bw, h: b?.offsetHeight ?? 0 };
+    let h: Rect | null;
+    let pos: { x: number; y: number };
+    if (page) {
+      ({ hole: h, ...pos } = tourPagePlace(
+        el ? el.getBoundingClientRect() : null,
+        size,
+        view,
+        mob,
+      ));
+    } else {
+      h = el ? tourHole(el.getBoundingClientRect(), view) : null;
+      const pop = el?.closest<HTMLElement>('[data-popover]');
+      pos = tourBubblePlace(h, size, view, {
+        phone: mob,
+        menu: pop ? pop.getBoundingClientRect() : null,
+      });
+    }
     const hole = holeRef.current;
     if (hole) {
       Object.assign(
@@ -155,17 +225,8 @@ export function TourOverlay(props: TourOverlayProps) {
           : { left: '50%', top: '50%', width: '0px', height: '0px' },
       );
     }
-    const b = bubble.current;
-    if (!b) return;
-    const bw = Math.min(BUBBLE_W, view.w - 24);
-    b.style.width = `${bw}px`;
-    const pop = el?.closest<HTMLElement>('[data-popover]');
-    const pos = tourBubblePlace(h, { w: bw, h: b.offsetHeight }, view, {
-      phone: mob,
-      menu: pop ? pop.getBoundingClientRect() : null,
-    });
-    Object.assign(b.style, { left: `${pos.x}px`, top: `${pos.y}px`, visibility: 'visible' });
-  }, [target]);
+    if (b) Object.assign(b.style, { left: `${pos.x}px`, top: `${pos.y}px`, visibility: 'visible' });
+  }, [target, page]);
 
   // Облачко ставится по элементу после каждой смены облачка и ещё раз, когда экран успокоился.
   useLayoutEffect(() => {
@@ -221,6 +282,9 @@ export function TourOverlay(props: TourOverlayProps) {
     };
   }, [open]);
 
+  // Обзор страницы контрагента на телефоне: кнопки и крестик не меньше 44 px (cp-help.css).
+  const big = page ? ' max-md:min-h-11 max-md:min-w-11' : '';
+  const tap = page ? 'max-md:min-h-11' : 'max-md:min-h-10';
   if (!open || !mounted) return null;
   return createPortal(
     <div ref={root} data-tour="" className="fixed inset-0 z-[200]">
@@ -252,8 +316,8 @@ export function TourOverlay(props: TourOverlayProps) {
               <span className="grow" />
               <button
                 type="button"
-                className={iconButtonClass('sm')}
-                aria-label={labels.end}
+                className={`${iconButtonClass('sm')}${big}`}
+                aria-label={labels.endAria ?? labels.end}
                 title={labels.endHint}
                 onClick={props.onEnd}
               >
@@ -268,10 +332,17 @@ export function TourOverlay(props: TourOverlayProps) {
             </div>
           </>
         ) : null}
-        <b className="text-[15.5px] tracking-[-.01em] max-md:text-[15px]">{title}</b>
-        <p className="m-0 mb-1.5 text-[13.5px] leading-[1.55] text-muted max-md:max-h-[30vh] max-md:overflow-auto">
+        <b
+          className={`text-[15.5px] tracking-[-.01em] ${page ? 'max-md:text-[17px]' : 'max-md:text-[15px]'}`}
+        >
+          {title}
+        </b>
+        <p
+          className={`m-0 mb-1.5 text-[13.5px] leading-[1.55] text-muted max-md:max-h-[30vh] max-md:overflow-auto${page ? ' max-md:text-base' : ''}`}
+        >
           {text}
         </p>
+        {extra}
         {skipped ? (
           <div
             data-tour-skipped=""
@@ -288,14 +359,20 @@ export function TourOverlay(props: TourOverlayProps) {
         ) : null}
         {step ? (
           <div className="mt-0.5 flex flex-wrap items-center gap-2">
-            <button type="button" className={linkButtonClass()} onClick={props.onEnd}>
-              {labels.end}
-            </button>
+            {endLink ? (
+              <button
+                type="button"
+                className={`${linkButtonClass()}${page ? ' max-md:min-h-11' : ''}`}
+                onClick={props.onEnd}
+              >
+                {labels.end}
+              </button>
+            ) : null}
             <span className="grow" />
             {canBack ? (
               <button
                 type="button"
-                className={`${buttonClass('ghost', 'sm')} max-md:min-h-10`}
+                className={`${buttonClass('ghost', 'sm')} ${tap}`}
                 disabled={busy}
                 onClick={props.onBack}
               >
@@ -305,7 +382,7 @@ export function TourOverlay(props: TourOverlayProps) {
             {skipped?.solo ? (
               <button
                 type="button"
-                className={`${buttonClass('ghost', 'sm')} max-md:min-h-10`}
+                className={`${buttonClass('ghost', 'sm')} ${tap}`}
                 disabled={busy}
                 onClick={props.onShowAll}
               >
@@ -315,7 +392,7 @@ export function TourOverlay(props: TourOverlayProps) {
             <button
               type="button"
               data-tour-next=""
-              className={`${buttonClass('cta', 'sm')} max-md:min-h-10`}
+              className={`${buttonClass('cta', 'sm')} ${tap}`}
               disabled={busy}
               onClick={props.onNext}
             >

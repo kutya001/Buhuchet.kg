@@ -2,6 +2,15 @@ import { searchText } from '../common/list';
 import { KB_ARTICLE_AUDIENCES, KB_MODULE_TITLES } from '../kb/admin';
 import { KB_EVENTS } from '../kb/events';
 import { kbShowWhat, type KbShowWhatInput } from '../kb/shows';
+import {
+  CP_FAQ_ACTS,
+  CP_FAQ_SECS,
+  CP_HELP_DICTS,
+  CP_HELP_HINT_KEYS,
+  CP_HELP_WELCOME_KEYS,
+  CP_TOUR_SECS,
+  cpHelpTextId,
+} from '../contractor-page/help';
 import { NEWS_AUDIENCES, NEWS_TYPES } from '../news/news';
 import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
 import { FEATURES } from '../roles/permissions';
@@ -58,7 +67,14 @@ import {
  */
 
 /** Содержимое «Базы знаний» с «Выгрузить» и «Загрузить» (Админка → «База знаний (содержимое)»). */
-export const KB_IO_DICTS = ['kbsteps', 'kbshows', 'kbarts', 'kbnews'] as const;
+export const KB_IO_DICTS = [
+  'kbsteps',
+  'kbshows',
+  'kbarts',
+  'kbnews',
+  // «Страница контрагента» (доработки 15.11.2026, прототип v120 DX.cpwel … DX.cpgloss).
+  ...CP_HELP_DICTS,
+] as const;
 export type KbIoDict = (typeof KB_IO_DICTS)[number];
 
 export function isKbIoDict(value: string): value is KbIoDict {
@@ -623,6 +639,67 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
     col('short', 'kbadm.io.col.short', { type: 'text' }, { required: true }),
     col('md', 'kbadm.io.col.md', { type: 'text' }, { required: true }),
   ],
+  // «Страница контрагента» (прототип v120 DX.cpwel, DX.cphints): «Где» — только в выгрузке, новых
+  // строк нет — тексты добавляет разработчик.
+  cpwel: [
+    CODE,
+    col(
+      'where',
+      'cph.io.col.where',
+      enumOf(CP_HELP_WELCOME_KEYS, (v) => `cph.adm.wel.${cpHelpTextId(v)}`),
+      { readonly: true },
+    ),
+    col('text', 'cph.io.col.text', { type: 'text' }, { required: true }),
+  ],
+  cphints: [
+    CODE,
+    col(
+      'where',
+      'cph.io.col.where',
+      enumOf(CP_HELP_HINT_KEYS, (v) => `cph.adm.hint.${cpHelpTextId(v)}`),
+      { readonly: true },
+    ),
+    col('text', 'cph.io.col.text', { type: 'text' }, { required: true }),
+  ],
+  // Обзор (прототип DX.cptour): «№» и «Что подсвечивает» — только в выгрузке, новых облачков нет.
+  cptour: [
+    CODE,
+    col('n', 'cph.io.col.n', { type: 'int', min: 1, max: 99, empty: 'keep' }, { readonly: true }),
+    col(
+      'sec',
+      'cph.io.col.sec',
+      enumOf(CP_TOUR_SECS, (v) => `cph.adm.sec.${v}`),
+      { readonly: true },
+    ),
+    col('t', 'cph.io.col.tour_t', { type: 'text' }, { required: true }),
+    col('x', 'cph.io.col.tour_x', { type: 'text' }, { required: true }),
+    col('x2', 'cph.io.col.tour_x2'),
+    col('active', 'cph.io.col.tour_on', { type: 'yesno' }),
+  ],
+  // Частые вопросы (прототип DX.cpfaq): новая строка — новый вопрос с кодом из файла.
+  cpfaq: [
+    CODE,
+    col('ord', 'cph.io.col.ord', { type: 'int', min: 0, max: 9999, empty: 'keep' }),
+    col('name', 'cph.io.col.q', { type: 'text' }, { required: true }),
+    col('a', 'cph.io.col.a', { type: 'text' }, { required: true }),
+    col(
+      'sec',
+      'cph.io.col.qsec',
+      enumOf(CP_FAQ_SECS, (v) => `cph.adm.qsec.${cpHelpTextId(v || 'all')}`, ''),
+    ),
+    col(
+      'act',
+      'cph.io.col.act',
+      enumOf(CP_FAQ_ACTS, (v) => `cph.adm.act.${cpHelpTextId(v || 'none')}`, ''),
+    ),
+    col('active', 'cph.io.col.faq_on', { type: 'yesno' }),
+  ],
+  // «Словарик» (прототип DX.cpgloss): строки сопоставляются по слову, новое слово — новой строкой.
+  cpgloss: [
+    col('code', 'cph.io.col.word'),
+    col('x', 'cph.io.col.gloss_x', { type: 'text' }, { required: true }),
+    col('also', 'cph.io.col.also'),
+  ],
 };
 
 /**
@@ -635,6 +712,9 @@ export function ioCodeValid(dict: IoDict, code: string): boolean {
   if (dict === 'gked') return GKED_CODE_PATTERN.test(code);
   // Шаги, статьи, новости — как коды записей «Базы знаний»; облачко показа — «сценарий#номер».
   if (dict === 'kbshows') return /^[a-z0-9][a-z0-9_-]{0,63}#\d{1,3}$/.test(code);
+  // Тексты и облачка «Страницы контрагента» новыми строками не добавляются; слово — любое до 60 знаков.
+  if (dict === 'cpwel' || dict === 'cphints' || dict === 'cptour') return false;
+  if (dict === 'cpgloss') return code.trim().length > 0 && code.length <= 60;
   if (isKbIoDict(dict)) return /^[a-z0-9][a-z0-9_-]{0,63}$/.test(code);
   if (dict === 'calendar') return isIsoDate(code);
   if (dict === 'gkgroups') return GKED_GROUP_ID_PATTERN.test(code);

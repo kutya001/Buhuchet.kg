@@ -10,6 +10,7 @@ export * from './contractor-import';
 export * from './contractor-regdocs';
 export * from './contractor-service';
 export * from './contractor-page';
+export * from './contractor-page-help';
 export * from './reports';
 export * from './report-pick';
 export * from './tasks';

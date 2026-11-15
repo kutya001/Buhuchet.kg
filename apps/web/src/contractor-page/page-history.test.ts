@@ -166,6 +166,21 @@ describe('pageHistoryText', () => {
     );
   });
 
+  it('обзор страницы — до конца или на шаге N из M (прототип v120 cphTourEnd)', () => {
+    expect(pageHistoryText(t, { action: 'page_tour', changes: [{ field: 'of', to: 9 }] })).toBe(
+      'Контрагент посмотрел обзор страницы',
+    );
+    expect(
+      pageHistoryText(t, {
+        action: 'page_tour',
+        changes: [
+          { field: 'step', to: 3 },
+          { field: 'of', to: 9 },
+        ],
+      }),
+    ).toBe('Контрагент закрыл обзор страницы на шаге 3 из 9');
+  });
+
   it('открытие и перерыв делает контрагент', () => {
     expect(pageHistoryActor(t, null)).toBe('Контрагент');
     expect(pageHistoryActor(t, 'Иванова А.')).toBe('Иванова А.');

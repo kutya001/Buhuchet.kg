@@ -4,12 +4,15 @@ import {
   contractorPageHeader,
   contractorTelegramCounts,
   contractorPageOrg,
+  cpCodeHelp,
+  cpHelpForPage,
   contractorPageState,
   getContractorPage,
   listContractorSentFiles,
   pageContractorFacts,
   pageFiles,
   pageReportFile,
+  readCpHelp,
   sentUploadState,
   tryContractorPageCode,
   withOrgContext,
@@ -144,7 +147,12 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     privateHeaders(c);
     if (!isPageAddress(slug, inn)) return c.json({ state: 'unavailable' } as PublicPageBody, 200);
     const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
-    if (state.state === 'unavailable' || state.state === 'code' || state.state === 'closed') {
+    // Экран кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120
+    // `cphCodeWhat`): остальные подсказки страница получает после кода.
+    if (state.state === 'code') {
+      return c.json({ state: 'code', help: await cpCodeHelp(deps.db) } as PublicPageBody, 200);
+    }
+    if (state.state === 'unavailable' || state.state === 'closed') {
       return c.json({ state: state.state } as PublicPageBody, 200);
     }
     if (state.state === 'locked') {
@@ -159,10 +167,11 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     const now = deps.clock.now();
     const today = bishkekDate(now);
     const page = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {
-      const [header, org, own] = await Promise.all([
+      const [header, org, own, help] = await Promise.all([
         contractorPageHeader(tx, contractorId),
         contractorPageOrg(tx, orgId),
         getContractorPage(tx, contractorId),
+        readCpHelp(tx),
       ]);
       if (!header || !org || !own) return null;
       // Раздел «Telegram» есть, только когда бот подключён (задача К3).
@@ -199,6 +208,8 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
         sections,
         telegram: tg && { ...tg, full: tg.on + tg.wait >= CP_TG_MAX },
         sent,
+        // Подсказки и обучение (доработки 15.11.2026): включённые облачка, вопросы и слова.
+        help: cpHelpForPage(help),
       };
     });
     if (!page) return c.json({ state: 'unavailable' } as PublicPageBody, 200);

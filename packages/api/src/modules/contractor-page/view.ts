@@ -61,7 +61,10 @@ import { pageTransferOf } from '../telegram/client/requisite';
  */
 
 // Раздел «Telegram» (задача К3) добавляет обработчик страницы: ему нужен подключённый бот.
-type Body = Omit<PublicPageBody, 'asOf' | 'contractor' | 'org' | 'sections' | 'telegram' | 'sent'>;
+type Body = Omit<
+  PublicPageBody,
+  'asOf' | 'contractor' | 'org' | 'sections' | 'telegram' | 'sent' | 'help'
+>;
 
 /** Разделы страницы и телефон организации для шапки «Ваш бухгалтер» и «Контактов». */
 export type ContractorPageBody = Body & { orgPhone: PublicPageBody['org']['phone'] };

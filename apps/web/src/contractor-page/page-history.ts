@@ -134,6 +134,18 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
       text: typeof p.text === 'string' ? p.text : '',
     });
   }
+  // Обзор страницы (доработки 15.11.2026, пункт 2; прототип v120 `cphTourEnd`): посмотрел до конца
+  // или закрыл на шаге N из M.
+  if (entry.action === 'page_tour') {
+    const num = (field: string) => {
+      const v = entry.changes.find((c) => c.field === field)?.to;
+      return typeof v === 'number' ? v : null;
+    };
+    const step = num('step');
+    return step === null
+      ? t('cppage.hist.page_tour_full')
+      : t('cppage.hist.page_tour_step', { step, of: num('of') ?? step });
+  }
   if (entry.action in ACTION_TEXT) {
     return t(ACTION_TEXT[entry.action as keyof typeof ACTION_TEXT]);
   }

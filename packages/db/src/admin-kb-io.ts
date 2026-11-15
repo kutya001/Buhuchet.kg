@@ -19,6 +19,7 @@ import {
 } from '@buhuchet/domain';
 import type { IoRecord } from './admin-dict-io';
 import type { SectionSaveResult, SectionWriter } from './admin-io-sections';
+import { CP_HELP_SECTION_WRITERS } from './contractor-page-help-io';
 import {
   adminKbArticleRemove,
   adminKbArticles,
@@ -390,4 +391,5 @@ export const KB_SECTION_WRITERS: Readonly<Record<KbIoDict, SectionWriter>> = {
   kbshows: showsWriter,
   kbarts: articlesWriter,
   kbnews: newsWriter,
+  ...CP_HELP_SECTION_WRITERS,
 };

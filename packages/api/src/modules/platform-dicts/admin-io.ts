@@ -41,6 +41,7 @@ import {
   GKED_GROUP_ASK_MAX,
   IO_COLUMNS,
   isIoSectionDict,
+  cpHelpTextId,
   isKbIoDict,
   KB_ARTICLE_HTML_MAX,
   NEWS_MD_MAX,
@@ -378,6 +379,9 @@ function newCodeError(dict: IoDict): UiTextKey {
   if (dict === 'calendar') return 'pdicts.io.err.code_date';
   if (dict === 'gkgroups') return 'pdicts.io.err.code_group';
   if (dict === 'kbshows') return 'kbadm.io.err.show_code';
+  // «Страница контрагента»: тексты и облачка новыми строками не добавляются, слово — до 60 знаков.
+  if (dict === 'cpwel' || dict === 'cphints' || dict === 'cptour') return 'cph.io.err.no_new';
+  if (dict === 'cpgloss') return 'cph.adm.err.word';
   if (isKbIoDict(dict)) return 'kbadm.io.err.code';
   if (isIoSectionDict(dict)) return 'pdicts.io.err.code';
   return 'key' in ADMIN_DICT_META[dict].code ? 'pdicts.io.err.code_key' : 'pdicts.io.err.code';
@@ -527,6 +531,9 @@ class SectionRowFail extends Error {
 
 /** Название строки в сравнении; у облачка показа — шаг и номер (прототип shFlat: «Шаг · облачко 4»). */
 function rowName(t: Translate, dict: IoSectionDict, code: string, name: string): string {
+  // Тексты «Страницы контрагента» — по «Где» (прототип CPH_WEL, CPH_HINT).
+  if (dict === 'cpwel') return t(`cph.adm.wel.${cpHelpTextId(code)}` as UiTextKey);
+  if (dict === 'cphints') return t(`cph.adm.hint.${cpHelpTextId(code)}` as UiTextKey);
   if (dict !== 'kbshows') return name;
   return t('kbadm.show.cloud', { step: name, n: code.slice(code.lastIndexOf('#') + 1) });
 }

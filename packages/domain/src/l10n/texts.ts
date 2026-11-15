@@ -13,6 +13,7 @@ import { CONTRACTOR_IMPORT_TEXTS } from './contractor-import-texts';
 import { CONTRACTOR_REGDOCS_TEXTS } from './contractor-regdocs-texts';
 import { CONTRACTOR_SERVICE_TEXTS } from './contractor-service-texts';
 import { CONTRACTOR_PAGE_TEXTS } from './contractor-page-texts';
+import { CONTRACTOR_PAGE_HELP_TEXTS } from './contractor-page-help-texts';
 import { CONTRACTORS_TEXTS } from './contractors-texts';
 import { DICTS_TEXTS } from './dicts-texts';
 import { FEE_TEXTS } from './fees-texts';
@@ -116,6 +117,7 @@ export const UI_TEXTS = {
   ...CONTRACTOR_REGDOCS_TEXTS,
   ...CONTRACTOR_SERVICE_TEXTS,
   ...CONTRACTOR_PAGE_TEXTS,
+  ...CONTRACTOR_PAGE_HELP_TEXTS,
   ...REPORTS_TEXTS,
   ...REPORT_MONTHS_TEXTS,
   ...TASKS_TEXTS,

@@ -48,21 +48,13 @@ export interface PageAddress {
 }
 
 /**
- * Раздел «Telegram» страницы контрагента. «Подключить Telegram» просит у сервера одноразовую ссылку
- * (её получает только браузер, где введён код страницы) и открывает бота в новой вкладке: вкладка
- * открывается сразу по нажатию — иначе браузер телефона её не пустит, — адрес ставится после ответа.
- * Когда клиент вернулся на страницу, она перечитывается: «ждёт подтверждения бухгалтера».
+ * «Подключить Telegram» страницы контрагента: просит у сервера одноразовую ссылку (её получает только
+ * браузер, где введён код страницы) и открывает бота в новой вкладке: вкладка открывается сразу по
+ * нажатию — иначе браузер телефона её не пустит, — адрес ставится после ответа. Когда клиент вернулся
+ * на страницу, она перечитывается: «ждёт подтверждения бухгалтера». Тем же нажатием подключает и
+ * ответ «Помощи» (прототип v120 `cphHelp`, действие `tg`).
  */
-export function PageTelegramBody({
-  telegram,
-  address,
-  what,
-}: {
-  telegram: PageTelegram;
-  address: PageAddress;
-  /** Пояснение раздела из «Текстов элементов экрана»: есть — своего текста раздел не показывает. */
-  what: string;
-}) {
+export function usePageTelegramConnect(telegram: PageTelegram | null, address: PageAddress) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -83,10 +75,10 @@ export function PageTelegramBody({
     };
   }, [asked, router]);
 
-  const full = telegram.full ? t('err.cp_tg_full') : null;
+  const full = telegram?.full ? t('err.cp_tg_full') : null;
   const connect = async () => {
     if (full) return toast(full, { icon: 'lock', bad: true });
-    if (busy) return;
+    if (busy || !telegram) return;
     setBusy(true);
     const tab = window.open('about:blank', '_blank');
     // Адрес — под адресом страницы: cookie этой ссылки браузер отправляет только туда.
@@ -110,6 +102,21 @@ export function PageTelegramBody({
       window.location.assign(url);
     }
   };
+  return { connect, busy, full };
+}
+
+/** Раздел «Telegram» страницы контрагента (прототип pgTgPub): подключённые, ждущие и «Подключить». */
+export function PageTelegramBody({
+  telegram,
+  what,
+  connect: { connect, busy, full },
+}: {
+  telegram: PageTelegram;
+  /** Пояснение раздела из «Текстов элементов экрана»: есть — своего текста раздел не показывает. */
+  what: string;
+  connect: ReturnType<typeof usePageTelegramConnect>;
+}) {
+  const t = useT();
 
   return (
     <>

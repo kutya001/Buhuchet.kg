@@ -23,12 +23,14 @@ import {
   type KbShowProblem,
   type KbStepInput,
   type ListQuery,
+  CP_HELP_DICTS,
 } from '@buhuchet/domain';
-import { and, asc, count, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { readReference, saveReference } from './admin-gked';
 import type { Tx } from './client';
+import { readCpHelp } from './contractor-page-help';
 import {
   selectListExport,
   selectListPage,
@@ -1206,9 +1208,11 @@ export async function adminKbHistory(
   section: KbHistorySection,
   limit: number,
 ): Promise<{ total: number; items: AdminKbHistoryItem[] }> {
+  // «Страница контрагента» — записи пяти разделов вкладки (`cpwel:…` … `cpgloss:…`), код — с разделом.
+  const prefixes = section === 'cppage' ? CP_HELP_DICTS : [section];
   const where = and(
     eq(platformAuditLog.entity, 'platform_dict'),
-    sql`starts_with(${platformAuditLog.entityId}, ${`${section}:`})`,
+    or(...prefixes.map((p) => sql`starts_with(${platformAuditLog.entityId}, ${`${p}:`})`)),
   );
   const [rows, [counted]] = await Promise.all([
     tx
@@ -1223,12 +1227,20 @@ export async function adminKbHistory(
   if (section === 'kbsteps') for (const s of await adminKbSteps(tx)) titles.set(s.id, s.t);
   if (section === 'kbarts') for (const a of await adminKbArticles(tx)) titles.set(a.id, a.t);
   if (section === 'kbshows') for (const s of await adminKbSteps(tx)) titles.set(s.id, s.t);
+  if (section === 'cppage') {
+    const h = await readCpHelp(tx);
+    for (const s of h.tour) titles.set(`cptour:${s.id}`, s.t);
+    for (const q of h.faq) titles.set(`cpfaq:${q.id}`, q.q);
+  }
   return {
     total: counted?.n ?? 0,
     items: rows.map((r) => {
-      const code = r.entityId.slice(section.length + 1);
+      const code = section === 'cppage' ? r.entityId : r.entityId.slice(section.length + 1);
       const changes = (r.changes ?? []) as HistoryChange[];
-      const title = changes.find((c) => c.field === 't');
+      // Название записи «Страницы контрагента»: заголовок облачка, вопрос или слово.
+      const title = changes.find(
+        (c) => c.field === 't' || (section === 'cppage' && (c.field === 'q' || c.field === 'w')),
+      );
       return {
         id: String(r.id),
         at: r.at,

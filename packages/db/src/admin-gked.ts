@@ -96,7 +96,15 @@ export async function readReference(
  */
 export async function saveReference(
   tx: Tx,
-  key: 'taxes' | 'propertyRates' | 'gkedGroups' | 'kbSteps' | 'kbArticles' | 'kbLevels' | 'kbShows',
+  key:
+    | 'taxes'
+    | 'propertyRates'
+    | 'gkedGroups'
+    | 'kbSteps'
+    | 'kbArticles'
+    | 'kbLevels'
+    | 'kbShows'
+    | 'cpHelp',
   payload: unknown,
   version: number,
 ): Promise<number | null> {

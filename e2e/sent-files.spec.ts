@@ -11,6 +11,7 @@ import {
   uniqueChat,
   uniqueLogin,
 } from './helpers';
+import { clearCookiesButWelcome, closeDone, pageHint } from './page-help';
 
 // Файлы от контрагентов (доработки 14.11.2026, блок 2; прототип v112 modules/cp-sent.js): контрагент
 // отправляет файлы со своей страницы, ответственному — сообщение в Telegram, в карточке — раздел
@@ -193,16 +194,14 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     await expect(page.locator('footer')).toHaveText(text(texts, 'pub.foot.upload'));
     await section.locator('[data-pub-up]').click();
     const send = page.getByRole('dialog', { name: text(texts, 'pub.sent.send') });
-    await expect(send.getByText(text(texts, 'pub.sent.dlg.files_hint'))).toBeVisible();
+    await expect(send.getByText(pageHint('upHint', { мб: 20, файлов: 10 }))).toBeVisible();
     await send
       .locator('[data-pub-up-files]')
       .setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBytes() });
     await send.locator('[data-pub-up-note]').fill(comment);
     await send.locator('[data-pub-up-ok]').click();
     await expect(send).toBeHidden();
-    await expect(
-      page.getByRole('status').filter({ hasText: text(texts, 'pub.sent.done.one') }),
-    ).toBeVisible();
+    await closeDone(page, text(texts, 'cph.up.done_one'), pageHint('upDone'));
 
     // «Отправленные вами»: файл «Новый», комментарий и «Удалится через 30 дней».
     const mine = section.locator('[data-pub-sent-row]').filter({ hasText: fileName });
@@ -396,7 +395,7 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
 
     // На странице клиента: «Принят», без срока удаления.
     await page.goto('about:blank');
-    await page.context().clearCookies();
+    await clearCookiesButWelcome(page.context());
     const section = await openFilesSection(page, cp, name, isMobile);
     const mine = section.locator('[data-pub-sent-row]').filter({ hasText: fileName });
     await expect(mine).toHaveAttribute('data-pub-sent-row', 'accepted');

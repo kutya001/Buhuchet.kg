@@ -1,6 +1,7 @@
 import type { ListColumnType, ListSort } from '../common/list';
 import { bishkekDate, formatDateRu } from '../common/dates';
 import type { UiTextKey } from '../l10n/texts';
+import { cpHelpHistoryDict, cpHelpHistoryLine, type CpHelpDict } from '../contractor-page/help';
 import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
 import { FEATURES, PERMISSIONS } from '../roles/permissions';
 import type { KbLevelDef } from './catalog';
@@ -341,7 +342,16 @@ export const KB_ADMIN_SORT: Readonly<Record<KbAdminList, ListSort | null>> = {
  * Разделы истории: шаги, статьи, уровни, показы и видео платформы (`platform_audit_log`,
  * `<раздел>:<код>`); загрузка из Excel и её откат — записи раздела без кода (`<раздел>:`).
  */
-export const KB_HISTORY_SECTIONS = ['kbsteps', 'kbarts', 'kblevels', 'kbshows', 'video'] as const;
+// «Страница контрагента» (доработки 15.11.2026, прототип v120 `cphLog`, раздел `cppage`): записи пяти
+// разделов вкладки — `cpwel:<ключ>`, `cphints:<ключ>`, `cptour:<облачко>`, `cpfaq:<вопрос>`, `cpgloss:<слово>`.
+export const KB_HISTORY_SECTIONS = [
+  'kbsteps',
+  'kbarts',
+  'kblevels',
+  'kbshows',
+  'video',
+  'cppage',
+] as const;
 export type KbHistorySection = (typeof KB_HISTORY_SECTIONS)[number];
 
 /** Вкладка → её раздел истории. */
@@ -394,7 +404,7 @@ const levelText = (v: unknown, t: (key: UiTextKey) => string) => {
   return `${String(l.n ?? '')} ${String(l.p ?? '')} ${t('kbadm.hist.percent')}`;
 };
 
-const changeTo = (item: KbHistoryItemInput, field: string) =>
+const changeTo = (item: { changes: readonly KbHistoryChange[] }, field: string) =>
   item.changes.find((ch) => ch.field === field)?.to;
 
 /**
@@ -402,7 +412,9 @@ const changeTo = (item: KbHistoryItemInput, field: string) =>
  * — добавлено 1, изменено 2, отключено 0», «Показы: загрузка от 31.10.2026 откачена».
  */
 function loadLine(
-  item: KbHistoryItemInput & { section: Exclude<KbHistorySection, 'kblevels' | 'video'> },
+  item: Omit<KbHistoryItemInput, 'section'> & {
+    section: Exclude<KbHistorySection, 'kblevels' | 'video' | 'cppage'> | CpHelpDict;
+  },
   t: (key: UiTextKey) => string,
 ): KbHistoryLine {
   const dict = t(`pdicts.title.${item.section}`);
@@ -431,6 +443,14 @@ export function kbHistoryLine(
   adminGroup: (group: string) => boolean,
 ): KbHistoryLine {
   const name = item.label;
+  if (item.section === 'cppage') {
+    // Загрузка раздела — «Страница контрагента: обзор страницы: загрузка из Excel — …».
+    const dict = cpHelpHistoryDict(item.code);
+    if (dict && (item.action === 'import' || item.action === 'rollback')) {
+      return loadLine({ ...item, section: dict }, t);
+    }
+    return cpHelpHistoryLine(item, t) ?? { key: 'cph.hist.other', params: { name } };
+  }
   if (
     (item.action === 'import' || item.action === 'rollback') &&
     item.section !== 'kblevels' &&

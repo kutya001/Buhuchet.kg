@@ -22,6 +22,9 @@ import {
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
+/** Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). */
+const CODE = { state: 'code', help: { what: expect.any(String), whatX: expect.any(String) } };
+
 const PHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 
@@ -289,7 +292,15 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(first.status).toBe(200);
     expect(first.headers.get('cache-control')).toBe('no-store');
     expect(first.headers.get('x-robots-tag')).toContain('noindex');
-    expect(PublicPage.parse(await first.json())).toEqual({ state: 'code' });
+    // До кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120).
+    expect(PublicPage.parse(await first.json())).toEqual({
+      state: 'code',
+      help: {
+        what: 'Что это за страница?',
+        whatX:
+          'Ваш бухгалтер открыл вам страницу с данными вашей компании. Код из 6 цифр он прислал вместе со ссылкой.',
+      },
+    });
     // Код не попадает в ответ страницы без входа ни в каком виде.
     expect(JSON.stringify(await (await visit(path)).json())).not.toContain(code);
 
@@ -334,8 +345,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
 
     // Cookie подходит только к своей ссылке, выдуманный — как без cookie.
     expect(await visited(`org-a/${cpOther.inn}`, { cookie })).toEqual({ state: 'unavailable' });
-    expect(await visited(path, { cookie: 'bh_page=not-a-token' })).toEqual({ state: 'code' });
-    expect(await visited(path, { cookie: `bh_page=${'A'.repeat(43)}` })).toEqual({ state: 'code' });
+    expect(await visited(path, { cookie: 'bh_page=not-a-token' })).toEqual(CODE);
+    expect(await visited(path, { cookie: `bh_page=${'A'.repeat(43)}` })).toEqual(CODE);
   });
 
   it('без сеанса открыты только три пути страницы: другие пути под /api/page/ — 401', async () => {
@@ -402,7 +413,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     // «Сменить код» открывает страницу снова: новый код подходит.
     const changed = await block(await act(chief, cpAcc.id, 'code'));
     expect(changed.closed).toBe(false);
-    expect(await visited(path, { cookie })).toEqual({ state: 'code' });
+    expect(await visited(path, { cookie })).toEqual(CODE);
     expect((await enter(path, changed.code, '198.51.100.31')).status).toBe(200);
     expect(tg.sent).toHaveLength(1);
   });
@@ -480,7 +491,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const after = await pageRow(cpAcc.id);
     expect(after.codeVersion).toBe(before.codeVersion + 1);
     expect(changed.code).toBe(after.code);
-    expect(await visited(path, { cookie })).toEqual({ state: 'code' });
+    expect(await visited(path, { cookie })).toEqual(CODE);
     if (after.code !== oldCode) {
       expect((await enter(path, oldCode, '198.51.100.3')).status).toBe(403);
     }

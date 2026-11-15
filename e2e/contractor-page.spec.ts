@@ -8,10 +8,19 @@ import {
   linkTelegram,
   pressStart,
   signIn,
+  stillElement,
   uniqueChat,
   uniqueLogin,
 } from './helpers';
 import { orgWithTypes } from './orgs';
+import {
+  clearCookiesButWelcome,
+  closeDone,
+  forgetWelcome,
+  PAGE_HELP,
+  pageHint,
+  WELCOME_COOKIE,
+} from './page-help';
 
 // Страница контрагента по ссылке: включение, код доступа и защита (задача 2.42, #98) и разделы
 // страницы (задача 2.43, #99). Страница включается через API сайта, открывает её браузер без входа.
@@ -773,6 +782,13 @@ function text(texts: Texts, key: string, values: Record<string, string | number>
 const som = (value: string) =>
   new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s'));
 
+/** Шаги «Я оплатил»: у каждого — номер в кружке и текст из подсказки `paidSteps`. */
+const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const paidSteps = () =>
+  pageHint('paidSteps')
+    .split('|')
+    .map((s) => new RegExp(`^\\d+${reEsc(s)}$`));
+
 /** Настоящий PDF по содержимому: сервер проверяет начало файла, а не расширение. */
 const pdfBytes = () =>
   Buffer.from(
@@ -855,10 +871,17 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await month.locator('[data-pub-send]').click();
     const send = page.getByRole('dialog').filter({ has: page.locator('[data-pub-send-dlg]') });
     await expect(send.locator('[data-pub-send-left]')).toHaveText(som('4 670,50 сом'));
+    // Под суммой — что это за деньги (доработки 15.11.2026, пункт 5.2).
+    await expect(send.locator('[data-pub-send-hint]')).toHaveText(
+      new RegExp(`^${pageHint('sendSum').split('{месяц}').map(reEsc).join('\\S+( \\d{4})?')}$`),
+    );
     await send.locator('[data-pub-send-paid]').click();
     const paid = page.getByRole('dialog', { name: text(texts, 'pub.paid.title') });
     await expect(paid.locator('[data-pub-paid-sum]')).toHaveValue(som('4 670,50'));
     await expect(paid.getByText(text(texts, 'pub.paid.info'))).toBeVisible();
+    // Что сделать — по шагам (доработки 15.11.2026, пункт 3.4); выбора «что оплатили» здесь нет.
+    await expect(paid.locator('[data-pub-paid-steps] li')).toHaveText(paidSteps());
+    await expect(paid.locator('[data-chip-select]')).toHaveCount(0);
     // Без чека «Отправить» неактивна.
     const ok = paid.locator('[data-pub-paid-ok]');
     await expect(ok).toBeDisabled();
@@ -869,9 +892,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await expect(ok).toBeEnabled();
     await ok.click();
     await expect(paid).toBeHidden();
-    await expect(
-      page.getByRole('status').filter({ hasText: text(texts, 'pub.paid.done') }),
-    ).toBeVisible();
+    await closeDone(page, text(texts, 'cph.paid.done_t'), pageHint('paidDone'));
 
     // У месяца — «Ожидает подтверждения», у карточки «Налоги» — когда и сколько сообщили.
     await expect(month.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'wait');
@@ -1004,9 +1025,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
       .setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBytes() });
     await paid.locator('[data-pub-paid-ok]').click();
     await expect(paid).toBeHidden();
-    await expect(
-      page.getByRole('status').filter({ hasText: text(texts, 'pub.paid.done') }),
-    ).toBeVisible();
+    await closeDone(page, text(texts, 'cph.paid.done_t'));
 
     // Сотрудник (вход владельца — в том же браузере): «Принять» у чека — окно оплаты с чеком.
     // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
@@ -1107,7 +1126,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     expect(approved.status(), await approved.text()).toBe(200);
 
     // Сутки прошли — браузер код забыл: снова «Введите код доступа».
-    await page.context().clearCookies();
+    await clearCookiesButWelcome(page.context());
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
 
@@ -1138,5 +1157,245 @@ test.describe('Доработки 14.11, блок 6: страница контр
       await request.get(`/api/contractors/${id}/history`, { maxRetries: 2 })
     ).json()) as { items: { action: string }[] };
     expect(history.items.filter((h) => h.action === 'page_code_tg')).toHaveLength(3);
+  });
+});
+
+// Доработки 15.11.2026 (прототип v120 modules/cp-help.js): подсказки на странице контрагента для людей
+// без бухгалтерского образования — «Что это за страница?» до кода, «Добро пожаловать» один раз, обзор
+// облачками по разделам с записью в историю, «Помощь» с частыми вопросами, «Словарик», шаги в «Я оплатил».
+// Тексты подсказок — из наполнения (`kbUi.cpHelp` refDB.json), подписи интерфейса — из словаря.
+
+/** Облачко обзора: номер шага и сколько всего (`cph.tour.of` — «{n} из {m}»). */
+async function tourStep(page: Page): Promise<{ n: number; m: number }> {
+  const label = (await page.locator('[data-tour-count]').innerText()).trim();
+  const [n, m] = label.split(/\D+/).filter(Boolean).map(Number);
+  return { n: n!, m: m! };
+}
+
+test.describe('Доработки 15.11: подсказки на странице контрагента', () => {
+  test.beforeEach(async ({ page }) => {
+    const part = () => Math.floor(Math.random() * 256);
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
+  });
+
+  test('(приёмка 15.11, пункт 2) до кода — «Что это за страница?»; после первого кода — «Добро пожаловать» и обзор облачками до «Готово!»; обзор, закрытый на шаге, — тоже в истории контрагента', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    // Своя организация, два прохода обзора по всем разделам страницы и история контрагента.
+    test.slow();
+    const texts = await dictionary(request);
+    const o = await pageOrg(request, baseURL);
+    const name = `ОсОО «Обзор ${Date.now().toString(36)}»`;
+    const cp = await pageOf(request, o, name, 'org');
+    const tours = async () =>
+      (
+        (await (
+          await request.get(`/api/contractors/${cp.id}/history`, { maxRetries: 2 })
+        ).json()) as { items: { action: string; changes: { field: string; to?: unknown }[] }[] }
+      ).items.filter((h) => h.action === 'page_tour');
+
+    // Этот браузер страницу ещё не видел.
+    await forgetWelcome(page.context());
+    await page.goto(cp.path);
+    const what = page.locator('[data-pub-what]');
+    await expect(what).toHaveText(pageHint('codeWhat'));
+    await expect(page.locator('[data-pub-what-text]')).toBeHidden();
+    await what.click();
+    await expect(page.locator('[data-pub-what-text]')).toBeVisible();
+    await expect(page.locator('[data-pub-what-text]')).toHaveText(pageHint('codeWhatX'));
+
+    await openByCode(page, cp.path, cp.code, name);
+    const welcome = page.getByRole('dialog', { name: PAGE_HELP.welcome.t! });
+    await expect(welcome.locator('[data-pub-welcome]')).toContainText(PAGE_HELP.welcome.lead!);
+    // Карточки — только разделов, которые видны: отчёты, оплата и файлы.
+    await expect(welcome.locator('[data-pub-welcome-card]')).toHaveText([
+      new RegExp(reEsc(PAGE_HELP.welcome.repT!)),
+      new RegExp(reEsc(PAGE_HELP.welcome.payT!)),
+      new RegExp(reEsc(PAGE_HELP.welcome.filesT!)),
+    ]);
+    await welcome.locator('[data-pub-welcome-go]').click();
+    await expect(welcome).toBeHidden();
+    // Отметка «уже видели» — под адресом этой страницы: второй раз приветствия здесь не будет.
+    await expect
+      .poll(async () =>
+        (await page.context().cookies()).some(
+          (c) => c.name === WELCOME_COOKIE && c.path === cp.path,
+        ),
+      )
+      .toBe(true);
+
+    // Обзор: облачко у каждого видимого раздела, у «Отчётов» — что значат цвета, последнее — «Готово!».
+    // Название облачка — его подпись для чтения с экрана.
+    const bubble = page.locator('[data-tour-bubble]');
+    const next = bubble.locator('[data-tour-next]');
+    // Облачко стоит на месте: нажатие по переезжающей кнопке теряется молча (№ 34).
+    const settled = async () => {
+      await expect(next).toBeEnabled();
+      await stillElement(bubble);
+    };
+    const reportsStep = PAGE_HELP.tour.find((s) => s.sec === 'reports')!;
+    const endStep = PAGE_HELP.tour.find((s) => s.sec === 'end')!;
+    await expect(bubble).toHaveAttribute('aria-label', PAGE_HELP.tour[0]!.t);
+    const { m } = await tourStep(page);
+    const titles: string[] = [];
+    for (let n = 1; n <= m; n++) {
+      await expect(page.locator('[data-tour-count]')).toHaveText(
+        text(texts, 'cph.tour.of', { n, m }),
+      );
+      const title = (await bubble.getAttribute('aria-label')) ?? '';
+      titles.push(title);
+      if (title === reportsStep.t) await expect(bubble.locator('[data-pub-legend]')).toBeVisible();
+      await expect(next).toHaveText(text(texts, n === m ? 'cph.tour.done' : 'cph.tour.next'));
+      await settled();
+      await next.click();
+    }
+    await expect(bubble).toBeHidden();
+    expect(titles).toContain(reportsStep.t);
+    expect(titles.at(-1)).toBe(endStep.t);
+    await expect.poll(async () => (await tours()).length).toBe(1);
+    expect((await tours())[0]!.changes).toEqual([{ field: 'of', to: m }]);
+
+    // «Помощь» → «Показать, как пользоваться страницей» — тот же обзор; «Закончить» на третьем шаге.
+    await page.locator('[data-pub-help]').click();
+    const help = page.locator('[data-pub-help-panel]');
+    await help.locator('[data-pub-help-tour]').click();
+    await expect(help).toBeHidden();
+    await expect(page.locator('[data-tour-count]')).toHaveText(
+      text(texts, 'cph.tour.of', { n: 1, m }),
+    );
+    await settled();
+    await next.click();
+    await expect(page.locator('[data-tour-count]')).toHaveText(
+      text(texts, 'cph.tour.of', { n: 2, m }),
+    );
+    await settled();
+    await next.click();
+    await expect(page.locator('[data-tour-count]')).toHaveText(
+      text(texts, 'cph.tour.of', { n: 3, m }),
+    );
+    await settled();
+    // «Закончить» под текстом облачка (у крестика в углу — та же подпись, но без текста).
+    await bubble.getByText(text(texts, 'cph.tour.end'), { exact: true }).click();
+    await expect(bubble).toBeHidden();
+    await expect.poll(async () => (await tours()).length).toBe(2);
+    expect((await tours())[0]!.changes).toEqual([
+      { field: 'step', to: 3 },
+      { field: 'of', to: m },
+    ]);
+  });
+
+  test('(приёмка 15.11, пункты 3–5) «Помощь»: вопросы о том, что есть на странице, ответ с кнопкой открывает нужное окно; «Словарик» — облачко у слова и список в «Помощи»; в «Я оплатил» — шаги и выбор «Налоги / Обслуживание»', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    // Своя организация, панель «Помощь» с двумя окнами и «Словарик».
+    test.slow();
+    const texts = await dictionary(request);
+    const o = await pageOrg(request, baseURL);
+    const name = `ОсОО «Помощь ${Date.now().toString(36)}»`;
+    const cp = await pageOf(request, o, name, 'org');
+    // «Посмотрю сам» — приветствие закрывается и под адресом этой страницы больше не появляется.
+    await forgetWelcome(page.context());
+    await openByCode(page, cp.path, cp.code, name);
+    const welcome = page.getByRole('dialog', { name: PAGE_HELP.welcome.t! });
+    await welcome.locator('[data-pub-welcome-skip]').click();
+    await expect(welcome).toBeHidden();
+    await expect
+      .poll(async () =>
+        (await page.context().cookies()).some(
+          (c) => c.name === WELCOME_COOKIE && c.path === cp.path,
+        ),
+      )
+      .toBe(true);
+    await page.reload();
+    await pageReady(page);
+
+    const openHelp = async () => {
+      await page.locator('[data-pub-help]').click();
+      const panel = page.getByRole('dialog', { name: pageHint('helpTitle') });
+      await expect(panel.locator('[data-pub-help-panel]')).toBeVisible();
+      return panel;
+    };
+    const question = (panel: ReturnType<Page['locator']>, q: string) =>
+      panel.locator('[data-pub-faq]').filter({ has: page.getByRole('button', { name: q }) });
+    const faq = (act: string) => PAGE_HELP.faq.find((q) => q.act === act && q.on)!;
+
+    // Вопросы — о том, что на странице есть: оплата налогов и обслуживания, отправка файла.
+    let panel = await openHelp();
+    // После перезагрузки открыта только «Помощь»: приветствия нет.
+    await expect(page.getByRole('dialog')).toHaveCount(1);
+    for (const q of [faq('goPay').q, faq('paid').q, faq('up').q]) {
+      await expect(question(panel, q)).toHaveCount(1);
+    }
+    // «Перейти к …»: панель закрывается, нужный раздел («Файлы» — внизу страницы) — на экране, на
+    // телефоне раскрыт.
+    const files = section(page, 'files');
+    await expect(files).not.toBeInViewport();
+    const goQ = question(panel, faq('goFiles').q);
+    await goQ.getByRole('button', { name: faq('goFiles').q }).click();
+    await goQ.locator('[data-pub-faq-act="goFiles"]').click();
+    await expect(panel).toBeHidden();
+    await expect(files).toBeInViewport();
+    await expect(files).not.toHaveAttribute('data-folded', '');
+    panel = await openHelp();
+    // Ответ раскрывается по нажатию; кнопка ответа открывает «Я оплатил» с выбором, что оплачено.
+    const paidQ = question(panel, faq('paid').q);
+    await paidQ.getByRole('button', { name: faq('paid').q }).click();
+    await expect(paidQ.getByRole('button', { name: faq('paid').q })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await paidQ.locator('[data-pub-faq-act="paid"]').click();
+    await expect(panel).toBeHidden();
+    const paid = page.getByRole('dialog', { name: text(texts, 'pub.paid.title') });
+    await expect(paid.locator('[data-pub-paid-steps] li')).toHaveText(paidSteps());
+    const pick = paid.getByRole('group', { name: pageHint('paidPick') });
+    const tax = pick.getByRole('button', { name: text(texts, 'pub.pay.tax') });
+    const fee = pick.getByRole('button', { name: text(texts, 'pub.pay.fee') });
+    await expect(tax).toHaveAttribute('aria-pressed', 'true');
+    await fee.click();
+    await expect(fee).toHaveAttribute('aria-pressed', 'true');
+    await expect(tax).toHaveAttribute('aria-pressed', 'false');
+    await expect(paid.getByText(pageHint('paidFile'), { exact: false })).toBeVisible();
+    await paid.getByRole('button', { name: text(texts, 'btn.cancel') }).click();
+    await expect(paid).toBeHidden();
+
+    // «Как отправить документ бухгалтеру?» → «Отправить файл»: окно с тем, что можно прислать.
+    panel = await openHelp();
+    const upQ = question(panel, faq('up').q);
+    await upQ.getByRole('button', { name: faq('up').q }).click();
+    await upQ.locator('[data-pub-faq-act="up"]').click();
+    await expect(panel).toBeHidden();
+    const send = page.getByRole('dialog', { name: text(texts, 'pub.sent.send') });
+    await expect(send.getByText(pageHint('upHint', { мб: 20, файлов: 10 }))).toBeVisible();
+    await send.getByRole('button', { name: text(texts, 'btn.cancel') }).click();
+    await expect(send).toBeHidden();
+
+    // «Словарик» в «Помощи»: все слова с объяснением.
+    panel = await openHelp();
+    const glossQ = panel.locator('[data-pub-faq="__gloss"]');
+    await glossQ.getByRole('button').first().click();
+    await expect(glossQ.locator('[data-pub-help-gloss] dt')).toHaveCount(PAGE_HELP.gloss.length);
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+
+    // Слово на странице подчёркнуто: по нажатию — облачко с его объяснением.
+    if (isMobile) await unfold(page, 'reports', isMobile);
+    const word = page.locator('[data-pub-gl]:visible').first();
+    await expect(word).toBeVisible();
+    await word.click();
+    const pop = page.locator('[data-pub-gloss-pop]');
+    await expect(pop).toBeVisible();
+    const explained = (await pop.locator('p').innerText()).trim();
+    expect(PAGE_HELP.gloss.map((g) => g.x)).toContain(explained);
+    await page.keyboard.press('Escape');
+    await expect(pop).toBeHidden();
+
+    // Пустой раздел «Файлы» (раскрыт переходом из «Помощи») объясняет, что здесь появится (пункт 5.5).
+    await expect(files).toContainText(pageHint('emptyFiles'));
   });
 });
