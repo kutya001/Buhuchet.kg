@@ -796,29 +796,30 @@ describe.skipIf(!databaseAvailable())(
 
       it('«Отправить файл» со страницы, когда хранилище не удаляет: загрузка и проверочная копия — на повторное удаление, файл остаётся', async () => {
         const del = storage.delete;
-        storage.delete = async () => {
-          throw new Error('S3 недоступно');
-        };
-        let key: string;
         try {
-          const [id] = await send('org-a', cpAcc, grantAcc, [
-            { name: 'Счёт со страницы.pdf', body: PDF('page') },
-          ]);
-          key = (await keyOf(id!))!;
-          const left = await retries();
-          expect(left).toHaveLength(2);
-          expect(left).toContain(`${key}.up`);
-          expect(left.some((k) => k.startsWith(`${key}.chk-`))).toBe(true);
-        } finally {
-          storage.delete = del;
-        }
-        try {
+          storage.delete = async () => {
+            throw new Error('S3 недоступно');
+          };
+          let key: string;
+          try {
+            const [id] = await send('org-a', cpAcc, grantAcc, [
+              { name: 'Счёт со страницы.pdf', body: PDF('page') },
+            ]);
+            key = (await keyOf(id!))!;
+            const left = await retries();
+            expect(left).toHaveLength(2);
+            expect(left).toContain(`${key}.up`);
+            expect(left.some((k) => k.startsWith(`${key}.chk-`))).toBe(true);
+          } finally {
+            storage.delete = del;
+          }
           expect(await retryStorageDeletes(f.deps)).toBe(2);
           expect(storage.files.has(`${key}.up`)).toBe(false);
           expect([...storage.files.keys()].some((k) => k.startsWith(`${key}.chk-`))).toBe(false);
           expect(storage.files.has(key)).toBe(true);
           expect(await retries()).toEqual([]);
         } finally {
+          storage.delete = del;
           await f.t.admin.db.delete(schema.storageDeleteRetries);
         }
       });

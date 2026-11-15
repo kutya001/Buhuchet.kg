@@ -642,15 +642,15 @@ describe.skipIf(!databaseAvailable())(
       expect((await filesOf('receipt', receipt)).length).toBe(1);
       // Хранилище не удаляет копию после отказа — она идёт на повторное удаление (п. И-10).
       const del = storage.delete;
-      storage.delete = async () => {
-        throw new Error('S3 недоступно');
-      };
       try {
-        expect((await attach(owner, 'receipt', await op(cpA2))).status).toBe(404);
-      } finally {
-        storage.delete = del;
-      }
-      try {
+        storage.delete = async () => {
+          throw new Error('S3 недоступно');
+        };
+        try {
+          expect((await attach(owner, 'receipt', await op(cpA2))).status).toBe(404);
+        } finally {
+          storage.delete = del;
+        }
         const retries = await f.t.admin.db
           .select({ key: schema.storageDeleteRetries.key })
           .from(schema.storageDeleteRetries);
@@ -659,6 +659,7 @@ describe.skipIf(!databaseAvailable())(
         expect(await retryStorageDeletes(f.deps)).toBe(1);
         expect(objects()).toBe(before);
       } finally {
+        storage.delete = del;
         await f.t.admin.db.delete(schema.storageDeleteRetries);
       }
       // Только поступление и оплата за обслуживание.
