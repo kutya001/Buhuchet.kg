@@ -69,9 +69,10 @@ export interface CreateOrganizationInput {
   /**
    * «Создать организацию» по заявке с сайта (прототип addOrgDlg с `lead`): в той же транзакции заявка
    * получает «Подключена» и ссылку на организацию; заявки нет или по ней уже создана организация —
-   * `LeadLinkError`, и организация не создаётся.
+   * `LeadLinkError`, и организация не создаётся. `docs` — «Одобрить» заявки с документами: запись
+   * истории организации «создана по заявке с сайта» с логином владельца (прототип v114 ldApproveDlg).
    */
-  lead?: { id: string; now: Date; version?: number } | null;
+  lead?: { id: string; now: Date; version?: number; docs?: boolean } | null;
   /**
    * Что сделать в той же транзакции после создания (заявка уже «Подключена»): у «Одобрить» — привязать
    * Telegram заявителя к владельцу и перенести документы заявки в файлы организации. Только `tx`.
@@ -278,7 +279,12 @@ async function insertOrganization(
   // Кто создал организацию и что появилось вместе с ней; учётная политика — запись с ключом org_id.
   await writeHistory(
     tx,
-    { entity: 'organization', entityId: orgId, action: 'create' },
+    {
+      entity: 'organization',
+      entityId: orgId,
+      action: 'create',
+      ...(input.lead?.docs ? { changes: [{ field: 'fromLead', to: input.owner.login }] } : {}),
+    },
     ...created.map((r) => ({ entity: 'role' as const, entityId: r.id, action: 'create' as const })),
     { entity: 'user', entityId: user!.id, action: 'create' },
     { entity: 'employee', entityId: employee!.id, action: 'create' },

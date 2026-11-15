@@ -152,7 +152,9 @@ describe.skipIf(!databaseAvailable())('документы заявки с лен
   });
 
   it('черновик и документы заявки роль приложения не читает и не меняет напрямую', async () => {
-    await expect(db.app.db.execute(sql`select * from platform_lead_uploads`)).rejects.toEqual(denied);
+    await expect(db.app.db.execute(sql`select * from platform_lead_uploads`)).rejects.toEqual(
+      denied,
+    );
     await expect(db.app.db.select().from(platformLeadDocs)).rejects.toEqual(denied);
   });
 

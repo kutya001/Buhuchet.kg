@@ -427,6 +427,10 @@ export const ADMIN_ORG_CARD_TEXTS = {
   'orgs.card.files.none': { ru: 'Файлов пока нет', section: S },
   'orgs.card.hist.empty': { ru: 'Записей пока нет', section: S },
   'orgs.card.hist.created': { ru: 'Организация создана вместе с владельцем', section: S },
+  'orgs.card.hist.created_lead': {
+    ru: 'Организация создана по заявке с сайта: владелец {login}, файлы заявки — в «Файловом менеджере» (Заявка на подключение)',
+    section: S,
+  },
   'orgs.card.hist.blocked': { ru: 'Организация заблокирована: {reason}', section: S },
   'orgs.card.hist.unblocked': { ru: 'Организация разблокирована', section: S },
   'orgs.card.hist.unblocked_was': { ru: 'Организация разблокирована (была: {reason})', section: S },

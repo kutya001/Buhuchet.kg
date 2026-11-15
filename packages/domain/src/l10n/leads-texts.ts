@@ -1,4 +1,8 @@
-import { LEAD_APPROVE_MESSAGES, LEAD_DOCS_KEEP_REJECTED_DAYS } from '../admin/lead-docs';
+import {
+  LEAD_APPROVE_MESSAGES,
+  LEAD_DOCS_KEEP_REJECTED_DAYS,
+  LEAD_UPLOAD_MESSAGES,
+} from '../admin/lead-docs';
 import { LEAD_MESSAGES } from '../admin/leads';
 import type { UiTextDefault } from './texts';
 
@@ -198,7 +202,7 @@ export const LEADS_TEXTS = {
     section: S,
   },
   'leads.approve.done_no_tg': {
-    ru: 'Организация и владелец созданы, но ссылка для пароля не ушла: отправьте её из карточки учётной записи',
+    ru: 'Организация и владелец созданы, но ссылка для пароля не ушла: отправьте новую из карточки организации',
     section: S,
   },
   'err.lead_not_found': { ru: LEAD_MESSAGES.lead_not_found, section: E },
@@ -214,4 +218,8 @@ export const LEADS_TEXTS = {
   'err.lead_inn_taken': { ru: LEAD_APPROVE_MESSAGES.lead_inn_taken, section: E },
   'err.lead_has_docs': { ru: LEAD_APPROVE_MESSAGES.lead_has_docs, section: E },
   'err.lead_no_docs': { ru: LEAD_APPROVE_MESSAGES.lead_no_docs, section: E },
+  'err.lead_upload_limit': { ru: LEAD_UPLOAD_MESSAGES.lead_upload_limit, section: E },
+  'err.lead_read_busy': { ru: LEAD_UPLOAD_MESSAGES.lead_read_busy, section: E },
+  'err.lead_read_limit': { ru: LEAD_UPLOAD_MESSAGES.lead_read_limit, section: E },
+  'err.lead_upload_missing': { ru: LEAD_UPLOAD_MESSAGES.lead_upload_missing, section: E },
 } as const satisfies Record<string, UiTextDefault>;

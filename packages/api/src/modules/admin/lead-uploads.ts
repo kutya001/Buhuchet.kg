@@ -21,6 +21,7 @@ import {
   LEAD_READ_TIMEOUT_MS,
   LEAD_READ_WINDOW_SECONDS,
   LEAD_UPLOAD_LIMIT,
+  LEAD_UPLOAD_MESSAGES,
   leadDocValues,
   rdExtract,
   rdToCp,
@@ -142,7 +143,7 @@ export function leadUploadStartHandler(
     const slot = await takeRateLimit(deps.db, LEAD_UPLOAD_RATE_LIMIT, leadIpSubject(c, deps));
     const all = slot.ok ? await takeRateLimit(deps.db, LEAD_UPLOAD_ALL_RATE_LIMIT, 'all') : slot;
     if (!slot.ok || !all.ok) {
-      apiFail(429, 'lead_upload_limit', 'Слишком много загрузок за час. Попробуйте позже');
+      apiFail(429, 'lead_upload_limit', LEAD_UPLOAD_MESSAGES.lead_upload_limit);
     }
     const id = randomUUID();
     const started = await startLeadUpload(deps.db, {
@@ -215,8 +216,9 @@ export function leadUploadReadHandler(
     const subject = leadIpSubject(c, deps);
     const slot = await takeRateLimit(deps.db, LEAD_READ_RATE_LIMIT, subject);
     if (!slot.ok) {
-      if (slot.reason === 'busy') apiFail(429, 'lead_read_busy', 'Документ ещё читается');
-      apiFail(429, 'lead_read_limit', 'Слишком много документов за час. Попробуйте позже');
+      if (slot.reason === 'busy')
+        apiFail(429, 'lead_read_busy', LEAD_UPLOAD_MESSAGES.lead_read_busy);
+      apiFail(429, 'lead_read_limit', LEAD_UPLOAD_MESSAGES.lead_read_limit);
     }
     try {
       const upload = await leadUploadOf(deps.db, id, draft);
@@ -224,7 +226,7 @@ export function leadUploadReadHandler(
       const key = leadUploadKey(id);
       const stored = await deps.storage.stat(key);
       if (!stored)
-        return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
+        return apiFail(409, 'lead_upload_missing', LEAD_UPLOAD_MESSAGES.lead_upload_missing);
       // Отказ — через `return await`: иначе отказ ждал бы, пока `finally` отпускает предел, без
       // обработчика (необработанное отклонение).
       const refuse = async (code: 'lead_doc_pdf' | 'lead_doc_big'): Promise<never> => {
@@ -236,12 +238,12 @@ export function leadUploadReadHandler(
       };
       if (stored.size > LEAD_DOC_MAX_BYTES) return await refuse('lead_doc_big');
       if (stored.size !== upload.sizeBytes) {
-        return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
+        return apiFail(409, 'lead_upload_missing', LEAD_UPLOAD_MESSAGES.lead_upload_missing);
       }
       if (!(await isStoredPdf(deps, key))) return await refuse('lead_doc_pdf');
       const bytes = await deps.storage.get(key);
       if (!bytes || bytes.length !== upload.sizeBytes) {
-        return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
+        return apiFail(409, 'lead_upload_missing', LEAD_UPLOAD_MESSAGES.lead_upload_missing);
       }
       const reader = await leadReaderOf(deps);
       const read = await reader.read(bytes);

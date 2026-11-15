@@ -938,7 +938,7 @@ function FilesTab({
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13px] font-semibold text-ink">{f.name}</div>
                   <div className="truncate text-xs text-faint">
-                    {`${t(LEAD_DOC_TEXT_KEYS[f.kind] as UiTextKey)} · ${fileSizeText(t, f.bytes)}`}
+                    {`${t(LEAD_DOC_TEXT_KEYS[f.kind] as UiTextKey)} · ${fileSizeText(t, f.bytes)} · ${formatMomentRu(new Date(f.at))}`}
                   </div>
                 </div>
               </li>

@@ -123,12 +123,19 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
       [{ telegram: '@aigul\r\nадмин' }, 'telegram'],
       [{ note: 'Перезвоните\u0000' }, 'note'],
       [{ website: '\u0000' }, 'website'],
+      // Поля из документов (доработки 14.11.2026, блок 1): форма, ИНН, ОКПО, номер черновика.
+      [{ form: 'ao' }, 'form'],
+      [{ form: null }, 'form'],
+      [{ inn: '123' }, 'inn'],
+      [{ inn: '2181120181000x' }, 'inn'],
+      [{ okpo: '1234567' }, 'okpo'],
+      [{ address: 'г. Бишкек\nул. Токтогула' }, 'address'],
+      [{ head: 'x'.repeat(300) }, 'head'],
+      [{ draft: 'не-номер' }, 'draft'],
     ];
     const before = (await leads()).length;
     for (const [over, field] of cases) {
-      const res = await send(
-        form({ ...over, phone: over.phone ?? '+996700000001', draft: NO_DRAFT }),
-      );
+      const res = await send(form({ phone: '+996700000001', draft: NO_DRAFT, ...over }));
       expect([field, res.status]).toEqual([field, 400]);
       const body = ApiError.parse(await res.json());
       expect(body.error.code).toBe('validation_failed');

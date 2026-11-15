@@ -36,7 +36,7 @@ import {
   type PhoneInputCode,
   type PhoneInputValue,
 } from '@buhuchet/ui';
-import { useCallback, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { api, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { Stamp } from './landing-art';
@@ -47,6 +47,8 @@ import {
   leadDocErrorKey,
   leadDocProblem,
   uploadLeadDoc,
+  valuesAfterFormSwitch,
+  valuesAfterRead,
   type LeadDocResult,
   type LeadRegField,
 } from './lead-docs';
@@ -180,6 +182,11 @@ export function LeadForm({
   const [auto, setAuto] = useState<Partial<Record<LeadRegField, string>>>({});
   const [busy, setBusy] = useState(false);
   const autoRef = useRef<Partial<Record<LeadRegField, string>>>({});
+  // Поля на момент ответа разбора (он приходит после ожидания сети).
+  const valuesRef = useRef(values);
+  useEffect(() => {
+    valuesRef.current = values;
+  }, [values]);
   const draft = useRef<string | null>(null);
   // Документы разбираются по одному: у первого появляется черновик, следующие идут в него же.
   const chain = useRef<Promise<void>>(Promise.resolve());
@@ -204,11 +211,7 @@ export function LeadForm({
   const pickForm = (next: OrgLegalForm) => {
     if (next === legalForm) return;
     const was = autoRef.current;
-    setValues((v) => {
-      const out = { ...v };
-      for (const f of LEAD_REG_FIELDS) if (was[f] && v[f].trim() === was[f]) out[f] = '';
-      return out;
-    });
+    setValues((v) => valuesAfterFormSwitch(v, was));
     generation.current += 1;
     draft.current = null;
     autoRef.current = {};
@@ -228,22 +231,11 @@ export function LeadForm({
     setDocs(Object.fromEntries(read.read.docs.map((d) => [d.kind, d.name])));
     setFound(read.read.found);
     const got = read.read.values;
-    const was = autoRef.current;
-    const next = { ...was };
-    setValues((v) => {
-      const out = { ...v };
-      for (const f of LEAD_REG_FIELDS) {
-        if (!got[f]) continue;
-        const cur = v[f].trim();
-        if (!cur || cur === was[f]) {
-          out[f] = got[f];
-          next[f] = got[f];
-        }
-      }
-      return out;
-    });
-    autoRef.current = next;
-    setAuto(next);
+    const next = valuesAfterRead(valuesRef.current, autoRef.current, got);
+    valuesRef.current = next.values;
+    setValues(next.values);
+    autoRef.current = next.auto;
+    setAuto(next.auto);
     setErrors((e) => {
       const out = { ...e };
       for (const f of LEAD_REG_FIELDS) if (got[f]) out[f] = undefined;
@@ -262,7 +254,12 @@ export function LeadForm({
         delete next[kind];
         return next;
       });
-      if (!file) return;
+      // Поле очищено: прежний итог разбора больше не про эти документы (docs/deviations.md п. И-9).
+      // ОТКЛОНЕНИЕ: docs/deviations.md#И-9
+      if (!file) {
+        setFound('');
+        return;
+      }
       const problem = await leadDocProblem(file);
       if (problem) {
         input.value = '';

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  leadApproveRefusal,
   leadBack,
   leadCanConnect,
   leadCanCreateOrg,
@@ -150,8 +151,25 @@ export function useLeadActions(): {
   const startOrgOrApprove = (l: AdminLead) => (l.legalForm ? void startApprove(l) : startOrg(l));
 
   /**
-   * Пункты меню (прототип `leadActions`); в окне заявки — без «Открыть заявку», «Одобрить» там
-   * неактивна с причиной (в списке причину покажет нажатие).
+   * Почему «Одобрить» неактивна в строке списка (прототип ldApproveWhy) — по данным строки; занятый ИНН
+   * и незагрузившиеся документы покажет нажатие по свежей заявке (docs/deviations.md п. И-9).
+   */
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-9
+  const rowApproveWhy = (l: AdminLead): string => {
+    const refusal = leadApproveRefusal({
+      hasOrg: l.org !== null,
+      status: l.status,
+      tgLinked: l.tgLinked,
+      docsState: l.docs ? 'ready' : null,
+      inn: l.inn,
+      innTaken: false,
+    });
+    return refusal ? t(`err.${refusal}`, { inn: l.inn ?? '', name: '' }) : '';
+  };
+
+  /**
+   * Пункты меню (прототип `leadActions`); в окне заявки — без «Открыть заявку»; «Одобрить» неактивна
+   * с причиной — в окне по ответу сервера, в списке по данным строки.
    */
   const entries = (l: AdminLead | AdminLeadCard, inCard: boolean): ActionEntry[] => {
     const s = leadState(l);
@@ -171,7 +189,7 @@ export function useLeadActions(): {
         run: () => step(l, 'in_progress'),
       });
     if (leadCanCreateOrg(s) && l.legalForm) {
-      const why = 'approve' in l ? (l.approve?.message ?? '') : '';
+      const why = 'approve' in l ? (l.approve?.message ?? '') : rowApproveWhy(l);
       items.push({
         id: 'approve',
         label: t('leads.act.approve'),

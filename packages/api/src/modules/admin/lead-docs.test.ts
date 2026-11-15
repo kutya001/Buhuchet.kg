@@ -1,8 +1,15 @@
-import type { MemoryStorage } from '@buhuchet/adapters';
+import { createHash } from 'node:crypto';
+import { fixedClock, type MemoryStorage } from '@buhuchet/adapters';
 import { createFakeDocumentReader, type DocumentText } from '@buhuchet/adapters/documents';
-import { schema, submitLead } from '@buhuchet/db';
+import { releaseRateLimit, schema, submitLead, takeRateLimit } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
-import { LEAD_DOC_MAX_BYTES, LEAD_DRAFT_HOURS } from '@buhuchet/domain';
+import {
+  LEAD_DOC_MAX_BYTES,
+  LEAD_DRAFT_HOURS,
+  LEAD_READ_LIMIT,
+  LEAD_UPLOAD_MESSAGES,
+  pageIpSubject,
+} from '@buhuchet/domain';
 import {
   AdminLeadCard,
   AdminOrgCard,
@@ -26,6 +33,7 @@ import {
 } from '../../testing';
 import fixture from '../contractors/__fixtures__/regdocs-docs.json';
 import { purgeLeadDocs } from './lead-purge';
+import { LEAD_READ_RATE_LIMIT, LEAD_UPLOAD_ALL_RATE_LIMIT } from './lead-uploads';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
@@ -253,7 +261,70 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         ip,
       );
       expect(over.status).toBe(429);
-      expect((await failure(over)).code).toBe('lead_upload_limit');
+      expect(await failure(over)).toMatchObject({
+        code: 'lead_upload_limit',
+        message: LEAD_UPLOAD_MESSAGES.lead_upload_limit,
+      });
+    });
+
+    it('файл в хранилище больше 20 МБ, хотя заявлен меньше, — «Файл больше 20 МБ»: загрузка и файл убраны', async () => {
+      const ip = '198.18.1.4';
+      const res = await guest(
+        '/api/leads/uploads',
+        { draft: null, kind: 'gns_cert', name: 'big.pdf', size: 1000 },
+        ip,
+      );
+      expect(res.status).toBe(201);
+      const ticket = LeadUploadTicket.parse(await res.json());
+      const key = `leads/upload/${ticket.id}`;
+      const bytes = new Uint8Array(LEAD_DOC_MAX_BYTES + 1);
+      bytes.set(new TextEncoder().encode('%PDF-ipsv'));
+      await storage.put(key, bytes, { contentType: 'application/pdf' });
+      const read = await guest(`/api/leads/uploads/${ticket.id}/read`, { draft: ticket.draft }, ip);
+      expect(read.status).toBe(400);
+      expect(await failure(read)).toMatchObject({
+        code: 'lead_doc_big',
+        message: 'Файл больше 20 МБ',
+      });
+      expect(storage.files.has(key)).toBe(false);
+    });
+
+    it('чтения: пока читается прежнее — «Документ ещё читается»; больше 20 за час с адреса — 429', async () => {
+      const ip = '198.18.1.5';
+      const started = await guest(
+        '/api/leads/uploads',
+        { draft: null, kind: 'gns_cert', name: 'a.pdf', size: 9 },
+        ip,
+      );
+      const ticket = LeadUploadTicket.parse(await started.json());
+      await storage.put(`leads/upload/${ticket.id}`, new TextEncoder().encode('%PDF-scan'), {
+        contentType: 'application/pdf',
+      });
+      const read = () => guest(`/api/leads/uploads/${ticket.id}/read`, { draft: ticket.draft }, ip);
+      // Чтение с того же адреса уже идёт (аренда предела занята).
+      const subject = createHash('sha256')
+        .update(`lead:${pageIpSubject(ip)}`, 'utf8')
+        .digest('hex');
+      const held = await takeRateLimit(f.deps.db, LEAD_READ_RATE_LIMIT, subject);
+      if (!held.ok) throw new Error('предел чтения занят');
+      const busy = await read();
+      expect(busy.status).toBe(429);
+      expect(await failure(busy)).toMatchObject({
+        code: 'lead_read_busy',
+        message: LEAD_UPLOAD_MESSAGES.lead_read_busy,
+      });
+      await releaseRateLimit(f.deps.db, LEAD_READ_RATE_LIMIT, subject, held.ticket);
+      // Занятое чтение — в счёте за час: ещё LEAD_READ_LIMIT − 1.
+      for (let i = 1; i < LEAD_READ_LIMIT; i++) {
+        const res = await read();
+        expect([i, res.status]).toEqual([i, 200]);
+      }
+      const over = await read();
+      expect(over.status).toBe(429);
+      expect(await failure(over)).toMatchObject({
+        code: 'lead_read_limit',
+        message: LEAD_UPLOAD_MESSAGES.lead_read_limit,
+      });
     });
   });
 
@@ -315,6 +386,45 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       expect(JSON.stringify(body.details)).toContain('minjust_cert');
       expect(JSON.stringify(body.details)).toContain('land.e.doc.mj');
       expect((await f.t.admin.db.select().from(schema.platformLeads)).length).toBe(before);
+    });
+
+    it('файл документа не перенёсся под ключ заявки — документ «переносится», «Одобрить» неактивна с причиной', async () => {
+      n += 1;
+      const { draft, ids } = await leadDocDraft(app, storage, [
+        { kind: 'gns_cert', content: '%PDF-ipsv' },
+      ]);
+      // Файл пропал из хранилища до переноса (сбой хранилища): заявка всё равно сохранена.
+      await storage.delete(`leads/upload/${ids[0]}`);
+      const phone = `+996700${String(300000 + n)}`;
+      const res = await guest(
+        '/api/leads',
+        {
+          name: 'Азамат Токтогулов',
+          firm: `ИП Токтогулов ${n}`,
+          phone,
+          size: '21–50',
+          telegram: '',
+          note: '',
+          consent: true,
+          website: '',
+          form: 'ip',
+          inn: `215031990${String(10000 + n)}`,
+          okpo: '',
+          address: '',
+          head: '',
+          draft,
+        },
+        `198.18.0.${n}`,
+      );
+      expect(res.status).toBe(200);
+      const [lead] = await f.t.admin.db
+        .select()
+        .from(schema.platformLeads)
+        .where(eq(schema.platformLeads.phone, phone));
+      expect(lead).toMatchObject({ docsState: 'pending' });
+      expect(await leadDocs(lead!.id)).toEqual([expect.objectContaining({ state: 'pending' })]);
+      await tgLinked(lead!.id);
+      expect((await card(lead!.id)).approve?.refusal).toBe('lead_docs_pending');
     });
 
     it('повтор с того же телефона документов не получает: файлы черновика удалены (п. И-9)', async () => {
@@ -459,7 +569,12 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       expect(oc.profile).toMatchObject({ legalForm: 'ip', okpo: '31415926' });
       expect(oc.org.legalForm).toBe('ip');
       expect(oc.leadFiles).toEqual([
-        { kind: 'gns_cert', name: 'gns_cert.pdf', bytes: '%PDF-ipsv'.length },
+        {
+          kind: 'gns_cert',
+          name: 'gns_cert.pdf',
+          bytes: '%PDF-ipsv'.length,
+          at: expect.stringMatching(/^2026-/),
+        },
       ]);
     });
 
@@ -632,7 +747,7 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         .update(schema.platformLeads)
         .set({ docsPurgeAt: new Date('2026-10-18T02:00:00Z') })
         .where(eq(schema.platformLeads.id, lead.id));
-      const ctx = { ...f.deps, clock: { now: () => new Date('2026-10-20T03:00:00Z') } };
+      const ctx = { ...f.deps, clock: fixedClock('2026-10-20T03:00:00Z') };
       expect(await purgeLeadDocs(ctx)).toBeGreaterThan(0);
       expect(storage.files.has(doc!.storageKey)).toBe(false);
       expect(storage.files.has(`leads/upload/${left.ids[0]}`)).toBe(false);
@@ -659,7 +774,7 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       const now = f.deps.clock.now().getTime();
       const after = (hours: number) => ({
         ...f.deps,
-        clock: { now: () => new Date(now + hours * 3_600_000) },
+        clock: fixedClock(new Date(now + hours * 3_600_000).toISOString()),
       });
       // Пока ссылка на загрузку могла действовать (до срока черновика), файлы не трогаются.
       await purgeLeadDocs(after(LEAD_DRAFT_HOURS - 1));
@@ -667,6 +782,30 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
       await purgeLeadDocs(after(LEAD_DRAFT_HOURS + 1));
       expect(late.filter((key) => storage.files.has(key))).toEqual([]);
       expect(storage.files.has(doc!.storageKey)).toBe(true);
+    });
+  });
+
+  // Последним в файле: предел платформы на час общий для всех тестов файла.
+  describe('предел загрузок на всю платформу', () => {
+    it('больше 300 загрузок за час со всех адресов — 429 и с нового адреса', async () => {
+      try {
+        let taken = 0;
+        while ((await takeRateLimit(f.deps.db, LEAD_UPLOAD_ALL_RATE_LIMIT, 'all')).ok) {
+          taken += 1;
+          expect(taken).toBeLessThanOrEqual(LEAD_UPLOAD_ALL_RATE_LIMIT.max);
+        }
+        const res = await guest(
+          '/api/leads/uploads',
+          { draft: null, kind: 'gns_cert', name: 'a.pdf', size: 10 },
+          '198.18.9.1',
+        );
+        expect(res.status).toBe(429);
+        expect((await failure(res)).code).toBe('lead_upload_limit');
+      } finally {
+        await f.t.admin.db
+          .delete(schema.rateLimits)
+          .where(eq(schema.rateLimits.kind, LEAD_UPLOAD_ALL_RATE_LIMIT.kind));
+      }
     });
   });
 });

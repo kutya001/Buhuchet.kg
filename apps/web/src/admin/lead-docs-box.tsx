@@ -1,18 +1,12 @@
 'use client';
 
-import {
-  bishkekDate,
-  fileSizeParts,
-  formatDateRu,
-  LEAD_DOC_TEXT_KEYS,
-  LEAD_DOCS_KEEP_REJECTED_DAYS,
-  type UiTextKey,
-} from '@buhuchet/domain';
+import { fileSizeParts, LEAD_DOC_TEXT_KEYS, type UiTextKey } from '@buhuchet/domain';
 import { FileLink, type AdminLeadCard, type AdminLeadDoc } from '@buhuchet/shared';
 import { Box, buttonClass, Icon, KeyValues, Pill, useToast, type KeyValueItem } from '@buhuchet/ui';
 import { useState } from 'react';
 import { useErrorText } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { leadDocsHint } from './lead-history';
 import { leadDocLink } from './leads-data';
 
 /*
@@ -24,7 +18,6 @@ import { leadDocLink } from './leads-data';
 
 const faint = <span className="text-faint">—</span>;
 const mono = (v: string | null) => (v ? <span className="font-mono">{v}</span> : faint);
-const dateOf = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
 
 /** «Свидетельство ГНС · 1,2 МБ». */
 function docMeta(t: Translate, d: AdminLeadDoc): string {
@@ -39,17 +32,6 @@ export function LeadTgPill({ t, on }: { t: Translate; on: boolean }) {
       {t(on ? 'leads.tg.on' : 'leads.tg.off')}
     </Pill>
   );
-}
-
-/** Пояснение под файлами (прототип ldCardBox `.hint`). */
-function docsHint(t: Translate, l: AdminLeadCard): string {
-  if (l.docsGoneAt) return t('leads.docs.gone_at', { date: dateOf(l.docsGoneAt) });
-  if (l.org) return t('leads.docs.to_org', { name: l.org.name });
-  if (!l.docsPurgeAt) return '';
-  const date = dateOf(l.docsPurgeAt);
-  return l.status === 'rejected'
-    ? t('leads.docs.till_rejected', { date, days: LEAD_DOCS_KEEP_REJECTED_DAYS })
-    : t('leads.docs.till', { date });
 }
 
 export function LeadDocsBox({ t, l }: { t: Translate; l: AdminLeadCard }) {
@@ -88,7 +70,7 @@ export function LeadDocsBox({ t, l }: { t: Translate; l: AdminLeadCard }) {
     else window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const hint = docsHint(t, l);
+  const hint = leadDocsHint(t, l);
   return (
     <Box title={t('leads.docs.title')}>
       <div data-lead-docs="">

@@ -71,7 +71,7 @@ export interface AdminOrgCardRecord {
    * Документы заявки, по которой организацию одобрили (прототип v114 ocFiles, `leadFiles`): что было
    * приложено; сами файлы — в «Файловом менеджере» с источником «Заявка на подключение».
    */
-  leadFiles: { kind: LeadDocKind; name: string; bytes: number }[];
+  leadFiles: { kind: LeadDocKind; name: string; bytes: number; at: Date }[];
   summary: {
     staff: number;
     staffBlocked: number;
@@ -227,6 +227,8 @@ const HISTORY_VALUE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
     'slug',
     'status',
     'blockedReason',
+    // «Одобрить» заявки с сайта: логин владельца (прототип v114 ldApproveDlg).
+    'fromLead',
   ]),
   role: new Set(['name']),
 };
@@ -323,6 +325,7 @@ export async function adminOrgCard(
         kind: d.kind,
         name: d.name,
         bytes: d.sizeBytes,
+        at: d.createdAt,
       }))
     : [];
 

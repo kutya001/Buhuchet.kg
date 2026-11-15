@@ -78,9 +78,9 @@ function profileText(t: Translate, changes: readonly HistoryChange[]): string {
   const valued: string[] = [];
   const plain: string[] = [];
   for (const c of changes) {
-    // Форма — словами, как ldFormT прототипа v114: «Форма: ОсОО → ИП».
+    // Форма — словами, как ldFormT прототипа v114: «Форма: ОсОО → ИП», не указанная — «—».
     const shown = (v: unknown) =>
-      c.field === 'legalForm' && isLegalForm(v) ? t(`org.form.${v}`) : text(v);
+      c.field === 'legalForm' ? (isLegalForm(v) ? t(`org.form.${v}`) : '—') : text(v);
     const from = shown(c.from);
     const to = shown(c.to);
     const field = label(t, c.field);
@@ -150,7 +150,12 @@ export function orgHistoryText(t: Translate, h: HistoryEntry): string {
     return own ? `${own}; ${text}` : text;
   }
   if (h.entity === 'role') return roleText(t, h);
-  if (h.action === 'create') return t('orgs.card.hist.created');
+  if (h.action === 'create') {
+    const lead = h.changes.find((c) => c.field === 'fromLead');
+    return lead
+      ? t('orgs.card.hist.created_lead', { login: text(lead.to) })
+      : t('orgs.card.hist.created');
+  }
   const status = statusText(t, h.changes);
   if (status) return status;
   if (h.reason) return h.reason;

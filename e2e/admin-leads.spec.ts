@@ -167,18 +167,27 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     const file = card.locator('[data-lead-doc="gns_cert"]');
     await expect(file).toContainText('Свидетельство ГНС');
     await expect(card.locator('[data-lead-docs-hint]')).toContainText('если заявку не одобрить');
-    const [tab] = await Promise.all([
+    // «Открыть» — новая вкладка и ссылка на файл на 15 минут (просмотр PDF у браузера тестов может
+    // стать загрузкой, поэтому проверяется ответ ссылки, а не адрес вкладки).
+    const [link, tab] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          /\/api\/admin\/leads\/[^/]+\/docs\/[^/]+\/link$/.test(new URL(r.url()).pathname) &&
+          r.request().method() === 'GET',
+      ),
       page.context().waitForEvent('page'),
       file.locator('[data-lead-doc-open]').click(),
     ]);
-    await expect.poll(() => tab.url()).not.toBe('about:blank');
+    expect(link.status()).toBe(200);
+    expect(((await link.json()) as { url: string }).url).toMatch(/^https?:\/\//);
     await tab.close();
 
     // «В работу», затем главная кнопка — «Одобрить»: без Telegram заявителя неактивна с причиной.
     await card.getByRole('button', { name: 'В работу' }).click();
     const approve = card.getByRole('button', { name: 'Одобрить' });
     await expect(approve).toHaveAttribute('aria-disabled', 'true');
-    await approve.click();
+    // Неактивная кнопка с причиной: нажатие показывает причину (Playwright такую кнопку сам не нажимает).
+    await approve.click({ force: true });
     await expect(
       page.getByRole('status').filter({ hasText: 'Заявитель ещё не подключил Telegram' }),
     ).toBeVisible();

@@ -20,6 +20,44 @@ import type { ApiErrorLike } from '../l10n/translate';
 export const LEAD_REG_FIELDS = ['firm', 'inn', 'okpo', 'head', 'address'] as const;
 export type LeadRegField = (typeof LEAD_REG_FIELDS)[number];
 
+type RegValues = Record<LeadRegField, string>;
+type RegAuto = Partial<Record<LeadRegField, string>>;
+
+/**
+ * Смена формы (прототип ldDocsBind): подставленное разбором и не поправленное заявителем очищается,
+ * поправленное остаётся.
+ */
+export function valuesAfterFormSwitch<V extends RegValues>(values: V, auto: RegAuto): V {
+  const out = { ...values };
+  for (const f of LEAD_REG_FIELDS) {
+    if (auto[f] && values[f].trim() === auto[f]) out[f] = '' as V[typeof f];
+  }
+  return out;
+}
+
+/**
+ * Итог разбора — в форму (прототип ldParse, ldMarkSync): найденное — в пустые поля и в поля, которые
+ * подставил прежний разбор; поправленное заявителем не перезаписывается. `auto` — что теперь подставлено.
+ */
+export function valuesAfterRead<V extends RegValues>(
+  values: V,
+  auto: RegAuto,
+  got: Partial<Record<LeadRegField, string>>,
+): { values: V; auto: RegAuto } {
+  const out = { ...values };
+  const next = { ...auto };
+  for (const f of LEAD_REG_FIELDS) {
+    const value = got[f];
+    if (!value) continue;
+    const cur = values[f].trim();
+    if (!cur || cur === auto[f]) {
+      out[f] = value as V[typeof f];
+      next[f] = value;
+    }
+  }
+  return { values: out, auto: next };
+}
+
 /** Ключ словаря «Приложите …» по виду документа (`land.f.doc.gns` → `land.e.doc.gns`). */
 export const docMissingKey = (kind: LeadDocKind) =>
   LEAD_DOC_TEXT_KEYS[kind].replace('land.f.doc.', 'land.e.doc.') as UiTextKey;

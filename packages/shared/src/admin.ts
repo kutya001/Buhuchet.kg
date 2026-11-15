@@ -383,7 +383,14 @@ export const AdminOrgCard = z.object({
   /** Заявка с сайта, по которой создана организация; null — создана без заявки. */
   lead: z.object({ id: Uuid, title: z.string(), at: z.iso.datetime() }).nullable(),
   /** Документы заявки, по которой организацию одобрили (прототип v114 ocFiles); иначе пусто. */
-  leadFiles: z.array(z.object({ kind: z.enum(LEAD_DOC_KINDS), name: z.string(), bytes: Count })),
+  leadFiles: z.array(
+    z.object({
+      kind: z.enum(LEAD_DOC_KINDS),
+      name: z.string(),
+      bytes: Count,
+      at: z.iso.datetime(),
+    }),
+  ),
   summary: z.object({
     staff: Count,
     staffBlocked: Count,

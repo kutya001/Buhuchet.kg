@@ -114,8 +114,7 @@ describe.skipIf(!databaseAvailable())(
       head: '',
       draft:
         draft ??
-        (await leadDocDraft(app, deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }]))
-          .draft,
+        (await leadDocDraft(app, deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }])).draft,
     });
 
     /** Заявка с сайта и отправка очереди: что пришло каждому администратору. */

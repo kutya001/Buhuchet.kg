@@ -158,7 +158,7 @@ export function approveLeadHandler(deps: ApiDeps): RouteHandler<typeof approveLe
         },
         createdBy: adminId,
         today: bishkekDate(now),
-        lead: { id, now, version: body.version },
+        lead: { id, now, version: body.version, docs: true },
         within: async (tx, created) => {
           if (!(await linkLeadOwnerTelegram(tx, { leadId: id, userId: created.ownerUserId }))) {
             apiFail(409, 'lead_no_telegram', LEAD_APPROVE_MESSAGES.lead_no_telegram);

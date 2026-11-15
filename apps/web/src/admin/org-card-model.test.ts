@@ -38,6 +38,18 @@ describe('карточка организации: «История»', () => {
     expect(
       orgHistoryText(t, entry({ action: 'card_view', reason: 'Открыта карточка организации' })),
     ).toBe('Открыта карточка организации');
+    // «Одобрить» заявки с сайта (прототип v114 ldApproveDlg).
+    expect(
+      orgHistoryText(
+        t,
+        entry({
+          action: 'create',
+          changes: [{ field: 'fromLead', from: null, to: 'nurlan.kasymov' }],
+        }),
+      ),
+    ).toBe(
+      'Организация создана по заявке с сайта: владелец nurlan.kasymov, файлы заявки — в «Файловом менеджере» (Заявка на подключение)',
+    );
   });
 
   it('блокировка — с причиной, разблокировка — с прежней причиной', () => {
@@ -93,7 +105,7 @@ describe('карточка организации: «История»', () => {
     expect(orgHistoryText(t, h)).toBe('ИНН: 01234567890123 → 01234567890124; Форма: ОсОО → ИП');
     expect(
       orgHistoryText(t, entry({ changes: [{ field: 'legalForm', from: null, to: 'osoo' }] })),
-    ).toBe('Форма: ОсОО');
+    ).toBe('Форма: — → ОсОО');
     expect(
       orgHistoryText(t, entry({ changes: [{ field: 'okpo', from: null, to: '12345678' }] })),
     ).toBe('ОКПО: 12345678');

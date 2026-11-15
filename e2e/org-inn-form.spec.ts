@@ -13,10 +13,14 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
     baseURL,
     isMobile,
   }) => {
+    // Два браузера (администратор и владелец) и несколько окон подряд.
+    test.slow();
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
     const demo = (
-      (await (await page.request.get('/api/admin/organizations?size=all')).json()) as {
+      (await (
+        await page.request.get('/api/admin/organizations?size=all', { maxRetries: 2 })
+      ).json()) as {
         items: { inn: string | null; isDemo: boolean }[];
       }
     ).items.find((o) => o.isDemo)!;
@@ -73,15 +77,11 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
 
     const next = uniqueInn();
     await innField.fill(next);
-    // После сохранения список перечитывается: окно из строки открывается по новой версии.
-    await Promise.all([
-      page.waitForResponse(
-        (r) => /\/api\/admin\/organizations\?/.test(r.url()) && r.request().method() === 'GET',
-      ),
-      save.click(),
-    ]);
+    await save.click();
     await expect(dialog).toBeHidden();
     await expect(toast.filter({ hasText: 'Сохранено' })).toBeVisible();
+    // Список перечитан (в строке — новый ИНН): окно из строки открывается по новой версии.
+    await expect(row).toContainText(next);
 
     // Повторно, ничего не меняя, — «Изменений нет».
     dialog = await openInnForm();
@@ -103,7 +103,7 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
       await card.getByRole('tab', { name: 'История' }).click();
     }
     await expect(card.getByRole('list', { name: 'История' })).toContainText(
-      `ИНН: ${inn} → ${next}; Форма: ИП`,
+      `ИНН: ${inn} → ${next}; Форма: — → ИП`,
     );
     await page.keyboard.press('Escape');
 
@@ -134,7 +134,9 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
       await okpo.fill('12345678');
       await main.getByRole('button', { name: 'Сохранить' }).click();
       await expect(own.getByRole('status').filter({ hasText: 'Сохранено' })).toBeVisible();
-      const profile = (await (await ownerContext.request.get('/api/org')).json()) as {
+      const profile = (await (
+        await ownerContext.request.get('/api/org', { maxRetries: 2 })
+      ).json()) as {
         inn: string | null;
         okpo: string | null;
         legalForm: string | null;

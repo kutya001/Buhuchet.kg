@@ -54,6 +54,18 @@ export function leadEventText(
   }
 }
 
+/** Пояснение под файлами заявки (прототип ldCardBox `.hint`): срок, «удалены», «переданы организации». */
+export function leadDocsHint(t: Translate, l: AdminLeadCard): string {
+  const dateOf = (iso: string) => formatDateRu(bishkekDate(new Date(iso)));
+  if (l.docsGoneAt) return t('leads.docs.gone_at', { date: dateOf(l.docsGoneAt) });
+  if (l.org) return t('leads.docs.to_org', { name: l.org.name });
+  if (!l.docsPurgeAt) return '';
+  const date = dateOf(l.docsPurgeAt);
+  return l.status === 'rejected'
+    ? t('leads.docs.till_rejected', { date, days: LEAD_DOCS_KEEP_REJECTED_DAYS })
+    : t('leads.docs.till', { date });
+}
+
 /** «История» — сверху новые (прототип: `o.hist.slice().reverse()`). */
 export function leadHistoryItems(t: Translate, l: AdminLeadCard): TimelineItem[] {
   return l.history
