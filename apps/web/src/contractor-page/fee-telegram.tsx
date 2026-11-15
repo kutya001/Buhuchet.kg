@@ -6,7 +6,7 @@ import { buttonClass, Field, Icon, inputClass, Modal, Note, Pill, useToast } fro
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
-import { contractorHistoryQuery } from '../contractors/contractor-data';
+import { refreshContractorHistory } from '../contractors/contractor-data';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useFeesRefresh } from '../fees/fees-data';
 import { useErrorText, useT } from '../l10n/provider';
@@ -150,7 +150,7 @@ function FeeTelegramDialog({
     const done = ContractorFeeTelegramSent.safeParse(res.data);
     onClose();
     toast(t('cppage.fee_tg.sent', { n: done.success ? done.data.delivered : 0 }), { icon: 'tg' });
-    void client.invalidateQueries({ queryKey: contractorHistoryQuery(contractorId).queryKey });
+    void refreshContractorHistory(client, contractorId);
   };
 
   return (

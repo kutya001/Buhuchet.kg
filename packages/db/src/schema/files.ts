@@ -15,6 +15,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   pgPolicy,
   pgTable,
   text,
@@ -302,5 +303,44 @@ export const contractorSentFiles = pgTable(
       to: appRole,
       using: sql`${t.status} <> 'accepted'`,
     }),
+  ],
+).enableRLS();
+
+/** Номер в ключе хранилища: uuid строчными. */
+const KEY_UUID = '[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}';
+
+/**
+ * Какие ключи можно поставить на повторное удаление: файлы с публичных загрузок — документы заявок с
+ * лендинга (`leads/upload/<номер>`, `leads/<заявка>/<номер>`) и отправленные контрагентом
+ * (`org/<организация>/sent/<номер>`, его загрузка `.up` и проверочная копия `.chk-<номер>`), а также
+ * копия принятого файла (`org/<организация>/files/<номер>`). Другие ключи функция не принимает. Ключ, на
+ * который ещё ссылается живая строка (файл, отправленный файл, документ или загрузка заявки), задача не
+ * удаляет, а снимает с повтора (`app.storage_retry_due`).
+ */
+export const STORAGE_RETRY_KEY_RE = `^(leads/upload/${KEY_UUID}|leads/${KEY_UUID}/${KEY_UUID}|org/${KEY_UUID}/(sent/${KEY_UUID}(\\.up|\\.chk-${KEY_UUID})?|files/${KEY_UUID}))$`;
+
+/**
+ * Файлы, которые не удалось удалить из хранилища (доработки 14.11.2026, этап 3, «удаление убирает и
+ * сам файл»): строки заявки и отправленного файла к этому моменту уже стёрты или файл больше им не
+ * нужен, поэтому ключ запоминается здесь, и задача `files.storage-retry` повторяет удаление, пока оно
+ * не удастся. Таблица общая для платформы: в ней только ключи, без данных организаций; роль приложения
+ * её не видит — только функции `app.storage_retry_*` (миграция 0155).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-10
+export const storageDeleteRetries = pgTable(
+  'storage_delete_retries',
+  {
+    key: text('key').primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Сколько раз задача пробовала удалить; 0 — ещё ни разу. */
+    attempts: integer('attempts').notNull().default(0),
+    triedAt: timestamp('tried_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('storage_delete_retries_created_idx').on(t.createdAt),
+    check(
+      'storage_delete_retries_key_check',
+      sql`${t.key} ~ ${sql.raw(`'${STORAGE_RETRY_KEY_RE}'`)}`,
+    ),
   ],
 ).enableRLS();

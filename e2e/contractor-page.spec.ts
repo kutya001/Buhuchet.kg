@@ -6,6 +6,7 @@ import {
   defaultResponsible,
   hire,
   linkTelegram,
+  pressStart,
   signIn,
   uniqueChat,
   uniqueLogin,
@@ -89,6 +90,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
     // Без кода не видно ничего, даже названия контрагента.
     await expect(page.getByText(name)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     const input = page.getByLabel('Код доступа');
     await input.fill('12');
     await page.getByRole('button', { name: 'Открыть' }).click();
@@ -129,6 +131,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     const name = `ОсОО «Выключение ${Date.now().toString(36)}»`;
     const { origin, id, code, path } = await enabledPage(request, baseURL, name);
     await page.goto(path);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name })).toBeVisible();
@@ -177,6 +180,7 @@ test.describe('Этап 2: страница контрагента по ссыл
     const { origin, id, code, path, inn } = await enabledPage(request, baseURL, name, employee.id);
     // Браузер контрагента запомнил код.
     await page.goto(path);
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     await page.getByLabel('Код доступа').fill(code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name })).toBeVisible();
@@ -383,12 +387,19 @@ const versionOf = async (api: APIRequestContext, id: string) =>
 /** Ввести код в браузере: открывается страница контрагента. */
 async function openByCode(page: Page, path: string, code: string, name: string) {
   await page.goto(path);
+  // «Открыть» доступна, когда React подхватил страницу: раньше поле заполнять нельзя (№ 41).
+  const open = page.getByRole('button', { name: 'Открыть' });
+  await expect(open).toBeEnabled();
   await page.getByLabel('Код доступа').fill(code);
-  await page.getByRole('button', { name: 'Открыть' }).click();
+  await open.click();
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
 const section = (page: Page, key: string) => page.locator(`[data-sec="${key}"]`);
+
+/** Страница по ссылке подхвачена React: после `goto` и `reload` нажатие раньше этого теряется (№ 41). */
+const pageReady = (page: Page) =>
+  expect(page.locator('[data-pub-page]')).toHaveAttribute('data-pub-ready', '');
 
 test.describe('Этап 2: страница контрагента по ссылке — разделы и компоновка', () => {
   test.beforeEach(async ({ page }) => {
@@ -448,13 +459,14 @@ test.describe('Этап 2: страница контрагента по ссыл
       await expect(card).toContainText('Перевод по номеру телефона');
       await expect(card).toContainText('Бакай Банк');
       await expect(card).toContainText('M-Bank');
-      await expect(card.getByRole('button', { name: 'Скопировать номер' })).toBeVisible();
+      // Подпись кнопки — как в Telegram (прототип v116 `pgRqBtn`).
+      await expect(card.getByRole('button', { name: 'Скопировать номер телефона' })).toBeVisible();
     }
     await pay
       .locator('[data-pay="tax"]')
-      .getByRole('button', { name: 'Скопировать номер' })
+      .getByRole('button', { name: 'Скопировать номер телефона' })
       .click();
-    await expect(page.getByText('Номер скопирован')).toBeVisible();
+    await expect(page.getByText('Номер телефона скопирован')).toBeVisible();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('0555123456');
 
     const emp = await pageOf(request, o, 'ИП На кошелёк', 'emp');
@@ -571,6 +583,7 @@ test.describe('Этап 2: страница контрагента по ссыл
       due: lastWorkday(),
     });
     await page.reload();
+    await pageReady(page);
     await expect(state).toHaveAttribute('data-pub-state', 'bad');
     await expect(state).toContainText('просрочен 1 отчёт');
     // Замечание ведёт в «Отчёты» с плашкой «Просрочено».
@@ -734,5 +747,396 @@ test.describe('Этап 3: страница контрагента — разд�
     const hidden = await page.request.get(`${cp.path}/files/${draft}`, { maxRedirects: 0 });
     expect(hidden.status()).toBe(303);
     expect(hidden.headers().location?.endsWith(cp.path)).toBe(true);
+  });
+});
+
+// Доработки 14.11.2026, блок 6, этап 3, поток К (прототип v116 modules/cp-paid.js): «Я оплатил» с
+// чеком, «По месяцам» и «Перечислить», код на 1 день, «Забыли код? Прислать в Telegram».
+
+type Texts = Record<string, string>;
+
+/** Тексты словаря интерфейса (`GET /api/l10n`): тест не копирует длинные строки. */
+async function dictionary(api: APIRequestContext): Promise<Texts> {
+  const res = await api.get('/api/l10n');
+  expect(res.status()).toBe(200);
+  return ((await res.json()) as { texts: Texts }).texts;
+}
+
+/** Текст словаря с подстановками `{имя}`. */
+function text(texts: Texts, key: string, values: Record<string, string | number> = {}) {
+  const raw = texts[key];
+  expect(raw, key).toBeTruthy();
+  return Object.entries(values).reduce((s, [k, v]) => s.replaceAll(`{${k}}`, String(v)), raw!);
+}
+
+/** Сумма на экране — с неразрывными пробелами: в сравнении любой пробел. */
+const som = (value: string) =>
+  new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s'));
+
+/** Настоящий PDF по содержимому: сервер проверяет начало файла, а не расширение. */
+const pdfBytes = () =>
+  Buffer.from(
+    '%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n',
+    'latin1',
+  );
+
+/** Раздел страницы раскрыт: на телефоне он свёрнут, кроме «Главного» и «Как оплатить». */
+async function unfold(page: Page, key: string, isMobile: boolean) {
+  const sec = section(page, key);
+  if (isMobile) {
+    await expect(sec).toHaveAttribute('data-folded', '');
+    // «Свёрнуто» видно уже в HTML сервера, а нажатие работает, когда React подхватил страницу и узнал
+    // телефон: тогда `aria-expanded` — false (№ 41).
+    const toggle = sec.locator('[data-pub-toggle]');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(sec).not.toHaveAttribute('data-folded', '');
+  }
+  return sec;
+}
+
+test.describe('Доработки 14.11, блок 6: страница контрагента — оплата и код', () => {
+  test.beforeEach(async ({ page }) => {
+    const part = () => Math.floor(Math.random() * 256);
+    await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
+  });
+
+  test('(приёмка блока 6) на странице контрагента «Я оплатил» без чека не отправляется; с чеком у месяца «Ожидает подтверждения»; «Принять» у чека открывает «Поступление от контрагента» с этим чеком в файлах, после записи чек — у поступления, у месяца — «Оплачено»', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    // Своя организация, отчёт с суммой, два открытия страницы, окна «Перечислить» и «Я оплатил», у
+    // сотрудника — «Отправленные файлы», окно чека и «Поступление от контрагента» с прикреплением.
+    test.slow();
+    const texts = await dictionary(request);
+    const o = await pageOrg(request, baseURL);
+    const tag = Date.now().toString(36);
+    const name = `ОсОО «Оплата ${tag}»`;
+    const cp = await pageOf(request, o, name, 'org');
+    // НДС за прошлый месяц со сроком в этом году: «Отчёты» показывают год срока сдачи.
+    const prev = new Date(`${bishkek()}T00:00:00Z`);
+    prev.setUTCDate(1);
+    prev.setUTCMonth(prev.getUTCMonth() - 1);
+    const nds = await manualReport(request, o.origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: prev.toISOString().slice(0, 10),
+      due: `${bishkek().slice(0, 4)}-12-21`,
+    });
+    const amount = await request.post(`/api/reports/${nds}/amount`, {
+      headers: { origin: o.origin },
+      data: { version: await versionOf(request, nds), amount: 467_050 },
+    });
+    expect(amount.status(), await amount.text()).toBe(200);
+
+    await openByCode(page, cp.path, cp.code, name);
+    // «Как оплатить»: подпись реквизита и «Я оплатил» у карточки «Налоги».
+    const tax = section(page, 'pay').locator('[data-pay="tax"]');
+    await expect(tax.locator('[data-pay-head]')).not.toBeEmpty();
+    await expect(tax.locator('[data-pub-paid="tax"]')).toHaveText(text(texts, 'pub.paid.btn'));
+    await expect(tax.locator('[data-pay-wait]')).toHaveCount(0);
+
+    // «Отчёты» → «По месяцам»: к оплате, оплачено, осталось и «Не оплачено».
+    const reports = await unfold(page, 'reports', isMobile);
+    await reports.getByRole('button', { name: text(texts, 'pub.rep.by_month') }).click();
+    const month = reports
+      .locator('[data-pub-tile]')
+      .filter({ has: page.locator('[data-pub-month-pay]') });
+    await expect(month).toHaveCount(1);
+    await expect(month.locator('[data-pub-month-pay]')).toHaveText(
+      som('к оплате 4 670,50 · оплачено 0 · осталось 4 670,50'),
+    );
+    await expect(month.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'unpaid');
+    await expect(month.locator('[data-pub-mpay]')).toHaveText(text(texts, 'pub.mpay.unpaid'));
+
+    // «Перечислить»: остаток месяца и «Я оплатил» — окно с суммой остатка.
+    await month.locator('[data-pub-send]').click();
+    const send = page.getByRole('dialog').filter({ has: page.locator('[data-pub-send-dlg]') });
+    await expect(send.locator('[data-pub-send-left]')).toHaveText(som('4 670,50 сом'));
+    await send.locator('[data-pub-send-paid]').click();
+    const paid = page.getByRole('dialog', { name: text(texts, 'pub.paid.title') });
+    await expect(paid.locator('[data-pub-paid-sum]')).toHaveValue(som('4 670,50'));
+    await expect(paid.getByText(text(texts, 'pub.paid.info'))).toBeVisible();
+    // Без чека «Отправить» неактивна.
+    const ok = paid.locator('[data-pub-paid-ok]');
+    await expect(ok).toBeDisabled();
+    const fileName = `чек-${tag}.pdf`;
+    await paid
+      .locator('[data-pub-paid-file]')
+      .setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBytes() });
+    await expect(ok).toBeEnabled();
+    await ok.click();
+    await expect(paid).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'pub.paid.done') }),
+    ).toBeVisible();
+
+    // У месяца — «Ожидает подтверждения», у карточки «Налоги» — когда и сколько сообщили.
+    await expect(month.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'wait');
+    await expect(month.locator('[data-pub-mpay]')).toHaveText(text(texts, 'pub.mpay.wait'));
+    await expect(tax.locator('[data-pay-wait]')).toContainText(text(texts, 'pub.mpay.wait'));
+    await expect(tax.locator('[data-pay-wait]')).toContainText(som('4 670,50 сом'));
+    // Чек — в «Отправленных вами».
+    const files = await unfold(page, 'files', isMobile);
+    await expect(
+      files.locator('[data-pub-sent-row]').filter({ hasText: fileName }),
+    ).toHaveAttribute('data-pub-sent-row', 'new');
+    const wide = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(wide).toBe(false);
+
+    // Бухгалтер (вход владельца — в том же браузере) в «Отправленных файлах» принимает чек: открывается
+    // «Поступление от контрагента» с суммой месяца, и чек уже стоит в поле файлов (прототип v119
+    // `rcptFileRow`) — при сохранении он прикрепляется к поступлению без повторной загрузки. У контрагента
+    // «Файл к поступлению обязателен»: принятый чек его засчитывает, другого файла не нужно.
+    const moneyCard = (await (
+      await request.get(`/api/contractors/${cp.id}/money`, { maxRetries: 2 })
+    ).json()) as { contractor: { version: number } };
+    const needFile = await request.patch(`/api/contractors/${cp.id}/money-settings`, {
+      headers: { origin: o.origin },
+      data: { version: moneyCard.contractor.version, needReceiptFile: true },
+    });
+    expect(needFile.status(), await needFile.text()).toBe(200);
+    // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
+    await page.goto('about:blank');
+    await page.context().addCookies((await request.storageState()).cookies);
+    await page.goto('/app/files/sent');
+    const grid = page.locator('[data-files-sent] [data-grid]');
+    await expect(grid).toBeVisible();
+    // Ответ поиска — до нажатия в строке (docs/typical-mistakes.md № 27).
+    const found = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
+    });
+    await search(page, isMobile, tag);
+    expect((await found).status()).toBe(200);
+    const line = grid.locator('[data-id]').filter({ hasText: fileName });
+    await expect(line).toContainText(text(texts, 'files.sent.st.new'));
+    await line.getByText(fileName, { exact: true }).click();
+    await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
+    const money = page.getByRole('dialog', { name: text(texts, 'money.in.title') });
+    await expect(money.locator('[data-receipt-total]')).toHaveValue(som('4 670,50'));
+    await expect(money.locator(`[data-receipt-row="${nds}"]`)).toHaveValue(som('4 670,50'));
+    const chip = money.locator('[data-sent-receipt]');
+    await expect(chip).toContainText(fileName);
+    await expect(chip).toContainText(text(texts, 'cppage.rcpt.file_hint'));
+    await expect(chip.locator('[data-sent-receipt-remove]')).toHaveText(
+      text(texts, 'cppage.rcpt.file_remove'),
+    );
+    const saved = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/contractors/${cp.id}/receipts`,
+    );
+    const attached = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname),
+    );
+    await money.getByRole('button', { name: text(texts, 'money.in.ok') }).click();
+    const savedRes = await saved;
+    expect(savedRes.status()).toBe(201);
+    const receiptId = ((await savedRes.json()) as { id: string }).id;
+    expect((await attached).status()).toBe(201);
+    await expect(money).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'money.in.done') }),
+    ).toBeVisible();
+    await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
+    // Чек — среди файлов поступления (копия: в «Отправленных файлах» он тоже остался).
+    const receiptRes = await request.get(`/api/files?kind=receipt&id=${receiptId}`, {
+      maxRetries: 2,
+    });
+    expect(receiptRes.status(), await receiptRes.text()).toBe(200);
+    const receiptFiles = (await receiptRes.json()) as { items: { name: string }[] };
+    expect(receiptFiles.items.map((f) => f.name)).toEqual([fileName]);
+
+    // Месяц на странице контрагента — оплачен.
+    await page.goto(cp.path);
+    await pageReady(page);
+    const again = await unfold(page, 'reports', isMobile);
+    await again.getByRole('button', { name: text(texts, 'pub.rep.by_month') }).click();
+    const done = again
+      .locator('[data-pub-tile]')
+      .filter({ has: page.locator('[data-pub-month-pay]') });
+    await expect(done.locator('[data-pub-month-pay]')).toHaveText(
+      som('к оплате 4 670,50 · оплачено 4 670,50 · осталось 0'),
+    );
+    await expect(done.locator('[data-pub-mpay]')).toHaveAttribute('data-pub-mpay', 'paid');
+    await expect(done.locator('[data-pub-mpay]')).toHaveText(text(texts, 'pub.mpay.paid'));
+    await expect(done.locator('[data-pub-send]')).toHaveCount(0);
+    await expect(section(page, 'pay').locator('[data-pay="tax"] [data-pay-wait]')).toHaveCount(0);
+
+    // Сообщение об оплате — в истории контрагента от его имени.
+    const history = (await (
+      await request.get(`/api/contractors/${cp.id}/history`, { maxRetries: 2 })
+    ).json()) as { items: { action: string; actor: string | null }[] };
+    const claim = history.items.find((h) => h.action === 'page_paid');
+    expect(claim).toBeTruthy();
+    expect(claim!.actor).toBeNull();
+  });
+
+  test('(прототип v119) «Я оплатил» за обслуживание: «Принять» у чека открывает «Принять оплату за обслуживание» с этим чеком в поле файлов; после «Убрать» оплата записана без файла, чек остался принятым', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    // Своя организация, страница клиента и окно денег у сотрудника в одном тесте.
+    test.slow();
+    const texts = await dictionary(request);
+    const o = await pageOrg(request, baseURL);
+    const tag = Date.now().toString(36);
+    const name = `ОсОО «Обслуживание ${tag}»`;
+    const cp = await pageOf(request, o, name, 'org');
+
+    // Клиент: «Как оплатить» → «Обслуживание» → «Я оплатил» с чеком (месяц и сумма — по умолчанию).
+    await openByCode(page, cp.path, cp.code, name);
+    const fee = section(page, 'pay').locator('[data-pay="fee"]');
+    await fee.locator('[data-pub-paid="fee"]').click();
+    const paid = page.getByRole('dialog', { name: text(texts, 'pub.paid.title') });
+    const fileName = `чек-обслуживание-${tag}.pdf`;
+    await paid
+      .locator('[data-pub-paid-file]')
+      .setInputFiles({ name: fileName, mimeType: 'application/pdf', buffer: pdfBytes() });
+    await paid.locator('[data-pub-paid-ok]').click();
+    await expect(paid).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'pub.paid.done') }),
+    ).toBeVisible();
+
+    // Сотрудник (вход владельца — в том же браузере): «Принять» у чека — окно оплаты с чеком.
+    // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
+    await page.goto('about:blank');
+    await page.context().addCookies((await request.storageState()).cookies);
+    await page.goto('/app/files/sent');
+    const grid = page.locator('[data-files-sent] [data-grid]');
+    await expect(grid).toBeVisible();
+    // Ответ поиска — до нажатия в строке (docs/typical-mistakes.md № 27).
+    const found = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
+    });
+    await search(page, isMobile, tag);
+    expect((await found).status()).toBe(200);
+    const line = grid.locator('[data-id]').filter({ hasText: fileName });
+    await expect(line).toContainText(text(texts, 'files.sent.st.new'));
+    await line.getByText(fileName, { exact: true }).click();
+    await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
+    const money = page.getByRole('dialog', { name: text(texts, 'fee.pay.title') });
+    const chip = money.locator('[data-sent-receipt]');
+    await expect(chip).toContainText(fileName);
+    await expect(chip).toContainText(text(texts, 'cppage.rcpt.file_hint'));
+
+    // «Убрать»: строки чека нет, при сохранении чек к оплате не прикрепляется.
+    await chip.locator('[data-sent-receipt-remove]').click();
+    await expect(chip).toHaveCount(0);
+    const attaches: string[] = [];
+    page.on('request', (r) => {
+      if (/^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname)) {
+        attaches.push(r.url());
+      }
+    });
+    const saved = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        new URL(r.url()).pathname === `/api/contractors/${cp.id}/fee-payments`,
+    );
+    await money.getByRole('button', { name: text(texts, 'fee.pay.ok') }).click();
+    const savedRes = await saved;
+    expect(savedRes.status()).toBe(201);
+    const paymentId = ((await savedRes.json()) as { id: string }).id;
+    await expect(money).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'fee.pay.saved') }),
+    ).toBeVisible();
+    await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
+    expect(attaches).toEqual([]);
+    const paymentRes = await request.get(`/api/files?kind=fee_payment&id=${paymentId}`, {
+      maxRetries: 2,
+    });
+    expect(paymentRes.status(), await paymentRes.text()).toBe(200);
+    const paymentFiles = (await paymentRes.json()) as { items: unknown[] };
+    expect(paymentFiles.items).toEqual([]);
+  });
+
+  test('(приёмка блока 6) код страницы запоминается на сутки; «Забыли код? Прислать в Telegram» — код пришёл в подключённый Telegram, четвёртый раз за сутки не приходит', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const texts = await dictionary(request);
+    const name = `ОсОО «Код ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}»`;
+    const { origin, id, code, path } = await enabledPage(request, baseURL, name);
+
+    // Верный код: «В этом браузере код запомнится на 1 день», cookie этой ссылки — на сутки.
+    await page.goto(path);
+    await expect(page.getByText(text(texts, 'pub.code.remember'))).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
+    await page.getByLabel('Код доступа').fill(code);
+    await page.getByRole('button', { name: 'Открыть' }).click();
+    await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+    const cookie = (await page.context().cookies()).find((c) => c.name.endsWith('bh_page'));
+    expect(cookie).toBeTruthy();
+    const left = cookie!.expires * 1000 - Date.now();
+    expect(left).toBeGreaterThan(86_400_000 - 600_000);
+    expect(left).toBeLessThanOrEqual(86_400_000 + 60_000);
+
+    // Клиент подключает Telegram со своей страницы, бухгалтер подтверждает.
+    const link = await page.request.post(`${path}/telegram`, { headers: { origin } });
+    expect(link.status(), await link.text()).toBe(200);
+    const clientChat = uniqueChat();
+    expect(
+      (
+        await pressStart(request, ((await link.json()) as { url: string }).url, clientChat)
+      ).status(),
+    ).toBe(200);
+    const list = (await (
+      await request.get(`/api/contractors/${id}/page/telegram`, { maxRetries: 2 })
+    ).json()) as {
+      items: { id: string; name: string; version: number }[];
+    };
+    const waiting = list.items.find((i) => i.name === `@e2e_${clientChat}`)!;
+    const approved = await request.post(`/api/contractors/${id}/page/telegram/${waiting.id}`, {
+      headers: { origin },
+      data: { action: 'approve', version: waiting.version },
+    });
+    expect(approved.status(), await approved.text()).toBe(200);
+
+    // Сутки прошли — браузер код забыл: снова «Введите код доступа».
+    await page.context().clearCookies();
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Введите код доступа' })).toBeVisible();
+
+    // «Забыли код? Прислать в Telegram»: код — в подключённый Telegram, не больше 3 раз за сутки.
+    const shown = `${code.slice(0, 3)} ${code.slice(3)}`;
+    const codes = async () =>
+      (await botMessages(request, clientChat)).filter((m) => m.includes(shown));
+    const forgot = page.locator('[data-pub-forgot]');
+    const answer = page.locator('[data-pub-forgot-answer]');
+    await expect(forgot).toHaveText(text(texts, 'pub.forgot'));
+    await expect(forgot).toBeEnabled();
+    for (let n = 1; n <= 3; n++) {
+      await forgot.click();
+      await expect(answer).toHaveAttribute('data-pub-forgot-answer', 'sent');
+      await expect(answer).toHaveText(text(texts, 'pub.forgot.sent'));
+      await expect.poll(async () => (await codes()).length).toBe(n);
+    }
+    await forgot.click();
+    await expect(answer).toHaveText(text(texts, 'pub.forgot.limit', { n: 3 }));
+    await expect(answer).toHaveAttribute('data-pub-forgot-answer', '');
+    expect(await codes()).toHaveLength(3);
+
+    // Кодом из Telegram страница открывается; каждая отправка — в истории контрагента.
+    await page.getByLabel('Код доступа').fill(code);
+    await page.getByRole('button', { name: 'Открыть' }).click();
+    await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
+    const history = (await (
+      await request.get(`/api/contractors/${id}/history`, { maxRetries: 2 })
+    ).json()) as { items: { action: string }[] };
+    expect(history.items.filter((h) => h.action === 'page_code_tg')).toHaveLength(3);
   });
 });

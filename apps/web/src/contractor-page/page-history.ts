@@ -92,6 +92,38 @@ export function pageHistoryText(t: Translate, entry: PageHistoryEntry): string {
           name: typeof p.name === 'string' ? p.name : '',
         });
   }
+  // «Я оплатил» со страницы (доработки 14.11.2026, блок 6; прототип v116 pubPaidDlg): что, сколько, чек.
+  const paid = entry.changes.find((c) => c.field === 'pagePaid' || c.field === 'pagePaidFee');
+  if (entry.action === 'page_paid' && paid) {
+    const p = (paid.to ?? {}) as Record<string, unknown>;
+    const purpose = p.purpose === 'fee' || paid.field === 'pagePaidFee' ? 'fee' : 'tax';
+    const month = typeof p.month === 'string' && isYearMonth(p.month) ? p.month : null;
+    const what = t(`pub.paid.what.${purpose}${month ? '_month' : ''}`, {
+      month: month ? monthLabel(month).toLowerCase() : '',
+    });
+    const note = typeof p.note === 'string' && p.note ? p.note : '';
+    return (
+      t('cppage.hist.page_paid', {
+        what: what.charAt(0).toLowerCase() + what.slice(1),
+        sum: typeof p.amount === 'number' ? formatSomWithUnit(p.amount) : '',
+        file: typeof p.file === 'string' ? p.file : '',
+      }) + (note ? t('cppage.hist.page_paid_note', { note }) : '')
+    );
+  }
+  // Код страницы в Telegram: «Забыли код?» на странице или команда бота «Код от страницы» (прототип v116).
+  if (entry.action === 'page_code_tg') {
+    const p = (entry.changes.find((c) => c.field === 'tgCode')?.to ?? {}) as Record<
+      string,
+      unknown
+    >;
+    const chats = Array.isArray(p.chats)
+      ? p.chats.filter((x): x is string => typeof x === 'string').map((x) => `«${x}»`)
+      : [];
+    return t('cppage.hist.page_code_tg', {
+      chats: chats.join(', '),
+      via: t(p.via === 'cmd' ? 'cppage.hist.code_via.cmd' : 'cppage.hist.code_via.page'),
+    });
+  }
   // Вопрос клиента бухгалтеру и ответ сотрудника клиенту из Telegram (прототип pgTgAsk, pgTgAnswer).
   if (entry.action === 'page_tg_question' || entry.action === 'page_tg_answer') {
     const question = entry.action === 'page_tg_question';

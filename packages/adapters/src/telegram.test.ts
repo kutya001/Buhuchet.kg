@@ -216,6 +216,15 @@ describe('createTelegramBotApi', () => {
       fetch: fetchReturning({ ok: false, error_code: 400, description: 'query is too old' }),
     });
     expect(await refused.answerCallback('cb3', 'x')).toBe(false);
+    // Скрытый ответ длиннее 200 знаков Telegram не примет — переходник обрезает его сам.
+    const long = fetchReturning({ ok: true, result: true });
+    await createTelegramBotApi({ token: '1:abc', fetch: long }).answerCallback(
+      'cb4',
+      'я'.repeat(250),
+    );
+    const sentText = JSON.parse(String(long.mock.calls[0]![1].body)).text as string;
+    expect(sentText).toHaveLength(200);
+    expect(sentText.endsWith('…')).toBe(true);
     expect(await refused.editKeyboard(100, 7, [])).toBe(false);
   });
 

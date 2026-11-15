@@ -42,6 +42,7 @@ import { serverTexts } from '../l10n/texts';
 import { botText, sendCodeMessage, sendNow, sendSecurityNotice } from './bot';
 import { clientStart, clientText } from './client';
 import { leadTgStart } from './lead-link';
+import { clientCodeCommand } from './client/code';
 import { clientDebtOn } from './client/debt';
 import { clientPress, clientQuestion } from './client/pay';
 import { clientFile } from './client/receipt';
@@ -470,6 +471,19 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
         if (await clientText(deps, chat.id, text)) return ok;
         // «Напоминать» — клиент снова включает напоминания о долге (поток К, задача К5).
         if (await clientDebtOn(deps, chat.id, text)) return ok;
+        // «Код от страницы» — код страницы контрагента в подключённый чат (поток К, доработки
+        // 14.11.2026, блок 6).
+        if (
+          await clientCodeCommand(deps, {
+            chatId: chat.id,
+            fromId: from?.id ?? 0,
+            messageId: data.message_id ?? null,
+            reply: data.reply_to_message != null,
+            text,
+          })
+        ) {
+          return ok;
+        }
         // Вопрос клиента бухгалтеру — ответом на просьбу бота (поток К, задача К4).
         if (await clientQuestion(deps, update.message)) return ok;
       }

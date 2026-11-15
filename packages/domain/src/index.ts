@@ -73,6 +73,7 @@ export * from './contractor-page/telegram-pay';
 export * from './contractor-page/telegram-requisite';
 export * from './contractor-page/telegram-fee';
 export * from './contractor-page/pay-claims';
+export * from './contractor-page/page-pay';
 export * from './contractor-page/telegram-notices';
 export * from './contractor-page/telegram-receipt';
 export * from './reports/periods';

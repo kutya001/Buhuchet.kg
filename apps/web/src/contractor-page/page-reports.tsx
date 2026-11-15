@@ -1,9 +1,12 @@
 'use client';
 
 import {
+  addMonths,
   formatDateRu,
   formatSom,
+  formatSomWithUnit,
   monthLabel,
+  monthOf,
   pageMonthGroups,
   pageOpenMonth,
   pageReportCounts,
@@ -16,8 +19,8 @@ import {
   type PageReportMark,
 } from '@buhuchet/domain';
 import type { PublicPageBody } from '@buhuchet/shared';
-import { ChipSelect, Icon, Plate, Pill, StatusPill, inputClass } from '@buhuchet/ui';
-import { useState } from 'react';
+import { buttonClass, ChipSelect, Icon, Plate, Pill, StatusPill, inputClass } from '@buhuchet/ui';
+import { useState, type ReactNode } from 'react';
 import { useT } from '../l10n/provider';
 import { statusPillView } from '../status/status-view';
 import {
@@ -32,6 +35,7 @@ import {
   usePageText,
 } from './page-parts';
 import type { OpenPageFile } from './page-files';
+import { MonthPayPill } from './page-pay';
 
 type Reports = NonNullable<PublicPageBody['reports']>;
 type Report = Reports['items'][number];
@@ -40,9 +44,9 @@ type Report = Reports['items'][number];
 export interface ReportsView {
   year: string | null;
   filter: PageReportMark | null;
-  mode: 'type' | 'due';
+  mode: 'type' | 'month' | 'due';
   openTypes: ReadonlySet<string>;
-  /** Раскрытые месяцы «По срокам»; null — раскрыт месяц по умолчанию. */
+  /** Раскрытые месяцы «По месяцам» и «По срокам»; null — раскрыт месяц по умолчанию. */
   openMonths: ReadonlySet<string> | null;
 }
 
@@ -73,6 +77,11 @@ const PER_KEY = {
   oneoff: 'pub.rep.per.oneoff',
 } as const;
 
+/** Текст словаря с вставками-элементами вместо `{имя}` (суммы жирным, как `<b>` прототипа). */
+function richText(text: string, parts: Readonly<Record<string, ReactNode>>): ReactNode[] {
+  return text.split(/\{(\w+)\}/).map((piece, i) => (i % 2 ? (parts[piece] ?? piece) : piece));
+}
+
 const flip = (set: ReadonlySet<string>, key: string) => {
   const next = new Set(set);
   if (next.has(key)) next.delete(key);
@@ -83,8 +92,10 @@ const flip = (set: ReadonlySet<string>, key: string) => {
 /**
  * «Отчёты» (прототип pubBody, `has('reports')`; ТЗ «Отчёты — группами по видам отчётов»): год срока
  * сдачи, плашки «Сдано», «Впереди», «Просрочено» — фильтры, «По видам» — плитки видов с пояснением и
- * «сдано N из M», «По срокам» — группы по месяцам срока (текущий раскрыт); периоды — срок, статус,
- * суммы, файлы.
+ * «сдано N из M», «По месяцам» — группы по месяцу, за который отчёт (правило «к сдаче и к оплате по
+ * месяцам»), в шапке — «к оплате», «оплачено», «осталось» и пометка оплаты месяца, у месяца с остатком
+ * — «Перечислить» (доработки 14.11.2026, блок 6, пункт 3; прототип v116 `pgMonthPay`), «По срокам» —
+ * группы по месяцам срока (текущий раскрыт); периоды — срок, статус, суммы, файлы.
  */
 export function useReportsSection(
   reports: Reports,
@@ -93,6 +104,7 @@ export function useReportsSection(
   view: ReportsView,
   setView: (v: ReportsView) => void,
   openFile: OpenPageFile,
+  send: (month: string) => void,
 ) {
   const t = useT();
   const tx = usePageText();
@@ -181,7 +193,90 @@ export function useReportsSection(
   };
 
   let list;
-  if (view.mode === 'due') {
+  if (view.mode === 'month') {
+    const months = [...new Set(shown.map((r) => r.month))].sort();
+    // Раскрыт месяц, за который сдают сейчас (прошлый), или ближайший следующий, иначе последний.
+    const now = addMonths(monthOf(today), -1);
+    const first = months.find((m) => m >= now) ?? months[months.length - 1];
+    const open = view.openMonths ?? new Set(first ? [first] : []);
+    const pays = new Map((reports.months ?? []).map((m) => [m.month, m]));
+    const b = (v: number) => <b className="text-ink tabular-nums">{formatSom(v, 'auto')}</b>;
+    list = (
+      <div className="flex min-w-0 flex-col gap-2">
+        {months.map((m) => {
+          const rs = shown.filter((r) => r.month === m);
+          const lateN = rs.filter(
+            (r) => pageReportMark({ status: r.status, due: r.due }, today) === 'late',
+          ).length;
+          const o = open.has(m);
+          const pp = reports.months ? pays.get(m) : undefined;
+          // Без «Учёта оплаты налогов» — только «к оплате» по отчётам месяца.
+          const plain = reports.months
+            ? 0
+            : rs.reduce((a, r) => a + (r.hasSum && r.sum !== null && r.sum > 0 ? r.sum : 0), 0);
+          return (
+            <PageFoldTile
+              key={m}
+              id={m}
+              open={o}
+              onToggle={() => setView({ ...view, openMonths: flip(open, m) })}
+              head={
+                <TileTitle open={o}>
+                  <b>{t('pub.rep.month_title', { month: monthLabel(m).toLowerCase() })}</b>
+                  <span className="text-[11.5px] text-faint">
+                    {t(`pub.rep.count.${pluralForm(rs.length)}`, { n: rs.length })}
+                  </span>
+                  {pp && pp.sum > 0 ? (
+                    <>
+                      <span data-pub-month-pay="" className="text-[11.5px] text-faint">
+                        {richText(
+                          t('pub.rep.month_pay', { sum: '{sum}', got: '{got}', left: '{left}' }),
+                          { sum: b(pp.sum), got: b(pp.got), left: b(pp.left) },
+                        )}
+                      </span>
+                      {pp.status ? <MonthPayPill status={pp.status} /> : null}
+                    </>
+                  ) : plain > 0 ? (
+                    <span className="text-[11.5px] text-faint">
+                      {richText(t('pub.rep.month_sum', { sum: '{sum}' }), { sum: b(plain) })}
+                    </span>
+                  ) : null}
+                  {lateN ? <LateMark text={late(lateN)} /> : null}
+                </TileTitle>
+              }
+            >
+              {pp && pp.left > 0 && reports.send ? (
+                <div className="flex flex-wrap items-center gap-2.5 rounded-lg bg-pane-alt px-2.5 py-2">
+                  <span>
+                    {t('pub.send.left')}{' '}
+                    <b className="tabular-nums">{formatSomWithUnit(pp.left)}</b>
+                  </span>
+                  <span className="grow" />
+                  <button
+                    type="button"
+                    data-pub-send={m}
+                    className={buttonClass('cta', 'sm')}
+                    onClick={() => send(m)}
+                  >
+                    <Icon name="send" size="sm" />
+                    {t('pub.send.btn')}
+                  </button>
+                </div>
+              ) : null}
+              <PageList
+                count={rs.length}
+                all={allOf.has(`rm:${m}`)}
+                onAll={() => showAll(`rm:${m}`)}
+                more={more(rs.length)}
+              >
+                {rs.map((r) => row(r, true))}
+              </PageList>
+            </PageFoldTile>
+          );
+        })}
+      </div>
+    );
+  } else if (view.mode === 'due') {
     const groups = pageMonthGroups(shown, today);
     const open =
       view.openMonths ??
@@ -346,9 +441,10 @@ export function useReportsSection(
           <ChipSelect
             label={t('pub.rep.mode_label')}
             value={view.mode}
-            onChange={(mode) => setView({ ...view, mode })}
+            onChange={(mode) => setView({ ...view, mode, openMonths: null })}
             options={[
               { value: 'type', label: t('pub.rep.by_type') },
+              { value: 'month', label: t('pub.rep.by_month') },
               { value: 'due', label: t('pub.rep.by_due') },
             ]}
           />

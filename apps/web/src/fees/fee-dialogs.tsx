@@ -46,6 +46,7 @@ import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
+import { attachSentReceipt, SentReceiptRow } from '../contractor-page/receipt-file';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import {
   feeOrderedMonths,
@@ -399,6 +400,10 @@ function FeePaymentModal({
   // Строки правили руками — сумма их больше не перераспределяет (прототип `st.manual`).
   const [manual, setManual] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
+  // Принятый чек (прототип v119 `feePayDlg` с `pre.file`): уже в поле «Файл»; «Убрать» — не прикреплять.
+  const [receipt, setReceipt] = useState(() =>
+    !edit && canUpload ? (preset?.receipt ?? null) : null,
+  );
   const [errors, setErrors] = useState<{
     amount?: string;
     date?: string;
@@ -508,13 +513,15 @@ function FeePaymentModal({
       to,
       allocation: allocation.filter((x) => x.amount > 0),
       note,
-      files: picked.length,
+      files: picked.length + (receipt ? 1 : 0),
     });
     const saved = res.ok ? FeePaymentSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
-      const failedUpload = picked.length
-        ? await uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: saved.data.id }, picked)
-        : null;
+      const source = { kind: 'fee_payment' as const, id: saved.data.id };
+      const failedReceipt = receipt ? await attachSentReceipt(t, errorText, receipt, source) : null;
+      const failedUpload =
+        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
+        failedReceipt;
       setBusy(false);
       onDone();
       onClose();
@@ -778,17 +785,22 @@ function FeePaymentModal({
               error={errors.files}
             >
               {(control) => (
-                <input
-                  {...control}
-                  type="file"
-                  multiple
-                  data-fee-pay-files=""
-                  className={inputClass({ file: true })}
-                  onChange={(e) => {
-                    setPicked([...(e.target.files ?? [])]);
-                    setErrors((x) => ({ ...x, files: undefined }));
-                  }}
-                />
+                <div>
+                  {receipt ? (
+                    <SentReceiptRow receipt={receipt} onRemove={() => setReceipt(null)} />
+                  ) : null}
+                  <input
+                    {...control}
+                    type="file"
+                    multiple
+                    data-fee-pay-files=""
+                    className={inputClass({ file: true })}
+                    onChange={(e) => {
+                      setPicked([...(e.target.files ?? [])]);
+                      setErrors((x) => ({ ...x, files: undefined }));
+                    }}
+                  />
+                </div>
               )}
             </Field>
           ) : null}

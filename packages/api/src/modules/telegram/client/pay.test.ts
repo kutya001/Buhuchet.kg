@@ -773,6 +773,7 @@ describe.skipIf(!databaseAvailable())(
           purpose: 'tax',
           month: SEP,
           amount: TOTAL,
+          source: 'telegram',
         });
       } finally {
         await f.t.admin.db.delete(schema.contractorPayClaims);

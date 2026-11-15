@@ -442,6 +442,7 @@ describe.skipIf(!databaseAvailable())(
         purpose: 'fee',
         month: '2026-09',
         amount: DEBT,
+        source: 'telegram',
       });
       // Контрагент в архиве — без денег. Напоминание — раз в сутки: прежнее — будто вчерашнее.
       await f.t.admin.db

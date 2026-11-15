@@ -39,6 +39,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
+import { attachSentReceipt, SentReceiptRow } from '../contractor-page/receipt-file';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { presetLines, reallocate, type ReceiptPreset } from './receipt-preset';
@@ -541,6 +542,11 @@ function ReceiptModal({
   const [reason, setReason] = useState('');
   const [changed, setChanged] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
+  // Принятый чек (прототип v119): уже в поле «Файлы»; «Убрать» — не прикреплять. Только у нового поступления
+  // и у того, кто может прикреплять файлы.
+  const [receipt, setReceipt] = useState(() =>
+    !edit && canUpload && preset && 'list' in preset ? (preset.receipt ?? null) : null,
+  );
   // Файл уже приложен к изменяемому поступлению — второй не требуется (прототип: «уже приложено N»).
   const needFile = filesOn && !!form?.contractor.needReceiptFile && !(edit && edit.files > 0);
   const fileHint =
@@ -709,7 +715,7 @@ function ReceiptModal({
       });
     if (!date || date > todayBishkek()) return setErrors({ date: t('err.money_date_future') });
     if (over) return setErrors({ rows: t('err.receipt_row_over') });
-    if (needFile && picked.length === 0)
+    if (needFile && picked.length === 0 && !receipt)
       return setErrors({ files: t('err.receipt_file_required') });
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
@@ -722,15 +728,17 @@ function ReceiptModal({
           date,
           rows: rowsOut(),
           ...(feeDetail > 0 ? { fee: feeOut() } : {}),
-          files: picked.length,
+          files: picked.length + (receipt ? 1 : 0),
         },
       }),
     );
     const saved = res.ok ? ReceiptSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
-      const failedUpload = picked.length
-        ? await uploadMoneyFiles(t, errorText, { kind: 'receipt', id: saved.data.id }, picked)
-        : null;
+      const source = { kind: 'receipt' as const, id: saved.data.id };
+      const failedReceipt = receipt ? await attachSentReceipt(t, errorText, receipt, source) : null;
+      const failedUpload =
+        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
+        failedReceipt;
       setBusy(false);
       onDone();
       onClose();
@@ -1086,13 +1094,18 @@ function ReceiptModal({
               error={errors.files}
             >
               {(control) => (
-                <FilesInput
-                  control={control}
-                  onPick={(f) => {
-                    setPicked(f);
-                    setErrors((x) => ({ ...x, files: undefined }));
-                  }}
-                />
+                <div>
+                  {receipt ? (
+                    <SentReceiptRow receipt={receipt} onRemove={() => setReceipt(null)} />
+                  ) : null}
+                  <FilesInput
+                    control={control}
+                    onPick={(f) => {
+                      setPicked(f);
+                      setErrors((x) => ({ ...x, files: undefined }));
+                    }}
+                  />
+                </div>
               )}
             </Field>
           </FormGrid>

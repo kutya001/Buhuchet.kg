@@ -365,8 +365,15 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
 
     await test.step('«Скопировать для клиента»: текст по шаблону — в буфере, запись — в истории контрагента', async () => {
       await expect(copy).toBeEnabled();
+      // Запись в историю уходит после уведомления: «История» открывается, когда она записана
+      // (docs/typical-mistakes.md № 44), и упавшая запись видна своим ответом, а не пропавшей строкой.
+      const copied = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && r.url().endsWith('/month-pay/copied'),
+      );
       await copy.click();
       await expect(page.getByText('Текст для клиента скопирован')).toBeVisible();
+      const copiedRes = await copied;
+      expect(copiedRes.status(), await copiedRes.text()).toBe(200);
       const text = await page.evaluate(() => navigator.clipboard.readText());
       expect(text).toContain(`Уважаемые ${name}! Налоги к оплате за сентябрь 2026: `);
       expect(text).toMatch(/Итого — 4\s670,50\sсом\. Просим перечислить до \d\d\.\d\d\.\d{4} на: /);
@@ -788,12 +795,32 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
       await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/^4\s670,50$/);
       await expect(receipt.locator(`[data-receipt-row="${nds}"]`)).toHaveValue(/^3\s800$/);
       await expect(receipt.locator(`[data-receipt-row="${pat}"]`)).toHaveValue('870,50');
+      // Сам чек уже стоит в поле файлов (прототип v119): после записи он — у поступления.
+      await expect(receipt.locator('[data-sent-receipt]')).toContainText(receiptName);
+      const saved = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && /\/receipts$/.test(new URL(r.url()).pathname),
+      );
+      const attached = page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          /^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname),
+      );
       await receipt.getByRole('button', { name: 'Записать поступление' }).click();
+      const savedRes = await saved;
+      expect(savedRes.status()).toBe(201);
+      expect((await attached).status()).toBe(201);
       await expect(receipt).toBeHidden();
       await expect(
         page.getByRole('status').filter({ hasText: 'Поступление записано' }),
       ).toBeVisible();
       await expect(line).toContainText('Принят');
+      const receiptId = ((await savedRes.json()) as { id: string }).id;
+      const filesRes = await page.request.get(`/api/files?kind=receipt&id=${receiptId}`, {
+        maxRetries: 2,
+      });
+      expect(filesRes.status(), await filesRes.text()).toBe(200);
+      const files = (await filesRes.json()) as { items: { name: string }[] };
+      expect(files.items.map((x) => x.name)).toEqual([receiptName]);
     });
   });
 });

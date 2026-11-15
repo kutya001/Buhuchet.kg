@@ -6,15 +6,19 @@ import {
   DEBT_TOGGLE_REFUSALS,
   INDICATOR_TOTALS,
   INDICATOR_TYPES,
+  PAGE_FORGOT_OUTCOMES,
   PAGE_FILE_CATEGORIES,
+  PAGE_MONTH_PAY_STATUSES,
   PAGE_REPORT_STATUSES,
   PAGE_SECTIONS,
   PAGE_TIPS,
+  PAY_CLAIM_PURPOSES,
+  SENT_FILE_COMMENT_MAX,
   type PageTipId,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordVersion, Tyiyn, Uuid } from './common';
-import { PageSent } from './files-sent';
+import { PageSent, PageSentStartFile } from './files-sent';
 import { OrgLogoLink, PageSectionSchema } from './org';
 
 /*
@@ -128,10 +132,23 @@ export const PagePay = z.object({
   kind: z.enum(['phone', 'account', 'wallet']),
   bank: z.string(),
   number: z.string(),
+  /**
+   * Что копирует кнопка (прототип v116 `pgRqBtn`): у номера телефона — номер без пробелов, у счёта —
+   * строки реквизита (банк, счёт, БИК, получатель).
+   */
   copy: z.string(),
+  /** «Скопировать номер телефона» или «Скопировать реквизиты для перевода». */
+  copyLabel: z.string(),
+  /** «Реквизиты для перевода — организации …» или «— сотрудника …» (шаблон `tgRqHead`). */
+  head: z.string(),
   banks: z.array(z.string()),
   bik: z.string().nullable(),
   holder: z.string(),
+  /**
+   * Последнее сообщение клиента об оплате этого вида, которое ждёт подтверждения (прототип v116
+   * `pgClaimWait`): когда и сколько; null — ждущего нет.
+   */
+  waiting: z.object({ at: z.iso.datetime(), amount: Tyiyn.nullable() }).nullable(),
 });
 export type PagePay = z.infer<typeof PagePay>;
 
@@ -171,9 +188,33 @@ export const PageReport = z.object({
   sum: Tyiyn.nullable(),
   /** Только при «Учёте оплаты налогов» и сумме больше 0. */
   payStatus: z.enum(['unpaid', 'partial', 'paid']).nullable(),
+  /** Месяц, за который отчёт («По месяцам», правило `reportMonth`). */
+  month: YearMonth,
   files: z.array(PageFile),
 });
 export type PageReport = z.infer<typeof PageReport>;
+
+/**
+ * Оплата месяца для клиента (доработки 14.11.2026, блок 6, пункт 3; прототип v116 `pgMonthPay`): к
+ * оплате, оплачено, осталось, пометка и отчёты с остатком для «Перечислить» — от раннего срока оплаты.
+ */
+export const PageMonthPay = z.object({
+  month: YearMonth,
+  sum: Tyiyn,
+  got: Tyiyn,
+  left: Tyiyn,
+  status: z.enum(PAGE_MONTH_PAY_STATUSES).nullable(),
+  rows: z.array(
+    z.object({
+      id: Uuid,
+      type: z.string(),
+      period: z.string(),
+      left: Tyiyn,
+      payDue: IsoDate.nullable(),
+    }),
+  ),
+});
+export type PageMonthPay = z.infer<typeof PageMonthPay>;
 
 /**
  * Файл раздела «Файлы» (решение заказчика 06.11.2026, прототип v74 `pubFiles`): категория, к чему
@@ -239,7 +280,8 @@ export const PageFee = z.object({
       month: YearMonth,
       charge: Tyiyn,
       got: Tyiyn,
-      status: z.enum(['unpaid', 'partial', 'paid']),
+      /** «Ожидает подтверждения» — клиент сообщил об оплате месяца (прототип v116 `pgClaimWait`). */
+      status: z.enum(['unpaid', 'partial', 'paid', 'wait']),
     }),
   ),
 });
@@ -417,7 +459,22 @@ export const PublicPageBody = z.object({
   main: PageMain,
   accountant: PagePerson.nullable(),
   pay: z.object({ tax: PagePay.nullable(), fee: PagePay.nullable() }).nullable(),
-  reports: z.object({ types: z.array(PageReportType), items: z.array(PageReport) }).nullable(),
+  reports: z
+    .object({
+      types: z.array(PageReportType),
+      items: z.array(PageReport),
+      /**
+       * Оплата по месяцам (только при «Учёте оплаты налогов»; прототип v116 `pgMonthPay`): месяцы с
+       * суммами к оплате, от старых к новым; null — без «Учёта оплаты налогов».
+       */
+      months: z.array(PageMonthPay).nullable(),
+      /**
+       * «Перечислить» у месяца с остатком (прототип v116 `pgSendOn`): «Учёт оплаты налогов», показан
+       * «Как оплатить» и есть реквизиты для налогов.
+       */
+      send: z.boolean(),
+    })
+    .nullable(),
   /** «Файлы»: сначала новые; только при показанном разделе. */
   files: z.array(PageFilesItem).nullable(),
   /**
@@ -457,3 +514,37 @@ export const PublicPageCodeInput = z.object({
 });
 
 export const PublicPageCodeOk = z.object({ ok: z.literal(true) });
+
+/**
+ * «Я оплатил» (доработки 14.11.2026, блок 6, пункт 2; прототип v116 `pubPaidDlg`): что оплачено, за
+ * какой месяц (налоги — из месяцев с остатком, обслуживание — с долгом; без месяца — null), сумма в
+ * тыйынах, необязательный комментарий и чек — фото или PDF. Правила полей — `pagePaidProblems` домена.
+ */
+export const PagePaidStart = z.strictObject({
+  purpose: z.enum(PAY_CLAIM_PURPOSES),
+  month: YearMonth.nullable(),
+  amount: z.number().int(),
+  comment: z
+    .string()
+    .max(SENT_FILE_COMMENT_MAX * 4)
+    .optional(),
+  file: PageSentStartFile,
+});
+export type PagePaidStart = z.infer<typeof PagePaidStart>;
+
+/** Чек загружен: номер из ответа «Я оплатил» и те же поля — сервер сверяет их с начатой отправкой. */
+export const PagePaidComplete = PagePaidStart.omit({ file: true }).extend({ id: Uuid });
+export type PagePaidComplete = z.infer<typeof PagePaidComplete>;
+
+/** Сообщение об оплате и чек получил бухгалтер. */
+export const PagePaidDone = z.object({ ok: z.literal(true) });
+
+/**
+ * «Забыли код? Прислать в Telegram» (прототип v116 `pubForgot`): отправлен, Telegram не подключён,
+ * уже 3 раза за сутки, страница закрыта; `limit` — сколько раз за сутки можно.
+ */
+export const PageForgot = z.object({
+  outcome: z.enum(PAGE_FORGOT_OUTCOMES),
+  limit: z.number().int().positive(),
+});
+export type PageForgot = z.infer<typeof PageForgot>;

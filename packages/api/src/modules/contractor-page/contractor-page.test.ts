@@ -282,7 +282,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     ).toBe(404);
   });
 
-  it('по ссылке без входа: ввод кода, неверный код, верный — cookie этой ссылки на 30 дней', async () => {
+  it('по ссылке без входа: ввод кода, неверный код, верный — cookie этой ссылки на 1 день', async () => {
     const path = `org-a/${cpAcc.inn}`;
     const code = (await pageRow(cpAcc.id)).code;
     const first = await visit(path);
@@ -311,7 +311,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(setCookie).toContain(`Path=/org-a/inn/${cpAcc.inn}`);
     expect(setCookie).toContain('HttpOnly');
     expect(setCookie).toContain('SameSite=Lax');
-    expect(setCookie).toContain('Max-Age=2592000');
+    // Код запоминается на 1 день (доработки 14.11.2026, блок 6; было 30 дней).
+    expect(setCookie).toContain('Max-Age=86400');
     const cookie = setCookie.split(';')[0]!;
     // Верный код сбросил счёт неверных.
     expect((await pageRow(cpAcc.id)).failures).toBe(0);

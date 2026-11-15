@@ -11,6 +11,7 @@ import {
   listSentFilesPage,
   listSentFileValues,
   orgMenuSettings,
+  rejectReceiptClaims,
   rejectSentFile,
   SentFileDecidedError,
   sentContractor,
@@ -76,6 +77,7 @@ import { contractorOf } from '../contractor-page/card';
 import { serverTexts } from '../l10n/texts';
 import { error, FILES_SECTION, realNow, requireFilesFeature, subjectOf } from './files';
 import { filesScopeOf } from './manager';
+import { removeStoredObjects } from './storage-retry';
 
 /*
  * Файлы от контрагентов глазами сотрудника (доработки 14.11.2026, блок 2; прототип v112
@@ -176,7 +178,7 @@ const canDecideOf = (subject: AccessSubject) => hasPermission(subject, 'filesUpl
  * Загруженный отправленный файл контрагента, которого сотрудник видит в области группы «Файловый
  * менеджер»; иначе — 404 (чужой и вне области не отличить от несуществующего).
  */
-async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
+export async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
   const file = await getSentFile(tx, id);
   if (!file || file.state !== 'ready') return notFound();
   const contractor = await sentContractor(tx, file.contractorId);
@@ -185,7 +187,7 @@ async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
 }
 
 /** Вкладка и счётчик — при «Файлах в карточках» и «Странице контрагента по ссылке». */
-async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
+export async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
   const features = await requireFilesFeature(tx, orgId);
   if (!features.cppage) cppageOff();
 }
@@ -513,20 +515,16 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
         }),
       );
     } catch (err) {
-      await deps.storage.delete(key).catch((e: unknown) => {
-        deps.logger.error({ err: e }, 'файлы от контрагентов: копия не удалена после отказа');
-      });
+      await removeStoredObjects(deps, [key], 'файлы от контрагентов: копия после отказа');
       throw err;
     }
-    // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас.
-    for (const sentKey of [seen.storageKey, sentUploadKey(seen.storageKey)]) {
-      await deps.storage.delete(sentKey).catch((err: unknown) => {
-        deps.logger.error(
-          { err },
-          'файлы от контрагентов: принятый файл не удалён из «отправленных»',
-        );
-      });
-    }
+    // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас; не
+    // удалось — повторит задача `files.storage-retry`.
+    await removeStoredObjects(
+      deps,
+      [seen.storageKey, sentUploadKey(seen.storageKey)],
+      'файлы от контрагентов: принятый в «отправленных»',
+    );
     return c.json(body, 200);
   };
 }
@@ -569,6 +567,9 @@ export function sentRejectHandler(deps: ApiDeps): RouteHandler<typeof sentReject
         await requireFilesFeature(tx, ctx.orgId);
         const { file, contractor } = await visibleSent(tx, subject, id);
         await rejectSentFile(tx, { id, version: input.version, reason });
+        // Отклонённый чек — и сообщение об оплате с ним отклонено: у месяца снова «Не оплачено» или
+        // «Частично» (доработки 14.11.2026, блок 6; прототип v116 `pgClaimReject`).
+        await rejectReceiptClaims(tx, id);
         await writeHistory(tx, {
           entity: 'sent_file',
           entityId: id,

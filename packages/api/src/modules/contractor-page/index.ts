@@ -19,6 +19,14 @@ import {
   pageSentRoute,
 } from './card';
 import {
+  pageForgotHandler,
+  pageForgotRoute,
+  pagePaidCompleteHandler,
+  pagePaidCompleteRoute,
+  pagePaidStartHandler,
+  pagePaidStartRoute,
+} from './paid';
+import {
   publicPageCodeHandler,
   publicPageCodeRoute,
   publicPageFileHandler,
@@ -63,6 +71,10 @@ export function contractorPageModule(deps: ApiDeps) {
       .openapi(publicPageRoute, publicPageHandler(deps))
       .openapi(publicPageCodeRoute, publicPageCodeHandler(deps))
       .openapi(publicPageFileRoute, publicPageFileHandler(deps))
+      // «Я оплатил» и «Забыли код? Прислать в Telegram» (доработки 14.11.2026, блок 6).
+      .openapi(pagePaidStartRoute, pagePaidStartHandler(deps))
+      .openapi(pagePaidCompleteRoute, pagePaidCompleteHandler(deps))
+      .openapi(pageForgotRoute, pageForgotHandler(deps))
       // Telegram контрагента (задача К3): список и решения в карточке, ссылка на бота со страницы.
       .openapi(getPageTelegramRoute, getPageTelegramHandler(deps))
       // Раньше «…/telegram/{linkId}»: иначе «debt» разбирается как номер подключения.

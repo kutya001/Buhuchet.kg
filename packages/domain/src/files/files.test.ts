@@ -47,8 +47,18 @@ describe('файлы записей', () => {
       'x.js',
       'help.chm',
       'a.iso',
+      // Сценарии и ярлыки, которые Windows и офис выполняют при открытии (проверка защиты этапа 3).
+      'run.py',
+      'note.one',
+      'q.iqy',
+      'data.slk',
+      'x.searchconnector-ms',
+      'cfg.psd1',
+      'base.accde',
+      'start.desktop',
+      'site.website',
     ]) {
-      expect(fileUploadProblem({ name, size: 10 })).toBe('file_type_forbidden');
+      expect(fileUploadProblem({ name, size: 10 }), name).toBe('file_type_forbidden');
     }
     for (const name of [
       'Устав.pdf',
@@ -78,6 +88,7 @@ describe('файлы записей', () => {
       'Акт\u202efdp.exe',
       'a\u2066b.pdf',
       'a\u200fb.pdf',
+      'a\u061cb.pdf',
     ]) {
       expect(fileUploadProblem({ name, size: 1 }), JSON.stringify(name)).toBe('file_name_invalid');
     }

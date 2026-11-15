@@ -67,7 +67,8 @@ import { contractorPageBody } from './view';
 const error = { 'application/json': { schema: ApiError } };
 
 /**
- * Cookie страницы (ТЗ «Верный код запоминается в этом браузере на 30 дней»): своя у каждой ссылки
+ * Cookie страницы (верный код запоминается в этом браузере на `PAGE_REMEMBER_DAYS` — 1 день с момента
+ * ввода, доработки 14.11.2026, блок 6; было 30 дней): своя у каждой ссылки
  * (путь /<адрес организации>/inn/<ИНН>), HttpOnly, SameSite=Lax; по https — Secure. В базе — только
  * хеш токена и номер кода, при котором он выдан.
  */
@@ -243,7 +244,7 @@ export const publicPageCodeRoute = createRoute({
   },
   responses: {
     200: {
-      description: 'Верный код: браузер получает cookie страницы на 30 дней',
+      description: 'Верный код: браузер получает cookie страницы на 1 день',
       content: { 'application/json': { schema: PublicPageCodeOk } },
     },
     400: { description: 'Не 6 цифр', content: error },

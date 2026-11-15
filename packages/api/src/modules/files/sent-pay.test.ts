@@ -16,8 +16,18 @@ function subject(permissions: PermissionId[], scopes: AccessSubject['scopes'] = 
   return { employeeId: ME, isOwner: false, permissions: new Set(permissions), scopes };
 }
 
-const TAX = { purpose: 'tax' as const, month: '2026-10' as const, amount: 625_050 };
-const FEE = { purpose: 'fee' as const, month: '2026-09' as const, amount: 900_000 };
+const TAX = {
+  purpose: 'tax' as const,
+  month: '2026-10' as const,
+  amount: 625_050,
+  source: 'telegram' as const,
+};
+const FEE = {
+  purpose: 'fee' as const,
+  month: '2026-09' as const,
+  amount: 900_000,
+  source: 'page' as const,
+};
 const mine = { responsibleEmployeeId: ME, archived: false };
 const theirs = { responsibleEmployeeId: OTHER, archived: false };
 

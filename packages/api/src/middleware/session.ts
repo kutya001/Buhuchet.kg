@@ -39,7 +39,7 @@ const PUBLIC_PATHS = new Set([
  * который знает браузер заявителя.
  */
 const PUBLIC_PATTERNS: readonly RegExp[] = [
-  /^\/api\/page\/[^/]+\/[^/]+(?:\/code|\/telegram|\/files\/[^/]+|\/sent|\/sent\/complete)?$/,
+  /^\/api\/page\/[^/]+\/[^/]+(?:\/code|\/telegram|\/files\/[^/]+|\/sent|\/sent\/complete|\/paid|\/paid\/complete|\/forgot)?$/,
   // «Задать пароль» по ссылке из Telegram (доработки 14.11.2026, блок 1): ключ ссылки — в пути.
   /^\/api\/auth\/setup\/[A-Za-z0-9_-]{43}$/,
   /^\/api\/landing\/videos\/[a-z0-9][a-z0-9_-]{0,63}\/(?:cover|play|start|watched)$/,

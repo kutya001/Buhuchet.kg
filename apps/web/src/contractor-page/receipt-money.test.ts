@@ -42,7 +42,7 @@ describe('чек за налоги: «Принять деньги» за мес�
     const preset = taxReceiptPreset(
       t,
       rows,
-      { purpose: 'tax', month: '2026-09', amount: 450_000 },
+      { purpose: 'tax', month: '2026-09', amount: 450_000, source: 'telegram' },
       LAST_MONTH,
     );
     expect(preset).toEqual({
@@ -64,23 +64,77 @@ describe('чек за налоги: «Принять деньги» за мес�
 
   it('суммы в сообщении нет — общая сумма по строкам', () => {
     expect(
-      taxReceiptPreset(t, rows, { purpose: 'tax', month: '2026-10', amount: null }, LAST_MONTH),
+      taxReceiptPreset(
+        t,
+        rows,
+        { purpose: 'tax', month: '2026-10', amount: null, source: 'telegram' },
+        LAST_MONTH,
+      ),
     ).toEqual({
       list: [{ reportId: 'nds-10', amount: 300_000 }],
       note: 'Деньги за октябрь 2026 — по чеку из Telegram',
     });
   });
 
-  it('деньги месяца уже получены или месяца нет — окна нет, сообщение «уже получены»', () => {
+  it('чек «Я оплатил» со страницы — «по чеку со страницы» (прототип v116)', () => {
+    expect(
+      taxReceiptPreset(
+        t,
+        rows,
+        { purpose: 'tax', month: '2026-10', amount: null, source: 'page' },
+        LAST_MONTH,
+      ),
+    ).toEqual({
+      list: [{ reportId: 'nds-10', amount: 300_000 }],
+      note: 'Деньги за октябрь 2026 — по чеку со страницы',
+    });
+  });
+
+  it("чек без месяца — все месяцы с остатком, от старых к новым (прототип v116 `p.m || 'all'`)", () => {
+    expect(
+      taxReceiptPreset(
+        t,
+        rows,
+        { purpose: 'tax', month: null, amount: 500_000, source: 'page' },
+        LAST_MONTH,
+      ),
+    ).toEqual({
+      list: [
+        { reportId: 'nds-09', amount: 400_000 },
+        { reportId: 'sf-09', amount: 67_050 },
+        { reportId: 'nds-10', amount: 300_000 },
+      ],
+      note: 'Деньги на налоги — по чеку со страницы',
+      total: 500_000,
+    });
+    expect(taxReceivedText(t, null)).toBe('Деньги на налоги уже получены от контрагента');
+  });
+
+  it('деньги месяца уже получены — окна нет, сообщение «уже получены»', () => {
     const got = [row('nds-10', { amount: 300_000, receivedFor: 300_000 })];
     expect(
-      taxReceiptPreset(t, got, { purpose: 'tax', month: '2026-10', amount: 1 }, LAST_MONTH),
+      taxReceiptPreset(
+        t,
+        got,
+        { purpose: 'tax', month: '2026-10', amount: 1, source: 'telegram' },
+        LAST_MONTH,
+      ),
     ).toBeNull();
     expect(
-      taxReceiptPreset(t, rows, { purpose: 'tax', month: '2026-08', amount: 1 }, LAST_MONTH),
+      taxReceiptPreset(
+        t,
+        rows,
+        { purpose: 'tax', month: '2026-08', amount: 1, source: 'telegram' },
+        LAST_MONTH,
+      ),
     ).toBeNull();
     expect(
-      taxReceiptPreset(t, rows, { purpose: 'fee', month: '2026-10', amount: 1 }, LAST_MONTH),
+      taxReceiptPreset(
+        t,
+        rows,
+        { purpose: 'fee', month: '2026-10', amount: 1, source: 'telegram' },
+        LAST_MONTH,
+      ),
     ).toBeNull();
     expect(taxReceivedText(t, '2026-10')).toBe(
       'Деньги на налоги за октябрь 2026 уже получены от контрагента',
@@ -90,11 +144,19 @@ describe('чек за налоги: «Принять деньги» за мес�
 
 describe('чек за обслуживание: примечание оплаты', () => {
   it('с месяцем начисления и без него (ручное напоминание о долге)', () => {
-    expect(feeReceiptNote(t, { purpose: 'fee', month: '2026-11', amount: 300_000 })).toBe(
-      'По чеку из Telegram за ноябрь 2026',
+    expect(
+      feeReceiptNote(t, { purpose: 'fee', month: '2026-11', amount: 300_000, source: 'telegram' }),
+    ).toBe('По чеку из Telegram за ноябрь 2026');
+    expect(
+      feeReceiptNote(t, { purpose: 'fee', month: null, amount: 900_000, source: 'telegram' }),
+    ).toBe('По чеку из Telegram');
+  });
+
+  it('чек «Я оплатил» со страницы — «по чеку со страницы» (прототип v116)', () => {
+    const page = { purpose: 'fee', amount: 300_000, source: 'page' } as const;
+    expect(feeReceiptNote(t, { ...page, month: '2026-11' })).toBe(
+      'По чеку со страницы за ноябрь 2026',
     );
-    expect(feeReceiptNote(t, { purpose: 'fee', month: null, amount: 900_000 })).toBe(
-      'По чеку из Telegram',
-    );
+    expect(feeReceiptNote(t, { ...page, month: null })).toBe('По чеку со страницы');
   });
 });
