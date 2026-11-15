@@ -1,3 +1,5 @@
+import type { UiTextKey } from '../l10n/texts';
+
 /*
  * Подсказки и обучение на странице контрагента (доработки 15.11.2026, пункты 1–7; прототип v120
  * modules/cp-help.js, admin/cp-help-admin.js): клиенты — не бухгалтеры, поэтому окно «Добро
@@ -467,4 +469,95 @@ export function cpFaqMove(faq: readonly CpFaq[], id: string, dir: -1 | 1): CpFaq
   return faq.map((q) =>
     q.id === a.id ? { ...q, ord: oa } : q.id === b.id ? { ...q, ord: ob } : q,
   );
+}
+
+/* ───────────── «История изменений» вкладки Админки ───────────── */
+
+/** Разделы вкладки «Страница контрагента» в истории и в «Выгрузить» / «Загрузить» (прототип DX.cpwel…). */
+export const CP_HELP_DICTS = ['cpwel', 'cphints', 'cptour', 'cpfaq', 'cpgloss'] as const;
+export type CpHelpDict = (typeof CP_HELP_DICTS)[number];
+
+export function isCpHelpDict(value: string): value is CpHelpDict {
+  return (CP_HELP_DICTS as readonly string[]).includes(value);
+}
+
+/** Запись истории вкладки: код — «раздел:запись» (`cpwel:t`, `cpfaq:paid`), у загрузки — «раздел:». */
+export interface CpHelpHistoryInput {
+  code: string;
+  action: string;
+  /** Заголовок облачка, вопрос или слово на момент записи. */
+  label: string;
+  changes: readonly { field: string; from?: unknown; to?: unknown }[];
+}
+
+/** Строка истории: ключ словаря и подстановки. */
+export interface CpHelpHistoryLine {
+  key: UiTextKey;
+  params: Record<string, string>;
+}
+
+/**
+ * Часть ключа словаря из кода записи (`repT` → `rep_t`, `payTax` → `pay_tax`): ключи словаря — строчными
+ * («Где» текстов, разделы вопросов и кнопки ответов Админки).
+ */
+export function cpHelpTextId(code: string): string {
+  return code.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+/** Раздел записи истории по её коду; не из вкладки — null. */
+export function cpHelpHistoryDict(code: string): CpHelpDict | null {
+  const dict = code.slice(0, code.indexOf(':'));
+  return isCpHelpDict(dict) ? dict : null;
+}
+
+/**
+ * Запись истории словами прототипа (`cphLog`): «Страница контрагента: «Где» изменён», «…: обзор —
+ * облачко «…» изменено», «…: обзор — «…» выше», «…: вопрос «…» выключен», «…: добавлен вопрос «…»»,
+ * «…: «Словарик» — удалено «…»». Загрузку из Excel и её откат пишет общая строка «Загрузок».
+ */
+export function cpHelpHistoryLine(
+  item: CpHelpHistoryInput,
+  t: (key: UiTextKey) => string,
+): CpHelpHistoryLine | null {
+  const dict = cpHelpHistoryDict(item.code);
+  if (!dict) return null;
+  const code = item.code.slice(dict.length + 1);
+  // Поля, которые изменились (название вопроса пишется в запись и без изменений — для строки).
+  const changed = item.changes.filter(
+    (c) => JSON.stringify(c.from ?? null) !== JSON.stringify(c.to ?? null),
+  );
+  const only = (field: string) =>
+    changed.length === 1 && changed[0]!.field === field ? changed[0]! : null;
+  const name = item.label;
+  if (dict === 'cpwel' || dict === 'cphints') {
+    const where = t(
+      `cph.adm.${dict === 'cpwel' ? 'wel' : 'hint'}.${cpHelpTextId(code)}` as UiTextKey,
+    );
+    return { key: 'cph.hist.text', params: { name: where } };
+  }
+  if (dict === 'cptour') {
+    const n = only('n');
+    if (n) {
+      const up = Number(n.to) < Number(n.from);
+      return { key: up ? 'cph.hist.tour.up' : 'cph.hist.tour.down', params: { name } };
+    }
+    const on = only('on');
+    if (on) return { key: on.to ? 'cph.hist.tour.on' : 'cph.hist.tour.off', params: { name } };
+    return { key: 'cph.hist.tour.update', params: { name } };
+  }
+  if (dict === 'cpfaq') {
+    if (item.action === 'create') return { key: 'cph.hist.faq.create', params: { name } };
+    if (item.action === 'delete') return { key: 'cph.hist.faq.delete', params: { name } };
+    const ord = only('ord');
+    if (ord) {
+      const up = Number(ord.to) < Number(ord.from);
+      return { key: up ? 'cph.hist.faq.up' : 'cph.hist.faq.down', params: { name } };
+    }
+    const on = only('on');
+    if (on) return { key: on.to ? 'cph.hist.faq.on' : 'cph.hist.faq.off', params: { name } };
+    return { key: 'cph.hist.faq.update', params: { name } };
+  }
+  if (item.action === 'create') return { key: 'cph.hist.gloss.create', params: { name } };
+  if (item.action === 'delete') return { key: 'cph.hist.gloss.delete', params: { name } };
+  return { key: 'cph.hist.gloss.update', params: { name } };
 }

@@ -19,6 +19,7 @@ import {
   type CpFaqSec,
   type CpGloss,
   type CpHelp,
+  type CpHelpDict,
   type CpHelpHintKey,
   type CpHelpWelcomeKey,
   type CpTourStep,
@@ -44,10 +45,6 @@ import { platformReference } from './schema';
  */
 
 export const CP_HELP_KEY = 'cpHelp';
-
-/** Разделы истории и выгрузки «Страницы контрагента» (прототип DX.cpwel … DX.cpgloss). */
-export const CP_HELP_DICTS = ['cpwel', 'cphints', 'cptour', 'cpfaq', 'cpgloss'] as const;
-export type CpHelpDict = (typeof CP_HELP_DICTS)[number];
 
 const text = z.string().catch('');
 const texts = <K extends string>(keys: readonly K[]) =>
@@ -195,11 +192,15 @@ export type AdminCpHelpEdit =
   | {
       op: 'faq';
       id?: string;
+      /** Код нового вопроса из файла загрузки (у окна — нет: код придумывает сервер). */
+      newId?: string;
       q: string;
       a: string;
       sec: CpFaqSec;
       act: CpFaqAct;
       on: boolean;
+      /** «Порядок» из файла загрузки (у окна — нет: порядок меняют «Выше» / «Ниже»). */
+      ord?: number;
       version: number;
     }
   | { op: 'faqMove'; id: string; dir: -1 | 1; version: number }
@@ -224,6 +225,7 @@ interface Applied {
 type ApplyFail = Exclude<AdminCpHelpResult, { ok: true }>;
 
 const NOT_FOUND: ApplyFail = { ok: false, reason: 'not_found' };
+const CHANGED_FAIL: ApplyFail = { ok: false, reason: 'changed' };
 const CHANGED: AdminCpHelpResult = { ok: false, reason: 'changed' };
 
 /** «Было → стало» по полям, которые поменялись. */
@@ -296,8 +298,10 @@ export function applyCpHelpEdit(h: CpHelp, e: AdminCpHelpEdit, seed: number): Ap
         on: e.on,
       };
       if (e.id === undefined) {
-        const id = cpFaqNewId(seed, new Set(h.faq.map((q) => q.id)));
-        const q: CpFaq = { id, ...fields, ord: cpFaqNextOrd(h.faq) };
+        const taken = new Set(h.faq.map((q) => q.id));
+        if (e.newId !== undefined && taken.has(e.newId)) return CHANGED_FAIL;
+        const id = e.newId ?? cpFaqNewId(seed, taken);
+        const q: CpFaq = { id, ...fields, ord: e.ord ?? cpFaqNextOrd(h.faq) };
         return {
           help: { ...h, faq: [...h.faq, q] },
           dict: 'cpfaq',
@@ -308,7 +312,7 @@ export function applyCpHelpEdit(h: CpHelp, e: AdminCpHelpEdit, seed: number): Ap
       }
       const q = h.faq.find((x) => x.id === e.id);
       if (!q) return NOT_FOUND;
-      const next: CpFaq = { ...q, ...fields };
+      const next: CpFaq = { ...q, ...fields, ...(e.ord !== undefined ? { ord: e.ord } : {}) };
       const changes = diff(
         q as unknown as Record<string, unknown>,
         next as unknown as Record<string, unknown>,

@@ -261,6 +261,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
         'contractor',
         'fee',
         'files',
+        // Подсказки и обучение (доработки 15.11.2026): тексты справочника, не данные контрагента.
+        'help',
         'issues',
         'kpi',
         'main',
