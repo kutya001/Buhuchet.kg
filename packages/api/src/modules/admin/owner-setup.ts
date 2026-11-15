@@ -68,16 +68,6 @@ export function ownerSetupHandler(deps: ApiDeps): RouteHandler<typeof ownerSetup
         now,
         days: OWNER_SETUP_DAYS,
       });
-      if (issued?.outcome === 'ok') {
-        // В историю организации — её видно во вкладке «История» карточки (прототип: log('porg', …)).
-        await writeHistory(tx, {
-          entity: 'organization',
-          entityId: id,
-          action: 'update',
-          changes: [],
-          reason: `Владельцу ${issued.login} отправлена новая ссылка, чтобы задать пароль; прежняя больше не действует`,
-        });
-      }
       return issued ? { ownerId, issued } : null;
     });
     if (!result) {
@@ -89,10 +79,29 @@ export function ownerSetupHandler(deps: ApiDeps): RouteHandler<typeof ownerSetup
     if (result.issued.outcome === 'no_telegram') {
       return c.json(apiError('owner_no_telegram', 'У владельца не привязан Telegram'), 409);
     }
-    const sent = await sendSetupMessage(deps, result.ownerId, result.issued, token);
+    const { issued } = result;
+    const sent = await sendSetupMessage(deps, result.ownerId, issued, token);
     if (sent !== 'sent') {
-      return c.json(apiError('owner_setup_send_failed', 'Telegram не принял сообщение'), 503);
+      // Прежняя ссылка уже не действует, новую Telegram не принял: в истории — ничего, повтор выдаст
+      // следующую (docs/deviations.md п. Т-18).
+      return c.json(
+        apiError(
+          'owner_setup_send_failed',
+          'Telegram не принял сообщение. Попробуйте ещё раз через минуту.',
+        ),
+        503,
+      );
     }
+    // В историю организации — после отправки (прототип: log('porg', …), вкладка «История» карточки).
+    await withOrgContext(deps.db, { orgId: id, userId: adminId }, (tx) =>
+      writeHistory(tx, {
+        entity: 'organization',
+        entityId: id,
+        action: 'update',
+        changes: [],
+        reason: `Владельцу ${issued.login} отправлена новая ссылка, чтобы задать пароль; прежняя больше не действует`,
+      }),
+    );
     return c.json({ ok: true as const }, 200);
   };
 }

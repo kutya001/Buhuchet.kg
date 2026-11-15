@@ -1,4 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
+import { markSessionEnd } from './auth';
 import type { Db, Tx } from './client';
 import { employees, roles } from './schema';
 
@@ -14,8 +15,9 @@ const iso = (d: Date) => d.toISOString();
 export type LeadTgIssue = { outcome: 'new' | 'same'; till: Date } | { outcome: 'linked' };
 
 /**
- * В транзакции подачи заявки (тот же `now`, что у `submitLead`): новой заявке — ключ `hash` на `ttlHours`
- * часов; повтору — только ссылка браузера, который её получил (`priorHash`). null — ссылки нет.
+ * В транзакции подачи заявки (тот же `now`, что у `submitLead`): новой заявке и повтору, когда прежняя
+ * ссылка истекла без «Старта», — ключ `hash` на `ttlHours` часов; пока ссылка действует, повтору — только
+ * она и только браузеру, который её получил (`priorHash`). null — ссылки нет.
  */
 export async function issueLeadTgToken(
   tx: Tx,
@@ -61,12 +63,15 @@ export async function startLeadTelegram(
   return { outcome: row?.outcome === 'again' ? 'again' : 'bad' };
 }
 
-/** Причина отказа, которую бот ещё не присылал заявителю; берётся один раз. */
+/**
+ * Причина отказа, которую бот ещё не присылал заявителю; берётся один раз. Только в контексте
+ * администратора платформы (`withUserContext`).
+ */
 export async function takeLeadRefusal(
-  db: Db | Tx,
+  tx: Tx,
   leadId: string,
 ): Promise<{ chatId: number; firm: string; reason: string } | null> {
-  const [row] = await db.execute<{ chat_id: string | number; firm: string; reason: string }>(
+  const [row] = await tx.execute<{ chat_id: string | number; firm: string; reason: string }>(
     sql`select chat_id, firm, reason from app.lead_tg_refusal_take(${leadId}::uuid)`,
   );
   return row ? { chatId: Number(row.chat_id), firm: row.firm, reason: row.reason } : null;
@@ -136,11 +141,15 @@ export async function peekPasswordSetup(
     : null;
 }
 
-/** «Задать пароль» в контексте организации владельца: логин; null — ссылка не подошла. */
+/**
+ * «Задать пароль» в контексте организации владельца от его имени (`withOrgContext` с `userId` из
+ * ссылки): логин; null — ссылка не подошла. Сеансы закрываются с причиной «пароль сменён».
+ */
 export async function completePasswordSetup(
   tx: Tx,
   p: { hash: string; passwordHash: string; now: Date },
 ): Promise<string | null> {
+  await markSessionEnd(tx, 'password');
   const [row] = await tx.execute<{ login: string | null }>(
     sql`select app.password_setup_complete(${p.hash}, ${p.passwordHash},
       ${iso(p.now)}::timestamptz) as login`,

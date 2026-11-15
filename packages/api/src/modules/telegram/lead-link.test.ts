@@ -1,5 +1,8 @@
+import { randomUUID } from 'node:crypto';
+import { Writable } from 'node:stream';
 import {
   createFakeTelegram,
+  createLogger,
   fixedClock,
   type FakeTelegram,
   type FixedClock,
@@ -225,10 +228,10 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     ).toBeNull();
   });
 
-  it('повтор заявки: без ключа браузера — ничего; с ключом — та же ссылка, после «Старта» — «подключён»', async () => {
+  it('повтор заявки: пока ссылка действует — только браузеру с её ключом; истекла без «Старта» — новая; после «Старта» — «подключён» только с ключом', async () => {
     const l = await submitted();
-    clock.advance(60_000);
     const repeat = async (prior: string | null) => {
+      clock.advance(60_000);
       const s = lead({ phone: l.phone, now: clock.now() });
       const res = await submitLead(f.t.app.db, s);
       expect(res.outcome).toBe('repeat');
@@ -243,16 +246,38 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       );
     };
     expect(await repeat(null)).toBeNull();
-    clock.advance(60_000);
     expect(await repeat('мусор')).toBeNull();
-    clock.advance(60_000);
     expect(await repeat(l.key)).toMatchObject({
       url: l.link && 'url' in l.link ? l.link.url : '',
       token: l.key,
     });
-    expect((await start(l.key, 9201)).status).toBe(200);
-    clock.advance(60_000);
+
+    // Ссылка истекла без «Старта» (срок ссылки и окно повтора сейчас — по 24 часа, позже повтор — уже
+    // новая заявка): повтор получает новую ссылку и без ключа прежней (как в прототипе: «Отправьте
+    // заявку ещё раз — придёт новая ссылка»).
+    await f.t.admin.db
+      .update(schema.platformLeadTgTokens)
+      .set({ expiresAt: clock.now() })
+      .where(eq(schema.platformLeadTgTokens.leadId, l.id));
+    const fresh = await repeat(null);
+    expect(fresh).toEqual({
+      url: expect.stringMatching(LINK_RE),
+      token: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/),
+      expiresAt: new Date(clock.now().getTime() + 24 * 3_600_000),
+    });
+    const freshKey = fresh && 'token' in fresh ? fresh.token : '';
+    expect(freshKey).not.toBe(l.key);
+    // Новая действует — снова только её браузеру; прежний ключ её не получает.
+    expect(await repeat(null)).toBeNull();
+    expect(await repeat(l.key)).toBeNull();
+    expect(await repeat(freshKey)).toMatchObject({ token: freshKey });
+    await start(l.key, 9202);
+    expect(last(9202)?.text).toBe(TPL.tgLeadLinkBad);
+
+    expect((await start(freshKey, 9201)).status).toBe(200);
+    expect(await repeat(freshKey)).toEqual({ linked: true });
     expect(await repeat(l.key)).toEqual({ linked: true });
+    expect(await repeat(null)).toBeNull();
   });
 
   it('«Старт» по ссылке: «Заявка получена» с фирмой; повтор доставки — без ответа; другой чат и неизвестный ключ — «Ссылка устарела»', async () => {
@@ -279,6 +304,9 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(last(9212)?.text).toBe(TPL.tgLeadLinkBad);
     await start('A'.repeat(43), 9213);
     expect(last(9213)?.text).toBe(TPL.tgLeadLinkBad);
+    // Испорченная ссылка заявителя (ключ не той длины) — ответ заявителю, а не про «Мой профиль».
+    await sendToBot(app, telegramUpdate(`/start l_${'A'.repeat(20)}`, 9215));
+    expect(last(9215)?.text).toBe(TPL.tgLeadLinkBad);
     // Ключ привязки сотрудника, который сам начинается с «l_», — не ссылка заявителя.
     await sendToBot(app, telegramUpdate(`/start l_${'B'.repeat(41)}`, 9214));
     expect(last(9214)?.text).toBe(TPL.tgLinkInvalid);
@@ -344,7 +372,7 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       expect(last(9221)?.text).toBe(
         fillTemplate(TPL.tgLeadNo, { фирма: FIRM, причина: 'Не наш регион' }),
       );
-      expect(await sendLeadRefused(deps, { leadId: saved!.id })).toBe('not_linked');
+      expect(await sendLeadRefused(deps, { leadId: saved!.id, adminId })).toBe('not_linked');
     } finally {
       await f.t.admin.db
         .delete(schema.telegramLinks)
@@ -364,12 +392,39 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         now: clock.now(),
       }),
     );
-    expect(await sendLeadRefused(deps, { leadId: l.id })).toBe('not_linked');
+    expect(await sendLeadRefused(deps, { leadId: l.id, adminId })).toBe('not_linked');
     await start(l.key, 9231);
     expect(last(9231)?.text).toBe(
       fillTemplate(TPL.tgLeadNo, { фирма: FIRM, причина: 'Дубль заявки' }),
     );
-    expect(await sendLeadRefused(deps, { leadId: l.id })).toBe('not_linked');
+    expect(await sendLeadRefused(deps, { leadId: l.id, adminId })).toBe('not_linked');
+  });
+
+  it('отказ на сайте после «Старта»: причина — заявителю один раз и только от имени администратора платформы', async () => {
+    const l = await submitted();
+    await start(l.key, 9232);
+    await withUserContext(f.t.app.db, adminId, (tx) =>
+      setLeadStatus(tx, {
+        id: l.id,
+        version: null,
+        to: 'rejected',
+        before: 'new',
+        text: 'Не наш регион',
+        now: clock.now(),
+      }),
+    );
+    const count = sent(9232).length;
+    // Не администратор платформы причину не берёт: она остаётся для настоящего вызова.
+    expect(await sendLeadRefused(deps, { leadId: l.id, adminId: f.a.ownerUserId })).toBe(
+      'not_linked',
+    );
+    expect(sent(9232)).toHaveLength(count);
+    expect(await sendLeadRefused(deps, { leadId: l.id, adminId })).toBe('sent');
+    expect(last(9232)?.text).toBe(
+      fillTemplate(TPL.tgLeadNo, { фирма: FIRM, причина: 'Не наш регион' }),
+    );
+    expect(await sendLeadRefused(deps, { leadId: l.id, adminId })).toBe('not_linked');
+    expect(sent(9232)).toHaveLength(count + 1);
   });
 
   it('«Одобрить»: Telegram заявителя — владельцу; «Организация создана» и «Задать пароль»; в журнале — без текста и кнопки', async () => {
@@ -423,10 +478,14 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
 
     expect((await setPassword(key, 'Корот7')).status).toBe(400);
     expect((await setPassword(key, 'Новый-пароль-1', null)).status).toBe(403);
+    const count = sent(c).length;
     const done = await setPassword(key, 'Новый-пароль-1');
     expect(done.status).toBe(200);
     expect(await done.json()).toEqual({ ok: true, login: 'ltg-api-b-owner' });
-    expect(last(c)?.text).toContain('ltg-api-b-owner');
+    // «Пароль изменён» с «Это не я» — как после любой смены пароля самим пользователем.
+    expect(sent(c)).toHaveLength(count + 1);
+    expect(last(c)?.text).toMatch(/^🔑 Пароль учётной записи ltg-api-b-owner изменён сегодня в /);
+    expect((last(c)?.options.keyboard ?? []).flat().map((b) => b.text)).toEqual([TPL.tgBtnNotMe]);
 
     expect((await setPassword(key, 'Другой-пароль-2')).status).toBe(404);
     expect(await (await peek(key)).json()).toMatchObject({ error: { code: 'setup_link_invalid' } });
@@ -507,5 +566,124 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       admin,
     );
     expect(other.status).toBe(409);
+  });
+
+  it('«Отправить новую ссылку для пароля»: нет организации — 404; Telegram не принял — 503 и без записи в истории; организация без заявки — 409 и у свежего владельца', async () => {
+    const unknown = `/api/admin/organizations/${randomUUID()}/owner-setup`;
+    expect((await apiRequest(app, 'POST', unknown, admin)).status).toBe(404);
+
+    const { org, chat: c } = await approved('ltg-api-e', '07811201810452');
+    await sendOwnerSetup(deps, { userId: org.ownerUserId, adminId });
+    const first = setupKeyOf(c);
+    const path = `/api/admin/organizations/${org.orgId}/owner-setup`;
+    const reason =
+      'Владельцу ltg-api-e-owner отправлена новая ссылка, чтобы задать пароль; прежняя больше не действует';
+    const reasons = async () => {
+      const card = await apiRequest(
+        app,
+        'GET',
+        `/api/admin/organizations/${org.orgId}/card?refresh=1`,
+        admin,
+      );
+      const { history } = (await card.json()) as { history: { reason: string | null }[] };
+      return history.map((h) => h.reason).filter((r) => r === reason);
+    };
+    tg.failNext({ ok: false, errorCode: 502, description: 'Bad Gateway', permanent: false });
+    const failed = await apiRequest(app, 'POST', path, admin);
+    expect(failed.status).toBe(503);
+    expect(await failed.json()).toEqual({
+      error: {
+        code: 'owner_setup_send_failed',
+        message: 'Telegram не принял сообщение. Попробуйте ещё раз через минуту.',
+      },
+    });
+    expect(await reasons()).toEqual([]);
+    // Прежняя ссылка уже не действует (docs/deviations.md п. Т-18); повтор присылает новую.
+    expect((await peek(first)).status).toBe(404);
+    expect((await apiRequest(app, 'POST', path, admin)).status).toBe(200);
+    expect((await peek(setupKeyOf(c))).status).toBe(200);
+    expect(await reasons()).toEqual([reason]);
+
+    // Свежий владелец (не входил, временного пароля нет) организации, созданной не по заявке.
+    const plain = await createOrganization(f.t.app.db, {
+      name: 'ОсОО «ltg-api-nolead»',
+      inn: '08811201810453',
+      slug: 'ltg-api-nolead',
+      owner: { fullName: 'Иванов Иван', login: 'ltg-api-nolead-owner', passwordHash: 'нет пароля' },
+    });
+    await f.t.admin.db
+      .update(schema.users)
+      .set({ mustChangePassword: false })
+      .where(eq(schema.users.id, plain.ownerUserId));
+    const nolead = await apiRequest(
+      app,
+      'POST',
+      `/api/admin/organizations/${plain.orgId}/owner-setup`,
+      admin,
+    );
+    expect(nolead.status).toBe(409);
+    expect(await nolead.json()).toMatchObject({ error: { code: 'owner_setup_unavailable' } });
+  });
+
+  it('ключ ссылки «Задать пароль» не попадает в журнал сервера — только шаблон пути', async () => {
+    const { org, chat: c } = await approved('ltg-api-f', '09811201810454');
+    await sendOwnerSetup(deps, { userId: org.ownerUserId, adminId });
+    const key = setupKeyOf(c);
+    const lines: string[] = [];
+    const destination = new Writable({
+      write(chunk, _enc, cb) {
+        lines.push(String(chunk));
+        cb();
+      },
+    });
+    const logged = createApp({
+      ...deps,
+      logger: createLogger({
+        level: 'info',
+        environment: 'test',
+        version: 'test',
+        service: 'web',
+        destination,
+      }),
+    });
+    expect((await logged.request(`/api/auth/setup/${key}`)).status).toBe(200);
+    const bad = await logged.request(`/api/auth/setup/${key}`, {
+      method: 'POST',
+      headers: { origin: TEST_ORIGIN, 'content-type': 'application/json' },
+      body: JSON.stringify({ password: 'x' }),
+    });
+    expect(bad.status).toBe(400);
+    const out = lines.join('');
+    expect(out).toContain('/api/auth/setup/:token');
+    expect(out).not.toContain(key);
+  });
+
+  it('«Задать пароль» — в общем пределе попыток с одного адреса вместе со входом', async () => {
+    const limited = createApp({
+      ...deps,
+      authIpLimit: { kind: 'auth_ip', max: 2, windowSeconds: 600 },
+    });
+    const from = (path: string, body?: unknown) =>
+      limited.request(path, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: {
+          origin: TEST_ORIGIN,
+          'content-type': 'application/json',
+          'x-forwarded-for': '203.0.113.91, 10.0.0.1',
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    const key = 'D'.repeat(43);
+    expect(
+      (await from('/api/auth/login', { login: 'нет-такого', password: 'x'.repeat(8) })).status,
+    ).toBe(401);
+    expect((await from(`/api/auth/setup/${key}`)).status).toBe(404);
+    const res = await from(`/api/auth/setup/${key}`);
+    expect(res.status).toBe(429);
+    expect(await res.json()).toMatchObject({ error: { code: 'auth_ip_limited' } });
+    expect((await from(`/api/auth/setup/${key}`, { password: 'Новый-пароль-1' })).status).toBe(429);
+    expect(
+      (await from('/api/auth/login', { login: 'owner-a', password: TEST_PASSWORD })).status,
+    ).toBe(429);
   });
 });

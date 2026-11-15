@@ -16,12 +16,20 @@ export const LEAD_TG_START_PREFIX = 'l_';
 /** Ключ ссылки — 43 знака base64url (32 случайных байта, как у ссылки привязки Telegram). */
 const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
 
+/** Длина ключа ссылки привязки Telegram сотрудника (без приставки). */
+const STAFF_KEY_LENGTH = 43;
+
 /**
- * Ключ из параметра «/start l_<ключ>»; null — это не ссылка заявителя. Ключ привязки сотрудника —
- * те же 43 знака без приставки и может сам начинаться с «l_»: его длина 43, а не 45.
+ * Параметр «/start» — ссылка заявителя, в том числе испорченная: «l_» и не 43 знака. Ключ привязки
+ * сотрудника — 43 знака без приставки и может сам начинаться с «l_»; такой параметр — не заявителя.
  */
+export function isLeadTgStart(payload: string | null): boolean {
+  return !!payload?.startsWith(LEAD_TG_START_PREFIX) && payload.length !== STAFF_KEY_LENGTH;
+}
+
+/** Ключ из параметра «/start l_<ключ>»; null — не ссылка заявителя или ключ не того вида. */
 export function leadTgStartToken(payload: string | null): string | null {
-  if (!payload?.startsWith(LEAD_TG_START_PREFIX)) return null;
+  if (!payload || !isLeadTgStart(payload)) return null;
   const key = payload.slice(LEAD_TG_START_PREFIX.length);
   return KEY_RE.test(key) ? key : null;
 }

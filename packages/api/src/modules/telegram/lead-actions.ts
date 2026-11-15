@@ -142,7 +142,7 @@ const leadNoWhy: BotAction = {
           причина: reason,
         }),
         // Причина — и заявителю, если он подключил Telegram (доработки 14.11.2026, блок 1).
-        afterCommit: () => sendLeadRefused(ctx.deps, { leadId: lead.id }),
+        afterCommit: () => sendLeadRefused(ctx.deps, { leadId: lead.id, adminId: ctx.user.userId }),
       };
     }),
 };

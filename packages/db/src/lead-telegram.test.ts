@@ -13,15 +13,23 @@ import {
   takeLeadRefusal,
 } from './lead-telegram';
 import { connectLeadToOrganization, setLeadStatus, submitLead, type LeadSubmission } from './leads';
+import { createEmployee } from './staff';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   employees,
+  loginAttempts,
+  organizations,
+  passwordResetCodes,
   passwordSetupTokens,
   platformLeadEvents,
   platformLeads,
   platformLeadTgTokens,
+  roles,
+  sessionLog,
   sessions,
+  telegramLinkGuards,
   telegramLinks,
+  telegramOutbox,
   users,
 } from './schema';
 import {
@@ -33,7 +41,8 @@ import {
 
 /*
  * Telegram заявителя и пароль владельца по ссылке (доработки 14.11.2026, блок 1; миграция 0149):
- * ссылка на бота — одна на заявку и только браузеру, который её получил; «Старт» — один раз; причина
+ * действующая ссылка на бота у заявки одна и только браузеру, который её получил, истекла без «Старта» —
+ * повтор заявки получает новую; «Старт» — один раз; причина
  * отказа — заявителю один раз; «Одобрить» переносит Telegram заявителя владельцу; «Задать пароль» —
  * 7 дней, один раз, новая гасит прежнюю, пароль иначе — ссылки не действуют.
  */
@@ -73,7 +82,7 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
   };
 
   /** Заявка, поданная в `now`, и выданная ей ссылка (ключ и хеш). */
-  const submitted = async (over: Partial<LeadSubmission> = {}) => {
+  const submitted = async (over: Partial<LeadSubmission> = {}, ttlHours = 24) => {
     const s = lead(over);
     const res = await submitLead(db.app.db, s);
     const k = key();
@@ -83,7 +92,7 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         hash: hashOf(k),
         priorHash: null,
         now: s.now,
-        ttlHours: 24,
+        ttlHours,
       }),
     );
     return { id: res.leadId!, key: k, issued, phone: s.phone };
@@ -168,37 +177,90 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(JSON.stringify(row)).not.toContain(l.key);
     const again = (now: Date) =>
       db.app.db.transaction((tx) =>
-        issueLeadTgToken(tx, { leadId: l.id, hash: hashOf(key()), priorHash: null, now, ttlHours: 24 }),
+        issueLeadTgToken(tx, {
+          leadId: l.id,
+          hash: hashOf(key()),
+          priorHash: null,
+          now,
+          ttlHours: 24,
+        }),
       );
     expect(await again(NOW)).toBeNull();
     expect(await again(hour(1))).toBeNull();
-    expect(await db.admin.db.$count(platformLeadTgTokens, eq(platformLeadTgTokens.leadId, l.id))).toBe(1);
+    expect(
+      await db.admin.db.$count(platformLeadTgTokens, eq(platformLeadTgTokens.leadId, l.id)),
+    ).toBe(1);
   });
 
-  it('повтор с того же телефона: новой ссылки нет; браузеру с ключом — та же ссылка, после «Старта» — «подключён»', async () => {
-    const l = await submitted();
-    const repeat = async (priorHash: string | null, now: Date) => {
+  it('повтор с того же телефона: пока ссылка действует — только её браузеру; истекла без «Старта» — новая; после «Старта» — «подключён» только с ключом', async () => {
+    // Срок ссылки короче окна повтора (сейчас оба — 24 часа): так видно, что истёкшая ссылка не тупик.
+    const l = await submitted({}, 2);
+    expect(l.issued).toEqual({ outcome: 'new', till: hour(2) });
+    const repeat = async (priorHash: string | null, now: Date, k = key()) => {
       const res = await submitLead(db.app.db, lead({ phone: l.phone, now }));
       expect(res.outcome).toBe('repeat');
       return db.app.db.transaction((tx) =>
-        issueLeadTgToken(tx, { leadId: res.leadId!, hash: hashOf(key()), priorHash, now, ttlHours: 24 }),
+        issueLeadTgToken(tx, {
+          leadId: res.leadId!,
+          hash: hashOf(k),
+          priorHash,
+          now,
+          ttlHours: 24,
+        }),
       );
     };
-    // Посторонний, знающий телефон: ни новой ссылки, ни чужой.
-    expect(await repeat(null, hour(1))).toBeNull();
+    // Посторонний, знающий телефон, пока ссылка действует: ни новой ссылки, ни чужой.
+    expect(await repeat(null, hour(0.1))).toBeNull();
     const stranger = await submitted();
-    expect(await repeat(hashOf(stranger.key), hour(2))).toBeNull();
+    expect(await repeat(hashOf(stranger.key), hour(0.2))).toBeNull();
     // Тот же браузер — та же ссылка с прежним сроком.
-    expect(await repeat(hashOf(l.key), hour(3))).toEqual({ outcome: 'same', till: hour(24) });
-    expect(await start(l.key, 7001, hour(4))).toEqual({ outcome: 'linked', firm: 'ОсОО «Учёт Плюс»' });
-    expect(await repeat(hashOf(l.key), hour(5))).toEqual({ outcome: 'linked' });
-    expect(await db.admin.db.$count(platformLeadTgTokens, eq(platformLeadTgTokens.leadId, l.id))).toBe(1);
+    expect(await repeat(hashOf(l.key), hour(0.3))).toEqual({ outcome: 'same', till: hour(2) });
+    // Срок вышел без «Старта» — новая ссылка любому повтору (как в прототипе).
+    const fresh = key();
+    expect(await repeat(null, hour(3), fresh)).toEqual({ outcome: 'new', till: hour(27) });
+    expect(await repeat(null, hour(4))).toBeNull();
+    expect(await repeat(hashOf(l.key), hour(5))).toBeNull();
+    expect(await repeat(hashOf(fresh), hour(6))).toEqual({ outcome: 'same', till: hour(27) });
+    expect(await start(l.key, 7001, hour(7))).toEqual({ outcome: 'bad' });
+    expect(await start(fresh, 7001, hour(7))).toEqual({
+      outcome: 'linked',
+      firm: 'ОсОО «Учёт Плюс»',
+    });
+    // Подключён — «подключён» браузеру с ключом любой ссылки этой заявки, остальным — ничего.
+    expect(await repeat(hashOf(fresh), hour(8))).toEqual({ outcome: 'linked' });
+    expect(await repeat(hashOf(l.key), hour(9))).toEqual({ outcome: 'linked' });
+    expect(await repeat(null, hour(10))).toBeNull();
+    expect(await repeat(hashOf(stranger.key), hour(11))).toBeNull();
+    expect(
+      await db.admin.db.$count(platformLeadTgTokens, eq(platformLeadTgTokens.leadId, l.id)),
+    ).toBe(2);
+  });
+
+  it('через сутки тот же телефон — новая заявка со своей ссылкой: заявитель, потерявший ссылку, не в тупике', async () => {
+    const l = await submitted();
+    const res = await submitLead(db.app.db, lead({ phone: l.phone, now: hour(25) }));
+    expect(res.outcome).toBe('created');
+    expect(res.leadId).not.toBe(l.id);
+    expect(
+      await db.app.db.transaction((tx) =>
+        issueLeadTgToken(tx, {
+          leadId: res.leadId!,
+          hash: hashOf(key()),
+          priorHash: null,
+          now: hour(25),
+          ttlHours: 24,
+        }),
+      ),
+    ).toEqual({ outcome: 'new', till: hour(49) });
   });
 
   it('«Старт»: заявка получает чат и имя, в истории «Telegram подключён» через Telegram; ссылка — один раз', async () => {
     const l = await submitted();
     expect(await start(l.key, 7101)).toEqual({ outcome: 'linked', firm: 'ОсОО «Учёт Плюс»' });
-    const [saved] = await db.admin.db.select().from(platformLeads).where(eq(platformLeads.id, l.id));
+    const [saved] = await db.admin.db
+      .select()
+      .from(platformLeads)
+      .where(eq(platformLeads.id, l.id));
     expect(saved).toMatchObject({
       tgChatId: 7101,
       tgLinkedAt: hour(1),
@@ -211,7 +273,12 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       .from(platformLeadEvents)
       .where(and(eq(platformLeadEvents.leadId, l.id), eq(platformLeadEvents.kind, 'tg')));
     expect(events).toEqual([
-      expect.objectContaining({ text: '@aigul_s', via: 'telegram', actorUserId: null, at: hour(1) }),
+      expect.objectContaining({
+        text: '@aigul_s',
+        via: 'telegram',
+        actorUserId: null,
+        at: hour(1),
+      }),
     ]);
     // Telegram повторил доставку — «again», ответа нет; другой чат — «Ссылка устарела».
     expect(await start(l.key, 7101, hour(2))).toEqual({ outcome: 'again' });
@@ -228,33 +295,48 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
   });
 
   it('отказ: причина заявителю — один раз; отказ до «Старта» — причина сразу в ответ на «Старт»', async () => {
+    const take = (id: string) => asAdmin((tx) => takeLeadRefusal(tx, id));
     const l = await submitted();
     await start(l.key, 7301);
-    expect(await takeLeadRefusal(db.app.db, l.id)).toBeNull();
+    expect(await take(l.id)).toBeNull();
     await reject(l.id, 'Не наш регион');
-    expect(await takeLeadRefusal(db.app.db, l.id)).toEqual({
+    // Не администратор платформы причину не берёт и не тратит.
+    expect(
+      await withOrgContext(db.app.db, { orgId: other.orgId, userId: other.ownerUserId }, (tx) =>
+        takeLeadRefusal(tx, l.id),
+      ),
+    ).toBeNull();
+    expect(await take(l.id)).toEqual({
       chatId: 7301,
       firm: 'ОсОО «Учёт Плюс»',
       reason: 'Не наш регион',
     });
-    expect(await takeLeadRefusal(db.app.db, l.id)).toBeNull();
+    expect(await take(l.id)).toBeNull();
     // Сняли отказ и отказали снова — новая причина уходит.
     await asAdmin((tx) =>
-      setLeadStatus(tx, { id: l.id, version: null, to: 'new', before: null, rollback: true, text: 'Ошибка', now: hour(3) }),
+      setLeadStatus(tx, {
+        id: l.id,
+        version: null,
+        to: 'new',
+        before: null,
+        rollback: true,
+        text: 'Ошибка',
+        now: hour(3),
+      }),
     );
-    expect(await takeLeadRefusal(db.app.db, l.id)).toBeNull();
+    expect(await take(l.id)).toBeNull();
     await reject(l.id, 'Нет ИНН', hour(4));
-    expect((await takeLeadRefusal(db.app.db, l.id))?.reason).toBe('Нет ИНН');
+    expect((await take(l.id))?.reason).toBe('Нет ИНН');
 
     const early = await submitted();
     await reject(early.id, 'Дубль заявки');
-    expect(await takeLeadRefusal(db.app.db, early.id)).toBeNull();
+    expect(await take(early.id)).toBeNull();
     expect(await start(early.key, 7302, hour(3))).toEqual({
       outcome: 'refused',
       firm: 'ОсОО «Учёт Плюс»',
       reason: 'Дубль заявки',
     });
-    expect(await takeLeadRefusal(db.app.db, early.id)).toBeNull();
+    expect(await take(early.id)).toBeNull();
   });
 
   it('«Одобрить»: Telegram заявителя — Telegram владельца; без Telegram, не владельцу и не администратору — нет', async () => {
@@ -266,10 +348,23 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       .select()
       .from(telegramLinks)
       .where(eq(telegramLinks.userId, org.ownerUserId));
-    expect(link).toMatchObject({ orgId: org.orgId, chatId: 7401, username: 'aigul_s', firstName: 'Айгуль' });
+    expect(link).toMatchObject({
+      orgId: org.orgId,
+      chatId: 7401,
+      username: 'aigul_s',
+      firstName: 'Айгуль',
+    });
     // Повтор того же вызова — тот же чат, true; другой пользователь — нет.
-    expect(await asAdmin((tx) => linkLeadOwnerTelegramRow(tx, { leadId: l.id, userId: org.ownerUserId }))).toBe(true);
-    expect(await asAdmin((tx) => linkLeadOwnerTelegramRow(tx, { leadId: l.id, userId: other.ownerUserId }))).toBe(false);
+    expect(
+      await asAdmin((tx) =>
+        linkLeadOwnerTelegramRow(tx, { leadId: l.id, userId: org.ownerUserId }),
+      ),
+    ).toBe(true);
+    expect(
+      await asAdmin((tx) =>
+        linkLeadOwnerTelegramRow(tx, { leadId: l.id, userId: other.ownerUserId }),
+      ),
+    ).toBe(false);
     // Не администратор платформы (владелец организации в своём контексте) — нет.
     expect(
       await withOrgContext(db.app.db, { orgId: org.orgId, userId: org.ownerUserId }, (tx) =>
@@ -277,10 +372,67 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
       ),
     ).toBe(false);
 
+    // Владелец уже входил, уволен или привязывал и отвязывал Telegram — чат заявителя ему не
+    // привязывается (иначе это замена Telegram в обход кода из прежнего чата).
+    const relink = async (
+      slug: string,
+      inn: string,
+      spoil: (userId: string) => Promise<unknown>,
+    ) => {
+      const ll = await submitted();
+      await start(ll.key, 7400 + n);
+      const org2 = await createOrganization(db.app.db, {
+        name: `ОсОО «${slug}»`,
+        inn,
+        slug,
+        owner: { fullName: 'Садыкова Айгуль', login: `${slug}-owner`, passwordHash: 'random' },
+      });
+      await db.admin.db
+        .update(users)
+        .set({ mustChangePassword: false })
+        .where(eq(users.id, org2.ownerUserId));
+      await spoil(org2.ownerUserId);
+      return asAdmin(async (tx) => {
+        await connectLeadToOrganization(tx, {
+          id: ll.id,
+          orgId: org2.orgId,
+          orgName: slug,
+          now: hour(3),
+        });
+        return linkLeadOwnerTelegramRow(tx, { leadId: ll.id, userId: org2.ownerUserId });
+      });
+    };
+    expect(
+      await relink('ltg-al1', '12811201810457', (id) =>
+        db.admin.db
+          .update(users)
+          .set({ lastLoginAt: hour(1) })
+          .where(eq(users.id, id)),
+      ),
+    ).toBe(false);
+    expect(
+      await relink('ltg-al2', '13811201810458', (id) =>
+        db.admin.db.update(employees).set({ active: false }).where(eq(employees.userId, id)),
+      ),
+    ).toBe(false);
+    expect(
+      await relink('ltg-al3', '14811201810459', async (id) => {
+        const [u] = await db.admin.db
+          .select({ orgId: users.orgId })
+          .from(users)
+          .where(eq(users.id, id));
+        await db.admin.db
+          .insert(telegramLinkGuards)
+          .values({ userId: id, orgId: u!.orgId, chatId: 7499 });
+      }),
+    ).toBe(false);
+
     const noTg = await submitted();
     const second = await approved(noTg.id, 'ltg-beta', '03811201810458');
     expect(second.linked).toBe(false);
-    expect(await db.admin.db.$count(telegramLinks, eq(telegramLinks.userId, second.org.ownerUserId))).toBe(0);
+    expect(
+      await db.admin.db.$count(telegramLinks, eq(telegramLinks.userId, second.org.ownerUserId)),
+    ).toBe(0);
   });
 
   it('«Задать пароль»: только администратор; ссылка — в привязанный чат; страница не тратит ссылку; пароль — один раз, сеансы завершены', async () => {
@@ -308,7 +460,8 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         return r?.v;
       });
     expect(await unset()).toBe(true);
-    const peek = (kk: string, now = hour(5)) => peekPasswordSetup(db.app.db, { hash: hashOf(kk), now });
+    const peek = (kk: string, now = hour(5)) =>
+      peekPasswordSetup(db.app.db, { hash: hashOf(kk), now });
     expect(await peek(k)).toEqual({
       userId: org.ownerUserId,
       orgId: org.orgId,
@@ -318,22 +471,60 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(await peek(k)).not.toBeNull();
     expect(await peek(k, hour(4 + 7 * 24))).toBeNull();
 
-    await db.admin.db.insert(sessions).values({
-      userId: org.ownerUserId,
-      orgId: org.orgId,
-      tokenHash: hashOf(key()),
-      expiresAt: hour(30),
-    });
+    const [session] = await db.admin.db
+      .insert(sessions)
+      .values({
+        userId: org.ownerUserId,
+        orgId: org.orgId,
+        tokenHash: hashOf(key()),
+        expiresAt: hour(30),
+      })
+      .returning({ id: sessions.id });
+    // Неверные пароли и ждущий код «Забыли пароль?» до ссылки.
+    await db.admin.db.update(users).set({ loginFailures: 3 }).where(eq(users.id, org.ownerUserId));
+    await db.admin.db.insert(loginAttempts).values({ login: 'ltg-gamma-owner', failures: 3 });
+    const [resetCode] = await db.admin.db
+      .insert(passwordResetCodes)
+      .values({
+        userId: org.ownerUserId,
+        orgId: org.orgId,
+        codeHash: 'argon-code',
+        expiresAt: hour(6),
+      })
+      .returning({ id: passwordResetCodes.id });
     // Ссылка чужой организации в контексте другой — не подходит.
     expect(
       await withOrgContext(db.app.db, { orgId: other.orgId, userId: other.ownerUserId }, (tx) =>
         completePasswordSetup(tx, { hash: hashOf(k), passwordHash: 'x', now: hour(5) }),
       ),
     ).toBeNull();
+    // Организация ссылки, но от имени другого пользователя — тоже нет.
+    expect(
+      await withOrgContext(db.app.db, { orgId: org.orgId, userId: adminId }, (tx) =>
+        completePasswordSetup(tx, { hash: hashOf(k), passwordHash: 'x', now: hour(5) }),
+      ),
+    ).toBeNull();
     expect(await complete(org, k)).toBe('ltg-gamma-owner');
     const [u] = await db.admin.db.select().from(users).where(eq(users.id, org.ownerUserId));
-    expect(u).toMatchObject({ passwordHash: 'argon-new', mustChangePassword: false });
+    expect(u).toMatchObject({
+      passwordHash: 'argon-new',
+      mustChangePassword: false,
+      loginFailures: 0,
+    });
     expect(await db.admin.db.$count(sessions, eq(sessions.userId, org.ownerUserId))).toBe(0);
+    const [ended] = await db.admin.db
+      .select()
+      .from(sessionLog)
+      .where(eq(sessionLog.id, session!.id));
+    expect(ended?.endReason).toBe('password');
+    expect(
+      await db.admin.db.$count(loginAttempts, eq(loginAttempts.login, 'ltg-gamma-owner')),
+    ).toBe(0);
+    const [revoked] = await db.admin.db
+      .select()
+      .from(passwordResetCodes)
+      .where(eq(passwordResetCodes.id, resetCode!.id));
+    expect(revoked?.expiresAt).toEqual(hour(5));
     expect(await complete(org, k)).toBeNull();
     expect(await peek(k)).toBeNull();
     expect(await unset()).toBe(false);
@@ -348,56 +539,189 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     const first = key();
     const second = key();
     expect((await issueSetup(org.ownerUserId, first))?.outcome).toBe('ok');
-    expect(await issueSetup(org.ownerUserId, second, hour(5))).toMatchObject({ outcome: 'ok', first: false });
+    expect(await issueSetup(org.ownerUserId, second, hour(5))).toMatchObject({
+      outcome: 'ok',
+      first: false,
+    });
     expect(await peekPasswordSetup(db.app.db, { hash: hashOf(first), now: hour(6) })).toBeNull();
-    expect(await peekPasswordSetup(db.app.db, { hash: hashOf(second), now: hour(6) })).not.toBeNull();
+    expect(
+      await peekPasswordSetup(db.app.db, { hash: hashOf(second), now: hour(6) }),
+    ).not.toBeNull();
 
-    // Блокировка гасит ссылку насовсем: снятие блокировки её не возвращает.
+    // Блокировка гасит ссылку насовсем: снятие блокировки её не возвращает — на любых часах (срок
+    // становится моментом выдачи, часы базы не участвуют).
     await db.admin.db.update(users).set({ blocked: true }).where(eq(users.id, org.ownerUserId));
     await db.admin.db.update(users).set({ blocked: false }).where(eq(users.id, org.ownerUserId));
     expect(await peekPasswordSetup(db.app.db, { hash: hashOf(second), now: hour(6) })).toBeNull();
+    expect(await peekPasswordSetup(db.app.db, { hash: hashOf(second), now: hour(5) })).toBeNull();
+
+    // Закрытый вход («Это не я», неверные пароли) — так же; пока вход закрыт, новой ссылки нет.
+    const locked = key();
+    expect((await issueSetup(org.ownerUserId, locked, hour(6)))?.outcome).toBe('ok');
+    await db.admin.db
+      .update(users)
+      .set({ loginLockedAt: hour(6) })
+      .where(eq(users.id, org.ownerUserId));
+    expect(await peekPasswordSetup(db.app.db, { hash: hashOf(locked), now: hour(6) })).toBeNull();
+    expect(await issueSetup(org.ownerUserId, key(), hour(6))).toBeNull();
+    await db.admin.db
+      .update(users)
+      .set({ loginLockedAt: null })
+      .where(eq(users.id, org.ownerUserId));
+    expect(await peekPasswordSetup(db.app.db, { hash: hashOf(locked), now: hour(6) })).toBeNull();
+
+    // Организация заблокирована: ссылка не открывается, не тратится и не выдаётся.
+    const blockedOrg = key();
+    expect((await issueSetup(org.ownerUserId, blockedOrg, hour(6)))?.outcome).toBe('ok');
+    await db.admin.db
+      .update(organizations)
+      .set({ status: 'blocked' })
+      .where(eq(organizations.id, org.orgId));
+    expect(
+      await peekPasswordSetup(db.app.db, { hash: hashOf(blockedOrg), now: hour(6) }),
+    ).toBeNull();
+    expect(await complete(org, blockedOrg, hour(6))).toBeNull();
+    expect(await issueSetup(org.ownerUserId, key(), hour(6))).toBeNull();
+    await db.admin.db
+      .update(organizations)
+      .set({ status: 'active' })
+      .where(eq(organizations.id, org.orgId));
+    expect(
+      await peekPasswordSetup(db.app.db, { hash: hashOf(blockedOrg), now: hour(6) }),
+    ).not.toBeNull();
 
     // Временный пароль от администратора — пароль задан, ссылки «использованы».
     const third = key();
     expect((await issueSetup(org.ownerUserId, third, hour(7)))?.outcome).toBe('ok');
-    await db.admin.db.update(users).set({ passwordHash: 'temp' }).where(eq(users.id, org.ownerUserId));
+    await db.admin.db
+      .update(users)
+      .set({ passwordHash: 'temp' })
+      .where(eq(users.id, org.ownerUserId));
     expect(await peekPasswordSetup(db.app.db, { hash: hashOf(third), now: hour(8) })).toBeNull();
     expect(
       await db.admin.db.$count(
         passwordSetupTokens,
-        and(eq(passwordSetupTokens.userId, org.ownerUserId), sql`${passwordSetupTokens.usedAt} is null`),
+        and(
+          eq(passwordSetupTokens.userId, org.ownerUserId),
+          sql`${passwordSetupTokens.usedAt} is null`,
+        ),
       ),
     ).toBe(0);
 
     // Владелец без Telegram: ссылка не выдаётся.
     const noTg = await submitted();
     const plain = await approved(noTg.id, 'ltg-eps', '06811201810451');
-    expect(await issueSetup(plain.org.ownerUserId, key())).toMatchObject({ outcome: 'no_telegram', first: true });
-    expect(await db.admin.db.$count(passwordSetupTokens, eq(passwordSetupTokens.userId, plain.org.ownerUserId))).toBe(0);
+    expect(await issueSetup(plain.org.ownerUserId, key())).toMatchObject({
+      outcome: 'no_telegram',
+      first: true,
+    });
+    expect(
+      await db.admin.db.$count(
+        passwordSetupTokens,
+        eq(passwordSetupTokens.userId, plain.org.ownerUserId),
+      ),
+    ).toBe(0);
   });
 
   it('первая ссылка — только владельцу организации по заявке, который не входил и не получал временный пароль', async () => {
-    // Организация без заявки.
-    expect(await issueSetup(other.ownerUserId, key())).toBeNull();
+    const unset = (userId: string) =>
+      asAdmin(async (tx) => {
+        const [r] = await tx.execute<{ v: boolean }>(
+          sql`select app.password_unset(${userId}::uuid) as v`,
+        );
+        return r?.v;
+      });
+    // Свежий владелец (не входил, временного пароля нет) организации без заявки.
+    const plain = await createOrganization(db.app.db, {
+      name: 'ОсОО «ltg-nolead»',
+      inn: '15811201810450',
+      slug: 'ltg-nolead',
+      owner: { fullName: 'Иванов Иван', login: 'ltg-nolead-owner', passwordHash: 'random' },
+    });
+    await db.admin.db
+      .update(users)
+      .set({ mustChangePassword: false })
+      .where(eq(users.id, plain.ownerUserId));
+    await db.admin.db
+      .insert(telegramLinks)
+      .values({ userId: plain.ownerUserId, orgId: plain.orgId, chatId: 7700 });
+    expect(await issueSetup(plain.ownerUserId, key())).toBeNull();
+    expect(await unset(plain.ownerUserId)).toBe(false);
     const l = await submitted();
     await start(l.key, 7701);
     const { org } = await approved(l.id, 'ltg-zeta', '07811201810452');
+    // До первой ссылки (её отправка не удалась) — уже «Пароль не задан»: кнопка выдаст первую.
+    expect(await unset(org.ownerUserId)).toBe(true);
+
+    // Сотрудник — не владелец, даже без временного пароля и ни разу не входивший.
+    const [role] = await db.admin.db
+      .select({ id: roles.id, name: roles.name })
+      .from(roles)
+      .where(and(eq(roles.orgId, org.orgId), eq(roles.isOwner, false)))
+      .limit(1);
+    const staffId = await withOrgContext(
+      db.app.db,
+      { orgId: org.orgId, userId: org.ownerUserId },
+      async (tx) => {
+        await createEmployee(tx, {
+          fullName: 'Петрова Анна',
+          shortName: 'Петрова А.',
+          login: 'ltg-zeta-staff',
+          passwordHash: 'h',
+          phone: null,
+          role: role!,
+        });
+        const [u] = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.login, 'ltg-zeta-staff'));
+        return u!.id;
+      },
+    );
+    await db.admin.db.update(users).set({ mustChangePassword: false }).where(eq(users.id, staffId));
+    await db.admin.db
+      .insert(telegramLinks)
+      .values({ userId: staffId, orgId: org.orgId, chatId: 7702 });
+    expect(await issueSetup(staffId, key())).toBeNull();
+    expect(await unset(staffId)).toBe(false);
+
     await db.admin.db
       .update(users)
       .set({ mustChangePassword: true })
       .where(eq(users.id, org.ownerUserId));
     expect(await issueSetup(org.ownerUserId, key())).toBeNull();
+    expect(await unset(org.ownerUserId)).toBe(false);
     await db.admin.db
       .update(users)
       .set({ mustChangePassword: false, lastLoginAt: hour(1) })
       .where(eq(users.id, org.ownerUserId));
     expect(await issueSetup(org.ownerUserId, key())).toBeNull();
-    // Сотрудник — не владелец.
-    const [emp] = await db.admin.db
-      .select({ active: employees.active })
-      .from(employees)
-      .where(eq(employees.userId, org.ownerUserId));
-    expect(emp?.active).toBe(true);
+    expect(await unset(org.ownerUserId)).toBe(false);
+  });
+
+  it('«Повторить» в журнале отправок Админки ссылку «Задать пароль» не повторяет', async () => {
+    const [row] = await db.admin.db
+      .insert(telegramOutbox)
+      .values({
+        userId: other.ownerUserId,
+        orgId: other.orgId,
+        chatId: 7900,
+        kind: 'setup_link',
+        status: 'error',
+      })
+      .returning({ id: telegramOutbox.id });
+    const queued = await asAdmin(async (tx) => {
+      const [r] = await tx.execute<{ n: number }>(
+        sql`select app.admin_telegram_retry(array[${row!.id}]::uuid[], ${hour(1).toISOString()}::timestamptz) as n`,
+      );
+      return r?.n;
+    });
+    expect(queued).toBe(0);
+    const [after] = await db.admin.db
+      .select()
+      .from(telegramOutbox)
+      .where(eq(telegramOutbox.id, row!.id));
+    expect(after?.status).toBe('error');
   });
 
   it('таблицы ссылок роль приложения не видит; «пароль не задан» чужой организации — нет', async () => {
@@ -417,8 +741,8 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
     expect(await unsetIn(org.orgId, org.ownerUserId)).toBe(true);
     expect(await unsetIn(other.orgId, other.ownerUserId)).toBe(false);
     // Функция-триггер роли приложения недоступна.
-    await expect(
-      db.app.db.execute(sql`select app.password_setup_revoke()`),
-    ).rejects.toEqual(code('42501'));
+    await expect(db.app.db.execute(sql`select app.password_setup_revoke()`)).rejects.toEqual(
+      code('42501'),
+    );
   });
 });

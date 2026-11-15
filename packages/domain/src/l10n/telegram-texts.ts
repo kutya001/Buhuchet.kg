@@ -399,10 +399,13 @@ export const TELEGRAM_TEXTS = {
   // организации в Админке (доработки 14.11.2026, блок 1, пункт 3; прототип v113 setPassPage, ownerSetupAct).
   'setpass.meta_title': { ru: 'Задать пароль', section: SP },
   'setpass.title': { ru: 'Задайте пароль', section: SP },
-  'setpass.org': { ru: 'Организация: {org}.', section: SP },
-  'setpass.login': { ru: 'Логин для входа:', section: SP },
+  // {login} на странице — моноширинным жирным (прототип: <b class="mono">).
   'setpass.lead': {
-    ru: 'Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
+    ru: 'Логин для входа: {login}. Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
+    section: SP,
+  },
+  'setpass.lead_org': {
+    ru: 'Организация: {org}. Логин для входа: {login}. Придумайте пароль — с ним вы будете входить в Buhuchet.kg.',
     section: SP,
   },
   'setpass.submit': { ru: 'Задать пароль', section: SP },

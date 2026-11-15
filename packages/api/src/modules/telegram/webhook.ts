@@ -22,6 +22,7 @@ import {
   formatDateRu,
   formatText,
   GROUP_MINE,
+  isLeadTgStart,
   leadTgStartToken,
   loginDenial,
   parseBotPress,
@@ -532,13 +533,17 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       return ok;
     }
     // Telegram заявителя (доработки 14.11.2026, блок 1): ссылка после заявки — «/start l_<ключ>».
-    const leadKey = leadTgStartToken(command.token);
-    if (leadKey) {
+    // Испорченная ссылка заявителя (ключ не той длины) — тоже заявителю: «Ссылка устарела».
+    if (isLeadTgStart(command.token)) {
       try {
         await leadTgStart(
           deps,
-          { chatId: chat.id, username: from?.username ?? null, firstName: from?.first_name ?? null },
-          leadKey,
+          {
+            chatId: chat.id,
+            username: from?.username ?? null,
+            firstName: from?.first_name ?? null,
+          },
+          leadTgStartToken(command.token),
         );
       } catch (err) {
         deps.logger.error({ err }, 'Telegram: «Старт» заявителя не обработан');

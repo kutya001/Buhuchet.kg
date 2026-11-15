@@ -5,10 +5,12 @@
 
 -- «Подключить Telegram» после заявки: ссылка на бота на p_ttl_hours часов. Только в той же подаче, что
 -- создала или повторила заявку (запись истории гостя в этот же момент p_now, как у app.lead_notify).
--- Новая заявка — новая ссылка, одна на заявку. Повтор с того же телефона новой ссылки не выдаёт (иначе
--- посторонний, зная телефон, получил бы ссылку и подключил свой Telegram раньше заявителя): браузеру,
--- который получил ссылку при подаче (p_prior — её ключ из cookie), отвечает той же ссылкой (same) или
--- «Telegram уже подключён» (linked); остальным — ничего.
+-- Действующая ссылка у заявки одна. Пока она действует, повтор с того же телефона другой ссылки не
+-- получает (иначе посторонний, зная телефон, получил бы её и подключил свой Telegram раньше заявителя):
+-- браузеру, который получил ссылку (p_prior — её ключ из cookie), — та же ссылка (same), остальным —
+-- ничего. Ссылка истекла, а «Старта» не было — повтор получает новую (new), как в прототипе: «Отправьте
+-- заявку ещё раз — придёт новая ссылка». Telegram подключён — «уже подключён» (linked) только браузеру с
+-- ключом ссылки этой заявки, остальным — ничего.
 CREATE FUNCTION app.lead_tg_issue(
   p_lead uuid, p_hash text, p_prior text, p_now timestamptz, p_ttl_hours integer
 )
@@ -36,31 +38,32 @@ CREATE FUNCTION app.lead_tg_issue(
     IF NOT FOUND THEN
       RETURN;
     END IF;
-    IF v_kind = 'created' THEN
-      IF p_hash IS NULL OR v_linked OR EXISTS (
-        SELECT 1 FROM public.platform_lead_tg_tokens t WHERE t.lead_id = p_lead
+    IF v_linked THEN
+      IF v_kind = 'repeat' AND p_prior IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.platform_lead_tg_tokens t
+        WHERE t.token_hash = p_prior AND t.lead_id = p_lead
       ) THEN
-        RETURN;
+        RETURN QUERY SELECT 'linked'::text, NULL::timestamptz;
       END IF;
-      v_till := p_now + make_interval(hours => p_ttl_hours);
-      INSERT INTO public.platform_lead_tg_tokens (token_hash, lead_id, expires_at, created_at)
-        VALUES (p_hash, p_lead, v_till, p_now);
-      RETURN QUERY SELECT 'new'::text, v_till;
-      RETURN;
-    END IF;
-    IF p_prior IS NULL THEN
       RETURN;
     END IF;
     SELECT * INTO v_tok FROM public.platform_lead_tg_tokens t
-      WHERE t.token_hash = p_prior AND t.lead_id = p_lead;
-    IF NOT FOUND THEN
+      WHERE t.lead_id = p_lead AND t.used_at IS NULL AND t.expires_at > p_now
+      ORDER BY t.expires_at DESC
+      LIMIT 1;
+    IF FOUND THEN
+      IF v_kind = 'repeat' AND v_tok.token_hash = p_prior THEN
+        RETURN QUERY SELECT 'same'::text, v_tok.expires_at;
+      END IF;
       RETURN;
     END IF;
-    IF v_linked THEN
-      RETURN QUERY SELECT 'linked'::text, NULL::timestamptz;
-    ELSIF v_tok.used_at IS NULL AND v_tok.expires_at > p_now THEN
-      RETURN QUERY SELECT 'same'::text, v_tok.expires_at;
+    IF p_hash IS NULL THEN
+      RETURN;
     END IF;
+    v_till := p_now + make_interval(hours => p_ttl_hours);
+    INSERT INTO public.platform_lead_tg_tokens (token_hash, lead_id, expires_at, created_at)
+      VALUES (p_hash, p_lead, v_till, p_now);
+    RETURN QUERY SELECT 'new'::text, v_till;
   END
   $$;
 --> statement-breakpoint
@@ -132,8 +135,9 @@ CREATE FUNCTION app.lead_tg_start(
   $$;
 --> statement-breakpoint
 -- Причина отказа заявителю в Telegram — после «Отклонить» на сайте или в чате бота (после транзакции
--- отказа). Только заявке «Отказ» с подключённым Telegram и только ещё не отправленную причину: повтор
--- вызова, «Отказ» после «Старта» с причиной и повторное нажатие второго сообщения не шлют.
+-- отказа, от имени отказавшего администратора платформы). Только заявке «Отказ» с подключённым Telegram
+-- и только ещё не отправленную причину: повтор вызова, «Отказ» после «Старта» с причиной и повторное
+-- нажатие второго сообщения не шлют.
 CREATE FUNCTION app.lead_tg_refusal_take(p_lead uuid)
   RETURNS TABLE (chat_id bigint, firm text, reason text)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -144,6 +148,9 @@ CREATE FUNCTION app.lead_tg_refusal_take(p_lead uuid)
     v_event bigint;
     v_reason text;
   BEGIN
+    IF NOT app.is_platform_admin() THEN
+      RETURN;
+    END IF;
     SELECT * INTO v_lead FROM public.platform_leads l
       WHERE l.id = p_lead
       FOR UPDATE;
@@ -165,8 +172,10 @@ CREATE FUNCTION app.lead_tg_refusal_take(p_lead uuid)
 --> statement-breakpoint
 -- «Одобрить» (в транзакции создания организации по заявке): Telegram заявителя становится Telegram
 -- владельца новой организации — та же привязка, что «Старт» по ссылке из «Мой профиль»
--- (app.telegram_link_set). Только незаблокированный администратор платформы, только владелец
--- организации, созданной по этой заявке, и только если заявитель подключил Telegram. false — нет.
+-- (app.telegram_link_set). Только незаблокированный администратор платформы, только действующий
+-- владелец организации, созданной по этой заявке, который ещё не входил, не задавал пароль по ссылке и
+-- не привязывал и не отвязывал Telegram (иначе это была бы замена Telegram в обход кода из прежнего
+-- чата), и только если заявитель подключил Telegram. false — нет.
 CREATE FUNCTION app.lead_owner_tg_link(p_lead uuid, p_user uuid)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -187,9 +196,15 @@ CREATE FUNCTION app.lead_owner_tg_link(p_lead uuid, p_user uuid)
       RETURN false;
     END IF;
     SELECT u.org_id INTO v_org FROM public.users u
-      JOIN public.employees e ON e.user_id = u.id AND e.org_id = u.org_id
+      JOIN public.employees e ON e.user_id = u.id AND e.org_id = u.org_id AND e.active
       JOIN public.roles r ON r.id = e.role_id AND r.org_id = e.org_id AND r.is_owner
-      WHERE u.id = p_user AND u.org_id = v_lead.created_org_id AND NOT u.blocked;
+      WHERE u.id = p_user AND u.org_id = v_lead.created_org_id AND NOT u.blocked
+        AND u.last_login_at IS NULL
+        AND NOT EXISTS (SELECT 1 FROM public.telegram_link_guards g WHERE g.user_id = u.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM public.password_setup_tokens t WHERE t.user_id = u.id AND t.used_at IS NOT NULL
+        )
+      FOR UPDATE OF u;
     IF NOT FOUND THEN
       RETURN false;
     END IF;
@@ -283,8 +298,10 @@ CREATE FUNCTION app.password_setup_peek(p_hash text, p_now timestamptz)
 --> statement-breakpoint
 -- «Задать пароль»: ссылка тратится один раз (проверки — как у app.password_setup_peek, атомарно);
 -- новый пароль, временного больше нет, все сеансы завершены, счёт неверных паролей снят (как
--- app.auth_reset_complete). Только для организации из контекста (историю пишет API в той же
--- транзакции). Ответ — логин; пусто — ссылка не подошла.
+-- app.auth_reset_complete). Только для организации и пользователя из контекста — владельца ссылки
+-- (историю и причину конца сеансов пишет API в той же транзакции); ждущие коды «Забыли пароль?» гаснут.
+-- Сначала блокируется пользователь, потом ссылка — тот же порядок, что у смены пароля с триггером
+-- users_password_setup_revoke, без взаимного ожидания. Ответ — логин; пусто — ссылка не подошла.
 CREATE FUNCTION app.password_setup_complete(p_hash text, p_password_hash text, p_now timestamptz)
   RETURNS text
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -297,15 +314,22 @@ CREATE FUNCTION app.password_setup_complete(p_hash text, p_password_hash text, p
     IF p_password_hash IS NULL OR p_password_hash = '' THEN
       RETURN NULL;
     END IF;
-    SELECT t.user_id INTO v_user
+    v_user := app.current_user_id();
+    PERFORM 1 FROM public.users u
+      WHERE u.id = v_user AND u.org_id = app.current_org_id()
+      FOR UPDATE;
+    IF NOT FOUND THEN
+      RETURN NULL;
+    END IF;
+    PERFORM 1
       FROM public.password_setup_tokens t
       JOIN public.users u ON u.id = t.user_id AND u.org_id = t.org_id
       JOIN public.organizations o ON o.id = t.org_id
       WHERE t.token_hash = p_hash AND t.used_at IS NULL AND t.expires_at > p_now
-        AND t.org_id = app.current_org_id()
+        AND t.user_id = v_user AND t.org_id = app.current_org_id()
         AND NOT u.blocked AND u.login_locked_at IS NULL AND o.status = 'active'
         AND EXISTS (SELECT 1 FROM public.employees e WHERE e.user_id = u.id AND e.active)
-      FOR UPDATE OF t, u;
+      FOR UPDATE OF t;
     IF NOT FOUND THEN
       RETURN NULL;
     END IF;
@@ -317,25 +341,44 @@ CREATE FUNCTION app.password_setup_complete(p_hash text, p_password_hash text, p
       RETURNING u.login::text INTO v_login;
     DELETE FROM public.sessions s WHERE s.user_id = v_user;
     DELETE FROM public.login_attempts a WHERE a.login = lower(v_login);
+    -- Ждущие коды «Забыли пароль?» больше не действуют (как app.auth_reset_revoke при смене пароля).
+    UPDATE public.password_reset_codes c SET expires_at = least(c.expires_at, p_now)
+      WHERE c.user_id = v_user AND c.used_at IS NULL AND c.expires_at > p_now;
     RETURN v_login;
   END
   $$;
 --> statement-breakpoint
--- «Пароль не задан: ссылка в Telegram» в карточках Админки: ссылки выдавались, ни одна не использована,
--- пароль не меняли иначе. Только пользователю организации из контекста или администратору платформы.
+-- «Пароль не задан: ссылка в Telegram» в карточках Админки (прототип: noPass с «Одобрить»): ни одна
+-- ссылка не использована и пароль не меняли иначе (смена пароля гасит ссылки триггером), а ссылки
+-- выдавались или это владелец организации по заявке, который ещё не входил и не получал временный
+-- пароль (первая ссылка не ушла — тогда её выдаст «Отправить новую ссылку для пароля»). Только
+-- пользователю организации из контекста или администратору платформы.
 CREATE FUNCTION app.password_unset(p_user uuid)
   RETURNS boolean
   LANGUAGE sql STABLE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
     SELECT EXISTS (
-        SELECT 1 FROM public.password_setup_tokens t
-        WHERE t.user_id = p_user
-          AND (t.org_id = app.current_org_id() OR (SELECT app.is_platform_admin()))
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM public.password_setup_tokens t WHERE t.user_id = p_user AND t.used_at IS NOT NULL
-      )
+      SELECT 1 FROM public.users u
+      WHERE u.id = p_user
+        AND (u.org_id = app.current_org_id() OR (SELECT app.is_platform_admin()))
+        AND NOT EXISTS (
+          SELECT 1 FROM public.password_setup_tokens t
+          WHERE t.user_id = u.id AND t.used_at IS NOT NULL
+        )
+        AND (
+          EXISTS (SELECT 1 FROM public.password_setup_tokens t WHERE t.user_id = u.id)
+          OR (
+            u.last_login_at IS NULL AND NOT u.must_change_password
+            AND EXISTS (SELECT 1 FROM public.platform_leads l WHERE l.created_org_id = u.org_id)
+            AND EXISTS (
+              SELECT 1 FROM public.employees e
+              JOIN public.roles r ON r.id = e.role_id AND r.org_id = e.org_id AND r.is_owner
+              WHERE e.user_id = u.id AND e.org_id = u.org_id
+            )
+          )
+        )
+    )
   $$;
 --> statement-breakpoint
 -- Пароль сменили иначе (временный от администратора, смена в «Мой профиль», «Забыли пароль?») — пароль
@@ -353,7 +396,9 @@ CREATE FUNCTION app.password_setup_revoke()
     END IF;
     IF (NEW.blocked AND NOT OLD.blocked)
       OR (NEW.login_locked_at IS NOT NULL AND OLD.login_locked_at IS NULL) THEN
-      UPDATE public.password_setup_tokens t SET expires_at = least(t.expires_at, now())
+      -- Срок — момент выдачи: ссылка не действует ни на каких часах (проверки сравнивают со своим
+      -- «сейчас», а не с часами базы).
+      UPDATE public.password_setup_tokens t SET expires_at = least(t.expires_at, t.created_at)
         WHERE t.user_id = NEW.id AND t.used_at IS NULL;
     END IF;
     RETURN NULL;
@@ -365,6 +410,24 @@ CREATE TRIGGER users_password_setup_revoke
   FOR EACH ROW EXECUTE FUNCTION app.password_setup_revoke();
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION app.password_setup_revoke() FROM PUBLIC, buhuchet_app;
+--> statement-breakpoint
+-- «Повторить» в журнале отправок Админки: ссылка «Задать пароль», как код, не повторяется — её ключа в
+-- базе нет, а без текста Telegram сообщение не примет (outboxRetryRefusal домена).
+CREATE OR REPLACE FUNCTION app.admin_telegram_retry(p_ids uuid[], p_now timestamptz)
+  RETURNS integer
+  LANGUAGE sql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    WITH queued AS (
+      UPDATE public.telegram_outbox
+        SET status = 'pending', tries = 0, last_error = NULL, sent_at = NULL, next_at = p_now
+        WHERE id = ANY (p_ids) AND status = 'error'
+          AND kind NOT IN ('code', 'relink_code', 'bot_cmd', 'setup_link')
+          AND (SELECT app.is_platform_admin())
+        RETURNING 1
+    )
+    SELECT count(*)::integer FROM queued
+  $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION
   app.lead_tg_issue(uuid, text, text, timestamptz, integer),

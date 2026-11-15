@@ -39,8 +39,9 @@ export type LeadTgLink = { url: string; token: string; expiresAt: Date } | { lin
 /**
  * В транзакции подачи заявки (тот же `now`, что у `submitLead`). Ловушке (`leadId` null) — ссылка того
  * же вида с ключом, которого нет в базе: по ответу ловушку не распознать. Новой заявке — новая ссылка
- * на 24 часа. Повтору — только ссылка браузера, который получил её при подаче (`prior` — её ключ из
- * cookie): та же ссылка или «Telegram уже подключён»; иначе null (без кнопки и без «подключён»).
+ * на 24 часа. Повтору, пока ссылка действует, — только она и только браузеру, который её получил
+ * (`prior` — её ключ из cookie); истекла без «Старта» — новая ссылка (как в прототипе). Telegram уже
+ * подключён — «подключён» только браузеру с ключом ссылки этой заявки. Иначе null (без кнопки).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-18
 export async function issueLeadTgLink(
@@ -63,12 +64,11 @@ export async function issueLeadTgLink(
       expiresAt: new Date(p.now.getTime() + LEAD_TG_TTL_HOURS * 3_600_000),
     };
   }
-  const prior = p.prior && isSessionTokenShape(p.prior) ? p.prior : null;
-  if (p.repeat && !prior) return null;
+  const prior = p.repeat && p.prior && isSessionTokenShape(p.prior) ? p.prior : null;
   const issued = await issueLeadTgToken(tx, {
     leadId: p.leadId,
     hash: hashSessionToken(token),
-    priorHash: p.repeat && prior ? hashSessionToken(prior) : null,
+    priorHash: prior ? hashSessionToken(prior) : null,
     now: p.now,
     ttlHours: LEAD_TG_TTL_HOURS,
   });
@@ -90,12 +90,19 @@ export function linkLeadOwnerTelegram(
   return linkLeadOwnerTelegramRow(tx, p);
 }
 
-/** «Старт» по ссылке заявителя из личного чата: ответ бота; повтор доставки — без ответа. */
+/**
+ * «Старт» по ссылке заявителя из личного чата: ответ бота; повтор доставки — без ответа. `key` null —
+ * ссылка заявителя испорчена (ключ не того вида): «Ссылка устарела».
+ */
 export async function leadTgStart(
   deps: ApiDeps,
   chat: { chatId: number; username: string | null; firstName: string | null },
-  key: string,
+  key: string | null,
 ): Promise<void> {
+  if (!key) {
+    await sendNow(deps, chat.chatId, await botText(deps, 'tgLeadLinkBad'), 'lead_start');
+    return;
+  }
   const res = await startLeadTelegram(deps.db, {
     hash: hashSessionToken(key),
     chatId: chat.chatId,
@@ -185,14 +192,17 @@ export async function sendOwnerSetup(
 
 /**
  * После «Отклонить» на сайте или в чате бота (после коммита): причина отказа заявителю в Telegram —
- * только заявке «Отказ» с подключённым Telegram и только ещё не отправленная. Не бросает.
+ * только заявке «Отказ» с подключённым Telegram и только ещё не отправленная. `adminId` — отказавший
+ * администратор платформы (от его имени берётся причина). Не бросает.
  */
 export async function sendLeadRefused(
   deps: ApiDeps,
-  p: { leadId: string },
+  p: { leadId: string; adminId: string },
 ): Promise<'sent' | 'not_linked' | 'failed'> {
   try {
-    const refusal = await takeLeadRefusal(deps.db, p.leadId);
+    const refusal = await withUserContext(deps.db, p.adminId, (tx) =>
+      takeLeadRefusal(tx, p.leadId),
+    );
     if (!refusal) return 'not_linked';
     const text = await botText(deps, 'tgLeadNo', {
       фирма: leadBotFirm(refusal.firm),

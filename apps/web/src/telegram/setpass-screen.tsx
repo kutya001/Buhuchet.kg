@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { OWNER_SETUP_DAYS } from '@buhuchet/domain';
 import { PasswordSetupDone, PasswordSetupForm, PasswordSetupInfo } from '@buhuchet/shared';
 import { Brand, buttonClass, MONO_CLASS, Note } from '@buhuchet/ui';
-import { useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { api, callApi } from '../api-client';
 import { NewPasswordFields } from '../auth/fields';
@@ -20,6 +20,20 @@ type State =
   | { id: 'done'; login: string };
 
 const TITLE = 'm-0 text-[20px] font-[720] tracking-[-.015em]';
+
+/**
+ * Текст словаря с вставками-элементами вместо `{имя}`: подстановки идут за один проход, поэтому
+ * «{login}» в названии организации не станет логином.
+ */
+function richText(text: string, parts: Readonly<Record<string, ReactNode>>): ReactNode[] {
+  return text
+    .split(/\{(\w+)\}/)
+    .map((piece, i) => (
+      <Fragment key={i}>
+        {i % 2 ? (Object.hasOwn(parts, piece) ? parts[piece] : `{${piece}}`) : piece}
+      </Fragment>
+    ));
+}
 const WIDE_CTA = `${buttonClass('cta')} justify-center`;
 
 /**
@@ -158,8 +172,10 @@ function SetPasswordForm({
     <form onSubmit={submit} noValidate className="flex flex-col gap-3.5">
       <h1 className={TITLE}>{t('setpass.title')}</h1>
       <p className="m-0 text-muted">
-        {info.organization ? `${t('setpass.org', { org: info.organization })} ` : null}
-        {t('setpass.login')} <b className={MONO_CLASS}>{info.login}</b>. {t('setpass.lead')}
+        {richText(t(info.organization ? 'setpass.lead_org' : 'setpass.lead'), {
+          org: info.organization,
+          login: <b className={MONO_CLASS}>{info.login}</b>,
+        })}
       </p>
       {/* Логин — для менеджера паролей: он запомнит пароль вместе с ним. */}
       <input
