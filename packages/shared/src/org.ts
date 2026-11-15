@@ -66,9 +66,10 @@ export type OrgProfile = z.infer<typeof OrgProfile>;
 /**
  * Сохранить «Основное». Не переданное поле не меняется; пустая строка в необязательном поле очищает
  * его. Название, ОКПО, телефон и адрес страницы сервер проверяет с текстами прототипа. ИНН и форму
- * владелец не меняет (доработки 14.11.2026, блок 1, пункт 4): их в запросе нет — «ИНН и форма» Админки.
+ * владелец не меняет (доработки 14.11.2026, блок 1, пункт 4): их в запросе нет, присланные — не меняются
+ * (как прочие лишние поля) — «ИНН и форма» Админки.
  */
-export const UpdateOrgProfileRequest = z.strictObject({
+export const UpdateOrgProfileRequest = z.object({
   version: RecordVersion,
   name: z.string().trim().max(ORG_NAME_MAX_LENGTH).optional(),
   okpo: z.string().trim().max(20).nullable().optional(),

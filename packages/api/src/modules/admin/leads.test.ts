@@ -1,12 +1,20 @@
+import { createFakeDocumentReader } from '@buhuchet/adapters/documents';
 import { schema } from '@buhuchet/db';
 import { databaseAvailable } from '@buhuchet/db/testing';
 import { ApiError, LeadSubmitted } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
-import { createStaffFixture, createTestDeps, TEST_ORIGIN } from '../../testing';
+import { createStaffFixture, createTestDeps, leadDocDraft, TEST_ORIGIN } from '../../testing';
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
+
+/**
+ * Черновик документов подставляет `send` (доработки 14.11.2026, блок 1: без документов заявка не
+ * уходит); у формы с неверными данными — номер без документов: до документов проверка не доходит.
+ */
+const AUTO_DRAFT = 'auto';
+const NO_DRAFT = '00000000-0000-4000-8000-00000000d0c5';
 
 const form = (over: Record<string, unknown> = {}) => ({
   name: 'Айгуль Садыкова',
@@ -17,32 +25,51 @@ const form = (over: Record<string, unknown> = {}) => ({
   note: 'Перезвоните после обеда',
   consent: true,
   website: '',
+  form: 'ip',
+  inn: '21811201810001',
+  okpo: '',
+  address: '',
+  head: '',
+  draft: AUTO_DRAFT,
   ...over,
 });
 
 describe.skipIf(!databaseAvailable())('«Оставить заявку» с лендинга (задача #165)', () => {
   let f: Fixture;
+  let docsApp: Fixture['app'];
   let adminId: string;
 
-  const send = (
-    body: unknown,
-    { ip = '203.0.113.7', app = f.app }: { ip?: string; app?: Fixture['app'] } = {},
-  ) =>
-    app.request('/api/leads', {
+  const send = async (
+    body: Record<string, unknown>,
+    { ip = '203.0.113.7', app = docsApp }: { ip?: string; app?: Fixture['app'] } = {},
+  ) => {
+    const json =
+      body.draft === AUTO_DRAFT
+        ? {
+            ...body,
+            draft: (
+              await leadDocDraft(app, f.deps.storage, [{ kind: 'gns_cert', content: '%PDF-scan' }])
+            ).draft,
+          }
+        : body;
+    return app.request('/api/leads', {
       method: 'POST',
       headers: {
         origin: TEST_ORIGIN,
         'content-type': 'application/json',
         'x-forwarded-for': `${ip}, 10.0.0.1`,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(json),
     });
+  };
   const leads = () => f.t.admin.db.select().from(schema.platformLeads);
   const outbox = () =>
     f.t.admin.db.select().from(schema.telegramOutbox).where(eq(schema.telegramOutbox.kind, 'lead'));
 
   beforeAll(async () => {
     f = await createStaffFixture();
+    // Чтение PDF — подделка: документ «не прочитался» (как скан без текста), поля заполняет заявитель.
+    docsApp = createApp({ ...f.deps, documents: createFakeDocumentReader({}) });
     const [a] = await f.t.admin.db
       .select({ id: schema.users.id })
       .from(schema.users)
@@ -61,7 +88,7 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     const res = await send(form());
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
-    expect(LeadSubmitted.parse(await res.json())).toEqual({ ok: true });
+    expect(LeadSubmitted.parse(await res.json()).ok).toBe(true);
     expect(await leads()).toEqual([
       expect.objectContaining({
         name: 'Айгуль Садыкова',
@@ -99,14 +126,16 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     ];
     const before = (await leads()).length;
     for (const [over, field] of cases) {
-      const res = await send(form({ ...over, phone: over.phone ?? '+996700000001' }));
+      const res = await send(
+        form({ ...over, phone: over.phone ?? '+996700000001', draft: NO_DRAFT }),
+      );
       expect([field, res.status]).toEqual([field, 400]);
       const body = ApiError.parse(await res.json());
       expect(body.error.code).toBe('validation_failed');
       expect(JSON.stringify(body.error.details)).toContain(field);
     }
     // Номер не по маске страны (8 цифр вместо 9) — тоже 400 с ключом словаря.
-    const short = await send(form({ phone: '+99655510020' }));
+    const short = await send(form({ phone: '+99655510020', draft: NO_DRAFT }));
     expect(short.status).toBe(400);
     expect(JSON.stringify((await short.json()) as unknown)).toContain('land.e.phone');
     expect((await leads()).length).toBe(before);
@@ -132,11 +161,11 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     const sent = (await outbox()).length;
     const trap = { website: 'http://spam.example' };
     // Неверные данные с ловушкой — тот же 400, что без неё.
-    expect((await send(form({ ...trap, phone: '555' }), { ip })).status).toBe(400);
+    expect((await send(form({ ...trap, phone: '555', draft: NO_DRAFT }), { ip })).status).toBe(400);
     for (const phone of ['+996700000021', '+996700000022', '+996700000023']) {
       const res = await send(form({ ...trap, phone }), { ip });
       expect(res.status).toBe(200);
-      expect(LeadSubmitted.parse(await res.json())).toEqual({ ok: true });
+      expect(LeadSubmitted.parse(await res.json()).ok).toBe(true);
     }
     expect((await leads()).length).toBe(before);
     expect((await outbox()).length).toBe(sent);
@@ -187,6 +216,8 @@ describe.skipIf(!databaseAvailable())('«Оставить заявку» с ле
     const stand = createApp(
       createTestDeps({
         db: f.deps.db,
+        storage: f.deps.storage,
+        documents: createFakeDocumentReader({}),
         config: { ...base, APP_ENV: 'staging', APP_BASE_URL: 'https://test.example' },
       }),
     );

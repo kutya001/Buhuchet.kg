@@ -426,7 +426,8 @@ export function leadStatusHandler(deps: ApiDeps): RouteHandler<typeof leadStatus
     const { id } = c.req.valid('param');
     const { to, version, reason } = c.req.valid('json');
     const t = await textsOf(deps);
-    const card = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => {
+    const adminId = c.get('session')!.userId;
+    const card = await withUserContext(deps.db, adminId, async (tx) => {
       const lead = await adminLeadById(tx, id);
       if (!lead) apiFail(404, 'lead_not_found', LEAD_MESSAGES.lead_not_found);
       if (lead.version !== version) throw new RecordChangedError('lead', id, lead.version);
@@ -463,7 +464,7 @@ export function leadStatusHandler(deps: ApiDeps): RouteHandler<typeof leadStatus
       return { card: await leadCard(tx, id, t), rejected: change.kind === 'reject' };
     });
     // «Отклонить»: заявителю с подключённым Telegram — причина отказа (поток Т; не бросает).
-    if (card.rejected) await sendLeadRefused(deps, { leadId: id });
+    if (card.rejected) await sendLeadRefused(deps, { leadId: id, adminId });
     return c.json(card.card, 200);
   };
 }

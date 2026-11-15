@@ -225,6 +225,8 @@ export function leadUploadReadHandler(
       const stored = await deps.storage.stat(key);
       if (!stored)
         return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
+      // Отказ — через `return await`: иначе отказ ждал бы, пока `finally` отпускает предел, без
+      // обработчика (необработанное отклонение).
       const refuse = async (code: 'lead_doc_pdf' | 'lead_doc_big'): Promise<never> => {
         await dropLeadUpload(deps.db, id, draft);
         await removeLeadObjects(deps, [key]);
@@ -232,11 +234,11 @@ export function leadUploadReadHandler(
           ? apiFail(400, code, 'Файл больше 20 МБ')
           : apiFail(400, code, 'Только PDF');
       };
-      if (stored.size > LEAD_DOC_MAX_BYTES) return refuse('lead_doc_big');
+      if (stored.size > LEAD_DOC_MAX_BYTES) return await refuse('lead_doc_big');
       if (stored.size !== upload.sizeBytes) {
         return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');
       }
-      if (!(await isStoredPdf(deps, key))) return refuse('lead_doc_pdf');
+      if (!(await isStoredPdf(deps, key))) return await refuse('lead_doc_pdf');
       const bytes = await deps.storage.get(key);
       if (!bytes || bytes.length !== upload.sizeBytes) {
         return apiFail(409, 'lead_upload_missing', 'Файл не загрузился. Попробуйте ещё раз');

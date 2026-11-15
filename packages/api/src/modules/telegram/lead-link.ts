@@ -51,10 +51,13 @@ export async function sendOwnerSetup(
   return 'no_telegram';
 }
 
-/** После «Отклонить»: заявителю — причина отказа в Telegram. Не бросает. */
+/**
+ * После «Отклонить» (после коммита транзакции отказа): заявителю — причина отказа в Telegram. `adminId` —
+ * администратор платформы, который отклонил заявку: причину база отдаёт только ему. Не бросает.
+ */
 export async function sendLeadRefused(
   _deps: ApiDeps,
-  _p: { leadId: string },
+  _p: { leadId: string; adminId: string },
 ): Promise<'sent' | 'not_linked' | 'failed'> {
   return 'not_linked';
 }
