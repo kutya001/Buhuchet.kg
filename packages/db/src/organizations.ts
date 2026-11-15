@@ -14,6 +14,7 @@ import {
   SLUG_MESSAGES,
   slugProblem,
   type IsoDate,
+  type OrgLegalForm,
 } from '@buhuchet/domain';
 import { asc, eq, sql } from 'drizzle-orm';
 import type { Db, Tx } from './client';
@@ -35,6 +36,8 @@ import {
 } from './schema';
 
 export interface CreateOrganizationInput {
+  /** Номер новой организации: «Одобрить» копирует файлы заявки под её ключ до транзакции. Нет — новый. */
+  id?: string;
   name: string;
   /** 14 цифр. */
   inn: string;
@@ -46,7 +49,19 @@ export interface CreateOrganizationInput {
     /** Хеш временного пароля (`hashPassword` из @buhuchet/adapters/password). */
     passwordHash: string;
     phone?: string | null;
+    /**
+     * «Одобрить» по заявке с документами (доработки 14.11.2026, блок 1): пароля владелец не знает (хеш
+     * случайного), задаёт его по ссылке из Telegram — смены при первом входе не просит.
+     */
+    passwordless?: boolean;
   };
+  /** Данные из документов заявки: форма, ОКПО, юридический адрес, руководитель. */
+  profile?: {
+    legalForm: OrgLegalForm | null;
+    okpo: string | null;
+    address: string | null;
+    head: string | null;
+  } | null;
   /** Администратор платформы, который создаёт организацию. */
   createdBy?: string | null;
   /** Сегодня по Бишкеку — «Вести с» показателей-примеров; без него — по часам сервера. */
@@ -56,7 +71,12 @@ export interface CreateOrganizationInput {
    * получает «Подключена» и ссылку на организацию; заявки нет или по ней уже создана организация —
    * `LeadLinkError`, и организация не создаётся.
    */
-  lead?: { id: string; now: Date } | null;
+  lead?: { id: string; now: Date; version?: number } | null;
+  /**
+   * Что сделать в той же транзакции после создания (заявка уже «Подключена»): у «Одобрить» — привязать
+   * Telegram заявителя к владельцу и перенести документы заявки в файлы организации. Только `tx`.
+   */
+  within?: (tx: Tx, created: CreatedOrganization) => Promise<void>;
 }
 
 export interface CreatedOrganization {
@@ -110,7 +130,7 @@ export async function createOrganization(
     );
   }
 
-  const orgId = randomUUID();
+  const orgId = input.id ?? randomUUID();
   try {
     return await withOrgContext(db, { orgId, userId: input.createdBy ?? null }, (tx) =>
       insertOrganization(tx, orgId, { ...input, name, owner: { ...input.owner, fullName, login } }),
@@ -140,9 +160,18 @@ async function insertOrganization(
   }
   const createdBy = input.createdBy ?? null;
 
-  await tx
-    .insert(organizations)
-    .values({ id: orgId, slug: input.slug, name: input.name, inn: input.inn, createdBy });
+  const profile = input.profile ?? null;
+  await tx.insert(organizations).values({
+    id: orgId,
+    slug: input.slug,
+    name: input.name,
+    inn: input.inn,
+    legalForm: profile?.legalForm ?? null,
+    okpo: profile?.okpo ?? null,
+    address: profile?.address ?? null,
+    head: profile?.head ?? null,
+    createdBy,
+  });
 
   const created: CreatedOrganization['roles'] = [];
   for (const role of rolesForNewOrganization(templates)) {
@@ -181,7 +210,7 @@ async function insertOrganization(
       orgId,
       login: input.owner.login,
       passwordHash: input.owner.passwordHash,
-      mustChangePassword: true,
+      mustChangePassword: !input.owner.passwordless,
     })
     .returning({ id: users.id });
   const [employee] = await tx
@@ -266,7 +295,9 @@ async function insertOrganization(
     await connectLeadToOrganization(tx, { ...input.lead, orgId, orgName: input.name });
   }
 
-  return { orgId, ownerUserId: user!.id, ownerEmployeeId: employee!.id, roles: created };
+  const result = { orgId, ownerUserId: user!.id, ownerEmployeeId: employee!.id, roles: created };
+  if (input.within) await input.within(tx, result);
+  return result;
 }
 
 /**

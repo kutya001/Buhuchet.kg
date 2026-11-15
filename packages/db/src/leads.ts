@@ -3,12 +3,15 @@ import {
   LEAD_IP_WINDOW_SECONDS,
   LEAD_NOTE_TOTAL_MAX,
   LEAD_REPEAT_HOURS,
+  ORG_LEGAL_FORMS,
   PLATFORM_ADMIN_NAME,
+  RecordChangedError,
   scaleStatuses,
   type BotMessage,
   type LeadEventKind,
   type LeadStatus,
   type ListQuery,
+  type OrgLegalForm,
 } from '@buhuchet/domain';
 import { asc, desc, eq, sql } from 'drizzle-orm';
 import { bigint, boolean, integer, pgSchema, text, timestamp, uuid } from 'drizzle-orm/pg-core';
@@ -55,6 +58,18 @@ export const adminLeadsView = app
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
     /** Кто изменил последним (администратор платформы); null — гость с лендинга. */
     updatedBy: uuid('updated_by'),
+    /** Данные из документов (доработки 14.11.2026, блок 1; миграции 0147, 0148); null — заявка без документов. */
+    legalForm: text('legal_form').$type<OrgLegalForm>(),
+    inn: text('inn'),
+    okpo: text('okpo'),
+    address: text('address'),
+    head: text('head'),
+    /** Документы заявки: pending — переносятся в хранилище, ready — готовы, null — нет или удалены по сроку. */
+    docsState: text('docs_state').$type<'pending' | 'ready'>(),
+    docsPurgeAt: timestamp('docs_purge_at', { withTimezone: true }),
+    /** Когда заявитель подключил бота по ссылке из формы; null — «Telegram не подключён». */
+    tgLinkedAt: timestamp('tg_linked_at', { withTimezone: true }),
+    docsCount: integer('docs_count').notNull(),
   })
   .existing();
 
@@ -129,10 +144,16 @@ export type LeadSubmitOutcome = 'created' | 'repeat' | 'trap' | 'limited';
  * транзакции: сообщение не уходит без заявки, заявка не остаётся без сообщения (миграции 0089, 0092 и
  * задача Т6). `queued` — сколько сообщений поставлено в очередь.
  */
-export async function submitLead(
+export async function submitLead<R = undefined>(
   db: Db,
   s: LeadSubmission,
-): Promise<{ outcome: LeadSubmitOutcome; leadId: string | null; queued: number }> {
+  /**
+   * Что сделать в той же транзакции после записи заявки (доработки 14.11.2026, блок 1): перенести
+   * документы черновика в заявку и выдать ссылку на бота. Только `tx`, без внешних вызовов (п. О-46).
+   * Ошибка откатывает и саму заявку.
+   */
+  within?: (tx: Tx, r: { outcome: LeadSubmitOutcome; leadId: string | null }) => Promise<R>,
+): Promise<{ outcome: LeadSubmitOutcome; leadId: string | null; queued: number; extra: R }> {
   return db.transaction(async (tx) => {
     const now = s.now.toISOString();
     const rows = await tx.execute<{
@@ -169,7 +190,10 @@ export async function submitLead(
         queued = Number(sent[0]?.n ?? 0);
       }
     }
-    return { outcome: row.outcome, leadId: row.lead_id, queued };
+    const extra = (
+      within ? await within(tx, { outcome: row.outcome, leadId: row.lead_id }) : undefined
+    ) as R;
+    return { outcome: row.outcome, leadId: row.lead_id, queued, extra };
   });
 }
 
@@ -209,8 +233,8 @@ const ADMIN = textLiteral(PLATFORM_ADMIN_NAME);
 const UPDATED_BY = sql`case when ${BY_GUEST} then ${GUEST} else ${ADMIN} end`;
 
 /**
- * Столбцы вкладки «Заявки» на сервере (прототип admin/leads.js, renderLeads): дата, имя, фирма,
- * телефон, клиентов, Telegram, комментарий, статус, организация; ключи — как у столбцов экрана.
+ * Столбцы вкладки «Заявки» на сервере (прототип admin/leads.js, renderLeads): дата, имя, фирма, форма,
+ * документы, телефон, клиентов, Telegram, комментарий, статус, организация; ключи — как у столбцов экрана.
  * Телефон ищется без пробелов и «+» (`compact`), статус сортируется по шкале, «Создал» — посетитель
  * сайта (`leads.guest`), «Изменил» — администратор платформы или посетитель (повторная заявка).
  */
@@ -233,9 +257,34 @@ export function adminLeadListColumns(t: ListTexts): ListColumns {
     },
     name: { type: 'text', label: 'leads.col.name', value: v.name },
     firm: { type: 'text', label: 'leads.col.firm', value: v.firm },
+    // Доработки 14.11.2026, блок 1 (прототип v114 renderLeads): «Форма» и «Документы» — у заявок с
+    // документами; «Telegram» — подключил ли заявитель бота по ссылке из формы (а не ник из формы).
+    form: {
+      type: 'enum',
+      label: 'leads.col.form',
+      value: v.legalForm,
+      display: sql`case ${v.legalForm} ${sql.join(
+        ORG_LEGAL_FORMS.map(
+          (f) => sql`when ${textLiteral(f)} then ${dictLiteral(t(`land.f.form.${f}`))}`,
+        ),
+        sql` `,
+      )} end`,
+    },
+    docs: {
+      type: 'text',
+      label: 'leads.col.docs',
+      value: sql`case when ${v.legalForm} is null then null when ${v.docsCount} = 0
+        then ${dictLiteral(t('leads.docs.gone'))} else ${v.docsCount}::text end`,
+    },
     phone: { type: 'text', label: 'leads.col.phone', value: v.phone, compact: true },
     size: { type: 'enum', label: 'leads.col.size', value: v.size },
-    telegram: { type: 'text', label: 'leads.col.telegram', value: v.telegram, compact: true },
+    telegram: {
+      type: 'enum',
+      label: 'leads.col.telegram',
+      value: sql`case when ${v.tgLinkedAt} is null then ${textLiteral('off')} else ${textLiteral('on')} end`,
+      display: sql`case when ${v.tgLinkedAt} is null then ${dictLiteral(t('leads.tg.off'))}
+        else ${dictLiteral(t('leads.tg.on'))} end`,
+    },
     note: { type: 'text', label: 'leads.col.note', value: v.note },
     status: {
       type: 'enum',
@@ -277,6 +326,15 @@ const LEAD_FIELDS = {
   version: v.version,
   updatedAt: v.updatedAt,
   updatedBy: v.updatedBy,
+  legalForm: v.legalForm,
+  inn: v.inn,
+  okpo: v.okpo,
+  address: v.address,
+  head: v.head,
+  docsState: v.docsState,
+  docsPurgeAt: v.docsPurgeAt,
+  tgLinkedAt: v.tgLinkedAt,
+  docsCount: v.docsCount,
   updatedByGuest: BY_GUEST,
   statusAt: STATUS_AT,
   statusByGuest: STATUS_BY_GUEST,
@@ -433,20 +491,33 @@ export class LeadLinkError extends Error {
  */
 export async function connectLeadToOrganization(
   tx: Tx,
-  p: { id: string; orgId: string; orgName: string; now: Date },
+  p: {
+    id: string;
+    orgId: string;
+    orgName: string;
+    now: Date;
+    /** «Одобрить»: версия заявки, которую видел администратор; другая — `RecordChangedError`. */
+    version?: number;
+  },
 ): Promise<number> {
   const lead = await adminLeadById(tx, p.id);
   if (!lead) throw new LeadLinkError('not_found');
   if (lead.createdOrgId) throw new LeadLinkError('org_exists');
+  if (p.version !== undefined && lead.version !== p.version) {
+    throw new RecordChangedError('lead', p.id, lead.version);
+  }
   const version = await setLeadStatus(tx, {
     id: p.id,
-    version: null,
+    version: p.version ?? null,
     to: 'connected',
     before: null,
     orgId: p.orgId,
     text: p.orgName,
     now: p.now,
   });
+  if (version === null && p.version !== undefined) {
+    throw new RecordChangedError('lead', p.id, p.version + 1);
+  }
   if (version === null) throw new LeadLinkError('org_exists');
   return version;
 }

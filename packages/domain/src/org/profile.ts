@@ -17,6 +17,9 @@ export const ORG_PROFILE_MESSAGES = {
   name_required: 'Введите название',
   inn_invalid: 'ИНН — 14 цифр',
   inn_taken: 'Организация с таким ИНН уже есть',
+  // Доработки 14.11.2026, блок 1, пункт 4 (прототип v114 modules/org.js, lead-docs.js ldInnFormDlg).
+  okpo_invalid: 'Код ОКПО — 8 цифр',
+  form_required: 'Выберите форму',
   logo_too_large: 'Файл больше 2 МБ',
   logo_type: 'Логотип — картинка PNG или JPG',
 } as const;

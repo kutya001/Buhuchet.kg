@@ -38,9 +38,19 @@ export type LeadStatus = (typeof LEAD_STATUSES)[number];
 
 /**
  * Что записано в историю заявки: заявка с сайта, повтор с того же телефона, смена статуса, откат
- * статуса с причиной (в «Истории статусов» — с пометкой «Откат»), заметка, создана организация.
+ * статуса с причиной (в «Истории статусов» — с пометкой «Откат»), заметка, создана организация, файлы
+ * заявки удалены по сроку хранения.
  */
-export const LEAD_EVENT_KINDS = ['created', 'repeat', 'status', 'rollback', 'note', 'org'] as const;
+export const LEAD_EVENT_KINDS = [
+  'created',
+  'repeat',
+  'status',
+  'rollback',
+  'note',
+  'org',
+  // Файлы заявки удалены по сроку хранения (доработки 14.11.2026, блок 1, пункт 3; прототип v114 ldPurge).
+  'docs',
+] as const;
 export type LeadEventKind = (typeof LEAD_EVENT_KINDS)[number];
 
 /**

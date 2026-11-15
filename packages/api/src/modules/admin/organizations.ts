@@ -19,6 +19,7 @@ import {
   bishkekDate,
   isValidLogin,
   isValidOrgInn,
+  LEAD_APPROVE_MESSAGES,
   LEAD_MESSAGES,
   normalizeLogin,
   ORG_PROFILE_MESSAGES,
@@ -248,7 +249,10 @@ export const createOrganizationRoute = createRoute({
     400: { description: 'Неверные данные, ИНН или логин заняты', content: error },
     ...denied,
     404: { description: 'Заявки, по которой создаётся организация, нет', content: error },
-    409: { description: 'По заявке уже создана организация', content: error },
+    409: {
+      description: 'По заявке уже создана организация или у заявки документы (её одобряют)',
+      content: error,
+    },
   },
 });
 
@@ -309,6 +313,11 @@ export function createOrganizationHandler(
       const lead = await withUserContext(deps.db, adminId, (tx) => adminLeadById(tx, leadId));
       if (!lead) leadFail('not_found');
       if (lead.createdOrgId) leadFail('org_exists');
+      // У заявки с документами организацию создаёт «Одобрить» (прототип v114 leadActions): данные и
+      // файлы из документов и владелец с Telegram заявителя (доработки 14.11.2026, блок 1).
+      if (lead.legalForm) {
+        apiFail(409, 'lead_has_docs', LEAD_APPROVE_MESSAGES.lead_has_docs);
+      }
     }
     const taken = await withUserContext(deps.db, adminId, (tx) => adminOrgSlugs(tx));
     const passwordHash = await hashPassword(body.temporaryPassword);

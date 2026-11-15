@@ -109,6 +109,7 @@ export function orgCardHandler(deps: ApiDeps): RouteHandler<typeof orgCardRoute,
       profile: card.profile,
       owner: card.owner,
       lead: card.lead ? { ...card.lead, at: iso(card.lead.at) } : null,
+      leadFiles: card.leadFiles,
       summary: card.summary,
       staff: {
         count: card.staff.count,

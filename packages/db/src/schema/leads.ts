@@ -15,6 +15,7 @@ import {
   boolean,
   check,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -169,6 +170,51 @@ export const platformLeadDocs = pgTable(
     check(
       'platform_lead_docs_key_check',
       sql`${t.storageKey} = ('leads/' || ${t.leadId}::text || '/' || ${t.id}::text)`,
+    ),
+  ],
+).enableRLS();
+
+/**
+ * Документы формы заявки до её отправки — черновик (доработки 14.11.2026, блок 1, пункт 1; прототип
+ * v114 ldParse): посетитель выбрал PDF, файл лёг в хранилище под ключом `leads/upload/<номер>` по
+ * подписанной ссылке и сразу разобран — найденное подставляется в форму. Отправка заявки переносит
+ * документы черновика в `platform_lead_docs`; черновик, не ставший заявкой, через сутки удаляется вместе
+ * с файлами. Номер черновика знает только браузер посетителя. Роль приложения таблицу не видит и не
+ * меняет (RLS без политик): только функции базы методов лендинга без входа `app.lead_upload_*`.
+ */
+export const platformLeadUploads = pgTable(
+  'platform_lead_uploads',
+  {
+    /** Номер задаёт API до вставки: из него строится ключ хранилища. */
+    id: uuid('id').primaryKey(),
+    draftId: uuid('draft_id').notNull(),
+    kind: text('kind', { enum: LEAD_DOC_KINDS }).notNull(),
+    name: text('name').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    /** `pending` — загрузка начата; `ready` — PDF проверен по первым байтам и разобран. */
+    state: text('state').notNull().default('pending'),
+    /** Что нашёл разбор (документ без текста): пусто — не распознан или скан. */
+    doc: jsonb('doc'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    // Один файл каждого вида в черновике: новый того же вида заменяет прежний.
+    unique('platform_lead_uploads_kind_key').on(t.draftId, t.kind),
+    index('platform_lead_uploads_created_idx').on(t.createdAt),
+    check('platform_lead_uploads_kind_check', sql`${t.kind} in (${inList(LEAD_DOC_KINDS)})`),
+    check(
+      'platform_lead_uploads_name_check',
+      sql`char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))}`,
+    ),
+    check(
+      'platform_lead_uploads_size_check',
+      sql`${t.sizeBytes} between 1 and ${sql.raw(String(FILE_MAX_BYTES))}`,
+    ),
+    check('platform_lead_uploads_state_check', sql`${t.state} in ('pending', 'ready')`),
+    // Разбор хранится только у проверенного файла и не больше 64 КБ.
+    check(
+      'platform_lead_uploads_doc_check',
+      sql`${t.doc} is null or (${t.state} = 'ready' and pg_column_size(${t.doc}) <= 65536)`,
     ),
   ],
 ).enableRLS();

@@ -1,5 +1,11 @@
 import {
+  LEAD_ADDRESS_MAX,
   LEAD_ADMIN_NOTE_MAX,
+  LEAD_APPROVE_REFUSALS,
+  LEAD_DOC_KINDS,
+  LEAD_DOC_MAX_BYTES,
+  LEAD_DOCS_FOUND,
+  LEAD_HEAD_MAX,
   LEAD_EVENT_KINDS,
   LEAD_FIRM_MAX,
   LEAD_NAME_MAX,
@@ -8,6 +14,7 @@ import {
   LEAD_SIZE_MAX,
   LEAD_STATUSES,
   LEAD_TELEGRAM_MAX,
+  ORG_LEGAL_FORMS,
   type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
@@ -31,6 +38,17 @@ const oneLine = (s: string) => !CONTROL.test(s);
  * сколько цифр после кода, сверяет сервер по справочнику «Коды стран телефонов».
  */
 export const LeadForm = z.object({
+  /**
+   * Форма организации и данные из документов (доработки 14.11.2026, блок 1; прототип v114 ldCheck):
+   * ИНН — 14 цифр, ОКПО — 8 цифр или пусто (пробелы убирает форма до отправки), адрес и руководитель —
+   * как проверил и поправил заявитель. Документы формы — в черновике `draft` (загружены и проверены).
+   */
+  form: z.enum(ORG_LEGAL_FORMS, message('land.e.form')),
+  inn: z.string().regex(/^[0-9]{14}$/, message('land.e.inn')),
+  okpo: z.string().regex(/^([0-9]{8})?$/, message('land.e.okpo')),
+  address: z.string().trim().max(LEAD_ADDRESS_MAX).refine(oneLine),
+  head: z.string().trim().max(LEAD_HEAD_MAX).refine(oneLine),
+  draft: Uuid,
   name: z
     .string()
     .trim()
@@ -66,11 +84,70 @@ export const LeadForm = z.object({
 });
 export type LeadForm = z.infer<typeof LeadForm>;
 
-/** Ответ на заявку: всегда «Спасибо!», и для повторной с того же телефона, и для ловушки. */
-export const LeadSubmitted = z.object({ ok: z.literal(true) });
+/**
+ * Ответ на заявку: одинаковый для новой, повторной с того же телефона и для ловушки. `tg` — ссылка
+ * «Подключить Telegram» на сутки (прототип v114 ldOkHtml, поток Т): ловушке — такая же, но ненастоящая;
+ * `linked` — заявитель уже подключил бота (повтор из того же браузера); null — бота нет.
+ */
+export const LeadSubmitted = z.object({
+  ok: z.literal(true),
+  tg: z
+    .union([
+      z.object({ url: z.string(), expiresAt: z.iso.datetime() }),
+      z.object({ linked: z.literal(true) }),
+    ])
+    .nullable(),
+});
 export type LeadSubmitted = z.infer<typeof LeadSubmitted>;
 
 export const LeadStatusCode = z.enum(LEAD_STATUSES);
+
+export const LeadDocKindCode = z.enum(LEAD_DOC_KINDS);
+
+/**
+ * Документ формы с лендинга (прототип v114 ldDocsBind): вид, имя и размер — PDF до 20 МБ. `draft` —
+ * черновик документов этой формы (null — первый документ): номер знает только браузер заявителя.
+ */
+export const LeadUploadStart = z.strictObject({
+  draft: Uuid.nullable(),
+  kind: LeadDocKindCode,
+  name: z.string().trim().min(1).max(255).refine(oneLine),
+  size: z.number().int().min(1).max(LEAD_DOC_MAX_BYTES, message('land.e.big')),
+});
+export type LeadUploadStart = z.infer<typeof LeadUploadStart>;
+
+/** Куда положить документ (подписанная ссылка на 2 минуты) и черновик, к которому он относится. */
+export const LeadUploadTicket = z.object({
+  id: Uuid,
+  draft: Uuid,
+  upload: z.object({
+    url: z.string(),
+    method: z.literal('PUT'),
+    headers: z.record(z.string(), z.string()),
+    expiresAt: z.iso.datetime(),
+  }),
+});
+export type LeadUploadTicket = z.infer<typeof LeadUploadTicket>;
+
+export const LeadUploadParams = z.object({ id: Uuid });
+export const LeadUploadRead = z.strictObject({ draft: Uuid });
+
+/**
+ * Документы формы прочитаны (прототип v114 ldParse): что нашёл разбор по всем документам черновика —
+ * данные для полей, ничего (скан без текста) или документы разных организаций.
+ */
+export const LeadDocsRead = z.object({
+  found: z.enum(LEAD_DOCS_FOUND),
+  values: z.object({
+    firm: z.string(),
+    inn: z.string(),
+    okpo: z.string(),
+    head: z.string(),
+    address: z.string(),
+  }),
+  docs: z.array(z.object({ id: Uuid, kind: LeadDocKindCode, name: z.string() })),
+});
+export type LeadDocsRead = z.infer<typeof LeadDocsRead>;
 
 /**
  * Заявка в Админке → «Организации» → «Заявки» (прототип admin/leads.js, renderLeads): дата, имя,
@@ -94,6 +171,18 @@ export const AdminLead = z.object({
   fromStand: z.boolean(),
   /** Когда статус ставили в последний раз и кто — под компактной шкалой списка. */
   lastStatus: z.object({ at: z.iso.datetime(), by: z.string() }).nullable(),
+  /**
+   * Заявка с документами (доработки 14.11.2026, блок 1): форма и данные из документов; null — заявка
+   * без документов (до 15.11.2026). `docs` — сколько документов (0 — удалены по сроку).
+   */
+  legalForm: z.enum(ORG_LEGAL_FORMS).nullable(),
+  inn: z.string().nullable(),
+  okpo: z.string().nullable(),
+  address: z.string().nullable(),
+  head: z.string().nullable(),
+  docs: z.number().int().nonnegative().nullable(),
+  /** Заявитель подключил бота по ссылке из формы («Telegram подключён»). */
+  tgLinked: z.boolean(),
   audit: RecordAudit,
   version: RecordVersion,
 });
@@ -117,11 +206,41 @@ export const AdminLeadEvent = z.object({
 });
 export type AdminLeadEvent = z.infer<typeof AdminLeadEvent>;
 
+/** Документ заявки в окне заявки (прототип v114 ldCardBox): вид, имя, размер. */
+export const AdminLeadDoc = z.object({
+  id: Uuid,
+  kind: LeadDocKindCode,
+  name: z.string(),
+  size: z.number().int().nonnegative(),
+  /** Файл ещё переносится в хранилище (не открыть). */
+  pending: z.boolean(),
+});
+export type AdminLeadDoc = z.infer<typeof AdminLeadDoc>;
+
+/**
+ * «Одобрить» в окне заявки (прототип v114 ldApproveWhy, ldLoginOf): почему неактивна (код и текст) и
+ * логин владельца, который подставит окно.
+ */
+export const LeadApproveInfo = z.object({
+  refusal: z.enum(LEAD_APPROVE_REFUSALS).nullable(),
+  message: z.string().nullable(),
+  login: z.string(),
+});
+export type LeadApproveInfo = z.infer<typeof LeadApproveInfo>;
+
 /** Окно заявки (прототип openLead): заявка, «Заметка администратора», «История статусов», «История». */
 export const AdminLeadCard = AdminLead.extend({
   adminNote: z.string(),
   statusHistory: z.array(StatusHistoryEntry),
   history: z.array(AdminLeadEvent),
+  /** Документы заявки и что с ними (доработки 14.11.2026, блок 1); у заявки без документов — пусто. */
+  docFiles: z.array(AdminLeadDoc),
+  /** Когда удалятся файлы, если заявку не одобрить; null — не удалятся (одобрена, удалены, нет). */
+  docsPurgeAt: z.iso.datetime().nullable(),
+  /** Когда файлы удалены по сроку; null — не удалялись. */
+  docsGoneAt: z.iso.datetime().nullable(),
+  /** «Одобрить» — только у заявки с документами без организации; иначе null. */
+  approve: LeadApproveInfo.nullable(),
 });
 export type AdminLeadCard = z.infer<typeof AdminLeadCard>;
 
@@ -152,6 +271,24 @@ export const LeadStatusRequest = z.strictObject({
   reason: LeadReason.optional(),
 });
 export type LeadStatusRequest = z.input<typeof LeadStatusRequest>;
+
+/**
+ * «Одобрить» (прототип v114 ldApproveDlg): логин владельца (латиница, цифры, точка, дефис; от 3) и
+ * версия заявки, которую видел администратор. Остальное — из заявки.
+ */
+export const LeadApproveRequest = z.strictObject({
+  login: z.string().trim().toLowerCase().min(1).max(64),
+  version: RecordVersion,
+});
+export type LeadApproveRequest = z.input<typeof LeadApproveRequest>;
+
+/** Ответ «Одобрить»: организация, владелец и ушла ли ему ссылка для пароля (поток Т). */
+export const LeadApproved = z.object({
+  orgId: Uuid,
+  ownerUserId: Uuid,
+  setup: z.enum(['sent', 'no_telegram', 'failed']),
+});
+export type LeadApproved = z.infer<typeof LeadApproved>;
 
 /** «Сохранить заметку»: пустая — заметки нет. */
 export const LeadNoteRequest = z.strictObject({

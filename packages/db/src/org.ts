@@ -5,6 +5,7 @@ import {
   type Feature,
   type HistoryAction,
   type HistoryChange,
+  type OrgLegalForm,
   type OrgPolicy,
   type PageSection,
   type WeekDay,
@@ -33,6 +34,9 @@ export interface OrgProfileRecord {
   id: string;
   name: string;
   inn: string | null;
+  /** «Форма» (ОсОО или ИП) и «ОКПО» — доработки 14.11.2026, блок 1, пункт 4; форму и ИНН меняет только администратор платформы. */
+  legalForm: OrgLegalForm | null;
+  okpo: string | null;
   address: string | null;
   phone: string | null;
   head: string | null;
@@ -63,6 +67,8 @@ export async function getOrgProfile(tx: Tx, orgId: string): Promise<OrgProfileRe
       id: organizations.id,
       name: organizations.name,
       inn: organizations.inn,
+      legalForm: organizations.legalForm,
+      okpo: organizations.okpo,
       address: organizations.address,
       phone: organizations.phone,
       head: organizations.head,
@@ -85,6 +91,8 @@ export async function getOrgProfile(tx: Tx, orgId: string): Promise<OrgProfileRe
     id: r.id,
     name: r.name,
     inn: r.inn,
+    legalForm: r.legalForm,
+    okpo: r.okpo,
     address: r.address,
     phone: r.phone,
     head: r.head,

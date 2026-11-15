@@ -4,6 +4,7 @@ import {
   MENU_MODULE_IDS,
   ORG_ADDRESS_MAX_LENGTH,
   ORG_HEAD_MAX_LENGTH,
+  ORG_LEGAL_FORMS,
   ORG_NAME_MAX_LENGTH,
   ORG_TIMEZONE_IDS,
   PAGE_SECTIONS,
@@ -44,8 +45,12 @@ export type OrgLogoLink = z.infer<typeof OrgLogoLink>;
 export const OrgProfile = z.object({
   id: Uuid,
   name: z.string(),
-  /** 14 цифр; у организаций, созданных без ИНН, — null. */
+  /** 14 цифр; у организаций, созданных без ИНН, — null. Меняет только администратор платформы. */
   inn: z.string().nullable(),
+  /** «Форма» — ОсОО или ИП (доработки 14.11.2026, блок 1, пункт 4): меняет только администратор платформы. */
+  legalForm: z.enum(ORG_LEGAL_FORMS).nullable(),
+  /** «ОКПО» — 8 цифр. */
+  okpo: z.string().nullable(),
   address: z.string().nullable(),
   phone: z.string().nullable(),
   head: z.string().nullable(),
@@ -60,12 +65,13 @@ export type OrgProfile = z.infer<typeof OrgProfile>;
 
 /**
  * Сохранить «Основное». Не переданное поле не меняется; пустая строка в необязательном поле очищает
- * его. Название, ИНН, телефон и адрес страницы сервер проверяет с текстами прототипа.
+ * его. Название, ОКПО, телефон и адрес страницы сервер проверяет с текстами прототипа. ИНН и форму
+ * владелец не меняет (доработки 14.11.2026, блок 1, пункт 4): их в запросе нет — «ИНН и форма» Админки.
  */
-export const UpdateOrgProfileRequest = z.object({
+export const UpdateOrgProfileRequest = z.strictObject({
   version: RecordVersion,
   name: z.string().trim().max(ORG_NAME_MAX_LENGTH).optional(),
-  inn: z.string().trim().max(20).optional(),
+  okpo: z.string().trim().max(20).nullable().optional(),
   address: z.string().trim().max(ORG_ADDRESS_MAX_LENGTH).nullable().optional(),
   phone: Phone.nullable().optional(),
   head: z.string().trim().max(ORG_HEAD_MAX_LENGTH).nullable().optional(),
@@ -87,7 +93,10 @@ export const OrgMainForm = z.object({
     .trim()
     .min(1, message('err.name_required'))
     .max(ORG_NAME_MAX_LENGTH, message('form.too_long')),
-  inn: z.string().trim().refine(isValidOrgInn, message('err.inn_invalid')),
+  okpo: z
+    .string()
+    .trim()
+    .regex(/^([0-9]{8})?$/, message('err.okpo_invalid')),
   address: z.string().trim().max(ORG_ADDRESS_MAX_LENGTH, message('form.too_long')),
   head: z.string().trim().max(ORG_HEAD_MAX_LENGTH, message('form.too_long')),
   slug: z.string(),
@@ -224,3 +233,21 @@ export const OrgPolicyHistory = z.object({
   ),
 });
 export type OrgPolicyHistory = z.infer<typeof OrgPolicyHistory>;
+
+/**
+ * «ИНН и форма» организации в Админке (прототип v114 ldInnFormDlg; доработки 14.11.2026, блок 1,
+ * пункт 4): меняет только администратор платформы, с версией записи.
+ */
+export const OrgInnFormRequest = z.strictObject({
+  inn: z.string().trim().refine(isValidOrgInn, message('err.inn_invalid')),
+  legalForm: z.enum(ORG_LEGAL_FORMS, message('err.org_form_required')),
+  version: RecordVersion,
+});
+export type OrgInnFormRequest = z.infer<typeof OrgInnFormRequest>;
+
+/** «ИНН и форма» сохранены: новая версия организации; `changed` false — «Изменений нет». */
+export const OrgInnFormSaved = z.object({
+  changed: z.boolean(),
+  version: z.number().int().nonnegative(),
+});
+export type OrgInnFormSaved = z.infer<typeof OrgInnFormSaved>;

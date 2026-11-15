@@ -8,6 +8,8 @@ import {
   tariffAt,
   type Feature,
   type IsoDate,
+  type LeadDocKind,
+  type OrgLegalForm,
   type Translate,
   type Tyiyn,
   type YearMonth,
@@ -19,6 +21,7 @@ import { adminGetOrganization, type AdminOrganizationRecord } from './admin-orgs
 import { ADMIN_CARD_ROWS, adminSessions, capped, countAll, type CardList } from './admin-user-card';
 import { bankNamesOf, feeLedgers, feeSubjectsOf } from './fees';
 import { writeHistory } from './history';
+import { adminLeadDocs } from './lead-docs';
 import { adminLeadOfOrganization } from './leads';
 import { getOrgPolicy, getOrgProfile } from './org';
 import {
@@ -51,6 +54,9 @@ export interface AdminOrgCardRecord {
   org: AdminOrganizationRecord;
   /** «Основное»: реквизиты из «Моя организация». */
   profile: {
+    /** Форма (ОсОО, ИП) и ОКПО — доработки 14.11.2026, блок 1; форму меняет только администратор. */
+    legalForm: OrgLegalForm | null;
+    okpo: string | null;
     address: string | null;
     phone: string | null;
     head: string | null;
@@ -61,6 +67,11 @@ export interface AdminOrgCardRecord {
   owner: { userId: string; login: string; fullName: string } | null;
   /** Заявка с сайта, по которой создана организация. */
   lead: { id: string; title: string; at: Date } | null;
+  /**
+   * Документы заявки, по которой организацию одобрили (прототип v114 ocFiles, `leadFiles`): что было
+   * приложено; сами файлы — в «Файловом менеджере» с источником «Заявка на подключение».
+   */
+  leadFiles: { kind: LeadDocKind; name: string; bytes: number }[];
   summary: {
     staff: number;
     staffBlocked: number;
@@ -208,6 +219,8 @@ const HISTORY_VALUE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
   organization: new Set([
     'name',
     'inn',
+    'legalForm',
+    'okpo',
     'address',
     'phone',
     'head',
@@ -305,6 +318,13 @@ export async function adminOrgCard(
     .orderBy(asc(employees.createdAt), asc(employees.id))
     .limit(1);
   const lead = await adminLeadOfOrganization(tx, input.orgId);
+  const leadFiles = lead
+    ? (await adminLeadDocs(tx, lead.id)).map((d) => ({
+        kind: d.kind,
+        name: d.name,
+        bytes: d.sizeBytes,
+      }))
+    : [];
 
   // «Сводка».
   const [staffN = { active: 0, blocked: 0 }] = await tx
@@ -600,6 +620,8 @@ export async function adminOrgCard(
   return {
     org,
     profile: {
+      legalForm: profile?.legalForm ?? null,
+      okpo: profile?.okpo ?? null,
       address: profile?.address ?? null,
       phone: profile?.phone ? formatPhone(profile.phone, codes) : null,
       head: profile?.head ?? null,
@@ -608,6 +630,7 @@ export async function adminOrgCard(
     },
     owner: owner ?? null,
     lead,
+    leadFiles,
     summary: {
       staff: staffN.active,
       staffBlocked: staffN.blocked,
