@@ -61,7 +61,8 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
     // Форма у организации, созданной без заявки, не задана — «Выберите форму».
     let dialog = await openInnForm();
     const formField = dialog.getByLabel('Форма');
-    const innField = dialog.getByLabel('ИНН', { exact: true });
+    // Подпись обязательного поля — «ИНН *» (звёздочка — текстом подписи), поэтому без `exact`.
+    const innField = dialog.getByLabel('ИНН');
     await expect(innField).toHaveValue(inn);
     await expect(formField).toHaveValue('');
     const save = dialog.getByRole('button', { name: 'Сохранить' });
@@ -85,7 +86,7 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
 
     // Повторно, ничего не меняя, — «Изменений нет».
     dialog = await openInnForm();
-    await expect(dialog.getByLabel('ИНН', { exact: true })).toHaveValue(next);
+    await expect(dialog.getByLabel('ИНН')).toHaveValue(next);
     await expect(dialog.getByLabel('Форма')).toHaveValue('ip');
     await dialog.getByRole('button', { name: 'Сохранить' }).click();
     await expect(dialog).toBeHidden();
