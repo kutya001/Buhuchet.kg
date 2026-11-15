@@ -425,6 +425,9 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]});
     const lt=(db.ref.localization||[]).find(x=>x.key==='land.feat.8.d'),rt=(r.localization||[]).find(x=>x.key==='land.feat.8.d');if(lt&&rt&&lt.ru==='По ссылке и коду клиент видит свои отчёты, сроки и что оплатить — только просмотр')lt.ru=rt.ru;
     const u=db.ref.kbUi,ru=r.kbUi;if(u&&u.page&&u.page.secs&&ru&&ru.page&&/кнопкой «Скопировать»\.$/.test(u.page.secs['Как оплатить']||''))u.page.secs['Как оплатить']=ru.page.secs['Как оплатить']}
+  // Поток И, доработки 14.11.2026, этап 3 (v117): ответ «Что видит мой клиент?» и сроки документов заявки в согласии на лендинге — если их не меняли
+  if(!db.meta.lpI17){db.meta.lpI17=1;const l=db.ref.localization,rl=r.localization||[],old={'land.faq.4.a':'Только то, что вы откроете: по ссылке и 6-значному коду он видит свои отчёты, сроки и что оплатить. Изменить ничего не может.','land.consent.docs':'Документы из заявки хранятся только для создания организации и видны только администратору платформы.'};
+    if(Array.isArray(l))l.forEach(x=>{const n=old[x.key]!=null&&x.ru===old[x.key]&&rl.find(y=>y.key===x.key);if(n){x.ru=n.ru;x._ua=n._ua;x._ub=n._ub}})}
   // Блок «Telegram-уведомления» (v111, пакет 14.11.2026, блок 3): путь к общему чату в шаблоне «ссылка устарела» — если администратор не менял текст
   if(!db.meta.tgN1){db.meta.tgN1=1;const a=db.ref.messageTemplates,rm=r.messageTemplates||{};if(a&&a.tgGrpLinkBad==='Ссылка для подключения группы устарела или уже использована. Владелец организации может создать новую: «Моя организация» → «Настройки» → «Общий чат фирмы в Telegram».'&&rm.tgGrpLinkBad)a.tgGrpLinkBad=rm.tgGrpLinkBad;
     const n=db.ref.templateNotes,rn=r.templateNotes||{};if(n&&rn.tgActOff&&n.tgActOff&&!n.tgActOff.includes('Telegram-уведомления'))n.tgActOff=rn.tgActOff}

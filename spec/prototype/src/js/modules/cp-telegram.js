@@ -200,10 +200,12 @@ tgAct('cp-receipt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill(
 // «Принять» у чека: сразу «Принять деньги» с суммой из оплаченного сообщения — налоги месяца разнесены по отчётам от старых к новым, излишек — аванс;
 // за обслуживание — «Принять оплату за обслуживание». Нет права или деньги месяца уже получены — файл просто принят
 // Чек со страницы («Я оплатил», cp-paid.js) — так же; у чека налогов без месяца — все месяцы с остатком
-function pgRcptMoney(c,p,src){const from=src==='page'?'со страницы':'из Telegram';
-  if(p.kind==='fee'){if(feeAccOk(c))feePayDlg(c,null,{sum:p.sum,note:`По чеку ${from}${p.m?' за '+ymLabel(p.m).toLowerCase():''}`});return}
+function pgRcptMoney(c,p,src,file){const from=src==='page'?'со страницы':'из Telegram';
+  if(p.kind==='fee'){if(feeAccOk(c))feePayDlg(c,null,{sum:p.sum,note:`По чеку ${from}${p.m?' за '+ymLabel(p.m).toLowerCase():''}`,file});return}
   if(!rmRecvOn(c))return;const k=p.m||'all',pl=rmRecvPlan(rmRecvMonths(c,k));if(!pl.list.length)return toast(p.m?`Деньги на налоги за ${rmMonthTxt(p.m)} уже получены от контрагента`:'Деньги на налоги уже получены от контрагента','info');
-  inDlg(c,null,{list:pl.list,total:p.sum,note:`${p.m?`Деньги за ${rmMonthTxt(p.m)}`:'Деньги на налоги'} — по чеку ${from}`})}
+  inDlg(c,null,{list:pl.list,total:p.sum,note:`${p.m?`Деньги за ${rmMonthTxt(p.m)}`:'Деньги на налоги'} — по чеку ${from}`,file})}
+// Принятый чек в поле «Файлы» окна денег (v119): строка с именем и «Убрать» — тогда чек не прикрепляется (в файлах контрагента он остаётся)
+function rcptFileRow(n,id){return n?`<div class="row" id="${id}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">${ic('clip','sm')}<b>${esc(n)}</b><span class="faint">— чек контрагента, прикрепится при сохранении</span><span class="grow"></span><button class="btn sm ghost" type="button" id="${id}-x" title="Не прикреплять чек">${ic('x','sm')}Убрать</button></div>`:''}
 tgAct('cp-ask',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};pgTgAskOn&&pgTgAskOn(l);return {msg:{t:tplFill('tgCpAskHow',{}),at:bishkekNow().hm}}}});
 // Вопрос клиента уходит ответственному бухгалтеру с названием контрагента; ответ бухгалтера возвращается клиенту
 function pgTgAsk(c,x,q){const to=pgTgStaff(c);pgTgClientLog(c,`Вопрос бухгалтеру из Telegram («${x.name}»): ${q.slice(0,200)}`);if(to)tgSvc(to,PG_TG_KIND);pgTgToClient(c,x);
