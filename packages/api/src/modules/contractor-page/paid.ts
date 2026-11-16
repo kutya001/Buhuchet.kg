@@ -67,6 +67,7 @@ import { SentFilesRefused, sentFileKey, sentLimitCheck } from '../files/sent-add
 import { botText } from '../telegram/bot';
 import { sendPageCode } from '../telegram/client/code';
 import { flushEvents } from '../telegram/outbox';
+import { bellContractor } from '../telegram/bell';
 import { queueStaffNotice, seesFee } from '../telegram/client/pay';
 import { clientIpHash } from './public';
 import { contractorPageBody } from './view';
@@ -451,6 +452,19 @@ async function finishPaid(
         },
       ],
     });
+    await bellContractor(
+      deps,
+      tx,
+      page.contractorId,
+      {
+        event: 'cp_paid_page',
+        fileId: row.id,
+        purpose: body.purpose,
+        month: body.month,
+        amount: body.amount,
+      },
+      t,
+    );
     return queueStaffNotice(
       tx,
       deps,

@@ -17,6 +17,7 @@ import { syncServiceStatusesJob } from '../modules/contractors/job';
 import { cleanupVideoUploadsJob } from '../modules/kb/video-cleanup';
 import { duesRecalcJob } from '../modules/platform-dicts/admin-dues';
 import { createDueReportsJob } from '../modules/reports/job';
+import { bellCleanupJob, bellDayJob } from '../modules/telegram/bell-day';
 import { contractorDebtJob } from '../modules/telegram/client/debt';
 import { contractorPayJob } from '../modules/telegram/client/pay';
 
@@ -107,6 +108,8 @@ export const jobs: readonly Job[] = [
   cleanupContractorPageGrantsJob,
   contractorPayJob,
   contractorDebtJob,
+  bellDayJob,
+  bellCleanupJob,
   createDueReportsJob,
   cleanupPendingFilesJob,
   purgeSentFilesJob,

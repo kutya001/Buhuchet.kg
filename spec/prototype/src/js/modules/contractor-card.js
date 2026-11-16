@@ -166,7 +166,7 @@ function feePayDlg(c,edit,pre){if(!c)return;const own={};if(edit)fpAlloc(edit).f
     <div class="box flat"><h3>За какие месяцы<span class="grow"></span>${ms.length?`<button class="btn sm" id="fp-auto" type="button">${ic('list','sm')}От старых к новым</button>`:''}</h3>
       ${ms.length?`<div class="tbl-wrap"><table class="mini"><thead><tr><th>Месяц</th><th class="num">Начислено</th><th class="num">Уже оплачено</th><th class="num" style="width:140px">Распределить</th><th>Станет</th></tr></thead><tbody>${ms.map(m=>`<tr><td>${esc(ymLabel(m))}${feeDue(c,m)<TODAY&&left(m)>0?' <span class="tag red">просрочено</span>':''}</td><td class="num">${fmtM(feeCharge(c,m))}</td><td class="num">${fmtM(got(m))}</td><td class="num"><input class="inp tnum" data-fpm="${m}" value="${st.rows[m]!=null?st.rows[m]:''}" inputmode="decimal" style="max-width:120px;margin-left:auto;text-align:right" aria-label="Распределить на ${esc(ymLabel(m))}"></td><td data-fps="${m}"></td></tr>`).join('')}</tbody></table></div>`:'<span class="faint">Неоплаченных начислений нет — вся сумма станет авансом и сама засчитается в следующие начисления.</span>'}
       <div id="fp-line" class="row"></div></div>
-    <div class="form">${fld('Файл: скрин перевода, квитанция',`${rcptFileRow(st.rcpt,'fp-rcpt')}<input class="inp" type="file" id="fp-f" multiple>`,{full:true,id:'fp-f',hint:edit&&(edit.files||[]).length?`Уже приложено: ${edit.files.length}`:''})}${fld('Примечание',inp('fp-note',st.note),{full:true,id:'fp-note'})}
+    <div class="form">${fld('Файл: скрин перевода, квитанция',`${rcptFileRow(st.rcpt,'fp-rcpt',!st.rcpt&&!edit&&pre&&pre.sent?pre.file:null)}<input class="inp" type="file" id="fp-f" multiple>`,{full:true,id:'fp-f',hint:edit&&(edit.files||[]).length?`Уже приложено: ${edit.files.length}`:''})}${fld('Примечание',inp('fp-note',st.note),{full:true,id:'fp-note'})}
       ${edit?fld('Причина изменения',`<textarea class="inp" id="fp-why" style="min-height:56px" placeholder="Например: ошибка в сумме">${esc(st.why)}</textarea>`,{full:true,id:'fp-why',hint:'Обязательна, если меняются сумма, дата, месяцы или куда поступили деньги'}):''}</div>`,
     foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="fp-ok">${ic('wallet','sm')}${edit?'Сохранить':'Принять оплату'}</button>`,
     mount(el){const line=$('#fp-line',el);
@@ -178,11 +178,13 @@ function feePayDlg(c,edit,pre){if(!c)return;const own={};if(edit)fpAlloc(edit).f
       $('#fp-date',el).oninput=e=>{st.date=e.target.value};$('#fp-to',el).onchange=e=>{st.to=e.target.value};$('#fp-note',el).oninput=e=>{st.note=e.target.value};if($('#fp-why',el))$('#fp-why',el).oninput=e=>{st.why=e.target.value};
       $$('[data-fpm]',el).forEach(i=>i.oninput=()=>{st.manual=true;const n=parseNum(i.value);if(isNaN(n))delete st.rows[i.dataset.fpm];else st.rows[i.dataset.fpm]=n;calc()});
       if($('#fp-auto',el))$('#fp-auto',el).onclick=()=>{st.manual=false;auto();mm.draw()};
-      if($('#fp-rcpt-x',el))$('#fp-rcpt-x',el).onclick=()=>{st.rcpt=null;mm.draw()};
+      if($('#fp-rcpt-x',el))$('#fp-rcpt-x',el).onclick=()=>{st.rcpt=null;mm.draw()};if($('#fp-rcpt-back',el))$('#fp-rcpt-back',el).onclick=()=>{st.rcpt=pre.file;mm.draw()};
       $('#fp-ok',el).onclick=()=>{const {t,d}=calc();const bad=Object.entries(st.rows).some(([m,v])=>v<0||v>left(m)+0.001);
         if(!setErr(el,'fp-sum',isNaN(t)||t<=0?'Введите сумму больше нуля':bad?'В строке месяца сумма больше долга за этот месяц':d>t+0.001?`Распределено больше суммы на ${som(d-t)}`:''))return;
         if(!setErr(el,'fp-date',!st.date?'Укажите дату':st.date>TODAY?'Дата не может быть позже сегодняшней':''))return;
-        const alloc=Object.entries(st.rows).filter(([,v])=>v>0).sort((a,b)=>a[0]<b[0]?-1:1).map(([m,a])=>({m,a})),files=[...(st.rcpt?[st.rcpt]:[]),...[...$('#fp-f',el).files].map(x=>x.name)];files.forEach(n=>FUP.add(n));
+        // Чек из «Отправленных файлов» принимается здесь, одним действием с оплатой (16.11, блок 1); его уже принял или отклонил другой — оплата без него
+        const rc=edit?{file:null,warn:''}:pgRcptSave(pre,!!st.rcpt,`оплате за обслуживание от ${fmtD(st.date)}`,'оплата');
+        const alloc=Object.entries(st.rows).filter(([,v])=>v>0).sort((a,b)=>a[0]<b[0]?-1:1).map(([m,a])=>({m,a})),files=[...(rc.file?[rc.file]:[]),...[...$('#fp-f',el).files].map(x=>x.name)];files.forEach(n=>FUP.add(n));
         const txt=al=>(al.length?al.map(x=>`${ymLabel(x.m)} — ${fmtM(x.a,false)}`).join(', '):'')+(t-al.reduce((a,x)=>a+x.a,0)>0.001?`${al.length?', ':''}аванс — ${fmtM(t-al.reduce((a,x)=>a+x.a,0),false)}`:'');
         if(edit){const al0=fpAlloc(edit),ch=[];if(Math.abs(t-edit.amount)>0.001)ch.push(`сумма ${fmtM(edit.amount)} → ${fmtM(t)} сом`);if(st.date!==edit.date)ch.push(`дата ${fmtD(edit.date)} → ${fmtD(st.date)}`);
           const t0=txt(al0).replace(/аванс — [\d\s,]+$/,''),t1=txt(alloc).replace(/аванс — [\d\s,]+$/,'');if(t0!==t1)ch.push(`месяцы «${t0||'аванс'}» → «${t1||'аванс'}»`);if(st.to!==(edit.to||'org'))ch.push(`куда: ${fpToName(edit.to||'org')} → ${fpToName(st.to)}`);
@@ -192,7 +194,7 @@ function feePayDlg(c,edit,pre){if(!c)return;const own={};if(edit)fpAlloc(edit).f
           HIST.push({at:nowStamp(),who:S.me,ent:'fp',id:edit.id,cp:c.id,what:`Изменено: ${[...ch,nch?'примечание':'',files.length?'добавлены файлы: '+files.join(', '):''].filter(Boolean).join('; ')||'без изменений'}${ch.length?'. Причина: '+st.why.trim():''}`})}
         else{const f=born({id:fpId(),cp:c.id,amount:t,alloc,month:alloc.length?alloc[0].m:null,date:st.date,by:S.me,holder:'org',to:st.to,note:st.note,files});FEEPAYS.push(f);alloc.forEach(x=>{c.feePaid[x.m]=(c.feePaid[x.m]||0)+x.a});
           log('fp',f.id,`Оплата за обслуживание ${som(t)}: ${txt(alloc)}`,c.id)}
-        mm.close();refreshAll();toast(edit?'Оплата изменена':'Оплата за обслуживание принята','wallet')}}})});
+        mm.close();refreshAll();if(rc.warn)toast(rc.warn,'alert');else toast(edit?'Оплата изменена':'Оплата за обслуживание принята','wallet')}}})});
 }
 
 /* Внутренние отчёты: периодичность и срок по контрагенту */

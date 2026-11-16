@@ -438,7 +438,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v119')).toMatchObject({ release: '119' });
     expect(rows.find((r) => r.id === 'v120')).toMatchObject({ release: '120' });
     const source = refDB.news as { id: string; status: string }[];
-    // Черновики прототипа (сейчас «Версия 121: план») не наполняются.
+    // Черновики прототипа (сейчас «Версия 122: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
     expect(drafts.length).toBeGreaterThan(0);
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);

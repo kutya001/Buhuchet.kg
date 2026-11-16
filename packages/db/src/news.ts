@@ -116,6 +116,17 @@ const ADMIN_MD = sql<
   string | null
 >`(select ${newsAdminTexts.md} from ${newsAdminTexts} where ${newsAdminTexts.newsId} = ${news.id})`;
 
+/**
+ * Для колокольчика (доработки 16.11.2026, блок 3; поток Т, `telegram-bell.ts`): новость видна вошедшему
+ * сейчас, момент её появления и «прочитана» — те же условия, что у ленты «Новостей», с модулями
+ * вошедшего (`mine`, как у ленты; null — администратор платформы).
+ */
+export const NEWS_BELL = {
+  live: (mine: NewsModulesOfMe) => sql`(${LIVE} and ${FOR_ME} and ${FOR_MODULES(mine)})`,
+  at: SHOW_AT,
+  read: READ,
+} as const;
+
 const fields = {
   id: news.id,
   title: news.title,

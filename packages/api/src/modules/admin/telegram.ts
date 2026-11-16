@@ -12,7 +12,7 @@ import {
   withUserContext,
   type AdminTelegramLogRecord,
 } from '@buhuchet/db';
-import { bishkekDate, webhookState } from '@buhuchet/domain';
+import { bellText, bishkekDate, formatText, webhookState } from '@buhuchet/domain';
 import {
   AdminTelegramBot,
   AdminTelegramBotView,
@@ -368,11 +368,15 @@ export const telegramBroadcastRoute = createRoute({
  * активному сотруднику действующей организации с привязанным Telegram; уходят обычной очередью.
  * Оформленная рассылка (поток Т, задача Т6) — с картинкой, заголовком и кнопками-ссылками на сайт.
  */
+/** Длина текста рассылки в строке колокольчика без заголовка (прототип v122: `slice(0,200)`). */
+const BELL_BROADCAST_MAX = 200;
+
 export function telegramBroadcastHandler(
   deps: ApiDeps,
 ): RouteHandler<typeof telegramBroadcastRoute, AppEnv> {
   return async (c) => {
     const body = c.req.valid('json');
+    const t = await serverTexts(deps);
     const queued = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => {
       const cast = await castMessage(deps, tx, body);
       return adminTelegramBroadcast(tx, {
@@ -380,6 +384,11 @@ export function telegramBroadcastHandler(
         text: cast.text,
         now: deps.clock.now(),
         message: cast.message,
+        // Колокольчик (доработки 16.11.2026, блок 3; прототип v122 `admin/tg-cast.js`): заголовок,
+        // без него — начало текста.
+        bellText: formatText(t('bell.line.broadcast'), {
+          text: body.title.trim() || bellText(body.text).slice(0, BELL_BROADCAST_MAX),
+        }),
         cast: {
           title: body.title,
           image: body.image,

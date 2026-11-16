@@ -89,6 +89,7 @@ import { z } from '@hono/zod-openapi';
 import type { ApiDeps, Job, JobContext } from '../../../deps';
 import { serverTexts } from '../../l10n/texts';
 import { monthPayRows } from '../../reports/month-pay-rows';
+import { bellContractor } from '../bell';
 import { botSendOptions, flushEvents, queueEvents } from '../outbox';
 import type { BotPress } from '../press';
 import { clientFileToPress, receiptCancel, receiptOffer, receiptPress } from './receipt';
@@ -555,6 +556,13 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
             amount: total,
             tgMessageId: target.id,
           });
+          await bellContractor(
+            deps,
+            tx,
+            target.contractorId,
+            { event: 'fee_paid', messageId: target.id, amount: total },
+            t,
+          );
           const staff = await queueStaffNotice(
             tx,
             deps,
@@ -607,6 +615,13 @@ export async function clientPress(deps: ApiDeps, press: BotPress): Promise<boole
             month,
             total,
           });
+          await bellContractor(
+            deps,
+            tx,
+            target.contractorId,
+            { event: 'cp_paid_tg', messageId: target.id, month, amount: total },
+            t,
+          );
           const staff = await queueStaffNotice(
             tx,
             deps,
@@ -824,6 +839,13 @@ export async function clientQuestion(deps: ApiDeps, raw: unknown): Promise<boole
       await logContractorTelegramPay(tx, target.contractorId, 'page_tg_question', [
         { field: 'tgQuestion', to: { name: current.name, text: cpTgQuestionForHistory(question) } },
       ]);
+      await bellContractor(
+        deps,
+        tx,
+        target.contractorId,
+        { event: 'cp_question', messageId: target.id, question },
+        t,
+      );
       // Ответ сотрудника на это сообщение уходит клиенту: просьба без дня ждёт ответа именно на него.
       const staff = await queueStaffNotice(
         tx,

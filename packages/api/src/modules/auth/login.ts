@@ -20,6 +20,7 @@ import { denialError, lockedError } from '../../auth-errors';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
+import { serverTexts } from '../l10n/texts';
 import { botText } from '../telegram/bot';
 import { ADMIN_CODE_SENT_DESCRIPTION, adminSecondFactorOn, startAdminCode } from './admin-code';
 import { AUTH_IP_LIMITED_DESCRIPTION, authIpLimited } from './ip-limit';
@@ -133,12 +134,16 @@ async function announceAccountLocked(deps: ApiDeps, account: LoginRecord): Promi
       организация: account.orgName ?? '',
       кто: account.isOwner ? 'администратор платформы' : 'владелец организации',
     };
+    const t = await serverTexts(deps);
     await notifyAccountLocked(deps.db, {
       userId: account.userId,
       userText: deps.telegram ? await botText(deps, 'tgLoginLocked', values) : null,
       unlockerText: deps.telegram
         ? await botText(deps, account.isOwner ? 'tgLoginLockedOwner' : 'tgLoginLockedStaff', values)
         : null,
+      // Колокольчик (доработки 16.11.2026, блок 3) — и без бота; «{name}» подставляет база.
+      bellText: t('bell.line.login_locked'),
+      bellStaffText: t('bell.line.login_locked.staff'),
       now: deps.clock.now(),
     });
   } catch (err) {
