@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { ADMIN_PASSWORD, platformAdmin } from './admin';
-import { finger, hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
+import { DEMO_PASSWORD, finger, hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
 
 // «Новости» и «Что нового» (задача 2.32). Новость видят все пользователи платформы, поэтому тесты — в
 // *.shared.spec.ts (идут после остальных и по одному): опубликованная новость не попадёт в чужую
@@ -421,6 +421,91 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
         page.locator('[data-news-list] [data-news-head][aria-expanded="true"]'),
       ).toHaveCount(1);
       await expect(rows.nth(0).locator('[data-news-fresh]')).toHaveCount(0);
+    } finally {
+      for (const id of ids) await takeOff(admin, origin, id);
+      await admin.dispose();
+    }
+  });
+
+  // Доработки 16.11.2026, блок 4 (прототип v123): у новости — модули (видят только те, у кого есть хотя
+  // бы один) и второй текст «Для администратора платформы» (виден только в режиме Админка).
+  test('(приёмка блока 4) бухгалтер без права «Видеть плату за обслуживание» не видит новость про обслуживание; у новости версии нет текста «Для администратора платформы», в режиме Админка он есть', async ({
+    page,
+    baseURL,
+    playwright,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const admin = await playwright.request.newContext({ baseURL });
+    const adminLogin = await platformAdmin(admin, origin);
+    // Бухгалтер демо-организации: права «Видеть плату за обслуживание» у роли нет.
+    const reader = await newReader(page.request, origin);
+    const tag = uniqueLogin('e2e');
+    const adminMd = `## Для администратора\n- Миграция ${tag}`;
+    const ids: string[] = [];
+    try {
+      const fee = await publish(admin, origin, {
+        title: `Версия 9001.6 — обслуживание ${tag}`,
+        release: '9001.6',
+        showOnLogin: false,
+        modules: ['fee'],
+      });
+      ids.push(fee.id);
+      const releaseTitle = `Версия 9001.5 ${tag}`;
+      const release = await publish(admin, origin, {
+        title: releaseTitle,
+        release: '9001.5',
+        showOnLogin: false,
+        adminMd,
+      });
+      ids.push(release.id);
+
+      // Владелец (право есть, функция включена) видит обе новости, второго текста у него нет.
+      const owner = await playwright.request.newContext({ baseURL });
+      await signIn(owner, origin, 'erkin', DEMO_PASSWORD);
+      const ownerFeed = (await (await owner.get('/api/news')).json()) as {
+        items: { id: string; adminMd?: string }[];
+      };
+      expect(ownerFeed.items.map((n) => n.id)).toEqual(expect.arrayContaining(ids));
+      expect(ownerFeed.items.find((n) => n.id === release.id)).not.toHaveProperty('adminMd');
+      await owner.dispose();
+
+      // Бухгалтер: новости про обслуживание нет ни в ленте, ни в счётчике; у новости версии — только
+      // текст для пользователей.
+      await signIn(page.request, origin, reader, READER_PASSWORD);
+      const feed = (await (await page.request.get('/api/news')).json()) as {
+        items: { id: string; adminMd?: string }[];
+      };
+      expect(feed.items.map((n) => n.id)).not.toContain(fee.id);
+      expect(feed.items.find((n) => n.id === release.id)).not.toHaveProperty('adminMd');
+      expect(await unread(page.request)).toBe(1);
+      await page.goto('/app/kb/news');
+      const row = page.locator(`[data-news="${release.id}"]`);
+      await expect(row.locator('[data-news-head]')).toHaveAttribute('aria-expanded', 'true');
+      await expect(row.getByRole('heading', { name: 'Где найти' })).toBeVisible();
+      await expect(row.locator('[data-news-admin]')).toHaveCount(0);
+      await expect(row).not.toContainText(`Миграция ${tag}`);
+      await expect(page.locator(`[data-news="${fee.id}"]`)).toHaveCount(0);
+
+      // Режим Админка: «Предпросмотр» новости версии — второй текст под чертой со своей подписью.
+      // Перед сменой входа — уход со страницы (docs/typical-mistakes.md № 6).
+      await page.goto('about:blank');
+      await page.request.post('/api/auth/logout', { headers: { origin } });
+      await signIn(page.request, origin, adminLogin, ADMIN_PASSWORD);
+      const adminFeed = (await (await page.request.get('/api/news')).json()) as {
+        items: { id: string; adminMd?: string }[];
+      };
+      expect(adminFeed.items.find((n) => n.id === release.id)?.adminMd).toBe(adminMd);
+      await page.goto('/app/kbadm/news');
+      const adminRow = page.locator(`[data-grid] [data-id="${release.id}"]`);
+      await adminRow.locator('[data-row-menu]').click();
+      await page
+        .getByRole('menu', { name: 'Действия' })
+        .getByRole('menuitem', { name: 'Предпросмотр' })
+        .click();
+      const card = page.getByRole('dialog', { name: releaseTitle });
+      const second = card.locator('[data-news-admin]');
+      await expect(second).toContainText('Для администратора платформы');
+      await expect(second).toContainText(`Миграция ${tag}`);
     } finally {
       for (const id of ids) await takeOff(admin, origin, id);
       await admin.dispose();

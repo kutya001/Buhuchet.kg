@@ -700,7 +700,6 @@ export function NewsEditDialog({
                       userArea.current = el;
                     }}
                     spellCheck
-                    aria-label={t('news.f.text_users')}
                     className={`${inputClass({ multiline: true })} h-full min-h-[320px] font-mono text-[12.5px] leading-[1.55] ${view === 'prev' ? 'max-md:hidden' : ''} ${which === 'md' ? '' : 'hidden'}`}
                   />
                   <textarea
