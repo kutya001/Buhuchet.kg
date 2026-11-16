@@ -19,6 +19,7 @@ import { AttachDialog } from '../files/attach-dialog';
 import { FileEditDialog } from '../files/file-edit-dialog';
 import { FileWindow } from '../files/file-window';
 import { fileKindText, filePageText } from '../files/file-columns';
+import { fileAlsoText } from '../files/file-links';
 import { fileSizeText, uploadFile, useFilePageToggle, useFilesRefresh } from '../files/files-data';
 import { ContractorSentBox } from '../files/sent-files';
 import { useErrorText, useT } from '../l10n/provider';
@@ -183,6 +184,16 @@ export function ContractorFilesTab({
                           className="text-xs font-normal text-muted italic [overflow-wrap:anywhere]"
                         >
                           {f.note}
+                        </div>
+                      ) : null}
+                      {/* Где ещё файл (доработки 16.11.2026, блок 2; прототип v124 `x.also`). */}
+                      {f.links.length ? (
+                        <div
+                          data-file-also=""
+                          className="inline-flex items-center gap-1 text-xs font-normal text-muted"
+                        >
+                          <Icon name="link" size="sm" />
+                          {fileAlsoText(t, f.links)}
                         </div>
                       ) : null}
                     </>

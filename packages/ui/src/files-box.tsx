@@ -20,6 +20,12 @@ export interface FilesBoxItem {
    * Нет — кнопки нет.
    */
   page?: { hidden: boolean; label: string };
+  /**
+   * Файл контрагента, прикреплённый к записи ссылкой (доработки 16.11.2026, блок 2; прототип v124
+   * `filesBox`): значок «скрепка-ссылка», вместо «Удалить» — «Открепить» (`canUnlink`).
+   */
+  linked?: boolean;
+  canUnlink?: boolean;
 }
 
 export interface FilesBoxLabels {
@@ -37,6 +43,11 @@ export interface FilesBoxLabels {
   editTitle: string;
   /** Подсказка строки примечания («Примечание к файлу»). */
   noteTitle: string;
+  /** «Из файлов контрагента» в заголовке и «Открепить» у файла-ссылки (блок 2); без них кнопок нет. */
+  pick?: string;
+  unlink?: string;
+  unlinkTitle?: string;
+  unlinkAria?: (name: string) => string;
 }
 
 export interface FilesBoxProps {
@@ -55,12 +66,18 @@ export interface FilesBoxProps {
   onPage?: (item: FilesBoxItem) => void;
   /** «Изменить файл» — окно открывает приложение. */
   onEdit?: (item: FilesBoxItem) => void;
+  /** «Из файлов контрагента» (у записи контрагента, файлы которой можно менять) — окно у приложения. */
+  canLink?: boolean;
+  onLinkPick?: () => void;
+  /** «Открепить» файл-ссылку: сразу, без подтверждения (прототип `fUnlink`). */
+  onUnlink?: (item: FilesBoxItem) => void;
 }
 
 /**
  * Блок «Файлы» карточки записи (прототип modules/services.js `filesBox`, стили `.box`, `.list`, `.li`):
- * заголовок «Файлы · N» с кнопкой «Прикрепить» (выбор нескольких файлов), строки — значок, имя,
- * «тип · размер», примечание (курсивом), «Скачать», «Изменить» и «Удалить»; пусто — «Файлов пока нет».
+ * заголовок «Файлы · N» с кнопками «Из файлов контрагента» и «Прикрепить» (выбор нескольких файлов),
+ * строки — значок, имя, «тип · размер», примечание (курсивом), «Скачать», «Изменить» и «Удалить»; у
+ * файла контрагента, прикреплённого ссылкой, — значок ссылки и «Открепить»; пусто — «Файлов пока нет».
  */
 export function FilesBox({
   items,
@@ -72,6 +89,9 @@ export function FilesBox({
   onDelete,
   onPage,
   onEdit,
+  canLink = false,
+  onLinkPick,
+  onUnlink,
 }: FilesBoxProps) {
   const input = useRef<HTMLInputElement>(null);
   const picked = (e: ChangeEvent<HTMLInputElement>) => {
@@ -84,20 +104,35 @@ export function FilesBox({
     <Box
       title={`${labels.title} · ${items.length}`}
       actions={
-        canUpload ? (
+        canUpload || (canLink && onLinkPick) ? (
           <>
-            {/* В прототипе «Прикрепить» — подпись `label.btn` в заголовке блока: прописными, как он. */}
-            <button
-              type="button"
-              className={`${buttonClass('default', 'sm')} uppercase`}
-              disabled={busy}
-              aria-busy={busy || undefined}
-              onClick={() => input.current?.click()}
-            >
-              <Icon name="clip" size="sm" />
-              {busy ? labels.uploading : labels.attach}
-            </button>
-            <input ref={input} type="file" multiple hidden onChange={picked} data-files-input />
+            {canLink && onLinkPick && labels.pick ? (
+              <button
+                type="button"
+                data-file-pick=""
+                className={`${buttonClass('default', 'sm')} uppercase`}
+                onClick={onLinkPick}
+              >
+                <Icon name="folder" size="sm" />
+                {labels.pick}
+              </button>
+            ) : null}
+            {canUpload ? (
+              <>
+                {/* В прототипе «Прикрепить» — подпись `label.btn` в заголовке блока: прописными, как он. */}
+                <button
+                  type="button"
+                  className={`${buttonClass('default', 'sm')} uppercase`}
+                  disabled={busy}
+                  aria-busy={busy || undefined}
+                  onClick={() => input.current?.click()}
+                >
+                  <Icon name="clip" size="sm" />
+                  {busy ? labels.uploading : labels.attach}
+                </button>
+                <input ref={input} type="file" multiple hidden onChange={picked} data-files-input />
+              </>
+            ) : null}
           </>
         ) : null
       }
@@ -109,7 +144,7 @@ export function FilesBox({
               key={item.id}
               className="flex min-w-0 items-center gap-2.5 border-b border-line px-0.5 py-[9px] last:border-b-0 hover:bg-row-hover"
             >
-              <Icon name="file" className="flex-none text-muted" />
+              <Icon name={item.linked ? 'link' : 'file'} className="flex-none text-muted" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-semibold text-ink">{item.name}</div>
                 <div className="truncate text-xs text-faint">{item.meta}</div>
@@ -156,7 +191,20 @@ export function FilesBox({
                   <Icon name={item.page.hidden ? 'eyeoff' : 'eye'} size="sm" />
                 </button>
               ) : null}
-              {item.canDelete ? (
+              {item.linked && item.canUnlink && onUnlink && labels.unlink ? (
+                <button
+                  type="button"
+                  data-file-unlink=""
+                  className={`${buttonClass('ghost', 'sm')} ${TOUCH_AREA}`}
+                  aria-label={labels.unlinkAria?.(item.name) ?? labels.unlink}
+                  title={labels.unlinkTitle}
+                  onClick={() => onUnlink(item)}
+                >
+                  <Icon name="x" size="sm" />
+                  {labels.unlink}
+                </button>
+              ) : null}
+              {item.canDelete && !item.linked ? (
                 <button
                   type="button"
                   className={`${iconButtonClass('sm')} ${TOUCH_AREA}`}

@@ -29,6 +29,7 @@ import {
   employees,
   feeAllocations,
   feePayments,
+  fileLinks,
   files,
   moneyAllocations,
   moneyOperations,
@@ -225,9 +226,14 @@ const SIGNED = sql`case when ${j('deleted')} or ${j('kind')} = 'xfer' or ${j('se
 
 /**
  * Файлов у операции: поступление, оплата налога, оплата за обслуживание, остальные операции, транш; у
- * разовой услуги — её файлы и файлы её оплат (прототип finRows: `s.files.length + pays files`).
+ * разовой услуги — её файлы и файлы её оплат (прототип finRows: `s.files.length + pays files`). Файлы
+ * контрагента, прикреплённые ссылкой (доработки 16.11.2026, блок 2), тоже считаются (прототип v124
+ * finance.js: `files.length + lk.length`).
  */
-const FILES = sql<number>`((select count(*)::int from ${files} jf where jf.source_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind in ('receipt', 'tax_payment', 'fee_payment', 'money_operation', 'one_off_service', 'project_payment')) + case when ${j('src')} = 'svc' then (select count(*)::int from ${files} jf join ${oneOffServicePayments} jsp on jsp.id = jf.source_id where jsp.service_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind = 'one_off_service_payment') else 0 end)`;
+const OWN_KINDS = sql.raw(
+  `'receipt', 'tax_payment', 'fee_payment', 'money_operation', 'one_off_service', 'project_payment'`,
+);
+const FILES = sql<number>`((select count(*)::int from ${files} jf where jf.source_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind in (${OWN_KINDS})) + (select count(*)::int from ${fileLinks} jl join ${files} jlf on jlf.id = jl.file_id and jlf.state = 'ready' where jl.source_id = ${j('ref_id')} and jl.source_kind in (${OWN_KINDS})) + case when ${j('src')} = 'svc' then (select count(*)::int from ${files} jf join ${oneOffServicePayments} jsp on jsp.id = jf.source_id where jsp.service_id = ${j('ref_id')} and jf.state = 'ready' and jf.source_kind = 'one_off_service_payment') + (select count(*)::int from ${fileLinks} jl join ${oneOffServicePayments} jsp on jsp.id = jl.source_id join ${files} jlf on jlf.id = jl.file_id and jlf.state = 'ready' where jsp.service_id = ${j('ref_id')} and jl.source_kind = 'one_off_service_payment') else 0 end)`;
 
 /** Получено по разовой услуге: действующие оплаты (прототип `svcPaid`). */
 const SVC_PAID = sql`(select coalesce(sum(sp.amount), 0)::bigint from ${oneOffServicePayments} sp where sp.service_id = ${j('ref_id')} and sp.deleted_at is null)`;

@@ -5,7 +5,9 @@ import {
   fileLinkKey,
   fileLinkLabels,
   fileLinksOf,
+  contractorScope,
   linkableFiles,
+  linkContractor,
   linkContractorName,
   linkFiles,
   unlinkFile,
@@ -18,6 +20,7 @@ import {
 import {
   FILE_LINK_SOURCE_KINDS,
   hasPermission,
+  scopeOf,
   type AccessSubject,
   type Feature,
   type FileLinkSourceKind,
@@ -166,7 +169,8 @@ export const linkableRoute = createRoute({
   request: { query: FileSourceQuery },
   responses: {
     200: {
-      description: 'Файлы контрагента записи, кроме уже прикреплённых к ней, сначала новые',
+      description:
+        'Файлы контрагента записи, кроме уже прикреплённых к ней, сначала новые; `kind=contractor` и номер контрагента — для формы новой записи (все его файлы)',
       content: { 'application/json': { schema: FileLinkable } },
     },
     401: { description: 'Нет входа', content: error },
@@ -175,7 +179,11 @@ export const linkableRoute = createRoute({
         'Нет права «Загружать файлы», файлы записи нельзя менять или «Файлы в карточках» выключены',
       content: error,
     },
-    404: { description: 'Записи нет, она вне области или у неё нет контрагента', content: error },
+    404: {
+      description:
+        'Записи нет, она вне области или у неё нет контрагента; контрагента формы нет или он вне области «Файлового менеджера»',
+      content: error,
+    },
   },
 });
 
@@ -187,11 +195,18 @@ export function linkableHandler(deps: ApiDeps): RouteHandler<typeof linkableRout
     const subject = subjectOf(c);
     const body = await withOrgContext(deps.db, ctx, async (tx) => {
       const features = await requireFilesFeature(tx, ctx.orgId);
-      const { target, record } = await linkRecord(deps, tx, subject, kind, id);
-      const hidden = feeSeenFor(subject, features, record.contractor)
-        ? undefined
-        : feeLinkedHidden(false);
-      const all = await linkableFiles(tx, record.contractor.id, hidden);
+      // Форма новой записи (`kind=contractor`, прототип `fPickBind`): записи ещё нет — файлы контрагента в
+      // области группы «Файловый менеджер»; прикрепит их `POST /files/links` после сохранения записи, уже
+      // со всеми проверками записи. Иначе — запись, к которой прикрепляют, со своими проверками.
+      const { target, contractor } =
+        kind === 'contractor'
+          ? { target: null, contractor: await formContractor(tx, subject, id) }
+          : await linkRecord(deps, tx, subject, kind, id).then(({ target, record }) => ({
+              target: target as FileLinkTarget | null,
+              contractor: record.contractor,
+            }));
+      const hidden = feeSeenFor(subject, features, contractor) ? undefined : feeLinkedHidden(false);
+      const all = await linkableFiles(tx, contractor.id, hidden);
       const infos = await fileLinkInfos(
         deps,
         tx,
@@ -200,6 +215,7 @@ export function linkableHandler(deps: ApiDeps): RouteHandler<typeof linkableRout
         all.map((f) => f.id),
       );
       const linkedHere = (fileId: string) =>
+        !!target &&
         (infos.get(fileId)?.links ?? []).some((l) => l.kind === target.kind && l.id === target.id);
       const items = all
         .filter((f) => !linkedHere(f.id))
@@ -214,16 +230,23 @@ export function linkableHandler(deps: ApiDeps): RouteHandler<typeof linkableRout
           links: infos.get(f.id)?.links ?? [],
         }));
       return {
-        contractor: {
-          id: record.contractor.id,
-          name: await linkContractorName(tx, record.contractor.id),
-        },
+        contractor: { id: contractor.id, name: await linkContractorName(tx, contractor.id) },
         items,
         allLinked: items.length === 0 && all.length > 0,
       };
     });
     return c.json(body, 200);
   };
+}
+
+/** Контрагент формы новой записи: в области группы «Файловый менеджер», иначе 404. */
+async function formContractor(
+  tx: Tx,
+  subject: AccessSubject,
+  id: string,
+): Promise<{ id: string; responsibleEmployeeId: string | null }> {
+  const own = scopeOf(subject, 'files') === 'own' ? subject.employeeId : null;
+  return (await linkContractor(tx, id, contractorScope(own))) ?? notFound();
 }
 
 export const linkAddRoute = createRoute({
@@ -314,7 +337,8 @@ export const unlinkRoute = createRoute({
   request: { params: FileIdParam, query: FileUnlinkQuery },
   responses: {
     200: {
-      description: 'Откреплён (в истории записи — «Откреплён файл … он остался в файлах контрагента»)',
+      description:
+        'Откреплён (в истории записи — «Откреплён файл … он остался в файлах контрагента»)',
       content: { 'application/json': { schema: z.object({ id: z.uuid() }) } },
     },
     401: { description: 'Нет входа', content: error },

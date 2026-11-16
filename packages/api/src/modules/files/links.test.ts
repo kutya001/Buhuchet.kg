@@ -182,9 +182,9 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
       { id: act, name: 'Акт сверки.pdf' },
     ]);
     // Ещё раз — уже прикреплён: ничего нового, в истории одна запись.
-    expect(FileLinkAdded.parse(await (await link(acc, 'receipt', receipt, [act])).json())).toEqual(
-      { added: [] },
-    );
+    expect(FileLinkAdded.parse(await (await link(acc, 'receipt', receipt, [act])).json())).toEqual({
+      added: [],
+    });
     // В записи — строка со ссылкой: «Открепить» вместо «Удалить», «Из файлов контрагента» есть.
     const list = await recordFiles(acc, 'receipt', receipt);
     expect(list.canLink).toBe(true);
@@ -237,7 +237,9 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
   });
 
   it('права, область и чужая организация: без входа 401, без «Загружать файлы» 403, чужой контрагент и чужая организация 404, файл другого контрагента и файл записи — 404', async () => {
-    expect((await link(undefined as unknown as string, 'receipt', receipt, [act])).status).toBe(401);
+    expect((await link(undefined as unknown as string, 'receipt', receipt, [act])).status).toBe(
+      401,
+    );
     expect((await link(senior, 'receipt', receipt, [act])).status).toBe(403);
     expect((await linkable(senior, 'receipt', receipt)).status).toBe(403);
     // Бухгалтер со «Свои» не видит поступление контрагента главного бухгалтера.
@@ -254,7 +256,10 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     // Файл другого контрагента, несуществующий файл и файл самой записи ссылкой не прикрепляются.
     expect((await link(owner, 'receipt', receipt, [otherFile])).status).toBe(404);
     expect((await link(owner, 'receipt', receipt, [randomUUID()])).status).toBe(404);
-    const own = await upload(owner, { source: { kind: 'receipt', id: receipt }, name: 'Скрин.png' });
+    const own = await upload(owner, {
+      source: { kind: 'receipt', id: receipt },
+      name: 'Скрин.png',
+    });
     expect((await link(owner, 'receipt', otherReceipt, [own])).status).toBe(404);
     const res = await link(owner, 'receipt', otherReceipt, [act]);
     expect(res.status).toBe(404);
@@ -279,6 +284,19 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     // Файлы самой записи — без «Открепить».
     const mine = (await recordFiles(owner, 'receipt', receipt)).items.find((x) => x.id === own)!;
     expect(mine).toMatchObject({ linked: false, canUnlink: false });
+  });
+
+  it('форма новой записи: окно по контрагенту (kind=contractor) — все его файлы в области «Файлового менеджера»; чужой контрагент и чужая организация — 404', async () => {
+    const res = await linkable(acc, 'contractor', cpAcc.id);
+    expect(res.status, await res.clone().text()).toBe(200);
+    const body = FileLinkable.parse(await res.json());
+    expect(body.contractor).toEqual({ id: cpAcc.id, name: cpAcc.name });
+    // Записи ещё нет: уже прикреплённые к другим записям файлы тоже предлагаются — с «также у …».
+    expect(body.items.find((x) => x.id === act)?.links.map((l) => l.kind)).toEqual(['receipt']);
+    expect((await linkable(acc, 'contractor', cpOther.id)).status).toBe(404);
+    expect((await linkable(acc, 'contractor', randomUUID())).status).toBe(404);
+    expect((await linkable(accB, 'contractor', cpAcc.id)).status).toBe(404);
+    expect((await linkable(senior, 'contractor', cpAcc.id)).status).toBe(403);
   });
 
   it('приёмка (сценарий 4): «Открепить» — ссылка убрана, файл остался у контрагента, в истории записи «Откреплён файл»', async () => {

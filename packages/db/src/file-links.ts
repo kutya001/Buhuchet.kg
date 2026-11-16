@@ -155,11 +155,7 @@ export async function linkFiles(
 }
 
 /** «Открепить» (прототип `fUnlink`): убирается только ссылка; false — ссылки не было. */
-export async function unlinkFile(
-  tx: Tx,
-  target: FileLinkTarget,
-  fileId: string,
-): Promise<boolean> {
+export async function unlinkFile(tx: Tx, target: FileLinkTarget, fileId: string): Promise<boolean> {
   const rows = await tx
     .delete(fileLinks)
     .where(
@@ -293,9 +289,7 @@ export async function fileLinkLabels(
         .from(moneyOperations)
         .leftJoin(reports, eq(reports.id, moneyOperations.reportId))
         .leftJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
-        .where(
-          and(inArray(moneyOperations.id, ids), opKind, isNull(moneyOperations.cancelledAt)),
-        );
+        .where(and(inArray(moneyOperations.id, ids), opKind, isNull(moneyOperations.cancelledAt)));
       for (const r of rows) {
         out.set(keyOf({ kind, id: r.id }), {
           ...base,
@@ -399,6 +393,27 @@ export async function fileLinkLabels(
 }
 
 export const fileLinkKey = keyOf;
+
+/**
+ * Контрагент формы новой записи для окна «Из файлов контрагента» (прототип v124 `fPickBind`: записи ещё
+ * нет, файлы прикрепятся после её сохранения): только в области `scope` (группа «Файловый менеджер»);
+ * нет или вне области — null.
+ */
+export async function linkContractor(
+  tx: Tx,
+  id: string,
+  scope: SQL | undefined,
+): Promise<{ id: string; name: string; responsibleEmployeeId: string | null } | null> {
+  const [row] = await tx
+    .select({
+      id: contractors.id,
+      name: contractors.name,
+      responsibleEmployeeId: contractors.responsibleEmployeeId,
+    })
+    .from(contractors)
+    .where(and(eq(contractors.id, id), scope));
+  return row ?? null;
+}
 
 /** Название контрагента для заголовка окна «Из файлов контрагента». */
 export async function linkContractorName(tx: Tx, id: string): Promise<string> {

@@ -17,14 +17,25 @@ function sizeText(t: Translate, v: unknown): string {
  * Записи истории о файле, одинаковые во всех карточках (прототип v95 modules/files.js `fileEditDlg`,
  * `fNoteLog`): прикрепление с примечанием — «Прикреплён файл: … Примечание: …»; «Изменить файл» —
  * «Файл «a» переименован в «b»», «Примечание к файлу «b»: …» или «… убрано», «Файл «b» заменён: было
- * X, стало Y» (одна запись на сохранение, части через «; »). Остальные записи — null: их пишет карточка.
+ * X, стало Y» (одна запись на сохранение, части через «; »); файл контрагента ссылкой (блок 2) —
+ * «Прикреплены из файлов контрагента: …», «Откреплён файл «…»: он остался в файлах контрагента», «Удалён
+ * файл «…» (был прикреплён из файлов контрагента)». Остальные записи — null: их пишет карточка.
  */
 export function fileHistoryText(t: Translate, entry: FileHistoryEntry): string | null {
   const change = (field: string) => entry.changes.find((c) => c.field === field);
   const name = str(change('file')?.to);
   if (entry.action === 'file_attach') {
+    // Файл контрагента прикреплён ссылкой (доработки 16.11.2026, блок 2; прототип v124 `fLinkAdd`).
+    if (change('link')) return t('files.hist.linked', { name });
     const note = str(change('note')?.to);
     return note ? t('files.hist.attach_note', { name, note }) : null;
+  }
+  if (entry.action === 'file_delete') {
+    // «Открепить» и «Удалить отовсюду» (прототип v124 `fUnlink`, `fDelDlg`); обычное удаление — карточка.
+    const from = str(change('file')?.from);
+    if (change('link')) return t('files.hist.unlinked', { name: from });
+    if (change('linked')) return t('files.hist.deleted_linked', { name: from });
+    return null;
   }
   if (entry.action !== 'file_edit') return null;
   const parts: string[] = [];

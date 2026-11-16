@@ -13,6 +13,7 @@ import {
 import type { FileManagerRow } from '@buhuchet/shared';
 import { Icon, Tag, type GridAudit, type GridColumn, type IconName } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
+import { fileSourceWithLinks } from './file-links';
 import { fileSizeText } from './files-data';
 
 /** По умолчанию — новые сверху по дате загрузки (прототип: `sort: {key: 'date', dir: -1}`). */
@@ -80,7 +81,14 @@ export function fileColumns(t: Translate, cppage = false): GridColumn<FileManage
       text: (r) => fileKindText(t, r.kind),
       cell: (r) => <Tag icon={fileKindIcon(r.kind)}>{fileKindText(t, r.kind)}</Tag>,
     },
-    { key: 'src', label: t('files.col.src'), type: 'text', width: 280, text: (r) => r.source },
+    // Файл контрагента с ссылками (блок 2): «Источник» — его источник и все записи (прототип v124 `o.src`).
+    {
+      key: 'src',
+      label: t('files.col.src'),
+      type: 'text',
+      width: 280,
+      text: (r) => fileSourceWithLinks(t, r.source, r.links),
+    },
     {
       key: 'cp',
       label: t('files.col.cp'),

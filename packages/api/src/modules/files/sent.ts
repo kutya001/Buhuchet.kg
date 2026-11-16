@@ -515,13 +515,13 @@ export const sentAcceptRoute = createRoute({
   responses: {
     200: {
       description:
-        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); с `attach` — и у записи денег',
+        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); с `attach` — и у записи денег ссылкой на этот же файл',
       content: { 'application/json': { schema: SentFileAccepted } },
     },
     ...decideResponses,
     403: {
       description:
-        'Нет права «Просматривать файлы» или «Загружать файлы»; «Файлы в карточках» выключены; с `attach` — нельзя менять файлы записи денег, имя или размер файла не годятся для файлов записей',
+        'Нет права «Просматривать файлы» или «Загружать файлы»; «Файлы в карточках» выключены; с `attach` — нельзя менять файлы записи денег',
       content: error,
     },
     404: {
@@ -529,7 +529,6 @@ export const sentAcceptRoute = createRoute({
         'Файла нет или контрагент вне области; с `attach` — записи денег нет, она не видна или другого контрагента',
       content: error,
     },
-    429: { description: 'С `attach` — слишком много загрузок за час', content: error },
   },
 });
 
@@ -542,10 +541,9 @@ export const sentAcceptRoute = createRoute({
  * С `attach` — «Сохранить» в окне денег с чеком (доработки 16.11.2026, блок 1; прототип v121
  * `pgRcptSave`): деньги уже записаны своим запросом, а чек принимается и прикрепляется к ним одной
  * транзакцией — «Принят файл «…» — прикреплён к поступлению от ДД.ММ.ГГГГ». До этого чек остаётся
- * «Новый»: «Отменить» в окне денег ничего не меняет. Прикрепляется вторая копия (а не ссылка — до
- * блока 2), по правилам загрузки с сайта: та же запись того же контрагента, `attachStoredFile`, предел
- * загрузок пользователя. Чек уже решил другой сотрудник — 409 `sent_decided` с `details` (кто и как),
- * деньги остаются без чека.
+ * «Новый»: «Отменить» в окне денег ничего не меняет. Прикрепляется ссылкой на принятый файл контрагента,
+ * без второй копии (блок 2, пункт 1; `linkTo`): та же запись того же контрагента, право менять её файлы.
+ * Чек уже решил другой сотрудник — 409 `sent_decided` с `details` (кто и как), деньги остаются без чека.
  */
 export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAcceptRoute, AppEnv> {
   return async (c) => {
@@ -645,14 +643,9 @@ async function linkReceipt(
   fileId: string,
 ): Promise<{ field: 'receipt' | 'feePayment'; to: IsoDate }> {
   const added = record.contractor
-    ? await linkTo(
-        tx,
-        subject,
-        features,
-        target,
-        { ...record, contractor: record.contractor },
-        [fileId],
-      )
+    ? await linkTo(tx, subject, features, target, { ...record, contractor: record.contractor }, [
+        fileId,
+      ])
     : null;
   if (!added?.length) notFound();
   const date = await sentReceiptTargetDate(tx, target);

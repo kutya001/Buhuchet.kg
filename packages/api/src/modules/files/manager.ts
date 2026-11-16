@@ -225,9 +225,7 @@ export function listManagerHandler(deps: ApiDeps): RouteHandler<typeof listManag
     });
     return c.json(
       {
-        items: page.rows.map((r) =>
-          rowBody(r, subject, ctx.userId!, now, cppage, links.get(r.id)),
-        ),
+        items: page.rows.map((r) => rowBody(r, subject, ctx.userId!, now, cppage, links.get(r.id))),
         total: page.total,
         page: page.page,
         size: page.size,

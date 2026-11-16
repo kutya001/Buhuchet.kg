@@ -40,6 +40,7 @@ import { ApiFailure } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
+import { linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import { useShell } from '../shell/context';
 import { reasonNeeded, type ChangedPart } from './edit-reason';
@@ -550,7 +551,7 @@ function ServiceModal({
 
 /**
  * «Оплата разовой услуги» (прототип svcPay → tranchDlg): сумма (подставлен остаток, не больше его),
- * дата (не позже сегодняшней), файлы «платёжка, чек».
+ * дата (не позже сегодняшней), файлы «платёжка, чек» и «Из файлов контрагента» (блок 2, пункт 9).
  */
 export function ServicePayDialog({
   service,
@@ -558,7 +559,7 @@ export function ServicePayDialog({
   onClose,
   onDone,
 }: {
-  service: { id: string; name: string; contractor: string; left: number };
+  service: { id: string; name: string; contractor: string; contractorId: string; left: number };
   open: boolean;
   onClose: () => void;
   onDone: () => void;
@@ -572,6 +573,7 @@ export function ServicePayDialog({
   const [amount, setAmount] = useState(service.left > 0 ? formatSom(service.left, 'auto') : '');
   const [date, setDate] = useState(todayBishkek);
   const [picked, setPicked] = useState<File[]>([]);
+  const [links, setLinks] = useState<PickedLink[]>([]);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const fail = useFail(setErrors);
@@ -589,18 +591,14 @@ export function ServicePayDialog({
     const res = await payService(service.id, {
       amount: n ?? 0,
       date: paidOn,
-      files: picked.length,
+      files: picked.length + links.length,
     });
     const saved = res.ok ? ServiceSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
-      const failedUpload = picked.length
-        ? await uploadMoneyFiles(
-            t,
-            errorText,
-            { kind: 'one_off_service_payment', id: saved.data.id },
-            picked,
-          )
-        : null;
+      const source = { kind: 'one_off_service_payment' as const, id: saved.data.id };
+      const failedUpload =
+        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
+        (await linkPicked(t, errorText, source, links));
       setBusy(false);
       onDone();
       onClose();
@@ -617,7 +615,7 @@ export function ServicePayDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      dirty={picked.length > 0}
+      dirty={picked.length > 0 || links.length > 0}
       title={t('fin.svc.pay_title')}
       sub={t('fin.svc.pay_sub', { name: service.name, cp: service.contractor })}
       footer={
@@ -673,13 +671,20 @@ export function ServicePayDialog({
           {canUpload ? (
             <Field id={`${id}-files`} label={t('fin.svc.pay_files')} full error={errors.files}>
               {(control) => (
-                <FilesInput
-                  control={control}
-                  onPick={(files) => {
-                    setPicked(files);
-                    setErrors((x) => ({ ...x, files: undefined }));
-                  }}
-                />
+                <div>
+                  <LinkPickRow
+                    contractorId={service.contractorId}
+                    picked={links}
+                    onChange={setLinks}
+                  />
+                  <FilesInput
+                    control={control}
+                    onPick={(files) => {
+                      setPicked(files);
+                      setErrors((x) => ({ ...x, files: undefined }));
+                    }}
+                  />
+                </div>
               )}
             </Field>
           ) : null}

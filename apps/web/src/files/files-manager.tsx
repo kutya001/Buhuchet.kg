@@ -1,7 +1,13 @@
 'use client';
 
 import { formatCount, type ListFilterValue, type UiTextKey } from '@buhuchet/domain';
-import { FileLink, FileManagerList, ListValues, type FileManagerRow } from '@buhuchet/shared';
+import {
+  FileLink,
+  FileManagerList,
+  ListValues,
+  type FileLinkInfo,
+  type FileManagerRow,
+} from '@buhuchet/shared';
 import {
   ConfirmDialog,
   DataGrid,
@@ -17,6 +23,8 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useState, type ReactNo
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
 import { openContractorCard } from '../contractors/card-store';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { FeePaymentWindowDialog } from '../finance/fee-payment-window';
+import { OperationWindowDialog } from '../finance/operation-window';
 import { ServiceActionDialog } from '../finance/service-card';
 import { useKpiEntry } from '../kpi/kpi-entry';
 import { useErrorText, useT } from '../l10n/provider';
@@ -39,6 +47,7 @@ import {
   fileKindText,
 } from './file-columns';
 import { FileEditDialog } from './file-edit-dialog';
+import { fileDeleteLinksList, fileLinkText } from './file-links';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
 import { SentFilesTab } from './sent-files';
 import {
@@ -178,6 +187,8 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
   const kpi = useKpiEntry();
   const [card, setCard] = useState<DialogSlot<FileManagerRow> | null>(null);
   const [service, setService] = useState<DialogSlot<string> | null>(null);
+  // Окно поступления, оплаты налога, операции или оплаты за обслуживание — «Перейти к источнику: …» ссылки.
+  const [money, setMoney] = useState<DialogSlot<{ fee: boolean; id: string }> | null>(null);
   const [ask, setAsk] = useState<FileManagerRow | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
 
@@ -222,7 +233,8 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
    * услуги и её оплаты — карточка услуги (прототип `serviceCard`), у файла проекта — карточка проекта.
    */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
-    if (file.kind === 'contractor' && file.contractor) {
+    // Файл контрагента (из документов и принятый от него, блок 2) — вкладка «Файлы» его карточки.
+    if ((file.kind === 'contractor' || file.kind === 'sent_file') && file.contractor) {
       const { id } = file.contractor;
       return () => openContractorCard({ id }, 'files');
     }
@@ -257,8 +269,62 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
     return null;
   };
 
-  const actions = (file: FileManagerRow): ActionEntry[] => {
+  /** Запись ссылки в своём окне (прототип v124 `fLinkRecs` `open`). */
+  const linkOpen = (link: FileLinkInfo): (() => void) => {
+    switch (link.kind) {
+      case 'report':
+        return () => reports.openCard({ id: link.id });
+      case 'fee_payment':
+        return () => setMoney(openSlot<{ fee: boolean; id: string }>({ fee: true, id: link.id }));
+      case 'one_off_service':
+      case 'one_off_service_payment':
+        return () => setService(openSlot(link.parentId ?? link.id));
+      case 'project':
+      case 'project_payment':
+        return () => openProjectCard(link.parentId ?? link.id);
+      default:
+        return () => setMoney(openSlot<{ fee: boolean; id: string }>({ fee: false, id: link.id }));
+    }
+  };
+
+  /**
+   * «Перейти к источнику» (прототип v124 `fGoActs`): у файла контрагента с ссылками — «…: файлы
+   * контрагента» и по пункту на каждую видимую запись.
+   */
+  const sourceActions = (file: FileManagerRow): ActionEntry[] => {
     const source = sourceOf(file);
+    if (!file.links.length)
+      return source
+        ? [
+            {
+              id: 'source',
+              label: t('files.act.source'),
+              icon: fileKindIcon(file.kind),
+              run: source,
+            },
+          ]
+        : [];
+    return [
+      ...(source
+        ? [
+            {
+              id: 'source',
+              label: t('files.act.source_cp'),
+              icon: 'building' as IconName,
+              run: source,
+            },
+          ]
+        : []),
+      ...file.links.map((link) => ({
+        id: `source-${link.kind}-${link.id}`,
+        label: t('files.act.source_to', { name: fileLinkText(t, link, 'nm') }),
+        icon: 'link' as IconName,
+        run: linkOpen(link),
+      })),
+    ];
+  };
+
+  const actions = (file: FileManagerRow): ActionEntry[] => {
     return [
       {
         id: 'open',
@@ -272,16 +338,7 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
         icon: 'download',
         run: () => void download(file),
       },
-      ...(source
-        ? [
-            {
-              id: 'source',
-              label: t('files.act.source'),
-              icon: fileKindIcon(file.kind),
-              run: source,
-            },
-          ]
-        : []),
+      ...sourceActions(file),
       // Прототип v95 `fEditAct`: «Изменить» — название, примечание, замена; без права — с причиной.
       {
         id: 'edit',
@@ -307,7 +364,7 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
       { id: 'sep', separator: true as const },
       {
         id: 'delete',
-        label: t('files.act.delete'),
+        label: t(file.links.length ? 'files.act.delete_all' : 'files.act.delete'),
         icon: 'trash',
         danger: true,
         disabled: !file.canDelete,
@@ -325,7 +382,8 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
       }),
     );
     await refresh();
-    if (res.ok) toast(t('files.deleted'), { icon: 'trash' });
+    const everywhere = file.links.length > 0 || file.hiddenLinks > 0;
+    if (res.ok) toast(t(everywhere ? 'files.deleted_all' : 'files.deleted'), { icon: 'trash' });
     else toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
 
@@ -435,11 +493,18 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
         onClose={() => setAsk(null)}
         title={t('files.delete.title', { name: ask?.name ?? '' })}
         text={
-          ask?.kind === 'manual'
-            ? t('files.delete.manual')
-            : t('files.delete.attached', { src: ask?.source ?? '' })
+          // «Удалить отовсюду?» (прототип v124 `fDelDlg`): файл контрагента прикреплён к записям.
+          ask && (ask.links.length || ask.hiddenLinks)
+            ? t('files.delete.linked', {
+                list: fileDeleteLinksList(t, ask.links, ask.hiddenLinks),
+              })
+            : ask?.kind === 'manual'
+              ? t('files.delete.manual')
+              : t('files.delete.attached', { src: ask?.source ?? '' })
         }
-        ok={t('files.delete_ok')}
+        ok={t(
+          ask && (ask.links.length || ask.hiddenLinks) ? 'files.act.delete_all' : 'files.delete_ok',
+        )}
         danger
         onConfirm={() => ask && void remove(ask)}
       />
@@ -450,6 +515,25 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
           open={service.open}
           onClose={() => setService(closeSlot)}
         />
+      ) : null}
+      {money ? (
+        money.data.fee ? (
+          <FeePaymentWindowDialog
+            key={`money-${money.n}`}
+            id={money.data.id}
+            open={money.open}
+            onClose={() => setMoney(closeSlot)}
+            onOpenReport={(id) => reports.openCard({ id })}
+          />
+        ) : (
+          <OperationWindowDialog
+            key={`money-${money.n}`}
+            id={money.data.id}
+            open={money.open}
+            onClose={() => setMoney(closeSlot)}
+            onOpenReport={(id) => reports.openCard({ id })}
+          />
+        )
       ) : null}
       {tasks.dialogs}
       {reports.dialogs}

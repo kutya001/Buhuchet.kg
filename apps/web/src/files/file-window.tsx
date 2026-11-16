@@ -23,6 +23,7 @@ import { useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import { FileNoteInput } from './attach-dialog';
 import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
+import { fileSourceWithLinks } from './file-links';
 import { formContractorsQuery, fileSizeText } from './files-data';
 
 /** Ссылка на просмотр картинки или PDF в окне файла (на 15 минут). */
@@ -135,7 +136,11 @@ export function FileWindow({
   const replacedAt = file.replaced ? new Date(file.replaced.at) : null;
   const items: KeyValueItem[] = [
     { id: 'kind', label: t('files.window.kind'), value: fileKindText(t, file.kind) },
-    { id: 'src', label: t('files.window.src'), value: file.source },
+    {
+      id: 'src',
+      label: t('files.window.src'),
+      value: fileSourceWithLinks(t, file.source, file.links),
+    },
     {
       id: 'cp',
       label: t('files.window.cp'),
@@ -215,7 +220,8 @@ export function FileWindow({
               }}
             >
               <Icon name={fileKindIcon(file.kind)} size="sm" />
-              {t('files.act.source')}
+              {/* Файл контрагента с ссылками (прототип v124): кнопка ведёт в его файлы. */}
+              {file.links.length ? t('files.window.cp_files') : t('files.act.source')}
             </button>
           ) : (
             <button type="button" className={buttonClass('cta')} onClick={onClose}>
