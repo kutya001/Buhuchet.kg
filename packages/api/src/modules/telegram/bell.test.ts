@@ -17,7 +17,7 @@ import {
 } from '../../testing';
 import { notifyPageClosed } from '../contractor-page/closed';
 import { addSentFiles } from '../files/sent-add';
-import { bellContractor, putBell } from './bell';
+import { bellContext, bellContractor, putBell } from './bell';
 import { bellCleanupJob, bellDayJob } from './bell-day';
 
 /*
@@ -404,9 +404,11 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       .set({ responsibleEmployeeId: person('senior-a').employeeId })
       .where(eq(contractors.id, cp));
     try {
+      // Часы и тексты прочитаны до транзакции действия (`bellContext`): внутри неё — только `tx`.
+      const ctx = await bellContext(deps);
       expect(
         await inOrg((tx) =>
-          bellContractor(deps, tx, cp, {
+          bellContractor(ctx, tx, cp, {
             event: 'cp_file',
             sendId: '0b7f8a52-8a36-4a8e-9a43-000000000010',
             n: 1,

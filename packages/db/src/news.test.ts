@@ -24,7 +24,7 @@ import { markWelcomeSeen } from './onboarding';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { readPlatformHistory } from './platform-history';
 import { news, newsAdminTexts, newsReads, platformAuditLog, users } from './schema';
-import { NEWS_NOT_YET, newsAdminTextSeedRows, newsSeedRows } from './seed/news';
+import { NEWS_NOT_YET, newsAdminTextSeedRows, newsSeedRows, seedNews } from './seed/news';
 import { readSpecJson } from './spec-data';
 import {
   createTestDatabase,
@@ -622,5 +622,50 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         },
       ]),
     ).toThrow(/x2/);
+  });
+
+  it('наполнение с --update меняет и «Для кого»: разбор выпущенных новостей (доработки 16.11.2026, блок 4, пункт 5); поправленную администратором — нет', async () => {
+    const item = (id: string, aud: string) => ({
+      id,
+      t: `Версия ${id}`,
+      type: 'Обновление',
+      ver: id,
+      date: '2026-11-16',
+      status: 'Опубликовано',
+      short: 'Коротко',
+      md: '- Текст',
+      aud,
+    });
+    const ids = ['x9301', 'x9302', 'x9303'];
+    await seedNews(db.admin.db, [item('x9301', 'all'), item('x9302', 'all'), item('x9303', 'adm')], {});
+    await db.admin.db.update(news).set({ updatedBy: adminId }).where(eq(news.id, 'x9302'));
+    const audience = async () =>
+      Object.fromEntries(
+        (
+          await db.admin.db
+            .select({ id: news.id, audience: news.audience })
+            .from(news)
+            .where(inArray(news.id, ids))
+        ).map((r) => [r.id, r.audience]),
+      );
+    // Без --update уже залитые новости не меняются.
+    await seedNews(db.admin.db, [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')], {});
+    expect(await audience()).toEqual({ x9301: 'all', x9302: 'all', x9303: 'adm' });
+    const report = await seedNews(
+      db.admin.db,
+      [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')],
+      { update: true },
+    );
+    expect(await audience()).toEqual({ x9301: 'adm', x9302: 'all', x9303: 'all' });
+    expect(report).toMatchObject({ inserted: 0, updated: 2 });
+    // Повтор ничего не меняет.
+    expect(
+      await seedNews(
+        db.admin.db,
+        [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')],
+        { update: true },
+      ),
+    ).toMatchObject({ inserted: 0, updated: 0 });
+    await db.admin.db.delete(news).where(inArray(news.id, ids));
   });
 });

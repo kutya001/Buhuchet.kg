@@ -219,21 +219,31 @@ function contractorBellRow(
   }
 }
 
+/** Часы и тексты словаря для `bellContractor`, прочитанные до транзакции действия (`bellContext`). */
+export type BellContext = { readonly now: Date; readonly t: Translate };
+
+/** Часы и тексты словаря до транзакции: тогда `bellContractor` внутри неё не трогает `deps`. */
+export async function bellContext(deps: ApiDeps): Promise<BellContext> {
+  return { now: deps.clock.now(), t: await serverTexts(deps) };
+}
+
 /**
  * Строка колокольчика о событии контрагента (стык «Положить уведомление», вызывают потоки К и И) — в
  * транзакции действия, только через `tx`, и без бота, и без привязанного Telegram, и при выключенных
- * «Напоминаниях в Telegram». Кому — `bellContractorUsers`. Тексты словаря `texts` лучше прочитать до
- * транзакции (`serverTexts(deps)`); не переданы — читаются здесь (у словаря своё соединение, п. О-46).
+ * «Напоминаниях в Telegram». Кому — `bellContractorUsers`. Лучше передать первым параметром
+ * `bellContext(deps)`, прочитанный до транзакции; с `deps` часы берутся здесь, тексты словаря — из
+ * `texts` или здесь же (у словаря своё соединение, п. О-46).
  */
 export async function bellContractor(
-  deps: ApiDeps,
+  ctx: ApiDeps | BellContext,
   tx: Tx,
   contractorId: string,
   e: ContractorBell,
   texts?: Translate,
 ): Promise<number> {
-  const now = deps.clock.now();
-  const t = texts ?? (await serverTexts(deps));
+  const pre = 'clock' in ctx ? null : ctx;
+  const now = pre ? pre.now : (ctx as ApiDeps).clock.now();
+  const t = pre ? pre.t : (texts ?? (await serverTexts(ctx as ApiDeps)));
   const tr: Translate = (key, params) => formatText(t(key), params);
   const row = contractorBellRow(e, contractorId, tr, now);
   const users = await bellContractorUsers(tx, contractorId, row.need ?? null);
