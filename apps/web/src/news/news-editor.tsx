@@ -41,7 +41,7 @@ import {
 } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { useForm, useWatch, type FieldPath } from 'react-hook-form';
+import { useForm, useWatch, type FieldError, type FieldPath } from 'react-hook-form';
 import { api, apiFailure, callApi } from '../api-client';
 import { fieldError } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
@@ -593,7 +593,8 @@ export function NewsEditDialog({
             label={t('news.f.modules')}
             full
             hint={t('news.f.modules_hint')}
-            error={fieldError(t, errors.modules)}
+            // Ошибка списка модулей ставится на сам список (setError('modules')), не на его строки.
+            error={fieldError(t, errors.modules as FieldError | undefined)}
           >
             {(c) => (
               <ChipMultiSelect
