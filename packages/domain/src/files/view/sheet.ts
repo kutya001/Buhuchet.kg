@@ -19,8 +19,8 @@ export const SHEET_MAX_CELL_CHARS = 32_767;
 /** Знаков во всех ячейках книги — не больше: модель копируется из потока разбора в окно. */
 export const SHEET_MAX_BOOK_CHARS = 16_000_000;
 /**
- * Ячеек во всей книге — не больше (полный лист 5 000 × 256 — 1,28 млн): пустая ячейка с заливкой
- * не стоит ни знака, но окно её копирует и рисует.
+ * Мест ячеек во всей книге — не больше (полный лист 5 000 × 256 — 1,28 млн): считаются и пустая
+ * ячейка с заливкой (не стоит ни знака), и пустые места строки до ячейки — окно копирует каждое.
  */
 export const SHEET_MAX_BOOK_CELLS = 1_000_000;
 /** Код формата числа длиннее — «Общий» (предел Excel): «@» в коде размножает текст ячейки. */
@@ -37,17 +37,23 @@ export const sheetTextBudget = (): SheetTextBudget => ({
 });
 /** Предел книги исчерпан: дальше строки не собираются. */
 export const sheetBudgetSpent = (b: SheetTextBudget) => b.left <= 0 || b.cells <= 0;
-/** Взять ячейку в счёт книги (знаки и сама ячейка); места нет — false, ячейка не сохраняется. */
-export function takeSheetCell(b: SheetTextBudget, cell: SheetCell): boolean {
-  if (b.cells <= 0 || b.left < cell.v.length) {
+/**
+ * Взять ячейку в счёт книги: её знаки и новые места строки (`slots` — сама ячейка и пустые места
+ * перед ней); места нет — false, ячейка не сохраняется.
+ */
+export function takeSheetCell(b: SheetTextBudget, cell: SheetCell, slots = 1): boolean {
+  if (b.cells < slots || b.left < cell.v.length) {
     b.cells = 0;
     b.left = 0;
     return false;
   }
-  b.cells--;
+  b.cells -= slots;
   b.left -= cell.v.length;
   return true;
 }
+/** Сколько новых мест строки займёт ячейка в столбце `c` (с пустыми местами до неё). */
+export const sheetSlots = (row: readonly unknown[] | undefined, c: number) =>
+  Math.max(1, c + 1 - (row?.length ?? 0));
 
 /** Код формата из файла: длиннее предела — «Общий». */
 export const sheetFormatCode = (code: string) =>
@@ -142,15 +148,14 @@ export function capBookText(book: BookView): BookView {
     for (let r = 0; r < sheet.rows.length; r++) {
       const row = sheet.rows[r]!;
       let size = 0;
-      let count = 0;
       for (const cell of row) {
         if (!cell) continue;
         if (cell.v.length > SHEET_MAX_CELL_CHARS) cell.v = cell.v.slice(0, SHEET_MAX_CELL_CHARS);
         size += cell.v.length;
-        count++;
       }
       left -= size;
-      cells -= count;
+      // Места строки, и пустые тоже.
+      cells -= row.length;
       if (left < 0 || cells < 0) {
         sheet.rows.length = r;
         left = 0;

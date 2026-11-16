@@ -4,10 +4,12 @@ import {
   numberText,
   DOC_MAX_BLOCKS,
   DOC_MAX_CELLS,
+  DOC_MAX_GRID,
   DOC_MAX_LABEL,
   DOC_MAX_LIST_START,
   DOC_MAX_RUNS,
 } from './docx';
+import type { DocBlock } from './docx';
 import { docxBytes, docxImage, zipBytes } from './fixtures';
 import { ViewError } from './xml';
 import { openZip } from './zip';
@@ -199,9 +201,9 @@ describe('Word DOCX в окне просмотра', () => {
   });
 
   it('пустые ячейки таблиц считаются: строки и ячейки всех таблиц — до предела (защита, п. И-12)', async () => {
-    // Таблица 300 × 200 пустых `<w:tc/>`: ни абзаца, ни знака, но окно рисует каждую ячейку.
-    const tr = `<w:tr>${'<w:tc/>'.repeat(200)}</w:tr>`;
-    const doc = await parseDocx(openZip(await docxBytes(`<w:tbl>${tr.repeat(300)}</w:tbl>`)));
+    // Таблица 1 000 × 60 пустых `<w:tc/>`: ни абзаца, ни знака, но окно рисует каждую ячейку.
+    const tr = `<w:tr>${'<w:tc/>'.repeat(60)}</w:tr>`;
+    const doc = await parseDocx(openZip(await docxBytes(`<w:tbl>${tr.repeat(1_000)}</w:tbl>`)));
     const t = doc.blocks[0];
     const rows = t?.k === 't' ? t.rows : [];
     const units = rows.length + rows.reduce((n, r) => n + r.length, 0);
@@ -209,14 +211,58 @@ describe('Word DOCX в окне просмотра', () => {
     expect(units).toBeGreaterThan(DOC_MAX_CELLS - 200);
     expect(doc.cut).toBe(true);
 
-    // Ячейка на сотни столбцов сетки — не шире предела Word; неверное число — одна ячейка.
+    // Строка таблицы — не шире сетки Word: ячейка шире остатка сужается, лишние ячейки не берутся.
     const span = (v: string) => `<w:tc><w:tcPr><w:gridSpan w:val="${v}"/></w:tcPr></w:tc>`;
-    const wide = await parseDocx(
-      openZip(await docxBytes(`<w:tbl><w:tr>${span('100000')}${span('abc')}</w:tr></w:tbl>`)),
+    const spans = async (row: string) => {
+      const d = await parseDocx(openZip(await docxBytes(`<w:tbl><w:tr>${row}</w:tr></w:tbl>`)));
+      const t = d.blocks[0];
+      return { spans: t?.k === 't' ? t.rows[0]!.map((c) => c.span ?? 1) : [], cut: d.cut };
+    };
+    // Неверное число — одна ячейка; 100 000 — до конца сетки.
+    expect(await spans(`${span('abc')}${span('100000')}`)).toEqual({
+      spans: [1, DOC_MAX_GRID - 1],
+      cut: false,
+    });
+    // Тысяча ячеек по 63 столбца: в строке — одна, документ показан не целиком.
+    expect(await spans(span('63').repeat(1_000))).toEqual({ spans: [DOC_MAX_GRID], cut: true });
+    const plain = await spans('<w:tc/>'.repeat(1_000));
+    expect(plain.spans).toHaveLength(DOC_MAX_GRID);
+    expect(plain.cut).toBe(true);
+  });
+
+  it('вложенные таблицы и объединения по вертикали — в том же пределе ячеек (защита, п. И-12)', async () => {
+    // Таблица в ячейке таблицы в ячейке…: ячейки всех уровней считаются вместе.
+    let body = `<w:tbl>${`<w:tr>${'<w:tc/>'.repeat(50)}</w:tr>`.repeat(400)}</w:tbl>`;
+    for (let k = 0; k < 4; k++)
+      body = `<w:tbl><w:tr><w:tc>${body}</w:tc></w:tr>${`<w:tr>${'<w:tc/>'.repeat(50)}</w:tr>`.repeat(400)}</w:tbl>`;
+    const nested = await parseDocx(openZip(await docxBytes(body)));
+    const units = (blocks: DocBlock[]): number =>
+      blocks.reduce(
+        (n, b) =>
+          n +
+          (b.k === 't'
+            ? b.rows.reduce((m, r) => m + 1 + r.reduce((q, c) => q + 1 + units(c.blocks), 0), 0)
+            : 0),
+        0,
+      );
+    expect(units(nested.blocks)).toBeLessThanOrEqual(DOC_MAX_CELLS);
+    expect(nested.cut).toBe(true);
+
+    // Объединение по вертикали на много строк: строки — в пределе, у первой ячейки — их число.
+    const vm = (v?: string) =>
+      `<w:tc><w:tcPr><w:vMerge${v ? ` w:val="${v}"` : ''}/></w:tcPr></w:tc>`;
+    const tall = await parseDocx(
+      openZip(
+        await docxBytes(
+          `<w:tbl><w:tr>${vm('restart')}</w:tr>${`<w:tr>${vm()}</w:tr>`.repeat(DOC_MAX_CELLS + 10)}</w:tbl>`,
+        ),
+      ),
     );
-    const w = wide.blocks[0];
-    expect(w?.k === 't' ? w.rows[0]!.map((c) => c.span) : null).toEqual([63, undefined]);
-    expect(wide.cut).toBe(false);
+    const t = tall.blocks[0];
+    const rows = t?.k === 't' ? t.rows : [];
+    expect(rows.length).toBeLessThanOrEqual(DOC_MAX_CELLS);
+    expect(rows[0]![0]!.rowSpan).toBe(rows.length);
+    expect(tall.cut).toBe(true);
   });
 
   it('предел абзацев и документ без тела', async () => {

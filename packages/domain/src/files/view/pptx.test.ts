@@ -120,6 +120,14 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(parts(table.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
     expect(table.cut).toBe(true);
 
+    // Группы фигур, вложенные друг в друга, — в том же пределе слайда.
+    let group = Array.from({ length: 1_000 }, (_, k) => shape(k)).join('');
+    for (let k = 0; k < 20; k++)
+      group = `<p:grpSp><p:nvGrpSpPr/><p:grpSpPr/>${group}${Array.from({ length: 1_000 }, (_, j) => shape(j)).join('')}</p:grpSp>`;
+    const grouped = await parsePptx(openZip(await pptxBytes([group])));
+    expect(parts(grouped.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
+    expect(grouped.cut).toBe(true);
+
     // Много тяжёлых слайдов: вся презентация — до предела, дальше слайды не берутся.
     const heavy = Array.from({ length: 1_400 }, (_, k) => shape(k)).join('');
     const deck = await parsePptx(openZip(await pptxBytes(Array.from({ length: 60 }, () => heavy))));

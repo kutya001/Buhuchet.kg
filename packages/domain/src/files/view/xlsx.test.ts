@@ -284,9 +284,21 @@ describe('Excel XLSX в окне просмотра', () => {
     // Следующий лист той же книги ничего не берёт.
     expect(parseWorksheet('b', ws, fill, [], false, budget).rows).toHaveLength(0);
 
+    // Пустые места строки до ячейки тоже считаются: ячейка в столбце IV — 256 мест.
+    const far = `<worksheet><sheetData>${Array.from(
+      { length: 10 },
+      (_, i) => `<row r="${i + 1}"><c r="IV${i + 1}"><v>1</v></c></row>`,
+    ).join('')}</sheetData></worksheet>`;
+    const slots = { left: SHEET_MAX_BOOK_CHARS, cells: 600 };
+    const padded = parseWorksheet('c', far, [], [], false, slots);
+    expect(padded.rows).toHaveLength(2);
+    expect(padded.rows[1]).toHaveLength(SHEET_MAX_COLS);
+    expect(slots.cells).toBe(0);
+
     // Второй рубеж — после разбора: ячейки книги считаются так же, как знаки.
     const cell = { v: '', bg: '#FFFF00' };
-    const full = Array.from({ length: SHEET_MAX_COLS }, () => cell);
+    // Одна ячейка в конце строки: пустые места до неё считаются вместе с ней.
+    const full = [...Array.from({ length: SHEET_MAX_COLS - 1 }, () => null), cell];
     const big = (name: string) => ({
       name,
       cols: [],
@@ -304,6 +316,19 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(book.sheets[1]!.rows).toHaveLength(
       Math.floor((SHEET_MAX_BOOK_CELLS - 3_000 * SHEET_MAX_COLS) / SHEET_MAX_COLS),
     );
+  });
+
+  it('CSV — в том же пределе мест книги (защита, п. И-12)', async () => {
+    const line = `${Array.from({ length: 300 }, () => '1').join(',')}\n`;
+    const csv = await parseFileView(
+      'big.csv',
+      new TextEncoder().encode(line.repeat(SHEET_MAX_ROWS)),
+    );
+    if (csv.kind !== 'sheet') throw new Error(csv.kind);
+    const sheet = csv.sheets[0]!;
+    expect(sheet.colsCut).toBe(true);
+    expect(sheet.rows).toHaveLength(Math.floor(SHEET_MAX_BOOK_CELLS / SHEET_MAX_COLS));
+    expect(sheet.totalRows).toBe(SHEET_MAX_ROWS);
   });
 
   it('помощники листа и CSV', () => {

@@ -140,6 +140,24 @@ describe('старый Excel XLS в окне просмотра', () => {
     expect(first!.totalRows).toBe(10);
     expect(second!.rows).toHaveLength(0);
     expect(budget.cells).toBe(0);
+
+    // Пустые места строки до ячейки тоже считаются: ячейка в столбце IV — 256 мест.
+    const far = cfbBytes([
+      {
+        name: 'Workbook',
+        data: xlsWorkbookStream([
+          {
+            name: 'Далеко',
+            cells: Array.from({ length: 10 }, (_, i) => ({ r: i, c: 255, k: 'rk' as const, v: 1 })),
+          },
+        ]),
+      },
+    ]);
+    const slots = { left: SHEET_MAX_BOOK_CHARS, cells: 600 };
+    const [padded] = parseXls(far, slots).sheets;
+    expect(padded!.rows).toHaveLength(2);
+    expect(padded!.rows[1]).toHaveLength(256);
+    expect(slots.cells).toBe(0);
   });
 
   it('книга с паролем и битые файлы', () => {

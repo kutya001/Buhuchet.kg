@@ -41,7 +41,14 @@ interface SlideBudget {
 
 /** Ещё одна фигура, абзац, кусок текста или ячейка: места нет — false, презентация показана не целиком. */
 function takePart(b: SlideBudget, chars = 0): boolean {
-  if (b.slide <= 0 || b.deck <= 0 || b.chars < chars) {
+  if (b.deck <= 0 || b.chars < chars) {
+    // Предел презентации: следующие слайды уже не разбираются.
+    b.deck = 0;
+    b.chars = 0;
+    b.cut = true;
+    return false;
+  }
+  if (b.slide <= 0) {
     b.cut = true;
     return false;
   }

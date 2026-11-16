@@ -33,8 +33,11 @@ export const DOC_MAX_CHARS = 16_000_000;
  * ни знака, а окно рисует каждую ячейку.
  */
 export const DOC_MAX_CELLS = 50_000;
-/** Столбцов сетки, которые занимает одна ячейка, — не больше (у Word — до 63 столбцов). */
-export const DOC_MAX_SPAN = 63;
+/**
+ * Столбцов сетки в строке таблицы — не больше (у Word — до 63): ячейка шире остатка сужается, лишние
+ * ячейки строки не берутся. Иначе строка из тысяч ячеек с `gridSpan` вешает раскладку страницы.
+ */
+export const DOC_MAX_GRID = 63;
 
 export interface DocRun {
   t: string;
@@ -398,9 +401,13 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
     const row: DocCell[] = [];
     let grid = 0;
     for (const tc of childEls(tr, 'tc')) {
+      if (grid >= DOC_MAX_GRID) {
+        ctx.cut = true;
+        break;
+      }
       const pr = childEl(tc, 'tcPr');
       const spanVal = Math.floor(Number(attrOf(childEl(pr, 'gridSpan'), 'val') ?? 1));
-      const span = Math.min(DOC_MAX_SPAN, Math.max(1, spanVal || 1));
+      const span = Math.min(DOC_MAX_GRID - grid, Math.max(1, spanVal || 1));
       const vm = childEl(pr, 'vMerge');
       const vmVal = attrOf(vm, 'val');
       if (vm && vmVal !== 'restart') {

@@ -13,6 +13,7 @@ import {
   SHEET_MAX_SHEETS,
   sheetFormatCode,
   sheetMergeCollector,
+  sheetSlots,
   sheetTextBudget,
   takeSheetCell,
   type SheetTextBudget,
@@ -328,7 +329,7 @@ function parseXlsSheet(
       colsCut = true;
       return;
     }
-    if (!takeSheetCell(budget, cell)) {
+    if (!takeSheetCell(budget, cell, sheetSlots(rows[r], c))) {
       if (textCutAt < 0 || r < textCutAt) textCutAt = r;
       return;
     }

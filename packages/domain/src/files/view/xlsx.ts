@@ -17,6 +17,7 @@ import {
   sheetBudgetSpent,
   sheetFormatCode,
   sheetMergeCollector,
+  sheetSlots,
   sheetTextBudget,
   takeSheetCell,
   type SheetTextBudget,
@@ -280,7 +281,7 @@ export function parseWorksheet(
             sst,
             date1904,
           );
-          if (cell && !takeSheetCell(budget, cell)) {
+          if (cell && !takeSheetCell(budget, cell, sheetSlots(rows[rowIdx], cur.c))) {
             cut = true;
             if (textCutAt < 0) textCutAt = rowIdx;
           } else if (cell) {
