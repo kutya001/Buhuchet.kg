@@ -52,7 +52,9 @@ function tgTaskMsg(t,at){return {h:t.title,sub:tplFill('tgTask',{автор:empN
   btns:[[...(t.status==='К выполнению'?[{t:tgBtnT('tgBtnTaskWork','Взять в работу'),act:'taskWork',arg:t.id}]:[]),{t:tgBtnT('tgBtnTaskDone','Выполнена'),act:'taskDone',arg:t.id}],
     [{t:tgBtnT('tgBtnTaskOpen','Открыть задачу'),url:`${TG_SITE}/tasks/mine?task=${t.id}`,go:()=>openTask(t)}]]}}
 // Сообщение постановщику: в макете — строка журнала «Телеграм» (чат постановщика здесь не показан)
-function tgTaskTell(t,kind){const a=t.by&&t.by!==t.exec&&EM[t.by];if(a&&a.tg)TG_LOG.unshift({id:TG_LOG.length+1,at:nowStamp(),to:a.short+' '+a.tg,org:ORG.name,kind,st:'Ожидает',tries:0,err:''})}
+// Постановщику — в Telegram и в колокольчик (bell.js): взята в работу, ждёт подтверждения, выполнена
+const TG_TASK_BELL={'Задача взята в работу':'start','Задача ждёт подтверждения':'conf','Задача выполнена':'done'};
+function tgTaskTell(t,kind){if(t.by!==t.exec&&TG_TASK_BELL[kind])bellTask(t,TG_TASK_BELL[kind],t.by);const a=t.by&&t.by!==t.exec&&EM[t.by];if(a&&a.tg)TG_LOG.unshift({id:TG_LOG.length+1,at:nowStamp(),to:a.short+' '+a.tg,org:ORG.name,kind,st:'Ожидает',tries:0,err:''})}
 tgAct('taskWork',{change:true,scope:tgTaskIn,stale:(u,id)=>tgTaskOf(id).status!=='К выполнению',
   run:(u,id)=>{const t=tgTaskOf(id);t.status='В работе';tgLog('t',t.id,'Статус: К выполнению → В работе');tgTaskTell(t,'Задача взята в работу');return {done:'✓ В работе',eph:tplFill('tgActTaskWork',{})}}});
 function tgTaskFinish(t,f,note){const from=t.status;t.doneAt=TODAY;if(f){t.file=f.name;FUP.add(f.name);fNoteAdd(t.cp,[f],note)}
@@ -85,7 +87,7 @@ tgAct('confBack',{change:true,perm:'repConfirm',scope:tgRepIn,stale:tgConfStale,
 tgAct('confWhy',{change:true,perm:'repConfirm',scope:tgRepIn,stale:tgConfStale,
   reply:(u,id,p)=>{const r=tgRepOf(id),why=String(p.text||'').replace(/[()]/g,'').replace(/\s+/g,' ').trim().slice(0,500);if(!why)return {again:tplFill('tgAskNeedText',{})};
     if(tgConfOwn(r))return {say:tplFill('tgActConfOwn',{})};
-    Object.assign(r,{status:'Требует исправления',fixWhy:why,fixBy:S.me,fixAt:nowStamp(),confAt:null,confBy:null,confNote:''});tgLog('r',r.id,`Статус: Сдан → Требует исправления (на исправление: ${why})`,r.cp);
+    Object.assign(r,{status:'Требует исправления',fixWhy:why,fixBy:S.me,fixAt:nowStamp(),confAt:null,confBy:null,confNote:''});tgLog('r',r.id,`Статус: Сдан → Требует исправления (на исправление: ${why})`,r.cp);bellFix(r);
     const e=EM[r.resp];if(e&&e.tg)TG_LOG.unshift({id:TG_LOG.length+1,at:nowStamp(),to:e.short+' '+e.tg,org:ORG.name,kind:'Возврат на исправление',st:'Ожидает',tries:0,err:''});
     return {done:'↩ Возвращён',off:['confOk'],say:tplFill('tgConfBackOk',{отчёт:tgRepFull(r)})}}});
 // Сообщение ответственному о возврате: прежний текст шаблона и кнопки отчёта — исправил и сразу отметил «Сдан»
@@ -93,13 +95,16 @@ function tgFixMsg(r,at){return {t:tplFill('tgFix',{отчёт:tgRepFull(r),пр�
 
 // Чат сотрудника в макете: что бот прислал бы ему сегодня. В макете в него попадают все его несданные отчёты со сроком в ближайшие дни напоминания, все ждущие подтверждения и все новые задачи —
 // чтобы было что нажать; в продукте напоминание приходит в свои дни (за N дней, в день срока, при просрочке), о задаче — когда её поставили, о подтверждении — когда сдача ждёт дольше заданного
+// Что утреннее напоминание скажет сотруднику: его несданные отчёты в днях напоминания (просрочено, сегодня, скоро) и налоги к оплате.
+// Им же считается строка «Сроки на сегодня» колокольчика (bell.js, пакет 16.11.2026, блок 3)
+function tgMine(u){const days=r=>{const o=ORG.types[r.t];return Math.max(0,...((o&&o.days)||ORG.remind||[]))};
+  const mine=visReports().filter(r=>r.resp===u.id&&tgRepOpen(r)&&!CPM[r.cp].archived&&diffDays(r.due,TODAY)<=days(r)).sort((a,b)=>a.due<b.due?-1:a.due>b.due?1:a.id-b.id);
+  // Налоги к оплате: срок оплаты впереди, в пределах дней напоминания (задача Т3: раздел «Оплата налогов» утренней таблицы)
+  const pay=visReports().filter(r=>r.resp===u.id&&tgPayOpen(r)&&!CPM[r.cp].archived&&r.payDue>TODAY&&diffDays(r.payDue,TODAY)<=days(r)).sort((a,b)=>a.payDue<b.payDue?-1:a.payDue>b.payDue?1:a.id-b.id);
+  return {mine,pay,ov:mine.filter(r=>r.due<TODAY),td:mine.filter(r=>r.due===TODAY),bf:mine.filter(r=>r.due>TODAY)}}
 function tgStaffList(u){const at=tgnAt(),L=[{day:'Сегодня'}],list=rs=>rs.map(r=>`${tgRepName(r)} — ${CPM[r.cp].name}`).join(', ');
   if(feat('telegram')){
-    const days=r=>{const o=ORG.types[r.t];return Math.max(0,...((o&&o.days)||ORG.remind||[]))};
-    const mine=visReports().filter(r=>r.resp===u.id&&tgRepOpen(r)&&!CPM[r.cp].archived&&diffDays(r.due,TODAY)<=days(r)).sort((a,b)=>a.due<b.due?-1:a.due>b.due?1:a.id-b.id);
-    const ov=mine.filter(r=>r.due<TODAY),td=mine.filter(r=>r.due===TODAY),bf=mine.filter(r=>r.due>TODAY);
-    // Налоги к оплате: срок оплаты впереди, в пределах дней напоминания (задача Т3: раздел «Оплата налогов» утренней таблицы)
-    const pay=visReports().filter(r=>r.resp===u.id&&tgPayOpen(r)&&!CPM[r.cp].archived&&r.payDue>TODAY&&diffDays(r.payDue,TODAY)<=days(r)).sort((a,b)=>a.payDue<b.payDue?-1:a.payDue>b.payDue?1:a.id-b.id);
+    const{mine,pay,ov,td,bf}=tgMine(u);
     if(mine.length||pay.length){const by={},pby={};bf.forEach(r=>{const d=diffDays(r.due,TODAY);(by[d]=by[d]||[]).push(r)});pay.forEach(r=>{const d=diffDays(r.payDue,TODAY);(pby[d]=pby[d]||[]).push(r)});
       // Утреннее напоминание — таблицей с разделами (tgMornMsg); простой текст — прежние строки
       const plain=[ov.length?tplFill('tgOver',{список:list(ov)}):'',td.length?tplFill('tgToday',{список:list(td)}):'',...Object.keys(by).map(d=>tplFill('tgBefore',{дней:d,список:list(by[d])})),...Object.keys(pby).map(d=>tplFill('tgPay',{дней:d,список:list(pby[d])}))].filter(Boolean).join('\n');

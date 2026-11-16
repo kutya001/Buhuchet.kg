@@ -22,7 +22,7 @@ function renderSide(){
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v121 · 16.11.2026';
+const PROTO_VER='v124 · 16.11.2026';
 // В демо-режиме — только «Войти как» (без администратора платформы) и «Очистить рабочие данные»
 function demoBox(){if(DEMO.on)return `<div class="demo"><div class="row" style="gap:6px"><b>${LE('land.demo.box')}</b></div><label for="demo-user">Войти как:</label>${sel('demo-user',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),S.me)}<div class="demo-db"><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button></div><span>${LE('land.demo.box.sub')}</span></div>`;
   return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
@@ -73,7 +73,7 @@ function tabsTarget(t,on){on=on||$('.tab.on',t);if(!on||t.scrollWidth<=t.clientW
 // «На всю ширину»: страница модуля без ограничения ширины (на телефоне не действует); выбор запоминается
 function paintWide(){const b=$('#wide'),on=!!S.wide;$('#app').classList.toggle('wide',on);if(!b)return;b.innerHTML=ic(on?'minimize':'maximize');b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on));b.title=on?'Обычная ширина: содержимое по центру':'На всю ширину экрана';b.setAttribute('aria-label',b.title)}
 function paintBurger(){const b=$('#burger');if(!b)return;const t=isMobile()?'Меню':S.navHidden?'Развернуть панель модулей':'Свернуть панель до значков';b.title=t;b.setAttribute('aria-label',t);b.setAttribute('aria-expanded',String(!S.navHidden))}
-function renderShell(fresh){$('#app').classList.toggle('nav-hidden',S.navHidden&&!isMobile());paintBurger();renderSide();renderBnav();renderPage(fresh);vidTopSync()}
+function renderShell(fresh){$('#app').classList.toggle('nav-hidden',S.navHidden&&!isMobile());paintBurger();renderSide();renderBnav();renderPage(fresh);vidTopSync();bellSoon()}
 function refreshAll(){gkIndex();derive();const openForms=MODALS.filter(m=>m.o.live);renderShell();openForms.forEach(m=>m.draw())}
 
 /* ═════════════ Top bar ═════════════ */
@@ -96,6 +96,6 @@ function initTop(){
   let deb;$('#q').addEventListener('input',e=>{clearTimeout(deb);deb=setTimeout(()=>{S.search=e.target.value;if(S.search)ckHit('search');ACTIVE.forEach(g=>{g.s.page=0;g.refresh()});if(S.mod==='reports'&&S.tab==='matrix')renderPage()},120)});
   $('#q-open').onclick=()=>{$('#topbar').classList.add('searching');$('#q').focus()};
   $('#q').addEventListener('blur',()=>{if(!S.search)$('#topbar').classList.remove('searching')});
-  tick();setInterval(tick,20000);
+  tick();setInterval(tick,20000);bellInit();
 }
 

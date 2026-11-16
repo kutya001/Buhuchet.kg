@@ -31,6 +31,9 @@ function accLockFail(u){if(!u||u.id==='admin'||u.pwLocked)return;u.pwBad=(u.pwBa
   u.pwLocked=nowStamp();const own=accIsOwner(u),org=accOrg(u);
   if(EMP.includes(u))log('emp',u.id,'Вход заблокирован: 10 неверных паролей подряд',null,{who:'system'});
   // «Telegram: вход заблокирован» — самому пользователю; «…вход сотрудника заблокирован» — владельцам организации; «…вход владельца заблокирован» — администраторам платформы
+  // Колокольчик (пакет 16.11.2026, блок 3): самому сотруднику и владельцам организации — как в Telegram, и без привязанного Telegram
+  if(EMP.includes(u)){const k='login_locked:'+u.id+':'+u.pwLocked;bellPut(u.id,{kind:'other',ev:'login_locked',text:'Вход заблокирован: 10 неверных паролей подряд',key:k});
+    if(!own)EMP.filter(e=>e.role==='owner'&&e.active!==false&&e!==u).forEach(e=>bellPut(e.id,{kind:'other',ev:'login_locked',open:{k:'employee',id:u.id},text:`Вход сотрудника ${u.short||u.fio} заблокирован: 10 неверных паролей подряд`,key:k}))}
   tgSvc(tgOf(u),'Вход заблокирован',{org});(own?leadAdmins():accOwners(u)).forEach(w=>tgSvc(tgOf(w),'Вход заблокирован',{org:own?'':org}))}
 // Вход закрывает и кнопка «Это не я» под сообщением бота о безопасности (поток Т, задача Т4, 13.11.2026; tg-security.js): та же блокировка pwLocked с причиной pwLockWhy='notme',
 // при этом все сеансы завершаются. Текст на странице входа — свой, показывается так же только после верного пароля

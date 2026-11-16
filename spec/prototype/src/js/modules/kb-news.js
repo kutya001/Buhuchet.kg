@@ -7,7 +7,16 @@ const NEWS=DB.ref.news;
 // Новому пользователю прочитанными считаются новости версий прототипа v1–v28 (целые номера), а не любые с номером меньше 29: «1.4» — новая версия
 const NEWS_READ=dbSets(DB.newsRead);const newsRead=u=>NEWS_READ[u||S.me]=NEWS_READ[u||S.me]||new Set(NEWS.filter(n=>/^\d+$/.test(n.ver||'')&&+n.ver<=28).map(n=>n.id));
 const newsLive=n=>n.status==='Опубликовано'&&!n.off&&(n.date<TODAY||(n.date===TODAY&&bishkekNow().hm>='09:00'));
-const newsVis=()=>NEWS.filter(n=>newsLive(n)&&(n.aud==='all'||isAdmin()));
+// «Модули» новости (пакет 16.11.2026, блок 4, пункт 3): модули режима Бизнес и «Плата за обслуживание» — у неё своё право (по умолчанию).
+// Новость про модуль, которого у человека нет (нет права или выключен в учётной политике), ему не видна — в ленте, «Что нового» и колокольчике;
+// новость про несколько модулей видна, если есть хотя бы один (по умолчанию); без модулей — видят все; в режиме Админка — все новости
+const NEWS_MODS=()=>[...BIZ.map(m=>[m.id,m.title]),['fee','Плата за обслуживание']];
+const newsModName=k=>(NEWS_MODS().find(m=>m[0]===k)||[k,k])[1];
+const newsModOk=k=>k==='fee'?feat('fee')&&can('fee'):mods().some(m=>m.id===k);
+const newsModsOk=n=>isAdmin()||!(n.mods||[]).length||n.mods.some(newsModOk);
+const newsVis=()=>NEWS.filter(n=>newsLive(n)&&(n.aud==='all'||isAdmin())&&newsModsOk(n));
+// Текст «Для администратора платформы» (блок 4, пункт 1) — только в режиме Админка, под чертой с этой подписью
+const newsAdmHtml=n=>isAdmin()&&n.admMd&&mdText(n.admMd)?`<div class="nw-adm"><div class="nw-adm-h">${ic('shield','sm')}Для администратора платформы</div><div class="kb-art md">${mdHtml(n.admMd)}</div></div>`:'';
 const newsUnread=()=>{const r=newsRead();return newsVis().filter(n=>!r.has(n.id)).length};
 const newsPill=t=>`<span class="pill sm ${NEWS_T[t]||'blue'}">${esc(t)}</span>`;
 const newsLinkTxt=l=>!l?'':l.k==='art'?((KB_ARTS.find(a=>a.id===l.id)||{}).t||''):l.k==='video'?((vidById(l.id)||{}).t||''):kbModT(l.id);
@@ -52,7 +61,7 @@ function newsSync(){const fresh=(DBSRC.ref.db.news||[]);
   fresh.forEach(f=>{if(!NEWS.some(n=>n.id===f.id))NEWS.push(structuredClone(f))})}
 newsSync();
 function newsOpen(n){newsRead().add(n.id);renderSide();renderSheetDot();
-  openModal({size:'wide',render:()=>({title:esc(n.t),sub:`${fmtD(n.date)}${n.ver?' · версия '+esc(n.ver):''}${n.edited?' · изменено '+fmtD(n.edited):''}`,body:`<div class="row" style="gap:8px">${newsPill(n.type)}${n.pin?'<span class="tag">Закреплено</span>':''}</div><div class="kb-art md">${mdHtml(n.md)}</div>`,
+  openModal({size:'wide',render:()=>({title:esc(n.t),sub:`${fmtD(n.date)}${n.ver?' · версия '+esc(n.ver):''}${n.edited?' · изменено '+fmtD(n.edited):''}`,body:`<div class="row" style="gap:8px">${newsPill(n.type)}${n.pin?'<span class="tag">Закреплено</span>':''}</div><div class="kb-art md">${mdHtml(n.md)}</div>${newsAdmHtml(n)}`,
     foot:`<div class="grow"></div>${n.link&&newsLinkOk(n.link)?`<button class="btn" id="nw-more">${newsLinkBtn(n.link)}</button>`:''}<button class="btn cta" data-close>Закрыть</button>`,
     mount(el,m){const b=$('#nw-more',el);if(b)b.onclick=()=>{m.close();newsLinkGo(n.link)}}}),onClose:()=>{if(S.mod==='kb')renderPage()}});if(S.mod==='kb')setTimeout(renderPage,0)}
 /* Окно «Что нового» (ТЗ, «Новости» → «Окно «Что нового» при входе»): при входе в систему, только если есть непрочитанные новости
@@ -69,7 +78,7 @@ function newsOrder(l){const v=l.filter(n=>n.ver).sort((a,b)=>newsVerCmp(a,b)||ne
 /* Новость в ленте и в окне «Что нового» — строкой-заголовком: главный смысл в заголовке, подробности раскрываются по нажатию
    (решение заказчика 13.11.2026). Раскрыта сама только самая новая; «версия N» в строке — только если номера нет в самом заголовке */
 const newsVerInT=n=>new RegExp('(^|\\D)'+String(n.ver).replace(/\./g,'\\.')+'(\\D|$)').test(n.t);
-const newsRow=(n,open,fresh)=>`<div class="nw-it${open?' open':''}${fresh?' unread':''}" data-nwit="${n.id}"><button type="button" class="nw-h" data-news="${n.id}" aria-expanded="${!!open}">${ic(open?'down':'right','sm')}<b class="nw-t">${esc(n.t)}</b><span class="nw-m">${fresh?'<span class="pill sm red">Новое</span>':''}${n.pin?`<span class="tag">${ic('star','sm')}Закреплено</span>`:''}${newsPill(n.type)}<span class="muted">${fmtD(n.date)}${n.ver&&!newsVerInT(n)?' · версия '+esc(n.ver):''}</span></span></button>${open?`<div class="nw-b"><div class="kb-art md">${mdHtml(n.md)}</div>${n.link&&newsLinkOk(n.link)?`<button class="btn sm" data-nwmore="${n.id}">${newsLinkBtn(n.link)}</button>`:''}</div>`:''}</div>`;
+const newsRow=(n,open,fresh)=>`<div class="nw-it${open?' open':''}${fresh?' unread':''}" data-nwit="${n.id}"><button type="button" class="nw-h" data-news="${n.id}" aria-expanded="${!!open}">${ic(open?'down':'right','sm')}<b class="nw-t">${esc(n.t)}</b><span class="nw-m">${fresh?'<span class="pill sm red">Новое</span>':''}${n.pin?`<span class="tag">${ic('star','sm')}Закреплено</span>`:''}${newsPill(n.type)}<span class="muted">${fmtD(n.date)}${n.ver&&!newsVerInT(n)?' · версия '+esc(n.ver):''}</span></span></button>${open?`<div class="nw-b"><div class="kb-art md">${mdHtml(n.md)}</div>${newsAdmHtml(n)}${n.link&&newsLinkOk(n.link)?`<button class="btn sm" data-nwmore="${n.id}">${newsLinkBtn(n.link)}</button>`:''}</div>`:''}</div>`;
 function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return;if(DEMO.on)return;// в демо-версии окно не открывается само: новости — во вкладке «Новости»
   if(how==='open'){let seen=null;try{seen=sessionStorage.getItem(BU_P+'wn.'+S.me)}catch(e){}if(seen)return}
   try{sessionStorage.setItem(BU_P+'wn.'+S.me,'1')}catch(e){}
@@ -87,24 +96,26 @@ function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return
         const nb=$(`#wn-list [data-news="${n.id}"]`,el);if(nb)nb.focus({preventScroll:true})}}}),
     onClose:()=>{if(S.mod==='kb')renderPage()}}),400)}
 const newsLinkOk=l=>l.k==='art'?kbArts().some(a=>a.id===l.id):l.k==='video'?vidOk(vidById(l.id)):mods().some(m=>m.id===l.id);
-const NF={type:'',ver:'',q:''};
+const NF={type:'',ver:'',mod:'',q:''};
 // Какие новости раскрыты во вкладке: при каждом входе во вкладку — только самая новая
 const NW={open:new Set(),fresh:''};
 function renderNews(body,fresh){const all=newsVis();const r=newsRead();const q=NF.q.trim().toLowerCase();
   // Раскрытая сама самая новая считается прочитанной сразу, но отметка «Новое» видна на ней до ухода со вкладки
   const top=newsOrder(all)[0];if(fresh){NW.open=new Set(top?[top.id]:[]);NW.fresh='';if(top&&!r.has(top.id)){NW.fresh=top.id;r.add(top.id);setTimeout(()=>{renderSide();renderSheetDot();if(typeof dbSoon==='function')dbSoon()},0)}}
-  const l=newsOrder(all.filter(n=>(!NF.type||n.type===NF.type)&&(!NF.ver||n.ver===NF.ver)&&(!q||(n.t+' '+newsShort(n)+' '+(n.md||'')).toLowerCase().includes(q))));
+  const l=newsOrder(all.filter(n=>(!NF.type||n.type===NF.type)&&(!NF.ver||n.ver===NF.ver)&&(!NF.mod||(n.mods||[]).includes(NF.mod))&&(!q||(n.t+' '+newsShort(n)+' '+(n.md||'')+(isAdmin()?' '+(n.admMd||''):'')).toLowerCase().includes(q))));
+  // Фильтр «Модуль» — модули, которые у человека есть (в режиме Админка — все); выбранный, но пропавший модуль остаётся в списке
+  const mo=NEWS_MODS().filter(m=>isAdmin()||newsModOk(m[0])||m[0]===NF.mod);
   const vers=[...new Set(all.map(n=>n.ver).filter(Boolean))].sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));
   const item=n=>newsRow(n,NW.open.has(n.id),!r.has(n.id)||NW.fresh===n.id);
   const pins=l.filter(n=>n.pin),rest=l.filter(n=>!n.pin);
-  body.innerHTML=`<div class="box"><div class="row" style="flex-wrap:wrap"><span class="kb-search">${ic('search','sm')}<input class="inp" id="nw-q" placeholder="Поиск по новостям" value="${esc(NF.q)}" aria-label="Поиск по новостям"></span>${sel('nw-type',[['','Все типы'],...Object.keys(NEWS_T).map(x=>[x,x])],NF.type,'aria-label="Тип"')}${sel('nw-ver',[['','Все версии'],...vers.map(v=>[v,'Версия '+v])],NF.ver,'aria-label="Версия"')}<span class="muted">${l.length} ${plural(l.length,'новость','новости','новостей')}${r.size||all.length?` · непрочитанных ${all.filter(n=>!r.has(n.id)).length}`:''}</span>${all.some(n=>!r.has(n.id))?'<button class="linkbtn" id="nw-all">Отметить все прочитанными</button>':''}</div></div>
+  body.innerHTML=`<div class="box"><div class="row" style="flex-wrap:wrap"><span class="kb-search">${ic('search','sm')}<input class="inp" id="nw-q" placeholder="Поиск по новостям" value="${esc(NF.q)}" aria-label="Поиск по новостям"></span>${sel('nw-type',[['','Все типы'],...Object.keys(NEWS_T).map(x=>[x,x])],NF.type,'aria-label="Тип"')}${sel('nw-ver',[['','Все версии'],...vers.map(v=>[v,'Версия '+v])],NF.ver,'aria-label="Версия"')}${sel('nw-mod',[['','Все модули'],...mo],NF.mod,'aria-label="Модуль"')}<span class="muted">${l.length} ${plural(l.length,'новость','новости','новостей')}${r.size||all.length?` · непрочитанных ${all.filter(n=>!r.has(n.id)).length}`:''}</span>${all.some(n=>!r.has(n.id))?'<button class="linkbtn" id="nw-all">Отметить все прочитанными</button>':''}</div></div>
   ${!l.length?`<div class="state">${ic('bell','lg')}<b>${all.length?'Ничего не найдено':'Новостей пока нет'}</b>${all.length?'<button class="linkbtn" id="nw-x">Сбросить фильтры</button>':'<span>Здесь появятся новости об обновлениях платформы.</span>'}</div>`:''}
   ${pins.length?`<div class="box"><h3>Закреплено</h3><div class="nw-list">${pins.map(item).join('')}</div></div>`:''}
   ${rest.length?`<div class="box"><div class="nw-list">${rest.map(item).join('')}</div></div>`:''}`;
   const qi=$('#nw-q',body);qi.oninput=()=>{NF.q=qi.value;const p=qi.selectionStart;renderPage();const n=$('#nw-q');if(n){n.focus({preventScroll:true});n.setSelectionRange(p,p)}};
-  $('#nw-type',body).onchange=e=>{NF.type=e.target.value;renderPage()};$('#nw-ver',body).onchange=e=>{NF.ver=e.target.value;renderPage()};
+  $('#nw-type',body).onchange=e=>{NF.type=e.target.value;renderPage()};$('#nw-ver',body).onchange=e=>{NF.ver=e.target.value;renderPage()};$('#nw-mod',body).onchange=e=>{NF.mod=e.target.value;renderPage()};
   body.onclick=e=>{const g=e.target.closest('[data-nwmore]');if(g)return newsLinkGo(NEWS.find(n=>n.id===g.dataset.nwmore).link);
     // Заголовок раскрывает и сворачивает подробности; раскрытая новость считается прочитанной
     const b=e.target.closest('[data-news]');
     if(b){const id=b.dataset.news;if(NW.open.has(id))NW.open.delete(id);else{NW.open.add(id);if(!r.has(id)){r.add(id);renderSide();renderSheetDot()}}renderPage();const nb=$(`.nw-list [data-news="${id}"]`);if(nb)nb.focus({preventScroll:true});return}
-    if(e.target.closest('#nw-x')){NF.type=NF.ver=NF.q='';renderPage()}if(e.target.closest('#nw-all')){all.forEach(n=>r.add(n.id));NW.fresh='';renderPage();renderSide();renderSheetDot()}}}
+    if(e.target.closest('#nw-x')){NF.type=NF.ver=NF.mod=NF.q='';renderPage()}if(e.target.closest('#nw-all')){all.forEach(n=>r.add(n.id));NW.fresh='';renderPage();renderSide();renderSheetDot()}}}
