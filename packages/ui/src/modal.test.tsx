@@ -1,9 +1,10 @@
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   confirmFooter,
   dialogClass,
+  swallowGhostClick,
   WindowFrame,
   type WindowFrameProps,
   type WindowLabels,
@@ -270,5 +271,58 @@ describe('стопка открытых окон', () => {
     removeForm();
     expect(stack.hasUnsaved()).toBe(false);
     removeCard();
+  });
+});
+
+describe('swallowGhostClick — касание фона только закрывает окно', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // Слушатель «кнопки» добавлен после: у EventTarget без дерева порядок — порядок добавления,
+  // а в документе перехват (`capture`) и так идёт раньше обработчиков React.
+  const fakeDoc = () => {
+    const doc = new EventTarget();
+    const reached = vi.fn();
+    const click = () => {
+      const ev = new Event('click', { cancelable: true });
+      doc.dispatchEvent(ev);
+      return ev.defaultPrevented;
+    };
+    const swallow = () => {
+      swallowGhostClick(doc as unknown as Document);
+      doc.addEventListener('click', reached);
+    };
+    return { doc, reached, click, swallow };
+  };
+
+  it('клик того же нажатия гасится, следующий доходит', () => {
+    const { reached, click, swallow } = fakeDoc();
+    swallow();
+    expect(click()).toBe(true);
+    expect(reached).not.toHaveBeenCalled();
+    expect(click()).toBe(false);
+    expect(reached).toHaveBeenCalledTimes(1);
+  });
+
+  it('новое нажатие до клика — клик уже не трогаем', () => {
+    const { doc, reached, click, swallow } = fakeDoc();
+    swallow();
+    doc.dispatchEvent(new Event('pointerdown'));
+    expect(click()).toBe(false);
+    expect(reached).toHaveBeenCalledTimes(1);
+  });
+
+  it('клика не было — через 700 мс гасить перестаём', () => {
+    vi.useFakeTimers();
+    const { reached, click, swallow } = fakeDoc();
+    swallow();
+    vi.advanceTimersByTime(700);
+    expect(click()).toBe(false);
+    expect(reached).toHaveBeenCalledTimes(1);
+  });
+
+  it('без документа (сервер) — ничего не делает', () => {
+    expect(() => swallowGhostClick(undefined)).not.toThrow();
   });
 });

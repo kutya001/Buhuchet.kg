@@ -191,6 +191,34 @@ const FLIP_MS = 220;
 const FLIP_EASE = 'cubic-bezier(.2,.8,.2,1)';
 
 /** Tab и Shift+Tab не уходят из окна под фон (окно модальное). */
+/**
+ * Окно закрывается по нажатию на фон (`pointerdown`, как `openModal` прототипа), и фон исчезает сразу.
+ * «Клик» того же нажатия браузер отдаёт уже тому, что было под фоном (на телефоне — кнопке верхней
+ * панели): касание фона только закрывает окно, поэтому клик этого нажатия гасится. Ждём его до
+ * следующего нажатия или `GHOST_CLICK_MS` — так чужой клик позже не пропадёт.
+ */
+const GHOST_CLICK_MS = 700;
+
+export function swallowGhostClick(doc: Document | undefined = globalThis.document): void {
+  if (!doc) return;
+  const capture = { capture: true };
+  const stop = (ev: Event) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+    done();
+  };
+  const done = () => {
+    doc.removeEventListener('click', stop, capture);
+    doc.removeEventListener('pointerdown', done, capture);
+    clearTimeout(timer);
+  };
+  doc.addEventListener('click', stop, capture);
+  // Слушатель добавлен во время текущего `pointerdown`: на него он уже не сработает, только на следующее нажатие.
+  doc.addEventListener('pointerdown', done, capture);
+  const timer = setTimeout(done, GHOST_CLICK_MS);
+}
+
 function trapTab(e: KeyboardEvent, dialog: HTMLElement) {
   const items = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
     (n) => n.getClientRects().length > 0,
@@ -410,7 +438,9 @@ export function Modal({
         onToggleMax={toggleMax}
         onClose={onClose}
         onCoverDown={(e) => {
-          if (e.target === e.currentTarget && !sticky) onClose();
+          if (e.target !== e.currentTarget || sticky) return;
+          swallowGhostClick();
+          onClose();
         }}
       >
         {children}
