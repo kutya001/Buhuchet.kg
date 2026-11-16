@@ -374,6 +374,10 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
       text(texts, 'files.act.delete_all'),
     );
     await cpWindow.locator('[data-file-window-delete]').click();
+    // Окно файла остаётся под вопросом и закрывается после подтверждения (прототип `fDelDlg`); ищется по
+    // своему атрибуту: в заголовке вопроса тоже есть название файла.
+    const fileWindow = page.locator(`[data-file-window="${fileId}"]`);
+    await expect(fileWindow).toBeVisible();
     const confirm = page.getByRole('dialog', {
       name: text(texts, 'files.delete.title', { name: fileName }),
     });
@@ -384,6 +388,7 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
       }),
     );
     await confirm.getByRole('button', { name: text(texts, 'files.act.delete_all') }).click();
+    await expect(fileWindow).toBeHidden();
     await expect(
       page.getByRole('status').filter({ hasText: text(texts, 'files.deleted_all') }),
     ).toBeVisible();

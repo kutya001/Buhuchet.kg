@@ -5,6 +5,7 @@ import { ConfirmDialog, useToast } from '@buhuchet/ui';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
+import { refreshContractorHistory } from '../contractors/contractor-data';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { FeePaymentWindowDialog } from '../finance/fee-payment-window';
 import { OperationWindowDialog } from '../finance/operation-window';
@@ -125,13 +126,13 @@ export function useFileDelete(): {
         query: { version: String(target.version) },
       }),
     );
-    await refresh();
-    if (target.contractor)
-      void client.invalidateQueries({ queryKey: ['contractors', 'history', target.contractor.id] });
+    // История контрагента и окна записей — сразу, с отменой начатой загрузки (№ 44), списки — следом.
+    if (target.contractor) void refreshContractorHistory(client, target.contractor.id);
     for (const link of target.links) {
       const key = recordQueryKey({ kind: link.kind, id: link.id });
       if (key) void client.invalidateQueries({ queryKey: key });
     }
+    await refresh();
     const everywhere = target.links.length > 0 || target.hiddenLinks > 0;
     if (res.ok) toast(t(everywhere ? 'files.deleted_all' : 'files.deleted'), { icon: 'trash' });
     else toast(errorText(res.error), { bad: true, icon: 'alert' });
