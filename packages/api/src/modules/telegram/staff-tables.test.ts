@@ -379,6 +379,22 @@ describe.skipIf(!databaseAvailable())(
       expect(await outbox('nudge', acc.userId)).toEqual([
         { id: expect.any(String), status: 'sent' },
       ]);
+      // Колокольчик (доработки 16.11.2026, блок 3): та же строка — во вкладку «Просрочено» сотрудника,
+      // одна в день.
+      const { bellNotifications: bell } = schema;
+      const bellRows = () =>
+        f.t.admin.db
+          .select({ key: bell.eventKey, kind: bell.targetKind, id: bell.targetId, need: bell.need })
+          .from(bell)
+          .where(and(eq(bell.userId, acc.userId), eq(bell.event, 'nudge')))
+          .orderBy(bell.eventKey);
+      const row = (day: string) => ({
+        key: `nudge:${day}`,
+        kind: 'reports_tab',
+        id: 'overdue',
+        need: 'repView',
+      });
+      expect(await bellRows()).toEqual([row('2026-10-19')]);
       // Второе нажатие той же кнопки — «Кнопка устарела»; главный бухгалтер своей кнопкой — «уже
       // получил напоминание сегодня», второго сообщения нет, его кнопка остаётся.
       expect(await press(CHAT.owner, week.id, nudge(acc.employeeId))).toMatchObject({
@@ -402,6 +418,7 @@ describe.skipIf(!databaseAvailable())(
       });
       expect(sent(CHAT.acc)).toHaveLength(from + 2);
       expect(last(CHAT.acc).text).toContain(fill(TPL.tgNudge, { кто: 'chief-a', n: 2 }));
+      expect(await bellRows()).toEqual([row('2026-10-19'), row('2026-10-20')]);
       await settings({ telegramActions: true });
       clock.set('2026-10-19T03:00:00Z');
     });

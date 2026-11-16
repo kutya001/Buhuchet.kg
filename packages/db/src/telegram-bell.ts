@@ -1,4 +1,4 @@
-import { BELL_FROM, BELL_PAGE_SIZE, type BellKind } from '@buhuchet/domain';
+import { BELL_FROM, BELL_KEEP_DAYS, BELL_PAGE_SIZE, type BellKind } from '@buhuchet/domain';
 import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { adminLeadsView } from './leads';
@@ -84,6 +84,8 @@ export interface BellSight {
   tasks: SQL | undefined | null;
   /** «Отправленные файлы» — функция страницы контрагента. */
   cpSent: boolean;
+  /** Контрагент «Отправленных файлов» — условие области группы «Файловый менеджер» на `contractors`. */
+  files: SQL | undefined;
   /** «Обслуживание» — функция «Плата за обслуживание» и право «Видеть плату за обслуживание». */
   cpFee: boolean;
   /** Карточка сотрудника — право «Просматривать сотрудников». */
@@ -91,6 +93,11 @@ export interface BellSight {
 }
 
 const B = sql.raw('bell_notifications');
+/**
+ * Срок хранения строк (`app.bell_cleanup` убирает старше): новость и заявку старше него в колокольчик
+ * не кладём — иначе убранная строка вернулась бы непросмотренной при следующем чтении.
+ */
+const KEEP = sql.raw(`interval '${BELL_KEEP_DAYS} days'`);
 const ID_RE = /^[0-9a-f-]{36}$/;
 const csv = (list: readonly string[]) => list.filter((x) => /^[A-Za-z]+$/.test(x)).join(',');
 
@@ -116,7 +123,8 @@ function seen(s: BellSight): SQL {
       when 'tasks_tab' then ${s.tasks === null ? sql`false` : sql`true`}
       when 'news' then exists (select 1 from ${news} where ${news.id}::text = b.target_id and ${NEWS_BELL.live})
       when 'lead' then app.is_platform_admin()
-      when 'cp_sent' then ${s.cpSent}::boolean
+      when 'cp_sent' then ${s.cpSent}::boolean and exists (select 1 from ${contractors}
+        where ${contractors.id}::text = b.target_id and ${s.files ?? sql`true`})
       when 'cp_fee' then ${s.cpFee}::boolean
       when 'employee' then ${s.staff}::boolean
       else true end`;
@@ -231,8 +239,9 @@ export async function bellReadAll(tx: Tx, now: Date): Promise<string[]> {
 
 /**
  * Новости — в колокольчик вошедшего при чтении (прототип `bellNews`): каждая опубликованная с
- * `BELL_FROM`, которую он видит; прочитанная в «Новостях» — прочитана и здесь, в том числе раньше
- * положенная строка. Время строки — появление новости (09:00 по Бишкеку дня публикации).
+ * `BELL_FROM`, которую он видит и которая не старше срока хранения; прочитанная в «Новостях» — прочитана
+ * и здесь, в том числе раньше положенная строка. Время строки — появление новости (09:00 по Бишкеку дня
+ * публикации).
  */
 export async function bellSyncNews(tx: Tx, now: Date): Promise<void> {
   const at = sql`${now.toISOString()}::timestamptz`;
@@ -243,6 +252,7 @@ export async function bellSyncNews(tx: Tx, now: Date): Promise<void> {
       case when ${NEWS_BELL.read} then ${at} end, case when ${NEWS_BELL.read} then ${at} end
     from ${news}
     where ${NEWS_BELL.live} and ${news.publishDate} >= ${BELL_FROM}::date
+      and ${NEWS_BELL.at} >= ${at} - ${KEEP}
     on conflict (user_id, event_key) do nothing`);
   await tx.execute(sql`
     update ${B} b set read_at = ${at}, seen_at = coalesce(b.seen_at, ${at})
@@ -252,10 +262,11 @@ export async function bellSyncNews(tx: Tx, now: Date): Promise<void> {
 
 /**
  * Режим Админка: новые заявки с лендинга — в колокольчик администратора платформы при чтении (прототип
- * `bellLeads`): со статусом «Новая» и поданные не раньше `BELL_FROM`. Строка без организации; фраза —
+ * `bellLeads`): со статусом «Новая», поданные не раньше `BELL_FROM` и не старше срока хранения. Строка без
+ * организации; фраза —
  * `template` с `{name}` (название фирмы из заявки).
  */
-export async function bellSyncLeads(tx: Tx, template: string): Promise<void> {
+export async function bellSyncLeads(tx: Tx, template: string, now: Date): Promise<void> {
   await tx.execute(sql`
     insert into ${B} (org_id, user_id, kind, event, target_kind, target_id, text, created_at, event_key)
     select null, app.current_user_id(), 'other', 'lead', 'lead', ${adminLeadsView.id}::text,
@@ -264,6 +275,7 @@ export async function bellSyncLeads(tx: Tx, template: string): Promise<void> {
     from ${adminLeadsView}
     where ${adminLeadsView.status} = 'new'
       and (${adminLeadsView.createdAt} at time zone 'Asia/Bishkek')::date >= ${BELL_FROM}::date
+      and ${adminLeadsView.createdAt} >= ${now.toISOString()}::timestamptz - ${KEEP}
     on conflict (user_id, event_key) do nothing`);
 }
 

@@ -91,4 +91,6 @@ export const ALERTS_TEXTS = {
   'alert.job.telegram_reminders': { ru: 'Напоминания в Telegram', section: S },
   'alert.job.telegram_send': { ru: 'Отправка сообщений Telegram', section: S },
   'alert.job.telegram_register_webhook': { ru: 'Вебхук бота Telegram', section: S },
+  'alert.job.telegram_bell_day': { ru: 'Колокольчик: строки дня', section: S },
+  'alert.job.telegram_bell_cleanup': { ru: 'Колокольчик: уборка старых строк', section: S },
 } as const satisfies Record<string, UiTextDefault>;

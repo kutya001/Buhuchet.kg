@@ -177,6 +177,8 @@ async function bellEvents(deps: ApiDeps, tx: Tx, events: readonly TelegramEvent[
       kind: e.kind === 'report_fix' ? 'reports' : 'tasks',
       event: e.kind,
       target: bell.target,
+      // Отчёт с причиной возврата — только пока есть «Просматривать отчёты» (ТЗ, блок 3: права сейчас).
+      need: e.kind === 'report_fix' ? 'repView' : null,
       contractorId: bell.contractorId,
       text: bellEventText(e, bell, tr),
       eventKey: `${e.kind}:${bell.target.id}:${now.getTime().toString(36)}.${n}`,

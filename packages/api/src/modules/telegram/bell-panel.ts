@@ -7,12 +7,13 @@ import {
   bellSyncLeads,
   bellSyncNews,
   bellUnseen,
+  contractorScope,
   markNewsRead,
   orgMenuSettings,
   type BellSight,
   type Tx,
 } from '@buhuchet/db';
-import { hasPermission } from '@buhuchet/domain';
+import { effectivePermissions, hasPermission, scopeOf } from '@buhuchet/domain';
 import {
   ApiError,
   BellCount,
@@ -63,18 +64,23 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
       reports: undefined,
       tasks: null,
       cpSent: false,
+      files: undefined,
       cpFee: false,
       staff: false,
     };
   }
   const s = access.subject;
   const { features } = await orgMenuSettings(tx, orgId);
+  // Действующие права (владелец — все, «Видеть плату…» — только вместе с «Просматривать контрагентов»),
+  // а не сохранённые в роли; плата за обслуживание — ещё и при её функции.
+  const permissions = effectivePermissions(s).filter((p) => p !== 'fee' || features.fee === true);
   return {
-    permissions: [...s.permissions],
+    permissions,
     contractors: cpScopeOf(s),
     reports: reportScopeOf(s),
     tasks: features.tasks ? taskAccessOf(s) : null,
     cpSent: features.cppage,
+    files: contractorScope(scopeOf(s, 'files') === 'own' ? s.employeeId : null),
     cpFee: features.fee && hasPermission(s, 'fee'),
     staff: hasPermission(s, 'staffView'),
   };
@@ -84,7 +90,7 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
 async function syncReadTime(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, lead: string) {
   const now = deps.clock.now();
   await bellSyncNews(tx, now);
-  if (c.get('session')?.isPlatformAdmin) await bellSyncLeads(tx, lead);
+  if (c.get('session')?.isPlatformAdmin) await bellSyncLeads(tx, lead, now);
 }
 
 export const bellPageRoute = createRoute({

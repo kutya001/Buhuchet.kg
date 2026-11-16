@@ -18,6 +18,7 @@ CREATE FUNCTION app.auth_lock_notify(
     v_event bigint;
     v_employee uuid;
     v_name text;
+    v_staff_text text;
   BEGIN
     SELECT u.org_id, o.name, coalesce(r.is_owner, false), e.id, e.short_name
       INTO v_org, v_org_name, v_owner, v_employee, v_name
@@ -41,12 +42,15 @@ CREATE FUNCTION app.auth_lock_notify(
           'login_locked:' || v_event::text, p_now)
         ON CONFLICT (user_id, event_key) DO NOTHING;
     END IF;
-    IF NOT v_owner AND p_bell_staff_text IS NOT NULL AND btrim(p_bell_staff_text) <> '' THEN
+    -- Пустоту текста владельцам проверяем после подстановки имени: текст из одного «{name}» без имени
+    -- нарушил бы проверку длины строки и откатил бы и историю, и сообщения Telegram.
+    v_staff_text := left(replace(coalesce(p_bell_staff_text, ''), '{name}', coalesce(v_name, '')), 1000);
+    IF NOT v_owner AND btrim(v_staff_text) <> '' THEN
       INSERT INTO public.bell_notifications
         (org_id, user_id, kind, event, target_kind, target_id, text, event_key, created_at)
       SELECT v_org, u.id, 'other', 'login_locked',
         CASE WHEN v_employee IS NULL THEN NULL ELSE 'employee' END, v_employee::text,
-        left(replace(p_bell_staff_text, '{name}', coalesce(v_name, '')), 1000),
+        v_staff_text,
         'login_locked:' || v_event::text, p_now
       FROM public.employees e
       JOIN public.roles r ON r.id = e.role_id AND r.org_id = e.org_id AND r.is_owner

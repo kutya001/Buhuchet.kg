@@ -77,8 +77,10 @@ export async function putBell(tx: Tx, rows: readonly BellPut[], now: Date): Prom
  * страница закрыта): ответственному — даже без Telegram — и тому, кому ушло сообщение Telegram (первый с
  * Telegram из ответственного и владельцев, прототип `pgTgStaff`); ни у кого нет Telegram и нет
  * ответственного — первому владельцу (прототип v122 `bellCpTo`). Заблокированные и уволенные не получают.
- * `need` — право, без которого строку не видно (сумма за обслуживание): как сообщение Telegram (п. К-10),
- * строка идёт только тем, у кого это право и контрагент в области группы «Контрагенты».
+ * `need` — право, без которого строку не видно: сумма за обслуживание — как сообщение Telegram (п. К-10),
+ * строка идёт только тем, у кого это право и контрагент в области группы «Контрагенты»; файлы от
+ * контрагента — «Просматривать файлы» и область группы «Файловый менеджер» (имя и «Открыть» в Telegram —
+ * так же, п. И-10).
  */
 export async function bellContractorUsers(
   tx: Tx,
@@ -92,7 +94,9 @@ export async function bellContractorUsers(
     if (!need) return true;
     const access = await loadEmployeeAccess(tx, employeeId);
     return (
-      !!access && hasPermission(access.subject, need) && canSeeContractor(access.subject, 'cps', cp)
+      !!access &&
+      hasPermission(access.subject, need) &&
+      canSeeContractor(access.subject, need === 'filesView' ? 'files' : 'cps', cp)
     );
   };
   const resp =
@@ -151,6 +155,7 @@ function contractorBellRow(
         kind: 'files',
         event: 'cp_file',
         target: cp('cp_sent'),
+        need: 'filesView',
         text: e.n > 1 ? t('bell.line.cp_file.many', { n: e.n }) : t('bell.line.cp_file.one'),
         eventKey: `cp_file:${e.sendId}`,
       };

@@ -81,6 +81,7 @@ const ALL: BellSight = {
   reports: undefined,
   tasks: undefined,
   cpSent: true,
+  files: undefined,
   cpFee: true,
   staff: true,
 };
@@ -211,7 +212,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
   it('сотруднику чужой организации строку не положить', async () => {
     await expect(
       inA(a.ownerUserId, (tx) => insertBellRows(tx, [row(b.ownerUserId)], NOW)),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({ cause: expect.objectContaining({ code: '23503' }) });
   });
 
   it('видно только то, что человек видит по правам сейчас: право, архив, область, функции', async () => {
@@ -247,6 +248,12 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     // Контрагент вне области («Свои»): строк о нём нет.
     expect(await keys(acc.userId, { ...ALL, contractors: sql`false` })).toEqual([
       'employee',
+      'tasks_tab',
+    ]);
+    // Контрагент вне области «Файлового менеджера» — «Отправленные файлы» о нём не открыть, строки нет.
+    expect(await keys(acc.userId, { ...ALL, files: sql`false` })).toEqual([
+      'employee',
+      'fee',
       'tasks_tab',
     ]);
     // Функции и права экранов: «Отправленные файлы», «Обслуживание», карточка сотрудника, «Задачи».
@@ -333,8 +340,21 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     const base = { type: 'feature', short: 'Коротко', md: 'Текст', status: 'published' as const };
     await db.admin.db.insert(news).values([
       { ...base, id: 'bell-n1', title: 'Новая функция', publishDate: BELL_FROM, publishedAt: NOW },
-      { ...base, id: 'bell-n0', title: 'Старая новость', publishDate: '2026-11-10', publishedAt: new Date('2026-11-10T03:00:00Z') },
-      { ...base, id: 'bell-adm', title: 'Только Админка', publishDate: BELL_FROM, publishedAt: NOW, audience: 'adm' },
+      {
+        ...base,
+        id: 'bell-n0',
+        title: 'Старая новость',
+        publishDate: '2026-11-10',
+        publishedAt: new Date('2026-11-10T03:00:00Z'),
+      },
+      {
+        ...base,
+        id: 'bell-adm',
+        title: 'Только Админка',
+        publishDate: BELL_FROM,
+        publishedAt: NOW,
+        audience: 'adm',
+      },
       { ...base, id: 'bell-draft', title: 'Черновик', publishDate: BELL_FROM, status: 'draft' },
     ]);
     const sync = () => inA(acc.userId, (tx) => bellSyncNews(tx, NOW));
@@ -383,15 +403,55 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         lead('ОсОО «Подключена»', { status: 'connected' }),
       ]);
     const template = 'Новая заявка с сайта: {name}';
-    await asAdmin((tx) => bellSyncLeads(tx, template));
-    await asAdmin((tx) => bellSyncLeads(tx, template));
+    await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
+    await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
     const page = await asAdmin((tx) => bellPage(tx, ALL, { tab: 'all' }));
     expect(page.items.map((x) => [x.kind, x.text, x.targetKind])).toEqual([
       ['other', 'Новая заявка с сайта: ОсОО «Новая»', 'lead'],
     ]);
     // Сотрудник организации заявок не кладёт и не видит.
-    await expect(inA(acc.userId, (tx) => bellSyncLeads(tx, template))).resolves.toBeUndefined();
+    await expect(
+      inA(acc.userId, (tx) => bellSyncLeads(tx, template, NOW)),
+    ).resolves.toBeUndefined();
     expect(await keys(acc.userId)).toEqual([]);
+  });
+
+  it('новости и заявки старше срока хранения не кладутся: убранная уборкой строка не возвращается', async () => {
+    await clear();
+    await db.admin.db.insert(news).values({
+      id: 'bell-keep',
+      type: 'feature',
+      title: 'Новость колокольчика',
+      short: 'Коротко',
+      md: 'Текст',
+      status: 'published',
+      publishDate: BELL_FROM,
+      publishedAt: NOW,
+    });
+    await db.admin.db.insert(platformLeads).values({
+      name: 'Заявитель',
+      firm: 'ОсОО «Давняя»',
+      phone: '+996555000001',
+      size: '1-10',
+      createdAt: new Date(`${BELL_FROM}T06:00:00Z`),
+    });
+    // Через 91 день после появления новости и заявки.
+    const later = new Date(new Date(`${BELL_FROM}T03:00:00Z`).getTime() + 91 * 86_400_000);
+    await inA(acc.userId, (tx) => bellSyncNews(tx, later));
+    await asAdmin((tx) => bellSyncNews(tx, later));
+    await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', later));
+    const rows = await db.admin.db
+      .select({ k: bellNotifications.eventKey })
+      .from(bellNotifications)
+      .where(
+        sql`${bellNotifications.eventKey} like 'news:bell-keep' or ${bellNotifications.event} = 'lead'`,
+      );
+    expect(rows).toEqual([]);
+    // В пределах срока — кладутся.
+    await inA(acc.userId, (tx) => bellSyncNews(tx, NOW));
+    expect(await keys(acc.userId)).toContain('news:bell-keep');
+    await db.admin.db.delete(platformLeads).where(eq(platformLeads.firm, 'ОсОО «Давняя»'));
+    await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-keep'));
   });
 
   it('уборка: строки старше 90 дней — только своей организации или только администраторов', async () => {
@@ -401,10 +461,15 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     await withOrgContext(db.app.db, { orgId: b.orgId, userId: null }, (tx) =>
       insertBellRows(tx, [row(b.ownerUserId, { eventKey: 'old-b', contractorId: null })], NOW),
     );
+    // Уборка сверяет с часами базы (`now()`): сроки строк — от настоящих часов (№ 52).
     await db.admin.db
       .update(bellNotifications)
       .set({ createdAt: new Date(Date.now() - 91 * 86_400_000) })
       .where(sql`${bellNotifications.eventKey} in ('old', 'old-b')`);
+    await db.admin.db
+      .update(bellNotifications)
+      .set({ createdAt: new Date() })
+      .where(eq(bellNotifications.eventKey, 'new'));
     expect(await inA(null, (tx) => bellCleanup(tx))).toBe(1);
     const left = await db.admin.db
       .select({ k: bellNotifications.eventKey })
@@ -468,6 +533,8 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
           key: own!.key,
         },
       ]);
+      // Владельцу другой организации — ничего.
+      expect(await bellOf(b.ownerUserId)).toEqual([]);
       // Следующая блокировка — новые строки (ключ — по записи истории).
       await notifyAccountLocked(db.app.db, {
         userId: acc.userId,
