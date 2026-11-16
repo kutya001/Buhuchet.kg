@@ -1,4 +1,5 @@
 import {
+  BELL_KINDS,
   NOTIFY_KINDS,
   NOTIFY_MODES,
   PASSWORD_MAX_LENGTH,
@@ -112,3 +113,42 @@ export const PasswordSetupRequest = z.strictObject({
 export type PasswordSetupRequest = z.infer<typeof PasswordSetupRequest>;
 export const PasswordSetupDone = z.object({ ok: z.literal(true), login: z.string() });
 export type PasswordSetupDone = z.infer<typeof PasswordSetupDone>;
+
+/*
+ * Колокольчик уведомлений (доработки 16.11.2026, блок 3; поток Т): ответы панели. Экран — поток И
+ * (стык — /mnt/project-files/stream-t/bell-contract.md).
+ */
+
+/** Кнопка-фильтр панели: «Все» и виды строк («Другое» — только во «Все»). */
+export const BellTab = z.enum(['all', 'reports', 'tasks', 'files', 'money', 'news']);
+export type BellTab = z.infer<typeof BellTab>;
+
+export const BellQuery = z.object({
+  tab: BellTab.default('all'),
+  /** Номер последней показанной строки — «Показать ещё». */
+  before: z.uuid().optional(),
+});
+export type BellQuery = z.infer<typeof BellQuery>;
+
+/** Строка колокольчика: что случилось, контрагент (имя — сейчас), когда, прочитана, что открыть. */
+export const BellItem = z.object({
+  id: z.uuid(),
+  kind: z.enum(BELL_KINDS),
+  event: z.string(),
+  contractor: z.object({ id: z.uuid(), name: z.string() }).nullable(),
+  text: z.string(),
+  at: z.iso.datetime(),
+  read: z.boolean(),
+  /** Что открыть по нажатию; незнакомый вид панель показывает без перехода. */
+  open: z.object({ kind: z.string(), id: z.string() }).nullable(),
+});
+export type BellItem = z.infer<typeof BellItem>;
+
+export const BellPage = z.object({ items: z.array(BellItem), more: z.boolean() });
+export type BellPage = z.infer<typeof BellPage>;
+
+export const BellCount = z.object({ unseen: z.number().int().nonnegative() });
+export type BellCount = z.infer<typeof BellCount>;
+
+export const BellReadParams = z.object({ id: z.uuid() });
+export const BellDone = z.object({ ok: z.literal(true) });

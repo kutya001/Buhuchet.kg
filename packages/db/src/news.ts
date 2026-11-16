@@ -83,6 +83,12 @@ const FOR_ME = sql`(${news.audience} = 'all' or (${news.audience} = 'adm' and ap
 // ОТКЛОНЕНИЕ: docs/deviations.md#Г-3
 const READ = sql`(exists (select 1 from ${newsReads} where ${newsReads.newsId} = ${news.id} and ${newsReads.userId} = app.current_user_id()) or greatest(${news.publishedAt}, ${SHOW_AT}) <= app.current_user_created_at())`;
 
+/**
+ * Для колокольчика (доработки 16.11.2026, блок 3; поток Т, `telegram-bell.ts`): новость видна вошедшему
+ * сейчас, момент её появления и «прочитана» — те же условия, что у ленты «Новостей».
+ */
+export const NEWS_BELL = { live: sql`(${LIVE} and ${FOR_ME})`, at: SHOW_AT, read: READ } as const;
+
 const fields = {
   id: news.id,
   title: news.title,
