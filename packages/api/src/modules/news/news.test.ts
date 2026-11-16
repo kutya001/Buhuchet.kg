@@ -1,5 +1,7 @@
 import type { MemoryStorage } from '@buhuchet/adapters';
+import { schema } from '@buhuchet/db';
 import { databaseAvailable, seedKbReference } from '@buhuchet/db/testing';
+import { eq } from 'drizzle-orm';
 import {
   AdminNewsList,
   AdminNewsRecord,
@@ -67,6 +69,8 @@ describe.skipIf(!databaseAvailable())('«Новости»: API', () => {
     pinned: false,
     showOnLogin: true,
     audience: 'all',
+    modules: [],
+    adminMd: '',
     publish: true,
     ...over,
   });
@@ -404,5 +408,87 @@ describe.skipIf(!databaseAvailable())('«Новости»: API', () => {
     big.set(PNG);
     expect((await fail(await put(big), 413)).code).toBe('news_image_too_large');
     expect((await put(PNG, owner)).status).toBe(403);
+  });
+
+  it('модули (доработки 16.11.2026, блок 4, пункт 3; приёмка 8): бухгалтер без права «Видеть плату за обслуживание» не видит новость про обслуживание; выключенный модуль — тоже', async () => {
+    await f.t.admin.db
+      .update(schema.orgSettings)
+      .set({ features: { tasks: true, files: true, fee: true } })
+      .where(eq(schema.orgSettings.orgId, f.a.orgId));
+    await f.t.admin.db
+      .update(schema.orgSettings)
+      .set({ features: { files: true } })
+      .where(eq(schema.orgSettings.orgId, f.b.orgId));
+    const fee = await create({ title: 'Про обслуживание', release: '1.5', modules: ['fee'] });
+    const tasks = await create({
+      title: 'Про задачи',
+      release: '1.6',
+      modules: ['tasks', 'fee'],
+    });
+    const ids = async (cookie: string) => (await feed(cookie)).items.map((n) => n.id);
+    // Владелец: функция включена, право — у владельца всегда.
+    expect(await ids(owner)).toEqual(expect.arrayContaining([fee.id, tasks.id]));
+    // Бухгалтер без права fee: новость только про обслуживание не видна; с «Задачами» — видна.
+    expect(await ids(acc)).not.toContain(fee.id);
+    expect(await ids(acc)).toContain(tasks.id);
+    expect((await feed(owner)).items.find((n) => n.id === fee.id)?.modules).toEqual(['fee']);
+    // Не видна — не отметить прочитанной.
+    expect(
+      NewsReadResult.parse(await ok(await call('POST', '/api/news/read', acc, { ids: [fee.id] })))
+        .marked,
+    ).toBe(0);
+    // В организации Б «Задачи» и плата выключены — не видна ни одна.
+    expect(await ids(ownerB)).not.toEqual(expect.arrayContaining([fee.id]));
+    expect(await ids(ownerB)).not.toContain(tasks.id);
+    // Администратору платформы — все.
+    expect(await ids(admin)).toEqual(expect.arrayContaining([fee.id, tasks.id]));
+    // Незнакомый модуль и повтор — 400 с полем.
+    const bad = await fail(
+      await call('POST', '/api/admin/news', admin, input({ modules: ['accounts'] })),
+      400,
+    );
+    expect(bad).toMatchObject({ code: 'news_modules_unknown', details: { field: 'modules' } });
+    expect(
+      (
+        await fail(
+          await call('POST', '/api/admin/news', admin, input({ modules: ['cps', 'cps'] })),
+          400,
+        )
+      ).code,
+    ).toBe('news_modules_duplicate');
+    // Порядок сохранения — как в окне.
+    const ordered = await create({ title: 'Порядок', release: '1.7', modules: ['fee', 'cps'] });
+    expect(ordered.modules).toEqual(['cps', 'fee']);
+  });
+
+  it('второй текст «Для администратора платформы» (блок 4, пункт 1; приёмка 8): в ленте только у администратора платформы; «Только режим Админка» — можно без текста для пользователей', async () => {
+    const adminMd = '## Для администратора платформы\n- Миграция 0157';
+    const n = await create({ title: 'Версия с подробностями', release: '1.8', adminMd });
+    expect(n.adminMd).toBe(adminMd);
+    expect((await feed(owner)).items.find((x) => x.id === n.id)).not.toHaveProperty('adminMd');
+    expect((await feed(admin)).items.find((x) => x.id === n.id)?.adminMd).toBe(adminMd);
+    // Список Админки: «Есть» / «Нет».
+    const list = AdminNewsList.parse(
+      await ok(await call('GET', '/api/admin/news?size=100', admin)),
+    );
+    expect(list.items.find((x) => x.id === n.id)?.hasAdminMd).toBe(true);
+    expect(list.items.find((x) => x.id === live.id)?.hasAdminMd).toBe(false);
+    // Правка: пустой второй текст убирает его, версия растёт.
+    const saved = AdminNewsRecord.parse(
+      await ok(
+        await call('PUT', `/api/admin/news/${n.id}`, admin, {
+          ...input({ title: n.title, release: '1.8', adminMd: '' }),
+          version: n.version,
+        }),
+      ),
+    );
+    expect(saved).toMatchObject({ adminMd: '', version: n.version + 1 });
+    // Без текста для пользователей: «Все пользователи» — нельзя, «Только режим Админка» со вторым текстом — можно.
+    const empty = { md: '## Что нового\n- \n', adminMd: '- Только для Админки' };
+    expect((await fail(await call('POST', '/api/admin/news', admin, input(empty)), 400)).code).toBe(
+      'news_md_required',
+    );
+    const admOnly = await create({ ...empty, audience: 'adm', release: '1.9' });
+    expect(admOnly).toMatchObject({ md: '', adminMd: '- Только для Админки' });
   });
 });

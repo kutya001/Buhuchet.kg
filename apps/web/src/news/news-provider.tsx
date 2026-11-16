@@ -1,6 +1,6 @@
 'use client';
 
-import { newsTitleHasVersion, pluralForm, type MenuModuleId } from '@buhuchet/domain';
+import { newsMdText, newsTitleHasVersion, pluralForm, type MenuModuleId } from '@buhuchet/domain';
 import type { NewsItem, NewsLinkSchema, WhatsNew } from '@buhuchet/shared';
 import { buttonClass, Icon, Modal, Note, Tag, useToast, useWindow } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -277,6 +277,7 @@ export function NewsRow({
         >
           <div className="w-full">
             <NewsBody source={item.md} />
+            <NewsAdminText source={item.adminMd} />
           </div>
           <MoreButton link={item.link} small />
         </div>
@@ -289,6 +290,34 @@ export function NewsRow({
 export function NewsBody({ source, preview = false }: { source: string; preview?: boolean }) {
   const follow = useNewsLinks({ preview });
   return <NewsMarkdown source={source} onLink={follow} />;
+}
+
+/**
+ * Текст «Для администратора платформы» под чертой с этой подписью (доработки 16.11.2026, блок 4,
+ * пункт 1; прототип v123 newsAdmHtml): виден только в режиме Админка — сервер отдаёт его только
+ * администратору платформы, а редактор показывает в предпросмотре.
+ */
+export function NewsAdminText({
+  source,
+  preview = false,
+}: {
+  source: string | undefined;
+  preview?: boolean;
+}) {
+  const t = useT();
+  if (!source || !newsMdText(source)) return null;
+  return (
+    <div
+      data-news-admin=""
+      className="mt-3 w-full border-t border-dashed border-line-strong pt-2.5"
+    >
+      <div className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold tracking-[.06em] text-faint uppercase">
+        <Icon name="shield" size="sm" />
+        {t('news.admin_md')}
+      </div>
+      <NewsBody source={source} preview={preview} />
+    </div>
+  );
 }
 
 /**

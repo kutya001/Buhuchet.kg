@@ -3,6 +3,8 @@ import {
   newsOrder,
   diffChanges,
   newsHistoryKinds,
+  newsModuleTitle,
+  NEWS_MODULES,
   NEWS_TYPES,
   type IsoDate,
   type ListQuery,
@@ -26,7 +28,7 @@ import {
 } from './list';
 import { welcomeSeenByMe } from './onboarding';
 import { writePlatformHistory } from './platform-history';
-import { news, newsReads, platformAuditLog } from './schema';
+import { news, newsAdminTexts, newsReads, platformAuditLog } from './schema';
 
 /*
  * «Новости» Базы знаний (задача 2.32, docs/decisions.md п. Г-3): лента и прочитанность пользователя,
@@ -53,6 +55,13 @@ export interface NewsRecord {
   pinned: boolean;
   showOnLogin: boolean;
   audience: NewsAudience;
+  /** «Модули» (доработки 16.11.2026, блок 4, пункт 3): пусто — новость про всё, видят все. */
+  modules: string[];
+  /**
+   * Текст «Для администратора платформы» (блок 4, пункт 1); пусто — его нет. Не администратору
+   * платформы — всегда пусто: таблицу второго текста читает только он (политика `news_admin_texts_admin`).
+   */
+  adminMd: string;
   status: NewsStatus;
   off: boolean;
   publishedAt: Date | null;
@@ -83,6 +92,30 @@ const FOR_ME = sql`(${news.audience} = 'all' or (${news.audience} = 'adm' and ap
 // ОТКЛОНЕНИЕ: docs/deviations.md#Г-3
 const READ = sql`(exists (select 1 from ${newsReads} where ${newsReads.newsId} = ${news.id} and ${newsReads.userId} = app.current_user_id()) or greatest(${news.publishedAt}, ${SHOW_AT}) <= app.current_user_created_at())`;
 
+const textArray = (items: readonly string[]) =>
+  items.length
+    ? sql`array[${sql.join(
+        items.map((k) => sql`${k}`),
+        sql`, `,
+      )}]::text[]`
+    : sql`'{}'::text[]`;
+
+/**
+ * По модулям (доработки 16.11.2026, блок 4, пункт 3; прототип v123 newsModsOk): новость без модулей
+ * видят все, с модулями — у кого есть хотя бы один из них. `mine` — модули вошедшего
+ * (`newsModulesOf` домена: меню по функциям учётной политики и правам и «Плата за обслуживание»);
+ * null — администратор платформы, ему видны все.
+ */
+const FOR_MODULES = (mine: readonly string[] | null) =>
+  mine === null
+    ? sql`true`
+    : sql`(cardinality(${news.modules}) = 0 or ${news.modules} && ${textArray(mine)})`;
+
+/** Второй текст: строка `news_admin_texts` видна только администратору платформы (политика таблицы). */
+const ADMIN_MD = sql<
+  string | null
+>`(select ${newsAdminTexts.md} from ${newsAdminTexts} where ${newsAdminTexts.newsId} = ${news.id})`;
+
 const fields = {
   id: news.id,
   title: news.title,
@@ -96,6 +129,7 @@ const fields = {
   pinned: news.pinned,
   showOnLogin: news.showOnLogin,
   audience: news.audience,
+  modules: news.modules,
   status: news.status,
   off: news.off,
   publishedAt: news.publishedAt,
@@ -104,6 +138,9 @@ const fields = {
   createdAt: news.createdAt,
   updatedAt: news.updatedAt,
 };
+
+/** Поля чтения: со вторым текстом (в `returning` его нет — пишется отдельно после новости). */
+const readFields = { ...fields, adminMd: ADMIN_MD };
 
 interface Row {
   id: string;
@@ -118,6 +155,8 @@ interface Row {
   pinned: boolean;
   showOnLogin: boolean;
   audience: string;
+  modules: string[];
+  adminMd?: string | null;
   status: string;
   off: boolean;
   publishedAt: Date | null;
@@ -140,6 +179,8 @@ function toRecord(r: Row): NewsRecord {
     pinned: r.pinned,
     showOnLogin: r.showOnLogin,
     audience: r.audience as NewsAudience,
+    modules: r.modules,
+    adminMd: r.adminMd ?? '',
     status: r.status as NewsStatus,
     off: r.off,
     publishedAt: r.publishedAt,
@@ -154,27 +195,33 @@ function omitMd({ md: _md, ...rest }: NewsRecord): Omit<NewsRecord, 'md'> {
   return rest;
 }
 
+/** Модули вошедшего для ленты: null — администратор платформы (видит все новости). */
+export type NewsModulesOfMe = readonly string[] | null;
+
 /** Порядок ленты и «Что нового»: строго по номеру версии, новые сверху (`newsOrder` домена). */
 const inFeedOrder = <T extends NewsRecord>(list: readonly T[]): T[] =>
   newsOrder(list, (n) => ({ date: n.date, publishedAt: n.publishedAt, version: n.release }));
 
 /* ───────────── Лента пользователя ───────────── */
 
-/** Лента «Новостей» вошедшего (прототип newsVis + newsRead): от новых к старым, с отметкой «прочитана». */
-export async function newsFeed(tx: Tx): Promise<NewsFeedRecord[]> {
+/**
+ * Лента «Новостей» вошедшего (прототип newsVis + newsRead): от новых к старым, с отметкой
+ * «прочитана»; только новости его модулей (`mine`).
+ */
+export async function newsFeed(tx: Tx, mine: NewsModulesOfMe): Promise<NewsFeedRecord[]> {
   const rows = await tx
-    .select({ ...fields, read: sql<boolean>`${READ}` })
+    .select({ ...readFields, read: sql<boolean>`${READ}` })
     .from(news)
-    .where(and(LIVE, FOR_ME));
+    .where(and(LIVE, FOR_ME, FOR_MODULES(mine)));
   return inFeedOrder(rows.map((r) => ({ ...toRecord(r), read: r.read })));
 }
 
 /** Сколько непрочитанных новостей у вошедшего — счётчик у вкладки и у модуля «База знаний». */
-export async function newsUnreadCount(tx: Tx): Promise<number> {
+export async function newsUnreadCount(tx: Tx, mine: NewsModulesOfMe): Promise<number> {
   const [row] = await tx
     .select({ n: sql<number>`count(*)::integer` })
     .from(news)
-    .where(and(LIVE, FOR_ME, sql`not ${READ}`));
+    .where(and(LIVE, FOR_ME, FOR_MODULES(mine), sql`not ${READ}`));
   return row?.n ?? 0;
 }
 
@@ -186,11 +233,14 @@ export async function newsUnreadCount(tx: Tx): Promise<number> {
  * отметку `kbw.<пользователь>` (решение заказчика Г-4 «А»).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Г-4
-export async function newsWhatsNew(tx: Tx): Promise<{ items: NewsRecord[]; first: boolean }> {
+export async function newsWhatsNew(
+  tx: Tx,
+  mine: NewsModulesOfMe,
+): Promise<{ items: NewsRecord[]; first: boolean }> {
   const rows = await tx
-    .select(fields)
+    .select(readFields)
     .from(news)
-    .where(and(LIVE, FOR_ME, eq(news.showOnLogin, true), sql`not ${READ}`));
+    .where(and(LIVE, FOR_ME, FOR_MODULES(mine), eq(news.showOnLogin, true), sql`not ${READ}`));
   const [seen] = await tx
     .select({ n: sql<number>`count(*)::integer` })
     .from(newsReads)
@@ -204,12 +254,16 @@ export async function newsWhatsNew(tx: Tx): Promise<{ items: NewsRecord[]; first
  * видимые ему непрочитанные новости: уже прочитанные (и вышедшие до его учётной записи) не
  * трогаются. `all` — все видимые («Отметить все прочитанными»). Отвечает, сколько отметок добавлено.
  */
-export async function markNewsRead(tx: Tx, ids: readonly string[] | 'all'): Promise<number> {
+export async function markNewsRead(
+  tx: Tx,
+  ids: readonly string[] | 'all',
+  mine: NewsModulesOfMe,
+): Promise<number> {
   const only: SQL = ids === 'all' ? sql`true` : inArray(news.id, [...ids]);
   if (ids !== 'all' && ids.length === 0) return 0;
   const rows = await tx.execute<{ news_id: string }>(sql`
     insert into ${newsReads} (user_id, news_id)
-    select app.current_user_id(), ${news.id} from ${news} where ${LIVE} and ${FOR_ME} and not ${READ} and ${only}
+    select app.current_user_id(), ${news.id} from ${news} where ${LIVE} and ${FOR_ME} and ${FOR_MODULES(mine)} and not ${READ} and ${only}
     on conflict do nothing
     returning news_id`);
   return rows.length;
@@ -220,6 +274,7 @@ export async function markNewsRead(tx: Tx, ids: readonly string[] | 'all'): Prom
 const READS = sql`(select count(*)::integer from ${newsReads} where ${newsReads.newsId} = ${news.id})`;
 const STATE = sql`case when ${news.status} = 'draft' then 'draft' when ${news.off} then 'off' when ${SHOW_AT} <= now() then 'live' else 'scheduled' end`;
 const CREATED_BY = auditActorValue(news.createdBy, sql`null`);
+const HAS_ADMIN_MD = sql<boolean>`exists (select 1 from ${newsAdminTexts} where ${newsAdminTexts.newsId} = ${news.id})`;
 const UPDATED_BY = sql`coalesce(${auditActorValue(news.updatedBy, sql`null`)}, ${CREATED_BY})`;
 
 /**
@@ -228,6 +283,10 @@ const UPDATED_BY = sql`coalesce(${auditActorValue(news.updatedBy, sql`null`)}, $
  * опубликованной), «Прочитали» и служебные «Создал», «Изменил», «Создано», «Изменено».
  */
 export function newsAdminColumns(t: ListTexts): ListColumns {
+  const moduleName = sql.join(
+    NEWS_MODULES.map((code) => sql`when ${code} then ${t(newsModuleTitle(code))}`),
+    sql` `,
+  );
   const typeName = sql.join(
     NEWS_TYPES.map((code) => sql`when ${code} then ${t(`news.type.${code}`)}`),
     sql` `,
@@ -276,6 +335,20 @@ export function newsAdminColumns(t: ListTexts): ListColumns {
       value: sql`(${news.editedAt} at time zone 'Asia/Bishkek')::date`,
     },
     reads: { type: 'int', label: 'news.col.reads', value: READS },
+    // Доработки 16.11.2026, блок 4 (прототип v123): «Модули» названиями через запятую и скрытый
+    // «Для администратора платформы» — «Есть» / «Нет».
+    modules: {
+      type: 'text',
+      label: 'news.col.modules',
+      value: sql`array_to_string(${news.modules}, ',')`,
+      display: sql`coalesce(nullif(array_to_string(array(select case u.m ${moduleName} else u.m end from unnest(${news.modules}) with ordinality as u(m, i) order by u.i), ', '), ''), '—')`,
+    },
+    adminMd: {
+      type: 'enum',
+      label: 'news.col.admin_md',
+      value: sql`case when ${HAS_ADMIN_MD} then 'yes' else 'no' end`,
+      display: sql`case when ${HAS_ADMIN_MD} then ${t('news.admin_md.yes')} else ${t('news.admin_md.no')} end`,
+    },
     createdAt: { type: 'datetime', label: 'grid.col.created_at', value: news.createdAt },
     updatedAt: { type: 'datetime', label: 'grid.col.updated_at', value: news.updatedAt },
     createdBy: { type: 'enum', label: 'grid.col.created_by', value: CREATED_BY },
@@ -292,6 +365,8 @@ export function newsAdminColumns(t: ListTexts): ListColumns {
  * числом прочитавших и «Создал» / «Изменил» для экрана.
  */
 export interface NewsAdminRecord extends Omit<NewsRecord, 'md'> {
+  /** Есть ли текст «Для администратора платформы» (сам текст список не берёт — его берёт окно). */
+  hasAdminMd: boolean;
   state: 'draft' | 'off' | 'scheduled' | 'live';
   reads: number;
   createdBy: string | null;
@@ -312,6 +387,7 @@ const adminFrom =
 const adminFields = {
   ...fields,
   md: sql<string>`''`,
+  hasAdminMd: HAS_ADMIN_MD,
   state: sql<NewsAdminRecord['state']>`${STATE}`,
   reads: sql<number>`${READS}`,
   createdBy: sql<string | null>`${CREATED_BY}`,
@@ -343,6 +419,7 @@ export async function listNewsAdminPage(
     ...page,
     rows: page.rows.map((r) => ({
       ...omitMd(toRecord(r)),
+      hasAdminMd: r.hasAdminMd,
       state: r.state,
       reads: r.reads,
       createdBy: r.createdBy,
@@ -388,6 +465,10 @@ export interface NewsInput {
   pinned: boolean;
   showOnLogin: boolean;
   audience: NewsAudience;
+  /** «Модули» — коды по порядку `NEWS_MODULES`, без повторов (проверяет вызывающий). */
+  modules: readonly string[];
+  /** Текст «Для администратора платформы»; пусто — второго текста нет. */
+  adminMd: string;
 }
 
 const inputColumns = (v: NewsInput) => ({
@@ -402,7 +483,26 @@ const inputColumns = (v: NewsInput) => ({
   pinned: v.pinned,
   showOnLogin: v.showOnLogin,
   audience: v.audience,
+  modules: [...v.modules],
 });
+
+/**
+ * Записать второй текст (политика `news_admin_texts_admin`: только администратор платформы и только от
+ * своего имени): пустой — строки нет. Новость правится в той же транзакции, её версия уже поднята.
+ */
+async function writeAdminMd(tx: Tx, newsId: string, md: string): Promise<void> {
+  if (!md) {
+    await tx.delete(newsAdminTexts).where(eq(newsAdminTexts.newsId, newsId));
+    return;
+  }
+  await tx
+    .insert(newsAdminTexts)
+    .values({ newsId, md, updatedBy: sql`app.current_user_id()` })
+    .onConflictDoUpdate({
+      target: newsAdminTexts.newsId,
+      set: { md, updatedAt: sql`now()`, updatedBy: sql`app.current_user_id()` },
+    });
+}
 
 /**
  * Все новости для «Выгрузить» и «Загрузить» в Excel (задача 2.39, прототип DX.kbnews): сначала новые
@@ -410,7 +510,7 @@ const inputColumns = (v: NewsInput) => ({
  */
 export async function allNewsForAdmin(tx: Tx): Promise<NewsRecord[]> {
   const rows = await tx
-    .select(fields)
+    .select(readFields)
     .from(news)
     .orderBy(desc(news.publishDate), desc(news.createdAt), asc(news.id));
   return rows.map(toRecord);
@@ -418,7 +518,7 @@ export async function allNewsForAdmin(tx: Tx): Promise<NewsRecord[]> {
 
 /** Одна новость (администратору — любая, пользователю — только видимая ему). */
 export async function getNews(tx: Tx, id: string): Promise<NewsRecord | null> {
-  const [row] = await tx.select(fields).from(news).where(eq(news.id, id));
+  const [row] = await tx.select(readFields).from(news).where(eq(news.id, id));
   return row ? toRecord(row) : null;
 }
 
@@ -439,6 +539,8 @@ const historyFields = (n: NewsRecord) => ({
   pinned: n.pinned,
   showOnLogin: n.showOnLogin,
   audience: n.audience,
+  modules: n.modules.join(', ') || null,
+  adminMd: n.adminMd,
   status: n.status,
   off: n.off,
 });
@@ -463,7 +565,8 @@ export async function createNews(
       updatedBy: sql`app.current_user_id()`,
     })
     .returning(fields);
-  const record = toRecord(row!);
+  if (input.adminMd) await writeAdminMd(tx, row!.id, input.adminMd);
+  const record = toRecord({ ...row!, adminMd: input.adminMd });
   await writePlatformHistory(tx, {
     entity: 'news',
     entityId: record.id,
@@ -491,8 +594,9 @@ async function updateNews(
   id: string,
   version: number,
   patch: (before: NewsRecord) => PgUpdateSetSource<typeof news> | 'not_draft' | 'not_published',
+  adminMd?: string,
 ): Promise<NewsSaveResult> {
-  const [locked] = await tx.select(fields).from(news).where(eq(news.id, id)).for('update');
+  const [locked] = await tx.select(readFields).from(news).where(eq(news.id, id)).for('update');
   if (!locked) return { ok: false, reason: 'not_found' };
   const before = toRecord(locked);
   if (before.version !== version) return { ok: false, reason: 'changed', current: before.version };
@@ -509,7 +613,9 @@ async function updateNews(
     .where(and(eq(news.id, id), eq(news.version, version)))
     .returning(fields);
   if (!row) return { ok: false, reason: 'changed', current: before.version };
-  const record = toRecord(row);
+  // Второй текст — в той же транзакции, что новость: его правка подняла и её версию.
+  if (adminMd !== undefined && adminMd !== before.adminMd) await writeAdminMd(tx, id, adminMd);
+  const record = toRecord({ ...row, adminMd: adminMd ?? before.adminMd });
   await writePlatformHistory(tx, {
     entity: 'news',
     entityId: id,
@@ -531,14 +637,20 @@ export function saveNews(
   input: NewsInput,
   options: { publish: boolean },
 ): Promise<NewsSaveResult> {
-  return updateNews(tx, id, version, (before) => ({
-    ...inputColumns(input),
-    ...(before.status === 'published'
-      ? { editedAt: sql`now()` }
-      : options.publish
-        ? { status: 'published', publishedAt: sql`now()` }
-        : {}),
-  }));
+  return updateNews(
+    tx,
+    id,
+    version,
+    (before) => ({
+      ...inputColumns(input),
+      ...(before.status === 'published'
+        ? { editedAt: sql`now()` }
+        : options.publish
+          ? { status: 'published', publishedAt: sql`now()` }
+          : {}),
+    }),
+    input.adminMd,
+  );
 }
 
 /** «Опубликовать» черновик из меню записи. Уже опубликованная — `not_draft`. */

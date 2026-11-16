@@ -122,4 +122,5 @@ export * from './kb/shows';
 export * from './kb/admin';
 export * from './kb/video';
 export * from './news/news';
+export * from './news/modules';
 export * from './news/markdown';

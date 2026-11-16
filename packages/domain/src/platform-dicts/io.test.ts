@@ -619,6 +619,58 @@ describe('Выгрузка и загрузка «Базы знаний (соде
     expect(load('kbnews', news, { 'Дата публикации': '' }).row.errors).toHaveLength(1);
   });
 
+  it('новость: второй текст и «Модули» названиями через запятую (доработки 16.11.2026, блок 4, пункт 6)', () => {
+    const news: IoValue = {
+      code: 'v123',
+      name: 'Версия 123',
+      active: true,
+      data: {
+        type: 'feature',
+        release: '123',
+        date: '2026-11-16',
+        aud: 'all',
+        pinned: false,
+        showOnLogin: true,
+        short: 'Кратко',
+        md: '## Что нового\nТекст',
+        adminMd: '## Для администратора платформы\n- Подробности',
+        modules: ['reports', 'fee'],
+        status: 'published',
+        off: false,
+      },
+    };
+    const n = load('kbnews', news);
+    expect(n.changes).toEqual([]);
+    const cells = ioRow('kbnews', news, ctx);
+    expect(cells[n.header.indexOf('Модули')]).toBe('Отчеты для сдачи, Плата за обслуживание');
+    expect(cells[n.header.indexOf('Для администратора платформы')]).toBe(
+      '## Для администратора платформы\n- Подробности',
+    );
+    // Названия или коды, через «,» или «;», повтор — один раз; порядок — как в окне.
+    const typed = load('kbnews', news, { Модули: 'fee; Контрагенты, контрагенты' });
+    expect(typed.row.errors).toEqual([]);
+    expect(ioMerge(news, typed.row.values).data.modules).toEqual(['cps', 'fee']);
+    // Пустая ячейка — без модулей.
+    expect(ioMerge(news, load('kbnews', news, { Модули: '' }).row.values).data.modules).toEqual([]);
+    expect(load('kbnews', news, { Модули: 'Склад' }).row.errors).toEqual([
+      'Модули: модуля «Склад» нет',
+    ]);
+    // Старый файл без новых столбцов загружается как раньше: второй текст и модули остаются.
+    const header = ioHeader('kbnews', t);
+    const keep = header.map((h) => h !== 'Модули' && h !== 'Для администратора платформы');
+    const parsed = parseIoRows(
+      'kbnews',
+      [header.filter((_, i) => keep[i]), ioRow('kbnews', news, ctx).filter((_, i) => keep[i])],
+      ctx,
+    );
+    if ('fatal' in parsed) throw new Error(parsed.fatal);
+    expect(parsed.rows[0]!.errors).toEqual([]);
+    expect(ioMerge(news, parsed.rows[0]!.values).data).toMatchObject({
+      adminMd: news.data.adminMd,
+      modules: ['reports', 'fee'],
+    });
+  });
+
   it('коды: шаги, статьи и новости — латиницей; облачко — «сценарий#номер»', () => {
     expect(ioCodeValid('kbsteps', 'u-excel')).toBe(true);
     expect(ioCodeValid('kbsteps', 'Шаг')).toBe(false);

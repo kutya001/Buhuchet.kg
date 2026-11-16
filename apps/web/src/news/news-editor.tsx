@@ -6,11 +6,14 @@ import {
   MENU_MODULE_IDS,
   NEWS_AUDIENCES,
   NEWS_IMAGE_MAX_BYTES,
+  NEWS_MODULES,
   NEWS_TEMPLATE,
   NEWS_TYPES,
   newsLoginDefault,
   newsMdTrim,
+  newsModuleTitle,
   newsProblems,
+  newsTechWords,
   type NewsAudience,
   type NewsField,
   type NewsType,
@@ -24,6 +27,7 @@ import {
 } from '@buhuchet/shared';
 import {
   buttonClass,
+  ChipMultiSelect,
   Field,
   FormGrid,
   Icon,
@@ -46,7 +50,7 @@ import { videoOptionsQuery } from '../kb/video/video-data';
 import { useVideoPick } from '../kb/video/video-pick';
 import { MODULES } from '../shell/modules';
 import { adminNewsQuery } from './news-data';
-import { NewsBody } from './news-provider';
+import { NewsAdminText, NewsBody } from './news-provider';
 
 /*
  * Окно «Новость» в Админке (ТЗ «Админка» → «База знаний (содержимое)» → «Новости»; прототип
@@ -54,6 +58,12 @@ import { NewsBody } from './news-provider';
  * у черновика — «Сохранить черновик» и «Опубликовать», у опубликованной — «Сохранить» (у пользователей
  * появится «Изменено»). Подробное описание — markdown с кнопками, предпросмотром (на ПК — рядом, на
  * телефоне — переключателем «Текст / Предпросмотр») и картинками в хранилище.
+ *
+ * Доработки 16.11.2026, блок 4 (прототип v123): «Модули» плашками; второй текст «Для администратора
+ * платформы» — в том же редакторе, переключателем над ним (кнопки и предпросмотр работают с выбранным
+ * текстом); под текстом — правила текста для пользователей и предупреждение о технических словах
+ * (сохранить оно не мешает). Новость «Только режим Админка» сохраняется и без текста для пользователей,
+ * если есть второй текст.
  */
 
 interface NewsFormValues {
@@ -68,6 +78,10 @@ interface NewsFormValues {
   showOnLogin: boolean;
   short: string;
   md: string;
+  /** Текст «Для администратора платформы». */
+  adminMd: string;
+  /** «Модули» — по порядку `NEWS_MODULES`. */
+  modules: string[];
 }
 
 /** Поле проверки домена → поле формы. */
@@ -78,6 +92,8 @@ const FORM_FIELD: Record<NewsField | 'link', FieldPath<NewsFormValues>> = {
   md: 'md',
   version: 'release',
   link: 'link',
+  adminMd: 'adminMd',
+  modules: 'modules',
 };
 
 const linkValue = (link: NewsLinkSchema | null) => (link ? `${link.kind}:${link.id}` : '');
@@ -99,6 +115,8 @@ function formValues(n: AdminNewsRecord | null): NewsFormValues {
       showOnLogin: true,
       short: '',
       md: NEWS_TEMPLATE,
+      adminMd: '',
+      modules: [],
     };
   }
   return {
@@ -112,6 +130,8 @@ function formValues(n: AdminNewsRecord | null): NewsFormValues {
     showOnLogin: n.showOnLogin,
     short: n.short,
     md: n.md,
+    adminMd: n.adminMd,
+    modules: n.modules,
   };
 }
 
@@ -170,7 +190,11 @@ export function NewsEditDialog({
   const [reloading, setReloading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState<'text' | 'prev'>('text');
-  const textarea = useRef<HTMLTextAreaElement | null>(null);
+  // Какой текст в редакторе: для пользователей или для администратора платформы.
+  const [which, setWhich] = useState<'md' | 'adminMd'>('md');
+  const userArea = useRef<HTMLTextAreaElement | null>(null);
+  const adminArea = useRef<HTMLTextAreaElement | null>(null);
+  const textarea = which === 'md' ? userArea : adminArea;
   const fileInput = useRef<HTMLInputElement>(null);
   const articles = useQuery(articleOptionsQuery).data ?? [];
   const videoPick = useVideoPick();
@@ -201,11 +225,16 @@ export function NewsEditDialog({
     showOnLogin: register('showOnLogin'),
     short: register('short'),
     md: register('md'),
+    adminMd: register('adminMd'),
   };
   const md = useWatch({ control, name: 'md' });
+  const adminMd = useWatch({ control, name: 'adminMd' });
+  const modules = useWatch({ control, name: 'modules' });
+  const shown = which === 'md' ? md : adminMd;
+  const techWords = newsTechWords(md);
   const draft = !current || current.status === 'draft';
 
-  const setMd = (value: string) => setValue('md', value, { shouldDirty: true });
+  const setMd = (value: string) => setValue(which, value, { shouldDirty: true });
   const wrap = (pre: string, post: string, placeholder: string) => {
     const ta = textarea.current;
     if (!ta) return;
@@ -289,7 +318,17 @@ export function NewsEditDialog({
     const v = getValues();
     clearErrors();
     const problems = newsProblems(
-      { title: v.title, type: v.type, version: v.release, date: v.date, short: v.short, md: v.md },
+      {
+        title: v.title,
+        type: v.type,
+        version: v.release,
+        date: v.date,
+        short: v.short,
+        md: v.md,
+        audience: v.audience,
+        adminMd: v.adminMd,
+        modules: v.modules,
+      },
       { publish: publish || !draft },
     );
     const bad = (Object.keys(problems) as NewsField[]).map((f) => [f, problems[f]!] as const);
@@ -314,6 +353,8 @@ export function NewsEditDialog({
       pinned: v.pinned,
       showOnLogin: v.showOnLogin,
       audience: v.audience,
+      modules: v.modules,
+      adminMd: v.adminMd,
       publish,
     };
     setBusy(true);
@@ -548,6 +589,24 @@ export function NewsEditDialog({
             }
           </Field>
           <Field
+            id={`${id}-modules`}
+            label={t('news.f.modules')}
+            full
+            hint={t('news.f.modules_hint')}
+            error={fieldError(t, errors.modules)}
+          >
+            {(c) => (
+              <ChipMultiSelect
+                id={c.id}
+                describedBy={c['aria-describedby']}
+                label={t('news.f.modules')}
+                options={NEWS_MODULES.map((m) => ({ value: m, label: t(newsModuleTitle(m)) }))}
+                value={modules}
+                onChange={(next) => setValue('modules', next, { shouldDirty: true })}
+              />
+            )}
+          </Field>
+          <Field
             id={`${id}-short`}
             label={t('news.f.short')}
             required
@@ -572,10 +631,20 @@ export function NewsEditDialog({
             required
             full
             hint={t('news.f.md_hint')}
-            error={fieldError(t, errors.md)}
+            error={fieldError(t, errors.md ?? errors.adminMd)}
           >
             {(c) => (
               <div className="flex flex-col gap-2">
+                <Segments
+                  size="sm"
+                  label={t('news.f.text_switch')}
+                  value={which}
+                  onChange={setWhich}
+                  options={[
+                    { value: 'md', label: t('news.f.text_users') },
+                    { value: 'adminMd', label: t('news.f.text_admin') },
+                  ]}
+                />
                 <div className="flex flex-wrap items-center gap-1.5">
                   {TOOLS.map((x) => (
                     <button
@@ -627,23 +696,49 @@ export function NewsEditDialog({
                     {...fields.md}
                     ref={(el) => {
                       fields.md.ref(el);
-                      textarea.current = el;
+                      userArea.current = el;
                     }}
                     spellCheck
-                    className={`${inputClass({ multiline: true })} h-full min-h-[320px] font-mono text-[12.5px] leading-[1.55] ${view === 'prev' ? 'max-md:hidden' : ''}`}
+                    aria-label={t('news.f.text_users')}
+                    className={`${inputClass({ multiline: true })} h-full min-h-[320px] font-mono text-[12.5px] leading-[1.55] ${view === 'prev' ? 'max-md:hidden' : ''} ${which === 'md' ? '' : 'hidden'}`}
+                  />
+                  <textarea
+                    id={`${id}-admin-md`}
+                    {...fields.adminMd}
+                    ref={(el) => {
+                      fields.adminMd.ref(el);
+                      adminArea.current = el;
+                    }}
+                    spellCheck
+                    data-news-admin-md=""
+                    aria-label={t('news.f.text_admin')}
+                    placeholder={t('news.f.admin_ph')}
+                    className={`${inputClass({ multiline: true })} h-full min-h-[320px] font-mono text-[12.5px] leading-[1.55] ${view === 'prev' ? 'max-md:hidden' : ''} ${which === 'adminMd' ? '' : 'hidden'}`}
                   />
                   <div
                     aria-label={t('news.md.preview')}
                     data-news-preview=""
                     className={`max-h-[520px] overflow-auto rounded-lg border border-line bg-pane px-3.5 py-2.5 text-[13.5px] ${view === 'text' ? 'max-md:hidden' : ''}`}
                   >
-                    {newsMdTrim(md) ? (
-                      <NewsBody source={newsMdTrim(md)} preview />
-                    ) : (
+                    {!newsMdTrim(shown) ? (
                       <span className="text-muted">{t('news.md.empty')}</span>
+                    ) : which === 'md' ? (
+                      <NewsBody source={newsMdTrim(shown)} preview />
+                    ) : (
+                      <NewsAdminText source={newsMdTrim(shown)} preview />
                     )}
                   </div>
                 </div>
+                <p className="text-[12.5px] text-muted">{t('news.f.users_hint')}</p>
+                <p
+                  data-news-warn=""
+                  aria-live="polite"
+                  className="text-[12.5px] text-caution-label"
+                >
+                  {techWords.length
+                    ? t('news.f.tech_warn', { words: techWords.map((w) => `«${w}»`).join(', ') })
+                    : ''}
+                </p>
               </div>
             )}
           </Field>

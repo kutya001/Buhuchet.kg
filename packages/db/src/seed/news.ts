@@ -1,8 +1,15 @@
-import { NEWS_TYPE_BY_NAME, newsShowMoment, isIsoDate } from '@buhuchet/domain';
+import {
+  NEWS_TYPE_BY_NAME,
+  newsMdTrim,
+  newsModulesOrdered,
+  newsModulesProblem,
+  newsShowMoment,
+  isIsoDate,
+} from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Db } from '../client';
-import { news } from '../schema';
+import { news, newsAdminTexts } from '../schema';
 import type { SeedOptions, SeedReport } from './platform';
 
 const NewsSection = z.array(
@@ -26,8 +33,17 @@ const NewsSection = z.array(
       })
       .nullish(),
     hist: z.array(z.object({ at: z.string(), to: z.string() })).nullish(),
+    // Доработки 16.11.2026, блок 4 (прототип v123): «Модули» и текст «Для администратора платформы».
+    mods: z.array(z.string()).nullish(),
+    admMd: z.string().nullish(),
   }),
 );
+
+/** Опубликованные новости наполнения без `NEWS_NOT_YET`. */
+const seedItems = (section: unknown) =>
+  NewsSection.parse(section ?? []).filter(
+    (n) => n.status === 'Опубликовано' && !NEWS_NOT_YET.has(n.id),
+  );
 
 /** Момент «Опубликовано» из истории прототипа («2026-10-12 09:00» по Бишкеку) или дата в 09:00. */
 function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
@@ -61,33 +77,35 @@ export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108']);
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-53
 export function newsSeedRows(section: unknown) {
-  return NewsSection.parse(section ?? [])
-    .filter((n) => n.status === 'Опубликовано' && !NEWS_NOT_YET.has(n.id))
-    .map((n) => {
-      const type = NEWS_TYPE_BY_NAME[n.type];
-      if (!type) throw new Error(`Новость ${n.id}: неизвестный тип «${n.type}»`);
-      const link = n.link && n.link.k !== 'video' ? n.link : null;
-      return {
-        id: n.id,
-        title: n.t,
-        type,
-        release: n.ver?.trim() || null,
-        publishDate: n.date,
-        short: n.short?.trim() ?? '',
-        md: n.md ?? '',
-        linkKind: link?.k ?? null,
-        linkId: link?.id ?? null,
-        pinned: n.pin ?? false,
-        showOnLogin: n.login ?? false,
-        audience: n.aud === 'adm' ? 'adm' : 'all',
-        status: 'published',
-        off: n.off ?? false,
-        publishedAt: publishedAt(n),
-        // История версий: «Создано» — момент публикации (список Админки — от новых к старым по «Создано»).
-        createdAt: publishedAt(n),
-        updatedAt: publishedAt(n),
-      };
-    });
+  return seedItems(section).map((n) => {
+    const type = NEWS_TYPE_BY_NAME[n.type];
+    if (!type) throw new Error(`Новость ${n.id}: неизвестный тип «${n.type}»`);
+    const modules = n.mods ?? [];
+    const problem = newsModulesProblem(modules);
+    if (problem) throw new Error(`Новость ${n.id}: модули ${modules.join(', ')} — ${problem}`);
+    const link = n.link && n.link.k !== 'video' ? n.link : null;
+    return {
+      id: n.id,
+      title: n.t,
+      type,
+      release: n.ver?.trim() || null,
+      publishDate: n.date,
+      short: n.short?.trim() ?? '',
+      md: n.md ?? '',
+      linkKind: link?.k ?? null,
+      linkId: link?.id ?? null,
+      pinned: n.pin ?? false,
+      showOnLogin: n.login ?? false,
+      audience: n.aud === 'adm' ? 'adm' : 'all',
+      modules: newsModulesOrdered(modules),
+      status: 'published',
+      off: n.off ?? false,
+      publishedAt: publishedAt(n),
+      // История версий: «Создано» — момент публикации (список Админки — от новых к старым по «Создано»).
+      createdAt: publishedAt(n),
+      updatedAt: publishedAt(n),
+    };
+  });
 }
 
 /**
@@ -95,6 +113,62 @@ export function newsSeedRows(section: unknown) {
  * версий v1 … текущей»; раздел `news` refDB.json). Без `update` — только недостающие; с `update` —
  * ещё и изменившиеся, кроме тех, что правил администратор платформы (`updated_by` задан).
  */
+/** Второй текст новостей наполнения; пустой — у новости его нет. */
+export function newsAdminTextSeedRows(section: unknown): { newsId: string; md: string }[] {
+  return seedItems(section).map((n) => ({ newsId: n.id, md: newsMdTrim(n.admMd ?? '') }));
+}
+
+/**
+ * Второй текст «Для администратора платформы» (доработки 16.11.2026, блок 4, пункт 1): только у
+ * новостей, которые администратор платформы не правил (`news.updated_by` пуст). Без `update` —
+ * недостающие; с `update` — ещё изменившиеся и убранные из наполнения; у изменённой новости
+ * поднимается версия (открытое окно правки не затрёт новый текст).
+ */
+async function seedNewsAdminTexts(db: Db, section: unknown, update: boolean): Promise<void> {
+  const rows = newsAdminTextSeedRows(section);
+  const filled = rows.filter((r) => r.md);
+  const changed = new Set<string>();
+  if (filled.length) {
+    const values = sql.join(
+      filled.map((r) => sql`(${r.newsId}, ${r.md})`),
+      sql`, `,
+    );
+    const done = await db.execute<{ news_id: string }>(sql`
+      insert into ${newsAdminTexts} (news_id, md, updated_by)
+      select v.id, v.md, null from (values ${values}) as v(id, md)
+        join ${news} n on n.id = v.id and n.updated_by is null
+      on conflict (news_id) do ${
+        update
+          ? sql`update set md = excluded.md, updated_at = now(), updated_by = null
+              where ${newsAdminTexts}.md is distinct from excluded.md`
+          : sql`nothing`
+      }
+      returning news_id`);
+    for (const r of done) changed.add(r.news_id);
+  }
+  const empty = rows.filter((r) => !r.md).map((r) => r.newsId);
+  if (update && empty.length) {
+    const ids = sql.join(
+      empty.map((id) => sql`${id}`),
+      sql`, `,
+    );
+    const gone = await db.execute<{ news_id: string }>(sql`
+      delete from ${newsAdminTexts} t using ${news} n
+      where n.id = t.news_id and n.updated_by is null and t.news_id in (${ids})
+      returning t.news_id`);
+    for (const r of gone) changed.add(r.news_id);
+  }
+  if (changed.size) {
+    const ids = sql.join(
+      [...changed].map((id) => sql`${id}`),
+      sql`, `,
+    );
+    await db.execute(
+      sql`update ${news} set version = version + 1, updated_at = now() where id in (${ids})`,
+    );
+  }
+}
+
 export async function seedNews(
   db: Db,
   section: unknown,
@@ -119,13 +193,15 @@ export async function seedNews(
             linkId: sql`excluded.link_id`,
             pinned: sql`excluded.pinned`,
             showOnLogin: sql`excluded.show_on_login`,
+            modules: sql`excluded.modules`,
             updatedAt: sql`now()`,
             version: sql`${news.version} + 1`,
           },
-          setWhere: sql`${news.updatedBy} is null and (${news.title}, ${news.type}, ${news.release}, ${news.publishDate}, ${news.short}, ${news.md}, ${news.linkKind}, ${news.linkId}, ${news.pinned}, ${news.showOnLogin}) is distinct from (excluded.title, excluded.type, excluded.release, excluded.publish_date, excluded.short, excluded.md, excluded.link_kind, excluded.link_id, excluded.pinned, excluded.show_on_login)`,
+          setWhere: sql`${news.updatedBy} is null and (${news.title}, ${news.type}, ${news.release}, ${news.publishDate}, ${news.short}, ${news.md}, ${news.linkKind}, ${news.linkId}, ${news.pinned}, ${news.showOnLogin}, ${news.modules}) is distinct from (excluded.title, excluded.type, excluded.release, excluded.publish_date, excluded.short, excluded.md, excluded.link_kind, excluded.link_id, excluded.pinned, excluded.show_on_login, excluded.modules)`,
         })
         .returning({ id: news.id })
     : await insert.onConflictDoNothing().returning({ id: news.id });
   const inserted = (await db.$count(news)) - before;
+  await seedNewsAdminTexts(db, section, options.update === true);
   return { inserted, updated: touched.length - inserted, unchanged: rows.length - touched.length };
 }
