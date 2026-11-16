@@ -401,4 +401,116 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     await expect(mine).toHaveAttribute('data-pub-sent-row', 'accepted');
     await expect(mine).not.toContainText(leftText(texts));
   });
+
+  test('(приёмка доработок 16.11, сценарий 9) окно просмотра в «Отправленных файлах» карточки: «‹ ›» по строкам раздела, «Скачать», «Принять» — у показанного файла', async ({
+    page,
+    request,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    // Длинный сценарий: новый сотрудник, отправка двух файлов, карточка контрагента.
+    test.slow();
+    const origin = new URL(baseURL!).origin;
+    const texts = await dictionary(request);
+    const staffApi = await playwright.request.newContext({ baseURL });
+    const { employee } = await hire(staffApi, origin, uniqueLogin('e2e-sent'));
+    await staffApi.dispose();
+    const tag = uniqueTag();
+    const name = `ОсОО «Просмотр ${tag}»`;
+    const cp = await enabledPage(request, origin, name, employee.id);
+    const names = [`счёт-${tag}.pdf`, `накладная-${tag}.pdf`];
+    const body = pdfBytes();
+
+    // Клиент отправляет два файла одним разом (начать → PUT в хранилище → закончить).
+    const part = () => Math.floor(Math.random() * 256);
+    const client = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: { 'x-forwarded-for': `198.18.${part()}.${part()}` },
+    });
+    const opened = await client.post(`/api/page/${SLUG}/${cp.inn}/code`, {
+      headers: { origin },
+      data: { code: cp.code },
+    });
+    expect(opened.status(), await opened.text()).toBe(200);
+    const begun = await client.post(`${cp.path}/sent`, {
+      headers: { origin },
+      data: { files: names.map((n) => ({ name: n, size: body.length })) },
+    });
+    expect(begun.status(), await begun.text()).toBe(201);
+    const ticket = (await begun.json()) as {
+      items: { id: string; upload: { url: string; headers: Record<string, string> } }[];
+    };
+    expect(ticket.items).toHaveLength(2);
+    for (const item of ticket.items) {
+      const put = await client.put(item.upload.url, { headers: item.upload.headers, data: body });
+      expect(put.status(), await put.text()).toBe(200);
+    }
+    const done = await client.post(`${cp.path}/sent/complete`, {
+      headers: { origin },
+      data: { ids: ticket.items.map((i) => i.id) },
+    });
+    expect(done.status(), await done.text()).toBe(200);
+    await client.dispose();
+    // Номер файла → название: ответ «начать» идёт в порядке файлов запроса.
+    const nameOf = new Map(ticket.items.map((item, i) => [item.id, names[i]!]));
+
+    // Бухгалтер: карточка → «Файлы» → «Отправленные файлы», две строки «Новый».
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const card = await openCardFiles(page, name, tag, isMobile);
+    const rows = card.locator('[data-cp-sent] [data-mini-row]');
+    await expect(rows).toHaveCount(2);
+    // Порядок строк — как на экране: окно листает по нему.
+    const order = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-mini-row')!));
+    const [firstId, secondId] = order as [string, string];
+    const first = nameOf.get(firstId)!;
+    const second = nameOf.get(secondId)!;
+
+    // Строка → окно просмотра первого файла: «‹» недоступна, «›» — есть, «Скачать» — метод скачивания.
+    await rows.nth(0).getByText(first, { exact: true }).click();
+    const viewer = page.getByRole('dialog').filter({ has: page.locator('[data-file-viewer]') });
+    await expect(viewer).toHaveAccessibleName(first);
+    await expect(viewer.locator('[data-file-viewer]')).toHaveAttribute('data-file-viewer', firstId);
+    await expect(
+      viewer.getByText(
+        text(texts, 'files.sent.view.sub', { src: text(texts, 'files.sent.src.page') }),
+      ),
+    ).toBeVisible();
+    await expect(viewer.locator(`[data-sent-window="${firstId}"]`)).toContainText(name);
+    await expect(viewer.locator('[data-fv-prev]')).toBeDisabled();
+    await expect(viewer.locator('[data-fv-download]')).toHaveAttribute(
+      'href',
+      `/api/files/sent/${firstId}/download`,
+    );
+
+    // «›» — второй файл того же списка; дальше листать некуда (по кругу окно не ходит).
+    await viewer.locator('[data-fv-next]').click();
+    await expect(viewer).toHaveAccessibleName(second);
+    await expect(viewer.locator('[data-file-viewer]')).toHaveAttribute(
+      'data-file-viewer',
+      secondId,
+    );
+    await expect(viewer.locator(`[data-sent-window="${secondId}"]`)).toBeVisible();
+    await expect(viewer.locator('[data-fv-next]')).toBeDisabled();
+    await expect(viewer.locator('[data-fv-prev]')).toBeEnabled();
+    const href = await viewer.locator('[data-fv-download]').getAttribute('href');
+    expect(href).toBe(`/api/files/sent/${secondId}/download`);
+    // «Скачать» — переход на подписанную ссылку-вложение; просмотр ничего не меняет.
+    const got = await page.request.get(href!, { maxRedirects: 0 });
+    expect(got.status()).toBe(302);
+    expect(got.headers()['location']).toBeTruthy();
+
+    // «Принять» в окне — у показанного (второго) файла: первый остаётся «Новым».
+    await viewer.locator('[data-sent-window-accept]').click();
+    await expect(viewer).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'files.sent.accepted') }),
+    ).toBeVisible();
+    await expect(card.locator(`[data-cp-sent] [data-mini-row="${secondId}"]`)).toContainText(
+      text(texts, 'files.sent.st.accepted'),
+    );
+    await expect(card.locator(`[data-cp-sent] [data-mini-row="${firstId}"]`)).toContainText(
+      text(texts, 'files.sent.st.new'),
+    );
+  });
 });

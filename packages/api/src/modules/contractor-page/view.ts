@@ -334,10 +334,11 @@ export async function contractorPageBody(
               sum: x.r.amount,
               payStatus: x.payStatus,
               month: x.month,
-              // Картинка и PDF открываются в окне просмотра страницы (прототип v74 `pubFileOpen`).
+              // Любой файл открывается в окне просмотра страницы (доработки 16.11.2026, блок 5).
               files: (rep.files.get(x.r.id) ?? []).map((f) => ({
                 id: f.id,
                 name: f.name,
+                size: f.size,
                 preview: filePreviewKind(f.contentType),
               })),
             })),

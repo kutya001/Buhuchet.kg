@@ -28,7 +28,13 @@ export async function GET(
   if (!isPageAddress(slug, inn) || !FILE_ID.test(id)) {
     return new NextResponse(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
   }
+  // Окно просмотра (доработки 16.11.2026, блок 5) читает файл запросом `fetch` с `view=1`: файл —
+  // вложением (браузер его не открывает, байты разбирает окно), а отказ — 404, а не переход на страницу:
+  // иначе окно получило бы вместо файла разметку страницы.
+  const view = req.nextUrl.searchParams.get('view') === '1';
   const back = () => {
+    if (view)
+      return new NextResponse(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
     const res = NextResponse.redirect(new URL(`/${slug}/inn/${inn}`, req.nextUrl.origin), 303);
     res.headers.set('Cache-Control', 'no-store');
     return res;
@@ -40,7 +46,8 @@ export async function GET(
     })
     .join('; ');
   // «Скачать» окна просмотра раздела «Файлы»: картинку и PDF — вложением, а не в браузере.
-  const download = req.nextUrl.searchParams.get('download') === '1' ? ('1' as const) : undefined;
+  const download =
+    view || req.nextUrl.searchParams.get('download') === '1' ? ('1' as const) : undefined;
   const res = (await localApi.api.page[':slug'][':inn'].files[':id'].$get(
     { param: { slug, inn, id }, query: download ? { download } : {} },
     { headers: { cookie } },

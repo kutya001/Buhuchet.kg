@@ -174,14 +174,14 @@ export function useReportsSection(
         </div>
         {r.files.length ? (
           <div className="flex flex-wrap gap-x-2.5 gap-y-1">
-            {r.files.map((f) => (
-              // Прототип v74 `[data-pub-file]` → `pubFileOpen`: картинка и PDF — в окне просмотра.
+            {r.files.map((f, i) => (
+              // Прототип v126 `[data-pub-file]` → `pubFileOpen`: окно просмотра, «‹ ›» по файлам отчёта.
               <button
                 key={f.id}
                 type="button"
                 data-pub-file={f.id}
-                title={f.preview ? t('pub.files.view') : t('pub.files.download')}
-                onClick={() => openFile(f, t('pub.files.viewer'))}
+                title={t('pub.files.view')}
+                onClick={() => openFile(r.files, i, () => t('pub.files.viewer'))}
                 className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left font-[inherit] text-[12.5px] text-link underline"
               >
                 <Icon name="download" size="sm" />

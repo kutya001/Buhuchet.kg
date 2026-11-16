@@ -50,7 +50,7 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
-import { FilePreview } from './file-window';
+import { FileViewer } from './file-viewer';
 import { fileMeta } from './files-data';
 import {
   acceptSent,
@@ -61,8 +61,9 @@ import {
   sentLeftText,
   sentSourceText,
   sentStatusText,
+  sentDownloadHref,
   sentUploadQuery,
-  sentViewQuery,
+  sentViewSrc,
   sentWhoText,
   useSentRefresh,
 } from './sent-data';
@@ -202,136 +203,138 @@ function RejectDialog({
   );
 }
 
-/** Окно отправленного файла (прототип `sntOpen`): просмотр, откуда и кто прислал, статус, срок удаления. */
-// ОТКЛОНЕНИЕ: docs/deviations.md#И-7 — настоящий просмотр файла вместо заглушки прототипа.
-function SentFileWindow({
-  file,
-  open,
+/**
+ * Окно отправленного файла (прототип v126 `sntOpen` → `fileView`): окно просмотра с «‹ ›» по файлам того
+ * же списка, под просмотром — откуда и кто прислал, статус, срок удаления; у нового — «Отклонить»,
+ * «Принять только файл» (чек с оплатой) и «Принять» для файла, который сейчас в окне.
+ */
+function SentFileViewer({
+  files,
+  index,
   onClose,
-  onDownload,
   onAccept,
   onAcceptFile,
   onReject,
 }: {
-  file: SentFileItem;
-  open: boolean;
+  files: readonly SentFileItem[];
+  index: number;
   onClose: () => void;
-  onDownload: () => void;
-  onAccept: () => void;
-  onAcceptFile: () => void;
-  onReject: () => void;
+  onAccept: (file: SentFileItem) => void;
+  onAcceptFile: (file: SentFileItem) => void;
+  onReject: (file: SentFileItem) => void;
 }) {
   const t = useT();
-  const decided = file.decidedAt
-    ? t('files.sent.view.decided', { who: file.decidedBy ?? '—', at: momentText(file.decidedAt) })
-    : null;
-  const items: KeyValueItem[] = [
-    { id: 'cp', label: t('files.sent.col.cp'), value: file.contractor.name },
-    { id: 'src', label: t('files.sent.col.src'), value: sentSourceText(t, file.source) },
-    { id: 'who', label: t('files.sent.col.who'), value: sentWhoText(t, file) },
-    { id: 'at', label: t('files.sent.col.at'), value: momentText(file.sentAt) },
-    ...(file.comment ? [{ id: 'note', label: t('files.sent.col.note'), value: file.comment }] : []),
-    {
-      id: 'st',
-      label: t('files.sent.col.st'),
-      value: (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
-          <SentStatusPill status={file.status} />
-          {file.status === 'rejected' && file.rejectReason ? (
-            <span className="text-xs text-muted">{file.rejectReason}</span>
-          ) : null}
-          {decided ? <span className="text-xs text-muted">· {decided}</span> : null}
-        </span>
-      ),
-    },
-    ...(file.daysLeft !== null
-      ? [
-          {
-            id: 'purge',
-            label: t('files.sent.view.purge'),
-            value: sentLeftText(t, file.daysLeft),
-          },
-        ]
-      : []),
-  ];
-  const fresh = file.status === 'new';
-  const why = file.canDecide ? undefined : t('files.sent.why');
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={file.name}
-      sub={t('files.sent.view.sub', { src: sentSourceText(t, file.source) })}
-      size="mid"
-      kind="card"
-      footer={
-        <>
+  const byId = new Map(files.map((f) => [f.id, f]));
+  const itemsOf = (file: SentFileItem): KeyValueItem[] => {
+    const decided = file.decidedAt
+      ? t('files.sent.view.decided', { who: file.decidedBy ?? '—', at: momentText(file.decidedAt) })
+      : null;
+    return [
+      { id: 'cp', label: t('files.sent.col.cp'), value: file.contractor.name },
+      { id: 'src', label: t('files.sent.col.src'), value: sentSourceText(t, file.source) },
+      { id: 'who', label: t('files.sent.col.who'), value: sentWhoText(t, file) },
+      { id: 'at', label: t('files.sent.col.at'), value: momentText(file.sentAt) },
+      ...(file.comment
+        ? [{ id: 'note', label: t('files.sent.col.note'), value: file.comment }]
+        : []),
+      {
+        id: 'st',
+        label: t('files.sent.col.st'),
+        value: (
+          <span className="inline-flex flex-wrap items-center gap-1.5">
+            <SentStatusPill status={file.status} />
+            {file.status === 'rejected' && file.rejectReason ? (
+              <span className="text-xs text-muted">{file.rejectReason}</span>
+            ) : null}
+            {decided ? <span className="text-xs text-muted">· {decided}</span> : null}
+          </span>
+        ),
+      },
+      ...(file.daysLeft !== null
+        ? [
+            {
+              id: 'purge',
+              label: t('files.sent.view.purge'),
+              value: sentLeftText(t, file.daysLeft),
+            },
+          ]
+        : []),
+    ];
+  };
+  const buttons = (file: SentFileItem) => {
+    if (file.status !== 'new') return null;
+    const why = file.canDecide ? undefined : t('files.sent.why');
+    return (
+      <>
+        <button
+          type="button"
+          data-sent-window-reject=""
+          className={buttonClass('danger')}
+          disabled={!file.canDecide}
+          title={why}
+          onClick={() => onReject(file)}
+        >
+          <Icon name="ban" size="sm" />
+          {t('files.sent.reject')}
+        </button>
+        {file.pay ? (
           <button
             type="button"
-            data-sent-download=""
+            data-sent-window-accept-file=""
             className={buttonClass('default')}
-            onClick={onDownload}
+            disabled={!file.canDecide}
+            title={why ?? t('files.sent.accept_only.title')}
+            onClick={() => onAcceptFile(file)}
           >
-            <Icon name="download" size="sm" />
-            {t('files.act.download')}
+            <Icon name="file" size="sm" />
+            {t('files.sent.accept_only')}
           </button>
-          <div className="flex-1" />
-          {fresh ? (
-            <>
-              <button
-                type="button"
-                data-sent-window-reject=""
-                className={buttonClass('danger')}
-                disabled={!file.canDecide}
-                title={why}
-                onClick={onReject}
-              >
-                <Icon name="ban" size="sm" />
-                {t('files.sent.reject')}
-              </button>
-              {file.pay ? (
-                <button
-                  type="button"
-                  data-sent-window-accept-file=""
-                  className={buttonClass('default')}
-                  disabled={!file.canDecide}
-                  title={why ?? t('files.sent.accept_only.title')}
-                  onClick={onAcceptFile}
-                >
-                  <Icon name="file" size="sm" />
-                  {t('files.sent.accept_only')}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                data-sent-window-accept=""
-                className={buttonClass('cta')}
-                disabled={!file.canDecide}
-                title={why}
-                onClick={onAccept}
-              >
-                <Icon name="check" size="sm" />
-                {t('files.sent.accept')}
-              </button>
-            </>
-          ) : (
-            <button type="button" className={buttonClass('cta')} onClick={onClose}>
-              {t('btn.done')}
-            </button>
-          )}
-        </>
-      }
-    >
-      <div data-sent-window="" className="flex flex-col gap-3">
-        <FilePreview
-          file={{ name: file.name, contentType: file.contentType, size: file.size }}
-          view={sentViewQuery(file.id)}
-        />
-        <Box>
-          <KeyValues items={items} />
-        </Box>
-      </div>
-    </Modal>
+        ) : null}
+        <button
+          type="button"
+          data-sent-window-accept=""
+          className={buttonClass('cta')}
+          disabled={!file.canDecide}
+          title={why}
+          onClick={() => onAccept(file)}
+        >
+          <Icon name="check" size="sm" />
+          {t('files.sent.accept')}
+        </button>
+      </>
+    );
+  };
+  return (
+    <FileViewer
+      files={files.map((f) => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        contentType: f.contentType,
+      }))}
+      index={index}
+      src={sentViewSrc}
+      download={sentDownloadHref}
+      onClose={onClose}
+      sub={(f) => {
+        const file = byId.get(f.id);
+        return file ? t('files.sent.view.sub', { src: sentSourceText(t, file.source) }) : null;
+      }}
+      info={(f) => {
+        const file = byId.get(f.id);
+        return file ? (
+          <Box>
+            <div data-sent-window={file.id}>
+              <KeyValues items={itemsOf(file)} />
+            </div>
+          </Box>
+        ) : null;
+      }}
+      footer={(f) => {
+        const file = byId.get(f.id);
+        return file ? buttons(file) : null;
+      }}
+    />
   );
 }
 
@@ -341,12 +344,19 @@ function SentFileWindow({
  * v121), «Отклонить» (без права «Загружать файлы» — недоступны с причиной), «Открыть контрагента». Окна —
  * `dialogs` в разметку экрана.
  */
-export function useSentActions(o: { withContractor: boolean }) {
+export function useSentActions(o: {
+  withContractor: boolean;
+  /** Файлы списка на экране — по ним листает окно просмотра. */
+  list?: readonly SentFileItem[];
+}) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
   const refresh = useSentRefresh();
-  const [card, setCard] = useState<DialogSlot<SentFileItem> | null>(null);
+  const [card, setCard] = useState<DialogSlot<{
+    files: readonly SentFileItem[];
+    index: number;
+  }> | null>(null);
   const [reject, setReject] = useState<DialogSlot<SentFileItem> | null>(null);
 
   const download = useCallback(
@@ -397,7 +407,12 @@ export function useSentActions(o: { withContractor: boolean }) {
     [acceptNow, t],
   );
 
-  const open = useCallback((file: SentFileItem) => setCard(openSlot(file)), []);
+  // Окно просмотра листает по файлам того же списка (`o.list` — строки на экране, в их порядке); файла
+  // в списке нет — только этот файл.
+  const open = (file: SentFileItem, list = o.list) => {
+    const index = list?.findIndex((f) => f.id === file.id) ?? -1;
+    setCard(openSlot(index < 0 ? { files: [file], index: 0 } : { files: list!, index }));
+  };
   const askReject = useCallback((file: SentFileItem) => setReject(openSlot(file)), []);
 
   const actions = (file: SentFileItem): ActionEntry[] => {
@@ -460,24 +475,23 @@ export function useSentActions(o: { withContractor: boolean }) {
 
   const dialogs: ReactNode = (
     <>
-      {card ? (
-        <SentFileWindow
+      {card?.open ? (
+        <SentFileViewer
           key={`sent-${card.n}`}
-          file={card.data}
-          open={card.open}
+          files={card.data.files}
+          index={card.data.index}
           onClose={() => setCard(closeSlot)}
-          onDownload={() => void download(card.data)}
-          onAccept={() => {
+          onAccept={(file) => {
             setCard(closeSlot);
-            void accept(card.data);
+            void accept(file);
           }}
-          onAcceptFile={() => {
+          onAcceptFile={(file) => {
             setCard(closeSlot);
-            void acceptFile(card.data);
+            void acceptFile(file);
           }}
-          onReject={() => {
+          onReject={(file) => {
             setCard(closeSlot);
-            askReject(card.data);
+            askReject(file);
           }}
         />
       ) : null}
@@ -607,7 +621,6 @@ export function SentFilesTab({ after }: { after?: ReactNode }) {
   const { search, clearSearch, access } = useShell();
   const columns = useMemo(() => sentColumns(t), [t]);
   const view = useViewSettings(SENT_GRID_KEY);
-  const sent = useSentActions({ withContractor: true });
 
   const fetchPage = useCallback<FetchListPage<SentFileRow>>(async (params) => {
     const res = await api.api.files.sent.$get({ query: params });
@@ -629,6 +642,7 @@ export function SentFilesTab({ after }: { after?: ReactNode }) {
     enabled: view.ready,
     fetchPage,
   });
+  const sent = useSentActions({ withContractor: true, list: list.data?.items });
   const { params, visible } = list;
   const sendExport = useCallback(
     () => api.api.files.sent.export.$get({ query: { ...params, cols: visible.join(',') } }),
@@ -689,7 +703,7 @@ export function ContractorSentBox({ contractorId }: { contractorId: string }) {
     ...contractorSentQuery(contractorId),
     enabled: access.feature('cppage'),
   });
-  const acts = useSentActions({ withContractor: false });
+  const acts = useSentActions({ withContractor: false, list: sent.data?.items });
   const data = sent.data;
   if (!data?.items.length) return null;
   const why = (f: SentFileItem) => (f.canDecide ? undefined : t('files.sent.why'));

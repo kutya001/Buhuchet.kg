@@ -734,43 +734,82 @@ export const sentLinkRoute = createRoute({
 });
 
 /**
- * Скачать и открыть (прототип `sntActs`, `sntOpen`): у принятого — файл контрагента, пока его не
- * удалили; открыть в окне — только картинку и PDF (хранилище отдаёт их с проверенным типом).
+ * Подписанная ссылка на файл от контрагента (прототип `sntActs`, `sntOpen`): у принятого — файл
+ * контрагента, пока его не удалили; открыть в окне — только картинку и PDF (хранилище отдаёт их с
+ * проверенным типом), остальное — вложением. Окно просмотра (доработки 16.11.2026, блок 5) читает любой
+ * файл по ссылке-вложению: байты разбирает само, браузер файл не открывает.
  */
+async function sentFileLink(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  id: string,
+  download: boolean,
+): Promise<{ url: string; expiresAt: string }> {
+  const ctx = orgContextOf(c);
+  const file = await withOrgContext(deps.db, ctx, async (tx) => {
+    const features = await requireFilesFeature(tx, ctx.orgId);
+    const subject = subjectOf(c);
+    const sent = await visibleSent(tx, subject, id);
+    // Принятый чек, прикреплённый к оплате за обслуживание (доработки 16.11.2026, блок 2; прототип
+    // v124 `fFeeHid`, п. К-19), открывает только тот, кто видит плату — как в «Файловом менеджере».
+    if (
+      sent.file.status === 'accepted' &&
+      sent.file.fileId &&
+      !feeSeenFor(subject, features, sent.contractor) &&
+      (await fileFeeLinked(tx, sent.file.fileId))
+    ) {
+      notFound();
+    }
+    return sent.file;
+  });
+  const key = file.status === 'accepted' ? file.fileStorageKey : file.storageKey;
+  if (!key) notFound();
+  if (!download && !filePreviewKind(file.contentType)) {
+    apiFail(400, 'file_no_preview', FILE_MESSAGES.file_no_preview);
+  }
+  const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
+  const url = await deps.storage.signedDownloadUrl(key!, {
+    expiresInSeconds: FILE_LINK_SECONDS,
+    fileName: file.name,
+    ...(download ? {} : { inline: { contentType: file.contentType } }),
+  });
+  return { url, expiresAt: expiresAt.toISOString() };
+}
+
+/** Скачать и открыть: ссылка ответом (окно и «Скачать» из меню). */
 export function sentLinkHandler(deps: ApiDeps): RouteHandler<typeof sentLinkRoute, AppEnv> {
   return async (c) => {
-    const { id } = c.req.valid('param');
     const download = c.req.valid('query').download === '1';
-    const ctx = orgContextOf(c);
-    const file = await withOrgContext(deps.db, ctx, async (tx) => {
-      const features = await requireFilesFeature(tx, ctx.orgId);
-      const subject = subjectOf(c);
-      const sent = await visibleSent(tx, subject, id);
-      // Принятый чек, прикреплённый к оплате за обслуживание (доработки 16.11.2026, блок 2; прототип
-      // v124 `fFeeHid`, п. К-19), открывает только тот, кто видит плату — как в «Файловом менеджере».
-      if (
-        sent.file.status === 'accepted' &&
-        sent.file.fileId &&
-        !feeSeenFor(subject, features, sent.contractor) &&
-        (await fileFeeLinked(tx, sent.file.fileId))
-      ) {
-        notFound();
-      }
-      return sent.file;
-    });
-    const key = file.status === 'accepted' ? file.fileStorageKey : file.storageKey;
-    if (!key) notFound();
-    if (!download && !filePreviewKind(file.contentType)) {
-      apiFail(400, 'file_no_preview', FILE_MESSAGES.file_no_preview);
-    }
-    const expiresAt = new Date(Date.now() + FILE_LINK_SECONDS * 1000);
-    const url = await deps.storage.signedDownloadUrl(key!, {
-      expiresInSeconds: FILE_LINK_SECONDS,
-      fileName: file.name,
-      ...(download ? {} : { inline: { contentType: file.contentType } }),
-    });
-    return c.json({ url, expiresAt: expiresAt.toISOString() }, 200);
+    return c.json(await sentFileLink(deps, c, c.req.valid('param').id, download), 200);
   };
+}
+
+export const sentDownloadRoute = createRoute({
+  method: 'get',
+  path: '/files/sent/{id}/download',
+  tags: ['files'],
+  summary:
+    'Скачать файл от контрагента: переход на подписанную ссылку (кнопка «Скачать» окна просмотра)',
+  middleware: [requirePermission('filesView')] as const,
+  request: { params: SentFileIdParam },
+  responses: {
+    302: { description: 'Переход на подписанную ссылку-вложение на 15 минут' },
+    401: noAuth,
+    403: {
+      description: 'Нет права «Просматривать файлы» или «Файлы в карточках» выключены',
+      content: error,
+    },
+    404: { description: 'Файла нет, он удалён или контрагент вне области', content: error },
+  },
+});
+
+/**
+ * «Скачать» окна просмотра (доработки 16.11.2026, блок 5, пункт 1): окно ставит адрес в ссылку, поэтому
+ * метод сам переходит на подписанную ссылку-вложение — те же проверки, что у ссылки ответом.
+ */
+export function sentDownloadHandler(deps: ApiDeps): RouteHandler<typeof sentDownloadRoute, AppEnv> {
+  return async (c) =>
+    c.redirect((await sentFileLink(deps, c, c.req.valid('param').id, true)).url, 302);
 }
 
 /* ═════════════ Галочка «Контрагент может отправлять файлы» у контрагента ═════════════ */
