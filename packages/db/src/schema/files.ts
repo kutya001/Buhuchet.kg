@@ -1,4 +1,5 @@
 import {
+  FILE_LINK_SOURCE_KINDS,
   FILE_MAX_BYTES,
   FILE_NAME_MAX_LENGTH,
   SENT_FILE_COMMENT_MAX,
@@ -18,6 +19,7 @@ import {
   integer,
   pgPolicy,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -168,6 +170,66 @@ export const files = pgTable(
 ).enableRLS();
 
 const oneOf = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`).join(', '));
+
+/**
+ * Ещё одна ссылка файла — на запись контрагента, без копии (доработки 16.11.2026, блок 2; общая основа
+ * пакета — этап 0, миграция 0157): принятый чек, накладная, акт, сверка контрагента — один файл в
+ * хранилище и одна строка в «Файловом менеджере», источник — «От контрагента», а ссылки ведут ещё и к
+ * записям этого контрагента (`FILE_LINK_SOURCE_KINDS`: деньги, операции, проекты, отчёты). «Открепить» и
+ * удаление записи удаляют только ссылку (историю пишет модуль записи); файл уходит из хранилища, когда
+ * у него не осталось ни одной ссылки.
+ *
+ * Роль приложения ставит ссылку только от своего имени и только на загруженный файл самого контрагента —
+ * «От контрагента», «Из свидетельства и выписки», загруженный вручную к контрагенту, а не файл чужой
+ * записи (задачи, оплаты за обслуживание…) (триггер `file_links_file_guard`); не меняет её (нет UPDATE),
+ * удалить может. Что запись — того же контрагента,
+ * что её видно сотруднику (право и область модуля записи) и что файл оплаты за обслуживание виден только
+ * с правом «Видеть плату за обслуживание», проверяет API.
+ */
+export const fileLinks = pgTable(
+  'file_links',
+  {
+    orgId: uuid('org_id')
+      .notNull()
+      .default(currentOrgId)
+      .references(() => organizations.id, { onDelete: 'restrict' }),
+    fileId: uuid('file_id').notNull(),
+    /** Вид записи: `FileLinkSourceKind` из @buhuchet/domain. */
+    sourceKind: text('source_kind').notNull(),
+    /** Номер записи; ссылку проверяет модуль записи, как у `files.source_id`. */
+    sourceId: uuid('source_id').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .default(sql`app.current_user_id()`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'file_links_pk', columns: [t.fileId, t.sourceKind, t.sourceId] }),
+    foreignKey({
+      name: 'file_links_file_fk',
+      columns: [t.fileId, t.orgId],
+      foreignColumns: [files.id, files.orgId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'file_links_created_by_fk',
+      columns: [t.createdBy, t.orgId],
+      foreignColumns: [users.id, users.orgId],
+    }).onDelete('restrict'),
+    index('file_links_source_idx').on(t.orgId, t.sourceKind, t.sourceId),
+    check(
+      'file_links_source_kind_check',
+      sql`${t.sourceKind} in (${oneOf(FILE_LINK_SOURCE_KINDS)})`,
+    ),
+    orgIsolation('file_links_isolation', t.orgId),
+    // Ссылку ставит тот, кто вошёл (автора не подставить).
+    pgPolicy('file_links_insert_guard', {
+      as: 'restrictive',
+      for: 'insert',
+      to: appRole,
+      withCheck: sql`${t.createdBy} = app.current_user_id()`,
+    }),
+  ],
+).enableRLS();
 
 /**
  * Файлы от контрагентов — «Отправленные файлы» (доработки 14.11.2026, блок 2): контрагент присылает
