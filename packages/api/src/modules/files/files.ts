@@ -89,8 +89,14 @@ export const FILES_SECTION = 'files';
 
 type FileSources = Readonly<Record<string, FileSource>>;
 
+/**
+ * Реестр записей-источников из зависимостей — всё, что нужно функциям, которые зовут внутри транзакции:
+ * к базе они ходят только через `tx` (п. О-46), `deps.db` им не передаётся.
+ */
+export type FileSourcesDeps = Pick<ApiDeps, 'fileSources'>;
+
 /** Источник файлов по виду: только свои ключи реестра (`constructor`, `__proto__` — не источники). */
-export function sourceOf(deps: ApiDeps, kind: string): FileSource | undefined {
+export function sourceOf(deps: FileSourcesDeps, kind: string): FileSource | undefined {
   const sources: FileSources = deps.fileSources ?? FILE_SOURCES;
   return Object.hasOwn(sources, kind) ? sources[kind] : undefined;
 }
@@ -144,6 +150,17 @@ export function canUpload(subject: AccessSubject, record: FileSourceRecord): boo
   return canView(subject, record) && record.editable && hasPermission(subject, 'filesUpload');
 }
 
+/**
+ * Прикрепить ссылкой и открепить файл контрагента (доработки 16.11.2026, блок 2): как прикрепить файл к
+ * записи, а у отчёта ещё «Менять статус» (прототип v124 report-card.js: «Из файлов контрагента» и
+ * «Открепить» — `can('changeStatus')`; продукт строже: и «Загружать файлы», п. К-19).
+ */
+export function canLinkTo(subject: AccessSubject, kind: string, record: FileSourceRecord): boolean {
+  return (
+    canUpload(subject, record) && (kind !== 'report' || hasPermission(subject, 'changeStatus'))
+  );
+}
+
 export function deleteRefusal(
   subject: AccessSubject,
   record: FileSourceRecord,
@@ -163,7 +180,7 @@ export function deleteRefusal(
  * отличить от несуществующей).
  */
 export async function visibleSource(
-  deps: ApiDeps,
+  deps: FileSourcesDeps,
   tx: Tx,
   subject: AccessSubject,
   kind: string,
@@ -240,6 +257,7 @@ function itemBody(
  */
 function linkedItemBody(
   file: FileRecord,
+  kind: string,
   record: FileSourceRecord,
   own: FileSourceRecord | null,
   subject: AccessSubject,
@@ -259,7 +277,7 @@ function linkedItemBody(
     canReplace: false,
     page: filePageOf(file, own?.contractor ?? null, subject, cppage),
     linked: true,
-    canUnlink: canUpload(subject, record),
+    canUnlink: canLinkTo(subject, kind, record),
     version: file.version,
   };
 }
@@ -343,13 +361,18 @@ export function listFilesHandler(deps: ApiDeps): RouteHandler<typeof listFilesRo
               contractorId: contractor.id,
             })
           : null;
+      const ownItems = items.map((f) =>
+        itemBody(f, record, subject, ctx.userId!, now, features.cppage),
+      );
+      const linkedItems = shown.map((f) =>
+        linkedItemBody(f, kind, record, own, subject, features.cppage),
+      );
       return {
-        items: [
-          ...items.map((f) => itemBody(f, record, subject, ctx.userId!, now, features.cppage)),
-          ...shown.map((f) => linkedItemBody(f, record, own, subject, features.cppage)),
-        ],
+        // У отчёта файлы-ссылки — над своими (прототип v124 report-card.js `rcLinked`), у остальных
+        // записей — после своих (`filesBox`).
+        items: kind === 'report' ? [...linkedItems, ...ownItems] : [...ownItems, ...linkedItems],
         canUpload: canUpload(subject, record),
-        canLink: linkKind && !!contractor && canUpload(subject, record),
+        canLink: linkKind && !!contractor && canLinkTo(subject, kind, record),
       };
     });
     return c.json(body, 200);

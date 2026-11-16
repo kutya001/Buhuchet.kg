@@ -111,6 +111,17 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     expect(res.status, await res.clone().text()).toBe(200);
     return FileManagerList.parse(await res.json()).items.find((r) => r.id === fileId);
   };
+  /** Файлы, которые находит фильтр столбца «Источник» «Файлового менеджера». */
+  const srcFound = async (cookie: string, q: string) => {
+    const filters = JSON.stringify({ src: { type: 'text', q } });
+    const res = await call(
+      'GET',
+      `/api/files/manager?size=all&filters=${encodeURIComponent(filters)}`,
+      cookie,
+    );
+    expect(res.status, await res.clone().text()).toBe(200);
+    return FileManagerList.parse(await res.json()).items.map((r) => r.id);
+  };
   const history = (entityId: string, action: string) =>
     f.t.admin.db
       .select({ entity: schema.auditLog.entity, changes: schema.auditLog.changes })
@@ -270,6 +281,20 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     // Неверные данные — 400 по схеме.
     expect((await link(owner, 'receipt', receipt, [])).status).toBe(400);
     expect((await call('POST', '/api/files/links', owner, { kind: 'receipt' })).status).toBe(400);
+    expect((await call('GET', '/api/files/linkable?kind=receipt&id=не-номер', owner)).status).toBe(
+      400,
+    );
+    expect((await call('DELETE', `/api/files/${act}/links?kind=receipt`, owner)).status).toBe(400);
+    expect(
+      (await call('DELETE', `/api/files/не-номер/links?kind=receipt&sourceId=${receipt}`, owner))
+        .status,
+    ).toBe(400);
+    // Окно и «Открепить» — тоже только со входом и с правом «Загружать файлы».
+    expect((await linkable(undefined as unknown as string, 'receipt', receipt)).status).toBe(401);
+    expect((await unlink(undefined as unknown as string, act, 'receipt', receipt)).status).toBe(
+      401,
+    );
+    expect((await unlink(senior, act, 'receipt', receipt)).status).toBe(403);
     // «Файлы в карточках» выключены — 403.
     await features({ ...ON, files: false });
     try {
@@ -359,6 +384,10 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
       (await recordFiles(owner, 'receipt', extra)).items.filter((x) => x.id === act),
     ).toHaveLength(1);
     expect((await managerRow(owner, act))!.links.map((l) => l.id)).toContain(extra);
+    // Фильтр «Источник» находит файл и по записи ссылки (ТЗ блок 2 п. 2), и по основному источнику.
+    expect(await srcFound(owner, '13.11.2026')).toContain(act);
+    expect(await srcFound(owner, 'вручную')).toContain(act);
+    expect(await srcFound(owner, '14.11.2026')).not.toContain(act);
     // Запись денег отменили («Удалить» в «Финансовых операциях»): файл остаётся у контрагента.
     await f.t.admin.db
       .update(schema.moneyOperations)
@@ -371,11 +400,78 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     const row = await managerRow(owner, act);
     expect(row!.links.map((l) => l.id)).not.toContain(extra);
     expect(row!.hiddenLinks).toBe(0);
+    expect(await srcFound(owner, '13.11.2026')).not.toContain(act);
+    // Отменённую запись менять нельзя: ни прикрепить, ни открепить (403), в блоке «Файлы» — без кнопок.
+    const cancelled = await recordFiles(owner, 'receipt', extra);
+    expect(cancelled.canLink).toBe(false);
+    expect(cancelled.items.find((x) => x.id === act)).toMatchObject({ canUnlink: false });
+    const second = await upload(owner, {
+      source: { kind: 'manual', id: null },
+      name: 'Накладная.pdf',
+      contractorId: cpAcc.id,
+    });
+    expect((await link(owner, 'receipt', extra, [second])).status).toBe(403);
+    expect((await unlink(owner, act, 'receipt', extra)).status).toBe(403);
+    expect((await linkable(owner, 'receipt', extra)).status).toBe(403);
     const kept = await f.t.admin.db
       .select({ id: schema.fileLinks.sourceId })
       .from(schema.fileLinks)
       .where(and(eq(schema.fileLinks.fileId, act), eq(schema.fileLinks.sourceId, extra)));
     expect(kept).toEqual([{ id: extra }]);
+  });
+
+  it('отчёт: «Из файлов контрагента» и «Открепить» — ещё и с правом «Менять статус» (прототип v124 report-card.js); файлы-ссылки — над своими', async () => {
+    const [rep] = await f.t.admin.db
+      .insert(schema.reports)
+      .values({
+        orgId: f.a.orgId,
+        contractorId: cpAcc.id,
+        responsibleEmployeeId: employee('acc-a'),
+        reportTypeCode: 't1m',
+        period: 'M',
+        act: 'sub',
+        periodStart: '2026-10-01',
+        dueBase: '2026-11-20',
+        dueDate: '2026-11-20',
+      })
+      .returning({ id: schema.reports.id });
+    const report = rep!.id;
+    const own = await upload(acc, {
+      source: { kind: 'report', id: report },
+      name: 'Квитанция.pdf',
+    });
+    const res = await link(acc, 'report', report, [act]);
+    expect(res.status, await res.clone().text()).toBe(200);
+    const list = await recordFiles(acc, 'report', report);
+    expect(list.canLink).toBe(true);
+    expect(list.items.map((x) => [x.id, x.linked])).toEqual([
+      [act, true],
+      [own, false],
+    ]);
+    // Без «Менять статус» файлы отчёта прикреплять можно, а ссылки — нет.
+    const accRole = f.templateRole(f.a, 'acc');
+    const noStatus = and(
+      eq(schema.rolePermissions.roleId, accRole),
+      eq(schema.rolePermissions.permissionId, 'changeStatus'),
+    );
+    expect(
+      await f.t.admin.db.delete(schema.rolePermissions).where(noStatus).returning(),
+    ).toHaveLength(1);
+    try {
+      const plain = await signIn(f.app, 'acc-a', TEST_PASSWORD);
+      const seen = await recordFiles(plain, 'report', report);
+      expect(seen.canUpload).toBe(true);
+      expect(seen.canLink).toBe(false);
+      expect(seen.items.find((x) => x.id === act)).toMatchObject({ canUnlink: false });
+      expect((await link(plain, 'report', report, [act])).status).toBe(403);
+      expect((await unlink(plain, act, 'report', report)).status).toBe(403);
+      expect((await linkable(plain, 'report', report)).status).toBe(403);
+    } finally {
+      await f.t.admin.db
+        .insert(schema.rolePermissions)
+        .values({ orgId: f.a.orgId, roleId: accRole, permissionId: 'changeStatus' });
+    }
+    expect((await unlink(acc, act, 'report', report)).status).toBe(200);
   });
 
   it('приёмка (сценарий 5): «Удалить отовсюду» — файл пропал из всех записей, в истории каждой «Удалён файл», и тех, которых удаляющему не видно', async () => {

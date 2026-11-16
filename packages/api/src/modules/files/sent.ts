@@ -5,6 +5,7 @@ import {
   acceptSentFile,
   contractorDocumentNames,
   exportSentFiles,
+  fileFeeLinked,
   getContractorPage,
   getSentFile,
   listContractorSentFiles,
@@ -79,6 +80,7 @@ import { serverTexts } from '../l10n/texts';
 import {
   canUpload,
   error,
+  feeSeenFor,
   FILES_SECTION,
   realNow,
   requireFilesFeature,
@@ -741,8 +743,20 @@ export function sentLinkHandler(deps: ApiDeps): RouteHandler<typeof sentLinkRout
     const download = c.req.valid('query').download === '1';
     const ctx = orgContextOf(c);
     const file = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
-      return (await visibleSent(tx, subjectOf(c), id)).file;
+      const features = await requireFilesFeature(tx, ctx.orgId);
+      const subject = subjectOf(c);
+      const sent = await visibleSent(tx, subject, id);
+      // Принятый чек, прикреплённый к оплате за обслуживание (доработки 16.11.2026, блок 2; прототип
+      // v124 `fFeeHid`, п. К-19), открывает только тот, кто видит плату — как в «Файловом менеджере».
+      if (
+        sent.file.status === 'accepted' &&
+        sent.file.fileId &&
+        !feeSeenFor(subject, features, sent.contractor) &&
+        (await fileFeeLinked(tx, sent.file.fileId))
+      ) {
+        notFound();
+      }
+      return sent.file;
     });
     const key = file.status === 'accepted' ? file.fileStorageKey : file.storageKey;
     if (!key) notFound();

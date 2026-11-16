@@ -739,6 +739,11 @@ describe.skipIf(!databaseAvailable())(
       const seenByAcc = await acceptFields(acc);
       expect(seenByAcc).toContain('receipt');
       expect(seenByAcc).not.toContain('feePayment');
+      // Чек оплаты за обслуживание в «Отправленных файлах» открывает только тот, кто видит плату (п. К-19).
+      const sentLink = (cookie: string) =>
+        call(cookie, 'GET', `/api/files/sent/${next.id}/link?download=1`);
+      expect((await sentLink(owner)).status).toBe(200);
+      expect((await sentLink(acc)).status).toBe(404);
 
       // Два окна денег сохранили один чек одновременно: принят один раз, у записи денег одна ссылка,
       // копия проигравшего запроса из хранилища убрана.

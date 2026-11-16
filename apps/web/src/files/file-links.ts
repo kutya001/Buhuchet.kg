@@ -5,7 +5,7 @@ import {
   pluralForm,
   type MoneyOpKind,
 } from '@buhuchet/domain';
-import type { FileLinkInfo, FileSource } from '@buhuchet/shared';
+import type { FileLinkInfo } from '@buhuchet/shared';
 import type { Translate } from '../l10n/translate';
 
 /**
@@ -18,11 +18,17 @@ export type FileLinkForm = 'nm' | 'gen' | 'src';
 const dateOf = (link: FileLinkInfo) => (link.date ? formatDateRu(link.date) : '');
 const amountOf = (link: FileLinkInfo) => formatSomWithUnit(link.amount ?? 0);
 
-/** Отчёт коротко: «НДС · 10.2026» (прототип `${T[r.t].short} · ${r.plabel}`). */
-function reportOf(t: Translate, link: FileLinkInfo): string {
+/**
+ * Отчёт коротко: «НДС · 10.2026» у ссылки на отчёт, «НДС 10.2026» у оплаты налога (прототип v124
+ * `fLinkRecs`: `${T[r.t].short} · ${r.plabel}` и `Оплата ${T[r.t].short} ${r.plabel}`).
+ */
+function reportOf(t: Translate, link: FileLinkInfo, pay = false): string {
   if (!link.report) return '';
   const { short, period, start, event } = link.report;
-  return t('files.link.report', { short, period: periodLabel({ period, start, event }, t) });
+  return t(pay ? 'files.link.report_pay' : 'files.link.report', {
+    short,
+    period: periodLabel({ period, start, event }, t),
+  });
 }
 
 /** Подпись записи по словарю. */
@@ -36,7 +42,7 @@ export function fileLinkText(t: Translate, link: FileLinkInfo, form: FileLinkFor
     case 'tax_payment':
       if (form === 'src')
         return link.report
-          ? t('files.link.src.tax_payment', { report: reportOf(t, link), amount, date })
+          ? t('files.link.src.tax_payment', { report: reportOf(t, link, true), amount, date })
           : t('files.link.src.tax_payment_plain', { date, amount });
       return t(`files.link.${form}.tax_payment`, { date });
     case 'money_operation': {
@@ -90,12 +96,4 @@ export function fileDeleteLinksList(
   });
   if (hidden) seen.push(t(`files.delete.hidden.${pluralForm(hidden)}`, { n: hidden }));
   return seen.join('; ');
-}
-
-/**
- * Куда ведёт «Перейти к источнику: …» ссылки: запись в своём модуле (у оплаты услуги и транша проекта
- * — сама оплата, в её окне есть «Карточка услуги» и «Карточка проекта»).
- */
-export function fileLinkSource(link: FileLinkInfo): FileSource {
-  return { kind: link.kind, id: link.id };
 }

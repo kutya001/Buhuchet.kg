@@ -40,9 +40,10 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import {
-  canUpload,
+  canLinkTo,
   error,
   feeSeenFor,
+  type FileSourcesDeps,
   requireFilesFeature,
   sourceOf,
   subjectOf,
@@ -57,8 +58,9 @@ import type { FileSourceRecord } from './sources';
  * `fLinkRecs`, `fPickDlg`, `fLinkAdd`, `fUnlink`; таблица `file_links`): файл контрагента — принятый чек,
  * накладная, акт, сверка, документы карточки, загруженный вручную с контрагентом — прикрепляется к его
  * записям ссылкой, без новой загрузки и копии: «Из файлов контрагента» и «Открепить» в блоке «Файлы»
- * записи. Прикрепить и открепить может тот, кто может прикреплять файлы к этой записи (`canUpload`:
- * право «Загружать файлы», область группы «Файловый менеджер», запись можно менять в её модуле); файл —
+ * записи. Прикрепить и открепить может тот, кто может прикреплять файлы к этой записи (`canLinkTo`:
+ * право «Загружать файлы», область группы «Файловый менеджер», запись можно менять в её модуле, у отчёта —
+ * ещё «Менять статус»); файл —
  * только свой загруженный файл того же контрагента. Файл, прикреплённый к оплате за обслуживание, видит
  * только тот, кто видит плату (прототип `fFeeHid`).
  */
@@ -87,7 +89,7 @@ export function feeHiddenSql(
  * нет в обоих числах. Сумму поступления целиком (с обслуживанием) видит только тот, кто видит плату.
  */
 export async function fileLinkInfos(
-  deps: ApiDeps,
+  deps: FileSourcesDeps,
   tx: Tx,
   subject: AccessSubject,
   features: Readonly<Record<Feature, boolean>>,
@@ -139,7 +141,7 @@ export async function fileLinkInfos(
  * (иначе 404), её файлы можно менять (иначе 403).
  */
 async function linkRecord(
-  deps: ApiDeps,
+  deps: FileSourcesDeps,
   tx: Tx,
   subject: AccessSubject,
   kind: string,
@@ -151,7 +153,7 @@ async function linkRecord(
   if (!isLinkKind(kind)) return notFound();
   const record = await visibleSource(deps, tx, subject, kind, id);
   if (!record.contractor) return notFound();
-  if (!canUpload(subject, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
+  if (!canLinkTo(subject, kind, record)) apiFail(403, 'forbidden', 'Нет права на это действие');
   return {
     target: { kind, id },
     record: record as FileSourceRecord & {

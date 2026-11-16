@@ -19,6 +19,7 @@ import { AttachDialog } from '../files/attach-dialog';
 import { FileEditDialog } from '../files/file-edit-dialog';
 import { FileWindow } from '../files/file-window';
 import { fileKindText, filePageText } from '../files/file-columns';
+import { useFileDelete, useFileLinkOpen } from '../files/file-link-open';
 import { fileAlsoText } from '../files/file-links';
 import { fileSizeText, uploadFile, useFilePageToggle, useFilesRefresh } from '../files/files-data';
 import { ContractorSentBox } from '../files/sent-files';
@@ -86,6 +87,9 @@ export function ContractorFilesTab({
   const canAttach = access.can('filesUpload') && !archived;
   const cppage = access.feature('cppage');
   const togglePage = useFilePageToggle(t, toast, errorText);
+  // Окно файла: записи ссылок — в их окнах, «Удалить» / «Удалить отовсюду?» (прототип v124 `openFile`).
+  const links = useFileLinkOpen();
+  const del = useFileDelete();
 
   const download = async (file: FileManagerRow) => {
     const res = await callApi(() => api.api.files[':id'].link.$get({ param: { id: file.id } }));
@@ -266,8 +270,12 @@ export function ContractorFilesTab({
           onDownload={() => void download(open.data)}
           onSource={null}
           onEdit={() => setEditId(open.data.id)}
+          onLink={links.open}
+          onDelete={() => del.ask(data.items.find((f) => f.id === open.data.id) ?? open.data)}
         />
       ) : null}
+      {links.dialogs}
+      {del.dialog}
       <AttachDialog
         files={picked}
         sub={name}

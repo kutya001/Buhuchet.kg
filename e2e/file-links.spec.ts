@@ -47,12 +47,16 @@ const reEsc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Текст с суммой: на экране пробелы в числе неразрывные — в сравнении любой пробел. */
 const loose = (value: string) => new RegExp(reEsc(value).replace(/ /g, '\\s'));
 
-/** Владелец создаёт контрагента с ответственным и включает его страницу. */
+/**
+ * Владелец создаёт контрагента с ответственным и включает его страницу; `tariff` — ставка за обслуживание
+ * в тыйынах (0 — без начислений).
+ */
 async function contractorWithPage(
   api: APIRequestContext,
   origin: string,
   name: string,
   responsible: string,
+  tariff = 0,
 ) {
   await signIn(api, origin, 'erkin', DEMO_PASSWORD);
   const inn = freshInn();
@@ -68,7 +72,7 @@ async function contractorWithPage(
       gked: '46.34.0',
       startDate: '2026-10-01',
       responsibleEmployeeId: responsible,
-      tariff: { amount: 0, period: 'M' },
+      tariff: { amount: tariff, period: 'M' },
     },
   });
   expect(created.status(), await created.text()).toBe(201);
@@ -199,13 +203,16 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     const receipt = page.getByRole('dialog', { name: text(texts, 'money.in.title') });
     // Окно дочитывает данные первого контрагента и рисуется заново — список открываем после этого.
     await expect(receipt.getByRole('button', { name: text(texts, 'money.in.ok') })).toBeEnabled();
+    // Выбранный контрагент — окно дочитывает его данные и рисуется заново (№ 28): сумму вводим после.
+    const formRead = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === `/api/contractors/${cp.id}/receipt-form`,
+    );
     await pickContractor(receipt.locator('[data-receipt-contractor]'), tag);
-    await expect(
-      page
-        .getByRole('dialog', { name: text(texts, 'money.in.title') })
-        .locator('[data-receipt-contractor]'),
-    ).toContainText(name);
+    expect((await formRead).status()).toBe(200);
+    await expect(receipt.locator('[data-receipt-contractor]')).toContainText(name);
+    await expect(receipt.locator('[data-link-pick]')).toBeVisible();
     await receipt.locator('[data-receipt-total]').fill('1000');
+    await expect(receipt.locator('[data-receipt-total]')).toHaveValue(/1\s?000|1000/);
     await receipt.locator('[data-link-pick]').click();
     const pick = page.getByRole('dialog', { name: text(texts, 'files.pick.title') });
     await expect(pick.locator('[data-file-pick-dialog]')).toBeVisible();
@@ -267,9 +274,13 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     );
     await row.getByText(fileName, { exact: true }).click();
     const window = await windowSource(page, fileName);
-    await expect(window).toContainText(both);
-    await page.keyboard.press('Escape');
+    await expect(window.locator('[data-file-window-src]')).toHaveText(both);
+    // Запись в «Источнике» — ссылка на её окно (прототип v124 `data-fol`).
+    await window.locator(`[data-file-link-open="receipt:${receiptId}"]`).click();
     await expect(window).toBeHidden();
+    await expect(page.locator(`[data-fin-op-window="${receiptId}"]`)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator(`[data-fin-op-window="${receiptId}"]`)).toBeHidden();
 
     // Меню «…»: «Перейти к источнику» по каждой ссылке (прототип v124 `fGoActs`).
     const toReceipt = text(texts, 'files.act.source_to', {
@@ -283,12 +294,18 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     await menu.getByRole('menuitem', { name: toReceipt }).click();
     const op = page.locator(`[data-fin-op-window="${receiptId}"]`);
     await expect(op).toBeVisible();
-    const inOp = op.locator('li').filter({ hasText: fileName });
+    // Строка блока «Файлы», не строка «Истории изменений» с тем же названием.
+    const inOp = op.locator('[data-file-row]').filter({ hasText: fileName });
     await expect(inOp).toContainText(text(texts, 'files.link.also_cp'));
 
     // «Открепить»: без подтверждения, файл ушёл из поступления, но остался у контрагента.
     await inOp
-      .getByRole('button', { name: text(texts, 'files.link.unlink_aria', { name: fileName }) })
+      .locator('[data-file-unlink]')
+      .and(
+        page.getByRole('button', {
+          name: text(texts, 'files.link.unlink_aria', { name: fileName }),
+        }),
+      )
       .click();
     await expect(
       page.getByRole('status').filter({ hasText: text(texts, 'files.link.unlinked') }),
@@ -326,9 +343,27 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     await page.keyboard.press('Escape');
     await expect(op).toBeHidden();
 
-    // Удаление в «Файловом менеджере» при ссылке — «Удалить отовсюду?» со списком записей.
+    // Файл у контрагента: «Перейти к источнику: файлы контрагента» — его вкладка «Файлы» с «также у
+    // поступления от …»; удаление в окне файла при ссылке — «Удалить отовсюду?» со списком записей.
     await row.locator('[data-row-menu]').click();
-    await menu.getByRole('menuitem', { name: text(texts, 'files.act.delete_all') }).click();
+    await menu.getByRole('menuitem', { name: text(texts, 'files.act.source_cp') }).click();
+    const card = page.getByRole('dialog', { name });
+    const cpFiles = card.locator('[data-cp-files]');
+    await expect(cpFiles).toBeVisible();
+    const cpRow = cpFiles.locator(`[data-mini-row="${fileId}"]`);
+    await expect(cpRow.locator('[data-file-also]')).toHaveText(
+      loose(
+        text(texts, 'files.pick.also', {
+          list: text(texts, 'files.link.gen.receipt', { date: ddmmyyyy(date) }),
+        }),
+      ),
+    );
+    await cpRow.getByText(fileName, { exact: true }).click();
+    const cpWindow = page.getByRole('dialog', { name: fileName });
+    await expect(cpWindow.locator('[data-file-window-delete]')).toHaveText(
+      text(texts, 'files.act.delete_all'),
+    );
+    await cpWindow.locator('[data-file-window-delete]').click();
     const confirm = page.getByRole('dialog', {
       name: text(texts, 'files.delete.title', { name: fileName }),
     });
@@ -342,9 +377,102 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     await expect(
       page.getByRole('status').filter({ hasText: text(texts, 'files.deleted_all') }),
     ).toBeVisible();
-    await expect(row).toHaveCount(0);
+    await expect(cpRow).toHaveCount(0);
+    await expect(card.locator('[data-cp-files]')).not.toContainText(fileName);
     const gone = await request.get(`/api/files?kind=receipt&id=${receiptId}`, { maxRetries: 2 });
     expect(((await gone.json()) as { items: unknown[] }).items).toEqual([]);
     expect((await request.get(`/api/files/${fileId}/link`, { maxRetries: 2 })).status()).toBe(404);
+  });
+  test('(приёмка 16.11, путь «акт → оплата за обслуживание») принятая накладная прикрепляется к «Принять оплату за обслуживание» через «Из файлов контрагента»: после сохранения — ссылка на оплату, в «Источнике» «Файлового менеджера» — «Оплата за обслуживание …»', async ({
+    page,
+    request,
+    playwright,
+    baseURL,
+    isMobile,
+  }) => {
+    test.slow();
+    const origin = new URL(baseURL!).origin;
+    const texts = await dictionary(request);
+    const staffApi = await playwright.request.newContext({ baseURL });
+    const { employee } = await hire(staffApi, origin, uniqueLogin('e2e-links-fee'));
+    await staffApi.dispose();
+    const tag = uniqueTag();
+    const name = `ОсОО «Накладная ${tag}»`;
+    // Ставка 60 000 сом с текущего месяца: в окне оплаты сумма подставлена.
+    const cp = await contractorWithPage(request, origin, name, employee.id, 6_000_000);
+    const fileName = `накладная-${tag}.pdf`;
+    const part = () => Math.floor(Math.random() * 256);
+    const client = await playwright.request.newContext({
+      baseURL,
+      extraHTTPHeaders: { 'x-forwarded-for': `198.18.${part()}.${part()}` },
+    });
+    const fileId = await sentAndAccepted(client, request, origin, cp, fileName);
+    await client.dispose();
+
+    // «Контрагенты» → «…» строки → «Принять оплату за обслуживание»; ответ поиска — до шагов в строке.
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/cps/all');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    const found = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/contractors' && url.searchParams.get('q') === tag;
+    });
+    await search(page, isMobile, tag);
+    expect((await found).status()).toBe(200);
+    const cpRow = page.locator(`[data-grid] [data-id="${cp.id}"]`);
+    await expect(cpRow).toHaveCount(1);
+    await cpRow.locator('[data-row-menu]').click();
+    const title = text(texts, 'fee.pay.title');
+    await page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: new RegExp(reEsc(title)) })
+      .click();
+    const dialog = page.getByRole('dialog', { name: title });
+    await expect(dialog.locator('[data-fee-pay-sum]')).toHaveValue(loose('60 000'));
+    const date = await dialog.locator('[data-fee-pay-date]').inputValue();
+
+    await dialog.locator('[data-link-pick]').click();
+    const pick = page.getByRole('dialog', { name: text(texts, 'files.pick.title') });
+    await expect(pick.locator('[data-file-pick-dialog]')).toBeVisible();
+    await pick.locator(`[data-file-pick-row="${fileName}"]`).click();
+    await pick.locator('[data-file-pick-ok]').click();
+    await expect(pick).toBeHidden();
+    await expect(dialog.locator(`[data-link-picked="${fileName}"]`)).toBeVisible();
+
+    const linked = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && new URL(r.url()).pathname === '/api/files/links',
+    );
+    await dialog.locator('[data-fee-ok]').click();
+    const linkedRes = await linked;
+    expect(linkedRes.status(), await linkedRes.text()).toBe(200);
+    const body = linkedRes.request().postDataJSON() as { kind: string; fileIds: string[] };
+    expect(body).toMatchObject({ kind: 'fee_payment', fileIds: [fileId] });
+    await expect(dialog).toBeHidden();
+
+    // Файл один, у него ссылка на эту оплату; в окне файла «Источник» — «От контрагента · Оплата за
+    // обслуживание …».
+    const filters = JSON.stringify({ cp: { type: 'enum', vals: [cp.id] } });
+    const listed = await request.get(
+      `/api/files/manager?size=all&filters=${encodeURIComponent(filters)}`,
+      { maxRetries: 2 },
+    );
+    expect(listed.status(), await listed.text()).toBe(200);
+    const rows = (
+      (await listed.json()) as { items: { id: string; links: { kind: string; id: string }[] }[] }
+    ).items;
+    expect(rows.map((r) => [r.id, r.links.map((l) => [l.kind, l.id])])).toEqual([
+      [fileId, [['fee_payment', (body as { id?: string }).id]]],
+    ]);
+    const row = await managerRow(page, isMobile, tag, fileId);
+    await row.getByText(fileName, { exact: true }).click();
+    const window = await windowSource(page, fileName);
+    await expect(window.locator('[data-file-window-src]')).toHaveText(
+      loose(
+        `${text(texts, 'files.src.sent')} · ${text(texts, 'files.link.src.fee_payment', {
+          date: ddmmyyyy(date),
+          amount: '60 000 сом',
+        })}`,
+      ),
+    );
   });
 });

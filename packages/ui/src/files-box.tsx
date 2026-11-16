@@ -142,6 +142,7 @@ export function FilesBox({
           {items.map((item) => (
             <li
               key={item.id}
+              data-file-row={item.id}
               className="flex min-w-0 items-center gap-2.5 border-b border-line px-0.5 py-[9px] last:border-b-0 hover:bg-row-hover"
             >
               <Icon name={item.linked ? 'link' : 'file'} className="flex-none text-muted" />

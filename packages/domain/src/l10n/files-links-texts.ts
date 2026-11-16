@@ -69,6 +69,8 @@ export const FILES_LINKS_TEXTS = {
   'files.link.gen.report': { ru: 'отчёта {report}', section: FM },
   'files.link.src.report': { ru: 'Отчёт {report}', section: FM },
   'files.link.report': { ru: '{short} · {period}', section: FM },
+  // Отчёт оплаты налога: «НДС 10.2026» (прототип v124 `fLinkRecs`: `Оплата ${T[r.t].short} ${r.plabel}`).
+  'files.link.report_pay': { ru: '{short} {period}', section: FM },
   'files.link.nm.one_off_service': { ru: 'Разовая услуга «{name}»', section: FM },
   'files.link.gen.one_off_service': { ru: 'разовой услуги «{name}»', section: FM },
   'files.link.src.one_off_service': { ru: 'Разовая услуга «{name}»', section: FM },

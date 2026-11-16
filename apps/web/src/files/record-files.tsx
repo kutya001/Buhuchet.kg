@@ -29,6 +29,32 @@ import { fileMeta, filesQuery, uploadFile, useFilePageToggle, useFilesRefresh } 
  * `filesBox`, `fPickDlg`, `fUnlink`) — «Из файлов контрагента» (файлы прикрепляются ссылкой сразу, с
  * записью в историю) и файлы-ссылки после своих файлов: «также в файлах контрагента» и «Открепить».
  */
+/**
+ * Окно самой записи — после «Из файлов контрагента» и «Открепить» в его «Истории изменений» новая строка
+ * (docs/typical-mistakes.md № 44): поступление, оплаты и операции — окна «Финансовых операций», отчёт —
+ * карточка, проект и транш — их окна.
+ */
+function recordQueryKey(source: FileSource): readonly unknown[] | null {
+  if (!source.id) return null;
+  switch (source.kind) {
+    case 'report':
+      return ['reports', 'card', source.id];
+    case 'project':
+      return ['projects', 'card', source.id];
+    case 'project_payment':
+      return ['projects', 'payment', source.id];
+    case 'receipt':
+    case 'tax_payment':
+    case 'money_operation':
+    case 'fee_payment':
+    case 'one_off_service':
+    case 'one_off_service_payment':
+      return ['finance'];
+    default:
+      return null;
+  }
+}
+
 export function RecordFiles({ source }: { source: FileSource }) {
   const t = useT();
   const toast = useToast();
@@ -42,8 +68,16 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const togglePage = useFilePageToggle(t, toast, errorText);
-  // Ссылка меняет и «Источник» в «Файловом менеджере», и «также у …» в файлах контрагента.
-  const refreshAll = useFilesRefresh();
+  // Ссылка меняет и «Источник» в «Файловом менеджере», и «также у …» в файлах контрагента, и историю
+  // самой записи.
+  const refreshFiles = useFilesRefresh();
+  const refreshAll = async () => {
+    const record = recordQueryKey(source);
+    await Promise.all([
+      refreshFiles(),
+      record ? client.invalidateQueries({ queryKey: record }) : null,
+    ]);
+  };
 
   const labels = useMemo<FilesBoxLabels>(
     () => ({
@@ -70,11 +104,11 @@ export function RecordFiles({ source }: { source: FileSource }) {
   if (files.error instanceof ApiFailure && files.error.status === 403) return null;
   if (files.isError) return <Note tone="bad">{t('files.load_error')}</Note>;
   if (!files.data) return null;
-  // Свои файлы записи, затем файлы контрагента ссылкой (прототип: `files`, потом `lk`).
-  const ordered = [
-    ...files.data.items.filter((f) => !f.linked),
-    ...files.data.items.filter((f) => f.linked),
-  ];
+  // Свои файлы записи, затем файлы контрагента ссылкой (прототип: `files`, потом `lk`); у отчёта
+  // ссылки — над своими (прототип v124 report-card.js `rcLinked`).
+  const own = files.data.items.filter((f) => !f.linked);
+  const linkedFiles = files.data.items.filter((f) => f.linked);
+  const ordered = source.kind === 'report' ? [...linkedFiles, ...own] : [...own, ...linkedFiles];
   const items: FilesBoxItem[] = ordered.map((f) => ({
     id: f.id,
     name: f.name,
