@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RecordVersion, Uuid } from './common';
+import { IsoDate, RecordVersion, Uuid } from './common';
 import { listPageSchema } from './list';
 
 /**
@@ -57,6 +57,41 @@ export type FilePage = z.infer<typeof FilePage>;
 export const FilePageInput = z.strictObject({ hidden: z.boolean() });
 
 /**
+ * Ссылка файла контрагента на его запись (доработки 16.11.2026, блок 2; прототип v124 `fLinkRecs`):
+ * вид и номер записи (`FILE_LINK_SOURCE_KINDS`), услуга оплаты услуги или проект транша (`parentId`) и
+ * то, из чего экран собирает подпись по словарю: дата, сумма в тыйынах, название услуги или проекта, вид
+ * финансовой операции, отчёт (вид коротко, период).
+ */
+export const FileLinkInfo = z.object({
+  kind: FileSourceKind,
+  id: Uuid,
+  parentId: Uuid.nullable(),
+  date: IsoDate.nullable(),
+  amount: z.number().int().nullable(),
+  name: z.string().nullable(),
+  op: z.string().nullable(),
+  report: z
+    .object({
+      short: z.string(),
+      period: z.enum(['M', 'Q', 'H', 'Y']),
+      start: IsoDate,
+      event: IsoDate.nullable(),
+    })
+    .nullable(),
+});
+export type FileLinkInfo = z.infer<typeof FileLinkInfo>;
+
+/**
+ * Где ещё файл (прототип v124 `f.links`): записи, которые сотрудник видит, и сколько ещё записей ему не
+ * видно (для «Удалить отовсюду?»).
+ */
+export const FileLinks = z.object({
+  links: z.array(FileLinkInfo),
+  hiddenLinks: z.number().int().nonnegative(),
+});
+export type FileLinks = z.infer<typeof FileLinks>;
+
+/**
  * Файл в блоке «Файлы»: кто и когда загрузил, примечание, что с ним может этот пользователь: удалить,
  * изменить (название и примечание — право «Загружать файлы» и право менять запись) и заменить (тот,
  * кто может и изменить, и удалить: прежний файл при замене пропадает).
@@ -73,6 +108,12 @@ export const FileItem = z.object({
   canEdit: z.boolean(),
   canReplace: z.boolean(),
   page: FilePage.nullable(),
+  /**
+   * Прикреплён к записи ссылкой из файлов контрагента (доработки 16.11.2026, блок 2): вместо «Удалить» —
+   * «Открепить» (`canUnlink`), файл остаётся у контрагента.
+   */
+  linked: z.boolean(),
+  canUnlink: z.boolean(),
   version: RecordVersion,
 });
 export type FileItem = z.infer<typeof FileItem>;
@@ -98,8 +139,15 @@ export const FileReplaceStart = z.strictObject({
 });
 export type FileReplaceStart = z.infer<typeof FileReplaceStart>;
 
-/** Файлы записи и можно ли прикреплять новые. */
-export const FileList = z.object({ items: z.array(FileItem), canUpload: z.boolean() });
+/**
+ * Файлы записи и можно ли прикреплять новые; `canLink` — кнопка «Из файлов контрагента» (у записи
+ * контрагента, файлы которой можно менять).
+ */
+export const FileList = z.object({
+  items: z.array(FileItem),
+  canUpload: z.boolean(),
+  canLink: z.boolean(),
+});
 export type FileList = z.infer<typeof FileList>;
 
 /**
@@ -148,6 +196,8 @@ export const FileManagerRow = z.object({
   canReplace: z.boolean(),
   replaced: z.object({ by: z.string().nullable(), at: z.iso.datetime() }).nullable(),
   page: FilePage.nullable(),
+  /** Где ещё файл контрагента (ссылки, блок 2): «Источник», «Перейти к источнику», «Удалить отовсюду?». */
+  ...FileLinks.shape,
   audit: z.object({
     createdAt: z.iso.datetime(),
     createdBy: z.string().nullable(),
@@ -193,3 +243,51 @@ export const FileVersionQuery = z.object({ version: z.coerce.number().int().nonn
 export function fileDownloadPath(id: string): string {
   return `/api/files/${encodeURIComponent(id)}/download`;
 }
+
+/** Запись, к которой прикрепляют или от которой открепляют файл ссылкой. */
+export const FileLinkSource = z.strictObject({ kind: FileSourceKind, id: Uuid });
+export type FileLinkSource = z.infer<typeof FileLinkSource>;
+
+/** «Из файлов контрагента» → «Прикрепить: N»: какие файлы контрагента прикрепить ссылкой к записи. */
+export const FileLinkAdd = z.strictObject({
+  kind: FileSourceKind,
+  id: Uuid,
+  fileIds: z.array(Uuid).min(1).max(50),
+});
+export type FileLinkAdd = z.infer<typeof FileLinkAdd>;
+
+/** Что прикреплено (уже прикреплённые к записи — нет). */
+export const FileLinkAdded = z.object({
+  added: z.array(z.object({ id: Uuid, name: z.string() })),
+});
+export type FileLinkAdded = z.infer<typeof FileLinkAdded>;
+
+/** «Открепить»: файл и запись, от которой его открепляют. */
+export const FileUnlinkQuery = z.strictObject({ kind: FileSourceKind, sourceId: Uuid });
+
+/**
+ * Окно «Из файлов контрагента» (прототип v124 `fPickDlg`): контрагент записи и его файлы — файлы
+ * карточки, принятые от него и загруженные вручную с ним, кроме уже прикреплённых к записи: откуда файл
+ * (`kind`), когда загружен, примечание и где ещё он прикреплён.
+ */
+export const FileLinkable = z.object({
+  contractor: z.object({ id: Uuid, name: z.string() }),
+  items: z.array(
+    z.object({
+      id: Uuid,
+      name: z.string(),
+      contentType: z.string(),
+      size: z.number().int().nonnegative(),
+      kind: FileSourceKind,
+      note: z.string().nullable(),
+      uploadedAt: z.iso.datetime(),
+      links: z.array(FileLinkInfo),
+    }),
+  ),
+  /** Файлы контрагента есть, но все уже прикреплены к записи. */
+  allLinked: z.boolean(),
+});
+export type FileLinkable = z.infer<typeof FileLinkable>;
+
+/** Где ещё файл — перед удалением (`Удалить отовсюду?`). */
+export const FileLinksBody = FileLinks;

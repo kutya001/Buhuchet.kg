@@ -19,6 +19,8 @@ import { AttachDialog } from '../files/attach-dialog';
 import { FileEditDialog } from '../files/file-edit-dialog';
 import { FileWindow } from '../files/file-window';
 import { fileKindText, filePageText } from '../files/file-columns';
+import { useFileDelete, useFileLinkOpen } from '../files/file-link-open';
+import { fileAlsoText, fileSourceWithLinks } from '../files/file-links';
 import { fileSizeText, uploadFile, useFilePageToggle, useFilesRefresh } from '../files/files-data';
 import { ContractorSentBox } from '../files/sent-files';
 import { useErrorText, useT } from '../l10n/provider';
@@ -85,6 +87,9 @@ export function ContractorFilesTab({
   const canAttach = access.can('filesUpload') && !archived;
   const cppage = access.feature('cppage');
   const togglePage = useFilePageToggle(t, toast, errorText);
+  // Окно файла: записи ссылок — в их окнах, «Удалить» / «Удалить отовсюду?» (прототип v124 `openFile`).
+  const links = useFileLinkOpen();
+  const del = useFileDelete();
 
   const download = async (file: FileManagerRow) => {
     const res = await callApi(() => api.api.files[':id'].link.$get({ param: { id: file.id } }));
@@ -185,6 +190,16 @@ export function ContractorFilesTab({
                           {f.note}
                         </div>
                       ) : null}
+                      {/* Где ещё файл (доработки 16.11.2026, блок 2; прототип v124 `x.also`). */}
+                      {f.links.length ? (
+                        <div
+                          data-file-also=""
+                          className="inline-flex items-center gap-1 text-xs font-normal text-muted"
+                        >
+                          <Icon name="link" size="sm" />
+                          {fileAlsoText(t, f.links)}
+                        </div>
+                      ) : null}
                     </>
                   ),
                   src: <span className="text-muted">{f.source}</span>,
@@ -255,8 +270,16 @@ export function ContractorFilesTab({
           onDownload={() => void download(open.data)}
           onSource={null}
           onEdit={() => setEditId(open.data.id)}
+          onLink={links.open}
+          onDelete={() =>
+            del.ask(data.items.find((f) => f.id === open.data.id) ?? open.data, () =>
+              setOpen(closeSlot),
+            )
+          }
         />
       ) : null}
+      {links.dialogs}
+      {del.dialog}
       <AttachDialog
         files={picked}
         sub={name}
@@ -271,7 +294,10 @@ export function ContractorFilesTab({
         file={editFile}
         sub={
           editFile
-            ? t('files.window.sub', { kind: fileKindText(t, editFile.kind), src: editFile.source })
+            ? t('files.window.sub', {
+                kind: fileKindText(t, editFile.kind),
+                src: fileSourceWithLinks(t, editFile.source, editFile.links),
+              })
             : undefined
         }
         onClose={() => setEditId(null)}

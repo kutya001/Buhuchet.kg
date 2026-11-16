@@ -53,6 +53,7 @@ import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { WhyButton } from '../finance/finance-dialogs';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import { useShell } from '../shell/context';
 import { openProjectCard } from './project-card-store';
@@ -82,7 +83,13 @@ type Errors = Partial<Record<'date' | 'amount' | 'files' | 'reason', string>>;
 export type ProjectPaymentAction =
   | {
       act: 'pay';
-      project: { id: string; name: string; contractor: string; left: number | null };
+      project: {
+        id: string;
+        name: string;
+        contractor: string;
+        contractorId: string;
+        left: number | null;
+      };
     }
   | { act: 'payment'; id: string }
   | { act: 'payment-edit'; id: string }
@@ -92,7 +99,7 @@ export type ProjectPaymentAction =
 export const payAction = (p: {
   id: string;
   name: string;
-  contractor: { name: string };
+  contractor: { id: string; name: string };
   money: { plan: number | null; paid: number } | null;
 }): ProjectPaymentAction => ({
   act: 'pay',
@@ -100,6 +107,7 @@ export const payAction = (p: {
     id: p.id,
     name: p.name,
     contractor: p.contractor.name,
+    contractorId: p.contractor.id,
     left: p.money?.plan ? Math.max(0, p.money.plan - p.money.paid) : null,
   },
 });
@@ -403,7 +411,8 @@ function PaymentById({
 
 /**
  * «Оплата по проекту» (прототип `projPay` → `tranchDlg`): сумма (подставлен остаток; при стоимости — не
- * больше его, без неё — любая), дата (не позже сегодняшней), комментарий, файлы «платёжка, чек».
+ * больше его, без неё — любая), дата (не позже сегодняшней), комментарий, файлы «платёжка, чек» и «Из
+ * файлов контрагента» (блок 2, пункт 9).
  */
 export function ProjectPayDialog({
   project,
@@ -411,7 +420,13 @@ export function ProjectPayDialog({
   onClose,
   onDone,
 }: {
-  project: { id: string; name: string; contractor: string; left: number | null };
+  project: {
+    id: string;
+    name: string;
+    contractor: string;
+    contractorId: string;
+    left: number | null;
+  };
   open: boolean;
   onClose: () => void;
   onDone: () => void;
@@ -427,6 +442,7 @@ export function ProjectPayDialog({
   const [date, setDate] = useState(todayBishkek);
   const [note, setNote] = useState('');
   const [picked, setPicked] = useState<File[]>([]);
+  const [links, setLinks] = useState<PickedLink[]>([]);
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const fail = useFail(setErrors);
@@ -450,18 +466,15 @@ export function ProjectPayDialog({
       amount: n ?? 0,
       date: paidOn,
       note: note.trim(),
-      files: picked.length,
+      files: picked.length + links.length,
     });
     const saved = res.ok ? ProjectSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
-      const failedUpload = picked.length
-        ? await uploadMoneyFiles(
-            t,
-            errorText,
-            { kind: 'project_payment', id: saved.data.id },
-            picked,
-          )
-        : null;
+      const source = { kind: 'project_payment' as const, id: saved.data.id };
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();
@@ -478,7 +491,7 @@ export function ProjectPayDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      dirty={picked.length > 0 || note !== ''}
+      dirty={picked.length > 0 || links.length > 0 || note !== ''}
       title={t('proj.pay.title')}
       sub={t('proj.pay.sub', { name: project.name, cp: project.contractor })}
       footer={
@@ -552,13 +565,20 @@ export function ProjectPayDialog({
           {canUpload ? (
             <Field id={`${id}-files`} label={t('proj.pay.files')} full error={errors.files}>
               {(control) => (
-                <FilesInput
-                  control={control}
-                  onPick={(files) => {
-                    setPicked(files);
-                    setErrors((x) => ({ ...x, files: undefined }));
-                  }}
-                />
+                <div>
+                  <LinkPickRow
+                    contractorId={project.contractorId}
+                    picked={links}
+                    onChange={setLinks}
+                  />
+                  <FilesInput
+                    control={control}
+                    onPick={(files) => {
+                      setPicked(files);
+                      setErrors((x) => ({ ...x, files: undefined }));
+                    }}
+                  />
+                </div>
               )}
             </Field>
           ) : null}

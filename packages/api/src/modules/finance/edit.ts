@@ -8,6 +8,7 @@ import {
   feePaymentEditForm,
   feePaymentOf,
   holderKeyOf,
+  linkedFiles,
   listSourceFiles,
   lockOperation,
   moneyContractor,
@@ -104,6 +105,20 @@ async function editLock(
   );
 }
 
+/**
+ * Файлов у записи денег для «уже приложено N»: свои и файлы контрагента, прикреплённые ссылкой
+ * (доработки 16.11.2026, блок 2; прототип v124 `inDlg`: `edit.files.length || edit.lk.length`).
+ */
+async function recordFileCount(
+  tx: Tx,
+  kind: 'receipt' | 'tax_payment' | 'money_operation' | 'fee_payment',
+  id: string,
+): Promise<number> {
+  return (
+    (await listSourceFiles(tx, kind, id)).length + (await linkedFiles(tx, { kind, id })).length
+  );
+}
+
 export const operationEditFormRoute = createRoute({
   method: 'get',
   path: '/money-operations/{id}/edit-form',
@@ -141,13 +156,11 @@ export function operationEditFormHandler(
       if (lock) lockFail(lock);
       // «Добавить файлы» — как блок «Файлы» окна операции: у оплаты налога — её источник.
       const files = settings.features.files
-        ? (
-            await listSourceFiles(
-              tx,
-              locked.op.kind === 'pay' ? 'tax_payment' : 'money_operation',
-              id,
-            )
-          ).length
+        ? await recordFileCount(
+            tx,
+            locked.op.kind === 'pay' ? 'tax_payment' : 'money_operation',
+            id,
+          )
         : null;
       return { locked, form: await operationEditForm(tx, locked), files };
     });
@@ -286,7 +299,7 @@ export function receiptEditFormHandler(
       if (lock) lockFail(lock);
       const fee = await receiptFeeEditable(tx, c, locked.c);
       const form = await receiptEditForm(tx, locked, { today, fee, t });
-      const files = settings.features.files ? (await listSourceFiles(tx, 'receipt', id)).length : 0;
+      const files = settings.features.files ? await recordFileCount(tx, 'receipt', id) : 0;
       return { locked, form, fee, files };
     });
     const { op, c: cp } = out.locked;
@@ -560,9 +573,7 @@ export function feePaymentEditFormHandler(
       if (lock) lockFail(lock);
       if (locked.payment.operationId) feeFail(409, 'fee_payment_receipt_part');
       const form = await feePaymentEditForm(tx, locked, { today: todayOf(deps), t });
-      const files = settings.features.files
-        ? (await listSourceFiles(tx, 'fee_payment', id)).length
-        : 0;
+      const files = settings.features.files ? await recordFileCount(tx, 'fee_payment', id) : 0;
       return { locked, form, files };
     });
     const { payment } = out.locked;

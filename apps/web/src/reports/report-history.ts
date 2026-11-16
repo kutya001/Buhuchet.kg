@@ -167,7 +167,7 @@ export function reportHistoryText(
       text = fileHistoryText(t, entry) ?? t('report.hist.file_attach', { name: file('to') });
       break;
     case 'file_delete':
-      text = t('report.hist.file_delete', { name: file('from') });
+      text = fileHistoryText(t, entry) ?? t('report.hist.file_delete', { name: file('from') });
       break;
     // Показ файла на странице контрагента (решение заказчика 06.11.2026, прототип v74 `pgFileSet`).
     case 'file_hide':

@@ -6,7 +6,10 @@ if (!config.DATABASE_ADMIN_URL) {
   console.error('Для миграций нужен DATABASE_ADMIN_URL (владелец схемы).');
   process.exit(1);
 }
-await runMigrations(config.DATABASE_ADMIN_URL, config.DATABASE_CA_CERT);
+// Сообщения миграций (итоги переноса данных) — в журнал задания «Migrate test» и выпуска.
+await runMigrations(config.DATABASE_ADMIN_URL, config.DATABASE_CA_CERT, (line) =>
+  console.log(line),
+);
 const role = await ensureAppLoginRole(
   config.DATABASE_ADMIN_URL,
   config.DATABASE_URL,

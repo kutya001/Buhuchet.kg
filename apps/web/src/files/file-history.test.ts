@@ -48,4 +48,33 @@ describe('записи истории о файле (прототип v95 fileEd
       }),
     ).toBe('Примечание к файлу «Акт.pdf» убрано');
   });
+  it('файл контрагента ссылкой (доработки 16.11.2026, блок 2; прототип v124 fLinkAdd, fUnlink, fDelDlg)', () => {
+    expect(
+      fileHistoryText(t, {
+        action: 'file_attach',
+        changes: [
+          { field: 'file', to: 'Акт сверки.pdf' },
+          { field: 'link', to: true },
+        ],
+      }),
+    ).toBe('Прикреплены из файлов контрагента: Акт сверки.pdf');
+    expect(
+      fileHistoryText(t, {
+        action: 'file_delete',
+        changes: [
+          { field: 'file', from: 'Акт сверки.pdf' },
+          { field: 'link', to: true },
+        ],
+      }),
+    ).toBe('Откреплён файл «Акт сверки.pdf»: он остался в файлах контрагента');
+    expect(
+      fileHistoryText(t, {
+        action: 'file_delete',
+        changes: [
+          { field: 'file', from: 'Акт сверки.pdf' },
+          { field: 'linked', to: true },
+        ],
+      }),
+    ).toBe('Удалён файл «Акт сверки.pdf» (был прикреплён из файлов контрагента)');
+  });
 });

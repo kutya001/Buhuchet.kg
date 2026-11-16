@@ -8,12 +8,25 @@ export const MIGRATIONS_FOLDER = fileURLToPath(new URL('../migrations', import.m
 /** Групповая роль приложения: создаётся первой миграцией, получает права на таблицы. */
 export const APP_GROUP_ROLE = 'buhuchet_app';
 
-/** Применить все новые миграции. Только от имени владельца схемы (DATABASE_ADMIN_URL). */
-export async function runMigrations(adminUrl: string, caCert?: string): Promise<void> {
+/** Текст сообщения сервера для журнала: «NOTICE: …». */
+export const noticeLine = (notice: { severity?: string; message?: string }): string =>
+  `${notice.severity ?? 'NOTICE'}: ${notice.message ?? ''}`;
+
+/**
+ * Применить все новые миграции. Только от имени владельца схемы (DATABASE_ADMIN_URL). `onNotice` —
+ * сообщения миграций (`RAISE NOTICE` с итогом переноса данных, например 0159 `file_copies_merge`):
+ * команда `db:migrate` печатает их в журнал стенда и выпуска, тесты — нет.
+ */
+export async function runMigrations(
+  adminUrl: string,
+  caCert?: string,
+  onNotice?: (line: string) => void,
+): Promise<void> {
   const { db, close } = createDb(adminUrl, {
     max: 1,
     applicationName: 'buhuchet-migrate',
     caCert,
+    onNotice: onNotice ? (notice) => onNotice(noticeLine(notice)) : undefined,
   });
   try {
     await migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
