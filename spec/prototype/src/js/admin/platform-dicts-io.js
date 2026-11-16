@@ -129,7 +129,10 @@ DX.kbnews={title:'Новости',key:'id',items:()=>NEWS,cols:[
  ['pin','Закрепить вверху',n=>YN(n.pin),ynIn('Закрепить вверху')],
  ['login','Показывать при входе',n=>YN(n.login),ynIn('Показывать при входе')],
  ['short','Краткое описание',n=>n.short||'',v=>v||{err:'нет краткого описания'}],
- ['md','Подробное описание (markdown)',n=>n.md||'',v=>v||{err:'нет подробного описания'}]],
+ ['md','Подробное описание (markdown)',n=>n.md||'',v=>v||{err:'нет подробного описания'}],
+ // Пакет 16.11.2026, блок 4, пункт 6: второй текст и модули (названия через запятую)
+ ['admMd','Для администратора платформы',n=>n.admMd||'',v=>v||''],
+ ['mods','Модули',n=>(n.mods||[]).map(newsModName).join(', '),v=>{const L=String(v||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean),out=[];for(const x of L){const m=NEWS_MODS().find(y=>norm(y[1])===norm(x)||y[0]===x);if(!m)return {err:`модуля «${x}» нет`};if(!out.includes(m[0]))out.push(m[0])}return out}]],
  upd:(x,v)=>{Object.keys(v).forEach(f=>{if(v[f]!=null)x[f]=v[f]});if(x.status==='Опубликовано')x.edited=TODAY;touch(x)},
  add:v=>{const o=born(Object.assign({status:'Черновик',off:false,link:null,hist:[{at:nowStamp(),to:'Черновик',who:S.me}]},v));NEWS.push(o)}};
 // Показы: строка — одно облачко сценария; меняются заголовок, текст, признак «Общий элемент» и «Активен» сценария
