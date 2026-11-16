@@ -9,6 +9,7 @@ export * from './history';
 export * from './platform-history';
 export * from './status';
 export * from './files';
+export * from './file-links';
 export * from './sent-files';
 export * from './storage-retries';
 export * from './auth';

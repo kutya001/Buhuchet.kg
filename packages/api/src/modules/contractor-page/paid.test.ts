@@ -529,7 +529,7 @@ describe.skipIf(!databaseAvailable())(
       );
     });
 
-    it('чек принимается вместе с деньгами (v121): «Принять» с `attach` — файл контрагента, копия у поступления и оплаты за обслуживание одной транзакцией; отказ — чек «Новый», копий нет', async () => {
+    it('чек принимается вместе с деньгами (v121, v124): «Принять» с `attach` — файл контрагента и ссылка на него у поступления и оплаты за обслуживание одной транзакцией, без копии; отказ — чек «Новый», копий нет', async () => {
       const month = (await publicPage('org-a', INN_A, grantA)).reports!.months![0]!.month;
       const done = await paid(grantA, { purpose: 'tax', month, amount: 100_000 });
       expect(done.res.status, await done.res.clone().text()).toBe(200);
@@ -569,7 +569,8 @@ describe.skipIf(!databaseAvailable())(
       const filesOf = async (kind: string, id: string) => {
         const res = await call(owner, 'GET', `/api/files?kind=${kind}&id=${id}`);
         expect(res.status, await res.clone().text()).toBe(200);
-        return ((await res.json()) as { items: { id: string; name: string }[] }).items;
+        return ((await res.json()) as { items: { id: string; name: string; linked: boolean }[] })
+          .items;
       };
       const objects = () => storage.files.size;
       const before = objects();
@@ -604,7 +605,7 @@ describe.skipIf(!databaseAvailable())(
       expect(objects()).toBe(before);
       expect((await filesOf('receipt', receipt)).length).toBe(0);
       expect((await sentList())[0]).toMatchObject({ status: 'new', version: file!.version });
-      // Хранилище не удаляет копии после отказа — они идут на повторное удаление (п. И-10).
+      // Хранилище не удаляет копию после отказа — она идёт на повторное удаление (п. И-10).
       const del = storage.delete;
       try {
         storage.delete = async () => {
@@ -618,34 +619,32 @@ describe.skipIf(!databaseAvailable())(
         const retries = await f.t.admin.db
           .select({ key: schema.storageDeleteRetries.key })
           .from(schema.storageDeleteRetries);
-        expect(retries).toHaveLength(2);
-        expect(objects()).toBe(before + 2);
-        expect(await retryStorageDeletes(f.deps)).toBe(2);
+        expect(retries).toHaveLength(1);
+        expect(objects()).toBe(before + 1);
+        expect(await retryStorageDeletes(f.deps)).toBe(1);
         expect(objects()).toBe(before);
       } finally {
         storage.delete = del;
         await f.t.admin.db.delete(schema.storageDeleteRetries);
       }
 
-      // «Сохранить» в окне денег: чек принят и прикреплён к поступлению одной транзакцией.
+      // «Сохранить» в окне денег: чек принят и прикреплён к поступлению ссылкой одной транзакцией.
       const res = await accept(acc, 'receipt', receipt);
       expect(res.status, await res.clone().text()).toBe(200);
       const out = SentFileAccepted.parse(await res.json());
       expect(out).toMatchObject({ status: 'accepted', pay: null });
       const [attached] = await filesOf('receipt', receipt);
-      expect(attached!.name).toBe('Чек.pdf');
-      // Копия — свой объект хранилища с содержимым чека; файл контрагента — свой; отправленный удалён.
+      // Тот же файл контрагента (блок 2): одна строка, один объект хранилища; отправленный удалён.
+      expect(attached).toMatchObject({ id: out.fileId, name: 'Чек.pdf', linked: true });
       const keys = await f.t.admin.db
         .select({ id: schema.files.id, key: schema.files.storageKey })
         .from(schema.files)
         .where(eq(schema.files.contractorId, cpA));
-      const copyKey = keys.find((k) => k.id === attached!.id)!.key;
-      const acceptedKey = keys.find((k) => k.id === out.fileId)!.key;
-      expect(copyKey).not.toBe(acceptedKey);
-      expect(await storage.get(copyKey)).toEqual(PDF);
-      expect(await storage.get(acceptedKey)).toEqual(PDF);
-      // История поступления — «Прикреплён файл», контрагента — «Принят файл «…» — прикреплён к
-      // поступлению от 10.11.2026».
+      expect(keys.map((k) => k.id)).toEqual([out.fileId]);
+      expect(await storage.get(keys[0]!.key)).toEqual(PDF);
+      expect(objects()).toBe(before);
+      // История поступления — «Прикреплён из файлов контрагента», контрагента — «Принят файл «…» —
+      // прикреплён к поступлению от 10.11.2026».
       const attachedHistory = await f.t.admin.db
         .select({ entity: schema.auditLog.entity, changes: schema.auditLog.changes })
         .from(schema.auditLog)
@@ -653,7 +652,13 @@ describe.skipIf(!databaseAvailable())(
           and(eq(schema.auditLog.entityId, receipt), eq(schema.auditLog.action, 'file_attach')),
         );
       expect(attachedHistory).toEqual([
-        { entity: 'money_operation', changes: [{ field: 'file', to: 'Чек.pdf' }] },
+        {
+          entity: 'money_operation',
+          changes: [
+            { field: 'file', to: 'Чек.pdf' },
+            { field: 'link', to: true },
+          ],
+        },
       ]);
       const acceptHistory = await f.t.admin.db
         .select({ changes: schema.auditLog.changes })
@@ -684,8 +689,7 @@ describe.skipIf(!databaseAvailable())(
       });
       expect((await filesOf('receipt', receipt)).length).toBe(1);
 
-      // Оплата за обслуживание того же контрагента: имя занято — принятый «Чек (2).pdf», копия у оплаты —
-      // названием отправленного файла (её найдёт объединение копий этапа 1).
+      // Оплата за обслуживание того же контрагента: имя занято — принятый «Чек (2).pdf», у оплаты — он же.
       const second = await paid(grantA, { purpose: 'tax', month, amount: 50_000 });
       expect(second.res.status, await second.res.clone().text()).toBe(200);
       const next = (await sentList()).find((x) => x.status === 'new')!;
@@ -701,7 +705,7 @@ describe.skipIf(!databaseAvailable())(
         .returning({ id: schema.feePayments.id });
       const feeRes = await accept(owner, 'fee_payment', fee!.id, next);
       expect(feeRes.status, await feeRes.clone().text()).toBe(200);
-      expect((await filesOf('fee_payment', fee!.id)).map((x) => x.name)).toEqual(['Чек.pdf']);
+      expect((await filesOf('fee_payment', fee!.id)).map((x) => x.name)).toEqual(['Чек (2).pdf']);
       const feeHistory = await f.t.admin.db
         .select({ changes: schema.auditLog.changes })
         .from(schema.auditLog)
@@ -736,7 +740,7 @@ describe.skipIf(!databaseAvailable())(
       expect(seenByAcc).toContain('receipt');
       expect(seenByAcc).not.toContain('feePayment');
 
-      // Два окна денег сохранили один чек одновременно: принят один раз, у записи денег одна копия,
+      // Два окна денег сохранили один чек одновременно: принят один раз, у записи денег одна ссылка,
       // копия проигравшего запроса из хранилища убрана.
       const third = await paid(grantA, { purpose: 'tax', month, amount: 70_000 });
       expect(third.res.status, await third.res.clone().text()).toBe(200);
@@ -753,8 +757,8 @@ describe.skipIf(!databaseAvailable())(
       };
       expect(['sent_decided', 'file_not_uploaded']).toContain(lost.error.code);
       expect((await filesOf('receipt', target)).length).toBe(1);
-      // Принятый файл и копия у денег — новые объекты, отправленный удалён.
-      expect(objects()).toBe(stored + 1);
+      // Принятый файл — новый объект, отправленный удалён.
+      expect(objects()).toBe(stored);
       expect(await f.t.admin.db.select().from(schema.storageDeleteRetries)).toEqual([]);
     });
 

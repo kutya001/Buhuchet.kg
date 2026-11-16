@@ -3,8 +3,11 @@ import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import { orgFileKey } from '@buhuchet/adapters';
 import {
   changeFile,
+  dropFileLinks,
   dropPendingFile,
+  fileFeeLinked,
   getFile,
+  linkedFiles,
   takeRateLimit,
   insertPendingFile,
   listSourceFiles,
@@ -21,6 +24,8 @@ import {
 import {
   canSeeContractor,
   cleanFileNote,
+  FILE_LINK_SOURCE_KINDS,
+  FILE_LINKABLE_FILE_KINDS,
   FILE_LINK_SECONDS,
   FILE_MAX_BYTES,
   FILE_MESSAGES,
@@ -38,6 +43,7 @@ import {
   RecordChangedError,
   type AccessSubject,
   type Feature,
+  type FileLinkSourceKind,
 } from '@buhuchet/domain';
 import {
   ApiError,
@@ -55,6 +61,7 @@ import {
   FileVersionQuery,
   type FileItem as FileItemBody,
 } from '@buhuchet/shared';
+import { sql } from 'drizzle-orm';
 import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
@@ -161,12 +168,40 @@ export async function visibleSource(
   subject: AccessSubject,
   kind: string,
   id: string | null,
-  own?: { contractorId: string | null },
+  own?: { id?: string; contractorId: string | null },
 ): Promise<FileSourceRecord> {
   const source = sourceOf(deps, kind);
   const record = source ? await source.resolve(tx, subject, id, own) : null;
   if (!record || !canView(subject, record)) return notFound();
+  // Файл контрагента, прикреплённый к оплате за обслуживание (доработки 16.11.2026, блок 2; прототип
+  // v124 `fFeeHid`), видит только тот, кто видит плату: остальным его как будто нет.
+  if (
+    own?.id &&
+    record.contractor &&
+    (FILE_LINKABLE_FILE_KINDS as readonly string[]).includes(kind) &&
+    (await fileFeeLinked(tx, own.id))
+  ) {
+    const { features } = await orgMenuSettings(tx, await currentOrg(tx));
+    if (!feeSeenFor(subject, features, record.contractor)) return notFound();
+  }
   return record;
+}
+
+/** Организация транзакции (RLS): из контекста `withOrgContext`. */
+async function currentOrg(tx: Tx): Promise<string> {
+  const rows = await tx.execute<{ id: string }>(sql`select app.current_org_id()::text as id`);
+  return rows[0]!.id;
+}
+
+/** Видит ли сотрудник плату за обслуживание этого контрагента (прототип `feeSee`). */
+export function feeSeenFor(
+  subject: AccessSubject,
+  features: Readonly<Record<Feature, boolean>>,
+  contractor: { id: string; responsibleEmployeeId: string | null },
+): boolean {
+  return (
+    features.fee && hasPermission(subject, 'fee') && canSeeContractor(subject, 'cps', contractor)
+  );
 }
 
 /** Файл блока «Файлы» для ответа: можно ли удалить, изменить и заменить — этому сотруднику сейчас. */
@@ -192,6 +227,39 @@ function itemBody(
     canEdit,
     canReplace: canEdit && canDelete,
     page: filePageOf(file, record.contractor, subject, cppage),
+    linked: false,
+    canUnlink: false,
+    version: file.version,
+  };
+}
+
+/**
+ * Файл, прикреплённый к записи ссылкой из файлов контрагента (доработки 16.11.2026, блок 2; прототип v124
+ * `filesBox`): «Изменить» — по правам самого файла контрагента (`own`), вместо «Удалить» — «Открепить»
+ * (файлы записи можно менять).
+ */
+function linkedItemBody(
+  file: FileRecord,
+  record: FileSourceRecord,
+  own: FileSourceRecord | null,
+  subject: AccessSubject,
+  cppage: boolean,
+): FileItemBody {
+  const canEdit = own !== null && canUpload(subject, own);
+  return {
+    id: file.id,
+    name: file.name,
+    contentType: file.contentType,
+    size: file.sizeBytes,
+    note: file.note,
+    uploadedBy: file.uploadedBy,
+    uploadedAt: file.createdAt.toISOString(),
+    canDelete: false,
+    canEdit,
+    canReplace: false,
+    page: filePageOf(file, own?.contractor ?? null, subject, cppage),
+    linked: true,
+    canUnlink: canUpload(subject, record),
     version: file.version,
   };
 }
@@ -258,9 +326,30 @@ export function listFilesHandler(deps: ApiDeps): RouteHandler<typeof listFilesRo
       const features = await requireFilesFeature(tx, ctx.orgId);
       const record = await visibleSource(deps, tx, subject, kind, id ?? null);
       const items = await listSourceFiles(tx, kind, id ?? null);
+      // Файлы контрагента, прикреплённые ссылкой (доработки 16.11.2026, блок 2) — после своих; файлы
+      // оплаты за обслуживание, которую сотрудник не видит, — нет (прототип v124 `fFeeHid`).
+      const linkKind = (FILE_LINK_SOURCE_KINDS as readonly string[]).includes(kind);
+      const contractor = record.contractor;
+      const linked =
+        linkKind && id && contractor
+          ? await linkedFiles(tx, { kind: kind as FileLinkSourceKind, id })
+          : [];
+      const feeSeen = contractor ? feeSeenFor(subject, features, contractor) : false;
+      const shown = [];
+      for (const f of linked) if (feeSeen || !(await fileFeeLinked(tx, f.id))) shown.push(f);
+      const own =
+        shown.length && contractor
+          ? await sourceOf(deps, 'contractor')!.resolve(tx, subject, null, {
+              contractorId: contractor.id,
+            })
+          : null;
       return {
-        items: items.map((f) => itemBody(f, record, subject, ctx.userId!, now, features.cppage)),
+        items: [
+          ...items.map((f) => itemBody(f, record, subject, ctx.userId!, now, features.cppage)),
+          ...shown.map((f) => linkedItemBody(f, record, own, subject, features.cppage)),
+        ],
         canUpload: canUpload(subject, record),
+        canLink: linkKind && !!contractor && canUpload(subject, record),
       };
     });
     return c.json(body, 200);
@@ -677,11 +766,38 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
         action: 'file_delete',
         changes: [{ field: 'file', from: file.name }],
       });
+      // «Удалить отовсюду» (доработки 16.11.2026, блок 2; прототип v124 `fDelDlg`): файл пропадает и из
+      // записей, к которым прикреплён ссылкой, — в истории каждой «Удалён файл (был прикреплён из файлов
+      // контрагента)», и тех, которых удаляющему не видно.
+      for (const link of await dropFileLinks(tx, id)) {
+        const target = await sourceOf(deps, link.kind)?.resolve(
+          tx,
+          historySubject(subject),
+          link.id,
+        );
+        if (!target) continue;
+        await writeHistory(tx, {
+          ...target.history(id),
+          action: 'file_delete',
+          changes: [
+            { field: 'file', from: file.name },
+            { field: 'linked', to: true },
+          ],
+        });
+      }
       return file.storageKey;
     });
     await dropObject(deps, key);
     return c.json({ id }, 200);
   };
+}
+
+/**
+ * Кто «видит» запись, чтобы найти, куда писать историю удаления файла: все права и области в той же
+ * организации (RLS транзакции). Только для `history()` — данные записи отсюда не отдаются.
+ */
+function historySubject(subject: AccessSubject): AccessSubject {
+  return { employeeId: subject.employeeId, isOwner: true, permissions: new Set(), scopes: {} };
 }
 
 /** Одна строка названия: пробелы и переносы — одним пробелом (прототип v95 `fileEditDlg`). */

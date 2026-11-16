@@ -59,6 +59,14 @@ import {
   sentValuesRoute,
 } from './sent';
 import {
+  linkableHandler,
+  linkableRoute,
+  linkAddHandler,
+  linkAddRoute,
+  unlinkHandler,
+  unlinkRoute,
+} from './links';
+import {
   pageSentCompleteHandler,
   pageSentCompleteRoute,
   pageSentStartHandler,
@@ -90,6 +98,11 @@ export function filesModule(deps: ApiDeps) {
     .openapi(sentUploadSetRoute, sentUploadSetHandler(deps))
     .openapi(pageSentStartRoute, pageSentStartHandler(deps))
     .openapi(pageSentCompleteRoute, pageSentCompleteHandler(deps))
+    // Ссылки файлов контрагента (доработки 16.11.2026, блок 2) — раньше `/files/{id}`: «linkable» и
+    // «links» — не номер файла.
+    .openapi(linkableRoute, linkableHandler(deps))
+    .openapi(linkAddRoute, linkAddHandler(deps))
+    .openapi(unlinkRoute, unlinkHandler(deps))
     .openapi(listFilesRoute, listFilesHandler(deps))
     .openapi(startUploadRoute, startUploadHandler(deps))
     .openapi(completeUploadRoute, completeUploadHandler(deps))

@@ -146,7 +146,7 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
     });
 
     it('пустой список и «Прикрепить» для того, у кого есть «Загружать файлы»', async () => {
-      expect(await list(owner)).toEqual({ items: [], canUpload: true });
+      expect(await list(owner)).toEqual({ items: [], canUpload: true, canLink: false });
       expect((await list(acc)).canUpload).toBe(true);
     });
 

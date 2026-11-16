@@ -15,6 +15,7 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  FILE_LINKABLE_FILE_KINDS,
   FILE_LIST_KIND_OF,
   FILE_MESSAGES,
   fileDeleteRefusal,
@@ -37,6 +38,7 @@ import {
   ListQueryParams,
   ListValues,
   ListValuesQuery,
+  type FileLinks,
   type FileManagerRow as FileManagerRowBody,
 } from '@buhuchet/shared';
 import type { SQL } from 'drizzle-orm';
@@ -46,6 +48,7 @@ import type { AppEnv } from '../../env';
 import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
+import { scopeSqlOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import {
   downloadLink,
@@ -57,7 +60,11 @@ import {
   subjectOf,
   visibleFile,
 } from './files';
+import { feeHiddenSql, fileLinkInfos } from './links';
 import { FILE_SOURCES, type FileListSource } from './sources';
+
+const LINKABLE: ReadonlySet<string> = new Set(FILE_LINKABLE_FILE_KINDS);
+const NO_LINKS: FileLinks = { links: [], hiddenLinks: 0 };
 
 /*
  * «Файловый менеджер» (задача 2.29; ТЗ «Файловый менеджер»; прототип modules/files.js — `renderFiles`,
@@ -108,7 +115,13 @@ async function listOptions(
 ): Promise<FileListOptions> {
   const subject = subjectOf(c);
   const { features } = await orgMenuSettings(tx, orgContextOf(c).orgId);
-  return { t, scope: filesScopeOf(subject), parts: listParts(deps, subject, features, t) };
+  return {
+    t,
+    scope: filesScopeOf(subject),
+    parts: listParts(deps, subject, features, t),
+    // Файл, прикреплённый к оплате за обслуживание, — только тому, кто видит плату (прототип v124).
+    hidden: feeHiddenSql(subject, features, scopeSqlOf(subject)),
+  };
 }
 
 /**
@@ -121,6 +134,7 @@ function rowBody(
   userId: string,
   now: Date,
   cppage: boolean,
+  links: FileLinks = NO_LINKS,
 ) {
   const canDelete =
     fileDeleteRefusal(
@@ -157,6 +171,8 @@ function rowBody(
       subject,
       cppage,
     ),
+    links: links.links,
+    hiddenLinks: links.hiddenLinks,
     audit: {
       createdAt: r.createdAt.toISOString(),
       createdBy: r.uploadedBy,
@@ -194,16 +210,24 @@ export function listManagerHandler(deps: ApiDeps): RouteHandler<typeof listManag
     const subject = subjectOf(c);
     const t = await serverTexts(deps);
     const now = realNow();
-    const { page, cppage } = await withOrgContext(deps.db, ctx, async (tx) => {
+    const { page, cppage, links } = await withOrgContext(deps.db, ctx, async (tx) => {
       const features = await requireFilesFeature(tx, ctx.orgId);
+      const page = await listFilesPage(tx, query, await listOptions(deps, tx, c, t));
+      // Где ещё файл контрагента (блок 2): только у своих файлов контрагента на этой странице.
+      const own = page.rows
+        .filter((r) => r.contractor && LINKABLE.has(r.sourceKind))
+        .map((r) => r.id);
       return {
-        page: await listFilesPage(tx, query, await listOptions(deps, tx, c, t)),
+        page,
         cppage: features.cppage,
+        links: await fileLinkInfos(deps, tx, subject, features, own),
       };
     });
     return c.json(
       {
-        items: page.rows.map((r) => rowBody(r, subject, ctx.userId!, now, cppage)),
+        items: page.rows.map((r) =>
+          rowBody(r, subject, ctx.userId!, now, cppage, links.get(r.id)),
+        ),
         total: page.total,
         page: page.page,
         size: page.size,

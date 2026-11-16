@@ -59,7 +59,8 @@ export interface FileRecord {
   version: number;
 }
 
-const columns = {
+/** Столбцы описания файла (`FileRecord`) — и для ссылок файла (`file-links.ts`). */
+export const fileRecordColumns = {
   id: files.id,
   sourceKind: files.sourceKind,
   sourceId: files.sourceId,
@@ -80,7 +81,7 @@ const columns = {
 
 type FileRow = Omit<FileRecord, 'uploadedBy'> & { createdByName: string | null };
 
-function record({ createdByName, ...r }: FileRow): FileRecord {
+export function fileRecordOf({ createdByName, ...r }: FileRow): FileRecord {
   return { ...r, uploadedBy: auditActorName(r.createdBy, createdByName) };
 }
 
@@ -109,12 +110,12 @@ export async function insertPendingFile(tx: Tx, file: NewFile): Promise<void> {
 /** Файл организации в любом состоянии; чужой организации и неверный номер — null. */
 export async function getFile(tx: Tx, id: string, options: { lock?: boolean } = {}) {
   const query = tx
-    .select(columns)
+    .select(fileRecordColumns)
     .from(files)
     .leftJoin(employees, eq(employees.userId, files.createdBy))
     .where(eq(files.id, id));
   const [row] = options.lock ? await query.for('update', { of: files }) : await query;
-  return row ? record(row) : null;
+  return row ? fileRecordOf(row) : null;
 }
 
 /**
@@ -128,7 +129,7 @@ export async function listSourceFiles(
   sourceId: string | null,
 ): Promise<FileRecord[]> {
   const rows = await tx
-    .select(columns)
+    .select(fileRecordColumns)
     .from(files)
     .leftJoin(employees, eq(employees.userId, files.createdBy))
     .where(
@@ -140,7 +141,7 @@ export async function listSourceFiles(
       ),
     )
     .orderBy(asc(files.createdAt), asc(files.id));
-  return rows.map(record);
+  return rows.map(fileRecordOf);
 }
 
 /** Загрузка закончена: файл в хранилище проверен — он виден в записи. */
@@ -327,7 +328,7 @@ export async function pendingRegdocs(
 ): Promise<FileRecord[]> {
   if (ids.length === 0) return [];
   const query = tx
-    .select(columns)
+    .select(fileRecordColumns)
     .from(files)
     .leftJoin(employees, eq(employees.userId, files.createdBy))
     .where(
@@ -341,7 +342,7 @@ export async function pendingRegdocs(
       ),
     );
   const rows = options.lock ? await query.for('update', { of: files }) : await query;
-  return rows.map(record);
+  return rows.map(fileRecordOf);
 }
 
 /**
@@ -486,6 +487,11 @@ export interface FileListOptions {
   /** Область «Свои контрагенты» (`contractorScope`) над присоединённым контрагентом файла. */
   scope: SQL | undefined;
   parts: FileListParts;
+  /**
+   * Каких файлов не показывать (доработки 16.11.2026, блок 2): прикреплённых к оплате за обслуживание,
+   * которую сотрудник не видит (`feeLinkedHidden`), — условие над `files` и контрагентом файла.
+   */
+  hidden?: SQL;
 }
 
 const uploader = employees;
@@ -610,7 +616,7 @@ export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListCo
  * Какие файлы видит сотрудник: загруженные, в области группы «Файловый менеджер» (общий файл — всем),
  * только видимых ему видов источника и записей.
  */
-function listScope(o: Pick<FileListOptions, 'scope' | 'parts'>): SQL {
+function listScope(o: Pick<FileListOptions, 'scope' | 'parts' | 'hidden'>): SQL {
   const kinds = Object.entries(o.parts).map(([kind, part]) =>
     and(eq(files.sourceKind, kind), part.visible),
   );
@@ -618,6 +624,7 @@ function listScope(o: Pick<FileListOptions, 'scope' | 'parts'>): SQL {
     eq(files.state, 'ready'),
     o.scope ? or(isNull(files.contractorId), o.scope) : undefined,
     kinds.length ? or(...kinds) : sql`false`,
+    o.hidden ? sql`not (${o.hidden})` : undefined,
   )!;
 }
 
@@ -785,7 +792,7 @@ export function exportFiles(tx: Tx, query: ListQuery, keys: readonly string[], o
  */
 export async function fileKindCounts(
   tx: Tx,
-  o: Pick<FileListOptions, 'scope' | 'parts'>,
+  o: Pick<FileListOptions, 'scope' | 'parts' | 'hidden'>,
 ): Promise<{ kinds: Partial<Record<string, number>>; bytes: number; count: number }> {
   const rows = await tx
     .select({
