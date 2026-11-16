@@ -7,6 +7,7 @@ import {
   kbStepProblems,
   newsLoginDefault,
   newsMdTrim,
+  newsModulesOrdered,
   newsProblems,
   type IsoDate,
   type KbArticleAudience,
@@ -317,6 +318,8 @@ const newsRecord = (n: NewsRecord): IoRecord => ({
     showOnLogin: n.showOnLogin,
     short: n.short,
     md: n.md,
+    adminMd: n.adminMd,
+    modules: n.modules,
     status: n.status,
     off: n.off,
   },
@@ -353,6 +356,9 @@ const newsWriter: SectionWriter = {
       showOnLogin:
         typeof d.showOnLogin === 'boolean' ? d.showOnLogin : newsLoginDefault(type, pinned),
       audience: str(d.aud) as NewsAudience,
+      // Столбцы пакета 16.11.2026: в старом файле их нет — остаётся как было (у новой — пусто).
+      modules: Array.isArray(d.modules) ? newsModulesOrdered(d.modules as string[]) : [],
+      adminMd: newsMdTrim(str(d.adminMd)),
     };
     const problem = firstProblem(
       'kbnews',
@@ -364,6 +370,9 @@ const newsWriter: SectionWriter = {
           date: input.date,
           short: input.short,
           md: str(d.md),
+          audience: input.audience,
+          adminMd: input.adminMd,
+          modules: input.modules,
         },
         { publish: now?.status === 'published' },
       ),

@@ -1,6 +1,15 @@
 'use client';
 
-import { NEWS_TYPES, newsMatches, newsVersions, pluralForm } from '@buhuchet/domain';
+import {
+  FEATURES,
+  NEWS_MODULES,
+  NEWS_TYPES,
+  newsMatches,
+  newsModulesOf,
+  newsModuleTitle,
+  newsVersions,
+  pluralForm,
+} from '@buhuchet/domain';
 import type { NewsItem } from '@buhuchet/shared';
 import { Box, EmptyState, Icon, inputClass, linkButtonClass, Note, useToast } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +17,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiFailure } from '../api-client';
 import { useKbLinkParam } from '../kb/kb-link-param';
 import { useErrorText, useT } from '../l10n/provider';
+import { useShell } from '../shell/context';
 import { markAllNewsRead, markNewsRead, newsFeedQuery, newsUnreadQuery } from './news-data';
 import { NewsRow } from './news-provider';
 
@@ -16,8 +26,12 @@ import { NewsRow } from './news-provider';
  * 13.11.2026): лента строками-заголовками строго по номеру версии, новые сверху (порядок отдаёт
  * сервер); закреплённые — отдельным блоком над лентой. Подробности раскрываются по нажатию на строку,
  * при каждом входе во вкладку сами раскрыты только у самой новой. Раскрытая новость прочитана; у
- * раскрытой самой «Новое» видно до ухода со вкладки. Поиск по тексту, фильтры «Тип» и «Версия»,
- * «Отметить все прочитанными».
+ * раскрытой самой «Новое» видно до ухода со вкладки. Поиск по тексту, фильтры «Тип», «Версия» и
+ * «Модуль», «Отметить все прочитанными».
+ *
+ * «Модуль» (доработки 16.11.2026, блок 4, пункт 3; прототип v123): только модули, которые у человека
+ * есть (в режиме Админка — все); выбор показывает новости, где модуль отмечен. Новости чужих модулей
+ * сервер в ленту не отдаёт. Поиск администратора платформы идёт и по второму тексту.
  */
 export function KbNewsTab() {
   const t = useT();
@@ -28,6 +42,8 @@ export function KbNewsTab() {
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
   const [version, setVersion] = useState('');
+  const [mod, setMod] = useState('');
+  const { access, editor } = useShell();
   // Что нажато: раскрыто или свёрнуто; не нажатая — раскрыта только самая новая на момент входа.
   const [toggled, setToggled] = useState<Readonly<Record<string, boolean>>>({});
   const [top, setTop] = useState<{ id: string; unread: boolean } | null>(null);
@@ -70,8 +86,20 @@ export function KbNewsTab() {
   const unread = all.filter((n) => !n.read).length;
   const list = all.filter(
     (n) =>
-      (!type || n.type === type) && (!version || n.release === version) && newsMatches(n, search),
+      (!type || n.type === type) &&
+      (!version || n.release === version) &&
+      (!mod || n.modules.includes(mod)) &&
+      newsMatches(n.adminMd ? { ...n, md: `${n.md}\n${n.adminMd}` } : n, search),
   );
+  const mine = access.admin
+    ? null
+    : editor
+      ? newsModulesOf(
+          editor.subject,
+          Object.fromEntries(FEATURES.map((f) => [f, access.feature(f)])),
+        )
+      : [];
+  const modules = NEWS_MODULES.filter((m) => mine === null || mine.includes(m) || m === mod);
   const versions = newsVersions(all.map((n) => ({ version: n.release })));
   const pinned = list.filter((n) => n.pinned);
   const rest = list.filter((n) => !n.pinned);
@@ -79,6 +107,7 @@ export function KbNewsTab() {
     setSearch('');
     setType('');
     setVersion('');
+    setMod('');
   };
   const readAll = () => {
     setTop((was) => was && { ...was, unread: false });
@@ -142,6 +171,19 @@ export function KbNewsTab() {
             {versions.map((v) => (
               <option key={v} value={v}>
                 {t('news.filter.version_item', { v })}
+              </option>
+            ))}
+          </select>
+          <select
+            value={mod}
+            onChange={(e) => setMod(e.target.value)}
+            aria-label={t('news.filter.module')}
+            className={`${inputClass({ full: false })} min-w-[150px] flex-none cursor-pointer`}
+          >
+            <option value="">{t('news.filter.module_all')}</option>
+            {modules.map((m) => (
+              <option key={m} value={m}>
+                {t(newsModuleTitle(m))}
               </option>
             ))}
           </select>

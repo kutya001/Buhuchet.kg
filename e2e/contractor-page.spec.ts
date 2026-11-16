@@ -1021,13 +1021,36 @@ test.describe('Доработки 14.11, блок 6: страница контр
       page.getByRole('status').filter({ hasText: text(texts, 'money.in.done') }),
     ).toBeVisible();
     await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
-    // Чек — среди файлов поступления (копия: в «Отправленных файлах» он тоже остался).
+    // Чек — у поступления тем же файлом, что у контрагента, без копии (доработки 16.11, блок 2,
+    // пункт 1): ссылка.
+    const acceptedFile = ((await acceptedRes.json()) as { fileId: string }).fileId;
     const receiptRes = await request.get(`/api/files?kind=receipt&id=${receiptId}`, {
       maxRetries: 2,
     });
     expect(receiptRes.status(), await receiptRes.text()).toBe(200);
-    const receiptFiles = (await receiptRes.json()) as { items: { name: string }[] };
-    expect(receiptFiles.items.map((f) => f.name)).toEqual([fileName]);
+    const receiptFiles = (await receiptRes.json()) as {
+      items: { id: string; name: string; linked: boolean }[];
+    };
+    expect(receiptFiles.items.map((f) => [f.id, f.name, f.linked])).toEqual([
+      [acceptedFile, fileName, true],
+    ]);
+    // В «Файловом менеджере» — одна строка с обеими ссылками: «От контрагента» и поступление.
+    const managed = await request.get(
+      `/api/files/manager?size=all&filters=${encodeURIComponent(
+        JSON.stringify({ cp: { type: 'enum', vals: [cp.id] } }),
+      )}`,
+      { maxRetries: 2 },
+    );
+    expect(managed.status(), await managed.text()).toBe(200);
+    const rows = (
+      (await managed.json()) as {
+        items: { id: string; name: string; kind: string; links: { kind: string; id: string }[] }[];
+      }
+    ).items.filter((f) => f.name === fileName);
+    // Вид строки — «Контрагент» (принятый файл, `FILE_LIST_KIND_OF`), ссылка — на поступление.
+    expect(rows.map((f) => [f.id, f.kind, f.links.map((l) => [l.kind, l.id])])).toEqual([
+      [acceptedFile, 'contractor', [['receipt', receiptId]]],
+    ]);
 
     // Месяц на странице контрагента — оплачен.
     await page.goto(cp.path);

@@ -29,6 +29,7 @@ import {
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../../deps';
 import { serverTexts } from '../../l10n/texts';
+import { bellContractor } from '../bell';
 import { botText, sendNow } from '../bot';
 import { flushEvents, queueEvents } from '../outbox';
 
@@ -178,9 +179,18 @@ export async function clientStart(
   // Telegram повторил то же сообщение после запроса — второй раз не отвечаем.
   if (target.state === 'repeat') return;
   const name = cpTgName(chat);
-  const res = await withOrgContext(deps.db, { orgId: target.orgId, userId: null }, (tx) =>
-    startContractorTelegram(tx, { tokenHash, chatId: chat.chatId, name }),
-  );
+  const res = await withOrgContext(deps.db, { orgId: target.orgId, userId: null }, async (tx) => {
+    const r = await startContractorTelegram(tx, { tokenHash, chatId: chat.chatId, name });
+    // Колокольчик (доработки 16.11.2026, блок 3): в транзакции запроса, и без бота у сотрудников.
+    if (r.outcome === 'asked') {
+      await bellContractor(deps, tx, r.contractorId, {
+        event: 'cp_tg_request',
+        linkId: r.linkId,
+        name,
+      });
+    }
+    return r;
+  });
   if (res.outcome === 'invalid') return reply(deps, chat.chatId, 'tgCpLinkBad');
   const values = { контрагент: res.contractor };
   if (res.outcome === 'limit') return reply(deps, chat.chatId, 'tgCpLimit', values);

@@ -1,5 +1,7 @@
 import {
   auditActorName,
+  FILE_LINK_SOURCE_KINDS,
+  FILE_LINKABLE_FILE_KINDS,
   FILE_LIST_KIND_OF,
   FILE_SOURCE_KINDS,
   pageFileCategory,
@@ -26,6 +28,8 @@ import {
   contractors,
   contractorSentFiles,
   employees,
+  feePayments,
+  fileLinks,
   files,
   indicators,
   indicatorValues,
@@ -59,7 +63,8 @@ export interface FileRecord {
   version: number;
 }
 
-const columns = {
+/** Столбцы описания файла (`FileRecord`) — и для ссылок файла (`file-links.ts`). */
+export const fileRecordColumns = {
   id: files.id,
   sourceKind: files.sourceKind,
   sourceId: files.sourceId,
@@ -80,7 +85,7 @@ const columns = {
 
 type FileRow = Omit<FileRecord, 'uploadedBy'> & { createdByName: string | null };
 
-function record({ createdByName, ...r }: FileRow): FileRecord {
+export function fileRecordOf({ createdByName, ...r }: FileRow): FileRecord {
   return { ...r, uploadedBy: auditActorName(r.createdBy, createdByName) };
 }
 
@@ -109,12 +114,12 @@ export async function insertPendingFile(tx: Tx, file: NewFile): Promise<void> {
 /** Файл организации в любом состоянии; чужой организации и неверный номер — null. */
 export async function getFile(tx: Tx, id: string, options: { lock?: boolean } = {}) {
   const query = tx
-    .select(columns)
+    .select(fileRecordColumns)
     .from(files)
     .leftJoin(employees, eq(employees.userId, files.createdBy))
     .where(eq(files.id, id));
   const [row] = options.lock ? await query.for('update', { of: files }) : await query;
-  return row ? record(row) : null;
+  return row ? fileRecordOf(row) : null;
 }
 
 /**
@@ -128,7 +133,7 @@ export async function listSourceFiles(
   sourceId: string | null,
 ): Promise<FileRecord[]> {
   const rows = await tx
-    .select(columns)
+    .select(fileRecordColumns)
     .from(files)
     .leftJoin(employees, eq(employees.userId, files.createdBy))
     .where(
@@ -140,7 +145,7 @@ export async function listSourceFiles(
       ),
     )
     .orderBy(asc(files.createdAt), asc(files.id));
-  return rows.map(record);
+  return rows.map(fileRecordOf);
 }
 
 /** Загрузка закончена: файл в хранилище проверен — он виден в записи. */
@@ -327,7 +332,7 @@ export async function pendingRegdocs(
 ): Promise<FileRecord[]> {
   if (ids.length === 0) return [];
   const query = tx
-    .select(columns)
+    .select(fileRecordColumns)
     .from(files)
     .leftJoin(employees, eq(employees.userId, files.createdBy))
     .where(
@@ -341,7 +346,7 @@ export async function pendingRegdocs(
       ),
     );
   const rows = options.lock ? await query.for('update', { of: files }) : await query;
-  return rows.map(record);
+  return rows.map(fileRecordOf);
 }
 
 /**
@@ -486,6 +491,11 @@ export interface FileListOptions {
   /** Область «Свои контрагенты» (`contractorScope`) над присоединённым контрагентом файла. */
   scope: SQL | undefined;
   parts: FileListParts;
+  /**
+   * Каких файлов не показывать (доработки 16.11.2026, блок 2): прикреплённых к оплате за обслуживание,
+   * которую сотрудник не видит (`feeLinkedHidden`), — условие над `files` и контрагентом файла.
+   */
+  hidden?: SQL;
 }
 
 const uploader = employees;
@@ -513,6 +523,27 @@ function byKind(parts: FileListParts, pick: (part: FileListPart) => SQL | undefi
   return cases.length
     ? sql`(case ${files.sourceKind} ${sql.join(cases, sql` `)} end)`
     : sql`null::text`;
+}
+
+/**
+ * Записи, к которым файл контрагента прикреплён ссылкой (доработки 16.11.2026, блок 2; прототип v124:
+ * «Источник» — «От контрагента · Поступление …», фильтр «Источник» находит файл по обеим ссылкам), —
+ * для поиска, фильтра и выгрузки столбца «Источник»: подпись записи — как у файлов самой записи
+ * (`source` её вида), только записи, которые сотрудник видит (`visible` вида: отменённых поступлений и
+ * записей вне области нет). Подзапрос подменяет `files` строкой ссылки (`source_id`), поэтому условия и
+ * подписи видов работают над записью ссылки. Оплата за обслуживание — по дате («Оплата за обслуживание
+ * от …»): файл с такой ссылкой и так виден только тому, кто видит плату (`feeLinkedHidden`).
+ */
+function linkedSourcesText(parts: FileListParts, t: ListTexts): SQL {
+  const cases = Object.entries(parts).flatMap(([kind, part]) =>
+    (FILE_LINK_SOURCE_KINDS as readonly string[]).includes(kind)
+      ? [
+          sql`when ${textLiteral(kind)} then (case when ${part.visible ?? sql`true`} then ${part.source} end)`,
+        ]
+      : [],
+  );
+  const fee = sql`when 'fee_payment' then (select replace(${dictLiteral(t('files.link.nm.fee_payment'))}::text, '{date}', to_char(${feePayments.paidOn}, 'DD.MM.YYYY')) from ${feePayments} where ${feePayments.id} = ${files.sourceId} and ${feePayments.deletedAt} is null)`;
+  return sql`(select string_agg(lt.label, ' · ' order by lt.created_at, lt.label) from (select ${fileLinks.sourceKind} as kind, ${fileLinks.sourceId} as source_id, ${fileLinks.createdAt} as created_at from ${fileLinks} where ${fileLinks.fileId} = ${files.id}) lk cross join lateral (select lk.source_id) as "files"(source_id) cross join lateral (select lk.created_at, (case lk.kind ${sql.join(cases, sql` `)} ${fee} end) as label) lt where lt.label is not null)`;
 }
 
 /** Расширение прописными, как `fext` прототипа (`fileExtension`); нет расширения — null. */
@@ -568,7 +599,15 @@ export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListCo
       display: kindText,
       sort: { value: KIND_ORDER, text: false },
     },
-    src: { type: 'text', label: 'files.col.src', value: byKind(o.parts, (p) => p.source) },
+    // У файла контрагента со ссылками — и записи ссылок (доработки 16.11.2026, блок 2).
+    src: {
+      type: 'text',
+      label: 'files.col.src',
+      value: sql`concat_ws(' · ', ${byKind(o.parts, (p) => p.source)}, (case when ${files.sourceKind} in (${sql.join(
+        FILE_LINKABLE_FILE_KINDS.map((k) => textLiteral(k)),
+        sql`, `,
+      )}) then ${linkedSourcesText(o.parts, t)} end))`,
+    },
     cp: {
       type: 'enum',
       label: 'files.col.cp',
@@ -610,7 +649,7 @@ export function fileListColumns(o: Pick<FileListOptions, 't' | 'parts'>): ListCo
  * Какие файлы видит сотрудник: загруженные, в области группы «Файловый менеджер» (общий файл — всем),
  * только видимых ему видов источника и записей.
  */
-function listScope(o: Pick<FileListOptions, 'scope' | 'parts'>): SQL {
+function listScope(o: Pick<FileListOptions, 'scope' | 'parts' | 'hidden'>): SQL {
   const kinds = Object.entries(o.parts).map(([kind, part]) =>
     and(eq(files.sourceKind, kind), part.visible),
   );
@@ -618,6 +657,7 @@ function listScope(o: Pick<FileListOptions, 'scope' | 'parts'>): SQL {
     eq(files.state, 'ready'),
     o.scope ? or(isNull(files.contractorId), o.scope) : undefined,
     kinds.length ? or(...kinds) : sql`false`,
+    o.hidden ? sql`not (${o.hidden})` : undefined,
   )!;
 }
 
@@ -785,7 +825,7 @@ export function exportFiles(tx: Tx, query: ListQuery, keys: readonly string[], o
  */
 export async function fileKindCounts(
   tx: Tx,
-  o: Pick<FileListOptions, 'scope' | 'parts'>,
+  o: Pick<FileListOptions, 'scope' | 'parts' | 'hidden'>,
 ): Promise<{ kinds: Partial<Record<string, number>>; bytes: number; count: number }> {
   const rows = await tx
     .select({

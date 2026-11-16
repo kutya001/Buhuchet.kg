@@ -26,6 +26,11 @@ export interface DbOptions {
    * шифрование без проверки сертификата).
    */
   caCert?: string | undefined;
+  /**
+   * Сообщения сервера (`RAISE NOTICE`, предупреждения): по умолчанию не выводятся; миграции печатают
+   * итоги переносов данных в журнал стенда и выпуска (п. К-19).
+   */
+  onNotice?: ((notice: postgres.Notice) => void) | undefined;
 }
 
 /**
@@ -38,7 +43,7 @@ export function createDb(url: string, options: DbOptions = {}): DbHandle {
     prepare: false,
     ...(options.idleTimeoutSeconds ? { idle_timeout: options.idleTimeoutSeconds } : {}),
     ...(options.caCert ? { ssl: { ca: options.caCert, rejectUnauthorized: true } } : {}),
-    onnotice: () => {},
+    onnotice: options.onNotice ?? (() => {}),
     connection: { application_name: options.applicationName ?? 'buhuchet' },
   });
   return {

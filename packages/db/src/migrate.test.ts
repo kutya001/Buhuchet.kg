@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ensureAppLoginRole, roleFromUrl, scramSha256Verifier } from './migrate';
+import { ensureAppLoginRole, noticeLine, roleFromUrl, scramSha256Verifier } from './migrate';
 import { createTestDatabase, databaseAvailable, type TestDatabase } from './testing';
 
 /**
@@ -31,6 +31,13 @@ describe('журнал миграций', () => {
     for (let i = 1; i < entries.length; i += 1) {
       expect(entries[i]!.when, entries[i]!.tag).toBeGreaterThan(entries[i - 1]!.when);
     }
+  });
+});
+
+describe('noticeLine', () => {
+  it('строка журнала: важность и текст сообщения', () => {
+    expect(noticeLine({ severity: 'NOTICE', message: 'итог: 2' })).toBe('NOTICE: итог: 2');
+    expect(noticeLine({})).toBe('NOTICE: ');
   });
 });
 
@@ -84,14 +91,21 @@ describe('ensureAppLoginRole: проверки до подключения', () 
 describe.skipIf(!databaseAvailable())('ensureAppLoginRole: в базе', () => {
   let t: TestDatabase;
   const BAD_ROLE = `buhuchet_test_owner_${process.pid}`;
+  const notices: string[] = [];
 
   beforeAll(async () => {
-    t = await createTestDatabase();
+    t = await createTestDatabase({ onMigrationNotice: (line) => notices.push(line) });
   });
 
   afterAll(async () => {
     await t?.admin.sql.unsafe(`drop role if exists "${BAD_ROLE}"`);
     await t?.drop();
+  });
+
+  // Итог переноса данных (п. К-19, О-81) — в журнале «Migrate test» и выпуска: раньше подключение
+  // миграций глушило NOTICE, и чисел «объединено N» не было видно.
+  it('сообщения миграций доходят до вывода: итог объединения копий чеков', () => {
+    expect(notices.some((line) => /^NOTICE: file_copies_merge \(\d{4}\): /.test(line))).toBe(true);
   });
 
   it('роль входит в базу с паролем из строки подключения', async () => {

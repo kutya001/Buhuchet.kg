@@ -10,6 +10,7 @@ import {
   withOrganization,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
+import { putBell } from './bell';
 import type { BotAction, BotPressResult } from './press';
 import { reminderReports } from './reminders';
 import { botReportRow, botSiteUrl, reportTableTexts } from './staff-view';
@@ -92,6 +93,22 @@ export const nudgeAction: BotAction = {
         ctx.deps.clock.now(),
       );
       if (!queued.length) return refused('tgActNudgeWait', values);
+      // Колокольчик (доработки 16.11.2026, блок 3): та же строка — «Просрочено» сотрудника.
+      await putBell(
+        tx,
+        [
+          {
+            userId: target.userId,
+            kind: 'reports',
+            event: 'nudge',
+            target: { kind: 'reports_tab', id: 'overdue' },
+            need: 'repView',
+            text: tr('bell.line.nudge', { name: by, n: overdue.length }),
+            eventKey: `nudge:${today}`,
+          },
+        ],
+        ctx.deps.clock.now(),
+      );
       return {
         done: tr('telegram.done.nudged'),
         reply: await ctx.text('tgActNudgeOk', values),

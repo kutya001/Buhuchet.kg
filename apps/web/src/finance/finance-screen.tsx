@@ -448,6 +448,7 @@ function JournalTab({ tab }: { tab: FinJournalTab }) {
                 id: r.id,
                 name: r.what,
                 contractor: r.contractor.name,
+                contractorId: r.contractor.id,
                 left: r.amount - service.paid,
               },
             }),

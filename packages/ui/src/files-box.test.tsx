@@ -96,4 +96,41 @@ describe('блок «Файлы» (прототип filesBox)', () => {
     expect(html).toContain('Загрузка…');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"/);
   });
+  it('файл контрагента ссылкой (блок 2, прототип v124): значок ссылки, «Открепить» вместо «Удалить», «Из файлов контрагента» в заголовке', () => {
+    const linkLabels: FilesBoxLabels = {
+      ...labels,
+      pick: 'Из файлов контрагента',
+      unlink: 'Открепить',
+      unlinkTitle: 'Убрать файл из этой записи: в файлах контрагента он останется',
+      unlinkAria: (name) => `Открепить ${name}`,
+    };
+    const html = render({
+      labels: linkLabels,
+      items: [
+        {
+          id: '3',
+          name: 'Акт.pdf',
+          meta: 'PDF · 1 КБ',
+          canDelete: true,
+          linked: true,
+          canUnlink: true,
+        },
+      ],
+      canLink: true,
+      onLinkPick: vi.fn(),
+      onUnlink: vi.fn(),
+    });
+    expect(html).toContain('data-file-pick');
+    expect(html).toContain('Из файлов контрагента');
+    expect(html).toContain('aria-label="Открепить Акт.pdf"');
+    expect(html).not.toContain('aria-label="Удалить Акт.pdf"');
+    // Без права откреплять — ни «Открепить», ни «Удалить».
+    const plain = render({
+      labels: linkLabels,
+      items: [{ id: '3', name: 'Акт.pdf', meta: 'PDF', canDelete: false, linked: true }],
+      onUnlink: vi.fn(),
+    });
+    expect(plain).not.toContain('Открепить');
+    expect(plain).not.toContain('data-file-pick');
+  });
 });

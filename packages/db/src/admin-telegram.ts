@@ -317,11 +317,16 @@ export async function adminTelegramBroadcast(
     message?: BotMessage | null;
     /** Для истории: заголовок, картинка, «Подробнее» и «Смотреть видео» (вид:номер записи). */
     cast?: { title: string; image: string | null; more: string | null; video: string | null };
+    /**
+     * Строка колокольчика (доработки 16.11.2026, блок 3) — каждому действующему сотруднику
+     * действующих организаций, и без привязанного Telegram; null — без неё.
+     */
+    bellText?: string | null;
   },
 ): Promise<number | null> {
   const payload = input.message ? JSON.stringify(input.message) : null;
   const [row] = await tx.execute<{ n: number | null }>(
-    sql`select app.admin_telegram_broadcast(${input.orgId}::uuid, ${input.text}, ${payload}::jsonb, ${input.now.toISOString()}::timestamptz) as n`,
+    sql`select app.admin_telegram_broadcast(${input.orgId}::uuid, ${input.text}, ${payload}::jsonb, ${input.now.toISOString()}::timestamptz, ${input.bellText ?? null}) as n`,
   );
   const queued = row?.n ?? null;
   if (queued === null) return null;

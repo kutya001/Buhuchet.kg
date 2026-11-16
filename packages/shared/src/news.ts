@@ -25,6 +25,12 @@ export const NewsLinkSchema = z.object({
 });
 export type NewsLinkSchema = z.infer<typeof NewsLinkSchema>;
 
+/**
+ * Код модуля новости (доработки 16.11.2026, блок 4, пункт 3): модуль организации (`cps`, `reports`…)
+ * или `fee` — «Плата за обслуживание». Незнакомый код отклоняет проверка домена (`newsModulesProblem`).
+ */
+export const NewsModuleCode = z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/);
+
 /** Новость в ленте пользователя и в окне «Что нового». */
 export const NewsItem = z.object({
   id: NewsCode,
@@ -41,6 +47,13 @@ export const NewsItem = z.object({
   editedAt: z.iso.datetime().nullable(),
   /** Прочитана: открыта, показана в «Что нового» или «Отметить все прочитанными». */
   read: z.boolean(),
+  /** «Модули»: для фильтра «Модуль» ленты; пусто — новость про всё. */
+  modules: z.array(NewsModuleCode),
+  /**
+   * Текст «Для администратора платформы» — только администратору платформы (режим Админка) и только у
+   * новости, где он есть; остальным поля нет.
+   */
+  adminMd: z.string().optional(),
 });
 export type NewsItem = z.infer<typeof NewsItem>;
 
@@ -85,6 +98,7 @@ const adminFields = {
   pinned: z.boolean(),
   showOnLogin: z.boolean(),
   audience: NewsAudienceSchema,
+  modules: z.array(NewsModuleCode),
   status: z.enum(['draft', 'published']),
   off: z.boolean(),
   state: NewsStateSchema,
@@ -98,6 +112,8 @@ export const AdminNews = z.object({
   ...adminFields,
   /** «Прочитали» — сколько пользователей прочитали новость. */
   reads: z.number().int().nonnegative(),
+  /** Столбец «Для администратора платформы»: есть ли второй текст. */
+  hasAdminMd: z.boolean(),
   audit: RecordAudit,
 });
 export type AdminNews = z.infer<typeof AdminNews>;
@@ -106,7 +122,12 @@ export const AdminNewsList = listPageSchema(AdminNews);
 export type AdminNewsList = z.infer<typeof AdminNewsList>;
 
 /** Новость целиком — для окна «Новость» и «Предпросмотра». */
-export const AdminNewsRecord = z.object({ ...adminFields, md: z.string() });
+export const AdminNewsRecord = z.object({
+  ...adminFields,
+  md: z.string(),
+  /** Текст «Для администратора платформы»; пусто — его нет. */
+  adminMd: z.string(),
+});
 export type AdminNewsRecord = z.infer<typeof AdminNewsRecord>;
 
 /**
@@ -124,6 +145,10 @@ export const NewsInputSchema = z.object({
   pinned: z.boolean(),
   showOnLogin: z.boolean(),
   audience: NewsAudienceSchema,
+  /** «Модули»; без поля — без модулей. */
+  modules: z.array(NewsModuleCode).max(60).default([]),
+  /** Текст «Для администратора платформы»; пусто или без поля — второго текста нет. */
+  adminMd: z.string().max(60_000).default(''),
 });
 export type NewsInputSchema = z.infer<typeof NewsInputSchema>;
 

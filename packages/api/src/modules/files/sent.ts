@@ -5,6 +5,7 @@ import {
   acceptSentFile,
   contractorDocumentNames,
   exportSentFiles,
+  fileFeeLinked,
   getContractorPage,
   getSentFile,
   listContractorSentFiles,
@@ -19,7 +20,6 @@ import {
   sentFilesNewCount,
   sentReceiptTargetDate,
   sentUploadState,
-  takeRateLimit,
   updateWithHistory,
   withOrgContext,
   writeHistory,
@@ -36,7 +36,6 @@ import {
   FILE_LINK_SECONDS,
   FILE_MESSAGES,
   filePreviewKind,
-  fileUploadProblem,
   hasPermission,
   PAGE_MESSAGES,
   pageManageRefusal,
@@ -78,16 +77,18 @@ import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { contractorOf } from '../contractor-page/card';
 import { serverTexts } from '../l10n/texts';
-import { attachStoredFile } from './attach';
 import {
+  canUpload,
   error,
+  feeSeenFor,
   FILES_SECTION,
   realNow,
   requireFilesFeature,
   subjectOf,
-  UPLOAD_RATE_LIMIT,
   visibleSource,
 } from './files';
+import { linkTo } from './links';
+import type { FileSourceRecord } from './sources';
 import { filesScopeOf } from './manager';
 import { removeStoredObjects } from './storage-retry';
 
@@ -516,13 +517,13 @@ export const sentAcceptRoute = createRoute({
   responses: {
     200: {
       description:
-        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); с `attach` — и у записи денег',
+        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); с `attach` — и у записи денег ссылкой на этот же файл',
       content: { 'application/json': { schema: SentFileAccepted } },
     },
     ...decideResponses,
     403: {
       description:
-        'Нет права «Просматривать файлы» или «Загружать файлы»; «Файлы в карточках» выключены; с `attach` — нельзя менять файлы записи денег, имя или размер файла не годятся для файлов записей',
+        'Нет права «Просматривать файлы» или «Загружать файлы»; «Файлы в карточках» выключены; с `attach` — нельзя менять файлы записи денег',
       content: error,
     },
     404: {
@@ -530,7 +531,6 @@ export const sentAcceptRoute = createRoute({
         'Файла нет или контрагент вне области; с `attach` — записи денег нет, она не видна или другого контрагента',
       content: error,
     },
-    429: { description: 'С `attach` — слишком много загрузок за час', content: error },
   },
 });
 
@@ -543,10 +543,9 @@ export const sentAcceptRoute = createRoute({
  * С `attach` — «Сохранить» в окне денег с чеком (доработки 16.11.2026, блок 1; прототип v121
  * `pgRcptSave`): деньги уже записаны своим запросом, а чек принимается и прикрепляется к ним одной
  * транзакцией — «Принят файл «…» — прикреплён к поступлению от ДД.ММ.ГГГГ». До этого чек остаётся
- * «Новый»: «Отменить» в окне денег ничего не меняет. Прикрепляется вторая копия (а не ссылка — до
- * блока 2), по правилам загрузки с сайта: та же запись того же контрагента, `attachStoredFile`, предел
- * загрузок пользователя. Чек уже решил другой сотрудник — 409 `sent_decided` с `details` (кто и как),
- * деньги остаются без чека.
+ * «Новый»: «Отменить» в окне денег ничего не меняет. Прикрепляется ссылкой на принятый файл контрагента,
+ * без второй копии (блок 2, пункт 1; `linkTo`): та же запись того же контрагента, право менять её файлы.
+ * Чек уже решил другой сотрудник — 409 `sent_decided` с `details` (кто и как), деньги остаются без чека.
  */
 export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAcceptRoute, AppEnv> {
   return async (c) => {
@@ -554,39 +553,30 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
     const { version, attach } = c.req.valid('json');
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);
-    if (attach) {
-      const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
-      if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
-    }
     const seen = await withOrgContext(deps.db, ctx, async (tx) => {
       await requireFilesFeature(tx, ctx.orgId);
       return (await visibleSent(tx, subject, id)).file;
     });
     if (seen.status !== 'new') decidedFail(seen);
-    if (attach) {
-      // Правила файлов записей (имя, тип, размер) — как у загрузки с сайта и файла из Telegram.
-      const problem = fileUploadProblem({ name: seen.name, size: seen.sizeBytes });
-      if (problem) apiFail(403, problem, FILE_MESSAGES[problem]);
-    }
     const fileId = randomUUID();
     const key = orgFileKey(ctx.orgId, FILES_SECTION, fileId);
-    const copy = attach ? { id: randomUUID(), source: attach } : null;
-    const copyKey = copy ? orgFileKey(ctx.orgId, FILES_SECTION, copy.id) : null;
     const today = sentToday();
     let body: SentFileItemBody;
     try {
       if (!(await deps.storage.copy(seen.storageKey, key))) {
         apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
       }
-      const copySize = copyKey ? await storedCopy(deps, seen.storageKey, copyKey) : 0;
       body = await decided(deps, ctx, id, () =>
         withOrgContext(deps.db, ctx, async (tx) => {
-          await requireFilesFeature(tx, ctx.orgId);
+          const features = await requireFilesFeature(tx, ctx.orgId);
           const { file, contractor } = await visibleSent(tx, subject, id);
-          if (copy) {
-            const record = await visibleSource(deps, tx, subject, copy.source.kind, copy.source.id);
-            // Чек одного контрагента к деньгам другого не прикрепить.
-            if (record.contractor?.id !== contractor.id) notFound();
+          const record = attach
+            ? await visibleSource(deps, tx, subject, attach.kind, attach.id)
+            : null;
+          // Чек одного контрагента к деньгам другого не прикрепить; файлы записи должно быть можно менять.
+          if (record && record.contractor?.id !== contractor.id) notFound();
+          if (record && !canUpload(subject, record)) {
+            apiFail(403, 'forbidden', 'Нет права на это действие');
           }
           const name = acceptedFileName(
             file.name,
@@ -607,17 +597,10 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
               note: file.comment,
             },
           });
-          const to = copy
-            ? await attachReceipt(deps, tx, subject, ctx.orgId, {
-                ...copy,
-                // Копия — названием отправленного файла, как с 15.11: по нему, размеру и типу её найдёт
-                // `app.file_copies_merge()` этапа 1 (у принятого название могло стать «Имя (2)»).
-                name: file.name,
-                size: copySize,
-                contentType: file.contentType,
-                storageKey: copyKey!,
-              })
-            : null;
+          const to =
+            attach && record
+              ? await linkReceipt(tx, subject, features, attach, record, fileId)
+              : null;
           await writeHistory(tx, {
             entity: 'sent_file',
             entityId: id,
@@ -633,11 +616,7 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
         }),
       );
     } catch (err) {
-      await removeStoredObjects(
-        deps,
-        copyKey ? [key, copyKey] : [key],
-        'файлы от контрагентов: копия после отказа',
-      );
+      await removeStoredObjects(deps, [key], 'файлы от контрагентов: копия после отказа');
       throw err;
     }
     // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас; не
@@ -651,42 +630,29 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
   };
 }
 
-/** Вторая копия чека — для записи денег; ответ — фактический размер положенного объекта. */
-async function storedCopy(deps: ApiDeps, from: string, to: string): Promise<number> {
-  if (!(await deps.storage.copy(from, to))) {
-    apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-  }
-  const stored = await deps.storage.stat(to);
-  if (!stored) apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-  return stored!.size;
-}
-
 /**
- * Принятый чек — к записи денег (`attachStoredFile`: «Файлы в карточках», запись видна, её файлы можно
- * менять; история записи — «Прикреплён файл»). Ответ — поле истории контрагента «к поступлению от …» или
- * «к оплате за обслуживание от …» (дата оплаты — только тому, кто видит плату: `FEE_FIELDS`).
+ * Принятый чек — к записи денег ссылкой (доработки 16.11.2026, блок 2; прототип v124 `pgRcptSave`): тот
+ * же файл контрагента, без копии; в истории записи — «Прикреплён из файлов контрагента». Ответ — поле
+ * истории контрагента «к поступлению от …» или «к оплате за обслуживание от …» (дата оплаты — только
+ * тому, кто видит плату: `FEE_FIELDS`).
  */
-async function attachReceipt(
-  deps: ApiDeps,
+async function linkReceipt(
   tx: Tx,
   subject: AccessSubject,
-  orgId: string,
-  file: {
-    id: string;
-    source: { kind: 'receipt' | 'fee_payment'; id: string };
-    name: string;
-    size: number;
-    contentType: string;
-    storageKey: string;
-  },
+  features: Readonly<Record<Feature, boolean>>,
+  target: { kind: 'receipt' | 'fee_payment'; id: string },
+  record: FileSourceRecord,
+  fileId: string,
 ): Promise<{ field: 'receipt' | 'feePayment'; to: IsoDate }> {
-  const done = await attachStoredFile(deps, tx, subject, orgId, { ...file, note: null });
-  if (done === 'files_off') apiFail(403, 'files_off', FILE_MESSAGES.files_off);
-  if (done === 'not_found') notFound();
-  if (done === 'forbidden') apiFail(403, 'forbidden', 'Нет права на это действие');
-  const date = await sentReceiptTargetDate(tx, file.source);
+  const added = record.contractor
+    ? await linkTo(tx, subject, features, target, { ...record, contractor: record.contractor }, [
+        fileId,
+      ])
+    : null;
+  if (!added?.length) notFound();
+  const date = await sentReceiptTargetDate(tx, target);
   if (!date) notFound();
-  return { field: file.source.kind === 'receipt' ? 'receipt' : 'feePayment', to: date! };
+  return { field: target.kind === 'receipt' ? 'receipt' : 'feePayment', to: date! };
 }
 
 export const sentRejectRoute = createRoute({
@@ -777,8 +743,20 @@ export function sentLinkHandler(deps: ApiDeps): RouteHandler<typeof sentLinkRout
     const download = c.req.valid('query').download === '1';
     const ctx = orgContextOf(c);
     const file = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
-      return (await visibleSent(tx, subjectOf(c), id)).file;
+      const features = await requireFilesFeature(tx, ctx.orgId);
+      const subject = subjectOf(c);
+      const sent = await visibleSent(tx, subject, id);
+      // Принятый чек, прикреплённый к оплате за обслуживание (доработки 16.11.2026, блок 2; прототип
+      // v124 `fFeeHid`, п. К-19), открывает только тот, кто видит плату — как в «Файловом менеджере».
+      if (
+        sent.file.status === 'accepted' &&
+        sent.file.fileId &&
+        !feeSeenFor(subject, features, sent.contractor) &&
+        (await fileFeeLinked(tx, sent.file.fileId))
+      ) {
+        notFound();
+      }
+      return sent.file;
     });
     const key = file.status === 'accepted' ? file.fileStorageKey : file.storageKey;
     if (!key) notFound();

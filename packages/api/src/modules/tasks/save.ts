@@ -32,7 +32,7 @@ import { apiFail, versionedSaveResponses } from '../../errors';
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { projectWhere, taskProjectsOn } from '../projects/common';
-import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
+import { queueTelegramEvents, taskBell, type TelegramEvent } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
 import { taskView } from '../telegram/staff-view';
 import { taskOut } from './card';
@@ -306,6 +306,7 @@ async function newTaskEvent(
       срок: task.term === 'month' ? formatText(t('task.date.month'), { date }) : date,
     },
     link: 'tasks',
+    bell: taskBell(task),
     // Кнопки под сообщением: «Взять в работу», «Выполнена», «Открыть задачу» (поток Т, задача Т2).
     ...(await taskView(deps, { id: task.id, title: task.title, todo: task.status === 'todo' }, tx)),
   };

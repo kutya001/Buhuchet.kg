@@ -30,6 +30,7 @@ import {
   newsImageProblem,
   newsImageType,
   newsMdTrim,
+  newsModulesOrdered,
   newsProblems,
   newsState,
   PLATFORM_ADMIN_NAME,
@@ -102,6 +103,7 @@ function adminCommon(n: Omit<NewsRecord, 'md'>) {
     pinned: n.pinned,
     showOnLogin: n.showOnLogin,
     audience: n.audience,
+    modules: n.modules,
     status: n.status,
     off: n.off,
     publishedAt: iso(n.publishedAt),
@@ -115,6 +117,7 @@ function adminNewsBody(n: NewsAdminRecord): AdminNews {
     ...adminCommon(n),
     state: n.state,
     reads: n.reads,
+    hasAdminMd: n.hasAdminMd,
     audit: {
       createdAt: n.createdAt.toISOString(),
       createdBy: n.createdBy,
@@ -129,7 +132,7 @@ function adminNewsBody(n: NewsAdminRecord): AdminNews {
  * а не по часам демо-стенда.
  */
 function newsRecordBody(n: NewsRecord): AdminNewsRecord {
-  return { ...adminCommon(n), state: newsState(n, new Date()), md: n.md };
+  return { ...adminCommon(n), state: newsState(n, new Date()), md: n.md, adminMd: n.adminMd };
 }
 
 export const listNewsRoute = createRoute({
@@ -279,6 +282,9 @@ async function checkedInput(tx: Tx, body: NewsInputSchema, publish: boolean): Pr
       date: body.date,
       short: body.short,
       md: body.md,
+      audience: body.audience,
+      adminMd: body.adminMd,
+      modules: body.modules,
     },
     { publish },
   );
@@ -309,6 +315,8 @@ async function checkedInput(tx: Tx, body: NewsInputSchema, publish: boolean): Pr
     pinned: body.pinned,
     showOnLogin: body.showOnLogin,
     audience: body.audience,
+    modules: newsModulesOrdered(body.modules),
+    adminMd: newsMdTrim(body.adminMd),
   };
 }
 

@@ -114,7 +114,16 @@ function Audit({ who, at }: { who: string | null; at: string }) {
 /** Окна, которые открывает карточка, журнал и меню контрагента. */
 export type ServiceAction =
   | { act: 'card'; id: string }
-  | { act: 'pay'; service: { id: string; name: string; contractor: string; left: number } }
+  | {
+      act: 'pay';
+      service: {
+        id: string;
+        name: string;
+        contractor: string;
+        contractorId: string;
+        left: number;
+      };
+    }
   | { act: 'edit'; id: string }
   | { act: 'delete'; id: string }
   | { act: 'payment'; id: string }
@@ -312,7 +321,13 @@ export function ServiceCardDialog({
     s &&
     open1({
       act: 'pay',
-      service: { id: s.id, name: s.name, contractor: s.contractor.name, left },
+      service: {
+        id: s.id,
+        name: s.name,
+        contractor: s.contractor.name,
+        contractorId: s.contractor.id,
+        left,
+      },
     });
 
   const items: KeyValueItem[] = s

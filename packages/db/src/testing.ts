@@ -60,8 +60,13 @@ function withDatabase(url: string, name: string): string {
 /** Номер рекомендательной блокировки на время миграций тестовой базы. */
 const MIGRATION_LOCK = 704_118;
 
-/** Временная база с применёнными миграциями. Обязательно вызвать drop() в afterAll. */
-export async function createTestDatabase(): Promise<TestDatabase> {
+/**
+ * Временная база с применёнными миграциями. Обязательно вызвать drop() в afterAll. `onMigrationNotice` —
+ * сообщения миграций (как их печатает `db:migrate`).
+ */
+export async function createTestDatabase(
+  options: { onMigrationNotice?: (line: string) => void } = {},
+): Promise<TestDatabase> {
   const config = loadDatabaseConfig();
   const serverAdminUrl = config.DATABASE_ADMIN_URL!;
   const name = `test_${randomBytes(6).toString('hex')}`;
@@ -74,7 +79,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
   // тестов делают это по очереди, иначе одновременный CREATE ROLE падает на уникальности имени.
   await maintenance.sql`select pg_advisory_lock(${MIGRATION_LOCK})`;
   try {
-    await runMigrations(adminUrl);
+    await runMigrations(adminUrl, undefined, options.onMigrationNotice);
     await ensureAppLoginRole(adminUrl, appUrl);
   } finally {
     await maintenance.sql`select pg_advisory_unlock(${MIGRATION_LOCK})`;

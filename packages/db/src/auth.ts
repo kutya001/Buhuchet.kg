@@ -109,14 +109,24 @@ export async function recordLoginFailure(db: Db, userId: string | null): Promise
 /**
  * Вход только что закрыт: запись в историю организации от имени системы и сообщения в очередь
  * Telegram — пользователю и тем, кто снимает блокировку (владельцам или администраторам платформы).
+ * Колокольчик (доработки 16.11.2026, блок 3): строка самому пользователю (`bellText`) и — о
+ * сотруднике — владельцам его организации (`bellStaffText`, `{name}` — краткое ФИО сотрудника), и
+ * без бота, и без привязанного Telegram.
  */
 export async function notifyAccountLocked(
   db: Db,
-  /** Тексты null — бот не подключён: только запись в историю. */
-  input: { userId: string; userText: string | null; unlockerText: string | null; now: Date },
+  /** Тексты Telegram null — бот не подключён: только история и колокольчик. */
+  input: {
+    userId: string;
+    userText: string | null;
+    unlockerText: string | null;
+    bellText: string | null;
+    bellStaffText: string | null;
+    now: Date;
+  },
 ): Promise<void> {
   await db.execute(
-    sql`select app.auth_lock_notify(${input.userId}, ${input.userText}, ${input.unlockerText}, ${input.now.toISOString()}::timestamptz)`,
+    sql`select app.auth_lock_notify(${input.userId}, ${input.userText}, ${input.unlockerText}, ${input.now.toISOString()}::timestamptz, ${input.bellText}, ${input.bellStaffText})`,
   );
 }
 

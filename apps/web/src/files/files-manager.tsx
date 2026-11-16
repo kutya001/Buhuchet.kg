@@ -3,7 +3,6 @@
 import { formatCount, type ListFilterValue, type UiTextKey } from '@buhuchet/domain';
 import { FileLink, FileManagerList, ListValues, type FileManagerRow } from '@buhuchet/shared';
 import {
-  ConfirmDialog,
   DataGrid,
   EmptyState,
   Plate,
@@ -39,6 +38,8 @@ import {
   fileKindText,
 } from './file-columns';
 import { FileEditDialog } from './file-edit-dialog';
+import { useFileDelete, useFileLinkOpen } from './file-link-open';
+import { fileLinkText, fileSourceWithLinks } from './file-links';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
 import { SentFilesTab } from './sent-files';
 import {
@@ -165,7 +166,6 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
   const errorText = useErrorText();
   const togglePage = useFilePageToggle(t, toast, errorText);
   const client = useQueryClient();
-  const refresh = useFilesRefresh();
   const labels = useGridLabels('files.count');
   const { search, clearSearch, access } = useShell();
   const cppage = access.feature('cppage');
@@ -178,7 +178,9 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
   const kpi = useKpiEntry();
   const [card, setCard] = useState<DialogSlot<FileManagerRow> | null>(null);
   const [service, setService] = useState<DialogSlot<string> | null>(null);
-  const [ask, setAsk] = useState<FileManagerRow | null>(null);
+  // Записи ссылок («Перейти к источнику: …», «Источник» окна файла) и «Удалить отовсюду?».
+  const links = useFileLinkOpen();
+  const del = useFileDelete();
   const [editId, setEditId] = useState<string | null>(null);
 
   const fetchPage = useCallback<FetchListPage<FileManagerRow>>(async (params) => {
@@ -222,7 +224,8 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
    * услуги и её оплаты — карточка услуги (прототип `serviceCard`), у файла проекта — карточка проекта.
    */
   const sourceOf = (file: FileManagerRow): (() => void) | null => {
-    if (file.kind === 'contractor' && file.contractor) {
+    // Файл контрагента (из документов и принятый от него, блок 2) — вкладка «Файлы» его карточки.
+    if ((file.kind === 'contractor' || file.kind === 'sent_file') && file.contractor) {
       const { id } = file.contractor;
       return () => openContractorCard({ id }, 'files');
     }
@@ -257,8 +260,44 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
     return null;
   };
 
-  const actions = (file: FileManagerRow): ActionEntry[] => {
+  /**
+   * «Перейти к источнику» (прототип v124 `fGoActs`): у файла контрагента с ссылками — «…: файлы
+   * контрагента» и по пункту на каждую видимую запись.
+   */
+  const sourceActions = (file: FileManagerRow): ActionEntry[] => {
     const source = sourceOf(file);
+    if (!file.links.length)
+      return source
+        ? [
+            {
+              id: 'source',
+              label: t('files.act.source'),
+              icon: fileKindIcon(file.kind),
+              run: source,
+            },
+          ]
+        : [];
+    return [
+      ...(source
+        ? [
+            {
+              id: 'source',
+              label: t('files.act.source_cp'),
+              icon: 'building' as IconName,
+              run: source,
+            },
+          ]
+        : []),
+      ...file.links.map((link) => ({
+        id: `source-${link.kind}-${link.id}`,
+        label: t('files.act.source_to', { name: fileLinkText(t, link, 'nm') }),
+        icon: 'link' as IconName,
+        run: () => links.open(link),
+      })),
+    ];
+  };
+
+  const actions = (file: FileManagerRow): ActionEntry[] => {
     return [
       {
         id: 'open',
@@ -272,16 +311,7 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
         icon: 'download',
         run: () => void download(file),
       },
-      ...(source
-        ? [
-            {
-              id: 'source',
-              label: t('files.act.source'),
-              icon: fileKindIcon(file.kind),
-              run: source,
-            },
-          ]
-        : []),
+      ...sourceActions(file),
       // Прототип v95 `fEditAct`: «Изменить» — название, примечание, замена; без права — с причиной.
       {
         id: 'edit',
@@ -307,26 +337,14 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
       { id: 'sep', separator: true as const },
       {
         id: 'delete',
-        label: t('files.act.delete'),
+        label: t(file.links.length ? 'files.act.delete_all' : 'files.act.delete'),
         icon: 'trash',
         danger: true,
         disabled: !file.canDelete,
         reason: file.canDelete ? undefined : t('err.file_delete_forbidden'),
-        run: () => setAsk(file),
+        run: () => del.ask(file),
       },
     ];
-  };
-
-  const remove = async (file: FileManagerRow) => {
-    const res = await callApi(() =>
-      api.api.files[':id'].$delete({
-        param: { id: file.id },
-        query: { version: String(file.version) },
-      }),
-    );
-    await refresh();
-    if (res.ok) toast(t('files.deleted'), { icon: 'trash' });
-    else toast(errorText(res.error), { bad: true, icon: 'alert' });
   };
 
   const plates = summary.data?.plates ?? [];
@@ -418,31 +436,24 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
           onDownload={() => void download(card.data)}
           onSource={sourceOf(card.data)}
           onEdit={() => setEditId(card.data.id)}
+          onLink={links.open}
+          onDelete={() => del.ask(rowOf(card.data.id) ?? card.data, () => setCard(closeSlot))}
         />
       ) : null}
       <FileEditDialog
         file={editFile}
         sub={
           editFile
-            ? t('files.window.sub', { kind: fileKindText(t, editFile.kind), src: editFile.source })
+            ? t('files.window.sub', {
+                kind: fileKindText(t, editFile.kind),
+                src: fileSourceWithLinks(t, editFile.source, editFile.links),
+              })
             : undefined
         }
         onClose={() => setEditId(null)}
       />
       {upload.dialog}
-      <ConfirmDialog
-        open={ask !== null}
-        onClose={() => setAsk(null)}
-        title={t('files.delete.title', { name: ask?.name ?? '' })}
-        text={
-          ask?.kind === 'manual'
-            ? t('files.delete.manual')
-            : t('files.delete.attached', { src: ask?.source ?? '' })
-        }
-        ok={t('files.delete_ok')}
-        danger
-        onConfirm={() => ask && void remove(ask)}
-      />
+      {del.dialog}
       {service ? (
         <ServiceActionDialog
           key={`service-${service.n}`}
@@ -451,6 +462,7 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
           onClose={() => setService(closeSlot)}
         />
       ) : null}
+      {links.dialogs}
       {tasks.dialogs}
       {reports.dialogs}
       {kpi.dialog}

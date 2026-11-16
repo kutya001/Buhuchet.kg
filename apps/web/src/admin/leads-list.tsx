@@ -16,8 +16,8 @@ import {
   type GridColumn,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { api } from '../api-client';
 import { PhoneLinks } from '../contractors/contractor-columns';
 import { useT } from '../l10n/provider';
@@ -26,6 +26,7 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useListPage } from '../lists/use-list-page';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { tabHref } from '../shell/modules';
@@ -220,6 +221,17 @@ export function LeadsList() {
   const { search, clearSearch, openProfile } = useShell();
   const summary = useQuery(leadSummaryQuery);
   const leads = useLeadActions();
+  // Строка колокольчика «Новая заявка с сайта» (доработки 16.11.2026, блок 3): карточка заявки и адрес
+  // без `?lead=`.
+  const leadParam = useSearchParams().get('lead');
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('lead');
+    const id = linkedRecordId(value);
+    if (id) leads.openCard(id);
+  });
+  useEffect(() => {
+    if (leadParam) openLinked(leadParam);
+  }, [leadParam]);
   const list = useListPage({
     gridKey: 'orgs.leads',
     columns,
