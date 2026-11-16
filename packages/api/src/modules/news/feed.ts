@@ -68,7 +68,8 @@ async function myNewsModules(
   c: Context<AppEnv>,
   inOrg: boolean,
 ): Promise<NewsModulesOfMe> {
-  if (!inOrg || !session.orgId) return null;
+  // Без организации — только администратор платформы (все новости); иначе закрыто, как в колокольчике.
+  if (!inOrg || !session.orgId) return session.isPlatformAdmin ? null : [];
   const access = c.get('access');
   if (!access) return [];
   const { features } = await orgMenuSettings(tx, session.orgId);
@@ -112,7 +113,7 @@ export function newsFeedHandler(deps: ApiDeps): RouteHandler<typeof newsFeedRout
   return async (c) => {
     const { items, admin } = await asReader(deps, c, async (tx, mine) => ({
       items: await newsFeed(tx, mine),
-      admin: mine === null,
+      admin: c.get('session')?.isPlatformAdmin === true,
     }));
     return c.json({ items: items.map((n) => newsItemBody(n, n.read, admin)) }, 200);
   };
@@ -163,7 +164,7 @@ export function whatsNewHandler(deps: ApiDeps): RouteHandler<typeof whatsNewRout
   return async (c) => {
     const { items, first, admin } = await asReader(deps, c, async (tx, mine) => ({
       ...(await newsWhatsNew(tx, mine)),
-      admin: mine === null,
+      admin: c.get('session')?.isPlatformAdmin === true,
     }));
     return c.json({ items: items.map((n) => newsItemBody(n, false, admin)), first }, 200);
   };
