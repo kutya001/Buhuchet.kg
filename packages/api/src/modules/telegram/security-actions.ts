@@ -83,25 +83,27 @@ export const notMeAction: BotAction = {
       // История администратора платформы — в Админке: у его записи нет организации.
       if (orgId) await writeHistory(tx, entry);
       else await writePlatformHistory(tx, entry);
-      // Колокольчик (приёмка «Колокольчик против Telegram», доработки 16.11.2026, этап 2; прототип v126):
+      // Колокольчик (приёмка «Колокольчик против Telegram», доработки 16.11.2026, этап 2; прототип v128):
       // владельцам — «выдайте новый пароль», и без привязанного Telegram; нажатие — карточка сотрудника.
       // ОТКЛОНЕНИЕ: docs/deviations.md#Т-21 — нажал владелец: сообщение — администраторам платформы,
       // строки у них нет.
       const { employeeId } = ctx.user;
       if (orgId && result.locked && !result.isOwner && employeeId) {
-        const owners = await bellOwnerUsers(tx, userId);
-        await putBell(
-          tx,
-          owners.map((owner) => ({
-            userId: owner,
-            kind: 'other' as const,
-            event: 'not_me',
-            target: { kind: 'employee' as const, id: employeeId },
-            text: ctx.tr('bell.line.not_me', { name: login }),
-            eventKey: `not_me:${userId}:${now.getTime().toString(36)}`,
-          })),
-          now,
-        );
+        const owners = await bellOwnerUsers(tx, orgId, userId);
+        const rows = owners.map((owner) => ({
+          userId: owner,
+          kind: 'other' as const,
+          event: 'not_me',
+          target: { kind: 'employee' as const, id: employeeId },
+          text: ctx.tr('bell.line.not_me', { name: login }),
+          eventKey: `not_me:${userId}:${now.getTime().toString(36)}`,
+        }));
+        // Точка сохранения: сбой строки колокольчика не отменяет защиту учётной записи (сеансы, вход).
+        try {
+          await tx.transaction((sp) => putBell(sp, rows, now));
+        } catch (err) {
+          ctx.deps.logger.error({ err }, 'Колокольчик: строка «Это не я» владельцам не записана');
+        }
       }
 
       const text = result.locked

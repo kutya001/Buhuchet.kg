@@ -296,23 +296,35 @@ export async function bellCleanup(db: Db | Tx): Promise<number> {
   return Number(row?.n ?? 0);
 }
 
-/** Ответственный контрагента и действующие владельцы организации по порядку (для `bellContractorUsers`). */
 /**
- * Владельцы организации из контекста — кому «Сотрудник нажал «Это не я»» (как сообщение Telegram
+ * Владельцы организации `orgId` — кому «Сотрудник нажал «Это не я»» (как сообщение Telegram
  * `app.telegram_not_me`: действующий сотрудник, учётная запись не заблокирована), кроме `except`; по
- * порядку появления. Приёмка «Колокольчик против Telegram» (доработки 16.11.2026, этап 2).
+ * порядку появления. Организация — и условием запроса, не только RLS. Приёмка «Колокольчик против
+ * Telegram» (доработки 16.11.2026, этап 2).
  */
-export async function bellOwnerUsers(tx: Tx, except: string | null): Promise<string[]> {
+export async function bellOwnerUsers(
+  tx: Tx,
+  orgId: string,
+  except: string | null,
+): Promise<string[]> {
   const rows = await tx
     .select({ userId: employees.userId })
     .from(employees)
     .innerJoin(roles, eq(roles.id, employees.roleId))
     .innerJoin(users, eq(users.id, employees.userId))
-    .where(and(eq(roles.isOwner, true), eq(employees.active, true), eq(users.blocked, false)))
+    .where(
+      and(
+        eq(employees.orgId, orgId),
+        eq(roles.isOwner, true),
+        eq(employees.active, true),
+        eq(users.blocked, false),
+      ),
+    )
     .orderBy(asc(employees.createdAt), asc(employees.id));
   return rows.map((r) => r.userId).filter((u) => u !== except);
 }
 
+/** Ответственный контрагента и действующие владельцы организации по порядку (для `bellContractorUsers`). */
 export async function contractorBellStaff(
   tx: Tx,
   contractorId: string,

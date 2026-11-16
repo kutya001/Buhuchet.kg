@@ -52,7 +52,7 @@ export const BELL_TEXTS = {
   'bell.line.fee_paid': { ru: 'Сообщил в Telegram об оплате за обслуживание: {sum}', section: S },
   'bell.line.cp_tg_request': { ru: 'Просит подключить Telegram: {name}', section: S },
   'bell.line.cp_question': { ru: 'Вопрос из Telegram: {text}', section: S },
-  // Приёмка «Колокольчик против Telegram» (доработки 16.11.2026, этап 2; прототип v126).
+  // Приёмка «Колокольчик против Telegram» (доработки 16.11.2026, этап 2; прототип v128).
   'bell.line.cp_no_req': {
     ru: 'Не отправлено «К оплате» за {month}: нет реквизитов для перевода',
     section: S,

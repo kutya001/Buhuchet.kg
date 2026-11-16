@@ -208,7 +208,12 @@ describe.skipIf(!databaseAvailable())(
       const bell = await f.t.admin.db
         .select()
         .from(schema.bellNotifications)
-        .where(eq(schema.bellNotifications.event, 'not_me'));
+        .where(
+          and(
+            eq(schema.bellNotifications.event, 'not_me'),
+            eq(schema.bellNotifications.targetId, acc.employeeId),
+          ),
+        );
       expect(bell.map((r) => [r.userId, r.kind, r.targetKind, r.targetId, r.text])).toEqual([
         [
           f.a.ownerUserId,
@@ -369,6 +374,18 @@ describe.skipIf(!databaseAvailable())(
       );
       // В чат постороннего бот об этом не пишет.
       expect(last(CHAT.chiefNew).text).toBe(fillTemplate(TPL.tgLinked, { логин: 'chief-a' }));
+      // Колокольчик: код замены, «Привязан другой Telegram» и «Проверка бота» не попадают; владельцу —
+      // строка «Это не я» о главном бухгалтере.
+      const bellOf = (userId: string) =>
+        f.t.admin.db
+          .select({ event: schema.bellNotifications.event, id: schema.bellNotifications.targetId })
+          .from(schema.bellNotifications)
+          .where(eq(schema.bellNotifications.userId, userId));
+      expect(await bellOf(chief.userId)).toEqual([]);
+      expect(await bellOf(f.a.ownerUserId)).toContainEqual({
+        event: 'not_me',
+        id: chief.employeeId,
+      });
       const [entry] = await history(chief.userId);
       expect(entry!.changes).toEqual([
         { field: 'notMe', to: 'relink' },
@@ -409,17 +426,13 @@ describe.skipIf(!databaseAvailable())(
           событие: 'Telegram отвязан',
         }),
       });
-      // Нажал владелец: сообщение — администраторам платформы, строки колокольчика нет (по умолчанию).
+      // Нажал владелец: сообщение — администраторам платформы, строки колокольчика нет (по умолчанию);
+      // «Telegram отвязан» в колокольчик тоже не попадает — в организации Б строк нет вовсе.
       expect(
         await f.t.admin.db
           .select()
           .from(schema.bellNotifications)
-          .where(
-            and(
-              eq(schema.bellNotifications.event, 'not_me'),
-              eq(schema.bellNotifications.orgId, f.b.orgId),
-            ),
-          ),
+          .where(eq(schema.bellNotifications.orgId, f.b.orgId)),
       ).toEqual([]);
       const denied = await login('owner-b', TEST_PASSWORD);
       expect(denied.status).toBe(403);

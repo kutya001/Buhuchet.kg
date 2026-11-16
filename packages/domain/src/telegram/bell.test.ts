@@ -224,6 +224,49 @@ describe('колокольчик: строки дня — как утренне�
     expect(inTelegram(boss('manual'))).toBe(0);
   });
 
+  // Правило Telegram продукта (ТЗ «Уведомления в Telegram», п. Б-13): отчёты сотрудника без привязанного
+  // Telegram приходят руководителю при любом объёме — и в строке тоже (docs/deviations.md п. Т-21).
+  it('сотрудник без Telegram: его отчёты — у руководителя и в «Только ручные задачи», как в сообщении', () => {
+    const unlinked = person('other');
+    const mine = [
+      report({ responsibleId: 'other', contractorResponsibleId: 'other' }),
+      report({
+        responsibleId: 'other',
+        contractorResponsibleId: 'other',
+        dueDate: addDays(TODAY, -1),
+      }),
+    ];
+    for (const mode of ['manual', 'digest'] as const) {
+      const boss = person('chief', {
+        boss: true,
+        viewReports: 'all',
+        settings: withNotifyMode(mode),
+      });
+      const inTelegram = remindersFor(
+        boss,
+        { reports: mine, tasks: [], people: new Map([['other', unlinked]]) },
+        policy(),
+      ).reduce((n, l) => n + ('items' in l ? l.items.length : 0), 0);
+      expect(inTelegram).toBe(2);
+      const plan = bellDayPlans([boss, unlinked], { reports: mine, tasks: [] }, policy()).find(
+        (x) => x.employeeId === 'chief',
+      );
+      expect(plan).toMatchObject({ dues: { today: 1, over: 1 }, others: true });
+    }
+  });
+
+  it('главный бухгалтер с областью отчётов «Свои» или без права на отчёты — чужих отчётов в строке нет', () => {
+    const linked = person('other', { linked: true });
+    const theirs = [report({ responsibleId: 'other', contractorResponsibleId: 'other' })];
+    for (const viewReports of ['own', null] as const) {
+      const boss = person('chief', { boss: true, viewReports });
+      const plan = bellDayPlans([boss, linked], { reports: theirs, tasks: [] }, policy()).find(
+        (x) => x.employeeId === 'chief',
+      );
+      expect(plan).toBeUndefined();
+    }
+  });
+
   it('«Ждут подтверждения сдачи» и задачи — по правилам сообщения дня', () => {
     const boss = person('chief', {
       boss: true,

@@ -139,7 +139,8 @@ export type ContractorBell =
   | { event: 'page_closed'; failures: number }
   /**
    * «Не отправлено «К оплате»: нет реквизитов для перевода» за месяц (приёмка «Колокольчик против
-   * Telegram», доработки 16.11.2026, блок 3, пункт 3; прототип v126 `pgNoReqWhy`).
+   * Telegram», доработки 16.11.2026, блок 3, пункт 3): сообщение Telegram — только в продукте
+   * (`queueNoRequisite`, причина — как `pgNoReqWhy` прототипа), строка — с ним (docs/deviations.md п. Т-21).
    */
   | { event: 'cp_no_req'; month: YearMonth };
 

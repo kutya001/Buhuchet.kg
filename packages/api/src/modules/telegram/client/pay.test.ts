@@ -1429,6 +1429,19 @@ describe.skipIf(!databaseAvailable())(
             notice(formatText(UI_TEXTS['cppage.tg.rq.emp_hint'].ru, { employee: 'chief-a' })),
           ],
         ]);
+        // Колокольчик: ответственному и без Telegram, и владельцу, которому ушло сообщение.
+        const noReqUsers = await f.t.admin.db
+          .select({ userId: schema.bellNotifications.userId })
+          .from(schema.bellNotifications)
+          .where(
+            and(
+              eq(schema.bellNotifications.event, 'cp_no_req'),
+              eq(schema.bellNotifications.contractorId, cpA),
+            ),
+          );
+        expect(noReqUsers.map((r) => r.userId).sort()).toEqual(
+          [f.people['acc-a']!.userId, f.people['chief-a']!.userId, f.a.ownerUserId].sort(),
+        );
         await setContractor(cpA, { responsibleEmployeeId: employee('acc-a') });
         // Клиентам ничего не ушло и не записано; реквизиты появились — «К оплате» уходит.
         expect(await messages(cpA)).toEqual([]);

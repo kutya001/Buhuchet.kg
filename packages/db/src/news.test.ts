@@ -455,10 +455,23 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // Текст «Для администратора платформы» (admMd) идёт только во второй текст, не в текст новости.
     const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());
     expect(withAdm.map((x) => x.id)).toEqual(expect.arrayContaining(['v123', 'v124']));
+    // Ни одна строка второго текста (кроме заголовков разделов и коротких подписей) не попала в текст
+    // и короткое описание той же новости.
+    const plain = (line: string) =>
+      line
+        .replace(/^[\s>*\-\d.]+/, '')
+        .replace(/\*\*|`/g, '')
+        .trim();
     for (const x of withAdm) {
-      expect(rows.find((r) => r.id === x.id)?.md ?? '').not.toContain(
-        '## Для администратора платформы',
-      );
+      const row = rows.find((r) => r.id === x.id);
+      expect(row?.md ?? '').not.toContain('## Для администратора платформы');
+      const leaked = x
+        .admMd!.split('\n')
+        .filter((line) => !line.trimStart().startsWith('#'))
+        .map(plain)
+        .filter((line) => line.length >= 20)
+        .filter((line) => (row?.md ?? '').includes(line) || (row?.short ?? '').includes(line));
+      expect(leaked, x.id).toEqual([]);
     }
     // Второй текст v123 есть; подпись «Для администратора платформы» экран ставит сам (с прототипа v125
     // её нет и в тексте).

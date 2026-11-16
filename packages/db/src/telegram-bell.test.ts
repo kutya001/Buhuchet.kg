@@ -26,6 +26,7 @@ import {
   bellSeenAll,
   bellSyncLeads,
   bellSyncNews,
+  bellOwnerUsers,
   bellUnseen,
   contractorBellStaff,
   insertBellRows,
@@ -390,6 +391,15 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     expect(await inA(acc.userId, (tx) => bellRead(tx, after.items[0]!.id, NOW))).toEqual({
       newsId: 'bell-n1',
     });
+    // Разбор новостей перевёл новость в «Только режим Админка» (`db:seed --update`, доработки 16.11.2026,
+    // блок 4, пункт 5) — лежавшую строку не видно (счётчик идёт тем же условием `seen`); вернули «Для
+    // всех» — видна снова.
+    await db.admin.db.update(news).set({ audience: 'adm' }).where(eq(news.id, 'bell-n1'));
+    expect((await inA(acc.userId, (tx) => bellPage(tx, ALL, { tab: 'news' }))).items).toEqual([]);
+    await db.admin.db.update(news).set({ audience: 'all' }).where(eq(news.id, 'bell-n1'));
+    expect((await inA(acc.userId, (tx) => bellPage(tx, ALL, { tab: 'news' }))).items).toHaveLength(
+      1,
+    );
     // Сняли с публикации — строки не видно.
     await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-n1'));
     expect((await inA(acc.userId, (tx) => bellPage(tx, ALL, { tab: 'news' }))).items).toEqual([]);
@@ -699,5 +709,47 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
           .where(eq(organizations.id, b.orgId));
       }
     });
+  });
+
+  it('кому «Это не я»: действующие владельцы своей организации, кроме нажавшего; заблокированный и уволенный — нет', async () => {
+    const c = await createOrganization(db.app.db, {
+      name: 'Организация В',
+      inn: '03811201810458',
+      slug: 'bell-c',
+      owner: { fullName: 'Владелец', login: 'bell-owner-c', passwordHash: 'x' },
+    });
+    const inC = <T>(fn: Fn<T>) => withOrgContext(db.app.db, { orgId: c.orgId, userId: null }, fn);
+    const ownerRole = c.roles.find((r) => r.isOwner)!;
+    const staff = c.roles.find((r) => r.templateCode === 'acc')!;
+    const add = (login: string, role: typeof ownerRole) =>
+      withOrgContext(db.app.db, { orgId: c.orgId, userId: c.ownerUserId }, async (tx) => {
+        const employeeId = await createEmployee(tx, {
+          fullName: 'Сотрудник',
+          shortName: 'Сотрудник',
+          login,
+          passwordHash: 'x',
+          phone: null,
+          role,
+        });
+        const [e] = await tx
+          .select({ userId: employees.userId })
+          .from(employees)
+          .where(eq(employees.id, employeeId));
+        return e!.userId;
+      });
+    const second = await add('bell-owner-c2', ownerRole);
+    const blocked = await add('bell-owner-c3', ownerRole);
+    const fired = await add('bell-owner-c4', ownerRole);
+    const presser = await add('bell-acc-c', staff);
+    await db.admin.db.update(users).set({ blocked: true }).where(eq(users.id, blocked));
+    await db.admin.db.update(employees).set({ active: false }).where(eq(employees.userId, fired));
+    expect(await inC((tx) => bellOwnerUsers(tx, c.orgId, presser))).toEqual([
+      c.ownerUserId,
+      second,
+    ]);
+    expect(await inC((tx) => bellOwnerUsers(tx, c.orgId, c.ownerUserId))).toEqual([second]);
+    // Чужая организация — ни одного: и условие запроса, и RLS.
+    expect(await inC((tx) => bellOwnerUsers(tx, a.orgId, presser))).toEqual([]);
+    expect(await inA(null, (tx) => bellOwnerUsers(tx, c.orgId, null))).toEqual([]);
   });
 });

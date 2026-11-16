@@ -655,6 +655,35 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     expect(rework[0]!.text).toContain('Сверить остатки по кассе');
     expect(rework[0]!.text).toContain('Нет акта сверки');
     expect((await page('acc-a', 'tasks')).items.map((x) => x.event)).toEqual(['task_rework']);
+
+    // Подтверждена и отменена — исполнителю, тому же, кому сообщение Telegram (приёмка «Колокольчик против
+    // Telegram», «Задачи»).
+    expect((await call('acc-a', 'POST', `/api/tasks/${task.id}/done`, {})).status).toBe(200);
+    const ok = await call('owner-a', 'POST', `/api/tasks/${task.id}/confirm`, {});
+    expect(ok.status, await ok.clone().text()).toBe(200);
+    const confirmed = await rowsOf(person('acc-a').userId, 'task_confirmed');
+    expect(confirmed.map((r) => [r.kind, r.targetKind, r.targetId, r.text])).toEqual([
+      ['tasks', 'task', task.id, 'Задача подтверждена: Сверить остатки по кассе'],
+    ]);
+    const other = await call('owner-a', 'POST', '/api/tasks', {
+      title: 'Собрать акты',
+      description: '',
+      categoryCode: 'КАТ-001',
+      contractorId: cp,
+      executorEmployeeId: person('acc-a').employeeId,
+      term: 'day',
+      dueDate: '2026-11-27',
+      needFile: false,
+      confirm: false,
+    });
+    const second = Task.parse(await other.json());
+    const cancel = await call('owner-a', 'POST', `/api/tasks/${second.id}/cancel`);
+    expect(cancel.status, await cancel.clone().text()).toBe(200);
+    const cancelled = await rowsOf(person('acc-a').userId, 'task_cancelled');
+    expect(cancelled.map((r) => [r.targetId, r.text])).toEqual([
+      [second.id, 'Задача отменена: Собрать акты'],
+    ]);
+    expect(await rowsOf(f.a.ownerUserId, 'task_cancelled')).toEqual([]);
   });
 
   it('страница контрагента закрыта после неверных кодов — строка ответственному и без бота, одна за день', async () => {
