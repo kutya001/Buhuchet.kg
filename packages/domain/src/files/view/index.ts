@@ -88,7 +88,7 @@ export async function parseFileView(name: string, bytes: Uint8Array): Promise<Fi
       const { text } = decodeText(bytes);
       const { rows, total } = parseCsv(text, SHEET_MAX_ROWS);
       const base = name.replace(/\.[^.]*$/, '') || name;
-      return { kind: 'sheet', sheets: [csvSheet(base, rows, total)] };
+      return capBookText({ kind: 'sheet', sheets: [csvSheet(base, rows, total)] });
     }
     case 'docx':
       return isZip(bytes) ? parseDocx(openZip(bytes)) : { kind: 'none' };

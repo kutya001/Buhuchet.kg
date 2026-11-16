@@ -21,6 +21,35 @@ import type { Zip } from './zip';
 
 /** Слайдов в окне — не больше. */
 export const SLIDES_MAX = 300;
+/** Фигур, абзацев, кусков текста и ячеек таблиц на одном слайде — не больше: окно рисует слайд целиком. */
+export const SLIDE_MAX_PARTS = 5_000;
+/**
+ * Того же во всей презентации — не больше: модель копируется из потока разбора в окно, а одну часть
+ * слайда файл может назвать хоть 300 раз.
+ */
+export const SLIDES_MAX_PARTS = 200_000;
+/** Знаков текста во всей презентации — не больше. */
+export const SLIDES_MAX_CHARS = 16_000_000;
+
+/** Сколько ещё можно взять в модель; считается во время разбора. */
+interface SlideBudget {
+  slide: number;
+  deck: number;
+  chars: number;
+  cut: boolean;
+}
+
+/** Ещё одна фигура, абзац, кусок текста или ячейка: места нет — false, презентация показана не целиком. */
+function takePart(b: SlideBudget, chars = 0): boolean {
+  if (b.slide <= 0 || b.deck <= 0 || b.chars < chars) {
+    b.cut = true;
+    return false;
+  }
+  b.slide--;
+  b.deck--;
+  b.chars -= chars;
+  return true;
+}
 
 /** Положение на слайде: доли ширины и высоты слайда (0…1). */
 export interface SlideBox {
@@ -168,9 +197,10 @@ function masterSizes(root: XEl | null): MasterSizes {
   };
 }
 
-function parasOf(txBody: XEl, defSize: (lvl: number) => number): SlidePara[] {
+function parasOf(txBody: XEl, defSize: (lvl: number) => number, budget: SlideBudget): SlidePara[] {
   const out: SlidePara[] = [];
   for (const p of childEls(txBody, 'p')) {
+    if (!takePart(budget)) break;
     const ppr = childEl(p, 'pPr');
     const lvl = Number(attrOf(ppr, 'lvl') ?? 0);
     const para: SlidePara = { runs: [] };
@@ -186,11 +216,13 @@ function parasOf(txBody: XEl, defSize: (lvl: number) => number): SlidePara[] {
       const n = localName(r.name);
       if (n !== 'r' && n !== 'fld' && n !== 'br') continue;
       if (n === 'br') {
+        if (!takePart(budget)) break;
         para.runs.push({ t: '\n' });
         continue;
       }
       const rp = childEl(r, 'rPr');
       const run: SlideRun = { t: textOf(childEl(r, 't')) };
+      if (!takePart(budget, run.t.length)) break;
       if (attrOf(rp, 'b') === '1') run.b = true;
       if (attrOf(rp, 'i') === '1') run.i = true;
       const u = attrOf(rp, 'u');
@@ -214,6 +246,7 @@ interface SlideCtx {
   sizes: MasterSizes;
   rels: Map<string, Rel>;
   bag: ImageBag;
+  budget: SlideBudget;
 }
 
 type Tf = (x: Xfrm) => Xfrm;
@@ -226,6 +259,7 @@ async function shapesOf(tree: XEl, ctx: SlideCtx, tf: Tf, out: SlideItem[]): Pro
   for (const sp of tree.kids) {
     if (typeof sp === 'string') continue;
     const n = localName(sp.name);
+    if ((n === 'sp' || n === 'pic' || n === 'graphicFrame') && !takePart(ctx.budget)) return;
     if (n === 'sp') {
       const ph = phOf(sp);
       const xf = xfrmOf(sp) ?? (ph ? phXfrm(ph, ctx.layers) : null);
@@ -235,7 +269,7 @@ async function shapesOf(tree: XEl, ctx: SlideCtx, tf: Tf, out: SlideItem[]): Pro
       const isTitle = !!ph && titleType(ph.type);
       const def = (lvl: number) =>
         isTitle ? ctx.sizes.title : ph ? (ctx.sizes.body[Math.min(lvl, 4)] ?? 18) : ctx.sizes.other;
-      const paras = txBody ? parasOf(txBody, def) : [];
+      const paras = txBody ? parasOf(txBody, def, ctx.budget) : [];
       const anchor = attrOf(childEl(txBody, 'bodyPr'), 'anchor');
       const item: SlideItem = { k: 'text', ...box(xf), paras };
       if (fill) item.fill = fill;
@@ -255,9 +289,17 @@ async function shapesOf(tree: XEl, ctx: SlideCtx, tf: Tf, out: SlideItem[]): Pro
       const ext = childEl(xf, 'ext');
       const tbl = findEl(sp, 'tbl');
       if (!off || !ext || !tbl) continue;
-      const rows = childEls(tbl, 'tr').map((tr) =>
-        childEls(tr, 'tc').map((tc) => childEls(childEl(tc, 'txBody'), 'p').map(textOf).join('\n')),
-      );
+      const rows: string[][] = [];
+      for (const tr of childEls(tbl, 'tr')) {
+        if (!takePart(ctx.budget)) break;
+        const row: string[] = [];
+        for (const tc of childEls(tr, 'tc')) {
+          const text = childEls(childEl(tc, 'txBody'), 'p').map(textOf).join('\n');
+          if (!takePart(ctx.budget, text.length)) break;
+          row.push(text);
+        }
+        rows.push(row);
+      }
       out.push({
         k: 'table',
         ...box({
@@ -306,7 +348,18 @@ export async function parsePptx(zip: Zip): Promise<SlidesView> {
   const slides: SlideModel[] = [];
   const layoutCache = new Map<string, { layers: PhLayer[]; sizes: MasterSizes }>();
   const ids = childEls(childEl(pres ?? undefined, 'sldIdLst'), 'sldId');
+  const budget: SlideBudget = {
+    slide: SLIDE_MAX_PARTS,
+    deck: SLIDES_MAX_PARTS,
+    chars: SLIDES_MAX_CHARS,
+    cut: false,
+  };
   for (const sid of ids.slice(0, SLIDES_MAX)) {
+    if (budget.deck <= 0 || budget.chars <= 0) {
+      budget.cut = true;
+      break;
+    }
+    budget.slide = SLIDE_MAX_PARTS;
     const rel = rels.get(prefixedAttr(sid, 'id') ?? '');
     if (!rel || rel.external || rel.type !== 'slide') continue;
     const src = await zip.text(rel.part);
@@ -341,11 +394,18 @@ export async function parsePptx(zip: Zip): Promise<SlidesView> {
     if (tree)
       await shapesOf(
         tree,
-        { W, H, layers: lay.layers, sizes: lay.sizes, rels: srels, bag },
+        { W, H, layers: lay.layers, sizes: lay.sizes, rels: srels, bag, budget },
         (x) => x,
         model.items,
       );
     slides.push(model);
   }
-  return { kind: 'slides', w: W, h: H, slides, images: bag.images, cut: ids.length > SLIDES_MAX };
+  return {
+    kind: 'slides',
+    w: W,
+    h: H,
+    slides,
+    images: bag.images,
+    cut: ids.length > SLIDES_MAX || budget.cut,
+  };
 }

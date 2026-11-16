@@ -14,6 +14,7 @@ import {
   sheetFormatCode,
   sheetMergeCollector,
   sheetTextBudget,
+  takeSheetCell,
   type SheetTextBudget,
   type BookView,
   type SheetCell,
@@ -244,7 +245,7 @@ interface XlsXf {
   wrap?: true;
 }
 
-export function parseXls(file: Uint8Array): BookView {
+export function parseXls(file: Uint8Array, budget: SheetTextBudget = sheetTextBudget()): BookView {
   const wb = cfbStream(file, 'Workbook');
   if (!wb) throw new ViewError('xls_bad');
   const fonts: { b: boolean; i: boolean; u: boolean }[] = [];
@@ -290,8 +291,7 @@ export function parseXls(file: Uint8Array): BookView {
     }
   }
   const sheets: SheetView[] = [];
-  // Знаки ячеек — общим счётом на книгу: следующий лист берёт остаток.
-  const budget = sheetTextBudget();
+  // Знаки и ячейки — общим счётом на книгу: следующий лист берёт остаток.
   for (const meta of sheetsMeta.slice(0, SHEET_MAX_SHEETS)) {
     if (meta.pos >= wb.length) continue;
     sheets.push(parseXlsSheet(wb, meta, xfs, sst, date1904, budget));
@@ -308,7 +308,7 @@ function parseXlsSheet(
   budget: SheetTextBudget,
 ): SheetView {
   const rows: (SheetCell | null)[][] = [];
-  // Строка, на которой кончился предел знаков книги: с неё строки не показываются.
+  // Строка, на которой кончился предел знаков или ячеек книги: с неё строки не показываются.
   let textCutAt = -1;
   const heights: Record<number, number> = {};
   const hiddenRows: number[] = [];
@@ -328,11 +328,10 @@ function parseXlsSheet(
       colsCut = true;
       return;
     }
-    if (budget.left <= 0) {
+    if (!takeSheetCell(budget, cell)) {
       if (textCutAt < 0 || r < textCutAt) textCutAt = r;
       return;
     }
-    budget.left -= cell.v.length;
     while (rows.length <= r) rows.push([]);
     const row = rows[r]!;
     while (row.length < c) row.push(null);

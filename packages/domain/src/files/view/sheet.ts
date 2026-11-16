@@ -18,14 +18,36 @@ export const SHEET_MERGE_CELLS_BUDGET = 4_000_000;
 export const SHEET_MAX_CELL_CHARS = 32_767;
 /** Знаков во всех ячейках книги — не больше: модель копируется из потока разбора в окно. */
 export const SHEET_MAX_BOOK_CHARS = 16_000_000;
+/**
+ * Ячеек во всей книге — не больше (полный лист 5 000 × 256 — 1,28 млн): пустая ячейка с заливкой
+ * не стоит ни знака, но окно её копирует и рисует.
+ */
+export const SHEET_MAX_BOOK_CELLS = 1_000_000;
 /** Код формата числа длиннее — «Общий» (предел Excel): «@» в коде размножает текст ячейки. */
 export const SHEET_MAX_FORMAT_CHARS = 255;
 
-/** Сколько знаков ячеек книги ещё можно взять; считается во время разбора, а не после. */
+/** Сколько знаков и ячеек книги ещё можно взять; считается во время разбора, а не после. */
 export interface SheetTextBudget {
   left: number;
+  cells: number;
 }
-export const sheetTextBudget = (): SheetTextBudget => ({ left: SHEET_MAX_BOOK_CHARS });
+export const sheetTextBudget = (): SheetTextBudget => ({
+  left: SHEET_MAX_BOOK_CHARS,
+  cells: SHEET_MAX_BOOK_CELLS,
+});
+/** Предел книги исчерпан: дальше строки не собираются. */
+export const sheetBudgetSpent = (b: SheetTextBudget) => b.left <= 0 || b.cells <= 0;
+/** Взять ячейку в счёт книги (знаки и сама ячейка); места нет — false, ячейка не сохраняется. */
+export function takeSheetCell(b: SheetTextBudget, cell: SheetCell): boolean {
+  if (b.cells <= 0 || b.left < cell.v.length) {
+    b.cells = 0;
+    b.left = 0;
+    return false;
+  }
+  b.cells--;
+  b.left -= cell.v.length;
+  return true;
+}
 
 /** Код формата из файла: длиннее предела — «Общий». */
 export const sheetFormatCode = (code: string) =>
@@ -108,25 +130,31 @@ export interface BookView {
 }
 
 /**
- * Предел текста книги для окна: ячейка — до `SHEET_MAX_CELL_CHARS` знаков, вся книга — до
- * `SHEET_MAX_BOOK_CHARS`; дальше строки не показываются («Показаны первые …», как у предела строк).
- * Одна общая строка XLSX на тысячах ячеек при передаче из потока разбора копируется в каждую.
+ * Предел книги для окна — второй рубеж после счёта при разборе: ячейка — до `SHEET_MAX_CELL_CHARS`
+ * знаков, вся книга — до `SHEET_MAX_BOOK_CHARS` знаков и `SHEET_MAX_BOOK_CELLS` ячеек; дальше строки
+ * не показываются («Показаны первые …», как у предела строк). Одна общая строка XLSX на тысячах
+ * ячеек при передаче из потока разбора копируется в каждую.
  */
 export function capBookText(book: BookView): BookView {
   let left = SHEET_MAX_BOOK_CHARS;
+  let cells = SHEET_MAX_BOOK_CELLS;
   for (const sheet of book.sheets) {
     for (let r = 0; r < sheet.rows.length; r++) {
       const row = sheet.rows[r]!;
       let size = 0;
+      let count = 0;
       for (const cell of row) {
         if (!cell) continue;
         if (cell.v.length > SHEET_MAX_CELL_CHARS) cell.v = cell.v.slice(0, SHEET_MAX_CELL_CHARS);
         size += cell.v.length;
+        count++;
       }
       left -= size;
-      if (left < 0) {
+      cells -= count;
+      if (left < 0 || cells < 0) {
         sheet.rows.length = r;
         left = 0;
+        cells = 0;
         break;
       }
     }

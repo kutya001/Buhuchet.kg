@@ -9,6 +9,7 @@ import {
   colLetters,
   csvSheet,
   looksNumeric,
+  SHEET_MAX_BOOK_CELLS,
   SHEET_MAX_BOOK_CHARS,
   SHEET_MAX_CELL_CHARS,
   SHEET_MAX_COLS,
@@ -233,7 +234,7 @@ describe('Excel XLSX в окне просмотра', () => {
       (_, i) => `<row r="${i + 1}"><c r="A${i + 1}" t="s"><v>0</v></c></row>`,
     ).join('');
     const ws = `<worksheet><sheetData>${rows}</sheetData></worksheet>`;
-    const budget = { left: 2 * long.length };
+    const budget = { left: 2 * long.length, cells: SHEET_MAX_BOOK_CELLS };
     const s = parseWorksheet('a', ws, [{ fmt: '@@' }], [long], false, budget);
     expect(s.rows.length).toBeLessThanOrEqual(3);
     expect(s.totalRows).toBe(50);
@@ -263,6 +264,46 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(book.sheets[1]!.rows.length).toBeLessThan(rowsPerSheet);
     expect(book.sheets[2]!.rows).toHaveLength(0);
     expect(book.sheets[2]!.totalRows).toBe(rowsPerSheet);
+  });
+
+  it('ячейки книги считаются и пустые с заливкой: строка на пределе не показывается (защита, п. И-12)', () => {
+    // Пустая ячейка ошибки со стилем-заливкой не стоит ни знака, но окно её рисует.
+    const fill = [{ fmt: 'General', bg: '#FFFF00' }];
+    const ws = `<worksheet><sheetData>${Array.from(
+      { length: 10 },
+      (_, i) => `<row r="${i + 1}">${'<c t="e"></c>'.repeat(4)}</row>`,
+    ).join('')}</sheetData></worksheet>`;
+    const budget = { left: SHEET_MAX_BOOK_CHARS, cells: 10 };
+    const s = parseWorksheet('a', ws, fill, [], false, budget);
+    // 10 ячеек — две строки целиком и половина третьей: третья не показывается.
+    expect(s.rows).toHaveLength(2);
+    expect(s.rows.flat().filter(Boolean)).toHaveLength(8);
+    expect(s.rows[0]![0]).toEqual({ v: '', al: 'c', bg: '#FFFF00' });
+    expect(s.totalRows).toBe(10);
+    expect(budget.cells).toBe(0);
+    // Следующий лист той же книги ничего не берёт.
+    expect(parseWorksheet('b', ws, fill, [], false, budget).rows).toHaveLength(0);
+
+    // Второй рубеж — после разбора: ячейки книги считаются так же, как знаки.
+    const cell = { v: '', bg: '#FFFF00' };
+    const full = Array.from({ length: SHEET_MAX_COLS }, () => cell);
+    const big = (name: string) => ({
+      name,
+      cols: [],
+      rows: Array.from({ length: 3_000 }, () => full),
+      heights: {},
+      hiddenRows: [],
+      merges: [],
+      totalRows: 3_000,
+      colsCut: false,
+    });
+    const book = capBookText({ kind: 'sheet', sheets: [big('1'), big('2')] });
+    expect(book.sheets[0]!.rows).toHaveLength(3_000);
+    const shown = book.sheets.reduce((n, x) => n + x.rows.length * SHEET_MAX_COLS, 0);
+    expect(shown).toBeLessThanOrEqual(SHEET_MAX_BOOK_CELLS);
+    expect(book.sheets[1]!.rows).toHaveLength(
+      Math.floor((SHEET_MAX_BOOK_CELLS - 3_000 * SHEET_MAX_COLS) / SHEET_MAX_COLS),
+    );
   });
 
   it('помощники листа и CSV', () => {

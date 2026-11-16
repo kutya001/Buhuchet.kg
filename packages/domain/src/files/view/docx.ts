@@ -28,6 +28,13 @@ export const DOC_MAX_LIST_TEMPLATE = 255;
 export const DOC_MAX_LABEL = 64;
 /** Знаков текста во всём документе — не больше: модель копируется из потока разбора в окно. */
 export const DOC_MAX_CHARS = 16_000_000;
+/**
+ * Строк и ячеек всех таблиц документа вместе — не больше: пустая `<w:tc/>` не тратит ни абзаца,
+ * ни знака, а окно рисует каждую ячейку.
+ */
+export const DOC_MAX_CELLS = 50_000;
+/** Столбцов сетки, которые занимает одна ячейка, — не больше (у Word — до 63 столбцов). */
+export const DOC_MAX_SPAN = 63;
 
 export interface DocRun {
   t: string;
@@ -257,6 +264,8 @@ interface Ctx {
   runs: number;
   /** Знаков текста уже в модели. */
   chars: number;
+  /** Строк и ячеек таблиц уже в модели. */
+  cells: number;
   cut: boolean;
 }
 
@@ -369,16 +378,29 @@ async function paraOf(p: XEl, ctx: Ctx): Promise<DocPara> {
   return para;
 }
 
+/** Ещё одна строка или ячейка таблицы: после `DOC_MAX_CELLS` — нет, документ показан не целиком. */
+function takeCell(ctx: Ctx): boolean {
+  if (ctx.cells >= DOC_MAX_CELLS) {
+    ctx.cut = true;
+    return false;
+  }
+  ctx.cells++;
+  return true;
+}
+
 async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
   const rows: DocCell[][] = [];
   // Ячейка, начавшая объединение по вертикали, по номеру столбца сетки.
   const vStart = new Map<number, DocCell>();
+  let full = false;
   for (const tr of childEls(tbl, 'tr')) {
+    if (full || !takeCell(ctx)) break;
     const row: DocCell[] = [];
     let grid = 0;
     for (const tc of childEls(tr, 'tc')) {
       const pr = childEl(tc, 'tcPr');
-      const span = Math.max(1, Number(attrOf(childEl(pr, 'gridSpan'), 'val') ?? 1));
+      const spanVal = Math.floor(Number(attrOf(childEl(pr, 'gridSpan'), 'val') ?? 1));
+      const span = Math.min(DOC_MAX_SPAN, Math.max(1, spanVal || 1));
       const vm = childEl(pr, 'vMerge');
       const vmVal = attrOf(vm, 'val');
       if (vm && vmVal !== 'restart') {
@@ -386,6 +408,10 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
         if (start) start.rowSpan = (start.rowSpan ?? 1) + 1;
         grid += span;
         continue;
+      }
+      if (!takeCell(ctx)) {
+        full = true;
+        break;
       }
       const cell: DocCell = { blocks: await blocksOf(tc, ctx) };
       if (span > 1) cell.span = span;
@@ -443,6 +469,7 @@ export async function parseDocx(zip: Zip): Promise<DocView> {
     count: 0,
     runs: 0,
     chars: 0,
+    cells: 0,
     cut: false,
   };
   const root = parseXmlTree(src, 3_000_000).root;

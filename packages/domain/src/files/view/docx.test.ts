@@ -3,6 +3,7 @@ import {
   parseDocx,
   numberText,
   DOC_MAX_BLOCKS,
+  DOC_MAX_CELLS,
   DOC_MAX_LABEL,
   DOC_MAX_LIST_START,
   DOC_MAX_RUNS,
@@ -195,6 +196,27 @@ describe('Word DOCX в окне просмотра', () => {
     const b = runs.blocks[0];
     expect(b?.k === 'p' ? b.runs.length : 0).toBe(DOC_MAX_RUNS);
     expect(runs.cut).toBe(true);
+  });
+
+  it('пустые ячейки таблиц считаются: строки и ячейки всех таблиц — до предела (защита, п. И-12)', async () => {
+    // Таблица 300 × 200 пустых `<w:tc/>`: ни абзаца, ни знака, но окно рисует каждую ячейку.
+    const tr = `<w:tr>${'<w:tc/>'.repeat(200)}</w:tr>`;
+    const doc = await parseDocx(openZip(await docxBytes(`<w:tbl>${tr.repeat(300)}</w:tbl>`)));
+    const t = doc.blocks[0];
+    const rows = t?.k === 't' ? t.rows : [];
+    const units = rows.length + rows.reduce((n, r) => n + r.length, 0);
+    expect(units).toBeLessThanOrEqual(DOC_MAX_CELLS);
+    expect(units).toBeGreaterThan(DOC_MAX_CELLS - 200);
+    expect(doc.cut).toBe(true);
+
+    // Ячейка на сотни столбцов сетки — не шире предела Word; неверное число — одна ячейка.
+    const span = (v: string) => `<w:tc><w:tcPr><w:gridSpan w:val="${v}"/></w:tcPr></w:tc>`;
+    const wide = await parseDocx(
+      openZip(await docxBytes(`<w:tbl><w:tr>${span('100000')}${span('abc')}</w:tr></w:tbl>`)),
+    );
+    const w = wide.blocks[0];
+    expect(w?.k === 't' ? w.rows[0]!.map((c) => c.span) : null).toEqual([63, undefined]);
+    expect(wide.cut).toBe(false);
   });
 
   it('предел абзацев и документ без тела', async () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cfbBytes, xlsWorkbookStream, type XlsSheetSpec } from './fixtures';
+import { SHEET_MAX_BOOK_CHARS } from './sheet';
 import { cfbStream, isCfb, parseXls } from './xls';
 import { ViewError } from './xml';
 
@@ -114,6 +115,31 @@ describe('старый Excel XLS в окне просмотра', () => {
     expect(big!.rows).toHaveLength(5000);
     expect(big!.totalRows).toBe(50_000);
     expect(dates!.rows[0]![0]!.v).toBe('01.01.1904');
+  });
+
+  it('ячейки книги — общим счётом на листы: строка на пределе не показывается (защита, п. И-12)', () => {
+    const cells = Array.from({ length: 10 }, (_, i) => ({
+      r: i,
+      c: 0,
+      k: 'mulrk' as const,
+      v: [1, 2, 3, 4],
+    }));
+    const file = cfbBytes([
+      {
+        name: 'Workbook',
+        data: xlsWorkbookStream([
+          { name: 'Первый', cells },
+          { name: 'Второй', cells },
+        ]),
+      },
+    ]);
+    const budget = { left: SHEET_MAX_BOOK_CHARS, cells: 10 };
+    const [first, second] = parseXls(file, budget).sheets;
+    // 10 ячеек — две строки по 4 и половина третьей: третья не показывается, число строк — прежнее.
+    expect(first!.rows).toHaveLength(2);
+    expect(first!.totalRows).toBe(10);
+    expect(second!.rows).toHaveLength(0);
+    expect(budget.cells).toBe(0);
   });
 
   it('книга с паролем и битые файлы', () => {

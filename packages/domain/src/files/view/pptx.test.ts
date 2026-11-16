@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { pptxBytes, zipBytes } from './fixtures';
-import { parsePptx, SLIDES_MAX } from './pptx';
+import { parsePptx, SLIDE_MAX_PARTS, SLIDES_MAX, SLIDES_MAX_PARTS } from './pptx';
 import { ViewError } from './xml';
 import { openZip } from './zip';
 
@@ -94,6 +94,39 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     const [g, t] = v.slides[0]!.items;
     expect(g).toMatchObject({ k: 'text', x: 0.2, y: 0.2, w: 0.1, h: 0.1 });
     expect(t).toMatchObject({ k: 'table', rows: [['Налог', 'Сумма']] });
+  });
+
+  it('фигуры, абзацы и ячейки таблиц — в пределах слайда и всей презентации (защита, п. И-12)', async () => {
+    const shape = (k: number) =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="${k + 10}" name="t"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>x</a:t></a:r></a:p></p:txBody></p:sp>`;
+    // Слайд из множества фигур: каждая — фигура, абзац и кусок текста.
+    const crowded = Array.from({ length: SLIDE_MAX_PARTS }, (_, k) => shape(k)).join('');
+    const one = await parsePptx(openZip(await pptxBytes([crowded])));
+    const parts = (items: (typeof one.slides)[number]['items']) =>
+      items.reduce(
+        (n, it) =>
+          n +
+          1 +
+          (it.k === 'text' ? it.paras.reduce((m, p) => m + 1 + p.runs.length, 0) : 0) +
+          (it.k === 'table' ? it.rows.reduce((m, r) => m + 1 + r.length, 0) : 0),
+        0,
+      );
+    expect(parts(one.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
+    expect(one.cut).toBe(true);
+
+    // Таблица 200 × 100 пустых ячеек на слайде — тоже в пределе слайда.
+    const tbl = `<p:graphicFrame><p:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></p:xfrm><a:graphic><a:graphicData><a:tbl>${`<a:tr>${'<a:tc/>'.repeat(100)}</a:tr>`.repeat(200)}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    const table = await parsePptx(openZip(await pptxBytes([tbl])));
+    expect(parts(table.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
+    expect(table.cut).toBe(true);
+
+    // Много тяжёлых слайдов: вся презентация — до предела, дальше слайды не берутся.
+    const heavy = Array.from({ length: 1_400 }, (_, k) => shape(k)).join('');
+    const deck = await parsePptx(openZip(await pptxBytes(Array.from({ length: 60 }, () => heavy))));
+    const total = deck.slides.reduce((n, s) => n + parts(s.items), 0);
+    expect(total).toBeLessThanOrEqual(SLIDES_MAX_PARTS);
+    expect(deck.slides.length).toBeLessThan(60);
+    expect(deck.cut).toBe(true);
   });
 
   it('предел слайдов и битая презентация', async () => {

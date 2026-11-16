@@ -13,9 +13,12 @@ import {
   SHEET_MAX_COLS,
   SHEET_MAX_ROWS,
   SHEET_MAX_SHEETS,
+  clipCellText,
+  sheetBudgetSpent,
   sheetFormatCode,
   sheetMergeCollector,
   sheetTextBudget,
+  takeSheetCell,
   type SheetTextBudget,
   type BookView,
   type SheetCell,
@@ -139,12 +142,12 @@ export function sheetCell(
   if (t === 's') cell = { v: formatCellText(sst[Number(raw)] ?? '', fmt) };
   else if (t === 'str' || t === 'inlineStr') cell = { v: formatCellText(raw, fmt) };
   else if (t === 'b') cell = { v: boolText(raw), al: 'c' };
-  else if (t === 'e') cell = { v: raw, al: 'c' };
+  else if (t === 'e') cell = { v: clipCellText(raw), al: 'c' };
   else if (t === 'd') {
     const ms = Date.parse(
       raw.length <= 10 ? `${raw}T00:00:00Z` : raw.endsWith('Z') ? raw : `${raw}Z`,
     );
-    if (Number.isNaN(ms)) cell = { v: raw };
+    if (Number.isNaN(ms)) cell = { v: clipCellText(raw) };
     else
       cell = {
         v: formatCellNumber(
@@ -157,7 +160,9 @@ export function sheetCell(
   } else {
     if (raw.trim() === '') return null;
     const n = Number(raw);
-    cell = Number.isFinite(n) ? { v: formatCellNumber(n, fmt, date1904), num: true } : { v: raw };
+    cell = Number.isFinite(n)
+      ? { v: formatCellNumber(n, fmt, date1904), num: true }
+      : { v: clipCellText(raw) };
   }
   if (cell.v === '' && !xf?.bg) return null;
   if (xf) {
@@ -213,6 +218,8 @@ export function parseWorksheet(
   let inIs = false;
   let rph = 0;
   let cut = false;
+  // Строка, на которой кончился предел книги (знаки или ячейки): с неё строки не показываются.
+  let textCutAt = -1;
   let rowsSeen = 0;
   const dataEnd = (() => {
     const i = src.lastIndexOf('sheetData>');
@@ -225,8 +232,8 @@ export function parseWorksheet(
         rowsSeen++;
         rowIdx = a.r ? Number(a.r) - 1 : rowIdx + 1;
         colIdx = -1;
-        // Предел строк или знаков книги: дальше строки только считаются (`totalRows`).
-        if (rowIdx >= SHEET_MAX_ROWS || budget.left <= 0) {
+        // Предел строк, знаков или ячеек книги: дальше строки только считаются (`totalRows`).
+        if (rowIdx >= SHEET_MAX_ROWS || sheetBudgetSpent(budget)) {
           cut = true;
           return false;
         }
@@ -273,8 +280,10 @@ export function parseWorksheet(
             sst,
             date1904,
           );
-          if (cell) {
-            budget.left -= cell.v.length;
+          if (cell && !takeSheetCell(budget, cell)) {
+            cut = true;
+            if (textCutAt < 0) textCutAt = rowIdx;
+          } else if (cell) {
             const row = rows[rowIdx]!;
             while (row.length < cur.c) row.push(null);
             row[cur.c] = cell;
@@ -291,6 +300,7 @@ export function parseWorksheet(
       if (inV && rph === 0) val += t;
     },
   });
+  if (textCutAt >= 0 && rows.length > textCutAt) rows.length = textCutAt;
   let totalRows = rows.length;
   if (cut) {
     totalRows = Math.max(lastRowNumber(src, dataEnd), rowsSeen);
