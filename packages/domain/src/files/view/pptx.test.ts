@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { pptxBytes, zipBytes } from './fixtures';
-import { parsePptx, SLIDE_MAX_PARTS, SLIDES_MAX, SLIDES_MAX_PARTS } from './pptx';
+import {
+  parsePptx,
+  SLIDE_MAX_FONT_PT,
+  SLIDE_MAX_PARTS,
+  SLIDES_MAX,
+  SLIDES_MAX_PARTS,
+} from './pptx';
 import { ViewError } from './xml';
 import { openZip } from './zip';
 
@@ -135,6 +141,18 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(total).toBeLessThanOrEqual(SLIDES_MAX_PARTS);
     expect(deck.slides.length).toBeLessThan(60);
     expect(deck.cut).toBe(true);
+  });
+
+  it('размер шрифта и уровень абзаца из файла — в пределах (защита, п. И-12)', async () => {
+    const sp = `<p:sp><p:nvSpPr><p:cNvPr id="9" name="t"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:pPr lvl="1000000"/><a:r><a:rPr sz="100000000"/><a:t>x</a:t></a:r></a:p><a:p><a:pPr lvl="1.5"/><a:endParaRPr sz="99999999"/></a:p></p:txBody></p:sp>`;
+    const v = await parsePptx(openZip(await pptxBytes([sp])));
+    const it0 = v.slides[0]!.items[0];
+    expect(it0?.k).toBe('text');
+    if (it0?.k !== 'text') return;
+    expect(it0.paras[0]!.lvl).toBe(8);
+    expect(it0.paras[0]!.runs[0]!.sz).toBe(SLIDE_MAX_FONT_PT);
+    expect(it0.paras[1]!.lvl).toBeUndefined();
+    expect(it0.paras[1]!.runs[0]!.sz).toBe(SLIDE_MAX_FONT_PT);
   });
 
   it('предел слайдов и битая презентация', async () => {

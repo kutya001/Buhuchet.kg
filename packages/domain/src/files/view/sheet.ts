@@ -10,6 +10,8 @@ export const SHEET_MAX_ROWS = 5_000;
 export const SHEET_MAX_COLS = 256;
 /** Листов книги — не больше. */
 export const SHEET_MAX_SHEETS = 100;
+/** Знаков в названии листа — не больше. */
+export const SHEET_MAX_NAME = 100;
 /** Объединений ячеек на лист — не больше. */
 export const SHEET_MAX_MERGES = 5_000;
 /** Ячеек, которые проверка объединений листа просматривает, — не больше (файл не вешает разбор). */
@@ -145,6 +147,8 @@ export function capBookText(book: BookView): BookView {
   let left = SHEET_MAX_BOOK_CHARS;
   let cells = SHEET_MAX_BOOK_CELLS;
   for (const sheet of book.sheets) {
+    // Название листа — вкладка окна (у Excel — до 31 знака).
+    if (sheet.name.length > SHEET_MAX_NAME) sheet.name = sheet.name.slice(0, SHEET_MAX_NAME);
     for (let r = 0; r < sheet.rows.length; r++) {
       const row = sheet.rows[r]!;
       let size = 0;
@@ -192,10 +196,64 @@ export function cellRef(ref: string): [number, number] | null {
   return m ? [Number(m[2]) - 1, colIndex(m[1]!)] : null;
 }
 
-/** Ширина столбца Excel (в знаках) в px. */
-export const colWidthPx = (chars: number) => Math.max(0, Math.round(chars * 7 + 5));
-
 export const DEFAULT_COL_PX = 64;
+/** Ширина столбца — не больше 255 знаков (предел Excel), высота строки — не больше 409 пт. */
+export const SHEET_MAX_COL_PX = 255 * 7 + 5;
+export const SHEET_MAX_ROW_PX = 545;
+
+/** Ширина столбца Excel (в знаках) в px, в пределе; не число — `fallback`. */
+export const colWidthPx = (chars: number, fallback = DEFAULT_COL_PX) =>
+  Number.isFinite(chars)
+    ? Math.min(SHEET_MAX_COL_PX, Math.max(0, Math.round(chars * 7 + 5)))
+    : fallback;
+
+/** Описаний столбцов листа — не больше (каждое окно перебирает до 256 столбцов). */
+export const SHEET_MAX_COL_DEFS = 1_024;
+
+/**
+ * Ширины столбцов листа из файла (`<col>`, COLINFO): номера — целые в пределах 256 столбцов, неверные
+ * описания пропускаются, описаний — не больше `SHEET_MAX_COL_DEFS`. Номера в файле — с 0.
+ */
+export function sheetColDefs() {
+  const defs: { min: number; max: number; px: number }[] = [];
+  return {
+    /** `px` < 0 — ширина по умолчанию. */
+    add(min: number, max: number, px: number) {
+      if (defs.length >= SHEET_MAX_COL_DEFS) return;
+      if (!Number.isInteger(min) || !Number.isInteger(max) || min > max || max < 0) return;
+      if (min >= SHEET_MAX_COLS) return;
+      defs.push({ min: Math.max(0, min), max: Math.min(max, SHEET_MAX_COLS - 1), px });
+    },
+    /** Ширины первых `width` столбцов. */
+    widths(width: number, defPx: number): number[] {
+      const cols = Array.from({ length: width }, () => defPx);
+      for (const d of defs)
+        for (let c = d.min; c <= d.max && c < width; c++) cols[c] = d.px < 0 ? defPx : d.px;
+      return cols;
+    },
+  };
+}
+
+/**
+ * Высоты и скрытые строки листа из файла: только строки окна (0…`SHEET_MAX_ROWS` − 1), высота — в
+ * пределе, скрытая строка — один раз, сколько бы раз файл её ни назвал.
+ */
+export function sheetRowMeta() {
+  const heights: Record<number, number> = {};
+  const hidden = new Set<number>();
+  const shown = (r: number) => Number.isInteger(r) && r >= 0 && r < SHEET_MAX_ROWS;
+  return {
+    heights,
+    height(r: number, px: number) {
+      if (shown(r) && Number.isFinite(px))
+        heights[r] = Math.min(SHEET_MAX_ROW_PX, Math.max(0, Math.round(px)));
+    },
+    hide(r: number) {
+      if (shown(r)) hidden.add(r);
+    },
+    hiddenRows: () => [...hidden].sort((a, b) => a - b),
+  };
+}
 
 /** Число в тексте CSV — выравнивается вправо. */
 export const looksNumeric = (s: string) => /^[-+]?\d[\d\s\u00a0]*([.,]\d+)?%?$/.test(s.trim());

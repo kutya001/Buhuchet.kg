@@ -12,7 +12,9 @@ import {
   SHEET_MAX_ROWS,
   SHEET_MAX_SHEETS,
   sheetFormatCode,
+  sheetColDefs,
   sheetMergeCollector,
+  sheetRowMeta,
   sheetSlots,
   sheetTextBudget,
   takeSheetCell,
@@ -311,10 +313,9 @@ function parseXlsSheet(
   const rows: (SheetCell | null)[][] = [];
   // Строка, на которой кончился предел знаков или ячеек книги: с неё строки не показываются.
   let textCutAt = -1;
-  const heights: Record<number, number> = {};
-  const hiddenRows: number[] = [];
+  const rowMeta = sheetRowMeta();
   const merges = sheetMergeCollector();
-  const colDef: { min: number; max: number; px: number }[] = [];
+  const colDefs = sheetColDefs();
   let defPx = DEFAULT_COL_PX;
   let dimRows = 0;
   let maxRow = -1;
@@ -380,20 +381,19 @@ function parseXlsSheet(
       case 0x007d:
         if (d.length >= 10) {
           const hidden = (rdv.getUint16(8, true) & 1) !== 0;
-          colDef.push({
-            min: rdv.getUint16(0, true),
-            max: Math.min(rdv.getUint16(2, true), SHEET_MAX_COLS - 1),
-            px: hidden ? 0 : colWidthPx(rdv.getUint16(4, true) / 256),
-          });
+          colDefs.add(
+            rdv.getUint16(0, true),
+            rdv.getUint16(2, true),
+            hidden ? 0 : colWidthPx(rdv.getUint16(4, true) / 256),
+          );
         }
         break;
       case 0x0208:
         if (d.length >= 16 && rw < SHEET_MAX_ROWS) {
           const h = rdv.getUint16(6, true);
           const flags = rdv.getUint16(12, true);
-          if (flags & 0x20) hiddenRows.push(rw);
-          if (flags & 0x40 && !(h & 0x8000))
-            heights[rw] = Math.round(((h & 0x7fff) / 20) * (4 / 3));
+          if (flags & 0x20) rowMeta.hide(rw);
+          if (flags & 0x40 && !(h & 0x8000)) rowMeta.height(rw, ((h & 0x7fff) / 20) * (4 / 3));
         }
         break;
       case 0x00fd:
@@ -466,14 +466,12 @@ function parseXlsSheet(
   if (textCutAt >= 0 && rows.length > textCutAt) rows.length = textCutAt;
   for (const m of merges.list) maxCol = Math.max(maxCol, m[3]);
   const width = Math.min(SHEET_MAX_COLS, maxCol + 1);
-  const cols = Array.from({ length: width }, () => defPx);
-  for (const c of colDef) for (let i = c.min; i <= c.max && i < width; i++) cols[i] = c.px;
   return {
     name: meta.name,
-    cols,
+    cols: colDefs.widths(width, defPx),
     rows,
-    heights,
-    hiddenRows,
+    heights: rowMeta.heights,
+    hiddenRows: rowMeta.hiddenRows(),
     merges: merges.list,
     totalRows: Math.max(rows.length, maxRow + 1, dimRows),
     colsCut,

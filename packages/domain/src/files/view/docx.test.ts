@@ -230,6 +230,54 @@ describe('Word DOCX в окне просмотра', () => {
     expect(plain.cut).toBe(true);
   });
 
+  it('«лестница» объединений по вертикали не раздвигает таблицу шире сетки Word (защита, п. И-12)', async () => {
+    // Ширина таблицы так, как её раскладывает окно (правило HTML: ячейка — в первый столбец, не
+    // занятый объединением сверху).
+    const layoutWidth = (rows: { span?: number; rowSpan?: number }[][]) => {
+      const busy: number[] = [];
+      let width = 0;
+      rows.forEach((row, ri) => {
+        let col = 0;
+        for (const cell of row) {
+          while ((busy[col] ?? 0) > ri) col++;
+          for (let c = col; c < col + (cell.span ?? 1); c++)
+            busy[c] = Math.max(busy[c] ?? 0, ri + (cell.rowSpan ?? 1));
+          col += cell.span ?? 1;
+          width = Math.max(width, col);
+        }
+      });
+      return width;
+    };
+    const cont = '<w:tc><w:tcPr><w:vMerge/></w:tcPr></w:tc>';
+    const start = (span: number) =>
+      `<w:tc><w:tcPr><w:gridSpan w:val="${span}"/><w:vMerge w:val="restart"/></w:tcPr></w:tc>`;
+    // По сетке файла каждая строка — 63 столбца, а начальные ячейки сдвигают строки ниже вправо.
+    let stair = '';
+    for (let k = 0; k < DOC_MAX_GRID; k++)
+      stair += `<w:tr>${cont.repeat(k)}${start(DOC_MAX_GRID - k)}</w:tr>`;
+    const tall = `<w:tr>${cont.repeat(DOC_MAX_GRID)}</w:tr>`.repeat(200);
+    const doc = await parseDocx(openZip(await docxBytes(`<w:tbl>${stair}${tall}</w:tbl>`)));
+    const t = doc.blocks[0];
+    expect(t?.k).toBe('t');
+    if (t?.k !== 't') return;
+    expect(layoutWidth(t.rows)).toBeLessThanOrEqual(DOC_MAX_GRID);
+    expect(t.rows[0]![0]!.span).toBe(DOC_MAX_GRID);
+    expect(doc.cut).toBe(true);
+
+    // Обычная таблица с объединениями показывается целиком.
+    const ok = await parseDocx(
+      openZip(
+        await docxBytes(
+          `<w:tbl><w:tr>${start(2)}<w:tc/></w:tr><w:tr>${cont.replace('<w:vMerge/>', '<w:gridSpan w:val="2"/><w:vMerge/>')}<w:tc/></w:tr></w:tbl>`,
+        ),
+      ),
+    );
+    const o = ok.blocks[0];
+    expect(o?.k === 't' ? o.rows.map((r) => r.length) : null).toEqual([2, 1]);
+    expect(o?.k === 't' ? o.rows[0]![0]!.rowSpan : null).toBe(2);
+    expect(ok.cut).toBe(false);
+  });
+
   it('вложенные таблицы и объединения по вертикали — в том же пределе ячеек (защита, п. И-12)', async () => {
     // Таблица в ячейке таблицы в ячейке…: ячейки всех уровней считаются вместе.
     let body = `<w:tbl>${`<w:tr>${'<w:tc/>'.repeat(50)}</w:tr>`.repeat(400)}</w:tbl>`;

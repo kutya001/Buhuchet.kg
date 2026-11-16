@@ -7,13 +7,17 @@ import {
   cellRef,
   colIndex,
   colLetters,
+  colWidthPx,
   csvSheet,
   looksNumeric,
   SHEET_MAX_BOOK_CELLS,
   SHEET_MAX_BOOK_CHARS,
   SHEET_MAX_CELL_CHARS,
+  SHEET_MAX_COL_PX,
   SHEET_MAX_COLS,
   SHEET_MAX_MERGES,
+  SHEET_MAX_NAME,
+  SHEET_MAX_ROW_PX,
   SHEET_MAX_ROWS,
   sheetFormatCode,
   sheetMergeCollector,
@@ -258,6 +262,11 @@ describe('Excel XLSX в окне просмотра', () => {
     });
     const book = capBookText({ kind: 'sheet', sheets: [sheet('1'), sheet('2'), sheet('3')] });
     expect(book.sheets[0]!.rows[0]![0]!.v).toHaveLength(SHEET_MAX_CELL_CHARS);
+    const named = capBookText({
+      kind: 'sheet',
+      sheets: [{ ...sheet('л'.repeat(5_000)), rows: [] }],
+    });
+    expect(named.sheets[0]!.name).toHaveLength(SHEET_MAX_NAME);
     expect(book.sheets[0]!.rows).toHaveLength(rowsPerSheet);
     const shown = book.sheets.reduce((n, x) => n + x.rows.length, 0);
     expect(shown * SHEET_MAX_CELL_CHARS).toBeLessThanOrEqual(SHEET_MAX_BOOK_CHARS);
@@ -316,6 +325,21 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(book.sheets[1]!.rows).toHaveLength(
       Math.floor((SHEET_MAX_BOOK_CELLS - 3_000 * SHEET_MAX_COLS) / SHEET_MAX_COLS),
     );
+  });
+
+  it('номера строк и столбцов, высоты и ширины из файла — в пределах листа (защита, п. И-12)', () => {
+    const ws = `<worksheet><cols><col min="-8000000" max="1" width="1e9"/><col min="3" max="2" width="5"/><col min="1.5" max="9"/><col min="2" max="2" width="abc"/></cols><sheetData>${'<row r="1" hidden="1"/>'.repeat(1_000)}<row r="-5" ht="1e9" customHeight="1"><c><v>1</v></c></row><row r="2.5"><c><v>2</v></c></row><row r="4" ht="-7" customHeight="1" hidden="1"><c><v>3</v></c></row></sheetData></worksheet>`;
+    const s = parseWorksheet('a', ws, [], [], false);
+    // Неверные номера строк — следующая строка по порядку.
+    expect(s.rows.map((r) => r[0]?.v)).toEqual([undefined, '1', '2', '3']);
+    expect(s.hiddenRows).toEqual([0, 3]);
+    expect(s.heights).toEqual({ 1: SHEET_MAX_ROW_PX, 3: 0 });
+    // Отрицательный и дробный `<col>` и `min > max` не берутся; не число — ширина по умолчанию.
+    expect(s.cols).toEqual([SHEET_MAX_COL_PX]);
+    expect(Object.keys(s.cols)).toEqual(['0']);
+    expect(colWidthPx(Number('abc'), -1)).toBe(-1);
+    expect(colWidthPx(1e9)).toBe(SHEET_MAX_COL_PX);
+    expect(colWidthPx(-3)).toBe(0);
   });
 
   it('CSV — в том же пределе мест книги (защита, п. И-12)', async () => {

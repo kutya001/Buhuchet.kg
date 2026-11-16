@@ -16,7 +16,9 @@ import {
   clipCellText,
   sheetBudgetSpent,
   sheetFormatCode,
+  sheetColDefs,
   sheetMergeCollector,
+  sheetRowMeta,
   sheetSlots,
   sheetTextBudget,
   takeSheetCell,
@@ -202,12 +204,10 @@ export function parseWorksheet(
   date1904: boolean,
   budget: SheetTextBudget = sheetTextBudget(),
 ): SheetView {
-  const cols: number[] = [];
-  const colDef: { min: number; max: number; px: number }[] = [];
+  const colDefs = sheetColDefs();
   let defPx = DEFAULT_COL_PX;
   const rows: (SheetCell | null)[][] = [];
-  const heights: Record<number, number> = {};
-  const hiddenRows: number[] = [];
+  const rowMeta = sheetRowMeta();
   const merges = sheetMergeCollector();
   let colsCut = false;
   let maxCol = -1;
@@ -231,7 +231,9 @@ export function parseWorksheet(
       const n = localName(tag);
       if (n === 'row') {
         rowsSeen++;
-        rowIdx = a.r ? Number(a.r) - 1 : rowIdx + 1;
+        // Номер строки — целое с 1; неверный — следующая строка, как без номера.
+        const rn = a.r ? Number(a.r) : NaN;
+        rowIdx = Number.isInteger(rn) && rn >= 1 ? rn - 1 : rowIdx + 1;
         colIdx = -1;
         // Предел строк, знаков или ячеек книги: дальше строки только считаются (`totalRows`).
         if (rowIdx >= SHEET_MAX_ROWS || sheetBudgetSpent(budget)) {
@@ -240,8 +242,8 @@ export function parseWorksheet(
         }
         while (rows.length <= rowIdx) rows.push([]);
         if (a.ht && (a.customHeight === '1' || a.customHeight === 'true'))
-          heights[rowIdx] = Math.round(Number(a.ht) * (4 / 3));
-        if (a.hidden === '1' || a.hidden === 'true') hiddenRows.push(rowIdx);
+          rowMeta.height(rowIdx, Number(a.ht) * (4 / 3));
+        if (a.hidden === '1' || a.hidden === 'true') rowMeta.hide(rowIdx);
       } else if (n === 'c') {
         const ref = a.r ? cellRef(a.r) : null;
         colIdx = ref ? ref[1] : colIdx + 1;
@@ -255,10 +257,12 @@ export function parseWorksheet(
       else if (n === 'rPh' && !self) rph++;
       else if (n === 't' && inIs && !self) inV = true;
       else if (n === 'col') {
-        const min = Number(a.min ?? 1) - 1;
-        const max = Math.min(Number(a.max ?? a.min ?? 1) - 1, SHEET_MAX_COLS - 1);
         const hidden = a.hidden === '1' || a.hidden === 'true';
-        colDef.push({ min, max, px: hidden ? 0 : a.width ? colWidthPx(Number(a.width)) : -1 });
+        colDefs.add(
+          Number(a.min ?? 1) - 1,
+          Number(a.max ?? a.min ?? 1) - 1,
+          hidden ? 0 : a.width ? colWidthPx(Number(a.width), -1) : -1,
+        );
       } else if (n === 'sheetFormatPr') {
         if (a.defaultColWidth) defPx = colWidthPx(Number(a.defaultColWidth));
         else if (a.baseColWidth) defPx = colWidthPx(Number(a.baseColWidth) + 0.43);
@@ -321,11 +325,18 @@ export function parseWorksheet(
   // Ширины: заданные `<col>` и по умолчанию; столбцов — до последнего с данными или объединением.
   for (const m of merges.list) maxCol = Math.max(maxCol, m[3]);
   const width = Math.min(SHEET_MAX_COLS, maxCol + 1);
-  for (let c = 0; c < width; c++) cols.push(defPx);
-  for (const d of colDef)
-    for (let c = d.min; c <= d.max && c < width; c++) cols[c] = d.px < 0 ? defPx : d.px;
+  const cols = colDefs.widths(width, defPx);
   for (const r of rows) if (r.length > width) r.length = width;
-  return { name, cols, rows, heights, hiddenRows, merges: merges.list, totalRows, colsCut };
+  return {
+    name,
+    cols,
+    rows,
+    heights: rowMeta.heights,
+    hiddenRows: rowMeta.hiddenRows(),
+    merges: merges.list,
+    totalRows,
+    colsCut,
+  };
 }
 
 /** Книга XLSX/XLSM: видимые листы по порядку книги. */

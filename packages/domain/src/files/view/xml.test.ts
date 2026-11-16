@@ -11,7 +11,7 @@ import {
   textOf,
   ViewError,
 } from './xml';
-import { xmlView } from './xmlview';
+import { XML_MAX_CHARS, XML_MAX_NODES, xmlView } from './xmlview';
 
 const enc = new TextEncoder();
 
@@ -124,6 +124,18 @@ describe('безопасный XML окна просмотра', () => {
     const big = xmlView(enc.encode(`<r>${'<i/>'.repeat(25_000)}</r>`));
     expect(big.cut).toBe(true);
     expect(big.root!.c.length).toBe(19_999);
+    // Атрибуты считаются вместе с элементами, знаки имён, значений и текста — в своём пределе.
+    const attrs = xmlView(
+      enc.encode(`<r ${Array.from({ length: 30_000 }, (_, i) => `a${i}=""`).join(' ')}/>`),
+    );
+    expect(attrs.cut).toBe(true);
+    expect(attrs.root).toBeNull();
+    const many = xmlView(enc.encode(`<r>${'<i a="1" b="2"/>'.repeat(10_000)}</r>`));
+    expect(many.cut).toBe(true);
+    expect(many.root!.c.length).toBeLessThanOrEqual(XML_MAX_NODES / 3);
+    const long = xmlView(enc.encode(`<r><i>${'я'.repeat(XML_MAX_CHARS)}</i><i>x</i></r>`));
+    expect(long.cut).toBe(true);
+    expect(long.root!.c).toEqual([{ n: 'i', a: [], c: [] }]);
     // Windows-1251: русский текст читается.
     const cp = new Uint8Array([
       0x3c, 0x72, 0x3e, 0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2, 0x3c, 0x2f, 0x72, 0x3e,

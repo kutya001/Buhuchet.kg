@@ -5,8 +5,13 @@
 import { decodeText } from './text';
 import { scanXml } from './xml';
 
-/** Элементов XML в окне — не больше; дальше — «Скачайте, чтобы увидеть всё». */
+/**
+ * Элементов и атрибутов XML в окне вместе — не больше (атрибут окно рисует так же, как элемент);
+ * дальше — «Скачайте, чтобы увидеть всё».
+ */
 export const XML_MAX_NODES = 20_000;
+/** Знаков в именах, значениях и тексте XML в окне — не больше (как у текстового файла). */
+export const XML_MAX_CHARS = 2_000_000;
 
 export interface XmlViewNode {
   /** Имя элемента. */
@@ -33,16 +38,21 @@ export function xmlView(bytes: Uint8Array): XmlView {
   const top: XmlViewNode = { n: '#', a: [], c: [] };
   const stack: XmlViewNode[] = [top];
   let nodes = 0;
+  let chars = 0;
   let cut = false;
   let doctype = false;
   let decl: string | null = null;
   scanXml(text, {
     open(name, attrs) {
-      if (++nodes > XML_MAX_NODES) {
+      const a = Object.entries(attrs);
+      nodes += 1 + a.length;
+      for (const [k, v] of a) chars += k.length + v.length;
+      chars += name.length;
+      if (nodes > XML_MAX_NODES || chars > XML_MAX_CHARS) {
         cut = true;
         return false;
       }
-      const el: XmlViewNode = { n: name, a: Object.entries(attrs), c: [] };
+      const el: XmlViewNode = { n: name, a, c: [] };
       stack[stack.length - 1]!.c.push(el);
       stack.push(el);
     },
@@ -51,7 +61,13 @@ export function xmlView(bytes: Uint8Array): XmlView {
     },
     text(t) {
       const s = t.trim();
-      if (s && stack.length > 1) stack[stack.length - 1]!.c.push(s);
+      if (!s || stack.length <= 1) return;
+      chars += s.length;
+      if (chars > XML_MAX_CHARS) {
+        cut = true;
+        return false;
+      }
+      stack[stack.length - 1]!.c.push(s);
     },
     doctype() {
       doctype = true;

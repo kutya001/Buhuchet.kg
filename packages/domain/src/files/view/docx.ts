@@ -104,8 +104,9 @@ function parseDocStyles(src: string | null): Map<string, StyleInfo> {
     if (m) info.h = Math.min(6, Number(m[1]));
     else if (name === 'title') info.h = 0;
     const ol = attrOf(childEl(childEl(s, 'pPr'), 'outlineLvl'), 'val');
-    if (info.h === undefined && ol !== undefined && Number(ol) < 9)
-      info.h = Math.min(6, Number(ol) + 1);
+    const olN = Number(ol);
+    if (info.h === undefined && Number.isInteger(olN) && olN >= 0 && olN < 9)
+      info.h = Math.min(6, olN + 1);
     const b = childEl(childEl(s, 'rPr'), 'b');
     if (b) info.b = attrOf(b, 'val') !== '0' && attrOf(b, 'val') !== 'false';
     const np = childEl(childEl(s, 'pPr'), 'numPr');
@@ -149,7 +150,7 @@ function parseNumbering(src: string | null): Map<string, { abs: string; lvls: Nu
     const lvls: NumLevel[] = [];
     for (const l of childEls(a, 'lvl')) {
       const i = Number(attrOf(l, 'ilvl') ?? 0);
-      if (i < 0 || i > 8) continue;
+      if (!Number.isInteger(i) || i < 0 || i > 8) continue;
       lvls[i] = {
         fmt: attrOf(childEl(l, 'numFmt'), 'val') ?? 'decimal',
         text: lvlTemplate(attrOf(childEl(l, 'lvlText'), 'val') ?? ''),
@@ -359,9 +360,9 @@ async function paraOf(p: XEl, ctx: Ctx): Promise<DocPara> {
   const st = styleId ? ctx.styles.get(styleId) : undefined;
   const para: DocPara = { k: 'p', runs: [] };
   if (st?.h !== undefined) para.h = st.h;
-  const ol = attrOf(childEl(pp, 'outlineLvl'), 'val');
-  if (para.h === undefined && ol !== undefined && Number(ol) < 9)
-    para.h = Math.min(6, Number(ol) + 1);
+  const ol = Number(attrOf(childEl(pp, 'outlineLvl'), 'val'));
+  if (para.h === undefined && Number.isInteger(ol) && ol >= 0 && ol < 9)
+    para.h = Math.min(6, ol + 1);
   const jc = attrOf(childEl(pp, 'jc'), 'val');
   if (jc === 'center') para.al = 'c';
   else if (jc === 'right' || jc === 'end') para.al = 'r';
@@ -429,7 +430,36 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
     }
     rows.push(row);
   }
+  fitTableGrid(rows, ctx);
   return { k: 't', rows };
+}
+
+/**
+ * Раскладка, как у таблицы в окне (правило HTML): ячейка встаёт в первый столбец, не занятый
+ * объединением по вертикали сверху. Ячейка, которая так выходит за сетку Word (`DOC_MAX_GRID`), и
+ * остальные ячейки её строки не показываются: иначе «лестница» объединений из файла раздвигает
+ * таблицу на тысячи столбцов, хотя по сетке файла строка укладывается в 63.
+ */
+function fitTableGrid(rows: DocCell[][], ctx: Ctx): void {
+  // До какой строки (не включая) занят столбец объединением сверху.
+  const busy = new Array<number>(DOC_MAX_GRID).fill(0);
+  rows.forEach((row, ri) => {
+    let col = 0;
+    let kept = 0;
+    for (const cell of row) {
+      while (col < DOC_MAX_GRID && busy[col]! > ri) col++;
+      const span = cell.span ?? 1;
+      if (col + span > DOC_MAX_GRID) {
+        ctx.cut = true;
+        break;
+      }
+      const until = ri + (cell.rowSpan ?? 1);
+      for (let c = col; c < col + span; c++) busy[c] = Math.max(busy[c]!, until);
+      col += span;
+      kept++;
+    }
+    row.length = kept;
+  });
 }
 
 async function blocksOf(el: XEl, ctx: Ctx): Promise<DocBlock[]> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cfbBytes, xlsWorkbookStream, type XlsSheetSpec } from './fixtures';
-import { SHEET_MAX_BOOK_CHARS } from './sheet';
+import { SHEET_MAX_BOOK_CHARS, SHEET_MAX_COL_PX } from './sheet';
 import { cfbStream, isCfb, parseXls } from './xls';
 import { ViewError } from './xml';
 
@@ -158,6 +158,29 @@ describe('старый Excel XLS в окне просмотра', () => {
     expect(padded!.rows).toHaveLength(2);
     expect(padded!.rows[1]).toHaveLength(256);
     expect(slots.cells).toBe(0);
+  });
+
+  it('описания строк и столбцов из файла — в пределах листа (защита, п. И-12)', () => {
+    const file = cfbBytes([
+      {
+        name: 'Workbook',
+        data: xlsWorkbookStream([
+          {
+            name: 'Описания',
+            cells: [{ r: 0, c: 0, k: 'rk', v: 1 }],
+            // Одна и та же скрытая строка тысячу раз — в модели один раз.
+            rowsInfo: Array.from({ length: 1_000 }, () => ({ r: 0, hidden: true })),
+            colWidths: [
+              { first: 0, last: 0, width256: 65_535 },
+              { first: 5, last: 2, width256: 256 },
+            ],
+          },
+        ]),
+      },
+    ]);
+    const [s] = parseXls(file).sheets;
+    expect(s!.hiddenRows).toEqual([0]);
+    expect(s!.cols).toEqual([SHEET_MAX_COL_PX]);
   });
 
   it('книга с паролем и битые файлы', () => {

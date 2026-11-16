@@ -30,6 +30,18 @@ export const SLIDE_MAX_PARTS = 5_000;
 export const SLIDES_MAX_PARTS = 200_000;
 /** Знаков текста во всей презентации — не больше. */
 export const SLIDES_MAX_CHARS = 16_000_000;
+/** Размер шрифта из файла — не больше, пт (предел PowerPoint — 4 000). */
+export const SLIDE_MAX_FONT_PT = 400;
+/** Уровень абзаца — 0…8, как у PowerPoint. */
+const slideLevel = (v: string | undefined) => {
+  const n = Number(v ?? 0);
+  return Number.isInteger(n) ? Math.min(8, Math.max(0, n)) : 0;
+};
+/** Размер шрифта из файла (сотые пункта) в пт, в пределе; нет или неверный — 0. */
+const fontPt = (v: string | undefined) => {
+  const n = Number(v);
+  return n > 0 ? Math.min(SLIDE_MAX_FONT_PT, n / 100) : 0;
+};
 
 /** Сколько ещё можно взять в модель; считается во время разбора. */
 interface SlideBudget {
@@ -191,8 +203,7 @@ interface MasterSizes {
 function masterSizes(root: XEl | null): MasterSizes {
   const tx = childEl(root ?? undefined, 'txStyles');
   const sz = (el: XEl | undefined, lvl: number) => {
-    const s = Number(attrOf(childEl(childEl(el, `lvl${lvl}pPr`), 'defRPr'), 'sz'));
-    return s > 0 ? s / 100 : 0;
+    return fontPt(attrOf(childEl(childEl(el, `lvl${lvl}pPr`), 'defRPr'), 'sz'));
   };
   const body = [1, 2, 3, 4, 5].map(
     (l) => sz(childEl(tx, 'bodyStyle'), l) || [32, 28, 24, 20, 20][l - 1]!,
@@ -209,7 +220,7 @@ function parasOf(txBody: XEl, defSize: (lvl: number) => number, budget: SlideBud
   for (const p of childEls(txBody, 'p')) {
     if (!takePart(budget)) break;
     const ppr = childEl(p, 'pPr');
-    const lvl = Number(attrOf(ppr, 'lvl') ?? 0);
+    const lvl = slideLevel(attrOf(ppr, 'lvl'));
     const para: SlidePara = { runs: [] };
     const algn = attrOf(ppr, 'algn');
     if (algn === 'ctr') para.al = 'c';
@@ -217,7 +228,7 @@ function parasOf(txBody: XEl, defSize: (lvl: number) => number, budget: SlideBud
     else if (algn === 'just') para.al = 'j';
     if (lvl) para.lvl = lvl;
     if (childEl(ppr, 'buChar') || childEl(ppr, 'buAutoNum')) para.bullet = true;
-    const endSz = Number(attrOf(childEl(p, 'endParaRPr'), 'sz'));
+    const endSz = fontPt(attrOf(childEl(p, 'endParaRPr'), 'sz'));
     for (const r of p.kids) {
       if (typeof r === 'string') continue;
       const n = localName(r.name);
@@ -234,13 +245,12 @@ function parasOf(txBody: XEl, defSize: (lvl: number) => number, budget: SlideBud
       if (attrOf(rp, 'i') === '1') run.i = true;
       const u = attrOf(rp, 'u');
       if (u && u !== 'none') run.u = true;
-      const sz = Number(attrOf(rp, 'sz'));
-      run.sz = sz > 0 ? sz / 100 : defSize(lvl);
+      run.sz = fontPt(attrOf(rp, 'sz')) || defSize(lvl);
       const col = srgb(rp);
       if (col) run.color = col;
       para.runs.push(run);
     }
-    if (!para.runs.length && endSz > 0) para.runs.push({ t: '', sz: endSz / 100 });
+    if (!para.runs.length && endSz > 0) para.runs.push({ t: '', sz: endSz });
     out.push(para);
   }
   return out;
