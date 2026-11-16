@@ -1,4 +1,5 @@
 import {
+  bellCleanup,
   bellDigestTime,
   feeDebtorList,
   loadReminderData,
@@ -90,6 +91,32 @@ export const bellDayJob: Job = {
     if (put) ctx.logger.info({ job: 'telegram.bell-day', put }, 'строки дня колокольчика');
     if (failed.length) {
       throw new Error(`telegram.bell-day: не собраны строки организаций: ${failed.length}`);
+    }
+  },
+};
+
+/**
+ * Уборка колокольчика раз в сутки (по умолчанию 90 дней, `BELL_KEEP_DAYS`): строки каждой организации —
+ * в её контексте, строки администраторов платформы — без организации (`app.bell_cleanup`).
+ */
+export const bellCleanupJob: Job = {
+  name: 'telegram.bell-cleanup',
+  cron: '50 3 * * *',
+  lookbackMinutes: 24 * 60,
+  async run(ctx) {
+    let removed = await bellCleanup(ctx.db);
+    const failed: string[] = [];
+    for (const orgId of await orgIds(ctx.db)) {
+      try {
+        removed += await withOrgContext(ctx.db, { orgId, kind: 'job' }, (tx) => bellCleanup(tx));
+      } catch (err) {
+        failed.push(orgId);
+        ctx.logger.error({ job: 'telegram.bell-cleanup', orgId, err }, 'колокольчик не убран');
+      }
+    }
+    if (removed) ctx.logger.info({ job: 'telegram.bell-cleanup', removed }, 'колокольчик убран');
+    if (failed.length) {
+      throw new Error(`telegram.bell-cleanup: не убраны организации: ${failed.length}`);
     }
   },
 };

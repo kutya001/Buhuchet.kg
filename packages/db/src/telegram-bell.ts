@@ -1,6 +1,6 @@
 import { BELL_FROM, BELL_PAGE_SIZE, type BellKind } from '@buhuchet/domain';
 import { sql, type SQL } from 'drizzle-orm';
-import type { Tx } from './client';
+import type { Db, Tx } from './client';
 import { adminLeadsView } from './leads';
 import { NEWS_BELL } from './news';
 import { contractors, news, orgSettings, reports, tasks } from './schema';
@@ -261,10 +261,12 @@ export async function bellSyncLeads(tx: Tx, template: string): Promise<void> {
     on conflict (user_id, event_key) do nothing`);
 }
 
-/** Уборка: строки организации из контекста старше `from` (по умолчанию 90 дней). */
-export async function bellCleanup(tx: Tx, from: Date): Promise<number> {
-  const res = await tx.execute(
-    sql`delete from ${B} where created_at < ${from.toISOString()}::timestamptz`,
-  );
-  return res.count ?? 0;
+/**
+ * Уборка строк старше 90 дней (`app.bell_cleanup`, миграция этапа 0): в контексте организации без
+ * пользователя — её строки, без организации — строки администраторов платформы. Сама задача строк не
+ * видит (RLS: читает и удаляет только получатель). Отвечает, сколько удалено.
+ */
+export async function bellCleanup(db: Db | Tx): Promise<number> {
+  const [row] = await db.execute<{ n: number | string | null }>(sql`select app.bell_cleanup() as n`);
+  return Number(row?.n ?? 0);
 }

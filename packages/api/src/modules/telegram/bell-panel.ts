@@ -22,8 +22,10 @@ import {
   BellReadParams,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
+import { createMiddleware } from 'hono/factory';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
+import { apiFail } from '../../errors';
 import { asSessionUser } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { reportScopeOf } from '../reports/common';
@@ -43,12 +45,12 @@ const denied = {
 } as const;
 
 /** Сотрудник организации или администратор платформы (режим Админка); иначе — 403. */
-function bellUser(c: Context<AppEnv>): boolean {
-  return !!c.get('access') || !!c.get('session')?.isPlatformAdmin;
-}
-
-const forbidden = (c: Context<AppEnv>) =>
-  c.json({ error: { code: 'forbidden', message: 'Нет права' } }, 403);
+const bellUser = createMiddleware<AppEnv>(async (c, next) => {
+  if (!c.get('access') && !c.get('session')?.isPlatformAdmin) {
+    return c.json({ error: { code: 'forbidden', message: 'Нет права' } }, 403);
+  }
+  return next();
+});
 
 /** Что вошедший видит сейчас: права, области, функции учётной политики. */
 async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
@@ -89,6 +91,7 @@ export const bellPageRoute = createRoute({
   method: 'get',
   path: '/bell',
   tags: ['telegram'],
+  middleware: [bellUser] as const,
   summary: 'Колокольчик: строки вошедшего, по 30, от новых к старым',
   request: { query: BellQuery },
   responses: {
@@ -104,7 +107,6 @@ export const bellPageRoute = createRoute({
 
 export function bellPageHandler(deps: ApiDeps): RouteHandler<typeof bellPageRoute, AppEnv> {
   return async (c) => {
-    if (!bellUser(c)) return forbidden(c);
     const q = c.req.valid('query');
     const t = await serverTexts(deps);
     const page = await asSessionUser(deps, c.get('session')!, async (tx) => {
@@ -137,6 +139,7 @@ export const bellCountRoute = createRoute({
   method: 'get',
   path: '/bell/count',
   tags: ['telegram'],
+  middleware: [bellUser] as const,
   summary: 'Колокольчик: сколько строк вошедший ещё не видел (значок)',
   responses: {
     200: { description: 'Число непросмотренных', content: { 'application/json': { schema: BellCount } } },
@@ -146,7 +149,6 @@ export const bellCountRoute = createRoute({
 
 export function bellCountHandler(deps: ApiDeps): RouteHandler<typeof bellCountRoute, AppEnv> {
   return async (c) => {
-    if (!bellUser(c)) return forbidden(c);
     const t = await serverTexts(deps);
     const unseen = await asSessionUser(deps, c.get('session')!, async (tx) => {
       await syncReadTime(deps, c, tx, t('bell.line.lead'));
@@ -160,6 +162,7 @@ export const bellSeenRoute = createRoute({
   method: 'post',
   path: '/bell/seen',
   tags: ['telegram'],
+  middleware: [bellUser] as const,
   summary: 'Колокольчик открыт: все строки вошедшего просмотрены (счётчик гаснет на всех устройствах)',
   responses: {
     200: { description: 'Готово', content: { 'application/json': { schema: BellDone } } },
@@ -169,7 +172,6 @@ export const bellSeenRoute = createRoute({
 
 export function bellSeenHandler(deps: ApiDeps): RouteHandler<typeof bellSeenRoute, AppEnv> {
   return async (c) => {
-    if (!bellUser(c)) return forbidden(c);
     await asSessionUser(deps, c.get('session')!, (tx) => bellSeenAll(tx, deps.clock.now()));
     return c.json({ ok: true as const }, 200);
   };
@@ -179,6 +181,7 @@ export const bellReadRoute = createRoute({
   method: 'post',
   path: '/bell/{id}/read',
   tags: ['telegram'],
+  middleware: [bellUser] as const,
   summary: 'Строка колокольчика прочитана (новость — и в «Новостях»)',
   request: { params: BellReadParams },
   responses: {
@@ -191,14 +194,13 @@ export const bellReadRoute = createRoute({
 
 export function bellReadHandler(deps: ApiDeps): RouteHandler<typeof bellReadRoute, AppEnv> {
   return async (c) => {
-    if (!bellUser(c)) return forbidden(c);
     const { id } = c.req.valid('param');
     const found = await asSessionUser(deps, c.get('session')!, async (tx) => {
       const row = await bellRead(tx, id, deps.clock.now());
       if (row?.newsId) await markNewsRead(tx, [row.newsId]);
       return row !== null;
     });
-    if (!found) return c.json({ error: { code: 'not_found', message: 'Не найдено' } }, 404);
+    if (!found) apiFail(404, 'not_found', 'Запись не найдена');
     return c.json({ ok: true as const }, 200);
   };
 }
@@ -207,6 +209,7 @@ export const bellReadAllRoute = createRoute({
   method: 'post',
   path: '/bell/read-all',
   tags: ['telegram'],
+  middleware: [bellUser] as const,
   summary: '«Прочитать все»: все строки вошедшего, без вкладки (новости — и в «Новостях»)',
   responses: {
     200: { description: 'Готово', content: { 'application/json': { schema: BellDone } } },
@@ -216,7 +219,6 @@ export const bellReadAllRoute = createRoute({
 
 export function bellReadAllHandler(deps: ApiDeps): RouteHandler<typeof bellReadAllRoute, AppEnv> {
   return async (c) => {
-    if (!bellUser(c)) return forbidden(c);
     await asSessionUser(deps, c.get('session')!, async (tx) => {
       const ids = await bellReadAll(tx, deps.clock.now());
       if (ids.length) await markNewsRead(tx, ids);
