@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { FILE_LINK_SOURCE_KINDS } from '@buhuchet/domain';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
@@ -310,16 +311,14 @@ describe.skipIf(!databaseAvailable())(
           ).rejects.toThrow(checkFailed);
         }
         await inA((tx) =>
-          tx
-            .insert(bellNotifications)
-            .values(
-              bell(colleagueA, {
-                targetKind: null,
-                targetId: null,
-                contractorId: null,
-                need: null,
-              }),
-            ),
+          tx.insert(bellNotifications).values(
+            bell(colleagueA, {
+              targetKind: null,
+              targetId: null,
+              contractorId: null,
+              need: null,
+            }),
+          ),
         );
       });
 
@@ -457,14 +456,12 @@ describe.skipIf(!databaseAvailable())(
         // Автора не подставить; ссылка не меняется.
         await expect(
           inA((tx) =>
-            tx
-              .insert(fileLinks)
-              .values({
-                fileId,
-                sourceKind: 'fee_payment',
-                sourceId: randomUUID(),
-                createdBy: colleagueA,
-              }),
+            tx.insert(fileLinks).values({
+              fileId,
+              sourceKind: 'fee_payment',
+              sourceId: randomUUID(),
+              createdBy: colleagueA,
+            }),
           ),
         ).rejects.toThrow(denied);
         await expect(
@@ -484,7 +481,32 @@ describe.skipIf(!databaseAvailable())(
         expect(removed).toEqual([{ id: receiptId }]);
       });
 
-      it('незагруженный файл, файл без контрагента, та же запись, что источник файла, и чужой вид — ошибка, а не пропуск', async () => {
+      it('любой файл контрагента (акт, сверка) — ссылкой к записям контрагента всех видов, файл один', async () => {
+        const act = await readyFile({
+          name: 'Акт сверки.xlsx',
+          contentType: 'application/vnd.ms-excel',
+        });
+        const records = FILE_LINK_SOURCE_KINDS.map((sourceKind) => ({
+          fileId: act,
+          sourceKind,
+          sourceId: randomUUID(),
+        }));
+        await inA((tx) => tx.insert(fileLinks).values(records));
+        const linked = await inA((tx) =>
+          tx
+            .select({ sourceKind: fileLinks.sourceKind })
+            .from(fileLinks)
+            .where(eq(fileLinks.fileId, act)),
+        );
+        expect(linked.map((l) => l.sourceKind).sort()).toEqual([...FILE_LINK_SOURCE_KINDS].sort());
+        const copies = await db.admin.db
+          .select({ id: files.id })
+          .from(files)
+          .where(and(eq(files.orgId, a.orgId), eq(files.name, 'Акт сверки.xlsx')));
+        expect(copies).toEqual([{ id: act }]);
+      });
+
+      it('незагруженный файл, файл без контрагента, та же запись, что источник файла, и вид без ссылки — ошибка, а не пропуск', async () => {
         const pending = await readyFile({ state: 'pending' });
         const general = await readyFile({ contractorId: null });
         const ownReceipt = randomUUID();
@@ -505,13 +527,23 @@ describe.skipIf(!databaseAvailable())(
               .values({ fileId: receiptFile, sourceKind: 'receipt', sourceId: ownReceipt }),
           ),
         ).rejects.toThrow(fileCheck);
-        await expect(
-          inA((tx) =>
-            tx
-              .insert(fileLinks)
-              .values({ fileId: receiptFile, sourceKind: 'tax_payment', sourceId: randomUUID() }),
-          ),
-        ).rejects.toThrow(checkFailed);
+        // У задачи ссылки нет (файлы задач видят только участники); прочие виды — не записи контрагента.
+        for (const sourceKind of [
+          'task',
+          'indicator_value',
+          'manual',
+          'contractor',
+          'sent_file',
+          'lead',
+        ]) {
+          await expect(
+            inA((tx) =>
+              tx
+                .insert(fileLinks)
+                .values({ fileId: receiptFile, sourceKind, sourceId: randomUUID() }),
+            ),
+          ).rejects.toThrow(checkFailed);
+        }
         // Удалённый файл — тоже нет.
         const gone = await readyFile();
         await db.admin.db

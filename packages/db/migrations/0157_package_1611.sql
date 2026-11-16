@@ -1,6 +1,6 @@
 -- Общая основа пакета доработок 16.11.2026 (этап 0, ТЗ «Доработки 16.11.2026» → «Порядок работ и стыки
 -- блоков»; docs/decisions.md п. О-57): колокольчик уведомлений (блок 3, стык потока Т), текст «Для
--- администратора платформы» и модули новостей (блок 4), вторая ссылка файла — на запись денег без копии
+-- администратора платформы» и модули новостей (блок 4), ссылки файла контрагента на его записи без копии
 -- (блок 2) и функция переноса задвоенных чеков; ниже — ручная часть.
 -- Блокировки таблиц ждём не дольше 10 с: если выпуск совпал с долгой транзакцией, миграция падает и
 -- задание выпуска перезапускают, а не держит новости и файлы, пока ждёт.
@@ -48,7 +48,7 @@ CREATE TABLE "file_links" (
 	"created_by" uuid DEFAULT app.current_user_id() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "file_links_pk" PRIMARY KEY("file_id","source_kind","source_id"),
-	CONSTRAINT "file_links_source_kind_check" CHECK ("file_links"."source_kind" in ('receipt', 'fee_payment'))
+	CONSTRAINT "file_links_source_kind_check" CHECK ("file_links"."source_kind" in ('report', 'receipt', 'tax_payment', 'fee_payment', 'money_operation', 'one_off_service', 'one_off_service_payment', 'project', 'project_payment'))
 );
 --> statement-breakpoint
 ALTER TABLE "file_links" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
