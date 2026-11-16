@@ -409,9 +409,16 @@ export async function stillElement(locator: Locator, ms = 120) {
  * Вкладка окна-карточки: на ПК — кнопкой вкладки, на телефоне — из списка под текущей вкладкой («N из M ▾»).
  * Список выезжает анимацией, и её первый кадр стоит на конечном месте: Playwright считает пункт неподвижным,
  * а нажатие уходит соседнему пункту или мимо и теряется молча (типовая ошибка № 34) — поэтому сначала
- * `stillElement`, а после нажатия — проверка, что вкладка сменилась.
+ * `stillElement`, а после нажатия — проверка, что вкладка сменилась. `switches: false` — переход
+ * перехватывает вопрос (несохранённый «Подбор отчётов»): вкладка не меняется, проверяет сам тест.
  */
-export async function cardTab(page: Page, card: Locator, isMobile: boolean, name: string | RegExp) {
+export async function cardTab(
+  page: Page,
+  card: Locator,
+  isMobile: boolean,
+  name: string | RegExp,
+  { switches = true }: { switches?: boolean } = {},
+) {
   if (isMobile) {
     // Шторка окна тоже выезжает: нажатие по вкладке во время выезда теряется так же.
     await stillElement(card);
@@ -422,7 +429,7 @@ export async function cardTab(page: Page, card: Locator, isMobile: boolean, name
   } else {
     await card.getByRole('tab', { name }).click();
   }
-  await expect(card.getByRole('tab', { selected: true })).toContainText(name);
+  if (switches) await expect(card.getByRole('tab', { selected: true })).toContainText(name);
 }
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));

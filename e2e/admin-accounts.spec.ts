@@ -8,6 +8,7 @@ import {
   linkTelegram,
   newOrgOwner,
   signIn,
+  stillElement,
   uniqueChat,
   uniqueLogin,
 } from './helpers';
@@ -360,7 +361,10 @@ test.describe('Админка: учётные записи', () => {
     const tabNames = isMobile
       ? page.getByRole('menu').getByRole('menuitem')
       : adminCard.getByRole('tab');
-    if (isMobile) await adminCard.getByRole('tab', { selected: true }).click();
+    if (isMobile) {
+      await stillElement(adminCard);
+      await adminCard.getByRole('tab', { selected: true }).click();
+    }
     await expect(tabNames).toHaveText([/Основное/, /Сеансы/, /История/]);
 
     // Нет такой учётной записи — уведомление, карточки нет.

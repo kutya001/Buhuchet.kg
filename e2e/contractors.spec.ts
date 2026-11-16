@@ -524,7 +524,8 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(tab.locator('[data-pick-sum]')).toContainText('новых 1');
 
     await test.step('уход на «Деньги» — «Подбор не применён»; «Отмена» оставляет подбор', async () => {
-      await cardTab(page, card, isMobile, /^Деньги/);
+      // Уход перехватывает вопрос — вкладка остаётся «Подбор отчётов» (проверка ниже).
+      await cardTab(page, card, isMobile, /^Деньги/, { switches: false });
       const leave = page.getByRole('dialog', { name: 'Подбор не применён' });
       await expect(leave).toBeVisible();
       await leave.getByRole('button', { name: 'Отмена' }).click();
