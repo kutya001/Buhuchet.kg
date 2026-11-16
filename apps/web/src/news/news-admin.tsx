@@ -5,6 +5,8 @@ import {
   bishkekTime,
   formatDateRu,
   formatMomentRu,
+  isNewsModule,
+  newsModuleTitle,
   type ListSort,
 } from '@buhuchet/domain';
 import { AdminNewsRecord, type AdminNews } from '@buhuchet/shared';
@@ -50,13 +52,16 @@ import {
 } from './news-data';
 import { NewsEditDialog, newsStateText } from './news-editor';
 import { momentDate, NewsTypePill } from './news-parts';
-import { NewsBody } from './news-provider';
+import { NewsAdminText, NewsBody } from './news-provider';
 
 /** Как во всех списках — от новых к старым по «Создано» (прототип defSort). */
 const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
 
-/** Видимые по умолчанию (прототип admin/news.js, `hide` у «Кода», «Закреплено», «Изменено», «Прочитали»). */
-const DEFAULT_VISIBLE = ['date', 'release', 'type', 'title', 'status', 'audience'];
+/**
+ * Видимые по умолчанию (прототип admin/news.js, `hide` у «Кода», «Закреплено», «Изменено», «Прочитали»;
+ * v123 — «Модули» видны, «Для администратора платформы» скрыт).
+ */
+const DEFAULT_VISIBLE = ['date', 'release', 'type', 'title', 'status', 'audience', 'modules'];
 
 /** Цвет состояния (прототип: faint, red, green, yellow). */
 const STATE_TONE: Record<AdminNews['state'], string> = {
@@ -130,6 +135,22 @@ export function newsColumns(t: Translate): GridColumn<AdminNews>[] {
       type: 'enum',
       width: 170,
       text: (n) => t(`news.aud.${n.audience}`),
+    },
+    // Доработки 16.11.2026, блок 4 (прототип v123): модули названиями и есть ли второй текст.
+    {
+      key: 'modules',
+      label: t('news.col.modules'),
+      type: 'text',
+      width: 200,
+      text: (n) =>
+        n.modules.map((m) => (isNewsModule(m) ? t(newsModuleTitle(m)) : m)).join(', ') || '—',
+    },
+    {
+      key: 'adminMd',
+      label: t('news.col.admin_md'),
+      type: 'enum',
+      width: 150,
+      text: (n) => t(n.hasAdminMd ? 'news.admin_md.yes' : 'news.admin_md.no'),
     },
     {
       key: 'pinned',
@@ -520,6 +541,7 @@ function NewsPreviewDialog({
         <p className="m-0 text-muted">{record.short}</p>
         <div className="w-full">
           <NewsBody source={record.md} />
+          <NewsAdminText source={record.adminMd} />
         </div>
       </div>
     </Modal>

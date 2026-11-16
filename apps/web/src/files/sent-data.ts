@@ -92,17 +92,18 @@ export function useSentRefresh() {
 type Saved = { ok: true; item: SentFileItem } | { ok: false; status: number; error: ApiErrorLike };
 
 /**
- * «Принять» (прототип `sntAccept`): файл становится файлом контрагента с источником «От контрагента»;
- * у чека из Telegram — ещё и что оплачено (`item.pay`, прототип v115 `pgRcptMoney`).
+ * «Принять» (прототип `sntAccept`): файл становится файлом контрагента с источником «От контрагента».
+ * `attach` — «Сохранить» в окне денег с чеком (доработки 16.11.2026, блок 1; прототип v121
+ * `pgRcptSave`): чек принимается и прикрепляется к только что записанным деньгам одной транзакцией.
  */
-export async function acceptSent(file: {
-  id: string;
-  version: number;
-}): Promise<{ ok: true; item: SentFileAccepted } | Exclude<Saved, { ok: true }>> {
+export async function acceptSent(
+  file: { id: string; version: number },
+  attach?: { kind: 'receipt' | 'fee_payment'; id: string },
+): Promise<{ ok: true; item: SentFileAccepted } | Exclude<Saved, { ok: true }>> {
   const res = await callApi(() =>
     api.api.files.sent[':id'].accept.$post({
       param: { id: file.id },
-      json: { version: file.version },
+      json: { version: file.version, ...(attach ? { attach } : {}) },
     }),
   );
   return res.ok ? { ok: true, item: SentFileAccepted.parse(res.data) } : res;

@@ -817,14 +817,15 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await page.setExtraHTTPHeaders({ 'x-forwarded-for': `198.18.${part()}.${part()}` });
   });
 
-  test('(приёмка блока 6) на странице контрагента «Я оплатил» без чека не отправляется; с чеком у месяца «Ожидает подтверждения»; «Принять» у чека открывает «Поступление от контрагента» с этим чеком в файлах, после записи чек — у поступления, у месяца — «Оплачено»', async ({
+  test('(приёмка блока 6; доработки 16.11, блок 1) на странице контрагента «Я оплатил» без чека не отправляется; с чеком у месяца «Ожидает подтверждения»; «Принять» у чека открывает «Поступление от контрагента» с этим чеком в файлах, «Отменить» оставляет чек «Новый»; после записи чек принят и — у поступления, у месяца — «Оплачено»', async ({
     page,
     request,
     baseURL,
     isMobile,
   }) => {
-    // Своя организация, отчёт с суммой, два открытия страницы, окна «Перечислить» и «Я оплатил», у
-    // сотрудника — «Отправленные файлы», окно чека и «Поступление от контрагента» с прикреплением.
+    // Своя организация, отчёт с суммой, три открытия страницы, окна «Перечислить» и «Я оплатил», у
+    // сотрудника — «Отправленные файлы», окно чека, «Поступление от контрагента» с «Отменить», снова
+    // «Принять» и «Сохранить» с прикреплением.
     test.slow();
     const texts = await dictionary(request);
     const o = await pageOrg(request, baseURL);
@@ -911,8 +912,9 @@ test.describe('Доработки 14.11, блок 6: страница контр
 
     // Бухгалтер (вход владельца — в том же браузере) в «Отправленных файлах» принимает чек: открывается
     // «Поступление от контрагента» с суммой месяца, и чек уже стоит в поле файлов (прототип v119
-    // `rcptFileRow`) — при сохранении он прикрепляется к поступлению без повторной загрузки. У контрагента
-    // «Файл к поступлению обязателен»: принятый чек его засчитывает, другого файла не нужно.
+    // `rcptFileRow`) — при сохранении он принимается и прикрепляется к поступлению без повторной загрузки;
+    // «Отменить» ничего не меняет — чек «Новый» (прототип v121). У контрагента «Файл к поступлению
+    // обязателен»: чек его засчитывает, другого файла не нужно.
     const moneyCard = (await (
       await request.get(`/api/contractors/${cp.id}/money`, { maxRetries: 2 })
     ).json()) as { contractor: { version: number } };
@@ -937,7 +939,12 @@ test.describe('Доработки 14.11, блок 6: страница контр
     const line = grid.locator('[data-id]').filter({ hasText: fileName });
     await expect(line).toContainText(text(texts, 'files.sent.st.new'));
     await line.getByText(fileName, { exact: true }).click();
-    await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
+    // У чека с оплатой рядом с «Принять» — «Принять только файл» (доработки 16.11, блок 1, пункт 5).
+    const sentWin = page.getByRole('dialog', { name: fileName });
+    await expect(sentWin.locator('[data-sent-window-accept-file]')).toHaveText(
+      text(texts, 'files.sent.accept_only'),
+    );
+    await sentWin.locator('[data-sent-window-accept]').click();
     const money = page.getByRole('dialog', { name: text(texts, 'money.in.title') });
     await expect(money.locator('[data-receipt-total]')).toHaveValue(som('4 670,50'));
     await expect(money.locator(`[data-receipt-row="${nds}"]`)).toHaveValue(som('4 670,50'));
@@ -947,33 +954,103 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await expect(chip.locator('[data-sent-receipt-remove]')).toHaveText(
       text(texts, 'cppage.rcpt.file_remove'),
     );
+    // «Отменить»: окно закрыто, чек «Новый», запроса «Принять» не было.
+    const accepts: string[] = [];
+    const onAccept = (r: { method(): string; url(): string }) => {
+      if (
+        r.method() === 'POST' &&
+        /^\/api\/files\/sent\/[^/]+\/accept$/.test(new URL(r.url()).pathname)
+      )
+        accepts.push(r.url());
+    };
+    page.on('request', onAccept);
+    await money.getByRole('button', { name: text(texts, 'btn.cancel') }).click();
+    await expect(money).toBeHidden();
+    await expect(line).toContainText(text(texts, 'files.sent.st.new'));
+    expect(accepts).toEqual([]);
+    page.off('request', onAccept);
+    // В истории контрагента о чеке ничего: он не принят.
+    const kept = (await (
+      await request.get(`/api/contractors/${cp.id}/history`, { maxRetries: 2 })
+    ).json()) as { items: { action: string }[] };
+    expect(kept.items.map((h) => h.action)).not.toContain('sent_file_accept');
+    // У месяца на странице контрагента — по-прежнему «Ожидает подтверждения».
+    await page.goto(cp.path);
+    await pageReady(page);
+    const still = await unfold(page, 'reports', isMobile);
+    await still.getByRole('button', { name: text(texts, 'pub.rep.by_month') }).click();
+    await expect(
+      still
+        .locator('[data-pub-tile]')
+        .filter({ has: page.locator('[data-pub-month-pay]') })
+        .locator('[data-pub-mpay]'),
+    ).toHaveAttribute('data-pub-mpay', 'wait');
+    await page.goto('/app/files/sent');
+    await expect(grid).toBeVisible();
+    const refound = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
+    });
+    await search(page, isMobile, tag);
+    expect((await refound).status()).toBe(200);
+    // Снова «Принять» — то же окно с чеком.
+    await line.getByText(fileName, { exact: true }).click();
+    await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
+    await expect(money.locator('[data-sent-receipt]')).toContainText(fileName);
     const saved = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
         new URL(r.url()).pathname === `/api/contractors/${cp.id}/receipts`,
     );
-    const attached = page.waitForResponse(
+    const accepted = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
-        /^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname),
+        /^\/api\/files\/sent\/[^/]+\/accept$/.test(new URL(r.url()).pathname),
     );
     await money.getByRole('button', { name: text(texts, 'money.in.ok') }).click();
     const savedRes = await saved;
     expect(savedRes.status()).toBe(201);
     const receiptId = ((await savedRes.json()) as { id: string }).id;
-    expect((await attached).status()).toBe(201);
+    const acceptedRes = await accepted;
+    expect(acceptedRes.status()).toBe(200);
+    expect(acceptedRes.request().postDataJSON()).toMatchObject({
+      attach: { kind: 'receipt', id: receiptId },
+    });
     await expect(money).toBeHidden();
     await expect(
       page.getByRole('status').filter({ hasText: text(texts, 'money.in.done') }),
     ).toBeVisible();
     await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
-    // Чек — среди файлов поступления (копия: в «Отправленных файлах» он тоже остался).
+    // Чек — у поступления тем же файлом, что у контрагента, без копии (доработки 16.11, блок 2,
+    // пункт 1): ссылка.
+    const acceptedFile = ((await acceptedRes.json()) as { fileId: string }).fileId;
     const receiptRes = await request.get(`/api/files?kind=receipt&id=${receiptId}`, {
       maxRetries: 2,
     });
     expect(receiptRes.status(), await receiptRes.text()).toBe(200);
-    const receiptFiles = (await receiptRes.json()) as { items: { name: string }[] };
-    expect(receiptFiles.items.map((f) => f.name)).toEqual([fileName]);
+    const receiptFiles = (await receiptRes.json()) as {
+      items: { id: string; name: string; linked: boolean }[];
+    };
+    expect(receiptFiles.items.map((f) => [f.id, f.name, f.linked])).toEqual([
+      [acceptedFile, fileName, true],
+    ]);
+    // В «Файловом менеджере» — одна строка с обеими ссылками: «От контрагента» и поступление.
+    const managed = await request.get(
+      `/api/files/manager?size=all&filters=${encodeURIComponent(
+        JSON.stringify({ cp: { type: 'enum', vals: [cp.id] } }),
+      )}`,
+      { maxRetries: 2 },
+    );
+    expect(managed.status(), await managed.text()).toBe(200);
+    const rows = (
+      (await managed.json()) as {
+        items: { id: string; name: string; kind: string; links: { kind: string; id: string }[] }[];
+      }
+    ).items.filter((f) => f.name === fileName);
+    // Вид строки — «Контрагент» (принятый файл, `FILE_LIST_KIND_OF`), ссылка — на поступление.
+    expect(rows.map((f) => [f.id, f.kind, f.links.map((l) => [l.kind, l.id])])).toEqual([
+      [acceptedFile, 'contractor', [['receipt', receiptId]]],
+    ]);
 
     // Месяц на странице контрагента — оплачен.
     await page.goto(cp.path);
@@ -991,16 +1068,22 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await expect(done.locator('[data-pub-send]')).toHaveCount(0);
     await expect(section(page, 'pay').locator('[data-pay="tax"] [data-pay-wait]')).toHaveCount(0);
 
-    // Сообщение об оплате — в истории контрагента от его имени.
+    // Сообщение об оплате — в истории контрагента от его имени; чек — «прикреплён к поступлению от …».
     const history = (await (
       await request.get(`/api/contractors/${cp.id}/history`, { maxRetries: 2 })
-    ).json()) as { items: { action: string; actor: string | null }[] };
+    ).json()) as {
+      items: { action: string; actor: string | null; changes: { field: string; to?: unknown }[] }[];
+    };
     const claim = history.items.find((h) => h.action === 'page_paid');
     expect(claim).toBeTruthy();
     expect(claim!.actor).toBeNull();
+    // Чек принят один раз — при сохранении поступления.
+    const taken = history.items.filter((h) => h.action === 'sent_file_accept');
+    expect(taken).toHaveLength(1);
+    expect(taken[0]!.changes.map((c) => c.field)).toContain('receipt');
   });
 
-  test('(прототип v119) «Я оплатил» за обслуживание: «Принять» у чека открывает «Принять оплату за обслуживание» с этим чеком в поле файлов; после «Убрать» оплата записана без файла, чек остался принятым', async ({
+  test('(прототип v119, v121) «Я оплатил» за обслуживание: «Принять только файл» принимает чек без окна денег; «Принять» у чека открывает «Принять оплату за обслуживание» с этим чеком в поле файлов; «Убрать» и «Вернуть»; после «Убрать» оплата записана без файла, а чек принят только в файлы контрагента', async ({
     page,
     request,
     baseURL,
@@ -1026,6 +1109,15 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await paid.locator('[data-pub-paid-ok]').click();
     await expect(paid).toBeHidden();
     await closeDone(page, text(texts, 'cph.paid.done_t'));
+    // Второй чек — для «Принять только файл».
+    const onlyName = `чек-только-файл-${tag}.pdf`;
+    await fee.locator('[data-pub-paid="fee"]').click();
+    await paid
+      .locator('[data-pub-paid-file]')
+      .setInputFiles({ name: onlyName, mimeType: 'application/pdf', buffer: pdfBytes() });
+    await paid.locator('[data-pub-paid-ok]').click();
+    await expect(paid).toBeHidden();
+    await closeDone(page, text(texts, 'cph.paid.done_t'));
 
     // Сотрудник (вход владельца — в том же браузере): «Принять» у чека — окно оплаты с чеком.
     // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
@@ -1041,39 +1133,71 @@ test.describe('Доработки 14.11, блок 6: страница контр
     });
     await search(page, isMobile, tag);
     expect((await found).status()).toBe(200);
+    const money = page.getByRole('dialog', { name: text(texts, 'fee.pay.title') });
+    const acceptCall = () =>
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          /^\/api\/files\/sent\/[^/]+\/accept$/.test(new URL(r.url()).pathname),
+      );
+
+    // «Принять только файл» у второго чека (доработки 16.11, блок 1, пункт 5): окно денег не
+    // открывается, чек принят только в файлы контрагента.
+    const onlyLine = grid.locator('[data-id]').filter({ hasText: onlyName });
+    await expect(onlyLine).toContainText(text(texts, 'files.sent.st.new'));
+    await onlyLine.getByText(onlyName, { exact: true }).click();
+    const onlyTaken = acceptCall();
+    await page
+      .getByRole('dialog', { name: onlyName })
+      .locator('[data-sent-window-accept-file]')
+      .click();
+    const onlyRes = await onlyTaken;
+    expect(onlyRes.status()).toBe(200);
+    expect(onlyRes.request().postDataJSON()).not.toHaveProperty('attach');
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'files.sent.accepted_only') }),
+    ).toBeVisible();
+    await expect(onlyLine).toContainText(text(texts, 'files.sent.st.accepted'));
+    await expect(money).toHaveCount(0);
+
     const line = grid.locator('[data-id]').filter({ hasText: fileName });
     await expect(line).toContainText(text(texts, 'files.sent.st.new'));
     await line.getByText(fileName, { exact: true }).click();
     await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
-    const money = page.getByRole('dialog', { name: text(texts, 'fee.pay.title') });
     const chip = money.locator('[data-sent-receipt]');
     await expect(chip).toContainText(fileName);
     await expect(chip).toContainText(text(texts, 'cppage.rcpt.file_hint'));
 
-    // «Убрать»: строки чека нет, при сохранении чек к оплате не прикрепляется.
+    // «Убрать»: строка «не прикрепится: будет принят только в файлы контрагента» и «Вернуть»
+    // (прототип v121); «Вернуть» ставит чек обратно.
+    const off = money.locator('[data-sent-receipt-off]');
     await chip.locator('[data-sent-receipt-remove]').click();
     await expect(chip).toHaveCount(0);
-    const attaches: string[] = [];
-    page.on('request', (r) => {
-      if (/^\/api\/files\/sent\/[^/]+\/attach$/.test(new URL(r.url()).pathname)) {
-        attaches.push(r.url());
-      }
-    });
+    await expect(off).toContainText(text(texts, 'cppage.rcpt.file_off', { name: fileName }));
+    await off.locator('[data-sent-receipt-back]').click();
+    await expect(chip).toContainText(fileName);
+    await expect(off).toHaveCount(0);
+    await chip.locator('[data-sent-receipt-remove]').click();
+    await expect(off).toBeVisible();
     const saved = page.waitForResponse(
       (r) =>
         r.request().method() === 'POST' &&
         new URL(r.url()).pathname === `/api/contractors/${cp.id}/fee-payments`,
     );
+    const accepted = acceptCall();
     await money.getByRole('button', { name: text(texts, 'fee.pay.ok') }).click();
     const savedRes = await saved;
     expect(savedRes.status()).toBe(201);
     const paymentId = ((await savedRes.json()) as { id: string }).id;
+    // Чек принят без прикрепления к оплате.
+    const acceptedRes = await accepted;
+    expect(acceptedRes.status()).toBe(200);
+    expect(acceptedRes.request().postDataJSON()).not.toHaveProperty('attach');
     await expect(money).toBeHidden();
     await expect(
       page.getByRole('status').filter({ hasText: text(texts, 'fee.pay.saved') }),
     ).toBeVisible();
     await expect(line).toContainText(text(texts, 'files.sent.st.accepted'));
-    expect(attaches).toEqual([]);
     const paymentRes = await request.get(`/api/files?kind=fee_payment&id=${paymentId}`, {
       maxRetries: 2,
     });

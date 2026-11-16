@@ -48,6 +48,11 @@ export interface TopBarProps {
    * телефоне кнопки нет — видео только в окне «?».
    */
   video?: { label: string; onClick: () => void } | null;
+  /**
+   * Колокольчик уведомлений слева от «?» (доработки 16.11.2026, блок 3; прототип v123 `#bell`):
+   * `Bell` со своей панелью; на телефоне прячется, пока раскрыт поиск.
+   */
+  bell?: ReactNode;
   /** «?» — помощь по модулю: открывает окно со статьёй «Базы знаний». */
   help: { label: string; title: string; onClick: () => void };
   /** Переключатель темы. */
@@ -58,7 +63,7 @@ export interface TopBarProps {
 /**
  * Верхняя панель (прототип index.html `#topbar`, ui/shell.js initTop и renderPage; css/shell.css,
  * mobile.css `.tb-title`): «Меню», название модуля и под ним вкладки с «ⓘ», общий поиск, дата и время,
- * «На всю ширину» (ПК), «?» (окно помощи, kb.js kbHelp) и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
+ * «На всю ширину» (ПК), колокольчик, «?» (окно помощи, kb.js kbHelp) и переключатель темы. Стоит над рабочей областью и не прокручивается. Длинное название
  * обрезается многоточием, полное — в подсказке и по нажатию. На телефоне поиск свёрнут в значок и
  * раскрывается на всю ширину вместо остальных кнопок; пустое поле при уходе фокуса сворачивается.
  */
@@ -71,6 +76,7 @@ export function TopBar({
   clock,
   wide,
   video,
+  bell,
   help,
   theme,
 }: TopBarProps) {
@@ -227,6 +233,7 @@ export function TopBar({
           <Icon name="film" />
         </button>
       )}
+      {bell ? <span className={`inline-flex ${other}`}>{bell}</span> : null}
       <button
         type="button"
         onClick={help.onClick}

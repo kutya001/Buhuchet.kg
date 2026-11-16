@@ -2,7 +2,7 @@ import { BELL_FROM, BELL_KEEP_DAYS, BELL_PAGE_SIZE, type BellKind } from '@buhuc
 import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { adminLeadsView } from './leads';
-import { NEWS_BELL } from './news';
+import { NEWS_BELL, type NewsModulesOfMe } from './news';
 import { contractors, employees, news, orgSettings, reports, roles, tasks } from './schema';
 
 /*
@@ -90,6 +90,11 @@ export interface BellSight {
   cpFee: boolean;
   /** Карточка сотрудника — право «Просматривать сотрудников». */
   staff: boolean;
+  /**
+   * Модули вошедшего для новостей (доработки 16.11.2026, блок 4, пункт 3; `newsModulesOf` домена):
+   * новость с модулями видна, если есть хотя бы один; null — администратор платформы, видны все.
+   */
+  news: NewsModulesOfMe;
 }
 
 const B = sql.raw('bell_notifications');
@@ -121,7 +126,7 @@ function seen(s: BellSight): SQL {
         where ${reports.id}::text = b.target_id and ${s.reports ?? sql`true`})
       when 'task' then ${task}
       when 'tasks_tab' then ${s.tasks === null ? sql`false` : sql`true`}
-      when 'news' then exists (select 1 from ${news} where ${news.id}::text = b.target_id and ${NEWS_BELL.live})
+      when 'news' then exists (select 1 from ${news} where ${news.id}::text = b.target_id and ${NEWS_BELL.live(s.news)})
       when 'lead' then app.is_platform_admin()
       when 'cp_sent' then ${s.cpSent}::boolean and exists (select 1 from ${contractors}
         where ${contractors.id}::text = b.target_id and ${s.files ?? sql`true`})
@@ -243,7 +248,7 @@ export async function bellReadAll(tx: Tx, now: Date): Promise<string[]> {
  * и здесь, в том числе раньше положенная строка. Время строки — появление новости (09:00 по Бишкеку дня
  * публикации).
  */
-export async function bellSyncNews(tx: Tx, now: Date): Promise<void> {
+export async function bellSyncNews(tx: Tx, now: Date, mine: NewsModulesOfMe): Promise<void> {
   const at = sql`${now.toISOString()}::timestamptz`;
   await tx.execute(sql`
     insert into ${B} (org_id, user_id, kind, event, target_kind, target_id, text, created_at, event_key, seen_at, read_at)
@@ -251,7 +256,7 @@ export async function bellSyncNews(tx: Tx, now: Date): Promise<void> {
       left(${news.title}, 1000), ${NEWS_BELL.at}, 'news:' || ${news.id},
       case when ${NEWS_BELL.read} then ${at} end, case when ${NEWS_BELL.read} then ${at} end
     from ${news}
-    where ${NEWS_BELL.live} and ${news.publishDate} >= ${BELL_FROM}::date
+    where ${NEWS_BELL.live(mine)} and ${news.publishDate} >= ${BELL_FROM}::date
       and ${NEWS_BELL.at} >= ${at} - ${KEEP}
     on conflict (user_id, event_key) do nothing`);
   await tx.execute(sql`

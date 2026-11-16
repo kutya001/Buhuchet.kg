@@ -156,3 +156,9 @@ body.wl-open{overflow:hidden}
 @media (prefers-reduced-motion:reduce){#ckbar .ck-tm i{animation:none}}
 /* Ссылка-действие в уведомлении («Мои запросы» после отправки запроса) */
 .toast-a{border:0;background:transparent;color:inherit;font:inherit;font-weight:650;text-decoration:underline;text-underline-offset:2px;cursor:pointer;padding:0 2px;white-space:nowrap}
+/* Текст новости «Для администратора платформы» — только в режиме Админка (пакет 16.11.2026, блок 4) */
+.nw-adm{margin-top:12px;padding-top:10px;border-top:1px dashed var(--border-strong)}
+.nw-adm-h{display:flex;align-items:center;gap:6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:650;color:var(--faint);margin-bottom:4px}
+.nw-adm-sw{margin-bottom:6px}
+.nw-warn{color:var(--yellow);font-size:12.5px}
+.md-src.md-off{display:none!important}

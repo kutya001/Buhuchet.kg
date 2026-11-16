@@ -58,7 +58,14 @@ import {
   sentValuesHandler,
   sentValuesRoute,
 } from './sent';
-import { sentAttachHandler, sentAttachRoute } from './sent-attach';
+import {
+  linkableHandler,
+  linkableRoute,
+  linkAddHandler,
+  linkAddRoute,
+  unlinkHandler,
+  unlinkRoute,
+} from './links';
 import {
   pageSentCompleteHandler,
   pageSentCompleteRoute,
@@ -74,38 +81,44 @@ import {
  * контрагенты ручной загрузки, занятый объём.
  * Файлы от контрагентов (доработки 14.11.2026, блок 2): «Отправленные файлы» карточки, вкладка «Файлы от
  * контрагентов» со счётчиком, «Принять» и «Отклонить», галочка контрагента и отправка со страницы по
- * ссылке без входа; принятый чек — к поступлению или оплате за обслуживание (`sent-attach.ts`). Маршруты
+ * ссылке без входа; чек принимается вместе с поступлением или оплатой за обслуживание («Принять» с `attach`). Маршруты
  * `/files/sent/…` — раньше `/files/{id}…`: «sent» — не номер файла.
  */
 export function filesModule(deps: ApiDeps) {
-  return createModuleApp()
-    .openapi(contractorSentRoute, contractorSentHandler(deps))
-    .openapi(sentListRoute, sentListHandler(deps))
-    .openapi(sentValuesRoute, sentValuesHandler(deps))
-    .openapi(sentExportRoute, sentExportHandler(deps))
-    .openapi(sentCountRoute, sentCountHandler(deps))
-    .openapi(sentAcceptRoute, sentAcceptHandler(deps))
-    .openapi(sentAttachRoute, sentAttachHandler(deps))
-    .openapi(sentRejectRoute, sentRejectHandler(deps))
-    .openapi(sentLinkRoute, sentLinkHandler(deps))
-    .openapi(sentUploadRoute, sentUploadHandler(deps))
-    .openapi(sentUploadSetRoute, sentUploadSetHandler(deps))
-    .openapi(pageSentStartRoute, pageSentStartHandler(deps))
-    .openapi(pageSentCompleteRoute, pageSentCompleteHandler(deps))
-    .openapi(listFilesRoute, listFilesHandler(deps))
-    .openapi(startUploadRoute, startUploadHandler(deps))
-    .openapi(completeUploadRoute, completeUploadHandler(deps))
-    .openapi(fileLinkRoute, fileLinkHandler(deps))
-    .openapi(downloadFileRoute, downloadFileHandler(deps))
-    .openapi(filePageRoute, filePageHandler(deps))
-    .openapi(startReplaceRoute, startReplaceHandler(deps))
-    .openapi(editFileRoute, editFileHandler(deps))
-    .openapi(deleteFileRoute, deleteFileHandler(deps))
-    .openapi(listManagerRoute, listManagerHandler(deps))
-    .openapi(managerValuesRoute, managerValuesHandler(deps))
-    .openapi(exportManagerRoute, exportManagerHandler(deps))
-    .openapi(managerSummaryRoute, managerSummaryHandler(deps))
-    .openapi(formContractorsRoute, formContractorsHandler(deps))
-    .openapi(fileUsageRoute, fileUsageHandler(deps))
-    .openapi(fileViewRoute, fileViewHandler(deps));
+  return (
+    createModuleApp()
+      .openapi(contractorSentRoute, contractorSentHandler(deps))
+      .openapi(sentListRoute, sentListHandler(deps))
+      .openapi(sentValuesRoute, sentValuesHandler(deps))
+      .openapi(sentExportRoute, sentExportHandler(deps))
+      .openapi(sentCountRoute, sentCountHandler(deps))
+      .openapi(sentAcceptRoute, sentAcceptHandler(deps))
+      .openapi(sentRejectRoute, sentRejectHandler(deps))
+      .openapi(sentLinkRoute, sentLinkHandler(deps))
+      .openapi(sentUploadRoute, sentUploadHandler(deps))
+      .openapi(sentUploadSetRoute, sentUploadSetHandler(deps))
+      .openapi(pageSentStartRoute, pageSentStartHandler(deps))
+      .openapi(pageSentCompleteRoute, pageSentCompleteHandler(deps))
+      // Ссылки файлов контрагента (доработки 16.11.2026, блок 2) — раньше `/files/{id}`: «linkable» и
+      // «links» — не номер файла.
+      .openapi(linkableRoute, linkableHandler(deps))
+      .openapi(linkAddRoute, linkAddHandler(deps))
+      .openapi(unlinkRoute, unlinkHandler(deps))
+      .openapi(listFilesRoute, listFilesHandler(deps))
+      .openapi(startUploadRoute, startUploadHandler(deps))
+      .openapi(completeUploadRoute, completeUploadHandler(deps))
+      .openapi(fileLinkRoute, fileLinkHandler(deps))
+      .openapi(downloadFileRoute, downloadFileHandler(deps))
+      .openapi(filePageRoute, filePageHandler(deps))
+      .openapi(startReplaceRoute, startReplaceHandler(deps))
+      .openapi(editFileRoute, editFileHandler(deps))
+      .openapi(deleteFileRoute, deleteFileHandler(deps))
+      .openapi(listManagerRoute, listManagerHandler(deps))
+      .openapi(managerValuesRoute, managerValuesHandler(deps))
+      .openapi(exportManagerRoute, exportManagerHandler(deps))
+      .openapi(managerSummaryRoute, managerSummaryHandler(deps))
+      .openapi(formContractorsRoute, formContractorsHandler(deps))
+      .openapi(fileUsageRoute, fileUsageHandler(deps))
+      .openapi(fileViewRoute, fileViewHandler(deps))
+  );
 }

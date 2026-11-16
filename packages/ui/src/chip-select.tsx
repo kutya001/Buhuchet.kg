@@ -79,6 +79,7 @@ export function ChipMultiSelect({
   onChange,
   label,
   describedBy,
+  check = false,
 }: {
   id?: string;
   options: readonly ChipMultiOption[];
@@ -87,6 +88,8 @@ export function ChipMultiSelect({
   /** Название группы кнопок для экранного диктора. */
   label: string;
   describedBy?: string;
+  /** Галочка перед подписью выбранной плашки (прототип v123, «Модули» новости). */
+  check?: boolean;
 }) {
   const toggle = (code: string) => {
     const next = new Set(value);
@@ -114,6 +117,7 @@ export function ChipMultiSelect({
             onClick={() => toggle(o.value)}
             className={chipClass(on)}
           >
+            {check && on ? <Icon name="check" size="sm" /> : null}
             {o.label}
           </button>
         );

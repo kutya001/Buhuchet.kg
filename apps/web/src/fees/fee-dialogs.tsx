@@ -46,7 +46,8 @@ import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
-import { attachSentReceipt, SentReceiptRow } from '../contractor-page/receipt-file';
+import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import {
   feeOrderedMonths,
@@ -400,10 +401,13 @@ function FeePaymentModal({
   // Строки правили руками — сумма их больше не перераспределяет (прототип `st.manual`).
   const [manual, setManual] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
-  // Принятый чек (прототип v119 `feePayDlg` с `pre.file`): уже в поле «Файл»; «Убрать» — не прикреплять.
-  const [receipt, setReceipt] = useState(() =>
-    !edit && canUpload ? (preset?.receipt ?? null) : null,
-  );
+  // «Из файлов контрагента» (доработки 16.11.2026, блок 2, пункт 9): прикрепятся ссылкой после сохранения.
+  const [links, setLinks] = useState<PickedLink[]>([]);
+  // Чек из «Отправленных файлов» (прототип v119–v121 `feePayDlg` с `pre.file`): уже в поле «Файл», но
+  // «Новый», пока оплата не сохранена; «Убрать» — при сохранении он будет принят только в файлы контрагента.
+  const sent = !edit ? (preset?.receipt ?? null) : null;
+  const [receiptOn, setReceiptOn] = useState(true);
+  const receipt = sent && canUpload && receiptOn ? sent : null;
   const [errors, setErrors] = useState<{
     amount?: string;
     date?: string;
@@ -446,10 +450,13 @@ function FeePaymentModal({
     if (bad) return setErrors({ files: bad });
     // Новые файлы — к оплате после сохранения (прототип: «добавлены файлы» без причины).
     const upload = async () =>
-      picked.length
-        ? uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: e.id }, picked)
-        : null;
-    if (parts.length === 0 && note === e.note && picked.length > 0) {
+      joinFailures(
+        picked.length
+          ? await uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: e.id }, picked)
+          : null,
+        await linkPicked(t, errorText, { kind: 'fee_payment', id: e.id }, links),
+      );
+    if (parts.length === 0 && note === e.note && (picked.length > 0 || links.length > 0)) {
       setBusy(true);
       const failedUpload = await upload();
       setBusy(false);
@@ -513,19 +520,27 @@ function FeePaymentModal({
       to,
       allocation: allocation.filter((x) => x.amount > 0),
       note,
-      files: picked.length + (receipt ? 1 : 0),
+      files: picked.length + links.length + (receipt ? 1 : 0),
     });
     const saved = res.ok ? FeePaymentSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
       const source = { kind: 'fee_payment' as const, id: saved.data.id };
-      const failedReceipt = receipt ? await attachSentReceipt(t, errorText, receipt, source) : null;
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        failedReceipt;
+      const taken = sent
+        ? await takeSentReceipt(t, errorText, sent, {
+            kind: 'fee',
+            attach: receipt ? source : null,
+          })
+        : null;
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();
       if (failedUpload) toast(failedUpload, { bad: true });
+      if (taken && 'bad' in taken) toast(taken.bad, { bad: true });
+      if (taken && 'warn' in taken) return void toast(taken.warn, { icon: 'alert' });
       return void toast(t('fee.pay.saved'), { icon: 'wallet' });
     }
     setBusy(false);
@@ -558,7 +573,9 @@ function FeePaymentModal({
       onClose={onClose}
       kind="form"
       size="mid"
-      dirty={picked.length > 0 || (edit ? reason !== '' : note !== '') || manual}
+      dirty={
+        picked.length > 0 || links.length > 0 || (edit ? reason !== '' : note !== '') || manual
+      }
       title={t(edit ? 'fin.fee.edit_title' : 'fee.pay.title')}
       sub={sub}
       footer={
@@ -786,9 +803,20 @@ function FeePaymentModal({
             >
               {(control) => (
                 <div>
-                  {receipt ? (
-                    <SentReceiptRow receipt={receipt} onRemove={() => setReceipt(null)} />
+                  {sent ? (
+                    <SentReceiptRow
+                      receipt={sent}
+                      on={receiptOn}
+                      onRemove={() => setReceiptOn(false)}
+                      onBack={() => setReceiptOn(true)}
+                    />
                   ) : null}
+                  <LinkPickRow
+                    contractorId={form?.contractor.id ?? null}
+                    picked={links}
+                    record={edit ? { kind: 'fee_payment', id: edit.id } : null}
+                    onChange={setLinks}
+                  />
                   <input
                     {...control}
                     type="file"

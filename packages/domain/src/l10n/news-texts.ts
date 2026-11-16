@@ -35,6 +35,12 @@ export const NEWS_TEXTS = {
   'news.col.pinned': { ru: 'Закреплено', section: S },
   'news.col.edited': { ru: 'Изменено', section: S },
   'news.col.reads': { ru: 'Прочитали', section: S },
+  'news.col.modules': { ru: 'Модули', section: S },
+  'news.col.admin_md': { ru: 'Для администратора платформы', section: S },
+  'news.admin_md.yes': { ru: 'Есть', section: S },
+  'news.admin_md.no': { ru: 'Нет', section: S },
+  // «Модули» новости (доработки 16.11.2026, блок 4, пункт 3): у модулей — их название в меню.
+  'news.mod.fee': { ru: 'Плата за обслуживание', section: S },
   'news.count.one': { ru: '{n} новость', section: S },
   'news.count.few': { ru: '{n} новости', section: S },
   'news.count.many': { ru: '{n} новостей', section: S },
@@ -45,6 +51,10 @@ export const NEWS_TEXTS = {
   'news.filter.version': { ru: 'Версия', section: S },
   'news.filter.version_all': { ru: 'Все версии', section: S },
   'news.filter.version_item': { ru: 'Версия {v}', section: S },
+  'news.filter.module': { ru: 'Модуль', section: S },
+  'news.filter.module_all': { ru: 'Все модули', section: S },
+  // Второй текст — только в режиме Админка, под чертой с этой подписью (блок 4, пункт 1).
+  'news.admin_md': { ru: 'Для администратора платформы', section: S },
   'news.unread': { ru: 'непрочитанных {n}', section: S },
   'news.badge': { ru: 'Непрочитанные новости', section: S },
   'news.read_all': { ru: 'Отметить все прочитанными', section: S },
@@ -78,7 +88,7 @@ export const NEWS_TEXTS = {
   'news.wn.ok': { ru: 'Понятно', section: S },
   // Админка: список и меню записи
   'news.adm.note': {
-    ru: 'Новости видят все пользователи всех организаций во вкладке «Новости» модуля «База знаний», независимо от прав. При входе новости с отметкой «Показывать при входе» открываются в окне «Что нового»; сообщений в Telegram нет. Черновик видит только администратор платформы; будущая дата публикации — новость появится сама в 09:00 по Бишкеку.',
+    ru: 'Новости видят все пользователи всех организаций во вкладке «Новости» модуля «База знаний»; новость с модулями — только те, у кого есть хотя бы один из них. Текст «Для администратора платформы» виден только в режиме Админка. При входе новости с отметкой «Показывать при входе» открываются в окне «Что нового»; сообщений в Telegram нет. Черновик видит только администратор платформы; будущая дата публикации — новость появится сама в 09:00 по Бишкеку.',
     section: S,
   },
   'news.act.edit': { ru: 'Изменить', section: S },
@@ -164,6 +174,26 @@ export const NEWS_TEXTS = {
     ru: 'Разделы: «Что нового», «Изменено», «Исправлено», «Где найти», «Что нужно сделать»; пустые разделы не показываются. Можно: # и ## заголовки, **жирный**, *курсив*, списки «- » и «1. », [ссылка](https://…), ссылка на модуль [Перейти](#mod:reports), на его вкладку (#mod:dicts.types), статью (#art:a5) или видео (кнопка «Видео»: у пользователя — «▶ название · 3:25»), картинка, «> » примечание, «---» разделитель, таблица | a | b |. HTML не выполняется.',
     section: S,
   },
+  'news.f.modules': { ru: 'Модули', section: S },
+  'news.f.modules_hint': {
+    ru: 'Новость про модуль видят только те, у кого он есть (право и учётная политика); без модулей — все',
+    section: S,
+  },
+  'news.f.text_switch': { ru: 'Какой текст', section: S },
+  'news.f.text_users': { ru: 'Для пользователей', section: S },
+  'news.f.text_admin': { ru: 'Для администратора платформы', section: S },
+  'news.f.admin_ph': {
+    ru: 'Что изменилось в Админке, технические подробности: видно только в режиме Админка',
+    section: S,
+  },
+  'news.f.users_hint': {
+    ru: 'Для пользователей — что изменилось для них и где это найти, без слов «прототип», «миграция», «стенд», «поток», «PR», «справочник платформы». Всё про Админку и технические подробности — в тексте «Для администратора платформы»: его видят только в режиме Админка, под чертой с этой подписью.',
+    section: S,
+  },
+  'news.f.tech_warn': {
+    ru: 'В тексте для пользователей: {words}. Такое — в текст «Для администратора платформы».',
+    section: S,
+  },
   'news.md.bold': { ru: 'Жирный', section: S },
   'news.md.bold_mark': { ru: 'Ж', section: S },
   'news.md.heading_mark': { ru: 'H', section: S },
@@ -193,6 +223,10 @@ export const NEWS_TEXTS = {
   'err.news_md_too_long': { ru: NEWS_MESSAGES.news_md_too_long, section: E },
   'err.news_version_required': { ru: NEWS_MESSAGES.news_version_required, section: E },
   'err.news_version_too_long': { ru: NEWS_MESSAGES.news_version_too_long, section: E },
+  'err.news_admin_md_too_long': { ru: NEWS_MESSAGES.news_admin_md_too_long, section: E },
+  'err.news_modules_unknown': { ru: NEWS_MESSAGES.news_modules_unknown, section: E },
+  'err.news_modules_duplicate': { ru: NEWS_MESSAGES.news_modules_duplicate, section: E },
+  'err.news_modules_too_many': { ru: NEWS_MESSAGES.news_modules_too_many, section: E },
   'err.news_link': { ru: 'Нет такой статьи, модуля или видео', section: E },
   'err.news_not_draft': { ru: 'Новость уже опубликована', section: E },
   'err.news_delete_not_draft': {

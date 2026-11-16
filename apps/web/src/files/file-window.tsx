@@ -1,7 +1,7 @@
 'use client';
 
 import { bishkekDate, bishkekTime, filePreviewKind, formatDateRu } from '@buhuchet/domain';
-import { FileLink, type FileManagerRow } from '@buhuchet/shared';
+import { FileLink, type FileLinkInfo, type FileManagerRow } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
@@ -12,17 +12,19 @@ import {
   Icon,
   inputClass,
   KeyValues,
+  linkButtonClass,
   Modal,
   Note,
   type KeyValueItem,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { Fragment, useId, useState } from 'react';
 import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import { FileNoteInput } from './attach-dialog';
 import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
+import { fileLinkText, fileSourceWithLinks } from './file-links';
 import { formContractorsQuery, fileSizeText } from './files-data';
 
 /** Ссылка на просмотр картинки или PDF в окне файла (на 15 минут). */
@@ -113,6 +115,8 @@ export function FilePreview({
  * тип и размер), «Откуда», «Источник», «Контрагент», кто и когда загрузил, «Заменён» (кто и когда —
  * прототип v95) и примечание (нет — «нет»); «Скачать», «Изменить» (без права «Загружать файлы» —
  * недоступна, с причиной) и «Перейти к источнику» — у файла записи, «Готово» — у загруженного вручную.
+ * У файла контрагента, прикреплённого к записям (доработки 16.11.2026, блок 2; прототип v124): записи в
+ * «Источнике» — ссылки на их окна (`data-fol`), «Удалить» — «Удалить отовсюду» (`fo-del`).
  */
 export function FileWindow({
   file,
@@ -121,6 +125,8 @@ export function FileWindow({
   onDownload,
   onSource,
   onEdit,
+  onLink,
+  onDelete,
 }: {
   file: FileManagerRow;
   open: boolean;
@@ -130,12 +136,53 @@ export function FileWindow({
   onSource: (() => void) | null;
   /** «Изменить» — окно «Изменить файл» открывает экран; нет — кнопки нет. */
   onEdit?: () => void;
+  /** Запись ссылки из «Источника» — в её окне; нет — записи простым текстом. */
+  onLink?: (link: FileLinkInfo) => void;
+  /**
+   * «Удалить» / «Удалить отовсюду» (без права — недоступна, с причиной); нет — кнопки нет. Окно остаётся
+   * открытым до подтверждения (прототип `fDelDlg(f, () => m.close())`): вопрос — поверх окна.
+   */
+  onDelete?: () => void;
 }) {
   const t = useT();
+  // Надпись — по видимым ссылкам, как в меню «…» и в прототипе (`f.links.length`).
+  const linked = file.links.length > 0;
   const replacedAt = file.replaced ? new Date(file.replaced.at) : null;
   const items: KeyValueItem[] = [
     { id: 'kind', label: t('files.window.kind'), value: fileKindText(t, file.kind) },
-    { id: 'src', label: t('files.window.src'), value: file.source },
+    {
+      id: 'src',
+      label: t('files.window.src'),
+      // Прототип v124 `openFile`: «От контрагента · <запись> · <запись>», запись — ссылка на её окно.
+      value: (
+        <span data-file-window-src="">
+          {file.source}
+          {file.links.map((link) => {
+            const text = fileLinkText(t, link, 'src');
+            return (
+              <Fragment key={`${link.kind}-${link.id}`}>
+                {' · '}
+                {onLink ? (
+                  <button
+                    type="button"
+                    data-file-link-open={`${link.kind}:${link.id}`}
+                    className={linkButtonClass()}
+                    onClick={() => {
+                      onClose();
+                      onLink(link);
+                    }}
+                  >
+                    {text}
+                  </button>
+                ) : (
+                  text
+                )}
+              </Fragment>
+            );
+          })}
+        </span>
+      ),
+    },
     {
       id: 'cp',
       label: t('files.window.cp'),
@@ -176,7 +223,10 @@ export function FileWindow({
       open={open}
       onClose={onClose}
       title={file.name}
-      sub={t('files.window.sub', { kind: fileKindText(t, file.kind), src: file.source })}
+      sub={t('files.window.sub', {
+        kind: fileKindText(t, file.kind),
+        src: fileSourceWithLinks(t, file.source, file.links),
+      })}
       size="mid"
       kind="card"
       footer={
@@ -203,6 +253,19 @@ export function FileWindow({
               {t('files.window.edit')}
             </button>
           ) : null}
+          {onDelete ? (
+            <button
+              type="button"
+              data-file-window-delete=""
+              className={buttonClass('danger')}
+              disabled={!file.canDelete}
+              title={file.canDelete ? undefined : t('err.file_delete_forbidden')}
+              onClick={onDelete}
+            >
+              <Icon name="trash" size="sm" />
+              {t(linked ? 'files.act.delete_all' : 'files.act.delete')}
+            </button>
+          ) : null}
           <div className="flex-1" />
           {onSource ? (
             <button
@@ -215,7 +278,8 @@ export function FileWindow({
               }}
             >
               <Icon name={fileKindIcon(file.kind)} size="sm" />
-              {t('files.act.source')}
+              {/* Файл контрагента с ссылками (прототип v124): кнопка ведёт в его файлы. */}
+              {file.links.length ? t('files.window.cp_files') : t('files.act.source')}
             </button>
           ) : (
             <button type="button" className={buttonClass('cta')} onClick={onClose}>

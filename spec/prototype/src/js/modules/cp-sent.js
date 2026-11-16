@@ -24,7 +24,8 @@ const sntCan=()=>can('filesUpload');
 // Может ли контрагент отправлять файлы: страница включена, раздел «Файлы» показан, галочка в учётной политике и у контрагента
 const sntUpOn=c=>pgOn(c)&&pgSecs(c).includes('files')&&ORG.cpUpload!==false&&!(c.page&&c.page.noUp);
 // Кому сообщить о новом файле: ответственному, без него (или он заблокирован, без Telegram) — первому владельцу с Telegram
-function sntNotify(c,n){const to=pgTgStaff(c);if(to)tgSvc(to,n>1?`Новые файлы от контрагента: ${n}`:'Новый файл от контрагента')}
+// Строка в колокольчике (пакет 16.11.2026, блок 3) — ответственному и тому, кому ушло сообщение в Telegram: открывает «Отправленные файлы»
+function sntNotify(c,n){bellCp(c,{kind:'files',ev:'cp_file',open:{k:'cp_sent',id:c.id},text:n>1?`Новые файлы от контрагента: ${n}`:'Новый файл от контрагента',key:bellOnce('cp_file:'+c.id)});const to=pgTgStaff(c);if(to)tgSvc(to,n>1?`Новые файлы от контрагента: ${n}`:'Новый файл от контрагента')}
 // Принять файл в файлы контрагента (то же имя уже есть — «… (2)»); to — к какой записи денег он прикреплён при сохранении («поступлению от ДД.ММ.ГГГГ»).
 // Возвращает имя, под которым файл лёг к контрагенту
 function sntAcceptDo(x,to){const c=CPM[x.cp];let n=x.name;if((c.files||[]).includes(n)){const i=n.lastIndexOf('.'),b=i>0?n.slice(0,i):n,e=i>0?n.slice(i):'';let k=2;while(c.files.includes(`${b} (${k})${e}`))k++;n=`${b} (${k})${e}`}

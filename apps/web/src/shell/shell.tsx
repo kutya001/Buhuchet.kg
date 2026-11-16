@@ -53,6 +53,7 @@ import { ProfileWindow } from '../profile/profile-window';
 import { QueryProvider } from '../query';
 import { useModuleStats } from '../lists/stats';
 import { ModuleScreen, screenHasPlates } from '../screens/module-screen';
+import { ShellBell } from './bell';
 import { skipNextIntro } from './brand-intro';
 import { PHONE_QUERY, saveNavHidden, saveTree, saveWide, toggleTheme } from './browser';
 import { Clock } from './clock';
@@ -597,6 +598,7 @@ function ShellPage({
                     }
                   : null
               }
+              bell={<ShellBell />}
               help={{
                 label: t('shell.help'),
                 title: t('shell.help_title'),

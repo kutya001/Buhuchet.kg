@@ -76,5 +76,5 @@ tgAct('nudge',{scope:(u,id)=>seeAll('reports')&&!!EM[id]&&EM[id].active!==false&
   run:(u,id)=>{const e=EM[id],v={сотрудник:e.short,n:tgOverOf(id).length};
     if(!e.tg)return {eph:tplFill('tgActNudgeNoTg',v)};
     if(e.nudge&&e.nudge.day===TODAY)return {eph:tplFill('tgActNudgeWait',v)};
-    e.nudge={day:TODAY,by:u.id,at:bishkekNow().hm};TG_LOG.unshift({id:TG_LOG.length+1,at:nowStamp(),to:e.short+' '+e.tg,org:ORG.name,kind:'Напоминание о просроченном',st:'Ожидает',tries:0,err:''});
+    e.nudge={day:TODAY,by:u.id,at:bishkekNow().hm};bellPut(e.id,{kind:'reports',ev:'nudge',need:'repView',open:{k:'reports_tab',id:'overdue'},text:`${u.short||u.fio} напоминает о просроченном: ${v.n}`,key:'nudge:'+TODAY});TG_LOG.unshift({id:TG_LOG.length+1,at:nowStamp(),to:e.short+' '+e.tg,org:ORG.name,kind:'Напоминание о просроченном',st:'Ожидает',tries:0,err:''});
     return {done:'✓ Напомнили',eph:tplFill('tgActNudgeOk',v)}}});

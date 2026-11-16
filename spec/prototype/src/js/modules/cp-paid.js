@@ -80,6 +80,7 @@ function pubPaidDlg(c,k,m0,o={}){if(!pgPaidOn(c)){toast('Ваш бухгалте
         SENT.push({id,cp:c.id,name:x.name.slice(0,FNAME_MAX),size:x.size,src:'page',at,note:`Чек: ${tx?'налоги':'обслуживание'}, ${som(sum)}${cm?'. '+cm:''}`,st:'new',pay:{kind:k,m,sum}});
         pgClaimAdd(c,{src:'page',k,m,sum,at,file:id});
         HIST.push({at,who:'client',ent:'cp',id:c.id,cp:c.id,what:`Контрагент сообщил со страницы об оплате: ${what(m).replace(/^./,ch=>ch.toLowerCase())} — ${som(sum)}, чек «${x.name}»${cm?'. Комментарий: '+cm:''}`});
+        bellCp(c,{kind:'money',ev:'cp_paid',open:{k:'cp_sent',id:c.id},text:`Сообщил об оплате: ${what(m).replace(/^./,ch=>ch.toLowerCase())} — ${som(sum)}, чек в «Отправленных файлах»`,key:'cp_paid:'+id});
         const to=pgTgStaff(c);if(to)tgSvc(to,'Контрагент сообщил об оплате');
         // Итог простыми словами: что будет дальше (доработки 15.11.2026, пункт 5.1)
         dbSoon();mm.close();pubDraw(true);cphDone('Сообщение об оплате отправлено',cphT('paidDone','Сообщение об оплате и чек отправлены бухгалтеру'))}}})})}

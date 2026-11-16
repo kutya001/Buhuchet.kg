@@ -335,8 +335,11 @@ export const KB_ADMIN_TEXTS = {
   'kbadm.io.col.login': { ru: 'Показывать при входе', section: S },
   'kbadm.io.col.short': { ru: 'Краткое описание', section: S },
   'kbadm.io.col.md': { ru: 'Подробное описание (markdown)', section: S },
+  'kbadm.io.col.news_admin_md': { ru: 'Для администратора платформы', section: S },
+  'kbadm.io.col.news_modules': { ru: 'Модули', section: S },
   'kbadm.io.aud_adm': { ru: 'Администраторам платформы', section: S },
   'pdicts.io.err.ref.kbgroups': { ru: 'модуля программы «{value}» нет', section: E },
+  'kbadm.io.err.news_module': { ru: 'модуля «{value}» нет', section: E },
   'pdicts.io.err.ref.perms': { ru: 'права «{value}» нет', section: E },
   'kbadm.io.err.code': {
     ru: 'Код — латиница, цифры, «-» и «_», с буквы или цифры, до 64 знаков',

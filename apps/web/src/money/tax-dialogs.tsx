@@ -39,7 +39,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
-import { attachSentReceipt, SentReceiptRow } from '../contractor-page/receipt-file';
+import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { presetLines, reallocate, type ReceiptPreset } from './receipt-preset';
@@ -152,6 +153,9 @@ export function PaymentDialog({
   const [date, setDate] = useState(todayBishkek);
   const [amount, setAmount] = useState(formatSom(Math.max(0, defaults.amount), 'auto'));
   const [picked, setPicked] = useState<File[]>([]);
+  // «Из файлов контрагента» (доработки 16.11.2026, блок 2, пункт 9; прототип v124 `payDlg`): прикрепятся
+  // ссылкой к оплате после её записи.
+  const [links, setLinks] = useState<PickedLink[]>([]);
   const [errors, setErrors] = useState<{ date?: string; amount?: string; files?: string }>({});
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
@@ -178,14 +182,11 @@ export function PaymentDialog({
     );
     const saved = res.ok ? PaymentSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
-      const failed = picked.length
-        ? await uploadMoneyFiles(
-            t,
-            errorText,
-            { kind: 'tax_payment', id: saved.data.operationId },
-            picked,
-          )
-        : null;
+      const source = { kind: 'tax_payment', id: saved.data.operationId } as const;
+      const failed = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();
@@ -206,7 +207,7 @@ export function PaymentDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      dirty={picked.length > 0}
+      dirty={picked.length > 0 || links.length > 0}
       title={t('money.pay.title')}
       sub={reportSub(card)}
       footer={
@@ -309,13 +310,20 @@ export function PaymentDialog({
               error={errors.files}
             >
               {(control) => (
-                <FilesInput
-                  control={control}
-                  onPick={(f) => {
-                    setPicked(f);
-                    setErrors((x) => ({ ...x, files: undefined }));
-                  }}
-                />
+                <div>
+                  <LinkPickRow
+                    contractorId={card.contractor.id}
+                    picked={links}
+                    onChange={setLinks}
+                  />
+                  <FilesInput
+                    control={control}
+                    onPick={(f) => {
+                      setPicked(f);
+                      setErrors((x) => ({ ...x, files: undefined }));
+                    }}
+                  />
+                </div>
               )}
             </Field>
           ) : null}
@@ -542,11 +550,14 @@ function ReceiptModal({
   const [reason, setReason] = useState('');
   const [changed, setChanged] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
-  // Принятый чек (прототип v119): уже в поле «Файлы»; «Убрать» — не прикреплять. Только у нового поступления
-  // и у того, кто может прикреплять файлы.
-  const [receipt, setReceipt] = useState(() =>
-    !edit && canUpload && preset && 'list' in preset ? (preset.receipt ?? null) : null,
-  );
+  // «Из файлов контрагента» (доработки 16.11.2026, блок 2, пункт 9): прикрепятся ссылкой после сохранения.
+  const [links, setLinks] = useState<PickedLink[]>([]);
+  // Чек из «Отправленных файлов» (прототип v119–v121): уже в поле «Файлы», но «Новый», пока поступление не
+  // сохранено; «Убрать» — при сохранении он будет принят только в файлы контрагента. Только у нового
+  // поступления; прикрепить — у того, кто может прикреплять файлы.
+  const sent = !edit && preset && 'list' in preset ? (preset.receipt ?? null) : null;
+  const [receiptOn, setReceiptOn] = useState(true);
+  const receipt = sent && canUpload && receiptOn ? sent : null;
   // Файл уже приложен к изменяемому поступлению — второй не требуется (прототип: «уже приложено N»).
   const needFile = filesOn && !!form?.contractor.needReceiptFile && !(edit && edit.files > 0);
   const fileHint =
@@ -637,7 +648,7 @@ function ReceiptModal({
       return setErrors({
         total: t('err.receipt_min', { amount: formatSomWithUnit(e.spent.min) }),
       });
-    if (needFile && picked.length === 0)
+    if (needFile && picked.length === 0 && links.length === 0)
       return setErrors({ files: t('err.receipt_file_required') });
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
@@ -661,10 +672,15 @@ function ReceiptModal({
     if (holder !== e.holder) parts.push('holder');
     // Новые файлы — к поступлению после сохранения (прототип: «добавлены файлы» без причины).
     const upload = async () =>
-      picked.length ? uploadMoneyFiles(t, errorText, { kind: 'receipt', id: e.id }, picked) : null;
+      joinFailures(
+        picked.length
+          ? await uploadMoneyFiles(t, errorText, { kind: 'receipt', id: e.id }, picked)
+          : null,
+        await linkPicked(t, errorText, { kind: 'receipt', id: e.id }, links),
+      );
     // Без изменений, только с новыми файлами — файлы без записи «Сохранено без изменений» (прототип:
     // «Прикреплены файлы»); совсем без изменений — сохраняется, в истории «Сохранено без изменений».
-    if (parts.length === 0 && picked.length > 0) {
+    if (parts.length === 0 && (picked.length > 0 || links.length > 0)) {
       setBusy(true);
       const failedUpload = await upload();
       setBusy(false);
@@ -715,7 +731,7 @@ function ReceiptModal({
       });
     if (!date || date > todayBishkek()) return setErrors({ date: t('err.money_date_future') });
     if (over) return setErrors({ rows: t('err.receipt_row_over') });
-    if (needFile && picked.length === 0 && !receipt)
+    if (needFile && picked.length === 0 && links.length === 0 && !receipt)
       return setErrors({ files: t('err.receipt_file_required') });
     const bad = pickedMoneyFilesProblem(t, errorText, picked);
     if (bad) return setErrors({ files: bad });
@@ -728,21 +744,29 @@ function ReceiptModal({
           date,
           rows: rowsOut(),
           ...(feeDetail > 0 ? { fee: feeOut() } : {}),
-          files: picked.length + (receipt ? 1 : 0),
+          files: picked.length + links.length + (receipt ? 1 : 0),
         },
       }),
     );
     const saved = res.ok ? ReceiptSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
       const source = { kind: 'receipt' as const, id: saved.data.id };
-      const failedReceipt = receipt ? await attachSentReceipt(t, errorText, receipt, source) : null;
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        failedReceipt;
+      const taken = sent
+        ? await takeSentReceipt(t, errorText, sent, {
+            kind: 'receipt',
+            attach: receipt ? source : null,
+          })
+        : null;
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();
       if (failedUpload) toast(failedUpload, { bad: true });
+      if (taken && 'bad' in taken) toast(taken.bad, { bad: true });
+      if (taken && 'warn' in taken) return void toast(taken.warn, { icon: 'alert' });
       return void toast(t('money.in.done'), { icon: 'wallet' });
     }
     setBusy(false);
@@ -777,7 +801,7 @@ function ReceiptModal({
       onClose={onClose}
       kind="form"
       size="wide"
-      dirty={(edit ? reason !== '' : total !== '') || picked.length > 0}
+      dirty={(edit ? reason !== '' : total !== '') || picked.length > 0 || links.length > 0}
       title={t(edit ? 'fin.in_edit.title' : 'money.in.title')}
       sub={sub}
       footer={
@@ -1095,8 +1119,24 @@ function ReceiptModal({
             >
               {(control) => (
                 <div>
-                  {receipt ? (
-                    <SentReceiptRow receipt={receipt} onRemove={() => setReceipt(null)} />
+                  {sent ? (
+                    <SentReceiptRow
+                      receipt={sent}
+                      on={receiptOn}
+                      onRemove={() => setReceiptOn(false)}
+                      onBack={() => setReceiptOn(true)}
+                    />
+                  ) : null}
+                  {form ? (
+                    <LinkPickRow
+                      contractorId={form.contractor.id}
+                      picked={links}
+                      record={edit ? { kind: 'receipt', id: edit.id } : null}
+                      onChange={(next) => {
+                        setLinks(next);
+                        setErrors((x) => ({ ...x, files: undefined }));
+                      }}
+                    />
                   ) : null}
                   <FilesInput
                     control={control}

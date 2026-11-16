@@ -116,7 +116,9 @@ export function projectHistoryText(
         t('report.hist.file_attach', { name: str(valueOf(e, 'file', 'to')) });
       break;
     case 'file_delete':
-      text = t('report.hist.file_delete', { name: str(valueOf(e, 'file', 'from')) });
+      text =
+        fileHistoryText(t, e) ??
+        t('report.hist.file_delete', { name: str(valueOf(e, 'file', 'from')) });
       break;
     case 'file_hide':
       text = t('files.hist.page_hide', { name: str(valueOf(e, 'file', 'to')) });

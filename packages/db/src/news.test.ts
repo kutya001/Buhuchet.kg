@@ -23,8 +23,8 @@ import {
 import { markWelcomeSeen } from './onboarding';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { readPlatformHistory } from './platform-history';
-import { news, newsReads, platformAuditLog, users } from './schema';
-import { NEWS_NOT_YET, newsSeedRows } from './seed/news';
+import { news, newsAdminTexts, newsReads, platformAuditLog, users } from './schema';
+import { NEWS_NOT_YET, newsAdminTextSeedRows, newsSeedRows } from './seed/news';
 import { readSpecJson } from './spec-data';
 import {
   createTestDatabase,
@@ -61,6 +61,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     pinned: false,
     showOnLogin: true,
     audience: 'all',
+    modules: [],
+    adminMd: '',
     ...over,
   });
 
@@ -149,7 +151,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
   });
 
   it('пользователь видит только опубликованные, не снятые, с наступившей датой и для всех', async () => {
-    const feed = await asOwner(a, (tx) => newsFeed(tx));
+    const feed = await asOwner(a, (tx) => newsFeed(tx, []));
     expect(feed.map((n) => n.id)).toEqual(['v1']);
     // Политика базы прячет и при прямом запросе.
     const raw = await asOwner(a, (tx) => tx.select({ id: news.id }).from(news));
@@ -158,43 +160,45 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
   });
 
   it('администратор платформы в своей ленте видит новости для Админки, но не черновики', async () => {
-    const feed = await asAdmin((tx) => newsFeed(tx));
+    const feed = await asAdmin((tx) => newsFeed(tx, null));
     expect(feed.map((n) => n.id).sort()).toEqual(['adm1', 'v1']);
   });
 
   it('новость, вышедшая до появления учётной записи, прочитана; новая — нет', async () => {
     const created = await asAdmin((tx) => createNews(tx, input(), { publish: true }));
-    const feed = await asOwner(a, (tx) => newsFeed(tx));
+    const feed = await asOwner(a, (tx) => newsFeed(tx, []));
     expect(feed.map((n) => [n.id, n.read])).toEqual([
       [created.id, false],
       ['v1', true],
     ]);
-    expect(await asOwner(a, (tx) => newsUnreadCount(tx))).toBe(1);
-    const wn = await asOwner(a, (tx) => newsWhatsNew(tx));
+    expect(await asOwner(a, (tx) => newsUnreadCount(tx, []))).toBe(1);
+    const wn = await asOwner(a, (tx) => newsWhatsNew(tx, []));
     expect(wn.items.map((n) => n.id)).toEqual([created.id]);
     expect(wn.first).toBe(true);
 
     // Кто видел приветствие организации, тому приветствие в окне не повторяется (решение Г-4 «А»).
-    expect((await asOwner(b, (tx) => newsWhatsNew(tx))).first).toBe(true);
+    expect((await asOwner(b, (tx) => newsWhatsNew(tx, []))).first).toBe(true);
     await asOwner(b, (tx) => markWelcomeSeen(tx));
-    expect(await asOwner(b, (tx) => newsWhatsNew(tx))).toMatchObject({
+    expect(await asOwner(b, (tx) => newsWhatsNew(tx, []))).toMatchObject({
       items: [expect.objectContaining({ id: created.id })],
       first: false,
     });
     // Администратор платформы без организации: строки «Приветствия» у него нет, ответ — без ошибки.
-    expect((await asAdmin((tx) => newsWhatsNew(tx))).first).toBe(true);
+    expect((await asAdmin((tx) => newsWhatsNew(tx, null))).first).toBe(true);
 
     // «Понятно»: показанные — прочитаны; окно больше не открывается.
-    expect(await asOwner(a, (tx) => markNewsRead(tx, [created.id, 'draft1', 'future1']))).toBe(1);
-    expect(await asOwner(a, (tx) => markNewsRead(tx, [created.id]))).toBe(0);
-    expect(await asOwner(a, (tx) => newsUnreadCount(tx))).toBe(0);
-    expect((await asOwner(a, (tx) => newsWhatsNew(tx))).items).toEqual([]);
-    expect((await asOwner(a, (tx) => newsWhatsNew(tx))).first).toBe(false);
+    expect(await asOwner(a, (tx) => markNewsRead(tx, [created.id, 'draft1', 'future1'], []))).toBe(
+      1,
+    );
+    expect(await asOwner(a, (tx) => markNewsRead(tx, [created.id], []))).toBe(0);
+    expect(await asOwner(a, (tx) => newsUnreadCount(tx, []))).toBe(0);
+    expect((await asOwner(a, (tx) => newsWhatsNew(tx, []))).items).toEqual([]);
+    expect((await asOwner(a, (tx) => newsWhatsNew(tx, []))).first).toBe(false);
 
     // У другой организации своя прочитанность.
-    expect(await asOwner(b, (tx) => newsUnreadCount(tx))).toBe(1);
-    expect(await asOwner(b, (tx) => markNewsRead(tx, 'all'))).toBe(1);
-    expect(await asOwner(b, (tx) => newsUnreadCount(tx))).toBe(0);
+    expect(await asOwner(b, (tx) => newsUnreadCount(tx, []))).toBe(1);
+    expect(await asOwner(b, (tx) => markNewsRead(tx, 'all', []))).toBe(1);
+    expect(await asOwner(b, (tx) => newsUnreadCount(tx, []))).toBe(0);
   });
 
   it('в окне «Что нового» — только новости «Показывать при входе»', async () => {
@@ -203,9 +207,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         publish: true,
       }),
     );
-    expect((await asOwner(a, (tx) => newsWhatsNew(tx))).items).toEqual([]);
-    expect(await asOwner(a, (tx) => newsUnreadCount(tx))).toBe(1);
-    await asOwner(a, (tx) => markNewsRead(tx, [quiet.id]));
+    expect((await asOwner(a, (tx) => newsWhatsNew(tx, []))).items).toEqual([]);
+    expect(await asOwner(a, (tx) => newsUnreadCount(tx, []))).toBe(1);
+    await asOwner(a, (tx) => markNewsRead(tx, [quiet.id], []));
   });
 
   it('отметки прочитанности: свои видны, чужие нет; чужому не поставить, изменить и удалить нельзя', async () => {
@@ -306,7 +310,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
 
     const off = await asAdmin((tx) => setNewsOff(tx, draft.id, 4, true));
     expect(off).toMatchObject({ ok: true, record: { off: true } });
-    expect((await asOwner(a, (tx) => newsFeed(tx))).some((n) => n.id === draft.id)).toBe(false);
+    expect((await asOwner(a, (tx) => newsFeed(tx, []))).some((n) => n.id === draft.id)).toBe(false);
     expect(await asAdmin((tx) => setNewsOff(tx, draft.id, 5, false))).toMatchObject({
       ok: true,
       record: { off: false },
@@ -412,8 +416,10 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // («Файлы от контрагентов», п. И-7), v113 (Telegram заявителя и пароль по ссылке, п. Т-18), v114
     // (регистрация по документам, п. И-9), v115 («К оплате» по дням, файлы и чеки через бота, п. К-11),
     // v116 («Я оплатил», оплата по месяцам и код на странице контрагента, п. К-14), v117 (тексты
-    // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14) и
-    // v120 (подсказки и обучение на странице контрагента, п. К-16) — да.
+    // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14),
+    // v120 (подсказки и обучение на странице контрагента, п. К-16) и v121 (чек принимается только
+    // вместе с деньгами, п. К-18), v122–v124 (колокольчик, новости по модулям, один файл — несколько
+    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -433,8 +439,32 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v118')).toMatchObject({ release: '118' });
     expect(rows.find((r) => r.id === 'v119')).toMatchObject({ release: '119' });
     expect(rows.find((r) => r.id === 'v120')).toMatchObject({ release: '120' });
+    expect(rows.find((r) => r.id === 'v121')).toMatchObject({
+      release: '121',
+      linkKind: 'mod',
+      linkId: 'cps',
+    });
+    expect(rows.find((r) => r.id === 'v122')).toMatchObject({ release: '122', showOnLogin: true });
+    expect(rows.find((r) => r.id === 'v123')).toMatchObject({ release: '123', modules: [] });
+    expect(rows.find((r) => r.id === 'v124')).toMatchObject({
+      release: '124',
+      linkKind: 'mod',
+      linkId: 'files',
+      modules: ['files'],
+    });
+    // Текст «Для администратора платформы» (admMd) идёт только во второй текст, не в текст новости.
+    const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());
+    expect(withAdm.map((x) => x.id)).toEqual(expect.arrayContaining(['v123', 'v124']));
+    for (const x of withAdm) {
+      expect(rows.find((r) => r.id === x.id)?.md ?? '').not.toContain(
+        '## Для администратора платформы',
+      );
+    }
+    expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toMatch(
+      /^## Для администратора платформы/,
+    );
     const source = refDB.news as { id: string; status: string }[];
-    // Черновики прототипа (сейчас «Версия 122: план») не наполняются.
+    // Черновики прототипа (сейчас «Версия 125: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
     expect(drafts.length).toBeGreaterThan(0);
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
@@ -460,10 +490,137 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     const v8999 = await make('8999', 0);
     const mine = new Set([v9000.id, v9001.id, v8999.id]);
     const order = [v9001.id, v9000.id, v8999.id];
-    const feed = await asOwner(a, (tx) => newsFeed(tx));
+    const feed = await asOwner(a, (tx) => newsFeed(tx, []));
     // Версии с номером больше всех остальных — в самом верху ленты.
     expect(feed.slice(0, 3).map((n) => n.id)).toEqual(order);
-    const wn = await asOwner(a, (tx) => newsWhatsNew(tx));
+    const wn = await asOwner(a, (tx) => newsWhatsNew(tx, []));
     expect(wn.items.filter((n) => mine.has(n.id)).map((n) => n.id)).toEqual(order);
+  });
+
+  it('модули новости (доработки 16.11.2026, блок 4, пункт 3): видна, если есть хотя бы один из них; счётчик и отметки — так же', async () => {
+    const make = (title: string, modules: string[]) =>
+      asAdmin((tx) => createNews(tx, input({ title, modules }), { publish: true }));
+    const fee = await make('Про обслуживание', ['fee']);
+    const both = await make('Про задачи и обслуживание', ['tasks', 'fee']);
+    const ids = async (mine: string[] | null) =>
+      (
+        await (mine === null
+          ? asAdmin((tx) => newsFeed(tx, null))
+          : asOwner(b, (tx) => newsFeed(tx, mine)))
+      ).map((n) => n.id);
+    // Бухгалтер без права «Видеть плату за обслуживание» и без «Задач» — не видит ни одной.
+    expect(await ids(['home', 'cps', 'reports'])).not.toEqual(expect.arrayContaining([fee.id]));
+    expect(await ids(['home', 'cps', 'reports'])).not.toContain(both.id);
+    // Хотя бы один модуль из отмеченных — видна.
+    expect(await ids(['tasks'])).toContain(both.id);
+    expect(await ids(['tasks'])).not.toContain(fee.id);
+    expect(await ids(['fee'])).toEqual(expect.arrayContaining([fee.id, both.id]));
+    // Администратору платформы — все.
+    expect(await ids(null)).toEqual(expect.arrayContaining([fee.id, both.id]));
+    // Невидимую по модулям не отметить прочитанной и в счётчике её нет.
+    const unread = await asOwner(b, (tx) => newsUnreadCount(tx, ['cps']));
+    expect(await asOwner(b, (tx) => newsUnreadCount(tx, ['fee']))).toBe(unread + 2);
+    expect(await asOwner(b, (tx) => markNewsRead(tx, [fee.id, both.id], ['cps']))).toBe(0);
+    expect(await asOwner(b, (tx) => markNewsRead(tx, 'all', ['tasks']))).toBeGreaterThanOrEqual(1);
+    expect(await asOwner(b, (tx) => newsUnreadCount(tx, ['fee']))).toBe(1);
+    expect((await asOwner(b, (tx) => newsWhatsNew(tx, ['fee']))).items.map((n) => n.id)).toEqual([
+      fee.id,
+    ]);
+    // Код не по образцу база не примет (незнакомые коды и повторы отклоняет API — раньше).
+    await expect(
+      asAdmin((tx) =>
+        tx
+          .update(news)
+          .set({ modules: ['fee', 'Fee!'] })
+          .where(eq(news.id, fee.id)),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('второй текст «Для администратора платформы» (блок 4, пункт 1): читает и пишет только администратор платформы, правка поднимает версию новости', async () => {
+    const md = '## Для администратора платформы\n- Миграция 0157';
+    const n = await asAdmin((tx) =>
+      createNews(tx, input({ title: 'Со вторым текстом', adminMd: md }), { publish: true }),
+    );
+    expect(n.adminMd).toBe(md);
+    expect((await asAdmin((tx) => getNews(tx, n.id)))?.adminMd).toBe(md);
+    const adminFeed = await asAdmin((tx) => newsFeed(tx, null));
+    expect(adminFeed.find((x) => x.id === n.id)?.adminMd).toBe(md);
+    // Пользователю организации текста нет ни в ленте, ни прямым запросом; записать он не может.
+    const feed = await asOwner(a, (tx) => newsFeed(tx, []));
+    expect(feed.find((x) => x.id === n.id)?.adminMd).toBe('');
+    expect(await asOwner(a, (tx) => tx.select().from(newsAdminTexts))).toEqual([]);
+    await expect(
+      asOwner(a, (tx) => tx.insert(newsAdminTexts).values({ newsId: n.id, md: 'чужой' })),
+    ).rejects.toThrow();
+    // Список Админки: есть ли второй текст, без самого текста.
+    const page = await asAdmin((tx) =>
+      listNewsAdminPage(tx, { page: 1, size: 100, sort: undefined, filters: {} }, t),
+    );
+    expect(page.rows.find((r) => r.id === n.id)).toMatchObject({ hasAdminMd: true });
+    // Правка: новый текст — та же строка, версия новости +1, история «было → стало».
+    const edited = await asAdmin((tx) =>
+      saveNews(tx, n.id, n.version, input({ title: n.title, adminMd: `${md}\n- ещё` }), {
+        publish: false,
+      }),
+    );
+    expect(edited).toMatchObject({ ok: true, record: { version: n.version + 1 } });
+    const history = await db.admin.db
+      .select({ changes: platformAuditLog.changes })
+      .from(platformAuditLog)
+      .where(eq(platformAuditLog.entityId, n.id));
+    expect(JSON.stringify(history)).toContain('adminMd');
+    // Пустой текст — строки нет.
+    const cleared = await asAdmin((tx) =>
+      saveNews(tx, n.id, n.version + 1, input({ title: n.title, adminMd: '' }), {
+        publish: false,
+      }),
+    );
+    expect(cleared).toMatchObject({ ok: true, record: { adminMd: '', version: n.version + 2 } });
+    expect(
+      await db.admin.db.select().from(newsAdminTexts).where(eq(newsAdminTexts.newsId, n.id)),
+    ).toEqual([]);
+  });
+
+  it('наполнение: модули и второй текст из refDB.json', async () => {
+    const refDB = (await readSpecJson('data/refDB.json')) as { news: unknown[] };
+    const rows = newsSeedRows(refDB.news);
+    expect(rows.every((r) => Array.isArray(r.modules))).toBe(true);
+    const texts = newsAdminTextSeedRows([
+      {
+        id: 'x1',
+        t: 'Версия 1',
+        type: 'Обновление',
+        date: '2026-11-16',
+        status: 'Опубликовано',
+        mods: ['fee', 'cps'],
+        admMd: '## Для администратора платформы\n- Подробности\n\n## Изменено\n- ',
+      },
+    ]);
+    expect(texts).toEqual([{ newsId: 'x1', md: '## Для администратора платформы\n- Подробности' }]);
+    expect(
+      newsSeedRows([
+        {
+          id: 'x1',
+          t: 'Версия 1',
+          type: 'Обновление',
+          date: '2026-11-16',
+          status: 'Опубликовано',
+          mods: ['fee', 'cps'],
+        },
+      ])[0]?.modules,
+    ).toEqual(['cps', 'fee']);
+    expect(() =>
+      newsSeedRows([
+        {
+          id: 'x2',
+          t: 'Версия 2',
+          type: 'Обновление',
+          date: '2026-11-16',
+          status: 'Опубликовано',
+          mods: ['nope'],
+        },
+      ]),
+    ).toThrow(/x2/);
   });
 });

@@ -21,6 +21,24 @@ export const SentFileSourceSchema = z.enum(SENT_FILE_SOURCES);
 export const SentFileStatusSchema = z.enum(SENT_FILE_STATUSES);
 
 /**
+ * Чек к оплате (доработки 14.11.2026, блок 4, пункт 4; прототип v115 `pgRcptMoney`): что оплачено, за
+ * какой месяц и сколько — из сообщения, под которым клиент нажал «Оплатил» или «Прислать чек». Приходит
+ * только тому, кто может сразу принять эти деньги: у него «Принять» открывает окно денег, а рядом —
+ * «Принять только файл» (доработки 16.11.2026, блок 1).
+ */
+export const SentFilePay = z.object({
+  purpose: z.enum(PAY_CLAIM_PURPOSES),
+  month: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .nullable(),
+  amount: Tyiyn.nullable(),
+  /** Откуда чек: со страницы контрагента («Я оплатил») или из Telegram — для примечания денег. */
+  source: z.enum(PAY_CLAIM_SOURCES),
+});
+export type SentFilePay = z.infer<typeof SentFilePay>;
+
+/**
  * Отправленный файл глазами сотрудника: откуда и кто прислал, когда, комментарий, статус, причина
  * отказа, кто решил и когда, сколько дней до удаления (у принятого — null), принятый файл контрагента;
  * `canDecide` — можно ли этому сотруднику принять или отклонить (прототип `sntCan`).
@@ -43,30 +61,25 @@ export const SentFileItem = z.object({
   daysLeft: z.number().int().nonnegative().nullable(),
   fileId: Uuid.nullable(),
   canDecide: z.boolean(),
+  /** У нового чека с оплатой — что оплачено (`SentFilePay`), иначе null. */
+  pay: SentFilePay.nullable(),
   version: RecordVersion,
 });
 export type SentFileItem = z.infer<typeof SentFileItem>;
 
-/**
- * Чек к оплате (доработки 14.11.2026, блок 4, пункт 4; прототип v115 `pgRcptMoney`): что оплачено, за
- * какой месяц и сколько — из сообщения, под которым клиент нажал «Оплатил» или «Прислать чек». Приходит
- * только в ответе «Принять» и только тому, кто может сразу принять эти деньги.
- */
-export const SentFilePay = z.object({
-  purpose: z.enum(PAY_CLAIM_PURPOSES),
-  month: z
-    .string()
-    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
-    .nullable(),
-  amount: Tyiyn.nullable(),
-  /** Откуда чек: со страницы контрагента («Я оплатил») или из Telegram — для примечания денег. */
-  source: z.enum(PAY_CLAIM_SOURCES),
-});
-export type SentFilePay = z.infer<typeof SentFilePay>;
-
-/** Ответ «Принять»: принятый файл и — у чека — что оплачено. */
-export const SentFileAccepted = SentFileItem.extend({ pay: SentFilePay.nullable() });
+/** Ответ «Принять»: принятый файл. */
+export const SentFileAccepted = SentFileItem;
 export type SentFileAccepted = z.infer<typeof SentFileAccepted>;
+
+/**
+ * `details` ответа 409 `sent_decided`: кто и как уже решил по файлу — для сообщения окна денег «Чек уже
+ * принял <имя> — поступление сохранено без него» (доработки 16.11.2026, блок 1; прототип v121 `pgRcptSave`).
+ */
+export const SentFileDecided = z.object({
+  status: z.enum(['accepted', 'rejected']),
+  by: z.string().nullable(),
+});
+export type SentFileDecided = z.infer<typeof SentFileDecided>;
 
 /** Раздел «Отправленные файлы» карточки контрагента: от новых к старым и сколько новых. */
 export const SentFileList = z.object({
@@ -88,25 +101,21 @@ export type SentFileCount = z.infer<typeof SentFileCount>;
 export const SentFileIdParam = z.object({ id: Uuid });
 export const SentContractorParam = z.object({ id: Uuid });
 
-/** «Принять»: с версией, которую видел сотрудник. */
-export const SentFileAccept = z.strictObject({ version: RecordVersion });
+/**
+ * «Принять»: с версией, которую видел сотрудник. `attach` — чек принимается при «Сохранить» в окне денег
+ * (доработки 16.11.2026, блок 1; прототип v121 `pgRcptSave`): в той же транзакции он прикрепляется к
+ * только что записанному поступлению или оплате за обслуживание того же контрагента.
+ */
+export const SentFileAccept = z.strictObject({
+  version: RecordVersion,
+  attach: z.strictObject({ kind: z.enum(['receipt', 'fee_payment']), id: Uuid }).optional(),
+});
+export type SentFileAccept = z.infer<typeof SentFileAccept>;
 /** «Отклонить»: причина обязательна (пустую и длинную проверяет правило `sentFileReason`). */
 export const SentFileReject = z.strictObject({
   version: RecordVersion,
   reason: z.string().max(SENT_FILE_REASON_MAX * 4),
 });
-
-/**
- * Принятый чек — к записи денег, открытой после «Принять» (прототип v119 `pgRcptMoney` → поле «Файлы»):
- * поступлению от контрагента или оплате за обслуживание того же контрагента.
- */
-export const SentFileAttach = z.strictObject({
-  source: z.strictObject({ kind: z.enum(['receipt', 'fee_payment']), id: Uuid }),
-});
-export type SentFileAttach = z.infer<typeof SentFileAttach>;
-/** Прикреплённая копия: файл записи денег. */
-export const SentFileAttached = z.object({ id: Uuid, name: z.string() });
-export type SentFileAttached = z.infer<typeof SentFileAttached>;
 
 /** Ссылка на файл: `download=1` — скачать, иначе картинка и PDF открываются в браузере. */
 export const SentFileLinkQuery = z.strictObject({ download: z.enum(['1']).optional() });

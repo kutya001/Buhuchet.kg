@@ -10,7 +10,7 @@ const PG_TRY=5,PG_LOCK=15*60e3,PG_KEEP=864e5;
 const PG_DAY=5,PG_DAYMS=864e5;
 const pgDay=p=>{const now=Date.now();p.day=(p.day||[]).filter(t=>now-t<PG_DAYMS);return p.day};
 // Ответственному за контрагента — «Telegram: страница контрагента закрыта»; нет ответственного, он заблокирован или без Telegram — первому владельцу организации с Telegram. Приходит и при выключенных напоминаниях
-function pgClosedNotify(c){const r=EM[c.resp],to=r&&r.active!==false&&r.tg?r:EMP.find(e=>e.role==='owner'&&e.active!==false&&e.tg);if(to)tgSvc(to,'Страница контрагента закрыта')}
+function pgClosedNotify(c){bellCp(c,{kind:'other',ev:'page_closed',open:{k:'contractor',id:c.id},text:`Страница закрыта: ${PG_DAY} неверных кодов за сутки, откроется после смены кода`,key:'page_closed:'+c.id+':'+TODAY});const r=EM[c.resp],to=r&&r.active!==false&&r.tg?r:EMP.find(e=>e.role==='owner'&&e.active!==false&&e.tg);if(to)tgSvc(to,'Страница контрагента закрыта')}
 const pgPath=c=>`${ORG.slug}/inn/${c.inn}`;
 const pgUrl=c=>'www.buhuchet.kg/'+pgPath(c);
 const pgCodeTxt=k=>k?k.slice(0,3)+' '+k.slice(3):'';
