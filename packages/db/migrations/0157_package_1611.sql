@@ -1,0 +1,169 @@
+-- Общая основа пакета доработок 16.11.2026 (этап 0, ТЗ «Доработки 16.11.2026» → «Порядок работ и стыки
+-- блоков»; docs/decisions.md п. О-57): колокольчик уведомлений (блок 3, стык потока Т), текст «Для
+-- администратора платформы» и модули новостей (блок 4), вторая ссылка файла — на запись денег без копии
+-- (блок 2) и функция переноса задвоенных чеков; ниже — ручная часть.
+-- Блокировки таблиц ждём не дольше 10 с: если выпуск совпал с долгой транзакцией, миграция падает и
+-- задание выпуска перезапускают, а не держит новости и файлы, пока ждёт.
+SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+CREATE TABLE "bell_notifications" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"org_id" uuid DEFAULT app.current_org_id(),
+	"user_id" uuid NOT NULL,
+	"kind" text NOT NULL,
+	"event" text NOT NULL,
+	"target_kind" text,
+	"target_id" text,
+	"contractor_id" uuid,
+	"need" text,
+	"text" text NOT NULL,
+	"event_key" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"seen_at" timestamp with time zone,
+	"read_at" timestamp with time zone,
+	CONSTRAINT "bell_notifications_event_key" UNIQUE("user_id","event_key"),
+	CONSTRAINT "bell_notifications_kind_check" CHECK ("bell_notifications"."kind" in ('reports', 'tasks', 'files', 'money', 'news', 'other')),
+	CONSTRAINT "bell_notifications_event_check" CHECK ("bell_notifications"."event" ~ '^[a-z][a-z0-9_]{0,39}$'),
+	CONSTRAINT "bell_notifications_target_check" CHECK (("bell_notifications"."target_kind" is null) = ("bell_notifications"."target_id" is null) and ("bell_notifications"."target_kind" is null or ("bell_notifications"."target_kind" ~ '^[a-z][a-z0-9_]{0,39}$' and char_length("bell_notifications"."target_id") between 1 and 100))),
+	CONSTRAINT "bell_notifications_need_check" CHECK ("bell_notifications"."need" is null or "bell_notifications"."need" ~ '^[a-zA-Z]{1,40}$'),
+	CONSTRAINT "bell_notifications_text_check" CHECK (char_length("bell_notifications"."text") between 1 and 1000),
+	CONSTRAINT "bell_notifications_event_key_check" CHECK (char_length("bell_notifications"."event_key") between 1 and 200),
+	CONSTRAINT "bell_notifications_contractor_check" CHECK ("bell_notifications"."contractor_id" is null or "bell_notifications"."org_id" is not null)
+);
+--> statement-breakpoint
+ALTER TABLE "bell_notifications" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "news_admin_texts" (
+	"news_id" text PRIMARY KEY NOT NULL,
+	"md" text NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_by" uuid,
+	CONSTRAINT "news_admin_texts_md_check" CHECK (char_length("news_admin_texts"."md") between 1 and 50000)
+);
+--> statement-breakpoint
+ALTER TABLE "news_admin_texts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE TABLE "file_links" (
+	"org_id" uuid DEFAULT app.current_org_id() NOT NULL,
+	"file_id" uuid NOT NULL,
+	"source_kind" text NOT NULL,
+	"source_id" uuid NOT NULL,
+	"created_by" uuid DEFAULT app.current_user_id() NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "file_links_pk" PRIMARY KEY("file_id","source_kind","source_id"),
+	CONSTRAINT "file_links_source_kind_check" CHECK ("file_links"."source_kind" in ('receipt', 'fee_payment'))
+);
+--> statement-breakpoint
+ALTER TABLE "file_links" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "news" ADD COLUMN "modules" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
+ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_user_org_fk" FOREIGN KEY ("user_id","org_id") REFERENCES "public"."users"("id","org_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bell_notifications" ADD CONSTRAINT "bell_notifications_contractor_fk" FOREIGN KEY ("contractor_id","org_id") REFERENCES "public"."contractors"("id","org_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "news_admin_texts" ADD CONSTRAINT "news_admin_texts_news_id_news_id_fk" FOREIGN KEY ("news_id") REFERENCES "public"."news"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "news_admin_texts" ADD CONSTRAINT "news_admin_texts_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "file_links" ADD CONSTRAINT "file_links_org_id_organizations_id_fk" FOREIGN KEY ("org_id") REFERENCES "public"."organizations"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "file_links" ADD CONSTRAINT "file_links_file_fk" FOREIGN KEY ("file_id","org_id") REFERENCES "public"."files"("id","org_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "file_links" ADD CONSTRAINT "file_links_created_by_fk" FOREIGN KEY ("created_by","org_id") REFERENCES "public"."users"("id","org_id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "bell_notifications_user_idx" ON "bell_notifications" USING btree ("user_id","created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "bell_notifications_unseen_idx" ON "bell_notifications" USING btree ("user_id") WHERE "bell_notifications"."seen_at" is null;--> statement-breakpoint
+CREATE INDEX "bell_notifications_org_created_idx" ON "bell_notifications" USING btree ("org_id","created_at");--> statement-breakpoint
+CREATE INDEX "bell_notifications_contractor_idx" ON "bell_notifications" USING btree ("org_id","contractor_id") WHERE "bell_notifications"."contractor_id" is not null;--> statement-breakpoint
+CREATE INDEX "file_links_source_idx" ON "file_links" USING btree ("org_id","source_kind","source_id");--> statement-breakpoint
+ALTER TABLE "news" ADD CONSTRAINT "news_modules_check" CHECK (cardinality("news"."modules") = 0 or (cardinality("news"."modules") <= 30 and array_position("news"."modules", null) is null and array_to_string("news"."modules", ',') ~ '^[a-z][a-z0-9_-]{0,31}(,[a-z][a-z0-9_-]{0,31})*$' and cardinality(string_to_array(array_to_string("news"."modules", ','), ',')) = cardinality("news"."modules")));--> statement-breakpoint
+CREATE POLICY "bell_notifications_isolation" ON "bell_notifications" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("bell_notifications"."org_id" = app.current_org_id()) WITH CHECK ("bell_notifications"."org_id" = app.current_org_id());--> statement-breakpoint
+CREATE POLICY "bell_notifications_platform_admin" ON "bell_notifications" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("bell_notifications"."org_id" is null and app.current_org_id() is null and "bell_notifications"."user_id" = app.current_user_id() and app.is_platform_admin()) WITH CHECK ("bell_notifications"."org_id" is null and app.current_org_id() is null and "bell_notifications"."user_id" = app.current_user_id() and app.is_platform_admin());--> statement-breakpoint
+CREATE POLICY "bell_notifications_own_select" ON "bell_notifications" AS RESTRICTIVE FOR SELECT TO "buhuchet_app" USING ("bell_notifications"."user_id" = app.current_user_id() or app.current_user_id() is null);--> statement-breakpoint
+CREATE POLICY "bell_notifications_own_update" ON "bell_notifications" AS RESTRICTIVE FOR UPDATE TO "buhuchet_app" USING ("bell_notifications"."user_id" = app.current_user_id()) WITH CHECK ("bell_notifications"."user_id" = app.current_user_id());--> statement-breakpoint
+CREATE POLICY "news_admin_texts_admin" ON "news_admin_texts" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING (app.is_platform_admin()) WITH CHECK (app.is_platform_admin());--> statement-breakpoint
+CREATE POLICY "file_links_isolation" ON "file_links" AS PERMISSIVE FOR ALL TO "buhuchet_app" USING ("file_links"."org_id" = app.current_org_id()) WITH CHECK ("file_links"."org_id" = app.current_org_id());--> statement-breakpoint
+CREATE POLICY "file_links_insert_guard" ON "file_links" AS RESTRICTIVE FOR INSERT TO "buhuchet_app" WITH CHECK ("file_links"."created_by" = app.current_user_id());
+--> statement-breakpoint
+-- Ручная часть миграции (общая основа пакета доработок 16.11.2026, этап 0).
+-- Колокольчик: роль приложения меняет у строки только «просмотрено» и «прочитано» (чьи строки — решают
+-- политики: только свои).
+REVOKE UPDATE ON TABLE public.bell_notifications FROM buhuchet_app;--> statement-breakpoint
+GRANT UPDATE (seen_at, read_at) ON TABLE public.bell_notifications TO buhuchet_app;--> statement-breakpoint
+-- Вторая ссылка файла не меняется: «Открепить» — удаление ссылки.
+REVOKE UPDATE ON TABLE public.file_links FROM buhuchet_app;--> statement-breakpoint
+-- Ссылку ставят только на загруженный файл контрагента и не на ту же запись, что источник самого файла;
+-- иначе — ошибка ограничения file_links_file_check (API отвечает «не найден»), а не тихий пропуск.
+CREATE FUNCTION app.file_links_file_guard()
+  RETURNS trigger
+  LANGUAGE plpgsql
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.files f
+      WHERE f.id = NEW.file_id AND f.org_id = NEW.org_id AND f.state = 'ready'
+        AND f.contractor_id IS NOT NULL
+        AND NOT (f.source_kind = NEW.source_kind AND f.source_id IS NOT DISTINCT FROM NEW.source_id)
+    ) THEN
+      RAISE EXCEPTION 'file_links: файл не загружен, без контрагента или уже у этой записи'
+        USING ERRCODE = '23514', CONSTRAINT = 'file_links_file_check';
+    END IF;
+    RETURN NEW;
+  END
+  $$;--> statement-breakpoint
+CREATE TRIGGER file_links_file_guard BEFORE INSERT ON public.file_links
+  FOR EACH ROW EXECUTE FUNCTION app.file_links_file_guard();--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.file_links_file_guard() FROM PUBLIC, buhuchet_app;--> statement-breakpoint
+-- Перенос задвоенных чеков (блок 2, пункт 8): с 15.11.2026 принятый чек прикреплялся к записи денег
+-- копией. Пара «оригинал — копия»: оригинал — файл принятого отправленного файла; копия — загруженный
+-- файл той же организации и того же контрагента у поступления или оплаты за обслуживание, с тем же
+-- названием, размером и типом, создан не раньше оригинала и не раньше 15.11.2026, не заменялся, и
+-- подходит ровно к одному оригиналу (иначе не трогается). Копия становится второй ссылкой оригинала
+-- (автор и время — копии), сама копия — «удалена» её автором, её объект хранилища удалит задача
+-- повторного удаления (storage_delete_retries, п. И-7). Повтор ничего не меняет. Отвечает, сколько копий
+-- объединено. Зовёт миграция потока К вместе с кодом, который читает вторые ссылки (этап 1): до этого
+-- запись денег показывает только свои файлы, и копия ещё нужна (docs/decisions.md п. О-57).
+CREATE FUNCTION app.file_copies_merge()
+  RETURNS integer
+  LANGUAGE plpgsql VOLATILE
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+  DECLARE
+    n integer;
+  BEGIN
+    WITH originals AS (
+      SELECT f.id, f.org_id, f.contractor_id, f.name, f.size_bytes, f.content_type, f.created_at
+      FROM public.contractor_sent_files s
+      JOIN public.files f ON f.id = s.file_id AND f.org_id = s.org_id
+      WHERE s.status = 'accepted' AND f.state = 'ready' AND f.contractor_id IS NOT NULL
+    ),
+    pairs AS (
+      SELECT c.id AS copy_id, c.org_id, c.source_kind, c.source_id, c.created_by, c.created_at,
+        (array_agg(o.id))[1] AS orig_id
+      FROM public.files c
+      JOIN originals o ON o.org_id = c.org_id AND o.contractor_id = c.contractor_id
+        AND o.name = c.name AND o.size_bytes = c.size_bytes AND o.content_type = c.content_type
+        AND o.id <> c.id AND c.created_at >= o.created_at
+      WHERE c.state = 'ready' AND c.source_kind IN ('receipt', 'fee_payment')
+        AND c.source_id IS NOT NULL AND c.replaced_at IS NULL
+        AND c.created_at >= timestamptz '2026-11-15 00:00:00+00'
+      GROUP BY c.id, c.org_id, c.source_kind, c.source_id, c.created_by, c.created_at
+      HAVING count(*) = 1
+    ),
+    linked AS (
+      INSERT INTO public.file_links (org_id, file_id, source_kind, source_id, created_by, created_at)
+        SELECT p.org_id, p.orig_id, p.source_kind, p.source_id, p.created_by, p.created_at FROM pairs p
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+    ),
+    gone AS (
+      UPDATE public.files f
+        SET state = 'deleted', deleted_at = now(), deleted_by = p.created_by, updated_at = now(),
+          version = f.version + 1
+        FROM pairs p
+        WHERE f.id = p.copy_id
+        RETURNING f.storage_key
+    ),
+    stored AS (
+      INSERT INTO public.storage_delete_retries (key)
+        SELECT g.storage_key FROM gone g
+        ON CONFLICT (key) DO NOTHING
+        RETURNING 1
+    )
+    SELECT count(*)::integer INTO n FROM gone;
+    RETURN n;
+  END
+  $$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.file_copies_merge() FROM PUBLIC, buhuchet_app;

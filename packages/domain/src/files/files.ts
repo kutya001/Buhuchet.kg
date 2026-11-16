@@ -76,6 +76,17 @@ export const FILE_SOURCE_KINDS = [
 ] as const;
 export type FileSourceKind = (typeof FILE_SOURCE_KINDS)[number];
 
+/**
+ * Вторая ссылка файла — запись денег без копии файла (доработки 16.11.2026, блок 2; таблица
+ * `file_links`): принятый чек контрагента у поступления (`receipt`) или у оплаты за обслуживание
+ * (`fee_payment`). Источник самого файла не меняется («От контрагента»).
+ */
+export const FILE_LINK_SOURCE_KINDS = [
+  'receipt',
+  'fee_payment',
+] as const satisfies readonly FileSourceKind[];
+export type FileLinkSourceKind = (typeof FILE_LINK_SOURCE_KINDS)[number];
+
 export function isFileSourceKind(value: string): value is FileSourceKind {
   return (FILE_SOURCE_KINDS as readonly string[]).includes(value);
 }

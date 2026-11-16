@@ -15,6 +15,7 @@ export * from './onboarding';
 export * from './history';
 export * from './auth';
 export * from './telegram';
+export * from './bell';
 export * from './l10n';
 export * from './views';
 export * from './kb';
