@@ -198,14 +198,23 @@ tgAct('cp-receipt',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill(
     if(cl)cl.file=sf.id;else pgClaimAdd(l.c,{src:'tg',k:a.kind,m:a.m||null,sum:a.sum||0,file:sf.id});
     return {done:'✓ Чек отправлен',say:tplFill('tgCpReceiptOk',{})}}});
 // «Принять» у чека: сразу «Принять деньги» с суммой из оплаченного сообщения — налоги месяца разнесены по отчётам от старых к новым, излишек — аванс;
-// за обслуживание — «Принять оплату за обслуживание». Нет права или деньги месяца уже получены — файл просто принят
-// Чек со страницы («Я оплатил», cp-paid.js) — так же; у чека налогов без месяца — все месяцы с остатком
-function pgRcptMoney(c,p,src,file){const from=src==='page'?'со страницы':'из Telegram';
-  if(p.kind==='fee'){if(feeAccOk(c))feePayDlg(c,null,{sum:p.sum,note:`По чеку ${from}${p.m?' за '+ymLabel(p.m).toLowerCase():''}`,file});return}
-  if(!rmRecvOn(c))return;const k=p.m||'all',pl=rmRecvPlan(rmRecvMonths(c,k));if(!pl.list.length)return toast(p.m?`Деньги на налоги за ${rmMonthTxt(p.m)} уже получены от контрагента`:'Деньги на налоги уже получены от контрагента','info');
-  inDlg(c,null,{list:pl.list,total:p.sum,note:`${p.m?`Деньги за ${rmMonthTxt(p.m)}`:'Деньги на налоги'} — по чеку ${from}`,file})}
+// за обслуживание — «Принять оплату за обслуживание». Чек со страницы («Я оплатил», cp-paid.js) — так же; у чека налогов без месяца — все месяцы с остатком.
+// pgRcptPlan — откроется ли окно денег: {open, list} или {got: 'почему нет'}; нет права — {} (файл просто принят)
+function pgRcptPlan(c,p){if(p.kind==='fee')return feeAccOk(c)?{open:true}:{};if(!rmRecvOn(c))return {};const pl=rmRecvPlan(rmRecvMonths(c,p.m||'all'));
+  return pl.list.length?{open:true,list:pl.list}:{got:p.m?`Деньги на налоги за ${rmMonthTxt(p.m)} уже получены от контрагента`:'Деньги на налоги уже получены от контрагента'}}
+// Окно денег с чеком x из «Отправленных файлов» (доработки 16.11.2026, блок 1): чек принимается только при сохранении денег — inDlg и feePayDlg зовут pgRcptSave
+function pgRcptMoney(c,x,pl){const p=x.pay,from=x.src==='page'?'со страницы':'из Telegram',pre={file:x.name,sent:x};
+  if(p.kind==='fee')return feePayDlg(c,null,{...pre,sum:p.sum,note:`По чеку ${from}${p.m?' за '+ymLabel(p.m).toLowerCase():''}`});
+  inDlg(c,null,{...pre,list:pl.list,total:p.sum,note:`${p.m?`Деньги за ${rmMonthTxt(p.m)}`:'Деньги на налоги'} — по чеку ${from}`})}
+// «Сохранить» в окне денег с чеком: принять чек одним действием с деньгами. keep — чек остался в поле «Файлы» (не «Убрать»): прикрепить к записи «to».
+// Чек уже принял или отклонил другой сотрудник, пока окно было открыто, — деньги сохраняются без него. Возвращает {file: имя для записи денег или null, warn}
+function pgRcptSave(pre,keep,to,what){const x=pre&&pre.sent;if(!x)return {file:keep?pre&&pre.file||null:null,warn:''};
+  if(x.st!=='new')return {file:null,warn:`Чек ${x.st==='ok'?'уже принял':'отклонил'} ${whoName(x.dBy)} — ${what} сохранено без него`};
+  const n=sntAcceptDo(x,keep?to:null);return {file:keep?n:null,warn:''}}
 // Принятый чек в поле «Файлы» окна денег (v119): строка с именем и «Убрать» — тогда чек не прикрепляется (в файлах контрагента он остаётся)
-function rcptFileRow(n,id){return n?`<div class="row" id="${id}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">${ic('clip','sm')}<b>${esc(n)}</b><span class="faint">— чек контрагента, прикрепится при сохранении</span><span class="grow"></span><button class="btn sm ghost" type="button" id="${id}-x" title="Не прикреплять чек">${ic('x','sm')}Убрать</button></div>`:''}
+// После «Убрать» (16.11, блок 1, пункт 4) — строка «не прикрепится» и «Вернуть»: при сохранении чек принимается только в файлы контрагента, «Отменить» — чек остаётся «Новый»
+function rcptFileRow(n,id,off){return n?`<div class="row" id="${id}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap">${ic('clip','sm')}<b>${esc(n)}</b><span class="faint">— чек контрагента, прикрепится при сохранении</span><span class="grow"></span><button class="btn sm ghost" type="button" id="${id}-x" title="Не прикреплять чек">${ic('x','sm')}Убрать</button></div>`
+  :off?`<div class="row" id="${id}" style="gap:6px;margin-bottom:6px;flex-wrap:wrap"><span class="faint">Чек «${esc(off)}» не прикрепится: при сохранении он будет принят только в файлы контрагента</span><span class="grow"></span><button class="btn sm ghost" type="button" id="${id}-back">${ic('refresh','sm')}Вернуть</button></div>`:''}
 tgAct('cp-ask',{run:(u,a)=>{const l=pgTgLinked(a);if(!l)return {eph:tplFill('tgCpNotLinked',{})};pgTgAskOn&&pgTgAskOn(l);return {msg:{t:tplFill('tgCpAskHow',{}),at:bishkekNow().hm}}}});
 // Вопрос клиента уходит ответственному бухгалтеру с названием контрагента; ответ бухгалтера возвращается клиенту
 function pgTgAsk(c,x,q){const to=pgTgStaff(c);pgTgClientLog(c,`Вопрос бухгалтеру из Telegram («${x.name}»): ${q.slice(0,200)}`);if(to)tgSvc(to,PG_TG_KIND);pgTgToClient(c,x);
