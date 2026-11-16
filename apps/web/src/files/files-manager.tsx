@@ -39,7 +39,7 @@ import {
 } from './file-columns';
 import { FileEditDialog } from './file-edit-dialog';
 import { useFileDelete, useFileLinkOpen } from './file-link-open';
-import { fileLinkText } from './file-links';
+import { fileLinkText, fileSourceWithLinks } from './file-links';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
 import { SentFilesTab } from './sent-files';
 import {
@@ -437,14 +437,17 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
           onSource={sourceOf(card.data)}
           onEdit={() => setEditId(card.data.id)}
           onLink={links.open}
-          onDelete={() => del.ask(rowOf(card.data.id) ?? card.data)}
+          onDelete={() => del.ask(rowOf(card.data.id) ?? card.data, () => setCard(closeSlot))}
         />
       ) : null}
       <FileEditDialog
         file={editFile}
         sub={
           editFile
-            ? t('files.window.sub', { kind: fileKindText(t, editFile.kind), src: editFile.source })
+            ? t('files.window.sub', {
+                kind: fileKindText(t, editFile.kind),
+                src: fileSourceWithLinks(t, editFile.source, editFile.links),
+              })
             : undefined
         }
         onClose={() => setEditId(null)}

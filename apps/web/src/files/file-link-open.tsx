@@ -2,7 +2,8 @@
 
 import type { FileLinkInfo, FileManagerRow } from '@buhuchet/shared';
 import { ConfirmDialog, useToast } from '@buhuchet/ui';
-import { useState, type ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRef, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { FeePaymentWindowDialog } from '../finance/fee-payment-window';
@@ -17,6 +18,7 @@ import {
 import { useReportActions } from '../reports/report-actions';
 import { fileDeleteLinksList } from './file-links';
 import { useFilesRefresh } from './files-data';
+import { recordQueryKey } from './record-files';
 
 /** Окно записи денег: оплата за обслуживание или операция (поступление, оплата налога и др.). */
 type MoneyWindow = { fee: boolean; id: string };
@@ -100,13 +102,21 @@ export function useFileLinkOpen(): { open: (link: FileLinkInfo) => void; dialogs
  * «Удалить» файла (прототип v124 `fDelDlg`): у файла контрагента, прикреплённого к записям, — «Удалить
  * отовсюду?» со списком записей (которых не видно — числом); иначе — обычный вопрос. Общее для меню
  * «Файлового менеджера», окна файла и вкладки «Файлы» контрагента; `dialog` — в разметку экрана.
+ * `onDeleted` — после «Удалить»: окно файла закрывается только после подтверждения (прототип
+ * `fDelDlg(f, () => m.close())`). После удаления перечитываются списки файлов, история контрагента и
+ * окна записей ссылок — в их истории строка «Удалён файл …» (docs/typical-mistakes.md № 44).
  */
-export function useFileDelete(): { ask: (file: FileManagerRow) => void; dialog: ReactNode } {
+export function useFileDelete(): {
+  ask: (file: FileManagerRow, onDeleted?: () => void) => void;
+  dialog: ReactNode;
+} {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
   const refresh = useFilesRefresh();
+  const client = useQueryClient();
   const [file, setFile] = useState<FileManagerRow | null>(null);
+  const after = useRef<(() => void) | undefined>(undefined);
 
   const remove = async (target: FileManagerRow) => {
     const res = await callApi(() =>
@@ -116,6 +126,12 @@ export function useFileDelete(): { ask: (file: FileManagerRow) => void; dialog: 
       }),
     );
     await refresh();
+    if (target.contractor)
+      void client.invalidateQueries({ queryKey: ['contractors', 'history', target.contractor.id] });
+    for (const link of target.links) {
+      const key = recordQueryKey({ kind: link.kind, id: link.id });
+      if (key) void client.invalidateQueries({ queryKey: key });
+    }
     const everywhere = target.links.length > 0 || target.hiddenLinks > 0;
     if (res.ok) toast(t(everywhere ? 'files.deleted_all' : 'files.deleted'), { icon: 'trash' });
     else toast(errorText(res.error), { bad: true, icon: 'alert' });
@@ -138,8 +154,16 @@ export function useFileDelete(): { ask: (file: FileManagerRow) => void; dialog: 
       }
       ok={t(linked ? 'files.act.delete_all' : 'files.delete_ok')}
       danger
-      onConfirm={() => file && void remove(file)}
+      onConfirm={() => {
+        if (!file) return;
+        after.current?.();
+        void remove(file);
+      }}
     />
   );
-  return { ask: setFile, dialog };
+  const ask = (target: FileManagerRow, onDeleted?: () => void) => {
+    after.current = onDeleted;
+    setFile(target);
+  };
+  return { ask, dialog };
 }

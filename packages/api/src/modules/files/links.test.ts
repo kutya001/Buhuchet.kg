@@ -351,6 +351,8 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     expect(forChief!.links.map((l) => [l.kind, l.date, l.amount])).toEqual([
       ['fee_payment', '2026-11-11', 50_000],
     ]);
+    // Фильтр «Источник» находит файл и по оплате за обслуживание («… от 11.11.2026»).
+    expect(await srcFound(chief, '11.11.2026')).toContain(act);
     // Бухгалтер без права «Видеть плату за обслуживание» файла не видит нигде.
     expect(await managerRow(acc, act)).toBeUndefined();
     expect((await call('GET', `/api/files/${act}/link`, acc)).status).toBe(404);
@@ -482,6 +484,9 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     expect(row!.links.map((l) => l.id)).toEqual([receipt]);
     expect(row!.hiddenLinks).toBe(1);
     expect((await managerRow(owner, act))!.hiddenLinks).toBe(0);
+    // Фильтр «Источник» не находит файл по записи, которой сотруднику не видно.
+    expect(await srcFound(acc, '12.11.2026')).not.toContain(act);
+    expect(await srcFound(owner, '12.11.2026')).toContain(act);
     const del = await call('DELETE', `/api/files/${act}?version=${row!.version}`, owner);
     expect(del.status, await del.clone().text()).toBe(200);
     expect((await recordFiles(owner, 'receipt', receipt)).items.map((x) => x.id)).not.toContain(

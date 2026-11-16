@@ -24,7 +24,7 @@ import { useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import { FileNoteInput } from './attach-dialog';
 import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
-import { fileLinkText } from './file-links';
+import { fileLinkText, fileSourceWithLinks } from './file-links';
 import { formContractorsQuery, fileSizeText } from './files-data';
 
 /** Ссылка на просмотр картинки или PDF в окне файла (на 15 минут). */
@@ -138,11 +138,15 @@ export function FileWindow({
   onEdit?: () => void;
   /** Запись ссылки из «Источника» — в её окне; нет — записи простым текстом. */
   onLink?: (link: FileLinkInfo) => void;
-  /** «Удалить» / «Удалить отовсюду» (без права — недоступна, с причиной); нет — кнопки нет. */
+  /**
+   * «Удалить» / «Удалить отовсюду» (без права — недоступна, с причиной); нет — кнопки нет. Окно остаётся
+   * открытым до подтверждения (прототип `fDelDlg(f, () => m.close())`): вопрос — поверх окна.
+   */
   onDelete?: () => void;
 }) {
   const t = useT();
-  const linked = file.links.length > 0 || file.hiddenLinks > 0;
+  // Надпись — по видимым ссылкам, как в меню «…» и в прототипе (`f.links.length`).
+  const linked = file.links.length > 0;
   const replacedAt = file.replaced ? new Date(file.replaced.at) : null;
   const items: KeyValueItem[] = [
     { id: 'kind', label: t('files.window.kind'), value: fileKindText(t, file.kind) },
@@ -219,7 +223,10 @@ export function FileWindow({
       open={open}
       onClose={onClose}
       title={file.name}
-      sub={t('files.window.sub', { kind: fileKindText(t, file.kind), src: file.source })}
+      sub={t('files.window.sub', {
+        kind: fileKindText(t, file.kind),
+        src: fileSourceWithLinks(t, file.source, file.links),
+      })}
       size="mid"
       kind="card"
       footer={
@@ -253,10 +260,7 @@ export function FileWindow({
               className={buttonClass('danger')}
               disabled={!file.canDelete}
               title={file.canDelete ? undefined : t('err.file_delete_forbidden')}
-              onClick={() => {
-                onClose();
-                onDelete();
-              }}
+              onClick={onDelete}
             >
               <Icon name="trash" size="sm" />
               {t(linked ? 'files.act.delete_all' : 'files.act.delete')}

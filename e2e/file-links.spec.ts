@@ -311,6 +311,15 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
       page.getByRole('status').filter({ hasText: text(texts, 'files.link.unlinked') }),
     ).toBeVisible();
     await expect(inOp).toHaveCount(0);
+    // «История изменений» окна поступления перечитана сразу (docs/typical-mistakes.md № 44).
+    const opHist = op.locator('[data-timeline-item]');
+    await expect(
+      opHist.filter({ hasText: text(texts, 'files.hist.unlinked', { name: fileName }) }),
+    ).toHaveCount(1);
+    const linkedHist = opHist.filter({
+      hasText: text(texts, 'files.hist.linked', { name: fileName }),
+    });
+    const linkedBefore = await linkedHist.count();
     const afterUnlink = await request.get(`/api/files?kind=receipt&id=${receiptId}`, {
       maxRetries: 2,
     });
@@ -340,6 +349,7 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
       page.getByRole('status').filter({ hasText: text(texts, 'files.link.linked_one') }),
     ).toBeVisible();
     await expect(inOp).toHaveCount(1);
+    await expect(linkedHist).toHaveCount(linkedBefore + 1);
     await page.keyboard.press('Escape');
     await expect(op).toBeHidden();
 
@@ -378,7 +388,10 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
       page.getByRole('status').filter({ hasText: text(texts, 'files.deleted_all') }),
     ).toBeVisible();
     await expect(cpRow).toHaveCount(0);
-    await expect(card.locator('[data-cp-files]')).not.toContainText(fileName);
+    // В «Отправленных файлах» строка остаётся «Принят»: удалён сам принятый файл, а не запись отправки.
+    await expect(
+      card.locator('[data-cp-sent] [data-mini-row]').filter({ hasText: fileName }),
+    ).toContainText(text(texts, 'files.sent.st.accepted'));
     const gone = await request.get(`/api/files?kind=receipt&id=${receiptId}`, { maxRetries: 2 });
     expect(((await gone.json()) as { items: unknown[] }).items).toEqual([]);
     expect((await request.get(`/api/files/${fileId}/link`, { maxRetries: 2 })).status()).toBe(404);
@@ -390,6 +403,7 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     baseURL,
     isMobile,
   }) => {
+    // Длинный сценарий: отправка со страницы, «Принять», список контрагентов, окно оплаты, Файловый менеджер.
     test.slow();
     const origin = new URL(baseURL!).origin;
     const texts = await dictionary(request);
@@ -474,5 +488,9 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
         })}`,
       ),
     );
+    // Ссылка «Оплата за обслуживание …» в «Источнике» открывает окно самой оплаты.
+    const feeId = (body as { id?: string }).id!;
+    await window.locator(`[data-file-link-open="fee_payment:${feeId}"]`).click();
+    await expect(page.locator(`[data-fee-payment-window="${feeId}"]`)).toBeVisible();
   });
 });

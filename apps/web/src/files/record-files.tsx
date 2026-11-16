@@ -32,9 +32,9 @@ import { fileMeta, filesQuery, uploadFile, useFilePageToggle, useFilesRefresh } 
 /**
  * Окно самой записи — после «Из файлов контрагента» и «Открепить» в его «Истории изменений» новая строка
  * (docs/typical-mistakes.md № 44): поступление, оплаты и операции — окна «Финансовых операций», отчёт —
- * карточка, проект и транш — их окна.
+ * карточка, проект и транш — их окна. Удаление файла со ссылками перечитывает их так же (`useFileDelete`).
  */
-function recordQueryKey(source: FileSource): readonly unknown[] | null {
+export function recordQueryKey(source: FileSource): readonly unknown[] | null {
   if (!source.id) return null;
   switch (source.kind) {
     case 'report':

@@ -20,7 +20,7 @@ import { FileEditDialog } from '../files/file-edit-dialog';
 import { FileWindow } from '../files/file-window';
 import { fileKindText, filePageText } from '../files/file-columns';
 import { useFileDelete, useFileLinkOpen } from '../files/file-link-open';
-import { fileAlsoText } from '../files/file-links';
+import { fileAlsoText, fileSourceWithLinks } from '../files/file-links';
 import { fileSizeText, uploadFile, useFilePageToggle, useFilesRefresh } from '../files/files-data';
 import { ContractorSentBox } from '../files/sent-files';
 import { useErrorText, useT } from '../l10n/provider';
@@ -271,7 +271,11 @@ export function ContractorFilesTab({
           onSource={null}
           onEdit={() => setEditId(open.data.id)}
           onLink={links.open}
-          onDelete={() => del.ask(data.items.find((f) => f.id === open.data.id) ?? open.data)}
+          onDelete={() =>
+            del.ask(data.items.find((f) => f.id === open.data.id) ?? open.data, () =>
+              setOpen(closeSlot),
+            )
+          }
         />
       ) : null}
       {links.dialogs}
@@ -290,7 +294,10 @@ export function ContractorFilesTab({
         file={editFile}
         sub={
           editFile
-            ? t('files.window.sub', { kind: fileKindText(t, editFile.kind), src: editFile.source })
+            ? t('files.window.sub', {
+                kind: fileKindText(t, editFile.kind),
+                src: fileSourceWithLinks(t, editFile.source, editFile.links),
+              })
             : undefined
         }
         onClose={() => setEditId(null)}
