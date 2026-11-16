@@ -96,6 +96,17 @@ export const FILE_LINK_SOURCE_KINDS = [
 ] as const satisfies readonly FileSourceKind[];
 export type FileLinkSourceKind = (typeof FILE_LINK_SOURCE_KINDS)[number];
 
+/**
+ * Какие файлы прикрепляются ссылкой (`file_links`, триггер `file_links_file_guard` миграции 0157): файлы
+ * самого контрагента без записи — «Загружен вручную» к контрагенту, «Из свидетельства и выписки», «От
+ * контрагента». Файл чужой записи (задачи, оплаты за обслуживание…) — нет: у него своя видимость.
+ */
+export const FILE_LINKABLE_FILE_KINDS = [
+  'manual',
+  'contractor',
+  'sent_file',
+] as const satisfies readonly FileSourceKind[];
+
 export function isFileSourceKind(value: string): value is FileSourceKind {
   return (FILE_SOURCE_KINDS as readonly string[]).includes(value);
 }

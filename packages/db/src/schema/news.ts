@@ -145,7 +145,10 @@ export const newsAdminTexts = pgTable(
     /** Текст в markdown, как подробное описание новости. */
     md: text('md').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    /** Кто менял последним — вошедший администратор (запись с другим автором база не примет). */
+    updatedBy: uuid('updated_by')
+      .default(currentUserId)
+      .references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
     check('news_admin_texts_md_check', sql`char_length(${t.md}) between 1 and 50000`),
@@ -154,7 +157,7 @@ export const newsAdminTexts = pgTable(
       for: 'all',
       to: appRole,
       using: isPlatformAdmin,
-      withCheck: isPlatformAdmin,
+      withCheck: sql`${isPlatformAdmin} and ${t.updatedBy} = ${currentUserId}`,
     }),
   ],
 ).enableRLS();

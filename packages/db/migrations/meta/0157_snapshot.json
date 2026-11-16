@@ -1,5 +1,5 @@
 {
-  "id": "2e4a0d6d-1157-4a59-9d1b-06ad4faa6963",
+  "id": "a2a77fb4-2d50-4fce-bc9c-ba84cc6c96b6",
   "prevId": "5fca44ba-3705-4536-a712-a32fe83b6a8c",
   "version": "7",
   "dialect": "postgresql",
@@ -10196,7 +10196,7 @@
           "to": [
             "buhuchet_app"
           ],
-          "using": "\"bell_notifications\".\"user_id\" = app.current_user_id() or app.current_user_id() is null"
+          "using": "\"bell_notifications\".\"user_id\" = app.current_user_id()"
         },
         "bell_notifications_own_update": {
           "name": "bell_notifications_own_update",
@@ -10207,6 +10207,15 @@
           ],
           "using": "\"bell_notifications\".\"user_id\" = app.current_user_id()",
           "withCheck": "\"bell_notifications\".\"user_id\" = app.current_user_id()"
+        },
+        "bell_notifications_own_delete": {
+          "name": "bell_notifications_own_delete",
+          "as": "RESTRICTIVE",
+          "for": "DELETE",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"bell_notifications\".\"user_id\" = app.current_user_id()"
         }
       },
       "checkConstraints": {
@@ -12362,7 +12371,8 @@
           "name": "updated_by",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "default": "app.current_user_id()"
         }
       },
       "indexes": {},
@@ -12405,7 +12415,7 @@
             "buhuchet_app"
           ],
           "using": "app.is_platform_admin()",
-          "withCheck": "app.is_platform_admin()"
+          "withCheck": "app.is_platform_admin() and \"news_admin_texts\".\"updated_by\" = app.current_user_id()"
         }
       },
       "checkConstraints": {

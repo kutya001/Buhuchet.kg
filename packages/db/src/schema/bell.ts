@@ -34,12 +34,14 @@ const inList = (values: readonly string[]) => sql.raw(values.map((v) => `'${v}'`
  * Уведомление в колокольчике. «Просмотрено» (`seen_at` — открыл панель) и «прочитано» (`read_at` — нажал
  * строку) хранятся на сервере, у каждого человека свои, и не зависят от устройства. Одно событие у
  * человека — одна строка, в том числе при перезапуске расписания (`event_key`). Строки старше 90 дней
- * убирает задача потока Т (без пользователя).
+ * убирает задача потока Т функцией `app.bell_cleanup()` (миграция 0157).
  *
  * Строки организации кладёт любое действие или задача этой организации (событие доходит до ответственного),
- * а читает и отмечает только сам получатель: ограничительные политики ниже. Поэтому `INSERT … ON CONFLICT
- * DO NOTHING` чужому человеку работает, а `RETURNING` по чужим строкам — нет. Пустой `org_id` — строка
- * администратора платформы (режим Админка): её видит и пишет только он сам.
+ * а читает, отмечает и удаляет только сам получатель: ограничительные политики ниже. Поэтому `INSERT … ON
+ * CONFLICT DO NOTHING` чужому человеку работает, а `RETURNING` по чужим строкам — нет; `DO UPDATE` не
+ * годится (ошибка RLS выдаёт, есть ли событие у коллеги). Контекст без пользователя (задача, страница
+ * контрагента, бот клиента) строки только кладёт; уборка старше 90 дней — функцией `app.bell_cleanup()`.
+ * Пустой `org_id` — строка администратора платформы (режим Админка): её видит и пишет только он сам.
  */
 export const bellNotifications = pgTable(
   'bell_notifications',
@@ -124,13 +126,14 @@ export const bellNotifications = pgTable(
       using: sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId} and app.is_platform_admin()`,
       withCheck: sql`${t.orgId} is null and ${currentOrgId} is null and ${t.userId} = ${currentUserId} and app.is_platform_admin()`,
     }),
-    // Читает и отмечает только получатель; задача без пользователя (расписание, уборка) видит строки
-    // своей организации. Положить строку другому сотруднику своей организации можно (политика изоляции).
+    // Читает, отмечает и удаляет только получатель (DELETE без условия по столбцам политику чтения не
+    // включает — нужна своя). Положить строку другому сотруднику своей организации можно (политика
+    // изоляции); контекст без пользователя строк не видит и не удаляет.
     pgPolicy('bell_notifications_own_select', {
       as: 'restrictive',
       for: 'select',
       to: appRole,
-      using: sql`${t.userId} = ${currentUserId} or ${currentUserId} is null`,
+      using: sql`${t.userId} = ${currentUserId}`,
     }),
     pgPolicy('bell_notifications_own_update', {
       as: 'restrictive',
@@ -138,6 +141,12 @@ export const bellNotifications = pgTable(
       to: appRole,
       using: sql`${t.userId} = ${currentUserId}`,
       withCheck: sql`${t.userId} = ${currentUserId}`,
+    }),
+    pgPolicy('bell_notifications_own_delete', {
+      as: 'restrictive',
+      for: 'delete',
+      to: appRole,
+      using: sql`${t.userId} = ${currentUserId}`,
     }),
   ],
 ).enableRLS();
