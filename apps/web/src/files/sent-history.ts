@@ -1,3 +1,4 @@
+import { formatDateRu, type IsoDate } from '@buhuchet/domain';
 import type { Translate } from '../l10n/translate';
 
 /** Запись истории контрагента об отправленном файле (как её отдаёт `/api/contractors/{id}/history`). */
@@ -17,7 +18,9 @@ const changeOf = (e: SentHistoryEntry, field: string) =>
  * `sntRejectDlg`, `sntPurge`) и v115 (`pgFileIn`): «Контрагент отправил со страницы файлы: ….
  * Комментарий: …», «Контрагент отправил через Telegram («@имя») чек: …», «Принят файл
  * от контрагента «…» (сохранён как «…»)», «Отклонён файл от контрагента «…»: причина», «Удалён
- * непринятый файл от контрагента «…»: прошло 30 дней после отправки».
+ * непринятый файл от контрагента «…»: прошло 30 дней после отправки»; чек, принятый вместе с деньгами
+ * (доработки 16.11.2026, блок 1; прототип v121 `sntAcceptDo`), — «Принят файл «…» — прикреплён к
+ * поступлению от ДД.ММ.ГГГГ» (дату оплаты за обслуживание сервер отдаёт только тому, кто видит плату).
  */
 export function sentHistoryText(t: Translate, e: SentHistoryEntry): string {
   const name = str(changeOf(e, 'file'));
@@ -40,6 +43,15 @@ export function sentHistoryText(t: Translate, e: SentHistoryEntry): string {
     }
     case 'sent_file_accept': {
       const saved = str(changeOf(e, 'savedAs'));
+      const receipt = str(changeOf(e, 'receipt'));
+      const fee = str(changeOf(e, 'feePayment'));
+      const to = receipt ? 'receipt' : fee ? 'fee' : '';
+      if (to) {
+        const date = formatDateRu((receipt || fee) as IsoDate);
+        return saved
+          ? t(`files.sent.hist.accept_${to}_as`, { name, saved, date })
+          : t(`files.sent.hist.accept_${to}`, { name, date });
+      }
       return saved
         ? t('files.sent.hist.accept_as', { name, saved })
         : t('files.sent.hist.accept', { name });

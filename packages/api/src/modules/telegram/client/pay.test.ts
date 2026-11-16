@@ -23,7 +23,7 @@ import {
   ContractorPage,
   ContractorTelegram,
   PublicPageTelegramLink,
-  SentFileAccepted,
+  SentFileList,
 } from '@buhuchet/shared';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -764,12 +764,11 @@ describe.skipIf(!databaseAvailable())(
             keyboard: [[{ text: '✓ Чек отправлен', data: 'off', disabled: true }]],
           },
         ]);
-        // «Принять» у чека — что оплачено: сразу «Принять деньги» за сентябрь с суммой сообщения.
-        const accepted = await call(owner, 'POST', `/api/files/sent/${file!.id}/accept`, {
-          version: file!.version,
-        });
-        expect(accepted.status, await accepted.clone().text()).toBe(200);
-        expect(SentFileAccepted.parse(await accepted.json()).pay).toEqual({
+        // У чека — что оплачено: «Принять» откроет «Принять деньги» за сентябрь с суммой сообщения.
+        const listed = await call(owner, 'GET', `/api/contractors/${cpA}/sent-files`);
+        expect(listed.status, await listed.clone().text()).toBe(200);
+        const item = SentFileList.parse(await listed.json()).items.find((x) => x.id === file!.id);
+        expect(item!.pay).toEqual({
           purpose: 'tax',
           month: SEP,
           amount: TOTAL,

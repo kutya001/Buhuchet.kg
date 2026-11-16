@@ -210,6 +210,7 @@ function SentFileWindow({
   onClose,
   onDownload,
   onAccept,
+  onAcceptFile,
   onReject,
 }: {
   file: SentFileItem;
@@ -217,6 +218,7 @@ function SentFileWindow({
   onClose: () => void;
   onDownload: () => void;
   onAccept: () => void;
+  onAcceptFile: () => void;
   onReject: () => void;
 }) {
   const t = useT();
@@ -287,6 +289,19 @@ function SentFileWindow({
                 <Icon name="ban" size="sm" />
                 {t('files.sent.reject')}
               </button>
+              {file.pay ? (
+                <button
+                  type="button"
+                  data-sent-window-accept-file=""
+                  className={buttonClass('default')}
+                  disabled={!file.canDecide}
+                  title={why ?? t('files.sent.accept_only.title')}
+                  onClick={onAcceptFile}
+                >
+                  <Icon name="file" size="sm" />
+                  {t('files.sent.accept_only')}
+                </button>
+              ) : null}
               <button
                 type="button"
                 data-sent-window-accept=""
@@ -322,8 +337,9 @@ function SentFileWindow({
 
 /**
  * Действия над отправленным файлом — общие для вкладки и раздела карточки (прототип `sntActs`):
- * «Открыть», «Скачать», у нового — «Принять» и «Отклонить» (без права «Загружать файлы» — недоступны с
- * причиной), «Открыть контрагента». Окна — `dialogs` в разметку экрана.
+ * «Открыть», «Скачать», у нового — «Принять», у чека с оплатой — ещё «Принять только файл» (прототип
+ * v121), «Отклонить» (без права «Загружать файлы» — недоступны с причиной), «Открыть контрагента». Окна —
+ * `dialogs` в разметку экрана.
  */
 export function useSentActions(o: { withContractor: boolean }) {
   const t = useT();
@@ -344,19 +360,41 @@ export function useSentActions(o: { withContractor: boolean }) {
     [toast, errorText],
   );
 
-  // Чек из Telegram: после «Принять» — сразу «Принять деньги» (прототип v115 `sntAccept` → `pgRcptMoney`).
-  const money = useReceiptMoney();
+  // Чек с оплатой (прототип v121 `sntAccept`): «Принять» открывает «Принять деньги» или «Принять оплату
+  // за обслуживание» с чеком в поле файлов — чек «Новый», пока деньги не сохранены. Деньги месяца уже
+  // получены, нет права на деньги, обычный файл — принят сразу; «Принять только файл» — без окна денег.
+  const money = useReceiptMoney(() => void refresh());
   const takeMoney = money.take;
-  const accept = useCallback(
-    async (file: SentFileItem) => {
+  const acceptNow = useCallback(
+    async (file: SentFileItem, done: string, icon: 'check' | 'info') => {
       const res = await acceptSent(file);
       await refresh();
       if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
-      toast(t('files.sent.accepted'), { icon: 'check' });
-      if (res.item.pay)
-        await takeMoney(file.contractor.id, res.item.pay, { sentId: file.id, name: file.name });
+      toast(done, { icon });
     },
-    [refresh, toast, t, errorText, takeMoney],
+    [refresh, toast, errorText],
+  );
+  const accept = useCallback(
+    async (file: SentFileItem) => {
+      if (file.pay) {
+        const taken = await takeMoney(file.contractor.id, file.pay, {
+          sentId: file.id,
+          name: file.name,
+          version: file.version,
+        });
+        if (taken.kind === 'opened') return;
+        if (taken.kind === 'failed') return toast(t('err.unknown'), { bad: true, icon: 'alert' });
+        if (taken.kind === 'received') {
+          return acceptNow(file, t('files.sent.accepted_got', { got: taken.text }), 'info');
+        }
+      }
+      return acceptNow(file, t('files.sent.accepted'), 'check');
+    },
+    [acceptNow, takeMoney, toast, t],
+  );
+  const acceptFile = useCallback(
+    (file: SentFileItem) => acceptNow(file, t('files.sent.accepted_only'), 'check'),
+    [acceptNow, t],
   );
 
   const open = useCallback((file: SentFileItem) => setCard(openSlot(file)), []);
@@ -383,6 +421,18 @@ export function useSentActions(o: { withContractor: boolean }) {
               reason: why,
               run: () => void accept(file),
             },
+            ...(file.pay
+              ? [
+                  {
+                    id: 'accept-file',
+                    label: t('files.sent.accept_only'),
+                    icon: 'file' as const,
+                    disabled: !file.canDecide,
+                    reason: why,
+                    run: () => void acceptFile(file),
+                  },
+                ]
+              : []),
             {
               id: 'reject',
               label: t('files.sent.reject'),
@@ -420,6 +470,10 @@ export function useSentActions(o: { withContractor: boolean }) {
           onAccept={() => {
             setCard(closeSlot);
             void accept(card.data);
+          }}
+          onAcceptFile={() => {
+            setCard(closeSlot);
+            void acceptFile(card.data);
           }}
           onReject={() => {
             setCard(closeSlot);

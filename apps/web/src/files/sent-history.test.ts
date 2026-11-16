@@ -93,6 +93,30 @@ describe('файлы от контрагентов: тексты истории 
     );
   });
 
+  it('чек принят вместе с деньгами (v121): «— прикреплён к поступлению от …» и «к оплате за обслуживание от …»', () => {
+    expect(
+      sentHistoryText(
+        t,
+        entry('sent_file_accept', [
+          { field: 'file', to: 'Чек.pdf' },
+          { field: 'receipt', to: '2026-11-10' },
+        ]),
+      ),
+    ).toBe('Принят файл «Чек.pdf» — прикреплён к поступлению от 10.11.2026');
+    expect(
+      sentHistoryText(
+        t,
+        entry('sent_file_accept', [
+          { field: 'file', to: 'Чек.pdf' },
+          { field: 'savedAs', to: 'Чек (2).pdf' },
+          { field: 'feePayment', to: '2026-11-11' },
+        ]),
+      ),
+    ).toBe(
+      'Принят файл «Чек.pdf» (сохранён как «Чек (2).pdf») — прикреплён к оплате за обслуживание от 11.11.2026',
+    );
+  });
+
   it('кто: отправка без автора — контрагент, удаление — система, решение — сотрудник', () => {
     expect(sentHistoryActor(t, { action: 'sent_file_send', actor: null })).toBe('Контрагент');
     expect(sentHistoryActor(t, { action: 'sent_file_purge', actor: null })).toBe('Система');

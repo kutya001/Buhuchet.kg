@@ -32,7 +32,9 @@ import {
   contractors,
   contractorSentFiles,
   employees,
+  feePayments,
   files,
+  moneyOperations,
   orgSettings,
 } from './schema';
 import { dateLiteral } from './sql-text';
@@ -422,6 +424,28 @@ export async function acceptSentFile(
   return current;
 }
 
+/**
+ * Дата записи денег, к которой при «Сохранить» прикрепляется принятый чек (доработки 16.11.2026, блок 1;
+ * прототип v121 `pgRcptSave`): «Принят файл «…» — прикреплён к поступлению от ДД.ММ.ГГГГ». Запись не
+ * видна (RLS) — null.
+ */
+export async function sentReceiptTargetDate(
+  tx: Tx,
+  target: { kind: 'receipt' | 'fee_payment'; id: string },
+): Promise<IsoDate | null> {
+  const [row] =
+    target.kind === 'receipt'
+      ? await tx
+          .select({ date: moneyOperations.opDate })
+          .from(moneyOperations)
+          .where(eq(moneyOperations.id, target.id))
+      : await tx
+          .select({ date: feePayments.paidOn })
+          .from(feePayments)
+          .where(eq(feePayments.id, target.id));
+  return (row?.date as IsoDate | undefined) ?? null;
+}
+
 /** «Отклонить» с причиной (прототип `sntRejectDlg`); ответ — отправленный файл до решения. */
 export async function rejectSentFile(
   tx: Tx,
@@ -620,6 +644,7 @@ function sentRowFields(today: IsoDate) {
     ...recordFields,
     contractorName: contractors.name,
     contractorResponsible: contractors.responsibleEmployeeId,
+    contractorArchived: sql<boolean>`${contractors.serviceStatus} = 'archived'`,
     responsibleName: responsible.shortName,
     daysLeft: daysLeft(today),
   };
@@ -643,7 +668,8 @@ const sentListFrom =
 
 /** Строка вкладки «Файлы от контрагентов». */
 export interface SentFileListRow extends SentFileRecord {
-  contractor: { id: string; name: string; responsibleEmployeeId: string | null };
+  /** `archived` — от контрагента в архиве деньги по чеку сразу не принимаются (`payFor` API). */
+  contractor: { id: string; name: string; responsibleEmployeeId: string | null; archived: boolean };
   responsibleName: string | null;
 }
 
@@ -657,6 +683,7 @@ function toListRow(r: SentRowData): SentFileListRow {
       id: base.contractorId,
       name: (r.contractorName as string | null) ?? '',
       responsibleEmployeeId: (r.contractorResponsible as string | null) ?? null,
+      archived: r.contractorArchived === true,
     },
     responsibleName: (r.responsibleName as string | null) ?? null,
   };

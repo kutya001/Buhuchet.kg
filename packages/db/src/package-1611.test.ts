@@ -732,7 +732,7 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
       });
       return fileId;
     };
-    /** Копия, как её делает «прикрепить к деньгам» (sent-attach): название и тип отправленного файла. */
+    /** Копия, как её делает «Принять» с прикреплением к деньгам до этапа 1 (`files/sent.ts`): название и тип отправленного файла. */
     const copyOf = (name: string, over: Partial<typeof files.$inferInsert> = {}) =>
       readyFile({
         name,

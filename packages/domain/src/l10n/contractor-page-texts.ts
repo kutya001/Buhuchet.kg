@@ -763,4 +763,21 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.rcpt.file_hint': { ru: '— чек контрагента, прикрепится при сохранении', section: S },
   'cppage.rcpt.file_remove': { ru: 'Убрать', section: S },
   'cppage.rcpt.file_remove_title': { ru: 'Не прикреплять чек', section: S },
+  // После «Убрать» и чек, который решил другой сотрудник, пока окно было открыто (доработки 16.11.2026,
+  // блок 1; прототип v121 `rcptFileRow`, `pgRcptSave`).
+  'cppage.rcpt.file_off': {
+    ru: 'Чек «{name}» не прикрепится: при сохранении он будет принят только в файлы контрагента',
+    section: S,
+  },
+  'cppage.rcpt.file_back': { ru: 'Вернуть', section: S },
+  'cppage.rcpt.taken.receipt': {
+    ru: 'Чек уже принял {who} — поступление сохранено без него',
+    section: S,
+  },
+  'cppage.rcpt.rejected.receipt': {
+    ru: 'Чек отклонил {who} — поступление сохранено без него',
+    section: S,
+  },
+  'cppage.rcpt.taken.fee': { ru: 'Чек уже принял {who} — оплата сохранена без него', section: S },
+  'cppage.rcpt.rejected.fee': { ru: 'Чек отклонил {who} — оплата сохранена без него', section: S },
 } as const satisfies Record<string, UiTextDefault>;
