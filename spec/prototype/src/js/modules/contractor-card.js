@@ -110,7 +110,7 @@ function openCp(c,tab){
         if(q('#cp-in2'))q('#cp-in2').onclick=()=>inDlg(c);
         if(q('#cp-proj'))q('#cp-proj').onclick=()=>projectDlg(null,c);
         $$('[data-proj]',el).forEach(x=>x.onclick=()=>openProject(PROJECTS.find(p=>p.id===x.dataset.proj)));
-        $$('[data-file]',el).forEach(x=>x.onclick=()=>openFile(allFiles().find(f=>f.id===x.dataset.file)));
+        $$('[data-file]',el).forEach(x=>x.onclick=()=>{const L=$$('[data-file]',el).map(y=>allFiles().find(f=>f.id===y.dataset.file)).filter(Boolean);openFile(L.find(f=>f.id===x.dataset.file),L)});
         $$('[data-fedit]',el).forEach(x=>x.onclick=e=>{e.stopPropagation();const f=allFiles().find(y=>y.id===x.dataset.fedit);if(f)fileEditDlg(f)});
         sntMount(el,()=>mm.draw());
         if(st.tab==='fin')grid(q('#cpf'),{id:'cp-fin',audit:false,cols:finCols(),rows:()=>finRows().filter(x=>x.cp===c.id),title:'what',noun:['операция','операции','операций'],sort:{key:'date',dir:-1},search:false,open:openFinRow,actions:finActions,empty:{icon:'coins',title:'Операций пока нет'}});

@@ -52,8 +52,9 @@ function renderTgCast(body){const c=TG_CAST,news=tgCastNews(),chat={who:'Buhuche
     confirmDlg({title:'Поставить рассылку в очередь?',text:`Сообщение${c.h?` «${esc(c.h)}»`:''} получат ${n} ${plural(n,'пользователь','пользователя','пользователей')} — ${esc(whom)}. Отправленное сообщение отозвать нельзя.`,ok:'Поставить в очередь',run:()=>{
       for(let i=0;i<Math.min(n,6);i++)TG_LOG.unshift({id:TG_LOG.length+1,at:TODAY+' '+bishkekNow().hm,to:'получатель '+(i+1),org:c.to==='all'?'Все':orgName(c.to),kind:'Объявление',st:'Ожидает',tries:0,err:''});
       log('tg','cast',`Рассылка${c.h?` «${c.h}»`:''}: ${whom}, получателей — ${n}${c.img?', с картинкой':''}`);
-      // Колокольчик (пакет 16.11.2026, блок 3): в макете — сотрудникам демо-организации, если рассылка им; и тем, у кого Telegram не привязан
-      if(c.to==='all'||orgName(c.to)===ORG.name){const k=bellOnce('broadcast');EMP.filter(e=>e.active!==false).forEach(e=>bellPut(e.id,{kind:'other',ev:'broadcast',text:`Сообщение платформы: ${c.h||c.t.replace(/\s+/g,' ').slice(0,200)}`,key:k}))}
+      // Колокольчик (пакет 16.11.2026, блок 3): в макете — сотрудникам демо-организации, если рассылка им; и тем, у кого Telegram не привязан.
+      // Рассылка с «Подробнее» на новость второй строки к строке этой новости не даёт (приёмка «Колокольчик против Telegram»)
+      if((c.to==='all'||orgName(c.to)===ORG.name)&&!String(c.more||'').startsWith('news:')){const k=bellOnce('broadcast');EMP.filter(e=>e.active!==false).forEach(e=>bellPut(e.id,{kind:'other',ev:'broadcast',text:`Сообщение платформы: ${c.h||c.t.replace(/\s+/g,' ').slice(0,200)}`,key:k}))}
       Object.assign(c,{h:'',t:'',more:'',video:'',img:null});renderTgCast(body);toast(`В очереди: ${n} ${plural(n,'сообщение','сообщения','сообщений')}`,'tg');
       setTimeout(()=>{TG_LOG.forEach(x=>{if(x.kind==='Объявление'&&x.st==='Ожидает'){x.st='Отправлено';x.tries=1}})},2500)}})};
 }

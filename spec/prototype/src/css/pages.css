@@ -198,10 +198,6 @@ img.pub-logo{background:none;border:1px solid var(--border)}
 /* Файлы от контрагента (v112): «Отправить файл» и «Отправленные вами» над файлами бухгалтера */
 .pub-sent{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.pub-sent>.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pub-sl-h{font-size:13px;color:var(--muted);font-weight:600}.pub-srow{cursor:default}.pub-srow:hover{border-color:var(--border)}.pub-srow .pub-fs{gap:3px}.pub-fm .bad{color:var(--red,#c0392b)}
-.pub-fv{display:flex;align-items:center;justify-content:center;min-height:260px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--pane-alt);color:var(--muted)}
-.pub-fv.img .ic{transform:scale(3)}
-.pub-fvp{display:flex;flex-direction:column;gap:9px;width:min(220px,70%);padding:22px 18px;background:var(--raised);border:1px solid var(--border);border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.pub-fvp i{display:block;height:6px;border-radius:3px;background:var(--border)}.pub-fvp i:nth-child(3n){width:62%}.pub-fvp i:first-child{width:45%;height:9px}
 .pub-more{display:none}
 .pub-nav{display:none}
 .pub-foot{color:var(--faint);font-size:12px;text-align:center}
