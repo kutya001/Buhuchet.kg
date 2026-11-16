@@ -43,7 +43,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { orgContextOf, requirePermission } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { queueTelegramEvents, type TelegramEvent } from '../telegram/events';
+import { queueTelegramEvents, reportBell, type TelegramEvent } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
 import { fixView } from '../telegram/staff-view';
 import { subjectOf, todayOf } from '../contractors/common';
@@ -299,6 +299,11 @@ async function fixEvent(
 ): Promise<TelegramEvent[]> {
   const facts = await reportMessageFacts(tx, id);
   if (!facts?.responsibleId || facts.responsibleId === by) return [];
+  const item = {
+    type: facts.typeShort,
+    period: periodFull({ period: facts.period, start: facts.periodStart }, ctx.t),
+    contractor: facts.contractorName,
+  };
   return [
     {
       kind: 'report_fix',
@@ -306,15 +311,12 @@ async function fixEvent(
       by,
       template: 'tgFix',
       values: {
-        отчёт: ctx.t('telegram.item.report', {
-          type: facts.typeShort,
-          period: periodFull({ period: facts.period, start: facts.periodStart }, ctx.t),
-          contractor: facts.contractorName,
-        }),
+        отчёт: ctx.t('telegram.item.report', item),
         причина: reason,
         автор: await employeeShortName(tx, by),
       },
       link: 'reports',
+      bell: reportBell(id, { ...item, contractorId: facts.contractorId }, reason),
       // Кнопки отчёта под сообщением: «Сдан», «Открыть» (поток Т, задача Т2; прототип `tgFixMsg`).
       ...(await fixView(deps, id, tx)),
     },

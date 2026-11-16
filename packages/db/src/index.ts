@@ -18,6 +18,7 @@ export * from './telegram-commands';
 export * from './telegram-groups';
 export * from './telegram-widgets';
 export * from './telegram-outbox';
+export * from './telegram-bell';
 export * from './telegram-reminders';
 export * from './telegram-notices';
 export * from './lead-telegram';

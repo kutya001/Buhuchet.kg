@@ -35,6 +35,7 @@ import {
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
 import { serverTexts } from '../l10n/texts';
+import { bellContractor } from '../telegram/bell';
 import { flushEvents, queueEvents } from '../telegram/outbox';
 import { removeStoredObjects } from './storage-retry';
 
@@ -281,6 +282,11 @@ export async function addSentFiles(
         comment,
         sender: o.source === 'telegram' ? senderName : null,
         receipt: o.receipt ?? false,
+      });
+      await bellContractor(deps, tx, o.contractorId, {
+        event: 'cp_file',
+        sendId: ids[0]!,
+        n: ids.length,
       });
     });
   } catch (err) {

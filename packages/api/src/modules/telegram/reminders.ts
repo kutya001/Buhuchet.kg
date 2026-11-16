@@ -52,6 +52,7 @@ import {
   type IsoDate,
   type ReminderLine,
   type ReminderPerson,
+  type ReminderPolicy,
   type ReminderReport,
   type ReminderTask,
   type ReminderTexts,
@@ -127,6 +128,61 @@ export function reminderReports(
   }));
 }
 
+/**
+ * Получатели, отчёты, задачи и правила напоминаний за день `day` — общие у сообщения дня Telegram и
+ * строк дня колокольчика (`bell-day.ts`): одни правила, одни получатели.
+ */
+export function reminderInputs(
+  data: Awaited<ReturnType<typeof loadReminderData>>,
+  entries: Awaited<ReturnType<typeof productionCalendarEntries>>,
+  day: IsoDate,
+  tr: Translate,
+): {
+  people: ReminderPerson[];
+  reports: ReminderReport[];
+  tasks: ReminderTask[];
+  policy: ReminderPolicy;
+} {
+  const calendar = productionCalendar(entries);
+  const people: ReminderPerson[] = data.employees.map((e) => ({
+    employeeId: e.employeeId,
+    shortName: e.shortName,
+    boss: e.subject.isOwner || e.chief,
+    isOwner: e.subject.isOwner,
+    linked: e.chatId !== null,
+    settings: e.settings,
+    viewReports: hasPermission(e.subject, 'repView') ? scopeOf(e.subject, 'reports') : null,
+    confirmReports: hasPermission(e.subject, 'repConfirm') ? scopeOf(e.subject, 'reports') : null,
+    confirmTasks: hasPermission(e.subject, 'tasksConfirm'),
+  }));
+  const tasks: ReminderTask[] = data.tasks.map((x) => ({
+    id: x.id,
+    title: x.title,
+    executorId: x.executorId,
+    authorId: x.authorId,
+    dueDate: x.dueDate,
+    open: taskOpen(x.status),
+    waitingSince: x.status === 'on_confirm' ? x.doneOn : null,
+  }));
+  return {
+    people,
+    reports: reminderReports(data.reports, tr),
+    tasks,
+    policy: {
+      today: day,
+      overdueRepeat: data.overdueRepeat,
+      reportConfirm: data.reportConfirm,
+      confirmWaitDays: data.confirmWaitDays,
+      taxpay: data.features.taxpay === true,
+      tasks: data.features.tasks === true,
+      // Недельная сводка — в день организации (блок «Telegram-уведомления», по умолчанию понедельник):
+      // неделя — как `weekRange` прототипа (неделя дня сводки, в выходные — следующая).
+      week: isWeekSummaryDay(day, data.weekDay) ? summaryWeek(day) : null,
+      nextWorkingDay: (d) => nextWorkingDay(calendar, d),
+    },
+  };
+}
+
 /** Значение считается один раз и только если понадобилось. */
 function lazy<T>(make: () => Promise<T>): () => Promise<T> {
   let value: Promise<T> | undefined;
@@ -147,45 +203,9 @@ export async function buildDailyReminders(
     // Тем же соединением, что и вся транзакция организации: запрос к пулу внутри неё ждал бы свободное.
     messageTemplates(tx),
   ]);
-  const calendar = productionCalendar(entries);
   const tr: Translate = (key, params) => formatText(t(key), params);
-  const people: ReminderPerson[] = data.employees.map((e) => ({
-    employeeId: e.employeeId,
-    shortName: e.shortName,
-    boss: e.subject.isOwner || e.chief,
-    isOwner: e.subject.isOwner,
-    linked: e.chatId !== null,
-    settings: e.settings,
-    viewReports: hasPermission(e.subject, 'repView') ? scopeOf(e.subject, 'reports') : null,
-    confirmReports: hasPermission(e.subject, 'repConfirm') ? scopeOf(e.subject, 'reports') : null,
-    confirmTasks: hasPermission(e.subject, 'tasksConfirm'),
-  }));
-  const reports = reminderReports(data.reports, tr);
-  const tasks: ReminderTask[] = data.tasks.map((x) => ({
-    id: x.id,
-    title: x.title,
-    executorId: x.executorId,
-    authorId: x.authorId,
-    dueDate: x.dueDate,
-    open: taskOpen(x.status),
-    waitingSince: x.status === 'on_confirm' ? x.doneOn : null,
-  }));
-  const messages = dailyReminders(
-    people,
-    { reports, tasks },
-    {
-      today: day,
-      overdueRepeat: data.overdueRepeat,
-      reportConfirm: data.reportConfirm,
-      confirmWaitDays: data.confirmWaitDays,
-      taxpay: data.features.taxpay === true,
-      tasks: data.features.tasks === true,
-      // Недельная сводка — в день организации (блок «Telegram-уведомления», по умолчанию понедельник):
-      // неделя — как `weekRange` прототипа (неделя дня сводки, в выходные — следующая).
-      week: isWeekSummaryDay(day, data.weekDay) ? summaryWeek(day) : null,
-      nextWorkingDay: (d) => nextWorkingDay(calendar, d),
-    },
-  );
+  const { people, reports, tasks, policy } = reminderInputs(data, entries, day, tr);
+  const messages = dailyReminders(people, { reports, tasks }, policy);
   const texts: ReminderTexts = {
     template: (key) => templates[key] ?? TELEGRAM_TEMPLATE_DEFAULTS[key],
     more: t('telegram.more'),
@@ -464,7 +484,7 @@ export async function buildDailyReminders(
   }
   const group = await groupSummaryRow(ctx, tx, {
     day,
-    working: isWorkingDay(calendar, day),
+    working: isWorkingDay(productionCalendar(entries), day),
     reports,
     names,
     taxpay: data.features.taxpay === true,

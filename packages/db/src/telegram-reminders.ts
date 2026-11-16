@@ -365,6 +365,7 @@ export async function reportMessageFacts(
   typeShort: string;
   period: ReportPeriod;
   periodStart: IsoDate;
+  contractorId: string;
   contractorName: string;
   /** Контрагент в архиве: его записи из чата не меняются. */
   contractorArchived: boolean;
@@ -375,6 +376,7 @@ export async function reportMessageFacts(
       typeShort: reportTypes.shortName,
       period: reports.period,
       periodStart: reports.periodStart,
+      contractorId: reports.contractorId,
       contractorName: contractors.name,
       serviceStatus: contractors.serviceStatus,
       responsibleId: reports.responsibleEmployeeId,

@@ -15,6 +15,7 @@ import {
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../deps';
 import { serverTexts } from '../l10n/texts';
+import { bellContractor } from '../telegram/bell';
 import { flushEvents, queueEvents } from '../telegram/outbox';
 
 /** Куда ведёт ссылка в сообщении: модуль «Контрагенты». */
@@ -34,9 +35,14 @@ export async function notifyPageClosed(
   orgId: string,
   contractorId: string,
 ): Promise<void> {
-  if (!deps.telegram) return;
   try {
     const ids = await withOrgContext(deps.db, { orgId, userId: null }, async (tx) => {
+      // Колокольчик (доработки 16.11.2026, блок 3) — и без бота.
+      await bellContractor(deps, tx, contractorId, {
+        event: 'page_closed',
+        failures: PAGE_DAY_MAX_FAILURES,
+      });
+      if (!deps.telegram) return [];
       const notice = await pageClosedNotice(tx, contractorId);
       if (!notice) return [];
       for (const employeeId of notice.employeeIds) {
