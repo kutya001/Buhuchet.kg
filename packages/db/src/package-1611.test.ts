@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { FILE_LINK_SOURCE_KINDS, FILE_LINKABLE_FILE_KINDS } from '@buhuchet/domain';
+import {
+  FILE_LINK_SOURCE_KINDS,
+  FILE_LINKABLE_FILE_KINDS,
+  FILE_SOURCE_KINDS,
+} from '@buhuchet/domain';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
@@ -146,7 +150,8 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
       state: 'ready',
       status: 'accepted',
       decidedBy: a.ownerUserId,
-      decidedAt: new Date(),
+      // Часы Node и базы могут разойтись на миллисекунды: «Принять» — заведомо раньше копии.
+      decidedAt: new Date(Date.now() - 1000),
       fileId,
       ...over,
     });
@@ -634,9 +639,9 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
         .set({ state: 'deleted', deletedAt: new Date(), deletedBy: a.ownerUserId })
         .where(eq(files.id, gone));
       const ofRecords = await Promise.all(
-        (['task', 'fee_payment', 'receipt', 'report', 'indicator_value'] as const).map(
-          (sourceKind) => readyFile({ sourceKind, sourceId: randomUUID() }),
-        ),
+        FILE_SOURCE_KINDS.filter(
+          (k) => !(FILE_LINKABLE_FILE_KINDS as readonly string[]).includes(k),
+        ).map((sourceKind) => readyFile({ sourceKind, sourceId: randomUUID() })),
       );
       for (const fileId of [pending, general, gone, ...ofRecords]) {
         await expect(
@@ -814,6 +819,19 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
       const at = new Date(Date.now() - 5_000);
       const original = await sentCheck(`Чек ${u}.jpg`, { at });
       const copy = await copyOf(`Чек ${u}.jpg`, { createdAt: at });
+      await merge();
+      expect((await stateOf([copy])).get(copy)?.state).toBe('deleted');
+      expect(await linksOf([original])).toHaveLength(1);
+    });
+
+    it('граница 15.11.2026 — полночь по Бишкеку: копия в 00:01 15.11 по Бишкеку (18:01 14.11 UTC) объединяется', async () => {
+      const u = randomUUID().slice(0, 8);
+      const original = await sentCheck(`Полночь ${u}.jpg`, {
+        at: new Date('2026-11-14T10:00:00Z'),
+      });
+      const copy = await copyOf(`Полночь ${u}.jpg`, {
+        createdAt: new Date('2026-11-14T18:01:00Z'),
+      });
       await merge();
       expect((await stateOf([copy])).get(copy)?.state).toBe('deleted');
       expect(await linksOf([original])).toHaveLength(1);
