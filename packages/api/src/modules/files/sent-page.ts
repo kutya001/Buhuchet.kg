@@ -40,6 +40,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { clientIpHash, pageTokenHash } from '../contractor-page/public';
+import { bellContractor } from '../telegram/bell';
 import { error } from './files';
 import {
   finishSentFiles,
@@ -381,6 +382,11 @@ export function pageSentCompleteHandler(
         names: rows.map((r) => r.name),
         source: 'page',
         comment: rows[0]!.comment,
+      });
+      await bellContractor(deps, tx, page.contractorId, {
+        event: 'cp_file',
+        sendId: rows[0]!.id,
+        n: rows.length,
       });
       return true;
     }).catch(async (e: unknown) => {
