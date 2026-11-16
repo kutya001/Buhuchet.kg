@@ -9,6 +9,7 @@ import { databaseAvailable } from '@buhuchet/db/testing';
 import {
   botPressData,
   fillTemplate,
+  formatText,
   NOT_ME_ACTION,
   NOT_ME_HOURS,
   notMeArg,
@@ -202,6 +203,28 @@ describe.skipIf(!databaseAvailable())(
       );
       expect(sent(CHAT.admin)).toHaveLength(0);
       expect(sent(CHAT.ownerB)).toHaveLength(1);
+      // Колокольчик (приёмка «Колокольчик против Telegram»): владельцу — та же весть строкой, нажатие —
+      // карточка сотрудника; самому нажавшему и чужой организации — ничего.
+      const bell = await f.t.admin.db
+        .select()
+        .from(schema.bellNotifications)
+        .where(eq(schema.bellNotifications.event, 'not_me'));
+      expect(bell.map((r) => [r.userId, r.kind, r.targetKind, r.targetId, r.text])).toEqual([
+        [
+          f.a.ownerUserId,
+          'other',
+          'employee',
+          acc.employeeId,
+          formatText(UI_TEXTS['bell.line.not_me'].ru, { name: 'acc-a' }),
+        ],
+      ]);
+      // «Пароль изменён» и ответ бота в колокольчик не попадают (приёмка: «Не попадают»).
+      expect(
+        await f.t.admin.db
+          .select()
+          .from(schema.bellNotifications)
+          .where(eq(schema.bellNotifications.userId, acc.userId)),
+      ).toEqual([]);
       // История учётной записи — от имени нажавшего, «через Telegram».
       const [entry] = await history(acc.userId);
       expect(entry).toMatchObject({
@@ -386,6 +409,18 @@ describe.skipIf(!databaseAvailable())(
           событие: 'Telegram отвязан',
         }),
       });
+      // Нажал владелец: сообщение — администраторам платформы, строки колокольчика нет (по умолчанию).
+      expect(
+        await f.t.admin.db
+          .select()
+          .from(schema.bellNotifications)
+          .where(
+            and(
+              eq(schema.bellNotifications.event, 'not_me'),
+              eq(schema.bellNotifications.orgId, f.b.orgId),
+            ),
+          ),
+      ).toEqual([]);
       const denied = await login('owner-b', TEST_PASSWORD);
       expect(denied.status).toBe(403);
       expect(await denied.json()).toEqual({

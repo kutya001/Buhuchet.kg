@@ -129,8 +129,14 @@ export interface BellTaskDayCounts {
 /** Что положить человеку в колокольчик в час напоминаний: числа строк дня. */
 export interface BellDayPlan {
   employeeId: string;
-  /** «Сроки на сегодня» — только свои отчёты (как в прототипе `tgMine`). */
+  /**
+   * «Сроки на сегодня» — те же числа, что в утреннем сообщении Telegram (доработки 16.11.2026, приёмка
+   * «Колокольчик против Telegram»): у владельца и главного бухгалтера — и отчёты других сотрудников по
+   * объёму и переключателям профиля.
+   */
   dues: BellDayCounts;
+  /** Среди отчётов строки есть чужие: строка откроет «На неделе» без отбора «Ответственный — я». */
+  others: boolean;
   /** «Ждут подтверждения сдачи» — как строка `tgConfWait` сообщения дня. */
   confWait: number;
   tasks: BellTaskDayCounts;
@@ -138,23 +144,18 @@ export interface BellDayPlan {
   week: { sub: number; over: number; boss: boolean } | null;
 }
 
-const countOf = (
-  lines: ReturnType<typeof remindersFor>,
-  keys: readonly string[],
-  own?: Set<string>,
-) =>
+const countOf = (lines: ReturnType<typeof remindersFor>, keys: readonly string[]) =>
   lines
     .filter((l) => keys.includes(l.key))
-    .reduce(
-      (n, l) => n + ('items' in l ? l.items.filter((i) => !own || own.has(i.id)).length : 0),
-      0,
-    );
+    .reduce((n, l) => n + ('items' in l ? l.items.length : 0), 0);
 
 /**
  * Строки дня колокольчика (доработки 16.11.2026, блок 3; прототип v122 `bellStaffDay`): те же правила,
  * получатели и переключатели профиля, что у утреннего сообщения Telegram (`remindersFor`, `weekSummary`),
- * но каждому сотруднику — и без привязанного Telegram. «Сроки на сегодня» считает только свои отчёты: по
- * нажатию открывается список «ответственный — я, срок — этот день». Человек без единой строки — не в списке.
+ * но каждому сотруднику — и без привязанного Telegram. «Сроки на сегодня» — с теми же числами, что
+ * сообщение (этап 2, «Колокольчик против Telegram»): у сотрудника — свои отчёты, по нажатию — «На неделе»
+ * с отбором «Ответственный — я»; у владельца и главного бухгалтера — и чужие по объёму из профиля, тогда
+ * по нажатию — «На неделе» без отбора. Человек без единой строки — не в списке.
  */
 export function bellDayPlans(
   people: readonly ReminderPerson[],
@@ -168,12 +169,17 @@ export function bellDayPlans(
     const own = new Set(
       data.reports.filter((r) => r.responsibleId === person.employeeId).map((r) => r.id),
     );
+    // ОТКЛОНЕНИЕ: docs/deviations.md#Т-21 — у руководителя и чужие отчёты, как в его сообщении Telegram.
+    const dueKeys = ['tgToday', 'tgPayToday', 'tgPay', 'tgPayOver', 'tgOver', 'tgBefore'];
     const dues: BellDayCounts = {
-      today: countOf(lines, ['tgToday'], own),
-      pay: countOf(lines, ['tgPayToday', 'tgPay', 'tgPayOver'], own),
-      over: countOf(lines, ['tgOver'], own),
-      soon: countOf(lines, ['tgBefore'], own),
+      today: countOf(lines, ['tgToday']),
+      pay: countOf(lines, ['tgPayToday', 'tgPay', 'tgPayOver']),
+      over: countOf(lines, ['tgOver']),
+      soon: countOf(lines, ['tgBefore']),
     };
+    const others = lines.some(
+      (l) => dueKeys.includes(l.key) && 'items' in l && l.items.some((i) => !own.has(i.id)),
+    );
     const tasks: BellTaskDayCounts = {
       soon: countOf(lines, ['tgTaskSoon']),
       over: countOf(lines, ['tgTaskOver']),
@@ -189,7 +195,7 @@ export function bellDayPlans(
         : null;
     const counts = [...Object.values(dues), ...Object.values(tasks), confWait];
     if (counts.some(Boolean) || (week && (week.sub || week.over || week.boss))) {
-      out.push({ employeeId: person.employeeId, dues, confWait, tasks, week });
+      out.push({ employeeId: person.employeeId, dues, others, confWait, tasks, week });
     }
   }
   return out;
@@ -217,8 +223,8 @@ export function bellTaskDayText(c: BellTaskDayCounts, tr: Translate): string | n
 }
 
 /**
- * Строки дня одного человека (прототип v122 `bellStaffDay`): «Сроки на сегодня» (откроет отчёты этого
- * дня), «Ждут подтверждения сдачи» (вкладка «ждут подтверждения»), «Задачи» (мои задачи) и в «День
+ * Строки дня одного человека (прототип v122 `bellStaffDay`): «Сроки на сегодня» (откроет «На неделе»: свои
+ * отчёты, а с чужими — все), «Ждут подтверждения сдачи» (вкладка «ждут подтверждения»), «Задачи» (мои задачи) и в «День
  * сводки» — «Сводка недели» (вкладка недели; руководителю — с числом должников за обслуживание
  * `debtors`). Ключ — вид и день: перезапуск расписания второй строки не кладёт.
  */
@@ -236,7 +242,9 @@ export function bellDayRows(
     add({
       kind: 'reports',
       event: 'day_dues',
-      target: { kind: 'reports_day', id: today },
+      target: plan.others
+        ? { kind: 'reports_tab', id: 'week' }
+        : { kind: 'reports_day', id: today },
       need: 'repView',
       text: dues,
     });

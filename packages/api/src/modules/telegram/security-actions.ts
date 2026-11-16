@@ -1,4 +1,4 @@
-import { telegramNotMe, writeHistory, writePlatformHistory } from '@buhuchet/db';
+import { bellOwnerUsers, telegramNotMe, writeHistory, writePlatformHistory } from '@buhuchet/db';
 import {
   NOT_ME_HOURS,
   notMeLate,
@@ -7,6 +7,7 @@ import {
   telegramName,
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
+import { putBell } from './bell';
 import type { BotAction, BotPressResult } from './press';
 
 /*
@@ -82,6 +83,26 @@ export const notMeAction: BotAction = {
       // История администратора платформы — в Админке: у его записи нет организации.
       if (orgId) await writeHistory(tx, entry);
       else await writePlatformHistory(tx, entry);
+      // Колокольчик (приёмка «Колокольчик против Telegram», доработки 16.11.2026, этап 2; прототип v126):
+      // владельцам — «выдайте новый пароль», и без привязанного Telegram; нажатие — карточка сотрудника.
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Т-21 — нажал владелец: сообщение — администраторам платформы,
+      // строки у них нет.
+      const { employeeId } = ctx.user;
+      if (orgId && result.locked && !result.isOwner && employeeId) {
+        const owners = await bellOwnerUsers(tx, userId);
+        await putBell(
+          tx,
+          owners.map((owner) => ({
+            userId: owner,
+            kind: 'other' as const,
+            event: 'not_me',
+            target: { kind: 'employee' as const, id: employeeId },
+            text: ctx.tr('bell.line.not_me', { name: login }),
+            eventKey: `not_me:${userId}:${now.getTime().toString(36)}`,
+          })),
+          now,
+        );
+      }
 
       const text = result.locked
         ? await ctx.text('tgNotMeDone', {

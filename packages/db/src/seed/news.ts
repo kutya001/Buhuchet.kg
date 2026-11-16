@@ -22,7 +22,10 @@ const NewsSection = z.array(
     short: z.string().nullish(),
     md: z.string().nullish(),
     status: z.string(),
-    aud: z.string().nullish(),
+    // «Для кого» обязательно, и незнакомое значение останавливает наполнение: `--update` переписывает и
+    // залитые новости, и опечатка или пропуск открыли бы новость «Только режим Админка» всем организациям
+    // (в прототипе такая новость не видна никому, кроме Админки).
+    aud: z.enum(['all', 'adm']),
     off: z.boolean().nullish(),
     pin: z.boolean().nullish(),
     login: z.boolean().nullish(),
@@ -100,7 +103,7 @@ export function newsSeedRows(section: unknown) {
       linkId: link?.id ?? null,
       pinned: n.pin ?? false,
       showOnLogin: n.login ?? false,
-      audience: n.aud === 'adm' ? 'adm' : 'all',
+      audience: n.aud,
       modules: newsModulesOrdered(modules),
       status: 'published',
       off: n.off ?? false,

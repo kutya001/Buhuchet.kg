@@ -281,9 +281,14 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     expect(day.items.map((x) => [x.event, x.open])).toEqual([
       ['day_dues', { kind: 'reports_day', id: TODAY }],
     ]);
-    // «Только свои отчёты»: владелец и главный бухгалтер видят все отчёты, но своих на сегодня у них нет.
-    expect(await rowsOf(f.a.ownerUserId, 'day_dues')).toEqual([]);
-    expect(await rowsOf(person('chief-a').userId, 'day_dues')).toEqual([]);
+    // Владелец и главный бухгалтер (объём «Все»): отчёт бухгалтера без Telegram — в их утреннем
+    // сообщении, значит, и в строке; нажатие — «На неделе» без отбора «Ответственный — я» (приёмка
+    // «Колокольчик против Telegram»).
+    for (const userId of [f.a.ownerUserId, person('chief-a').userId]) {
+      expect(
+        (await rowsOf(userId, 'day_dues')).map((r) => [r.targetKind, r.targetId, r.text]),
+      ).toEqual([['reports_tab', 'week', rows[0]!.text]]);
+    }
 
     // День — по Бишкеку: час напоминаний 05:00, запуск в 23:00 UTC предыдущего дня по UTC.
     await clear();
@@ -692,6 +697,19 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       expect(reads).toHaveLength(1);
       // У другого сотрудника новость не прочитана.
       expect((await page('chief-a', 'news')).items.map((x) => x.read)).toEqual([false]);
+      // Рассылка, заполненная из этой новости («Подробнее» — новость), второй строки не даёт
+      // (приёмка «Колокольчик против Telegram»): у сотрудника — только строка новости.
+      const cast = await call('platform-admin', 'POST', '/api/admin/telegram/broadcast', {
+        org: null,
+        title: 'Колокольчик уведомлений',
+        text: 'Коротко',
+        more: { kind: 'news', id: 'bell-api-news' },
+      });
+      expect(cast.status, await cast.clone().text()).toBe(200);
+      expect(await rowsOf(person('chief-a').userId, 'broadcast')).toEqual([]);
+      expect((await page('chief-a')).items.map((x) => [x.event, x.text])).toEqual([
+        ['news', 'Колокольчик уведомлений'],
+      ]);
     } finally {
       await f.t.admin.db.delete(news).where(eq(news.id, 'bell-api-news'));
     }

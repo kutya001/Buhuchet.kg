@@ -136,7 +136,12 @@ export type ContractorBell =
   /** Вопрос клиента: номер сообщения-просьбы и текст вопроса. */
   | { event: 'cp_question'; messageId: string; question: string }
   /** Страница закрыта после 5 неверных кодов за сутки. */
-  | { event: 'page_closed'; failures: number };
+  | { event: 'page_closed'; failures: number }
+  /**
+   * «Не отправлено «К оплате»: нет реквизитов для перевода» за месяц (приёмка «Колокольчик против
+   * Telegram», доработки 16.11.2026, блок 3, пункт 3; прототип v126 `pgNoReqWhy`).
+   */
+  | { event: 'cp_no_req'; month: YearMonth };
 
 /** Длина вопроса клиента в строке (прототип v122: `slice(0,200)`). */
 const BELL_QUESTION_MAX = 200;
@@ -208,6 +213,15 @@ function contractorBellRow(
         }),
         eventKey: `cp_question:${e.messageId}`,
       };
+    case 'cp_no_req':
+      return {
+        kind: 'money',
+        event: 'cp_no_req',
+        target: cp('contractor'),
+        text: t('bell.line.cp_no_req', { month: monthLabel(e.month) }),
+        // Как сообщение Telegram: одно на контрагента и месяц.
+        eventKey: `cp_no_req:${contractorId}:${e.month}`,
+      };
     case 'page_closed':
       return {
         kind: 'other',
@@ -234,6 +248,19 @@ export async function bellContext(deps: ApiDeps): Promise<BellContext> {
  * `bellContext(deps)`, прочитанный до транзакции; с `deps` часы берутся здесь, тексты словаря — из
  * `texts` или здесь же (у словаря своё соединение, п. О-46).
  */
+export async function bellContractor(
+  ctx: BellContext,
+  tx: Tx,
+  contractorId: string,
+  e: ContractorBell,
+): Promise<number>;
+export async function bellContractor(
+  deps: ApiDeps,
+  tx: Tx,
+  contractorId: string,
+  e: ContractorBell,
+  texts?: Translate,
+): Promise<number>;
 export async function bellContractor(
   ctx: ApiDeps | BellContext,
   tx: Tx,

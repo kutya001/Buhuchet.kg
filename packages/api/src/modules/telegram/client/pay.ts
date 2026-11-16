@@ -937,6 +937,9 @@ async function queueNoRequisite(
             employee: cp.responsible?.shortName || t('cppage.tg.rq.no_resp'),
           })
         : t('cppage.tg.rq.org_hint');
+  // Колокольчик (приёмка «Колокольчик против Telegram», поток Т): та же весть строкой — ответственному и
+  // без Telegram, одна на контрагента и месяц; нажатие — карточка контрагента.
+  await bellContractor({ now: ctx.clock.now(), t }, tx, cp.id, { event: 'cp_no_req', month });
   return queueStaffNotice(
     tx,
     ctx,

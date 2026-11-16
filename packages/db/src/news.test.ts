@@ -1,6 +1,6 @@
 import { hashPassword } from '@buhuchet/adapters/password';
 import { addDays, bishkekDate, newsShowMoment } from '@buhuchet/domain';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
 import { withOrgContext } from './context';
@@ -460,11 +460,11 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         '## Для администратора платформы',
       );
     }
-    expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toMatch(
-      /^## Для администратора платформы/,
-    );
+    // Второй текст v123 есть; подпись «Для администратора платформы» экран ставит сам (с прототипа v125
+    // её нет и в тексте).
+    expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toBeTruthy();
     const source = refDB.news as { id: string; status: string }[];
-    // Черновики прототипа (сейчас «Версия 125: план») не наполняются.
+    // Черновики прототипа («Версия N+1: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
     expect(drafts.length).toBeGreaterThan(0);
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
@@ -593,6 +593,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         type: 'Обновление',
         date: '2026-11-16',
         status: 'Опубликовано',
+        aud: 'all',
         mods: ['fee', 'cps'],
         admMd: '## Для администратора платформы\n- Подробности\n\n## Изменено\n- ',
       },
@@ -606,6 +607,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
           type: 'Обновление',
           date: '2026-11-16',
           status: 'Опубликовано',
+          aud: 'all',
           mods: ['fee', 'cps'],
         },
       ])[0]?.modules,
@@ -618,14 +620,33 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
           type: 'Обновление',
           date: '2026-11-16',
           status: 'Опубликовано',
+          aud: 'all',
           mods: ['nope'],
         },
       ]),
     ).toThrow(/x2/);
+    // «Для кого» — только «all» или «adm»: опечатка или пропуск останавливают наполнение, а не открывают
+    // новость всем.
+    const aud = (value: unknown) => () =>
+      newsSeedRows([
+        {
+          id: 'x3',
+          t: 'Версия 3',
+          type: 'Обновление',
+          date: '2026-11-16',
+          status: 'Опубликовано',
+          ...(value === undefined ? {} : { aud: value }),
+        },
+      ]);
+    expect(aud('adn')).toThrow();
+    expect(aud(undefined)).toThrow();
+    expect(aud(null)).toThrow();
+    expect(aud('adm')()[0]?.audience).toBe('adm');
   });
 
-  it('наполнение с --update меняет и «Для кого»: разбор выпущенных новостей (доработки 16.11.2026, блок 4, пункт 5); поправленную администратором — нет', async () => {
-    const item = (id: string, aud: string) => ({
+  it('наполнение с --update меняет «Для кого», модули и второй текст: разбор выпущенных новостей (доработки 16.11.2026, блок 4, пункт 5); поправленную администратором — нет', async () => {
+    type Extra = { aud: 'all' | 'adm'; mods?: string[]; admMd?: string };
+    const item = (id: string, x: Extra) => ({
       id,
       t: `Версия ${id}`,
       type: 'Обновление',
@@ -634,46 +655,76 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       status: 'Опубликовано',
       short: 'Коротко',
       md: '- Текст',
-      aud,
+      ...x,
     });
     const ids = ['x9301', 'x9302', 'x9303'];
-    await seedNews(
-      db.admin.db,
-      [item('x9301', 'all'), item('x9302', 'all'), item('x9303', 'adm')],
-      { update: false },
-    );
-    await db.admin.db.update(news).set({ updatedBy: adminId }).where(eq(news.id, 'x9302'));
-    const audience = async () =>
-      Object.fromEntries(
-        (
-          await db.admin.db
-            .select({ id: news.id, audience: news.audience })
-            .from(news)
-            .where(inArray(news.id, ids))
-        ).map((r) => [r.id, r.audience]),
+    const before = [
+      item('x9301', { aud: 'all' }),
+      item('x9302', { aud: 'all' }),
+      item('x9303', { aud: 'adm', admMd: '- Старый текст' }),
+    ];
+    // Разбор: x9301 — в Админку, модуль и второй текст; x9302 правил администратор; x9303 — всем, без
+    // второго текста.
+    const after = [
+      item('x9301', { aud: 'adm', mods: ['fee'], admMd: '- Новый текст' }),
+      item('x9302', { aud: 'adm', mods: ['fee'], admMd: '- Новый текст' }),
+      item('x9303', { aud: 'all' }),
+    ];
+    try {
+      await seedNews(db.admin.db, before, { update: false });
+      await db.admin.db.update(news).set({ updatedBy: adminId }).where(eq(news.id, 'x9302'));
+      const state = async () => {
+        const rows = await db.admin.db
+          .select({ id: news.id, audience: news.audience, modules: news.modules, v: news.version })
+          .from(news)
+          .where(inArray(news.id, ids))
+          .orderBy(asc(news.id));
+        const texts = await db.admin.db
+          .select({ id: newsAdminTexts.newsId, md: newsAdminTexts.md })
+          .from(newsAdminTexts)
+          .where(inArray(newsAdminTexts.newsId, ids));
+        const md = new Map(texts.map((x) => [x.id, x.md]));
+        return Object.fromEntries(
+          rows.map((r) => [r.id, [r.audience, r.modules, md.get(r.id) ?? null, r.v]]),
+        );
+      };
+      // Без --update у залитых новостей не меняются «Для кого», модули и имеющийся второй текст —
+      // добавляется только недостающий второй текст (не у новости, которую правил администратор).
+      await seedNews(db.admin.db, after, { update: false });
+      const start = await state();
+      expect(Object.fromEntries(Object.entries(start).map(([k, x]) => [k, x.slice(0, 3)]))).toEqual(
+        {
+          x9301: ['all', [], '- Новый текст'],
+          x9302: ['all', [], null],
+          x9303: ['adm', [], '- Старый текст'],
+        },
       );
-    // Без --update уже залитые новости не меняются.
-    await seedNews(
-      db.admin.db,
-      [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')],
-      { update: false },
-    );
-    expect(await audience()).toEqual({ x9301: 'all', x9302: 'all', x9303: 'adm' });
-    const report = await seedNews(
-      db.admin.db,
-      [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')],
-      { update: true },
-    );
-    expect(await audience()).toEqual({ x9301: 'adm', x9302: 'all', x9303: 'all' });
-    expect(report).toMatchObject({ inserted: 0, updated: 2 });
-    // Повтор ничего не меняет.
-    expect(
-      await seedNews(
-        db.admin.db,
-        [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')],
-        { update: true },
-      ),
-    ).toMatchObject({ inserted: 0, updated: 0 });
-    await db.admin.db.delete(news).where(inArray(news.id, ids));
+      const report = await seedNews(db.admin.db, after, { update: true });
+      const v = (id: string) => start[id]![3] as number;
+      expect(await state()).toEqual({
+        // «Для кого», модуль и второй текст — новые; версия поднялась (окно правки получит 409).
+        x9301: ['adm', ['fee'], '- Новый текст', expect.any(Number)],
+        // Правил администратор — ничего не меняется.
+        x9302: ['all', [], null, v('x9302')],
+        // «Для всех», второго текста больше нет.
+        x9303: ['all', [], null, expect.any(Number)],
+      });
+      const now = await state();
+      expect(now.x9301![3]).toBeGreaterThan(v('x9301'));
+      expect(now.x9303![3]).toBeGreaterThan(v('x9303'));
+      expect(report).toMatchObject({ inserted: 0, updated: 2 });
+      // Сотруднику организации «Только режим Админка» после выпуска не видна, ставшая «для всех» — видна.
+      expect(await asOwner(a, (tx) => getNews(tx, 'x9301'))).toBeNull();
+      expect((await asOwner(a, (tx) => getNews(tx, 'x9303')))?.id).toBe('x9303');
+      // Повтор ничего не меняет.
+      expect(await seedNews(db.admin.db, after, { update: true })).toMatchObject({
+        inserted: 0,
+        updated: 0,
+      });
+      expect(await state()).toEqual(now);
+    } finally {
+      await db.admin.db.delete(newsAdminTexts).where(inArray(newsAdminTexts.newsId, ids));
+      await db.admin.db.delete(news).where(inArray(news.id, ids));
+    }
   });
 });

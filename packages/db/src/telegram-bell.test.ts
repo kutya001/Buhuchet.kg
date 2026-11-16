@@ -211,6 +211,17 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     expect(item!.at).toEqual(NOW);
   });
 
+  it('действие откатилось — строки нет (строку кладёт транзакция действия)', async () => {
+    await clear();
+    await expect(
+      inA(a.ownerUserId, async (tx) => {
+        await insertBellRows(tx, [row(acc.userId)], NOW);
+        throw new Error('действие не удалось');
+      }),
+    ).rejects.toThrow('действие не удалось');
+    expect(await keys(acc.userId)).toEqual([]);
+  });
+
   it('сотруднику чужой организации строку не положить', async () => {
     await expect(
       inA(a.ownerUserId, (tx) => insertBellRows(tx, [row(b.ownerUserId)], NOW)),
