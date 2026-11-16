@@ -604,6 +604,7 @@ export function NewsEditDialog({
                 options={NEWS_MODULES.map((m) => ({ value: m, label: t(newsModuleTitle(m)) }))}
                 value={modules}
                 onChange={(next) => setValue('modules', next, { shouldDirty: true })}
+                check
               />
             )}
           </Field>
@@ -730,11 +731,7 @@ export function NewsEditDialog({
                   </div>
                 </div>
                 <p className="text-[12.5px] text-muted">{t('news.f.users_hint')}</p>
-                <p
-                  data-news-warn=""
-                  aria-live="polite"
-                  className="text-[12.5px] text-caution-label"
-                >
+                <p data-news-warn="" aria-live="polite" className="text-[12.5px] text-warn-label">
                   {techWords.length
                     ? t('news.f.tech_warn', { words: techWords.map((w) => `«${w}»`).join(', ') })
                     : ''}

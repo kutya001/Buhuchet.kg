@@ -93,6 +93,8 @@ export function bellGoOf(
   const record = UUID.test(id);
   const card = (tab: 'main' | 'money' | 'fee' | 'files', sent?: boolean): BellGo =>
     record && ctx.contractors ? { kind: 'contractor', id, tab, sent } : { kind: 'gone' };
+  // ОТКЛОНЕНИЕ: docs/deviations.md#И-11 — отчёт, задача, новость, сотрудник и заявка открываются
+  // списком модуля с карточкой (`?report=`, `?task=`, `?news=`, `?employee=`, `?lead=`).
   switch (open.kind) {
     case 'report':
       return record ? { kind: 'href', href: `${tabHref('reports', 'all')}?report=${id}` } : null;

@@ -192,14 +192,26 @@ export function ShellBell() {
       }}
       tabs={BELL_PANEL_TABS.map((x) => ({ value: x, label: t(`bell.tab.${x}`) }))}
       tab={tab}
-      onTab={(x) => setTab(x as BellPanelTab)}
+      onTab={(x) => {
+        // Как в прототипе: каждая кнопка-фильтр — снова первые 30 строк.
+        client.setQueryData<Pages>([...PAGES_KEY, x], (d) =>
+          d ? { pages: d.pages.slice(0, 1), pageParams: d.pageParams.slice(0, 1) } : d,
+        );
+        setTab(x as BellPanelTab);
+      }}
       rows={items ? items.map((x) => bellRowView(t, x, now)) : page.isError ? [] : null}
       error={page.isError}
       onRetry={() => void page.refetch()}
       more={page.hasNextPage}
       loadingMore={page.isFetchingNextPage}
       onMore={() => void page.fetchNextPage()}
-      canReadAll={allItems.some((x) => !x.read) || (items ?? []).some((x) => !x.read)}
+      // Непрочитанные могут быть и дальше загруженных 30 строк: тогда кнопка тоже доступна.
+      canReadAll={
+        allItems.some((x) => !x.read) ||
+        (items ?? []).some((x) => !x.read) ||
+        all.hasNextPage ||
+        page.hasNextPage
+      }
       onReadAll={readAll}
       canShowAll={tab !== 'all' && allItems.length > 0}
       onRow={(id) => {

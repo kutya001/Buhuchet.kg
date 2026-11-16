@@ -39,6 +39,7 @@ const IMAGE_LINK_SECONDS = 900;
  * Новость для ленты и окна «Что нового»: только поля схемы, моменты — строкой ISO. Второй текст — только
  * администратору платформы (`admin`) и только когда он есть (доработки 16.11.2026, блок 4, пункт 1).
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-11 — второй текст сотрудникам не уходит вовсе (в прототипе он в данных).
 export function newsItemBody(n: NewsRecord, read: boolean, admin = false): NewsItem {
   return {
     id: n.id,

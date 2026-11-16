@@ -120,7 +120,7 @@ export function Bell(p: BellProps) {
         {p.unseen ? (
           <span
             data-bell-count=""
-            className="pointer-events-none absolute -top-[3px] -right-[5px] min-w-[17px] rounded-full bg-danger-btn px-1 text-center text-[10px] leading-4 font-[650] text-on-accent tabular-nums shadow-[0_0_0_2px_var(--color-pane)] max-md:top-[3px] max-md:right-[3px]"
+            className="pointer-events-none absolute -top-[3px] -right-[5px] min-w-[17px] rounded-full bg-danger-btn px-1 text-center text-[10px] leading-4 font-[650] text-on-accent tabular-nums shadow-[0_0_0_2px_var(--color-pane)]"
           >
             {bellCountText(p.unseen)}
           </span>
@@ -302,6 +302,7 @@ function BellList(p: BellProps): ReactNode {
           ))}
         </div>
       ))}
+      {/* ОТКЛОНЕНИЕ: docs/deviations.md#И-11 — «Показать ещё» без «N из M». */}
       {p.more ? (
         <div className="flex items-center gap-2.5 px-2 pt-2 pb-0.5">
           <button
