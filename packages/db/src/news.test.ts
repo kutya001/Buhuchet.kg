@@ -418,8 +418,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // v116 («Я оплатил», оплата по месяцам и код на странице контрагента, п. К-14), v117 (тексты
     // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14),
     // v120 (подсказки и обучение на странице контрагента, п. К-16) и v121 (чек принимается только
-    // вместе с деньгами, п. К-18) — да; v122–v124 (колокольчик, новости по модулям, один файл —
-    // несколько ссылок; доработки 16.11.2026, этап 1) — пока нет: их переносит общая сборка этапа.
+    // вместе с деньгами, п. К-18), v122–v124 (колокольчик, новости по модулям, один файл — несколько
+    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -444,6 +444,23 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       linkKind: 'mod',
       linkId: 'cps',
     });
+    expect(rows.find((r) => r.id === 'v122')).toMatchObject({ release: '122', showOnLogin: true });
+    expect(rows.find((r) => r.id === 'v123')).toMatchObject({ release: '123', modules: [] });
+    expect(rows.find((r) => r.id === 'v124')).toMatchObject({
+      release: '124',
+      linkKind: 'mod',
+      linkId: 'files',
+      modules: ['files'],
+    });
+    // Текст «Для администратора платформы» (admMd) идёт только во второй текст, не в текст новости.
+    const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());
+    expect(withAdm.map((x) => x.id)).toEqual(expect.arrayContaining(['v123', 'v124']));
+    for (const x of withAdm) {
+      expect(rows.find((r) => r.id === x.id)?.md ?? '').not.toContain('## Для администратора платформы');
+    }
+    expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toMatch(
+      /^## Для администратора платформы/,
+    );
     const source = refDB.news as { id: string; status: string }[];
     // Черновики прототипа (сейчас «Версия 125: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
