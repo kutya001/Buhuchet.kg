@@ -42,6 +42,7 @@ import { STATUS_TEXTS } from './status-texts';
 import { TASKS_TEXTS } from './tasks-texts';
 import { TELEGRAM_TEXTS } from './telegram-texts';
 import { BELL_TEXTS } from './bell-texts';
+import { BELL_PANEL_TEXTS } from './bell-panel-texts';
 import { TELEGRAM_ADMIN_TEXTS } from './telegram-admin-texts';
 
 /**
@@ -143,6 +144,7 @@ export const UI_TEXTS = {
   ...NEWS_TEXTS,
   ...TELEGRAM_TEXTS,
   ...BELL_TEXTS,
+  ...BELL_PANEL_TEXTS,
   ...PLATFORM_DICTS_TEXTS,
   ...KB_ADMIN_TEXTS,
   ...TELEGRAM_ADMIN_TEXTS,

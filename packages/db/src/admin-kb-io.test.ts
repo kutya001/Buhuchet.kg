@@ -302,6 +302,8 @@ describe.skipIf(!databaseAvailable())(
             pinned: false,
             showOnLogin: false,
             audience: 'all',
+            modules: [],
+            adminMd: '',
           },
           { publish: false },
         ),

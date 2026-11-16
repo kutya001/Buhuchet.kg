@@ -1,5 +1,6 @@
 import { BISHKEK_UTC_OFFSET_MINUTES, isIsoDate, type IsoDate } from '../common/dates';
 import { newsMdText, newsMdTrim } from './markdown';
+import { newsModulesProblem, type NewsModulesProblem } from './modules';
 
 /*
  * «Новости» Базы знаний (ТЗ «База знаний» → вкладка «Новости», «Окно «Что нового» при входе»;
@@ -167,6 +168,12 @@ export interface NewsDraft {
   date: string;
   short: string;
   md: string;
+  /** «Для кого»: у новости «Только режим Админка» хватит второго текста. */
+  audience?: NewsAudience;
+  /** Текст «Для администратора платформы» (доработки 16.11.2026, блок 4, пункт 1). */
+  adminMd?: string;
+  /** «Модули» (блок 4, пункт 3). */
+  modules?: readonly string[];
 }
 
 export type NewsProblem =
@@ -178,9 +185,11 @@ export type NewsProblem =
   | 'news_md_required'
   | 'news_md_too_long'
   | 'news_version_required'
-  | 'news_version_too_long';
+  | 'news_version_too_long'
+  | 'news_admin_md_too_long'
+  | NewsModulesProblem;
 
-export type NewsField = 'title' | 'date' | 'short' | 'md' | 'version';
+export type NewsField = 'title' | 'date' | 'short' | 'md' | 'version' | 'adminMd' | 'modules';
 
 export const NEWS_MESSAGES: Record<NewsProblem, string> = {
   news_title_required: 'Введите заголовок',
@@ -192,6 +201,10 @@ export const NEWS_MESSAGES: Record<NewsProblem, string> = {
   news_md_too_long: `Подробное описание — не больше ${NEWS_MD_MAX} знаков`,
   news_version_required: 'Укажите версию: без неё можно только объявление',
   news_version_too_long: `Версия — не больше ${NEWS_VERSION_MAX} знаков`,
+  news_admin_md_too_long: `Текст для администратора платформы — не больше ${NEWS_MD_MAX} знаков`,
+  news_modules_unknown: 'Нет такого модуля',
+  news_modules_duplicate: 'Модуль отмечен дважды',
+  news_modules_too_many: 'Слишком много модулей',
 };
 
 /**
@@ -211,9 +224,16 @@ export function newsProblems(
   const short = draft.short.trim();
   if (!short) out.short = 'news_short_required';
   else if (short.length > NEWS_SHORT_MAX) out.short = 'news_short_too_long';
-  // Пустые разделы шаблона не считаются текстом (прототип: проверка после mdTrim).
-  if (!newsMdText(newsMdTrim(draft.md))) out.md = 'news_md_required';
-  else if (draft.md.length > NEWS_MD_MAX) out.md = 'news_md_too_long';
+  // Пустые разделы шаблона не считаются текстом (прототип: проверка после mdTrim). Без текста для
+  // пользователей можно только новость «Только режим Админка» со вторым текстом (прототип v123).
+  const adminMd = draft.adminMd ?? '';
+  const adminOnly = draft.audience === 'adm' && !!newsMdText(newsMdTrim(adminMd));
+  if (!newsMdText(newsMdTrim(draft.md))) {
+    if (!adminOnly) out.md = 'news_md_required';
+  } else if (draft.md.length > NEWS_MD_MAX) out.md = 'news_md_too_long';
+  if (adminMd.length > NEWS_MD_MAX) out.adminMd = 'news_admin_md_too_long';
+  const modules = draft.modules ? newsModulesProblem(draft.modules) : null;
+  if (modules) out.modules = modules;
   const version = draft.version.trim();
   if (version.length > NEWS_VERSION_MAX) out.version = 'news_version_too_long';
   else if (!version && draft.type !== 'announce' && options.publish)

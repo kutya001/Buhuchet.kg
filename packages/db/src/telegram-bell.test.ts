@@ -85,6 +85,7 @@ const ALL: BellSight = {
   files: undefined,
   cpFee: true,
   staff: true,
+  news: null,
 };
 
 describe.skipIf(!databaseAvailable())('Колокольчик: строки, права, новости, уборка', () => {
@@ -358,7 +359,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       },
       { ...base, id: 'bell-draft', title: 'Черновик', publishDate: BELL_FROM, status: 'draft' },
     ]);
-    const sync = () => inA(acc.userId, (tx) => bellSyncNews(tx, NOW));
+    const sync = () => inA(acc.userId, (tx) => bellSyncNews(tx, NOW, null));
     await sync();
     await sync();
     const page = await inA(acc.userId, (tx) => bellPage(tx, ALL, { tab: 'news' }));
@@ -382,9 +383,46 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-n1'));
     expect((await inA(acc.userId, (tx) => bellPage(tx, ALL, { tab: 'news' }))).items).toEqual([]);
     // «Только режим Админка» — администратору платформы.
-    await asAdmin((tx) => bellSyncNews(tx, NOW));
+    await asAdmin((tx) => bellSyncNews(tx, NOW, null));
     const adm = await asAdmin((tx) => bellPage(tx, ALL, { tab: 'news' }));
     expect(adm.items.map((x) => x.targetId)).toEqual(['bell-adm']);
+  });
+
+  it('новости с модулями — только тем, у кого есть хотя бы один из них (доработки 16.11, блок 4, пункт 3)', async () => {
+    await clear();
+    await db.admin.db
+      .update(users)
+      .set({ createdAt: new Date('2026-11-01T00:00:00Z') })
+      .where(eq(users.id, acc.userId));
+    const base = { type: 'feature', short: 'Коротко', md: 'Текст', status: 'published' as const };
+    await db.admin.db.insert(news).values(
+      [
+        { ...base, id: 'bell-m-fee', title: 'Про обслуживание', modules: ['fee'] },
+        { ...base, id: 'bell-m-two', title: 'Про задачи и отчёты', modules: ['tasks', 'reports'] },
+        { ...base, id: 'bell-m-all', title: 'Для всех', modules: [] },
+      ].map((n) => ({ ...n, publishDate: BELL_FROM, publishedAt: NOW })),
+    );
+    const ids = async (mine: readonly string[] | null) => {
+      await inA(acc.userId, (tx) => bellSyncNews(tx, NOW, mine));
+      const page = await inA(acc.userId, (tx) =>
+        bellPage(tx, { ...ALL, news: mine }, { tab: 'news' }),
+      );
+      return page.items.map((x) => x.targetId).sort();
+    };
+    // Бухгалтер без «Платы за обслуживание»: новости про неё нет ни в строках, ни в базе.
+    expect(await ids(['home', 'reports'])).toEqual(['bell-m-all', 'bell-m-two']);
+    const kept = await db.admin.db
+      .select({ k: bellNotifications.eventKey })
+      .from(bellNotifications)
+      .where(eq(bellNotifications.eventKey, 'news:bell-m-fee'));
+    expect(kept).toEqual([]);
+    // Получил право — новость появляется при следующем чтении; потерял модуль — строки не видно.
+    expect(await ids(['home', 'fee'])).toEqual(['bell-m-all', 'bell-m-fee']);
+    expect(await ids(null)).toEqual(['bell-m-all', 'bell-m-fee', 'bell-m-two']);
+    await db.admin.db
+      .update(news)
+      .set({ off: true })
+      .where(sql`${news.id} in ('bell-m-fee', 'bell-m-two', 'bell-m-all')`);
   });
 
   it('заявки с лендинга — только администратору платформы: новые и поданные с появления колокольчика', async () => {
@@ -438,8 +476,8 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     });
     // Через 91 день после появления новости и заявки.
     const later = new Date(new Date(`${BELL_FROM}T03:00:00Z`).getTime() + 91 * 86_400_000);
-    await inA(acc.userId, (tx) => bellSyncNews(tx, later));
-    await asAdmin((tx) => bellSyncNews(tx, later));
+    await inA(acc.userId, (tx) => bellSyncNews(tx, later, null));
+    await asAdmin((tx) => bellSyncNews(tx, later, null));
     await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', later));
     const rows = await db.admin.db
       .select({ k: bellNotifications.eventKey })
@@ -449,7 +487,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       );
     expect(rows).toEqual([]);
     // В пределах срока — кладутся.
-    await inA(acc.userId, (tx) => bellSyncNews(tx, NOW));
+    await inA(acc.userId, (tx) => bellSyncNews(tx, NOW, null));
     expect(await keys(acc.userId)).toContain('news:bell-keep');
     await db.admin.db.delete(platformLeads).where(eq(platformLeads.firm, 'ОсОО «Давняя»'));
     await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-keep'));

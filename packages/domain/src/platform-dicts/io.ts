@@ -11,6 +11,7 @@ import {
   CP_TOUR_SECS,
   cpHelpTextId,
 } from '../contractor-page/help';
+import { NEWS_MODULES, newsModuleTitle, type NewsModule } from '../news/modules';
 import { NEWS_AUDIENCES, NEWS_TYPES } from '../news/news';
 import { MENU_MODULE_IDS, type MenuModuleId } from '../org/modules';
 import { FEATURES } from '../roles/permissions';
@@ -146,8 +147,17 @@ type IoField =
   | { type: 'yesno' }
   /** Одно из значений; пустая ячейка — `empty` (как в прототипе: «Срок считается» — от конца периода). */
   | { type: 'enum'; values: readonly string[]; label: (v: string) => UiTextKey; empty?: string }
-  /** Несколько значений через «;» (размер бизнеса). */
-  | { type: 'enums'; values: readonly string[]; label: (v: string) => UiTextKey }
+  /**
+   * Несколько значений через «;» (размер бизнеса); `sep` — свой разделитель в выгрузке (модули новости —
+   * «, »: при загрузке тогда годятся и «,», и «;»), `unknown` — своя ошибка с `{value}` вместо списка.
+   */
+  | {
+      type: 'enums';
+      values: readonly string[];
+      label: (v: string) => UiTextKey;
+      sep?: string;
+      unknown?: UiTextKey;
+    }
   /** Ссылка; `optional` — пустая ячейка или «—» — без значения (право шага и статьи). */
   | { type: 'ref'; ref: IoRefDict; optional?: boolean }
   | { type: 'refs'; ref: IoRefDict }
@@ -638,6 +648,15 @@ export const IO_COLUMNS: Readonly<Record<IoDict, readonly IoColumn[]>> = {
     col('showOnLogin', 'kbadm.io.col.login', { type: 'yesno' }),
     col('short', 'kbadm.io.col.short', { type: 'text' }, { required: true }),
     col('md', 'kbadm.io.col.md', { type: 'text' }, { required: true }),
+    // Доработки 16.11.2026, блок 4, пункт 6 (прототип v123): второй текст и модули через запятую.
+    col('adminMd', 'kbadm.io.col.news_admin_md', { type: 'text' }),
+    col('modules', 'kbadm.io.col.news_modules', {
+      type: 'enums',
+      values: NEWS_MODULES,
+      label: (v) => newsModuleTitle(v as NewsModule),
+      sep: ', ',
+      unknown: 'kbadm.io.err.news_module',
+    }),
   ],
   // «Страница контрагента» (прототип v120 DX.cpwel, DX.cphints): «Где» — только в выгрузке, новых
   // строк нет — тексты добавляет разработчик.
@@ -784,7 +803,7 @@ export function ioCellText(column: IoColumn, x: IoValue, ctx: IoContext): string
     case 'enum':
       return typeof v === 'string' && v ? ctx.t(f.label(v)) : '';
     case 'enums':
-      return ((v ?? []) as string[]).map((x) => ctx.t(f.label(x))).join('; ');
+      return ((v ?? []) as string[]).map((x) => ctx.t(f.label(x))).join(f.sep ?? '; ');
     case 'ref':
       return typeof v === 'string' && v ? refLabel(ctx, f.ref, v) : '';
     case 'refs':
@@ -1109,8 +1128,15 @@ export function parseIoCell(column: IoColumn, text: string, ctx: IoContext): Par
       const list = { list: f.values.map((v) => ctx.t(f.label(v))).join(', ') };
       if (f.type === 'enums') {
         const out: string[] = [];
-        for (const part of split(s)) {
+        const parts = f.sep
+          ? s
+              .split(/[,;\n]/)
+              .map((x) => x.trim())
+              .filter(Boolean)
+          : split(s);
+        for (const part of parts) {
           const v = pick(part);
+          if (!v && f.unknown) return bad(ctx, f.unknown, { value: part });
           if (!v) return bad(ctx, 'pdicts.io.err.enum', list);
           out.push(v);
         }

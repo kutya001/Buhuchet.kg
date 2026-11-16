@@ -695,6 +695,54 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     }
   });
 
+  it('(приёмка блока 4) новость модуля «Плата за обслуживание» — в колокольчике и счётчике только у того, у кого есть этот модуль; администратору платформы — всё', async () => {
+    await clear();
+    await setFeatures({ tasks: true, files: true, fee: true });
+    await f.t.admin.db.insert(news).values({
+      id: 'bell-api-news-fee',
+      type: 'feature',
+      title: 'Плата за обслуживание: новое',
+      short: 'Коротко',
+      md: 'Текст',
+      status: 'published',
+      modules: ['fee'],
+      publishDate: BELL_FROM,
+      publishedAt: new Date(),
+    });
+    try {
+      // У «Бухгалтера» нет права «Видеть плату за обслуживание»: ни строки, ни числа, ни отметки.
+      expect((await page('acc-a', 'news')).items).toEqual([]);
+      expect((await page('acc-a')).items).toEqual([]);
+      expect(await unseen('acc-a')).toBe(0);
+      expect((await call('acc-a', 'POST', '/api/bell/read-all')).status).toBe(200);
+      const reads = await f.t.admin.db
+        .select()
+        .from(newsReads)
+        .where(
+          and(
+            eq(newsReads.userId, person('acc-a').userId),
+            eq(newsReads.newsId, 'bell-api-news-fee'),
+          ),
+        );
+      expect(reads).toEqual([]);
+      // Владелец (все права при функции) и администратор платформы видят её.
+      expect(await unseen('owner-a')).toBe(1);
+      expect((await page('owner-a', 'news')).items.map((x) => x.open)).toEqual([
+        { kind: 'news', id: 'bell-api-news-fee' },
+      ]);
+      expect((await page('platform-admin', 'news')).items.map((x) => x.open)).toEqual([
+        { kind: 'news', id: 'bell-api-news-fee' },
+      ]);
+      // Функцию выключили — модуля у владельца нет, строки тоже.
+      await setFeatures({ tasks: true, files: true });
+      expect((await page('owner-a', 'news')).items).toEqual([]);
+      expect(await unseen('owner-a')).toBe(0);
+    } finally {
+      await f.t.admin.db.delete(news).where(eq(news.id, 'bell-api-news-fee'));
+      await setFeatures({ tasks: true, files: true });
+    }
+  });
+
   it('режим Админка: новая заявка с сайта — строкой администратору платформы, сотрудникам — нет', async () => {
     await clear();
     const [lead] = await f.t.admin.db

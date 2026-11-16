@@ -5,8 +5,12 @@ import {
   newsFeed,
   newsUnreadCount,
   newsWhatsNew,
+  orgMenuSettings,
+  type NewsModulesOfMe,
   type NewsRecord,
+  type Tx,
 } from '@buhuchet/db';
+import { newsModulesOf } from '@buhuchet/domain';
 import {
   ApiError,
   NewsFeed,
@@ -18,7 +22,8 @@ import {
   type NewsItem,
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
-import type { AppEnv } from '../../env';
+import type { AppEnv, AuthSession } from '../../env';
+import type { Context } from 'hono';
 import { asSessionUser } from '../../middleware/access';
 
 const error = { 'application/json': { schema: ApiError } };
@@ -30,8 +35,12 @@ export const NEWS_IMAGES = 'news';
 /** Срок ссылки на картинку — как у логотипа и файлов, 15 минут. */
 const IMAGE_LINK_SECONDS = 900;
 
-/** Новость для ленты и окна «Что нового»: только поля схемы, моменты — строкой ISO. */
-export function newsItemBody(n: NewsRecord, read: boolean): NewsItem {
+/**
+ * Новость для ленты и окна «Что нового»: только поля схемы, моменты — строкой ISO. Второй текст — только
+ * администратору платформы (`admin`) и только когда он есть (доработки 16.11.2026, блок 4, пункт 1).
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#И-11 — второй текст сотрудникам не уходит вовсе (в прототипе он в данных).
+export function newsItemBody(n: NewsRecord, read: boolean, admin = false): NewsItem {
   return {
     id: n.id,
     title: n.title,
@@ -44,7 +53,40 @@ export function newsItemBody(n: NewsRecord, read: boolean): NewsItem {
     pinned: n.pinned,
     editedAt: n.editedAt?.toISOString() ?? null,
     read,
+    modules: n.modules,
+    ...(admin && n.adminMd ? { adminMd: n.adminMd } : {}),
   };
+}
+
+/**
+ * Лента вошедшего по модулям (доработки 16.11.2026, блок 4, пункт 3; прототип v123 newsModsOk):
+ * сотруднику — модули его меню (функции учётной политики и права) и «Плата за обслуживание» при функции
+ * и праве; администратору платформы — все новости (null). Функции читаются в той же транзакции.
+ */
+async function myNewsModules(
+  tx: Tx,
+  session: AuthSession,
+  c: Context<AppEnv>,
+  inOrg: boolean,
+): Promise<NewsModulesOfMe> {
+  // Без организации — только администратор платформы (все новости); иначе закрыто, как в колокольчике.
+  if (!inOrg || !session.orgId) return session.isPlatformAdmin ? null : [];
+  const access = c.get('access');
+  if (!access) return [];
+  const { features } = await orgMenuSettings(tx, session.orgId);
+  return newsModulesOf(access.subject, features);
+}
+
+/** Транзакция вошедшего с его модулями новостей. */
+function asReader<T>(
+  deps: ApiDeps,
+  c: Context<AppEnv>,
+  fn: (tx: Tx, mine: NewsModulesOfMe) => Promise<T>,
+): Promise<T> {
+  const session = c.get('session')!;
+  return asSessionUser(deps, session, async (tx, inOrg) =>
+    fn(tx, await myNewsModules(tx, session, c, inOrg)),
+  );
 }
 
 export const newsFeedRoute = createRoute({
@@ -64,13 +106,17 @@ export const newsFeedRoute = createRoute({
 
 /**
  * Вкладка «Новости» Базы знаний (прототип renderNews): новостей немного, поэтому лента приходит
- * целиком, а поиск, фильтры «Тип» и «Версия» и группы версий — на экране. Видят все пользователи
- * всех организаций независимо от прав (ТЗ).
+ * целиком, а поиск, фильтры «Тип», «Версия» и «Модуль» и группы версий — на экране. Видят все
+ * пользователи всех организаций; новость с модулями — у кого есть хотя бы один из них (доработки
+ * 16.11.2026, блок 4, пункт 3).
  */
 export function newsFeedHandler(deps: ApiDeps): RouteHandler<typeof newsFeedRoute, AppEnv> {
   return async (c) => {
-    const items = await asSessionUser(deps, c.get('session')!, (tx) => newsFeed(tx));
-    return c.json({ items: items.map((n) => newsItemBody(n, n.read)) }, 200);
+    const { items, admin } = await asReader(deps, c, async (tx, mine) => ({
+      items: await newsFeed(tx, mine),
+      admin: c.get('session')?.isPlatformAdmin === true,
+    }));
+    return c.json({ items: items.map((n) => newsItemBody(n, n.read, admin)) }, 200);
   };
 }
 
@@ -90,7 +136,7 @@ export const newsUnreadRoute = createRoute({
 
 export function newsUnreadHandler(deps: ApiDeps): RouteHandler<typeof newsUnreadRoute, AppEnv> {
   return async (c) => {
-    const unread = await asSessionUser(deps, c.get('session')!, (tx) => newsUnreadCount(tx));
+    const unread = await asReader(deps, c, (tx, mine) => newsUnreadCount(tx, mine));
     return c.json({ unread }, 200);
   };
 }
@@ -117,8 +163,11 @@ export const whatsNewRoute = createRoute({
  */
 export function whatsNewHandler(deps: ApiDeps): RouteHandler<typeof whatsNewRoute, AppEnv> {
   return async (c) => {
-    const { items, first } = await asSessionUser(deps, c.get('session')!, (tx) => newsWhatsNew(tx));
-    return c.json({ items: items.map((n) => newsItemBody(n, false)), first }, 200);
+    const { items, first, admin } = await asReader(deps, c, async (tx, mine) => ({
+      ...(await newsWhatsNew(tx, mine)),
+      admin: c.get('session')?.isPlatformAdmin === true,
+    }));
+    return c.json({ items: items.map((n) => newsItemBody(n, false, admin)), first }, 200);
   };
 }
 
@@ -144,9 +193,9 @@ export const newsReadRoute = createRoute({
 export function newsReadHandler(deps: ApiDeps): RouteHandler<typeof newsReadRoute, AppEnv> {
   return async (c) => {
     const { ids } = c.req.valid('json');
-    const result = await asSessionUser(deps, c.get('session')!, async (tx) => ({
-      marked: await markNewsRead(tx, ids),
-      unread: await newsUnreadCount(tx),
+    const result = await asReader(deps, c, async (tx, mine) => ({
+      marked: await markNewsRead(tx, ids, mine),
+      unread: await newsUnreadCount(tx, mine),
     }));
     return c.json(result, 200);
   };
@@ -168,7 +217,7 @@ export const newsReadAllRoute = createRoute({
 
 export function newsReadAllHandler(deps: ApiDeps): RouteHandler<typeof newsReadAllRoute, AppEnv> {
   return async (c) => {
-    const marked = await asSessionUser(deps, c.get('session')!, (tx) => markNewsRead(tx, 'all'));
+    const marked = await asReader(deps, c, (tx, mine) => markNewsRead(tx, 'all', mine));
     return c.json({ marked, unread: 0 }, 200);
   };
 }

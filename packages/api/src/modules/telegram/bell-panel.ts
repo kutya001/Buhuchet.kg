@@ -13,7 +13,7 @@ import {
   type BellSight,
   type Tx,
 } from '@buhuchet/db';
-import { effectivePermissions, hasPermission, scopeOf } from '@buhuchet/domain';
+import { effectivePermissions, hasPermission, newsModulesOf, scopeOf } from '@buhuchet/domain';
 import {
   ApiError,
   BellCount,
@@ -67,6 +67,8 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
       files: undefined,
       cpFee: false,
       staff: false,
+      // Режим Админка: администратору платформы видны новости всех модулей.
+      news: c.get('session')?.isPlatformAdmin ? null : [],
     };
   }
   const s = access.subject;
@@ -83,13 +85,15 @@ async function sightOf(c: Context<AppEnv>, tx: Tx): Promise<BellSight> {
     files: contractorScope(scopeOf(s, 'files') === 'own' ? s.employeeId : null),
     cpFee: features.fee && hasPermission(s, 'fee'),
     staff: hasPermission(s, 'staffView'),
+    // Модули новостей — как у ленты «Новостей» (доработки 16.11.2026, блок 4, пункт 3).
+    news: newsModulesOf(s, features),
   };
 }
 
 /** Новости вошедшего и — администратору платформы — новые заявки: до чтения строк. */
-async function syncReadTime(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, lead: string) {
+async function syncReadTime(deps: ApiDeps, c: Context<AppEnv>, tx: Tx, lead: string, s: BellSight) {
   const now = deps.clock.now();
-  await bellSyncNews(tx, now);
+  await bellSyncNews(tx, now, s.news);
   if (c.get('session')?.isPlatformAdmin) await bellSyncLeads(tx, lead, now);
 }
 
@@ -116,8 +120,9 @@ export function bellPageHandler(deps: ApiDeps): RouteHandler<typeof bellPageRout
     const q = c.req.valid('query');
     const t = await serverTexts(deps);
     const page = await asSessionUser(deps, c.get('session')!, async (tx) => {
-      await syncReadTime(deps, c, tx, t('bell.line.lead'));
-      return bellPage(tx, await sightOf(c, tx), { tab: q.tab, before: q.before ?? null });
+      const s = await sightOf(c, tx);
+      await syncReadTime(deps, c, tx, t('bell.line.lead'), s);
+      return bellPage(tx, s, { tab: q.tab, before: q.before ?? null });
     });
     return c.json(
       {
@@ -160,8 +165,9 @@ export function bellCountHandler(deps: ApiDeps): RouteHandler<typeof bellCountRo
   return async (c) => {
     const t = await serverTexts(deps);
     const unseen = await asSessionUser(deps, c.get('session')!, async (tx) => {
-      await syncReadTime(deps, c, tx, t('bell.line.lead'));
-      return bellUnseen(tx, await sightOf(c, tx));
+      const s = await sightOf(c, tx);
+      await syncReadTime(deps, c, tx, t('bell.line.lead'), s);
+      return bellUnseen(tx, s);
     });
     return c.json({ unseen }, 200);
   };
@@ -207,7 +213,7 @@ export function bellReadHandler(deps: ApiDeps): RouteHandler<typeof bellReadRout
     const { id } = c.req.valid('param');
     const found = await asSessionUser(deps, c.get('session')!, async (tx) => {
       const row = await bellRead(tx, id, deps.clock.now());
-      if (row?.newsId) await markNewsRead(tx, [row.newsId]);
+      if (row?.newsId) await markNewsRead(tx, [row.newsId], (await sightOf(c, tx)).news);
       return row !== null;
     });
     if (!found) apiFail(404, 'not_found', 'Запись не найдена');
@@ -231,7 +237,7 @@ export function bellReadAllHandler(deps: ApiDeps): RouteHandler<typeof bellReadA
   return async (c) => {
     await asSessionUser(deps, c.get('session')!, async (tx) => {
       const ids = await bellReadAll(tx, deps.clock.now());
-      if (ids.length) await markNewsRead(tx, ids);
+      if (ids.length) await markNewsRead(tx, ids, (await sightOf(c, tx)).news);
     });
     return c.json({ ok: true as const }, 200);
   };

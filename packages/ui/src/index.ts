@@ -49,6 +49,14 @@ export {
 export { BottomSheet, type BottomSheetProps } from './sheet';
 export { AppFrame } from './shell/app-frame';
 export { CountBadge } from './shell/badge';
+export {
+  Bell,
+  bellCountText,
+  bellGroups,
+  type BellLabels,
+  type BellProps,
+  type BellRowView,
+} from './shell/bell';
 export { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './shell/phone-nav';
 export {
   Brand,

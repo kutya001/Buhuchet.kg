@@ -14,8 +14,9 @@ import {
   type GridAudit,
   type GridColumn,
 } from '@buhuchet/ui';
-import { useQuery } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
 import { KbBadge } from '../kb/kb-parts';
 import { useT } from '../l10n/provider';
@@ -25,12 +26,13 @@ import { useGridLabels } from '../lists/grid-labels';
 import { usePresetFilters } from '../lists/preset';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
+import { dropAddressParam, linkedRecordId } from '../record-link';
 import { useNewRole } from '../roles/new-role';
 import { useShell } from '../shell/context';
 import { useStaffActions } from './staff-actions';
 import { useStaffAddRequest } from './staff-add';
 import { boardRoles, staffKanban } from './staff-board';
-import { allRolesQuery, boardRoleQuery } from './staff-data';
+import { allRolesQuery, boardRoleQuery, employeeQuery } from './staff-data';
 
 /** Сортировка по умолчанию во всех списках — от новых к старым по «Создано» (прототип defSort). */
 const DEFAULT_SORT: ListSort = { key: 'createdAt', dir: 'desc' };
@@ -200,6 +202,18 @@ export function StaffList() {
   const defaultVisible = kb ? DEFAULT_VISIBLE_KB : DEFAULT_VISIBLE;
   const view = useViewSettings('staff.list');
   const staff = useStaffActions();
+  // Строка колокольчика «Вход сотрудника … заблокирован» (доработки 16.11.2026, блок 3): карточка
+  // сотрудника и адрес без `?employee=`.
+  const client = useQueryClient();
+  const employeeParam = useSearchParams().get('employee');
+  const openLinked = useEffectEvent((value: string) => {
+    dropAddressParam('employee');
+    const id = linkedRecordId(value);
+    if (id) void client.fetchQuery(employeeQuery(id)).then(staff.openCard, () => {});
+  });
+  useEffect(() => {
+    if (employeeParam) openLinked(employeeParam);
+  }, [employeeParam]);
   // Доска (прототип v85 `staffKanban`): столбцы ролей видны и пустыми — все роли организации тому,
   // кто ведёт сотрудников (по порядку `boardRoles`), остальным — роли сотрудников списка.
   const canManage = access.can('staff');
