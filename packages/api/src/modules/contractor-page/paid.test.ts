@@ -744,6 +744,11 @@ describe.skipIf(!databaseAvailable())(
         call(cookie, 'GET', `/api/files/sent/${next.id}/link?download=1`);
       expect((await sentLink(owner)).status).toBe(200);
       expect((await sentLink(acc)).status).toBe(404);
+      // «Скачать» окна просмотра (п. К-20) — те же проверки.
+      const sentDownload = (cookie: string) =>
+        call(cookie, 'GET', `/api/files/sent/${next.id}/download`);
+      expect((await sentDownload(owner)).status).toBe(302);
+      expect((await sentDownload(acc)).status).toBe(404);
 
       // Два окна денег сохранили один чек одновременно: принят один раз, у записи денег одна ссылка,
       // копия проигравшего запроса из хранилища убрана.

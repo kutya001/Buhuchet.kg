@@ -984,8 +984,11 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
     describe('второй перенос с границей по записи денег (app.file_copies_merge_late)', () => {
       const mergeLate = () => db.admin.db.execute(sql`select app.file_copies_merge_late()`);
       const minutes = (n: number) => n * 60_000;
-      /** Поступление от контрагента «А», созданное в `at`. */
-      const receiptAt = async (at: Date) => {
+      /** Поступление от контрагента (по умолчанию «А»), созданное в `at`. */
+      const receiptAt = async (
+        at: Date,
+        over: Partial<typeof moneyOperations.$inferInsert> = {},
+      ) => {
         const id = randomUUID();
         await db.admin.db.insert(moneyOperations).values({
           id,
@@ -998,6 +1001,7 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
           holderKind: 'org',
           createdBy: a.ownerUserId,
           createdAt: at,
+          ...over,
         });
         return id;
       };
@@ -1100,11 +1104,40 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
           createdAt: saved,
           note: 'Чек за октябрь',
         });
+        // Другой контрагент той же организации: копия его поступления с названием, типом и размером
+        // принятого чека «А» — не пара.
+        const cpA3 = await inA((tx) =>
+          createContractor(tx, a.orgId, contractor('03807819461918', 'ОсОО «А-3»'), null),
+        );
+        const other = await sentCheck(`Чужой-${u}.jpg`, { at: accepted });
+        const foreign = await copyOf(`Чужой-${u}.jpg`, {
+          contractorId: cpA3,
+          sourceId: await receiptAt(saved, { contractorId: cpA3 }),
+          createdAt: saved,
+        });
+        // Копия контрагента «А», но запись денег — другого контрагента: ссылка на чужие деньги не встаёт.
+        const misplaced = await copyOf(`Чужой-${u}.jpg`, {
+          sourceId: await receiptAt(saved, { contractorId: cpA3 }),
+          createdAt: saved,
+        });
+        // Другая организация: копия у поступления контрагента «Б» с тем же названием, типом и размером.
+        const elsewhere = await copyOf(`Чужой-${u}.jpg`, {
+          orgId: b.orgId,
+          contractorId: cpB,
+          storageKey: `org/${b.orgId}/files/${randomUUID()}`,
+          sourceId: await receiptAt(saved, {
+            orgId: b.orgId,
+            contractorId: cpB,
+            createdBy: b.ownerUserId,
+          }),
+          createdBy: b.ownerUserId,
+          createdAt: saved,
+        });
         await mergeLate();
-        const byId = await stateOf([ambiguous, noted]);
-        expect(byId.get(ambiguous)?.state).toBe('ready');
-        expect(byId.get(noted)?.state).toBe('ready');
-        expect(await linksOf([first, second, single])).toEqual([]);
+        const byId = await stateOf([ambiguous, noted, foreign, misplaced, elsewhere]);
+        for (const id of [ambiguous, noted, foreign, misplaced, elsewhere])
+          expect(byId.get(id)?.state).toBe('ready');
+        expect(await linksOf([first, second, single, other])).toEqual([]);
       });
 
       it('роль приложения функцию второго переноса не зовёт', async () => {

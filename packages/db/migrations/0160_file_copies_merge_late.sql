@@ -33,15 +33,17 @@ CREATE FUNCTION app.file_copies_merge_late()
       WHERE c.state = 'ready' AND c.source_kind IN ('receipt', 'fee_payment')
         AND c.source_id IS NOT NULL AND c.replaced_at IS NULL AND c.note IS NULL
         AND c.created_at >= timestamptz '2026-11-15 00:00:00+06'
-        -- Прикреплена тем же «Сохранить», что создало запись денег.
+        -- Прикреплена тем же «Сохранить», что создало запись денег того же контрагента.
         AND EXISTS (
           SELECT 1 FROM public.money_operations m
           WHERE c.source_kind = 'receipt' AND m.id = c.source_id AND m.org_id = c.org_id
+            AND m.contractor_id = c.contractor_id
             AND m.kind = 'in' AND c.created_at >= m.created_at
             AND c.created_at <= m.created_at + interval '10 minutes'
           UNION ALL
           SELECT 1 FROM public.fee_payments p
           WHERE c.source_kind = 'fee_payment' AND p.id = c.source_id AND p.org_id = c.org_id
+            AND p.contractor_id = c.contractor_id
             AND c.created_at >= p.created_at
             AND c.created_at <= p.created_at + interval '10 minutes'
         )
@@ -87,11 +89,13 @@ CREATE FUNCTION app.file_copies_merge_late()
         AND EXISTS (
           SELECT 1 FROM public.money_operations m
           WHERE c.source_kind = 'receipt' AND m.id = c.source_id AND m.org_id = c.org_id
+            AND m.contractor_id = c.contractor_id
             AND m.kind = 'in' AND c.created_at >= m.created_at
             AND c.created_at <= m.created_at + interval '10 minutes'
           UNION ALL
           SELECT 1 FROM public.fee_payments p
           WHERE c.source_kind = 'fee_payment' AND p.id = c.source_id AND p.org_id = c.org_id
+            AND p.contractor_id = c.contractor_id
             AND c.created_at >= p.created_at
             AND c.created_at <= p.created_at + interval '10 minutes'
         )
