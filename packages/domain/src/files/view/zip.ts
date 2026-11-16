@@ -69,7 +69,7 @@ export async function inflateRaw(data: Uint8Array, max: number): Promise<Uint8Ar
   const writer = ds.writable.getWriter();
   const reader = ds.readable.getReader();
   writer
-    .write(data)
+    .write(data as Uint8Array<ArrayBuffer>)
     .then(() => writer.close())
     .catch(() => undefined);
   const chunks: Uint8Array[] = [];

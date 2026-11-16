@@ -115,6 +115,7 @@ export * from './files/files';
 export * from './files/manager';
 export * from './files/sent-files';
 export * from './files/sent';
+export * from './files/view';
 export * from './kb/catalog';
 export * from './kb/ready';
 export * from './kb/events';

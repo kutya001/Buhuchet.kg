@@ -73,7 +73,9 @@ export class ImageBag {
     const type = viewImageType(bytes);
     if (!type) return null;
     this.count++;
-    this.images[rel.part] = { type, bytes };
+    // Своя копия байтов: модель уходит из потока разбора копией, и вместе с частью архива
+    // скопировался бы весь файл.
+    this.images[rel.part] = { type, bytes: bytes.slice() };
     return rel.part;
   }
 }

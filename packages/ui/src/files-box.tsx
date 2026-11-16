@@ -71,6 +71,13 @@ export interface FilesBoxProps {
   onLinkPick?: () => void;
   /** «Открепить» файл-ссылку: сразу, без подтверждения (прототип `fUnlink`). */
   onUnlink?: (item: FilesBoxItem) => void;
+  /**
+   * Нажатие на файл — окно просмотра (доработки 16.11.2026, блок 5; прототип v126 `[data-fview]`):
+   * значок и название строки — кнопка `data-file-open`; кнопки строки работают как прежде.
+   */
+  onOpen?: (item: FilesBoxItem) => void;
+  /** Подсказка кнопки файла («Открыть просмотр»). */
+  openTitle?: string;
 }
 
 /**
@@ -92,6 +99,8 @@ export function FilesBox({
   canLink = false,
   onLinkPick,
   onUnlink,
+  onOpen,
+  openTitle,
 }: FilesBoxProps) {
   const input = useRef<HTMLInputElement>(null);
   const picked = (e: ChangeEvent<HTMLInputElement>) => {
@@ -146,20 +155,12 @@ export function FilesBox({
               data-file-row={item.id}
               className="flex min-w-0 items-center gap-2.5 border-b border-line px-0.5 py-[9px] last:border-b-0 hover:bg-row-hover"
             >
-              <Icon name={item.linked ? 'link' : 'file'} className="flex-none text-muted" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold text-ink">{item.name}</div>
-                <div className="truncate text-xs text-faint">{item.meta}</div>
-                {item.note ? (
-                  <div
-                    data-file-note=""
-                    title={labels.noteTitle}
-                    className="text-xs font-normal text-muted italic [overflow-wrap:anywhere]"
-                  >
-                    {item.note}
-                  </div>
-                ) : null}
-              </div>
+              <FileRowText
+                item={item}
+                noteTitle={labels.noteTitle}
+                onOpen={onOpen}
+                openTitle={openTitle}
+              />
               <button
                 type="button"
                 className={`${iconButtonClass('sm')} ${TOUCH_AREA}`}
@@ -224,5 +225,51 @@ export function FilesBox({
         <span className="text-[13px] text-faint">{labels.empty}</span>
       )}
     </Box>
+  );
+}
+
+/** Значок, название, «тип · размер» и примечание строки; с `onOpen` — кнопка окна просмотра. */
+function FileRowText({
+  item,
+  noteTitle,
+  onOpen,
+  openTitle,
+}: {
+  item: FilesBoxItem;
+  noteTitle: string;
+  onOpen?: (item: FilesBoxItem) => void;
+  openTitle?: string;
+}) {
+  const text = (
+    <>
+      <Icon name={item.linked ? 'link' : 'file'} className="flex-none text-muted" />
+      <span className="block min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold text-ink">{item.name}</span>
+        <span className="block truncate text-xs text-faint">{item.meta}</span>
+        {item.note ? (
+          <span
+            data-file-note=""
+            title={noteTitle}
+            className="block text-xs font-normal text-muted italic [overflow-wrap:anywhere]"
+          >
+            {item.note}
+          </span>
+        ) : null}
+      </span>
+    </>
+  );
+  const box = 'flex min-w-0 flex-1 items-center gap-2.5';
+  return onOpen ? (
+    <button
+      type="button"
+      data-file-open={item.id}
+      title={openTitle}
+      className={`${box} cursor-pointer border-0 bg-transparent p-0 text-left font-[inherit]`}
+      onClick={() => onOpen(item)}
+    >
+      {text}
+    </button>
+  ) : (
+    <div className={box}>{text}</div>
   );
 }

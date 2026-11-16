@@ -1,0 +1,963 @@
+'use client';
+
+/**
+ * Содержимое окна просмотра файлов (доработки 16.11.2026, блок 5; прототип v126 `ui/file-view.js`,
+ * `css/file-view.css`): лист Excel, документ Word, слайды, текст, XML, картинка и PDF. Компоненты
+ * только рисуют готовую модель (её разобрал отдельный поток браузера): HTML из файла не вставляется,
+ * ссылки — только текстом, картинки — из байтов файла по проверенному типу (без SVG).
+ */
+import {
+  colLetters,
+  type DocBlock,
+  type DocRun,
+  type FileViewModel,
+  type SheetCell,
+  type SheetView,
+  type SlideItem,
+  type SlidesView,
+  type TextView,
+  type ViewImage,
+  type XmlView,
+  type XmlViewNode,
+} from '@buhuchet/domain';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { buttonClass, iconButtonClass } from '../button';
+import { Icon } from '../icon';
+import type { IconName } from '../icons';
+import {
+  cellKey,
+  mergeMap,
+  rotateNext,
+  SHEET_RENDER_STEP,
+  sheetRowsFor,
+  sheetHits,
+  xmlBranches,
+  xmlHits,
+  zoomNext,
+  type XmlPath,
+} from './file-view-model';
+
+export interface FileViewLabels {
+  zoomIn: string;
+  zoomOut: string;
+  rotate: string;
+  fit: string;
+  sheetSearch: string;
+  xmlSearch: string;
+  found: (n: number) => string;
+  notFound: string;
+  /** «Показаны первые 5 000 строк из 50 000 — скачайте файл, чтобы увидеть всё». */
+  moreRows: (shown: number, total: number) => string;
+  /** Документ, слайды или XML показаны не целиком. */
+  moreAll: string;
+  prevSlide: string;
+  nextSlide: string;
+  slideOf: (n: number, total: number) => string;
+  encoding: (name: string) => string;
+  collapseAll: string;
+  expandAll: string;
+  collapse: (name: string) => string;
+  expand: (name: string) => string;
+  /** В XML было объявление DOCTYPE: оно пропущено, внешнее не загружалось. */
+  doctype: string;
+  emptySheet: string;
+  openTab: string;
+}
+
+const BAR =
+  'flex flex-none flex-wrap items-center gap-1.5 border-b border-line bg-pane px-2.5 py-2';
+const SCROLL =
+  'min-h-[340px] flex-[1_1_0] overflow-auto max-md:min-h-0 [-webkit-overflow-scrolling:touch]';
+const HINT = 'text-[12.5px] text-muted';
+const ZV = 'min-w-[46px] text-center text-[12.5px] text-muted tabular-nums';
+const SEARCH =
+  'min-h-[31px] max-w-[260px] rounded-lg border border-line bg-field px-2.5 py-[5px] text-[13px] text-ink outline-none focus:border-accent max-md:max-w-none max-md:flex-[1_1_160px]';
+
+/** Рамка просмотра (`.fv`): тип файла — в `data-fv`. */
+export function FileViewFrame({ kind, children }: { kind: string; children: ReactNode }) {
+  return (
+    <div
+      data-fv={kind}
+      className="flex flex-[1_0_auto] flex-col overflow-hidden rounded-xl border border-line bg-pane-alt"
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Состояние без содержимого: «Предпросмотр недоступен», «Не удалось открыть файл», загрузка. */
+export function FileViewState({
+  icon = 'file',
+  title,
+  text,
+  action,
+  state,
+}: {
+  icon?: IconName;
+  title: string;
+  text?: string;
+  action?: ReactNode;
+  state: string;
+}) {
+  return (
+    <div
+      data-fv-state={state}
+      className="m-4 flex min-h-[260px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-muted"
+    >
+      <Icon name={icon} size="lg" className="text-faint" />
+      <b className="max-w-[520px] text-[15px] text-balance text-ink">{title}</b>
+      {text ? <span className="max-w-[420px]">{text}</span> : null}
+      {action}
+    </div>
+  );
+}
+
+/** Байты в base64 частями: `String.fromCharCode(...)` с большим массивом переполняет стек. */
+export function bytesBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+
+/**
+ * Адреса картинок модели — `data:` из байтов: тип уже проверен по содержимому и только PNG, JPEG, GIF или
+ * WebP (не SVG), поэтому картинка ничего не выполняет и никуда не ходит; освобождать адрес не нужно.
+ */
+export function useImageUrls(
+  images: Record<string, ViewImage> | undefined,
+): Record<string, string> {
+  return useMemo(() => {
+    const urls: Record<string, string> = {};
+    for (const [k, img] of Object.entries(images ?? {}))
+      urls[k] = `data:${img.type};base64,${bytesBase64(img.bytes)}`;
+    return urls;
+  }, [images]);
+}
+
+// ── Картинка и PDF ──
+
+export function PictureView({
+  url,
+  name,
+  labels,
+  onFail,
+}: {
+  url: string;
+  name: string;
+  labels: FileViewLabels;
+  /** Браузер не смог показать картинку (HEIC вне Safari). */
+  onFail: () => void;
+}) {
+  const [z, setZ] = useState(1);
+  const [r, setR] = useState(0);
+  return (
+    <FileViewFrame kind="image">
+      <div className={BAR}>
+        <button
+          type="button"
+          className={iconButtonClass('sm')}
+          aria-label={labels.zoomOut}
+          data-fz="-1"
+          onClick={() => setZ((v) => zoomNext(v, -1))}
+        >
+          −
+        </button>
+        <span className={ZV} data-fv-zoom="">
+          {Math.round(z * 100)} %
+        </span>
+        <button
+          type="button"
+          className={iconButtonClass('sm')}
+          aria-label={labels.zoomIn}
+          data-fz="1"
+          onClick={() => setZ((v) => zoomNext(v, 1))}
+        >
+          +
+        </button>
+        <button
+          type="button"
+          className={buttonClass('ghost', 'sm')}
+          data-frot=""
+          onClick={() => setR(rotateNext)}
+        >
+          <Icon name="refresh" size="sm" />
+          {labels.rotate}
+        </button>
+        <button
+          type="button"
+          className={buttonClass('ghost', 'sm')}
+          data-ffit=""
+          onClick={() => {
+            setZ(1);
+            setR(0);
+          }}
+        >
+          {labels.fit}
+        </button>
+      </div>
+      <div className={`${SCROLL} grid place-items-center p-4`}>
+        <div
+          className="transition-transform duration-200"
+          style={{ transform: `scale(${z}) rotate(${r}deg)` }}
+        >
+          <img
+            src={url}
+            alt={name}
+            data-fv-img=""
+            onError={onFail}
+            className="block max-h-[62vh] max-w-full rounded-md object-contain shadow-pane"
+          />
+        </div>
+      </div>
+    </FileViewFrame>
+  );
+}
+
+/** PDF — встроенным просмотрщиком браузера, как раньше; на телефоне — ещё «Открыть в новой вкладке». */
+export function PdfView({
+  url,
+  name,
+  labels,
+}: {
+  url: string;
+  name: string;
+  labels: FileViewLabels;
+}) {
+  return (
+    <FileViewFrame kind="pdf">
+      <iframe
+        data-file-preview="pdf"
+        src={url}
+        title={name}
+        className="h-[66vh] w-full border-0 bg-raised max-md:h-[calc(100dvh-230px)]"
+      />
+      <div className="flex flex-none justify-end border-t border-line bg-pane px-2.5 py-1.5 md:hidden">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-file-open-tab=""
+          className="text-[13px] text-link"
+        >
+          {labels.openTab}
+        </a>
+      </div>
+    </FileViewFrame>
+  );
+}
+
+// ── Excel ──
+
+function cellStyle(cell: SheetCell): CSSProperties | undefined {
+  if (!cell.color && !cell.bg) return undefined;
+  return {
+    ...(cell.bg ? { background: cell.bg, color: cell.color ?? '#1f1f1f' } : {}),
+    ...(cell.color ? { color: cell.color } : {}),
+  };
+}
+
+function cellClass(cell: SheetCell | null | undefined, hit: boolean, current: boolean): string {
+  const al = cell?.al ?? (cell?.num ? 'r' : 'l');
+  return [
+    'h-6 overflow-hidden border-r border-b border-line px-[7px] py-1 text-ellipsis',
+    cell?.wrap ? 'whitespace-pre-wrap' : 'whitespace-nowrap',
+    al === 'r' ? 'text-right tabular-nums' : al === 'c' ? 'text-center' : 'text-left',
+    cell?.b ? 'font-bold' : '',
+    cell?.i ? 'italic' : '',
+    cell?.u ? 'underline' : '',
+    hit ? 'bg-caution-bg' : '',
+    current ? 'shadow-[inset_0_0_0_2px_var(--color-caution)]' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Лист: буквы столбцов и номера строк закреплены, объединения, скрытые строки и столбцы не рисуются. */
+export function SheetTable({
+  sheet,
+  hits,
+  current,
+}: {
+  sheet: SheetView;
+  hits: Set<string>;
+  current: string | null;
+}) {
+  const merges = useMemo(() => mergeMap(sheet), [sheet]);
+  const hidden = useMemo(() => new Set(sheet.hiddenRows), [sheet]);
+  const [drawn, setDrawn] = useState(SHEET_RENDER_STEP);
+  const more = useRef<HTMLTableRowElement | null>(null);
+  // Строка с найденным дальше нарисованного — рисуется до неё.
+  const limit = Math.max(drawn, current ? sheetRowsFor(Number(current.split(':')[0])) : 0);
+  useEffect(() => {
+    const el = more.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((e) => {
+      if (e.some((x) => x.isIntersecting)) setDrawn(limit + SHEET_RENDER_STEP);
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [limit, sheet]);
+  const cols = sheet.cols.map((w, c) => ({ w, c })).filter((x) => x.w > 0);
+  const rows = sheet.rows.slice(0, limit);
+  return (
+    <table
+      className="w-max table-fixed border-separate border-spacing-0 text-[12.5px]"
+      data-fv-sheet={sheet.name}
+    >
+      <colgroup>
+        <col style={{ width: 46 }} />
+        {cols.map(({ w, c }) => (
+          <col key={c} style={{ width: w }} />
+        ))}
+      </colgroup>
+      <thead>
+        <tr>
+          <th className="sticky top-0 left-0 z-[3] border-r border-b border-line bg-pane-alt" />
+          {cols.map(({ c }) => (
+            <th
+              key={c}
+              className="sticky top-0 z-[2] border-r border-b border-line bg-pane-alt px-[7px] py-1 text-center font-medium text-muted"
+            >
+              {colLetters(c)}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, r) =>
+          hidden.has(r) ? null : (
+            <tr key={r} style={sheet.heights[r] ? { height: sheet.heights[r] } : undefined}>
+              <th className="sticky left-0 z-[1] border-r border-b border-line bg-pane-alt px-1 text-center font-medium text-muted tabular-nums">
+                {r + 1}
+              </th>
+              {cols.map(({ c }) => {
+                const k = cellKey(r, c);
+                if (merges.skip.has(k)) return null;
+                const cell = row[c];
+                const span = merges.span.get(k);
+                return (
+                  <td
+                    key={c}
+                    data-cell={k}
+                    rowSpan={span && span.rows > 1 ? span.rows : undefined}
+                    colSpan={span && span.cols > 1 ? span.cols : undefined}
+                    className={cellClass(cell, hits.has(k), current === k)}
+                    style={cell ? cellStyle(cell) : undefined}
+                    title={cell && cell.v.length > 24 ? cell.v : undefined}
+                  >
+                    {cell?.v}
+                  </td>
+                );
+              })}
+            </tr>
+          ),
+        )}
+        {sheet.rows.length > limit ? (
+          <tr ref={more}>
+            <td colSpan={cols.length + 1} className="h-6" />
+          </tr>
+        ) : null}
+      </tbody>
+    </table>
+  );
+}
+
+export function SheetBookView({
+  model,
+  labels,
+}: {
+  model: Extract<FileViewModel, { kind: 'sheet' }>;
+  labels: FileViewLabels;
+}) {
+  const [tab, setTab] = useState(0);
+  const [q, setQ] = useState('');
+  const [query, setQuery] = useState('');
+  const [at, setAt] = useState(0);
+  const sheet = model.sheets[tab];
+  const found = useMemo(() => (sheet ? sheetHits(sheet, query) : []), [sheet, query]);
+  const hitSet = useMemo(() => new Set(found.map(([r, c]) => cellKey(r, c))), [found]);
+  const currentHit = found[at];
+  const current = currentHit ? cellKey(currentHit[0], currentHit[1]) : null;
+  const scroller = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!current) return;
+    // Найденная ячейка — в середину видимой части (после того как строка нарисована).
+    const id = setTimeout(() => {
+      scroller.current
+        ?.querySelector(`[data-cell="${current}"]`)
+        ?.scrollIntoView({ block: 'center', inline: 'center' });
+    }, 30);
+    return () => clearTimeout(id);
+  }, [current]);
+  if (!sheet) return <FileViewState state="empty" title={labels.emptySheet} />;
+  return (
+    <FileViewFrame kind="sheet">
+      <div className={BAR}>
+        <input
+          type="search"
+          data-fv-q=""
+          className={SEARCH}
+          placeholder={labels.sheetSearch}
+          aria-label={labels.sheetSearch}
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            if (!e.target.value) setQuery('');
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            // Enter — искать; ещё Enter по той же строке — к следующей найденной ячейке.
+            if (q.trim() === query.trim() && found.length) setAt((v) => (v + 1) % found.length);
+            else {
+              setQuery(q);
+              setAt(0);
+            }
+          }}
+        />
+        {query.trim() ? (
+          <span className={HINT} data-fv-found="">
+            {found.length ? labels.found(found.length) : labels.notFound}
+          </span>
+        ) : null}
+      </div>
+      <div ref={scroller} className={`${SCROLL} bg-pane`}>
+        <SheetTable key={tab} sheet={sheet} hits={hitSet} current={current} />
+      </div>
+      {sheet.totalRows > sheet.rows.length ? (
+        <div
+          data-fv-more=""
+          className="flex flex-none items-center gap-1.5 border-t border-line bg-pane px-2.5 py-[7px] text-[12.5px] text-muted"
+        >
+          <Icon name="info" size="sm" />
+          {labels.moreRows(sheet.rows.length, sheet.totalRows)}
+        </div>
+      ) : null}
+      {model.sheets.length > 1 ? (
+        <div
+          role="tablist"
+          className="flex flex-none gap-0.5 overflow-x-auto border-t border-line bg-pane-alt px-2"
+          data-no-swipe=""
+        >
+          {model.sheets.map((s, i) => (
+            <button
+              key={`${i}-${s.name}`}
+              type="button"
+              role="tab"
+              aria-selected={i === tab}
+              data-fsh={i}
+              onClick={() => {
+                setTab(i);
+                setAt(0);
+              }}
+              className={`cursor-pointer border-0 border-t-2 px-3.5 py-2 text-[12.5px] whitespace-nowrap ${
+                i === tab
+                  ? 'border-t-accent bg-pane font-semibold text-ink'
+                  : 'border-t-transparent bg-transparent text-muted'
+              }`}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </FileViewFrame>
+  );
+}
+
+// ── Word ──
+
+function runStyle(r: DocRun): CSSProperties | undefined {
+  if (!r.sz && !r.color) return undefined;
+  return {
+    ...(r.sz ? { fontSize: `${Math.max(8, Math.min(40, r.sz)) * (4 / 3)}px` } : {}),
+    ...(r.color ? { color: r.color } : {}),
+  };
+}
+
+function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, string> }) {
+  return (
+    <>
+      {runs.map((r, i) => {
+        if (r.img) {
+          const src = urls[r.img];
+          return src ? (
+            <img
+              key={i}
+              src={src}
+              alt=""
+              data-fv-docimg=""
+              className="inline-block max-w-full align-middle"
+              style={{ width: r.w ? Math.min(r.w, 680) : undefined, height: 'auto' }}
+            />
+          ) : null;
+        }
+        const cls = [
+          r.b ? 'font-bold' : '',
+          r.i ? 'italic' : '',
+          r.u ? 'underline' : '',
+          r.s ? 'line-through' : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        return (
+          <span key={i} className={cls || undefined} style={runStyle(r)}>
+            {r.t}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+const ALIGN: Record<string, string> = { c: 'text-center', r: 'text-right', j: 'text-justify' };
+const HEADING = [
+  'text-[19px] text-center font-bold mb-1.5',
+  'text-[17px] font-bold mt-4 mb-1.5',
+  'text-[15px] font-bold mt-4 mb-1.5',
+  'text-[14px] font-bold mt-3 mb-1',
+  'text-[13.5px] font-bold mt-3 mb-1',
+  'text-[13px] font-bold mt-2 mb-1',
+  'text-[13px] font-semibold mt-2 mb-1',
+];
+
+function DocBlocks({
+  blocks,
+  urls,
+}: {
+  blocks: readonly DocBlock[];
+  urls: Record<string, string>;
+}) {
+  return (
+    <>
+      {blocks.map((b, i) => {
+        if (b.k === 't') {
+          return (
+            <table key={i} className="my-2 w-full border-collapse text-[13px]">
+              <tbody>
+                {b.rows.map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((cell, ci) => (
+                      <td
+                        key={ci}
+                        colSpan={cell.span}
+                        rowSpan={cell.rowSpan}
+                        className="border border-[#bbb] px-2 py-[5px] align-top"
+                      >
+                        <DocBlocks blocks={cell.blocks} urls={urls} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        }
+        const cls = [
+          b.h !== undefined ? HEADING[b.h] : 'my-1.5 min-h-[1em] leading-[1.55]',
+          b.al ? ALIGN[b.al] : '',
+          'whitespace-pre-wrap',
+        ].join(' ');
+        const body = (
+          <>
+            {b.li ? (
+              <span className="mr-2 inline-block min-w-[1.2em] text-right" aria-hidden="true">
+                {b.li.label}
+              </span>
+            ) : null}
+            <Runs runs={b.runs} urls={urls} />
+          </>
+        );
+        const style = b.li ? { paddingLeft: `${b.li.lvl * 24}px` } : undefined;
+        if (b.h === undefined)
+          return (
+            <p key={i} className={cls} style={style}>
+              {body}
+            </p>
+          );
+        const H = `h${Math.min(6, Math.max(1, b.h || 1))}` as 'h1';
+        return (
+          <H key={i} className={cls} style={style}>
+            {body}
+          </H>
+        );
+      })}
+    </>
+  );
+}
+
+export function DocumentView({
+  model,
+  labels,
+}: {
+  model: Extract<FileViewModel, { kind: 'doc' }>;
+  labels: FileViewLabels;
+}) {
+  const urls = useImageUrls(model.images);
+  return (
+    <FileViewFrame kind="doc">
+      <div className={`${SCROLL} p-4 max-md:p-2`}>
+        <div
+          className="mx-auto max-w-[760px] rounded-md bg-white px-10 py-8 text-[13.5px] text-[#222] shadow-pane max-md:px-4 max-md:py-5"
+          data-fv-paper=""
+        >
+          <DocBlocks blocks={model.blocks} urls={urls} />
+        </div>
+      </div>
+      {model.cut ? <MoreAll text={labels.moreAll} /> : null}
+    </FileViewFrame>
+  );
+}
+
+function MoreAll({ text }: { text: string }) {
+  return (
+    <div
+      data-fv-more=""
+      className="flex flex-none items-center gap-1.5 border-t border-line bg-pane px-2.5 py-[7px] text-[12.5px] text-muted"
+    >
+      <Icon name="info" size="sm" />
+      {text}
+    </div>
+  );
+}
+
+// ── Презентация ──
+
+function SlideItemView({
+  item,
+  widthPt,
+  urls,
+}: {
+  item: SlideItem;
+  widthPt: number;
+  urls: Record<string, string>;
+}) {
+  const box: CSSProperties = {
+    position: 'absolute',
+    left: `${item.x * 100}%`,
+    top: `${item.y * 100}%`,
+    width: `${item.w * 100}%`,
+    height: `${item.h * 100}%`,
+  };
+  const fs = (pt: number) => `${(pt / widthPt) * 100}cqw`;
+  if (item.k === 'pic') {
+    const src = urls[item.img];
+    return src ? <img src={src} alt="" style={{ ...box, objectFit: 'contain' }} /> : null;
+  }
+  if (item.k === 'table') {
+    return (
+      <table style={{ ...box, fontSize: fs(12) }} className="border-collapse">
+        <tbody>
+          {item.rows.map((row, i) => (
+            <tr key={i}>
+              {row.map((c, j) => (
+                <td
+                  key={j}
+                  className="border border-[#aab] px-[0.6cqw] py-[0.3cqw] align-top whitespace-pre-wrap"
+                >
+                  {c}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+  return (
+    <div
+      style={{ ...box, background: item.fill, padding: '0.8cqw 1cqw' }}
+      className={`flex flex-col overflow-hidden ${item.anchor === 'c' ? 'justify-center' : item.anchor === 'b' ? 'justify-end' : 'justify-start'}`}
+    >
+      {item.paras.map((p, i) => (
+        <div
+          key={i}
+          className={`leading-[1.2] whitespace-pre-wrap ${p.al ? ALIGN[p.al] : ''}`}
+          style={{
+            paddingLeft: p.lvl ? `${p.lvl * 2.5}cqw` : undefined,
+            fontSize: fs(p.runs[0]?.sz ?? 18),
+          }}
+        >
+          {p.bullet ? '• ' : ''}
+          {p.runs.map((r, j) => (
+            <span
+              key={j}
+              className={
+                [r.b || item.title ? 'font-bold' : '', r.i ? 'italic' : '', r.u ? 'underline' : '']
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
+              style={{ fontSize: r.sz ? fs(r.sz) : undefined, color: r.color }}
+            >
+              {r.t}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SlidesView({
+  model,
+  labels,
+  slide,
+  onSlide,
+}: {
+  model: SlidesView;
+  labels: FileViewLabels;
+  slide: number;
+  onSlide: (n: number) => void;
+}) {
+  const urls = useImageUrls(model.images);
+  const n = model.slides.length;
+  const s = model.slides[Math.min(slide, n - 1)];
+  const widthPt = model.w / 12700;
+  return (
+    <FileViewFrame kind="slides">
+      <div className={BAR}>
+        <button
+          type="button"
+          className={iconButtonClass('sm')}
+          aria-label={labels.prevSlide}
+          data-fsl="-1"
+          disabled={slide <= 0}
+          onClick={() => onSlide(slide - 1)}
+        >
+          <Icon name="left" size="sm" />
+        </button>
+        <span className={ZV} data-fv-slide="">
+          {labels.slideOf(Math.min(slide, n - 1) + 1, n)}
+        </span>
+        <button
+          type="button"
+          className={iconButtonClass('sm')}
+          aria-label={labels.nextSlide}
+          data-fsl="1"
+          disabled={slide >= n - 1}
+          onClick={() => onSlide(slide + 1)}
+        >
+          <Icon name="right" size="sm" />
+        </button>
+      </div>
+      <div className={`${SCROLL} grid place-items-center p-4 max-md:p-2`}>
+        {s ? (
+          <div
+            data-fv-slide-box=""
+            className="relative w-[min(760px,100%)] overflow-hidden rounded-md text-[#1f2a44] shadow-pane [container-type:inline-size]"
+            style={{ aspectRatio: `${model.w} / ${model.h}`, background: s.bg ?? '#fff' }}
+          >
+            {s.items.map((it, i) => (
+              <SlideItemView key={i} item={it} widthPt={widthPt} urls={urls} />
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {model.cut ? <MoreAll text={labels.moreAll} /> : null}
+    </FileViewFrame>
+  );
+}
+
+// ── Текст ──
+
+export function TextFileView({ model, labels }: { model: TextView; labels: FileViewLabels }) {
+  const enc = model.encoding === 'windows-1251' ? 'Windows-1251' : model.encoding.toUpperCase();
+  return (
+    <FileViewFrame kind="text">
+      <div className={BAR}>
+        <span className={HINT} data-fv-enc={model.encoding}>
+          {labels.encoding(enc)}
+        </span>
+      </div>
+      <div className={`${SCROLL} bg-pane`}>
+        <pre className="m-0 px-3 py-2.5 font-mono text-[12.5px] leading-[1.6] break-words whitespace-pre-wrap">
+          {model.lines.map((l, i) => (
+            <span key={i} className="block">
+              <span className="mr-2.5 inline-block w-[34px] text-right text-faint select-none">
+                {i + 1}
+              </span>
+              {l}
+            </span>
+          ))}
+        </pre>
+      </div>
+      {model.totalLines > model.lines.length ? (
+        <MoreAll text={labels.moreRows(model.lines.length, model.totalLines)} />
+      ) : null}
+    </FileViewFrame>
+  );
+}
+
+// ── XML ──
+
+function XmlNodeView({
+  node,
+  path,
+  closed,
+  hits,
+  onToggle,
+  labels,
+}: {
+  node: XmlViewNode;
+  path: XmlPath;
+  closed: Set<XmlPath>;
+  hits: Set<XmlPath>;
+  onToggle: (p: XmlPath) => void;
+  labels: FileViewLabels;
+}) {
+  const attrs = node.a.map(([k, v]) => (
+    <span key={k}>
+      {' '}
+      <span className="text-violet">{k}</span>=<span className="text-ok">&quot;{v}&quot;</span>
+    </span>
+  ));
+  const hit = hits.has(path) ? 'rounded-[3px] bg-caution-bg' : '';
+  const kids = node.c.filter((x): x is XmlViewNode => typeof x !== 'string');
+  const text = node.c.filter((x): x is string => typeof x === 'string').join(' ');
+  if (!kids.length) {
+    return (
+      <div className={hit} data-xn={path}>
+        <span className="text-info">&lt;{node.n}</span>
+        {attrs}
+        {text ? (
+          <>
+            <span className="text-info">&gt;</span>
+            {text}
+            <span className="text-info">&lt;/{node.n}&gt;</span>
+          </>
+        ) : (
+          <span className="text-info">/&gt;</span>
+        )}
+      </div>
+    );
+  }
+  const off = closed.has(path);
+  let k = 0;
+  return (
+    <div data-xn={path}>
+      <span className={hit}>
+        <button
+          type="button"
+          aria-expanded={!off}
+          aria-label={off ? labels.expand(node.n) : labels.collapse(node.n)}
+          onClick={() => onToggle(path)}
+          className={`-ml-4 w-4 cursor-pointer border-0 bg-transparent p-0 text-[11px] text-muted transition-transform ${off ? '-rotate-90' : ''}`}
+        >
+          ▾
+        </button>
+        <span className="text-info">&lt;{node.n}</span>
+        {attrs}
+        <span className="text-info">&gt;</span>
+        {off ? <span className="text-faint">…</span> : null}
+        {text && !off ? <span>{text}</span> : null}
+      </span>
+      {off ? null : (
+        <div className="ml-[5px] border-l border-dotted border-line-strong pl-[18px]">
+          {node.c.map((x, i) => {
+            if (typeof x === 'string') return null;
+            k++;
+            return (
+              <XmlNodeView
+                key={`${i}-${k}`}
+                node={x}
+                path={`${path}-${i}`}
+                closed={closed}
+                hits={hits}
+                onToggle={onToggle}
+                labels={labels}
+              />
+            );
+          })}
+        </div>
+      )}
+      <span className="text-info">&lt;/{node.n}&gt;</span>
+    </div>
+  );
+}
+
+export function XmlFileView({ model, labels }: { model: XmlView; labels: FileViewLabels }) {
+  const [q, setQ] = useState('');
+  const [closed, setClosed] = useState<Set<XmlPath>>(() => new Set());
+  const found = useMemo(
+    () =>
+      model.root ? xmlHits(model.root, q) : { hits: new Set<XmlPath>(), open: new Set<XmlPath>() },
+    [model, q],
+  );
+  // Найденное раскрывается: ветки-предки найденных узлов не свёрнуты.
+  const shownClosed = useMemo(() => {
+    if (!found.open.size) return closed;
+    const s = new Set(closed);
+    for (const p of found.open) s.delete(p);
+    return s;
+  }, [closed, found]);
+  const toggle = (p: XmlPath) =>
+    setClosed((s) => {
+      const n = new Set(s);
+      if (n.has(p)) n.delete(p);
+      else n.add(p);
+      return n;
+    });
+  return (
+    <FileViewFrame kind="xml">
+      <div className={BAR}>
+        <input
+          type="search"
+          data-fv-q=""
+          className={SEARCH}
+          placeholder={labels.xmlSearch}
+          aria-label={labels.xmlSearch}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {q.trim() ? (
+          <span className={HINT} data-fv-found="">
+            {found.hits.size ? labels.found(found.hits.size) : labels.notFound}
+          </span>
+        ) : null}
+        <div className="flex-1" />
+        <button
+          type="button"
+          className={buttonClass('ghost', 'sm')}
+          data-fxa="0"
+          onClick={() => setClosed(new Set(model.root ? xmlBranches(model.root) : []))}
+        >
+          {labels.collapseAll}
+        </button>
+        <button
+          type="button"
+          className={buttonClass('ghost', 'sm')}
+          data-fxa="1"
+          onClick={() => setClosed(new Set())}
+        >
+          {labels.expandAll}
+        </button>
+      </div>
+      {model.doctype ? (
+        <div
+          data-fv-doctype=""
+          className="flex flex-none items-center gap-1.5 border-b border-line bg-caution-bg px-2.5 py-[7px] text-[12.5px] text-ink"
+        >
+          <Icon name="shield" size="sm" />
+          {labels.doctype}
+        </div>
+      ) : null}
+      <div
+        className={`${SCROLL} bg-pane px-3 py-2.5 font-mono text-[12.5px] leading-[1.7] break-words`}
+      >
+        {model.decl ? <div className="text-faint">{model.decl}</div> : null}
+        {model.root ? (
+          <XmlNodeView
+            node={model.root}
+            path="0"
+            closed={shownClosed}
+            hits={found.hits}
+            onToggle={toggle}
+            labels={labels}
+          />
+        ) : null}
+      </div>
+      {model.cut ? <MoreAll text={labels.moreAll} /> : null}
+    </FileViewFrame>
+  );
+}

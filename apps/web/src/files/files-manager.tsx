@@ -41,6 +41,7 @@ import { FileEditDialog } from './file-edit-dialog';
 import { useFileDelete, useFileLinkOpen } from './file-link-open';
 import { fileLinkText, fileSourceWithLinks } from './file-links';
 import { FileWindow, UploadDialog, type UploadChoice } from './file-window';
+import { windowFiles } from './file-viewer';
 import { SentFilesTab } from './sent-files';
 import {
   managerSummaryQuery,
@@ -429,15 +430,15 @@ export function FilesManager({ upload }: { upload: { start: () => void; dialog: 
       {card ? (
         <FileWindow
           key={`file-${card.n}`}
-          // После «Изменить файл» окно показывает перечитанную строку списка.
-          file={rowOf(card.data.id) ?? card.data}
+          // «‹ ›» — строки списка на экране в том же порядке (прототип v126 `fvGridRows`); после
+          // «Изменить файл» окно показывает перечитанную строку.
+          {...windowFiles(list.data?.items ?? [], card.data)}
           open={card.open}
           onClose={() => setCard(closeSlot)}
-          onDownload={() => void download(card.data)}
-          onSource={sourceOf(card.data)}
-          onEdit={() => setEditId(card.data.id)}
+          onSource={sourceOf}
+          onEdit={(file) => setEditId(file.id)}
           onLink={links.open}
-          onDelete={() => del.ask(rowOf(card.data.id) ?? card.data, () => setCard(closeSlot))}
+          onDelete={(file) => del.ask(file, () => setCard(closeSlot))}
         />
       ) : null}
       <FileEditDialog
