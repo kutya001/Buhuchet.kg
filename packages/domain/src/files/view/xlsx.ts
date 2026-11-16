@@ -13,7 +13,10 @@ import {
   SHEET_MAX_COLS,
   SHEET_MAX_ROWS,
   SHEET_MAX_SHEETS,
+  sheetFormatCode,
   sheetMergeCollector,
+  sheetTextBudget,
+  type SheetTextBudget,
   type BookView,
   type SheetCell,
   type SheetView,
@@ -56,7 +59,7 @@ function parseStyles(src: string | null): Xf[] {
   if (!root) return [];
   const fmts = new Map<number, string>();
   for (const f of childEls(childEl(root, 'numFmts'), 'numFmt'))
-    fmts.set(Number(attrOf(f, 'numFmtId')), attrOf(f, 'formatCode') ?? '');
+    fmts.set(Number(attrOf(f, 'numFmtId')), sheetFormatCode(attrOf(f, 'formatCode') ?? ''));
   const fonts = childEls(childEl(root, 'fonts'), 'font').map((f) => {
     const on = (n: string) => {
       const e = childEl(f, n);
@@ -191,6 +194,7 @@ export function parseWorksheet(
   xfs: readonly Xf[],
   sst: readonly string[],
   date1904: boolean,
+  budget: SheetTextBudget = sheetTextBudget(),
 ): SheetView {
   const cols: number[] = [];
   const colDef: { min: number; max: number; px: number }[] = [];
@@ -221,7 +225,8 @@ export function parseWorksheet(
         rowsSeen++;
         rowIdx = a.r ? Number(a.r) - 1 : rowIdx + 1;
         colIdx = -1;
-        if (rowIdx >= SHEET_MAX_ROWS) {
+        // Предел строк или знаков книги: дальше строки только считаются (`totalRows`).
+        if (rowIdx >= SHEET_MAX_ROWS || budget.left <= 0) {
           cut = true;
           return false;
         }
@@ -269,6 +274,7 @@ export function parseWorksheet(
             date1904,
           );
           if (cell) {
+            budget.left -= cell.v.length;
             const row = rows[rowIdx]!;
             while (row.length < cur.c) row.push(null);
             row[cur.c] = cell;
@@ -329,6 +335,8 @@ export async function parseXlsx(zip: Zip): Promise<BookView> {
   );
   const xfs = parseStyles(await zip.text(relOf('styles')?.part ?? 'xl/styles.xml'));
   const sheets: SheetView[] = [];
+  // Знаки ячеек — общим счётом на книгу: следующий лист берёт остаток.
+  const budget = sheetTextBudget();
   for (const s of childEls(childEl(wb ?? undefined, 'sheets'), 'sheet')) {
     if (sheets.length >= SHEET_MAX_SHEETS) break;
     const state = attrOf(s, 'state');
@@ -338,7 +346,14 @@ export async function parseXlsx(zip: Zip): Promise<BookView> {
     const src = await zip.text(rel.part);
     if (src === null) continue;
     sheets.push(
-      parseWorksheet(attrOf(s, 'name') ?? String(sheets.length + 1), src, xfs, sst, date1904),
+      parseWorksheet(
+        attrOf(s, 'name') ?? String(sheets.length + 1),
+        src,
+        xfs,
+        sst,
+        date1904,
+        budget,
+      ),
     );
   }
   return { kind: 'sheet', sheets };

@@ -11,7 +11,10 @@ import {
   SHEET_MAX_COLS,
   SHEET_MAX_ROWS,
   SHEET_MAX_SHEETS,
+  sheetFormatCode,
   sheetMergeCollector,
+  sheetTextBudget,
+  type SheetTextBudget,
   type BookView,
   type SheetCell,
   type SheetView,
@@ -262,7 +265,7 @@ export function parseXls(file: Uint8Array): BookView {
         u: d[10]! !== 0,
       });
     } else if (r.type === 0x041e && d.length >= 5)
-      formats.set(rdv.getUint16(0, true), xlString(d, 2).s);
+      formats.set(rdv.getUint16(0, true), sheetFormatCode(xlString(d, 2).s));
     else if (r.type === 0x00e0 && d.length >= 8) {
       const fi = rdv.getUint16(0, true);
       const font = fonts[fi >= 4 ? fi - 1 : fi];
@@ -287,9 +290,11 @@ export function parseXls(file: Uint8Array): BookView {
     }
   }
   const sheets: SheetView[] = [];
+  // Знаки ячеек — общим счётом на книгу: следующий лист берёт остаток.
+  const budget = sheetTextBudget();
   for (const meta of sheetsMeta.slice(0, SHEET_MAX_SHEETS)) {
     if (meta.pos >= wb.length) continue;
-    sheets.push(parseXlsSheet(wb, meta, xfs, sst, date1904));
+    sheets.push(parseXlsSheet(wb, meta, xfs, sst, date1904, budget));
   }
   return { kind: 'sheet', sheets };
 }
@@ -300,8 +305,11 @@ function parseXlsSheet(
   xfs: readonly XlsXf[],
   sst: readonly string[],
   date1904: boolean,
+  budget: SheetTextBudget,
 ): SheetView {
   const rows: (SheetCell | null)[][] = [];
+  // Строка, на которой кончился предел знаков книги: с неё строки не показываются.
+  let textCutAt = -1;
   const heights: Record<number, number> = {};
   const hiddenRows: number[] = [];
   const merges = sheetMergeCollector();
@@ -320,6 +328,11 @@ function parseXlsSheet(
       colsCut = true;
       return;
     }
+    if (budget.left <= 0) {
+      if (textCutAt < 0 || r < textCutAt) textCutAt = r;
+      return;
+    }
+    budget.left -= cell.v.length;
     while (rows.length <= r) rows.push([]);
     const row = rows[r]!;
     while (row.length < c) row.push(null);
@@ -450,6 +463,7 @@ function parseXlsSheet(
       }
     }
   }
+  if (textCutAt >= 0 && rows.length > textCutAt) rows.length = textCutAt;
   for (const m of merges.list) maxCol = Math.max(maxCol, m[3]);
   const width = Math.min(SHEET_MAX_COLS, maxCol + 1);
   const cols = Array.from({ length: width }, () => defPx);

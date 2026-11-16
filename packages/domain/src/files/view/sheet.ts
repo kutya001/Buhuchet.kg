@@ -18,6 +18,22 @@ export const SHEET_MERGE_CELLS_BUDGET = 4_000_000;
 export const SHEET_MAX_CELL_CHARS = 32_767;
 /** Знаков во всех ячейках книги — не больше: модель копируется из потока разбора в окно. */
 export const SHEET_MAX_BOOK_CHARS = 16_000_000;
+/** Код формата числа длиннее — «Общий» (предел Excel): «@» в коде размножает текст ячейки. */
+export const SHEET_MAX_FORMAT_CHARS = 255;
+
+/** Сколько знаков ячеек книги ещё можно взять; считается во время разбора, а не после. */
+export interface SheetTextBudget {
+  left: number;
+}
+export const sheetTextBudget = (): SheetTextBudget => ({ left: SHEET_MAX_BOOK_CHARS });
+
+/** Код формата из файла: длиннее предела — «Общий». */
+export const sheetFormatCode = (code: string) =>
+  code.length > SHEET_MAX_FORMAT_CHARS ? 'General' : code;
+
+/** Текст ячейки в пределе знаков ячейки. */
+export const clipCellText = (text: string) =>
+  text.length > SHEET_MAX_CELL_CHARS ? text.slice(0, SHEET_MAX_CELL_CHARS) : text;
 
 /**
  * Объединения листа в пределах окна (docs/deviations.md п. И-12): углы — в пределах

@@ -71,9 +71,11 @@ export function mergeMap(sheet: SheetView, drawn = Number.POSITIVE_INFINITY): Me
   const skip = new Set<string>();
   const hidden = new Set(sheet.hiddenRows);
   const visibleCol = (c: number) => (sheet.cols[c] ?? 1) > 0;
+  // Строк ниже данных листа окно не рисует — и не просматривает.
+  const last = Math.min(drawn, sheet.rows.length);
   for (const [r1, c1, r2full, c2] of sheet.merges) {
-    if (r1 >= drawn) continue;
-    const r2 = Math.min(r2full, drawn - 1);
+    if (r1 >= last) continue;
+    const r2 = Math.min(r2full, last - 1);
     if (skip.size + (r2 - r1 + 1) * (c2 - c1 + 1) > MERGE_SKIP_MAX) break;
     let rows = 0;
     for (let r = r1; r <= r2; r++) if (!hidden.has(r)) rows++;

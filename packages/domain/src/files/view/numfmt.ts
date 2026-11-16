@@ -3,6 +3,7 @@
  * из файла (встроенный номер или свой код) применяется к значению, разделители — как в русском Excel:
  * тысячи — неразрывный пробел, дробная часть — запятая.
  */
+import { clipCellText, SHEET_MAX_CELL_CHARS } from './sheet';
 
 const NBSP = '\u00a0';
 
@@ -481,16 +482,22 @@ export function formatCellNumber(v: number, code: string, date1904 = false): str
     return formatGeneral(v);
   const val = abs ? Math.abs(v) : v;
   const out = formatNumberSection(Math.abs(val), s);
-  return val < 0 && !abs ? `-${out}` : out;
+  return clipCellText(val < 0 && !abs ? `-${out}` : out);
 }
 
 /** Строка ячейки по секции текста (`@`) формата, если она есть. */
 export function formatCellText(text: string, code: string): string {
-  if (!code || !code.includes('@')) return text;
+  if (!code || !code.includes('@')) return clipCellText(text);
   const sections = splitSections(code);
   const sec = sections.length >= 4 ? sections[3]! : sections.find((x) => x.includes('@'));
-  if (!sec) return text;
-  return parseSection(sec)
-    .toks.map((t) => (t.k === 'lit' ? t.v : t.v === '@' ? text : ''))
-    .join('');
+  if (!sec) return clipCellText(text);
+  // Каждый «@» подставляет текст ещё раз: строка собирается только до предела ячейки.
+  let out = '';
+  for (const t of parseSection(sec).toks) {
+    const piece = t.k === 'lit' ? t.v : t.v === '@' ? text : '';
+    if (out.length + piece.length >= SHEET_MAX_CELL_CHARS)
+      return out + piece.slice(0, SHEET_MAX_CELL_CHARS - out.length);
+    out += piece;
+  }
+  return out;
 }

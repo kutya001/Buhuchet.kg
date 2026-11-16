@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { parseDocx, numberText, DOC_MAX_BLOCKS, DOC_MAX_LIST_START, DOC_MAX_RUNS } from './docx';
+import {
+  parseDocx,
+  numberText,
+  DOC_MAX_BLOCKS,
+  DOC_MAX_LABEL,
+  DOC_MAX_LIST_START,
+  DOC_MAX_RUNS,
+} from './docx';
 import { docxBytes, docxImage, zipBytes } from './fixtures';
 import { ViewError } from './xml';
 import { openZip } from './zip';
@@ -159,8 +166,29 @@ describe('Word DOCX в окне просмотра', () => {
     );
     const first = big.blocks[0];
     expect(first?.k === 'p' ? first.li?.label : null).toBe(
-      `${numberText(DOC_MAX_LIST_START, 'upperRoman')}.`,
+      `${numberText(DOC_MAX_LIST_START, 'upperRoman')}.`.slice(0, DOC_MAX_LABEL),
     );
+
+    // Шаблон номера длиннее 255 знаков не берётся; номер и маркер — не длиннее 64 знаков.
+    const tpl = (text: string, fmt = 'upperRoman') =>
+      `<w:numbering ${W}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1000000000000"/><w:numFmt w:val="${fmt}"/><w:lvlText w:val="${text}"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`;
+    const labelOf = async (numbering: string) => {
+      const d = await parseDocx(
+        openZip(
+          await docxBytes(
+            p(r('пункт'), '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'),
+            {
+              numbering,
+            },
+          ),
+        ),
+      );
+      const b0 = d.blocks[0];
+      return b0?.k === 'p' ? b0.li?.label : undefined;
+    };
+    expect(await labelOf(tpl('%1'.repeat(300)))).toBeFalsy();
+    expect(await labelOf(tpl('%1'.repeat(100)))).toHaveLength(DOC_MAX_LABEL);
+    expect(await labelOf(tpl('o'.repeat(200), 'bullet'))).toBe('o'.repeat(DOC_MAX_LABEL));
 
     // Один абзац из множества кусков: в модели — не больше предела, документ помечен «не целиком».
     const runs = await parseDocx(openZip(await docxBytes(p(r('x').repeat(DOC_MAX_RUNS + 5)))));

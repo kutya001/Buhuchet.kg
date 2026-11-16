@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { xlsxBytes, zipBytes } from './fixtures';
 import { parseFileView } from './index';
+import { formatCellText } from './numfmt';
 import {
   capBookText,
   cellRef,
@@ -13,6 +14,7 @@ import {
   SHEET_MAX_COLS,
   SHEET_MAX_MERGES,
   SHEET_MAX_ROWS,
+  sheetFormatCode,
   sheetMergeCollector,
 } from './sheet';
 import { parseWorksheet, parseXlsx, sheetCell } from './xlsx';
@@ -212,6 +214,32 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(wide.list).toEqual([
       [SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1, SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1],
     ]);
+  });
+
+  it('«@» в формате не размножает текст сверх предела; знаки книги считаются во время разбора (защита, п. И-12)', () => {
+    const long = 'я'.repeat(20_000);
+    // Допустимый в Excel «@@» — ячейка не длиннее предела; код длиннее 255 знаков — «Общий».
+    expect(formatCellText(long, '@@')).toHaveLength(SHEET_MAX_CELL_CHARS);
+    expect(formatCellText('x'.repeat(SHEET_MAX_CELL_CHARS + 5), '@')).toHaveLength(
+      SHEET_MAX_CELL_CHARS,
+    );
+    expect(sheetFormatCode('@'.repeat(400))).toBe('General');
+    expect(sheetFormatCode('#,##0.00')).toBe('#,##0.00');
+    expect(sheetCell('s', '0', { fmt: '@@' }, [long], false)?.v).toHaveLength(SHEET_MAX_CELL_CHARS);
+
+    // Знаков книги осталось на две ячейки: дальше строки не берутся, число строк листа — прежнее.
+    const rows = Array.from(
+      { length: 50 },
+      (_, i) => `<row r="${i + 1}"><c r="A${i + 1}" t="s"><v>0</v></c></row>`,
+    ).join('');
+    const ws = `<worksheet><sheetData>${rows}</sheetData></worksheet>`;
+    const budget = { left: 2 * long.length };
+    const s = parseWorksheet('a', ws, [{ fmt: '@@' }], [long], false, budget);
+    expect(s.rows.length).toBeLessThanOrEqual(3);
+    expect(s.totalRows).toBe(50);
+    expect(budget.left).toBeLessThanOrEqual(0);
+    // Следующий лист той же книги берёт остаток — ничего.
+    expect(parseWorksheet('b', ws, [], [long], false, budget).rows).toHaveLength(0);
   });
 
   it('текст книги в пределах: ячейка — до 32 767 знаков, книга — до предела, дальше строки не показаны', () => {

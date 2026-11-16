@@ -23,6 +23,11 @@ export const DOC_MAX_BLOCKS = 10_000;
 export const DOC_MAX_RUNS = 200_000;
 /** Номер начала списка — не больше. */
 export const DOC_MAX_LIST_START = 100_000;
+/** Шаблон номера списка из файла длиннее (предел Word) — не берётся; номер пункта — до 64 знаков. */
+export const DOC_MAX_LIST_TEMPLATE = 255;
+export const DOC_MAX_LABEL = 64;
+/** Знаков текста во всём документе — не больше: модель копируется из потока разбора в окно. */
+export const DOC_MAX_CHARS = 16_000_000;
 
 export interface DocRun {
   t: string;
@@ -137,7 +142,7 @@ function parseNumbering(src: string | null): Map<string, { abs: string; lvls: Nu
       if (i < 0 || i > 8) continue;
       lvls[i] = {
         fmt: attrOf(childEl(l, 'numFmt'), 'val') ?? 'decimal',
-        text: attrOf(childEl(l, 'lvlText'), 'val') ?? '',
+        text: lvlTemplate(attrOf(childEl(l, 'lvlText'), 'val') ?? ''),
         // Номер начала — из файла, в разумных пределах: римские цифры для 10¹² — строка в миллиард знаков.
         start: Math.min(
           Math.max(Number(attrOf(childEl(l, 'start'), 'val') ?? 1) || 0, 0),
@@ -212,6 +217,9 @@ export function numberText(n: number, fmt: string): string {
   }
 }
 
+/** Шаблон номера из файла: длиннее предела — пустой (номера нет), а не строка в миллионы знаков. */
+const lvlTemplate = (t: string) => (t.length > DOC_MAX_LIST_TEMPLATE ? '' : t);
+
 class Numberer {
   private counters = new Map<string, number[]>();
   constructor(private readonly nums: Map<string, { abs: string; lvls: NumLevel[] }>) {}
@@ -220,16 +228,19 @@ class Numberer {
     if (!num || numId === '0') return null;
     const lvl = num.lvls[ilvl];
     if (!lvl) return null;
-    if (lvl.fmt === 'bullet') return /^[\w\d]/.test(lvl.text) ? lvl.text : '•';
+    if (lvl.fmt === 'bullet')
+      return /^[\w\d]/.test(lvl.text) ? lvl.text.slice(0, DOC_MAX_LABEL) : '•';
     const c = this.counters.get(num.abs) ?? [];
     for (let i = 0; i < ilvl; i++) if (c[i] === undefined) c[i] = num.lvls[i]?.start ?? 1;
     c[ilvl] = c[ilvl] === undefined ? lvl.start : c[ilvl]! + 1;
     c.length = ilvl + 1;
     this.counters.set(num.abs, c);
-    return lvl.text.replace(/%([1-9])/g, (_m, d: string) => {
-      const i = Number(d) - 1;
-      return numberText(c[i] ?? num.lvls[i]?.start ?? 1, num.lvls[i]?.fmt ?? 'decimal');
-    });
+    return lvl.text
+      .replace(/%([1-9])/g, (_m, d: string) => {
+        const i = Number(d) - 1;
+        return numberText(c[i] ?? num.lvls[i]?.start ?? 1, num.lvls[i]?.fmt ?? 'decimal');
+      })
+      .slice(0, DOC_MAX_LABEL);
   }
 }
 
@@ -244,16 +255,19 @@ interface Ctx {
   count: number;
   /** Кусков текста и картинок уже в модели. */
   runs: number;
+  /** Знаков текста уже в модели. */
+  chars: number;
   cut: boolean;
 }
 
-/** Ещё один кусок в модель: после `DOC_MAX_RUNS` — нет, документ показан не целиком. */
-function take(ctx: Ctx): boolean {
-  if (ctx.runs >= DOC_MAX_RUNS) {
+/** Ещё один кусок в модель: после `DOC_MAX_RUNS` кусков или `DOC_MAX_CHARS` знаков — нет, документ показан не целиком. */
+function take(ctx: Ctx, chars = 0): boolean {
+  if (ctx.runs >= DOC_MAX_RUNS || ctx.chars + chars > DOC_MAX_CHARS) {
     ctx.cut = true;
     return false;
   }
   ctx.runs++;
+  ctx.chars += chars;
   return true;
 }
 
@@ -282,7 +296,7 @@ async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): 
       }
       let text = '';
       const flush = () => {
-        if (text && take(ctx)) out.push({ ...fmt, t: text });
+        if (text && take(ctx, text.length)) out.push({ ...fmt, t: text });
         text = '';
       };
       for (const c of k.kids) {
@@ -428,6 +442,7 @@ export async function parseDocx(zip: Zip): Promise<DocView> {
     bag,
     count: 0,
     runs: 0,
+    chars: 0,
     cut: false,
   };
   const root = parseXmlTree(src, 3_000_000).root;
