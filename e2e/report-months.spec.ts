@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import {
   botFile,
   botMessages,
+  cardTab,
   finger,
   hire,
   linkTelegram,
@@ -30,16 +31,6 @@ async function search(page: Page, isMobile: boolean, text: string) {
   await page.getByRole('searchbox').first().fill(text);
 }
 
-/** Вкладка карточки контрагента (на телефоне — из меню вкладок). */
-async function toCardTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
-}
-
 /** «Отметить сданным» через API сегодняшней датой по Бишкеку. */
 async function submitReport(api: APIRequestContext, origin: string, id: string) {
   const card = await api.get(`/api/reports/${id}`);
@@ -62,15 +53,7 @@ async function openReportsTab(page: Page, isMobile: boolean, word: string): Prom
   await page.locator('[data-grid] [data-id]').filter({ hasText: name }).first().click();
   const card = page.getByRole('dialog', { name });
   await expect(card.locator('[data-cp-card]')).toBeVisible();
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page
-      .getByRole('menu')
-      .getByRole('menuitem', { name: /^Отчёты к сдаче/ })
-      .click();
-  } else {
-    await card.getByRole('tab', { name: /^Отчёты к сдаче/ }).click();
-  }
+  await cardTab(page, card, isMobile, /^Отчёты к сдаче/);
   return card;
 }
 
@@ -201,9 +184,9 @@ test.describe('Доработки 13.11.2026, К2: отчёты и налоги 
       await months.locator('[data-months-quick] [data-quick="pay"]').click();
       await expect(row(t1)).toHaveCount(0);
       // Ушли на другую вкладку карточки и вернулись — «Уплатить» всё ещё выбрано.
-      await toCardTab(page, card, isMobile, /^История/);
+      await cardTab(page, card, isMobile, /^История/);
       await expect(months).toHaveCount(0);
-      await toCardTab(page, card, isMobile, /^Отчёты к сдаче/);
+      await cardTab(page, card, isMobile, /^Отчёты к сдаче/);
       await expect(months.locator('[data-months-quick] [data-quick="pay"]')).toHaveAttribute(
         'aria-pressed',
         'true',
@@ -378,7 +361,7 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
       expect(text).toContain(`Уважаемые ${name}! Налоги к оплате за сентябрь 2026: `);
       expect(text).toMatch(/Итого — 4\s670,50\sсом\. Просим перечислить до \d\d\.\d\d\.\d{4} на: /);
       expect(text).toMatch(/3\s800\sсом \(до \d\d\.\d\d\.\d{4}\)/);
-      await toCardTab(page, card, isMobile, /^История/);
+      await cardTab(page, card, isMobile, /^История/);
       await expect(
         card.getByText(/Скопирован текст «К оплате» за сентябрь 2026: 4\s670,50\sсом/),
       ).toBeVisible();
@@ -691,7 +674,7 @@ test.describe('Доработки 13.11.2026, К4: «К оплате клиен�
     await test.step('история контрагента: отправка, «оплатил», вопрос и ответ', async () => {
       await page.reload();
       const again = await openReportsTab(page, isMobile, word);
-      await toCardTab(page, again, isMobile, /^История/);
+      await cardTab(page, again, isMobile, /^История/);
       await expect(
         again.getByText(
           /«К оплате» за сентябрь 2026 отправлено в Telegram: 4\s670,50\sсом, получателей — 1/,

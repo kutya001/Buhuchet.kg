@@ -3,13 +3,14 @@ import { platformAdmin, search } from './admin';
 import {
   botAnswers,
   botSent,
+  cardTab,
   hire,
   linkTelegram,
   pressBotButton,
   signIn,
+  type BotSent,
   uniqueChat,
   uniqueLogin,
-  type BotSent,
 } from './helpers';
 import { orgWithTypes } from './orgs';
 
@@ -211,15 +212,7 @@ test.describe('Доработки 13.11. Т4: «Это не я» под сооб
     await expect(card.locator('[data-account-states]')).toContainText(
       'Вход закрыт: «Это не я» из Telegram',
     );
-    const openTab = async (name: string) => {
-      if (isMobile) {
-        await card.getByRole('tab', { selected: true }).click();
-        await page.getByRole('menu').getByRole('menuitem', { name }).click();
-      } else {
-        await card.getByRole('tab', { name }).click();
-      }
-      await expect(card.getByRole('tab', { selected: true })).toContainText(name);
-    };
+    const openTab = (name: string) => cardTab(page, card, isMobile, name);
     await openTab('Сеансы');
     await expect(card.locator('[data-account-sessions="0"]')).toBeVisible();
     await expect(card).toContainText('Завершён: «Это не я» из Telegram');

@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, FAKE_TELEGRAM, pressStart, signIn, uniqueChat } from './helpers';
+import { cardTab, DEMO_PASSWORD, FAKE_TELEGRAM, pressStart, signIn, uniqueChat } from './helpers';
 import { asOwner } from './reports';
 
 // «Напомнить в Telegram» об оплате за обслуживание (доработки 14.11.2026, блок 4, пункт 5; прототип v110
@@ -67,16 +67,6 @@ async function openCard(page: Page, isMobile: boolean, id: string, name: string)
   return card;
 }
 
-/** Вкладка карточки: на телефоне — из списка под текущей вкладкой. */
-async function toTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
-}
-
 test.describe('Доработки 14.11, К (блок 4): «Напомнить в Telegram» об оплате за обслуживание', () => {
   test('(доработки 14.11.2026, блок 4, пункт 5) «Напомнить в Telegram» на вкладке «Обслуживание»: окно с получателем, текстом по шаблону и реквизитами для обслуживания; клиенту — «Оплата за обслуживание до …» с текстом сотрудника, реквизитами и «Оплатил»; отправка — в истории; второй раз за день кнопка неактивна — «Сегодня уже напоминали в ЧЧ:ММ»', async ({
     page,
@@ -141,7 +131,7 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
 
       await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
       const card = await openCard(page, isMobile, cp.id, cp.name);
-      await toTab(page, card, isMobile, /Обслуживание/);
+      await cardTab(page, card, isMobile, /Обслуживание/);
       const button = card.locator('[data-fee-tab] [data-fee-telegram]');
       /** Скрыть у контрагента разделы страницы (с версией строки страницы). */
       const hide = async (sections: string[]) => {
@@ -234,7 +224,7 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
       });
 
       await test.step('отправка — в истории контрагента', async () => {
-        await toTab(page, card, isMobile, /История/);
+        await cardTab(page, card, isMobile, /История/);
         await expect(card).toContainText(
           new RegExp(
             `Напоминание об оплате за обслуживание отправлено в Telegram: ${sum}, получателей — 1`,

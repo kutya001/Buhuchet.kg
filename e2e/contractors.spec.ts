@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+  cardTab,
   defaultResponsible,
   DEMO_PASSWORD,
   finger,
@@ -51,16 +52,6 @@ async function openCard(page: Page, name: string): Promise<Locator> {
   const card = page.getByRole('dialog', { name });
   await expect(card.locator('[data-cp-card]')).toBeVisible();
   return card;
-}
-
-/** Вкладка карточки: на телефоне — из списка под текущей вкладкой. */
-async function toTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
 }
 
 /** Новый главный бухгалтер демо-организации (область «Все контрагенты») входит в браузере. */
@@ -324,7 +315,7 @@ test.describe('Этап 2: контрагенты — список и карто
     }
     // У прежнего сотрудника закреплённых контрагентов больше нет.
     await expect(card).toBeVisible();
-    await toTab(page, card, isMobile, /^Контрагенты/);
+    await cardTab(page, card, isMobile, /^Контрагенты/);
     await expect(card).toContainText('Нет закреплённых контрагентов');
   });
 
@@ -383,7 +374,7 @@ test.describe('Этап 2: контрагенты — список и карто
 
     // На ПК таблица «Отчётов к сдаче» растягивается на всю ширину развёрнутой карточки; заголовки
     // столбцов стоят над своими ячейками.
-    await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+    await cardTab(page, card, isMobile, /^Отчёты к сдаче/);
     // Вкладка открывается «По месяцам» (доработки 13.11.2026, К2): общий список — «Списком».
     await card.locator('[data-reports-mode] [data-mode="list"]').click();
     const table = card.getByRole('table', { name: 'Отчёты к сдаче' });
@@ -409,7 +400,7 @@ test.describe('Этап 2: контрагенты — список и карто
     expect(Math.max(...skew)).toBeLessThanOrEqual(1);
 
     await test.step('вкладка «Деньги»: таблица операций на всю ширину развёрнутой карточки, без перекоса', async () => {
-      await toTab(page, card, isMobile, /^Деньги/);
+      await cardTab(page, card, isMobile, /^Деньги/);
       const ops = card.getByRole('table', { name: /^Операции · \d+$/ });
       await expect(ops.locator('tbody tr').first()).toBeVisible();
       expect(await ops.locator('tbody tr').count()).toBeGreaterThan(1);
@@ -467,7 +458,7 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(rows(page).first()).toBeVisible();
     await search(page, isMobile, word);
     const card = await openCard(page, name);
-    await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+    await cardTab(page, card, isMobile, /^Отчёты к сдаче/);
     // Ошибка была в общем списке вкладки: с задачи К2 он открывается «Списком».
     await card.locator('[data-reports-mode] [data-mode="list"]').click();
     const row = card.locator(`[data-grid] [data-id="${nds}"]`);
@@ -523,7 +514,7 @@ test.describe('Этап 2: контрагенты — список и карто
       await expect(card.getByRole('tab', { name: /^Деньги/ })).toBeVisible();
     }
 
-    await toTab(page, card, isMobile, /^Подбор отчётов/);
+    await cardTab(page, card, isMobile, /^Подбор отчётов/);
     const tab = card.locator('[data-pick-tab]');
     await tab.getByRole('button', { name: 'Все', exact: true }).click();
     // НДС подходит к ОНР; назначений у нового контрагента нет.
@@ -533,7 +524,8 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(tab.locator('[data-pick-sum]')).toContainText('новых 1');
 
     await test.step('уход на «Деньги» — «Подбор не применён»; «Отмена» оставляет подбор', async () => {
-      await toTab(page, card, isMobile, /^Деньги/);
+      // Уход перехватывает вопрос — вкладка остаётся «Подбор отчётов» (проверка ниже).
+      await cardTab(page, card, isMobile, /^Деньги/, { switches: false });
       const leave = page.getByRole('dialog', { name: 'Подбор не применён' });
       await expect(leave).toBeVisible();
       await leave.getByRole('button', { name: 'Отмена' }).click();
@@ -552,7 +544,7 @@ test.describe('Этап 2: контрагенты — список и карто
       ).toBeVisible();
       await expect(row).toContainText('Назначен');
       // Подбор применён: на другую вкладку — без вопроса.
-      await toTab(page, card, isMobile, /^Отчёты к сдаче/);
+      await cardTab(page, card, isMobile, /^Отчёты к сдаче/);
       await expect(page.getByRole('dialog', { name: 'Подбор не применён' })).toHaveCount(0);
       await expect(card.getByRole('tab', { selected: true })).toContainText('Отчёты к сдаче');
     });
@@ -646,7 +638,7 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(warn).toContainText('подтвердил');
     await expect(warn).not.toContainText('нужно подтверждение');
 
-    await toTab(page, card, isMobile, /^История/);
+    await cardTab(page, card, isMobile, /^История/);
     const entry = card
       .getByRole('list', { name: 'История' })
       .getByRole('listitem')
@@ -674,7 +666,7 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(card.locator('[data-cp-card]')).toContainText('СПиНО');
 
     await test.step('«Подбор отчётов»: у «Соцфонда» — ставки тарифа СПиНО', async () => {
-      await toTab(page, card, isMobile, /^Подбор отчётов/);
+      await cardTab(page, card, isMobile, /^Подбор отчётов/);
       const tab = card.locator('[data-pick-tab]');
       await tab.getByRole('button', { name: 'Все', exact: true }).click();
       await tab.locator('[data-pick-row="soc"]').click({ position: { x: 150, y: 12 } });
@@ -812,7 +804,7 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(rows(page).first()).toBeVisible();
     await search(page, isMobile, word);
     const card = await openCard(page, name);
-    await toTab(page, card, isMobile, /^Показатели/);
+    await cardTab(page, card, isMobile, /^Показатели/);
     const period = card.locator('[data-kpi-period] input[type="month"]');
     await period.nth(0).fill(monthAt(-3));
     await period.nth(1).fill(monthAt(-1));

@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { defaultResponsible } from './helpers';
+import { cardTab, defaultResponsible } from './helpers';
 import { orgWithTypes } from './orgs';
 import { assign, newContractor } from './reports';
 
@@ -92,15 +92,7 @@ test('(проверка прототипа v84) дата начала обслу
     await expect(card).toContainText('10.03.2026');
     await expect(card).not.toContainText('01.01.2026');
     await expect(card).toContainText('Периоды обслуживания: 03.2026–…');
-    if (isMobile) {
-      await card.getByRole('tab', { selected: true }).click();
-      await page
-        .getByRole('menu')
-        .getByRole('menuitem', { name: /^История/ })
-        .click();
-    } else {
-      await card.getByRole('tab', { name: /^История/ }).click();
-    }
+    await cardTab(page, card, isMobile, /^История/);
     await expect(card).toContainText(
       'Дата начала обслуживания: 01.01.2026 → 10.03.2026. Причина: внесли с ошибкой',
     );

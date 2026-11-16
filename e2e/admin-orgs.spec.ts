@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ADMIN_PASSWORD, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { showStats, signIn, uniqueLogin } from './helpers';
+import { cardTab, showStats, signIn, uniqueLogin } from './helpers';
 
 // Админка → «Организации» (ТЗ «Админка» → «Модуль организаций»; просьба заказчика 27.10.2026 —
 // стенд, где администратор платформы создаёт организации): плашки, список всех организаций,
@@ -269,15 +269,7 @@ test.describe('Админка: организации', () => {
     await page.keyboard.press('Escape');
     await row.getByText(name).click();
     const card = page.getByRole('dialog', { name });
-    const openTab = async (tab: string) => {
-      if (isMobile) {
-        await card.getByRole('tab', { selected: true }).click();
-        await page.getByRole('menu').getByRole('menuitem', { name: tab }).click();
-      } else {
-        await card.getByRole('tab', { name: tab }).click();
-      }
-      await expect(card.getByRole('tab', { selected: true })).toContainText(tab);
-    };
+    const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
 
     // Шапка: ИНН, адрес страницы, состояние, кнопки — как в меню строки и «Сбросить пароль владельцу».
     await expect(card.locator('[data-org-states]')).toHaveText('Активна');

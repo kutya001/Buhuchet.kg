@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { cardTab } from './helpers';
 
 // Сотрудники и роли через настоящий сайт (Next.js → API): владелец демо-организации создаёт
 // сотрудника, тот входит временным паролем и обязан его сменить; заблокированный не входит (методы
@@ -242,13 +243,7 @@ test.describe('Этап 1: сотрудники и роли (экраны)', () 
     await expect(reset).toHaveCount(0);
 
     // Вкладка «Контрагенты»: закреплённых пока нет. На телефоне вкладки — список под текущей.
-    if (isMobile) {
-      await card.getByRole('tab', { selected: true }).click();
-      await page.getByRole('menu').getByRole('menuitem', { name: 'Контрагенты' }).click();
-    } else {
-      await card.getByRole('tab', { name: 'Контрагенты' }).click();
-    }
-    await expect(card.getByRole('tab', { selected: true })).toContainText('Контрагенты');
+    await cardTab(page, card, isMobile, 'Контрагенты');
     await expect(card).toContainText('Закреплено контрагентов: 0');
     await expect(card).toContainText('Нет закреплённых контрагентов');
 

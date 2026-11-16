@@ -3,6 +3,7 @@ import { expect, test, type APIRequestContext, type Locator, type Page } from '@
 import { search } from './admin';
 import {
   botMessages,
+  cardTab,
   DEMO_PASSWORD,
   hire,
   linkTelegram,
@@ -146,15 +147,7 @@ async function openCardFiles(page: Page, name: string, tag: string, isMobile: bo
   await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
   const card = page.getByRole('dialog', { name });
   await expect(card.locator('[data-cp-card]')).toBeVisible();
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page
-      .getByRole('menu')
-      .getByRole('menuitem', { name: /^Файлы/ })
-      .click();
-  } else {
-    await card.getByRole('tab', { name: /^Файлы/ }).click();
-  }
+  await cardTab(page, card, isMobile, /^Файлы/);
   await expect(card.locator('[data-cp-files]')).toBeVisible();
   return card;
 }
