@@ -80,7 +80,7 @@ export interface BellSight {
   contractors: SQL | undefined;
   /** Отчёт — условие области на `reports` с `contractors`; undefined — все отчёты. */
   reports: SQL | undefined;
-  /** Задача — условие на `tasks`; undefined — все; null — модуль «Задачи» выключен. */
+  /** Задача — условие на `tasks` с `contractors` (контрагент задачи); undefined — все; null — «Задачи» выключены. */
   tasks: SQL | undefined | null;
   /** «Отправленные файлы» — функция страницы контрагента. */
   cpSent: boolean;
@@ -99,7 +99,10 @@ function seen(s: BellSight): SQL {
   const task =
     s.tasks === null
       ? sql`false`
-      : sql`exists (select 1 from ${tasks} where ${tasks.id}::text = b.target_id and ${s.tasks ?? sql`true`})`;
+      : // Условие области задач (`taskAccessOf`) опирается на контрагента задачи — как в списке задач.
+        sql`exists (select 1 from ${tasks}
+          left join ${contractors} on ${contractors.id} = ${tasks.contractorId}
+          where ${tasks.id}::text = b.target_id and ${s.tasks ?? sql`true`})`;
   return sql`b.user_id = app.current_user_id()
     and (b.need is null or b.need = any(string_to_array(${csv(s.permissions)}, ',')))
     and (b.contractor_id is null or exists (select 1 from ${contractors}
