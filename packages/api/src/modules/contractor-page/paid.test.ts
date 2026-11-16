@@ -720,6 +720,42 @@ describe.skipIf(!databaseAvailable())(
           ],
         },
       ]);
+      // Дата оплаты за обслуживание в «Истории» контрагента — только тому, кто видит плату (п. К-18).
+      const acceptFields = async (cookie: string) => {
+        const res = await call(cookie, 'GET', `/api/contractors/${cpA}/history`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        const body = (await res.json()) as {
+          items: { action: string; changes: { field: string }[] }[];
+        };
+        return body.items
+          .filter((h) => h.action === 'sent_file_accept')
+          .flatMap((h) => h.changes.map((x) => x.field));
+      };
+      expect(await acceptFields(owner)).toEqual(expect.arrayContaining(['receipt', 'feePayment']));
+      const seenByAcc = await acceptFields(acc);
+      expect(seenByAcc).toContain('receipt');
+      expect(seenByAcc).not.toContain('feePayment');
+
+      // Два окна денег сохранили один чек одновременно: принят один раз, у записи денег одна копия,
+      // копия проигравшего запроса из хранилища убрана.
+      const third = await paid(grantA, { purpose: 'tax', month, amount: 70_000 });
+      expect(third.res.status, await third.res.clone().text()).toBe(200);
+      const last = (await sentList()).find((x) => x.status === 'new')!;
+      const target = await op(cpA);
+      const stored = objects();
+      const both = await Promise.all([
+        accept(acc, 'receipt', target, last),
+        accept(owner, 'receipt', target, last),
+      ]);
+      expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
+      const lost = (await both.find((r) => r.status === 409)!.json()) as {
+        error: { code: string };
+      };
+      expect(['sent_decided', 'file_not_uploaded']).toContain(lost.error.code);
+      expect((await filesOf('receipt', target)).length).toBe(1);
+      // Принятый файл и копия у денег — новые объекты, отправленный удалён.
+      expect(objects()).toBe(stored + 1);
+      expect(await f.t.admin.db.select().from(schema.storageDeleteRetries)).toEqual([]);
     });
 
     it('«Я оплатил» за обслуживание: месяц с долгом, «Ожидает подтверждения» у месяца; сумма — тому, кто видит плату', async () => {

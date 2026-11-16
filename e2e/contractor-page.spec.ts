@@ -973,6 +973,25 @@ test.describe('Доработки 14.11, блок 6: страница контр
       await request.get(`/api/contractors/${cp.id}/history`, { maxRetries: 2 })
     ).json()) as { items: { action: string }[] };
     expect(kept.items.map((h) => h.action)).not.toContain('sent_file_accept');
+    // У месяца на странице контрагента — по-прежнему «Ожидает подтверждения».
+    await page.goto(cp.path);
+    await pageReady(page);
+    const still = await unfold(page, 'reports', isMobile);
+    await still.getByRole('button', { name: text(texts, 'pub.rep.by_month') }).click();
+    await expect(
+      still
+        .locator('[data-pub-tile]')
+        .filter({ has: page.locator('[data-pub-month-pay]') })
+        .locator('[data-pub-mpay]'),
+    ).toHaveAttribute('data-pub-mpay', 'wait');
+    await page.goto('/app/files/sent');
+    await expect(grid).toBeVisible();
+    const refound = page.waitForResponse((r) => {
+      const url = new URL(r.url());
+      return url.pathname === '/api/files/sent' && url.searchParams.get('q') === tag;
+    });
+    await search(page, isMobile, tag);
+    expect((await refound).status()).toBe(200);
     // Снова «Принять» — то же окно с чеком.
     await line.getByText(fileName, { exact: true }).click();
     await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
@@ -1040,7 +1059,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
     expect(taken[0]!.changes.map((c) => c.field)).toContain('receipt');
   });
 
-  test('(прототип v119, v121) «Я оплатил» за обслуживание: «Принять» у чека открывает «Принять оплату за обслуживание» с этим чеком в поле файлов; «Убрать» и «Вернуть»; после «Убрать» оплата записана без файла, а чек принят только в файлы контрагента', async ({
+  test('(прототип v119, v121) «Я оплатил» за обслуживание: «Принять только файл» принимает чек без окна денег; «Принять» у чека открывает «Принять оплату за обслуживание» с этим чеком в поле файлов; «Убрать» и «Вернуть»; после «Убрать» оплата записана без файла, а чек принят только в файлы контрагента', async ({
     page,
     request,
     baseURL,
@@ -1066,6 +1085,15 @@ test.describe('Доработки 14.11, блок 6: страница контр
     await paid.locator('[data-pub-paid-ok]').click();
     await expect(paid).toBeHidden();
     await closeDone(page, text(texts, 'cph.paid.done_t'));
+    // Второй чек — для «Принять только файл».
+    const onlyName = `чек-только-файл-${tag}.pdf`;
+    await fee.locator('[data-pub-paid="fee"]').click();
+    await paid
+      .locator('[data-pub-paid-file]')
+      .setInputFiles({ name: onlyName, mimeType: 'application/pdf', buffer: pdfBytes() });
+    await paid.locator('[data-pub-paid-ok]').click();
+    await expect(paid).toBeHidden();
+    await closeDone(page, text(texts, 'cph.paid.done_t'));
 
     // Сотрудник (вход владельца — в том же браузере): «Принять» у чека — окно оплаты с чеком.
     // Со страницы по ссылке — уходим до входа сотрудника в том же браузере (№ 6).
@@ -1081,11 +1109,37 @@ test.describe('Доработки 14.11, блок 6: страница контр
     });
     await search(page, isMobile, tag);
     expect((await found).status()).toBe(200);
+    const money = page.getByRole('dialog', { name: text(texts, 'fee.pay.title') });
+    const acceptCall = () =>
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === 'POST' &&
+          /^\/api\/files\/sent\/[^/]+\/accept$/.test(new URL(r.url()).pathname),
+      );
+
+    // «Принять только файл» у второго чека (доработки 16.11, блок 1, пункт 5): окно денег не
+    // открывается, чек принят только в файлы контрагента.
+    const onlyLine = grid.locator('[data-id]').filter({ hasText: onlyName });
+    await expect(onlyLine).toContainText(text(texts, 'files.sent.st.new'));
+    await onlyLine.getByText(onlyName, { exact: true }).click();
+    const onlyTaken = acceptCall();
+    await page
+      .getByRole('dialog', { name: onlyName })
+      .locator('[data-sent-window-accept-file]')
+      .click();
+    const onlyRes = await onlyTaken;
+    expect(onlyRes.status()).toBe(200);
+    expect(onlyRes.request().postDataJSON()).not.toHaveProperty('attach');
+    await expect(
+      page.getByRole('status').filter({ hasText: text(texts, 'files.sent.accepted_only') }),
+    ).toBeVisible();
+    await expect(onlyLine).toContainText(text(texts, 'files.sent.st.accepted'));
+    await expect(money).toHaveCount(0);
+
     const line = grid.locator('[data-id]').filter({ hasText: fileName });
     await expect(line).toContainText(text(texts, 'files.sent.st.new'));
     await line.getByText(fileName, { exact: true }).click();
     await page.getByRole('dialog', { name: fileName }).locator('[data-sent-window-accept]').click();
-    const money = page.getByRole('dialog', { name: text(texts, 'fee.pay.title') });
     const chip = money.locator('[data-sent-receipt]');
     await expect(chip).toContainText(fileName);
     await expect(chip).toContainText(text(texts, 'cppage.rcpt.file_hint'));
@@ -1106,11 +1160,7 @@ test.describe('Доработки 14.11, блок 6: страница контр
         r.request().method() === 'POST' &&
         new URL(r.url()).pathname === `/api/contractors/${cp.id}/fee-payments`,
     );
-    const accepted = page.waitForResponse(
-      (r) =>
-        r.request().method() === 'POST' &&
-        /^\/api\/files\/sent\/[^/]+\/accept$/.test(new URL(r.url()).pathname),
-    );
+    const accepted = acceptCall();
     await money.getByRole('button', { name: text(texts, 'fee.pay.ok') }).click();
     const savedRes = await saved;
     expect(savedRes.status()).toBe(201);

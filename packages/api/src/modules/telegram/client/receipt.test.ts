@@ -16,6 +16,7 @@ import {
   PublicPageTelegramLink,
   SentFileAccepted,
   SentFileList,
+  SentFileListPage,
 } from '@buhuchet/shared';
 import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -425,10 +426,19 @@ describe.skipIf(!databaseAvailable())(
         expect(lastText(chat)).toBe(text('tgCpReceiptOk'));
       }
       const [first, second] = await sentFiles(cpA);
+      // Вкладка контрагента и общий список «Файлы от контрагентов» (у него свой путь: строки и признак
+      // архива — из запроса списка) отдают одно и то же.
       const pays = async (cookie: string) => {
         const res = await call(cookie, 'GET', `/api/contractors/${cpA}/sent-files`);
         expect(res.status, await res.clone().text()).toBe(200);
-        return new Map(SentFileList.parse(await res.json()).items.map((x) => [x.id, x.pay]));
+        const tab = new Map(SentFileList.parse(await res.json()).items.map((x) => [x.id, x.pay]));
+        const list = await call(cookie, 'GET', '/api/files/sent?size=all&sort=ord.desc');
+        expect(list.status, await list.clone().text()).toBe(200);
+        const all = new Map(
+          SentFileListPage.parse(await list.json()).items.map((x) => [x.id, x.pay]),
+        );
+        for (const [id, pay] of tab) expect(all.get(id), id).toEqual(pay);
+        return tab;
       };
       // Бухгалтер принимает файлы, но платы за обслуживание не видит — у него «Принять» примет файл сразу.
       const acc = await signIn(f.app, 'acc-a', TEST_PASSWORD);
