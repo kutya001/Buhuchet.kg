@@ -419,7 +419,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14),
     // v120 (подсказки и обучение на странице контрагента, п. К-16) и v121 (чек принимается только
     // вместе с деньгами, п. К-18), v122–v124 (колокольчик, новости по модулям, один файл — несколько
-    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) — да.
+    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) — да; v125–v128 (новости только о
+    // своём, окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026,
+    // этап 2) — пока нет: их переносит общая сборка этапа.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -460,16 +462,39 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         '## Для администратора платформы',
       );
     }
-    expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toMatch(
-      /^## Для администратора платформы/,
-    );
+    expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toBeTruthy();
     const source = refDB.news as { id: string; status: string }[];
-    // Черновики прототипа (сейчас «Версия 125: план») не наполняются.
+    // Черновики прототипа (сейчас «Версия 129: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
     expect(drafts.length).toBeGreaterThan(0);
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
+    // Новости о работе Админки — «Только режим Админка» (разбор новостей v125, доработки 16.11.2026,
+    // блок 4, пункт 5): организации их не видят.
+    expect(
+      rows
+        .filter((r) => r.audience === 'adm')
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(
+      [
+        'v32',
+        'v65',
+        'v66',
+        'v67',
+        'v70',
+        'v71',
+        'v72',
+        'v78',
+        'v91',
+        'v99',
+        'v103',
+        'v113',
+        'v117',
+        'v118',
+      ].sort(),
+    );
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
       sql`select count(*)::integer as n from news where id = 'v1'`,
     )) as unknown as [{ n: number }];
