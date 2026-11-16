@@ -61,6 +61,17 @@ export const FILES_SENT_TEXTS = {
   'files.sent.open_cp': { ru: 'Открыть контрагента', section: S },
   'files.sent.why': { ru: 'Нужно право «Загружать файлы»', section: S },
   'files.sent.accepted': { ru: 'Файл принят: он среди файлов контрагента', section: S },
+  // Чек с оплатой (доработки 16.11.2026, блок 1; прототип v121 `sntAcceptFile`, `sntAccept`).
+  'files.sent.accept_only': { ru: 'Принять только файл', section: S },
+  'files.sent.accept_only.title': {
+    ru: 'Деньги ещё не дошли: чек ляжет в файлы контрагента, окно денег не откроется',
+    section: S,
+  },
+  'files.sent.accepted_only': {
+    ru: 'Чек принят без денег: он среди файлов контрагента',
+    section: S,
+  },
+  'files.sent.accepted_got': { ru: 'Файл принят. {got}', section: S },
   'files.sent.rejected': { ru: 'Файл отклонён, контрагент увидит причину', section: S },
   'files.sent.view.sub': { ru: 'От контрагента · {src}', section: S },
   'files.sent.view.purge': { ru: 'Удаление', section: S },
@@ -168,6 +179,23 @@ export const FILES_SENT_TEXTS = {
   'files.sent.hist.accept': { ru: 'Принят файл от контрагента «{name}»', section: S },
   'files.sent.hist.accept_as': {
     ru: 'Принят файл от контрагента «{name}» (сохранён как «{saved}»)',
+    section: S,
+  },
+  // Чек принят вместе с деньгами (доработки 16.11.2026, блок 1; прототип v121 `sntAcceptDo`).
+  'files.sent.hist.accept_receipt': {
+    ru: 'Принят файл «{name}» — прикреплён к поступлению от {date}',
+    section: S,
+  },
+  'files.sent.hist.accept_receipt_as': {
+    ru: 'Принят файл «{name}» (сохранён как «{saved}») — прикреплён к поступлению от {date}',
+    section: S,
+  },
+  'files.sent.hist.accept_fee': {
+    ru: 'Принят файл «{name}» — прикреплён к оплате за обслуживание от {date}',
+    section: S,
+  },
+  'files.sent.hist.accept_fee_as': {
+    ru: 'Принят файл «{name}» (сохранён как «{saved}») — прикреплён к оплате за обслуживание от {date}',
     section: S,
   },
   'files.sent.hist.reject': { ru: 'Отклонён файл от контрагента «{name}»: {reason}', section: S },

@@ -15,6 +15,8 @@ import {
   ContractorTelegram,
   PublicPageTelegramLink,
   SentFileAccepted,
+  SentFileList,
+  SentFileListPage,
 } from '@buhuchet/shared';
 import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -416,7 +418,7 @@ describe.skipIf(!databaseAvailable())(
       expect(await sentFiles(cpB)).toEqual([]);
     });
 
-    it('«Принять» у чека: что оплачено — только тому, кто может сразу принять эти деньги', async () => {
+    it('«Принять» у чека: что оплачено — в списке только тому, кто может сразу принять эти деньги (v121)', async () => {
       await feeMessage();
       for (const chat of [CLIENT_1, CLIENT_2]) {
         await press(receiptData, chat, lastMessageId(chat));
@@ -424,26 +426,38 @@ describe.skipIf(!databaseAvailable())(
         expect(lastText(chat)).toBe(text('tgCpReceiptOk'));
       }
       const [first, second] = await sentFiles(cpA);
+      // Вкладка контрагента и общий список «Файлы от контрагентов» (у него свой путь: строки и признак
+      // архива — из запроса списка) отдают одно и то же.
+      const pays = async (cookie: string) => {
+        const res = await call(cookie, 'GET', `/api/contractors/${cpA}/sent-files`);
+        expect(res.status, await res.clone().text()).toBe(200);
+        const tab = new Map(SentFileList.parse(await res.json()).items.map((x) => [x.id, x.pay]));
+        const list = await call(cookie, 'GET', '/api/files/sent?size=all&sort=ord.desc');
+        expect(list.status, await list.clone().text()).toBe(200);
+        const all = new Map(
+          SentFileListPage.parse(await list.json()).items.map((x) => [x.id, x.pay]),
+        );
+        for (const [id, pay] of tab) expect(all.get(id), id).toEqual(pay);
+        return tab;
+      };
+      // Бухгалтер принимает файлы, но платы за обслуживание не видит — у него «Принять» примет файл сразу.
+      const acc = await signIn(f.app, 'acc-a', TEST_PASSWORD);
+      expect((await pays(acc)).get(first!.id)).toBeNull();
+      // Владелец — «Принять» откроет «Принять оплату за обслуживание» с суммой из сообщения; месяц —
+      // последний месяц долга (прототип v115 `pgFeeMsg`).
+      const fee = { purpose: 'fee', month: '2026-09', amount: DEBT, source: 'telegram' };
+      expect((await pays(owner)).get(second!.id)).toEqual(fee);
+      // «Принять только файл»: без `attach` чек принят в файлы контрагента, деньги не тронуты; у
+      // принятого — «что оплачено» больше нет.
       const accept = (cookie: string, file: { id: string; version: number }) =>
         call(cookie, 'POST', `/api/files/sent/${file.id}/accept`, { version: file.version });
-      // Бухгалтер принимает файлы, но платы за обслуживание не видит — файл просто принят.
-      const acc = await signIn(f.app, 'acc-a', TEST_PASSWORD);
-      const byAcc = await accept(acc, first!);
-      expect(byAcc.status, await byAcc.clone().text()).toBe(200);
-      expect(SentFileAccepted.parse(await byAcc.json())).toMatchObject({
+      const byOwner = await accept(owner, second!);
+      expect(byOwner.status, await byOwner.clone().text()).toBe(200);
+      expect(SentFileAccepted.parse(await byOwner.json())).toMatchObject({
         status: 'accepted',
         pay: null,
       });
-      // Владелец — сразу «Принять оплату за обслуживание» с суммой из сообщения.
-      const byOwner = await accept(owner, second!);
-      expect(byOwner.status, await byOwner.clone().text()).toBe(200);
-      // Месяц — последний месяц долга (прототип v115 `pgFeeMsg`).
-      expect(SentFileAccepted.parse(await byOwner.json()).pay).toEqual({
-        purpose: 'fee',
-        month: '2026-09',
-        amount: DEBT,
-        source: 'telegram',
-      });
+      expect((await pays(owner)).get(second!.id)).toBeNull();
       // Контрагент в архиве — без денег. Напоминание — раз в сутки: прежнее — будто вчерашнее.
       await f.t.admin.db
         .update(schema.contractorTelegramMessages)
@@ -453,14 +467,13 @@ describe.skipIf(!databaseAvailable())(
       await press(receiptData, CLIENT_2, lastMessageId(CLIENT_2));
       await sendFile(CLIENT_2, { name: 'Чек 3.pdf', replyTo: lastMessageId(CLIENT_2) });
       const third = (await sentFiles(cpA)).find((x) => x.name === 'Чек 3.pdf')!;
+      expect((await pays(owner)).get(third.id)).toEqual(fee);
       await f.t.admin.db
         .update(schema.contractors)
         .set({ serviceStatus: 'archived' })
         .where(eq(schema.contractors.id, cpA));
       try {
-        const archived = await accept(owner, third);
-        expect(archived.status, await archived.clone().text()).toBe(200);
-        expect(SentFileAccepted.parse(await archived.json()).pay).toBeNull();
+        expect((await pays(owner)).get(third.id)).toBeNull();
       } finally {
         await f.t.admin.db
           .update(schema.contractors)

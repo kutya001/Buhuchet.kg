@@ -416,8 +416,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // («Файлы от контрагентов», п. И-7), v113 (Telegram заявителя и пароль по ссылке, п. Т-18), v114
     // (регистрация по документам, п. И-9), v115 («К оплате» по дням, файлы и чеки через бота, п. К-11),
     // v116 («Я оплатил», оплата по месяцам и код на странице контрагента, п. К-14), v117 (тексты
-    // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14) и
-    // v120 (подсказки и обучение на странице контрагента, п. К-16) — да.
+    // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14),
+    // v120 (подсказки и обучение на странице контрагента, п. К-16) и v121 (чек принимается только
+    // вместе с деньгами, п. К-18) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -437,6 +438,11 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.find((r) => r.id === 'v118')).toMatchObject({ release: '118' });
     expect(rows.find((r) => r.id === 'v119')).toMatchObject({ release: '119' });
     expect(rows.find((r) => r.id === 'v120')).toMatchObject({ release: '120' });
+    expect(rows.find((r) => r.id === 'v121')).toMatchObject({
+      release: '121',
+      linkKind: 'mod',
+      linkId: 'cps',
+    });
     const source = refDB.news as { id: string; status: string }[];
     // Черновики прототипа (сейчас «Версия 122: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);

@@ -1,29 +1,56 @@
 'use client';
 
+import { SentFileDecided } from '@buhuchet/shared';
 import { buttonClass, Icon } from '@buhuchet/ui';
-import { api, callApi } from '../api-client';
 import { useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
+import { acceptSent } from '../files/sent-data';
 
 /*
- * Принятый чек — сразу в окне денег (просьба заказчика 15.11.2026, прототип v119 `rcptFileRow`): «Принять»
- * у чека из Telegram или со страницы контрагента открывает «Поступление от контрагента» или «Принять оплату
- * за обслуживание», и чек уже стоит в поле файлов. После сохранения записи денег окно прикрепляет к ней
- * копию принятого файла (`POST /api/files/sent/{id}/attach`) — второй раз его не скачивают и не загружают.
+ * Чек из «Отправленных файлов» в окне денег (просьба заказчика 15.11.2026, прототип v119 `rcptFileRow`;
+ * доработки 16.11.2026, блок 1, прототип v121 `pgRcptSave`): «Принять» у чека из Telegram или со
+ * страницы контрагента открывает «Поступление от контрагента» или «Принять оплату за обслуживание», чек
+ * уже стоит в поле файлов, но остаётся «Новый». «Сохранить» записывает деньги, а затем принимает чек и
+ * прикрепляет его к ним одной транзакцией сервера (`POST /api/files/sent/{id}/accept` с `attach`) —
+ * второй раз его не скачивают и не загружают. «Убрать» — при сохранении чек принимается только в файлы
+ * контрагента; «Отменить», крестик и Esc ничего не меняют.
  */
 
-/** Принятый чек: отправленный файл контрагента и его имя. */
-export type SentReceipt = { sentId: string; name: string };
+/** Чек в окне денег: отправленный файл контрагента, его имя и версия, которую видел сотрудник. */
+export type SentReceipt = { sentId: string; name: string; version: number };
 
-/** Строка чека над выбором файлов: имя, пояснение и «Убрать» (тогда чек к деньгам не прикрепляется). */
+/**
+ * Строка чека над выбором файлов: имя, пояснение и «Убрать»; после «Убрать» — «не прикрепится: будет
+ * принят только в файлы контрагента» и «Вернуть».
+ */
 export function SentReceiptRow({
   receipt,
+  on,
   onRemove,
+  onBack,
 }: {
   receipt: SentReceipt;
+  on: boolean;
   onRemove: () => void;
+  onBack: () => void;
 }) {
   const t = useT();
+  if (!on)
+    return (
+      <div data-sent-receipt-off="" className="mb-1.5 flex flex-wrap items-center gap-1.5">
+        <span className="text-faint">{t('cppage.rcpt.file_off', { name: receipt.name })}</span>
+        <span className="grow" />
+        <button
+          type="button"
+          data-sent-receipt-back=""
+          className={buttonClass('ghost', 'sm')}
+          onClick={onBack}
+        >
+          <Icon name="refresh" size="sm" />
+          {t('cppage.rcpt.file_back')}
+        </button>
+      </div>
+    );
   return (
     <div data-sent-receipt="" className="mb-1.5 flex flex-wrap items-center gap-1.5">
       <Icon name="clip" size="sm" />
@@ -44,23 +71,37 @@ export function SentReceiptRow({
   );
 }
 
+/** Что сказать после «Сохранить»: ошибка (`bad`) или чек уже решил другой сотрудник (`warn`). */
+export type ReceiptTaken = { bad: string } | { warn: string } | null;
+
 /**
- * Прикрепить принятый чек к сохранённой записи денег. Не вышло — текст для уведомления («Записано, но
- * файл … не загружен»), как у файлов, выбранных в окне; вышло — null.
+ * Принять чек после сохранения записи денег: `attach` — прикрепить его к ней (иначе — «Убрать»: только в
+ * файлы контрагента). Чек тем временем принял или отклонил другой сотрудник — «Чек уже принял <имя> —
+ * поступление сохранено без него»; другая ошибка — «Записано, но файл … не загружен».
  */
-export async function attachSentReceipt(
+export async function takeSentReceipt(
   t: Translate,
   errorText: (e: ApiErrorLike) => string,
   receipt: SentReceipt,
-  source: { kind: 'receipt' | 'fee_payment'; id: string },
-): Promise<string | null> {
-  const res = await callApi(() =>
-    api.api.files.sent[':id'].attach.$post({
-      param: { id: receipt.sentId },
-      json: { source },
-    }),
+  o: { kind: 'receipt' | 'fee'; attach: { kind: 'receipt' | 'fee_payment'; id: string } | null },
+): Promise<ReceiptTaken> {
+  const res = await acceptSent(
+    { id: receipt.sentId, version: receipt.version },
+    o.attach ?? undefined,
   );
-  return res.ok
-    ? null
-    : t('money.files_saved_partly', { name: receipt.name, error: errorText(res.error) });
+  if (res.ok) return null;
+  const decided =
+    res.error.code === 'sent_decided' ? SentFileDecided.safeParse(res.error.details) : null;
+  if (decided?.success)
+    return {
+      warn: t(
+        `cppage.rcpt.${decided.data.status === 'accepted' ? 'taken' : 'rejected'}.${o.kind}`,
+        {
+          who: decided.data.by ?? '—',
+        },
+      ),
+    };
+  return {
+    bad: t('money.files_saved_partly', { name: receipt.name, error: errorText(res.error) }),
+  };
 }

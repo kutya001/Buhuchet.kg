@@ -46,7 +46,7 @@ import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
-import { attachSentReceipt, SentReceiptRow } from '../contractor-page/receipt-file';
+import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import {
   feeOrderedMonths,
@@ -400,10 +400,11 @@ function FeePaymentModal({
   // Строки правили руками — сумма их больше не перераспределяет (прототип `st.manual`).
   const [manual, setManual] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
-  // Принятый чек (прототип v119 `feePayDlg` с `pre.file`): уже в поле «Файл»; «Убрать» — не прикреплять.
-  const [receipt, setReceipt] = useState(() =>
-    !edit && canUpload ? (preset?.receipt ?? null) : null,
-  );
+  // Чек из «Отправленных файлов» (прототип v119–v121 `feePayDlg` с `pre.file`): уже в поле «Файл», но
+  // «Новый», пока оплата не сохранена; «Убрать» — при сохранении он будет принят только в файлы контрагента.
+  const sent = !edit ? (preset?.receipt ?? null) : null;
+  const [receiptOn, setReceiptOn] = useState(true);
+  const receipt = sent && canUpload && receiptOn ? sent : null;
   const [errors, setErrors] = useState<{
     amount?: string;
     date?: string;
@@ -518,14 +519,21 @@ function FeePaymentModal({
     const saved = res.ok ? FeePaymentSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
       const source = { kind: 'fee_payment' as const, id: saved.data.id };
-      const failedReceipt = receipt ? await attachSentReceipt(t, errorText, receipt, source) : null;
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        failedReceipt;
+      const taken = sent
+        ? await takeSentReceipt(t, errorText, sent, {
+            kind: 'fee',
+            attach: receipt ? source : null,
+          })
+        : null;
+      const failedUpload = picked.length
+        ? await uploadMoneyFiles(t, errorText, source, picked)
+        : null;
       setBusy(false);
       onDone();
       onClose();
       if (failedUpload) toast(failedUpload, { bad: true });
+      if (taken && 'bad' in taken) toast(taken.bad, { bad: true });
+      if (taken && 'warn' in taken) return void toast(taken.warn, { icon: 'alert' });
       return void toast(t('fee.pay.saved'), { icon: 'wallet' });
     }
     setBusy(false);
@@ -786,8 +794,13 @@ function FeePaymentModal({
             >
               {(control) => (
                 <div>
-                  {receipt ? (
-                    <SentReceiptRow receipt={receipt} onRemove={() => setReceipt(null)} />
+                  {sent ? (
+                    <SentReceiptRow
+                      receipt={sent}
+                      on={receiptOn}
+                      onRemove={() => setReceiptOn(false)}
+                      onBack={() => setReceiptOn(true)}
+                    />
                   ) : null}
                   <input
                     {...control}

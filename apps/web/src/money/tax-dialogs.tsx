@@ -39,7 +39,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
-import { attachSentReceipt, SentReceiptRow } from '../contractor-page/receipt-file';
+import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { presetLines, reallocate, type ReceiptPreset } from './receipt-preset';
@@ -542,11 +542,12 @@ function ReceiptModal({
   const [reason, setReason] = useState('');
   const [changed, setChanged] = useState(false);
   const [picked, setPicked] = useState<File[]>([]);
-  // Принятый чек (прототип v119): уже в поле «Файлы»; «Убрать» — не прикреплять. Только у нового поступления
-  // и у того, кто может прикреплять файлы.
-  const [receipt, setReceipt] = useState(() =>
-    !edit && canUpload && preset && 'list' in preset ? (preset.receipt ?? null) : null,
-  );
+  // Чек из «Отправленных файлов» (прототип v119–v121): уже в поле «Файлы», но «Новый», пока поступление не
+  // сохранено; «Убрать» — при сохранении он будет принят только в файлы контрагента. Только у нового
+  // поступления; прикрепить — у того, кто может прикреплять файлы.
+  const sent = !edit && preset && 'list' in preset ? (preset.receipt ?? null) : null;
+  const [receiptOn, setReceiptOn] = useState(true);
+  const receipt = sent && canUpload && receiptOn ? sent : null;
   // Файл уже приложен к изменяемому поступлению — второй не требуется (прототип: «уже приложено N»).
   const needFile = filesOn && !!form?.contractor.needReceiptFile && !(edit && edit.files > 0);
   const fileHint =
@@ -735,14 +736,21 @@ function ReceiptModal({
     const saved = res.ok ? ReceiptSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
       const source = { kind: 'receipt' as const, id: saved.data.id };
-      const failedReceipt = receipt ? await attachSentReceipt(t, errorText, receipt, source) : null;
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        failedReceipt;
+      const taken = sent
+        ? await takeSentReceipt(t, errorText, sent, {
+            kind: 'receipt',
+            attach: receipt ? source : null,
+          })
+        : null;
+      const failedUpload = picked.length
+        ? await uploadMoneyFiles(t, errorText, source, picked)
+        : null;
       setBusy(false);
       onDone();
       onClose();
       if (failedUpload) toast(failedUpload, { bad: true });
+      if (taken && 'bad' in taken) toast(taken.bad, { bad: true });
+      if (taken && 'warn' in taken) return void toast(taken.warn, { icon: 'alert' });
       return void toast(t('money.in.done'), { icon: 'wallet' });
     }
     setBusy(false);
@@ -1095,8 +1103,13 @@ function ReceiptModal({
             >
               {(control) => (
                 <div>
-                  {receipt ? (
-                    <SentReceiptRow receipt={receipt} onRemove={() => setReceipt(null)} />
+                  {sent ? (
+                    <SentReceiptRow
+                      receipt={sent}
+                      on={receiptOn}
+                      onRemove={() => setReceiptOn(false)}
+                      onBack={() => setReceiptOn(true)}
+                    />
                   ) : null}
                   <FilesInput
                     control={control}
