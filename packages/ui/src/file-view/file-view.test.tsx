@@ -18,6 +18,7 @@ import {
   type FileViewLabels,
 } from './file-view';
 import {
+  MERGE_SKIP_MAX,
   mergeMap,
   rotateNext,
   scrollsToward,
@@ -127,6 +128,30 @@ describe('правила окна просмотра', () => {
     expect(m.span.has('2:2')).toBe(false);
     const hid = mergeMap({ ...sheet, merges: [[0, 1, 1, 2]] });
     expect(hid.span.get('0:1')).toEqual({ rows: 1, cols: 1 });
+  });
+
+  it('объединения — только по нарисованным строкам и в общем пределе отмеченных ячеек (защита, п. И-12)', () => {
+    const tall = {
+      ...sheet,
+      hiddenRows: [],
+      cols: [64, 64, 64],
+      merges: [[0, 0, 4999, 1]] as SheetView['merges'],
+    };
+    const m = mergeMap(tall, 100);
+    expect(m.span.get('0:0')).toEqual({ rows: 100, cols: 2 });
+    expect(m.skip.size).toBe(100 * 2 - 1);
+    expect(m.skip.has('100:0')).toBe(false);
+    // Ниже нарисованного объединения не просматриваются.
+    expect(mergeMap({ ...tall, merges: [[200, 0, 300, 1]] }, 100).span.size).toBe(0);
+    // Чужая модель с огромными пересекающимися объединениями: отмечено не больше предела.
+    const huge = mergeMap({
+      ...tall,
+      merges: Array.from(
+        { length: 50 },
+        () => [0, 0, 4999, 255] as [number, number, number, number],
+      ),
+    });
+    expect(huge.skip.size).toBeLessThanOrEqual(MERGE_SKIP_MAX);
   });
 
   it('найденное дальше нарисованного: строк рисуется до него, кратно шагу', () => {

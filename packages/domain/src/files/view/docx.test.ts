@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDocx, numberText, DOC_MAX_BLOCKS } from './docx';
+import { parseDocx, numberText, DOC_MAX_BLOCKS, DOC_MAX_LIST_START, DOC_MAX_RUNS } from './docx';
 import { docxBytes, docxImage, zipBytes } from './fixtures';
 import { ViewError } from './xml';
 import { openZip } from './zip';
@@ -142,6 +142,31 @@ describe('Word DOCX в окне просмотра', () => {
     expect(JSON.stringify(doc)).not.toContain('evil.example');
     expect(runs[5]).toEqual([{ t: 'вставлено' }]);
     expect(runs[6]).toEqual([{ t: 'поле' }]);
+  });
+
+  it('номер начала списка из файла — в пределах; кусков текста — до предела (защита, п. И-12)', async () => {
+    const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+    const numbering = `<w:numbering ${W}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1000000000000"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`;
+    const big = await parseDocx(
+      openZip(
+        await docxBytes(
+          p(r('пункт'), '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>'),
+          {
+            numbering,
+          },
+        ),
+      ),
+    );
+    const first = big.blocks[0];
+    expect(first?.k === 'p' ? first.li?.label : null).toBe(
+      `${numberText(DOC_MAX_LIST_START, 'upperRoman')}.`,
+    );
+
+    // Один абзац из множества кусков: в модели — не больше предела, документ помечен «не целиком».
+    const runs = await parseDocx(openZip(await docxBytes(p(r('x').repeat(DOC_MAX_RUNS + 5)))));
+    const b = runs.blocks[0];
+    expect(b?.k === 'p' ? b.runs.length : 0).toBe(DOC_MAX_RUNS);
+    expect(runs.cut).toBe(true);
   });
 
   it('предел абзацев и документ без тела', async () => {

@@ -73,6 +73,9 @@ describe('безопасный XML окна просмотра', () => {
     }
     const deep = '<a>'.repeat(300) + '</a>'.repeat(300);
     expect(() => parseXmlTree(deep)).toThrowError(new ViewError('xml_too_deep'));
+    // Непарные закрывающие теги в начале предел глубины не обходят.
+    const sneaky = '</a>'.repeat(500) + deep;
+    expect(() => parseXmlTree(sneaky)).toThrowError(new ViewError('xml_too_deep'));
     expect(() => parseXmlTree('<a><b/><b/><b/></a>', 2)).toThrowError(new ViewError('xml_too_big'));
   });
 

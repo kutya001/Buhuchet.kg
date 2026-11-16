@@ -142,7 +142,8 @@ export function scanXml(
     if (c1 === 0x2f /* / */) {
       const e = src.indexOf('>', lt + 2);
       if (e < 0) throw new ViewError('xml_bad');
-      depth--;
+      // Непарный закрывающий тег глубину ниже нуля не уводит: иначе предел глубины обходится.
+      depth = Math.max(0, depth - 1);
       if (h.close && h.close(src.slice(lt + 2, e).trim()) === false) return;
       i = e + 1;
       continue;

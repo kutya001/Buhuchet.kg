@@ -1,7 +1,8 @@
 /**
  * Чтение ZIP для XLSX, DOCX и PPTX в окне просмотра (доработки 16.11.2026, блок 5, пункт 3):
  * предел распаковки. Проверяется и заявленный в архиве размер, и фактический при распаковке —
- * архив, который врёт о размере, останавливается на пределе, а не забивает память («zip-бомба»).
+ * архив, который врёт о размере, останавливается на пределе, а не забивает память («zip-бомба»):
+ * распаковка идёт шагами (`inflateRaw`).
  * Распаковка — DecompressionStream браузера (и Node.js в тестах), без сторонних библиотек.
  */
 import { ViewError } from './xml';
@@ -63,15 +64,32 @@ export function decodeXmlBytes(b: Uint8Array): string {
   return new TextDecoder('utf-8').decode(b);
 }
 
-/** Распаковка deflate с остановкой на пределе: больше `max` байт — `zip_bomb`. */
-export async function inflateRaw(data: Uint8Array, max: number): Promise<Uint8Array> {
+/** Сжатых байт за один шаг распаковки: deflate раздувает кусок не больше чем в ~1 032 раза (≈ 4 МиБ). */
+export const INFLATE_STEP = 4 * 1024;
+
+/**
+ * Распаковка deflate с остановкой на пределе: больше `max` байт — `zip_bomb`. Браузер распаковывает
+ * записанный кусок целиком, не дожидаясь чтения, поэтому сжатые данные подаются шагами по
+ * `step` байт, и следующий шаг — только после того, как прочитан выход предыдущего: на пределе
+ * подача прекращается, и в памяти не больше одного раздутого шага.
+ */
+export async function inflateRaw(
+  data: Uint8Array,
+  max: number,
+  step = INFLATE_STEP,
+): Promise<Uint8Array> {
   const ds = new DecompressionStream('deflate-raw');
   const writer = ds.writable.getWriter();
   const reader = ds.readable.getReader();
-  writer
-    .write(data as Uint8Array<ArrayBuffer>)
-    .then(() => writer.close())
-    .catch(() => undefined);
+  let stop = false;
+  void (async () => {
+    for (let o = 0; o < data.length; o += step) {
+      await writer.ready;
+      if (stop) return;
+      await writer.write(data.subarray(o, o + step) as Uint8Array<ArrayBuffer>);
+    }
+    if (!stop) await writer.close();
+  })().catch(() => undefined);
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
@@ -79,13 +97,13 @@ export async function inflateRaw(data: Uint8Array, max: number): Promise<Uint8Ar
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
-      if (total > max) {
-        await reader.cancel().catch(() => undefined);
-        throw new ViewError('zip_bomb');
-      }
+      if (total > max) throw new ViewError('zip_bomb');
       chunks.push(value);
     }
   } catch (e) {
+    stop = true;
+    await reader.cancel().catch(() => undefined);
+    await writer.abort().catch(() => undefined);
     if (e instanceof ViewError) throw e;
     throw new ViewError('zip_bad');
   }

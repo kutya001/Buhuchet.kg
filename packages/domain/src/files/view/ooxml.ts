@@ -57,22 +57,27 @@ export function viewImageType(b: Uint8Array): ViewImageType | null {
 
 /** Картинок одного файла — не больше. */
 export const VIEW_MAX_IMAGES = 200;
+/** Байт всех картинок файла — не больше: окно переводит их в base64 на странице. */
+export const VIEW_MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 
 /** Собирает картинки по связям: внешние и неподдерживаемые пропускаются. */
 export class ImageBag {
-  readonly images: Record<string, ViewImage> = {};
+  // Без прототипа: часть с именем «constructor» или «__proto__» — обычный ключ.
+  readonly images: Record<string, ViewImage> = Object.create(null) as Record<string, ViewImage>;
   private count = 0;
+  private bytes = 0;
   constructor(private readonly zip: Zip) {}
   /** Ключ картинки для модели или `null`, если её не показать. */
   async add(rel: Rel | undefined): Promise<string | null> {
     if (!rel || rel.external || !rel.part) return null;
-    if (rel.part in this.images) return rel.part;
+    if (Object.hasOwn(this.images, rel.part)) return rel.part;
     if (this.count >= VIEW_MAX_IMAGES) return null;
     const bytes = await this.zip.read(rel.part);
-    if (!bytes) return null;
+    if (!bytes || this.bytes + bytes.byteLength > VIEW_MAX_IMAGE_BYTES) return null;
     const type = viewImageType(bytes);
     if (!type) return null;
     this.count++;
+    this.bytes += bytes.byteLength;
     // Своя копия байтов: модель уходит из потока разбора копией, и вместе с частью архива
     // скопировался бы весь файл.
     this.images[rel.part] = { type, bytes: bytes.slice() };

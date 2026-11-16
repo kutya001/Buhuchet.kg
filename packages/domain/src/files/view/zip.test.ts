@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { zipBytes } from './fixtures';
+import { describe, expect, it, vi } from 'vitest';
+import { deflateRaw, zipBytes } from './fixtures';
 import {
   decodeXmlBytes,
   inflateRaw,
@@ -46,6 +46,36 @@ describe('ZIP окна просмотра: предел распаковки', (
     const zeros = new Uint8Array(8 * MiB);
     const z = openZip(await zipBytes([{ name: 'big.xml', data: zeros, declaredSize: 1000 }]));
     await expect(z.read('big.xml')).rejects.toThrowError(new ViewError('zip_bomb'));
+  });
+
+  it('распаковка подаёт сжатые данные шагами и на пределе прекращает подачу (браузер раздувает записанное целиком)', async () => {
+    // Распаковщик как в браузере: каждый записанный кусок сразу раздувается целиком (здесь — в 64 КиБ)
+    // и ложится в очередь, не дожидаясь чтения. Считаем, сколько сжатых байт ему подано.
+    let fed = 0;
+    class BrowserLike extends TransformStream<Uint8Array, Uint8Array> {
+      constructor() {
+        super({
+          transform(chunk, ctl) {
+            fed += chunk.byteLength;
+            for (let i = 0; i < 4; i++) ctl.enqueue(new Uint8Array(16 * 1024));
+          },
+        });
+      }
+    }
+    vi.stubGlobal('DecompressionStream', BrowserLike);
+    const packed = new Uint8Array(64 * 1024);
+    try {
+      await expect(inflateRaw(packed, 100 * 1024, 64)).rejects.toThrowError(
+        new ViewError('zip_bomb'),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    // Предел — на втором куске; подано не больше нескольких шагов, а не все 64 КиБ.
+    expect(fed).toBeLessThanOrEqual(4 * 64);
+    // Настоящая распаковка шагами: обычная запись — целиком.
+    const text = new TextEncoder().encode('строка '.repeat(5000));
+    expect(await inflateRaw(await deflateRaw(text), text.length, 64)).toEqual(text);
   });
 
   it('слишком сжатая запись (больше 500 раз) — отказ', async () => {

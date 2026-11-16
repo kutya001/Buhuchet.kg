@@ -11,6 +11,7 @@ import {
   SHEET_MAX_COLS,
   SHEET_MAX_ROWS,
   SHEET_MAX_SHEETS,
+  sheetMergeCollector,
   type BookView,
   type SheetCell,
   type SheetView,
@@ -54,7 +55,10 @@ export function cfbStream(b: Uint8Array, name: string): Uint8Array | null {
       if (s !== FREESECT && s !== ENDOFCHAIN) fatSids.push(s);
     }
     difat = u32(o + ss - 4);
+    // Цепочка, замкнутая сама на себя, не раздувает таблицу: секторов таблицы не больше, чем в файле.
+    if (fatSids.length > nSectors) throw new ViewError('xls_bad');
   }
+  if (fatSids.length > nSectors) throw new ViewError('xls_bad');
   const fat = new Uint32Array(fatSids.length * (ss / 4));
   fatSids.forEach((sid, k) => {
     const o = sectorOff(sid);
@@ -300,7 +304,7 @@ function parseXlsSheet(
   const rows: (SheetCell | null)[][] = [];
   const heights: Record<number, number> = {};
   const hiddenRows: number[] = [];
-  const merges: SheetView['merges'] = [];
+  const merges = sheetMergeCollector();
   const colDef: { min: number; max: number; px: number }[] = [];
   let defPx = DEFAULT_COL_PX;
   let dimRows = 0;
@@ -440,19 +444,13 @@ function parseXlsSheet(
           const o = 2 + k * 8;
           const r1 = rdv.getUint16(o, true);
           const c1 = rdv.getUint16(o + 4, true);
-          if (r1 < SHEET_MAX_ROWS && c1 < SHEET_MAX_COLS)
-            merges.push([
-              r1,
-              c1,
-              Math.min(rdv.getUint16(o + 2, true), SHEET_MAX_ROWS - 1),
-              Math.min(rdv.getUint16(o + 6, true), SHEET_MAX_COLS - 1),
-            ]);
+          merges.add(r1, c1, rdv.getUint16(o + 2, true), rdv.getUint16(o + 6, true));
         }
         break;
       }
     }
   }
-  for (const m of merges) maxCol = Math.max(maxCol, m[3]);
+  for (const m of merges.list) maxCol = Math.max(maxCol, m[3]);
   const width = Math.min(SHEET_MAX_COLS, maxCol + 1);
   const cols = Array.from({ length: width }, () => defPx);
   for (const c of colDef) for (let i = c.min; i <= c.max && i < width; i++) cols[i] = c.px;
@@ -462,7 +460,7 @@ function parseXlsSheet(
     rows,
     heights,
     hiddenRows,
-    merges,
+    merges: merges.list,
     totalRows: Math.max(rows.length, maxRow + 1, dimRows),
     colsCut,
   };

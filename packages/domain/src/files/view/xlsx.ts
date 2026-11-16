@@ -13,6 +13,7 @@ import {
   SHEET_MAX_COLS,
   SHEET_MAX_ROWS,
   SHEET_MAX_SHEETS,
+  sheetMergeCollector,
   type BookView,
   type SheetCell,
   type SheetView,
@@ -197,7 +198,7 @@ export function parseWorksheet(
   const rows: (SheetCell | null)[][] = [];
   const heights: Record<number, number> = {};
   const hiddenRows: number[] = [];
-  const merges: SheetView['merges'] = [];
+  const merges = sheetMergeCollector();
   let colsCut = false;
   let maxCol = -1;
   let rowIdx = -1;
@@ -252,8 +253,7 @@ export function parseWorksheet(
         const [p, q] = a.ref.split(':');
         const s = p ? cellRef(p) : null;
         const e = q ? cellRef(q) : s;
-        if (s && e && s[0] < SHEET_MAX_ROWS && s[1] < SHEET_MAX_COLS)
-          merges.push([s[0], s[1], e[0], Math.min(e[1], SHEET_MAX_COLS - 1)]);
+        if (s && e) merges.add(s[0], s[1], e[0], e[1]);
       }
     },
     close(tag) {
@@ -296,25 +296,19 @@ export function parseWorksheet(
           const [p, q] = a.ref.split(':');
           const s = p ? cellRef(p) : null;
           const e = q ? cellRef(q) : s;
-          if (s && e && s[0] < SHEET_MAX_ROWS && s[1] < SHEET_MAX_COLS)
-            merges.push([
-              s[0],
-              s[1],
-              Math.min(e[0], SHEET_MAX_ROWS - 1),
-              Math.min(e[1], SHEET_MAX_COLS - 1),
-            ]);
+          if (s && e) merges.add(s[0], s[1], e[0], e[1]);
         }
       },
     });
   }
   // Ширины: заданные `<col>` и по умолчанию; столбцов — до последнего с данными или объединением.
-  for (const m of merges) maxCol = Math.max(maxCol, m[3]);
+  for (const m of merges.list) maxCol = Math.max(maxCol, m[3]);
   const width = Math.min(SHEET_MAX_COLS, maxCol + 1);
   for (let c = 0; c < width; c++) cols.push(defPx);
   for (const d of colDef)
     for (let c = d.min; c <= d.max && c < width; c++) cols[c] = d.px < 0 ? defPx : d.px;
   for (const r of rows) if (r.length > width) r.length = width;
-  return { name, cols, rows, heights, hiddenRows, merges, totalRows, colsCut };
+  return { name, cols, rows, heights, hiddenRows, merges: merges.list, totalRows, colsCut };
 }
 
 /** Книга XLSX/XLSM: видимые листы по порядку книги. */

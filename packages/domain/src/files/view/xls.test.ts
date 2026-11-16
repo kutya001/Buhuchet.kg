@@ -131,5 +131,13 @@ describe('старый Excel XLS в окне просмотра', () => {
     const loop = cfbBytes([{ name: 'Workbook', data: new Uint8Array(5000) }]);
     expect(cfbStream(loop, 'workbook')).toHaveLength(5000);
     expect(cfbStream(loop, 'Нет')).toBeNull();
+    // Цепочка DIFAT, замкнутая сама на себя, не раздувает таблицу размещения: «битый файл».
+    const difat = cfbBytes([{ name: 'Workbook', data: new Uint8Array(5000) }]);
+    const dv = new DataView(difat.buffer, difat.byteOffset, difat.byteLength);
+    const k = difat.length / 512 - 2;
+    dv.setUint32(68, k, true);
+    for (let i = 0; i < 127; i++) dv.setUint32(512 + k * 512 + i * 4, 0, true);
+    dv.setUint32(512 + k * 512 + 508, k, true);
+    expect(() => cfbStream(difat, 'Workbook')).toThrowError(new ViewError('xls_bad'));
   });
 });

@@ -19,6 +19,10 @@ import type { Zip } from './zip';
 
 /** Абзацев и таблиц документа в окне — не больше. */
 export const DOC_MAX_BLOCKS = 10_000;
+/** Кусков текста и картинок во всех абзацах — не больше: окно рисует каждый. */
+export const DOC_MAX_RUNS = 200_000;
+/** Номер начала списка — не больше. */
+export const DOC_MAX_LIST_START = 100_000;
 
 export interface DocRun {
   t: string;
@@ -134,7 +138,11 @@ function parseNumbering(src: string | null): Map<string, { abs: string; lvls: Nu
       lvls[i] = {
         fmt: attrOf(childEl(l, 'numFmt'), 'val') ?? 'decimal',
         text: attrOf(childEl(l, 'lvlText'), 'val') ?? '',
-        start: Number(attrOf(childEl(l, 'start'), 'val') ?? 1),
+        // Номер начала — из файла, в разумных пределах: римские цифры для 10¹² — строка в миллиард знаков.
+        start: Math.min(
+          Math.max(Number(attrOf(childEl(l, 'start'), 'val') ?? 1) || 0, 0),
+          DOC_MAX_LIST_START,
+        ),
       };
     }
     abs.set(attrOf(a, 'abstractNumId') ?? '', lvls);
@@ -234,7 +242,19 @@ interface Ctx {
   rels: Map<string, Rel>;
   bag: ImageBag;
   count: number;
+  /** Кусков текста и картинок уже в модели. */
+  runs: number;
   cut: boolean;
+}
+
+/** Ещё один кусок в модель: после `DOC_MAX_RUNS` — нет, документ показан не целиком. */
+function take(ctx: Ctx): boolean {
+  if (ctx.runs >= DOC_MAX_RUNS) {
+    ctx.cut = true;
+    return false;
+  }
+  ctx.runs++;
+  return true;
 }
 
 async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): Promise<void> {
@@ -262,7 +282,7 @@ async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): 
       }
       let text = '';
       const flush = () => {
-        if (text) out.push({ ...fmt, t: text });
+        if (text && take(ctx)) out.push({ ...fmt, t: text });
         text = '';
       };
       for (const c of k.kids) {
@@ -277,7 +297,7 @@ async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): 
           const blip = findEl(c, 'blip') ?? findEl(c, 'imagedata');
           const rid = prefixedAttr(blip, 'embed') ?? prefixedAttr(blip, 'id');
           const key = rid ? await ctx.bag.add(ctx.rels.get(rid)) : null;
-          if (key) {
+          if (key && take(ctx)) {
             const ext = findEl(c, 'extent');
             const w = emuToPx(Number(attrOf(ext, 'cx') ?? 0));
             const h = emuToPx(Number(attrOf(ext, 'cy') ?? 0));
@@ -401,7 +421,15 @@ export async function parseDocx(zip: Zip): Promise<DocView> {
   const styles = parseDocStyles(await zip.text(relOf('styles') ?? 'word/styles.xml'));
   const nums = parseNumbering(await zip.text(relOf('numbering') ?? 'word/numbering.xml'));
   const bag = new ImageBag(zip);
-  const ctx: Ctx = { styles, numberer: new Numberer(nums), rels, bag, count: 0, cut: false };
+  const ctx: Ctx = {
+    styles,
+    numberer: new Numberer(nums),
+    rels,
+    bag,
+    count: 0,
+    runs: 0,
+    cut: false,
+  };
   const root = parseXmlTree(src, 3_000_000).root;
   const body = childEl(root ?? undefined, 'body');
   const blocks = body ? await blocksOf(body, ctx) : [];

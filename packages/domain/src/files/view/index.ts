@@ -6,7 +6,7 @@
 import { parseDocx, type DocView } from './docx';
 import { viewImageType } from './ooxml';
 import { parsePptx, type SlidesView } from './pptx';
-import { csvSheet, SHEET_MAX_ROWS, type BookView } from './sheet';
+import { capBookText, csvSheet, SHEET_MAX_ROWS, type BookView } from './sheet';
 import { decodeText, parseCsv, textView, type TextView } from './text';
 import { isCfb, parseXls } from './xls';
 import { parseXlsx } from './xlsx';
@@ -81,8 +81,8 @@ export async function parseFileView(name: string, bytes: Uint8Array): Promise<Fi
   const kind = fileViewKind(name);
   switch (kind) {
     case 'sheet':
-      if (isZip(bytes)) return parseXlsx(openZip(bytes));
-      if (isCfb(bytes)) return parseXls(bytes);
+      if (isZip(bytes)) return capBookText(await parseXlsx(openZip(bytes)));
+      if (isCfb(bytes)) return capBookText(parseXls(bytes));
       return { kind: 'none' };
     case 'csv': {
       const { text } = decodeText(bytes);

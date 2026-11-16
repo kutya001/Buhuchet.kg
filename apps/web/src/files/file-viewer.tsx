@@ -149,6 +149,8 @@ function parseInWorker(
     worker.onmessage = (e: MessageEvent<ViewResponse>) =>
       e.data.ok ? stop(undefined, e.data.model) : stop(new ViewLoadError(e.data.code));
     worker.onerror = () => stop(new ViewLoadError('worker'));
+    // Модель не прочиталась на этой стороне (не скопировалась) — так же, как «слишком большой».
+    worker.onmessageerror = () => stop(new ViewLoadError('too_big'));
     const buf = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength,

@@ -283,12 +283,13 @@ export function SheetTable({
   hits: Set<string>;
   current: string | null;
 }) {
-  const merges = useMemo(() => mergeMap(sheet), [sheet]);
   const hidden = useMemo(() => new Set(sheet.hiddenRows), [sheet]);
   const [drawn, setDrawn] = useState(SHEET_RENDER_STEP);
   const more = useRef<HTMLTableRowElement | null>(null);
   // Строка с найденным дальше нарисованного — рисуется до неё.
   const limit = Math.max(drawn, current ? sheetRowsFor(Number(current.split(':')[0])) : 0);
+  // Объединения — только по нарисованным строкам: работа растёт вместе с таблицей, а не с файлом.
+  const merges = useMemo(() => mergeMap(sheet, limit), [sheet, limit]);
   useEffect(() => {
     const el = more.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;

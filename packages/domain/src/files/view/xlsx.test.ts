@@ -2,13 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { xlsxBytes, zipBytes } from './fixtures';
 import { parseFileView } from './index';
 import {
+  capBookText,
   cellRef,
   colIndex,
   colLetters,
   csvSheet,
   looksNumeric,
+  SHEET_MAX_BOOK_CHARS,
+  SHEET_MAX_CELL_CHARS,
   SHEET_MAX_COLS,
+  SHEET_MAX_MERGES,
   SHEET_MAX_ROWS,
+  sheetMergeCollector,
 } from './sheet';
 import { parseWorksheet, parseXlsx, sheetCell } from './xlsx';
 import { ViewError } from './xml';
@@ -171,6 +176,65 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(s.cols).toHaveLength(3);
     const dimOnly = `<worksheet><dimension ref="A1:B9000"/><sheetData><row><c><v>1</v></c></row>${'<row><c><v>1</v></c></row>'.repeat(SHEET_MAX_ROWS)}</sheetData></worksheet>`;
     expect(parseWorksheet('b', dimOnly, [], [], false).totalRows).toBe(9000);
+  });
+
+  it('объединения из файла в пределах окна: огромный диапазон обрезан, пересекающиеся и лишние отброшены (защита, п. И-12)', () => {
+    // Файл в 2,5 КБ с «A1:IV1048576» вешал окно: теперь — в пределах 5 000 × 256.
+    const huge = `<worksheet><sheetData><row r="1"><c r="A1"><v>1</v></c></row></sheetData><mergeCells><mergeCell ref="A1:IV1048576"/><mergeCell ref="B2:C3"/>${'<mergeCell ref="A1:IV5000"/>'.repeat(200)}</mergeCells></worksheet>`;
+    const s = parseWorksheet('a', huge, [], [], false);
+    expect(s.merges).toEqual([[0, 0, SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1]]);
+
+    // Пересечение отбрасывается, соседние принимаются; число объединений — до предела.
+    const m = sheetMergeCollector();
+    m.add(0, 0, 1, 1);
+    m.add(1, 1, 2, 2);
+    m.add(0, 2, 1, 3);
+    m.add(5, 0, 2, 0);
+    m.add(-1, 0, 1, 1);
+    expect(m.list).toEqual([
+      [0, 0, 1, 1],
+      [0, 2, 1, 3],
+    ]);
+    const many = sheetMergeCollector();
+    // Соседние объединения по две ячейки: столбцы A:B, потом C:D…
+    for (let i = 0; i < SHEET_MAX_MERGES + 10; i++) {
+      const r = i % SHEET_MAX_ROWS;
+      const c = Math.floor(i / SHEET_MAX_ROWS) * 2;
+      many.add(r, c, r, c + 1);
+    }
+    expect(many.list).toHaveLength(SHEET_MAX_MERGES);
+
+    // Просмотр ячеек ограничен: большие диапазоны, наложенные друг на друга, не перебираются без конца.
+    const wide = sheetMergeCollector();
+    wide.add(SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1, SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1);
+    for (let i = 0; i < 100; i++) wide.add(0, 0, SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1);
+    wide.add(0, 0, 0, 1);
+    expect(wide.list).toEqual([
+      [SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1, SHEET_MAX_ROWS - 1, SHEET_MAX_COLS - 1],
+    ]);
+  });
+
+  it('текст книги в пределах: ячейка — до 32 767 знаков, книга — до предела, дальше строки не показаны', () => {
+    const long = 'я'.repeat(SHEET_MAX_CELL_CHARS + 100);
+    const rowsPerSheet = Math.ceil(SHEET_MAX_BOOK_CHARS / SHEET_MAX_CELL_CHARS / 2) + 1;
+    const sheet = (name: string) => ({
+      name,
+      cols: [64, 64],
+      rows: Array.from({ length: rowsPerSheet }, () => [{ v: long }]),
+      heights: {},
+      hiddenRows: [],
+      merges: [],
+      totalRows: rowsPerSheet,
+      colsCut: false,
+    });
+    const book = capBookText({ kind: 'sheet', sheets: [sheet('1'), sheet('2'), sheet('3')] });
+    expect(book.sheets[0]!.rows[0]![0]!.v).toHaveLength(SHEET_MAX_CELL_CHARS);
+    expect(book.sheets[0]!.rows).toHaveLength(rowsPerSheet);
+    const shown = book.sheets.reduce((n, x) => n + x.rows.length, 0);
+    expect(shown * SHEET_MAX_CELL_CHARS).toBeLessThanOrEqual(SHEET_MAX_BOOK_CHARS);
+    expect(book.sheets[1]!.rows.length).toBeLessThan(rowsPerSheet);
+    expect(book.sheets[2]!.rows).toHaveLength(0);
+    expect(book.sheets[2]!.totalRows).toBe(rowsPerSheet);
   });
 
   it('помощники листа и CSV', () => {

@@ -10,6 +10,47 @@ export const SHEET_MAX_ROWS = 5_000;
 export const SHEET_MAX_COLS = 256;
 /** Листов книги — не больше. */
 export const SHEET_MAX_SHEETS = 100;
+/** Объединений ячеек на лист — не больше. */
+export const SHEET_MAX_MERGES = 5_000;
+/** Ячеек, которые проверка объединений листа просматривает, — не больше (файл не вешает разбор). */
+export const SHEET_MERGE_CELLS_BUDGET = 4_000_000;
+/** Знаков в ячейке — не больше (как в Excel). */
+export const SHEET_MAX_CELL_CHARS = 32_767;
+/** Знаков во всех ячейках книги — не больше: модель копируется из потока разбора в окно. */
+export const SHEET_MAX_BOOK_CHARS = 16_000_000;
+
+/**
+ * Объединения листа в пределах окна (docs/deviations.md п. И-12): углы — в пределах
+ * `SHEET_MAX_ROWS` × `SHEET_MAX_COLS`, пересекающиеся с уже принятыми отбрасываются (Excel их не
+ * допускает), не больше `SHEET_MAX_MERGES` и `SHEET_MERGE_CELLS_BUDGET` просмотренных ячеек. Так окно
+ * рисует объединения за время, пропорциональное самому листу, а не числам из файла.
+ */
+export function sheetMergeCollector() {
+  const list: SheetView['merges'] = [];
+  let taken: Uint8Array | null = null;
+  let budget = SHEET_MERGE_CELLS_BUDGET;
+  return {
+    list,
+    add(r1: number, c1: number, r2: number, c2: number) {
+      if (list.length >= SHEET_MAX_MERGES || budget <= 0) return;
+      if (![r1, c1, r2, c2].every(Number.isInteger) || r1 < 0 || c1 < 0) return;
+      if (r1 >= SHEET_MAX_ROWS || c1 >= SHEET_MAX_COLS) return;
+      const rb = Math.min(r2, SHEET_MAX_ROWS - 1);
+      const cb = Math.min(c2, SHEET_MAX_COLS - 1);
+      if (rb < r1 || cb < c1) return;
+      const area = (rb - r1 + 1) * (cb - c1 + 1);
+      // Просмотр и отметка — по разу на ячейку.
+      budget -= 2 * area;
+      if (budget < 0) return;
+      taken ??= new Uint8Array(SHEET_MAX_ROWS * SHEET_MAX_COLS);
+      for (let r = r1; r <= rb; r++)
+        for (let c = c1; c <= cb; c++) if (taken[r * SHEET_MAX_COLS + c]) return;
+      for (let r = r1; r <= rb; r++)
+        taken.fill(1, r * SHEET_MAX_COLS + c1, r * SHEET_MAX_COLS + cb + 1);
+      list.push([r1, c1, rb, cb]);
+    },
+  };
+}
 
 export interface SheetCell {
   /** Текст ячейки, как его показывает Excel. */
@@ -48,6 +89,33 @@ export interface SheetView {
 export interface BookView {
   kind: 'sheet';
   sheets: SheetView[];
+}
+
+/**
+ * Предел текста книги для окна: ячейка — до `SHEET_MAX_CELL_CHARS` знаков, вся книга — до
+ * `SHEET_MAX_BOOK_CHARS`; дальше строки не показываются («Показаны первые …», как у предела строк).
+ * Одна общая строка XLSX на тысячах ячеек при передаче из потока разбора копируется в каждую.
+ */
+export function capBookText(book: BookView): BookView {
+  let left = SHEET_MAX_BOOK_CHARS;
+  for (const sheet of book.sheets) {
+    for (let r = 0; r < sheet.rows.length; r++) {
+      const row = sheet.rows[r]!;
+      let size = 0;
+      for (const cell of row) {
+        if (!cell) continue;
+        if (cell.v.length > SHEET_MAX_CELL_CHARS) cell.v = cell.v.slice(0, SHEET_MAX_CELL_CHARS);
+        size += cell.v.length;
+      }
+      left -= size;
+      if (left < 0) {
+        sheet.rows.length = r;
+        left = 0;
+        break;
+      }
+    }
+  }
+  return book;
 }
 
 /** «AB» → 27 (с 0). */

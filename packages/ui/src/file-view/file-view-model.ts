@@ -58,17 +58,28 @@ export interface MergeMap {
 
 export const cellKey = (r: number, c: number) => `${r}:${c}`;
 
-export function mergeMap(sheet: SheetView): MergeMap {
+/** Ячеек под объединениями, которые окно отмечает, — не больше (столько и рисуется: 5 000 × 256). */
+export const MERGE_SKIP_MAX = 5_000 * 256;
+
+/**
+ * Объединения нарисованных строк (`drawn` — сколько строк сверху на экране): строки ниже не
+ * просматриваются. Объединения из разбора не пересекаются и в пределах листа; здесь ещё общий предел
+ * отмеченных ячеек — главный поток страницы не зависает и на чужой модели.
+ */
+export function mergeMap(sheet: SheetView, drawn = Number.POSITIVE_INFINITY): MergeMap {
   const span = new Map<string, { rows: number; cols: number }>();
   const skip = new Set<string>();
   const hidden = new Set(sheet.hiddenRows);
   const visibleCol = (c: number) => (sheet.cols[c] ?? 1) > 0;
-  for (const [r1, c1, r2, c2] of sheet.merges) {
+  for (const [r1, c1, r2full, c2] of sheet.merges) {
+    if (r1 >= drawn) continue;
+    const r2 = Math.min(r2full, drawn - 1);
+    if (skip.size + (r2 - r1 + 1) * (c2 - c1 + 1) > MERGE_SKIP_MAX) break;
     let rows = 0;
     for (let r = r1; r <= r2; r++) if (!hidden.has(r)) rows++;
     let cols = 0;
     for (let c = c1; c <= c2; c++) if (visibleCol(c)) cols++;
-    if (rows < 1 || cols < 1 || (rows === 1 && cols === 1 && r1 === r2 && c1 === c2)) continue;
+    if (rows < 1 || cols < 1 || (rows === 1 && cols === 1 && r1 === r2full && c1 === c2)) continue;
     span.set(cellKey(r1, c1), { rows, cols });
     for (let r = r1; r <= r2; r++)
       for (let c = c1; c <= c2; c++) if (r !== r1 || c !== c1) skip.add(cellKey(r, c));

@@ -27,7 +27,14 @@ const scope = globalThis as unknown as {
 scope.onmessage = (e) => {
   const { name, bytes } = e.data;
   parseFileView(name, new Uint8Array(bytes)).then(
-    (model) => scope.postMessage({ ok: true, model }),
+    (model) => {
+      // Модель не передалась (слишком большая для копирования) — сразу ответ, а не ожидание предела.
+      try {
+        scope.postMessage({ ok: true, model });
+      } catch {
+        scope.postMessage({ ok: false, code: 'too_big' });
+      }
+    },
     (err: unknown) =>
       scope.postMessage({ ok: false, code: err instanceof ViewError ? err.code : 'file_bad' }),
   );
