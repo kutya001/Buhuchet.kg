@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { cardTab } from './helpers';
 import { orgWithTypes } from './orgs';
 
 // Создание контрагента «Из свидетельства и выписки» (задача 2.17, #72, часть 2; Бета) через настоящий
@@ -37,16 +38,6 @@ async function byInn(api: APIRequestContext, inn = INN): Promise<{ id: string }[
   const res = await api.get(`/api/contractors?size=all&filters=${filters}`);
   expect(res.status(), await res.text()).toBe(200);
   return ((await res.json()) as { items: { id: string }[] }).items;
-}
-
-/** Вкладка карточки: на телефоне — из списка под текущей вкладкой. */
-async function toTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
 }
 
 test.describe('Этап 2: контрагент из свидетельства и выписки', () => {
@@ -112,7 +103,7 @@ test.describe('Этап 2: контрагент из свидетельства 
     await expect(card.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства и выписки');
 
     // Оба PDF — во вкладке «Файлы», источник «Из свидетельства и выписки».
-    await toTab(page, card, isMobile, /^Файлы/);
+    await cardTab(page, card, isMobile, /^Файлы/);
     const files = card.locator('[data-cp-files]');
     await expect(files).toContainText('Документов: 2');
     await expect(files).toContainText('regdocs-svid.pdf');
@@ -120,7 +111,7 @@ test.describe('Этап 2: контрагент из свидетельства 
     await expect(files).toContainText('Из свидетельства и выписки');
 
     // История контрагента: «Создан из свидетельства и выписки (бета)».
-    await toTab(page, card, isMobile, /^История/);
+    await cardTab(page, card, isMobile, /^История/);
     await expect(
       card
         .getByRole('list', { name: 'История' })
@@ -197,7 +188,7 @@ test.describe('Этап 2: контрагент из свидетельства 
     const card = page.getByRole('dialog', { name: 'ИП Токтогулов А. Б.' });
     await expect(card.locator('[data-cp-card]')).toBeVisible();
     await expect(card.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства ИП');
-    await toTab(page, card, isMobile, /^История/);
+    await cardTab(page, card, isMobile, /^История/);
     await expect(
       card
         .getByRole('list', { name: 'История' })

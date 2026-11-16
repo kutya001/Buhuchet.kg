@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
-import { signIn, uniqueLogin } from './helpers';
+import { cardTab, signIn, uniqueLogin } from './helpers';
 
 // «ИНН и форма» организации (доработки 14.11.2026, блок 1, пункт 4; прототип v114 ldInnFormDlg):
 // меняет только администратор платформы — из меню строки «Организаций» или карточки; владелец в
@@ -97,12 +97,7 @@ test.describe('Доработки 14.11.2026, блок 1: «ИНН и форма
     const card = page.getByRole('dialog', { name });
     await expect(card).toContainText(next);
     await expect(card.getByRole('definition').filter({ hasText: /^ИП$/ })).toBeVisible();
-    if (isMobile) {
-      await card.getByRole('tab', { selected: true }).click();
-      await page.getByRole('menu').getByRole('menuitem', { name: 'История' }).click();
-    } else {
-      await card.getByRole('tab', { name: 'История' }).click();
-    }
+    await cardTab(page, card, isMobile, 'История');
     await expect(card.getByRole('list', { name: 'История' })).toContainText(
       `ИНН: ${inn} → ${next}; Форма: — → ИП`,
     );

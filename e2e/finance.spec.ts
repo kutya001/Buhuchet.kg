@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, pickContractor, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, pickContractor, signIn } from './helpers';
 import { asOwner, manualReport, newContractor, staffIds } from './reports';
 
 // Остаток контрагента и счёт сотрудника (задача 2.20, #76, часть 1) через настоящий сайт. Демо-
@@ -29,16 +29,6 @@ async function search(page: Page, isMobile: boolean, text: string) {
   await page.getByRole('searchbox').first().fill(text);
 }
 
-/** Вкладка карточки: на телефоне — из списка под текущей вкладкой. */
-async function toTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
-}
-
 /** «Контрагенты» → «Все» → карточка контрагента теста → вкладка «Деньги». */
 async function openMoney(page: Page, isMobile: boolean, word: string, id: string, name: string) {
   await page.goto('/app/cps/all');
@@ -47,7 +37,7 @@ async function openMoney(page: Page, isMobile: boolean, word: string, id: string
   await page.locator(`[data-grid] [data-id="${id}"]`).getByText(name, { exact: true }).click();
   const card = page.getByRole('dialog', { name });
   await expect(card.locator('[data-cp-card]')).toBeVisible();
-  await toTab(page, card, isMobile, /Деньги/);
+  await cardTab(page, card, isMobile, /Деньги/);
   await expect(card.locator('[data-money-tab]')).toBeVisible();
   return card;
 }
@@ -145,7 +135,7 @@ test.describe('Этап 2: остаток контрагента и счёт с�
       .first()
       .click();
     const staff = page.getByRole('dialog', { name: emp.fullName });
-    await toTab(page, staff, isMobile, /Счёт/);
+    await cardTab(page, staff, isMobile, /Счёт/);
     const account = staff.locator(`[data-employee-account="${emp.id}"]`);
     await expect(account).toBeVisible();
     const line = account.locator('[data-mini-table] tbody tr').filter({ hasText: name });

@@ -405,6 +405,26 @@ export async function stillElement(locator: Locator, ms = 120) {
   );
 }
 
+/**
+ * Вкладка окна-карточки: на ПК — кнопкой вкладки, на телефоне — из списка под текущей вкладкой («N из M ▾»).
+ * Список выезжает анимацией, и её первый кадр стоит на конечном месте: Playwright считает пункт неподвижным,
+ * а нажатие уходит соседнему пункту или мимо и теряется молча (типовая ошибка № 34) — поэтому сначала
+ * `stillElement`, а после нажатия — проверка, что вкладка сменилась.
+ */
+export async function cardTab(page: Page, card: Locator, isMobile: boolean, name: string | RegExp) {
+  if (isMobile) {
+    // Шторка окна тоже выезжает: нажатие по вкладке во время выезда теряется так же.
+    await stillElement(card);
+    await card.getByRole('tab', { selected: true }).click();
+    const menu = page.getByRole('menu');
+    await stillElement(menu);
+    await menu.getByRole('menuitem', { name }).click();
+  } else {
+    await card.getByRole('tab', { name }).click();
+  }
+  await expect(card.getByRole('tab', { selected: true })).toContainText(name);
+}
+
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */

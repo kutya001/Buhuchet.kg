@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import {
   botMessages,
+  cardTab,
   DEMO_PASSWORD,
   hire,
   linkTelegram,
@@ -277,15 +278,7 @@ test.describe('Админка: учётные записи', () => {
     await expect(card).toContainText(
       'Только просмотр: войти в программу под этим пользователем из Админки нельзя',
     );
-    const openTab = async (name: string) => {
-      if (isMobile) {
-        await card.getByRole('tab', { selected: true }).click();
-        await page.getByRole('menu').getByRole('menuitem', { name }).click();
-      } else {
-        await card.getByRole('tab', { name }).click();
-      }
-      await expect(card.getByRole('tab', { selected: true })).toContainText(name);
-    };
+    const openTab = (name: string) => cardTab(page, card, isMobile, name);
     // Кнопки шапки — как в меню строки.
     await expect(card.locator('[data-account-action="reset-password"]')).toBeVisible();
     await expect(card.locator('[data-account-action="block"]')).toBeVisible();

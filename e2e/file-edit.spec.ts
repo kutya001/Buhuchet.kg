@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, signIn } from './helpers';
 import { newContractor } from './reports';
 
 // Доработки 13.11, задача И4 (прототип v95, modules/files.js `attachDlg`, `fileEditDlg`): необязательное
@@ -320,15 +320,7 @@ test.describe('Доработки 13.11: примечание к файлам и
       .click();
     const card = page.getByRole('dialog', { name: cpName });
     await expect(card.locator('[data-cp-card]')).toBeVisible();
-    if (isMobile) {
-      await card.getByRole('tab', { selected: true }).click();
-      await page
-        .getByRole('menu')
-        .getByRole('menuitem', { name: /^Файлы/ })
-        .click();
-    } else {
-      await card.getByRole('tab', { name: /^Файлы/ }).click();
-    }
+    await cardTab(page, card, isMobile, /^Файлы/);
     const tab = card.locator('[data-cp-files]');
     await expect(tab).toBeVisible();
 
