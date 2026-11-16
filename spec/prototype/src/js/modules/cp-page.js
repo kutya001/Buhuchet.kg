@@ -96,7 +96,7 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
       p.fails=0;const m=pgMem();m[o.slug+'|'+o.inn]={code:p.code,until:Date.now()+PG_KEEP};store.set('pgmem',m);pubDraw()}}
   const y=$('#pub-y',el);if(y)y.onchange=()=>{PUB.y=y.value;PUB.rm=null;pubDraw(true)};const ky=$('#pub-ky',el);if(ky)ky.onchange=()=>{PUB.ky=ky.value;pubDraw(true)};
   const b=$('.pub-body',el);if(b)b.onclick=pubClick;
-  $$('[data-pub-file]',el).forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();pubFileOpen(a.dataset.pubFile)});
+  $$('[data-pub-file]',el).forEach(a=>a.onclick=e=>{e.preventDefault();e.stopPropagation();const l=$$('[data-pub-file]',a.parentElement);pubFileOpen(l.map(x=>({name:x.dataset.pubFile})),l.indexOf(a))});
   const fq=$('#pub-fq',el);if(fq){fq.oninput=()=>{PUB.fq=fq.value;pubFq(el)};pubFq(el)}
   // Подсказки и обучение (доработки 15.11.2026, cp-help.js): пунктир «Словарика», кнопка «Помощь», «Добро пожаловать» после первого верного кода
   if(b&&c){cphGloss(b);cphMount(el,c);cphWelcomeAuto(c)}}
@@ -113,7 +113,7 @@ function pubClick(e){const x=e.target.closest('[data-pub-gl],[data-pub-tgon],[da
   if(d.pubPaid){const c=pubCp(PUB.open);if(c)pubPaidDlg(c,d.pubPaid);return}
   if(d.pubSend){const c=pubCp(PUB.open);if(c)pubSendDlg(c,d.pubSend);return}
   if(d.pubTgon!=null){const c=pubCp(PUB.open);if(d.why)toast(d.why,'lock',true);else if(c)pgTgDlg(c);return}
-  if(d.pubFo!=null){const f=PUB.fl[+d.pubFo];if(f)pubFileOpen(f.name,f);return}
+  if(d.pubFo!=null){const l=$$('[data-pub-fo]',x.parentElement).filter(r=>!r.hidden);pubFileOpen(l.map(r=>PUB.fl[+r.dataset.pubFo]),l.indexOf(x));return}
   if(d.pubFf!=null){PUB.ff=PUB.ff===d.pubFf?'':d.pubFf;pubDraw(true);return}
   if(d.pubCopy!=null){copyText(d.pubCopy,d.pubOk||'Скопировано',true);return}
   if(d.pubMore!=null){x.parentElement.classList.add('all');x.remove();return}
@@ -182,13 +182,9 @@ function pubFiles(c,has,fee){const out=[],hid=new Set(c.pgHide||[]),add=(cat,n,r
   FILES.forEach(f=>{if(f.cp===c.id)add('oth',f.name,'',f.at)});
   return out.sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0)}
 const pubFIc=n=>/^(JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n))?'image':/^(XLSX?|CSV)$/.test(fext(n))?'table':/^(ZIP|RAR|7Z)$/.test(fext(n))?'folder':'file';
-const pubFView=n=>/^(PDF|JPE?G|PNG|WEBP|GIF|HEIC|BMP)$/.test(fext(n));
-// Изображения и PDF открываются в окне просмотра на странице, в окне — «Скачать»; остальные файлы сразу скачиваются. Ссылка на файл в рабочей версии временная — 5 минут
-function pubFileOpen(n,f){if(!pubFView(n)){toast('Скачивание: '+n,'download');return}const img=pubFIc(n)==='image',lines=Array.from({length:7},()=>'<i></i>').join('');
-  openModal({size:'mid',render:()=>({title:esc(n),sub:f?`${esc(PG_FCATL[f.cat]||'')}${f.rel?' · '+esc(f.rel):''}`:'Просмотр файла',
-    body:`<div class="pub-fv${img?' img':''}" aria-label="Просмотр файла">${img?ic('image'):`<span class="pub-fvp">${lines}</span>`}</div><span class="hint">Прототип: в рабочей версии здесь сам файл — ${img?'изображение':'страницы PDF'} с прокруткой и масштабом.</span>`,
-    foot:`<button class="btn" data-close>Закрыть</button><div class="grow"></div><button class="btn cta" id="pf-dl">${ic('download','sm')}Скачать</button>`,
-    mount(el){$('#pf-dl',el).onclick=()=>toast('Скачивание: '+n,'download')}})})}
+// Любой файл открывается в окне просмотра (доработки 16.11.2026, блок 5): «‹ ›» — по файлам того же списка (раздел «Файлы» с плашкой и поиском,
+// файлы одного отчёта), «Скачать»; файл, который не показать, — «Предпросмотр недоступен» и «Скачать». Ссылка на файл в рабочей версии временная — 5 минут
+function pubFileOpen(list,i){fileView(list,i,{sub:f=>f.cat?`${esc(PG_FCATL[f.cat]||'')}${f.rel?' · '+esc(f.rel):''}`:'Просмотр файла',dl:f=>toast('Скачивание: '+f.name,'download')})}
 function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy=TODAY.slice(0,4),fee=has('fee')&&c.kind!=='oneoff',tp=feat('taxpay');const role=x=>(ROLES.find(r=>r.id===x.role)||{}).name||'';
   const tel=ph=>ph&&ph.digits?`<a class="btn sm" href="tel:+${ph.digits}">${ic('phone','sm')}Позвонить</a><a class="btn sm" href="${waLink(ph)}" target="_blank" rel="noopener">${ic('chat','sm')}WhatsApp</a>`:'';
   const person=(x,sub)=>`<div class="pub-person"><b>${esc(x.fio)}</b><span class="hint">${esc(sub)}</span>${x.phone&&x.phone.digits?`<a class="mono" href="tel:+${x.phone.digits}">${esc(fmtPhone(x.phone))}</a>`:''}</div>`;
@@ -252,7 +248,7 @@ function pubBody(c){const secs=pgSecs(c),has=k=>secs.includes(k),e=EM[c.resp],cy
     const pl=(k,l,n)=>`<button type="button" class="plate${ff===k?' on':''}" data-pub-ff="${k}" aria-pressed="${ff===k}"><span class="pl-top">${esc(l)}</span><span class="pl-val">${n}</span></button>`;
     H.files=pubSec('files','folder','Файлы',fs.length?`${fs.length} ${plural(fs.length,'файл','файла','файлов')}`:'',pubSentHtml(c)+(fs.length?`<div class="plates pub-pl pub-fpl">${pl('','Все',fs.length)}${cats.map(([k,l])=>pl(k,l,fs.filter(f=>f.cat===k).length)).join('')}</div>
       <div class="pub-tools"><input class="inp pub-fq" id="pub-fq" type="search" placeholder="Поиск по названию" value="${esc(PUB.fq||'')}" aria-label="Поиск файла по названию" autocomplete="off"></div>
-      <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name))}" title="${pubFView(f.name)?'Открыть для просмотра':'Скачать'}">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span></span><span class="pub-fs hint"><span>${fmtD(f.date)}</span><span>${fmtSize(f.size)}</span></span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием нет</span>`
+      <div class="pub-list pub-fl">${vis.map((f,i)=>`<button type="button" class="pub-frow" data-pub-fo="${i}" data-n="${esc(norm(f.name))}" title="Открыть для просмотра">${ic(pubFIc(f.name))}<span class="pub-fm"><b>${esc(f.name)}</b><span class="hint">${esc(PG_FCATL[f.cat])}${f.rel?' · '+esc(f.rel):''}</span></span><span class="pub-fs hint"><span>${fmtD(f.date)}</span><span>${fmtSize(f.size)}</span></span></button>`).join('')}${pubMore(vis.length)}</div><span class="faint pub-fnone" hidden>Файлов с таким названием нет</span>`
       :`<span class="faint">${esc(cphT(sntUpOn(c)?'emptyFiles':'emptyFilesView','Файлов пока нет'))}</span>`))}
   if(M){const v=M.diff<0?['short','alert','Недостача',som(-M.diff)]:M.diff===0?['ok','ok','Достаточно',som(0)]:M.needSum?['ok','ok','Достаточно, излишек','+'+som(M.diff)]:['over','info','Излишек','+'+som(M.diff)];
     const kv=(l,key,val)=>`<div><span class="k">${l}${PGT('money',key)?tipI(PGT('money',key)):''}</span><span class="v tnum">${val}</span></div>`;

@@ -45,6 +45,9 @@ tgAct('notMe',{prev:true,stale:u=>u.id!=='admin'&&!!u.pwLocked,
     tgLog('acc',u.login,what);if(EMP.includes(u))tgLog('emp',u.id,what);
     // Ответ бота — в тот же чат; владельцам организации — «выдайте сотруднику новый пароль», администраторам платформы — то же о владельце (в макете — строки журнала «Телеграм»)
     tgSvc(tgOf(u),TG_NOTME,{chat:a.chat,org});if(!adm)(own?leadAdmins():accOwners(u)).forEach(w=>tgSvc(tgOf(w),TG_NOTME,{org:own?'':org}));
+    // Колокольчик (пакет 16.11.2026, приёмка «Колокольчик против Telegram»): владельцам — та же весть строкой, и без Telegram; нажатие — карточка сотрудника.
+    // Нажал владелец — сообщение администраторам платформы, в колокольчике режима Админка строки нет (по умолчанию)
+    if(!adm&&!own&&EMP.includes(u)){const k=bellOnce('not_me:'+u.id);EMP.filter(e=>e.role==='owner'&&e.active!==false&&e!==u).forEach(e=>bellPut(e.id,{kind:'other',ev:'not_me',open:{k:'employee',id:u.id},text:`Сотрудник ${u.login} нажал «Это не я»: вход закрыт, выдайте новый пароль`,key:k}))}
     TG_SEC_OUT=u.login;b.icon='';
     return {done:adm?'✓ Сеансы завершены':'✓ Вход закрыт',msg:{t:tplFill(adm?'tgNotMeAdmin':'tgNotMeDone',{логин:u.login,кто:tgNotMeWho(u)}),at:bishkekNow().hm}}}});
 // Окно «прежний чат»: сообщения бота в чате, который отвязали от учётной записи («Мой профиль» → «Демо: прежний чат»)

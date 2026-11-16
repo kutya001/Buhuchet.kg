@@ -57,11 +57,13 @@ function bellStaffDay(u){const at=bellDayAt(),m=tgMine(u);
   if(tgIsBoss(u)&&tgNotifyOn(u,'week')&&bellWd(TODAY)===tgnWeekDay()){const W=tgWeekRows(),sub=W.rows.reduce((a,x)=>a+x.sub,0),ov=W.rows.reduce((a,x)=>a+x.over,0),debt=tgDebtors().length;
     if(W.rows.length||debt)bellPut(u.id,{kind:'reports',ev:'week',need:'repView',open:{k:'reports_tab',id:'week'},text:`Сводка недели: сдать ${sub}, просрочено ${ov}${debt?`, должников за обслуживание ${debt}`:''}`,key:'week:'+TODAY,at},true)}}
 // Новости — у каждого, кто их видит; прочитанная в «Новостях» — прочитана и здесь (и наоборот: bellRead)
-function bellNews(uid){const rd=newsRead(uid);
-  newsVis().filter(n=>n.date>=BELL_FROM).forEach(n=>{const r=rd.has(n.id);bellPut(uid,{kind:'news',ev:'news',open:{k:'news',id:n.id},text:n.t,key:'news:'+n.id,at:n.date+' 09:00',seen:r,read:r},true)});
+// Новости и заявки старше 90 дней в колокольчик не кладутся: bellClean убрал бы их строку, а следующий bellSync вернул бы снова (как в продукте)
+const bellFrom=()=>{const l=addDays(TODAY,-BELL_DAYS);return l>BELL_FROM?l:BELL_FROM};
+function bellNews(uid){const rd=newsRead(uid),from=bellFrom();
+  newsVis().filter(n=>n.date>=from).forEach(n=>{const r=rd.has(n.id);bellPut(uid,{kind:'news',ev:'news',open:{k:'news',id:n.id},text:n.t,key:'news:'+n.id,at:n.date+' 09:00',seen:r,read:r},true)});
   BELL.forEach(x=>{if(x.uid===uid&&x.ev==='news'&&!x.read&&x.open&&rd.has(x.open.id))x.read=x.seen=true})}
 // Режим Админка: новые заявки с лендинга (и новости «Только режим Админка» — через bellNews)
-function bellLeads(){LEADS.filter(l=>l.status==='Новая'&&(l.at||'').slice(0,10)>=BELL_FROM).forEach(l=>bellPut('admin',{kind:'other',ev:'lead',open:{k:'lead',id:l.id},
+function bellLeads(){const from=bellFrom();LEADS.filter(l=>l.status==='Новая'&&(l.at||'').slice(0,10)>=from).forEach(l=>bellPut('admin',{kind:'other',ev:'lead',open:{k:'lead',id:l.id},
   text:`Новая заявка с сайта: ${l.firm||l.name||''}`,key:'lead:'+l.id,at:l.at},true))}
 function bellClean(){const lim=addDays(TODAY,-BELL_DAYS);for(let i=BELL.length-1;i>=0;i--)if(String(BELL[i].at).slice(0,10)<lim)BELL.splice(i,1)}
 function bellSync(){bellClean();if(isAdmin())bellLeads();else bellStaffDay(me());bellNews(S.me)}

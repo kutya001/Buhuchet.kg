@@ -1,0 +1,69 @@
+/* Окно просмотра файлов (доработки 16.11.2026, блок 5; ui/file-view.js) */
+.modal.fv-m .mb{display:flex;flex-direction:column;gap:12px}
+.fv-nav{display:flex;align-items:center;gap:4px;margin:0 6px;flex-shrink:0}
+.fv-n{font-size:12.5px;color:var(--muted);min-width:52px;text-align:center;font-variant-numeric:tabular-nums}
+.fv{display:flex;flex-direction:column;flex:1 0 auto;border:1px solid var(--border);border-radius:var(--r-l);background:var(--pane-alt);overflow:hidden}
+.fv-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--pane)}
+.fv-zv{font-size:12.5px;color:var(--muted);min-width:46px;text-align:center;font-variant-numeric:tabular-nums}
+.fv-q{max-width:260px;min-height:31px;padding:5px 10px}
+.fv-scroll{overflow:auto;flex:1 1 0;min-height:340px;-webkit-overflow-scrolling:touch}
+.fv-tabs,.fv-bar,.fv-more{flex:0 0 auto}
+.modal.fv-m .mh h2{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fv-img{display:grid;place-items:center;padding:16px}
+.fv-img>div{transition:transform .18s;transform-origin:center}
+.fv-svg{width:300px;max-width:100%;height:auto;display:block;box-shadow:var(--shadow-s)}
+.fv-pdf{padding:16px}
+.fv-pg{position:relative;width:min(560px,100%);aspect-ratio:1/1.414;margin:0 auto 14px;background:#fff;box-shadow:var(--shadow-s);padding:7% 8%;display:flex;flex-direction:column;gap:9px}
+.fv-pg b{color:#222;font-size:15px;min-height:4px}.fv-pg i{display:block;height:7px;border-radius:4px;background:#d9d6cc}
+.fv-pn{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:11px;color:#888}
+/* Excel: буквы столбцов, номера строк, листы вкладками внизу */
+.fv-grid{background:var(--pane)}
+.fv-xl{border-collapse:separate;border-spacing:0;table-layout:fixed;width:max-content;font-size:12.5px}
+.fv-xl th,.fv-xl td{border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:24px}
+.fv-xl thead th{position:sticky;top:0;z-index:2;background:var(--pane-alt);color:var(--muted);font-weight:500;text-align:center}
+.fv-xl tbody th{position:sticky;left:0;z-index:1;background:var(--pane-alt);color:var(--muted);font-weight:500;text-align:center;font-variant-numeric:tabular-nums}
+.fv-xl thead th:first-child{left:0;z-index:3}
+.fv-xl td.b{font-weight:700}.fv-xl td.num{text-align:right;font-variant-numeric:tabular-nums}
+.fv-xl td.hit{background:var(--yellow-bg);box-shadow:inset 0 0 0 2px var(--yellow)}
+.fv-tabs{display:flex;gap:2px;overflow-x:auto;padding:0 8px;border-top:1px solid var(--border);background:var(--pane-alt)}
+.fv-tabs button{border:0;background:none;padding:8px 14px;font:inherit;font-size:12.5px;color:var(--muted);border-top:2px solid transparent;cursor:pointer;white-space:nowrap}
+.fv-tabs button[aria-selected=true]{color:var(--text);font-weight:600;background:var(--pane);border-top-color:var(--accent)}
+.fv-more{display:flex;align-items:center;gap:6px;padding:7px 10px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--border);background:var(--pane)}
+/* Word: текст с заголовками, списками и таблицами, без разбивки на страницы */
+.fv-doc{padding:16px}
+.fv-paper{background:#fff;color:#222;max-width:760px;margin:0 auto;padding:32px 40px;box-shadow:var(--shadow-s);border-radius:var(--r-s)}
+.fv-paper h1{font-size:19px;text-align:center;margin:0 0 6px}.fv-paper h2{font-size:15px;margin:18px 0 6px}
+.fv-paper table{border-collapse:collapse;width:100%;margin:8px 0;font-size:13px}.fv-paper th,.fv-paper td{border:1px solid #bbb;padding:5px 8px;text-align:left}.fv-paper th{background:#f1f1f1}.fv-paper .num{text-align:right}
+.fv-r{text-align:right;color:#555}
+.fv-pic{display:flex;flex-direction:column;align-items:center;gap:4px;width:180px;margin:14px 0 0 auto;padding:14px;border:1px dashed #bbb;border-radius:var(--r-m);color:#777;font-size:12px}
+/* Презентация: слайд 16:9 */
+.fv-ppt{display:grid;place-items:center;padding:16px}
+.fv-slide{width:min(760px,100%);aspect-ratio:16/9;background:#fff;color:#1f2a44;box-shadow:var(--shadow-s);border-radius:var(--r-s);overflow:hidden;container-type:inline-size}
+.fv-s0{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2cqw;background:linear-gradient(135deg,#2f4aa8,#5a6fc4);color:#fff;text-align:center;padding:6cqw}
+.fv-s0 b{font-size:5cqw}.fv-s0 span{font-size:2.6cqw;opacity:.85}
+.fv-sl{height:100%;padding:5cqw 6cqw;display:flex;flex-direction:column;gap:2.4cqw}.fv-sl b{font-size:4cqw}.fv-sl ul{margin:0;padding-left:4cqw;font-size:2.8cqw;line-height:1.6}
+.fv-bars{flex:1;display:flex;align-items:flex-end;gap:5cqw;padding:0 4cqw 4cqw;border-bottom:2px solid #ccd}
+.fv-bars i{flex:1;background:#5a6fc4;border-radius:.6cqw .6cqw 0 0;position:relative}.fv-bars span{position:absolute;bottom:-3.6cqw;left:0;right:0;text-align:center;font-style:normal;font-size:2.2cqw;color:#555}
+/* Текст: моноширинный шрифт и номера строк */
+.fv-txt{background:var(--pane)}
+.fv-txt pre{margin:0;padding:10px 12px;font-family:var(--font-mono);font-size:12.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.fv-txt .ln{display:inline-block;width:34px;margin-right:10px;color:var(--faint);text-align:right;user-select:none}
+/* XML: отступы, сворачивание веток, поиск */
+.fv-xml{background:var(--pane);padding:10px 12px;font-family:var(--font-mono);font-size:12.5px;line-height:1.7}
+.fv-xml .xc{padding-left:18px;border-left:1px dotted var(--border-strong);margin-left:5px}
+.fv-xml .xn.off>.xc{display:none}.fv-xml .xn.off>.xc+.xt::before{content:'…';color:var(--faint);margin-right:2px}
+.fv-xml .xf{border:0;background:none;padding:0;width:16px;margin-left:-16px;color:var(--muted);cursor:pointer;font-size:11px}
+.fv-xml .xn.off>.xf{transform:rotate(-90deg)}
+.fv-xml .xt{color:var(--blue)}.fv-xml .xa{color:var(--purple)}.fv-xml .xv{color:var(--green)}.fv-xml .xpi{color:var(--faint)}
+.fv-xml .hit{background:var(--yellow-bg);border-radius:3px}
+.fv-none{margin:16px;min-height:260px;justify-content:center}
+@media (max-width:767px){
+  .modal.fv-m,.modal.fv-m.wide{height:100dvh;max-height:100dvh;border-radius:0}
+  .fv-scroll{min-height:0}
+  .fv-nav{margin:0 2px;gap:0}.fv-n{min-width:40px}
+  .fv-paper{padding:20px 16px}
+  .fv-q{max-width:none;flex:1 1 160px}
+}
+/* Строка файла в блоке «Файлы» записи открывает окно просмотра */
+[data-fview]{cursor:pointer}
+[data-fview]:hover{background:var(--row-hover)}
