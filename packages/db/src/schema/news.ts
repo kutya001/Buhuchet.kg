@@ -59,6 +59,15 @@ export const news = pgTable(
     showOnLogin: boolean('show_on_login').notNull().default(true),
     /** «Для кого»: `all` — все пользователи, `adm` — только режим Админка. */
     audience: text('audience').notNull().default('all'),
+    /**
+     * «Модули» (доработки 16.11.2026, блок 4, пункт 3): коды модулей прототипа (`cps`, `reports`…).
+     * Новость про модуль, на который у человека нет права или который выключен в учётной политике, ему не
+     * показывается — решает API; пусто — новость про всё, видят все.
+     */
+    modules: text('modules')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     /** `draft` или `published`. */
     status: text('status').notNull().default('draft'),
     /** «Снято с публикации». */
@@ -78,6 +87,10 @@ export const news = pgTable(
     check('news_type_check', sql`${t.type} in (${inList(NEWS_TYPES)})`),
     check('news_audience_check', sql`${t.audience} in (${inList(NEWS_AUDIENCES)})`),
     check('news_status_check', sql`${t.status} in (${inList(NEWS_STATUSES)})`),
+    check(
+      'news_modules_check',
+      sql`cardinality(${t.modules}) = 0 or (cardinality(${t.modules}) <= 30 and array_position(${t.modules}, null) is null and array_to_string(${t.modules}, ',') ~ '^[a-z][a-z0-9_-]{0,31}(,[a-z][a-z0-9_-]{0,31})*$' and cardinality(string_to_array(array_to_string(${t.modules}, ','), ',')) = cardinality(${t.modules}))`,
+    ),
     check(
       'news_link_check',
       sql`(${t.linkKind} is null and ${t.linkId} is null) or (${t.linkKind} in ('art', 'mod', 'video') and ${t.linkId} ~ '^[A-Za-z0-9_-]{1,64}$')`,
@@ -112,6 +125,39 @@ export const news = pgTable(
       for: 'delete',
       to: appRole,
       using: sql`${isPlatformAdmin} and ${t.status} = 'draft'`,
+    }),
+  ],
+).enableRLS();
+
+/**
+ * Текст «Для администратора платформы» (доработки 16.11.2026, блок 4, пункт 1): виден только в режиме
+ * Админка, под чертой с этой подписью. Отдельная таблица, а не столбец `news`: политика чтения новостей
+ * пускает всех пользователей, и столбец попал бы в любой запрос организации — здесь читать и писать может
+ * только администратор платформы. Пустой второй текст — строки нет; правка поднимает `news.version` в
+ * той же транзакции (код модуля «Новости»).
+ */
+export const newsAdminTexts = pgTable(
+  'news_admin_texts',
+  {
+    newsId: text('news_id')
+      .primaryKey()
+      .references(() => news.id, { onDelete: 'cascade' }),
+    /** Текст в markdown, как подробное описание новости. */
+    md: text('md').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Кто менял последним — вошедший администратор (запись с другим автором база не примет). */
+    updatedBy: uuid('updated_by')
+      .default(currentUserId)
+      .references(() => users.id, { onDelete: 'set null' }),
+  },
+  (t) => [
+    check('news_admin_texts_md_check', sql`char_length(${t.md}) between 1 and 50000`),
+    pgPolicy('news_admin_texts_admin', {
+      as: 'permissive',
+      for: 'all',
+      to: appRole,
+      using: isPlatformAdmin,
+      withCheck: sql`${isPlatformAdmin} and ${t.updatedBy} = ${currentUserId}`,
     }),
   ],
 ).enableRLS();

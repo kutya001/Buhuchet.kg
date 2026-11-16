@@ -76,6 +76,37 @@ export const FILE_SOURCE_KINDS = [
 ] as const;
 export type FileSourceKind = (typeof FILE_SOURCE_KINDS)[number];
 
+/**
+ * Ещё одна ссылка файла — запись контрагента без копии файла (доработки 16.11.2026, блок 2; таблица
+ * `file_links`): любой файл контрагента — принятый чек, накладная, акт, сверка — прикрепляется ссылкой
+ * к поступлению, оплате налога или за обслуживание, другой денежной или финансовой операции, разовой
+ * услуге, проекту и его оплате, отчёту (пункт 9). У задач ссылки нет — файлы задач видят только
+ * участники задачи. Источник самого файла не меняется («От контрагента»).
+ */
+export const FILE_LINK_SOURCE_KINDS = [
+  'report',
+  'receipt',
+  'tax_payment',
+  'fee_payment',
+  'money_operation',
+  'one_off_service',
+  'one_off_service_payment',
+  'project',
+  'project_payment',
+] as const satisfies readonly FileSourceKind[];
+export type FileLinkSourceKind = (typeof FILE_LINK_SOURCE_KINDS)[number];
+
+/**
+ * Какие файлы прикрепляются ссылкой (`file_links`, триггер `file_links_file_guard` миграции 0157): файлы
+ * самого контрагента без записи — «Загружен вручную» к контрагенту, «Из свидетельства и выписки», «От
+ * контрагента». Файл чужой записи (задачи, оплаты за обслуживание…) — нет: у него своя видимость.
+ */
+export const FILE_LINKABLE_FILE_KINDS = [
+  'manual',
+  'contractor',
+  'sent_file',
+] as const satisfies readonly FileSourceKind[];
+
 export function isFileSourceKind(value: string): value is FileSourceKind {
   return (FILE_SOURCE_KINDS as readonly string[]).includes(value);
 }
