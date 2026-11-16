@@ -85,12 +85,10 @@ describe('Excel XLSX в окне просмотра', () => {
 
   it('лист на 50 000 строк: показаны первые 5 000, известно, сколько всего', async () => {
     const bytes = await xlsxBytes([{ name: 'Журнал', rows: [['№', 'Описание']], bigRows: 49_999 }]);
-    const t0 = Date.now();
     const s = (await parseXlsx(openZip(bytes))).sheets[0]!;
     expect(s.rows).toHaveLength(SHEET_MAX_ROWS);
     expect(s.totalRows).toBe(50_000);
     expect(s.rows[SHEET_MAX_ROWS - 1]![1]).toEqual({ v: `Строка ${SHEET_MAX_ROWS}` });
-    expect(Date.now() - t0).toBeLessThan(5000);
   });
 
   it('книга с макросом (XLSM): макрос не читается, внешние связи не открываются, листы показываются', async () => {

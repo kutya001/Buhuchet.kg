@@ -32,7 +32,7 @@ test.describe('Доработки 16.11. Колокольчик: переход 
       .toBe(true);
   });
 
-  test('«Вход сотрудника заблокирован»: `?employee=` открывает карточку сотрудника; чужой номер — ничего', async ({
+  test('«Вход сотрудника заблокирован»: `?employee=` открывает карточку сотрудника; номер, которого нет, и не номер — ничего', async ({
     page,
     baseURL,
   }) => {
@@ -61,8 +61,19 @@ test.describe('Доработки 16.11. Колокольчик: переход 
     await expect(page.getByRole('dialog', { name: fullName })).toBeVisible();
     await expect(page).toHaveURL(/\/app\/staff\/list$/);
 
-    // Номер, которого нет (или не номер вовсе), карточку не открывает и адрес чистит.
-    await page.goto('/app/staff/list?employee=00000000-0000-4000-8000-000000000000');
+    // Номер, которого нет, карточку не открывает и адрес чистит: окна проверяются после ответа сервера.
+    const missing = '00000000-0000-4000-8000-000000000000';
+    const answered = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === `/api/staff/${missing}`,
+    );
+    await page.goto(`/app/staff/list?employee=${missing}`);
+    expect((await answered).status()).toBe(404);
+    await expect(page).toHaveURL(/\/app\/staff\/list$/);
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+
+    // Не номер вовсе — запроса нет, адрес чистится, окна нет.
+    await page.goto('/app/staff/list?employee=abc');
     await expect(page).toHaveURL(/\/app\/staff\/list$/);
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
     await expect(page.getByRole('dialog')).toHaveCount(0);

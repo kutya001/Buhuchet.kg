@@ -46,6 +46,8 @@ export const FILES_VIEW_TEXTS = {
   'files.view.none_hint': { ru: 'Скачайте файл, чтобы открыть его', section: V },
   'files.view.old': { ru: 'Старый формат {ext} — просмотр недоступен', section: V },
   'files.view.old_hint': { ru: 'Скачайте файл и откройте его в {app}', section: V },
+  'files.view.app.doc': { ru: 'Word', section: V },
+  'files.view.app.ppt': { ru: 'PowerPoint', section: V },
   'files.view.failed': { ru: 'Не удалось открыть файл', section: V },
   'files.view.encrypted': { ru: 'Файл защищён паролем — просмотр недоступен', section: V },
   'files.view.too_big': { ru: 'Файл слишком сложный для просмотра', section: V },

@@ -30,9 +30,13 @@ describe('ZIP окна просмотра: предел распаковки', (
     expect(await z.text('нет')).toBeNull();
   });
 
-  it('zip-бомба: 70 МиБ нулей с честным размером — отказ без распаковки', async () => {
-    const zeros = new Uint8Array(70 * MiB);
-    const z = openZip(await zipBytes([{ name: 'xl/worksheets/sheet1.xml', data: zeros }]));
+  it('zip-бомба: часть больше предела с честным размером — отказ без распаковки', async () => {
+    // Предел части уменьшен (в работе — 64 МиБ), чтобы тест не сжимал десятки мегабайт.
+    const zeros = new Uint8Array(2 * MiB);
+    const z = openZip(await zipBytes([{ name: 'xl/worksheets/sheet1.xml', data: zeros }]), {
+      ...ZIP_LIMITS,
+      maxEntryBytes: MiB,
+    });
     await expect(z.read('xl/worksheets/sheet1.xml')).rejects.toThrowError(
       new ViewError('zip_too_big'),
     );

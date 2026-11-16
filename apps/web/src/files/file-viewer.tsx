@@ -92,7 +92,7 @@ type Content =
 
 /** Байтов файла для просмотра — не больше предела загрузки (20 МБ) с запасом. */
 export const VIEW_FETCH_MAX = FILE_MAX_BYTES + 1024 * 1024;
-/** Разбор дольше — поток закрывается, «Не удалось открыть файл». */
+/** Разбор дольше — поток закрывается, «Файл слишком сложный для просмотра». */
 export const VIEW_PARSE_MS = 30_000;
 
 class ViewLoadError extends Error {
@@ -240,17 +240,21 @@ function viewLabels(t: Translate): FileViewLabels {
   };
 }
 
-/** Текст ошибки разбора: пароль, слишком большой или сложный файл, остальное — «Не удалось открыть». */
-function failedTitle(t: Translate, code: string): string {
+/** Коды пределов разбора (docs/deviations.md п. И-12): «Файл слишком сложный для просмотра». */
+const TOO_COMPLEX = new Set([
+  'too_big',
+  'timeout',
+  'zip_too_big',
+  'zip_bomb',
+  'zip_entries',
+  'xml_too_big',
+  'xml_too_deep',
+]);
+
+/** Текст ошибки разбора: пароль, слишком большой или сложный файл, остальное (битый) — «Не удалось открыть». */
+export function failedTitle(t: Translate, code: string): string {
   if (code === 'file_encrypted') return t('files.view.encrypted');
-  if (
-    code === 'too_big' ||
-    code.startsWith('zip_') ||
-    code === 'xml_too_big' ||
-    code === 'xml_too_deep' ||
-    code === 'timeout'
-  )
-    return t('files.view.too_big');
+  if (TOO_COMPLEX.has(code)) return t('files.view.too_big');
   return t('files.view.failed');
 }
 
@@ -319,7 +323,9 @@ export function FileViewer<F extends ViewerFile>({
         <FileViewState
           state="old"
           title={t('files.view.old', { ext })}
-          text={t('files.view.old_hint', { app: ext === 'DOC' ? 'Word' : 'PowerPoint' })}
+          text={t('files.view.old_hint', {
+            app: t(ext === 'DOC' ? 'files.view.app.doc' : 'files.view.app.ppt'),
+          })}
           action={dlButton}
         />
       );

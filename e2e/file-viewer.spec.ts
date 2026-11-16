@@ -37,6 +37,22 @@ async function apiUpload(api: APIRequestContext, origin: string, name: string, b
 
 const fileRow = (page: Page, id: string) => page.locator(`[data-grid] [data-id="${id}"]`);
 
+/**
+ * «Файловый менеджер» с поиском по своей метке: дождаться ответа списка с поиском и ровно своих строк —
+ * иначе нажатие придёт в строку, которую сдвинет перерисовка (docs/typical-mistakes.md № 27).
+ */
+async function managerWithTag(page: Page, isMobile: boolean, tag: string, count: number) {
+  await page.goto('/app/files');
+  await expect(page.locator('[data-grid]')).toBeVisible();
+  const searched = page.waitForResponse((r) => {
+    const url = new URL(r.url());
+    return url.pathname === '/api/files/manager' && url.searchParams.get('q') === tag;
+  });
+  await search(page, isMobile, tag);
+  expect((await searched).status()).toBe(200);
+  await expect(page.locator('[data-grid] [data-id]')).toHaveCount(count);
+}
+
 /** Открыть файл из строки «Файлового менеджера»: окно с названием файла и его просмотром. */
 async function openFile(page: Page, id: string, name: string) {
   await fileRow(page, id).getByText(name, { exact: true }).click();
@@ -46,7 +62,7 @@ async function openFile(page: Page, id: string, name: string) {
 }
 
 test.describe('Доработки 16.11. Окно просмотра файлов', () => {
-  test('(сценарий 9) XLSX — листы вкладками, числа как в файле; TXT в Windows-1251 по-русски; XML с внешней сущностью — без загрузки внешнего; DOC — только «Скачать»; «‹ ›» — файлы списка', async ({
+  test('(сценарий 9) XLSX — листы вкладками, числа как в файле, поиск по листу; «‹ ›» — соседний файл того же списка', async ({
     page,
     baseURL,
     isMobile,
@@ -54,36 +70,15 @@ test.describe('Доработки 16.11. Окно просмотра файло�
     const origin = new URL(baseURL!).origin;
     const tag = uniqueTag();
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
-    const names = {
-      xlsx: `налоги-${tag}.xlsx`,
-      txt: `выписка-${tag}.txt`,
-      xml: `отчёт-ГНС-${tag}.xml`,
-      doc: `договор-${tag}.doc`,
-    };
+    const names = { xlsx: `налоги-${tag}.xlsx`, doc: `договор-${tag}.doc` };
     const ids = {
       xlsx: await apiUpload(page.request, origin, names.xlsx, xlsxTwoSheets()),
-      txt: await apiUpload(
-        page.request,
-        origin,
-        names.txt,
-        win1251('Отчёт за октябрь\nИтого: 1 250,50 сом'),
-      ),
-      xml: await apiUpload(page.request, origin, names.xml, xmlWithEntity()),
       doc: await apiUpload(page.request, origin, names.doc, oldDoc()),
     };
-    // Ни один запрос страницы не уходит по адресу внешней сущности XML.
-    const external: string[] = [];
-    page.on('request', (req) => {
-      if (req.url().startsWith(new URL(XML_EXTERNAL).origin)) external.push(req.url());
-    });
+    await managerWithTag(page, isMobile, tag, 2);
 
-    await page.goto('/app/files');
-    await expect(page.locator('[data-grid]')).toBeVisible();
-    await search(page, isMobile, tag);
-    await expect(fileRow(page, ids.doc)).toBeVisible();
-
-    // XLSX: листы вкладками внизу, буквы столбцов, жирные заголовки, число в формате файла.
-    let card = await openFile(page, ids.xlsx, names.xlsx);
+    // Листы вкладками внизу, буквы столбцов, жирные заголовки, число в формате файла.
+    const card = await openFile(page, ids.xlsx, names.xlsx);
     await expect(card.locator('[data-fsh]')).toHaveText([...XLSX_SHEETS]);
     await expect(card.locator('[data-fsh="0"]')).toHaveAttribute('aria-selected', 'true');
     await expect(card.locator('[data-cell="0:0"]')).toHaveText('Налог');
@@ -101,14 +96,13 @@ test.describe('Доработки 16.11. Окно просмотра файло�
       `/api/files/${ids.xlsx}/download`,
     );
 
-    // «‹ ›» — соседний файл того же списка (на ПК — ещё стрелки клавиатуры), счётчик «N из 4».
-    await expect(card.locator('[data-fv-n]')).toHaveText(/из 4$/);
+    // «‹ ›» — соседний файл того же списка (на ПК — ещё стрелки клавиатуры), счётчик «N из 2».
+    await expect(card.locator('[data-fv-n]')).toHaveText(/из 2$/);
     const viewer = page.locator('[data-file-viewer]');
     const next = page.locator('[data-fv-next]');
     const forward = await next.isEnabled();
     await (forward ? next : page.locator('[data-fv-prev]')).click();
-    await expect(viewer).not.toHaveAttribute('data-file-viewer', ids.xlsx);
-    expect(Object.values(ids)).toContain(await viewer.getAttribute('data-file-viewer'));
+    await expect(viewer).toHaveAttribute('data-file-viewer', ids.doc);
     if (!isMobile) {
       await page.keyboard.press(forward ? 'ArrowLeft' : 'ArrowRight');
       await expect(viewer).toHaveAttribute('data-file-viewer', ids.xlsx);
@@ -119,9 +113,43 @@ test.describe('Доработки 16.11. Окно просмотра файло�
       .getByRole('button', { name: 'Готово' })
       .click();
     await expect(viewer).toHaveCount(0);
+  });
+
+  test('(сценарий 9) TXT в Windows-1251 — по-русски; XML с внешней сущностью — без загрузки внешнего; DOC — только «Скачать»; PDF с чужим содержимым — «Предпросмотр недоступен»', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const tag = uniqueTag();
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    const names = {
+      txt: `выписка-${tag}.txt`,
+      xml: `отчёт-ГНС-${tag}.xml`,
+      doc: `договор-${tag}.doc`,
+      pdf: `скан-${tag}.pdf`,
+    };
+    const ids = {
+      txt: await apiUpload(
+        page.request,
+        origin,
+        names.txt,
+        win1251('Отчёт за октябрь\nИтого: 1 250,50 сом'),
+      ),
+      xml: await apiUpload(page.request, origin, names.xml, xmlWithEntity()),
+      doc: await apiUpload(page.request, origin, names.doc, oldDoc()),
+      // Расширение «.pdf», а внутри — текст: во фрейм не попадает.
+      pdf: await apiUpload(page.request, origin, names.pdf, Buffer.from('<html>не PDF</html>')),
+    };
+    // Ни один запрос страницы не уходит по адресу внешней сущности XML.
+    const external: string[] = [];
+    page.on('request', (req) => {
+      if (req.url().startsWith(new URL(XML_EXTERNAL).origin)) external.push(req.url());
+    });
+    await managerWithTag(page, isMobile, tag, 4);
 
     // TXT в Windows-1251: русский текст, кодировка определена сама; номера строк.
-    card = await openFile(page, ids.txt, names.txt);
+    let card = await openFile(page, ids.txt, names.txt);
     await expect(card.locator('[data-fv="text"]')).toContainText('Отчёт за октябрь');
     await expect(card.locator('[data-fv="text"]')).toContainText('Итого: 1 250,50 сом');
     await expect(card.locator('[data-fv-enc]')).toHaveAttribute('data-fv-enc', 'windows-1251');
@@ -145,6 +173,16 @@ test.describe('Доработки 16.11. Окно просмотра файло�
       0,
     );
     await card.getByRole('button', { name: 'Готово' }).click();
-    await expect(viewer).toHaveCount(0);
+
+    // «.pdf» с чужим содержимым: тип проверен по байтам — «Предпросмотр недоступен», фрейма нет.
+    card = await openFile(page, ids.pdf, names.pdf);
+    await expect(card.locator('[data-fv-state="none"]')).toBeVisible();
+    await expect(card.locator('[data-fv-state="none"] [data-fdl]')).toHaveAttribute(
+      'href',
+      `/api/files/${ids.pdf}/download`,
+    );
+    await expect(card.locator('iframe')).toHaveCount(0);
+    await card.getByRole('button', { name: 'Готово' }).click();
+    await expect(page.locator('[data-file-viewer]')).toHaveCount(0);
   });
 });
