@@ -57,11 +57,14 @@ export function newsModulesSeen(
 export type NewsModulesProblem =
   'news_modules_unknown' | 'news_modules_duplicate' | 'news_modules_too_many';
 
-/** Что не так со списком модулей: незнакомый код, повтор или больше `NEWS_MODULES_MAX`. */
+/**
+ * Что не так со списком модулей: больше `NEWS_MODULES_MAX` (предел базы; проверяется первым — длинный
+ * список дальше не разбирается), незнакомый код или повтор.
+ */
 export function newsModulesProblem(codes: readonly string[]): NewsModulesProblem | null {
+  if (codes.length > NEWS_MODULES_MAX) return 'news_modules_too_many';
   if (codes.some((c) => !isNewsModule(c))) return 'news_modules_unknown';
   if (new Set(codes).size !== codes.length) return 'news_modules_duplicate';
-  if (codes.length > NEWS_MODULES_MAX) return 'news_modules_too_many';
   return null;
 }
 

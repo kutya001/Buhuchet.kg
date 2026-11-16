@@ -504,7 +504,10 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
         .click();
       const card = page.getByRole('dialog', { name: releaseTitle });
       const second = card.locator('[data-news-admin]');
-      await expect(second).toContainText('Для администратора платформы');
+      const l10n = (await (await admin.get('/api/l10n')).json()) as {
+        texts: Record<string, string>;
+      };
+      await expect(second).toContainText(l10n.texts['news.admin_md']!);
       await expect(second).toContainText(`Миграция ${tag}`);
     } finally {
       for (const id of ids) await takeOff(admin, origin, id);

@@ -70,6 +70,9 @@ describe('модули новости — как NEWS_MODS и newsModOk прот
     expect(newsModulesProblem(['cps', 'accounts'])).toBe('news_modules_unknown');
     expect(newsModulesProblem(['cps', 'cps'])).toBe('news_modules_duplicate');
     expect(newsModulesProblem(Array.from({ length: 31 }, () => 'cps'))).toBe(
+      'news_modules_too_many',
+    );
+    expect(newsModulesProblem(Array.from({ length: 30 }, () => 'cps'))).toBe(
       'news_modules_duplicate',
     );
     expect(newsModulesOrdered(['fee', 'cps', 'fee'])).toEqual(['cps', 'fee']);

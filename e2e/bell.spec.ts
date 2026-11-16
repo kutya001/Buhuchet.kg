@@ -8,7 +8,7 @@ import {
   type BrowserContext,
   type Page,
 } from '@playwright/test';
-import { DEMO_PASSWORD, hire, newOrgOwner, signIn, uniqueLogin } from './helpers';
+import { DEMO_PASSWORD, hire, newOrgOwner, signIn, stillElement, uniqueLogin } from './helpers';
 import { newContractor } from './reports';
 
 // Колокольчик уведомлений (доработки 16.11.2026, блок 3; прототип v123 `ui/bell-panel.js`): число
@@ -67,21 +67,23 @@ const freshInn = () =>
     .toString()
     .padStart(4, '0')}`;
 
-/** Открыть или обновить страницу и дождаться числа на колокольчике с сервера. */
+/**
+ * Открыть или обновить страницу: число непросмотренных — из ответа сервера (до ответа значок рисует
+ * «0», поэтому сверять только атрибут нельзя) и значок, когда он его показал.
+ */
 async function bellPage(page: Page, reload = false) {
   const counted = page.waitForResponse(
     (r) => new URL(r.url()).pathname === '/api/bell/count' && r.status() === 200,
   );
   if (reload) await page.reload();
   else await page.goto('/app/home');
-  await counted;
-  return page.locator('[data-bell]');
-}
-
-/** Число на колокольчике: `null` — числа нет (все просмотрены). */
-async function bellCount(page: Page): Promise<string | null> {
-  const badge = page.locator('[data-bell] [data-bell-count]');
-  return (await badge.count()) ? await badge.innerText() : null;
+  const { unseen } = (await (await counted).json()) as { unseen: number };
+  const bell = page.locator('[data-bell]');
+  await expect(bell).toHaveAttribute('data-unseen', String(unseen));
+  const badge = bell.locator('[data-bell-count]');
+  if (unseen) await expect(badge).toHaveText(String(unseen));
+  else await expect(badge).toHaveCount(0);
+  return unseen;
 }
 
 /** Открыть панель «Уведомления»: первый ответ страницы — уже после «просмотрено». */
@@ -106,13 +108,13 @@ async function tick(api: APIRequestContext) {
 const SLOT = 5 * 60_000;
 
 /**
- * «ЧЧ:ММ» по Бишкеку ближайшего запуска строк дня (`telegram.bell-day` — раз в 5 минут, организация —
- * в запуск своего «Часа напоминаний»): время в будущем, поэтому этот запуск ещё никто не занял.
+ * Ближайший запуск строк дня (`telegram.bell-day` — раз в 5 минут, организация — в запуск своего «Часа
+ * напоминаний»): момент и «ЧЧ:ММ» по Бишкеку; время в будущем, поэтому этот запуск ещё никто не занял.
  */
-function nextSlotTime(now = Date.now()) {
+function nextSlot(now = Date.now()) {
   let slot = Math.ceil(now / SLOT) * SLOT;
   if (slot - now < 30_000) slot += SLOT;
-  return new Date(slot + 6 * 3600_000).toISOString().slice(11, 16);
+  return { at: slot, hm: new Date(slot + 6 * 3600_000).toISOString().slice(11, 16) };
 }
 
 test.describe('Доработки 16.11, блок 3: колокольчик уведомлений', () => {
@@ -172,8 +174,7 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
 
     // На ПК у ответственного числа на колокольчике нет.
     await signIn(page.request, origin, login, PASSWORD);
-    await expect(await bellPage(page)).toHaveAttribute('data-unseen', '0');
-    expect(await bellCount(page)).toBeNull();
+    expect(await bellPage(page)).toBe(0);
 
     // Клиент отправляет файл со своей страницы (начать → PUT в хранилище → закончить).
     const part = () => Math.floor(Math.random() * 256);
@@ -213,12 +214,11 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
     await client.dispose();
 
     // ПК: число «1» — после обновления страницы (или раз в минуту сам).
-    await expect(await bellPage(page, true)).toHaveAttribute('data-unseen', '1');
-    expect(await bellCount(page)).toBe('1');
+    expect(await bellPage(page, true)).toBe(1);
 
     // Телефон: «1» на колокольчике, панель во весь экран — строка «Новый файл от контрагента».
     const phone = await device(browser, baseURL!, 'phone', login);
-    await expect(await bellPage(phone.page)).toHaveAttribute('data-unseen', '1');
+    expect(await bellPage(phone.page)).toBe(1);
     const panel = await openPanel(phone.page);
     const box = await panel.boundingBox();
     expect(box?.width).toBe(390);
@@ -229,14 +229,28 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
     // Открыл панель — просмотрено: числа нет и на телефоне.
     await expect(phone.page.locator('[data-bell]')).toHaveAttribute('data-unseen', '0');
 
-    // ПК после обновления: число погасло, строка ещё не прочитана.
-    await expect(await bellPage(page, true)).toHaveAttribute('data-unseen', '0');
-    expect(await bellCount(page)).toBeNull();
+    // ПК после обновления: сервер отвечает «0», числа на значке нет.
+    expect(await bellPage(page, true)).toBe(0);
+
+    // Панель: кнопка-фильтр без строк — «Новых уведомлений нет» и «Показать все» (снова «Все»);
+    // «Прочитать все» — строка без синей точки, уведомление.
+    await panel.locator('[data-bell-tab="tasks"]').click();
+    await expect(panel.locator('[data-bell-tab="tasks"]')).toHaveAttribute('aria-pressed', 'true');
+    const empty = panel.locator('[data-bell-empty]');
+    await expect(empty).toContainText(texts['bell.empty']!);
+    await empty.getByRole('button', { name: texts['bell.show_all']! }).click();
+    await expect(panel.locator('[data-bell-tab="all"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(row).toBeVisible();
+    await panel.locator('[data-bell-read-all]').click();
+    await expect(phone.page.getByText(texts['bell.read_all_done']!)).toBeVisible();
+    await expect(row).toHaveAttribute('data-read', 'true');
+    await expect(panel.locator('[data-bell-read-all]')).toBeDisabled();
 
     // Телефон: нажатие на строку — карточка контрагента, «Файлы» → «Отправленные файлы» с этим файлом.
     const read = phone.page.waitForResponse((r) =>
       /\/api\/bell\/[^/]+\/read$/.test(new URL(r.url()).pathname),
     );
+    await stillElement(row);
     await row.click();
     await expect(panel).toBeHidden();
     const card = phone.page.getByRole('dialog', { name });
@@ -247,7 +261,7 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
     expect((await read).status()).toBe(200);
     await phone.context.close();
 
-    // ПК: в панели строка уже прочитана (без синей точки).
+    // ПК: в панели строка уже прочитана (без синей точки) — «Прочитать все» на телефоне.
     const pcPanel = await openPanel(page);
     const pcRow = pcPanel.locator('[data-bell-row]').filter({ hasText: name });
     await expect(pcRow).toHaveAttribute('data-read', 'true');
@@ -265,7 +279,7 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
   }) => {
     test.skip(isMobile, 'ПК и телефон — в одном тесте: телефон — свой контекст браузера');
     // Строки дня кладёт задача расписания в ближайший запуск «Часа напоминаний» — до 5 минут ожидания.
-    test.setTimeout(9 * 60_000);
+    test.setTimeout(11 * 60_000);
     const origin = new URL(baseURL!).origin;
     const texts = await dictionary(request);
 
@@ -297,33 +311,32 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
     const me = (await (await request.get('/api/auth/me')).json()) as { telegram: unknown };
     expect(me.telegram).toBeNull();
     const current = (await (await request.get('/api/org/policy')).json()) as { version: number };
+    const slot = nextSlot();
     const saved = await request.patch('/api/org/policy', {
       headers: { origin },
-      data: {
-        version: current.version,
-        features: { telegram: false },
-        digestTime: nextSlotTime(),
-      },
+      data: { version: current.version, features: { telegram: false }, digestTime: slot.hm },
     });
     expect(saved.status(), await saved.text()).toBe(200);
 
-    // Запуск расписания (как вызывает Vercel) — пока строка дня не появится.
+    // Запуск расписания (как вызывает Vercel) — пока не появится именно строка дня («Отчёты»):
+    // до слота и ещё 3 минуты на запуск и его повтор.
     await expect
       .poll(
         async () => {
           await tick(request);
-          const res = await request.get('/api/bell/count', { maxRetries: 2 });
+          const res = await request.get('/api/bell?tab=reports', { maxRetries: 2 });
           expect(res.status()).toBe(200);
-          return ((await res.json()) as { unseen: number }).unseen;
+          const { items } = (await res.json()) as { items: { event: string }[] };
+          return items.filter((x) => x.event === 'day_dues').length;
         },
-        { timeout: 7 * 60_000, intervals: [10_000, 15_000] },
+        { timeout: slot.at - Date.now() + 3 * 60_000, intervals: [10_000, 15_000] },
       )
-      .toBeGreaterThan(0);
+      .toBe(1);
 
     // ПК: строка «Сроки на сегодня: … просрочено 1» с датой «Сегодня».
     const prefix = lead(texts, 'bell.line.day');
     await signIn(page.request, origin, login, PASSWORD);
-    await expect(await bellPage(page)).not.toHaveAttribute('data-unseen', '0');
+    expect(await bellPage(page)).toBeGreaterThan(0);
     const panel = await openPanel(page);
     const row = panel.locator('[data-bell-row]').filter({ hasText: prefix });
     await expect(row).toHaveCount(1);
@@ -338,6 +351,7 @@ test.describe('Доработки 16.11, блок 3: колокольчик ув
     const phonePanel = await openPanel(phone.page);
     const phoneRow = phonePanel.locator('[data-bell-row]').filter({ hasText: prefix });
     await expect(phoneRow).toHaveCount(1);
+    await stillElement(phoneRow);
     await phoneRow.click();
     await expect(phone.page).toHaveURL(/\/app\/reports\/week(\?|$)/);
     await expect(phone.page.locator('[data-grid]')).toBeVisible();
