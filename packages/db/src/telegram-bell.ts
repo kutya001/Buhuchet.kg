@@ -35,6 +35,9 @@ export interface BellRowInput {
  * Положить строки в колокольчик организации из контекста (у администратора платформы — без организации):
  * в транзакции действия; строка с тем же ключом события у того же человека второй раз не кладётся.
  * Число добавленных — по счёту строк, без RETURNING: чужие строки RLS вошедшему не показывает.
+ * `on conflict` без списка столбцов: со списком PostgreSQL сверяет новую строку и с правилом чтения
+ * (`bell_notifications_own_select`), и строка другому сотруднику или из задачи без вошедшего не ложится.
+ * Уникальных ключей у таблицы два: id (случайный) и (user_id, event_key) — повтор отсекает второй.
  */
 export async function insertBellRows(
   tx: Tx,
@@ -62,7 +65,7 @@ export async function insertBellRows(
       r.contractor_id, r.need, r.text, ${now.toISOString()}::timestamptz, r.event_key
     from jsonb_to_recordset(${json}::jsonb) as r(user_id uuid, kind text, event text,
       target_kind text, target_id text, contractor_id uuid, need text, text text, event_key text)
-    on conflict (user_id, event_key) do nothing`);
+    on conflict do nothing`);
   return res.count ?? 0;
 }
 
