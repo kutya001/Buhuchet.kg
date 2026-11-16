@@ -396,6 +396,33 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     }
   });
 
+  it('файлы от контрагента: у ответственного нет «Просматривать файлы» — строку получает владелец', async () => {
+    await clear();
+    // Ответственный — «Старший»: «Просматривать контрагентов» есть, «Просматривать файлы» нет.
+    await f.t.admin.db
+      .update(contractors)
+      .set({ responsibleEmployeeId: person('senior-a').employeeId })
+      .where(eq(contractors.id, cp));
+    try {
+      expect(
+        await inOrg((tx) =>
+          bellContractor(deps, tx, cp, {
+            event: 'cp_file',
+            sendId: '0b7f8a52-8a36-4a8e-9a43-000000000010',
+            n: 1,
+          }),
+        ),
+      ).toBe(1);
+      expect(await rowsOf(person('senior-a').userId)).toEqual([]);
+      expect((await rowsOf(f.a.ownerUserId, 'cp_file')).map((r) => r.need)).toEqual(['filesView']);
+    } finally {
+      await f.t.admin.db
+        .update(contractors)
+        .set({ responsibleEmployeeId: person('acc-a').employeeId })
+        .where(eq(contractors.id, cp));
+    }
+  });
+
   it('право строки — действующее: «Видеть плату за обслуживание» без «Просматривать контрагентов» строки не показывает', async () => {
     await clear();
     const senior = person('senior-a').userId;

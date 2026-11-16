@@ -13,6 +13,7 @@ import {
   employees,
   news,
   newsReads,
+  organizations,
   platformLeads,
   users,
 } from './schema';
@@ -641,6 +642,51 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         ),
       ).toBeNull();
       expect(await db.admin.db.$count(bellNotifications)).toBe(0);
+    });
+
+    it('рассылка: строку не получают заблокированная учётная запись, неактивный сотрудник, заблокированная организация и администратор платформы', async () => {
+      await clear();
+      const cast = () =>
+        asAdmin((tx) =>
+          adminTelegramBroadcast(tx, {
+            orgId: null,
+            text: 'Текст',
+            now: NOW,
+            bellText: 'Сообщение платформы: Обновление',
+          }),
+        );
+      const recipients = async () =>
+        (await db.admin.db.select({ user: bellNotifications.userId }).from(bellNotifications)).map(
+          (r) => r.user,
+        );
+      await db.admin.db.update(users).set({ blocked: true }).where(eq(users.id, acc.userId));
+      await db.admin.db
+        .update(organizations)
+        .set({ status: 'blocked' })
+        .where(eq(organizations.id, b.orgId));
+      try {
+        expect(await cast()).toBe(0);
+        // Только владелец организации А: администратор платформы — не сотрудник, строки нет и ему.
+        expect(await recipients()).toEqual([a.ownerUserId]);
+        await clear();
+        await db.admin.db.update(users).set({ blocked: false }).where(eq(users.id, acc.userId));
+        await db.admin.db
+          .update(employees)
+          .set({ active: false })
+          .where(eq(employees.userId, acc.userId));
+        expect(await cast()).toBe(0);
+        expect(await recipients()).toEqual([a.ownerUserId]);
+      } finally {
+        await db.admin.db.update(users).set({ blocked: false }).where(eq(users.id, acc.userId));
+        await db.admin.db
+          .update(employees)
+          .set({ active: true })
+          .where(eq(employees.userId, acc.userId));
+        await db.admin.db
+          .update(organizations)
+          .set({ status: 'active' })
+          .where(eq(organizations.id, b.orgId));
+      }
     });
   });
 });
