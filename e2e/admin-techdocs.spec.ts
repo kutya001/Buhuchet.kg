@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { newOrgOwner } from './helpers';
+import { cardTab, newOrgOwner } from './helpers';
 
 // Админка → «Техническая документация» (ТЗ «Админка» → «Техническая документация», решение заказчика
 // 09.11.2026; прототип v83 admin/techdocs.js): вкладки «Схема базы» (страница схемы в рамке) и «API»
@@ -36,15 +36,7 @@ test.describe('Админка: техническая документация',
 
     const card = page.getByRole('dialog', { name: USERS });
     const body = card.locator(`[data-td-method="${USERS}"]`);
-    const openTab = async (tab: string) => {
-      if (isMobile) {
-        await card.getByRole('tab', { selected: true }).click();
-        await page.getByRole('menu').getByRole('menuitem', { name: tab }).click();
-      } else {
-        await card.getByRole('tab', { name: tab }).click();
-      }
-      await expect(card.getByRole('tab', { selected: true })).toContainText(tab);
-    };
+    const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
     await expect(body).toContainText('Только администратор платформы');
     await expect(card).toContainText('Только просмотр: из Админки метод не вызывается');
 

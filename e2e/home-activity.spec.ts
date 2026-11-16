@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { showStats, signIn, uniqueLogin } from './helpers';
+import { cardTab, showStats, signIn, uniqueLogin } from './helpers';
 import { orgWithTypes } from './orgs';
 import { newContractor } from './reports';
 
@@ -33,16 +33,6 @@ async function showPlates(page: Page, screen: Locator) {
   await expect(screen.locator('[data-grid] [data-id]').first()).toBeVisible();
   await showStats(page);
   await expect(screen.locator('[data-plates]')).toBeVisible();
-}
-
-/** Вкладка окна: на телефоне — список вкладок. */
-async function toTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
 }
 
 /** Владелец своей организации нанимает сотрудника с ролью; ответ — временный пароль. */
@@ -119,7 +109,7 @@ test.describe('«Главная» → «Активность»', () => {
     const card = page.getByRole('dialog').filter({ hasText: 'Активность ·' });
     await expect(card).toContainText('Подборова Сквозная');
     await expect(card.locator('[data-mini-table]')).toContainText(today);
-    await toTab(page, card, isMobile, /По контрагентам/);
+    await cardTab(page, card, isMobile, /По контрагентам/);
     await expect(card.locator('[data-mini-table]')).toContainText(name);
     await expect(card.locator('[data-mini-table]')).not.toContainText('Прочие контрагенты');
     await card.locator('[data-mini-table]').getByText(name).click();

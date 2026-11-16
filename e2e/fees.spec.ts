@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, showStats, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, showStats, signIn, stillElement } from './helpers';
 import { asOwner, newContractor, staffIds } from './reports';
 
 // «Контрагенты» → плата за обслуживание (задача 2.21, #77) через настоящий сайт. Демо-организация:
@@ -50,20 +50,14 @@ async function openCard(page: Page, id: string, name: string): Promise<Locator> 
 /** Названия вкладок карточки (на телефоне — пункты списка под текущей вкладкой). */
 async function tabNames(page: Page, card: Locator, isMobile: boolean): Promise<string[]> {
   if (!isMobile) return card.getByRole('tab').allInnerTexts();
+  await stillElement(card);
   await card.getByRole('tab', { selected: true }).click();
-  const names = await page.getByRole('menu').getByRole('menuitem').allInnerTexts();
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem').first()).toBeVisible();
+  const names = await menu.getByRole('menuitem').allInnerTexts();
   await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
   return names;
-}
-
-/** Вкладка карточки: на телефоне — из списка под текущей вкладкой. */
-async function toTab(page: Page, card: Locator, isMobile: boolean, name: RegExp) {
-  if (isMobile) {
-    await card.getByRole('tab', { selected: true }).click();
-    await page.getByRole('menu').getByRole('menuitem', { name }).click();
-  } else {
-    await card.getByRole('tab', { name }).click();
-  }
 }
 
 async function feesOf(api: APIRequestContext, id: string): Promise<Fees> {
@@ -116,7 +110,7 @@ test.describe('Этап 2: плата за обслуживание', () => {
 
     // Карточка → «Обслуживание»: долг 0, начисление «Оплачено», оплата в «Оплаты · 1».
     const card = await openCard(page, cp.id, name);
-    await toTab(page, card, isMobile, /Обслуживание/);
+    await cardTab(page, card, isMobile, /Обслуживание/);
     const tab = card.locator('[data-fee-tab]');
     // Значение плашки — вместе с единицей: «0 сом».
     await expect(tab.locator('[data-plate="debt"] [data-plate-value]')).toHaveText(/^0\s*сом$/);
@@ -174,7 +168,7 @@ test.describe('Этап 2: плата за обслуживание', () => {
     expect(await tabNames(page, card, isMobile)).toEqual(
       expect.arrayContaining([expect.stringMatching(/Обслуживание/)]),
     );
-    await toTab(page, card, isMobile, /История/);
+    await cardTab(page, card, isMobile, /История/);
     await expect(card).toContainText('Оплата за обслуживание');
     await card.getByRole('button', { name: 'Готово' }).click();
 
@@ -211,7 +205,7 @@ test.describe('Этап 2: плата за обслуживание', () => {
     const names = await tabNames(page, card, isMobile);
     expect(names.some((n) => /Деньги/.test(n))).toBe(true);
     expect(names.some((n) => /Обслуживание/.test(n))).toBe(false);
-    await toTab(page, card, isMobile, /История/);
+    await cardTab(page, card, isMobile, /История/);
     await expect(card.locator('[data-timeline-item]').first()).toBeVisible();
     await expect(card).not.toContainText('Оплата за обслуживание');
     await expect(card).not.toContainText('Ставка обслуживания');
@@ -240,7 +234,7 @@ test.describe('Этап 2: плата за обслуживание', () => {
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await openList(page, isMobile, word);
     const card = await openCard(page, cp.id, name);
-    await toTab(page, card, isMobile, /Обслуживание/);
+    await cardTab(page, card, isMobile, /Обслуживание/);
     const tab = card.locator('[data-fee-tab]');
     const journal = tab.locator('[data-fee-tariffs] li');
     await expect(journal).toHaveCount(2);
@@ -292,7 +286,7 @@ test.describe('Этап 2: плата за обслуживание', () => {
     await expect(journal).toHaveCount(1);
 
     // История контрагента: правка и удаление — с причиной.
-    await toTab(page, card, isMobile, /История/);
+    await cardTab(page, card, isMobile, /История/);
     await expect(card).toContainText(
       /Изменена ставка обслуживания: сумма 60\s000\sсом → 50\s000\sсом\. Причина: ставку внесли с ошибкой/,
     );
