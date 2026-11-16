@@ -18,7 +18,7 @@ import { AttachDialog } from './attach-dialog';
 import { FileEditDialog } from './file-edit-dialog';
 import { linkFiles, unlinkFile } from './file-links-data';
 import { FilePickDialog } from './file-pick-dialog';
-import { fileMeta, filesQuery, uploadFile, useFilePageToggle } from './files-data';
+import { fileMeta, filesQuery, uploadFile, useFilePageToggle, useFilesRefresh } from './files-data';
 
 /**
  * Блок «Файлы» карточки записи (задача 2.04; прототип modules/services.js `filesBox`, `bindFiles`):
@@ -42,6 +42,8 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const [editId, setEditId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const togglePage = useFilePageToggle(t, toast, errorText);
+  // Ссылка меняет и «Источник» в «Файловом менеджере», и «также у …» в файлах контрагента.
+  const refreshAll = useFilesRefresh();
 
   const labels = useMemo<FilesBoxLabels>(
     () => ({
@@ -127,7 +129,7 @@ export function RecordFiles({ source }: { source: FileSource }) {
       target,
       picked.map((x) => x.id),
     );
-    await refresh();
+    await refreshAll();
     if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
     const n = res.data.added.length;
     if (n)
@@ -137,7 +139,7 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const unlink = async (item: FilesBoxItem) => {
     if (!target) return;
     const res = await unlinkFile(item.id, target);
-    await refresh();
+    await refreshAll();
     if (res.ok) toast(t('files.link.unlinked'), { icon: 'link' });
     else toast(errorText(res.error), { bad: true, icon: 'alert' });
   };

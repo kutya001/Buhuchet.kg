@@ -53,7 +53,7 @@ import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { WhyButton } from '../finance/finance-dialogs';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
-import { linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import { useShell } from '../shell/context';
 import { openProjectCard } from './project-card-store';
@@ -471,9 +471,10 @@ export function ProjectPayDialog({
     const saved = res.ok ? ProjectSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
       const source = { kind: 'project_payment' as const, id: saved.data.id };
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        (await linkPicked(t, errorText, source, links));
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();

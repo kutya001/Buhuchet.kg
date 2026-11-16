@@ -96,3 +96,11 @@ export async function linkPicked(
   );
   return res.ok ? null : t('files.pick.link_failed', { error: errorText(res.error) });
 }
+
+/**
+ * Тексты неудач двух шагов после сохранения записи (загрузка новых файлов и ссылки из файлов
+ * контрагента): каждый шаг идёт, даже если другой не удался; всё удалось — null.
+ */
+export function joinFailures(...texts: (string | null)[]): string | null {
+  return texts.filter(Boolean).join(' ') || null;
+}

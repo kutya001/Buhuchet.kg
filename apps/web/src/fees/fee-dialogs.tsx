@@ -47,7 +47,7 @@ import { editFeePayment, feePaymentEditFormQuery } from '../finance/journal-data
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
-import { linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import {
   feeOrderedMonths,
@@ -450,9 +450,12 @@ function FeePaymentModal({
     if (bad) return setErrors({ files: bad });
     // Новые файлы — к оплате после сохранения (прототип: «добавлены файлы» без причины).
     const upload = async () =>
-      (picked.length
-        ? await uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: e.id }, picked)
-        : null) ?? (await linkPicked(t, errorText, { kind: 'fee_payment', id: e.id }, links));
+      joinFailures(
+        picked.length
+          ? await uploadMoneyFiles(t, errorText, { kind: 'fee_payment', id: e.id }, picked)
+          : null,
+        await linkPicked(t, errorText, { kind: 'fee_payment', id: e.id }, links),
+      );
     if (parts.length === 0 && note === e.note && (picked.length > 0 || links.length > 0)) {
       setBusy(true);
       const failedUpload = await upload();
@@ -528,9 +531,10 @@ function FeePaymentModal({
             attach: receipt ? source : null,
           })
         : null;
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        (await linkPicked(t, errorText, source, links));
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();

@@ -347,6 +347,37 @@ describe.skipIf(!databaseAvailable())('Ссылки файлов контраг�
     expect((await managerRow(acc, act))!.links.map((l) => l.kind)).toEqual(['receipt']);
   });
 
+  it('повтор ссылки её не задваивает; ссылка отменённой записи денег остаётся в базе, но не видна и в «ещё N записей» не считается', async () => {
+    const extra = await operation(cpAcc.id, 20_000, 20_000, '2026-11-13');
+    const first = await link(owner, 'receipt', extra, [act]);
+    expect(first.status, await first.clone().text()).toBe(200);
+    expect(FileLinkAdded.parse(await first.json()).added.map((x) => x.id)).toEqual([act]);
+    const again = await link(owner, 'receipt', extra, [act]);
+    expect(again.status, await again.clone().text()).toBe(200);
+    expect(FileLinkAdded.parse(await again.json()).added).toEqual([]);
+    expect(
+      (await recordFiles(owner, 'receipt', extra)).items.filter((x) => x.id === act),
+    ).toHaveLength(1);
+    expect((await managerRow(owner, act))!.links.map((l) => l.id)).toContain(extra);
+    // Запись денег отменили («Удалить» в «Финансовых операциях»): файл остаётся у контрагента.
+    await f.t.admin.db
+      .update(schema.moneyOperations)
+      .set({
+        cancelledAt: new Date(),
+        cancelledBy: f.people['chief-a']!.userId,
+        cancelReason: 'Ошибочная запись',
+      })
+      .where(eq(schema.moneyOperations.id, extra));
+    const row = await managerRow(owner, act);
+    expect(row!.links.map((l) => l.id)).not.toContain(extra);
+    expect(row!.hiddenLinks).toBe(0);
+    const kept = await f.t.admin.db
+      .select({ id: schema.fileLinks.sourceId })
+      .from(schema.fileLinks)
+      .where(and(eq(schema.fileLinks.fileId, act), eq(schema.fileLinks.sourceId, extra)));
+    expect(kept).toEqual([{ id: extra }]);
+  });
+
   it('приёмка (сценарий 5): «Удалить отовсюду» — файл пропал из всех записей, в истории каждой «Удалён файл», и тех, которых удаляющему не видно', async () => {
     // Поступление только за обслуживание бухгалтеру не видно: в «Источнике» — «ещё 1 запись».
     const feeOnly = await operation(cpAcc.id, 0, 30_000, '2026-11-12');

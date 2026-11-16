@@ -40,7 +40,7 @@ import { useId, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
-import { linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
 import { useErrorText, useT } from '../l10n/provider';
 import { presetLines, reallocate, type ReceiptPreset } from './receipt-preset';
@@ -153,6 +153,9 @@ export function PaymentDialog({
   const [date, setDate] = useState(todayBishkek);
   const [amount, setAmount] = useState(formatSom(Math.max(0, defaults.amount), 'auto'));
   const [picked, setPicked] = useState<File[]>([]);
+  // «Из файлов контрагента» (доработки 16.11.2026, блок 2, пункт 9; прототип v124 `payDlg`): прикрепятся
+  // ссылкой к оплате после её записи.
+  const [links, setLinks] = useState<PickedLink[]>([]);
   const [errors, setErrors] = useState<{ date?: string; amount?: string; files?: string }>({});
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
@@ -179,14 +182,11 @@ export function PaymentDialog({
     );
     const saved = res.ok ? PaymentSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
-      const failed = picked.length
-        ? await uploadMoneyFiles(
-            t,
-            errorText,
-            { kind: 'tax_payment', id: saved.data.operationId },
-            picked,
-          )
-        : null;
+      const source = { kind: 'tax_payment', id: saved.data.operationId } as const;
+      const failed = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();
@@ -207,7 +207,7 @@ export function PaymentDialog({
       open={open}
       onClose={onClose}
       kind="form"
-      dirty={picked.length > 0}
+      dirty={picked.length > 0 || links.length > 0}
       title={t('money.pay.title')}
       sub={reportSub(card)}
       footer={
@@ -310,13 +310,20 @@ export function PaymentDialog({
               error={errors.files}
             >
               {(control) => (
-                <FilesInput
-                  control={control}
-                  onPick={(f) => {
-                    setPicked(f);
-                    setErrors((x) => ({ ...x, files: undefined }));
-                  }}
-                />
+                <div>
+                  <LinkPickRow
+                    contractorId={card.contractor.id}
+                    picked={links}
+                    onChange={setLinks}
+                  />
+                  <FilesInput
+                    control={control}
+                    onPick={(f) => {
+                      setPicked(f);
+                      setErrors((x) => ({ ...x, files: undefined }));
+                    }}
+                  />
+                </div>
               )}
             </Field>
           ) : null}
@@ -665,9 +672,12 @@ function ReceiptModal({
     if (holder !== e.holder) parts.push('holder');
     // Новые файлы — к поступлению после сохранения (прототип: «добавлены файлы» без причины).
     const upload = async () =>
-      (picked.length
-        ? await uploadMoneyFiles(t, errorText, { kind: 'receipt', id: e.id }, picked)
-        : null) ?? (await linkPicked(t, errorText, { kind: 'receipt', id: e.id }, links));
+      joinFailures(
+        picked.length
+          ? await uploadMoneyFiles(t, errorText, { kind: 'receipt', id: e.id }, picked)
+          : null,
+        await linkPicked(t, errorText, { kind: 'receipt', id: e.id }, links),
+      );
     // Без изменений, только с новыми файлами — файлы без записи «Сохранено без изменений» (прототип:
     // «Прикреплены файлы»); совсем без изменений — сохраняется, в истории «Сохранено без изменений».
     if (parts.length === 0 && (picked.length > 0 || links.length > 0)) {
@@ -747,9 +757,10 @@ function ReceiptModal({
             attach: receipt ? source : null,
           })
         : null;
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        (await linkPicked(t, errorText, source, links));
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();

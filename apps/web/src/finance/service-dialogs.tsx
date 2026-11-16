@@ -40,7 +40,7 @@ import { ApiFailure } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
-import { linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
+import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { pickedMoneyFilesProblem, uploadMoneyFiles } from '../money/tax-data';
 import { useShell } from '../shell/context';
 import { reasonNeeded, type ChangedPart } from './edit-reason';
@@ -596,9 +596,10 @@ export function ServicePayDialog({
     const saved = res.ok ? ServiceSaved.safeParse(res.data) : null;
     if (res.ok && saved?.success) {
       const source = { kind: 'one_off_service_payment' as const, id: saved.data.id };
-      const failedUpload =
-        (picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null) ??
-        (await linkPicked(t, errorText, source, links));
+      const failedUpload = joinFailures(
+        picked.length ? await uploadMoneyFiles(t, errorText, source, picked) : null,
+        await linkPicked(t, errorText, source, links),
+      );
       setBusy(false);
       onDone();
       onClose();
