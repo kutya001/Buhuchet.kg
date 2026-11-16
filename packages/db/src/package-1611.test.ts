@@ -284,17 +284,14 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
       const ownerRow = bell(a.ownerUserId);
       const colleagueRow = bell(colleagueA);
       await inA((tx) => tx.insert(bellNotifications).values([ownerRow, colleagueRow]));
-      // Коллега без условия по столбцам (политика чтения тут не включается — нужна своя на DELETE).
-      const byColleague = await asColleague((tx) =>
-        tx
-          .delete(bellNotifications)
-          .returning({ k: bellNotifications.eventKey, to: bellNotifications.userId }),
+      // Без RETURNING и без условия по столбцам: политика чтения тут не включается — нужна своя на DELETE.
+      // Сначала контекст без пользователя (задача, страница контрагента, бот клиента) — ничего.
+      await asJob(a.orgId, (tx) => tx.delete(bellNotifications));
+      expect(await left([ownerRow.eventKey, colleagueRow.eventKey])).toEqual(
+        [ownerRow.eventKey, colleagueRow.eventKey].sort(),
       );
-      // Ушли только его строки (и строки коллеги из тестов выше), строки владельца — нет.
-      expect(byColleague).toContainEqual({ k: colleagueRow.eventKey, to: colleagueA });
-      expect(byColleague.every((r) => r.to === colleagueA)).toBe(true);
-      // Контекст без пользователя (задача, страница контрагента, бот клиента) — ничего.
-      expect(await asJob(a.orgId, (tx) => tx.delete(bellNotifications).returning())).toEqual([]);
+      // Коллега — только свои строки, строка владельца остаётся.
+      await asColleague((tx) => tx.delete(bellNotifications));
       expect(await left([ownerRow.eventKey, colleagueRow.eventKey])).toEqual([ownerRow.eventKey]);
     });
 
@@ -810,6 +807,16 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
       await merge();
       expect(await linksOf([original, copy, feeCopy, other])).toHaveLength(2);
       expect((await stateOf([original, other])).get(other)?.state).toBe('ready');
+    });
+
+    it('копия, сделанная в той же транзакции, что «Принять» (то же время), объединяется', async () => {
+      const u = randomUUID().slice(0, 8);
+      const at = new Date(Date.now() - 5_000);
+      const original = await sentCheck(`Чек ${u}.jpg`, { at });
+      const copy = await copyOf(`Чек ${u}.jpg`, { createdAt: at });
+      await merge();
+      expect((await stateOf([copy])).get(copy)?.state).toBe('deleted');
+      expect(await linksOf([original])).toHaveLength(1);
     });
 
     it('один чек, присланный дважды («Квит» и «Квит (2)»), и копия другого контрагента не трогаются', async () => {
