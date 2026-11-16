@@ -175,7 +175,7 @@ export function useReportsSection(
         {r.files.length ? (
           <div className="flex flex-wrap gap-x-2.5 gap-y-1">
             {r.files.map((f, i) => (
-              // Прототип v126 `[data-pub-file]` → `pubFileOpen`: окно просмотра, «‹ ›» по файлам отчёта.
+              // Прототип v127 `[data-pub-file]` → `pubFileOpen`: окно просмотра, «‹ ›» по файлам отчёта.
               <button
                 key={f.id}
                 type="button"

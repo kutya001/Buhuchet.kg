@@ -5,10 +5,12 @@
 -- «Сохранить» окна денег, тем же нажатием. Поэтому копия здесь — ещё и прикреплённая не позже 10 минут
 -- после создания своей записи денег (поступления или оплаты за обслуживание); файл, загруженный в карточку
 -- записи позже, не трогается, сколько бы ни прошло со дня выпуска. Повтор ничего не меняет, вызвать можно
--- в любом следующем выпуске (например, если этапы пакета выйдут одним «выпускай»).
+-- в любом следующем выпуске (например, если этапы пакета выйдут одним «выпускай»). Вызов в следующем выпуске —
+-- с верхней границей `until` (когда на рабочем сайте вышел новый код): копии позже неё делал уже не прежний
+-- код (например, тот же файл, вручную загруженный в форму денег), их функция не трогает. Без границы — все.
 -- Предел ожидания блокировок — как у 0157 и 0159.
 SET LOCAL lock_timeout = '10s';--> statement-breakpoint
-CREATE FUNCTION app.file_copies_merge_late()
+CREATE FUNCTION app.file_copies_merge_late(until timestamptz DEFAULT NULL)
   RETURNS integer
   LANGUAGE plpgsql VOLATILE
   SET search_path = pg_catalog, pg_temp
@@ -33,6 +35,7 @@ CREATE FUNCTION app.file_copies_merge_late()
       WHERE c.state = 'ready' AND c.source_kind IN ('receipt', 'fee_payment')
         AND c.source_id IS NOT NULL AND c.replaced_at IS NULL AND c.note IS NULL
         AND c.created_at >= timestamptz '2026-11-15 00:00:00+06'
+        AND (until IS NULL OR c.created_at < until)
         -- Прикреплена тем же «Сохранить», что создало запись денег того же контрагента.
         AND EXISTS (
           SELECT 1 FROM public.money_operations m
@@ -86,6 +89,7 @@ CREATE FUNCTION app.file_copies_merge_late()
       WHERE c.state = 'ready' AND c.source_kind IN ('receipt', 'fee_payment')
         AND c.source_id IS NOT NULL AND c.replaced_at IS NULL AND c.note IS NULL
         AND c.created_at >= timestamptz '2026-11-15 00:00:00+06'
+        AND (until IS NULL OR c.created_at < until)
         AND EXISTS (
           SELECT 1 FROM public.money_operations m
           WHERE c.source_kind = 'receipt' AND m.id = c.source_id AND m.org_id = c.org_id
@@ -110,7 +114,7 @@ CREATE FUNCTION app.file_copies_merge_late()
     RETURN merged;
   END
   $$;--> statement-breakpoint
-REVOKE ALL ON FUNCTION app.file_copies_merge_late() FROM PUBLIC, buhuchet_app;--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.file_copies_merge_late(timestamptz) FROM PUBLIC, buhuchet_app;--> statement-breakpoint
 DO $$
 BEGIN
   RAISE NOTICE 'file_copies_merge_late (0160): %', app.file_copies_merge_late();

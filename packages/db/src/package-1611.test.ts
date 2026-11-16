@@ -982,7 +982,10 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
      * денег: так прикреплял её прежний код сразу после «Сохранить» (docs/deviations.md п. К-19).
      */
     describe('второй перенос с границей по записи денег (app.file_copies_merge_late)', () => {
-      const mergeLate = () => db.admin.db.execute(sql`select app.file_copies_merge_late()`);
+      const mergeLate = (until?: Date) =>
+        until
+          ? db.admin.db.execute(sql`select app.file_copies_merge_late(${until.toISOString()})`)
+          : db.admin.db.execute(sql`select app.file_copies_merge_late()`);
       const minutes = (n: number) => n * 60_000;
       /** Поступление от контрагента (по умолчанию «А»), созданное в `at`. */
       const receiptAt = async (
@@ -1038,6 +1041,10 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
           createdBy: a.ownerUserId,
           createdAt: new Date(saved.getTime() + minutes(10)),
         });
+        // Верхняя граница вызова (выкладка нового кода) раньше копий — копии не трогаются.
+        await mergeLate(new Date(saved.getTime() + 1_000));
+        expect((await stateOf([copy, feeCopy])).get(copy)?.state).toBe('ready');
+        expect(await linksOf([original])).toEqual([]);
         await mergeLate();
         const byId = await stateOf([original, copy, feeCopy]);
         expect(byId.get(original)?.state).toBe('ready');
@@ -1087,7 +1094,7 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
         expect(await linksOf([original])).toEqual([]);
       });
 
-      it('остальные условия пары — как у первого переноса: два одинаковых чека, примечание, другой контрагент', async () => {
+      it('остальные условия пары — как у первого переноса: два одинаковых чека, примечание, другой контрагент, другая организация, запись денег не того контрагента или вида', async () => {
         const u = randomUUID().slice(0, 8);
         const name = `Двойной ${u}.jpg`;
         const accepted = new Date(Date.now() - minutes(30));
@@ -1133,10 +1140,15 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
           createdBy: b.ownerUserId,
           createdAt: saved,
         });
+        // Запись денег того же контрагента, но не поступление (возврат контрагенту): пары нет.
+        const notReceipt = await copyOf(`Чужой-${u}.jpg`, {
+          sourceId: await receiptAt(saved, { kind: 'refund', total: null }),
+          createdAt: saved,
+        });
         await mergeLate();
-        const byId = await stateOf([ambiguous, noted, foreign, misplaced, elsewhere]);
-        for (const id of [ambiguous, noted, foreign, misplaced, elsewhere])
-          expect(byId.get(id)?.state).toBe('ready');
+        const all = [ambiguous, noted, foreign, misplaced, elsewhere, notReceipt];
+        const byId = await stateOf(all);
+        for (const id of all) expect(byId.get(id)?.state).toBe('ready');
         expect(await linksOf([first, second, single, other])).toEqual([]);
       });
 

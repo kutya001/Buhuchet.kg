@@ -262,7 +262,19 @@ function SentFileViewer({
     ];
   };
   const buttons = (file: SentFileItem) => {
-    if (file.status !== 'new') return null;
+    // Решённый файл — только «Закрыть» (прототип v127 `sntOpen`): своя кнопка места заменяет «Закрыть» окна.
+    if (file.status !== 'new') {
+      return (
+        <button
+          type="button"
+          data-sent-window-close=""
+          className={buttonClass('cta')}
+          onClick={onClose}
+        >
+          {t('btn.close')}
+        </button>
+      );
+    }
     const why = file.canDecide ? undefined : t('files.sent.why');
     return (
       <>

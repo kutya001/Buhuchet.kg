@@ -641,6 +641,8 @@ test.describe('Этап 3: страница контрагента — разд�
     baseURL,
     isMobile,
   }) => {
+    // Долгий путь: «Файловый менеджер», страница по коду, окна просмотра по трём спискам.
+    test.slow();
     const o = await pageOrg(request, baseURL);
     const tag = Date.now().toString(36);
     const name = 'ОсОО «Файлы»';
@@ -747,9 +749,8 @@ test.describe('Этап 3: страница контрагента — разд�
       'href',
       `${cp.path}/files/${receipt}?download=1`,
     );
-    // В списке «Отчёты» один файл — листать некуда.
-    await expect(viewer.locator('[data-fv-prev]')).toBeDisabled();
-    await expect(viewer.locator('[data-fv-next]')).toBeDisabled();
+    // В списке «Отчёты» один файл — листать некуда (у окна потока И «‹ ›» тогда нет вовсе).
+    await expect(viewer.locator('[data-fv-prev]:enabled, [data-fv-next]:enabled')).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(viewer).toBeHidden();
     // «Все»: «‹ ›» листают по файлам того же списка, в порядке строк.
@@ -773,6 +774,22 @@ test.describe('Этап 3: страница контрагента — разд�
     );
     await page.keyboard.press('Escape');
     await expect(second).toBeHidden();
+    // «Отчёты»: файл отчёта в плитке НДС открывается в том же окне, «‹ ›» — по файлам этого отчёта.
+    const reports = await unfold(page, 'reports', isMobile);
+    const ndsTile = reports.locator('[data-pub-tile="nds"]');
+    await ndsTile.getByRole('button').first().click();
+    await expect(ndsTile.locator('[data-pub-row]').first()).toBeVisible();
+    // На телефоне у плитки первые 5 периодов: остальные — «Показать ещё».
+    const moreRows = ndsTile.getByRole('button', { name: /^Показать ещё/ });
+    if (await moreRows.isVisible()) await moreRows.click();
+    await ndsTile.locator(`[data-pub-file="${receipt}"]`).click();
+    const reportFile = page.getByRole('dialog', { name: `Квитанция НДС ${tag}.pdf` });
+    await expect(reportFile.locator(`[data-file-viewer="${receipt}"]`)).toBeVisible();
+    await expect(reportFile.locator('[data-fv-prev]:enabled, [data-fv-next]:enabled')).toHaveCount(
+      0,
+    );
+    await page.keyboard.press('Escape');
+    await expect(reportFile).toBeHidden();
     const pdf = await page.request.get(`${cp.path}/files/${receipt}`);
     expect(pdf.status()).toBe(200);
     expect(pdf.headers()['content-type']).toContain('application/pdf');

@@ -417,6 +417,7 @@ describe.skipIf(!databaseAvailable())(
       expect(FileLink.parse(await otherLink.json()).url).toContain(`/sent/${other}`);
       expect((await call('GET', `/api/files/sent/${other}/link`, acc)).status).toBe(400);
       expect((await call('GET', `/api/files/sent/${other}/download`, acc)).status).toBe(302);
+      expect((await call('GET', '/api/files/sent/not-an-id/download', acc)).status).toBe(400);
       const h = await history(cpAcc.id);
       expect(h.filter((x) => x.action === 'sent_file_accept').map((x) => x.changes)).toEqual([
         [{ field: 'file', to: 'Договор.pdf' }],

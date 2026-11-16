@@ -30,7 +30,7 @@ export type FileViewerProps = {
   sub?: (file: ViewerFile) => ReactNode;
   /** Блок под просмотром (откуда файл, комментарий, статус). */
   info?: (file: ViewerFile) => ReactNode;
-  /** Свои кнопки слева от «Скачать». */
+  /** Кнопки места — после «Скачать», справа (прототип `foot`); есть они — своей «Закрыть» у окна нет. */
   footer?: (file: ViewerFile) => ReactNode;
 };
 
@@ -58,35 +58,46 @@ export function FileViewer({
       kind="card"
       footer={
         <>
-          {footer?.(file)}
-          <div className="flex-1" />
-          <button
-            type="button"
-            data-fv-prev=""
-            className={buttonClass('default', 'sm')}
-            disabled={at === 0}
-            onClick={() => setAt(at - 1)}
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            data-fv-next=""
-            className={buttonClass('default', 'sm')}
-            disabled={at >= files.length - 1}
-            onClick={() => setAt(at + 1)}
-          >
-            ›
-          </button>
           <a
             data-fv-download=""
             href={download(file.id)}
-            className={buttonClass('cta')}
+            className={buttonClass('default')}
             rel="noopener noreferrer"
           >
             <Icon name="download" size="sm" />
             {t('files.act.download')}
           </a>
+          {/* Прототип v126 `fileView`: у одного файла «‹ ›» нет, у крайнего — недоступна. */}
+          {files.length > 1 ? (
+            <>
+              <button
+                type="button"
+                data-fv-prev=""
+                className={buttonClass('default', 'sm')}
+                disabled={at === 0}
+                onClick={() => setAt(at - 1)}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                data-fv-next=""
+                className={buttonClass('default', 'sm')}
+                disabled={at >= files.length - 1}
+                onClick={() => setAt(at + 1)}
+              >
+                ›
+              </button>
+            </>
+          ) : null}
+          <div className="flex-1" />
+          {footer ? (
+            footer(file)
+          ) : (
+            <button type="button" className={buttonClass('cta')} onClick={onClose}>
+              {t('btn.close')}
+            </button>
+          )}
         </>
       }
     >

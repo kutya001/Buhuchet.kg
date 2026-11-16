@@ -106,6 +106,9 @@ describe.skipIf(!databaseAvailable())('ensureAppLoginRole: в базе', () => {
   // миграций глушило NOTICE, и чисел «объединено N» не было видно.
   it('сообщения миграций доходят до вывода: итог объединения копий чеков', () => {
     expect(notices.some((line) => /^NOTICE: file_copies_merge \(\d{4}\): /.test(line))).toBe(true);
+    expect(notices.some((line) => /^NOTICE: file_copies_merge_late \(\d{4}\): /.test(line))).toBe(
+      true,
+    );
   });
 
   it('роль входит в базу с паролем из строки подключения', async () => {
