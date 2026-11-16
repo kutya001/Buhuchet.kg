@@ -470,6 +470,31 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
     // «Версия 104: темы в чате с ботом» прототип убрал (п. Т-10).
     expect(rows.find((r) => r.id === 'v104')).toBeUndefined();
+    // Новости о работе Админки — «Только режим Админка» (разбор новостей v125, доработки 16.11.2026,
+    // блок 4, пункт 5): организации их не видят.
+    expect(
+      rows
+        .filter((r) => r.audience === 'adm')
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(
+      [
+        'v32',
+        'v65',
+        'v66',
+        'v67',
+        'v70',
+        'v71',
+        'v72',
+        'v78',
+        'v91',
+        'v99',
+        'v103',
+        'v113',
+        'v117',
+        'v118',
+      ].sort(),
+    );
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(
       sql`select count(*)::integer as n from news where id = 'v1'`,
     )) as unknown as [{ n: number }];
