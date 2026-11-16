@@ -477,7 +477,8 @@ describe.skipIf(!databaseAvailable())('Telegram заявителя и парол
         userId: org.ownerUserId,
         orgId: org.orgId,
         tokenHash: hashOf(key()),
-        expiresAt: hour(30),
+        // По настоящим часам: журнал сеансов сверяет срок с now() базы.
+        expiresAt: new Date(Date.now() + 30 * 3_600_000),
       })
       .returning({ id: sessions.id });
     // Неверные пароли и ждущий код «Забыли пароль?» до ссылки.
