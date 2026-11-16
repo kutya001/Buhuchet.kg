@@ -105,7 +105,8 @@ export function FilesBox({
       title={`${labels.title} · ${items.length}`}
       actions={
         canUpload || (canLink && onLinkPick) ? (
-          <>
+          // Две кнопки на телефоне не помещаются в строку заголовка — переносятся одна под другую.
+          <span className="flex flex-wrap justify-end gap-2">
             {canLink && onLinkPick && labels.pick ? (
               <button
                 type="button"
@@ -133,7 +134,7 @@ export function FilesBox({
                 <input ref={input} type="file" multiple hidden onChange={picked} data-files-input />
               </>
             ) : null}
-          </>
+          </span>
         ) : null
       }
     >

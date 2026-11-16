@@ -1047,8 +1047,9 @@ test.describe('Доработки 14.11, блок 6: страница контр
         items: { id: string; name: string; kind: string; links: { kind: string; id: string }[] }[];
       }
     ).items.filter((f) => f.name === fileName);
+    // Вид строки — «Контрагент» (принятый файл, `FILE_LIST_KIND_OF`), ссылка — на поступление.
     expect(rows.map((f) => [f.id, f.kind, f.links.map((l) => [l.kind, l.id])])).toEqual([
-      [acceptedFile, 'sent_file', [['receipt', receiptId]]],
+      [acceptedFile, 'contractor', [['receipt', receiptId]]],
     ]);
 
     // Месяц на странице контрагента — оплачен.
