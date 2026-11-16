@@ -142,7 +142,10 @@ export const bellCountRoute = createRoute({
   middleware: [bellUser] as const,
   summary: 'Колокольчик: сколько строк вошедший ещё не видел (значок)',
   responses: {
-    200: { description: 'Число непросмотренных', content: { 'application/json': { schema: BellCount } } },
+    200: {
+      description: 'Число непросмотренных',
+      content: { 'application/json': { schema: BellCount } },
+    },
     ...denied,
   },
 });
@@ -163,7 +166,8 @@ export const bellSeenRoute = createRoute({
   path: '/bell/seen',
   tags: ['telegram'],
   middleware: [bellUser] as const,
-  summary: 'Колокольчик открыт: все строки вошедшего просмотрены (счётчик гаснет на всех устройствах)',
+  summary:
+    'Колокольчик открыт: все строки вошедшего просмотрены (счётчик гаснет на всех устройствах)',
   responses: {
     200: { description: 'Готово', content: { 'application/json': { schema: BellDone } } },
     ...denied,

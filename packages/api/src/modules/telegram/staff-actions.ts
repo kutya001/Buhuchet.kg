@@ -44,7 +44,7 @@ import {
 import { attachStoredFile } from '../files/attach';
 import { assigneeScopeOf, reportScopeOf } from '../reports/common';
 import { taskAccessOf } from '../tasks/common';
-import type { TelegramEvent } from './events';
+import { reportBell, taskBell, type TelegramEvent } from './events';
 import { botReportNames, fixView } from './staff-view';
 import type {
   BotAction,
@@ -396,6 +396,7 @@ const confirmWhy: BotAction = {
       );
       if (back === 'tgActStale') return said(ctx, back);
       const by = access!.subject.employeeId;
+      const item = await reportItemValues(tx, r.id, t);
       const events: TelegramEvent[] =
         r.responsibleEmployeeId && r.responsibleEmployeeId !== by
           ? [
@@ -405,11 +406,12 @@ const confirmWhy: BotAction = {
                 by,
                 template: 'tgFix',
                 values: {
-                  отчёт: t('telegram.item.report', await reportItemValues(tx, r.id, t)),
+                  отчёт: t('telegram.item.report', item),
                   причина: reason,
                   автор: access!.shortName,
                 },
                 link: 'reports',
+                bell: reportBell(r.id, item, reason),
                 ...(await fixView(ctx.deps, r.id, tx)),
               },
             ]
@@ -430,6 +432,7 @@ async function reportItemValues(tx: Tx, id: string, t: Translate) {
     type: facts.typeShort,
     period: periodFull({ period: facts.period, start: facts.periodStart }, t),
     contractor: facts.contractorName,
+    contractorId: facts.contractorId,
   };
 }
 
@@ -471,6 +474,7 @@ function taskEvent(
       template,
       values: { задача: task.title, исполнитель: task.executor.shortName },
       link: 'tasks',
+      bell: taskBell(task),
     },
   ];
 }

@@ -85,7 +85,10 @@ export const bellDayJob: Job = {
         });
       } catch (err) {
         failed.push(orgId);
-        ctx.logger.error({ job: 'telegram.bell-day', orgId, err }, 'строки дня колокольчика не собраны');
+        ctx.logger.error(
+          { job: 'telegram.bell-day', orgId, err },
+          'строки дня колокольчика не собраны',
+        );
       }
     }
     if (put) ctx.logger.info({ job: 'telegram.bell-day', put }, 'строки дня колокольчика');

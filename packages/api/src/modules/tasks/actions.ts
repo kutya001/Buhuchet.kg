@@ -42,7 +42,7 @@ import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requireEmployee } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
-import { queueTelegramEvents } from '../telegram/events';
+import { queueTelegramEvents, taskBell } from '../telegram/events';
 import { flushEvents } from '../telegram/outbox';
 import { taskOut } from './card';
 import {
@@ -158,7 +158,7 @@ function taskEvents(
   actor: string,
 ) {
   const by = subject.employeeId;
-  const base = { by, link: 'tasks' as const };
+  const base = { by, link: 'tasks' as const, bell: taskBell(task) };
   if (change.to === 'on_confirm') {
     return [
       {
@@ -188,6 +188,7 @@ function taskEvents(
         kind: 'task_rework' as const,
         to: task.executor.id,
         template: 'tgTaskRework' as const,
+        bell: taskBell(task, task.reworkReason),
         values: {
           задача: task.title,
           причина: task.reworkReason,

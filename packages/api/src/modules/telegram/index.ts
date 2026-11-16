@@ -42,24 +42,26 @@ export function telegramModule(deps: ApiDeps) {
   const app = createModuleApp();
   // Секрет вебхука проверяется до разбора тела запроса.
   app.use(webhookRoute.path, webhookGuard(deps));
-  return app
-    .openapi(createLinkRoute, createLinkHandler(deps))
-    .openapi(unlinkRoute, unlinkHandler(deps))
-    .openapi(getNotifyRoute, getNotifyHandler(deps))
-    .openapi(saveNotifyRoute, saveNotifyHandler(deps))
-    .openapi(botTestRoute, botTestHandler(deps))
-    .openapi(plainTextRoute, plainTextHandler(deps))
-    .openapi(getGroupRoute, getGroupHandler(deps))
-    .openapi(createGroupLinkRoute, createGroupLinkHandler(deps))
-    .openapi(saveGroupRoute, saveGroupHandler(deps))
-    .openapi(unlinkGroupRoute, unlinkGroupHandler(deps))
-    // «/bell/read-all» — раньше «/bell/{id}/read» не нужно: пути разной длины.
-    .openapi(bellPageRoute, bellPageHandler(deps))
-    .openapi(bellCountRoute, bellCountHandler(deps))
-    .openapi(bellSeenRoute, bellSeenHandler(deps))
-    .openapi(bellReadAllRoute, bellReadAllHandler(deps))
-    .openapi(bellReadRoute, bellReadHandler(deps))
-    .openapi(setupPeekRoute, setupPeekHandler(deps))
-    .openapi(setupCompleteRoute, setupCompleteHandler(deps))
-    .openapi(webhookRoute, webhookHandler(deps));
+  return (
+    app
+      .openapi(createLinkRoute, createLinkHandler(deps))
+      .openapi(unlinkRoute, unlinkHandler(deps))
+      .openapi(getNotifyRoute, getNotifyHandler(deps))
+      .openapi(saveNotifyRoute, saveNotifyHandler(deps))
+      .openapi(botTestRoute, botTestHandler(deps))
+      .openapi(plainTextRoute, plainTextHandler(deps))
+      .openapi(getGroupRoute, getGroupHandler(deps))
+      .openapi(createGroupLinkRoute, createGroupLinkHandler(deps))
+      .openapi(saveGroupRoute, saveGroupHandler(deps))
+      .openapi(unlinkGroupRoute, unlinkGroupHandler(deps))
+      // «/bell/read-all» — раньше «/bell/{id}/read» не нужно: пути разной длины.
+      .openapi(bellPageRoute, bellPageHandler(deps))
+      .openapi(bellCountRoute, bellCountHandler(deps))
+      .openapi(bellSeenRoute, bellSeenHandler(deps))
+      .openapi(bellReadAllRoute, bellReadAllHandler(deps))
+      .openapi(bellReadRoute, bellReadHandler(deps))
+      .openapi(setupPeekRoute, setupPeekHandler(deps))
+      .openapi(setupCompleteRoute, setupCompleteHandler(deps))
+      .openapi(webhookRoute, webhookHandler(deps))
+  );
 }

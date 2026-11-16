@@ -1,4 +1,4 @@
-import { insertBellRows, type Tx } from '@buhuchet/db';
+import { contractorBellStaff, insertBellRows, notifyTarget, type Tx } from '@buhuchet/db';
 import { bellText, type BellKind, type BellTarget, type PermissionId } from '@buhuchet/domain';
 
 /*
@@ -48,4 +48,26 @@ export async function putBell(tx: Tx, rows: readonly BellPut[], now: Date): Prom
     })),
     now,
   );
+}
+
+/**
+ * Кому строка о событии контрагента (файл, «Я оплатил», «Оплатил», запрос на подключение, вопрос клиента,
+ * страница закрыта): ответственному — даже без Telegram — и тому, кому ушло сообщение Telegram (первый с
+ * Telegram из ответственного и владельцев, прототип `pgTgStaff`); ни у кого нет Telegram и нет
+ * ответственного — первому владельцу (прототип v122 `bellCpTo`). Заблокированные и уволенные не получают.
+ */
+export async function bellContractorUsers(tx: Tx, contractorId: string): Promise<string[]> {
+  const staff = await contractorBellStaff(tx, contractorId);
+  if (!staff) return [];
+  const resp = staff.responsibleId ? await notifyTarget(tx, staff.responsibleId) : null;
+  const owners = [];
+  for (const id of staff.ownerIds) {
+    const target = await notifyTarget(tx, id);
+    if (target) owners.push(target);
+  }
+  // Кому ушло в Telegram: ответственному с Telegram, иначе первому владельцу с Telegram.
+  const tg = resp?.chatId != null ? resp : (owners.find((o) => o.chatId !== null) ?? null);
+  const users = [resp?.userId, tg?.userId].filter((u): u is string => !!u);
+  if (!users.length && owners[0]) users.push(owners[0].userId);
+  return [...new Set(users)];
 }

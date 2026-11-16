@@ -1,9 +1,9 @@
 import { BELL_FROM, BELL_PAGE_SIZE, type BellKind } from '@buhuchet/domain';
-import { sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, sql, type SQL } from 'drizzle-orm';
 import type { Db, Tx } from './client';
 import { adminLeadsView } from './leads';
 import { NEWS_BELL } from './news';
-import { contractors, news, orgSettings, reports, tasks } from './schema';
+import { contractors, employees, news, orgSettings, reports, roles, tasks } from './schema';
 
 /*
  * Колокольчик уведомлений (доработки 16.11.2026, блок 3; поток Т; стык «Положить уведомление» —
@@ -267,6 +267,27 @@ export async function bellSyncLeads(tx: Tx, template: string): Promise<void> {
  * видит (RLS: читает и удаляет только получатель). Отвечает, сколько удалено.
  */
 export async function bellCleanup(db: Db | Tx): Promise<number> {
-  const [row] = await db.execute<{ n: number | string | null }>(sql`select app.bell_cleanup() as n`);
+  const [row] = await db.execute<{ n: number | string | null }>(
+    sql`select app.bell_cleanup() as n`,
+  );
   return Number(row?.n ?? 0);
+}
+
+/** Ответственный контрагента и действующие владельцы организации по порядку (для `bellContractorUsers`). */
+export async function contractorBellStaff(
+  tx: Tx,
+  contractorId: string,
+): Promise<{ responsibleId: string | null; ownerIds: string[] } | null> {
+  const [cp] = await tx
+    .select({ responsibleId: contractors.responsibleEmployeeId })
+    .from(contractors)
+    .where(eq(contractors.id, contractorId));
+  if (!cp) return null;
+  const owners = await tx
+    .select({ id: employees.id })
+    .from(employees)
+    .innerJoin(roles, eq(roles.id, employees.roleId))
+    .where(and(eq(roles.isOwner, true), eq(employees.active, true)))
+    .orderBy(asc(employees.createdAt), asc(employees.id));
+  return { responsibleId: cp.responsibleId, ownerIds: owners.map((o) => o.id) };
 }
