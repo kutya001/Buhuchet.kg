@@ -637,7 +637,11 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       aud,
     });
     const ids = ['x9301', 'x9302', 'x9303'];
-    await seedNews(db.admin.db, [item('x9301', 'all'), item('x9302', 'all'), item('x9303', 'adm')], {});
+    await seedNews(
+      db.admin.db,
+      [item('x9301', 'all'), item('x9302', 'all'), item('x9303', 'adm')],
+      { update: false },
+    );
     await db.admin.db.update(news).set({ updatedBy: adminId }).where(eq(news.id, 'x9302'));
     const audience = async () =>
       Object.fromEntries(
@@ -649,7 +653,11 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         ).map((r) => [r.id, r.audience]),
       );
     // Без --update уже залитые новости не меняются.
-    await seedNews(db.admin.db, [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')], {});
+    await seedNews(
+      db.admin.db,
+      [item('x9301', 'adm'), item('x9302', 'adm'), item('x9303', 'all')],
+      { update: false },
+    );
     expect(await audience()).toEqual({ x9301: 'all', x9302: 'all', x9303: 'adm' });
     const report = await seedNews(
       db.admin.db,
