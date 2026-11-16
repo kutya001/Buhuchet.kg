@@ -58,7 +58,6 @@ import {
   sentValuesHandler,
   sentValuesRoute,
 } from './sent';
-import { sentAttachHandler, sentAttachRoute } from './sent-attach';
 import {
   pageSentCompleteHandler,
   pageSentCompleteRoute,
@@ -74,7 +73,7 @@ import {
  * контрагенты ручной загрузки, занятый объём.
  * Файлы от контрагентов (доработки 14.11.2026, блок 2): «Отправленные файлы» карточки, вкладка «Файлы от
  * контрагентов» со счётчиком, «Принять» и «Отклонить», галочка контрагента и отправка со страницы по
- * ссылке без входа; принятый чек — к поступлению или оплате за обслуживание (`sent-attach.ts`). Маршруты
+ * ссылке без входа; чек принимается вместе с поступлением или оплатой за обслуживание («Принять» с `attach`). Маршруты
  * `/files/sent/…` — раньше `/files/{id}…`: «sent» — не номер файла.
  */
 export function filesModule(deps: ApiDeps) {
@@ -85,7 +84,6 @@ export function filesModule(deps: ApiDeps) {
     .openapi(sentExportRoute, sentExportHandler(deps))
     .openapi(sentCountRoute, sentCountHandler(deps))
     .openapi(sentAcceptRoute, sentAcceptHandler(deps))
-    .openapi(sentAttachRoute, sentAttachHandler(deps))
     .openapi(sentRejectRoute, sentRejectHandler(deps))
     .openapi(sentLinkRoute, sentLinkHandler(deps))
     .openapi(sentUploadRoute, sentUploadHandler(deps))

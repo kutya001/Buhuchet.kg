@@ -17,7 +17,9 @@ import {
   sentContractor,
   sentFilePays,
   sentFilesNewCount,
+  sentReceiptTargetDate,
   sentUploadState,
+  takeRateLimit,
   updateWithHistory,
   withOrgContext,
   writeHistory,
@@ -34,6 +36,7 @@ import {
   FILE_LINK_SECONDS,
   FILE_MESSAGES,
   filePreviewKind,
+  fileUploadProblem,
   hasPermission,
   PAGE_MESSAGES,
   pageManageRefusal,
@@ -56,6 +59,7 @@ import {
   SentFileAccept,
   SentFileAccepted,
   SentFileCount,
+  type SentFileDecided,
   SentFileIdParam,
   SentFileItem,
   SentFileLinkQuery,
@@ -64,7 +68,6 @@ import {
   SentFileReject,
   SentUploadState,
   SentUploadSwitch,
-  type SentFileAccepted as SentFileAcceptedBody,
   type SentFileItem as SentFileItemBody,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -75,7 +78,16 @@ import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '
 import { orgContextOf, requireEmployee, requirePermission } from '../../middleware/access';
 import { contractorOf } from '../contractor-page/card';
 import { serverTexts } from '../l10n/texts';
-import { error, FILES_SECTION, realNow, requireFilesFeature, subjectOf } from './files';
+import { attachStoredFile } from './attach';
+import {
+  error,
+  FILES_SECTION,
+  realNow,
+  requireFilesFeature,
+  subjectOf,
+  UPLOAD_RATE_LIMIT,
+  visibleSource,
+} from './files';
 import { filesScopeOf } from './manager';
 import { removeStoredObjects } from './storage-retry';
 
@@ -118,6 +130,7 @@ function itemOf(
   contractor: { id: string; name: string },
   today: IsoDate,
   canDecide: boolean,
+  pay: SentFilePay | null = null,
 ): SentFileItemBody {
   return {
     id: r.id,
@@ -137,13 +150,16 @@ function itemOf(
     daysLeft: sentFileDaysLeft(r, today),
     fileId: r.status === 'accepted' ? r.fileId : null,
     canDecide,
+    pay: r.status === 'new' && canDecide ? pay : null,
     version: r.version,
   };
 }
 
 /**
- * Чек к оплате у принятого файла (доработки 14.11.2026, блок 4, пункт 4; прототип v115 `pgRcptMoney`):
- * его сумма уходит только тому, кто может сразу принять эти деньги, — иначе файл просто принят. Налоги —
+ * Чек к оплате у нового файла (доработки 14.11.2026, блок 4, пункт 4; прототип v115 `pgRcptMoney`): его
+ * сумма уходит только тому, кто может сразу принять эти деньги, — у него «Принять» открывает окно денег,
+ * а рядом — «Принять только файл» (доработки 16.11.2026, блок 1; прототип v121 `sntPayOpen`); иначе
+ * файл принимается сразу. Налоги —
  * «Учёт оплаты налогов» и право «Учёт денег» в области «Финансовых операций» (как окно «Поступление от
  * контрагента»); обслуживание — «Плата за обслуживание» и права «Видеть плату» и «Менять ставку» в
  * области «Контрагентов» (как «Принять оплату за обслуживание», прототип `feeAccOk`). Контрагент в архиве
@@ -187,18 +203,65 @@ export async function visibleSent(tx: Tx, subject: AccessSubject, id: string) {
 }
 
 /** Вкладка и счётчик — при «Файлах в карточках» и «Странице контрагента по ссылке». */
-export async function requireSentTab(tx: Tx, orgId: string): Promise<void> {
+export async function requireSentTab(
+  tx: Tx,
+  orgId: string,
+): Promise<Readonly<Record<Feature, boolean>>> {
   const features = await requireFilesFeature(tx, orgId);
   if (!features.cppage) cppageOff();
+  return features;
 }
 
-/** Решение уже принято — 409 `sent_decided` (файл решили, пока сотрудник смотрел). */
-async function decided<T>(run: () => Promise<T>): Promise<T> {
+/** Чеки среди новых файлов: что оплачено — только тому, кто может сразу принять эти деньги. */
+async function paysOf(
+  tx: Tx,
+  rows: readonly SentFileRecord[],
+  o: {
+    subject: AccessSubject;
+    features: Readonly<Record<Feature, boolean>>;
+    contractorOf: (r: SentFileRecord) => {
+      responsibleEmployeeId: string | null;
+      archived: boolean;
+    };
+  },
+): Promise<Map<string, SentFilePay>> {
+  const ids = rows.filter((r) => r.status === 'new').map((r) => r.id);
+  const pays = await sentFilePays(tx, ids);
+  const out = new Map<string, SentFilePay>();
+  for (const r of rows) {
+    const pay = payFor(pays.get(r.id), {
+      subject: o.subject,
+      features: o.features,
+      contractor: o.contractorOf(r),
+    });
+    if (pay) out.set(r.id, pay);
+  }
+  return out;
+}
+
+/**
+ * Решение уже принято — 409 `sent_decided` (файл решили, пока сотрудник смотрел): в `details` — кто и
+ * как решил, для сообщения окна денег «Чек уже принял <имя> — поступление сохранено без него» (прототип
+ * v121 `pgRcptSave`).
+ */
+function decidedFail(file: SentFileRecord | null): never {
+  const details: SentFileDecided | undefined =
+    file && file.status !== 'new' ? { status: file.status, by: file.decidedByName } : undefined;
+  return apiFail(409, 'sent_decided', SENT_FILE_MESSAGES.sent_decided, details);
+}
+
+async function decided<T>(
+  deps: ApiDeps,
+  ctx: ReturnType<typeof orgContextOf>,
+  id: string,
+  run: () => Promise<T>,
+): Promise<T> {
   try {
     return await run();
   } catch (err) {
     if (err instanceof SentFileDecidedError) {
-      return apiFail(409, 'sent_decided', SENT_FILE_MESSAGES.sent_decided);
+      // Транзакция решения откатилась — кто решил, читается заново.
+      return decidedFail(await withOrgContext(deps.db, ctx, (tx) => getSentFile(tx, id)));
     }
     throw err;
   }
@@ -236,15 +299,18 @@ export function contractorSentHandler(
     const subject = subjectOf(c);
     const today = sentToday();
     const body = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireFilesFeature(tx, ctx.orgId);
+      const features = await requireFilesFeature(tx, ctx.orgId);
       const contractor = await sentContractor(tx, id);
       if (!contractor || !canSeeContractor(subject, 'files', contractor)) {
         apiFail(404, 'contractor_not_found', 'Контрагент не найден');
       }
       const rows = await listContractorSentFiles(tx, id);
       const canDecide = canDecideOf(subject);
+      const pays = canDecide
+        ? await paysOf(tx, rows, { subject, features, contractorOf: () => contractor! })
+        : new Map<string, SentFilePay>();
       return {
-        items: rows.map((r) => itemOf(r, contractor!, today, canDecide)),
+        items: rows.map((r) => itemOf(r, contractor!, today, canDecide, pays.get(r.id))),
         newCount: rows.filter((r) => r.status === 'new').length,
       };
     });
@@ -284,15 +350,24 @@ export function sentListHandler(deps: ApiDeps): RouteHandler<typeof sentListRout
     const subject = subjectOf(c);
     const t = await serverTexts(deps);
     const today = sentToday();
-    const page = await withOrgContext(deps.db, ctx, async (tx) => {
-      await requireSentTab(tx, ctx.orgId);
-      return listSentFilesPage(tx, query, listOptions(subject, t, today));
-    });
     const canDecide = canDecideOf(subject);
+    const { page, pays } = await withOrgContext(deps.db, ctx, async (tx) => {
+      const features = await requireSentTab(tx, ctx.orgId);
+      const page = await listSentFilesPage(tx, query, listOptions(subject, t, today));
+      const byId = new Map(page.rows.map((r) => [r.id, r.contractor]));
+      const pays = canDecide
+        ? await paysOf(tx, page.rows, {
+            subject,
+            features,
+            contractorOf: (r) => byId.get(r.id)!,
+          })
+        : new Map<string, SentFilePay>();
+      return { page, pays };
+    });
     return c.json(
       {
         items: page.rows.map((r) => ({
-          ...itemOf(r, r.contractor, today, canDecide),
+          ...itemOf(r, r.contractor, today, canDecide, pays.get(r.id)),
           responsible: r.responsibleName,
         })),
         total: page.total,
@@ -431,7 +506,8 @@ export const sentAcceptRoute = createRoute({
   method: 'post',
   path: '/files/sent/{id}/accept',
   tags: ['files'],
-  summary: '«Принять» файл от контрагента: он становится файлом контрагента «От контрагента»',
+  summary:
+    '«Принять» файл от контрагента: он становится файлом контрагента «От контрагента», чек — ещё и файлом записи денег',
   middleware: [requirePermission('filesView'), requirePermission('filesUpload')] as const,
   request: {
     params: SentFileIdParam,
@@ -440,10 +516,21 @@ export const sentAcceptRoute = createRoute({
   responses: {
     200: {
       description:
-        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); у чека — что оплачено',
+        'Принят: файл среди файлов контрагента (занятое имя — «Имя (2).pdf»); с `attach` — и у записи денег',
       content: { 'application/json': { schema: SentFileAccepted } },
     },
     ...decideResponses,
+    403: {
+      description:
+        'Нет права «Просматривать файлы» или «Загружать файлы»; «Файлы в карточках» выключены; с `attach` — нельзя менять файлы записи денег, имя или размер файла не годятся для файлов записей',
+      content: error,
+    },
+    404: {
+      description:
+        'Файла нет или контрагент вне области; с `attach` — записи денег нет, она не видна или другого контрагента',
+      content: error,
+    },
+    429: { description: 'С `attach` — слишком много загрузок за час', content: error },
   },
 });
 
@@ -452,30 +539,55 @@ export const sentAcceptRoute = createRoute({
  * в транзакции — файл контрагента с источником «От контрагента» (занятое имя — «Имя (2).pdf»),
  * «Принят» и запись в историю контрагента; после — отправленный объект удаляется. Не вышло — копия
  * удаляется.
+ *
+ * С `attach` — «Сохранить» в окне денег с чеком (доработки 16.11.2026, блок 1; прототип v121
+ * `pgRcptSave`): деньги уже записаны своим запросом, а чек принимается и прикрепляется к ним одной
+ * транзакцией — «Принят файл «…» — прикреплён к поступлению от ДД.ММ.ГГГГ». До этого чек остаётся
+ * «Новый»: «Отменить» в окне денег ничего не меняет. Прикрепляется вторая копия (а не ссылка — до
+ * блока 2), по правилам загрузки с сайта: та же запись того же контрагента, `attachStoredFile`, предел
+ * загрузок пользователя. Чек уже решил другой сотрудник — 409 `sent_decided` с `details` (кто и как),
+ * деньги остаются без чека.
  */
 export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAcceptRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const { version } = c.req.valid('json');
+    const { version, attach } = c.req.valid('json');
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);
+    if (attach) {
+      const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
+      if (!slot.ok) apiFail(429, 'file_upload_limit', FILE_MESSAGES.file_upload_limit);
+    }
     const seen = await withOrgContext(deps.db, ctx, async (tx) => {
       await requireFilesFeature(tx, ctx.orgId);
       return (await visibleSent(tx, subject, id)).file;
     });
-    if (seen.status !== 'new') apiFail(409, 'sent_decided', SENT_FILE_MESSAGES.sent_decided);
+    if (seen.status !== 'new') decidedFail(seen);
+    if (attach) {
+      // Правила файлов записей (имя, тип, размер) — как у загрузки с сайта и файла из Telegram.
+      const problem = fileUploadProblem({ name: seen.name, size: seen.sizeBytes });
+      if (problem) apiFail(403, problem, FILE_MESSAGES[problem]);
+    }
     const fileId = randomUUID();
     const key = orgFileKey(ctx.orgId, FILES_SECTION, fileId);
-    if (!(await deps.storage.copy(seen.storageKey, key))) {
-      apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
-    }
+    const copy = attach ? { id: randomUUID(), source: attach } : null;
+    const copyKey = copy ? orgFileKey(ctx.orgId, FILES_SECTION, copy.id) : null;
     const today = sentToday();
-    let body: SentFileAcceptedBody;
+    let body: SentFileItemBody;
     try {
-      body = await decided(() =>
+      if (!(await deps.storage.copy(seen.storageKey, key))) {
+        apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
+      }
+      const copySize = copyKey ? await storedCopy(deps, seen.storageKey, copyKey) : 0;
+      body = await decided(deps, ctx, id, () =>
         withOrgContext(deps.db, ctx, async (tx) => {
-          const features = await requireFilesFeature(tx, ctx.orgId);
+          await requireFilesFeature(tx, ctx.orgId);
           const { file, contractor } = await visibleSent(tx, subject, id);
+          if (copy) {
+            const record = await visibleSource(deps, tx, subject, copy.source.kind, copy.source.id);
+            // Чек одного контрагента к деньгам другого не прикрепить.
+            if (record.contractor?.id !== contractor.id) notFound();
+          }
           const name = acceptedFileName(
             file.name,
             await contractorDocumentNames(tx, contractor.id),
@@ -495,6 +607,17 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
               note: file.comment,
             },
           });
+          const to = copy
+            ? await attachReceipt(deps, tx, subject, ctx.orgId, {
+                ...copy,
+                // Копия — названием отправленного файла, как с 15.11: по нему, размеру и типу её найдёт
+                // `app.file_copies_merge()` этапа 1 (у принятого название могло стать «Имя (2)»).
+                name: file.name,
+                size: copySize,
+                contentType: file.contentType,
+                storageKey: copyKey!,
+              })
+            : null;
           await writeHistory(tx, {
             entity: 'sent_file',
             entityId: id,
@@ -503,19 +626,18 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
             changes: [
               { field: 'file', to: file.name },
               ...(name !== file.name ? [{ field: 'savedAs', to: name }] : []),
+              ...(to ? [to] : []),
             ],
           });
-          const after = (await getSentFile(tx, id))!;
-          const pay = payFor((await sentFilePays(tx, [id])).get(id), {
-            subject,
-            features,
-            contractor,
-          });
-          return { ...itemOf(after, contractor, today, true), pay };
+          return itemOf((await getSentFile(tx, id))!, contractor, today, true);
         }),
       );
     } catch (err) {
-      await removeStoredObjects(deps, [key], 'файлы от контрагентов: копия после отказа');
+      await removeStoredObjects(
+        deps,
+        copyKey ? [key, copyKey] : [key],
+        'файлы от контрагентов: копия после отказа',
+      );
       throw err;
     }
     // Принятый не удаляется задачей по расписанию: и загрузку со страницы по ссылке — сейчас; не
@@ -527,6 +649,44 @@ export function sentAcceptHandler(deps: ApiDeps): RouteHandler<typeof sentAccept
     );
     return c.json(body, 200);
   };
+}
+
+/** Вторая копия чека — для записи денег; ответ — фактический размер положенного объекта. */
+async function storedCopy(deps: ApiDeps, from: string, to: string): Promise<number> {
+  if (!(await deps.storage.copy(from, to))) {
+    apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
+  }
+  const stored = await deps.storage.stat(to);
+  if (!stored) apiFail(409, 'file_not_uploaded', FILE_MESSAGES.file_not_uploaded);
+  return stored!.size;
+}
+
+/**
+ * Принятый чек — к записи денег (`attachStoredFile`: «Файлы в карточках», запись видна, её файлы можно
+ * менять; история записи — «Прикреплён файл»). Ответ — поле истории контрагента «к поступлению от …» или
+ * «к оплате за обслуживание от …» (дата оплаты — только тому, кто видит плату: `FEE_FIELDS`).
+ */
+async function attachReceipt(
+  deps: ApiDeps,
+  tx: Tx,
+  subject: AccessSubject,
+  orgId: string,
+  file: {
+    id: string;
+    source: { kind: 'receipt' | 'fee_payment'; id: string };
+    name: string;
+    size: number;
+    contentType: string;
+    storageKey: string;
+  },
+): Promise<{ field: 'receipt' | 'feePayment'; to: IsoDate }> {
+  const done = await attachStoredFile(deps, tx, subject, orgId, { ...file, note: null });
+  if (done === 'files_off') apiFail(403, 'files_off', FILE_MESSAGES.files_off);
+  if (done === 'not_found') notFound();
+  if (done === 'forbidden') apiFail(403, 'forbidden', 'Нет права на это действие');
+  const date = await sentReceiptTargetDate(tx, file.source);
+  if (!date) notFound();
+  return { field: file.source.kind === 'receipt' ? 'receipt' : 'feePayment', to: date! };
 }
 
 export const sentRejectRoute = createRoute({
@@ -562,7 +722,7 @@ export function sentRejectHandler(deps: ApiDeps): RouteHandler<typeof sentReject
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);
     const today = sentToday();
-    const body = await decided(() =>
+    const body = await decided(deps, ctx, id, () =>
       withOrgContext(deps.db, ctx, async (tx) => {
         await requireFilesFeature(tx, ctx.orgId);
         const { file, contractor } = await visibleSent(tx, subject, id);

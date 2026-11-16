@@ -19,7 +19,8 @@ import {
   PageSentTicket,
   PublicPage,
   PublicPageTelegramLink,
-  SentFileAttached,
+  SentFileAccepted,
+  SentFileDecided,
   SentFileList,
 } from '@buhuchet/shared';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
@@ -528,7 +529,7 @@ describe.skipIf(!databaseAvailable())(
       );
     });
 
-    it('принятый чек — к поступлению и оплате за обслуживание того же контрагента без повторной загрузки (v119); чужим и непринятым — нет', async () => {
+    it('чек принимается вместе с деньгами (v121): «Принять» с `attach` — файл контрагента, копия у поступления и оплаты за обслуживание одной транзакцией; отказ — чек «Новый», копий нет', async () => {
       const month = (await publicPage('org-a', INN_A, grantA)).reports!.months![0]!.month;
       const done = await paid(grantA, { purpose: 'tax', month, amount: 100_000 });
       expect(done.res.status, await done.res.clone().text()).toBe(200);
@@ -537,6 +538,8 @@ describe.skipIf(!databaseAvailable())(
           await (await call(owner, 'GET', `/api/contractors/${cpA}/sent-files`)).json(),
         ).items;
       const [file] = await sentList();
+      // У нового чека — что оплачено: «Принять» откроет окно денег.
+      expect(file!.pay).toEqual({ purpose: 'tax', month, amount: 100_000, source: 'page' });
       const op = async (cp: string) => {
         const [row] = await f.t.admin.db
           .insert(schema.moneyOperations)
@@ -553,37 +556,30 @@ describe.skipIf(!databaseAvailable())(
         return row!.id;
       };
       const receipt = await op(cpA);
-      const attach = (
+      const accept = (
         cookie: string | undefined,
-        kind: 'receipt' | 'fee_payment',
+        kind: 'receipt' | 'fee_payment' | 'report',
         id: string,
-        sent = file!.id,
-      ) => call(cookie, 'POST', `/api/files/sent/${sent}/attach`, { source: { kind, id } });
+        sent: { id: string; version: number } = file!,
+      ) =>
+        call(cookie, 'POST', `/api/files/sent/${sent.id}/accept`, {
+          version: sent.version,
+          attach: { kind, id },
+        });
       const filesOf = async (kind: string, id: string) => {
         const res = await call(owner, 'GET', `/api/files?kind=${kind}&id=${id}`);
         expect(res.status, await res.clone().text()).toBe(200);
         return ((await res.json()) as { items: { id: string; name: string }[] }).items;
       };
-      // Не принятый чек не прикрепить.
-      expect((await attach(owner, 'receipt', receipt)).status).toBe(404);
-      const accepted = await call(owner, 'POST', `/api/files/sent/${file!.id}/accept`, {
-        version: file!.version,
-      });
-      expect(accepted.status, await accepted.clone().text()).toBe(200);
-
-      const res = await attach(acc, 'receipt', receipt);
-      expect(res.status, await res.clone().text()).toBe(201);
-      const out = SentFileAttached.parse(await res.json());
-      expect(out.name).toBe('Чек.pdf');
-      expect((await filesOf('receipt', receipt)).map((x) => [x.id, x.name])).toEqual([
-        [out.id, 'Чек.pdf'],
-      ]);
-      // Без входа — 401, без прав на файлы — 403; бухгалтер с областью «Свои» и чужой контрагент —
-      // 404 (тот же запрос только что прошёл, пока контрагент был его).
-      const stored = storage.files.size;
-      expect((await attach(undefined, 'receipt', receipt)).status).toBe(401);
+      const objects = () => storage.files.size;
+      const before = objects();
+      // Без входа — 401, без прав на файлы — 403; бухгалтер с областью «Свои» и чужой контрагент — 404;
+      // деньги другого контрагента, чужая организация, несуществующая запись — 404; только поступление
+      // и оплата за обслуживание — 400; «Файлы в карточках» выключены — 403. Чек остаётся «Новый»,
+      // копий в хранилище не остаётся, к деньгам ничего не прикреплено.
+      expect((await accept(undefined, 'receipt', receipt)).status).toBe(401);
       const senior = await signIn(f.app, 'senior-a', TEST_PASSWORD);
-      expect((await attach(senior, 'receipt', receipt)).status).toBe(403);
+      expect((await accept(senior, 'receipt', receipt)).status).toBe(403);
       const responsible = (id: string) =>
         f.t.admin.db
           .update(schema.contractors)
@@ -591,22 +587,65 @@ describe.skipIf(!databaseAvailable())(
           .where(eq(schema.contractors.id, cpA));
       await responsible(employee('chief-a'));
       try {
-        expect((await attach(acc, 'receipt', receipt)).status).toBe(404);
+        expect((await accept(acc, 'receipt', receipt)).status).toBe(404);
       } finally {
         await responsible(employee('acc-a'));
       }
-      expect(storage.files.size).toBe(stored);
-      expect((await filesOf('receipt', receipt)).length).toBe(1);
-      // Копия — свой объект хранилища с содержимым чека; файл контрагента остался.
+      expect((await accept(owner, 'receipt', await op(cpA2))).status).toBe(404);
+      expect((await accept(ownerB, 'receipt', receipt)).status).toBe(404);
+      expect((await accept(owner, 'receipt', randomUUID())).status).toBe(404);
+      expect((await accept(owner, 'report', receipt)).status).toBe(400);
+      await features(f.a.orgId, { ...ON, files: false });
+      try {
+        expect((await accept(owner, 'receipt', receipt)).status).toBe(403);
+      } finally {
+        await features(f.a.orgId, ON);
+      }
+      expect(objects()).toBe(before);
+      expect((await filesOf('receipt', receipt)).length).toBe(0);
+      expect((await sentList())[0]).toMatchObject({ status: 'new', version: file!.version });
+      // Хранилище не удаляет копии после отказа — они идут на повторное удаление (п. И-10).
+      const del = storage.delete;
+      try {
+        storage.delete = async () => {
+          throw new Error('S3 недоступно');
+        };
+        try {
+          expect((await accept(owner, 'receipt', await op(cpA2))).status).toBe(404);
+        } finally {
+          storage.delete = del;
+        }
+        const retries = await f.t.admin.db
+          .select({ key: schema.storageDeleteRetries.key })
+          .from(schema.storageDeleteRetries);
+        expect(retries).toHaveLength(2);
+        expect(objects()).toBe(before + 2);
+        expect(await retryStorageDeletes(f.deps)).toBe(2);
+        expect(objects()).toBe(before);
+      } finally {
+        storage.delete = del;
+        await f.t.admin.db.delete(schema.storageDeleteRetries);
+      }
+
+      // «Сохранить» в окне денег: чек принят и прикреплён к поступлению одной транзакцией.
+      const res = await accept(acc, 'receipt', receipt);
+      expect(res.status, await res.clone().text()).toBe(200);
+      const out = SentFileAccepted.parse(await res.json());
+      expect(out).toMatchObject({ status: 'accepted', pay: null });
+      const [attached] = await filesOf('receipt', receipt);
+      expect(attached!.name).toBe('Чек.pdf');
+      // Копия — свой объект хранилища с содержимым чека; файл контрагента — свой; отправленный удалён.
       const keys = await f.t.admin.db
         .select({ id: schema.files.id, key: schema.files.storageKey })
         .from(schema.files)
         .where(eq(schema.files.contractorId, cpA));
-      const copyKey = keys.find((k) => k.id === out.id)!.key;
+      const copyKey = keys.find((k) => k.id === attached!.id)!.key;
+      const acceptedKey = keys.find((k) => k.id === out.fileId)!.key;
+      expect(copyKey).not.toBe(acceptedKey);
       expect(await storage.get(copyKey)).toEqual(PDF);
-      const acceptedId = (await sentList())[0]!.fileId!;
-      expect(await storage.exists(keys.find((k) => k.id === acceptedId)!.key)).toBe(true);
-      // В истории поступления — «Прикреплён файл».
+      expect(await storage.get(acceptedKey)).toEqual(PDF);
+      // История поступления — «Прикреплён файл», контрагента — «Принят файл «…» — прикреплён к
+      // поступлению от 10.11.2026».
       const attachedHistory = await f.t.admin.db
         .select({ entity: schema.auditLog.entity, changes: schema.auditLog.changes })
         .from(schema.auditLog)
@@ -616,71 +655,71 @@ describe.skipIf(!databaseAvailable())(
       expect(attachedHistory).toEqual([
         { entity: 'money_operation', changes: [{ field: 'file', to: 'Чек.pdf' }] },
       ]);
+      const acceptHistory = await f.t.admin.db
+        .select({ changes: schema.auditLog.changes })
+        .from(schema.auditLog)
+        .where(
+          and(
+            eq(schema.auditLog.entityId, file!.id),
+            eq(schema.auditLog.action, 'sent_file_accept'),
+          ),
+        );
+      expect(acceptHistory).toEqual([
+        {
+          changes: [
+            { field: 'file', to: 'Чек.pdf' },
+            { field: 'receipt', to: '2026-11-10' },
+          ],
+        },
+      ]);
+      // Второй раз (окно денег у другого сотрудника) — 409 `sent_decided`: кто и как уже решил, деньги
+      // остаются без чека.
+      const again = await accept(owner, 'receipt', receipt);
+      expect(again.status).toBe(409);
+      const err = (await again.json()) as { error: { code: string; details?: unknown } };
+      expect(err.error.code).toBe('sent_decided');
+      expect(SentFileDecided.parse(err.error.details)).toEqual({
+        status: 'accepted',
+        by: expect.any(String),
+      });
+      expect((await filesOf('receipt', receipt)).length).toBe(1);
 
-      // Оплата за обслуживание того же контрагента — тоже.
+      // Оплата за обслуживание того же контрагента: имя занято — принятый «Чек (2).pdf», копия у оплаты —
+      // названием отправленного файла (её найдёт объединение копий этапа 1).
+      const second = await paid(grantA, { purpose: 'tax', month, amount: 50_000 });
+      expect(second.res.status, await second.res.clone().text()).toBe(200);
+      const next = (await sentList()).find((x) => x.status === 'new')!;
       const [fee] = await f.t.admin.db
         .insert(schema.feePayments)
         .values({
           orgId: f.a.orgId,
           contractorId: cpA,
           amount: 100_000,
-          paidOn: '2026-11-10',
+          paidOn: '2026-11-11',
           toKind: 'org',
         })
         .returning({ id: schema.feePayments.id });
-      const feeRes = await attach(owner, 'fee_payment', fee!.id);
-      expect(feeRes.status, await feeRes.clone().text()).toBe(201);
+      const feeRes = await accept(owner, 'fee_payment', fee!.id, next);
+      expect(feeRes.status, await feeRes.clone().text()).toBe(200);
       expect((await filesOf('fee_payment', fee!.id)).map((x) => x.name)).toEqual(['Чек.pdf']);
-
-      // Деньги другого контрагента, чужая организация, несуществующая запись — 404, копии не остаётся.
-      const objects = () => storage.files.size;
-      const before = objects();
-      expect((await attach(owner, 'receipt', await op(cpA2))).status).toBe(404);
-      expect((await attach(ownerB, 'receipt', receipt)).status).toBe(404);
-      expect((await attach(owner, 'receipt', randomUUID())).status).toBe(404);
-      expect(objects()).toBe(before);
-      expect((await filesOf('receipt', receipt)).length).toBe(1);
-      // Хранилище не удаляет копию после отказа — она идёт на повторное удаление (п. И-10).
-      const del = storage.delete;
-      try {
-        storage.delete = async () => {
-          throw new Error('S3 недоступно');
-        };
-        try {
-          expect((await attach(owner, 'receipt', await op(cpA2))).status).toBe(404);
-        } finally {
-          storage.delete = del;
-        }
-        const retries = await f.t.admin.db
-          .select({ key: schema.storageDeleteRetries.key })
-          .from(schema.storageDeleteRetries);
-        expect(retries).toHaveLength(1);
-        expect(objects()).toBe(before + 1);
-        expect(await retryStorageDeletes(f.deps)).toBe(1);
-        expect(objects()).toBe(before);
-      } finally {
-        storage.delete = del;
-        await f.t.admin.db.delete(schema.storageDeleteRetries);
-      }
-      // Только поступление и оплата за обслуживание.
-      const wrong = await call(owner, 'POST', `/api/files/sent/${file!.id}/attach`, {
-        source: { kind: 'report', id: receipt },
-      });
-      expect(wrong.status).toBe(400);
-      // «Файлы в карточках» выключены — 403.
-      await features(f.a.orgId, { ...ON, files: false });
-      try {
-        expect((await attach(owner, 'receipt', receipt)).status).toBe(403);
-      } finally {
-        await features(f.a.orgId, ON);
-      }
-      // Файл контрагента удалили — прикреплять нечего.
-      await f.t.admin.db
-        .update(schema.files)
-        .set({ state: 'deleted', deletedAt: new Date(), deletedBy: f.people['acc-a']!.userId })
-        .where(eq(schema.files.id, acceptedId));
-      expect((await attach(owner, 'receipt', receipt)).status).toBe(404);
-      expect(objects()).toBe(before);
+      const feeHistory = await f.t.admin.db
+        .select({ changes: schema.auditLog.changes })
+        .from(schema.auditLog)
+        .where(
+          and(
+            eq(schema.auditLog.entityId, next.id),
+            eq(schema.auditLog.action, 'sent_file_accept'),
+          ),
+        );
+      expect(feeHistory).toEqual([
+        {
+          changes: [
+            { field: 'file', to: 'Чек.pdf' },
+            { field: 'savedAs', to: 'Чек (2).pdf' },
+            { field: 'feePayment', to: '2026-11-11' },
+          ],
+        },
+      ]);
     });
 
     it('«Я оплатил» за обслуживание: месяц с долгом, «Ожидает подтверждения» у месяца; сумма — тому, кто видит плату', async () => {

@@ -29,7 +29,7 @@ export interface StoredFile {
   id: string;
   /**
    * Запись, к которой прикрепляется файл: отчёт или задача (файл из Telegram), поступление или оплата
-   * за обслуживание (принятый чек контрагента, `sent-attach.ts`).
+   * за обслуживание (чек контрагента, принятый вместе с деньгами, — «Принять» в `sent.ts`).
    */
   source: { kind: 'report' | 'task' | 'receipt' | 'fee_payment'; id: string };
   name: string;
