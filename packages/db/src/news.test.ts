@@ -456,7 +456,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());
     expect(withAdm.map((x) => x.id)).toEqual(expect.arrayContaining(['v123', 'v124']));
     for (const x of withAdm) {
-      expect(rows.find((r) => r.id === x.id)?.md ?? '').not.toContain('## Для администратора платформы');
+      expect(rows.find((r) => r.id === x.id)?.md ?? '').not.toContain(
+        '## Для администратора платформы',
+      );
     }
     expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toMatch(
       /^## Для администратора платформы/,
