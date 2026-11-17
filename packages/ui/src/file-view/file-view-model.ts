@@ -149,6 +149,36 @@ export function xmlBranches(root: XmlViewNode): XmlPath[] {
   return out;
 }
 
+/**
+ * Текст на экране — кусками не длиннее: каждый кусок — свой текстовый узел. Один длинный кусок
+ * браузер раскладывает тем дольше, чем чаще в нём меняется шрифт (кириллица и пробел сайта — из
+ * разных частей шрифта; эмодзи и чужая письменность — всегда), время растёт как «смены × строки».
+ */
+export const TEXT_CHUNK = 128;
+
+/** Текст кусками до `max` знаков: режется после пробела, а без пробела — не внутри пары UTF-16. */
+export function textChunks(text: string, max = TEXT_CHUNK): string | string[] {
+  if (text.length <= max) return text;
+  const out: string[] = [];
+  let from = 0;
+  while (text.length - from > max) {
+    const space = text.lastIndexOf(' ', from + max - 1);
+    let cut = space >= from ? space + 1 : from + max;
+    const last = text.charCodeAt(cut - 1);
+    if (space < from && last >= 0xd800 && last <= 0xdbff && cut - 1 > from) cut--;
+    out.push(text.slice(from, cut));
+    from = cut;
+  }
+  out.push(text.slice(from));
+  return out;
+}
+
+/**
+ * Шрифт содержимого файла (лист, бумага документа, слайд) — системный, без шрифта сайта: тот
+ * подключён частями, и русский текст менял бы шрифт на каждом пробеле.
+ */
+export const FILE_FONT = 'system-ui, "Segoe UI", Roboto, Arial, sans-serif';
+
 /** Знаков ячейки листа на экране — не больше (как Excel); полный текст — в подсказке. */
 export const SHEET_CELL_SHOW = 1_024;
 export const sheetCellText = (v: string) =>

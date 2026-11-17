@@ -31,6 +31,8 @@ import {
   sheetHits,
   sheetStepEnd,
   swipeDirection,
+  TEXT_CHUNK,
+  textChunks,
   xmlBranches,
   xmlClosed,
   xmlDepth,
@@ -213,6 +215,23 @@ describe('правила окна просмотра', () => {
     expect(sheetCellText('коротко')).toBe('коротко');
   });
 
+  it('длинный текст — кусками до 128 знаков по пробелу, пара UTF-16 не режется (п. И-12)', () => {
+    expect(textChunks('коротко')).toBe('коротко');
+    const words = 'я '.repeat(1000);
+    const parts = textChunks(words) as string[];
+    expect(parts.join('')).toBe(words);
+    expect(parts.every((x) => x.length <= TEXT_CHUNK && x.endsWith(' '))).toBe(true);
+    // Без пробелов — ровно по пределу; эмодзи (пара UTF-16) остаётся целым.
+    expect(textChunks('а'.repeat(300))).toEqual(['а'.repeat(128), 'а'.repeat(128), 'а'.repeat(44)]);
+    const emoji = textChunks(`a${'😀'.repeat(200)}`) as string[];
+    expect(emoji.join('')).toBe(`a${'😀'.repeat(200)}`);
+    for (const x of emoji) {
+      expect(x.length).toBeLessThanOrEqual(TEXT_CHUNK);
+      const end = x.charCodeAt(x.length - 1);
+      expect(end >= 0xd800 && end <= 0xdbff).toBe(false);
+    }
+  });
+
   it('найденные ячейки — по строкам', () => {
     const m = hitsByRow([
       [2, 0],
@@ -287,8 +306,9 @@ describe('просмотр Excel', () => {
     );
     expect(html).toContain('max-height:545px');
     // Ширина таблицы — числом из ширин столбцов (46 + 80 + 80 + 80): текст её не раздвигает.
-    expect(html).toMatch(/<table[^>]*style="width:286px"/);
+    expect(html).toMatch(/<table[^>]*style="width:286px;/);
     expect(html).toContain(`>${'а'.repeat(SHEET_CELL_SHOW)}<`);
+    expect(html).toContain('font-family:system-ui');
     expect(html).toContain(`title="${long}"`);
   });
 

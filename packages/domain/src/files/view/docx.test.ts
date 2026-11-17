@@ -142,6 +142,9 @@ describe('Word DOCX в окне просмотра', () => {
     expect(doc.cut).toBe(true);
     expect(breaks).toBeLessThanOrEqual(DOC_MAX_CHARS / DOC_BREAK_CHARS);
     expect(breaks).toBeGreaterThan(0);
+    // Перевод строки внутри `<w:t>` — пробел, как у Word: строку переносит только `<w:br/>`.
+    const plain = await parseDocx(openZip(await docxBytes(p(r('первая\nвторая\r\nтретья')))));
+    expect(plain.blocks).toEqual([{ k: 'p', runs: [{ t: 'первая вторая третья' }] }]);
   });
 
   it('одна картинка в 1 500 местах — показана в первых 1 000 (защита, п. И-12)', async () => {

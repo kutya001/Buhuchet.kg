@@ -34,6 +34,7 @@ import { Icon } from '../icon';
 import type { IconName } from '../icons';
 import {
   cellKey,
+  FILE_FONT,
   hitsByRow,
   mergeMap,
   rotateNext,
@@ -41,6 +42,7 @@ import {
   sheetHits,
   sheetStepEnd,
   SHEET_WRAP_MAX_PX,
+  textChunks,
   xmlBranches,
   xmlClosed,
   xmlDepth,
@@ -331,7 +333,7 @@ const SheetRow = memo(function SheetRow({
         const cell = row[c];
         const span = merges.span.get(k);
         // В ячейке — до 1 024 знаков, с переносом — не выше строки Excel; весь текст — в подсказке.
-        const text = cell ? sheetCellText(cell.v) : undefined;
+        const text = cell ? textChunks(sheetCellText(cell.v)) : undefined;
         return (
           <td
             key={c}
@@ -449,7 +451,7 @@ export function SheetTable({
         className="table-fixed border-separate border-spacing-0 text-[12.5px]"
         // Ширина таблицы — числом из ширин столбцов: при `max-content` браузер раскладывает таблицу
         // по тексту, и строка нового шага заново раскладывала бы все нарисованные.
-        style={{ width: tableWidth }}
+        style={{ width: tableWidth, fontFamily: FILE_FONT }}
         data-fv-sheet={sheet.name}
       >
         <colgroup>
@@ -606,7 +608,7 @@ function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, st
           .join(' ');
         return (
           <span key={i} className={cls || undefined} style={runStyle(r)}>
-            {r.t}
+            {textChunks(r.t)}
           </span>
         );
       })}
@@ -704,6 +706,7 @@ export function DocumentView({
         <div
           className="mx-auto max-w-[760px] rounded-md bg-white px-10 py-8 text-[13.5px] text-[#222] shadow-pane max-md:px-4 max-md:py-5"
           data-fv-paper=""
+          style={{ fontFamily: FILE_FONT }}
         >
           <DocBlocks blocks={model.blocks} urls={urls} />
         </div>
@@ -759,7 +762,7 @@ function SlideItemView({
                   key={j}
                   className="border border-[#aab] px-[0.6cqw] py-[0.3cqw] align-top whitespace-pre-wrap"
                 >
-                  {c}
+                  {textChunks(c)}
                 </td>
               ))}
             </tr>
@@ -793,7 +796,7 @@ function SlideItemView({
               }
               style={{ fontSize: r.sz ? fs(r.sz) : undefined, color: r.color }}
             >
-              {r.t}
+              {textChunks(r.t)}
             </span>
           ))}
         </div>
@@ -849,7 +852,11 @@ export function SlidesView({
           <div
             data-fv-slide-box=""
             className="relative w-[min(760px,100%)] overflow-hidden rounded-md text-[#1f2a44] shadow-pane [container-type:inline-size]"
-            style={{ aspectRatio: `${model.w} / ${model.h}`, background: s.bg ?? '#fff' }}
+            style={{
+              aspectRatio: `${model.w} / ${model.h}`,
+              background: s.bg ?? '#fff',
+              fontFamily: FILE_FONT,
+            }}
           >
             {s.items.map((it, i) => (
               <SlideItemView key={i} item={it} widthPt={widthPt} urls={urls} />
@@ -880,7 +887,7 @@ export function TextFileView({ model, labels }: { model: TextView; labels: FileV
               <span className="mr-2.5 inline-block w-[34px] text-right text-faint select-none">
                 {i + 1}
               </span>
-              {l}
+              {textChunks(l)}
             </span>
           ))}
         </pre>
@@ -916,7 +923,8 @@ function XmlNodeView({
   const attrs = node.a.map(([k, v]) => (
     <span key={k}>
       {' '}
-      <span className="text-violet">{k}</span>=<span className="text-ok">&quot;{v}&quot;</span>
+      <span className="text-violet">{k}</span>=
+      <span className="text-ok">&quot;{textChunks(v)}&quot;</span>
     </span>
   ));
   const hit = hits.has(path) ? 'rounded-[3px] bg-caution-bg' : '';
@@ -930,7 +938,7 @@ function XmlNodeView({
         {text ? (
           <>
             <span className="text-info">&gt;</span>
-            {text}
+            {textChunks(text)}
             <span className="text-info">&lt;/{node.n}&gt;</span>
           </>
         ) : (
@@ -957,7 +965,7 @@ function XmlNodeView({
         {attrs}
         <span className="text-info">&gt;</span>
         {off ? <span className="text-faint">…</span> : null}
-        {text && !off ? <span>{text}</span> : null}
+        {text && !off ? <span>{textChunks(text)}</span> : null}
       </span>
       {off ? null : (
         <div className="ml-[5px] border-l border-dotted border-line-strong pl-[18px]">

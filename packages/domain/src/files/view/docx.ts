@@ -324,7 +324,12 @@ async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): 
       for (const c of k.kids) {
         if (typeof c === 'string') continue;
         const cn = localName(c.name);
-        if (cn === 't') text += c.kids.filter((x): x is string => typeof x === 'string').join('');
+        // Перевод строки внутри `<w:t>` — пробел, как у Word (строку переносит только `<w:br/>`).
+        if (cn === 't')
+          text += c.kids
+            .filter((x): x is string => typeof x === 'string')
+            .join('')
+            .replace(/[\r\n]+/g, ' ');
         else if (cn === 'tab' || cn === 'ptab') text += '\t';
         else if (cn === 'br' || cn === 'cr') {
           text += '\n';
