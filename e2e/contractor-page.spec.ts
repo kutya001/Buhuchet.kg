@@ -641,6 +641,8 @@ test.describe('Этап 3: страница контрагента — разд�
     baseURL,
     isMobile,
   }) => {
+    // Долгий путь: «Файловый менеджер», страница по коду, окна просмотра по трём спискам.
+    test.slow();
     const o = await pageOrg(request, baseURL);
     const tag = Date.now().toString(36);
     const name = 'ОсОО «Файлы»';
@@ -739,23 +741,74 @@ test.describe('Этап 3: страница контрагента — разд�
     await expect(receiptRow).toContainText(`Квитанция НДС ${tag}.pdf`);
     await expect(receiptRow).toContainText('НДС · 09.2026');
 
-    // PDF открывается в окне просмотра на странице, рядом — «Скачать».
+    // Файл открывается в окне просмотра на странице (доработки 16.11.2026, блок 5), рядом — «Скачать».
     await receiptRow.click();
     const viewer = page.getByRole('dialog', { name: `Квитанция НДС ${tag}.pdf` });
-    const frame = viewer.locator('iframe');
-    await expect(frame).toHaveAttribute('src', `${cp.path}/files/${receipt}`);
-    await expect(viewer.getByRole('link', { name: 'Скачать' })).toHaveAttribute(
+    await expect(viewer.locator(`[data-file-viewer="${receipt}"]`)).toBeVisible();
+    await expect(viewer.locator('[data-fv-download]')).toHaveAttribute(
       'href',
       `${cp.path}/files/${receipt}?download=1`,
     );
+    // В списке «Отчёты» один файл — листать некуда (у окна потока И «‹ ›» тогда нет вовсе).
+    await expect(viewer.locator('[data-fv-prev]:enabled, [data-fv-next]:enabled')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(viewer).toBeHidden();
+    // «Все»: «‹ ›» листают по файлам того же списка, в порядке строк.
+    await plates.nth(0).click();
+    await expect(rows).toHaveCount(2);
+    const order = await rows.evaluateAll((els) => els.map((e) => e.getAttribute('data-pub-fo')));
+    const names = new Map([
+      [charter, `Устав ${tag}.pdf`],
+      [receipt, `Квитанция НДС ${tag}.pdf`],
+    ]);
+    await rows.first().click();
+    const first = page.getByRole('dialog', { name: names.get(order[0]!) });
+    await expect(first.locator('[data-fv-prev]')).toBeDisabled();
+    await first.locator('[data-fv-next]').click();
+    const second = page.getByRole('dialog', { name: names.get(order[1]!) });
+    await expect(second.locator(`[data-file-viewer="${order[1]}"]`)).toBeVisible();
+    await expect(second.locator('[data-fv-next]')).toBeDisabled();
+    await expect(second.locator('[data-fv-download]')).toHaveAttribute(
+      'href',
+      `${cp.path}/files/${order[1]}?download=1`,
+    );
+    await page.keyboard.press('Escape');
+    await expect(second).toBeHidden();
+    // «Отчёты»: файл отчёта в плитке НДС открывается в том же окне, «‹ ›» — по файлам этого отчёта.
+    const reports = await unfold(page, 'reports', isMobile);
+    const ndsTile = reports.locator('[data-pub-tile="nds"]');
+    await ndsTile.getByRole('button').first().click();
+    await expect(ndsTile.locator('[data-pub-row]').first()).toBeVisible();
+    // На телефоне у плитки первые 5 периодов: остальные — «Показать ещё».
+    const moreRows = ndsTile.getByRole('button', { name: /^Показать ещё/ });
+    if (await moreRows.isVisible()) await moreRows.click();
+    await ndsTile.locator(`[data-pub-file="${receipt}"]`).click();
+    const reportFile = page.getByRole('dialog', { name: `Квитанция НДС ${tag}.pdf` });
+    await expect(reportFile.locator(`[data-file-viewer="${receipt}"]`)).toBeVisible();
+    await expect(reportFile.locator('[data-fv-prev]:enabled, [data-fv-next]:enabled')).toHaveCount(
+      0,
+    );
+    await page.keyboard.press('Escape');
+    await expect(reportFile).toBeHidden();
     const pdf = await page.request.get(`${cp.path}/files/${receipt}`);
     expect(pdf.status()).toBe(200);
     expect(pdf.headers()['content-type']).toContain('application/pdf');
+    // Окно читает файл с `view=1`: переход на подписанную ссылку-вложение.
+    const viewed = await page.request.get(`${cp.path}/files/${receipt}?view=1`, {
+      maxRedirects: 0,
+    });
+    expect(viewed.status()).toBe(302);
+    expect(viewed.headers()['cache-control']).toContain('no-store');
     // Скрытый файл и файл задачи по ссылке страницы тоже не открываются.
-    // Сайт в таком случае возвращает на саму страницу, без ссылки на хранилище.
+    // Сайт в таком случае возвращает на саму страницу, без ссылки на хранилище, а окну — 404.
     const hidden = await page.request.get(`${cp.path}/files/${draft}`, { maxRedirects: 0 });
     expect(hidden.status()).toBe(303);
     expect(hidden.headers().location?.endsWith(cp.path)).toBe(true);
+    const hiddenView = await page.request.get(`${cp.path}/files/${draft}?view=1`, {
+      maxRedirects: 0,
+    });
+    expect(hiddenView.status()).toBe(404);
+    expect(hiddenView.headers().location).toBeUndefined();
   });
 });
 

@@ -164,12 +164,13 @@ export const PageReportType = z.object({
 });
 
 /**
- * Файл, приложенный к отчёту: открывается и скачивается по ссылке страницы; картинка и PDF
- * (`preview`) — в окне просмотра на странице (прототип v74 `pubFileOpen`), остальное скачивается.
+ * Файл, приложенный к отчёту: открывается и скачивается по ссылке страницы, в окне просмотра — любой
+ * (доработки 16.11.2026, блок 5); `preview` — картинка или PDF (прежнее окно, прототип v74 `pubFileOpen`).
  */
 export const PageFile = z.object({
   id: Uuid,
   name: z.string(),
+  size: z.number().int().nonnegative(),
   preview: z.enum(['image', 'pdf']).nullable(),
 });
 export type PageFile = z.infer<typeof PageFile>;

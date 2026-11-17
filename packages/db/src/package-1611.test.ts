@@ -13,8 +13,10 @@ import { createOrganization, type CreatedOrganization } from './organizations';
 import {
   bellNotifications,
   contractorSentFiles,
+  feePayments,
   fileLinks,
   files,
+  moneyOperations,
   news,
   newsAdminTexts,
   storageDeleteRetries,
@@ -972,6 +974,189 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
       await expect(inA((tx) => tx.execute(sql`select app.file_copies_merge()`))).rejects.toThrow(
         denied,
       );
+    });
+
+    /*
+     * Второй перенос (этап 2, миграция 0160): копии, которые прежний код сделал, пока шёл выпуск этапа 1.
+     * Те же условия пары и ещё одно — копия прикреплена не позже 10 минут после создания своей записи
+     * денег: так прикреплял её прежний код сразу после «Сохранить» (docs/deviations.md п. К-19).
+     */
+    describe('второй перенос с границей по записи денег (app.file_copies_merge_late)', () => {
+      const mergeLate = (until?: Date) =>
+        until
+          ? db.admin.db.execute(sql`select app.file_copies_merge_late(${until.toISOString()})`)
+          : db.admin.db.execute(sql`select app.file_copies_merge_late()`);
+      const minutes = (n: number) => n * 60_000;
+      /** Поступление от контрагента (по умолчанию «А»), созданное в `at`. */
+      const receiptAt = async (
+        at: Date,
+        over: Partial<typeof moneyOperations.$inferInsert> = {},
+      ) => {
+        const id = randomUUID();
+        await db.admin.db.insert(moneyOperations).values({
+          id,
+          orgId: a.orgId,
+          contractorId: cpA,
+          kind: 'in',
+          amount: 500_000,
+          total: 500_000,
+          opDate: '2026-11-16',
+          holderKind: 'org',
+          createdBy: a.ownerUserId,
+          createdAt: at,
+          ...over,
+        });
+        return id;
+      };
+      /** Оплата за обслуживание контрагента «А», созданная в `at`. */
+      const feePaymentAt = async (at: Date) => {
+        const id = randomUUID();
+        await db.admin.db.insert(feePayments).values({
+          id,
+          orgId: a.orgId,
+          contractorId: cpA,
+          amount: 300_000,
+          paidOn: '2026-11-16',
+          toKind: 'owner',
+          createdBy: a.ownerUserId,
+          createdAt: at,
+        });
+        return id;
+      };
+
+      it('копия, прикреплённая сразу после записи денег, объединяется — у поступления и у оплаты за обслуживание; повтор ничего не меняет', async () => {
+        const u = randomUUID().slice(0, 8);
+        const accepted = new Date(Date.now() - minutes(30));
+        const original = await sentCheck(`Поздний ${u}.jpg`, { at: accepted });
+        const saved = new Date(Date.now() - minutes(20));
+        const receipt = await receiptAt(saved);
+        const copy = await copyOf(`Поздний ${u}.jpg`, {
+          sourceId: receipt,
+          createdAt: new Date(saved.getTime() + 3_000),
+        });
+        const fee = await feePaymentAt(saved);
+        const feeCopy = await copyOf(`Поздний ${u}.jpg`, {
+          sourceKind: 'fee_payment',
+          sourceId: fee,
+          createdBy: a.ownerUserId,
+          createdAt: new Date(saved.getTime() + minutes(10)),
+        });
+        // Верхняя граница вызова (выкладка нового кода) раньше копий — копии не трогаются.
+        await mergeLate(new Date(saved.getTime() + 1_000));
+        expect((await stateOf([copy, feeCopy])).get(copy)?.state).toBe('ready');
+        expect(await linksOf([original])).toEqual([]);
+        await mergeLate();
+        const byId = await stateOf([original, copy, feeCopy]);
+        expect(byId.get(original)?.state).toBe('ready');
+        expect(byId.get(copy)).toMatchObject({ state: 'deleted', deletedBy: colleagueA });
+        expect(byId.get(feeCopy)).toMatchObject({ state: 'deleted', deletedBy: a.ownerUserId });
+        expect(await linksOf([original])).toEqual(
+          expect.arrayContaining([
+            { fileId: original, kind: 'receipt', id: receipt, by: colleagueA },
+            { fileId: original, kind: 'fee_payment', id: fee, by: a.ownerUserId },
+          ]),
+        );
+        const keys = (
+          await db.admin.db.select({ key: storageDeleteRetries.key }).from(storageDeleteRetries)
+        ).map((k) => k.key);
+        expect(keys).toEqual(expect.arrayContaining([byId.get(copy)!.key, byId.get(feeCopy)!.key]));
+        await mergeLate();
+        expect(await linksOf([original])).toHaveLength(2);
+      });
+
+      it('та же копия, прикреплённая позже 10 минут после записи денег, до записи или к записи без строки, не трогается', async () => {
+        const u = randomUUID().slice(0, 8);
+        const accepted = new Date(Date.now() - minutes(60));
+        const original = await sentCheck(`Ручной ${u}.jpg`, { at: accepted });
+        const saved = new Date(Date.now() - minutes(40));
+        // Загрузили тот же файл в карточку записи позже — это не копия прежнего кода.
+        const later = await copyOf(`Ручной ${u}.jpg`, {
+          sourceId: await receiptAt(saved),
+          createdAt: new Date(saved.getTime() + minutes(10) + 1_000),
+        });
+        const feeLater = await copyOf(`Ручной ${u}.jpg`, {
+          sourceKind: 'fee_payment',
+          sourceId: await feePaymentAt(saved),
+          createdAt: new Date(saved.getTime() + minutes(15)),
+        });
+        // Время записи денег позже времени копии (часы разошлись) — тоже не копия.
+        const before = await copyOf(`Ручной ${u}.jpg`, {
+          sourceId: await receiptAt(saved),
+          createdAt: new Date(saved.getTime() - 1_000),
+        });
+        // Записи денег нет (номер чужой записи).
+        const orphan = await copyOf(`Ручной ${u}.jpg`, { createdAt: saved });
+        // Первый перенос (0159) такую копию объединил бы: граница только у второго.
+        await mergeLate();
+        const byId = await stateOf([later, feeLater, before, orphan]);
+        for (const id of [later, feeLater, before, orphan])
+          expect(byId.get(id)?.state).toBe('ready');
+        expect(await linksOf([original])).toEqual([]);
+      });
+
+      it('остальные условия пары — как у первого переноса: два одинаковых чека, примечание, другой контрагент, другая организация, запись денег не того контрагента или вида', async () => {
+        const u = randomUUID().slice(0, 8);
+        const name = `Двойной ${u}.jpg`;
+        const accepted = new Date(Date.now() - minutes(30));
+        const first = await sentCheck(name, { at: accepted });
+        const second = await sentCheck(name, { fileName: `Двойной ${u} (2).jpg`, at: accepted });
+        const saved = new Date(Date.now() - minutes(20));
+        const ambiguous = await copyOf(name, {
+          sourceId: await receiptAt(saved),
+          createdAt: saved,
+        });
+        const single = await sentCheck(`Один-${u}.jpg`, { at: accepted });
+        const noted = await copyOf(`Один-${u}.jpg`, {
+          sourceId: await receiptAt(saved),
+          createdAt: saved,
+          note: 'Чек за октябрь',
+        });
+        // Другой контрагент той же организации: копия его поступления с названием, типом и размером
+        // принятого чека «А» — не пара.
+        const cpA3 = await inA((tx) =>
+          createContractor(tx, a.orgId, contractor('03807819461918', 'ОсОО «А-3»'), null),
+        );
+        const other = await sentCheck(`Чужой-${u}.jpg`, { at: accepted });
+        const foreign = await copyOf(`Чужой-${u}.jpg`, {
+          contractorId: cpA3,
+          sourceId: await receiptAt(saved, { contractorId: cpA3 }),
+          createdAt: saved,
+        });
+        // Копия контрагента «А», но запись денег — другого контрагента: ссылка на чужие деньги не встаёт.
+        const misplaced = await copyOf(`Чужой-${u}.jpg`, {
+          sourceId: await receiptAt(saved, { contractorId: cpA3 }),
+          createdAt: saved,
+        });
+        // Другая организация: копия у поступления контрагента «Б» с тем же названием, типом и размером.
+        const elsewhere = await copyOf(`Чужой-${u}.jpg`, {
+          orgId: b.orgId,
+          contractorId: cpB,
+          storageKey: `org/${b.orgId}/files/${randomUUID()}`,
+          sourceId: await receiptAt(saved, {
+            orgId: b.orgId,
+            contractorId: cpB,
+            createdBy: b.ownerUserId,
+          }),
+          createdBy: b.ownerUserId,
+          createdAt: saved,
+        });
+        // Запись денег того же контрагента, но не поступление (возврат контрагенту): пары нет.
+        const notReceipt = await copyOf(`Чужой-${u}.jpg`, {
+          sourceId: await receiptAt(saved, { kind: 'refund', total: null }),
+          createdAt: saved,
+        });
+        await mergeLate();
+        const all = [ambiguous, noted, foreign, misplaced, elsewhere, notReceipt];
+        const byId = await stateOf(all);
+        for (const id of all) expect(byId.get(id)?.state).toBe('ready');
+        expect(await linksOf([first, second, single, other])).toEqual([]);
+      });
+
+      it('роль приложения функцию второго переноса не зовёт', async () => {
+        await expect(
+          inA((tx) => tx.execute(sql`select app.file_copies_merge_late()`)),
+        ).rejects.toThrow(denied);
+      });
     });
   });
 });

@@ -59,17 +59,22 @@ export const sentUploadQuery = (contractorId: string, pageVersion: number | null
     },
   });
 
-/** Ссылка на просмотр картинки или PDF в окне отправленного файла (на 15 минут). */
-export const sentViewQuery = (id: string) => ({
-  queryKey: ['files', 'sent', 'view', id],
-  queryFn: async () => {
-    const res = await api.api.files.sent[':id'].link.$get({ param: { id }, query: {} });
-    if (!res.ok) throw await apiFailure(res);
-    return FileLink.parse(await res.json());
-  },
-  // Ссылка живёт 15 минут: открытое заново окно берёт свежую.
-  staleTime: 5 * 60_000,
-});
+/**
+ * Окно просмотра (доработки 16.11.2026, блок 5): байты отправленного файла — по подписанной ссылке на
+ * 15 минут вложением (`download=1`): окно разбирает любой файл само, браузер его не открывает.
+ */
+export async function sentViewSrc(id: string): Promise<string> {
+  const res = await api.api.files.sent[':id'].link.$get({
+    param: { id },
+    query: { download: '1' },
+  });
+  if (!res.ok) throw await apiFailure(res);
+  return FileLink.parse(await res.json()).url;
+}
+
+/** «Скачать» окна просмотра: метод сам переходит на подписанную ссылку-вложение. */
+export const sentDownloadHref = (id: string) =>
+  `/api/files/sent/${encodeURIComponent(id)}/download`;
 
 /**
  * После «Принять», «Отклонить» и отправки: вкладка, раздел карточки, счётчик новых, файлы контрагента

@@ -208,7 +208,7 @@ export async function pageReports(
 ): Promise<{
   reports: PageReportRecord[];
   types: PageReportTypeRecord[];
-  files: Map<string, { id: string; name: string; contentType: string }[]>;
+  files: Map<string, { id: string; name: string; contentType: string; size: number }[]>;
 }> {
   const rows = await tx
     .select({
@@ -260,6 +260,7 @@ export async function pageReports(
             id: files.id,
             name: files.name,
             contentType: files.contentType,
+            size: files.sizeBytes,
             reportId: files.sourceId,
           })
           .from(files)
@@ -278,10 +279,13 @@ export async function pageReports(
           .orderBy(asc(files.createdAt), asc(files.id))
       : [],
   ]);
-  const byReport = new Map<string, { id: string; name: string; contentType: string }[]>();
+  const byReport = new Map<
+    string,
+    { id: string; name: string; contentType: string; size: number }[]
+  >();
   for (const f of fileRows) {
     const list = byReport.get(f.reportId!) ?? [];
-    list.push({ id: f.id, name: f.name, contentType: f.contentType });
+    list.push({ id: f.id, name: f.name, contentType: f.contentType, size: f.size });
     byReport.set(f.reportId!, list);
   }
   return {
