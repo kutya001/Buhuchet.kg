@@ -809,6 +809,18 @@ test.describe('Этап 3: страница контрагента — разд�
     });
     expect(hiddenView.status()).toBe(404);
     expect(hiddenView.headers().location).toBeUndefined();
+    // Без запомненного кода (запрос сотрудника, cookie страницы нет) и у неизвестной страницы — тот же
+    // 404 без перехода и без ссылки на хранилище.
+    for (const refused of [
+      await request.get(`${cp.path}/files/${receipt}?view=1`, { maxRedirects: 0 }),
+      await page.request.get(`/${SLUG}/inn/00000000000000/files/${receipt}?view=1`, {
+        maxRedirects: 0,
+      }),
+    ]) {
+      expect(refused.status()).toBe(404);
+      expect(refused.headers().location).toBeUndefined();
+      expect(refused.headers()['cache-control']).toContain('no-store');
+    }
   });
 });
 

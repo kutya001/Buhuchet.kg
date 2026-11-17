@@ -794,6 +794,7 @@ export const sentDownloadRoute = createRoute({
   request: { params: SentFileIdParam },
   responses: {
     302: { description: 'Переход на подписанную ссылку-вложение на 15 минут' },
+    400: { description: 'Номер файла неверного вида', content: error },
     401: noAuth,
     403: {
       description: 'Нет права «Просматривать файлы» или «Файлы в карточках» выключены',
