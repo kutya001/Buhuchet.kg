@@ -150,7 +150,7 @@ export const TELEGRAM_TEXTS = {
   },
   'profile.notify.mode.manual': { ru: 'Только ручные задачи', section: P },
   'profile.notify.mode.manual_hint': {
-    ru: 'Новые задачи, поставленные вручную, их комментарии и выполнение. Регулярные задачи по отчётам не приходят',
+    ru: 'Новые задачи, их комментарии и выполнение. Сообщения по отчётам не приходят',
     section: P,
   },
   'profile.notify.staff_note': {
