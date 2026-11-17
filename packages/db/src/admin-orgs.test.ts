@@ -155,6 +155,11 @@ describe.skipIf(!databaseAvailable())(
         listAdminOrgsPage(tx, query({ sort: { key: 'contractors', dir: 'desc' } }), t),
       );
       expect(byCount.rows.map((r) => r.name)).toEqual(['ОсОО «Альфа»', 'ОсОО «Бета»']);
+      // По возрастанию «Бета» (0) первая — порядок не совпадает с сортировкой по названию.
+      const byCountAsc = await withUserContext(db.app.db, adminId, (tx) =>
+        listAdminOrgsPage(tx, query({ sort: { key: 'contractors', dir: 'asc' } }), t),
+      );
+      expect(byCountAsc.rows.map((r) => r.name)).toEqual(['ОсОО «Бета»', 'ОсОО «Альфа»']);
 
       const values = await withUserContext(db.app.db, adminId, (tx) =>
         listAdminOrgValues(tx, 'active', t),
@@ -178,7 +183,7 @@ describe.skipIf(!databaseAvailable())(
       );
       expect(asOwner.page.total).toBe(0);
       expect(asOwner.other).toBeNull();
-      expect(asOwner.summary.users).toBe(0);
+      expect(asOwner.summary).toEqual({ active: 0, contractors: 0, users: 0, requests: 0 });
       const asBlocked = await withUserContext(db.app.db, blockedAdminId, (tx) =>
         listAdminOrgsPage(tx, query(), t),
       );
