@@ -240,11 +240,16 @@ export function textLines(chars: number, perLine = TEXT_LINE_CHARS): number {
  * Блок и строка в узком месте (ячейка таблицы документа шириной в долю `share` бумаги): знаков в
  * блоке и в строке — во столько же раз меньше, но блок — не короче куска текста (`TEXT_CHUNK`).
  * Соседние ячейки видны разом, и без этого в кадр попадало бы по целому блоку из каждого столбца.
+ * В строке места — не меньше `TEXT_LINE_FLOOR` знаков: места всех блоков документа (до 2 млн
+ * знаков) вместе — до 10 млн px. При одном знаке в строке абзац в ячейке на сотую ширины просил
+ * 40 млн px — больше, чем браузер умеет прокручивать: блоки за этим пределом вставали в одну точку
+ * и при переходе в конец раскладывались одним кадром (5 с).
  */
+export const TEXT_LINE_FLOOR = 4;
 export const shareSegment = (share: number): number =>
   Math.max(TEXT_CHUNK, Math.floor(TEXT_SEGMENT * Math.min(1, share)));
 export const shareLineChars = (share: number): number =>
-  Math.max(1, Math.floor(TEXT_LINE_CHARS * Math.min(1, share)));
+  Math.max(TEXT_LINE_FLOOR, Math.floor(TEXT_LINE_CHARS * Math.min(1, share)));
 
 /**
  * Наименьшая высота блока с текстом — по числу знаков: строка на каждые `TEXT_MIN_LINE_CHARS`

@@ -1163,31 +1163,58 @@ function XmlNodeView({
   const hit = hits.has(path) ? 'rounded-[3px] bg-caution-bg' : '';
   const kids = node.c.filter((x): x is XmlViewNode => typeof x !== 'string');
   const text = node.c.filter((x): x is string => typeof x === 'string').join(' ');
-  // Место под узел — по тексту его строки; у вложенных узлов и блоков атрибутов место своё.
+  // Место под узел — по тексту его строки (имя в ней дважды: и в закрывающем теге); у вложенных
+  // узлов и блоков атрибутов место своё.
   const own = wide ? node.n.length : head;
+  const close = node.n.length;
+  // Строка длиннее блока раскладки (имя, атрибуты, текст и закрывающий тег подряд — до трёх раз
+  // по 8 192 знака) — текст и закрывающий тег своими блоками: в строке — не больше одного блока.
+  const textBlock = (
+    <span className="block" style={lazyText(text.length)}>
+      {chunked(text)}
+    </span>
+  );
   if (!kids.length) {
+    const split = text !== '' && own + text.length + close > TEXT_SEGMENT;
     return (
-      <div className={hit} data-xn={path} style={lazyText(own + text.length)}>
+      <div
+        className={hit}
+        data-xn={path}
+        style={lazyText(split ? own : own + (text ? text.length + close : 0))}
+      >
         <span className="text-info">&lt;{chunked(node.n)}</span>
         {attrs}
-        {text ? (
+        {!text ? (
+          <span className="text-info">/&gt;</span>
+        ) : split ? (
+          <>
+            <span className="text-info">&gt;</span>
+            {textBlock}
+            <span className="block text-info" style={lazyText(close)}>
+              &lt;/{chunked(node.n)}&gt;
+            </span>
+          </>
+        ) : (
           <>
             <span className="text-info">&gt;</span>
             {chunked(text)}
             <span className="text-info">&lt;/{chunked(node.n)}&gt;</span>
           </>
-        ) : (
-          <span className="text-info">/&gt;</span>
         )}
       </div>
     );
   }
   const off = xmlClosed(path, toggled, open);
+  const split = !off && text !== '' && own + text.length > TEXT_SEGMENT;
   let k = 0;
   return (
     // Отступ и обратное поле: кнопка-стрелка слева остаётся внутри блока и не обрезается.
-    // У свёрнутого узла текста на экране нет — и места под него нет.
-    <div className="-ml-4 pl-4" data-xn={path} style={lazyText(own + (off ? 0 : text.length))}>
+    // У свёрнутого узла текста на экране нет, а закрывающий тег — в той же строке.
+    <div
+      className="-ml-4 pl-4"
+      data-xn={path}
+      style={lazyText(own + close + (off || split ? 0 : text.length))}
+    >
       <span className={hit}>
         <button
           type="button"
@@ -1202,8 +1229,9 @@ function XmlNodeView({
         {attrs}
         <span className="text-info">&gt;</span>
         {off ? <span className="text-faint">…</span> : null}
-        {text && !off ? <span>{chunked(text)}</span> : null}
+        {text && !off && !split ? <span>{chunked(text)}</span> : null}
       </span>
+      {split ? textBlock : null}
       {off ? null : (
         <div className="ml-[5px] border-l border-dotted border-line-strong pl-[18px]">
           {node.c.map((x, i) => {
@@ -1224,7 +1252,13 @@ function XmlNodeView({
           })}
         </div>
       )}
-      <span className="text-info">&lt;/{chunked(node.n)}&gt;</span>
+      {off && own + close > TEXT_SEGMENT ? (
+        <span className="block text-info" style={lazyText(close)}>
+          &lt;/{chunked(node.n)}&gt;
+        </span>
+      ) : (
+        <span className="text-info">&lt;/{chunked(node.n)}&gt;</span>
+      )}
     </div>
   );
 }

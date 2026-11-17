@@ -434,10 +434,32 @@ describe('правила окна просмотра', () => {
     const tree = renderToStaticMarkup(<XmlFileView model={xml} labels={labels} />);
     expect(tree).toContain(`data-xn="0-0" ${lazy(80, 8)}`);
     expect(tree).toContain(`data-xn="0-1" ${lazy(80, 8)}`);
+    // Имя узла в строке дважды (и в закрывающем теге) — в счёт тоже дважды.
+    const pair = await model(
+      'p.xml',
+      enc(`<r><${'a'.repeat(600)}>${'б'.repeat(600)}</${'a'.repeat(600)}></r>`),
+      'xml',
+    );
+    const pairTree = renderToStaticMarkup(<XmlFileView model={pair} labels={labels} />);
+    expect(pairTree).toContain(`data-xn="0-0" ${lazy(18, 2)}`);
+    // Строка длиннее блока раскладки (имя из знаков без ширины, текст, снова имя — почти 16 000
+    // знаков) — текст и закрывающий тег своими блоками: в строке — не больше одного блока.
+    const name = '\u200e\u200f'.repeat(3999);
+    const leaf = await model('n.xml', enc(`<r><${name}>т</${name}></r>`), 'xml');
+    const leafTree = renderToStaticMarkup(<XmlFileView model={leaf} labels={labels} />);
+    expect(leafTree).toContain(`data-xn="0-0" ${lazy(80, 8)}`);
+    expect(leafTree).toContain(`<span class="block text-info" ${lazy(80, 8)}>`);
+    // У узла с вложенными — так же: текст длиннее блока своей строкой.
+    const head = await model('h.xml', enc(`<r>${'я'.repeat(9000)}<c/></r>`), 'xml');
+    const headTree = renderToStaticMarkup(<XmlFileView model={head} labels={labels} />);
+    expect(headTree).toContain(
+      `data-xn="0" style="content-visibility:auto;contain-intrinsic-size:none auto 20px"`,
+    );
+    expect(headTree).toContain(`<span class="block" ${lazy(90, 9)}>`);
     // В ячейке таблицы документа — по её доле ширины, но не меньше 4 знаков в строке.
     expect([1, 0.25, 1 / 63, 0, 5].map(shareMinLineChars)).toEqual([1000, 250, 15, 4, 1000]);
     // Место под блок — не больше 50 000 строк: высоту в десятки миллионов px браузер не прокручивает.
-    const cell = { blocks: [{ k: 'p' as const, runs: [{ t: '\u200e'.repeat(60_000) }] }] };
+    const cell = { blocks: [{ k: 'p' as const, runs: [{ t: '\u200e'.repeat(240_000) }] }] };
     const narrow = renderToStaticMarkup(
       <DocumentView
         model={{
@@ -449,8 +471,15 @@ describe('правила окна просмотра', () => {
         labels={labels}
       />,
     );
-    // 60 000 знаков по одному в строке — 60 000 строк места, остаётся 50 000; высота — по 15 знаков.
-    expect(narrow).toMatch(new RegExp(`<p class="[^"]*" ${lazy(LAZY_MAX_LINES, 4000)}>`));
+    // 240 000 знаков по 4 в строке — 60 000 строк места, остаётся 50 000; высота — по 15 знаков.
+    expect(narrow).toMatch(new RegExp(`<p class="[^"]*" ${lazy(LAZY_MAX_LINES, 16_000)}>`));
+    // Места блоков абзаца вместе — по 4 знака в строке, не по одному: 240 000 знаков — 1,2 млн px,
+    // а не 4,8 млн (2 млн знаков по одному — 40 млн px, больше предела прокрутки браузера).
+    const sum = [...narrow.matchAll(/<span class="block" style="[^"]*none auto (\d+)px/g)].reduce(
+      (a, m) => a + Number(m[1]),
+      0,
+    );
+    expect(sum).toBe((240_000 / 4) * 20);
     // Лист: ячейка с переносом из «тяжёлой» строки — не ниже строки на каждые столько знаков,
     // сколько самых узких помещается в её ширину (80 px — 28 знаков), и не выше предела Excel.
     expect(sheetWrapMinPx(28, 80)).toBe(0);
@@ -469,7 +498,8 @@ describe('правила окна просмотра', () => {
       TEXT_CHUNK,
       TEXT_SEGMENT,
     ]);
-    expect([1, 0.25, 1 / 63, 0, 5].map(shareLineChars)).toEqual([100, 25, 1, 1, 100]);
+    // В строке места — не меньше 4 знаков: места всех блоков документа вместе — до 10 млн px.
+    expect([1, 0.25, 1 / 63, 0, 5].map(shareLineChars)).toEqual([100, 25, 4, 4, 100]);
     // Доли столбцов — по ширинам из файла, но столбец — не уже половины равной доли.
     expect(docColShares([1500, 4500])).toEqual([0.25, 0.75]);
     expect(docColShares([1, 1, 1, 1])).toEqual([0.25, 0.25, 0.25, 0.25]);
