@@ -6,7 +6,7 @@ import { DEMO_PASSWORD, newOrgOwner, signIn, uniqueLogin } from './helpers';
 // (заявка `?lead=` — в admin-leads.spec.ts). Запись открывается, адрес — без параметра.
 
 test.describe('Доработки 16.11. Колокольчик: переход по строке', () => {
-  test('«Сообщение платформы»: `?news=` раскрывает свою новость в ленте и отмечает её прочитанной', async ({
+  test('«Новость»: `?news=` раскрывает свою новость в ленте и отмечает её прочитанной', async ({
     page,
     baseURL,
   }) => {

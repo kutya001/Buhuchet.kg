@@ -745,6 +745,8 @@ test.describe('Этап 3: страница контрагента — разд�
     await receiptRow.click();
     const viewer = page.getByRole('dialog', { name: `Квитанция НДС ${tag}.pdf` });
     await expect(viewer.locator(`[data-file-viewer="${receipt}"]`)).toBeVisible();
+    // Окно прочитало байты файла по ссылке страницы (`view=1`) и узнало в них PDF, а не открыло пустую рамку.
+    await expect(viewer.locator('[data-fv="pdf"] iframe')).toHaveAttribute('src', /^blob:/);
     await expect(viewer.locator('[data-fv-download]')).toHaveAttribute(
       'href',
       `${cp.path}/files/${receipt}?download=1`,
@@ -785,6 +787,7 @@ test.describe('Этап 3: страница контрагента — разд�
     await ndsTile.locator(`[data-pub-file="${receipt}"]`).click();
     const reportFile = page.getByRole('dialog', { name: `Квитанция НДС ${tag}.pdf` });
     await expect(reportFile.locator(`[data-file-viewer="${receipt}"]`)).toBeVisible();
+    await expect(reportFile.locator('[data-fv="pdf"] iframe')).toHaveAttribute('src', /^blob:/);
     await expect(reportFile.locator('[data-fv-prev]:enabled, [data-fv-next]:enabled')).toHaveCount(
       0,
     );

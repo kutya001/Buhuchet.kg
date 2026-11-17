@@ -1,6 +1,6 @@
 'use client';
 
-import { bishkekDate, bishkekTime, filePreviewKind, formatDateRu } from '@buhuchet/domain';
+import { bishkekDate, bishkekTime, formatDateRu } from '@buhuchet/domain';
 import { FileLink, type FileLinkInfo, type FileManagerRow } from '@buhuchet/shared';
 import {
   Box,
@@ -14,7 +14,6 @@ import {
   KeyValues,
   linkButtonClass,
   Modal,
-  Note,
   type KeyValueItem,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -24,81 +23,10 @@ import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { ContractorSelect } from '../shell/contractor-select';
 import { FileNoteInput } from './attach-dialog';
-import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
+import { fileKindIcon, fileKindText } from './file-columns';
 import { fileLinkText, fileSourceWithLinks } from './file-links';
 import { FileViewer } from './file-viewer';
-import { formContractorsQuery, fileSizeText } from './files-data';
-
-/**
- * Просмотр в окне: картинка или PDF; остальное — значок, тип и размер. `view` — запрос ссылки на
- * просмотр (у файла записи — `…/view`, у отправленного контрагентом — `/files/sent/{id}/link`).
- */
-export function FilePreview({
-  file,
-  view,
-}: {
-  file: { name: string; contentType: string; size: number };
-  view: { queryKey: readonly unknown[]; queryFn: () => Promise<FileLink>; staleTime?: number };
-}) {
-  const t = useT();
-  const kind = filePreviewKind(file.contentType);
-  const link = useQuery({ ...view, enabled: kind !== null });
-  const meta = t('files.window.meta', {
-    ext: fileTypeText(t, file.name),
-    size: fileSizeText(t, file.size),
-  });
-  if (kind && link.data) {
-    return kind === 'image' ? (
-      <div data-file-preview="image" className="grid place-items-center">
-        {/* Картинка из хранилища по подписанной ссылке на 15 минут. */}
-        <img
-          src={link.data.url}
-          alt={file.name}
-          referrerPolicy="no-referrer"
-          className="max-h-[60vh] max-w-full rounded-[10px] object-contain"
-        />
-      </div>
-    ) : (
-      <div className="flex flex-col items-end gap-1.5">
-        <iframe
-          data-file-preview="pdf"
-          src={link.data.url}
-          title={file.name}
-          referrerPolicy="no-referrer"
-          className="h-[60vh] w-full rounded-[10px] border border-line bg-raised"
-        />
-        {/* Браузер телефона PDF во фрейме часто не показывает — открыть его отдельно. */}
-        <a
-          href={link.data.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-file-open-tab=""
-          className="text-[13px] break-words text-link"
-        >
-          {t('files.window.open_tab')}
-        </a>
-      </div>
-    );
-  }
-  return (
-    <Box>
-      <div
-        data-file-preview="none"
-        className="flex min-h-[180px] flex-col items-center justify-center gap-3 text-center"
-      >
-        <span className="inline-block scale-[2.2] text-muted">
-          <Icon name="file" />
-        </span>
-        <b>{meta}</b>
-        {kind && link.isError ? (
-          <Note tone="bad">{t('files.window.preview_error')}</Note>
-        ) : kind ? null : (
-          <Hint>{t('files.window.no_preview')}</Hint>
-        )}
-      </div>
-    </Box>
-  );
-}
+import { formContractorsQuery } from './files-data';
 
 /** Байты файла для окна просмотра: подписанная ссылка хранилища на 15 минут (право «Просматривать файлы»). */
 export async function fileBytesUrl(id: string): Promise<string> {

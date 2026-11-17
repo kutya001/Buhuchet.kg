@@ -502,6 +502,8 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     ).toBeVisible();
     await expect(viewer.locator(`[data-sent-window="${firstId}"]`)).toContainText(name);
     await expect(viewer.locator('[data-fv-prev]')).toBeDisabled();
+    // Окно прочитало сам файл по своему `src`, а не только открыло рамку.
+    await expect(viewer.locator('[data-fv="text"]')).toContainText(`${first}: документ за октябрь`);
     await expect(viewer.locator('[data-fv-download]')).toHaveAttribute(
       'href',
       `/api/files/sent/${firstId}/download`,
@@ -566,6 +568,8 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     await pageRow.click();
     const onPage = page.getByRole('dialog', { name: first });
     await expect(onPage.locator('[data-file-viewer]')).toBeVisible();
+    // Окно прочитало текст файла по ссылке страницы с `view=1`.
+    await expect(onPage.locator('[data-fv="text"]')).toContainText(`${first}: документ за октябрь`);
     // Окно читает и текстовый файл: `view=1` — переход на ссылку-вложение, а не на страницу.
     const viewed = await page.request.get(`${cp.path}/files/${pageFileId}?view=1`, {
       maxRedirects: 0,

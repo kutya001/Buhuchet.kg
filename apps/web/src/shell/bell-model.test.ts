@@ -102,6 +102,11 @@ describe('куда ведёт строка — как bellGo прототипа'
       kind: 'href',
       href: '/app/reports/overdue',
     });
+    // «Сроки на сегодня» руководителя с отчётами других сотрудников (п. Т-21) — «На неделе» без отбора по ответственному.
+    expect(bellGoOf({ kind: 'reports_tab', id: 'week' }, ctx)).toEqual({
+      kind: 'href',
+      href: '/app/reports/week',
+    });
     expect(bellGoOf({ kind: 'tasks_tab', id: 'mine' }, ctx)).toEqual({
       kind: 'href',
       href: '/app/tasks/mine',

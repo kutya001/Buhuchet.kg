@@ -211,6 +211,7 @@ function RejectDialog({
 function SentFileViewer({
   files,
   index,
+  open,
   onClose,
   onAccept,
   onAcceptFile,
@@ -218,6 +219,8 @@ function SentFileViewer({
 }: {
   files: readonly SentFileItem[];
   index: number;
+  /** `false` — окно закрывается с анимацией (ячейка окна, `closeSlot`). */
+  open: boolean;
   onClose: () => void;
   onAccept: (file: SentFileItem) => void;
   onAcceptFile: (file: SentFileItem) => void;
@@ -263,21 +266,26 @@ function SentFileViewer({
   };
   const buttons = (file: SentFileItem) => {
     // Решённый файл — только «Закрыть» (прототип v127 `sntOpen`): своя кнопка места заменяет «Закрыть» окна.
+    // «Скачать» окна — слева, кнопки места — справа (прототип v127 `sntOpen`: подвал с `grow`).
     if (file.status !== 'new') {
       return (
-        <button
-          type="button"
-          data-sent-window-close=""
-          className={buttonClass('cta')}
-          onClick={onClose}
-        >
-          {t('btn.close')}
-        </button>
+        <>
+          <div className="flex-1" />
+          <button
+            type="button"
+            data-sent-window-close=""
+            className={buttonClass('cta')}
+            onClick={onClose}
+          >
+            {t('btn.close')}
+          </button>
+        </>
       );
     }
     const why = file.canDecide ? undefined : t('files.sent.why');
     return (
       <>
+        <div className="flex-1" />
         <button
           type="button"
           data-sent-window-reject=""
@@ -325,6 +333,7 @@ function SentFileViewer({
         contentType: f.contentType,
       }))}
       index={index}
+      open={open}
       src={sentViewSrc}
       download={sentDownloadHref}
       onClose={onClose}
@@ -487,11 +496,12 @@ export function useSentActions(o: {
 
   const dialogs: ReactNode = (
     <>
-      {card?.open ? (
+      {card ? (
         <SentFileViewer
           key={`sent-${card.n}`}
           files={card.data.files}
           index={card.data.index}
+          open={card.open}
           onClose={() => setCard(closeSlot)}
           onAccept={(file) => {
             setCard(closeSlot);

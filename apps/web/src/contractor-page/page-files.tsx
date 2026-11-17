@@ -93,6 +93,8 @@ export function usePageFileViewer(fileHref: (id: string) => string): {
     index: number;
     sub: (file: ViewFile) => string;
     n: number;
+    /** `false` — окно закрывается с анимацией (слот окна, `src/dialog-slot.ts`). */
+    open: boolean;
   } | null>(null);
   const openFile: OpenPageFile = (list, index, sub) =>
     setState((v) => ({
@@ -100,6 +102,7 @@ export function usePageFileViewer(fileHref: (id: string) => string): {
       index,
       sub: sub as (file: ViewFile) => string,
       n: (v?.n ?? 0) + 1,
+      open: true,
     }));
   return {
     openFile,
@@ -111,7 +114,8 @@ export function usePageFileViewer(fileHref: (id: string) => string): {
         src={(id) => `${fileHref(id)}?view=1`}
         download={(id) => `${fileHref(id)}?download=1`}
         sub={(f) => state.sub(state.files.find((x) => x.id === f.id) ?? f)}
-        onClose={() => setState(null)}
+        open={state.open}
+        onClose={() => setState((v) => v && { ...v, open: false })}
       />
     ) : null,
   };
