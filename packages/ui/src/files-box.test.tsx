@@ -133,4 +133,15 @@ describe('блок «Файлы» (прототип filesBox)', () => {
     expect(plain).not.toContain('Открепить');
     expect(plain).not.toContain('data-file-pick');
   });
+
+  it('нажатие на файл открывает окно просмотра (блок 5, прототип v126): название — кнопка, кнопки строки — как были', () => {
+    const html = render({ onOpen: vi.fn(), openTitle: 'Открыть просмотр' });
+    expect(html.match(/data-file-open=/g)).toHaveLength(2);
+    expect(html).toMatch(
+      /<button type="button" data-file-open="1" title="Открыть просмотр"[^>]*>.*Акт сверки\.pdf/,
+    );
+    expect(html).toContain('aria-label="Скачать Акт сверки.pdf"');
+    // Без обработчика — прежняя строка без кнопки.
+    expect(render()).not.toContain('data-file-open');
+  });
 });

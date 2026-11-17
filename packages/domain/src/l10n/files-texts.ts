@@ -1,6 +1,7 @@
 import { FILE_MESSAGES, type FileProblem } from '../files/files';
 import { FILES_LINKS_TEXTS } from './files-links-texts';
 import { FILES_SENT_TEXTS } from './files-sent-texts';
+import { FILES_VIEW_TEXTS } from './files-view-texts';
 import type { UiTextDefault } from './texts';
 
 const S = 'Файлы';
@@ -211,6 +212,8 @@ export const FILES_TEXTS = {
   ...FILES_SENT_TEXTS,
   // Один файл — несколько ссылок (доработки 16.11.2026, блок 2).
   ...FILES_LINKS_TEXTS,
+  // Окно просмотра файлов (доработки 16.11.2026, блок 5).
+  ...FILES_VIEW_TEXTS,
   ...(Object.fromEntries(
     Object.entries(FILE_MESSAGES).map(([code, ru]) => [`err.${code}`, { ru, section: 'Ошибки' }]),
   ) as Record<`err.${FileProblem}`, UiTextDefault>),
