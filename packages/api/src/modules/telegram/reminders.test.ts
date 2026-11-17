@@ -166,9 +166,10 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
       expect(items.every((r) => r.kind === 'manual')).toBe(true);
       expect(items.some((r) => r.title.includes('1-Т за Сентябрь 2026'))).toBe(false);
     }
-    const summary = TaskSummary.parse(await (await call('GET', '/api/tasks/summary', acc)).json());
-    expect(summary).toMatchObject({ mine: 0, overdue: 0 });
-    expect(summary).not.toHaveProperty('progress');
+    // Сырой ответ: `parse` отбросил бы лишнее поле, а «Отчётов за месяц» в ответе быть не должно.
+    const raw: unknown = await (await call('GET', '/api/tasks/summary', acc)).json();
+    expect(TaskSummary.parse(raw)).toMatchObject({ mine: 0, overdue: 0 });
+    expect(raw).not.toHaveProperty('progress');
     const tab = await call('GET', `/api/contractors/${cpAcc}/tasks`, acc);
     expect(tab.status, await tab.clone().text()).toBe(200);
     expect(await tab.json()).toMatchObject({ items: [], total: 0, open: 0 });
