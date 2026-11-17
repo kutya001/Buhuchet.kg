@@ -408,13 +408,15 @@ describe.skipIf(!databaseAvailable())('Главная: «Сводка» и «А�
     await create('Акт сверки', '2026-10-25');
 
     const s = await summary(acc);
-    // И задачи по отчётам: «Сдать 1-Т за Сентябрь 2026» со сроком 15.10 (как «Мои задачи» в прототипе).
-    expect(s.plates.tsk).toEqual({ count: 3, overdue: 2 });
+    // Только задачи: отчёт «1-Т за Сентябрь 2026» со сроком 15.10 сюда не входит (решение заказчика
+    // 17.11.2026, прототип v129).
+    expect(s.plates.tsk).toEqual({ count: 2, overdue: 1 });
     // Блок — по сроку: сначала просроченные.
-    expect(s.tasks!.map((t) => t.dueDate)).toEqual(['2026-10-15', '2026-10-16', '2026-10-18']);
-    expect(s.tasks!.slice(1).map((t) => t.id)).toEqual([late, today]);
+    expect(s.tasks!.map((t) => t.dueDate)).toEqual(['2026-10-16', '2026-10-18']);
+    expect(s.tasks!.map((t) => t.id)).toEqual([late, today]);
+    expect(s.tasks!.every((t) => t.kind === 'manual')).toBe(true);
     const opened = await plateList(acc, 'tsk', false);
-    expect(opened.total).toBe(3);
+    expect(opened.total).toBe(2);
     expect(opened.items.map((t) => t.id).sort()).toEqual(s.tasks!.map((t) => t.id).sort());
     // Бухгалтер не подтверждает задачи — плашки «Ждут подтверждения» у него нет.
     expect(s.plates.tpend).toBeNull();

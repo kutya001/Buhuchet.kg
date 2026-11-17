@@ -12,7 +12,6 @@ import {
 } from '@buhuchet/db';
 import {
   bishkekDate,
-  diffDays,
   hasPermission,
   scopeOf,
   TASK_MESSAGES,
@@ -154,41 +153,7 @@ export function rowBody(r: TaskRow | TaskRecord, today: IsoDate): TaskRowBody {
   };
 }
 
-/**
- * Строка списка (ручная или регулярная) для ответа API. Сумму и оплату отчёта регулярной задачи
- * экран показывает только с правом «Менять статус» (подсказка у «Отметить отчёт сданным», прототип
- * `taskActions` → `subPayWhy`): без него они не отдаются (защита — по более строгому, п. Б-11).
- */
-export function listRowBody(r: TaskListRow, today: IsoDate, sums: boolean): TaskListRowBody {
-  if (r.kind === 'manual') return { ...rowBody(r, today), kind: 'manual', open: r.open };
-  const audit = {
-    createdAt: r.audit.createdAt.toISOString(),
-    createdBy: r.audit.createdBy,
-    updatedAt: r.audit.updatedAt.toISOString(),
-    updatedBy: r.audit.updatedBy,
-  };
-  const { submittedOn, ...report } = r.report;
-  return {
-    kind: 'regular',
-    id: r.id,
-    title: r.title,
-    category: r.category,
-    contractor: { id: r.contractor.id, name: r.contractor.name },
-    executor: r.executor,
-    dueDate: r.dueDate,
-    needFile: r.needFile,
-    hasFile: r.hasFile,
-    open: r.open,
-    overdue: r.overdue,
-    report: {
-      ...report,
-      amount: sums ? report.amount : null,
-      paid: sums ? report.paid : 0,
-      waitDays:
-        report.mark === 'waiting' && submittedOn ? Math.max(0, diffDays(today, submittedOn)) : 0,
-    },
-    lastStatus: r.lastStatus ? { at: r.lastStatus.at.toISOString(), by: r.lastStatus.by } : null,
-    audit,
-    version: r.version,
-  };
+/** Строка списка для ответа API: только ручные задачи (решение заказчика 17.11.2026). */
+export function listRowBody(r: TaskListRow, today: IsoDate): TaskListRowBody {
+  return { ...rowBody(r, today), kind: 'manual', open: r.open };
 }

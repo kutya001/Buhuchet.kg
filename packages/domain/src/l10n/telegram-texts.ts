@@ -150,7 +150,7 @@ export const TELEGRAM_TEXTS = {
   },
   'profile.notify.mode.manual': { ru: 'Только ручные задачи', section: P },
   'profile.notify.mode.manual_hint': {
-    ru: 'Новые задачи, поставленные вручную, их комментарии и выполнение. Регулярные задачи по отчётам не приходят',
+    ru: 'Новые задачи, их комментарии и выполнение. Сообщения по отчётам не приходят',
     section: P,
   },
   'profile.notify.staff_note': {
@@ -168,7 +168,7 @@ export const TELEGRAM_TEXTS = {
   },
   'profile.notify.kind.over': { ru: 'Просрочки по отчётам других сотрудников', section: P },
   'profile.notify.kind.tasks': { ru: 'Ручные задачи: новые, комментарии, выполнение', section: P },
-  'profile.notify.kind.regtasks': { ru: 'Регулярные задачи по отчётам', section: P },
+  'profile.notify.kind.regtasks': { ru: 'Возврат моих отчётов на исправление', section: P },
   'profile.notify.kind.week': {
     ru: 'Сводка за неделю — в день, выбранный организацией (по умолчанию понедельник)',
     section: P,

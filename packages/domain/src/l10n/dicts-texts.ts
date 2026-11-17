@@ -110,7 +110,7 @@ export const DICTS_TEXTS = {
   'dicts.type.day.few': { ru: '{n} дня', section: S },
   'dicts.type.day.many': { ru: '{n} дней', section: S },
   'dicts.type.days_hint': { ru: 'Пустой набор — значит только в день срока.', section: S },
-  'dicts.type.file_hint': { ru: 'Регулярную задачу нельзя закрыть без файла', section: S },
+  'dicts.type.file_hint': { ru: 'Отчёт нельзя отметить сданным без файла', section: S },
   'dicts.type.receipt_hint': {
     ru: 'При «Подтвердить» сдачу нужно приложить квитанцию о приёме органом (если подтверждение сдачи выключено в учётной политике — при «Сдан»)',
     section: S,

@@ -12,7 +12,7 @@ import {
   type TaskTab,
   type Tx,
 } from '@buhuchet/db';
-import { hasPermission, monthStart } from '@buhuchet/domain';
+import { monthStart } from '@buhuchet/domain';
 import {
   ListExportParams,
   ListQueryParams,
@@ -35,8 +35,7 @@ import { error, listRowBody, requireTasks, subjectOf, todayOf, viewerOf } from '
 const off = { description: 'Задачи выключены в учётной политике', content: error };
 
 /**
- * Условия списка того, кто смотрит: его права, вкладка, сегодня по Бишкеку и «Сдача отчётов требует
- * подтверждения» (когда закрывается регулярная задача). Задачи выключены — 403.
+ * Условия списка того, кто смотрит: его права, вкладка и сегодня по Бишкеку. Задачи выключены — 403.
  */
 async function listOptions(
   deps: ApiDeps,
@@ -44,11 +43,10 @@ async function listOptions(
   tx: Tx,
   tab: TaskTab,
 ): Promise<TaskListOptions> {
-  const settings = await requireTasks(tx, orgContextOf(c).orgId);
+  await requireTasks(tx, orgContextOf(c).orgId);
   return {
     t: await serverTexts(deps),
     today: todayOf(deps),
-    reportConfirm: settings.reportConfirm,
     viewer: viewerOf(subjectOf(c)),
     tab,
   };
@@ -88,9 +86,7 @@ export function listTasksHandler(deps: ApiDeps): RouteHandler<typeof listTasksRo
     );
     return c.json(
       {
-        items: page.rows.map((r) =>
-          listRowBody(r, today, hasPermission(subjectOf(c), 'changeStatus')),
-        ),
+        items: page.rows.map((r) => listRowBody(r, today)),
         total: page.total,
         page: page.page,
         size: page.size,
@@ -111,7 +107,7 @@ export const taskSummaryRoute = createRoute({
   responses: {
     200: {
       description:
-        'Мои открытые, поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить; «Отчёты за месяц: сдано N из M»; есть ли в организации задачи',
+        'Мои открытые, поставленные мной открытые, просроченные; ждущие подтверждения и сколько из них можно подтвердить; есть ли в организации задачи',
       content: { 'application/json': { schema: TaskSummary } },
     },
     401: { description: 'Нет входа', content: error },
@@ -125,8 +121,8 @@ export function taskSummaryHandler(deps: ApiDeps): RouteHandler<typeof taskSumma
     const viewer = viewerOf(subjectOf(c));
     const today = todayOf(deps);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      const settings = await requireTasks(tx, orgContextOf(c).orgId);
-      const source = { t: await serverTexts(deps), today, reportConfirm: settings.reportConfirm };
+      await requireTasks(tx, orgContextOf(c).orgId);
+      const source = { t: await serverTexts(deps), today };
       const [counts, pending, empty] = await Promise.all([
         taskTabCounts(tx, viewer, source),
         taskPendingStats(tx, viewer),

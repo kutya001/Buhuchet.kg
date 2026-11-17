@@ -307,16 +307,10 @@ function TasksBox({
     <Box title={t('home.tasks.title')}>
       <div data-home-tasks="" className="flex flex-col">
         {rows.map((r) => {
-          const status =
-            r.kind === 'regular'
-              ? statusPillView(t, 'report', r.report.status)
-              : statusPillView(t, 'task', r.status);
+          const status = statusPillView(t, 'task', r.status);
           return (
             <Row key={r.id} data-home-task={r.id} onOpen={() => onOpen(r)}>
-              <Icon
-                name={r.kind === 'regular' ? 'file' : 'task'}
-                className="flex-none text-muted"
-              />
+              <Icon name="task" className="flex-none text-muted" />
               <div className="min-w-0 flex-1">
                 <div className={LINE1}>{r.title}</div>
                 <div className={LINE2}>

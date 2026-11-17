@@ -11,7 +11,9 @@ import type { SeedOptions } from './platform';
  * (`updated_by` задан), остаётся — это уже его запись; шаблоны и тексты нигде не используются.
  * Прототип v110 (пакет 14.11, блок 4) заменил кнопки «Скопировать реквизиты», «Реквизиты для налогов» и
  * «Реквизиты для обслуживания» кнопками по виду реквизита и «Показать реквизиты для перевода»: их
- * шаблоны и подписи убраны, в коде их больше нет.
+ * шаблоны и подписи убраны, в коде их больше нет. Прототип v129 (решение заказчика 17.11.2026, «Задачи» —
+ * только задачи) убрал регулярные задачи: их тексты (`task.reg.*`, «Тип задачи», отказы доски, последствие
+ * отката «Регулярная задача … снова станет открытой») больше не нужны.
  */
 export const RETIRED = {
   news: ['v104'],
@@ -40,6 +42,32 @@ export const RETIRED = {
     'pdicts.tpl.label.tg_btn_cp_req',
     'pdicts.tpl.label.tg_btn_cp_req_tax',
     'pdicts.tpl.label.tg_btn_cp_req_fee',
+    'report.rollback.effect_task',
+    'task.board.reg_exec',
+    'task.board.reg_status',
+    'task.col.tkind',
+    'task.reg.cat.pay',
+    'task.reg.cat.sub',
+    'task.reg.closes',
+    'task.reg.closes_confirm',
+    'task.reg.closes_wait',
+    'task.reg.no_status_right',
+    'task.reg.open_report',
+    'task.reg.progress.all',
+    'task.reg.progress.done',
+    'task.reg.progress.mine',
+    'task.reg.status_tag',
+    'task.reg.status_tag_title',
+    'task.reg.submit',
+    'task.reg.system',
+    'task.reg.tag',
+    'task.reg.tag_title',
+    'task.reg.title',
+    'task.reg.verb.both',
+    'task.reg.verb.pay',
+    'task.reg.verb.sub',
+    'task.tkind.manual',
+    'task.tkind.regular',
   ],
 } as const;
 

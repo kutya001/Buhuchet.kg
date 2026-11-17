@@ -421,7 +421,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // вместе с деньгами, п. К-18), v122–v124 (колокольчик, новости по модулям, один файл — несколько
     // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) и v125–v128 (новости только о своём,
     // окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026, этап 2,
-    // п. Т-21, И-12, К-20) — да.
+    // п. Т-21, И-12, К-20) и v129 («Задачи» — только задачи, п. О-58) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -475,6 +475,12 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       release: '128',
       showOnLogin: true,
       linkKind: null,
+    });
+    // «Задачи» — только задачи (доработки 17.11.2026, п. О-58): «Подробнее» — модуль «Задачи».
+    expect(rows.find((r) => r.id === 'v129')).toMatchObject({
+      release: '129',
+      linkKind: 'mod',
+      linkId: 'tasks',
     });
     // Текст «Для администратора платформы» (admMd) идёт только во второй текст, не в текст новости.
     const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());

@@ -71,7 +71,7 @@ export const ORG_TEXTS = {
   'org.feature.projects': { ru: 'Проекты контрагентов', section: S },
   'org.feature.indicators': { ru: 'Показатели контрагентов', section: S },
   'org.feature.cppage': { ru: 'Страница контрагента по ссылке', section: S },
-  'org.feature.tasks.hint': { ru: 'Модуль задач и регулярные задачи по отчётам', section: S },
+  'org.feature.tasks.hint': { ru: 'Поручения сотрудникам и контроль их выполнения', section: S },
   'org.feature.calendar.hint': { ru: 'Вкладка «Календарь» в модуле отчётов', section: S },
   'org.feature.fee.hint': { ru: 'Журнал тарифов, начисления, должники', section: S },
   'org.feature.taxpay.hint': { ru: 'Деньги от контрагента и оплата в бюджет', section: S },
@@ -104,7 +104,7 @@ export const ORG_TEXTS = {
     section: S,
   },
   'org.feature.tasks.benefit': {
-    ru: 'Регулярная задача на каждый отчёт и ручные поручения сотрудникам с контролем выполнения.',
+    ru: 'Поручения сотрудникам с контролем выполнения: сроки, файлы, подтверждение.',
     section: S,
   },
   'org.feature.calendar.benefit': {

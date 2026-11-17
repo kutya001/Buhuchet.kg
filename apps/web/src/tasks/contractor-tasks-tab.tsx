@@ -11,10 +11,8 @@ import {
   MiniTable,
   Note,
   StatusPill,
-  Tag,
   type MiniRow,
 } from '@buhuchet/ui';
-import type { TaskListRow } from '@buhuchet/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
@@ -29,8 +27,8 @@ const SHOWN = 40;
  * Вкладка «Задачи» карточки контрагента (ТЗ «Карточка контрагента»; прототип modules/contractor-card.js,
  * `st.tab === 'tasks'`): «Задач: N · открытых M», кнопка «Задача» — новая задача «По контрагенту» с
  * этим контрагентом (у кого есть право ставить задачи, не у архивного); последние 40 задач — задача,
- * исполнитель, срок (просроченный — красным), статус; задача открывает свою карточку, регулярная (с
- * меткой «регулярная», без имени контрагента в названии) — карточку отчёта. Пустая — «Задач
+ * исполнитель, срок (просроченный — красным), статус; задача открывает свою карточку. Отчётов здесь
+ * нет — они во вкладке «Отчёты к сдаче» (решение заказчика 17.11.2026). Пустая — «Задач
  * по контрагенту пока нет». Карточку контрагента делает задача 2.11 — она и ставит сюда эту вкладку
  * (правило стыков); счётчик открытых задач у названия вкладки — `open` того же ответа.
  */
@@ -82,30 +80,18 @@ export function ContractorTasksTab({
       </>
     );
   }
-  // В названии регулярной задачи имя контрагента не повторяется (ТЗ «Карточка контрагента»).
-  const titleOf = (r: TaskListRow) => {
-    const tail = r.contractor ? ` — ${r.contractor.name}` : '';
-    return r.kind === 'regular' && tail && r.title.endsWith(tail)
-      ? r.title.slice(0, -tail.length)
-      : r.title;
-  };
   const rows: MiniRow[] = data.items.slice(0, SHOWN).map((r) => ({
     key: r.id,
     cells: {
       title: (
         <span>
-          {r.kind === 'regular' ? (
-            <>
-              <Tag title={t('task.reg.tag_title')}>{t('task.reg.tag')}</Tag>{' '}
-            </>
-          ) : null}
           <button
             type="button"
             data-cp-task={r.id}
             className={`${linkButtonClass()} text-left`}
             onClick={() => tasks.openCard(r)}
           >
-            {titleOf(r)}
+            {r.title}
           </button>
         </span>
       ),
@@ -115,14 +101,7 @@ export function ContractorTasksTab({
           {formatDateRu(r.dueDate)}
         </span>
       ),
-      status: (
-        <StatusPill
-          {...(r.kind === 'regular'
-            ? statusPillView(t, 'report', r.report.status)
-            : statusPillView(t, 'task', r.status))}
-          size="sm"
-        />
-      ),
+      status: <StatusPill {...statusPillView(t, 'task', r.status)} size="sm" />,
     },
   }));
   return (

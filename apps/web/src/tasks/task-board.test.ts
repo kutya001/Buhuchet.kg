@@ -5,7 +5,6 @@ import { makeTranslate } from '../l10n/translate';
 import {
   executorChangeBody,
   manualTaskMove,
-  regularTaskMove,
   TASK_BOARD_STATUS_ORDER,
   taskKanban,
 } from './task-board';
@@ -38,7 +37,7 @@ describe('доска задач', () => {
   it('столбцы: статус по умолчанию; статусы «К выполнению», «В работе», «На подтверждении», «Выполнена» видны и пустыми', () => {
     const kanban = taskKanban(t, [{ id: OTHER, shortName: 'Асанов А.' }], () => {});
     expect(kanban.def).toBe('status');
-    expect(kanban.by).toEqual(['status', 'exec', 'cp', 'cat', 'proj', 'by', 'term', 'tkind']);
+    expect(kanban.by).toEqual(['status', 'exec', 'cp', 'cat', 'proj', 'by', 'term']);
     expect(kanban.show?.status).toEqual([
       { key: 'todo', label: 'К выполнению' },
       { key: 'in_progress', label: 'В работе' },
@@ -46,17 +45,20 @@ describe('доска задач', () => {
       { key: 'done', label: 'Выполнена' },
     ]);
     expect(kanban.show?.exec).toEqual([{ key: OTHER, label: 'Асанов А.' }]);
-    // «В работе» отчёта регулярной задачи — в том же столбце, что у ручной.
-    expect(kanban.merge?.status).toEqual({ 'rep:in_progress': 'in_progress' });
+    // Отчётов в «Задачах» нет (решение заказчика 17.11.2026): ни столбца «Тип задачи», ни статусов отчёта.
+    expect(kanban.merge).toBeUndefined();
     expect(kanban.drop).toBeDefined();
     expect(taskKanban(t, [], undefined).drop).toBeUndefined();
-    // Порядок прототипа: К выполнению, К сдаче, В работе, На доработке, Требует исправления, …
-    expect(TASK_BOARD_STATUS_ORDER.slice(0, 5)).toEqual([
+    // Порядок прототипа v129: К выполнению, В работе, На доработке, На подтверждении, Выполнена, …
+    expect(TASK_BOARD_STATUS_ORDER).toEqual([
       'todo',
-      'rep:todo',
       'in_progress',
       'rework',
-      'rep:needs_fix',
+      'on_confirm',
+      'done',
+      'confirmed',
+      'failed',
+      'cancelled',
     ]);
   });
 
@@ -124,7 +126,7 @@ describe('доска задач', () => {
       manualTaskMove(facts('todo'), actor(OTHER, { isOwner: true }), 'status', 'cancelled'),
     ).toEqual({ kind: 'action', action: 'cancel' });
     expect(manualTaskMove(facts('todo'), actor(EXEC), 'status', 'cancelled').kind).toBe('refusal');
-    for (const to of ['todo', 'in_progress', 'done', 'cancelled', 'rep:submitted', '']) {
+    for (const to of ['todo', 'in_progress', 'done', 'cancelled', '']) {
       expect(manualTaskMove(facts('done'), actor(AUTHOR, { isOwner: true }), 'status', to)).toEqual(
         { kind: 'text', key: 'task.board.no_move' },
       );
@@ -166,40 +168,12 @@ describe('доска задач', () => {
   });
 
   it('по контрагенту, категории, проекту и другим столбцам перенос ничего не меняет', () => {
-    for (const key of ['cp', 'cat', 'proj', 'by', 'term', 'tkind']) {
+    for (const key of ['cp', 'cat', 'proj', 'by', 'term']) {
       expect(manualTaskMove(facts('todo'), actor(AUTHOR), key, 'x')).toEqual({
         kind: 'text',
         key: 'task.board.only',
       });
-      expect(regularTaskMove({ status: 'todo', act: 'sub' }, key, 'x')).toEqual({
-        key: 'task.board.only',
-      });
     }
-  });
-
-  it('регулярная задача: статус — из отчёта; «В работе» берёт в работу, «Сдан» — сдача', () => {
-    expect(regularTaskMove({ status: 'todo', act: 'sub' }, 'status', 'in_progress')).toBe('start');
-    expect(regularTaskMove({ status: 'in_progress', act: 'both' }, 'status', 'rep:submitted')).toBe(
-      'submit',
-    );
-    expect(regularTaskMove({ status: 'needs_fix', act: 'sub' }, 'status', 'rep:submitted')).toBe(
-      'submit',
-    );
-    const refused = { key: 'task.board.reg_status' };
-    // У отчёта «только уплата» сдачи нет; сданный и взятый в работу — не переносятся.
-    expect(regularTaskMove({ status: 'todo', act: 'pay' }, 'status', 'rep:submitted')).toEqual(
-      refused,
-    );
-    expect(regularTaskMove({ status: 'submitted', act: 'sub' }, 'status', 'rep:submitted')).toEqual(
-      refused,
-    );
-    expect(regularTaskMove({ status: 'in_progress', act: 'sub' }, 'status', 'in_progress')).toEqual(
-      refused,
-    );
-    expect(regularTaskMove({ status: 'todo', act: 'sub' }, 'status', 'done')).toEqual(refused);
-    expect(regularTaskMove({ status: 'todo', act: 'sub' }, 'exec', OTHER)).toEqual({
-      key: 'task.board.reg_exec',
-    });
   });
 
   it('смена исполнителя — «Изменить» с прежними полями и версией; «На месяц» — первым днём месяца', () => {

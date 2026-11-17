@@ -88,9 +88,9 @@ export type ReportActions = ReturnType<typeof useReportActions>;
 export function useReportActions(): {
   actions: (r: ReportRow) => ActionEntry[];
   openCard: (r: ReportRow | { id: string }) => void;
-  /** «Отметить сданным» — окно сдачи по свежей карточке (и из регулярной задачи, задача 2.24). */
+  /** «Отметить сданным» — окно сдачи по свежей карточке. */
   submit: (r: { id: string }) => void;
-  /** «Взять в работу» отчёта «К сдаче» — и переносом регулярной задачи на доске задач. */
+  /** «Взять в работу» отчёта «К сдаче». */
   start: (r: { id: string; version: number }) => void;
   /**
    * Перенос карточки на доске отчётов (прототип `repKanban.drop`); нет вошедшего сотрудника — доска

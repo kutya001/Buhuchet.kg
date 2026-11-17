@@ -329,7 +329,7 @@ export function reportScaleBack(r: ReportMenuRow, actor: ReportActor): string | 
 
 /**
  * Последствия отката (прототип rollbackDlg): снять подтверждение — отчёт снова ждёт подтверждения; шаг
- * назад — регулярная задача снова открыта (у «Не требуется» — отчёт снова активен), у просроченного —
+ * назад у «Не требуется» — отчёт снова активен, у просроченного —
  * снова в просроченных, у сданного снимается дата сдачи, «Требует исправления» снова ждёт
  * подтверждения; файлы не удаляются.
  */
@@ -346,7 +346,7 @@ export function reportRollbackEffect(
   }
   const st = r.status;
   return [
-    t(st === 'not_required' ? 'report.rollback.effect_none' : 'report.rollback.effect_task'),
+    st === 'not_required' ? t('report.rollback.effect_none') : '',
     r.dueDate < o.today && (to === 'todo' || to === 'in_progress') && st !== 'needs_fix'
       ? t('report.rollback.effect_todo')
       : '',

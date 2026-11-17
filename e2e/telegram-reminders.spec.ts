@@ -3,10 +3,10 @@ import { botMessages, linkTelegram, signIn, uniqueChat, uniqueLogin } from './he
 import { orgWithTypes } from './orgs';
 import { newContractor } from './reports';
 
-// Напоминания и сообщения в Telegram (задача 2.25) и регулярные задачи по отчётам (задача 2.24) через
-// настоящий сайт с ботом-подделкой (fake-telegram.ts). Каждый тест — в своей организации: время сводки
-// 00:00 (пора сразу), «Напоминания в Telegram» включаются последними, когда отчёты и привязка уже есть,
-// — иначе расписание отметило бы день раньше. Расписание запускается вызовом /api/cron/tick, как это
+// Напоминания и сообщения в Telegram (задача 2.25) через настоящий сайт; отчётов в «Задачах» нет
+// (решение заказчика 17.11.2026, прототип v129). Сайт — с ботом-подделкой (fake-telegram.ts). Каждый
+// тест — в своей организации: время сводки 00:00 (пора сразу), «Напоминания в Telegram» включаются
+// последними, когда отчёты и привязка уже есть, — иначе расписание отметило бы день раньше. Расписание запускается вызовом /api/cron/tick, как это
 // делает Vercel; день сводки и правила по дням недели — тесты `packages/domain/src/telegram/*.test.ts`
 // и `packages/api/src/modules/telegram/reminders.test.ts` (там часы стоят на понедельнике).
 
@@ -64,8 +64,8 @@ async function remindDays(api: APIRequestContext, origin: string, code: string, 
   expect(res.status(), await res.text()).toBe(200);
 }
 
-test.describe('Этап 2: напоминания в Telegram и регулярные задачи', () => {
-  test('(п. 8) ответственный получает одно сообщение в Telegram со всеми своими отчётами за 3 дня до срока; повторный запуск расписания второго не присылает; регулярные задачи по отчётам — со статусом отчёта и без дублей', async ({
+test.describe('Этап 2: напоминания в Telegram', () => {
+  test('(п. 8) ответственный получает одно сообщение в Telegram со всеми своими отчётами за 3 дня до срока; повторный запуск расписания второго не присылает; отчёты в «Задачи» не попадают', async ({
     request,
     page,
     baseURL,
@@ -107,8 +107,7 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
       month,
       due: addDays(today, 3),
     });
-    // Несданный просроченный отчёт другого контрагента: его регулярная задача видна в любой день месяца
-    // (у отчётов со сроком в следующем месяце задачи ещё нет, как в прототипе `allTasks`).
+    // Несданный просроченный отчёт другого контрагента: раньше он был бы регулярной задачей.
     const lateName = `ОсОО «Просрочка ${Date.now().toString(36)}»`;
     const lateCp = await newContractor(request, origin, { tariff: false, name: lateName });
     const late = await manualReport(request, origin, {
@@ -147,39 +146,21 @@ test.describe('Этап 2: напоминания в Telegram и регуляр�
     await tick(request);
     expect(await reminders()).toHaveLength(1);
 
-    // Регулярные задачи: по одной на отчёт со сроком в этом месяце или просроченный, статус — из отчёта;
-    // повторные запуски дублей не создают.
-    const expected = [late, sub, both]
-      .filter((r) => r.dueDate < today || r.dueDate.slice(0, 7) === today.slice(0, 7))
-      .map((r) => r.id)
-      .sort();
-    const regular = async () => {
-      const res = await request.get('/api/tasks?tab=all&size=all');
-      expect(res.status(), await res.text()).toBe(200);
-      const { items } = (await res.json()) as {
-        items: { kind: string; id: string; title: string; report?: { status: string } }[];
-      };
-      return items.filter((r) => r.kind === 'regular');
-    };
-    const rows = await regular();
-    expect(rows.map((r) => r.id).sort()).toEqual(expected);
-    const lateTask = rows.find((r) => r.id === late.id)!;
-    expect(lateTask.report).toMatchObject({ status: 'todo' });
-    expect(lateTask.title.startsWith('Сдать 1-Т за ')).toBe(true);
-    expect(lateTask.title.endsWith(` — ${lateName}`)).toBe(true);
-    if (expected.includes(both.id)) {
-      expect(rows.find((r) => r.id === both.id)?.title).toMatch(/^Сдать и оплатить НДС за /);
-    }
-    expect((await regular()).map((r) => r.id).sort()).toEqual(expected);
+    // «Задачи» — только задачи (решение заказчика 17.11.2026, прототип v129): ни отчёты месяца, ни
+    // просроченный в списке задач не появляются, и после запусков расписания тоже.
+    const res = await request.get('/api/tasks?tab=all&size=all');
+    expect(res.status(), await res.text()).toBe(200);
+    const { items } = (await res.json()) as { items: { kind: string; id: string }[] };
+    expect(items.filter((r) => [late.id, sub.id, both.id].includes(r.id))).toEqual([]);
+    expect(items.every((r) => r.kind === 'manual')).toBe(true);
 
-    // На экране «Задачи» → «Все»: метка «регулярная», шкала отчёта с меткой «отчёт», «Поставил» — «Система».
+    // На экране «Задачи» → «Все» задач нет — подсказка первого входа, отчёта «Просрочка» нет.
     await page.context().addCookies((await request.storageState()).cookies);
     await page.goto('/app/tasks/all');
-    const row = page.locator(`[data-grid] [data-id="${late.id}"]`);
-    await expect(row).toContainText(lateTask.title);
-    await expect(row).toContainText('регулярная');
-    await expect(row).toContainText('отчёт');
-    await expect(row).toContainText('Система');
+    await expect(page.locator('[data-empty-state]')).toContainText(
+      'Задач пока нет. Поставьте первую',
+    );
+    await expect(page.getByText(lateName)).toHaveCount(0);
   });
 
   test('(п. 41, Telegram) возвращённую на доработку задачу исполнитель получает в Telegram с причиной; о новой задаче — тоже сообщение', async ({

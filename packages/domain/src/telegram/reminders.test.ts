@@ -267,7 +267,7 @@ describe('напоминания за день (ТЗ «Уведомления в
     const longer = report({ open: false, waitingSince: addDays(TODAY, -5), submittedById: 'acc' });
     expect(linesOf(chief, { reports: [longer] }, { overdueRepeat: false })).toEqual([]);
     expect(linesOf(chief, { reports: [waiting] }, { reportConfirm: false })).toEqual([]);
-    // Переключатель «Регулярные задачи по отчётам» выключен — тоже нет.
+    // Переключатель «Возврат моих отчётов на исправление» (`regtasks`) выключен — тоже нет.
     const off = { ...chief, settings: withNotifyKind(DEFAULT_NOTIFY_SETTINGS, 'regtasks', false) };
     expect(linesOf(off, { reports: [waiting] })).toEqual([]);
   });
