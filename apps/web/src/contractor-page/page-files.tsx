@@ -9,8 +9,9 @@ import {
   type PageFileCategory,
 } from '@buhuchet/domain';
 import type { PageFile, PageFilesItem } from '@buhuchet/shared';
-import { buttonClass, Icon, inputClass, Modal, Note, type IconName } from '@buhuchet/ui';
+import { Icon, inputClass, type IconName } from '@buhuchet/ui';
 import { useState, type ReactNode } from 'react';
+import { FileViewer } from '../files/file-viewer';
 import { fileSizeText } from '../files/files-data';
 import { useT } from '../l10n/provider';
 import { usePageHint } from './page-help-context';
@@ -20,8 +21,9 @@ import { PageList } from './page-parts';
  * Раздел «Файлы» открытой страницы контрагента (решение заказчика 06.11.2026; прототип v74
  * modules/cp-page.js — `pubFiles`, `pubFq`, `pubFileOpen`, стили css/pages.css `.pub-fpl`, `.pub-frow`,
  * `.pub-fv`): плашки-категории с числом файлов (только непустые), поиск по названию, строки от новых к
- * старым. Картинка и PDF открываются в окне просмотра со «Скачать», остальное сразу скачивается. Файл
- * отдаёт сервер по ссылке страницы — только в браузере, где страница открыта по коду.
+ * старым. Любой файл открывается в окне просмотра со «Скачать» и «‹ ›» по найденным файлам (доработки
+ * 16.11.2026, блок 5). Файл отдаёт сервер по ссылке страницы — только в браузере, где страница открыта
+ * по коду.
  */
 
 /** Значок по типу файла (прототип `pubFIc`). */
@@ -64,119 +66,56 @@ function CategoryPlate({
 }
 
 /** Файл, который страница открывает: из раздела «Файлы» или у периода «Отчётов». */
-type ViewFile = Pick<PageFile, 'id' | 'name' | 'preview'>;
+type ViewFile = Pick<PageFile, 'id' | 'name' | 'size'>;
 
-/** Окно просмотра (прототип `pubFileOpen`): картинка или страницы PDF, «Закрыть» и «Скачать». */
-function FileViewer({
-  file,
-  sub,
-  href,
-  open,
-  onClose,
-}: {
-  file: ViewFile;
-  sub: string;
-  href: string;
-  open: boolean;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const [failed, setFailed] = useState(false);
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={file.name}
-      sub={sub}
-      size="mid"
-      kind="card"
-      footer={
-        <>
-          <button type="button" className={buttonClass('default')} onClick={onClose}>
-            {t('pub.files.close')}
-          </button>
-          <div className="flex-1" />
-          <a
-            data-pub-fdl=""
-            href={`${href}?download=1`}
-            className={buttonClass('cta')}
-            rel="noopener noreferrer"
-          >
-            <Icon name="download" size="sm" />
-            {t('pub.files.download')}
-          </a>
-        </>
-      }
-    >
-      <div data-pub-fv={file.preview ?? ''} aria-label={t('pub.files.viewer')} role="region">
-        {failed ? (
-          <Note tone="bad">{t('pub.files.view_error')}</Note>
-        ) : file.preview === 'image' ? (
-          <div className="grid place-items-center">
-            {/* Картинка — по ссылке страницы: сервер переводит на подписанную ссылку на 5 минут. */}
-            <img
-              src={href}
-              alt={file.name}
-              referrerPolicy="no-referrer"
-              onError={() => setFailed(true)}
-              className="max-h-[60vh] max-w-full rounded-[10px] object-contain"
-            />
-          </div>
-        ) : (
-          <div className="flex flex-col items-end gap-1.5">
-            <iframe
-              src={href}
-              title={file.name}
-              referrerPolicy="no-referrer"
-              className="h-[60vh] w-full rounded-[10px] border border-line bg-raised"
-            />
-            {/* Браузер телефона PDF во фрейме часто не показывает — открыть его отдельно. */}
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[13px] break-words text-link"
-            >
-              {t('files.window.open_tab')}
-            </a>
-          </div>
-        )}
-      </div>
-    </Modal>
-  );
-}
-
-/** Открыть файл страницы: картинку и PDF — в окне просмотра (подзаголовок `sub`), остальное — скачать. */
-export type OpenPageFile = (file: ViewFile, sub: string) => void;
+/**
+ * Открыть файл страницы в окне просмотра: `list` — файлы того же списка в порядке экрана («‹ ›» листают
+ * по ним), `index` — открытый, `sub` — подзаголовок окна для файла списка.
+ */
+export type OpenPageFile = <F extends ViewFile>(
+  list: readonly F[],
+  index: number,
+  sub: (file: F) => string,
+) => void;
 
 /**
  * Окно просмотра файлов страницы — одно на страницу: его открывают и раздел «Файлы», и файлы периодов
- * «Отчётов» (прототип v74 `pubFileOpen`, `[data-pub-file]`). Остальные файлы сервер отдаёт вложением.
+ * «Отчётов» (прототип v126 `pubFileOpen` → `fileView`). Любой файл открывается в окне (доработки
+ * 16.11.2026, блок 5): окно читает его по ссылке страницы с `view=1` (вложением, отказ — 404, а не
+ * переход на страницу), «Скачать» — та же ссылка с `download=1`.
  */
 export function usePageFileViewer(fileHref: (id: string) => string): {
   openFile: OpenPageFile;
   viewer: ReactNode;
 } {
   const [state, setState] = useState<{
-    file: ViewFile;
-    sub: string;
+    files: readonly ViewFile[];
+    index: number;
+    sub: (file: ViewFile) => string;
     n: number;
+    /** `false` — окно закрывается с анимацией (слот окна, `src/dialog-slot.ts`). */
     open: boolean;
   } | null>(null);
-  const openFile: OpenPageFile = (file, sub) => {
-    if (file.preview) setState((v) => ({ file, sub, n: (v?.n ?? 0) + 1, open: true }));
-    else globalThis.location.assign(fileHref(file.id));
-  };
+  const openFile: OpenPageFile = (list, index, sub) =>
+    setState((v) => ({
+      files: list,
+      index,
+      sub: sub as (file: ViewFile) => string,
+      n: (v?.n ?? 0) + 1,
+      open: true,
+    }));
   return {
     openFile,
     viewer: state ? (
       <FileViewer
         key={`pub-file-${state.n}`}
-        file={state.file}
-        sub={state.sub}
-        href={fileHref(state.file.id)}
+        files={state.files}
+        index={state.index}
+        src={(id) => `${fileHref(id)}?view=1`}
+        download={(id) => `${fileHref(id)}?download=1`}
+        sub={(f) => state.sub(state.files.find((x) => x.id === f.id) ?? f)}
         open={state.open}
-        onClose={() => setState((v) => (v ? { ...v, open: false } : v))}
+        onClose={() => setState((v) => v && { ...v, open: false })}
       />
     ) : null,
   };
@@ -256,13 +195,13 @@ export function usePageFilesSection(
             onAll={() => setAll(true)}
             more={t('pub.more', { n: found.length - 5 })}
           >
-            {found.map((f) => (
+            {found.map((f, i) => (
               <button
                 key={f.id}
                 type="button"
                 data-pub-fo={f.id}
-                title={f.preview ? t('pub.files.view') : t('pub.files.download')}
-                onClick={() => openFile(f, subOf(f))}
+                title={t('pub.files.view')}
+                onClick={() => openFile(found, i, subOf)}
                 className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-raised px-3 py-[9px] text-left font-[inherit] text-inherit hover:border-info max-md:gap-2 max-md:px-2.5 max-md:py-2"
               >
                 <Icon name={fileIcon(f.name)} className="flex-none text-muted" />

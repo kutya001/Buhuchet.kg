@@ -327,6 +327,11 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     const taken = await card(leadId);
     expect(taken.status).toBe('in_progress');
     expect(taken.statusHistory.at(-1)).toMatchObject({ to: 'in_progress', via: 'telegram' });
+    // Строка колокольчика «Новая заявка с сайта» (доработки 16.11.2026, блок 3) ведёт на «Заявки» с
+    // `?lead=`: открывается карточка заявки, адрес — без параметра.
+    await page.goto(`/app/orgs/leads?lead=${leadId}`);
+    await expect(page.getByRole('dialog', { name: work })).toBeVisible();
+    await expect(page).toHaveURL(/\/app\/orgs\/leads$/);
     // Кнопка погасла; второе нажатие (другим администратором или повторно) — «Кнопка устарела».
     const again = await pressBotButton(page.request, chat, message!.messageId, workData);
     await expect

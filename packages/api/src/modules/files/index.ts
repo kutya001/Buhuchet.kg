@@ -43,6 +43,8 @@ import {
   sentAcceptRoute,
   sentCountHandler,
   sentCountRoute,
+  sentDownloadHandler,
+  sentDownloadRoute,
   sentExportHandler,
   sentExportRoute,
   sentLinkHandler,
@@ -95,6 +97,7 @@ export function filesModule(deps: ApiDeps) {
       .openapi(sentAcceptRoute, sentAcceptHandler(deps))
       .openapi(sentRejectRoute, sentRejectHandler(deps))
       .openapi(sentLinkRoute, sentLinkHandler(deps))
+      .openapi(sentDownloadRoute, sentDownloadHandler(deps))
       .openapi(sentUploadRoute, sentUploadHandler(deps))
       .openapi(sentUploadSetRoute, sentUploadSetHandler(deps))
       .openapi(pageSentStartRoute, pageSentStartHandler(deps))

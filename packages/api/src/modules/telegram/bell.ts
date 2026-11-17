@@ -136,7 +136,13 @@ export type ContractorBell =
   /** Вопрос клиента: номер сообщения-просьбы и текст вопроса. */
   | { event: 'cp_question'; messageId: string; question: string }
   /** Страница закрыта после 5 неверных кодов за сутки. */
-  | { event: 'page_closed'; failures: number };
+  | { event: 'page_closed'; failures: number }
+  /**
+   * «Не отправлено «К оплате»: нет реквизитов для перевода» за месяц (приёмка «Колокольчик против
+   * Telegram», доработки 16.11.2026, блок 3, пункт 3): сообщение Telegram — только в продукте
+   * (`queueNoRequisite`, причина — как `pgNoReqWhy` прототипа), строка — с ним (docs/deviations.md п. Т-21).
+   */
+  | { event: 'cp_no_req'; month: YearMonth };
 
 /** Длина вопроса клиента в строке (прототип v122: `slice(0,200)`). */
 const BELL_QUESTION_MAX = 200;
@@ -208,6 +214,15 @@ function contractorBellRow(
         }),
         eventKey: `cp_question:${e.messageId}`,
       };
+    case 'cp_no_req':
+      return {
+        kind: 'money',
+        event: 'cp_no_req',
+        target: cp('contractor'),
+        text: t('bell.line.cp_no_req', { month: monthLabel(e.month) }),
+        // Как сообщение Telegram: одно на контрагента и месяц.
+        eventKey: `cp_no_req:${contractorId}:${e.month}`,
+      };
     case 'page_closed':
       return {
         kind: 'other',
@@ -219,21 +234,44 @@ function contractorBellRow(
   }
 }
 
+/** Часы и тексты словаря для `bellContractor`, прочитанные до транзакции действия (`bellContext`). */
+export type BellContext = { readonly now: Date; readonly t: Translate };
+
+/** Часы и тексты словаря до транзакции: тогда `bellContractor` внутри неё не трогает `deps`. */
+export async function bellContext(deps: ApiDeps): Promise<BellContext> {
+  return { now: deps.clock.now(), t: await serverTexts(deps) };
+}
+
 /**
  * Строка колокольчика о событии контрагента (стык «Положить уведомление», вызывают потоки К и И) — в
  * транзакции действия, только через `tx`, и без бота, и без привязанного Telegram, и при выключенных
- * «Напоминаниях в Telegram». Кому — `bellContractorUsers`. Тексты словаря `texts` лучше прочитать до
- * транзакции (`serverTexts(deps)`); не переданы — читаются здесь (у словаря своё соединение, п. О-46).
+ * «Напоминаниях в Telegram». Кому — `bellContractorUsers`. Лучше передать первым параметром
+ * `bellContext(deps)`, прочитанный до транзакции; с `deps` часы берутся здесь, тексты словаря — из
+ * `texts` или здесь же (у словаря своё соединение, п. О-46).
  */
+export async function bellContractor(
+  ctx: BellContext,
+  tx: Tx,
+  contractorId: string,
+  e: ContractorBell,
+): Promise<number>;
 export async function bellContractor(
   deps: ApiDeps,
   tx: Tx,
   contractorId: string,
   e: ContractorBell,
   texts?: Translate,
+): Promise<number>;
+export async function bellContractor(
+  ctx: ApiDeps | BellContext,
+  tx: Tx,
+  contractorId: string,
+  e: ContractorBell,
+  texts?: Translate,
 ): Promise<number> {
-  const now = deps.clock.now();
-  const t = texts ?? (await serverTexts(deps));
+  const pre = 'clock' in ctx ? null : ctx;
+  const now = pre ? pre.now : (ctx as ApiDeps).clock.now();
+  const t = pre ? pre.t : (texts ?? (await serverTexts(ctx as ApiDeps)));
   const tr: Translate = (key, params) => formatText(t(key), params);
   const row = contractorBellRow(e, contractorId, tr, now);
   const users = await bellContractorUsers(tx, contractorId, row.need ?? null);

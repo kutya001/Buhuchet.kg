@@ -1,6 +1,6 @@
 'use client';
 
-import { FileLink, FileManagerList, type FileManagerRow } from '@buhuchet/shared';
+import { FileManagerList, type FileManagerRow } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
@@ -13,10 +13,11 @@ import {
 } from '@buhuchet/ui';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
-import { api, apiFailure, callApi } from '../api-client';
+import { api, apiFailure } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { AttachDialog } from '../files/attach-dialog';
 import { FileEditDialog } from '../files/file-edit-dialog';
+import { windowFiles } from '../files/file-viewer';
 import { FileWindow } from '../files/file-window';
 import { fileKindText, filePageText } from '../files/file-columns';
 import { useFileDelete, useFileLinkOpen } from '../files/file-link-open';
@@ -90,12 +91,6 @@ export function ContractorFilesTab({
   // Окно файла: записи ссылок — в их окнах, «Удалить» / «Удалить отовсюду?» (прототип v124 `openFile`).
   const links = useFileLinkOpen();
   const del = useFileDelete();
-
-  const download = async (file: FileManagerRow) => {
-    const res = await callApi(() => api.api.files[':id'].link.$get({ param: { id: file.id } }));
-    if (!res.ok) return toast(errorText(res.error), { bad: true, icon: 'alert' });
-    globalThis.location.assign(FileLink.parse(res.data).url);
-  };
 
   const attach = async (chosen: File[], note: string) => {
     setBusy(true);
@@ -263,19 +258,14 @@ export function ContractorFilesTab({
       {open ? (
         <FileWindow
           key={`file-${open.n}`}
-          // После «Изменить файл» окно показывает перечитанную строку.
-          file={data.items.find((f) => f.id === open.data.id) ?? open.data}
+          // «‹ ›» — файлы вкладки по порядку (прототип v126); после «Изменить файл» — перечитанная строка.
+          {...windowFiles(data.items, open.data)}
           open={open.open}
           onClose={() => setOpen(closeSlot)}
-          onDownload={() => void download(open.data)}
-          onSource={null}
-          onEdit={() => setEditId(open.data.id)}
+          onSource={() => null}
+          onEdit={(file) => setEditId(file.id)}
           onLink={links.open}
-          onDelete={() =>
-            del.ask(data.items.find((f) => f.id === open.data.id) ?? open.data, () =>
-              setOpen(closeSlot),
-            )
-          }
+          onDelete={(file) => del.ask(file, () => setOpen(closeSlot))}
         />
       ) : null}
       {links.dialogs}

@@ -354,6 +354,18 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       expect(go.headers.get('location')).toBe(link.url);
     });
 
+    it('открыть файл (окно просмотра и «Скачать») — в историю не пишется, файл не меняется (доработки 16.11.2026, блок 5, п. 4)', async () => {
+      const item = await upload(acc, 'выписка.xlsx');
+      const row = async () =>
+        (await f.t.admin.db.select().from(files).where(eq(files.id, item.id)))[0];
+      const before = { row: await row(), history: await history(item.id) };
+      for (const path of [`/api/files/${item.id}/link`, `/api/files/${item.id}/download`]) {
+        expect([200, 302], path).toContain((await call('GET', path, chief)).status);
+      }
+      expect(await row()).toEqual(before.row);
+      expect(await history(item.id)).toEqual(before.history);
+    });
+
     it('без входа, без права и из чужой организации — не скачать', async () => {
       const item = await upload(acc, 'секрет.pdf');
       expect((await call('GET', `/api/files/${item.id}/link`)).status).toBe(401);

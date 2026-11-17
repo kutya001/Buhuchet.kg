@@ -344,7 +344,9 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const nds = items[1]!;
     expect(nds).toMatchObject({ hasSum: true, sum: 125_050, payStatus: 'unpaid' });
     // PDF открывается в окне просмотра страницы (прототип v74 `pubFileOpen`).
-    expect(nds.files).toEqual([{ id: ids.ndsFile, name: 'Декларация НДС.pdf', preview: 'pdf' }]);
+    expect(nds.files).toEqual([
+      { id: ids.ndsFile, name: 'Декларация НДС.pdf', size: 10, preview: 'pdf' },
+    ]);
     expect(items[0]).toMatchObject({
       hasSum: false,
       sum: null,

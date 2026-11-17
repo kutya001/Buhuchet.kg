@@ -13,11 +13,14 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { api, ApiFailure, callApi } from '../api-client';
+import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { AttachDialog } from './attach-dialog';
 import { FileEditDialog } from './file-edit-dialog';
 import { linkFiles, unlinkFile } from './file-links-data';
 import { FilePickDialog } from './file-pick-dialog';
+import { FileViewer } from './file-viewer';
+import { fileBytesUrl, fileDownloadUrl } from './file-window';
 import { fileMeta, filesQuery, uploadFile, useFilePageToggle, useFilesRefresh } from './files-data';
 
 /**
@@ -67,6 +70,8 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const [picked, setPicked] = useState<File[] | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  // Окно просмотра: «‹ ›» — файлы блока по порядку (доработки 16.11.2026, блок 5; прототип v126).
+  const [view, setView] = useState<DialogSlot<string> | null>(null);
   const togglePage = useFilePageToggle(t, toast, errorText);
   // Ссылка меняет и «Источник» в «Файловом менеджере», и «также у …» в файлах контрагента, и историю
   // самой записи.
@@ -208,7 +213,23 @@ export function RecordFiles({ source }: { source: FileSource }) {
         canLink={files.data.canLink && target !== null}
         onLinkPick={() => setPicking(true)}
         onUnlink={(item) => void unlink(item)}
+        onOpen={(item) => setView(openSlot(item.id))}
+        openTitle={t('files.view.open')}
       />
+      {view ? (
+        <FileViewer
+          key={`view-${view.n}`}
+          files={ordered}
+          index={Math.max(
+            0,
+            ordered.findIndex((f) => f.id === view.data),
+          )}
+          open={view.open}
+          onClose={() => setView(closeSlot)}
+          src={fileBytesUrl}
+          download={fileDownloadUrl}
+        />
+      ) : null}
       <FilePickDialog
         target={picking ? target : null}
         onClose={() => setPicking(false)}

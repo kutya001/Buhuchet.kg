@@ -17,7 +17,7 @@ import {
 } from '../../testing';
 import { notifyPageClosed } from '../contractor-page/closed';
 import { addSentFiles } from '../files/sent-add';
-import { bellContractor, putBell } from './bell';
+import { bellContext, bellContractor, putBell } from './bell';
 import { bellCleanupJob, bellDayJob } from './bell-day';
 
 /*
@@ -281,9 +281,14 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     expect(day.items.map((x) => [x.event, x.open])).toEqual([
       ['day_dues', { kind: 'reports_day', id: TODAY }],
     ]);
-    // «Только свои отчёты»: владелец и главный бухгалтер видят все отчёты, но своих на сегодня у них нет.
-    expect(await rowsOf(f.a.ownerUserId, 'day_dues')).toEqual([]);
-    expect(await rowsOf(person('chief-a').userId, 'day_dues')).toEqual([]);
+    // Владелец и главный бухгалтер (объём «Все»): отчёт бухгалтера без Telegram — в их утреннем
+    // сообщении, значит, и в строке; нажатие — «На неделе» без отбора «Ответственный — я» (приёмка
+    // «Колокольчик против Telegram»).
+    for (const userId of [f.a.ownerUserId, person('chief-a').userId]) {
+      expect(
+        (await rowsOf(userId, 'day_dues')).map((r) => [r.targetKind, r.targetId, r.text]),
+      ).toEqual([['reports_tab', 'week', rows[0]!.text]]);
+    }
 
     // День — по Бишкеку: час напоминаний 05:00, запуск в 23:00 UTC предыдущего дня по UTC.
     await clear();
@@ -404,9 +409,11 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       .set({ responsibleEmployeeId: person('senior-a').employeeId })
       .where(eq(contractors.id, cp));
     try {
+      // Часы и тексты прочитаны до транзакции действия (`bellContext`): внутри неё — только `tx`.
+      const ctx = await bellContext(deps);
       expect(
         await inOrg((tx) =>
-          bellContractor(deps, tx, cp, {
+          bellContractor(ctx, tx, cp, {
             event: 'cp_file',
             sendId: '0b7f8a52-8a36-4a8e-9a43-000000000010',
             n: 1,
@@ -648,6 +655,35 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     expect(rework[0]!.text).toContain('Сверить остатки по кассе');
     expect(rework[0]!.text).toContain('Нет акта сверки');
     expect((await page('acc-a', 'tasks')).items.map((x) => x.event)).toEqual(['task_rework']);
+
+    // Подтверждена и отменена — исполнителю, тому же, кому сообщение Telegram (приёмка «Колокольчик против
+    // Telegram», «Задачи»).
+    expect((await call('acc-a', 'POST', `/api/tasks/${task.id}/done`, {})).status).toBe(200);
+    const ok = await call('owner-a', 'POST', `/api/tasks/${task.id}/confirm`, {});
+    expect(ok.status, await ok.clone().text()).toBe(200);
+    const confirmed = await rowsOf(person('acc-a').userId, 'task_confirmed');
+    expect(confirmed.map((r) => [r.kind, r.targetKind, r.targetId, r.text])).toEqual([
+      ['tasks', 'task', task.id, 'Задача подтверждена: Сверить остатки по кассе'],
+    ]);
+    const other = await call('owner-a', 'POST', '/api/tasks', {
+      title: 'Собрать акты',
+      description: '',
+      categoryCode: 'КАТ-001',
+      contractorId: cp,
+      executorEmployeeId: person('acc-a').employeeId,
+      term: 'day',
+      dueDate: '2026-11-27',
+      needFile: false,
+      confirm: false,
+    });
+    const second = Task.parse(await other.json());
+    const cancel = await call('owner-a', 'POST', `/api/tasks/${second.id}/cancel`);
+    expect(cancel.status, await cancel.clone().text()).toBe(200);
+    const cancelled = await rowsOf(person('acc-a').userId, 'task_cancelled');
+    expect(cancelled.map((r) => [r.targetId, r.text])).toEqual([
+      [second.id, 'Задача отменена: Собрать акты'],
+    ]);
+    expect(await rowsOf(f.a.ownerUserId, 'task_cancelled')).toEqual([]);
   });
 
   it('страница контрагента закрыта после неверных кодов — строка ответственному и без бота, одна за день', async () => {
@@ -690,6 +726,19 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       expect(reads).toHaveLength(1);
       // У другого сотрудника новость не прочитана.
       expect((await page('chief-a', 'news')).items.map((x) => x.read)).toEqual([false]);
+      // Рассылка, заполненная из этой новости («Подробнее» — новость), второй строки не даёт
+      // (приёмка «Колокольчик против Telegram»): у сотрудника — только строка новости.
+      const cast = await call('platform-admin', 'POST', '/api/admin/telegram/broadcast', {
+        org: null,
+        title: 'Колокольчик уведомлений',
+        text: 'Коротко',
+        more: { kind: 'news', id: 'bell-api-news' },
+      });
+      expect(cast.status, await cast.clone().text()).toBe(200);
+      expect(await rowsOf(person('chief-a').userId, 'broadcast')).toEqual([]);
+      expect((await page('chief-a')).items.map((x) => [x.event, x.text])).toEqual([
+        ['news', 'Колокольчик уведомлений'],
+      ]);
     } finally {
       await f.t.admin.db.delete(news).where(eq(news.id, 'bell-api-news'));
     }

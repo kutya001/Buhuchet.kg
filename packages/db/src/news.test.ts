@@ -1,6 +1,6 @@
 import { hashPassword } from '@buhuchet/adapters/password';
 import { addDays, bishkekDate, newsShowMoment } from '@buhuchet/domain';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withUserContext } from './auth';
 import { withOrgContext } from './context';
@@ -24,7 +24,7 @@ import { markWelcomeSeen } from './onboarding';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { readPlatformHistory } from './platform-history';
 import { news, newsAdminTexts, newsReads, platformAuditLog, users } from './schema';
-import { NEWS_NOT_YET, newsAdminTextSeedRows, newsSeedRows } from './seed/news';
+import { NEWS_NOT_YET, newsAdminTextSeedRows, newsSeedRows, seedNews } from './seed/news';
 import { readSpecJson } from './spec-data';
 import {
   createTestDatabase,
@@ -419,9 +419,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14),
     // v120 (подсказки и обучение на странице контрагента, п. К-16) и v121 (чек принимается только
     // вместе с деньгами, п. К-18), v122–v124 (колокольчик, новости по модулям, один файл — несколько
-    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) — да; v125–v128 (новости только о
-    // своём, окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026,
-    // этап 2) — пока нет: их переносит общая сборка этапа.
+    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) и v125–v128 (новости только о своём,
+    // окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026, этап 2,
+    // п. Т-21, И-12, К-20) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -454,17 +454,54 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       linkId: 'files',
       modules: ['files'],
     });
+    expect(rows.find((r) => r.id === 'v125')).toMatchObject({
+      release: '125',
+      showOnLogin: true,
+      linkKind: 'mod',
+      linkId: 'kb',
+      modules: [],
+    });
+    expect(rows.find((r) => r.id === 'v126')).toMatchObject({
+      release: '126',
+      linkKind: 'mod',
+      linkId: 'files',
+      modules: ['files'],
+    });
+    expect(rows.find((r) => r.id === 'v127')).toMatchObject({ release: '127', linkId: 'cps' });
+    expect(rows.find((r) => r.id === 'v127')?.modules).toEqual(
+      expect.arrayContaining(['cps', 'files']),
+    );
+    expect(rows.find((r) => r.id === 'v128')).toMatchObject({
+      release: '128',
+      showOnLogin: true,
+      linkKind: null,
+    });
     // Текст «Для администратора платформы» (admMd) идёт только во второй текст, не в текст новости.
     const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());
     expect(withAdm.map((x) => x.id)).toEqual(expect.arrayContaining(['v123', 'v124']));
+    // Ни одна строка второго текста (кроме заголовков разделов и коротких подписей) не попала в текст
+    // и короткое описание той же новости.
+    const plain = (line: string) =>
+      line
+        .replace(/^[\s>*\-\d.]+/, '')
+        .replace(/\*\*|`/g, '')
+        .trim();
     for (const x of withAdm) {
-      expect(rows.find((r) => r.id === x.id)?.md ?? '').not.toContain(
-        '## Для администратора платформы',
-      );
+      const row = rows.find((r) => r.id === x.id);
+      expect(row?.md ?? '').not.toContain('## Для администратора платформы');
+      const leaked = x
+        .admMd!.split('\n')
+        .filter((line) => !line.trimStart().startsWith('#'))
+        .map(plain)
+        .filter((line) => line.length >= 20)
+        .filter((line) => (row?.md ?? '').includes(line) || (row?.short ?? '').includes(line));
+      expect(leaked, x.id).toEqual([]);
     }
+    // Второй текст v123 есть; подпись «Для администратора платформы» экран ставит сам (с прототипа v125
+    // её нет и в тексте).
     expect(newsAdminTextSeedRows(refDB.news).find((t) => t.newsId === 'v123')?.md).toBeTruthy();
     const source = refDB.news as { id: string; status: string }[];
-    // Черновики прототипа (сейчас «Версия 129: план») не наполняются.
+    // Черновики прототипа («Версия N+1: план») не наполняются.
     const drafts = source.filter((x) => x.status !== 'Опубликовано').map((x) => x.id);
     expect(drafts.length).toBeGreaterThan(0);
     expect(rows.filter((r) => drafts.includes(r.id))).toEqual([]);
@@ -618,6 +655,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         type: 'Обновление',
         date: '2026-11-16',
         status: 'Опубликовано',
+        aud: 'all',
         mods: ['fee', 'cps'],
         admMd: '## Для администратора платформы\n- Подробности\n\n## Изменено\n- ',
       },
@@ -631,6 +669,7 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
           type: 'Обновление',
           date: '2026-11-16',
           status: 'Опубликовано',
+          aud: 'all',
           mods: ['fee', 'cps'],
         },
       ])[0]?.modules,
@@ -643,9 +682,111 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
           type: 'Обновление',
           date: '2026-11-16',
           status: 'Опубликовано',
+          aud: 'all',
           mods: ['nope'],
         },
       ]),
     ).toThrow(/x2/);
+    // «Для кого» — только «all» или «adm»: опечатка или пропуск останавливают наполнение, а не открывают
+    // новость всем.
+    const aud = (value: unknown) => () =>
+      newsSeedRows([
+        {
+          id: 'x3',
+          t: 'Версия 3',
+          type: 'Обновление',
+          date: '2026-11-16',
+          status: 'Опубликовано',
+          ...(value === undefined ? {} : { aud: value }),
+        },
+      ]);
+    expect(aud('adn')).toThrow();
+    expect(aud(undefined)).toThrow();
+    expect(aud(null)).toThrow();
+    expect(aud('adm')()[0]?.audience).toBe('adm');
+  });
+
+  it('наполнение с --update меняет «Для кого», модули и второй текст: разбор выпущенных новостей (доработки 16.11.2026, блок 4, пункт 5); поправленную администратором — нет', async () => {
+    type Extra = { aud: 'all' | 'adm'; mods?: string[]; admMd?: string };
+    const item = (id: string, x: Extra) => ({
+      id,
+      t: `Версия ${id}`,
+      type: 'Обновление',
+      ver: id,
+      date: '2026-11-16',
+      status: 'Опубликовано',
+      short: 'Коротко',
+      md: '- Текст',
+      ...x,
+    });
+    const ids = ['x9301', 'x9302', 'x9303'];
+    const before = [
+      item('x9301', { aud: 'all' }),
+      item('x9302', { aud: 'all' }),
+      item('x9303', { aud: 'adm', admMd: '- Старый текст' }),
+    ];
+    // Разбор: x9301 — в Админку, модуль и второй текст; x9302 правил администратор; x9303 — всем, без
+    // второго текста.
+    const after = [
+      item('x9301', { aud: 'adm', mods: ['fee'], admMd: '- Новый текст' }),
+      item('x9302', { aud: 'adm', mods: ['fee'], admMd: '- Новый текст' }),
+      item('x9303', { aud: 'all' }),
+    ];
+    try {
+      await seedNews(db.admin.db, before, { update: false });
+      await db.admin.db.update(news).set({ updatedBy: adminId }).where(eq(news.id, 'x9302'));
+      const state = async () => {
+        const rows = await db.admin.db
+          .select({ id: news.id, audience: news.audience, modules: news.modules, v: news.version })
+          .from(news)
+          .where(inArray(news.id, ids))
+          .orderBy(asc(news.id));
+        const texts = await db.admin.db
+          .select({ id: newsAdminTexts.newsId, md: newsAdminTexts.md })
+          .from(newsAdminTexts)
+          .where(inArray(newsAdminTexts.newsId, ids));
+        const md = new Map(texts.map((x) => [x.id, x.md]));
+        return Object.fromEntries(
+          rows.map((r) => [r.id, [r.audience, r.modules, md.get(r.id) ?? null, r.v]]),
+        );
+      };
+      // Без --update у залитых новостей не меняются «Для кого», модули и имеющийся второй текст —
+      // добавляется только недостающий второй текст (не у новости, которую правил администратор).
+      await seedNews(db.admin.db, after, { update: false });
+      const start = await state();
+      expect(Object.fromEntries(Object.entries(start).map(([k, x]) => [k, x.slice(0, 3)]))).toEqual(
+        {
+          x9301: ['all', [], '- Новый текст'],
+          x9302: ['all', [], null],
+          x9303: ['adm', [], '- Старый текст'],
+        },
+      );
+      const report = await seedNews(db.admin.db, after, { update: true });
+      const v = (id: string) => start[id]![3] as number;
+      expect(await state()).toEqual({
+        // «Для кого», модуль и второй текст — новые; версия поднялась (окно правки получит 409).
+        x9301: ['adm', ['fee'], '- Новый текст', expect.any(Number)],
+        // Правил администратор — ничего не меняется.
+        x9302: ['all', [], null, v('x9302')],
+        // «Для всех», второго текста больше нет.
+        x9303: ['all', [], null, expect.any(Number)],
+      });
+      const now = await state();
+      expect(now.x9301![3]).toBeGreaterThan(v('x9301'));
+      expect(now.x9303![3]).toBeGreaterThan(v('x9303'));
+      expect(report).toMatchObject({ inserted: 0, updated: 2 });
+      // Сотруднику организации «Только режим Админка» после выпуска не видна, ставшая «для всех» — видна.
+      expect(await asOwner(a, (tx) => getNews(tx, 'x9301'))).toBeNull();
+      expect((await asOwner(a, (tx) => getNews(tx, 'x9303')))?.id).toBe('x9303');
+      // Повтор ничего не меняет.
+      expect(await seedNews(db.admin.db, after, { update: true })).toMatchObject({
+        inserted: 0,
+        updated: 0,
+      });
+      expect(await state()).toEqual(now);
+    } finally {
+      await db.admin.db.delete(newsAdminTexts).where(inArray(newsAdminTexts.newsId, ids));
+      await db.admin.db.delete(news).where(inArray(news.id, ids));
+    }
   });
 });

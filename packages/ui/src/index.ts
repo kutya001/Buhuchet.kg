@@ -189,3 +189,29 @@ export type {
   GridRowTone,
   GridValues,
 } from './grid/types';
+export {
+  DocumentView,
+  FileViewFrame,
+  FileViewState,
+  PdfView,
+  PictureView,
+  SheetBookView,
+  SheetTable,
+  SlidesView,
+  TextFileView,
+  useImageUrls,
+  XmlFileView,
+  type FileViewLabels,
+} from './file-view/file-view';
+export {
+  mergeMap,
+  rotateNext,
+  scrollsToward,
+  sheetHits,
+  swipeDirection,
+  xmlBranches,
+  xmlHits,
+  zoomNext,
+  ZOOM_MAX,
+  ZOOM_MIN,
+} from './file-view/file-view-model';

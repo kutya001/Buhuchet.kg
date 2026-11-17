@@ -400,6 +400,24 @@ describe.skipIf(!databaseAvailable())(
       const link = await call('GET', `/api/files/sent/${first}/link?download=1`, acc);
       expect(link.status).toBe(200);
       expect(FileLink.parse(await link.json()).url).toContain(saved[0]!.key);
+      // «Скачать» окна просмотра (блок 5 пакета 16.11): тот же файл переходом, вложением.
+      const go = await call('GET', `/api/files/sent/${first}/download`, acc);
+      expect(go.status).toBe(302);
+      expect(go.headers.get('location')).toContain(saved[0]!.key);
+      expect(go.headers.get('location')).not.toContain('inline');
+      // Окно просмотра читает и не картинку, и не PDF — ссылкой-вложением; в окне браузера — только
+      // картинку и PDF (400, как раньше).
+      const other = (
+        await send('org-a', cpAcc, grantAcc, [
+          { name: 'Сверка.txt', body: enc('Акт сверки за октябрь') },
+        ])
+      )[0]!;
+      const otherLink = await call('GET', `/api/files/sent/${other}/link?download=1`, acc);
+      expect(otherLink.status).toBe(200);
+      expect(FileLink.parse(await otherLink.json()).url).toContain(`/sent/${other}`);
+      expect((await call('GET', `/api/files/sent/${other}/link`, acc)).status).toBe(400);
+      expect((await call('GET', `/api/files/sent/${other}/download`, acc)).status).toBe(302);
+      expect((await call('GET', '/api/files/sent/not-an-id/download', acc)).status).toBe(400);
       const h = await history(cpAcc.id);
       expect(h.filter((x) => x.action === 'sent_file_accept').map((x) => x.changes)).toEqual([
         [{ field: 'file', to: 'Договор.pdf' }],
@@ -773,6 +791,7 @@ describe.skipIf(!databaseAvailable())(
         ['GET', '/api/files/sent/values?col=st'],
         ['GET', '/api/files/sent/count'],
         ['GET', `/api/files/sent/${id}/link`],
+        ['GET', `/api/files/sent/${id}/download`],
         ['POST', `/api/files/sent/${id}/accept`],
         ['POST', `/api/files/sent/${id}/reject`],
         ['GET', `/api/contractors/${cpAcc.id}/sent-files`],
@@ -1222,6 +1241,8 @@ describe.skipIf(!databaseAvailable())(
       const version = await versionOf(chief, cpChief, id!);
       expect((await decide(acc, id!, 'accept', { version })).status).toBe(404);
       expect((await call('GET', `/api/files/sent/${id}/link?download=1`, acc)).status).toBe(404);
+      expect((await call('GET', `/api/files/sent/${id}/download`, acc)).status).toBe(404);
+      expect((await call('GET', `/api/files/sent/${id}/download`, senior)).status).toBe(403);
       expect((await decide(senior, id!, 'reject', { version, reason: 'нет' })).status).toBe(403);
       const tab = SentFileListPage.parse(
         await (await call('GET', '/api/files/sent?size=all&sort=ord.desc', acc)).json(),
@@ -1255,6 +1276,7 @@ describe.skipIf(!databaseAvailable())(
         expect((await call('GET', `/api/files/sent/${id}/link?download=1`, cookie)).status).toBe(
           404,
         );
+        expect((await call('GET', `/api/files/sent/${id}/download`, cookie)).status).toBe(404);
         const tab = SentFileListPage.parse(
           await (await call('GET', '/api/files/sent?size=all&sort=ord.desc', cookie)).json(),
         );

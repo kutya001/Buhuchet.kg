@@ -52,6 +52,11 @@ export const BELL_TEXTS = {
   'bell.line.fee_paid': { ru: 'Сообщил в Telegram об оплате за обслуживание: {sum}', section: S },
   'bell.line.cp_tg_request': { ru: 'Просит подключить Telegram: {name}', section: S },
   'bell.line.cp_question': { ru: 'Вопрос из Telegram: {text}', section: S },
+  // Приёмка «Колокольчик против Telegram» (доработки 16.11.2026, этап 2; прототип v128).
+  'bell.line.cp_no_req': {
+    ru: 'Не отправлено «К оплате» за {month}: нет реквизитов для перевода',
+    section: S,
+  },
   'bell.line.page_closed': {
     ru: 'Страница закрыта: {n} неверных кодов за сутки, откроется после смены кода',
     section: S,
@@ -59,6 +64,10 @@ export const BELL_TEXTS = {
   'bell.line.login_locked': { ru: 'Вход заблокирован: 10 неверных паролей подряд', section: S },
   'bell.line.login_locked.staff': {
     ru: 'Вход сотрудника {name} заблокирован: 10 неверных паролей подряд',
+    section: S,
+  },
+  'bell.line.not_me': {
+    ru: 'Сотрудник {name} нажал «Это не я»: вход закрыт, выдайте новый пароль',
     section: S,
   },
   'bell.line.broadcast': { ru: 'Сообщение платформы: {text}', section: S },

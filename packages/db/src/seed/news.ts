@@ -22,7 +22,10 @@ const NewsSection = z.array(
     short: z.string().nullish(),
     md: z.string().nullish(),
     status: z.string(),
-    aud: z.string().nullish(),
+    // «Для кого» обязательно, и незнакомое значение останавливает наполнение: `--update` переписывает и
+    // залитые новости, и опечатка или пропуск открыли бы новость «Только режим Админка» всем организациям
+    // (в прототипе такая новость не видна никому, кроме Админки).
+    aud: z.enum(['all', 'adm']),
     off: z.boolean().nullish(),
     pin: z.boolean().nullish(),
     login: z.boolean().nullish(),
@@ -71,17 +74,10 @@ function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
  * перед общей сборкой этапа, перенесены самой сборкой. Новости только о том, что касается человека
  * v125 и колокольчик — то же, что присылает бот, v128 (поток Т), окно просмотра файлов v126 (поток И),
  * файлы от контрагентов и страница контрагента в окне просмотра v127 (поток К) — доработки 16.11.2026,
- * этап 2: так же, их убирает отсюда общая сборка этапа 2.
+ * этап 2: так же, перенесены общей сборкой этапа 2.
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-14
-export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
-  'v107',
-  'v108',
-  'v125',
-  'v126',
-  'v127',
-  'v128',
-]);
+export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108']);
 
 /**
  * Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи) без
@@ -110,7 +106,7 @@ export function newsSeedRows(section: unknown) {
       linkId: link?.id ?? null,
       pinned: n.pin ?? false,
       showOnLogin: n.login ?? false,
-      audience: n.aud === 'adm' ? 'adm' : 'all',
+      audience: n.aud,
       modules: newsModulesOrdered(modules),
       status: 'published',
       off: n.off ?? false,
@@ -207,11 +203,14 @@ export async function seedNews(
             linkId: sql`excluded.link_id`,
             pinned: sql`excluded.pinned`,
             showOnLogin: sql`excluded.show_on_login`,
+            // «Для кого» — тоже: разбор выпущенных новостей (доработки 16.11.2026, блок 4, пункт 5)
+            // переводит новости в «Только режим Админка».
+            audience: sql`excluded.audience`,
             modules: sql`excluded.modules`,
             updatedAt: sql`now()`,
             version: sql`${news.version} + 1`,
           },
-          setWhere: sql`${news.updatedBy} is null and (${news.title}, ${news.type}, ${news.release}, ${news.publishDate}, ${news.short}, ${news.md}, ${news.linkKind}, ${news.linkId}, ${news.pinned}, ${news.showOnLogin}, ${news.modules}) is distinct from (excluded.title, excluded.type, excluded.release, excluded.publish_date, excluded.short, excluded.md, excluded.link_kind, excluded.link_id, excluded.pinned, excluded.show_on_login, excluded.modules)`,
+          setWhere: sql`${news.updatedBy} is null and (${news.title}, ${news.type}, ${news.release}, ${news.publishDate}, ${news.short}, ${news.md}, ${news.linkKind}, ${news.linkId}, ${news.pinned}, ${news.showOnLogin}, ${news.audience}, ${news.modules}) is distinct from (excluded.title, excluded.type, excluded.release, excluded.publish_date, excluded.short, excluded.md, excluded.link_kind, excluded.link_id, excluded.pinned, excluded.show_on_login, excluded.audience, excluded.modules)`,
         })
         .returning({ id: news.id })
     : await insert.onConflictDoNothing().returning({ id: news.id });

@@ -11,6 +11,7 @@ import {
   formatSomWithUnit,
   formatText,
   MONTH_PAY_SEND_MESSAGES,
+  monthLabel,
   TELEGRAM_TEMPLATE_DEFAULTS,
   UI_TEXTS,
   type BotMessage,
@@ -1388,6 +1389,26 @@ describe.skipIf(!databaseAvailable())(
         expect(tg.sent.map((m) => [m.chatId, m.text])).toEqual([
           [CHAT_ACC, notice(UI_TEXTS['cppage.tg.rq.hidden_staff'].ru)],
         ]);
+        // Колокольчик (поток Т, приёмка «Колокольчик против Telegram»): та же весть строкой
+        // ответственному, одна на контрагента и месяц; нажатие — карточка контрагента.
+        const bell = await f.t.admin.db
+          .select()
+          .from(schema.bellNotifications)
+          .where(
+            and(
+              eq(schema.bellNotifications.event, 'cp_no_req'),
+              eq(schema.bellNotifications.contractorId, cpA),
+            ),
+          );
+        expect(bell.map((r) => [r.userId, r.kind, r.targetKind, r.targetId, r.text])).toEqual([
+          [
+            f.people['acc-a']!.userId,
+            'money',
+            'contractor',
+            cpA,
+            formatText(UI_TEXTS['bell.line.cp_no_req'].ru, { month: monthLabel(SEP) }),
+          ],
+        ]);
         await hidePage(cpA, []);
         await wipe();
         // Деньги на налоги переводят организации, счёта для налогов нет.
@@ -1408,6 +1429,19 @@ describe.skipIf(!databaseAvailable())(
             notice(formatText(UI_TEXTS['cppage.tg.rq.emp_hint'].ru, { employee: 'chief-a' })),
           ],
         ]);
+        // Колокольчик: ответственному и без Telegram, и владельцу, которому ушло сообщение.
+        const noReqUsers = await f.t.admin.db
+          .select({ userId: schema.bellNotifications.userId })
+          .from(schema.bellNotifications)
+          .where(
+            and(
+              eq(schema.bellNotifications.event, 'cp_no_req'),
+              eq(schema.bellNotifications.contractorId, cpA),
+            ),
+          );
+        expect(noReqUsers.map((r) => r.userId).sort()).toEqual(
+          [f.people['acc-a']!.userId, f.people['chief-a']!.userId, f.a.ownerUserId].sort(),
+        );
         await setContractor(cpA, { responsibleEmployeeId: employee('acc-a') });
         // Клиентам ничего не ушло и не записано; реквизиты появились — «К оплате» уходит.
         expect(await messages(cpA)).toEqual([]);

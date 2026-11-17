@@ -12,7 +12,8 @@ import {
   bellTaskText,
   bellText,
 } from './bell';
-import { DEFAULT_NOTIFY_SETTINGS, withNotifyKind } from './notify';
+import { DEFAULT_NOTIFY_SETTINGS, withNotifyKind, withNotifyMode } from './notify';
+import { remindersFor } from './reminders';
 import type { ReminderPerson, ReminderPolicy, ReminderReport, ReminderTask } from './reminders';
 
 const t: Translate = (key, params) => formatText(UI_TEXTS[key].ru, params);
@@ -139,21 +140,20 @@ describe('колокольчик: строки дня — как утренне�
     report({ act: 'pay', payDue: addDays(TODAY, 7), unpaid: true }),
     // Не в день напоминания (за 5 дней) — в сообщении дня его нет, и в строке тоже.
     report({ dueDate: addDays(TODAY, 5) }),
-    // Чужой отчёт: у руководителя он в сообщении Telegram (ответственный без Telegram), в его строке — нет.
+    // Чужой отчёт: у руководителя он в сообщении Telegram (ответственный без Telegram) — и в его строке.
     report({ responsibleId: 'other', contractorResponsibleId: 'other' }),
   ];
 
-  it('«Сроки на сегодня» — только свои отчёты, у сотрудника без Telegram тоже', () => {
+  it('«Сроки на сегодня» — свои отчёты, у сотрудника без Telegram тоже', () => {
     const plans = bellDayPlans([acc, chief], { reports, tasks: [] }, policy());
-    expect(plans).toEqual([
-      {
-        employeeId: 'acc',
-        dues: { today: 2, pay: 2, over: 1, soon: 1 },
-        confWait: 0,
-        tasks: { soon: 0, over: 0, wait: 0 },
-        week: null,
-      },
-    ]);
+    expect(plans[0]).toEqual({
+      employeeId: 'acc',
+      dues: { today: 2, pay: 2, over: 1, soon: 1 },
+      others: false,
+      confWait: 0,
+      tasks: { soon: 0, over: 0, wait: 0 },
+      week: null,
+    });
     expect(bellDayRows(plans[0]!, TODAY, 0, t)).toEqual([
       {
         employeeId: 'acc',
@@ -165,6 +165,106 @@ describe('колокольчик: строки дня — как утренне�
         eventKey: `day_dues:${TODAY}`,
       },
     ]);
+  });
+
+  // Доработки 16.11.2026, приёмка «Колокольчик против Telegram»: у владельца и главного бухгалтера числа
+  // строки — как в утреннем сообщении, вместе с отчётами других сотрудников по объёму из профиля.
+  it('владелец и главный бухгалтер: числа строки — как в сообщении Telegram, по объёму из профиля', () => {
+    const linked = person('other', { linked: true });
+    const others = [
+      report({ responsibleId: 'other', contractorResponsibleId: 'other' }),
+      report({
+        responsibleId: 'other',
+        contractorResponsibleId: 'other',
+        dueDate: addDays(TODAY, -1),
+      }),
+      report({
+        responsibleId: 'other',
+        contractorResponsibleId: 'other',
+        dueDate: addDays(TODAY, 3),
+      }),
+    ];
+    const boss = (mode: 'all' | 'digest' | 'manual', off?: 'before') =>
+      person('chief', {
+        boss: true,
+        viewReports: 'all',
+        settings: off ? withNotifyKind(withNotifyMode(mode), off, false) : withNotifyMode(mode),
+      });
+    // Сколько отчётов в утреннем сообщении — по тем же строкам `remindersFor`.
+    const inTelegram = (p: ReminderPerson) =>
+      remindersFor(
+        p,
+        { reports: others, tasks: [], people: new Map([['other', linked]]) },
+        policy(),
+      ).reduce((n, l) => n + ('items' in l ? l.items.length : 0), 0);
+    const plan = (p: ReminderPerson) =>
+      bellDayPlans([p, linked], { reports: others, tasks: [] }, policy()).find(
+        (x) => x.employeeId === 'chief',
+      );
+    // «Все» — день срока, просрочка и «за N дней» по отчётам других.
+    expect(plan(boss('all'))).toMatchObject({
+      dues: { today: 1, over: 1, soon: 1 },
+      others: true,
+    });
+    expect(inTelegram(boss('all'))).toBe(3);
+    const [row] = bellDayRows(plan(boss('all'))!, TODAY, 0, t);
+    expect(row).toMatchObject({
+      event: 'day_dues',
+      target: { kind: 'reports_tab', id: 'week' },
+      text: 'Сроки на сегодня: 1 отчёт; просрочено 1; скоро 1',
+    });
+    // «Только просрочки и сводка» — только просрочка.
+    expect(plan(boss('digest'))).toMatchObject({ dues: { today: 0, over: 1, soon: 0 } });
+    expect(inTelegram(boss('digest'))).toBe(1);
+    // Выключил «за N дней» — нет ни в сообщении, ни в строке.
+    expect(plan(boss('all', 'before'))).toMatchObject({ dues: { today: 1, over: 1, soon: 0 } });
+    expect(inTelegram(boss('all', 'before'))).toBe(2);
+    // «Только ручные задачи» — строки сроков нет, как и сообщения.
+    expect(plan(boss('manual'))).toBeUndefined();
+    expect(inTelegram(boss('manual'))).toBe(0);
+  });
+
+  // Правило Telegram продукта (ТЗ «Уведомления в Telegram», п. Б-13): отчёты сотрудника без привязанного
+  // Telegram приходят руководителю при любом объёме — и в строке тоже (docs/deviations.md п. Т-21).
+  it('сотрудник без Telegram: его отчёты — у руководителя и в «Только ручные задачи», как в сообщении', () => {
+    const unlinked = person('other');
+    const mine = [
+      report({ responsibleId: 'other', contractorResponsibleId: 'other' }),
+      report({
+        responsibleId: 'other',
+        contractorResponsibleId: 'other',
+        dueDate: addDays(TODAY, -1),
+      }),
+    ];
+    for (const mode of ['manual', 'digest'] as const) {
+      const boss = person('chief', {
+        boss: true,
+        viewReports: 'all',
+        settings: withNotifyMode(mode),
+      });
+      const inTelegram = remindersFor(
+        boss,
+        { reports: mine, tasks: [], people: new Map([['other', unlinked]]) },
+        policy(),
+      ).reduce((n, l) => n + ('items' in l ? l.items.length : 0), 0);
+      expect(inTelegram).toBe(2);
+      const plan = bellDayPlans([boss, unlinked], { reports: mine, tasks: [] }, policy()).find(
+        (x) => x.employeeId === 'chief',
+      );
+      expect(plan).toMatchObject({ dues: { today: 1, over: 1 }, others: true });
+    }
+  });
+
+  it('главный бухгалтер с областью отчётов «Свои» или без права на отчёты — чужих отчётов в строке нет', () => {
+    const linked = person('other', { linked: true });
+    const theirs = [report({ responsibleId: 'other', contractorResponsibleId: 'other' })];
+    for (const viewReports of ['own', null] as const) {
+      const boss = person('chief', { boss: true, viewReports });
+      const plan = bellDayPlans([boss, linked], { reports: theirs, tasks: [] }, policy()).find(
+        (x) => x.employeeId === 'chief',
+      );
+      expect(plan).toBeUndefined();
+    }
   });
 
   it('«Ждут подтверждения сдачи» и задачи — по правилам сообщения дня', () => {
@@ -213,7 +313,13 @@ describe('колокольчик: строки дня — как утренне�
       ['chief', { sub: 2, over: 1, boss: true }],
     ]);
     const chiefRows = bellDayRows(plans[1]!, '2026-11-02', 4, t);
-    expect(chiefRows).toEqual([
+    // У сотрудника нет Telegram — его отчёты в сообщении руководителя, значит, и в его строке дня.
+    expect(chiefRows[0]).toMatchObject({
+      event: 'day_dues',
+      target: { kind: 'reports_tab', id: 'week' },
+      text: 'Сроки на сегодня: нет; просрочено 1; скоро 1',
+    });
+    expect(chiefRows.slice(1)).toEqual([
       {
         employeeId: 'chief',
         kind: 'reports',

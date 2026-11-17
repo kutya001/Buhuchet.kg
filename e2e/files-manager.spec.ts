@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { search } from './admin';
 import { DEMO_PASSWORD, newOrgOwner, showStats, signIn } from './helpers';
+import { tinyPdf, tinyPng } from './view-files';
 
 // «Файловый менеджер» (задача 2.29, #85): все файлы организации с источником, ручная загрузка с
 // контрагентом, окно файла, область «Свои контрагенты» и уроки модуля в «Базе знаний».
@@ -11,13 +12,21 @@ const uniqueTag = () => `${Date.now().toString(36)}${randomBytes(3).toString('he
 
 type Contractor = { id: string; name: string };
 
-/** Загрузить файл через API, как это делает браузер: начать → PUT в хранилище → закончить. */
+/**
+ * Загрузить файл через API, как это делает браузер: начать → PUT в хранилище → закончить. Содержимое —
+ * настоящий маленький файл по расширению (окно просмотра проверяет тип по байтам).
+ */
 async function apiUpload(
   api: APIRequestContext,
   origin: string,
   data: Record<string, unknown> & { name: string },
 ) {
-  const size = 2048;
+  const body = data.name.endsWith('.png')
+    ? tinyPng()
+    : data.name.endsWith('.pdf')
+      ? tinyPdf()
+      : Buffer.alloc(2048, 7);
+  const size = body.length;
   const start = await api.post('/api/files/uploads', {
     headers: { origin },
     data: { source: { kind: 'manual', id: null }, size, ...data },
@@ -29,7 +38,7 @@ async function apiUpload(
   };
   const put = await api.put(ticket.upload.url, {
     headers: ticket.upload.headers,
-    data: Buffer.alloc(size, 7),
+    data: body,
   });
   expect(put.status(), await put.text()).toBe(200);
   const done = await api.post(`/api/files/${ticket.id}/complete`, { headers: { origin } });
@@ -110,14 +119,18 @@ test.describe('Этап 2: Файловый менеджер', () => {
     // По прямой ссылке чужой файл тоже не открыть.
     expect((await page.request.get(`/api/files/${ofOther}/link`)).status()).toBe(404);
 
-    // Окно файла: просмотр PDF, откуда, контрагент, кто загрузил, описание; «Готово» у ручной загрузки.
+    // Окно файла: просмотр PDF (из байтов файла, доработки 16.11.2026, блок 5), откуда, контрагент, кто
+    // загрузил, описание; «Скачать» — ссылкой; «Готово» у ручной загрузки.
     await fileRow(page, ofMine).getByText(`свой-${tag}.pdf`, { exact: true }).click();
     const card = page.getByRole('dialog', { name: `свой-${tag}.pdf` });
-    await expect(card.locator('[data-file-preview="pdf"]')).toHaveAttribute('src', /inline/);
+    await expect(card.locator('[data-file-preview="pdf"]')).toHaveAttribute('src', /^blob:/);
     await expect(card.getByText('Загружен вручную').first()).toBeVisible();
     await expect(card.getByText(mine.name)).toBeVisible();
     await expect(card.getByText('Подписанный договор')).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Скачать' })).toBeVisible();
+    await expect(card.locator('[data-fv-download]')).toHaveAttribute(
+      'href',
+      `/api/files/${ofMine}/download`,
+    );
     await card.getByRole('button', { name: 'Готово' }).click();
     await expect(card).toBeHidden();
   });
@@ -158,15 +171,41 @@ test.describe('Этап 2: Файловый менеджер', () => {
       name: `акт-${tag}.png`,
       source: { kind: 'task', id: task.id },
     });
+    const second = await apiUpload(page.request, origin, {
+      name: `счёт-${tag}.pdf`,
+      source: { kind: 'task', id: task.id },
+    });
 
     await openManager(page, isMobile, tag);
     const row = fileRow(page, file);
     await expect(row).toContainText(title);
     await row.getByText(`акт-${tag}.png`, { exact: true }).click();
     const card = page.getByRole('dialog', { name: `акт-${tag}.png` });
-    await expect(card.locator('[data-file-preview="image"] img')).toBeVisible();
+    await expect(card.locator('[data-fv="image"] [data-fv-img]')).toBeVisible();
     await card.getByRole('button', { name: 'Перейти к источнику' }).click();
-    await expect(page.getByRole('dialog', { name: title })).toBeVisible();
+    const taskCard = page.getByRole('dialog', { name: title });
+    await expect(taskCard).toBeVisible();
+
+    // Блок «Файлы» карточки: нажатие на файл — окно просмотра поверх карточки, «‹ ›» — файлы блока
+    // (доработки 16.11.2026, блок 5; прототип v126). Закрыл просмотр — карточка задачи на месте.
+    await taskCard.locator(`[data-file-open="${file}"]`).click();
+    const viewer = page.locator('[data-file-viewer]');
+    await expect(viewer).toHaveAttribute('data-file-viewer', file);
+    await expect(page.getByRole('dialog', { name: `акт-${tag}.png` })).toBeVisible();
+    await expect(page.locator('[data-fv-n]')).toHaveText(/из 2$/);
+    const step = (await page.locator('[data-fv-next]').isEnabled())
+      ? page.locator('[data-fv-next]')
+      : page.locator('[data-fv-prev]');
+    await step.click();
+    await expect(viewer).toHaveAttribute('data-file-viewer', second);
+    await expect(page.locator('[data-file-preview="pdf"]')).toHaveAttribute('src', /^blob:/);
+    await page
+      .getByRole('dialog', { name: `счёт-${tag}.pdf` })
+      .getByRole('button', { name: 'Закрыть' })
+      .last()
+      .click();
+    await expect(viewer).toHaveCount(0);
+    await expect(taskCard).toBeVisible();
   });
 
   test('(п. 21) «Загрузить файл вручную» из урока: окно загрузки, файл с комментарием, шаг засчитан; выключенные «Файлы в карточках» скрывают уроки модуля, включённые — возвращают', async ({

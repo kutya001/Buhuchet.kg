@@ -1,6 +1,6 @@
 'use client';
 
-import { bishkekDate, bishkekTime, filePreviewKind, formatDateRu } from '@buhuchet/domain';
+import { bishkekDate, bishkekTime, formatDateRu } from '@buhuchet/domain';
 import { FileLink, type FileLinkInfo, type FileManagerRow } from '@buhuchet/shared';
 import {
   Box,
@@ -14,141 +14,154 @@ import {
   KeyValues,
   linkButtonClass,
   Modal,
-  Note,
   type KeyValueItem,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useId, useState } from 'react';
 import { api, apiFailure } from '../api-client';
 import { useT } from '../l10n/provider';
+import type { Translate } from '../l10n/translate';
 import { ContractorSelect } from '../shell/contractor-select';
 import { FileNoteInput } from './attach-dialog';
-import { fileKindIcon, fileKindText, fileTypeText } from './file-columns';
+import { fileKindIcon, fileKindText } from './file-columns';
 import { fileLinkText, fileSourceWithLinks } from './file-links';
-import { formContractorsQuery, fileSizeText } from './files-data';
+import { FileViewer } from './file-viewer';
+import { formContractorsQuery } from './files-data';
 
-/** Ссылка на просмотр картинки или PDF в окне файла (на 15 минут). */
-const viewQuery = (id: string) => ({
-  queryKey: ['files', 'view', id],
-  queryFn: async () => {
-    const res = await api.api.files[':id'].view.$get({ param: { id } });
-    if (!res.ok) throw await apiFailure(res);
-    return FileLink.parse(await res.json());
-  },
-  // Ссылка живёт 15 минут: открытое заново окно берёт свежую.
-  staleTime: 5 * 60_000,
-});
-
-/**
- * Просмотр в окне: картинка или PDF; остальное — значок, тип и размер. `view` — запрос ссылки на
- * просмотр (у файла записи — `…/view`, у отправленного контрагентом — `/files/sent/{id}/link`).
- */
-export function FilePreview({
-  file,
-  view,
-}: {
-  file: { name: string; contentType: string; size: number };
-  view: { queryKey: readonly unknown[]; queryFn: () => Promise<FileLink>; staleTime?: number };
-}) {
-  const t = useT();
-  const kind = filePreviewKind(file.contentType);
-  const link = useQuery({ ...view, enabled: kind !== null });
-  const meta = t('files.window.meta', {
-    ext: fileTypeText(t, file.name),
-    size: fileSizeText(t, file.size),
-  });
-  if (kind && link.data) {
-    return kind === 'image' ? (
-      <div data-file-preview="image" className="grid place-items-center">
-        {/* Картинка из хранилища по подписанной ссылке на 15 минут. */}
-        <img
-          src={link.data.url}
-          alt={file.name}
-          referrerPolicy="no-referrer"
-          className="max-h-[60vh] max-w-full rounded-[10px] object-contain"
-        />
-      </div>
-    ) : (
-      <div className="flex flex-col items-end gap-1.5">
-        <iframe
-          data-file-preview="pdf"
-          src={link.data.url}
-          title={file.name}
-          referrerPolicy="no-referrer"
-          className="h-[60vh] w-full rounded-[10px] border border-line bg-raised"
-        />
-        {/* Браузер телефона PDF во фрейме часто не показывает — открыть его отдельно. */}
-        <a
-          href={link.data.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          data-file-open-tab=""
-          className="text-[13px] break-words text-link"
-        >
-          {t('files.window.open_tab')}
-        </a>
-      </div>
-    );
-  }
-  return (
-    <Box>
-      <div
-        data-file-preview="none"
-        className="flex min-h-[180px] flex-col items-center justify-center gap-3 text-center"
-      >
-        <span className="inline-block scale-[2.2] text-muted">
-          <Icon name="file" />
-        </span>
-        <b>{meta}</b>
-        {kind && link.isError ? (
-          <Note tone="bad">{t('files.window.preview_error')}</Note>
-        ) : kind ? null : (
-          <Hint>{t('files.window.no_preview')}</Hint>
-        )}
-      </div>
-    </Box>
-  );
+/** Байты файла для окна просмотра: подписанная ссылка хранилища на 15 минут (право «Просматривать файлы»). */
+export async function fileBytesUrl(id: string): Promise<string> {
+  const res = await api.api.files[':id'].link.$get({ param: { id } });
+  if (!res.ok) throw await apiFailure(res);
+  return FileLink.parse(await res.json()).url;
 }
 
+/** «Скачать» в окне просмотра: переход на подписанную ссылку хранилища. */
+export const fileDownloadUrl = (id: string) => `/api/files/${encodeURIComponent(id)}/download`;
+
 /**
- * Окно файла (прототип modules/files.js, `openFile`): просмотр картинки или PDF (остальное — значок,
- * тип и размер), «Откуда», «Источник», «Контрагент», кто и когда загрузил, «Заменён» (кто и когда —
- * прототип v95) и примечание (нет — «нет»); «Скачать», «Изменить» (без права «Загружать файлы» —
- * недоступна, с причиной) и «Перейти к источнику» — у файла записи, «Готово» — у загруженного вручную.
- * У файла контрагента, прикреплённого к записям (доработки 16.11.2026, блок 2; прототип v124): записи в
- * «Источнике» — ссылки на их окна (`data-fol`), «Удалить» — «Удалить отовсюду» (`fo-del`).
+ * Окно файла (прототип modules/files.js, `openFile` → `fileView`, v126): просмотр файла (доработки
+ * 16.11.2026, блок 5 — `FileViewer`, «‹ ›» по файлам списка), под ним «Откуда», «Источник»,
+ * «Контрагент», кто и когда загрузил, «Заменён» (кто и когда — прототип v95) и примечание (нет — «нет»);
+ * «Скачать», «Изменить» (без права «Загружать файлы» — недоступна, с причиной) и «Перейти к источнику» —
+ * у файла записи, «Готово» — у загруженного вручную. У файла контрагента, прикреплённого к записям
+ * (доработки 16.11.2026, блок 2; прототип v124): записи в «Источнике» — ссылки на их окна
+ * (`data-fol`), «Удалить» — «Удалить отовсюду» (`fo-del`).
  */
 export function FileWindow({
-  file,
+  files,
+  index,
   open,
   onClose,
-  onDownload,
   onSource,
   onEdit,
   onLink,
   onDelete,
 }: {
-  file: FileManagerRow;
+  /** Файлы списка на экране — для «‹ ›»; окно открывается на `index`. */
+  files: readonly FileManagerRow[];
+  index: number;
   open: boolean;
   onClose: () => void;
-  onDownload: () => void;
-  /** «Перейти к источнику»; нет — у файла нет записи. */
-  onSource: (() => void) | null;
+  /** «Перейти к источнику» файла; `null` — у файла нет записи. */
+  onSource: (file: FileManagerRow) => (() => void) | null;
   /** «Изменить» — окно «Изменить файл» открывает экран; нет — кнопки нет. */
-  onEdit?: () => void;
+  onEdit?: (file: FileManagerRow) => void;
   /** Запись ссылки из «Источника» — в её окне; нет — записи простым текстом. */
   onLink?: (link: FileLinkInfo) => void;
   /**
    * «Удалить» / «Удалить отовсюду» (без права — недоступна, с причиной); нет — кнопки нет. Окно остаётся
    * открытым до подтверждения (прототип `fDelDlg(f, () => m.close())`): вопрос — поверх окна.
    */
-  onDelete?: () => void;
+  onDelete?: (file: FileManagerRow) => void;
 }) {
   const t = useT();
-  // Надпись — по видимым ссылкам, как в меню «…» и в прототипе (`f.links.length`).
-  const linked = file.links.length > 0;
+  return (
+    <FileViewer
+      files={files}
+      index={index}
+      open={open}
+      onClose={onClose}
+      src={fileBytesUrl}
+      download={fileDownloadUrl}
+      sub={(file) =>
+        t('files.window.sub', {
+          kind: fileKindText(t, file.kind),
+          src: fileSourceWithLinks(t, file.source, file.links),
+        })
+      }
+      info={(file) => (
+        <div data-file-window={file.id}>
+          <Box>
+            <KeyValues items={fileInfoItems(t, file, onClose, onLink)} />
+          </Box>
+        </div>
+      )}
+      footer={(file) => {
+        const source = onSource(file);
+        return (
+          <>
+            {onEdit ? (
+              <button
+                type="button"
+                data-file-window-edit=""
+                className={buttonClass('default')}
+                disabled={!file.canEdit}
+                title={file.canEdit ? undefined : t('files.act.edit_reason')}
+                onClick={() => onEdit(file)}
+              >
+                <Icon name="edit" size="sm" />
+                {t('files.window.edit')}
+              </button>
+            ) : null}
+            {onDelete ? (
+              <button
+                type="button"
+                data-file-window-delete=""
+                className={buttonClass('danger')}
+                disabled={!file.canDelete}
+                title={file.canDelete ? undefined : t('err.file_delete_forbidden')}
+                onClick={() => onDelete(file)}
+              >
+                <Icon name="trash" size="sm" />
+                {t(file.links.length > 0 ? 'files.act.delete_all' : 'files.act.delete')}
+              </button>
+            ) : null}
+            <div className="flex-1" />
+            {source ? (
+              <button
+                type="button"
+                data-file-source=""
+                className={buttonClass('cta')}
+                onClick={() => {
+                  onClose();
+                  source();
+                }}
+              >
+                <Icon name={fileKindIcon(file.kind)} size="sm" />
+                {/* Файл контрагента с ссылками (прототип v124): кнопка ведёт в его файлы. */}
+                {file.links.length ? t('files.window.cp_files') : t('files.act.source')}
+              </button>
+            ) : (
+              <button type="button" className={buttonClass('cta')} onClick={onClose}>
+                {t('files.window.done')}
+              </button>
+            )}
+          </>
+        );
+      }}
+    />
+  );
+}
+
+/** Сведения о файле под просмотром. */
+function fileInfoItems(
+  t: Translate,
+  file: FileManagerRow,
+  onClose: () => void,
+  onLink: ((link: FileLinkInfo) => void) | undefined,
+): KeyValueItem[] {
   const replacedAt = file.replaced ? new Date(file.replaced.at) : null;
-  const items: KeyValueItem[] = [
+  return [
     { id: 'kind', label: t('files.window.kind'), value: fileKindText(t, file.kind) },
     {
       id: 'src',
@@ -218,85 +231,6 @@ export function FileWindow({
       ),
     },
   ];
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={file.name}
-      sub={t('files.window.sub', {
-        kind: fileKindText(t, file.kind),
-        src: fileSourceWithLinks(t, file.source, file.links),
-      })}
-      size="mid"
-      kind="card"
-      footer={
-        <>
-          <button
-            type="button"
-            data-file-download=""
-            className={buttonClass('default')}
-            onClick={onDownload}
-          >
-            <Icon name="download" size="sm" />
-            {t('files.act.download')}
-          </button>
-          {onEdit ? (
-            <button
-              type="button"
-              data-file-window-edit=""
-              className={buttonClass('default')}
-              disabled={!file.canEdit}
-              title={file.canEdit ? undefined : t('files.act.edit_reason')}
-              onClick={onEdit}
-            >
-              <Icon name="edit" size="sm" />
-              {t('files.window.edit')}
-            </button>
-          ) : null}
-          {onDelete ? (
-            <button
-              type="button"
-              data-file-window-delete=""
-              className={buttonClass('danger')}
-              disabled={!file.canDelete}
-              title={file.canDelete ? undefined : t('err.file_delete_forbidden')}
-              onClick={onDelete}
-            >
-              <Icon name="trash" size="sm" />
-              {t(linked ? 'files.act.delete_all' : 'files.act.delete')}
-            </button>
-          ) : null}
-          <div className="flex-1" />
-          {onSource ? (
-            <button
-              type="button"
-              data-file-source=""
-              className={buttonClass('cta')}
-              onClick={() => {
-                onClose();
-                onSource();
-              }}
-            >
-              <Icon name={fileKindIcon(file.kind)} size="sm" />
-              {/* Файл контрагента с ссылками (прототип v124): кнопка ведёт в его файлы. */}
-              {file.links.length ? t('files.window.cp_files') : t('files.act.source')}
-            </button>
-          ) : (
-            <button type="button" className={buttonClass('cta')} onClick={onClose}>
-              {t('files.window.done')}
-            </button>
-          )}
-        </>
-      }
-    >
-      <div data-file-window={file.id} className="flex flex-col gap-3.5">
-        <FilePreview file={file} view={viewQuery(file.id)} />
-        <Box>
-          <KeyValues items={items} />
-        </Box>
-      </div>
-    </Modal>
-  );
 }
 
 /** Что выбрано в окне «Загрузить файл». */
