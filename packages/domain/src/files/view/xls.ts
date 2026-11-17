@@ -373,7 +373,8 @@ function parseXlsSheet(
     const xfi = d.length >= 6 ? rdv.getUint16(4, true) : 0;
     switch (r.type) {
       case 0x0200:
-        if (d.length >= 8) dimRows = rdv.getUint32(4, true);
+        // Число строк из файла: у XLS — не больше 65 536.
+        if (d.length >= 8) dimRows = Math.min(65_536, rdv.getUint32(4, true));
         break;
       case 0x0055:
         if (d.length >= 2) defPx = colWidthPx(rdv.getUint16(0, true) + 0.43);

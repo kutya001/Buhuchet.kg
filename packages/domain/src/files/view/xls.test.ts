@@ -114,6 +114,16 @@ describe('старый Excel XLS в окне просмотра', () => {
     const [big, dates] = parseXls(file).sheets;
     expect(big!.rows).toHaveLength(5000);
     expect(big!.totalRows).toBe(50_000);
+    // Число строк из файла — не больше, чем у XLS (65 536).
+    const endless = cfbBytes([
+      {
+        name: 'Workbook',
+        data: xlsWorkbookStream([
+          { name: 'Лист', cells: cells.slice(0, 1), dimRows: 4_000_000_000 },
+        ]),
+      },
+    ]);
+    expect(parseXls(endless).sheets[0]!.totalRows).toBe(65_536);
     expect(dates!.rows[0]![0]!.v).toBe('01.01.1904');
   });
 

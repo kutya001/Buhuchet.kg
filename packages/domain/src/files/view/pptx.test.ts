@@ -91,11 +91,18 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(JSON.stringify(v)).not.toContain('evil.example');
   });
 
+  it('размер слайда из файла — от 1 до 56 дюймов, как у PowerPoint', async () => {
+    const tiny = await parsePptx(openZip(await pptxBytes([''], { width: 1, height: 1 })));
+    expect([tiny.w, tiny.h]).toEqual([914_400, 914_400]);
+    const huge = await parsePptx(openZip(await pptxBytes([''], { width: 1e15, height: 1e15 })));
+    expect([huge.w, huge.h]).toEqual([51_206_400, 51_206_400]);
+  });
+
   it('группа фигур пересчитывает координаты, таблица — текстом', async () => {
-    const grp = `<p:grpSp><p:nvGrpSpPr/><p:grpSpPr><a:xfrm><a:off x="1000" y="1000"/><a:ext cx="2000" cy="2000"/><a:chOff x="0" y="0"/><a:chExt cx="1000" cy="1000"/></a:xfrm></p:grpSpPr>${box(500, 500, 500, 500, '<a:p><a:r><a:t>в группе</a:t></a:r></a:p>')}</p:grpSp>`;
+    const grp = `<p:grpSp><p:nvGrpSpPr/><p:grpSpPr><a:xfrm><a:off x="100000" y="100000"/><a:ext cx="200000" cy="200000"/><a:chOff x="0" y="0"/><a:chExt cx="1000" cy="1000"/></a:xfrm></p:grpSpPr>${box(500, 500, 500, 500, '<a:p><a:r><a:t>в группе</a:t></a:r></a:p>')}</p:grpSp>`;
     const tbl = `<p:graphicFrame><p:nvGraphicFramePr/><p:xfrm><a:off x="0" y="0"/><a:ext cx="12192000" cy="685800"/></p:xfrm><a:graphic><a:graphicData><a:tbl><a:tr><a:tc><a:txBody><a:p><a:r><a:t>Налог</a:t></a:r></a:p></a:txBody></a:tc><a:tc><a:txBody><a:p><a:r><a:t>Сумма</a:t></a:r></a:p></a:txBody></a:tc></a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
     const v = await parsePptx(
-      openZip(await pptxBytes([grp + tbl], { width: 10000, height: 10000 })),
+      openZip(await pptxBytes([grp + tbl], { width: 1_000_000, height: 1_000_000 })),
     );
     const [g, t] = v.slides[0]!.items;
     expect(g).toMatchObject({ k: 'text', x: 0.2, y: 0.2, w: 0.1, h: 0.1 });

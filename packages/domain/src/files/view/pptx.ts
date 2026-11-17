@@ -28,8 +28,15 @@ export const SLIDE_MAX_PARTS = 5_000;
  * слайда файл может назвать хоть 300 раз.
  */
 export const SLIDES_MAX_PARTS = 200_000;
-/** Знаков текста во всей презентации — не больше. */
-export const SLIDES_MAX_CHARS = 16_000_000;
+/** Знаков текста во всей презентации — не больше (как у текстового файла). */
+export const SLIDES_MAX_CHARS = 2_000_000;
+/** Сторона слайда, EMU: от 1 до 56 дюймов, как у PowerPoint. */
+const SLIDE_SIDE_MIN = 914_400;
+const SLIDE_SIDE_MAX = 51_206_400;
+const slideSide = (v: string | undefined, def: number) => {
+  const n = Number(v ?? def);
+  return Number.isFinite(n) && n > 0 ? Math.min(SLIDE_SIDE_MAX, Math.max(SLIDE_SIDE_MIN, n)) : def;
+};
 /** Размер шрифта из файла — не больше, пт (предел PowerPoint — 4 000). */
 export const SLIDE_MAX_FONT_PT = 400;
 /** Уровень абзаца — 0…8, как у PowerPoint. */
@@ -358,8 +365,8 @@ export async function parsePptx(zip: Zip): Promise<SlidesView> {
   if (!presSrc) throw new ViewError('file_bad');
   const pres = parseXmlTree(presSrc, 200_000).root;
   const sz = childEl(pres ?? undefined, 'sldSz');
-  const W = Number(attrOf(sz, 'cx') ?? 12192000) || 12192000;
-  const H = Number(attrOf(sz, 'cy') ?? 6858000) || 6858000;
+  const W = slideSide(attrOf(sz, 'cx'), 12192000);
+  const H = slideSide(attrOf(sz, 'cy'), 6858000);
   const rels = await readRels(zip, presPart);
   const bag = new ImageBag(zip);
   const slides: SlideModel[] = [];

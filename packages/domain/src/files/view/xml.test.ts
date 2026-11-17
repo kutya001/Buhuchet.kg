@@ -11,7 +11,7 @@ import {
   textOf,
   ViewError,
 } from './xml';
-import { XML_MAX_CHARS, XML_MAX_NODES, xmlView } from './xmlview';
+import { XML_MAX_CHARS, XML_MAX_DECL, XML_MAX_NODES, xmlView } from './xmlview';
 
 const enc = new TextEncoder();
 
@@ -142,5 +142,16 @@ describe('безопасный XML окна просмотра', () => {
     ]);
     expect(xmlView(cp).root!.c).toEqual(['Привет']);
     expect(xmlView(enc.encode('просто текст')).root).toBeNull();
+  });
+
+  it('объявление <?xml …?> — до 1 000 знаков и в общем счёте; куски текста между комментариями — одним (защита, п. И-12)', () => {
+    const decl = xmlView(
+      enc.encode(`<?xml version="1.0" x="${'я'.repeat(XML_MAX_CHARS)}"?><r><i>текст</i></r>`),
+    );
+    expect(decl.decl!.length).toBeLessThanOrEqual(XML_MAX_DECL + 10);
+    expect(decl.root!.c).toEqual([{ n: 'i', a: [], c: ['текст'] }]);
+    const pieces = xmlView(enc.encode(`<r>${'а<!---->'.repeat(50_000)}</r>`));
+    expect(pieces.root!.c).toHaveLength(1);
+    expect(pieces.root!.c[0]).toBe(Array.from({ length: 50_000 }, () => 'а').join(' '));
   });
 });

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { xlsxBytes, zipBytes } from './fixtures';
 import { parseFileView } from './index';
-import { formatCellText } from './numfmt';
+import { formatCellNumber, formatCellText } from './numfmt';
+import { parseCsv } from './text';
 import {
   capBookText,
   cellRef,
@@ -16,7 +17,9 @@ import {
   SHEET_MAX_COL_PX,
   SHEET_MAX_COLS,
   SHEET_MAX_MERGES,
+  SHEET_ALL_ROWS,
   SHEET_MAX_NAME,
+  SHEET_MAX_PLACES,
   SHEET_MAX_ROW_PX,
   SHEET_MAX_ROWS,
   sheetFormatCode,
@@ -183,6 +186,34 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(s.cols).toHaveLength(3);
     const dimOnly = `<worksheet><dimension ref="A1:B9000"/><sheetData><row><c><v>1</v></c></row>${'<row><c><v>1</v></c></row>'.repeat(SHEET_MAX_ROWS)}</sheetData></worksheet>`;
     expect(parseWorksheet('b', dimOnly, [], [], false).totalRows).toBe(9000);
+    // Число строк из файла — не больше, чем у Excel: в «Показаны первые … из …» не попадает «∞».
+    const endless = `<worksheet><dimension ref="A1:B99999999999"/><sheetData><row r="1"><c><v>1</v></c></row>${'<row><c><v>1</v></c></row>'.repeat(SHEET_MAX_ROWS)}<row r="999999999999"><c><v>1</v></c></row></sheetData></worksheet>`;
+    expect(parseWorksheet('b', endless, [], [], false).totalRows).toBe(SHEET_ALL_ROWS);
+  });
+
+  it('лист — до 200 000 мест «строки × видимые столбцы»; скрытые строки и столбцы не считаются (защита, п. И-12)', () => {
+    const wide = (hiddenRows: number[], cols = Array.from({ length: 256 }, () => 64)) =>
+      capBookText({
+        kind: 'sheet',
+        sheets: [
+          {
+            ...csvSheet(
+              'a',
+              Array.from({ length: 5000 }, () => []),
+              5000,
+            ),
+            cols,
+            hiddenRows,
+          },
+        ],
+      }).sheets[0]!;
+    expect(wide([]).rows).toHaveLength(Math.floor(SHEET_MAX_PLACES / 256));
+    expect(wide(Array.from({ length: 1000 }, (_, i) => i)).rows).toHaveLength(
+      1000 + Math.floor(SHEET_MAX_PLACES / 256),
+    );
+    // Скрытые столбцы (ширина 0) окно не рисует.
+    const half = Array.from({ length: 256 }, (_, i) => (i < 40 ? 64 : 0));
+    expect(wide([], half).rows).toHaveLength(5000);
   });
 
   it('объединения из файла в пределах окна: огромный диапазон обрезан, пересекающиеся и лишние отброшены (защита, п. И-12)', () => {
@@ -342,7 +373,7 @@ describe('Excel XLSX в окне просмотра', () => {
     expect(colWidthPx(-3)).toBe(0);
   });
 
-  it('CSV — в том же пределе мест книги (защита, п. И-12)', async () => {
+  it('CSV — в пределе мест листа «строки × видимые столбцы» (защита, п. И-12)', async () => {
     const line = `${Array.from({ length: 300 }, () => '1').join(',')}\n`;
     const csv = await parseFileView(
       'big.csv',
@@ -351,8 +382,17 @@ describe('Excel XLSX в окне просмотра', () => {
     if (csv.kind !== 'sheet') throw new Error(csv.kind);
     const sheet = csv.sheets[0]!;
     expect(sheet.colsCut).toBe(true);
-    expect(sheet.rows).toHaveLength(Math.floor(SHEET_MAX_BOOK_CELLS / SHEET_MAX_COLS));
+    expect(sheet.rows).toHaveLength(Math.floor(SHEET_MAX_PLACES / SHEET_MAX_COLS));
+    // Строка CSV из миллиона разделителей — не больше 257 полей ещё при разборе.
+    expect(
+      parseCsv(`${','.repeat(1_000_000)}\n`, 10, ',', SHEET_MAX_COLS + 1).rows[0],
+    ).toHaveLength(SHEET_MAX_COLS + 1);
     expect(sheet.totalRows).toBe(SHEET_MAX_ROWS);
+  });
+
+  it('формат с сотней знаков после запятой — до 30, книга открывается (защита, п. И-12)', () => {
+    expect(formatCellNumber(1.5, `0.${'0'.repeat(150)}`, false)).toBe(`1,${'5'.padEnd(30, '0')}`);
+    expect(() => formatCellNumber(0.5, `hh:mm:ss.${'0'.repeat(150)}`, false)).not.toThrow();
   });
 
   it('помощники листа и CSV', () => {

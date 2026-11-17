@@ -58,13 +58,16 @@ export interface MergeMap {
 
 export const cellKey = (r: number, c: number) => `${r}:${c}`;
 
-/** Ячеек под объединениями, которые окно отмечает, — не больше (столько и рисуется: 5 000 × 256). */
-export const MERGE_SKIP_MAX = 5_000 * 256;
+/**
+ * Ячеек под объединениями, которые окно отмечает, — не больше: мест листа в окне не больше
+ * 200 000 (`SHEET_MAX_PLACES` домена).
+ */
+export const MERGE_SKIP_MAX = 200_000;
 
 /**
- * Объединения нарисованных строк (`drawn` — сколько строк сверху на экране): строки ниже не
- * просматриваются. Объединения из разбора не пересекаются и в пределах листа; здесь ещё общий предел
- * отмеченных ячеек — главный поток страницы не зависает и на чужой модели.
+ * Объединения листа (`drawn` — только по стольким строкам сверху). Объединения из разбора
+ * не пересекаются и в пределах листа; здесь ещё общий предел отмеченных ячеек — главный поток
+ * страницы не зависает и на чужой модели. Окно считает их один раз на лист.
  */
 export function mergeMap(sheet: SheetView, drawn = Number.POSITIVE_INFINITY): MergeMap {
   const span = new Map<string, { rows: number; cols: number }>();
@@ -114,6 +117,17 @@ export function xmlHits(root: XmlViewNode, q: string): { hits: Set<XmlPath>; ope
   return { hits, open };
 }
 
+/**
+ * Ветки глубже — свёрнуты, пока их не развернули: глубокое дерево из чужого файла не раскладывается
+ * целиком при открытии (у обычного XML столько уровней не бывает).
+ */
+export const XML_OPEN_DEPTH = 32;
+/** Уровень узла по пути: корень «0» — 0. */
+export const xmlDepth = (p: XmlPath) => p.split('-').length - 1;
+/** Свёрнута ли ветка: по уровню, переключению пользователя (`toggled`) и найденному (`open`). */
+export const xmlClosed = (p: XmlPath, toggled: ReadonlySet<XmlPath>, open: ReadonlySet<XmlPath>) =>
+  !open.has(p) && xmlDepth(p) >= XML_OPEN_DEPTH !== toggled.has(p);
+
 /** Все пути веток (узлов с детьми-элементами) — для «Свернуть всё» (корень остаётся открытым). */
 export function xmlBranches(root: XmlViewNode): XmlPath[] {
   const out: XmlPath[] = [];
@@ -129,8 +143,61 @@ export function xmlBranches(root: XmlViewNode): XmlPath[] {
   return out;
 }
 
-/** Строк листа рисуется за раз (дальше — по прокрутке), чтобы большой лист открывался сразу. */
+/** Знаков ячейки листа на экране — не больше (как Excel); полный текст — в подсказке. */
+export const SHEET_CELL_SHOW = 1_024;
+export const sheetCellText = (v: string) =>
+  v.length > SHEET_CELL_SHOW ? v.slice(0, SHEET_CELL_SHOW) : v;
+/** Высота ячейки с переносом — не больше, px (предел высоты строки Excel — 409 пт). */
+export const SHEET_WRAP_MAX_PX = 545;
+
+/**
+ * Шаг отрисовки листа (дальше — по прокрутке или к найденному, следующей задачей): видимых строк —
+ * до `SHEET_RENDER_STEP`, мест «строки × видимые столбцы» — до `SHEET_STEP_PLACES`, знаков
+ * на экране — до `SHEET_STEP_CHARS`. Так и большой, и широкий лист открывается сразу.
+ */
 export const SHEET_RENDER_STEP = 300;
-/** Сколько строк листа нарисовать, чтобы строка `row` (с 0) была видна: кратно `SHEET_RENDER_STEP`. */
-export const sheetRowsFor = (row: number) =>
-  Math.ceil((row + 1) / SHEET_RENDER_STEP) * SHEET_RENDER_STEP;
+export const SHEET_STEP_PLACES = 25_000;
+export const SHEET_STEP_CHARS = 200_000;
+
+/**
+ * До какой строки (не включая) рисовать шаг, начатый со строки `from`; `width` — видимых столбцов.
+ * В шаге — хоть одна видимая строка, если она ещё есть: рисование всегда идёт вперёд.
+ */
+export function sheetStepEnd(
+  sheet: SheetView,
+  from: number,
+  width: number,
+  hidden: ReadonlySet<number>,
+): number {
+  let rows = 0;
+  let places = 0;
+  let chars = 0;
+  let r = from;
+  for (; r < sheet.rows.length; r++) {
+    if (hidden.has(r)) continue;
+    let size = 0;
+    for (const cell of sheet.rows[r]!) if (cell) size += Math.min(cell.v.length, SHEET_CELL_SHOW);
+    if (
+      rows > 0 &&
+      (rows >= SHEET_RENDER_STEP ||
+        places + width > SHEET_STEP_PLACES ||
+        chars + size > SHEET_STEP_CHARS)
+    )
+      break;
+    rows++;
+    places += width;
+    chars += size;
+  }
+  return r;
+}
+
+/** Найденные ячейки по строкам: строка → столбцы (строке без найденного — ничего). */
+export function hitsByRow(hits: readonly [number, number][]): Map<number, Set<number>> {
+  const m = new Map<number, Set<number>>();
+  for (const [r, c] of hits) {
+    let s = m.get(r);
+    if (!s) m.set(r, (s = new Set()));
+    s.add(c);
+  }
+  return m;
+}

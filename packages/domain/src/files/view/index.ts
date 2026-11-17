@@ -6,7 +6,7 @@
 import { parseDocx, type DocView } from './docx';
 import { viewImageType } from './ooxml';
 import { parsePptx, type SlidesView } from './pptx';
-import { capBookText, csvSheet, SHEET_MAX_ROWS, type BookView } from './sheet';
+import { capBookText, csvSheet, SHEET_MAX_COLS, SHEET_MAX_ROWS, type BookView } from './sheet';
 import { decodeText, parseCsv, textView, type TextView } from './text';
 import { isCfb, parseXls } from './xls';
 import { parseXlsx } from './xlsx';
@@ -86,7 +86,7 @@ export async function parseFileView(name: string, bytes: Uint8Array): Promise<Fi
       return { kind: 'none' };
     case 'csv': {
       const { text } = decodeText(bytes);
-      const { rows, total } = parseCsv(text, SHEET_MAX_ROWS);
+      const { rows, total } = parseCsv(text, SHEET_MAX_ROWS, undefined, SHEET_MAX_COLS + 1);
       const base = name.replace(/\.[^.]*$/, '') || name;
       return capBookText({ kind: 'sheet', sheets: [csvSheet(base, rows, total)] });
     }

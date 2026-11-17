@@ -8,7 +8,6 @@ import {
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import {
-  bytesBase64,
   DocumentView,
   SheetBookView,
   SheetTable,
@@ -18,17 +17,25 @@ import {
   type FileViewLabels,
 } from './file-view';
 import {
+  hitsByRow,
   MERGE_SKIP_MAX,
   mergeMap,
   rotateNext,
   scrollsToward,
   searchKey,
+  SHEET_CELL_SHOW,
+  sheetCellText,
   SHEET_RENDER_STEP,
+  SHEET_STEP_CHARS,
+  SHEET_STEP_PLACES,
   sheetHits,
-  sheetRowsFor,
+  sheetStepEnd,
   swipeDirection,
   xmlBranches,
+  xmlClosed,
+  xmlDepth,
   xmlHits,
+  XML_OPEN_DEPTH,
   zoomNext,
   ZOOM_MAX,
   ZOOM_MIN,
@@ -157,10 +164,61 @@ describe('правила окна просмотра', () => {
     expect(mergeMap({ ...tall, rows: [[], [], []] }).span.get('0:0')).toEqual({ rows: 3, cols: 2 });
   });
 
-  it('найденное дальше нарисованного: строк рисуется до него, кратно шагу', () => {
-    expect(sheetRowsFor(0)).toBe(SHEET_RENDER_STEP);
-    expect(sheetRowsFor(SHEET_RENDER_STEP)).toBe(2 * SHEET_RENDER_STEP);
-    expect(sheetRowsFor(4999)).toBe(5100);
+  it('шаг отрисовки листа — по строкам, местам и знакам; хоть одна строка, скрытые не считаются (п. И-12)', () => {
+    const none = new Set<number>();
+    const empty = (n: number): SheetView => ({
+      ...sheet,
+      rows: Array.from({ length: n }, () => []),
+    });
+    // Узкий лист — до 300 строк за шаг.
+    expect(sheetStepEnd(empty(5000), 0, 3, none)).toBe(SHEET_RENDER_STEP);
+    expect(sheetStepEnd(empty(5000), 4900, 3, none)).toBe(5000);
+    // Широкий лист из пустых строк — по местам «строки × столбцы».
+    expect(sheetStepEnd(empty(5000), 0, 256, none)).toBe(Math.floor(SHEET_STEP_PLACES / 256));
+    // Скрытые строки шаг не тратят.
+    const hidden = new Set(Array.from({ length: 1000 }, (_, i) => i));
+    expect(sheetStepEnd(empty(5000), 0, 3, hidden)).toBe(1000 + SHEET_RENDER_STEP);
+    expect(sheetStepEnd(empty(1000), 0, 3, hidden)).toBe(1000);
+    // Длинный текст — по знакам: в ячейке на экране до 1 024.
+    const long: SheetView = {
+      ...sheet,
+      rows: Array.from({ length: 500 }, () => [{ v: 'я'.repeat(30_000) }]),
+    };
+    expect(sheetStepEnd(long, 0, 1, none)).toBe(Math.floor(SHEET_STEP_CHARS / SHEET_CELL_SHOW));
+    // Строка больше шага — всё равно рисуется: окно не встаёт.
+    expect(sheetStepEnd(empty(10), 3, SHEET_STEP_PLACES * 2, none)).toBe(4);
+    expect(sheetCellText('я'.repeat(5000))).toHaveLength(SHEET_CELL_SHOW);
+    expect(sheetCellText('коротко')).toBe('коротко');
+  });
+
+  it('найденные ячейки — по строкам', () => {
+    const m = hitsByRow([
+      [2, 0],
+      [2, 3],
+      [7, 1],
+    ]);
+    expect([...(m.get(2) ?? [])]).toEqual([0, 3]);
+    expect(m.has(3)).toBe(false);
+  });
+
+  it('XML: ветки глубже 32 уровней свёрнуты, пока их не развернули или там не найдено (п. И-12)', async () => {
+    const none = new Set<string>();
+    const deep = Array.from({ length: XML_OPEN_DEPTH + 1 }, () => '0').join('-');
+    expect(xmlDepth('0')).toBe(0);
+    expect(xmlDepth(deep)).toBe(XML_OPEN_DEPTH);
+    expect(xmlClosed('0-1', none, none)).toBe(false);
+    expect(xmlClosed(deep, none, none)).toBe(true);
+    expect(xmlClosed(deep, new Set([deep]), none)).toBe(false);
+    expect(xmlClosed('0-1', new Set(['0-1']), none)).toBe(true);
+    expect(xmlClosed('0-1', new Set(['0-1']), new Set(['0-1']))).toBe(false);
+    const xml = await model(
+      'deep.xml',
+      enc(`${'<a>'.repeat(40)}<b>в глубине</b>${'</a>'.repeat(40)}`),
+      'xml',
+    );
+    const html = renderToStaticMarkup(<XmlFileView model={xml} labels={labels} />);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('в глубине');
   });
 
   it('XML: найденное и ветки-предки раскрываются, «Свернуть всё» не трогает корень', async () => {
@@ -177,18 +235,12 @@ describe('правила окна просмотра', () => {
     expect([...xmlHits(root, 'ТЕКСТ').open]).toEqual(['0', '0-1']);
     expect(xmlBranches(root)).toEqual(['0-0', '0-1']);
   });
-
-  it('base64 больших картинок — частями, без переполнения стека', () => {
-    const big = new Uint8Array(200_000).fill(65);
-    expect(bytesBase64(big)).toBe(btoa('A'.repeat(200_000)));
-    expect(bytesBase64(new Uint8Array([0xff, 0, 0x80]))).toBe('/wCA');
-  });
 });
 
 describe('просмотр Excel', () => {
   it('буквы столбцов и номера строк, жирный, число вправо, скрытые строки и столбцы не рисуются', () => {
     const html = renderToStaticMarkup(
-      <SheetTable sheet={sheet} hits={new Set(['2:0'])} current="2:0" />,
+      <SheetTable sheet={sheet} hits={[[2, 0]]} current={[2, 0]} />,
     );
     expect(html).toContain('>A<');
     expect(html).toContain('>B<');
@@ -200,6 +252,35 @@ describe('просмотр Excel', () => {
     expect(html).toMatch(/data-cell="0:3"[^>]*class="[^"]*text-right/);
     expect(html).toMatch(/data-cell="0:0"[^>]*class="[^"]*font-bold/);
     expect(html).toMatch(/data-cell="2:0"[^>]*class="[^"]*bg-caution-bg/);
+  });
+
+  it('ячейка: на экране до 1 024 знаков, с переносом — не выше строки Excel, весь текст в подсказке (п. И-12)', () => {
+    const long = 'а'.repeat(5000);
+    const html = renderToStaticMarkup(
+      <SheetTable
+        sheet={{ ...sheet, rows: [[{ v: long, wrap: true }]], hiddenRows: [], merges: [] }}
+        hits={[]}
+        current={null}
+      />,
+    );
+    expect(html).toContain('max-height:545px');
+    expect(html).toContain(`>${'а'.repeat(SHEET_CELL_SHOW)}<`);
+    expect(html).toContain(`title="${long}"`);
+  });
+
+  it('широкий лист из пустых строк рисуется шагом по местам, дальше — отметка «ещё» (п. И-12)', () => {
+    const wide: SheetView = {
+      ...sheet,
+      cols: Array.from({ length: 256 }, () => 64),
+      rows: Array.from({ length: 1000 }, () => []),
+      hiddenRows: [],
+      merges: [],
+    };
+    const html = renderToStaticMarkup(<SheetTable sheet={wide} hits={[]} current={null} />);
+    const n = Math.floor(SHEET_STEP_PLACES / 256);
+    expect(html).toContain(`data-cell="${n - 1}:255"`);
+    expect(html).not.toContain(`data-cell="${n}:0"`);
+    expect(html).toContain('data-fv-more-rows');
   });
 
   it('CSV: один лист — без вкладок; 50 000 строк — первые 5 000 и «скачайте»', async () => {

@@ -79,6 +79,7 @@ export function parseCsv(
   text: string,
   maxRows: number,
   delim = csvDelimiter(text),
+  maxCols = Number.POSITIVE_INFINITY,
 ): { rows: string[][]; total: number } {
   const rows: string[][] = [];
   let row: string[] = [];
@@ -86,8 +87,9 @@ export function parseCsv(
   let inQ = false;
   let total = 0;
   const n = text.length;
+  // Полей строки — не больше `maxCols`: строка из миллионов разделителей не копит массив.
   const push = () => {
-    row.push(field);
+    if (row.length < maxCols) row.push(field);
     field = '';
   };
   const endRow = () => {

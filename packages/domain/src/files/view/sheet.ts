@@ -10,6 +10,8 @@ export const SHEET_MAX_ROWS = 5_000;
 export const SHEET_MAX_COLS = 256;
 /** Листов книги — не больше. */
 export const SHEET_MAX_SHEETS = 100;
+/** Строк листа — не больше (Excel; XLS — 65 536): число строк из файла в «Показаны первые … из …». */
+export const SHEET_ALL_ROWS = 1_048_576;
 /** Знаков в названии листа — не больше. */
 export const SHEET_MAX_NAME = 100;
 /** Объединений ячеек на лист — не больше. */
@@ -18,13 +20,22 @@ export const SHEET_MAX_MERGES = 5_000;
 export const SHEET_MERGE_CELLS_BUDGET = 4_000_000;
 /** Знаков в ячейке — не больше (как в Excel). */
 export const SHEET_MAX_CELL_CHARS = 32_767;
-/** Знаков во всех ячейках книги — не больше: модель копируется из потока разбора в окно. */
-export const SHEET_MAX_BOOK_CHARS = 16_000_000;
+/**
+ * Знаков во всех ячейках книги — не больше: модель копируется из потока разбора в окно, поиск идёт
+ * по всем ячейкам. Лист окно рисует шагами и в ячейке показывает до 1 024 знаков, поэтому предел
+ * выше, чем у документа (тот раскладывается целиком).
+ */
+export const SHEET_MAX_BOOK_CHARS = 4_000_000;
 /**
  * Мест ячеек во всей книге — не больше (полный лист 5 000 × 256 — 1,28 млн): считаются и пустая
  * ячейка с заливкой (не стоит ни знака), и пустые места строки до ячейки — окно копирует каждое.
  */
 export const SHEET_MAX_BOOK_CELLS = 1_000_000;
+/**
+ * Мест листа в окне — строк × видимых столбцов — не больше: окно рисует каждое место, и пустое
+ * (лист из одной ячейки IV1 и 5 000 пустых строк — 1,28 млн мест). Дальше — «Показаны первые …».
+ */
+export const SHEET_MAX_PLACES = 200_000;
 /** Код формата числа длиннее — «Общий» (предел Excel): «@» в коде размножает текст ячейки. */
 export const SHEET_MAX_FORMAT_CHARS = 255;
 
@@ -139,7 +150,8 @@ export interface BookView {
 
 /**
  * Предел книги для окна — второй рубеж после счёта при разборе: ячейка — до `SHEET_MAX_CELL_CHARS`
- * знаков, вся книга — до `SHEET_MAX_BOOK_CHARS` знаков и `SHEET_MAX_BOOK_CELLS` ячеек; дальше строки
+ * знаков, вся книга — до `SHEET_MAX_BOOK_CHARS` знаков и `SHEET_MAX_BOOK_CELLS` ячеек, лист — до
+ * `SHEET_MAX_PLACES` мест «строки × видимые столбцы»; дальше строки
  * не показываются («Показаны первые …», как у предела строк). Одна общая строка XLSX на тысячах
  * ячеек при передаче из потока разбора копируется в каждую.
  */
@@ -149,7 +161,16 @@ export function capBookText(book: BookView): BookView {
   for (const sheet of book.sheets) {
     // Название листа — вкладка окна (у Excel — до 31 знака).
     if (sheet.name.length > SHEET_MAX_NAME) sheet.name = sheet.name.slice(0, SHEET_MAX_NAME);
+    // Окно рисует у каждой видимой строки все видимые столбцы листа.
+    const width = Math.max(1, sheet.cols.filter((w) => w > 0).length);
+    const hidden = new Set(sheet.hiddenRows);
+    let places = 0;
     for (let r = 0; r < sheet.rows.length; r++) {
+      if (!hidden.has(r)) places += width;
+      if (places > SHEET_MAX_PLACES) {
+        sheet.rows.length = r;
+        break;
+      }
       const row = sheet.rows[r]!;
       let size = 0;
       for (const cell of row) {

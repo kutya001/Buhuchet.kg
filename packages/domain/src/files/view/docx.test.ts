@@ -11,6 +11,7 @@ import {
 } from './docx';
 import type { DocBlock } from './docx';
 import { docxBytes, docxImage, zipBytes } from './fixtures';
+import { VIEW_MAX_IMAGE_REFS } from './ooxml';
 import { ViewError } from './xml';
 import { openZip } from './zip';
 
@@ -128,6 +129,13 @@ describe('Word DOCX в окне просмотра', () => {
       ],
     ]);
     expect(t.rows[0]![0]!.blocks).toEqual([{ k: 'p', runs: [{ t: 'Шапка' }] }]);
+  });
+
+  it('одна картинка в 1 500 местах — показана в первых 1 000 (защита, п. И-12)', async () => {
+    const doc = await parseDocx(openZip(await docxBytes(p(docxImage('rIdImg')).repeat(1500))));
+    const shown = doc.blocks.flatMap((b) => (b.k === 'p' ? b.runs : [])).filter((x) => x.img);
+    expect(shown).toHaveLength(VIEW_MAX_IMAGE_REFS);
+    expect(Object.keys(doc.images)).toHaveLength(1);
   });
 
   it('картинки из файла показываются, внешние и неподдерживаемые — нет; ссылка — только текст', async () => {

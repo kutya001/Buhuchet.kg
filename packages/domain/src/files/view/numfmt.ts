@@ -239,8 +239,9 @@ function formatNumberSection(v: number, s: Section): string {
   const decPat = dot < 0 ? '' : pat.slice(dot + 1).replace(/[^0#?]/g, '');
   const grouping = /[0#?],[0#?]/.test(intPat);
   const minInt = (intPat.match(/0/g) ?? []).length;
-  const decMax = decPat.length;
-  const decMin = (decPat.match(/0/g) ?? []).length;
+  // Знаков после запятой — не больше 30 (предел Excel; `toFixed` больше 100 не умеет).
+  const decMax = Math.min(30, decPat.length);
+  const decMin = Math.min(decMax, (decPat.match(/0/g) ?? []).length);
   let body: string;
   if (eIdx > 0) {
     const expTok = toks
@@ -452,7 +453,7 @@ function formatDateSection(v: number, s: Section, date1904: boolean): string {
     } else if (c[0] === 's') out += c.length === 1 ? String(p.s) : two(p.s);
     else if (c === 'am/pm') out += p.h < 12 ? 'AM' : 'PM';
     else if (c === 'a/p') out += p.h < 12 ? 'A' : 'P';
-    else if (c[0] === '.') out += ',' + p.frac.toFixed(c.length - 1).slice(2);
+    else if (c[0] === '.') out += ',' + p.frac.toFixed(Math.min(9, c.length - 1)).slice(2);
   });
   return out;
 }

@@ -20,20 +20,34 @@ import {
   type XmlView,
   type XmlViewNode,
 } from '@buhuchet/domain';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
 import { buttonClass, iconButtonClass } from '../button';
 import { Icon } from '../icon';
 import type { IconName } from '../icons';
 import {
   cellKey,
+  hitsByRow,
   mergeMap,
   rotateNext,
-  SHEET_RENDER_STEP,
-  sheetRowsFor,
+  sheetCellText,
   sheetHits,
+  sheetStepEnd,
+  SHEET_WRAP_MAX_PX,
   xmlBranches,
+  xmlClosed,
+  xmlDepth,
   xmlHits,
+  XML_OPEN_DEPTH,
   zoomNext,
+  type MergeMap,
   type XmlPath,
 } from './file-view-model';
 
@@ -112,27 +126,34 @@ export function FileViewState({
   );
 }
 
-/** Байты в base64 частями: `String.fromCharCode(...)` с большим массивом переполняет стек. */
-export function bytesBase64(bytes: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < bytes.length; i += 0x8000)
-    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-
 /**
- * Адреса картинок модели — `data:` из байтов: тип уже проверен по содержимому и только PNG, JPEG, GIF или
- * WebP (не SVG), поэтому картинка ничего не выполняет и никуда не ходит; освобождать адрес не нужно.
+ * Адреса картинок модели — `blob:` из байтов, по одному на картинку: тип уже проверен по содержимому
+ * и только PNG, JPEG, GIF или WebP (не SVG), поэтому картинка ничего не выполняет и никуда не ходит.
+ * Одну картинку файл может показать в сотнях мест — короткий адрес не копирует её байты в каждое.
+ * Адреса освобождаются, когда модель сменилась или окно закрыто.
  */
 export function useImageUrls(
   images: Record<string, ViewImage> | undefined,
 ): Record<string, string> {
-  return useMemo(() => {
-    const urls: Record<string, string> = {};
-    for (const [k, img] of Object.entries(images ?? {}))
-      urls[k] = `data:${img.type};base64,${bytesBase64(img.bytes)}`;
-    return urls;
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    // Адреса — внешний ресурс: создаются после показа (отдельной микрозадачей, как ответ загрузки)
+    // и освобождаются при уходе; отменённый запуск (повтор эффекта в режиме разработки) их не создаёт.
+    let live = true;
+    let made: Record<string, string> = {};
+    queueMicrotask(() => {
+      if (!live) return;
+      for (const [k, img] of Object.entries(images ?? {}))
+        made[k] = URL.createObjectURL(new Blob([img.bytes as BlobPart], { type: img.type }));
+      setUrls(made);
+    });
+    return () => {
+      live = false;
+      for (const u of Object.values(made)) URL.revokeObjectURL(u);
+      made = {};
+    };
   }, [images]);
+  return urls;
 }
 
 // ── Картинка и PDF ──
@@ -273,94 +294,174 @@ function cellClass(cell: SheetCell | null | undefined, hit: boolean, current: bo
     .join(' ');
 }
 
-/** Лист: буквы столбцов и номера строк закреплены, объединения, скрытые строки и столбцы не рисуются. */
+interface SheetCol {
+  w: number;
+  c: number;
+}
+
+/** Строка листа: перерисовывается, только когда у неё сменилось найденное. */
+const SheetRow = memo(function SheetRow({
+  row,
+  r,
+  cols,
+  merges,
+  height,
+  hitCols,
+  currentCol,
+}: {
+  row: (SheetCell | null)[];
+  r: number;
+  cols: SheetCol[];
+  merges: MergeMap;
+  height: number | undefined;
+  hitCols: Set<number> | undefined;
+  currentCol: number;
+}) {
+  return (
+    <tr style={height ? { height } : undefined}>
+      <th className="sticky left-0 z-[1] border-r border-b border-line bg-pane-alt px-1 text-center font-medium text-muted tabular-nums">
+        {r + 1}
+      </th>
+      {cols.map(({ c }) => {
+        const k = cellKey(r, c);
+        if (merges.skip.has(k)) return null;
+        const cell = row[c];
+        const span = merges.span.get(k);
+        // В ячейке — до 1 024 знаков, с переносом — не выше строки Excel; весь текст — в подсказке.
+        const text = cell ? sheetCellText(cell.v) : undefined;
+        return (
+          <td
+            key={c}
+            data-cell={k}
+            rowSpan={span && span.rows > 1 ? span.rows : undefined}
+            colSpan={span && span.cols > 1 ? span.cols : undefined}
+            className={cellClass(cell, hitCols?.has(c) ?? false, currentCol === c)}
+            style={cell ? cellStyle(cell) : undefined}
+            title={cell && cell.v.length > 24 ? cell.v : undefined}
+          >
+            {cell?.wrap ? (
+              <div className="overflow-hidden" style={{ maxHeight: SHEET_WRAP_MAX_PX }}>
+                {text}
+              </div>
+            ) : (
+              text
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
+});
+
+/**
+ * Лист: буквы столбцов и номера строк закреплены, объединения, скрытые строки и столбцы не рисуются.
+ * Строки рисуются шагами (`sheetStepEnd`): дальше — по прокрутке, к найденной ячейке — шаг за шагом
+ * отдельными задачами, потом прокрутка к ней.
+ */
 export function SheetTable({
   sheet,
   hits,
   current,
 }: {
   sheet: SheetView;
-  hits: Set<string>;
-  current: string | null;
+  /** Найденные ячейки: [строка, столбец]. */
+  hits: readonly [number, number][];
+  /** Текущая найденная ячейка. */
+  current: readonly [number, number] | null;
 }) {
   const hidden = useMemo(() => new Set(sheet.hiddenRows), [sheet]);
-  const [drawn, setDrawn] = useState(SHEET_RENDER_STEP);
-  const more = useRef<HTMLTableRowElement | null>(null);
-  // Строка с найденным дальше нарисованного — рисуется до неё.
-  const limit = Math.max(drawn, current ? sheetRowsFor(Number(current.split(':')[0])) : 0);
-  // Объединения — только по нарисованным строкам: работа растёт вместе с таблицей, а не с файлом.
-  const merges = useMemo(() => mergeMap(sheet, limit), [sheet, limit]);
+  const cols = useMemo<SheetCol[]>(
+    () => sheet.cols.map((w, c) => ({ w, c })).filter((x) => x.w > 0),
+    [sheet],
+  );
+  // Объединения — один раз на лист.
+  const merges = useMemo(() => mergeMap(sheet), [sheet]);
+  const byRow = useMemo(() => hitsByRow(hits), [hits]);
+  const [drawn, setDrawn] = useState(() => sheetStepEnd(sheet, 0, cols.length, hidden));
+  const more = useRef<HTMLDivElement | null>(null);
+  const table = useRef<HTMLTableElement | null>(null);
+  const scrolled = useRef<string | null>(null);
+  const cr = current ? current[0] : -1;
+  const cc = current ? current[1] : -1;
+  useEffect(() => {
+    if (cr < 0) {
+      scrolled.current = null;
+      return;
+    }
+    const k = cellKey(cr, cc);
+    if (scrolled.current === k) return;
+    if (cr >= drawn) {
+      // Найденная строка ниже нарисованного: следующий шаг — отдельной задачей, окно не замирает.
+      const id = setTimeout(() => setDrawn((d) => sheetStepEnd(sheet, d, cols.length, hidden)), 0);
+      return () => clearTimeout(id);
+    }
+    // Найденная ячейка — в середину видимой части (после того как строка нарисована).
+    const id = setTimeout(() => {
+      scrolled.current = k;
+      table.current
+        ?.querySelector(`[data-cell="${k}"]`)
+        ?.scrollIntoView({ block: 'center', inline: 'center' });
+    }, 30);
+    return () => clearTimeout(id);
+  }, [cr, cc, drawn, sheet, cols, hidden]);
   useEffect(() => {
     const el = more.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
     const io = new IntersectionObserver((e) => {
-      if (e.some((x) => x.isIntersecting)) setDrawn(limit + SHEET_RENDER_STEP);
+      if (e.some((x) => x.isIntersecting))
+        setDrawn((d) => sheetStepEnd(sheet, d, cols.length, hidden));
     });
     io.observe(el);
     return () => io.disconnect();
-  }, [limit, sheet]);
-  const cols = sheet.cols.map((w, c) => ({ w, c })).filter((x) => x.w > 0);
-  const rows = sheet.rows.slice(0, limit);
+  }, [drawn, sheet, cols, hidden]);
+  const rows: ReactNode[] = [];
+  const last = Math.min(drawn, sheet.rows.length);
+  for (let r = 0; r < last; r++) {
+    if (hidden.has(r)) continue;
+    rows.push(
+      <SheetRow
+        key={r}
+        row={sheet.rows[r]!}
+        r={r}
+        cols={cols}
+        merges={merges}
+        height={sheet.heights[r]}
+        hitCols={byRow.get(r)}
+        currentCol={cr === r ? cc : -1}
+      />,
+    );
+  }
   return (
-    <table
-      className="w-max table-fixed border-separate border-spacing-0 text-[12.5px]"
-      data-fv-sheet={sheet.name}
-    >
-      <colgroup>
-        <col style={{ width: 46 }} />
-        {cols.map(({ w, c }) => (
-          <col key={c} style={{ width: w }} />
-        ))}
-      </colgroup>
-      <thead>
-        <tr>
-          <th className="sticky top-0 left-0 z-[3] border-r border-b border-line bg-pane-alt" />
-          {cols.map(({ c }) => (
-            <th
-              key={c}
-              className="sticky top-0 z-[2] border-r border-b border-line bg-pane-alt px-[7px] py-1 text-center font-medium text-muted"
-            >
-              {colLetters(c)}
-            </th>
+    <>
+      <table
+        ref={table}
+        className="w-max table-fixed border-separate border-spacing-0 text-[12.5px]"
+        data-fv-sheet={sheet.name}
+      >
+        <colgroup>
+          <col style={{ width: 46 }} />
+          {cols.map(({ w, c }) => (
+            <col key={c} style={{ width: w }} />
           ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, r) =>
-          hidden.has(r) ? null : (
-            <tr key={r} style={sheet.heights[r] ? { height: sheet.heights[r] } : undefined}>
-              <th className="sticky left-0 z-[1] border-r border-b border-line bg-pane-alt px-1 text-center font-medium text-muted tabular-nums">
-                {r + 1}
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="sticky top-0 left-0 z-[3] border-r border-b border-line bg-pane-alt" />
+            {cols.map(({ c }) => (
+              <th
+                key={c}
+                className="sticky top-0 z-[2] border-r border-b border-line bg-pane-alt px-[7px] py-1 text-center font-medium text-muted"
+              >
+                {colLetters(c)}
               </th>
-              {cols.map(({ c }) => {
-                const k = cellKey(r, c);
-                if (merges.skip.has(k)) return null;
-                const cell = row[c];
-                const span = merges.span.get(k);
-                return (
-                  <td
-                    key={c}
-                    data-cell={k}
-                    rowSpan={span && span.rows > 1 ? span.rows : undefined}
-                    colSpan={span && span.cols > 1 ? span.cols : undefined}
-                    className={cellClass(cell, hits.has(k), current === k)}
-                    style={cell ? cellStyle(cell) : undefined}
-                    title={cell && cell.v.length > 24 ? cell.v : undefined}
-                  >
-                    {cell?.v}
-                  </td>
-                );
-              })}
-            </tr>
-          ),
-        )}
-        {sheet.rows.length > limit ? (
-          <tr ref={more}>
-            <td colSpan={cols.length + 1} className="h-6" />
+            ))}
           </tr>
-        ) : null}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>{rows}</tbody>
+      </table>
+      {/* Отметка «нарисовать ещё» — под таблицей: объединение ниже нарисованного её не задевает. */}
+      {sheet.rows.length > drawn ? <div ref={more} data-fv-more-rows="" className="h-6" /> : null}
+    </>
   );
 }
 
@@ -377,20 +478,7 @@ export function SheetBookView({
   const [at, setAt] = useState(0);
   const sheet = model.sheets[tab];
   const found = useMemo(() => (sheet ? sheetHits(sheet, query) : []), [sheet, query]);
-  const hitSet = useMemo(() => new Set(found.map(([r, c]) => cellKey(r, c))), [found]);
-  const currentHit = found[at];
-  const current = currentHit ? cellKey(currentHit[0], currentHit[1]) : null;
-  const scroller = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!current) return;
-    // Найденная ячейка — в середину видимой части (после того как строка нарисована).
-    const id = setTimeout(() => {
-      scroller.current
-        ?.querySelector(`[data-cell="${current}"]`)
-        ?.scrollIntoView({ block: 'center', inline: 'center' });
-    }, 30);
-    return () => clearTimeout(id);
-  }, [current]);
+  const current = found[at] ?? null;
   if (!sheet) return <FileViewState state="empty" title={labels.emptySheet} />;
   return (
     <FileViewFrame kind="sheet">
@@ -423,8 +511,8 @@ export function SheetBookView({
           </span>
         ) : null}
       </div>
-      <div ref={scroller} className={`${SCROLL} bg-pane`}>
-        <SheetTable key={tab} sheet={sheet} hits={hitSet} current={current} />
+      <div className={`${SCROLL} bg-pane`}>
+        <SheetTable key={tab} sheet={sheet} hits={found} current={current} />
       </div>
       {sheet.totalRows > sheet.rows.length ? (
         <div
@@ -795,14 +883,18 @@ export function TextFileView({ model, labels }: { model: TextView; labels: FileV
 function XmlNodeView({
   node,
   path,
-  closed,
+  toggled,
+  open,
   hits,
   onToggle,
   labels,
 }: {
   node: XmlViewNode;
   path: XmlPath;
-  closed: Set<XmlPath>;
+  /** Ветки, которые пользователь свернул или развернул (против положения по умолчанию). */
+  toggled: Set<XmlPath>;
+  /** Ветки-предки найденного — развёрнуты. */
+  open: Set<XmlPath>;
   hits: Set<XmlPath>;
   onToggle: (p: XmlPath) => void;
   labels: FileViewLabels;
@@ -833,7 +925,7 @@ function XmlNodeView({
       </div>
     );
   }
-  const off = closed.has(path);
+  const off = xmlClosed(path, toggled, open);
   let k = 0;
   return (
     <div data-xn={path}>
@@ -863,7 +955,8 @@ function XmlNodeView({
                 key={`${i}-${k}`}
                 node={x}
                 path={`${path}-${i}`}
-                closed={closed}
+                toggled={toggled}
+                open={open}
                 hits={hits}
                 onToggle={onToggle}
                 labels={labels}
@@ -879,21 +972,16 @@ function XmlNodeView({
 
 export function XmlFileView({ model, labels }: { model: XmlView; labels: FileViewLabels }) {
   const [q, setQ] = useState('');
-  const [closed, setClosed] = useState<Set<XmlPath>>(() => new Set());
+  const [toggled, setToggled] = useState<Set<XmlPath>>(() => new Set());
+  // Найденное раскрывается: ветки-предки найденных узлов не свёрнуты.
   const found = useMemo(
     () =>
       model.root ? xmlHits(model.root, q) : { hits: new Set<XmlPath>(), open: new Set<XmlPath>() },
     [model, q],
   );
-  // Найденное раскрывается: ветки-предки найденных узлов не свёрнуты.
-  const shownClosed = useMemo(() => {
-    if (!found.open.size) return closed;
-    const s = new Set(closed);
-    for (const p of found.open) s.delete(p);
-    return s;
-  }, [closed, found]);
+  const branches = useMemo(() => (model.root ? xmlBranches(model.root) : []), [model]);
   const toggle = (p: XmlPath) =>
-    setClosed((s) => {
+    setToggled((s) => {
       const n = new Set(s);
       if (n.has(p)) n.delete(p);
       else n.add(p);
@@ -921,7 +1009,7 @@ export function XmlFileView({ model, labels }: { model: XmlView; labels: FileVie
           type="button"
           className={buttonClass('ghost', 'sm')}
           data-fxa="0"
-          onClick={() => setClosed(new Set(model.root ? xmlBranches(model.root) : []))}
+          onClick={() => setToggled(new Set(branches.filter((p) => xmlDepth(p) < XML_OPEN_DEPTH)))}
         >
           {labels.collapseAll}
         </button>
@@ -929,7 +1017,7 @@ export function XmlFileView({ model, labels }: { model: XmlView; labels: FileVie
           type="button"
           className={buttonClass('ghost', 'sm')}
           data-fxa="1"
-          onClick={() => setClosed(new Set())}
+          onClick={() => setToggled(new Set(branches.filter((p) => xmlDepth(p) >= XML_OPEN_DEPTH)))}
         >
           {labels.expandAll}
         </button>
@@ -951,7 +1039,8 @@ export function XmlFileView({ model, labels }: { model: XmlView; labels: FileVie
           <XmlNodeView
             node={model.root}
             path="0"
-            closed={shownClosed}
+            toggled={toggled}
+            open={found.open}
             hits={found.hits}
             onToggle={toggle}
             labels={labels}

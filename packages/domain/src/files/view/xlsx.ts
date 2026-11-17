@@ -16,6 +16,7 @@ import {
   clipCellText,
   sheetBudgetSpent,
   sheetFormatCode,
+  SHEET_ALL_ROWS,
   sheetColDefs,
   sheetMergeCollector,
   sheetRowMeta,
@@ -190,9 +191,9 @@ function lastRowNumber(src: string, dataEnd: number): number {
   if (at2 > at) at = at2 - 1;
   if (at >= 0) {
     const m = /\br="(\d+)"/.exec(src.slice(at, at + 400));
-    if (m) return Number(m[1]);
+    if (m) return Math.min(SHEET_ALL_ROWS, Number(m[1]));
   }
-  return dim ? Number(dim[1]) : 0;
+  return dim ? Math.min(SHEET_ALL_ROWS, Number(dim[1])) : 0;
 }
 
 /** Лист: первые `SHEET_MAX_ROWS` строк; остальное не разбирается (только число строк). */
