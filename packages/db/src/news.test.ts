@@ -419,9 +419,9 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // лендинга), v118 (проверка сообщений бота, п. Т-13), v119 (принятый чек в окне денег, п. К-14),
     // v120 (подсказки и обучение на странице контрагента, п. К-16) и v121 (чек принимается только
     // вместе с деньгами, п. К-18), v122–v124 (колокольчик, новости по модулям, один файл — несколько
-    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) — да; v125–v128 (новости только о
-    // своём, окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026,
-    // этап 2) — пока нет: их переносит общая сборка этапа.
+    // ссылок; доработки 16.11.2026, этап 1, п. Т-20, И-11, К-19) и v125–v128 (новости только о своём,
+    // окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026, этап 2,
+    // п. Т-21, И-12, К-20) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
@@ -453,6 +453,28 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
       linkKind: 'mod',
       linkId: 'files',
       modules: ['files'],
+    });
+    expect(rows.find((r) => r.id === 'v125')).toMatchObject({
+      release: '125',
+      showOnLogin: true,
+      linkKind: 'mod',
+      linkId: 'kb',
+      modules: [],
+    });
+    expect(rows.find((r) => r.id === 'v126')).toMatchObject({
+      release: '126',
+      linkKind: 'mod',
+      linkId: 'files',
+      modules: ['files'],
+    });
+    expect(rows.find((r) => r.id === 'v127')).toMatchObject({ release: '127', linkId: 'cps' });
+    expect(rows.find((r) => r.id === 'v127')?.modules).toEqual(
+      expect.arrayContaining(['cps', 'files']),
+    );
+    expect(rows.find((r) => r.id === 'v128')).toMatchObject({
+      release: '128',
+      showOnLogin: true,
+      linkKind: null,
     });
     // Текст «Для администратора платформы» (admMd) идёт только во второй текст, не в текст новости.
     const withAdm = (refDB.news as { id: string; admMd?: string }[]).filter((x) => x.admMd?.trim());
