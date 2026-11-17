@@ -133,6 +133,21 @@ describe.skipIf(!databaseAvailable())(
         .orderBy(desc(schema.statusHistory.at), desc(schema.statusHistory.id));
       return row;
     };
+    /** Строки колокольчика о событии записи. */
+    const bellOf = (event: string, targetId: string) =>
+      f.t.admin.db
+        .select({
+          userId: schema.bellNotifications.userId,
+          kind: schema.bellNotifications.kind,
+          text: schema.bellNotifications.text,
+        })
+        .from(schema.bellNotifications)
+        .where(
+          and(
+            eq(schema.bellNotifications.event, event),
+            eq(schema.bellNotifications.targetId, targetId),
+          ),
+        );
     const filesOf = (kind: 'report' | 'task', id: string) =>
       f.t.admin.db
         .select()
@@ -648,6 +663,14 @@ describe.skipIf(!databaseAvailable())(
         `↩️ На исправление: 1-Т за Сентябрь 2026 — ${CP}. Причина: Нет квитанции о приёме. Вернул: chief-a`,
       );
       expect(keys(fix)).toEqual([{ text: 'Сдан', data: `repDone:${t1}` }]);
+      // Колокольчик — тому же ответственному, с той же причиной (приёмка «Колокольчик против Telegram»).
+      expect(await bellOf('report_fix', t1)).toEqual([
+        {
+          userId: person('acc-a').userId,
+          kind: 'reports',
+          text: expect.stringMatching(/^На исправление: 1-Т .+\. Причина: Нет квитанции о приёме$/),
+        },
+      ]);
       expect(
         tg.edits
           .at(-1)!
@@ -749,6 +772,14 @@ describe.skipIf(!databaseAvailable())(
       expect((await press(CHAT.acc, m.id, `taskDone:${task.id}`)).text).toBe(TPL.tgActTaskDone);
       expect(await status(task.id)).toBe('done');
       expect(last(CHAT.owner).text).toContain('Задача выполнена: Сверить акт. Исполнитель: acc-a.');
+      // Колокольчик — тому же постановщику, что и сообщение Telegram.
+      const author = { userId: f.a.ownerUserId, kind: 'tasks' };
+      expect(await bellOf('task_started', task.id)).toEqual([
+        { ...author, text: 'Задача взята в работу: Сверить акт' },
+      ]);
+      expect(await bellOf('task_done', task.id)).toEqual([
+        { ...author, text: 'Задача выполнена: Сверить акт' },
+      ]);
       expect(await statusVia(task.id)).toEqual({ to: 'done', via: 'telegram' });
       const card = await apiRequest(app, 'GET', `/api/tasks/${task.id}`, owner);
       expect(card.status).toBe(200);

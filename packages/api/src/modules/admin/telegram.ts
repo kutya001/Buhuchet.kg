@@ -385,10 +385,14 @@ export function telegramBroadcastHandler(
         now: deps.clock.now(),
         message: cast.message,
         // Колокольчик (доработки 16.11.2026, блок 3; прототип v122 `admin/tg-cast.js`): заголовок,
-        // без него — начало текста.
-        bellText: formatText(t('bell.line.broadcast'), {
-          text: body.title.trim() || bellText(body.text).slice(0, BELL_BROADCAST_MAX),
-        }),
+        // без него — начало текста. Рассылка с «Подробнее» на новость второй строки к строке этой
+        // новости не даёт (приёмка «Колокольчик против Telegram»; прототип v128).
+        bellText:
+          body.more?.kind === 'news'
+            ? null
+            : formatText(t('bell.line.broadcast'), {
+                text: body.title.trim() || bellText(body.text).slice(0, BELL_BROADCAST_MAX),
+              }),
         cast: {
           title: body.title,
           image: body.image,
