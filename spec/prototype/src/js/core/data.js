@@ -440,6 +440,20 @@ const t=(e.indicators||[]).find(x=>x.name==='ФОТ');
     if(a)ks.forEach(k=>{if(a[k]==null&&rm[k]!=null)a[k]=rm[k]});if(n)ks.forEach(k=>{if(n[k]==null&&rn[k]!=null)n[k]=rn[k]})}
   // v120 (поток К, доработки 15.11.2026): подсказки и обучение на странице контрагента — тексты в справочнике текстов элементов экрана kbUi.cpHelp
   if(!db.meta.cpH1){db.meta.cpH1=1;const u=db.ref&&db.ref.kbUi,ru=r.kbUi;if(u&&ru&&ru.cpHelp&&!u.cpHelp)u.cpHelp=structuredClone(ru.cpHelp)}
+  // «Задачи» — только задачи, без отчётов (решение заказчика 17.11.2026): у данных, сохранённых раньше, подсказки и обучение — из refDB.json, если администратор их не менял; шаг «Посмотреть регулярные задачи по отчётам» убран
+  if(!db.meta.tasks17){db.meta.tasks17=1;const u=db.ref&&db.ref.kbUi,ru=r.kbUi||{},kb=db.ref&&db.ref.kbSteps;
+    if(u){const old=[['mods','tasks','Поручения сотрудникам: регулярные задачи по каждому отчёту создаются сами, ручные ставят старшие.'],['tabs','tasks.mine','Ваши задачи: регулярные по отчётам и ручные от старших.']];
+      old.forEach(([g,k,o])=>{if(u[g]&&u[g][k]===o&&ru[g]&&ru[g][k])u[g][k]=ru[g][k]});
+      const ft=u.features&&u.features.tasks,rf=ru.features&&ru.features.tasks;if(ft&&rf&&ft.benefit==='Регулярная задача на каждый отчёт и ручные поручения сотрудникам с контролем выполнения.')ft.benefit=rf.benefit;
+      const fx=(o,a,b)=>typeof o==='string'?o.split(a).join(b):o&&typeof o==='object'&&typeof o.x==='string'?Object.assign(o,{x:o.x.split(a).join(b)}):o;
+      if(u.forms&&u.forms['Подтвердить сдачу'])u.forms['Подтвердить сдачу']=fx(u.forms['Подтвердить сдачу'],' Регулярная задача закроется.','');
+      if(u.fields&&u.fields['Файл при сдаче обязателен'])u.fields['Файл при сдаче обязателен']=fx(u.fields['Файл при сдаче обязателен'],'Регулярную задачу по отчёту нельзя закрыть без файла.','Отчёт нельзя отметить сданным без файла.');
+      const nk='Возврат моих отчётов на исправление';if(u.fields&&u.fields['Регулярные задачи по отчётам']){delete u.fields['Регулярные задачи по отчётам'];if(!u.fields[nk]&&ru.fields&&ru.fields[nk])u.fields[nk]=structuredClone(ru.fields[nk])}}
+    if(Array.isArray(kb)){const i=kb.findIndex(x=>x.id==='regtasks');if(i>=0)kb.splice(i,1)}
+    const arts=db.ref.kbArticles||[];['a2','a5','a7','a8','a13','a20','a22','a23'].forEach(id=>{const b=(r.kbArticles||[]).find(x=>x.id===id),x=arts.find(y=>y.id===id);if(b&&x&&(!x._ub||x._ub==='system')&&/егулярн[а-я]* задач/.test(x.html||''))x.html=b.html});
+    const v=(db.ref.videos||[]).find(x=>x.id==='vd-tasks'),rv=(r.videos||[]).find(x=>x.id==='vd-tasks');if(v&&rv){if(v.t==='Задачи: ручные и регулярные')v.t=rv.t;if(typeof v.desc==='string'&&v.desc.startsWith('Регулярные задачи по каждому отчёту закрываются сами'))v.desc=rv.desc}
+    (db.ref.kbShows||[]).forEach(sh=>(sh.items||[]).forEach(it=>{if(typeof it.x==='string')it.x=it.x.replace('отчёты, регулярные задачи и напоминания','отчёты и напоминания')}));
+    const q=db.ref.onboarding&&db.ref.onboarding.questions;if(Array.isArray(q))q.forEach(x=>{if(typeof x.x==='string')x.x=x.x.replace('ручные задачи и регулярные задачи по каждому отчёту','поручения сотрудникам и контроль их выполнения')})}
   if(db.organization&&db.organization.payFirst==null)db.organization.payFirst=true;
   if(db.organization&&db.organization.repConfirm==null)db.organization.repConfirm=true;
   if(db.organization&&db.organization.taskConfirm==null)db.organization.taskConfirm=true;

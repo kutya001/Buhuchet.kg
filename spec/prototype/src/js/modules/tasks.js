@@ -1,24 +1,20 @@
 'use strict';
 // Модуль «Задачи»
 /* ═════════════ Задачи ═════════════ */
-const taskOpen=t=>t.reg?!t.fin&&t.status!=='Не требуется':t.status==='К выполнению'||t.status==='В работе'||t.status==='На доработке';
+const taskOpen=t=>t.status==='К выполнению'||t.status==='В работе'||t.status==='На доработке';
 // Подтверждение выполнения: «На подтверждении» ждёт постановщика или сотрудника с правом «Подтверждать задачи»; исполнитель свою задачу не подтверждает
-const taskPend=t=>!t.reg&&t.status==='На подтверждении';
+const taskPend=t=>t.status==='На подтверждении';
 const taskConfDef=()=>ORG.taskConfirm!==false;
 function taskConfWhy(t){if(!taskPend(t))return 'Задача не ждёт подтверждения';if(t.exec===S.me)return 'Свою задачу подтвердить нельзя: подтверждает постановщик или другой сотрудник с правом';if(t.by!==S.me&&!can('tasksConfirm'))return 'Подтверждает постановщик или сотрудник с правом «Подтверждать задачи»';return ''}
-const taskConfTxt=t=>t.reg?repConfTxt(REPORTS.find(r=>r.id===t.rid)):!t.confirm?'Не требуется':t.status==='Подтверждена'&&t.confBy?'Подтвердил '+empName(t.confBy):'Требуется';
-const taskOver=t=>(t.reg?OPEN.has(t.status):taskOpen(t))&&t.date<TODAY;
-// Текст регулярной задачи по метке «Что нужно сделать»: «Сдать 1-Т…», «Оплатить патент…», «Сдать и оплатить НДС…»
-const REG_VERB={sub:'Сдать',pay:'Оплатить',both:'Сдать и оплатить'};
+const taskConfTxt=t=>!t.confirm?'Не требуется':t.status==='Подтверждена'&&t.confBy?'Подтвердил '+empName(t.confBy):'Требуется';
+const taskOver=t=>taskOpen(t)&&t.date<TODAY;
 // Исполнитель новой задачи по умолчанию: ответственный выбранного контрагента, иначе тот, кто ставит задачу
 const taskExec0=e=>{const r=e.cp&&CPM[e.cp]&&CPM[e.cp].resp;return r&&EMP.some(x=>x.id===r&&x.active)?r:S.me};
 // Менять и отменять ручную задачу может поставивший её — только с правом «Ставить задачи» (ТЗ; решение заказчика 30.10.2026, продукт п. Б-4) — и владелец
 const taskBoss=t=>(t.by===S.me&&can('tasksCreate'))||me().role==='owner';
 const taskBossWhy=t=>t.by===S.me&&!taskBoss(t)?'Менять и отменять свои задачи можно только с правом «Ставить задачи»':'';
-function allTasks(){
-  const m=ym(TODAY);
-  const reg=REPORTS.filter(r=>!r.superseded&&r.status!=='Не требуется'&&!CPM[r.cp].archived&&(ym(r.due)===m||(OPEN.has(r.status)&&r.due<TODAY&&r.due>=addDays(TODAY,-75)))).map(r=>({id:'r'+r.id,reg:true,rid:r.id,title:`${REG_VERB[actOf(r)]||'Сдать'} ${tR(r).payOnly?T[r.t].name.toLowerCase():T[r.t].short} за ${r.phuman} — ${CPM[r.cp].name}`,cat:tR(r).payOnly?'Оплата':'Сдача отчёта',cp:r.cp,exec:r.resp,by:null,kind:'day',date:r.due,needFile:!!(ORG.types[r.t]&&ORG.types[r.t].needFile),_cb:'system',_ca:r._ca,_ub:r._ub,_ua:r._ua,status:r.status,fin:repFin(r),wait:repWait(r)}));
-  return TASKS.concat(reg)}
+// Задачи — только поручения, которые ставят люди: отчётов в «Задачах» нет, они только в «Отчетах для сдачи» (решение заказчика 17.11.2026)
+function allTasks(){return TASKS}
 function taskScope(){return can('tasksAll')?allTasks():allTasks().filter(t=>t.exec===S.me||t.by===S.me||(can('tasksConfirm')&&taskPend(t)))}
 function taskTabs(){const sc=taskScope();return [
  {id:'mine',label:'Мои',icon:'user',count:sc.filter(t=>t.exec===S.me&&taskOpen(t)).length},
@@ -27,22 +23,20 @@ function taskTabs(){const sc=taskScope();return [
  {id:'overdue',label:'Просроченные',icon:'alert',count:sc.filter(taskOver).length,red:true}]}
 function taskAdd(){return can('tasksCreate')?[{label:'Задача',icon:'task',run:()=>taskDlg()}]:[]}
 function taskCols(){return [
- {key:'title',label:'Задача',type:'text',w:330,val:t=>t.title,html:t=>`${t.reg?'<span class="tag" title="Создана системой по отчёту">регулярная</span> ':''}<span class="strong">${esc(t.title)}</span>`},
+ {key:'title',label:'Задача',type:'text',w:330,val:t=>t.title,html:t=>`<span class="strong">${esc(t.title)}</span>`},
  {key:'cp',label:'Контрагент',type:'enum',inn:true,w:190,val:t=>t.cp?CPM[t.cp].name:'Общие задачи',text:t=>t.cp?CPM[t.cp].name:'',html:t=>t.cp?esc(CPM[t.cp].name):'<span class="faint">Общая</span>',pin:'Общие задачи',hide:true},
  {key:'proj',label:'Проект',type:'enum',w:200,val:t=>t.proj?(PROJECTS.find(p=>p.id===t.proj)||{}).name||'':'',hide:true},
  {key:'cat',label:'Категория',type:'enum',w:150,val:t=>t.cat},
  {key:'exec',label:'Исполнитель',type:'enum',w:130,val:t=>empName(t.exec)},
  {key:'date',label:'Срок',type:'date',w:150,val:t=>t.date,html:t=>`<span class="${taskOver(t)?'red strong':''}">${taskOver(t)?ic('alert','sm')+' ':''}${t.kind==='month'?'до '+fmtD(t.date):fmtD(t.date)}</span> <span class="tag ${t.kind==='month'?'kd-month':'kd-day'}">${t.kind==='month'?'Месяц':'День'}</span>`},
- {key:'status',label:'Статус',type:'enum',w:220,val:t=>t.status,html:t=>t.reg?scaleMini('rep',t.status,REPORTS.find(r=>r.id===t.rid))+' <span class="tag" title="Статус берётся из отчёта">отчёт</span>':scaleMini('task',t.status,t)},
+ {key:'status',label:'Статус',type:'enum',w:220,val:t=>t.status,html:t=>scaleMini('task',t.status,t)},
  {key:'needf',label:'Нужен файл',type:'enum',w:110,val:t=>t.needFile?'Да':'Нет',hide:true},{key:'doneAt',label:'Дата выполнения',type:'date',w:130,val:t=>t.doneAt||null,hide:true},{key:'file',label:'Файл',type:'enum',w:110,val:t=>t.needFile?(t.file?'Приложен':'Нужен'):'',html:t=>t.needFile?(t.file?`<span class="pill green sm">${ic('clip')}приложен</span>`:`<span class="pill sm">${ic('clip')}нужен</span>`):'<span class="faint">—</span>'},
- {key:'by',label:'Поставил',type:'enum',w:120,val:t=>t.reg?'Система':empName(t.by)},
- {key:'confirm',label:'Подтверждение',type:'enum',w:170,val:taskConfTxt,html:t=>t.reg?(t.wait?`<span class="pill yellow sm">${ic('hourglass')}${esc(taskConfTxt(t))}</span>`:taskConfTxt(t)?`<span class="pill green sm">${ic('check')}${esc(taskConfTxt(t))}</span>`:'<span class="faint">—</span>'):!t.confirm?'<span class="faint">Не требуется</span>':t.status==='Подтверждена'?`<span class="pill green sm">${ic('check')}${esc(taskConfTxt(t))}</span>`:t.status==='На подтверждении'?`<span class="pill purple sm">${ic('hourglass')}ждёт</span>`:'Требуется',hide:true},
+ {key:'by',label:'Поставил',type:'enum',w:120,val:t=>empName(t.by)},
+ {key:'confirm',label:'Подтверждение',type:'enum',w:170,val:taskConfTxt,html:t=>!t.confirm?'<span class="faint">Не требуется</span>':t.status==='Подтверждена'?`<span class="pill green sm">${ic('check')}${esc(taskConfTxt(t))}</span>`:t.status==='На подтверждении'?`<span class="pill purple sm">${ic('hourglass')}ждёт</span>`:'Требуется',hide:true},
  {key:'scope',label:'Вид задачи',type:'enum',w:140,val:t=>t.cp?'По контрагенту':'Общая',hide:true,xls:true},
- {key:'tkind',label:'Тип задачи',type:'enum',w:120,val:t=>t.reg?'Регулярная':'Ручная',hide:true},
  {key:'term',label:'Вид срока',type:'enum',w:120,val:t=>t.kind==='month'?'На месяц':'На день',hide:true},
  {key:'open',label:'Открыта',type:'enum',w:100,val:t=>taskOpen(t)?'Да':'Нет',hide:true}]}
 function taskActions(t){
-  if(t.reg){const r=REPORTS.find(x=>x.id===t.rid);return [{label:'Открыть отчёт',icon:'file',run:()=>openReport(r)},...(OPEN.has(r.status)?[{label:'Отметить отчёт сданным',icon:'send',disabled:!can('changeStatus')||!!subPayWhy(r),reason:!can('changeStatus')?'Нет права менять статус':subPayWhy(r),run:()=>submitDlg([r])}]:[]),{label:repWait(r)?'Задача закроется сама, когда сдачу подтвердят':repConfOn()?'Задача закроется сама, когда отчёт сдадут и сдачу подтвердят':'Задача закроется сама, когда отчёт будет сдан',icon:'info',disabled:true}]}
   const mine=t.exec===S.me,boss=taskBoss(t),why=taskBossWhy(t),edit={label:'Изменить',icon:'edit',disabled:!boss,reason:why,run:()=>taskDlg(t)};const it=[{label:'Открыть',icon:'task',run:()=>openTask(t)}];
   if(taskPend(t)){const why=taskConfWhy(t);it.push({label:'Подтвердить',icon:'check',disabled:!!why,reason:why,run:()=>taskConfDlg(t)},{label:'На доработку',icon:'refresh',disabled:!!why,reason:why,run:()=>taskReworkDlg(t)});if(boss||why)it.push(edit)}
   if(taskOpen(t)){if(t.status==='К выполнению')it.push({label:'Взять в работу',icon:'clock',disabled:!mine&&!boss,reason:!mine&&!boss&&(why||'Взять в работу может исполнитель или постановщик'),run:()=>{t.status='В работе';log('t',t.id,'Статус: К выполнению → В работе');refreshAll();toast('Задача в работе')}});
@@ -54,14 +48,11 @@ function taskCancelDlg(t){confirmDlg({title:'Отменить задачу?',tex
 /* Доска задач: столбцы — статус (по умолчанию), исполнитель, контрагент, категория, проект, постановщик, вид срока.
    Перенос карточки в другой столбец делает то же, что действие в меню: те же права и те же окна (файл, причина, подтверждение) */
 const empByName=n=>EMP.find(e=>e.active&&e.short===n);
-function taskKanban(){return {def:'status',by:['status','exec','cp','cat','proj','by','term','tkind'],
-  order:{status:['К выполнению','К сдаче','В работе','На доработке','Требует исправления','На подтверждении','Выполнена','Сдан','Подтверждена','Не выполнена','Не требуется','Отменена']},
+function taskKanban(){return {def:'status',by:['status','exec','cp','cat','proj','by','term'],
+  order:{status:['К выполнению','В работе','На доработке','На подтверждении','Выполнена','Подтверждена','Не выполнена','Отменена']},
   show:{status:['К выполнению','В работе','На подтверждении','Выполнена'],exec:()=>can('tasksAll')?EMP.filter(e=>e.active).map(e=>e.short):[]},
   drop(t,key,v,label){const bad=m=>toast(m,'alert',true);
     if(key==='status'){
-      if(t.reg){const r=REPORTS.find(x=>x.id===t.rid);if(v==='Сдан'&&OPEN.has(r.status)){if(!can('changeStatus'))return bad('Нет права менять статус');const w=subPayWhy(r);if(w)return bad(w);return submitDlg([r])}
-        if(v==='В работе'&&r.status==='К сдаче'){if(!can('changeStatus'))return bad('Нет права менять статус');return setStatus(r,'В работе')}
-        return bad('Статус регулярной задачи берётся из отчёта: её можно взять в работу или отметить отчёт сданным')}
       const mine=t.exec===S.me,boss=taskBoss(t),open=taskOpen(t);
       if(v==='В работе'&&t.status==='К выполнению'){if(!mine&&!boss)return bad('Взять в работу может исполнитель или постановщик');t.status='В работе';log('t',t.id,'Статус: К выполнению → В работе');refreshAll();return toast('Задача в работе')}
       if((v==='Выполнена'||v==='На подтверждении'||(v==='Подтверждена'&&!taskPend(t)))&&open){if(!mine)return bad('Отметить выполненной может только исполнитель');return taskDoneDlg(t)}
@@ -70,16 +61,15 @@ function taskKanban(){return {def:'status',by:['status','exec','cp','cat','proj'
       if(v==='Не выполнена'&&open){if(!mine)return bad('Отметить может только исполнитель');return taskFailDlg(t)}
       if(v==='Отменена'&&open){if(!boss)return bad(taskBossWhy(t)||'Отменить задачу может тот, кто её поставил, или владелец');return taskCancelDlg(t)}
       return bad(`Из «${t.status}» в «${label}» задачу перевести нельзя`)}
-    if(key==='exec'){if(t.reg)return bad('Исполнитель регулярной задачи — ответственный за отчёт');const e=empByName(v);if(!e)return bad('Выберите столбец сотрудника');
+    if(key==='exec'){const e=empByName(v);if(!e)return bad('Выберите столбец сотрудника');
       if(!taskBoss(t))return bad(taskBossWhy(t)||'Сменить исполнителя может тот, кто поставил задачу, или владелец');if(!taskOpen(t))return bad('Исполнитель меняется только у открытой задачи');
       const was=empName(t.exec);t.exec=e.id;touch(t);log('t',t.id,`Исполнитель: ${was||'—'} → ${e.short}`,t.cp);refreshAll();return toast(`Исполнитель: ${e.short}`,'user')}
     bad('Перетаскиванием меняются статус и исполнитель. Остальное — в окне «Изменить»')}}}
 function renderTasks(body,tab,fresh){
-  const v=S.taskView;const m=ym(TODAY);
-  const reg=taskScope().filter(t=>t.reg&&ym(t.date)===m&&(tab==='mine'?t.exec===S.me:true));const done=reg.filter(t=>{const r=REPORTS.find(x=>x.id===t.rid);return r.status==='Сдан'}).length;
+  const m=ym(TODAY);
   const pl=can('tasksCreate')||can('tasksConfirm');const gid='tasks-'+tab;const pend=taskScope().filter(taskPend);const fst=(S.preset||(GS[gid]&&GS[gid].filters)||{}).status;const pendOn=!!(fst&&(fst.vals||[]).includes('На подтверждении'));
   body.innerHTML=`${pl?`<div class="plates" style="grid-template-columns:repeat(auto-fill,minmax(min(260px,100%),1fr))">${plate({id:'pend',icon:'hourglass',color:pend.length?'purple':'green',label:'На подтверждении',value:pend.length,sub:pend.length?`можете подтвердить: ${pend.filter(t=>!taskConfWhy(t)).length}`:'выполненных задач без подтверждения нет',on:pendOn})}</div>`:''}<div class="row"><span class="kd-legend"><span class="tag kd-day">День</span> задача на дату <span class="tag kd-month">Месяц</span> задача на месяц</span><span class="muted">${tab==='overdue'?'Все просроченные задачи':`С ${ymG(m)}, вперёд и всё просроченное`}</span><div class="grow"></div>
-  ${tab!=='byme'&&reg.length?`<div style="min-width:260px;display:flex;flex-direction:column;gap:4px"><span class="hint">Отчёты ${tab==='mine'?'мои':'всех'} за месяц: <b>сдано ${done} из ${reg.length}</b></span><div class="bar"><i style="width:${Math.round(done/reg.length*100)}%"></i></div></div>`:''}</div><div id="tg"></div>`;
+  </div><div id="tg"></div>`;
   const pb=body.querySelector('.plates');if(pb)pb.onclick=e=>{if(!e.target.closest('[data-plate="pend"]'))return;const g=GS[gid];if(!g)return;g.filters=pendOn?{}:{status:{type:'enum',vals:['На подтверждении']}};g.page=0;renderPage()};
   const rows=()=>{let l=taskScope();const g=GS[gid];if(g&&g.filters&&g.filters.status&&(g.filters.status.vals||[]).includes('На подтверждении')&&tab!=='overdue')return l.filter(t=>taskPend(t)||g.filters.status.vals.includes(t.status));if(tab==='mine')l=l.filter(t=>t.exec===S.me);if(tab==='byme')l=TASKS.filter(t=>t.by===S.me);if(tab==='overdue')return l.filter(taskOver);
     return l.filter(t=>ym(t.date)>=m||taskOver(t))};
@@ -87,7 +77,7 @@ function renderTasks(body,tab,fresh){
     empty:{icon:'ok',title:tab==='overdue'?'Просроченных задач нет':'Задач нет',text:'',add:can('tasksCreate')&&tab!=='overdue'?()=>taskDlg():null}});
 }
 function openTask(t){
-  if(!t)return;if(t.reg){openReport(REPORTS.find(r=>r.id===t.rid));return}
+  if(!t)return;
   openModal({size:'mid',live:true,form:false,render:m=>{const hs=HIST.filter(h=>h.ent==='t'&&h.id===t.id).sort((a,b)=>a.at<b.at?1:-1);
     const pj=t.proj&&PROJECTS.find(p=>p.id===t.proj);
     return {title:esc(t.title),sub:esc(t.cat),body:`<div class="box">${scaleFull('task',t.status,t.id)}</div>${t.status==='На доработке'&&t.rework?`<div class="note warn">${ic('refresh')}<span><b>Возвращена на доработку</b>${t.reworkBy?` · ${esc(empName(t.reworkBy))}`:''}: ${esc(t.rework)}</span></div>`:''}${taskPend(t)?`<div class="note">${ic('hourglass')}<span>Ждёт подтверждения: ${esc(empName(t.by))}${t.by!==t.exec?' или':''} сотрудник с правом «Подтверждать задачи»${t.exec===S.me?'. Свою задачу подтвердить нельзя':''}.</span></div>`:''}<div class="row">${taskOver(t)?`<span class="pill red">${ic('alert')}просрочена</span>`:''}${t.confirm?`<span class="pill ${t.status==='Подтверждена'?'green':'purple'}">${ic(t.status==='Подтверждена'?'check':'hourglass')}${t.status==='Подтверждена'?'подтверждена':'требуется подтверждение'}</span>`:''}${t.needFile?`<span class="pill ${t.file?'green':''}">${ic('clip')}${t.file?'файл приложен':'нужен файл при выполнении'}</span>`:''}</div>
