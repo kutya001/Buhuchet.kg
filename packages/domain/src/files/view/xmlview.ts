@@ -49,7 +49,8 @@ export function xmlView(bytes: Uint8Array): XmlView {
       const a = Object.entries(attrs);
       nodes += 1 + a.length;
       for (const [k, v] of a) chars += k.length + v.length;
-      chars += name.length;
+      // Имя на экране дважды: и в закрывающем теге.
+      chars += name.length * 2;
       if (nodes > XML_MAX_NODES || chars > XML_MAX_CHARS) {
         cut = true;
         return false;

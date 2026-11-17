@@ -275,6 +275,28 @@ export function textMinLines(chars: number, perLine = TEXT_MIN_LINE_CHARS): numb
  */
 export const LAZY_MAX_LINES = 50_000;
 
+/**
+ * Картинка документа — не выше, px (вписывается целиком): высота из файла (PNG 1 × 50 000 в
+ * несколько КБ) иначе уводила документ за предел прокрутки браузера, и блоки за ним раскладывались
+ * одним кадром. Мест с картинками — до 1 000 (`VIEW_MAX_IMAGE_REFS`): вместе — до 1,2 млн px.
+ */
+export const DOC_IMAGE_MAX_PX = 1_200;
+/** Ширина картинки документа — не больше, px (ширина бумаги). */
+export const DOC_IMAGE_MAX_W = 680;
+
+/** Размер картинки документа: ширина из файла до ширины бумаги, высота — до `DOC_IMAGE_MAX_PX`. */
+export function docImageStyle(w: number | undefined): {
+  width: number | undefined;
+  height: 'auto';
+  maxHeight: number;
+} {
+  return {
+    width: w && w > 0 ? Math.min(w, DOC_IMAGE_MAX_W) : undefined,
+    height: 'auto',
+    maxHeight: DOC_IMAGE_MAX_PX,
+  };
+}
+
 /** Столбец таблицы документа на экране — не уже, px: таблица шире бумаги прокручивается вбок. */
 export const DOC_COL_MIN_PX = 56;
 

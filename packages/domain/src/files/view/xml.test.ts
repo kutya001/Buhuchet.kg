@@ -136,6 +136,10 @@ describe('безопасный XML окна просмотра', () => {
     const long = xmlView(enc.encode(`<r><i>${'я'.repeat(XML_MAX_CHARS)}</i><i>x</i></r>`));
     expect(long.cut).toBe(true);
     expect(long.root!.c).toEqual([{ n: 'i', a: [], c: [] }]);
+    // Имя элемента на экране дважды (и в закрывающем теге) — в предел знаков идёт дважды.
+    const name = 'n'.repeat(XML_MAX_CHARS / 2 + 1);
+    expect(xmlView(enc.encode(`<r><${name}/></r>`)).cut).toBe(true);
+    expect(xmlView(enc.encode(`<r><${'n'.repeat(XML_MAX_CHARS / 2 - 10)}/></r>`)).cut).toBe(false);
     // Windows-1251: русский текст читается.
     const cp = new Uint8Array([
       0x3c, 0x72, 0x3e, 0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2, 0x3c, 0x2f, 0x72, 0x3e,

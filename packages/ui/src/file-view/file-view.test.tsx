@@ -20,6 +20,8 @@ import {
   chunkOfLongWord,
   docCellShares,
   docColShares,
+  DOC_IMAGE_MAX_PX,
+  docImageStyle,
   hitsByRow,
   LAZY_MAX_LINES,
   MERGE_SKIP_MAX,
@@ -498,6 +500,13 @@ describe('правила окна просмотра', () => {
       TEXT_CHUNK,
       TEXT_SEGMENT,
     ]);
+    // Картинка документа — не выше 1 200 px (вписывается целиком): высота из файла не уводит
+    // документ за предел прокрутки браузера; ширина — до ширины бумаги.
+    expect(docImageStyle(1000)).toEqual({ width: 680, height: 'auto', maxHeight: 1200 });
+    expect(docImageStyle(300).width).toBe(300);
+    expect(docImageStyle(undefined).width).toBeUndefined();
+    expect(docImageStyle(-5).width).toBeUndefined();
+    expect(DOC_IMAGE_MAX_PX).toBe(1200);
     // В строке места — не меньше 4 знаков: места всех блоков документа вместе — до 10 млн px.
     expect([1, 0.25, 1 / 63, 0, 5].map(shareLineChars)).toEqual([100, 25, 4, 4, 100]);
     // Доли столбцов — по ширинам из файла, но столбец — не уже половины равной доли.

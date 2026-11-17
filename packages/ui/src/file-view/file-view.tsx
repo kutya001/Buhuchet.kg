@@ -41,6 +41,7 @@ import {
   docCellShares,
   docColShares,
   DOC_COL_MIN_PX,
+  docImageStyle,
   FILE_FONT,
   hitsByRow,
   LAZY_MAX_LINES,
@@ -770,8 +771,8 @@ function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, st
           src={src}
           alt=""
           data-fv-docimg=""
-          className="inline-block max-w-full align-middle"
-          style={{ width: r.w ? Math.min(r.w, 680) : undefined, height: 'auto' }}
+          className="inline-block max-w-full object-contain align-middle"
+          style={docImageStyle(r.w)}
         />
       ) : null;
     }
