@@ -43,19 +43,23 @@ import {
   DOC_COL_MIN_PX,
   FILE_FONT,
   hitsByRow,
+  LAZY_MAX_LINES,
   mergeMap,
   rotateNext,
   segmentStarts,
   shareLineChars,
+  shareMinLineChars,
   shareSegment,
   sheetCellText,
   sheetRowPlan,
+  sheetWrapMinPx,
   sheetWrapPx,
   sheetHits,
   sheetStepEnd,
   SHEET_WRAP_MAX_PX,
   textChunks,
   textLines,
+  textMinLines,
   TEXT_CHUNK,
   TEXT_SEGMENT,
   xmlBranches,
@@ -329,18 +333,29 @@ const LAZY_CELL = lazyBlock(1);
 const LAZY_LINE_PX = 20;
 const lazyStyles = new Map<number, CSSProperties>();
 
-/** Место под блок в `lines` строк; одинаковые стили — одним объектом. */
-function lazyLines(lines: number): CSSProperties {
-  let style = lazyStyles.get(lines);
+/**
+ * Место под блок в `lines` строк (не больше `LAZY_MAX_LINES`) и его наименьшая высота в `min`
+ * строк (0 — без неё, `textMinLines`); одинаковые стили — одним объектом.
+ */
+function lazyLines(lines: number, min = 0): CSSProperties {
+  const place = Math.min(LAZY_MAX_LINES, lines);
+  const least = Math.min(place, min);
+  const key = place * (LAZY_MAX_LINES + 1) + least;
+  let style = lazyStyles.get(key);
   if (!style) {
-    style = lazyBlock(lines * LAZY_LINE_PX);
-    if (lazyStyles.size < 4096) lazyStyles.set(lines, style);
+    style = lazyBlock(place * LAZY_LINE_PX);
+    if (least > 0) style = { ...style, minHeight: least * LAZY_LINE_PX };
+    if (lazyStyles.size < 4096) lazyStyles.set(key, style);
   }
   return style;
 }
 
-/** Место под блок с текстом в `chars` знаков — по длине текста (`textLines`). */
-const lazyText = (chars: number): CSSProperties => lazyLines(textLines(chars));
+/**
+ * Место и наименьшая высота блока с текстом в `chars` знаков в месте шириной в долю `share` бумаги
+ * (`textLines`, `textMinLines`).
+ */
+const lazyText = (chars: number, share = 1): CSSProperties =>
+  lazyLines(textLines(chars, shareLineChars(share)), textMinLines(chars, shareMinLineChars(share)));
 
 /**
  * На слайде блоки не откладываются: слайд виден целиком и раскладывается целиком (сколько на нём
@@ -372,6 +387,7 @@ function Blocks({
   const starts = segmentStarts(lengths, shareSegment(share));
   if (starts.length === 1 && !own) return nodes;
   const perLine = shareLineChars(share);
+  const perMin = shareMinLineChars(share);
   return starts.map((from, i) => {
     const to = starts[i + 1] ?? lengths.length;
     let lines = 0;
@@ -384,7 +400,11 @@ function Blocks({
       <span
         key={from}
         className="block"
-        style={off ? undefined : lazyLines(own ? lines : textLines(chars, perLine))}
+        style={
+          off
+            ? undefined
+            : lazyLines(own ? lines : textLines(chars, perLine), textMinLines(chars, perMin))
+        }
       >
         {nodes.slice(from, to)}
       </span>
@@ -421,6 +441,16 @@ const Chunks = memo(function Chunks({ text }: { text: string }) {
 /** Текст файла на экране: короткий — как есть, длинный — кусками. */
 function chunked(text: string): ReactNode {
   return text.length > TEXT_CHUNK ? <Chunks text={text} /> : text;
+}
+
+/**
+ * Ячейка листа с переносом из «тяжёлой» строки: раскладывается у экрана, место — по числу знаков
+ * и ширине, наименьшая высота — `sheetWrapMinPx`.
+ */
+function wrapLazy(chars: number, width: number): CSSProperties {
+  const min = sheetWrapMinPx(chars, width);
+  const lazy = lazyBlock(sheetWrapPx(chars, width));
+  return min ? { ...lazy, minHeight: min } : lazy;
 }
 
 /** Ширина столбца номеров строк, px. */
@@ -487,9 +517,7 @@ const SheetRow = memo(function SheetRow({
                 className="overflow-hidden"
                 style={{
                   maxHeight: SHEET_WRAP_MAX_PX,
-                  ...(plan.lazy && shown
-                    ? lazyBlock(sheetWrapPx(shown.length, widthAt.get(c) ?? 0))
-                    : undefined),
+                  ...(plan.lazy && shown ? wrapLazy(shown.length, widthAt.get(c) ?? 0) : undefined),
                 }}
               >
                 {text}
@@ -862,7 +890,7 @@ function DocBlocks({
           </>
         );
         const style = {
-          ...lazyLines(textLines(docChars([b]), perLine)),
+          ...lazyText(docChars([b]), share),
           ...(b.li ? { paddingLeft: `${b.li.lvl * 24}px` } : undefined),
         };
         if (b.h === undefined)
@@ -1136,10 +1164,10 @@ function XmlNodeView({
   const kids = node.c.filter((x): x is XmlViewNode => typeof x !== 'string');
   const text = node.c.filter((x): x is string => typeof x === 'string').join(' ');
   // Место под узел — по тексту его строки; у вложенных узлов и блоков атрибутов место своё.
-  const lazy = lazyText((wide ? node.n.length : head) + text.length);
+  const own = wide ? node.n.length : head;
   if (!kids.length) {
     return (
-      <div className={hit} data-xn={path} style={lazy}>
+      <div className={hit} data-xn={path} style={lazyText(own + text.length)}>
         <span className="text-info">&lt;{chunked(node.n)}</span>
         {attrs}
         {text ? (
@@ -1158,7 +1186,8 @@ function XmlNodeView({
   let k = 0;
   return (
     // Отступ и обратное поле: кнопка-стрелка слева остаётся внутри блока и не обрезается.
-    <div className="-ml-4 pl-4" data-xn={path} style={lazy}>
+    // У свёрнутого узла текста на экране нет — и места под него нет.
+    <div className="-ml-4 pl-4" data-xn={path} style={lazyText(own + (off ? 0 : text.length))}>
       <span className={hit}>
         <button
           type="button"

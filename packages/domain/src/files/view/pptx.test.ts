@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pptxBytes, zipBytes } from './fixtures';
 import {
+  slideFontGrid,
   parsePptx,
   SLIDE_MAX_CHARS,
   SLIDE_MAX_FONT_PT,
@@ -189,6 +190,30 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(it0.paras[0]!.runs[0]!.sz).toBe(SLIDE_MAX_FONT_PT);
     expect(it0.paras[1]!.lvl).toBeUndefined();
     expect(it0.paras[1]!.runs[0]!.sz).toBe(SLIDE_MAX_FONT_PT);
+  });
+
+  it('размер шрифта слайда — по сетке: разных размеров на слайде немного (защита, п. И-12)', async () => {
+    // До 40 пт — целые, до 100 — кратные 4, дальше — кратные 20; меньше 1 пт не бывает.
+    expect(
+      [0.01, 0.4, 10.5, 17.49, 18, 40, 41, 43, 54, 66, 100, 109, 111, 399, 4000].map(slideFontGrid),
+    ).toEqual([1, 1, 11, 17, 18, 40, 40, 44, 56, 68, 100, 100, 120, 400, 400]);
+    // 2 000 кусков, у каждого свой размер из файла (от 0,5 до 400 пт с шагом 0,2 пт).
+    const runs = Array.from(
+      { length: 2000 },
+      (_, i) => `<a:r><a:rPr sz="${50 + i * 20}"/><a:t>я</a:t></a:r>`,
+    ).join('');
+    const v = await parsePptx(
+      openZip(await pptxBytes([box(0, 0, 1000, 1000, `<a:p>${runs}</a:p>`)])),
+    );
+    const it0 = v.slides[0]!.items[0];
+    expect(it0?.k).toBe('text');
+    if (it0?.k !== 'text') return;
+    const sizes = new Set(it0.paras[0]!.runs.map((r) => r.sz));
+    expect(it0.paras[0]!.runs).toHaveLength(2000);
+    expect(sizes.size).toBeLessThanOrEqual(70);
+    expect([...sizes].every((x) => Number.isInteger(x) && x! >= 1 && x! <= SLIDE_MAX_FONT_PT)).toBe(
+      true,
+    );
   });
 
   it('предел слайдов и битая презентация', async () => {

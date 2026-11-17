@@ -246,6 +246,30 @@ export const shareSegment = (share: number): number =>
 export const shareLineChars = (share: number): number =>
   Math.max(1, Math.floor(TEXT_LINE_CHARS * Math.min(1, share)));
 
+/**
+ * Наименьшая высота блока с текстом — по числу знаков: строка на каждые `TEXT_MIN_LINE_CHARS`
+ * знаков (в ячейке таблицы документа — по её доле ширины, но не меньше `TEXT_MIN_LINE_FLOOR`).
+ * Текст из знаков без ширины (U+200E, U+200F, U+061C) после раскладки занимает одну строку,
+ * сколько бы знаков в нём ни было: браузер запоминал такую высоту, и при возврате к этому месту
+ * в кадр попадала сотня блоков — миллион знаков, 5–6 с. Обычный текст эту высоту не замечает:
+ * тысяча знаков в строку не помещается ни на каком экране.
+ */
+export const TEXT_MIN_LINE_CHARS = 1_000;
+export const TEXT_MIN_LINE_FLOOR = 4;
+export const shareMinLineChars = (share: number): number =>
+  Math.max(TEXT_MIN_LINE_FLOOR, Math.floor(TEXT_MIN_LINE_CHARS * Math.min(1, share)));
+
+/** Строк наименьшей высоты блока в `chars` знаков; 0 — блоку она не нужна (текст в одну строку). */
+export function textMinLines(chars: number, perLine = TEXT_MIN_LINE_CHARS): number {
+  return chars > perLine ? Math.ceil(chars / perLine) : 0;
+}
+
+/**
+ * Строк места под блок — не больше: абзац на 2 млн знаков в узкой ячейке просил место в 38 млн px —
+ * больше, чем браузер умеет прокручивать.
+ */
+export const LAZY_MAX_LINES = 50_000;
+
 /** Столбец таблицы документа на экране — не уже, px: таблица шире бумаги прокручивается вбок. */
 export const DOC_COL_MIN_PX = 56;
 
@@ -254,10 +278,11 @@ export const DOC_COL_MIN_PX = 56;
  * доли (иначе узкий «№» на телефоне не читается, а столбец шириной 1 из файла не виден вовсе).
  */
 export function docColShares(cols: readonly number[]): number[] {
-  const total = cols.reduce((a, w) => a + (w > 0 ? w : 0), 0);
+  const width = (w: number) => (Number.isFinite(w) && w > 0 ? w : 0);
+  const total = cols.reduce((a, w) => a + width(w), 0);
   if (!(total > 0)) return cols.map(() => 1 / cols.length);
   const least = total / cols.length / 2;
-  const raised = cols.map((w) => Math.max(w > 0 ? w : 0, least));
+  const raised = cols.map((w) => Math.max(width(w), least));
   const sum = raised.reduce((a, w) => a + w, 0);
   return raised.map((w) => w / sum);
 }
@@ -375,6 +400,18 @@ export function sheetRowPlan(
 export function sheetWrapPx(chars: number, width: number): number {
   const perLine = Math.max(1, Math.floor((width - 14) / 7));
   return Math.min(SHEET_WRAP_MAX_PX, Math.max(1, Math.ceil(chars / perLine)) * SHEET_LINE_PX);
+}
+
+/**
+ * Наименьшая высота ячейки с переносом из «тяжёлой» строки, px: строка на каждые столько знаков,
+ * сколько самых узких помещается в ширину ячейки (как в `sheetCellFit`); 0 — не нужна. Ячейка из
+ * знаков без ширины иначе сжимается в одну строку, и экран таких строк — миллион знаков за кадр.
+ * Обычный текст выше этого всегда.
+ */
+export function sheetWrapMinPx(chars: number, width: number): number {
+  const line = Math.floor(Math.max(0, width) / SHEET_GLYPH_MIN_PX) + 2;
+  const lines = Math.ceil(chars / line);
+  return lines > 1 ? Math.min(SHEET_WRAP_MAX_PX, lines * SHEET_LINE_PX) : 0;
 }
 
 /**

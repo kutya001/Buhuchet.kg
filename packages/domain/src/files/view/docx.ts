@@ -31,6 +31,8 @@ export const DOC_MAX_LABEL = 64;
  * целиком.
  */
 export const DOC_MAX_CHARS = 2_000_000;
+/** Размер шрифта куска текста — целые пункты, не больше. */
+export const DOC_MAX_FONT_PT = 72;
 /** Перенос строки `<w:br/>` в счёте знаков документа — как строка в 64 знака. */
 export const DOC_BREAK_CHARS = 64;
 /**
@@ -326,8 +328,10 @@ async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): 
         if (on(childEl(rp, 'i'))) fmt.i = true;
         if (on(childEl(rp, 'u'))) fmt.u = true;
         if (on(childEl(rp, 'strike')) || on(childEl(rp, 'dstrike'))) fmt.s = true;
+        // Размер — целыми пунктами: каждый новый размер — новый шрифт у браузера, и документ, где
+        // у каждого куска свой дробный размер, раскладывался 5–6 с одним кадром.
         const sz = Number(attrOf(childEl(rp, 'sz'), 'val'));
-        if (sz > 0) fmt.sz = Math.min(72, sz / 2);
+        if (sz > 0) fmt.sz = Math.min(DOC_MAX_FONT_PT, Math.max(1, Math.round(sz / 2)));
         const col = attrOf(childEl(rp, 'color'), 'val');
         if (col && /^[0-9A-Fa-f]{6}$/.test(col) && col !== '000000')
           fmt.color = `#${col.toUpperCase()}`;

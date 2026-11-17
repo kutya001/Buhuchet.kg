@@ -21,6 +21,7 @@ import {
   docCellShares,
   docColShares,
   hitsByRow,
+  LAZY_MAX_LINES,
   MERGE_SKIP_MAX,
   mergeMap,
   rotateNext,
@@ -35,16 +36,20 @@ import {
   sheetRowPlan,
   SHEET_STEP_CHARS,
   SHEET_STEP_PLACES,
+  sheetWrapMinPx,
   sheetWrapPx,
   segmentStarts,
   shareLineChars,
+  shareMinLineChars,
   shareSegment,
   sheetHits,
+  SHEET_WRAP_MAX_PX,
   sheetStepEnd,
   swipeDirection,
   TEXT_CHUNK,
   textChunks,
   textLines,
+  textMinLines,
   TEXT_SEGMENT,
   xmlBranches,
   xmlClosed,
@@ -348,34 +353,111 @@ describe('правила окна просмотра', () => {
     // Место под блок — по длине текста: 100 знаков в строке, строка — 20 px.
     expect([0, 1, 100, 101, 8192].map((n) => textLines(n))).toEqual([1, 1, 1, 2, 82]);
     expect(textLines(100, 0)).toBe(100);
-    const lazy = (lines: number) =>
-      `style="content-visibility:auto;contain-intrinsic-size:none auto ${lines * 20}px"`;
+    // Наименьшая высота блока — строка на каждую тысячу знаков; тексту в одну строку она не нужна.
+    expect([0, 1000, 1001, 8192, 2_000_000].map((n) => textMinLines(n))).toEqual([
+      0, 0, 2, 9, 2000,
+    ]);
+    const lazy = (lines: number, min = 0) =>
+      `style="content-visibility:auto;contain-intrinsic-size:none auto ${lines * 20}px` +
+      `${min ? `;min-height:${min * 20}px` : ''}"`;
+    // Блоки разметки: [строк места, строк наименьшей высоты].
     const blocks = (html: string) =>
-      [...html.matchAll(/<span class="block[^"]*" style="[^"]*none auto (\d+)px">/g)].map(
-        (m) => Number(m[1]) / 20,
-      );
+      [
+        ...html.matchAll(
+          /<span class="block[^"]*" style="[^"]*none auto (\d+)px(?:;min-height:(\d+)px)?">/g,
+        ),
+      ].map((m) => [Number(m[1]) / 20, Number(m[2] ?? 0) / 20]);
     // Строка текста в 20 000 знаков — три блока (куски по 126 знаков: 65 кусков в блоке); между
     // кусками — место переноса. Место под строку и под каждый блок — по их длине.
     const line = 'слово '.repeat(20_000 / 6);
     const text = await model('l.txt', enc(`коротко\n${line}`), 'text');
     const html = renderToStaticMarkup(<TextFileView model={text} labels={labels} />);
-    expect(blocks(html)).toEqual([1, 200, 82, 82, 37]);
+    expect(blocks(html)).toEqual([
+      [1, 0],
+      [200, 20],
+      [82, 9],
+      [82, 9],
+      [37, 4],
+    ]);
     expect(html.split('<wbr/>').length).toBeGreaterThan(line.length / TEXT_CHUNK);
     expect(html.replace(/<[^>]+>/g, '')).toContain(line);
     // Абзац Word из 300 кусков по 100 знаков — тоже блоками (по 81 куску), абзац бумаги — у экрана.
     const runs = Array.from({ length: 300 }, () => ({ t: 'я'.repeat(99) + ' ' }));
     const doc: DocView = { kind: 'doc', blocks: [{ k: 'p', runs }], images: {}, cut: false };
     const paper = renderToStaticMarkup(<DocumentView model={doc} labels={labels} />);
-    expect(blocks(paper)).toEqual([81, 81, 81, 57]);
-    expect(paper).toMatch(new RegExp(`<p class="[^"]*" ${lazy(300)}>`));
+    expect(blocks(paper)).toEqual([
+      [81, 9],
+      [81, 9],
+      [81, 9],
+      [57, 6],
+    ]);
+    expect(paper).toMatch(new RegExp(`<p class="[^"]*" ${lazy(300, 30)}>`));
     // XML: имя и атрибуты длиннее блока — каждый атрибут своей строкой, блоки — по строкам
     // атрибутов (по две строки на атрибут в 106–107 знаков); сам узел — у экрана.
     const attrs = Array.from({ length: 100 }, (_, i) => `a${i}="${'я'.repeat(100)}"`).join(' ');
     const xml = await model('a.xml', enc(`<r ${attrs}><b k="1"/></r>`), 'xml');
     const tree = renderToStaticMarkup(<XmlFileView model={xml} labels={labels} />);
     expect(tree.split('<span class="block pl-4">')).toHaveLength(101);
-    expect(blocks(tree)).toEqual([76 * 2, 24 * 2]);
+    expect(blocks(tree)).toEqual([
+      [76 * 2, 9],
+      [24 * 2, 3],
+    ]);
     expect(tree).toContain(`data-xn="0" ${lazy(1)}`);
+  });
+
+  it('текст из знаков без ширины держит высоту по числу знаков (п. И-12)', async () => {
+    // После раскладки такой текст — одна строка: без наименьшей высоты при возврате к этому месту
+    // в кадр попадала сотня блоков. Высота — строка (20 px) на каждую тысячу знаков.
+    const lazy = (lines: number, min: number) =>
+      `style="content-visibility:auto;contain-intrinsic-size:none auto ${lines * 20}px` +
+      `;min-height:${min * 20}px"`;
+    const zero = '\u200e\u200f'.repeat(3950);
+    const text = await model('z.txt', enc(`${zero}\nкоротко\n${'я'.repeat(1000)}`), 'text');
+    const html = renderToStaticMarkup(<TextFileView model={text} labels={labels} />);
+    expect(html).toContain(`<span class="block" ${lazy(79, 8)}>`);
+    // Строке до тысячи знаков наименьшая высота не нужна: её высота — как была.
+    expect(html.split('min-height')).toHaveLength(2);
+    // Абзац Word и узел XML — так же; у свёрнутого узла текста на экране нет — и высоты под него.
+    const doc: DocView = {
+      kind: 'doc',
+      blocks: [
+        { k: 'p', runs: [{ t: zero }] },
+        { k: 'p', runs: [{ t: 'коротко' }] },
+      ],
+      images: {},
+      cut: false,
+    };
+    const paper = renderToStaticMarkup(<DocumentView model={doc} labels={labels} />);
+    expect(paper).toMatch(new RegExp(`<p class="[^"]*" ${lazy(79, 8)}>`));
+    expect(paper.split('min-height')).toHaveLength(2);
+    const xml = await model('z.xml', enc(`<r><a>${zero}</a><b>${zero}<c/></b></r>`), 'xml');
+    const tree = renderToStaticMarkup(<XmlFileView model={xml} labels={labels} />);
+    expect(tree).toContain(`data-xn="0-0" ${lazy(80, 8)}`);
+    expect(tree).toContain(`data-xn="0-1" ${lazy(80, 8)}`);
+    // В ячейке таблицы документа — по её доле ширины, но не меньше 4 знаков в строке.
+    expect([1, 0.25, 1 / 63, 0, 5].map(shareMinLineChars)).toEqual([1000, 250, 15, 4, 1000]);
+    // Место под блок — не больше 50 000 строк: высоту в десятки миллионов px браузер не прокручивает.
+    const cell = { blocks: [{ k: 'p' as const, runs: [{ t: '\u200e'.repeat(60_000) }] }] };
+    const narrow = renderToStaticMarkup(
+      <DocumentView
+        model={{
+          kind: 'doc',
+          blocks: [{ k: 't', cols: Array.from({ length: 63 }, () => 1), rows: [[cell]] }],
+          images: {},
+          cut: false,
+        }}
+        labels={labels}
+      />,
+    );
+    // 60 000 знаков по одному в строке — 60 000 строк места, остаётся 50 000; высота — по 15 знаков.
+    expect(narrow).toMatch(new RegExp(`<p class="[^"]*" ${lazy(LAZY_MAX_LINES, 4000)}>`));
+    // Лист: ячейка с переносом из «тяжёлой» строки — не ниже строки на каждые столько знаков,
+    // сколько самых узких помещается в её ширину (80 px — 28 знаков), и не выше предела Excel.
+    expect(sheetWrapMinPx(28, 80)).toBe(0);
+    expect(sheetWrapMinPx(29, 80)).toBe(32);
+    expect(sheetWrapMinPx(980, 80)).toBe(SHEET_WRAP_MAX_PX);
+    expect(sheetWrapMinPx(10, 0)).toBe(80);
+    expect(sheetWrapMinPx(0, 80)).toBe(0);
   });
 
   it('таблица Word: ширины столбцов заданы, текст ячейки — блоками по её доле ширины (п. И-12)', () => {
@@ -394,6 +476,8 @@ describe('правила окна просмотра', () => {
     expect(docColShares([1, 31_680]).map((x) => Math.round(x * 100))).toEqual([20, 80]);
     expect(docColShares([0, -5, Number.NaN])).toHaveLength(3);
     expect(docColShares([0, 0])).toEqual([0.5, 0.5]);
+    // Ширина не числом — как незаданная.
+    expect(docColShares([1, Number.POSITIVE_INFINITY])).toEqual([0.8, 0.2]);
     expect(docColShares([])).toEqual([]);
     // Доля ячейки — по столбцам, которые она занимает (с объединениями по вертикали сверху).
     expect(
@@ -416,17 +500,29 @@ describe('правила окна просмотра', () => {
     // Столбец — не уже 56 px: таблица шире бумаги прокручивается вбок в своём блоке.
     expect(html).toMatch(/<div class="overflow-x-auto"[^>]*><table[^>]*style="min-width:112px"/);
     expect(html).toContain('<colgroup><col style="width:25%"/><col style="width:75%"/></colgroup>');
+    // [место, наименьшая высота], px.
     const px = (tag: string) =>
-      [...html.matchAll(new RegExp(`<${tag}[^>]*none auto (\\d+)px"`, 'g'))].map((m) =>
-        Number(m[1]),
-      );
+      [
+        ...html.matchAll(
+          new RegExp(`<${tag}[^>]*none auto (\\d+)px(?:;min-height:(\\d+)px)?"`, 'g'),
+        ),
+      ].map((m) => [Number(m[1]), Number(m[2] ?? 0)]);
     // Место под таблицу — по её тексту (12 005 знаков — 121 строка), под абзацы ячеек — по ширине
     // ячейки: 25 и 75 знаков в строке.
-    expect(px('div')).toEqual([121 * 20]);
-    expect(px('p')).toEqual([240 * 20, 80 * 20, 20]);
+    // Наименьшая высота абзаца — по 250 и 750 знаков в строке; у таблицы её нет.
+    expect(px('div')).toEqual([[121 * 20, 0]]);
+    expect(px('p')).toEqual([
+      [240 * 20, 24 * 20],
+      [80 * 20, 8 * 20],
+      [20, 0],
+    ]);
     // Блоки текста: в ячейке на четверть ширины — до 2 048 знаков (16 кусков по 126 знаков), на три
     // четверти — до 6 144: там весь текст — один блок.
-    expect(px('span class="block"')).toEqual([81 * 20, 81 * 20, 79 * 20]);
+    expect(px('span class="block"')).toEqual([
+      [81 * 20, 9 * 20],
+      [81 * 20, 9 * 20],
+      [79 * 20, 8 * 20],
+    ]);
   });
 
   it('найденные ячейки — по строкам', () => {
@@ -542,7 +638,9 @@ describe('просмотр Excel', () => {
       />,
     );
     const lazy = 'content-visibility:auto;contain-intrinsic-size:none auto';
-    expect(heavy.split(`max-height:545px;${lazy} 304px`)).toHaveLength(3);
+    // Наименьшая высота ячейки с переносом — по числу знаков (8 строк по 135 самых узких знаков):
+    // и текст без ширины её не сожмёт.
+    expect(heavy.split(`max-height:545px;${lazy} 304px;min-height:128px`)).toHaveLength(3);
     expect(
       heavy.split(`<div class="overflow-hidden text-ellipsis" style="${lazy} 1px">`),
     ).toHaveLength(2);

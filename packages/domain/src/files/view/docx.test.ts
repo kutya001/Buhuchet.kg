@@ -7,6 +7,7 @@ import {
   DOC_MAX_CELLS,
   DOC_MAX_CHARS,
   DOC_MAX_COL_WIDTH,
+  DOC_MAX_FONT_PT,
   DOC_MAX_GRID,
   DOC_MAX_LABEL,
   DOC_MAX_LIST_START,
@@ -200,6 +201,37 @@ describe('Word DOCX в окне просмотра', () => {
     expect(shown).toBeLessThanOrEqual(left);
     expect(shown).toBeGreaterThan(left - 4);
     expect(items.filter((b) => b.li).length).toBeLessThan(100);
+  });
+
+  it('размер шрифта — целыми пунктами от 1 до 72: разных размеров в документе немного (защита, п. И-12)', async () => {
+    // 3 000 кусков, у каждого свой размер из файла (полупункты с дробной частью).
+    const body = p(
+      Array.from({ length: 3000 }, (_, i) => r('я', `<w:sz w:val="${0.1 + i * 0.07}"/>`)).join(''),
+    );
+    const doc = await parseDocx(openZip(await docxBytes(body)));
+    const sizes = new Set(doc.blocks.flatMap((b) => (b.k === 'p' ? b.runs.map((x) => x.sz) : [])));
+    expect(sizes.size).toBeLessThanOrEqual(DOC_MAX_FONT_PT);
+    expect([...sizes].every((x) => Number.isInteger(x) && x! >= 1 && x! <= DOC_MAX_FONT_PT)).toBe(
+      true,
+    );
+    const odd = await parseDocx(
+      openZip(
+        await docxBytes(
+          p(
+            r('а', '<w:sz w:val="21"/>') +
+              r('б', '<w:sz w:val="100000"/>') +
+              r('в', '<w:sz w:val="abc"/>') +
+              r('г', '<w:sz w:val="-4"/>'),
+          ),
+        ),
+      ),
+    );
+    expect(odd.blocks).toEqual([
+      {
+        k: 'p',
+        runs: [{ t: 'а', sz: 11 }, { t: 'б', sz: DOC_MAX_FONT_PT }, { t: 'в' }, { t: 'г' }],
+      },
+    ]);
   });
 
   it('одна картинка в 1 500 местах — показана в первых 1 000 (защита, п. И-12)', async () => {

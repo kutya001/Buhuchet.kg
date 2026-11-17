@@ -49,10 +49,20 @@ const slideLevel = (v: string | undefined) => {
   const n = Number(v ?? 0);
   return Number.isInteger(n) ? Math.min(8, Math.max(0, n)) : 0;
 };
-/** Размер шрифта из файла (сотые пункта) в пт, в пределе; нет или неверный — 0. */
+/**
+ * Размер шрифта слайда по сетке, пт: до 40 — целые, до 100 — кратные 4, дальше — кратные 20 (всего
+ * 70 значений). Каждый новый размер — новый шрифт у браузера: слайд, где у каждого из 5 000 кусков
+ * свой размер, раскладывался 6–8 с одним кадром.
+ */
+export function slideFontGrid(pt: number): number {
+  const size = Math.min(SLIDE_MAX_FONT_PT, pt);
+  if (size <= 40) return Math.max(1, Math.round(size));
+  return size <= 100 ? Math.round(size / 4) * 4 : Math.round(size / 20) * 20;
+}
+/** Размер шрифта из файла (сотые пункта) в пт, в пределе и по сетке; нет или неверный — 0. */
 const fontPt = (v: string | undefined) => {
   const n = Number(v);
-  return n > 0 ? Math.min(SLIDE_MAX_FONT_PT, n / 100) : 0;
+  return n > 0 ? slideFontGrid(n / 100) : 0;
 };
 
 /** Сколько ещё можно взять в модель; считается во время разбора. */
