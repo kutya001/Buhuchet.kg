@@ -386,6 +386,11 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     await asAdmin((tx) => bellSyncNews(tx, NOW, null));
     const adm = await asAdmin((tx) => bellPage(tx, ALL, { tab: 'news' }));
     expect(adm.items.map((x) => x.targetId)).toEqual(['bell-adm']);
+    // Остальные свои новости тоже снимаем: следующим тестам файла они не нужны.
+    await db.admin.db
+      .update(news)
+      .set({ off: true })
+      .where(sql`${news.id} in ('bell-n0', 'bell-adm', 'bell-draft')`);
   });
 
   it('новости с модулями — только тем, у кого есть хотя бы один из них (доработки 16.11, блок 4, пункт 3)', async () => {
@@ -444,22 +449,25 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         lead('ОсОО «Подключена»', { status: 'connected', createdAt: recent }),
       ])
       .returning({ id: platformLeads.id });
-    const template = 'Новая заявка с сайта: {name}';
-    await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
-    await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
-    const page = await asAdmin((tx) => bellPage(tx, ALL, { tab: 'all' }));
-    expect(page.items.map((x) => [x.kind, x.text, x.targetKind])).toEqual([
-      ['other', 'Новая заявка с сайта: ОсОО «Новая»', 'lead'],
-    ]);
-    // Сотрудник организации заявок не кладёт и не видит.
-    await expect(
-      inA(acc.userId, (tx) => bellSyncLeads(tx, template, NOW)),
-    ).resolves.toBeUndefined();
-    expect(await keys(acc.userId)).toEqual([]);
-    // Свои заявки убираем: следующим тестам файла они не нужны.
-    await db.admin.db
-      .delete(platformLeads)
-      .where(sql`${platformLeads.id} in ${own.map((x) => x.id)}`);
+    try {
+      const template = 'Новая заявка с сайта: {name}';
+      await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
+      await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
+      const page = await asAdmin((tx) => bellPage(tx, ALL, { tab: 'all' }));
+      expect(page.items.map((x) => [x.kind, x.text, x.targetKind])).toEqual([
+        ['other', 'Новая заявка с сайта: ОсОО «Новая»', 'lead'],
+      ]);
+      // Сотрудник организации заявок не кладёт и не видит.
+      await expect(
+        inA(acc.userId, (tx) => bellSyncLeads(tx, template, NOW)),
+      ).resolves.toBeUndefined();
+      expect(await keys(acc.userId)).toEqual([]);
+    } finally {
+      // Свои заявки убираем и при падении: следующим тестам файла они не нужны.
+      await db.admin.db
+        .delete(platformLeads)
+        .where(sql`${platformLeads.id} in ${own.map((x) => x.id)}`);
+    }
   });
 
   it('новости и заявки старше срока хранения не кладутся: убранная уборкой строка не возвращается', async () => {
@@ -493,18 +501,21 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         .where(sql`${bellNotifications.eventKey} in ${ownKeys}`);
       return rows.map((r) => `${r.u === adminId ? 'admin' : 'acc'} ${r.k}`).sort();
     };
-    // Через 91 день после появления новости и заявки.
-    const later = new Date(new Date(`${BELL_FROM}T03:00:00Z`).getTime() + 91 * 86_400_000);
-    await inA(acc.userId, (tx) => bellSyncNews(tx, later, null));
-    await asAdmin((tx) => bellSyncNews(tx, later, null));
-    await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', later));
-    expect(await put()).toEqual([]);
-    // В пределах срока — кладутся: новость сотруднику, заявка администратору платформы.
-    await inA(acc.userId, (tx) => bellSyncNews(tx, NOW, null));
-    await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', NOW));
-    expect(await put()).toEqual(['acc news:bell-keep', `admin lead:${old!.id}`]);
-    await db.admin.db.delete(platformLeads).where(eq(platformLeads.id, old!.id));
-    await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-keep'));
+    try {
+      // Через 91 день после появления новости и заявки.
+      const later = new Date(new Date(`${BELL_FROM}T03:00:00Z`).getTime() + 91 * 86_400_000);
+      await inA(acc.userId, (tx) => bellSyncNews(tx, later, null));
+      await asAdmin((tx) => bellSyncNews(tx, later, null));
+      await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', later));
+      expect(await put()).toEqual([]);
+      // В пределах срока — кладутся: новость сотруднику, заявка администратору платформы.
+      await inA(acc.userId, (tx) => bellSyncNews(tx, NOW, null));
+      await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', NOW));
+      expect(await put()).toEqual(['acc news:bell-keep', `admin lead:${old!.id}`]);
+    } finally {
+      await db.admin.db.delete(platformLeads).where(eq(platformLeads.id, old!.id));
+      await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-keep'));
+    }
   });
 
   it('уборка: строки старше 90 дней — только своей организации или только администраторов', async () => {
