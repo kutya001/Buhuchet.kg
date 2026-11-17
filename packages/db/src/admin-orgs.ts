@@ -46,6 +46,8 @@ export const adminOrganizations = pgSchema('app')
     updatedByName: text('updated_by_name'),
     // Форма организации (миграция 0150): окно «ИНН и форма» Админки.
     legalForm: text('legal_form', { enum: ORG_LEGAL_FORMS }),
+    // Контрагентов не в архиве (миграция 0161, прототип `cps`).
+    contractors: integer('contractors').notNull(),
   })
   .existing();
 
@@ -60,7 +62,7 @@ export interface AdminOrganizationRecord {
   legalForm: OrgLegalForm | null;
   slug: string;
   ownerLogin: string | null;
-  /** Контрагентов — появится с модулем «Контрагенты» (поток А); пока 0. */
+  /** Контрагентов не в архиве (прототип admin/accounts-orgs.js, `cps`). */
   contractors: number;
   /** Активных сотрудников. */
   employees: number;
@@ -89,6 +91,7 @@ const fields = {
   createdByName: v.createdByName,
   updatedByName: v.updatedByName,
   legalForm: v.legalForm,
+  contractors: v.contractors,
 };
 
 type Row = {
@@ -103,7 +106,7 @@ function toRecord(r: Row): AdminOrganizationRecord {
     legalForm: r.legalForm,
     slug: r.slug!,
     ownerLogin: r.ownerLogin,
-    contractors: 0,
+    contractors: r.contractors ?? 0,
     employees: r.employees ?? 0,
     active: r.status === 'active',
     blockedReason: r.blockedReason,
@@ -124,7 +127,7 @@ const CREATED_BY = auditActorValue(v.createdBy, v.createdByName);
  * Столбцы списка «Организации» на сервере (ТЗ «Админка» → «Модуль организаций»: название, ИНН,
  * владелец, число контрагентов и сотрудников, дата регистрации, активна; прототип
  * admin/accounts-orgs.js, renderOrgs): ключи — как у столбцов экрана. Статус — коды `active`/`blocked`,
- * сортируется и ищется как подписи («Активна» выше «Заблокирована»). Контрагентов пока нет — 0.
+ * сортируется и ищется как подписи («Активна» выше «Заблокирована»).
  */
 export function adminOrgListColumns(t: ListTexts): ListColumns {
   return {
@@ -132,7 +135,7 @@ export function adminOrgListColumns(t: ListTexts): ListColumns {
     inn: { type: 'text', label: 'orgs.col.inn', value: v.inn, compact: true },
     owner: { type: 'text', label: 'orgs.col.owner', value: v.ownerLogin },
     slug: { type: 'text', label: 'orgs.col.slug', value: v.slug },
-    contractors: { type: 'int', label: 'orgs.col.contractors', value: sql`0`, total: true },
+    contractors: { type: 'int', label: 'orgs.col.contractors', value: v.contractors, total: true },
     employees: { type: 'int', label: 'orgs.col.employees', value: v.employees, total: true },
     registered: {
       type: 'date',
@@ -234,22 +237,24 @@ export async function adminOrgIdBySlug(tx: Tx, slug: string): Promise<string | n
 }
 
 /**
- * Плашки над списком (прототип renderOrgs): активных организаций, контрагентов на платформе (пока 0 —
- * появятся с модулем «Контрагенты»), учётных записей организаций и запросов организаций на добавление
+ * Плашки над списком (прототип renderOrgs): активных организаций, контрагентов на платформе (не в архиве,
+ * сумма по организациям), учётных записей организаций и запросов организаций на добавление
  * в справочники («Попросить добавить», все — как `REQUESTS.length` прототипа).
  */
 export async function adminOrgSummary(
   tx: Tx,
 ): Promise<{ active: number; contractors: number; users: number; requests: number }> {
   const [orgs] = await tx
-    .select({ n: sql<number>`count(*)::integer` })
-    .from(v)
-    .where(eq(v.status, 'active'));
+    .select({
+      n: sql<number>`(count(*) filter (where ${v.status} = 'active'))::integer`,
+      cps: sql<number>`coalesce(sum(${v.contractors}), 0)::integer`,
+    })
+    .from(v);
   const [users] = await tx.execute<{ n: number }>(sql`select app.admin_platform_users() as n`);
   const [requests] = await tx.execute<{ n: number }>(sql`select app.admin_dict_requests() as n`);
   return {
     active: orgs?.n ?? 0,
-    contractors: 0,
+    contractors: orgs?.cps ?? 0,
     users: users?.n ?? 0,
     requests: requests?.n ?? 0,
   };

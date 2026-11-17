@@ -1,6 +1,6 @@
 import { hashPassword } from '@buhuchet/adapters/password';
 import type { ListQuery } from '@buhuchet/domain';
-import { sql, type SQL } from 'drizzle-orm';
+import { eq, sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   adminGetOrganization,
@@ -12,17 +12,50 @@ import {
 } from './admin-orgs';
 import { withUserContext } from './auth';
 import { withOrgContext } from './context';
+import { createContractor, type ContractorFields } from './contractors';
 import { readHistory } from './history';
 import { createOrganization, type CreatedOrganization } from './organizations';
-import { users } from './schema';
+import { contractors, users } from './schema';
 import {
   createTestDatabase,
   databaseAvailable,
   seedAccessReference,
+  seedAllPlatformDictionaries,
   type TestDatabase,
 } from './testing';
 
 const t = (key: string) => key;
+const contractor = (
+  name: string,
+  inn: string,
+  responsibleEmployeeId: string,
+): ContractorFields => ({
+  name,
+  inn,
+  phone: '+996505890076',
+  kind: 'regular',
+  formCode: 'ФС-01',
+  regimeCode: 'РЕЖ-01',
+  regime2Code: null,
+  gked: '46.34.0',
+  gkedExtra: [],
+  taxOfficeCode: null,
+  bizSize: 'small',
+  benefits: [],
+  bases: [],
+  responsibleEmployeeId,
+  head: '',
+  contact: '',
+  contractNo: '',
+  contractDate: null,
+  note: '',
+  registration: {},
+  startDate: '2024-07-16',
+  firstMonthMode: 'full',
+  feeDay: 10,
+  paysTo: 'emp',
+  gkedConfirmation: null,
+});
 const query = (over: Partial<ListQuery> = {}): ListQuery => ({
   sort: undefined,
   page: 1,
@@ -43,6 +76,7 @@ describe.skipIf(!databaseAvailable())(
     beforeAll(async () => {
       db = await createTestDatabase();
       await seedAccessReference(db.admin.db);
+      await seedAllPlatformDictionaries(db.admin.db);
       const passwordHash = await hashPassword('Bh-4821-temp');
       const [admin, blocked] = await db.admin.db
         .insert(users)
@@ -66,6 +100,35 @@ describe.skipIf(!databaseAvailable())(
         owner: { fullName: 'Бекова Бермет', login: 'bekova', passwordHash },
         createdBy: adminId,
       });
+      // «Альфа»: три контрагента, один в архиве — в Админке считаются два (прототип `cps`); у «Беты» — ни одного.
+      const cps = await withOrgContext(
+        db.app.db,
+        { orgId: a.orgId, userId: a.ownerUserId },
+        async (tx) => [
+          await createContractor(
+            tx,
+            a.orgId,
+            contractor('ОсОО «Первый»', '03744097401851', a.ownerEmployeeId),
+            null,
+          ),
+          await createContractor(
+            tx,
+            a.orgId,
+            contractor('ОсОО «Второй»', '03744097401852', a.ownerEmployeeId),
+            null,
+          ),
+          await createContractor(
+            tx,
+            a.orgId,
+            contractor('ОсОО «Архивный»', '03744097401853', a.ownerEmployeeId),
+            null,
+          ),
+        ],
+      );
+      await db.admin.db
+        .update(contractors)
+        .set({ serviceStatus: 'archived' })
+        .where(eq(contractors.id, cps[2]!));
     });
 
     afterAll(async () => {
@@ -77,21 +140,28 @@ describe.skipIf(!databaseAvailable())(
         listAdminOrgsPage(tx, query({ sort: { key: 'name', dir: 'asc' } }), t),
       );
       expect(page.total).toBe(2);
-      expect(page.rows.map((r) => [r.name, r.inn, r.ownerLogin, r.employees, r.active])).toEqual([
-        ['ОсОО «Альфа»', '01811201810456', 'asanov', 1, true],
-        ['ОсОО «Бета»', '02811201810457', 'bekova', 1, true],
+      expect(
+        page.rows.map((r) => [r.name, r.inn, r.ownerLogin, r.contractors, r.employees, r.active]),
+      ).toEqual([
+        ['ОсОО «Альфа»', '01811201810456', 'asanov', 2, 1, true],
+        ['ОсОО «Бета»', '02811201810457', 'bekova', 0, 1, true],
       ]);
       const beta = page.rows[1]!;
       expect(beta.audit.createdBy).toBe('Администратор платформы');
       expect(page.rows[0]!.audit.createdBy).toBeNull();
       expect(page.totals.employees).toBe(2);
+      expect(page.totals.contractors).toBe(2);
+      const byCount = await withUserContext(db.app.db, adminId, (tx) =>
+        listAdminOrgsPage(tx, query({ sort: { key: 'contractors', dir: 'desc' } }), t),
+      );
+      expect(byCount.rows.map((r) => r.name)).toEqual(['ОсОО «Альфа»', 'ОсОО «Бета»']);
 
       const values = await withUserContext(db.app.db, adminId, (tx) =>
         listAdminOrgValues(tx, 'active', t),
       );
       expect(values.items).toEqual([{ value: 'active', label: 'orgs.active', count: 2 }]);
       const summary = await withUserContext(db.app.db, adminId, (tx) => adminOrgSummary(tx));
-      expect(summary).toEqual({ active: 2, contractors: 0, users: 2, requests: 0 });
+      expect(summary).toEqual({ active: 2, contractors: 2, users: 2, requests: 0 });
       const slugs = await withUserContext(db.app.db, adminId, (tx) => adminOrgSlugs(tx));
       expect(slugs.sort()).toEqual(['alfa', 'beta']);
     });
