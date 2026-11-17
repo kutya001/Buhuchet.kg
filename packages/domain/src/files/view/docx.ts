@@ -31,6 +31,8 @@ export const DOC_MAX_LABEL = 64;
  * целиком.
  */
 export const DOC_MAX_CHARS = 2_000_000;
+/** Перенос строки `<w:br/>` в счёте знаков документа — как строка в 64 знака. */
+export const DOC_BREAK_CHARS = 64;
 /**
  * Строк и ячеек всех таблиц документа вместе — не больше: пустая `<w:tc/>` не тратит ни абзаца,
  * ни знака, а окно рисует каждую ячейку.
@@ -311,17 +313,23 @@ async function runsOf(el: XEl, ctx: Ctx, out: DocRun[], base: Partial<DocRun>): 
         if (on(childEl(rp, 'vanish'))) continue;
       }
       let text = '';
+      let breaks = 0;
       const flush = () => {
-        if (text && take(ctx, text.length)) out.push({ ...fmt, t: text });
+        // Перенос строки стоит как строка текста: работу окна задаёт число строк, а не знаков.
+        if (text && take(ctx, text.length + breaks * DOC_BREAK_CHARS))
+          out.push({ ...fmt, t: text });
         text = '';
+        breaks = 0;
       };
       for (const c of k.kids) {
         if (typeof c === 'string') continue;
         const cn = localName(c.name);
         if (cn === 't') text += c.kids.filter((x): x is string => typeof x === 'string').join('');
         else if (cn === 'tab' || cn === 'ptab') text += '\t';
-        else if (cn === 'br' || cn === 'cr') text += '\n';
-        else if (cn === 'noBreakHyphen') text += '-';
+        else if (cn === 'br' || cn === 'cr') {
+          text += '\n';
+          breaks++;
+        } else if (cn === 'noBreakHyphen') text += '-';
         else if (cn === 'drawing' || cn === 'pict' || cn === 'object') {
           flush();
           const blip = findEl(c, 'blip') ?? findEl(c, 'imagedata');

@@ -37,16 +37,21 @@ export function scrollsToward(
 /** Строка поиска: без лишних пробелов, без учёта регистра и «ё/е». */
 export const searchKey = (s: string) => searchFold(s.trim());
 
-/** Ячейки листа, где есть искомое: [строка, столбец] по порядку строк. */
+/**
+ * Ячейки листа, где есть искомое: [строка, столбец] по порядку строк. Скрытые строки и столбцы
+ * не ищутся: их нет на экране, перейти к ним нельзя.
+ */
 export function sheetHits(sheet: SheetView, q: string): [number, number][] {
   const k = searchKey(q);
   if (!k) return [];
+  const hidden = new Set(sheet.hiddenRows);
   const out: [number, number][] = [];
-  sheet.rows.forEach((row, r) =>
+  sheet.rows.forEach((row, r) => {
+    if (hidden.has(r)) return;
     row.forEach((cell, c) => {
-      if (cell && searchKey(cell.v).includes(k)) out.push([r, c]);
-    }),
-  );
+      if (cell && (sheet.cols[c] ?? 1) > 0 && searchKey(cell.v).includes(k)) out.push([r, c]);
+    });
+  });
   return out;
 }
 
@@ -79,7 +84,8 @@ export function mergeMap(sheet: SheetView, drawn = Number.POSITIVE_INFINITY): Me
   for (const [r1, c1, r2full, c2] of sheet.merges) {
     if (r1 >= last) continue;
     const r2 = Math.min(r2full, last - 1);
-    if (skip.size + (r2 - r1 + 1) * (c2 - c1 + 1) > MERGE_SKIP_MAX) break;
+    // Не поместилось в предел — пропущено только оно: следующие объединения листа на месте.
+    if (skip.size + (r2 - r1 + 1) * (c2 - c1 + 1) > MERGE_SKIP_MAX) continue;
     let rows = 0;
     for (let r = r1; r <= r2; r++) if (!hidden.has(r)) rows++;
     let cols = 0;

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   parseDocx,
   numberText,
+  DOC_BREAK_CHARS,
   DOC_MAX_BLOCKS,
   DOC_MAX_CELLS,
+  DOC_MAX_CHARS,
   DOC_MAX_GRID,
   DOC_MAX_LABEL,
   DOC_MAX_LIST_START,
@@ -129,6 +131,17 @@ describe('Word DOCX в окне просмотра', () => {
       ],
     ]);
     expect(t.rows[0]![0]!.blocks).toEqual([{ k: 'p', runs: [{ t: 'Шапка' }] }]);
+  });
+
+  it('перенос строки стоит как строка текста: сто тысяч `<w:br/>` в документ не попадают (защита, п. И-12)', async () => {
+    const piece = `<w:r>${'<w:br/>'.repeat(1000)}</w:r>`;
+    const doc = await parseDocx(openZip(await docxBytes(p(piece.repeat(100)))));
+    const breaks = doc.blocks
+      .flatMap((b) => (b.k === 'p' ? b.runs : []))
+      .reduce((n, x) => n + x.t.length, 0);
+    expect(doc.cut).toBe(true);
+    expect(breaks).toBeLessThanOrEqual(DOC_MAX_CHARS / DOC_BREAK_CHARS);
+    expect(breaks).toBeGreaterThan(0);
   });
 
   it('одна картинка в 1 500 местах — показана в первых 1 000 (защита, п. И-12)', async () => {

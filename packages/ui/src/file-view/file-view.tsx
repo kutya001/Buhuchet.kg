@@ -294,6 +294,9 @@ function cellClass(cell: SheetCell | null | undefined, hit: boolean, current: bo
     .join(' ');
 }
 
+/** Ширина столбца номеров строк, px. */
+const SHEET_HEAD_PX = 46;
+
 interface SheetCol {
   w: number;
   c: number;
@@ -374,6 +377,7 @@ export function SheetTable({
     () => sheet.cols.map((w, c) => ({ w, c })).filter((x) => x.w > 0),
     [sheet],
   );
+  const tableWidth = useMemo(() => SHEET_HEAD_PX + cols.reduce((a, x) => a + x.w, 0), [cols]);
   // Объединения — один раз на лист.
   const merges = useMemo(() => mergeMap(sheet), [sheet]);
   const byRow = useMemo(() => hitsByRow(hits), [hits]);
@@ -392,8 +396,15 @@ export function SheetTable({
     if (scrolled.current === k) return;
     if (cr >= drawn) {
       // Найденная строка ниже нарисованного: следующий шаг — отдельной задачей, окно не замирает.
-      const id = setTimeout(() => setDrawn((d) => sheetStepEnd(sheet, d, cols.length, hidden)), 0);
-      return () => clearTimeout(id);
+      // после кадра прошлого шага — иначе браузер склеивает несколько шагов в один кадр.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const frame = requestAnimationFrame(() => {
+        timer = setTimeout(() => setDrawn((d) => sheetStepEnd(sheet, d, cols.length, hidden)), 0);
+      });
+      return () => {
+        cancelAnimationFrame(frame);
+        clearTimeout(timer);
+      };
     }
     // Найденная ячейка — в середину видимой части (после того как строка нарисована).
     const id = setTimeout(() => {
@@ -435,11 +446,14 @@ export function SheetTable({
     <>
       <table
         ref={table}
-        className="w-max table-fixed border-separate border-spacing-0 text-[12.5px]"
+        className="table-fixed border-separate border-spacing-0 text-[12.5px]"
+        // Ширина таблицы — числом из ширин столбцов: при `max-content` браузер раскладывает таблицу
+        // по тексту, и строка нового шага заново раскладывала бы все нарисованные.
+        style={{ width: tableWidth }}
         data-fv-sheet={sheet.name}
       >
         <colgroup>
-          <col style={{ width: 46 }} />
+          <col style={{ width: SHEET_HEAD_PX }} />
           {cols.map(({ w, c }) => (
             <col key={c} style={{ width: w }} />
           ))}

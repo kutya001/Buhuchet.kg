@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pptxBytes, zipBytes } from './fixtures';
 import {
   parsePptx,
+  SLIDE_MAX_CHARS,
   SLIDE_MAX_FONT_PT,
   SLIDE_MAX_PARTS,
   SLIDES_MAX,
@@ -89,6 +90,34 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(image).toMatchObject({ k: 'pic', img: 'ppt/media/image1.png' });
     expect(Object.keys(v.images)).toEqual(['ppt/media/image1.png']);
     expect(JSON.stringify(v)).not.toContain('evil.example');
+  });
+
+  it('знаков на одном слайде — до 100 000: остаток слайда не показан, следующий слайд цел (защита, п. И-12)', async () => {
+    const word = 'я '.repeat(30_000);
+    const many = Array.from({ length: 5 }, () => `<a:p><a:r><a:t>${word}</a:t></a:r></a:p>`).join(
+      '',
+    );
+    const v = await parsePptx(
+      openZip(
+        await pptxBytes([
+          box(0, 0, 1, 1000, many),
+          box(0, 0, 1000, 1000, '<a:p><a:r><a:t>второй</a:t></a:r></a:p>'),
+        ]),
+      ),
+    );
+    const chars = (i: number) =>
+      v.slides[i]!.items.reduce(
+        (n, it) =>
+          n +
+          (it.k === 'text'
+            ? it.paras.reduce((m, p) => m + p.runs.reduce((q, r) => q + r.t.length, 0), 0)
+            : 0),
+        0,
+      );
+    expect(v.cut).toBe(true);
+    expect(chars(0)).toBeLessThanOrEqual(SLIDE_MAX_CHARS);
+    expect(chars(0)).toBe(60_000);
+    expect(chars(1)).toBe('второй'.length);
   });
 
   it('размер слайда из файла — от 1 до 56 дюймов, как у PowerPoint', async () => {

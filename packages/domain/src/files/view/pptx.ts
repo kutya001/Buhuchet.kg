@@ -30,6 +30,11 @@ export const SLIDE_MAX_PARTS = 5_000;
 export const SLIDES_MAX_PARTS = 200_000;
 /** Знаков текста во всей презентации — не больше (как у текстового файла). */
 export const SLIDES_MAX_CHARS = 2_000_000;
+/**
+ * Знаков текста на одном слайде — не больше: окно раскладывает слайд целиком, а в узкой надписи
+ * каждое слово — своя строка.
+ */
+export const SLIDE_MAX_CHARS = 100_000;
 /** Сторона слайда, EMU: от 1 до 56 дюймов, как у PowerPoint. */
 const SLIDE_SIDE_MIN = 914_400;
 const SLIDE_SIDE_MAX = 51_206_400;
@@ -53,6 +58,8 @@ const fontPt = (v: string | undefined) => {
 /** Сколько ещё можно взять в модель; считается во время разбора. */
 interface SlideBudget {
   slide: number;
+  /** Знаков ещё можно взять на этом слайде. */
+  slideChars: number;
   deck: number;
   chars: number;
   cut: boolean;
@@ -67,11 +74,14 @@ function takePart(b: SlideBudget, chars = 0): boolean {
     b.cut = true;
     return false;
   }
-  if (b.slide <= 0) {
+  if (b.slide <= 0 || b.slideChars < chars) {
+    // Предел слайда: остаток этого слайда не показан, следующие — целы.
+    b.slideChars = 0;
     b.cut = true;
     return false;
   }
   b.slide--;
+  b.slideChars -= chars;
   b.deck--;
   b.chars -= chars;
   return true;
@@ -374,6 +384,7 @@ export async function parsePptx(zip: Zip): Promise<SlidesView> {
   const ids = childEls(childEl(pres ?? undefined, 'sldIdLst'), 'sldId');
   const budget: SlideBudget = {
     slide: SLIDE_MAX_PARTS,
+    slideChars: SLIDE_MAX_CHARS,
     deck: SLIDES_MAX_PARTS,
     chars: SLIDES_MAX_CHARS,
     cut: false,
@@ -384,6 +395,7 @@ export async function parsePptx(zip: Zip): Promise<SlidesView> {
       break;
     }
     budget.slide = SLIDE_MAX_PARTS;
+    budget.slideChars = SLIDE_MAX_CHARS;
     const rel = rels.get(prefixedAttr(sid, 'id') ?? '');
     if (!rel || rel.external || rel.type !== 'slide') continue;
     const src = await zip.text(rel.part);

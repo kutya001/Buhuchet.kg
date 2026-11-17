@@ -123,6 +123,17 @@ describe('правила окна просмотра', () => {
       [2, 0],
     ]);
     expect(sheetHits(sheet, '   ')).toEqual([]);
+    // Скрытые строки и столбцы не ищутся: перейти к ним нельзя.
+    expect(sheetHits(sheet, 'скрытая')).toEqual([]);
+    expect(
+      sheetHits(
+        { ...sheet, rows: [[{ v: 'а' }, null, { v: 'а' }, { v: 'а' }]], hiddenRows: [] },
+        'а',
+      ),
+    ).toEqual([
+      [0, 0],
+      [0, 3],
+    ]);
     // Пробел в числе — неразрывный, как в Excel; ищется обычным.
     expect(sheetHits({ ...sheet, rows: [[{ v: '1 250', num: true }]] }, '1 250')).toEqual([[0, 0]]);
   });
@@ -160,6 +171,17 @@ describe('правила окна просмотра', () => {
       ),
     });
     expect(huge.skip.size).toBeLessThanOrEqual(MERGE_SKIP_MAX);
+    // Объединение больше предела пропущено одно: следующее — на месте.
+    const next = mergeMap({
+      ...tall,
+      cols: Array.from({ length: 256 }, () => 64),
+      merges: [
+        [0, 0, 4999, 200],
+        [0, 201, 1, 202],
+      ],
+    });
+    expect(next.span.has('0:0')).toBe(false);
+    expect(next.span.get('0:201')).toEqual({ rows: 2, cols: 2 });
     // Ниже данных листа — тоже нет: строк в листе 3, объединение на 5 000.
     expect(mergeMap({ ...tall, rows: [[], [], []] }).span.get('0:0')).toEqual({ rows: 3, cols: 2 });
   });
@@ -264,6 +286,8 @@ describe('просмотр Excel', () => {
       />,
     );
     expect(html).toContain('max-height:545px');
+    // Ширина таблицы — числом из ширин столбцов (46 + 80 + 80 + 80): текст её не раздвигает.
+    expect(html).toMatch(/<table[^>]*style="width:286px"/);
     expect(html).toContain(`>${'а'.repeat(SHEET_CELL_SHOW)}<`);
     expect(html).toContain(`title="${long}"`);
   });
