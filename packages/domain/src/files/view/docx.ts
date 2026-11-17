@@ -31,11 +31,6 @@ export const DOC_MAX_LABEL = 64;
  * целиком.
  */
 export const DOC_MAX_CHARS = 2_000_000;
-/**
- * Знаков текста в одной таблице документа (со вложенными) — не больше: таблицу окно раскладывает
- * целиком, по частям её не разложить. Остальные строки таблицы не показываются.
- */
-export const DOC_MAX_TABLE_CHARS = 500_000;
 /** Перенос строки `<w:br/>` в счёте знаков документа — как строка в 64 знака. */
 export const DOC_BREAK_CHARS = 64;
 /**
@@ -48,6 +43,8 @@ export const DOC_MAX_CELLS = 50_000;
  * ячейки строки не берутся. Иначе строка из тысяч ячеек с `gridSpan` вешает раскладку страницы.
  */
 export const DOC_MAX_GRID = 63;
+/** Ширина столбца таблицы из файла (`w:gridCol`, двадцатые доли пункта) — не больше (22 дюйма Word). */
+export const DOC_MAX_COL_WIDTH = 31_680;
 
 export interface DocRun {
   t: string;
@@ -82,6 +79,12 @@ export interface DocCell {
 
 export interface DocTable {
   k: 't';
+  /**
+   * Ширины столбцов сетки — доли между собой (из `w:tblGrid` файла; без него — поровну), по одному
+   * числу на столбец, который занят ячейками. Окно задаёт ширины по ним, а не по тексту ячеек:
+   * иначе браузер раскладывает весь текст таблицы разом.
+   */
+  cols: number[];
   rows: DocCell[][];
 }
 
@@ -280,34 +283,30 @@ interface Ctx {
   chars: number;
   /** Строк и ячеек таблиц уже в модели. */
   cells: number;
-  /** Глубина таблицы, которая сейчас разбирается (0 — вне таблицы). */
-  tableDepth: number;
-  /** Знаков текста в таблице верхнего уровня, которая сейчас разбирается. */
-  tableChars: number;
-  /** Таблица верхнего уровня набрала `DOC_MAX_TABLE_CHARS`: её строки больше не берутся. */
-  tableFull: boolean;
   cut: boolean;
 }
 
 /**
- * Ещё один кусок в модель: после `DOC_MAX_RUNS` кусков или `DOC_MAX_CHARS` знаков — нет, документ
- * показан не целиком; в таблице — ещё и после `DOC_MAX_TABLE_CHARS` знаков этой таблицы.
+ * Ещё `chars` знаков текста в модель: после `DOC_MAX_CHARS` знаков — нет, документ показан не
+ * целиком.
  */
-function take(ctx: Ctx, chars = 0): boolean {
-  if (ctx.runs >= DOC_MAX_RUNS || ctx.chars + chars > DOC_MAX_CHARS) {
+function spend(ctx: Ctx, chars: number): boolean {
+  if (ctx.chars + chars > DOC_MAX_CHARS) {
     ctx.cut = true;
     return false;
   }
-  if (ctx.tableDepth > 0) {
-    if (ctx.tableFull || ctx.tableChars + chars > DOC_MAX_TABLE_CHARS) {
-      ctx.tableFull = true;
-      ctx.cut = true;
-      return false;
-    }
-    ctx.tableChars += chars;
-  }
-  ctx.runs++;
   ctx.chars += chars;
+  return true;
+}
+
+/** Ещё один кусок в модель: после `DOC_MAX_RUNS` кусков или предела знаков (`spend`) — нет. */
+function take(ctx: Ctx, chars = 0): boolean {
+  if (ctx.runs >= DOC_MAX_RUNS) {
+    ctx.cut = true;
+    return false;
+  }
+  if (!spend(ctx, chars)) return false;
+  ctx.runs++;
   return true;
 }
 
@@ -414,7 +413,8 @@ async function paraOf(p: XEl, ctx: Ctx): Promise<DocPara> {
     : st?.num;
   if (num) {
     const label = ctx.numberer.label(num.numId, num.ilvl);
-    if (label !== null) para.li = { lvl: num.ilvl, label };
+    // Номер пункта — тоже текст на экране: его знаки в общем счёте.
+    if (label !== null && spend(ctx, label.length)) para.li = { lvl: num.ilvl, label };
   }
   await runsOf(p, ctx, para.runs, st?.b ? { b: true } : {});
   return para;
@@ -435,13 +435,8 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
   // Ячейка, начавшая объединение по вертикали, по номеру столбца сетки.
   const vStart = new Map<number, DocCell>();
   let full = false;
-  if (ctx.tableDepth === 0) {
-    ctx.tableChars = 0;
-    ctx.tableFull = false;
-  }
-  ctx.tableDepth++;
   for (const tr of childEls(tbl, 'tr')) {
-    if (full || ctx.tableFull || !takeCell(ctx)) break;
+    if (full || !takeCell(ctx)) break;
     const row: DocCell[] = [];
     let grid = 0;
     for (const tc of childEls(tr, 'tc')) {
@@ -460,7 +455,7 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
         grid += span;
         continue;
       }
-      if (ctx.tableFull || !takeCell(ctx)) {
+      if (!takeCell(ctx)) {
         full = true;
         break;
       }
@@ -473,18 +468,36 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
     }
     rows.push(row);
   }
-  ctx.tableDepth--;
-  fitTableGrid(rows, ctx);
-  return { k: 't', rows };
+  const used = fitTableGrid(rows, ctx);
+  return { k: 't', cols: tableCols(tbl, used), rows };
+}
+
+/**
+ * Ширины `used` столбцов таблицы: из сетки файла `w:tblGrid` (числа от 1 до `DOC_MAX_COL_WIDTH`);
+ * столбцу без ширины в файле — средняя из заданных, без сетки — всем поровну.
+ */
+function tableCols(tbl: XEl, used: number): number[] {
+  const grid = childEl(tbl, 'tblGrid');
+  const widths = (grid ? childEls(grid, 'gridCol') : []).slice(0, used).map((gc) => {
+    const w = Math.floor(Number(attrOf(gc, 'w')));
+    return w > 0 ? Math.min(DOC_MAX_COL_WIDTH, w) : 0;
+  });
+  const given = widths.filter((w) => w > 0);
+  const rest = given.length
+    ? Math.max(1, Math.round(given.reduce((a, w) => a + w, 0) / given.length))
+    : 1;
+  return Array.from({ length: used }, (_, c) => widths[c] || rest);
 }
 
 /**
  * Раскладка, как у таблицы в окне (правило HTML): ячейка встаёт в первый столбец, не занятый
  * объединением по вертикали сверху. Ячейка, которая так выходит за сетку Word (`DOC_MAX_GRID`), и
  * остальные ячейки её строки не показываются: иначе «лестница» объединений из файла раздвигает
- * таблицу на тысячи столбцов, хотя по сетке файла строка укладывается в 63.
+ * таблицу на тысячи столбцов, хотя по сетке файла строка укладывается в 63. Ответ — сколько столбцов
+ * заняли ячейки.
  */
-function fitTableGrid(rows: DocCell[][], ctx: Ctx): void {
+function fitTableGrid(rows: DocCell[][], ctx: Ctx): number {
+  let used = 0;
   // До какой строки (не включая) занят столбец объединением сверху.
   const busy = new Array<number>(DOC_MAX_GRID).fill(0);
   rows.forEach((row, ri) => {
@@ -502,8 +515,10 @@ function fitTableGrid(rows: DocCell[][], ctx: Ctx): void {
       col += span;
       kept++;
     }
+    used = Math.max(used, col);
     row.length = kept;
   });
+  return used;
 }
 
 async function blocksOf(el: XEl, ctx: Ctx): Promise<DocBlock[]> {
@@ -551,9 +566,6 @@ export async function parseDocx(zip: Zip): Promise<DocView> {
     runs: 0,
     chars: 0,
     cells: 0,
-    tableDepth: 0,
-    tableChars: 0,
-    tableFull: false,
     cut: false,
   };
   const root = parseXmlTree(src, 3_000_000).root;

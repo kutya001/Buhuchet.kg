@@ -21,8 +21,10 @@ import {
   type XmlViewNode,
 } from '@buhuchet/domain';
 import {
+  createContext,
   Fragment,
   memo,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -36,16 +38,24 @@ import type { IconName } from '../icons';
 import {
   cellKey,
   chunkOfLongWord,
+  docCellShares,
+  docColShares,
+  DOC_COL_MIN_PX,
   FILE_FONT,
   hitsByRow,
   mergeMap,
   rotateNext,
   segmentStarts,
+  shareLineChars,
+  shareSegment,
   sheetCellText,
+  sheetRowPlan,
+  sheetWrapPx,
   sheetHits,
   sheetStepEnd,
   SHEET_WRAP_MAX_PX,
   textChunks,
+  textLines,
   TEXT_CHUNK,
   TEXT_SEGMENT,
   xmlBranches,
@@ -304,49 +314,103 @@ function cellClass(cell: SheetCell | null | undefined, hit: boolean, current: bo
 /**
  * Блок содержимого файла (строка текста, абзац, узел XML, блок длинного текста): браузер
  * раскладывает его, только когда он у экрана (`content-visibility: auto`), а до того держит под
- * него место высотой `px` (потом — настоящей). Так время открытия зависит от того, что видно, а не
- * от размера файла: китайский текст на 2 млн знаков без этого раскладывался 6 с при любом делении.
+ * него место высотой `px` (потом — настоящей; ширина блока — как у обычного блока). Так время
+ * открытия зависит от того, что видно, а не от размера файла: китайский текст на 2 млн знаков без
+ * этого раскладывался 6 с при любом делении.
  */
 function lazyBlock(px: number): CSSProperties {
-  return { contentVisibility: 'auto', containIntrinsicSize: `auto ${px}px` };
+  return { contentVisibility: 'auto', containIntrinsicSize: `none auto ${px}px` };
 }
 
-/** Место под блок до `TEXT_SEGMENT` знаков, пока он не у экрана, px. */
-const LAZY_SEGMENT = lazyBlock(1200);
-/** Место под строку текста, абзац и узел XML. */
-const LAZY_LINE = lazyBlock(21);
-/** Место под таблицу документа. */
-const LAZY_TABLE = lazyBlock(120);
+/** Ячейка листа в одну строку из «тяжёлой» строки: раскладывается у экрана, места до того — 1 px. */
+const LAZY_CELL = lazyBlock(1);
 
-/** Куски подряд — блоками (`segmentStarts`): каждый блок браузер раскладывает отдельно. */
-function inBlocks(nodes: readonly ReactNode[], lengths: readonly number[]): ReactNode {
-  const starts = segmentStarts(lengths);
-  if (starts.length === 1) return nodes;
-  return starts.map((from, i) => (
-    <span key={from} className="block" style={LAZY_SEGMENT}>
-      {nodes.slice(from, starts[i + 1])}
-    </span>
-  ));
+/** Высота строки текста файла для оценки места, px. */
+const LAZY_LINE_PX = 20;
+const lazyStyles = new Map<number, CSSProperties>();
+
+/** Место под блок в `lines` строк; одинаковые стили — одним объектом. */
+function lazyLines(lines: number): CSSProperties {
+  let style = lazyStyles.get(lines);
+  if (!style) {
+    style = lazyBlock(lines * LAZY_LINE_PX);
+    if (lazyStyles.size < 4096) lazyStyles.set(lines, style);
+  }
+  return style;
+}
+
+/** Место под блок с текстом в `chars` знаков — по длине текста (`textLines`). */
+const lazyText = (chars: number): CSSProperties => lazyLines(textLines(chars));
+
+/**
+ * На слайде блоки не откладываются: слайд виден целиком и раскладывается целиком (сколько на нём
+ * текста, ограничено при разборе).
+ */
+const LazyOff = createContext(false);
+
+/**
+ * Доля ширины бумаги у места, где рисуется текст: 1 — сама бумага, меньше — ячейка таблицы
+ * документа. Блок и строка в ячейке короче во столько же раз (`shareSegment`, `shareLineChars`).
+ */
+const Share = createContext(1);
+
+/**
+ * Куски подряд — блоками (`segmentStarts`): каждый блок браузер раскладывает отдельно и только у
+ * экрана. `own` — каждый кусок на своей строке (атрибуты XML): место считается по кускам.
+ */
+function Blocks({
+  nodes,
+  lengths,
+  own,
+}: {
+  nodes: readonly ReactNode[];
+  lengths: readonly number[];
+  own?: boolean;
+}): ReactNode {
+  const off = useContext(LazyOff);
+  const share = useContext(Share);
+  const starts = segmentStarts(lengths, shareSegment(share));
+  if (starts.length === 1 && !own) return nodes;
+  const perLine = shareLineChars(share);
+  return starts.map((from, i) => {
+    const to = starts[i + 1] ?? lengths.length;
+    let lines = 0;
+    let chars = 0;
+    for (let k = from; k < to; k++) {
+      chars += lengths[k]!;
+      if (own) lines += textLines(lengths[k]!, perLine);
+    }
+    return (
+      <span
+        key={from}
+        className="block"
+        style={off ? undefined : lazyLines(own ? lines : textLines(chars, perLine))}
+      >
+        {nodes.slice(from, to)}
+      </span>
+    );
+  });
 }
 
 /**
  * Длинный текст — кусками `textChunks` с местом переноса `<wbr>` между ними: без него браузер
  * раскладывает длинную строку за квадрат от длины и дольше. Кусок длинного «слова» без пробелов
- * переносится между любыми буквами (`chunkOfLongWord`). Текст длиннее `TEXT_SEGMENT` — блоками.
+ * переносится между любыми буквами (`chunkOfLongWord`). Текст длиннее блока (`TEXT_SEGMENT`, в
+ * ячейке таблицы документа — меньше) — блоками.
  */
-function chunkNodes(text: string): ReactNode {
+function chunkNodes(text: string, wrap = true): ReactNode {
   const parts = textChunks(text);
   if (typeof parts === 'string') return parts;
+  // Текст в одну строку (ячейка листа без переноса) — без мест переноса: `<wbr>` переносит строку
+  // и при `white-space: nowrap`.
+  if (!wrap) return parts.map((part, i) => <Fragment key={i}>{part}</Fragment>);
   const nodes = parts.map((part, i) => (
     <Fragment key={i}>
       {chunkOfLongWord(parts, i) ? <span className="break-all">{part}</span> : part}
       {i < parts.length - 1 ? <wbr /> : null}
     </Fragment>
   ));
-  return inBlocks(
-    nodes,
-    parts.map((part) => part.length),
-  );
+  return <Blocks nodes={nodes} lengths={parts.map((part) => part.length)} />;
 }
 
 /** Куски длинного текста считаются один раз на значение, а не при каждой перерисовке окна. */
@@ -385,6 +449,15 @@ const SheetRow = memo(function SheetRow({
   hitCols: Set<number> | undefined;
   currentCol: number;
 }) {
+  // Ширина ячейки на экране: объединённая — по всем своим видимым столбцам.
+  const widthAt = new Map<number, number>();
+  cols.forEach(({ c }, i) => {
+    const span = merges.span.get(cellKey(r, c))?.cols ?? 1;
+    let w = 0;
+    for (let k = i; k < Math.min(cols.length, i + span); k++) w += cols[k]!.w;
+    widthAt.set(c, w);
+  });
+  const plan = sheetRowPlan(row, (c) => widthAt.get(c) ?? 0);
   return (
     <tr style={height ? { height } : undefined}>
       <th className="sticky left-0 z-[1] border-r border-b border-line bg-pane-alt px-1 text-center font-medium text-muted tabular-nums">
@@ -395,8 +468,10 @@ const SheetRow = memo(function SheetRow({
         if (merges.skip.has(k)) return null;
         const cell = row[c];
         const span = merges.span.get(k);
-        // В ячейке — до 1 024 знаков, с переносом — не выше строки Excel; весь текст — в подсказке.
-        const text = cell ? chunkNodes(sheetCellText(cell.v)) : undefined;
+        // В ячейке — сколько может быть видно (`sheetRowPlan`): с переносом — не выше строки
+        // Excel, без переноса — одна строка (места переноса не ставятся); весь текст — в подсказке.
+        const shown = cell ? sheetCellText(cell.v, plan.show[c] ?? 0) : '';
+        const text = cell ? chunkNodes(shown, cell.wrap === true) : undefined;
         return (
           <td
             key={c}
@@ -408,7 +483,20 @@ const SheetRow = memo(function SheetRow({
             title={cell && cell.v.length > 24 ? cell.v : undefined}
           >
             {cell?.wrap ? (
-              <div className="overflow-hidden" style={{ maxHeight: SHEET_WRAP_MAX_PX }}>
+              <div
+                className="overflow-hidden"
+                style={{
+                  maxHeight: SHEET_WRAP_MAX_PX,
+                  ...(plan.lazy && shown
+                    ? lazyBlock(sheetWrapPx(shown.length, widthAt.get(c) ?? 0))
+                    : undefined),
+                }}
+              >
+                {text}
+              </div>
+            ) : plan.lazy && shown ? (
+              // Пока ячейка не у экрана, места под неё — 1 px: высоту строки она не задаёт.
+              <div className="overflow-hidden text-ellipsis" style={LAZY_CELL}>
                 {text}
               </div>
             ) : (
@@ -674,14 +762,7 @@ function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, st
     );
   });
   // Абзац из многих кусков — блоками до `TEXT_SEGMENT` знаков, как и один длинный кусок.
-  return (
-    <>
-      {inBlocks(
-        nodes,
-        runs.map((r) => (r.img ? 1 : r.t.length)),
-      )}
-    </>
-  );
+  return <Blocks nodes={nodes} lengths={runs.map((r) => (r.img ? 1 : r.t.length))} />;
 }
 
 const ALIGN: Record<string, string> = { c: 'text-center', r: 'text-right', j: 'text-justify' };
@@ -695,47 +776,74 @@ const HEADING = [
   'text-[13px] font-semibold mt-2 mb-1',
 ];
 
+/** Знаков текста в блоках документа (в таблице — во всех ячейках, со вложенными). */
+function docChars(blocks: readonly DocBlock[]): number {
+  let n = 0;
+  for (const b of blocks) {
+    if (b.k === 't') for (const row of b.rows) for (const cell of row) n += docChars(cell.blocks);
+    else for (const r of b.runs) n += r.img ? 1 : r.t.length;
+  }
+  return n;
+}
+
+/**
+ * Блоки документа: абзац и таблицу браузер раскладывает, когда они у экрана. Ширины столбцов
+ * таблицы заданы (`table-fixed`, доли из файла), а не считаются по тексту: иначе браузер
+ * раскладывает весь текст таблицы разом, и отложить в ней нечего.
+ */
 function DocBlocks({
   blocks,
   urls,
-  lazy,
 }: {
   blocks: readonly DocBlock[];
   urls: Record<string, string>;
-  /** Блоки самой бумаги (не ячеек таблицы) раскладываются, когда они у экрана. */
-  lazy?: boolean;
 }) {
+  const share = useContext(Share);
+  const perLine = shareLineChars(share);
   return (
     <>
       {blocks.map((b, i) => {
         if (b.k === 't') {
-          const table = (
-            <table key={i} className="my-2 w-full border-collapse text-[13px]">
-              <tbody>
-                {b.rows.map((row, ri) => (
-                  <tr key={ri}>
-                    {row.map((cell, ci) => (
-                      <td
-                        key={ci}
-                        colSpan={cell.span}
-                        rowSpan={cell.rowSpan}
-                        className="border border-[#bbb] px-2 py-[5px] align-top"
-                      >
-                        <DocBlocks blocks={cell.blocks} urls={urls} />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          );
-          // У самой таблицы `content-visibility` не действует — у блока вокруг неё.
-          return lazy ? (
-            <div key={i} style={LAZY_TABLE}>
-              {table}
+          const widths = docColShares(b.cols);
+          const shares = docCellShares(widths, b.rows);
+          // У самой таблицы `content-visibility` не действует — у блока вокруг неё; место — по
+          // числу строк и знаков таблицы, чтобы соседние таблицы не попадали в один кадр. Таблица
+          // из многих столбцов прокручивается в этом блоке вбок.
+          return (
+            <div
+              key={i}
+              className="overflow-x-auto"
+              style={lazyLines(Math.max(b.rows.length, textLines(docChars([b]), perLine)))}
+            >
+              <table
+                className="my-2 w-full table-fixed border-collapse text-[13px]"
+                style={{ minWidth: b.cols.length * DOC_COL_MIN_PX }}
+              >
+                <colgroup>
+                  {widths.map((w, c) => (
+                    <col key={c} style={{ width: `${Math.round(w * 10000) / 100}%` }} />
+                  ))}
+                </colgroup>
+                <tbody>
+                  {b.rows.map((row, ri) => (
+                    <tr key={ri}>
+                      {row.map((cell, ci) => (
+                        <td
+                          key={ci}
+                          colSpan={cell.span}
+                          rowSpan={cell.rowSpan}
+                          className="border border-[#bbb] px-2 py-[5px] align-top"
+                        >
+                          <Share.Provider value={share * (shares[ri]?.[ci] ?? 0)}>
+                            <DocBlocks blocks={cell.blocks} urls={urls} />
+                          </Share.Provider>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ) : (
-            table
           );
         }
         const cls = [
@@ -754,7 +862,7 @@ function DocBlocks({
           </>
         );
         const style = {
-          ...(lazy ? LAZY_LINE : undefined),
+          ...lazyLines(textLines(docChars([b]), perLine)),
           ...(b.li ? { paddingLeft: `${b.li.lvl * 24}px` } : undefined),
         };
         if (b.h === undefined)
@@ -790,7 +898,7 @@ export function DocumentView({
           data-fv-paper=""
           style={{ fontFamily: FILE_FONT }}
         >
-          <DocBlocks blocks={model.blocks} urls={urls} lazy />
+          <DocBlocks blocks={model.blocks} urls={urls} />
         </div>
       </div>
       {model.cut ? <MoreAll text={labels.moreAll} /> : null}
@@ -868,8 +976,8 @@ function SlideItemView({
           }}
         >
           {p.bullet ? '• ' : ''}
-          {inBlocks(
-            p.runs.map((r, j) => (
+          <Blocks
+            nodes={p.runs.map((r, j) => (
               <span
                 key={j}
                 className={
@@ -885,9 +993,9 @@ function SlideItemView({
               >
                 {chunked(r.t)}
               </span>
-            )),
-            p.runs.map((r) => r.t.length),
-          )}
+            ))}
+            lengths={p.runs.map((r) => r.t.length)}
+          />
         </div>
       ))}
     </div>
@@ -947,9 +1055,11 @@ export function SlidesView({
               fontFamily: FILE_FONT,
             }}
           >
-            {s.items.map((it, i) => (
-              <SlideItemView key={i} item={it} widthPt={widthPt} urls={urls} />
-            ))}
+            <LazyOff.Provider value={true}>
+              {s.items.map((it, i) => (
+                <SlideItemView key={i} item={it} widthPt={widthPt} urls={urls} />
+              ))}
+            </LazyOff.Provider>
           </div>
         ) : null}
       </div>
@@ -972,7 +1082,7 @@ export function TextFileView({ model, labels }: { model: TextView; labels: FileV
       <div className={`${SCROLL} bg-pane`}>
         <pre className="m-0 px-3 py-2.5 font-mono text-[12.5px] leading-[1.6] break-words whitespace-pre-wrap">
           {model.lines.map((l, i) => (
-            <span key={i} className="block" style={LAZY_LINE}>
+            <span key={i} className="block" style={lazyText(l.length)}>
               <span className="mr-2.5 inline-block w-[34px] text-right text-faint select-none">
                 {i + 1}
               </span>
@@ -1009,21 +1119,27 @@ function XmlNodeView({
   onToggle: (p: XmlPath) => void;
   labels: FileViewLabels;
 }) {
-  // Имя и атрибуты длиннее блока раскладки — каждый атрибут своей строкой.
-  const head = node.a.reduce((n, [k, v]) => n + k.length + v.length, node.n.length);
-  const attrs = node.a.map(([k, v]) => (
-    <span key={k} className={head > TEXT_SEGMENT ? 'block pl-4' : undefined}>
-      {head > TEXT_SEGMENT ? null : ' '}
+  // Знаков строки узла: имя и атрибуты со своими знаками разметки (пробел, «=», кавычки).
+  const attrChars = node.a.map(([k, v]) => k.length + v.length + 4);
+  const head = attrChars.reduce((n, x) => n + x, node.n.length);
+  // Имя и атрибуты длиннее блока раскладки — каждый атрибут своей строкой, строки — блоками.
+  const wide = head > TEXT_SEGMENT;
+  const attrNodes = node.a.map(([k, v]) => (
+    <span key={k} className={wide ? 'block pl-4' : undefined}>
+      {wide ? null : ' '}
       <span className="text-violet">{chunked(k)}</span>=
       <span className="text-ok">&quot;{chunked(v)}&quot;</span>
     </span>
   ));
+  const attrs = wide ? <Blocks nodes={attrNodes} lengths={attrChars} own /> : attrNodes;
   const hit = hits.has(path) ? 'rounded-[3px] bg-caution-bg' : '';
   const kids = node.c.filter((x): x is XmlViewNode => typeof x !== 'string');
   const text = node.c.filter((x): x is string => typeof x === 'string').join(' ');
+  // Место под узел — по тексту его строки; у вложенных узлов и блоков атрибутов место своё.
+  const lazy = lazyText((wide ? node.n.length : head) + text.length);
   if (!kids.length) {
     return (
-      <div className={hit} data-xn={path} style={LAZY_LINE}>
+      <div className={hit} data-xn={path} style={lazy}>
         <span className="text-info">&lt;{chunked(node.n)}</span>
         {attrs}
         {text ? (
@@ -1042,7 +1158,7 @@ function XmlNodeView({
   let k = 0;
   return (
     // Отступ и обратное поле: кнопка-стрелка слева остаётся внутри блока и не обрезается.
-    <div className="-ml-4 pl-4" data-xn={path} style={LAZY_LINE}>
+    <div className="-ml-4 pl-4" data-xn={path} style={lazy}>
       <span className={hit}>
         <button
           type="button"

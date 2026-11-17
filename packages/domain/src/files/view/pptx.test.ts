@@ -92,8 +92,8 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(JSON.stringify(v)).not.toContain('evil.example');
   });
 
-  it('знаков на одном слайде — до 100 000: остаток слайда не показан, следующий слайд цел (защита, п. И-12)', async () => {
-    const word = 'я '.repeat(30_000);
+  it('знаков на одном слайде — до 16 000: остаток слайда не показан, следующий слайд цел (защита, п. И-12)', async () => {
+    const word = 'я '.repeat(2_500);
     const many = Array.from({ length: 5 }, () => `<a:p><a:r><a:t>${word}</a:t></a:r></a:p>`).join(
       '',
     );
@@ -116,7 +116,7 @@ describe('PowerPoint PPTX в окне просмотра', () => {
       );
     expect(v.cut).toBe(true);
     expect(chars(0)).toBeLessThanOrEqual(SLIDE_MAX_CHARS);
-    expect(chars(0)).toBe(60_000);
+    expect(chars(0)).toBe(15_000);
     expect(chars(1)).toBe('второй'.length);
   });
 

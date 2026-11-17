@@ -6,11 +6,11 @@ import {
   DOC_MAX_BLOCKS,
   DOC_MAX_CELLS,
   DOC_MAX_CHARS,
+  DOC_MAX_COL_WIDTH,
   DOC_MAX_GRID,
   DOC_MAX_LABEL,
   DOC_MAX_LIST_START,
   DOC_MAX_RUNS,
-  DOC_MAX_TABLE_CHARS,
 } from './docx';
 import type { DocBlock } from './docx';
 import { docxBytes, docxImage, zipBytes } from './fixtures';
@@ -148,36 +148,58 @@ describe('Word DOCX в окне просмотра', () => {
     expect(plain.blocks).toEqual([{ k: 'p', runs: [{ t: 'первая вторая третья' }] }]);
   });
 
-  it('в одной таблице — до 500 000 знаков, документ после неё идёт дальше (защита, п. И-12)', async () => {
-    // Разный текст: одинаковый сжался бы сильнее предела архива.
-    let seed = 7;
-    const noise = (n: number) =>
-      Array.from({ length: n }, () => {
-        seed = (seed * 1103515245 + 12345) % 2147483648;
-        return String.fromCharCode(0x430 + (seed % 32));
-      }).join('');
-    const row = () => `<w:tr><w:tc>${p(r(noise(10_000)))}</w:tc></w:tr>`;
-    const big = `<w:tbl>${Array.from({ length: 60 }, row).join('')}</w:tbl>`;
-    const small = `<w:tbl>${row()}</w:tbl>`;
-    const doc = await parseDocx(openZip(await docxBytes(big + p(r('после таблицы')) + small)));
-    const chars = (blocks: DocBlock[]): number =>
-      blocks.reduce(
-        (n, b) =>
-          n +
-          (b.k === 'p'
-            ? b.runs.reduce((m, x) => m + x.t.length, 0)
-            : b.rows.reduce((m, cells) => m + cells.reduce((q, c) => q + chars(c.blocks), 0), 0)),
-        0,
-      );
+  it('ширины столбцов таблицы — из сетки файла, без неё — поровну (защита, п. И-12)', async () => {
+    const tc = (inner: string, pr = '') =>
+      `<w:tc>${pr ? `<w:tcPr>${pr}</w:tcPr>` : ''}${p(r(inner))}</w:tc>`;
+    const grid = (...w: string[]) =>
+      `<w:tblGrid>${w.map((x) => `<w:gridCol w:w="${x}"/>`).join('')}</w:tblGrid>`;
+    const row3 = `<w:tr>${tc('1')}${tc('2')}${tc('3')}</w:tr>`;
+    const cols = async (tbl: string) => {
+      const doc = await parseDocx(openZip(await docxBytes(`<w:tbl>${tbl}</w:tbl>`)));
+      const t = doc.blocks[0]!;
+      return t.k === 't' ? t.cols : null;
+    };
+    expect(await cols(grid('2000', '6000', '1000') + row3)).toEqual([2000, 6000, 1000]);
+    // Без сетки — поровну; столбцов — сколько заняли ячейки (с объединениями).
+    expect(await cols(row3)).toEqual([1, 1, 1]);
+    expect(await cols(`<w:tr>${tc('шапка', '<w:gridSpan w:val="4"/>')}</w:tr>${row3}`)).toEqual([
+      1, 1, 1, 1,
+    ]);
+    // Столбцу без ширины или с негодной — средняя из заданных; лишние столбцы сетки не берутся.
+    expect(await cols(grid('3000', 'abc') + row3)).toEqual([3000, 3000, 3000]);
+    expect(await cols(grid('1000', '-5', '3000', '777', '888') + row3)).toEqual([1000, 2000, 3000]);
+    expect(await cols(grid('0', '', 'NaN') + row3)).toEqual([1, 1, 1]);
+    // Ширина — не больше предела Word, только число.
+    expect(await cols(grid('999999999999', '1e3', '15.9') + row3)).toEqual([
+      DOC_MAX_COL_WIDTH,
+      1000,
+      15,
+    ]);
+    // «Лестница» объединений по вертикали столбцов сверх сетки Word не даёт.
+    const ladder = Array.from(
+      { length: 200 },
+      () => `<w:tr>${tc('я', '<w:vMerge w:val="restart"/>')}</w:tr>`,
+    ).join('');
+    expect((await cols(ladder))!.length).toBeLessThanOrEqual(DOC_MAX_GRID);
+    expect(await cols('')).toEqual([]);
+  });
+
+  it('номер пункта списка — в общем счёте знаков документа (защита, п. И-12)', async () => {
+    // Переносы строк занимают почти весь предел (каждый — как 64 знака и сам знак).
+    const breaks = (n: number) => `<w:r>${'<w:br/>'.repeat(n)}</w:r>`;
+    const filler = p(breaks(1000).repeat(30) + breaks(768));
+    const left = DOC_MAX_CHARS - 30_768 * (DOC_BREAK_CHARS + 1);
+    const li = p(r('я'), '<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>');
+    const doc = await parseDocx(openZip(await docxBytes(filler + li.repeat(100))));
+    const items = doc.blocks.slice(1).flatMap((b) => (b.k === 'p' ? [b] : []));
+    const shown = items.reduce(
+      (n, b) => n + (b.li?.label.length ?? 0) + b.runs.reduce((m, x) => m + x.t.length, 0),
+      0,
+    );
     expect(doc.cut).toBe(true);
-    const [first, after, second] = doc.blocks;
-    expect(first?.k).toBe('t');
-    expect(chars([first!])).toBe(DOC_MAX_TABLE_CHARS);
-    // Строки сверх предела в таблицу не попали и пустыми.
-    expect(first?.k === 't' ? first.rows.length : 0).toBeLessThanOrEqual(51);
-    expect(after).toEqual({ k: 'p', runs: [{ t: 'после таблицы' }] });
-    // У следующей таблицы счёт свой.
-    expect(chars([second!])).toBe(10_000);
+    expect(shown).toBeLessThanOrEqual(left);
+    expect(shown).toBeGreaterThan(left - 4);
+    expect(items.filter((b) => b.li).length).toBeLessThan(100);
   });
 
   it('одна картинка в 1 500 местах — показана в первых 1 000 (защита, п. И-12)', async () => {

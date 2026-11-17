@@ -225,6 +225,71 @@ export function chunkOfLongWord(parts: readonly string[], i: number): boolean {
 export const TEXT_SEGMENT = 8_192;
 
 /**
+ * Строк на экране под текст в `chars` знаков — оценка для места под блок, пока он не разложен
+ * (`content-visibility`): по `TEXT_LINE_CHARS` знаков в строке, не меньше одной. Место растёт с
+ * длиной текста, поэтому в кадр попадает столько блоков, сколько помещается в окно, а не сколько
+ * их в файле: при месте в одну строку под блок в 8 000 знаков в первый кадр попадала сотня блоков.
+ */
+export const TEXT_LINE_CHARS = 100;
+
+export function textLines(chars: number, perLine = TEXT_LINE_CHARS): number {
+  return Math.max(1, Math.ceil(chars / Math.max(1, perLine)));
+}
+
+/**
+ * Блок и строка в узком месте (ячейка таблицы документа шириной в долю `share` бумаги): знаков в
+ * блоке и в строке — во столько же раз меньше, но блок — не короче куска текста (`TEXT_CHUNK`).
+ * Соседние ячейки видны разом, и без этого в кадр попадало бы по целому блоку из каждого столбца.
+ */
+export const shareSegment = (share: number): number =>
+  Math.max(TEXT_CHUNK, Math.floor(TEXT_SEGMENT * Math.min(1, share)));
+export const shareLineChars = (share: number): number =>
+  Math.max(1, Math.floor(TEXT_LINE_CHARS * Math.min(1, share)));
+
+/** Столбец таблицы документа на экране — не уже, px: таблица шире бумаги прокручивается вбок. */
+export const DOC_COL_MIN_PX = 56;
+
+/**
+ * Доли ширины столбцов таблицы документа: по ширинам из файла, но столбец — не уже половины равной
+ * доли (иначе узкий «№» на телефоне не читается, а столбец шириной 1 из файла не виден вовсе).
+ */
+export function docColShares(cols: readonly number[]): number[] {
+  const total = cols.reduce((a, w) => a + (w > 0 ? w : 0), 0);
+  if (!(total > 0)) return cols.map(() => 1 / cols.length);
+  const least = total / cols.length / 2;
+  const raised = cols.map((w) => Math.max(w > 0 ? w : 0, least));
+  const sum = raised.reduce((a, w) => a + w, 0);
+  return raised.map((w) => w / sum);
+}
+
+/**
+ * Доля ширины таблицы документа у каждой её ячейки (по строкам): ячейка встаёт в первый столбец,
+ * не занятый объединением по вертикали сверху, как в таблице HTML; `shares` — доли столбцов.
+ */
+export function docCellShares(
+  shares: readonly number[],
+  rows: readonly (readonly { span?: number; rowSpan?: number }[])[],
+): number[][] {
+  // До какой строки (не включая) занят столбец объединением сверху.
+  const busy = new Array<number>(shares.length).fill(0);
+  return rows.map((row, ri) => {
+    let col = 0;
+    return row.map((cell) => {
+      while (col < shares.length && busy[col]! > ri) col++;
+      const end = Math.min(shares.length, col + (cell.span ?? 1));
+      const until = ri + (cell.rowSpan ?? 1);
+      let w = 0;
+      for (let c = col; c < end; c++) {
+        busy[c] = Math.max(busy[c]!, until);
+        w += shares[c]!;
+      }
+      col = Math.max(col, end);
+      return w;
+    });
+  });
+}
+
+/**
  * Куски подряд — блоками до `seg` знаков: номера кусков, с которых начинается блок (первый — 0).
  * Кусок длиннее `seg` — один в блоке (его делит на блоки тот, кто его рисует).
  */
@@ -249,19 +314,78 @@ export const FILE_FONT = 'system-ui, "Segoe UI", Roboto, Arial, sans-serif';
 
 /** Знаков ячейки листа на экране — не больше (как Excel); полный текст — в подсказке. */
 export const SHEET_CELL_SHOW = 1_024;
-export const sheetCellText = (v: string) =>
-  v.length > SHEET_CELL_SHOW ? v.slice(0, SHEET_CELL_SHOW) : v;
+export const sheetCellText = (v: string, show = SHEET_CELL_SHOW) =>
+  v.length > show ? v.slice(0, show) : v;
 /** Высота ячейки с переносом — не больше, px (предел высоты строки Excel — 409 пт). */
 export const SHEET_WRAP_MAX_PX = 545;
+
+/** Самый узкий знак на листе (точка, «i», «l» при 12,5 px) — не уже, px; строка ячейки — не ниже. */
+export const SHEET_GLYPH_MIN_PX = 3;
+export const SHEET_LINE_PX = 16;
+
+/**
+ * Сколько знаков ячейки шириной `width` px может быть видно: без переноса — одна строка до края
+ * ячейки, с переносом — строки до `SHEET_WRAP_MAX_PX`. Остальное на экране не видно, и раскладывать
+ * его незачем; полный текст — в подсказке.
+ */
+export function sheetCellFit(width: number, wrap: boolean): number {
+  const line = Math.floor(Math.max(0, width) / SHEET_GLYPH_MIN_PX) + 2;
+  const lines = wrap ? Math.ceil(SHEET_WRAP_MAX_PX / SHEET_LINE_PX) : 1;
+  return Math.min(SHEET_CELL_SHOW, line * lines);
+}
+
+/**
+ * Знаков одной строки листа на экране — не больше: строку браузер раскладывает за один кадр, а в
+ * ней до 256 ячеек по 1 024 знака. В строке длиннее ячейки показывают поровну (`sheetRowPlan`).
+ */
+export const SHEET_ROW_CHARS = 16_384;
+/**
+ * Строка листа с текстом длиннее — «тяжёлая»: её ячейки браузер раскладывает, только когда они у
+ * экрана (и по горизонтали), иначе экран таких строк — это десятки кадров по секунде.
+ */
+export const SHEET_ROW_LAZY = 2_048;
+
+export interface SheetRowPlan {
+  /** Сколько знаков показывает ячейка столбца (по номеру столбца листа). */
+  show: number[];
+  /** Ячейки строки раскладываются у экрана. */
+  lazy: boolean;
+}
+
+/** Что показывает строка листа; `widthOf(c)` — ширина ячейки столбца `c` на экране, px. */
+export function sheetRowPlan(
+  row: SheetView['rows'][number],
+  widthOf: (c: number) => number,
+): SheetRowPlan {
+  let size = 0;
+  let filled = 0;
+  const show = row.map((cell, c) => {
+    if (!cell || !cell.v) return 0;
+    const n = Math.min(cell.v.length, sheetCellFit(widthOf(c), cell.wrap === true));
+    filled++;
+    size += n;
+    return n;
+  });
+  if (size <= SHEET_ROW_CHARS) return { show, lazy: size > SHEET_ROW_LAZY };
+  const each = Math.max(1, Math.floor(SHEET_ROW_CHARS / filled));
+  return { show: show.map((n) => Math.min(n, each)), lazy: true };
+}
+
+/** Высота места под ячейку с переносом, пока она не разложена: по числу знаков и ширине, px. */
+export function sheetWrapPx(chars: number, width: number): number {
+  const perLine = Math.max(1, Math.floor((width - 14) / 7));
+  return Math.min(SHEET_WRAP_MAX_PX, Math.max(1, Math.ceil(chars / perLine)) * SHEET_LINE_PX);
+}
 
 /**
  * Шаг отрисовки листа (дальше — по прокрутке или к найденному, следующей задачей): видимых строк —
  * до `SHEET_RENDER_STEP`, мест «строки × видимые столбцы» — до `SHEET_STEP_PLACES`, знаков
- * на экране — до `SHEET_STEP_CHARS`. Так и большой, и широкий лист открывается сразу.
+ * на экране — до `SHEET_STEP_CHARS` (столько браузер раскладывает за кадр и на тексте, где шрифт
+ * меняется на каждом знаке). Так и большой, и широкий лист открывается сразу.
  */
 export const SHEET_RENDER_STEP = 300;
 export const SHEET_STEP_PLACES = 25_000;
-export const SHEET_STEP_CHARS = 200_000;
+export const SHEET_STEP_CHARS = 16_384;
 
 /**
  * До какой строки (не включая) рисовать шаг, начатый со строки `from`; `width` — видимых столбцов.
@@ -281,6 +405,7 @@ export function sheetStepEnd(
     if (hidden.has(r)) continue;
     let size = 0;
     for (const cell of sheet.rows[r]!) if (cell) size += Math.min(cell.v.length, SHEET_CELL_SHOW);
+    size = Math.min(size, SHEET_ROW_CHARS);
     if (
       rows > 0 &&
       (rows >= SHEET_RENDER_STEP ||
