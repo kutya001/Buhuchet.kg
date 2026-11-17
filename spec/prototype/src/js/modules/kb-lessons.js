@@ -62,7 +62,6 @@ const CKG=[
   {id:'feepay',done:()=>FEEPAYS.length>0,go:G('cps','debtors','#mbody .gscroll, #mbody .gcards')},
   {id:'feepause',learn:1,hit:'cp.fee',go:G('cps','all','#mbody .gscroll, #mbody .gcards')}]},
  {id:'tasks',feat:()=>feat('tasks'),items:[
-  {id:'regtasks',learn:1,staff:1,at:['tasks.mine'],go:G('tasks','mine','#mbody')},
   {id:'mtask',perm:'tasksCreate',done:()=>TASKS.some(t=>!t.reg),go:G('tasks','byme','#add-btn','#fab',()=>taskDlg())},
   {id:'daymonth',learn:1,staff:1,at:['tasks.mine','tasks.overdue','tasks.all'],go:G('tasks','mine','.kd-legend')},
   {id:'tdone',staff:1,done:()=>TASKS.some(t=>['Выполнена','Не выполнена','На подтверждении','Подтверждена'].includes(t.status)),go:G('tasks','mine','#mbody .gscroll, #mbody .gcards')},

@@ -35,7 +35,7 @@ function bellCpTo(c){const r=EM[c.resp],resp=r&&r.active!==false?r.id:null,tg=ty
 function bellCp(c,o){if(c)bellPutAll(bellCpTo(c),{cp:c.id,...o})}
 
 // Задачи и возврат отчёта — как сообщения Telegram о событиях (продукт: queueTelegramEvents): себе не пишется, заблокированному тоже,
-// переключатели профиля «Ручные задачи» и «Регулярные задачи по отчётам»
+// переключатели профиля «Ручные задачи» и «Возврат моих отчётов на исправление» (до 17.11.2026 — «Регулярные задачи по отчётам», ключ regtasks прежний)
 const BELL_TASK={new:'Новая задача',conf:'Ждёт подтверждения',ok:'Задача подтверждена',rework:'Задача на доработке',cancel:'Задача отменена',
   start:'Задача взята в работу',done:'Задача выполнена'};
 function bellTo(to,k){const u=EM[to];return !!u&&to!==S.me&&u.active!==false&&tgNotifyOn(u,k)}
