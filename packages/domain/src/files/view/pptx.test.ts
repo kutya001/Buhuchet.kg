@@ -8,6 +8,7 @@ import {
   SLIDE_MAX_PARTS,
   SLIDES_MAX,
   SLIDES_MAX_PARTS,
+  type SlideModel,
 } from './pptx';
 import { ViewError } from './xml';
 import { openZip } from './zip';
@@ -18,6 +19,20 @@ const box = (x: number, y: number, w: number, h: number, inner: string, fill = '
   `<p:sp><p:nvSpPr><p:cNvPr id="4" name="b"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm>${fill}</p:spPr><p:txBody><a:bodyPr anchor="b"/>${inner}</p:txBody></p:sp>`;
 const pic = (x: number, y: number, rid: string) =>
   `<p:pic><p:nvPicPr><p:cNvPr id="5" name="p"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="${rid}"/></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="1219200" cy="685800"/></a:xfrm></p:spPr></p:pic>`;
+
+// Фигура с координатами и одним куском текста: три места слайда (фигура, абзац, кусок).
+const shape = (k: number) =>
+  `<p:sp><p:nvSpPr><p:cNvPr id="${k + 10}" name="t"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>x</a:t></a:r></a:p></p:txBody></p:sp>`;
+// Мест в модели слайда: фигуры, абзацы, куски текста, строки и ячейки таблиц.
+const parts = (items: SlideModel['items']) =>
+  items.reduce(
+    (n, it) =>
+      n +
+      1 +
+      (it.k === 'text' ? it.paras.reduce((m, p) => m + 1 + p.runs.length, 0) : 0) +
+      (it.k === 'table' ? it.rows.reduce((m, r) => m + 1 + r.length, 0) : 0),
+    0,
+  );
 
 describe('PowerPoint PPTX в окне просмотра', () => {
   it('слайды по порядку, скрытый слайд пропущен, размер слайда', async () => {
@@ -139,40 +154,34 @@ describe('PowerPoint PPTX в окне просмотра', () => {
     expect(t).toMatchObject({ k: 'table', rows: [['Налог', 'Сумма']] });
   });
 
-  it('фигуры, абзацы и ячейки таблиц — в пределах слайда и всей презентации (защита, п. И-12)', async () => {
-    const shape = (k: number) =>
-      `<p:sp><p:nvSpPr><p:cNvPr id="${k + 10}" name="t"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>x</a:t></a:r></a:p></p:txBody></p:sp>`;
-    // Слайд из множества фигур: каждая — фигура, абзац и кусок текста.
-    const crowded = Array.from({ length: SLIDE_MAX_PARTS }, (_, k) => shape(k)).join('');
+  it('фигуры, абзацы и ячейки таблиц — в пределах слайда (защита, п. И-12)', async () => {
+    // Слайд из множества фигур: каждая — фигура, абзац и кусок текста (три места).
+    const crowded = Array.from({ length: SLIDE_MAX_PARTS / 2 }, (_, k) => shape(k)).join('');
     const one = await parsePptx(openZip(await pptxBytes([crowded])));
-    const parts = (items: (typeof one.slides)[number]['items']) =>
-      items.reduce(
-        (n, it) =>
-          n +
-          1 +
-          (it.k === 'text' ? it.paras.reduce((m, p) => m + 1 + p.runs.length, 0) : 0) +
-          (it.k === 'table' ? it.rows.reduce((m, r) => m + 1 + r.length, 0) : 0),
-        0,
-      );
     expect(parts(one.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
     expect(one.cut).toBe(true);
 
-    // Таблица 200 × 100 пустых ячеек на слайде — тоже в пределе слайда.
-    const tbl = `<p:graphicFrame><p:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></p:xfrm><a:graphic><a:graphicData><a:tbl>${`<a:tr>${'<a:tc/>'.repeat(100)}</a:tr>`.repeat(200)}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    // Таблица 60 × 100 пустых ячеек на слайде — тоже в пределе слайда.
+    const tbl = `<p:graphicFrame><p:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></p:xfrm><a:graphic><a:graphicData><a:tbl>${`<a:tr>${'<a:tc/>'.repeat(100)}</a:tr>`.repeat(60)}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
     const table = await parsePptx(openZip(await pptxBytes([tbl])));
     expect(parts(table.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
     expect(table.cut).toBe(true);
 
-    // Группы фигур, вложенные друг в друга, — в том же пределе слайда.
-    let group = Array.from({ length: 1_000 }, (_, k) => shape(k)).join('');
+    // Группы фигур, вложенные друг в друга, — в том же пределе слайда (21 уровень по 100 фигур).
+    const hundred = Array.from({ length: 100 }, (_, k) => shape(k)).join('');
+    let group = hundred;
     for (let k = 0; k < 20; k++)
-      group = `<p:grpSp><p:nvGrpSpPr/><p:grpSpPr/>${group}${Array.from({ length: 1_000 }, (_, j) => shape(j)).join('')}</p:grpSp>`;
+      group = `<p:grpSp><p:nvGrpSpPr/><p:grpSpPr/>${group}${hundred}</p:grpSp>`;
     const grouped = await parsePptx(openZip(await pptxBytes([group])));
     expect(parts(grouped.slides[0]!.items)).toBeLessThanOrEqual(SLIDE_MAX_PARTS);
     expect(grouped.cut).toBe(true);
+  });
 
-    // Много тяжёлых слайдов: вся презентация — до предела, дальше слайды не берутся.
-    const heavy = Array.from({ length: 1_400 }, (_, k) => shape(k)).join('');
+  it('много тяжёлых слайдов: вся презентация — до предела мест, дальше слайды не берутся (защита, п. И-12)', async () => {
+    // Слайд — 3 фигуры по 1 600 кусков текста: 4 806 мест, чуть меньше предела слайда.
+    // Мест много, а XML мало: тест укладывается в предел времени и с покрытием (docs/typical-mistakes.md № 59).
+    const wide = `<p:sp><p:nvSpPr><p:cNvPr id="9" name="t"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm></p:spPr><p:txBody><a:bodyPr/><a:p>${'<a:r><a:t>x</a:t></a:r>'.repeat(1_600)}</a:p></p:txBody></p:sp>`;
+    const heavy = wide.repeat(3);
     const deck = await parsePptx(openZip(await pptxBytes(Array.from({ length: 60 }, () => heavy))));
     const total = deck.slides.reduce((n, s) => n + parts(s.items), 0);
     expect(total).toBeLessThanOrEqual(SLIDES_MAX_PARTS);
