@@ -434,13 +434,16 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       size: '1-10',
       ...over,
     });
-    await db.admin.db
+    // Время подачи — от «сейчас» теста, а не от часов базы: правило получает время параметром (№ 57).
+    const recent = new Date(NOW.getTime() - 86_400_000);
+    const own = await db.admin.db
       .insert(platformLeads)
       .values([
-        lead('ОсОО «Новая»'),
+        lead('ОсОО «Новая»', { createdAt: recent }),
         lead('ОсОО «Старая»', { createdAt: new Date('2026-11-10T04:00:00Z') }),
-        lead('ОсОО «Подключена»', { status: 'connected' }),
-      ]);
+        lead('ОсОО «Подключена»', { status: 'connected', createdAt: recent }),
+      ])
+      .returning({ id: platformLeads.id });
     const template = 'Новая заявка с сайта: {name}';
     await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
     await asAdmin((tx) => bellSyncLeads(tx, template, NOW));
@@ -453,6 +456,10 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       inA(acc.userId, (tx) => bellSyncLeads(tx, template, NOW)),
     ).resolves.toBeUndefined();
     expect(await keys(acc.userId)).toEqual([]);
+    // Свои заявки убираем: следующим тестам файла они не нужны.
+    await db.admin.db
+      .delete(platformLeads)
+      .where(sql`${platformLeads.id} in ${own.map((x) => x.id)}`);
   });
 
   it('новости и заявки старше срока хранения не кладутся: убранная уборкой строка не возвращается', async () => {
@@ -467,29 +474,36 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       publishDate: BELL_FROM,
       publishedAt: NOW,
     });
-    await db.admin.db.insert(platformLeads).values({
-      name: 'Заявитель',
-      firm: 'ОсОО «Давняя»',
-      phone: '+996555000001',
-      size: '1-10',
-      createdAt: new Date(`${BELL_FROM}T06:00:00Z`),
-    });
+    const [old] = await db.admin.db
+      .insert(platformLeads)
+      .values({
+        name: 'Заявитель',
+        firm: 'ОсОО «Давняя»',
+        phone: '+996555000001',
+        size: '1-10',
+        createdAt: new Date(`${BELL_FROM}T06:00:00Z`),
+      })
+      .returning({ id: platformLeads.id });
+    // Только свои строки: новость и заявка этого теста (№ 2).
+    const ownKeys = ['news:bell-keep', `lead:${old!.id}`];
+    const put = async () => {
+      const rows = await db.admin.db
+        .select({ k: bellNotifications.eventKey, u: bellNotifications.userId })
+        .from(bellNotifications)
+        .where(sql`${bellNotifications.eventKey} in ${ownKeys}`);
+      return rows.map((r) => `${r.u === adminId ? 'admin' : 'acc'} ${r.k}`).sort();
+    };
     // Через 91 день после появления новости и заявки.
     const later = new Date(new Date(`${BELL_FROM}T03:00:00Z`).getTime() + 91 * 86_400_000);
     await inA(acc.userId, (tx) => bellSyncNews(tx, later, null));
     await asAdmin((tx) => bellSyncNews(tx, later, null));
     await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', later));
-    const rows = await db.admin.db
-      .select({ k: bellNotifications.eventKey })
-      .from(bellNotifications)
-      .where(
-        sql`${bellNotifications.eventKey} like 'news:bell-keep' or ${bellNotifications.event} = 'lead'`,
-      );
-    expect(rows).toEqual([]);
-    // В пределах срока — кладутся.
+    expect(await put()).toEqual([]);
+    // В пределах срока — кладутся: новость сотруднику, заявка администратору платформы.
     await inA(acc.userId, (tx) => bellSyncNews(tx, NOW, null));
-    expect(await keys(acc.userId)).toContain('news:bell-keep');
-    await db.admin.db.delete(platformLeads).where(eq(platformLeads.firm, 'ОсОО «Давняя»'));
+    await asAdmin((tx) => bellSyncLeads(tx, 'Заявка: {name}', NOW));
+    expect(await put()).toEqual(['acc news:bell-keep', `admin lead:${old!.id}`]);
+    await db.admin.db.delete(platformLeads).where(eq(platformLeads.id, old!.id));
     await db.admin.db.update(news).set({ off: true }).where(eq(news.id, 'bell-keep'));
   });
 
