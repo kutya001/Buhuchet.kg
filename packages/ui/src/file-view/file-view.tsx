@@ -21,6 +21,7 @@ import {
   type XmlViewNode,
 } from '@buhuchet/domain';
 import {
+  Fragment,
   memo,
   useEffect,
   useMemo,
@@ -37,15 +38,16 @@ import {
   chunkOfLongWord,
   FILE_FONT,
   hitsByRow,
-  longWordRuns,
   mergeMap,
   rotateNext,
+  segmentStarts,
   sheetCellText,
   sheetHits,
   sheetStepEnd,
   SHEET_WRAP_MAX_PX,
   textChunks,
   TEXT_CHUNK,
+  TEXT_SEGMENT,
   xmlBranches,
   xmlClosed,
   xmlDepth,
@@ -300,20 +302,50 @@ function cellClass(cell: SheetCell | null | undefined, hit: boolean, current: bo
 }
 
 /**
- * Длинный текст — кусками `textChunks`; кусок длинного «слова» без пробелов переносится по любому
- * знаку (`chunkOfLongWord`), иначе браузер раскладывает такое слово за квадрат от длины.
+ * Блок содержимого файла (строка текста, абзац, узел XML, блок длинного текста): браузер
+ * раскладывает его, только когда он у экрана (`content-visibility: auto`), а до того держит под
+ * него место высотой `px` (потом — настоящей). Так время открытия зависит от того, что видно, а не
+ * от размера файла: китайский текст на 2 млн знаков без этого раскладывался 6 с при любом делении.
+ */
+function lazyBlock(px: number): CSSProperties {
+  return { contentVisibility: 'auto', containIntrinsicSize: `auto ${px}px` };
+}
+
+/** Место под блок до `TEXT_SEGMENT` знаков, пока он не у экрана, px. */
+const LAZY_SEGMENT = lazyBlock(1200);
+/** Место под строку текста, абзац и узел XML. */
+const LAZY_LINE = lazyBlock(21);
+/** Место под таблицу документа. */
+const LAZY_TABLE = lazyBlock(120);
+
+/** Куски подряд — блоками (`segmentStarts`): каждый блок браузер раскладывает отдельно. */
+function inBlocks(nodes: readonly ReactNode[], lengths: readonly number[]): ReactNode {
+  const starts = segmentStarts(lengths);
+  if (starts.length === 1) return nodes;
+  return starts.map((from, i) => (
+    <span key={from} className="block" style={LAZY_SEGMENT}>
+      {nodes.slice(from, starts[i + 1])}
+    </span>
+  ));
+}
+
+/**
+ * Длинный текст — кусками `textChunks` с местом переноса `<wbr>` между ними: без него браузер
+ * раскладывает длинную строку за квадрат от длины и дольше. Кусок длинного «слова» без пробелов
+ * переносится между любыми буквами (`chunkOfLongWord`). Текст длиннее `TEXT_SEGMENT` — блоками.
  */
 function chunkNodes(text: string): ReactNode {
   const parts = textChunks(text);
   if (typeof parts === 'string') return parts;
-  return parts.map((part, i) =>
-    chunkOfLongWord(parts, i) ? (
-      <span key={i} className="break-all">
-        {part}
-      </span>
-    ) : (
-      part
-    ),
+  const nodes = parts.map((part, i) => (
+    <Fragment key={i}>
+      {chunkOfLongWord(parts, i) ? <span className="break-all">{part}</span> : part}
+      {i < parts.length - 1 ? <wbr /> : null}
+    </Fragment>
+  ));
+  return inBlocks(
+    nodes,
+    parts.map((part) => part.length),
   );
 }
 
@@ -613,39 +645,41 @@ function runStyle(r: DocRun): CSSProperties | undefined {
 }
 
 function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, string> }) {
-  // Слово из многих кусков подряд (без пробела между ними) переносится по любому знаку.
-  const long = longWordRuns(runs.map((r) => (r.img ? ' ' : r.t)));
+  const nodes = runs.map((r, i) => {
+    if (r.img) {
+      const src = urls[r.img];
+      return src ? (
+        <img
+          key={i}
+          src={src}
+          alt=""
+          data-fv-docimg=""
+          className="inline-block max-w-full align-middle"
+          style={{ width: r.w ? Math.min(r.w, 680) : undefined, height: 'auto' }}
+        />
+      ) : null;
+    }
+    const cls = [
+      r.b ? 'font-bold' : '',
+      r.i ? 'italic' : '',
+      r.u ? 'underline' : '',
+      r.s ? 'line-through' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    return (
+      <span key={i} className={cls || undefined} style={runStyle(r)}>
+        {chunked(r.t)}
+      </span>
+    );
+  });
+  // Абзац из многих кусков — блоками до `TEXT_SEGMENT` знаков, как и один длинный кусок.
   return (
     <>
-      {runs.map((r, i) => {
-        if (r.img) {
-          const src = urls[r.img];
-          return src ? (
-            <img
-              key={i}
-              src={src}
-              alt=""
-              data-fv-docimg=""
-              className="inline-block max-w-full align-middle"
-              style={{ width: r.w ? Math.min(r.w, 680) : undefined, height: 'auto' }}
-            />
-          ) : null;
-        }
-        const cls = [
-          r.b ? 'font-bold' : '',
-          r.i ? 'italic' : '',
-          r.u ? 'underline' : '',
-          r.s ? 'line-through' : '',
-          long.has(i) ? 'break-all' : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
-        return (
-          <span key={i} className={cls || undefined} style={runStyle(r)}>
-            {chunked(r.t)}
-          </span>
-        );
-      })}
+      {inBlocks(
+        nodes,
+        runs.map((r) => (r.img ? 1 : r.t.length)),
+      )}
     </>
   );
 }
@@ -664,15 +698,18 @@ const HEADING = [
 function DocBlocks({
   blocks,
   urls,
+  lazy,
 }: {
   blocks: readonly DocBlock[];
   urls: Record<string, string>;
+  /** Блоки самой бумаги (не ячеек таблицы) раскладываются, когда они у экрана. */
+  lazy?: boolean;
 }) {
   return (
     <>
       {blocks.map((b, i) => {
         if (b.k === 't') {
-          return (
+          const table = (
             <table key={i} className="my-2 w-full border-collapse text-[13px]">
               <tbody>
                 {b.rows.map((row, ri) => (
@@ -692,6 +729,14 @@ function DocBlocks({
               </tbody>
             </table>
           );
+          // У самой таблицы `content-visibility` не действует — у блока вокруг неё.
+          return lazy ? (
+            <div key={i} style={LAZY_TABLE}>
+              {table}
+            </div>
+          ) : (
+            table
+          );
         }
         const cls = [
           b.h !== undefined ? HEADING[b.h] : 'my-1.5 min-h-[1em] leading-[1.55]',
@@ -708,7 +753,10 @@ function DocBlocks({
             <Runs runs={b.runs} urls={urls} />
           </>
         );
-        const style = b.li ? { paddingLeft: `${b.li.lvl * 24}px` } : undefined;
+        const style = {
+          ...(lazy ? LAZY_LINE : undefined),
+          ...(b.li ? { paddingLeft: `${b.li.lvl * 24}px` } : undefined),
+        };
         if (b.h === undefined)
           return (
             <p key={i} className={cls} style={style}>
@@ -738,11 +786,11 @@ export function DocumentView({
     <FileViewFrame kind="doc">
       <div className={`${SCROLL} p-4 max-md:p-2`}>
         <div
-          className="mx-auto max-w-[760px] rounded-md bg-white px-10 py-8 text-[13.5px] text-[#222] shadow-pane max-md:px-4 max-md:py-5"
+          className="mx-auto max-w-[760px] rounded-md bg-white px-10 py-8 text-[13.5px] break-words text-[#222] shadow-pane max-md:px-4 max-md:py-5"
           data-fv-paper=""
           style={{ fontFamily: FILE_FONT }}
         >
-          <DocBlocks blocks={model.blocks} urls={urls} />
+          <DocBlocks blocks={model.blocks} urls={urls} lazy />
         </div>
       </div>
       {model.cut ? <MoreAll text={labels.moreAll} /> : null}
@@ -810,19 +858,18 @@ function SlideItemView({
       style={{ ...box, background: item.fill, padding: '0.8cqw 1cqw' }}
       className={`flex flex-col overflow-hidden ${item.anchor === 'c' ? 'justify-center' : item.anchor === 'b' ? 'justify-end' : 'justify-start'}`}
     >
-      {item.paras.map((p, i) => {
-        const long = longWordRuns(p.runs.map((r) => r.t));
-        return (
-          <div
-            key={i}
-            className={`leading-[1.2] whitespace-pre-wrap ${p.al ? ALIGN[p.al] : ''}`}
-            style={{
-              paddingLeft: p.lvl ? `${p.lvl * 2.5}cqw` : undefined,
-              fontSize: fs(p.runs[0]?.sz ?? 18),
-            }}
-          >
-            {p.bullet ? '• ' : ''}
-            {p.runs.map((r, j) => (
+      {item.paras.map((p, i) => (
+        <div
+          key={i}
+          className={`leading-[1.2] whitespace-pre-wrap ${p.al ? ALIGN[p.al] : ''}`}
+          style={{
+            paddingLeft: p.lvl ? `${p.lvl * 2.5}cqw` : undefined,
+            fontSize: fs(p.runs[0]?.sz ?? 18),
+          }}
+        >
+          {p.bullet ? '• ' : ''}
+          {inBlocks(
+            p.runs.map((r, j) => (
               <span
                 key={j}
                 className={
@@ -830,7 +877,6 @@ function SlideItemView({
                     r.b || item.title ? 'font-bold' : '',
                     r.i ? 'italic' : '',
                     r.u ? 'underline' : '',
-                    long.has(j) ? 'break-all' : '',
                   ]
                     .filter(Boolean)
                     .join(' ') || undefined
@@ -839,10 +885,11 @@ function SlideItemView({
               >
                 {chunked(r.t)}
               </span>
-            ))}
-          </div>
-        );
-      })}
+            )),
+            p.runs.map((r) => r.t.length),
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -893,7 +940,7 @@ export function SlidesView({
         {s ? (
           <div
             data-fv-slide-box=""
-            className="relative w-[min(760px,100%)] overflow-hidden rounded-md text-[#1f2a44] shadow-pane [container-type:inline-size]"
+            className="relative w-[min(760px,100%)] overflow-hidden rounded-md break-words text-[#1f2a44] shadow-pane [container-type:inline-size]"
             style={{
               aspectRatio: `${model.w} / ${model.h}`,
               background: s.bg ?? '#fff',
@@ -925,7 +972,7 @@ export function TextFileView({ model, labels }: { model: TextView; labels: FileV
       <div className={`${SCROLL} bg-pane`}>
         <pre className="m-0 px-3 py-2.5 font-mono text-[12.5px] leading-[1.6] break-words whitespace-pre-wrap">
           {model.lines.map((l, i) => (
-            <span key={i} className="block">
+            <span key={i} className="block" style={LAZY_LINE}>
               <span className="mr-2.5 inline-block w-[34px] text-right text-faint select-none">
                 {i + 1}
               </span>
@@ -962,9 +1009,11 @@ function XmlNodeView({
   onToggle: (p: XmlPath) => void;
   labels: FileViewLabels;
 }) {
+  // Имя и атрибуты длиннее блока раскладки — каждый атрибут своей строкой.
+  const head = node.a.reduce((n, [k, v]) => n + k.length + v.length, node.n.length);
   const attrs = node.a.map(([k, v]) => (
-    <span key={k}>
-      {' '}
+    <span key={k} className={head > TEXT_SEGMENT ? 'block pl-4' : undefined}>
+      {head > TEXT_SEGMENT ? null : ' '}
       <span className="text-violet">{chunked(k)}</span>=
       <span className="text-ok">&quot;{chunked(v)}&quot;</span>
     </span>
@@ -974,7 +1023,7 @@ function XmlNodeView({
   const text = node.c.filter((x): x is string => typeof x === 'string').join(' ');
   if (!kids.length) {
     return (
-      <div className={hit} data-xn={path}>
+      <div className={hit} data-xn={path} style={LAZY_LINE}>
         <span className="text-info">&lt;{chunked(node.n)}</span>
         {attrs}
         {text ? (
@@ -992,7 +1041,8 @@ function XmlNodeView({
   const off = xmlClosed(path, toggled, open);
   let k = 0;
   return (
-    <div data-xn={path}>
+    // Отступ и обратное поле: кнопка-стрелка слева остаётся внутри блока и не обрезается.
+    <div className="-ml-4 pl-4" data-xn={path} style={LAZY_LINE}>
       <span className={hit}>
         <button
           type="button"

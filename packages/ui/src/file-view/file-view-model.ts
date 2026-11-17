@@ -172,7 +172,7 @@ const lastGap = (s: string): number => Math.max(s.lastIndexOf(' '), s.lastIndexO
  * строке на тексте без пробелов — квадрат от длины (2 млн знаков — секунды на каждую перерисовку).
  */
 export function textChunks(text: string, max = TEXT_CHUNK): string | string[] {
-  if (text.length <= max) return text;
+  if (max < 1 || text.length <= max) return text;
   const out: string[] = [];
   let from = 0;
   let word = false;
@@ -208,39 +208,37 @@ function cutByLimit(parts: readonly string[], i: number): boolean {
 
 /**
  * Кусок из `textChunks` — часть длинного «слова»: он сам отрезан по пределу или продолжает такой
- * кусок. Ему нужен перенос по любому знаку (`break-all`): слово без мест переноса браузер переносит
- * по `overflow-wrap` за квадрат от длины (2 млн русских букв подряд — около минуты одним кадром).
+ * кусок. Ему — перенос между любыми буквами (`break-all`), чтобы строки шли до края; место
+ * переноса между кусками окно ставит само (`<wbr>`): знаки препинания `break-all` не разделяет.
  */
 export function chunkOfLongWord(parts: readonly string[], i: number): boolean {
   return cutByLimit(parts, i) || cutByLimit(parts, i - 1);
 }
 
 /**
- * Куски текста одного абзаца (Word, слайд), по которым идёт «слово» длиннее `max` знаков: соседние
- * куски без пробела между ними для браузера — одно слово, как бы коротки они ни были. Таким кускам
- * тоже нужен перенос по любому знаку. Картинка в строке — место переноса: вместо неё — пробел.
+ * Знаков текста файла в одном блоке раскладки — не больше. Время раскладки одной строки или абзаца
+ * растёт быстрее длины и зависит от содержимого (буквы со знаками между ними, чужая письменность,
+ * один знак с тысячами надстрочных): 2 млн знаков одним абзацем — от секунд до минут. Поэтому
+ * длинный текст делится на блоки: в каждом браузер раскладывает не больше этого, сколько бы ни
+ * было всего и что бы в нём ни было.
  */
-export function longWordRuns(texts: readonly string[], max = TEXT_CHUNK): Set<number> {
-  const out = new Set<number>();
-  let start = 0;
-  let streak = 0;
-  let marked = 0;
-  texts.forEach((t, i) => {
-    const first = firstGap(t);
-    // Сколько знаков слова в этом куске; кусок, начатый с пробела, в слово не входит.
-    const reach = first < 0 ? t.length : first;
-    const to = reach > 0 ? i : i - 1;
-    if (to > start && streak + reach > max) {
-      for (let k = Math.max(start, marked); k <= to; k++) out.add(k);
-      marked = to + 1;
+export const TEXT_SEGMENT = 8_192;
+
+/**
+ * Куски подряд — блоками до `seg` знаков: номера кусков, с которых начинается блок (первый — 0).
+ * Кусок длиннее `seg` — один в блоке (его делит на блоки тот, кто его рисует).
+ */
+export function segmentStarts(lengths: readonly number[], seg = TEXT_SEGMENT): number[] {
+  const starts = [0];
+  let sum = 0;
+  lengths.forEach((n, i) => {
+    if (i > 0 && sum + n > seg) {
+      starts.push(i);
+      sum = 0;
     }
-    if (first < 0) streak += t.length;
-    else {
-      start = i;
-      streak = t.length - lastGap(t) - 1;
-    }
+    sum += n;
   });
-  return out;
+  return starts;
 }
 
 /**

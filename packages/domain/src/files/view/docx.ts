@@ -31,6 +31,11 @@ export const DOC_MAX_LABEL = 64;
  * целиком.
  */
 export const DOC_MAX_CHARS = 2_000_000;
+/**
+ * Знаков текста в одной таблице документа (со вложенными) — не больше: таблицу окно раскладывает
+ * целиком, по частям её не разложить. Остальные строки таблицы не показываются.
+ */
+export const DOC_MAX_TABLE_CHARS = 500_000;
 /** Перенос строки `<w:br/>` в счёте знаков документа — как строка в 64 знака. */
 export const DOC_BREAK_CHARS = 64;
 /**
@@ -275,14 +280,31 @@ interface Ctx {
   chars: number;
   /** Строк и ячеек таблиц уже в модели. */
   cells: number;
+  /** Глубина таблицы, которая сейчас разбирается (0 — вне таблицы). */
+  tableDepth: number;
+  /** Знаков текста в таблице верхнего уровня, которая сейчас разбирается. */
+  tableChars: number;
+  /** Таблица верхнего уровня набрала `DOC_MAX_TABLE_CHARS`: её строки больше не берутся. */
+  tableFull: boolean;
   cut: boolean;
 }
 
-/** Ещё один кусок в модель: после `DOC_MAX_RUNS` кусков или `DOC_MAX_CHARS` знаков — нет, документ показан не целиком. */
+/**
+ * Ещё один кусок в модель: после `DOC_MAX_RUNS` кусков или `DOC_MAX_CHARS` знаков — нет, документ
+ * показан не целиком; в таблице — ещё и после `DOC_MAX_TABLE_CHARS` знаков этой таблицы.
+ */
 function take(ctx: Ctx, chars = 0): boolean {
   if (ctx.runs >= DOC_MAX_RUNS || ctx.chars + chars > DOC_MAX_CHARS) {
     ctx.cut = true;
     return false;
+  }
+  if (ctx.tableDepth > 0) {
+    if (ctx.tableFull || ctx.tableChars + chars > DOC_MAX_TABLE_CHARS) {
+      ctx.tableFull = true;
+      ctx.cut = true;
+      return false;
+    }
+    ctx.tableChars += chars;
   }
   ctx.runs++;
   ctx.chars += chars;
@@ -413,8 +435,13 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
   // Ячейка, начавшая объединение по вертикали, по номеру столбца сетки.
   const vStart = new Map<number, DocCell>();
   let full = false;
+  if (ctx.tableDepth === 0) {
+    ctx.tableChars = 0;
+    ctx.tableFull = false;
+  }
+  ctx.tableDepth++;
   for (const tr of childEls(tbl, 'tr')) {
-    if (full || !takeCell(ctx)) break;
+    if (full || ctx.tableFull || !takeCell(ctx)) break;
     const row: DocCell[] = [];
     let grid = 0;
     for (const tc of childEls(tr, 'tc')) {
@@ -433,7 +460,7 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
         grid += span;
         continue;
       }
-      if (!takeCell(ctx)) {
+      if (ctx.tableFull || !takeCell(ctx)) {
         full = true;
         break;
       }
@@ -446,6 +473,7 @@ async function tableOf(tbl: XEl, ctx: Ctx): Promise<DocTable> {
     }
     rows.push(row);
   }
+  ctx.tableDepth--;
   fitTableGrid(rows, ctx);
   return { k: 't', rows };
 }
@@ -523,6 +551,9 @@ export async function parseDocx(zip: Zip): Promise<DocView> {
     runs: 0,
     chars: 0,
     cells: 0,
+    tableDepth: 0,
+    tableChars: 0,
+    tableFull: false,
     cut: false,
   };
   const root = parseXmlTree(src, 3_000_000).root;

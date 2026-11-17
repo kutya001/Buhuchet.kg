@@ -10,6 +10,7 @@ import {
   DOC_MAX_LABEL,
   DOC_MAX_LIST_START,
   DOC_MAX_RUNS,
+  DOC_MAX_TABLE_CHARS,
 } from './docx';
 import type { DocBlock } from './docx';
 import { docxBytes, docxImage, zipBytes } from './fixtures';
@@ -145,6 +146,38 @@ describe('Word DOCX в окне просмотра', () => {
     // Перевод строки внутри `<w:t>` — пробел, как у Word: строку переносит только `<w:br/>`.
     const plain = await parseDocx(openZip(await docxBytes(p(r('первая\nвторая\r\nтретья')))));
     expect(plain.blocks).toEqual([{ k: 'p', runs: [{ t: 'первая вторая третья' }] }]);
+  });
+
+  it('в одной таблице — до 500 000 знаков, документ после неё идёт дальше (защита, п. И-12)', async () => {
+    // Разный текст: одинаковый сжался бы сильнее предела архива.
+    let seed = 7;
+    const noise = (n: number) =>
+      Array.from({ length: n }, () => {
+        seed = (seed * 1103515245 + 12345) % 2147483648;
+        return String.fromCharCode(0x430 + (seed % 32));
+      }).join('');
+    const row = () => `<w:tr><w:tc>${p(r(noise(10_000)))}</w:tc></w:tr>`;
+    const big = `<w:tbl>${Array.from({ length: 60 }, row).join('')}</w:tbl>`;
+    const small = `<w:tbl>${row()}</w:tbl>`;
+    const doc = await parseDocx(openZip(await docxBytes(big + p(r('после таблицы')) + small)));
+    const chars = (blocks: DocBlock[]): number =>
+      blocks.reduce(
+        (n, b) =>
+          n +
+          (b.k === 'p'
+            ? b.runs.reduce((m, x) => m + x.t.length, 0)
+            : b.rows.reduce((m, cells) => m + cells.reduce((q, c) => q + chars(c.blocks), 0), 0)),
+        0,
+      );
+    expect(doc.cut).toBe(true);
+    const [first, after, second] = doc.blocks;
+    expect(first?.k).toBe('t');
+    expect(chars([first!])).toBe(DOC_MAX_TABLE_CHARS);
+    // Строки сверх предела в таблицу не попали и пустыми.
+    expect(first?.k === 't' ? first.rows.length : 0).toBeLessThanOrEqual(51);
+    expect(after).toEqual({ k: 'p', runs: [{ t: 'после таблицы' }] });
+    // У следующей таблицы счёт свой.
+    expect(chars([second!])).toBe(10_000);
   });
 
   it('одна картинка в 1 500 местах — показана в первых 1 000 (защита, п. И-12)', async () => {

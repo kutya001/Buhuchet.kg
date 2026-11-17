@@ -19,7 +19,6 @@ import {
 import {
   chunkOfLongWord,
   hitsByRow,
-  longWordRuns,
   MERGE_SKIP_MAX,
   mergeMap,
   rotateNext,
@@ -30,6 +29,7 @@ import {
   SHEET_RENDER_STEP,
   SHEET_STEP_CHARS,
   SHEET_STEP_PLACES,
+  segmentStarts,
   sheetHits,
   sheetStepEnd,
   swipeDirection,
@@ -234,13 +234,15 @@ describe('правила окна просмотра', () => {
     }
   });
 
-  it('текст без пробелов режется за один проход: 2 млн знаков — не секунды (п. И-12)', () => {
+  it('текст без пробелов режется за один проход: 4 млн знаков — не секунды (п. И-12)', () => {
     // Поиск пробела назад по всей строке — квадрат: 2 млн знаков шли 5 с на каждую перерисовку.
+    expect(textChunks('я'.repeat(300), 0)).toBe('я'.repeat(300));
+    // Запас по времени большой: за один проход 4 млн знаков — десятки мс, за квадрат — 20 с.
     for (const sign of ['я', 'A', '😀']) {
-      const text = sign.repeat(2_000_000 / sign.length);
+      const text = sign.repeat(4_000_000 / sign.length);
       const started = performance.now();
       const parts = textChunks(text) as string[];
-      expect(performance.now() - started).toBeLessThan(1500);
+      expect(performance.now() - started).toBeLessThan(5000);
       expect(parts.length).toBeGreaterThanOrEqual(text.length / TEXT_CHUNK);
       expect(parts.reduce((n, x) => n + x.length, 0)).toBe(text.length);
     }
@@ -281,31 +283,32 @@ describe('правила окна просмотра', () => {
     expect(names.split('<span class="break-all">')).toHaveLength(10);
   });
 
-  it('слово из многих коротких кусков абзаца переносится по любому знаку (п. И-12)', () => {
-    const short = 'я'.repeat(100);
-    // Три куска по 100 знаков без пробела между ними — одно слово в 300 знаков.
-    expect([...longWordRuns([short, short, short])]).toEqual([0, 1, 2]);
-    // Пробел или картинка (вместо неё — пробел) между кусками: слова короткие.
-    expect(longWordRuns([`${short} `, short, ' ', short]).size).toBe(0);
-    // Длинное слово начинается в хвосте одного куска и кончается в начале другого.
-    expect([...longWordRuns(['слово', `и ${short}`, `${short} конец`, 'слово'])]).toEqual([1, 2]);
-    expect([...longWordRuns([short, short, ' дальше', short])]).toEqual([0, 1]);
-    // Слово в одном куске режет `textChunks`, абзацу отметка не нужна.
-    expect(longWordRuns(['я'.repeat(1000), ' дальше']).size).toBe(0);
-    expect(longWordRuns(['я'.repeat(1000)]).size).toBe(0);
-    const runs = Array.from({ length: 200_000 }, () => 'яя');
-    const started = performance.now();
-    expect(longWordRuns(runs).size).toBe(runs.length);
-    expect(performance.now() - started).toBeLessThan(1500);
-    const doc: DocView = {
-      kind: 'doc',
-      blocks: [{ k: 'p', runs: [{ t: short }, { t: short, b: true }, { t: ' и слово' }] }],
-      images: {},
-      cut: false,
-    };
-    const html = renderToStaticMarkup(<DocumentView model={doc} labels={labels} />);
-    expect(html.split('break-all')).toHaveLength(3);
-    expect(html).toContain(`<span class="font-bold break-all">${short}</span>`);
+  it('длинный текст — блоками до 8 192 знаков, блок раскладывается у экрана (п. И-12)', async () => {
+    expect(segmentStarts([])).toEqual([0]);
+    expect(segmentStarts([100, 200, 300])).toEqual([0]);
+    // Блок закрывается, когда следующий кусок в него не входит; кусок длиннее блока — один.
+    expect(segmentStarts([5000, 3000, 200, 9000, 1, 8191, 1])).toEqual([0, 2, 3, 4, 6]);
+    const lazy = 'content-visibility:auto;contain-intrinsic-size:auto';
+    // Строка текста в 20 000 знаков — три блока; между кусками — место переноса.
+    const line = 'слово '.repeat(20_000 / 6);
+    const text = await model('l.txt', enc(`коротко\n${line}`), 'text');
+    const html = renderToStaticMarkup(<TextFileView model={text} labels={labels} />);
+    expect(html.split(`<span class="block" style="${lazy} 1200px">`)).toHaveLength(4);
+    expect(html.split(`<span class="block" style="${lazy} 21px">`)).toHaveLength(3);
+    expect(html.split('<wbr/>').length).toBeGreaterThan(line.length / TEXT_CHUNK);
+    expect(html.replace(/<[^>]+>/g, '')).toContain(line);
+    // Абзац Word из 300 кусков по 100 знаков — тоже блоками, абзац бумаги — у экрана.
+    const runs = Array.from({ length: 300 }, () => ({ t: 'я'.repeat(99) + ' ' }));
+    const doc: DocView = { kind: 'doc', blocks: [{ k: 'p', runs }], images: {}, cut: false };
+    const paper = renderToStaticMarkup(<DocumentView model={doc} labels={labels} />);
+    expect(paper.split(`<span class="block" style="${lazy} 1200px">`)).toHaveLength(5);
+    expect(paper).toMatch(new RegExp(`<p class="[^"]*" style="${lazy} 21px">`));
+    // XML: имя и атрибуты длиннее блока — каждый атрибут своей строкой.
+    const attrs = Array.from({ length: 100 }, (_, i) => `a${i}="${'я'.repeat(100)}"`).join(' ');
+    const xml = await model('a.xml', enc(`<r ${attrs}><b k="1"/></r>`), 'xml');
+    const tree = renderToStaticMarkup(<XmlFileView model={xml} labels={labels} />);
+    expect(tree.split('<span class="block pl-4">')).toHaveLength(101);
+    expect(tree).toContain(`data-xn="0" style="${lazy} 21px"`);
   });
 
   it('найденные ячейки — по строкам', () => {
