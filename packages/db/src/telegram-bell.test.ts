@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { BELL_FROM, BELL_PAGE_SIZE, PERMISSION_IDS } from '@buhuchet/domain';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { adminTelegramBroadcast } from './admin-telegram';
 import { notifyAccountLocked, withUserContext } from './auth';
 import { withOrgContext } from './context';
@@ -129,6 +129,14 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     return rows.map((r) => r.key).sort();
   };
   const clear = () => db.admin.db.delete(bellNotifications);
+  /** Свои новости теста снять с публикации в его конце, и при падении: соседним тестам они не нужны. */
+  const dropNewsAfter = (ids: readonly string[]) =>
+    onTestFinished(async () => {
+      await db.admin.db
+        .update(news)
+        .set({ off: true })
+        .where(sql`${news.id} in ${[...ids]}`);
+    });
 
   beforeAll(async () => {
     db = await createTestDatabase();
@@ -175,7 +183,13 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       .where(eq(contractors.id, cpArchived));
     const [admin] = await db.admin.db
       .insert(users)
-      .values({ login: 'bell-platform', passwordHash: 'x', isPlatformAdmin: true })
+      .values({
+        login: 'bell-platform',
+        passwordHash: 'x',
+        isPlatformAdmin: true,
+        // Старше новостей тестов: вышедшие раньше создания учётной записи считаются прочитанными (№ 57).
+        createdAt: new Date('2026-11-01T00:00:00Z'),
+      })
       .returning({ id: users.id });
     adminId = admin!.id;
   });
@@ -359,6 +373,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
       },
       { ...base, id: 'bell-draft', title: 'Черновик', publishDate: BELL_FROM, status: 'draft' },
     ]);
+    dropNewsAfter(['bell-n1', 'bell-n0', 'bell-adm', 'bell-draft']);
     const sync = () => inA(acc.userId, (tx) => bellSyncNews(tx, NOW, null));
     await sync();
     await sync();
@@ -386,11 +401,6 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     await asAdmin((tx) => bellSyncNews(tx, NOW, null));
     const adm = await asAdmin((tx) => bellPage(tx, ALL, { tab: 'news' }));
     expect(adm.items.map((x) => x.targetId)).toEqual(['bell-adm']);
-    // Остальные свои новости тоже снимаем: следующим тестам файла они не нужны.
-    await db.admin.db
-      .update(news)
-      .set({ off: true })
-      .where(sql`${news.id} in ('bell-n0', 'bell-adm', 'bell-draft')`);
   });
 
   it('новости с модулями — только тем, у кого есть хотя бы один из них (доработки 16.11, блок 4, пункт 3)', async () => {
@@ -407,6 +417,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         { ...base, id: 'bell-m-all', title: 'Для всех', modules: [] },
       ].map((n) => ({ ...n, publishDate: BELL_FROM, publishedAt: NOW })),
     );
+    dropNewsAfter(['bell-m-fee', 'bell-m-two', 'bell-m-all']);
     const ids = async (mine: readonly string[] | null) => {
       await inA(acc.userId, (tx) => bellSyncNews(tx, NOW, mine));
       const page = await inA(acc.userId, (tx) =>
@@ -424,10 +435,6 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     // Получил право — новость появляется при следующем чтении; потерял модуль — строки не видно.
     expect(await ids(['home', 'fee'])).toEqual(['bell-m-all', 'bell-m-fee']);
     expect(await ids(null)).toEqual(['bell-m-all', 'bell-m-fee', 'bell-m-two']);
-    await db.admin.db
-      .update(news)
-      .set({ off: true })
-      .where(sql`${news.id} in ('bell-m-fee', 'bell-m-two', 'bell-m-all')`);
   });
 
   it('заявки с лендинга — только администратору платформы: новые и поданные с появления колокольчика', async () => {
@@ -462,6 +469,14 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         inA(acc.userId, (tx) => bellSyncLeads(tx, template, NOW)),
       ).resolves.toBeUndefined();
       expect(await keys(acc.userId)).toEqual([]);
+      // Страница строку заявки сотруднику и так прячет — «не кладёт» сверяем по таблице.
+      const staffLeads = await db.admin.db
+        .select({ k: bellNotifications.eventKey })
+        .from(bellNotifications)
+        .where(
+          sql`${bellNotifications.event} = 'lead' and ${bellNotifications.userId} <> ${adminId}`,
+        );
+      expect(staffLeads).toEqual([]);
     } finally {
       // Свои заявки убираем и при падении: следующим тестам файла они не нужны.
       await db.admin.db
@@ -499,7 +514,8 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
         .select({ k: bellNotifications.eventKey, u: bellNotifications.userId })
         .from(bellNotifications)
         .where(sql`${bellNotifications.eventKey} in ${ownKeys}`);
-      return rows.map((r) => `${r.u === adminId ? 'admin' : 'acc'} ${r.k}`).sort();
+      const who = (u: string) => (u === adminId ? 'admin' : u === acc.userId ? 'acc' : u);
+      return rows.map((r) => `${who(r.u)} ${r.k}`).sort();
     };
     try {
       // Через 91 день после появления новости и заявки.
