@@ -156,20 +156,90 @@ export function xmlBranches(root: XmlViewNode): XmlPath[] {
  */
 export const TEXT_CHUNK = 128;
 
-/** Текст кусками до `max` знаков: режется после пробела, а без пробела — не внутри пары UTF-16. */
+/** Пробел или табуляция — место, где браузер и сам переносит строку. */
+function firstGap(s: string): number {
+  const space = s.indexOf(' ');
+  const tab = s.indexOf('\t');
+  return space < 0 ? tab : tab < 0 ? space : Math.min(space, tab);
+}
+
+const lastGap = (s: string): number => Math.max(s.lastIndexOf(' '), s.lastIndexOf('\t'));
+
+/**
+ * Текст кусками до `max` знаков: режется после пробела (или табуляции), а без пробела — по пределу,
+ * но не внутри пары UTF-16. После куска, отрезанного по пределу, идёт длинное «слово»: следующий
+ * кусок кончается на его первом пробеле. Пробел ищется только в своём куске: поиск назад по всей
+ * строке на тексте без пробелов — квадрат от длины (2 млн знаков — секунды на каждую перерисовку).
+ */
 export function textChunks(text: string, max = TEXT_CHUNK): string | string[] {
   if (text.length <= max) return text;
   const out: string[] = [];
   let from = 0;
-  while (text.length - from > max) {
-    const space = text.lastIndexOf(' ', from + max - 1);
-    let cut = space >= from ? space + 1 : from + max;
-    const last = text.charCodeAt(cut - 1);
-    if (space < from && last >= 0xd800 && last <= 0xdbff && cut - 1 > from) cut--;
+  let word = false;
+  while (from < text.length) {
+    const piece = text.slice(from, from + max);
+    const gap = word ? firstGap(piece) : lastGap(piece);
+    let cut: number;
+    if (word && gap >= 0) {
+      cut = from + gap + 1;
+      word = false;
+    } else if (text.length - from <= max) {
+      cut = text.length;
+      word = false;
+    } else if (gap >= 0) {
+      cut = from + gap + 1;
+    } else {
+      cut = from + max;
+      const last = text.charCodeAt(cut - 1);
+      if (last >= 0xd800 && last <= 0xdbff && cut - 1 > from) cut--;
+      word = true;
+    }
     out.push(text.slice(from, cut));
     from = cut;
   }
-  out.push(text.slice(from));
+  return out;
+}
+
+/** Кусок отрезан по пределу, а не по пробелу. */
+function cutByLimit(parts: readonly string[], i: number): boolean {
+  const part = parts[i] ?? '';
+  return i >= 0 && i < parts.length - 1 && !part.endsWith(' ') && !part.endsWith('\t');
+}
+
+/**
+ * Кусок из `textChunks` — часть длинного «слова»: он сам отрезан по пределу или продолжает такой
+ * кусок. Ему нужен перенос по любому знаку (`break-all`): слово без мест переноса браузер переносит
+ * по `overflow-wrap` за квадрат от длины (2 млн русских букв подряд — около минуты одним кадром).
+ */
+export function chunkOfLongWord(parts: readonly string[], i: number): boolean {
+  return cutByLimit(parts, i) || cutByLimit(parts, i - 1);
+}
+
+/**
+ * Куски текста одного абзаца (Word, слайд), по которым идёт «слово» длиннее `max` знаков: соседние
+ * куски без пробела между ними для браузера — одно слово, как бы коротки они ни были. Таким кускам
+ * тоже нужен перенос по любому знаку. Картинка в строке — место переноса: вместо неё — пробел.
+ */
+export function longWordRuns(texts: readonly string[], max = TEXT_CHUNK): Set<number> {
+  const out = new Set<number>();
+  let start = 0;
+  let streak = 0;
+  let marked = 0;
+  texts.forEach((t, i) => {
+    const first = firstGap(t);
+    // Сколько знаков слова в этом куске; кусок, начатый с пробела, в слово не входит.
+    const reach = first < 0 ? t.length : first;
+    const to = reach > 0 ? i : i - 1;
+    if (to > start && streak + reach > max) {
+      for (let k = Math.max(start, marked); k <= to; k++) out.add(k);
+      marked = to + 1;
+    }
+    if (first < 0) streak += t.length;
+    else {
+      start = i;
+      streak = t.length - lastGap(t) - 1;
+    }
+  });
   return out;
 }
 

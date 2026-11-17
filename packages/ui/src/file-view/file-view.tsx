@@ -34,8 +34,10 @@ import { Icon } from '../icon';
 import type { IconName } from '../icons';
 import {
   cellKey,
+  chunkOfLongWord,
   FILE_FONT,
   hitsByRow,
+  longWordRuns,
   mergeMap,
   rotateNext,
   sheetCellText,
@@ -43,6 +45,7 @@ import {
   sheetStepEnd,
   SHEET_WRAP_MAX_PX,
   textChunks,
+  TEXT_CHUNK,
   xmlBranches,
   xmlClosed,
   xmlDepth,
@@ -296,6 +299,34 @@ function cellClass(cell: SheetCell | null | undefined, hit: boolean, current: bo
     .join(' ');
 }
 
+/**
+ * Длинный текст — кусками `textChunks`; кусок длинного «слова» без пробелов переносится по любому
+ * знаку (`chunkOfLongWord`), иначе браузер раскладывает такое слово за квадрат от длины.
+ */
+function chunkNodes(text: string): ReactNode {
+  const parts = textChunks(text);
+  if (typeof parts === 'string') return parts;
+  return parts.map((part, i) =>
+    chunkOfLongWord(parts, i) ? (
+      <span key={i} className="break-all">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
+/** Куски длинного текста считаются один раз на значение, а не при каждой перерисовке окна. */
+const Chunks = memo(function Chunks({ text }: { text: string }) {
+  return chunkNodes(text);
+});
+
+/** Текст файла на экране: короткий — как есть, длинный — кусками. */
+function chunked(text: string): ReactNode {
+  return text.length > TEXT_CHUNK ? <Chunks text={text} /> : text;
+}
+
 /** Ширина столбца номеров строк, px. */
 const SHEET_HEAD_PX = 46;
 
@@ -333,7 +364,7 @@ const SheetRow = memo(function SheetRow({
         const cell = row[c];
         const span = merges.span.get(k);
         // В ячейке — до 1 024 знаков, с переносом — не выше строки Excel; весь текст — в подсказке.
-        const text = cell ? textChunks(sheetCellText(cell.v)) : undefined;
+        const text = cell ? chunkNodes(sheetCellText(cell.v)) : undefined;
         return (
           <td
             key={c}
@@ -582,6 +613,8 @@ function runStyle(r: DocRun): CSSProperties | undefined {
 }
 
 function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, string> }) {
+  // Слово из многих кусков подряд (без пробела между ними) переносится по любому знаку.
+  const long = longWordRuns(runs.map((r) => (r.img ? ' ' : r.t)));
   return (
     <>
       {runs.map((r, i) => {
@@ -603,12 +636,13 @@ function Runs({ runs, urls }: { runs: readonly DocRun[]; urls: Record<string, st
           r.i ? 'italic' : '',
           r.u ? 'underline' : '',
           r.s ? 'line-through' : '',
+          long.has(i) ? 'break-all' : '',
         ]
           .filter(Boolean)
           .join(' ');
         return (
           <span key={i} className={cls || undefined} style={runStyle(r)}>
-            {textChunks(r.t)}
+            {chunked(r.t)}
           </span>
         );
       })}
@@ -762,7 +796,7 @@ function SlideItemView({
                   key={j}
                   className="border border-[#aab] px-[0.6cqw] py-[0.3cqw] align-top whitespace-pre-wrap"
                 >
-                  {textChunks(c)}
+                  {chunked(c)}
                 </td>
               ))}
             </tr>
@@ -776,31 +810,39 @@ function SlideItemView({
       style={{ ...box, background: item.fill, padding: '0.8cqw 1cqw' }}
       className={`flex flex-col overflow-hidden ${item.anchor === 'c' ? 'justify-center' : item.anchor === 'b' ? 'justify-end' : 'justify-start'}`}
     >
-      {item.paras.map((p, i) => (
-        <div
-          key={i}
-          className={`leading-[1.2] whitespace-pre-wrap ${p.al ? ALIGN[p.al] : ''}`}
-          style={{
-            paddingLeft: p.lvl ? `${p.lvl * 2.5}cqw` : undefined,
-            fontSize: fs(p.runs[0]?.sz ?? 18),
-          }}
-        >
-          {p.bullet ? '• ' : ''}
-          {p.runs.map((r, j) => (
-            <span
-              key={j}
-              className={
-                [r.b || item.title ? 'font-bold' : '', r.i ? 'italic' : '', r.u ? 'underline' : '']
-                  .filter(Boolean)
-                  .join(' ') || undefined
-              }
-              style={{ fontSize: r.sz ? fs(r.sz) : undefined, color: r.color }}
-            >
-              {textChunks(r.t)}
-            </span>
-          ))}
-        </div>
-      ))}
+      {item.paras.map((p, i) => {
+        const long = longWordRuns(p.runs.map((r) => r.t));
+        return (
+          <div
+            key={i}
+            className={`leading-[1.2] whitespace-pre-wrap ${p.al ? ALIGN[p.al] : ''}`}
+            style={{
+              paddingLeft: p.lvl ? `${p.lvl * 2.5}cqw` : undefined,
+              fontSize: fs(p.runs[0]?.sz ?? 18),
+            }}
+          >
+            {p.bullet ? '• ' : ''}
+            {p.runs.map((r, j) => (
+              <span
+                key={j}
+                className={
+                  [
+                    r.b || item.title ? 'font-bold' : '',
+                    r.i ? 'italic' : '',
+                    r.u ? 'underline' : '',
+                    long.has(j) ? 'break-all' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+                style={{ fontSize: r.sz ? fs(r.sz) : undefined, color: r.color }}
+              >
+                {chunked(r.t)}
+              </span>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -887,7 +929,7 @@ export function TextFileView({ model, labels }: { model: TextView; labels: FileV
               <span className="mr-2.5 inline-block w-[34px] text-right text-faint select-none">
                 {i + 1}
               </span>
-              {textChunks(l)}
+              {chunked(l)}
             </span>
           ))}
         </pre>
@@ -923,8 +965,8 @@ function XmlNodeView({
   const attrs = node.a.map(([k, v]) => (
     <span key={k}>
       {' '}
-      <span className="text-violet">{k}</span>=
-      <span className="text-ok">&quot;{textChunks(v)}&quot;</span>
+      <span className="text-violet">{chunked(k)}</span>=
+      <span className="text-ok">&quot;{chunked(v)}&quot;</span>
     </span>
   ));
   const hit = hits.has(path) ? 'rounded-[3px] bg-caution-bg' : '';
@@ -933,13 +975,13 @@ function XmlNodeView({
   if (!kids.length) {
     return (
       <div className={hit} data-xn={path}>
-        <span className="text-info">&lt;{node.n}</span>
+        <span className="text-info">&lt;{chunked(node.n)}</span>
         {attrs}
         {text ? (
           <>
             <span className="text-info">&gt;</span>
-            {textChunks(text)}
-            <span className="text-info">&lt;/{node.n}&gt;</span>
+            {chunked(text)}
+            <span className="text-info">&lt;/{chunked(node.n)}&gt;</span>
           </>
         ) : (
           <span className="text-info">/&gt;</span>
@@ -961,11 +1003,11 @@ function XmlNodeView({
         >
           ▾
         </button>
-        <span className="text-info">&lt;{node.n}</span>
+        <span className="text-info">&lt;{chunked(node.n)}</span>
         {attrs}
         <span className="text-info">&gt;</span>
         {off ? <span className="text-faint">…</span> : null}
-        {text && !off ? <span>{textChunks(text)}</span> : null}
+        {text && !off ? <span>{chunked(text)}</span> : null}
       </span>
       {off ? null : (
         <div className="ml-[5px] border-l border-dotted border-line-strong pl-[18px]">
@@ -987,7 +1029,7 @@ function XmlNodeView({
           })}
         </div>
       )}
-      <span className="text-info">&lt;/{node.n}&gt;</span>
+      <span className="text-info">&lt;/{chunked(node.n)}&gt;</span>
     </div>
   );
 }

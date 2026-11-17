@@ -17,7 +17,9 @@ import {
   type FileViewLabels,
 } from './file-view';
 import {
+  chunkOfLongWord,
   hitsByRow,
+  longWordRuns,
   MERGE_SKIP_MAX,
   mergeMap,
   rotateNext,
@@ -232,6 +234,80 @@ describe('правила окна просмотра', () => {
     }
   });
 
+  it('текст без пробелов режется за один проход: 2 млн знаков — не секунды (п. И-12)', () => {
+    // Поиск пробела назад по всей строке — квадрат: 2 млн знаков шли 5 с на каждую перерисовку.
+    for (const sign of ['я', 'A', '😀']) {
+      const text = sign.repeat(2_000_000 / sign.length);
+      const started = performance.now();
+      const parts = textChunks(text) as string[];
+      expect(performance.now() - started).toBeLessThan(1500);
+      expect(parts.length).toBeGreaterThanOrEqual(text.length / TEXT_CHUNK);
+      expect(parts.reduce((n, x) => n + x.length, 0)).toBe(text.length);
+    }
+    // Пробел только в начале: дальше одно длинное «слово».
+    const tail = textChunks(`а б ${'в'.repeat(1000)}`) as string[];
+    expect(tail[0]).toBe('а б ');
+    expect(tail.slice(1, -1).every((x) => x.length === TEXT_CHUNK)).toBe(true);
+  });
+
+  it('кусок длинного слова без пробелов переносится по любому знаку (п. И-12)', async () => {
+    const word = textChunks('я'.repeat(300)) as string[];
+    // Хвост длинного слова — тоже его часть.
+    expect(word.map((_, i) => chunkOfLongWord(word, i))).toEqual([true, true, true]);
+    // После длинного слова кусок кончается на его первом пробеле: обычный текст дальше — как был.
+    const mixed = textChunks(`${'я'.repeat(200)} обычный текст\tпосле слова`) as string[];
+    expect(mixed).toEqual(['я'.repeat(128), `${'я'.repeat(72)} `, 'обычный текст\tпосле слова']);
+    expect(mixed.map((_, i) => chunkOfLongWord(mixed, i))).toEqual([true, true, false]);
+    // Табуляция — такое же место переноса, как пробел.
+    const tabs = textChunks('имя\t'.repeat(100)) as string[];
+    expect(tabs.some((_, i) => chunkOfLongWord(tabs, i))).toBe(false);
+    const prose = textChunks('слово '.repeat(100)) as string[];
+    expect(prose.some((_, i) => chunkOfLongWord(prose, i))).toBe(false);
+    const text = await model('w.txt', enc(`${'я'.repeat(300)}\n${'слово '.repeat(100)}`), 'text');
+    const html = renderToStaticMarkup(<TextFileView model={text} labels={labels} />);
+    expect(html.split('<span class="break-all">')).toHaveLength(4);
+    expect(html).toContain(`<span class="break-all">${'я'.repeat(TEXT_CHUNK)}</span>`);
+    const xml = await model(
+      'w.xml',
+      enc(`<r k="${'A'.repeat(300)}">${'я'.repeat(300)}</r>`),
+      'xml',
+    );
+    const tree = renderToStaticMarkup(<XmlFileView model={xml} labels={labels} />);
+    expect(tree.split('<span class="break-all">')).toHaveLength(7);
+    // Имя узла и атрибута — такой же текст файла: длинное режется так же.
+    const name = 'я'.repeat(300);
+    const named = await model('n.xml', enc(`<${name} ${name}="1">т</${name}>`), 'xml');
+    const names = renderToStaticMarkup(<XmlFileView model={named} labels={labels} />);
+    expect(names.split('<span class="break-all">')).toHaveLength(10);
+  });
+
+  it('слово из многих коротких кусков абзаца переносится по любому знаку (п. И-12)', () => {
+    const short = 'я'.repeat(100);
+    // Три куска по 100 знаков без пробела между ними — одно слово в 300 знаков.
+    expect([...longWordRuns([short, short, short])]).toEqual([0, 1, 2]);
+    // Пробел или картинка (вместо неё — пробел) между кусками: слова короткие.
+    expect(longWordRuns([`${short} `, short, ' ', short]).size).toBe(0);
+    // Длинное слово начинается в хвосте одного куска и кончается в начале другого.
+    expect([...longWordRuns(['слово', `и ${short}`, `${short} конец`, 'слово'])]).toEqual([1, 2]);
+    expect([...longWordRuns([short, short, ' дальше', short])]).toEqual([0, 1]);
+    // Слово в одном куске режет `textChunks`, абзацу отметка не нужна.
+    expect(longWordRuns(['я'.repeat(1000), ' дальше']).size).toBe(0);
+    expect(longWordRuns(['я'.repeat(1000)]).size).toBe(0);
+    const runs = Array.from({ length: 200_000 }, () => 'яя');
+    const started = performance.now();
+    expect(longWordRuns(runs).size).toBe(runs.length);
+    expect(performance.now() - started).toBeLessThan(1500);
+    const doc: DocView = {
+      kind: 'doc',
+      blocks: [{ k: 'p', runs: [{ t: short }, { t: short, b: true }, { t: ' и слово' }] }],
+      images: {},
+      cut: false,
+    };
+    const html = renderToStaticMarkup(<DocumentView model={doc} labels={labels} />);
+    expect(html.split('break-all')).toHaveLength(3);
+    expect(html).toContain(`<span class="font-bold break-all">${short}</span>`);
+  });
+
   it('найденные ячейки — по строкам', () => {
     const m = hitsByRow([
       [2, 0],
@@ -307,7 +383,14 @@ describe('просмотр Excel', () => {
     expect(html).toContain('max-height:545px');
     // Ширина таблицы — числом из ширин столбцов (46 + 80 + 80 + 80): текст её не раздвигает.
     expect(html).toMatch(/<table[^>]*style="width:286px;/);
-    expect(html).toContain(`>${'а'.repeat(SHEET_CELL_SHOW)}<`);
+    // На экране — 1 024 знака кусками по 128: восемь кусков длинного слова.
+    expect(html.split('<span class="break-all">')).toHaveLength(SHEET_CELL_SHOW / TEXT_CHUNK + 1);
+    expect(
+      html
+        .match(/>(а+)</g)
+        ?.join('')
+        .replace(/[><]/g, ''),
+    ).toBe('а'.repeat(SHEET_CELL_SHOW));
     expect(html).toContain('font-family:system-ui');
     expect(html).toContain(`title="${long}"`);
   });
