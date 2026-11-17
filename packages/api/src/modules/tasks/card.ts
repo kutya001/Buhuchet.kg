@@ -278,17 +278,12 @@ export function contractorTasksHandler(
     const subject = subjectOf(c);
     const today = todayOf(deps);
     const body = await withOrgContext(deps.db, orgContextOf(c), async (tx) => {
-      const settings = await requireTasks(tx, orgContextOf(c).orgId);
+      await requireTasks(tx, orgContextOf(c).orgId);
       if (!(await taskContractorOf(tx, id, cpScopeOf(subject)))) {
         apiFail(404, 'contractor_not_found', 'Контрагент не найден');
       }
-      const tab = await contractorTasks(tx, id, {
-        t: await serverTexts(deps),
-        today,
-        reportConfirm: settings.reportConfirm,
-      });
-      const sums = hasPermission(subject, 'changeStatus');
-      return { ...tab, items: tab.items.map((r) => listRowBody(r, today, sums)) };
+      const tab = await contractorTasks(tx, id, { t: await serverTexts(deps), today });
+      return { ...tab, items: tab.items.map((r) => listRowBody(r, today)) };
     });
     return c.json(body, 200);
   };

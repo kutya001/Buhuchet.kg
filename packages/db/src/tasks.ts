@@ -5,8 +5,6 @@ import {
   type HistoryValue,
   type IsoDate,
   type ListQuery,
-  type ReportAct,
-  type ReportStatus,
   type TaskStatus,
   type TaskTerm,
 } from '@buhuchet/domain';
@@ -31,18 +29,14 @@ import {
   contractors,
   employees,
   files,
-  orgReportTypes,
   orgSettings,
   projects,
-  reports,
-  reportTypes,
   statusHistory,
   taskCategories,
   taskComments,
   tasks,
   users,
 } from './schema';
-import { REPORT_PERIOD_FULL } from './report-list';
 import { dateLiteral, dictLiteral, textLiteral } from './sql-text';
 import type { AuditRecord } from './staff';
 import { writeStatusChange } from './status';
@@ -231,24 +225,15 @@ function toRow(r: RowData): TaskRow {
 }
 
 /*
- * Список задач (задача 2.24; ТЗ «Задачи» → «Регулярные задачи — по отчётам»; прототип `allTasks`):
- * ручные задачи и регулярные задачи по отчётам — одной выборкой `tl`. Регулярная задача не хранится
- * отдельной записью: это сам отчёт месяца (и несданный просроченный за последние 75 дней) — без прежних
- * версий, «Не требуется» и архивных контрагентов (docs/deviations.md п. Б-11). Поэтому повторный
- * запуск ничего не дублирует, смена ответственного сразу переносит задачу, а «Не требуется» и архив её
- * убирают. Название — по метке «Что нужно сделать»; статус и шкала — отчёта; выполнена — когда отчёт
- * «Сдан» и сдача подтверждена (при выключенном подтверждении — когда «Сдан»).
+ * Список задач (задача 2.24): выборка `tl` — ручные задачи с вычисленными «открыта», «просрочена» и
+ * «есть файл». Регулярных задач по отчётам нет (решение заказчика 17.11.2026, ТЗ «Доработки
+ * 17.11.2026»): отчёты — только в «Отчетах для сдачи».
  */
-
-/** Сколько дней назад ещё показывается несданная регулярная задача (прототип `allTasks`: 75). */
-export const REGULAR_TASK_OVERDUE_DAYS = 75;
 
 /** Столбец выборки списка `tl`. */
 const tl = (name: string) => sql.raw(`"tl"."${name}"`);
 const TL = {
   id: tl('id'),
-  kind: tl('kind'),
-  scale: tl('scale'),
   title: tl('title'),
   categoryCode: tl('category_code'),
   contractorId: tl('contractor_id'),
@@ -262,12 +247,6 @@ const TL = {
   status: tl('status'),
   doneAt: tl('done_at'),
   confirmedById: tl('confirmed_by_id'),
-  act: tl('act'),
-  amount: tl('amount'),
-  paid: tl('paid'),
-  repMark: tl('rep_mark'),
-  repConfirmedBy: tl('rep_confirmed_by'),
-  repSubmittedDay: tl('rep_submitted_day'),
   open: tl('is_open'),
   overdue: tl('is_overdue'),
   hasFile: tl('has_file'),
@@ -277,105 +256,24 @@ const TL = {
   updatedBy: tl('updated_by'),
   version: tl('version'),
 };
-const REGULAR = sql`(${TL.kind} = 'regular')`;
-
-/** Что нужно выборке: сегодня по Бишкеку, «Сдача отчётов требует подтверждения», тексты словаря. */
+/** Что нужно выборке: сегодня по Бишкеку, тексты словаря. */
 export interface TaskSourceOptions {
   t: ListTexts;
   today: IsoDate;
-  reportConfirm: boolean;
 }
 
-const OPEN_REPORT = sql`${reports.status} in ('todo', 'in_progress', 'needs_fix')`;
-
-/** Запись текстов `lt` регулярной задачи: период полностью, название по метке. */
-function regularTexts(t: ListTexts): SQL {
-  const record = {
-    m_full: t('report.period.m_full'),
-    q_full: t('report.period.q_full'),
-    h_full: t('report.period.h_full'),
-    y_full: t('report.period.y_full'),
-    event_full: t('report.period.event_full'),
-    event_default: t('report.event.default'),
-    months: Array.from({ length: 12 }, (_, i) => t(`report.month.${i + 1}`)),
-    title: t('task.reg.title'),
-    verb_sub: t('task.reg.verb.sub'),
-    verb_pay: t('task.reg.verb.pay'),
-    verb_both: t('task.reg.verb.both'),
-  };
-  const text = [
-    'm_full',
-    'q_full',
-    'h_full',
-    'y_full',
-    'event_full',
-    'event_default',
-    'title',
-    'verb_sub',
-    'verb_pay',
-    'verb_both',
-  ].map((f) => `${f} text`);
-  return sql`jsonb_to_record(${JSON.stringify(record)}::jsonb) as lt(${sql.raw([...text, 'months text[]'].join(', '))})`;
-}
-
-const lt = (name: string) => sql.raw(`"lt"."${name}"`);
-const PF = sql.raw(`"rp"."pf"`);
-/**
- * Название регулярной задачи (ТЗ «Метка «Что нужно сделать»»; прототип `allTasks`, `REG_VERB`): глагол по
- * метке, краткое название вида (у «Уплата» — полное строчными), период полностью — как в отчёте
- * («Сдать НДС за Сентябрь 2026 — …»), контрагент.
- */
-const REGULAR_TITLE = sql`replace(replace(replace(replace(${lt('title')}, '{verb}', case ${reports.act} when 'pay' then ${lt('verb_pay')} when 'both' then ${lt('verb_both')} else ${lt('verb_sub')} end), '{what}', case when ${reports.act} = 'pay' then lower(${reportTypes.name}) else ${reportTypes.shortName} end), '{period}', ${PF}), '{contractor}', ${contractors.name})`;
-
-/**
- * Выборка `tl`: ручные задачи и регулярные задачи по отчётам. Регулярная — отчёт со сроком в текущем
- * месяце или несданный просроченный не старше 75 дней (прототип `allTasks`); открыта, пока отчёт не
- * сдан или сдача ждёт подтверждения; просрочена, пока не сдан после срока (прототип `taskOver`).
- */
+/** Выборка `tl`: ручные задачи с «открыта», «просрочена» и «есть файл». */
 function taskListSource(o: TaskSourceOptions): SQL {
-  const today = dateLiteral(o.today);
-  const month = dateLiteral(monthStartOf(o.today));
-  const mark = o.reportConfirm
-    ? sql`case when ${reports.status} = 'submitted' and ${reports.act} <> 'pay' then case when ${reports.confirmedAt} is null then 'waiting' else 'confirmed' end end`
-    : sql`null::text`;
-  const waiting = o.reportConfirm
-    ? sql`(${reports.status} = 'submitted' and ${reports.act} <> 'pay' and ${reports.confirmedAt} is null)`
-    : sql`false`;
-  const manual = sql`select ${tasks.id} as id, 'manual'::text as kind, 'task'::text as scale,
+  return sql`(select ${tasks.id} as id,
     ${tasks.title} as title, ${tasks.categoryCode} as category_code, ${tasks.contractorId} as contractor_id,
     ${tasks.projectId} as project_id, ${tasks.executorEmployeeId} as executor_id, ${tasks.authorEmployeeId} as author_id, ${tasks.term}::text as term,
     ${tasks.dueDate} as due_date, ${tasks.needFile} as need_file, ${tasks.confirm} as confirm,
     ${tasks.status}::text as status, ${tasks.doneAt} as done_at, ${tasks.confirmedByEmployeeId} as confirmed_by_id,
-    null::text as act, null::bigint as amount, null::bigint as paid, null::text as rep_mark,
-    null::uuid as rep_confirmed_by, null::date as rep_submitted_day,
     ${OPEN_SQL} as is_open, ${overdueSql(o.today)} as is_overdue, ${HAS_FILE} as has_file,
     ${tasks.createdAt} as created_at, ${tasks.createdBy} as created_by, ${tasks.updatedAt} as updated_at,
     ${tasks.updatedBy} as updated_by, ${tasks.version} as version
-    from ${tasks}`;
-  // ОТКЛОНЕНИЕ: docs/deviations.md#Б-11 — «Файл» — по готовым файлам отчёта, «Оплата» — по метке отчёта.
-  const regular = sql`select ${reports.id}, 'regular'::text, 'report'::text, ${REGULAR_TITLE},
-    case when ${reports.act} = 'pay' then 'reg:pay' else 'reg:sub' end, ${reports.contractorId},
-    null::uuid, ${reports.responsibleEmployeeId}, null::uuid, 'day'::text, ${reports.dueDate},
-    coalesce(${orgReportTypes.needFile}, false), false, ${reports.status}::text, null::timestamptz, null::uuid,
-    ${reports.act}::text, ${reports.amount}, ${reports.paid}, ${mark}, ${reports.confirmedBy},
-    coalesce((${reports.submittedAt} at time zone 'Asia/Bishkek')::date, ${reports.submittedOn}),
-    (${OPEN_REPORT} or ${waiting}), (${OPEN_REPORT} and ${reports.dueDate} < ${today}),
-    exists (select 1 from ${files} where ${files.sourceKind} = 'report' and ${files.sourceId} = ${reports.id} and ${files.state} = 'ready'),
-    ${reports.createdAt}, null::uuid, ${reports.updatedAt}, ${reports.updatedBy}, ${reports.version}
-    from ${reports}
-    inner join ${contractors} on ${contractors.id} = ${reports.contractorId}
-    inner join ${reportTypes} on ${reportTypes.code} = ${reports.reportTypeCode}
-    left join ${orgReportTypes} on ${orgReportTypes.orgId} = ${reports.orgId} and ${orgReportTypes.reportTypeCode} = ${reports.reportTypeCode}
-    cross join ${regularTexts(o.t)}
-    cross join lateral (select ${REPORT_PERIOD_FULL} as pf) rp
-    where not ${reports.superseded} and ${reports.status} <> 'not_required'
-      and ${contractors.serviceStatus} <> 'archived'
-      and ((${reports.dueDate} >= ${month} and ${reports.dueDate} < (${month} + interval '1 month')::date)
-        or (${OPEN_REPORT} and ${reports.dueDate} < ${today} and ${reports.dueDate} >= ${today} - ${sql.raw(String(REGULAR_TASK_OVERDUE_DAYS))}))`;
-  return sql`(${manual} union all ${regular})`;
+    from ${tasks})`;
 }
-
-const repConfirmer = alias(employees, 'task_rep_confirmer');
 
 /** Выборка `tl` с категорией, контрагентом, исполнителем, постановщиком и именами «Создал», «Изменил». */
 function fromTaskList(tx: Tx, fields: object, o: TaskSourceOptions) {
@@ -388,7 +286,6 @@ function fromTaskList(tx: Tx, fields: object, o: TaskSourceOptions) {
     .leftJoin(executor, sql`${executor.id} = ${TL.executorId}`)
     .leftJoin(author, sql`${author.id} = ${TL.authorId}`)
     .leftJoin(confirmer, sql`${confirmer.id} = ${TL.confirmedById}`)
-    .leftJoin(repConfirmer, sql`${repConfirmer.userId} = ${TL.repConfirmedBy}`)
     .leftJoin(creator, sql`${creator.userId} = ${TL.createdBy}`)
     .leftJoin(updater, sql`${updater.userId} = ${TL.updatedBy}`)
     .$dynamic();
@@ -399,23 +296,22 @@ const taskListFrom =
   (fields) =>
     fromTaskList(tx, fields, o);
 
-/** Последняя смена статуса задачи или отчёта регулярной задачи (шкала в списке — под статусом). */
+/** Последняя смена статуса задачи (шкала в списке — под статусом). */
 const listLastStatus = (field: SQL) =>
-  sql`(select ${field} from ${statusHistory} where ${statusHistory.scale} = ${TL.scale} and ${statusHistory.entityId} = ${TL.id} order by ${statusHistory.at} desc, ${statusHistory.id} desc limit 1)`;
+  sql`(select ${field} from ${statusHistory} where ${statusHistory.scale} = 'task' and ${statusHistory.entityId} = ${TL.id} order by ${statusHistory.at} desc, ${statusHistory.id} desc limit 1)`;
 
-/** Категория: у регулярной — «Сдача отчёта» или «Оплата» (прототип `allTasks`). */
-function categoryName(t: ListTexts): SQL {
-  return sql`coalesce(${taskCategories.name}, case ${TL.categoryCode} when 'reg:pay' then ${dictLiteral(t('task.reg.cat.pay'))} else ${dictLiteral(t('task.reg.cat.sub'))} end)`;
+/** Категория задачи. */
+function categoryName(): SQL {
+  return sql`${taskCategories.name}`;
 }
 
-function listFields(t: ListTexts) {
+function listFields() {
   const moment = (v: unknown) => (v == null ? null : new Date(v as string));
   return {
-    kind: sql<string>`${TL.kind}`,
     id: sql<string>`${TL.id}`,
     title: sql<string>`${TL.title}`,
     categoryCode: sql<string>`${TL.categoryCode}`,
-    categoryName: categoryName(t),
+    categoryName: categoryName(),
     contractorId: sql<string | null>`${TL.contractorId}`,
     contractorName: contractors.name,
     contractorResponsibleId: contractors.responsibleEmployeeId,
@@ -436,12 +332,6 @@ function listFields(t: ListTexts) {
     confirmedByName: confirmer.shortName,
     open: sql<boolean>`${TL.open}`,
     overdue: sql<boolean>`${TL.overdue}`,
-    act: sql<string | null>`${TL.act}`,
-    amount: sql<number | null>`${TL.amount}`.mapWith((v) => (v == null ? null : Number(v))),
-    paid: sql<number | null>`${TL.paid}`.mapWith((v) => (v == null ? null : Number(v))),
-    repMark: sql<string | null>`${TL.repMark}`,
-    repConfirmedByName: repConfirmer.shortName,
-    repSubmittedDay: sql<string | null>`${TL.repSubmittedDay}::text`,
     statusAt: sql<Date | null>`${listLastStatus(sql`${statusHistory.at}`)}`.mapWith(moment),
     statusUser: sql<string | null>`${listLastStatus(sql`${statusHistory.actorUserId}`)}`,
     statusName: sql<string | null>`${listLastStatus(
@@ -459,87 +349,23 @@ function listFields(t: ListTexts) {
 
 type ListRowData = Record<keyof ReturnType<typeof listFields>, unknown>;
 
-/** Отчёт регулярной задачи: статус, метка, сумма — для шкалы, «Подтверждения» и «Отметить сданным». */
-export interface RegularTaskReport {
-  status: ReportStatus;
-  act: ReportAct;
-  /** Сумма к уплате и оплачено, тыйыны (null — суммы нет или не указана). */
-  amount: number | null;
-  paid: number;
-  /** Отметка на шаге «Сдан»: ждёт подтверждения или подтверждена (при включённом подтверждении). */
-  mark: 'waiting' | 'confirmed' | null;
-  /** Кто подтвердил (сотрудник), если он ещё есть в организации. */
-  confirmedBy: string | null;
-  /** День сдачи по Бишкеку — «Ждёт подтверждения · N дн.». */
-  submittedOn: IsoDate | null;
-}
-
-/** Регулярная задача по отчёту (прототип `allTasks`): номер — номер отчёта. */
-export interface RegularTaskRow {
-  kind: 'regular';
-  id: string;
-  title: string;
-  category: { code: string; name: string };
-  contractor: { id: string; name: string; responsibleEmployeeId: string | null };
-  /** Ответственный за отчёт; null — не назначен. */
-  executor: { id: string; shortName: string } | null;
-  dueDate: IsoDate;
-  needFile: boolean;
-  hasFile: boolean;
-  open: boolean;
-  overdue: boolean;
-  report: RegularTaskReport;
-  lastStatus: { at: Date; by: string | null } | null;
-  audit: AuditRecord;
-  version: number;
-}
-
-/** Строка списка: ручная задача или регулярная по отчёту. */
-export type TaskListRow =
-  (TaskRow & { kind: 'manual'; open: boolean; overdue: boolean }) | RegularTaskRow;
+/** Строка списка: ручная задача с отметками «открыта» и «просрочена». */
+export type TaskListRow = TaskRow & { kind: 'manual'; open: boolean; overdue: boolean };
 
 function toListRow(r: ListRowData): TaskListRow {
-  const base = toRow(r as unknown as RowData);
-  if (r.kind !== 'regular') {
-    return { ...base, kind: 'manual', open: Boolean(r.open), overdue: Boolean(r.overdue) };
-  }
-  const executorId = r.executorId as string | null;
   return {
-    kind: 'regular',
-    id: base.id,
-    title: base.title,
-    category: base.category,
-    contractor: base.contractor!,
-    executor: executorId
-      ? { id: executorId, shortName: (r.executorName as string | null) ?? '' }
-      : null,
-    dueDate: base.dueDate,
-    needFile: base.needFile,
-    hasFile: base.hasFile,
+    ...toRow(r as unknown as RowData),
+    kind: 'manual',
     open: Boolean(r.open),
     overdue: Boolean(r.overdue),
-    report: {
-      status: r.status as ReportStatus,
-      act: r.act as ReportAct,
-      amount: r.amount as number | null,
-      paid: (r.paid as number | null) ?? 0,
-      mark: r.repMark as RegularTaskReport['mark'],
-      confirmedBy: (r.repConfirmedByName as string | null) ?? null,
-      submittedOn: (r.repSubmittedDay as IsoDate | null) ?? null,
-    },
-    lastStatus: base.lastStatus,
-    audit: base.audit,
-    version: base.version,
   };
 }
 
-/** Порядок статусов в сортировке: шкала задачи, затем шкала отчёта. */
+/** Порядок статусов в сортировке — по шкале задачи. */
 const STATUS_ORDER = sql.raw(
-  `case when "tl"."kind" = 'regular' then 100 + (case "tl"."status" ${scaleStatuses('report')
+  `case "tl"."status" ${scaleStatuses('task')
     .map((s, i) => `when '${s}' then ${i}`)
-    .join(' ')} end) else (case "tl"."status" ${scaleStatuses('task')
-    .map((s, i) => `when '${s}' then ${i}`)
-    .join(' ')} end) end`,
+    .join(' ')} end`,
 );
 
 const CREATED_BY = auditActorValue(TL.createdBy, creator.shortName);
@@ -550,36 +376,28 @@ function dueText(t: ListTexts): SQL {
   return sql`case when ${TL.term} = 'month' then replace(${dictLiteral(t('task.date.month'))}, '{date}', ${date}) else ${date} end`;
 }
 
-/**
- * Отметка «Подтверждение» (прототип `taskConfTxt`): у ручной — «Не требуется», «Подтвердил …»,
- * «Требуется»; у регулярной — отметка её отчёта («Ждёт подтверждения», «Подтвердил …», «Подтверждено»).
- */
+/** Отметка «Подтверждение» (прототип `taskConfTxt`): «Не требуется», «Подтвердил …», «Требуется». */
 function confirmText(t: ListTexts): SQL {
   const by = (name: SQL) =>
     sql`replace(${dictLiteral(t('task.confirm.confirmed'))}, '{name}', ${name})`;
-  return sql`case when ${REGULAR} then (case ${TL.repMark} when 'waiting' then ${dictLiteral(t('status.report.waiting'))} when 'confirmed' then coalesce(${by(sql`${repConfirmer.shortName}`)}, ${dictLiteral(t('status.report.confirmed'))}) end)
-    when not ${TL.confirm} then ${dictLiteral(t('task.confirm.not_required'))}
+  return sql`case when not ${TL.confirm} then ${dictLiteral(t('task.confirm.not_required'))}
     when ${TL.status} = 'confirmed' and ${confirmer.shortName} is not null then ${by(sql`${confirmer.shortName}`)}
     else ${dictLiteral(t('task.confirm.required'))} end`;
 }
 
-const CONFIRM_VALUE = sql`case when ${REGULAR} then (case ${TL.repMark} when 'waiting' then 'rep:waiting' when 'confirmed' then coalesce('rep:confirmed:' || ${repConfirmer.id}::text, 'rep:confirmed') end)
-  when not ${TL.confirm} then 'not_required'
+const CONFIRM_VALUE = sql`case when not ${TL.confirm} then 'not_required'
   when ${TL.status} = 'confirmed' and ${TL.confirmedById} is not null then 'confirmed:' || ${TL.confirmedById}::text
   else 'required' end`;
 
 const yesNo = (t: ListTexts, value: SQL) =>
   sql`case when ${value} then ${dictLiteral(t('task.yes'))} else ${dictLiteral(t('task.no'))} end`;
 
-/** Значение столбца «Статус»: у регулярной — статус отчёта с приставкой (шкалы разные). */
-const STATUS_VALUE = sql`case when ${REGULAR} then 'rep:' || ${TL.status} else ${TL.status} end`;
-
 /**
  * Столбцы списка задач на сервере (ТЗ «Задачи» → «Общие задачи в списке», «Столбцы, видимые по
  * умолчанию»; прототип `taskCols`): ключи — как у столбцов экрана. «Общие задачи» в фильтре по
- * контрагенту — первым значением, «Вид задачи» — для фильтра, группировки и выгрузки; у регулярной
- * задачи — статус её отчёта, «Поставил» — «Система», «Тип задачи» — «Регулярная»; «Проект» — проект
- * ручной задачи (задача 2.26; прототип `taskCols`: `proj`).
+ * контрагенту — первым значением, «Вид задачи» — для фильтра, группировки и выгрузки; «Проект» —
+ * проект задачи (задача 2.26; прототип `taskCols`: `proj`). Столбца «Тип задачи» нет: регулярных задач
+ * по отчётам нет (решение заказчика 17.11.2026).
  */
 export function taskListColumns(t: ListTexts): ListColumns {
   return {
@@ -611,8 +429,8 @@ export function taskListColumns(t: ListTexts): ListColumns {
       type: 'enum',
       label: 'task.col.cat',
       value: TL.categoryCode,
-      display: categoryName(t),
-      sort: { value: categoryName(t), text: true },
+      display: categoryName(),
+      sort: { value: categoryName(), text: true },
     },
     exec: {
       type: 'enum',
@@ -625,18 +443,13 @@ export function taskListColumns(t: ListTexts): ListColumns {
     status: {
       type: 'enum',
       label: 'task.col.status',
-      value: STATUS_VALUE,
-      display: sql`case when ${REGULAR} then (case ${TL.status} ${sql.join(
-        scaleStatuses('report').map(
-          (s) => sql`when ${textLiteral(s)} then ${dictLiteral(t(`status.report.${s}`))}`,
-        ),
-        sql` `,
-      )} end) else (case ${TL.status} ${sql.join(
+      value: TL.status,
+      display: sql`case ${TL.status} ${sql.join(
         scaleStatuses('task').map(
           (s) => sql`when ${textLiteral(s)} then ${dictLiteral(t(`status.task.${s}`))}`,
         ),
         sql` `,
-      )} end) end`,
+      )} end`,
       sort: { value: STATUS_ORDER, text: false },
     },
     needFile: {
@@ -659,12 +472,9 @@ export function taskListColumns(t: ListTexts): ListColumns {
     by: {
       type: 'enum',
       label: 'task.col.by',
-      value: sql`coalesce(${TL.authorId}::text, 'system')`,
-      display: sql`coalesce(${author.shortName}, ${dictLiteral(t('task.reg.system'))})`,
-      sort: {
-        value: sql`coalesce(${author.shortName}, ${dictLiteral(t('task.reg.system'))})`,
-        text: true,
-      },
+      value: TL.authorId,
+      display: author.shortName,
+      sort: { value: author.shortName, text: true },
     },
     confirm: {
       type: 'enum',
@@ -677,12 +487,6 @@ export function taskListColumns(t: ListTexts): ListColumns {
       label: 'task.col.scope',
       value: sql`case when ${TL.contractorId} is null then 'general' else 'contractor' end`,
       display: sql`case when ${TL.contractorId} is null then ${dictLiteral(t('task.scope.general'))} else ${dictLiteral(t('task.scope.contractor'))} end`,
-    },
-    tkind: {
-      type: 'enum',
-      label: 'task.col.tkind',
-      value: TL.kind,
-      display: sql`case when ${REGULAR} then ${dictLiteral(t('task.tkind.regular'))} else ${dictLiteral(t('task.tkind.manual'))} end`,
     },
     term: {
       type: 'enum',
@@ -721,15 +525,15 @@ const monthStartOf = (date: IsoDate): IsoDate => `${date.slice(0, 7)}-01`;
 
 /**
  * Какие строки выборки видит сотрудник (прототип `taskScope`): с правом «Видеть задачи всех» — все;
- * иначе свои (исполнитель — и регулярные по своим отчётам — или постановщик) и — с правом
- * «Подтверждать задачи» — все ручные, ждущие подтверждения.
+ * иначе свои (исполнитель или постановщик) и — с правом «Подтверждать задачи» — все, ждущие
+ * подтверждения.
  */
 function listVisibility(v: TaskViewer): SQL | undefined {
   if (v.all) return undefined;
   return or(
     sql`${TL.executorId} = ${v.employeeId}`,
     sql`${TL.authorId} = ${v.employeeId}`,
-    v.canConfirm ? sql`(${TL.status} = 'on_confirm' and not ${REGULAR})` : undefined,
+    v.canConfirm ? sql`${TL.status} = 'on_confirm'` : undefined,
   );
 }
 
@@ -741,7 +545,7 @@ function pendingFilter(query: Pick<ListQuery, 'filters'>): boolean {
 
 /**
  * Условие списка (прототип `renderTasks` → rows): видимость; вкладка — «Мои» (исполнитель), «Поставленные
- * мной» (только ручные), «Все», «Просроченные» (все просроченные); остальные вкладки — с текущего
+ * мной» (постановщик), «Все», «Просроченные» (все просроченные); остальные вкладки — с текущего
  * месяца, вперёд и всё просроченное. Плашка «На подтверждении» (фильтр статуса) показывает все видимые
  * ждущие задачи.
  */
@@ -768,7 +572,7 @@ export async function listTasksPage(
   query: ListQuery,
   o: TaskListOptions,
 ): Promise<ListPageResult<TaskListRow>> {
-  const fields = listFields(o.t);
+  const fields = listFields();
   const page = await selectListPage({
     query,
     columns: taskListColumns(o.t),
@@ -820,60 +624,33 @@ export function exportTasks(tx: Tx, query: ListQuery, keys: readonly string[], o
   });
 }
 
-/** Отчёты месяца — сдано из всех (прототип `renderTasks`: «Отчёты мои/всех за месяц: сдано N из M»). */
-export interface RegularMonthProgress {
-  done: number;
-  total: number;
-}
-
 /**
- * Счётчики вкладок (прототип `taskTabs`): «Мои» — мои открытые (и регулярные), «Поставленные мной» —
- * поставленные мной открытые, «Просроченные» — просроченные среди видимых; строка «Отчёты за месяц:
- * сдано N из M» — регулярные задачи со сроком в текущем месяце: мои и все видимые.
+ * Счётчики вкладок (прототип `taskTabs`): «Мои» — мои открытые, «Поставленные мной» — поставленные мной
+ * открытые, «Просроченные» — просроченные среди видимых.
  */
 export async function taskTabCounts(
   tx: Tx,
   viewer: TaskViewer,
   o: TaskSourceOptions,
-): Promise<{
-  mine: number;
-  byme: number;
-  overdue: number;
-  progress: { mine: RegularMonthProgress; all: RegularMonthProgress };
-}> {
+): Promise<{ mine: number; byme: number; overdue: number }> {
   const visible = listVisibility(viewer) ?? sql`true`;
   const mine = sql`${TL.executorId} = ${viewer.employeeId}`;
-  const month = sql`(${REGULAR} and ${TL.dueDate} >= ${dateLiteral(monthStartOf(o.today))})`;
-  const done = sql`${TL.status} = 'submitted'`;
   const [row] = await fromTaskList(
     tx,
     {
       mine: sql<number>`count(*) filter (where ${mine} and ${TL.open})::int`,
       byme: sql<number>`count(*) filter (where ${TL.authorId} = ${viewer.employeeId} and ${TL.open})::int`,
       overdue: sql<number>`count(*) filter (where ${TL.overdue} and ${visible})::int`,
-      mineTotal: sql<number>`count(*) filter (where ${month} and ${mine})::int`,
-      mineDone: sql<number>`count(*) filter (where ${month} and ${mine} and ${done})::int`,
-      allTotal: sql<number>`count(*) filter (where ${month} and ${visible})::int`,
-      allDone: sql<number>`count(*) filter (where ${month} and ${visible} and ${done})::int`,
     },
     o,
   ).where(or(sql`${visible}`, sql`${TL.authorId} = ${viewer.employeeId}`, mine));
   const n = (v: unknown) => Number(v ?? 0);
-  return {
-    mine: n(row?.mine),
-    byme: n(row?.byme),
-    overdue: n(row?.overdue),
-    progress: {
-      mine: { done: n(row?.mineDone), total: n(row?.mineTotal) },
-      all: { done: n(row?.allDone), total: n(row?.allTotal) },
-    },
-  };
+  return { mine: n(row?.mine), byme: n(row?.byme), overdue: n(row?.overdue) };
 }
 
 /**
- * В организации ещё нет ни одной задачи — ни ручной, ни регулярной (прототип ui/empty.js, `firstEmpty`:
- * `!allTasks().length`): список показывает «Регулярные задачи создадутся сами по отчётам; ручную
- * задачу можно поставить сейчас».
+ * В организации ещё нет ни одной задачи (прототип ui/empty.js, `firstEmpty`): список показывает «Задач
+ * пока нет. Поставьте первую».
  */
 export async function tasksOrgEmpty(tx: Tx, o: TaskSourceOptions): Promise<boolean> {
   const [row] = await fromTaskList(tx, { id: TL.id }, o).limit(1);
@@ -1167,8 +944,8 @@ export const CONTRACTOR_TASKS_SHOWN = 40;
 
 /**
  * Вкладка «Задачи» карточки контрагента (ТЗ: «Задач: N · открытых M», последние 40; прототип
- * modules/contractor-card.js): все задачи контрагента — и регулярные по его отчётам, сначала с поздним
- * сроком; открытая регулярная — пока отчёт не сдан (прототип: `OPEN.has(t.status)`).
+ * modules/contractor-card.js): задачи контрагента, сначала с поздним сроком; отчётов здесь нет (решение
+ * заказчика 17.11.2026).
  */
 export async function contractorTasks(
   tx: Tx,
@@ -1180,11 +957,11 @@ export async function contractorTasks(
     tx,
     {
       total: sql<number>`count(*)::int`,
-      open: sql<number>`count(*) filter (where case when ${REGULAR} then ${TL.status} in ('todo', 'in_progress', 'needs_fix') else ${TL.open} end)::int`,
+      open: sql<number>`count(*) filter (where ${TL.open})::int`,
     },
     o,
   ).where(where);
-  const rows = await fromTaskList(tx, listFields(o.t), o)
+  const rows = await fromTaskList(tx, listFields(), o)
     .where(where)
     .orderBy(desc(TL.dueDate), desc(TL.createdAt), desc(TL.id))
     .limit(CONTRACTOR_TASKS_SHOWN);
@@ -1245,19 +1022,17 @@ export async function taskContractorOf(
 
 /**
  * Учётная политика для задач: включён ли модуль «Задачи», «Файлы в карточках», значение «Требуется
- * подтверждение» для новых задач («Задачи требуют подтверждения») и «Сдача отчётов требует
- * подтверждения» (когда закрывается регулярная задача). Записи нет — всё выключено. Без
+ * подтверждение» для новых задач («Задачи требуют подтверждения»). Записи нет — всё выключено. Без
  * `orgId` — организация из контекста.
  */
 export async function taskOrgSettings(
   tx: Tx,
   orgId?: string,
-): Promise<{ tasks: boolean; files: boolean; confirmDefault: boolean; reportConfirm: boolean }> {
+): Promise<{ tasks: boolean; files: boolean; confirmDefault: boolean }> {
   const [row] = await tx
     .select({
       features: orgSettings.features,
       taskConfirm: orgSettings.taskConfirm,
-      reportConfirm: orgSettings.reportConfirm,
     })
     .from(orgSettings)
     .where(eq(orgSettings.orgId, orgId ?? sql`app.current_org_id()`));
@@ -1266,7 +1041,6 @@ export async function taskOrgSettings(
     tasks: features.tasks === true,
     files: features.files === true,
     confirmDefault: row?.taskConfirm ?? true,
-    reportConfirm: row?.reportConfirm ?? false,
   };
 }
 

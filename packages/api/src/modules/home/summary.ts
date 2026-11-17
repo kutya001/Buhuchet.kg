@@ -120,14 +120,13 @@ async function reportParts(
 async function taskParts(
   deps: ApiDeps,
   tx: Tx,
-  o: { subject: AccessSubject; ctx: HomePlateContext; reportConfirm: boolean },
+  o: { subject: AccessSubject; ctx: HomePlateContext },
 ) {
   const { subject, ctx } = o;
   const viewer = viewerOf(subject);
   const options = {
     t: await serverTexts(deps),
     today: ctx.today,
-    reportConfirm: o.reportConfirm,
     viewer,
     tab: 'mine' as const,
   };
@@ -138,12 +137,11 @@ async function taskParts(
     listTasksPage(tx, plateQuery('tsk', yesterday), options),
     hasPermission(subject, 'tasksConfirm') ? taskPendingStats(tx, viewer) : null,
   ]);
-  const sums = hasPermission(subject, 'changeStatus');
   return {
     tsk: { count: mine.total, overdue: overdue.total },
     // Прототип: `taskPend(t) && t.exec !== S.me` — выполненные задачи других сотрудников.
     tpend: pending ? { count: pending.canConfirm } : null,
-    tasks: mine.rows.slice(0, HOME_TASKS_MAX).map((r) => listRowBody(r, ctx.today, sums)),
+    tasks: mine.rows.slice(0, HOME_TASKS_MAX).map((r) => listRowBody(r, ctx.today)),
   };
 }
 
@@ -189,9 +187,7 @@ export function homeSummaryHandler(deps: ApiDeps): RouteHandler<typeof homeSumma
               reportConfirm: settings.reportConfirm,
             })
           : null,
-        f.tasks
-          ? taskParts(deps, tx, { subject, ctx, reportConfirm: settings.reportConfirm })
-          : null,
+        f.tasks ? taskParts(deps, tx, { subject, ctx }) : null,
         f.indicators && can('kpiView')
           ? kpiMissingRows(tx, { scope: kpiScopeOf(subject), today })
           : null,

@@ -402,7 +402,7 @@ export const REPORTS_TEXTS = {
     section: S,
   },
   'report.rollback.effect_none': {
-    ru: 'Отчёт и его регулярная задача снова станут активными.',
+    ru: 'Отчёт снова станет активным.',
     section: S,
   },
   'report.rollback.effect_date': { ru: 'Дата сдачи будет снята.', section: S },
@@ -410,13 +410,9 @@ export const REPORTS_TEXTS = {
     ru: 'Отчёт снова будет ждать подтверждения сдачи.',
     section: S,
   },
-  'report.rollback.effect_task': {
-    ru: 'Регулярная задача по отчёту снова станет открытой.',
-    section: S,
-  },
   'report.rollback.effect_files': { ru: 'Приложенные файлы не удаляются.', section: S },
   'report.rollback.unconfirm_by': {
-    ru: 'Подтверждение {who} будет снято: отчёт снова будет ждать подтверждения старшего бухгалтера, регулярная задача снова станет открытой. Приложенные файлы не удаляются.',
+    ru: 'Подтверждение {who} будет снято: отчёт снова будет ждать подтверждения старшего бухгалтера. Приложенные файлы не удаляются.',
     section: S,
   },
   'report.file.title': { ru: 'Прикрепить файлы', section: S },

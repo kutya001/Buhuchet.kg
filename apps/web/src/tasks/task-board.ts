@@ -1,10 +1,7 @@
 import {
-  OPEN_REPORT_STATUSES,
   taskActionRefusal,
   taskOpen,
   taskPending,
-  type ReportAct,
-  type ReportStatus,
   type TaskAction,
   type TaskActor,
   type TaskFacts,
@@ -17,35 +14,26 @@ import type { Translate } from '../l10n/translate';
 
 /**
  * Доска задач (прототип modules/tasks.js, `taskKanban`): столбцы — статус (по умолчанию), исполнитель,
- * контрагент, категория, проект, постановщик, вид срока, тип задачи. Перенос карточки в другой
+ * контрагент, категория, проект, постановщик, вид срока (отчётов в «Задачах» нет — решение заказчика
+ * 17.11.2026). Перенос карточки в другой
  * столбец делает то же, что действие в меню: те же права и те же окна (файл, причина, подтверждение).
  */
-export const TASK_BOARD_BY = ['status', 'exec', 'cp', 'cat', 'proj', 'by', 'term', 'tkind'];
+export const TASK_BOARD_BY = ['status', 'exec', 'cp', 'cat', 'proj', 'by', 'term'];
 
-/**
- * Порядок столбцов по статусу (прототип `order.status`): статусы ручной задачи и — с приставкой
- * `rep:` — статусы отчёта регулярной.
- */
+/** Порядок столбцов по статусу (прототип `order.status`). */
 export const TASK_BOARD_STATUS_ORDER = [
   'todo',
-  'rep:todo',
   'in_progress',
   'rework',
-  'rep:needs_fix',
   'on_confirm',
   'done',
-  'rep:submitted',
   'confirmed',
   'failed',
-  'rep:not_required',
   'cancelled',
 ];
 
 /** Столбцы статусов, которые видны и пустыми (прототип `show.status`). */
 const TASK_BOARD_STATUS_SHOWN = ['todo', 'in_progress', 'on_confirm', 'done'] as const;
-
-/** «В работе» у ручной задачи и у отчёта регулярной — один столбец (в прототипе столбец — подпись). */
-const TASK_BOARD_MERGE = { status: { 'rep:in_progress': 'in_progress' } };
 
 /**
  * Доска списка задач: `executors` — действующие сотрудники, столбцы «Столбцы: Исполнитель», видные и
@@ -64,7 +52,6 @@ export function taskKanban<Row>(
       status: TASK_BOARD_STATUS_SHOWN.map((s) => ({ key: s, label: t(`status.task.${s}`) })),
       exec: executors.map((e) => ({ key: e.id, label: e.shortName })),
     },
-    merge: TASK_BOARD_MERGE,
     ...(drop ? { drop } : {}),
   };
 }
@@ -118,26 +105,6 @@ export function manualTaskMove(
     return { kind: 'executor', employeeId: to };
   }
   return { kind: 'text', key: 'task.board.only' };
-}
-
-/**
- * Перенос регулярной задачи (прототип `taskKanban.drop`, `t.reg`): её статус берётся из отчёта —
- * «В работе» берёт отчёт «К сдаче» в работу, «Сдан» открывает окно сдачи несданного отчёта (у отчёта
- * «только уплата» сдачи нет, как в меню задачи); исполнитель — ответственный за отчёт.
- */
-export function regularTaskMove(
-  report: { status: ReportStatus; act: ReportAct },
-  key: string,
-  to: string,
-): 'start' | 'submit' | { key: UiTextKey } {
-  if (key === 'status') {
-    if (to === 'rep:submitted' && OPEN_REPORT_STATUSES.has(report.status) && report.act !== 'pay')
-      return 'submit';
-    if (to === 'in_progress' && report.status === 'todo') return 'start';
-    return { key: 'task.board.reg_status' };
-  }
-  if (key === 'exec') return { key: 'task.board.reg_exec' };
-  return { key: 'task.board.only' };
 }
 
 /**

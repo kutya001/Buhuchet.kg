@@ -64,9 +64,7 @@ test.describe('«Главная»', () => {
     // «Задачи» — тоже пустые, с подсказкой и кнопкой «Добавить».
     await page.goto('/app/tasks/mine');
     const tasks = page.locator('[data-empty-state]');
-    await expect(tasks).toContainText(
-      'Регулярные задачи создадутся сами по отчётам; ручную задачу можно поставить сейчас',
-    );
+    await expect(tasks).toContainText('Задач пока нет. Поставьте первую');
     await expect(tasks.getByRole('button', { name: 'Добавить', exact: true })).toBeVisible();
   });
 

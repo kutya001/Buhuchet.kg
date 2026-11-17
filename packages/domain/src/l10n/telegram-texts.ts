@@ -168,7 +168,7 @@ export const TELEGRAM_TEXTS = {
   },
   'profile.notify.kind.over': { ru: 'Просрочки по отчётам других сотрудников', section: P },
   'profile.notify.kind.tasks': { ru: 'Ручные задачи: новые, комментарии, выполнение', section: P },
-  'profile.notify.kind.regtasks': { ru: 'Регулярные задачи по отчётам', section: P },
+  'profile.notify.kind.regtasks': { ru: 'Возврат моих отчётов на исправление', section: P },
   'profile.notify.kind.week': {
     ru: 'Сводка за неделю — в день, выбранный организацией (по умолчанию понедельник)',
     section: P,

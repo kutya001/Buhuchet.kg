@@ -8,7 +8,7 @@ import {
   taskFileMark,
   type ListSort,
 } from '@buhuchet/domain';
-import type { RegularTaskRow, TaskListRow, TaskRow } from '@buhuchet/shared';
+import type { TaskListRow, TaskRow } from '@buhuchet/shared';
 import {
   Icon,
   Pill,
@@ -84,75 +84,8 @@ export function taskConfirmText(t: Translate, task: TaskRow): string {
   return t(mark === 'required' ? 'task.confirm.required' : 'task.confirm.not_required');
 }
 
-/** Вид срока строки: регулярная задача — всегда «На день» (ТЗ «Регулярные задачи»). */
-export const taskTermOf = (r: TaskListRow): TaskRow['term'] =>
-  r.kind === 'regular' ? 'day' : r.term;
-
-/**
- * Шкала отчёта в строке регулярной задачи (прототип `scaleMini('rep', …)` и метка «отчёт» — «Статус
- * берётся из отчёта»): у сданного — отметка «Ждёт подтверждения» или «Подтверждено».
- */
-export function RegularStatusMini({ t, task }: { t: Translate; task: RegularTaskRow }) {
-  const history: StatusEvent[] = task.lastStatus
-    ? [
-        {
-          at: new Date(task.lastStatus.at),
-          from: null,
-          to: task.report.status,
-          rollback: false,
-          reason: null,
-          actor: task.lastStatus.by,
-        },
-      ]
-    : [];
-  const mark = task.report.mark;
-  const view = miniView(t, {
-    scale: 'report',
-    status: task.report.status,
-    history,
-    ...(mark ? { mark, markLabel: regularConfirmText(t, task) } : {}),
-  });
-  return (
-    <span className="inline-flex max-w-full items-center gap-1.5">
-      {view.kind === 'none' ? (
-        <StatusMiniNone label={view.label} title={view.title} />
-      ) : view.kind === 'pill' ? (
-        <StatusPill {...view.pill} size="sm" />
-      ) : (
-        <StatusMini {...view.props} />
-      )}
-      <Tag title={t('task.reg.status_tag_title')}>{t('task.reg.status_tag')}</Tag>
-    </span>
-  );
-}
-
-/**
- * «Подтверждение» регулярной задачи — отметка её отчёта (прототип `repConfTxt`): «Ждёт подтверждения ·
- * 3 дн.», «Подтвердил Алишер Т.», «Подтверждено»; без отметки — пусто.
- */
-export function regularConfirmText(t: Translate, task: RegularTaskRow): string {
-  const mark = task.report.mark;
-  if (!mark) return '';
-  const name = statusName(t, 'report', mark);
-  if (mark === 'waiting') return t('status.mark_waiting_days', { name, n: task.report.waitDays });
-  return task.report.confirmedBy
-    ? t('status.mark_confirmed_by', { who: task.report.confirmedBy })
-    : name;
-}
-
-function RegularConfirmCell({ t, task }: { t: Translate; task: RegularTaskRow }) {
-  const text = regularConfirmText(t, task);
-  if (!text) return <span className="text-faint">—</span>;
-  return task.report.mark === 'waiting' ? (
-    <Pill tone="warn" icon="hourglass" size="sm">
-      {text}
-    </Pill>
-  ) : (
-    <Pill tone="ok" icon="check" size="sm">
-      {text}
-    </Pill>
-  );
-}
+/** Вид срока строки. */
+export const taskTermOf = (r: TaskListRow): TaskRow['term'] => r.term;
 
 function ConfirmCell({ t, task }: { t: Translate; task: TaskRow }) {
   if (!task.confirm) return <span className="text-faint">{t('task.confirm.not_required')}</span>;
@@ -189,9 +122,8 @@ function FileCell({ t, task }: { t: Translate; task: TaskListRow }) {
 
 /**
  * Столбцы списка задач — как в прототипе (modules/tasks.js, `taskCols`), ключи — как на сервере.
- * «Контрагент» у общей задачи — серым «Общая» (ТЗ «Общие задачи в списке»). У регулярной задачи —
- * метка «регулярная», шкала её отчёта с меткой «отчёт», «Поставил» — «Система» (задача 2.24). «Проект» —
- * название проекта задачи, скрыт по умолчанию (задача 2.26). Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список
+ * «Контрагент» у общей задачи — серым «Общая» (ТЗ «Общие задачи в списке»). Отчётов в списке нет
+ * (решение заказчика 17.11.2026). «Проект» — название проекта задачи, скрыт по умолчанию (задача 2.26). Служебные «Создал», «Изменил», «Создано», «Изменено» добавляет сам список
  * (`TASK_AUDIT`).
  */
 export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
@@ -203,16 +135,7 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       type: 'text',
       width: 330,
       text: (r) => r.title,
-      cell: (r) => (
-        <>
-          {r.kind === 'regular' ? (
-            <>
-              <Tag title={t('task.reg.tag_title')}>{t('task.reg.tag')}</Tag>{' '}
-            </>
-          ) : null}
-          <span className="font-semibold">{r.title}</span>
-        </>
-      ),
+      cell: (r) => <span className="font-semibold">{r.title}</span>,
     },
     {
       key: 'cp',
@@ -232,7 +155,7 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       label: t('task.col.proj'),
       type: 'enum',
       width: 200,
-      text: (r) => (r.kind === 'manual' ? (r.project?.name ?? '') : ''),
+      text: (r) => r.project?.name ?? '',
     },
     {
       key: 'cat',
@@ -272,16 +195,8 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       label: t('task.col.status'),
       type: 'enum',
       width: 220,
-      text: (r) =>
-        r.kind === 'regular'
-          ? statusName(t, 'report', r.report.status)
-          : statusName(t, 'task', r.status),
-      cell: (r) =>
-        r.kind === 'regular' ? (
-          <RegularStatusMini t={t} task={r} />
-        ) : (
-          <TaskStatusMini t={t} task={r} />
-        ),
+      text: (r) => statusName(t, 'task', r.status),
+      cell: (r) => <TaskStatusMini t={t} task={r} />,
     },
     {
       key: 'needFile',
@@ -295,8 +210,7 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       label: t('task.col.done_at'),
       type: 'date',
       width: 130,
-      text: (r) =>
-        r.kind === 'manual' && r.doneAt ? formatDateRu(bishkekDate(new Date(r.doneAt))) : '',
+      text: (r) => (r.doneAt ? formatDateRu(bishkekDate(new Date(r.doneAt))) : ''),
     },
     {
       key: 'file',
@@ -316,20 +230,15 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       label: t('task.col.by'),
       type: 'enum',
       width: 120,
-      text: (r) => (r.kind === 'regular' ? t('task.reg.system') : r.author.shortName),
+      text: (r) => r.author.shortName,
     },
     {
       key: 'confirm',
       label: t('task.col.confirm'),
       type: 'enum',
       width: 170,
-      text: (r) => (r.kind === 'regular' ? regularConfirmText(t, r) : taskConfirmText(t, r)),
-      cell: (r) =>
-        r.kind === 'regular' ? (
-          <RegularConfirmCell t={t} task={r} />
-        ) : (
-          <ConfirmCell t={t} task={r} />
-        ),
+      text: (r) => taskConfirmText(t, r),
+      cell: (r) => <ConfirmCell t={t} task={r} />,
     },
     {
       key: 'scope',
@@ -337,13 +246,6 @@ export function taskColumns(t: Translate): GridColumn<TaskListRow>[] {
       type: 'enum',
       width: 140,
       text: (r) => t(r.contractor ? 'task.scope.contractor' : 'task.scope.general'),
-    },
-    {
-      key: 'tkind',
-      label: t('task.col.tkind'),
-      type: 'enum',
-      width: 120,
-      text: (r) => t(r.kind === 'regular' ? 'task.tkind.regular' : 'task.tkind.manual'),
     },
     {
       key: 'term',

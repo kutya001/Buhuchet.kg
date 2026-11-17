@@ -1,7 +1,7 @@
 'use client';
 
 import { formatCount, type GridKey, type ListFilterValue, type UiTextKey } from '@buhuchet/domain';
-import { ListValues, TaskList, type TaskListRow, type TaskSummary } from '@buhuchet/shared';
+import { ListValues, TaskList, type TaskListRow } from '@buhuchet/shared';
 import { DataGrid, EmptyState, Plate, Plates, Tag } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
@@ -50,34 +50,6 @@ function rangeText(t: Translate, tab: TaskTab, monthStart: string | undefined): 
   return t('task.range.from', { month: `${name} ${year}` });
 }
 
-/**
- * «Отчёты мои / всех за месяц: сдано N из M» с полосой (прототип `renderTasks`): регулярные задачи
- * текущего месяца; на «Поставленных мной» и без регулярных задач месяца строки нет.
- */
-function MonthProgress({ t, tab, summary }: { t: Translate; tab: TaskTab; summary?: TaskSummary }) {
-  if (!summary || tab === 'byme') return null;
-  const p = tab === 'mine' ? summary.progress.mine : summary.progress.all;
-  if (!p.total) return null;
-  const pct = Math.round((p.done / p.total) * 100);
-  return (
-    <div data-task-progress="" className="flex min-w-[260px] flex-col gap-1 max-md:w-full">
-      <span className="text-[11.5px] leading-[1.4] text-faint">
-        {t(tab === 'mine' ? 'task.reg.progress.mine' : 'task.reg.progress.all')}{' '}
-        <b>{t('task.reg.progress.done', { done: p.done, total: p.total })}</b>
-      </span>
-      <div
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        className="h-2 overflow-hidden rounded-full bg-pane-alt shadow-[inset_0_0_0_1px_var(--bu-border)]"
-      >
-        <i className="block h-full rounded-full bg-ok" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
 /** «+ Добавить» → «Задача» в модуле «Задачи» (прототип `taskAdd`) — на любой вкладке. */
 function useTaskAddRequest(run: () => void) {
   const { addRequest, clearAddRequest } = useShell();
@@ -99,8 +71,8 @@ function useTaskAddRequest(run: () => void) {
  * группировкой, видом «Доска» (перенос карточки — то же, что действие в меню) и «В Excel» (в файле
  * всегда есть «Вид задачи»). Полоска слева у строки — вид срока,
  * просроченные — красным, закрытые — приглушённо. Строка открывает карточку задачи; действия — «⋯»,
- * долгим нажатием и правым кликом. Пока задач в организации нет — подсказка первого входа. Регулярные
- * задачи по отчётам — в том же списке, справа над ним — «Отчёты за месяц: сдано N из M» (задача 2.24).
+ * долгим нажатием и правым кликом. Пока задач в организации нет — подсказка первого входа. Отчётов в
+ * списке нет — только задачи (решение заказчика 17.11.2026).
  */
 export function TasksList({ tab }: { tab: TaskTab }) {
   const t = useT();
@@ -243,7 +215,6 @@ export function TasksList({ tab }: { tab: TaskTab }) {
           </span>
         ) : null}
         <div className="flex-1" />
-        <MonthProgress t={t} tab={tab} summary={s} />
       </div>
       <DataGrid
         columns={columns}

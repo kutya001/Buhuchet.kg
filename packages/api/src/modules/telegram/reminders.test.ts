@@ -13,7 +13,7 @@ import {
 } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import { ApiError, NotifySettingsResponse, Task, TaskList, TaskSummary } from '@buhuchet/shared';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../app';
 import type { ApiDeps } from '../../deps';
@@ -158,52 +158,20 @@ describe.skipIf(!databaseAvailable())('Напоминания и сообщен�
     clock.set('2026-10-19T03:00:00Z');
   });
 
-  it('«Задачи»: регулярные задачи по отчётам месяца и «Отчёты мои за месяц»', async () => {
-    const res = await call('GET', '/api/tasks?tab=mine&size=all', acc);
-    expect(res.status, await res.clone().text()).toBe(200);
-    const items = TaskList.parse(await res.json()).items.filter((r) => r.kind === 'regular');
-    expect(items.map((r) => r.title).sort()).toEqual([
-      'Сдать 1-Т за Сентябрь 2026 — ОсОО «Ала-Тоо Трейд»',
-      'Сдать и оплатить НДС за Сентябрь 2026 — ОсОО «Ала-Тоо Трейд»',
-    ]);
-    expect(items[0]).toMatchObject({
-      executor: { id: employee('acc-a') },
-      open: true,
-      report: { status: 'todo', mark: null },
-    });
-    const summary = TaskSummary.parse(await (await call('GET', '/api/tasks/summary', acc)).json());
-    expect(summary.progress.mine).toEqual({ done: 0, total: 2 });
-
-    // Сумма и оплата отчёта — только с правом «Менять статус» (п. Б-11).
-    const nds = items.find((r) => r.title.startsWith('Сдать и оплатить НДС'))!;
-    await f.t.admin.db
-      .update(schema.reports)
-      .set({ amount: 125_050, paid: 25_000 })
-      .where(eq(schema.reports.id, nds.id));
-    const ndsOf = async () =>
-      TaskList.parse(
-        await (await call('GET', '/api/tasks?tab=mine&size=all', acc)).json(),
-      ).items.find((r) => r.id === nds.id)!;
-    expect(await ndsOf()).toMatchObject({ report: { amount: 125_050, paid: 25_000 } });
-    const accRole = f.templateRole(f.a, 'acc');
-    const right = and(
-      eq(schema.rolePermissions.roleId, accRole),
-      eq(schema.rolePermissions.permissionId, 'changeStatus'),
-    );
-    await f.t.admin.db.delete(schema.rolePermissions).where(right);
-    try {
-      expect(await ndsOf()).toMatchObject({ report: { amount: null, paid: 0 } });
-      const tab = await call('GET', `/api/contractors/${cpAcc}/tasks`, acc);
-      expect(tab.status, await tab.clone().text()).toBe(200);
-      const row = ((await tab.json()) as { items: { id: string; report?: unknown }[] }).items.find(
-        (r) => r.id === nds.id,
-      );
-      expect(row).toMatchObject({ report: { amount: null, paid: 0 } });
-    } finally {
-      await f.t.admin.db
-        .insert(schema.rolePermissions)
-        .values({ orgId: f.a.orgId, roleId: accRole, permissionId: 'changeStatus' });
+  it('«Задачи» — только задачи: отчёты месяца не попадают ни в список, ни в счётчики, ни на вкладку контрагента (решение заказчика 17.11.2026)', async () => {
+    for (const tab of ['mine', 'all', 'overdue'] as const) {
+      const res = await call('GET', `/api/tasks?tab=${tab}&size=all`, owner);
+      expect(res.status, await res.clone().text()).toBe(200);
+      const items = TaskList.parse(await res.json()).items;
+      expect(items.every((r) => r.kind === 'manual')).toBe(true);
+      expect(items.some((r) => r.title.includes('1-Т за Сентябрь 2026'))).toBe(false);
     }
+    const summary = TaskSummary.parse(await (await call('GET', '/api/tasks/summary', acc)).json());
+    expect(summary).toMatchObject({ mine: 0, overdue: 0 });
+    expect(summary).not.toHaveProperty('progress');
+    const tab = await call('GET', `/api/contractors/${cpAcc}/tasks`, acc);
+    expect(tab.status, await tab.clone().text()).toBe(200);
+    expect(await tab.json()).toMatchObject({ items: [], total: 0, open: 0 });
   });
 
   it('п. 41: исполнитель получает в Telegram новую задачу и возврат на доработку с причиной; выключил «Ручные задачи» — не получает', async () => {

@@ -202,10 +202,6 @@ export function refreshReports(client: QueryClient) {
   void client.invalidateQueries({ queryKey: ['files', 'report'] });
   for (const tab of [...REPORT_LIST_TABS, 'calendar', 'months'])
     void client.invalidateQueries({ queryKey: ['list', `reports.${tab}`] });
-  // Регулярные задачи — это отчёты месяца (задача 2.24): их статус и счётчики меняются вместе с отчётом.
-  void client.invalidateQueries({ queryKey: ['tasks'] });
-  for (const tab of ['mine', 'byme', 'all', 'overdue'])
-    void client.invalidateQueries({ queryKey: ['list', `tasks.${tab}`] });
   // Списки «Контрагентов» — вкладки модуля и «Отчёты к сдаче» карточки: ключи `['list', 'cps.<вкладка>', …]`.
   void client.invalidateQueries({
     predicate: (q) =>

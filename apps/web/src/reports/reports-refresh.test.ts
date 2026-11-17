@@ -39,11 +39,13 @@ describe('refreshReports — что перечитывается после де
     expect(staleAfterRefresh(['reports', 'card', 'r1'])).toBe(true);
     expect(staleAfterRefresh(['reports', 'months', '2026-10'])).toBe(true);
     expect(staleAfterRefresh(['list', 'cps.reports', 'months', 'c1'])).toBe(true);
-    expect(staleAfterRefresh(['tasks', 'summary'])).toBe(true);
   });
 
   it('чужие списки не трогает', () => {
     expect(staleAfterRefresh(['list', 'staff.list', { page: 1 }])).toBe(false);
     expect(staleAfterRefresh(['contractors', 'form-options'])).toBe(false);
+    // Отчётов в «Задачах» нет (решение заказчика 17.11.2026): списки и счётчики задач не перечитываются.
+    expect(staleAfterRefresh(['tasks', 'summary'])).toBe(false);
+    expect(staleAfterRefresh(['list', 'tasks.mine', { page: 1 }])).toBe(false);
   });
 });

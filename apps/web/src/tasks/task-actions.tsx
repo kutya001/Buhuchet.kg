@@ -1,18 +1,7 @@
 'use client';
 
-import {
-  formatSomWithUnit,
-  submitNeedsPayment,
-  type TaskAction,
-  type TaskActor,
-} from '@buhuchet/domain';
-import {
-  Task,
-  type RegularTaskRow,
-  type TaskFormOptions,
-  type TaskListRow,
-  type TaskRow,
-} from '@buhuchet/shared';
+import type { TaskAction, TaskActor } from '@buhuchet/domain';
+import { Task, type TaskFormOptions, type TaskListRow, type TaskRow } from '@buhuchet/shared';
 import {
   ConfirmDialog,
   RollbackDialog,
@@ -26,9 +15,8 @@ import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
-import { useReportActions, useReportActor } from '../reports/report-actions';
 import { rollbackLabels, rollbackTitle, statusName } from '../status/status-view';
-import { executorChangeBody, manualTaskMove, regularTaskMove } from './task-board';
+import { executorChangeBody, manualTaskMove } from './task-board';
 import { TaskCard } from './task-card';
 import {
   TaskConfirmDialog,
@@ -66,13 +54,12 @@ const ROLLBACK_EFFECT = {
  * действий): в списке — кнопкой «⋯», долгим нажатием и правым кликом; в карточке — кнопкой «Действия»,
  * кнопками внизу и шагами шкалы. «Взять в работу» — сразу; «Выполнена», «Не выполнена», «Подтвердить»,
  * «На доработку», «Изменить» — окном (по свежей карточке с сервера); «Отменить задачу» — после
- * вопроса; откат — окном с причиной. Отказ сервера — уведомлением с текстом из словаря. Регулярная
- * задача открывает карточку своего отчёта; в меню — «Открыть отчёт», «Отметить отчёт сданным» и когда
- * задача закроется сама (задача 2.24).
+ * вопроса; откат — окном с причиной. Отказ сервера — уведомлением с текстом из словаря. Отчётов в
+ * «Задачах» нет (решение заказчика 17.11.2026).
  */
 export function useTaskActions(): {
   actions: (task: TaskListRow) => ActionEntry[];
-  /** Карточка: ручной задачи (строка списка или карточка с сервера) или отчёта регулярной задачи. */
+  /** Карточка задачи (строка списка или карточка с сервера). */
   openCard: (task: TaskListRow | TaskRow) => void;
   /** Карточка задачи по номеру: ссылка «Открыть задачу» из сообщения бота (`?task=`). */
   openById: (id: string) => void;
@@ -184,58 +171,8 @@ export function useTaskActions(): {
   const manualActions = actor ? taskMenuEntries({ actor, t, run }) : () => [];
   const cardActions = actor ? taskMenuEntries({ actor, t, run, card: true }) : () => [];
 
-  const reports = useReportActions();
-  const reportActor = useReportActor();
-  /** Почему отчёт регулярной задачи нельзя отметить сданным: нет права или «Сдача только после оплаты». */
-  const submitWhy = (task: RegularTaskRow): string => {
-    const r = task.report;
-    if (!access.can('changeStatus')) return t('task.reg.no_status_right');
-    return submitNeedsPayment(
-      { act: r.act, status: r.status, sum: r.amount, paid: r.paid, superseded: false },
-      !!reportActor?.taxpay && !!reportActor.payFirst,
-    )
-      ? t('report.pay_first.why', {
-          amount: formatSomWithUnit(r.amount ?? 0),
-          paid: formatSomWithUnit(r.paid),
-        })
-      : '';
-  };
-  /** Меню регулярной задачи (прототип `taskActions`, `t.reg`). */
-  const regularActions = (task: RegularTaskRow): ActionEntry[] => {
-    const r = task.report;
-    const open = r.status === 'todo' || r.status === 'in_progress' || r.status === 'needs_fix';
-    const why = submitWhy(task);
-    const closes =
-      r.mark === 'waiting'
-        ? 'task.reg.closes_wait'
-        : access.reportConfirm && r.act !== 'pay'
-          ? 'task.reg.closes_confirm'
-          : 'task.reg.closes';
-    return [
-      {
-        id: 'report',
-        label: t('task.reg.open_report'),
-        icon: 'file',
-        run: () => reports.openCard({ id: task.id }),
-      },
-      ...(open && r.act !== 'pay'
-        ? [
-            {
-              id: 'submit',
-              label: t('task.reg.submit'),
-              icon: 'send' as const,
-              ...(why ? { disabled: true, reason: why } : {}),
-              run: () => reports.submit({ id: task.id }),
-            },
-          ]
-        : []),
-      { id: 'closes', label: t(closes), icon: 'info', disabled: true, run: () => {} },
-    ];
-  };
-  const actions = (task: TaskListRow) =>
-    task.kind === 'regular' ? regularActions(task) : manualActions(task);
-  const openCard = (task: TaskListRow | TaskRow) =>
-    'kind' in task && task.kind === 'regular' ? reports.openCard({ id: task.id }) : run.open(task);
+  const actions = (task: TaskListRow) => manualActions(task);
+  const openCard = (task: TaskListRow | TaskRow) => run.open(task);
 
   /** Смена исполнителя переносом на доске: «Изменить» по свежей карточке, меняется только исполнитель. */
   const changeExecutor = async (task: TaskRow, employeeId: string, name: string) => {
@@ -259,16 +196,6 @@ export function useTaskActions(): {
 
   const drop = (task: TaskListRow, key: string, to: BoardValue) => {
     const bad = (text: string) => toast(text, { bad: true });
-    if (task.kind === 'regular') {
-      const move = regularTaskMove(task.report, key, to.key);
-      if (typeof move !== 'string') return bad(t(move.key));
-      if (move === 'submit') {
-        const why = submitWhy(task);
-        return why ? bad(why) : reports.submit({ id: task.id });
-      }
-      if (!access.can('changeStatus')) return bad(t('task.reg.no_status_right'));
-      return reports.start({ id: task.id, version: task.version });
-    }
     if (!actor) return;
     // Список действующих сотрудников доска уже запросила (тому, кто видит задачи всех); пуст — не знаем.
     const known = client.getQueryData(taskBoardOptionsQuery.queryKey)?.executors ?? [];
@@ -386,11 +313,6 @@ export function useTaskActions(): {
     openById: (id) => void openById(id),
     newTask: (preset) => void newTask(preset),
     drop: actor ? drop : undefined,
-    dialogs: (
-      <>
-        {dialogs}
-        {reports.dialogs}
-      </>
-    ),
+    dialogs,
   };
 }
