@@ -382,7 +382,13 @@ describe('правила окна просмотра', () => {
       [37, 4],
     ]);
     expect(html.split('<wbr/>').length).toBeGreaterThan(line.length / TEXT_CHUNK);
-    expect(html.replace(/<[^>]+>/g, '')).toContain(line);
+    // Весь текст строки — на месте и по порядку (куски между тегами).
+    let at = 0;
+    for (const part of textChunks(line) as string[]) {
+      at = html.indexOf(part, at);
+      expect(at).toBeGreaterThanOrEqual(0);
+      at += part.length;
+    }
     // Абзац Word из 300 кусков по 100 знаков — тоже блоками (по 81 куску), абзац бумаги — у экрана.
     const runs = Array.from({ length: 300 }, () => ({ t: 'я'.repeat(99) + ' ' }));
     const doc: DocView = { kind: 'doc', blocks: [{ k: 'p', runs }], images: {}, cut: false };

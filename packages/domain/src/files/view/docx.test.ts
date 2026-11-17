@@ -265,7 +265,7 @@ describe('Word DOCX в окне просмотра', () => {
     expect(runs[6]).toEqual([{ t: 'поле' }]);
   });
 
-  it('номер начала списка из файла — в пределах; кусков текста — до предела (защита, п. И-12)', async () => {
+  it('номер начала списка из файла — в пределах (защита, п. И-12)', async () => {
     const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
     const numbering = `<w:numbering ${W}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1000000000000"/><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num></w:numbering>`;
     const big = await parseDocx(
@@ -303,9 +303,14 @@ describe('Word DOCX в окне просмотра', () => {
     expect(await labelOf(tpl('%1'.repeat(300)))).toBeFalsy();
     expect(await labelOf(tpl('%1'.repeat(100)))).toHaveLength(DOC_MAX_LABEL);
     expect(await labelOf(tpl('o'.repeat(200), 'bullet'))).toBe('o'.repeat(DOC_MAX_LABEL));
+  });
 
+  it('кусков текста — до предела (защита, п. И-12)', async () => {
     // Один абзац из множества кусков: в модели — не больше предела, документ помечен «не целиком».
-    const runs = await parseDocx(openZip(await docxBytes(p(r('x').repeat(DOC_MAX_RUNS + 5)))));
+    // Отдельным тестом: 200 000 кусков с покрытием — около секунды (docs/typical-mistakes.md № 59).
+    const runs = await parseDocx(
+      openZip(await docxBytes(p('<w:r><w:t>x</w:t></w:r>'.repeat(DOC_MAX_RUNS + 5)))),
+    );
     const b = runs.blocks[0];
     expect(b?.k === 'p' ? b.runs.length : 0).toBe(DOC_MAX_RUNS);
     expect(runs.cut).toBe(true);
