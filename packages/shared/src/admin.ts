@@ -34,7 +34,7 @@ export const AdminOrganization = z.object({
   slug: z.string(),
   /** null — у организации ещё нет владельца (не бывает у созданной Админкой). */
   ownerLogin: z.string().nullable(),
-  /** Контрагентов — появится с модулем «Контрагенты»; пока 0. */
+  /** Контрагентов не в архиве (как `cps` прототипа). */
   contractors: z.number().int().nonnegative(),
   /** Активных сотрудников. */
   employees: z.number().int().nonnegative(),
