@@ -108,7 +108,9 @@ describe('Журнал «Телеграм»: меню строки перепи�
     expect(failed.reason).toBe(
       'Сообщение клиенту контрагента отсюда не повторяется: отправьте его заново из карточки контрагента',
     );
-    const sent = item(row({ src: 'client', chatKind: 'client', kind: 'client_pay', status: 'sent' }));
+    const sent = item(
+      row({ src: 'client', chatKind: 'client', kind: 'client_pay', status: 'sent' }),
+    );
     expect(sent.reason).toBe('Повтор доступен только для ошибок');
   });
 });

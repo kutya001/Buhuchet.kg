@@ -165,7 +165,8 @@ export function ChatTable({ table }: { table: BotTable }) {
 // Отступы между частями сообщения — как `.tgc-b p+p`, `p+.tgc-t`, `.tgc-t+p`, `details+p` прототипа.
 export const BUBBLE =
   'min-w-0 rounded-[14px_14px_14px_4px] border border-line bg-raised px-[11px] py-2 text-[13.5px] leading-[1.45] [overflow-wrap:anywhere] [&_details+p]:mt-1.5 [&_p+p]:mt-1.5 [&_p+table]:mt-1.5 [&_table+p]:mt-1.5';
-export const SIDE = 'flex max-w-[min(440px,100%)] min-w-0 flex-col gap-1 self-start max-md:max-w-full';
+export const SIDE =
+  'flex max-w-[min(440px,100%)] min-w-0 flex-col gap-1 self-start max-md:max-w-full';
 
 /**
  * Окно чата: шапка «Buhuchet.kg · бот», сообщения и кнопки под ними. `plain` — запасной простой текст

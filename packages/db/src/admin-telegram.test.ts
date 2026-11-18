@@ -280,7 +280,12 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     expect(errors.total).toBe(4);
     // Поиск — по тому, что видно: подпись вида и подпись кода «recipient_unlinked».
     const found = await asAdmin((tx) =>
-      listAdminTelegramLogPage(tx, query({ search: { q: 'tgadm.err.unlinked', keys: KEYS } }), t, ALL),
+      listAdminTelegramLogPage(
+        tx,
+        query({ search: { q: 'tgadm.err.unlinked', keys: KEYS } }),
+        t,
+        ALL,
+      ),
     );
     expect(found.rows.map((r) => r.id)).toEqual([ids.unlinked]);
     const kinds = await asAdmin((tx) =>

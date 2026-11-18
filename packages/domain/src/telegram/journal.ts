@@ -161,6 +161,7 @@ const blank = {
  * сообщения ботов, обычная переписка в группе). Код (шесть цифр) и ссылка «/start <ключ>» идут без
  * текста: в журнале остаётся только вид сообщения.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-23 — шесть цифр скрываются всегда, обычная переписка группы не пишется.
 export function incomingEntry(update: unknown): IncomingEntry | null {
   const u = dict(update);
   if (!u) return null;

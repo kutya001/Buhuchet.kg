@@ -149,6 +149,7 @@ export function jobDoneKey(name: string): string {
  * «Важный» запуск: ошибка, ещё выполняется или что-то сделал. Успешный запуск, который ничего не
  * сделал или не сообщил, сколько сделал, — пустой: в «Важных» его нет, во «Всех» — есть.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-22 — запуск без числа «Что сделано» тоже пустой.
 export function runImportant(run: { status: RunStatus; done: number | null }): boolean {
   return run.status !== 'ok' || (run.done ?? 0) > 0;
 }
