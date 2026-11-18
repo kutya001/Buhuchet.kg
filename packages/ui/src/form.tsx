@@ -29,7 +29,7 @@ export function inputClass(
 ): string {
   return [
     options.full === false ? '' : 'w-full',
-    'min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none',
+    'min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none max-md:min-h-11',
     'shadow-[inset_0_1px_2px_rgba(0,0,0,.04)] transition-[border-color,box-shadow] duration-150',
     'focus:border-line-strong focus:shadow-[0_0_0_3px_var(--bu-sel)] [&[readonly]]:bg-pane-alt',
     options.file ? FILE_BUTTON_CLASS : '',
@@ -136,7 +136,7 @@ export function Field(props: FieldProps) {
       {typeof children === 'function' ? children(fieldControl(props)) : children}
       {mark?.node}
       {hint ? (
-        <div id={`${id}-hint`} data-hint="" className="text-[11.5px] leading-[1.4] text-faint">
+        <div id={`${id}-hint`} data-hint="" className="text-[12px] leading-[1.4] text-muted">
           {hint}
         </div>
       ) : null}
@@ -250,7 +250,7 @@ export function Box({
       className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5"
     >
       {title ? (
-        <h3 className="m-0 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+        <h3 className="m-0 flex items-center gap-2 text-[13.5px] font-[650] text-muted">
           <span className="grow">{title}</span>
           {actions}
         </h3>

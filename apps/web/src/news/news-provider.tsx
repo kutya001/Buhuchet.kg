@@ -1,6 +1,6 @@
 'use client';
 
-import { newsMdText, newsTitleHasVersion, pluralForm, type MenuModuleId } from '@buhuchet/domain';
+import { newsMdText, newsTitleHasVersion, type MenuModuleId } from '@buhuchet/domain';
 import type { NewsItem, NewsLinkSchema, WhatsNew } from '@buhuchet/shared';
 import { buttonClass, Icon, Modal, Note, Tag, useToast, useWindow } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -311,7 +311,7 @@ export function NewsAdminText({
       data-news-admin=""
       className="mt-3 w-full border-t border-dashed border-line-strong pt-2.5"
     >
-      <div className="mb-1 flex items-center gap-1.5 text-[11.5px] font-semibold tracking-[.06em] text-faint uppercase">
+      <div className="mb-1 flex items-center gap-1.5 text-[12.5px] font-[650] text-muted">
         <Icon name="shield" size="sm" />
         {t('news.admin_md')}
       </div>
@@ -323,9 +323,12 @@ export function NewsAdminText({
 /**
  * «Что нового» (ТЗ «Окно «Что нового» при входе»; прототип v98 whatsNew): непрочитанные новости
  * «Показывать при входе» строками-заголовками, по номеру версии от новых к старым; подробности сами
- * раскрыты только у самой новой, остальные раскрываются по нажатию. В самый первый раз — приветствие
- * и «Открыть Базу знаний». «Все новости» — вкладка «Новости», «Понятно» — закрыть.
+ * раскрыты только у самой новой, остальные раскрываются по нажатию. Не больше трёх последних (прототип
+ * v138): остальные — «Все новости · N», прочитанными они считаются так же. В самый первый раз — строка
+ * «Начните с уроков в «Базе знаний»» и кнопка «Уроки». «Понятно» — закрыть.
  */
+const WHATS_NEW_MAX = 3;
+
 function WhatsNewDialog({
   data,
   open,
@@ -350,17 +353,22 @@ function WhatsNewDialog({
       kind="card"
       size="wide"
       title={t('news.wn.title')}
-      sub={t(`news.wn.sub.${pluralForm(n)}`, { n })}
-      footer={<WhatsNewFooter first={data.first} newsHref={newsHref} lessonsHref={lessonsHref} />}
+      sub={n > WHATS_NEW_MAX ? t('news.wn.last', { shown: WHATS_NEW_MAX, n }) : undefined}
+      footer={
+        <WhatsNewFooter
+          first={data.first}
+          more={n > WHATS_NEW_MAX ? n : 0}
+          newsHref={newsHref}
+          lessonsHref={lessonsHref}
+        />
+      }
     >
       <div data-whats-new="" className="flex flex-col gap-3.5">
         {data.first ? (
-          <Note icon="grad">
-            <b>{t('news.wn.welcome')}</b> {t('news.wn.welcome_text')}
-          </Note>
+          <Note icon="grad">{t('news.wn.welcome')}</Note>
         ) : null}
         <div data-news-list="" className="flex flex-col gap-1.5">
-          {data.items.map((item, i) => {
+          {data.items.slice(0, WHATS_NEW_MAX).map((item, i) => {
             const shown = toggled[item.id] ?? i === 0;
             return (
               <NewsRow
@@ -381,10 +389,13 @@ function WhatsNewDialog({
 
 function WhatsNewFooter({
   first,
+  more,
   newsHref,
   lessonsHref,
 }: {
   first: boolean;
+  /** Сколько всего новостей, когда показаны не все; 0 — показаны все. */
+  more: number;
   newsHref: string;
   lessonsHref: string;
 }) {
@@ -399,9 +410,14 @@ function WhatsNewFooter({
         </Link>
       ) : null}
       <div className="flex-1" />
-      <Link href={newsHref} replace onClick={leave} className={buttonClass('ghost')}>
-        <Icon name="bell" size="sm" />
-        {t('news.wn.all')}
+      <Link
+        href={newsHref}
+        replace
+        onClick={leave}
+        data-whats-new-all=""
+        className={buttonClass('ghost')}
+      >
+        {more ? t('news.wn.all_n', { n: more }) : t('news.wn.all')}
       </Link>
       <button type="button" onClick={close} className={buttonClass('cta')}>
         {t('news.wn.ok')}

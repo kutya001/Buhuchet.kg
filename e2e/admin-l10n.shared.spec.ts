@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { DEMO_PASSWORD, showStats, signIn } from './helpers';
+import { DEMO_PASSWORD, discardChanges, showStats, signIn } from './helpers';
 
 // Админка → «Локализация» (ТЗ «Админка» → «Модуль Локализация»; прототип admin/l10n.js): языки на
 // плашках, словарь текстов интерфейса с поиском и правка русского текста без изменения кода. Словарь
@@ -123,7 +123,9 @@ test.describe('Админка: Локализация', () => {
     await field.fill('   ');
     await dialog.getByRole('button', { name: 'Сохранить' }).click();
     await expect(dialog.getByText('Введите текст')).toBeVisible();
+    // Поле меняли — «Отмена» сначала спрашивает (прототип v131).
     await dialog.getByRole('button', { name: 'Отмена' }).click();
+    await discardChanges(page);
     await expect(dialog).toBeHidden();
     expect(await uiText(page.request, 'locale.count.many')).toEqual(before);
 

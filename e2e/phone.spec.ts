@@ -119,7 +119,8 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     await test.step('окно («?»): короткая протяжка за шапку — возвращается, дальше четверти высоты — закрывается, рывок вниз — закрывается', async () => {
       const help = page.getByRole('dialog', { name: 'Отчеты для сдачи' });
       const openHelp = async () => {
-        await page.getByRole('button', { name: 'Помощь' }).click();
+        await page.getByRole('button', { name: 'Что здесь: подсказка по модулю' }).click();
+        await page.getByRole('button', { name: 'Вся инструкция' }).click();
         const box = await settledBox(help);
         // Шторка снизу во всю ширину.
         expect(box.width).toBeCloseTo(390, 0);
@@ -238,10 +239,10 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       await expect(add).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(add).toBeHidden();
-      // Окошко «ⓘ» в верхней панели: заглушки в истории у него нет, «Назад» закрывает его и уходит на
+      // Окошко «?» в верхней панели: заглушки в истории у него нет, «Назад» закрывает его и уходит на
       // прежнюю страницу (заглушка панели «Меню» уже снята, вкладки после свайпа историю не копят).
-      await page.getByRole('button', { name: 'Описание модуля' }).click();
-      const info = page.getByRole('dialog', { name: 'Описание модуля' });
+      await page.getByRole('button', { name: 'Что здесь: подсказка по модулю' }).click();
+      const info = page.getByRole('dialog', { name: 'Что здесь: подсказка по модулю' });
       await expect(info).toBeVisible();
       await page.evaluate(() => history.back());
       await expect(page).toHaveURL(/\/app\/reports\/week$/);

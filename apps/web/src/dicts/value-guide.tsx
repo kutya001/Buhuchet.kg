@@ -187,7 +187,7 @@ function benefitItems(
         {gkedText(gked, t)}
         {gked.hint ? <span className="text-faint"> {t('dicts.guide.gked_hint')}</span> : null}
         {gked.note ? (
-          <div className="text-[11.5px] leading-[1.4] text-faint">{gked.note}</div>
+          <div className="text-[12px] leading-[1.4] text-muted">{gked.note}</div>
         ) : null}
       </>,
     ],

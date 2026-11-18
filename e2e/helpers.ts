@@ -486,3 +486,15 @@ export async function pickContractor(field: Locator, query: string) {
   await list.getByRole('option').first().click();
   await expect(list).toBeHidden();
 }
+
+/**
+ * Форма с несохранёнными изменениями на «Отмена», крестик, Esc и касание фона спрашивает «Закрыть без
+ * сохранения?» (прототип v131): ответ «Закрыть» — окно закрывается, введённое пропадает. В подвале
+ * вопроса «Закрыть» словом — последняя (крестик в шапке тоже «Закрыть»).
+ */
+export async function discardChanges(page: Page) {
+  const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+  await expect(ask).toContainText('Введённое пропадёт.');
+  await ask.getByRole('button', { name: 'Закрыть', exact: true }).last().click();
+  await expect(ask).toBeHidden();
+}

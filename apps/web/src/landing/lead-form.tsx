@@ -651,7 +651,7 @@ export function LeadSentBox({ phone, tg }: { phone: string; tg: LeadSentTg }) {
               <Icon name="tg" size="sm" />
               {t('land.btn.tg')}
             </a>
-            <span className="text-[11.5px] leading-[1.4] text-faint">
+            <span className="text-[12px] leading-[1.4] text-muted">
               {t('land.ok.till', { до: formatMomentRu(new Date(tg.expiresAt)) })}
             </span>
           </>

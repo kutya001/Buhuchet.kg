@@ -34,6 +34,7 @@ export function UiProviders({
       discardTitle: t('window.discard_title'),
       discardText: t('window.discard_text'),
       discardOk: t('window.discard_ok'),
+      discardStay: t('window.discard_stay'),
       tabPosition: (n, total) => t('window.tab_position', { n, total }),
     }),
     [t],

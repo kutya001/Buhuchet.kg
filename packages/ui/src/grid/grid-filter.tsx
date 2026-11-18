@@ -43,7 +43,7 @@ type ValueDigits = Readonly<Record<string, string | null>>;
 const digitsOfValues = (values: GridValues): ValueDigits =>
   Object.fromEntries(values.items.map((i) => [i.value, i.digits ?? null]));
 
-const HINT = 'text-[11.5px] leading-[1.4] text-faint';
+const HINT = 'text-[12px] leading-[1.4] text-muted';
 
 /**
  * Меню столбца (прототип ui/grid.js, filterPop; ТЗ «Фильтр у каждого столбца по его типу»): текст —
@@ -187,7 +187,7 @@ export function FilterPanel<Row>({
 
   return (
     <div className="flex flex-col gap-2.5" onKeyDown={enter} data-filter-panel={column.key}>
-      <h4 className="m-0 text-[12px] font-[650] tracking-[0.07em] text-faint uppercase">
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">
         {column.label}
       </h4>
       {type === 'text' && (

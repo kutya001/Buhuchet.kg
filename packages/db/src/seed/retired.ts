@@ -13,7 +13,8 @@ import type { SeedOptions } from './platform';
  * «Реквизиты для обслуживания» кнопками по виду реквизита и «Показать реквизиты для перевода»: их
  * шаблоны и подписи убраны, в коде их больше нет. Прототип v129 (решение заказчика 17.11.2026, «Задачи» —
  * только задачи) убрал регулярные задачи: их тексты (`task.reg.*`, «Тип задачи», отказы доски, последствие
- * отката «Регулярная задача … снова станет открытой») больше не нужны.
+ * отката «Регулярная задача … снова станет открытой») больше не нужны. Прототип v138 оставил в верхней панели одно «?» на модуль: подписи прежних кнопок
+ * («ⓘ», «?», видео над экраном) и слово «Business» в шапке убраны.
  */
 export const RETIRED = {
   news: ['v104'],
@@ -68,6 +69,24 @@ export const RETIRED = {
     'task.reg.verb.sub',
     'task.tkind.manual',
     'task.tkind.regular',
+    'onboarding.fx.on',
+    'onboarding.mods.always',
+    'onboarding.mods.can_on',
+    'onboarding.mods.features',
+    'onboarding.mods.on',
+    'onboarding.pic.caption',
+    'kb.toast.steps.one',
+    'kb.toast.steps.few',
+    'kb.toast.steps.many',
+    'news.wn.sub.one',
+    'news.wn.sub.few',
+    'news.wn.sub.many',
+    'news.wn.welcome_text',
+    'shell.help',
+    'shell.help_title',
+    'shell.mode.business',
+    'shell.module_info',
+    'video.top',
   ],
 } as const;
 

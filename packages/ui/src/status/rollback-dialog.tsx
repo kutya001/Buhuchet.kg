@@ -118,7 +118,7 @@ export function RollbackDialog({
           />
         )}
       </Field>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.hint}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{labels.hint}</div>
     </Modal>
   );
 }

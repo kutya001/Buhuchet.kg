@@ -180,7 +180,7 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
           )
         }
       >
-        <span className="-mt-1 text-[11.5px] leading-[1.4] text-faint">
+        <span className="-mt-1 text-[12px] leading-[1.4] text-muted">
           {t('org.policy.features_hint')}
         </span>
         {FEATURES.map((f) => {

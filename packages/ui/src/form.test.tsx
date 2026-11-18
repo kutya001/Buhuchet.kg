@@ -142,7 +142,7 @@ describe('поля и блоки форм (прототип controls.css, cards.
       'id="pf-p1" aria-invalid="true" aria-required="true" aria-describedby="pf-p1-hint pf-p1-err"',
     );
     expect(html).toContain(
-      '<div id="pf-p1-hint" data-hint="" class="text-[11.5px] leading-[1.4] text-faint">Не короче 8 символов</div>',
+      '<div id="pf-p1-hint" data-hint="" class="text-[12px] leading-[1.4] text-muted">Не короче 8 символов</div>',
     );
     expect(html).toMatch(
       /<div id="pf-p1-err" class="[^"]*text-danger"><svg[^>]*>.*<\/svg><span>Пароль короче 8 символов<\/span>/,
@@ -212,7 +212,8 @@ describe('поля и блоки форм (прототип controls.css, cards.
       </Box>,
     );
     expect(box).toContain(
-      'uppercase"><span class="grow">Основное</span><button type="button">Добавить</button></h3>',
+      // Заголовок блока — обычными буквами, не мелкими прописными (прототип v138 `.box h3`).
+      'text-[13.5px] font-[650] text-muted"><span class="grow">Основное</span><button type="button">Добавить</button></h3>',
     );
 
     const note = renderToStaticMarkup(

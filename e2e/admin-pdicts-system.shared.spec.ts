@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
+import { discardChanges } from './helpers';
 
 // Админка → «Справочники платформы», часть 3 задачи 2.36 — вкладки «Работа системы» (ТЗ «Справочники,
 // на которых держится логика системы» и «Шаблоны для организаций»; прототип admin/platform-dicts.js):
@@ -100,6 +101,7 @@ test.describe('Админка: справочники платформы — р�
       await period.getByRole('button', { name: 'Сохранить' }).click();
       await expect(period.getByText('Такое название уже есть')).toBeVisible();
       await period.getByRole('button', { name: 'Отмена' }).click();
+      await discardChanges(page);
       await expect(page.locator('[data-period="q"]')).toContainText('4 в году');
     } finally {
       const now = await status();
@@ -189,6 +191,7 @@ test.describe('Админка: справочники платформы — р�
       await rename.getByRole('button', { name: 'Сохранить' }).click();
       await expect(rename.getByText('Такой шаблон уже есть')).toBeVisible();
       await rename.getByRole('button', { name: 'Отмена' }).click();
+      await discardChanges(page);
 
       await card.getByRole('button', { name: 'Права' }).click();
       let dialog = page.getByRole('dialog', { name: 'Права шаблона роли' });

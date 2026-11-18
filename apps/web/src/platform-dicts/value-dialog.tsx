@@ -560,7 +560,7 @@ export function ValueDialog({
                   <Icon name="plus" size="sm" />
                   {t('pdicts.organ.contact_add')}
                 </button>
-                <span className="text-[11.5px] leading-[1.4] text-faint">
+                <span className="text-[12px] leading-[1.4] text-muted">
                   {t('pdicts.organ.contacts_hint')}
                 </span>
               </div>

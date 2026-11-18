@@ -64,7 +64,7 @@ function monthTitle(t: Translate, month: string): string {
 }
 
 const RAISED_ICON =
-  'inline-grid h-[33px] w-[33px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-grid h-[33px] w-[33px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-flat hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 /** День сетки (`.cday`): нерабочий — фоном, чужой месяц — бледно, сегодня — рамкой, выбранный — тенью. */
 function dayClass(d: Day, o: { inMonth: boolean; today: boolean; selected: boolean }): string {
@@ -147,7 +147,7 @@ export function ReportCalendarTab() {
           {t('report.cal.today')}
         </button>
         <div className="flex-1" />
-        <span className="text-[11.5px] leading-[1.4] text-faint">{t('report.cal.hint')}</span>
+        <span className="text-[12px] leading-[1.4] text-muted">{t('report.cal.hint')}</span>
       </div>
       {query.isError && !data ? (
         <Note tone="bad">
@@ -221,14 +221,14 @@ export function ReportCalendarTab() {
       </div>
       {day ? (
         <>
-          <h3 className="m-0 mt-1.5 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+          <h3 className="m-0 mt-1.5 flex items-center gap-2 text-[13.5px] font-[650] text-muted">
             {t('report.cal.list', { date: formatDateRu(day) })}
             {picked?.holiday ? ` · ${picked.holiday}` : ''}
           </h3>
           <ReportDayList key={day} day={day} reports={reports} />
         </>
       ) : (
-        <span className="text-[11.5px] leading-[1.4] text-faint">{t('report.cal.pick')}</span>
+        <span className="text-[12px] leading-[1.4] text-muted">{t('report.cal.pick')}</span>
       )}
       {mass.dialog}
       {reports.dialogs}

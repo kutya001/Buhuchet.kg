@@ -17,8 +17,10 @@ async function signIn(api: APIRequestContext, origin: string) {
 
 const helpWindow = (page: Page) => page.getByRole('dialog', { name: 'Отчеты для сдачи' });
 
+/** Окно помощи модуля: «?» у названия → «Вся инструкция» (прототип v138). */
 async function openHelp(page: Page): Promise<Locator> {
-  await page.getByRole('button', { name: 'Помощь' }).click();
+  await page.getByRole('button', { name: 'Что здесь: подсказка по модулю' }).click();
+  await page.getByRole('button', { name: 'Вся инструкция' }).click();
   const help = helpWindow(page);
   await expect(help).toContainText('Главный рабочий модуль');
   return help;
@@ -209,7 +211,7 @@ test.describe('Этап 1: окна и уведомления', () => {
     await signIn(page.request, new URL(baseURL!).origin);
     await page.goto('/app/home/today');
     await page.goto('/app/reports/week');
-    const helpButton = page.getByRole('button', { name: 'Помощь' });
+    const helpButton = page.getByRole('button', { name: 'Что здесь: подсказка по модулю' });
 
     let help = await openHelp(page);
     // Фокус — в окне; Tab и Shift+Tab ходят только по кнопкам окна.

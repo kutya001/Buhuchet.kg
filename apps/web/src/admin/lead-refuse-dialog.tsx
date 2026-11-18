@@ -88,7 +88,7 @@ export function LeadRefuseDialog({
           />
         )}
       </Field>
-      <div className="text-[11.5px] leading-[1.4] text-faint">
+      <div className="text-[12px] leading-[1.4] text-muted">
         {[
           t('leads.refuse.hint'),
           tg ? t('leads.refuse.hint_tg') : '',

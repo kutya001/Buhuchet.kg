@@ -113,7 +113,7 @@ export function LeadDocsBox({ t, l }: { t: Translate; l: AdminLeadCard }) {
         </ul>
       ) : null}
       {hint ? (
-        <div data-lead-docs-hint="" className="text-[11.5px] leading-[1.4] text-faint">
+        <div data-lead-docs-hint="" className="text-[12px] leading-[1.4] text-muted">
           {hint}
         </div>
       ) : null}

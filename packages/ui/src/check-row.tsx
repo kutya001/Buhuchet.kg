@@ -70,5 +70,5 @@ export function CheckRow({
 
 /** Пояснение под названием в строке (`.hint`): мелкий бледный текст. */
 export function Hint({ children }: { children: ReactNode }) {
-  return <div className="text-[11.5px] leading-[1.4] text-faint">{children}</div>;
+  return <div className="text-[12px] leading-[1.4] text-muted">{children}</div>;
 }

@@ -147,7 +147,14 @@ export type BellItem = z.infer<typeof BellItem>;
 export const BellPage = z.object({ items: z.array(BellItem), more: z.boolean() });
 export type BellPage = z.infer<typeof BellPage>;
 
-export const BellCount = z.object({ unseen: z.number().int().nonnegative() });
+/**
+ * Значок колокольчика: `unseen` — непросмотренные рабочие уведомления (красное число), `news` —
+ * непросмотренные новости версий (серая точка, когда рабочих нет; прототип v138).
+ */
+export const BellCount = z.object({
+  unseen: z.number().int().nonnegative(),
+  news: z.number().int().nonnegative(),
+});
 export type BellCount = z.infer<typeof BellCount>;
 
 export const BellReadParams = z.object({ id: z.uuid() });

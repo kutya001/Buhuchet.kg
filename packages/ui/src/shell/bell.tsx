@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { buttonClass, iconButtonClass, linkButtonClass } from '../button';
+import { useFadeAway } from '../fade-away';
 import { Icon } from '../icon';
 import type { IconName } from '../icons';
 import { PHONE_QUERY, useMediaQuery, useMounted } from '../use-media';
@@ -35,6 +36,10 @@ export interface BellLabels {
   title: string;
   /** Подпись значка с непросмотренными: «Уведомления: непросмотренных 3». */
   unseen: string;
+  /** Подпись значка с серой точкой: «Уведомления: есть новости». */
+  newsDot: string;
+  /** «Новости» — ссылка пустой панели «Все», когда под кнопкой «Новости» строки есть. */
+  showNews: string;
   readAll: string;
   close: string;
   /** Название ряда кнопок-фильтров для экранного диктора. */
@@ -49,8 +54,13 @@ export interface BellLabels {
 }
 
 export interface BellProps {
-  /** Сколько строк ещё не видели: 1–99, больше — «99+»; 0 — значок серый, без числа. */
+  /**
+   * Сколько рабочих уведомлений ещё не видели: 1–99, больше — «99+»; 0 — значок серый, без числа.
+   * Новости версий в число не входят (прототип v138).
+   */
   unseen: number;
+  /** Есть непросмотренные новости версий: серая точка на значке, когда рабочих уведомлений нет. */
+  news?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   labels: BellLabels;
@@ -69,6 +79,8 @@ export interface BellProps {
   onReadAll: () => void;
   /** Пусто под фильтром, а во «Все» строки есть — «Показать все». */
   canShowAll: boolean;
+  /** Пусто во «Все», а под кнопкой «Новости» строки есть — ссылка «Новости» (прототип v138). */
+  canShowNews?: boolean;
   onRow: (id: string) => void;
 }
 
@@ -94,14 +106,16 @@ const EDGE = 8;
 /**
  * Колокольчик в верхней панели и панель «Уведомления» (доработки 16.11.2026, блок 3; прототип v123
  * `ui/bell-panel.js`, css/shell.css `.tb-bell`, `.bell-*`): значок жёлтый с красным числом, пока есть
- * непросмотренные; панель под значком (на ПК 400 px, до 600 px в высоту) с кнопками-фильтрами, строками
+ * непросмотренные рабочие уведомления; только новости версий — серая точка без числа (прототип v138
+ * `.bell-nd`); панель под значком (на ПК 400 px, до 600 px в высоту) с кнопками-фильтрами, строками
  * по группам, «Показать ещё» и «Прочитать все»; на телефоне — во весь экран, выезжает снизу,
  * закрывается крестиком или протяжкой вниз. Как всплывающее окошко: Esc, нажатие вне панели и «Назад»
  * закрывают её. Данные, отметки и переходы — у приложения.
  */
 export function Bell(p: BellProps) {
   const button = useRef<HTMLButtonElement>(null);
-  const label = p.unseen ? p.labels.unseen : p.labels.title;
+  const newsDot = !p.unseen && p.news === true;
+  const label = p.unseen ? p.labels.unseen : newsDot ? p.labels.newsDot : p.labels.title;
   return (
     <>
       <button
@@ -124,6 +138,11 @@ export function Bell(p: BellProps) {
           >
             {bellCountText(p.unseen)}
           </span>
+        ) : newsDot ? (
+          <span
+            data-bell-news=""
+            className="pointer-events-none absolute top-[5px] right-[5px] h-2 w-2 rounded-full bg-faint shadow-[0_0_0_2px_var(--color-pane)] max-md:top-2.5 max-md:right-2.5"
+          />
         ) : null}
       </button>
       {p.open ? <BellPanel {...p} anchor={button} /> : null}
@@ -142,6 +161,8 @@ function BellPanel(p: BellProps & { anchor: RefObject<HTMLButtonElement | null> 
   const closeEvent = useEffectEvent(close);
 
   useSwipeDown(panel, { enabled: phone, onClose: () => close(false) });
+  // Панель гаснет плавно (прототип v131 `.pop.out`).
+  useFadeAway(panel, mounted);
 
   // На ПК — под значком, правым краем к нему и не дальше 8 px от края экрана.
   useLayoutEffect(() => {
@@ -197,7 +218,8 @@ function BellPanel(p: BellProps & { anchor: RefObject<HTMLButtonElement | null> 
       data-overlay
       data-popover
       data-bell-panel=""
-      className="fixed z-[70] flex w-[min(400px,calc(100vw-16px))] touch-pan-y flex-col overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop outline-none md:max-h-[min(600px,calc(100dvh-72px))] md:animate-slide-up max-md:inset-0 max-md:h-dvh max-md:w-full max-md:animate-bell-up max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)] motion-reduce:animate-none"
+      data-leave="animate-fade-out"
+      className="fixed z-[70] flex w-[min(400px,calc(100vw-16px))] touch-pan-y flex-col overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop outline-none md:max-h-[min(600px,calc(100dvh-72px))] md:animate-rise max-md:inset-0 max-md:h-dvh max-md:w-full max-md:animate-bell-up max-md:rounded-none max-md:border-0 max-md:pt-[env(safe-area-inset-top,0px)] max-md:pb-[env(safe-area-inset-bottom,0px)] motion-reduce:animate-none"
     >
       <div
         data-swipe-handle
@@ -245,7 +267,7 @@ function BellPanel(p: BellProps & { anchor: RefObject<HTMLButtonElement | null> 
                   if (panel.current) panel.current.scrollTop = 0;
                   p.onTab(x.value);
                 }}
-                className={`inline-flex flex-none cursor-pointer items-center rounded-full border px-[7px] py-[3px] text-[12px] font-[550] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-md:min-h-9 max-md:px-2 max-md:py-1 max-md:text-[12.5px] ${on ? 'border-transparent bg-accent text-on-accent shadow-cta' : 'border-line bg-raised text-muted'}`}
+                className={`inline-flex flex-none cursor-pointer items-center rounded-full border px-[7px] py-[3px] text-[12px] font-[550] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent max-md:min-h-9 max-md:px-2 max-md:py-1 max-md:text-[12.5px] ${on ? 'border-transparent bg-accent text-on-accent' : 'border-line bg-raised text-muted'}`}
               >
                 {x.label}
               </button>
@@ -286,6 +308,15 @@ function BellList(p: BellProps): ReactNode {
           <button type="button" onClick={() => p.onTab('all')} className={linkButtonClass()}>
             {l.showAll}
           </button>
+        ) : p.canShowNews ? (
+          <button
+            type="button"
+            onClick={() => p.onTab('news')}
+            data-bell-show-news=""
+            className={linkButtonClass()}
+          >
+            {l.showNews}
+          </button>
         ) : null}
       </div>
     );
@@ -294,7 +325,7 @@ function BellList(p: BellProps): ReactNode {
     <>
       {bellGroups(p.rows).map((g) => (
         <div key={g.group}>
-          <div className="px-2 pt-2.5 pb-1 text-[11px] font-[650] tracking-[0.07em] text-faint uppercase">
+          <div className="px-2 pt-2.5 pb-1 text-[12.5px] font-[650] text-muted">
             {g.group}
           </div>
           {g.rows.map((r) => (

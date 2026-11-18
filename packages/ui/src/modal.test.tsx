@@ -19,8 +19,9 @@ const LABELS: WindowLabels = {
   cancel: 'Отмена',
   confirm: 'Подтвердить',
   discardTitle: 'Закрыть без сохранения?',
-  discardText: 'В форме есть несохранённые изменения. Если закрыть сейчас, они пропадут.',
+  discardText: 'Введённое пропадёт.',
   discardOk: 'Закрыть',
+  discardStay: 'Остаться',
   tabPosition: (n, total) => `${n} из ${total}`,
 };
 

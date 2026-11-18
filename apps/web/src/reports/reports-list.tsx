@@ -148,7 +148,7 @@ export function NoTypesNote() {
               {t('report.no_types.pick')}
             </button>
           ) : (
-            <span className="shrink-0 text-[11.5px] leading-[1.4] text-faint">
+            <span className="shrink-0 text-[12px] leading-[1.4] text-muted">
               {t('report.no_types.owner')}
             </span>
           )}

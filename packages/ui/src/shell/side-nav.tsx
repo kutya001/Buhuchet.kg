@@ -48,6 +48,7 @@ export function Brand({
   mode,
   className = 'px-2 pt-2 pb-4',
 }: {
+  /** Режим под названием — только «Admin» в Админке; в организации строки нет (прототип v138). */
   mode: string;
   /** Отступы: в левой панели и в панели «Меню» телефона они разные. */
   className?: string;
@@ -61,9 +62,11 @@ export function Brand({
         <div data-brand-name="" className="text-base leading-[1.1] font-[750] tracking-[-0.015em]">
           Buhuchet.kg
         </div>
-        <div className="mt-0.5 text-[10.5px] font-[650] tracking-[0.12em] text-faint uppercase">
-          {mode}
-        </div>
+        {mode ? (
+          <div className="mt-0.5 text-[10.5px] font-[650] tracking-[0.12em] text-faint uppercase">
+            {mode}
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -89,7 +92,8 @@ export interface SideNavLabels {
 
 /**
  * Панель модулей на ПК (прототип ui/shell.js, renderSide; css/shell.css `.side`, `.tree`): вверху
- * «Buhuchet.kg» и режим, дерево модулей до вкладок — название открывает модуль, стрелка рядом
+ * «Buhuchet.kg» (в Админке — и режим «Admin»), дерево модулей до вкладок с короткими названиями
+ * (полное — в подсказке) — название открывает модуль, стрелка рядом
  * раскрывает его вкладки, вкладка открывает модуль сразу на ней; активные модуль и вкладка подсвечены.
  * Внизу — `footer` (организация, «Выйти из аккаунта»). Свёрнутая панель (прототип v85
  * `.app.nav-hidden`, ПК) — полоска значков: названия, стрелки и вкладки скрыты, название модуля — в
@@ -139,7 +143,7 @@ export function SideNav({
                   className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-[7px] text-[13.5px] font-[550] text-inherit no-underline md:group-data-[nav=hidden]/app:relative md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-[9px]"
                 >
                   <Icon name={m.icon} />
-                  <span className={`truncate ${MINI_TEXT}`}>{m.title}</span>
+                  <span className={`truncate ${MINI_TEXT}`}>{m.short ?? m.title}</span>
                   {m.count && (
                     <CountBadge
                       count={m.count}
@@ -214,7 +218,7 @@ export function SideOrg({
       data-side-org=""
       className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent p-2 text-left text-ink hover:bg-hover md:group-data-[nav=hidden]/app:relative md:group-data-[nav=hidden]/app:justify-center md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-1.5"
     >
-      <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
+      <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-flat">
         <Icon name="landmark" size="sm" />
       </span>
       <span className={`min-w-0 ${MINI_TEXT}`}>
@@ -241,11 +245,14 @@ export function SideFootRow({ children }: { children: ReactNode }) {
 export function SideFootButton({
   icon,
   label,
+  title,
   onClick,
   disabled = false,
 }: {
   icon: 'user' | 'logout';
+  /** Короткая подпись («Профиль», «Выйти»); `title` — полная в подсказке («Мой профиль»). */
   label: string;
+  title?: string;
   onClick: () => void;
   disabled?: boolean;
 }) {
@@ -254,7 +261,8 @@ export function SideFootButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={label}
+      title={title ?? label}
+      aria-label={title ?? label}
       className="inline-flex min-h-[29px] min-w-0 flex-[1_1_auto] cursor-pointer items-center justify-center gap-1 rounded-lg border-0 bg-transparent px-1 py-1 text-[11.5px] font-[550] whitespace-nowrap text-muted hover:bg-row-hover hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 md:group-data-[nav=hidden]/app:relative md:group-data-[nav=hidden]/app:w-full md:group-data-[nav=hidden]/app:gap-0 md:group-data-[nav=hidden]/app:px-0 md:group-data-[nav=hidden]/app:py-[7px]"
     >
       <Icon

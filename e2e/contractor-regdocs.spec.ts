@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { cardTab } from './helpers';
+import { cardTab, discardChanges } from './helpers';
 import { orgWithTypes } from './orgs';
 
 // Создание контрагента «Из свидетельства и выписки» (задача 2.17, #72, часть 2; Бета) через настоящий
@@ -146,7 +146,9 @@ test.describe('Этап 2: контрагент из свидетельства 
       'свидетельство ИП загружено вместе с документом юрлица',
       { timeout: 30_000 },
     );
+    // Файлы выбраны — «Отмена» сначала спрашивает (прототип v131).
     await mixed.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await discardChanges(page);
     await expect(mixed).toBeHidden();
 
     await recognize(page, [fixture('regdocs-ipsv.pdf')]);

@@ -66,12 +66,12 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visi
 const LABEL =
   'flex flex-col items-start text-left leading-[1.15] max-md:min-w-0 max-md:flex-auto max-md:flex-row max-md:flex-wrap max-md:items-baseline max-md:gap-x-2 max-md:gap-y-0.5 max-md:leading-[1.25]';
 const NOTE = 'mt-0.5 text-[11px] not-italic max-md:mt-0 max-md:basis-full';
-const HINT = 'text-[11.5px] leading-[1.4] text-faint';
+const HINT = 'text-[12px] leading-[1.4] text-muted';
 
 /** Название шкалы (`.scf-t`). */
 function ScaleTitle({ children }: { children: ReactNode }) {
   return (
-    <span className="text-[11px] font-bold tracking-[.06em] text-muted uppercase">{children}</span>
+    <span className="text-[12.5px] font-[650] text-muted">{children}</span>
   );
 }
 

@@ -248,7 +248,7 @@ export function ContractorFilesTab({
                 if (file) setOpen(openSlot(file));
               }}
             />
-            <span className="text-[11.5px] leading-[1.4] text-faint">
+            <span className="text-[12px] leading-[1.4] text-muted">
               {t('cp.files.hint')} {t('files.cp.hint_edit')}
               {cppage ? ` ${t('cp.files.hint_page')}` : ''}
             </span>

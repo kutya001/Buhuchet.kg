@@ -432,7 +432,7 @@ export function ScheduleBox({ t, r, today }: { t: Translate; r: ReportCard; toda
       data-report-schedule=""
       className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5"
     >
-      <h3 className="m-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+      <h3 className="m-0 text-[13.5px] font-[650] text-muted">
         {t('report.money.schedule', { n: t(`report.money.schedule.${pluralForm(n)}`, { n }) })}
       </h3>
       <MiniTable

@@ -110,7 +110,7 @@ export function SetPasswordScreen({ token }: { token: string | null }) {
     <main className="grid min-h-dvh place-items-center overflow-auto bg-frame px-4 py-6">
       <div
         data-setpass={state.id}
-        className="flex w-[min(400px,100%)] animate-slide-up flex-col gap-3.5 rounded-2xl border border-line bg-pane px-[26px] py-7 shadow-pop"
+        className="flex w-[min(400px,100%)] animate-rise flex-col gap-3.5 rounded-2xl border border-line bg-pane px-[26px] py-7 shadow-pop"
       >
         <Brand mode={t('auth.brand_mode')} className="flex-wrap" />
         {body}

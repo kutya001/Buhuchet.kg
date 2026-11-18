@@ -16,7 +16,8 @@ const PHONE = '(max-width: 767px)';
  * Подгонка ряда вкладок под ширину (прототип ui/shell.js, fitTabs; ТЗ «Вкладки модуля»): на ПК, если
  * ряд не помещается, сначала у отдельных кнопок добавления остаются только значки, затем уменьшаются
  * отступы вкладок, затем скрываются их значки, и только потом ряд прокручивается; на телефоне остаются
- * только значки. Активная вкладка сдвигается в видимую часть.
+ * только значки, а у открытой вкладки — значок с названием (прототип v138). Активная вкладка сдвигается
+ * в видимую часть.
  */
 function fitTabs(row: HTMLElement) {
   const root = row.parentElement;
@@ -129,13 +130,16 @@ export function TabRow({
                   role="tab"
                   aria-selected={on}
                   title={t.title ?? t.label}
-                  className={`inline-flex flex-none cursor-pointer items-center gap-[7px] rounded-full border px-3.5 py-[7px] text-[13px] font-[550] no-underline transition-[background-color,color,transform] duration-200 group-data-[fit=icons]/tabs:px-[11px] group-data-[fit=labels]/tabs:gap-[5px] group-data-[fit=labels]/tabs:px-[9px] group-data-[fit=tight]/tabs:gap-[5px] group-data-[fit=tight]/tabs:px-[9px] ${on ? 'animate-pop border-transparent bg-raised text-ink shadow-btn group-data-[swiping=true]/tabs:animate-none group-data-[swiping=true]/tabs:border-line group-data-[swiping=true]/tabs:bg-pane-alt group-data-[swiping=true]/tabs:text-muted group-data-[swiping=true]/tabs:shadow-none' : 'border-line bg-pane-alt text-muted hover:-translate-y-px hover:bg-raised hover:text-ink'}`}
+                  className={`inline-flex flex-none cursor-pointer items-center gap-[7px] rounded-full border px-3.5 py-[7px] text-[13px] font-[550] no-underline transition-[background-color,color,transform] duration-200 max-md:min-h-11 group-data-[fit=icons]/tabs:px-[11px] group-data-[fit=labels]/tabs:gap-[5px] group-data-[fit=labels]/tabs:px-[9px] group-data-[fit=tight]/tabs:gap-[5px] group-data-[fit=tight]/tabs:px-[9px] ${on ? 'animate-pop border-transparent bg-raised text-ink shadow-flat group-data-[swiping=true]/tabs:animate-none group-data-[swiping=true]/tabs:border-line group-data-[swiping=true]/tabs:bg-pane-alt group-data-[swiping=true]/tabs:text-muted group-data-[swiping=true]/tabs:shadow-none' : 'border-line bg-pane-alt text-muted hover:-translate-y-px hover:bg-raised hover:text-ink'}`}
                 >
                   <span className="inline-grid group-data-[fit=labels]/tabs:hidden">
                     <Icon name={t.icon} size="tab" />
                   </span>
-                  {/* Без места — только значок; название остаётся в имени вкладки для экранного диктора. */}
-                  <span className="group-data-[fit=icons]/tabs:sr-only">{t.label}</span>
+                  {/* Без места — только значок, а у открытой вкладки название остаётся (прототип v138:
+                      видно, где ты); у остальных оно — в имени вкладки для экранного диктора. */}
+                  <span className={on ? undefined : 'group-data-[fit=icons]/tabs:sr-only'}>
+                    {t.label}
+                  </span>
                   {t.count && <CountBadge count={t.count} />}
                 </Link>
               </Fragment>
@@ -153,7 +157,7 @@ export function TabRow({
             aria-label={stats.label}
             aria-pressed={stats.shown}
             title={stats.shown ? stats.hide : stats.show}
-            className={`${iconButtonClass()} ${stats.shown ? 'bg-btn! text-ink! shadow-btn' : ''}`}
+            className={`${iconButtonClass()} ${stats.shown ? 'bg-btn! text-ink! shadow-flat-strong' : ''}`}
           >
             <Icon name="chart" />
           </button>

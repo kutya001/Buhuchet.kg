@@ -68,7 +68,7 @@ export function Section({
   if (blank(children)) return null;
   return (
     <section className="flex min-w-0 flex-col gap-1.5">
-      <h4 className="m-0 flex items-center gap-1.5 text-[11.5px] font-bold tracking-[.06em] text-muted uppercase">
+      <h4 className="m-0 flex items-center gap-1.5 text-[13px] font-[650] text-muted">
         <Icon name={icon} size="sm" />
         {title}
       </h4>
@@ -562,7 +562,7 @@ export function TypeDesc({
       {x.description ? <Para>{x.description}</Para> : null}
       {x.choiceNote ? <Note>{x.choiceNote}</Note> : null}
       {x.pickHint ? (
-        <div className="text-[11.5px] leading-[1.4] text-faint">{x.pickHint}</div>
+        <div className="text-[12px] leading-[1.4] text-muted">{x.pickHint}</div>
       ) : null}
       {x.verify ? (
         <Note tone="warn">

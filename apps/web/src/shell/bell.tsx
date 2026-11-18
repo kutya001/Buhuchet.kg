@@ -39,7 +39,7 @@ const PAGES_KEY = ['bell', 'page'] as const;
 
 export const bellCountQuery = queryOptions({
   queryKey: COUNT_KEY,
-  queryFn: async () => json(await api.api.bell.count.$get(), (v) => BellCount.parse(v).unseen),
+  queryFn: async () => json(await api.api.bell.count.$get(), (v) => BellCount.parse(v)),
   refetchInterval: BELL_POLL_MS,
   refetchOnWindowFocus: true,
   staleTime: 0,
@@ -96,11 +96,14 @@ export function ShellBell() {
   const count = useQuery(bellCountQuery);
   const all = useInfiniteQuery({ ...bellPageQuery('all'), enabled: open });
   const page = useInfiniteQuery({ ...bellPageQuery(tab), enabled: open });
-  const unseen = count.data ?? 0;
+  // Под кнопкой «Новости» — новости версий: во «Все» их нет (прототип v138).
+  const newsPage = useInfiniteQuery({ ...bellPageQuery('news'), enabled: open && tab === 'all' });
+  const unseen = count.data?.unseen ?? 0;
+  const newsUnseen = count.data?.news ?? 0;
 
   // Открыл панель — строки просмотрены; пока она открыта, пришедшие строки — тоже (прототип bellPaint).
   const seen = useEffectEvent(() => {
-    client.setQueryData(COUNT_KEY, 0);
+    client.setQueryData<BellCount>(COUNT_KEY, { unseen: 0, news: 0 });
     void api.api.bell.seen.$post().then(
       (res) => json(res, (v) => BellDone.parse(v)),
       () => {},
@@ -111,8 +114,8 @@ export function ShellBell() {
   }, [open, page.isSuccess, page.dataUpdatedAt]);
   const fresh = useEffectEvent(() => void client.invalidateQueries({ queryKey: PAGES_KEY }));
   useEffect(() => {
-    if (open && unseen > 0) fresh();
-  }, [open, unseen]);
+    if (open && unseen + newsUnseen > 0) fresh();
+  }, [open, unseen, newsUnseen]);
 
   const onOpenChange = (next: boolean) => {
     if (next) {
@@ -175,11 +178,14 @@ export function ShellBell() {
   return (
     <Bell
       unseen={unseen}
+      news={newsUnseen > 0}
       open={open}
       onOpenChange={onOpenChange}
       labels={{
         title: t('bell.title'),
         unseen: t('bell.unseen', { n: unseen }),
+        newsDot: t('bell.news_dot'),
+        showNews: t('bell.tab.news'),
         readAll: t('bell.read_all'),
         close: t('btn.close'),
         tabs: t('bell.tabs'),
@@ -208,12 +214,14 @@ export function ShellBell() {
       // Непрочитанные могут быть и дальше загруженных 30 строк: тогда кнопка тоже доступна.
       canReadAll={
         allItems.some((x) => !x.read) ||
+        (newsPage.data?.pages[0]?.items ?? []).some((x) => !x.read) ||
         (items ?? []).some((x) => !x.read) ||
         all.hasNextPage ||
         page.hasNextPage
       }
       onReadAll={readAll}
       canShowAll={tab !== 'all' && allItems.length > 0}
+      canShowNews={tab === 'all' && (newsPage.data?.pages[0]?.items.length ?? 0) > 0}
       onRow={(id) => {
         const item = items?.find((x) => x.id === id);
         if (item) go(item);

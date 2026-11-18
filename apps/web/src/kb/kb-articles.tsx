@@ -135,7 +135,7 @@ function ArticleRow({
           </Fragment>
         ) : null}
       </b>
-      <span className="text-[11.5px] leading-[1.4] text-faint">{snippet(a.text, q)}</span>
+      <span className="text-[12px] leading-[1.4] text-muted">{snippet(a.text, q)}</span>
       {module ? <Tag>{module}</Tag> : null}
     </button>
   );

@@ -544,7 +544,7 @@ function KbShowDialog({
                 </button>
               </div>
               {p.auto ? (
-                <span className="text-[11.5px] leading-[1.4] text-faint">
+                <span className="text-[12px] leading-[1.4] text-muted">
                   {t('kbadm.show.auto_hint')}
                 </span>
               ) : (
@@ -684,7 +684,7 @@ function KbShowPreview({
             </li>
           ))}
         </ol>
-        <p className="m-0 text-[11.5px] leading-[1.4] text-faint">{t('kbadm.show.prev.hint')}</p>
+        <p className="m-0 text-[12px] leading-[1.4] text-muted">{t('kbadm.show.prev.hint')}</p>
       </div>
     </Modal>
   );

@@ -47,16 +47,6 @@ export const ONBOARDING_TEXTS = {
   'onboarding.pic.row3.type': { ru: 'Соцфонд', section: S },
   'onboarding.pic.row3.cp': { ru: 'ОсОО «Бектур»', section: S },
   'onboarding.pic.row3.status': { ru: 'Подтверждено', section: S },
-  'onboarding.pic.caption': {
-    ru: 'Слева — модули, сверху — вкладки и «+ Добавить», плашки — быстрые фильтры, ниже — список',
-    section: S,
-  },
-  // Экран 2: модули и функции
-  'onboarding.mods.always': { ru: 'Включён всегда', section: S },
-  'onboarding.mods.can_on': { ru: 'Можно включить', section: S },
-  'onboarding.mods.on': { ru: 'Включён · можно выключить', section: S },
-  'onboarding.mods.features': { ru: 'Функции внутри модулей', section: S },
-  'onboarding.fx.on': { ru: 'Включена', section: S },
   // Экран 3: опросник
   'onboarding.answer': { ru: 'Ответ', section: S },
   'onboarding.answer.yes': { ru: 'Да', section: S },
@@ -71,8 +61,10 @@ export const ONBOARDING_TEXTS = {
     ru: 'Выполненную задачу проверяет постановщик или сотрудник с правом «Подтверждать задачи»',
     section: S,
   },
+  'onboarding.plan.needs': { ru: 'Требует «{name}».', section: S },
+  'onboarding.plan.later': { ru: 'Поменять можно позже в «Учётной политике»', section: S },
   'onboarding.plan.note': {
-    ru: 'Всегда включены: {list}. Всё остальное можно включить или выключить позже в «Моя организация» → «Учётная политика»; данные при выключении не удаляются.',
+    ru: 'Всегда включены: {list}. Данные при выключении не удаляются.',
     section: S,
   },
   // Экран 5: с чего начать
@@ -87,7 +79,7 @@ export const ONBOARDING_TEXTS = {
   'onboarding.tax.self': { ru: 'Подключить и осмотреться', section: S },
   'onboarding.tax.learn': { ru: 'Подключить и начать обучение', section: S },
   'onboarding.tax.skipped': {
-    ru: 'Налоги можно выбрать позже: «Справочники» → «Виды отчётов» → «Подключить из каталога»',
+    ru: 'Выбрать налоги можно позже в «Справочниках»',
     section: S,
   },
   'onboarding.tax.done': { ru: 'Подключено видов отчётов: {n}', section: S },

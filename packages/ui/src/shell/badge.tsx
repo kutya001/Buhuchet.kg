@@ -11,9 +11,17 @@ const TONES = {
 
 /** Счётчик-«таблетка» (прототип `.badge`): число записей у модуля или вкладки. */
 export function CountBadge({ count, className = '' }: { count: ShellCount; className?: string }) {
-  if (count.dot) return <NavDot title={count.title} className={className} />;
+  if (count.dot) {
+    return (
+      <NavDot
+        title={count.title}
+        tone={count.tone === 'gray' ? 'gray' : 'info'}
+        className={className}
+      />
+    );
+  }
   // Нулевой счётчик — серый, даже если вкладка «красная» (как в прототипе).
-  const tone = count.value && count.tone ? count.tone : 'none';
+  const tone = count.value && count.tone && count.tone !== 'gray' ? count.tone : 'none';
   return (
     <span
       title={count.title}
@@ -25,9 +33,13 @@ export function CountBadge({ count, className = '' }: { count: ShellCount; class
   );
 }
 
-/** Цвет точки: синяя — «Начните с Базы знаний», красная и жёлтая — незаполненные показатели. */
+/**
+ * Цвет точки: синяя — «Начните с Базы знаний», красная и жёлтая — незаполненные показатели, серая —
+ * непрочитанные новости (прототип v138: новости не требуют действия, красного счётчика у них нет).
+ */
 const DOT_TONES = {
   info: 'bg-info shadow-[0_0_0_3px_var(--color-info-bg)]',
+  gray: 'bg-faint shadow-[0_0_0_3px_var(--bu-pane-alt)]',
   red: 'bg-danger shadow-[0_0_0_3px_var(--color-danger-bg)]',
   yellow: 'bg-warn shadow-[0_0_0_3px_var(--color-warn-bg)]',
 } as const;

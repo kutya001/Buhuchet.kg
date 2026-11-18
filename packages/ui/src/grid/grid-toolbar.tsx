@@ -44,10 +44,10 @@ export interface GridBoardChoice {
  * Кнопка панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`), область
  * касания — 44 px (`TOUCH_AREA`).
  */
-const PHONE_TOOL = `${TOUCH_AREA} inline-grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:text-ink [&_svg]:h-[17px] [&_svg]:w-[17px]`;
+const PHONE_TOOL = `${TOUCH_AREA} inline-grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-flat hover:text-ink [&_svg]:h-[17px] [&_svg]:w-[17px]`;
 
 /** Кнопка «Настройки вида» на ПК (`.icon-btn.sm.raised`). */
-const RAISED_ICON = `${iconButtonClass('sm')} bg-btn! shadow-btn`;
+const RAISED_ICON = `${iconButtonClass('sm')} bg-btn! shadow-flat`;
 
 interface ToolbarProps<Row> {
   columns: readonly GridColumn<Row>[];
@@ -189,7 +189,7 @@ export function GridToolbar<Row>({
                 data-view={v}
                 title={v === 'kanban' ? labels.kanbanHint : labels[v]}
                 onClick={() => setView(v)}
-                className={`inline-flex min-h-[26px] cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 py-1 text-[12.5px] font-[550] ${view === v ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
+                className={`inline-flex min-h-[26px] cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 py-1 text-[12.5px] font-[550] ${view === v ? 'bg-raised text-ink shadow-flat-strong' : 'bg-transparent text-muted'}`}
               >
                 <Icon name={VIEW_ICON[v]} size="sm" />
                 <span>{labels[v]}</span>
@@ -464,7 +464,7 @@ export function GroupPanel<Row>({
 
   return (
     <>
-      <h4 className="m-0 text-[12px] font-[650] tracking-[0.07em] text-faint uppercase">
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">
         {labels.group}
       </h4>
       <div className={field}>
@@ -524,7 +524,7 @@ export function GroupPanel<Row>({
           ))}
         </>
       )}
-      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.groupHint}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{labels.groupHint}</div>
       <div className="flex justify-end gap-1.5">
         <button
           type="button"
@@ -566,7 +566,7 @@ export function GridBulkBar<Row>({
       role="toolbar"
       aria-label={labels.selected(selection.count)}
       data-grid-bulk
-      className="flex animate-slide-up flex-wrap items-center gap-1.5 rounded-full border border-line-strong bg-raised py-[3px] pr-1 pl-3 text-[13px] shadow-pane"
+      className="flex animate-rise flex-wrap items-center gap-1.5 rounded-full border border-line-strong bg-raised py-[3px] pr-1 pl-3 text-[13px] shadow-pane"
     >
       <b>{labels.selected(selection.count)}</b>
       {selection.actions.map((a) => (
@@ -659,7 +659,7 @@ export function ColumnsPanel<Row>({
 
   return (
     <>
-      <h4 className="m-0 text-[12px] font-[650] tracking-[0.07em] text-faint uppercase">
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">
         {labels.columns}
       </h4>
       <div
@@ -736,7 +736,7 @@ export function ColumnsPanel<Row>({
           );
         })}
       </div>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.columnsHint}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{labels.columnsHint}</div>
     </>
   );
 }

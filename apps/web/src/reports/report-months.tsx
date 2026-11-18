@@ -98,7 +98,7 @@ export function MonthSummary({ g, taxpay }: { g: MonthTotals; taxpay: boolean })
           </Pill>
         </span>
       ))}
-      {due ? <span className="text-[11.5px] leading-[1.4] text-faint">{due}</span> : null}
+      {due ? <span className="text-[12px] leading-[1.4] text-muted">{due}</span> : null}
     </>
   );
 }
@@ -274,13 +274,13 @@ function MonthPayBlock({
           {formatSomWithUnit(pay.total)}
         </b>
         {pay.due ? (
-          <span className="text-[11.5px] leading-[1.4] text-faint">
+          <span className="text-[12px] leading-[1.4] text-muted">
             {t('report.months.pay.due', { date: formatDateRu(pay.due) })}
           </span>
         ) : null}
       </span>
       <span
-        className="order-3 min-w-0 flex-[1_1_100%] text-[11.5px] leading-[1.4] text-faint"
+        className="order-3 min-w-0 flex-[1_1_100%] text-[12px] leading-[1.4] text-muted"
         data-month-pay-list=""
       >
         {hint}
@@ -716,7 +716,7 @@ export function ContractorReportMonths({
     <div className="flex flex-col gap-2.5" data-contractor-months="">
       {bar}
       {body}
-      <span className="text-[11.5px] leading-[1.4] text-faint">{t('report.months.hint')}</span>
+      <span className="text-[12px] leading-[1.4] text-muted">{t('report.months.hint')}</span>
       {menu ? (
         <ActionMenu
           items={menu.items}
@@ -756,7 +756,7 @@ const monthsVisible = (taxpay: boolean): string[] => [
 const MONTHS_SEARCH_ALSO = ['cp', 'inn'] as const;
 
 const RAISED_ICON =
-  'inline-grid h-[33px] w-[33px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-grid h-[33px] w-[33px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-flat hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 function cpsText(t: Translate, n: number): string {
   return t(`report.months.cps.${pluralForm(n)}`, { n });
@@ -833,7 +833,7 @@ export function ReportMonthsTab() {
           </button>
         )}
         <div className="flex-1 max-md:hidden" />
-        <span className="text-[11.5px] leading-[1.4] text-faint max-md:hidden">
+        <span className="text-[12px] leading-[1.4] text-muted max-md:hidden">
           {t('report.months.head_hint')}
         </span>
       </div>

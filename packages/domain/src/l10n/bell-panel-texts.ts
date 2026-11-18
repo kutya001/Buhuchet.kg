@@ -9,6 +9,7 @@ const S = 'Колокольчик';
 export const BELL_PANEL_TEXTS = {
   'bell.title': { ru: 'Уведомления', section: S },
   'bell.unseen': { ru: 'Уведомления: непросмотренных {n}', section: S },
+  'bell.news_dot': { ru: 'Уведомления: есть новости', section: S },
   'bell.read_all': { ru: 'Прочитать все', section: S },
   'bell.read_all_done': { ru: 'Все уведомления прочитаны', section: S },
   'bell.tabs': { ru: 'Что показать', section: S },

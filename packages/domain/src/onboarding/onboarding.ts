@@ -35,7 +35,7 @@ export const ONBOARDING_STATES = ['new', 'later', 'done'] as const;
 export type OnboardingState = (typeof ONBOARDING_STATES)[number];
 
 /** Экраны приветствия (прототип welcomeOpen, `WL.screens`). */
-export const WELCOME_SCREENS = ['hello', 'mods', 'quiz', 'plan', 'start', 'taxes'] as const;
+export const WELCOME_SCREENS = ['hello', 'quiz', 'plan', 'start', 'taxes'] as const;
 export type WelcomeScreen = (typeof WELCOME_SCREENS)[number];
 
 /** Что показать вошедшему: приветствие с опросником (владелец) или без него (сотрудник, повтор). */
@@ -206,15 +206,16 @@ export function welcomeAtLogin(o: {
 }
 
 /**
- * Экраны приветствия (прототип welcomeOpen): у владельца новой организации — шесть («Выбор налогов» —
+ * Экраны приветствия (прототип welcomeOpen): у владельца новой организации — пять («Выбор налогов» —
  * с правом «Вести справочники организации»), у сотрудников и при повторном открытии — «Добро
- * пожаловать», «Модули», «С чего начать»; «Пройти опросник заново» — только опросник и план.
+ * пожаловать» и «С чего начать»; «Пройти опросник заново» — только опросник и план. Экрана «Модули»
+ * нет с прототипа v138 (решение заказчика 17.11.2026 «Меньше текста»).
  */
 export function welcomeScreens(o: {
   kind: WelcomeKind | 'retake';
   canDicts: boolean;
 }): WelcomeScreen[] {
   if (o.kind === 'retake') return ['quiz', 'plan'];
-  if (o.kind === 'tour') return ['hello', 'mods', 'start'];
-  return ['hello', 'mods', 'quiz', 'plan', 'start', ...(o.canDicts ? ['taxes' as const] : [])];
+  if (o.kind === 'tour') return ['hello', 'start'];
+  return ['hello', 'quiz', 'plan', 'start', ...(o.canDicts ? ['taxes' as const] : [])];
 }

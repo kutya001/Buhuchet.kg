@@ -20,6 +20,7 @@ import { createPortal } from 'react-dom';
 import { useBackClose } from './back-close';
 import { buttonClass, iconButtonClass } from './button';
 import { CardTabs, type CardTab } from './card-tabs';
+import { useFadeAway } from './fade-away';
 import { reducedMotion } from './gestures';
 import { Icon } from './icon';
 import { useCardPager } from './use-card-pager';
@@ -49,6 +50,8 @@ export interface WindowLabels {
   discardTitle: string;
   discardText: string;
   discardOk: string;
+  /** «Остаться» — вторая кнопка вопроса «Закрыть без сохранения?» (прототип v131). */
+  discardStay: string;
   /** «N из M» текущей вкладки карточки на телефоне. */
   tabPosition: (n: number, total: number) => string;
 }
@@ -156,8 +159,10 @@ export interface ModalProps {
    */
   size?: ModalSize;
   /**
-   * В форме есть несохранённые изменения: протяжка вниз, «Назад» и выход из аккаунта сначала
-   * спрашивают. У карточки — если в ней своя форма с изменениями («Смена пароля» в «Мой профиль»).
+   * В форме есть несохранённые изменения: крестик, Esc, касание фона, «Отмена», протяжка вниз, «Назад»
+   * и выход из аккаунта сначала спрашивают. У карточки — если в ней своя форма с изменениями («Смена
+   * пароля» в «Мой профиль»). Вопрос задаётся, только если человек что-то делал в теле окна (ввод,
+   * выбор, нажатие): форма, открытая уже заполненной, закрывается без вопроса.
    */
   dirty?: boolean;
   /** Касание фона не закрывает окно. */
@@ -173,6 +178,11 @@ export interface ModalProps {
    * «Помощь», «Добро пожаловать», окна итога; прототип v120 cp-help.css).
    */
   touch?: boolean;
+  /**
+   * Короткое подтверждение появляется сразу, без выезда (прототип v131 `.modal.cfm`: за 100 мс) — и на
+   * телефоне.
+   */
+  quick?: boolean;
   /** Вкладки карточки записи: ряд закреплён вверху содержимого, свайп вбок листает их. */
   tabs?: {
     items: readonly CardTab[];
@@ -252,10 +262,17 @@ function trapTab(e: KeyboardEvent, dialog: HTMLElement) {
  *   центру (форма — колонкой до 980 px); на телефоне — весь экран без скругления. Выбор запоминается
  *   для следующих карточек (или форм); окно поверх другого разворачивается само по себе.
  * - Закрывается крестиком, клавишей Esc, касанием фона, кнопкой «Назад» и на телефоне протяжкой вниз;
- *   форма с несохранёнными изменениями на протяжку и «Назад» спрашивает «Закрыть без сохранения?».
+ *   форма с несохранёнными изменениями на любой из этих способов и на «Отмена» спрашивает «Закрыть без
+ *   сохранения?» с кнопками «Остаться» и «Закрыть» (прототип v131 `tryClose`). Сохранение закрывает без
+ *   вопроса: экран сам убирает окно.
+ * - Появляется за 240 мс без отскока, уходит за 140 мс (`useFadeAway`); на телефоне выезжает снизу и
+ *   уезжает вниз.
  * - Фокус — в первое поле формы (на ПК) или в окно, Tab не уходит под фон, после закрытия фокус
  *   возвращается на кнопку, которая открыла окно.
  */
+/** Действия человека в теле окна, после которых изменения формы считаются его изменениями. */
+const TOUCH_EVENTS = ['input', 'change', 'click', 'drop'] as const;
+
 export function Modal({
   open,
   onClose,
@@ -273,6 +290,7 @@ export function Modal({
   swipeHead = false,
   phoneFull = false,
   touch = false,
+  quick = false,
   tabs,
 }: ModalProps) {
   const windows = useWindowsValue();
@@ -284,6 +302,7 @@ export function Modal({
   const [max, setMax] = useState(false);
   const [openedMax, setOpenedMax] = useState(false);
   const [asking, setAsking] = useState(false);
+  const [touched, setTouched] = useState(false);
   // Окно открылось — развёрнуто, если так выбрали в прошлый раз (для карточек и форм отдельно).
   if (shown !== open) {
     const startMax = open && canMax && windows.max[kind as keyof typeof windows.max];
@@ -291,8 +310,10 @@ export function Modal({
     setMax(startMax);
     setOpenedMax(startMax);
     setAsking(false);
+    setTouched(false);
   }
 
+  const frame = useRef<HTMLDivElement>(null);
   const cover = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -301,21 +322,41 @@ export function Modal({
   const live = open && mounted;
 
   /** Окно в стопке открытых окон: вид и несохранённые изменения (для «Выйти без сохранения?»). */
-  const self = useRef<OpenWindow>({ kind, dirty });
+  /**
+   * Несохранённое есть, когда экран сказал `dirty` и человек что-то делал в теле окна (прототип
+   * `m.dirty` ставится по событиям ввода): форма, которая открылась уже заполненной, закрывается без
+   * вопроса, пока её не тронули.
+   */
+  const unsaved = dirty && touched;
+  const self = useRef<OpenWindow>({ kind, dirty: unsaved });
   useEffect(() => {
     self.current.kind = kind;
-    self.current.dirty = dirty;
-  }, [kind, dirty]);
+    self.current.dirty = unsaved;
+  }, [kind, unsaved]);
+  useEffect(() => {
+    const el = body.current;
+    if (!live || !el) return;
+    const mark = () => setTouched(true);
+    for (const type of TOUCH_EVENTS) el.addEventListener(type, mark, true);
+    return () => {
+      for (const type of TOUCH_EVENTS) el.removeEventListener(type, mark, true);
+    };
+  }, [live]);
   /** Можно ли закрыть сразу; форма с несохранёнными изменениями сначала спрашивает. */
   const mayClose = () => {
-    if (closesAtOnce({ kind, dirty })) return true;
+    if (closesAtOnce({ kind, dirty: unsaved })) return true;
     setAsking(true);
     return false;
+  };
+  /** Закрыть крестиком, Esc, касанием фона или «Отмена»: форма с изменениями сначала спрашивает. */
+  const tryClose = () => {
+    if (mayClose()) onClose();
   };
   const release = useBackClose(live, () => {
     if (!mayClose()) return false;
     onClose();
   });
+  useFadeAway(frame, live);
   useSwipeDown(dialog, {
     enabled: live,
     onClose,
@@ -338,7 +379,7 @@ export function Modal({
       // Сначала закрывается всплывающее окошко внутри окна (оно само слушает Esc).
       if (document.querySelector('[data-popover]')) return;
       e.preventDefault();
-      onClose();
+      tryClose();
     } else if (e.key === 'Tab') {
       trapTab(e, el);
     }
@@ -414,6 +455,7 @@ export function Modal({
   return createPortal(
     <CurrentWindowContext.Provider value={current}>
       <WindowFrame
+        frameRef={frame}
         coverRef={cover}
         dialogRef={dialog}
         bodyRef={body}
@@ -432,15 +474,30 @@ export function Modal({
         slide={!openedMax}
         phoneFull={phoneFull}
         touch={touch}
+        quick={quick}
         phone={phone}
         labels={windows.labels}
         tabs={tabs}
         onToggleMax={toggleMax}
-        onClose={onClose}
+        onClose={tryClose}
         onCoverDown={(e) => {
           if (e.target !== e.currentTarget || sticky) return;
           swallowGhostClick();
-          onClose();
+          tryClose();
+        }}
+        onFootClick={(e) => {
+          // «Отмена» формы с изменениями (прототип v131, `[data-close]`): кнопку рисует сам экран, поэтому
+          // её нажатие перехватывается здесь — по `data-window-cancel` или по надписи «Отмена».
+          if (closesAtOnce({ kind, dirty: unsaved })) return;
+          const button = (e.target as HTMLElement).closest('button');
+          if (!button || button.disabled) return;
+          const cancel =
+            button.hasAttribute('data-window-cancel') ||
+            button.textContent?.trim() === windows.labels.cancel;
+          if (!cancel) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setAsking(true);
         }}
       >
         {children}
@@ -451,6 +508,7 @@ export function Modal({
         title={windows.labels.discardTitle}
         text={windows.labels.discardText}
         ok={windows.labels.discardOk}
+        cancel={windows.labels.discardStay}
         danger
         onConfirm={onClose}
       />
@@ -475,20 +533,22 @@ const PHONE_FULL =
  * Классы окна: размер на ПК, шторка на телефоне, развёрнутое — во всё окно (прототип `.modal`).
  * `slide` — окно выезжает снизу при открытии; открытое сразу развёрнутым появляется без выезда
  * (прототип `.modal.max{animation:none}`). `phoneFull` и размер `large` — на телефоне на весь экран
- * и не развёрнутое.
+ * и не развёрнутое. На телефоне окно выезжает листом снизу (прототип v131 `sheet-in`); `quick` — короткое
+ * подтверждение: появляется на месте за 100 мс.
  */
 export function dialogClass(
   size: ModalSize,
   max: boolean,
   slide = true,
   phoneFull = false,
+  quick = false,
 ): string {
   const desktop = max ? 'w-full h-[calc(100dvh-24px)] max-h-none' : DIALOG_SIZE[size];
   const phone =
     max || phoneFull || size === 'large' || size === 'side'
       ? PHONE_FULL
       : `max-md:w-full max-md:max-h-[92dvh] ${size === 'wide' ? 'max-md:h-[92dvh]' : 'max-md:h-auto'} max-md:rounded-b-none max-md:border-b-0 max-md:pb-[env(safe-area-inset-bottom,0px)]`;
-  return `relative flex min-w-0 touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${slide ? 'animate-slide-up' : ''} ${desktop} ${phone}`;
+  return `relative flex min-w-0 touch-pan-y flex-col rounded-2xl border border-line-strong bg-pane text-ink shadow-pop outline-none ${slide ? (quick ? 'animate-fade-fast' : 'animate-slide-up max-md:animate-sheet-in') : ''} ${desktop} ${phone}`;
 }
 
 const EDGE_MAX = {
@@ -502,6 +562,8 @@ function edgeClass(max: boolean, narrow: boolean, normal: string): string {
 }
 
 export interface WindowFrameProps {
+  /** Всё окно вместе с фоном: его копия плавно уходит при закрытии. */
+  frameRef?: RefObject<HTMLDivElement | null>;
   coverRef?: RefObject<HTMLDivElement | null>;
   dialogRef?: RefObject<HTMLDivElement | null>;
   bodyRef?: RefObject<HTMLDivElement | null>;
@@ -526,16 +588,21 @@ export interface WindowFrameProps {
   phoneFull?: boolean;
   /** На телефоне кнопки шапки не меньше 44 px. */
   touch?: boolean;
+  /** Короткое подтверждение: без выезда. */
+  quick?: boolean;
   phone: boolean;
   labels: WindowLabels;
   tabs?: ModalProps['tabs'];
   onToggleMax: () => void;
   onClose: () => void;
   onCoverDown: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  /** Нажатие в нижней строке — до кнопок экрана (перехват «Отмена» у формы с изменениями). */
+  onFootClick?: (e: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
 /** Разметка окна (без поведения): фон, окно, ручка, шапка, содержимое, нижняя строка. */
 export function WindowFrame({
+  frameRef,
   coverRef,
   dialogRef,
   bodyRef,
@@ -555,12 +622,14 @@ export function WindowFrame({
   slide = true,
   phoneFull = false,
   touch = false,
+  quick = false,
   phone,
   labels,
   tabs,
   onToggleMax,
   onClose,
   onCoverDown,
+  onFootClick,
 }: WindowFrameProps) {
   const maxLabel = max ? labels.restore : labels.maximize;
   const headButton = `${iconButtonClass()}${touch ? ' max-md:min-h-11 max-md:min-w-11' : ''}`;
@@ -575,6 +644,7 @@ export function WindowFrame({
   };
   return (
     <div
+      ref={frameRef}
       data-max={max}
       className={`fixed inset-0 z-50 grid max-md:items-end max-md:justify-items-stretch max-md:p-0 ${size === 'side' && !max ? 'items-stretch justify-items-end p-0' : `place-items-center ${max ? 'p-3' : 'px-4 py-6'}`}`}
     >
@@ -583,6 +653,7 @@ export function WindowFrame({
         ref={coverRef}
         onPointerDown={onCoverDown}
         aria-hidden="true"
+        data-leave="animate-fade-out"
         className="absolute inset-0 animate-fade bg-cover backdrop-blur-[3px]"
       />
       <div
@@ -596,7 +667,8 @@ export function WindowFrame({
         data-window-kind={kind}
         data-overlay
         data-max={max}
-        className={dialogClass(size, max, slide, phoneFull)}
+        data-leave="animate-sink max-md:animate-sheet-out"
+        className={dialogClass(size, max, slide, phoneFull, quick)}
       >
         <div
           data-swipe-handle
@@ -670,6 +742,7 @@ export function WindowFrame({
         {footer && (
           <div
             data-window-foot
+            onClickCapture={onFootClick}
             className={`flex flex-none flex-wrap items-center justify-end gap-2 border-t border-line pt-3 pb-3.5 max-md:pt-2.5 max-md:pb-3 ${edgeClass(max, narrow, 'pr-[18px] pl-[22px] max-md:px-4')}`}
           >
             {footer}
@@ -716,6 +789,7 @@ export function ConfirmDialog({
   title,
   text,
   ok,
+  cancel,
   danger = false,
   onConfirm,
 }: {
@@ -725,6 +799,8 @@ export function ConfirmDialog({
   text: ReactNode;
   /** Надпись кнопки действия; по умолчанию «Подтвердить». */
   ok?: string;
+  /** Надпись кнопки отказа; по умолчанию «Отмена» («Остаться» у «Закрыть без сохранения?»). */
+  cancel?: string;
   danger?: boolean;
   onConfirm: () => void;
 }) {
@@ -734,9 +810,10 @@ export function ConfirmDialog({
       open={open}
       onClose={onClose}
       kind="message"
+      quick
       title={title}
       footer={confirmFooter({
-        cancel: labels.cancel,
+        cancel: cancel ?? labels.cancel,
         ok: ok ?? labels.confirm,
         danger,
         onCancel: onClose,

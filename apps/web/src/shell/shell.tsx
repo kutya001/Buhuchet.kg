@@ -9,6 +9,7 @@ import {
   buttonClass,
   ConfirmDialog,
   Icon,
+  linkButtonClass,
   Modal,
   PhoneMenu,
   SheetAction,
@@ -87,6 +88,7 @@ function shellModule(id: MenuModuleId, access: ShellAccess, t: Translate): Shell
   return {
     id,
     title: t(def.title),
+    short: t(def.short),
     icon: def.icon,
     href: moduleHref(id, access),
     tabs: visibleTabs(id, access).map((tab) => {
@@ -163,6 +165,83 @@ function HelpFooter({ kbHref }: { kbHref: string }) {
         {t('btn.close')}
       </button>
     </>
+  );
+}
+
+/**
+ * Подсказка модуля по «?» у названия (прототип v138 ui/shell.js `modHelpPop`, css/mobile.css `.mh-pop`;
+ * решение заказчика 17.11.2026 «Меньше текста»): одна строка «что здесь», до четырёх действий
+ * «+ Добавить» и ссылки «Показать на экране», «Видео» (если у модуля есть видео) и «Вся инструкция».
+ */
+function ModuleHelp({
+  title,
+  desc,
+  actions,
+  onAdd,
+  onShow,
+  onVideo,
+  onAll,
+}: {
+  title: string;
+  desc: string;
+  actions: readonly AddAction[];
+  onAdd: (actionId: string) => void;
+  onShow: () => void;
+  onVideo: (() => void) | null;
+  onAll: () => void;
+}) {
+  const t = useT();
+  return (
+    <div data-module-help-pop="" className="flex max-w-[316px] flex-col gap-2.5 max-md:max-w-none">
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">{title}</h4>
+      <div className="text-[13.5px] leading-normal text-ink">{desc}</div>
+      {actions.length > 0 && (
+        <div className="flex flex-col items-start gap-1.5">
+          {actions.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`${linkButtonClass()} inline-flex items-center gap-1.5 text-[13.5px] max-md:min-h-9`}
+              onClick={() => onAdd(a.id)}
+            >
+              <Icon name={a.icon} size="sm" />
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          data-kb-show-screen=""
+          className={buttonClass('default', 'sm')}
+          onClick={onShow}
+        >
+          <Icon name="play" size="sm" />
+          {t('shell.help_show')}
+        </button>
+        {onVideo && (
+          <button
+            type="button"
+            data-module-help-video=""
+            className={buttonClass('default', 'sm')}
+            onClick={onVideo}
+          >
+            <Icon name="film" size="sm" />
+            {t('shell.help_video')}
+          </button>
+        )}
+        <button
+          type="button"
+          data-module-help-all=""
+          className={buttonClass('default', 'sm')}
+          onClick={onAll}
+        >
+          <Icon name="book" size="sm" />
+          {t('shell.help_all')}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -256,7 +335,8 @@ function ShellPage({
   // «Начните с Базы знаний»: точка у модуля, пока уровень 0 % (прототип kbDot).
   const kbProgress = useQuery(kbStateQuery).data?.progress;
   const kbStart = !!kbProgress && kbProgress.total > 0 && kbProgress.pct === 0;
-  // Непрочитанные новости: красный счётчик у модуля и вкладки «Новости» — вместо точки (прототип kbTabs).
+  // Непрочитанные новости: у модуля — серая точка (новости не требуют действия, прототип v138), красный
+  // счётчик — только у вкладки «Новости» (прототип kbTabs).
   const newsUnread = useQuery({ ...newsUnreadQuery, enabled: me.modules.includes('kb') }).data ?? 0;
   const modules = useMemo(
     () =>
@@ -267,7 +347,12 @@ function ShellPage({
           const count = { value: newsUnread, tone: 'red' as const, title: t('news.badge') };
           return {
             ...m,
-            count,
+            count: {
+              value: '',
+              dot: true,
+              tone: 'gray' as const,
+              title: t('news.dot', { n: newsUnread }),
+            },
             tabs: m.tabs.map((tab) => (tab.id === 'news' ? { ...tab, count } : tab)),
           };
         }
@@ -288,7 +373,8 @@ function ShellPage({
       // В «Других модулях» число новых файлов от контрагентов не показывается (прототип v112
       // renderSheet: у «Файлового менеджера» значка нет, только в левой и нижней панели).
       other: split.other.map((id) => {
-        const m = pick(id, t(MODULES[id].title));
+        // Короткие названия, как в левой панели (прототип v138 `m.short||m.title`).
+        const m = pick(id, t(MODULES[id].short));
         return id === 'files' ? { ...m, count: undefined } : m;
       }),
     };
@@ -484,7 +570,19 @@ function ShellPage({
     });
   };
 
-  const mode = t(access.admin ? 'shell.mode.admin' : 'shell.mode.business');
+  /** «+ Добавить»: способ добавления открывает экран модуля (кнопка ряда вкладок и подсказка «?»). */
+  const requestAdd = (actionId: string) => {
+    if (!current) return;
+    setAddRequest((prev) => ({
+      moduleId: current.id,
+      actionId,
+      label: actions.find((a) => a.id === actionId)?.label ?? '',
+      n: (prev?.n ?? 0) + 1,
+    }));
+  };
+
+  const mode = access.admin ? t('shell.mode.admin') : '';
+  const shortTitle = current?.short ?? title;
   const fullName = me.employee?.fullName ?? t('profile.platform_admin');
 
   return (
@@ -528,12 +626,14 @@ function ShellPage({
                   <SideFootRow>
                     <SideFootButton
                       icon="user"
-                      label={t('profile.title')}
+                      label={t('shell.profile_short')}
+                      title={t('profile.title')}
                       onClick={() => setProfileOpen(true)}
                     />
                     <SideFootButton
                       icon="logout"
-                      label={t('shell.logout')}
+                      label={t('shell.logout_short')}
+                      title={t('shell.logout')}
                       onClick={() => requestLogout()}
                       disabled={leaving}
                     />
@@ -544,8 +644,8 @@ function ShellPage({
           }
           topBar={
             <TopBar
-              title={title}
-              tab={currentTab?.label ?? null}
+              title={shortTitle}
+              fullTitle={currentTab ? `${title} · ${currentTab.label}` : title}
               menu={{
                 label: t('shell.menu'),
                 onClick: toggleNav,
@@ -555,23 +655,41 @@ function ShellPage({
                 },
                 // Непрочитанные новости — обычная точка у «Меню», цветная — только у показателей
                 // (прототип renderSheetDot).
-                ...menuDot(
-                  phone.other.map((m) =>
-                    m.id === 'kb' && m.count?.value
-                      ? { ...m, count: { ...m.count, tone: undefined, dot: true } }
-                      : m,
-                  ),
-                ),
+                ...menuDot(phone.other),
               }}
               info={{
-                label: t('shell.module_info'),
-                content: (
-                  <>
-                    <h4 className="m-0 text-xs font-[650] tracking-[0.07em] text-faint uppercase">
-                      {title}
-                    </h4>
-                    <div className="max-w-[300px] text-[13px] leading-normal">{desc}</div>
-                  </>
+                label: t('shell.help_here_label'),
+                title: t('shell.help_here'),
+                content: (close) => (
+                  <ModuleHelp
+                    title={title}
+                    desc={desc}
+                    // До четырёх действий «+ Добавить» (прототип v138 `modHelpPop`).
+                    actions={actions.slice(0, 4)}
+                    onAdd={(actionId) => {
+                      close();
+                      requestAdd(actionId);
+                    }}
+                    onShow={() => {
+                      close();
+                      kb.controls.showScreen();
+                    }}
+                    onVideo={
+                      topVideo
+                        ? () => {
+                            close();
+                            video.controls.open(topVideo.id);
+                          }
+                        : null
+                    }
+                    onAll={() => {
+                      close();
+                      // Фокус — на «?»: окно помощи после закрытия вернёт его сюда, а не в никуда
+                      // (кнопки окошка к тому времени уже нет).
+                      document.querySelector<HTMLElement>('header [data-module-help]')?.focus();
+                      openHelp();
+                    }}
+                  />
                 ),
               }}
               search={{
@@ -581,7 +699,6 @@ function ShellPage({
                   if (value.trim()) kb.controls.hit('search');
                 },
                 placeholder: t('shell.search'),
-                scope: currentTab?.label ?? title,
                 openLabel: t('shell.search_open'),
               }}
               clock={<Clock initial={serverNow} />}
@@ -590,20 +707,7 @@ function ShellPage({
                 label: t(wide ? 'shell.wide_off' : 'shell.wide_on'),
                 onToggle: toggleWide,
               }}
-              video={
-                topVideo
-                  ? {
-                      label: t('video.top', { title: topVideo.title }),
-                      onClick: () => video.controls.open(topVideo.id),
-                    }
-                  : null
-              }
               bell={<ShellBell />}
-              help={{
-                label: t('shell.help'),
-                title: t('shell.help_title'),
-                onClick: openHelp,
-              }}
               theme={{
                 label: t('shell.theme'),
                 title: t('shell.theme_title'),
@@ -627,7 +731,6 @@ function ShellPage({
             >
               {(leave) => (
                 <PhoneMenu
-                  mode={mode}
                   modules={phone.other}
                   active={moduleId}
                   label={t('shell.other_modules')}
@@ -689,14 +792,7 @@ function ShellPage({
               label={title}
               addActions={actions}
               addLabel={t('btn.add')}
-              onAdd={(actionId) =>
-                setAddRequest((prev) => ({
-                  moduleId: current.id,
-                  actionId,
-                  label: actions.find((a) => a.id === actionId)?.label ?? '',
-                  n: (prev?.n ?? 0) + 1,
-                }))
-              }
+              onAdd={requestAdd}
               Link={NextLink}
             />
           )}

@@ -139,7 +139,7 @@ export function TelegramNoticesBox({
               )}
             </Field>
           </div>
-          <span className="flex basis-full items-start gap-1.5 text-[11.5px] leading-[1.4] text-faint">
+          <span className="flex basis-full items-start gap-1.5 text-[12px] leading-[1.4] text-muted">
             <Icon name="calendar" size="sm" />
             <span>
               {t('tgn.remind.links')}{' '}
