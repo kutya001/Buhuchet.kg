@@ -1,8 +1,11 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
+import { safeErrorMessage } from '@buhuchet/adapters/logger';
 import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import { isValidWebhookSecret } from '@buhuchet/adapters/telegram';
 import { hashSessionToken, isSessionTokenShape, newResetCode } from '@buhuchet/adapters/tokens';
 import {
+  beginTelegramInbox,
+  finishTelegramInbox,
   peekTelegramLink,
   requestTelegramRelink,
   reserveTelegramRelinkAttempt,
@@ -22,6 +25,7 @@ import {
   formatDateRu,
   formatText,
   GROUP_MINE,
+  incomingEntry,
   isLeadTgStart,
   leadTgStartToken,
   loginDenial,
@@ -32,6 +36,7 @@ import {
   telegramName,
   telegramRelinkNeedsCode,
   withOrganization,
+  type InboxStatus,
 } from '@buhuchet/domain';
 import { ApiError, OkResponse } from '@buhuchet/shared';
 import { createMiddleware } from 'hono/factory';
@@ -390,219 +395,297 @@ export function webhookHandler(deps: ApiDeps): RouteHandler<typeof webhookRoute,
       my_chat_member?: unknown;
       widget_query?: unknown;
     };
-    // Галочка и «Обновить» в виджете «Мои отчёты на неделю» (задача Т9). Сбой не роняет вебхук.
-    const widgetQuery = WidgetQuery.safeParse(update.widget_query);
-    if (widgetQuery.success) {
-      const q = widgetQuery.data;
-      try {
-        await handleWidgetQuery(deps, {
-          id: q.id,
-          fromId: q.from.is_bot ? 0 : q.from.id,
-          chatId: q.chat.id,
-          chatType: q.chat.type,
-          messageId: q.message_id,
-          data: q.data,
-        });
-      } catch (err) {
-        deps.logger.error({ err }, 'Telegram: запрос виджета не обработан');
-      }
-      return ok;
+    // Журнал переписки (решение заказчика 17.11.2026): полученное пишется до разбора, итог — после.
+    const track: InboxTrack = { status: 'done', command: false, error: null };
+    const inboxId = await inboxBegin(deps, update);
+    try {
+      return await handleUpdate(deps, update, ok, track);
+    } catch (err) {
+      track.status = 'error';
+      track.error = inboxError(err);
+      throw err;
+    } finally {
+      await inboxFinish(deps, inboxId, track);
     }
-    // Нажатие кнопки под сообщением (поток Т, задача Т1). Сбой не роняет вебхук: иначе Telegram
-    // повторял бы доставку нажатия, а действие могло уже выполниться.
-    const press = ButtonPress.safeParse(update.callback_query);
-    if (press.success) {
-      const q = press.data;
-      try {
-        // «Мои» под сводкой в общем чате фирмы (поток Т, задача Т8) — своё правило, не ядро нажатий;
-        // любое другое нажатие в группе ядро по-прежнему молча отклоняет.
-        const type = q.message?.chat.type;
-        if (
-          q.message &&
-          !q.from.is_bot &&
-          (type === 'group' || type === 'supergroup') &&
-          parseBotPress(q.data ?? '')?.action === GROUP_MINE
-        ) {
-          await handleGroupPress(deps, {
-            callbackId: q.id,
-            fromId: q.from.id,
-            chatId: q.message.chat.id,
-            data: q.data ?? '',
-          });
-          return ok;
-        }
-        const pressed = {
+  };
+}
+
+/** Итог разбора полученного сообщения для журнала переписки. */
+interface InboxTrack {
+  status: Exclude<InboxStatus, 'new'>;
+  /** Бот узнал в тексте команду меню. */
+  command: boolean;
+  error: string | null;
+}
+
+/** Токен бота в тексте ошибки (адрес запроса к Telegram) в журнал не идёт. */
+const BOT_TOKEN_RE = /\d{6,}:[A-Za-z0-9_-]{30,}/g;
+
+/** Текст ошибки для журнала переписки: без значений параметров запроса к базе и без токена бота. */
+function inboxError(err: unknown): string {
+  return safeErrorMessage(err).replace(BOT_TOKEN_RE, '[скрыто]');
+}
+
+/** Сбой разбора: в журнал сервера и в итог полученного сообщения. */
+function failed(deps: ApiDeps, track: InboxTrack, err: unknown, message: string): void {
+  deps.logger.error({ err }, message);
+  track.status = 'error';
+  track.error = inboxError(err);
+}
+
+/**
+ * Записать полученное в журнал переписки (Админка → «Телеграм» → «Журнал»): код и ссылка привязки —
+ * без текста. Сбой журнала разбору не мешает: обновление всё равно обрабатывается.
+ */
+async function inboxBegin(deps: ApiDeps, update: unknown): Promise<string | null> {
+  try {
+    const entry = incomingEntry(update);
+    return entry ? await beginTelegramInbox(deps.db, entry, deps.clock.now()) : null;
+  } catch (err) {
+    deps.logger.error({ err }, 'Telegram: полученное сообщение не записано в журнал');
+    return null;
+  }
+}
+
+async function inboxFinish(deps: ApiDeps, id: string | null, track: InboxTrack): Promise<void> {
+  if (!id) return;
+  try {
+    await finishTelegramInbox(deps.db, id, track);
+  } catch (err) {
+    deps.logger.error({ err }, 'Telegram: итог полученного сообщения не записан в журнал');
+  }
+}
+
+/** Разбор обновления; `track` — что записать итогом в журнал переписки. */
+async function handleUpdate<R>(
+  deps: ApiDeps,
+  update: {
+    message?: unknown;
+    callback_query?: unknown;
+    my_chat_member?: unknown;
+    widget_query?: unknown;
+  },
+  ok: R,
+  track: InboxTrack,
+): Promise<R> {
+  // Галочка и «Обновить» в виджете «Мои отчёты на неделю» (задача Т9). Сбой не роняет вебхук.
+  const widgetQuery = WidgetQuery.safeParse(update.widget_query);
+  if (widgetQuery.success) {
+    const q = widgetQuery.data;
+    try {
+      await handleWidgetQuery(deps, {
+        id: q.id,
+        fromId: q.from.is_bot ? 0 : q.from.id,
+        chatId: q.chat.id,
+        chatType: q.chat.type,
+        messageId: q.message_id,
+        data: q.data,
+      });
+    } catch (err) {
+      failed(deps, track, err, 'Telegram: запрос виджета не обработан');
+    }
+    return ok;
+  }
+  // Нажатие кнопки под сообщением (поток Т, задача Т1). Сбой не роняет вебхук: иначе Telegram
+  // повторял бы доставку нажатия, а действие могло уже выполниться.
+  const press = ButtonPress.safeParse(update.callback_query);
+  if (press.success) {
+    const q = press.data;
+    try {
+      // «Мои» под сводкой в общем чате фирмы (поток Т, задача Т8) — своё правило, не ядро нажатий;
+      // любое другое нажатие в группе ядро по-прежнему молча отклоняет.
+      const type = q.message?.chat.type;
+      if (
+        q.message &&
+        !q.from.is_bot &&
+        (type === 'group' || type === 'supergroup') &&
+        parseBotPress(q.data ?? '')?.action === GROUP_MINE
+      ) {
+        await handleGroupPress(deps, {
           callbackId: q.id,
           fromId: q.from.id,
-          chatId: q.message?.chat.id ?? 0,
-          chatType: q.from.is_bot ? '' : (q.message?.chat.type ?? ''),
-          messageId: q.message?.message_id ?? 0,
+          chatId: q.message.chat.id,
           data: q.data ?? '',
-        };
-        // Telegram контрагента (поток К): кнопки под сообщением клиенту — «Оплатил», «Вопрос бухгалтеру».
-        if (await clientPress(deps, pressed)) return ok;
-        await handleBotPress(deps, pressed);
-      } catch (err) {
-        deps.logger.error({ err }, 'Telegram: нажатие кнопки не обработано');
+        });
+        return ok;
       }
-      return ok;
-    }
-    // Общий чат фирмы (поток Т, задача Т8): подключение по ссылке, «бота удалили», новый номер группы.
-    try {
-      if (await handleGroupUpdate(deps, update)) return ok;
-    } catch (err) {
-      deps.logger.error({ err }, 'Telegram: обновление из группы не обработано');
-      return ok;
-    }
-    const message = PrivateMessage.safeParse(update.message);
-    if (!message.success || message.data.from?.is_bot) return ok;
-    const data = message.data;
-    const { chat, from } = data;
-    const text = data.text ?? null;
-    const reply = async (body: string) => {
-      await sendNow(deps, chat.id, body, 'bot_reply');
-      return ok;
-    };
-
-    const command = text === null ? null : parseStartCommand(text);
-    if (!command) {
-      if (text !== null) {
-        // Telegram контрагента (поток К): «Отключить» от клиента, подключившего чат к контрагенту.
-        if (await clientText(deps, chat.id, text)) return ok;
-        // «Напоминать» — клиент снова включает напоминания о долге (поток К, задача К5).
-        if (await clientDebtOn(deps, chat.id, text)) return ok;
-        // «Код от страницы» — код страницы контрагента в подключённый чат (поток К, доработки
-        // 14.11.2026, блок 6).
-        if (
-          await clientCodeCommand(deps, {
-            chatId: chat.id,
-            fromId: from?.id ?? 0,
-            messageId: data.message_id ?? null,
-            reply: data.reply_to_message != null,
-            text,
-          })
-        ) {
-          return ok;
-        }
-        // Вопрос клиента бухгалтеру — ответом на просьбу бота (поток К, задача К4).
-        if (await clientQuestion(deps, update.message)) return ok;
-      }
-      // Код замены Telegram, если бот ждёт его в этом чате, — раньше ответа на просьбу: шесть цифр не
-      // должны уйти причиной возврата отчёта.
-      const code = text === null ? null : relinkCodeOf(text);
-      if (code && (await confirmRelink(deps, chat.id, code, reply))) return ok;
-      // Команда меню бота: «/today» или подпись кнопки под полем ввода (поток Т, задача Т5) — раньше
-      // ответа на просьбу: «Сегодня» не должно уйти запросом поиска контрагента. Сбой не роняет вебхук.
-      if (text !== null) {
-        try {
-          const handled = await handleBotCommand(deps, {
-            chatId: chat.id,
-            fromId: from?.id ?? 0,
-            messageId: data.message_id ?? null,
-            reply: data.reply_to_message != null,
-            text,
-          });
-          if (handled) return ok;
-        } catch (err) {
-          deps.logger.error({ err }, 'Telegram: команда меню бота не обработана');
-          return ok;
-        }
-      }
-      const incoming = {
-        chatId: chat.id,
-        fromId: from?.id ?? 0,
-        messageId: data.message_id ?? null,
-        replyTo: data.reply_to_message?.message_id ?? null,
-        text,
-        file: await incomingFile(deps, data),
-        caption: data.caption ?? null,
+      const pressed = {
+        callbackId: q.id,
+        fromId: q.from.id,
+        chatId: q.message?.chat.id ?? 0,
+        chatType: q.from.is_bot ? '' : (q.message?.chat.type ?? ''),
+        messageId: q.message?.message_id ?? 0,
+        data: q.data ?? '',
       };
-      // Чек ответом на «Пришлите чек» и файл без просьбы от клиента (поток К, доработки 14.11.2026,
-      // этап 2). Сбой не роняет вебхук.
-      try {
-        if (await clientFile(deps, incoming)) return ok;
-      } catch (err) {
-        deps.logger.error({ err }, 'Telegram: файл контрагента не обработан');
+      // Telegram контрагента (поток К): кнопки под сообщением клиенту — «Оплатил», «Вопрос бухгалтеру».
+      if (await clientPress(deps, pressed)) return ok;
+      await handleBotPress(deps, pressed);
+    } catch (err) {
+      failed(deps, track, err, 'Telegram: нажатие кнопки не обработано');
+    }
+    return ok;
+  }
+  // Общий чат фирмы (поток Т, задача Т8): подключение по ссылке, «бота удалили», новый номер группы.
+  try {
+    if (await handleGroupUpdate(deps, update)) return ok;
+  } catch (err) {
+    failed(deps, track, err, 'Telegram: обновление из группы не обработано');
+    return ok;
+  }
+  const message = PrivateMessage.safeParse(update.message);
+  if (!message.success || message.data.from?.is_bot) return ok;
+  const data = message.data;
+  const { chat, from } = data;
+  const text = data.text ?? null;
+  const reply = async (body: string) => {
+    await sendNow(deps, chat.id, body, 'bot_reply');
+    return ok;
+  };
+
+  const command = text === null ? null : parseStartCommand(text);
+  if (!command) {
+    if (text !== null) {
+      // Telegram контрагента (поток К): «Отключить» от клиента, подключившего чат к контрагенту.
+      if (await clientText(deps, chat.id, text)) return ok;
+      // «Напоминать» — клиент снова включает напоминания о долге (поток К, задача К5).
+      if (await clientDebtOn(deps, chat.id, text)) return ok;
+      // «Код от страницы» — код страницы контрагента в подключённый чат (поток К, доработки
+      // 14.11.2026, блок 6).
+      if (
+        await clientCodeCommand(deps, {
+          chatId: chat.id,
+          fromId: from?.id ?? 0,
+          messageId: data.message_id ?? null,
+          reply: data.reply_to_message != null,
+          text,
+        })
+      ) {
         return ok;
       }
-      // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
-      // Telegram повторял бы доставку, а действие могло уже выполниться.
+      // Вопрос клиента бухгалтеру — ответом на просьбу бота (поток К, задача К4).
+      if (await clientQuestion(deps, update.message)) return ok;
+    }
+    // Код замены Telegram, если бот ждёт его в этом чате, — раньше ответа на просьбу: шесть цифр не
+    // должны уйти причиной возврата отчёта.
+    const code = text === null ? null : relinkCodeOf(text);
+    if (code && (await confirmRelink(deps, chat.id, code, reply))) return ok;
+    // Команда меню бота: «/today» или подпись кнопки под полем ввода (поток Т, задача Т5) — раньше
+    // ответа на просьбу: «Сегодня» не должно уйти запросом поиска контрагента. Сбой не роняет вебхук.
+    if (text !== null) {
       try {
-        const handled = await handleBotReply(deps, incoming);
-        if (handled) return ok;
+        const handled = await handleBotCommand(deps, {
+          chatId: chat.id,
+          fromId: from?.id ?? 0,
+          messageId: data.message_id ?? null,
+          reply: data.reply_to_message != null,
+          text,
+        });
+        if (handled) {
+          track.command = true;
+          return ok;
+        }
       } catch (err) {
-        deps.logger.error({ err }, 'Telegram: ответ на просьбу бота не обработан');
+        failed(deps, track, err, 'Telegram: команда меню бота не обработана');
         return ok;
       }
-      // Файл, которого бот не ждал, остаётся без ответа — как раньше; на текст — подсказка.
-      if (text !== null) await sendBotHint(deps, chat.id);
+    }
+    const incoming = {
+      chatId: chat.id,
+      fromId: from?.id ?? 0,
+      messageId: data.message_id ?? null,
+      replyTo: data.reply_to_message?.message_id ?? null,
+      text,
+      file: await incomingFile(deps, data),
+      caption: data.caption ?? null,
+    };
+    // Чек ответом на «Пришлите чек» и файл без просьбы от клиента (поток К, доработки 14.11.2026,
+    // этап 2). Сбой не роняет вебхук.
+    try {
+      if (await clientFile(deps, incoming)) return ok;
+    } catch (err) {
+      failed(deps, track, err, 'Telegram: файл контрагента не обработан');
       return ok;
     }
-    if (!command.token) {
-      await sendBotHint(deps, chat.id);
+    // Ответ на просьбу бота: файл или текст (поток Т, задача Т2). Сбой не роняет вебхук: иначе
+    // Telegram повторял бы доставку, а действие могло уже выполниться.
+    try {
+      const handled = await handleBotReply(deps, incoming);
+      if (handled) return ok;
+    } catch (err) {
+      failed(deps, track, err, 'Telegram: ответ на просьбу бота не обработан');
       return ok;
     }
-    // Telegram контрагента (поток К): ссылка со страницы контрагента — «/start cp_<токен>».
-    // Испорченная ссылка страницы (ключ не той длины) — тоже клиенту: «ссылка не подходит».
-    if (command.token.startsWith(CP_TG_START_PREFIX)) {
-      await clientStart(
+    // Файл, которого бот не ждал, остаётся без ответа — как раньше; на текст — подсказка. В журнале
+    // переписки такое сообщение — «Не распознано».
+    track.status = 'unknown';
+    if (text !== null) await sendBotHint(deps, chat.id);
+    return ok;
+  }
+  if (!command.token) {
+    track.status = 'unknown';
+    await sendBotHint(deps, chat.id);
+    return ok;
+  }
+  // Telegram контрагента (поток К): ссылка со страницы контрагента — «/start cp_<токен>».
+  // Испорченная ссылка страницы (ключ не той длины) — тоже клиенту: «ссылка не подходит».
+  if (command.token.startsWith(CP_TG_START_PREFIX)) {
+    await clientStart(
+      deps,
+      {
+        chatId: chat.id,
+        username: from?.username ?? null,
+        firstName: from?.first_name ?? null,
+      },
+      cpTgStartToken(command.token),
+    );
+    return ok;
+  }
+  // Telegram заявителя (доработки 14.11.2026, блок 1): ссылка после заявки — «/start l_<ключ>».
+  // Испорченная ссылка заявителя (ключ не той длины) — тоже заявителю: «Ссылка устарела».
+  if (isLeadTgStart(command.token)) {
+    try {
+      await leadTgStart(
         deps,
         {
           chatId: chat.id,
           username: from?.username ?? null,
           firstName: from?.first_name ?? null,
         },
-        cpTgStartToken(command.token),
+        leadTgStartToken(command.token),
       );
-      return ok;
+    } catch (err) {
+      failed(deps, track, err, 'Telegram: «Старт» заявителя не обработан');
     }
-    // Telegram заявителя (доработки 14.11.2026, блок 1): ссылка после заявки — «/start l_<ключ>».
-    // Испорченная ссылка заявителя (ключ не той длины) — тоже заявителю: «Ссылка устарела».
-    if (isLeadTgStart(command.token)) {
-      try {
-        await leadTgStart(
-          deps,
-          {
-            chatId: chat.id,
-            username: from?.username ?? null,
-            firstName: from?.first_name ?? null,
-          },
-          leadTgStartToken(command.token),
-        );
-      } catch (err) {
-        deps.logger.error({ err }, 'Telegram: «Старт» заявителя не обработан');
-      }
-      return ok;
-    }
-    if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
-    const tokenHash = hashSessionToken(command.token);
-    const target = await peekTelegramLink(deps.db, tokenHash);
-    if (!target) return reply(await botText(deps, 'tgLinkInvalid'));
-    // Telegram повторил то же сообщение после привязки или запроса кода — второй раз не отвечаем.
-    if (target.used && (target.linkedChatId === chat.id || target.relinkChatId === chat.id)) {
-      return ok;
-    }
-    if (target.used || target.expired || loginDenial(target)) {
-      return reply(await botText(deps, 'tgLinkInvalid'));
-    }
-
-    const link: LinkChat = {
-      chatId: chat.id,
-      username: from?.username ?? null,
-      firstName: from?.first_name ?? null,
-    };
-    if (telegramRelinkNeedsCode(target, chat.id)) {
-      const asked = await askRelinkCode(deps, target, tokenHash, link, reply);
-      if (asked === 'asked') return ok;
-    }
-    const done = await linked(
-      deps,
-      target,
-      link,
-      (tx) => useTelegramLink(tx, { tokenHash, ...link }),
-      target.relinkFree,
-    );
-    if (!done) return reply(await botText(deps, 'tgLinkInvalid'));
     return ok;
+  }
+  if (!isSessionTokenShape(command.token)) return reply(await botText(deps, 'tgLinkInvalid'));
+  const tokenHash = hashSessionToken(command.token);
+  const target = await peekTelegramLink(deps.db, tokenHash);
+  if (!target) return reply(await botText(deps, 'tgLinkInvalid'));
+  // Telegram повторил то же сообщение после привязки или запроса кода — второй раз не отвечаем.
+  if (target.used && (target.linkedChatId === chat.id || target.relinkChatId === chat.id)) {
+    return ok;
+  }
+  if (target.used || target.expired || loginDenial(target)) {
+    return reply(await botText(deps, 'tgLinkInvalid'));
+  }
+
+  const link: LinkChat = {
+    chatId: chat.id,
+    username: from?.username ?? null,
+    firstName: from?.first_name ?? null,
   };
+  if (telegramRelinkNeedsCode(target, chat.id)) {
+    const asked = await askRelinkCode(deps, target, tokenHash, link, reply);
+    if (asked === 'asked') return ok;
+  }
+  const done = await linked(
+    deps,
+    target,
+    link,
+    (tx) => useTelegramLink(tx, { tokenHash, ...link }),
+    target.relinkFree,
+  );
+  if (!done) return reply(await botText(deps, 'tgLinkInvalid'));
+  return ok;
 }

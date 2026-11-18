@@ -1,5 +1,5 @@
 import { and, eq, isNull, lte, sql } from 'drizzle-orm';
-import type { Db } from './client';
+import type { Db, Tx } from './client';
 import { schedulerJobs, schedulerRuns } from './schema';
 
 /*
@@ -56,7 +56,7 @@ export async function claimJobSlot(
         finishedAt: null,
         ok: null,
         // Прежняя попытка остаётся в строке: Админка → «Запуски» показывает каждую попытку
-        // (docs/decisions.md п. Т-13). Ошибка и «что сделано» дальше — уже новой попытки.
+        // (docs/decisions.md п. Т-15). Ошибка и «что сделано» дальше — уже новой попытки.
         prev: sql`${schedulerRuns.prev} || jsonb_build_array(jsonb_build_object(
           'attempt', ${schedulerRuns.attempts},
           'startedAt', ${schedulerRuns.startedAt},
@@ -157,7 +157,7 @@ export async function failHungJobRuns(
 }
 
 /** Состояние всех задач, которые хоть раз запускались. */
-export async function jobStates(db: Db): Promise<Map<string, JobState>> {
+export async function jobStates(db: Db | Tx): Promise<Map<string, JobState>> {
   const rows = await db.select().from(schedulerJobs);
   return new Map(rows.map((r) => [r.job, r]));
 }

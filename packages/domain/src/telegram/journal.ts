@@ -1,13 +1,13 @@
 import { relinkCodeOf } from '../auth/reset';
 import { CP_TG_MESSAGE_KINDS } from '../contractor-page/telegram-pay';
-import { botPlainText, type BotMessage } from './bot-message';
+import type { BotMessage } from './bot-message';
 import { parseStartCommand } from './messages';
 import { CODE_KINDS, OUTBOX_KINDS, type OutboxKind } from './notify';
 
 /*
  * Журнал переписки бота в обе стороны (решение заказчика 17.11.2026; прототип v132 admin/tg-log.js; ТЗ
  * «Доработки 17.11.2026», блок «Админка: запуски по расписанию и переписка бота», пункт 3;
- * docs/decisions.md п. Т-14). Отправленное — журнал отправок сотрудникам и сообщения клиентам с
+ * docs/decisions.md п. Т-16). Отправленное — журнал отправок сотрудникам и сообщения клиентам с
  * кнопками, полученное — каждое обновление от Telegram, которое бот разбирает. Коды и одноразовые
  * ссылки в журнал не пишутся никогда: вместо текста — «Текст скрыт».
  */
@@ -231,7 +231,12 @@ export function incomingEntry(update: unknown): IncomingEntry | null {
     if (relinkCodeOf(text)) return { ...base, kind: 'code', hide: 'code', replyTo };
     const shown = body(text);
     if (shown === null) return null;
-    return { ...base, kind: text.trim().startsWith('/') ? 'command' : 'text', text: shown, replyTo };
+    return {
+      ...base,
+      kind: text.trim().startsWith('/') ? 'command' : 'text',
+      text: shown,
+      replyTo,
+    };
   }
   const document = dict(message.document);
   const photo = Array.isArray(message.photo) ? message.photo.map(dict) : [];
@@ -252,14 +257,19 @@ export function incomingEntry(update: unknown): IncomingEntry | null {
   };
 }
 
-/** Текст строки журнала одной строкой (столбец «Текст»); null — текст скрыт или его нет. */
+/**
+ * Текст отправленного сообщения одной строкой (столбец «Текст»); null — текст скрыт или его нет. У
+ * сообщения без своего текста (сообщения клиентам) — заголовок, подзаголовок и текст описания, без
+ * таблиц: так же считает запрос списка.
+ */
 export function journalLine(entry: {
   hide: JournalHide | null;
   text: string | null;
   payload: BotMessage | null;
 }): string | null {
   if (entry.hide) return null;
-  const text = entry.text ?? (entry.payload ? botPlainText(entry.payload) : null);
+  const p = entry.payload;
+  const text = entry.text ?? (p ? [p.heading, p.sub, p.text].filter(Boolean).join(' ') : null);
   if (text === null) return null;
   return text.replace(/\s+/g, ' ').trim() || null;
 }

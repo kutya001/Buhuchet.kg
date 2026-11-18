@@ -12,7 +12,7 @@ import {
 
 /*
  * Админка → «Запуски» (решение заказчика 17.11.2026; прототип v132 admin/runs.js; docs/decisions.md
- * п. Т-13): задачи по расписанию и журнал их запусков. Задачи — не таблица базы, а список из кода
+ * п. Т-15): задачи по расписанию и журнал их запусков. Задачи — не таблица базы, а список из кода
  * (`packages/api/src/jobs`): строки с уже посчитанным состоянием идут в общий механизм списков одним
  * параметром (`jsonb_to_recordset`), как методы API в «Технической документации». Запуски — таблица
  * `scheduler_runs`: строка хранит последнюю попытку, прежние — в `prev`; в журнале каждая попытка —
@@ -102,10 +102,9 @@ export const JOB_COLUMNS: ListColumns = {
     label: 'runs.col.state',
     value: field('state'),
     display: field('state_text'),
-    sort: {
-      value: sql`${field('state_rank')}::text || ${field('title')}`,
-      text: true,
-    },
+    // Только порядок состояний: значения столбца для фильтра группируются и по выражению сортировки,
+    // с названием задачи в нём каждая задача стала бы своим значением.
+    sort: { value: field('state_rank'), text: false },
   },
   what: { type: 'text', label: 'runs.col.what', value: field('what') },
   name: { type: 'text', label: 'runs.col.name', value: field('name') },
@@ -113,7 +112,7 @@ export const JOB_COLUMNS: ListColumns = {
 
 /** Сначала «Падает» и «Не запускалась» (прототип `sort: {key: 'st', dir: 1}`). */
 const JOB_SORT: ListSort = { key: 'st', dir: 'asc' };
-const JOB_NATURAL = [field('name')];
+const JOB_NATURAL = [field('title'), field('name')];
 
 const fromOf =
   (tx: Tx, source: SQL): ListFrom =>
@@ -200,7 +199,10 @@ export async function jobRunFacts(
   names: readonly string[],
   since: Date,
 ): Promise<
-  Map<string, { lastAt: Date | null; lastStatus: RunStatus | null; okAt: Date | null; errors: number }>
+  Map<
+    string,
+    { lastAt: Date | null; lastStatus: RunStatus | null; okAt: Date | null; errors: number }
+  >
 > {
   const out = new Map<
     string,
@@ -274,9 +276,14 @@ export interface RunTexts {
 }
 
 /** Журнал запусков: каждая попытка — строка (последняя — из столбцов, прежние — из `prev`). */
-function runSource(jobs: readonly RunJobText[]): SQL {
+function runSource(jobs: readonly RunJobText[], t: RunTexts): SQL {
   const titles = JSON.stringify(jobs.map((j) => ({ name: j.name, title: j.title, done: j.done })));
+  // «Длительность» и «Что сделано» словами — столбцы источника: в значении столбца списка параметров
+  // запроса быть не должно (по нему группируют), а тексты словаря — параметры.
   return sql`(
+    select b.*, ${durationText(t)} as dur_text, ${doneText(t)} as done_text,
+      case when b.ms < 60000 then round(b.ms / 100.0) * 100 else round(b.ms / 1000.0) * 1000 end as dur_sort
+    from (
     select a.job, a.slot, a.attempt, a.started_at, a.finished_at, a.status, a.error, a.done,
       coalesce(j.title, a.job) as title, j.done as done_tpl,
       (extract(epoch from a.finished_at - a.started_at) * 1000)::bigint as ms
@@ -292,13 +299,14 @@ function runSource(jobs: readonly RunJobText[]): SQL {
     ) a
     left join jsonb_to_recordset(${titles}::jsonb) as j(name text, title text, done text)
       on j.name = a.job
+    ) b
   ) as r`;
 }
 
 const STATUSES: readonly RunStatus[] = ['ok', 'error', 'running'];
 
 function durationText(t: RunTexts): SQL {
-  const ms = field('ms');
+  const ms = sql.raw('b.ms');
   const secs = sql`replace(regexp_replace(round(${ms} / 1000.0, 1)::text, '\\.0$', ''), '.', ',')`;
   const whole = sql`round(${ms} / 1000.0)::bigint`;
   return sql`case
@@ -310,9 +318,9 @@ function durationText(t: RunTexts): SQL {
 
 function doneText(t: RunTexts): SQL {
   return sql`case
-    when ${field('done')} is null then ''
-    when ${field('done')} = 0 then ${t.nothing}
-    else replace(coalesce(${field('done_tpl')}, '{n}'), '{n}', ${field('done')}::text)
+    when b.done is null then ''
+    when b.done = 0 then ${t.nothing}
+    else replace(coalesce(b.done_tpl, '{n}'), '{n}', b.done::text)
   end`;
 }
 
@@ -336,12 +344,12 @@ export function runColumns(t: RunTexts): ListColumns {
         sql` `,
       )} else ${field('status')} end`,
     },
-    // Значение — секунды с десятыми: числовой фильтр «от и до» — в секундах.
+    // Текстом, как в прототипе («0,4 с», «1 мин 30 с»); порядок — по времени.
     dur: {
-      type: 'int',
+      type: 'text',
       label: 'runs.col.dur',
-      value: sql`round(${field('ms')} / 1000.0, 1)`,
-      display: durationText(t),
+      value: field('dur_text'),
+      sort: { value: field('dur_sort'), text: false },
     },
     tr: {
       type: 'enum',
@@ -350,7 +358,13 @@ export function runColumns(t: RunTexts): ListColumns {
       display: sql`replace(${t.attempt}, '{n}', ${field('attempt')}::text)`,
       sort: { value: field('attempt'), text: false },
     },
-    done: { type: 'int', label: 'runs.col.done', value: field('done'), display: doneText(t) },
+    // «Отправлено сообщений: 3», «Нечего делать» — текстом; порядок — по числу.
+    done: {
+      type: 'text',
+      label: 'runs.col.done',
+      value: field('done_text'),
+      sort: { value: field('done'), text: false },
+    },
     err: { type: 'text', label: 'runs.col.err', value: sql`coalesce(${field('error')}, '')` },
     slot: { type: 'datetime', label: 'runs.col.slot', value: field('slot') },
     end: { type: 'datetime', label: 'runs.col.end', value: field('finished_at') },
@@ -401,7 +415,7 @@ export function listRunsPage(
   tx: Tx,
   o: { query: ListQuery; jobs: readonly RunJobText[]; texts: RunTexts; scope: RunScope },
 ) {
-  const source = runSource(o.jobs);
+  const source = runSource(o.jobs, o.texts);
   return selectListPage({
     query: o.query,
     columns: runColumns(o.texts),
@@ -428,7 +442,7 @@ export function listRunValues(
     columns: runColumns(o.texts),
     key: o.key,
     scope: runScope(o.scope),
-    from: fromOf(tx, runSource(o.jobs)),
+    from: fromOf(tx, runSource(o.jobs, o.texts)),
     q: o.q,
   });
 }
@@ -450,7 +464,7 @@ export function exportRuns(
     natural: RUN_NATURAL,
     defaultSort: RUN_SORT,
     scope: runScope(o.scope),
-    from: fromOf(tx, runSource(o.jobs)),
+    from: fromOf(tx, runSource(o.jobs, o.texts)),
   });
 }
 

@@ -69,9 +69,11 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
       continue;
     }
     let error: string | null = null;
+    let done: number | null = null;
     const started = Date.now();
     try {
-      await job.run(ctx, slot);
+      const result = await job.run(ctx, slot);
+      done = typeof result === 'number' ? result : null;
       // Чтобы по журналу стенда и рабочего сайта было видно, что задачи действительно идут.
       ctx.logger.info(
         { job: job.name, slot: slot.toISOString(), attempt, ms: Date.now() - started },
@@ -92,6 +94,7 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
       attempt,
       now: ctx.clock.now(),
       error,
+      done,
     });
     if (recorded) await watch(ctx, job.name, () => afterAttempt(ctx, job.name, error));
     result.ran.push({ job: job.name, slot: slot.toISOString(), ok: error === null });

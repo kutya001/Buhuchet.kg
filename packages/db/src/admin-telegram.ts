@@ -35,7 +35,7 @@ import {
 
 /*
  * Админка → «Телеграм» → «Журнал» и «Рассылка» (ТЗ «Админка» → «Модуль Телеграмм»; прототип
- * admin/telegram.js и admin/tg-log.js; задача 2.41, docs/decisions.md п. Д-13, Т-14). Журнал переписки
+ * admin/telegram.js и admin/tg-log.js; задача 2.41, docs/decisions.md п. Д-13, Т-16). Журнал переписки
  * бота всех организаций в обе стороны — представление `app.admin_telegram_journal` (миграция 0163):
  * отправленное сотрудникам и в общий чат, сообщения клиентам контрагентов с кнопками и всё полученное.
  * Строки отдаются, только если в контексте — незаблокированный администратор платформы
@@ -240,7 +240,12 @@ export function adminTelegramLogColumns(t: ListTexts, stand = false): ListColumn
       value: v.kind,
       display: caseOf(v.kind, JOURNAL_KINDS, (k) => t(journalKindKey(k))),
     },
-    txt: { type: 'text', label: 'tgadm.col.txt', value: sql`coalesce(${v.text}, '')`, display: lineText(t) },
+    txt: {
+      type: 'text',
+      label: 'tgadm.col.txt',
+      value: sql`coalesce(${v.text}, '')`,
+      display: lineText(t),
+    },
     org: {
       type: 'enum',
       label: 'tgadm.col.org',
@@ -461,17 +466,19 @@ export async function adminTelegramMessage(
           .orderBy(asc(v.createdAt), asc(v.id))
           .limit(20)
       : [];
-  const at = sql`${own.createdAt.toISOString()}::timestamptz`;
+  // Место строки — её же значения из базы: момент в JavaScript — до миллисекунд, а в базе — до микросекунд,
+  // и со сравнением по округлённому моменту строка оказалась бы «позже» самой себя.
+  const self = sql`(select j.created_at, j.id from app.admin_telegram_journal j where j.id = ${own.id}::uuid limit 1)`;
   const [prev] = await tx
     .select({ id: v.id })
     .from(v)
-    .where(and(inChat, sql`(${v.createdAt}, ${v.id}) < (${at}, ${own.id}::uuid)`))
+    .where(and(inChat, sql`(${v.createdAt}, ${v.id}) < ${self}`))
     .orderBy(desc(v.createdAt), desc(v.id))
     .limit(1);
   const [next] = await tx
     .select({ id: v.id })
     .from(v)
-    .where(and(inChat, sql`(${v.createdAt}, ${v.id}) > (${at}, ${own.id}::uuid)`))
+    .where(and(inChat, sql`(${v.createdAt}, ${v.id}) > ${self}`))
     .orderBy(asc(v.createdAt), asc(v.id))
     .limit(1);
   return {

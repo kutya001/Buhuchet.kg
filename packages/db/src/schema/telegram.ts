@@ -248,7 +248,7 @@ export const telegramOutbox = pgTable(
       .on(t.orgId, t.nextAt)
       .where(sql`${t.status} = 'pending'`),
     index('telegram_outbox_org_created_idx').on(t.orgId, t.createdAt),
-    // Журнал переписки Админки (docs/decisions.md п. Т-14): период по всем организациям и «Вся
+    // Журнал переписки Админки (docs/decisions.md п. Т-16): период по всем организациям и «Вся
     // переписка» одного чата.
     index('telegram_outbox_created_idx').on(t.createdAt),
     index('telegram_outbox_chat_created_idx').on(t.chatId, t.createdAt),
@@ -478,7 +478,7 @@ export const telegramWidgets = pgTable(
 
 /**
  * Что бот получил (решение заказчика 17.11.2026; прототип v132 admin/tg-log.js; docs/decisions.md
- * п. Т-14): нажатие кнопки, команда, текст, файл, код, ссылка привязки, «бота добавили в чат». Строку
+ * п. Т-16): нажатие кнопки, команда, текст, файл, код, ссылка привязки, «бота добавили в чат». Строку
  * пишет вебхук до разбора обновления, итог — после. Код и одноразовая ссылка идут без текста: его не
  * получает и функция базы. Роль приложения таблицу не видит и не меняет: пишут функции
  * `app.telegram_inbox_begin` и `app.telegram_inbox_finish`, читает администратор платформы через

@@ -1,6 +1,6 @@
 /*
  * Админка → «Запуски» (решение заказчика 17.11.2026; прототип v132 admin/runs.js; ТЗ «Доработки
- * 17.11.2026», блок «Админка: запуски по расписанию и переписка бота»; docs/decisions.md п. Т-13):
+ * 17.11.2026», блок «Админка: запуски по расписанию и переписка бота»; docs/decisions.md п. Т-15):
  * задачи по расписанию и журнал их запусков. Только просмотр.
  */
 
@@ -119,10 +119,13 @@ export function cronEveryMinutes(every: CronEvery): number {
 }
 
 /** Длительность запуска для экрана: до минуты — секунды с десятыми, дольше — минуты и секунды. */
-export function runDuration(ms: number | null): { kind: 's'; s: string } | { kind: 'm'; m: number; s: number } | null {
+export function runDuration(
+  ms: number | null,
+): { kind: 's'; s: string } | { kind: 'm'; m: number; s: number } | null {
   if (ms === null || !Number.isFinite(ms) || ms < 0) return null;
   const seconds = ms / 1000;
-  if (seconds < 60) return { kind: 's', s: String(Math.round(seconds * 10) / 10).replace('.', ',') };
+  if (seconds < 60)
+    return { kind: 's', s: String(Math.round(seconds * 10) / 10).replace('.', ',') };
   const whole = Math.round(seconds);
   return { kind: 'm', m: Math.floor(whole / 60), s: whole % 60 };
 }

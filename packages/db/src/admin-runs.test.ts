@@ -32,7 +32,11 @@ const TEXTS: RunTexts = {
   minutes: '{m} мин {s} с',
 };
 const JOBS = [
-  { name: 'telegram.send', title: 'Отправка сообщений Telegram', done: 'Отправлено сообщений: {n}' },
+  {
+    name: 'telegram.send',
+    title: 'Отправка сообщений Telegram',
+    done: 'Отправлено сообщений: {n}',
+  },
   { name: 'files.storage-retry', title: 'Повторное удаление файлов', done: 'Сделано: {n}' },
 ];
 const SLOT = new Date('2026-11-07T04:00:00Z');
@@ -114,7 +118,14 @@ describe.skipIf(!databaseAvailable())('Админка → «Запуски» (п
     // Число у неудачи не пишется: упавшая попытка не «сделала» ничего.
     const slot = at(40);
     await claimJobSlot(t.app.db, { job: 'x.fail', slot, now: slot, ...retry });
-    await finishJobRun(t.app.db, { job: 'x.fail', slot, attempt: 1, now: slot, error: 'e', done: 9 });
+    await finishJobRun(t.app.db, {
+      job: 'x.fail',
+      slot,
+      attempt: 1,
+      now: slot,
+      error: 'e',
+      done: 9,
+    });
     const [row] = await t.admin.db
       .select({ done: schedulerRuns.done })
       .from(schedulerRuns)
@@ -181,12 +192,19 @@ describe.skipIf(!databaseAvailable())('Админка → «Запуски» (п
       }),
     );
     expect(file.rows.slice(0, 3)).toEqual([
-      ['Повторное удаление файлов', 'Ошибка', 3, '1 из 3', null, 'S3: timeout'],
-      ['Отправка сообщений Telegram', 'Успешно', 61, '1 из 3', 0, null],
-      ['Отправка сообщений Telegram', 'Успешно', 61, '1 из 3', 5, null],
+      ['Повторное удаление файлов', 'Ошибка', '3 с', '1 из 3', null, 'S3: timeout'],
+      ['Отправка сообщений Telegram', 'Успешно', '1 мин 1 с', '1 из 3', 'Нечего делать', null],
+      [
+        'Отправка сообщений Telegram',
+        'Успешно',
+        '1 мин 1 с',
+        '1 из 3',
+        'Отправлено сообщений: 5',
+        null,
+      ],
     ]);
-    // Числовые столбцы уходят в Excel числами: длительность — в секундах, «Что сделано» — числом записей.
-    expect(file.rows[4]![4]).toBe(2);
+    // «Длительность» и «Что сделано» уходят в Excel текстом, как на экране (в прототипе столбцы текстовые).
+    expect(file.rows[4]![4]).toBe('Сделано: 2');
   });
 
   it('последний запуск, последний успех и ошибки за период — по всем попыткам', async () => {
