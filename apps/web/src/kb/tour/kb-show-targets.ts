@@ -69,8 +69,9 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
     '[data-window-foot] [data-report-button="submit"] || [data-window-foot] [data-report-button="confirm"]',
   // Задачи: легенда «на день / на месяц».
   '#mbody .kd-legend': '[data-task-legend]',
-  // Проекты контрагентов: «Записать оплату» в карточке проекта.
-  '#pj-pay': '[data-pj-pay]',
+  // Проекты контрагентов: «Записать оплату» в карточке проекта — в блоке «Оплаты» или, на вкладке
+  // «Главное» (карточка открывается на ней, прототип v136), главной кнопкой внизу.
+  '#pj-pay': '[data-pj-pay] || [data-window-foot] [data-pj-main="pay"]',
   // Показатели контрагентов: месяц и период, таблица ввода (на телефоне — плитки), настройка.
   '#mbody .kpi-bar': 'main [role=group]:has([data-kpi-month-pick]) || main [data-kpi-period]',
   '#mbody .kt || #mbody .gcards': 'main [data-kpi-table] || main :has(> [data-kpi-tile])',

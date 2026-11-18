@@ -340,6 +340,9 @@ test.describe('Этап 2: финансовые операции по контр
     await win.locator('[data-fin-more]').click();
     await page.getByRole('menuitem', { name: 'Удалить' }).click();
     const del = page.getByRole('dialog', { name: 'Удалить операцию?' });
+    // Прототип v136: вопроса с суммой нет (сумма — в шапке окна оплаты), только что будет с записью.
+    await expect(del).toContainText('Запись останется в журнале с отметкой «Удалена».');
+    await expect(del).not.toContainText(/ сом\?/);
     await del.locator('[data-fin-reason]').fill('дубль');
     await del.getByRole('button', { name: 'Удалить' }).click();
     await expect(del).toBeHidden();

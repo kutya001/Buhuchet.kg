@@ -82,8 +82,6 @@ export const FINANCE_TEXTS = {
   'fin.corr.done': { ru: 'Обратная запись сделана', section: S },
   // Окно операции
   'fin.op.title': { ru: '{kind} {amount}', section: S },
-  'fin.op.kind': { ru: 'Тип операции', section: S },
-  'fin.op.contractor': { ru: 'Контрагент', section: S },
   'fin.op.date': { ru: 'Дата', section: S },
   'fin.op.amount': { ru: 'Сумма', section: S },
   'fin.op.tax': { ru: 'На налоги', section: S },
@@ -108,7 +106,6 @@ export const FINANCE_TEXTS = {
   'fin.op.alloc_advance': { ru: 'Аванс, не распределён', section: S },
   'fin.op.total': { ru: 'Итого', section: S },
   'fin.op.corrections': { ru: 'Обратные записи', section: S },
-  'fin.op.history': { ru: 'История изменений', section: S },
   'fin.op.history_empty': { ru: 'Изменений не было', section: S },
   'fin.op.delete': { ru: 'Удалить', section: S },
   'fin.op.correction': { ru: 'Обратная запись', section: S },

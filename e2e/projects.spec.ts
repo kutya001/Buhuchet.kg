@@ -236,8 +236,13 @@ test.describe('Этап 2: проекты контрагентов', () => {
     // «Записать оплату»).
     await expect(card.locator('[data-pj-works-short]')).toHaveText('0 из 1');
     await expect(card).toContainText(/Запланировано\s*50\s000\sсом/);
-    await expect(card.locator('[data-pj-main="pay"]')).toBeVisible();
     await expect(card.getByRole('button', { name: 'Готово', exact: true })).toHaveCount(0);
+    // Главная кнопка открывает то же окно оплаты, что «Записать оплату» в блоке «Оплаты».
+    await card.locator('[data-pj-main="pay"]').click();
+    const payDlg = page.getByRole('dialog', { name: 'Оплата по проекту' });
+    await expect(payDlg).toContainText('Осталось получить 50 000 сом');
+    await payDlg.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(payDlg).toBeHidden();
 
     await expandCard(card);
     await card.locator('ol[data-status-scale] button[title="Перевести в «В работе»"]').click();
@@ -272,6 +277,52 @@ test.describe('Этап 2: проекты контрагентов', () => {
       items: { name: string; status: string }[];
     };
     expect(saved.items).toEqual([expect.objectContaining({ name, status: 'planned' })]);
+  });
+
+  test('(доработки 17.11.2026, карточка проекта) у проекта без стоимости внизу карточки следующий шаг: «В работу» переводит сразу, без вопроса, после него кнопка — «Завершить»; у завершённого проекта следующего шага нет', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Шаг');
+    const cpName = `ОсОО «${word}»`;
+    const cp = await newContractor(request, origin, { name: cpName, tariffAmount: 0 });
+    const name = `Сверка с налоговой ${word}`;
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/projects/active');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    await add(page);
+    const dlg = page.getByRole('dialog', { name: 'Новый проект' });
+    await dlg.locator('[data-pd-name]').fill(name);
+    await pickContractor(dlg.locator('[data-pd-cp]'), cp.inn);
+    await dlg.locator('[data-pd-ok]').click();
+    await expect(dlg).toBeHidden();
+
+    const card = page.getByRole('dialog', { name });
+    await expect(card.locator('[data-project-card] [data-status-line]')).toBeVisible();
+    // Стоимости нет — «Записать оплату» главной кнопкой не становится: внизу шаг по шкале.
+    await expect(card.locator('[data-pj-main="pay"]')).toHaveCount(0);
+    const start = card.locator('[data-pj-main="in_progress"]');
+    await expect(start).toHaveText('В работу');
+    await start.click();
+    // Прототип `pj-next`: статус меняется сразу; вопрос — только у шага на шкале.
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Статус проекта: В работе' }),
+    ).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /^Перевести проект/ })).toHaveCount(0);
+    const finish = card.locator('[data-pj-main="done"]');
+    await expect(finish).toHaveText('Завершить');
+    await finish.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Статус проекта: Завершён' }),
+    ).toBeVisible();
+    await expect(card.locator('[data-pj-main]')).toHaveCount(0);
+    const saved = (await (await request.get(`/api/contractors/${cp.id}/projects`)).json()) as {
+      items: { name: string; status: string }[];
+    };
+    expect(saved.items).toEqual([expect.objectContaining({ name, status: 'done' })]);
   });
 
   test('(п. 66, транш проекта) транш 50 000 сом, изменённый на 45 000 сом с причиной, уменьшает «получено» проекта; без причины сумма не меняется', async ({

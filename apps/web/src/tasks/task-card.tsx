@@ -129,6 +129,7 @@ function Audit({ who, at }: { who: string | null; at: string }) {
  * Если исполнитель — сам постановщик, его имени нет (свою задачу он не подтверждает); исполнителю в
  * пояснении — «Свою задачу подтвердить нельзя».
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-83
 function PendingNote({
   t,
   task,

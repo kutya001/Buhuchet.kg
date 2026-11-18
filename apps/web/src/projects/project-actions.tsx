@@ -363,6 +363,7 @@ export function useProjectActions(): {
     card: {
       menu: (p) => entries(p, true),
       onStep: (p, to) => setAskStep({ p, to: to as ProjectStatus }),
+      onNext: (p, to) => void move(p, to as ProjectStatus),
       onBack: (p, to) => startBack(p, to as ProjectStatus),
       onTask: taskFor,
       onOpenTask: openTask,
@@ -375,6 +376,7 @@ export function useProjectActions(): {
 interface CardHandlers {
   menu: (p: ProjectCard) => ActionEntry[];
   onStep: (p: ProjectCard, to: string) => void;
+  onNext: (p: ProjectCard, to: string) => void;
   onBack: (p: ProjectCard, to: string) => void;
   onTask: (p: ProjectCard) => void;
   onOpenTask: (taskId: string) => void;

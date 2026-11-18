@@ -382,6 +382,7 @@ export function ProjectCardDialog({
   onClose,
   menu,
   onStep,
+  onNext,
   onBack,
   onTask,
   onOpenTask,
@@ -393,6 +394,8 @@ export function ProjectCardDialog({
   menu: (p: ProjectCard) => ActionEntry[];
   /** Шаг вперёд по шкале — после вопроса. */
   onStep: (p: ProjectCard, to: string) => void;
+  /** Следующий шаг кнопкой внизу — сразу, как пункт «Действий» (прототип `pj-next`, `setProjStatus`). */
+  onNext: (p: ProjectCard, to: string) => void;
   /** Откат на шаг — окно с причиной. */
   onBack: (p: ProjectCard, to: string) => void;
   /** «Задача» в блоке «Задачи». */
@@ -495,7 +498,7 @@ export function ProjectCardDialog({
           type="button"
           data-pj-main={next}
           className={buttonClass('cta')}
-          onClick={() => onStep(p, next)}
+          onClick={() => onNext(p, next)}
         >
           <Icon name={statusPillView(t, 'project', next).icon} size="sm" />
           {t(next === 'done' ? 'proj.act.finish' : 'proj.act.start')}
