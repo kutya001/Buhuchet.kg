@@ -31,18 +31,18 @@ import { BrandIntro, skipNextIntro, usePageLoad } from '../shell/brand-intro';
 import { UiProviders } from '../shell/ui-providers';
 import {
   BalanceIcon,
+  BgSpiral,
   delay,
   Emblem,
   FeatureIcon,
   HeroBg,
   LandLogo,
-  ScrollPath,
   Shield,
   SpiralIcon,
   type EmblemPart,
 } from './landing-art';
 import type { DemoScreens } from './landing-data';
-import { playTile, reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
+import { featureChips, reducedMotion, startLandingFx, type LandingFx } from './landing-fx';
 import { LeadForm, LeadSentBox, type LeadSentTg } from './lead-form';
 import { CardScreen, DeskScreen, PhoneScreen } from './mini-screens';
 import './landing.css';
@@ -110,7 +110,6 @@ const NAV = [
 
 const N3 = [1, 2, 3] as const;
 const N4 = [1, 2, 3, 4] as const;
-const N12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
 /** Символы герба: значок и цвет строки списка (прототип `EI`); у кривой Бернулли значок — спираль. */
 const EMBLEM: readonly (readonly [EmblemPart, string, IconName | null, 1 | 2 | 3])[] = [
@@ -124,7 +123,29 @@ const WHO: readonly [IconName, string][] = [
   ['user', 'g'],
   ['chart', 'p'],
 ];
-const FEATURE_TONES = ['', 'g', 'p', '', 'y', 'g', 'p', '', 'y', 'g', 'p', ''];
+/**
+ * «Возможности» (прототип v144, решение заказчика 18.11.2026): сверху шесть главных функций, остальные
+ * открывает «Все функции»; цвет подложки значка — по номеру функции (`FTOP`, `FREST`, `FCL` прототипа).
+ */
+const FEATURES_TOP = [1, 2, 13, 4, 6, 8] as const;
+const FEATURES_REST = [3, 5, 7, 10, 14, 9, 11, 12] as const;
+type FeatureNo = (typeof FEATURES_TOP)[number] | (typeof FEATURES_REST)[number];
+const FEATURE_TONES: Record<FeatureNo, string> = {
+  1: '',
+  2: 'g',
+  3: 'p',
+  4: '',
+  5: 'y',
+  6: 'g',
+  7: 'p',
+  8: '',
+  9: 'y',
+  10: 'g',
+  11: 'p',
+  12: '',
+  13: 'y',
+  14: 'p',
+};
 /** Пункты «Безопасность и данные» (прототип v70: без «Серверы в Европе…»). */
 const SECURITY: readonly (readonly [1 | 2 | 3 | 4 | 5, IconName])[] = [
   [1, 'shield'],
@@ -203,7 +224,6 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
   const [bal, setBal] = useState(false);
   const [more, setMore] = useState<Partial<Record<BlockId, boolean>>>({});
   const [hl, setHl] = useState<EmblemPart | ''>('');
-  const [tiles, setTiles] = useState<ReadonlySet<number>>(new Set());
   const root = useRef<HTMLDivElement>(null);
   // Строка BOOT — в разметке с сервера, при загрузке страницы.
   const boot = usePageLoad();
@@ -283,6 +303,16 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
   }, []);
   const revealBlocks = useCallback(() => fx.current?.reveal(), []);
 
+  /**
+   * Заявка отправлена: экран «Заявка отправлена» с подключением Telegram — на виду, а не выше экрана
+   * (прототип v133, оставлено в v143).
+   */
+  const onLeadSent = (phone: string, tg: LeadSentTg) => {
+    setSent({ phone, tg });
+    requestAnimationFrame(() =>
+      document.getElementById('lp-lead')?.scrollIntoView({ block: 'start', behavior: 'auto' }),
+    );
+  };
   const toggleMore = (id: BlockId) => setMore((m) => ({ ...m, [id]: !m[id] }));
   /** Символ герба: нажатие на строку списка — подсветить или снять, на рисунок — подсветить; весы взвешивают. */
   const pick = (part: EmblemPart, fromEmblem = false) => {
@@ -290,12 +320,6 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
     setHl(next);
     if (next === 'scales') fx.current?.weigh();
   };
-  const toggleTile = (i: number) =>
-    setTiles((s) => {
-      const next = new Set(s);
-      if (!next.delete(i)) next.add(i);
-      return next;
-    });
   /** «Что меняется»: карточка переворачивается между «Было» и «Стало». */
   const flip = (e: MouseEvent<HTMLButtonElement>) => e.currentTarget.classList.toggle('now');
 
@@ -391,6 +415,24 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
     <CardScreen key="card" t={t} d={screens} />,
     <PhoneScreen key="phone" t={t} d={screens} today={today} />,
   ];
+  const featureCard = (n: FeatureNo, i: number) => (
+    <article key={n} className="lp-fcd rv" style={delay(i % 3)} data-feature={n}>
+      <div className={`lp-fsc lp-ico ${FEATURE_TONES[n]}`}>
+        <span className="lp-fbig">
+          <FeatureIcon n={n} />
+        </span>
+        <span className="lp-fch">
+          {featureChips(t(`land.feat.${n}.x` as const)).map((chip, j) => (
+            <i key={j} style={{ '--j': j } as CSSProperties}>
+              {chip}
+            </i>
+          ))}
+        </span>
+      </div>
+      <h3>{t(`land.feat.${n}.t` as const)}</h3>
+      <p>{t(`land.feat.${n}.d` as const)}</p>
+    </article>
+  );
   const faqItem = (n: 1 | 2 | 3 | 4 | 5 | 6 | 7) => (
     <details key={n} className="rv" style={delay((n - 1) % 3)}>
       <summary>{t(`land.faq.${n}.q` as const)}</summary>
@@ -402,6 +444,8 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
     <div ref={root} className="land" onKeyDown={onKeyDown} suppressHydrationWarning>
       {boot ? <script dangerouslySetInnerHTML={{ __html: BOOT }} /> : null}
       <BrandIntro onReveal={revealBlocks} />
+      {/* Спираль логотипа на фоне: выходит из знака в шапке, при прокрутке поворачивается */}
+      <BgSpiral />
       {guest.overlay}
       {stand ? <div className="lp-test">{t('land.test')}</div> : null}
       {/* Шапка */}
@@ -470,8 +514,6 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
           </a>
         </div>
       </header>
-      {/* Линия Бернулли через всю страницу: рисуется по прокрутке, на конце — солнце */}
-      <ScrollPath />
       <main>
         {/* Первый экран: заголовок, одна строка, две кнопки, картинка; внизу «Листайте вниз» */}
         <section className="lp-hero lp-live" id="lp-hero">
@@ -639,35 +681,18 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
             {moreButton('change')}
           </>,
         )}
-        {/* 4. Возможности — плитки встают волной; у каждой функции свой значок со своей анимацией; плитка
-            раскрывается нажатием */}
+        {/* 4. Возможности — у каждой функции живая карточка: значок со своей анимацией, примеры
+            выскакивают по очереди, описание видно сразу; сверху шесть главных, остальные — по «Все функции» */}
         {block(
           'features',
           'lp-feat lp-live alt',
           t('land.feat.title'),
           <>
-            <div className="lp-tiles">
-              {N12.map((n, i) => (
-                <button
-                  key={n}
-                  type="button"
-                  className="lp-tile rv"
-                  style={delay((i % 4) + Math.floor(i / 4))}
-                  aria-expanded={tiles.has(i)}
-                  onClick={(e) => {
-                    if (!tiles.has(i)) playTile(e.currentTarget);
-                    toggleTile(i);
-                  }}
-                >
-                  <span className={`lp-ico ${FEATURE_TONES[i]!}`}>
-                    <FeatureIcon n={n} />
-                  </span>
-                  <b>{t(`land.feat.${n}.t` as const)}</b>
-                  <DetailsLine>{t(`land.feat.${n}.d` as const)}</DetailsLine>
-                </button>
-              ))}
-            </div>
-            {moreButton('features')}
+            <div className="lp-fgrid">{FEATURES_TOP.map(featureCard)}</div>
+            <Details>
+              <div className="lp-fgrid lp-frest">{FEATURES_REST.map(featureCard)}</div>
+            </Details>
+            {moreButton('features', t('land.feat.all', { число: FEATURES_REST.length }))}
           </>,
         )}
         {/* 5. Как это выглядит — экран выпрямляется, как крышка ноутбука, пока блок въезжает */}
@@ -872,11 +897,7 @@ function LandingPage({ screens, numbers, codes, videos, today, stand, version }:
               {sent ? (
                 <LeadSentBox phone={sent.phone} tg={sent.tg} />
               ) : (
-                <LeadForm
-                  codes={codes}
-                  onSent={(phone, tg) => setSent({ phone, tg })}
-                  onConsent={() => setConsent(true)}
-                />
+                <LeadForm codes={codes} onSent={onLeadSent} onConsent={() => setConsent(true)} />
               )}
             </div>
             {links.length > 0 ? (

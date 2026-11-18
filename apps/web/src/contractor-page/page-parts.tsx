@@ -1,14 +1,7 @@
 'use client';
 
 import type { PageTipId } from '@buhuchet/domain';
-import {
-  HelpTip,
-  Icon,
-  PHONE_QUERY,
-  Popover,
-  useMediaQuery,
-  type IconName,
-} from '@buhuchet/ui';
+import { HelpTip, Icon, PHONE_QUERY, Popover, useMediaQuery, type IconName } from '@buhuchet/ui';
 import { createContext, useContext, type ReactNode } from 'react';
 
 /*

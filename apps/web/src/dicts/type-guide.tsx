@@ -561,9 +561,7 @@ export function TypeDesc({
       </h3>
       {x.description ? <Para>{x.description}</Para> : null}
       {x.choiceNote ? <Note>{x.choiceNote}</Note> : null}
-      {x.pickHint ? (
-        <div className="text-[12px] leading-[1.4] text-muted">{x.pickHint}</div>
-      ) : null}
+      {x.pickHint ? <div className="text-[12px] leading-[1.4] text-muted">{x.pickHint}</div> : null}
       {x.verify ? (
         <Note tone="warn">
           {x.verifyNote

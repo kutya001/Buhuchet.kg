@@ -53,10 +53,12 @@ export function BottomSheet({ open, onClose, label, children }: BottomSheetProps
     <>
       <div
         ref={cover}
-        hidden={!open}
         onClick={onClose}
         aria-hidden="true"
-        className="fixed inset-0 z-[55] bg-cover md:hidden"
+        data-open={open}
+        // Затемнение проявляется и гаснет плавно (прототип v131, `.sheet-cover`): закрытое — невидимо и
+        // нажатий не перехватывает.
+        className="invisible fixed inset-0 z-[55] bg-cover opacity-0 [transition:opacity_var(--bu-t-exit)_var(--bu-ease-in),visibility_0s_linear_var(--bu-t-exit)] data-[open=true]:visible data-[open=true]:opacity-100 data-[open=true]:[transition:opacity_var(--bu-t-slow)_var(--bu-ease-out),visibility_0s] motion-reduce:transition-none md:hidden"
       />
       <div
         ref={sheet}

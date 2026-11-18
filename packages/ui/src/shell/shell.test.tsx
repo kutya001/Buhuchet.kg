@@ -13,6 +13,7 @@ import { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './phone-nav
 import { Brand, BrandMark, SideFootButton, SideNav, SideOrg } from './side-nav';
 import { TabPager } from './tab-pager';
 import { TabRow, type AddAction } from './tab-row';
+import { PAGE_SWIPED_ATTR } from './app-frame';
 import { TopBar, type TopBarProps } from './top-bar';
 import type { ShellLinkProps, ShellModule } from './types';
 
@@ -726,7 +727,13 @@ describe('телефон: нижняя панель и панель «Меню»
         {() => <p>пункты</p>}
       </BottomSheet>,
     );
-    expect(closed).toMatch(/<div hidden="" aria-hidden="true" class="fixed inset-0/);
+    // Затемнение закрытой панели невидимо и не нажимается; гаснет и проявляется плавно (прототип v131).
+    expect(closed).toMatch(
+      /<div aria-hidden="true" data-open="false" class="invisible fixed inset-0/,
+    );
+    expect(closed).toContain('opacity-0');
+    expect(closed).toContain('data-[open=true]:opacity-100');
+    expect(closed).toContain('motion-reduce:transition-none');
     expect(closed).toContain('data-open="false"');
     expect(closed).toContain('invisible');
     expect(closed).toContain('translate-y-[110%]');
@@ -739,7 +746,7 @@ describe('телефон: нижняя панель и панель «Меню»
     expect(open).toMatch(
       /role="dialog" aria-modal="true" aria-label="Меню" tabindex="-1" data-open="true"/,
     );
-    expect(open).not.toContain('<div hidden=""');
+    expect(open).toMatch(/<div aria-hidden="true" data-open="true" class="invisible fixed inset-0/);
     expect(open).toContain('data-swipe-handle="true"');
     // Пока панель открыта, вкладки свайпом не листаются; закрытая — не мешает.
     expect(open).toContain('data-overlay="true"');
@@ -824,6 +831,11 @@ describe('AppFrame и значки', () => {
     expect(html).toMatch(/^<div data-nav="hidden"/);
     expect(html).toContain('<main aria-label="Контрагенты"');
     expect(html).toContain('<p>экран</p>');
+    // Страница помечена для свайпа вкладок; при первом показе она на месте — проявляется только при
+    // смене модуля или вкладки (прототип v131).
+    expect(html).toContain('data-page=""');
+    expect(html).not.toContain('animate-fade-in');
+    expect(html).not.toContain(PAGE_SWIPED_ATTR);
     const shown = renderToStaticMarkup(
       <AppFrame navHidden={false} side={null} topBar={null}>
         {null}

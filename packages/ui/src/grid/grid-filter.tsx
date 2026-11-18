@@ -187,9 +187,7 @@ export function FilterPanel<Row>({
 
   return (
     <div className="flex flex-col gap-2.5" onKeyDown={enter} data-filter-panel={column.key}>
-      <h4 className="m-0 text-[13.5px] font-[650] text-ink">
-        {column.label}
-      </h4>
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">{column.label}</h4>
       {type === 'text' && (
         <input
           className={inputClass()}

@@ -3,9 +3,11 @@ import {
   DEMO_PASSWORD,
   finger,
   hire,
+  onPhone,
   openColumnFilter,
   openColumns,
   openGrouping,
+  phoneListMenu,
   phoneTableView,
   settledBox,
   signIn,
@@ -504,12 +506,14 @@ test.describe('Списки: UnifiedDataGrid', () => {
     // «⋯» на плитке или в строке: «Заблокировать» — после подтверждения.
     const more = card(first!.id).locator('[data-row-menu]');
     if (isMobile) {
-      // Касание «⋯» на телефоне — не меньше 44 px: нажатие рядом с кнопкой попадает в неё.
+      // Касание «⋯» на телефоне — не меньше 44 px: сама кнопка — 40 px (прототип v131), нажатие рядом
+      // с ней, в пределах 2 px, попадает в неё.
       const box = await settledBox(more);
       expect(box.width).toBeLessThan(44);
+      expect(box.width).toBeGreaterThanOrEqual(40);
       const hit = await page.evaluate(
         ([x, y]) => document.elementFromPoint(x, y)?.closest('[data-row-menu]') !== null,
-        [box.x + box.width / 2, box.y - 8] as const,
+        [box.x + box.width / 2, box.y - 1] as const,
       );
       expect(hit).toBe(true);
     }
@@ -573,7 +577,9 @@ test.describe('Списки: UnifiedDataGrid', () => {
 
     await page.goto('/app/staff/list');
     await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
-    await page.getByRole('button', { name: 'В Excel' }).click();
+    // На телефоне «В Excel» — пункт меню «⋯» над списком (прототип v139).
+    if (onPhone(page)) await phoneListMenu(page, /^В Excel/);
+    else await page.getByRole('button', { name: 'В Excel' }).click();
     await expect(
       page
         .getByRole('status')

@@ -165,16 +165,21 @@ test.describe('Этап 1: оболочка на телефоне', () => {
 
     await test.step('вкладки: медленно на 60 px — страница возвращается, вкладка та же', async () => {
       const firstTab = page.locator('[data-tabrow] [role="tab"]').first();
-      const before = (await firstTab.boundingBox())!;
+      // Место вкладки в ряду — без его прокрутки: с прототипа v138 у открытой вкладки название видно и
+      // при одних значках, ряд длиннее экрана и при листании сам прокручивается к новой вкладке (v73).
+      const place = async () =>
+        (await firstTab.boundingBox())!.x +
+        (await page.locator('[data-tabrow]').evaluate((row) => row.scrollLeft));
+      const before = await place();
       await swipe.drag(left, { x: left.x - 60, y }, async () => {
-        // Прототип v73: рамка-призрак — первым элементом ряда и ровно по размеру вкладки, ряд вкладок
-        // на время листания не съезжает.
+        // Прототип v73: рамка-призрак — первым элементом ряда и ровно по размеру вкладки, вкладки в ряду
+        // на время листания не съезжают.
         const ghost = page.locator('[data-tabrow] > [data-tab-ghost]:first-child');
         await expect(ghost).toHaveCount(1);
         const g = (await ghost.boundingBox())!;
         const t = (await firstTab.boundingBox())!;
         expect(Math.round(g.height)).toBe(Math.round(t.height));
-        expect(Math.round(t.x)).toBe(Math.round(before.x));
+        expect(Math.round(await place())).toBe(Math.round(before));
       });
       await page.waitForTimeout(400);
       await expect(page).toHaveURL(/\/app\/reports\/week$/);

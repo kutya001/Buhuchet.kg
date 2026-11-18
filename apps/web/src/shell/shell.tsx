@@ -597,6 +597,7 @@ function ShellPage({
           navHidden={navHidden}
           wide={wide}
           paneLabel={title}
+          pageKey={`${moduleId ?? ''}/${tabId ?? ''}`}
           side={
             <SideNav
               mode={mode}

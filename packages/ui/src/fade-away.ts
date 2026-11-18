@@ -32,6 +32,15 @@ export function motionOff(): boolean {
   return typeof window === 'undefined' || reducedMotion() || navigator.webdriver === true;
 }
 
+/**
+ * Классы уходящей копии: анимации появления (и с условием: `max-md:animate-sheet-in`) сняты, вместо
+ * них — классы ухода из `data-leave`. Остальные классы — как были.
+ */
+export function leaveClass(classes: string, leave: string): string {
+  const kept = classes.split(/\s+/).filter((c) => c && !/(^|:)animate-/.test(c));
+  return [...kept, ...leave.split(/\s+/).filter(Boolean)].join(' ');
+}
+
 /** Путь от `root` до `node` номерами детей. */
 function pathOf(root: Element, node: Element): number[] | null {
   const path: number[] = [];
@@ -64,10 +73,7 @@ export function leaveCopy(node: HTMLElement, scroll: ReadonlyMap<Element, [numbe
     const leave = el.getAttribute(LEAVE_ATTR);
     if (leave !== null) {
       // Классы анимации появления (и с условием: `max-md:animate-sheet-in`) — на уход.
-      el.setAttribute(
-        'class',
-        `${(el.getAttribute('class') ?? '').replace(/(^|\s)\S*animate-\S+/g, ' ')} ${leave}`,
-      );
+      el.setAttribute('class', leaveClass(el.getAttribute('class') ?? '', leave));
     }
     // Одинаковое имя переключателей вне формы сняло бы выбор у живого окна.
     if (el.getAttribute('type') === 'radio') el.removeAttribute('name');

@@ -325,9 +325,7 @@ function BellList(p: BellProps): ReactNode {
     <>
       {bellGroups(p.rows).map((g) => (
         <div key={g.group}>
-          <div className="px-2 pt-2.5 pb-1 text-[12.5px] font-[650] text-muted">
-            {g.group}
-          </div>
+          <div className="px-2 pt-2.5 pb-1 text-[12.5px] font-[650] text-muted">{g.group}</div>
           {g.rows.map((r) => (
             <BellRow key={r.id} row={r} unread={l.unread} onRow={p.onRow} />
           ))}

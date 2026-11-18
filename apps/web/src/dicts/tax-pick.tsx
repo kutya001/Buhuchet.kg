@@ -350,9 +350,7 @@ export function TaxPickList({
               return (
                 <div key={i}>
                   {s.title ? (
-                    <div className="mx-2.5 mt-2.5 text-[13px] font-[650] text-muted">
-                      {s.title}
-                    </div>
+                    <div className="mx-2.5 mt-2.5 text-[13px] font-[650] text-muted">{s.title}</div>
                   ) : null}
                   {items.map((x) => rowView(x, `${g.id}-${x.code}`))}
                 </div>

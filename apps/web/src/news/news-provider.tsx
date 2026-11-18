@@ -364,9 +364,7 @@ function WhatsNewDialog({
       }
     >
       <div data-whats-new="" className="flex flex-col gap-3.5">
-        {data.first ? (
-          <Note icon="grad">{t('news.wn.welcome')}</Note>
-        ) : null}
+        {data.first ? <Note icon="grad">{t('news.wn.welcome')}</Note> : null}
         <div data-news-list="" className="flex flex-col gap-1.5">
           {data.items.slice(0, WHATS_NEW_MAX).map((item, i) => {
             const shown = toggled[item.id] ?? i === 0;

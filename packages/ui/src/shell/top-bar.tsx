@@ -128,7 +128,9 @@ export function TopBar({
         data-page-title
         className={`flex max-w-[360px] min-w-0 flex-[0_1_auto] flex-col items-start justify-center gap-px px-1 py-0.5 text-left text-ink max-md:max-w-none max-md:flex-1 ${other}`}
       >
-        <b className="block max-w-full truncate text-[15px] font-bold tracking-[-0.01em]">{title}</b>
+        <b className="block max-w-full truncate text-[15px] font-bold tracking-[-0.01em]">
+          {title}
+        </b>
       </div>
       <Popover
         label={info.label}

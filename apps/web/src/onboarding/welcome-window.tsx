@@ -525,9 +525,7 @@ function PlanScreen({
           text={
             <>
               {t(`org.feature.${f}.benefit`)}
-              {needs
-                ? ` ${t('onboarding.plan.needs', { name: t(`org.feature.${needs}`) })}`
-                : null}
+              {needs ? ` ${t('onboarding.plan.needs', { name: t(`org.feature.${needs}`) })}` : null}
             </>
           }
         />
