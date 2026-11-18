@@ -39,6 +39,7 @@ export const ADMIN_MENU_MODULES = [
   'kb',
   'kbadm',
   'tdocs',
+  'runs',
   'tg',
 ] as const;
 

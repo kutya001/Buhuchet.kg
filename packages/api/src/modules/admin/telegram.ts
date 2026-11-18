@@ -4,44 +4,31 @@ import {
   adminTelegramBroadcast,
   adminTelegramOrgs,
   adminTelegramRetry,
-  adminTelegramSummary,
-  exportAdminTelegramLog,
-  listAdminTelegramLogPage,
-  listAdminTelegramLogValues,
   telegramBotRich,
   withUserContext,
-  type AdminTelegramLogRecord,
 } from '@buhuchet/db';
-import { bellText, bishkekDate, formatText, webhookState } from '@buhuchet/domain';
+import { bellText, formatText, webhookState } from '@buhuchet/domain';
 import {
   AdminTelegramBot,
   AdminTelegramBotView,
   AdminTelegramBroadcastRequest,
   AdminTelegramBroadcastResult,
-  AdminTelegramLogList,
-  type AdminTelegramLogRow,
   AdminTelegramOrgs,
   AdminTelegramRetryRequest,
   AdminTelegramRetryResult,
-  AdminTelegramSummary,
   ApiError,
-  ListExportParams,
-  ListQueryParams,
-  ListValues,
-  ListValuesQuery,
 } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
-import { apiFail, listQueryOf, listQueryResponses } from '../../errors';
-import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
+import { apiFail } from '../../errors';
 import { requirePlatformAdmin } from '../../middleware/access';
 import { serverTexts } from '../l10n/texts';
 import { castMessage } from './telegram-cast';
 
 /*
  * Админка → «Телеграм» (ТЗ «Админка» → «Модуль Телеграмм»; прототип admin/telegram.js; задача 2.41,
- * docs/decisions.md п. Д-13): журнал отправок всех организаций с повтором, состояние вебхука бота
- * платформы и рассылка объявлений. Только администратору платформы.
+ * docs/decisions.md п. Д-13): повтор отправки, состояние вебхука бота платформы и рассылка объявлений.
+ * Сам журнал переписки — `telegram-journal.ts`. Только администратору платформы.
  */
 
 const error = { 'application/json': { schema: ApiError } };
@@ -50,165 +37,6 @@ const denied = {
   403: { description: 'Не администратор платформы', content: error },
 } as const;
 const json = <T>(schema: T) => ({ 'application/json': { schema } });
-
-/** Строка журнала для ответа API: без текста сообщения и номера чата, моменты — строкой ISO. */
-function logRowBody(r: AdminTelegramLogRecord): AdminTelegramLogRow {
-  return {
-    id: r.id,
-    at: r.createdAt.toISOString(),
-    sentAt: r.sentAt ? r.sentAt.toISOString() : null,
-    recipient: r.recipient,
-    orgId: r.orgId,
-    orgName: r.orgName,
-    kind: r.kind,
-    status: r.status,
-    tries: r.tries,
-    error: r.lastError,
-  };
-}
-
-export const telegramLogRoute = createRoute({
-  method: 'get',
-  path: '/admin/telegram/log',
-  tags: ['admin'],
-  summary: 'Журнал отправок Telegram всех организаций: страница списка',
-  middleware: [requirePlatformAdmin] as const,
-  request: { query: ListQueryParams },
-  responses: {
-    200: {
-      description: 'Страница журнала: сортировка, страница, фильтры, поиск и группы — на сервере',
-      content: json(AdminTelegramLogList),
-    },
-    ...listQueryResponses,
-    ...denied,
-  },
-});
-
-/** «Журнал» (прототип grid 'tg-log'): сообщения всех организаций и платформы, сначала новые. */
-export function telegramLogHandler(deps: ApiDeps): RouteHandler<typeof telegramLogRoute, AppEnv> {
-  return async (c) => {
-    const query = listQueryOf(c.req.valid('query'));
-    const t = await serverTexts(deps);
-    const page = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      listAdminTelegramLogPage(tx, query, t, deps.config.APP_ENV === 'staging'),
-    );
-    return c.json(
-      {
-        items: page.rows.map(logRowBody),
-        total: page.total,
-        page: page.page,
-        size: page.size,
-        totals: page.totals,
-        ...(page.groups ? { groups: page.groups, rowGroups: page.rowGroups } : {}),
-      },
-      200,
-    );
-  };
-}
-
-export const telegramLogValuesRoute = createRoute({
-  method: 'get',
-  path: '/admin/telegram/log/values',
-  tags: ['admin'],
-  summary: 'Значения столбца журнала Telegram для фильтра',
-  middleware: [requirePlatformAdmin] as const,
-  request: { query: ListValuesQuery },
-  responses: {
-    200: {
-      description: 'Значения столбца с подписью и числом записей во всём журнале',
-      content: json(ListValues),
-    },
-    ...listQueryResponses,
-    ...denied,
-  },
-});
-
-export function telegramLogValuesHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof telegramLogValuesRoute, AppEnv> {
-  return async (c) => {
-    const { col, q } = c.req.valid('query');
-    const t = await serverTexts(deps);
-    const values = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      listAdminTelegramLogValues(tx, col, t, q, deps.config.APP_ENV === 'staging'),
-    );
-    return c.json(values, 200);
-  };
-}
-
-export const telegramLogExportRoute = createRoute({
-  method: 'get',
-  path: '/admin/telegram/log/export',
-  tags: ['admin'],
-  summary: 'Журнал отправок Telegram в Excel',
-  middleware: [requirePlatformAdmin] as const,
-  request: { query: ListExportParams },
-  responses: {
-    200: {
-      description: 'Файл Excel со всеми записями под поиском и фильтрами',
-      content: xlsxContent,
-    },
-    ...listQueryResponses,
-    ...exportRateResponses,
-    ...denied,
-  },
-});
-
-export function telegramLogExportHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof telegramLogExportRoute, AppEnv> {
-  return async (c) => {
-    const params = c.req.valid('query');
-    const query = listQueryOf(params);
-    const keys = [...new Set(params.cols.split(','))];
-    const userId = c.get('session')!.userId;
-    return withExportSlot(deps, userId, async () => {
-      const t = await serverTexts(deps);
-      const result = await withUserContext(
-        deps.db,
-        userId,
-        (tx) => exportAdminTelegramLog(tx, query, keys, t, deps.config.APP_ENV === 'staging'),
-        'export',
-      );
-      return xlsxResponse(c, {
-        title: t('nav.telegram'),
-        today: deps.clock.now(),
-        columns: result.columns,
-        rows: result.rows,
-        more: result.more,
-        total: result.total,
-        t,
-      });
-    });
-  };
-}
-
-export const telegramSummaryRoute = createRoute({
-  method: 'get',
-  path: '/admin/telegram/log/summary',
-  tags: ['admin'],
-  summary: 'Плашки над журналом Telegram',
-  middleware: [requirePlatformAdmin] as const,
-  responses: {
-    200: {
-      description: 'В очереди, ошибок отправки, отправлено сегодня (по Бишкеку)',
-      content: json(AdminTelegramSummary),
-    },
-    ...denied,
-  },
-});
-
-export function telegramSummaryHandler(
-  deps: ApiDeps,
-): RouteHandler<typeof telegramSummaryRoute, AppEnv> {
-  return async (c) => {
-    const today = bishkekDate(deps.clock.now());
-    const summary = await withUserContext(deps.db, c.get('session')!.userId, (tx) =>
-      adminTelegramSummary(tx, today),
-    );
-    return c.json(summary, 200);
-  };
-}
 
 export const telegramRetryRoute = createRoute({
   method: 'post',

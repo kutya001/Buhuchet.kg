@@ -3,7 +3,9 @@
 import {
   formatCount,
   formatMomentRu,
-  type ListFilterValue,
+  JOURNAL_PERIODS,
+  type GridViewSettings,
+  type JournalPeriod,
   type ListSort,
   type UiTextKey,
 } from '@buhuchet/domain';
@@ -17,16 +19,20 @@ import {
 import {
   DataGrid,
   EmptyState,
+  Icon,
+  linkButtonClass,
   MONO_CLASS,
-  Pill,
+  Note,
   Plate,
   Plates,
+  Segments,
   useToast,
   type GridBulkAction,
   type GridColumn,
 } from '@buhuchet/ui';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
+import { useAdminCards } from '../admin/admin-cards';
 import { api, apiFailure, callApi } from '../api-client';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
@@ -36,25 +42,31 @@ import { useModuleStats } from '../lists/stats';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
+import {
+  chatChoice,
+  errorOf,
+  journalExtra,
+  kindText,
+  plateChoice,
+  rowText,
+  savedSettings,
+  shownSettings,
+} from './tgadm-log-model';
+import {
+  setJournalView,
+  useJournalMessageRequests,
+  useJournalView,
+  type JournalSide,
+} from './tgadm-log-store';
 import { bulkRetryToast, logMenu } from './tgadm-menu';
+import { JournalStatusPill, useJournalMessage } from './tgadm-message';
 
 /** Сначала новые (прототип `sort: {key: 'at', dir: -1}`). */
 const DEFAULT_SORT: ListSort = { key: 'at', dir: 'desc' };
-const DEFAULT_VISIBLE = ['at', 'to', 'org', 'kind', 'st', 'tries', 'err'];
+const DEFAULT_VISIBLE = ['at', 'dir', 'to', 'kind', 'txt', 'org', 'st', 'err'];
+const SIDES: readonly JournalSide[] = ['all', 'out', 'in'];
 
-const STATUS_PILL = {
-  sent: { tone: 'ok', icon: 'check' },
-  pending: { tone: 'warn', icon: 'hourglass' },
-  error: { tone: 'bad', icon: 'alert' },
-} as const;
-
-/** «Ошибка» строки: ответ Telegram или подпись кода итога из словаря. */
-function errorOf(t: Translate, row: AdminTelegramLogRow): string {
-  if (!row.error) return '';
-  return row.error === 'recipient_unlinked' ? t('tgadm.err.unlinked') : row.error;
-}
-
-/** Столбцы журнала — как в прототипе (admin/telegram.js, grid 'tg-log'), ключи — как на сервере. */
+/** Столбцы журнала — как в прототипе (admin/tg-log.js, grid 'tg-log'), ключи — как на сервере. */
 export function logColumns(t: Translate): GridColumn<AdminTelegramLogRow>[] {
   return [
     {
@@ -64,40 +76,59 @@ export function logColumns(t: Translate): GridColumn<AdminTelegramLogRow>[] {
       width: 150,
       text: (r) => formatMomentRu(new Date(r.at)),
     },
-    { key: 'to', label: t('tgadm.col.to'), type: 'text', width: 190, text: (r) => r.recipient },
     {
-      key: 'org',
-      label: t('tgadm.col.org'),
+      key: 'dir',
+      label: t('tgadm.col.dir'),
       type: 'enum',
-      width: 220,
-      text: (r) => r.orgName ?? t('tgadm.org.platform'),
+      width: 130,
+      text: (r) => t(`tgadm.dir.${r.dir}`),
+      cell: (r) => (
+        <span
+          data-tg-dir={r.dir}
+          className={`font-semibold whitespace-nowrap ${r.dir === 'in' ? 'text-ink' : 'text-muted'}`}
+        >
+          {t(r.dir === 'in' ? 'tgadm.msg.in' : 'tgadm.msg.out')}
+        </span>
+      ),
     },
+    { key: 'to', label: t('tgadm.col.to'), type: 'text', width: 200, text: (r) => r.recipient },
     {
       key: 'kind',
       label: t('tgadm.col.kind'),
       type: 'enum',
-      width: 190,
-      text: (r) => t(`telegram.kind.${r.kind}` as UiTextKey),
+      width: 170,
+      text: (r) => kindText(t, r.kind),
+    },
+    {
+      key: 'txt',
+      label: t('tgadm.col.txt'),
+      type: 'text',
+      width: 340,
+      text: (r) => rowText(t, r),
+      cell: (r) =>
+        r.hide ? (
+          <span data-tg-hidden="" className="inline-flex items-center gap-1 text-faint">
+            <Icon name="eyeoff" size="sm" />
+            {rowText(t, r)}
+          </span>
+        ) : (
+          <span className="block truncate">{rowText(t, r)}</span>
+        ),
+    },
+    {
+      key: 'org',
+      label: t('tgadm.col.org'),
+      type: 'enum',
+      width: 200,
+      text: (r) => r.orgName ?? t('tgadm.org.platform'),
     },
     {
       key: 'st',
       label: t('tgadm.col.st'),
       type: 'enum',
-      width: 140,
+      width: 150,
       text: (r) => t(`tgadm.st.${r.status}`),
-      cell: (r) => (
-        <Pill tone={STATUS_PILL[r.status].tone} icon={STATUS_PILL[r.status].icon}>
-          {t(`tgadm.st.${r.status}`)}
-        </Pill>
-      ),
-    },
-    {
-      key: 'tries',
-      label: t('tgadm.col.tries'),
-      type: 'int',
-      width: 90,
-      numeric: true,
-      text: (r) => formatCount(r.tries),
+      cell: (r) => <JournalStatusPill t={t} status={r.status} />,
     },
     {
       key: 'err',
@@ -107,17 +138,38 @@ export function logColumns(t: Translate): GridColumn<AdminTelegramLogRow>[] {
       text: (r) => errorOf(t, r),
       className: MONO_CLASS,
     },
+    {
+      key: 'tries',
+      label: t('tgadm.col.tries'),
+      type: 'int',
+      width: 90,
+      numeric: true,
+      text: (r) => (r.dir === 'in' ? '' : formatCount(r.tries)),
+    },
+    {
+      key: 'ct',
+      label: t('tgadm.col.ct'),
+      type: 'enum',
+      width: 170,
+      text: (r) => t(`tgadm.ct.${r.chatKind}`),
+    },
   ];
 }
 
+type Extra = Readonly<Record<string, string>>;
+// Свои параметры журнала (направление, период, чат) идут строками, как общие параметры списка.
+type JournalQuery = Record<string, string> & { dir?: 'out' | 'in' };
+
 const fetchLog: FetchListPage<AdminTelegramLogRow> = async (params) => {
-  const res = await api.api.admin.telegram.log.$get({ query: params });
+  const res = await api.api.admin.telegram.log.$get({ query: params as JournalQuery });
   if (!res.ok) throw await apiFailure(res);
   return AdminTelegramLogList.parse(await res.json());
 };
 
-const fetchLogValues = async (col: string, q?: string) => {
-  const res = await api.api.admin.telegram.log.values.$get({ query: q ? { col, q } : { col } });
+const fetchLogValues = async (extra: Extra, col: string, q?: string) => {
+  const res = await api.api.admin.telegram.log.values.$get({
+    query: (q ? { col, q, ...extra } : { col, ...extra }) as JournalQuery & { col: string },
+  });
   if (!res.ok) throw await apiFailure(res);
   return ListValues.parse(await res.json());
 };
@@ -131,17 +183,14 @@ const summaryQuery = queryOptions({
   },
 });
 
-/** Плашка — фильтр «Статус» (прототип: `g.filters.st = {type: 'enum', vals: [...]}`). */
-const statusFilter = (status: 'error' | 'pending'): Record<string, ListFilterValue> => ({
-  st: { type: 'enum', vals: [status] },
-});
-
 /**
- * Админка → «Телеграм» → «Журнал» (ТЗ «Журнал отправленных сообщений и ошибок отправки, повтор
- * отправки»; прототип admin/telegram.js, tab 'log'): плашки «В очереди», «Ошибки отправки» (нажатие —
- * фильтр по статусу), «Отправлено сегодня» (нажатие снимает фильтры); журнал всех организаций и
- * платформы с поиском, фильтрами и «В Excel»; строки с ошибкой — красным. «Повторить отправку» у
- * строки и «Повторить ошибки» у отмеченных; код восстановления повторно не отправляется.
+ * Админка → «Телеграм» → «Журнал» (решение заказчика 17.11.2026; прототип v132 admin/tg-log.js;
+ * docs/decisions.md п. Т-16): переписка бота в обе стороны с текстом сообщений. Плашки «В очереди»,
+ * «Ошибки отправки», «Отправлено сегодня», «Получено сегодня» (нажатие — направление, период и фильтр);
+ * переключатели направления и периода; журнал всех организаций и платформы с поиском, фильтрами и
+ * «В Excel»; ошибки — красным. Нажатие на строку — окно «Сообщение»; «Вся переписка» — один чат от
+ * старых к новым. «Повторить отправку» у строки и «Повторить ошибки» у отмеченных; коды и одноразовые
+ * ссылки не показываются и повторно не отправляются.
  */
 export function TgAdmLog() {
   const t = useT();
@@ -154,20 +203,32 @@ export function TgAdmLog() {
   const summary = useQuery(summaryQuery);
   const { search, clearSearch } = useShell();
   const client = useQueryClient();
+  const chosen = useJournalView();
+  const inChat = chosen.chat !== null;
+  const extra = useMemo(() => journalExtra(chosen), [chosen]);
+  const settings = useMemo(() => shownSettings(view.settings, inChat), [view.settings, inChat]);
+  const loadValues = useCallback(
+    (col: string, q?: string) => fetchLogValues(extra, col, q),
+    [extra],
+  );
   const list = useListPage({
     gridKey: 'tg.log',
     columns,
     audit: false,
     defaultVisible: DEFAULT_VISIBLE,
-    settings: view.settings,
+    settings,
     defaultSort: DEFAULT_SORT,
     search,
     enabled: view.ready,
     fetchPage: fetchLog,
+    extra,
   });
   const { params, visible } = list;
   const sendExport = useCallback(
-    () => api.api.admin.telegram.log.export.$get({ query: { ...params, cols: visible.join(',') } }),
+    () =>
+      api.api.admin.telegram.log.export.$get({
+        query: { ...params, cols: visible.join(',') } as JournalQuery & { cols: string },
+      }),
     [params, visible],
   );
   const exporter = useListExport(sendExport);
@@ -176,6 +237,7 @@ export function TgAdmLog() {
   const refresh = useCallback(() => {
     void client.invalidateQueries({ queryKey: ['list', 'tg.log'] });
     void client.invalidateQueries({ queryKey: summaryQuery.queryKey });
+    void client.invalidateQueries({ queryKey: ['admin', 'tg-message'] });
   }, [client]);
 
   const retry = async (ids: readonly string[]) => {
@@ -206,14 +268,33 @@ export function TgAdmLog() {
     else toast(t('tgadm.retry.none'), { bad: true });
   };
 
+  // «Вся переписка»: чат этой строки, все направления, весь срок хранения; фильтры журнала снимаются.
+  const { setFilters } = list;
+  const toChat = useCallback(
+    (row: AdminTelegramLogRow) => {
+      setFilters({});
+      setJournalView(chatChoice(row.id));
+    },
+    [setFilters],
+  );
+  const { openAccount, openOrg, cards } = useAdminCards();
+  const message = useJournalMessage({
+    onChat: toChat,
+    onRetry: (row) => void retryOne(row),
+    onAccount: openAccount,
+    onOrg: openOrg,
+  });
+  // Сообщение о сбое из окна «Запуск» (Админка → «Запуски»).
+  useJournalMessageRequests(message.open);
+
   const bulk: GridBulkAction<AdminTelegramLogRow>[] = [
     {
       id: 'retry',
       label: t('tgadm.retry.bulk'),
       icon: 'refresh',
       run: (rows, done) => {
-        // Строки не в «Ошибке» не повторяются и не шлются; коды (восстановления и замены) пропускает сервер.
-        const ids = rows.filter((r) => r.status === 'error').map((r) => r.id);
+        // Повторяются только ошибки отправок сотрудникам; коды (восстановления и замены) пропускает сервер.
+        const ids = rows.filter((r) => r.src === 'outbox' && r.status === 'error').map((r) => r.id);
         done();
         if (!ids.length) return toast(bulkRetryToast(t, { queued: 0, codes: 0 }));
         void retry(ids).then((result) => {
@@ -223,9 +304,21 @@ export function TgAdmLog() {
     },
   ];
 
-  const actions = logMenu({ t, retry: (row) => void retryOne(row) });
+  const actions = logMenu({
+    t,
+    open: (row) => message.open(row.id),
+    chat: toChat,
+    retry: (row) => void retryOne(row),
+  });
   const plate = (n: number | undefined) => (n === undefined ? '' : formatCount(n));
   const errors = summary.data?.errors ?? 0;
+  const pick = (id: 'q' | 'e' | 's' | 'r') => {
+    const choice = plateChoice(id);
+    setFilters(choice.filters);
+    setJournalView(choice.view);
+  };
+  const saveSettings = (next: GridViewSettings) =>
+    view.save(savedSettings(next, view.settings, inChat));
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -237,7 +330,7 @@ export function TgAdmLog() {
           label={t('tgadm.plate.queue')}
           value={plate(summary.data?.pending)}
           sub={t('tgadm.plate.queue_sub')}
-          onClick={() => list.setFilters(statusFilter('pending'))}
+          onClick={() => pick('q')}
         />
         <Plate
           id="e"
@@ -246,7 +339,7 @@ export function TgAdmLog() {
           label={t('tgadm.plate.errors')}
           value={plate(summary.data?.errors)}
           sub={t('tgadm.plate.errors_sub')}
-          onClick={() => list.setFilters(statusFilter('error'))}
+          onClick={() => pick('e')}
         />
         <Plate
           id="s"
@@ -254,15 +347,55 @@ export function TgAdmLog() {
           color="green"
           label={t('tgadm.plate.sent')}
           value={plate(summary.data?.sentToday)}
-          onClick={() => list.setFilters({})}
+          onClick={() => pick('s')}
+        />
+        <Plate
+          id="r"
+          icon="chat"
+          color="green"
+          label={t('tgadm.plate.received')}
+          value={plate(summary.data?.receivedToday)}
+          onClick={() => pick('r')}
         />
       </Plates>
+      {inChat ? (
+        <Note icon="chat">
+          <span data-tg-chat-note="">{t('tgadm.log.chat')}</span>{' '}
+          <button
+            type="button"
+            className={linkButtonClass()}
+            onClick={() => setJournalView({ chat: null })}
+          >
+            {t('tgadm.log.chat_reset')}
+          </button>
+        </Note>
+      ) : (
+        <div data-tg-bar="" className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <Segments<JournalSide>
+            label={t('tgadm.seg.dir')}
+            options={SIDES.map((side) => ({ value: side, label: t(`tgadm.seg.${side}`) }))}
+            value={chosen.dir}
+            onChange={(dir) => setJournalView({ dir })}
+          />
+          <Segments<`${JournalPeriod}`>
+            label={t('tgadm.seg.period')}
+            options={JOURNAL_PERIODS.map((p) => ({
+              value: `${p}` as const,
+              label: t(`tgadm.per.${p}` as UiTextKey),
+            }))}
+            value={`${chosen.per}`}
+            onChange={(p) => setJournalView({ per: Number(p) as JournalPeriod })}
+          />
+          <div className="flex-1" />
+          <span className="text-[12.5px] text-muted max-md:hidden">{t('tgadm.log.note')}</span>
+        </div>
+      )}
       <DataGrid
         columns={columns}
         defaultVisible={DEFAULT_VISIBLE}
         defaultSort={DEFAULT_SORT}
-        settings={view.settings}
-        onSettingsChange={view.save}
+        settings={settings}
+        onSettingsChange={saveSettings}
         onResetView={() => void view.reset()}
         data={view.ready ? list.data : undefined}
         onPageChange={list.setPage}
@@ -272,12 +405,14 @@ export function TgAdmLog() {
         onRetry={list.retry}
         filters={list.filters}
         onFiltersChange={list.setFilters}
-        loadValues={fetchLogValues}
+        loadValues={loadValues}
         search={search}
         onClearSearch={clearSearch}
         onExport={() => void exporter.run()}
         exporting={exporter.exporting}
-        empty={<EmptyState icon="tg" title={t('grid.empty')} />}
+        empty={
+          <EmptyState icon="tg" title={t('tgadm.log.empty')} text={t('tgadm.log.empty_text')} />
+        }
         rowKey={(r) => r.id}
         titleKey="kind"
         rowTone={(r) => (r.status === 'error' ? 'overdue' : undefined)}
@@ -285,7 +420,10 @@ export function TgAdmLog() {
         labels={labels}
         actions={actions}
         bulk={bulk}
+        onOpen={(r) => message.open(r.id)}
       />
+      {message.node}
+      {cards}
     </div>
   );
 }

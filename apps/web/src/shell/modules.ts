@@ -502,6 +502,17 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'api', icon: 'code', label: 'tab.tdocs.api' },
     ],
   },
+  // «Запуски» (прототип v132): только просмотр, добавлять нечего.
+  runs: {
+    icon: 'clock',
+    title: 'nav.runs',
+    short: 'nav.short.runs',
+    desc: 'nav.desc.runs',
+    tabs: [
+      { id: 'jobs', icon: 'list', label: 'tab.runs.jobs' },
+      { id: 'runs', icon: 'history', label: 'tab.runs.runs' },
+    ],
+  },
   tg: {
     icon: 'tg',
     title: 'nav.telegram',

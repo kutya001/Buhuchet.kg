@@ -46,7 +46,7 @@ export const ALERTS_TEXTS = {
     ru: '⚠️ Хранилище: больше суток не удаётся удалить файлы с публичных загрузок (заявки с лендинга, файлы от контрагентов) — задача повторяет каждый час. Таких файлов: {n}.\nПроверьте доступ к хранилищу S3 и журнал сайта.',
     section: S,
   },
-  'alert.job.system_cleanup_scheduler_runs': { ru: 'Очистка журнала запусков', section: S },
+  'alert.job.system_cleanup_scheduler_runs': { ru: 'Очистка журналов', section: S },
   'alert.job.auth_cleanup_login_attempts': { ru: 'Очистка счёта неверных паролей', section: S },
   'alert.job.auth_watch_login_locks': { ru: 'Слежение за блокировками входа', section: S },
   'alert.job.system_cleanup_rate_limits': { ru: 'Очистка частоты выгрузок', section: S },

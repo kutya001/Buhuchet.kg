@@ -43,6 +43,7 @@ import { TASKS_TEXTS } from './tasks-texts';
 import { TELEGRAM_TEXTS } from './telegram-texts';
 import { BELL_TEXTS } from './bell-texts';
 import { BELL_PANEL_TEXTS } from './bell-panel-texts';
+import { RUNS_TEXTS } from './runs-texts';
 import { TELEGRAM_ADMIN_TEXTS } from './telegram-admin-texts';
 
 /**
@@ -98,7 +99,7 @@ const SYSTEM_TEXTS = {
  * `kpi-texts.ts`, блока «Файлы» — `files-texts.ts`, «Базы знаний» — `kb-texts.ts`, «Новостей» — `news-texts.ts`,
  * уведомлений в Telegram и блока «Уведомления в Telegram» профиля — `telegram-texts.ts`,
  * Админки → «Справочники платформы» — `platform-dicts-texts.ts`, Админки → «База знаний (содержимое)» —
- * `kb-admin-texts.ts`, Админки → «Телеграм» — `telegram-admin-texts.ts`.
+ * `kb-admin-texts.ts`, Админки → «Запуски» — `runs-texts.ts`, Админки → «Телеграм» — `telegram-admin-texts.ts`.
  */
 export const UI_TEXTS = {
   ...SYSTEM_TEXTS,
@@ -147,6 +148,7 @@ export const UI_TEXTS = {
   ...BELL_PANEL_TEXTS,
   ...PLATFORM_DICTS_TEXTS,
   ...KB_ADMIN_TEXTS,
+  ...RUNS_TEXTS,
   ...TELEGRAM_ADMIN_TEXTS,
 } as const satisfies Record<string, UiTextDefault>;
 

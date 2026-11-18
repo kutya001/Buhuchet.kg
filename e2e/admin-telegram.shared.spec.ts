@@ -196,7 +196,11 @@ test.describe('Этап 2: Админка → «Телеграм»', () => {
     await page.goto('/app/tg/log');
     await search(page, isMobile, ownerLogin);
     const rows = page.locator('[data-grid] [data-id]');
-    const sent = rows.filter({ hasText: 'Объявление' }).filter({ hasText: 'Отправлено' });
+    // «Отправлено» — по метке статуса: в столбце «Направление» «→ Отправлено» стоит у каждой отправки,
+    // и у «Ошибки» тоже (журнал в обе стороны, доработки 17.11.2026).
+    const sent = rows
+      .filter({ hasText: 'Объявление' })
+      .filter({ has: page.locator('[data-pill]', { hasText: 'Отправлено' }) });
     // На телефоне у плиток подпись «Ошибка» есть у всех — ищем по пояснению.
     const error = rows.filter({ hasText: 'Получатель отвязал или сменил Telegram' });
     // Отправлены два объявления: простое и с картинкой (задача Т6).

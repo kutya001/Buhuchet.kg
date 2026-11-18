@@ -598,6 +598,7 @@ export function telegramRemindersJob(baseUrl: string, pause?: Pause): Job {
       if (failed.length) {
         throw new Error(`telegram.reminders: не собраны напоминания организаций: ${failed.length}`);
       }
+      return queued;
     },
   };
 }
