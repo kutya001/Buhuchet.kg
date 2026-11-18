@@ -1,6 +1,14 @@
 import { addDays, type IsoDate } from '../common/dates';
 import type { Tyiyn } from '../common/money';
-import { monthOf, type YearMonth } from '../common/months';
+import {
+  addMonths,
+  daysInMonth,
+  monthDay,
+  monthLabel,
+  monthLabelGen,
+  monthOf,
+  type YearMonth,
+} from '../common/months';
 import type { FeeMonth } from '../fees/charges';
 import type { ReconciliationVerdict } from '../money/tax';
 import type { PageSection } from '../org/policy';
@@ -206,29 +214,6 @@ export function pageFeePaidTill(months: readonly Pick<FeeMonth, 'month' | 'charg
   return till;
 }
 
-/** Плитка «Главного». */
-export type PageTile =
-  | { key: 'reports'; wide: boolean }
-  | { key: 'next'; wide: boolean }
-  | { key: 'taxes'; wide: boolean }
-  | { key: 'fee'; wide: boolean };
-
-/**
- * Плитки «Главного» (прототип `T1`): «Отчёты» и «Ближайший срок» — при показанных «Отчётах», «Налоги»
- * — во всю ширину, если есть отчёты года с суммой больше 0 и показаны «Отчёты» или «Деньги на налоги»,
- * «Обслуживание» — при показанной «Оплате за обслуживание»; нечётное число плиток в две колонки —
- * последняя во всю ширину.
- */
-export function pageTiles(o: { reports: boolean; taxes: boolean; fee: boolean }): PageTile[] {
-  const tiles: PageTile[] = [];
-  if (o.reports) tiles.push({ key: 'reports', wide: false }, { key: 'next', wide: false });
-  if (o.taxes) tiles.push({ key: 'taxes', wide: true });
-  if (o.fee) tiles.push({ key: 'fee', wide: false });
-  const narrow = tiles.filter((t) => t.key !== 'taxes').length;
-  if (narrow % 2) tiles[tiles.length - 1]!.wide = true;
-  return tiles;
-}
-
 /** Плитка «Налоги {год}, сом»: к уплате, получено и оплачено по отчётам года с суммой больше 0. */
 export function pageTaxTotals(
   reports: readonly { due: IsoDate; hasSum: boolean; sum: Tyiyn | null; got: Tyiyn; paid: Tyiyn }[],
@@ -243,7 +228,7 @@ export function pageTaxTotals(
   };
 }
 
-/* ───────────── «Деньги на налоги», «Показатели», нижняя панель ───────────── */
+/* ───────────── «Деньги на налоги», «Показатели» ───────────── */
 
 /** Итог сверки на странице (прототип `v`): «Недостача», «Достаточно», «Достаточно, излишек», «Излишек». */
 export type PageMoneyVerdict = ReconciliationVerdict['state'];
@@ -284,15 +269,6 @@ export function pageSpark(
   });
 }
 
-/** Панель разделов внизу на телефоне (прототип `nav`): только показанные, если их больше одного. */
-export const PAGE_NAV = ['main', 'pay', 'reports', 'kpi', 'contacts'] as const;
-export type PageNavItem = (typeof PAGE_NAV)[number];
-
-export function pageNav(shown: ReadonlySet<PageNavItem>): PageNavItem[] {
-  const items = PAGE_NAV.filter((k) => shown.has(k));
-  return items.length > 1 ? items : [];
-}
-
 /** Раздел страницы виден: организация и карточка его не скрыли, функция включена. */
 export const pageHas = (sections: readonly PageSection[], section: PageSection) =>
   sections.includes(section);
@@ -303,48 +279,15 @@ export const pageHas = (sections: readonly PageSection[], section: PageSection) 
  * обозначениям — сервер переводит, на экране русских ключей нет.
  */
 export const PAGE_TIPS = {
-  'secs.main': ['secs', 'Главное'],
-  'secs.pay': ['secs', 'Как оплатить'],
-  'secs.acc': ['secs', 'Ваш бухгалтер'],
+  'secs.pay': ['secs', 'Оплата'],
   'secs.reports': ['secs', 'Отчёты'],
   'secs.files': ['secs', 'Файлы'],
-  'secs.money': ['secs', 'Деньги на налоги'],
-  'secs.fee': ['secs', 'Оплата за обслуживание'],
-  'secs.kpi': ['secs', 'Показатели'],
-  'secs.contacts': ['secs', 'Контакты'],
+  'secs.acc': ['secs', 'Связь'],
+  'secs.kpi': ['secs', 'Цифры компании'],
   'secs.tg': ['secs', 'Telegram'],
   'state.ok': ['state', 'Всё в порядке'],
-  'state.attention': ['state', 'Нужно внимание'],
-  'main.reports': ['main', 'Отчёты'],
-  'main.next': ['main', 'Ближайший срок'],
-  'main.taxes': ['main', 'Налоги'],
-  'main.fee': ['main', 'Обслуживание'],
-  'pay.tax': ['pay', 'Налоги'],
-  'pay.fee': ['pay', 'Обслуживание'],
   'pay.banks': ['pay', 'Банки и кошельки'],
-  'report.todo': ['report', 'К сдаче'],
-  'report.in_progress': ['report', 'В работе'],
-  'report.submitted': ['report', 'Сдан'],
-  'report.sub': ['report', 'Сдано'],
-  'report.next': ['report', 'Впереди'],
-  'report.late': ['report', 'Просрочено'],
-  'taxPay.unpaid': ['taxPay', 'Не оплачено'],
-  'taxPay.partial': ['taxPay', 'Оплачено частично'],
-  'taxPay.paid': ['taxPay', 'Оплачено'],
-  'money.need': ['money', 'Нужно оплатить'],
-  'money.got': ['money', 'Поступило от вас'],
-  'money.paid': ['money', 'Оплачено в бюджет'],
-  'money.short': ['money', 'Недостача'],
-  'money.enough': ['money', 'Достаточно'],
-  'money.enough_surplus': ['money', 'Достаточно, излишек'],
-  'money.surplus': ['money', 'Излишек'],
-  'fee.tariff': ['fee', 'Текущая ставка'],
-  'fee.debt': ['fee', 'Долг'],
-  'fee.unpaid': ['fee', 'Не оплачено'],
-  'fee.partial': ['fee', 'Оплачено частично'],
-  'fee.paid': ['fee', 'Оплачено'],
   'contacts.data': ['contacts', 'Ваши данные у нас'],
-  'head.as_of': ['head', 'Данные на'],
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type PageTipId = keyof typeof PAGE_TIPS;
@@ -363,3 +306,105 @@ export function pageTipTexts(
   }
   return out;
 }
+
+/* ───────────── Простыми словами (доработки 17.11.2026; прототип v135) ───────────── */
+
+/** Дата словами (прототип `pubDW`): «20 ноября», другой год — «20 ноября 2025». */
+export function pageDateWords(date: IsoDate, today: IsoDate): string {
+  const y = yearOf(date);
+  const month = monthLabelGen(monthOf(date)).split(' ')[0];
+  return `${Number(date.slice(8, 10))} ${month}${y === yearOf(today) ? '' : ` ${y}`}`;
+}
+
+/** Месяц с большой буквы; текущий год не пишется (прототип `pubMon`): «Ноябрь», «Декабрь 2025». */
+export function pageMonthName(month: YearMonth, today: IsoDate): string {
+  const label = monthLabel(month).replace(` ${yearOf(today)}`, '');
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Месяц с большой буквы и с годом — шапка группы «Отчётов» (прототип `cphCap(ymLabel(m))`). */
+export function pageMonthTitle(month: YearMonth): string {
+  const label = monthLabel(month);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+/** Срок оплаты услуг бухгалтера за месяц (прототип `pubFeeDue`): день оплаты, не позже конца месяца. */
+export const pageFeeDue = (month: YearMonth, feeDay: number): IsoDate =>
+  monthDay(month, Math.min(Math.max(feeDay, 1), daysInMonth(month)));
+
+/** Строка «Налоги» раздела «Оплата» (прототип `pubTaxDue`, `pubMoney`, `pubTaxLate`). */
+export interface PageTaxView {
+  /** «Не хватает» — сколько перевести сейчас; 0 — денег хватает. */
+  due: Tyiyn;
+  /** «Ваши деньги у нас». */
+  ours: Tyiyn;
+  /** «Запас». */
+  spare: Tyiyn;
+  /** Срок оплаты какого-то отчёта из суммы уже прошёл. */
+  late: boolean;
+}
+
+export function pageTaxView(
+  m: {
+    verdict: PageMoneyVerdict;
+    amount: Tyiyn;
+    dueSum: Tyiyn;
+    due: readonly { payDue: IsoDate }[];
+  },
+  today: IsoDate,
+): PageTaxView {
+  const due = m.verdict === 'short' ? m.amount : 0;
+  const spare = m.verdict === 'short' || m.verdict === 'enough' ? 0 : m.amount;
+  return {
+    due,
+    ours: m.dueSum - due + spare,
+    spare,
+    late: due > 0 && m.due.some((r) => r.payDue < today),
+  };
+}
+
+/** Месяцы услуг бухгалтера с долгом — от старых к новым (прототип `pgFeeOpen`). */
+export function pageFeeOpen<M extends { month: YearMonth; charge: Tyiyn; got: Tyiyn }>(
+  months: readonly M[],
+): M[] {
+  return months.filter((m) => m.charge - m.got > 0).sort((a, b) => a.month.localeCompare(b.month));
+}
+
+/** Долг за услуги бухгалтера просрочен (прототип `pubFeeLate`): срок оплаты месяца с долгом прошёл. */
+export function pageFeeLate(
+  fee: {
+    debt: Tyiyn;
+    feeDay: number;
+    months: readonly { month: YearMonth; charge: Tyiyn; got: Tyiyn }[];
+  },
+  today: IsoDate,
+): boolean {
+  return (
+    fee.debt > 0 && pageFeeOpen(fee.months).some((m) => pageFeeDue(m.month, fee.feeDay) < today)
+  );
+}
+
+/**
+ * «В комментарии к переводу» (прототип `pubPayNote`): налоги — название контрагента, услуги бухгалтера
+ * — название и самый старый месяц с долгом (нет долга — текущий), без текущего года.
+ */
+export function pagePayNote(
+  name: string,
+  purpose: 'tax' | 'fee',
+  feeMonths: readonly { month: YearMonth; charge: Tyiyn; got: Tyiyn }[],
+  today: IsoDate,
+): string {
+  if (purpose === 'tax') return name;
+  const month = pageFeeOpen(feeMonths)[0]?.month ?? monthOf(today);
+  return `${name}, ${monthLabel(month).replace(` ${yearOf(today)}`, '')}`;
+}
+
+/** Раскрытый сразу месяц «По месяцам» (прототип `now=addMonths(ym(TODAY),-1)`): с прошлого месяца. */
+export function pageOpenPayMonth(months: readonly YearMonth[], today: IsoDate): YearMonth | null {
+  const prev = addMonths(monthOf(today), -1);
+  return months.find((x) => x >= prev) ?? months[months.length - 1] ?? null;
+}
+
+/** Куда сдаётся вид отчёта (прототип `pubOrgan`): налоговая — словом, остальные органы — названием. */
+export const pageOrganKind = (organ: string): 'tax' | 'other' =>
+  organ === 'ГНС' ? 'tax' : 'other';

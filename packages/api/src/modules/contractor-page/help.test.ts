@@ -164,8 +164,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     );
     expect(open.page.help.faq.some((x) => x.id === q.id)).toBe(false);
     expect(open.page.help.gloss.length).toBe(before.help.gloss.length);
-    expect(open.page.help.welcome.t).toBe(before.help.welcome.t);
-    expect(open.page.help.hints.paidSteps).toBe(before.help.hints.paidSteps);
+    expect(open.page.help.welcome.lead).toBe(before.help.welcome.lead);
+    expect(open.page.help.hints.paidNote).toBe(before.help.hints.paidNote);
     // Вернуть как было — остальные тесты считают облачка наполнения.
     v = (await edited({ ...step, op: 'tour', on: true, version: v })).version;
     await edited({

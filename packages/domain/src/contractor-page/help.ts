@@ -9,20 +9,11 @@ import type { UiTextKey } from '../l10n/texts';
  * страницы, разбор «Словарика» и проверки окон Админки.
  */
 
-/** Тексты окна «Добро пожаловать» (прототип CPH_WEL) — в порядке строк Админки. */
-export const CP_HELP_WELCOME_KEYS = [
-  't',
-  'lead',
-  'repT',
-  'repX',
-  'payT',
-  'payX',
-  'filesT',
-  'filesX',
-  'filesXView',
-  'go',
-  'skip',
-] as const;
+/**
+ * Тексты приглашения к обзору (прототип v135 CPH_WEL: полоса внизу страницы вместо окна «Добро
+ * пожаловать») — в порядке строк Админки.
+ */
+export const CP_HELP_WELCOME_KEYS = ['lead', 'go', 'skip'] as const;
 export type CpHelpWelcomeKey = (typeof CP_HELP_WELCOME_KEYS)[number];
 
 /** Подсказки в окнах и подписи «Помощи» (прототип CPH_HINT) — в порядке строк Админки. */
@@ -43,11 +34,10 @@ export const CP_HELP_HINT_KEYS = [
   'actGoReports',
   'actTg',
   'actCode',
-  'paidSteps',
+  'paidNote',
   'paidPick',
   'paidFile',
   'paidDone',
-  'sendSum',
   'upHint',
   'upDone',
   'codeWhat',
@@ -56,16 +46,14 @@ export const CP_HELP_HINT_KEYS = [
   'emptyFilesView',
   'emptyReports',
   'emptyKpi',
-  'emptyMoney',
 ] as const;
 export type CpHelpHintKey = (typeof CP_HELP_HINT_KEYS)[number];
 
 /**
- * Подстановки текста подсказки (прототип `cphFill`): у «Перечислить» — {месяц}, у «Отправить файл» —
- * {мб} и {файлов}, у пустых «Отчётов» — {год}. Администратор их не меняет.
+ * Подстановки текста подсказки (прототип `cphFill`): у «Отправить файл» — {мб} и {файлов}, у пустых
+ * «Отчётов» — {год}. Администратор их не меняет.
  */
 export const CP_HELP_HINT_VARS: Readonly<Partial<Record<CpHelpHintKey, readonly string[]>>> = {
-  sendSum: ['месяц'],
   upHint: ['мб', 'файлов'],
   emptyReports: ['год'],
 };
@@ -144,7 +132,7 @@ export interface CpTourStep {
   x: string;
   /** Текст, если действие недоступно (только у `pay` и `files`). */
   x2?: string;
-  /** Шаг активен; у последнего облачка (`end`) всегда да. */
+  /** Шаг активен (с прототипа v135 выключается и последнее облачко `end`). */
   on: boolean;
 }
 
@@ -166,6 +154,11 @@ export interface CpGloss {
   x: string;
   /** Другие формы на странице — через запятую. */
   also?: string;
+  /**
+   * «Подчёркивать на странице» (прототип v135): `false` — слово есть только в «Словарике» «Помощи»;
+   * пунктиром на странице — только настоящие термины (НДС, Соцфонд).
+   */
+  pg?: boolean;
 }
 
 export interface CpHelp {
@@ -195,9 +188,13 @@ export const CP_HELP_MAX = {
  * показывают только это.
  */
 export interface CpHelpView {
-  /** Показанные разделы страницы (`main`, `pay`, `reports`…). */
+  /**
+   * Показанные разделы страницы (`pay`, `reports`, `files`, `acc`, `kpi`) и её части (прототип v135
+   * `cphSec`): `money` — строка «Налоги» в «Оплате», `fee` — «Услуги бухгалтера», `tg` — Telegram в
+   * «Связи».
+   */
   sections: ReadonlySet<string>;
-  /** Карточки «Как оплатить»: налоги и обслуживание. */
+  /** Счета для оплаты: налоги и услуги бухгалтера. */
   payTax: boolean;
   payFee: boolean;
   /** Есть «Я оплатил» (контрагент может отправлять файлы и есть карточка «Как оплатить»). */
@@ -224,12 +221,12 @@ export function cpHelpCap(s: string): string {
 
 /**
  * Облачка обзора (прототип `cphTourList`): выключенные и облачка разделов, скрытых у контрагента, —
- * пропускаются (последнее «Готово!» — всегда); у «Как оплатить» без «Я оплатил» и у «Файлов» без
+ * пропускаются (с v135 выключается и последнее «Готово!»); у «Оплаты» без «Я оплатил» и у «Файлов» без
  * «Отправить файл» — «Текст, если действие недоступно». Счётчик «N из M» считает только эти облачка.
  */
 export function cpTourSteps(help: CpHelp, v: CpHelpView): CpTourStep[] {
   return help.tour
-    .filter((s) => s.sec === 'end' || s.on)
+    .filter((s) => s.on)
     .filter((s) => s.sec === 'end' || s.sec === 'state' || s.sec === 'help' || has(v, s.sec))
     .map((s) => {
       const alt = (s.sec === 'pay' && !v.paid) || (s.sec === 'files' && !v.up);
@@ -240,7 +237,7 @@ export function cpTourSteps(help: CpHelp, v: CpHelpView): CpTourStep[] {
 /** Виден ли вопрос (прототип `cphQVis`): вопросы о скрытых разделах не показываются. */
 export function cpFaqShown(q: CpFaq, v: CpHelpView): boolean {
   if (q.sec === '') return true;
-  if (q.sec === 'pay') return v.payTax || v.payFee;
+  if (q.sec === 'pay') return v.payTax || v.payFee || has(v, 'pay');
   if (q.sec === 'payTax') return v.payTax;
   if (q.sec === 'payFee') return v.payFee;
   return has(v, q.sec);
@@ -289,14 +286,6 @@ export function cpLegendRows(a: string): { label: string; text: string }[] {
   });
 }
 
-/** Три шага над полями «Я оплатил» (прототип `cphSteps`): подсказка `paidSteps` через «|». */
-export function cpPaidSteps(text: string): string[] {
-  return text
-    .split('|')
-    .map((x) => x.trim())
-    .filter(Boolean);
-}
-
 /** «Словарик» по алфавиту (прототип: `localeCompare(…, 'ru')`). */
 export function cpGlossSorted(gloss: readonly CpGloss[]): CpGloss[] {
   return gloss.filter((g) => g.w && g.x).sort((a, b) => a.w.localeCompare(b.w, 'ru'));
@@ -320,7 +309,8 @@ export interface CpGlossIndex {
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * Поиск слов «Словарика» в тексте (прототип `cphGlossRx`): у одного слова — по основе (отчёт → отчёты,
+ * Поиск слов «Словарика» в тексте (прототип `cphGlossRx`): только слова, которые подчёркиваются на
+ * странице (без `pg: false`); у одного слова — по основе (отчёт → отчёты,
  * отчётов; у слова от 5 букв на гласную, «й» или «ь» основа без последней буквы), у сочетаний — как
  * написано; «Другие формы» — ещё варианты через запятую; сокращения — только заглавными; «е» и «ё» не
  * различаются. Длинные варианты — раньше коротких.
@@ -328,7 +318,7 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export function cpGlossIndex(gloss: readonly CpGloss[]): CpGlossIndex {
   const alts: GlossAlt[] = [];
   gloss.forEach((x, i) => {
-    if (!x.w || !x.x) return;
+    if (!x.w || !x.x || x.pg === false) return;
     for (const f of [x.w, ...(x.also ?? '').split(',')].map((s) => s.trim()).filter(Boolean)) {
       alts.push({ i, f, up: f.length > 1 && f === f.toUpperCase() && /[A-ZА-ЯЁ]/.test(f) });
     }

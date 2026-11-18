@@ -117,10 +117,18 @@ export const FILES_SENT_TEXTS = {
     ru: 'Документы для бухгалтера: до 10 файлов за раз, до 20 МБ каждый',
     section: S,
   },
-  'pub.sent.list': { ru: 'Отправленные вами', section: S },
+  'pub.sent.none': { ru: 'Вы пока ничего не отправляли', section: S },
+  'pub.sent.none_off': { ru: 'Файлов от вас нет', section: S },
+  'pub.sent.dlg.title': { ru: 'Отправить файл бухгалтеру', section: S },
+  'pub.sent.st.new': { ru: 'Отправлен', section: S },
+  'pub.sent.st.accepted': { ru: 'Принят', section: S },
+  'pub.sent.st.rejected': { ru: 'Не принят', section: S },
+  'pub.sent.left.one': { ru: 'хранится ещё {n} день', section: S },
+  'pub.sent.left.few': { ru: 'хранится ещё {n} дня', section: S },
+  'pub.sent.left.many': { ru: 'хранится ещё {n} дней', section: S },
+  'pub.sent.left.today': { ru: 'удалится сегодня', section: S },
   'pub.sent.reason': { ru: 'Причина: {reason}', section: S },
   'pub.sent.tg': { ru: 'из Telegram', section: S },
-  'pub.sent.dlg.sub': { ru: 'Файлы получит ваш бухгалтер', section: S },
   'pub.sent.dlg.files': { ru: 'Файлы', section: S },
   'pub.sent.dlg.files_hint': {
     ru: 'До 10 файлов за раз, до 20 МБ каждый. Программы, сценарии и веб-страницы не принимаются',
@@ -131,10 +139,6 @@ export const FILES_SENT_TEXTS = {
   'pub.sent.dlg.ok': { ru: 'Отправить', section: S },
   'pub.sent.done.one': { ru: 'Файл отправлен бухгалтеру', section: S },
   'pub.sent.done.many': { ru: 'Файлы отправлены бухгалтеру: {n}', section: S },
-  'pub.foot.upload': {
-    ru: 'На странице можно смотреть свои данные, отправлять файлы бухгалтеру и сообщать об оплате. Вопросы — вашему бухгалтеру.',
-    section: S,
-  },
   // Сообщение ответственному (прототип `sntNotify`): одно на отправку.
   'files.sent.tg.one': { ru: 'Новый файл от контрагента\n{contractor}: {names}', section: S },
   'files.sent.tg.many': {

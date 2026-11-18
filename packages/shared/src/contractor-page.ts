@@ -145,6 +145,8 @@ export const PagePay = z.object({
   banks: z.array(z.string()),
   bik: z.string().nullable(),
   holder: z.string(),
+  /** Реквизит сотрудника: «Получатель: …, ваш бухгалтер» (прототип v135 `pubPay`, `emp`). */
+  employee: z.boolean(),
   /**
    * Последнее сообщение клиента об оплате этого вида, которое ждёт подтверждения (прототип v116
    * `pgClaimWait`): когда и сколько; null — ждущего нет.
@@ -502,15 +504,26 @@ export const PublicPageBody = z.object({
 export type PublicPageBody = z.infer<typeof PublicPageBody>;
 
 /**
+ * Чья страница — на экранах кода (прототип v135 `pubBrand`): название и логотип организации, когда
+ * страница есть; у «Страницы недоступна» — знак платформы.
+ */
+export const PageGateOrg = z.object({ name: z.string(), logo: OrgLogoLink.nullable() });
+export type PageGateOrg = z.infer<typeof PageGateOrg>;
+
+/**
  * Что показать по ссылке: «Страница недоступна» (выключенная, неизвестный ИНН, архив — одинаково),
  * ввод кода, перерыв после неверных кодов, «Страница закрыта» после 5 неверных кодов за сутки (до
  * смены кода, docs/deviations.md п. О-21) или саму страницу.
  */
 export const PublicPage = z.discriminatedUnion('state', [
   z.object({ state: z.literal('unavailable') }),
-  z.object({ state: z.literal('code'), help: CpCodeHelp }),
-  z.object({ state: z.literal('locked'), lockedUntil: z.iso.datetime() }),
-  z.object({ state: z.literal('closed') }),
+  z.object({ state: z.literal('code'), org: PageGateOrg.nullable(), help: CpCodeHelp }),
+  z.object({
+    state: z.literal('locked'),
+    org: PageGateOrg.nullable(),
+    lockedUntil: z.iso.datetime(),
+  }),
+  z.object({ state: z.literal('closed'), org: PageGateOrg.nullable() }),
   z.object({ state: z.literal('open'), page: PublicPageBody }),
 ]);
 export type PublicPage = z.infer<typeof PublicPage>;

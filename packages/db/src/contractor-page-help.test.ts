@@ -223,28 +223,27 @@ describe.skipIf(!databaseAvailable())(
       const r = await asAdmin((tx) =>
         adminCpHelpEdit(
           tx,
-          { op: 'welcome', key: 't', text: 'Здравствуйте!', version: before.version },
+          { op: 'welcome', key: 'lead', text: 'Здравствуйте!', version: before.version },
           0,
         ),
       );
       expect(r).toMatchObject({ ok: true, value: { version: before.version + 1 } });
-      expect((await readCpHelp(db.app.db)).welcome.t).toBe('Здравствуйте!');
-      const [row] = await history('cpwel:t');
+      expect((await readCpHelp(db.app.db)).welcome.lead).toBe('Здравствуйте!');
+      const [row] = await history('cpwel:lead');
       expect(row).toMatchObject({
         action: 'update',
         actorUserId: adminId,
-        // С прототипа v135 у «Приветствия» нет своего заголовка: экран берёт его из словаря.
-        changes: [{ field: 'text', from: before.help.welcome.t ?? '', to: 'Здравствуйте!' }],
+        changes: [{ field: 'text', from: before.help.welcome.lead ?? '', to: 'Здравствуйте!' }],
       });
       const again = await asAdmin((tx) =>
         adminCpHelpEdit(
           tx,
-          { op: 'welcome', key: 't', text: 'Здравствуйте!', version: before.version + 1 },
+          { op: 'welcome', key: 'lead', text: 'Здравствуйте!', version: before.version + 1 },
           0,
         ),
       );
       expect(again).toMatchObject({ ok: true, value: { version: before.version + 1 } });
-      expect(await history('cpwel:t')).toHaveLength(1);
+      expect(await history('cpwel:lead')).toHaveLength(1);
     });
 
     it('устаревшая версия — «запись изменена другим пользователем», ничего не пишется', async () => {

@@ -256,6 +256,7 @@ export async function contractorPageBody(
       const w = lastWaiting(kind);
       return {
         ...a,
+        employee: kind === 'tax' && facts.paysTo === 'emp',
         head: tr?.head ?? '',
         copy: tr?.copy ?? a.copy,
         copyLabel: tr?.copyLabel ?? '',
@@ -278,8 +279,9 @@ export async function contractorPageBody(
 
   return {
     today,
-    // Телефон организации — в «Контактах» и в «Бухгалтер пока не назначен»; иначе не передаётся.
-    orgPhone: has('contacts') || !responsible ? people.orgPhone : null,
+    // Телефон организации — в «Контактах», в «Бухгалтер пока не назначен» и когда у бухгалтера нет
+    // своего телефона («Позвонить бухгалтеру», прототип v135 `ph`); иначе не передаётся.
+    orgPhone: has('contacts') || !responsible?.phone ? people.orgPhone : null,
     issues: {
       late,
       short: moneyBody?.verdict === 'short' ? moneyBody.amount : 0,
