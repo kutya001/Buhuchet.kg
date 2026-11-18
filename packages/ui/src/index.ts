@@ -36,6 +36,7 @@ export {
   type WindowLabels,
 } from './modal';
 export { FloatingPanel } from './floating';
+export { Fold, FormMore } from './fold';
 export { Plate, Plates, type PlateColor, type PlateProps } from './plates';
 export { Popover, type PopoverProps } from './popover';
 export { RecordChangedNotice, type RecordChangedNoticeProps } from './record-changed';
@@ -140,6 +141,7 @@ export {
   type StatusHistoryRow,
 } from './status/status-history';
 export { RollbackDialog, type RollbackDialogLabels } from './status/rollback-dialog';
+export { DueBit, StatusLine } from './status/status-line';
 export { STATUS_TONE, type StatusToneClasses } from './status/tones';
 export {
   ActionList,

@@ -15,6 +15,9 @@ const BUTTON_VARIANTS = {
   danger: 'bg-danger-btn text-on-accent shadow-cta',
   ok: 'bg-ok-btn text-on-accent shadow-cta',
   ghost: 'bg-transparent text-muted hover:bg-row-hover hover:text-ink',
+  /** Возврат «На исправление», «На доработку» (прототип v134 `.btn.danger-o`): обычная, текст красным. */
+  dangerOutline:
+    'bg-btn text-danger shadow-btn hover:bg-btn-hover hover:shadow-btn-hover active:shadow-btn-active',
 } as const;
 
 const BUTTON_SIZES = {
