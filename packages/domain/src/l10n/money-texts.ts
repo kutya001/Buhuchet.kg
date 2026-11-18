@@ -204,9 +204,10 @@ export const TAX_MONEY_TEXTS = {
     section: R,
   },
   'report.pay_first.note': {
-    ru: 'Отчёт «Сдача + уплата» отмечается сданным после оплаты полностью или частично: «Принять деньги» → «Отметить оплаченным» → «Сдан».',
+    ru: 'Отчёт «Сдача + уплата» отмечается сданным после оплаты полностью или частично: «Принять деньги», потом «Отметить оплаченным», потом «Сдан».',
     section: R,
   },
+  'report.pay_first.left': { ru: 'Сначала оплатите налог: осталось {amount}', section: R },
   'report.pay_first.submit_note': {
     ru: 'Отчёт «Сдача + уплата» отмечается сданным после оплаты налога. Нулевой отчёт — впишите 0. Если сумма больше 0, она сохранится, а «Сдан» можно будет поставить после «Отметить оплаченным».',
     section: R,
@@ -235,9 +236,6 @@ export const TAX_MONEY_TEXTS = {
   },
 
   // Карточка отчёта: суммы, график оплаты, деньги контрагента
-  'report.money.received_full': { ru: 'получено полностью', section: R },
-  'report.money.received_part': { ru: 'получено частично', section: R },
-  'report.money.received_wait': { ru: 'ожидаем', section: R },
   'report.money.self_paid': { ru: 'оплатил контрагент сам: {amount}', section: R },
   'report.money.over': { ru: '+{amount} пеня/переплата', section: R },
   'report.money.pay_overdue': { ru: 'срок оплаты прошёл', section: R },

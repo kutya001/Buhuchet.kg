@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, newOrgOwner, signIn } from './helpers';
+import { DEMO_PASSWORD, expandCard, newOrgOwner, signIn } from './helpers';
 import { connectAllTypes } from './orgs';
 import { asOwner, manualReport, newContractor, prepay, reportsOf, staffIds } from './reports';
 
@@ -96,6 +96,8 @@ async function openCard(page: Page, id: string, text: string, typeName: string):
   await expect(row(page, id)).toHaveCount(1);
   await row(page, id).getByText(text).first().click();
   const card = page.getByRole('dialog', { name: typeName });
+  // Под шапкой — строка состояния; шкалы, «Подробности» и «История» раскрываются (прототип v134).
+  await expandCard(card.locator(`[data-report-card="${id}"]`));
   // С «Учётом оплаты налогов» у вида с суммой две шкалы — «Сдача» и «Оплата» (задача 2.19).
   await expect(
     card.locator(`[data-report-card="${id}"] [data-status-scale]`).first(),
@@ -194,7 +196,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     ).toBeVisible();
 
     // История изменений: каждое изменение суммы и статуса — с автором и временем.
-    const history = card.getByRole('list', { name: 'История изменений' });
+    const history = card.getByRole('list', { name: 'Изменения' });
     const entry = (text: RegExp) =>
       history.locator('[data-timeline-item]').filter({ hasText: text });
     await expect(entry(/Сумма к уплате: не указана → 4\s000\sсом/)).toContainText('Эркин С.');
@@ -235,9 +237,11 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await openTab(page, isMobile, 'all', word);
     const card = await openCard(page, t1, name, 'Форма 1-Т — отчёт по труду, месячный');
-    await expect(card).toContainText('у этого вида отчёта суммы нет');
+    // У вида без суммы строки «Сумма к уплате» и блока сумм в карточке нет (прототип v134).
+    await expect(card.locator('[data-report-sums], [data-report-sum-none]')).toHaveCount(0);
+    await expect(card).not.toContainText('Сумма к уплате');
     await card.locator('[data-report-more]').click();
-    const menu = page.getByRole('menu', { name: 'Ещё действия' });
+    const menu = page.getByRole('menu', { name: 'Действия' });
     await expect(menu.getByRole('menuitem', { name: 'Изменить срок' })).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Указать сумму' })).toHaveCount(0);
     await page.keyboard.press('Escape');
@@ -507,7 +511,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await expect(card).toContainText(file);
     await expect(
       card
-        .getByRole('list', { name: 'История изменений' })
+        .getByRole('list', { name: 'Изменения' })
         .locator('[data-timeline-item]')
         .filter({ hasText: `Прикреплены файлы: ${file}` }),
     ).toHaveCount(1);

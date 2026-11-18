@@ -60,7 +60,7 @@ async function openCard(
   return card;
 }
 
-/** Карточка отчёта → «Ещё действия» → «Указать сумму». */
+/** Карточка отчёта → «Действия» → «Указать сумму». */
 async function openAmount(
   page: Page,
   cp: NewContractor,
@@ -71,7 +71,7 @@ async function openAmount(
   const card = await openCard(page, cp, name, reportId, typeName);
   await card.locator('[data-report-more]').click();
   await page
-    .getByRole('menu', { name: 'Ещё действия' })
+    .getByRole('menu', { name: 'Действия' })
     .getByRole('menuitem', { name: 'Указать сумму' })
     .click();
   return page.getByRole('dialog', { name: 'Сумма к уплате' });
