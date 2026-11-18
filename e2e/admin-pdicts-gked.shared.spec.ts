@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
+import { phoneSelectMode } from './helpers';
 
 // Админка → «Справочники платформы»: вкладка «ГКЭД» (задача 2.38; прототип admin/gked-admin.js) и
 // «Отметить сверку с ГНС» у отмеченных видов отчётов (задача 2.37, часть 3; прототип markGns).
@@ -124,6 +125,7 @@ test.describe('Админка: ГКЭД и сверка с ГНС', () => {
     await search(page, isMobile, 'НДС');
     const row = page.locator('[data-grid] [data-id="nds"]');
     await expect(row).toBeVisible();
+    await phoneSelectMode(page);
     await row.getByRole('checkbox').check();
     const bar = page.locator('[data-grid-bulk]');
     await expect(bar).toContainText('Выбрано: 1');

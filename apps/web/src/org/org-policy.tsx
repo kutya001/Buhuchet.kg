@@ -23,6 +23,7 @@ import {
   Field,
   fieldControl,
   FormGrid,
+  HelpTip,
   Hint,
   Icon,
   inputClass,
@@ -180,8 +181,10 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
           )
         }
       >
+        {/* Прототип v139 («Меньше текста»): короткая строка, подробности — под «?». */}
         <span className="-mt-1 text-[12px] leading-[1.4] text-muted">
-          {t('org.policy.features_hint')}
+          {t('org.policy.features_short')}
+          <HelpTip label={t('org.policy.features')} text={t('org.policy.features_hint')} />
         </span>
         {FEATURES.map((f) => {
           const needs = FEATURE_REQUIRES[f]?.[0];
@@ -193,13 +196,16 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
                 disabled={off}
                 onChange={(on) => void toggleFeature(f, on)}
                 label={feature(f)}
+                tip={
+                  <HelpTip
+                    label={t('org.feature.more', { name: feature(f) })}
+                    text={`${t('org.feature.benefit_line', { text: t(`org.feature.${f}.benefit`) })}${needs ? ` ${t('org.feature.needs_tip', { name: feature(needs) })}` : ''}`}
+                  />
+                }
               >
                 <Hint>
                   {t(`org.feature.${f}.hint`)}
                   {needs ? ` · ${t('org.feature.needs', { name: feature(needs) })}` : null}
-                </Hint>
-                <Hint>
-                  {t('org.feature.benefit_line', { text: t(`org.feature.${f}.benefit`) })}
                 </Hint>
               </CheckRow>
               {f === 'cppage' && policy.features.cppage ? (
@@ -227,8 +233,14 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
               )
             }
             label={t('org.policy.task_confirm')}
+            tip={
+              <HelpTip
+                label={t('org.policy.task_confirm')}
+                text={t('org.policy.task_confirm_hint')}
+              />
+            }
           >
-            <Hint>{t('org.policy.task_confirm_hint')}</Hint>
+            <Hint>{t('org.policy.task_confirm_short')}</Hint>
           </CheckRow>
         </Box>
       ) : null}
@@ -239,8 +251,14 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
           disabled={off}
           onChange={(on) => void toggleReportConfirm(on)}
           label={t('org.policy.report_confirm')}
+          tip={
+            <HelpTip
+              label={t('org.policy.report_confirm')}
+              text={t('org.policy.report_confirm_hint')}
+            />
+          }
         >
-          <Hint>{t('org.policy.report_confirm_hint')}</Hint>
+          <Hint>{t('org.policy.report_confirm_short')}</Hint>
         </CheckRow>
         {policy.reportConfirm ? (
           <WaitDays
@@ -261,8 +279,11 @@ function PolicyEdit({ policy, readOnly }: { policy: OrgPolicy; readOnly: boolean
               )
             }
             label={t('org.policy.pay_first')}
+            tip={
+              <HelpTip label={t('org.policy.pay_first')} text={t('org.policy.pay_first_hint')} />
+            }
           >
-            <Hint>{t('org.policy.pay_first_hint')}</Hint>
+            <Hint>{t('org.policy.pay_first_short')}</Hint>
           </CheckRow>
         ) : null}
       </Box>
@@ -477,7 +498,10 @@ function RemindDays({
           <span>{error}</span>
         </div>
       ) : null}
-      <Hint>{t('org.remind.hint')}</Hint>
+      <Hint>
+        {t('org.remind.short')}
+        <HelpTip label={t('org.remind.title')} text={t('org.remind.hint')} />
+      </Hint>
     </Box>
   );
 }

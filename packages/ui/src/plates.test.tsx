@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { Plate, Plates } from './plates';
+import { Plate, Plates, PlatesLabelsProvider, platesHidden } from './plates';
 
 describe('Статистика модуля — плашки-итоги (прототип `plate`)', () => {
   it('плашка-фильтр — кнопка: значок в цветном кружке, подпись, число, пояснение; нажатая — отмечена', () => {
@@ -66,5 +66,47 @@ describe('Статистика модуля — плашки-итоги (про�
     expect(html).toContain('minmax(200px,1fr)');
     expect(html).toContain('max-md:group-data-static/plates:text-[18px]');
     expect(renderToStaticMarkup(<Plates>{null}</Plates>)).not.toContain('data-static');
+  });
+
+  it('(прототип v139) телефон: ряд модуля — одна строка, число сверху, без значка и пояснения; красное число — только у красной плашки', () => {
+    const html = renderToStaticMarkup(
+      <PlatesLabelsProvider labels={{ more: (n) => `Ещё ${n}`, less: 'Свернуть' }}>
+        <Plates>
+          <Plate
+            id="over"
+            icon="clock"
+            color="red"
+            label="Просрочено"
+            value="3"
+            sub="за всё время"
+          />
+          <Plate id="week" icon="clock" color="blue" label="На неделе" value="7" />
+        </Plates>
+      </PlatesLabelsProvider>,
+    );
+    expect(html).toMatch(/data-plates="true" data-row="" data-all=""/);
+    expect(html).toContain('max-md:flex-nowrap');
+    expect(html).toContain('max-md:[&amp;:not([data-all])&gt;:nth-child(n+4)]:hidden');
+    // Значок и пояснение на телефоне скрыты, число красное только у «Просрочено».
+    expect(html).toMatch(/data-plate-dot="red" class="[^"]*max-md:group-data-row\/plates:hidden/);
+    expect(html).toMatch(/data-plate-sub="true" class="[^"]*max-md:group-data-row\/plates:hidden/);
+    expect(html.match(/max-md:group-data-row\/plates:text-danger/g)).toHaveLength(1);
+    // Плашек не больше четырёх — «Ещё N» нет.
+    expect(html).not.toContain('data-plates-more');
+    // Плашки в окне строкой не становятся.
+    expect(
+      renderToStaticMarkup(
+        <Plates static>
+          <Plate id="a" icon="clock" color="gray" label="А" value="1" />
+        </Plates>,
+      ),
+    ).not.toContain('data-row=');
+  });
+
+  it('(прототип v139 `plMob`) за «Ещё N» прячутся плашки сверх трёх, когда их больше четырёх', () => {
+    expect(platesHidden(0)).toBe(0);
+    expect(platesHidden(4)).toBe(0);
+    expect(platesHidden(5)).toBe(2);
+    expect(platesHidden(9)).toBe(6);
   });
 });

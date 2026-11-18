@@ -242,6 +242,9 @@ export const SHELL_TEXTS = {
   'shell.wide_off': { ru: 'Обычная ширина: содержимое по центру', section: 'Оболочка' },
   'shell.expand_tabs': { ru: 'Раскрыть вкладки', section: 'Оболочка' },
   'shell.collapse_tabs': { ru: 'Свернуть вкладки', section: 'Оболочка' },
+  // Телефон: ряд плашек-итогов модуля (прототип v139 `plMob`).
+  'plates.more': { ru: 'Ещё {n}', section: 'Оболочка' },
+  'plates.less': { ru: 'Свернуть', section: 'Оболочка' },
   'shell.help_here': { ru: 'Что здесь', section: 'Оболочка' },
   'shell.help_here_label': { ru: 'Что здесь: подсказка по модулю', section: 'Оболочка' },
   'shell.help_show': { ru: 'Показать на экране', section: 'Оболочка' },

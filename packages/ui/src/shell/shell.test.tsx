@@ -409,6 +409,25 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
     expect(html).toMatch(/href="\/app\/reports\/week" role="tab" aria-selected="false"/);
   });
 
+  it('(прототип v141) круглая «+» телефона умеет уезжать при прокрутке: на месте не помечена', () => {
+    const html = renderToStaticMarkup(
+      <TabRow
+        tabs={TABS}
+        activeTab="overdue"
+        label="Отчеты"
+        addActions={[{ id: 'new', label: 'Отчёт', icon: 'plus' }]}
+        addLabel="Добавить"
+        onAdd={() => {}}
+      />,
+    );
+    // Пока список не прокручивали, кнопка на месте; уезжает она по отметке обёртки.
+    expect(html).not.toContain(' data-fab-away=');
+    expect(html).toMatch(/group\/fab contents/);
+    expect(html).toContain('group-data-fab-away/fab:translate-y-24');
+    expect(html).toContain('group-data-fab-away/fab:pointer-events-none');
+    expect(html).toContain('motion-reduce:transition-none');
+  });
+
   it('группы вкладок: черта только между группами, подсказка — «Группа · Название»', () => {
     const tab = (id: string, group: string) => ({
       id,

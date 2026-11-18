@@ -70,9 +70,7 @@ const HINT = 'text-[12px] leading-[1.4] text-muted';
 
 /** Название шкалы (`.scf-t`). */
 function ScaleTitle({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-[12.5px] font-[650] text-muted">{children}</span>
-  );
+  return <span className="text-[12.5px] font-[650] text-muted">{children}</span>;
 }
 
 /**
@@ -324,7 +322,7 @@ export function StatusMini({
       data-status-mini=""
       className="inline-flex max-w-full items-center gap-1.5 text-[12.5px] font-semibold whitespace-nowrap text-ink"
     >
-      <span aria-hidden="true" className="inline-flex flex-none gap-[3px]">
+      <span aria-hidden="true" data-status-dots="" className="inline-flex flex-none gap-[3px]">
         {Array.from({ length: count }, (_, j) => (
           <i
             key={j}
@@ -338,10 +336,12 @@ export function StatusMini({
           />
         ))}
       </span>
-      <b className={`font-bold tabular-nums ${t.text}`}>
+      {/* В строке списка статус — словом и цветом; номер шага и время смены — в карточке записи
+          (прототип v139 `.grid .scm>b`, `.grid .scm-w small`). */}
+      <b className={`font-bold tabular-nums group-data-grid/grid:hidden ${t.text}`}>
         {index + 1}/{count}
       </b>
-      <span className="min-w-0 truncate">{label}</span>
+      <span className={`min-w-0 truncate ${t.gridText}`}>{label}</span>
       {mark ? (
         <span role="img" aria-label={mark.label} className={`inline-flex ${t.text}`}>
           <Icon name={mark.icon} size="sm" />
@@ -356,7 +356,9 @@ export function StatusMini({
       className="inline-flex max-w-full flex-col gap-px align-middle leading-[1.2]"
     >
       {mini}
-      <small className="pl-px text-[10.5px] text-faint tabular-nums">{at}</small>
+      <small className="pl-px text-[10.5px] text-faint tabular-nums group-data-grid/grid:hidden">
+        {at}
+      </small>
     </span>
   );
 }

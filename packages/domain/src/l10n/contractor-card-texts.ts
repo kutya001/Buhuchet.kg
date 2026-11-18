@@ -47,10 +47,6 @@ export const CONTRACTOR_CARD_TEXTS = {
   'cp.plate.archived': { ru: 'В архиве', section: L },
   'cp.plate.archived_sub': { ru: 'показать в списке', section: L },
   'cp.empty.all': { ru: 'Контрагентов пока нет', section: L },
-  'cp.empty.all_text': {
-    ru: 'Добавьте первого контрагента или загрузите список из Excel.',
-    section: L,
-  },
   'cp.empty.first': { ru: 'Здесь будут ваши клиенты', section: L },
   'cp.empty.first_text': {
     ru: 'Добавьте контрагентов по одному или загрузите сразу списком из Excel.',

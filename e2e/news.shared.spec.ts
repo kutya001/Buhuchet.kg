@@ -443,7 +443,9 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
     const ids: string[] = [];
     try {
       for (const release of ['9111', '9112', '9113', '9114']) {
-        ids.push((await publish(admin, origin, { title: `Версия ${release}: правки`, release })).id);
+        ids.push(
+          (await publish(admin, origin, { title: `Версия ${release}: правки`, release })).id,
+        );
       }
       await logIn(page, reader);
       const window = page.getByRole('dialog', { name: 'Что нового' });

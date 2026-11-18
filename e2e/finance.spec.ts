@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { cardTab, DEMO_PASSWORD, pickContractor, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, openColumns, pickContractor, signIn } from './helpers';
 import { asOwner, manualReport, newContractor, staffIds } from './reports';
 
 // Остаток контрагента и счёт сотрудника (задача 2.20, #76, часть 1) через настоящий сайт. Демо-
@@ -389,8 +389,7 @@ test.describe('Этап 2: финансовые операции по контр
     const line = page.locator(`[data-grid] [data-id="${id}"]`);
     await expect(line).toHaveCount(1);
     // «Изменение» по умолчанию скрыт, как `SHOW` прототипа: включаем в «Столбцах».
-    await page.getByRole('button', { name: /^Столбцы/ }).click();
-    const panel = page.getByRole('dialog', { name: 'Столбцы' });
+    const panel = await openColumns(page);
     await panel.getByRole('checkbox', { name: 'Изменение' }).check();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();

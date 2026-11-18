@@ -3,6 +3,9 @@ import {
   DEMO_PASSWORD,
   finger,
   hire,
+  openColumnFilter,
+  openColumns,
+  openGrouping,
   phoneTableView,
   settledBox,
   signIn,
@@ -18,7 +21,7 @@ import {
 const isStaffList = (r: Response) =>
   r.request().method() === 'GET' && new URL(r.url()).pathname === '/api/staff';
 
-/** Число с разрядами через неразрывный пробел, как «Показано 1 – 25 из 1 250» внизу списка. */
+/** Число с разрядами через неразрывный пробел, как «1–25 из 1 250» внизу списка. */
 const grouped = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
 interface StaffPage {
@@ -170,7 +173,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     const grid = page.locator('[data-grid]');
     const footer = page.locator('[data-grid-footer]');
     await expect(grid.locator('[data-id]')).toHaveCount(25);
-    await expect(footer).toContainText(`Показано 1 – 25 из ${grouped(first.total)}`);
+    await expect(footer).toContainText(`1–25 из ${grouped(first.total)}`);
     await expect(page.locator('[data-grid-page]')).toHaveText(`1 / ${Math.ceil(first.total / 25)}`);
 
     const secondLoad = page.waitForResponse(
@@ -183,7 +186,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
     await expect(grid.locator('[data-id]').first()).toHaveAttribute('data-id', second.items[0]!.id);
     await expect(grid.locator('[data-id]')).toHaveCount(25);
-    await expect(footer).toContainText(`Показано 26 – 50 из ${grouped(second.total)}`);
+    await expect(footer).toContainText(`26–50 из ${grouped(second.total)}`);
     await expect(page.locator('[data-grid-page]')).toHaveText(
       `2 / ${Math.ceil(second.total / 25)}`,
     );
@@ -204,8 +207,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect.poll(() => headers(page)).toEqual(['fullName', 'role', 'phone', 'active', 'kb']);
 
     // «Столбцы»: скрыть «Телефон», «Роль» — наверх.
-    await page.getByRole('button', { name: /^Столбцы/ }).click();
-    const panel = page.getByRole('dialog', { name: 'Столбцы' });
+    const panel = await openColumns(page);
     await panel.getByRole('checkbox', { name: 'Телефон' }).uncheck();
     // «Роль» — третья в общем порядке столбцов (после ФИО и скрытого «Логина»).
     for (let i = 0; i < 2; i++) await panel.getByRole('button', { name: 'Выше: Роль' }).click();
@@ -265,8 +267,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     if (isMobile) await phoneTableView(page);
 
     // «Группировка»: роль, внутри — статус.
-    await grid.locator('[data-grid-group-button]').click();
-    const panel = page.getByRole('dialog', { name: 'Группировка' });
+    const panel = await openGrouping(page);
     await panel.getByLabel('Уровень 1').selectOption({ label: 'Роль' });
     await panel.getByLabel('Уровень 2 (внутри первого)').selectOption({ label: 'Статус' });
     const grouped = page.waitForResponse(listWith('group', 'role,active'));
@@ -453,8 +454,7 @@ test.describe('Списки: UnifiedDataGrid', () => {
     await expect(card(second!.id)).toContainText('Заблокирован');
 
     // Группировка по статусу — заголовки групп над плитками (на ПК — строки групп в таблице).
-    await grid.locator('[data-grid-group-button]').click();
-    const panel = page.getByRole('dialog', { name: 'Группировка' });
+    const panel = await openGrouping(page);
     await panel.getByLabel('Уровень 1').selectOption({ label: 'Статус' });
     await panel.getByRole('button', { name: 'Применить' }).click();
     await expect(grid.locator('[data-group-level="0"]')).toHaveCount(2);
@@ -465,20 +465,38 @@ test.describe('Списки: UnifiedDataGrid', () => {
       .click();
     await expect(grid.locator('[data-group-level="0"]')).toHaveCount(0);
 
-    // Фильтр у столбца «Статус» (на телефоне — в виде «Таблица», как в прототипе); плашка фильтра
-    // видна и в плитках, там же фильтр снимается.
-    if (isMobile) await phoneTableView(page);
-    await grid.getByRole('button', { name: 'Фильтр: Статус' }).click();
-    const filter = page.getByRole('dialog', { name: 'Статус' });
+    // Фильтр у столбца «Статус»: на ПК — у заголовка, на телефоне — «Фильтр» над плитками и столбец
+    // в меню (прототип v139); плашка фильтра видна и в плитках, там же фильтр снимается.
+    const filter = await openColumnFilter(page, 'Статус');
     await filter.getByRole('checkbox', { name: 'Активен' }).uncheck();
     await filter.getByRole('button', { name: 'Применить' }).click();
     await expect(grid.locator('[data-id]')).toHaveCount(1);
     await expect(card(second!.id)).toBeVisible();
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Карточки' }).click();
+    if (isMobile) {
+      // Число на кнопке «Фильтр»; вид остался «Карточки».
+      await expect(grid.locator('[data-grid-phone="filter"]')).toHaveAccessibleName('Фильтр: 1');
+      await expect(grid).toHaveAttribute('data-view', 'cards');
+    }
     const chip = grid.locator('[data-chip="active"]');
     await expect(chip).toContainText('Статус: Заблокирован');
     await chip.getByRole('button', { name: 'Убрать фильтр' }).click();
     await expect(grid.locator('[data-id]')).toHaveCount(2);
+    if (isMobile) {
+      // «Сортировка» над плитками (прототип v139): столбец в меню — по возрастанию, ещё раз — по убыванию.
+      const sort = grid.locator('[data-grid-phone="sort"]');
+      const sortMenu = page.getByRole('menu', { name: 'Сортировка' });
+      for (const dir of ['asc', 'desc']) {
+        const sorted = page.waitForResponse(listWith('sort', `fullName.${dir}`));
+        await sort.click();
+        await sortMenu.getByRole('menuitem', { name: /^ФИО/ }).click();
+        const ids = ((await (await sorted).json()) as StaffPage).items.map((i) => i.id);
+        await expect(grid.locator('[data-id]').first()).toHaveAttribute('data-id', ids[0]!);
+      }
+      await sort.click();
+      await expect(sortMenu.getByRole('menuitem', { name: /^ФИО/ })).toContainText('по убыванию');
+      await page.keyboard.press('Escape');
+      await expect(sortMenu).toHaveCount(0);
+    }
 
     const menu = page.getByRole('menu', { name: 'Действия' });
     const toast = page.getByRole('status');

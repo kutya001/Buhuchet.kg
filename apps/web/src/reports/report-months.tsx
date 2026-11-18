@@ -53,7 +53,7 @@ import { useViewSettings } from '../lists/view-settings';
 import { useShell } from '../shell/context';
 import { useMassAssign } from './mass-assign';
 import { useReportActions, useReportAddRequest, type ReportActions } from './report-actions';
-import { REPORT_AUDIT, reportColumns, reportTone } from './report-columns';
+import { REPORT_AUDIT, reportColumns, reportShortCard, reportTone } from './report-columns';
 import {
   contractorPlan,
   monthDueText,
@@ -889,6 +889,11 @@ function MonthList({
       }),
     [t, access.reportConfirm, tabCounts.data?.waitDays, phone, taxpay, onReceive],
   );
+  // Телефон (прототип v141): короткая карточка отчёта.
+  const phoneCard = useMemo(
+    () => reportShortCard(t, { confirm: access.reportConfirm }),
+    [t, access.reportConfirm],
+  );
   const defaultVisible = useMemo(() => monthsVisible(taxpay), [taxpay]);
   const view = useViewSettings('reports.months');
   // Пока вид не настроен — группы по контрагенту (прототип `defGroup`).
@@ -964,6 +969,7 @@ function MonthList({
         }
         rowKey={(r) => r.id}
         titleKey="cp"
+        phoneCard={phoneCard}
         kanban={kanban}
         rowTone={reportTone}
         label={title}

@@ -17,6 +17,7 @@ import { Chip } from '../chip';
 import { iconButtonClass, linkButtonClass, TOUCH_AREA } from '../button';
 import { EmptyState, NothingFound } from '../empty-state';
 import { FloatingPanel } from '../floating';
+import { HelpTip } from '../help-tip';
 import { Icon } from '../icon';
 import { useToast } from '../toast';
 import { PHONE_QUERY, useMediaQuery } from '../use-media';
@@ -53,6 +54,7 @@ import type {
   GridRowSelection,
   GridRowStripe,
   GridRowTone,
+  GridShortCard,
   GridValues,
 } from './types';
 
@@ -112,6 +114,11 @@ export interface DataGridProps<Row> {
    * нет — заголовок и пары «подпись — значение» видимых столбцов.
    */
   cardRender?: (row: Row) => ReactNode;
+  /**
+   * Короткая карточка записи на телефоне (прототип v141 `mcard`): что стоит под заголовком и справа;
+   * `visible` — ключи видимых столбцов. На ПК карточки обычные.
+   */
+  phoneCard?: (row: Row, visible: ReadonlySet<string>) => GridShortCard;
   /** Своя строка на панели вместо числа записей (прототип `caption`). */
   caption?: ReactNode;
   /**
@@ -171,6 +178,7 @@ export function DataGrid<Row>({
   fixedView,
   kanban,
   cardRender,
+  phoneCard,
   caption,
   filters = NO_FILTERS,
   onFiltersChange,
@@ -190,6 +198,9 @@ export function DataGrid<Row>({
   );
   // Отмеченные строки — по ключу записи; выбор переживает переход по страницам до «Снять выбор».
   const [picked, setPicked] = useState<ReadonlyMap<string, Row>>(() => new Map());
+  // Телефон (прототип v139 `selMode`): галочки у записей — только после «Выбрать несколько» под «⋯»
+  // или пока что-то выбрано; «Снять выбор» выходит из режима.
+  const [selectMode, setSelectMode] = useState(false);
   // `move` — второй шаг меню карточки доски: «Перенести в столбец…» → список столбцов.
   const [menu, setMenu] = useState<{ row: Row; place: MenuPlace; move?: boolean } | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
@@ -258,7 +269,11 @@ export function DataGrid<Row>({
         togglePage: (on) => setPicked((prev) => pickRows(prev, pageRows, on, rowKey)),
       }
     : undefined;
-  const clearPicked = () => setPicked(new Map());
+  const clearPicked = () => {
+    setPicked(new Map());
+    setSelectMode(false);
+  };
+  const rowSelection = !phone || selectMode || picked.size > 0 ? selection : undefined;
 
   const tree =
     group.length && data?.groups ? groupTree(data.groups, data.items, data.rowGroups ?? []) : null;
@@ -377,12 +392,7 @@ export function DataGrid<Row>({
   } else if (data.total === 0) {
     body =
       filterKeys.length || searching ? (
-        <NothingFound
-          title={labels.notFound}
-          text={labels.notFoundText}
-          resetLabel={labels.resetFilters}
-          onReset={resetAll}
-        />
+        <NothingFound title={labels.notFound} resetLabel={labels.resetFilters} onReset={resetAll} />
       ) : (
         empty
       );
@@ -429,7 +439,7 @@ export function DataGrid<Row>({
         hasActions={!!actions}
         clickable={!!onOpen || (openMenu && !!actions)}
         events={events}
-        selection={selection}
+        selection={rowSelection}
         filter={
           onFiltersChange
             ? {
@@ -456,23 +466,30 @@ export function DataGrid<Row>({
         rowStripe={rowStripe}
         clickable={!!onOpen || (openMenu && !!actions)}
         events={events}
-        selection={selection}
+        selection={rowSelection}
         totals={data.totals}
         total={data.total}
         groups={groups}
         labels={labels}
         render={cardRender}
+        short={phone ? phoneCard : undefined}
       />
     );
   }
   const filterColumn = filterAt ? columns.find((c) => c.key === filterAt.key) : undefined;
+  /** Значение фильтра строкой — в чипе над списком и в меню «Фильтр» на телефоне. */
+  const filterText = (key: string) => {
+    const names = valueLabels[key] ?? {};
+    const type = columns.find((c) => c.key === key)!.type;
+    return chipText(type, filters[key]!, labels, (v) => names[v] ?? v);
+  };
 
   return (
     <div
       data-grid
       data-density={settings.density ?? 'normal'}
       data-view={view}
-      className={`flex min-w-0 flex-col gap-2.5 ${settings.width === 'center' && !onBoard ? 'mx-auto w-full max-w-[1180px] group-data-[wide=true]/app:max-w-none' : ''}`}
+      className={`group/grid flex min-w-0 flex-col gap-2.5 ${settings.width === 'center' && !onBoard ? 'mx-auto w-full max-w-[1180px] group-data-[wide=true]/app:max-w-none' : ''}`}
     >
       <GridToolbar
         columns={columns}
@@ -511,6 +528,30 @@ export function DataGrid<Row>({
         fold={fold}
         onExport={onExport}
         exporting={exporting}
+        phoneTools={
+          phone
+            ? {
+                filters: onFiltersChange
+                  ? {
+                      active: Object.fromEntries(filterKeys.map((k) => [k, filterText(k)])),
+                      onOpen: (key, anchor) => setFilterAt({ key, anchor }),
+                      onReset: () => onFiltersChange({}),
+                    }
+                  : undefined,
+                sort,
+                onSort: (next) => onSettingsChange({ ...settings, sort: next }),
+                select: bulk?.length
+                  ? {
+                      on: selectMode,
+                      onToggle: () => {
+                        if (selectMode) setPicked(new Map());
+                        setSelectMode(!selectMode);
+                      },
+                    }
+                  : undefined,
+              }
+            : undefined
+        }
         labels={labels}
       />
       {(filterKeys.length > 0 || group.length > 0 || searching) && (
@@ -521,13 +562,7 @@ export function DataGrid<Row>({
           search={searching ? search : null}
           onClearSearch={onClearSearch}
           filters={filterKeys.map((key) => {
-            const column = columns.find((c) => c.key === key)!;
-            const names = valueLabels[key] ?? {};
-            return {
-              key,
-              label: column.label,
-              text: chipText(column.type, filters[key]!, labels, (v) => names[v] ?? v),
-            };
+            return { key, label: columns.find((c) => c.key === key)!.label, text: filterText(key) };
           })}
           onRemove={(key) => setFilter(key, null)}
           onResetAll={resetAll}
@@ -535,18 +570,20 @@ export function DataGrid<Row>({
         />
       )}
       {body}
-      {!error && !loading && data && data.total > 0 && board && (
+      {/* Низ доски (прототип v139): только «Как перенести» с подсказкой «?», и только когда перенос есть. */}
+      {!error && !loading && data && data.total > 0 && board && canMove && (
         <div
           className="flex flex-wrap items-center gap-2 text-[12.5px] text-muted"
           data-grid-footer
         >
-          <span>{labels.boardShown(board.columns.length, data.total)}</span>
           <div className="flex-1" />
-          {canMove && (
-            <span className="text-faint" data-board-tip>
-              {phone ? labels.boardTipMenu : labels.boardTipDrag}
-            </span>
-          )}
+          <span className="inline-flex items-center gap-1 text-faint" data-board-tip>
+            {labels.boardHow}
+            <HelpTip
+              label={labels.boardHow}
+              text={phone ? labels.boardTipMenu : labels.boardTipDrag}
+            />
+          </span>
         </div>
       )}
       {!error && !loading && data && data.total > 0 && tree && (
@@ -678,7 +715,7 @@ export function GridChips({
 }
 
 /**
- * Низ списка (прототип `.gfoot`): «Показано 1 – 25 из 250», «На странице» 25 / 50 / 100 / «Все записи»,
+ * Низ списка (прототип v139 `.gfoot`): «1–25 из 250», «На странице» 25 / 50 / 100 / «Все записи»,
  * «Назад» и «Вперёд» с номером страницы.
  */
 export function GridFooter({

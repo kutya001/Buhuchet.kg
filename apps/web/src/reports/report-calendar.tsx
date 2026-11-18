@@ -35,6 +35,7 @@ import {
   REPORT_AUDIT,
   REPORT_DEFAULT_SORT,
   reportColumns,
+  reportShortCard,
   reportDefaultVisible,
   reportTone,
 } from './report-columns';
@@ -260,6 +261,11 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
       }),
     [t, access.reportConfirm, summary.data?.waitDays, phone, taxpay, onReceive],
   );
+  // Телефон (прототип v141): короткая карточка отчёта.
+  const phoneCard = useMemo(
+    () => reportShortCard(t, { confirm: access.reportConfirm }),
+    [t, access.reportConfirm],
+  );
   const defaultVisible = useMemo(() => reportDefaultVisible(false, taxpay), [taxpay]);
   const view = useViewSettings('reports.calendar');
   const extra = useMemo(() => ({ tab: 'calendar', quick: 'all', day }), [day]);
@@ -323,6 +329,7 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
         empty={<EmptyState icon="calendar" title={t('report.cal.empty')} />}
         rowKey={(r) => r.id}
         titleKey="cp"
+        phoneCard={phoneCard}
         kanban={kanban}
         rowTone={reportTone}
         label={t('report.cal.list', { date: formatDateRu(day) })}

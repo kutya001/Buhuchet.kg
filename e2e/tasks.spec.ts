@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, showStats, signIn } from './helpers';
+import { DEMO_PASSWORD, openColumns, showStats, signIn } from './helpers';
 
 // «Задачи» (задача 2.23, #79) через настоящий сайт: форма «Общая / По контрагенту», подтверждение
 // выполнения, возврат «На доработку», карточка задачи на телефоне. Демо-организация: владелец erkin,
@@ -122,8 +122,7 @@ test.describe('Этап 2: задачи', () => {
 
     await search(page, isMobile, title);
     // «Контрагент» по умолчанию скрыт, как в прототипе (docs/deviations.md п. Б-2): включаем в «Столбцах».
-    await page.getByRole('button', { name: /^Столбцы/ }).click();
-    const panel = page.getByRole('dialog', { name: 'Столбцы' });
+    const panel = await openColumns(page);
     await panel.getByRole('checkbox', { name: 'Контрагент' }).check();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();

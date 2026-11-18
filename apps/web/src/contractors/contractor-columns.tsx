@@ -36,6 +36,13 @@ export const CONTRACTOR_DEFAULT_VISIBLE = [
   'overdue',
 ];
 
+/**
+ * Вкладка «Должники» (прототип v139, `SHOW['cps-debtors']` и `sort` в `renderCps`): вместо ИНН и режима
+ * — долг за обслуживание, сверху — самый большой долг.
+ */
+export const DEBTORS_DEFAULT_VISIBLE = ['name', 'debt', 'responsible', 'overdue', 'service'];
+export const DEBTORS_DEFAULT_SORT: ListSort = { key: 'debt', dir: 'desc' };
+
 export const CONTRACTOR_AUDIT: GridAudit<ContractorRow> = {
   createdBy: (r) => r.audit.createdBy ?? '',
   updatedBy: (r) => r.audit.updatedBy ?? r.audit.createdBy ?? '',

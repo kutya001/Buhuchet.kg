@@ -29,6 +29,7 @@ export function CheckRow({
   disabled = false,
   onChange,
   label,
+  tip,
   children,
   compact = false,
   plain = false,
@@ -40,6 +41,8 @@ export function CheckRow({
   onChange: (checked: boolean) => void;
   /** Название: у переключателя — жирным, если не `plain`. */
   label: ReactNode;
+  /** «?» с подробным пояснением сразу после названия (прототип v139: `tipI` в строке переключателя). */
+  tip?: ReactNode;
   /** Пояснения под названием (`.hint`). */
   children?: ReactNode;
   compact?: boolean;
@@ -62,6 +65,7 @@ export function CheckRow({
       />
       <span className="min-w-0 flex-1">
         {kind === 'switch' && !plain ? <b>{label}</b> : label}
+        {tip}
         {children}
       </span>
     </label>

@@ -40,9 +40,31 @@ export interface GridColumn<Row> {
    * подпись столбца; `cell` — значение на плитке (`cv`), без него — `text`. Пустое значение не
    * показывается.
    */
-  tileLine?: { label?: string; cell?: (row: Row) => ReactNode };
+  tileLine?: {
+    label?: string;
+    cell?: (row: Row) => ReactNode;
+    /**
+     * Значение числом (прототип v141 `clineHtml`): общая строка плитки показывается, только когда у
+     * первого её столбца оно больше нуля — у отчёта без суммы к уплате строки денег нет.
+     */
+    amount?: (row: Row) => number | null;
+  };
   /** Только на ПК (`deskOnly` прототипа): на телефоне столбец не показывается, даже если выбран. */
   desktopOnly?: boolean;
+}
+
+/**
+ * Короткая карточка записи на телефоне (прототип v141 ui/grid.js `cfg.mcard`, стили `.gc-m`, `.gc-sub`,
+ * `.gc-r`; решение заказчика 17.11.2026 «Меньше текста»): главное — строкой под заголовком и справа от
+ * него, остальные видимые столбцы — парами ниже.
+ */
+export interface GridShortCard {
+  /** Столбцы, которые карточка уже показала под заголовком и справа: в парах ниже их нет. */
+  keys: readonly string[];
+  /** Строка под заголовком: мелко и серым («НДС · октябрь 2026 · до 25.11 · Айгуль М.»). */
+  sub?: ReactNode;
+  /** Справа от заголовка: статус. */
+  right?: ReactNode;
 }
 
 /** Атрибуты ячейки из `GridColumn.td`. */
@@ -135,9 +157,7 @@ export interface GridLabels {
   /** На доске вместо «Столбцы» — «Поля»; подсказка — «Какие поля показывать на карточке: первые пять видимых». */
   boardFields: string;
   boardFieldsHint: string;
-  /** Подписи кнопок-значков доски на телефоне: «Столбцы доски: {поле}», «Поля карточки (n/m)». */
-  boardByPhone: (label: string) => string;
-  boardFieldsPhone: (shown: number, total: number) => string;
+  /** Пункт «⋯» на телефоне: «Поля карточки». */
   boardFieldsName: string;
   /** Столбец доски для диктора: «В работе: 12». */
   boardColumn: (label: string, count: number) => string;
@@ -147,15 +167,28 @@ export interface GridLabels {
   boardMore: (next: number, left: number) => string;
   /** «Показаны первые 60 столбцов из 75 — сузьте список фильтром или поиском». */
   boardCut: (shown: number, total: number) => string;
-  /** Низ доски: «Столбцов: 4 · записей: 52». */
-  boardShown: (columns: number, total: number) => string;
-  /** Подсказки внизу: «Карточку можно перетащить в другой столбец», «Перенос — в меню карточки «⋯»». */
+  /** Низ доски: «Как перенести» и подсказка «?» к нему (прототип v139). */
+  boardHow: string;
+  /** Текст подсказки: «Карточку можно перетащить в другой столбец», «Перенос — в меню карточки «⋯»». */
   boardTipDrag: string;
   boardTipMenu: string;
   /** Пункт меню карточки: «Перенести в столбец…». */
   boardMove: string;
-  /** Кнопка вида на телефоне: «Вид списка: Карточки». */
-  viewTo: (name: string) => string;
+  /** Телефон (прототип v139): «Сортировка», «по возрастанию», «по убыванию», «Без сортировки». */
+  sort: string;
+  sortAsc: string;
+  sortDesc: string;
+  sortNone: string;
+  /** Телефон: кнопка «Фильтр» с числом для диктора — «Фильтр: 2». */
+  filterN: (n: number) => string;
+  /** Телефон: кнопка «⋯» — «Ещё», для диктора — «Ещё: вид, группировка, поля, Excel». */
+  more: string;
+  moreHint: string;
+  /** Телефон, пункты «⋯»: «Столбцы доски», «5 из 9», «Плотность», «Выбрать несколько». */
+  boardColumns: string;
+  shownOf: (n: number, total: number) => string;
+  density: string;
+  selectMany: string;
   /** «Столбцы». */
   columns: string;
   /** Пояснение в меню «Столбцы». */
@@ -180,7 +213,7 @@ export interface GridLabels {
   columnWidth: string;
   /** Кнопка «⋯» и меню записи: «Действия». */
   actions: string;
-  /** «Показано 1 – 25 из 250». */
+  /** «1–25 из 250» (прототип v139). */
   shown: (from: number, to: number, total: number) => string;
   perPage: string;
   allRows: string;
@@ -206,9 +239,8 @@ export interface GridLabels {
   /** Строка карточки: «Создал: Алишер Т., 12.03.2026 10:15». */
   createdLine: (text: string) => string;
   updatedLine: (text: string) => string;
-  /** «Ничего не найдено»: заголовок, пояснение и «Сбросить фильтры». */
+  /** «Ничего не найдено»: заголовок и «Сбросить фильтры» (прототип v139: без пояснения). */
   notFound: string;
-  notFoundText: string;
   resetFilters: string;
   /** Кнопка фильтра у заголовка: подсказка «Фильтр», для диктора — «Фильтр: ФИО». */
   filter: string;

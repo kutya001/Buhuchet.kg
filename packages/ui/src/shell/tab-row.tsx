@@ -1,7 +1,8 @@
 'use client';
 
-import { Fragment, useLayoutEffect, useRef } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { buttonClass, iconButtonClass } from '../button';
+import { fabAway } from '../gestures';
 import { Icon } from '../icon';
 import { BetaBadge, MenuItems, type MenuItem } from '../menu';
 import { Popover } from '../popover';
@@ -74,7 +75,8 @@ export interface StatsToggle {
  * `.tab`, `.add-btn`): вкладки-«острова» со значком и счётчиком по центру, кнопка справа на том же
  * уровне; между группами вкладок — черта (`.tab-sep`). Один способ добавления — кнопка сразу его запускает, несколько — открывает меню выбора. На
  * телефоне вместо кнопки — круглая «+» справа внизу со всеми способами. У экрана с плашками-итогами
- * перед ними — значок «Статистика» (на ПК и на телефоне).
+ * перед ними — значок «Статистика» (только на ПК: на телефоне плашки всегда на виду одной строкой,
+ * прототип v139).
  */
 export function TabRow({
   tabs,
@@ -87,6 +89,7 @@ export function TabRow({
   Link = DefaultLink,
 }: TabRowProps) {
   const row = useRef<HTMLDivElement>(null);
+  const [fabHolder, fabGone] = useFabAway(activeTab);
 
   useLayoutEffect(() => {
     const el = row.current;
@@ -157,7 +160,8 @@ export function TabRow({
             aria-label={stats.label}
             aria-pressed={stats.shown}
             title={stats.shown ? stats.hide : stats.show}
-            className={`${iconButtonClass()} ${stats.shown ? 'bg-btn! text-ink! shadow-flat-strong' : ''}`}
+            // На телефоне кнопки нет: плашки там всегда одной строкой (прототип v139).
+            className={`${iconButtonClass()} max-md:hidden ${stats.shown ? 'bg-btn! text-ink! shadow-flat-strong' : ''}`}
           >
             <Icon name="chart" />
           </button>
@@ -184,12 +188,41 @@ export function TabRow({
       </div>
       {addActions.length > 0 && (
         // Свайп вкладок не начинается на кнопке «+».
-        <span data-no-swipe className="contents">
+        <span
+          ref={fabHolder}
+          data-no-swipe
+          data-fab-away={fabGone ? '' : undefined}
+          className="group/fab contents"
+        >
           <AddControl actions={addActions} label={addLabel} onAdd={onAdd} fab />
         </span>
       )}
     </div>
   );
+}
+
+/**
+ * Круглая «+» телефона уезжает вниз, пока список прокручивают вниз, и возвращается при прокрутке
+ * вверх (прототип v141: кнопка не закрывает записи). Смена вкладки возвращает её на место.
+ */
+function useFabAway(tab: string | null) {
+  const [el, setEl] = useState<HTMLElement | null>(null);
+  const [state, setState] = useState({ away: false, tab });
+  useEffect(() => {
+    const pane = el?.closest('main');
+    if (!pane) return;
+    let last = pane.scrollTop;
+    const onScroll = () => {
+      const y = pane.scrollTop;
+      const away = fabAway(y, last);
+      if (away === null) return;
+      last = y;
+      setState((s) => (s.away === away && s.tab === tab ? s : { away, tab }));
+    };
+    pane.addEventListener('scroll', onScroll, { passive: true });
+    return () => pane.removeEventListener('scroll', onScroll);
+  }, [el, tab]);
+  return [setEl, state.away && state.tab === tab] as const;
 }
 
 /** «+ Добавить» на ПК или круглая «+» на телефоне: один способ — сразу, несколько — меню. */
@@ -206,7 +239,7 @@ function AddControl({
 }) {
   const many = actions.length > 1;
   const wrapper = fab
-    ? 'fixed right-4 bottom-[calc(78px+env(safe-area-inset-bottom,0px))] z-20 inline-flex group-data-[kb=true]/app:hidden md:hidden'
+    ? 'fixed right-4 bottom-[calc(78px+env(safe-area-inset-bottom,0px))] z-20 inline-flex transition-[translate,opacity] duration-(--bu-t-base) ease-(--bu-ease-out) group-data-fab-away/fab:pointer-events-none group-data-fab-away/fab:translate-y-24 group-data-fab-away/fab:opacity-0 group-data-[kb=true]/app:hidden motion-reduce:transition-none md:hidden'
     : 'relative inline-flex';
   const look = fab
     ? 'grid h-[54px] w-[54px] cursor-pointer place-items-center rounded-full border-0 bg-accent text-on-accent shadow-[var(--bu-sh-cta),var(--bu-shadow-l)]'

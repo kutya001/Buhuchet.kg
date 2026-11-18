@@ -149,11 +149,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     await endShow(page);
     await saved;
     await expect(bubble(page)).toHaveCount(0);
-    await expect(
-      page.getByText(
-        'Показ не пройден до конца',
-      ),
-    ).toBeVisible();
+    await expect(page.getByText('Показ не пройден до конца')).toBeVisible();
     expect(await stepDone(page.request, 'roles')).toBeNull();
 
     // Второй раз — «Продолжить показ?»: «Продолжить» пропускает уже пройденные (знакомые) облачки.
@@ -272,11 +268,7 @@ test.describe('Этап 2: База знаний — «Показать как»
     await forward(page);
     await endShow(page);
     await expect(bubble(page)).toHaveCount(0);
-    await expect(
-      page.getByText(
-        'Показ не пройден до конца',
-      ),
-    ).toBeVisible();
+    await expect(page.getByText('Показ не пройден до конца')).toBeVisible();
     expect(await stepDone(page.request, 'rtabs')).toBeNull();
 
     await showStep(page, 'rtabs');
@@ -294,15 +286,18 @@ test.describe('Этап 2: База знаний — «Показать как»
         'Вкладка «Просрочено»',
         'Вкладка «Ожидают подтверждения»',
         'Вкладка «Календарь»',
-        'Кнопка «Статистика»',
         'Кнопка «…» — действия',
       ]),
     );
-    // На телефоне плашки скрыты (их выбор — свой), а список — карточками без фильтров столбцов, как в
-    // прототипе: облачка показывают только видимое.
-    if (!isMobile) {
+    // На телефоне (прототип v139) кнопки «Статистика» нет, плашки — одной строкой (за «Ещё N» — те,
+    // что после третьей), а список — карточками без фильтров столбцов: облачка показывают только видимое.
+    if (isMobile) {
+      expect(titles).not.toContain('Кнопка «Статистика»');
+      expect(titles.some((x) => x.startsWith('Плашка «'))).toBe(true);
+    } else {
       expect(titles).toEqual(
         expect.arrayContaining([
+          'Кнопка «Статистика»',
           'Плашка «Просрочено»',
           'Плашка «На этой неделе»',
           'Фильтр столбца',

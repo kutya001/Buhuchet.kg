@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { orgWithTypes } from './orgs';
 import { assign, newContractor } from './reports';
+import { phoneSelectMode } from './helpers';
 
 // Прототип v84: массовые изменения видов отчётов — галочки в списке, «Подключить», «Настроить»,
 // «Отключить» (docs/deviations.md п. О-74). Своя организация теста без подключённых видов.
@@ -13,6 +14,8 @@ async function pick(page: Page, isMobile: boolean, code: string, name: string) {
     await page.getByRole('button', { name: 'Поиск', exact: true }).click();
   }
   await page.getByRole('searchbox').first().fill(name);
+  await expect(row(page, code)).toBeVisible();
+  await phoneSelectMode(page);
   await row(page, code)
     .getByRole('checkbox', { name: /Выбрать/ })
     .check();

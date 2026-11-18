@@ -1,5 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, finger, newOrgOwner, phoneTableView, settledBox, signIn } from './helpers';
+import {
+  DEMO_PASSWORD,
+  finger,
+  newOrgOwner,
+  openColumnFilter,
+  settledBox,
+  signIn,
+} from './helpers';
 import { asOwner, manualReport, newContractor, staffIds } from './reports';
 
 // «Отчеты для сдачи» → вкладки и список (задача 2.13, #69) через настоящий сайт. Отчёты — «Разовым
@@ -67,11 +74,22 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     const row = (id: string) => grid.locator(`[data-id="${id}"]`);
     await expect(grid.locator('[data-id]')).toHaveCount(3);
 
-    // Метка «Что сделать»: на ПК — столбец за видом отчёта, на телефоне — на плитке рядом с видом.
-    await expect(row(nds).locator('[data-act]')).toHaveText('Сдача + уплата');
-    await expect(row(nds).locator('[data-act]')).toHaveAttribute('data-act', 'both');
-    await expect(row(pat).locator('[data-act]')).toHaveText('Уплата');
-    await expect(row(t1).locator('[data-act]')).toHaveText('Сдача');
+    if (isMobile) {
+      // Короткая карточка телефона (прототип v141 `mcard`): под контрагентом — вид отчёта и срок
+      // «до ДД.ММ», справа — статус; метки «Что сделать» на ней нет, у патента справа — оплата.
+      await expect(row(nds).locator('[data-card-sub]')).toContainText('НДС');
+      await expect(row(nds).locator('[data-card-sub]')).toContainText('до 15.01');
+      await expect(row(nds).locator('[data-act]')).toHaveCount(0);
+      await expect(row(pat).locator('[data-card-right] [data-payment-mini]')).toContainText(
+        'Не оплачено',
+      );
+    } else {
+      // Метка «Что сделать» — столбец за видом отчёта.
+      await expect(row(nds).locator('[data-act]')).toHaveText('Сдача + уплата');
+      await expect(row(nds).locator('[data-act]')).toHaveAttribute('data-act', 'both');
+      await expect(row(pat).locator('[data-act]')).toHaveText('Уплата');
+      await expect(row(t1).locator('[data-act]')).toHaveText('Сдача');
+    }
     // Шкала сдачи — у НДС и 1-Т; у патента вместо неё «—». Шкала оплаты (в «Оплачено в бюджет», задача
     // 2.19) — у НДС и патента, у 1-Т её нет.
     const reportMini = (id: string) =>
@@ -245,18 +263,18 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     const row = (id: string) => grid.locator(`[data-id="${id}"]`);
     await expect(grid.locator('[data-id]')).toHaveCount(2);
 
-    // Фильтр у столбца «Вид отчёта» (на телефоне — в виде «Таблица», как в прототипе); плашка фильтра
-    // видна и в плитках, там же фильтр снимается.
-    if (isMobile) await phoneTableView(page);
-    await grid.getByRole('button', { name: 'Фильтр: Вид отчёта' }).click();
-    const filter = page.getByRole('dialog', { name: 'Вид отчёта' });
+    // Фильтр у столбца «Вид отчёта»: на ПК — у заголовка, на телефоне — «Фильтр» над плитками
+    // (прототип v139); плашка фильтра видна и в плитках, там же фильтр снимается.
+    const filter = await openColumnFilter(page, 'Вид отчёта');
     // «1-Т» месячный и годовой — одно значение, как в прототипе.
     await expect(filter.getByRole('checkbox', { name: /^1-Т(\s|$)/ })).toHaveCount(1);
     await filter.getByRole('checkbox', { name: /^НДС(\s|$)/ }).uncheck();
     await filter.getByRole('button', { name: 'Применить' }).click();
     await expect(grid.locator('[data-id]')).toHaveCount(1);
     await expect(row(t1)).toBeVisible();
-    if (isMobile) await page.getByRole('button', { name: 'Вид списка: Карточки' }).click();
+    if (isMobile) {
+      await expect(grid.locator('[data-grid-phone="filter"]')).toHaveAccessibleName('Фильтр: 1');
+    }
     const chip = grid.locator('[data-chip="type"]');
     await expect(chip).toContainText('Вид отчёта');
     await chip.getByRole('button', { name: 'Убрать фильтр' }).click();
@@ -272,7 +290,7 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
 
     // Меню без правого клика: на телефоне — долгим нажатием на плитку, на ПК — правым кликом.
     if (isMobile) {
-      const box = await settledBox(row(t1).locator('dl'));
+      const box = await settledBox(row(t1).locator('[data-card-sub]'));
       await (await finger(page)).hold({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
     } else {
       await row(t1).click({ button: 'right' });
@@ -295,14 +313,16 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await dialog.getByRole('button', { name: 'Сохранить' }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: 'Срок сдачи изменён' })).toBeVisible();
-    await expect(row(nds)).toContainText('17.01.2030');
-    await expect(row(nds)).toContainText('перенос');
-    await expect(row(t1)).toContainText('15.01.2030');
+    // На телефоне срок — в короткой карточке «до ДД.ММ», метки «перенос» на ней нет.
+    await expect(row(nds)).toContainText(isMobile ? 'до 17.01' : '17.01.2030');
+    if (!isMobile) await expect(row(nds)).toContainText('перенос');
+    await expect(row(t1)).toContainText(isMobile ? 'до 15.01' : '15.01.2030');
   });
 
   test('(проверка задачи 2.13) «Перейти» у шага «Скрыть и показать статистику модуля» ведёт на «На неделе» «Отчетов для сдачи», кнопка статистики засчитывает шаг', async ({
     page,
     baseURL,
+    isMobile,
   }) => {
     // Шаги засчитываются один раз и навсегда — у владельца новой организации.
     await newOrgOwner(page.request, new URL(baseURL!).origin);
@@ -320,8 +340,16 @@ test.describe('Этап 2: отчёты — список и вкладки', () 
     await expect(
       page.getByText('Отчёты появятся, когда вы назначите виды отчётов контрагентам'),
     ).toBeVisible();
-    // Статистика по умолчанию скрыта и на ПК, и на телефоне (прототип v88); кнопка показывает плашки.
     const toggle = page.locator('[data-stats-toggle]');
+    if (isMobile) {
+      // Телефон (прототип v139): кнопки «Статистика» нет, плашки — всегда одной строкой над списком;
+      // шаг засчитывается кнопкой на ПК.
+      await expect(page.locator('[data-plates]')).toHaveCount(1);
+      await expect(toggle).toBeHidden();
+      expect(await stepDone()).toBeNull();
+      return;
+    }
+    // ПК: статистика по умолчанию скрыта (прототип v88); кнопка показывает плашки.
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('[data-plates]')).toHaveCount(0);
     // Выбор уходит на сервер через 300 мс; перезагрузка раньше — новая страница читает настройки

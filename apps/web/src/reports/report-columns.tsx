@@ -19,13 +19,16 @@ import {
   type GridAudit,
   type GridColumn,
   type GridRowTone,
+  type GridShortCard,
 } from '@buhuchet/ui';
+import { Fragment, type ReactNode } from 'react';
 import type { Translate } from '../l10n/translate';
 import {
   FundsCell,
   fundsText,
   PaidCell,
   PaidTile,
+  PaymentMini,
   PaymentStatusCell,
   ReceivedCell,
   reportWaitsPayment,
@@ -226,6 +229,57 @@ function ConfirmCell({ t, r, confirm }: { t: Translate; r: ReportRow; confirm: b
   );
 }
 
+/** Столбцы, которые короткая карточка телефона показывает под названием контрагента и справа. */
+const SHORT_CARD_KEYS = ['cp', 'type', 'act', 'period', 'due', 'status', 'responsible'];
+
+/**
+ * Короткая карточка отчёта на телефоне (прототип v141 modules/reports.js `mcard`; решение заказчика
+ * 17.11.2026 «Меньше текста» — четыре отчёта на экране вместо полутора): под контрагентом — «вид · период
+ * · до ДД.ММ · ответственный» (просроченный срок — красным), справа — статус сдачи, у отчёта «только
+ * оплата» — срок и статус оплаты. В строку попадают только видимые столбцы; `title` — столбец-заголовок
+ * карточки (в карточке контрагента это вид отчёта — в строке он не повторяется).
+ */
+export function reportShortCard(t: Translate, o: { confirm: boolean; title?: string }) {
+  return (r: ReportRow, visible: ReadonlySet<string>): GridShortCard => {
+    const payOnly = r.act === 'pay';
+    const due = payOnly ? r.payDue : r.dueDate;
+    const overdue = payOnly ? r.payOverdue : r.overdue;
+    const parts: ReactNode[] = [];
+    if (visible.has('type') && o.title !== 'type')
+      parts.push(<span key="type">{r.type.shortName}</span>);
+    if (visible.has('period') && r.periodLabel)
+      parts.push(<span key="period">{r.periodLabel}</span>);
+    if (visible.has('due') && due)
+      parts.push(
+        <span
+          key="due"
+          data-short-due={overdue ? 'overdue' : ''}
+          className={overdue ? 'font-semibold text-danger' : undefined}
+        >
+          {t('report.short.due', { date: formatDateRu(due).slice(0, 5) })}
+        </span>,
+      );
+    if (visible.has('responsible') && r.responsible)
+      parts.push(<span key="responsible">{r.responsible.shortName}</span>);
+    return {
+      keys: payOnly ? [...SHORT_CARD_KEYS, 'payDue', 'paymentStatus'] : SHORT_CARD_KEYS,
+      sub: parts.length
+        ? parts.map((part, i) => (
+            <Fragment key={i}>
+              {i > 0 ? ' · ' : null}
+              {part}
+            </Fragment>
+          ))
+        : undefined,
+      right: !visible.has('status') ? undefined : payOnly ? (
+        <PaymentMini t={t} r={r} />
+      ) : (
+        <StatusCell t={t} r={r} confirm={o.confirm} />
+      ),
+    };
+  };
+}
+
 export interface ReportColumnsOptions {
   /** Вкладка «Ожидают подтверждения»: столбцы «Ждёт, дней» и «Сдал». */
   waiting: boolean;
@@ -263,7 +317,7 @@ export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn
           total: money,
           text: (r) => (withSum(r) ? formatSom(r.received, 'auto') : ''),
           cell: (r) => <ReceivedCell t={t} r={r} onReceive={receive(r)} />,
-          tileLine: { label: t('report.col.received_short') },
+          tileLine: { label: t('report.col.received_short'), amount: (r) => r.received },
         },
         {
           key: 'paid',
@@ -273,7 +327,11 @@ export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn
           total: money,
           text: (r) => (r.act === 'sub' ? '' : formatSom(r.paid, 'auto')),
           cell: (r) => <PaidCell t={t} r={r} />,
-          tileLine: { label: t('report.col.paid_short'), cell: (r) => <PaidTile t={t} r={r} /> },
+          tileLine: {
+            label: t('report.col.paid_short'),
+            cell: (r) => <PaidTile t={t} r={r} />,
+            amount: (r) => r.paid,
+          },
         },
         {
           key: 'left',
@@ -435,7 +493,8 @@ export function reportColumns(t: Translate, o: ReportColumnsOptions): GridColumn
       total: money,
       text: amountText,
       cell: (r) => <AmountCell t={t} r={r} />,
-      tileLine: {},
+      // Прототип v141: у отчёта без суммы к уплате строки денег на плитке нет.
+      tileLine: { amount: (r) => (r.act === 'sub' ? null : r.amount) },
     },
     ...moneyColumns,
     {

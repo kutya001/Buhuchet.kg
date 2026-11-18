@@ -33,7 +33,12 @@ test.describe('«Главная»', () => {
     await newOrgOwner(page.request, new URL(baseURL!).origin);
     await page.goto('/app/home/today');
     const home = page.locator('[data-home-summary]');
-    await expect(home.locator('[data-home-hello]')).toContainText('Вы видите всю организацию');
+    // Прототип v139: в приветствии — только «Сегодня …»; владелец видит всю организацию — метки
+    // «Только мои» нет.
+    await expect(home.locator('[data-home-hello]')).toContainText(
+      /^Сегодня \d{1,2} [а-я]+, [а-я]+/,
+    );
+    await expect(home.locator('[data-home-own]')).toHaveCount(0);
     const hint = home.locator('[data-home-empty]');
     await expect(hint).toContainText('Добавьте контрагентов, чтобы здесь появились сроки и суммы.');
 

@@ -9,10 +9,10 @@ import { DEMO_PASSWORD, discardChanges, showStats, signIn } from './helpers';
 
 type UiText = { key: string; text: string; version: number };
 
-// Правка на ПК и на телефоне идёт одновременно (fullyParallel), поэтому у каждого свой текст на
-// экране: заметка над списком и пояснение плашки «Добавить язык».
+// Текст на экране над списком — заметка: пояснение плашки «Добавить язык» на телефоне скрыто (прототип
+// v139: в строке плашек — только подпись и число). Общие тесты телефона идут после ПК
+// (`mobile-shared` — после `desktop-shared`), поэтому ключ один; новый текст у каждого свой.
 const NOTE_KEY = 'locale.note';
-const ADD_LANG_SUB_KEY = 'locale.add_lang_sub';
 
 /** Текст словаря через API администратора: ключ, текст, версия. */
 async function uiText(api: APIRequestContext, key: string): Promise<UiText> {
@@ -53,7 +53,7 @@ test.describe('Админка: Локализация', () => {
   }) => {
     const origin = new URL(baseURL!).origin;
     await platformAdmin(page.request, origin);
-    const key = isMobile ? ADD_LANG_SUB_KEY : NOTE_KEY;
+    const key = NOTE_KEY;
     const before = await uiText(page.request, key);
     const changed = `Тексты правятся здесь, без выпуска новой версии (${isMobile ? 'телефон' : 'ПК'}).`;
 
@@ -69,7 +69,7 @@ test.describe('Админка: Локализация', () => {
       // Добавление языка заложено, но пока недоступно.
       await expect(plates.locator('[data-plate="add"]')).toBeDisabled();
       await expect(plates.locator('[data-plate="add"]')).toContainText('Добавить язык');
-      // Текст — над списком: заметка на ПК, пояснение плашки на телефоне (он же может быть в строке словаря).
+      // Текст — над списком, в заметке (он же может быть в строке словаря).
       await expect(
         page.getByText(before.text).and(page.locator(':not([data-grid] *)')),
       ).toBeVisible();

@@ -38,7 +38,15 @@ export {
 export { EXIT_MS, motionOff, useFadeAway } from './fade-away';
 export { FloatingPanel } from './floating';
 export { Fold, FormMore } from './fold';
-export { Plate, Plates, type PlateColor, type PlateProps } from './plates';
+export {
+  Plate,
+  Plates,
+  PlatesLabelsProvider,
+  platesHidden,
+  type PlateColor,
+  type PlateProps,
+  type PlatesLabels,
+} from './plates';
 export { HelpTip } from './help-tip';
 export { PHONE_SHEET, POP_LEAVE, Popover, type PopoverProps } from './popover';
 export { RecordChangedNotice, type RecordChangedNoticeProps } from './record-changed';
@@ -191,6 +199,7 @@ export type {
   GridRowSelection,
   GridRowStripe,
   GridRowTone,
+  GridShortCard,
   GridValues,
 } from './grid/types';
 export {

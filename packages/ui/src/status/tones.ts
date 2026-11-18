@@ -8,6 +8,8 @@ import type { StatusTone } from '@buhuchet/domain';
 export interface StatusToneClasses {
   /** Цвет статуса текстом: «2/3» компактной шкалы, отметка шага. */
   text: string;
+  /** Тот же цвет у названия статуса в строке списка (прототип v139 `.grid .scm .scm-l`). */
+  gridText: string;
   /** Метка статуса (`.pill.<цвет>`). */
   pill: string;
   /** Текущий шаг шкалы: рамка и подложка (`.scf-s.c`) — отдельно, чтобы рамку заменял пунктир шага-действия. */
@@ -23,6 +25,7 @@ export interface StatusToneClasses {
 export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   gray: {
     text: 'text-label',
+    gridText: 'group-data-grid/grid:text-label',
     pill: 'bg-label-bg text-label',
     stepBorder: 'border-label/35',
     stepBg: 'bg-btn',
@@ -32,6 +35,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   blue: {
     text: 'text-info',
+    gridText: 'group-data-grid/grid:text-info',
     pill: 'bg-info-bg text-info',
     stepBorder: 'border-info/35',
     stepBg: 'bg-info-bg',
@@ -41,6 +45,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   yellow: {
     text: 'text-warn-label',
+    gridText: 'group-data-grid/grid:text-warn-label',
     pill: 'bg-warn-bg text-warn-label',
     stepBorder: 'border-warn/35',
     stepBg: 'bg-warn-bg',
@@ -50,6 +55,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   green: {
     text: 'text-ok',
+    gridText: 'group-data-grid/grid:text-ok',
     pill: 'bg-ok-bg text-ok',
     stepBorder: 'border-ok/35',
     stepBg: 'bg-ok-bg',
@@ -59,6 +65,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   orange: {
     text: 'text-caution-label',
+    gridText: 'group-data-grid/grid:text-caution-label',
     pill: 'bg-caution-bg text-caution-label',
     stepBorder: 'border-caution/35',
     stepBg: 'bg-caution-bg',
@@ -68,6 +75,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   red: {
     text: 'text-danger-label',
+    gridText: 'group-data-grid/grid:text-danger-label',
     pill: 'bg-danger-bg text-danger-label',
     stepBorder: 'border-danger/35',
     stepBg: 'bg-danger-bg',
@@ -77,6 +85,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   purple: {
     text: 'text-violet',
+    gridText: 'group-data-grid/grid:text-violet',
     pill: 'bg-violet-bg text-violet',
     stepBorder: 'border-violet/35',
     stepBg: 'bg-violet-bg',
@@ -86,6 +95,7 @@ export const STATUS_TONE: Readonly<Record<StatusTone, StatusToneClasses>> = {
   },
   faint: {
     text: 'text-label',
+    gridText: 'group-data-grid/grid:text-label',
     pill: 'bg-faint-pill-bg text-label shadow-[inset_0_0_0_1px_var(--bu-border)]',
     stepBorder: 'border-faint/35',
     stepBg: 'bg-btn',
