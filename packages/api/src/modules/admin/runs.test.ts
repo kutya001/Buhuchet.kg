@@ -234,9 +234,23 @@ describe.skipIf(!databaseAvailable())('Админка → «Запуски»', (
   });
 
   it('задачи: плашки, фильтр по состоянию, поиск, значения столбца и выгрузка', async () => {
+    // «Ошибок за сутки» — за сегодня по Бишкеку, как запуски, которые открывает плашка: ошибка
+    // вчера в 20:00 (13 часов назад) в число не идёт.
+    const yesterday = new Date('2026-10-17T14:00:00Z');
+    await f.t.admin.db.insert(schema.schedulerRuns).values({
+      job: missed.name,
+      slot: yesterday,
+      startedAt: yesterday,
+      finishedAt: new Date(yesterday.getTime() + 1000),
+      ok: false,
+      error: 'сбой вчера вечером',
+    });
     expect(AdminJobSummary.parse(await (await get('/api/admin/runs/jobs/summary')).json())).toEqual(
       { total: 5, ok: 2, failing: 1, missed: 2, dayErrors: 3 },
     );
+    await f.t.admin.db
+      .delete(schema.schedulerRuns)
+      .where(eq(schema.schedulerRuns.error, 'сбой вчера вечером'));
     const filter = encodeURIComponent(JSON.stringify({ st: { type: 'enum', vals: ['missed'] } }));
     const only = AdminJobList.parse(
       await (await get(`/api/admin/runs/jobs?filters=${filter}`)).json(),
