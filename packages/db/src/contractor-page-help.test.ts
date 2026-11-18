@@ -233,7 +233,8 @@ describe.skipIf(!databaseAvailable())(
       expect(row).toMatchObject({
         action: 'update',
         actorUserId: adminId,
-        changes: [{ field: 'text', from: before.help.welcome.t, to: 'Здравствуйте!' }],
+        // С прототипа v135 у «Приветствия» нет своего заголовка: экран берёт его из словаря.
+        changes: [{ field: 'text', from: before.help.welcome.t ?? '', to: 'Здравствуйте!' }],
       });
       const again = await asAdmin((tx) =>
         adminCpHelpEdit(

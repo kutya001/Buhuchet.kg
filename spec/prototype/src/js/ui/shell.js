@@ -9,20 +9,20 @@ function counts(){const vr=visReports();const[w0,w1]=weekRange();
 function inWeek(r,w0,w1){if(CPM[r.cp].paused)return false;return (OPEN.has(r.status)&&!tR(r).payOnly&&r.due>=w0&&r.due<=w1)||(feat('taxpay')&&['Не оплачено','Оплачено частично'].includes(r.payStatus)&&r.sum>0&&r.payDue>=w0&&r.payDue<=w1)}
 function renderSide(){
   const l=mods();const u=me();
-  let h=`<div class="brand">${logoSvg()}<div><div class="brand-name">Buhuchet.kg</div><div class="mode">${isAdmin()?'Admin':'Business'}</div></div></div><nav class="tree">`;
+  let h=`<div class="brand">${logoSvg()}<div><div class="brand-name">Buhuchet.kg</div>${isAdmin()?'<div class="mode">Admin</div>':''}</div></div><nav class="tree">`;
   const cn=isAdmin()?{}:counts();
   l.filter(m=>!m.hidden).forEach(m=>{const tabs=modTabs(m);const open=S.open.has(m.id);const on=S.mod===m.id;
-    const badge=m.id==='reports'&&cn.overdue?`<span class="badge red" title="Просрочено">${cn.overdue}</span>`:m.id==='kpi'?kMissBadge():m.id==='kb'&&newsUnread()?`<span class="badge red" title="Непрочитанные новости">${newsUnread()}</span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':m.id==='files'&&!isAdmin()&&sntNew()?`<span class="badge" title="Новые файлы от контрагентов">${sntNew()}</span>`:'';
-    h+=`<div class="ti ${on?'on':''}"><a href="#${m.id}" data-go="${m.id}" title="${esc(m.title)}" ${on?'aria-current="page"':''}>${ic(m.icon)}<span>${esc(m.title)}</span>${badge}</a>${tabs.length?`<button class="tog ${open?'open':''}" data-tog="${m.id}" aria-label="${open?'Свернуть':'Раскрыть'} вкладки" aria-expanded="${open}">${ic('right','sm')}</button>`:''}</div>`;
+    const badge=m.id==='reports'&&cn.overdue?`<span class="badge red" title="Просрочено">${cn.overdue}</span>`:m.id==='kpi'?kMissBadge():m.id==='kb'&&newsUnread()?`<span class="kb-dot gray" title="Непрочитанные новости: ${newsUnread()}"></span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':m.id==='files'&&!isAdmin()&&sntNew()?`<span class="badge" title="Новые файлы от контрагентов">${sntNew()}</span>`:'';
+    h+=`<div class="ti ${on?'on':''}"><a href="#${m.id}" data-go="${m.id}" title="${esc(m.title)}" ${on?'aria-current="page"':''}>${ic(m.icon)}<span>${esc(m.short||m.title)}</span>${badge}</a>${tabs.length?`<button class="tog ${open?'open':''}" data-tog="${m.id}" aria-label="${open?'Свернуть':'Раскрыть'} вкладки" aria-expanded="${open}">${ic('right','sm')}</button>`:''}</div>`;
     if(tabs.length&&open)h+=`<div class="subtree">${tabs.map(t=>`<a class="sti ${on&&S.tab===t.id?'on':''}" href="#${m.id}.${t.id}">${ic(t.icon||'right')}<span>${esc(t.label)}</span>${t.count!=null&&t.count!==''?`<span class="badge ${t.count?(t.red?'red':t.yellow?'yellow':''):''}" style="margin-left:auto">${t.count}</span>`:''}</a>`).join('')}</div>`;
   });
   h+=`</nav><div class="side-foot">`;
   if(!isAdmin())h+=`<button class="orgbtn" id="org-open" title="Профиль организации"><span class="av">${ic('landmark','sm')}</span><span style="min-width:0"><div class="o-n">${esc(ORG.name)}</div><div class="o-s">ИНН ${ORG.inn}</div></span></button>`;
-  h+=`<div class="foot-row"><button class="btn ghost sm" id="me-open" title="Мой профиль">${ic('user','sm')}Мой профиль</button>${DEMO.on?'':`<button class="btn ghost sm" id="logout" title="Выйти из аккаунта">${ic('logout','sm')}Выйти из аккаунта</button>`}</div>`;
+  h+=`<div class="foot-row"><button class="btn ghost sm" id="me-open" title="Мой профиль">${ic('user','sm')}Профиль</button>${DEMO.on?'':`<button class="btn ghost sm" id="logout" title="Выйти из аккаунта">${ic('logout','sm')}Выйти</button>`}</div>`;
   h+=demoBox()+`</div>`;
   $('#side').innerHTML=h;
 }
-const PROTO_VER='v129 · 17.11.2026';
+const PROTO_VER='v146 · 18.11.2026';
 // В демо-режиме — только «Войти как» (без администратора платформы) и «Очистить рабочие данные»
 function demoBox(){if(DEMO.on)return `<div class="demo"><div class="row" style="gap:6px"><b>${LE('land.demo.box')}</b></div><label for="demo-user">Войти как:</label>${sel('demo-user',EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),S.me)}<div class="demo-db"><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button></div><span>${LE('land.demo.box.sub')}</span></div>`;
   return `<div class="demo"><div class="row" style="gap:6px"><b>Прототип ${PROTO_VER}</b></div><label>Данные:</label>${sel('demo-data-x',[['demo','Демо-данные'],['empty','Пустая организация']],DATA_MODE,'data-demo-data aria-label="Данные макета"')}<label for="demo-user">Войти как:</label>${sel('demo-user',[...EMP.filter(e=>e.active).map(e=>[e.id,`${e.short} — ${ROLES.find(r=>r.id===e.role).name}`]),['admin','Администратор платформы']],S.me)}<button type="button" class="linkbtn" data-demo-fail style="align-self:flex-start">Показать ошибку загрузки списка</button><label>Данные прототипа:</label><div class="demo-db"><button type="button" class="linkbtn" data-db="export">Экспорт TemDB.json</button><button type="button" class="linkbtn" data-db="load">Загрузить TemDB.json</button><button type="button" class="linkbtn" data-db="clear">Очистить рабочие данные</button><button type="button" class="linkbtn" data-db="ref">Экспорт refDB.json</button><button type="button" class="linkbtn" data-db="gked">Экспорт gkedDB.json</button></div><span>${DATA_MODE==='empty'?'Организация как сразу после регистрации.':'Демо-данные из demoDB.json.'} Все изменения сохраняются в этом браузере (TemDB). Файлы данных: ${DBSRC.demo.from}.</span></div>`}
@@ -33,20 +33,23 @@ function renderBnav(){
   const a=$('#bnav .bn.on');if(a&&a.scrollIntoView)a.scrollIntoView({block:'nearest',inline:'nearest'});
 }
 function renderSheet(){
-  $('#sheet').innerHTML=`<div class="grabber"></div><div class="brand" style="padding:6px 4px 10px">${logoSvg()}<div><div class="brand-name">Buhuchet.kg</div><div class="mode">${isAdmin()?'Admin':'Business'}</div></div></div>
-  ${(()=>{const ids=BNAV[isAdmin()?'admin':'business'];const rest=mods().filter(m=>!ids.includes(m.id)&&!m.hidden);return rest.length?`<div class="sheet-mods" role="navigation" aria-label="Другие модули">${rest.map(m=>`<button data-shmod="${m.id}" class="${S.mod===m.id?'on':''}">${ic(m.icon)}<span>${esc(m.title)}</span>${m.id==='kpi'?kMissBadge('margin-left:auto'):m.id==='kb'&&newsUnread()?`<span class="badge red" style="margin-left:auto" title="Непрочитанные новости">${newsUnread()}</span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':''}</button>`).join('')}</div>`:''})()}
+  $('#sheet').innerHTML=`<div class="grabber"></div>
+  ${(()=>{const ids=BNAV[isAdmin()?'admin':'business'];const rest=mods().filter(m=>!ids.includes(m.id)&&!m.hidden);return rest.length?`<div class="sheet-mods" role="navigation" aria-label="Другие модули">${rest.map(m=>`<button data-shmod="${m.id}" class="${S.mod===m.id?'on':''}">${ic(m.icon)}<span>${esc(m.short||m.title)}</span>${m.id==='kpi'?kMissBadge('margin-left:auto'):m.id==='kb'&&newsUnread()?`<span class="kb-dot gray" title="Непрочитанные новости: ${newsUnread()}"></span>`:m.id==='kb'&&kbDot()?'<span class="kb-dot" title="Начните с Базы знаний"></span>':''}</button>`).join('')}</div>`:''})()}
   ${isAdmin()?'':`<button class="orgbtn" data-sh="org"><span class="av">${ic('landmark','sm')}</span><span><div class="o-n">${esc(ORG.name)}</div><div class="o-s">Профиль организации</div></span></button>`}
   <button class="orgbtn" data-sh="me"><span class="av round">${initials(me().fio)}</span><span><div class="o-n">Мой профиль</div><div class="o-s">${esc(me().fio)}</div></span></button>
   ${DEMO.on?'':`<button class="orgbtn" data-sh="out"><span class="av">${ic('logout','sm')}</span><span><div class="o-n">Выйти из аккаунта</div></span></button>`}${demoBox().replace('id="demo-user"','id="demo-user-m"').replace('for="demo-user"','for="demo-user-m"').replace('id="demo-data-x"','id="demo-data-m"')}`;
 }
 // «Назад» закрывает панель «Другие модули» (см. ovOpen в popups.js)
-function openSheet(){renderSheet();$('#sheet').classList.add('open');$('#sheet-cover').hidden=false;ovOpen()}
-function closeSheet(pop){const was=$('#sheet').classList.contains('open');$('#sheet').classList.remove('open');$('#sheet-cover').hidden=true;if(was&&!pop)ovClosed()}
+let SHEET_T=0;
+function openSheet(){renderSheet();clearTimeout(SHEET_T);$('#sheet').classList.add('open');const c=$('#sheet-cover');c.classList.remove('out');c.hidden=false;ovOpen()}
+function closeSheet(pop){const was=$('#sheet').classList.contains('open');$('#sheet').classList.remove('open');const c=$('#sheet-cover');if(was&&!RMQ()){c.classList.add('out');clearTimeout(SHEET_T);SHEET_T=setTimeout(()=>{c.hidden=true;c.classList.remove('out')},T_EXIT)}else c.hidden=true;if(was&&!pop)ovClosed()}
 
 function renderPage(fresh){
   const m=curMod();const tabs=modTabs(m);const page=$('#page');const pane=$('#pane');
   const keep=fresh?0:pane.scrollTop;
   ACTIVE=[];closePop();
+  // Смена модуля или вкладки: содержимое проявляется за --t-base (плавность, 17.11.2026)
+  if(fresh){page.classList.remove('pg-in');void page.offsetWidth;page.classList.add('pg-in')}
   // Все способы добавления — пункты меню «+ Добавить» (на ПК и телефоне); btn:true — отдельная кнопка на ПК (сейчас не используется)
   const all=m.add?m.add().filter(Boolean):[];const btns=isMobile()?[]:all.filter(a=>a.btn),adds=isMobile()?all:all.filter(a=>!a.btn);
   page.innerHTML=`<div class="tabrow"><span class="tr-l"></span>
@@ -54,15 +57,33 @@ function renderPage(fresh){
   const runAdd=b=>{if(adds.length===1)adds[0].run();else menu(b,adds.map(a=>a.sep?a:({label:a.label,icon:a.icon,run:a.run,badge:a.beta?'Бета':'',sub:a.sub||''})))};
   $$('[data-addx]',page).forEach(b=>b.onclick=()=>btns[+b.dataset.addx].run());
   const ab=$('#add-btn');if(ab)ab.onclick=()=>runAdd(ab);
-  const fab=$('#fab');fab.hidden=!adds.length;fab.innerHTML=ic('plus');fab.onclick=()=>runAdd(fab);
+  const fab=$('#fab');fab.hidden=!adds.length;fab.innerHTML=ic('plus');fab.onclick=()=>runAdd(fab);fab.classList.remove('away');
+  // Телефон: при прокрутке вниз «+» уезжает, при прокрутке вверх и в начале страницы — возвращается (17.11.2026)
+  if(!pane.dataset.fabw){pane.dataset.fabw='1';let y0=0;pane.addEventListener('scroll',()=>{const y=pane.scrollTop,f=$('#fab');if(!f)return;if(Math.abs(y-y0)<8)return;f.classList.toggle('away',isMobile()&&y>y0&&y>120);y0=y},{passive:true})}
   m.render($('#mbody'),S.tab,fresh);
-  {const sb=$('#stat-btn');const has=!!$('#mbody .plates');sb.hidden=!has;const k='stats.'+m.id;const off=()=>store.get(k,'off')==='off';const ap=()=>{page.classList.toggle('nostats',off());sb.classList.toggle('on',!off());sb.setAttribute('aria-pressed',String(!off()));sb.title=off()?'Показать статистику':'Скрыть статистику'};ap();sb.onclick=()=>{store.set(k,off()?'on':'off');ap();fitTabs();ckHit('stats')}}
+  plMob(m);
+  {const sb=$('#stat-btn');const has=!!$('#mbody .plates');sb.hidden=!has||isMobile();const k='stats.'+m.id;const off=()=>store.get(k,'off')==='off';const ap=()=>{page.classList.toggle('nostats',off());sb.classList.toggle('on',!off());sb.setAttribute('aria-pressed',String(!off()));sb.title=off()?'Показать статистику':'Скрыть статистику'};ap();sb.onclick=()=>{store.set(k,off()?'on':'off');ap();fitTabs();ckHit('stats')}}
   S.preset=null;
   fitTabs();
   pane.scrollTop=keep;ckVisit();
-  $('#q-scope').textContent=tabs.length?(tabs.find(t=>t.id===S.tab)||{}).label||'':m.title;
-  {const tl=tabs.length?(tabs.find(t=>t.id===S.tab)||{}).label||'':'';$('#tb-mod').textContent=m.title;$('#tb-tab').textContent=tl;$('#tb-tab').hidden=!tl;const tb=$('#tb-title');tb.classList.remove('full');tb.title=m.title+(tl?' · '+tl:'');tb.onclick=()=>tb.classList.toggle('full');const ti=$('#tb-info');ti.innerHTML=ic('info','sm');ti.onclick=()=>openPop(ti,`<h4>${esc(m.title)}</h4><div style="font-size:13px;line-height:1.5;max-width:300px">${esc(m.desc)}</div>`,{cls:'pad'})}
+  /* Верхняя панель (17.11.2026, «Меньше текста», ТЗ п. 9): короткое название модуля; вкладка подсвечена в строке вкладок и в панели не повторяется.
+     Один «?» у названия: что здесь, что можно сделать и ссылки «Показать на экране», «Видео», «Вся инструкция» — вместо «ⓘ», значка видео и «?» справа */
+  $('#q-scope').textContent='';
+  {const tl=tabs.length?(tabs.find(t=>t.id===S.tab)||{}).label||'':'';$('#tb-mod').textContent=m.short||m.title;$('#tb-tab').textContent='';$('#tb-tab').hidden=true;const tb=$('#tb-title');tb.classList.remove('full');tb.title=m.title+(tl?' · '+tl:'');tb.onclick=null;
+   const ti=$('#tb-info');ti.innerHTML=ic('help','sm');ti.title='Что здесь';ti.setAttribute('aria-label','Что здесь: подсказка по модулю');ti.onclick=()=>modHelpPop(ti,m,all)}
 }
+// Короткая подсказка модуля по «?»: одна строка «что здесь», до четырёх действий «+ Добавить» и три ссылки
+function modHelpPop(ti,m,adds){const v=typeof vidOfMod==='function'?vidOfMod(m.id):[],acts=(adds||[]).filter(a=>a&&!a.sep).slice(0,4);
+  openPop(ti,`<h4>${esc(m.title)}</h4><div class="mh-d">${esc(m.desc)}</div>${acts.length?`<div class="mh-a">${acts.map((a,i)=>`<button type="button" class="linkbtn" data-mha="${i}">${ic(a.icon||'plus','sm')}${esc(a.label)}</button>`).join('')}</div>`:''}
+    <div class="mh-l"><button type="button" class="btn sm" data-mh="scr">${ic('play','sm')}Показать на экране</button>${v.length?`<button type="button" class="btn sm" data-mh="vid">${ic('film','sm')}Видео</button>`:''}<button type="button" class="btn sm" data-mh="kb">${ic('book','sm')}Вся инструкция</button></div>`,
+    {cls:'pad mh-pop',mount(el){el.onclick=e=>{const b=e.target.closest('[data-mh],[data-mha]');if(!b)return;closePop();
+      if(b.dataset.mha!=null)return acts[+b.dataset.mha].run();const k=b.dataset.mh;if(k==='scr')tourScreen();else if(k==='vid')vidOpen(v[0].id);else kbHelp()}}})}
+// Телефон: плашки модуля — одной строкой из трёх чисел; «Ещё N» раскрывает остальные (выбор запоминается на сеанс)
+const PL_ALL=new Set();
+function plMob(m){if(!isMobile())return;const pl=$('#mbody .plates:not(.static)');if(!pl)return;const n=pl.querySelectorAll('.plate').length;if(n<=4){pl.classList.add('pl-all');return}
+  const k=m.id+'.'+S.tab,on=()=>PL_ALL.has(k);pl.classList.toggle('pl-all',on());const b=document.createElement('button');b.type='button';b.className='linkbtn pl-more';
+  const paint=()=>{b.textContent=on()?'Свернуть':`Ещё ${n-3}`;b.setAttribute('aria-expanded',String(on()))};paint();pl.after(b);
+  b.onclick=()=>{on()?PL_ALL.delete(k):PL_ALL.add(k);pl.classList.toggle('pl-all',on());paint()}}
 function fitTabs(){const t=$('#tabs');if(!t)return;const ab=$('#add-btn');const ax=$$('.add-x');const over=()=>t.scrollWidth>t.clientWidth+2;t.classList.remove('compact','tight','tight2');if(ab)ab.classList.remove('slim');ax.forEach(x=>x.classList.remove('slim'));
   if(isMobile()){if(ab&&over())ab.classList.add('slim');if(over())t.classList.add('compact')}else{if(over())ax.forEach(x=>x.classList.add('slim'));if(over())t.classList.add('tight');if(over())t.classList.add('tight2')}
   // центрируем активную вкладку только по горизонтали: scrollIntoView прокрутил бы и страницу

@@ -20,7 +20,7 @@ function profileDlg(){
       if(q('#pf-kb'))q('#pf-kb').onclick=()=>{m.close();go('kb','level')};
       if(q('#pf-short'))q('#pf-short').onclick=()=>shortDlg(u,()=>m.draw());
       bindNotify(el,u,m);q('#pf-known').onclick=()=>tKnownReset(()=>m.draw());
-      q('#pf-theme').onchange=e=>setTheme(e.target.value,$('#theme'));
+      q('#pf-theme').onchange=e=>{ckHit('theme');setTheme(e.target.value,$('#theme'))};
       if(q('#pf-untg'))q('#pf-untg').onclick=()=>{tgSecSend(u,'unlink');u.tgPrev=u.tg;u.tg=null;log('emp',u.id,'Telegram отвязан');m.draw();toast('Telegram отвязан')};
       // Поток Т (13.11.2026): «Проверить бота» — сообщение с таблицей и кнопкой; «Сообщения простым текстом» — запасной вид для старого приложения Telegram
       if(q('#pf-tgchat'))q('#pf-tgchat').onclick=tgStaffDlg;
@@ -45,7 +45,7 @@ function shortDlg(u,done){openModal({form:true,render:()=>({title:'Отобра�
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="sh-ok">Сохранить</button>',mount(el,m){bindShort(el,'sh-v',()=>u.fio,shortManual(u));$('#sh-ok',el).onclick=()=>{const sh=readShort(el,'sh-v',u.fio);if(!setErr(el,'sh-v',shortErr(sh,u.id)))return;
     if(sh!==u.short){log('emp',u.id,`Отображаемое имя: «${u.short}» → «${sh}»`);u.short=sh;touch(u)}m.close();refreshAll();renderSide();if(done)done();toast('Отображаемое имя сохранено','user')}}})})}
 /* Уведомления: владелец и главбух выбирают режим; сотрудник получает своё */
-const NMODES=[['all','Все','Сроки и просрочки отчётов всех сотрудников, задачи, сводка за неделю'],['digest','Только просрочки и сводка','Без ежедневных напоминаний о сроках: только просрочки, ручные задачи и сводка за неделю'],['manual','Только ручные задачи','Новые задачи, поставленные вручную, их комментарии и выполнение. Регулярные задачи по отчётам не приходят']];
+const NMODES=[['all','Все','Сроки и просрочки отчётов всех сотрудников, задачи, сводка за неделю'],['digest','Только просрочки и сводка','Без ежедневных напоминаний о сроках: только просрочки, ручные задачи и сводка за неделю'],['manual','Только ручные задачи','Новые задачи, их комментарии и выполнение. Сообщения по отчётам не приходят']];
 const NKINDS=[['before','Напоминания за N дней до срока по отчётам других сотрудников'],['over','Просрочки по отчётам других сотрудников'],['tasks','Ручные задачи: новые, комментарии, выполнение'],['regtasks','Возврат моих отчётов на исправление'],['week','Сводка за неделю — в день, выбранный организацией (по умолчанию понедельник)']];
 function notifyOf(u){u.notify=u.notify||{mode:'all',off:{}};return u.notify}
 function notifyBox(u){const n=notifyOf(u);const boss=u.role==='owner'||u.role==='chief';

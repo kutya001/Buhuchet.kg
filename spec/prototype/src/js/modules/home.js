@@ -14,7 +14,8 @@ function renderHome(body,tab){
   const waiting=repWaitList();
   const myTasks=feat('tasks')?allTasks().filter(t=>t.exec===S.me&&taskOpen(t)&&t.date<=TODAY):[];
   const d=D(TODAY);
-  let h=`<div class="hello"><span>Сегодня <b>${d.getUTCDate()} ${MONTHS_G[d.getUTCMonth()]}, ${DOW[d.getUTCDay()]}</b></span><span>·</span><span>${seeAll('reports')?'Вы видите всю организацию':'Вы видите только своих контрагентов и свои отчёты'}</span><span>·</span><span>неделя ${fmtD(w0).slice(0,5)}–${fmtD(w1).slice(0,5)}${isWeekend()?' (сегодня выходной, показана ближайшая рабочая неделя)':''}</span></div>`;
+  // 17.11.2026 («Меньше текста», ТЗ п. 9): без «Вы видите всю организацию» и дат недели (они в плашке); у сотрудника — метка «Только мои»
+  let h=`<div class="hello"><span>Сегодня <b>${d.getUTCDate()} ${MONTHS_G[d.getUTCMonth()]}, ${DOW[d.getUTCDay()]}</b></span>${seeAll('reports')?'':`<span class="tag" title="Вы видите только своих контрагентов и свои отчёты">Только мои</span>`}${isWeekend()?`<span class="faint">выходной ${tipI(`Показана ближайшая рабочая неделя: ${fmtD(w0).slice(0,5)}–${fmtD(w1).slice(0,5)}`)}</span>`:''}</div>`;
   // Организация без контрагентов: та же сводка с нулями и одна строка-подсказка
   if(!CPS.length)h+=`<div class="note fe-note">${ic('building')}<span class="grow">Добавьте контрагентов, чтобы здесь появились сроки и суммы.</span>${can('createCp')||can('cpImport')?`<button class="btn cta sm" data-goto="cps.all">${ic('plus','sm')}Перейти к контрагентам</button>`:''}</div>`;
   h+=`<div class="plates">

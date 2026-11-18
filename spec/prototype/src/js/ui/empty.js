@@ -14,6 +14,7 @@ function firstEmpty(){const needCp=f=>()=>CPS.length?f():(toast('Сначала 
   const f=F[S.mod];return f?f()||null:null}
 function feHtml(e){return `<div class="state fe">${ic(e.icon,'lg')}<b>${esc(e.title)}</b>${e.text?`<span>${esc(e.text)}</span>`:''}<div class="row" style="justify-content:center">${e.btns.filter(Boolean).map((b,i)=>`<button class="btn ${b[3]?'cta':''}" data-a="fe" data-i="${i}">${ic(b[1])}${esc(b[0])}</button>`).join('')}</div></div>`}
 // Small ⓘ next to complex fields and buttons.
-const tipI=t=>`<button type="button" class="icon-btn sm tipi" data-tip="${esc(t)}" aria-label="Пояснение">${ic('info','sm')}</button>`;
-document.addEventListener('click',e=>{const b=e.target.closest('.tipi');if(!b)return;e.preventDefault();e.stopPropagation();openPop(b,`<div style="padding:6px 8px;font-size:13px;line-height:1.5;max-width:300px">${esc(b.dataset.tip)}</div>`)},true);
+// «?» — короткое пояснение у заголовка блока или поля (17.11.2026, «Меньше текста», п. 2): на компьютере — подсказка рядом, на телефоне — лист снизу (стиль .pop в mobile.css)
+const tipI=t=>`<button type="button" class="icon-btn sm tipi" data-tip="${esc(t)}" aria-label="Пояснение" title="Пояснение">${ic('help','sm')}</button>`;
+document.addEventListener('click',e=>{const b=e.target.closest('.tipi');if(!b)return;e.preventDefault();e.stopPropagation();openPop(b,`<div class="tip-t">${esc(b.dataset.tip)}</div>`)},true);
 

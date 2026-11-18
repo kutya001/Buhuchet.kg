@@ -45,8 +45,7 @@ const sfInit=c=>({sf:Object.assign({},c&&c.sf||{}),sfT:c&&c.sfT||'',sfTouch:fals
 function sfCardKv(c){const s=sfState(c);if(!s)return '';const ed=can('createCp')&&!c.archived;
   const fl=[`Выплата зарплаты: ${sfPay(c)?esc(sfPayName(sfPay(c)).toLowerCase()):'<span class="faint">не указано</span>'}`,...SF_FLAGS.map(([k,l])=>{const v=sfFlag(c,k);return `${esc(l.replace(/\s*\(.*\)$/,''))}: ${v===null?(k==='gov'?'нет':'<span class="yellow">не указано</span>'):v?'да':'нет'}`})].join(' · ');
   const why=sfBadWhy(s);const a=s.auto;
-  return `<div class="sf-kv"><span class="k">Тариф Соцфонда</span><span class="v">${sfPill(s.cur)}${s.cur?` <span class="tag">${s.man?'выбран вручную':'определён автоматически'}</span>`:''} <button class="linkbtn" id="cp-sf" style="font-size:12px">${ed?(s.cur?'изменить':'Указать'):'ставки'}</button>
-    <div class="hint">${fl}</div>
+  return `<div class="sf-kv"><span class="k">Тариф Соцфонда</span><span class="v">${sfPill(s.cur)}${s.cur&&s.man?' <span class="tag">выбран вручную</span>':''} <button class="linkbtn" id="cp-sf" style="font-size:12px">${ed?(s.cur?'изменить':'Указать'):'ставки'}</button>
     ${sfCashWarn(c)?`<div class="note yellow sf-cash" style="margin-top:6px">${ic('alert')}<span>${esc(sfCashWarn(c))}</span></div>`:''}
     ${s.none?`<div class="hint">${a.t?`По условиям подходит «${esc(sfShort(a.t))}»`:`Не указано: ${esc(a.miss.join(', '))}`}</div>`:''}
     ${s.bad&&!s.man?`<div class="note warn sf-n" style="margin-top:6px">${ic('alert')}<span class="grow">Тариф ${esc(sfShort(s.cur))} больше не применим: ${esc(why)}</span>${ed&&a.t?`<button type="button" class="btn sm" id="cp-sfto">Сменить на ${esc(sfLow(sfShort(a.t)).replace(/ тариф$/,''))}</button>`:''}</div>`:''}

@@ -14,7 +14,8 @@ const cphCap=s=>s?s[0].toUpperCase()+s.slice(1):'';
 const CPH_PILL=()=>({...ST,'Впереди':['blue','clock'],'Просрочен':['red','alert'],'Просрочено':['red','alert']});
 
 /* Что сейчас видно на странице: обзор, «Добро пожаловать» и вопросы «Помощи» показывают только это */
-const cphSec=k=>!!$(`#pub .pub-body .pub-s[data-sec="${k}"]`);
+// Разделы страницы (17.11.2026): «money» — расчёт «Не хватает» в строке «Налоги» «Оплаты», «fee» — строка «Услуги бухгалтера», «tg» — Telegram в «Связи»
+const cphSec=k=>k==='money'?!!$('#pub .pub-body .pub-calc'):k==='fee'?!!$('#pub .pub-body [data-po="fee"]'):!!$(`#pub .pub-body [data-sec="${k}"]`);
 function cphVis(c){const tax=!!$('#pub .pub-s[data-sec="pay"] [data-pay="tax"]'),fee=!!$('#pub .pub-s[data-sec="pay"] [data-pay="fee"]'),tg=cphSec('tg');
   return {sec:cphSec,payTax:tax,payFee:fee,pay:tax||fee,paid:pgPaidOn(c)&&(tax||fee),up:sntUpOn(c)&&cphSec('files'),tg,tgFull:tg&&!!$('#pub [data-pub-tgon].dis'),code:pgCodeTo(c).length>0}}
 
@@ -24,15 +25,12 @@ const CPH_WKEY='pgwel';
 const cphKey=()=>PUB.open?PUB.open.slug+'|'+PUB.open.inn:'';
 const cphSeen=k=>{const m=store.get(CPH_WKEY,{});return !!(m&&typeof m==='object'&&m[k])};
 function cphSeenSet(k){let m=store.get(CPH_WKEY,{});if(!m||typeof m!=='object')m={};m[k]=nowStamp();store.set(CPH_WKEY,m)}
-function cphWelcomeAuto(c){const k=cphKey();if(!k||cphSeen(k)||PUB.wel||CPHT.on||MODALS.length)return;PUB.wel=true;
-  setTimeout(()=>{if(PUB.open&&cphKey()===k&&$('#pub .pub-body')&&!MODALS.length)cphWelcome(c,k);else PUB.wel=false},150)}
-function cphWelcome(c,k){const v=cphVis(c);
-  const cards=[['reports','file',cphW('repT'),cphW('repX')],['pay','wallet',cphW('payT'),cphW('payX')],['files','folder',cphW('filesT'),v.up?cphW('filesX'):cphW('filesXView',cphW('filesX'))]].filter(([s,,t])=>t&&v.sec(s));
-  openModal({noMax:true,sticky:false,render:()=>({title:esc(cphW('t','Добро пожаловать!')),
-    body:`<div class="pgw"><p class="pgw-lead">${esc(cphW('lead'))}</p>${cards.length?`<div class="pgw-cards">${cards.map(([s,i,t,x])=>`<div class="pgw-card" data-pgw="${s}"><span class="pgw-ic">${ic(i)}</span><span class="pgw-tx"><b>${esc(t)}</b>${x?`<span>${esc(x)}</span>`:''}</span></div>`).join('')}</div>`:''}</div>`,
-    foot:`<button type="button" class="btn ghost" id="pgw-skip">${esc(cphW('skip','Посмотрю сам'))}</button><button type="button" class="btn cta" id="pgw-go">${ic('play','sm')}${esc(cphW('go','Показать, как пользоваться'))}</button>`,
-    mount(el,m){$('#pgw-skip',el).onclick=()=>m.close();$('#pgw-go',el).onclick=()=>{m.close();setTimeout(()=>cphTour(c),60)}}}),
-    onClose:()=>{cphSeenSet(k);PUB.wel=false}})}
+// Приглашение (17.11.2026, «Меньше текста», п. 6): одна строка и две кнопки полосой внизу экрана, страница видна сразу (было окно «Добро пожаловать!» на 72 % экрана с тремя карточками).
+// Показывается, пока клиент не нажал одну из кнопок; «Показать» запускает обзор
+function cphWelcomeBar(c){const k=cphKey();if(!k||cphSeen(k)||CPHT.on)return '';
+  return `<div class="pgw-bar" role="region" aria-label="Как пользоваться страницей"><span>${esc(cphW('lead','Здесь видно, что сдано, сколько и куда заплатить. Показать за минуту?'))}</span><div class="pgw-bb"><button type="button" class="btn ghost" id="pgw-skip">${esc(cphW('skip','Не сейчас'))}</button><button type="button" class="btn" id="pgw-go">${ic('play','sm')}${esc(cphW('go','Показать'))}</button></div></div>`}
+function cphWelcomeMount(el,c){const b=$('.pgw-bar',el);if(!b)return;const k=cphKey(),done=()=>{cphSeenSet(k);b.classList.add('out');setTimeout(()=>b.remove(),cphRM()?0:140)};
+  $('#pgw-skip',b).onclick=done;$('#pgw-go',b).onclick=()=>{done();setTimeout(()=>cphTour(c),60)}}
 
 /* ═════════════ Пункт 2.2. Обзор страницы по живому экрану ═════════════ */
 // Тот же вид, что «Показать как» сотрудников (облачко .tour-bub и подсветка .tour-hole), но свой движок: страница без входа, без шагов уроков и знакомых элементов.
@@ -41,11 +39,12 @@ function cphWelcome(c,k){const v=cphVis(c);
 const CPHT={on:false,list:[],i:0,c:null,unf:null,top:0,el:null,t:0};
 const cphRM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Что подсвечивать: s — на ПК, m — на телефоне (меньший элемент, чтобы облачко внизу его не закрывало)
-const CPH_EL={state:{s:'.pub-state'},help:{s:'#pub-help'},pay:{s:'.pub-s[data-sec="pay"]',m:'.pub-s[data-sec="pay"] .pub-pay'}};
+const CPH_EL={state:{s:'.pub-state'},help:{s:'#pub-help',m:'.pub-nav [data-pub-nav="help"]'},pay:{s:'.pub-s[data-sec="pay"]',m:'.pub-s[data-sec="pay"] .pub-po'}};
 const cphElSel=k=>{const d=CPH_EL[k]||{s:`.pub-s[data-sec="${k}"]`};return isMobile()&&d.m?d.m:d.s};
 const cphEl=k=>k==='end'?null:[...$$('#pub .pub-body '+cphElSel(k))].find(tVis)||null;
+// Обзор — 5 шагов (17.11.2026): «Что нужно сделать», «Оплата», «Отчёты», «Файлы», «Помощь»; остальные шаги выключены в справочнике (поле «on»), «Готово» — тоже шаг со своим «on»
 function cphTourList(c){const v=cphVis(c);
-  return (CPH().tour||[]).filter(s=>s.sec==='end'||s.on!==false).filter(s=>s.sec==='end'||(s.sec==='help'?!!$('#pub-help'):s.sec==='state'?!!$('#pub .pub-state'):v.sec(s.sec)))
+  return (CPH().tour||[]).filter(s=>s.on!==false).filter(s=>s.sec==='end'||(s.sec==='help'?!!$('#pub-help'):s.sec==='state'?!!$('#pub .pub-state'):v.sec(s.sec)))
     .map(s=>({...s,x:(s.sec==='pay'&&!v.paid||s.sec==='files'&&!v.up)&&s.x2?s.x2:s.x}))}
 function cphOverlay(){let o=$('#pgtour');if(o)return o;o=document.createElement('div');o.id='pgtour';o.hidden=true;
   o.innerHTML='<div class="tour-hole"></div><div class="tour-bub" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="pgt-t"></div>';document.body.append(o);
@@ -63,7 +62,7 @@ function cphTourScroll(){if(CPHT.on){cancelAnimationFrame(CPHT.raf);CPHT.raf=req
 function cphTourGo(d){const j=CPHT.i+d;if(d>0&&j>=CPHT.list.length)return cphTourEnd(true);if(j<0||j>=CPHT.list.length)return;CPHT.i=j;cphTourShow()}
 function cphTourShow(){const p=CPHT.list[CPHT.i];if(!p)return;CPHT.busy=true;
   // свёрнутый на телефоне раздел раскрывается на своём шаге
-  if(isMobile()&&p.sec!=='end'&&p.sec!=='state'&&p.sec!=='help')pubFold(p.sec,true);
+  if(isMobile()&&p.sec!=='end'&&p.sec!=='state'&&p.sec!=='help'&&p.sec!=='pay')pubFold(p.sec,true);
   const el=cphEl(p.sec);CPHT.el=el;const sc=$('#pub .pub-page');
   if(el&&sc){const r=el.getBoundingClientRect(),sr=sc.getBoundingClientRect(),bh=isMobile()?Math.min(260,innerHeight*.45):0,room=sc.clientHeight-bh-24;
     // телефон и высокий элемент — верх элемента у верха экрана; иначе элемент посередине
@@ -99,19 +98,18 @@ function cphTourEnd(full,quiet){if(!CPHT.on)return;const c=CPHT.c,k=CPHT.i,n=CPH
 // Метки «Отчётов» с цветом и значком: в облачке «Отчёты» — только метки, в «Помощи» — метка и объяснение (строки ответа «Что значат цвета у отчётов?»)
 function cphLegend(short){const q=(CPH().faq||[]).find(x=>x.act==='colors'&&x.on!==false);if(!q)return '';const P=CPH_PILL();
   const rows=String(q.a||'').split('\n').map(l=>l.trim()).filter(Boolean).map(l=>{const m=/^«([^»]+)»\s*[—–-]\s*(.+)$/.exec(l);return m?{l:m[1],t:m[2]}:{l:'',t:l}});
-  if(short)return `<div class="pgt-leg">${rows.filter(r=>r.l).map(r=>pill(r.l,P,'sm')).join('')}</div>`;
+  // В облачке обзора — три главные метки: «Сдан», «В работе», «Просрочен»
+  if(short)return `<div class="pgt-leg">${rows.filter(r=>['Сдан','В работе','Просрочен'].includes(r.l)).map(r=>pill(r.l,P,'sm')).join('')}</div>`;
   return `<ul class="pgh-leg">${rows.map(r=>`<li>${r.l?pill(r.l,P,'sm'):''}<span>${esc(r.t)}</span></li>`).join('')}</ul>`}
 
 /* ═════════════ Пункт 3. «Помощь» ═════════════ */
-// Кнопка в шапке страницы; когда шапка уехала вверх, та же кнопка — круглая в углу экрана, чтобы «Помощь» была видна всегда
-const cphHelpBtn=()=>`<button type="button" class="btn sm pub-help" id="pub-help" aria-label="${esc(cphT('helpBtn','Помощь'))}" title="${esc(cphT('helpBtn','Помощь'))}">${ic('help')}<span class="bl">${esc(cphT('helpBtn','Помощь'))}</span></button>`;
-function cphMount(el,c){const h=$('#pub-help',el);if(!h)return;h.onclick=()=>cphHelp(c);
-  let f=$('#pub-helpf',el);if(!f){f=document.createElement('button');f.type='button';f.id='pub-helpf';f.className='pub-helpf';f.hidden=true;f.innerHTML=ic('help');f.setAttribute('aria-label',cphT('helpBtn','Помощь'));f.title=cphT('helpBtn','Помощь');el.append(f)}
-  f.onclick=()=>cphHelp(c);const sc=$('.pub-page',el);
-  if(window.IntersectionObserver&&sc){if(PUB.io)PUB.io.disconnect();PUB.io=new IntersectionObserver(es=>{const fb=$('#pub-helpf');if(fb)fb.hidden=es[0].isIntersecting},{root:sc,threshold:0});PUB.io.observe(h)}}
+// «?» в шапке страницы и «Помощь» в нижнем меню телефона (17.11.2026): круглой кнопки поверх страницы больше нет — она закрывала суммы у правого края
+const cphHelpBtn=()=>`<button type="button" class="icon-btn pub-help" id="pub-help" aria-label="${esc(cphT('helpBtn','Помощь'))}" title="${esc(cphT('helpBtn','Помощь'))}">${ic('help')}</button>`;
+function cphMount(el,c){const h=$('#pub-help',el);if(h)h.onclick=()=>cphHelp(c)}
 // Вопросы о скрытых разделах и выключенных функциях не показываются
-function cphQVis(q,v){const s=q.sec||'';return s===''?true:s==='pay'?v.pay:s==='payTax'?v.payTax:s==='payFee'?v.payFee:v.sec(s)}
+function cphQVis(q,v){const s=q.sec||'';return s===''?true:s==='pay'?v.pay||v.sec('pay'):s==='payTax'?v.payTax:s==='payFee'?v.payFee:v.sec(s)}
 const CPH_GO={goPay:'pay',goFiles:'files',goMoney:'money',goFee:'fee',goReports:'reports'};
+// «Открыть налоги» и «Открыть услуги бухгалтера» ведут к строке «Оплаты» (pubGo)
 const cphActL=a=>cphT('act'+a[0].toUpperCase()+a.slice(1),'');
 // Можно ли нажать кнопку ответа сейчас: нет — вместо кнопки «Спросите вашего бухгалтера»
 function cphActOn(a,v){if(CPH_GO[a])return v.sec(CPH_GO[a]);return a==='paid'?v.paid:a==='up'?v.up:a==='tg'?v.tg&&!v.tgFull:a==='code'?v.code:false}
@@ -124,11 +122,11 @@ function cphHelp(c){if(CPHT.on)return;c=c||pubCp(PUB.open);if(!c)return;closePop
     const act=!q.act||q.act==='colors'?'':cphActOn(q.act,v)?`<button type="button" class="btn sm cta" data-pgh-act="${esc(q.act)}">${ic(CPH_GO[q.act]?'right':q.act==='paid'?'check':q.act==='up'?'upload':q.act==='tg'?'tg':'send','sm')}${esc(cphActL(q.act))}</button>`:`<span class="pgh-ask1">${ic('user','sm')}${esc(cphT('askAcc','Спросите вашего бухгалтера'))}</span>`;
     return body+(act?`<div class="row pgh-act">${act}</div>`:'')+(q.act==='code'?'<span class="hint pgh-res" role="status" hidden></span>':'')};
   const row=(id,t,a)=>`<div class="pgh-q${open.has(id)?' open':''}"><button type="button" class="pgh-qh" data-pgh-q="${esc(id)}" aria-expanded="${open.has(id)}"><span>${esc(t)}</span>${ic('down','sm')}</button><div class="pgh-a">${a}</div></div>`;
-  openModal({size:'pgside',noMax:true,cph:true,render:()=>({title:esc(cphT('helpTitle','Помощь')),sub:esc(c.name),
-    body:`<button type="button" class="btn cta pgh-tour" data-pgh-tour>${ic('play','sm')}${esc(cphT('helpTour','Показать, как пользоваться страницей'))}</button>
+  openModal({size:'pgside',noMax:true,cph:true,render:()=>({title:esc(cphT('helpTitle','Помощь')),
+    body:`<div class="pgh-ask"><b>${esc(cphT('notFound','Спросить бухгалтера'))}</b>${ph?`<span class="hint">${esc(who)} · <span class="mono">${esc(fmtPhone(ph))}</span></span><div class="row"><a class="btn sm" href="tel:+${ph.digits}">${ic('phone','sm')}Позвонить</a><a class="btn sm" href="${waLink(ph)}" target="_blank" rel="noopener">${ic('chat','sm')}WhatsApp</a></div>`:''}</div>
+      <button type="button" class="btn pgh-tour" data-pgh-tour>${ic('play','sm')}${esc(cphT('helpTour','Как пользоваться'))}</button>
       ${qs.length?`<h3 class="pgh-h">${esc(cphT('faqHead','Частые вопросы'))}</h3><div class="pgh-faq">${qs.map(q=>row(q.id,q.q,ans(q))).join('')}</div>`:''}
-      <div class="pgh-ask"><b>${esc(cphT('notFound','Не нашли ответ? Спросите вашего бухгалтера'))}</b>${ph?`<span class="hint">${esc(who)} · <span class="mono">${esc(fmtPhone(ph))}</span></span><div class="row"><a class="btn sm" href="tel:+${ph.digits}">${ic('phone','sm')}Позвонить</a><a class="btn sm" href="${waLink(ph)}" target="_blank" rel="noopener">${ic('chat','sm')}WhatsApp</a></div>`:''}</div>
-      ${gl.length?`<div class="pgh-faq pgh-gl">${row('__gloss',`${cphT('glossHead','Словарик')} · ${gl.length} ${plural(gl.length,'слово','слова','слов')}`,`<dl class="pgh-dl">${gl.map(g=>`<div><dt>${esc(cphCap(g.w))}</dt><dd>${esc(g.x)}</dd></div>`).join('')}</dl>`)}</div>`:''}`,
+      ${gl.length?`<div class="pgh-faq pgh-gl">${row('__gloss',cphT('glossHead','Словарик'),`<dl class="pgh-dl">${gl.map(g=>`<div><dt>${esc(cphCap(g.w))}</dt><dd>${esc(g.x)}</dd></div>`).join('')}</dl>`)}</div>`:''}`,
     mount(el,m){const mb=$('.mb',el);mb.onclick=ev=>{const b=ev.target.closest('[data-pgh-q],[data-pgh-act],[data-pgh-tour],[data-pgh-demo]');if(!b)return;
       if(b.dataset.pghQ!=null){const id=b.dataset.pghQ,on=!open.has(id);on?open.add(id):open.delete(id);b.parentElement.classList.toggle('open',on);b.setAttribute('aria-expanded',on);return}
       if(b.dataset.pghTour!=null){m.close();setTimeout(()=>cphTour(c),60);return}
@@ -147,15 +145,15 @@ function cphPaid(c,v){v=v||cphVis(c);const ks=[v.payTax&&'tax',v.payFee&&'fee'].
 // (отчёт → отчёты, отчётов), у сочетаний — как написано; «Другие формы» — ещё варианты через запятую (к уплате, единого налога). Сокращения (НДС, ГНС) — только заглавными
 let CPH_GRX=null,CPH_GV='';
 function cphGlossRx(){const g=CPH().gloss||[],key=JSON.stringify(g);if(CPH_GRX&&CPH_GV===key)return CPH_GRX;
-  const alts=[];g.forEach((x,i)=>{if(!x.w||!x.x)return;[x.w,...String(x.also||'').split(',')].map(s=>s.trim()).filter(Boolean).forEach(f=>alts.push({i,f,up:f.length>1&&f===f.toUpperCase()&&/[A-ZА-ЯЁ]/.test(f)}))});
+  const alts=[];g.forEach((x,i)=>{if(!x.w||!x.x||x.pg===false)return;[x.w,...String(x.also||'').split(',')].map(s=>s.trim()).filter(Boolean).forEach(f=>alts.push({i,f,up:f.length>1&&f===f.toUpperCase()&&/[A-ZА-ЯЁ]/.test(f)}))});
   alts.sort((a,b)=>b.f.length-a.f.length);
   const pat=a=>{let s=a.f.toLowerCase();const one=!/\s/.test(s),stem=one&&!a.up;if(stem&&s.length>=5&&/[аеёиоуыэюяьй]$/.test(s))s=s.slice(0,-1);
     return '(?<![\\p{L}\\p{N}])'+s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/[её]/g,'[её]').replace(/\s+/g,'\\s+')+(stem?'\\p{L}*':'')+'(?![\\p{L}\\p{N}])'};
   let rx=null;try{rx=alts.length?new RegExp(alts.map(a=>'('+pat(a)+')').join('|'),'giu'):null}catch(e){rx=null}
   CPH_GRX={alts,rx};CPH_GV=key;return CPH_GRX}
-const CPH_GSKIP='button,a,input,select,textarea,label,h1,h2,h3,h4,.pill,.mono,.tnum,svg,option,.pub-gl,.pub-sum,.pub-tv,.pub-fm';
+const CPH_GSKIP='button,a,input,select,textarea,label,h1,h2,h3,h4,.pill,.mono,.tnum,svg,option,.pub-gl,.pub-sum,.pub-fm,.pub-dl,.pub-pay';
 function cphGloss(root){const G=cphGlossRx();if(!G.rx)return;
-  $$('.pub-state,.pub-s',root).forEach(sc=>{const used=new Set(),w=document.createTreeWalker(sc,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.nodeValue.trim()&&!n.parentElement.closest(CPH_GSKIP)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT}),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
+  $$('.pub-s',root).forEach(sc=>{const used=new Set(),w=document.createTreeWalker(sc,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.nodeValue.trim()&&!n.parentElement.closest(CPH_GSKIP)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT}),nodes=[];let n;while((n=w.nextNode()))nodes.push(n);
     nodes.forEach(nd=>{const t=nd.nodeValue,out=[];let last=0,m;G.rx.lastIndex=0;
       while((m=G.rx.exec(t))){const a=G.alts[m.slice(1).findIndex(x=>x!==undefined)];if(!a||used.has(a.i)||(a.up&&m[0]!==m[0].toUpperCase())){G.rx.lastIndex=m.index+1;continue}
         used.add(a.i);out.push(document.createTextNode(t.slice(last,m.index)));const b=document.createElement('button');b.type='button';b.className='pub-gl';b.dataset.pubGl=a.i;b.setAttribute('aria-haspopup','dialog');b.title='Что это значит?';b.textContent=m[0];out.push(b);last=m.index+m[0].length}
@@ -166,8 +164,6 @@ function cphGlossPop(b){const g=(CPH().gloss||[])[+b.dataset.pubGl];if(!g)return
     {cls:'pad pgl-pop',mount:el=>{$('[data-pgl-x]',el).onclick=()=>{closePop();b.focus({preventScroll:true})}}})}
 
 /* ═════════════ Пункт 5. Подсказки в окнах действий ═════════════ */
-// Три шага над полями «Я оплатил»
-const cphSteps=()=>{const s=cphT('paidSteps','').split('|').map(x=>x.trim()).filter(Boolean);return s.length?`<ol class="pub-steps full" aria-label="Как сообщить об оплате">${s.map((x,i)=>`<li><span class="pub-stn">${i+1}</span><span>${esc(x)}</span></li>`).join('')}</ol>`:''};
 // После отправки — окно с понятным итогом вместо короткого уведомления: что будет дальше
 function cphDone(title,text){openModal({noMax:true,render:()=>({title:esc(title),body:`<div class="pgw-done">${ic('ok')}<p>${esc(text)}</p></div>`,foot:'<button type="button" class="btn cta" data-close>Понятно</button>'})})}
 // Экран кода: «Что это за страница?» раскрывает объяснение под ссылкой

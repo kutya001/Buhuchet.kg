@@ -83,3 +83,11 @@
 .tgw-old .ic{width:13px;height:13px;flex:none}
 .tgw-foot{display:flex;gap:4px;margin-top:8px}
 .tgw-foot .tgc-k{flex:1 1 0}
+/* Админка → «Телеграм» → «Журнал» и «Запуски» (доработки 17.11.2026): направление, текст одной строкой, сообщение как в чате, нажатая кнопка */
+.tgl-dir{white-space:nowrap;font-weight:600;color:var(--muted)}
+.tgl-dir.in{color:var(--text)}
+.tgl-txt{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tgl-view{margin-bottom:12px}
+.tgl-view .tgc{max-width:460px}
+.tgc-k.pressed{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.run-err{margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--red-bg);white-space:pre-wrap;word-break:break-word;font-size:12.5px}

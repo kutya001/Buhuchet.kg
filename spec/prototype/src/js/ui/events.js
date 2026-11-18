@@ -22,7 +22,7 @@ document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest
   b.setAttribute('aria-pressed',String(show));b.setAttribute('aria-label',l);b.title=l;b.innerHTML=ic(show?'eyeoff':'eye','sm')});
 document.addEventListener('keydown',e=>{
   // Esc на странице контрагента сначала закрывает облачко и окна поверх неё (панель «Помощь», «Я оплатил»), потом саму страницу
-  if(e.key==='Escape'){if(POP){closePop();return}if(MODALS.length){MODALS[MODALS.length-1].close();return}if(PUB.open){pubClose();return}if($('#sheet').classList.contains('open')){closeSheet();return}}
+  if(e.key==='Escape'){if(POP){closePop();return}if(MODALS.length){MODALS[MODALS.length-1].tryClose();return}if(PUB.open){pubClose();return}if($('#sheet').classList.contains('open')){closeSheet();return}}
   if(e.key==='/'&&!/input|textarea|select/i.test(document.activeElement.tagName)&&!MODALS.length){e.preventDefault();$('#topbar').classList.add('searching');$('#q').focus()}
 });
 $('#sheet-cover').onclick=closeSheet;

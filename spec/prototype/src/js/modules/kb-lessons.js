@@ -20,7 +20,7 @@ const CKG=[
  {id:'me',items:[
   {id:'tg',star:1,user:1,staff:1,done:()=>!!me().tg,go:G(null,null,'#me-open','#burger',()=>{profileDlg();ckFlash('#pf-tglink')})},
   {id:'nmode',user:1,staff:1,done:()=>hasLog('emp',S.me,/^Уведомления/),go:G(null,null,'#me-open','#burger',()=>{profileDlg();ckFlash('[name=pf-nm]')})},
-  {id:'theme',learn:1,hit:'theme',go:G(null,null,'#theme')}]},
+  {id:'theme',learn:1,hit:'theme',go:G(null,null,'#theme','#burger',()=>{if(isMobile()){profileDlg();ckFlash('#pf-theme')}else ckFlash('#theme')})}]},
  {id:'dicts',items:[
   {id:'types',star:1,perm:'dicts',done:()=>Object.values(ORG.types).some(t=>t.on),go:G('dicts','types','#dt-first, #dg')},
   {id:'typecfg',perm:'dicts',done:()=>hasLog('type')||hasLog('org',null,/^Настройки «/),go:G('dicts','types','#dg')},
@@ -210,7 +210,7 @@ function ckEval(){const fresh=CK.q.splice(0);
   const a=CK.active&&ckFind(CK.active);const act=fresh.filter(i=>!i.at);
   const pick=act.find(i=>i===a&&!i.soft&&!i.learn)||act.find(i=>!i.learn&&!i.soft);
   if(pick&&CK.active){CK.active=pick.id;CK.bar=true;setTimeout(()=>ckDoneDlg(pick),MODALS.length?250:50)}
-  {const rest=act.filter(i=>!(CK.active&&i===pick));if(rest.length){CK.quiet++;toast(rest.length===1?`База знаний: шаг выполнен — «${rest[0].t}»`:`База знаний: выполнено ${rest.length} ${plural(rest.length,'шаг','шага','шагов')} — ${rest.map(i=>'«'+i.t+'»').join(', ')}`,'grad');CK.quiet--}}
+  {const rest=act.filter(i=>!(CK.active&&i===pick));if(rest.length&&CK.active){CK.quiet++;toast(rest.length===1?`Шаг выполнен: «${rest[0].t}»`:`Выполнено шагов: ${rest.length}`,'grad');CK.quiet--}}
   const before=ckU().max;kbSync(false);if(ckU().max!==before||fresh.length){if(S.mod==='kb')renderPage();renderSide();if(typeof renderSheetDot==='function')renderSheetDot()}
   ckBar()}
 // Silent baseline: what this user already did before (history under his name) is marked at once, without dialogs.

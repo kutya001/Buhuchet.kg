@@ -232,7 +232,7 @@ function tourEnd(full,quiet){if(!TOUR.on)return;const p=TOUR.list[TOUR.i];const 
   // «Посмотреть» засчитывается только показом до конца; обзор экрана засчитывает шаги «Посмотреть» этого экрана
   if(done&&TOUR.kind==='step'){const i=ckFind(TOUR.sid);if(i&&i.learn){if(ckMark(i,'show')){CK.active=i.id;CK.bar=true;kbSync(false);renderSide();if(typeof renderSheetDot==='function')renderSheetDot();if(S.mod==='kb')renderPage();setTimeout(()=>ckDoneDlg(i),120)}}}
   if(done&&TOUR.kind==='scr'){const k=TOUR.scr||tScr();const l=ckAll().filter(i=>i.learn&&i.at&&(i.at.includes(k)||i.at.includes(k.split('.')[0]))&&ckMark(i,'show'));if(l.length){kbSync(false);renderSide();toast(`База знаний: ${l.length===1?'шаг просмотрен — «'+l[0].t+'»':'просмотрено шагов: '+l.length}`,'grad')}}
-  if(!done&&!quiet&&TOUR.kind==='step'){const i=ckFind(TOUR.sid);if(i&&i.learn)toast('Показ закончен раньше: шаг «Посмотреть» засчитается, когда пройдёте показ до конца','info')}
+  if(!done&&!quiet&&TOUR.kind==='step'){const i=ckFind(TOUR.sid);if(i&&i.learn)toast('Показ не пройден до конца','info')}
   ckBar()}
 function tourPlace(){if(!TOUR.on)return;const mob=isMobile();const el=TOUR.el&&tVis(TOUR.el)?TOUR.el:null;const hole=$('#tour .tour-hole'),bub=$('#tour .tour-bub');
   const W=innerWidth,H=innerHeight;let r=null;

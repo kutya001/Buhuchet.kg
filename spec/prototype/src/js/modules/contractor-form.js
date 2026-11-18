@@ -41,7 +41,7 @@ function cfTypes(p,cx,sel,auto,before){const rec=pkCalc(cx).rec;before=before||n
   return `<div class="cf-types" id="${p}-types">${[...sel].map(id=>{const t=T[id];if(!t)return '';const r=rec[id];return `<div class="cf-ty"><div class="grow"><b>${esc(t.short)}</b> ${actPill(t.act,1)} <span class="muted">${esc(t.organ)}</span><div class="hint">${esc(r?r.why:'Выбран вручную')}${before.size?before.has(id)?' · назначен':' · будет добавлен':''}</div></div><button type="button" class="icon-btn sm" data-unsel="${id}" title="Убрать ${esc(t.short)}" aria-label="Убрать ${esc(t.short)}">${ic('x','sm')}</button></div>`}).join('')||'<span class="faint">Отчёты не выбраны</span>'}</div>
     ${[...before].filter(id=>!sel.has(id)).length?`<div class="hint red">Будет снято: ${[...before].filter(id=>!sel.has(id)).map(id=>esc(T[id].short)).join(', ')}</div>`:''}
     <div class="row"><button type="button" class="btn sm cta" id="${p}-pick">${ic('list','sm')}Подобрать отчёты</button><button type="button" class="btn sm" id="${p}-one">${ic('plus','sm')}Добавить отчёт</button></div>
-    ${auto?`<div class="hint">${ic('info','sm')} Подобрано автоматически по режиму, статусам и основаниям. Проверьте в «Подобрать отчёты»: там описание каждого отчёта.</div>`:''}`}
+    ${auto?`<div class="hint">${ic('info','sm')} Подобрано автоматически — проверьте</div>`:''}`}
 // Обязательные по подбору, но не выбранные — с кнопкой «Добавить»
 function cfMissing(cx,sel,attr){const miss=pkAuto(cx).filter(id=>!sel.has(id));if(!miss.length)return '';return `<div class="note">${ic('info')}<span class="grow">Обязательны по режиму, статусам или основаниям, но не выбраны: ${miss.map(id=>esc(T[id].short)).join(', ')}</span><button type="button" class="btn sm" ${attr}="${miss.join(',')}">Добавить</button></div>`}
 const sizeSeg=(id,v)=>`<div class="seg" role="group" aria-label="Размер бизнеса" id="${id}">${BIZSZ.map(b=>`<button type="button" data-sz="${b.code}" class="${(v||'small')===b.code?'on':''}" title="${esc(b.rule)}">${esc(b.name)}</button>`).join('')}</div>`;
@@ -58,36 +58,36 @@ function addCpDlg(kind,pre){
     fake.assign=[...st.sel].filter(isEnT).map(id=>({t:id,en:enClean(st.rates[id])}));
     const d=st.d||{};const feeOn=feat('fee')&&can('fee')&&reg;const mob=isMobile();const step=m.state.step;
     const s1=`<div class="form">
-    <div class="fld full"><label>Тип обслуживания</label><div class="seg" role="group" aria-label="Тип обслуживания" id="nc-kind" style="align-self:flex-start;width:max-content">${[['regular','Постоянное обслуживание'],['oneoff','Разовое']].map(([k,l])=>`<button type="button" data-k="${k}" class="${st.kind===k?'on':''}">${l}</button>`).join('')}</div><div class="hint">${reg?'Сдаёт отчёты, платит за обслуживание по тарифу.':'Отчётов и тарифа нет: только разовые услуги и проекты. Потом можно перевести в постоянное.'}</div></div>
+    <div class="fld full"><label>Тип обслуживания</label><div class="seg" role="group" aria-label="Тип обслуживания" id="nc-kind" style="align-self:flex-start;width:max-content">${[['regular','Постоянное обслуживание'],['oneoff','Разовое']].map(([k,l])=>`<button type="button" data-k="${k}" class="${st.kind===k?'on':''}">${l}</button>`).join('')}</div>${reg?'':'<div class="hint">Без отчётов и тарифа: только услуги и проекты</div>'}</div>
     ${fld('Название',inp('nc-name',d.name||'','placeholder="ОсОО «Компания»"'),{req:true,full:true,id:'nc-name'})}
     ${fld('ИНН',inp('nc-inn',d.inn||'','inputmode="numeric" maxlength="14" class="inp mono" placeholder="14 цифр"'),{req:true,id:'nc-inn'})}
     ${fld('Телефон (звонок и WhatsApp)',phoneInput('nc-ph',d.ph),{req:true,id:'nc-ph'})}
     ${gkFields('nc',st)}${pre&&pre.res?rdGkBox(st,pre):''}
     ${fld('Форма собственности',sel('nc-form',[...(st.form?[]:[['','— выберите —']]),...DICT.forms.items.filter(x=>x.active).map(x=>x.name)],st.form),{req:true,id:'nc-form'})}
-    ${fld('Налоговый орган (УГНС)',sel('nc-ugns',[['','— не указан —'],...DICT.ugns.items.filter(x=>x.active).map(x=>[ugK(x),ugT(x)])],d.ugns||''),{id:'nc-ugns',hint:'Список ведёт администратор платформы'})}
+    ${fld('Налоговый орган (УГНС)',sel('nc-ugns',[['','— не указан —'],...DICT.ugns.items.filter(x=>x.active).map(x=>[ugK(x),ugT(x)])],d.ugns||''),{id:'nc-ugns'})}
     ${fld('Руководитель',inp('nc-head',d.head||''),{id:'nc-head'})}${fld('Контактное лицо',inp('nc-contact',d.contact||''),{id:'nc-contact'})}
-    <div class="fld full reg-h"><button type="button" class="linkbtn" id="nc-regt" aria-expanded="${st.regOpen}">${ic(st.regOpen?'down':'right','sm')}Регистрационные данные</button><span class="hint">полное наименование, регистрационный номер, ОКПО, юридический адрес, почта, даты регистрации, учредители${st.regOpen?'':' — необязательно'}</span></div>
+    <div class="fld full reg-h"><button type="button" class="linkbtn" id="nc-regt" aria-expanded="${st.regOpen}">${ic(st.regOpen?'down':'right','sm')}Регистрационные данные</button><span class="hint">наименование, номер, ОКПО, адрес, учредители</span></div>
     ${st.regOpen?regFields('nc',st.reg):''}</div>`;
     const s2=`<div class="form">
     ${fld('Режим налогообложения',sel('nc-reg',[['','— не указан —'],...DICT.regimes.items.filter(x=>x.active).map(x=>[x.name,REGIME_FULL[x.name]||x.name])],st.regime),{id:'nc-reg',hint:st.regime?'':'Не обязательно. Без режима обязательные отчёты не подбираются: проверьте назначение вручную.'})}
-    ${st.regime?fld('Дополнительный режим',sel('nc-reg2',reg2Opts(st.regime,st.regime2),st.regime2),{id:'nc-reg2',hint:'Если контрагент совмещает режимы по разным видам деятельности, например ОНР и майнинг'}):'<div></div>'}
+    ${st.regime?fld(`Дополнительный режим ${tipI('Если контрагент совмещает режимы по разным видам деятельности, например ОНР и майнинг')}`,sel('nc-reg2',reg2Opts(st.regime,st.regime2),st.regime2),{id:'nc-reg2'}):'<div></div>'}
     ${fld('Размер бизнеса',sizeSeg('nc-size',st.size),{id:'nc-size',full:true,hint:esc((BIZSZ.find(b=>b.code===st.size)||{}).rule||'')+': от него зависит, ежемесячно или ежеквартально сдаются единый налог и налог с продаж'})}
-    ${fld('Льготы и особые статусы',`<div class="cf-ben">${benLine(fake)}</div><button type="button" class="btn sm" id="nc-benb" style="align-self:flex-start">${ic('star','sm')}Выбрать льготы и статусы</button>`,{full:true,id:'nc-ben',hint:'Необязательно. В окне — описание каждой льготы, условия и какие отчёты она добавляет или делает ненужными'})}
+    ${fld('Льготы и особые статусы',`<div class="cf-ben">${benLine(fake)}</div><button type="button" class="btn sm" id="nc-benb" style="align-self:flex-start">${ic('star','sm')}Выбрать льготы и статусы</button>`,{full:true,id:'nc-ben'})}
     ${reg?fld('Основания для сквозных отчётов',basesChips('nc-bases',st.bases),{full:true,id:'nc-bases',hint:'Что есть у контрагента: по каждому основанию подбираются свои отчёты (например, сотрудники — Соцфонд)'}):''}
     ${reg?sfFields('nc',fake,st):''}
     <div class="fld full">${gkNote(fake,reg?st.sel:new Set())}</div></div>`;
     const s3=`<div class="form">
     ${reg?`<div class="fld full" data-f="nc-types"><label class="req">Сдаёт отчёты</label>${cfTypes('nc',fake,st.sel,!st.picked&&st.sel.size>0)}<div class="err" hidden></div></div>
     <div class="fld full">${pkNotNeededNote(fake,[...st.sel],'data-nnrm')}${st.picked?cfMissing(fake,st.sel,'data-addmiss'):''}${gkFitHint(fake,st.sel)}</div>`:''}
-    ${reg&&st.sel.size?`<div class="fld full"><label>Ставки налога</label>${rateRows(st.sel,st.rates,null,fake)||'<span class="faint">У выбранных видов ставка не выбирается</span>'}<div class="hint">Ставки ведёт администратор платформы: у видов отчётов — в каталоге, у единого налога — в справочнике «Ставки единого налога» (строки ЕНС подставлены по ГКЭД и статусам). Повторяющуюся сумму (например, патент) можно задать позже в карточке, кнопка «Ставки».</div></div>`:''}
+    ${reg&&st.sel.size?`<div class="fld full"><label>Ставки налога</label>${rateRows(st.sel,st.rates,null,fake)||'<span class="faint">У выбранных видов ставка не выбирается</span>'}<div class="hint">Ставки — из каталога ${tipI('Ставки ведёт администратор платформы: у видов отчётов — в каталоге, у единого налога — в справочнике «Ставки единого налога» (строки ЕНС подставлены по ГКЭД и статусам). Повторяющуюся сумму (например, патент) можно задать позже в карточке, кнопка «Ставки».')}</div></div>`:''}
     ${fld('Ответственный бухгалтер',sel('nc-resp',[['','— выберите —'],...EMP.filter(e=>e.active).map(e=>[e.id,e.short])],d.resp||(me().role==='acc'?S.me:'')),{req:true,id:'nc-resp'})}
     ${fld(reg?'Дата начала обслуживания':'Дата первого обращения',inp('nc-start',d.start||TODAY,'type="date"'),{id:'nc-start'})}
-    ${feeOn?`${fld('Стоимость обслуживания, сом',`<div class="row" style="flex-wrap:nowrap">${inp('nc-fee',d.fee||'','inputmode="decimal" class="inp tnum"')}<div class="seg" role="group" aria-label="Периодичность оплаты" id="nc-per" style="flex-shrink:0;white-space:nowrap">${[['M','в месяц'],['Y','в год']].map(([k,l])=>`<button type="button" data-p="${k}" class="${st.per===k?'on':''}">${l}</button>`).join('')}</div></div>`,{req:true,id:'nc-fee',hint:st.per==='Y'?'Годовой тариф начисляется раз в год, в месяце начала обслуживания':''})}${st.per==='M'?fld('Первый неполный месяц',sel('nc-first',[['full','Полный месяц'],['prorate','Пропорционально дням'],['next','Со следующего месяца']],d.first||'full'),{id:'nc-first'}):'<div></div>'}`:reg&&feat('fee')?`<div class="note full" style="grid-column:1/-1">${ic('lock')}<span>Стоимость обслуживания вам не видна. Её внесёт владелец или сотрудник с правом «Плата за обслуживание».</span></div>`:''}
-    ${reg&&feat('taxpay')?`<label class="check-row full" style="grid-column:1/-1"><input type="checkbox" class="sw" id="nc-needf" ${d.needf?'checked':''}><span class="grow">Обязательно требовать прикрепления при поступлении от контрагента<div class="hint">Поступление денег нельзя будет сохранить без скрина перевода или квитанции</div></span></label>`:''}
+    ${feeOn?`${fld('Стоимость обслуживания, сом',`<div class="row" style="flex-wrap:nowrap">${inp('nc-fee',d.fee||'','inputmode="decimal" class="inp tnum"')}<div class="seg" role="group" aria-label="Периодичность оплаты" id="nc-per" style="flex-shrink:0;white-space:nowrap">${[['M','в месяц'],['Y','в год']].map(([k,l])=>`<button type="button" data-p="${k}" class="${st.per===k?'on':''}">${l}</button>`).join('')}</div></div>`,{req:true,id:'nc-fee',hint:st.per==='Y'?'Годовой тариф начисляется раз в год, в месяце начала обслуживания':''})}${st.per==='M'?fld('Первый неполный месяц',sel('nc-first',[['full','Полный месяц'],['prorate','Пропорционально дням'],['next','Со следующего месяца']],d.first||'full'),{id:'nc-first'}):'<div></div>'}`:reg&&feat('fee')?`<div class="note full" style="grid-column:1/-1">${ic('lock')}<span>Стоимость внесёт владелец</span></div>`:''}
+    ${reg&&feat('taxpay')?`<label class="check-row full" style="grid-column:1/-1"><input type="checkbox" class="sw" id="nc-needf" ${d.needf?'checked':''}><span class="grow">Обязательно требовать прикрепления при поступлении от контрагента ${tipI('Поступление денег нельзя будет сохранить без скрина перевода или квитанции')}</span></label>`:''}
     ${fld('Номер договора',inp('nc-cno',d.cno||'','placeholder="Например: 45/26"'),{id:'nc-cno'})}${fld('Дата договора',inp('nc-cdate',d.cdate||'','type="date"'),{id:'nc-cdate'})}
     ${fld('Примечание',`<textarea class="inp" id="nc-note" style="min-height:60px">${esc(d.note||'')}</textarea>`,{full:true,id:'nc-note'})}
     </div><div id="nc-pro" class="hint"></div>`;
-    return {title:'Новый контрагент'+(pre?' '+rdBadge:''),sub:pre&&pre.res?(rdIpDocs(pre)?'Заполнено из свидетельства ИП':'Заполнено из свидетельства и выписки')+' — проверьте все поля. Ничего не сохранится до «Сохранить контрагента»':'Обязательные поля отмечены звёздочкой, остальные можно заполнить позже',
+    return {title:'Новый контрагент'+(pre?' '+rdBadge:''),sub:pre&&pre.res?(rdIpDocs(pre)?'Заполнено из свидетельства ИП':'Заполнено из свидетельства и выписки')+' — проверьте все поля. Ничего не сохранится до «Сохранить контрагента»':'',
       body:`${pre&&pre.res?rdHead(st,pre):pre?RD_BETA:''}${pre&&(pre.files||[]).length?`<div class="note">${ic('clip')}<span>После сохранения к контрагенту прикрепятся: ${pre.files.map(esc).join(', ')}</span></div>`:''}
       <div class="cf ${mob?'steps':''}">${cfToc(step,mob)}${cfSec(1,s1)}${cfSec(2,s2)}${cfSec(3,s3)}</div>`,
     foot:mob?`<button class="btn ghost" id="cf-back">${ic('left','sm')}Назад</button><button class="btn ghost cf-cancel" data-close>Отмена</button><div class="grow"></div><button class="btn cta" id="cf-next">Далее${ic('right','sm')}</button><button class="btn cta" id="nc-ok">Сохранить контрагента</button>`:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="nc-ok">Сохранить контрагента</button>',
@@ -177,34 +177,45 @@ function editCpDlg(c){
   const before=new Set(c.assign.filter(a=>!a.to).map(a=>a.t));const reg=c.kind!=='oneoff';
   const st={form:c.form,regime:c.regime||'',regime2:c.regime2||'',ben:[...(c.ben||[])],benD:JSON.parse(JSON.stringify(c.benDates||{})),bases:[...(c.bases||[])],size:c.size||'small',sel:new Set(before),forced:{},ugns:c.ugns||'',ugAdd:[],gked:c.gked||'',gked2:[...(c.gked2||[])],...sfInit(c),d:{name:c.name,inn:c.inn,ph:c.phone,head:c.head||'',contact:c.contact||'',note:c.note||'',cno:cm?cm[1]:'',cdate:cm&&cm[2]?`${cm[4]}-${cm[3]}-${cm[2]}`:'',feeDay:c.feeDay,start:c.start||'',swhy:''},reg:Object.assign({},c.reg||{})};
   const feeOn=feat('fee')&&can('fee')&&c.kind!=='oneoff';
-  openModal({form:true,size:'mid',render:m=>{const d=st.d;const bad=c.assign.filter(a=>!a.to&&st.sel.has(a.t)&&compatible(T[a.t],{regime:st.regime,regime2:st.regime2,form:st.form,assign:c.assign}));
+  openModal({form:true,size:'mid',state:{step:1},render:m=>{const d=st.d;const bad=c.assign.filter(a=>!a.to&&st.sel.has(a.t)&&compatible(T[a.t],{regime:st.regime,regime2:st.regime2,form:st.form,assign:c.assign}));
     const fake=Object.assign({},c,{regime:st.regime,regime2:st.regime2,ben:st.ben,benDates:st.benD,bases:st.bases,size:st.size,form:st.form,gked:st.gked,gked2:st.gked2});
-    return {title:'Изменить контрагента',sub:esc(c.name),body:`<div class="form">
+    /* «Изменить контрагента» — три раздела, как у «Нового контрагента» (решение заказчика 17.11.2026, «Меньше текста», ТЗ п. 8): на ПК — лентой с оглавлением,
+       на телефоне — три шага с «Назад» и «Далее». Регистрационные данные свёрнуты; причина изменения даты — только когда дата изменена */
+    const mob=isMobile(),step=m.state.step||1;
+    const s1=`<div class="form">
     ${fld('Название',inp('ec-name',d.name,'placeholder="ОсОО «Компания»"'),{req:true,full:true,id:'ec-name'})}
     ${fld('ИНН',inp('ec-inn',d.inn,'inputmode="numeric" maxlength="14" class="inp mono" placeholder="14 цифр"'),{req:true,id:'ec-inn'})}
     ${fld('Телефон (звонок и WhatsApp)',phoneInput('ec-ph',d.ph),{req:true,id:'ec-ph'})}
-    ${gkFields('ec',st)}
     ${fld('Форма собственности',sel('ec-form',DICT.forms.items.filter(x=>x.active||x.name===c.form).map(x=>x.name),st.form),{id:'ec-form'})}
-    ${fld('Налоговый орган (УГНС)',sel('ec-ugns',[['','— не указан —'],...DICT.ugns.items.filter(x=>x.active||ugK(x)===st.ugns).map(x=>[ugK(x),ugT(x)])],st.ugns),{id:'ec-ugns',hint:'Список ведёт администратор платформы'})}
+    ${fld('Руководитель',inp('ec-head',d.head),{id:'ec-head'})}${fld('Контактное лицо',inp('ec-contact',d.contact),{id:'ec-contact'})}
+    <details class="fmore full" id="ec-regd" ${st.regOpen?'open':''}><summary>Регистрационные данные${regEmpty(st.reg)?' <span class="faint">· не заполнены</span>':''}</summary><div class="form">${regFields('ec',st.reg)}</div></details>
+    </div>`;
+    const s2=`<div class="form">
+    ${gkFields('ec',st)}
+    ${fld('Налоговый орган (УГНС)',sel('ec-ugns',[['','— не указан —'],...DICT.ugns.items.filter(x=>x.active||ugK(x)===st.ugns).map(x=>[ugK(x),ugT(x)])],st.ugns),{id:'ec-ugns'})}
     ${fld('Режим налогообложения',sel('ec-reg',[['','— не указан —'],...DICT.regimes.items.filter(x=>x.active||x.name===c.regime).map(x=>[x.name,REGIME_FULL[x.name]||x.name])],st.regime),{id:'ec-reg'})}
     ${st.regime?fld('Дополнительный режим',sel('ec-reg2',reg2Opts(st.regime,st.regime2),st.regime2),{id:'ec-reg2'}):'<div></div>'}
     ${fld('Размер бизнеса',sizeSeg('ec-size',st.size),{id:'ec-size',full:true,hint:esc((BIZSZ.find(b=>b.code===st.size)||{}).rule||'')})}
     ${fld('Льготы и особые статусы',`<div class="cf-ben">${benLine(fake)}</div><button type="button" class="btn sm" id="ec-benb" style="align-self:flex-start">${ic('star','sm')}Выбрать льготы и статусы</button>`,{full:true,id:'ec-ben'})}
     ${reg?fld('Основания для сквозных отчётов',basesChips('ec-bases',st.bases),{full:true,id:'ec-bases'}):''}
-    ${reg?sfFields('ec',fake,st,can('createCp')):''}
+    ${reg?`<details class="fmore full" id="ec-sfd" ${st.sfOpen?'open':''}><summary>Тариф Соцфонда: ${(()=>{try{const x=sfState(fake);return x&&x.cur?esc(sfShort(x.cur)):'не указан'}catch(e){return '—'}})()}</summary><div class="form">${sfFields('ec',fake,st,can('createCp'))}</div></details>`:''}
     <div class="full" style="grid-column:1/-1">${gkNote(fake)}</div>
-    ${reg?`<div class="note full" style="grid-column:1/-1">${ic('list')}<span>Отчёты здесь не выбираются: их подбор с описаниями — на вкладке «Подбор отчётов» карточки контрагента. После смены режима, статусов, оснований или видов деятельности проверьте отчёты там.</span></div>`:''}
+    ${reg?`<div class="note full" style="grid-column:1/-1">${ic('list')}<span>Отчёты подбираются на вкладке «Подбор отчётов» карточки: после смены режима, статусов или ГКЭД проверьте их там.</span></div>`:''}
     ${bad.length?`<div class="note warn full" style="grid-column:1/-1">${ic('alert')}<span>Назначенные отчёты не меняются сами. Не подходят к новому режиму или форме: ${bad.map(a=>esc(T[a.t].short)).join(', ')}. После сохранения уберите их на вкладке «Подбор отчётов».</span></div>`:''}
-    ${fld('Руководитель',inp('ec-head',d.head),{id:'ec-head'})}${fld('Контактное лицо',inp('ec-contact',d.contact),{id:'ec-contact'})}
+    </div>`;
+    const s3=`<div class="form">
     ${fld('Номер договора',inp('ec-cno',d.cno,'placeholder="Например: 45/26"'),{id:'ec-cno'})}${fld('Дата договора',inp('ec-cdate',d.cdate,'type="date"'),{id:'ec-cdate'})}
-    ${fld(reg?'Дата начала обслуживания':'Дата первого обращения',inp('ec-start',d.start,'type="date"'),{id:'ec-start',hint:reg?'С этой даты ведётся учёт контрагента: первый период обслуживания, начисления за обслуживание и месяцы показателей':''})}${fld('Причина изменения даты',inp('ec-swhy',d.swhy,'placeholder="Например: внесли с ошибкой"'),{id:'ec-swhy',hint:'Обязательна, если дата начала меняется'})}
-    ${feeOn?fld('День оплаты обслуживания',inp('ec-fday',d.feeDay,'type="number" min="1" max="28" class="inp tnum"'),{id:'ec-fday',hint:'Число месяца, до которого контрагент платит за обслуживание (1–28)'}):''}
+    ${fld(reg?`Дата начала обслуживания ${tipI('С этой даты ведётся учёт контрагента: первый период обслуживания, начисления за обслуживание и месяцы показателей')}`:'Дата первого обращения',inp('ec-start',d.start,'type="date"'),{id:'ec-start'})}<div class="ec-sw" ${d.start!==(c.start||'')?'':'hidden'}>${fld('Причина изменения даты',inp('ec-swhy',d.swhy,'placeholder="Например: внесли с ошибкой"'),{id:'ec-swhy',req:true})}</div>
+    ${feeOn?fld('День оплаты обслуживания',inp('ec-fday',d.feeDay,'type="number" min="1" max="28" class="inp tnum" placeholder="1–28"'),{id:'ec-fday'}):''}
     ${fld('Примечание',`<textarea class="inp" id="ec-note" style="min-height:60px">${esc(d.note)}</textarea>`,{full:true,id:'ec-note'})}
-    <div class="fld full reg-h"><b>Регистрационные данные</b></div>
-    ${regFields('ec',st.reg)}
-    </div><div class="hint">Тип обслуживания, тариф, ответственный и периоды обслуживания меняются своими действиями в карточке.</div>`,
-    foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="ec-ok">Сохранить</button>',
-    mount(el){bindPhone(el,'ec-ph');gkBind(el,'ec',st,()=>{snap();m.draw()});
+    </div><div class="hint">Тип, тариф, ответственный и периоды обслуживания меняются в карточке</div>`;
+    return {title:'Изменить контрагента',sub:esc(c.name),body:`<div class="cf ${mob?'steps':''}">${cfToc(step,mob)}${cfSec(1,s1)}${cfSec(2,s2)}${cfSec(3,s3)}</div>`,
+    foot:isMobile()?`<button class="btn ghost" id="cf-back">${ic('left','sm')}Назад</button><button class="btn ghost cf-cancel" data-close>Отмена</button><div class="grow"></div><button class="btn cta" id="cf-next">Далее${ic('right','sm')}</button><button class="btn cta" id="ec-ok">Сохранить</button>`:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="ec-ok">Сохранить</button>',
+    mount(el){bindPhone(el,'ec-ph');const mob=isMobile();cfShow(el,m,m.state.step||1);
+      $$('.cf-tc',el).forEach(b=>b.onclick=()=>{const n=+b.dataset.step;if(mob)cfShow(el,m,n);else{const x=el.querySelector(`.cf-sec[data-sec="${n}"]`);x&&x.scrollIntoView({block:'start',behavior:'smooth'})}});
+      if($('#cf-next',el))$('#cf-next',el).onclick=()=>cfShow(el,m,Math.min(3,m.state.step+1));if($('#cf-back',el))$('#cf-back',el).onclick=()=>cfShow(el,m,Math.max(1,m.state.step-1));
+      $('#ec-regd',el).ontoggle=e=>{st.regOpen=e.target.open};if($('#ec-sfd',el))$('#ec-sfd',el).ontoggle=e=>{st.sfOpen=e.target.open};
+      $('#ec-start',el).addEventListener('change',e=>{const w=el.querySelector('.ec-sw');if(w)w.hidden=e.target.value===(c.start||'')});gkBind(el,'ec',st,()=>{snap();m.draw()});
       const snap=()=>{st.d={name:val(el,'ec-name'),inn:val(el,'ec-inn'),ph:readPhone(el,'ec-ph').ph||st.d.ph,head:val(el,'ec-head'),contact:val(el,'ec-contact'),note:val(el,'ec-note'),cno:val(el,'ec-cno'),cdate:val(el,'ec-cdate'),feeDay:$('#ec-fday',el)?val(el,'ec-fday'):st.d.feeDay,start:val(el,'ec-start'),swhy:val(el,'ec-swhy')};st.reg=regRead(el,'ec')};
       $('#ec-reg',el).onchange=e=>{snap();st.regime=e.target.value;if(st.regime2===st.regime||!st.regime)st.regime2='';m.draw();gkEnOk(Object.assign({},c,st),st,()=>m.draw())};if($('#ec-reg2',el))$('#ec-reg2',el).onchange=e=>{snap();st.regime2=e.target.value;m.draw()};
       $('#ec-form',el).onchange=e=>{snap();st.form=e.target.value;m.draw()};
@@ -221,8 +232,9 @@ function editCpDlg(c){
           $('#ec-fday',el)?setErr(el,'ec-fday',fd>=1&&fd<=28?'':'Число от 1 до 28'):true,
           setErr(el,'ec-start',cpStartWhy(c,val(el,'ec-start'))),setErr(el,'ec-swhy',val(el,'ec-start')!==(c.start||'')&&!val(el,'ec-swhy')?'Укажите причину: меняется дата начала':''),
           setErr(el,'ec-gk',st.gked?'':'Укажите основной вид деятельности (ГКЭД)'),setErr(el,'ec-reg',gkCheck(Object.assign({},c,st)).block[0]||''),regCheck(el,'ec')].every(Boolean);
-        if(!ok){const f=el.querySelector('.fld.bad');f&&f.scrollIntoView({block:'center',behavior:'smooth'});return}
-        if(!sfValid(el,'ec',fake,st)){const f=el.querySelector('.fld.bad');f&&f.scrollIntoView({block:'center',behavior:'smooth'});return}
+        const toBad=()=>{const f=el.querySelector('.fld.bad');if(!f)return;const dd=f.closest('details');if(dd)dd.open=true;const sc=f.closest('.cf-sec');if(isMobile()&&sc)cfShow(el,m,+sc.dataset.sec);f.scrollIntoView({block:'center',behavior:'smooth'})};
+        if(!ok){toBad();return}
+        if(!sfValid(el,'ec',fake,st)){toBad();return}
         if(!gkEnOk(Object.assign({},c,st),st,()=>$('#ec-ok',el).click()))return;
         if(!gkBenOk(Object.assign({},c,st),st,()=>$('#ec-ok',el).click()))return;
         if(!sfConfirm(fake,st,()=>$('#ec-ok',el).click()))return;

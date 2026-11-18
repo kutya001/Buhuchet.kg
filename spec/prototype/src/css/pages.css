@@ -49,7 +49,7 @@ textarea.f-note-i{min-height:58px}
 
 /* ── Login ── */
 .login{position:fixed;inset:0;z-index:100;background:var(--frame);display:grid;place-items:center;padding:24px 16px;overflow:auto}
-.login .card{width:min(400px,100%);background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:28px 26px;display:flex;flex-direction:column;gap:14px;animation:slideUp .25s forwards}
+.login .card{width:min(400px,100%);background:var(--pane);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-l);padding:28px 26px;display:flex;flex-direction:column;gap:14px;animation:slideUp var(--t-base) var(--ease-out) both}
 .login h2{margin:0;font-size:20px;font-weight:720;letter-spacing:-.015em}
 
 /* Тариф Соцфонда: признаки Да / Нет, выбор тарифа, ставки (ТЗ «Тариф страховых взносов в Соцфонд (СПиНО)») */
@@ -78,12 +78,14 @@ textarea.f-note-i{min-height:58px}
 .tgc-t th.num+th,.tgc-t td.num+td{padding-left:14px}
 .pg-tg-debt{align-items:center;gap:8px 10px;flex-wrap:wrap}.pg-tg-debt>.check-row{flex:1 1 280px;margin:0}
 .pg-tg-tbl td{vertical-align:middle}.pg-tg-act{white-space:nowrap;text-align:right}.pg-tg-act .btn+.btn{margin-left:6px}
-.pub-tgp{margin:0;line-height:1.5}.pub-tgst{display:flex;gap:6px;flex-wrap:wrap}
+.pub-tgst{display:flex;gap:6px;flex-wrap:wrap}
 @media (max-width:767px){.pg-tg-act{white-space:normal;text-align:left;display:flex;gap:6px;flex-wrap:wrap}.pg-tg-act .btn+.btn{margin-left:0}}
 .pg-secs{display:flex;flex-wrap:wrap;gap:4px 14px}.pg-secs .row{gap:6px;font-size:13px}
 .pg-pol{margin:-4px 0 6px 52px;display:flex;flex-direction:column;gap:2px}.pg-pol .check-row{padding:4px 0}
 .pg-pol .pg-pol-sub{padding-left:28px}
 .snt-acts{display:inline-flex;flex-direction:column;gap:4px;align-items:stretch}
+/* Страница контрагента по ссылке (простыми словами — 17.11.2026, «Меньше текста, понятнее, плавнее», п. 6): одна крупная вещь — сумма и кнопка,
+   остальное простыми строками; красный — только деньги с прошедшим сроком; разделы и строки раскрываются по высоте; переходы — переменные из base.css */
 .pub{position:fixed;inset:0;z-index:85;background:var(--frame);display:flex;flex-direction:column;overflow:hidden}
 .pub[hidden]{display:none}
 body.pub-on{overflow:hidden}
@@ -92,94 +94,112 @@ body.pub-on{overflow:hidden}
 .pub-url{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--field);border:1px solid var(--border);overflow:hidden;white-space:nowrap}
 .pub-url .mono{overflow:hidden;text-overflow:ellipsis}
 .pub-page{flex:1;overflow:auto;padding:24px 16px 32px;display:flex;flex-direction:column;align-items:center;gap:18px}
-.pub-gate{width:min(420px,100%);margin-top:8vh;background:var(--raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:26px 24px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-l)}
+.pub-gate{width:min(420px,100%);margin-top:8vh;background:var(--raised);border:1px solid var(--border);border-radius:var(--r-xl);padding:26px 24px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-l);animation:slideUp var(--t-slow) var(--ease-out) both}
 .pub-gate h1{margin:0;font-size:20px}.pub-gate p{margin:0}
+.pub-gate .fld>label:empty{display:none}
 .pub-brand{display:flex;align-items:center;gap:8px;color:var(--accent);font-size:15px}
+.pub-brand.pub-org{color:var(--text)}
 .pub-code{font-size:22px;letter-spacing:.3em;text-align:center}
 .pub-body{width:min(1120px,100%);display:flex;flex-direction:column;gap:14px}
-.pub-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:space-between}
-.pub-org{display:flex;align-items:center;gap:10px}.pub-org>span{display:flex;flex-direction:column}
-.pub-logo{width:40px;height:40px;border-radius:10px;object-fit:contain;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:700;flex:none}
+/* Шапка в одну строку: логотип и название фирмы, звонок, «?» */
+.pub-h{display:flex;align-items:center;gap:8px}
+.pub-org{display:flex;align-items:center;gap:10px;min-width:0}.pub-org b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pub-logo{width:36px;height:36px;border-radius:10px;object-fit:contain;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:700;flex:none;font-size:13px}
 img.pub-logo{background:none;border:1px solid var(--border)}
-.pub-title h1{margin:0 0 4px;font-size:24px;line-height:1.25}
-/* Строка состояния: цвет дополнен значком и текстом, замечания — ссылки на свои разделы */
-.pub-state{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:var(--r-l);font-size:14px;line-height:1.5}
-.pub-state>.ic{flex:none;margin-top:2px}
-.pub-state.ok{background:var(--green-bg);color:var(--green);font-weight:600}
-.pub-state.warn{background:var(--orange-bg);color:var(--orange)}
-.pub-state.bad{background:var(--red-bg);color:var(--red)}
-.pub-state .linkbtn{color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:600}
-.pub-state .tipi{margin-left:auto;color:inherit}
-/* ПК: две колонки — слева «Главное», «Отчёты», «Показатели», справа оплата, бухгалтер, деньги, обслуживание, контакты */
-.pub-grid{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:14px;align-items:start}
+.pub-h .icon-btn{color:var(--accent)}
+.pub-title h1{margin:0;font-size:24px;line-height:1.25}
+/* «Что нужно сделать»: строка — что, сумма крупно, кнопка; деньги с прошедшим сроком — красным, несданные отчёты — спокойно */
+.pub-state{border-radius:var(--r-l);font-size:14px;line-height:1.5}
+.pub-state.ok{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--green-bg);color:var(--green);font-weight:600}
+.pub-state.ok>.ic{flex:none}
+.pub-state.todo{background:var(--raised);border:1px solid var(--border);padding:6px 16px 4px;display:flex;flex-direction:column}
+.pub-state h2{margin:8px 0 2px;font-size:15px}
+.pub-do{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+.pub-do:first-of-type{border-top:0}
+.pub-dl{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pub-dsum{font-size:26px;font-weight:700;line-height:1.2}
+.pub-do.late .pub-dsum{color:var(--red)}
+.pub-do.calm .linkbtn{font-weight:600;color:var(--text);text-decoration:none;text-align:left}
+.pub-do .btn{flex:none}
+.pub-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px;align-items:start}
 .pub-col{display:flex;flex-direction:column;gap:14px;min-width:0}
-.pub-s{scroll-margin-top:12px}
-.pub-s h3.pub-sh{font-size:15px;text-transform:none;letter-spacing:0;color:var(--text);flex-wrap:wrap}
-.pub-sh .ic{color:var(--accent)}
+.pub-s{scroll-margin-top:12px;transition:background-color var(--t-slow) var(--ease-out)}
+.pub-s h3.pub-sh{font-size:15px;text-transform:none;letter-spacing:0;color:var(--text);flex-wrap:wrap;gap:6px 8px;align-items:center}
 .pub-tg{display:flex;align-items:center;gap:8px;flex:1;min-width:0;background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:default}
-.pub-tg>.ic:last-child:not(:first-child){display:none;color:var(--faint);transition:transform .2s}
+.pub-chev{display:none;align-items:center;justify-content:center;width:32px;height:44px;padding:0;border:0;background:none;color:var(--faint);cursor:pointer}
+.pub-chev .ic{transition:transform var(--t-base) var(--ease-move)}
+.pub-due{display:inline-flex;align-items:center;gap:4px}
 .pub-body .grow{flex:1}
 .pub-tt{white-space:nowrap;flex:none}
 .pub-sum{display:none;font-weight:500;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pub-act{display:flex;align-items:center;gap:6px}
 .pub-ex .inp{width:auto;min-height:30px;padding:3px 8px;font-size:13px}
-.pub-sb{display:flex;flex-direction:column;gap:10px;min-width:0}
-.pub-what{margin:-2px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.pub-sw{display:grid;grid-template-rows:1fr;transition:grid-template-rows var(--t-slow) var(--ease-move)}
+.pub-sb{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0}
 .pub-s h4{margin:6px 0 0;font-size:13px}
-.pub-flash{animation:pub-flash 2s}
-@keyframes pub-flash{0%{box-shadow:0 0 0 3px var(--b-blue)}100%{box-shadow:0 0 0 3px transparent}}
-/* «Главное» — плитки-итоги с крупными цифрами */
-.pub-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.pub-tile{display:flex;flex-direction:column;gap:6px;text-align:left;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:var(--pane-alt);font:inherit;color:inherit;cursor:pointer;min-width:0}
-.pub-tile:hover{border-color:var(--border-strong);box-shadow:var(--shadow-s)}
-.pub-tile.wide{grid-column:1/-1}
-.pub-tl{font-size:12.5px;color:var(--muted);font-weight:600}
-.pub-tv{font-size:24px;font-weight:700;line-height:1.15}
-.pub-tv small{font-size:14px;font-weight:600;color:var(--muted)}
-.pub-tile.bad .pub-tv{color:var(--red)}
-.pub-ts{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:6px;line-height:1.35}
-.pub-ts .bar{margin:2px 0 0}
-.pub-t3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.pub-t3>span{display:flex;flex-direction:column;gap:2px;min-width:0}
-.pub-t3 small{font-size:12px;color:var(--muted);font-weight:600}
-.pub-t3 b{font-size:20px}
-/* «Как оплатить» */
-.pub-pays{display:flex;flex-direction:column;gap:10px}
-.pub-pay{border:1px solid var(--border);border-radius:var(--r-l);padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:var(--pane-alt)}
-.pub-pt{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.pub-pt .ic{color:var(--accent)}.pub-pt .hint{margin-left:auto}
+.pub-flash{animation:pub-flash 600ms var(--ease-out)}
+@keyframes pub-flash{0%{background-color:var(--sel)}100%{background-color:transparent}}
+/* «Оплата»: строки «Налоги» и «Услуги бухгалтера», раскрываются по высоте */
+.pub-pos{display:flex;flex-direction:column}
+.pub-po{border-top:1px solid var(--border)}.pub-po:first-child{border-top:0}
+.pub-po>.pub-gh{padding:12px 2px}
+.pub-po .pub-gi{padding:0 2px 12px}
+.pub-calc{display:flex;flex-direction:column;gap:6px}.pub-calc>div{flex-direction:row;justify-content:space-between;align-items:baseline;gap:12px}.pub-calc .k{font-size:13.5px;color:var(--muted);font-weight:500}.pub-calc .v{font-size:15px}
+.pub-body .kv .k{font-size:12.5px;color:var(--muted)}
+.pub-pay{border:1px solid var(--border);border-radius:var(--r-l);padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:var(--pane-alt)}
 .pub-pbn{font-weight:600}
 .pub-pn{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .pub-pn .mono{font-size:22px;font-weight:700;letter-spacing:.02em;overflow-wrap:anywhere}
-.pub-pb,.pub-pk{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px}
-.pub-pay .pub-what{margin:0}
-.pub-pw{margin-top:-4px}
-.pub-paid{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:8px;border-top:1px dashed var(--border)}
+.pub-pk{display:flex;align-items:center;gap:4px 6px;flex-wrap:wrap;font-size:13.5px}
+.pub-pnote .icon-btn{margin-left:2px}
+.pub-paid{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.pub-paid .pill{align-self:flex-start}
+.pub-paid .btn{justify-content:center}
+.pub-fee1{font-size:13.5px}
 .pub-gpay{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;border-radius:var(--r-m);background:var(--pane-alt)}
-.pub-send{display:flex;flex-direction:column;gap:12px}.pub-sendsum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.pub-sendsum b{font-size:24px}
-.pp-what{display:flex;align-items:center;background:var(--pane-alt);color:var(--text)}
+.pub-send{display:flex;flex-direction:column;gap:12px}
+.pub-sendsum{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}.pub-sendsum b{font-size:26px}
 .pub-fg{align-self:center}.pub-fgm{text-align:center}.pub-fgm.ok{color:var(--green)}
-/* Плитки видов отчётов, месяцев и показателей; строки периодов */
-.pub-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.plates.pub-pl{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* «Из чего сумма», «За год», «История оплат», «Куда переводить» */
+.pub-det{border-top:1px dashed var(--border)}
+.pub-dh{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;padding:6px 0;background:none;border:0;font:inherit;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;text-align:left}
+.pub-dh .ic{transition:transform var(--t-base) var(--ease-move)}
+.pub-det.open>.pub-dh .ic{transform:rotate(180deg)}
+.pub-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pub-chips{display:flex;gap:6px;flex-wrap:wrap}
+.pub-chip{display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:4px 12px;border-radius:999px;border:1px solid var(--border);background:var(--raised);font:inherit;font-size:13px;color:var(--text);cursor:pointer;transition:background-color var(--t-fast),border-color var(--t-fast)}
+.pub-chip b{font-weight:650;color:var(--muted)}
+.pub-chip:hover{border-color:var(--border-strong)}
+.pub-chip.on{background:var(--sel);border-color:var(--accent)}
+.pub-chip.calm b{color:var(--orange)}
+.pub-vm{gap:4px}
+.pub-ftabs{align-self:flex-start}
+.pub-fade.in{animation:fade var(--t-base) var(--ease-out)}
 .pub-list{display:flex;flex-direction:column;gap:8px;min-width:0}
 .pub-row{display:flex;flex-direction:column;gap:4px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised);min-width:0}
-.pub-row.late{border-color:var(--b-red)}
-.pub-r1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px}
-.pub-r2{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.pub-r1{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:14px}
+.pub-r2{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .pub-r2 b{color:var(--text)}
+.calm{color:var(--orange)}
 .pub-files{display:flex;flex-wrap:wrap;gap:4px 10px}
-.tipi.pub-tp{width:auto;height:auto;margin:0;padding:0;border:0;background:none;display:inline-flex;align-items:center;gap:3px;cursor:help;font:inherit;color:var(--faint)}
+/* Виды отчётов, месяцы, цифры компании: строка-кнопка, содержимое раскрывается по высоте */
 .pub-rt,.pub-grp,.pub-k{border:1px solid var(--border);border-radius:var(--r-l);background:var(--raised);overflow:hidden;min-width:0}
-.pub-rt.late{border-color:var(--b-red)}
-.pub-gh{display:flex;flex-direction:column;align-items:stretch;gap:5px;width:100%;padding:11px 14px;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.pub-gh{display:flex;flex-direction:column;align-items:stretch;gap:5px;width:100%;padding:11px 14px;background:none;border:0;font:inherit;color:inherit;text-align:left;cursor:pointer;transition:background-color var(--t-fast)}
 .pub-gh:hover{background:var(--row-hover)}
-.pub-rt1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.pub-rt1>.ic:last-child{color:var(--faint);transition:transform .2s}
+.pub-rt1{display:flex;align-items:center;gap:8px}.pub-rt1>.pub-gsum,.pub-rt1>span:not(.grow){min-width:0;text-align:right}
+.pub-rt1>.ic:last-child{color:var(--faint);transition:transform var(--t-base) var(--ease-move)}
 .open>.pub-gh .pub-rt1>.ic:last-child{transform:rotate(180deg)}
-.pub-rt2{font-size:13px;color:var(--muted);line-height:1.45}
-.pub-rt3{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
-.pub-rt3 b{color:var(--text)}
-.pub-gb{display:none;padding:0 12px 12px}
-.open>.pub-gb{display:flex}
+.pub-gsum{font-size:13.5px;color:var(--muted)}.pub-gsum b{color:var(--text)}
+.pub-rt2{font-size:13.5px;color:var(--muted);line-height:1.45}
+.pub-rt3{display:flex;align-items:center;gap:4px 12px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.pub-rt3 b{color:var(--text)}.pub-rt3 .blue{color:var(--blue)}
+@media (max-width:767px){.pub-row .pub-r1>b+.faint{display:none}.pub-row .pub-r1>b{flex-basis:100%}}
+.pub-gb{display:grid;grid-template-rows:0fr;visibility:hidden;transition:grid-template-rows var(--t-slow) var(--ease-move),visibility 0s linear var(--t-slow)}
+.open>.pub-gb{grid-template-rows:1fr;visibility:visible;transition:grid-template-rows var(--t-slow) var(--ease-move)}
+.pub-gi{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:8px}
+.pub-rt .pub-gi,.pub-grp .pub-gi,.pub-k .pub-gi{padding:0 12px}
+.open>.pub-gb>.pub-gi{padding-bottom:12px}
+.pub-det .pub-gi{gap:8px}.pub-det.open>.pub-gb>.pub-gi{padding-bottom:10px}
 .pub-gb .pub-row{background:var(--pane-alt)}
 .pub-ks{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
 .pub-kv{font-size:22px;font-weight:700;line-height:1.2}
@@ -187,43 +207,58 @@ img.pub-logo{background:none;border:1px solid var(--border)}
 .pub-sp rect{fill:var(--border-strong)}.pub-sp rect.c{fill:var(--accent)}.pub-sp rect.e{fill:var(--border)}
 .pub-people{display:flex;flex-direction:column;gap:10px}
 .pub-person{display:flex;flex-direction:column;gap:2px}.pub-person a{color:var(--link)}
-.pub-file{display:inline-flex;align-items:center;gap:4px;color:var(--link);font-size:12.5px}
-/* «Файлы» страницы контрагента: плашки-категории переносятся, строка файла — кнопка: значок, название и к чему относится, дата и размер */
-.plates.pub-fpl{display:flex;flex-wrap:wrap}.plates.pub-fpl .plate{flex:0 1 auto;min-width:96px}
+.pub-sub{display:flex;flex-direction:column;gap:8px;padding-top:10px;border-top:1px solid var(--border)}.pub-sub h4{margin:0}
+.pub-tgh{display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap}
+.pub-file{display:inline-flex;align-items:center;gap:4px;color:var(--link);font-size:13px}
 .pub-fq{max-width:320px;width:100%}
-.pub-frow{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised);min-width:0;text-align:left;color:inherit;font:inherit;cursor:pointer;width:100%}
-.pub-frow:hover{border-color:var(--b-blue,var(--border-strong,var(--border)))}.pub-frow>.ic{color:var(--muted);flex:none}
+.pub-frow{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-m);background:var(--raised);min-width:0;text-align:left;color:inherit;font:inherit;cursor:pointer;width:100%;transition:border-color var(--t-fast),background-color var(--t-fast)}
+.pub-frow:hover{border-color:var(--border-strong)}.pub-frow:active{background:var(--row-hover)}.pub-frow>.ic{color:var(--muted);flex:none}
 .pub-fm{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.pub-fm b{overflow-wrap:anywhere;font-weight:600}
 .pub-fs{display:flex;flex-direction:column;align-items:flex-end;flex:none;white-space:nowrap;text-align:right}
-/* Файлы от контрагента (v112): «Отправить файл» и «Отправленные вами» над файлами бухгалтера */
-.pub-sent{display:flex;flex-direction:column;gap:10px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}.pub-sent>.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.pub-sl-h{font-size:13px;color:var(--muted);font-weight:600}.pub-srow{cursor:default}.pub-srow:hover{border-color:var(--border)}.pub-srow .pub-fs{gap:3px}.pub-fm .bad{color:var(--red,#c0392b)}
+.pub-srow{cursor:default}.pub-srow:hover{border-color:var(--border)}.pub-srow .pub-fs{gap:3px}.pub-fm .bad,.pub-fs .bad{color:var(--red)}
+/* «Я оплатил»: строка «это не оплата» сверху, большая кнопка «Приложить чек» */
+.pub-pfile{width:100%;justify-content:center;min-height:52px;border-style:dashed;cursor:pointer}
+.pub-pfile.on{border-style:solid;border-color:var(--accent);background:var(--sel)}
+.pub-pfile span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.pub-fin{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.pub-ppsum{font-size:20px;font-weight:650}
 .pub-more{display:none}
 .pub-nav{display:none}
-.pub-foot{color:var(--faint);font-size:12px;text-align:center}
-/* Окна и подсказки поверх страницы контрагента */
+.pub-foot{color:var(--muted);font-size:12px;text-align:center}
 body.pub-on .cover{z-index:88}body.pub-on .pop{z-index:89}
-/* Телефон: разделы друг под другом, кроме «Главного» и «Как оплатить» свёрнуты с итогом в заголовке, снизу — панель разделов */
+/* ПК: итог раздела виден рядом с заголовком; разделы раскрыты */
+@media (min-width:768px){.pub-sum{display:block}.pub-sh .pub-sum::before{content:'· '}
+  .pub-state.todo{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));column-gap:0;padding:6px 0 0}.pub-state.todo h2{grid-column:1/-1;padding:0 18px}
+  .pub-state.todo .pub-do{flex-direction:column;align-items:flex-start;justify-content:space-between;gap:10px;padding:10px 18px 16px;border-top:0;border-left:1px solid var(--border)}.pub-state.todo .pub-do:first-of-type{border-left:0}}
 @media (max-width:767px){.pub-proto span{display:none}.pub-bar{padding:8px 12px}.pub-title h1{font-size:20px}.pub-gate{margin-top:4vh;padding:22px 18px}.pg-pol{margin-left:0}
-  .pub-page{padding:14px 12px calc(84px + env(safe-area-inset-bottom,0px));gap:14px}.pub-body{gap:10px}
+  .pub-page{padding:12px 12px calc(84px + env(safe-area-inset-bottom,0px));gap:12px}.pub-body{gap:10px}
   .pub-grid{display:flex;flex-direction:column;align-items:stretch;gap:10px}.pub-col{display:contents}
-  .pub-s[data-sec=main]{order:1}.pub-s[data-sec=pay]{order:2}.pub-s[data-sec=acc]{order:3}.pub-s[data-sec=reports]{order:4}.pub-s[data-sec=files]{order:5}.pub-s[data-sec=money]{order:6}.pub-s[data-sec=fee]{order:7}.pub-s[data-sec=kpi]{order:8}.pub-s[data-sec=contacts]{order:9}.pub-s[data-sec=tg]{order:10}
+  .pub-s[data-sec=pay]{order:1}.pub-s[data-sec=reports]{order:2}.pub-s[data-sec=files]{order:3}.pub-s[data-sec=acc]{order:4}.pub-s[data-sec=kpi]{order:5}
+  .pub-state.todo{padding:4px 14px 2px}.pub-do{flex-wrap:wrap}.pub-do .btn{min-width:120px}.pub-dsum{font-size:24px}
   .pub-frow{padding:8px 10px;gap:8px}.pub-fq{max-width:none}
   .pub-srow{flex-wrap:wrap}.pub-srow .pub-fs{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 8px;width:100%;padding-left:28px;white-space:normal;text-align:left}
-  .pub-s{padding:12px 14px}.pub-fd .pub-tg{cursor:pointer;min-height:28px}.pub-tg>.ic:last-child:not(:first-child){display:inline-block}
-  .pub-fd:not(.fold) .pub-tg>.ic:last-child{transform:rotate(180deg)}
-  .pub-s.fold .pub-sb,.pub-s.fold .pub-ex{display:none}
-  .pub-fd .pub-tg{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:8px;row-gap:1px}.pub-fd .pub-tg>.ic:first-child{grid-area:1/1}.pub-fd .pub-tt{grid-area:1/2}.pub-fd .pub-tg .grow{display:none}.pub-fd .pub-tg>.ic:last-child{grid-area:1/3/3/4}
-  .pub-s.fold .pub-sum{display:block;grid-area:2/2;white-space:normal}
-  .pub-tv{font-size:20px}.pub-t3 b{font-size:16px}.pub-pn .mono{font-size:20px}.pub-kv{font-size:20px}
-  .pub-tile{padding:10px 12px}.pub-ks{grid-template-columns:minmax(0,1fr)}
-  .plates.pub-pl{gap:8px}.plates.pub-pl .plate{padding:9px 10px;gap:4px}.plates.pub-pl .pl-top{font-size:11px;gap:4px;flex-wrap:wrap;min-width:0}.plates.pub-pl .pl-dot{width:20px;height:20px}.plates.pub-pl .pl-val{font-size:18px}
+  .pub-s{padding:12px 14px}
+  .pub-fd .pub-tg{cursor:pointer;min-height:44px;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px}
+  .pub-fd .pub-chev{display:inline-flex}
+  .pub-fd:not(.fold) .pub-chev .ic{transform:rotate(180deg)}
+  .pub-fd .pub-sum{display:block;white-space:normal}
+  .pub-s.fold .pub-sw{grid-template-rows:0fr}
+  .pub-s.fold .pub-sb{visibility:hidden;transition:visibility 0s linear var(--t-slow)}
+  .pub-s.fold .pub-ex{display:none}
+  .pub-sb{overflow:hidden}
+  .pub-pn .mono{font-size:20px}.pub-kv{font-size:20px}.pub-sendsum b{font-size:24px}
+  .pub-ks{grid-template-columns:minmax(0,1fr)}
+  .pub-chip{min-height:40px}
   .pub-list:not(.all)>:nth-child(n+6):not(.pub-more){display:none}
-  .pub-more{display:inline-flex;align-items:center;gap:4px;align-self:flex-start}
+  .pub-more{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;min-height:44px}
+  .pub-paid .btn,.pub-po .pub-sendsum+.pub-pay~.pub-paid .btn{width:100%}
   .pub-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:86;background:var(--raised);border-top:1px solid var(--border);padding:2px 4px calc(2px + env(safe-area-inset-bottom,0px))}
-  .pub-nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;font:inherit;font-size:11px;font-weight:600;color:var(--muted);padding:6px 2px;min-height:52px;cursor:pointer}
-  .pub-nav button .ic{width:20px;height:20px}
+  .pub-nav button{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;background:none;border:0;font:inherit;font-size:12px;font-weight:600;color:var(--muted);padding:6px 2px;min-height:52px;cursor:pointer;border-radius:var(--r-m);transition:color var(--t-fast),background-color var(--t-fast)}
+  .pub-nav button .ic{width:22px;height:22px}
+  .pub-nav button.on{color:var(--accent)}
+  .pub-nav button:active{background:var(--row-hover)}
   body.pub-on .toasts{bottom:calc(66px + env(safe-area-inset-bottom,0px))}}
+@media (prefers-reduced-motion:reduce){.pub-sw,.pub-gb,.open>.pub-gb,.pub-s.fold .pub-sb{transition:none}.pub-flash,.pub-fade.in,.pub-gate{animation:none}}
 /* Ставки в назначении: строки ЕНС, добавляемые строки налога с продаж; строки суммы по ставкам в «Сдан» и «Указать сумму» */
 .rt-tbl td:nth-child(2){min-width:260px}
 .en-ed{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
