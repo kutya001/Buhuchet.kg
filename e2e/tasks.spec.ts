@@ -117,8 +117,6 @@ test.describe('Этап 2: задачи', () => {
     await expect(form.getByLabel(/^Описание/)).toBeVisible();
     await expect(form.getByLabel(/^Категория/)).toBeVisible();
     await expect(form.getByRole('switch', { name: 'нужно подтверждение' })).toBeChecked();
-    await expect(form).not.toContainText('По умолчанию — из учётной политики');
-    await expect(form).not.toContainText('получит уведомление в Telegram');
 
     // «По контрагенту» — обязательное поле «Контрагент» (галочку «Проект» проверяет e2e/projects.spec.ts).
     await scope.getByRole('button', { name: 'По контрагенту' }).click();

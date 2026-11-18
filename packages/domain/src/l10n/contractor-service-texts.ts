@@ -80,10 +80,6 @@ export const CONTRACTOR_SERVICE_TEXTS = {
   'svc.rollback.month': { ru: '{month}: начисление за обслуживание и отчёты', section: S },
   'svc.rollback.reason': { ru: 'Причина отката', section: S },
   'svc.rollback.reason_ph': { ru: 'Например: статус поставили по ошибке', section: S },
-  'svc.rollback.hint': {
-    ru: 'Откат делается на один шаг и попадает в историю статусов с пометкой «Откат».',
-    section: S,
-  },
   'svc.rollback.ok': { ru: 'Откатить', section: S },
   'svc.rollback.done': { ru: 'Откат выполнен', section: S },
   'svc.archive.title_one': { ru: 'Отправить в архив {name}?', section: S },

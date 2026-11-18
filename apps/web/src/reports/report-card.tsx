@@ -567,6 +567,7 @@ export function ReportCardWindow({
             onReceive={canReceive ? () => onAction('receive', r) : null}
             onPay={canPay ? () => onAction('pay', r) : null}
             onCancelPay={r.money?.canCancel ? () => onAction('cancelPay', r) : null}
+            // ОТКЛОНЕНИЕ: docs/deviations.md#О-82 — у прежней версии отчёта «Указать» нет.
             onAmount={actor?.can.changeSum && !r.superseded ? () => onAction('amount', r) : null}
           />
         ) : null}

@@ -459,6 +459,12 @@ export async function expandCard(card: Locator) {
   if (await scale.count()) await scale.click();
   const closed = card.locator('details[data-fold]:not([open]) > summary');
   while (await closed.count()) await closed.first().click();
+  // Раскрытое въезжает со сдвигом (0,25 с): замер геометрии сразу после раскрытия попал бы в середину
+  // анимации (docs/typical-mistakes.md № 34).
+  const full = card.locator('[data-status-line-full]');
+  if (await full.count()) await stillElement(full.first());
+  const folds = card.locator('details[data-fold][open]');
+  for (let i = 0, n = await folds.count(); i < n; i += 1) await stillElement(folds.nth(i));
 }
 
 /**

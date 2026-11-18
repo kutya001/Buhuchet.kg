@@ -1,33 +1,65 @@
 import {
   BROADCAST_TEXT_MAX,
   CAST_TITLE_MAX,
-  OUTBOX_KINDS,
-  OUTBOX_STATUSES,
+  JOURNAL_CHAT_KINDS,
+  JOURNAL_DIRS,
+  JOURNAL_HIDES,
+  JOURNAL_KINDS,
+  JOURNAL_PERIODS,
+  JOURNAL_SOURCES,
+  JOURNAL_STATUSES,
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { Uuid } from './common';
-import { listPageSchema } from './list';
+import { ListExportParams, ListQueryParams, ListValuesQuery, listPageSchema } from './list';
 
 /*
- * Админка → «Телеграм» (ТЗ «Админка» → «Модуль Телеграмм»; прототип admin/telegram.js; задача 2.41).
+ * Админка → «Телеграм» (ТЗ «Админка» → «Модуль Телеграмм»; прототип admin/telegram.js и admin/tg-log.js;
+ * задача 2.41; журнал переписки в обе стороны — docs/decisions.md п. Т-16).
  */
 
+/** Период журнала: 1 (сегодня по Бишкеку), 7, 30 или 90 дней; по умолчанию — 7. */
+const JournalDays = z.enum(JOURNAL_PERIODS.map(String) as [string, ...string[]]);
+
 /**
- * Строка журнала отправок: время, получатель («Иванов А. @ivanov»), организация (null — администратор
- * платформы, «Платформа»), вид сообщения, статус, попыток, ошибка Telegram или код итога
- * (`recipient_unlinked` — подпись по словарю). Текста сообщения и номера чата в ответе нет.
+ * Что показывает журнал сверх поиска и фильтров: направление («Все · Отправленные · Полученные»),
+ * период и «Вся переписка» — `chat` — номер строки журнала, чей чат показать (номера чата в запросах и
+ * ответах нет).
+ */
+const journalScope = {
+  dir: z.enum(JOURNAL_DIRS).optional(),
+  days: JournalDays.optional(),
+  chat: Uuid.optional(),
+};
+export const AdminTelegramLogQuery = ListQueryParams.extend(journalScope);
+export const AdminTelegramLogValuesQuery = ListValuesQuery.extend(journalScope);
+export const AdminTelegramLogExportQuery = ListExportParams.extend(journalScope);
+
+/**
+ * Строка журнала переписки бота (решение заказчика 17.11.2026; прототип v132 admin/tg-log.js): время,
+ * направление, собеседник («Иванов А. @ivanov», контрагент и имя клиента, общий чат), организация (null —
+ * «Платформа»), вид сообщения, текст одной строкой, статус, попыток, ошибка Telegram или код итога
+ * (`recipient_unlinked` — подпись по словарю). У кода и одноразовой ссылки текста нет (`hide`). Номера
+ * чата в ответе нет.
  */
 export const AdminTelegramLogRow = z.object({
   id: Uuid,
+  /** Откуда строка: журнал отправок, сообщения клиентам контрагентов, полученное. Повтор — только `outbox`. */
+  src: z.enum(JOURNAL_SOURCES),
+  dir: z.enum(JOURNAL_DIRS),
   at: z.iso.datetime(),
   sentAt: z.iso.datetime().nullable(),
   recipient: z.string(),
   orgId: Uuid.nullable(),
   orgName: z.string().nullable(),
-  kind: z.enum(OUTBOX_KINDS),
-  status: z.enum(OUTBOX_STATUSES),
+  chatKind: z.enum(JOURNAL_CHAT_KINDS),
+  kind: z.enum(JOURNAL_KINDS),
+  status: z.enum(JOURNAL_STATUSES),
   tries: z.number().int().nonnegative(),
   error: z.string().nullable(),
+  /** Текст одной строкой, как в столбце «Текст»; null — текст скрыт или его нет. */
+  text: z.string().nullable(),
+  hide: z.enum(JOURNAL_HIDES).nullable(),
 });
 export type AdminTelegramLogRow = z.infer<typeof AdminTelegramLogRow>;
 
@@ -35,13 +67,82 @@ export type AdminTelegramLogRow = z.infer<typeof AdminTelegramLogRow>;
 export const AdminTelegramLogList = listPageSchema(AdminTelegramLogRow);
 export type AdminTelegramLogList = z.infer<typeof AdminTelegramLogList>;
 
-/** Плашки над журналом: «В очереди», «Ошибки отправки», «Отправлено сегодня». */
+/** Плашки над журналом: «В очереди», «Ошибки отправки», «Отправлено сегодня», «Получено сегодня». */
 export const AdminTelegramSummary = z.object({
   pending: z.number().int().nonnegative(),
   errors: z.number().int().nonnegative(),
   sentToday: z.number().int().nonnegative(),
+  receivedToday: z.number().int().nonnegative(),
 });
 export type AdminTelegramSummary = z.infer<typeof AdminTelegramSummary>;
+
+/**
+ * Сообщение бота, как его видит человек в чате: заголовок, текст, таблицы и кнопки. От кнопки — только
+ * подпись, вид, погашена ли и нажата ли: адреса ссылок, тексты копирования и данные нажатия в ответ не
+ * идут.
+ */
+export const AdminTelegramView = z.object({
+  heading: z.string().optional(),
+  sub: z.string().optional(),
+  text: z.string().optional(),
+  tables: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        open: z.boolean().optional(),
+        head: z.array(z.string()).optional(),
+        rows: z.array(z.array(z.string())),
+        foot: z.array(z.string()).optional(),
+        numeric: z.array(z.number().int().nonnegative()).optional(),
+        n: z.number().int().nonnegative().optional(),
+      }),
+    )
+    .optional(),
+  buttons: z
+    .array(
+      z.array(
+        z.object({
+          text: z.string(),
+          kind: z.enum(['action', 'copy', 'url']),
+          off: z.boolean(),
+          pressed: z.boolean(),
+        }),
+      ),
+    )
+    .optional(),
+  /** У сообщения была картинка (рассылка); сама картинка в журнале не показывается. */
+  image: z.boolean(),
+});
+export type AdminTelegramView = z.infer<typeof AdminTelegramView>;
+
+/** Сообщение в окне «Сообщение»: строка журнала и то, что показать в виде чата. */
+export const AdminTelegramMessageBody = AdminTelegramLogRow.extend({
+  /** Учётная запись собеседника — для перехода в карточку; null — клиент, группа или чат без привязки. */
+  userId: Uuid.nullable(),
+  /** Отправленное: сообщение бота, как в чате; null — скрыто или описания нет (тогда — `fullText`). */
+  view: AdminTelegramView.nullable(),
+  /** Текст с переносами строк: полученный текст, подпись к файлу или текст отправленного без описания. */
+  fullText: z.string().nullable(),
+  /** Подпись нажатой кнопки (полученное нажатие). */
+  button: z.string().nullable(),
+  file: z
+    .object({ name: z.string().nullable(), size: z.number().nonnegative().nullable() })
+    .nullable(),
+});
+export type AdminTelegramMessageBody = z.infer<typeof AdminTelegramMessageBody>;
+
+/**
+ * Окно «Сообщение»: само сообщение; сообщение бота, к которому относится полученное; что пришло в
+ * ответ на отправленное (нажатия и ответы, не больше 20); соседние сообщения того же чата.
+ */
+export const AdminTelegramMessage = z.object({
+  message: AdminTelegramMessageBody,
+  bot: AdminTelegramMessageBody.nullable(),
+  replies: z.array(AdminTelegramMessageBody),
+  prevId: Uuid.nullable(),
+  nextId: Uuid.nullable(),
+});
+export type AdminTelegramMessage = z.infer<typeof AdminTelegramMessage>;
 
 /** «Повторить отправку» (одна строка) и «Повторить ошибки» (отмеченные): до 500 строк за раз. */
 export const AdminTelegramRetryRequest = z.strictObject({

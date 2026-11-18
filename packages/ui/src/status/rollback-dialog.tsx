@@ -11,7 +11,6 @@ export interface RollbackDialogLabels {
   /** «Причина отката». */
   reason: string;
   placeholder: string;
-  /** «Откат делается на один шаг и попадает в историю статусов с пометкой «Откат».» */
   /** «Откатить». */
   ok: string;
   /** «Укажите причину». */

@@ -263,7 +263,10 @@ test.describe('Этап 3: заявки с сайта в Админке (зад�
     // Поиск применился: в списке остались записи только этого получателя.
     const all = page.locator('[data-grid] [data-id]');
     await expect(all.filter({ hasNotText: `e2e_${chat}` })).toHaveCount(0);
-    const rows = all.filter({ hasText: 'Заявка с сайта' }).filter({ hasText: 'Отправлено' });
+    // «Отправлено» — по метке статуса: «→ Отправлено» в «Направлении» стоит у любой отправки.
+    const rows = all
+      .filter({ hasText: 'Заявка с сайта' })
+      .filter({ has: page.locator('[data-pill]', { hasText: 'Отправлено' }) });
     await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(2);
     // «Организация» (на телефоне карточка её не показывает) — «Платформа» у каждой такой записи.
     if (!isMobile) {

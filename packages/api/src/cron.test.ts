@@ -200,15 +200,35 @@ describe.skipIf(!databaseAvailable())('/api/cron/tick с базой', () => {
     expect(done.map((e) => e.job)).toEqual(['test.ok']);
   });
 
-  it('очистка удаляет записи старше 30 дней', async () => {
+  it('очистка удаляет запуски старше 30 дней и полученные ботом сообщения старше 90', async () => {
     await t.admin.db.insert(schema.schedulerRuns).values([
       { job: 'old', slot: new Date('2026-09-01T00:00:00Z') },
       { job: 'fresh', slot: new Date('2026-10-10T00:00:00Z') },
     ]);
-    await cleanupSchedulerRuns.run(createTestDeps({ db: t.app.db }), new Date());
+    // Та же задача чистит полученные ботом сообщения: они хранятся 90 дней (часы теста — 18.10.2026).
+    const inboxRow = (text: string, at: string) => ({
+      chatId: 1,
+      chatKind: 'private' as const,
+      kind: 'text' as const,
+      text,
+      createdAt: new Date(at),
+    });
+    await t.admin.db
+      .insert(schema.telegramInbox)
+      .values([
+        inboxRow('старше 90 дней', '2026-07-19T00:00:00Z'),
+        inboxRow('моложе 90 дней', '2026-07-21T00:00:00Z'),
+      ]);
+    const deps = createTestDeps({ db: t.app.db });
+    const removed = await cleanupSchedulerRuns.run(deps, deps.clock.now());
     const left = (await t.admin.db.select().from(schema.schedulerRuns)).map((r) => r.job);
     expect(left).not.toContain('old');
     expect(left).toContain('fresh');
+    const inbox = (await t.admin.db.select().from(schema.telegramInbox)).map((r) => r.text);
+    expect(inbox).toEqual(['моложе 90 дней']);
+    // Итог задачи — сколько строк удалено из обоих журналов («Что сделано» в Админке → «Запуски»).
+    expect(removed).toBeGreaterThanOrEqual(2);
+    await t.admin.db.delete(schema.telegramInbox);
   });
 
   it('очистка счёта неверных паролей: удаляются забытые строки, закрытый вход остаётся', async () => {

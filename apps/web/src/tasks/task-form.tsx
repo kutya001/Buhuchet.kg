@@ -409,6 +409,7 @@ export function TaskFormDialog({
           label={t('status.fold.more')}
           filled={filled}
           filledLabel={t('status.fold.filled', { n: filled })}
+          // ОТКЛОНЕНИЕ: docs/deviations.md#О-83 — при ошибке в поле под блоком он раскрывается сам.
           open={more || !!errors.categoryCode || !!errors.projectId}
           onToggle={setMore}
         >

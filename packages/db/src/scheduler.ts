@@ -1,5 +1,5 @@
 import { and, eq, isNull, lte, sql } from 'drizzle-orm';
-import type { Db } from './client';
+import type { Db, Tx } from './client';
 import { schedulerJobs, schedulerRuns } from './schema';
 
 /*
@@ -55,6 +55,16 @@ export async function claimJobSlot(
         startedAt: o.now,
         finishedAt: null,
         ok: null,
+        // Прежняя попытка остаётся в строке: Админка → «Запуски» показывает каждую попытку
+        // (docs/decisions.md п. Т-15). Ошибка и «что сделано» дальше — уже новой попытки.
+        prev: sql`${schedulerRuns.prev} || jsonb_build_array(jsonb_build_object(
+          'attempt', ${schedulerRuns.attempts},
+          'startedAt', ${schedulerRuns.startedAt},
+          'finishedAt', ${schedulerRuns.finishedAt},
+          'error', ${schedulerRuns.error}
+        ))`,
+        error: null,
+        done: null,
       },
       setWhere: sql`${schedulerRuns.ok} = false
         and ${schedulerRuns.attempts} < ${o.maxAttempts}
@@ -86,11 +96,23 @@ export async function claimJobSlot(
  */
 export async function finishJobRun(
   db: Db,
-  o: { job: string; slot: Date; attempt: number; now: Date; error: string | null },
+  o: {
+    job: string;
+    slot: Date;
+    attempt: number;
+    now: Date;
+    error: string | null;
+    /** Сколько записей обработано: 0 — «Нечего делать»; не задано — задача число не сообщает. */
+    done?: number | null;
+  },
 ): Promise<boolean> {
+  const done =
+    o.error === null && typeof o.done === 'number' && Number.isSafeInteger(o.done) && o.done >= 0
+      ? Math.min(o.done, 2_000_000_000)
+      : null;
   const rows = await db
     .update(schedulerRuns)
-    .set({ finishedAt: o.now, ok: o.error === null, error: o.error })
+    .set({ finishedAt: o.now, ok: o.error === null, error: o.error, done })
     .where(
       and(
         eq(schedulerRuns.job, o.job),
@@ -135,7 +157,7 @@ export async function failHungJobRuns(
 }
 
 /** Состояние всех задач, которые хоть раз запускались. */
-export async function jobStates(db: Db): Promise<Map<string, JobState>> {
+export async function jobStates(db: Db | Tx): Promise<Map<string, JobState>> {
   const rows = await db.select().from(schedulerJobs);
   return new Map(rows.map((r) => [r.job, r]));
 }

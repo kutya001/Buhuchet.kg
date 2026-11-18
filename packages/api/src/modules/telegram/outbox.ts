@@ -284,9 +284,11 @@ export function telegramSendJob(pause?: Pause): Job {
     async run(ctx) {
       if (!ctx.telegram) return;
       const failed: string[] = [];
+      // Сколько сообщений ушло — в Админку → «Запуски», столбец «Что сделано».
+      let sent = 0;
       for (const orgId of await telegramOutboxOrgs(ctx.db, ctx.clock.now())) {
         try {
-          await sendOrgOutbox(ctx, orgId, pause ? { pause } : {});
+          sent += await sendOrgOutbox(ctx, orgId, pause ? { pause } : {});
         } catch (err) {
           failed.push(orgId);
           ctx.logger.error(
@@ -296,13 +298,14 @@ export function telegramSendJob(pause?: Pause): Job {
         }
       }
       try {
-        await sendPlatformOutbox(ctx, pause ? { pause } : {});
+        sent += await sendPlatformOutbox(ctx, pause ? { pause } : {});
       } catch (err) {
         failed.push('platform');
         ctx.logger.error({ job: 'telegram.send', err }, 'очередь платформы не разобрана');
       }
       if (failed.length)
         throw new Error(`telegram.send: не разобрана очередь организаций: ${failed.length}`);
+      return sent;
     },
   };
 }
