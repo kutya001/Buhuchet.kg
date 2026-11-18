@@ -55,8 +55,10 @@ export interface FieldProps {
   label: string;
   /** Обязательное поле: красная звёздочка у подписи. */
   required?: boolean;
-  /** Подсказка под полем («Не короче 8 символов»). */
-  hint?: string | undefined;
+  /** Подсказка под полем («Не короче 8 символов»); можно с «ⓘ» после текста. */
+  hint?: ReactNode;
+  /** «ⓘ» у подписи (прототип `tipI` в подписи поля): стоит рядом с подписью, вне `<label>`. */
+  tip?: ReactNode;
   /** Ошибка под полем: значок и текст красным, рамка поля красная; можно с кнопкой («Вернуть из архива»). */
   error?: ReactNode;
   /** На всю ширину формы и на ПК. */
@@ -113,9 +115,21 @@ const NEED_CLASS = [
 
 /** Поле формы (`.fld`): подпись, поле ввода, отметки формы, подсказка и ошибка. */
 export function Field(props: FieldProps) {
-  const { id, label, required, hint, error, full, children } = props;
+  const { id, label, required, hint, tip, error, full, children } = props;
   const mark = useContext(FieldMarks)?.(id);
   const need = !!mark?.need && !error;
+  const caption = (
+    <label htmlFor={id} className="text-[12px] font-semibold tracking-[.01em] text-muted">
+      {label}
+      {/* Отметка поля — до звёздочки: у прототипа «*» стоит в конце подписи (`.req::after`). */}
+      {mark?.label ? <span className="ml-1 align-[1px]">{mark.label}</span> : null}
+      {required ? (
+        <span aria-hidden="true" className="text-danger">
+          {' *'}
+        </span>
+      ) : null}
+    </label>
+  );
   return (
     <div
       data-field=""
@@ -123,16 +137,14 @@ export function Field(props: FieldProps) {
       data-need={need ? '' : undefined}
       className={`flex min-w-0 flex-col gap-[5px]${full ? ' col-span-full' : ''}${need ? ` ${NEED_CLASS}` : ''}`}
     >
-      <label htmlFor={id} className="text-[12px] font-semibold tracking-[.01em] text-muted">
-        {label}
-        {/* Отметка поля — до звёздочки: у прототипа «*» стоит в конце подписи (`.req::after`). */}
-        {mark?.label ? <span className="ml-1 align-[1px]">{mark.label}</span> : null}
-        {required ? (
-          <span aria-hidden="true" className="text-danger">
-            {' *'}
-          </span>
-        ) : null}
-      </label>
+      {tip ? (
+        <div className="flex items-center gap-1">
+          {caption}
+          {tip}
+        </div>
+      ) : (
+        caption
+      )}
       {typeof children === 'function' ? children(fieldControl(props)) : children}
       {mark?.node}
       {hint ? (
@@ -233,21 +245,24 @@ export function KeyValues({
 
 /**
  * Блок карточки (`.box`): заголовок прописными буквами (с пометкой — `title` разметкой), справа от него
- * — кнопки; без заголовка — только рамка.
+ * — кнопки; без заголовка — только рамка. `bare` — без рамки, фона и отступов: блок внутри свёрнутого
+ * блока (прототип v137 `.cp-pgd>.box`, `.rc-det>.box`).
  */
 export function Box({
   title,
   actions,
+  bare = false,
   children,
 }: {
   title?: ReactNode;
   actions?: ReactNode;
+  bare?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       data-box
-      className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5"
+      className={`flex min-w-0 flex-col gap-2.5 ${bare ? 'mt-2' : 'rounded-xl border border-line bg-raised px-4 py-3.5'}`}
     >
       {title ? (
         <h3 className="m-0 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">

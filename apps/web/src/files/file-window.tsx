@@ -285,7 +285,6 @@ export function UploadDialog({
       open={open}
       onClose={onClose}
       title={t('files.upload.title')}
-      sub={t('files.upload.sub')}
       kind="form"
       dirty={files.length > 0 || note !== ''}
       footer={

@@ -20,18 +20,22 @@ import {
   EmptyState,
   Field,
   FormGrid,
+  FormMore,
   Icon,
   inputClass,
   Modal,
   Note,
+  PHONE_QUERY,
   PhoneInput,
   RecordChangedNotice,
+  useMediaQuery,
   useToast,
 } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { catalogQuery, valueDictsQuery, type Catalog, type ValueDicts } from '../dicts/dicts-data';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { phoneCodesQuery } from '../staff/staff-data';
@@ -56,11 +60,14 @@ import {
 import {
   editDraftOf,
   editErrors,
+  FIELD_SECTION,
   formFieldOf,
   updatePatchOf,
   type EditDraft,
   type EditField,
+  type FormSection,
 } from './contractor-form-model';
+import { FormSectionBlock, FormToc } from './form-sections';
 import { GkedFields } from './gked-pick';
 import { RegistrationFields } from './registration-fields';
 import { reportPickCalcOf, useReportPickCalc, type ReportPickCalc } from './report-pick';
@@ -70,7 +77,9 @@ import { SocfundFields } from './socfund-fields';
 /*
  * Окно «Изменить контрагента» (ТЗ «Контрагенты» → «Обязательные поля», «Необязательные поля»; прототип
  * modules/contractor-form.js, editCpDlg): реквизиты, режимы, статусы, основания, признаки тарифа
- * Соцфонда и регистрационные данные. Отчёты здесь не выбираются — их подбор на вкладке «Подбор
+ * Соцфонда и регистрационные данные — тремя разделами, как «Новый контрагент» (прототип v137): на ПК
+ * лентой с оглавлением, на телефоне — три шага; «Регистрационные данные» и «Тариф Соцфонда» свёрнуты,
+ * причина изменения даты — только когда дата изменена. Отчёты здесь не выбираются — их подбор на вкладке «Подбор
  * отчётов» карточки; тип обслуживания, тариф, ответственный и периоды обслуживания меняются своими
  * действиями. Дата начала обслуживания (у разового — дата первого обращения) исправляется здесь же,
  * только с причиной (прототип v84, cpStartWhy; docs/deviations.md п. О-73): период, оплаты и сданные
@@ -79,6 +88,14 @@ import { SocfundFields } from './socfund-fields';
  */
 
 type ErrorKey = EditField;
+
+/** Раздел поля формы «Изменить»: ГКЭД стоит во втором разделе, день оплаты и причина — в третьем. */
+const EDIT_SECTION: Readonly<Record<EditField, FormSection>> = {
+  ...FIELD_SECTION,
+  gked: 2,
+  feeDay: 3,
+  startReason: 3,
+};
 
 interface Ask {
   title: string;
@@ -213,6 +230,14 @@ function EditContractorForm({
   const [decided, setDecided] = useState<Decisions>({ gked: '', benefits: '', socfund: false });
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
+  const phone = useMediaQuery(PHONE_QUERY);
+  const [step, setStep] = useState<FormSection>(1);
+  const [regOpen, setRegOpen] = useState(false);
+  const [sfOpen, setSfOpen] = useState(false);
+  const sections = useRef<Partial<Record<FormSection, HTMLElement | null>>>({});
+  const sectionRef = (sec: FormSection, el: HTMLElement | null) => {
+    sections.current[sec] = el;
+  };
 
   const regular = c.kind === 'regular';
   const feeDay = regular && options.feeOn && options.fee && c.feeDay !== null;
@@ -290,10 +315,20 @@ function EditContractorForm({
     }
   };
   const fieldId = (k: ErrorKey) => `${id}-${k.replace('.', '-')}`;
-  const focusField = (k: ErrorKey) =>
+  // К неверному полю: на телефоне — шаг его раздела, свёрнутый блок раскрывается (прототип `toBad`).
+  const focusField = (k: ErrorKey) => {
+    if (phone) setStep(EDIT_SECTION[k]);
+    if (k === 'okpo' || k === 'email') setRegOpen(true);
+    if (k === 'socfund.reason') setSfOpen(true);
     requestAnimationFrame(() =>
       document.getElementById(fieldId(k))?.scrollIntoView({ block: 'center', behavior: 'smooth' }),
     );
+  };
+  // Оглавление: на телефоне — шаг (без проверки: поля уже заполнены), на ПК — прокрутка к разделу.
+  const goStep = (sec: FormSection) => {
+    if (phone) setStep(sec);
+    else sections.current[sec]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
   const confirm = (a: Ask) => {
     setAsk(a);
     setAskOpen(true);
@@ -489,9 +524,34 @@ function EditContractorForm({
         dirty={JSON.stringify(d) !== JSON.stringify(initial)}
         footer={
           <>
-            <button type="button" className={buttonClass('ghost')} onClick={onClose}>
-              {t('btn.cancel')}
-            </button>
+            {/* На телефоне — три шага (прототип v137): «Отмена» только на первом, «Сохранить» — на любом. */}
+            {phone && step > 1 ? (
+              <button
+                type="button"
+                className={buttonClass('ghost')}
+                data-cf-back=""
+                onClick={() => setStep((x) => (x > 1 ? ((x - 1) as FormSection) : x))}
+              >
+                <Icon name="left" size="sm" />
+                {t('cp.form.back')}
+              </button>
+            ) : (
+              <button type="button" className={buttonClass('ghost')} onClick={onClose}>
+                {t('btn.cancel')}
+              </button>
+            )}
+            {phone ? <div className="flex-1" /> : null}
+            {phone && step < 3 ? (
+              <button
+                type="button"
+                className={buttonClass('cta')}
+                data-cf-next=""
+                onClick={() => setStep((x) => (x < 3 ? ((x + 1) as FormSection) : x))}
+              >
+                {t('cp.form.next')}
+                <Icon name="right" size="sm" />
+              </button>
+            ) : null}
             <button
               type="button"
               className={buttonClass('cta')}
@@ -511,276 +571,315 @@ function EditContractorForm({
             onReload={onReload}
           />
         ) : null}
-        <FormGrid>
-          <Field id={fieldId('name')} label={t('cp.form.name')} required full error={errors.name}>
-            {(control) => (
-              <input
-                {...control}
-                className={inputClass()}
-                value={d.name}
-                placeholder={t('cp.form.name_placeholder')}
-                data-cp-field="name"
-                onChange={(e) => set({ name: e.target.value }, 'name')}
-              />
-            )}
-          </Field>
-          <Field id={fieldId('inn')} label={t('cp.form.inn')} required error={errors.inn}>
-            {(control) => (
-              <input
-                {...control}
-                className={inputClass({ mono: true })}
-                value={d.inn}
-                inputMode="numeric"
-                maxLength={14}
-                placeholder={t('cp.form.inn_placeholder')}
-                data-cp-field="inn"
-                onChange={(e) =>
-                  set({ inn: e.target.value.replace(/\D/g, '').slice(0, 14) }, 'inn')
-                }
-              />
-            )}
-          </Field>
-          <Field id={fieldId('phone')} label={t('cp.form.phone')} required error={errors.phone}>
-            {(control) => (
-              <PhoneInput
-                codes={codes}
-                value={d.phone}
-                control={control}
-                codeLabel={t('cp.form.phone_code')}
-                onChange={(v) => set({ phone: v }, 'phone')}
-              />
-            )}
-          </Field>
-          <GkedFields
-            idPrefix={id}
-            mainId={fieldId('gked')}
-            main={d.gked}
-            extra={d.gkedExtra}
-            off={notes?.off ?? []}
-            error={errors.gked}
-            onMain={(v) =>
-              set(
-                { gked: v, gkedExtra: d.gkedExtra.filter((x) => x.code !== v.code) },
-                'gked',
-                'regimeCode',
-              )
-            }
-            onExtra={(v) => set({ gkedExtra: v }, 'regimeCode')}
-          />
-          <FormSelect
-            id={fieldId('formCode')}
-            forms={dicts.forms}
-            value={d.formCode}
-            current={initial.formCode}
-            error={errors.formCode}
-            onChange={(code) => set({ formCode: code }, 'formCode', 'regimeCode')}
-          />
-          <OfficeSelect
-            id={`${id}-office`}
-            offices={dicts.offices}
-            value={d.taxOfficeCode}
-            current={initial.taxOfficeCode}
-            onChange={(code) => {
-              const r = changeOffice(catalog, d.benefits, d.taxOfficeCode, code, t);
-              set({ taxOfficeCode: code, benefits: r.benefits });
-              if (r.message) toast(r.message, { icon: 'info' });
-            }}
-          />
-          <RegimeFields
-            idPrefix={id}
-            regimeId={fieldId('regimeCode')}
-            catalog={catalog}
-            regime={d.regimeCode}
-            regime2={d.regime2Code}
-            current={{ regime: initial.regimeCode, regime2: initial.regime2Code }}
-            error={errors.regimeCode}
-            hints={false}
-            onRegime={(code) => void changeRegime(code)}
-            onRegime2={(code) => set({ regime2Code: code }, 'regimeCode')}
-          />
-          <BizSizeField
-            id={`${id}-size`}
-            value={d.bizSize}
-            long={false}
-            onChange={(v) => set({ bizSize: v })}
-          />
-          <BenefitsField
-            id={`${id}-ben`}
-            catalog={catalog}
-            benefits={d.benefits}
-            office={d.taxOfficeCode}
-            onOpen={() => {
-              setWin((w) => ({ n: (w?.n ?? 0) + 1 }));
-              setWinOpen(true);
-            }}
-          />
-          {regular ? (
-            <BasesField
-              id={`${id}-bases`}
-              catalog={catalog}
-              bases={d.bases}
-              onChange={(bases) => set({ bases })}
+        <div className="flex flex-col gap-[18px]" data-cf="" data-step={phone ? step : undefined}>
+          <FormToc phone={phone} step={step} onStep={goStep} />
+          <FormSectionBlock sec={1} phone={phone} step={step} onRef={sectionRef}>
+            <Field id={fieldId('name')} label={t('cp.form.name')} required full error={errors.name}>
+              {(control) => (
+                <input
+                  {...control}
+                  className={inputClass()}
+                  value={d.name}
+                  placeholder={t('cp.form.name_placeholder')}
+                  data-cp-field="name"
+                  onChange={(e) => set({ name: e.target.value }, 'name')}
+                />
+              )}
+            </Field>
+            <Field id={fieldId('inn')} label={t('cp.form.inn')} required error={errors.inn}>
+              {(control) => (
+                <input
+                  {...control}
+                  className={inputClass({ mono: true })}
+                  value={d.inn}
+                  inputMode="numeric"
+                  maxLength={14}
+                  placeholder={t('cp.form.inn_placeholder')}
+                  data-cp-field="inn"
+                  onChange={(e) =>
+                    set({ inn: e.target.value.replace(/\D/g, '').slice(0, 14) }, 'inn')
+                  }
+                />
+              )}
+            </Field>
+            <Field id={fieldId('phone')} label={t('cp.form.phone')} required error={errors.phone}>
+              {(control) => (
+                <PhoneInput
+                  codes={codes}
+                  value={d.phone}
+                  control={control}
+                  codeLabel={t('cp.form.phone_code')}
+                  onChange={(v) => set({ phone: v }, 'phone')}
+                />
+              )}
+            </Field>
+            <FormSelect
+              id={fieldId('formCode')}
+              forms={dicts.forms}
+              value={d.formCode}
+              current={initial.formCode}
+              error={errors.formCode}
+              onChange={(code) => set({ formCode: code }, 'formCode', 'regimeCode')}
             />
-          ) : null}
-          {regular ? (
-            <SocfundFields
-              idPrefix={id}
-              reasonId={fieldId('socfund.reason')}
-              draft={d.socfund}
-              check={socfund}
-              saved={
-                c.socfund.tariff
-                  ? {
-                      id: c.socfund.tariff.id,
-                      manual: c.socfund.tariff.manual,
-                      reason: c.socfund.tariff.reason,
-                    }
-                  : null
+            <Field id={`${id}-head`} label={t('cp.form.head')}>
+              {(control) => (
+                <input
+                  {...control}
+                  className={inputClass()}
+                  value={d.head}
+                  onChange={(e) => set({ head: e.target.value })}
+                />
+              )}
+            </Field>
+            <Field id={`${id}-contact`} label={t('cp.form.contact')}>
+              {(control) => (
+                <input
+                  {...control}
+                  className={inputClass()}
+                  value={d.contact}
+                  onChange={(e) => set({ contact: e.target.value })}
+                />
+              )}
+            </Field>
+            <FormMore
+              label={
+                t('cp.form.reg_toggle') +
+                (Object.values(d.registration).every((v) => !v.trim())
+                  ? t('cp.card.reg_empty_tag')
+                  : '')
               }
-              reasonError={errors['socfund.reason']}
-              onChange={(v) => set({ socfund: v }, 'socfund.reason')}
+              open={regOpen}
+              onToggle={setRegOpen}
+              data-cp-edit-reg=""
+            >
+              <FormGrid>
+                <RegistrationFields
+                  idPrefix={id}
+                  value={d.registration}
+                  errors={{ okpo: errors.okpo, email: errors.email }}
+                  onChange={(v) => set({ registration: v }, 'okpo', 'email')}
+                />
+              </FormGrid>
+            </FormMore>
+          </FormSectionBlock>
+          <FormSectionBlock sec={2} phone={phone} step={step} onRef={sectionRef}>
+            <GkedFields
+              idPrefix={id}
+              mainId={fieldId('gked')}
+              main={d.gked}
+              extra={d.gkedExtra}
+              off={notes?.off ?? []}
+              error={errors.gked}
+              onMain={(v) =>
+                set(
+                  { gked: v, gkedExtra: d.gkedExtra.filter((x) => x.code !== v.code) },
+                  'gked',
+                  'regimeCode',
+                )
+              }
+              onExtra={(v) => set({ gkedExtra: v }, 'regimeCode')}
             />
-          ) : null}
-          {notes ? (
-            <div className="col-span-full flex flex-col gap-2">
-              <GkedNotesView notes={notes} />
-            </div>
-          ) : null}
-          {regular ? (
-            <div className="col-span-full">
-              <Note icon="list">{t('cp.form.edit.reports_note')}</Note>
-            </div>
-          ) : null}
-          {bad.length ? (
-            <div className="col-span-full" data-cp-bad-types="">
-              <Note tone="warn">
-                {t('cp.form.edit.bad_types', {
-                  names: bad.map((x) => catalog.type(x)?.shortName ?? x).join(', '),
+            <OfficeSelect
+              id={`${id}-office`}
+              offices={dicts.offices}
+              value={d.taxOfficeCode}
+              current={initial.taxOfficeCode}
+              onChange={(code) => {
+                const r = changeOffice(catalog, d.benefits, d.taxOfficeCode, code, t);
+                set({ taxOfficeCode: code, benefits: r.benefits });
+                if (r.message) toast(r.message, { icon: 'info' });
+              }}
+            />
+            <RegimeFields
+              idPrefix={id}
+              regimeId={fieldId('regimeCode')}
+              catalog={catalog}
+              regime={d.regimeCode}
+              regime2={d.regime2Code}
+              current={{ regime: initial.regimeCode, regime2: initial.regime2Code }}
+              error={errors.regimeCode}
+              hints={false}
+              onRegime={(code) => void changeRegime(code)}
+              onRegime2={(code) => set({ regime2Code: code }, 'regimeCode')}
+            />
+            <BizSizeField
+              id={`${id}-size`}
+              value={d.bizSize}
+              long={false}
+              onChange={(v) => set({ bizSize: v })}
+            />
+            <BenefitsField
+              id={`${id}-ben`}
+              catalog={catalog}
+              benefits={d.benefits}
+              office={d.taxOfficeCode}
+              onOpen={() => {
+                setWin((w) => ({ n: (w?.n ?? 0) + 1 }));
+                setWinOpen(true);
+              }}
+            />
+            {regular ? (
+              <BasesField
+                id={`${id}-bases`}
+                catalog={catalog}
+                bases={d.bases}
+                onChange={(bases) => set({ bases })}
+              />
+            ) : null}
+            {regular && socfund?.needed ? (
+              <FormMore
+                label={t('cp.form.edit.socfund', {
+                  name: socfund.tariff?.short ?? t('cp.form.edit.socfund_none'),
                 })}
-              </Note>
-            </div>
-          ) : null}
-          <Field id={`${id}-head`} label={t('cp.form.head')}>
-            {(control) => (
-              <input
-                {...control}
-                className={inputClass()}
-                value={d.head}
-                onChange={(e) => set({ head: e.target.value })}
-              />
-            )}
-          </Field>
-          <Field id={`${id}-contact`} label={t('cp.form.contact')}>
-            {(control) => (
-              <input
-                {...control}
-                className={inputClass()}
-                value={d.contact}
-                onChange={(e) => set({ contact: e.target.value })}
-              />
-            )}
-          </Field>
-          <Field id={`${id}-cno`} label={t('cp.form.contract_no')}>
-            {(control) => (
-              <input
-                {...control}
-                className={inputClass()}
-                value={d.contractNo}
-                placeholder={t('cp.form.contract_no_placeholder')}
-                onChange={(e) => set({ contractNo: e.target.value })}
-              />
-            )}
-          </Field>
-          <Field
-            id={fieldId('contractDate')}
-            label={t('cp.form.contract_date')}
-            error={errors.contractDate}
+                open={sfOpen}
+                onToggle={setSfOpen}
+                data-cp-edit-socfund=""
+              >
+                <FormGrid>
+                  <SocfundFields
+                    idPrefix={id}
+                    reasonId={fieldId('socfund.reason')}
+                    draft={d.socfund}
+                    check={socfund}
+                    saved={
+                      c.socfund.tariff
+                        ? {
+                            id: c.socfund.tariff.id,
+                            manual: c.socfund.tariff.manual,
+                            reason: c.socfund.tariff.reason,
+                          }
+                        : null
+                    }
+                    reasonError={errors['socfund.reason']}
+                    onChange={(v) => set({ socfund: v }, 'socfund.reason')}
+                  />
+                </FormGrid>
+              </FormMore>
+            ) : null}
+            {notes ? (
+              <div className="col-span-full flex flex-col gap-2">
+                <GkedNotesView notes={notes} />
+              </div>
+            ) : null}
+            {regular ? (
+              <div className="col-span-full">
+                <Note icon="list">{t('cp.form.edit.reports_note')}</Note>
+              </div>
+            ) : null}
+            {bad.length ? (
+              <div className="col-span-full" data-cp-bad-types="">
+                <Note tone="warn">
+                  {t('cp.form.edit.bad_types', {
+                    names: bad.map((x) => catalog.type(x)?.shortName ?? x).join(', '),
+                  })}
+                </Note>
+              </div>
+            ) : null}
+          </FormSectionBlock>
+          <FormSectionBlock
+            sec={3}
+            phone={phone}
+            step={step}
+            onRef={sectionRef}
+            after={<p className="m-0 text-[12px] text-muted">{t('cp.form.edit.foot')}</p>}
           >
-            {(control) => (
-              <input
-                {...control}
-                type="date"
-                className={inputClass()}
-                value={d.contractDate}
-                onChange={(e) => set({ contractDate: e.target.value }, 'contractDate')}
-              />
-            )}
-          </Field>
-          <Field
-            id={fieldId('startDate')}
-            label={t(regular ? 'cp.form.start' : 'cp.form.start_oneoff')}
-            hint={regular ? t('cp.form.edit.start_hint') : undefined}
-            error={errors.startDate}
-          >
-            {(control) => (
-              <input
-                {...control}
-                type="date"
-                className={inputClass()}
-                value={d.startDate}
-                data-cp-field="start-date"
-                onChange={(e) => set({ startDate: e.target.value }, 'startDate', 'startReason')}
-              />
-            )}
-          </Field>
-          <Field
-            id={fieldId('startReason')}
-            label={t('cp.form.edit.start_reason')}
-            hint={t('cp.form.edit.start_reason_hint')}
-            error={errors.startReason}
-          >
-            {(control) => (
-              <input
-                {...control}
-                className={inputClass()}
-                value={d.startReason}
-                maxLength={START_REASON_MAX}
-                placeholder={t('cp.form.edit.start_reason_placeholder')}
-                data-cp-field="start-reason"
-                onChange={(e) => set({ startReason: e.target.value }, 'startReason')}
-              />
-            )}
-          </Field>
-          {feeDay ? (
+            <Field id={`${id}-cno`} label={t('cp.form.contract_no')}>
+              {(control) => (
+                <input
+                  {...control}
+                  className={inputClass()}
+                  value={d.contractNo}
+                  placeholder={t('cp.form.contract_no_placeholder')}
+                  onChange={(e) => set({ contractNo: e.target.value })}
+                />
+              )}
+            </Field>
             <Field
-              id={fieldId('feeDay')}
-              label={t('cp.form.edit.fee_day')}
-              hint={t('cp.form.edit.fee_day_hint')}
-              error={errors.feeDay}
+              id={fieldId('contractDate')}
+              label={t('cp.form.contract_date')}
+              error={errors.contractDate}
             >
               {(control) => (
                 <input
                   {...control}
-                  type="number"
-                  min={1}
-                  max={28}
-                  className={inputClass({ mono: true })}
-                  value={d.feeDay}
-                  data-cp-field="fee-day"
-                  onChange={(e) => set({ feeDay: e.target.value }, 'feeDay')}
+                  type="date"
+                  className={inputClass()}
+                  value={d.contractDate}
+                  onChange={(e) => set({ contractDate: e.target.value }, 'contractDate')}
                 />
               )}
             </Field>
-          ) : null}
-          <Field id={`${id}-note`} label={t('cp.form.note')} full>
-            {(control) => (
-              <textarea
-                {...control}
-                className={`${inputClass()} min-h-[60px]`}
-                value={d.note}
-                onChange={(e) => set({ note: e.target.value })}
-              />
-            )}
-          </Field>
-          <div className="col-span-full font-semibold">{t('cp.form.reg_toggle')}</div>
-          <RegistrationFields
-            idPrefix={id}
-            value={d.registration}
-            errors={{ okpo: errors.okpo, email: errors.email }}
-            onChange={(v) => set({ registration: v }, 'okpo', 'email')}
-          />
-        </FormGrid>
-        <p className="mt-3 mb-0 text-[12px] text-muted">{t('cp.form.edit.foot')}</p>
+            <Field
+              id={fieldId('startDate')}
+              label={t(regular ? 'cp.form.start' : 'cp.form.start_oneoff')}
+              tip={
+                regular ? (
+                  <InfoTip label={t('cp.form.start')} text={t('cp.form.edit.start_hint')} />
+                ) : undefined
+              }
+              error={errors.startDate}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  type="date"
+                  className={inputClass()}
+                  value={d.startDate}
+                  data-cp-field="start-date"
+                  onChange={(e) => set({ startDate: e.target.value }, 'startDate', 'startReason')}
+                />
+              )}
+            </Field>
+            {/* Причина нужна только изменённой дате (прототип v137 `.ec-sw`). */}
+            {d.startDate !== initial.startDate ? (
+              <Field
+                id={fieldId('startReason')}
+                label={t('cp.form.edit.start_reason')}
+                required
+                error={errors.startReason}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    className={inputClass()}
+                    value={d.startReason}
+                    maxLength={START_REASON_MAX}
+                    placeholder={t('cp.form.edit.start_reason_placeholder')}
+                    data-cp-field="start-reason"
+                    onChange={(e) => set({ startReason: e.target.value }, 'startReason')}
+                  />
+                )}
+              </Field>
+            ) : null}
+            {feeDay ? (
+              <Field id={fieldId('feeDay')} label={t('cp.form.edit.fee_day')} error={errors.feeDay}>
+                {(control) => (
+                  <input
+                    {...control}
+                    type="number"
+                    min={1}
+                    max={28}
+                    className={inputClass({ mono: true })}
+                    value={d.feeDay}
+                    placeholder={t('cp.form.edit.fee_day_placeholder')}
+                    data-cp-field="fee-day"
+                    onChange={(e) => set({ feeDay: e.target.value }, 'feeDay')}
+                  />
+                )}
+              </Field>
+            ) : null}
+            <Field id={`${id}-note`} label={t('cp.form.note')} full>
+              {(control) => (
+                <textarea
+                  {...control}
+                  className={`${inputClass()} min-h-[60px]`}
+                  value={d.note}
+                  onChange={(e) => set({ note: e.target.value })}
+                />
+              )}
+            </Field>
+          </FormSectionBlock>
+        </div>
       </Modal>
       {win ? (
         <BenefitPickDialog

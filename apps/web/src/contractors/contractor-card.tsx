@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  formatDateRu,
-  formatMomentRu,
-  formatSom,
-  IP_FORM_NAME,
-  type GridKey,
-} from '@buhuchet/domain';
+import { formatDateRu, formatSom, IP_FORM_NAME, type GridKey } from '@buhuchet/domain';
 import {
   ListValues,
   ReportList,
@@ -24,6 +18,7 @@ import {
   ConfirmDialog,
   DataGrid,
   EmptyState,
+  Fold,
   Icon,
   iconButtonClass,
   KeyValues,
@@ -32,8 +27,12 @@ import {
   Note,
   PHONE_QUERY,
   Pill,
+  Plate,
   StatusHistory,
   StatusHistoryDetails,
+  StatusLine,
+  StatusMini,
+  StatusMiniNone,
   StatusNone,
   StatusPill,
   StatusScale,
@@ -43,11 +42,13 @@ import {
   type ActionEntry,
   type CardTab,
   type KeyValueItem,
+  type PlateProps,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { api, apiFailure } from '../api-client';
 import { ContractorPageBox } from '../contractor-page/page-box';
+import { contractorPageQuery } from '../contractor-page/page-data';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { catalogQuery, type Catalog } from '../dicts/dicts-data';
 import { ContractorFeesTab } from '../fees/contractor-fees';
@@ -61,11 +62,13 @@ import { useGridLabels } from '../lists/grid-labels';
 import { useListPage, type FetchListPage } from '../lists/use-list-page';
 import { useViewSettings } from '../lists/view-settings';
 import {
-  ContractorBalanceBox,
   ContractorMoneyTab,
   useMoneySettingsItems,
   useMoneyTabOn,
 } from '../money/contractor-money';
+import { ReceiptDialog } from '../money/tax-dialogs';
+import { contractorMoneyQuery, useMoneyRefresh } from '../money/tax-data';
+import { InfoTip } from '../kpi/kpi-table';
 import { useReportActions, type ReportActions } from '../reports/report-actions';
 import {
   ContractorReportMonths,
@@ -85,12 +88,14 @@ import { useShell } from '../shell/context';
 import {
   historyLabels,
   historyView,
+  miniView,
   scaleView,
   statusEvents,
-  statusPillView,
 } from '../status/status-view';
 import { ContractorTasksTab } from '../tasks/contractor-tasks-tab';
+import { useTaskActions } from '../tasks/task-actions';
 import { ContractorProjectsTab } from '../projects/contractor-projects-tab';
+import { useProjectActions } from '../projects/project-actions';
 import { contractorProjectsQuery } from '../projects/projects-data';
 import { contractorTasksQuery } from '../tasks/tasks-data';
 import { AssignmentDialog } from './assignment-dialog';
@@ -106,22 +111,12 @@ import { RatesDialog } from './rates-dialog';
 import { NotNeededNote, ReportPickTab } from './report-pick';
 import { reportPickQuery } from './report-pick-data';
 import { serviceQuery } from './service-data';
-import { ServicePlanNote, ServiceStatusBlock } from './service-actions';
+import { ServicePlanNote } from './service-actions';
 
 export type ContractorCardTab =
   'main' | 'reports' | 'pick' | 'money' | 'fee' | 'projects' | 'tasks' | 'kpi' | 'files' | 'hist';
 
 const REPORTS_GRID: GridKey = 'cps.reports';
-
-/** Кто и когда: имя, под ним момент мелким серым (прототип `auditKv`). */
-function Audit({ who, at }: { who: string | null; at: string }) {
-  return (
-    <>
-      {who ?? '—'}
-      <span className="block text-[11.5px] text-faint">{formatMomentRu(new Date(at))}</span>
-    </>
-  );
-}
 
 const Faint = ({ children }: { children: ReactNode }) => (
   <span className="text-faint">{children}</span>
@@ -331,19 +326,43 @@ export function ContractorCardWindow(props: ContractorCardProps) {
             <button
               type="button"
               data-cp-more=""
-              className={buttonClass('default')}
+              title={t('cp.card.more')}
+              className={`${buttonClass('default')} max-md:min-w-11 max-md:px-2.5`}
               aria-haspopup="menu"
               aria-expanded={menu !== null}
               onClick={(e) => setMenu(menu ? null : e.currentTarget)}
             >
               <Icon name="more" size="sm" />
-              {t('cp.card.more')}
+              <span className="max-md:hidden">{t('cp.card.more')}</span>
             </button>
           ) : null}
           <div className="flex-1" />
-          <button type="button" data-cp-done="" className={buttonClass('cta')} onClick={close}>
-            {t('btn.done')}
-          </button>
+          {/* Главное действие вкладки (прототип v137 `foot`): «Готово» — только у «Подбора отчётов». */}
+          {shownTab === 'pick' ? (
+            <button type="button" data-cp-done="" className={buttonClass('cta')} onClick={close}>
+              {t('btn.done')}
+            </button>
+          ) : null}
+          {shownTab === 'money' && access.can('money') && !archived ? (
+            <ReceiveAction contractorId={id} label={t('cp.card.act.receive')} />
+          ) : null}
+          {shownTab === 'fee' && feeAccept ? (
+            <button
+              type="button"
+              data-cp-act="fee"
+              className={buttonClass('cta')}
+              onClick={() => feeDialogs.accept(id)}
+            >
+              <Icon name="wallet" size="sm" />
+              {t('cp.card.fee_accept')}
+            </button>
+          ) : null}
+          {shownTab === 'tasks' && access.can('tasksCreate') && !archived ? (
+            <TaskAction contractorId={id} label={t('cp.card.act.task')} />
+          ) : null}
+          {shownTab === 'projects' && projects?.canCreate && !archived ? (
+            <ProjectAction contractor={{ id, name }} label={t('cp.card.act.project')} />
+          ) : null}
         </>
       }
     >
@@ -356,6 +375,8 @@ export function ContractorCardWindow(props: ContractorCardProps) {
             c={c}
             service={service}
             onPick={() => guard(() => setTab('pick'))}
+            tabs={new Set(tabs.map((x) => x.id as ContractorCardTab))}
+            onTab={setTab}
           />
         ) : null}
         {shownTab === 'reports' ? (
@@ -416,6 +437,82 @@ export function ContractorCardWindow(props: ContractorCardProps) {
   );
 }
 
+/** «Поступление» в подвале вкладки «Деньги на налоги» (прототип v137 `cp-f-in`): то же окно, что у вкладки. */
+function ReceiveAction({ contractorId, label }: { contractorId: string; label: string }) {
+  const { access } = useShell();
+  const refresh = useMoneyRefresh();
+  const [slot, setSlot] = useState<DialogSlot<null> | null>(null);
+  return (
+    <>
+      <button
+        type="button"
+        data-cp-act="money"
+        className={buttonClass('cta')}
+        onClick={() => setSlot(openSlot(null))}
+      >
+        <Icon name="plus" size="sm" />
+        {label}
+      </button>
+      {slot ? (
+        <ReceiptDialog
+          key={`foot-receive-${slot.n}`}
+          contractorId={contractorId}
+          preset={null}
+          filesOn={access.feature('files')}
+          canUpload={access.feature('files') && access.can('filesUpload')}
+          open={slot.open}
+          onClose={() => setSlot(closeSlot)}
+          onDone={refresh}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** «Задача» в подвале вкладки «Задачи» (прототип v137 `cp-f-task`): новая задача по этому контрагенту. */
+function TaskAction({ contractorId, label }: { contractorId: string; label: string }) {
+  const tasks = useTaskActions();
+  return (
+    <>
+      <button
+        type="button"
+        data-cp-act="tasks"
+        className={buttonClass('cta')}
+        onClick={() => tasks.newTask({ contractorId })}
+      >
+        <Icon name="plus" size="sm" />
+        {label}
+      </button>
+      {tasks.dialogs}
+    </>
+  );
+}
+
+/** «Проект» в подвале вкладки «Проекты» (прототип v137 `cp-f-proj`): новый проект этого контрагента. */
+function ProjectAction({
+  contractor,
+  label,
+}: {
+  contractor: { id: string; name: string };
+  label: string;
+}) {
+  const projects = useProjectActions();
+  return (
+    <>
+      <button
+        type="button"
+        data-cp-act="projects"
+        className={buttonClass('cta')}
+        onClick={() => projects.newProject(contractor)}
+      >
+        <Icon name="plus" size="sm" />
+        {label}
+      </button>
+      {projects.dialogs}
+    </>
+  );
+}
+
 /** «ИНН … · режим · обслуживание приостановлено · разовый контрагент · просрочено отчётов: N». */
 function CardSub({
   t,
@@ -458,8 +555,11 @@ function CardSub({
   );
 }
 
-/** Шкала «Статус обслуживания» с запланированным и «Историей статусов» (прототип scaleFull('svc')). */
-function ServiceBox({
+/**
+ * Полная шкала «Статус обслуживания» под строкой состояния (прототип v137 `stLine(…, scaleFull('svc'))`):
+ * шаги, запланированное, «Периоды обслуживания» и «История статусов».
+ */
+function ServiceFull({
   t,
   c,
   service,
@@ -503,7 +603,7 @@ function ServiceBox({
   });
   const history = historyView(t, 'service', events, new Date());
   return (
-    <Box>
+    <div className="flex min-w-0 flex-col gap-2.5 pb-3">
       <div data-service-scale="">
         {view.kind === 'none' ? (
           <StatusNone title={view.title} text={view.text} since={view.since} undo={null} />
@@ -524,12 +624,122 @@ function ServiceBox({
         service={service}
         onCancelPause={onCancelPause ? () => onCancelPause(c, service) : null}
       />
+      {service.kind === 'regular' ? (
+        <span data-service-periods="">
+          <Hint>
+            {service.periodsText
+              ? t('svc.periods', { text: service.periodsText })
+              : t('svc.periods.none')}
+          </Hint>
+        </span>
+      ) : null}
       {history.rows.length ? (
         <StatusHistoryDetails title={t('cp.card.status_history')}>
           <StatusHistory rows={history.rows} totals={history.totals} labels={historyLabels(t)} />
         </StatusHistoryDetails>
       ) : null}
-    </Box>
+    </div>
+  );
+}
+
+/** Статус обслуживания коротко в строке состояния (прототип `scaleMini0('svc', …)`). */
+function ServiceMini({ t, c }: { t: Translate; c: Contractor }) {
+  const view = miniView(t, { scale: 'service', status: c.serviceStatus, history: [] });
+  if (view.kind === 'none') return <StatusMiniNone label={view.label} title={view.title} />;
+  if (view.kind === 'pill') return <StatusPill {...view.pill} size="sm" />;
+  return <StatusMini {...view.props} />;
+}
+
+/** Целые сомы на маленькой карточке (прототип `fmtM(…, false)`). */
+const wholeSom = (tyiyn: number) => formatSom(Math.round(tyiyn / 100) * 100, 'auto');
+
+type HotTab = 'reports' | 'money' | 'fee';
+
+/**
+ * Что горит — маленькими карточками (решение заказчика 18.11.2026; прототип v142 `.cp-hot`): «Просрочено
+ * отчётов», «Осталось оплатить», «На счёте», «Долг за обслуживание». Карточка есть, только когда есть её
+ * вкладка и число больше нуля; нажатие открывает вкладку.
+ */
+function HotPlates({
+  t,
+  c,
+  tabs,
+  onTab,
+}: {
+  t: Translate;
+  c: Contractor;
+  tabs: ReadonlySet<ContractorCardTab>;
+  onTab: (tab: ContractorCardTab) => void;
+}) {
+  const money = useQuery({
+    ...contractorMoneyQuery(c.id, null),
+    enabled: tabs.has('money'),
+    retry: false,
+  }).data;
+  const fees = useQuery({ ...contractorFeesQuery(c.id), enabled: tabs.has('fee') }).data;
+  const owe = money?.owe ?? 0;
+  const avail = money?.balance.available ?? 0;
+  const debt = fees?.debt ?? 0;
+  const som = t('report.plate.som');
+  const hot: (Omit<PlateProps, 'id'> & { tab: HotTab })[] = [];
+  if (c.overdue && tabs.has('reports')) {
+    hot.push({
+      tab: 'reports',
+      label: t('cp.card.hot.overdue'),
+      value: String(c.overdue),
+      color: 'red',
+      icon: 'alert',
+      danger: true,
+    });
+  }
+  if (owe > 0) {
+    hot.push({
+      tab: 'money',
+      label: t('cp.card.hot.owe'),
+      value: wholeSom(owe),
+      unit: som,
+      color: owe > avail ? 'orange' : 'yellow',
+      icon: 'file',
+    });
+  }
+  if (avail > 0) {
+    hot.push({
+      tab: 'money',
+      label: t('cp.card.hot.avail'),
+      value: wholeSom(avail),
+      unit: som,
+      color: 'blue',
+      icon: 'wallet',
+    });
+  }
+  if (debt > 0) {
+    hot.push({
+      tab: 'fee',
+      label: t('cp.card.hot.fee'),
+      value: wholeSom(debt),
+      unit: som,
+      color: 'red',
+      icon: 'coins',
+      danger: true,
+    });
+  }
+  if (!hot.length) return null;
+  return (
+    <div
+      data-cp-hot=""
+      className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5 max-md:grid-cols-2"
+    >
+      {hot.map(({ tab, ...plate }, i) => (
+        <Plate
+          key={i}
+          id={`hot-${i}`}
+          {...plate}
+          small
+          title={t('cp.card.hot.title')}
+          onClick={() => onTab(tab)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -542,46 +752,156 @@ function MainTab({
   onEdit,
   onCancelPause,
   onPick,
+  tabs,
+  onTab,
 }: ContractorCardProps & {
   t: Translate;
   c: Contractor;
   service: ContractorService | undefined;
   onPick: () => void;
+  /** Вкладки карточки: «что горит» ведёт только на те, что есть. */
+  tabs: ReadonlySet<ContractorCardTab>;
+  onTab: (tab: ContractorCardTab) => void;
 }) {
+  const { access } = useShell();
   const regular = c.kind !== 'oneoff';
+  const live = c.serviceStatus !== 'archived';
   const entries = service ? serviceActions(c, service) : [];
   const catalog = useQuery(catalogQuery).data;
   const edits = useCardEdits(c, catalog);
   const money = useMoneySettingsItems(c);
+  const feeSeen = access.feature('fee') && access.can('fee') && regular;
+  const regEmpty = registrationRows(t, c).every(([, v]) => !v);
   return (
     <>
-      {service ? (
-        <ServiceBox t={t} c={c} service={service} entries={entries} onCancelPause={onCancelPause} />
-      ) : null}
+      <StatusLine
+        id={`c${c.id}`}
+        label={t('cp.card.scale')}
+        minis={
+          <>
+            <ServiceMini t={t} c={c} />
+            {regular ? null : <Tag>{t('cp.card.oneoff_tag')}</Tag>}
+          </>
+        }
+        parts={[
+          c.phone ? (
+            <>
+              <Icon name="phone" size="sm" />
+              <PhoneLinks t={t} phone={c.phone} text={c.phoneText} />
+            </>
+          ) : null,
+          <>
+            <Icon name="user" size="sm" />
+            <span data-cp-resp-name="">
+              {c.responsible ? (
+                c.responsible.shortName
+              ) : (
+                <Pill tone="caution" icon="alert">
+                  {t('cp.card.responsible_none')}
+                </Pill>
+              )}
+            </span>
+            {onResponsible && live ? (
+              <button
+                type="button"
+                data-cp-resp=""
+                className="cursor-pointer text-[12.5px] text-accent underline-offset-2 hover:underline"
+                onClick={() => onResponsible(c)}
+              >
+                {t('cp.card.responsible_change')}
+              </button>
+            ) : null}
+          </>,
+        ]}
+        full={
+          service ? (
+            <ServiceFull
+              t={t}
+              c={c}
+              service={service}
+              entries={entries}
+              onCancelPause={onCancelPause}
+            />
+          ) : undefined
+        }
+      />
+      <HotPlates t={t} c={c} tabs={tabs} onTab={onTab} />
       {regular || c.gked ? <GkedNotesView notes={c.gkedNotes} /> : null}
       <Box>
-        <KeyValues
-          items={[
-            ...mainItems(t, c, service, { onResponsible, onEdit }, { edits, catalog }),
-            ...money,
-          ]}
-        />
+        <KeyValues items={mainItems(t, c, { onEdit }, { edits, catalog })} />
+        <Fold title={t('cp.card.det.contract')} data-cp-det="contract">
+          <KeyValues items={contractItems(t, c, feeSeen)} />
+        </Fold>
+        {money.length ? (
+          <Fold title={t('cp.card.det.pay')} data-cp-det="pay">
+            <KeyValues items={money} />
+          </Fold>
+        ) : null}
+        <Fold
+          title={
+            <>
+              {t('cp.card.reg')}
+              {regEmpty ? (
+                <span className="font-normal text-faint">{t('cp.card.reg_empty_tag')}</span>
+              ) : null}
+            </>
+          }
+          data-cp-det="reg"
+        >
+          <RegistrationBox t={t} c={c} />
+        </Fold>
       </Box>
-      <RegistrationBox t={t} c={c} />
       <AssignmentsBox t={t} c={c} onPick={regular ? onPick : null} />
-      <ContractorPageBox contractorId={c.id} />
-      <ContractorBalanceBox contractorId={c.id} />
+      <PageFold t={t} contractorId={c.id} />
       {edits.dialogs}
     </>
   );
 }
 
-/** Строки «Основного» (прототип openCp, `.kv`): порядок — как в прототипе. */
+/**
+ * «Страница клиента» свёрнута (прототип v137 `details.cp-pgd`): в строке — «включена» или «выключена»;
+ * раскрытой остаётся, пока карточка открыта.
+ */
+function PageFold({ t, contractorId }: { t: Translate; contractorId: string }) {
+  const { access } = useShell();
+  const [open, setOpen] = useState(false);
+  const page = useQuery({
+    ...contractorPageQuery(contractorId),
+    enabled: access.feature('cppage'),
+  }).data;
+  if (!page) return null;
+  return (
+    <Fold
+      box
+      open={open}
+      onToggle={setOpen}
+      data-cp-page-fold=""
+      title={
+        <>
+          <span className="text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+            {t('cp.card.page')}
+          </span>
+          <span className="text-[12.5px] font-medium text-faint">
+            {t(page.enabled ? 'cp.card.page_on' : 'cp.card.page_off')}
+          </span>
+        </>
+      }
+    >
+      <ContractorPageBox contractorId={contractorId} bare />
+    </Fold>
+  );
+}
+
+/**
+ * Строки «Основного» (прототип v137 openCp, `.kv`): виды деятельности, режим, льготы, тариф Соцфонда,
+ * основания, размер бизнеса, налоговый орган текстом (меняется в «Изменить»), форма собственности;
+ * руководитель, контактное лицо и примечание — только заполненные. ИНН, телефон, ответственный, тип и
+ * статус обслуживания — в шапке и строке состояния, «Создал» и «Изменил» — в «Истории».
+ */
 function mainItems(
   t: Translate,
   c: Contractor,
-  service: ContractorService | undefined,
-  run: Pick<ContractorCardProps, 'onResponsible' | 'onEdit'>,
+  run: Pick<ContractorCardProps, 'onEdit'>,
   { edits, catalog }: { edits: CardEdits; catalog: Catalog | undefined },
 ): KeyValueItem[] {
   // Режим полным названием из справочника (прототип REGIME_FULL), отключённый — как сохранён.
@@ -633,23 +953,6 @@ function mainItems(
           },
         ]
       : []),
-    { id: 'inn', label: t('cp.card.inn'), value: c.inn, mono: true },
-    {
-      id: 'created',
-      label: t('grid.col.created_by'),
-      value: <Audit who={c.audit.createdBy} at={c.audit.createdAt} />,
-    },
-    {
-      id: 'updated',
-      label: t('grid.col.updated_by'),
-      value: <Audit who={c.audit.updatedBy ?? c.audit.createdBy} at={c.audit.updatedAt} />,
-    },
-    {
-      id: 'phone',
-      label: t('cp.card.phone'),
-      value: <PhoneLinks t={t} phone={c.phone} text={c.phoneText} />,
-    },
-    { id: 'form', label: t('cp.card.form'), value: c.form.name },
     {
       id: 'regime',
       label: t('cp.card.regime'),
@@ -664,12 +967,12 @@ function mainItems(
           ) : null}
         </>
       ) : (
-        <>
+        <span className="inline-flex flex-wrap items-center gap-1">
           <Pill tone="warn" icon="alert">
             {t('cp.card.regime_none')}
           </Pill>
-          <Hint>{t('cp.card.regime_none_hint')}</Hint>
-        </>
+          <InfoTip label={t('cp.card.regime')} text={t('cp.card.regime_none_hint')} />
+        </span>
       ),
     },
     { id: 'benefits', label: t('cp.card.benefits'), value: edits.benefits },
@@ -695,47 +998,12 @@ function mainItems(
     {
       id: 'office',
       label: t('cp.card.office'),
-      value: edits.office,
+      value: c.taxOffice ? c.taxOffice.name : t('cp.card.office_none'),
     },
-    {
-      id: 'kind',
-      label: t('cp.card.kind'),
-      value: regular ? (
-        t('cp.card.kind_regular')
-      ) : (
-        <>
-          {t('cp.card.kind_oneoff')} <Faint>{t('cp.card.kind_oneoff_hint')}</Faint>
-        </>
-      ),
-    },
-    {
-      id: 'status',
-      label: t('cp.card.status'),
-      value: service ? (
-        <ServiceStatusBlock service={service} onCancelPause={null} plan={false} />
-      ) : (
-        <StatusPill {...statusPillView(t, 'service', c.serviceStatus)} />
-      ),
-    },
-    { id: 'head', label: t('cp.card.head'), value: c.head || '—' },
-    { id: 'contact', label: t('cp.card.contact'), value: c.contact || '—' },
-    { id: 'start', label: t('cp.card.start'), value: formatDateRu(c.startDate) },
-    { id: 'contract', label: t('cp.card.contract'), value: contractText(t, c) || '—' },
+    { id: 'form', label: t('cp.card.form'), value: c.form.name },
   );
-  if (regular && c.feeDay !== null) {
-    items.push({
-      id: 'fee-day',
-      label: t('cp.card.fee_day'),
-      value: t('cp.card.fee_day_value', { n: c.feeDay }),
-    });
-  }
-  if (c.tariff && regular) {
-    items.push({
-      id: 'fee',
-      label: t('cp.col.fee'),
-      value: `${formatSom(c.tariff.amount)} ${t(c.tariff.period === 'Y' ? 'cp.list.per_year' : 'cp.list.per_month')}`,
-    });
-  }
+  if (c.head) items.push({ id: 'head', label: t('cp.card.head'), value: c.head });
+  if (c.contact) items.push({ id: 'contact', label: t('cp.card.contact'), value: c.contact });
   if (c.note) {
     items.push({
       id: 'note',
@@ -743,42 +1011,50 @@ function mainItems(
       value: <span className="whitespace-pre-wrap">{c.note}</span>,
     });
   }
-  items.push({
-    id: 'responsible',
-    label: t('cp.card.responsible'),
-    value: (
-      <span className="inline-flex flex-wrap items-center gap-1.5">
-        {c.responsible ? (
-          c.responsible.shortName
-        ) : (
-          <Pill tone="caution" icon="alert">
-            {t('cp.card.responsible_none')}
-          </Pill>
-        )}
-        {run.onResponsible && live ? (
-          <button
-            type="button"
-            data-cp-resp=""
-            className="cursor-pointer text-[12px] text-accent underline-offset-2 hover:underline"
-            onClick={() => run.onResponsible?.(c)}
-          >
-            {t('cp.card.responsible_change')}
-          </button>
-        ) : null}
-      </span>
-    ),
-  });
   return items;
 }
 
 /**
- * «Регистрационные данные» (прототип regKvBox): незаполненные — «—»; пустой блок — подсказка; у
- * созданного из свидетельства и выписки — подпись «из свидетельства и выписки», у ИП — «из
- * свидетельства ИП» (прототип v82: по форме собственности «ИП»).
+ * «Договор и обслуживание» (прототип v137 `details.rc-det`): начало обслуживания, договор, день оплаты и
+ * стоимость обслуживания (кто видит плату, у постоянного), тип обслуживания.
  */
-function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
+function contractItems(t: Translate, c: Contractor, feeSeen: boolean): KeyValueItem[] {
+  const regular = c.kind !== 'oneoff';
+  const items: KeyValueItem[] = [
+    { id: 'start', label: t('cp.card.start'), value: formatDateRu(c.startDate) },
+    { id: 'contract', label: t('cp.card.contract'), value: contractText(t, c) || '—' },
+  ];
+  if (feeSeen && c.feeDay !== null) {
+    items.push({
+      id: 'fee-day',
+      label: t('cp.card.fee_day'),
+      value: t('cp.card.fee_day_value', { n: c.feeDay }),
+    });
+  }
+  if (feeSeen && c.tariff) {
+    items.push({
+      id: 'fee',
+      label: t('cp.col.fee'),
+      value: (
+        <>
+          {formatSom(c.tariff.amount)}{' '}
+          <Faint>{t(c.tariff.period === 'Y' ? 'cp.list.per_year' : 'cp.list.per_month')}</Faint>
+        </>
+      ),
+    });
+  }
+  items.push({
+    id: 'kind',
+    label: t('cp.card.kind'),
+    value: regular ? t('cp.card.kind_regular') : t('cp.card.kind_oneoff_full'),
+  });
+  return items;
+}
+
+/** Строки «Регистрационных данных» (прототип regKvBox): незаполненные — без значения. */
+function registrationRows(t: Translate, c: Contractor): [string, string | undefined][] {
   const r = c.registration;
-  const rows: [string, string | undefined][] = [
+  return [
     ['cp.reg.full_name', r.fullName],
     ['cp.reg.reg_no', r.regNo],
     ['cp.reg.reg_date', r.regDate && formatDateRu(r.regDate)],
@@ -792,22 +1068,23 @@ function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
     ],
     ['cp.reg.email', r.email],
   ];
+}
+
+/**
+ * «Регистрационные данные» внутри свёрнутого блока (прототип v137 `details.rc-det` с regKvBox):
+ * незаполненные — «—»; пустой блок — подсказка; у созданного из свидетельства и выписки — подпись «из
+ * свидетельства и выписки», у ИП — «из свидетельства ИП» (прототип v82: по форме собственности «ИП»).
+ */
+function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
+  const rows = registrationRows(t, c);
   const empty = rows.every(([, v]) => !v);
   return (
-    <Box
-      title={
-        c.regdocs ? (
-          <>
-            {t('cp.card.reg')}{' '}
-            <span className="text-[12px] font-medium" data-cp-reg-docs="">
-              {t(c.form.name === IP_FORM_NAME ? 'cp.rd.card_label_ip' : 'cp.rd.card_label')}
-            </span>
-          </>
-        ) : (
-          t('cp.card.reg')
-        )
-      }
-    >
+    <div data-cp-reg="" className="flex flex-col gap-2">
+      {c.regdocs ? (
+        <span className="text-[12px] font-medium text-faint" data-cp-reg-docs="">
+          {t(c.form.name === IP_FORM_NAME ? 'cp.rd.card_label_ip' : 'cp.rd.card_label')}
+        </span>
+      ) : null}
       {empty ? (
         <Faint>{t('cp.card.reg_empty')}</Faint>
       ) : (
@@ -819,12 +1096,13 @@ function RegistrationBox({ t, c }: { t: Translate; c: Contractor }) {
           }))}
         />
       )}
-    </Box>
+    </div>
   );
 }
 
 /**
- * «Сдаёт отчёты · N» (прототип openCp, `cp-asg`): действующие назначения — вид и код формы, орган,
+ * «Сдаёт отчёты · N» (прототип v137 openCp, `cp-asl`, `cp-asg`): виды отчётов короткими названиями, а
+ * под «Ставки, сроки и ответственные» — действующие назначения: вид и код формы, орган,
  * срок сдачи с метками «по статусу», «разовый», «только оплата», ставка, повторяющаяся сумма, с какого и
  * по какой месяц, ответственный («отдельно» — свой у вида), примечание и «Изменить назначение» (право
  * «Назначать отчёты»). Над таблицей — «По статусу «…» не нужны». На телефоне — плитка на вид. В
@@ -901,88 +1179,100 @@ function AssignmentsBox({
           {...(pickable && pickEdit ? { onRemove: notNeeded.onRemove } : {})}
         />
       ) : null}
-      {query.data ? (
-        <MiniTable
-          label={t('cp.card.asg.title', { n: list.length })}
-          empty={t('cp.card.asg.none')}
-          columns={[
-            { key: 'type', label: t('cp.card.asg.col.type') },
-            { key: 'organ', label: t('cp.card.asg.col.organ') },
-            { key: 'due', label: t('cp.card.asg.col.due') },
-            { key: 'rate', label: t('cp.card.asg.col.rate') },
-            { key: 'fixed', label: t('cp.card.asg.col.fixed'), numeric: true },
-            { key: 'from', label: t('cp.card.asg.col.from') },
-            { key: 'until', label: t('cp.card.asg.col.until') },
-            { key: 'resp', label: t('cp.card.asg.col.resp') },
-            { key: 'note', label: t('cp.card.asg.col.note') },
-            ...(canEdit ? [{ key: 'edit', label: '', actions: true }] : []),
-          ]}
-          rows={list.map((a) => ({
-            key: a.id,
-            wide: ['due', 'note'],
-            cells: {
-              type: (
-                <span title={a.reportTypeName}>
-                  <b>{a.reportTypeShort}</b>{' '}
-                  <Faint>{catalog?.type(a.reportTypeCode)?.formCode ?? ''}</Faint>
-                </span>
-              ),
-              organ: a.authority,
-              due: (
-                <span className="inline-flex flex-wrap items-center gap-1">
-                  {a.dueText}
-                  {a.dueStatus ? (
-                    <Tag title={t('cp.card.asg.tag.status_title', { name: a.dueStatus.name })}>
-                      {t('cp.card.asg.tag.status')}
-                    </Tag>
-                  ) : null}
-                  {a.oneOff ? <Tag>{t('cp.card.asg.tag.oneoff')}</Tag> : null}
-                  {a.act === 'pay' ? <Tag>{t('cp.card.asg.tag.pay')}</Tag> : null}
-                  {!a.typeActive ? <Tag>{t('cp.card.asg.tag.off')}</Tag> : null}
-                </span>
-              ),
-              rate: a.rateText || '—',
-              fixed:
-                a.fixedAmount !== null ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Icon name="repeat" size="sm" />
-                    {formatSom(a.fixedAmount)}
+      {query.data && !list.length ? <Faint>{t('cp.card.asg.none')}</Faint> : null}
+      {list.length ? (
+        <div data-cp-asg-tags="" className="flex flex-wrap gap-1.5">
+          {list.map((a) => (
+            <Tag key={a.id} title={a.reportTypeName}>
+              {a.reportTypeShort}
+            </Tag>
+          ))}
+        </div>
+      ) : null}
+      {list.length ? (
+        <Fold title={t('cp.card.asg.det')} data-cp-det="asg">
+          <MiniTable
+            label={t('cp.card.asg.title', { n: list.length })}
+            empty={t('cp.card.asg.none')}
+            columns={[
+              { key: 'type', label: t('cp.card.asg.col.type') },
+              { key: 'organ', label: t('cp.card.asg.col.organ') },
+              { key: 'due', label: t('cp.card.asg.col.due') },
+              { key: 'rate', label: t('cp.card.asg.col.rate') },
+              { key: 'fixed', label: t('cp.card.asg.col.fixed'), numeric: true },
+              { key: 'from', label: t('cp.card.asg.col.from') },
+              { key: 'until', label: t('cp.card.asg.col.until') },
+              { key: 'resp', label: t('cp.card.asg.col.resp') },
+              { key: 'note', label: t('cp.card.asg.col.note') },
+              ...(canEdit ? [{ key: 'edit', label: '', actions: true }] : []),
+            ]}
+            rows={list.map((a) => ({
+              key: a.id,
+              wide: ['due', 'note'],
+              cells: {
+                type: (
+                  <span title={a.reportTypeName}>
+                    <b>{a.reportTypeShort}</b>{' '}
+                    <Faint>{catalog?.type(a.reportTypeCode)?.formCode ?? ''}</Faint>
                   </span>
-                ) : (
-                  <Faint>—</Faint>
                 ),
-              from: month(a.fromMonth),
-              until: month(a.untilMonth) ?? <Faint>—</Faint>,
-              resp: (
-                <span>
-                  {a.responsible?.shortName ?? c.responsible?.shortName ?? '—'}
-                  {a.responsible ? (
-                    <>
-                      {' '}
-                      <Tag>{t('cp.card.asg.tag.separate')}</Tag>
-                    </>
-                  ) : null}
-                </span>
-              ),
-              note: a.note || <Faint>—</Faint>,
-              edit: (
-                <button
-                  type="button"
-                  data-asg-edit={a.reportTypeCode}
-                  className={iconButtonClass('sm')}
-                  title={t('cp.card.asg.edit', { name: a.reportTypeShort })}
-                  aria-label={t('cp.card.asg.edit', { name: a.reportTypeShort })}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setEdit({ a, open: true, n: (edit?.n ?? 0) + 1 });
-                  }}
-                >
-                  <Icon name="edit" size="sm" />
-                </button>
-              ),
-            },
-          }))}
-        />
+                organ: a.authority,
+                due: (
+                  <span className="inline-flex flex-wrap items-center gap-1">
+                    {a.dueText}
+                    {a.dueStatus ? (
+                      <Tag title={t('cp.card.asg.tag.status_title', { name: a.dueStatus.name })}>
+                        {t('cp.card.asg.tag.status')}
+                      </Tag>
+                    ) : null}
+                    {a.oneOff ? <Tag>{t('cp.card.asg.tag.oneoff')}</Tag> : null}
+                    {a.act === 'pay' ? <Tag>{t('cp.card.asg.tag.pay')}</Tag> : null}
+                    {!a.typeActive ? <Tag>{t('cp.card.asg.tag.off')}</Tag> : null}
+                  </span>
+                ),
+                rate: a.rateText || '—',
+                fixed:
+                  a.fixedAmount !== null ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name="repeat" size="sm" />
+                      {formatSom(a.fixedAmount)}
+                    </span>
+                  ) : (
+                    <Faint>—</Faint>
+                  ),
+                from: month(a.fromMonth),
+                until: month(a.untilMonth) ?? <Faint>—</Faint>,
+                resp: (
+                  <span>
+                    {a.responsible?.shortName ?? c.responsible?.shortName ?? '—'}
+                    {a.responsible ? (
+                      <>
+                        {' '}
+                        <Tag>{t('cp.card.asg.tag.separate')}</Tag>
+                      </>
+                    ) : null}
+                  </span>
+                ),
+                note: a.note || <Faint>—</Faint>,
+                edit: (
+                  <button
+                    type="button"
+                    data-asg-edit={a.reportTypeCode}
+                    className={iconButtonClass('sm')}
+                    title={t('cp.card.asg.edit', { name: a.reportTypeShort })}
+                    aria-label={t('cp.card.asg.edit', { name: a.reportTypeShort })}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEdit({ a, open: true, n: (edit?.n ?? 0) + 1 });
+                    }}
+                  >
+                    <Icon name="edit" size="sm" />
+                  </button>
+                ),
+              },
+            }))}
+          />
+        </Fold>
       ) : null}
       {edit ? (
         <AssignmentDialog

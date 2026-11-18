@@ -91,14 +91,8 @@ export const CONTRACTOR_PAGE_TEXTS = {
     section: S,
   },
   'cppage.wa.text': { ru: 'Текст сообщения', section: S },
-  'cppage.wa.hint': {
-    ru: 'Шаблон ведёт администратор платформы. Здесь текст можно поправить перед отправкой.',
-    section: S,
-  },
-  'cppage.wa.note': {
-    ru: 'Сообщение откроется в WhatsApp на номер {phone}, отправляете его вы сами. Нажатие записывается в историю.',
-    section: S,
-  },
+  'cppage.wa.hint': { ru: 'Текст можно поправить', section: S },
+  'cppage.wa.note': { ru: 'Откроется WhatsApp на номер {phone}, отправляете вы сами', section: S },
   'cppage.wa.go': { ru: 'Открыть WhatsApp', section: S },
   // Записи истории контрагента (прототип: log('cp', …)).
   'cppage.hist.page_on': { ru: 'Страница контрагента включена: создан код доступа', section: S },
@@ -320,17 +314,11 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'cppage.fee_tg.text': { ru: 'Текст сообщения', section: S },
   'cppage.fee_tg.text_required': { ru: 'Введите текст сообщения', section: S },
-  'cppage.fee_tg.text_hint': {
-    ru: 'Шаблон ведёт администратор платформы. Здесь текст можно поправить перед отправкой.',
-    section: S,
-  },
+  'cppage.fee_tg.text_hint': { ru: 'Текст можно поправить', section: S },
   'cppage.fee_tg.req': { ru: 'Реквизиты для перевода — в конце сообщения', section: S },
   'cppage.fee_tg.req_btns': { ru: 'Под сообщением — кнопки «{copy}» и «{paid}».', section: S },
   'cppage.fee_tg.req_btn': { ru: 'Под сообщением — кнопка «{paid}».', section: S },
-  'cppage.fee_tg.note': {
-    ru: 'Напомнить в Telegram можно не чаще раза в сутки. Отправка записывается в историю контрагента.',
-    section: S,
-  },
+  'cppage.fee_tg.note': { ru: 'Не чаще раза в сутки', section: S },
   'cppage.fee_tg.send': { ru: 'Отправить', section: S },
   'cppage.fee_tg.sent': { ru: 'Напоминание отправлено в Telegram: получателей — {n}', section: S },
   'cppage.hist.page_tg_fee': {

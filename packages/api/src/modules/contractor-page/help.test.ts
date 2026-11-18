@@ -396,7 +396,12 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     }
     const wel = await file('cpwel');
     expect(wel.header).toEqual(['Код', 'Где', 'Текст']);
-    expect(wel.rows.find((r) => r[0] === 't')![1]).toBe('Заголовок окна');
+    // Приглашение — полоса из трёх текстов (прототип v135): заголовка окна и «Что вы увидите» больше нет.
+    expect(wel.rows.map((r) => [r[0], r[1]])).toEqual([
+      ['lead', 'Строка приглашения'],
+      ['go', 'Кнопка обзора'],
+      ['skip', 'Кнопка «Не сейчас»'],
+    ]);
 
     const text = ioTsv([
       wel.header,
@@ -404,7 +409,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       ['newKey', '', 'Новый текст'],
     ]);
     const p = await preview('cpwel', text);
-    expect(p.change.map((x) => [x.code, x.name])).toEqual([['lead', 'Строка под заголовком']]);
+    expect(p.change.map((x) => [x.code, x.name])).toEqual([['lead', 'Строка приглашения']]);
     expect(p.errors.map((x) => [x.code, x.errors])).toEqual([
       ['newKey', ['Такой строки нет: новые тексты и облачка добавляет разработчик']],
     ]);

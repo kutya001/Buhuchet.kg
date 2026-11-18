@@ -26,7 +26,6 @@ import {
   EmptyState,
   Field,
   FieldMarks,
-  FormGrid,
   Icon,
   iconButtonClass,
   inputClass,
@@ -43,6 +42,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { catalogQuery, valueDictsQuery, type Catalog, type ValueDicts } from '../dicts/dicts-data';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import { useShell } from '../shell/context';
 import { phoneCodesQuery } from '../staff/staff-data';
@@ -69,7 +69,6 @@ import {
   draftErrors,
   errorsInSection,
   FIELD_SECTION,
-  FORM_SECTIONS,
   feeFieldShown,
   formFieldOf,
   leftInSection,
@@ -91,6 +90,7 @@ import {
   type RegdocsPrefill,
   type RegdocsState,
 } from './contractor-regdocs-model';
+import { FormSectionBlock, FormToc } from './form-sections';
 import { GkedFields } from './gked-pick';
 import { RateRows, singleTaxDefaults, type SingleTaxContext } from './rate-rows';
 import { RegistrationFields } from './registration-fields';
@@ -299,6 +299,9 @@ function NewContractorForm({
   const [decided, setDecided] = useState<Decisions>(NO_DECISIONS);
   const [busy, setBusy] = useState(false);
   const sections = useRef<Partial<Record<FormSection, HTMLElement | null>>>({});
+  const sectionRef = (sec: FormSection, el: HTMLElement | null) => {
+    sections.current[sec] = el;
+  };
 
   const regular = d.kind === 'regular';
   const benefitCodes = d.benefits.map((b) => b.code);
@@ -651,75 +654,13 @@ function NewContractorForm({
     );
   };
 
-  const toc = (
-    <div
-      role="tablist"
-      aria-label={t('cp.form.sections')}
-      data-cf-toc=""
-      data-form-toc=""
-      className={`sticky -top-1.5 z-[3] -mt-1.5 flex gap-1.5 bg-pane pt-1.5 pb-2 shadow-[0_1px_0_var(--bu-line)] ${phone ? 'flex-nowrap items-center gap-0.5' : 'flex-wrap'}`}
-    >
-      {FORM_SECTIONS.map((sec) => {
-        // На ПК, как в прототипе (cfToc со step = 1), выделен первый раздел: оглавление только прокручивает.
-        const on = phone ? step === sec : sec === 1;
-        return (
-          <div key={sec} className={`contents`}>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={on}
-              data-cf-step={sec}
-              onClick={() => goStep(sec)}
-              className={`inline-flex cursor-pointer items-center border border-line font-semibold ${on ? 'bg-raised text-ink shadow-btn' : 'bg-pane-alt text-muted'} ${phone ? 'min-w-0 flex-[1_1_0] flex-col gap-0.5 rounded-md px-1 py-1.5 text-center text-[11.5px] leading-[1.2]' : 'gap-[7px] rounded-full py-[5px] pr-3 pl-1.5 text-[12.5px]'}`}
-            >
-              <span
-                className={`inline-grid h-5 w-5 flex-none place-items-center rounded-full text-[11.5px] font-bold ${on ? 'bg-accent text-on-accent' : 'bg-sel text-muted'}`}
-              >
-                {sec}
-              </span>
-              <span className="max-w-full truncate">{t(`cp.form.sec.${sec}`)}</span>
-              <span data-cf-mark={sec}>{mark(sec)}</span>
-            </button>
-            {phone && sec < 3 ? (
-              <span aria-hidden="true" className="inline-grid flex-none text-faint">
-                <Icon name="right" size="sm" />
-              </span>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const section = (sec: FormSection, body: ReactNode) => (
-    <section
-      key={sec}
-      ref={(el) => {
-        sections.current[sec] = el;
-      }}
-      data-cf-sec={sec}
-      hidden={phone && step !== sec}
-      className="flex scroll-mt-[52px] flex-col gap-2.5"
-    >
-      {phone ? null : (
-        <h3 className="m-0 flex items-center gap-2 border-b border-line pb-1.5 text-[14px]">
-          <span className="inline-grid h-5 w-5 flex-none place-items-center rounded-full bg-accent text-[11.5px] font-bold text-on-accent">
-            {sec}
-          </span>
-          {t(`cp.form.sec.${sec}`)}
-        </h3>
-      )}
-      <FormGrid>{body}</FormGrid>
-    </section>
-  );
-
   const s1 = (
     <>
       <Field
         id={`${id}-kind`}
         label={t('cp.form.kind')}
         full
-        hint={t(`cp.form.kind.${d.kind}_hint`)}
+        hint={d.kind === 'oneoff' ? t('cp.form.kind.oneoff_hint') : undefined}
       >
         {() => (
           <div className="self-start" data-cp-field="kind">
@@ -882,9 +823,7 @@ function NewContractorForm({
           <Icon name={d.regOpen ? 'down' : 'right'} size="sm" />
           {t('cp.form.reg_toggle')}
         </button>
-        <span className="text-[12px] text-muted">
-          {t(d.regOpen ? 'cp.form.reg_hint' : 'cp.form.reg_hint_optional')}
-        </span>
+        <span className="text-[12px] text-muted">{t('cp.form.reg_hint')}</span>
       </div>
       {d.regOpen ? (
         <RegistrationFields
@@ -915,7 +854,6 @@ function NewContractorForm({
         catalog={catalog}
         benefits={d.benefits}
         office={d.taxOfficeCode}
-        hint={t('cp.form.benefits_hint')}
         onOpen={() => openWin('benefits')}
       />
       {regular ? (
@@ -998,7 +936,17 @@ function NewContractorForm({
         </div>
       ) : null}
       {regular && sel.length && cx ? (
-        <Field id={`${id}-rates`} label={t('cp.form.rates')} full hint={t('cp.form.rates_hint')}>
+        <Field
+          id={`${id}-rates`}
+          label={t('cp.form.rates')}
+          full
+          hint={
+            <>
+              {t('cp.form.rates_short')}{' '}
+              <InfoTip label={t('cp.form.rates')} text={t('cp.form.rates_hint')} />
+            </>
+          }
+        >
           {() =>
             sel.some((c) => (catalog.type(c)?.rates.length ?? 0) > 0) ? (
               <RateRows
@@ -1196,9 +1144,8 @@ function NewContractorForm({
           )
         }
         sub={
-          pre?.result
-            ? t(regdocsIp(pre) ? 'cp.rd.form_sub_ip' : 'cp.rd.form_sub')
-            : t('cp.form.sub_new')
+          // Без документов подзаголовка нет (прототип v137): звёздочки у полей говорят сами.
+          pre?.result ? t(regdocsIp(pre) ? 'cp.rd.form_sub_ip' : 'cp.rd.form_sub') : undefined
         }
         dirty={JSON.stringify(d) !== JSON.stringify(initial)}
         footer={
@@ -1238,10 +1185,16 @@ function NewContractorForm({
         {pre ? <RegdocsHead pre={pre} st={rd} /> : null}
         <FieldMarks.Provider value={marks}>
           <div className="flex flex-col gap-[18px]" data-cf="" data-step={phone ? step : undefined}>
-            {toc}
-            {section(1, s1)}
-            {section(2, s2)}
-            {section(3, s3)}
+            <FormToc phone={phone} step={step} onStep={goStep} mark={mark} />
+            <FormSectionBlock sec={1} phone={phone} step={step} onRef={sectionRef}>
+              {s1}
+            </FormSectionBlock>
+            <FormSectionBlock sec={2} phone={phone} step={step} onRef={sectionRef}>
+              {s2}
+            </FormSectionBlock>
+            <FormSectionBlock sec={3} phone={phone} step={step} onRef={sectionRef}>
+              {s3}
+            </FormSectionBlock>
           </div>
         </FieldMarks.Provider>
       </Modal>

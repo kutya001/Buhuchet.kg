@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, signIn } from './helpers';
 import { asOwner, manualReport, newContractor } from './reports';
 
 // «Отчеты для сдачи»: деньги по отчётам — поступления и оплата налога (задача 2.19, #75) через
@@ -306,6 +306,8 @@ test.describe('Этап 2: деньги по отчётам — поступле
       .getByText(name, { exact: true })
       .click();
     const cpCard = page.getByRole('dialog', { name });
+    // «Баланс по контрагенту» — внизу вкладки «Деньги» (прототип v137).
+    await cardTab(page, cpCard, isMobile, /^Деньги/);
     const balance = cpCard.locator('[data-money-balance]');
     const value = (label: string) =>
       balance.locator('dl > div').filter({ hasText: label }).locator('[data-kv-value]');
