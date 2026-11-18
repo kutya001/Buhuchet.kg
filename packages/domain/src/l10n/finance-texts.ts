@@ -42,10 +42,7 @@ export const FINANCE_TEXTS = {
   'fin.basis.back': { ru: 'Возврат по уточнённому расчёту (версия {n})', section: S },
   // «Списать остаток в бонус» и «Вернуть остаток контрагенту»
   'fin.bonus.title': { ru: 'Списать остаток в бонус', section: S },
-  'fin.bonus.lock': {
-    ru: 'Сумма фиксируется как бонус сотрудника. Отдельно бонус не выплачивается и не оформляется.',
-    section: S,
-  },
+  'fin.bonus.lock': { ru: 'Сумма станет бонусом сотрудника.', section: S },
   'fin.bonus.reason_default': { ru: 'Остаток после оплаты налогов', section: S },
   'fin.bonus.ok': { ru: 'Списать', section: S },
   'fin.bonus.done': { ru: 'Списано в бонус', section: S },
@@ -58,10 +55,7 @@ export const FINANCE_TEXTS = {
   'fin.wo.date': { ru: 'Дата', section: S },
   'fin.wo.reason': { ru: 'Причина', section: S },
   'fin.wo.comment': { ru: 'Комментарий', section: S },
-  'fin.wo.lock_tail': {
-    ru: 'Запись потом нельзя изменить, только отменить обратной записью.',
-    section: S,
-  },
+  'fin.wo.lock_tail': { ru: 'Изменить потом нельзя, только отменить.', section: S },
   // «Перевод на счёт сотрудника»
   'fin.xfer.title': { ru: 'Перевод на счёт сотрудника', section: S },
   'fin.xfer.sub': { ru: '{name} · на счёте организации {amount}', section: S },
@@ -70,10 +64,7 @@ export const FINANCE_TEXTS = {
   'fin.xfer.amount': { ru: 'Сумма', section: S },
   'fin.xfer.amount_hint': { ru: 'Не больше {amount}', section: S },
   'fin.xfer.amount_required': { ru: 'Введите сумму', section: S },
-  'fin.xfer.note': {
-    ru: 'Остаток контрагента не меняется: деньги только переходят со счёта организации на счёт сотрудника, который оплачивает налоги этого контрагента.',
-    section: S,
-  },
+  'fin.xfer.note': { ru: 'Остаток контрагента не меняется', section: S },
   'fin.xfer.ok': { ru: 'Перевести', section: S },
   'fin.xfer.done': { ru: 'Перевод записан', section: S },
   // «Обратная запись к поступлению»
@@ -138,18 +129,8 @@ export const FINANCE_TEXTS = {
   'fin.del.done': { ru: 'Операция удалена', section: S },
   'fin.del.done_bonus': { ru: 'Списание отменено', section: S },
   'fin.del.done_refund': { ru: 'Возврат отменён', section: S },
-  'fin.del.ask': {
-    ru: 'Удалить операцию на {amount}? Суммы и статусы оплаты пересчитаются.',
-    section: S,
-  },
-  'fin.del.ask_bonus': {
-    ru: 'Отменить списание на {amount}? Суммы и статусы оплаты пересчитаются.',
-    section: S,
-  },
-  'fin.del.ask_refund': {
-    ru: 'Отменить возврат на {amount}? Суммы и статусы оплаты пересчитаются.',
-    section: S,
-  },
+  'fin.del.ask_bonus': { ru: 'Отменить списание на {amount}?', section: S },
+  'fin.del.ask_refund': { ru: 'Отменить возврат на {amount}?', section: S },
   'fin.del.cons.in': { ru: 'Деньги уйдут из остатка контрагента.', section: S },
   'fin.del.cons.in_alloc': {
     ru: 'Деньги уйдут из остатка контрагента, отчёты из детализации снова будут ждать денег.',
@@ -170,10 +151,7 @@ export const FINANCE_TEXTS = {
   'fin.del.cons.refund': { ru: 'Сумма вернётся в свободный остаток контрагента.', section: S },
   'fin.del.cons.xfer': { ru: 'Деньги вернутся на счёт организации.', section: S },
   'fin.del.cons.corr': { ru: 'Остаток контрагента пересчитается.', section: S },
-  'fin.del.keep': {
-    ru: 'Запись не стирается: она получит отметку «Удалена», уйдёт из сумм, сверок и итогов и будет видна в журнале с фильтром «Показать удалённые».',
-    section: S,
-  },
+  'fin.del.keep': { ru: 'Запись останется в журнале с отметкой «Удалена».', section: S },
   'fin.del.reason': { ru: 'Причина', section: S },
   'fin.del.reason_ph': { ru: 'Например: внесли по ошибке', section: S },
   'fin.del.blocked_pay': { ru: 'Оплата налога', section: S },
@@ -473,7 +451,6 @@ export const FINANCE_TEXTS = {
   'files.plate.one_off_service': { ru: 'К разовым услугам', section: S },
   'fin.svc.title': { ru: 'Разовая услуга', section: S },
   'fin.svc.title_edit': { ru: 'Изменить разовую услугу', section: S },
-  'fin.svc.sub_new': { ru: 'Оплачивается отдельно от ежемесячного обслуживания', section: S },
   'fin.svc.cp': { ru: 'Контрагент', section: S },
   'fin.svc.cp_pick': { ru: '— выберите —', section: S },
   'fin.svc.cp_oneoff': { ru: '{name} · разовый', section: S },

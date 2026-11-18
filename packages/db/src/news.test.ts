@@ -423,6 +423,14 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
     // окно просмотра файлов, колокольчик — то же, что присылает бот; доработки 16.11.2026, этап 2,
     // п. Т-21, И-12, К-20) и v129 («Задачи» — только задачи, п. О-58) — да.
     expect(rows.filter((r) => NEWS_NOT_YET.has(r.id))).toEqual([]);
+    // Пометка прототипа «Пока только в прототипе…» в продукт не попадает (п. О-83): новость v134 и
+    // v136 выходит вместе с самой работой; остальной текст — как в прототипе.
+    for (const id of ['v134', 'v136']) {
+      const md = rows.find((r) => r.id === id)?.md ?? '';
+      expect(md).toContain('## Изменено');
+      expect(md).not.toContain('только в прототипе');
+      expect(md.endsWith('\n')).toBe(false);
+    }
     expect(rows.find((r) => r.id === 'v109')).toMatchObject({ release: '109', showOnLogin: true });
     expect(rows.find((r) => r.id === 'v110')).toMatchObject({ release: '110' });
     expect(rows.find((r) => r.id === 'v111')).toMatchObject({ release: '111', showOnLogin: true });

@@ -88,7 +88,6 @@ export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
   'v132',
   'v133',
   'v135',
-  'v136',
   'v137',
   'v138',
   'v139',
@@ -100,6 +99,21 @@ export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
   'v145',
   'v146',
 ]);
+
+/**
+ * Строка новостей v132–v146 «Пока только в прототипе: в рабочую версию — по отдельному слову» — пометка
+ * прототипа о нём самом: в продукте новость выходит как раз тогда, когда работа перенесена, и строка
+ * стала бы неправдой (docs/deviations.md п. О-83).
+ */
+const PROTOTYPE_ONLY_LINE = /^- Пока только в прототипе:/;
+
+/** Текст новости без пометки «Пока только в прототипе». */
+// ОТКЛОНЕНИЕ: docs/deviations.md#О-83
+export const newsSeedMd = (md: string) =>
+  md
+    .split('\n')
+    .filter((line) => !PROTOTYPE_ONLY_LINE.test(line.trim()))
+    .join('\n');
 
 /**
  * Строки наполнения: только опубликованные новости (черновики прототипа — его рабочие записи) без
@@ -123,7 +137,7 @@ export function newsSeedRows(section: unknown) {
       release: n.ver?.trim() || null,
       publishDate: n.date,
       short: n.short?.trim() ?? '',
-      md: n.md ?? '',
+      md: newsSeedMd(n.md ?? ''),
       linkKind: link?.k ?? null,
       linkId: link?.id ?? null,
       pinned: n.pin ?? false,

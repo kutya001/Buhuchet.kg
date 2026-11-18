@@ -2,7 +2,6 @@
 
 import {
   bishkekDate,
-  diffDays,
   formatDateRu,
   OPEN_REPORT_STATUSES,
   formatMomentRu,
@@ -28,8 +27,6 @@ import {
   Pill,
   StatusHistory,
   StatusLine,
-  StatusMini,
-  StatusMiniNone,
   StatusNone,
   StatusPill,
   StatusScale,
@@ -56,11 +53,11 @@ import {
 } from '../money/report-money';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { dueWords, MiniScale } from '../status/status-line';
 import {
   confirmMarkLabel,
   historyLabels,
   historyView,
-  miniView,
   scaleView,
   statusEvents,
   statusPillView,
@@ -229,20 +226,6 @@ function detailItems(t: Translate, r: Card): KeyValueItem[] {
   return items;
 }
 
-/** «N дн.» до срока для строки состояния (прототип `dueBit`): просрочка, «сегодня» или «осталось». */
-function dueWords(t: Translate, date: IsoDate, late: boolean, today: IsoDate) {
-  const n = diffDays(date, today);
-  return {
-    late: late ? t('status.line.late', { n: -n }) : null,
-    left:
-      late || n < 0 || n > 14
-        ? null
-        : n === 0
-          ? t('status.line.today')
-          : t('status.line.left', { n }),
-  };
-}
-
 /** Срок в строке состояния (прототип v134 openReport, `stLine`): сдача, оплата у «Уплаты» или «сдан». */
 function duePart(t: Translate, r: Card, today: IsoDate): ReactNode {
   if (r.act === 'pay') {
@@ -281,22 +264,24 @@ function duePart(t: Translate, r: Card, today: IsoDate): ReactNode {
   );
 }
 
-/** Шкала сдачи коротко, без строки «когда» (прототип `scaleMini0('rep')`), с отметкой подтверждения. */
+/** Шкала сдачи коротко (прототип `scaleMini0('rep')`), с отметкой подтверждения. */
 function ReportMini({ t, r }: { t: Translate; r: Card }) {
-  const view = miniView(t, {
-    scale: 'report',
-    status: r.status,
-    history: [],
-    ...(r.mark
-      ? {
-          mark: r.mark,
-          markLabel: confirmMarkLabel(t, statusEvents(r.statusHistory), r.mark, new Date()),
-        }
-      : {}),
-  });
-  if (view.kind === 'none') return <StatusMiniNone label={view.label} title={view.title} />;
-  if (view.kind === 'pill') return <StatusPill {...view.pill} size="sm" />;
-  return <StatusMini {...view.props} />;
+  return (
+    <MiniScale
+      t={t}
+      input={{
+        scale: 'report',
+        status: r.status,
+        history: [],
+        ...(r.mark
+          ? {
+              mark: r.mark,
+              markLabel: confirmMarkLabel(t, statusEvents(r.statusHistory), r.mark, new Date()),
+            }
+          : {}),
+      }}
+    />
+  );
 }
 
 const periodKey = (p: Card['period']) => p.toLowerCase() as 'm' | 'q' | 'h' | 'y';
