@@ -127,11 +127,18 @@ describe('payPlan — окно «Оплатить» (pubPayPlan)', () => {
     expect(payPlan(pageOf({}), 'fee', null)).toMatchObject({ sum: 0, month: null, rows: [] });
   });
 
-  it('налоги за месяц: остаток месяца и его отчёты; вид — коротко, не из каталога — кодом', () => {
+  it('налоги за месяц: остаток месяца и его отчёты; вид — полным названием (прототип v135), не из каталога — кодом', () => {
     const p = payPlan(pageOf({ reports, money }), 'tax', '2026-10');
     expect(p).toMatchObject({ sum: 500_000, month: '2026-10', titleMonth: '2026-10', calc: null });
     expect(p.rows).toEqual([
-      { id: 'r1', type: 'ЕН', period: '3 кв. 2026', month: null, sum: 450_000, due: '2026-11-15' },
+      {
+        id: 'r1',
+        type: 'Единый налог',
+        period: '3 кв. 2026',
+        month: null,
+        sum: 450_000,
+        due: '2026-11-15',
+      },
       { id: 'r9', type: 'XX', period: 'Октябрь 2026', month: null, sum: 50_000, due: null },
     ]);
   });

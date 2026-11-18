@@ -172,12 +172,12 @@ export const PAGE_SECTIONS = [
 export type PageSection = (typeof PAGE_SECTIONS)[number];
 
 export const PAGE_SECTION_TITLES: Record<PageSection, string> = {
-  pay: 'Как оплатить',
+  pay: 'Куда переводить',
   reports: 'Отчёты',
   files: 'Файлы',
   money: 'Деньги на налоги',
-  fee: 'Оплата за обслуживание',
-  kpi: 'Показатели',
+  fee: 'Услуги бухгалтера',
+  kpi: 'Цифры компании',
   contacts: 'Контакты',
   tg: 'Telegram',
 };

@@ -101,13 +101,11 @@ test.describe('Этап 2: страница контрагента по ссыл
 
     await page.goto(path);
     await expect(codeHeading(page)).toBeVisible();
-    // Без кода не видно ничего, даже названия контрагента; чья это страница — видно: логотип и название
-    // бухгалтерской компании (прототип v135, docs/deviations.md п. К-21).
+    // Без кода не видно ничего: ни названия контрагента, ни бухгалтерской компании (ТЗ строже
+    // прототипа v135, docs/deviations.md п. К-21) — что было на экране кода, сверяется после входа.
     await expect(page.getByText(name)).toHaveCount(0);
-    const brand = page.locator('[data-pub-brand]');
-    await expect(brand).not.toBeEmpty();
-    const orgName = (await brand.locator('b').innerText()).trim();
-    expect(orgName).not.toBe('');
+    await expect(page.locator('[data-pub-brand]')).toHaveCount(0);
+    const gateText = await page.locator('main').innerText();
     await expect(page.getByRole('button', { name: 'Открыть' })).toBeEnabled();
     const input = page.getByLabel('Код доступа');
     await input.fill('12');
@@ -123,7 +121,11 @@ test.describe('Этап 2: страница контрагента по ссыл
     await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
     // Шапка — та же бухгалтерская компания; ИНН — в «Связи» → «Ваши данные у нас» (на телефоне раздел
     // свёрнут: текст в нём есть, но не на экране); под страницей — «Обновлено …» (прототип v135).
-    await expect(page.locator('#pub-top')).toContainText(orgName);
+    const brand = page.locator('#pub-top [data-pub-brand] b');
+    await expect(brand).not.toBeEmpty();
+    const orgName = (await brand.innerText()).trim();
+    expect(orgName).not.toBe('');
+    expect(gateText).not.toContain(orgName);
     await expect(page.locator('[data-sec="acc"]')).toContainText(inn);
     await expect(page.locator('[data-pub-updated]')).toHaveText(
       /^Обновлено \d{1,2} \S+, \d{2}:\d{2}$/,

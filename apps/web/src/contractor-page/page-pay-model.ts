@@ -22,7 +22,7 @@ export interface PayLine {
   /** Сколько перевести; 0 — платить не нужно. */
   due: number;
   late: boolean;
-  /** Реквизит; null — раздел «Как оплатить» скрыт или реквизита нет. */
+  /** Реквизит; null — раздел «Куда переводить» скрыт или реквизита нет. */
   account: PagePay | null;
   waiting: PagePay['waiting'];
 }
@@ -113,7 +113,7 @@ export function payPlan(page: Page, purpose: PayClaimPurpose, month: string | nu
   }
   if (month) {
     const p = page.reports?.months?.find((m) => m.month === month);
-    const types = new Map((page.reports?.types ?? []).map((x) => [x.code, x.short]));
+    const types = new Map((page.reports?.types ?? []).map((x) => [x.code, x.name]));
     return {
       purpose,
       sum: p && p.left > 0 ? p.left : 0,

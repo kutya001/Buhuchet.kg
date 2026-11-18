@@ -136,7 +136,7 @@ export function useReportsSection(
         <div className={ROW1}>
           {withType && type ? (
             <>
-              <b title={type.name}>{type.short}</b>
+              <b>{type.name}</b>
               <span className="text-faint">·</span>
             </>
           ) : null}
@@ -337,7 +337,7 @@ export function useReportsSection(
               head={
                 <>
                   <TileTitle open={o}>
-                    <b title={type?.name}>{type?.short ?? tile.type}</b>
+                    <b>{type?.name ?? tile.type}</b>
                     {type ? (
                       <span className="text-[11.5px] text-faint">
                         {t(PER_KEY[type.periodicity])}

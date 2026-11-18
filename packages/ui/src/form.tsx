@@ -139,7 +139,7 @@ export function Field(props: FieldProps) {
       className={`flex min-w-0 flex-col gap-[5px]${full ? ' col-span-full' : ''}${need ? ` ${NEED_CLASS}` : ''}`}
     >
       {tip ? (
-        <div className="flex items-center gap-1">
+        <div data-field-cap="" className="flex items-center gap-1">
           {caption}
           {tip}
         </div>

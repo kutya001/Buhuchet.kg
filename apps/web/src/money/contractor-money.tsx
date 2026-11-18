@@ -29,6 +29,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { contractorFeesQuery } from '../fees/fees-data';
 import { TransferDialog, WhyButton, WriteOffDialog } from '../finance/finance-dialogs';
 import { useFinanceRefresh } from '../finance/finance-data';
 import { OperationWindowDialog } from '../finance/operation-window';
@@ -466,8 +467,10 @@ function MoneyActions({
 
 /**
  * «Баланс по контрагенту» внизу вкладки «Деньги» (прототип v137; раньше — на «Основном»): получено,
- * оплачено в бюджет (из них контрагент оплатил сам), списано в бонус, остаток на счёте. Виден с правом
- * «Учёт денег» и только по контрагенту в области «Финансовые операции».
+ * оплачено в бюджет (из них контрагент оплатил сам), списано в бонус, остаток на счёте и «Долг за
+ * обслуживание» — при «Плате за обслуживание» и праве «Видеть плату» (долг отдаёт сервер вкладки
+ * «Обслуживание»; не отдал — строки нет). Виден с правом «Учёт денег» и только по контрагенту в области
+ * «Финансовые операции».
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-15 — в прототипе блок виден с правом «Учёт денег» по любому контрагенту.
 export function ContractorBalanceBox({ contractorId }: { contractorId: string }) {
@@ -477,6 +480,11 @@ export function ContractorBalanceBox({ contractorId }: { contractorId: string })
   const m = useQuery({
     ...contractorMoneyQuery(contractorId, null),
     enabled: on,
+    retry: false,
+  }).data;
+  const fees = useQuery({
+    ...contractorFeesQuery(contractorId),
+    enabled: on && access.feature('fee') && access.can('fee'),
     retry: false,
   }).data;
   if (!on || !m) return null;
@@ -501,6 +509,22 @@ export function ContractorBalanceBox({ contractorId }: { contractorId: string })
       label: t('money.cp.available'),
       value: <b>{formatSomWithUnit(b.available)}</b>,
     },
+    ...(fees
+      ? [
+          {
+            id: 'feeDebt',
+            label: t('money.cp.fee_debt'),
+            value: (
+              <span
+                data-money-fee-debt=""
+                className={fees.debt > 0 ? 'font-bold text-danger-label' : undefined}
+              >
+                {formatSomWithUnit(fees.debt)}
+              </span>
+            ),
+          },
+        ]
+      : []),
   ];
   return (
     <div data-money-balance="">

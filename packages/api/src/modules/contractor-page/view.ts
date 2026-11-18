@@ -179,7 +179,8 @@ export async function contractorPageBody(
         const r = byId.get(id)!;
         return {
           id,
-          type: r.typeShort,
+          // Полное название вида (прототип v135 `T[r.t].name`).
+          type: typeOf.get(r.typeCode)?.name ?? r.typeShort,
           period: periodLabel({ period: r.period, start: r.periodStart, event: r.eventDate }, t),
           left: (r.sum ?? 0) - r.paid,
           payDue: r.payDue,
@@ -375,7 +376,7 @@ export async function contractorPageBody(
             .map((p) => ({
               ...person(p),
               responsible: p.id === facts.responsibleEmployeeId,
-              types: people.types.filter((x) => x.employeeId === p.id).map((x) => x.short),
+              types: people.types.filter((x) => x.employeeId === p.id).map((x) => x.name),
             })),
           head: facts.head,
           contact: facts.contact,
@@ -398,7 +399,7 @@ type PageRow = {
     periodStart: IsoDate;
     eventDate: IsoDate | null;
   };
-  type?: { short: string } | undefined;
+  type?: { name: string } | undefined;
   got: number;
   recv: number;
   month: string;
@@ -440,7 +441,7 @@ function monthsPay(
           const x = byId.get(row.id)!;
           return {
             ...row,
-            type: x.type?.short ?? x.r.typeCode,
+            type: x.type?.name ?? x.r.typeCode,
             period: periodLabel(
               { period: x.r.period, start: x.r.periodStart, event: x.r.eventDate },
               t,

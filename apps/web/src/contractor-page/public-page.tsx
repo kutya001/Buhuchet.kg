@@ -1,12 +1,7 @@
 'use client';
 
-import { bishkekTime, orgLogoLetters, PAGE_CODE_LENGTH } from '@buhuchet/domain';
-import {
-  PublicPageCodeInput,
-  type CpCodeHelp,
-  type PageGateOrg,
-  type PublicPage,
-} from '@buhuchet/shared';
+import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
+import { PublicPageCodeInput, type CpCodeHelp, type PublicPage } from '@buhuchet/shared';
 import { buttonClass, Icon, inputClass, useMounted } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
@@ -46,14 +41,11 @@ export function PublicPageScreen({
   let main: ReactNode;
   switch (state.state) {
     case 'unavailable':
-      main = (
-        <Gate org={null} title={t('pub.unavailable.title')} text={t('pub.unavailable.text')} />
-      );
+      main = <Gate title={t('pub.unavailable.title')} text={t('pub.unavailable.text')} />;
       break;
     case 'locked':
       main = (
         <Gate
-          org={state.org}
           title={t('pub.locked.title')}
           text={t('pub.locked.text', { time: timeOf(state.lockedUntil) })}
         >
@@ -62,10 +54,10 @@ export function PublicPageScreen({
       );
       break;
     case 'closed':
-      main = <Gate org={state.org} title={t('pub.closed.title')} text={t('pub.closed.text')} />;
+      main = <Gate title={t('pub.closed.title')} text={t('pub.closed.text')} />;
       break;
     case 'code':
-      main = <CodeGate slug={slug} inn={inn} org={state.org} help={state.help} />;
+      main = <CodeGate slug={slug} inn={inn} help={state.help} />;
       break;
     case 'open':
       main = (
@@ -100,54 +92,24 @@ const GATE =
   'mt-[8vh] flex w-[min(420px,100%)] flex-col gap-3 rounded-2xl border border-line bg-raised px-6 py-[26px] shadow-pop max-md:mt-[4vh] max-md:px-[18px] max-md:py-[22px]';
 
 /**
- * Чья страница (прототип v135 `pubBrand`): логотип и название бухгалтерской компании — клиент видит, что
- * открыл страницу своего бухгалтера; «Buhuchet.kg» — только когда страницы по адресу нет.
+ * Знак платформы на экранах до кода. В прототипе v135 (`pubBrand`) здесь логотип и название бухгалтерской
+ * компании; в продукте организация видна только после кода — ТЗ «по чужому ИНН без его кода не видно
+ * ничего» строже.
  * ОТКЛОНЕНИЕ: docs/deviations.md#К-21
  */
-function PageBrand({ org }: { org: PageGateOrg | null }) {
-  if (!org) {
-    return (
-      <div className="flex items-center gap-2 text-[15px] text-accent">
-        <Icon name="book" />
-        <b>Buhuchet.kg</b>
-      </div>
-    );
-  }
+function PageBrand() {
   return (
-    <div data-pub-brand="" className="flex min-w-0 items-center gap-2.5 text-[15px] text-ink">
-      {org.logo ? (
-        <img
-          src={org.logo.url}
-          alt=""
-          className="h-9 w-9 flex-none rounded-[10px] border border-line object-contain"
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-accent text-[13px] font-bold text-on-accent"
-        >
-          {orgLogoLetters(org.name)}
-        </span>
-      )}
-      <b className="overflow-hidden text-ellipsis whitespace-nowrap">{org.name}</b>
+    <div className="flex items-center gap-2 text-[15px] text-accent">
+      <Icon name="book" />
+      <b>Buhuchet.kg</b>
     </div>
   );
 }
 
-function Gate({
-  org,
-  title,
-  text,
-  children,
-}: {
-  org: PageGateOrg | null;
-  title: string;
-  text: string;
-  children?: ReactNode;
-}) {
+function Gate({ title, text, children }: { title: string; text: string; children?: ReactNode }) {
   return (
     <div className={GATE} role="status">
-      <PageBrand org={org} />
+      <PageBrand />
       <h1 className="m-0 text-[20px] font-[720]">{title}</h1>
       <p className="m-0 text-muted">{text}</p>
       {children}
@@ -193,17 +155,7 @@ function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
  * за час с одного адреса — час (docs/deviations.md п. Е-2); 5 неверных за сутки — страница закрыта до
  * смены кода (п. О-21).
  */
-function CodeGate({
-  slug,
-  inn,
-  org,
-  help,
-}: {
-  slug: string;
-  inn: string;
-  org: PageGateOrg | null;
-  help: CpCodeHelp;
-}) {
+function CodeGate({ slug, inn, help }: { slug: string; inn: string; help: CpCodeHelp }) {
   const t = useT();
   const errorText = useErrorText();
   const router = useRouter();
@@ -218,7 +170,6 @@ function CodeGate({
   if (ipLockedUntil) {
     return (
       <Gate
-        org={org}
         title={t('pub.locked.title')}
         text={t('pub.ip_locked.text', { time: timeOf(ipLockedUntil) })}
       >
@@ -259,7 +210,7 @@ function CodeGate({
 
   return (
     <form className={GATE} onSubmit={submit} noValidate autoComplete="off">
-      <PageBrand org={org} />
+      <PageBrand />
       <h1 className="m-0 text-[20px] font-[720]">{t('pub.code.title')}</h1>
       <p className="m-0 text-muted">{t('pub.code.text')}</p>
       {/* Подписи над полем нет: что вводить — строкой выше; имя поля — `aria-label` (прототип v135). */}

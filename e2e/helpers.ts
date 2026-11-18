@@ -408,7 +408,9 @@ export async function stillElement(locator: Locator, ms = 120) {
 /**
  * Свёрнутый блок «Основного» карточки контрагента (прототип v137): «Договор и обслуживание» (`contract`),
  * «Настройки оплаты» (`pay`), «Регистрационные данные» (`reg`), «Ставки, сроки и ответственные» (`asg`),
- * «Страница клиента» (`page`). Раскрывает, если свёрнут, и отдаёт сам блок.
+ * «Страница клиента» (`page`). Раскрывает, если свёрнут, и отдаёт сам блок. Раскрытое въезжает со сдвигом
+ * (0,25 с): нажатие по кнопке внутри сразу после раскрытия попало бы в середину анимации и потерялось
+ * (docs/typical-mistakes.md № 34), поэтому помощник ждёт, пока содержимое встанет на место.
  */
 export async function openCardFold(
   card: Locator,
@@ -418,18 +420,22 @@ export async function openCardFold(
   await expect(fold).toBeVisible();
   if ((await fold.getAttribute('open')) === null) await fold.locator('> summary').click();
   await expect(fold).toHaveAttribute('open', '');
+  await stillElement(fold.locator('> div'));
   return fold;
 }
 
 /**
  * Полная шкала статусов записи со строки состояния (прототип v134 `stLine`): в карточке контрагента под
- * ней — периоды обслуживания и «История статусов». Раскрывает, если свёрнута.
+ * ней — периоды обслуживания и «История статусов». Раскрывает, если свёрнута, и ждёт конца анимации
+ * раскрытия (docs/typical-mistakes.md № 34).
  */
 export async function openStatusLine(card: Locator): Promise<Locator> {
   const toggle = card.locator('[data-status-line-scale]');
   if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
-  return card.locator('[data-status-line-full]');
+  const full = card.locator('[data-status-line-full]');
+  await stillElement(full);
+  return full;
 }
 
 /**

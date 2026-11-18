@@ -4,7 +4,6 @@ import {
   contractorPageHeader,
   contractorTelegramCounts,
   contractorPageOrg,
-  contractorPageTarget,
   cpCodeHelp,
   cpHelpForPage,
   contractorPageState,
@@ -45,7 +44,6 @@ import {
   PublicPageFileParams,
   PublicPageFileQuery,
   PublicPageParams,
-  type PageGateOrg,
   type PublicPage as PublicPageBody,
 } from '@buhuchet/shared';
 import type { Context } from 'hono';
@@ -123,25 +121,6 @@ function privateHeaders(c: Context<AppEnv>) {
 
 const timeOf = (d: Date) => d.toISOString();
 
-/**
- * Чья страница — для экранов кода (прототип v135 `pubBrand`): название и логотип организации. Только у
- * страницы, которая есть (включена, контрагент не в архиве, организация не заблокирована) — у
- * «Страницы недоступна» организации нет. О контрагенте до кода страница не сообщает ничего.
- */
-// ОТКЛОНЕНИЕ: docs/deviations.md#К-21
-async function pageGateOrg(deps: ApiDeps, slug: string, inn: string): Promise<PageGateOrg | null> {
-  const target = await contractorPageTarget(deps.db, slug, inn);
-  if (!target) return null;
-  const header = await withOrgContext(deps.db, { orgId: target.orgId, userId: null }, (tx) =>
-    contractorPageHeader(tx, target.contractorId),
-  );
-  if (!header) return null;
-  return {
-    name: header.orgName,
-    logo: await logoLink(deps, target.orgId, header.orgLogoKey),
-  };
-}
-
 export const publicPageRoute = createRoute({
   method: 'get',
   path: '/page/{slug}/{inn}',
@@ -170,20 +149,18 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
     // Экран кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120
     // `cphCodeWhat`): остальные подсказки страница получает после кода.
-    if (state.state === 'unavailable')
-      return c.json({ state: 'unavailable' } as PublicPageBody, 200);
-    if (state.state !== 'open') {
-      // Экраны кода — с названием и логотипом организации (прототип v135 `pubBrand`).
-      const org = await pageGateOrg(deps, slug, inn);
-      if (state.state === 'code') {
-        return c.json(
-          { state: 'code', org, help: await cpCodeHelp(deps.db) } as PublicPageBody,
-          200,
-        );
-      }
-      if (state.state === 'closed') return c.json({ state: 'closed', org } as PublicPageBody, 200);
+    // До кода страница не называет и организацию: ТЗ «по чужому ИНН без его кода не видно ничего» строже
+    // прототипа v135 (`pubBrand` — логотип и название организации на экранах кода).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#К-21
+    if (state.state === 'code') {
+      return c.json({ state: 'code', help: await cpCodeHelp(deps.db) } as PublicPageBody, 200);
+    }
+    if (state.state === 'unavailable' || state.state === 'closed') {
+      return c.json({ state: state.state } as PublicPageBody, 200);
+    }
+    if (state.state === 'locked') {
       return c.json(
-        { state: 'locked', org, lockedUntil: timeOf(state.lockedUntil) } as PublicPageBody,
+        { state: 'locked', lockedUntil: timeOf(state.lockedUntil) } as PublicPageBody,
         200,
       );
     }

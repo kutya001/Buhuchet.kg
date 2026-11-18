@@ -26,7 +26,7 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'cppage.last_none': { ru: 'контрагент ещё не открывал', section: S },
   'cppage.sections': { ru: 'Разделы страницы', section: S },
   'cppage.sections_hint': {
-    ru: '«Ваш бухгалтер» видно всегда. Разделы для всех контрагентов — в учётной политике',
+    ru: '«Связь» с бухгалтером видна всегда. Разделы для всех контрагентов — в учётной политике',
     section: S,
   },
   'cppage.off_hint': {
@@ -335,7 +335,7 @@ export const CONTRACTOR_PAGE_TEXTS = {
   },
   'cppage.tg.rq.emp_hint': { ru: 'Реквизиты добавляет {employee} в «Мой профиль».', section: S },
   'cppage.tg.rq.hidden_staff': {
-    ru: 'Раздел «Как оплатить» скрыт на странице контрагента: без реквизитов для перевода «К оплате» не уходит.',
+    ru: 'Раздел «Куда переводить» скрыт на странице контрагента: без реквизитов для перевода «К оплате» не уходит.',
     section: S,
   },
   // В прототипе команды «Напоминать» нет (шаблон `tgCpNoDebtOk` её только обещает) — docs/deviations.md п. К-5.
@@ -493,8 +493,8 @@ export const CONTRACTOR_PAGE_TEXTS = {
   'pub.rep.sum': { ru: 'сдано {n} из {m}', section: S },
   'pub.rep.none_mark': { ru: 'Отчётов «{mark}» в {y} году нет', section: S },
   'pub.rep.none': { ru: 'В {y} году отчётов нет', section: S },
-  'pub.rep.per.m': { ru: 'ежемесячно', section: S },
-  'pub.rep.per.q': { ru: 'ежеквартально', section: S },
+  'pub.rep.per.m': { ru: 'раз в месяц', section: S },
+  'pub.rep.per.q': { ru: 'раз в квартал', section: S },
   'pub.rep.per.h': { ru: 'раз в полгода', section: S },
   'pub.rep.per.y': { ru: 'раз в год', section: S },
   'pub.rep.per.oneoff': { ru: 'разовый', section: S },

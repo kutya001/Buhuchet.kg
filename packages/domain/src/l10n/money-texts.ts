@@ -443,6 +443,7 @@ export const TAX_MONEY_TEXTS = {
   'money.cp.self_paid': { ru: 'из них контрагент оплатил сам: {amount}', section: S },
   'money.cp.bonus': { ru: 'Списано в бонус', section: S },
   'money.cp.available': { ru: 'Остаток на счёте', section: S },
+  'money.cp.fee_debt': { ru: 'Долг за обслуживание', section: S },
 
   // История контрагента
   'cp.hist.receipt': { ru: 'Поступление {amount}', section: S },

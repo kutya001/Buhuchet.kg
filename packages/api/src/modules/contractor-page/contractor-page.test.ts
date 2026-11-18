@@ -23,14 +23,12 @@ import {
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
 /**
- * До кода страница называет только бухгалтерскую компанию — её название и логотип (прототип v135
- * `pubBrand`, docs/deviations.md п. К-21); о контрагенте — ничего.
+ * Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). Ни о
+ * контрагенте, ни об организации до кода в ответе нет (docs/deviations.md п. К-21): ответы сверяются
+ * целиком (`toEqual`).
  */
-const GATE_ORG = { name: 'Организация А', logo: null };
-/** Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). */
 const CODE = {
   state: 'code',
-  org: GATE_ORG,
   help: { what: expect.any(String), whatX: expect.any(String) },
 };
 
@@ -304,7 +302,6 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     // До кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120; текст — v135).
     expect(PublicPage.parse(await first.json())).toEqual({
       state: 'code',
-      org: GATE_ORG,
       help: {
         what: 'Что это за страница?',
         whatX:
@@ -412,8 +409,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const right = await enter(path, code, '198.51.100.2');
     expect(right.status).toBe(429);
     expect((await failure(right)).code).toBe('page_closed');
-    expect(await visited(path, { cookie })).toEqual({ state: 'closed', org: GATE_ORG });
-    expect(await visited(path)).toEqual({ state: 'closed', org: GATE_ORG });
+    expect(await visited(path, { cookie })).toEqual({ state: 'closed' });
+    expect(await visited(path)).toEqual({ state: 'closed' });
     // Запись в истории и сообщение ответственному — по одному разу.
     expect((await history(cpAcc.id)).filter((h) => h.action === 'page_close')).toHaveLength(1);
     expect(tg.sent).toEqual([closedMessage(7101, 'ОсОО «Ала-Тоо Трейд»')]);
@@ -436,7 +433,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const on = await block(await act(owner, cp.id, 'enable'));
     tg.sent.length = 0;
     for (let i = 1; i <= 5; i++) await enter(`org-a/${cp.inn}`, wrongOf(on.code!), `192.0.2.${i}`);
-    expect(await visited(`org-a/${cp.inn}`)).toEqual({ state: 'closed', org: GATE_ORG });
+    expect(await visited(`org-a/${cp.inn}`)).toEqual({ state: 'closed' });
     expect(tg.sent).toEqual([closedMessage(7102, 'ИП Абдыкадыров')]);
   });
 
@@ -461,7 +458,6 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect((await enter(path, code, '198.51.100.2')).status).toBe(429);
     expect(await visited(path)).toEqual({
       state: 'locked',
-      org: GATE_ORG,
       lockedUntil: expect.any(String),
     });
     const locks = (await history(cpAcc.id)).filter((h) => h.action === 'page_lock');

@@ -100,6 +100,7 @@ import { contractorProjectsQuery } from '../projects/projects-data';
 import { contractorTasksQuery } from '../tasks/tasks-data';
 import { AssignmentDialog } from './assignment-dialog';
 import { useCardEdits, type CardEdits } from './card-edits';
+import { hotPlates, type HotTab } from './contractor-card-model';
 import { contractText, PhoneLinks } from './contractor-columns';
 import { assignmentsQuery, contractorHistoryQuery, contractorQuery } from './contractor-data';
 import { ContractorFilesTab, contractorFilesQuery, useFilesTabOn } from './contractor-files';
@@ -653,8 +654,6 @@ function ServiceMini({ t, c }: { t: Translate; c: Contractor }) {
 /** Целые сомы на маленькой карточке (прототип `fmtM(…, false)`). */
 const wholeSom = (tyiyn: number) => formatSom(Math.round(tyiyn / 100) * 100, 'auto');
 
-type HotTab = 'reports' | 'money' | 'fee';
-
 /**
  * Что горит — маленькими карточками (решение заказчика 18.11.2026; прототип v142 `.cp-hot`): «Просрочено
  * отчётов», «Осталось оплатить», «На счёте», «Долг за обслуживание». Карточка есть, только когда есть её
@@ -677,52 +676,38 @@ function HotPlates({
     retry: false,
   }).data;
   const fees = useQuery({ ...contractorFeesQuery(c.id), enabled: tabs.has('fee') }).data;
-  const owe = money?.owe ?? 0;
-  const avail = money?.balance.available ?? 0;
-  const debt = fees?.debt ?? 0;
   const som = t('report.plate.som');
-  const hot: (Omit<PlateProps, 'id'> & { tab: HotTab })[] = [];
-  if (c.overdue && tabs.has('reports')) {
-    hot.push({
-      tab: 'reports',
-      label: t('cp.card.hot.overdue'),
-      value: String(c.overdue),
-      color: 'red',
-      icon: 'alert',
-      danger: true,
-    });
-  }
-  if (owe > 0) {
-    hot.push({
-      tab: 'money',
-      label: t('cp.card.hot.owe'),
-      value: wholeSom(owe),
-      unit: som,
-      color: owe > avail ? 'orange' : 'yellow',
-      icon: 'file',
-    });
-  }
-  if (avail > 0) {
-    hot.push({
-      tab: 'money',
-      label: t('cp.card.hot.avail'),
-      value: wholeSom(avail),
-      unit: som,
-      color: 'blue',
-      icon: 'wallet',
-    });
-  }
-  if (debt > 0) {
-    hot.push({
-      tab: 'fee',
-      label: t('cp.card.hot.fee'),
-      value: wholeSom(debt),
-      unit: som,
-      color: 'red',
-      icon: 'coins',
-      danger: true,
-    });
-  }
+  const hot = hotPlates({
+    overdue: c.overdue,
+    owe: money?.owe ?? null,
+    avail: money?.balance.available ?? null,
+    feeDebt: fees?.debt ?? null,
+    tabs,
+  }).map((p): Omit<PlateProps, 'id'> & { tab: HotTab } => {
+    if (p.kind === 'overdue') {
+      return {
+        tab: p.tab,
+        label: t('cp.card.hot.overdue'),
+        value: String(p.value),
+        color: 'red',
+        icon: 'alert',
+        danger: true,
+      };
+    }
+    const sum = { tab: p.tab, value: wholeSom(p.value), unit: som };
+    if (p.kind === 'owe') {
+      return {
+        ...sum,
+        label: t('cp.card.hot.owe'),
+        color: p.short ? 'orange' : 'yellow',
+        icon: 'file',
+      };
+    }
+    if (p.kind === 'avail') {
+      return { ...sum, label: t('cp.card.hot.avail'), color: 'blue', icon: 'wallet' };
+    }
+    return { ...sum, label: t('cp.card.hot.fee'), color: 'red', icon: 'coins', danger: true };
+  });
   if (!hot.length) return null;
   return (
     <div

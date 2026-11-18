@@ -135,7 +135,12 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
     filesTab,
     setFilesTab,
   );
-  const upload = usePageUpload(address, () => setFilesTab('you'));
+  // После отправки — вкладка «От вас», а на телефоне раздел «Файлы» раскрыт: статус файла сразу виден
+  // (прототип v135 `PUB.ft='you'; PUB.unf.add('files')`).
+  const upload = usePageUpload(address, () => {
+    setFilesTab('you');
+    setUnfolded((s) => new Set([...s, 'files']));
+  });
   const telegram = usePageTelegramConnect(page.telegram, address);
   const root = useRef<HTMLDivElement>(null);
 
@@ -670,7 +675,7 @@ function OpenPageBody({ page, address, fileHref }: OpenPageProps) {
         className="flex w-[min(1120px,100%)] flex-col gap-3.5 max-md:gap-2.5"
       >
         <header id="pub-top" className="flex items-center gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div data-pub-brand="" className="flex min-w-0 items-center gap-2.5">
             {org.logo ? (
               <img
                 src={org.logo.url}

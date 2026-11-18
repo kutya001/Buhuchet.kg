@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Box, Field, fieldControl, FormGrid, inputClass, KeyValues, Note, Pill } from './form';
 import {
   columnWidth,
+  FIELD_LABEL_SELECTOR,
   isShortField,
   packFormCells,
   packKvItems,
@@ -147,6 +148,28 @@ describe('поля и блоки форм (прототип controls.css, cards.
     expect(html).toMatch(
       /<div id="pf-p1-err" class="[^"]*text-danger"><svg[^>]*>.*<\/svg><span>Пароль короче 8 символов<\/span>/,
     );
+  });
+
+  it('поле с «ⓘ» у подписи: подпись — в строке `data-field-cap`, по ней её находят компоновка и «Показать как»', () => {
+    const plain = renderToStaticMarkup(
+      <Field id="pf-a" label="Режим">
+        {(control) => <input {...control} />}
+      </Field>,
+    );
+    expect(plain).toMatch(/^<div data-field=""[^>]*><label for="pf-a"/);
+    const withTip = renderToStaticMarkup(
+      <Field id="pf-b" label="Дополнительный режим" tip={<button type="button">i</button>}>
+        {(control) => <input {...control} />}
+      </Field>,
+    );
+    // «ⓘ» — рядом с подписью, но вне `<label>`: нажатие на него не уводит фокус в поле.
+    expect(withTip).toMatch(
+      /^<div data-field=""[^>]*><div data-field-cap=""[^>]*><label for="pf-b"[^>]*>Дополнительный режим<\/label><button type="button">i<\/button><\/div>/,
+    );
+    expect(FIELD_LABEL_SELECTOR.split(', ')).toEqual([
+      ':scope > label',
+      ':scope > [data-field-cap] > label',
+    ]);
   });
 
   it('поле без подсказки и ошибки — без aria-describedby; на всю ширину помечено для компоновки', () => {
