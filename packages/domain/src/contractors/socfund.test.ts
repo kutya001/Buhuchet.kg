@@ -180,6 +180,6 @@ describe('Названия, ставки и предельная база тар
 describe('Подсказка о пене — как в прототипе', () => {
   it.each(fixture.penalties.map((x, i) => ({ ...x, i })))('$i', ({ report, expected }) => {
     const p = fixture.dict.penalties.find((x) => x.type === report.reportTypeCode) ?? null;
-    expect(penaltyText(report, p, fixture.today, t)).toBe(expected);
+    expect(penaltyText(report, p, fixture.today, t)).toEqual(expected);
   });
 });

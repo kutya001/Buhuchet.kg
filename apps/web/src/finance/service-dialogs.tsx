@@ -332,7 +332,7 @@ function ServiceModal({
       size="mid"
       dirty={dirty}
       title={t(edit ? 'fin.svc.title_edit' : 'fin.svc.title')}
-      sub={preset ? preset.name : t('fin.svc.sub_new')}
+      sub={preset?.name}
       footer={
         <Footer
           t={t}
@@ -769,7 +769,6 @@ export function ServiceDeleteDialog({
       }
     >
       <div className="flex flex-col gap-3" data-svc-delete={rec.id}>
-        <p className="m-0">{t('fin.del.ask', { amount })}</p>
         <Note icon="history">
           {consequence ? `${consequence} ` : ''}
           {t('fin.del.keep')}

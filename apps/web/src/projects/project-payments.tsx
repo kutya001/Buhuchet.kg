@@ -27,7 +27,6 @@ import {
   iconButtonClass,
   inputClass,
   KeyValues,
-  linkButtonClass,
   MiniTable,
   miniWide,
   Modal,
@@ -35,7 +34,6 @@ import {
   Pill,
   RecordChangedNotice,
   Tag,
-  Timeline,
   TOUCH_AREA,
   useToast,
   type ActionEntry,
@@ -51,6 +49,8 @@ import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
 import { RecordFiles } from '../files/record-files';
 import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { WhyButton } from '../finance/finance-dialogs';
+import { OpHistoryFold, OpMoreButton, OpWindowSub } from '../finance/op-window-parts';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
@@ -68,9 +68,9 @@ import {
 
 /*
  * Оплаты по проекту — транши (задача 2.26, часть 2; ТЗ «Оплата по проекту траншами», «Окно оплаты»;
- * прототип modules/projects.js — блок «Оплаты (транши)» в `openProject`, `projPay`; modules/services.js
+ * прототип modules/projects.js — вкладка «Оплаты» в `openProject`, `projPay`; modules/services.js
  * — `tranchDlg`; modules/fin-op.js — `opWin`, `opEditDlg`, `opDelDlg`, `opActs` с `src: 'pt'`). Блок
- * карточки: транши по дате, «изменён», кто записал, файлы, сумма, «Получено»; строка открывает окно
+ * карточки: транши по дате, «изменена», кто записал, файлы, сумма, «Получено»; строка открывает окно
  * транша, «⋯» — его действия. Окно «Оплата по проекту», окно транша, «Изменить» и «Удалить» с причиной.
  * Файлы окно загружает после записи; сервер проверяет права, видимость проекта и суммы ещё раз.
  */
@@ -174,21 +174,11 @@ function FilesInput({ control, onPick }: { control: object; onPick: (files: File
   );
 }
 
-/** Кто и когда: имя, под ним момент мелким серым (прототип `auditKv`). */
-function Audit({ who, at }: { who: string | null; at: string }) {
-  return (
-    <>
-      {who ?? '—'}
-      <span className="block text-[11.5px] text-faint">{formatMomentRu(new Date(at))}</span>
-    </>
-  );
-}
-
-/* ───────────── Блок карточки «Оплаты (транши)» ───────────── */
+/* ───────────── Блок карточки «Оплаты» ───────────── */
 
 /**
- * «Оплаты (транши) · N» (прототип `openProject`): кнопка «Записать оплату» — с правом, у неотменённого
- * проекта, пока не получена вся стоимость; строки по дате; «Получено» внизу; подсказка про журнал.
+ * «Оплаты · N» (прототип v136 `openProject`, вкладка «Оплаты»): кнопка «Записать оплату» — с правом, пока
+ * проект идёт и не получена вся стоимость; строки по дате; «Получено» внизу; про журнал — под «?».
  */
 export function PaymentsBox({
   t,
@@ -203,6 +193,8 @@ export function PaymentsBox({
   const pays = p.payments ?? [];
   const money = p.money!;
   const full = !!money.plan && money.plan - money.paid <= 0;
+  // Прототип v136: «Записать оплату» в блоке — пока проект идёт («Планируется», «В работе»).
+  const live = p.status === 'planned' || p.status === 'in_progress';
   const title = t('proj.pays.title', { n: pays.length });
 
   // Меню «⋯» транша (прототип opMenuBtn → opActs с `pt`): «Открыть», «Изменить», «Открыть источник»
@@ -243,13 +235,20 @@ export function PaymentsBox({
 
   return (
     <Box
-      title={title}
+      title={
+        <span className="inline-flex items-center gap-1.5">
+          {title}
+          <span className="font-normal tracking-normal normal-case">
+            <InfoTip label={t('proj.pays.tip_label')} text={t('proj.pays.hint')} />
+          </span>
+        </span>
+      }
       actions={
-        p.can.pay && !full ? (
+        p.can.pay && live && !full ? (
           <button
             type="button"
             data-pj-pay=""
-            className={buttonClass('cta', 'sm')}
+            className={buttonClass('default', 'sm')}
             onClick={() => onAction(payAction(p))}
           >
             <Icon name="wallet" size="sm" />
@@ -329,7 +328,6 @@ export function PaymentsBox({
           <span className="text-faint">{t('proj.pays.empty')}</span>
         )}
       </div>
-      <span className="block text-[12.5px] text-muted">{t('proj.pays.hint')}</span>
       {menu ? (
         <ActionMenu
           items={menu.items}
@@ -604,9 +602,10 @@ function historyItems(t: Translate, rows: ProjectPaymentWindow['history']): Time
 }
 
 /**
- * Окно транша (прототип opWin с `pt`): тип, контрагент, дата, сумма, «За что» — проект и комментарий,
- * «Проект: получено X из Y», счёт организации, кто внёс и изменил, отметки, файлы и история;
- * «Удалить», «Изменить» с замком; «Открыть источник» — карточка проекта.
+ * Окно оплаты по проекту (прототип v136 opWin с `pt`): тип, сумма, контрагент и дата — в шапке; ниже —
+ * «За что» (проект и комментарий), «Проект: получено X из Y», счёт организации, отметки, файлы и
+ * свёрнутая «История» (изменения, кто создал и изменил). Внизу — «Действия» («Открыть источник» —
+ * карточка проекта, «Удалить») и «Изменить» с замком.
  */
 export function ProjectPaymentWindowDialog({
   id,
@@ -623,6 +622,7 @@ export function ProjectPaymentWindowDialog({
   const query = useQuery(projectPaymentQuery(id));
   const [del, setDel] = useState<DialogSlot<ProjectPaymentWindow> | null>(null);
   const [edit, setEdit] = useState<DialogSlot<ProjectPaymentWindow> | null>(null);
+  const [more, setMore] = useState<HTMLElement | null>(null);
   const p = query.data;
   const failed =
     query.isError && !p
@@ -632,42 +632,16 @@ export function ProjectPaymentWindowDialog({
       : null;
   const lock = p && !p.deleted ? (p.locks.edit ?? p.locks.del) : null;
   const kind = t('fin.pt.kind');
+  const openContractor = () => {
+    if (!p) return;
+    onClose();
+    openContractorCard({ id: p.contractor.id }, 'money');
+  };
 
   const items: KeyValueItem[] = [];
   if (p) {
     const what = p.note ? `${p.project.name} · ${p.note}` : p.project.name;
     items.push(
-      {
-        id: 'kind',
-        label: t('fin.op.kind'),
-        value: (
-          <Pill tone="info" size="sm">
-            {kind}
-          </Pill>
-        ),
-      },
-      {
-        id: 'cp',
-        label: t('fin.op.contractor'),
-        value: (
-          <button
-            type="button"
-            className={linkButtonClass()}
-            onClick={() => {
-              onClose();
-              openContractorCard({ id: p.contractor.id }, 'money');
-            }}
-          >
-            {p.contractor.name}
-          </button>
-        ),
-      },
-      { id: 'date', label: t('fin.op.date'), value: formatDateRu(p.date) },
-      {
-        id: 'amount',
-        label: t('fin.op.amount'),
-        value: <b className="tabular-nums">{formatSomWithUnit(p.amount)}</b>,
-      },
       { id: 'what', label: t('fin.op.what'), value: what },
       {
         id: 'proj',
@@ -697,59 +671,63 @@ export function ProjectPaymentWindowDialog({
     // «Примечание» — комментарий транша (прототип opWin: `v.note !== v.what`).
     if (p.note && p.note !== what)
       items.push({ id: 'note', label: t('fin.op.note'), value: p.note });
-    items.push(
-      {
-        id: 'created',
-        label: t('fin.op.created'),
-        value: <Audit who={p.created.name} at={p.created.at} />,
+  }
+
+  // «Действия» (прототип `opActs(d, false)` с `pt`): «Изменить», «Открыть источник» — карточка
+  // проекта, «Удалить»; у удалённой оплаты — только источник.
+  const actions: ActionEntry[] = [];
+  if (p) {
+    const source: ActionEntry = {
+      id: 'source',
+      label: t('fin.op.source'),
+      icon: 'link',
+      sub: t('fin.pt.source', { name: p.project.name }),
+      run: () => {
+        onClose();
+        openProjectCard(p.project.id);
       },
-      {
-        id: 'updated',
-        label: t('fin.op.updated'),
-        value: <Audit who={p.updated.name} at={p.updated.at} />,
-      },
-    );
+    };
+    if (p.deleted) actions.push(source);
+    else
+      actions.push(
+        {
+          id: 'edit',
+          label: t('fin.op.edit'),
+          icon: 'edit',
+          disabled: !!p.locks.edit,
+          reason: p.locks.edit?.text,
+          run: () => setEdit(openSlot(p)),
+        },
+        source,
+        { id: 's1', separator: true },
+        {
+          id: 'delete',
+          label: t('fin.del.ok'),
+          icon: 'trash',
+          danger: true,
+          disabled: !!p.locks.del,
+          reason: p.locks.del?.text,
+          run: () => setDel(openSlot(p)),
+        },
+      );
   }
 
   const footer = (
     <>
-      {p && !p.deleted ? (
-        <>
-          <WhyButton
-            icon="trash"
-            label={t('fin.op.delete')}
-            why={p.locks.del?.text ?? null}
-            data="delete"
-            onClick={() => setDel(openSlot(p))}
-          />
-          <WhyButton
-            icon="edit"
-            label={t('fin.op.edit')}
-            why={p.locks.edit?.text ?? null}
-            data="edit"
-            onClick={() => setEdit(openSlot(p))}
-          />
-        </>
+      {p ? (
+        <OpMoreButton t={t} open={more !== null} onClick={(el) => setMore(more ? null : el)} />
       ) : null}
       <div className="flex-1" />
-      {p ? (
-        <button
-          type="button"
-          className={buttonClass('default')}
-          data-fin-source=""
-          title={t('fin.pt.source', { name: p.project.name })}
-          onClick={() => {
-            onClose();
-            openProjectCard(p.project.id);
-          }}
-        >
-          <Icon name="link" size="sm" />
-          {t('fin.op.source')}
-        </button>
+      {p && !p.deleted ? (
+        <WhyButton
+          icon="edit"
+          label={t('fin.op.edit')}
+          why={p.locks.edit?.text ?? null}
+          data="edit"
+          cta
+          onClick={() => setEdit(openSlot(p))}
+        />
       ) : null}
-      <button type="button" className={buttonClass('cta')} onClick={onClose}>
-        {t('btn.done')}
-      </button>
     </>
   );
 
@@ -761,7 +739,11 @@ export function ProjectPaymentWindowDialog({
       size="mid"
       title={p ? t('fin.op.title', { kind, amount: formatSomWithUnit(p.amount) }) : ''}
       label={p ? undefined : t('fin.pt.open')}
-      sub={p ? `${p.contractor.name} · ${formatDateRu(p.date)}` : undefined}
+      sub={
+        p ? (
+          <OpWindowSub name={p.contractor.name} date={p.date} onContractor={openContractor} />
+        ) : undefined
+      }
       footer={footer}
     >
       <div className="flex flex-col gap-3.5" data-pt-window={id}>
@@ -802,15 +784,22 @@ export function ProjectPaymentWindowDialog({
           <RecordFiles source={{ kind: 'project_payment', id: p.id }} />
         ) : null}
         {p ? (
-          <Box title={t('fin.op.history')}>
-            {p.history.length ? (
-              <Timeline items={historyItems(t, p.history)} label={t('fin.op.history')} />
-            ) : (
-              <span className="text-faint">{t('fin.op.history_empty')}</span>
-            )}
-          </Box>
+          <OpHistoryFold
+            t={t}
+            items={historyItems(t, p.history)}
+            created={p.created}
+            updated={p.updated}
+          />
         ) : null}
       </div>
+      {more && p ? (
+        <ActionMenu
+          items={actions}
+          place={{ anchor: more }}
+          label={t('status.act.more')}
+          onClose={() => setMore(null)}
+        />
+      ) : null}
       {del ? (
         <ProjectPaymentDeleteDialog
           key={`del-${del.n}`}
@@ -1114,7 +1103,6 @@ export function ProjectPaymentDeleteDialog({
       }
     >
       <div className="flex flex-col gap-3" data-pt-delete={p.id}>
-        <p className="m-0">{t('fin.del.ask', { amount })}</p>
         <Note icon="history">
           {t('fin.del.cons.pt')} {t('fin.del.keep')}
         </Note>

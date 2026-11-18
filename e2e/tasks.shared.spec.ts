@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { platformAdmin } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, expandCard, signIn } from './helpers';
 
 // «Задачи» (задача 2.23, #79): выключенная в учётной политике «Задачи требуют подтверждения» и
 // «Категории задач» в Админке. Меняет общую запись демо-организации и создаёт администратора
@@ -44,7 +44,9 @@ test.describe('Этап 2: задачи — учётная политика', ()
       await page.goto('/app/tasks/mine');
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
       const form = page.getByRole('dialog', { name: 'Новая задача' });
-      await expect(form.getByRole('switch', { name: 'Требуется подтверждение' })).not.toBeChecked();
+      // «При выполнении» — под «Дополнительно» (прототип v136).
+      await form.locator('[data-task-more-fields] > summary').click();
+      await expect(form.getByRole('switch', { name: 'нужно подтверждение' })).not.toBeChecked();
       await form.getByLabel(/^Название/).fill(title);
       await form.getByRole('button', { name: 'Поставить задачу' }).click();
       await expect(form).toBeHidden();
@@ -55,10 +57,14 @@ test.describe('Этап 2: задачи — учётная политика', ()
       await expect(row).toHaveCount(1);
       await row.getByText(title, { exact: true }).click();
       const card = page.getByRole('dialog', { name: title });
-      await expect(card).toContainText(/Подтверждение\s*Не требуется/);
+      // Без подтверждения шкала задачи заканчивается на «Выполнена» (строки «Подтверждение» в карточке
+      // с v136 нет).
+      await expandCard(card);
+      await expect(card.locator('ol[data-status-scale]')).not.toContainText('Подтверждена');
       await card.locator('[data-task-button="done"]').click();
       const done = page.getByRole('dialog', { name: 'Задача выполнена' });
-      await expect(done).not.toContainText('подтвердит');
+      await expect(done).toContainText('Отметить задачу выполненной?');
+      await expect(done).not.toContainText('Уйдёт на подтверждение');
       await done.getByRole('button', { name: 'Выполнена' }).click();
       await expect(done).toBeHidden();
       await expect(page.getByRole('status').filter({ hasText: 'Задача выполнена' })).toBeVisible();

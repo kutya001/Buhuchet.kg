@@ -279,6 +279,7 @@ export function useTaskActions(): {
         title={t('task.cancel.title')}
         text={t('task.cancel.text', { title: askCancel?.title ?? '' })}
         ok={t('task.action.cancel')}
+        cancel={t('task.cancel.keep')}
         danger
         onConfirm={() => askCancel && void simple(askCancel, 'cancel')}
       />

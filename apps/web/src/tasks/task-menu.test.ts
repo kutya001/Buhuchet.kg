@@ -76,6 +76,9 @@ describe('taskMenuEntries', () => {
     const author = taskMenuEntries({ actor: actor(AUTHOR), t, run: run() })(pending);
     expect(labels(author)).toEqual(['Открыть', 'Подтвердить', 'На доработку', 'Изменить']);
     expect(items(author).every((x) => !x.disabled)).toBe(true);
+    // Прототип v136: «На доработку» возвращает работу — пункт красный.
+    expect(items(author).find((x) => x.id === 'rework')).toMatchObject({ danger: true });
+    expect(items(author).find((x) => x.id === 'confirm')).not.toHaveProperty('danger');
 
     const own = taskMenuEntries({ actor: actor(EXEC, { canConfirm: true }), t, run: run() })(
       pending,

@@ -22,6 +22,7 @@ import {
 } from '@buhuchet/ui';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import { ContractorSelect } from '../shell/contractor-select';
 import type { Translate } from '../l10n/translate';
@@ -208,7 +209,6 @@ export function DueChangeDialog({
             id={`${id}-reason`}
             label={t('report.due.reason')}
             required
-            hint={t('report.due.reason_hint')}
             error={errors.reasonCode}
           >
             {(control) => (
@@ -397,7 +397,7 @@ export function ManualReportDialog({
 
   const field = (
     key: ManualField | 'reason',
-    label: string,
+    label: ReactNode,
     input: (control: object) => ReactNode,
     extra: { required?: boolean; hint?: string; full?: boolean } = {},
   ) => (
@@ -493,7 +493,13 @@ export function ManualReportDialog({
             )
           : field(
               'month',
-              t('report.manual.month'),
+              <>
+                {t('report.manual.month')}{' '}
+                <InfoTip
+                  label={t('report.manual.month_tip')}
+                  text={t('report.manual.month_hint')}
+                />
+              </>,
               (control) => (
                 <input
                   {...control}
@@ -506,7 +512,7 @@ export function ManualReportDialog({
                   }}
                 />
               ),
-              { required: true, hint: t('report.manual.month_hint') },
+              { required: true },
             )}
         {field(
           'due',
@@ -526,9 +532,7 @@ export function ManualReportDialog({
           ),
           {
             required: true,
-            hint: oneOff
-              ? `${t('report.manual.due_hint')} ${t('report.manual.due_shift_hint')}`
-              : t('report.manual.due_shift_hint'),
+            hint: oneOff ? t('report.manual.due_hint') : undefined,
           },
         )}
         {shifted ? (

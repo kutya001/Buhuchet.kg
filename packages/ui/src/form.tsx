@@ -52,7 +52,8 @@ export interface FieldControl {
 export interface FieldProps {
   /** id поля ввода: подпись связана с ним; подсказка и ошибка — `<id>-hint`, `<id>-err`. */
   id: string;
-  label: string;
+  /** Подпись; рядом с текстом может стоять «?» с пояснением (прототип `tipI`). */
+  label: ReactNode;
   /** Обязательное поле: красная звёздочка у подписи. */
   required?: boolean;
   /** Подсказка под полем («Не короче 8 символов»); можно с «ⓘ» после текста. */

@@ -50,7 +50,7 @@ function DialogFooter({
   label: string;
   busy: boolean;
   disabled?: boolean;
-  tone?: 'ok' | 'cta';
+  tone?: 'ok' | 'cta' | 'danger';
   onOk: () => void;
 }) {
   return (
@@ -105,11 +105,11 @@ function useSend({ onClose, onDone }: Pick<TaskDialogProps, 'onClose' | 'onDone'
 const NEW_FILE = '';
 
 /**
- * «Задача выполнена» (прототип modules/tasks.js, `taskDoneDlg`): с «Требуется файл» (и включёнными
+ * «Задача выполнена» (прототип modules/tasks.js, `taskDoneDlg`, v136): с «нужен файл» (и включёнными
  * «Файлами в карточках») — поле «Файл»: уже приложенный файл задачи или новый — он загружается в блок
  * «Файлы» задачи. Без права «Загружать файлы» нового не выбрать: подсказка, «Выполнена» недоступна,
- * пока файла нет (docs/deviations.md п. Б-1). Без файла — «Постановщик увидит, когда и кем задача
- * выполнена». С подтверждением — кто подтвердит; после — «Отправлено на подтверждение».
+ * пока файла нет (docs/deviations.md п. Б-1). С подтверждением — «Уйдёт на подтверждение: <кто>»;
+ * без файла и подтверждения — один вопрос «Отметить задачу выполненной?».
  */
 export function TaskDoneDialog({
   task,
@@ -172,7 +172,7 @@ export function TaskDoneDialog({
       id={`${id}-file`}
       label={t('task.done.file')}
       required
-      hint={noUpload ? t('task.done.no_upload') : t('task.done.file_hint')}
+      hint={noUpload ? t('task.done.no_upload') : undefined}
       error={error}
     >
       {(control) => (
@@ -213,7 +213,7 @@ export function TaskDoneDialog({
         </div>
       )}
     </Field>
-  ) : (
+  ) : task.confirm ? null : (
     <p className="m-0 text-muted">{t('task.done.text')}</p>
   );
 
@@ -245,7 +245,7 @@ export function TaskDoneDialog({
   );
 }
 
-/** Окно с обязательной причиной: «Не выполнена» и «На доработку». */
+/** Окно с обязательной причиной: «Не выполнена» и «На доработку» (у неё кнопка красная). */
 function ReasonDialog({
   open,
   onClose,
@@ -255,6 +255,7 @@ function ReasonDialog({
   placeholder,
   hint,
   ok,
+  tone,
   dataKey,
   submit,
   busy,
@@ -267,6 +268,7 @@ function ReasonDialog({
   placeholder?: string;
   hint?: ReactNode;
   ok: string;
+  tone?: 'cta' | 'danger';
   dataKey: string;
   submit: (reason: string, setError: (message: string) => void) => void;
   busy: boolean;
@@ -289,6 +291,7 @@ function ReasonDialog({
           onClose={onClose}
           label={ok}
           busy={busy}
+          tone={tone}
           onOk={() => {
             if (!reason.trim()) return setError(t('task.reason_required'));
             submit(reason.trim(), setError);
@@ -323,7 +326,7 @@ const reasonField = (setError: (message: string) => void) => (code: string, mess
   return true;
 };
 
-/** «Задача не выполнена» (прототип `taskFailDlg`): причина обязательна, «Сохранить». */
+/** «Задача не выполнена» (прототип `taskFailDlg`): причина обязательна, кнопка «Не выполнена». */
 export function TaskFailDialog({ task, open, onClose, onDone }: TaskDialogProps) {
   const t = useT();
   const { busy, send } = useSend({ onClose, onDone });
@@ -352,8 +355,8 @@ export function TaskFailDialog({ task, open, onClose, onDone }: TaskDialogProps)
 const todayBishkek = () => bishkekDate(new Date());
 
 /**
- * «Вернуть на доработку» (прототип `taskReworkDlg`): причина обязательна; задача вернётся в «В работе»
- * с отметкой «На доработке», исполнитель увидит причину; срок прошёл — станет просроченной.
+ * «Вернуть на доработку» (прототип `taskReworkDlg`, v136): причина обязательна, исполнитель получит её
+ * в Telegram; срок прошёл — задача станет просроченной. Кнопка красная: действие возвращает работу.
  */
 export function TaskReworkDialog({ task, open, onClose, onDone }: TaskDialogProps) {
   const t = useT();
@@ -374,6 +377,7 @@ export function TaskReworkDialog({ task, open, onClose, onDone }: TaskDialogProp
         </>
       }
       ok={t('task.action.rework')}
+      tone="danger"
       dataKey="rework"
       busy={busy}
       submit={(reason, setError) =>
@@ -388,9 +392,8 @@ export function TaskReworkDialog({ task, open, onClose, onDone }: TaskDialogProp
 }
 
 /**
- * «Подтвердить выполнение» (прототип `taskConfDlg`): исполнитель, когда выполнена, файл; подтверждает
- * не постановщик — «Вы подтверждаете вместо постановщика: это будет видно в истории»; комментарий
- * необязательный.
+ * «Подтвердить выполнение» (прототип `taskConfDlg`, v136): исполнитель, когда выполнена, файл;
+ * подтверждает не постановщик — «Вы подтверждаете вместо <кого>»; комментарий необязательный.
  */
 export function TaskConfirmDialog({
   task,
@@ -457,7 +460,6 @@ export function TaskConfirmDialog({
             {...control}
             data-task-comment-confirm=""
             className={`${inputClass({ multiline: true })} min-h-[60px]`}
-            placeholder={t('task.confirm.placeholder')}
             maxLength={TASK_CONFIRM_NOTE_MAX}
             value={comment}
             onChange={(e) => setComment(e.target.value)}

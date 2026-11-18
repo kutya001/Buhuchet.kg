@@ -20,11 +20,13 @@ const BODY_CLASS = 'animate-slide-up motion-reduce:animate-none';
 /**
  * Свёрнутый блок (решение заказчика 17.11.2026, «Меньше текста, понятнее, плавнее»; прототип v134
  * `details.rc-det`, `details.rc-hist`): редкое — под одной строкой, раскрывается по нажатию. `box` —
- * блок карточки с заголовком-строкой («История»), иначе — строка внутри блока («Подробности»).
+ * блок карточки с заголовком-строкой («История»), иначе — строка внутри блока («Подробности»); `first` —
+ * над строкой в блоке ничего нет, черта сверху не нужна.
  */
 export function Fold({
   title,
   box = false,
+  first = false,
   open,
   onToggle,
   children,
@@ -32,19 +34,23 @@ export function Fold({
 }: {
   title: ReactNode;
   box?: boolean;
+  first?: boolean;
   open?: boolean;
   onToggle?: (open: boolean) => void;
   children: ReactNode;
 } & { [key: `data-${string}`]: string }) {
   return (
     <details
+      data-fold=""
       {...data}
       open={open}
       onToggle={onToggle ? (e) => onToggle(e.currentTarget.open) : undefined}
       className={
         box
           ? 'group min-w-0 rounded-xl border border-line bg-raised px-4 py-2'
-          : 'group mt-2 min-w-0 border-t border-line pt-1'
+          : first
+            ? 'group min-w-0'
+            : 'group mt-2 min-w-0 border-t border-line pt-1'
       }
     >
       <summary className={SUMMARY_CLASS}>

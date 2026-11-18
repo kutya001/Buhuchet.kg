@@ -7,8 +7,8 @@ import {
   formatMomentRu,
   formatSom,
   formatSomWithUnit,
-  pluralForm,
   reportHasAmount,
+  type IsoDate,
 } from '@buhuchet/domain';
 import type { ReportCard as Card, ReportRow } from '@buhuchet/shared';
 import {
@@ -16,6 +16,8 @@ import {
   ActionMenu,
   Box,
   buttonClass,
+  DueBit,
+  Fold,
   Icon,
   KeyValues,
   linkButtonClass,
@@ -24,6 +26,7 @@ import {
   Note,
   Pill,
   StatusHistory,
+  StatusLine,
   StatusNone,
   StatusPill,
   StatusScale,
@@ -37,9 +40,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ContractorLink } from '../contractors/contractor-link';
 import { RecordFiles } from '../files/record-files';
+import { InfoTip } from '../kpi/kpi-table';
 import {
   FundsCell,
   PayFirstNote,
+  PaymentMini,
   PaymentScale,
   payFirstWhy,
   paymentEvents,
@@ -48,19 +53,17 @@ import {
 } from '../money/report-money';
 import { useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
+import { dueWords, MiniScale } from '../status/status-line';
 import {
   confirmMarkLabel,
   historyLabels,
   historyView,
   scaleView,
   statusEvents,
-  statusName,
   statusPillView,
 } from '../status/status-view';
-import { dueMovedTitle } from './report-columns';
 import { reportHistoryItem } from './report-history';
 import {
-  confirmRefusal,
   reportCardButtons,
   reportScaleBack,
   reportScaleSteps,
@@ -96,7 +99,7 @@ function SocfundTariff({ t, s }: { t: Translate; s: NonNullable<Card['socfund']>
           {t('cp.socfund.none')}
         </Pill>
       )}
-      {s.capHint ? <span className="block text-[11.5px] text-faint">{s.capHint}</span> : null}
+      {s.capHint ? <InfoTip label={t('cp.socfund.title')} text={s.capHint} /> : null}
     </>
   );
 }
@@ -123,31 +126,71 @@ function LinesValue({ t, lines }: { t: Translate; lines: Card['lines'] }) {
 }
 
 /**
- * Строки «подпись — значение» (прототип openReport, `.kv`). У ответственного с правом «Назначать
- * отчёты» — «сменить» (у прежней версии нет: она только для просмотра, решение Б-7).
+ * Строки «подпись — значение» на виду (прототип v134 openReport, `.kv`): «Срок сдачи» — у закрытого
+ * отчёта (у открытого срок — в строке состояния), сумма со строками, «Срок оплаты» и «Деньги
+ * контрагента». Остальное — в «Подробностях» (`detailItems`).
  */
 function cardItems(
   t: Translate,
   r: Card,
-  onResponsible: ((anchor: HTMLElement) => void) | null,
   money: { sums: boolean; onReceive: (() => void) | null },
 ): KeyValueItem[] {
+  const items: KeyValueItem[] = [];
+  if (r.act !== 'pay' && !OPEN_REPORT_STATUSES.has(r.status))
+    items.push({ id: 'due', label: t('report.card.due'), value: formatDateRu(r.dueDate) });
+  if (!reportHasAmount(r.act)) return items;
+  // С блоком сумм вверху карточки «Сумма к уплате» здесь не повторяется (прототип `sums`).
+  if (!money.sums)
+    items.push({
+      id: 'amount',
+      label: t('report.card.amount'),
+      value: (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          {r.amount === null ? (
+            <span className="text-faint">{t('report.amount.none')}</span>
+          ) : (
+            <b className="tabular-nums">{formatSomWithUnit(r.amount)}</b>
+          )}
+          {r.amountAuto ? (
+            <Tag icon="repeat" title={t('report.amount.repeat')}>
+              {t('report.repeat.tag')}
+            </Tag>
+          ) : null}
+        </span>
+      ),
+    });
+  if (r.lines.length)
+    items.push({
+      id: 'lines',
+      label: t('report.lines.kv'),
+      value: <LinesValue t={t} lines={r.lines} />,
+      wide: true,
+    });
+  // У вида «Уплата» срок оплаты до оплаты — в строке состояния.
+  if (r.taxpay && !(r.act === 'pay' && r.paymentStatus !== 'paid')) {
+    items.push(
+      {
+        id: 'payDue',
+        label: t('report.money.pay_due'),
+        value: (
+          <span className={r.payOverdue ? 'font-semibold text-danger' : undefined}>
+            {r.payDue ? formatDateRu(r.payDue) : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'funds',
+        label: t('report.money.funds'),
+        value: <FundsCell t={t} r={r} onReceive={money.onReceive} />,
+      },
+    );
+  }
+  return items;
+}
+
+/** «Подробности» (прототип v134 `details.rc-det`): ИНН, код формы, ставка, тариф, УГНС, кто и когда. */
+function detailItems(t: Translate, r: Card): KeyValueItem[] {
   const items: KeyValueItem[] = [
-    {
-      id: 'created',
-      label: t('grid.col.created_by'),
-      value: <Audit who={r.audit.createdBy} at={r.audit.createdAt} />,
-    },
-    {
-      id: 'updated',
-      label: t('grid.col.updated_by'),
-      value: <Audit who={r.audit.updatedBy ?? r.audit.createdBy} at={r.audit.updatedAt} />,
-    },
-    {
-      id: 'cp',
-      label: t('report.card.cp'),
-      value: <ContractorLink id={r.contractor.id} name={r.contractor.name} />,
-    },
     { id: 'inn', label: t('report.card.inn'), value: r.contractor.inn, mono: true },
     {
       id: 'form',
@@ -168,163 +211,94 @@ function cardItems(
     });
   if (r.taxOffice)
     items.push({ id: 'ugns', label: t('report.card.tax_office'), value: r.taxOffice });
-  if (r.act !== 'pay')
-    items.push({
-      id: 'due',
-      label: t('report.card.due'),
-      value: (
-        <>
-          <span className={r.overdue ? 'font-semibold text-danger' : undefined}>
-            {formatDateRu(r.dueDate)}
-          </span>
-          {r.dueDate !== r.dueBase ? (
-            <span className="block text-[11.5px] text-faint">{dueMovedTitle(t, r)}</span>
-          ) : null}
-        </>
-      ),
-    });
-  items.push({
-    id: 'responsible',
-    label: t('report.card.responsible'),
-    value: (
-      <>
-        {r.responsible?.shortName ?? '—'}
-        {onResponsible ? (
-          <>
-            {' '}
-            <button
-              type="button"
-              data-report-responsible=""
-              aria-haspopup="menu"
-              className={`${linkButtonClass()} text-[12px]`}
-              onClick={(e) => onResponsible(e.currentTarget)}
-            >
-              {t('report.card.change_responsible')}
-            </button>
-          </>
-        ) : null}
-      </>
-    ),
-  });
-  if (r.act !== 'pay')
-    items.push({
-      id: 'submitted',
-      label: t('report.card.submitted'),
-      value: (
-        <>
-          {r.submittedOn ? formatDateRu(r.submittedOn) : '—'}
-          {r.submittedOn && r.submittedBy ? (
-            <span className="text-faint">
-              {' '}
-              {t('report.card.submitted_by', { name: r.submittedBy.shortName })}
-            </span>
-          ) : null}
-        </>
-      ),
-    });
-  if (reportHasAmount(r.act)) {
-    // С блоком сумм вверху карточки «Сумма к уплате» здесь не повторяется (прототип `sums`).
-    if (!money.sums)
-      items.push({
-        id: 'amount',
-        label: t('report.card.amount'),
-        value: (
-          <span className="inline-flex flex-wrap items-center gap-1.5">
-            {r.amount === null ? (
-              <span className="text-faint">{t('report.amount.none')}</span>
-            ) : (
-              <b className="tabular-nums">{formatSomWithUnit(r.amount)}</b>
-            )}
-            {r.amountAuto ? (
-              <Tag icon="repeat" title={t('report.amount.repeat')}>
-                {t('report.repeat.tag')}
-              </Tag>
-            ) : null}
-          </span>
-        ),
-      });
-    if (r.lines.length)
-      items.push({
-        id: 'lines',
-        label: t('report.lines.kv'),
-        value: <LinesValue t={t} lines={r.lines} />,
-        wide: true,
-      });
-    if (r.taxpay) {
-      items.push(
-        {
-          id: 'payDue',
-          label: t('report.money.pay_due'),
-          value: (
-            <span className={r.payOverdue ? 'font-semibold text-danger' : undefined}>
-              {r.payDue ? formatDateRu(r.payDue) : '—'}
-            </span>
-          ),
-        },
-        {
-          id: 'funds',
-          label: t('report.money.funds'),
-          value: <FundsCell t={t} r={r} onReceive={money.onReceive} />,
-        },
-      );
-    }
-  } else {
-    items.push({
-      id: 'amount',
-      label: t('report.card.amount'),
-      value: <span className="text-faint">{t('report.card.no_amount')}</span>,
-    });
-  }
+  items.push(
+    {
+      id: 'created',
+      label: t('grid.col.created_by'),
+      value: <Audit who={r.audit.createdBy} at={r.audit.createdAt} />,
+    },
+    {
+      id: 'updated',
+      label: t('grid.col.updated_by'),
+      value: <Audit who={r.audit.updatedBy ?? r.audit.createdBy} at={r.audit.updatedAt} />,
+    },
+  );
   return items;
+}
+
+/** Срок в строке состояния (прототип v134 openReport, `stLine`): сдача, оплата у «Уплаты» или «сдан». */
+function duePart(t: Translate, r: Card, today: IsoDate): ReactNode {
+  if (r.act === 'pay') {
+    const shown =
+      r.taxpay &&
+      r.payDue &&
+      r.paymentStatus !== 'paid' &&
+      r.status !== 'not_required' &&
+      r.paymentStatus !== 'not_required';
+    if (!shown || !r.payDue) return null;
+    return (
+      <DueBit
+        text={t('report.line.pay_due', { date: formatDateRu(r.payDue) })}
+        {...dueWords(t, r.payDue, r.payOverdue, today)}
+      />
+    );
+  }
+  if (r.submittedOn && !OPEN_REPORT_STATUSES.has(r.status))
+    return (
+      <>
+        <Icon name="send" size="sm" />
+        <span>{t('report.line.submitted', { date: formatDateRu(r.submittedOn) })}</span>
+      </>
+    );
+  const base = formatDateRu(r.dueBase).slice(0, 5);
+  const note =
+    r.dueDate === r.dueBase
+      ? null
+      : t(r.dueManual ? 'report.line.manual' : 'report.line.moved', { date: base });
+  return (
+    <DueBit
+      text={t('status.line.due', { date: formatDateRu(r.dueDate) })}
+      {...dueWords(t, r.dueDate, r.overdue, today)}
+      note={note}
+    />
+  );
+}
+
+/** Шкала сдачи коротко (прототип `scaleMini0('rep')`), с отметкой подтверждения. */
+function ReportMini({ t, r }: { t: Translate; r: Card }) {
+  return (
+    <MiniScale
+      t={t}
+      input={{
+        scale: 'report',
+        status: r.status,
+        history: [],
+        ...(r.mark
+          ? {
+              mark: r.mark,
+              markLabel: confirmMarkLabel(t, statusEvents(r.statusHistory), r.mark, new Date()),
+            }
+          : {}),
+      }}
+    />
+  );
 }
 
 const periodKey = (p: Card['period']) => p.toLowerCase() as 'm' | 'q' | 'h' | 'y';
 
 /**
- * Блок «Подтверждение сдачи» (прототип repConfBox): возвращён на исправление — кто, когда, причина;
- * подтверждено — кто, когда, комментарий; ждёт — сколько дней и что делать.
+ * Причина возврата «На исправление» (прототип v134: `repConfBox` — только у «Требует исправления»; кто
+ * подтвердил и сколько ждёт — на шкале и в «Истории»).
  */
-function ConfirmBox({ t, r, actor }: { t: Translate; r: Card; actor: ReportActor | null }) {
-  if (r.status === 'needs_fix' && r.fix?.reason) {
-    return (
-      <Note tone="warn" icon="refresh">
-        <b>{t('report.card.fix')}</b>
-        {r.fix.actor ? ` · ${r.fix.actor}` : ''}
-        {`, ${formatMomentRu(new Date(r.fix.at))}`}
-        <br />
-        {r.fix.reason}
-      </Note>
-    );
-  }
-  if (!r.mark) return null;
-  if (r.mark === 'confirmed') {
-    return (
-      <Note tone="ok" icon="check">
-        <b>{statusName(t, 'report', 'confirmed')}</b>
-        {r.confirmedBy ? ` · ${r.confirmedBy.shortName}` : ''}
-        {r.confirmedAt ? `, ${formatMomentRu(new Date(r.confirmedAt))}` : ''}
-        {r.confirmNote ? (
-          <>
-            <br />
-            {r.confirmNote}
-          </>
-        ) : null}
-      </Note>
-    );
-  }
-  const why = actor ? confirmRefusal(r, actor) : null;
+function FixBox({ t, r }: { t: Translate; r: Card }) {
+  if (r.status !== 'needs_fix' || !r.fix?.reason) return null;
   return (
-    <Note icon="hourglass">
-      <b>
-        {t('status.mark_waiting_days', {
-          name: statusName(t, 'report', 'waiting'),
-          n: r.waitDays ?? 0,
-        })}
-      </b>
+    <Note tone="warn" icon="refresh">
+      <b>{t('report.card.fix')}</b>
+      {r.fix.actor ? ` · ${r.fix.actor}` : ''}
+      {`, ${formatMomentRu(new Date(r.fix.at))}`}
       <br />
-      {why && why !== 'report_not_waiting'
-        ? t(`err.${why}`)
-        : t(actor?.can.repConfirm ? 'report.card.wait_can' : 'report.card.wait_other')}
+      {r.fix.reason}
     </Note>
   );
 }
@@ -396,15 +370,17 @@ function ScaleBox({
 }
 
 /**
- * Карточка отчёта (ТЗ «Отчеты для сдачи» → «Карточка отчёта», «Подтверждение сдачи»; прототип
- * modules/report-card.js, `openReport`): в заголовке — вид, «Что нужно сделать», «уточнённый N»; под
- * ним — контрагент, период, орган и «Что уплачивается». Шкала «Сдача» с отметкой подтверждения,
- * просрочка, подтверждение или возврат на исправление, реквизиты и сумма со строками, «Версии» (строка
- * открывает другую версию), «Файлы», «История статусов» и «История изменений». Внизу — «Ещё
- * действия», «На исправление» и главное действие: «Отметить сданным» или «Подтвердить». С «Учётом
- * оплаты налогов» (задача 2.19) — шкала «Оплата», блок сумм, при «Сдаче только после оплаты» — причина
- * и закрытый шаг «Сдан», «Срок оплаты», «Деньги контрагента», график оплаты,
- * «История статусов» оплаты; внизу — «Принять деньги» и «Отметить оплаченным».
+ * Карточка отчёта (ТЗ «Отчеты для сдачи» → «Карточка отчёта», «Подтверждение сдачи»; прототип v134
+ * modules/report-card.js, `openReport`; решение заказчика 17.11.2026 «Меньше текста, понятнее,
+ * плавнее»). В заголовке — вид, «Что нужно сделать», «уточнённый N»; под ним — контрагент ссылкой,
+ * период, орган и «?» «Что уплачивается». Сразу под шапкой — строка состояния: шкалы коротко, срок и
+ * ответственный со «сменить»; полные шкалы «Сдача» и «Оплата» (шаги, откат, закрытый до оплаты «Сдан»)
+ * раскрываются нажатием на короткие. Дальше — блок сумм или «Сумма к уплате не указана» с «Указать»,
+ * причина «Сначала оплатите налог», возврат на исправление, сумма со строками, «Срок оплаты», «Деньги
+ * контрагента», пеня с «?», свёрнутые «Подробности», график оплаты, «Версии» (строка открывает другую
+ * версию), «Файлы» и свёрнутая «История» (статусы и «Изменения»). Внизу один ряд: «Действия» и следующий
+ * шаг — «Отметить сданным», «Подтвердить» с «На исправление» или «Отметить оплаченным»; «Принять
+ * деньги» и прочее — в «Действиях».
  */
 export function ReportCardWindow({
   id,
@@ -424,10 +400,10 @@ export function ReportCardWindow({
   open: boolean;
   onClose: () => void;
   actor: ReportActor | null;
-  /** Пункты «Ещё действия» (без «Открыть карточку»). */
+  /** Пункты «Действия» (без «Открыть карточку»). */
   actions: (r: Card) => ActionEntry[];
   onAction: (
-    action: 'submit' | 'start' | 'confirm' | 'fix' | 'receive' | 'pay' | 'cancelPay',
+    action: 'submit' | 'start' | 'confirm' | 'fix' | 'receive' | 'pay' | 'cancelPay' | 'amount',
     r: Card,
   ) => void;
   onBack: (r: Card, to: string) => void;
@@ -483,15 +459,21 @@ export function ReportCardWindow({
   );
   const sub: ReactNode = shown ? (
     <>
-      {`${shown.contractor.name} · ${shown.periodFull} · ${shown.organ}`}
+      <ContractorLink id={shown.contractor.id} name={shown.contractor.name} />
+      {` · ${shown.periodFull} · ${shown.organ}`}
       {reportHasAmount(shown.act) && shown.pays ? (
         <>
-          <br />
-          {t('report.card.pays', { pays: shown.pays })}
+          {' '}
+          <InfoTip
+            label={t('report.card.pays_tip')}
+            text={t('report.card.pays', { pays: shown.pays })}
+          />
         </>
       ) : null}
     </>
   ) : null;
+  // Сдача закрыта оплатой — главным становится «Отметить оплаченным» (прототип `payBtn`).
+  const payInstead = !!buttons?.pay && canPay && buttons.primary === 'submit';
 
   return (
     <Modal
@@ -508,50 +490,39 @@ export function ReportCardWindow({
             <button
               type="button"
               data-report-more=""
-              className={buttonClass('default')}
+              className={`${buttonClass('default')} max-md:min-w-11 max-md:px-2.5`}
               aria-haspopup="menu"
               aria-expanded={menu !== null}
+              aria-label={t('status.act.more')}
               onClick={(e) => setMenu(menu ? null : e.currentTarget)}
             >
               <Icon name="more" size="sm" />
-              {t('report.act.more')}
+              <span className="max-md:hidden">{t('status.act.more')}</span>
             </button>
           ) : null}
           <div className="flex-1" />
-          {r && canReceive ? (
-            <button
-              type="button"
-              data-report-button="receive"
-              className={buttonClass('default')}
-              onClick={() => onAction('receive', r)}
-            >
-              <Icon name="download" size="sm" />
-              {t('report.act.receive')}
-            </button>
-          ) : null}
           {r && buttons?.fix ? (
             <button
               type="button"
               data-report-button="fix"
-              className={buttonClass('default')}
+              className={buttonClass('dangerOutline')}
               onClick={() => onAction('fix', r)}
             >
               <Icon name="refresh" size="sm" />
               {t('report.act.fix')}
             </button>
           ) : null}
-          {r && buttons?.pay && canPay ? (
+          {r && payInstead ? (
             <button
               type="button"
               data-report-button="pay"
-              className={buttonClass('default')}
+              className={buttonClass('cta')}
               onClick={() => onAction('pay', r)}
             >
               <Icon name="wallet" size="sm" />
               {t('report.act.mark_paid')}
             </button>
-          ) : null}
-          {r && buttons?.primary && (buttons.primary !== 'pay' || canPay) ? (
+          ) : r && buttons?.primary && (buttons.primary !== 'pay' || canPay) ? (
             <button
               type="button"
               data-report-button={buttons.primary}
@@ -596,6 +567,7 @@ export function ReportCardWindow({
             onReceive={canReceive ? () => onAction('receive', r) : null}
             onPay={canPay ? () => onAction('pay', r) : null}
             onCancelPay={r.money?.canCancel ? () => onAction('cancelPay', r) : null}
+            onAmount={actor?.can.changeSum && !r.superseded ? () => onAction('amount', r) : null}
           />
         ) : null}
       </div>
@@ -611,7 +583,7 @@ export function ReportCardWindow({
         <ActionMenu
           items={items}
           place={{ anchor: menu }}
-          label={t('report.act.more')}
+          label={t('status.act.more')}
           onClose={() => setMenu(null)}
         />
       ) : null}
@@ -630,6 +602,7 @@ function CardBody({
   onReceive,
   onPay,
   onCancelPay,
+  onAmount,
 }: {
   t: Translate;
   r: Card;
@@ -641,46 +614,106 @@ function CardBody({
   onReceive: (() => void) | null;
   onPay: (() => void) | null;
   onCancelPay: (() => void) | null;
+  onAmount: (() => void) | null;
 }) {
   const now = new Date();
+  const today = bishkekDate(now);
   const events = statusEvents(r.statusHistory);
   const history = historyView(t, 'report', events, now);
   const timeline = r.history.map((h, i) => reportHistoryItem(t, h, i, r.revision));
-  const late = r.overdue ? Math.abs(r.days ?? 0) : 0;
   // Деньги отчёта — при «Учёте оплаты налогов» у вида с суммой (прототип `feat('taxpay') && t.sum`).
   const money = r.taxpay && reportHasAmount(r.act);
   const sums = money && r.status !== 'not_required';
+  // Суммы ещё нет и денег не было — одна строка с «Указать» вместо четырёх пустых плиток (прототип `sumNo`).
+  const sumNone = sums && r.amount === null && !(r.received > 0) && !(r.paid > 0);
   const payHistory = money ? historyView(t, 'payment', paymentEvents(t, r), now) : null;
   const why = OPEN_REPORT_STATUSES.has(r.status) ? payFirstWhy(t, r, r.taxpay && r.payFirst) : '';
+  const scales = r.act !== 'pay' || money;
+  const kv = cardItems(t, r, { sums, onReceive });
 
   return (
     <>
-      {r.act !== 'pay' || money ? (
-        <Box>
-          <div className="flex flex-col gap-3">
-            {r.act !== 'pay' ? (
-              <ScaleBox t={t} r={r} actor={actor} onStep={onStep} onBack={onBack} />
+      <StatusLine
+        id={`r${r.id}`}
+        label={t('status.line.scale')}
+        minis={
+          scales ? (
+            <>
+              {r.act !== 'pay' ? <ReportMini t={t} r={r} /> : null}
+              {money ? <PaymentMini t={t} r={r} /> : null}
+            </>
+          ) : (
+            <span className="text-faint">—</span>
+          )
+        }
+        parts={[
+          duePart(t, r, today),
+          <>
+            <Icon name="user" size="sm" />
+            <span>{r.responsible?.shortName ?? '—'}</span>
+            {onResponsible ? (
+              <button
+                type="button"
+                data-report-responsible=""
+                aria-haspopup="menu"
+                className={`${linkButtonClass()} text-[12.5px]`}
+                onClick={(e) => onResponsible(e.currentTarget)}
+              >
+                {t('report.card.change_responsible')}
+              </button>
             ) : null}
-            {money ? <PaymentScale t={t} r={r} onPay={onPay} onCancel={onCancelPay} /> : null}
-          </div>
-        </Box>
-      ) : null}
-      {sums ? <SumsBox t={t} r={r} /> : null}
-      {why ? <PayFirstNote t={t} why={why} /> : null}
-      {r.overdue ? (
-        <div className="flex flex-wrap gap-2">
-          <Pill tone="bad" icon="alert">
-            {t(`report.card.overdue.${pluralForm(late)}`, { n: late })}
-          </Pill>
+          </>,
+        ]}
+        full={
+          scales ? (
+            <div className="flex flex-col gap-3">
+              {r.act !== 'pay' ? (
+                <ScaleBox t={t} r={r} actor={actor} onStep={onStep} onBack={onBack} />
+              ) : null}
+              {money ? <PaymentScale t={t} r={r} onPay={onPay} onCancel={onCancelPay} /> : null}
+            </div>
+          ) : undefined
+        }
+      />
+      {sumNone ? (
+        <div data-report-sum-none="" className="flex flex-wrap items-center gap-2.5">
+          <span className="text-faint">{t('report.sums.none')}</span>
+          {onAmount ? (
+            <button
+              type="button"
+              data-report-sum-set=""
+              className={buttonClass('default', 'sm')}
+              onClick={onAmount}
+            >
+              <Icon name="coins" size="sm" />
+              {t('report.sums.set')}
+            </button>
+          ) : null}
         </div>
+      ) : sums ? (
+        <SumsBox t={t} r={r} />
       ) : null}
-      <ConfirmBox t={t} r={r} actor={actor} />
+      {why ? <PayFirstNote t={t} r={r} /> : null}
+      <FixBox t={t} r={r} />
       <Box>
-        <KeyValues items={cardItems(t, r, onResponsible, { sums, onReceive })} />
-        {r.penalty ? <Note>{r.penalty}</Note> : null}
+        {kv.length > 0 ? <KeyValues items={kv} /> : null}
+        {r.penalty ? (
+          <div data-report-penalty="">
+            <Note tone="warn" icon="alert">
+              {r.penalty} <InfoTip label={t('report.card.penalty_tip')} text={r.penaltyTip} />
+            </Note>
+          </div>
+        ) : null}
+        <Fold
+          title={t('status.fold.details')}
+          first={kv.length === 0 && !r.penalty}
+          data-report-details=""
+        >
+          <KeyValues items={detailItems(t, r)} />
+        </Fold>
       </Box>
       {/* График оплаты — у вида с суммой и долями, и без «Учёта оплаты налогов» (прототип report-card.js). */}
-      {reportHasAmount(r.act) ? <ScheduleBox t={t} r={r} today={bishkekDate(now)} /> : null}
+      {reportHasAmount(r.act) ? <ScheduleBox t={t} r={r} today={today} /> : null}
       {r.versions.length > 1 ? (
         <Box title={t('report.card.versions')}>
           <MiniTable
@@ -716,7 +749,11 @@ function CardBody({
         </Box>
       ) : null}
       {r.filesOn ? <RecordFiles source={{ kind: 'report', id: r.id }} /> : null}
-      <Box title={t('status.history')}>
+      <Fold
+        box
+        data-report-history=""
+        title={<h3 className="m-0 [font:inherit] text-inherit">{t('status.fold.history')}</h3>}
+      >
         {r.act !== 'pay' ? (
           <StatusHistory
             rows={history.rows}
@@ -733,14 +770,15 @@ function CardBody({
             labels={historyLabels(t)}
           />
         ) : null}
-      </Box>
-      <Box title={t('report.card.history')}>
+        <h4 className="m-0 mt-1 text-[12.5px] font-semibold text-muted">
+          {t('status.fold.changes')}
+        </h4>
         {timeline.length > 0 ? (
-          <Timeline items={timeline} label={t('report.card.history')} />
+          <Timeline items={timeline} label={t('status.fold.changes')} />
         ) : (
           <span className="text-faint">{t('report.card.history_empty')}</span>
         )}
-      </Box>
+      </Fold>
     </>
   );
 }

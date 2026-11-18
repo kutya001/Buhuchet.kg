@@ -144,7 +144,11 @@ async function projectOf(
     !body.contractorId ||
     !(await taskProjectAllowed(tx, body.projectId, body.contractorId, was, projectWhere(subject)))
   ) {
-    bad('task_project_invalid', 'Выберите проект или снимите галочку «Проект»', 'projectId');
+    bad(
+      'task_project_invalid',
+      'Проект не найден, отменён или завершён — выберите другой',
+      'projectId',
+    );
   }
   return body.projectId;
 }

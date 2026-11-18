@@ -34,7 +34,7 @@ const ACTION_VIEW: Record<TaskAction, { label: UiTextKey; icon: IconName }> = {
 
 /**
  * Пункты меню задачи (прототип modules/tasks.js, `taskActions`): «Открыть»; у ждущей подтверждения —
- * «Подтвердить», «На доработку», «Изменить» (постановщику и владельцу); у открытой — «Взять в работу»
+ * «Подтвердить», «На доработку» красным (v136), «Изменить» (постановщику и владельцу); у открытой — «Взять в работу»
  * (у «К выполнению»), «Выполнена», «Не выполнена», «Изменить», черта и «Отменить задачу» красным.
  * Недоступный пункт виден бледным с причиной (тексты отказов — те же, что у сервера). `card` —
  * меню кнопки «Действия» в карточке: без «Открыть».
@@ -61,7 +61,7 @@ export function taskMenuEntries({
         label: t(view.label),
         icon: view.icon,
         run: () => run[action](task),
-        ...(action === 'cancel' ? { danger: true } : {}),
+        ...(action === 'cancel' || action === 'rework' ? { danger: true } : {}),
         ...(refusal ? { disabled: true, reason: t(`err.${refusal}`) } : {}),
       };
       return action === 'cancel' ? [{ id: 'sep', separator: true }, item] : [item];

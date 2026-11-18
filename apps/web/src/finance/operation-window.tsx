@@ -11,8 +11,8 @@ import {
 } from '@buhuchet/domain';
 import type { OperationWindow } from '@buhuchet/shared';
 import {
+  ActionMenu,
   Box,
-  buttonClass,
   Icon,
   KeyValues,
   linkButtonClass,
@@ -20,7 +20,7 @@ import {
   Modal,
   Note,
   Pill,
-  Timeline,
+  type ActionEntry,
   type KeyValueItem,
   type TimelineItem,
 } from '@buhuchet/ui';
@@ -33,7 +33,6 @@ import { RecordFiles } from '../files/record-files';
 import { fileHistoryText } from '../files/file-history';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
-import { OP_LOOK } from '../money/contractor-money';
 import { ReceiptEditDialog } from '../money/tax-dialogs';
 import { CorrectionDialog, OperationDeleteDialog, WhyButton } from './finance-dialogs';
 import {
@@ -42,16 +41,19 @@ import {
   receiptCreatedText,
   signedSom,
 } from './finance-history';
+import { OpHistoryFold, OpMoreButton, OpWindowSub } from './op-window-parts';
 import { OperationEditDialog } from './operation-edit';
 import { operationQuery, useFinanceRefresh } from './finance-data';
 
 /*
  * Окно финансовой операции (задачи 2.20 и 2.22; ТЗ «Финансовые операции по контрагентам» → «Окно
- * оплаты», «Обратные записи», «Изменить» и «Удалить»; прототип modules/fin-op.js `opWin`, `opHistHtml`):
- * поля, как их вводили, кто и когда внёс, отметка «Изменена», детализация поступления, обратные записи,
- * файлы, история изменений «было → стало»; «Удалить», «Обратная запись» и «Изменить» — с замком и
- * причиной (поступление изменяется своим окном, прочие — `opEditDlg`), «Открыть источник» — отчёт или
- * вкладка «Деньги».
+ * оплаты», «Обратные записи», «Изменить» и «Удалить»; прототип v136 modules/fin-op.js `opWin`, `opHistIn`;
+ * решение заказчика 17.11.2026 «Меньше текста, понятнее, плавнее»): тип, сумма, контрагент и дата — в
+ * шапке и в таблице не повторяются; ниже — поля, как их вводили, отметка «Изменена», детализация
+ * поступления, обратные записи, файлы и свёрнутая «История» (изменения «было → стало», кто создал и
+ * изменил). Внизу один ряд: «Действия» («Обратная запись», «Открыть источник» — отчёт или вкладка
+ * «Деньги», «Удалить») и «Изменить» — с замком и причиной (поступление изменяется своим окном, прочие —
+ * `opEditDlg`); «Готово» нет.
  */
 
 type HistoryRow = OperationWindow['history'][number];
@@ -101,16 +103,6 @@ function historyItems(t: Translate, op: OperationWindow): TimelineItem[] {
   });
 }
 
-/** Кто и когда: имя, под ним момент мелким серым (прототип `auditKv`). */
-function Audit({ who, at }: { who: string | null; at: string }) {
-  return (
-    <>
-      {who ?? '—'}
-      <span className="block text-[11.5px] text-faint">{formatMomentRu(new Date(at))}</span>
-    </>
-  );
-}
-
 /** «За что» операции (прототип opView `what`). */
 function whatOf(t: Translate, op: OperationWindow): string {
   if (op.kind === 'pay' && op.report) return op.report.label;
@@ -144,6 +136,7 @@ export function OperationWindowDialog({
   const [corr, setCorr] = useState<DialogSlot<OperationWindow> | null>(null);
   const [child, setChild] = useState<DialogSlot<string> | null>(null);
   const [edit, setEdit] = useState<DialogSlot<OperationWindow> | null>(null);
+  const [more, setMore] = useState<HTMLElement | null>(null);
   const op = query.data;
   const corrections = op?.corrections.filter((x) => !x.deleted) ?? [];
   const failed =
@@ -163,44 +156,13 @@ export function OperationWindowDialog({
     openContractorCard({ id: op.contractor.id }, 'money');
   };
 
-  const look = op ? OP_LOOK[op.self && op.kind === 'pay' ? 'self' : op.kind]! : null;
   const kindLabel = op
     ? t(op.self && op.kind === 'pay' ? 'money.op.self' : `money.op.${op.kind}`)
     : '';
   const lock = op && !op.deleted ? (op.locks.edit ?? op.locks.del) : null;
 
   const items: KeyValueItem[] = [];
-  if (op && look) {
-    items.push(
-      {
-        id: 'kind',
-        label: t('fin.op.kind'),
-        value: (
-          <Pill tone={look.tone} size="sm">
-            {kindLabel}
-          </Pill>
-        ),
-      },
-      {
-        id: 'cp',
-        label: t('fin.op.contractor'),
-        value: (
-          <button type="button" className={linkButtonClass()} onClick={openContractor}>
-            {op.contractor.name}
-          </button>
-        ),
-      },
-      { id: 'date', label: t('fin.op.date'), value: formatDateRu(op.date) },
-      {
-        id: 'amount',
-        label: t('fin.op.amount'),
-        value: (
-          <b className="tabular-nums">
-            {op.kind === 'corr' ? signedSom(op.amount) : formatSomWithUnit(op.amount)}
-          </b>
-        ),
-      },
-    );
+  if (op) {
     if (op.kind === 'in' && op.receiptParts) {
       items.push({
         id: 'tax',
@@ -254,70 +216,77 @@ export function OperationWindowDialog({
     });
     if (op.note && op.note !== whatOf(t, op) && op.kind !== 'corr')
       items.push({ id: 'note', label: t('fin.op.note'), value: op.note });
-    items.push(
-      {
-        id: 'created',
-        label: t('fin.op.created'),
-        value: <Audit who={op.created.name} at={op.created.at} />,
-      },
-      {
-        id: 'updated',
-        label: t('fin.op.updated'),
-        value: <Audit who={op.updated.name} at={op.updated.at} />,
-      },
-    );
+  }
+
+  // «Действия» (прототип `opActs(d, false)`): «Изменить», у поступления «Обратная запись», «Открыть
+  // источник», «Удалить» («Отменить списание», «Отменить возврат»); у удалённой — только источник.
+  const actions: ActionEntry[] = [];
+  if (op) {
+    const source: ActionEntry = {
+      id: 'source',
+      label: t('fin.op.source'),
+      icon: 'link',
+      sub: op.report
+        ? t('fin.op.source_report', { report: op.report.label })
+        : t('fin.op.source_cp'),
+      run: () => (op.report ? openReport(op.report.id) : openContractor()),
+    };
+    if (op.deleted) actions.push(source);
+    else {
+      actions.push({
+        id: 'edit',
+        label: t('fin.op.edit'),
+        icon: 'edit',
+        disabled: !!op.locks.edit,
+        reason: op.locks.edit?.text,
+        run: () => setEdit(openSlot(op)),
+      });
+      if (op.kind === 'in')
+        actions.push({
+          id: 'correction',
+          label: t('fin.op.correction'),
+          icon: 'refresh',
+          sub: t('fin.op.act_corr_sub'),
+          disabled: !!op.locks.edit,
+          reason: op.locks.edit?.text,
+          run: () => setCorr(openSlot(op)),
+        });
+      actions.push(source, { id: 's1', separator: true });
+      actions.push({
+        id: 'delete',
+        label: t(
+          op.kind === 'bonus'
+            ? 'fin.del.ok_bonus'
+            : op.kind === 'refund'
+              ? 'fin.del.ok_refund'
+              : 'fin.del.ok',
+        ),
+        icon: op.kind === 'bonus' || op.kind === 'refund' ? 'history' : 'trash',
+        danger: true,
+        disabled: !!op.locks.del,
+        reason: op.locks.del?.text,
+        run: () => setDel(openSlot(op)),
+      });
+    }
   }
 
   const allocated = op ? op.allocations.reduce((a, x) => a + x.amount, 0) : 0;
   const footer = (
     <>
-      {op && !op.deleted ? (
-        <>
-          <WhyButton
-            icon="trash"
-            label={t('fin.op.delete')}
-            why={op.locks.del?.text ?? null}
-            data="delete"
-            onClick={() => setDel(openSlot(op))}
-          />
-          {op.kind === 'in' ? (
-            <WhyButton
-              icon="refresh"
-              label={t('fin.op.correction')}
-              why={op.locks.edit?.text ?? null}
-              data="correction"
-              onClick={() => setCorr(openSlot(op))}
-            />
-          ) : null}
-          <WhyButton
-            icon="edit"
-            label={t('fin.op.edit')}
-            why={op.locks.edit?.text ?? null}
-            data="edit"
-            onClick={() => setEdit(openSlot(op))}
-          />
-        </>
+      {op ? (
+        <OpMoreButton t={t} open={more !== null} onClick={(el) => setMore(more ? null : el)} />
       ) : null}
       <div className="flex-1" />
-      {op ? (
-        <button
-          type="button"
-          className={buttonClass('default')}
-          data-fin-source=""
-          title={
-            op.report
-              ? t('fin.op.source_report', { report: op.report.label })
-              : t('fin.op.source_cp')
-          }
-          onClick={() => (op.report ? openReport(op.report.id) : openContractor())}
-        >
-          <Icon name="link" size="sm" />
-          {t('fin.op.source')}
-        </button>
+      {op && !op.deleted ? (
+        <WhyButton
+          icon="edit"
+          label={t('fin.op.edit')}
+          why={op.locks.edit?.text ?? null}
+          data="edit"
+          cta
+          onClick={() => setEdit(openSlot(op))}
+        />
       ) : null}
-      <button type="button" className={buttonClass('cta')} onClick={onClose}>
-        {t('btn.done')}
-      </button>
     </>
   );
 
@@ -329,12 +298,20 @@ export function OperationWindowDialog({
       size="mid"
       title={
         op
-          ? t('fin.op.title', { kind: kindLabel, amount: formatSomWithUnit(Math.abs(op.amount)) })
+          ? t('fin.op.title', {
+              kind: kindLabel,
+              // Обратная запись — со знаком (прототип v136: «Обратная запись −100 сом»).
+              amount: op.kind === 'corr' ? signedSom(op.amount) : formatSomWithUnit(op.amount),
+            })
           : ''
       }
       // Пока операция не загрузилась, названия нет; потом имя окна — его заголовок («Списание в бонус 300 сом»).
       label={op ? undefined : t('fin.op.open')}
-      sub={op ? `${op.contractor.name} · ${formatDateRu(op.date)}` : undefined}
+      sub={
+        op ? (
+          <OpWindowSub name={op.contractor.name} date={op.date} onContractor={openContractor} />
+        ) : undefined
+      }
       footer={footer}
     >
       <div className="flex flex-col gap-3.5" data-fin-op-window={id} data-fin-op-kind={op?.kind}>
@@ -371,7 +348,7 @@ export function OperationWindowDialog({
         ) : lock ? (
           <Note icon="lock">{lock.text}</Note>
         ) : null}
-        {op ? (
+        {op && items.length ? (
           <Box>
             <KeyValues items={items} />
           </Box>
@@ -457,15 +434,22 @@ export function OperationWindowDialog({
         ) : null}
         {op?.files ? <RecordFiles source={{ kind: op.files.kind, id: op.id }} /> : null}
         {op ? (
-          <Box title={t('fin.op.history')}>
-            {op.history.length ? (
-              <Timeline items={historyItems(t, op)} label={t('fin.op.history')} />
-            ) : (
-              <span className="text-faint">{t('fin.op.history_empty')}</span>
-            )}
-          </Box>
+          <OpHistoryFold
+            t={t}
+            items={historyItems(t, op)}
+            created={op.created}
+            updated={op.updated}
+          />
         ) : null}
       </div>
+      {more && op ? (
+        <ActionMenu
+          items={actions}
+          place={{ anchor: more }}
+          label={t('status.act.more')}
+          onClose={() => setMore(null)}
+        />
+      ) : null}
       {del ? (
         <OperationDeleteDialog
           key={`del-${del.n}`}

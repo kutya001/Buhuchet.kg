@@ -14,6 +14,7 @@ import {
 } from '@buhuchet/ui';
 import { useId, useRef } from 'react';
 import type { Translate } from '../l10n/translate';
+import { InfoTip } from '../kpi/kpi-table';
 import { serviceBonusList } from './finance-history';
 
 /*
@@ -145,7 +146,10 @@ export function ServiceBonusRows({
         {t('fin.svc.bonus.add')}
       </button>
       <div id={`${id}-hint`}>
-        <Hint>{t('fin.svc.bonus.hint')}</Hint>
+        <Hint>
+          {t('fin.svc.bonus.hint')}{' '}
+          <InfoTip label={t('fin.svc.bonus.tip_label')} text={t('fin.svc.bonus.tip')} />
+        </Hint>
       </div>
       {error ? (
         <div

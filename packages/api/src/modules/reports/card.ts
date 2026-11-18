@@ -247,7 +247,8 @@ export function getReportHandler(deps: ApiDeps): RouteHandler<typeof getReportRo
         ...(h.file === undefined ? {} : { file: filesVisible ? h.file : null }),
       })),
       socfund,
-      penalty,
+      penalty: penalty.text,
+      penaltyTip: penalty.tip,
       mark: reportMarkOf(
         { status: card.status, act: card.act, confirmed: card.confirmedAt !== null },
         confirmOn,

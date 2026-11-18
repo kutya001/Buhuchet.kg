@@ -449,6 +449,19 @@ export async function closeWindow(dialog: Locator) {
 }
 
 /**
+ * Раскрыть карточку целиком (решение заказчика 17.11.2026, прототип v134): под шапкой — строка состояния,
+ * полная шкала открывается нажатием на короткую, «Подробности» и «История» свёрнуты. Скрытое не нажать и
+ * не найти по роли, поэтому тест шкалы, реквизитов и истории сначала раскрывает их.
+ */
+export async function expandCard(card: Locator) {
+  await expect(card.locator('[data-status-line]')).toBeVisible();
+  const scale = card.locator('[data-status-line-scale][aria-expanded="false"]');
+  if (await scale.count()) await scale.click();
+  const closed = card.locator('details[data-fold]:not([open]) > summary');
+  while (await closed.count()) await closed.first().click();
+}
+
+/**
  * Вкладка окна-карточки: на ПК — кнопкой вкладки, на телефоне — из списка под текущей вкладкой («N из M ▾»).
  * Список выезжает анимацией, и её первый кадр стоит на конечном месте: Playwright считает пункт неподвижным,
  * а нажатие уходит соседнему пункту или мимо и теряется молча (типовая ошибка № 34) — поэтому сначала

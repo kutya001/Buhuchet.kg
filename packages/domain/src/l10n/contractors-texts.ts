@@ -243,10 +243,8 @@ export const CONTRACTORS_TEXTS = {
     ru: '{start} начисляется пеня {rate} % в день от неуплаченной суммы',
     section: S,
   },
-  'cp.socfund.penalty.estimate': {
-    ru: 'Примерно на сегодня: ≈ {amount} за {days} дн. от {left}.',
-    section: S,
-  },
+  'cp.socfund.penalty.estimate': { ru: 'Пеня ≈ {amount} за {days} дн.', section: S },
+  'cp.socfund.penalty.per_day': { ru: 'Пеня {rate} % в день', section: S },
   'cp.socfund.penalty.hint': {
     ru: 'Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает.',
     section: S,

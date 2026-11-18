@@ -26,8 +26,7 @@ export interface TaskFormValues {
   month: string;
   needFile: boolean;
   confirm: boolean;
-  /** Галочка «Проект» (у «По контрагенту», при включённых «Проектах контрагентов»; задача 2.26). */
-  withProject: boolean;
+  /** Проект контрагента (при включённых «Проектах контрагентов»; задача 2.26); пусто — «Без проекта». */
   projectId: string;
 }
 
@@ -100,7 +99,6 @@ export function initialTaskForm({
       confirm: task.confirm,
       // Без поля «Проект» (функция выключена или нет права «Просматривать проекты») проект задачи не
       // отправляется — сервер оставляет его, пока не сменили контрагента.
-      withProject: options.projectsOn && !!task.project,
       projectId: options.projectsOn ? (task.project?.id ?? '') : '',
     };
   }
@@ -121,7 +119,6 @@ export function initialTaskForm({
     month: today.slice(0, 7),
     needFile: false,
     confirm: options.confirmDefault,
-    withProject: options.projectsOn && !!(contractorId && preset?.projectId),
     projectId: options.projectsOn && contractorId ? (preset?.projectId ?? '') : '',
   };
 }
@@ -158,17 +155,13 @@ export function taskFormLists(
   };
 }
 
-export type TaskFormField =
-  'title' | 'contractorId' | 'projectId' | 'executorEmployeeId' | 'date' | 'month';
+export type TaskFormField = 'title' | 'contractorId' | 'executorEmployeeId' | 'date' | 'month';
 
 /** Ошибки полей до отправки (прототип `taskDlg` → «Поставить задачу»): ключи словаря. */
 export function taskFormProblems(v: TaskFormValues): Partial<Record<TaskFormField, UiTextKey>> {
   const problems: Partial<Record<TaskFormField, UiTextKey>> = {};
   if (!/[^\s\p{Cf}]/u.test(v.title)) problems.title = 'task.form.title_required';
   if (v.scope === 'contractor' && !v.contractorId) problems.contractorId = 'task.form.cp_required';
-  // Прототип `taskDlg`: галочка «Проект» стоит, а проект не выбран.
-  if (v.scope === 'contractor' && v.withProject && !v.projectId)
-    problems.projectId = 'task.form.project_required';
   if (!v.executorEmployeeId) problems.executorEmployeeId = 'task.form.exec_required';
   if (v.term === 'day' && !/^\d{4}-\d{2}-\d{2}$/.test(v.date))
     problems.date = 'task.form.date_required';
@@ -178,7 +171,7 @@ export function taskFormProblems(v: TaskFormValues): Partial<Record<TaskFormFiel
 }
 
 /**
- * Тело запроса: у «Общая» контрагента и проекта нет; проект — только с галочкой «Проект»; «На месяц» —
+ * Тело запроса: у «Общая» контрагента и проекта нет; проект необязателен («Без проекта»); «На месяц» —
  * первый день месяца (срок — последний день ставит сервер).
  */
 export function taskFormBody(v: TaskFormValues): CreateTaskRequest {
@@ -192,21 +185,48 @@ export function taskFormBody(v: TaskFormValues): CreateTaskRequest {
     dueDate: v.term === 'month' ? `${v.month}-01` : v.date,
     needFile: v.needFile,
     confirm: v.confirm,
-    projectId: v.scope === 'contractor' && v.withProject && v.projectId ? v.projectId : null,
+    projectId: v.scope === 'contractor' && v.projectId ? v.projectId : null,
   };
 }
 
 /**
- * Подсказка под «Требуется подтверждение» (прототип `taskDlg`): у закрытой — признак не меняется; у
- * ждущей подтверждения — «Если снять, задача сразу станет «Выполнена»»; иначе — «По умолчанию — из
- * учётной политики».
+ * Подсказка под «нужно подтверждение» (прототип `taskDlg`, v136): у закрытой — признак не меняется; у
+ * ждущей подтверждения — «Если снять, задача сразу станет «Выполнена»»; иначе подсказки нет.
  */
 export function confirmHint(task: Pick<Task, 'status'> | null): {
-  key: UiTextKey;
+  key: UiTextKey | null;
   locked: boolean;
 } {
   if (task && !taskConfirmEditable(task.status))
     return { key: 'task.form.confirm_closed', locked: true };
   if (task && taskPending(task.status)) return { key: 'task.form.confirm_pending', locked: false };
-  return { key: 'task.form.confirm_default', locked: false };
+  return { key: null, locked: false };
+}
+
+/**
+ * «Дополнительно» раскрыто сразу (прототип `taskDlg`, `st.more`, v136): у изменяемой задачи с описанием,
+ * проектом, сроком «На месяц» или «нужен файл» — иначе заполненное редкое поле было бы не видно.
+ */
+export function taskFormMoreOpen(task: Task | null): boolean {
+  return !!task && (!!task.description || !!task.project || task.term === 'month' || task.needFile);
+}
+
+/**
+ * «· заполнено N» у «Дополнительно» (прототип `taskDlg`, `nMore`): описание, проект, срок «На месяц»,
+ * «нужен файл», категория не первая из справочника, у новой задачи — «нужно подтверждение» не как в
+ * учётной политике.
+ */
+export function taskFormMoreFilled(
+  v: TaskFormValues,
+  options: Pick<TaskFormOptions, 'categories' | 'confirmDefault'>,
+  isNew: boolean,
+): number {
+  return [
+    v.description.trim() !== '',
+    v.scope === 'contractor' && v.projectId !== '',
+    v.term === 'month',
+    v.needFile,
+    v.categoryCode !== (options.categories[0]?.code ?? ''),
+    isNew && v.confirm !== options.confirmDefault,
+  ].filter(Boolean).length;
 }

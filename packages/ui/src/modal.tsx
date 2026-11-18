@@ -716,6 +716,7 @@ export function ConfirmDialog({
   title,
   text,
   ok,
+  cancel,
   danger = false,
   onConfirm,
 }: {
@@ -725,6 +726,8 @@ export function ConfirmDialog({
   text: ReactNode;
   /** Надпись кнопки действия; по умолчанию «Подтвердить». */
   ok?: string;
+  /** Надпись кнопки отказа, когда «Отмена» читается двояко («Не отменять»); по умолчанию «Отмена». */
+  cancel?: string;
   danger?: boolean;
   onConfirm: () => void;
 }) {
@@ -736,7 +739,7 @@ export function ConfirmDialog({
       kind="message"
       title={title}
       footer={confirmFooter({
-        cancel: labels.cancel,
+        cancel: cancel ?? labels.cancel,
         ok: ok ?? labels.confirm,
         danger,
         onCancel: onClose,
