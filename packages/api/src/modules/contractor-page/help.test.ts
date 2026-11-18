@@ -159,13 +159,15 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const open = await visit(`org-a/${cp.inn}`, cookie);
     expect(open.state).toBe('open');
     if (open.state !== 'open') return;
+    // Облачка прежних разделов («Главное», «Ваш бухгалтер», «Контакты»…) с прототипа v135 выключены.
+    expect(before.help.tour.some((s) => !s.on)).toBe(true);
     expect(open.page.help.tour.map((s) => s.id)).toEqual(
-      before.help.tour.filter((s) => s.id !== step.id).map((s) => s.id),
+      before.help.tour.filter((s) => s.on && s.id !== step.id).map((s) => s.id),
     );
     expect(open.page.help.faq.some((x) => x.id === q.id)).toBe(false);
     expect(open.page.help.gloss.length).toBe(before.help.gloss.length);
-    expect(open.page.help.welcome.t).toBe(before.help.welcome.t);
-    expect(open.page.help.hints.paidSteps).toBe(before.help.hints.paidSteps);
+    expect(open.page.help.welcome.lead).toBe(before.help.welcome.lead);
+    expect(open.page.help.hints.paidNote).toBe(before.help.hints.paidNote);
     // Вернуть как было — остальные тесты считают облачка наполнения.
     v = (await edited({ ...step, op: 'tour', on: true, version: v })).version;
     await edited({
@@ -194,7 +196,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     // Шаг больше числа шагов, «из M» больше облачков справочника, свободный текст — 400.
     expect((await tour(path, { full: false, step: 4, of: 3 }, cookie)).status).toBe(400);
     expect((await tour(path, { full: false, step: 1, of: 13 }, cookie)).status).toBe(400);
-    const steps = (await help()).help.tour.length;
+    // «Из M» — не больше включённых облачков: выключенные (с v135 — и последнее) в обзор не входят.
+    const steps = (await help()).help.tour.filter((x) => x.on).length;
     expect((await tour(path, { full: false, step: 1, of: steps + 1 }, cookie)).status).toBe(400);
     expect((await tour(path, { full: 'да', step: 1, of: 2 }, cookie)).status).toBe(400);
     expect(await tourHistory(cp.id)).toEqual([]);
@@ -396,7 +399,12 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     }
     const wel = await file('cpwel');
     expect(wel.header).toEqual(['Код', 'Где', 'Текст']);
-    expect(wel.rows.find((r) => r[0] === 't')![1]).toBe('Заголовок окна');
+    // Приглашение — полоса из трёх текстов (прототип v135): заголовка окна и «Что вы увидите» больше нет.
+    expect(wel.rows.map((r) => [r[0], r[1]])).toEqual([
+      ['lead', 'Строка приглашения'],
+      ['go', 'Кнопка обзора'],
+      ['skip', 'Кнопка «Не сейчас»'],
+    ]);
 
     const text = ioTsv([
       wel.header,
@@ -404,7 +412,7 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       ['newKey', '', 'Новый текст'],
     ]);
     const p = await preview('cpwel', text);
-    expect(p.change.map((x) => [x.code, x.name])).toEqual([['lead', 'Строка под заголовком']]);
+    expect(p.change.map((x) => [x.code, x.name])).toEqual([['lead', 'Строка приглашения']]);
     expect(p.errors.map((x) => [x.code, x.errors])).toEqual([
       ['newKey', ['Такой строки нет: новые тексты и облачка добавляет разработчик']],
     ]);

@@ -246,7 +246,9 @@ const glossWriter: SectionWriter = {
     return writeRow(tx, 'cpgloss', w, (h, version) => {
       const now = h.gloss.find((g) => g.w === value.code);
       if (base ? !now : now) return CHANGED;
-      return { op: 'gloss', ...(base ? { was: value.code } : {}), w, x, also, version };
+      // «Подчёркивать на странице» в файле нет: загрузка его не меняет (прототип `DX.cpgloss.upd`).
+      const pg = now?.pg === false ? { pg: false } : {};
+      return { op: 'gloss', ...(base ? { was: value.code } : {}), w, x, also, ...pg, version };
     });
   },
   async remove(tx, record) {

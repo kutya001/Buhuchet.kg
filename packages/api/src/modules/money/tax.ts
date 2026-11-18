@@ -204,6 +204,10 @@ export function contractorMoneyHandler(
       months,
       balance,
       free: view.money.free,
+      owe: [...view.money.reports.values()].reduce(
+        (sum, r) => sum + (r.funds && r.funds.state !== 'paid' ? r.funds.need : 0),
+        0,
+      ),
       need: rec.due.map((rid) => item(rid, (r) => r.sum! - r.paid)),
       needSum: rec.dueSum,
       later: rec.later.map((rid) => item(rid, (r) => view.money.reports.get(r.id)?.reserved ?? 0)),

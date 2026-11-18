@@ -2,7 +2,7 @@
 
 import { bishkekTime, PAGE_CODE_LENGTH } from '@buhuchet/domain';
 import { PublicPageCodeInput, type CpCodeHelp, type PublicPage } from '@buhuchet/shared';
-import { buttonClass, Field, Icon, inputClass, useMounted } from '@buhuchet/ui';
+import { buttonClass, Icon, inputClass, useMounted } from '@buhuchet/ui';
 import { useRouter } from 'next/navigation';
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
@@ -69,7 +69,9 @@ export function PublicPageScreen({
       );
       break;
   }
-  // На телефоне у открытой страницы внизу панель разделов: последний раздел не уходит под неё.
+  // На телефоне у открытой страницы внизу меню разделов: последний раздел не уходит под него. Сноска
+  // «Обновлено …» — только у открытой страницы (её рисует `OpenPage`); на экранах кода и отказа сноски нет
+  // (прототип v135 `pubDraw`).
   const navPad =
     state.state === 'open' ? 'max-md:pb-[calc(84px+env(safe-area-inset-bottom,0px))]' : '';
   return (
@@ -81,10 +83,6 @@ export function PublicPageScreen({
         className={`flex min-h-dvh flex-col items-center gap-[18px] bg-frame px-4 pt-6 pb-8 max-md:gap-3.5 max-md:px-3 max-md:pt-3.5 ${navPad}`}
       >
         {main}
-        <footer className="text-center text-[12px] text-faint">
-          {/* Прототип v112: бухгалтер принимает файлы со страницы — другая строка подвала. */}
-          {t(state.state === 'open' && state.page.sent?.upload ? 'pub.foot.upload' : 'pub.foot')}
-        </footer>
       </main>
     </UiProviders>
   );
@@ -93,6 +91,12 @@ export function PublicPageScreen({
 const GATE =
   'mt-[8vh] flex w-[min(420px,100%)] flex-col gap-3 rounded-2xl border border-line bg-raised px-6 py-[26px] shadow-pop max-md:mt-[4vh] max-md:px-[18px] max-md:py-[22px]';
 
+/**
+ * Знак платформы на экранах до кода. В прототипе v135 (`pubBrand`) здесь логотип и название бухгалтерской
+ * компании; в продукте организация видна только после кода — ТЗ «по чужому ИНН без его кода не видно
+ * ничего» строже.
+ * ОТКЛОНЕНИЕ: docs/deviations.md#К-21
+ */
 function PageBrand() {
   return (
     <div className="flex items-center gap-2 text-[15px] text-accent">
@@ -145,7 +149,7 @@ function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
 }
 
 /**
- * «Введите код доступа»: 6 цифр (только цифры, не больше шести); верный код — сервер запоминает этот
+ * «Введите код»: 6 цифр (только цифры, не больше шести); верный код — сервер запоминает этот
  * браузер на 1 день (доработки 14.11.2026, блок 6, пункт 5), страница перечитывается; неверный — «Осталось попыток» (меньший из остатков по
  * ссылке и по адресу, docs/deviations.md п. О-1); 5 неверных подряд — перерыв на 15 минут, 3 неверных
  * за час с одного адреса — час (docs/deviations.md п. Е-2); 5 неверных за сутки — страница закрыта до
@@ -209,25 +213,33 @@ function CodeGate({ slug, inn, help }: { slug: string; inn: string; help: CpCode
       <PageBrand />
       <h1 className="m-0 text-[20px] font-[720]">{t('pub.code.title')}</h1>
       <p className="m-0 text-muted">{t('pub.code.text')}</p>
-      <Field id="pub-k" label={t('pub.code.label')} error={error || undefined} full>
-        {(control) => (
-          <input
-            {...control}
-            ref={input}
-            value={code}
-            onChange={(e) => {
-              setCode(e.target.value.replace(/\D/g, '').slice(0, PAGE_CODE_LENGTH));
-              setError('');
-            }}
-            className={`${inputClass()} text-center font-mono text-[22px] tracking-[.3em]`}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={PAGE_CODE_LENGTH}
-            placeholder="••••••"
-            autoFocus
-          />
-        )}
-      </Field>
+      {/* Подписи над полем нет: что вводить — строкой выше; имя поля — `aria-label` (прототип v135). */}
+      <div className="flex min-w-0 flex-col gap-[5px]">
+        <input
+          id="pub-k"
+          ref={input}
+          value={code}
+          onChange={(e) => {
+            setCode(e.target.value.replace(/\D/g, '').slice(0, PAGE_CODE_LENGTH));
+            setError('');
+          }}
+          className={`${inputClass()} text-center font-mono text-[22px] tracking-[.3em]`}
+          inputMode="numeric"
+          autoComplete="one-time-code"
+          maxLength={PAGE_CODE_LENGTH}
+          placeholder="••••••"
+          aria-label={t('pub.code.label')}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? 'pub-k-err' : undefined}
+          autoFocus
+        />
+        {error ? (
+          <div id="pub-k-err" className="flex items-start gap-[5px] text-[12px] text-danger">
+            <Icon name="alert" size="sm" className="mt-px" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+      </div>
       <button
         type="submit"
         className={`${buttonClass('cta')} justify-center`}
@@ -235,7 +247,6 @@ function CodeGate({ slug, inn, help }: { slug: string; inn: string; help: CpCode
       >
         {t('pub.code.open')}
       </button>
-      <span className="text-[11.5px] leading-[1.4] text-faint">{t('pub.code.remember')}</span>
       <ForgotCode slug={slug} inn={inn} />
       <CodeWhat help={help} />
     </form>

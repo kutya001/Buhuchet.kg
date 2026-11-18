@@ -435,12 +435,15 @@ export const TAX_MONEY_TEXTS = {
   'money.cp.pays_to.emp': { ru: 'на кошелёк ответственного', section: S },
   'money.cp.pays_to.org': { ru: 'на счёт организации', section: S },
   'money.cp.saved': { ru: 'Сохранено', section: S },
+  'money.cp.undo': { ru: 'Отменить', section: S },
+  'money.cp.undone': { ru: 'Отменено', section: S },
   'money.cp.balance': { ru: 'Баланс по контрагенту', section: S },
   'money.cp.received': { ru: 'Получено от контрагента', section: S },
   'money.cp.paid': { ru: 'Оплачено в бюджет', section: S },
   'money.cp.self_paid': { ru: 'из них контрагент оплатил сам: {amount}', section: S },
   'money.cp.bonus': { ru: 'Списано в бонус', section: S },
   'money.cp.available': { ru: 'Остаток на счёте', section: S },
+  'money.cp.fee_debt': { ru: 'Долг за обслуживание', section: S },
 
   // История контрагента
   'cp.hist.receipt': { ru: 'Поступление {amount}', section: S },

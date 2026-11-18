@@ -459,10 +459,6 @@ export const CONTRACTORS_TEXTS = {
   'cp.ben.ui.sum': { ru: 'Выбрано: {n}', section: S },
   // Форма создания и «Изменить» (задача 2.09; прототип modules/contractor-form.js, gked-ui.js).
   'cp.form.title_new': { ru: 'Новый контрагент', section: S },
-  'cp.form.sub_new': {
-    ru: 'Обязательные поля отмечены звёздочкой, остальные можно заполнить позже',
-    section: S,
-  },
   'cp.form.title_edit': { ru: 'Изменить контрагента', section: S },
   'cp.form.sec.1': { ru: 'Реквизиты', section: S },
   'cp.form.sec.2': { ru: 'Режим и статусы', section: S },
@@ -477,14 +473,7 @@ export const CONTRACTORS_TEXTS = {
   'cp.form.kind': { ru: 'Тип обслуживания', section: S },
   'cp.form.kind.regular': { ru: 'Постоянное обслуживание', section: S },
   'cp.form.kind.oneoff': { ru: 'Разовое', section: S },
-  'cp.form.kind.regular_hint': {
-    ru: 'Сдаёт отчёты, платит за обслуживание по тарифу.',
-    section: S,
-  },
-  'cp.form.kind.oneoff_hint': {
-    ru: 'Отчётов и тарифа нет: только разовые услуги и проекты. Потом можно перевести в постоянное.',
-    section: S,
-  },
+  'cp.form.kind.oneoff_hint': { ru: 'Без отчётов и тарифа: только услуги и проекты', section: S },
   'cp.form.name': { ru: 'Название', section: S },
   'cp.form.name_placeholder': { ru: 'ОсОО «Компания»', section: S },
   'cp.form.inn': { ru: 'ИНН', section: S },
@@ -494,19 +483,11 @@ export const CONTRACTORS_TEXTS = {
   'cp.form.form': { ru: 'Форма собственности', section: S },
   'cp.form.choose': { ru: '— выберите —', section: S },
   'cp.form.office': { ru: 'Налоговый орган (УГНС)', section: S },
-  'cp.form.office_hint': { ru: 'Список ведёт администратор платформы', section: S },
   'cp.form.not_set': { ru: '— не указан —', section: S },
   'cp.form.head': { ru: 'Руководитель', section: S },
   'cp.form.contact': { ru: 'Контактное лицо', section: S },
   'cp.form.reg_toggle': { ru: 'Регистрационные данные', section: S },
-  'cp.form.reg_hint': {
-    ru: 'полное наименование, регистрационный номер, ОКПО, юридический адрес, почта, даты регистрации, учредители',
-    section: S,
-  },
-  'cp.form.reg_hint_optional': {
-    ru: 'полное наименование, регистрационный номер, ОКПО, юридический адрес, почта, даты регистрации, учредители — необязательно',
-    section: S,
-  },
+  'cp.form.reg_hint': { ru: 'наименование, номер, ОКПО, адрес, учредители', section: S },
   'cp.form.regime': { ru: 'Режим налогообложения', section: S },
   'cp.form.regime_hint': {
     ru: 'Не обязательно. Без режима обязательные отчёты не подбираются: проверьте назначение вручную.',
@@ -528,10 +509,6 @@ export const CONTRACTORS_TEXTS = {
   'cp.form.size_rule.large': { ru: 'выручка за 12 месяцев свыше 50 млн сом', section: S },
   'cp.form.benefits': { ru: 'Льготы и особые статусы', section: S },
   'cp.form.benefits_btn': { ru: 'Выбрать льготы и статусы', section: S },
-  'cp.form.benefits_hint': {
-    ru: 'Необязательно. В окне — описание каждой льготы, условия и какие отчёты она добавляет или делает ненужными',
-    section: S,
-  },
   'cp.form.benefits_none': { ru: 'нет', section: S },
   'cp.form.benefit.by_office': { ru: ' · отмечен по УГНС', section: S },
   'cp.form.benefit.from': { ru: ' · с {date}', section: S },
@@ -549,10 +526,7 @@ export const CONTRACTORS_TEXTS = {
   'cp.form.types_remove': { ru: 'Убрать {name}', section: S },
   'cp.form.pick_btn': { ru: 'Подобрать отчёты', section: S },
   'cp.form.add_btn': { ru: 'Добавить отчёт', section: S },
-  'cp.form.types_auto': {
-    ru: 'Подобрано автоматически по режиму, статусам и основаниям. Проверьте в «Подобрать отчёты»: там описание каждого отчёта.',
-    section: S,
-  },
+  'cp.form.types_auto': { ru: 'Подобрано автоматически — проверьте', section: S },
   'cp.form.missing': {
     ru: 'Обязательны по режиму, статусам или основаниям, но не выбраны: {names}',
     section: S,
@@ -564,6 +538,7 @@ export const CONTRACTORS_TEXTS = {
   'cp.form.must.ok': { ru: 'Снять', section: S },
   'cp.form.rates': { ru: 'Ставки налога', section: S },
   'cp.form.rates_none': { ru: 'У выбранных видов ставка не выбирается', section: S },
+  'cp.form.rates_short': { ru: 'Ставки — из каталога', section: S },
   'cp.form.rates_hint': {
     ru: 'Ставки ведёт администратор платформы: у видов отчётов — в каталоге, у единого налога — в справочнике «Ставки единого налога» (строки ЕНС подставлены по ГКЭД и статусам). Повторяющуюся сумму (например, патент) можно задать позже в карточке, кнопка «Ставки».',
     section: S,
@@ -583,10 +558,7 @@ export const CONTRACTORS_TEXTS = {
   'cp.form.first.prorate': { ru: 'Пропорционально дням', section: S },
   'cp.form.first.full': { ru: 'Полный месяц', section: S },
   'cp.form.first.next': { ru: 'Со следующего месяца', section: S },
-  'cp.form.fee_locked': {
-    ru: 'Стоимость обслуживания вам не видна. Её внесёт владелец или сотрудник с правом «Плата за обслуживание».',
-    section: S,
-  },
+  'cp.form.fee_locked': { ru: 'Стоимость внесёт владелец', section: S },
   'cp.form.pro.year': {
     ru: 'Начисление {sum} раз в год: в {month}, затем каждый {month_name}.',
     section: S,
@@ -614,7 +586,7 @@ export const CONTRACTORS_TEXTS = {
     section: S,
   },
   'cp.form.edit.reports_note': {
-    ru: 'Отчёты здесь не выбираются: их подбор с описаниями — на вкладке «Подбор отчётов» карточки контрагента. После смены режима, статусов, оснований или видов деятельности проверьте отчёты там.',
+    ru: 'Отчёты подбираются на вкладке «Подбор отчётов» карточки: после смены режима, статусов или ГКЭД проверьте их там.',
     section: S,
   },
   'cp.form.edit.bad_types': {
@@ -622,22 +594,17 @@ export const CONTRACTORS_TEXTS = {
     section: S,
   },
   'cp.form.edit.fee_day': { ru: 'День оплаты обслуживания', section: S },
-  'cp.form.edit.fee_day_hint': {
-    ru: 'Число месяца, до которого контрагент платит за обслуживание (1–28)',
-    section: S,
-  },
   'cp.form.edit.start_hint': {
     ru: 'С этой даты ведётся учёт контрагента: первый период обслуживания, начисления за обслуживание и месяцы показателей',
     section: S,
   },
   'cp.form.edit.start_reason': { ru: 'Причина изменения даты', section: S },
   'cp.form.edit.start_reason_placeholder': { ru: 'Например: внесли с ошибкой', section: S },
-  'cp.form.edit.start_reason_hint': {
-    ru: 'Обязательна, если дата начала меняется',
-    section: S,
-  },
+  'cp.form.edit.fee_day_placeholder': { ru: '1–28', section: S },
+  'cp.form.edit.socfund': { ru: 'Тариф Соцфонда: {name}', section: S },
+  'cp.form.edit.socfund_none': { ru: 'не указан', section: S },
   'cp.form.edit.foot': {
-    ru: 'Тип обслуживания, тариф, ответственный и периоды обслуживания меняются своими действиями в карточке.',
+    ru: 'Тип, тариф, ответственный и периоды обслуживания меняются в карточке',
     section: S,
   },
   'cp.form.edit.no_changes': { ru: 'Изменений нет', section: S },
@@ -681,7 +648,6 @@ export const CONTRACTORS_TEXTS = {
   },
   'cp.form.gked.choose': { ru: 'Выбрать вид деятельности', section: S },
   'cp.form.gked.extra': { ru: 'Дополнительные виды деятельности (ГКЭД)', section: S },
-  'cp.form.gked.extra_hint': { ru: 'Сколько угодно кодов; основной повторять нельзя', section: S },
   'cp.form.gked.extra_one': { ru: 'Дополнительный вид деятельности (ГКЭД)', section: S },
   'cp.form.gked.remove': { ru: 'Убрать {code}', section: S },
   'cp.form.rate.title': { ru: 'Ставки налога', section: S },

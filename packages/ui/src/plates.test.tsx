@@ -47,6 +47,26 @@ describe('Статистика модуля — плашки-итоги (про�
     expect(html).not.toContain('text-[25px]');
   });
 
+  it('маленькая карточка окна (прототип v142 `.cp-hot`): число 20 px, красное у просрочки, подсказка', () => {
+    const html = renderToStaticMarkup(
+      <Plate
+        id="reports"
+        icon="alert"
+        color="red"
+        label="Просрочено отчётов"
+        value="3"
+        small
+        danger
+        title="Открыть вкладку"
+        onClick={vi.fn()}
+      />,
+    );
+    expect(html).toContain('title="Открыть вкладку"');
+    expect(html).toContain('text-[20px] text-danger');
+    expect(html).toContain('px-3 pt-2.5');
+    expect(html).not.toContain('text-[25px]');
+  });
+
   it('скрытая кнопкой «Статистика» — ряда плашек нет', () => {
     const html = renderToStaticMarkup(
       <Plates shown={false}>

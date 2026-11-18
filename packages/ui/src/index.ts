@@ -102,7 +102,7 @@ export {
   type FieldProps,
   type KeyValueItem,
 } from './form';
-export { PACK_QUERY } from './form-pack';
+export { FIELD_LABEL_SELECTOR, PACK_QUERY } from './form-pack';
 export { MINI_WIDE_CHARS, MiniTable, miniWide, type MiniColumn, type MiniRow } from './mini-table';
 export {
   passwordDots,

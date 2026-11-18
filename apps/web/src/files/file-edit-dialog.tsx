@@ -126,7 +126,6 @@ function EditForm({
             label={t('files.editdlg.name')}
             required
             full
-            hint={t('files.editdlg.name_hint')}
             error={errors.name}
           >
             {(control) => (

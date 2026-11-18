@@ -16,12 +16,12 @@ import { useT } from '../l10n/provider';
  * возвращается как было и ищется заново. Узлы React не удаляются и не переносятся — React их находит.
  */
 
-/** Где ищутся слова: строка состояния и разделы (прототип `.pub-state,.pub-s`). */
-const SCOPES = '[data-pub-state],section[data-sec]';
+/** Где ищутся слова: разделы страницы (прототип v135 `.pub-s`). */
+const SCOPES = 'section[data-sec]';
 
 /** Внутри чего слова не подчёркиваются (прототип `CPH_GSKIP`). */
 const SKIP =
-  'button,a,input,select,textarea,label,h1,h2,h3,h4,svg,option,[data-pill],[data-no-gloss],.font-mono,.tabular-nums';
+  'button,a,input,select,textarea,label,h1,h2,h3,h4,svg,option,[data-pill],[data-no-gloss],[data-pub-sum],.font-mono,.tabular-nums';
 
 /** Слово с пунктиром (прототип `.pub-gl`). */
 const WORD_CLASS =

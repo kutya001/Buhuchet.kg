@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { cardTab, DEMO_PASSWORD, showStats, signIn, stillElement } from './helpers';
+import { cardTab, closeWindow, DEMO_PASSWORD, showStats, signIn, stillElement } from './helpers';
 import { asOwner, newContractor, staffIds } from './reports';
 
 // «Контрагенты» → плата за обслуживание (задача 2.21, #77) через настоящий сайт. Демо-организация:
@@ -170,7 +170,8 @@ test.describe('Этап 2: плата за обслуживание', () => {
     );
     await cardTab(page, card, isMobile, /История/);
     await expect(card).toContainText('Оплата за обслуживание');
-    await card.getByRole('button', { name: 'Готово' }).click();
+    // «Готово» в подвале карточки — только у «Подбора отчётов» (прототип v137): окно закрывает крестик.
+    await closeWindow(card);
 
     // Бухгалтер alisher: ответы API — 403, в строке списка долга нет.
     await signIn(page.request, origin, 'alisher', DEMO_PASSWORD);

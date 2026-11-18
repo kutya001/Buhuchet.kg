@@ -2,28 +2,28 @@
 
 import {
   fileExtension,
-  formatDateRu,
   PAGE_FILE_CATEGORIES,
+  pageDateWords,
   pluralForm,
   searchText,
   type PageFileCategory,
 } from '@buhuchet/domain';
-import type { PageFile, PageFilesItem } from '@buhuchet/shared';
+import type { PageFile, PageFilesItem, PageSent } from '@buhuchet/shared';
 import { Icon, inputClass, type IconName } from '@buhuchet/ui';
 import { useState, type ReactNode } from 'react';
 import { FileViewer } from '../files/file-viewer';
-import { fileSizeText } from '../files/files-data';
+import { PageSentList } from '../files/page-sent';
 import { useT } from '../l10n/provider';
 import { usePageHint } from './page-help-context';
 import { PageList } from './page-parts';
 
 /*
- * Раздел «Файлы» открытой страницы контрагента (решение заказчика 06.11.2026; прототип v74
- * modules/cp-page.js — `pubFiles`, `pubFq`, `pubFileOpen`, стили css/pages.css `.pub-fpl`, `.pub-frow`,
- * `.pub-fv`): плашки-категории с числом файлов (только непустые), поиск по названию, строки от новых к
- * старым. Любой файл открывается в окне просмотра со «Скачать» и «‹ ›» по найденным файлам (доработки
- * 16.11.2026, блок 5). Файл отдаёт сервер по ссылке страницы — только в браузере, где страница открыта
- * по коду.
+ * Раздел «Файлы» открытой страницы контрагента (решение заказчика 06.11.2026; прототип v135
+ * modules/cp-page.js — `pubFiles`, `pubFq`, `pubFileOpen`, стили css/pages.css `.pub-chip`, `.pub-frow`):
+ * вкладки «От бухгалтера» и «От вас», чипы-категории с числом файлов (только непустые), поиск по
+ * названию — когда файлов больше 10, строки от новых к старым с датой словами. Любой файл открывается в
+ * окне просмотра со «Скачать» и «‹ ›» по найденным файлам (доработки 16.11.2026, блок 5). Файл отдаёт
+ * сервер по ссылке страницы — только в браузере, где страница открыта по коду.
  */
 
 /** Значок по типу файла (прототип `pubFIc`). */
@@ -35,8 +35,8 @@ export function fileIcon(name: string): IconName {
   return 'file';
 }
 
-/** Плашка-фильтр категории (прототип `.plates.pub-fpl .plate`): подпись и число, без значка. */
-function CategoryPlate({
+/** Чип-фильтр категории (прототип v135 `.pub-chip`): подпись и число. */
+function CategoryChip({
   id,
   label,
   value,
@@ -55,12 +55,9 @@ function CategoryPlate({
       data-pub-ff={id}
       aria-pressed={on}
       onClick={onClick}
-      className={`flex min-w-[96px] flex-[0_1_auto] cursor-pointer flex-col gap-1 rounded-xl border border-line bg-raised px-3.5 pt-2.5 pb-[11px] text-left font-[inherit] text-ink transition-[transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue max-md:px-3 max-md:py-2 ${on ? 'shadow-btn-active' : 'hover:-translate-y-px hover:shadow-pane'}`}
+      className={`inline-flex min-h-8 cursor-pointer items-center gap-[5px] rounded-full border px-3 py-1 font-[inherit] text-[13px] text-ink transition-colors max-md:min-h-10 ${on ? 'border-accent bg-sel' : 'border-line bg-raised hover:border-line-strong'}`}
     >
-      <span className="text-[12.5px] font-semibold text-muted max-md:text-[11.5px]">{label}</span>
-      <span className="text-[20px] leading-[1.05] font-[720] tabular-nums max-md:text-[18px]">
-        {value}
-      </span>
+      {label} <b className="font-[650] text-muted">{value}</b>
     </button>
   );
 }
@@ -121,15 +118,22 @@ export function usePageFileViewer(fileHref: (id: string) => string): {
   };
 }
 
+/** Вкладка «Файлов»: от бухгалтера или от вас. */
+export type FilesTab = 'acc' | 'you';
+
 /**
- * Раздел «Файлы»: итог для заголовка свёрнутого раздела («24 файла») и содержимое. Без раздела
- * (`files` = null) — null; хук вызывается всегда в одном порядке.
+ * Раздел «Файлы» (прототип v135 `pubBody`, `has('files')`): итог для заголовка («24 файла» — вместе с
+ * отправленными), вкладки «От бухгалтера» и «От вас» (когда клиент что-то отправлял или может
+ * отправить), у файлов бухгалтера — чипы категорий (когда их больше одной) и поиск (когда файлов больше
+ * 10). Без раздела (`files` = null) — null; хук вызывается всегда в одном порядке.
  */
 export function usePageFilesSection(
   files: readonly PageFilesItem[] | null,
+  sent: PageSent | null,
+  today: string,
   openFile: OpenPageFile,
-  /** Бухгалтер принимает файлы со страницы: пустой раздел говорит и об отправленных. */
-  upload = false,
+  tab: FilesTab | null,
+  setTab: (tab: FilesTab) => void,
 ): { sum: string; body: ReactNode } | null {
   const t = useT();
   const hint = usePageHint();
@@ -138,26 +142,53 @@ export function usePageFilesSection(
   const [all, setAll] = useState(false);
   if (!files) return null;
   const n = files.length;
-  if (!n) {
-    // Пустой раздел объясняет, что здесь появится (доработки 15.11.2026, пункт 5.5).
-    const none = hint(upload ? 'emptyFiles' : 'emptyFilesView', t('pub.files.none'));
-    return { sum: '', body: <span className="text-faint">{none}</span> };
-  }
+  const sentN = sent?.items.length ?? 0;
+  const upload = !!sent?.upload;
+  const current: FilesTab = tab === 'you' || (!n && sentN) ? 'you' : 'acc';
+  const total = n + sentN;
 
   const cats = PAGE_FILE_CATEGORIES.filter((k) => files.some((f) => f.category === k));
   const ff = cats.includes(filter as PageFileCategory) ? filter : '';
   const shown = files.filter((f) => !ff || f.category === ff);
-  const q = searchText(query.trim());
+  const q = n > 10 ? searchText(query.trim()) : '';
   const found = q ? shown.filter((f) => searchText(f.name).includes(q)) : shown;
   const subOf = (f: PageFilesItem) =>
     `${t(`pub.files.cat.${f.category}`)}${f.rel ? ` · ${f.rel}` : ''}`;
 
-  return {
-    sum: t(`pub.files.count.${pluralForm(n)}`, { n }),
-    body: (
-      <>
-        <div data-plates="" className="flex flex-wrap gap-2.5 max-md:gap-2">
-          <CategoryPlate
+  const tabs =
+    sentN || upload ? (
+      <div
+        role="tablist"
+        aria-label={t('pub.files.tabs')}
+        className="inline-flex gap-0.5 self-start rounded-lg bg-pane-alt p-0.5"
+      >
+        {(
+          [
+            ['acc', t('pub.files.tab.acc'), n],
+            ['you', t('pub.files.tab.you'), sentN],
+          ] as const
+        ).map(([k, label, count]) => (
+          <button
+            key={k}
+            type="button"
+            role="tab"
+            data-pub-ft={k}
+            aria-selected={current === k}
+            onClick={() => setTab(k)}
+            className={`min-h-8 cursor-pointer rounded-md border-0 px-3 py-1 font-[inherit] text-[13px] font-semibold max-md:min-h-10 ${current === k ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted hover:text-ink'}`}
+          >
+            {label}
+            {count ? ` · ${count}` : ''}
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  const fromAccountant = n ? (
+    <>
+      {cats.length > 1 ? (
+        <div className="flex flex-wrap gap-1.5">
+          <CategoryChip
             id=""
             label={t('pub.files.all')}
             value={n}
@@ -165,7 +196,7 @@ export function usePageFilesSection(
             onClick={() => setFilter('')}
           />
           {cats.map((k) => (
-            <CategoryPlate
+            <CategoryChip
               key={k}
               id={k}
               label={t(`pub.files.cat.${k}`)}
@@ -175,50 +206,67 @@ export function usePageFilesSection(
             />
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <input
-            type="search"
-            data-pub-fq=""
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('pub.files.search')}
-            aria-label={t('pub.files.search_label')}
-            autoComplete="off"
-            className={`${inputClass({ full: false })} w-full max-w-[320px] max-md:max-w-none`}
-          />
+      ) : null}
+      {n > 10 ? (
+        <input
+          type="search"
+          data-pub-fq=""
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t('pub.files.search')}
+          aria-label={t('pub.files.search_label')}
+          autoComplete="off"
+          className={`${inputClass({ full: false })} w-full max-w-[320px] max-md:max-w-none`}
+        />
+      ) : null}
+      {found.length ? (
+        <PageList
+          count={found.length}
+          // При поиске список показывается целиком (прототип `pubFq`).
+          all={all || !!q}
+          onAll={() => setAll(true)}
+          more={t('pub.more', { n: found.length - 5 })}
+        >
+          {found.map((f, i) => (
+            <button
+              key={f.id}
+              type="button"
+              data-pub-fo={f.id}
+              data-no-gloss=""
+              title={t('pub.files.view')}
+              onClick={() => openFile(found, i, subOf)}
+              className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-raised px-3 py-[9px] text-left font-[inherit] text-inherit hover:border-line-strong max-md:gap-2 max-md:px-2.5 max-md:py-2"
+            >
+              <Icon name={fileIcon(f.name)} className="flex-none text-muted" />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <b className="font-semibold [overflow-wrap:anywhere]">{f.name}</b>
+                <span className="text-[12px] text-faint">{subOf(f)}</span>
+              </span>
+              <span className="flex-none text-right text-[12px] whitespace-nowrap text-faint">
+                {pageDateWords(f.date, today)}
+              </span>
+            </button>
+          ))}
+        </PageList>
+      ) : (
+        <span className="text-faint">{t('pub.files.none_q')}</span>
+      )}
+    </>
+  ) : (
+    // Пустой раздел объясняет, что здесь появится (доработки 15.11.2026, пункт 5.5).
+    <span data-pub-files-none="" className="text-faint">
+      {hint(upload ? 'emptyFiles' : 'emptyFilesView', t('pub.files.none'))}
+    </span>
+  );
+
+  return {
+    sum: total ? t(`pub.files.count.${pluralForm(total)}`, { n: total }) : '',
+    body: (
+      <>
+        {tabs}
+        <div key={current} className="flex animate-fade flex-col gap-2.5">
+          {current === 'you' ? <PageSentList sent={sent} today={today} /> : fromAccountant}
         </div>
-        {found.length ? (
-          <PageList
-            count={found.length}
-            // При поиске список показывается целиком (прототип `pubFq`).
-            all={all || !!q}
-            onAll={() => setAll(true)}
-            more={t('pub.more', { n: found.length - 5 })}
-          >
-            {found.map((f, i) => (
-              <button
-                key={f.id}
-                type="button"
-                data-pub-fo={f.id}
-                title={t('pub.files.view')}
-                onClick={() => openFile(found, i, subOf)}
-                className="flex w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-lg border border-line bg-raised px-3 py-[9px] text-left font-[inherit] text-inherit hover:border-info max-md:gap-2 max-md:px-2.5 max-md:py-2"
-              >
-                <Icon name={fileIcon(f.name)} className="flex-none text-muted" />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <b className="font-semibold [overflow-wrap:anywhere]">{f.name}</b>
-                  <span className="text-[12px] text-faint">{subOf(f)}</span>
-                </span>
-                <span className="flex flex-none flex-col items-end text-right text-[12px] whitespace-nowrap text-faint">
-                  <span>{formatDateRu(f.date)}</span>
-                  <span>{fileSizeText(t, f.size)}</span>
-                </span>
-              </button>
-            ))}
-          </PageList>
-        ) : (
-          <span className="text-faint">{t('pub.files.none_q')}</span>
-        )}
       </>
     ),
   };

@@ -22,8 +22,15 @@ import {
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
-/** Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). */
-const CODE = { state: 'code', help: { what: expect.any(String), whatX: expect.any(String) } };
+/**
+ * Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). Ни о
+ * контрагенте, ни об организации до кода в ответе нет (docs/deviations.md п. К-21): ответы сверяются
+ * целиком (`toEqual`).
+ */
+const CODE = {
+  state: 'code',
+  help: { what: expect.any(String), whatX: expect.any(String) },
+};
 
 const PHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -449,7 +456,10 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(until - Date.now()).toBeLessThanOrEqual(15 * 60_000 + 5_000);
     // Закрыт и верный код; страница показывает перерыв.
     expect((await enter(path, code, '198.51.100.2')).status).toBe(429);
-    expect((await visited(path)).state).toBe('locked');
+    expect(await visited(path)).toEqual({
+      state: 'locked',
+      lockedUntil: expect.any(String),
+    });
     const locks = (await history(cpAcc.id)).filter((h) => h.action === 'page_lock');
     expect(locks).toHaveLength(1);
     await resetLock(cpAcc.id);

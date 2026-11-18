@@ -14,8 +14,10 @@ import type { IconName } from '@buhuchet/ui';
  */
 
 /**
- * Что видно на странице (прототип `cphVis`): показанные разделы, карточки «Как оплатить», «Я оплатил»,
- * «Отправить файл», места для Telegram и можно ли прислать код в Telegram.
+ * Что видно на странице (прототип v135 `cphVis`, `cphSec`): показанные разделы и их части — `money`
+ * (расчёт «Не хватает» в строке «Налоги» «Оплаты»), `fee` (строка «Услуги бухгалтера»), `tg` (Telegram
+ * в «Связи»), счета для оплаты, «Я оплатил», «Отправить файл», места для Telegram и можно ли прислать
+ * код в Telegram.
  */
 export function pageHelpView(
   page: PublicPageBody,
@@ -23,8 +25,12 @@ export function pageHelpView(
   o: { paid: boolean },
 ): CpHelpView {
   const shown = new Set(sections);
-  const payTax = shown.has('pay') && !!page.pay?.tax;
-  const payFee = shown.has('pay') && !!page.pay?.fee;
+  const pay = shown.has('pay');
+  if (pay && page.money) shown.add('money');
+  if (pay && page.fee) shown.add('fee');
+  if (page.telegram) shown.add('tg');
+  const payTax = pay && !!page.pay?.tax;
+  const payFee = pay && !!page.fee && !!page.pay?.fee;
   return {
     sections: shown,
     payTax,
@@ -38,21 +44,24 @@ export function pageHelpView(
 }
 
 /**
- * Что подсвечивает облачко (прототип `CPH_EL`, `cphElSel`): строка состояния, кнопка «Помощь», раздел;
- * у «Как оплатить» на телефоне — первая карточка, чтобы облачко внизу её не закрывало. «Готово!» —
- * ничего.
+ * Что подсвечивает облачко (прототип v135 `CPH_EL`, `cphElSel`): «Что нужно сделать», кнопка «?» (на
+ * телефоне — «Помощь» нижнего меню), раздел; у «Оплаты» на телефоне — первая строка, чтобы облачко
+ * внизу её не закрывало. «Готово!» — ничего.
  */
 export function tourTargetSelector(sec: CpTourSec, phone: boolean): string | null {
   if (sec === 'end') return null;
   if (sec === 'state') return '[data-pub-state]';
-  if (sec === 'help') return '[data-pub-help]';
-  if (sec === 'pay' && phone) return '#pub-pay [data-pay]';
+  if (sec === 'help') return phone ? '[data-pub-nav="help"]' : '[data-pub-help]';
+  if (sec === 'pay' && phone) return '#pub-pay [data-po]';
   return `#pub-${sec}`;
 }
 
-/** Раздел, который обзор раскрывает на телефоне на своём шаге (прототип `pubFold(p.sec, true)`). */
+/**
+ * Раздел, который обзор раскрывает на телефоне на своём шаге (прототип `pubFold(p.sec, true)`):
+ * «Оплата» не сворачивается.
+ */
 export function tourUnfolds(sec: CpTourSec): boolean {
-  return sec !== 'end' && sec !== 'state' && sec !== 'help';
+  return sec !== 'end' && sec !== 'state' && sec !== 'help' && sec !== 'pay';
 }
 
 /**

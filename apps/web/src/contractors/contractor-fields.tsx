@@ -10,6 +10,7 @@ import {
 import type { ContractorGkedNotes, OwnershipForm, TaxOffice } from '@buhuchet/shared';
 import { buttonClass, Field, Icon, inputClass, Note, Segments, Tag } from '@buhuchet/ui';
 import type { Catalog } from '../dicts/dicts-data';
+import { InfoTip } from '../kpi/kpi-table';
 import { useT } from '../l10n/provider';
 import type { BenefitChoice } from './benefit-pick';
 
@@ -80,7 +81,7 @@ export function OfficeSelect({
 }) {
   const t = useT();
   return (
-    <Field id={id} label={t('cp.form.office')} hint={t('cp.form.office_hint')}>
+    <Field id={id} label={t('cp.form.office')}>
       {(control) => (
         <select
           {...control}
@@ -160,7 +161,7 @@ export function RegimeFields({
   /** Режимы контрагента до правки: отключённые в справочнике остаются в списке. */
   current?: { regime: string; regime2: string };
   error?: string | undefined;
-  /** Подсказки под полями (у формы создания). */
+  /** Подсказки полей (у формы создания): под режимом — текстом, у дополнительного — «ⓘ» (прототип v137). */
   hints?: boolean;
   onRegime: (code: string) => void;
   onRegime2: (code: string) => void;
@@ -196,7 +197,11 @@ export function RegimeFields({
         <Field
           id={`${idPrefix}-reg2`}
           label={t('cp.form.regime2')}
-          hint={hints ? t('cp.form.regime2_hint') : undefined}
+          tip={
+            hints ? (
+              <InfoTip label={t('cp.form.regime2')} text={t('cp.form.regime2_hint')} />
+            ) : undefined
+          }
         >
           {(control) => (
             <select

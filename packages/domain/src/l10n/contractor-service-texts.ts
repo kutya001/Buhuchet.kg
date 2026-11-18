@@ -36,7 +36,6 @@ export const CONTRACTOR_SERVICE_TEXTS = {
     section: S,
   },
   'svc.pause.resume': { ru: 'Возобновить с месяца', section: S },
-  'svc.pause.resume_hint': { ru: 'Необязательно, можно указать позже', section: S },
   'svc.pause.reason': { ru: 'Причина', section: S },
   'svc.pause.reason_ph': { ru: 'Например: сезонная деятельность', section: S },
   'svc.pause.note': {

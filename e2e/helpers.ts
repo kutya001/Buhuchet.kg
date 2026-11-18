@@ -406,6 +406,55 @@ export async function stillElement(locator: Locator, ms = 120) {
 }
 
 /**
+ * Свёрнутый блок «Основного» карточки контрагента (прототип v137): «Договор и обслуживание» (`contract`),
+ * «Настройки оплаты» (`pay`), «Регистрационные данные» (`reg`), «Ставки, сроки и ответственные» (`asg`),
+ * «Страница клиента» (`page`). Раскрывает, если свёрнут, и отдаёт сам блок. Раскрытое въезжает со сдвигом
+ * (0,25 с): нажатие по кнопке внутри сразу после раскрытия попало бы в середину анимации и потерялось
+ * (docs/typical-mistakes.md № 34), поэтому помощник ждёт, пока содержимое встанет на место.
+ */
+export async function openCardFold(
+  card: Locator,
+  name: 'contract' | 'pay' | 'reg' | 'asg' | 'page',
+): Promise<Locator> {
+  const fold = card.locator(name === 'page' ? '[data-cp-page-fold]' : `[data-cp-det="${name}"]`);
+  await expect(fold).toBeVisible();
+  if ((await fold.getAttribute('open')) === null) await fold.locator('> summary').click();
+  await expect(fold).toHaveAttribute('open', '');
+  await stillElement(fold.locator('> div'));
+  return fold;
+}
+
+/**
+ * Полная шкала статусов записи со строки состояния (прототип v134 `stLine`): в карточке контрагента под
+ * ней — периоды обслуживания и «История статусов». Раскрывает, если свёрнута, и ждёт конца анимации
+ * раскрытия (docs/typical-mistakes.md № 34).
+ */
+export async function openStatusLine(card: Locator): Promise<Locator> {
+  const toggle = card.locator('[data-status-line-scale]');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const full = card.locator('[data-status-line-full]');
+  await stillElement(full);
+  return full;
+}
+
+/**
+ * Раздел формы «Изменить контрагента» (прототип v137): на телефоне разделы — шаги, поле другого шага
+ * скрыто; на ПК все три раздела идут лентой и делать ничего не нужно.
+ */
+export async function editSection(edit: Locator, isMobile: boolean, sec: 1 | 2 | 3) {
+  if (!isMobile) return;
+  await edit.locator(`[data-cf-step="${sec}"]`).click();
+  await expect(edit.locator(`[data-cf-sec="${sec}"]`)).toBeVisible();
+}
+
+/** Закрыть окно крестиком в шапке: «Готово» у карточки контрагента — только у «Подбора отчётов» (прототип v137). */
+export async function closeWindow(dialog: Locator) {
+  await dialog.locator('[data-window-close]').click();
+  await expect(dialog).toBeHidden();
+}
+
+/**
  * Раскрыть карточку целиком (решение заказчика 17.11.2026, прототип v134): под шапкой — строка состояния,
  * полная шкала открывается нажатием на короткую, «Подробности» и «История» свёрнуты. Скрытое не нажать и
  * не найти по роли, поэтому тест шкалы, реквизитов и истории сначала раскрывает их.

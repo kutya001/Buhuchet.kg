@@ -23,10 +23,6 @@ export const FEE_TEXTS = {
     section: S,
   },
   'cp.card.one_sum_on': { ru: 'налоги и обслуживание вместе', section: S },
-  'cp.card.one_sum_hint': {
-    ru: 'При поступлении деление на налоги и обслуживание подставится само',
-    section: S,
-  },
   'cp.plate.debtors': { ru: 'Должники', section: S },
   'cp.plate.debtors_ok': { ru: 'долгов нет', section: S },
   'cp.col.debt': { ru: 'Долг за обслуживание', section: S },
@@ -106,11 +102,8 @@ export const FEE_TEXTS = {
   'fee.tariff.from_hint_first': { ru: 'Ставка всегда начинается с 1-го числа', section: S },
   'fee.tariff.note': { ru: 'Примечание', section: S },
   'fee.tariff.note_default': { ru: 'Повышение с {month}', section: S },
-  'fee.tariff.info': {
-    ru: 'Начисления за прошлые месяцы не пересчитываются. Ставку можно внести заранее — она вступит в силу сама.',
-    section: S,
-  },
-  'fee.tariff.ok': { ru: 'Добавить в журнал', section: S },
+  'fee.tariff.info': { ru: 'Прошлые месяцы не пересчитываются', section: S },
+  'fee.tariff.ok': { ru: 'Сохранить ставку', section: S },
   'fee.tariff.saved': { ru: 'Ставка добавлена в журнал', section: S },
 
   // Окно «Изменить ставку обслуживания» (прототип v86 `tariffEditDlg`).
@@ -194,14 +187,8 @@ export const FEE_TEXTS = {
   'fee.wa.where': { ru: 'Куда переводить · основной счёт для обслуживания', section: S },
   'fee.wa.by_phone': { ru: 'по номеру', section: S },
   'fee.wa.text': { ru: 'Текст сообщения', section: S },
-  'fee.wa.text_hint': {
-    ru: 'Шаблон ведёт администратор платформы. Здесь текст можно поправить перед отправкой.',
-    section: S,
-  },
-  'fee.wa.note': {
-    ru: 'Сообщение откроется в WhatsApp на номер {phone}, отправляете его вы сами. Нажатие записывается в историю.',
-    section: S,
-  },
+  'fee.wa.text_hint': { ru: 'Текст можно поправить', section: S },
+  'fee.wa.note': { ru: 'Откроется WhatsApp на номер {phone}, отправляете вы сами', section: S },
   'fee.wa.open': { ru: 'Открыть WhatsApp', section: S },
   'fee.wa.logged': { ru: 'Записано в историю', section: S },
   'fee.wa.requisites': { ru: 'Реквизиты для оплаты: {req}.', section: S },
