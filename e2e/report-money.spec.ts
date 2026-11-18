@@ -367,5 +367,27 @@ test.describe('Этап 2: деньги по отчётам — поступле
     await expect(sum(card, 'Получено')).toContainText(som('5 000 сом'));
     await expect(sum(card, 'Оплачено')).toContainText(som('2 000 сом'));
     await expect(sum(card, 'Осталось')).toContainText(som('3 000 сом'));
+
+    // Карточка контрагента, «Основное» (прототип v137, v142): вверху маленькие карточки — «Осталось
+    // оплатить» (остаток по неоплаченным налогам) и «На счёте»; нажатие открывает «Деньги».
+    await page.goto('/app/cps/all');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    await search(page, isMobile, word);
+    await page
+      .locator('[data-grid] [data-id]')
+      .filter({ hasText: name })
+      .first()
+      .getByText(name, { exact: true })
+      .click();
+    const cpCard = page.getByRole('dialog', { name });
+    const hot = cpCard.locator('[data-cp-hot] [data-plate]');
+    await expect(hot).toHaveCount(2);
+    await expect(hot.filter({ hasText: 'Осталось оплатить' })).toContainText(som('3 000'));
+    await expect(hot.filter({ hasText: 'На счёте' })).toContainText(som('3 000'));
+    // Долга за обслуживание и просроченных отчётов нет — их карточек нет.
+    await expect(hot.filter({ hasText: 'Долг за обслуживание' })).toHaveCount(0);
+    await expect(hot.filter({ hasText: 'Просрочено отчётов' })).toHaveCount(0);
+    await hot.filter({ hasText: 'На счёте' }).click();
+    await expect(cpCard.locator('[data-money-balance]')).toBeVisible();
   });
 });

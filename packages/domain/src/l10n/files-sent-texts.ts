@@ -113,10 +113,6 @@ export const FILES_SENT_TEXTS = {
     section: 'Ошибки',
   },
   'pub.sent.send': { ru: 'Отправить файл', section: S },
-  'pub.sent.hint': {
-    ru: 'Документы для бухгалтера: до 10 файлов за раз, до 20 МБ каждый',
-    section: S,
-  },
   'pub.sent.none': { ru: 'Вы пока ничего не отправляли', section: S },
   'pub.sent.none_off': { ru: 'Файлов от вас нет', section: S },
   'pub.sent.dlg.title': { ru: 'Отправить файл бухгалтеру', section: S },

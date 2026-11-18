@@ -170,7 +170,8 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
     // Экран кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120
     // `cphCodeWhat`): остальные подсказки страница получает после кода.
-    if (state.state === 'unavailable') return c.json({ state: 'unavailable' } as PublicPageBody, 200);
+    if (state.state === 'unavailable')
+      return c.json({ state: 'unavailable' } as PublicPageBody, 200);
     if (state.state !== 'open') {
       // Экраны кода — с названием и логотипом организации (прототип v135 `pubBrand`).
       const org = await pageGateOrg(deps, slug, inn);

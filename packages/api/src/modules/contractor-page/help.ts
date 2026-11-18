@@ -99,7 +99,8 @@ export function publicPageTourHandler(
     const state = await contractorPageState(deps.db, slug, inn, grantHash);
     if (state.state !== 'open') return unavailable();
     const help = await readCpHelp(deps.db);
-    const steps = help.tour.filter((s) => s.sec === 'end' || s.on).length;
+    // Считаются только включённые облачка: с прототипа v135 выключается и последнее (`end`).
+    const steps = help.tour.filter((s) => s.on).length;
     if (tour.of > steps) apiFail(400, 'validation_failed', 'Шаг обзора больше числа шагов');
     const { orgId, contractorId } = state;
     const slot = await takeRateLimit(deps.db, PAGE_TOUR_RATE_LIMIT, grantHash);

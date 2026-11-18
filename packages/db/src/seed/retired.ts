@@ -125,6 +125,7 @@ export const RETIRED = {
     'pub.fee.to_pay',
     'pub.foot',
     'pub.foot.upload',
+    'pub.sent.hint',
     'pub.kpi.count.few',
     'pub.kpi.count.many',
     'pub.kpi.count.one',

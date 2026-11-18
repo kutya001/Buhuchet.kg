@@ -43,9 +43,10 @@ describe('наполнение: `kbUi.cpHelp` — своей строкой `cpH
 });
 
 describe('нестрогое чтение раздела', () => {
-  it('записи, которые не читаются, пропускаются; «Готово!» — всегда активно', () => {
+  it('записи, которые не читаются, пропускаются; выключенное последнее облачко остаётся выключенным (прототип v135)', () => {
     const h = parseCpHelp({
-      welcome: { t: 'Привет', bad: 'x', lead: 5 },
+      // Заголовка окна у приглашения больше нет (прототип v135): `t` — уже не его текст.
+      welcome: { lead: 'Привет', t: 'Заголовок', bad: 'x', go: 5 },
       tour: [
         { id: 'a', sec: 'main', t: 'Главное', x: 'текст', on: false },
         { id: 'b', sec: 'nope', t: 'x', x: 'y' },
@@ -56,10 +57,10 @@ describe('нестрогое чтение раздела', () => {
       gloss: [{ w: 'чек', x: 'Бумажка', also: 7 }, { x: 'без слова' }],
       hints: { helpBtn: 'Помощь', nope: 'x' },
     });
-    expect(h.welcome).toEqual({ t: 'Привет' });
+    expect(h.welcome).toEqual({ lead: 'Привет' });
     expect(h.tour.map((s) => [s.id, s.on])).toEqual([
       ['a', false],
-      ['end', true],
+      ['end', false],
     ]);
     expect(h.faq).toEqual([
       { id: 'q', q: 'Вопрос?', a: 'Ответ', sec: '', act: 'paid', ord: 0, on: true },
@@ -99,7 +100,7 @@ describe('правка без записи (applyCpHelpEdit)', () => {
     gloss: [{ w: 'отчёт', x: 'Документ' }],
   });
 
-  it('у облачка без «действие недоступно» второго текста нет; «Готово!» не выключается', () => {
+  it('у облачка без «действие недоступно» второго текста нет; последнее облачко выключается, как любое (прототип v135)', () => {
     const a = applyCpHelpEdit(
       base,
       { op: 'tour', id: 'acc', t: 'Б', x: 'y', x2: 'z', on: true, version: 1 },
@@ -117,8 +118,8 @@ describe('правка без записи (applyCpHelpEdit)', () => {
       { op: 'tour', id: 'end', t: 'Готово', x: 'x', on: false, version: 1 },
       0,
     );
-    expect('help' in e && e.help.tour[2]?.on).toBe(true);
-    expect('help' in e && e.changes).toEqual([]);
+    expect('help' in e && e.help.tour[2]?.on).toBe(false);
+    expect('help' in e && e.changes.length).toBe(1);
   });
 
   it('новый вопрос — свободный код и «Порядок» после наибольшего, ответ без пустых строк', () => {

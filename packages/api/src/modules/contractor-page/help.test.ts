@@ -159,8 +159,10 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     const open = await visit(`org-a/${cp.inn}`, cookie);
     expect(open.state).toBe('open');
     if (open.state !== 'open') return;
+    // Облачка прежних разделов («Главное», «Ваш бухгалтер», «Контакты»…) с прототипа v135 выключены.
+    expect(before.help.tour.some((s) => !s.on)).toBe(true);
     expect(open.page.help.tour.map((s) => s.id)).toEqual(
-      before.help.tour.filter((s) => s.id !== step.id).map((s) => s.id),
+      before.help.tour.filter((s) => s.on && s.id !== step.id).map((s) => s.id),
     );
     expect(open.page.help.faq.some((x) => x.id === q.id)).toBe(false);
     expect(open.page.help.gloss.length).toBe(before.help.gloss.length);
@@ -194,7 +196,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     // Шаг больше числа шагов, «из M» больше облачков справочника, свободный текст — 400.
     expect((await tour(path, { full: false, step: 4, of: 3 }, cookie)).status).toBe(400);
     expect((await tour(path, { full: false, step: 1, of: 13 }, cookie)).status).toBe(400);
-    const steps = (await help()).help.tour.length;
+    // «Из M» — не больше включённых облачков: выключенные (с v135 — и последнее) в обзор не входят.
+    const steps = (await help()).help.tour.filter((x) => x.on).length;
     expect((await tour(path, { full: false, step: 1, of: steps + 1 }, cookie)).status).toBe(400);
     expect((await tour(path, { full: 'да', step: 1, of: 2 }, cookie)).status).toBe(400);
     expect(await tourHistory(cp.id)).toEqual([]);
