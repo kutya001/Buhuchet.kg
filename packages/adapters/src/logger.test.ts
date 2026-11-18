@@ -1,6 +1,6 @@
 import { Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { createLogger, safeErrorMessage } from './logger';
+import { createLogger, safeErrorMessage, shownErrorMessage } from './logger';
 
 describe('createLogger', () => {
   it('пишет JSON со службой и вычищает секреты', () => {
@@ -116,5 +116,15 @@ describe('createLogger', () => {
     expect(safeErrorMessage(err)).toBe('Ошибка запроса к базе (23505)');
     expect(safeErrorMessage(new Error('сломалось'))).toBe('сломалось');
     expect(safeErrorMessage('не Error')).toBe('не Error');
+  });
+
+  it('текст ошибки для журналов Админки — без токена бота и не длиннее предела', () => {
+    const token = `1234567890:${'A'.repeat(35)}`;
+    const err = new Error(`fetch failed: https://api.telegram.org/bot${token}/sendMessage`);
+    expect(shownErrorMessage(err, 300)).toBe(
+      'fetch failed: https://api.telegram.org/bot[скрыто]/sendMessage',
+    );
+    expect(shownErrorMessage(new Error('я'.repeat(2000)), 1000)).toHaveLength(1000);
+    expect(shownErrorMessage('не Error', 300)).toBe('не Error');
   });
 });

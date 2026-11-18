@@ -4,8 +4,21 @@ import { useId, useState, type ReactNode } from 'react';
 import { Icon } from '../icon';
 import type { IconName } from '../icons';
 
-/** Раскрытые строки состояния: помнятся до перезагрузки страницы (прототип `STL_OPEN`). */
+/**
+ * Раскрытые строки состояния: помнятся до перезагрузки страницы (прототип `STL_OPEN`). Не больше
+ * `OPENED_MAX` последних — за длинный день без перезагрузки список не растёт без предела.
+ */
 const OPENED = new Set<string>();
+const OPENED_MAX = 200;
+
+function remember(id: string) {
+  OPENED.delete(id);
+  OPENED.add(id);
+  for (const old of OPENED) {
+    if (OPENED.size <= OPENED_MAX) break;
+    OPENED.delete(old);
+  }
+}
 
 /**
  * Строка состояния карточки (решение заказчика 17.11.2026, «Меньше текста, понятнее, плавнее», ТЗ п. 8;
@@ -31,7 +44,7 @@ export function StatusLine({
   const panel = useId();
   const toggle = () => {
     const next = !open;
-    if (next) OPENED.add(id);
+    if (next) remember(id);
     else OPENED.delete(id);
     setOpen(next);
   };

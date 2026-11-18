@@ -134,6 +134,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       '/api/admin/telegram/log/values?col=st',
       '/api/admin/telegram/log/export?cols=at',
       '/api/admin/telegram/log/summary',
+      `/api/admin/telegram/log/${ids.sent}`,
       '/api/admin/telegram/bot',
       '/api/admin/telegram/orgs',
     ]) {
@@ -154,20 +155,27 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     expect(row!.status).toBe('error');
   });
 
-  it('журнал всех организаций и платформы: без текста сообщения и номера чата; плашки, фильтр, Excel', async () => {
+  // Текст сообщений журнал показывает по решению заказчика 17.11.2026 (docs/decisions.md п. Т-16);
+  // номера чата в ответах по-прежнему нет, у кода нет и текста.
+  it('журнал всех организаций и платформы: с текстом сообщения, без номера чата; плашки, фильтр, Excel', async () => {
     const res = await get('/api/admin/telegram/log');
     expect(res.status).toBe(200);
     const body = await res.text();
-    expect(body).not.toContain('Секретный текст');
     expect(body).not.toContain(String(CHAT_A));
     const list = AdminTelegramLogList.parse(JSON.parse(body));
     expect(list.total).toBe(4);
     expect(list.items.find((r) => r.id === ids.sent)).toMatchObject({
+      src: 'outbox',
+      dir: 'out',
+      chatKind: 'private',
       recipient: expect.stringContaining('@owner_a'),
       orgName: 'Организация А',
       kind: 'reminders',
       status: 'sent',
+      text: 'Секретный текст напоминания',
+      hide: null,
     });
+    expect(list.items.find((r) => r.id === ids.code)).toMatchObject({ text: null, hide: 'code' });
     expect(list.items.find((r) => r.id === ids.platform)).toMatchObject({
       recipient: 'platform-admin @platform',
       orgId: null,
@@ -175,7 +183,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     });
     expect(
       AdminTelegramSummary.parse(await (await get('/api/admin/telegram/log/summary')).json()),
-    ).toEqual({ pending: 0, errors: 3, sentToday: 1 });
+    ).toEqual({ pending: 0, errors: 3, sentToday: 1, receivedToday: 0 });
     const values = ListValues.parse(
       await (await get('/api/admin/telegram/log/values?col=org')).json(),
     );
@@ -194,13 +202,17 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       ).json(),
     );
     expect(errors.total).toBe(3);
-    const file = await get('/api/admin/telegram/log/export?cols=at,to,org,kind,st,tries,err');
+    const file = await get(
+      '/api/admin/telegram/log/export?cols=at,dir,to,org,kind,txt,st,tries,err,ct',
+    );
     expect(file.status).toBe(200);
     const sheet = unzipTexts(new Uint8Array(await file.arrayBuffer()))['xl/worksheets/sheet1.xml']!;
     expect(sheet).toContain('Тип сообщения');
     expect(sheet).toContain('Пароль изменён');
     expect(sheet).toContain('Платформа');
-    expect(sheet).not.toContain('Секретный текст');
+    expect(sheet).toContain('Секретный текст напоминания');
+    expect(sheet).toContain('Текст скрыт: в сообщении код');
+    expect(sheet).toContain('Собеседник');
     expect(sheet).not.toContain(String(CHAT_A));
   });
 

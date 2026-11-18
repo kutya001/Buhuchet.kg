@@ -23,6 +23,7 @@ import {
   ChipMultiSelect,
   Field,
   FormGrid,
+  FormMore,
   Icon,
   iconButtonClass,
   inputClass,
@@ -183,6 +184,10 @@ function ProjectModal({
     })),
   );
   const [errors, setErrors] = useState<Errors>({});
+  // «Дополнительно» раскрыто сразу у проекта со стоимостью, описанием или работами (прототип `e.more`).
+  const [more, setMore] = useState(
+    () => !!edit && (edit.money?.plan != null || !!edit.description || edit.works.length > 0),
+  );
   const [changed, setChanged] = useState(false);
   const [busy, setBusy] = useState(false);
   const clear = (k: ErrorField) => setErrors((x) => ({ ...x, [k]: undefined }));
@@ -217,6 +222,7 @@ function ProjectModal({
   };
   const addWork = () => {
     const exec = lead ?? form?.me ?? members[0] ?? '';
+    setMore(true);
     setWorks((list) => [
       ...list,
       { key: nextKey(), name: '', executorId: exec, due: to, done: false },
@@ -317,6 +323,13 @@ function ProjectModal({
     (!edit && !preset && cp !== '');
 
   const statusPill = edit ? statusPillView(t, 'project', edit.status) : null;
+  // «· заполнено N» (прототип `projectDlg`, `n`): стоимость, описание, работы, главный из нескольких.
+  const filled = [
+    money && plan.trim() !== '',
+    description.trim() !== '',
+    works.length > 0,
+    !!lead && members.length > 1,
+  ].filter(Boolean).length;
 
   return (
     <Modal
@@ -326,7 +339,7 @@ function ProjectModal({
       size="mid"
       dirty={dirty}
       title={t(edit ? 'proj.dlg.edit' : 'proj.dlg.new')}
-      sub={preset ? preset.name : t('proj.dlg.sub')}
+      sub={preset?.name ?? edit?.contractor.name}
       footer={
         <>
           <button type="button" className={buttonClass('ghost')} onClick={onClose}>
@@ -379,7 +392,6 @@ function ProjectModal({
                 label={t('proj.dlg.cp')}
                 required
                 full
-                hint={t('proj.dlg.cp_hint')}
                 error={errors.contractor}
               >
                 {(control) => (
@@ -431,64 +443,11 @@ function ProjectModal({
                 />
               )}
             </Field>
-            {edit && statusPill ? (
-              <Field id={`${id}-st`} label={t('proj.dlg.status')} hint={t('proj.dlg.status_hint')}>
-                <div id={`${id}-st`} className="pt-1.5">
-                  <StatusPill {...statusPill} />
-                </div>
-              </Field>
-            ) : (
-              <Field id={`${id}-st`} label={t('proj.dlg.status')}>
-                {(control) => (
-                  <select
-                    {...control}
-                    data-pd-status=""
-                    className={`${inputClass()} cursor-pointer`}
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as 'planned' | 'in_progress')}
-                  >
-                    <option value="planned">{t('status.project.planned')}</option>
-                    <option value="in_progress">{t('status.project.in_progress')}</option>
-                  </select>
-                )}
-              </Field>
-            )}
-            {money ? (
-              <Field
-                id={`${id}-plan`}
-                label={t('proj.dlg.plan')}
-                hint={
-                  edit && paid
-                    ? t('proj.dlg.plan_paid', { amount: formatSomWithUnit(paid) })
-                    : t('proj.dlg.plan_hint')
-                }
-                error={errors.plan}
-              >
-                {(control) => (
-                  <input
-                    {...control}
-                    type="text"
-                    inputMode="decimal"
-                    data-pd-plan=""
-                    placeholder={t('proj.dlg.plan_ph')}
-                    className={`${inputClass()} tabular-nums`}
-                    value={plan}
-                    onChange={(e) => {
-                      setPlan(e.target.value);
-                      clear('plan');
-                    }}
-                  />
-                )}
-              </Field>
-            ) : (
-              <div />
-            )}
             <Field
               id={`${id}-resp`}
               label={t('proj.dlg.members')}
               required
               full
-              hint={t('proj.dlg.members_hint')}
               error={errors.members}
             >
               <ChipMultiSelect
@@ -499,134 +458,201 @@ function ProjectModal({
                 onChange={toggleMembers}
               />
             </Field>
-            <Field id={`${id}-lead`} label={t('proj.dlg.lead')} error={errors.lead}>
-              {(control) => (
-                <select
-                  {...control}
-                  data-pd-lead=""
-                  className={`${inputClass()} cursor-pointer`}
-                  value={lead ?? ''}
-                  onChange={(e) => {
-                    setLead(e.target.value || null);
-                    clear('lead');
-                  }}
-                >
-                  {members.map((m) => (
-                    <option key={m} value={m}>
-                      {names.get(m) ?? ''}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-            <div />
-            <Field id={`${id}-desc`} label={t('proj.dlg.desc')} full>
-              {(control) => (
-                <textarea
-                  {...control}
-                  data-pd-desc=""
-                  maxLength={2000}
-                  className={`${inputClass()} min-h-14 resize-y`}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              )}
-            </Field>
-            <Field
-              id={`${id}-works`}
-              label={t('proj.dlg.works')}
-              full
-              hint={t('proj.dlg.works_hint')}
-              error={errors.works}
+            <FormMore
+              data-pd-more=""
+              label={t('status.fold.more')}
+              filled={filled}
+              filledLabel={t('status.fold.filled', { n: filled })}
+              // ОТКЛОНЕНИЕ: docs/deviations.md#О-83 — при ошибке в поле под блоком он раскрывается сам.
+              open={more || !!errors.plan || !!errors.lead || !!errors.works}
+              onToggle={setMore}
             >
-              <div id={`${id}-works`} className="flex flex-col gap-2" data-pd-works="">
-                {works.length ? (
-                  <MiniTable
-                    label={t('proj.dlg.works')}
-                    empty=""
-                    phoneCards={false}
-                    columns={[
-                      { key: 'name', label: t('proj.dlg.work.name') },
-                      { key: 'exec', label: t('proj.dlg.work.exec') },
-                      { key: 'due', label: t('proj.dlg.work.due') },
-                      { key: 'del', label: '', numeric: true, width: 44 },
-                    ]}
-                    rows={works.map((w) => ({
-                      key: w.key,
-                      cells: {
-                        name: (
-                          <input
-                            type="text"
-                            data-pd-work-name=""
-                            aria-label={t('proj.dlg.work.name')}
-                            maxLength={300}
-                            className={`${inputClass()} min-h-[30px] px-2 py-[3px]`}
-                            value={w.name}
-                            onChange={(e) => setWork(w.key, { name: e.target.value })}
-                          />
-                        ),
-                        exec: (
-                          <select
-                            aria-label={t('proj.dlg.work.exec')}
-                            data-pd-work-exec=""
-                            className={`${inputClass()} min-h-[30px] cursor-pointer px-2 py-[3px]`}
-                            value={w.executorId}
-                            onChange={(e) => setWork(w.key, { executorId: e.target.value })}
-                          >
-                            {w.executorId && !form.employees.some((e) => e.id === w.executorId) ? (
-                              <option value={w.executorId}>{names.get(w.executorId) ?? ''}</option>
-                            ) : null}
-                            {form.employees.map((e) => (
-                              <option key={e.id} value={e.id}>
-                                {e.name}
-                              </option>
-                            ))}
-                          </select>
-                        ),
-                        due: (
-                          <input
-                            type="date"
-                            aria-label={t('proj.dlg.work.due')}
-                            data-pd-work-due=""
-                            className={`${inputClass()} min-h-[30px] px-2 py-[3px]`}
-                            value={w.due}
-                            onChange={(e) => setWork(w.key, { due: e.target.value })}
-                          />
-                        ),
-                        del: w.done ? (
-                          <Pill tone="ok" size="sm">
-                            {t('proj.dlg.work.done')}
-                          </Pill>
-                        ) : (
-                          <button
-                            type="button"
-                            aria-label={t('proj.dlg.work.del')}
-                            data-pd-work-del=""
-                            className={iconButtonClass('sm')}
-                            onClick={() => setWorks((list) => list.filter((x) => x.key !== w.key))}
-                          >
-                            <Icon name="trash" size="sm" />
-                          </button>
-                        ),
-                      },
-                    }))}
-                  />
-                ) : (
-                  <span className="text-faint">{t('proj.dlg.works_none')}</span>
-                )}
-                <div>
-                  <button
-                    type="button"
-                    data-pd-work-add=""
-                    className={buttonClass('default', 'sm')}
-                    onClick={addWork}
+              <FormGrid>
+                {edit && statusPill ? (
+                  <Field
+                    id={`${id}-st`}
+                    label={t('proj.dlg.status')}
+                    hint={t('proj.dlg.status_hint')}
                   >
-                    <Icon name="plus" size="sm" />
-                    {t('proj.dlg.work_add')}
-                  </button>
-                </div>
-              </div>
-            </Field>
+                    <div id={`${id}-st`} className="pt-1.5">
+                      <StatusPill {...statusPill} />
+                    </div>
+                  </Field>
+                ) : (
+                  <Field id={`${id}-st`} label={t('proj.dlg.status')}>
+                    {(control) => (
+                      <select
+                        {...control}
+                        data-pd-status=""
+                        className={`${inputClass()} cursor-pointer`}
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value as 'planned' | 'in_progress')}
+                      >
+                        <option value="planned">{t('status.project.planned')}</option>
+                        <option value="in_progress">{t('status.project.in_progress')}</option>
+                      </select>
+                    )}
+                  </Field>
+                )}
+                {money ? (
+                  <Field
+                    id={`${id}-plan`}
+                    label={t('proj.dlg.plan')}
+                    hint={
+                      edit && paid
+                        ? t('proj.dlg.plan_paid', { amount: formatSomWithUnit(paid) })
+                        : undefined
+                    }
+                    error={errors.plan}
+                  >
+                    {(control) => (
+                      <input
+                        {...control}
+                        type="text"
+                        inputMode="decimal"
+                        data-pd-plan=""
+                        placeholder={t('proj.dlg.plan_ph')}
+                        className={`${inputClass()} tabular-nums`}
+                        value={plan}
+                        onChange={(e) => {
+                          setPlan(e.target.value);
+                          clear('plan');
+                        }}
+                      />
+                    )}
+                  </Field>
+                ) : (
+                  <div />
+                )}
+                <Field id={`${id}-lead`} label={t('proj.dlg.lead')} error={errors.lead}>
+                  {(control) => (
+                    <select
+                      {...control}
+                      data-pd-lead=""
+                      className={`${inputClass()} cursor-pointer`}
+                      value={lead ?? ''}
+                      onChange={(e) => {
+                        setLead(e.target.value || null);
+                        clear('lead');
+                      }}
+                    >
+                      {members.map((m) => (
+                        <option key={m} value={m}>
+                          {names.get(m) ?? ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+                <Field id={`${id}-desc`} label={t('proj.dlg.desc')} full>
+                  {(control) => (
+                    <textarea
+                      {...control}
+                      data-pd-desc=""
+                      maxLength={2000}
+                      className={`${inputClass()} min-h-14 resize-y`}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  )}
+                </Field>
+                <Field id={`${id}-works`} label={t('proj.dlg.works')} full error={errors.works}>
+                  <div id={`${id}-works`} className="flex flex-col gap-2" data-pd-works="">
+                    {works.length ? (
+                      <MiniTable
+                        label={t('proj.dlg.works')}
+                        empty=""
+                        phoneCards={false}
+                        columns={[
+                          { key: 'name', label: t('proj.dlg.work.name') },
+                          { key: 'exec', label: t('proj.dlg.work.exec') },
+                          { key: 'due', label: t('proj.dlg.work.due') },
+                          { key: 'del', label: '', numeric: true, width: 44 },
+                        ]}
+                        rows={works.map((w) => ({
+                          key: w.key,
+                          cells: {
+                            name: (
+                              <input
+                                type="text"
+                                data-pd-work-name=""
+                                aria-label={t('proj.dlg.work.name')}
+                                maxLength={300}
+                                className={`${inputClass()} min-h-[30px] px-2 py-[3px]`}
+                                value={w.name}
+                                onChange={(e) => setWork(w.key, { name: e.target.value })}
+                              />
+                            ),
+                            exec: (
+                              <select
+                                aria-label={t('proj.dlg.work.exec')}
+                                data-pd-work-exec=""
+                                className={`${inputClass()} min-h-[30px] cursor-pointer px-2 py-[3px]`}
+                                value={w.executorId}
+                                onChange={(e) => setWork(w.key, { executorId: e.target.value })}
+                              >
+                                {w.executorId &&
+                                !form.employees.some((e) => e.id === w.executorId) ? (
+                                  <option value={w.executorId}>
+                                    {names.get(w.executorId) ?? ''}
+                                  </option>
+                                ) : null}
+                                {form.employees.map((e) => (
+                                  <option key={e.id} value={e.id}>
+                                    {e.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ),
+                            due: (
+                              <input
+                                type="date"
+                                aria-label={t('proj.dlg.work.due')}
+                                data-pd-work-due=""
+                                className={`${inputClass()} min-h-[30px] px-2 py-[3px]`}
+                                value={w.due}
+                                onChange={(e) => setWork(w.key, { due: e.target.value })}
+                              />
+                            ),
+                            del: w.done ? (
+                              <Pill tone="ok" size="sm">
+                                {t('proj.dlg.work.done')}
+                              </Pill>
+                            ) : (
+                              <button
+                                type="button"
+                                aria-label={t('proj.dlg.work.del')}
+                                data-pd-work-del=""
+                                className={iconButtonClass('sm')}
+                                onClick={() =>
+                                  setWorks((list) => list.filter((x) => x.key !== w.key))
+                                }
+                              >
+                                <Icon name="trash" size="sm" />
+                              </button>
+                            ),
+                          },
+                        }))}
+                      />
+                    ) : (
+                      <span className="text-faint">{t('proj.dlg.works_none')}</span>
+                    )}
+                    <div>
+                      <button
+                        type="button"
+                        data-pd-work-add=""
+                        title={t('proj.dlg.works_hint')}
+                        className={buttonClass('default', 'sm')}
+                        onClick={addWork}
+                      >
+                        <Icon name="plus" size="sm" />
+                        {t('proj.dlg.work_add')}
+                      </button>
+                    </div>
+                  </div>
+                </Field>
+              </FormGrid>
+            </FormMore>
           </FormGrid>
         ) : null}
       </div>

@@ -6,6 +6,7 @@ import {
   buttonClass,
   Field,
   FormGrid,
+  FormMore,
   Hint,
   inputClass,
   Modal,
@@ -26,6 +27,8 @@ import {
   initialTaskForm,
   taskFormBody,
   taskFormLists,
+  taskFormMoreFilled,
+  taskFormMoreOpen,
   taskFormProblems,
   type TaskFormField,
   type TaskFormOption,
@@ -46,10 +49,9 @@ const FIELD_OF_CODE: Record<string, keyof TaskFormValues> = {
 
 type Errors = Partial<Record<keyof TaskFormValues, string>>;
 
-/** Переключатель в ячейке формы (`.fld` с `.sw` прототипа): подпись сверху, подсказка снизу. */
-function SwitchField({
+/** Переключатель строкой (`.row` с `.sw` прототипа): подпись справа, подсказка снизу. */
+function SwitchRow({
   id,
-  label,
   text,
   checked,
   disabled = false,
@@ -57,22 +59,14 @@ function SwitchField({
   onChange,
 }: {
   id: string;
-  /** Подпись над переключателем; без неё — пустая строка той же высоты (`.m-sp`). */
-  label?: string;
   text: string;
   checked: boolean;
   disabled?: boolean;
-  hint?: string;
+  hint?: string | undefined;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div data-field="" className="flex min-w-0 flex-col gap-[5px]">
-      <span
-        aria-hidden={label ? undefined : true}
-        className="text-[12px] font-semibold tracking-[.01em] text-muted max-[600px]:empty:hidden"
-      >
-        {label ?? ' '}
-      </span>
+    <>
       <label className="flex min-h-[35px] cursor-pointer items-center gap-2.5">
         <input
           id={id}
@@ -91,7 +85,7 @@ function SwitchField({
           <Hint>{hint}</Hint>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -126,15 +120,15 @@ function Select({
 }
 
 /**
- * «Новая задача» и «Изменить задачу» (ТЗ «Ручные задачи»; прототип modules/tasks.js, `taskDlg`):
- * первым — «Вид задачи» («Общая» / «По контрагенту»; при смене на «Общая» у задачи с контрагентом —
- * предупреждение «Контрагент и проект будут убраны из задачи»), название, описание, контрагент (у «По
- * контрагенту»), категория, исполнитель (по умолчанию — ответственный выбранного контрагента, пока
- * исполнителя не выбрали руками; у общей — тот, кто ставит), вид срока и дата или месяц, «Требуется
- * файл» (только с «Файлами в карточках» — docs/deviations.md п. Б-1), «Требуется подтверждение» (по
- * умолчанию — из учётной политики). У «По контрагенту» при включённых «Проектах контрагентов» —
- * галочка «Проект» и список активных проектов контрагента (уже выбранный завершённый — тоже); смена
- * контрагента снимает проект (задача 2.26).
+ * «Новая задача» и «Изменить задачу» (ТЗ «Ручные задачи»; прототип modules/tasks.js, `taskDlg`, v136):
+ * на виду — «Вид задачи» («Общая» / «По контрагенту»; при смене на «Общая» у задачи с контрагентом —
+ * предупреждение «Контрагент и проект будут убраны из задачи»), название, контрагент (у «По
+ * контрагенту»), исполнитель (по умолчанию — ответственный выбранного контрагента, пока исполнителя не
+ * выбрали руками; у общей — тот, кто ставит) и дата или месяц. Редкое — под «Дополнительно · заполнено
+ * N»: описание, проект (у «По контрагенту» при включённых «Проектах контрагентов»: «Без проекта» или
+ * активный проект контрагента, уже выбранный завершённый — тоже; смена контрагента снимает проект,
+ * задача 2.26), категория, вид срока, «При выполнении»: «нужен файл» (только с «Файлами в карточках» —
+ * docs/deviations.md п. Б-1) и «нужно подтверждение» (по умолчанию — из учётной политики).
  */
 export function TaskFormDialog({
   task,
@@ -168,6 +162,7 @@ export function TaskFormDialog({
   const [errors, setErrors] = useState<Errors>({});
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
+  const [more, setMore] = useState(() => taskFormMoreOpen(task));
   const lists = useMemo(() => taskFormLists(options, current), [options, current]);
   const confirm = confirmHint(current);
   const dirty = JSON.stringify(values) !== JSON.stringify(initial);
@@ -191,17 +186,16 @@ export function TaskFormDialog({
     }));
     setErrors((e) => ({ ...e, contractorId: undefined, projectId: undefined }));
   };
-  const projectOn = options.projectsOn && values.scope === 'contractor' && values.withProject;
+  const projectOn = options.projectsOn && values.scope === 'contractor';
   const projects = useQuery({
     ...taskProjectsQuery(values.contractorId, current?.project?.id ?? null),
     enabled: projectOn && !!values.contractorId,
   });
   const projectItems = projects.data?.items ?? [];
-  const projectPlaceholder = !values.contractorId
-    ? t('task.form.project_first')
-    : projectItems.length || projects.isPending
-      ? t('task.form.project_pick')
-      : t('task.form.project_none');
+  const projectPlaceholder = t(
+    values.contractorId ? 'task.form.project_empty' : 'task.form.project_first',
+  );
+  const filled = taskFormMoreFilled(values, options, current === null);
 
   const reload = async () => {
     if (!task) return;
@@ -225,7 +219,7 @@ export function TaskFormDialog({
       for (const [field, key] of Object.entries(problems)) next[field as TaskFormField] = t(key);
       setErrors(next);
       const first = (
-        ['title', 'contractorId', 'projectId', 'executorEmployeeId', 'date', 'month'] as const
+        ['title', 'contractorId', 'executorEmployeeId', 'date', 'month'] as const
       ).find((f) => problems[f]);
       if (first) document.getElementById(`${id}-${first}`)?.focus();
       return;
@@ -255,7 +249,9 @@ export function TaskFormDialog({
     const field = FIELD_OF_CODE[res.error.code];
     if (field) {
       setErrors((e) => ({ ...e, [field]: message }));
-      return document.getElementById(`${id}-${field}`)?.focus();
+      // Поле под «Дополнительно» раскрывается вместе с ошибкой — фокус после перерисовки.
+      if (field === 'categoryCode' || field === 'projectId') setMore(true);
+      return void setTimeout(() => document.getElementById(`${id}-${field}`)?.focus());
     }
     toast(message, { bad: true });
   };
@@ -343,23 +339,8 @@ export function TaskFormDialog({
           ),
           { required: true, full: true },
         )}
-        {field(
-          'description',
-          t('task.form.description'),
-          (control) => (
-            <textarea
-              {...control}
-              maxLength={TASK_DESCRIPTION_MAX}
-              className={`${inputClass({ multiline: true })} min-h-[70px]`}
-              value={values.description}
-              onChange={(e) => set('description', e.target.value)}
-            />
-          ),
-          { full: true },
-        )}
-        {values.scope === 'contractor' ? (
-          <>
-            {field(
+        {values.scope === 'contractor'
+          ? field(
               'contractorId',
               t('task.form.cp'),
               (control) => (
@@ -376,47 +357,8 @@ export function TaskFormDialog({
                 />
               ),
               { required: true },
-            )}
-            {options.projectsOn ? (
-              <SwitchField
-                id={`${id}-withProject`}
-                text={t('task.form.project')}
-                checked={values.withProject}
-                onChange={(v) => {
-                  setValues((x) => ({ ...x, withProject: v, projectId: v ? x.projectId : '' }));
-                  setErrors((e) => ({ ...e, projectId: undefined }));
-                }}
-              />
-            ) : (
-              <div />
-            )}
-            {projectOn
-              ? field(
-                  'projectId',
-                  t('task.form.project'),
-                  (control) => (
-                    <Select
-                      control={control}
-                      value={values.projectId}
-                      options={projectItems.map((p) => ({ value: p.id, label: p.name }))}
-                      placeholder={projectPlaceholder}
-                      onChange={(v) => set('projectId', v)}
-                    />
-                  ),
-                  { required: true, full: true, hint: t('task.form.project_hint') },
-                )
-              : null}
-          </>
-        ) : null}
-        {field('categoryCode', t('task.form.cat'), (control) => (
-          <Select
-            control={control}
-            value={values.categoryCode}
-            options={lists.categories}
-            onChange={(v) => set('categoryCode', v)}
-          />
-        ))}
-        <div />
+            )
+          : null}
         {field(
           'executorEmployeeId',
           t('task.form.exec'),
@@ -433,17 +375,6 @@ export function TaskFormDialog({
           ),
           { required: true },
         )}
-        {field('term', t('task.form.term'), (control) => (
-          <Select
-            control={control}
-            value={values.term}
-            options={[
-              { value: 'day', label: t('task.term.day') },
-              { value: 'month', label: t('task.term.month') },
-            ]}
-            onChange={(v) => set('term', v as TaskFormValues['term'])}
-          />
-        ))}
         {values.term === 'day'
           ? field(
               'date',
@@ -471,28 +402,91 @@ export function TaskFormDialog({
                   onChange={(e) => set('month', e.target.value)}
                 />
               ),
-              { required: true, hint: t('task.form.month_hint') },
+              { required: true },
             )}
-        {/* ОТКЛОНЕНИЕ: docs/deviations.md#Б-1 */}
-        {options.filesOn ? (
-          <SwitchField
-            id={`${id}-file`}
-            label={t('task.form.on_done')}
-            text={t('task.form.need_file')}
-            checked={values.needFile}
-            onChange={(v) => set('needFile', v)}
-          />
-        ) : null}
-        <SwitchField
-          id={`${id}-confirm`}
-          text={t('task.form.confirm')}
-          checked={values.confirm}
-          disabled={confirm.locked}
-          hint={t(confirm.key)}
-          onChange={(v) => set('confirm', v)}
-        />
+        <FormMore
+          data-task-more-fields=""
+          label={t('status.fold.more')}
+          filled={filled}
+          filledLabel={t('status.fold.filled', { n: filled })}
+          // ОТКЛОНЕНИЕ: docs/deviations.md#О-83 — при ошибке в поле под блоком он раскрывается сам.
+          open={more || !!errors.categoryCode || !!errors.projectId}
+          onToggle={setMore}
+        >
+          <FormGrid>
+            {field(
+              'description',
+              t('task.form.description'),
+              (control) => (
+                <textarea
+                  {...control}
+                  maxLength={TASK_DESCRIPTION_MAX}
+                  className={`${inputClass({ multiline: true })} min-h-[70px]`}
+                  value={values.description}
+                  onChange={(e) => set('description', e.target.value)}
+                />
+              ),
+              { full: true },
+            )}
+            {projectOn
+              ? field('projectId', t('task.form.project'), (control) => (
+                  <Select
+                    control={control}
+                    value={values.projectId}
+                    options={projectItems.map((p) => ({ value: p.id, label: p.name }))}
+                    placeholder={projectPlaceholder}
+                    onChange={(v) => set('projectId', v)}
+                  />
+                ))
+              : null}
+            {field('categoryCode', t('task.form.cat'), (control) => (
+              <Select
+                control={control}
+                value={values.categoryCode}
+                options={lists.categories}
+                onChange={(v) => set('categoryCode', v)}
+              />
+            ))}
+            {field('term', t('task.form.term'), (control) => (
+              <Select
+                control={control}
+                value={values.term}
+                options={[
+                  { value: 'day', label: t('task.term.day') },
+                  { value: 'month', label: t('task.form.term_month') },
+                ]}
+                onChange={(v) => set('term', v as TaskFormValues['term'])}
+              />
+            ))}
+            <div
+              data-field=""
+              data-full=""
+              className="col-span-full flex min-w-0 flex-col gap-[5px]"
+            >
+              <span className="text-[12px] font-semibold tracking-[.01em] text-muted">
+                {t('task.form.on_done')}
+              </span>
+              {/* ОТКЛОНЕНИЕ: docs/deviations.md#Б-1 */}
+              {options.filesOn ? (
+                <SwitchRow
+                  id={`${id}-file`}
+                  text={t('task.form.need_file')}
+                  checked={values.needFile}
+                  onChange={(v) => set('needFile', v)}
+                />
+              ) : null}
+              <SwitchRow
+                id={`${id}-confirm`}
+                text={t('task.form.confirm')}
+                checked={values.confirm}
+                disabled={confirm.locked}
+                hint={confirm.key ? t(confirm.key) : undefined}
+                onChange={(v) => set('confirm', v)}
+              />
+            </div>
+          </FormGrid>
+        </FormMore>
       </FormGrid>
-      <Hint>{t('task.form.telegram')}</Hint>
     </Modal>
   );
 }

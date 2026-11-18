@@ -42,6 +42,7 @@ import { reasonNeeded, type ChangedPart } from '../finance/edit-reason';
 import { SentReceiptRow, takeSentReceipt } from '../contractor-page/receipt-file';
 import { joinFailures, linkPicked, LinkPickRow, type PickedLink } from '../files/link-pick-row';
 import { editReceipt, receiptEditFormQuery } from '../finance/journal-data';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import { presetLines, reallocate, type ReceiptPreset } from './receipt-preset';
 import { ContractorSelect } from '../shell/contractor-select';
@@ -256,12 +257,13 @@ export function PaymentDialog({
             setErrors((x) => ({ ...x, amount: undefined }));
           }}
           data-payment-self=""
-          label={t('money.pay.self')}
-        >
-          <span className="block text-[12px] leading-[1.4] text-muted">
-            {t('money.pay.self_hint')}
-          </span>
-        </CheckRow>
+          label={
+            <>
+              {t('money.pay.self')}{' '}
+              <InfoTip label={t('money.pay.self_tip')} text={t('money.pay.self_hint')} />
+            </>
+          }
+        />
         <FormGrid>
           <Field id={`${id}-date`} label={t('money.pay.date')} required error={errors.date}>
             {(control) => (
@@ -302,13 +304,7 @@ export function PaymentDialog({
             )}
           </Field>
           {canUpload ? (
-            <Field
-              id={`${id}-files`}
-              label={t('money.pay.file')}
-              full
-              hint={t('money.pay.file_hint')}
-              error={errors.files}
-            >
+            <Field id={`${id}-files`} label={t('money.pay.file')} full error={errors.files}>
               {(control) => (
                 <div>
                   <LinkPickRow
@@ -889,13 +885,7 @@ function ReceiptModal({
           </Note>
         ) : null}
         <FormGrid>
-          <Field
-            id={`${id}-total`}
-            label={t('money.in.total')}
-            required
-            hint={t('money.in.total_hint')}
-            error={errors.total}
-          >
+          <Field id={`${id}-total`} label={t('money.in.total')} required error={errors.total}>
             {(control) => (
               <input
                 {...control}

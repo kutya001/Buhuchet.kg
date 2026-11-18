@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, openColumns, showStats, signIn } from './helpers';
+import { DEMO_PASSWORD, expandCard, openColumns, showStats, signIn } from './helpers';
 
 // «Задачи» (задача 2.23, #79) через настоящий сайт: форма «Общая / По контрагенту», подтверждение
 // выполнения, возврат «На доработку», карточка задачи на телефоне. Демо-организация: владелец erkin,
@@ -60,7 +60,14 @@ async function createTask(chief: APIRequestContext, origin: string, title: strin
   return (await res.json()) as { id: string };
 }
 
-/** Открыть задачу из списка вкладки: поиск по названию, строка → карточка. */
+/** Редкие поля формы задачи — под «Дополнительно» (прототип v136): раскрыть. */
+const openMore = (form: Locator) =>
+  form.locator('[data-task-more-fields]:not([open]) > summary').click();
+
+/**
+ * Открыть задачу из списка вкладки: поиск по названию, строка → карточка. Полная шкала и «История»
+ * в карточке свёрнуты (прототип v136) — раскрываются, чтобы проверки видели их.
+ */
 async function openTask(page: Page, isMobile: boolean, tab: string, title: string, id: string) {
   await page.goto(`/app/tasks/${tab}`);
   await expect(page.locator('[data-grid]')).toBeVisible();
@@ -69,6 +76,8 @@ async function openTask(page: Page, isMobile: boolean, tab: string, title: strin
   await expect(row).toHaveCount(1);
   await row.getByText(title, { exact: true }).click();
   const card = page.getByRole('dialog', { name: title });
+  await expect(card.locator(`[data-task-card="${id}"] [data-status-line]`)).toBeVisible();
+  await expandCard(card);
   await expect(card.locator(`[data-task-card="${id}"] ol[data-status-scale]`)).toBeVisible();
   return card;
 }
@@ -98,8 +107,16 @@ test.describe('Этап 2: задачи', () => {
     await expect(form.getByLabel(/^Контрагент/)).toHaveCount(0);
     await expect(form.getByLabel(/^Проект/)).toHaveCount(0);
     await selected(form.getByLabel(/^Исполнитель/)).toBe('Мээрим К.');
-    await expect(form.getByRole('switch', { name: 'Требуется подтверждение' })).toBeChecked();
-    await expect(form).toContainText('По умолчанию — из учётной политики');
+    // Прототип v136: на виду только обязательное; описание, категория, вид срока и «При выполнении» —
+    // под «Дополнительно», подсказок под полями нет.
+    const more = form.locator('[data-task-more-fields]');
+    await expect(more).not.toHaveAttribute('open', '');
+    await expect(more.locator('summary')).toHaveText('Дополнительно');
+    await expect(form.getByLabel(/^Вид срока/)).toBeHidden();
+    await openMore(form);
+    await expect(form.getByLabel(/^Описание/)).toBeVisible();
+    await expect(form.getByLabel(/^Категория/)).toBeVisible();
+    await expect(form.getByRole('switch', { name: 'нужно подтверждение' })).toBeChecked();
 
     // «По контрагенту» — обязательное поле «Контрагент» (галочку «Проект» проверяет e2e/projects.spec.ts).
     await scope.getByRole('button', { name: 'По контрагенту' }).click();
@@ -112,8 +129,9 @@ test.describe('Этап 2: задачи', () => {
 
     await form.getByLabel(/^Название/).fill(title);
     await form.getByLabel(/^Исполнитель/).selectOption({ label: 'Алишер Т.' });
-    await form.getByLabel(/^Вид срока/).selectOption({ label: 'На месяц' });
-    await expect(form).toContainText('Срок — последний день месяца');
+    await form.getByLabel(/^Вид срока/).selectOption({ label: 'На месяц (до последнего дня)' });
+    await expect(form.getByLabel(/^Месяц/)).toBeVisible();
+    await expect(more.locator('summary')).toHaveText(/^Дополнительно\s*· заполнено 1$/);
     await form.getByRole('button', { name: 'Поставить задачу' }).click();
     await expect(form).toBeHidden();
     await expect(
@@ -136,8 +154,14 @@ test.describe('Этап 2: задачи', () => {
     await row.getByText(title, { exact: true }).click();
     const card = page.getByRole('dialog', { name: title });
     await expect(card).toContainText('Общая задача');
-    await expect(card).toContainText('в течение месяца, до');
-    await expect(card).toContainText('Задача поставлена');
+    // Срок и исполнитель — в строке состояния под шапкой; «История» свёрнута.
+    const line = card.locator('[data-status-line]');
+    await expect(line).toContainText(/до \d\d\.\d\d\.\d{4}/);
+    await expect(line).toContainText('в течение месяца');
+    await expect(line).toContainText('Алишер Т.');
+    await expect(card.locator('details[data-task-history]')).not.toHaveAttribute('open', '');
+    await expandCard(card);
+    await expect(card.locator('details[data-task-history]')).toContainText('Задача поставлена');
   });
 
   test('(п. 40) бухгалтер отмечает «Выполнена» — «На подтверждении»; владелец подтверждает вместо главного бухгалтера, это видно в карточке и истории', async ({
@@ -157,15 +181,20 @@ test.describe('Этап 2: задачи', () => {
     let card = await openTask(page, isMobile, 'mine', title, id);
     await card.locator('[data-task-button="done"]').click();
     const done = page.getByRole('dialog', { name: 'Задача выполнена' });
-    await expect(done).toContainText('Постановщик увидит, когда и кем задача выполнена.');
-    await expect(done).toContainText('подтвердит Мээрим К. или сотрудник с правом');
+    await expect(done).toContainText('Уйдёт на подтверждение: Мээрим К.');
+    await expect(done).not.toContainText('Отметить задачу выполненной?');
     await done.getByRole('button', { name: 'Выполнена' }).click();
     await expect(done).toBeHidden();
     await expect(
       page.getByRole('status').filter({ hasText: 'Отправлено на подтверждение: Мээрим К.' }),
     ).toBeVisible();
-    await expect(card).toContainText('Ждёт подтверждения: Мээрим К. или сотрудник с правом');
-    await expect(card).toContainText('Свою задачу подтвердить нельзя');
+    // В карточке — коротко, кто подтверждает; кто ещё может и почему не сам исполнитель — под «?».
+    const pending = card.locator('[data-task-pending]');
+    await expect(pending).toContainText('Подтверждает Мээрим К.');
+    await pending.getByRole('button', { name: 'Кто может подтвердить' }).click();
+    await expect(pending).toContainText(
+      'Подтвердить может постановщик или сотрудник с правом «Подтверждать задачи». Свою задачу подтвердить нельзя.',
+    );
     await expect(card.locator('[data-task-button="confirm"]')).toHaveCount(0);
     await page.request.post('/api/auth/logout', { headers: { origin } });
 
@@ -184,9 +213,8 @@ test.describe('Этап 2: задачи', () => {
     card = await openTask(page, isMobile, 'all', title, id);
     await card.locator('[data-task-button="confirm"]').click();
     const confirm = page.getByRole('dialog', { name: 'Подтвердить выполнение' });
-    await expect(confirm).toContainText(
-      'Задачу ставил Мээрим К.. Вы подтверждаете вместо постановщика: это будет видно в истории.',
-    );
+    await expect(confirm).toContainText('Вы подтверждаете вместо Мээрим К.');
+    await expect(confirm.getByLabel('Комментарий')).not.toHaveAttribute('placeholder');
     await confirm.getByLabel('Комментарий').fill('проверил сам');
     await confirm.getByRole('button', { name: 'Подтвердить' }).click();
     await expect(confirm).toBeHidden();
@@ -221,7 +249,7 @@ test.describe('Этап 2: задачи', () => {
     const card = await openTask(page, isMobile, 'byme', title, id);
     await card.locator('[data-task-button="rework"]').click();
     const rework = page.getByRole('dialog', { name: 'Вернуть на доработку' });
-    await expect(rework).toContainText('Задача вернётся в «В работе» с отметкой «На доработке»');
+    await expect(rework).toContainText('Алишер Т. получит причину в Telegram.');
     await rework.getByRole('button', { name: 'На доработку' }).click();
     await expect(rework).toContainText('Укажите причину');
     await expect(rework).toBeVisible();

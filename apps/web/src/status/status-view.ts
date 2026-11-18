@@ -311,7 +311,6 @@ export function rollbackLabels(t: Translate): RollbackDialogLabels {
   return {
     reason: t('status.rollback_reason'),
     placeholder: t('status.rollback_placeholder'),
-    hint: t('status.rollback_hint'),
     ok: t('status.rollback_ok'),
     required: t('status.rollback_reason_required'),
   };

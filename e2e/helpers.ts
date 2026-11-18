@@ -473,6 +473,25 @@ export async function stillElement(locator: Locator, ms = 120) {
 }
 
 /**
+ * Раскрыть карточку целиком (решение заказчика 17.11.2026, прототип v134): под шапкой — строка состояния,
+ * полная шкала открывается нажатием на короткую, «Подробности» и «История» свёрнуты. Скрытое не нажать и
+ * не найти по роли, поэтому тест шкалы, реквизитов и истории сначала раскрывает их.
+ */
+export async function expandCard(card: Locator) {
+  await expect(card.locator('[data-status-line]')).toBeVisible();
+  const scale = card.locator('[data-status-line-scale][aria-expanded="false"]');
+  if (await scale.count()) await scale.click();
+  const closed = card.locator('details[data-fold]:not([open]) > summary');
+  while (await closed.count()) await closed.first().click();
+  // Раскрытое въезжает со сдвигом (0,25 с): замер геометрии сразу после раскрытия попал бы в середину
+  // анимации (docs/typical-mistakes.md № 34).
+  const full = card.locator('[data-status-line-full]');
+  if (await full.count()) await stillElement(full.first());
+  const folds = card.locator('details[data-fold][open]');
+  for (let i = 0, n = await folds.count(); i < n; i += 1) await stillElement(folds.nth(i));
+}
+
+/**
  * Вкладка окна-карточки: на ПК — кнопкой вкладки, на телефоне — из списка под текущей вкладкой («N из M ▾»).
  * Список выезжает анимацией, и её первый кадр стоит на конечном месте: Playwright считает пункт неподвижным,
  * а нажатие уходит соседнему пункту или мимо и теряется молча (типовая ошибка № 34) — поэтому сначала

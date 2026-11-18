@@ -46,7 +46,7 @@ export const FILES_TEXTS = {
     section: S,
   },
   'files.note_hint_many': {
-    ru: 'Одно на все выбранные файлы. Видно сотрудникам; контрагенту на его странице не показывается',
+    ru: 'Видно только сотрудникам',
     section: S,
   },
   'files.attach.title_one': { ru: 'Прикрепить файл', section: S },

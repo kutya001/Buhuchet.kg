@@ -580,6 +580,9 @@ export const GRID_KEYS = [
   'pdicts.perms',
   'pdicts.loads',
   'pdicts.requests',
+  // Админка → «Запуски»: «Задачи» и «Запуски» (прототип `'run-jobs'`, `'run-list'`).
+  'runs.jobs',
+  'runs.list',
   // Админка → «Телеграм» → «Журнал» (прототип `'tg-log'`).
   'tg.log',
 ] as const;

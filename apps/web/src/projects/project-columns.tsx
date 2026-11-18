@@ -33,10 +33,10 @@ export function ProjectStatusMini({ t, status }: { t: Translate; status: Project
 }
 
 /** «срок прошёл» красной меткой (прототип `projOver`). */
-export function ProjectOverPill({ t, card = false }: { t: Translate; card?: boolean }) {
+export function ProjectOverPill({ t }: { t: Translate }) {
   return (
-    <Pill tone="bad" icon="alert" size={card ? 'md' : 'sm'}>
-      {t(card ? 'proj.over_card' : 'proj.over')}
+    <Pill tone="bad" icon="alert" size="sm">
+      {t('proj.over')}
     </Pill>
   );
 }

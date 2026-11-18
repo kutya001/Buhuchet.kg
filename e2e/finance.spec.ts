@@ -170,8 +170,14 @@ test.describe('Этап 2: остаток контрагента и счёт с�
       .click();
     const op = page.getByRole('dialog', { name: som('Списание в бонус 300 сом') });
     await expect(op.locator(`[data-fin-op-window="${id}"]`)).toBeVisible();
-    await op.locator('[data-fin-action="delete"]').click();
+    // Прототип v136: тип, сумма, контрагент и дата — только в шапке окна; «Отменить списание» — в «Действиях».
+    await expect(op.locator('[data-fin-op-cp]')).toHaveText(name);
+    await expect(op.locator(`[data-fin-op-window="${id}"]`)).not.toContainText('Тип операции');
+    await op.locator('[data-fin-more]').click();
+    await page.getByRole('menuitem', { name: 'Отменить списание' }).click();
     const ask = page.getByRole('dialog', { name: 'Отменить списание в бонус?' });
+    await expect(ask).toContainText(som('Отменить списание на 300 сом?'));
+    await expect(ask).toContainText('Запись останется в журнале с отметкой «Удалена».');
     await ask.locator('[data-fin-ok]').click();
     // Без причины не отменяется.
     await expect(ask).toContainText('Укажите причину');
@@ -184,7 +190,8 @@ test.describe('Этап 2: остаток контрагента и счёт с�
     await expect(op).toContainText(
       som('Списание отменено: списание в бонус на 300 сом от .*Причина: списали по ошибке'),
     );
-    await op.getByRole('button', { name: 'Готово', exact: true }).click();
+    await expect(op.getByRole('button', { name: 'Готово', exact: true })).toHaveCount(0);
+    await op.getByRole('button', { name: 'Закрыть', exact: true }).click();
     await expect(op).toBeHidden();
     await expect(have(card)).toHaveText(som('1 000'));
     expect(await balanceOf(request, cp.id)).toMatchObject({ available: 100_000 });
@@ -330,13 +337,17 @@ test.describe('Этап 2: финансовые операции по контр
     );
 
     // «Удалить» с причиной: из журнала и итогов уходит, с «Показать удалённые» — видна.
-    await win.locator('[data-fin-action="delete"]').click();
+    await win.locator('[data-fin-more]').click();
+    await page.getByRole('menuitem', { name: 'Удалить' }).click();
     const del = page.getByRole('dialog', { name: 'Удалить операцию?' });
+    // Прототип v136: вопроса с суммой нет (сумма — в шапке окна оплаты), только что будет с записью.
+    await expect(del).toContainText('Запись останется в журнале с отметкой «Удалена».');
+    await expect(del).not.toContainText(/ сом\?/);
     await del.locator('[data-fin-reason]').fill('дубль');
     await del.getByRole('button', { name: 'Удалить' }).click();
     await expect(del).toBeHidden();
     await expect(win).toContainText('Удалена');
-    await win.getByRole('button', { name: 'Готово', exact: true }).click();
+    await win.getByRole('button', { name: 'Закрыть', exact: true }).click();
     await expect(win).toBeHidden();
     expect(await debtOf()).toBe(5_000_000);
     await expect(line).toHaveCount(0);

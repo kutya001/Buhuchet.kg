@@ -6,6 +6,8 @@ import {
   initialTaskForm,
   taskFormBody,
   taskFormLists,
+  taskFormMoreFilled,
+  taskFormMoreOpen,
   taskFormProblems,
 } from './task-form-values';
 
@@ -78,7 +80,7 @@ describe('значения формы', () => {
     ).toMatchObject({ scope: 'contractor', contractorId: CP, executorEmployeeId: RESP });
   });
 
-  it('«Задача по проекту» — контрагент, проект с галочкой и главный ответственный исполнителем', () => {
+  it('«Задача по проекту» — контрагент, проект и главный ответственный исполнителем', () => {
     expect(
       initialTaskForm({
         task: null,
@@ -90,7 +92,6 @@ describe('значения формы', () => {
     ).toMatchObject({
       scope: 'contractor',
       contractorId: CP,
-      withProject: true,
       projectId: PROJECT,
       executorEmployeeId: ME,
     });
@@ -160,22 +161,13 @@ describe('проверка и тело запроса', () => {
     expect(taskFormProblems({ ...base, title: 'X' })).toEqual({});
   });
 
-  it('галочка «Проект» без проекта — «Выберите проект или снимите галочку «Проект»»', () => {
+  it('(прототип v136) проект необязателен: «Без проекта» — не ошибка; проект — только у «По контрагенту»', () => {
     const cp = { ...base, title: 'X', scope: 'contractor' as const, contractorId: CP };
-    expect(taskFormProblems({ ...cp, withProject: true, projectId: '' })).toEqual({
-      projectId: 'task.form.project_required',
-    });
-    expect(taskFormProblems({ ...cp, withProject: true, projectId: PROJECT })).toEqual({});
-    expect(taskFormProblems({ ...cp, withProject: false, projectId: '' })).toEqual({});
-  });
-
-  it('проект — только у «По контрагенту» с галочкой «Проект»', () => {
-    const cp = { ...base, title: 'X', scope: 'contractor' as const, contractorId: CP };
-    expect(taskFormBody({ ...cp, withProject: true, projectId: PROJECT }).projectId).toBe(PROJECT);
-    expect(taskFormBody({ ...cp, withProject: false, projectId: PROJECT }).projectId).toBeNull();
-    expect(
-      taskFormBody({ ...cp, scope: 'general', withProject: true, projectId: PROJECT }).projectId,
-    ).toBeNull();
+    expect(taskFormProblems({ ...cp, projectId: '' })).toEqual({});
+    expect(taskFormProblems({ ...cp, projectId: PROJECT })).toEqual({});
+    expect(taskFormBody({ ...cp, projectId: PROJECT }).projectId).toBe(PROJECT);
+    expect(taskFormBody({ ...cp, projectId: '' }).projectId).toBeNull();
+    expect(taskFormBody({ ...cp, scope: 'general', projectId: PROJECT }).projectId).toBeNull();
   });
 
   it('«Общая» — без контрагента; «На месяц» — первый день месяца', () => {
@@ -187,8 +179,9 @@ describe('проверка и тело запроса', () => {
     ).toMatchObject({ contractorId: CP, term: 'month', dueDate: '2026-10-01' });
   });
 
-  it('подсказка «Требуется подтверждение»: у ждущей — «станет «Выполнена»», у закрытой — не меняется', () => {
-    expect(confirmHint(null)).toEqual({ key: 'task.form.confirm_default', locked: false });
+  it('подсказка «нужно подтверждение»: у ждущей — «станет «Выполнена»», у закрытой — не меняется, иначе её нет', () => {
+    expect(confirmHint(null)).toEqual({ key: null, locked: false });
+    expect(confirmHint({ status: 'in_progress' })).toEqual({ key: null, locked: false });
     expect(confirmHint({ status: 'on_confirm' })).toEqual({
       key: 'task.form.confirm_pending',
       locked: false,
@@ -198,5 +191,50 @@ describe('проверка и тело запроса', () => {
       locked: true,
     });
     expect(confirmHint({ status: 'rework' }).locked).toBe(false);
+  });
+});
+
+describe('«Дополнительно» (прототип v136, `st.more` и `nMore`)', () => {
+  const base = initialTaskForm({ task: null, options, employeeId: ME, today: '2026-10-18' });
+  const plain = {
+    description: '',
+    project: null,
+    term: 'day',
+    needFile: false,
+  } as unknown as Task;
+
+  it('у новой задачи свёрнуто; у изменяемой раскрыто, когда есть описание, проект, срок на месяц или «нужен файл»', () => {
+    expect(taskFormMoreOpen(null)).toBe(false);
+    expect(taskFormMoreOpen(plain)).toBe(false);
+    expect(taskFormMoreOpen({ ...plain, description: 'Акт' })).toBe(true);
+    expect(taskFormMoreOpen({ ...plain, project: { id: PROJECT } } as unknown as Task)).toBe(true);
+    expect(taskFormMoreOpen({ ...plain, term: 'month' })).toBe(true);
+    expect(taskFormMoreOpen({ ...plain, needFile: true })).toBe(true);
+  });
+
+  it('«заполнено N»: описание, проект, срок на месяц, файл, категория не первая, подтверждение не как в политике', () => {
+    expect(taskFormMoreFilled(base, options, true)).toBe(0);
+    expect(taskFormMoreFilled({ ...base, description: ' Акт ' }, options, true)).toBe(1);
+    expect(
+      taskFormMoreFilled(
+        {
+          ...base,
+          description: 'Акт',
+          scope: 'contractor',
+          contractorId: CP,
+          projectId: PROJECT,
+          term: 'month',
+          needFile: true,
+          categoryCode: 'КАТ-002',
+          confirm: false,
+        },
+        options,
+        true,
+      ),
+    ).toBe(6);
+    // Проект общей задачи не отправляется — и не считается.
+    expect(taskFormMoreFilled({ ...base, projectId: PROJECT }, options, true)).toBe(0);
+    // У изменяемой задачи «нужно подтверждение» — её собственное, с политикой не сравнивается.
+    expect(taskFormMoreFilled({ ...base, confirm: false }, options, false)).toBe(0);
   });
 });

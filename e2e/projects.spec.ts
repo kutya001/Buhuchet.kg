@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, pickContractor, showStats, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, expandCard, pickContractor, showStats, signIn } from './helpers';
 import { asOwner, newContractor } from './reports';
 
 // «Проекты контрагентов» (задача 2.26, #82, часть 1) через настоящий сайт. Демо-организация: владелец
@@ -21,11 +21,18 @@ async function search(page: Page, isMobile: boolean, text: string) {
   await page.getByRole('searchbox').first().fill(text);
 }
 
+/** Подпись выбранного значения выпадающего списка. */
+const selected = (select: Locator) =>
+  expect.poll(() => select.evaluate((el: HTMLSelectElement) => el.selectedOptions[0]?.text));
+
 /** Подписи вариантов выпадающего списка. */
 const optionsOf = (select: Locator) =>
   select.evaluate((el: HTMLSelectElement) => [...el.options].map((o) => o.text));
 
-/** «Проекты контрагентов» → «Все» → поиск → карточка проекта. */
+/**
+ * «Проекты контрагентов» → «Все» → поиск → карточка проекта. Она открывается на вкладке «Главное»
+ * (прототип v136): под шапкой — строка состояния, полная шкала раскрывается нажатием на короткую.
+ */
 async function openProject(page: Page, isMobile: boolean, name: string) {
   await page.goto('/app/projects/all');
   await expect(page.locator('[data-grid]')).toBeVisible();
@@ -34,12 +41,13 @@ async function openProject(page: Page, isMobile: boolean, name: string) {
   await expect(row).toHaveCount(1);
   await row.getByText(name, { exact: true }).click();
   const card = page.getByRole('dialog', { name });
-  await expect(card.locator('[data-project-card] ol[data-status-scale]')).toBeVisible();
+  await expect(card.locator('[data-project-card] [data-status-line]')).toBeVisible();
+  await expect(card.getByRole('tab', { selected: true })).toContainText('Главное');
   return card;
 }
 
 test.describe('Этап 2: проекты контрагентов', () => {
-  test('(п. 16, проект) задача «По контрагенту» с галочкой «Проект» показывает поле проекта только с проектами выбранного контрагента; проект задачи — ссылкой в её карточке и в карточке проекта', async ({
+  test('(п. 16, проект) задача «По контрагенту» под «Дополнительно» показывает необязательное поле проекта только с проектами выбранного контрагента; проект задачи — ссылкой в её карточке и в карточке проекта', async ({
     page,
     baseURL,
     isMobile,
@@ -51,9 +59,9 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await add(page);
     const form = page.getByRole('dialog', { name: 'Новая задача' });
     await form.locator('[data-task-scope]').getByRole('button', { name: 'По контрагенту' }).click();
-    const withProject = form.getByRole('switch', { name: 'Проект' });
-    await expect(withProject).not.toBeChecked();
-    await withProject.check();
+    // Прототип v136: галочки «Проект» нет — поле «Проект» под «Дополнительно», первым пунктом «Без проекта».
+    await expect(form.getByRole('switch', { name: 'Проект' })).toHaveCount(0);
+    await form.locator('[data-task-more-fields] > summary').click();
     const project = form.getByRole('combobox', { name: /^Проект/ });
     await expect(project).toBeVisible();
     // Контрагент не выбран — сначала его.
@@ -61,16 +69,13 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await pickContractor(form.getByLabel(/^Контрагент/), 'Ала-Тоо Трейд');
     await expect
       .poll(() => optionsOf(project))
-      .toEqual(['— выберите проект —', 'Восстановление учёта 2024–2025']);
+      .toEqual(['Без проекта', 'Восстановление учёта 2024–2025']);
     await form.getByLabel(/^Название/).fill(title);
-    await form.getByRole('button', { name: 'Поставить задачу' }).click();
-    await expect(form).toContainText('Выберите проект или снимите галочку «Проект»');
     await project.selectOption({ label: 'Восстановление учёта 2024–2025' });
     // У другого контрагента — его проекты; выбранный проект снимается.
     await pickContractor(form.getByLabel(/^Контрагент/), 'Манас Авто Плюс');
-    await expect
-      .poll(() => optionsOf(project))
-      .toEqual(['— выберите проект —', 'Переход на единый налог']);
+    await expect.poll(() => optionsOf(project)).toEqual(['Без проекта', 'Переход на единый налог']);
+    await selected(project).toBe('Без проекта');
     await pickContractor(form.getByLabel(/^Контрагент/), 'Ала-Тоо Трейд');
     await project.selectOption({ label: 'Восстановление учёта 2024–2025' });
     await form.getByRole('button', { name: 'Поставить задачу' }).click();
@@ -85,6 +90,9 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await card.getByRole('button', { name: 'Восстановление учёта 2024–2025' }).click();
     const projectCard = page.getByRole('dialog', { name: 'Восстановление учёта 2024–2025' });
     await expect(projectCard.locator('[data-project-card]')).toBeVisible();
+    // «Главное» — коротко «N открыто из M»; сами задачи — на вкладке «Работы» (прототип v136).
+    await expect(projectCard.locator('[data-pj-tasks-short]')).toHaveText(/^\d+ открыто из \d+$/);
+    await cardTab(page, projectCard, isMobile, 'Работы');
     await expect(projectCard.locator('[data-pj-task-row]').filter({ hasText: title })).toHaveCount(
       1,
     );
@@ -134,39 +142,50 @@ test.describe('Этап 2: проекты контрагентов', () => {
     expect(done.status()).toBe(200);
 
     const card = await openProject(page, isMobile, name);
+    // Полная шкала — под строкой состояния, раскрывается нажатием на короткую.
+    await expect(card.locator('ol[data-status-scale]')).toBeHidden();
+    await expandCard(card);
     const steps = card.locator('ol[data-status-scale] > li > button');
     await expect(steps).toHaveCount(3);
-    const rows = card.locator('[data-status-history] tbody > tr');
-    await expect(rows).toHaveCount(2);
     const boxes = await Promise.all([0, 1].map(async (i) => (await steps.nth(i).boundingBox())!));
+    const noOverflow = async () => {
+      const overflow = await card.evaluate((dialog) => {
+        const edge = dialog.getBoundingClientRect().right + 1;
+        return [...dialog.querySelectorAll('[data-project-card] *')]
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.right > edge;
+          })
+          .map((el) => `${el.tagName} ${(el.textContent ?? '').slice(0, 40)}`);
+      });
+      expect(overflow).toEqual([]);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+      ).toBeLessThanOrEqual(0);
+    };
     if (isMobile) {
       expect(Math.abs(boxes[1]!.x - boxes[0]!.x)).toBeLessThanOrEqual(1);
       expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y + boxes[0]!.height - 1);
       const date = steps.nth(1).locator('small', { hasText: /^\d\d\.\d\d\.\d{4} \d\d:\d\d$/ });
       const at = (await date.boundingBox())!;
       expect(at.x).toBeGreaterThan(boxes[1]!.x + boxes[1]!.width / 2);
+    } else {
+      expect(boxes[1]!.x).toBeGreaterThan(boxes[0]!.x + boxes[0]!.width);
+    }
+    await noOverflow();
+    // «История статусов» — на вкладке «История».
+    await cardTab(page, card, isMobile, 'История');
+    const rows = card.locator('[data-status-history] tbody > tr');
+    await expect(rows).toHaveCount(2);
+    if (isMobile) {
       await expect(card.locator('[data-status-history] thead')).toBeHidden();
       const [first, second] = await Promise.all([
         rows.nth(0).boundingBox(),
         rows.nth(1).boundingBox(),
       ]);
       expect(second!.y).toBeGreaterThanOrEqual(first!.y + first!.height - 1);
-    } else {
-      expect(boxes[1]!.x).toBeGreaterThan(boxes[0]!.x + boxes[0]!.width);
     }
-    const overflow = await card.evaluate((dialog) => {
-      const edge = dialog.getBoundingClientRect().right + 1;
-      return [...dialog.querySelectorAll('[data-project-card] *')]
-        .filter((el) => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.right > edge;
-        })
-        .map((el) => `${el.tagName} ${(el.textContent ?? '').slice(0, 40)}`);
-    });
-    expect(overflow).toEqual([]);
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
-    ).toBeLessThanOrEqual(0);
+    await noOverflow();
   });
 
   test('(проверка задачи #82) «+ Добавить» → «Проект»: карточка открывается сама; «В работу» на шкале после вопроса, работа отмечается сделанной, откат — только с причиной', async ({
@@ -196,7 +215,13 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await expect(dlg).toContainText('Выберите контрагента');
     await dlg.locator('[data-pd-name]').fill(name);
     await pickContractor(dlg.locator('[data-pd-cp]'), cp.inn);
+    // Прототип v136: стоимость, главный, описание и работы — под «Дополнительно».
+    const more = dlg.locator('[data-pd-more]');
+    await expect(more).not.toHaveAttribute('open', '');
+    await expect(dlg.locator('[data-pd-plan]')).toBeHidden();
+    await more.locator('summary').click();
     await dlg.locator('[data-pd-plan]').fill('50000');
+    await expect(more.locator('summary')).toHaveText(/^Дополнительно\s*· заполнено 1$/);
     await dlg.locator('[data-pd-work-add]').click();
     await dlg.locator('[data-pd-work-name]').last().fill('Подготовить документы к освоению');
     await dlg.locator('[data-pd-ok]').click();
@@ -207,19 +232,34 @@ test.describe('Этап 2: проекты контрагентов', () => {
     const card = page.getByRole('dialog', { name });
     await expect(card.locator('[data-project-card]')).toBeVisible();
     await expect(card).toContainText(cpName);
-    await expect(card).toContainText('Работы · 0 из 1');
+    // «Главное»: коротко работы и деньги; внизу — следующий шаг вместо «Готово» (пока есть остаток —
+    // «Записать оплату»).
+    await expect(card.locator('[data-pj-works-short]')).toHaveText('0 из 1');
     await expect(card).toContainText(/Запланировано\s*50\s000\sсом/);
+    await expect(card.getByRole('button', { name: 'Готово', exact: true })).toHaveCount(0);
+    // Главная кнопка открывает то же окно оплаты, что «Записать оплату» в блоке «Оплаты».
+    await card.locator('[data-pj-main="pay"]').click();
+    const payDlg = page.getByRole('dialog', { name: 'Оплата по проекту' });
+    await expect(payDlg).toContainText('Осталось получить 50 000 сом');
+    await payDlg.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(payDlg).toBeHidden();
 
+    await expandCard(card);
     await card.locator('ol[data-status-scale] button[title="Перевести в «В работе»"]').click();
     const ask = page.getByRole('dialog', { name: 'Перевести проект в «В работе»?' });
     await ask.getByRole('button', { name: 'В работу' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Статус проекта: В работе' }),
     ).toBeVisible();
+    await cardTab(page, card, isMobile, 'История');
     await expect(card.locator('[data-status-history] tbody > tr')).toHaveCount(2);
 
+    await cardTab(page, card, isMobile, 'Работы');
+    await expect(card).toContainText('Работы · 0 из 1');
     await card.locator('[data-pj-work]').check();
     await expect(card).toContainText('Работы · 1 из 1');
+    await expect(card.getByRole('tab', { selected: true })).toContainText('1/1');
+    await cardTab(page, card, isMobile, 'История');
     await expect(card).toContainText('Сделано: Подготовить документы к освоению');
 
     await card.locator('[data-pj-more]').click();
@@ -237,6 +277,52 @@ test.describe('Этап 2: проекты контрагентов', () => {
       items: { name: string; status: string }[];
     };
     expect(saved.items).toEqual([expect.objectContaining({ name, status: 'planned' })]);
+  });
+
+  test('(доработки 17.11.2026, карточка проекта) у проекта без стоимости внизу карточки следующий шаг: «В работу» переводит сразу, без вопроса, после него кнопка — «Завершить»; у завершённого проекта следующего шага нет', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Шаг');
+    const cpName = `ОсОО «${word}»`;
+    const cp = await newContractor(request, origin, { name: cpName, tariffAmount: 0 });
+    const name = `Сверка с налоговой ${word}`;
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/projects/active');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    await add(page);
+    const dlg = page.getByRole('dialog', { name: 'Новый проект' });
+    await dlg.locator('[data-pd-name]').fill(name);
+    await pickContractor(dlg.locator('[data-pd-cp]'), cp.inn);
+    await dlg.locator('[data-pd-ok]').click();
+    await expect(dlg).toBeHidden();
+
+    const card = page.getByRole('dialog', { name });
+    await expect(card.locator('[data-project-card] [data-status-line]')).toBeVisible();
+    // Стоимости нет — «Записать оплату» главной кнопкой не становится: внизу шаг по шкале.
+    await expect(card.locator('[data-pj-main="pay"]')).toHaveCount(0);
+    const start = card.locator('[data-pj-main="in_progress"]');
+    await expect(start).toHaveText('В работу');
+    await start.click();
+    // Прототип `pj-next`: статус меняется сразу; вопрос — только у шага на шкале.
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Статус проекта: В работе' }),
+    ).toBeVisible();
+    await expect(page.getByRole('dialog', { name: /^Перевести проект/ })).toHaveCount(0);
+    const finish = card.locator('[data-pj-main="done"]');
+    await expect(finish).toHaveText('Завершить');
+    await finish.click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Статус проекта: Завершён' }),
+    ).toBeVisible();
+    await expect(card.locator('[data-pj-main]')).toHaveCount(0);
+    const saved = (await (await request.get(`/api/contractors/${cp.id}/projects`)).json()) as {
+      items: { name: string; status: string }[];
+    };
+    expect(saved.items).toEqual([expect.objectContaining({ name, status: 'done' })]);
   });
 
   test('(п. 66, транш проекта) транш 50 000 сом, изменённый на 45 000 сом с причиной, уменьшает «получено» проекта; без причины сумма не меняется', async ({
@@ -274,7 +360,8 @@ test.describe('Этап 2: проекты контрагентов', () => {
     const { id } = (await created.json()) as { id: string };
 
     const card = await openProject(page, isMobile, name);
-    await expect(card).toContainText('Оплаты (транши) · 0');
+    await cardTab(page, card, isMobile, 'Оплаты');
+    await expect(card).toContainText('Оплаты · 0');
     await expect(card).toContainText('Оплат пока не было');
     await card.locator('[data-pj-pay]').click();
     const pay = page.getByRole('dialog').filter({ has: page.locator('[data-pj-pay-dlg]') });
@@ -287,7 +374,7 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await pay.locator('[data-pt-ok]').click();
     await expect(pay).toBeHidden();
     await expect(page.getByRole('status').filter({ hasText: 'Оплата записана' })).toBeVisible();
-    await expect(card).toContainText('Оплаты (транши) · 1');
+    await expect(card).toContainText('Оплаты · 1');
     await expect(card.locator('[data-pj-paid]')).toHaveText(/^50\s000/);
     await expect(card).toContainText(/Получено\s*50\s000\sсом/);
 
@@ -311,12 +398,14 @@ test.describe('Этап 2: проекты контрагентов', () => {
     await expect(win).toContainText('Изменена');
     await expect(win).toContainText('Клиент вернул 5 000 сом');
     await expect(win.locator('[data-pt-received]')).toHaveText(/^45\s000\sсом из 60\s000\sсом$/);
-    await win.getByRole('button', { name: 'Готово', exact: true }).click();
+    // «Готово» в окне операции нет (прототип v136): закрывают крестиком.
+    await expect(win.getByRole('button', { name: 'Готово', exact: true })).toHaveCount(0);
+    await win.getByRole('button', { name: 'Закрыть', exact: true }).click();
     await expect(win).toBeHidden();
 
     await expect(card.locator('[data-pj-paid]')).toHaveText(/^45\s000/);
     await expect(card).toContainText(/Получено\s*45\s000\sсом/);
-    await expect(card.locator('[data-pt-row]')).toContainText('изменён');
+    await expect(card.locator('[data-pt-row]')).toContainText('изменена');
     const after = (await (await page.request.get(`/api/projects/${id}`)).json()) as {
       money: { paid: number } | null;
     };

@@ -10,15 +10,14 @@ import {
 } from '@buhuchet/domain';
 import type { FeePaymentWindow } from '@buhuchet/shared';
 import {
+  ActionMenu,
   Box,
-  buttonClass,
   Icon,
   KeyValues,
-  linkButtonClass,
   Modal,
   Note,
   Pill,
-  Timeline,
+  type ActionEntry,
   type KeyValueItem,
   type TimelineItem,
 } from '@buhuchet/ui';
@@ -36,14 +35,16 @@ import { ReceiptEditDialog } from '../money/tax-dialogs';
 import { useFinanceRefresh } from './finance-data';
 import { FeePaymentDeleteDialog, WhyButton } from './finance-dialogs';
 import { feePaymentQuery } from './journal-data';
+import { OpHistoryFold, OpMoreButton, OpWindowSub } from './op-window-parts';
 import { OperationWindowDialog } from './operation-window';
 
 /*
  * Окно оплаты за обслуживание (задача 2.22; ТЗ «Финансовые операции по контрагентам» → «Окно оплаты»;
- * прототип modules/fin-op.js `opWin` с `src:'fee'`): тип, контрагент (открывает вкладку «Обслуживание»),
- * дата, сумма, «За что», «Куда поступили», кто и когда внёс и изменил, отметки «Удалена» и «Изменена»,
- * файлы и история «было → стало». «Удалить» и «Изменить» — с замком и причиной; у части общего
- * поступления «Изменить» открывает само поступление, а «Открыть источник» — его окно.
+ * прототип v136 modules/fin-op.js `opWin` с `src:'fee'`): тип, сумма, контрагент (открывает вкладку
+ * «Обслуживание») и дата — в шапке; ниже — «За что», «Куда поступили», отметки «Удалена» и «Изменена»,
+ * файлы и свёрнутая «История» («было → стало», кто создал и изменил). Внизу — «Действия» («Открыть
+ * источник», «Удалить») и «Изменить» с замком и причиной; у части общего поступления «Изменить»
+ * открывает само поступление, а «Открыть источник» — его окно.
  */
 
 /** «За что» (прототип fpWhat): «Обслуживание за октябрь 2026, ноябрь 2026 · аванс 2 000 сом». */
@@ -55,16 +56,6 @@ function whatOf(t: Translate, p: FeePaymentWindow): string {
   return `${t('fin.j.fee_months', { months })}${
     advance > 0 ? t('fin.j.fee_more_adv', { amount: formatSomWithUnit(advance) }) : ''
   }`;
-}
-
-/** Кто и когда: имя, под ним момент мелким серым (прототип `auditKv`). */
-function Audit({ who, at }: { who: string | null; at: string }) {
-  return (
-    <>
-      {who ?? '—'}
-      <span className="block text-[11.5px] text-faint">{formatMomentRu(new Date(at))}</span>
-    </>
-  );
 }
 
 function historyItems(t: Translate, p: FeePaymentWindow): TimelineItem[] {
@@ -99,6 +90,7 @@ export function FeePaymentWindowDialog({
   const [del, setDel] = useState<DialogSlot<FeePaymentWindow> | null>(null);
   const [edit, setEdit] = useState<DialogSlot<FeePaymentWindow> | null>(null);
   const [child, setChild] = useState<DialogSlot<string> | null>(null);
+  const [more, setMore] = useState<HTMLElement | null>(null);
   const p = query.data;
   const failed =
     query.isError && !p
@@ -118,30 +110,6 @@ export function FeePaymentWindowDialog({
   if (p) {
     const what = whatOf(t, p);
     items.push(
-      {
-        id: 'kind',
-        label: t('fin.op.kind'),
-        value: (
-          <Pill tone="violet" size="sm">
-            {t('fin.fee.kind')}
-          </Pill>
-        ),
-      },
-      {
-        id: 'cp',
-        label: t('fin.op.contractor'),
-        value: (
-          <button type="button" className={linkButtonClass()} onClick={openContractor}>
-            {p.contractor.name}
-          </button>
-        ),
-      },
-      { id: 'date', label: t('fin.op.date'), value: formatDateRu(p.date) },
-      {
-        id: 'amount',
-        label: t('fin.op.amount'),
-        value: <b className="tabular-nums">{formatSomWithUnit(p.amount)}</b>,
-      },
       { id: 'what', label: t('fin.op.what'), value: what },
       {
         id: 'to',
@@ -156,63 +124,65 @@ export function FeePaymentWindowDialog({
     );
     if (p.note && p.note !== what)
       items.push({ id: 'note', label: t('fin.op.note'), value: p.note });
-    items.push(
-      {
-        id: 'created',
-        label: t('fin.op.created'),
-        value: <Audit who={p.created.name} at={p.created.at} />,
-      },
-      {
-        id: 'updated',
-        label: t('fin.op.updated'),
-        value: <Audit who={p.updated.name} at={p.updated.at} />,
-      },
-    );
+  }
+
+  // «Действия» (прототип `opActs(d, false)`): «Изменить», «Открыть источник» — поступление, частью
+  // которого пришла оплата, или вкладка «Обслуживание» контрагента, «Удалить»; у удалённой — источник.
+  const actions: ActionEntry[] = [];
+  if (p) {
+    const source: ActionEntry = {
+      id: 'source',
+      label: t('fin.op.source'),
+      icon: 'link',
+      sub: p.receipt
+        ? t('fin.fee.source_receipt', {
+            amount: formatSomWithUnit(p.receipt.total),
+            date: formatDateRu(p.receipt.date),
+          })
+        : t('fin.fee.source_cp'),
+      run: () => (p.receipt ? setChild(openSlot(p.receipt.id)) : openContractor()),
+    };
+    if (p.deleted) actions.push(source);
+    else
+      actions.push(
+        {
+          id: 'edit',
+          label: t('fin.op.edit'),
+          icon: 'edit',
+          disabled: !!p.locks.edit,
+          reason: p.locks.edit?.text,
+          run: () => setEdit(openSlot(p)),
+        },
+        source,
+        { id: 's1', separator: true },
+        {
+          id: 'delete',
+          label: t('fin.del.ok'),
+          icon: 'trash',
+          danger: true,
+          disabled: !!p.locks.del,
+          reason: p.locks.del?.text,
+          run: () => setDel(openSlot(p)),
+        },
+      );
   }
 
   const footer = (
     <>
-      {p && !p.deleted ? (
-        <>
-          <WhyButton
-            icon="trash"
-            label={t('fin.op.delete')}
-            why={p.locks.del?.text ?? null}
-            data="delete"
-            onClick={() => setDel(openSlot(p))}
-          />
-          <WhyButton
-            icon="edit"
-            label={t('fin.op.edit')}
-            why={p.locks.edit?.text ?? null}
-            data="edit"
-            onClick={() => setEdit(openSlot(p))}
-          />
-        </>
+      {p ? (
+        <OpMoreButton t={t} open={more !== null} onClick={(el) => setMore(more ? null : el)} />
       ) : null}
       <div className="flex-1" />
-      {p ? (
-        <button
-          type="button"
-          className={buttonClass('default')}
-          data-fin-source=""
-          title={
-            p.receipt
-              ? t('fin.fee.source_receipt', {
-                  amount: formatSomWithUnit(p.receipt.total),
-                  date: formatDateRu(p.receipt.date),
-                })
-              : t('fin.fee.source_cp')
-          }
-          onClick={() => (p.receipt ? setChild(openSlot(p.receipt.id)) : openContractor())}
-        >
-          <Icon name="link" size="sm" />
-          {t('fin.op.source')}
-        </button>
+      {p && !p.deleted ? (
+        <WhyButton
+          icon="edit"
+          label={t('fin.op.edit')}
+          why={p.locks.edit?.text ?? null}
+          data="edit"
+          cta
+          onClick={() => setEdit(openSlot(p))}
+        />
       ) : null}
-      <button type="button" className={buttonClass('cta')} onClick={onClose}>
-        {t('btn.done')}
-      </button>
     </>
   );
 
@@ -226,7 +196,11 @@ export function FeePaymentWindowDialog({
         p ? t('fin.op.title', { kind: t('fin.fee.kind'), amount: formatSomWithUnit(p.amount) }) : ''
       }
       label={p ? undefined : t('fin.fee.open')}
-      sub={p ? `${p.contractor.name} · ${formatDateRu(p.date)}` : undefined}
+      sub={
+        p ? (
+          <OpWindowSub name={p.contractor.name} date={p.date} onContractor={openContractor} />
+        ) : undefined
+      }
       footer={footer}
     >
       <div className="flex flex-col gap-3.5" data-fee-payment-window={id}>
@@ -273,15 +247,17 @@ export function FeePaymentWindowDialog({
         ) : null}
         {p?.files ? <RecordFiles source={{ kind: 'fee_payment', id: p.id }} /> : null}
         {p ? (
-          <Box title={t('fin.op.history')}>
-            {p.history.length ? (
-              <Timeline items={historyItems(t, p)} label={t('fin.op.history')} />
-            ) : (
-              <span className="text-faint">{t('fin.op.history_empty')}</span>
-            )}
-          </Box>
+          <OpHistoryFold t={t} items={historyItems(t, p)} created={p.created} updated={p.updated} />
         ) : null}
       </div>
+      {more && p ? (
+        <ActionMenu
+          items={actions}
+          place={{ anchor: more }}
+          label={t('status.act.more')}
+          onClose={() => setMore(null)}
+        />
+      ) : null}
       {del ? (
         <FeePaymentDeleteDialog
           key={`del-${del.n}`}

@@ -24,6 +24,7 @@ import {
   CheckRow,
   Field,
   FormGrid,
+  FormMore,
   Hint,
   Icon,
   inputClass,
@@ -42,6 +43,7 @@ import { api, callApi } from '../api-client';
 import { FileNoteInput } from '../files/attach-dialog';
 import { filesQuery, pickedFilesProblem, uploadFile } from '../files/files-data';
 import { ReportTaxBox, useReportTaxBox } from '../kpi/kpi-tax-box';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import type { ApiErrorLike, Translate } from '../l10n/translate';
 import { payFirstWhy } from '../money/report-money';
@@ -220,6 +222,7 @@ function AmountFields({
   onRepeat,
   errors,
   mode,
+  part,
 }: {
   t: Translate;
   id: string;
@@ -230,6 +233,8 @@ function AmountFields({
   onRepeat: (on: boolean) => void;
   errors: AmountErrors;
   mode: 'submit' | 'amount';
+  /** Окно «Сдан» (прототип v134): `main` — платежи и итог на виду, `extra` — строки по ставкам и «Повторять» под «Дополнительно». */
+  part?: 'main' | 'extra';
 }) {
   const defs = card.lineDefs;
   const rate = defs.flatMap((d, k) => (d.kind === 'rate' ? [{ d, k }] : []));
@@ -242,7 +247,7 @@ function AmountFields({
   const fixed = card.repeat?.fixedAmount ?? null;
   return (
     <>
-      {rate.length > 0 ? (
+      {part !== 'main' && rate.length > 0 ? (
         <div
           data-field=""
           data-report-lines=""
@@ -310,7 +315,7 @@ function AmountFields({
           ) : null}
         </div>
       ) : null}
-      {parts.map(({ d, k }) => {
+      {(part === 'extra' ? [] : parts).map(({ d, k }) => {
         const authority = card.payments[Number(d.key.slice('pay:'.length))]?.authority;
         return (
           <Field
@@ -336,30 +341,24 @@ function AmountFields({
           </Field>
         );
       })}
-      <Field
-        id={`${id}-amount`}
-        label={label}
-        full
-        hint={t(mode === 'submit' ? 'report.amount.hint_zero' : 'report.amount.hint')}
-        error={errors.amount}
-      >
-        {(control) => (
-          <input
-            {...control}
-            type="text"
-            inputMode="decimal"
-            data-report-amount=""
-            readOnly={total}
-            placeholder={
-              mode === 'submit' ? t('report.amount.placeholder_zero') : formatSom(125050, 'auto')
-            }
-            className={`${inputClass()} tabular-nums`}
-            value={form.amount}
-            onChange={(e) => onForm({ ...form, amount: e.target.value })}
-          />
-        )}
-      </Field>
-      {card.repeat ? (
+      {part !== 'extra' ? (
+        <Field id={`${id}-amount`} label={label} full error={errors.amount}>
+          {(control) => (
+            <input
+              {...control}
+              type="text"
+              inputMode="decimal"
+              data-report-amount=""
+              readOnly={total}
+              placeholder={t('report.amount.placeholder_zero')}
+              className={`${inputClass()} tabular-nums`}
+              value={form.amount}
+              onChange={(e) => onForm({ ...form, amount: e.target.value })}
+            />
+          )}
+        </Field>
+      ) : null}
+      {part !== 'main' && card.repeat ? (
         <div className="col-span-full">
           <CheckRow
             kind="check"
@@ -371,15 +370,16 @@ function AmountFields({
               <span className="inline-flex items-center gap-2">
                 <Icon name="repeat" size="sm" />
                 {t('report.repeat.label')}
+                <InfoTip
+                  label={t('report.repeat.tip')}
+                  text={t('report.repeat.hint', { type: card.type.shortName })}
+                />
               </span>
             }
           >
-            <Hint>
-              {t('report.repeat.hint', { type: card.type.shortName })}
-              {fixed !== null
-                ? ` ${t('report.repeat.now', { sum: formatSomWithUnit(fixed) })}`
-                : ''}
-            </Hint>
+            {fixed !== null ? (
+              <Hint>{t('report.repeat.now', { sum: formatSomWithUnit(fixed) })}</Hint>
+            ) : null}
           </CheckRow>
         </div>
       ) : null}
@@ -433,6 +433,13 @@ export function ReportSubmitDialog({
   const canUpload = useCanUpload(card);
   const withAmount = reportHasAmount(card.act);
   const tax = useReportTaxBox(card);
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-82 — со строками по ставкам «Дополнительно» раскрыто сразу: итог у
+  // такого отчёта только для чтения, и без строк сумму не ввести (в прототипе блок свёрнут всегда).
+  const [more, setMore] = useState(() => initial.lineDefs.some((d) => d.kind === 'rate'));
+  const onAmountForm = (f: AmountForm) => {
+    setForm(f);
+    setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
+  };
 
   const submit = async () => {
     if (!date || date > todayBishkek()) return setErrors({ date: t('err.submit_date_invalid') });
@@ -491,11 +498,9 @@ export function ReportSubmitDialog({
     toast(message, { bad: true });
   };
 
-  const filesHint = card.fileRequired
-    ? card.files.length
-      ? t('report.submit.files_have', { n: card.files.length })
-      : t('report.submit.files_need')
-    : t('report.submit.optional');
+  // Редкое — под «Дополнительно» (прототип v134 `fMore`): расчёт по показателям, строки по ставкам, «Повторять».
+  const hasLines = card.lineDefs.some((d) => d.kind === 'rate');
+  const hasMore = withAmount && (!!tax.box || hasLines || !!card.repeat);
 
   return (
     <Modal
@@ -536,35 +541,18 @@ export function ReportSubmitDialog({
               />
             )}
           </Field>
-          {withAmount && tax.box ? (
-            <ReportTaxBox
-              reportId={card.id}
-              box={tax.box}
-              period={card.periodFull}
-              typeShort={card.type.shortName}
-              onFill={(fill) => {
-                const next = withTaxFill(card.lineDefs, form, fill);
-                if (!next) return false;
-                setForm(next);
-                setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
-                return true;
-              }}
-            />
-          ) : null}
           {withAmount ? (
             <AmountFields
               t={t}
               id={id}
               card={card}
               form={form}
-              onForm={(f) => {
-                setForm(f);
-                setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
-              }}
+              onForm={onAmountForm}
               repeat={repeat}
               onRepeat={setRepeat}
               errors={errors}
               mode="submit"
+              part="main"
             />
           ) : null}
           {card.filesOn && canUpload ? (
@@ -572,7 +560,7 @@ export function ReportSubmitDialog({
               id={`${id}-files`}
               label={t('report.submit.files')}
               full
-              hint={filesHint}
+              required={card.fileRequired}
               error={errors.files}
             >
               {(control) => (
@@ -588,9 +576,47 @@ export function ReportSubmitDialog({
           ) : card.fileRequired && !card.hasFiles ? (
             <div className="col-span-full">
               <Note tone="warn" icon="clip">
-                {errors.files ?? t('report.submit.files_need')}
+                {errors.files ?? t('report.submit.file_required')}
               </Note>
             </div>
+          ) : null}
+          {hasMore ? (
+            <FormMore
+              data-report-more-fields=""
+              label={t(tax.box ? 'report.submit.more_tax' : 'status.fold.more')}
+              open={more || !!errors.lines}
+              onToggle={setMore}
+            >
+              <FormGrid>
+                {tax.box ? (
+                  <ReportTaxBox
+                    reportId={card.id}
+                    box={tax.box}
+                    period={card.periodFull}
+                    typeShort={card.type.shortName}
+                    onFill={(fill) => {
+                      const next = withTaxFill(card.lineDefs, form, fill);
+                      if (!next) return false;
+                      setForm(next);
+                      setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
+                      return true;
+                    }}
+                  />
+                ) : null}
+                <AmountFields
+                  t={t}
+                  id={id}
+                  card={card}
+                  form={form}
+                  onForm={onAmountForm}
+                  repeat={repeat}
+                  onRepeat={setRepeat}
+                  errors={errors}
+                  mode="submit"
+                  part="extra"
+                />
+              </FormGrid>
+            </FormMore>
           ) : null}
         </FormGrid>
         {card.taxpay &&
@@ -920,7 +946,6 @@ export function ReportConfirmDialog({ card: initial, open, onClose, onDone }: Ca
                 {...control}
                 data-report-note=""
                 maxLength={REPORT_NOTE_MAX}
-                placeholder={t('report.submit.optional')}
                 className={`${inputClass({ multiline: true })} min-h-[56px]`}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -932,15 +957,7 @@ export function ReportConfirmDialog({ card: initial, open, onClose, onDone }: Ca
               id={`${id}-files`}
               label={t('report.confirm.receipt')}
               full
-              hint={
-                card.receiptRequired
-                  ? t(
-                      card.files.length
-                        ? 'report.confirm.receipt_have'
-                        : 'report.confirm.receipt_need',
-                    )
-                  : t('report.submit.optional')
-              }
+              required={card.receiptRequired && card.files.length === 0}
               error={error}
             >
               {(control) => (
@@ -1081,7 +1098,6 @@ export function ReportBatchConfirmDialog({
                 {...control}
                 data-report-note=""
                 maxLength={REPORT_NOTE_MAX}
-                placeholder={t('report.submit.optional')}
                 className={`${inputClass({ multiline: true })} min-h-[56px]`}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -1353,12 +1369,7 @@ export function ReportFileDialog({
       }
     >
       <div className="flex flex-col gap-3.5">
-        <Field
-          id={`${id}-files`}
-          label={t('report.file.field')}
-          hint={t('report.file.hint')}
-          error={error}
-        >
+        <Field id={`${id}-files`} label={t('report.file.field')} error={error}>
           {(control) => (
             <FilesInput
               control={control}

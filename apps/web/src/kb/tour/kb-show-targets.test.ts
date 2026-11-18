@@ -24,7 +24,10 @@ describe('«Показать как»: элементы прототипа на 
     expect(productTarget('#cp-resp')).toBe('[data-cp-resp]');
     expect(productTarget('#cp-page')).toBe('[data-box]:has([data-cp-page])');
     // Карточка проекта: «Записать оплату» (показ шага «Принять транш оплаты по проекту»).
-    expect(productTarget('#pj-pay')).toBe('[data-pj-pay]');
+    // На вкладке «Главное» (v136) кнопка блока «Оплаты» не видна — цель и главная кнопка внизу.
+    expect(productTarget('#pj-pay')).toBe(
+      '[data-pj-pay] || [data-window-foot] [data-pj-main="pay"]',
+    );
   });
 
   it('«подняться до» пункта меню и строки карточки — элементы продукта', () => {

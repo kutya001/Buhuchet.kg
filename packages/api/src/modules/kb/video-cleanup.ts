@@ -29,5 +29,7 @@ export const cleanupVideoUploadsJob: Job = {
       }
     }
     await dropStaleVideoUploads(ctx.db, removed, before);
+    // Сколько загрузок убрано — в Админку → «Запуски», столбец «Что сделано».
+    return removed.length;
   },
 };
