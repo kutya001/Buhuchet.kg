@@ -252,6 +252,11 @@ test.describe('Этап 3: «Расчёт по показателям» в ок�
     );
     await card.locator('[data-report-button="submit"]').click();
     const dialog = page.getByRole('dialog', { name: 'Отметить отчёт сданным' });
+    // Расчёт по показателям в окне «Сдан» — под «Посчитать по показателям и другое» (прототип v134).
+    const more = dialog.locator('[data-report-more-fields]');
+    await expect(more).toContainText('Посчитать по показателям и другое');
+    if (!(await more.evaluate((el) => (el as HTMLDetailsElement).open)))
+      await more.locator('summary').click();
     const box = dialog.locator('[data-kpi-tax-box="rev"]');
     await expect(box).toContainText('не ведётся');
     await expect(box.locator('[data-kpi-tax-cell]')).toHaveCount(0);

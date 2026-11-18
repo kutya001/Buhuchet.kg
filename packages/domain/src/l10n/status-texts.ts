@@ -92,10 +92,6 @@ export const STATUS_TEXTS = {
     ru: 'Например: статус поставили по ошибке',
     section: 'Статусы',
   },
-  'status.rollback_hint': {
-    ru: 'Откат делается на один шаг и попадает в историю статусов с пометкой «Откат».',
-    section: 'Статусы',
-  },
   'status.rollback_ok': { ru: 'Откатить', section: 'Статусы' },
   'status.rollback_reason_required': { ru: 'Укажите причину', section: 'Статусы' },
   'status.rollback_done': { ru: 'Откат выполнен', section: 'Статусы' },

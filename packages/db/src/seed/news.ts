@@ -87,7 +87,6 @@ export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
   'v131',
   'v132',
   'v133',
-  'v134',
   'v135',
   'v136',
   'v137',

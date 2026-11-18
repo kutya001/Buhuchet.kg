@@ -321,9 +321,10 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await confirm.locator('[data-report-ok]').click();
     await expect(confirm).toBeHidden();
     await expect(step(waiting, 'Сдан')).toContainText('Подтвердил Мээрим К.');
-    await expect(waiting).toContainText(
-      new RegExp(`Подтверждено · Мээрим К\\., ${ru(bishkek()).replace(/\./g, '\\.')}`),
-    );
+    // Кто и когда подтвердил — на шкале и в «Истории»: отдельной плашки в карточке больше нет (прототип v134).
+    const confirmed = waiting.locator('details[data-report-history]');
+    await expect(confirmed).toContainText('Мээрим К.');
+    await expect(confirmed).toContainText(ru(bishkek()));
     expect(await cardOf(page.request, nds)).toMatchObject({
       status: 'submitted',
       mark: 'confirmed',
@@ -352,7 +353,14 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await openTab(page, isMobile, 'waiting', word);
     const mine = await openCard(page, own, name, 'НДС');
     await expect(mine.locator('[data-report-button="confirm"]')).toHaveCount(0);
-    await expect(mine).toContainText('Свой сданный отчёт подтвердить нельзя');
+    // Причина — у бледного пункта «Подтвердить» в «Действиях» (прототип v134: плашки ожидания нет).
+    await mine.locator('[data-report-more]').click();
+    const ownConfirm = page
+      .getByRole('menu', { name: 'Действия' })
+      .getByRole('menuitem', { name: /^Подтвердить/ });
+    await expect(ownConfirm).toBeDisabled();
+    await expect(ownConfirm).toContainText('Свой сданный отчёт подтвердить нельзя');
+    await page.keyboard.press('Escape');
     const refused = await page.request.post(`/api/reports/${own}/confirm`, {
       headers: { origin },
       data: { version: (await cardOf(page.request, own)).version },
@@ -532,6 +540,89 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await expect(
       page.getByRole('dialog', { name: 'НДС' }).locator(`[data-report-card="${nds}"]`),
     ).toBeVisible();
+  });
+
+  test('(доработки 17.11.2026, карточка отчёта) под шапкой одна строка — шкала коротко, срок и ответственный; полная шкала, «Подробности» и «История» раскрываются нажатием и остаются раскрытыми при повторном открытии; у отчёта без суммы — «Сумма к уплате не указана» с «Указать»; внизу один ряд — «Действия» и следующий шаг', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Строка');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(request, origin, { name });
+    const nds = await manualReport(request, origin, {
+      contractorId: cp.id,
+      reportTypeCode: 'nds',
+      month: '2026-09-01',
+      due: '2030-01-15',
+    });
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await openTab(page, isMobile, 'all', word);
+    await row(page, nds).getByText(name).first().click();
+    const dialog = page.getByRole('dialog', { name: 'НДС' });
+    const card = dialog.locator(`[data-report-card="${nds}"]`);
+
+    // Строка состояния: шкалы «Сдача» и «Оплата» коротко, срок, ответственный со «сменить».
+    const line = card.locator('[data-status-line]');
+    await expect(line).toBeVisible();
+    const short = line.locator('[data-status-line-scale]');
+    await expect(short).toContainText('К сдаче');
+    await expect(short).toContainText('Не оплачено');
+    await expect(short).toHaveAttribute('aria-expanded', 'false');
+    await expect(line).toContainText('до 15.01.2030');
+    await expect(line.locator('[data-report-responsible]')).toHaveText('сменить');
+    // Контрагент в шапке — ссылкой на его карточку.
+    await expect(dialog.locator(`[data-cp-link="${cp.id}"]`)).toHaveText(name);
+
+    // Полная шкала скрыта, пока не нажата короткая; раскрытое помнится до перезагрузки страницы.
+    const full = card.locator('[data-status-line-full]');
+    await expect(full).toBeHidden();
+    await short.click();
+    await expect(short).toHaveAttribute('aria-expanded', 'true');
+    await expect(full.locator(SUBMIT_SCALE)).toBeVisible();
+
+    // Суммы ещё нет: одна строка с «Указать» вместо плиток; «Указать» открывает «Сумма к уплате».
+    await expect(card.locator('[data-report-sums]')).toHaveCount(0);
+    const none = card.locator('[data-report-sum-none]');
+    await expect(none).toContainText('Сумма к уплате не указана');
+    await none.locator('[data-report-sum-set]').click();
+    const amount = page.getByRole('dialog', { name: 'Сумма к уплате' });
+    await expect(amount.locator('[data-report-amount]')).toHaveAttribute(
+      'placeholder',
+      '0 — нулевой отчёт',
+    );
+    await page.keyboard.press('Escape');
+    await expect(amount).toBeHidden();
+
+    // «Подробности» и «История» свёрнуты: реквизиты и записи видны после нажатия.
+    const details = card.locator('details[data-report-details]');
+    await expect(details).not.toHaveAttribute('open', '');
+    await expect(details.getByText(cp.inn)).toBeHidden();
+    await details.locator('summary').click();
+    await expect(details.getByText(cp.inn)).toBeVisible();
+    const history = card.locator('details[data-report-history]');
+    await expect(history.locator('[data-status-history]').first()).toBeHidden();
+    await history.locator('summary').click();
+    await expect(history.locator('[data-status-history]').first()).toBeVisible();
+    await expect(history.getByRole('heading', { name: 'Изменения' })).toBeVisible();
+
+    // Внизу один ряд: «Действия» и следующий шаг; «Принять деньги» — в «Действиях».
+    await expect(dialog.locator('[data-report-button]')).toHaveCount(1);
+    await expect(dialog.locator('[data-report-button="submit"]')).toBeVisible();
+    await dialog.locator('[data-report-more]').click();
+    const menu = page.getByRole('menu', { name: 'Действия' });
+    await expect(menu.getByRole('menuitem', { name: 'Указать сумму' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+
+    // Повторное открытие той же карточки: шкала осталась раскрытой.
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await row(page, nds).getByText(name).first().click();
+    await expect(card.locator('[data-status-line-full]').locator(SUBMIT_SCALE)).toBeVisible();
   });
 
   // Своя новая организация: выключение подтверждения меняет учётную политику, а у демо-организации
