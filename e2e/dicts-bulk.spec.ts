@@ -50,6 +50,10 @@ test('(проверка прототипа v84) в «Видах отчётов»
   await orgWithTypes(page.request, origin, false);
   await page.goto('/app/dicts/types');
   await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+  if (isMobile) {
+    // Телефон (прототип v139): пока не нажато «Выбрать несколько», галочек у записей нет.
+    await expect(page.locator('[data-grid] [data-id]').getByRole('checkbox')).toHaveCount(0);
+  }
 
   // «Подключить»: два вида сразу.
   await pick(page, isMobile, 'soc', SOC);

@@ -383,7 +383,8 @@ export async function openColumnFilter(page: Page, column: string): Promise<Loca
 
 /** Окно «Столбцы» списка: на ПК — кнопка над списком, на телефоне — пункт «⋯». */
 export async function openColumns(page: Page): Promise<Locator> {
-  if (onPhone(page)) await phoneListMenu(page, /^(Столбцы|Поля карточки)/);
+  // «Столбцы доски» в виде «Доска» — другое окно (поле столбцов), а не список столбцов.
+  if (onPhone(page)) await phoneListMenu(page, /^(Столбцы(?! доски)|Поля карточки)/);
   else await page.getByRole('button', { name: /^Столбцы/ }).click();
   return page.getByRole('dialog', { name: 'Столбцы' });
 }

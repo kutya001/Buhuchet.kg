@@ -9,7 +9,7 @@ import {
   type WindowFrameProps,
   type WindowLabels,
 } from './modal';
-import { canMaximize, closesAtOnce, WindowStack } from './window-stack';
+import { canMaximize, closesAtOnce, isCancelButton, unsavedNow, WindowStack } from './window-stack';
 
 const LABELS: WindowLabels = {
   maximize: 'На весь экран',
@@ -258,6 +258,25 @@ describe('стопка открытых окон', () => {
     expect(closesAtOnce({ kind: 'card', dirty: false })).toBe(true);
     expect(closesAtOnce({ kind: 'card', dirty: true })).toBe(false);
     expect(closesAtOnce({ kind: 'message', dirty: true })).toBe(true);
+  });
+
+  it('(прототип v131) «Закрыть без сохранения?» — только когда экран сообщил об изменениях и в окне что-то делали', () => {
+    // Форма открылась уже заполненной и её не трогали — закрывается без вопроса.
+    expect(unsavedNow(true, false)).toBe(false);
+    expect(unsavedNow(true, true)).toBe(true);
+    // Экран изменений не сообщил — нажатия в окне вопроса не дают.
+    expect(unsavedNow(false, true)).toBe(false);
+    expect(unsavedNow(undefined, true)).toBe(false);
+    expect(closesAtOnce({ kind: 'form', dirty: unsavedNow(true, false) })).toBe(true);
+    expect(closesAtOnce({ kind: 'form', dirty: unsavedNow(true, true) })).toBe(false);
+  });
+
+  it('(прототип v131) «Отмена» в нижней строке формы узнаётся по отметке или по надписи из словаря; «Сохранить» — нет', () => {
+    expect(isCancelButton({ marked: true, text: 'Не сейчас' }, 'Отмена')).toBe(true);
+    expect(isCancelButton({ marked: false, text: '  Отмена ' }, 'Отмена')).toBe(true);
+    expect(isCancelButton({ marked: false, text: 'Сохранить' }, 'Отмена')).toBe(false);
+    expect(isCancelButton({ marked: false, text: 'Отмена платежа' }, 'Отмена')).toBe(false);
+    expect(isCancelButton({ marked: false, text: null }, 'Отмена')).toBe(false);
   });
 
   it('выход спрашивает «Выйти без сохранения?», только если в открытой форме есть несохранённые изменения', () => {

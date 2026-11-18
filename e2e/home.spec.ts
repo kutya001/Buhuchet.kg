@@ -57,7 +57,13 @@ test.describe('«Главная»', () => {
       'Нет отчётов со сроком в этом месяце.',
     );
     await expect(home).not.toContainText(/чек-лист|урок|обучени/i);
-    await expect(home.locator('button:not([data-plate])')).toHaveCount(2);
+    // Кнопки сводки — только два перехода: «Ещё N» ряда плашек (на ПК скрыта) и «?» выходного дня
+    // (прототип v139) к ним не относятся.
+    await expect(
+      home.locator(
+        'button:not([data-plate]):not([data-plates-more]):not([data-home-day-off] button)',
+      ),
+    ).toHaveCount(2);
 
     // Первое действие: «Перейти к контрагентам» — пустой список с подсказкой и «Добавить контрагента».
     await hint.getByRole('button', { name: 'Перейти к контрагентам' }).click();

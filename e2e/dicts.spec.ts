@@ -73,6 +73,15 @@ test.describe('Этап 2: справочники — виды отчётов', 
     await expect(row.getByRole('switch').first()).toBeDisabled();
     // Галочек массовых изменений без права нет (прототип v84).
     await expect(row.getByRole('checkbox', { name: /Выбрать/ })).toHaveCount(0);
+    if (isMobile) {
+      // На телефоне галочки включает «Выбрать несколько» под «⋯» (прототип v139): без права пункта нет.
+      await page.locator('[data-grid] [data-grid-phone="more"]').click();
+      const more = page.getByRole('menu', { name: 'Ещё' });
+      await expect(more.getByRole('menuitem').first()).toBeVisible();
+      await expect(more.getByRole('menuitem', { name: /^Выбрать несколько/ })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(more).toHaveCount(0);
+    }
     await row.getByText('НДС', { exact: true }).first().click();
     const view = page.getByRole('dialog', { name: 'НДС' });
     await expect(view.locator('[data-type-settings]')).toContainText('Настройки организации');

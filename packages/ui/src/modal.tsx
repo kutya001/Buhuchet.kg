@@ -29,6 +29,8 @@ import { useSwipeDown } from './use-swipe-down';
 import {
   canMaximize,
   closesAtOnce,
+  isCancelButton,
+  unsavedNow,
   WindowStack,
   type MaxPrefs,
   type OpenWindow,
@@ -327,7 +329,7 @@ export function Modal({
    * `m.dirty` ставится по событиям ввода): форма, которая открылась уже заполненной, закрывается без
    * вопроса, пока её не тронули.
    */
-  const unsaved = dirty && touched;
+  const unsaved = unsavedNow(dirty, touched);
   const self = useRef<OpenWindow>({ kind, dirty: unsaved });
   useEffect(() => {
     self.current.kind = kind;
@@ -491,9 +493,10 @@ export function Modal({
           if (closesAtOnce({ kind, dirty: unsaved })) return;
           const button = (e.target as HTMLElement).closest('button');
           if (!button || button.disabled) return;
-          const cancel =
-            button.hasAttribute('data-window-cancel') ||
-            button.textContent?.trim() === windows.labels.cancel;
+          const cancel = isCancelButton(
+            { marked: button.hasAttribute('data-window-cancel'), text: button.textContent },
+            windows.labels.cancel,
+          );
           if (!cancel) return;
           e.preventDefault();
           e.stopPropagation();

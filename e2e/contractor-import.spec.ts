@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { showStats } from './helpers';
+import { discardChanges, showStats } from './helpers';
 import { orgWithTypes } from './orgs';
 
 // Загрузка контрагентов из Excel (задача 2.16, #72, часть 1) через настоящий сайт: своя организация
@@ -84,7 +84,10 @@ test.describe('Этап 2: загрузка контрагентов из Excel'
     await expect(page.getByText('Создано контрагентов: 2. Пропущено строк: 1')).toBeVisible();
     await expect(dialog.locator('[data-cp-import-row]')).toHaveCount(1);
     await expect(importRow(dialog, 0)).toContainText('ИНН не 14 цифр');
+    // В окне осталась исправленная строка с ошибкой: крестик спрашивает «Закрыть без сохранения?»
+    // (прототип v131).
     await dialog.getByRole('button', { name: 'Закрыть' }).first().click();
+    await discardChanges(page);
     await expect(dialog).toBeHidden();
 
     // Плашка «Без ГКЭД» (статистика по умолчанию скрыта — включается кнопкой): только контрагент без ГКЭД.

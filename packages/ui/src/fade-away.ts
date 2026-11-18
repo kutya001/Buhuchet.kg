@@ -20,6 +20,35 @@ const LIVE_ATTRS = [
   'aria-labelledby',
   'tabindex',
 ];
+/**
+ * Что снимается и с вложенных элементов копии: признаки, по которым страница ищет открытое окно (у
+ * `Modal` они стоят на самом окне внутри рамки), `id` и связь подписи с полем — на странице не должно
+ * быть двух элементов с одним `id`, пока то же окно открывают заново.
+ */
+const INNER_DROPS = ['data-overlay', 'data-popover', 'data-window', 'aria-modal', 'for'];
+/** Роли, по которым окно и меню находят на странице. */
+const WINDOW_ROLES = new Set(['dialog', 'alertdialog', 'menu']);
+
+/** Признаки открытого окна у вложенного элемента копии: какие атрибуты снять. */
+export function innerDrops(el: {
+  getAttribute(name: string): string | null;
+  closest(selector: string): unknown;
+}): string[] {
+  const drops = INNER_DROPS.filter((a) => el.getAttribute(a) !== null);
+  if (WINDOW_ROLES.has(el.getAttribute('role') ?? '')) drops.push('role');
+  // Внутри рисунка `id` нужен его же частям (заливка `url(#…)`).
+  if (el.getAttribute('id') !== null && !el.closest('svg')) drops.push('id');
+  return drops;
+}
+
+/** Поле с паролем или одноразовым кодом: его значение в уходящую копию не переносится. */
+export function secretField(type: string, autocomplete: string): boolean {
+  return (
+    type === 'password' ||
+    /(^|\s)(one-time-code|new-password|current-password)(\s|$)/.test(autocomplete)
+  );
+}
+
 /** Встроенное содержимое, которое в копии начало бы грузиться или играть заново. */
 const HEAVY = 'iframe,video,audio,object,embed';
 
@@ -77,6 +106,12 @@ export function leaveCopy(node: HTMLElement, scroll: ReadonlyMap<Element, [numbe
     }
     // Одинаковое имя переключателей вне формы сняло бы выбор у живого окна.
     if (el.getAttribute('type') === 'radio') el.removeAttribute('name');
+    for (const attr of innerDrops(el)) el.removeAttribute(attr);
+    // Введённый пароль и код в копию не попадают.
+    if (el instanceof HTMLInputElement && secretField(el.type, el.autocomplete)) {
+      el.value = '';
+      el.removeAttribute('value');
+    }
   }
   for (const attr of LIVE_ATTRS) copy.removeAttribute(attr);
   for (const el of copy.querySelectorAll(HEAVY)) {

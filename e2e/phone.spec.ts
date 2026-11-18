@@ -329,6 +329,29 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     await expect(search).toBeHidden();
     await expect(add).toBeVisible();
 
+    // Прототип v141: при прокрутке списка вниз «+» уезжает и не закрывает записи, вверх — возвращается.
+    const pane = page.locator('main');
+    const holder = page.locator('[data-fab-away]');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    const tall = await pane.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(tall).toBeGreaterThan(300);
+    // Видимая прозрачность кнопки — с учётом обёртки, которая её уводит.
+    const shown = () =>
+      add.evaluate((el) => {
+        let opacity = 1;
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          opacity *= Number(getComputedStyle(n).opacity);
+        }
+        return opacity;
+      });
+    await expect(holder).toHaveCount(0);
+    await pane.evaluate((el) => el.scrollTo(0, 300));
+    await expect(holder).toHaveCount(1);
+    await expect.poll(shown).toBe(0);
+    await pane.evaluate((el) => el.scrollTo(0, 0));
+    await expect(holder).toHaveCount(0);
+    await expect.poll(shown).toBe(1);
+
     await page.getByRole('button', { name: 'Поиск', exact: true }).click();
     await expect(search).toBeFocused();
     await expect(page.getByRole('button', { name: 'Меню' })).toBeHidden();

@@ -173,11 +173,14 @@ test.describe('Этап 2: задачи', () => {
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/tasks/all');
     const plate = page.locator('[data-plate="pend"]');
-    if (!isMobile) {
+    // На телефоне плашки на виду всегда, без пояснения под числом (прототип v139).
+    // На ПК выбор «Статистики» приходит с сервера: ответ, пришедший после нажатия, снова прячет плашки —
+    // поэтому показ и проверка повторяются вместе.
+    await expect(async () => {
       await showStats(page);
-      await expect(plate).toContainText('На подтверждении');
-      await expect(plate).toContainText('можете подтвердить:');
-    }
+      await expect(plate).toContainText('На подтверждении', { timeout: 3_000 });
+      if (!isMobile) await expect(plate).toContainText('можете подтвердить:', { timeout: 3_000 });
+    }).toPass();
     card = await openTask(page, isMobile, 'all', title, id);
     await card.locator('[data-task-button="confirm"]').click();
     const confirm = page.getByRole('dialog', { name: 'Подтвердить выполнение' });

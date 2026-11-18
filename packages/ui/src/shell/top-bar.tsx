@@ -132,9 +132,11 @@ export function TopBar({
           {title}
         </b>
       </div>
+      {/* На ПК «?» открывается и наведением (прототип ui/popups.js: `.tipi,#tb-info`). */}
       <Popover
         label={info.label}
         padded
+        hover
         className={`relative inline-flex ${other}`}
         trigger={({ open, toggle, id }) => (
           <button
