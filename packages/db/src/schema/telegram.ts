@@ -1,5 +1,13 @@
 import {
   CODE_KINDS,
+  INBOX_ERROR_MAX,
+  INBOX_FILE_NAME_MAX,
+  INBOX_KINDS,
+  INBOX_SENDER_MAX,
+  INBOX_STATUSES,
+  INBOX_TEXT_MAX,
+  JOURNAL_CHAT_KINDS,
+  JOURNAL_HIDES,
   NOTIFY_KINDS,
   NOTIFY_MODES,
   OUTBOX_KINDS,
@@ -240,6 +248,10 @@ export const telegramOutbox = pgTable(
       .on(t.orgId, t.nextAt)
       .where(sql`${t.status} = 'pending'`),
     index('telegram_outbox_org_created_idx').on(t.orgId, t.createdAt),
+    // Журнал переписки Админки (docs/decisions.md п. Т-14): период по всем организациям и «Вся
+    // переписка» одного чата.
+    index('telegram_outbox_created_idx').on(t.createdAt),
+    index('telegram_outbox_chat_created_idx').on(t.chatId, t.createdAt),
     check('telegram_outbox_kind_check', sql`${t.kind} in (${inList(OUTBOX_KINDS)})`),
     check('telegram_outbox_status_check', sql`${t.status} in (${inList(OUTBOX_STATUSES)})`),
     check('telegram_outbox_tries_check', sql`${t.tries} >= 0`),
@@ -461,5 +473,67 @@ export const telegramWidgets = pgTable(
     check('telegram_widgets_data_check', sql`octet_length(${t.data}) <= 1024`),
     index('telegram_widgets_org_idx').on(t.orgId, t.sentOn),
     orgIsolation('telegram_widgets_isolation', t.orgId),
+  ],
+).enableRLS();
+
+/**
+ * Что бот получил (решение заказчика 17.11.2026; прототип v132 admin/tg-log.js; docs/decisions.md
+ * п. Т-14): нажатие кнопки, команда, текст, файл, код, ссылка привязки, «бота добавили в чат». Строку
+ * пишет вебхук до разбора обновления, итог — после. Код и одноразовая ссылка идут без текста: его не
+ * получает и функция базы. Роль приложения таблицу не видит и не меняет: пишут функции
+ * `app.telegram_inbox_begin` и `app.telegram_inbox_finish`, читает администратор платформы через
+ * представление `app.admin_telegram_journal`, строки старше 90 дней удаляет задача очистки
+ * (`app.telegram_inbox_cleanup`).
+ */
+export const telegramInbox = pgTable(
+  'telegram_inbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Номер обновления Telegram: повторная доставка второй строки не даёт. */
+    updateId: bigint('update_id', { mode: 'number' }),
+    chatId: bigint('chat_id', { mode: 'number' }).notNull(),
+    chatKind: text('chat_kind', { enum: JOURNAL_CHAT_KINDS }).notNull(),
+    /** Чья организация (по привязке чата на момент сообщения); пусто — чат ни к кому не привязан. */
+    orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'restrict' }),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** Контрагент чата клиента; ссылки нет: удалённый контрагент остаётся в журнале без названия. */
+    contractorId: uuid('contractor_id'),
+    /** «Имя @имя» со слов Telegram. */
+    sender: text('sender'),
+    kind: text('kind', { enum: INBOX_KINDS }).notNull(),
+    text: text('text'),
+    hide: text('hide', { enum: JOURNAL_HIDES }),
+    /** Подпись нажатой кнопки — из отправленного сообщения на момент нажатия. */
+    button: text('button'),
+    /** Номер сообщения бота в чате, к которому относится нажатие или ответ. */
+    replyMessageId: bigint('reply_message_id', { mode: 'number' }),
+    fileName: text('file_name'),
+    fileSize: bigint('file_size', { mode: 'number' }),
+    status: text('status', { enum: INBOX_STATUSES }).notNull().default('new'),
+    error: text('error'),
+  },
+  (t) => [
+    unique('telegram_inbox_update_key').on(t.updateId),
+    index('telegram_inbox_created_idx').on(t.createdAt),
+    index('telegram_inbox_chat_idx').on(t.chatId, t.createdAt),
+    check('telegram_inbox_kind_check', sql`${t.kind} in (${inList(INBOX_KINDS)})`),
+    check('telegram_inbox_status_check', sql`${t.status} in (${inList(INBOX_STATUSES)})`),
+    check('telegram_inbox_chat_kind_check', sql`${t.chatKind} in (${inList(JOURNAL_CHAT_KINDS)})`),
+    check(
+      'telegram_inbox_hide_check',
+      sql`${t.hide} is null or (${t.hide} in (${inList(JOURNAL_HIDES)}) and ${t.text} is null)`,
+    ),
+    // Код и ссылка привязки — всегда без текста.
+    check(
+      'telegram_inbox_secret_check',
+      sql`${t.kind} not in ('code', 'link') or (${t.hide} is not null and ${t.text} is null)`,
+    ),
+    check(
+      'telegram_inbox_size_check',
+      sql.raw(
+        `char_length(coalesce("text", '')) <= ${INBOX_TEXT_MAX} and char_length(coalesce("sender", '')) <= ${INBOX_SENDER_MAX} and char_length(coalesce("error", '')) <= ${INBOX_ERROR_MAX} and char_length(coalesce("file_name", '')) <= ${INBOX_FILE_NAME_MAX} and char_length(coalesce("button", '')) <= 64`,
+      ),
+    ),
   ],
 ).enableRLS();
