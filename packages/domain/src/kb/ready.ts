@@ -337,4 +337,6 @@ export const KB_READY_MODULES: ReadonlySet<string> = new Set<MenuModuleId>([
   'kbadm',
   // «Техническая документация» (прототип v83).
   'tdocs',
+  // «Запуски» (прототип v132).
+  'runs',
 ]);

@@ -1,4 +1,4 @@
-import { outboxRetryRefusal } from '@buhuchet/domain';
+import { outboxRetryRefusal, type OutboxStatus } from '@buhuchet/domain';
 import type { AdminTelegramLogRow } from '@buhuchet/shared';
 import type { ActionEntry } from '@buhuchet/ui';
 import type { Translate } from '../l10n/translate';
@@ -11,26 +11,41 @@ const REFUSAL_TEXT = {
   outbox_bot_cmd: 'tgadm.retry.bot_cmd',
 } as const;
 
-/** Почему строку нельзя повторить (прототип `tgNoRetry`); пусто — можно. */
-export function retryRefusal(t: Translate, row: AdminTelegramLogRow): string {
-  const refusal = outboxRetryRefusal(row);
+type RetryRow = Pick<AdminTelegramLogRow, 'src' | 'status' | 'kind'>;
+
+/**
+ * Почему строку нельзя повторить (прототип `tgNoRetry`); пусто — можно. Полученное не повторяется;
+ * сообщение клиенту контрагента с ошибкой отправляют заново из карточки контрагента.
+ */
+export function retryRefusal(t: Translate, row: RetryRow): string {
+  if (row.src === 'inbox') return t('tgadm.retry.in');
+  if (row.status !== 'error') return t('tgadm.retry.not_error');
+  if (row.src === 'client') return t('tgadm.retry.client');
+  const refusal = outboxRetryRefusal({ status: row.status as OutboxStatus, kind: row.kind });
   return refusal ? t(REFUSAL_TEXT[refusal]) : '';
 }
 
 /**
- * Меню строки журнала (прототип admin/telegram.js, actions): «Повторить отправку» — только у «Ошибки»
- * и не у кода восстановления или кода замены Telegram; иначе пункт виден, но недоступен с причиной.
+ * Меню строки журнала (прототип admin/tg-log.js, actions): «Открыть сообщение», «Вся переписка» и
+ * «Повторить отправку» — только у «Ошибки» отправленного сотруднику и не у кода; иначе пункт виден, но
+ * недоступен с причиной.
  */
 export function logMenu({
   t,
+  open,
+  chat,
   retry,
 }: {
   t: Translate;
+  open: (row: AdminTelegramLogRow) => void;
+  chat: (row: AdminTelegramLogRow) => void;
   retry: (row: AdminTelegramLogRow) => void;
 }): (row: AdminTelegramLogRow) => ActionEntry[] {
   return (row) => {
     const reason = retryRefusal(t, row);
     return [
+      { id: 'open', label: t('tgadm.menu.open'), icon: 'eye', run: () => open(row) },
+      { id: 'chat', label: t('tgadm.menu.chat'), icon: 'chat', run: () => chat(row) },
       {
         id: 'retry',
         label: t('tgadm.retry'),

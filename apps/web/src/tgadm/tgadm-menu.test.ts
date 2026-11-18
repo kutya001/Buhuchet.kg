@@ -6,26 +6,37 @@ import { makeTranslate } from '../l10n/translate';
 import { bulkRetryToast, logMenu, retryRefusal } from './tgadm-menu';
 
 // Меню строки журнала Админки → «Телеграм» и уведомление «Повторить ошибки» (прототип
-// admin/telegram.js: tgNoRetry, actions, «Повторить ошибки»).
+// admin/tg-log.js: tgNoRetry, actions, «Повторить ошибки»).
 
 const t = makeTranslate(defaultUiTexts());
 
 const row = (over: Partial<AdminTelegramLogRow> = {}): AdminTelegramLogRow => ({
   id: '00000000-0000-4000-8000-000000000201',
+  src: 'outbox',
+  dir: 'out',
   at: '2026-10-18T03:00:00.000Z',
   sentAt: null,
   recipient: 'Иванова А.',
   orgId: '00000000-0000-4000-8000-000000000001',
   orgName: 'ОсОО «Пример»',
+  chatKind: 'private',
   kind: 'broadcast',
   status: 'error',
   tries: 5,
   error: 'Forbidden: bot was blocked by the user',
+  text: 'Плановые работы 15 ноября',
+  hide: null,
   ...over,
 });
 
+const menu = (r: AdminTelegramLogRow, over: { open?: () => void; chat?: () => void } = {}) =>
+  logMenu({ t, open: over.open ?? vi.fn(), chat: over.chat ?? vi.fn(), retry: vi.fn() })(r).filter(
+    (e): e is ActionItem => 'id' in e,
+  );
 const item = (r: AdminTelegramLogRow, retry = vi.fn()) =>
-  logMenu({ t, retry })(r).find((e): e is ActionItem => 'id' in e && e.id === 'retry')!;
+  logMenu({ t, open: vi.fn(), chat: vi.fn(), retry })(r).find(
+    (e): e is ActionItem => 'id' in e && e.id === 'retry',
+  )!;
 
 describe('Журнал «Телеграм»: «Повторить отправку»', () => {
   it('у «Ошибки» пункт доступен и повторяет строку', () => {
@@ -63,6 +74,42 @@ describe('Журнал «Телеграм»: «Повторить отправк
       expect(entry.disabled).toBe(true);
       expect(entry.reason).toBe(reason);
     }
+  });
+});
+
+describe('Журнал «Телеграм»: меню строки переписки в обе стороны', () => {
+  it('пункты — «Открыть сообщение», «Вся переписка», «Повторить отправку»; первые два открывают строку', () => {
+    const open = vi.fn();
+    const chat = vi.fn();
+    const r = row();
+    const entries = menu(r, { open, chat });
+    expect(entries.map((e) => e.label)).toEqual([
+      'Открыть сообщение',
+      'Вся переписка',
+      'Повторить отправку',
+    ]);
+    entries[0]!.run?.();
+    entries[1]!.run?.();
+    expect(open).toHaveBeenCalledWith(r);
+    expect(chat).toHaveBeenCalledWith(r);
+  });
+
+  it('полученное сообщение не повторяется, даже с «Ошибкой»', () => {
+    for (const status of ['done', 'unknown', 'error'] as const) {
+      const entry = item(row({ src: 'inbox', dir: 'in', kind: 'in_text', status }));
+      expect(entry.disabled).toBe(true);
+      expect(entry.reason).toBe('Повторить можно только отправленное сообщение');
+    }
+  });
+
+  it('сообщение клиенту контрагента с «Ошибкой» отсюда не повторяется, отправленное — «только для ошибок»', () => {
+    const failed = item(row({ src: 'client', chatKind: 'client', kind: 'client_pay' }));
+    expect(failed.disabled).toBe(true);
+    expect(failed.reason).toBe(
+      'Сообщение клиенту контрагента отсюда не повторяется: отправьте его заново из карточки контрагента',
+    );
+    const sent = item(row({ src: 'client', chatKind: 'client', kind: 'client_pay', status: 'sent' }));
+    expect(sent.reason).toBe('Повтор доступен только для ошибок');
   });
 });
 

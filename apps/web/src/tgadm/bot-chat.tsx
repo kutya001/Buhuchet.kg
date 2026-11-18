@@ -96,7 +96,7 @@ const CELL = 'border-b border-line py-1 pr-1.5 align-top';
 const NUM = 'text-right whitespace-nowrap pr-0';
 
 /** Таблица сообщения; у таблицы с названием — раскрывающийся раздел «Название · число строк». */
-function ChatTable({ table }: { table: BotTable }) {
+export function ChatTable({ table }: { table: BotTable }) {
   const numeric = new Set(table.numeric ?? []);
   const num = (i: number) => (numeric.has(i) ? ` ${NUM}` : '');
   const body = (
@@ -163,9 +163,9 @@ function ChatTable({ table }: { table: BotTable }) {
 }
 
 // Отступы между частями сообщения — как `.tgc-b p+p`, `p+.tgc-t`, `.tgc-t+p`, `details+p` прототипа.
-const BUBBLE =
+export const BUBBLE =
   'min-w-0 rounded-[14px_14px_14px_4px] border border-line bg-raised px-[11px] py-2 text-[13.5px] leading-[1.45] [overflow-wrap:anywhere] [&_details+p]:mt-1.5 [&_p+p]:mt-1.5 [&_p+table]:mt-1.5 [&_table+p]:mt-1.5';
-const SIDE = 'flex max-w-[min(440px,100%)] min-w-0 flex-col gap-1 self-start max-md:max-w-full';
+export const SIDE = 'flex max-w-[min(440px,100%)] min-w-0 flex-col gap-1 self-start max-md:max-w-full';
 
 /**
  * Окно чата: шапка «Buhuchet.kg · бот», сообщения и кнопки под ними. `plain` — запасной простой текст

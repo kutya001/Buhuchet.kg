@@ -261,7 +261,7 @@ export function jobExportHandler(deps: ApiDeps): RouteHandler<typeof jobExportRo
         'export',
       );
       return xlsxResponse(c, {
-        title: `${t('nav.runs')} — ${t('runs.tab.jobs')}`,
+        title: `${t('nav.runs')} — ${t('tab.runs.jobs')}`,
         today: deps.clock.now(),
         columns: result.columns,
         rows: result.rows,

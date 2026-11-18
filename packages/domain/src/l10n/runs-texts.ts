@@ -3,14 +3,19 @@ import type { UiTextDefault } from './texts';
 const S = 'Админка';
 
 /**
- * Тексты Админки → «Запуски» (решение заказчика 17.11.2026; прототип v132 admin/runs.js): вкладки
- * «Задачи» и «Запуски», окно «Запуск». Названия задач — `alert.job.<имя>` (alerts-texts.ts), «Что
+ * Тексты Админки → «Запуски» (решение заказчика 17.11.2026; прототип v132 admin/runs.js и
+ * core/registry.js, ADM runs): модуль меню, вкладки «Задачи» и «Запуски», окно «Запуск». Названия задач — `alert.job.<имя>` (alerts-texts.ts), «Что
  * делает» — `runs.what.<имя>`, «Что сделано» с числом — `runs.done.<имя>` (точки и дефисы имени — «_»).
  */
 export const RUNS_TEXTS = {
   'nav.runs': { ru: 'Запуски', section: 'Меню' },
-  'runs.tab.jobs': { ru: 'Задачи', section: S },
-  'runs.tab.runs': { ru: 'Запуски', section: S },
+  'nav.short.runs': { ru: 'Запуски', section: 'Меню' },
+  'nav.desc.runs': {
+    ru: 'Задачи по расписанию и журнал их запусков: что запускалось, когда, с каким итогом и ошибкой. Только просмотр: запустить задачу или изменить расписание отсюда нельзя.',
+    section: 'Меню',
+  },
+  'tab.runs.jobs': { ru: 'Задачи', section: 'Вкладки' },
+  'tab.runs.runs': { ru: 'Запуски', section: 'Вкладки' },
   // Плашки.
   'runs.plate.ok': { ru: 'Работают', section: S },
   'runs.plate.ok_value': { ru: '{n} из {total}', section: S },

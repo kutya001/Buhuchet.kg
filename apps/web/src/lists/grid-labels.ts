@@ -50,6 +50,8 @@ export type CountKey =
   | 'video.count'
   | 'video.views.count'
   | 'tdocs.count'
+  | 'runs.jobs.count'
+  | 'runs.count'
   | 'tgadm.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
