@@ -39,7 +39,10 @@ test.describe('Админка: журнал переписки бота', () => 
       const said = `Пришлю выписку завтра, ${word}`;
       await sendToBot(owner, chat, { text: said });
       // Шесть цифр — код: в журнал пишется строка без текста. Код — такой, какого нет в логине.
-      const code = ['482913', '739105', '264087'].find((c) => !login.includes(c))!;
+      // Строка и окно показывают логин и «@e2e_<чат>»: код не должен совпасть ни с тем, ни с другим.
+      const code = ['482913', '739105', '264087', '915326'].find(
+        (c) => !login.includes(c) && !String(chat).includes(c),
+      )!;
       await sendToBot(owner, chat, { text: code });
 
       await page.goto('/app/tg/log');
@@ -84,7 +87,12 @@ test.describe('Админка: журнал переписки бота', () => 
       const message = page.locator('[data-tg-message]');
       await expect(message.locator('[data-chat-me]')).toContainText(said);
       // «Вся переписка» из окна: один чат, оба направления — и то, что бот отправил, и то, что получил.
+      const chatList = page.waitForResponse((r) => {
+        const url = new URL(r.url());
+        return url.pathname === '/api/admin/telegram/log' && url.searchParams.has('chat');
+      });
       await page.locator('[data-tg-all]').click();
+      expect((await chatList).status()).toBe(200);
       await expect(message).toHaveCount(0);
       await expect(page.locator('[data-tg-chat-note]')).toBeVisible();
       await expect(got).toHaveCount(1);

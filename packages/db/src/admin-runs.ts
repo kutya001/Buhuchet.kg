@@ -7,7 +7,6 @@ import {
   selectListValues,
   type ListColumns,
   type ListFrom,
-  type ListTexts,
 } from './list';
 
 /*
@@ -296,6 +295,7 @@ function runSource(jobs: readonly RunJobText[], t: RunTexts): SQL {
       select r.job, r.slot, (p ->> 'attempt')::integer, (p ->> 'startedAt')::timestamptz,
         (p ->> 'finishedAt')::timestamptz, 'error', p ->> 'error', null::integer
       from scheduler_runs r cross join lateral jsonb_array_elements(r.prev) p
+      where r.prev <> '[]'::jsonb
     ) a
     left join jsonb_to_recordset(${titles}::jsonb) as j(name text, title text, done text)
       on j.name = a.job

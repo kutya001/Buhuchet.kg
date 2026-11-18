@@ -48,6 +48,8 @@ export const schedulerRuns = pgTable(
     index('scheduler_runs_unfinished_idx')
       .on(t.startedAt)
       .where(sql`${t.finishedAt} is null`),
+    // Админка → «Запуски»: журнал читается за период по началу попытки.
+    index('scheduler_runs_started_idx').on(t.startedAt),
     check('scheduler_runs_attempts_check', sql`${t.attempts} >= 1`),
     check('scheduler_runs_done_check', sql`${t.done} is null or ${t.done} >= 0`),
     check('scheduler_runs_prev_check', sql`jsonb_typeof(${t.prev}) = 'array'`),

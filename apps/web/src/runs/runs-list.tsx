@@ -35,6 +35,7 @@ import { setRunsView, useRunsView } from './runs-store';
 const DEFAULT_SORT: ListSort = { key: 'start', dir: 'desc' };
 const DEFAULT_VISIBLE = ['start', 'title', 'st', 'dur', 'tr', 'done', 'err'];
 const NUM = 'tabular-nums';
+const DASH = <span className="text-faint">—</span>;
 const moment = (iso: string) => formatMomentRu(new Date(iso));
 
 /** Столбцы журнала запусков — как в прототипе (admin/runs.js, grid 'run-list'), ключи — как на сервере. */
@@ -77,6 +78,7 @@ export function runColumns(t: Translate): GridColumn<AdminRunRow>[] {
       type: 'text',
       width: 280,
       text: (r) => r.doneText ?? '',
+      cell: (r) => r.doneText ?? DASH,
     },
     {
       key: 'err',
@@ -100,6 +102,7 @@ export function runColumns(t: Translate): GridColumn<AdminRunRow>[] {
       type: 'datetime',
       width: 150,
       text: (r) => (r.finishedAt ? momentWithSeconds(r.finishedAt) : ''),
+      cell: (r) => (r.finishedAt ? momentWithSeconds(r.finishedAt) : DASH),
       className: NUM,
     },
   ];

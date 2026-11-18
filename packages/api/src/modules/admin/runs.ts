@@ -113,20 +113,30 @@ export function everyText(t: Texts, cron: string): string {
 const titleOf = (t: Texts, name: string) => textOr(t, jobTitleKey(name), name);
 
 /**
+ * Задачи из кода и «сейчас»: в открытую транзакцию идут только они, а не `deps` с пулом соединений
+ * (docs/decisions.md п. О-46).
+ */
+interface JobSource {
+  now: Date;
+  jobs: ApiDeps['jobs'];
+}
+const jobSource = (deps: ApiDeps): JobSource => ({ now: deps.clock.now(), jobs: deps.jobs });
+
+/**
  * Строки списка задач (расписание из кода, состояние и последние запуски — из базы) и число ошибок
  * всех задач за сутки — для плашки.
  */
 async function jobData(
-  deps: ApiDeps,
+  src: JobSource,
   tx: Tx,
   t: Texts,
 ): Promise<{ rows: JobListRow[]; dayErrors: number }> {
-  const now = deps.clock.now();
-  const names = deps.jobs.map((j) => j.name);
+  const { now, jobs } = src;
+  const names = jobs.map((j) => j.name);
   const states = await jobStates(tx);
   const facts = await jobRunFacts(tx, names, new Date(now.getTime() - DAY_MS));
   const dayErrors = [...facts.values()].reduce((sum, f) => sum + f.errors, 0);
-  const rows = deps.jobs.map((job): JobListRow => {
+  const rows = jobs.map((job): JobListRow => {
     const state = states.get(job.name);
     const fact = facts.get(job.name);
     const code = jobStateOf({
@@ -155,7 +165,7 @@ async function jobData(
   return { rows, dayErrors };
 }
 
-const jobRows = async (deps: ApiDeps, tx: Tx, t: Texts) => (await jobData(deps, tx, t)).rows;
+const jobRows = async (src: JobSource, tx: Tx, t: Texts) => (await jobData(src, tx, t)).rows;
 
 export const jobListRoute = createRoute({
   method: 'get',
@@ -177,10 +187,11 @@ export const jobListRoute = createRoute({
 /** «Задачи» (прототип grid `run-jobs`): сначала «Падает» и «Не запускалась». */
 export function jobListHandler(deps: ApiDeps): RouteHandler<typeof jobListRoute, AppEnv> {
   return async (c) => {
+    const src = jobSource(deps);
     const query = listQueryOf(c.req.valid('query'));
     const t = await serverTexts(deps);
     const page = await withUserContext(deps.db, c.get('session')!.userId, async (tx) =>
-      listJobsPage(tx, await jobRows(deps, tx, t), query),
+      listJobsPage(tx, await jobRows(src, tx, t), query),
     );
     return c.json(
       {
@@ -222,10 +233,11 @@ export const jobValuesRoute = createRoute({
 
 export function jobValuesHandler(deps: ApiDeps): RouteHandler<typeof jobValuesRoute, AppEnv> {
   return async (c) => {
+    const src = jobSource(deps);
     const { col, q } = c.req.valid('query');
     const t = await serverTexts(deps);
     const values = await withUserContext(deps.db, c.get('session')!.userId, async (tx) =>
-      listJobValues(tx, await jobRows(deps, tx, t), col, q),
+      listJobValues(tx, await jobRows(src, tx, t), col, q),
     );
     return c.json(values, 200);
   };
@@ -248,6 +260,7 @@ export const jobExportRoute = createRoute({
 
 export function jobExportHandler(deps: ApiDeps): RouteHandler<typeof jobExportRoute, AppEnv> {
   return async (c) => {
+    const src = jobSource(deps);
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const keys = [...new Set(params.cols.split(','))];
@@ -257,7 +270,7 @@ export function jobExportHandler(deps: ApiDeps): RouteHandler<typeof jobExportRo
       const result = await withUserContext(
         deps.db,
         userId,
-        async (tx) => exportJobs(tx, await jobRows(deps, tx, t), query, keys),
+        async (tx) => exportJobs(tx, await jobRows(src, tx, t), query, keys),
         'export',
       );
       return xlsxResponse(c, {
@@ -290,9 +303,10 @@ export const jobSummaryRoute = createRoute({
 
 export function jobSummaryHandler(deps: ApiDeps): RouteHandler<typeof jobSummaryRoute, AppEnv> {
   return async (c) => {
+    const src = jobSource(deps);
     const t = await serverTexts(deps);
     const summary = await withUserContext(deps.db, c.get('session')!.userId, async (tx) => {
-      const { rows, dayErrors } = await jobData(deps, tx, t);
+      const { rows, dayErrors } = await jobData(src, tx, t);
       const count = (state: JobStateCode) => rows.filter((r) => r.state === state).length;
       return {
         total: rows.length,

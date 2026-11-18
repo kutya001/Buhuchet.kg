@@ -98,7 +98,9 @@ describe('Журнал «Телеграм»: меню строки перепи�
     for (const status of ['done', 'unknown', 'error'] as const) {
       const entry = item(row({ src: 'inbox', dir: 'in', kind: 'in_text', status }));
       expect(entry.disabled).toBe(true);
-      expect(entry.reason).toBe('Повторить можно только отправленное сообщение');
+      expect(entry.reason).toBe(
+        'Полученное сообщение не отправляется: повтор — только у отправленных',
+      );
     }
   });
 

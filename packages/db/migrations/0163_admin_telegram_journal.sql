@@ -31,6 +31,7 @@ CREATE FUNCTION app.telegram_inbox_begin(
     v_payload jsonb;
     v_button text;
     v_hide text := CASE WHEN p_kind IN ('code', 'link') THEN coalesce(p_hide, p_kind) ELSE p_hide END;
+    v_max integer := 4096;
   BEGIN
     IF p_chat_id IS NULL OR p_kind IS NULL THEN
       RETURN NULL;
@@ -81,13 +82,36 @@ CREATE FUNCTION app.telegram_inbox_begin(
         WHERE (b ->> 'action') || coalesce(':' || nullif(b ->> 'arg', ''), '') = p_data
         LIMIT 1;
     END IF;
+    -- Боту может написать любой пользователь Telegram. Чат, который ни к кому не привязан (ни сотрудник,
+    -- ни клиент, ни группа фирмы), пишется в журнал не чаще 30 строк в час и 200 в сутки, все такие чаты
+    -- вместе — не больше 2000 строк в час, текст — до 500 знаков. Сверх предела строки нет (ответ NULL):
+    -- на разбор обновления это не влияет.
+    IF v_org IS NULL AND v_user IS NULL AND v_contractor IS NULL
+       AND NOT EXISTS (SELECT 1 FROM public.telegram_links l WHERE l.chat_id = p_chat_id)
+       AND NOT EXISTS (SELECT 1 FROM public.contractor_telegram_links c
+                         WHERE c.chat_id = p_chat_id AND c.status IN ('wait', 'on')) THEN
+      IF (SELECT count(*) FROM (
+            SELECT 1 FROM public.telegram_inbox i
+              WHERE i.chat_id = p_chat_id AND i.created_at > p_now - interval '1 hour' LIMIT 30) h) >= 30
+         OR (SELECT count(*) FROM (
+            SELECT 1 FROM public.telegram_inbox i
+              WHERE i.chat_id = p_chat_id AND i.created_at > p_now - interval '1 day' LIMIT 200) d) >= 200
+         OR (SELECT count(*) FROM (
+            SELECT 1 FROM public.telegram_inbox i
+              WHERE i.created_at > p_now - interval '1 hour'
+                AND i.org_id IS NULL AND i.user_id IS NULL AND i.contractor_id IS NULL
+              LIMIT 2000) a) >= 2000 THEN
+        RETURN NULL;
+      END IF;
+      v_max := 500;
+    END IF;
     INSERT INTO public.telegram_inbox (
       created_at, update_id, chat_id, chat_kind, org_id, user_id, contractor_id, sender, kind, text,
       hide, button, reply_message_id, file_name, file_size
     ) VALUES (
       p_now, p_update_id, p_chat_id, v_kind, v_org, v_user, v_contractor,
       nullif(left(btrim(coalesce(p_sender, '')), 100), ''), p_kind,
-      CASE WHEN v_hide IS NULL THEN nullif(left(coalesce(p_text, ''), 4096), '') END,
+      CASE WHEN v_hide IS NULL THEN nullif(left(coalesce(p_text, ''), v_max), '') END,
       v_hide, v_button, p_reply, nullif(left(coalesce(p_file_name, ''), 200), ''), p_file_size
     )
     ON CONFLICT ON CONSTRAINT telegram_inbox_update_key DO NOTHING
@@ -111,13 +135,16 @@ CREATE FUNCTION app.telegram_inbox_finish(p_id uuid, p_status text, p_kind text,
   $$;
 --> statement-breakpoint
 -- Полученные сообщения хранятся 90 дней: старше p_before удаляет задача очистки. Отвечает, сколько удалено.
+-- Моложе суток (по часам базы) не удаляется, какой бы момент ни передали: вызвать функцию может роль
+-- приложения, и одной ошибкой в вызове журнал целиком не стереть.
 CREATE FUNCTION app.telegram_inbox_cleanup(p_before timestamptz)
   RETURNS integer
   LANGUAGE sql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, pg_temp
   AS $$
     WITH gone AS (
-      DELETE FROM public.telegram_inbox WHERE created_at < p_before RETURNING 1
+      DELETE FROM public.telegram_inbox
+        WHERE created_at < least(p_before, now() - interval '1 day') RETURNING 1
     )
     SELECT count(*)::integer FROM gone
   $$;

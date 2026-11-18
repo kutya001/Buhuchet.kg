@@ -375,6 +375,47 @@ describe.skipIf(!databaseAvailable())(
       ).rejects.toEqual(permissionDenied);
     });
 
+    it('чат без привязки: не больше 30 строк в час и 200 в сутки, все такие чаты — 2000 в час, текст до 500 знаков', async () => {
+      const STRANGER = 900_001;
+      let update = 900_000;
+      const write = (chat: number, min: number, text = 'спам') =>
+        beginTelegramInbox(
+          db.app.db,
+          entry({ update_id: ++update, message: { from, chat: privateChat(chat), text } }),
+          at(min),
+        );
+      const first = await write(STRANGER, 0, 'я'.repeat(900));
+      expect([...(await stored(first!)).text!]).toHaveLength(500);
+      for (let i = 1; i < 30; i += 1) expect(await write(STRANGER, 0), String(i)).not.toBeNull();
+      // Тридцать первая за час — мимо журнала; через час пишется снова.
+      expect(await write(STRANGER, 30)).toBeNull();
+      expect(await write(STRANGER, 61)).not.toBeNull();
+      // Привязанный чат сотрудника предел не задевает, и текст у него — целиком.
+      const own = await write(1001, 0, 'я'.repeat(900));
+      expect([...(await stored(own!)).text!]).toHaveLength(900);
+      const rows = (n: number, chat: (i: number) => number, min: number) =>
+        Array.from({ length: n }, (_, i) => ({
+          chatId: chat(i),
+          chatKind: 'private' as const,
+          kind: 'text' as const,
+          text: 'спам',
+          createdAt: at(min),
+        }));
+      // 31 строка уже есть; ещё 169 за те же сутки — и двухсот первая не пишется.
+      await db.admin.db.insert(telegramInbox).values(rows(169, () => STRANGER, -600));
+      expect(await write(STRANGER, 200)).toBeNull();
+      // Много разных чужих чатов: общий предел за час.
+      await db.admin.db.insert(telegramInbox).values(rows(2000, (i) => 910_000 + i, 300));
+      expect(await write(900_002, 301)).toBeNull();
+      expect(await write(1001, 301)).not.toBeNull();
+      expect(await write(900_002, 400)).not.toBeNull();
+      await db.admin.db
+        .delete(telegramInbox)
+        .where(
+          sql`${telegramInbox.chatId} >= 900000 or ${telegramInbox.text} in ('спам', ${'я'.repeat(900)})`,
+        );
+    });
+
     it('администратор видит переписку в обе стороны с текстом; сотрудник и запрос без контекста — ничего', async () => {
       const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t, ALL));
       expect(page.rows.map((r) => [r.dir, r.kind, r.status])).toEqual([

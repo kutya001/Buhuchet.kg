@@ -120,14 +120,48 @@ function clean(value: string, max: number): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join('')}…` : chars.join('');
 }
 
-/** Текст сообщения для журнала: переносы строк остаются, управляющие знаки — нет. */
+/** Чем в тексте журнала заменён код или ключ ссылки. */
+export const JOURNAL_MASK = '•••';
+
+/** Отдельная группа из шести цифр («482915», «482 915», «482-915») — так выглядит любой код сайта. */
+const CODE_IN_TEXT_RE = /(?<!\p{Nd})\p{Nd}{3}[\s-]?\p{Nd}{3}(?!\p{Nd})/gu;
+/** Ключ в адресе ссылки бота («…?start=<ключ>», «…?startgroup=<ключ>»). */
+const START_PARAM_RE = /(start(?:group|app)?=)[\w-]+/gi;
+/** Ключ в адресе «Задать пароль». */
+const SETUP_PATH_RE = /(\/setup\/)[\w-]+/gi;
+/** Длинная строка из знаков ключа: одноразовые ключи и токены — не короче 32 знаков. */
+const LONG_KEY_RE = /[A-Za-z0-9_-]{32,}/g;
+
+/**
+ * Код и ключ ссылки внутри свободного текста («код 482915 не подходит», вставленная ссылка бота): бот
+ * такое сообщение не принял, значит код ещё действует — в журнал вместо него идёт «•••». Сумма из шести
+ * цифр («150 000») скрывается так же: отличить её от кода нельзя.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-23
+function masked(text: string): string {
+  return text
+    .replace(START_PARAM_RE, `$1${JOURNAL_MASK}`)
+    .replace(SETUP_PATH_RE, `$1${JOURNAL_MASK}`)
+    .replace(LONG_KEY_RE, JOURNAL_MASK)
+    .replace(CODE_IN_TEXT_RE, JOURNAL_MASK);
+}
+
+/**
+ * Текст сообщения для журнала: переносы строк остаются, управляющие и невидимые знаки (в том числе
+ * смена направления письма) — нет; код и ключ ссылки внутри текста заменены на «•••».
+ */
 function body(value: string): string | null {
-  // eslint-disable-next-line no-control-regex
-  const text = value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+  const text = masked(
+    // eslint-disable-next-line no-control-regex
+    value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]|(?!\u200d)\p{Cf}/gu, ''),
+  ).trim();
   if (!text) return null;
   const chars = [...text];
   return chars.length > INBOX_TEXT_MAX ? `${chars.slice(0, INBOX_TEXT_MAX - 1).join('')}…` : text;
 }
+
+/** «/start <ключ> …» в любом регистре и с лишними словами: бот ключ не принял, но он ещё действует. */
+const START_WITH_KEY_RE = /^\/start(?:@\w+)?\s+\S/i;
 
 function senderOf(from: Dict | null): string | null {
   if (!from) return null;
@@ -224,7 +258,9 @@ export function incomingEntry(update: unknown): IncomingEntry | null {
   const text = str(message.text);
   const start = text === null ? null : parseStartCommand(text);
   const base = { ...blank, updateId, ...chat, sender: senderOf(from) };
-  if (start?.token) return { ...base, kind: 'link', hide: 'link' };
+  if (start?.token || (text !== null && START_WITH_KEY_RE.test(text.trim()))) {
+    return { ...base, kind: 'link', hide: 'link' };
+  }
   // В группе бот разбирает только ссылку подключения: обычная переписка сотрудников в журнал не идёт.
   if (chat.group) return null;
   const replyTo = int(dict(message.reply_to_message)?.message_id);
@@ -254,7 +290,7 @@ export function incomingEntry(update: unknown): IncomingEntry | null {
     text: caption === null || relinkCodeOf(caption) ? null : body(caption),
     replyTo,
     fileName: name ? clean(name, INBOX_FILE_NAME_MAX) || null : null,
-    fileSize: size,
+    fileSize: size !== null && size >= 0 ? size : null,
   };
 }
 

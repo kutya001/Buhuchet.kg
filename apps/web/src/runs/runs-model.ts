@@ -48,10 +48,10 @@ export function momentWithSeconds(iso: string): string {
   return `${formatDateRu(bishkekDate(at))} ${bishkekTime(at)}:${at.toISOString().slice(17, 19)}`;
 }
 
-/** Момент для ленты попыток: дата и время с секундами отдельными строками. */
+/** Момент для ленты попыток: дата и время «ЧЧ:ММ» отдельными строками (прототип `runDlg`). */
 export function attemptStamp(iso: string): { date: string; time: string } {
   const text = momentWithSeconds(iso);
-  return { date: text.slice(0, 10), time: text.slice(11) };
+  return { date: text.slice(0, 10), time: text.slice(11, 16) };
 }
 
 /** Цвета плашек над задачами (прототип `renderRuns`): зелёная — всё хорошо. */

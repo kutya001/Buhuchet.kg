@@ -58,7 +58,7 @@ export const AdminRunExportQuery = ListExportParams.extend(runScope);
  * Номер запуска для окна «Запуск»: «задача:время по расписанию в миллисекундах:попытка». Каждая попытка
  * запуска — своя строка журнала.
  */
-export const AdminRunId = z.string().regex(/^[a-z][a-z0-9.-]{0,63}:\d{1,15}:[1-9]\d?$/);
+export const AdminRunId = z.string().regex(/^[a-z][a-z0-9.-]{0,63}:\d{1,13}:[1-9]\d?$/);
 
 /** Строка журнала запусков: одна попытка. `done` — сколько записей обработано (0 — «Нечего делать»). */
 export const AdminRunRow = z.object({

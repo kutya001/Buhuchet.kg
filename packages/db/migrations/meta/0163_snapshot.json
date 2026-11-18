@@ -1,6 +1,6 @@
 {
-  "id": "d0b7efa0-609c-437c-aaf5-720d7f5cbea2",
-  "prevId": "ec9d6b38-d336-4e5c-83e1-bc92088fe31e",
+  "id": "421b4150-f37f-4fbf-a4e9-799d166a2311",
+  "prevId": "1a4d77a5-bc62-4082-a4bc-5ba58cd0d097",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1477,6 +1477,21 @@
           "with": {},
           "method": "btree",
           "where": "\"scheduler_runs\".\"finished_at\" is null",
+          "concurrently": false
+        },
+        "scheduler_runs_started_idx": {
+          "name": "scheduler_runs_started_idx",
+          "columns": [
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
           "concurrently": false
         }
       },
@@ -9090,7 +9105,18 @@
           "nullsNotDistinct": false
         }
       },
-      "policies": {},
+      "policies": {
+        "telegram_inbox_isolation": {
+          "name": "telegram_inbox_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"telegram_inbox\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"telegram_inbox\".\"org_id\" = app.current_org_id()"
+        }
+      },
       "checkConstraints": {
         "telegram_inbox_kind_check": {
           "name": "telegram_inbox_kind_check",
@@ -9115,6 +9141,10 @@
         "telegram_inbox_size_check": {
           "name": "telegram_inbox_size_check",
           "value": "char_length(coalesce(\"text\", '')) <= 4096 and char_length(coalesce(\"sender\", '')) <= 100 and char_length(coalesce(\"error\", '')) <= 300 and char_length(coalesce(\"file_name\", '')) <= 200 and char_length(coalesce(\"button\", '')) <= 64"
+        },
+        "telegram_inbox_file_size_check": {
+          "name": "telegram_inbox_file_size_check",
+          "value": "\"telegram_inbox\".\"file_size\" is null or \"telegram_inbox\".\"file_size\" >= 0"
         }
       },
       "isRLSEnabled": true

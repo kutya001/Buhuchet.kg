@@ -79,7 +79,10 @@ export const TELEGRAM_ADMIN_TEXTS = {
   'tgadm.log.chat_reset': { ru: 'Показать весь журнал', section: S },
   'tgadm.menu.open': { ru: 'Открыть сообщение', section: S },
   'tgadm.menu.chat': { ru: 'Вся переписка', section: S },
-  'tgadm.retry.in': { ru: 'Повторить можно только отправленное сообщение', section: S },
+  'tgadm.retry.in': {
+    ru: 'Полученное сообщение не отправляется: повтор — только у отправленных',
+    section: S,
+  },
   'tgadm.retry.client': {
     ru: 'Сообщение клиенту контрагента отсюда не повторяется: отправьте его заново из карточки контрагента',
     section: S,

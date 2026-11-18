@@ -1,5 +1,5 @@
 import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
-import { safeErrorMessage } from '@buhuchet/adapters/logger';
+import { shownErrorMessage } from '@buhuchet/adapters/logger';
 import { hashPassword, verifyPassword } from '@buhuchet/adapters/password';
 import { isValidWebhookSecret } from '@buhuchet/adapters/telegram';
 import { hashSessionToken, isSessionTokenShape, newResetCode } from '@buhuchet/adapters/tokens';
@@ -25,6 +25,7 @@ import {
   formatDateRu,
   formatText,
   GROUP_MINE,
+  INBOX_ERROR_MAX,
   incomingEntry,
   isLeadTgStart,
   leadTgStartToken,
@@ -418,12 +419,9 @@ interface InboxTrack {
   error: string | null;
 }
 
-/** Токен бота в тексте ошибки (адрес запроса к Telegram) в журнал не идёт. */
-const BOT_TOKEN_RE = /\d{6,}:[A-Za-z0-9_-]{30,}/g;
-
 /** Текст ошибки для журнала переписки: без значений параметров запроса к базе и без токена бота. */
 function inboxError(err: unknown): string {
-  return safeErrorMessage(err).replace(BOT_TOKEN_RE, '[скрыто]');
+  return shownErrorMessage(err, INBOX_ERROR_MAX);
 }
 
 /** Сбой разбора: в журнал сервера и в итог полученного сообщения. */

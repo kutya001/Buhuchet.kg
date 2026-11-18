@@ -149,7 +149,7 @@ function RunBody({
         <Box title={t('runs.card.error')}>
           <pre
             data-run-error=""
-            className={`${MONO_CLASS} m-0 max-h-[260px] overflow-auto rounded-lg border border-line bg-pane-alt px-3 py-2 text-[12.5px] [overflow-wrap:anywhere] whitespace-pre-wrap`}
+            className={`${MONO_CLASS} m-0 rounded-lg bg-danger-bg px-2.5 py-2 text-[12.5px] [overflow-wrap:anywhere] whitespace-pre-wrap`}
           >
             {r.error}
           </pre>

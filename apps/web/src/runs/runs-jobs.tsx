@@ -78,6 +78,7 @@ export function jobColumns(t: Translate): GridColumn<AdminJobRow>[] {
       type: 'datetime',
       width: 140,
       text: (j) => moment(j.okAt),
+      cell: (j) => (j.okAt ? moment(j.okAt) : DASH),
       className: NUM,
     },
     {

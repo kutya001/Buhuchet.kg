@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { safeErrorMessage } from '@buhuchet/adapters/logger';
+import { shownErrorMessage } from '@buhuchet/adapters/logger';
 import { dueJobs, latestDueSlot, parseCron } from '@buhuchet/adapters/scheduler';
 import {
   claimJobSlot,
@@ -29,6 +29,8 @@ import { alertTexts, jobTitle, sendPlatformAlert } from './alerts';
  * - Ошибка задачи — ещё и в Sentry, если задан `SENTRY_DSN`.
  */
 
+/** Текст ошибки попытки в журнале запусков — не длиннее стольких знаков. */
+export const RUN_ERROR_MAX = 1000;
 /** Попыток одного слота не больше. */
 export const JOB_MAX_ATTEMPTS = 3;
 /** Пауза перед повтором после первой и второй неудачной попытки, минут. */
@@ -80,8 +82,9 @@ export async function runDueJobs(ctx: JobContext, jobs: readonly Job[]): Promise
         'задача по расписанию выполнена',
       );
     } catch (e) {
-      // Журнал задач виден из любой организации: без значений параметров запроса к базе.
-      error = safeErrorMessage(e);
+      // Журнал задач виден из любой организации и показан в Админке → «Запуски»: без значений
+      // параметров запроса к базе, без токена бота и не длиннее предела.
+      error = shownErrorMessage(e, RUN_ERROR_MAX);
       ctx.logger.error(
         { job: job.name, slot: slot.toISOString(), attempt, err: e },
         'задача по расписанию упала',

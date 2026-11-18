@@ -542,6 +542,8 @@ describe.skipIf(!databaseAvailable())('«Новости» Базы знаний'
         'v113',
         'v117',
         'v118',
+        // «Запуски» и переписка бота — модули Админки (перенос v132).
+        'v132',
       ].sort(),
     );
     const [{ n }] = (await db.admin.db.execute<{ n: number }>(

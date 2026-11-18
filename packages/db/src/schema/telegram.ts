@@ -535,5 +535,8 @@ export const telegramInbox = pgTable(
         `char_length(coalesce("text", '')) <= ${INBOX_TEXT_MAX} and char_length(coalesce("sender", '')) <= ${INBOX_SENDER_MAX} and char_length(coalesce("error", '')) <= ${INBOX_ERROR_MAX} and char_length(coalesce("file_name", '')) <= ${INBOX_FILE_NAME_MAX} and char_length(coalesce("button", '')) <= 64`,
       ),
     ),
+    check('telegram_inbox_file_size_check', sql`${t.fileSize} is null or ${t.fileSize} >= 0`),
+    // У роли приложения прав на таблицу нет (миграция журнала); политика — как у всех таблиц с org_id.
+    orgIsolation('telegram_inbox_isolation', t.orgId),
   ],
 ).enableRLS();

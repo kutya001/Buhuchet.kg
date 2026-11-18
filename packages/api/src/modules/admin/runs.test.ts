@@ -321,7 +321,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Запуски»', (
     expect((await runs('?all=1&days=30&sort=dur.desc')).items[0]).toMatchObject({ ms: 90_500 });
     expect((await runs('?all=1&sort=done.desc')).items[0]).toMatchObject({ done: 3 });
     expect((await runs(`?all=1&${filter({ done: { type: 'text', q: 'нечего' } })}`)).total).toBe(3);
-    expect((await runs(`?days=30&${filter({ dur: { type: 'text', q: '1 мин 30' } })}`)).total).toBe(
+    expect((await runs(`?days=30&${filter({ dur: { type: 'text', q: '1 мин 31' } })}`)).total).toBe(
       1,
     );
     const values = async (query: string) =>

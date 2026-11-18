@@ -1,5 +1,5 @@
 {
-  "id": "ec9d6b38-d336-4e5c-83e1-bc92088fe31e",
+  "id": "1a4d77a5-bc62-4082-a4bc-5ba58cd0d097",
   "prevId": "9fef538b-419f-4f30-a7d5-5bc59df4f451",
   "version": "7",
   "dialect": "postgresql",
@@ -1475,6 +1475,21 @@
           ],
           "isUnique": false,
           "where": "\"scheduler_runs\".\"finished_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "scheduler_runs_started_idx": {
+          "name": "scheduler_runs_started_idx",
+          "columns": [
+            {
+              "expression": "started_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -9090,7 +9105,18 @@
           ]
         }
       },
-      "policies": {},
+      "policies": {
+        "telegram_inbox_isolation": {
+          "name": "telegram_inbox_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "buhuchet_app"
+          ],
+          "using": "\"telegram_inbox\".\"org_id\" = app.current_org_id()",
+          "withCheck": "\"telegram_inbox\".\"org_id\" = app.current_org_id()"
+        }
+      },
       "checkConstraints": {
         "telegram_inbox_kind_check": {
           "name": "telegram_inbox_kind_check",
@@ -9115,6 +9141,10 @@
         "telegram_inbox_size_check": {
           "name": "telegram_inbox_size_check",
           "value": "char_length(coalesce(\"text\", '')) <= 4096 and char_length(coalesce(\"sender\", '')) <= 100 and char_length(coalesce(\"error\", '')) <= 300 and char_length(coalesce(\"file_name\", '')) <= 200 and char_length(coalesce(\"button\", '')) <= 64"
+        },
+        "telegram_inbox_file_size_check": {
+          "name": "telegram_inbox_file_size_check",
+          "value": "\"telegram_inbox\".\"file_size\" is null or \"telegram_inbox\".\"file_size\" >= 0"
         }
       },
       "isRLSEnabled": true

@@ -35,7 +35,7 @@ describe('«Запуски»: тексты строки', () => {
     expect(momentWithSeconds('2026-11-17T20:05:07.000Z')).toBe('18.11.2026 02:05:07');
     expect(attemptStamp('2026-11-17T20:05:07.000Z')).toEqual({
       date: '18.11.2026',
-      time: '02:05:07',
+      time: '02:05',
     });
   });
 });

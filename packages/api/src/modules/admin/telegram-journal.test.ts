@@ -9,7 +9,7 @@ import {
   ListValues,
 } from '@buhuchet/shared';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   apiRequest,
   createStaffFixture,
@@ -214,7 +214,65 @@ describe.skipIf(!databaseAvailable())(
         .where(eq(schema.telegramInbox.id, rows[0]!.id));
     });
 
-    it('сбой журнала разбору не мешает, сбой разбора — «Ошибка» с текстом без токена бота', async () => {
+    it('сбой записи в журнал разбору не мешает: бот отвечает, строки журнала нет', async () => {
+      const before = tg().sent.length;
+      const outbox = () =>
+        f.t.admin.db.select({ id: schema.telegramOutbox.id }).from(schema.telegramOutbox);
+      const known = (await outbox()).map((r) => r.id);
+      // Первый запрос вебхука к базе функцией — запись полученного в журнал.
+      const execute = vi
+        .spyOn(f.deps.db, 'execute')
+        .mockRejectedValueOnce(new Error('журнал недоступен'));
+      try {
+        const res = await sendToBot(
+          f.app,
+          telegramUpdate('/today', CHAT_A, { username: 'owner_a' }),
+        );
+        expect(res.status).toBe(200);
+      } finally {
+        execute.mockRestore();
+      }
+      expect(tg().sent.length).toBeGreaterThan(before);
+      expect((await inbox()).filter((r) => r.text === '/today')).toHaveLength(1);
+      // Ответ бота из этого теста в счёт следующих не идёт.
+      const kept = new Set(known);
+      for (const row of await outbox()) {
+        if (!kept.has(row.id)) {
+          await f.t.admin.db
+            .delete(schema.telegramOutbox)
+            .where(eq(schema.telegramOutbox.id, row.id));
+        }
+      }
+    });
+
+    it('сбой разбора — строка «Ошибка», в тексте ошибки нет токена бота', async () => {
+      const real = f.deps.db.execute.bind(f.deps.db);
+      let calls = 0;
+      // Запись в журнал (первый запрос функцией) проходит, следующий запрос разбора падает с адресом
+      // запроса к Telegram в тексте, итог в журнал — снова проходит.
+      const execute = vi.spyOn(f.deps.db, 'execute').mockImplementation(((query: never) => {
+        calls += 1;
+        if (calls !== 2) return real(query);
+        return Promise.reject(
+          new Error(
+            'fetch failed: https://api.telegram.org/bot1234567890:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/x',
+          ),
+        );
+      }) as never);
+      try {
+        await sendToBot(f.app, telegramUpdate('/overdue', CHAT_A, { username: 'owner_a' }));
+      } finally {
+        execute.mockRestore();
+      }
+      expect(calls).toBeGreaterThanOrEqual(3);
+      const [row] = (await inbox()).filter((r) => r.text === '/overdue');
+      expect(row).toMatchObject({ status: 'error' });
+      expect(row!.error).toContain('[скрыто]');
+      expect(JSON.stringify(row)).not.toContain('AAAAAAAAAA');
+      await f.t.admin.db.delete(schema.telegramInbox).where(eq(schema.telegramInbox.id, row!.id));
+    });
+
+    it('ответ бота не ушёл — строка отправленного «Ошибка», токена бота нет ни в журнале, ни в базе', async () => {
       const bot = tg();
       const send = bot.sendMessage.bind(bot);
       bot.sendMessage = async () => {
@@ -439,6 +497,18 @@ describe.skipIf(!databaseAvailable())(
       expect((await get(`/api/admin/telegram/log/${ids.msg}`, owner)).status).toBe(403);
       expect((await get(`/api/admin/telegram/log/${ids.msg}`, '')).status).toBe(401);
       expect((await get('/api/admin/telegram/log?dir=in', owner)).status).toBe(403);
+      // Все методы журнала — только администратору платформы.
+      for (const path of [
+        '/api/admin/telegram/log',
+        '/api/admin/telegram/log/values?col=to',
+        '/api/admin/telegram/log/export?cols=at,dir,txt',
+        '/api/admin/telegram/log/summary',
+        `/api/admin/telegram/log/${ids.msg}`,
+      ]) {
+        expect((await get(path, '')).status, path).toBe(401);
+        expect((await get(path, owner)).status, path).toBe(403);
+        expect((await get(path)).status, path).toBe(200);
+      }
     });
 
     it('выгрузка в Excel — те же период и направление, текст и «Текст скрыт»', async () => {

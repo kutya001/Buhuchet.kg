@@ -160,6 +160,55 @@ describe('полученное сообщение для журнала', () => 
     for (const bad of [null, undefined, 'x', 5, [], {}]) expect(incomingEntry(bad)).toBeNull();
   });
 
+  it('код и ключ ссылки внутри свободного текста заменяются на «•••»; «/start <ключ> …» — без текста', () => {
+    const shown = (text: string) => incomingEntry(message({ text }))!.text;
+    // Бот такое сообщение кодом не принял — значит, код ещё действует.
+    expect(shown('код 482915 не подходит')).toBe('код ••• не подходит');
+    expect(shown('Код: 482 915.')).toBe('Код: •••.');
+    expect(shown('мой код 482-915, почему не входит?')).toBe('мой код •••, почему не входит?');
+    // Невидимый знак внутри кода и цифры не ASCII не спасают.
+    expect(shown('код 482\u200b915')).toBe('код •••');
+    expect(shown('код ٤٨٢٩١٥ не тот')).toBe('код ••• не тот');
+    // ИНН (14 цифр), телефон и короткие числа — не код.
+    expect(shown('ИНН 01234567890123, тел. +996555123456, сумма 12 500')).toBe(
+      'ИНН 01234567890123, тел. +996555123456, сумма 12 500',
+    );
+    const token = 'k'.repeat(43);
+    expect(shown(`не открывается https://t.me/buh_bot?start=cp_${token}`)).toBe(
+      'не открывается https://t.me/buh_bot?start=•••',
+    );
+    expect(shown(`https://t.me/buh_bot?startgroup=g_${token} вот`)).toBe(
+      'https://t.me/buh_bot?startgroup=••• вот',
+    );
+    expect(shown(`ссылка https://buhuchet.kg/setup/${token} не работает`)).toBe(
+      'ссылка https://buhuchet.kg/setup/••• не работает',
+    );
+    expect(shown(`ключ ${token}`)).toBe('ключ •••');
+    // Подпись к файлу — так же.
+    expect(
+      incomingEntry(message({ document: { file_name: 'чек.pdf' }, caption: 'оплата, код 482915' }))!
+        .text,
+    ).toBe('оплата, код •••');
+    // «/start» с ключом и лишними словами или в другом регистре бот не принял, но ключ действует.
+    for (const text of [
+      `/start ${token} ещё слово`,
+      `/Start ${token}`,
+      `/START@buh_bot l_${token}`,
+    ]) {
+      const link = incomingEntry(message({ text }));
+      expect(link, text).toMatchObject({ kind: 'link', hide: 'link', text: null });
+      expect(JSON.stringify(link)).not.toContain(token);
+    }
+    expect(incomingEntry(message({ text: '/start' }))).toMatchObject({
+      kind: 'command',
+      text: '/start',
+    });
+    // Знаки смены направления письма в текст не идут, переносы строк остаются.
+    expect(shown('счёт\u202Efdp.exe\u202C\nвторая\u200F строка')).toBe(
+      'счётfdp.exe\nвторая строка',
+    );
+  });
+
   it('длинное и «грязное» обрезается: текст, имя собеседника и имя файла — без управляющих знаков', () => {
     const long = incomingEntry(message({ text: 'я'.repeat(INBOX_TEXT_MAX + 50) }))!;
     expect([...long.text!]).toHaveLength(INBOX_TEXT_MAX);
@@ -174,7 +223,8 @@ describe('полученное сообщение для журнала', () => 
     expect([...noisy.sender!].length).toBeLessThanOrEqual(INBOX_SENDER_MAX);
     expect(noisy.sender).not.toMatch(/[\n‮]/);
     expect([...noisy.fileName!].length).toBeLessThanOrEqual(INBOX_FILE_NAME_MAX);
-    expect(noisy.fileName).not.toMatch(/[\n\u0000]/);
+    expect(noisy.fileName).not.toContain('\n');
+    expect(noisy.fileName).not.toContain('\u0000');
     expect(incomingEntry(message({ from: {}, text: 'x' }))!.sender).toBeNull();
   });
 });
