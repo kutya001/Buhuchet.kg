@@ -57,7 +57,7 @@ function text(texts: Texts, key: string, values: Record<string, string | number>
 const leftText = (texts: Texts) =>
   new RegExp(
     [30, 29]
-      .map((n) => text(texts, 'files.sent.left.many', { n }))
+      .map((n) => text(texts, 'pub.sent.left.many', { n }))
       .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('|'),
   );
@@ -112,12 +112,16 @@ async function enabledPage(
   return { id, inn, code, path: `/${SLUG}/inn/${inn}` };
 }
 
-/** Клиент вводит код страницы и открывает раздел «Файлы» (на телефоне он свёрнут). */
+/**
+ * Клиент вводит код страницы и открывает раздел «Файлы» (на телефоне он свёрнут) на вкладке «От вас»
+ * или «От бухгалтера» (прототип v135: отправленное клиентом — на своей вкладке).
+ */
 async function openFilesSection(
   page: Page,
   cp: { path: string; code: string | null },
   name: string,
   isMobile: boolean,
+  tab: 'you' | 'acc' = 'you',
 ): Promise<Locator> {
   await page.goto(cp.path);
   if (cp.code) {
@@ -134,7 +138,9 @@ async function openFilesSection(
     await expect(section.locator('[data-pub-toggle]')).toHaveAttribute('aria-expanded', 'false');
     await section.locator('[data-pub-toggle]').click();
   }
-  await expect(section.locator('[data-pub-sent]')).toBeVisible();
+  const tabButton = section.locator(`[data-pub-ft="${tab}"]`);
+  if ((await tabButton.getAttribute('aria-selected')) !== 'true') await tabButton.click();
+  await expect(tabButton).toHaveAttribute('aria-selected', 'true');
   return section;
 }
 
@@ -182,9 +188,8 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
 
     // Клиент: «Отправить файл» в разделе «Файлы» своей страницы.
     const section = await openFilesSection(page, cp, name, isMobile);
-    await expect(section.getByText(text(texts, 'pub.sent.hint'))).toBeVisible();
-    // Подвал страницы, где можно отправлять файлы, — свой (прототип v112).
-    await expect(page.locator('footer')).toHaveText(text(texts, 'pub.foot.upload'));
+    // На вкладке «От вас» пока пусто.
+    await expect(section.locator('[data-pub-sent-none]')).toHaveText(text(texts, 'pub.sent.none'));
     await section.locator('[data-pub-up]').click();
     const send = page.getByRole('dialog', { name: text(texts, 'pub.sent.send') });
     await expect(send.getByText(pageHint('upHint', { мб: 20, файлов: 10 }))).toBeVisible();
@@ -196,10 +201,11 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     await expect(send).toBeHidden();
     await closeDone(page, text(texts, 'cph.up.done_one'), pageHint('upDone'));
 
-    // «Отправленные вами»: файл «Новый», комментарий и «Удалится через 30 дней».
+    // «От вас»: файл «Отправлен», комментарий и «хранится ещё 30 дней».
+    await expect(section.locator('[data-pub-ft="you"]')).toHaveAttribute('aria-selected', 'true');
     const mine = section.locator('[data-pub-sent-row]').filter({ hasText: fileName });
     await expect(mine).toHaveAttribute('data-pub-sent-row', 'new');
-    await expect(mine).toContainText(text(texts, 'files.sent.st.new'));
+    await expect(mine).toContainText(text(texts, 'pub.sent.st.new'));
     await expect(mine).toContainText(comment);
     await expect(mine).toContainText(leftText(texts));
     // Ничего не прокручивается вбок (на телефоне — тоже).
@@ -258,12 +264,12 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     expect(sent.find((h) => h.action === 'sent_file_send')!.actor).toBeNull();
     expect(sent.find((h) => h.action === 'sent_file_reject')!.actor).toBeTruthy();
 
-    // Клиент снова открывает страницу: файл «Отклонён» и причина.
+    // Клиент снова открывает страницу: файл «Не принят» и причина.
     await page.goto('about:blank');
     const again = await openFilesSection(page, { ...cp, code: null }, name, isMobile);
     const rejected = again.locator('[data-pub-sent-row]').filter({ hasText: fileName });
     await expect(rejected).toHaveAttribute('data-pub-sent-row', 'rejected');
-    await expect(rejected).toContainText(text(texts, 'files.sent.st.rejected'));
+    await expect(rejected).toContainText(text(texts, 'pub.sent.st.rejected'));
     await expect(rejected.locator('[data-pub-sent-reason]')).toHaveText(
       text(texts, 'pub.sent.reason', { reason }),
     );
@@ -562,7 +568,7 @@ test.describe('Доработки 14.11, блок 2: файлы от контр�
     // Страница контрагента: принятый текстовый файл в «Файлах» открывается в окне просмотра.
     await page.goto('about:blank');
     await clearCookiesButWelcome(page.context());
-    const section = await openFilesSection(page, cp, name, isMobile);
+    const section = await openFilesSection(page, cp, name, isMobile, 'acc');
     const pageRow = section.locator('[data-pub-fo]').filter({ hasText: first });
     const pageFileId = await pageRow.getAttribute('data-pub-fo');
     await pageRow.click();

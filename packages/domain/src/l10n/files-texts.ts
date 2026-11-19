@@ -46,7 +46,7 @@ export const FILES_TEXTS = {
     section: S,
   },
   'files.note_hint_many': {
-    ru: 'Одно на все выбранные файлы. Видно сотрудникам; контрагенту на его странице не показывается',
+    ru: 'Видно только сотрудникам',
     section: S,
   },
   'files.attach.title_one': { ru: 'Прикрепить файл', section: S },
@@ -64,10 +64,6 @@ export const FILES_TEXTS = {
   'files.attach.ok': { ru: 'Прикрепить', section: S },
   'files.editdlg.title': { ru: 'Изменить файл', section: S },
   'files.editdlg.name': { ru: 'Название', section: S },
-  'files.editdlg.name_hint': {
-    ru: 'Расширение остаётся прежним; при замене файла — берётся от нового',
-    section: S,
-  },
   'files.editdlg.replace': { ru: 'Заменить файл', section: S },
   'files.editdlg.replace_hint': {
     ru: 'Необязательно. Сейчас: {meta}. Новый файл встанет на место прежнего везде, где он виден; прежний удаляется без возможности вернуть',
@@ -181,10 +177,6 @@ export const FILES_TEXTS = {
   'files.window.edit': { ru: 'Изменить', section: FM },
   'files.window.done': { ru: 'Готово', section: FM },
   'files.upload.title': { ru: 'Загрузить файл', section: FM },
-  'files.upload.sub': {
-    ru: 'Файл появится в файловом менеджере с источником «Загружен вручную»',
-    section: FM,
-  },
   'files.upload.files': { ru: 'Файлы', section: FM },
   'files.upload.files_required': { ru: 'Выберите хотя бы один файл', section: FM },
   'files.upload.cp': { ru: 'Контрагент', section: FM },

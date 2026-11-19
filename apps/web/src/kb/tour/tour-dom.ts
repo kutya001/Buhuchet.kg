@@ -6,6 +6,7 @@ import {
   type KbShowPoint,
 } from '@buhuchet/domain';
 import type { KbShowUi } from '@buhuchet/shared';
+import { FIELD_LABEL_SELECTOR } from '@buhuchet/ui';
 import type { Translate } from '../../l10n/translate';
 import {
   fieldForm,
@@ -799,7 +800,7 @@ export class TourDom {
       t,
     );
     visibleIn(root, '[data-field]', false).forEach((f, n) => {
-      const label = f.querySelector(':scope > label');
+      const label = f.querySelector(FIELD_LABEL_SELECTOR);
       const l = clean(label?.childNodes[0]?.textContent);
       if (!l) return;
       const req = !!label?.querySelector('[aria-hidden="true"]');

@@ -60,25 +60,47 @@ import {
 } from './leads-admin';
 import { adminResetPasswordHandler, adminResetPasswordRoute } from './password-reset';
 import {
+  jobExportHandler,
+  jobExportRoute,
+  jobListHandler,
+  jobListRoute,
+  jobSummaryHandler,
+  jobSummaryRoute,
+  jobValuesHandler,
+  jobValuesRoute,
+  runCardHandler,
+  runCardRoute,
+  runExportHandler,
+  runExportRoute,
+  runListHandler,
+  runListRoute,
+  runValuesHandler,
+  runValuesRoute,
+} from './runs';
+import {
   telegramBotHandler,
   telegramBotRoute,
   telegramBotViewHandler,
   telegramBotViewRoute,
   telegramBroadcastHandler,
   telegramBroadcastRoute,
+  telegramOrgsHandler,
+  telegramOrgsRoute,
+  telegramRetryHandler,
+  telegramRetryRoute,
+} from './telegram';
+import {
   telegramLogExportHandler,
   telegramLogExportRoute,
   telegramLogHandler,
   telegramLogRoute,
   telegramLogValuesHandler,
   telegramLogValuesRoute,
-  telegramOrgsHandler,
-  telegramOrgsRoute,
-  telegramRetryHandler,
-  telegramRetryRoute,
+  telegramMessageHandler,
+  telegramMessageRoute,
   telegramSummaryHandler,
   telegramSummaryRoute,
-} from './telegram';
+} from './telegram-journal';
 import {
   telegramCastCountHandler,
   telegramCastCountRoute,
@@ -183,11 +205,21 @@ export function adminModule(deps: ApiDeps) {
       .openapi(deleteLeadRoute, deleteLeadHandler(deps))
       .openapi(approveLeadRoute, approveLeadHandler(deps))
       .openapi(leadDocLinkRoute, leadDocLinkHandler(deps))
+      // «Запуски»: задачи по расписанию и журнал их запусков (только чтение).
+      .openapi(jobListRoute, jobListHandler(deps))
+      .openapi(jobValuesRoute, jobValuesHandler(deps))
+      .openapi(jobExportRoute, jobExportHandler(deps))
+      .openapi(jobSummaryRoute, jobSummaryHandler(deps))
+      .openapi(runListRoute, runListHandler(deps))
+      .openapi(runValuesRoute, runValuesHandler(deps))
+      .openapi(runExportRoute, runExportHandler(deps))
+      .openapi(runCardRoute, runCardHandler(deps))
       .openapi(telegramLogRoute, telegramLogHandler(deps))
       .openapi(telegramLogValuesRoute, telegramLogValuesHandler(deps))
       .openapi(telegramLogExportRoute, telegramLogExportHandler(deps))
       .openapi(telegramSummaryRoute, telegramSummaryHandler(deps))
       .openapi(telegramRetryRoute, telegramRetryHandler(deps))
+      .openapi(telegramMessageRoute, telegramMessageHandler(deps))
       .openapi(telegramBotRoute, telegramBotHandler(deps))
       .openapi(telegramBotViewRoute, telegramBotViewHandler(deps))
       .openapi(telegramOrgsRoute, telegramOrgsHandler(deps))

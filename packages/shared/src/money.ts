@@ -187,6 +187,11 @@ export const ContractorMoney = z.object({
   }),
   /** Свободный остаток после всех неоплаченных отчётов. */
   free: Tyiyn,
+  /**
+   * «Осталось оплатить» на «Основном» карточки (прототип v137 `owe`): остатки по всем неоплаченным
+   * налогам контрагента, какой бы ни был срок оплаты.
+   */
+  owe: Tyiyn,
   need: z.array(MoneyTabReport),
   needSum: Tyiyn,
   later: z.array(MoneyTabReport),

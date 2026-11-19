@@ -31,8 +31,8 @@ import { useEffect, useState } from 'react';
 import { api, apiFailure, callApi } from '../api-client';
 import { refreshContractorHistory } from '../contractors/contractor-data';
 import { useErrorText, useT } from '../l10n/provider';
-import type { Translate } from '../l10n/translate';
 import { contractorPageQuery } from './page-data';
+import { PageTip } from './page-parts';
 
 /*
  * Telegram контрагента (доработки 13.11.2026, задача К3; прототип v92 modules/cp-telegram.js): раздел
@@ -105,22 +105,30 @@ export function usePageTelegramConnect(telegram: PageTelegram | null, address: P
   return { connect, busy, full };
 }
 
-/** Раздел «Telegram» страницы контрагента (прототип pgTgPub): подключённые, ждущие и «Подключить». */
+/**
+ * «Telegram» в разделе «Связь» страницы контрагента (прототип v135 `pgTgPub`): одна строка, состояние,
+ * кнопка и что сделать в Telegram; срок ссылки и как отключиться — под «?».
+ */
 export function PageTelegramBody({
   telegram,
   what,
   connect: { connect, busy, full },
 }: {
   telegram: PageTelegram;
-  /** Пояснение раздела из «Текстов элементов экрана»: есть — своего текста раздел не показывает. */
+  /** Строка под заголовком из «Текстов элементов экрана»; пусто — текст словаря. */
   what: string;
   connect: ReturnType<typeof usePageTelegramConnect>;
 }) {
   const t = useT();
 
   return (
-    <>
-      {what ? null : <p className="m-0 leading-[1.5]">{t('pub.tg.text')}</p>}
+    <div
+      id="pub-tg"
+      data-sec="tg"
+      className="flex scroll-mt-3 flex-col gap-2 border-t border-line pt-2.5"
+    >
+      <h4 className="m-0 text-[13.5px]">{t('pub.sec.tg')}</h4>
+      <span>{what || t('pub.tg.text')}</span>
       {telegram.on || telegram.wait ? (
         <div className="flex flex-wrap gap-1.5" data-pub-tg-state="">
           {telegram.on ? (
@@ -139,7 +147,7 @@ export function PageTelegramBody({
         <button
           type="button"
           data-pub-tg-connect=""
-          className={`${buttonClass('cta')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none`}
+          className={`${buttonClass('default')} aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:shadow-none max-md:min-h-11`}
           aria-disabled={full ? true : undefined}
           title={full ?? undefined}
           disabled={busy}
@@ -149,17 +157,15 @@ export function PageTelegramBody({
           {t('pub.tg.connect')}
         </button>
       </div>
-      <span className="text-[11.5px] leading-[1.4] text-faint">
-        {t('pub.tg.hint', { hours: CP_TG_LINK_TTL_HOURS })}
+      <span className="inline-flex flex-wrap items-center gap-1 text-[12px] leading-[1.4] text-muted">
+        {t('pub.tg.hint')}
+        <PageTip
+          label={t('pub.tg.hint_more')}
+          text={t('pub.tg.hint_tip', { hours: CP_TG_LINK_TTL_HOURS })}
+        />
       </span>
-    </>
+    </div>
   );
-}
-
-/** Итог раздела «Telegram» в свёрнутом заголовке на телефоне (прототип pgTgPub). */
-export function pageTelegramSum(t: Translate, telegram: PageTelegram): string {
-  if (telegram.on) return t('pub.tg.sum.on', { n: telegram.on });
-  return telegram.wait ? t('pub.tg.sum.wait') : '';
 }
 
 /** Список «Telegram контрагента» карточки; функция «Страница контрагента» выключена — null. */

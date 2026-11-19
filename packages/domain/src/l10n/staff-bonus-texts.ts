@@ -108,8 +108,10 @@ export const STAFF_BONUS_TEXTS = {
   'fin.svc.bonus.remove': { ru: 'Убрать', section: S },
   'fin.svc.bonus.remove_aria': { ru: 'Убрать бонус', section: S },
   'fin.svc.bonus.add': { ru: 'Добавить бонус', section: S },
-  'fin.svc.bonus.hint': {
-    ru: 'Бонус начисляется, когда услуга оплачена полностью, и копится у сотрудника как остаток. Списывается отдельно: Сотрудники → «Бонусы». В сумме не больше стоимости услуги.',
+  'fin.svc.bonus.hint': { ru: 'В сумме не больше стоимости услуги', section: S },
+  'fin.svc.bonus.tip_label': { ru: 'Как начисляется бонус', section: S },
+  'fin.svc.bonus.tip': {
+    ru: 'Бонус начисляется, когда услуга оплачена полностью, и копится у сотрудника как остаток. Списывается отдельно: Сотрудники → «Бонусы».',
     section: S,
   },
   'fin.svc.bonus.note': {

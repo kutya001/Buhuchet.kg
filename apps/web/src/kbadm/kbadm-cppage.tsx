@@ -990,9 +990,12 @@ function GlossDialog({
   const [w, setW] = useState(base.w);
   const [x, setX] = useState(base.x);
   const [also, setAlso] = useState(base.also ?? '');
+  // «Подчёркивать на странице» (прототип v135): снято — слово остаётся только в «Словарике» «Помощи».
+  const [pg, setPg] = useState(base.pg !== false);
   const [errors, setErrors] = useState<{ w?: string; x?: string }>({});
   const save = useDialogSave(onClose);
-  const dirty = w !== base.w || x !== base.x || also !== (base.also ?? '');
+  const dirty =
+    w !== base.w || x !== base.x || also !== (base.also ?? '') || pg !== (base.pg !== false);
   const submit = () => {
     const ww = w.trim();
     const xx = x.trim();
@@ -1008,7 +1011,7 @@ function GlossDialog({
     setErrors(next);
     if (next.w || next.x) return;
     void save.run(
-      () => send({ op: 'gloss', ...(word ? { was: word.w } : {}), w: ww, x: xx, also: aa }),
+      () => send({ op: 'gloss', ...(word ? { was: word.w } : {}), w: ww, x: xx, also: aa, pg }),
       t(word ? 'cph.adm.saved.gloss' : 'cph.adm.saved.gloss_new'),
       xx,
       (e) => {
@@ -1040,6 +1043,7 @@ function GlossDialog({
               setW(fresh.w);
               setX(fresh.x);
               setAlso(fresh.also ?? '');
+              setPg(fresh.pg !== false);
             }
             save.setChanged(false);
           }}
@@ -1103,6 +1107,20 @@ function GlossDialog({
             />
           )}
         </Field>
+        <div className="col-span-full flex flex-col gap-[5px]" data-full="">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              data-cph-gloss-pg=""
+              checked={pg}
+              onChange={(e) => setPg(e.target.checked)}
+            />
+            {t('cph.adm.gloss.pg')}
+          </label>
+          <span className="text-[11.5px] leading-[1.4] text-faint">
+            {t('cph.adm.gloss.pg_hint')}
+          </span>
+        </div>
       </FormGrid>
     </Modal>
   );

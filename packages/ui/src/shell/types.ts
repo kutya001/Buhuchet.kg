@@ -11,7 +11,8 @@ export type ShellLink = ComponentType<ShellLinkProps>;
 /** Счётчик у модуля или вкладки (например, просроченные отчёты — красный). */
 export interface ShellCount {
   value: number | string;
-  tone?: 'red' | 'yellow';
+  /** `gray` — только у точки: непрочитанные новости (прототип v138 `.kb-dot.gray`). */
+  tone?: 'red' | 'yellow' | 'gray';
   /** Подсказка, например «Просрочено». */
   title?: string;
   /** Синяя точка вместо числа (прототип `.kb-dot`: «Начните с Базы знаний»). */
@@ -33,6 +34,8 @@ export interface ShellTab {
 export interface ShellModule {
   id: string;
   title: string;
+  /** Короткое название для левой панели и верхней панели («Отчёты»); полное — в подсказке (прототип v138). */
+  short?: string;
   icon: IconName;
   href: string;
   tabs: readonly ShellTab[];

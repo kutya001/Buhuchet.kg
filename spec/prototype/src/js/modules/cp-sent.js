@@ -87,11 +87,13 @@ function filesTabs(){if(!feat('cppage'))return [];const n=sntNew();return [{id:'
 /* Страница контрагента: «Отправить файл» и список отправленного со статусом, причиной отказа и «Удалится через N дн.» */
 // Не больше 20 файлов в сутки от одного контрагента — со страницы и из Telegram вместе
 const sntDayCnt=c=>SENT.filter(x=>x.cp===c.id&&Date.now()-new Date(String(x.at).replace(' ','T')+':00+06:00').getTime()<864e5).length;
-function pubSentHtml(c){const up=sntUpOn(c),l=SENT.filter(x=>x.cp===c.id).sort((a,b)=>String(b.at).localeCompare(String(a.at)));if(!up&&!l.length)return '';
-  return `<div class="pub-sent">${up?`<div class="row"><button type="button" class="btn sm cta" data-pub-up>${ic('upload','sm')}Отправить файл</button><span class="hint">Документы для бухгалтера: до ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый</span></div>`:''}
-    ${l.length?`<b class="pub-sl-h">Отправленные вами</b><div class="pub-list pub-sl">${l.map(x=>`<div class="pub-frow pub-srow">${ic(pubFIc(x.name))}<span class="pub-fm"><b>${esc(x.name)}</b><span class="hint">${fmtDT(x.at)}${x.src==='tg'?' · из Telegram':''}${x.note?' · '+esc(x.note):''}</span>${x.st==='rej'&&x.why?`<span class="hint bad">Причина: ${esc(x.why)}</span>`:''}</span><span class="pub-fs">${pill(SNT_ST[x.st],SNT_PILL)}${x.st!=='ok'?`<span class="hint">${sntLeftTxt(x)}</span>`:''}</span></div>`).join('')}${pubMore(l.length)}</div>`:''}</div>`}
+// Вкладка «От вас» раздела «Файлы» (17.11.2026, «Меньше текста», п. 6): дата словами, «Отправлен», «Принят», «Не принят» с причиной, «хранится ещё N дней» — красным, когда осталось 3 дня и меньше
+const PUB_SNT={new:'Отправлен',ok:'Принят',rej:'Не принят'},PUB_SNTP={Отправлен:['blue','clip'],Принят:['green','check'],'Не принят':['red','ban']};
+function pubSentHtml(c){const l=SENT.filter(x=>x.cp===c.id).sort((a,b)=>String(b.at).localeCompare(String(a.at)));if(!l.length)return `<span class="faint">${sntUpOn(c)?'Вы пока ничего не отправляли':'Файлов от вас нет'}</span>`;
+  const left=x=>{const n=sntLeft(x);return n==null?'':`<span class="hint${n<=3?' bad':''}">${n?`хранится ещё ${n} ${plural(n,'день','дня','дней')}`:'удалится сегодня'}</span>`};
+  return `<div class="pub-list pub-sl">${l.map(x=>`<div class="pub-frow pub-srow">${ic(pubFIc(x.name))}<span class="pub-fm"><b>${esc(x.name)}</b><span class="hint">${pubDW(String(x.at).slice(0,10))}${x.src==='tg'?' · из Telegram':''}${x.note?' · '+esc(x.note):''}</span>${x.st==='rej'&&x.why?`<span class="hint bad">Причина: ${esc(x.why)}</span>`:''}</span><span class="pub-fs">${pill(PUB_SNT[x.st],PUB_SNTP)}${x.st!=='ok'?left(x):''}</span></div>`).join('')}${pubMore(l.length)}</div>`}
 function pubUpDlg(c){if(!sntUpOn(c)){toast('Ваш бухгалтер сейчас не принимает файлы через страницу','lock',true);return}
-  openModal({form:true,noMax:true,render:()=>({title:'Отправить файл',sub:'Файлы получит ваш бухгалтер',body:`<div class="form">${fld('Файлы',`<input class="inp" type="file" id="pu-f" multiple>`,{req:true,full:true,id:'pu-f',hint:esc(cphFill(cphT('upHint',`До ${SNT_PER} файлов за раз, до ${FILE_MAX_MB} МБ каждый`),{мб:FILE_MAX_MB,файлов:SNT_PER}))})}
+  openModal({form:true,noMax:true,render:()=>({title:'Отправить файл бухгалтеру',body:`<div class="form">${fld('Файлы',`<input class="inp" type="file" id="pu-f" multiple>`,{req:true,full:true,id:'pu-f',hint:esc(cphFill(cphT('upHint',`Фото, PDF, Word или Excel · до ${SNT_PER} файлов`),{мб:FILE_MAX_MB,файлов:SNT_PER}))})}
     ${fld('Комментарий',`<textarea class="inp" id="pu-note" maxlength="${SNT_NOTE}" placeholder="Необязательно: что это за документы"></textarea>`,{full:true,id:'pu-note'})}</div>`,
   foot:'<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="pu-ok">Отправить</button>',
   mount(el,m){$('#pu-ok',el).onclick=()=>{const fs=[...$('#pu-f',el).files],left=SNT_DAY-sntDayCnt(c);
@@ -100,6 +102,6 @@ function pubUpDlg(c){if(!sntUpOn(c)){toast('Ваш бухгалтер сейча
     if(!setErr(el,'pu-f',e))return;const note=val(el,'pu-note').replace(/\s+/g,' ').trim().slice(0,SNT_NOTE),at=nowStamp();
     fs.forEach((x,i)=>SENT.push({id:'sf'+Date.now().toString(36)+i,cp:c.id,name:x.name.slice(0,FNAME_MAX),size:x.size,src:'page',at,note,st:'new'}));
     HIST.push({at,who:'client',ent:'cp',id:c.id,cp:c.id,what:`Контрагент отправил со страницы ${fs.length>1?'файлы':'файл'}: ${fs.map(x=>x.name).join(', ')}${note?'. Комментарий: '+note:''}`});
-    sntNotify(c,fs.length);dbSoon();m.close();pubDraw(true);
+    sntNotify(c,fs.length);dbSoon();m.close();PUB.ft='you';PUB.unf.add('files');pubDraw(true);
     // Итог простыми словами: что будет дальше (доработки 15.11.2026, пункт 5.3)
-    cphDone(fs.length>1?`Файлы отправлены: ${fs.length}`:'Файл отправлен',cphT('upDone','Файлы отправлены бухгалтеру'))}}})})}
+    cphDone(fs.length>1?`Файлы отправлены: ${fs.length}`:'Файл отправлен',cphT('upDone','Бухгалтер получил файл. Статус — во вкладке «От вас»'))}}})})}

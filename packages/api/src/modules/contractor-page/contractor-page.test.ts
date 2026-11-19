@@ -22,8 +22,15 @@ import {
 
 type Fixture = Awaited<ReturnType<typeof createStaffFixture>>;
 
-/** Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). */
-const CODE = { state: 'code', help: { what: expect.any(String), whatX: expect.any(String) } };
+/**
+ * Экран ввода кода: подсказки — только «Что это за страница?» (раздел `cpHelp` наполнен). Ни о
+ * контрагенте, ни об организации до кода в ответе нет (docs/deviations.md п. К-21): ответы сверяются
+ * целиком (`toEqual`).
+ */
+const CODE = {
+  state: 'code',
+  help: { what: expect.any(String), whatX: expect.any(String) },
+};
 
 const PHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -292,13 +299,13 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(first.status).toBe(200);
     expect(first.headers.get('cache-control')).toBe('no-store');
     expect(first.headers.get('x-robots-tag')).toContain('noindex');
-    // До кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120).
+    // До кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120; текст — v135).
     expect(PublicPage.parse(await first.json())).toEqual({
       state: 'code',
       help: {
         what: 'Что это за страница?',
         whatX:
-          'Ваш бухгалтер открыл вам страницу с данными вашей компании. Код из 6 цифр он прислал вместе со ссылкой.',
+          'Здесь бухгалтер показывает ваши отчёты, налоги и оплату. Код запоминается в этом браузере на 1 день.',
       },
     });
     // Код не попадает в ответ страницы без входа ни в каком виде.
@@ -449,7 +456,10 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
     expect(until - Date.now()).toBeLessThanOrEqual(15 * 60_000 + 5_000);
     // Закрыт и верный код; страница показывает перерыв.
     expect((await enter(path, code, '198.51.100.2')).status).toBe(429);
-    expect((await visited(path)).state).toBe('locked');
+    expect(await visited(path)).toEqual({
+      state: 'locked',
+      lockedUntil: expect.any(String),
+    });
     const locks = (await history(cpAcc.id)).filter((h) => h.action === 'page_lock');
     expect(locks).toHaveLength(1);
     await resetLock(cpAcc.id);

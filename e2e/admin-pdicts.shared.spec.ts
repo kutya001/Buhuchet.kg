@@ -1,6 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { platformAdmin, search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, discardChanges, signIn } from './helpers';
 
 // Админка → «Справочники платформы», часть 1 задачи 2.36 (ТЗ «Админка» → «Справочники платформы»;
 // прототип admin/platform-dicts*.js): вкладки по группам с шапкой, правка органов, УГНС и банков, «Запросы»
@@ -620,6 +620,7 @@ test.describe('Админка: справочники платформы', () =>
     await dialog.getByRole('button', { name: 'Сохранить' }).click();
     await expect(dialog.getByText('1–4 цифры')).toBeVisible();
     await dialog.getByRole('button', { name: 'Отмена' }).click();
+    await discardChanges(page);
   });
 
   test('(проверка задачи #92) календарь: нерабочий день добавляется и удаляется, праздник «каждый год» не удаляется; копирование на следующий год', async ({

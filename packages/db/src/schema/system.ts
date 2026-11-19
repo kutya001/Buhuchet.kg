@@ -1,3 +1,4 @@
+import type { RunAttempt } from '@buhuchet/domain';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -5,6 +6,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -29,6 +31,16 @@ export const schedulerRuns = pgTable(
     error: text('error'),
     /** Какая это попытка слота: 1 — первый запуск, дальше — повторы после ошибки или зависания. */
     attempts: integer('attempts').notNull().default(1),
+    /**
+     * Сколько записей обработала последняя попытка (Админка → «Запуски», столбец «Что сделано»;
+     * docs/decisions.md п. Т-15): 0 — «Нечего делать», пусто — задача число не сообщает.
+     */
+    done: integer('done'),
+    /** Прежние попытки этого запуска (номер, начало, конец, ошибка): строка хранит только последнюю. */
+    prev: jsonb('prev')
+      .$type<RunAttempt[]>()
+      .notNull()
+      .default(sql`'[]'::jsonb`),
   },
   (t) => [
     primaryKey({ columns: [t.job, t.slot] }),
@@ -36,7 +48,11 @@ export const schedulerRuns = pgTable(
     index('scheduler_runs_unfinished_idx')
       .on(t.startedAt)
       .where(sql`${t.finishedAt} is null`),
+    // Админка → «Запуски»: журнал читается за период по началу попытки.
+    index('scheduler_runs_started_idx').on(t.startedAt),
     check('scheduler_runs_attempts_check', sql`${t.attempts} >= 1`),
+    check('scheduler_runs_done_check', sql`${t.done} is null or ${t.done} >= 0`),
+    check('scheduler_runs_prev_check', sql`jsonb_typeof(${t.prev}) = 'array'`),
     platformService('scheduler_runs_service'),
   ],
 ).enableRLS();

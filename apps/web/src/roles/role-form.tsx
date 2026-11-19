@@ -172,7 +172,7 @@ export function RoleForm({
       dirty={dirty}
       footer={
         <>
-          <span data-role-count="" className="text-[11.5px] leading-[1.4] text-faint">
+          <span data-role-count="" className="text-[12px] leading-[1.4] text-muted">
             {t('roles.form.count', { n: state.selected.size, total: PERMISSION_IDS.length })}
           </span>
           <div className="flex-1" />

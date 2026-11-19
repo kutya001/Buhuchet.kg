@@ -90,7 +90,12 @@ export function useSwipeDown(
         el.style.transition = 'none';
         el.style.animation = 'none';
         const c = coverEl();
-        if (c) c.style.transition = 'none';
+        if (c) {
+          c.style.transition = 'none';
+          // Проявление фона держит прозрачность 1 и после конца (`animate-fade` — `both`): пока оно
+          // стоит, фон при протяжке не светлеет.
+          c.style.animation = 'none';
+        }
       }
       e.preventDefault();
       st.dy = Math.max(0, touch.clientY - st.y0);
@@ -131,6 +136,7 @@ export function useSwipeDown(
             if (c) {
               c.style.transition = '';
               c.style.opacity = '';
+              c.style.animation = '';
             }
           }, 30);
         });

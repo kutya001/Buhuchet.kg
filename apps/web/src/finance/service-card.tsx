@@ -16,7 +16,6 @@ import {
   Icon,
   iconButtonClass,
   KeyValues,
-  linkButtonClass,
   MiniTable,
   miniWide,
   Modal,
@@ -44,6 +43,7 @@ import { statusPillView } from '../status/status-view';
 import { useFinanceRefresh } from './finance-data';
 import { WhyButton } from './finance-dialogs';
 import { serviceHistoryText } from './finance-history';
+import { OpHistoryFold, OpMoreButton, OpWindowSub } from './op-window-parts';
 import { ServiceBonusBox } from './service-bonuses';
 import { serviceCardQuery, servicePaymentQuery } from './service-data';
 import {
@@ -596,10 +596,11 @@ export function ServiceCardDialog({
 /* ───────────── Окно оплаты разовой услуги ───────────── */
 
 /**
- * Окно оплаты (прототип opWin с `sp`): тип, контрагент, дата, сумма, «За что» — услуга, «Услуга:
- * получено X из Y», счёт организации, примечание, кто внёс и изменил, отметки, файлы и история;
- * «Удалить», «Изменить» с замком; «Открыть источник» — карточка услуги. Оплата удалённой услуги —
- * «Удалена» с отметкой удаления услуги, без «Удалить» и «Изменить» (прототип `opDelOf`).
+ * Окно оплаты (прототип v136 opWin с `sp`): тип, сумма, контрагент и дата — в шапке; ниже — «За что»
+ * (услуга), «Услуга: получено X из Y», счёт организации, примечание, отметки, файлы и свёрнутая
+ * «История» с «Создал» и «Изменил». Внизу — «Действия» («Изменить», «Открыть источник» — карточка
+ * услуги, «Удалить») и «Изменить» с замком. Оплата удалённой услуги — «Удалена» с отметкой удаления
+ * услуги, в «Действиях» только источник (прототип `opDelOf`).
  */
 export function ServicePaymentWindowDialog({
   id,
@@ -617,6 +618,7 @@ export function ServicePaymentWindowDialog({
   const [del, setDel] = useState<DialogSlot<ServicePaymentWindow> | null>(null);
   const [edit, setEdit] = useState<DialogSlot<ServicePaymentWindow> | null>(null);
   const [card, setCard] = useState<DialogSlot<string> | null>(null);
+  const [more, setMore] = useState<HTMLElement | null>(null);
   const p = query.data;
   const failed =
     query.isError && !p
@@ -626,40 +628,15 @@ export function ServicePaymentWindowDialog({
       : null;
   const lock = p && !p.deleted ? (p.locks.edit ?? p.locks.del) : null;
 
+  const openContractor = () => {
+    if (!p) return;
+    onClose();
+    openContractorCard({ id: p.contractor.id }, 'money');
+  };
+
   const items: KeyValueItem[] = [];
   if (p) {
     items.push(
-      {
-        id: 'kind',
-        label: t('fin.op.kind'),
-        value: (
-          <Pill tone="caution" size="sm">
-            {t('fin.sp.kind')}
-          </Pill>
-        ),
-      },
-      {
-        id: 'cp',
-        label: t('fin.op.contractor'),
-        value: (
-          <button
-            type="button"
-            className={linkButtonClass()}
-            onClick={() => {
-              onClose();
-              openContractorCard({ id: p.contractor.id }, 'money');
-            }}
-          >
-            {p.contractor.name}
-          </button>
-        ),
-      },
-      { id: 'date', label: t('fin.op.date'), value: formatDateRu(p.date) },
-      {
-        id: 'amount',
-        label: t('fin.op.amount'),
-        value: <b className="tabular-nums">{formatSomWithUnit(p.amount)}</b>,
-      },
       { id: 'what', label: t('fin.op.what'), value: p.service.name },
       {
         id: 'svc',
@@ -686,56 +663,60 @@ export function ServicePaymentWindowDialog({
     );
     if (p.note && p.note !== p.service.name)
       items.push({ id: 'note', label: t('fin.op.note'), value: p.note });
-    items.push(
-      {
-        id: 'created',
-        label: t('fin.op.created'),
-        value: <Audit who={p.created.name} at={p.created.at} />,
-      },
-      {
-        id: 'updated',
-        label: t('fin.op.updated'),
-        value: <Audit who={p.updated.name} at={p.updated.at} />,
-      },
-    );
+  }
+
+  // «Действия» (прототип `opActs(d, false)` с `sp`): «Изменить», «Открыть источник» — карточка
+  // услуги, «Удалить»; у удалённой оплаты — только источник.
+  const actions: ActionEntry[] = [];
+  if (p) {
+    const source: ActionEntry = {
+      id: 'source',
+      label: t('fin.op.source'),
+      icon: 'link',
+      sub: t('fin.sp.source', { name: p.service.name }),
+      run: () => setCard(openSlot(p.service.id)),
+    };
+    if (p.deleted) actions.push(source);
+    else
+      actions.push(
+        {
+          id: 'edit',
+          label: t('fin.op.edit'),
+          icon: 'edit',
+          disabled: !!p.locks.edit,
+          reason: p.locks.edit?.text,
+          run: () => setEdit(openSlot(p)),
+        },
+        source,
+        { id: 's1', separator: true },
+        {
+          id: 'delete',
+          label: t('fin.del.ok'),
+          icon: 'trash',
+          danger: true,
+          disabled: !!p.locks.del,
+          reason: p.locks.del?.text,
+          run: () => setDel(openSlot(p)),
+        },
+      );
   }
 
   const footer = (
     <>
-      {p && !p.deleted ? (
-        <>
-          <WhyButton
-            icon="trash"
-            label={t('fin.op.delete')}
-            why={p.locks.del?.text ?? null}
-            data="delete"
-            onClick={() => setDel(openSlot(p))}
-          />
-          <WhyButton
-            icon="edit"
-            label={t('fin.op.edit')}
-            why={p.locks.edit?.text ?? null}
-            data="edit"
-            onClick={() => setEdit(openSlot(p))}
-          />
-        </>
+      {p ? (
+        <OpMoreButton t={t} open={more !== null} onClick={(el) => setMore(more ? null : el)} />
       ) : null}
       <div className="flex-1" />
-      {p ? (
-        <button
-          type="button"
-          className={buttonClass('default')}
-          data-fin-source=""
-          title={t('fin.sp.source', { name: p.service.name })}
-          onClick={() => setCard(openSlot(p.service.id))}
-        >
-          <Icon name="link" size="sm" />
-          {t('fin.op.source')}
-        </button>
+      {p && !p.deleted ? (
+        <WhyButton
+          icon="edit"
+          label={t('fin.op.edit')}
+          why={p.locks.edit?.text ?? null}
+          data="edit"
+          cta
+          onClick={() => setEdit(openSlot(p))}
+        />
       ) : null}
-      <button type="button" className={buttonClass('cta')} onClick={onClose}>
-        {t('btn.done')}
-      </button>
     </>
   );
 
@@ -749,7 +730,11 @@ export function ServicePaymentWindowDialog({
         p ? t('fin.op.title', { kind: t('fin.sp.kind'), amount: formatSomWithUnit(p.amount) }) : ''
       }
       label={p ? undefined : t('fin.sp.open')}
-      sub={p ? `${p.contractor.name} · ${formatDateRu(p.date)}` : undefined}
+      sub={
+        p ? (
+          <OpWindowSub name={p.contractor.name} date={p.date} onContractor={openContractor} />
+        ) : undefined
+      }
       footer={footer}
     >
       <div className="flex flex-col gap-3.5" data-svc-payment-window={id}>
@@ -790,15 +775,22 @@ export function ServicePaymentWindowDialog({
           <RecordFiles source={{ kind: 'one_off_service_payment', id: p.id }} />
         ) : null}
         {p ? (
-          <Box title={t('fin.op.history')}>
-            {p.history.length ? (
-              <Timeline items={historyItems(t, p.history)} label={t('fin.op.history')} />
-            ) : (
-              <span className="text-faint">{t('fin.op.history_empty')}</span>
-            )}
-          </Box>
+          <OpHistoryFold
+            t={t}
+            items={historyItems(t, p.history)}
+            created={p.created}
+            updated={p.updated}
+          />
         ) : null}
       </div>
+      {more && p ? (
+        <ActionMenu
+          items={actions}
+          place={{ anchor: more }}
+          label={t('status.act.more')}
+          onClose={() => setMore(null)}
+        />
+      ) : null}
       {del ? (
         <ServiceDeleteDialog
           key={`del-${del.n}`}

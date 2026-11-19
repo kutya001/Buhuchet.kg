@@ -48,15 +48,37 @@ const WORD = [...'BuhUchet'];
 const SKIP_KEY = 'bh_intro_skip';
 /** Отметка «без заставки» действует столько, мс: только на переход, ради которого её поставили. */
 const SKIP_MS = 10_000;
+/**
+ * Заставка — один раз за сеанс вкладки (прототип v133, оставлено в v143: `sessionStorage` «bu.intro»): после
+ * неё ни новое открытие страницы, ни вход её не показывают.
+ */
+const SEEN_KEY = 'bh_intro_seen';
+
+function introSeen(): boolean {
+  try {
+    return sessionStorage.getItem(SEEN_KEY) != null;
+  } catch {
+    // Без хранилища заставка показывается каждый раз.
+    return false;
+  }
+}
+
+function markIntroSeen(): void {
+  try {
+    sessionStorage.setItem(SEEN_KEY, '1');
+  } catch {
+    // Без хранилища заставка покажется снова.
+  }
+}
 
 /**
  * Строка в начале заставки — до скриптов страницы: с какого мгновения заставка на экране (`buT0`), нажатие
- * или клавиша до загрузки скриптов (`buGo`); без заставки (класс `off`) — сразу после «Выйти» и в браузере под
- * управлением тестов (`navigator.webdriver`: сквозные тесты открывают сотни страниц, заставку проверяют
+ * или клавиша до загрузки скриптов (`buGo`); без заставки (класс `off`) — сразу после «Выйти», когда она в
+ * этом сеансе уже была, и в браузере под управлением тестов (`navigator.webdriver`: сквозные тесты открывают сотни страниц, заставку проверяют
  * отдельно; docs/deviations.md п. О-52).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#О-52
-const BOOT = `(function(s){var o=s&&s.parentNode,k='${SKIP_KEY}',x=0;if(!o)return;o.buT0=performance.now();try{x=+sessionStorage.getItem(k)||0;sessionStorage.removeItem(k)}catch(e){}if(Date.now()-x<${SKIP_MS}||navigator.webdriver){o.classList.add('off');return}var g=function(){o.buGo=1};o.addEventListener('click',g);document.addEventListener('keydown',g,{once:true});o.buStop=function(){o.removeEventListener('click',g);document.removeEventListener('keydown',g)}})(document.currentScript)`;
+const BOOT = `(function(s){var o=s&&s.parentNode,k='${SKIP_KEY}',n='${SEEN_KEY}',x=0,w=0;if(!o)return;o.buT0=performance.now();try{x=+sessionStorage.getItem(k)||0;sessionStorage.removeItem(k);w=sessionStorage.getItem(n)}catch(e){}if(Date.now()-x<${SKIP_MS}||navigator.webdriver||w){o.classList.add('off');return}try{sessionStorage.setItem(n,'1')}catch(e){}var g=function(){o.buGo=1};o.addEventListener('click',g);document.addEventListener('keydown',g,{once:true});o.buStop=function(){o.removeEventListener('click',g);document.removeEventListener('keydown',g)}})(document.currentScript)`;
 
 /** Следующая загрузка страницы в этой вкладке — без заставки (вызывается перед переходом на страницу входа). */
 export function skipNextIntro(): void {
@@ -136,7 +158,7 @@ export function BrandIntro({
 }) {
   // При загрузке страницы заставка уже в разметке с сервера (её прячет CSS или строка BOOT); при переходе
   // без перезагрузки — только если она нужна.
-  const [on, setOn] = useState(() => !loaded || (!onlyOnLoad && !quiet()));
+  const [on, setOn] = useState(() => !loaded || (!onlyOnLoad && !quiet() && !introSeen()));
   const boot = usePageLoad();
   const ref = useRef<IntroElement>(null);
   const reveal = useRef(onReveal);
@@ -162,6 +184,7 @@ export function BrandIntro({
       });
       return () => cancelAnimationFrame(raf);
     }
+    markIntroSeen();
     let flown = false;
     const fly = () => {
       if (flown) return;

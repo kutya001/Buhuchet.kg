@@ -22,9 +22,16 @@ describe('«Показать как»: элементы прототипа на 
     expect(productTarget('#rc-main')).toContain('[data-report-button="confirm"]');
     // Карточка контрагента: «сменить» ответственного и блок «Страница контрагента».
     expect(productTarget('#cp-resp')).toBe('[data-cp-resp]');
-    expect(productTarget('#cp-page')).toBe('[data-box]:has([data-cp-page])');
+    // Блок свёрнут (v137): цель — сам блок, а кнопки у свёрнутого — строка, которая его раскрывает.
+    expect(productTarget('#cp-page')).toBe('[data-cp-page-fold]');
+    expect(productTarget('#cp-page .acts')).toBe(
+      '[data-cp-page] > div:has([data-cp-page-action]) || [data-cp-page-fold] > summary',
+    );
     // Карточка проекта: «Записать оплату» (показ шага «Принять транш оплаты по проекту»).
-    expect(productTarget('#pj-pay')).toBe('[data-pj-pay]');
+    // На вкладке «Главное» (v136) кнопка блока «Оплаты» не видна — цель и главная кнопка внизу.
+    expect(productTarget('#pj-pay')).toBe(
+      '[data-pj-pay] || [data-window-foot] [data-pj-main="pay"]',
+    );
   });
 
   it('«подняться до» пункта меню и строки карточки — элементы продукта', () => {

@@ -45,5 +45,7 @@ export const syncServiceStatusesJob: Job = {
     if (failed.length) {
       throw new Error(`contractors.sync-service-status: не сверены организации: ${failed.length}`);
     }
+    // Сколько статусов сменилось — в Админку → «Запуски», столбец «Что сделано».
+    return changed;
   },
 };

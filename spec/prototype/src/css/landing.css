@@ -200,16 +200,18 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-intro.fly .lp-intro-w,.lp-intro.fly .lp-intro-ln{opacity:0}
 .lp-intro-lg.gone{opacity:0;transition:transform .85s cubic-bezier(.65,0,.25,1),opacity .6s ease .2s}
 .bu-intro-tg{opacity:0!important}
-/* Сквозная линия Бернулли и солнце на её конце */
-.lp-path{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
-.lp-p0{fill:none;stroke:var(--border-strong);stroke-width:1.5;stroke-dasharray:2 7;stroke-linecap:round;opacity:.75}
-.lp-p1{fill:none;stroke:var(--b-blue);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
-.lp-knots circle{fill:var(--pane);stroke:var(--border-strong);stroke-width:1.5;transition:fill .5s,stroke .5s}
-.lp-knots circle.on{fill:var(--b-yellow);stroke:var(--b-yellow)}
-.lp-psun .g{fill:hsl(43 83% 57% / .28)}.lp-psun .c{fill:var(--b-yellow)}.lp-psun .r{fill:none;stroke:var(--b-yellow);stroke-width:2;stroke-linecap:round}
-.lp-anim .lp-psun .r{animation:lp-spin 8s linear infinite}
-.lp-anim .lp-psun .g{transform-box:fill-box;transform-origin:50% 50%;animation:lp-pulse 1.6s ease-in-out infinite alternate}
-.land-page:not(.lp-anim) .lp-psun{display:none}
+/* Спираль логотипа на фоне (18.11.2026): та же, что в знаке; выходит из знака в шапке, при прокрутке поворачивается. Поверх фона блоков, под их содержимым */
+.lp-bgsp{position:absolute;left:0;right:0;z-index:0;overflow:hidden;pointer-events:none}
+.land-page main .lp-wrap,.land-page .lp-foot .lp-wrap{position:relative;z-index:1}
+.lp-bgsp-g{position:absolute;transform-origin:0 0;opacity:.085}
+.lp-bgsp-s{display:block;width:100%;height:auto;overflow:visible;transform-origin:37.6% 54.8%;will-change:transform}
+.lp-bgsp .lg-sp{fill:var(--b-blue)}
+:root[data-theme="dark"] .lp-bgsp-g{opacity:.13}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .lp-bgsp-g{opacity:.13}}
+.lp-bgsp.pre .lp-bgsp-g{opacity:0}
+.lp-bgsp.growing{overflow:visible}.lp-bgsp.grow0,.lp-bgsp.over{z-index:6}
+.lp-bgsp.grow0 .lp-bgsp-g{opacity:1;transition:none}
+.lp-bgsp.growing .lp-bgsp-g{transition:transform 1.8s cubic-bezier(.45,0,.15,1),opacity 1.1s cubic-bezier(.3,0,.2,1)}
 /* Весы в углу: качаются от прокрутки, кольцо — сколько прочитано, нажатие — наверх */
 .lp-bal{position:absolute;right:22px;bottom:22px;z-index:7;width:64px;height:64px;padding:0;border:0;border-radius:50%;background:var(--raised);box-shadow:var(--shadow-l);cursor:pointer}
 .lp-bal[hidden]{display:none}
@@ -230,8 +232,6 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-hb-sun{position:absolute;right:calc(50% - 760px);top:-260px;width:680px;height:680px;border-radius:50%;translate:calc(var(--mx,0)*-28px) calc(var(--my,0)*-20px);transition:translate .8s cubic-bezier(.2,.7,.2,1)}
 .lp-hb-sun::before{content:'';position:absolute;inset:0;border-radius:50%;background:repeating-conic-gradient(from 3deg,hsl(43 83% 57% / .17) 0deg 5deg,transparent 5deg 15deg);-webkit-mask:radial-gradient(circle,#000 14%,transparent 68%);mask:radial-gradient(circle,#000 14%,transparent 68%)}
 .lp-hb-sun::after{content:'';position:absolute;inset:24%;border-radius:50%;background:radial-gradient(circle,hsl(43 83% 57% / .42),hsl(43 83% 57% / .14) 46%,transparent 70%)}
-.lp-hb-sp{position:absolute;left:calc(50% - 860px);bottom:-210px;width:700px;height:auto;opacity:.09;overflow:visible;transform-origin:37.6% 54.8%}
-.lp-hb-sp .lg-sp{fill:var(--b-blue)}
 .lp-hero-pic{translate:calc(var(--mx,0)*10px) calc(var(--my,0)*8px);transition:translate .8s cubic-bezier(.2,.7,.2,1)}
 .lp-scroll{position:absolute;left:50%;bottom:18px;translate:-50% 0;z-index:2;display:flex;flex-direction:column-reverse;align-items:center;gap:6px;padding:4px 10px;background:none;border:0;color:var(--muted);font:inherit;font-size:12.5px;cursor:pointer}
 .lp-scroll i{position:relative;width:22px;height:34px;border:2px solid var(--border-strong);border-radius:12px;box-sizing:border-box}
@@ -407,8 +407,6 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-anim .lp-logo-a .lp-lg-b,.lp-anim .lp-logo-a .lp-lg-u{animation:lp-fade .6s ease 1.2s backwards}
 @media (hover:hover){.lp-anim .lp-logo:hover .lp-draw{animation:lp-draw 1.2s cubic-bezier(.5,0,.25,1)}}
 .lp-anim .lp-scroll i::after{animation:lp-wheel 1.8s ease-in-out infinite}
-.lp-anim .lp-hero.in .lp-hb-sp .lp-draw{animation:lp-draw 2.8s cubic-bezier(.5,0,.2,1) .2s backwards}
-.lp-anim .lp-hero .lp-hb-sp{animation:lp-spin-r 260s linear infinite}
 .lp-anim .lp-hero .lp-hb-sun::before{animation:lp-spin 140s linear infinite}
 .lp-anim .lp-hero .lp-hb-sun::after{animation:lp-pulse 5s ease-in-out infinite alternate}
 .lp-anim .lp-hero.in .lp-hb-sun{animation:lp-fade 1.6s ease backwards}
@@ -445,32 +443,32 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
 .lp-anim .lp-fc.rv.in{animation:lp-pop .6s cubic-bezier(.2,.8,.2,1) calc(var(--d,0)*120ms) backwards}
 /* 4. Возможности — плитки встают волной по диагонали; у каждой функции — своя анимация значка (класс fx ставит landTileFx) */
 .lp-anim .lp-tile.rv.in{animation:lp-tile .85s cubic-bezier(.16,.84,.24,1) calc(var(--d,0)*80ms) backwards}
-.lp-anim .lp-tile.fx .f1-a{animation:lp-f-beat .5s ease}
-.lp-anim .lp-tile.fx .f1-b{animation:lp-f1b .55s cubic-bezier(.3,1.4,.5,1) .12s backwards}
-.lp-anim .lp-tile.fx .f1-c{animation:lp-f1c .55s cubic-bezier(.3,1.4,.5,1) .34s backwards}
-.lp-anim .lp-tile.fx .f2-d{animation:lp-f2 1.25s cubic-bezier(.3,1.5,.5,1)}
-.lp-anim .lp-tile.fx .f2-r{animation:lp-f-hop .4s ease 1.15s}
-.lp-anim .lp-tile.fx .f3-m{animation:lp-f3 1.25s cubic-bezier(.4,0,.3,1)}
-.lp-anim .lp-tile.fx .f3-k{animation:lp-f-draw .35s ease 1.2s backwards}
-.lp-anim .lp-tile.fx .f4-p{animation:lp-f4 1.3s cubic-bezier(.5,0,.3,1)}
-.lp-anim .lp-tile.fx .f4-t{animation:lp-f4t 1.3s ease}
-.lp-anim .lp-tile.fx .f5-a{animation:lp-f-draw .35s ease .1s backwards}
-.lp-anim .lp-tile.fx .f5-b{animation:lp-f-draw .35s ease .6s backwards}
-.lp-anim .lp-tile.fx .f5-x{animation:lp-f-beat .4s ease .3s}
-.lp-anim .lp-tile.fx .f5-y{animation:lp-f-beat .4s ease .8s}
-.lp-anim .lp-tile.fx .f6-c{animation:lp-f6 .9s cubic-bezier(.5,0,.6,1)}
-.lp-anim .lp-tile.fx .f6-s{animation:lp-f6s .6s cubic-bezier(.3,1.5,.5,1) .7s backwards}
-.lp-anim .lp-tile.fx .f7-r{animation:lp-f7 1.2s steps(8,end)}
-.lp-anim .lp-tile.fx .f7-s{animation:lp-f-hop .25s ease 4}
-.lp-anim .lp-tile.fx .f8-d{animation:lp-f8 .4s cubic-bezier(.3,1.5,.5,1) calc(var(--i)*.17s + .1s) backwards}
-.lp-anim .lp-tile.fx .f8-w{animation:lp-f-beat .45s ease .95s}
-.lp-anim .lp-tile.fx .f9-b{animation:lp-f9 .6s cubic-bezier(.3,1.4,.5,1) calc(var(--i)*.16s) backwards}
-.lp-anim .lp-tile.fx .f10-s{animation:lp-f10 1s cubic-bezier(.3,.8,.3,1)}
-.lp-anim .lp-tile.fx .f10-f{animation:lp-f10f 1s ease}
-.lp-anim .lp-tile.fx .f11-a{animation:lp-f11a .5s cubic-bezier(.3,1.5,.5,1) .1s backwards}
-.lp-anim .lp-tile.fx .f11-b{animation:lp-f11b 1s ease .55s}
-.lp-anim .lp-tile.fx .f12-c{animation:lp-f12 1.1s cubic-bezier(.3,.6,.3,1)}
-.lp-anim .lp-tile.fx .f12-t{animation:lp-f12t 1.3s ease .15s}
+.lp-anim .fx .f1-a{animation:lp-f-beat .5s ease}
+.lp-anim .fx .f1-b{animation:lp-f1b .55s cubic-bezier(.3,1.4,.5,1) .12s backwards}
+.lp-anim .fx .f1-c{animation:lp-f1c .55s cubic-bezier(.3,1.4,.5,1) .34s backwards}
+.lp-anim .fx .f2-d{animation:lp-f2 1.25s cubic-bezier(.3,1.5,.5,1)}
+.lp-anim .fx .f2-r{animation:lp-f-hop .4s ease 1.15s}
+.lp-anim .fx .f3-m{animation:lp-f3 1.25s cubic-bezier(.4,0,.3,1)}
+.lp-anim .fx .f3-k{animation:lp-f-draw .35s ease 1.2s backwards}
+.lp-anim .fx .f4-p{animation:lp-f4 1.3s cubic-bezier(.5,0,.3,1)}
+.lp-anim .fx .f4-t{animation:lp-f4t 1.3s ease}
+.lp-anim .fx .f5-a{animation:lp-f-draw .35s ease .1s backwards}
+.lp-anim .fx .f5-b{animation:lp-f-draw .35s ease .6s backwards}
+.lp-anim .fx .f5-x{animation:lp-f-beat .4s ease .3s}
+.lp-anim .fx .f5-y{animation:lp-f-beat .4s ease .8s}
+.lp-anim .fx .f6-c{animation:lp-f6 .9s cubic-bezier(.5,0,.6,1)}
+.lp-anim .fx .f6-s{animation:lp-f6s .6s cubic-bezier(.3,1.5,.5,1) .7s backwards}
+.lp-anim .fx .f7-r{animation:lp-f7 1.2s steps(8,end)}
+.lp-anim .fx .f7-s{animation:lp-f-hop .25s ease 4}
+.lp-anim .fx .f8-d{animation:lp-f8 .4s cubic-bezier(.3,1.5,.5,1) calc(var(--i)*.17s + .1s) backwards}
+.lp-anim .fx .f8-w{animation:lp-f-beat .45s ease .95s}
+.lp-anim .fx .f9-b{animation:lp-f9 .6s cubic-bezier(.3,1.4,.5,1) calc(var(--i)*.16s) backwards}
+.lp-anim .fx .f10-s{animation:lp-f10 1s cubic-bezier(.3,.8,.3,1)}
+.lp-anim .fx .f10-f{animation:lp-f10f 1s ease}
+.lp-anim .fx .f11-a{animation:lp-f11a .5s cubic-bezier(.3,1.5,.5,1) .1s backwards}
+.lp-anim .fx .f11-b{animation:lp-f11b 1s ease .55s}
+.lp-anim .fx .f12-c{animation:lp-f12 1.1s cubic-bezier(.3,.6,.3,1)}
+.lp-anim .fx .f12-t{animation:lp-f12t 1.3s ease .15s}
 @keyframes lp-f-beat{40%{transform:scale(1.12)}}
 @keyframes lp-f-hop{50%{transform:translateY(-1.4px)}}
 @keyframes lp-f-draw{from{stroke-dasharray:1;stroke-dashoffset:1}to{stroke-dasharray:1;stroke-dashoffset:0}}
@@ -527,7 +525,6 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-secu-in{grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px 32px}
   .lp-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}
   .lp-hb-sun{right:-260px;top:-300px}
-  .lp-hb-sp{left:-300px}
 }
 @media (max-width:767px){
   .lp-hero{padding-bottom:96px}
@@ -554,7 +551,6 @@ body.land-on .cover{z-index:102}body.land-on .pop{z-index:103}body.land-on .toas
   .lp-secu-s{text-align:center}
   .lp-secu-r .lp-more-row{justify-content:center}
   .lp-hb-sun{width:460px;height:460px;right:-230px;top:-200px}
-  .lp-hb-sp{width:520px;left:-260px;bottom:auto;top:340px}
   .lp-sec h2::after{width:44px;margin-top:10px}
   .lp-bal{left:16px;right:auto;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:50px;height:50px}
   .lp-fab{left:76px!important}
@@ -636,3 +632,25 @@ body.demo-on .app{height:calc(100% - var(--demo-h,46px));margin-top:var(--demo-h
   .demo-strip .ds-r{flex:1 1 100%;margin-left:0}
   .demo-strip .ds-r .btn{flex:1;justify-content:center}
 }
+/* Возможности: живые карточки функций (18.11.2026) — значок со своей анимацией и примеры, которые выскакивают по очереди */
+.lp-fgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.lp-frest{padding-top:16px}
+.lp-fcd{display:flex;flex-direction:column;gap:6px;min-width:0;padding:12px 12px 18px;border:1px solid var(--border);border-radius:var(--r-xl);background:var(--raised);box-shadow:var(--shadow-s)}
+.lp-fcd h3{margin:8px 6px 0;font-size:17px;line-height:1.3}
+.lp-fcd p{margin:0 6px;color:var(--muted);font-size:14.5px;line-height:1.5}
+.lp-fsc.lp-ico{width:auto;height:104px;margin:0;border-radius:12px;display:flex;align-items:center;justify-content:flex-start;gap:16px;padding:0 16px;overflow:hidden}
+.lp-fbig{flex:none;width:64px;height:64px;border-radius:18px;display:grid;place-items:center;background:var(--raised);box-shadow:var(--shadow-s)}
+.lp-fbig .lp-fi{width:38px;height:38px;stroke-width:1.6}
+.lp-fch{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0}
+.lp-fch i{font-style:normal;font-size:12px;font-weight:600;line-height:1.2;padding:4px 9px;border-radius:999px;background:var(--raised);color:var(--text);box-shadow:0 1px 2px rgb(0 0 0 / .08);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.lp-anim .lp-fcd.rv.in{animation:lp-tile .85s cubic-bezier(.16,.84,.24,1) calc(var(--d,0)*90ms) backwards}
+.lp-anim .lp-fcd.fx .lp-fch i{animation:lp-chip .5s cubic-bezier(.3,1.5,.5,1) calc(var(--j)*.2s + .25s) backwards}
+.lp-anim .lp-fcd.fx .lp-fbig{animation:lp-f-beat .5s ease}
+@keyframes lp-chip{from{opacity:0;transform:translateX(-14px) scale(.8)}}
+.lp-fi .f13-b{transform-origin:50% 8%}.lp-fi .f13-d{transform-origin:50% 50%}
+.lp-anim .fx .f13-b{animation:lp-f13 1.1s ease}.lp-anim .fx .f13-d{animation:lp-f8 .45s cubic-bezier(.3,1.5,.5,1) .6s backwards}
+@keyframes lp-f13{15%{transform:rotate(16deg)}30%{transform:rotate(-13deg)}45%{transform:rotate(9deg)}60%{transform:rotate(-5deg)}75%{transform:rotate(2deg)}}
+.lp-anim .fx .f14-m{animation:lp-f3 1.25s cubic-bezier(.4,0,.3,1)}
+@media (hover:hover){.lp-fcd{transition:transform .3s cubic-bezier(.2,.7,.2,1),box-shadow .3s,border-color .3s}.lp-fcd:hover{transform:translateY(-4px);box-shadow:var(--shadow-l);border-color:var(--border-strong)}}
+@media (max-width:1023px){.lp-fgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:767px){.lp-fgrid{grid-template-columns:minmax(0,1fr);gap:12px}.lp-frest{padding-top:12px}.lp-fsc.lp-ico{height:92px}.lp-fbig{width:56px;height:56px}.lp-fbig .lp-fi{width:32px;height:32px}.lp-fcd h3{font-size:16px}}

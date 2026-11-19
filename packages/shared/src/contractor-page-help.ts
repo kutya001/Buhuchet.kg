@@ -42,6 +42,7 @@ export const CpGlossSchema = z.object({
   w: z.string().max(CP_HELP_MAX.word),
   x: z.string().max(CP_HELP_MAX.glossText),
   also: z.string().max(CP_HELP_MAX.also).optional(),
+  pg: z.boolean().optional(),
 });
 
 export const CpHelpSchema = z.object({
@@ -136,6 +137,8 @@ export const AdminCpHelpEdit = z.discriminatedUnion('op', [
     w: req(CP_HELP_MAX.word, 'cph.adm.err.word'),
     x: req(CP_HELP_MAX.glossText, 'cph.adm.err.gloss_text'),
     also: z.string().max(CP_HELP_MAX.also),
+    /** «Подчёркивать на странице» (прототип v135); не пришло — да. */
+    pg: z.boolean().optional(),
     version: RecordVersion,
   }),
   z.object({

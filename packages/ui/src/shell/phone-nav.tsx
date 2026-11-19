@@ -2,7 +2,6 @@ import type { MouseEvent, ReactNode } from 'react';
 import { Icon } from '../icon';
 import type { IconName } from '../icons';
 import { CountBadge } from './badge';
-import { Brand } from './side-nav';
 import type { ShellCount, ShellLink } from './types';
 
 const DefaultLink: ShellLink = (props) => <a {...props} />;
@@ -10,7 +9,7 @@ const DefaultLink: ShellLink = (props) => <a {...props} />;
 /** Модуль в нижней панели или в «Других модулях». */
 export interface PhoneModule {
   id: string;
-  /** В нижней панели — короткая подпись («Отчёты»), в «Других модулях» — полное название. */
+  /** Короткая подпись («Отчёты») — и в нижней панели, и в «Других модулях» (прототип v138). */
   title: string;
   icon: IconName;
   href: string;
@@ -48,7 +47,7 @@ export function BottomNav({
             key={m.id}
             href={m.href}
             aria-current={on ? 'page' : undefined}
-            className={`relative flex min-w-[66px] flex-[1_0_auto] flex-col items-center gap-[3px] rounded-[10px] px-1.5 pt-1.5 pb-[5px] text-[10.5px] font-semibold no-underline ${on ? 'bg-pane-alt text-ink shadow-btn' : 'text-muted'}`}
+            className={`relative flex min-w-[66px] flex-[1_0_auto] flex-col items-center gap-[3px] rounded-[10px] px-1.5 pt-1.5 pb-[5px] text-[10.5px] font-semibold no-underline ${on ? 'bg-pane-alt text-ink shadow-flat-strong' : 'text-muted'}`}
           >
             <Icon name={m.icon} size="nav" />
             <span>{m.title}</span>
@@ -67,12 +66,12 @@ export function BottomNav({
 
 /**
  * Содержимое панели «Меню» на телефоне (прототип ui/shell.js renderSheet, css/grid.css
- * `.sheet-mods`): название платформы и режим, «Другие модули» — все остальные модули по правам в
- * порядке меню по два в строку, активный подсвечен, — и ниже `footer` (организация, «Выйти»).
+ * `.sheet-mods`): «Другие модули» — все остальные модули по правам в порядке меню по два в строку
+ * с короткими названиями, активный подсвечен, — и ниже `footer` (организация, «Выйти»). Названия
+ * платформы сверху нет (прототип v138).
  * Выбор модуля закрывает панель (`onSelect`).
  */
 export function PhoneMenu({
-  mode,
   modules,
   active,
   label,
@@ -80,7 +79,6 @@ export function PhoneMenu({
   footer,
   Link = DefaultLink,
 }: {
-  mode: string;
   modules: readonly PhoneModule[];
   active: string | null;
   /** «Другие модули». */
@@ -91,7 +89,6 @@ export function PhoneMenu({
 }) {
   return (
     <>
-      <Brand mode={mode} className="px-1 pt-1.5 pb-2.5" />
       {modules.length > 0 && (
         <nav
           aria-label={label}
@@ -105,7 +102,7 @@ export function PhoneMenu({
                 href={m.href}
                 onClick={(e) => onSelect(e, m)}
                 aria-current={on ? 'page' : undefined}
-                className={`flex min-w-0 items-center gap-[9px] rounded-[10px] border border-line p-2.5 text-[13px] font-semibold no-underline focus-visible:outline-2 focus-visible:outline-brand-blue ${on ? 'bg-raised text-ink shadow-btn' : 'bg-pane-alt text-muted'}`}
+                className={`flex min-w-0 items-center gap-[9px] rounded-[10px] border border-line p-2.5 text-[13px] font-semibold no-underline focus-visible:outline-2 focus-visible:outline-brand-blue ${on ? 'bg-raised text-ink shadow-flat-strong' : 'bg-pane-alt text-muted'}`}
               >
                 <Icon name={m.icon} />
                 <span className="min-w-0">{m.title}</span>
@@ -150,12 +147,12 @@ export function SheetAction({
       {avatar ? (
         <span
           aria-hidden="true"
-          className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-btn text-[12px] font-bold tracking-[.02em] text-muted shadow-btn"
+          className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full bg-btn text-[12px] font-bold tracking-[.02em] text-muted shadow-flat"
         >
           {avatar}
         </span>
       ) : (
-        <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-btn">
+        <span className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[9px] bg-btn text-muted shadow-flat">
           <Icon name={icon} size="sm" />
         </span>
       )}

@@ -33,7 +33,12 @@ test.describe('«Главная»', () => {
     await newOrgOwner(page.request, new URL(baseURL!).origin);
     await page.goto('/app/home/today');
     const home = page.locator('[data-home-summary]');
-    await expect(home.locator('[data-home-hello]')).toContainText('Вы видите всю организацию');
+    // Прототип v139: в приветствии — только «Сегодня …»; владелец видит всю организацию — метки
+    // «Только мои» нет.
+    await expect(home.locator('[data-home-hello]')).toContainText(
+      /^Сегодня \d{1,2} [а-я]+, [а-я]+/,
+    );
+    await expect(home.locator('[data-home-own]')).toHaveCount(0);
     const hint = home.locator('[data-home-empty]');
     await expect(hint).toContainText('Добавьте контрагентов, чтобы здесь появились сроки и суммы.');
 
@@ -52,7 +57,13 @@ test.describe('«Главная»', () => {
       'Нет отчётов со сроком в этом месяце.',
     );
     await expect(home).not.toContainText(/чек-лист|урок|обучени/i);
-    await expect(home.locator('button:not([data-plate])')).toHaveCount(2);
+    // Кнопки сводки — только два перехода: «Ещё N» ряда плашек (на ПК скрыта) и «?» выходного дня
+    // (прототип v139) к ним не относятся.
+    await expect(
+      home.locator(
+        'button:not([data-plate]):not([data-plates-more]):not([data-home-day-off] button)',
+      ),
+    ).toHaveCount(2);
 
     // Первое действие: «Перейти к контрагентам» — пустой список с подсказкой и «Добавить контрагента».
     await hint.getByRole('button', { name: 'Перейти к контрагентам' }).click();

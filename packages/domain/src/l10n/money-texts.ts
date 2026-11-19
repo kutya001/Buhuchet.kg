@@ -204,11 +204,12 @@ export const TAX_MONEY_TEXTS = {
     section: R,
   },
   'report.pay_first.note': {
-    ru: 'Отчёт «Сдача + уплата» отмечается сданным после оплаты полностью или частично: «Принять деньги» → «Отметить оплаченным» → «Сдан».',
+    ru: 'Отчёт «Сдача + уплата» отмечается сданным после оплаты полностью или частично: «Принять деньги», потом «Отметить оплаченным», потом «Сдан».',
     section: R,
   },
+  'report.pay_first.left': { ru: 'Сначала оплатите налог: осталось {amount}', section: R },
   'report.pay_first.submit_note': {
-    ru: 'Отчёт «Сдача + уплата» отмечается сданным после оплаты налога. Нулевой отчёт — впишите 0. Если сумма больше 0, она сохранится, а «Сдан» можно будет поставить после «Отметить оплаченным».',
+    ru: 'Сначала оплата налога, потом «Сдан». Нулевой отчёт — впишите 0.',
     section: R,
   },
   'report.pay_first.saved': {
@@ -235,9 +236,6 @@ export const TAX_MONEY_TEXTS = {
   },
 
   // Карточка отчёта: суммы, график оплаты, деньги контрагента
-  'report.money.received_full': { ru: 'получено полностью', section: R },
-  'report.money.received_part': { ru: 'получено частично', section: R },
-  'report.money.received_wait': { ru: 'ожидаем', section: R },
   'report.money.self_paid': { ru: 'оплатил контрагент сам: {amount}', section: R },
   'report.money.over': { ru: '+{amount} пеня/переплата', section: R },
   'report.money.pay_overdue': { ru: 'срок оплаты прошёл', section: R },
@@ -265,6 +263,7 @@ export const TAX_MONEY_TEXTS = {
   'money.pay.already': { ru: 'Уже оплачено', section: S },
   'money.pay.available': { ru: 'Деньги контрагента на счёте', section: S },
   'money.pay.self': { ru: 'Оплатил контрагент сам', section: S },
+  'money.pay.self_tip': { ru: 'Когда контрагент платит сам', section: S },
   'money.pay.self_hint': {
     ru: 'Контрагент сам перечислил налог в бюджет: деньги с наших счетов не списываются, в журнале операций — «Оплата контрагентом напрямую»',
     section: S,
@@ -272,14 +271,10 @@ export const TAX_MONEY_TEXTS = {
   'money.pay.date': { ru: 'Дата оплаты', section: S },
   'money.pay.amount': { ru: 'Оплачено в бюджет, сом', section: S },
   'money.pay.amount_hint': {
-    ru: 'Может отличаться от суммы к уплате, например на пеню',
+    ru: 'С пеней — можно больше',
     section: S,
   },
   'money.pay.file': { ru: 'Платёжное поручение', section: S },
-  'money.pay.file_hint': {
-    ru: 'Необязательно; файл появится в карточке отчёта и в «Файловом менеджере»',
-    section: S,
-  },
   'money.pay.lock': {
     ru: 'Налог контрагента оплачивается только его деньгами. Это правило не отключается.',
     section: S,
@@ -320,9 +315,8 @@ export const TAX_MONEY_TEXTS = {
   'money.in.sub_org': { ru: '{name} · на счёт организации', section: S },
   'money.in.sub_emp': { ru: '{name} · на счёт {holder}', section: S },
   'money.in.total': { ru: 'Общая сумма, сом', section: S },
-  'money.in.total_hint': { ru: 'Сколько всего перевёл контрагент', section: S },
   'money.in.date': { ru: 'Дата', section: S },
-  'money.in.detail': { ru: 'Детализация: за что эти деньги', section: S },
+  'money.in.detail': { ru: 'За что эти деньги', section: S },
   'money.in.auto': { ru: 'Распределить по срокам', section: S },
   // «Принять деньги» за месяц и за весь период во вкладке «Отчёты к сдаче» (прототип v110 `inDlg`, `pre.list`).
   'money.in.list_note': {
@@ -355,7 +349,7 @@ export const TAX_MONEY_TEXTS = {
   'money.in.advance': { ru: 'аванс {amount}', section: S },
   'money.in.match': { ru: 'сходится', section: S },
   'money.in.hint': {
-    ru: 'Общая сумма должна быть не меньше суммы строк, излишек остаётся авансом контрагента.',
+    ru: 'Излишек останется авансом.',
     section: S,
   },
   'money.in.files': { ru: 'Файлы: платёжка, чек, скрин перевода', section: S },
@@ -441,12 +435,15 @@ export const TAX_MONEY_TEXTS = {
   'money.cp.pays_to.emp': { ru: 'на кошелёк ответственного', section: S },
   'money.cp.pays_to.org': { ru: 'на счёт организации', section: S },
   'money.cp.saved': { ru: 'Сохранено', section: S },
+  'money.cp.undo': { ru: 'Отменить', section: S },
+  'money.cp.undone': { ru: 'Отменено', section: S },
   'money.cp.balance': { ru: 'Баланс по контрагенту', section: S },
   'money.cp.received': { ru: 'Получено от контрагента', section: S },
   'money.cp.paid': { ru: 'Оплачено в бюджет', section: S },
   'money.cp.self_paid': { ru: 'из них контрагент оплатил сам: {amount}', section: S },
   'money.cp.bonus': { ru: 'Списано в бонус', section: S },
   'money.cp.available': { ru: 'Остаток на счёте', section: S },
+  'money.cp.fee_debt': { ru: 'Долг за обслуживание', section: S },
 
   // История контрагента
   'cp.hist.receipt': { ru: 'Поступление {amount}', section: S },

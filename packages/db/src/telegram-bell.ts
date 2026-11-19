@@ -158,7 +158,8 @@ export async function bellPage(
   s: BellSight,
   q: { tab: BellKind | 'all'; before?: string | null },
 ): Promise<{ items: BellItemRow[]; more: boolean }> {
-  const tab = q.tab === 'all' ? sql`true` : sql`b.kind = ${q.tab}`;
+  // «Все» — рабочие уведомления: новости версий — только под своей кнопкой (прототип v138 `bellItems`).
+  const tab = q.tab === 'all' ? sql`b.kind <> 'news'` : sql`b.kind = ${q.tab}`;
   const before =
     q.before && ID_RE.test(q.before)
       ? sql`(b.created_at, b.id) < (select x.created_at, x.id from ${B} x where x.id = ${q.before}::uuid and x.user_id = app.current_user_id())`
@@ -197,12 +198,26 @@ export async function bellPage(
   return { items, more: rows.length > BELL_PAGE_SIZE };
 }
 
-/** Сколько строк вошедший ещё не видел (значок колокольчика). */
-export async function bellUnseen(tx: Tx, s: BellSight): Promise<number> {
-  const [row] = await tx.execute<{ n: number }>(
-    sql`select count(*)::integer as n from ${B} b where b.seen_at is null and ${seen(s)}`,
+/**
+ * Сколько строк вошедший ещё не видел (значок колокольчика): `unseen` — рабочие уведомления (красное
+ * число), `news` — новости версий (серая точка, когда рабочих нет; прототип v138 `bellUnseen`,
+ * `bellNewsUnseen`).
+ */
+export async function bellUnseenCounts(
+  tx: Tx,
+  s: BellSight,
+): Promise<{ unseen: number; news: number }> {
+  const [row] = await tx.execute<{ n: number; news: number }>(
+    sql`select count(*) filter (where b.kind <> 'news')::integer as n,
+          count(*) filter (where b.kind = 'news')::integer as news
+        from ${B} b where b.seen_at is null and ${seen(s)}`,
   );
-  return row?.n ?? 0;
+  return { unseen: row?.n ?? 0, news: row?.news ?? 0 };
+}
+
+/** Сколько рабочих уведомлений вошедший ещё не видел (без новостей версий). */
+export async function bellUnseen(tx: Tx, s: BellSight): Promise<number> {
+  return (await bellUnseenCounts(tx, s)).unseen;
 }
 
 /** Открыл панель — все свои строки просмотрены (на всех устройствах). */

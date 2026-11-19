@@ -1,5 +1,9 @@
 /* Цвета, темы, шрифты, анимации */
 :root{
+  /* Плавность — один набор на весь интерфейс (решение заказчика 17.11.2026, «Меньше текста, понятнее, плавнее», п. 4):
+     три длительности, уход короче входа, три кривые. Новые переходы — только через эти переменные */
+  --t-fast:100ms; --t-base:180ms; --t-slow:240ms; --t-exit:140ms;
+  --ease-out:cubic-bezier(.2,.8,.2,1); --ease-in:cubic-bezier(.4,0,1,1); --ease-move:cubic-bezier(.3,0,.2,1);
   /* Layout: dimmed warm frame (top bar + module rail) around one lifted paper pane.
      Palette, shadows and type follow Primary for Obsidian, Classic Original. */
   color-scheme: light;
@@ -110,9 +114,14 @@
 }
 
 /* ── Primary keyframes ── */
-@keyframes slideUp{0%{transform:translateY(0);opacity:0}10%{transform:translateY(8%);opacity:.2}20%{transform:translateY(5%);opacity:.4}50%{transform:translateY(-2%);opacity:.85}100%{transform:translateY(0);opacity:1}}
+/* Появление без подскока: прозрачность и сдвиг на 8 px (было: сдвиг от высоты окна с отскоком, до 68 px у высокого окна) */
+@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes m-out{to{opacity:0;transform:translateY(8px)}}
+@keyframes fade-out{to{opacity:0}}
+@keyframes sheet-in{from{transform:translateY(100%)}to{transform:none}}
+@keyframes sheet-out{to{transform:translateY(100%)}}
 @keyframes fade{from{opacity:0}to{opacity:1}}
-@keyframes pop{0%{transform:scale(.94)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
+@keyframes pop{from{transform:scale(.97)}to{transform:none}}
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
 @media (prefers-reduced-motion: reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 

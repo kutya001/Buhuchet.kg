@@ -8,7 +8,7 @@ import { STAND_MARK } from '../modules/admin/leads';
 import { createTestDeps } from '../testing';
 import { ALERT_STAND_MARK } from './alerts';
 import { telegramWebhookJob } from './registry';
-import { overdueSlot, runDueJobs } from './runner';
+import { overdueSlot, RUN_ERROR_MAX, runDueJobs } from './runner';
 
 const JOB_HUNG_ERROR = 'Не закончилась за 10 минут: оборвана по времени или процесс остановлен';
 
@@ -284,6 +284,24 @@ describe.skipIf(!databaseAvailable())('задачи по расписанию: �
       slot: '2026-10-18T03:00:00.000Z',
       attempt: 1,
     });
+  });
+
+  it('текст ошибки в журнале запусков — без токена бота и не длиннее предела', async () => {
+    const token = `1234567890:${'A'.repeat(35)}`;
+    const job: Job = {
+      name: 'test.token',
+      cron: '* * * * *',
+      run: () =>
+        Promise.reject(
+          new Error(`fetch failed: https://api.telegram.org/bot${token}/x ${'я'.repeat(2000)}`),
+        ),
+    };
+    const { tick } = setup([job], '2026-10-18T03:00:00Z');
+    await tick('2026-10-18T03:00:00Z');
+    const [row] = await runs('test.token');
+    expect(row!.error).toContain('bot[скрыто]/x');
+    expect(row!.error).not.toContain(token);
+    expect(row!.error).toHaveLength(RUN_ERROR_MAX);
   });
 
   it('слежение не мешает задачам: его ошибка — в журнал, задачи выполняются', async () => {

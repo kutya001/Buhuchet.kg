@@ -71,6 +71,12 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
     expect(res.status).toBe(200);
     return BellCount.parse(await res.json()).unseen;
   };
+  /** Значок: рабочие уведомления (красное число) и новости версий (серая точка) — прототип v138. */
+  const counts = async (login: string) => {
+    const res = await call(login, 'GET', '/api/bell/count');
+    expect(res.status).toBe(200);
+    return BellCount.parse(await res.json());
+  };
   const rowsOf = (userId: string, event?: string) =>
     f.t.admin.db
       .select()
@@ -736,9 +742,13 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       });
       expect(cast.status, await cast.clone().text()).toBe(200);
       expect(await rowsOf(person('chief-a').userId, 'broadcast')).toEqual([]);
-      expect((await page('chief-a')).items.map((x) => [x.event, x.text])).toEqual([
+      expect((await page('chief-a', 'news')).items.map((x) => [x.event, x.text])).toEqual([
         ['news', 'Колокольчик уведомлений'],
       ]);
+      // (прототип v138) «Все» — только рабочие уведомления: новость версии — под кнопкой «Новости»,
+      // в красное число не входит, значку отдаётся отдельно (серая точка).
+      expect((await page('chief-a')).items).toEqual([]);
+      expect(await counts('chief-a')).toEqual({ unseen: 0, news: 1 });
     } finally {
       await f.t.admin.db.delete(news).where(eq(news.id, 'bell-api-news'));
     }
@@ -762,7 +772,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       // У «Бухгалтера» нет права «Видеть плату за обслуживание»: ни строки, ни числа, ни отметки.
       expect((await page('acc-a', 'news')).items).toEqual([]);
       expect((await page('acc-a')).items).toEqual([]);
-      expect(await unseen('acc-a')).toBe(0);
+      expect(await counts('acc-a')).toEqual({ unseen: 0, news: 0 });
       expect((await call('acc-a', 'POST', '/api/bell/read-all')).status).toBe(200);
       const reads = await f.t.admin.db
         .select()
@@ -775,7 +785,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
         );
       expect(reads).toEqual([]);
       // Владелец (все права при функции) и администратор платформы видят её.
-      expect(await unseen('owner-a')).toBe(1);
+      expect(await counts('owner-a')).toEqual({ unseen: 0, news: 1 });
       expect((await page('owner-a', 'news')).items.map((x) => x.open)).toEqual([
         { kind: 'news', id: 'bell-api-news-fee' },
       ]);
@@ -785,7 +795,7 @@ describe.skipIf(!databaseAvailable())('Колокольчик уведомлен
       // Функцию выключили — модуля у владельца нет, строки тоже.
       await setFeatures({ tasks: true, files: true });
       expect((await page('owner-a', 'news')).items).toEqual([]);
-      expect(await unseen('owner-a')).toBe(0);
+      expect(await counts('owner-a')).toEqual({ unseen: 0, news: 0 });
     } finally {
       await f.t.admin.db.delete(news).where(eq(news.id, 'bell-api-news-fee'));
       await setFeatures({ tasks: true, files: true });

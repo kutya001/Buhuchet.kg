@@ -45,6 +45,7 @@ import { RolesList } from '../roles/roles-list';
 import { ModuleStub } from '../shell/module-stub';
 import { StaffList } from '../staff/staff-list';
 import { TasksList, type TaskTab } from '../tasks/tasks-list';
+import { RunsScreen } from '../runs/runs-screen';
 import { TgAdmScreen } from '../tgadm/tgadm-screen';
 
 /**
@@ -144,6 +145,7 @@ export function ModuleScreen({
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;
+  if (moduleId === 'runs') return <RunsScreen tab={tabId ?? 'jobs'} />;
   if (moduleId === 'tg') return <TgAdmScreen tab={tabId ?? 'log'} />;
   return <ModuleStub moduleId={moduleId} />;
 }
@@ -197,6 +199,8 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'orgs/list',
   'orgs/act',
   'l10n/',
+  'runs/',
+  'runs/jobs',
   'tg/',
   'tg/log',
 ]);

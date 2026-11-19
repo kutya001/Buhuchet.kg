@@ -1064,6 +1064,37 @@ describe.skipIf(!databaseAvailable())('Пакет 16.11: колокольчик,
         expect(await linksOf([original])).toHaveLength(2);
       });
 
+      // Вызов миграции 0164 (выпуск 17.11.2026): граница — момент, когда рабочий сайт с новым кодом готов.
+      it('вызов с верхней границей объединяет копию раньше границы; копия ровно на границе и позже остаётся', async () => {
+        const u = randomUUID().slice(0, 8);
+        const accepted = new Date(Date.now() - minutes(30));
+        const original = await sentCheck(`Граница ${u}.jpg`, { at: accepted });
+        const saved = new Date(Date.now() - minutes(20));
+        const until = new Date(saved.getTime() + 5_000);
+        const receipt = await receiptAt(saved);
+        const early = await copyOf(`Граница ${u}.jpg`, {
+          sourceId: receipt,
+          createdAt: new Date(until.getTime() - 1_000),
+        });
+        const edge = await copyOf(`Граница ${u}.jpg`, {
+          sourceId: await receiptAt(saved),
+          createdAt: until,
+        });
+        const late = await copyOf(`Граница ${u}.jpg`, {
+          sourceId: await receiptAt(saved),
+          createdAt: new Date(until.getTime() + 1_000),
+        });
+        await mergeLate(until);
+        const byId = await stateOf([original, early, edge, late]);
+        expect(byId.get(original)?.state).toBe('ready');
+        expect(byId.get(early)?.state).toBe('deleted');
+        expect(byId.get(edge)?.state).toBe('ready');
+        expect(byId.get(late)?.state).toBe('ready');
+        expect(await linksOf([original])).toEqual([
+          expect.objectContaining({ fileId: original, kind: 'receipt', id: receipt }),
+        ]);
+      });
+
       it('та же копия, прикреплённая позже 10 минут после записи денег, до записи или к записи без строки, не трогается', async () => {
         const u = randomUUID().slice(0, 8);
         const accepted = new Date(Date.now() - minutes(60));

@@ -15,12 +15,14 @@ import type { HomeSummary, ReportRow, TaskListRow } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
+  HelpTip,
   Icon,
   linkButtonClass,
   Note,
   Plate,
   Plates,
   StatusPill,
+  Tag,
   type PlateProps,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -46,27 +48,38 @@ function todayText(t: Translate, today: string): string {
   });
 }
 
-/** Строка приветствия (прототип `.hello`): сегодня, что видит сотрудник, неделя «На неделе». */
+/**
+ * Строка приветствия (прототип v139 `.hello`, решение заказчика 17.11.2026 «Меньше текста»): только
+ * «Сегодня …»; у сотрудника, который видит не всю организацию, — метка «Только мои»; в выходной —
+ * «выходной» с подсказкой «?», какая неделя показана. «Вы видите всю организацию» и дат недели нет:
+ * даты — в плашке «На этой неделе».
+ */
 function Hello({ t, s }: { t: Translate; s: HomeSummary }) {
-  const dot = <span aria-hidden="true">·</span>;
   return (
     <div
       data-home-hello=""
-      className="flex flex-wrap items-baseline gap-2.5 text-[13.5px] text-muted"
+      className="flex flex-wrap items-center gap-2.5 text-[13.5px] text-muted"
     >
       <span>
         {t('home.hello.today')} <b className="text-ink">{todayText(t, s.today)}</b>
       </span>
-      {dot}
-      <span>{t(s.seeAll ? 'home.hello.all' : 'home.hello.own')}</span>
-      {dot}
-      <span>
-        {t('home.hello.week', {
-          from: formatDateRu(s.weekFrom).slice(0, 5),
-          to: formatDateRu(s.weekTo).slice(0, 5),
-        })}
-        {s.weekend ? ` ${t('home.hello.weekend')}` : ''}
-      </span>
+      {!s.seeAll && (
+        <span data-home-own="">
+          <Tag title={t('home.hello.own')}>{t('home.hello.own_tag')}</Tag>
+        </span>
+      )}
+      {s.weekend && (
+        <span className="inline-flex items-center gap-1 text-faint" data-home-day-off="">
+          {t('home.hello.day_off')}
+          <HelpTip
+            label={t('home.hello.day_off')}
+            text={t('home.hello.day_off_tip', {
+              from: formatDateRu(s.weekFrom).slice(0, 5),
+              to: formatDateRu(s.weekTo).slice(0, 5),
+            })}
+          />
+        </span>
+      )}
     </div>
   );
 }

@@ -117,9 +117,11 @@ export function RecordFiles({ source }: { source: FileSource }) {
   const items: FilesBoxItem[] = ordered.map((f) => ({
     id: f.id,
     name: f.name,
-    meta: f.linked
-      ? `${fileMeta(t, f.name, f.size)} · ${t('files.link.also_cp')}`
-      : fileMeta(t, f.name, f.size),
+    // У отчёта ссылки стоят отдельно над своими файлами — пометка не нужна (прототип v134 `rcLinked`).
+    meta:
+      f.linked && source.kind !== 'report'
+        ? `${fileMeta(t, f.name, f.size)} · ${t('files.link.also_cp')}`
+        : fileMeta(t, f.name, f.size),
     note: f.note,
     canDelete: f.canDelete,
     canEdit: f.canEdit,

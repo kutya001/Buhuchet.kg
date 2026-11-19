@@ -22,7 +22,10 @@ interface HistoryChange {
   to?: unknown;
 }
 
-/** Подписи окна удаления по виду: у списания и возврата — «Отменить …» (прототип opDelDlg, `T_`). */
+/**
+ * Подписи окна удаления по виду: у списания и возврата — «Отменить …» и вопрос «Отменить списание на
+ * 300 сом?»; у остальных вопроса нет — сумма уже в шапке окна (прототип v136 opDelDlg, `T_`).
+ */
 export const deleteWords = (kind: MoneyOpKind) =>
   kind === 'bonus' || kind === 'refund'
     ? ({
@@ -33,10 +36,10 @@ export const deleteWords = (kind: MoneyOpKind) =>
       } as const satisfies Record<string, UiTextKey>)
     : ({
         title: 'fin.del.title',
-        ask: 'fin.del.ask',
+        ask: null,
         ok: 'fin.del.ok',
         done: 'fin.del.done',
-      } as const satisfies Record<string, UiTextKey>);
+      } as const satisfies Record<string, UiTextKey | null>);
 
 /** Знак обратной записи (прототип: `amount < 0 ? '−' : '+'`). */
 export const signedSom = (amount: number) =>

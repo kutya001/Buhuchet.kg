@@ -245,7 +245,9 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await logIn(page, reader);
       const window = page.getByRole('dialog', { name: 'Что нового' });
       await expect(window).toBeVisible();
-      await expect(window).toContainText('Добро пожаловать в Buhuchet.kg: начните с Базы знаний.');
+      // (прототип v138) Первый раз — одна строка про уроки и кнопка «Уроки».
+      await expect(window).toContainText('Начните с уроков в «Базе знаний»');
+      await expect(window.getByRole('link', { name: 'Уроки', exact: true })).toBeVisible();
       await expect(window.locator('[data-news]')).toHaveCount(1);
       const item = window.locator(`[data-news="${v14.id}"]`);
       // Единственная новость — она же самая новая: раскрыта сама.
@@ -280,7 +282,7 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await expect(window).toBeVisible();
       await expect(window.locator('[data-news]')).toHaveCount(1);
       await expect(window.locator(`[data-news="${v15.id}"]`)).toBeVisible();
-      await expect(window).not.toContainText('Добро пожаловать');
+      await expect(window).not.toContainText('Начните с уроков');
       await window.getByRole('button', { name: 'Понятно' }).click();
       await expect(window).toBeHidden();
     } finally {
@@ -427,6 +429,48 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
     }
   });
 
+  // Доработки 17.11.2026, «Меньше текста, понятнее, плавнее» (прототип v138 `whatsNew`): в окне — не
+  // больше трёх последних новостей; остальные — по «Все новости · N», прочитаны они так же.
+  test('(проверка прототипа v138) «Что нового» показывает три последние новости из четырёх: «Последние 3 из 4» и «Все новости · 4»; прочитаны все четыре', async ({
+    page,
+    baseURL,
+    playwright,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const admin = await playwright.request.newContext({ baseURL });
+    await platformAdmin(admin, origin);
+    const reader = await newReader(page.request, origin);
+    const ids: string[] = [];
+    try {
+      for (const release of ['9111', '9112', '9113', '9114']) {
+        ids.push(
+          (await publish(admin, origin, { title: `Версия ${release}: правки`, release })).id,
+        );
+      }
+      await logIn(page, reader);
+      const window = page.getByRole('dialog', { name: 'Что нового' });
+      await expect(window).toBeVisible();
+      const shown = window.locator('[data-news]');
+      await expect(shown).toHaveCount(3);
+      // От новых к старым: самой старой из четырёх в окне нет.
+      await expect(shown.nth(0)).toHaveAttribute('data-news', ids[3]!);
+      await expect(shown.nth(2)).toHaveAttribute('data-news', ids[1]!);
+      await expect(window.locator(`[data-news="${ids[0]}"]`)).toHaveCount(0);
+      await expect(window).toContainText('Последние 3 из 4');
+      const all = window.locator('[data-whats-new-all]');
+      await expect(all).toHaveText('Все новости · 4');
+      // Прочитаны все четыре, а не только показанные.
+      await expect.poll(() => unread(page.request)).toBe(0);
+      await all.click();
+      await expect(page).toHaveURL(/\/app\/kb\/news$/);
+      await expect(window).toBeHidden();
+      await expect(page.locator(`[data-news-list] [data-news="${ids[0]}"]`)).toBeVisible();
+    } finally {
+      for (const id of ids) await takeOff(admin, origin, id);
+      await admin.dispose();
+    }
+  });
+
   // Доработки 16.11.2026, блок 4 (прототип v123): у новости — модули (видят только те, у кого есть хотя
   // бы один) и второй текст «Для администратора платформы» (виден только в режиме Админка).
   test('(приёмка блока 4) бухгалтер без права «Видеть плату за обслуживание» не видит новость про обслуживание; у новости версии нет текста «Для администратора платформы», в режиме Админка он есть', async ({
@@ -541,7 +585,7 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       await logIn(page, owner);
       const welcome = page.getByRole('dialog', { name: 'Приветствие' });
       await expect(welcome).toBeVisible();
-      await expect(welcome).toContainText('1 из 6');
+      await expect(welcome).toContainText('1 из 5');
       await expect(page.getByRole('dialog', { name: 'Что нового' })).toHaveCount(0);
       expect(askedWhatsNew).toBe(0);
       await welcome.getByRole('button', { name: 'Позже' }).click();
@@ -556,8 +600,8 @@ test.describe('Этап 2: Новости и «Что нового»', () => {
       const window = page.getByRole('dialog', { name: 'Что нового' });
       await expect(window).toBeVisible();
       await expect(window.locator(`[data-news="${v16.id}"]`)).toBeVisible();
-      await expect(window).not.toContainText('Добро пожаловать');
-      await expect(window.getByRole('link', { name: 'Открыть Базу знаний' })).toHaveCount(0);
+      await expect(window).not.toContainText('Начните с уроков');
+      await expect(window.getByRole('link', { name: 'Уроки', exact: true })).toHaveCount(0);
       await expect(welcome).toHaveCount(0);
       await window.getByRole('button', { name: 'Понятно' }).click();
       await expect(window).toBeHidden();

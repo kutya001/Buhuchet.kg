@@ -3,7 +3,6 @@
 import {
   FEATURE_REQUIRES,
   FEATURES,
-  MENU_MODULES,
   onboardingAnswersOf,
   onboardingFreshAnswers,
   onboardingPlan,
@@ -29,13 +28,11 @@ import {
   BrandMark,
   buttonClass,
   CheckRow,
+  HelpTip,
   Hint,
   Icon,
-  ICONS,
   Modal,
-  Note,
   PHONE_QUERY,
-  pillClass,
   RecordChangedNotice,
   Segments,
   useMediaQuery,
@@ -67,9 +64,10 @@ import { MODULES, type ShellAccess } from '../shell/modules';
 /**
  * Окно приветствия (ТЗ «Моя организация» → «Первый запуск организации»; прототип modules/onboard.js —
  * welcomeOpen, wlRender, wlClick, obApply): точки и «N из M», «Далее» / «Назад», свайп на телефоне.
- * Владельцу новой организации — шесть экранов с опросником и «Выбором налогов», сотруднику и при
- * повторном открытии из «Базы знаний» — «Добро пожаловать», «Модули», «С чего начать»; «Пройти
- * опросник заново» — опросник и «Что будет включено». На ПК — окно 860 px, на телефоне — весь экран.
+ * Владельцу новой организации — пять экранов с опросником и «Выбором налогов», сотруднику и при
+ * повторном открытии из «Базы знаний» — «Добро пожаловать» и «С чего начать»; «Пройти опросник
+ * заново» — опросник и «Что будет включено». Экрана «Модули», пояснений под вопросами и шагами нет с
+ * прототипа v138 («Меньше текста»): пояснения функций — по «?». На ПК — окно 860 px, на телефоне — весь экран.
  */
 
 /** Как открыто окно: при входе с опросником или без, из «Базы знаний», из учётной политики. */
@@ -308,15 +306,6 @@ export function WelcomeWindow(props: WelcomeWindowProps) {
         className="flex flex-col gap-3.5"
       >
         {screen === 'hello' ? <HelloScreen content={content} /> : null}
-        {screen === 'mods' ? (
-          <ModsScreen
-            content={content}
-            mods={props.data.mods}
-            access={access}
-            own={own}
-            modules={props.modules}
-          />
-        ) : null}
         {screen === 'quiz' ? (
           <QuizScreen
             content={content}
@@ -373,20 +362,9 @@ function ScreenHead({ title, lead }: { title: string; lead: string }) {
   );
 }
 
-const iconOf = (name: string): IconName => (name in ICONS ? (name as IconName) : 'info');
-
-/** Значок в синем квадрате (прототип `.wl-ic`). */
-function WlIcon({ name }: { name: IconName }) {
-  return (
-    <span className="inline-grid h-[34px] w-[34px] flex-none place-items-center rounded-[10px] bg-info-bg text-info">
-      <Icon name={name} />
-    </span>
-  );
-}
-
 const ITEM_TEXT = 'mt-[3px] mb-0 text-[13px] leading-[1.45] text-muted';
 
-/** Экран 1 «Добро пожаловать»: три пункта и картинка интерфейса. */
+/** Экран 1 «Добро пожаловать»: заголовок и картинка интерфейса (прототип v138 — без трёх пунктов). */
 function HelloScreen({ content }: { content: OnboardingContent }) {
   const t = useT();
   const s = content.s1;
@@ -396,17 +374,6 @@ function HelloScreen({ content }: { content: OnboardingContent }) {
         {/* Знак крупнее, как `.wl-logo` прототипа v75: 62 × 48. */}
         <BrandMark className="mb-1.5 h-12 w-[62px] self-start" />
         <ScreenHead title={s.t} lead={s.lead} />
-      </div>
-      <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-        {s.points.map((p) => (
-          <div key={p.t} className="flex items-start gap-2.5 rounded-xl bg-pane-alt p-3">
-            <WlIcon name={iconOf(p.i)} />
-            <div>
-              <b>{p.t}</b>
-              <p className={ITEM_TEXT}>{p.x}</p>
-            </div>
-          </div>
-        ))}
       </div>
       <AppPicture t={t} />
     </>
@@ -474,125 +441,7 @@ function AppPicture({ t }: { t: Translate }) {
           ))}
         </div>
       </div>
-      <figcaption className="text-[12.5px] text-faint">{t('onboarding.pic.caption')}</figcaption>
     </figure>
-  );
-}
-
-const PILL_BLUE = `${pillClass('sm')} flex-none self-center bg-info-bg text-info`;
-const PILL_FAINT = `${pillClass('sm')} flex-none self-center bg-faint-pill-bg text-label shadow-[inset_0_0_0_1px_var(--bu-border)]`;
-const PILL_GREEN = `${pillClass('sm')} flex-none self-center bg-ok-bg text-ok`;
-
-/** Модуль или функция в сетке (прототип `.wl-mod`). */
-function ModCard({
-  icon,
-  title,
-  text,
-  pill,
-  small = false,
-  id,
-}: {
-  icon?: IconName;
-  title: string;
-  text: string;
-  pill?: ReactNode;
-  small?: boolean;
-  id: string;
-}) {
-  return (
-    <div
-      data-welcome-mod={id}
-      className={`flex items-start gap-2.5 rounded-xl border border-line px-3 ${small ? 'py-2' : 'py-2.5'}`}
-    >
-      {icon ? <WlIcon name={icon} /> : null}
-      <div className="min-w-0 grow">
-        <b>{title}</b>
-        <p className={ITEM_TEXT}>{text}</p>
-      </div>
-      {pill}
-    </div>
-  );
-}
-
-/**
- * Экран 2 «Модули»: у владельца — все модули с отметкой «Включён всегда», «Включён · можно выключить»
- * или «Можно включить» и функции внутри модулей; у сотрудника — только его модули, без отметок.
- */
-function ModsScreen({
-  content,
-  mods,
-  access,
-  own,
-  modules,
-}: {
-  content: OnboardingContent;
-  mods: Record<string, string>;
-  access: ShellAccess;
-  own: boolean;
-  modules: readonly string[];
-}) {
-  const t = useT();
-  const always = new Set(content.always);
-  const list = MENU_MODULES.filter((m) => own || modules.includes(m.id));
-  const state = (id: string, feature: Feature | null) => {
-    if (always.has(id))
-      return (
-        <span className={PILL_GREEN}>
-          <Icon name="lock" size="sm" />
-          {t('onboarding.mods.always')}
-        </span>
-      );
-    if (feature && !access.feature(feature))
-      return <span className={PILL_FAINT}>{t('onboarding.mods.can_on')}</span>;
-    return <span className={PILL_BLUE}>{t('onboarding.mods.on')}</span>;
-  };
-  const inside = FEATURES.filter((f) => !MENU_MODULES.some((m) => m.feature === f));
-  return (
-    <>
-      <ScreenHead title={content.s2.t} lead={own ? content.s2.lead : content.s2.leadStaff} />
-      <div className="grid grid-cols-2 gap-2 max-md:grid-cols-1">
-        {list.map((m) => (
-          <ModCard
-            key={m.id}
-            id={m.id}
-            icon={MODULES[m.id].icon}
-            title={t(MODULES[m.id].title)}
-            text={mods[m.id] ?? t(MODULES[m.id].desc)}
-            pill={own ? state(m.id, m.feature) : null}
-          />
-        ))}
-        <ModCard
-          id="profile"
-          icon="user"
-          title={t('profile.title')}
-          text={mods.profile ?? ''}
-          pill={own ? state('profile', null) : null}
-        />
-      </div>
-      {own ? (
-        <>
-          <h3 className="m-0 mt-1.5 text-[14px] font-bold">{t('onboarding.mods.features')}</h3>
-          <div className="grid grid-cols-2 gap-2 max-md:grid-cols-1">
-            {inside.map((f) => (
-              <ModCard
-                key={f}
-                id={f}
-                small
-                title={t(`org.feature.${f}`)}
-                text={t(`org.feature.${f}.benefit`)}
-                pill={
-                  access.feature(f) ? (
-                    <span className={PILL_BLUE}>{t('onboarding.fx.on')}</span>
-                  ) : (
-                    <span className={PILL_FAINT}>{t('onboarding.mods.can_on')}</span>
-                  )
-                }
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
-    </>
   );
 }
 
@@ -614,7 +463,8 @@ function QuizScreen({
     value,
     label: t(`onboarding.answer.${value}`),
   }));
-  const row = (q: { id: string; q: string; x: string }, sub: boolean) => (
+  // Вопрос — одной строкой, без пояснения под ним (прототип v138).
+  const row = (q: { id: string; q: string }, sub: boolean) => (
     <div
       key={q.id}
       data-quiz-question={q.id}
@@ -622,7 +472,6 @@ function QuizScreen({
     >
       <div className="min-w-0">
         <b>{q.q}</b>
-        <p className={ITEM_TEXT}>{q.x}</p>
       </div>
       <div className="max-md:[&>div]:flex max-md:[&>div>button]:flex-1">
         <Segments
@@ -670,10 +519,16 @@ function PlanScreen({
         onChange={(v) => onChange(onboardingPlanToggle(plan, f, v))}
         label={t(`org.feature.${f}`)}
       >
-        <Hint>
-          {t(`org.feature.${f}.benefit`)}
-          {needs ? ` · ${t('org.feature.needs', { name: t(`org.feature.${needs}`) })}` : null}
-        </Hint>
+        {/* Пояснение — по «?», а не строкой под названием (прототип v138). */}{' '}
+        <HelpTip
+          label={t(`org.feature.${f}`)}
+          text={
+            <>
+              {t(`org.feature.${f}.benefit`)}
+              {needs ? ` ${t('onboarding.plan.needs', { name: t(`org.feature.${needs}`) })}` : null}
+            </>
+          }
+        />
       </CheckRow>
     );
   };
@@ -716,10 +571,20 @@ function PlanScreen({
           onChange={(v) => onChange({ ...plan, taskConfirm: v })}
           label={t('org.policy.task_confirm')}
         >
-          <Hint>{t('onboarding.plan.task_confirm_hint')}</Hint>
+          {' '}
+          <HelpTip
+            label={t('org.policy.task_confirm')}
+            text={t('onboarding.plan.task_confirm_hint')}
+          />
         </CheckRow>
       ) : null}
-      <Note>{t('onboarding.plan.note', { list: always })}</Note>
+      <Hint>
+        {t('onboarding.plan.later')}{' '}
+        <HelpTip
+          label={t('onboarding.plan.later')}
+          text={t('onboarding.plan.note', { list: always })}
+        />
+      </Hint>
     </>
   );
 }
@@ -750,7 +615,6 @@ function StartScreen({ content, lead }: { content: OnboardingContent; lead: bool
                   {x.star ? '★ ' : ''}
                   {x.title}
                 </b>
-                <p className={ITEM_TEXT}>{x.why}</p>
               </li>
             ))
           ) : (
@@ -761,13 +625,6 @@ function StartScreen({ content, lead }: { content: OnboardingContent; lead: bool
           )}
         </ol>
       ) : null}
-      <div className="flex items-start gap-2.5 rounded-xl bg-pane-alt p-3">
-        <WlIcon name="play" />
-        <div>
-          <b>{s.howT}</b>
-          <p className={ITEM_TEXT}>{s.how}</p>
-        </div>
-      </div>
     </>
   );
 }

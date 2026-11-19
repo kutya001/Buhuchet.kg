@@ -18,6 +18,13 @@ export interface KbTarget {
    * контрагента, прототип `addCpDlg('oneoff')`) или «Мой профиль».
    */
   open?: { add: string; variant?: string } | 'profile';
+  /** На телефоне сначала открыть «Мой профиль»: элемент шага там, а не в верхней панели. */
+  phoneOpen?: 'profile';
+  /**
+   * Что «Показать как» подсвечивает на телефоне, когда элемент шага там в окне, которое открывает
+   * «Перейти» (прототип `mhl`: у темы — кнопка «Меню», `#burger`). Нет — то же, что `phoneFlash`.
+   */
+  phoneShow?: string;
   /** Нажать подсвеченную кнопку (у блока на экране своё «+ Добавить», не в меню модуля). */
   press?: boolean;
 }
@@ -34,8 +41,15 @@ export const KB_GO: Readonly<Record<string, KbTarget>> = {
   // «Хранилище файлов» (задача 2.29).
   storage: { module: 'org', tab: 'settings', flash: '[data-org-storage]' },
   tg: { module: null, flash: '[data-profile-telegram]', open: 'profile' },
-  // «Тема оформления» (задача 2.31): кнопка темы в верхней панели.
-  theme: { module: null, flash: '[data-theme-toggle]' },
+  // «Тема оформления» (задача 2.31): кнопка темы в верхней панели; на телефоне её там нет — тема
+  // меняется в «Мой профиль» (прототип v138).
+  theme: {
+    module: null,
+    flash: '[data-theme-toggle]',
+    phoneFlash: '#pf-theme',
+    phoneOpen: 'profile',
+    phoneShow: '[data-menu-button]',
+  },
   types: { module: 'dicts', tab: 'types', flash: LIST },
   typecfg: { module: 'dicts', tab: 'types', flash: LIST },
   pdicts: { module: 'dicts', tab: 'platform', flash: 'main' },

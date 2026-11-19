@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomBytes, randomInt } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
@@ -9,7 +10,7 @@ export const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 /** Свой логин на каждый запуск и проект (ПК и телефон): неверные пароли считаются по логину. */
 export const uniqueLogin = (prefix: string) =>
-  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  `${prefix}-${Date.now().toString(36)}-${randomBytes(4).toString('hex').slice(0, 5)}`;
 
 export async function signIn(
   api: APIRequestContext,
@@ -70,7 +71,7 @@ export const WEBHOOK_SECRET =
   process.env.TELEGRAM_WEBHOOK_SECRET ?? 'local-webhook-secret-change-me';
 
 /** Свой чат Telegram на каждый тест: сообщения бота подделка хранит по чату. */
-export const uniqueChat = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
+export const uniqueChat = () => Date.now() * 1000 + randomInt(1000);
 
 /** Что бот сайта отправил в чат. */
 export async function botMessages(api: APIRequestContext, chat: number): Promise<string[]> {
@@ -124,12 +125,12 @@ export async function pressBotButton(
   messageId: number,
   data: string,
 ): Promise<string> {
-  const id = `e2e-${chat}-${messageId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const id = `e2e-${chat}-${messageId}-${Date.now()}-${randomInt(1000)}`;
   const res = await api.post('/api/telegram/webhook', {
     headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
     data: {
       // Номер обновления у каждого нажатия свой: повторную доставку Telegram шлёт с тем же номером.
-      update_id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      update_id: Date.now() * 1000 + randomInt(1000),
       callback_query: {
         id,
         from: { id: chat, is_bot: false, first_name: 'Сквозной' },
@@ -182,7 +183,7 @@ export async function botFile(
   api: APIRequestContext,
   file: { name: string; content: string | Buffer; tooBig?: boolean },
 ): Promise<string> {
-  const id = `e2e-file-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const id = `e2e-file-${Date.now()}-${randomInt(1_000_000)}`;
   const res = await api.post(`${FAKE_TELEGRAM}/files`, {
     data: {
       id,
@@ -210,7 +211,7 @@ export async function sendToBot(
   },
 ) {
   // Номер сообщения — свой у каждого, как у Telegram: одно сообщение бот принимает один раз.
-  const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const id = Date.now() * 1000 + randomInt(1000);
   const res = await api.post('/api/telegram/webhook', {
     headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
     data: {
@@ -330,11 +331,70 @@ export async function finger(page: Page) {
  * доски — сразу «Таблица» (прототип v84, ui/grid.js).
  */
 export async function phoneTableView(page: Page) {
-  const board = page.getByRole('button', { name: 'Вид списка: Доска', exact: true });
-  const table = page.getByRole('button', { name: 'Вид списка: Таблица', exact: true });
-  await expect(board.or(table)).toBeVisible();
-  if (await board.isVisible()) await board.click();
-  await table.click();
+  await phoneListMenu(page, /^Таблица/);
+  await expect(page.locator('[data-grid]')).toHaveAttribute('data-view', 'table');
+}
+
+/** Экран теста — телефон (уже 768 px): панель списка там другая (прототип v139). */
+export const onPhone = (page: Page) => (page.viewportSize()?.width ?? 1280) < 768;
+
+/**
+ * Телефон (прототип v139): пункт меню «⋯» над списком — вид («Таблица», «Карточки», «Доска»),
+ * «Группировка», «Столбцы доски», «Столбцы» или «Поля карточки», «Плотность», «Выбрать несколько»,
+ * «В Excel». У пункта после названия может стоять значение («Столбцы 5 из 9») — имя задаётся началом.
+ */
+export async function phoneListMenu(page: Page, item: RegExp) {
+  await page.locator('[data-grid] [data-grid-phone="more"]').click();
+  await page.getByRole('menu', { name: 'Ещё' }).getByRole('menuitem', { name: item }).click();
+}
+
+/**
+ * Телефон (прототип v139): галочки у записей появляются после «⋯» → «Выбрать несколько» и остаются,
+ * пока что-то отмечено; на ПК они видны всегда. Зовётся перед отметкой записи галочкой.
+ */
+export async function phoneSelectMode(page: Page) {
+  if (!onPhone(page)) return;
+  const rows = page.locator('[data-grid] [data-id]');
+  await expect(rows.first()).toBeVisible();
+  const boxes = rows.getByRole('checkbox');
+  if (await boxes.first().isVisible()) return;
+  await phoneListMenu(page, /^Выбрать несколько/);
+  await expect(boxes.first()).toBeVisible();
+}
+
+/**
+ * Окно фильтра столбца: на ПК — кнопка у заголовка таблицы, на телефоне — «Фильтр» над списком и
+ * столбец в меню (прототип v139: фильтр работает и в плитках).
+ */
+export async function openColumnFilter(page: Page, column: string): Promise<Locator> {
+  if (onPhone(page)) {
+    await page.locator('[data-grid] [data-grid-phone="filter"]').click();
+    await page
+      .getByRole('menu', { name: 'Фильтр' })
+      .getByRole('menuitem', { name: new RegExp(`^${column}`) })
+      .click();
+  } else {
+    await page
+      .locator('[data-grid]')
+      .getByRole('button', { name: `Фильтр: ${column}` })
+      .click();
+  }
+  return page.getByRole('dialog', { name: column });
+}
+
+/** Окно «Столбцы» списка: на ПК — кнопка над списком, на телефоне — пункт «⋯». */
+export async function openColumns(page: Page): Promise<Locator> {
+  // «Столбцы доски» в виде «Доска» — другое окно (поле столбцов), а не список столбцов.
+  if (onPhone(page)) await phoneListMenu(page, /^(Столбцы(?! доски)|Поля карточки)/);
+  else await page.getByRole('button', { name: /^Столбцы/ }).click();
+  return page.getByRole('dialog', { name: 'Столбцы' });
+}
+
+/** Окно «Группировка» списка: на ПК — кнопка над списком, на телефоне — пункт «⋯». */
+export async function openGrouping(page: Page): Promise<Locator> {
+  if (onPhone(page)) await phoneListMenu(page, /^Группировка/);
+  else await page.locator('[data-grid] [data-grid-group-button]').click();
+  return page.getByRole('dialog', { name: 'Группировка' });
 }
 
 /**
@@ -346,6 +406,14 @@ export async function phoneTableView(page: Page) {
 export async function showStats(page: Page) {
   const toggle = page.locator('[data-stats-toggle]');
   const plates = page.locator('[data-plates]').first();
+  // Телефон (прототип v139): кнопки «Статистика» нет, плашки — всегда одной строкой над списком;
+  // плашек больше четырёх — за «Ещё N» спрятаны все после третьей.
+  if (onPhone(page)) {
+    await expect(plates).toBeVisible();
+    const more = page.locator('[data-plates-more][aria-expanded="false"]');
+    if (await more.isVisible()) await more.click();
+    return;
+  }
   await expect(toggle).toBeVisible();
   await expect(async () => {
     if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
@@ -406,6 +474,74 @@ export async function stillElement(locator: Locator, ms = 120) {
 }
 
 /**
+ * Свёрнутый блок «Основного» карточки контрагента (прототип v137): «Договор и обслуживание» (`contract`),
+ * «Настройки оплаты» (`pay`), «Регистрационные данные» (`reg`), «Ставки, сроки и ответственные» (`asg`),
+ * «Страница клиента» (`page`). Раскрывает, если свёрнут, и отдаёт сам блок. Раскрытое въезжает со сдвигом
+ * (0,25 с): нажатие по кнопке внутри сразу после раскрытия попало бы в середину анимации и потерялось
+ * (docs/typical-mistakes.md № 34), поэтому помощник ждёт, пока содержимое встанет на место.
+ */
+export async function openCardFold(
+  card: Locator,
+  name: 'contract' | 'pay' | 'reg' | 'asg' | 'page',
+): Promise<Locator> {
+  const fold = card.locator(name === 'page' ? '[data-cp-page-fold]' : `[data-cp-det="${name}"]`);
+  await expect(fold).toBeVisible();
+  if ((await fold.getAttribute('open')) === null) await fold.locator('> summary').click();
+  await expect(fold).toHaveAttribute('open', '');
+  await stillElement(fold.locator('> div'));
+  return fold;
+}
+
+/**
+ * Полная шкала статусов записи со строки состояния (прототип v134 `stLine`): в карточке контрагента под
+ * ней — периоды обслуживания и «История статусов». Раскрывает, если свёрнута, и ждёт конца анимации
+ * раскрытия (docs/typical-mistakes.md № 34).
+ */
+export async function openStatusLine(card: Locator): Promise<Locator> {
+  const toggle = card.locator('[data-status-line-scale]');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const full = card.locator('[data-status-line-full]');
+  await stillElement(full);
+  return full;
+}
+
+/**
+ * Раздел формы «Изменить контрагента» (прототип v137): на телефоне разделы — шаги, поле другого шага
+ * скрыто; на ПК все три раздела идут лентой и делать ничего не нужно.
+ */
+export async function editSection(edit: Locator, isMobile: boolean, sec: 1 | 2 | 3) {
+  if (!isMobile) return;
+  await edit.locator(`[data-cf-step="${sec}"]`).click();
+  await expect(edit.locator(`[data-cf-sec="${sec}"]`)).toBeVisible();
+}
+
+/** Закрыть окно крестиком в шапке: «Готово» у карточки контрагента — только у «Подбора отчётов» (прототип v137). */
+export async function closeWindow(dialog: Locator) {
+  await dialog.locator('[data-window-close]').click();
+  await expect(dialog).toBeHidden();
+}
+
+/**
+ * Раскрыть карточку целиком (решение заказчика 17.11.2026, прототип v134): под шапкой — строка состояния,
+ * полная шкала открывается нажатием на короткую, «Подробности» и «История» свёрнуты. Скрытое не нажать и
+ * не найти по роли, поэтому тест шкалы, реквизитов и истории сначала раскрывает их.
+ */
+export async function expandCard(card: Locator) {
+  await expect(card.locator('[data-status-line]')).toBeVisible();
+  const scale = card.locator('[data-status-line-scale][aria-expanded="false"]');
+  if (await scale.count()) await scale.click();
+  const closed = card.locator('details[data-fold]:not([open]) > summary');
+  while (await closed.count()) await closed.first().click();
+  // Раскрытое въезжает со сдвигом (0,25 с): замер геометрии сразу после раскрытия попал бы в середину
+  // анимации (docs/typical-mistakes.md № 34).
+  const full = card.locator('[data-status-line-full]');
+  if (await full.count()) await stillElement(full.first());
+  const folds = card.locator('details[data-fold][open]');
+  for (let i = 0, n = await folds.count(); i < n; i += 1) await stillElement(folds.nth(i));
+}
+
+/**
  * Вкладка окна-карточки: на ПК — кнопкой вкладки, на телефоне — из списка под текущей вкладкой («N из M ▾»).
  * Список выезжает анимацией, и её первый кадр стоит на конечном месте: Playwright считает пункт неподвижным,
  * а нажатие уходит соседнему пункту или мимо и теряется молча (типовая ошибка № 34) — поэтому сначала
@@ -436,9 +572,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */
 export const uniqueInn = () =>
-  `9${Date.now().toString().slice(-9)}${Math.floor(Math.random() * 10_000)
-    .toString()
-    .padStart(4, '0')}`;
+  `9${Date.now().toString().slice(-9)}${randomInt(10_000).toString().padStart(4, '0')}`;
 
 /**
  * Новая организация с владельцем (`pnpm db:create-org`, база сайта — та же, что в .env): владелец
@@ -485,4 +619,16 @@ export async function pickContractor(field: Locator, query: string) {
   const list = page.getByRole('listbox');
   await list.getByRole('option').first().click();
   await expect(list).toBeHidden();
+}
+
+/**
+ * Форма с несохранёнными изменениями на «Отмена», крестик, Esc и касание фона спрашивает «Закрыть без
+ * сохранения?» (прототип v131): ответ «Закрыть» — окно закрывается, введённое пропадает. В подвале
+ * вопроса «Закрыть» словом — последняя (крестик в шапке тоже «Закрыть»).
+ */
+export async function discardChanges(page: Page) {
+  const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+  await expect(ask).toContainText('Введённое пропадёт.');
+  await ask.getByRole('button', { name: 'Закрыть', exact: true }).last().click();
+  await expect(ask).toBeHidden();
 }

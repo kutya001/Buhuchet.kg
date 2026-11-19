@@ -201,7 +201,6 @@ test.describe('Этап 2: отчёты — «Кто что сдаёт», мас
     await pickContractor(dialog.getByLabel('Контрагент'), cp.inn);
     await dialog.getByLabel('Вид отчёта').selectOption('t1m');
     await dialog.getByLabel('Месяц периода').fill('2026-09');
-    await expect(dialog).toContainText('Срок на нерабочий день переносится на ближайший рабочий');
     // 12.12.2026 — суббота: срок будет 14.12.2026.
     await dialog.getByLabel('Срок сдачи').fill('2026-12-12');
     await expect(dialog.locator('[data-due-shift]')).toHaveText(

@@ -17,6 +17,18 @@ const read = (path) => readFileSync(new URL(path, root), 'utf8');
 const ref = JSON.parse(read('spec/data/refDB.json'));
 const gkedItems = JSON.parse(read('spec/data/gkedDB.json')).items;
 const demo = JSON.parse(read('spec/data/demoDB.json'));
+/**
+ * Текст без разметки: теги убираются, пока есть что убирать — один проход оставил бы тег, сложившийся
+ * из остатков («<<b>b>»). Эталон делается из своих файлов прототипа, но правило — одно на все строки.
+ */
+const plain = (html) => {
+  let text = html;
+  for (;;) {
+    const next = text.replace(/<[^>]+>/g, '');
+    if (next === text) return text;
+    text = next;
+  }
+};
 const pick = (file, wanted) =>
   read(file)
     .split('\n')
@@ -227,6 +239,7 @@ const context = vm.createContext({
   SAVES: saves,
   PENALTIES: penalties,
   structuredClone,
+  plain,
 });
 vm.runInContext(
   `'use strict';
@@ -236,6 +249,8 @@ vm.runInContext(
   ${pick('spec/prototype/src/js/core/data.js', /^(const (D|toIso|diffDays|addDays|som)=|function fmtM\()/)}
   const esc = (s) => String(s);
   const ic = () => '';
+  // Пояснение под «?» (прототип v131, tipI): в эталон — отдельным полем tip.
+  const tipI = (s) => '⟦' + s + '⟧';
   const LOG = [];
   const log = (kind, id, text) => LOG.push(text);
   ${read('spec/prototype/src/js/core/gked.js')}
@@ -252,7 +267,7 @@ vm.runInContext(
       needed: sfNeed(c),
       auto: a && { t: a.t ? a.t.id : null, why: a.why, miss: a.miss, warn: a.warn },
       state: s && { bad: s.bad, none: s.none, ask: s.ask, why: sfBadWhy(s) },
-      typeNote: sfTypeNote({ id: sfTypeIds()[0] }, c).replace(/<[^>]+>/g, ''),
+      typeNote: plain(sfTypeNote({ id: sfTypeIds()[0] }, c)),
       cashHint: sfCashWarn(c),
     };
   };
@@ -273,7 +288,14 @@ vm.runInContext(
         log: [...LOG],
       };
     }),
-    penalties: PENALTIES.map((r) => sfPeniNote(r).replace(/<[^>]+>/g, '')),
+    penalties: PENALTIES.map((r) => {
+      const html = sfPeniNote(r);
+      const tip = /⟦(.*)⟧/s.exec(html);
+      return {
+        text: plain(html.replace(/⟦.*⟧/s, '')).trim(),
+        tip: tip ? tip[1] : '',
+      };
+    }),
     titles: sfTariffs().map((t) => ({ id: t.id, title: sfTitle(t), short: sfShort(t), rates: sfRatesTxt(t), cap: sfCapTxt(t) })),
   };`,
   context,

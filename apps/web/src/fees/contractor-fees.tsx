@@ -47,7 +47,7 @@ import { TariffEditDialog, type TariffRow } from './tariff-edit-dialog';
  */
 
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="block text-[11.5px] leading-[1.4] text-faint">{children}</span>
+  <span className="block text-[12px] leading-[1.4] text-muted">{children}</span>
 );
 
 /** Целые сомы на плашке (прототип `fmtM(…, false)`). */

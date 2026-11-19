@@ -83,8 +83,10 @@ function bellSees(x){const o=x.open||{},adm=isAdmin();if(adm!==(x.uid==='admin')
 
 // Для панели (поток И). uid — кто вошёл: права проверяются у него
 function bellItems(uid,tab){bellSync();uid=uid||S.me;
-  return BELL.filter(x=>x.uid===uid&&(!tab||tab==='all'||x.kind===tab)&&bellSees(x)).sort((a,b)=>String(b.at).localeCompare(String(a.at))||(+b.id.slice(1))-(+a.id.slice(1)))}
-const bellUnseen=uid=>bellItems(uid).filter(x=>!x.seen).length;
+  return BELL.filter(x=>x.uid===uid&&(!tab||(tab==='all'?x.kind!=='news':x.kind===tab))&&bellSees(x)).sort((a,b)=>String(b.at).localeCompare(String(a.at))||(+b.id.slice(1))-(+a.id.slice(1)))}
+// Красный счётчик — только рабочие уведомления; новости версий — серая точка (17.11.2026, ТЗ п. 5 и 9)
+const bellUnseen=uid=>bellItems(uid,'all').filter(x=>!x.seen).length;
+const bellNewsUnseen=uid=>bellItems(uid,'news').filter(x=>!x.seen).length;
 // Открыл панель — просмотрены все строки человека, и на других устройствах (в продукте — на сервере)
 function bellSeenAll(uid){uid=uid||S.me;BELL.forEach(x=>{if(x.uid===uid)x.seen=true});dbSoon()}
 // Нажал строку — прочитана; новость — прочитана и в «Новостях»

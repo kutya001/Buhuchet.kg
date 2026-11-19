@@ -60,17 +60,21 @@ export const KB_SHOW_TARGETS: Readonly<Record<string, string>> = {
   '#st-save': 'main form [type=submit]',
   // Справочники: «Справочники платформы» — плитки.
   '#mbody .gscroll || #mbody .gcards': 'main [data-dict-tile]',
-  // Контрагенты: «сменить» ответственного и блок «Страница контрагента» в карточке.
+  // Контрагенты: «сменить» ответственного и блок «Страница клиента» в карточке. Блок свёрнут (прототип
+  // v137 `details.cp-pgd`): облачко блока встаёт у него самого — он виден и свёрнутым; облачко кнопок у
+  // свёрнутого блока — у его строки-заголовка, по которой блок раскрывается.
   '#cp-resp': '[data-cp-resp]',
-  '#cp-page': '[data-box]:has([data-cp-page])',
-  '#cp-page .acts': '[data-cp-page] > div:has([data-cp-page-action])',
+  '#cp-page': '[data-cp-page-fold]',
+  '#cp-page .acts':
+    '[data-cp-page] > div:has([data-cp-page-action]) || [data-cp-page-fold] > summary',
   // Отчеты для сдачи: главная кнопка карточки отчёта — «Отметить сданным» или «Подтвердить».
   '#rc-main':
     '[data-window-foot] [data-report-button="submit"] || [data-window-foot] [data-report-button="confirm"]',
   // Задачи: легенда «на день / на месяц».
   '#mbody .kd-legend': '[data-task-legend]',
-  // Проекты контрагентов: «Записать оплату» в карточке проекта.
-  '#pj-pay': '[data-pj-pay]',
+  // Проекты контрагентов: «Записать оплату» в карточке проекта — в блоке «Оплаты» или, на вкладке
+  // «Главное» (карточка открывается на ней, прототип v136), главной кнопкой внизу.
+  '#pj-pay': '[data-pj-pay] || [data-window-foot] [data-pj-main="pay"]',
   // Показатели контрагентов: месяц и период, таблица ввода (на телефоне — плитки), настройка.
   '#mbody .kpi-bar': 'main [role=group]:has([data-kpi-month-pick]) || main [data-kpi-period]',
   '#mbody .kt || #mbody .gcards': 'main [data-kpi-table] || main :has(> [data-kpi-tile])',

@@ -761,7 +761,7 @@ export function OperationDeleteDialog({
       }
     >
       <div className="flex flex-col gap-3" data-fin-delete={op.id}>
-        <p className="m-0">{t(words.ask, { amount })}</p>
+        {words.ask ? <p className="m-0">{t(words.ask, { amount })}</p> : null}
         <Note icon="history">
           {consequences(t, op)} {t('fin.del.keep')}
         </Note>
@@ -851,7 +851,6 @@ export function FeePaymentDeleteDialog({
       }
     >
       <div className="flex flex-col gap-3" data-fee-delete={payment.id}>
-        <p className="m-0">{t('fin.del.ask', { amount })}</p>
         <Note icon="history">
           {months ? t('fin.del.cons.fee', { months }) : t('fin.del.cons.fee_adv')}{' '}
           {t('fin.del.keep')}
@@ -958,7 +957,7 @@ export function RestDialog({
                 },
               }))}
             />
-            <span className="text-[11.5px] leading-[1.4] text-faint">{t('fin.rest.hint')}</span>
+            <span className="text-[12px] leading-[1.4] text-muted">{t('fin.rest.hint')}</span>
           </>
         ) : (
           <Note icon="ok">{t('fin.rest.empty')}</Note>

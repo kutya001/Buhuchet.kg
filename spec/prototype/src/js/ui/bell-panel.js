@@ -19,9 +19,9 @@ const bellGroup=at=>{const d=String(at).slice(0,10);return d===TODAY?'Сегод
 
 // Значок: есть непросмотренные — цветной с красным счётчиком (1–99, дальше «99+»), иначе серый; до входа — скрыт
 function bellPaint(){const b=bellBtn();if(!b)return;clearTimeout(bellPaint.t);const off=S.loggedIn===false;b.hidden=off;if(off){if(bellIsOpen())closePop();return}
-  if(bellIsOpen())bellSeenAll(S.me);const n=bellUnseen(S.me);
-  b.classList.toggle('on',n>0);b.innerHTML=ic('bell')+(n?`<span class="badge red bell-n">${bellCount(n)}</span>`:'');
-  const t=n?`Уведомления: непросмотренных ${n}`:'Уведомления';b.title=t;b.setAttribute('aria-label',t);b.setAttribute('aria-expanded',String(bellIsOpen()));
+  if(bellIsOpen())bellSeenAll(S.me);const n=bellUnseen(S.me),nn=n?0:bellNewsUnseen(S.me);
+  b.classList.toggle('on',n>0);b.innerHTML=ic('bell')+(n?`<span class="badge red bell-n">${bellCount(n)}</span>`:nn?'<span class="bell-nd"></span>':'');
+  const t=n?`Уведомления: непросмотренных ${n}`:nn?'Уведомления: есть новости':'Уведомления';b.title=t;b.setAttribute('aria-label',t);b.setAttribute('aria-expanded',String(bellIsOpen()));
   if(bellIsOpen())bellDraw(POP)}
 // Несколько перерисовок подряд (действие, отрисовка оболочки) — одна
 const bellSoon=()=>{clearTimeout(bellPaint.t);bellPaint.t=setTimeout(bellPaint,30)};
@@ -29,7 +29,7 @@ const bellSoon=()=>{clearTimeout(bellPaint.t);bellPaint.t=setTimeout(bellPaint,3
 function bellRow(x){const c=x.cp!=null?CPM[x.cp]:null,i=BELL_EV_IC[x.ev]||BELL_IC[x.kind]||'info';
   return `<button type="button" class="bell-it${x.read?'':' unread'}" data-bell="${x.id}"${x.open?'':' data-noopen="1"'}><span class="bell-ic">${ic(i,'sm')}</span><span class="bell-tx">${c?`<span class="bell-cp">${esc(c.name)}</span>`:''}<span class="bell-t">${esc(x.text)}</span></span><span class="bell-at">${esc(bellAgo(x.at))}</span>${x.read?'':'<span class="bell-dot" aria-label="Не открыто"></span>'}</button>`}
 function bellListHtml(){const all=bellItems(S.me,BP.tab),l=all.slice(0,BP.n);let g='',h='';
-  if(!l.length)return `<div class="bell-empty">${ic('bell','lg')}<b>Новых уведомлений нет</b>${BP.tab!=='all'&&bellItems(S.me).length?'<button type="button" class="linkbtn" data-belltab="all">Показать все</button>':''}</div>`;
+  if(!l.length)return `<div class="bell-empty">${ic('bell','lg')}<b>Новых уведомлений нет</b>${BP.tab!=='all'&&bellItems(S.me,'all').length?'<button type="button" class="linkbtn" data-belltab="all">Показать все</button>':BP.tab==='all'&&bellItems(S.me,'news').length?'<button type="button" class="linkbtn" data-belltab="news">Новости</button>':''}</div>`;
   l.forEach(x=>{const k=bellGroup(x.at);if(k!==g){g=k;h+=`<div class="bell-g">${k}</div>`}h+=bellRow(x)});
   if(all.length>l.length)h+=`<div class="bell-more"><button type="button" class="btn sm" data-bellmore>Показать ещё</button><span class="muted">${l.length} из ${all.length}</span></div>`;
   return h}

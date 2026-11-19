@@ -201,7 +201,7 @@ const valueCell = (page: Page, contractorId: string, indicatorId: string) =>
   page.locator(`[data-kpi-row="${contractorId}"] td[data-kx*="|${indicatorId}|"]`);
 
 /**
- * Счётчик модуля: на ПК — у «Показатели контрагентов» в меню слева; на телефоне модуль в «Других
+ * Счётчик модуля: на ПК — у «Показателей» в меню слева (короткое название, прототип v138); на телефоне модуль в «Других
  * модулях», поэтому цвет повторяет точка на кнопке «Меню».
  */
 async function expectModuleCount(page: Page, isMobile: boolean, tone: 'red' | 'yellow') {
@@ -209,7 +209,7 @@ async function expectModuleCount(page: Page, isMobile: boolean, tone: 'red' | 'y
     const menu = page.getByRole('button', { name: 'Меню', exact: true });
     await expect(menu.locator(`[data-tone="${tone}"]`)).toBeVisible();
   } else {
-    const link = page.locator('aside').getByRole('link', { name: /^Показатели контрагентов/ });
+    const link = page.locator('aside').getByRole('link', { name: /^Показатели/ });
     await expect(link.locator(`[data-tone="${tone}"]`)).toBeVisible();
   }
 }

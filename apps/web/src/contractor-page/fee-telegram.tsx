@@ -99,11 +99,11 @@ export function FeeTelegramButton({
 }
 
 const Title = ({ children }: { children: string }) => (
-  <h3 className="m-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">{children}</h3>
+  <h3 className="m-0 text-[13.5px] font-[650] text-muted">{children}</h3>
 );
 
 const Hint = ({ children }: { children: string }) => (
-  <span className="block text-[11.5px] leading-[1.4] text-faint">{children}</span>
+  <span className="block text-[12px] leading-[1.4] text-muted">{children}</span>
 );
 
 /** Окно «Напомнить в Telegram» (прототип `pgFeeTgDlg`). */

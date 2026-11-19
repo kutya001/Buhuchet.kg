@@ -271,6 +271,9 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам — ме
       paymentStatus: 'unpaid',
       funds: { state: 'short', need: som(5000), short: som(5000) },
     });
+    // «Осталось оплатить» на «Основном» карточки (прототип v137): остаток по неоплаченным налогам.
+    const oweBefore = (await money(acc, cpA)).owe;
+    expect(oweBefore).toBeGreaterThanOrEqual(som(5000));
     let c = await card(acc, nds.id);
     expect(c).toMatchObject({ taxpay: true, payFirst: true });
     expect(c.money).toMatchObject({
@@ -352,6 +355,8 @@ describe.skipIf(!databaseAvailable())('Деньги по отчётам — ме
       paymentStatus: 'paid',
     });
     const m = await money(acc, cpA);
+    // Оплаченный налог из «Осталось оплатить» ушёл целиком.
+    expect(m.owe).toBe(oweBefore - som(5000));
     // Получено и деньги контрагента не изменились: оплатил сам.
     expect(m.balance).toMatchObject({
       received: som(1000),

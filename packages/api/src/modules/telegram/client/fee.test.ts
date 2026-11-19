@@ -436,8 +436,8 @@ describe.skipIf(!databaseAvailable())(
       }
       // Реквизиты уходят клиенту, только пока ему показаны «Как оплатить» и «Оплата за обслуживание».
       for (const [section, title] of [
-        ['pay', 'Как оплатить'],
-        ['fee', 'Оплата за обслуживание'],
+        ['pay', 'Куда переводить'],
+        ['fee', 'Услуги бухгалтера'],
       ] as const) {
         await hidePage(cpA, [section]);
         await refused(

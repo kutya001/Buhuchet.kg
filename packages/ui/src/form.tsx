@@ -29,7 +29,7 @@ export function inputClass(
 ): string {
   return [
     options.full === false ? '' : 'w-full',
-    'min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none',
+    'min-h-[35px] rounded-lg border border-line bg-field px-2.5 py-[7px] text-[13.5px] text-ink outline-none max-md:min-h-11',
     'shadow-[inset_0_1px_2px_rgba(0,0,0,.04)] transition-[border-color,box-shadow] duration-150',
     'focus:border-line-strong focus:shadow-[0_0_0_3px_var(--bu-sel)] [&[readonly]]:bg-pane-alt',
     options.file ? FILE_BUTTON_CLASS : '',
@@ -52,11 +52,14 @@ export interface FieldControl {
 export interface FieldProps {
   /** id поля ввода: подпись связана с ним; подсказка и ошибка — `<id>-hint`, `<id>-err`. */
   id: string;
-  label: string;
+  /** Подпись; рядом с текстом может стоять «?» с пояснением (прототип `tipI`). */
+  label: ReactNode;
   /** Обязательное поле: красная звёздочка у подписи. */
   required?: boolean;
-  /** Подсказка под полем («Не короче 8 символов»). */
-  hint?: string | undefined;
+  /** Подсказка под полем («Не короче 8 символов»); можно с «ⓘ» после текста. */
+  hint?: ReactNode;
+  /** «ⓘ» у подписи (прототип `tipI` в подписи поля): стоит рядом с подписью, вне `<label>`. */
+  tip?: ReactNode;
   /** Ошибка под полем: значок и текст красным, рамка поля красная; можно с кнопкой («Вернуть из архива»). */
   error?: ReactNode;
   /** На всю ширину формы и на ПК. */
@@ -113,9 +116,21 @@ const NEED_CLASS = [
 
 /** Поле формы (`.fld`): подпись, поле ввода, отметки формы, подсказка и ошибка. */
 export function Field(props: FieldProps) {
-  const { id, label, required, hint, error, full, children } = props;
+  const { id, label, required, hint, tip, error, full, children } = props;
   const mark = useContext(FieldMarks)?.(id);
   const need = !!mark?.need && !error;
+  const caption = (
+    <label htmlFor={id} className="text-[12px] font-semibold tracking-[.01em] text-muted">
+      {label}
+      {/* Отметка поля — до звёздочки: у прототипа «*» стоит в конце подписи (`.req::after`). */}
+      {mark?.label ? <span className="ml-1 align-[1px]">{mark.label}</span> : null}
+      {required ? (
+        <span aria-hidden="true" className="text-danger">
+          {' *'}
+        </span>
+      ) : null}
+    </label>
+  );
   return (
     <div
       data-field=""
@@ -123,20 +138,18 @@ export function Field(props: FieldProps) {
       data-need={need ? '' : undefined}
       className={`flex min-w-0 flex-col gap-[5px]${full ? ' col-span-full' : ''}${need ? ` ${NEED_CLASS}` : ''}`}
     >
-      <label htmlFor={id} className="text-[12px] font-semibold tracking-[.01em] text-muted">
-        {label}
-        {/* Отметка поля — до звёздочки: у прототипа «*» стоит в конце подписи (`.req::after`). */}
-        {mark?.label ? <span className="ml-1 align-[1px]">{mark.label}</span> : null}
-        {required ? (
-          <span aria-hidden="true" className="text-danger">
-            {' *'}
-          </span>
-        ) : null}
-      </label>
+      {tip ? (
+        <div data-field-cap="" className="flex items-center gap-1">
+          {caption}
+          {tip}
+        </div>
+      ) : (
+        caption
+      )}
       {typeof children === 'function' ? children(fieldControl(props)) : children}
       {mark?.node}
       {hint ? (
-        <div id={`${id}-hint`} data-hint="" className="text-[11.5px] leading-[1.4] text-faint">
+        <div id={`${id}-hint`} data-hint="" className="text-[12px] leading-[1.4] text-muted">
           {hint}
         </div>
       ) : null}
@@ -233,24 +246,27 @@ export function KeyValues({
 
 /**
  * Блок карточки (`.box`): заголовок прописными буквами (с пометкой — `title` разметкой), справа от него
- * — кнопки; без заголовка — только рамка.
+ * — кнопки; без заголовка — только рамка. `bare` — без рамки, фона и отступов: блок внутри свёрнутого
+ * блока (прототип v137 `.cp-pgd>.box`, `.rc-det>.box`).
  */
 export function Box({
   title,
   actions,
+  bare = false,
   children,
 }: {
   title?: ReactNode;
   actions?: ReactNode;
+  bare?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       data-box
-      className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5"
+      className={`flex min-w-0 flex-col gap-2.5 ${bare ? 'mt-2' : 'rounded-xl border border-line bg-raised px-4 py-3.5'}`}
     >
       {title ? (
-        <h3 className="m-0 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+        <h3 className="m-0 flex items-center gap-2 text-[13.5px] font-[650] text-muted">
           <span className="grow">{title}</span>
           {actions}
         </h3>

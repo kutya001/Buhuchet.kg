@@ -23,6 +23,7 @@ import {
   Tag,
   useToast,
 } from '@buhuchet/ui';
+import { InfoTip } from '../kpi/kpi-table';
 import type { Translate } from '../l10n/translate';
 import { miniView, scaleView, statusName, type StatusEvent } from '../status/status-view';
 
@@ -222,7 +223,8 @@ const Sub = ({ children }: { children: React.ReactNode }) => (
 
 /**
  * Блок сумм вверху карточки — в том же порядке, что столбцы списка (решение заказчика 25.10.2026):
- * «К уплате», «Получено от контрагента», «Оплачено в бюджет» со шкалой, «Осталось оплатить».
+ * «К уплате», «Получено», «Оплачено», «Осталось». Подписи короткие, шкала оплаты — в строке состояния
+ * (прототип v134, решение 17.11.2026 «Меньше текста»).
  */
 export function SumsBox({ t, r }: { t: Translate; r: ReportCard }) {
   const sum = r.amount;
@@ -247,29 +249,15 @@ export function SumsBox({ t, r }: { t: Translate; r: ReportCard }) {
           </span>
         ) : null}
       </Cell>
-      <Cell label={t('report.col.received')}>
+      <Cell label={t('report.sums.received')}>
         <b
           className={`text-[18px] font-bold tabular-nums ${(sum ?? 0) > 0 && r.received >= sum! ? 'text-ok' : ''}`}
         >
           {formatSomWithUnit(r.received)}
         </b>
-        {(sum ?? 0) > 0 ? (
-          <Sub>
-            {t(
-              r.received + r.selfPaid >= sum!
-                ? 'report.money.received_full'
-                : r.received > 0
-                  ? 'report.money.received_part'
-                  : 'report.money.received_wait',
-            )}
-          </Sub>
-        ) : null}
       </Cell>
-      <Cell label={t('report.col.paid')}>
+      <Cell label={t('report.sums.paid')}>
         <b className="text-[18px] font-bold tabular-nums">{formatSomWithUnit(r.paid)}</b>
-        <span className="text-[11.5px]">
-          <PaymentMini t={t} r={r} />
-        </span>
         {r.selfPaid ? (
           <Sub>{t('report.money.self_paid', { amount: formatSomWithUnit(r.selfPaid) })}</Sub>
         ) : null}
@@ -281,7 +269,7 @@ export function SumsBox({ t, r }: { t: Translate; r: ReportCard }) {
           </span>
         ) : null}
       </Cell>
-      <Cell label={t('report.col.left')}>
+      <Cell label={t('report.sums.left')}>
         <b className={`text-[18px] font-bold tabular-nums ${r.payOverdue ? 'text-danger' : ''}`}>
           {formatSomWithUnit(left)}
         </b>
@@ -432,7 +420,7 @@ export function ScheduleBox({ t, r, today }: { t: Translate; r: ReportCard; toda
       data-report-schedule=""
       className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line bg-raised px-4 py-3.5"
     >
-      <h3 className="m-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+      <h3 className="m-0 text-[13.5px] font-[650] text-muted">
         {t('report.money.schedule', { n: t(`report.money.schedule.${pluralForm(n)}`, { n }) })}
       </h3>
       <MiniTable
@@ -474,16 +462,18 @@ export function ScheduleBox({ t, r, today }: { t: Translate; r: ReportCard; toda
 }
 
 /**
- * Причина у несданного отчёта при «Сдаче только после оплаты» в карточке (прототип `subPayNote(r, false)`
- * — без кнопок: «Принять деньги» и «Отметить оплаченным» — внизу карточки).
+ * Причина у несданного отчёта при «Сдаче только после оплаты» в карточке (прототип v134
+ * `subPayNote(r, false)`): на виду — сколько осталось оплатить, правило — под «?»; кнопок нет: «Принять
+ * деньги» — в «Действиях», «Отметить оплаченным» — внизу карточки.
  */
-export function PayFirstNote({ t, why }: { t: Translate; why: string }) {
+export function PayFirstNote({ t, r }: { t: Translate; r: ReportCard }) {
   return (
     <div data-pay-first="">
       <Note tone="warn" icon="lock">
-        <span>
-          <b>{why}.</b> {t('report.pay_first.note')}
-        </span>
+        {t('report.pay_first.left', {
+          amount: formatSomWithUnit(Math.max(0, (r.amount ?? 0) - r.paid)),
+        })}{' '}
+        <InfoTip label={t('report.pay_first.tip')} text={t('report.pay_first.note')} />
       </Note>
     </div>
   );

@@ -241,6 +241,9 @@
   --shadow-pane: var(--bu-shadow-s);
   --shadow-pop: var(--bu-shadow-l);
   --shadow-btn: var(--bu-sh-btn);
+  /* Плоские кнопки (прототип v138, решение заказчика 17.11.2026): вместо объёмной тени — тонкая рамка. */
+  --shadow-flat: inset 0 0 0 1px var(--bu-border);
+  --shadow-flat-strong: inset 0 0 0 1px var(--bu-border-strong);
   --shadow-btn-hover: var(--bu-sh-btn-h);
   --shadow-btn-active: var(--bu-sh-btn-a);
   --shadow-cta: var(--bu-sh-cta);
@@ -252,12 +255,28 @@
     'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
   /* Моноширинный (`.mono` прототипа): логины, коды, номера счетов. */
   --font-mono: 'Cascadia Code', 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-  /* ТЗ «Принципы оформления»: анимации 150–250 мс; в прототипе «pop» — 0,32 с (docs/deviations.md, п. 23). */
-  --animate-pop: bu-pop 0.25s ease-out;
-  --animate-slide-up: bu-slide-up 0.25s forwards;
+  /*
+   * Движение (прототип v131, css/base.css; решение заказчика 17.11.2026 «Меньше текста, понятнее,
+   * плавнее»): окно и меню появляются без отскока, уходят быстрее, чем появляются; на телефоне меню и
+   * окно — лист снизу. Длительности и кривые — переменные `--bu-t-*`, `--bu-ease-*` ниже.
+   */
+  --animate-pop: bu-pop var(--bu-t-base) var(--bu-ease-out);
+  /* Окно: 240 мс. */
+  --animate-slide-up: bu-slide-up var(--bu-t-slow) var(--bu-ease-out) both;
+  /* Меню, всплывающее окошко, сообщение, панель выбранных строк: 180 мс. */
+  --animate-rise: bu-slide-up var(--bu-t-base) var(--bu-ease-out) both;
+  /* Лист снизу на телефоне: окно, меню, «Другие модули». */
+  --animate-sheet-in: bu-sheet-in var(--bu-t-slow) var(--bu-ease-out) both;
+  --animate-sheet-out: bu-sheet-out var(--bu-t-exit) var(--bu-ease-in) forwards;
   /* Панель «Уведомления» на телефоне выезжает снизу (прототип v123 `@keyframes bellUp`). */
   --animate-bell-up: bu-bell-up 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  --animate-fade: bu-fade 0.2s;
+  /* Фон окна: 240 мс; смена модуля и вкладки: 180 мс; окно подтверждения: 100 мс. */
+  --animate-fade: bu-fade var(--bu-t-slow) var(--bu-ease-out) both;
+  --animate-fade-in: bu-fade var(--bu-t-base) var(--bu-ease-out);
+  --animate-fade-fast: bu-fade var(--bu-t-fast) var(--bu-ease-out) both;
+  /* Уход: 140 мс. */
+  --animate-fade-out: bu-fade-out var(--bu-t-exit) var(--bu-ease-in) forwards;
+  --animate-sink: bu-sink var(--bu-t-exit) var(--bu-ease-in) forwards;
   /* Заготовка строк списка при загрузке (`.skel` прототипа, keyframes shimmer). */
   --animate-shimmer: bu-shimmer 1.1s infinite linear;
 }
@@ -272,14 +291,11 @@
 }
 
 @keyframes bu-pop {
-  0% {
-    transform: scale(0.94);
+  from {
+    transform: scale(0.97);
   }
-  60% {
-    transform: scale(1.03);
-  }
-  100% {
-    transform: scale(1);
+  to {
+    transform: none;
   }
 }
 
@@ -301,27 +317,56 @@
   }
 }
 
-@keyframes bu-slide-up {
-  0% {
-    transform: translateY(0);
+@keyframes bu-fade-out {
+  to {
     opacity: 0;
   }
-  10% {
-    transform: translateY(8%);
-    opacity: 0.2;
+}
+
+/* Появление без отскока (прототип v131 `slideUp`). */
+@keyframes bu-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
-  20% {
-    transform: translateY(5%);
-    opacity: 0.4;
-  }
-  50% {
-    transform: translateY(-2%);
-    opacity: 0.85;
-  }
-  100% {
-    transform: translateY(0);
+  to {
     opacity: 1;
+    transform: none;
   }
+}
+
+/* Уход окна (прототип `m-out`). */
+@keyframes bu-sink {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes bu-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes bu-sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Длительности и кривые движения (прототип v131: `--t-fast` … `--ease-move`). */
+:root {
+  --bu-t-fast: 100ms;
+  --bu-t-base: 180ms;
+  --bu-t-slow: 240ms;
+  --bu-t-exit: 140ms;
+  --bu-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --bu-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --bu-ease-move: cubic-bezier(0.3, 0, 0.2, 1);
 }
 
 @layer base {

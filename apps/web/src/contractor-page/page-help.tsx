@@ -10,7 +10,6 @@ import {
   cpHelpCap,
   cpLegendRows,
   cpTourSteps,
-  pluralForm,
   whatsAppLink,
   type CpFaq,
   type CpFaqAct,
@@ -22,6 +21,7 @@ import type { PublicPageBody } from '@buhuchet/shared';
 import {
   buttonClass,
   Icon,
+  iconButtonClass,
   Modal,
   PHONE_QUERY,
   StatusPill,
@@ -46,11 +46,11 @@ import {
 import type { PageAddress } from './page-telegram';
 
 /*
- * Подсказки и обучение на открытой странице контрагента (доработки 15.11.2026, пункты 1–7; прототип
- * v120 modules/cp-help.js, css/cp-help.css): клиенты — не бухгалтеры, поэтому окно «Добро
- * пожаловать» после первого верного кода, обзор страницы по живому экрану, кнопка и панель «Помощь» с
- * частыми вопросами и «Словарик» — слова с пунктиром и объяснением по нажатию. Обзор и панель ничего
- * не меняют в данных — обзор пишет только строку в историю контрагента.
+ * Подсказки и обучение на открытой странице контрагента (доработки 15.11.2026 и 17.11.2026 «простыми
+ * словами»; прототип v135 modules/cp-help.js, css/cp-help.css): клиенты — не бухгалтеры, поэтому
+ * приглашение одной строкой после первого верного кода, обзор страницы по живому экрану, «?» и панель
+ * «Помощь» с частыми вопросами и «Словарик» — термины с пунктиром и объяснением по нажатию. Обзор и
+ * панель ничего не меняют в данных — обзор пишет только строку в историю контрагента.
  */
 
 /** Что страница даёт «Помощи»: перейти в раздел и окна действий (нет действия — null). */
@@ -77,8 +77,10 @@ function Legend({ answer, short }: { answer: string; short: boolean }) {
   const names = {
     status: (code: string) => statusName(t, 'report', code),
     ahead: [t('pub.rep.next')],
-    late: [t('pub.rep.late'), t('cph.legend.late')],
+    late: [t('cph.legend.late'), t('cph.legend.late_n')],
   };
+  // В облачке обзора — три главные метки: «Сдан», «В работе», «Просрочен» (прототип v135).
+  const main = [names.status('submitted'), names.status('in_progress'), t('cph.legend.late')];
   const rows = cpLegendRows(answer);
   const pill = (label: string) => (
     <StatusPill label={label} size="sm" {...legendLook(label, names)} />
@@ -87,7 +89,7 @@ function Legend({ answer, short }: { answer: string; short: boolean }) {
     return (
       <div data-pub-legend="" className="-mt-0.5 mb-1.5 flex flex-wrap gap-1.5">
         {rows
-          .filter((r) => r.label)
+          .filter((r) => main.includes(r.label))
           .map((r) => (
             <span key={r.label}>{pill(r.label)}</span>
           ))}
@@ -194,7 +196,7 @@ function HelpPanel({
     if (a in CP_FAQ_GO) return later(() => actions.go(CP_FAQ_GO[a as keyof typeof CP_FAQ_GO]));
     if (a === 'goReports') return later(() => actions.go('reports'));
     if (a === 'paid' && actions.paid) {
-      // Обе карточки «Как оплатить» — сверху выбор «Налоги» или «Обслуживание» (пункт 3.4).
+      // Есть оба счёта — сверху выбор «Налоги» или «Услуги бухгалтера» (пункт 3.4).
       const paid = actions.paid;
       const pick = view.payTax && view.payFee;
       return later(() => paid(view.payTax ? 'tax' : 'fee', pick));
@@ -258,45 +260,16 @@ function HelpPanel({
       </>
     );
   };
-  const glossHead = hint('glossHead', t('cph.help.gloss'));
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={hint('helpTitle', t('cph.help'))}
-      sub={page.contractor.name}
       size="side"
       noMax
       touch
     >
       <div data-pub-help-panel="" className="flex flex-col gap-3.5">
-        <button
-          type="button"
-          data-pub-help-tour=""
-          className={`${buttonClass('cta')} self-start max-md:min-h-11 max-md:self-stretch max-md:justify-center`}
-          onClick={onTour}
-        >
-          <Icon name="play" size="sm" />
-          {hint('helpTour', t('cph.help.tour'))}
-        </button>
-        {qs.length ? (
-          <>
-            <h3 className="m-0 mt-1 -mb-1 text-[14px]">{hint('faqHead', t('cph.help.faq'))}</h3>
-            <div className="flex flex-col gap-2">
-              {qs.map((q) => (
-                <Question
-                  key={q.id}
-                  id={q.id}
-                  title={q.q}
-                  open={shown.has(q.id)}
-                  onToggle={() => toggle(q.id)}
-                >
-                  {answer(q)}
-                </Question>
-              ))}
-            </div>
-          </>
-        ) : null}
         <div
           data-pub-help-ask=""
           className="flex flex-col gap-1.5 rounded-xl bg-pane-alt px-3.5 py-3"
@@ -328,14 +301,37 @@ function HelpPanel({
             </>
           ) : null}
         </div>
+        <button
+          type="button"
+          data-pub-help-tour=""
+          className={`${buttonClass('default')} self-start max-md:min-h-11 max-md:self-stretch max-md:justify-center`}
+          onClick={onTour}
+        >
+          <Icon name="play" size="sm" />
+          {hint('helpTour', t('cph.help.tour'))}
+        </button>
+        {qs.length ? (
+          <>
+            <h3 className="m-0 mt-1 -mb-1 text-[14px]">{hint('faqHead', t('cph.help.faq'))}</h3>
+            <div className="flex flex-col gap-2">
+              {qs.map((q) => (
+                <Question
+                  key={q.id}
+                  id={q.id}
+                  title={q.q}
+                  open={shown.has(q.id)}
+                  onToggle={() => toggle(q.id)}
+                >
+                  {answer(q)}
+                </Question>
+              ))}
+            </div>
+          </>
+        ) : null}
         {gloss.length ? (
           <Question
             id="__gloss"
-            title={t('cph.help.gloss_n', {
-              head: glossHead,
-              n: gloss.length,
-              noun: t(`cph.help.gloss_${pluralForm(gloss.length)}`),
-            })}
+            title={hint('glossHead', t('cph.help.gloss'))}
             open={shown.has('__gloss')}
             onToggle={() => toggle('__gloss')}
           >
@@ -355,88 +351,42 @@ function HelpPanel({
 }
 
 /**
- * «Добро пожаловать» (прототип `cphWelcome`): что есть на странице — карточки только показанных
- * разделов, «Посмотрю сам» и «Показать, как пользоваться» (запускает обзор).
+ * Приглашение (прототип v135 `cphWelcomeBar`): одна строка и две кнопки полосой внизу экрана — страница
+ * видна сразу. Показывается, пока клиент не нажал одну из кнопок; «Показать» запускает обзор.
  */
-function WelcomeDialog({
-  view,
-  open,
-  onClose,
-  onGo,
-}: {
-  view: CpHelpView;
-  open: boolean;
-  onClose: () => void;
-  onGo: () => void;
-}) {
+function WelcomeBar({ onSkip, onGo }: { onSkip: () => void; onGo: () => void }) {
   const t = useT();
   const w = usePageHelpTexts().welcome;
-  const cards: [string, IconName, string, string][] = (
-    [
-      ['reports', 'file', w.repT ?? '', w.repX ?? ''],
-      ['pay', 'wallet', w.payT ?? '', w.payX ?? ''],
-      ['files', 'folder', w.filesT ?? '', (view.up ? w.filesX : w.filesXView || w.filesX) ?? ''],
-    ] satisfies [string, IconName, string, string][]
-  ).filter(([s, , title]) => title && view.sections.has(s));
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={w.t || t('cph.welcome.t')}
-      kind="message"
-      noMax
-      touch
-      footer={
-        <>
-          <button
-            type="button"
-            data-pub-welcome-skip=""
-            className={`${buttonClass('ghost')} max-md:min-h-11`}
-            onClick={onClose}
-          >
-            {w.skip || t('cph.welcome.skip')}
-          </button>
-          <button
-            type="button"
-            data-pub-welcome-go=""
-            className={`${buttonClass('cta')} max-md:min-h-11`}
-            onClick={onGo}
-          >
-            <Icon name="play" size="sm" />
-            {w.go || t('cph.welcome.go')}
-          </button>
-        </>
-      }
+    <div
+      role="region"
+      aria-label={t('cph.welcome.label')}
+      data-pub-welcome=""
+      className="fixed bottom-4 left-1/2 z-[46] flex w-[min(560px,calc(100%-24px))] -translate-x-1/2 animate-fade items-center gap-3 rounded-2xl border border-line bg-raised px-3.5 py-3 shadow-pop motion-reduce:animate-none max-md:bottom-[calc(66px+env(safe-area-inset-bottom,0px))] max-md:flex-wrap"
     >
-      <div data-pub-welcome="" className="flex flex-col gap-3.5">
-        {w.lead ? (
-          <p className="m-0 text-[15px] leading-[1.5] text-muted max-md:text-[16px]">{w.lead}</p>
-        ) : null}
-        {cards.length ? (
-          <div className="flex flex-col gap-2.5">
-            {cards.map(([s, icon, title, text]) => (
-              <div
-                key={s}
-                data-pub-welcome-card={s}
-                className="flex items-start gap-3 rounded-xl border border-line bg-pane-alt px-3.5 py-3"
-              >
-                <span className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-sel text-accent">
-                  <Icon name={icon} />
-                </span>
-                <span className="flex flex-col gap-0.5">
-                  <b>{title}</b>
-                  {text ? (
-                    <span className="text-[13.5px] leading-[1.45] text-muted max-md:text-[16px]">
-                      {text}
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : null}
+      <span className="flex-1 text-[14px] leading-[1.45] max-md:flex-[1_1_100%] max-md:text-[15px]">
+        {w.lead || t('cph.welcome.lead')}
+      </span>
+      <div className="flex flex-none gap-2 max-md:flex-1">
+        <button
+          type="button"
+          data-pub-welcome-skip=""
+          className={`${buttonClass('ghost')} max-md:min-h-11 max-md:flex-1 max-md:justify-center`}
+          onClick={onSkip}
+        >
+          {w.skip || t('cph.welcome.skip')}
+        </button>
+        <button
+          type="button"
+          data-pub-welcome-go=""
+          className={`${buttonClass('default')} max-md:min-h-11 max-md:flex-1 max-md:justify-center`}
+          onClick={onGo}
+        >
+          <Icon name="play" size="sm" />
+          {w.go || t('cph.welcome.go')}
+        </button>
       </div>
-    </Modal>
+    </div>
   );
 }
 
@@ -586,8 +536,9 @@ function usePageTour({
 }
 
 /**
- * Подсказки открытой страницы: кнопка «Помощь» для шапки, круглая кнопка в углу (когда шапка уехала
- * вверх), «Добро пожаловать», панель «Помощь», обзор и «Словарик».
+ * Подсказки открытой страницы (прототип v135): «?» в шапке (круглой кнопки поверх страницы больше нет —
+ * она закрывала суммы у правого края; на телефоне «Помощь» — в нижнем меню), приглашение полосой внизу,
+ * панель «Помощь», обзор и «Словарик».
  */
 export function usePageHelp({
   page,
@@ -613,7 +564,6 @@ export function usePageHelp({
   const button = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<{ n: number; open: boolean }>({ n: 0, open: false });
   const [welcome, setWelcome] = useState(false);
-  const [floating, setFloating] = useState(false);
   const [pop, setPop] = useState<{ i: number; anchor: HTMLElement } | null>(null);
   const tour = usePageTour({ address, view, unfolded, setUnfolded, helpButton: button });
 
@@ -621,29 +571,17 @@ export function usePageHelp({
     setPop((p) => (p?.anchor === anchor ? null : { i, anchor }));
   });
 
-  // «Добро пожаловать» — один раз в этом браузере для этой страницы, после первого верного кода.
+  // Приглашение — пока в этом браузере для этой страницы не нажали «Показать» или «Не сейчас».
   useEffect(() => {
     if (welcomeSeen(document.cookie)) return;
-    const timer = setTimeout(() => {
-      if (!document.querySelector('[data-window],[data-tour]')) setWelcome(true);
-    }, 150);
+    // Полоса появляется после первой отрисовки: страница видна сразу, полоса въезжает снизу.
+    const timer = setTimeout(() => setWelcome(true), 150);
     return () => clearTimeout(timer);
   }, []);
   const welcomeDone = () => {
     document.cookie = welcomeCookie(address, window.location.protocol === 'https:');
     setWelcome(false);
   };
-
-  // Шапка уехала вверх — та же кнопка круглой в углу экрана: «Помощь» видна всегда.
-  useEffect(() => {
-    const el = button.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver((es) => setFloating(!es[0]!.isIntersecting), {
-      threshold: 0,
-    });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
 
   const openPanel = () => {
     if (tour.on) return;
@@ -659,26 +597,14 @@ export function usePageHelp({
       aria-label={label}
       title={label}
       onClick={openPanel}
-      className={`${buttonClass('default', 'sm')} gap-1.5 max-md:min-h-11 max-md:px-3.5 max-md:text-[15px]`}
+      className={`${iconButtonClass()} text-accent max-md:h-11 max-md:w-11`}
     >
       <Icon name="help" />
-      <span>{label}</span>
     </button>
   );
   const word = pop ? help.gloss[pop.i] : undefined;
   const layer = (
     <>
-      <button
-        type="button"
-        data-pub-help-float=""
-        hidden={!floating || tour.on}
-        aria-label={label}
-        title={label}
-        onClick={openPanel}
-        className="fixed right-[18px] bottom-[calc(18px+env(safe-area-inset-bottom,0px))] z-[46] grid h-12 w-12 cursor-pointer place-items-center rounded-full border border-line-strong bg-raised p-0 text-accent shadow-pop hover:border-accent max-md:right-3 max-md:bottom-[calc(66px+env(safe-area-inset-bottom,0px))]"
-      >
-        <Icon name="help" className="h-[22px] w-[22px]" />
-      </button>
       {panel.n ? (
         <HelpPanel
           key={`pub-help-${panel.n}`}
@@ -694,20 +620,20 @@ export function usePageHelp({
           }}
         />
       ) : null}
-      <WelcomeDialog
-        view={view}
-        open={welcome}
-        onClose={welcomeDone}
-        onGo={() => {
-          welcomeDone();
-          setTimeout(tour.start, 60);
-        }}
-      />
+      {welcome && !tour.on ? (
+        <WelcomeBar
+          onSkip={welcomeDone}
+          onGo={() => {
+            welcomeDone();
+            setTimeout(tour.start, 60);
+          }}
+        />
+      ) : null}
       {tour.overlay}
       {pop && word ? (
         <GlossPop word={word} anchor={pop.anchor} onClose={() => setPop(null)} />
       ) : null}
     </>
   );
-  return { button: headButton, layer };
+  return { button: headButton, open: openPanel, layer };
 }

@@ -65,7 +65,9 @@ function sfTariffHtml(t){if(!t)return '';const g=sfGuide();
 function sfPeniNote(r){const t=T[r.t];if(!t||!(r.overdue||r.payOverdue))return '';const x=TAXES.find(x=>x.guide&&x.guide.penalty&&(x.guide.reportTypes||[]).includes(t.id));if(!x)return '';const p=x.guide.penalty;
   const pct=parseFloat(String(p.rate).replace(',','.'));const left=r.sum>0?Math.max(0,r.sum-(r.paid||0)):0;if(r.sum>0&&!left)return '';
   const days=Math.max(0,diffDays(TODAY,r.payDue||r.due));let amt=left?Math.round(left*pct/100*days*100)/100:0;const capped=/100 %/.test(p.cap||'')&&amt>left;if(capped)amt=left;
-  return `<div class="note warn">${ic('alert')}<span>${esc(String(p.start||'После срока').replace(/^./,s=>s.toUpperCase()))} начисляется пеня ${esc(String(pct).replace('.',','))} % в день от неуплаченной суммы${p.cap?` (${esc(p.cap)})`:''}.${left&&days?` Примерно на сегодня: ≈ ${som(amt)} за ${days} дн. от ${som(left)}.`:''} Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает.</span></div>`}
+  // 17.11.2026 («Меньше текста»): на виду — сумма пени на сегодня; правило начисления — под «?»
+  const rule=`${String(p.start||'После срока').replace(/^./,s=>s.toUpperCase())} начисляется пеня ${String(pct).replace('.',',')} % в день от неуплаченной суммы${p.cap?` (${p.cap})`:''}. Это подсказка: в суммы к уплате и деньги контрагента пеня не попадает.`;
+  return `<div class="note warn">${ic('alert')}<span>${left&&days?`Пеня ≈ ${som(amt)} за ${days} дн.`:`Пеня ${esc(String(pct).replace('.',','))} % в день`} ${tipI(rule)}</span></div>`}
 // Изменение тарифа с записью в историю: кто и почему поставил вручную; статус СПиНО в списке статусов контрагента идёт за тарифом
 function sfSet(c,id,man,why){const was=c.sfT?sfById(c.sfT):null,t=id?sfById(id):null;c.sfT=id||undefined;c.sfMan=!!man||undefined;c.sfWhy=man&&why?why:undefined;
   ['sfT','sfMan','sfWhy'].forEach(k=>{if(c[k]===undefined)delete c[k]});

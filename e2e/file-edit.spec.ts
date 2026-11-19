@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { cardTab, DEMO_PASSWORD, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, discardChanges, signIn } from './helpers';
 import { newContractor } from './reports';
 
 // Доработки 13.11, задача И4 (прототип v95, modules/files.js `attachDlg`, `fileEditDlg`): необязательное
@@ -128,9 +128,6 @@ test.describe('Доработки 13.11: примечание к файлам и
     const title = dlg.getByLabel('Название');
     await expect(title).toHaveValue(`договор-${tag}`);
     await expect(dlg.locator('[data-file-edit-ext]')).toHaveText('.pdf');
-    await expect(dlg).toContainText(
-      'Расширение остаётся прежним; при замене файла — берётся от нового',
-    );
     await expect(dlg.getByLabel('Примечание')).toHaveValue('Черновик');
     await expect(dlg).toContainText(
       'Необязательно. Сейчас: PDF · 2 КБ. Новый файл встанет на место прежнего везде, где он виден; прежний удаляется без возможности вернуть',
@@ -194,6 +191,7 @@ test.describe('Доработки 13.11: примечание к файлам и
     await dlg.getByRole('button', { name: 'Сохранить' }).click();
     await expect(dlg.getByText('Файл больше 20 МБ')).toBeVisible();
     await dlg.getByRole('button', { name: 'Отмена' }).click();
+    await discardChanges(page);
   });
 
   test('(проверка прототипа v95) чужой файл без права «Удалять файлы»: название и примечание меняются, «Замена недоступна»; сервер замену не начинает', async ({

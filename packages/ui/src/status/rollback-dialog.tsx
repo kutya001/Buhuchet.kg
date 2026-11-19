@@ -11,8 +11,6 @@ export interface RollbackDialogLabels {
   /** «Причина отката». */
   reason: string;
   placeholder: string;
-  /** «Откат делается на один шаг и попадает в историю статусов с пометкой «Откат».» */
-  hint: string;
   /** «Откатить». */
   ok: string;
   /** «Укажите причину». */
@@ -118,7 +116,6 @@ export function RollbackDialog({
           />
         )}
       </Field>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.hint}</div>
     </Modal>
   );
 }

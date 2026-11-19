@@ -2,13 +2,22 @@ import type { GridViewSettings } from '@buhuchet/domain';
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { ActionList, menuPosition } from '../action-menu';
+import { ActionList, menuPosition, type ActionEntry } from '../action-menu';
 import { Chip } from '../chip';
 import { DataGrid, GridChips, GridFooter, pickRows, type DataGridProps } from './data-grid';
 import { FilterPanel } from './grid-filter';
 import { GridCards } from './grid-cards';
 import { GridTable } from './grid-table';
-import { ColumnsPanel, GridBulkBar, GridFoldButton, GridToolbar, GroupPanel } from './grid-toolbar';
+import {
+  ColumnsPanel,
+  GridBulkBar,
+  GridFoldButton,
+  GridToolbar,
+  GroupPanel,
+  phoneMenus,
+  phoneSort,
+  type PhoneMenuArgs,
+} from './grid-toolbar';
 import { rowEvents } from './row-events';
 import type { GridColumn, GridLabels, GridRowSelection } from './types';
 
@@ -64,19 +73,27 @@ const LABELS: GridLabels = {
   boardByHint: 'Выбрать, по какому полю разложить записи на доске',
   boardFields: 'Поля',
   boardFieldsHint: 'Какие поля показывать на карточке: первые пять видимых',
-  boardByPhone: (label) => `Столбцы доски: ${label}`,
-  boardFieldsPhone: (shown, total) => `Поля карточки (${shown}/${total})`,
   boardFieldsName: 'Поля карточки',
   boardColumn: (label, count) => `${label}: ${count}`,
   boardEmpty: 'Нет записей',
   boardMore: (next, left) => `Показать ещё ${next} из ${left}`,
   boardCut: (shown, total) =>
     `Показаны первые ${shown} столбцов из ${total} — сузьте список фильтром или поиском`,
-  boardShown: (n, total) => `Столбцов: ${n} · записей: ${total}`,
+  boardHow: 'Как перенести',
   boardTipDrag: 'Карточку можно перетащить в другой столбец',
   boardTipMenu: 'Перенос — в меню карточки «⋯»',
   boardMove: 'Перенести в столбец…',
-  viewTo: (name) => `Вид списка: ${name}`,
+  sort: 'Сортировка',
+  sortAsc: 'по возрастанию',
+  sortDesc: 'по убыванию',
+  sortNone: 'Без сортировки',
+  filterN: (n) => `Фильтр: ${n}`,
+  more: 'Ещё',
+  moreHint: 'Ещё: вид, группировка, поля, Excel',
+  boardColumns: 'Столбцы доски',
+  shownOf: (n, total) => `${n} из ${total}`,
+  density: 'Плотность',
+  selectMany: 'Выбрать несколько',
   columns: 'Столбцы',
   columnsHint: 'Галочка — показать столбец.',
   system: 'системный',
@@ -94,7 +111,7 @@ const LABELS: GridLabels = {
   sortBy: (label) => `Сортировать: ${label}`,
   columnWidth: 'Ширина столбца',
   actions: 'Действия',
-  shown: (from, to, total) => `Показано ${from} – ${to} из ${total}`,
+  shown: (from, to, total) => `${from}–${to} из ${total}`,
   perPage: 'На странице',
   allRows: 'Все записи',
   prev: 'Назад',
@@ -115,7 +132,6 @@ const LABELS: GridLabels = {
   createdAt: 'Создано',
   updatedAt: 'Изменено',
   notFound: 'Ничего не найдено',
-  notFoundText: 'Под поиск и фильтры не подходит ни одна запись.',
   resetFilters: 'Сбросить фильтры',
   filter: 'Фильтр',
   filterOf: (label) => `Фильтр: ${label}`,
@@ -282,7 +298,7 @@ describe('UnifiedDataGrid: таблица (ТЗ «Списки записей»,
   it('в ответе только текущая страница; внизу — «Показано», «На странице» и страницы', () => {
     const html = grid({ data: { items: people(25), total: 250, page: 2, totals: {} } });
     expect(html.match(/<tr data-id=/g)).toHaveLength(25);
-    expect(html).toContain('Показано 26 – 50 из 250');
+    expect(html).toContain('26–50 из 250');
     expect(html).toContain('2 / 10');
     expect(html).toContain('<option value="all">Все записи</option>');
   });
@@ -561,11 +577,83 @@ describe('UnifiedDataGrid: карточки', () => {
       titleKey: 'name',
       data: { items: people(1), total: 1, page: 1, totals: {} },
     });
-    const line = html.match(/<dd data-tile-line[^>]*>(.*?)<\/dd>/)![1]!.replace(/<[^>]+>/g, '');
+    // Текст строки без разметки: содержимое между «>» и «<» (вырезание тегов заменой неполно — CodeQL).
+    const line = [...html.match(/<dd data-tile-line[^>]*>(.*?)<\/dd>/)![1]!.matchAll(/>([^<>]+)</g)]
+      .map((m) => m[1])
+      .join('');
     // Пустая сумма не показывается; строка стоит на месте первой суммы — выше роли.
     expect(line).toBe('К уплате 5 000·Оплачено 3 000');
     expect(html.indexOf('data-tile-line')).toBeLessThan(html.indexOf('>Роль</dt>'));
     expect(html).not.toContain('<dt class="text-faint">К уплате</dt>');
+  });
+
+  it('(прототип v141 `clineHtml`) у первой суммы строки значение не больше нуля — строки сумм на плитке нет', () => {
+    const due = (amount: number | null): GridColumn<Person> => ({
+      key: 'due',
+      label: 'К уплате',
+      type: 'money',
+      text: () => (amount === null ? '' : String(amount)),
+      tileLine: { amount: () => amount },
+    });
+    const paid: GridColumn<Person> = {
+      key: 'paid',
+      label: 'Оплачено',
+      type: 'money',
+      text: () => '0',
+      tileLine: {},
+    };
+    const cards = (amount: number | null) =>
+      grid({
+        columns: [COLUMNS[0]!, due(amount), paid, ...COLUMNS.slice(2)],
+        settings: { view: 'cards', shown: ['name', 'due', 'paid', 'role'] },
+        titleKey: 'name',
+        data: { items: people(1), total: 1, page: 1, totals: {} },
+      });
+    expect(cards(5000)).toContain('data-tile-line');
+    expect(cards(0)).not.toContain('data-tile-line');
+    expect(cards(null)).not.toContain('data-tile-line');
+  });
+
+  it('(прототип v141 `mcard`) короткая карточка телефона: под заголовком — строка главного, справа — статус без точек шкалы, ниже — только остальные столбцы', () => {
+    const short = vi.fn((p: Person, visible: ReadonlySet<string>) => ({
+      keys: ['role', 'active'],
+      sub: visible.has('role') ? p.role : '',
+      right: <span data-status-dots="">●●</span>,
+    }));
+    const cards = (over: Partial<Parameters<typeof GridCards<Person>>[0]> = {}) =>
+      renderToStaticMarkup(
+        <>
+          {GridCards<Person>({
+            columns: COLUMNS.slice(0, 4),
+            titleKey: 'name',
+            rows: people(1),
+            rowKey: (p) => p.id,
+            clickable: true,
+            events: rowEvents({ timer: undefined, start: null, pressed: false }, {}),
+            totals: {},
+            total: 1,
+            labels: LABELS,
+            short,
+            ...over,
+          })}
+        </>,
+      );
+    const html = cards();
+    expect(short.mock.calls[0]![1]).toEqual(new Set(['name', 'login', 'role', 'active']));
+    expect(html).toContain('data-card-short=""');
+    expect(html).toMatch(/data-card-sub="true"[^>]*>Бухгалтер</);
+    expect(html).toMatch(
+      /data-card-right="true" class="[^"]*\[&amp;_\[data-status-dots\]\]:hidden/,
+    );
+    // «Роль» и «Статус» уже показаны: в парах остаётся только «Логин».
+    expect(html.match(/<dt /g)).toHaveLength(1);
+    expect(html).toContain('<dt class="text-faint">Логин</dt>');
+    // Все столбцы показаны в строке и справа — блока пар нет вовсе.
+    expect(cards({ columns: [COLUMNS[0]!, COLUMNS[2]!, COLUMNS[3]!] })).not.toContain('<dl');
+    // Без `short` карточка обычная: все столбцы парами.
+    const plain = cards({ short: undefined });
+    expect(plain).not.toContain('data-card-short');
+    expect(plain.match(/<dt /g)).toHaveLength(3);
   });
 
   it('«⋯» только у записей с действиями — в карточках и в таблице', () => {
@@ -634,7 +722,8 @@ describe('UnifiedDataGrid: доска (прототип v84, ui/grid.js kanbanHt
     // Заголовок карточки — столбец-заголовок, даже когда он скрыт (прототип `ac.find`).
     const hidden = board({ settings: { view: 'kanban', shown: ['role', 'active', 'balance'] } });
     expect(hidden).toContain(people(1)[0]!.name);
-    expect(html).toContain('Столбцов: 3 · записей: 12');
+    // Прототип v139: строки «Столбцов: N · записей: M» внизу доски нет.
+    expect(html).not.toContain('Столбцов:');
   });
 
   it('над доской — «Столбцы: …» вместо «Группировки» и «Поля» вместо «Столбцы»; три вида', () => {
@@ -653,7 +742,9 @@ describe('UnifiedDataGrid: доска (прототип v84, ui/grid.js kanbanHt
     expect(plain).not.toContain('data-board-tip');
     const movable = board({ kanban: { ...KANBAN, drop: () => {} } });
     expect([...movable.matchAll(/draggable="true"/g)]).toHaveLength(3);
-    expect(movable).toContain('Карточку можно перетащить в другой столбец');
+    // Прототип v139: внизу — «Как перенести» и «?» с пояснением.
+    expect(movable).toMatch(/data-board-tip="true"[^>]*>Как перенести/);
+    expect(movable).toContain('data-help-tip');
     expect([...movable.matchAll(/data-row-menu/g)]).toHaveLength(3);
   });
 
@@ -690,6 +781,27 @@ describe('UnifiedDataGrid: доска (прототип v84, ui/grid.js kanbanHt
   });
 });
 
+/** Нажать пункт меню (не черту). */
+function press(item: ActionEntry | undefined) {
+  if (!item || 'separator' in item) throw new Error('пункта меню нет');
+  item.run();
+}
+
+/** Список на телефоне в виде «Таблица», без доски, группировки и выгрузки. */
+const MENU: PhoneMenuArgs<Person> = {
+  columns: COLUMNS,
+  defaultVisible: DEFAULT_VISIBLE,
+  settings: {},
+  onSettingsChange: () => {},
+  view: 'table',
+  views: ['table', 'cards'],
+  group: [],
+  exporting: false,
+  openFilter: () => {},
+  open: () => {},
+  labels: LABELS,
+};
+
 describe('панель над списком', () => {
   const toolbar = (over: Partial<Parameters<typeof GridToolbar<Person>>[0]> = {}) =>
     GridToolbar<Person>({
@@ -725,7 +837,7 @@ describe('панель над списком', () => {
     expect(html).not.toContain('250 сотрудников');
   });
 
-  it('доска: кнопки «Плотность и ширина» нет; на телефоне — «Столбцы доски: …» и «Поля карточки»', () => {
+  it('доска: кнопки «Плотность и ширина» нет; на телефоне под «⋯» — «Столбцы доски» и «Поля карточки», без «Плотности»', () => {
     const board = {
       key: 'role',
       options: [
@@ -739,31 +851,161 @@ describe('панель над списком', () => {
     expect(pc).not.toContain('data-grid-options-button');
     expect(renderToStaticMarkup(toolbar())).toContain('data-grid-options-button');
     const phone = renderToStaticMarkup(toolbar({ phone: true, view: 'kanban', board }));
-    expect(phone).toContain('aria-label="Столбцы доски: Роль"');
-    expect(phone).toContain('title="Поля карточки (3/7)"');
-    expect(phone).toContain('aria-label="Поля карточки"');
     expect(phone).not.toContain('data-grid-options-button');
+    const more = phoneMenus({
+      ...MENU,
+      view: 'kanban',
+      views: ['table', 'cards', 'kanban'],
+      board,
+    });
+    expect(more.more.map((i) => i.id)).toEqual([
+      'view-table',
+      'view-cards',
+      'view-kanban',
+      'more-sep',
+      'board',
+      'columns',
+    ]);
+    expect(more.more.find((i) => i.id === 'board')).toMatchObject({
+      label: 'Столбцы доски',
+      sub: 'Роль',
+    });
+    expect(more.more.find((i) => i.id === 'columns')).toMatchObject({
+      label: 'Поля карточки',
+      sub: '3 из 7',
+    });
   });
 
-  it('телефон: одна кнопка-значок вида с подписью для диктора', () => {
-    const change = vi.fn();
+  it('(прототип v139) телефон: на виду «Фильтр» с числом, «Сортировка» и «⋯»; кнопок вида, «Столбцы» и «Настройки вида» нет', () => {
     const html = renderToStaticMarkup(
-      toolbar({ phone: true, view: 'cards', onSettingsChange: change }),
+      toolbar({
+        phone: true,
+        view: 'cards',
+        phoneTools: {
+          filters: { active: { role: 'Бухгалтер' }, onOpen: () => {}, onReset: () => {} },
+          sort: { key: 'name', dir: 'desc' },
+          onSort: () => {},
+        },
+      }),
     );
-    expect(html).toContain('aria-label="Вид списка: Таблица"');
-    expect(html).toContain('aria-label="Столбцы (3/7)"');
-    expect(html).toContain('aria-label="Настройки вида"');
-    expect(html).not.toContain('<span>Таблица</span>');
-    // Выбор на телефоне запоминается отдельно от ПК: переключатель вида — первый элемент с `onChange`.
-    const tree = toolbar({ phone: true, view: 'cards', onSettingsChange: change });
-    const toggle = (tree.props as { children: ReactNode[] }).children
-      .flat()
-      .find(
-        (n): n is ReactElement<{ onChange: (v: 'table' | 'cards') => void }> =>
-          isValidElement<{ onChange?: unknown }>(n) && typeof n.props.onChange === 'function',
-      );
-    toggle!.props.onChange('table');
+    expect(html).toContain('data-grid-tools="phone"');
+    expect(html).toMatch(/aria-label="Фильтр: 1"[^>]*data-grid-phone="filter"/);
+    expect(html).toMatch(/aria-hidden="true"[^>]*>1<\/span>/);
+    expect(html).toMatch(/aria-label="Сортировка"[^>]*data-grid-phone="sort"/);
+    expect(html).toMatch(
+      /aria-label="Ещё: вид, группировка, поля, Excel"[^>]*data-grid-phone="more"/,
+    );
+    expect(html).not.toContain('Вид списка');
+    expect(html).not.toContain('data-grid-columns-button');
+    expect(html).not.toContain('data-grid-options-button');
+    // Список без фильтров и своей сортировки (нет `phoneTools`) — только «⋯».
+    const bare = renderToStaticMarkup(toolbar({ phone: true, view: 'cards' }));
+    expect(bare).not.toContain('data-grid-phone="filter"');
+    expect(bare).not.toContain('data-grid-phone="sort"');
+    expect(bare).toContain('data-grid-phone="more"');
+  });
+
+  it('(прототип v139 `mfilt`) меню «Фильтр»: видимые столбцы, у стоящего фильтра — значение; «Сбросить фильтры» — когда фильтр есть', () => {
+    const openFilter = vi.fn();
+    const onReset = vi.fn();
+    const tools = (active: Record<string, string>) => ({
+      filters: { active, onOpen: () => {}, onReset },
+      sort: null,
+      onSort: () => {},
+    });
+    const none = phoneMenus({ ...MENU, tools: tools({}), openFilter });
+    expect(none.filterCount).toBe(0);
+    expect(none.filter.map((i) => i.id)).toEqual(DEFAULT_VISIBLE);
+    press(none.filter[0]);
+    expect(openFilter).toHaveBeenCalledWith(DEFAULT_VISIBLE[0]);
+    const one = phoneMenus({ ...MENU, tools: tools({ role: 'Бухгалтер' }), openFilter });
+    expect(one.filterCount).toBe(1);
+    expect(one.filter.find((i) => i.id === 'role')).toMatchObject({ on: true, sub: 'Бухгалтер' });
+    expect(one.filter.at(-1)).toMatchObject({ id: 'filter-reset', label: 'Сбросить фильтры' });
+    press(one.filter.at(-1));
+    expect(onReset).toHaveBeenCalled();
+  });
+
+  it('(прототип v139 `msort`) меню «Сортировка»: тот же столбец — в обратную сторону, другой — по возрастанию; «Без сортировки»', () => {
+    expect(phoneSort(null, 'name')).toEqual({ key: 'name', dir: 'asc' });
+    expect(phoneSort({ key: 'name', dir: 'asc' }, 'name')).toEqual({ key: 'name', dir: 'desc' });
+    expect(phoneSort({ key: 'name', dir: 'desc' }, 'name')).toEqual({ key: 'name', dir: 'asc' });
+    expect(phoneSort({ key: 'name', dir: 'desc' }, 'role')).toEqual({ key: 'role', dir: 'asc' });
+    const onSort = vi.fn();
+    const menu = phoneMenus({
+      ...MENU,
+      tools: { sort: { key: 'name', dir: 'desc' }, onSort },
+    });
+    expect(menu.sort.find((i) => i.id === 'name')).toMatchObject({
+      on: true,
+      sub: 'по убыванию',
+      icon: 'dn',
+    });
+    press(menu.sort.find((i) => i.id === 'name'));
+    expect(onSort).toHaveBeenLastCalledWith({ key: 'name', dir: 'asc' });
+    expect(menu.sort.at(-1)).toMatchObject({ id: 'sort-none', label: 'Без сортировки' });
+    press(menu.sort.at(-1));
+    expect(onSort).toHaveBeenLastCalledWith(null);
+    // Сортировки нет — нет и «Без сортировки».
+    const plain = phoneMenus({ ...MENU, tools: { sort: null, onSort } });
+    expect(plain.sort.map((i) => i.id)).not.toContain('sort-none');
+  });
+
+  it('(прототип v139 `mmore`) меню «⋯»: вид (запоминается отдельно от ПК), группировка, столбцы, плотность, «Выбрать несколько», «В Excel»', () => {
+    const change = vi.fn();
+    const open = vi.fn();
+    const onToggle = vi.fn();
+    const onExport = vi.fn();
+    const menu = phoneMenus({
+      ...MENU,
+      view: 'cards',
+      onSettingsChange: change,
+      group: ['role', 'active'],
+      fold: { shut: false, onToggle: () => {} },
+      onExport,
+      tools: { sort: null, onSort: () => {}, select: { on: true, onToggle } },
+      open,
+    });
+    expect(menu.more.map((i) => i.id)).toEqual([
+      'view-table',
+      'view-cards',
+      'more-sep',
+      'group',
+      'fold',
+      'columns',
+      'options',
+      'select',
+      'excel',
+    ]);
+    expect(menu.more.find((i) => i.id === 'view-cards')).toMatchObject({ on: true });
+    press(menu.more.find((i) => i.id === 'view-table'));
     expect(change).toHaveBeenCalledWith({ phoneView: 'table' });
+    expect(menu.more.find((i) => i.id === 'group')).toMatchObject({
+      label: 'Группировка',
+      sub: 'Роль → Статус',
+    });
+    expect(menu.more.find((i) => i.id === 'fold')).toMatchObject({ label: 'Свернуть все' });
+    // В виде «Карточки» столбцы — это поля карточки.
+    expect(menu.more.find((i) => i.id === 'columns')).toMatchObject({
+      label: 'Поля карточки',
+      sub: '3 из 7',
+    });
+    for (const id of ['group', 'columns', 'options'] as const) {
+      press(menu.more.find((i) => i.id === id));
+      expect(open).toHaveBeenLastCalledWith(id);
+    }
+    expect(menu.more.find((i) => i.id === 'select')).toMatchObject({
+      label: 'Выбрать несколько',
+      on: true,
+    });
+    press(menu.more.find((i) => i.id === 'select'));
+    expect(onToggle).toHaveBeenCalled();
+    press(menu.more.find((i) => i.id === 'excel'));
+    expect(onExport).toHaveBeenCalled();
+    // Вид закреплён модулем, массовых действий и выгрузки нет — остаются группировка, столбцы и плотность.
+    const fixed = phoneMenus({ ...MENU, views: [] });
+    expect(fixed.more.map((i) => i.id)).toEqual(['group', 'columns', 'options']);
+    expect(fixed.more.find((i) => i.id === 'columns')).toMatchObject({ label: 'Столбцы' });
   });
 });
 
@@ -839,7 +1081,7 @@ describe('низ списка', () => {
         labels={LABELS}
       />,
     );
-    expect(html).toContain('Показано 1 – 250 из 250');
+    expect(html).toContain('1–250 из 250');
     expect(html).toContain('1 / 1');
   });
 });
@@ -1056,7 +1298,8 @@ describe('поиск, фильтры и группировка (задача #15
     const none = { items: [], total: 0, page: 1, totals: {} };
     const found = grid({ data: none, search: 'нет такого' });
     expect(found).toContain('Ничего не найдено');
-    expect(found).toContain('Под поиск и фильтры не подходит ни одна запись.');
+    // Прототип v139: пояснения под «Ничего не найдено» нет.
+    expect(found).not.toContain('не подходит ни одна запись');
     expect(found).toContain('Сбросить фильтры');
     expect(found).not.toContain('пусто');
     const filtered = grid({
@@ -1152,7 +1395,7 @@ describe('поиск, фильтры и группировка (задача #15
     expect(html).toContain('Убрать');
   });
 
-  it('панель: «Группировка (N)» и «В Excel» — только когда выгрузка разрешена; на телефоне — значки', () => {
+  it('панель: «Группировка (N)» и «В Excel» — только когда выгрузка разрешена; на телефоне они под «⋯»', () => {
     const toolbar = (over: Partial<Parameters<typeof GridToolbar<Person>>[0]>) =>
       renderToStaticMarkup(
         <GridToolbar
@@ -1178,8 +1421,8 @@ describe('поиск, фильтры и группировка (задача #15
     );
     expect(toolbar({})).not.toContain('data-grid-export');
     const phone = toolbar({ phone: true, group: ['role', 'active'], onExport: () => {} });
-    expect(phone).toContain('aria-label="Группировка (2)"');
-    expect(phone).toMatch(/aria-hidden="true"[^>]*>2<\/span>/);
-    expect(phone).toContain('aria-label="В Excel"');
+    expect(phone).not.toContain('data-grid-group-button');
+    expect(phone).not.toContain('data-grid-export');
+    expect(phone).toContain('data-grid-phone="more"');
   });
 });

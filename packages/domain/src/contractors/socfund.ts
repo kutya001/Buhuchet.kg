@@ -311,11 +311,22 @@ export function socfundTitle(t: SocfundTariff | null, dict: SocfundDict): string
   return t.id === 'spino' && dict.status ? dict.status.name : socfundShort(t);
 }
 
+/**
+ * Плательщик без пояснения в скобках в конце: «Работодатель (за работника)» → «Работодатель» (прототип
+ * sfRatesTxt, `/\s*\(.*\)$/`). Без регулярного выражения: на длинной строке пробелов оно работало бы
+ * квадратично.
+ */
+export function socfundPayerName(payer: string): string {
+  // Скобка — в последней строке текста: `.` выражения прототипа перенос строки не проходит.
+  const open = payer.indexOf('(', payer.lastIndexOf('\n') + 1);
+  return open >= 0 && payer.endsWith(')') ? payer.slice(0, open).trimEnd() : payer;
+}
+
 /** Ставки одной строкой: «работодатель 2,25 %, работник 10 %; итого 12,25 %» (прототип sfRatesTxt). */
 export function socfundRatesText(x: SocfundTariff | null, t: Translate): string {
   if (!x) return '';
   return [
-    x.parts.map((p) => `${p.payer.replace(/\s*\(.*\)$/, '').toLowerCase()} ${p.rate}`).join(', '),
+    x.parts.map((p) => `${socfundPayerName(p.payer).toLowerCase()} ${p.rate}`).join(', '),
     x.total ? t('cp.socfund.rates_total', { total: x.total }) : '',
   ]
     .filter(Boolean)
@@ -516,41 +527,43 @@ export interface PenaltyReport {
   paid: Tyiyn;
 }
 
+/** Подсказка о пене: строка на виду и правило начисления под «?»; обе пустые — подсказки нет. */
+export interface PenaltyNote {
+  text: string;
+  tip: string;
+}
+
 /**
- * Подсказка о пене у просроченного неоплаченного отчёта (прототип sfPeniNote): ставка из справочника,
- * примерная сумма на сегодня от неуплаченного. В суммы к уплате и деньги контрагента пеня не попадает.
- * '' — подсказки нет (не просрочен, оплачен полностью, у вида нет пени).
+ * Подсказка о пене у просроченного неоплаченного отчёта (прототип v134 sfPeniNote): на виду — примерная
+ * сумма на сегодня от неуплаченного («Пеня ≈ 63 сом за 7 дн.») или ставка в день; правило начисления из
+ * справочника — под «?». В суммы к уплате и деньги контрагента пеня не попадает. Пустой текст — подсказки
+ * нет (не просрочен, оплачен полностью, у вида нет пени).
  */
 export function penaltyText(
   r: PenaltyReport,
   p: SocfundPenalty | null,
   today: IsoDate,
   t: Translate,
-): string {
-  if (!p || !(r.overdue || r.payOverdue)) return '';
+): PenaltyNote {
+  const none = { text: '', tip: '' };
+  if (!p || !(r.overdue || r.payOverdue)) return none;
   const pct = parseFloat(p.rate.replace(',', '.'));
   // Как прототип: сомы с копейками, округление пени до копейки.
   const sum = r.amount === null ? 0 : r.amount / 100;
   const left = sum > 0 ? Math.max(0, sum - r.paid / 100) : 0;
-  if (sum > 0 && !left) return '';
+  if (sum > 0 && !left) return none;
   const days = Math.max(0, diffDays(today, r.payDue ?? r.dueDate));
   let amt = left ? Math.round(((left * pct) / 100) * days * 100) / 100 : 0;
   if (/100 %/.test(p.cap) && amt > left) amt = left;
   const start = (p.start || t('cp.socfund.penalty.start')).replace(/^./, (x) => x.toUpperCase());
-  const parts = [
-    t('cp.socfund.penalty.rate', { start, rate: String(pct).replace('.', ',') }) +
-      (p.cap ? ` (${p.cap})` : '') +
-      '.',
-  ];
-  if (left && days) {
-    parts.push(
-      t('cp.socfund.penalty.estimate', {
-        amount: formatSomWithUnit(Math.round(amt * 100)),
-        days,
-        left: formatSomWithUnit(Math.round(left * 100)),
-      }),
-    );
-  }
-  parts.push(t('cp.socfund.penalty.hint'));
-  return parts.join(' ');
+  const rate = String(pct).replace('.', ',');
+  const tip = `${t('cp.socfund.penalty.rate', { start, rate })}${p.cap ? ` (${p.cap})` : ''}. ${t('cp.socfund.penalty.hint')}`;
+  const text =
+    left && days
+      ? t('cp.socfund.penalty.estimate', {
+          amount: formatSomWithUnit(Math.round(amt * 100)),
+          days,
+        })
+      : t('cp.socfund.penalty.per_day', { rate });
+  return { text, tip };
 }

@@ -4,9 +4,10 @@ import {
   cleanupContractorTelegramLinks,
   cleanupLoginAttempts,
   cleanupRateLimits,
+  cleanupTelegramInbox,
   schema,
 } from '@buhuchet/db';
-import { formatMomentRu } from '@buhuchet/domain';
+import { formatMomentRu, JOURNAL_DAYS, RUN_KEEP_DAYS } from '@buhuchet/domain';
 import { lt } from 'drizzle-orm';
 import type { Job } from '../deps';
 import { purgeLeadDocsJob } from '../modules/admin/lead-purge';
@@ -31,14 +32,22 @@ const { schedulerRuns } = schema;
 
 const DAY_MS = 86_400_000;
 
-/** Журнал запусков хранится 30 дней. */
+/**
+ * Очистка журналов: запуски хранятся 30 дней, полученные ботом сообщения — 90 (Админка → «Запуски» и
+ * «Телеграм» → «Журнал»; docs/decisions.md п. Т-15, Т-16). Отвечает, сколько строк удалено.
+ */
 export const cleanupSchedulerRuns: Job = {
   name: 'system.cleanup-scheduler-runs',
   cron: '30 3 * * *',
   lookbackMinutes: 24 * 60,
   async run(ctx) {
-    const border = new Date(ctx.clock.now().getTime() - 30 * DAY_MS);
-    await ctx.db.delete(schedulerRuns).where(lt(schedulerRuns.slot, border));
+    const now = ctx.clock.now().getTime();
+    const runs = await ctx.db
+      .delete(schedulerRuns)
+      .where(lt(schedulerRuns.slot, new Date(now - RUN_KEEP_DAYS * DAY_MS)))
+      .returning({ job: schedulerRuns.job });
+    const inbox = await cleanupTelegramInbox(ctx.db, new Date(now - JOURNAL_DAYS * DAY_MS));
+    return runs.length + inbox;
   },
 };
 
@@ -51,7 +60,7 @@ export const cleanupLoginAttemptsJob: Job = {
   cron: '*/10 * * * *',
   lookbackMinutes: 10,
   async run(ctx) {
-    await cleanupLoginAttempts(ctx.db);
+    return cleanupLoginAttempts(ctx.db);
   },
 };
 
@@ -61,7 +70,7 @@ export const cleanupRateLimitsJob: Job = {
   cron: '15 * * * *',
   lookbackMinutes: 60,
   async run(ctx) {
-    await cleanupRateLimits(ctx.db);
+    return cleanupRateLimits(ctx.db);
   },
 };
 
@@ -74,9 +83,10 @@ export const cleanupContractorPageGrantsJob: Job = {
   cron: '40 3 * * *',
   lookbackMinutes: 24 * 60,
   async run(ctx) {
-    await cleanupContractorPageGrants(ctx.db);
+    const grants = await cleanupContractorPageGrants(ctx.db);
     // Одноразовые ссылки «Подключить Telegram» с истёкшим сроком (задача К3).
-    await cleanupContractorTelegramLinks(ctx.db);
+    const links = await cleanupContractorTelegramLinks(ctx.db);
+    return grants + links;
   },
 };
 

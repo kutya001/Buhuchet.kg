@@ -8,7 +8,7 @@ import {
   monthLabel,
   scopeOf,
 } from '@buhuchet/domain';
-import type { Contractor, ContractorMoney } from '@buhuchet/shared';
+import { MoneySettingsSaved, type Contractor, type ContractorMoney } from '@buhuchet/shared';
 import {
   Box,
   buttonClass,
@@ -29,6 +29,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { contractorFeesQuery } from '../fees/fees-data';
 import { TransferDialog, WhyButton, WriteOffDialog } from '../finance/finance-dialogs';
 import { useFinanceRefresh } from '../finance/finance-data';
 import { OperationWindowDialog } from '../finance/operation-window';
@@ -49,7 +50,7 @@ import { contractorMoneyQuery, saveMoneySettings, useMoneyRefresh } from './tax-
  */
 
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="block text-[11.5px] leading-[1.4] text-faint">{children}</span>
+  <span className="block text-[12px] leading-[1.4] text-muted">{children}</span>
 );
 
 /** Целые сомы на плашке (прототип `fmtM(…, false)`). */
@@ -327,6 +328,8 @@ export function ContractorMoneyTab({ contractorId }: { contractorId: string }) {
         </Hint>
       </Box>
       <OperationsBox t={t} m={m} onOpen={(id) => setOp(openSlot(id))} />
+      {/* Баланс целиком — внизу вкладки (прототип v137; на «Основном» — карточки «что горит»). */}
+      <ContractorBalanceBox contractorId={contractorId} />
       {receive ? (
         <ReceiptDialog
           key={`receive-${receive.n}`}
@@ -463,9 +466,11 @@ function MoneyActions({
 }
 
 /**
- * «Баланс по контрагенту» на «Основном» (прототип: блок после страницы контрагента): получено, оплачено
- * в бюджет (из них контрагент оплатил сам), списано в бонус, остаток на счёте. Виден с правом «Учёт
- * денег» и только по контрагенту в области «Финансовые операции».
+ * «Баланс по контрагенту» внизу вкладки «Деньги» (прототип v137; раньше — на «Основном»): получено,
+ * оплачено в бюджет (из них контрагент оплатил сам), списано в бонус, остаток на счёте и «Долг за
+ * обслуживание» — при «Плате за обслуживание» и праве «Видеть плату» (долг отдаёт сервер вкладки
+ * «Обслуживание»; не отдал — строки нет). Виден с правом «Учёт денег» и только по контрагенту в области
+ * «Финансовые операции».
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#В-15 — в прототипе блок виден с правом «Учёт денег» по любому контрагенту.
 export function ContractorBalanceBox({ contractorId }: { contractorId: string }) {
@@ -475,6 +480,11 @@ export function ContractorBalanceBox({ contractorId }: { contractorId: string })
   const m = useQuery({
     ...contractorMoneyQuery(contractorId, null),
     enabled: on,
+    retry: false,
+  }).data;
+  const fees = useQuery({
+    ...contractorFeesQuery(contractorId),
+    enabled: on && access.feature('fee') && access.can('fee'),
     retry: false,
   }).data;
   if (!on || !m) return null;
@@ -499,6 +509,22 @@ export function ContractorBalanceBox({ contractorId }: { contractorId: string })
       label: t('money.cp.available'),
       value: <b>{formatSomWithUnit(b.available)}</b>,
     },
+    ...(fees
+      ? [
+          {
+            id: 'feeDebt',
+            label: t('money.cp.fee_debt'),
+            value: (
+              <span
+                data-money-fee-debt=""
+                className={fees.debt > 0 ? 'font-bold text-danger-label' : undefined}
+              >
+                {formatSomWithUnit(fees.debt)}
+              </span>
+            ),
+          },
+        ]
+      : []),
   ];
   return (
     <div data-money-balance="">
@@ -514,7 +540,7 @@ export function ContractorBalanceBox({ contractorId }: { contractorId: string })
  * (прототип `#cp-one`, `#cp-needf`, `#cp-pays`): при «Учёте оплаты налогов»; «Платит одной суммой» —
  * ещё при «Плате за обслуживание», с правом «Видеть плату» и у постоянного контрагента (`oneSum` не
  * null). Менять — с правом «Создавать и изменять контрагентов», у архивного — только смотреть.
- * Сохраняется сразу, с версией записи.
+ * Сохраняется сразу, с версией записи; в уведомлении «Сохранено» — «Отменить» (прототип v137).
  */
 export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
   const t = useT();
@@ -526,17 +552,34 @@ export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
   if (!access.feature('taxpay')) return [];
   const edit = access.can('createCp');
   const live = c.serviceStatus !== 'archived';
-  const save = async (body: {
-    needReceiptFile?: boolean;
-    paysTo?: 'emp' | 'org';
-    oneSum?: boolean;
-  }) => {
+  type Settings = { needReceiptFile?: boolean; paysTo?: 'emp' | 'org'; oneSum?: boolean };
+  // «Отменить» в уведомлении возвращает прежнее значение — уже с новой версией записи.
+  const revert = async (was: Settings, version: number) => {
+    const res = await saveMoneySettings(c.id, { version, ...was });
+    refresh();
+    if (!res.ok) return toast(errorText(res.error), { icon: 'alert', bad: true });
+    toast(t('money.cp.undone'), { icon: 'history' });
+  };
+  // Сохраняется сразу, без «Сохранить» (прототип v137): после изменения — уведомление с «Отменить».
+  const save = async (body: Settings, was: Settings) => {
     setBusy(true);
     const res = await saveMoneySettings(c.id, { version: c.version, ...body });
     setBusy(false);
     refresh();
     if (!res.ok) return toast(errorText(res.error), { icon: 'alert', bad: true });
-    toast(t('money.cp.saved'));
+    // «Отменить» сохраняет прежнее значение поверх новой версии контрагента из ответа.
+    const saved = MoneySettingsSaved.safeParse(res.data);
+    toast(
+      t('money.cp.saved'),
+      saved.success
+        ? {
+            action: {
+              label: t('money.cp.undo'),
+              run: () => void revert(was, saved.data.version),
+            },
+          }
+        : {},
+    );
   };
   const oneSumOn =
     access.feature('fee') && access.can('fee') && c.kind !== 'oneoff' && c.oneSum !== null;
@@ -554,12 +597,11 @@ export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
                     compact
                     checked={!!c.oneSum}
                     disabled={!edit || !live || busy}
-                    onChange={(on) => void save({ oneSum: on })}
+                    onChange={(on) => void save({ oneSum: on }, { oneSum: !on })}
                     label={t('cp.card.one_sum_on')}
                   />
                   <InfoTip label={t('cp.card.one_sum')} text={t('cp.card.one_sum_tip')} />
                 </span>
-                <Hint>{t('cp.card.one_sum_hint')}</Hint>
               </span>
             ),
           } satisfies KeyValueItem,
@@ -569,16 +611,16 @@ export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
       id: 'need-file',
       label: t('money.cp.need_file'),
       value: (
-        <span data-money-need-file="">
+        <span data-money-need-file="" className="inline-flex items-center gap-1">
           <CheckRow
             plain
             compact
             checked={c.needReceiptFile}
             disabled={!edit || !live || busy}
-            onChange={(on) => void save({ needReceiptFile: on })}
+            onChange={(on) => void save({ needReceiptFile: on }, { needReceiptFile: !on })}
             label={t('money.cp.need_file_on')}
           />
-          <Hint>{t('money.cp.need_file_hint')}</Hint>
+          <InfoTip label={t('money.cp.need_file')} text={t('money.cp.need_file_hint')} />
         </span>
       ),
     },
@@ -592,7 +634,9 @@ export function useMoneySettingsItems(c: Contractor): KeyValueItem[] {
           data-money-pays-to=""
           value={c.paysTo}
           disabled={busy}
-          onChange={(e) => void save({ paysTo: e.target.value as 'emp' | 'org' })}
+          onChange={(e) =>
+            void save({ paysTo: e.target.value as 'emp' | 'org' }, { paysTo: c.paysTo })
+          }
         >
           <option value="emp">{t('money.cp.pays_to.emp')}</option>
           <option value="org">{t('money.cp.pays_to.org')}</option>

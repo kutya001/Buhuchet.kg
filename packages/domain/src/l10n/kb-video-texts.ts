@@ -140,7 +140,6 @@ export const KB_VIDEO_TEXTS = {
   'video.help.one': { ru: 'Видеоинструкция модуля', section: S },
   'video.help.many': { ru: 'Видеоинструкции модуля', section: S },
   'video.help.all': { ru: 'Все видео модуля · {n}', section: S },
-  'video.top': { ru: 'Видеоинструкция: {title}', section: S },
   // Вкладка «Видео»
   'video.empty.title': { ru: 'Видео пока нет', section: S },
   'video.empty.text': {

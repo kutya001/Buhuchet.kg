@@ -14,7 +14,7 @@ function gst(cfg){let s=GS[cfg.id];if(!s){const sv=store.get('g5.'+cfg.id,{});s=
 /* Сортировка по умолчанию во всех списках — от новых к старым по «Создано» */
 /* Видимые по умолчанию столбцы по спискам (ТЗ, «Столбцы, видимые по умолчанию»); остальные — в меню «Столбцы» */
 const SHOW={'rep-months':['type','act','period','due','status','sum','paydue','paid','resp'],'cp-rep':['type','act','period','due','status','sum','got','paid','resp'],'rep-':['cp','type','act','period','due','status','wait','sum','got','paid','resp'],
- 'cps-':['name','inn','regime','resp','over','svc'],'tasks-':['title','cp','exec','date','status'],'staff':['fio','role','phone','cps','over','active','kb'],
+ 'cps-debtors':['name','debt','resp','over','svc'],'cps-':['name','inn','regime','resp','over','svc'],'tasks-':['title','cp','exec','date','status'],'staff':['fio','role','phone','cps','over','active','kb'],
  'fin-journal':['date','cp','total','dist','adv','files'],'cp-fin':['date','cat','what','amount','acc'],'fin-svc':null,'fin-':['date','cp','cat','what','amount','acc'],
  'proj-':['name','cp','from','to','resps','status','paid'],'files':['name','cp','src','by','date','desc'],'dict-types':['on','name','act','pays','organ','per','rule','file','rcpt','used'],
  'bonus':['month','emp','cp','sum'],'an-cps':['cp','feeCh','fee','debt','total'],'adm-users':['login','fio','org','role','last','active'],'adm-orgs':['name','inn','owner','cps','staff','active']};
@@ -93,27 +93,30 @@ function grid(host,cfg){
     /* На телефоне (до 768 px) кнопки панели — только значками с подсказкой, вид списка — одна кнопка-переключатель (ТЗ, «Панель над списком») */
     const mob=isMobile(),ng=kb?0:gcols().length;
     const VL={table:'Таблица',cards:'Карточки',kanban:'Доска'},VI={table:'table',cards:'cards',kanban:'board'},views=cfg.kanban?['table','cards','kanban']:['table','cards'];
-    if(!cfg.fixedView){if(mob){const to=views[(views.indexOf(view)+1)%views.length],tl=VL[to];h+=`<button class="icon-btn sm raised" data-view="${to}" title="${tl}" aria-label="Вид списка: ${tl}">${ic(VI[to],'sm')}</button>`}
-      else h+=`<div class="seg" role="group" aria-label="Вид списка">${views.map(v=>`<button data-view="${v}" class="${view===v?'on':''}" title="${VL[v]}${v==='kanban'?': записи карточками по столбцам':''}">${ic(VI[v],'sm')}<span>${VL[v]}</span></button>`).join('')}</div>`}
+    /* Телефон (17.11.2026, «Меньше текста», ТЗ п. 9): на виду счётчик, «Фильтр», «Сортировка» и «⋯»; под «⋯» — вид, группировка, поля, статистика, выбор нескольких, Excel.
+       Фильтр и сортировка работают и в виде «Карточки» */
+    if(mob){const fn=fk.length;h+=`<button class="btn sm gt-m ${fn?'on':''}" data-a="mfilt" aria-label="Фильтр${fn?': '+fn:''}">${ic('filter','sm')}<span class="bl">Фильтр</span>${fn?`<span class="gt-n">${fn}</span>`:''}</button><button class="btn sm gt-m ${s.sort?'on':''}" data-a="msort" aria-label="Сортировка">${ic(s.sort&&s.sort.dir<0?'dn':'up','sm')}<span class="bl">Сортировка</span></button><button class="icon-btn sm raised" data-a="mmore" aria-label="Ещё: вид, группировка, поля, Excel" title="Ещё">${ic('more','sm')}</button>`}
+    else{if(!cfg.fixedView){h+=`<div class="seg" role="group" aria-label="Вид списка">${views.map(v=>`<button data-view="${v}" class="${view===v?'on':''}" title="${VL[v]}${v==='kanban'?': записи карточками по столбцам':''}">${ic(VI[v],'sm')}<span>${VL[v]}</span></button>`).join('')}</div>`}
     // на доске вместо «Группировки» — выбор, по какому столбцу списка разложить записи
-    if(kb){const bc=kbCol(ac),t=`Столбцы доски: ${bc.label}`;h+=mob?`<button class="icon-btn sm raised" data-a="kbby" title="${esc(t)}" aria-label="${esc(t)}">${ic('layers','sm')}</button>`:`<button class="btn sm on" data-a="kbby" title="Выбрать, по какому полю разложить записи на доске">${ic('layers','sm')}Столбцы: ${esc(bc.label)}</button>`;
-      h+=mob?`<button class="icon-btn sm raised" data-a="cols" title="Поля карточки (${vc.length}/${ac.length})" aria-label="Поля карточки">${ic('columns','sm')}</button>`:`<button class="btn sm" data-a="cols" title="Какие поля показывать на карточке: первые пять видимых">${ic('columns','sm')}Поля (${vc.length}/${ac.length})</button>`}
-    else if(mob)h+=`<button class="icon-btn sm raised gt-ic ${ng?'on':''}" data-a="grp" title="Группировка${ng?` (${ng})`:''}" aria-label="Группировка${ng?` (${ng})`:''}">${ic('layers','sm')}${ng?`<span class="gt-n">${ng}</span>`:''}</button><button class="icon-btn sm raised" data-a="cols" title="Столбцы (${vc.length}/${ac.length})" aria-label="Столбцы (${vc.length}/${ac.length})">${ic('columns','sm')}</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
+    if(kb){const bc=kbCol(ac),t=`Столбцы доски: ${bc.label}`;h+=false?`<button class="icon-btn sm raised" data-a="kbby" title="${esc(t)}" aria-label="${esc(t)}">${ic('layers','sm')}</button>`:`<button class="btn sm on" data-a="kbby" title="Выбрать, по какому полю разложить записи на доске">${ic('layers','sm')}Столбцы: ${esc(bc.label)}</button>`;
+      h+=false?'':`<button class="btn sm" data-a="cols" title="Какие поля показывать на карточке: первые пять видимых">${ic('columns','sm')}Поля (${vc.length}/${ac.length})</button>`}
+    else if(false)h+=`<button class="icon-btn sm raised gt-ic ${ng?'on':''}" data-a="grp" title="Группировка${ng?` (${ng})`:''}" aria-label="Группировка${ng?` (${ng})`:''}">${ic('layers','sm')}${ng?`<span class="gt-n">${ng}</span>`:''}</button><button class="icon-btn sm raised" data-a="cols" title="Столбцы (${vc.length}/${ac.length})" aria-label="Столбцы (${vc.length}/${ac.length})">${ic('columns','sm')}</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
     else h+=`<button class="btn sm ${ng?'on':''}" data-a="grp" title="Группировать список по столбцам (до двух уровней)">${ic('layers','sm')}Группировка${ng?` (${ng})`:''}</button><button class="btn sm" data-a="cols">${ic('columns','sm')}Столбцы (${vc.length}/${ac.length})</button><button class="icon-btn sm raised" data-a="opts" title="Плотность и ширина" aria-label="Настройки вида">${ic('sliders','sm')}</button>`;
     // группы есть — одна кнопка сворачивает все группы или, если все свёрнуты, разворачивает их (ТЗ, «Панель над списком»)
     // на телефоне — значком рядом с меткой «Группировка», чтобы панель не переносилась на вторую строку
     let fold='';if(gt&&gt.length){const ps=[];const w=arr=>arr.forEach(x=>{ps.push(x.path);if(x.sub)w(x.sub)});w(gt);const shut=ps.every(p=>s.closed.has(p)),a=shut?'gall':'gnone',l=shut?'Развернуть все':'Свернуть все',t=shut?'Развернуть все группы':'Свернуть все группы';
-      fold=mob?`<button class="icon-btn sm raised" data-a="${a}" title="${t}" aria-label="${t}">${ic(shut?'unfold':'fold','sm')}</button>`:`<button class="btn sm" data-a="${a}" title="${t}">${ic(shut?'unfold':'fold','sm')}${l}</button>`;if(!mob)h+=fold}
-    if(cfg.exportable!==false&&(isAdmin()||can('export')))h+=mob?`<button class="icon-btn sm raised" data-a="xls" title="В Excel: скачать файл .xlsx со всеми отфильтрованными записями" aria-label="В Excel">${ic('download','sm')}</button>`:`<button class="btn sm" data-a="xls" title="Скачать файл .xlsx со всеми отфильтрованными записями">${ic('download','sm')}В Excel</button>`;
+      g.fold={a,l};fold=mob?`<button class="icon-btn sm raised" data-a="${a}" title="${t}" aria-label="${t}">${ic(shut?'unfold':'fold','sm')}</button>`:`<button class="btn sm" data-a="${a}" title="${t}">${ic(shut?'unfold':'fold','sm')}${l}</button>`;if(!mob)h+=fold}else g.fold=null;
+    if(!mob&&cfg.exportable!==false&&(isAdmin()||can('export')))h+=false?`<button class="icon-btn sm raised" data-a="xls" title="В Excel: скачать файл .xlsx со всеми отфильтрованными записями" aria-label="В Excel">${ic('download','sm')}</button>`:`<button class="btn sm" data-a="xls" title="Скачать файл .xlsx со всеми отфильтрованными записями">${ic('download','sm')}В Excel</button>`;
+    }
     h+=`</div>`;
     const gc=kb?[]:gcols();if(fk.length||gc.length||(S.search&&cfg.search!==false))h+=`<div class="chips">${gc.length?`<span class="chip"><span><b>Группировка:</b> ${gc.map(c=>esc(c.label)).join(' → ')}</span><button data-a="ungrp" aria-label="Убрать группировку">${ic('x','sm')}</button></span>${mob?fold:''}`:''}${S.search&&cfg.search!==false?`<span class="chip"><span><b>Поиск:</b> «${esc(S.search)}»</span><button data-a="clrq" aria-label="Очистить поиск">${ic('x','sm')}</button></span>`:''}${fk.map(k=>{const c=ac.find(x=>x.key===k);return `<span class="chip"><span><b>${esc(c.label)}:</b> ${esc(chipText(c,s.filters[k]))}</span><button data-clr="${k}" aria-label="Убрать фильтр">${ic('x','sm')}</button></span>`}).join('')}<button class="linkbtn" data-a="clrall" style="font-size:12.5px">Сбросить всё</button></div>`;
     if(cfg.error)h+=`<div class="state">${ic('alert','lg')}<b>Не удалось загрузить список</b><span>Проверьте подключение к интернету и попробуйте ещё раз.</span><button class="btn cta" data-a="retry">${ic('refresh','sm')}Повторить</button></div>`;
     else if(cfg.loading)h+=skel();
     else if(!total)h+=emptyHtml(all.length||fk.length||(S.search&&cfg.search!==false));
     else h+=kb?kanbanHtml(vc,rows,ac):view==='table'?tableHtml(pr,vc,rows,gt):cardsHtml(pr,vc,rows,gt);
-    if(total&&kb)h+=`<div class="gfoot"><span>Столбцов: ${g.kbCols.length} · записей: ${total}</span><div class="grow"></div><span class="faint kan-tip">${cfg.kanban.drop?(mob?'Перенос — в меню карточки «⋯»':'Карточку можно перетащить в другой столбец'):''}</span></div>`;
+    if(total&&kb)h+=`<div class="gfoot"><div class="grow"></div>${cfg.kanban.drop?`<span class="faint kan-tip">Как перенести ${tipI(mob?'Перенос — в меню карточки «⋯»':'Карточку можно перетащить в другой столбец')}</span>`:''}</div>`;
     else if(total&&gt)h+=`<div class="gfoot"><span>Групп: ${gt.length} · записей: ${total}</span></div>`;
-    else if(total)h+=`<div class="gfoot"><span>Показано ${fmtM(s.page*size+1,false)}–${fmtM(Math.min(total,(s.page+1)*size),false)} из ${fmtM(total,false)}</span><div class="grow"></div><label>На странице ${sel('pg-'+cfg.id,[[25,'25'],[50,'50'],[100,'100'],['all','Все записи']],s.size,'data-a="size" style="display:inline-block;width:auto"')}</label><button class="icon-btn sm" data-a="prev" ${s.page?'':'disabled'} aria-label="Назад">${ic('left')}</button><span class="tnum">${s.page+1} / ${pages}</span><button class="icon-btn sm" data-a="next" ${s.page<pages-1?'':'disabled'} aria-label="Вперёд">${ic('right')}</button></div>`;
+    else if(total)h+=`<div class="gfoot"><span>${fmtM(s.page*size+1,false)}–${fmtM(Math.min(total,(s.page+1)*size),false)} из ${fmtM(total,false)}</span><div class="grow"></div><label>На странице ${sel('pg-'+cfg.id,[[25,'25'],[50,'50'],[100,'100'],['all','Все записи']],s.size,'data-a="size" style="display:inline-block;width:auto"')}</label><button class="icon-btn sm" data-a="prev" ${s.page?'':'disabled'} aria-label="Назад">${ic('left')}</button><span class="tnum">${s.page+1} / ${pages}</span><button class="icon-btn sm" data-a="next" ${s.page<pages-1?'':'disabled'} aria-label="Вперёд">${ic('right')}</button></div>`;
     const sc=host.querySelector('.gscroll');const keep=sc?[sc.scrollTop,sc.scrollLeft]:null;
     host.className='grid';host.dataset.gv=view;host.dataset.density=s.density;host.dataset.width=s.width;host.innerHTML=h;
     const sc2=host.querySelector('.gscroll');if(sc2&&keep){sc2.scrollTop=keep[0];sc2.scrollLeft=keep[1]}
@@ -123,10 +126,10 @@ function grid(host,cfg){
   function skel(){return `<div class="gscroll" style="padding:14px;display:flex;flex-direction:column;gap:14px">${Array.from({length:6},(_,i)=>`<div style="display:flex;gap:16px">${[30,18,14,16,12].map(w=>`<div class="skel" style="width:${w+(i*7)%9}%"></div>`).join('')}</div>`).join('')}</div>`}
   function emptyHtml(any){
     if(!any){const fe=cfg.firstRun===false?null:firstEmpty();g.fe=fe;if(fe)return feHtml(fe);const e=cfg.empty||{};return `<div class="state">${ic(e.icon||'list','lg')}<b>${esc(e.title||'Здесь пока пусто')}</b>${e.text?`<span>${esc(e.text)}</span>`:''}${e.add?`<button class="btn cta" data-a="emptyadd">${ic('plus')}Добавить</button>`:''}</div>`}
-    return `<div class="state">${ic('search','lg')}<b>Ничего не найдено</b><span>Под поиск и фильтры не подходит ни одна запись.</span><button class="linkbtn" data-a="clrall">Сбросить фильтры</button></div>`}
+    return `<div class="state">${ic('search','lg')}<b>Ничего не найдено</b><button class="linkbtn" data-a="clrall">Сбросить фильтры</button></div>`}
   function W(c){return s.widths[c.key]||c.w||140}
   function tableHtml(pr,vc,rows,gt){
-    const selCol=!!cfg.bulk;const tw=vc.reduce((a,c)=>a+W(c),0)+(selCol?38:0)+(cfg.actions?44:0);
+    const selCol=!!cfg.bulk&&(!isMobile()||g.selMode||s.sel.size>0);const tw=vc.reduce((a,c)=>a+W(c),0)+(selCol?38:0)+(cfg.actions?44:0);
     let h=`<div class="gscroll"><table class="gt" style="width:${tw}px"><colgroup>${selCol?'<col style="width:38px">':''}${vc.map(c=>`<col data-c="${c.key}" style="width:${W(c)}px">`).join('')}${cfg.actions?'<col style="width:44px">':''}</colgroup><thead><tr>`;
     if(selCol)h+=`<th class="selc"><input type="checkbox" data-a="selall" aria-label="Выбрать все на странице" ${pr.length&&pr.every(r=>s.sel.has(rid(r)))?'checked':''}></th>`;
     vc.forEach(c=>{const so=s.sort&&s.sort.key===c.key?s.sort.dir:0;const fa=!!s.filters[c.key];
@@ -143,11 +146,14 @@ function grid(host,cfg){
     return h+'</table></div>';
   }
   // Столбцы с cline на телефоне — одной строкой плитки: «К уплате 5 000 · Получено 5 000 · Оплачено 3 000»; cl — короткая подпись, cv — значение для плитки
-  const clineHtml=(cs,r)=>{const ps=cs.map(c=>{const v=c.val(r);return v==null||v===''?'':`<span>${esc(c.cl||c.label)} <b>${c.cv?c.cv(r):esc(colTxt(c,r))}</b></span>`}).filter(Boolean);return ps.length?`<dd class="gc-line">${ps.join('<i>·</i>')}</dd>`:''};
+  const clineHtml=(cs,r)=>{if(!(+cs[0].val(r)>0))return '';const ps=cs.map(c=>{const v=c.val(r);return v==null||v===''?'':`<span>${esc(c.cl||c.label)} <b>${c.cv?c.cv(r):esc(colTxt(c,r))}</b></span>`}).filter(Boolean);return ps.length?`<dd class="gc-line">${ps.join('<i>·</i>')}</dd>`:''};
   function cardsHtml(pr,vc,rows,gt){
     const tc=vc.find(c=>c.key===cfg.title)||vc[0];const rest=vc.filter(c=>c!==tc&&!c.audit);const au=vc.filter(c=>c.audit);const AU=k=>au.find(c=>c.key===k);
     const audLine=r=>{if(!au.length)return '';const part=(w,t)=>{const a=AU(w),b=AU(t);if(!a&&!b)return '';return `${a?esc(colTxt(a,r)):''}${a&&b?', ':''}${b?esc(colTxt(b,r)):''}`};const c1=part('_cb','_ca'),c2=part('_ub','_ua');return `<div class="gc-aud">${c1?`<span>Создал: ${c1}</span>`:''}${c2?`<span>Изменил: ${c2}</span>`:''}</div>`};
-    const card=r=>{const id=rid(r);if(cfg.cardHtml)return `<div class="gcard gcard-x ${cfg.rowClass?cfg.rowClass(r):''}" data-id="${esc(id)}" tabindex="0">${cfg.cardHtml(r)}${cfg.actions?`<button class="icon-btn sm gc-mx" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div>`;return `<div class="gcard ${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}" data-id="${esc(id)}" tabindex="0"><div class="gc-h">${cfg.bulk?`<input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать">`:''}<div class="gc-t">${tc.html?tc.html(r):esc(colTxt(tc,r))}</div>${cfg.actions?`<button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div><dl>${rest.map(c=>{if(c.cline)return c===rest.find(x=>x.cline)?clineHtml(rest.filter(x=>x.cline),r):'';const v=c.html?c.html(r):esc(colTxt(c,r));return `<dt>${esc(c.label)}</dt><dd>${v===''?'<span class="faint">—</span>':v}</dd>`}).join('')}</dl>${audLine(r)}</div>`};
+    const vk=new Set(vc.map(c=>c.key)),mc=isMobile()&&cfg.mcard;
+    const dlHtml=cs=>{const h=cs.map(c=>{if(c.cline)return c===cs.find(x=>x.cline)?clineHtml(cs.filter(x=>x.cline),r0):'';const v=c.html?c.html(r0):esc(colTxt(c,r0));return `<dt>${esc(c.label)}</dt><dd>${v===''?'<span class="faint">—</span>':v}</dd>`}).join('');return h?`<dl>${h}</dl>`:''};let r0=null;
+    const mcard=(r,id)=>{const m=cfg.mcard(r,vk);r0=r;const rest2=rest.filter(c=>!m.keys.includes(c.key));return `<div class="gcard gc-m ${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}" data-id="${esc(id)}" tabindex="0"><div class="gc-h">${cfg.bulk&&(g.selMode||s.sel.size>0)?`<input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать">`:''}<div class="gc-t">${tc.html?tc.html(r):esc(colTxt(tc,r))}${m.sub?`<div class="gc-sub">${m.sub}</div>`:''}</div>${m.right?`<div class="gc-r">${m.right}</div>`:''}${cfg.actions?`<button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div>${dlHtml(rest2)}${audLine(r)}</div>`};
+    const card=r=>{const id=rid(r);if(mc)return mcard(r,id);if(cfg.cardHtml)return `<div class="gcard gcard-x ${cfg.rowClass?cfg.rowClass(r):''}" data-id="${esc(id)}" tabindex="0">${cfg.cardHtml(r)}${cfg.actions?`<button class="icon-btn sm gc-mx" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div>`;return `<div class="gcard ${cfg.rowClass?cfg.rowClass(r):''} ${s.sel.has(id)?'sel':''}" data-id="${esc(id)}" tabindex="0"><div class="gc-h">${cfg.bulk&&(!isMobile()||g.selMode||s.sel.size>0)?`<input type="checkbox" data-sel="${esc(id)}" ${s.sel.has(id)?'checked':''} aria-label="Выбрать">`:''}<div class="gc-t">${tc.html?tc.html(r):esc(colTxt(tc,r))}</div>${cfg.actions?`<button class="icon-btn sm" data-menu="${esc(id)}" aria-label="Действия">${ic('more')}</button>`:''}</div><dl>${rest.map(c=>{if(c.cline)return c===rest.find(x=>x.cline)?clineHtml(rest.filter(x=>x.cline),r):'';const v=c.html?c.html(r):esc(colTxt(c,r));return `<dt>${esc(c.label)}</dt><dd>${v===''?'<span class="faint">—</span>':v}</dd>`}).join('')}</dl>${audLine(r)}</div>`};
     const nums=vc.filter(c=>NUMT.includes(c.type)&&aggOf(s,c));
     const walk=arr=>arr.map(gr=>{const open=!s.closed.has(gr.path);return `<div class="gc-grp lv${gr.lv}"><button class="g-tg" data-g="${esc(gr.path)}" aria-expanded="${open}">${ic(open?'down':'right','sm')}<b>${esc(gr.label)}</b><span class="g-c">${gr.rows.length}</span></button>${nums.length?`<span class="gc-agg">${nums.map(c=>{const how=aggOf(s,c);return `<span>${esc(c.label)}${how==='sum'?'':' ('+AGG_L[how].toLowerCase()+')'}: <b>${aggTxt(c,how,aggVal(c,how,gr.rows))}</b></span>`}).join('')}</span>`:''}</div>${open?(gr.sub?`<div class="gc-sub">${walk(gr.sub)}</div>`:`<div class="gcards">${gr.rows.map(card).join('')}</div>`):''}`}).join('');
     let h=gt?`<div class="gc-groups">${walk(gt)}</div>`:`<div class="gcards">${pr.map(card).join('')}</div>`;
@@ -252,7 +258,11 @@ function grid(host,cfg){
       if(b=t.closest('[data-kbmore]')){g.kbMore=g.kbMore||{};const k=b.dataset.kbmore;g.kbMore[k]=(g.kbMore[k]||KB_STEP)+KB_STEP;refresh();return}
       if(b=t.closest('[data-clr]')){delete s.filters[b.dataset.clr];s.page=0;refresh();return}
       if(b=t.closest('[data-bulk]')){ckHit('bulk');const list=[...s.sel].map(id=>byId[id]).filter(Boolean);cfg.bulk[+b.dataset.bulk].run(list,()=>{s.sel.clear()});return}
-      if(b=t.closest('[data-a]')){const a=b.dataset.a;
+      if(b=t.closest('[data-a]')){runA(b.dataset.a,b);return}
+      if(t.closest('a,button,input,select,label,textarea,td[data-sr]'))return;
+      const row=t.closest('[data-id]');if(row&&!row.dataset.lp&&cfg.open)cfg.open(byId[row.dataset.id]);if(row)delete row.dataset.lp;
+    };
+    function runA(a,b){
         if(a==='cols'){colsPop(b);ckHit('cols')}
         if(a==='kbby'){const cur=kbCol(ac).key;menu(b,kbKeys(ac).map(c=>({label:c.label,icon:'layers',on:c.key===cur,run:()=>{s.kb=c.key;g.kbMore={};gsave(cfg.id);refresh()}})))}
         if(a==='grp'){groupPop(b);ckHit('grp')}
@@ -276,13 +286,22 @@ function grid(host,cfg){
         if(a==='clrall'){s.filters={};s.page=0;if(S.search){clearSearch();ACTIVE.forEach(x=>x.refresh())}else refresh()}
         if(a==='clrq'){clearSearch();ACTIVE.forEach(x=>x.refresh())}
         if(a==='prev'){s.page--;refresh()}if(a==='next'){s.page++;refresh()}
-        if(a==='unsel'){s.sel.clear();refresh()}
+        if(a==='unsel'){s.sel.clear();g.selMode=false;refresh()}
+        // Телефон: «Фильтр» — выбор поля, затем то же окно фильтра; «Сортировка» — поле и направление; «⋯» — остальное
+        if(a==='mfilt'){const fc=vc.filter(c=>!c.nofilter);menu(b,[...fc.map(c=>({label:c.label,icon:'filter',on:!!s.filters[c.key],sub:s.filters[c.key]?chipText(c,s.filters[c.key]):'',run:()=>setTimeout(()=>filterPop(b.isConnected?b:host,c),0)})),...(Object.keys(s.filters).length?[{sep:true},{label:'Сбросить фильтры',icon:'x',run:()=>{s.filters={};s.page=0;refresh()}}]:[])]);return}
+        if(a==='msort'){const cur=s.sort;menu(b,[...vc.map(c=>({label:c.label,icon:cur&&cur.key===c.key?(cur.dir>0?'up':'dn'):'',on:!!(cur&&cur.key===c.key),sub:cur&&cur.key===c.key?(cur.dir>0?'по возрастанию':'по убыванию'):'',run:()=>{s.sort=cur&&cur.key===c.key?{key:c.key,dir:-cur.dir}:{key:c.key,dir:1};gsave(cfg.id);refresh()}})),...(cur?[{sep:true},{label:'Без сортировки',icon:'x',run:()=>{s.sort=null;gsave(cfg.id);refresh()}}]:[])]);return}
+        if(a==='mmore'){const VL={table:'Таблица',cards:'Карточки',kanban:'Доска'},VI={table:'table',cards:'cards',kanban:'board'},views=cfg.fixedView?[]:cfg.kanban?['table','cards','kanban']:['table','cards'];const kb=g.view==='kanban';
+          const it=[...views.map(v=>({label:VL[v],icon:VI[v],on:g.view===v,run:()=>{s.view=v;gsave(cfg.id);refresh()}})),views.length?{sep:true}:null,
+            kb?{label:'Столбцы доски',icon:'layers',sub:kbCol(ac).label,run:()=>setTimeout(()=>runA('kbby',b),0)}:{label:'Группировка',icon:'layers',sub:gcols().map(c=>c.label).join(' → '),run:()=>setTimeout(()=>runA('grp',b),0)},
+            g.fold?{label:g.fold.l,icon:g.fold.a==='gall'?'unfold':'fold',run:()=>runA(g.fold.a,b)}:null,
+            {label:kb||g.view==='cards'?'Поля карточки':'Столбцы',icon:'columns',sub:`${vc.length} из ${ac.length}`,run:()=>setTimeout(()=>runA('cols',b),0)},
+            {label:'Плотность',icon:'sliders',run:()=>setTimeout(()=>runA('opts',b),0)},
+            cfg.bulk?{label:'Выбрать несколько',icon:'check',on:!!g.selMode,run:()=>{g.selMode=!g.selMode;if(!g.selMode)s.sel.clear();refresh()}}:null,
+            cfg.exportable!==false&&(isAdmin()||can('export'))?{label:'В Excel',icon:'download',run:()=>runA('xls',b)}:null].filter(Boolean);
+          menu(b,it.filter((x,i)=>!(x.sep&&(i===0||i===it.length-1))));return}
         if(a==='emptyadd')cfg.empty.add();
         if(a==='fe'){const x=g.fe.btns.filter(Boolean)[+b.dataset.i];x&&x[2]()}
-        return}
-      if(t.closest('a,button,input,select,label,textarea,td[data-sr]'))return;
-      const row=t.closest('[data-id]');if(row&&!row.dataset.lp&&cfg.open)cfg.open(byId[row.dataset.id]);if(row)delete row.dataset.lp;
-    };
+    }
     host.onchange=e=>{const t=e.target;
       if(t.dataset.sel!=null){const id=t.dataset.sel;if(t.checked)s.sel.add(id);else s.sel.delete(id);refresh()}
       if(t.dataset.a==='selall'){pr.forEach(r=>{if(t.checked)s.sel.add(rid(r));else s.sel.delete(rid(r))});refresh()}

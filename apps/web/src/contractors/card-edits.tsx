@@ -1,17 +1,10 @@
 'use client';
 
-import {
-  benefitsEndingSoon,
-  bishkekDate,
-  formatDateRu,
-  pluralForm,
-  SOCFUND_FLAGS,
-} from '@buhuchet/domain';
+import { benefitsEndingSoon, bishkekDate, formatDateRu, pluralForm } from '@buhuchet/domain';
 import { ContractorSaved, type Contractor, type UpdateContractorRequest } from '@buhuchet/shared';
 import {
   buttonClass,
   ConfirmDialog,
-  inputClass,
   linkButtonClass,
   Modal,
   Note,
@@ -23,7 +16,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
-import { valueDictsQuery, type Catalog } from '../dicts/dicts-data';
+import type { Catalog } from '../dicts/dicts-data';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { useShell } from '../shell/context';
@@ -38,16 +31,15 @@ import {
 
 /*
  * Правки прямо в «Основном» карточки контрагента (ТЗ «Карточка контрагента», «Тариф страховых взносов
- * в Соцфонд»; прототип modules/contractor-card.js — `#cp-ben`, `#cp-ugns`, benSoon; modules/socfund-ui.js
+ * в Соцфонд»; прототип modules/contractor-card.js — `#cp-ben`, benSoon; modules/socfund-ui.js
  * — sfCardKv, sfCardMount, sfDlg): строка «Льготы и особые статусы» с «выбрать» (без права — «описания»)
- * и предупреждением за 60 дней до конца льготы по кодексу, выбор УГНС списком и строка «Тариф
- * Соцфонда» с признаками, «изменить» и «Сменить на …». Сохраняется только изменённое поле с версией
+ * и предупреждением за 60 дней до конца льготы по кодексу и строка «Тариф
+ * Соцфонда» с «изменить» и «Сменить на …» (УГНС и признаки тарифа — в окнах, прототип v137). Сохраняется только изменённое поле с версией
  * записи; статусы по УГНС и сроки отчётов по статусам пересчитывает сервер.
  */
 
 export interface CardEdits {
   benefits: ReactNode;
-  office: ReactNode;
   /** null — тариф Соцфонда контрагенту не нужен (разовый или без наёмных, docs/deviations.md п. А-5). */
   socfund: ReactNode | null;
   dialogs: ReactNode;
@@ -57,7 +49,7 @@ const Faint = ({ children }: { children: ReactNode }) => (
   <span className="text-faint">{children}</span>
 );
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="block text-[11.5px] leading-[1.4] text-faint">{children}</span>
+  <span className="block text-[12px] leading-[1.4] text-muted">{children}</span>
 );
 const linkClass = `${linkButtonClass()} text-[12px]`;
 
@@ -78,7 +70,6 @@ export function useCardEdits(c: Contractor, catalog: Catalog | undefined): CardE
   const refresh = useContractorsRefresh();
   const { access } = useShell();
   const edit = access.can('createCp') && c.serviceStatus !== 'archived';
-  const offices = useQuery({ ...valueDictsQuery, enabled: edit }).data?.offices;
   const [ben, setBen] = useState<{ n: number; open: boolean }>({ n: 0, open: false });
   const [sf, setSf] = useState<{ n: number; open: boolean }>({ n: 0, open: false });
   const [busy, setBusy] = useState(false);
@@ -159,47 +150,12 @@ export function useCardEdits(c: Contractor, catalog: Catalog | undefined): CardE
       {soon.map((b) => (
         <div key={b.name} className="mt-1.5">
           <Note tone="warn" icon="alert">
-            {t('cp.card.benefit_soon', { name: b.name, date: formatDateRu(b.until), n: b.days })}
+            {t('cp.card.benefit_soon', { name: b.name, date: formatDateRu(b.until) })}
           </Note>
         </div>
       ))}
     </>
   );
-
-  const officeLabel = (o: { gnsCode: string | null; name: string }) =>
-    o.gnsCode ? `${o.gnsCode} · ${o.name}` : o.name;
-  const current = c.taxOffice?.code ?? '';
-  const office =
-    edit && offices ? (
-      <select
-        className={`${inputClass()} min-h-[30px] cursor-pointer px-2 py-[3px]`}
-        aria-label={t('cp.card.office')}
-        data-cp-ugns=""
-        value={current}
-        disabled={busy}
-        onChange={(e) => {
-          const code = e.target.value;
-          if (code === current) return;
-          void patch(
-            { taxOfficeCode: code || null },
-            (s) => (s.notices.join('; ') || t('cp.card.saved')) + reduedText(t, s.redued),
-          );
-        }}
-      >
-        <option value="">{t('cp.form.not_set')}</option>
-        {offices
-          .filter((o) => o.active || o.code === current)
-          .map((o) => (
-            <option key={o.code} value={o.code}>
-              {officeLabel(o)}
-            </option>
-          ))}
-      </select>
-    ) : c.taxOffice ? (
-      c.taxOffice.name
-    ) : (
-      <Faint>{t('cp.card.office_none')}</Faint>
-    );
 
   const socfund = c.socfund.needed ? (
     <SocfundValue
@@ -263,7 +219,7 @@ export function useCardEdits(c: Contractor, catalog: Catalog | undefined): CardE
     </>
   );
 
-  return { benefits, office, socfund, dialogs };
+  return { benefits, socfund, dialogs };
 }
 
 /** Строка «Тариф Соцфонда» карточки (прототип sfCardKv). */
@@ -285,39 +241,6 @@ function SocfundValue({
   const s = c.socfund;
   const cur = s.tariff;
   const auto = s.auto;
-  // Первой — выплата зарплаты (прототип v82 sfCardKv): не указана — бледным, на тариф не влияет.
-  const pay = (
-    <span key="pay">
-      {t('cp.socfund.pay')}:{' '}
-      {s.flags.pay ? (
-        t(`cp.socfund.pay.${s.flags.pay}`).toLowerCase()
-      ) : (
-        <span className="text-faint">{t('cp.socfund.flag_unset')}</span>
-      )}
-    </span>
-  );
-  const flags = SOCFUND_FLAGS.map((k) => {
-    const v = s.flags[k];
-    // Подпись без пояснения в скобках; у госфинансирования «нет» по умолчанию (прототип sfCardKv).
-    const label = t(`cp.socfund.flag.${k}`).replace(/\s*\(.*\)$/, '');
-    return (
-      <span key={k}>
-        {' · '}
-        {label}:{' '}
-        {v === null ? (
-          k === 'gov' ? (
-            t('cp.socfund.no')
-          ) : (
-            <span className="text-warn-label">{t('cp.socfund.flag_unset')}</span>
-          )
-        ) : v ? (
-          t('cp.socfund.yes')
-        ) : (
-          t('cp.socfund.no')
-        )}
-      </span>
-    );
-  });
   return (
     <span className="block" data-cp-socfund="">
       <span className="inline-flex flex-wrap items-center gap-1">
@@ -333,15 +256,12 @@ function SocfundValue({
             {t('cp.socfund.none')}
           </Pill>
         )}
-        {cur ? <Tag>{t(cur.manual ? 'cp.socfund.manual' : 'cp.socfund.auto')}</Tag> : null}{' '}
+        {/* Только «выбран вручную»: признаки и «определён автоматически» — в окне тарифа (прототип v137). */}
+        {cur?.manual ? <Tag>{t('cp.socfund.manual')}</Tag> : null}{' '}
         <button type="button" data-cp-sf="" className={linkClass} onClick={onOpen}>
           {t(edit ? (cur ? 'cp.socfund.edit' : 'cp.socfund.set') : 'cp.socfund.view_rates')}
         </button>
       </span>
-      <Hint>
-        {pay}
-        {flags}
-      </Hint>
       {s.cashHint ? (
         <span className="mt-1.5 block">
           <Note tone="beta">

@@ -11,6 +11,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { menuPosition } from './action-menu';
+import { useFadeAway } from './fade-away';
+import { PHONE_SHEET, POP_LEAVE } from './popover';
 import { PHONE_QUERY } from './use-media';
 import { useSwipeDown } from './use-swipe-down';
 
@@ -22,7 +24,7 @@ const SIZE_CLASS = {
 /**
  * Всплывающее окошко у элемента поверх страницы (прототип ui/popups.js, openPop с `cls:'pad'`): как
  * `Popover`, но рисуется в `document.body` — не обрезается прокруткой таблицы (фильтр у заголовка
- * столбца). Место — `menuPosition`: под элементом, а если не помещается — над ним; вырос за край
+ * столбца). На телефоне — лист снизу (`PHONE_SHEET`). Место — `menuPosition`: под элементом, а если не помещается — над ним; вырос за край
  * экрана — место считается заново. Закрывается Esc (фокус возвращается на элемент), нажатием вне
  * окошка и элемента, кнопкой «Назад» и на телефоне протяжкой вниз (у списка с поиском — когда список
  * внутри прокручен к началу). При открытии фокус — на первом поле ввода (на телефоне — на выбранной
@@ -60,6 +62,7 @@ export function FloatingPanel({
     [],
   );
   useSwipeDown(box, { enabled: true, onClose, scroller });
+  useFadeAway(box, true);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -127,8 +130,9 @@ export function FloatingPanel({
       aria-label={label}
       data-overlay
       data-popover
+      data-leave={POP_LEAVE}
       style={pos ? { left: pos.x, top: pos.y } : { left: 0, top: 0, visibility: 'hidden' }}
-      className={`fixed z-[70] flex max-h-[min(460px,calc(100dvh-24px))] touch-pan-y animate-slide-up flex-col rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${SIZE_CLASS[size]}`}
+      className={`fixed z-[70] flex max-h-[min(460px,calc(100dvh-24px))] touch-pan-y animate-rise flex-col rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${SIZE_CLASS[size]} ${PHONE_SHEET}`}
     >
       {children}
     </div>,

@@ -35,9 +35,20 @@ export {
   type ModalSize,
   type WindowLabels,
 } from './modal';
+export { EXIT_MS, motionOff, useFadeAway } from './fade-away';
 export { FloatingPanel } from './floating';
-export { Plate, Plates, type PlateColor, type PlateProps } from './plates';
-export { Popover, type PopoverProps } from './popover';
+export { Fold, FormMore } from './fold';
+export {
+  Plate,
+  Plates,
+  PlatesLabelsProvider,
+  platesHidden,
+  type PlateColor,
+  type PlateProps,
+  type PlatesLabels,
+} from './plates';
+export { HelpTip } from './help-tip';
+export { PHONE_SHEET, POP_LEAVE, Popover, type PopoverProps } from './popover';
 export { RecordChangedNotice, type RecordChangedNoticeProps } from './record-changed';
 export {
   SEARCH_SELECT_MAX,
@@ -101,7 +112,7 @@ export {
   type FieldProps,
   type KeyValueItem,
 } from './form';
-export { PACK_QUERY } from './form-pack';
+export { FIELD_LABEL_SELECTOR, PACK_QUERY } from './form-pack';
 export { MINI_WIDE_CHARS, MiniTable, miniWide, type MiniColumn, type MiniRow } from './mini-table';
 export {
   passwordDots,
@@ -140,6 +151,7 @@ export {
   type StatusHistoryRow,
 } from './status/status-history';
 export { RollbackDialog, type RollbackDialogLabels } from './status/rollback-dialog';
+export { DueBit, StatusLine } from './status/status-line';
 export { STATUS_TONE, type StatusToneClasses } from './status/tones';
 export {
   ActionList,
@@ -187,6 +199,7 @@ export type {
   GridRowSelection,
   GridRowStripe,
   GridRowTone,
+  GridShortCard,
   GridValues,
 } from './grid/types';
 export {

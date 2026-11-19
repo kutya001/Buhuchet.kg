@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createTracker,
   dismissFires,
+  fabAway,
   finishMs,
   pagerFires,
   pagerOffset,
@@ -98,5 +99,20 @@ describe('жесты: общие правила (ТЗ «Управление с�
     expect(throwOpacity(0, 300)).toBe(1);
     expect(throwOpacity(-180, 300)).toBeCloseTo(0.5);
     expect(throwOpacity(1000, 300)).toBe(0.2);
+  });
+});
+
+describe('круглая «+» телефона при прокрутке (прототип v141)', () => {
+  it('вниз и ниже 120 px — уезжает, вверх — возвращается, шаг меньше 8 px не считается', () => {
+    // У верха страницы кнопка остаётся, даже если листают вниз.
+    expect(fabAway(60, 0)).toBe(false);
+    expect(fabAway(120, 100)).toBe(false);
+    expect(fabAway(140, 100)).toBe(true);
+    // Вверх — возвращается на любом месте страницы.
+    expect(fabAway(900, 940)).toBe(false);
+    // Дрожание пальца положение не меняет.
+    expect(fabAway(307, 300)).toBeNull();
+    expect(fabAway(293, 300)).toBeNull();
+    expect(fabAway(308, 300)).toBe(true);
   });
 });

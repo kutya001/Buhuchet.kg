@@ -33,6 +33,27 @@ export function closesAtOnce(window: OpenWindow): boolean {
 }
 
 /**
+ * Несохранённое есть, когда экран сказал `dirty` и человек что-то делал в окне (прототип v131: `m.dirty`
+ * ставится по событиям ввода): форма, которая открылась уже заполненной, закрывается без вопроса, пока
+ * её не тронули.
+ */
+export function unsavedNow(dirty: boolean | undefined, touched: boolean): boolean {
+  return !!dirty && touched;
+}
+
+/**
+ * Кнопка нижней строки окна — «Отмена» формы (прототип v131 `[data-close]`): помечена
+ * `data-window-cancel` или названа надписью «Отмена» из словаря. Её нажатие у формы с изменениями
+ * сначала спрашивает «Закрыть без сохранения?».
+ */
+export function isCancelButton(
+  button: { marked: boolean; text: string | null | undefined },
+  cancelLabel: string,
+): boolean {
+  return button.marked || (button.text ?? '').trim() === cancelLabel;
+}
+
+/**
  * Открытые окна по порядку открытия (прототип `MODALS`): Esc закрывает и Tab обходит только верхнее
  * окно; выход из аккаунта при несохранённых изменениях в открытой форме спрашивает «Выйти без
  * сохранения?» (ТЗ «Панель модулей», решение заказчика 26.10.2026; прототип core/login.js logoutDlg

@@ -318,7 +318,7 @@ export function TaxPickList({
             />
             <span className="flex min-w-0 flex-col gap-px">
               <b>{g.title}</b>
-              <span className="text-[11.5px] leading-[1.4] text-faint">{g.who}</span>
+              <span className="text-[12px] leading-[1.4] text-muted">{g.who}</span>
             </span>
           </button>
           <span
@@ -350,9 +350,7 @@ export function TaxPickList({
               return (
                 <div key={i}>
                   {s.title ? (
-                    <div className="mx-2.5 mt-2.5 text-[12px] font-[650] tracking-[.04em] text-muted uppercase">
-                      {s.title}
-                    </div>
+                    <div className="mx-2.5 mt-2.5 text-[13px] font-[650] text-muted">{s.title}</div>
                   ) : null}
                   {items.map((x) => rowView(x, `${g.id}-${x.code}`))}
                 </div>

@@ -157,7 +157,22 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
   test('тема: без выбора — светлая и при тёмной теме устройства (прототип v88), смена — волной, при «Уменьшить движение» — сразу, переключатель запоминает выбор', async ({
     page,
     baseURL,
+    isMobile,
   }) => {
+    // На телефоне кнопки темы в верхней панели нет (прототип v138): тема — в «Мой профиль».
+    const flip = async (to: 'light' | 'dark') => {
+      if (!isMobile) {
+        await page.getByRole('button', { name: 'Переключить тему' }).click();
+        return;
+      }
+      await expect(page.getByRole('button', { name: 'Переключить тему' })).toBeHidden();
+      await page.getByRole('button', { name: 'Меню', exact: true }).click();
+      await page.getByRole('button', { name: /^Мой профиль/ }).click();
+      const profile = page.getByRole('dialog', { name: 'Мой профиль' });
+      await profile.getByLabel('Тема').selectOption(to);
+      await page.keyboard.press('Escape');
+      await expect(profile).toBeHidden();
+    };
     await signIn(page.request, new URL(baseURL!).origin, 'erkin', DEMO_PASSWORD);
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.goto('/app/home/today');
@@ -178,7 +193,7 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
       });
     const waves = () => page.evaluate(() => (window as unknown as { __waves: string[] }).__waves);
     await watch();
-    await page.getByRole('button', { name: 'Переключить тему' }).click();
+    await flip('dark');
     await expect(html).toHaveAttribute('data-theme', 'dark');
     await expect(html).not.toHaveAttribute('data-wave', /./);
     expect(await waves()).toHaveLength(1);
@@ -189,13 +204,13 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
     // «Уменьшить движение» — тема меняется сразу, без волны.
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
     await watch();
-    await page.getByRole('button', { name: 'Переключить тему' }).click();
+    await flip('light');
     await expect(html).toHaveAttribute('data-theme', 'light');
     expect(luminance(await frame())).toBeGreaterThan(0.6);
     expect(await waves()).toEqual([]);
   });
 
-  test('верхняя и левая панели: «ⓘ», «?», поиск по вкладке, время по Бишкеку, свёрнутая панель и раскрытые ветки', async ({
+  test('верхняя и левая панели: один «?» у названия модуля, поиск по вкладке, время по Бишкеку, свёрнутая панель и раскрытые ветки', async ({
     page,
     baseURL,
     isMobile,
@@ -207,23 +222,24 @@ test.describe('Этап 1: оболочка рабочей страницы', ()
 
     const clock = page.locator('header [title$=", Бишкек"]');
     await expect(clock).toHaveAttribute('title', '27.10.2026 00:30, Бишкек');
-    // Уже 768 px — только ЧЧ:ММ.
-    await expect
-      .poll(() => clock.innerText())
-      .toMatch(isMobile ? /^00:30$/ : /^27\.10\.2026\s*00:30$/);
+    // На телефоне часов в верхней панели нет (прототип v138).
+    if (isMobile) await expect(clock).toBeHidden();
+    else await expect.poll(() => clock.innerText()).toMatch(/^27\.10\.2026\s*00:30$/);
 
-    // «ⓘ»: на ПК — при наведении, на телефоне — по нажатию.
-    const info = page.getByRole('button', { name: 'Описание модуля' });
-    const infoBox = page.getByRole('dialog', { name: 'Описание модуля' });
-    if (isMobile) await info.click();
-    else await info.hover();
-    await expect(infoBox).toContainText('Отчёты создаются автоматически по назначениям');
-    if (isMobile) await page.keyboard.press('Escape');
-    else await page.mouse.move(640, 600);
+    // Один «?» у названия (прототип v138): строка «что здесь», действия «+ Добавить» и три ссылки.
+    const info = page.getByRole('button', { name: 'Что здесь: подсказка по модулю' });
+    const infoBox = page.getByRole('dialog', { name: 'Что здесь: подсказка по модулю' });
+    await expect(page.locator('header [data-module-help]')).toHaveCount(1);
+    await info.click();
+    await expect(infoBox).toContainText('Все отчёты клиентов: сроки, статусы, суммы к уплате.');
+    await expect(infoBox.getByRole('button', { name: 'Показать на экране' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(infoBox).toBeHidden();
 
-    // «?»: окно «Базы знаний» о модуле — описание и «Открыть Базу знаний».
-    await page.getByRole('button', { name: 'Помощь' }).click();
+    // «Вся инструкция»: окно «Базы знаний» о модуле — описание и «Открыть Базу знаний».
+    await info.click();
+    await infoBox.getByRole('button', { name: 'Вся инструкция' }).click();
+    await expect(infoBox).toBeHidden();
     const help = page.getByRole('dialog', { name: 'Отчеты для сдачи' });
     await expect(help).toContainText('Главный рабочий модуль');
     await help.getByRole('link', { name: 'Открыть Базу знаний' }).click();

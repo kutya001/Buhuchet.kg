@@ -85,10 +85,12 @@ function whatsNew(how){if(navigator.webdriver&&!store.get('wntest',false))return
   const r=newsRead(),vis=newsOrder(newsVis());let l=vis.filter(n=>n.login&&!r.has(n.id));const unread=l.length;
   if(!l.length)return;const first=!store.get('kbw.'+S.me,false);store.set('kbw.'+S.me,true);
   const fresh=new Set(l.filter(n=>!r.has(n.id)).map(n=>n.id));l.forEach(n=>r.add(n.id));renderSide();renderSheetDot();if(typeof dbSoon==='function')dbSoon();
-  setTimeout(()=>openModal({size:'wide',render:()=>({title:'Что нового',sub:`${unread} ${plural(unread,'новость','новости','новостей')} с вашего прошлого входа`,
-    body:`${first?`<div class="note">${ic('grad')}<span><b>Добро пожаловать в Buhuchet.kg: начните с Базы знаний.</b> В «Базе знаний» — уроки по вашим модулям с кнопками «Перейти» и «Показать как», статьи инструкции и ваш уровень знаний. Программа строится из ваших прав: проходите шаги, и уровень вырастет от «Новичка» до «Эксперта».</span></div>`:''}
-      <div class="nw-list" id="wn-list">${l.map((n,i)=>newsRow(n,!i,fresh.has(n.id))).join('')}</div>`,
-    foot:`${first?`<button class="btn" id="wn-kb">${ic('grad','sm')}Открыть Базу знаний</button>`:''}<div class="grow"></div><button class="btn ghost" id="wn-all">${ic('bell','sm')}Все новости</button><button class="btn cta" data-close>Понятно</button>`,
+    // Не больше трёх последних (17.11.2026, «Меньше текста», ТЗ п. 9); остальные — «Все новости», прочитанными они считаются так же
+  const l3=l.slice(0,3);
+  setTimeout(()=>openModal({size:'wide',render:()=>({title:'Что нового',sub:unread>3?`Последние 3 из ${unread}`:'',
+    body:`${first?`<div class="note">${ic('grad')}<span>Начните с уроков в «Базе знаний»</span></div>`:''}
+      <div class="nw-list" id="wn-list">${l3.map((n,i)=>newsRow(n,!i,fresh.has(n.id))).join('')}</div>`,
+    foot:`${first?`<button class="btn" id="wn-kb">${ic('grad','sm')}Уроки</button>`:''}<div class="grow"></div><button class="btn ghost" id="wn-all">Все новости${unread>3?' · '+unread:''}</button><button class="btn cta" data-close>Понятно</button>`,
     mount(el,m){$('#wn-all',el).onclick=()=>{m.close();go('kb','news')};const k=$('#wn-kb',el);if(k)k.onclick=()=>{m.close();go('kb','lessons')};
       // Заголовок раскрывает и сворачивает подробности; раскрыта сама только самая новая
       $('#wn-list',el).onclick=e=>{const g=e.target.closest('[data-nwmore]');if(g){const n=NEWS.find(x=>x.id===g.dataset.nwmore);m.close();return newsLinkGo(n.link)}

@@ -149,6 +149,9 @@ export function publicPageHandler(deps: ApiDeps): RouteHandler<typeof publicPage
     const state = await contractorPageState(deps.db, slug, inn, pageTokenHash(c, deps));
     // Экран кода — только «Что это за страница?» и объяснение (доработки 15.11.2026, прототип v120
     // `cphCodeWhat`): остальные подсказки страница получает после кода.
+    // До кода страница не называет и организацию: ТЗ «по чужому ИНН без его кода не видно ничего» строже
+    // прототипа v135 (`pubBrand` — логотип и название организации на экранах кода).
+    // ОТКЛОНЕНИЕ: docs/deviations.md#К-21
     if (state.state === 'code') {
       return c.json({ state: 'code', help: await cpCodeHelp(deps.db) } as PublicPageBody, 200);
     }

@@ -48,7 +48,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
   // Новая организация (`pnpm db:create-org`) и вход через страницу входа — несколько раз за тест.
   test.describe.configure({ timeout: 120_000 });
 
-  test('(п. 47) владелец новой организации видит приветствие из 6 экранов; «Нет» на проекты и показатели, «Да» на деньги — после «Применить» в меню «Финансовые операции», нет «Проектов» и «Показателей», в истории «по опроснику»', async ({
+  test('(п. 47) владелец новой организации видит приветствие из 5 экранов (прототип v138 — без «Модулей»); «Нет» на проекты и показатели, «Да» на деньги — после «Применить» в меню «Финансовые операции», нет «Проектов» и «Показателей», в истории «по опроснику»', async ({
     page,
     baseURL,
   }) => {
@@ -58,23 +58,16 @@ test.describe('Этап 2: приветствие и опросник', () => {
 
     const w = welcome(page);
     await expect(w).toBeVisible();
-    await expect(w).toContainText('1 из 6');
+    await expect(w).toContainText('1 из 5');
     await expect(w.getByRole('heading', { name: 'Добро пожаловать в Buhuchet.kg' })).toBeVisible();
     // Вместо «Что нового»: в этот вход его нет.
     await expect(page.locator('[data-whats-new]')).toHaveCount(0);
     await expect(w.getByRole('button', { name: 'Позже' })).toBeVisible();
 
+    // Экрана «Модули программы» нет (прототип v138): сразу опросник.
     await next(page);
-    await expect(w).toContainText('2 из 6');
-    await expect(w.getByRole('heading', { name: 'Модули программы' })).toBeVisible();
-    await expect(w.locator('[data-welcome-mod="reports"]')).toContainText('Включён всегда');
-    await expect(w.locator('[data-welcome-mod="projects"]')).toContainText('Можно включить');
-    await expect(w.locator('[data-welcome-mod="tasks"]')).toContainText(
-      'Включён · можно выключить',
-    );
-
-    await next(page);
-    await expect(w).toContainText('3 из 6');
+    await expect(w).toContainText('2 из 5');
+    await expect(w.getByRole('heading', { name: 'Модули программы' })).toHaveCount(0);
     // «Позже» — только до опросника.
     await expect(w.getByRole('button', { name: 'Позже' })).toHaveCount(0);
     const answer = async (id: string, value: 'Да' | 'Нет') =>
@@ -89,7 +82,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
     await expect(w.locator('[data-quiz-question="q-acc"]')).toBeVisible();
 
     await next(page, 'Далее: что будет включено');
-    await expect(w).toContainText('4 из 6');
+    await expect(w).toContainText('3 из 5');
     const on = w.locator('[data-plan-on]');
     await expect(on).toContainText('Учёт оплаты налогов');
     await expect(on).toContainText('Финансовые операции по контрагентам');
@@ -98,11 +91,11 @@ test.describe('Этап 2: приветствие и опросник', () => {
     await expect(off).toContainText('Показатели контрагентов');
     await w.getByRole('button', { name: 'Применить' }).click();
 
-    await expect(w).toContainText('5 из 6');
+    await expect(w).toContainText('4 из 5');
     await expect(w.getByRole('heading', { name: 'С чего начать' })).toBeVisible();
     await expect(w.locator('[data-welcome-step]')).toHaveCount(3);
     await next(page, 'Далее: выбор налогов');
-    await expect(w).toContainText('6 из 6');
+    await expect(w).toContainText('5 из 5');
     await expect(w.getByRole('heading', { name: 'Выбор налогов' })).toBeVisible();
     await w.getByRole('button', { name: 'Пропустить' }).click();
     await expect(w).toHaveCount(0);
@@ -138,12 +131,11 @@ test.describe('Этап 2: приветствие и опросник', () => {
     await page.waitForTimeout(1000);
     await expect(w).toHaveCount(0);
 
-    // «База знаний» → «Мой уровень» → «Приветствие и обзор модулей»: три экрана, без опросника.
+    // «База знаний» → «Мой уровень» → «Приветствие и обзор модулей»: два экрана, без опросника.
     await page.goto('/app/kb/level');
     await page.getByRole('button', { name: 'Открыть', exact: true }).click();
-    await expect(w).toContainText('1 из 3');
+    await expect(w).toContainText('1 из 2');
     await expect(w.getByRole('button', { name: 'Позже' })).toHaveCount(0);
-    await next(page);
     await next(page);
     await expect(w.getByRole('button', { name: 'Осмотреться самому' })).toBeVisible();
     // «Начать обучение» открывает «Уроки» и сразу запускает «Показать как» первого невыполненного
@@ -162,8 +154,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
     const login = await newOrgOwner(page.request, origin);
     await logIn(page, origin, login);
     const w = welcome(page);
-    await expect(w).toContainText('1 из 6');
-    await next(page);
+    await expect(w).toContainText('1 из 5');
     await next(page);
     await next(page, 'Далее: что будет включено');
     await w.getByRole('button', { name: 'Применить' }).click();
@@ -198,8 +189,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
     const second = await newOrgOwner(other, origin);
     await other.dispose();
     await logIn(page, origin, second);
-    await expect(w).toContainText('1 из 6');
-    await next(page);
+    await expect(w).toContainText('1 из 5');
     await next(page);
     await next(page, 'Далее: что будет включено');
     await w.getByRole('button', { name: 'Применить' }).click();
@@ -207,9 +197,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
     await w.getByRole('button', { name: 'Пропустить' }).click();
     await expect(w).toHaveCount(0);
     await expect(
-      page.getByText(
-        'Налоги можно выбрать позже: «Справочники» → «Виды отчётов» → «Подключить из каталога»',
-      ),
+      page.getByText('Выбрать налоги можно позже в «Справочниках»', { exact: true }),
     ).toBeVisible();
     expect(await connected(page.request)).toEqual([]);
 
@@ -227,7 +215,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
     expect((await connected(page.request)).length).toBeGreaterThan(0);
   });
 
-  test('«Позже» откладывает опросник; сотрудник при первом входе видит три экрана без опросника, при втором — ничего', async ({
+  test('«Позже» откладывает опросник; сотрудник при первом входе видит два экрана без опросника, при втором — ничего', async ({
     page,
     baseURL,
   }) => {
@@ -250,7 +238,7 @@ test.describe('Этап 2: приветствие и опросник', () => {
 
     await logIn(page, origin, owner);
     const w = welcome(page);
-    await expect(w).toContainText('1 из 6');
+    await expect(w).toContainText('1 из 5');
     await w.getByRole('button', { name: 'Позже' }).click();
     await expect(w).toHaveCount(0);
     await expect(
@@ -277,14 +265,8 @@ test.describe('Этап 2: приветствие и опросник', () => {
     });
     expect(changed.status(), await changed.text()).toBe(200);
     await logIn(page, origin, staffLogin);
-    await expect(w).toContainText('1 из 3');
+    await expect(w).toContainText('1 из 2');
     await expect(w.getByRole('button', { name: 'Позже' })).toHaveCount(0);
-    await next(page);
-    await expect(w.getByRole('heading', { name: 'Модули программы' })).toBeVisible();
-    // Только свои модули и без отметок «Включён всегда» / «Можно включить».
-    await expect(w.locator('[data-welcome-mod="reports"]')).toBeVisible();
-    await expect(w.locator('[data-welcome-mod="projects"]')).toHaveCount(0);
-    await expect(w).not.toContainText('Включён всегда');
     await next(page);
     await expect(w.getByRole('heading', { name: 'С чего начать' })).toBeVisible();
     await w.getByRole('button', { name: 'Осмотреться самому' }).click();

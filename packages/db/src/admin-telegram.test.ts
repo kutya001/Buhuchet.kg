@@ -12,6 +12,7 @@ import {
   finishPlatformOutbox,
   listAdminTelegramLogPage,
   listAdminTelegramLogValues,
+  type JournalScope,
 } from './admin-telegram';
 import { withUserContext } from './auth';
 import { readPlatformHistory } from './platform-history';
@@ -39,6 +40,9 @@ const query = (over: Partial<ListQuery> = {}): ListQuery => ({
 const NOW = new Date('2026-11-01T04:00:00Z');
 const TODAY = '2026-11-01';
 const KEYS = ['at', 'to', 'org', 'kind', 'st', 'tries', 'err'];
+// Журнал показывает 90 дней: всё наполнение теста — внутри срока.
+const SINCE = new Date('2026-08-04T00:00:00Z');
+const ALL: JournalScope = { dir: null, from: SINCE };
 
 describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (задача 2.41)', () => {
   let db: TestDatabase;
@@ -210,8 +214,8 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
   const asAdmin = <T>(fn: Parameters<typeof withUserContext<T>>[2]) =>
     withUserContext(db.app.db, adminId, fn);
 
-  it('администратор видит журнал всех организаций и платформы: получатель, организация, без текста', async () => {
-    const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t));
+  it('администратор видит журнал всех организаций и платформы: получатель, организация, текст; у кода текста нет', async () => {
+    const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t, ALL));
     expect(page.total).toBe(7);
     expect(page.rows.map((r) => r.id)).toEqual([
       ids.sent,
@@ -232,8 +236,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       tries: 1,
       lastError: null,
     });
-    expect(first).not.toHaveProperty('text');
+    // Текст — по решению заказчика 17.11.2026; номера чата в строке нет, у кода текста нет вовсе.
+    expect(first).toMatchObject({ dir: 'out', src: 'outbox', text: 'Напоминания', hide: null });
     expect(first).not.toHaveProperty('chatId');
+    expect(page.rows.find((r) => r.id === ids.code)).toMatchObject({ text: null, hide: 'code' });
     // Без имени в Telegram — только краткое ФИО; у администратора платформы — логин, организации нет.
     expect(page.rows.find((r) => r.id === ids.code)!.recipient).toBe(shortName('Бекова Бермет'));
     expect(page.rows.find((r) => r.id === ids.platform)).toMatchObject({
@@ -246,7 +252,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       shortName('Асанов Асан Асанович'),
     );
 
-    const orgs = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'org', t));
+    const orgs = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'org', t, ALL));
     expect(orgs.items).toHaveLength(3);
     expect(orgs.items).toEqual(
       expect.arrayContaining([
@@ -255,7 +261,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
         { value: b.orgId, label: 'ОсОО «Бета»', count: 2 },
       ]),
     );
-    const statuses = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'st', t));
+    const statuses = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'st', t, ALL));
     expect(statuses.items.map((x) => [x.value, x.label, x.count])).toEqual(
       expect.arrayContaining([
         ['error', 'tgadm.st.error', 4],
@@ -268,12 +274,18 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
         tx,
         query({ filters: { st: { type: 'enum', vals: ['error'] } } }),
         t,
+        ALL,
       ),
     );
     expect(errors.total).toBe(4);
     // Поиск — по тому, что видно: подпись вида и подпись кода «recipient_unlinked».
     const found = await asAdmin((tx) =>
-      listAdminTelegramLogPage(tx, query({ search: { q: 'tgadm.err.unlinked', keys: KEYS } }), t),
+      listAdminTelegramLogPage(
+        tx,
+        query({ search: { q: 'tgadm.err.unlinked', keys: KEYS } }),
+        t,
+        ALL,
+      ),
     );
     expect(found.rows.map((r) => r.id)).toEqual([ids.unlinked]);
     const kinds = await asAdmin((tx) =>
@@ -281,12 +293,13 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
         tx,
         query({ search: { q: 'telegram.kind.pass_changed', keys: KEYS } }),
         t,
+        ALL,
       ),
     );
     expect(kinds.rows.map((r) => r.id)).toEqual([ids.platform]);
 
     const file = await asAdmin((tx) =>
-      exportAdminTelegramLog(tx, query(), ['kind', 'st', 'err'], t),
+      exportAdminTelegramLog(tx, query(), ['kind', 'st', 'err'], t, ALL),
     );
     expect(file.total).toBe(7);
     expect(file.rows[2]).toEqual([
@@ -295,10 +308,11 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       'tgadm.err.unlinked',
     ]);
 
-    expect(await asAdmin((tx) => adminTelegramSummary(tx, TODAY))).toEqual({
+    expect(await asAdmin((tx) => adminTelegramSummary(tx, TODAY, SINCE))).toEqual({
       pending: 1,
       errors: 4,
       sentToday: 1,
+      receivedToday: 0,
     });
   });
 
@@ -320,15 +334,15 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     const id = x!.id;
     try {
       // Рабочий сайт: «Платформа».
-      const prod = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'org', t));
+      const prod = await asAdmin((tx) => listAdminTelegramLogValues(tx, 'org', t, ALL));
       expect(prod.items).toEqual(
         expect.arrayContaining([{ value: 'platform', label: 'tgadm.org.platform', count: 2 }]),
       );
-      const prodPage = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t));
+      const prodPage = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t, ALL));
       expect(prodPage.rows.find((r) => r.id === id)).toMatchObject({ orgName: null });
       // Стенд: «Тестовый стенд» в строке, в фильтре, в поиске и в выгрузке.
       const values = await asAdmin((tx) =>
-        listAdminTelegramLogValues(tx, 'org', t, undefined, true),
+        listAdminTelegramLogValues(tx, 'org', t, ALL, undefined, true),
       );
       expect(values.items).toEqual(
         expect.arrayContaining([
@@ -336,7 +350,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
           { value: 'stand', label: 'tgadm.org.stand', count: 1 },
         ]),
       );
-      const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t, true));
+      const page = await asAdmin((tx) => listAdminTelegramLogPage(tx, query(), t, ALL, true));
       expect(page.rows.find((r) => r.id === id)).toMatchObject({
         orgId: null,
         orgName: 'tgadm.org.stand',
@@ -348,6 +362,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
           tx,
           query({ filters: { org: { type: 'enum', vals: ['stand'] } } }),
           t,
+          ALL,
           true,
         ),
       );
@@ -357,6 +372,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
           tx,
           query({ search: { q: 'tgadm.org.stand', keys: KEYS } }),
           t,
+          ALL,
           true,
         ),
       );
@@ -367,6 +383,7 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
           query({ filters: { org: { type: 'enum', vals: ['stand'] } } }),
           ['org', 'kind'],
           t,
+          ALL,
           true,
         ),
       );
@@ -381,8 +398,8 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       db.app.db,
       { orgId: a.orgId, userId: a.ownerUserId },
       async (tx) => ({
-        page: await listAdminTelegramLogPage(tx, query(), t),
-        summary: await adminTelegramSummary(tx, TODAY),
+        page: await listAdminTelegramLogPage(tx, query(), t, ALL),
+        summary: await adminTelegramSummary(tx, TODAY, SINCE),
         orgs: await adminTelegramOrgs(tx),
         retry: await adminTelegramRetry(tx, [ids.error!, ids.platform!], NOW),
         cast: await adminTelegramBroadcast(tx, { orgId: null, text: 'Чужое', now: NOW }),
@@ -390,13 +407,13 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
     );
     expect(asOwner).toEqual({
       page: expect.objectContaining({ total: 0 }),
-      summary: { pending: 0, errors: 0, sentToday: 0 },
+      summary: { pending: 0, errors: 0, sentToday: 0, receivedToday: 0 },
       orgs: [],
       retry: { queued: 0, codes: 0 },
       cast: null,
     });
     const asBlocked = await withUserContext(db.app.db, blockedAdminId, async (tx) => ({
-      page: await listAdminTelegramLogPage(tx, query(), t),
+      page: await listAdminTelegramLogPage(tx, query(), t, ALL),
       retry: await adminTelegramRetry(tx, [ids.error!], NOW),
       cast: await adminTelegramBroadcast(tx, { orgId: a.orgId, text: 'x', now: NOW }),
     }));
@@ -407,6 +424,10 @@ describe.skipIf(!databaseAvailable())('Админка → «Телеграм» (
       sql`select count(*)::integer as n from app.admin_telegram_log`,
     );
     expect(raw!.n).toBe(0);
+    const [journal] = await db.app.db.execute<{ n: number }>(
+      sql`select count(*)::integer as n from app.admin_telegram_journal`,
+    );
+    expect(journal!.n).toBe(0);
     const [error] = await db.admin.db
       .select({ status: telegramOutbox.status })
       .from(telegramOutbox)

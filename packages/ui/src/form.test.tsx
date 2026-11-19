@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Box, Field, fieldControl, FormGrid, inputClass, KeyValues, Note, Pill } from './form';
 import {
   columnWidth,
+  FIELD_LABEL_SELECTOR,
   isShortField,
   packFormCells,
   packKvItems,
@@ -142,11 +143,33 @@ describe('поля и блоки форм (прототип controls.css, cards.
       'id="pf-p1" aria-invalid="true" aria-required="true" aria-describedby="pf-p1-hint pf-p1-err"',
     );
     expect(html).toContain(
-      '<div id="pf-p1-hint" data-hint="" class="text-[11.5px] leading-[1.4] text-faint">Не короче 8 символов</div>',
+      '<div id="pf-p1-hint" data-hint="" class="text-[12px] leading-[1.4] text-muted">Не короче 8 символов</div>',
     );
     expect(html).toMatch(
       /<div id="pf-p1-err" class="[^"]*text-danger"><svg[^>]*>.*<\/svg><span>Пароль короче 8 символов<\/span>/,
     );
+  });
+
+  it('поле с «ⓘ» у подписи: подпись — в строке `data-field-cap`, по ней её находят компоновка и «Показать как»', () => {
+    const plain = renderToStaticMarkup(
+      <Field id="pf-a" label="Режим">
+        {(control) => <input {...control} />}
+      </Field>,
+    );
+    expect(plain).toMatch(/^<div data-field=""[^>]*><label for="pf-a"/);
+    const withTip = renderToStaticMarkup(
+      <Field id="pf-b" label="Дополнительный режим" tip={<button type="button">i</button>}>
+        {(control) => <input {...control} />}
+      </Field>,
+    );
+    // «ⓘ» — рядом с подписью, но вне `<label>`: нажатие на него не уводит фокус в поле.
+    expect(withTip).toMatch(
+      /^<div data-field=""[^>]*><div data-field-cap=""[^>]*><label for="pf-b"[^>]*>Дополнительный режим<\/label><button type="button">i<\/button><\/div>/,
+    );
+    expect(FIELD_LABEL_SELECTOR.split(', ')).toEqual([
+      ':scope > label',
+      ':scope > [data-field-cap] > label',
+    ]);
   });
 
   it('поле без подсказки и ошибки — без aria-describedby; на всю ширину помечено для компоновки', () => {
@@ -212,7 +235,8 @@ describe('поля и блоки форм (прототип controls.css, cards.
       </Box>,
     );
     expect(box).toContain(
-      'uppercase"><span class="grow">Основное</span><button type="button">Добавить</button></h3>',
+      // Заголовок блока — обычными буквами, не мелкими прописными (прототип v138 `.box h3`).
+      'text-[13.5px] font-[650] text-muted"><span class="grow">Основное</span><button type="button">Добавить</button></h3>',
     );
 
     const note = renderToStaticMarkup(

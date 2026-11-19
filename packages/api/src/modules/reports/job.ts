@@ -34,5 +34,7 @@ export const createDueReportsJob: Job = {
     if (failed.length) {
       throw new Error(`reports.create-due: не созданы отчёты организаций: ${failed.length}`);
     }
+    // Сколько создано — в Админку → «Запуски», столбец «Что сделано».
+    return created;
   },
 };

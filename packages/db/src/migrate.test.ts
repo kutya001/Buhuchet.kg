@@ -106,9 +106,13 @@ describe.skipIf(!databaseAvailable())('ensureAppLoginRole: в базе', () => {
   // миграций глушило NOTICE, и чисел «объединено N» не было видно.
   it('сообщения миграций доходят до вывода: итог объединения копий чеков', () => {
     expect(notices.some((line) => /^NOTICE: file_copies_merge \(\d{4}\): /.test(line))).toBe(true);
-    expect(notices.some((line) => /^NOTICE: file_copies_merge_late \(\d{4}\): /.test(line))).toBe(
-      true,
-    );
+    // Второй перенос (0160) и его вызов с границей выпуска 17.11.2026 (0164) — каждый своей строкой.
+    for (const n of ['0160', '0164']) {
+      expect(
+        notices.some((line) => line.startsWith(`NOTICE: file_copies_merge_late (${n}): `)),
+        n,
+      ).toBe(true);
+    }
   });
 
   it('роль входит в базу с паролем из строки подключения', async () => {

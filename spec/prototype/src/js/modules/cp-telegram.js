@@ -75,12 +75,12 @@ function pgTgBoxClick(c,x0,redraw){const[k,id]=x0.dataset.pgTg.split(':');
   else run()}
 
 // Страница контрагента, раздел «Telegram»
+// В «Связи» страницы (17.11.2026, «Меньше текста», п. 6): одна строка, состояние, кнопка и что сделать в Telegram; срок ссылки и как отключиться — под «?»
 function pgTgPub(c){const on=pgTgN(c,'on'),wait=pgTgN(c,'wait'),full=pgTgBusy(c)>=PG_TG_MAX;
-  return pubSec('tg','tg','Telegram',on?`подключено ${on}`:wait?'ждёт подтверждения':'',
-    `${PGT('secs','Telegram')?'':'<p class="pub-tgp">Получайте в Telegram суммы налогов к оплате и напоминания.</p>'}
+  return `<div class="pub-sub" data-sec="tg"><h4>Telegram</h4><span>${esc(PGT('secs','Telegram')||'Суммы налогов и напоминания приходят в Telegram')}</span>
     ${on||wait?`<div class="pub-tgst">${on?`<span class="pill green sm">${ic('check')}подключено: ${on}</span>`:''}${wait?`<span class="pill yellow sm">${ic('hourglass')}ждёт подтверждения бухгалтера: ${wait}</span>`:''}</div>`:''}
-    <div class="row"><button type="button" class="btn cta ${full?'dis':''}" data-pub-tgon ${full?`aria-disabled="true" data-why="Подключено или ждёт подтверждения ${PG_TG_MAX} Telegram — больше нельзя. Попросите вашего бухгалтера отключить лишний"`:''}>${ic('tg','sm')}Подключить Telegram</button></div>
-    <span class="hint">Кнопка откроет бота Buhuchet.kg в Telegram — нажмите в нём «Старт». Подключение подтверждает ваш бухгалтер. Ссылка действует ${PG_TG_TTL_H} часа и только один раз. Отключиться можно в любой момент командой «Отключить» в боте.</span>`)}
+    <div class="row"><button type="button" class="btn ${full?'dis':''}" data-pub-tgon ${full?`aria-disabled="true" data-why="Подключено или ждёт подтверждения ${PG_TG_MAX} Telegram — больше нельзя. Попросите вашего бухгалтера отключить лишний"`:''}>${ic('tg','sm')}Подключить Telegram</button></div>
+    <span class="hint pub-tgh">В Telegram нажмите «Старт». Бухгалтер подтвердит.${tipI(`Ссылка действует ${PG_TG_TTL_H} часа и только один раз. Отключиться можно в любой момент командой «Отключить» в боте.`)}</span></div>`}
 // Прототип: переписка клиента с ботом и сообщение бухгалтеру. В продукте кнопка открывает Telegram по одноразовой ссылке
 function pgTgDlg(c){const A=[{day:'Сегодня'}],B=[{day:'Сегодня'}],to=pgTgStaff(c),CA={who:'Чат клиента',list:A},CB={who:to?`Чат бухгалтера · ${to.short||to.fio}`:'Чат бухгалтера',list:B},told=new Set();let cur=null;
   const n=pgTgs(c).length+1,def=n===1&&c.contact?c.contact.split(' ').slice(0,2).join(' '):'Клиент '+n;
@@ -302,9 +302,9 @@ function pgFeeTgDlg(c){const w=pgFeeTgWhy(c);if(w){toast(w,'lock',true);return}c
   const txt=tplFill('tgCpFeeRemind',{контрагент:c.name,месяц:f.ms.map(ymLabel).join(', ')||ymLabel(ym(TODAY)),сумма:som(c.feeDebt),срок:fmtD(f.due)});
   openModal({form:true,size:'mid',render:m=>({title:'Напомнить в Telegram',sub:`${esc(c.name)} · долг за обслуживание ${som(c.feeDebt)}`,
     body:`<div class="box flat"><h3>Получатели · ${to.length}</h3><div class="row" style="flex-wrap:wrap;gap:6px">${to.map(x=>`<span class="pill sm blue">${ic('tg')}${esc(x.name)}</span>`).join('')}</div>${off?`<span class="hint">Не получат: ${off} — выключили напоминания кнопкой «Не напоминать».</span>`:''}</div>
-      ${fld('Текст сообщения',`<textarea class="inp" id="ft-text" maxlength="1000" style="min-height:110px">${esc(txt)}</textarea>`,{full:true,id:'ft-text',hint:'Шаблон ведёт администратор платформы. Здесь текст можно поправить перед отправкой.'})}
+      ${fld('Текст сообщения',`<textarea class="inp" id="ft-text" maxlength="1000" style="min-height:110px">${esc(txt)}</textarea>`,{full:true,id:'ft-text',hint:'Текст можно поправить'})}
       <div class="box flat"><h3>Реквизиты для перевода — в конце сообщения</h3><div style="white-space:pre-wrap">${esc(pgRqText(c,fa))}</div><span class="hint">Под сообщением — кнопки «${esc(pgRqBtn(fa).t)}» и «${esc(tgBtnT('tgBtnCpPaid','Оплатил'))}».</span></div>
-      <div class="note">${ic('info')}<span>Напомнить в Telegram можно не чаще раза в сутки. Отправка записывается в историю контрагента и в журнал «Телеграм» с типом «${PG_TG_MSG}».</span></div>`,
+      <div class="note">${ic('info')}<span>Не чаще раза в сутки</span></div>`,
     foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="ft-go">${ic('send','sm')}Отправить</button>`,
     mount(el){$('#ft-go',el).onclick=()=>{const t=$('#ft-text',el).value.trim();if(!setErr(el,'ft-text',t?'':'Введите текст сообщения'))return;const w2=pgFeeTgWhy(c);if(w2){toast(w2,'lock',true);return}
       const r=pgFeeSend(c,t);m.close();refreshAll();toast(`Напоминание отправлено в Telegram: получателей — ${r.to.length}`,'tg');

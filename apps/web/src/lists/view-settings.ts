@@ -3,7 +3,7 @@
 import type { GridViewSettings, ViewKey } from '@buhuchet/domain';
 import { ViewSettingsMap } from '@buhuchet/shared';
 import { useToast } from '@buhuchet/ui';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, callApi } from '../api-client';
 import { useT } from '../l10n/provider';
@@ -25,6 +25,55 @@ async function fetchViewSettings(): Promise<SettingsMap> {
 }
 
 /**
+ * Правки вида, сделанные в этой вкладке (`null` — «Сбросить вид»). Настройки грузятся один раз на
+ * вкладку, а правка пишется на сервер с задержкой: человек нажал «Статистика» раньше, чем пришёл
+ * ответ загрузки, — ответ со старыми настройками затирал правку в кеше, и плашки, едва появившись,
+ * пропадали, а кнопка оставалась нажатой (docs/typical-mistakes.md № 65). Поэтому ответ загрузки
+ * всегда накрывается правками вкладки. Выход — новая загрузка страницы, правки с ней уходят.
+ */
+const tabEdits = new WeakMap<QueryClient, Map<string, GridViewSettings | null>>();
+
+function noteViewEdit(client: QueryClient, gridKey: string, settings: GridViewSettings | null) {
+  let edits = tabEdits.get(client);
+  if (!edits) tabEdits.set(client, (edits = new Map()));
+  edits.set(gridKey, settings);
+}
+
+/** Запрос настроек вида: ответ сервера, накрытый правками этой вкладки. */
+export function viewSettingsQuery(
+  client: QueryClient,
+  load: () => Promise<SettingsMap> = fetchViewSettings,
+) {
+  return {
+    queryKey: VIEW_SETTINGS_KEY,
+    queryFn: async () => {
+      const next = { ...(await load()) };
+      for (const [key, edit] of tabEdits.get(client) ?? []) {
+        if (edit) next[key] = edit;
+        else delete next[key];
+      }
+      return next;
+    },
+    staleTime: Infinity,
+  };
+}
+
+/** Правка вида — сразу в кеш; ответ загрузки, которая ещё идёт, её не затрёт. */
+export function applyViewEdit(
+  client: QueryClient,
+  gridKey: string,
+  settings: GridViewSettings | null,
+) {
+  noteViewEdit(client, gridKey, settings);
+  client.setQueryData<SettingsMap>(VIEW_SETTINGS_KEY, (map) => {
+    const next = { ...map };
+    if (settings) next[gridKey] = settings;
+    else delete next[gridKey];
+    return next;
+  });
+}
+
+/**
  * Вид списка пользователя (ТЗ «Настройки вида»: столбцы, порядок, ширины, сортировка, плотность,
  * «Таблица / Карточки», записей на странице — для пользователя и списка, переживают перезагрузку и
  * вход с другого устройства). Правка сразу видна на экране и через 300 мс сохраняется на сервере;
@@ -35,11 +84,7 @@ export function useViewSettings(gridKey: ViewKey) {
   const client = useQueryClient();
   const toast = useToast();
   const t = useT();
-  const query = useQuery({
-    queryKey: VIEW_SETTINGS_KEY,
-    queryFn: fetchViewSettings,
-    staleTime: Infinity,
-  });
+  const query = useQuery(viewSettingsQuery(client));
   // Правка видна в том же нажатии: кеш запросов оповещает экран позже, и отмеченная галочка успела бы
   // вернуться на миг в прежнее положение.
   const [local, setLocal] = useState<GridViewSettings | null>(null);
@@ -84,10 +129,7 @@ export function useViewSettings(gridKey: ViewKey) {
   const save = useCallback(
     (settings: GridViewSettings) => {
       setLocal(settings);
-      client.setQueryData<SettingsMap>(VIEW_SETTINGS_KEY, (map) => ({
-        ...map,
-        [gridKey]: settings,
-      }));
+      applyViewEdit(client, gridKey, settings);
       if (pending.current) clearTimeout(pending.current.timer);
       pending.current = {
         settings,
@@ -101,11 +143,7 @@ export function useViewSettings(gridKey: ViewKey) {
     if (pending.current) clearTimeout(pending.current.timer);
     pending.current = undefined;
     setLocal(null);
-    client.setQueryData<SettingsMap>(VIEW_SETTINGS_KEY, (map) => {
-      const next = { ...map };
-      delete next[gridKey];
-      return next;
-    });
+    applyViewEdit(client, gridKey, null);
     const res = await callApi(() =>
       api.api['view-settings'][':gridKey'].$delete({ param: { gridKey } }),
     );

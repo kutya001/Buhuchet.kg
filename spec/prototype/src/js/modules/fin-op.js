@@ -48,14 +48,17 @@ function opView(d){const x=d.ref,k=opKind(d),c=CPM[opCpId(d)],m=opMeta(d);
   if(d.src==='svc'){v.hist={ent:'s',id:x.id};v.aud=x;v.what=x.name;v.src=[`Разовая услуга «${x.name}»`,()=>serviceCard(x)]}
   return v}
 function opLog(d,what){HIST.push(Object.assign({at:nowStamp(),who:S.me,cp:opCpId(d),what},opView(d).hist));ckSoon();touch(d.own||null);if(d.src==='svc')touch(d.ref)}
+// Записи истории без рамки — для свёрнутой «Истории» окна операции; пустая — одной строкой
+function opHistIn(h){const hs=HIST.filter(e=>e.ent===h.ent&&e.id===h.id&&(h.sub==null||e.sub===h.sub)).sort((a,b)=>a.at<b.at?1:-1);
+  return hs.length?`<ul class="tl">${hs.map(e=>`<li><span class="t">${fmtD(e.at.slice(0,10))}<br>${e.at.slice(11)}</span><span>${esc(e.what)}<br><span class="w">${esc(whoName(e.who))}</span></span></li>`).join('')}</ul>`:'<span class="faint">Изменений не было</span>'}
 function opHistHtml(h){const hs=HIST.filter(e=>e.ent===h.ent&&e.id===h.id&&(h.sub==null||e.sub===h.sub)).sort((a,b)=>a.at<b.at?1:-1);
   return `<div class="box"><h3>История изменений</h3>${hs.length?`<ul class="tl">${hs.map(e=>`<li><span class="t">${fmtD(e.at.slice(0,10))}<br>${e.at.slice(11)}</span><span>${esc(e.what)}<br><span class="w">${esc(whoName(e.who))}</span></span></li>`).join('')}</ul>`:'<span class="faint">Изменений не было</span>'}</div>`}
 // Кнопка, которую нельзя нажать: видна приглушённой, по нажатию — подсказка почему (на телефоне title не виден)
 const opBtn=(id,icon,label,why,cls='')=>`<button class="btn ${cls} ${why?'dis':''}" id="${id}" ${why?`aria-disabled="true" title="${esc(why)}" data-why="${esc(why)}"`:''}>${ic(icon,'sm')}${label}</button>`;
 function opWin(d){if(!d)return;if(d.src==='svc')return serviceCard(d.ref);
   openModal({size:'mid',live:true,render:()=>{const v=opView(d),x=d.ref,c=v.c,k=v.k;const eL=opLock(d,'edit'),dL=opLock(d,'del');
-    const kv=[['Тип операции',`<span class="pill sm ${v.color}">${esc(v.label)}</span>`],['Контрагент',`<button class="linkbtn" id="ow-cp">${esc(c.name)}</button>`],['Дата',fmtD(v.date)],
-      ['Сумма',`<span class="tnum strong">${k==='corr'?(x.amount<0?'−':'+'):''}${som(v.amount)}</span>`]];
+    // 17.11.2026 («Меньше текста», п. 8): тип, контрагент, дата и сумма — в шапке, в таблице не повторяются; кто создал и изменил — в «Истории»
+    const kv=[];
     if(k==='in'){const fa=(x.feeAlloc||[]).reduce((a,y)=>a+y.a,0);kv.push(['На налоги',`<span class="tnum">${som(x.amount)}</span>`]);if(fa)kv.push(['За обслуживание',`<span class="tnum">${som(fa)}</span>`]);kv.push(['Аванс',`<span class="tnum">${som(advOf(x))}</span>`])}
     else kv.push(['За что',v.rep?`<button class="linkbtn" id="ow-rep">${esc(v.what)}</button>`:esc(v.what)]);
     if(d.src==='pt'){const p=d.own;kv.push(['Проект: получено',`<span class="tnum">${som(projPaid(p))}${p.plan?' из '+som(p.plan):''}</span>`])}
@@ -64,21 +67,20 @@ function opWin(d){if(!d)return;if(d.src==='svc')return serviceCard(d.ref);
     if(v.note&&v.note!==v.what)kv.push(['Примечание',esc(v.note)]);
     const corr=k==='in'?OPS.filter(y=>y.kind==='corr'&&y.ref===x.id):[];
     const lockNote=!v.del&&(eL||dL)?`<div class="note">${ic('lock')}<span>${esc(eL||dL)}</span></div>`:'';
-    return {title:`${esc(v.label)} ${som(v.amount)}`,sub:`${esc(c.name)} · ${fmtD(v.date)}`,
+    return {title:`${esc(v.label)} ${k==='corr'?(x.amount<0?'−':'+'):''}${som(v.amount)}`,sub:`<button class="linkbtn" id="ow-cp">${esc(c.name)}</button> · ${fmtD(v.date)}`,
     body:`${v.del||v.edited?`<div class="row">${v.del?`<span class="pill red">${ic('trash')}Удалена</span>`:''}${v.edited?`<span class="pill yellow">${ic('edit')}Изменена</span>`:''}</div>`:''}
     ${v.del?`<div class="note bad">${ic('trash')}<span><b>Удалена</b> · ${esc(whoName(v.del.by))}, ${fmtDT(v.del.at)}${v.del.why?`. Причина: ${esc(v.del.why)}`:''}. В суммы, сверки и итоги не входит.</span></div>`:lockNote}
     ${k==='fee'&&v.in?`<div class="note">${ic('info')}<span>Часть общего поступления ${som(v.in.total??v.in.amount)} от ${fmtD(v.in.date)}: сумму и месяц меняют в самом поступлении.</span></div>`:''}
-    <div class="box"><div class="kv">${kv.map(([a,b])=>`<div><span class="k">${a}</span><span class="v">${b}</span></div>`).join('')}${auditKv(v.aud)}</div></div>
+    ${kv.length?`<div class="box"><div class="kv">${kv.map(([a,b])=>`<div><span class="k">${a}</span><span class="v">${b}</span></div>`).join('')}</div></div>`:''}
     ${k==='in'?`<div class="box"><h3>Детализация</h3><table class="mini"><thead><tr><th>За что</th><th class="num">Сумма</th></tr></thead><tbody>${(x.alloc||[]).map(y=>{const r=REPORTS.find(z=>z.id===y.r);return `<tr class="clk" data-rep="${y.r}"><td>${r?esc(T[r.t].short+' · '+r.plabel):'—'}</td><td class="num">${fmtM(y.a)}</td></tr>`}).join('')}${(x.feeAlloc||[]).map(y=>`<tr><td>${ic('coins','sm')} Обслуживание · ${esc(ymLabel(y.m))}</td><td class="num">${fmtM(y.a)}</td></tr>`).join('')}${advOf(x)>0?`<tr><td class="muted">Аванс, не распределён</td><td class="num">${fmtM(advOf(x))}</td></tr>`:''}<tr><td><b>Итого</b></td><td class="num"><b>${fmtM(x.total??x.amount)}</b></td></tr></tbody></table></div>`:''}
     ${corr.length?`<div class="box"><h3>Обратные записи</h3><table class="mini"><tbody>${corr.map(y=>`<tr class="clk" data-opw="op:${y.id}"><td>${fmtD(y.date)}</td><td>${esc(y.note)}</td><td>${esc(whoName(y.by))}</td><td class="num">${y.amount>0?'+':''}${fmtM(y.amount)}</td></tr>`).join('')}</tbody></table></div>`:''}
-    ${filesBox(v.files,'ow-f',!v.del&&!eL,'Файлы',{ent:v.hist.ent,id:v.hist.id,sub:v.hist.sub,cp:c.id,lk:x.lk||(x.lk=[])})}${opHistHtml(v.hist)}`,
-    foot:`${v.del?'':opBtn('ow-del','trash','Удалить',dL)+(k==='in'?opBtn('ow-corr','refresh','Обратная запись',eL):'')+opBtn('ow-edit','edit','Изменить',eL)}<div class="grow"></div><button class="btn" id="ow-src" title="${esc(v.src[0])}">${ic('link','sm')}Открыть источник</button><button class="btn cta" data-close>Готово</button>`,
+    ${filesBox(v.files,'ow-f',!v.del&&!eL,'Файлы',{ent:v.hist.ent,id:v.hist.id,sub:v.hist.sub,cp:c.id,lk:x.lk||(x.lk=[])})}<details class="box rc-hist"><summary><h3>История</h3></summary>${opHistIn(v.hist)}<div class="kv">${auditKv(v.aud)}</div></details>`,
+    // Один ряд: «Действия» (обратная запись, источник, удалить) и «Изменить»; «Готово» убрано
+    foot:`<button class="btn act-more" id="ow-more">${ic('more','sm')}<span class="bl">Действия</span></button><div class="grow"></div>${v.del?'':opBtn('ow-edit','edit','Изменить',eL,'cta')}`,
     mount(el,m){const q=s=>el.querySelector(s);
       $$('[data-why]',el).forEach(b=>b.onclick=()=>toast(b.dataset.why,'lock',true));
       if(q('#ow-edit:not(.dis)'))q('#ow-edit').onclick=()=>opEditDlg(d);
-      if(q('#ow-del:not(.dis)'))q('#ow-del').onclick=()=>opDelDlg(d);
-      if(q('#ow-corr:not(.dis)'))q('#ow-corr').onclick=()=>corrDlg(x);
-      q('#ow-src').onclick=()=>{m.close();v.src[1]()};q('#ow-cp').onclick=()=>openCp(c,d.src==='fee'?'fee':'money');if(q('#ow-rep'))q('#ow-rep').onclick=()=>openReport(v.rep);
+      q('#ow-more').onclick=e=>menu(e.currentTarget,opActs(d,false).map(a=>a&&a.label==='Открыть источник'?Object.assign({},a,{run:()=>{m.close(true);v.src[1]()}}):a));q('#ow-cp').onclick=()=>openCp(c,d.src==='fee'?'fee':'money');if(q('#ow-rep'))q('#ow-rep').onclick=()=>openReport(v.rep);
       $$('[data-rep]',el).forEach(y=>y.onclick=()=>openReport(REPORTS.find(r=>r.id===+y.dataset.rep)));
       bindFiles(el,'ow-f',v.files,(f,note)=>{opLog(d,'Прикреплены файлы: '+f.join(', ')+fNoteLog(note));m.draw()})}}}});
 }
@@ -146,7 +148,7 @@ function opDelDlg(d){const L=opLock(d,'del');if(L)return toast(L,'lock',true);co
   openModal({form:true,render:()=>({title:blk||neg?'Удалить нельзя':T_[0],sub:`${esc(v.label)} · ${esc(c.name)} · ${som(v.amount)} от ${fmtD(v.date)}`,
     body:blk?`<div class="note warn">${ic('lock')}<span>Из этого поступления уже оплачены налоги: не потрачено только ${som(c.avail)} из ${som(x.amount)}. Сначала измените или удалите оплату налога:</span></div>${blk.html}`
       :neg?`<div class="note warn">${ic('lock')}<span>Эти деньги уже потрачены: на счёте контрагента ${som(c.avail)}. Сначала измените или удалите оплату налога.</span></div>`
-      :`<p style="margin:0">${k==='bonus'||k==='refund'?`${T_[1]} на ${som(v.amount)}?`:`Удалить операцию на ${som(v.amount)}?`} Суммы и статусы оплаты пересчитаются.</p><div class="note">${ic('history')}<span>${cons} Запись не стирается: она получит отметку «Удалена», уйдёт из сумм, сверок и итогов и будет видна в журнале с фильтром «Показать удалённые».</span></div>${fld('Причина',`<textarea class="inp" id="od-why" style="min-height:64px" placeholder="Например: внесли по ошибке"></textarea>`,{req:true,full:true,id:'od-why'})}`,
+      :`${k==='bonus'||k==='refund'?`<p style="margin:0">${T_[1]} на ${som(v.amount)}?</p>`:''}<div class="note">${ic('history')}<span>${cons} Запись останется в журнале с отметкой «Удалена».</span></div>${fld('Причина',`<textarea class="inp" id="od-why" style="min-height:64px" placeholder="Например: внесли по ошибке"></textarea>`,{req:true,full:true,id:'od-why'})}`,
     foot:blk||neg?'<button class="btn cta" data-close>Понятно</button>':`<button class="btn ghost" data-close>Отмена</button><button class="btn danger" id="od-ok">${ic(k==='bonus'||k==='refund'?'history':'trash','sm')}${T_[1]}</button>`,
     mount(el,m){if(!$('#od-ok',el))return;$('#od-ok',el).onclick=()=>{const why=val(el,'od-why');if(!setErr(el,'od-why',why?'':'Укажите причину'))return;const mk={at:nowStamp(),by:S.me,why};
       if(d.src==='op'){x.kind=k+'_x';x.xAt=mk.at;x.xBy=S.me;x.xWhy=why;x.xDel=1;

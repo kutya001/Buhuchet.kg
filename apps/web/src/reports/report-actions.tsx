@@ -565,10 +565,7 @@ export function useReportActions(): {
         open={!!revision}
         onClose={() => setRevision(null)}
         title={t('report.revision.title', { n: (revision?.revision ?? 0) + 1 })}
-        text={t(actor?.confirmOn ? 'report.revision.text_confirm' : 'report.revision.text', {
-          type: revision?.type.shortName ?? '',
-          period: revision?.periodFull ?? '',
-        })}
+        text={t('report.revision.text')}
         ok={t('report.revision.ok')}
         onConfirm={() => {
           if (revision) void createRevision(revision);

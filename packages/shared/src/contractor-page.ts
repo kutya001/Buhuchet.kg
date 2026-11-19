@@ -145,6 +145,8 @@ export const PagePay = z.object({
   banks: z.array(z.string()),
   bik: z.string().nullable(),
   holder: z.string(),
+  /** Реквизит сотрудника: «Получатель: …, ваш бухгалтер» (прототип v135 `pubPay`, `emp`). */
+  employee: z.boolean(),
   /**
    * Последнее сообщение клиента об оплате этого вида, которое ждёт подтверждения (прототип v116
    * `pgClaimWait`): когда и сколько; null — ждущего нет.

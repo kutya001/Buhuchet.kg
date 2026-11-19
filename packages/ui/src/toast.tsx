@@ -24,9 +24,23 @@ import {
 import { Icon } from './icon';
 import type { IconName } from './icons';
 
-/** Уведомление исчезает само через 3,2 с (ТЗ: «примерно через 3 секунды»), затем гаснет за 0,3 с. */
-export const TOAST_MS = 3200;
-const FADE_MS = 300;
+/**
+ * Уведомление исчезает само: короткое — через 3 с (ТЗ: «примерно через 3 секунды»), затем гаснет за
+ * 140 мс (прототип v131: `fadeAway`).
+ */
+export const TOAST_MS = 3000;
+/** Самое долгое уведомление — 6 с. */
+export const TOAST_MAX_MS = 6000;
+const FADE_MS = 140;
+
+/**
+ * Сколько показывать уведомление — по длине текста (прототип v131, ui/popups.js `toast`; решение
+ * заказчика 17.11.2026): до 8 слов — 3 с, каждое следующее слово — ещё 250 мс, но не дольше 6 с.
+ */
+export function toastMs(message: string): number {
+  const words = message.split(/\s+/).length;
+  return Math.min(TOAST_MAX_MS, TOAST_MS + Math.max(0, words - 8) * 250);
+}
 
 export interface ToastOptions {
   /** Значок слева; по умолчанию — галочка. */
@@ -162,6 +176,8 @@ export function Toast({
   const ref = useRef<HTMLDivElement>(null);
   const life = useRef<ReturnType<typeof toastLife> | null>(null);
   const gone = useEffectEvent(() => onGone());
+  // Срок считается по тексту один раз, при появлении.
+  const lifeMs = useRef(toastMs(message));
 
   useEffect(() => {
     const el = ref.current;
@@ -173,11 +189,11 @@ export function Toast({
       // Анимация появления держит прозрачность — снимаем её, чтобы уведомление погасло плавно.
       el.style.animation = 'none';
       void el.offsetWidth;
-      el.style.transition = `opacity ${FADE_MS}ms`;
+      el.style.transition = `opacity ${FADE_MS}ms cubic-bezier(0.4, 0, 1, 1)`;
       el.style.opacity = '0';
       setTimeout(gone, FADE_MS + 20);
     };
-    const timer = toastLife(fade);
+    const timer = toastLife(fade, lifeMs.current);
     life.current = timer;
 
     const tracker = createTracker();
@@ -257,7 +273,7 @@ export function Toast({
     <div
       ref={ref}
       role="status"
-      className="pointer-events-auto flex animate-slide-up touch-pan-y items-center gap-[9px] rounded-lg bg-toast-bg px-4 py-2.5 text-[13px] font-[550] text-toast-fg shadow-pop select-none"
+      className="pointer-events-auto flex animate-rise touch-pan-y items-center gap-[9px] rounded-lg bg-toast-bg px-4 py-2.5 text-[13px] font-[550] text-toast-fg shadow-pop select-none"
     >
       <Icon name={icon} className={bad ? 'text-brand-red' : ''} />
       <span>{message}</span>

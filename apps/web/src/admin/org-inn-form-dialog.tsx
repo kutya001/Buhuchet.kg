@@ -205,7 +205,7 @@ export function OrgInnFormDialog({
           </Field>
         </FormGrid>
       </form>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{t('orgs.innform.hint')}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{t('orgs.innform.hint')}</div>
     </Modal>
   );
 }

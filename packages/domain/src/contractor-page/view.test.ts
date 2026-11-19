@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   PAGE_TIPS,
+  pageDateWords,
+  pageFeeDue,
+  pageFeeLate,
+  pageFeeOpen,
   pageFeePaidTill,
   pageKpiMonths,
   pageKpiYears,
   pageLateYear,
   pageMonthGroups,
-  pageNav,
+  pageMonthName,
+  pageMonthTitle,
   pageOpenMonth,
+  pageOpenPayMonth,
+  pageOrganKind,
+  pagePayNote,
   pagePeriodicity,
   pageReportCounts,
   pageReportMark,
@@ -17,7 +25,7 @@ import {
   pageSpark,
   pageStateTone,
   pageTaxTotals,
-  pageTiles,
+  pageTaxView,
   pageTipTexts,
   pageTypeNote,
   pageTypeTiles,
@@ -190,26 +198,6 @@ describe('строка состояния и «Главное»', () => {
     expect(pageFeePaidTill([])).toBeNull();
   });
 
-  it('плитки: «Налоги» во всю ширину, нечётная последняя — тоже', () => {
-    expect(pageTiles({ reports: true, taxes: true, fee: true })).toEqual([
-      { key: 'reports', wide: false },
-      { key: 'next', wide: false },
-      { key: 'taxes', wide: true },
-      { key: 'fee', wide: true },
-    ]);
-    expect(pageTiles({ reports: true, taxes: false, fee: false })).toEqual([
-      { key: 'reports', wide: false },
-      { key: 'next', wide: false },
-    ]);
-    expect(pageTiles({ reports: false, taxes: true, fee: false })).toEqual([
-      { key: 'taxes', wide: true },
-    ]);
-    expect(pageTiles({ reports: false, taxes: false, fee: true })).toEqual([
-      { key: 'fee', wide: true },
-    ]);
-    expect(pageTiles({ reports: false, taxes: false, fee: false })).toEqual([]);
-  });
-
   it('«Налоги {год}»: только отчёты года с суммой больше 0', () => {
     const r = (due: string, sum: number | null, got = 0, paid = 0, hasSum = true) => ({
       due,
@@ -240,7 +228,7 @@ describe('строка состояния и «Главное»', () => {
   });
 });
 
-describe('«Показатели» и панель разделов', () => {
+describe('«Цифры компании»', () => {
   it('месяцы года — по текущий; прошлый год — все 12, будущий — ни одного', () => {
     expect(pageKpiMonths('2026', TODAY)).toHaveLength(10);
     expect(pageKpiMonths('2026', TODAY).at(-1)).toBe('2026-10');
@@ -261,14 +249,93 @@ describe('«Показатели» и панель разделов', () => {
     // Отрицательные — по модулю.
     expect(pageSpark([-20, 10]).map((b) => b?.h)).toEqual([28, 14]);
   });
+});
 
-  it('панель — показанные разделы по порядку, если их больше одного', () => {
-    expect(pageNav(new Set(['contacts', 'main', 'reports']))).toEqual([
-      'main',
-      'reports',
-      'contacts',
-    ]);
-    expect(pageNav(new Set(['main']))).toEqual([]);
+describe('простыми словами (прототип v135)', () => {
+  it('дата и месяц словами: текущий год не пишется (pubDW, pubMon)', () => {
+    expect(pageDateWords('2026-11-20', TODAY)).toBe('20 ноября');
+    expect(pageDateWords('2026-03-05', TODAY)).toBe('5 марта');
+    expect(pageDateWords('2025-12-31', TODAY)).toBe('31 декабря 2025');
+    expect(pageMonthName('2026-11', TODAY)).toBe('Ноябрь');
+    expect(pageMonthName('2025-12', TODAY)).toBe('Декабрь 2025');
+    expect(pageMonthTitle('2026-11')).toBe('Ноябрь 2026');
+  });
+
+  it('«Налоги»: «Не хватает», «Ваши деньги у нас», «Запас» и просрочка (pubMoney, pubTaxLate)', () => {
+    const due = [{ payDue: '2026-10-15' }, { payDue: '2026-10-25' }];
+    // Нужно 10 000, у нас 4 000 — не хватает 6 000; срок одного из отчётов прошёл.
+    expect(
+      pageTaxView({ verdict: 'short', amount: 600_000, dueSum: 1_000_000, due }, TODAY),
+    ).toEqual({ due: 600_000, ours: 400_000, spare: 0, late: true });
+    // Сроки впереди — не просрочено.
+    expect(
+      pageTaxView(
+        { verdict: 'short', amount: 600_000, dueSum: 1_000_000, due: [{ payDue: TODAY }] },
+        TODAY,
+      ).late,
+    ).toBe(false);
+    // Денег ровно хватает.
+    expect(pageTaxView({ verdict: 'enough', amount: 0, dueSum: 1_000_000, due }, TODAY)).toEqual({
+      due: 0,
+      ours: 1_000_000,
+      spare: 0,
+      late: false,
+    });
+    // Хватает с запасом и запас без налогов к оплате: срок прошёл, но платить не нужно.
+    expect(
+      pageTaxView({ verdict: 'enough_surplus', amount: 250_000, dueSum: 1_000_000, due }, TODAY),
+    ).toEqual({ due: 0, ours: 1_250_000, spare: 250_000, late: false });
+    expect(pageTaxView({ verdict: 'surplus', amount: 250_000, dueSum: 0, due: [] }, TODAY)).toEqual(
+      { due: 0, ours: 250_000, spare: 250_000, late: false },
+    );
+  });
+
+  it('услуги бухгалтера: месяцы с долгом от старых, срок оплаты и просрочка (pgFeeOpen, pubFeeLate)', () => {
+    const months = [
+      { month: '2026-10', charge: 500_000, got: 0 },
+      { month: '2026-09', charge: 500_000, got: 500_000 },
+      { month: '2026-08', charge: 500_000, got: 200_000 },
+    ];
+    expect(pageFeeOpen(months).map((m) => m.month)).toEqual(['2026-08', '2026-10']);
+    expect(pageFeeDue('2026-10', 15)).toBe('2026-10-15');
+    // День оплаты больше дней месяца — последний день; меньше 1 — первый.
+    expect(pageFeeDue('2026-02', 31)).toBe('2026-02-28');
+    expect(pageFeeDue('2026-10', 0)).toBe('2026-10-01');
+    expect(pageFeeLate({ debt: 800_000, feeDay: 15, months }, TODAY)).toBe(true);
+    // Долг только за текущий месяц, срок — сегодня: ещё не просрочено.
+    const now = [{ month: '2026-10', charge: 500_000, got: 0 }];
+    expect(pageFeeLate({ debt: 500_000, feeDay: 20, months: now }, TODAY)).toBe(false);
+    expect(pageFeeLate({ debt: 500_000, feeDay: 19, months: now }, TODAY)).toBe(true);
+    // Долга нет — не просрочено, какие бы месяцы ни пришли.
+    expect(pageFeeLate({ debt: 0, feeDay: 1, months }, TODAY)).toBe(false);
+  });
+
+  it('«В комментарии к переводу»: налоги — название, услуги — название и месяц долга (pubPayNote)', () => {
+    const months = [
+      { month: '2026-10', charge: 500_000, got: 0 },
+      { month: '2025-12', charge: 500_000, got: 100 },
+    ];
+    expect(pagePayNote('ОсОО «Ала-Тоо»', 'tax', months, TODAY)).toBe('ОсОО «Ала-Тоо»');
+    expect(pagePayNote('ОсОО «Ала-Тоо»', 'fee', months, TODAY)).toBe(
+      'ОсОО «Ала-Тоо», декабрь 2025',
+    );
+    expect(pagePayNote('ОсОО «Ала-Тоо»', 'fee', months.slice(0, 1), TODAY)).toBe(
+      'ОсОО «Ала-Тоо», октябрь',
+    );
+    // Долга нет — текущий месяц.
+    expect(pagePayNote('ИП Асанов', 'fee', [], TODAY)).toBe('ИП Асанов, октябрь');
+  });
+
+  it('«По месяцам»: раскрыт месяц с прошлого, иначе последний (pubBody, now)', () => {
+    expect(pageOpenPayMonth(['2026-07', '2026-09', '2026-11'], TODAY)).toBe('2026-09');
+    expect(pageOpenPayMonth(['2026-07', '2026-11'], TODAY)).toBe('2026-11');
+    expect(pageOpenPayMonth(['2026-05', '2026-07'], TODAY)).toBe('2026-07');
+    expect(pageOpenPayMonth([], TODAY)).toBeNull();
+  });
+
+  it('куда сдаётся отчёт: налоговая — словом (pubOrgan)', () => {
+    expect(pageOrganKind('ГНС')).toBe('tax');
+    expect(pageOrganKind('Соцфонд')).toBe('other');
   });
 });
 
@@ -276,11 +343,12 @@ describe('пояснения страницы из «Текстов элемен
   it('переводятся по группе и подписи прототипа, пустые — не передаются', () => {
     expect(
       pageTipTexts({
-        secs: { Главное: 'Самое важное', Контакты: '  ' },
+        secs: { Оплата: 'Куда переводить', Связь: '  ', Главное: 'Раздела больше нет' },
+        state: { 'Всё в порядке': 'Платить не нужно' },
         report: { Просрочено: 'Срок прошёл' },
         other: { x: 'y' },
       }),
-    ).toEqual({ 'secs.main': 'Самое важное', 'report.late': 'Срок прошёл' });
+    ).toEqual({ 'secs.pay': 'Куда переводить', 'state.ok': 'Платить не нужно' });
   });
 
   it('у каждого обозначения — своя пара «группа, подпись»', () => {

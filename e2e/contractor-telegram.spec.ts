@@ -1,10 +1,11 @@
-import { expect, test, type APIRequestContext } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { search } from './admin';
 import {
   botMessages,
   DEMO_PASSWORD,
   hire,
   linkTelegram,
+  openCardFold,
   pressStart,
   signIn,
   tellBot,
@@ -19,6 +20,24 @@ import {
 
 /** Адрес демо-организации «Бухгалтер Плюс». */
 const SLUG = 'buhgalter-plyus';
+
+/**
+ * «Telegram» страницы контрагента — в разделе «Связь» (прототип v135 `pgTgPub`); на телефоне раздел
+ * свёрнут: сначала раскрыть.
+ */
+async function telegramBlock(page: Page, isMobile: boolean) {
+  const acc = page.locator('[data-sec="acc"]');
+  if (isMobile && (await acc.getAttribute('data-folded')) !== null) {
+    // Нажатие работает, когда React подхватил страницу и узнал телефон (№ 41).
+    const toggle = acc.locator('[data-pub-toggle]');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(acc).not.toHaveAttribute('data-folded', '');
+  }
+  const block = page.locator('[data-sec="tg"]');
+  await expect(block).toBeVisible();
+  return block;
+}
 
 const freshInn = () =>
   `07${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 10_000)
@@ -113,20 +132,18 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
     await page.getByLabel('Код доступа').fill(cp.code);
     await page.getByRole('button', { name: 'Открыть' }).click();
     await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
-    const section = page.locator('[data-sec="tg"]');
-    if (isMobile)
-      await section
-        .getByRole('button', { name: /Telegram/ })
-        .first()
-        .click();
+    // «Telegram» — в разделе «Связь» (прототип v135): строка о том, что придёт, кнопка и что сделать в
+    // Telegram; срок ссылки и как отключиться — под «?».
+    const section = await telegramBlock(page, isMobile);
+    await expect(section.locator('[data-pub-tg-connect]')).toHaveText('Подключить Telegram');
     await expect(
-      section.getByText('Получайте в Telegram суммы налогов к оплате и напоминания.'),
+      section.getByText('В Telegram нажмите «Старт». Бухгалтер подтвердит.'),
     ).toBeVisible();
+    await section.getByRole('button', { name: 'Подробнее о подключении' }).click();
     await expect(
-      section.getByText(
-        'Кнопка откроет бота Buhuchet.kg в Telegram — нажмите в нём «Старт». Подключение подтверждает ваш бухгалтер. Ссылка действует 24 часа и только один раз. Отключиться можно в любой момент командой «Отключить» в боте.',
-      ),
+      page.getByText(/Ссылка действует 24 часа и только один раз\. Отключиться можно/),
     ).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // «Подключить Telegram» открывает бота по одноразовой ссылке в новой вкладке.
     await page
@@ -168,11 +185,7 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
     await page.reload();
     // Нажатие работает, когда React подхватил страницу (№ 41).
     await expect(page.locator('[data-pub-page]')).toHaveAttribute('data-pub-ready', '');
-    if (isMobile)
-      await section
-        .getByRole('button', { name: /Telegram/ })
-        .first()
-        .click();
+    await telegramBlock(page, isMobile);
     await expect(section.getByText('ждёт подтверждения бухгалтера: 1')).toBeVisible();
 
     // Бухгалтер открывает карточку контрагента: в блоке «Страница контрагента» — запрос.
@@ -183,7 +196,8 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
     await search(page, isMobile, name);
     await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
     const card = page.getByRole('dialog', { name });
-    const box = card.locator('[data-cp-tg]');
+    // «Страница клиента» в карточке свёрнута до строки (прототип v137).
+    const box = (await openCardFold(card, 'page')).locator('[data-cp-tg]');
     await expect(box.getByText('Telegram контрагента', { exact: true })).toBeVisible();
     await expect(box.getByText('ждёт подтверждения: 1')).toBeVisible();
     await expect(box.getByText('подключено 0 из 5')).toBeVisible();
@@ -298,7 +312,9 @@ test.describe('Доработки 13.11, К3: Telegram контрагента', 
     await expect(rows.first()).toBeVisible();
     await search(page, isMobile, name);
     await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
-    const box = page.getByRole('dialog', { name }).locator('[data-cp-tg]');
+    const box = (await openCardFold(page.getByRole('dialog', { name }), 'page')).locator(
+      '[data-cp-tg]',
+    );
     await expect(box.getByText('ждёт подтверждения: 1')).toBeVisible();
     await expect(box.getByText('подключено 1 из 5')).toBeVisible();
 
@@ -494,7 +510,9 @@ test.describe('Доработки 13.11, К5: запрос на подключе
       await rows.filter({ hasText: name }).first().getByText(name, { exact: true }).click();
     };
     await openCard();
-    const box = page.getByRole('dialog', { name }).locator('[data-cp-tg]');
+    const box = (await openCardFold(page.getByRole('dialog', { name }), 'page')).locator(
+      '[data-cp-tg]',
+    );
     await expect(box.getByText('подключено 1 из 5')).toBeVisible();
     const debt = box.locator('[data-cp-tg-debt]');
     const toggle = debt.getByRole('switch', { name: /Напоминать о долге в Telegram/ });
@@ -537,6 +555,7 @@ test.describe('Доработки 13.11, К5: запрос на подключе
     await expect(page.getByText('Запись изменена другим пользователем')).toHaveCount(0);
     // Карточка открыта заново — переключатель в том же положении.
     await openCard();
+    await openCardFold(page.getByRole('dialog', { name }), 'page');
     await expect(toggle).not.toBeChecked();
     await toggle.click();
     await expect(

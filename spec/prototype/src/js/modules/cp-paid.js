@@ -18,13 +18,13 @@ function pgClaimReject(c,fileId){(c.claims||[]).forEach(x=>{if(x.file===fileId&&
 /* ═════════════ Оплата по месяцам для клиента ═════════════ */
 // Месяц — по правилу «к сдаче и к оплате по месяцам» (rmYm). «К оплате» — суммы налогов месяца; «оплачено» — что бухгалтер принял от клиента
 // под отчёты месяца (или уже оплатил в бюджет), не больше суммы отчёта; «осталось» — разница. Пометка: «Оплачено», «Ожидает подтверждения»
-// (клиент сообщил об оплате, деньги ещё не приняты), «Частично», «Не оплачено»
+// (клиент сообщил об оплате этого месяца или налогов без месяца, деньги ещё не приняты), «Частично», «Не оплачено»
 const PG_MPAY={'Оплачено':['green','check'],'Ожидает подтверждения':['blue','hourglass'],'Частично':['yellow','half'],'Не оплачено':['gray','circle']};
 const pgMonthReps=(c,m)=>REPORTS.filter(r=>r.cp===c.id&&!r.superseded&&r.status!=='Не требуется'&&rmYm(r)===m);
 function pgMonthPay(c,m){let sum=0,got=0;const rows=[];
   pgMonthReps(c,m).map(rmItem).forEach(x=>{if(!x.pay||!(x.sum>0))return;const g=Math.min(x.sum,Math.max(x.r.paid||0,x.r.recv||0));sum+=x.sum;got+=g;if(x.sum-g>0)rows.push({r:x.r,left:Math.round((x.sum-g)*100)/100})});
   sum=Math.round(sum*100)/100;got=Math.round(got*100)/100;const left=Math.round((sum-got)*100)/100;
-  const st=sum<=0?'':left<=0?'Оплачено':pgClaimWait(c,'tax',m)?'Ожидает подтверждения':got>0?'Частично':'Не оплачено';
+  const st=sum<=0?'':left<=0?'Оплачено':pgClaimWait(c,'tax',m)||pgClaimWait(c,'tax',null)?'Ожидает подтверждения':got>0?'Частично':'Не оплачено';
   return {m,sum,got,left,st,rows:rows.sort((a,b)=>(a.r.payDue||'')<(b.r.payDue||'')?-1:1)}}
 // Месяцы с остатком к оплате — от старых к новым (для «Я оплатил» из «Как оплатить»)
 function pgOpenMonths(c){const ms=[...new Set(REPORTS.filter(r=>r.cp===c.id&&!r.superseded&&r.status!=='Не требуется').map(rmYm))].sort();return ms.map(m=>pgMonthPay(c,m)).filter(p=>p.left>0)}
@@ -32,58 +32,62 @@ function pgOpenMonths(c){const ms=[...new Set(REPORTS.filter(r=>r.cp===c.id&&!r.
 const pgFeeOpen=c=>feeMonths(c).filter(m=>Math.round((feeCharge(c,m)-feeGot(c,m))*100)/100>0);
 // «Я оплатил» есть, пока контрагент может отправлять файлы со страницы: чек — обязательная часть сообщения
 const pgPaidOn=c=>sntUpOn(c);
-// «Перечислить» — у месяца с остатком, когда клиенту показан «Как оплатить» и у контрагента есть реквизиты для налогов
+// «Оплатить» — у месяца с остатком, когда клиенту показан «Как оплатить» и у контрагента есть реквизиты для налогов
 const pgSendOn=c=>feat('taxpay')&&pgSecs(c).includes('pay')&&!!pgTaxAcc(c);
 
-/* ═════════════ «Перечислить» ═════════════ */
-function pubSendDlg(c,m){const p=pgMonthPay(c,m),a=pgTaxAcc(c);if(!a||!(p.left>0))return;
-  openModal({size:'mid',noMax:true,render:()=>({title:`Перечислить ${esc(rmTitle(m).toLowerCase())}`,sub:esc(c.name),
-    body:`<div class="pub-send"><div class="pub-sendsum"><span class="hint">Осталось оплатить</span><b class="tnum">${som(p.left)}</b><button type="button" class="btn sm" id="ps-cp">${ic('copy','sm')}Скопировать сумму</button></div>
-      <span class="hint pub-sendw">${esc(cphFill(cphT('sendSum',''),{месяц:ymLabel(m).toLowerCase()}))}</span>
-      <div class="pub-list">${p.rows.map(x=>`<div class="pub-row"><div class="pub-r1"><b>${esc(T[x.r.t].short)}</b><span class="faint">·</span><span>${esc(x.r.plabel)}</span><span class="grow"></span><b class="tnum">${som(x.left)}</b></div>${x.r.payDue?`<div class="pub-r2"><span class="${x.r.payDue<TODAY?'red strong':''}">оплатить до ${fmtD(x.r.payDue)}</span></div>`:''}</div>`).join('')}</div>
-      ${pubPay('tax','Налоги','wallet',a,c.paysTo==='org',c)}
-      ${pgPaidOn(c)?`<span class="hint">После перевода нажмите «Я оплатил» и приложите чек: бухгалтер проверит поступление и отметит оплату.</span>`:''}</div>`,
+/* ═════════════ «Оплатить» ═════════════ */
+// Одно окно оплаты (17.11.2026, «Меньше текста», п. 6; было «Перечислить» только у месяца): сумма с «Скопировать», куда переводить, «Из чего сумма» свёрнуто, «Я оплатил».
+// k='tax' без месяца — «Перевести на налоги» из «Что нужно сделать» и «Оплаты»: сумма «Не хватает» (pubTaxDue); с месяцем — «Оплатить» месяца в «Отчёты» → «По месяцам»: остаток месяца;
+// k='fee' — долг за услуги бухгалтера. Та же сумма уходит в «Я оплатил»
+function pubPayPlan(c,k,m){if(k==='fee'){const ms=pgFeeOpen(c);return {sum:c.feeDebt>0?c.feeDebt:0,title:'Оплатить услуги бухгалтера',m:ms[0]||null,
+    rows:ms.map(x=>({l:cphCap(ymLabel(x)),s:Math.round((feeCharge(c,x)-feeGot(c,x))*100)/100,d:`до ${pubDW(pubFeeDue(c,x))}`}))}}
+  if(m){const p=pgMonthPay(c,m);return {sum:p.left>0?p.left:0,title:`Оплатить налоги за ${MONTHS[+m.slice(5,7)-1]}${m.slice(0,4)!==TODAY.slice(0,4)?' '+m.slice(0,4):''}`,m,rows:p.rows.map(x=>({l:`${T[x.r.t].name} · ${x.r.plabel}`,s:x.left,d:x.r.payDue?`до ${pubDW(x.r.payDue)}`:''}))}}
+  const M=pubMoney(c);return {sum:pubTaxDue(c),title:'Оплатить налоги',m:null,rows:M.need.map(r=>({l:`${T[r.t].name} · ${r.plabel}`,s:Math.round((r.sum-r.paid)*100)/100,d:`до ${pubDW(r.payDue)}`})),
+    calc:`Налоги до ${pubDW(lastDay(M.pm))} — ${som(M.needSum)}, ваши деньги у нас — ${som(Math.round((M.needSum+M.diff)*100)/100)}`}}
+function pubPayDlg(c,k,m){const a=pubAcc(c,k),pl=pubPayPlan(c,k,m);if(!a){toast('Спросите вашего бухгалтера, куда переводить','info');return}
+  const D=new Set();
+  openModal({size:'mid',noMax:true,render:()=>({title:esc(pl.title),
+    body:`<div class="pub-send">${pl.sum>0?pubSumLine(pl.sum):''}${pubPay(k,a,c)}
+      ${pl.rows.length?`<div class="pub-det${D.has('r')?' open':''}"><button type="button" class="pub-dh" data-pd="r" aria-expanded="${D.has('r')}"><span>Из чего сумма</span><span class="grow"></span>${ic('down','sm')}</button><div class="pub-gb"><div class="pub-gi pub-list">${pl.calc?`<span class="hint">${esc(pl.calc)}</span>`:''}${pl.rows.map(x=>`<div class="pub-row"><div class="pub-r1"><span>${esc(x.l)}</span><span class="grow"></span><b class="tnum">${som(x.s)}</b></div>${x.d?`<div class="pub-r2"><span>${esc(x.d)}</span></div>`:''}</div>`).join('')}</div></div></div>`:''}</div>`,
     foot:`<button class="btn ghost" data-close>Закрыть</button>${pgPaidOn(c)?`<button class="btn cta" id="ps-paid">${ic('check','sm')}Я оплатил</button>`:''}`,
-    mount(el,mm){$('#ps-cp',el).onclick=()=>copyText(String(p.left).replace('.',','),'Сумма скопирована',true);
-      $$('[data-pub-copy]',el).forEach(b=>b.onclick=()=>copyText(b.dataset.pubCopy,b.dataset.pubOk||'Скопировано',true));
-      const pd=$('#ps-paid',el);if(pd)pd.onclick=()=>{mm.close();pubPaidDlg(c,'tax',m)}}})})}
+    mount(el,mm){$$('[data-pub-copy]',el).forEach(b=>b.onclick=()=>copyText(b.dataset.pubCopy,b.dataset.pubOk||'Скопировано',true));
+      $$('[data-pd]',el).forEach(b=>b.onclick=()=>{const on=!D.has(b.dataset.pd);on?D.add(b.dataset.pd):D.delete(b.dataset.pd);b.parentElement.classList.toggle('open',on);b.setAttribute('aria-expanded',on)});
+      const pd=$('#ps-paid',el);if(pd)pd.onclick=()=>{mm.close();pubPaidDlg(c,k,pl.m,{sum:pl.sum,fixed:true})}}})})}
 
 /* ═════════════ «Я оплатил» ═════════════ */
-// Поля: сумма, что оплачено (по карточке: «Налоги» или «Обслуживание»), чек — фото или PDF, необязательный комментарий. Без чека «Отправить» неактивна.
-// Налоги из «Как оплатить»: месяц — самый старый с остатком, при нескольких — выбор «За какой месяц»; из «Перечислить» — его месяц.
-// Обслуживание — самый старый месяц с долгом. Чек ложится в «Отправленные файлы» со статусом «Новый» и комментарием «Чек: налоги, 5 000 сом»;
+// Поля (17.11.2026, «Меньше текста», п. 6): сверху строка «это не оплата», «Сколько перевели, сом», большая кнопка «Приложить чек», «Добавить комментарий» по ссылке; «Отправить чек» — когда чек приложен.
+// Сумма — та же, что в «Оплатить»: налоги — «Не хватает» (сообщение без месяца, бухгалтер раскладывает деньги по месяцам при «Принять»), месяц из «По месяцам» — его остаток,
+// услуги бухгалтера — долг (месяц — самый старый с долгом). Чек ложится в «Отправленные файлы» со статусом «Новый» и комментарием «Чек: налоги, 5 000 сом»;
 // «Принять» у него сразу открывает «Принять деньги» с этой суммой (pgRcptMoney). Ответственному — сообщение в Telegram, в историю — от имени контрагента
 function pubPaidDlg(c,k,m0,o={}){if(!pgPaidOn(c)){toast('Ваш бухгалтер сейчас не принимает файлы через страницу','lock',true);return}
-  // o.pick — «Сообщить об оплате» из «Помощи», когда показаны обе карточки «Как оплатить»: сверху выбор «Налоги» или «Обслуживание» (доработки 15.11.2026, пункт 3.4)
-  const st={k,m:null,own:false,sum:''},tax=()=>st.k==='tax',ms=()=>tax()?pgOpenMonths(c):[];
-  const def=m=>tax()?(m?pgMonthPay(c,m).left:0):(c.feeDebt>0?c.feeDebt:(curTariff(c)||{}).amount||0);
-  const what=m=>tax()?(m?`Налоги ${rmTitle(m).toLowerCase()}`:'Налоги'):(m?`Обслуживание за ${ymLabel(m).toLowerCase()}`:'Обслуживание');
-  const reset=()=>{st.m=tax()?(m0||(ms()[0]&&ms()[0].m)||null):(pgFeeOpen(c)[0]||null);st.own=false;st.sum=def(st.m)||''};reset();
-  openModal({form:true,noMax:true,render:()=>({title:'Я оплатил',sub:esc(c.name),
-    body:`<div class="form">${cphSteps()}${o.pick?fld(esc(cphT('paidPick','Что вы оплатили?')),`<div class="chipsel" role="group" id="pp-k">${[['tax','Налоги'],['fee','Обслуживание']].map(([x,l])=>`<button type="button" data-pp-k="${x}" class="${st.k===x?'on':''}" aria-pressed="${st.k===x}">${l}</button>`).join('')}</div>`,{full:true}):''}
-      ${tax()&&!m0&&ms().length>1?fld('За какой месяц',sel('pp-m',ms().map(p=>[p.m,`${rmTitle(p.m)} — осталось ${som(p.left)}`]),st.m),{full:true,id:'pp-m'}):''}
-      ${fld('Что оплачено',`<div class="inp pp-what" id="pp-what" aria-live="polite">${esc(what(st.m))}</div>`,{full:true})}
-      ${fld('Сумма, сом',inp('pp-sum',st.sum===''?'':pubM(st.sum),'inputmode="decimal" class="inp tnum" placeholder="5 000"'),{req:true,full:true,id:'pp-sum',hint:'Сколько вы перевели'})}
-      ${fld('Чек',`<input class="inp" type="file" id="pp-f" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,image/*">`,{req:true,full:true,id:'pp-f',hint:`${esc(cphT('paidFile','Фото или PDF чека из банка или кошелька'))}. Фото или PDF до ${FILE_MAX_MB} МБ`})}
-      ${fld('Комментарий',`<textarea class="inp" id="pp-note" maxlength="${SNT_NOTE}" placeholder="Необязательно: например, за какие налоги перевод"></textarea>`,{full:true,id:'pp-note'})}
-      <div class="note full" style="grid-column:1/-1">${ic('info')}<span>Это не оплата: деньги вы переводите в своём банке или кошельке по реквизитам из «Как оплатить». Бухгалтер проверит поступление и отметит оплату — до этого у месяца «Ожидает подтверждения».</span></div></div>`,
-    foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="pp-ok" disabled title="Приложите чек">${ic('send','sm')}Отправить</button>`,
-    mount(el,mm){const f=$('#pp-f',el),ok=$('#pp-ok',el),s=$('#pp-sum',el),sm=$('#pp-m',el);
-      $$('[data-pp-k]',el).forEach(b=>b.onclick=()=>{if(st.k===b.dataset.ppK)return;st.k=b.dataset.ppK;reset();mm.draw()});
-      f.onchange=()=>{const on=!!f.files.length;ok.disabled=!on;ok.title=on?'':'Приложите чек';setErr(el,'pp-f','')};
-      s.oninput=()=>{st.own=true;st.sum=s.value;setErr(el,'pp-sum','')};
-      if(sm)sm.onchange=()=>{st.m=sm.value;$('#pp-what',el).textContent=what(st.m);if(!st.own){const d=def(st.m);st.sum=d||'';s.value=d?pubM(d):''}};
+  // o.pick — «Я оплатил» из «Помощи», когда есть и налоги, и услуги бухгалтера: сверху выбор; o.fixed — из окна «Оплатить» с его месяцем и суммой
+  const st={k,m:m0||null,sum:''},tax=()=>st.k==='tax';
+  const what=m=>tax()?(m?`Налоги ${rmTitle(m).toLowerCase()}`:'Налоги'):(m?`Услуги бухгалтера за ${ymLabel(m)}`:'Услуги бухгалтера');
+  const reset=first=>{if(!(first&&o.fixed)){st.m=tax()?(m0||null):(pgFeeOpen(c)[0]||null)}const s=first&&o.sum!=null?o.sum:tax()?(st.m?pgMonthPay(c,st.m).left:pubTaxDue(c)):(c.feeDebt>0?c.feeDebt:0);st.sum=s>0?s:''};reset(true);
+  openModal({form:true,noMax:true,render:()=>({title:'Я оплатил',
+    body:`<div class="form"><div class="note full pub-paidnote" style="grid-column:1/-1">${ic('info')}<span>${esc(cphT('paidNote','Это не оплата. Сначала переведите деньги в своём банке, здесь вы только отправляете чек.'))}</span></div>
+      ${o.pick?fld(esc(cphT('paidPick','Что вы оплатили?')),`<div class="chipsel" role="group" id="pp-k">${[['tax','Налоги'],['fee','Услуги бухгалтера']].map(([x,l])=>`<button type="button" data-pp-k="${x}" class="${st.k===x?'on':''}" aria-pressed="${st.k===x}">${l}</button>`).join('')}</div>`,{full:true}):''}
+      ${fld('Сколько перевели, сом',inp('pp-sum',st.sum===''?'':pubM(st.sum),'inputmode="decimal" class="inp tnum pub-ppsum" placeholder="5 000"'),{req:true,full:true,id:'pp-sum'})}
+      ${fld('Чек',`<label class="btn pub-pfile" for="pp-f">${ic('clip','sm')}<span id="pp-fn">Приложить чек</span></label><input type="file" id="pp-f" class="pub-fin" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,image/*">`,{req:true,full:true,id:'pp-f',hint:esc(cphT('paidFile','Фото или скриншот из банка'))})}
+      <button type="button" class="linkbtn full" id="pp-addn" style="grid-column:1/-1;justify-self:start">${ic('plus','sm')}Добавить комментарий</button><div class="full" id="pp-nw" style="grid-column:1/-1" hidden>${fld('Комментарий',`<textarea class="inp" id="pp-note" maxlength="${SNT_NOTE}" placeholder="Например: за какие налоги перевод"></textarea>`,{full:true,id:'pp-note'})}</div></div>`,
+    foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn cta" id="pp-ok" disabled title="Приложите чек">${ic('send','sm')}Отправить чек</button>`,
+    mount(el,mm){const f=$('#pp-f',el),ok=$('#pp-ok',el),s=$('#pp-sum',el);
+      // Смена «Налоги» / «Услуги бухгалтера» и «Добавить комментарий» не перерисовывают окно: приложенный чек остаётся
+      $$('[data-pp-k]',el).forEach(b=>b.onclick=()=>{if(st.k===b.dataset.ppK)return;st.k=b.dataset.ppK;reset(false);$$('[data-pp-k]',el).forEach(y=>{const on=y===b;y.classList.toggle('on',on);y.setAttribute('aria-pressed',on)});s.value=st.sum===''?'':pubM(st.sum);setErr(el,'pp-sum','')});
+      $('#pp-addn',el).onclick=()=>{$('#pp-addn',el).hidden=true;$('#pp-nw',el).hidden=false;$('#pp-note',el).focus()};
+      f.onchange=()=>{const on=!!f.files.length;ok.disabled=!on;ok.title=on?'':'Приложите чек';$('#pp-fn',el).textContent=on?f.files[0].name:'Приложить чек';$('.pub-pfile',el).classList.toggle('on',on);setErr(el,'pp-f','')};
+      s.oninput=()=>{st.sum=s.value;setErr(el,'pp-sum','')};
       ok.onclick=()=>{const x=f.files[0],n=parseNum(s.value),i=x?x.name.lastIndexOf('.'):-1,k=st.k,tx=tax();
         if(!setErr(el,'pp-sum',isNaN(n)||n<=0?'Укажите сумму больше нуля':n>1e9?'Слишком большая сумма':''))return;
         if(!setErr(el,'pp-f',!x?'Приложите чек':i<1||!PG_RCPT_EXT.has(x.name.slice(i+1).toLowerCase())?'Чек — фото или PDF':x.size>FILE_MAX_MB*1048576?`Файл больше ${FILE_MAX_MB} МБ`:sntDayCnt(c)>=SNT_DAY?`За сутки можно отправить не больше ${SNT_DAY} файлов. Попробуйте завтра`:''))return;
-        const sum=Math.round(n*100)/100,cm=val(el,'pp-note').replace(/\s+/g,' ').trim().slice(0,SNT_NOTE),at=nowStamp(),id='sf'+Date.now().toString(36)+'p',m=st.m;
-        SENT.push({id,cp:c.id,name:x.name.slice(0,FNAME_MAX),size:x.size,src:'page',at,note:`Чек: ${tx?'налоги':'обслуживание'}, ${som(sum)}${cm?'. '+cm:''}`,st:'new',pay:{kind:k,m,sum}});
+        const nt=$('#pp-note',el),sum=Math.round(n*100)/100,cm=(nt?nt.value:'').replace(/\s+/g,' ').trim().slice(0,SNT_NOTE),at=nowStamp(),id='sf'+Date.now().toString(36)+'p',m=st.m;
+        SENT.push({id,cp:c.id,name:x.name.slice(0,FNAME_MAX),size:x.size,src:'page',at,note:`Чек: ${tx?'налоги':'услуги бухгалтера'}, ${som(sum)}${cm?'. '+cm:''}`,st:'new',pay:{kind:k,m,sum}});
         pgClaimAdd(c,{src:'page',k,m,sum,at,file:id});
         HIST.push({at,who:'client',ent:'cp',id:c.id,cp:c.id,what:`Контрагент сообщил со страницы об оплате: ${what(m).replace(/^./,ch=>ch.toLowerCase())} — ${som(sum)}, чек «${x.name}»${cm?'. Комментарий: '+cm:''}`});
         bellCp(c,{kind:'money',ev:'cp_paid',open:{k:'cp_sent',id:c.id},text:`Сообщил об оплате: ${what(m).replace(/^./,ch=>ch.toLowerCase())} — ${som(sum)}, чек в «Отправленных файлах»`,key:'cp_paid:'+id});
         const to=pgTgStaff(c);if(to)tgSvc(to,'Контрагент сообщил об оплате');
-        // Итог простыми словами: что будет дальше (доработки 15.11.2026, пункт 5.1)
-        dbSoon();mm.close();pubDraw(true);cphDone('Сообщение об оплате отправлено',cphT('paidDone','Сообщение об оплате и чек отправлены бухгалтеру'))}}})})}
+        // Итог простыми словами: что будет дальше (доработки 15.11.2026, пункт 5.1; короче — 17.11.2026)
+        dbSoon();mm.close();pubDraw(true);cphDone('Чек отправлен',cphT('paidDone','Бухгалтер проверит и отметит оплату. Обычно за рабочий день.'))}}})})}
 
 /* ═════════════ Код через Telegram ═════════════ */
 // «Забыли код? Прислать в Telegram» на экране ввода кода и команда бота «Код от страницы» (/code). Код приходит только в Telegram, уже подключённый
@@ -100,7 +104,7 @@ function pgCodeSend(c,to,via){const p=c.page;if(p.closed)return 'closed';if(pgCo
   HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Код страницы контрагента отправлен в Telegram ${to.map(x=>`«${x.name}»`).join(', ')}: ${via==='cmd'?'командой бота «Код от страницы»':'по ссылке «Забыли код?» на странице'}`});dbSoon();return ''}
 // Ссылка со страницы: код уходит во все подключённые Telegram контрагента
 function pubForgot(c){const to=pgCodeTo(c);if(!to.length)return {t:'Спросите код у вашего бухгалтера'};const no=pgCodeSend(c,to,'page');
-  return no==='limit'?{t:`Код уже присылали ${PG_CODE_TG} раза за сутки. Спросите код у вашего бухгалтера`}:no==='closed'?{t:'Страница закрыта. Попросите новый код у вашего бухгалтера'}:{t:'Код отправлен в Telegram, подключённый к этой странице',ok:true,to}}
+  return no==='limit'?{t:`Код уже присылали ${PG_CODE_TG} раза за сутки. Спросите код у вашего бухгалтера`}:no==='closed'?{t:'Страница закрыта. Попросите новый код у вашего бухгалтера'}:{t:'Код отправлен вам в Telegram',ok:true,to}}
 // Команда бота: коды всех включённых страниц контрагентов, к которым подключён этот Telegram, — по сообщению на страницу, с названием
 function pgCodeCmd(name){const at=bishkekNow().hm,ls=pgTgAllLinks(name).filter(l=>pgTgOn(l.c));if(!ls.length)return [{t:tplFill('tgCpCodeNone',{}),at}];
   return ls.map(({c,x})=>{const no=pgCodeSend(c,[x],'cmd');return no==='closed'?{t:tplFill('tgCpCodeClosed',{контрагент:c.name}),at}:no==='limit'?{t:tplFill('tgCpCodeLimit',{контрагент:c.name,лимит:PG_CODE_TG}),at}:pgCodeMsg(c)})}

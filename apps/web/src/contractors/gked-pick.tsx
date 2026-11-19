@@ -192,12 +192,7 @@ export function GkedFields({
         )}
       </Field>
       {after}
-      <Field
-        id={`${idPrefix}-gkx`}
-        label={t('cp.form.gked.extra')}
-        full
-        hint={t('cp.form.gked.extra_hint')}
-      >
+      <Field id={`${idPrefix}-gkx`} label={t('cp.form.gked.extra')} full>
         {() => (
           <div className="flex flex-wrap items-center gap-1.5" data-gked-extra="">
             {extra.map((x) => (

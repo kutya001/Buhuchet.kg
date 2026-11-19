@@ -28,6 +28,7 @@ import {
   bellSyncNews,
   bellOwnerUsers,
   bellUnseen,
+  bellUnseenCounts,
   contractorBellStaff,
   insertBellRows,
   type BellRowInput,
@@ -393,6 +394,12 @@ describe.skipIf(!databaseAvailable())('Колокольчик: строки, п�
     expect(page.items.map((x) => [x.targetId, x.text, x.read])).toEqual([
       ['bell-n1', 'Новая функция', false],
     ]);
+    // (прототип v138) Во «Все» новостей версий нет, в красное число они не входят — считаются отдельно.
+    expect((await inA(acc.userId, (tx) => bellPage(tx, ALL, { tab: 'all' }))).items).toEqual([]);
+    expect(await inA(acc.userId, (tx) => bellUnseenCounts(tx, ALL))).toEqual({
+      unseen: 0,
+      news: 1,
+    });
     // Время строки — появление новости: 09:00 по Бишкеку дня публикации.
     expect(page.items[0]!.at).toEqual(new Date(`${BELL_FROM}T03:00:00Z`));
     // Прочитал в «Новостях» — строка прочитана при следующем чтении.

@@ -23,6 +23,7 @@ import {
   SWIPE_EDGE,
   swipeAxis,
 } from '../gestures';
+import { PAGE_SWIPED_ATTR } from './app-frame';
 
 export interface TabPagerProps {
   /** Вкладки модуля по порядку (id). */
@@ -304,6 +305,9 @@ export function TabPager({ tabs, activeTab, scope, renderTab, onSwipe, children 
             reset();
           }, 5000),
         };
+        // Соседняя вкладка уже въехала: каркас не проявляет страницу заново (прототип v131 — только при
+        // переходе нажатием).
+        root.current?.closest('[data-page]')?.setAttribute(PAGE_SWIPED_ATTR, '');
         navigate(s.to);
       };
       paint(s, target, ms);

@@ -50,6 +50,8 @@ export type CountKey =
   | 'video.count'
   | 'video.views.count'
   | 'tdocs.count'
+  | 'runs.jobs.count'
+  | 'runs.count'
   | 'tgadm.count';
 
 /** Тексты списка из словаря; число записей — в форме для числа (1 сотрудник, 2 сотрудника, 5 сотрудников). */
@@ -65,18 +67,26 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     boardByHint: t('grid.board.by_hint'),
     boardFields: t('grid.board.fields'),
     boardFieldsHint: t('grid.board.fields_hint'),
-    boardByPhone: (name) => t('grid.board.by_phone', { name }),
-    boardFieldsPhone: (n, total) => t('grid.board.fields_phone', { n, total }),
     boardFieldsName: t('grid.board.fields_name'),
     boardColumn: (name, n) => t('grid.board.column', { name, n: formatCount(n) }),
     boardEmpty: t('grid.board.empty'),
     boardMore: (n, left) => t('grid.board.more', { n, left: formatCount(left) }),
     boardCut: (n, total) => t('grid.board.cut', { n, total: formatCount(total) }),
-    boardShown: (n, total) => t('grid.board.shown', { n, total: formatCount(total) }),
+    boardHow: t('grid.board.how'),
     boardTipDrag: t('grid.board.tip_drag'),
     boardTipMenu: t('grid.board.tip_menu'),
     boardMove: t('grid.board.move'),
-    viewTo: (name) => t('grid.view_to', { name }),
+    sort: t('grid.sort'),
+    sortAsc: t('grid.sort_asc'),
+    sortDesc: t('grid.sort_desc'),
+    sortNone: t('grid.sort_none'),
+    filterN: (n) => t('grid.filter_n', { n }),
+    more: t('grid.more'),
+    moreHint: t('grid.more_hint'),
+    boardColumns: t('grid.board.columns'),
+    shownOf: (n, total) => t('grid.shown_of', { n, total }),
+    density: t('grid.density'),
+    selectMany: t('grid.select_many'),
     columns: t('grid.columns'),
     columnsHint: t('grid.columns_hint'),
     system: t('grid.system'),
@@ -94,9 +104,9 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     sortBy: (label) => t('grid.sort_by', { label }),
     columnWidth: t('grid.column_width'),
     actions: t('grid.actions'),
-    // «Показано 1 – 5 000 из 8 200» — с разрядами (прототип ui/grid.js `.gfoot`, ТЗ «Все записи»).
+    // «1–5 000 из 8 200» — с разрядами (прототип v139 ui/grid.js `.gfoot`, ТЗ «Все записи»).
     shown: (from, to, total) =>
-      t('grid.shown', { from: formatCount(from), to: formatCount(to), total: formatCount(total) }),
+      t('grid.range', { from: formatCount(from), to: formatCount(to), total: formatCount(total) }),
     perPage: t('grid.per_page'),
     allRows: t('grid.all_rows'),
     prev: t('grid.prev'),
@@ -117,7 +127,6 @@ export function gridLabels(t: Translate, count: CountKey): GridLabels {
     createdLine: (text) => t('grid.created_line', { text }),
     updatedLine: (text) => t('grid.updated_line', { text }),
     notFound: t('grid.not_found'),
-    notFoundText: t('grid.not_found_text'),
     resetFilters: t('grid.reset_filters'),
     filter: t('grid.filter'),
     filterOf: (label) => t('grid.filter_of', { label }),

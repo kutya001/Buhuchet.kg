@@ -81,6 +81,7 @@ const Gloss = z.object({
   w: z.string().min(1),
   x: text,
   also: z.string().optional().catch(undefined),
+  pg: z.boolean().optional().catch(undefined),
 });
 
 /** Записи, которые не читаются, пропускаются — остальное раздела остаётся. */
@@ -105,7 +106,7 @@ const HelpPayload = z
   })
   .catch({ ...CP_HELP_EMPTY });
 
-/** Раздел из базы: что не читается — пусто; у облачка «Готово!» «Шаг активен» — всегда да. */
+/** Раздел из базы: что не читается — пусто; «Подчёркивать на странице» хранится, только когда нет. */
 export function parseCpHelp(payload: unknown): CpHelp {
   const h = HelpPayload.parse(payload ?? {});
   return {
@@ -116,11 +117,16 @@ export function parseCpHelp(payload: unknown): CpHelp {
         sec: s.sec,
         t: s.t,
         x: s.x,
-        on: s.sec === 'end' || s.on,
+        on: s.on,
       };
       return s.x2 !== undefined ? { ...step, x2: s.x2 } : step;
     }),
-    gloss: h.gloss.map((g) => (g.also ? { w: g.w, x: g.x, also: g.also } : { w: g.w, x: g.x })),
+    gloss: h.gloss.map((g) => ({
+      w: g.w,
+      x: g.x,
+      ...(g.also ? { also: g.also } : {}),
+      ...(g.pg === false ? { pg: false } : {}),
+    })),
   };
 }
 
@@ -205,7 +211,16 @@ export type AdminCpHelpEdit =
     }
   | { op: 'faqMove'; id: string; dir: -1 | 1; version: number }
   | { op: 'faqDelete'; id: string; version: number }
-  | { op: 'gloss'; was?: string; w: string; x: string; also: string; version: number }
+  | {
+      op: 'gloss';
+      was?: string;
+      w: string;
+      x: string;
+      also: string;
+      /** «Подчёркивать на странице» (прототип v135); не пришло — да. */
+      pg?: boolean;
+      version: number;
+    }
   | { op: 'glossDelete'; w: string; version: number };
 
 export type AdminCpHelpResult =
@@ -263,7 +278,7 @@ export function applyCpHelpEdit(h: CpHelp, e: AdminCpHelpEdit, seed: number): Ap
         ...s,
         t: e.t,
         x: e.x,
-        on: s.sec === 'end' ? true : e.on,
+        on: e.on,
         ...(CP_TOUR_ALT_SECS.includes(s.sec) && e.x2 !== undefined ? { x2: e.x2 } : {}),
       };
       return {
@@ -364,7 +379,12 @@ export function applyCpHelpEdit(h: CpHelp, e: AdminCpHelpEdit, seed: number): Ap
         return { ok: false, reason: 'invalid', problem: 'cph_word_taken', field: 'w' };
       }
       const also = cpAlsoClean(e.also);
-      const next: CpGloss = also ? { w: e.w, x: e.x, also } : { w: e.w, x: e.x };
+      const next: CpGloss = {
+        w: e.w,
+        x: e.x,
+        ...(also ? { also } : {}),
+        ...(e.pg === false ? { pg: false } : {}),
+      };
       return {
         help: {
           ...h,
@@ -373,11 +393,10 @@ export function applyCpHelpEdit(h: CpHelp, e: AdminCpHelpEdit, seed: number): Ap
         dict: 'cpgloss',
         code: next.w,
         action: was ? 'update' : 'create',
-        changes: diff(was ? { w: was.w, x: was.x, also: was.also ?? '' } : {}, {
-          w: next.w,
-          x: next.x,
-          also: next.also ?? '',
-        }).filter((c) => was || (c.to !== '' && c.to !== null)),
+        changes: diff(
+          was ? { w: was.w, x: was.x, also: was.also ?? '', pg: was.pg !== false } : {},
+          { w: next.w, x: next.x, also: next.also ?? '', pg: next.pg !== false },
+        ).filter((c) => was || (c.to !== '' && c.to !== null && c.to !== true)),
       };
     }
     case 'glossDelete': {

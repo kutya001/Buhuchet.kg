@@ -29,10 +29,7 @@ export const FILES_LINKS_TEXTS = {
   'files.pick.none': { ru: 'Ничего не найдено', section: S },
   'files.pick.row': { ru: '{base} · {date} · {ext}, {size}', section: S },
   'files.pick.also': { ru: 'также у {list}', section: S },
-  'files.pick.hint': {
-    ru: 'Файл прикрепится ссылкой: в Файловом менеджере он останется одной строкой, новой загрузки и копии нет.',
-    section: S,
-  },
+  'files.pick.hint': { ru: 'Прикрепится ссылкой, без копии', section: S },
   'files.pick.empty': { ru: 'У контрагента пока нет файлов', section: S },
   'files.pick.all_linked': { ru: 'Все файлы контрагента уже прикреплены', section: S },
   'files.pick.empty_text': {

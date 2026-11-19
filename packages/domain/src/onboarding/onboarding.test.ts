@@ -240,17 +240,16 @@ describe('что открыть после входа и какие экраны
     expect(welcomeAtLogin({ state: 'later', canPolicy: true, seen: false })).toBe('tour');
   });
 
-  it('у владельца шесть экранов, «Выбор налогов» — последний и только с правом справочников', () => {
+  it('(прототип v138) у владельца пять экранов без «Модулей», «Выбор налогов» — последний и только с правом справочников', () => {
     expect(welcomeScreens({ kind: 'quiz', canDicts: true })).toEqual([
       'hello',
-      'mods',
       'quiz',
       'plan',
       'start',
       'taxes',
     ]);
-    expect(welcomeScreens({ kind: 'quiz', canDicts: false })).toHaveLength(5);
-    expect(welcomeScreens({ kind: 'tour', canDicts: true })).toEqual(['hello', 'mods', 'start']);
+    expect(welcomeScreens({ kind: 'quiz', canDicts: false })).toHaveLength(4);
+    expect(welcomeScreens({ kind: 'tour', canDicts: true })).toEqual(['hello', 'start']);
     expect(welcomeScreens({ kind: 'retake', canDicts: true })).toEqual(['quiz', 'plan']);
   });
 });

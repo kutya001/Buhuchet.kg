@@ -228,7 +228,7 @@ function KbMemberDialog({
               </span>
             </div>
             <KbBar pct={p.pct} />
-            <span className="text-[11.5px] leading-[1.4] text-faint">
+            <span className="text-[12px] leading-[1.4] text-muted">
               {t('kb.member.hint', { next: p.next === null ? t('kb.top') : nextText(t, p) })}
             </span>
           </Box>

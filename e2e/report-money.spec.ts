@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, expandCard, signIn } from './helpers';
 import { asOwner, manualReport, newContractor } from './reports';
 
 // «Отчеты для сдачи»: деньги по отчётам — поступления и оплата налога (задача 2.19, #75) через
@@ -83,13 +83,15 @@ async function openCard(page: Page, id: string, text: string, typeName: string):
   await expect(row(page, id)).toHaveCount(1);
   await row(page, id).getByText(text).first().click();
   const card = page.getByRole('dialog', { name: typeName });
+  // Под шапкой — строка состояния; шкалы, «Подробности» и «История» раскрываются (прототип v134).
+  await expandCard(card.locator(`[data-report-card="${id}"]`));
   await expect(
     card.locator(`[data-report-card="${id}"] [data-status-scale]`).first(),
   ).toBeVisible();
   return card;
 }
 
-/** Ячейка блока сумм карточки по подписи («К уплате», «Получено от контрагента», …). */
+/** Ячейка блока сумм карточки по подписи («К уплате», «Получено», «Оплачено», «Осталось»). */
 const sum = (card: Locator, label: string) =>
   card.locator('[data-report-sums] > div').filter({ hasText: label });
 
@@ -154,9 +156,13 @@ test.describe('Этап 2: деньги по отчётам — поступле
 
     const card = await openCard(page, nds, name, 'НДС');
     const why = som('Сначала оплатите налог: к уплате 5 000 сом, оплачено 0 сом');
-    await expect(card.locator('[data-report-button="submit"]')).toBeDisabled();
-    await expect(card.locator('[data-report-button="submit"]')).toHaveAttribute('title', why);
-    await expect(card.locator('[data-pay-first]')).toContainText(why);
+    // Сдача закрыта оплатой: внизу вместо неактивной «Отметить сданным» — «Отметить оплаченным», причина —
+    // строкой «осталось …» с правилом под «?» (решение заказчика 17.11.2026, прототип v134).
+    await expect(card.locator('[data-report-button="submit"]')).toHaveCount(0);
+    await expect(card.locator('[data-report-button="pay"]')).toBeVisible();
+    await expect(card.locator('[data-pay-first]')).toContainText(
+      som('Сначала оплатите налог: осталось 5 000 сом'),
+    );
     // Шаг «Сдан» на шкале закрыт с той же причиной, под шкалой — подсказка (прототип scaleFull).
     const scale = card.locator('[data-status-scale]').first();
     await expect(
@@ -171,7 +177,7 @@ test.describe('Этап 2: деньги по отчётам — поступле
     await pay.locator('[data-payment-amount]').fill('3 000');
     await pay.locator('[data-money-ok]').click();
     await expect(pay).toBeHidden();
-    await expect(sum(card, 'Оплачено в бюджет')).toContainText(som('3 000 сом'));
+    await expect(sum(card, 'Оплачено')).toContainText(som('3 000 сом'));
     expect((await cardOf(request, nds)).paid).toBe(300_000);
 
     // Частичная оплата — «Сдан» можно поставить.
@@ -233,12 +239,13 @@ test.describe('Этап 2: деньги по отчётам — поступле
     expect(await cardOf(request, en)).toMatchObject({ status: 'todo', amount: 400_000 });
     await expect(card).toContainText(file);
     await expect(sum(card, 'К уплате')).toContainText(som('4 000 сом'));
-    await expect(card.locator('[data-report-button="submit"]')).toBeDisabled();
+    await expect(card.locator('[data-report-button="submit"]')).toHaveCount(0);
+    await expect(card.locator('[data-report-button="pay"]')).toBeVisible();
     await expect(card.locator('[data-pay-first]')).toContainText(
-      som('Сначала оплатите налог: к уплате 4 000 сом, оплачено 0 сом'),
+      som('Сначала оплатите налог: осталось 4 000 сом'),
     );
     const entry = card
-      .getByRole('list', { name: 'История изменений' })
+      .getByRole('list', { name: 'Изменения' })
       .locator('[data-timeline-item]')
       .filter({ hasText: '(сдача — после оплаты)' });
     await expect(entry).toHaveCount(1);
@@ -281,10 +288,8 @@ test.describe('Этап 2: деньги по отчётам — поступле
     await expect(
       page.getByRole('status').filter({ hasText: 'Оплата контрагентом напрямую отмечена' }),
     ).toBeVisible();
-    await expect(sum(card, 'Оплачено в бюджет')).toContainText(som('5 000 сом'));
-    await expect(sum(card, 'Оплачено в бюджет')).toContainText(
-      som('оплатил контрагент сам: 5 000 сом'),
-    );
+    await expect(sum(card, 'Оплачено')).toContainText(som('5 000 сом'));
+    await expect(sum(card, 'Оплачено')).toContainText(som('оплатил контрагент сам: 5 000 сом'));
     expect(await cardOf(request, nds)).toMatchObject({ paid: 500_000, selfPaid: 500_000 });
     await page.keyboard.press('Escape');
     await expect(card).toBeHidden();
@@ -306,6 +311,8 @@ test.describe('Этап 2: деньги по отчётам — поступле
       .getByText(name, { exact: true })
       .click();
     const cpCard = page.getByRole('dialog', { name });
+    // «Баланс по контрагенту» — внизу вкладки «Деньги» (прототип v137).
+    await cardTab(page, cpCard, isMobile, /^Деньги/);
     const balance = cpCard.locator('[data-money-balance]');
     const value = (label: string) =>
       balance.locator('dl > div').filter({ hasText: label }).locator('[data-kv-value]');
@@ -357,9 +364,30 @@ test.describe('Этап 2: деньги по отчётам — поступле
     }
     const card = await openCard(page, nds, name, 'НДС');
     await expect(sum(card, 'К уплате')).toContainText(som('5 000 сом'));
-    await expect(sum(card, 'Получено от контрагента')).toContainText(som('5 000 сом'));
-    await expect(sum(card, 'Получено от контрагента')).toContainText('получено полностью');
-    await expect(sum(card, 'Оплачено в бюджет')).toContainText(som('2 000 сом'));
-    await expect(sum(card, 'Осталось оплатить')).toContainText(som('3 000 сом'));
+    await expect(sum(card, 'Получено')).toContainText(som('5 000 сом'));
+    await expect(sum(card, 'Оплачено')).toContainText(som('2 000 сом'));
+    await expect(sum(card, 'Осталось')).toContainText(som('3 000 сом'));
+
+    // Карточка контрагента, «Основное» (прототип v137, v142): вверху маленькие карточки — «Осталось
+    // оплатить» (остаток по неоплаченным налогам) и «На счёте»; нажатие открывает «Деньги».
+    await page.goto('/app/cps/all');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    await search(page, isMobile, word);
+    await page
+      .locator('[data-grid] [data-id]')
+      .filter({ hasText: name })
+      .first()
+      .getByText(name, { exact: true })
+      .click();
+    const cpCard = page.getByRole('dialog', { name });
+    const hot = cpCard.locator('[data-cp-hot] [data-plate]');
+    await expect(hot).toHaveCount(2);
+    await expect(hot.filter({ hasText: 'Осталось оплатить' })).toContainText(som('3 000'));
+    await expect(hot.filter({ hasText: 'На счёте' })).toContainText(som('3 000'));
+    // Долга за обслуживание и просроченных отчётов нет — их карточек нет.
+    await expect(hot.filter({ hasText: 'Долг за обслуживание' })).toHaveCount(0);
+    await expect(hot.filter({ hasText: 'Просрочено отчётов' })).toHaveCount(0);
+    await hot.filter({ hasText: 'На счёте' }).click();
+    await expect(cpCard.locator('[data-money-balance]')).toBeVisible();
   });
 });

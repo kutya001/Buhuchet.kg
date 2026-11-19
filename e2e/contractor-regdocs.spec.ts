@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { cardTab } from './helpers';
+import { cardTab, discardChanges, openCardFold } from './helpers';
 import { orgWithTypes } from './orgs';
 
 // Создание контрагента «Из свидетельства и выписки» (задача 2.17, #72, часть 2; Бета) через настоящий
@@ -97,10 +97,12 @@ test.describe('Этап 2: контрагент из свидетельства 
     await expect(page.getByText(/^Контрагент добавлен, отчётов создано: \d+$/)).toBeVisible();
     expect(await byInn(page.request)).toHaveLength(1);
 
-    // Открылась карточка: «Регистрационные данные» с пометкой «из свидетельства и выписки».
+    // Открылась карточка: «Регистрационные данные» (свёрнуты, прототип v137) с пометкой «из свидетельства
+    // и выписки».
     const card = page.getByRole('dialog', { name: NAME });
     await expect(card.locator('[data-cp-card]')).toBeVisible();
-    await expect(card.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства и выписки');
+    const reg = await openCardFold(card, 'reg');
+    await expect(reg.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства и выписки');
 
     // Оба PDF — во вкладке «Файлы», источник «Из свидетельства и выписки».
     await cardTab(page, card, isMobile, /^Файлы/);
@@ -146,7 +148,9 @@ test.describe('Этап 2: контрагент из свидетельства 
       'свидетельство ИП загружено вместе с документом юрлица',
       { timeout: 30_000 },
     );
+    // Файлы выбраны — «Отмена» сначала спрашивает (прототип v131).
     await mixed.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await discardChanges(page);
     await expect(mixed).toBeHidden();
 
     await recognize(page, [fixture('regdocs-ipsv.pdf')]);
@@ -187,7 +191,8 @@ test.describe('Этап 2: контрагент из свидетельства 
     // Карточка: «Регистрационные данные» с пометкой «из свидетельства ИП», в истории — создание из него.
     const card = page.getByRole('dialog', { name: 'ИП Токтогулов А. Б.' });
     await expect(card.locator('[data-cp-card]')).toBeVisible();
-    await expect(card.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства ИП');
+    const reg = await openCardFold(card, 'reg');
+    await expect(reg.locator('[data-cp-reg-docs]')).toHaveText('из свидетельства ИП');
     await cardTab(page, card, isMobile, /^История/);
     await expect(
       card

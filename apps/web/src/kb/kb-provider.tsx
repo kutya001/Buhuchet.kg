@@ -1,6 +1,6 @@
 'use client';
 
-import { pluralForm, type Feature, type MenuModuleId } from '@buhuchet/domain';
+import { type Feature, type MenuModuleId } from '@buhuchet/domain';
 import type { KbMarkResult, KbState, KbStep } from '@buhuchet/shared';
 import { buttonClass, Icon, iconButtonClass, Modal, useToast, useWindow } from '@buhuchet/ui';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -235,17 +235,14 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
         setLesson({ id: pick.id, bar: true, off: false });
         setDone(openSlot<DoneDialog>({ id: pick.id, title: pick.title, look: false }));
       }
+      // Остальные шаги — коротким уведомлением и только во время урока (прототип v138 `ckEval`): вне
+      // урока работа идёт без сообщений «Базы знаний».
       const rest = result.fresh.filter((f) => f !== pick);
+      if (!active) return;
       if (rest.length === 1) {
         toast(t('kb.toast.step', { title: rest[0]!.title }), { icon: 'grad' });
       } else if (rest.length > 1) {
-        toast(
-          t(`kb.toast.steps.${pluralForm(rest.length)}`, {
-            n: rest.length,
-            titles: rest.map((f) => `«${f.title}»`).join(', '),
-          }),
-          { icon: 'grad' },
-        );
+        toast(t('kb.toast.steps', { n: rest.length }), { icon: 'grad' });
       }
     },
     [client, t, toast],
@@ -336,11 +333,11 @@ export function useKbRuntime(shell: KbShellInfo): { controls: KbControls; overla
         if (href && options?.replace) router.replace(href);
         else if (href) router.push(href);
       }
-      const open = target?.open;
+      const phone = window.matchMedia('(max-width: 767px)').matches;
+      const open = phone && target?.phoneOpen ? target.phoneOpen : target?.open;
       if (open === 'profile') onProfile();
       else if (open && module) setPendingAdd({ module, add: open.add, variant: open.variant });
       if (!open || open === 'profile') {
-        const phone = window.matchMedia('(max-width: 767px)').matches;
         flashTarget(
           phone && target?.phoneFlash ? target.phoneFlash : (target?.flash ?? 'main'),
           target?.press ? (el) => el.click() : undefined,
@@ -604,7 +601,7 @@ function LessonBar({
     <div
       role="status"
       data-kb-bar={look ? 'look' : 'lesson'}
-      className={`fixed right-[22px] bottom-[calc(18px+env(safe-area-inset-bottom,0px))] z-[45] flex max-w-[min(680px,calc(100vw-24px))] animate-slide-up items-center gap-2.5 border border-line-strong bg-raised py-1.5 pr-1.5 pl-3.5 text-[13px] shadow-pop max-md:right-3 max-md:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] max-md:left-3 max-md:max-w-none ${look ? 'flex-wrap gap-y-1.5 rounded-2xl' : 'rounded-full max-md:rounded-2xl'}`}
+      className={`fixed right-[22px] bottom-[calc(18px+env(safe-area-inset-bottom,0px))] z-[45] flex max-w-[min(680px,calc(100vw-24px))] animate-rise items-center gap-2.5 border border-line-strong bg-raised py-1.5 pr-1.5 pl-3.5 text-[13px] shadow-pop max-md:right-3 max-md:bottom-[calc(84px+env(safe-area-inset-bottom,0px))] max-md:left-3 max-md:max-w-none ${look ? 'flex-wrap gap-y-1.5 rounded-2xl' : 'rounded-full max-md:rounded-2xl'}`}
     >
       <Icon name={look ? 'eye' : step.done ? 'ok' : 'grad'} size="sm" />
       <span className="min-w-0 flex-1 truncate">

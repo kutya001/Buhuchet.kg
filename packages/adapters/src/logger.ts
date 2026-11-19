@@ -88,6 +88,17 @@ export function safeErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Токен бота: он стоит в адресе запроса к Telegram и может попасть в текст ошибки сети. */
+const BOT_TOKEN_RE = /(?<!\d)\d{6,}:[A-Za-z0-9_-]{30,}/g;
+
+/**
+ * Текст ошибки для журналов, которые показывает Админка (запуски задач, переписка бота): без значений
+ * параметров запроса, без токена бота и не длиннее `max` знаков.
+ */
+export function shownErrorMessage(err: unknown, max: number): string {
+  return safeErrorMessage(err).replace(BOT_TOKEN_RE, '[скрыто]').slice(0, max);
+}
+
 /**
  * Журнал — структурированные строки JSON в стандартный вывод: на Vercel их собирает Vercel,
  * на VPS — Docker или journald. Пароли, токены, cookie и коды доступа вычищаются.

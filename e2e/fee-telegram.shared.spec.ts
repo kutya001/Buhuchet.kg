@@ -168,12 +168,14 @@ test.describe('Доработки 14.11, К (блок 4): «Напомнить �
         await dialog.locator('[data-fee-telegram-send]').click();
         await expect(dialog).toContainText('Введите текст сообщения');
         await text.fill(own);
-        // Пока окно открыто, «Как оплатить» скрыли: отказ сообщением, окно с текстом остаётся открытым.
+        // Пока окно открыто, раздел «Куда переводить» (реквизиты) скрыли: отказ сообщением, окно с текстом остаётся открытым.
         await hide(['pay']);
         try {
           await dialog.locator('[data-fee-telegram-send]').click();
           await expect(
-            page.getByRole('status').filter({ hasText: /на странице скрыт раздел «Как оплатить»/ }),
+            page
+              .getByRole('status')
+              .filter({ hasText: /на странице скрыт раздел «Куда переводить»/ }),
           ).toBeVisible();
           await expect(dialog).toBeVisible();
           await expect(text).toHaveValue(own);

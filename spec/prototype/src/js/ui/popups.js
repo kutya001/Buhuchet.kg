@@ -2,7 +2,11 @@
 // Поповеры, меню, модальные окна, подтверждения, уведомления, помощники форм
 /* ═════════════ Popover / menu / modal / toast ═════════════ */
 let POP=null,POP_ANCHOR=null;
-function closePop(){if(POP){POP.remove();POP=null;if(POP_ANCHOR&&POP_ANCHOR.classList&&POP_ANCHOR.classList.contains('cps-b'))POP_ANCHOR.setAttribute('aria-expanded','false');POP_ANCHOR=null}}
+// Плавность (решение заказчика 17.11.2026): меню, окно и уведомление уходят за --t-exit (140 мс), а не исчезают за кадр; при «уменьшить движение» — сразу
+const RMQ=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
+const T_EXIT=150;
+function fadeAway(el,cls='out'){if(!el)return;if(RMQ()||!el.isConnected){el.remove();return}el.classList.add(cls);setTimeout(()=>el.remove(),T_EXIT)}
+function closePop(){if(POP){fadeAway(POP);POP=null;if(POP_ANCHOR&&POP_ANCHOR.classList&&POP_ANCHOR.classList.contains('cps-b'))POP_ANCHOR.setAttribute('aria-expanded','false');POP_ANCHOR=null}}
 function openPop(anchor,html,{pt,cls='',mount}={}){
   closePop();const el=document.createElement('div');el.className='pop '+cls;el.innerHTML=html;document.body.appendChild(el);
   const W=innerWidth,H=innerHeight,w=el.offsetWidth,h=el.offsetHeight;let x,y;
@@ -48,14 +52,14 @@ addEventListener('popstate',e=>{
   if(!ovAny()||!(e.state&&e.state.ovb===OV.id))return;
   if(typeof TOUR!=='undefined'&&TOUR.on){tourEnd(false);if(ovAny())ovOpen();return}
   const m=MODALS[MODALS.length-1];
-  if(m){if(m.dirty&&m.o.form){ovOpen();confirmDlg({title:'Закрыть без сохранения?',text:'В форме есть несохранённые изменения. Если закрыть сейчас, они пропадут.',ok:'Закрыть',danger:true,run:m.close});return}
+  if(m){if(m.dirty&&m.o.form){ovOpen();m.tryClose();return}
     m.close();if(ovAny())ovOpen();return}
   if(document.getElementById('sheet')&&document.getElementById('sheet').classList.contains('open'))closeSheet(true)});
 function openModal(o){
   const cover=document.createElement('div');cover.className='cover';
   cover.innerHTML=`<div class="modal ${o.size||''}" role="dialog" aria-modal="true"></div>`;
   document.body.appendChild(cover);
-  const m={o,cover,el:cover.firstElementChild,state:o.state||{},close(){if(m.closed)return;m.closed=true;cover.remove();const i=MODALS.indexOf(m);if(i>=0)MODALS.splice(i,1);ovClosed();if(typeof ckSoon==='function')ckSoon();if(o.onClose)o.onClose()}};
+  const m={o,cover,el:cover.firstElementChild,state:o.state||{},close(now){if(m.closed)return;m.closed=true;if(now===true)cover.remove();else fadeAway(cover);const i=MODALS.indexOf(m);if(i>=0)MODALS.splice(i,1);ovClosed();if(typeof ckSoon==='function')ckSoon();if(o.onClose)o.onClose()}};
   m.canMax=!!(o.size||o.form)&&!o.noMax;m.maxKey='modal.max.'+(o.form?'form':'card');if(o.form&&o.size!=='wide')m.el.classList.add('narrow');
   m.setMax=(on,save)=>{if(!m.canMax)on=false;m.max=on;const fl=m.el.getBoundingClientRect();cover.classList.toggle('max',on);m.el.classList.toggle('max',on);
     if(save){store.set(m.maxKey,on);
@@ -64,16 +68,22 @@ function openModal(o){
   MODALS.push(m);ovOpen();
   formPager(m);
   const mark=e=>{if(e.target.closest&&e.target.closest('.form,.fld'))m.dirty=true};m.el.addEventListener('input',mark);m.el.addEventListener('change',mark);
-  swipeDown(m.el,()=>m.el.querySelector('.mb'),{cover,headOnly:!!o.swipeHead,can:()=>{if(m.dirty&&o.form){confirmDlg({title:'Закрыть без сохранения?',text:'В форме есть несохранённые изменения. Если закрыть сейчас, они пропадут.',ok:'Закрыть',danger:true,run:m.close});return false}return true},close:m.close});
-  cover.addEventListener('pointerdown',e=>{if(e.target===cover&&!o.sticky)m.close()});
+  /* Изменённую форму нельзя потерять одним нажатием (17.11.2026, п. 8): «✕», «Отмена», Esc, нажатие мимо окна, «Назад» и свайп вниз спрашивают «Закрыть без сохранения?»;
+     «Остаться» возвращает форму с введённым. Сохранение закрывает окно через m.close() без вопроса */
+  m.tryClose=()=>{if(m.closed)return true;if(m.dirty&&o.form){confirmDlg({title:'Закрыть без сохранения?',text:'Введённое пропадёт.',ok:'Закрыть',cancel:'Остаться',danger:true,run:()=>m.close()});return false}m.close();return true};
+  swipeDown(m.el,()=>m.el.querySelector('.mb'),{cover,headOnly:!!o.swipeHead,can:()=>{if(m.dirty&&o.form){m.tryClose();return false}return true},close:()=>m.close(true)});
+  cover.addEventListener('pointerdown',e=>{if(e.target===cover&&!o.sticky)m.tryClose()});
   m.draw=()=>{
     const keep=m.el.querySelector('.mb')?m.el.querySelector('.mb').scrollTop:0;
+    // Раскрытые блоки («Подробности», «История», «Дополнительно», «Настройки оплаты») остаются раскрытыми после перерисовки окна (17.11.2026)
+    const dk=d=>(d.querySelector('summary')||{textContent:''}).textContent.trim().slice(0,40),opn=new Set([...m.el.querySelectorAll('.mb details[open]')].map(dk));
     const r=o.render(m);
     m.el.innerHTML=`<div class="grabber"></div><div class="mh"><div style="flex:1;min-width:0"><h2>${r.title}</h2>${r.sub?`<div class="sub">${r.sub}</div>`:''}</div>${r.head||''}<div class="mh-btns">${m.canMax?`<button class="icon-btn" data-max aria-pressed="${!!m.max}" aria-label="${m.max?'Свернуть окно':'На весь экран'}" title="${m.max?'Свернуть окно':'На весь экран'}${isMobile()?'':' (двойной клик по заголовку)'}">${ic(m.max?'minimize':'maximize')}</button>`:''}<button class="icon-btn" data-x aria-label="Закрыть">${ic('x')}</button></div></div><div class="mb">${r.body}</div>${r.foot?`<div class="mf">${r.foot}</div>`:''}`;
-    m.el.querySelector('[data-x]').onclick=m.close;
+    m.el.querySelector('[data-x]').onclick=()=>m.tryClose();
     if(m.canMax){m.el.querySelector('[data-max]').onclick=()=>m.setMax(!m.max,true);m.el.querySelector('.mh').ondblclick=e=>{if(!e.target.closest('button,a,input,select'))m.setMax(!m.max,true)}}
-    $$('[data-close]',m.el).forEach(b=>b.onclick=m.close);
+    $$('[data-close]',m.el).forEach(b=>b.onclick=()=>m.tryClose());
     r.mount&&r.mount(m.el,m);
+    if(opn.size)m.el.querySelectorAll('.mb details:not([open])').forEach(d=>{if(opn.has(dk(d))){d.classList.add('no-anim');d.open=true}});
     m.el.querySelectorAll('.scf').forEach(f=>{if(f.scrollWidth<=f.clientWidth)return;const g=f.querySelector('.scf-s.go')||f.querySelector('.scf-s.c');if(g)f.scrollLeft=Math.max(0,g.offsetLeft+g.offsetWidth-f.clientWidth+12)});
     m.el.querySelector('.mb').scrollTop=keep;
   };
@@ -85,12 +95,13 @@ function openModal(o){
 // act — необязательная ссылка в уведомлении {label, run}, например «Мои запросы» после отправки запроса
 function toast(msg,icon='check',bad=false,act=null){if(!bad&&typeof ckSoon==='function'&&!CK.quiet)ckSoon();const t=document.createElement('div');t.className='toast'+(bad?' bad':'');t.setAttribute('role','status');t.innerHTML=ic(icon)+`<span>${esc(msg)}</span>${act?`<button type="button" class="toast-a">${esc(act.label)}</button>`:''}<button type="button" class="toast-x" aria-label="Закрыть уведомление" title="Закрыть">${ic('x','sm')}</button>`;$('#toasts').appendChild(t);
   if(act)t.querySelector('.toast-a').onclick=()=>{t.gone=true;t.remove();act.run()};
-  const gone=()=>{if(t.gone)return;t.gone=true;t.style.transition='opacity .3s';t.style.opacity='0';setTimeout(()=>t.remove(),320)};
+  const gone=()=>{if(t.gone)return;t.gone=true;fadeAway(t)};
   t.querySelector('.toast-x').onclick=()=>{t.gone=true;t.remove()};swipeAway(t,()=>{t.gone=true;t.remove()});
-  setTimeout(()=>{if(t.dragging)t.later=gone;else gone()},3200)}
-function confirmDlg({title,text,ok='Подтвердить',danger=false,run}){
-  openModal({noMax:true,render:()=>({title,body:`<p style="margin:0;color:var(--muted);line-height:1.55">${text}</p>`,foot:`<button class="btn ghost" data-close>Отмена</button><button class="btn ${danger?'danger':'cta'}" id="cf-ok">${esc(ok)}</button>`,
-    mount(el,m){$('#cf-ok',el).onclick=()=>{m.close();run()}}})});
+  // Показ по длине текста: короткое — 3 с, длиннее 8 слов — дольше, но не больше 6 с
+  const words=String(msg).split(/\s+/).length;setTimeout(()=>{if(t.dragging)t.later=gone;else gone()},Math.min(6000,3000+Math.max(0,words-8)*250))}
+function confirmDlg({title,text,ok='Подтвердить',danger=false,run,cancel='Отмена'}){
+  const m0=openModal({noMax:true,render:()=>({title,body:`<p style="margin:0;color:var(--muted);line-height:1.55">${text}</p>`,foot:`<button class="btn ghost" data-close>${esc(cancel)}</button><button class="btn ${danger?'danger':'cta'}" id="cf-ok">${esc(ok)}</button>`,
+    mount(el,m){$('#cf-ok',el).onclick=()=>{m.close();run()}}})});m0.el.classList.add('cfm');return m0
 }
 /* Form helpers */
 function fld(label,inner,{req,full,hint,id}={}){return `<div class="fld ${full?'full':''}" ${id?`data-f="${id}"`:''}><label ${id?`for="${id}"`:''} class="${req?'req':''}">${label}</label>${inner}${hint?`<div class="hint">${hint}</div>`:''}<div class="err" hidden></div></div>`}

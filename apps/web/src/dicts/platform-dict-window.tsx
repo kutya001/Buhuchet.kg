@@ -345,7 +345,7 @@ export function PlatformDictWindow({
           <div className="flex flex-col gap-1.5 rounded-xl border border-line bg-pane-alt px-3.5 py-3">
             {tile.about ? <p className="m-0 leading-[1.45]">{tile.about}</p> : null}
             {tile.usedIn ? (
-              <div className="flex items-start gap-1.5 text-[11.5px] leading-[1.4] text-faint">
+              <div className="flex items-start gap-1.5 text-[12px] leading-[1.4] text-muted">
                 <Icon name="info" size="sm" className="mt-px" />
                 <span>{t('dicts.platform.used_in', { text: tile.usedIn })}</span>
               </div>

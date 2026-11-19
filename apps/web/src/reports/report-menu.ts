@@ -163,6 +163,7 @@ export function reportMenuEntries({
         item('fix', {
           label: t('report.act.fix'),
           icon: 'refresh',
+          danger: true,
           sub: t('report.act.fix_sub'),
           ...lock,
         }),

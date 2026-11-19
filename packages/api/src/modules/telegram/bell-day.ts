@@ -95,6 +95,7 @@ export const bellDayJob: Job = {
     if (failed.length) {
       throw new Error(`telegram.bell-day: не собраны строки организаций: ${failed.length}`);
     }
+    return put;
   },
 };
 
@@ -121,5 +122,6 @@ export const bellCleanupJob: Job = {
     if (failed.length) {
       throw new Error(`telegram.bell-cleanup: не убраны организации: ${failed.length}`);
     }
+    return removed;
   },
 };

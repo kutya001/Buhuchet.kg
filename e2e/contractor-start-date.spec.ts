@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { cardTab, defaultResponsible } from './helpers';
+import { cardTab, defaultResponsible, editSection } from './helpers';
 import { orgWithTypes } from './orgs';
 import { assign, newContractor } from './reports';
 
@@ -17,13 +17,16 @@ const bishkekDay = (plus = 0) =>
 
 const rows = (page: Page) => page.locator('[data-grid] [data-id]');
 
-async function openEdit(page: Page, card: Locator) {
+/** «Изменить контрагента» на разделе «Отчёты и обслуживание»: дата начала — в нём (прототип v137). */
+async function openEdit(page: Page, card: Locator, isMobile: boolean) {
   await card.locator('[data-cp-more]').click();
   await page
     .getByRole('menu', { name: 'Действия' })
     .getByRole('menuitem', { name: 'Изменить' })
     .click();
   const edit = page.getByRole('dialog', { name: 'Изменить контрагента' });
+  await expect(edit.locator('[data-cf-toc]')).toBeVisible({ timeout: 15_000 });
+  await editSection(edit, isMobile, 3);
   await expect(edit.locator('[data-cp-field="start-date"]')).toBeVisible({ timeout: 15_000 });
   return edit;
 }
@@ -55,19 +58,27 @@ test('(проверка прототипа v84) дата начала обслу
   await expect(card.locator('[data-cp-card]')).toBeVisible();
   await expect(card).toContainText('01.01.2026');
 
-  const edit = await openEdit(page, card);
+  const edit = await openEdit(page, card, isMobile);
   const date = edit.locator('[data-cp-field="start-date"]');
   const reason = edit.locator('[data-cp-field="start-reason"]');
   const save = edit.locator('[data-cp-save]');
 
-  await test.step('поля: дата с подсказкой и причина; новая дата без причины не сохраняется', async () => {
+  await test.step('поля: дата с подсказкой «ⓘ», причина — только у изменённой даты; новая дата без причины не сохраняется', async () => {
     await expect(date).toHaveValue('2026-01-01');
     await expect(edit).toContainText('Дата начала обслуживания');
-    await expect(edit).toContainText(
-      'С этой даты ведётся учёт контрагента: первый период обслуживания, начисления за обслуживание и месяцы показателей',
-    );
-    await expect(edit).toContainText('Обязательна, если дата начала меняется');
+    // Пояснение — по «ⓘ» у подписи, а не строкой под полем (прототип v137).
+    const tip = edit.getByRole('button', { name: 'Дата начала обслуживания', exact: true });
+    await tip.click();
+    await expect(
+      page.getByText(
+        'С этой даты ведётся учёт контрагента: первый период обслуживания, начисления за обслуживание и месяцы показателей',
+      ),
+    ).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(edit).toBeVisible();
+    await expect(reason).toHaveCount(0);
     await date.fill('2026-03-10');
+    await expect(reason).toBeVisible();
     await save.click();
     await expect(edit).toContainText('Укажите причину: меняется дата начала');
   });
@@ -99,9 +110,9 @@ test('(проверка прототипа v84) дата начала обслу
   });
 
   await test.step('та же дата — «Изменений нет», причина без новой даты не нужна', async () => {
-    const again = await openEdit(page, card);
+    const again = await openEdit(page, card, isMobile);
     await expect(again.locator('[data-cp-field="start-date"]')).toHaveValue('2026-03-10');
-    await expect(again.locator('[data-cp-field="start-reason"]')).toHaveValue('');
+    await expect(again.locator('[data-cp-field="start-reason"]')).toHaveCount(0);
     await again.locator('[data-cp-save]').click();
     await expect(page.getByText('Изменений нет').first()).toBeVisible();
     await expect(again).toBeHidden();
@@ -136,10 +147,10 @@ test('(проверка прототипа v84) дата начала обслу
       .click();
     const oneCard = page.getByRole('dialog', { name: oneName });
     await expect(oneCard.locator('[data-cp-card]')).toBeVisible();
-    const oneEdit = await openEdit(page, oneCard);
+    const oneEdit = await openEdit(page, oneCard, isMobile);
     await expect(oneEdit).toContainText('Дата первого обращения');
     await expect(oneEdit).not.toContainText('Дата начала обслуживания');
-    await expect(oneEdit).not.toContainText('С этой даты ведётся учёт контрагента');
+    await expect(oneEdit.getByRole('button', { name: 'Дата первого обращения' })).toHaveCount(0);
     await expect(oneEdit.locator('[data-cp-field="start-date"]')).toHaveValue('2026-02-01');
   });
 });

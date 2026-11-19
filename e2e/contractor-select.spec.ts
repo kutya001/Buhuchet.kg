@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, phoneTableView, pickContractor, signIn } from './helpers';
+import { DEMO_PASSWORD, discardChanges, phoneTableView, pickContractor, signIn } from './helpers';
 import { newContractor } from './reports';
 
 // Доработки 13.11, задача И3 (прототип v93, ui/cp-select.js): поле «Контрагент» во всех формах — общий
@@ -123,7 +123,10 @@ test.describe('Доработки 13.11: список контрагентов �
     const picked = page.getByRole('listbox').getByRole('option', { selected: true });
     await expect(picked).toContainText(`ОсОО «${name}»`);
     await expect(picked).toBeInViewport();
-    await field.click();
+    // На телефоне список — лист снизу (прототип v131) и поле под ним не нажать: лист закрывает Esc,
+    // форма при этом остаётся открытой.
+    if (isMobile) await page.keyboard.press('Escape');
+    else await field.click();
     await expect(page.getByRole('listbox')).toBeHidden();
     await expect(dlg).toBeVisible();
   });
@@ -149,7 +152,9 @@ test.describe('Доработки 13.11: список контрагентов �
     await expect(taskCp).toContainText('— выберите контрагента —');
     await pickContractor(taskCp, cp.inn);
     await expect(taskCp).toContainText(`ОсОО «${name}»`);
+    // Контрагент выбран — «Отмена» сначала спрашивает (прототип v131).
     await task.getByRole('button', { name: 'Отмена' }).click();
+    await discardChanges(page);
     await expect(task).toBeHidden();
 
     // «Загрузить файл»: пустой выбор — «общий файл организации».

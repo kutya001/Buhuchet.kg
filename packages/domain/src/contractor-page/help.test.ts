@@ -22,7 +22,6 @@ import {
   cpHelpFill,
   cpHelpLong,
   cpLegendRows,
-  cpPaidSteps,
   cpTourMove,
   cpTourSteps,
   type CpGlossPart,
@@ -30,8 +29,15 @@ import {
   type CpHelpView,
 } from './help';
 
-/* Эталон — прототип v120 modules/cp-help.js и refDB.json `kbUi.cpHelp`. */
+/* Эталон — прототип v135 modules/cp-help.js и refDB.json `kbUi.cpHelp`. */
 const help = (refDB as unknown as { kbUi: { cpHelp: CpHelp } }).kbUi.cpHelp;
+/** Тот же набор, где всё включено: правила проверяются на всех облачках, вопросах и словах. */
+const full: CpHelp = {
+  ...help,
+  tour: help.tour.map((x) => ({ ...x, on: true })),
+  faq: help.faq.map((q) => ({ ...q, on: true })),
+  gloss: help.gloss.map((g) => ({ w: g.w, x: g.x, ...(g.also ? { also: g.also } : {}) })),
+};
 
 const view = (over: Partial<CpHelpView> & { secs?: string[] } = {}): CpHelpView => ({
   sections: new Set(over.secs ?? ['main', 'pay', 'acc', 'reports', 'files', 'money', 'tg']),
@@ -69,8 +75,13 @@ describe('тексты справочника — те, что знает про
 });
 
 describe('обзор страницы (cphTourList)', () => {
-  it('все разделы видны — все 9 облачков, у «Как оплатить» и «Файлов» основной текст', () => {
+  it('как в прототипе v135: пять облачков — без «Главного», «Связи», Telegram и «Готово!»', () => {
     const s = cpTourSteps(help, view({ secs: ['main', 'pay', 'acc', 'reports', 'files', 'tg'] }));
+    expect(s.map((x) => x.sec)).toEqual(['state', 'pay', 'reports', 'files', 'help']);
+  });
+
+  it('все разделы видны и включены — все 9 облачков, у «Оплаты» и «Файлов» основной текст', () => {
+    const s = cpTourSteps(full, view({ secs: ['main', 'pay', 'acc', 'reports', 'files', 'tg'] }));
     expect(s.map((x) => x.sec)).toEqual([
       'state',
       'main',
@@ -85,17 +96,23 @@ describe('обзор страницы (cphTourList)', () => {
     expect(s.find((x) => x.sec === 'pay')?.x).toContain('«Я оплатил»');
   });
 
-  it('скрытый раздел и выключенное облачко пропускаются; «Готово!» — всегда', () => {
+  it('скрытый раздел и выключенное облачко пропускаются, выключается и «Готово!»', () => {
     const off: CpHelp = {
-      ...help,
-      tour: help.tour.map((x) => (x.sec === 'acc' || x.sec === 'end' ? { ...x, on: false } : x)),
+      ...full,
+      tour: full.tour.map((x) => (x.sec === 'acc' || x.sec === 'end' ? { ...x, on: false } : x)),
     };
-    const s = cpTourSteps(off, view({ secs: ['main', 'reports'] }));
-    expect(s.map((x) => x.sec)).toEqual(['state', 'main', 'reports', 'help', 'end']);
+    const s = cpTourSteps(off, view({ secs: ['main', 'acc', 'reports'] }));
+    expect(s.map((x) => x.sec)).toEqual(['state', 'main', 'reports', 'help']);
+    // «Готово!» включено — оно последнее, какие бы разделы ни были скрыты.
+    expect(cpTourSteps(full, view({ secs: [] })).map((x) => x.sec)).toEqual([
+      'state',
+      'help',
+      'end',
+    ]);
   });
 
   it('без «Я оплатил» и «Отправить файл» — «Текст, если действие недоступно»', () => {
-    const s = cpTourSteps(help, view({ paid: false, up: false, secs: ['pay', 'files'] }));
+    const s = cpTourSteps(full, view({ paid: false, up: false, secs: ['pay', 'files'] }));
     expect(s.find((x) => x.sec === 'pay')?.x).toBe(help.tour.find((x) => x.sec === 'pay')?.x2);
     expect(s.find((x) => x.sec === 'files')?.x).toBe(help.tour.find((x) => x.sec === 'files')?.x2);
   });
@@ -115,7 +132,19 @@ describe('обзор страницы (cphTourList)', () => {
 
 describe('«Помощь»: вопросы и кнопки (cphQVis, cphActOn)', () => {
   it('вопросы по «Порядку»; скрытые разделы и выключенные — без вопросов', () => {
+    // Как в прототипе v135: три вопроса выключены — меньше текста.
     expect(cpFaqList(help, view()).map((q) => q.id)).toEqual([
+      'pay-tax',
+      'wait',
+      'up',
+      'rej',
+      'colors',
+      'money',
+      'tg',
+      'code',
+      'safe',
+    ]);
+    expect(cpFaqList(full, view()).map((q) => q.id)).toEqual([
       'pay-tax',
       'pay-fee',
       'paid',
@@ -130,7 +159,7 @@ describe('«Помощь»: вопросы и кнопки (cphQVis, cphActOn)',
       'safe',
     ]);
     const only = cpFaqList(
-      { ...help, faq: help.faq.map((q) => (q.id === 'safe' ? { ...q, on: false } : q)) },
+      { ...full, faq: full.faq.map((q) => (q.id === 'safe' ? { ...q, on: false } : q)) },
       view({ payFee: false, secs: ['reports'] }),
     ).map((q) => q.id);
     expect(only).toEqual(['pay-tax', 'paid', 'wait', 'colors', 'code', 'again']);
@@ -172,32 +201,39 @@ describe('«Помощь»: вопросы и кнопки (cphQVis, cphActOn)',
       { label: '', text: 'просто текст' },
       { label: 'А', text: 'б' },
     ]);
+    // Пояснение из одних пробелов — не пара «название — пояснение», а обычная строка.
+    expect(cpLegendRows('«А» —   ')).toEqual([{ label: '', text: '«А» —' }]);
   });
 
-  it('шаги «Я оплатил», подстановки, заглавная буква', () => {
-    expect(cpPaidSteps(help.hints.paidSteps!)).toEqual([
-      'Переведите деньги в своём банке',
-      'Приложите чек',
-      'Нажмите «Отправить»',
-    ]);
-    expect(cpPaidSteps(' | ')).toEqual([]);
-    expect(cpHelpFill(help.hints.sendSum!, { месяц: 'август 2026' })).toBe(
-      'Это налоги за август 2026, которые ещё нужно перевести',
-    );
+  it('подстановки, заглавная буква', () => {
+    expect(cpHelpFill(help.hints.emptyReports!, { год: '2026' })).toBe('В 2026 году отчётов нет');
     expect(cpHelpFill('{мб} и {нет}', { мб: 20 })).toBe('20 и {нет}');
+    // Имя подстановки — без скобок: лишняя «{» остаётся текстом, строка из одних «{» разбирается сразу.
+    expect(cpHelpFill('{a{b}', { b: 1 })).toBe('{a1');
+    expect(cpHelpFill('{'.repeat(100_000), { b: 1 })).toHaveLength(100_000);
+    // Подставляются только свои значения: встроенные поля объекта — не подстановки.
+    expect(cpHelpFill('{constructor} {toString}', {})).toBe('{constructor} {toString}');
     expect(cpHelpCap('реквизиты')).toBe('Реквизиты');
     expect(cpHelpCap('')).toBe('');
   });
 });
 
 describe('«Словарик» (cphGlossRx, cphGloss)', () => {
-  const ix = cpGlossIndex(help.gloss);
+  const ix = cpGlossIndex(full.gloss);
   const split = (t: string, used = new Set<number>()) => cpGlossSplit(t, ix, used);
+
+  it('«Подчёркивать на странице» снято — слова на странице нет, в «Словарике» оно есть (v135)', () => {
+    const shipped = cpGlossIndex(help.gloss);
+    const on = (t: string) => words(cpGlossSplit(t, shipped, new Set()));
+    // Обычные слова («отчёт», «чек») не подчёркиваются, настоящие термины — да.
+    expect(on('Отчёты и чек по НДС в Соцфонд')).toEqual(['НДС', 'Соцфонд']);
+    expect(cpGlossSorted(help.gloss).map((g) => g.w)).toContain('отчёт');
+  });
 
   it('формы одного слова — по основе; сочетания — как написано; ё и е одинаково', () => {
     expect(words(split('Отчёты, которые мы сдаём'))).toEqual(['Отчёты']);
     expect(words(split('Нет отчетов'))).toEqual(['отчетов']);
-    expect(words(split('Реквизиты для перевода'))).toEqual(['Реквизиты']);
+    expect(words(split('Запаса хватит на аванс'))).toEqual(['Запаса', 'аванс']);
     expect(words(split('Платёж единого налога'))).toEqual(['единого налога']);
     expect(words(split('Суммы к уплате'))).toEqual(['к уплате']);
     // «получатель» — основа «получател»: «Получателю» тоже.

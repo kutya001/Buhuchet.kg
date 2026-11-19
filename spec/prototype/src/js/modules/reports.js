@@ -77,6 +77,11 @@ function repKanban(){return {def:'status',by:['status','resp','cp','type','perio
 function repGrid(host,id,rows,extra={}){
   return grid(host,Object.assign({id,kanban:repKanban(),cols:reportCols(extra),rows,title:'cp',noun:['отчёт','отчёта','отчётов'],rowClass:repRowClass,actions:reportActions,open:openReport,
     sort:{key:'due',dir:1},preset:S.preset,simulateLoad:extra.load,
+    // Телефон: короткая карточка — 4 отчёта на экране вместо полутора (17.11.2026, «Меньше текста», ТЗ п. 9)
+    mcard:(r,v)=>{const p=tR(r).payOnly,d=p?r.payDue:r.due,ov=p?r.payOverdue:r.overdue;
+      return {keys:['cp','type','act','period','due','status','resp',...(p?['paydue','paystatus']:[])],
+        sub:[v.has('type')?esc(T[r.t].short):'',v.has('period')?esc(r.plabel||''):'',v.has('due')&&d?`<span class="${ov?'red strong':''}">до ${fmtD(d).slice(0,5)}</span>`:'',v.has('resp')&&r.resp?esc(empName(r.resp)):''].filter(Boolean).join(' · '),
+        right:v.has('status')?(p?(tR(r).sum?scaleMini0('pay',r.payStatus,r):''):scaleMini0('rep',r.status,r)):''}},
     bulk:can('changeStatus')?[{label:'Отметить сданными',icon:'send',run:(rs,done)=>{const ok=rs.filter(r=>OPEN.has(r.status)&&!tR(r).payOnly);if(!ok.length){toast('Среди выбранных нет отчётов, которые можно сдать','alert',true);return}if(ok.length===1&&subPayWhy(ok[0])){toast(subPayWhy(ok[0]),'lock',true);return}submitDlg(ok,done)}}]:null,
     empty:{icon:'ok',title:extra.emptyTitle||'Отчётов нет',text:extra.emptyText||''}},extra.cfg||{}));
 }
@@ -150,8 +155,8 @@ function reportActions(r){
   if(r.superseded){if(feat('files')&&can('filesUpload'))it.push({label:'Прикрепить файл',icon:'clip',run:()=>fileDlg(r)});if(st==='Сдан')it.push({sep:true},repBackItem(r,st));return it}
   if(OPEN.has(st)){const w=subPayWhy(r);it.push({label:'Отметить сданным',icon:'send',disabled:!cs||!!w,reason:!cs?no:w,run:()=>submitDlg([r])})}
   if(st==='К сдаче')it.push({label:'Взять в работу',icon:'clock',disabled:!cs,reason:!cs&&no,run:()=>setStatus(r,'В работе')});
-  if(repWait(r)){const why=repConfWhy(r);it.push({label:'Подтвердить',icon:'check',sub:'Сдача проверена старшим бухгалтером',disabled:!!why,reason:why,run:()=>repConfDlg([r])},{label:'На исправление',icon:'refresh',sub:'Вернуть ответственному с причиной',disabled:!!why,reason:why,run:()=>repFixDlg(r)})}
-  if(st==='Сдан')it.push({label:'Требует исправления',icon:'alert',sub:'Орган не принял отчёт',disabled:!cs,reason:!cs&&no,run:()=>setStatus(r,'Требует исправления')});
+  if(repWait(r)){const why=repConfWhy(r);it.push({label:'Подтвердить',icon:'check',sub:'Сдача проверена старшим бухгалтером',disabled:!!why,reason:why,run:()=>repConfDlg([r])},{label:'На исправление',icon:'refresh',danger:true,sub:'Вернуть ответственному с причиной',disabled:!!why,reason:why,run:()=>repFixDlg(r)})}
+  if(st==='Сдан')it.push({label:'Орган не принял',icon:'alert',sub:'Статус «Требует исправления»',disabled:!cs,reason:!cs&&no,run:()=>setStatus(r,'Требует исправления')});
   if(OPEN.has(r.status)&&!t.payOnly)it.push({label:'Изменить срок',icon:'calendar',disabled:!can('repDue'),reason:'Нужно право «Изменять срок отчёта»',run:()=>dueEditDlg(r)});
   if(t.sum&&r.status!=='Не требуется')it.push({label:'Указать сумму',icon:'coins',disabled:!can('changeSum'),reason:!can('changeSum')&&'Нет права менять сумму',run:()=>sumDlg(r)});
   if(feat('taxpay')&&t.sum&&r.sum>0&&r.paid<r.sum&&r.status!=='Не требуется'){const ok=r.money&&r.money.s==='ok';

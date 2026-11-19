@@ -174,7 +174,7 @@ export function KbBox({
           </span>
         </div>
         <KbBar pct={p.pct} />
-        <span className="text-[11.5px] leading-[1.4] text-faint">
+        <span className="text-[12px] leading-[1.4] text-muted">
           {p.next === null ? t('kb.top') : nextText(t, p)}
           {got ? ` · ${t('kb.box.got', { name: level.name, date: levelDate(got) })}` : ''}
         </span>

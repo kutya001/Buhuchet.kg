@@ -16,6 +16,7 @@ import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-quer
 import { useId, useState, type ReactNode } from 'react';
 import { api, callApi } from '../api-client';
 import { closeSlot, openSlot, type DialogSlot } from '../dialog-slot';
+import { InfoTip } from '../kpi/kpi-table';
 import { useErrorText, useT } from '../l10n/provider';
 import { massAssignQuery, useReportsRefresh } from './reports-data';
 
@@ -204,7 +205,15 @@ function MassAssignDialog({
         {type.singleTax ? (
           <Note>{t('report.mass.single_tax')}</Note>
         ) : type.rates.length > 1 ? (
-          <Field id={`${id}-rate`} label={t('report.mass.rate')} hint={t('report.mass.rate_hint')}>
+          <Field
+            id={`${id}-rate`}
+            label={
+              <>
+                {t('report.mass.rate')}{' '}
+                <InfoTip label={t('report.mass.rate_tip')} text={t('report.mass.rate_hint')} />
+              </>
+            }
+          >
             {(control) => (
               <select
                 {...control}

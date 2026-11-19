@@ -103,7 +103,7 @@ export function KbLevelTab() {
           </Link>
         </div>
         <KbBar pct={artsPct} />
-        <span className="text-[11.5px] leading-[1.4] text-faint">{t('kb.arts.hint')}</span>
+        <span className="text-[12px] leading-[1.4] text-muted">{t('kb.arts.hint')}</span>
       </Box>
       <Box title={t('kb.levels.title')}>
         <KbLadder progress={p} />
@@ -113,7 +113,7 @@ export function KbLevelTab() {
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="min-w-[200px] flex-1">
               <b>{t('onboarding.kb.title')}</b>
-              <span className="block text-[11.5px] leading-[1.4] text-faint">
+              <span className="block text-[12px] leading-[1.4] text-muted">
                 {t('onboarding.kb.hint')}
               </span>
             </span>
@@ -133,7 +133,7 @@ export function KbLevelTab() {
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="min-w-[200px] flex-1">
             <b>{t('kb.known.title')}</b>
-            <span className="block text-[11.5px] leading-[1.4] text-faint">
+            <span className="block text-[12px] leading-[1.4] text-muted">
               {known ? t('kb.known.hint_n', { n: known }) : t('kb.known.hint')}
             </span>
           </span>

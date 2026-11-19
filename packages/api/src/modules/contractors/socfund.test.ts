@@ -448,11 +448,14 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
       ),
     });
     expect(aug.socfund!.tariff!.rates).toMatch(/работодатель/i);
-    expect(aug.penalty).toMatch(/^С 21-го числа/);
-    expect(aug.penalty).toContain('0,09');
+    // На виду — коротко, правило начисления — под «?» (прототип v134 sfPeniNote).
+    expect(aug.penalty).toMatch(/^Пеня /);
+    expect(aug.penaltyTip).toMatch(/^С 21-го числа/);
+    expect(aug.penaltyTip).toContain('0,09');
     // Не просроченный — без пени.
     const oct = await report(reports.find((r) => r.periodStart === '2026-10-01')!.id);
     expect(oct.penalty).toBe('');
+    expect(oct.penaltyTip).toBe('');
     expect(oct.socfund?.tariff?.id).toBe('spino');
 
     // Без основания тарифа в карточке отчёта нет, а пеня — есть.
@@ -461,6 +464,6 @@ describe.skipIf(!databaseAvailable())('Тариф Соцфонда: методы
     ).items.find((r) => r.contractor.id === noBase.id && r.periodStart === '2026-08-01')!;
     const noBaseAug = await report(other.id);
     expect(noBaseAug.socfund).toMatchObject({ tariff: null, auto: { id: 'spino' } });
-    expect(noBaseAug.penalty).toContain('0,09');
+    expect(noBaseAug.penaltyTip).toContain('0,09');
   });
 });

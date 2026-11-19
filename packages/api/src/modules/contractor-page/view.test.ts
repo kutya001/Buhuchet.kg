@@ -317,6 +317,8 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       // Подпись «Реквизиты для перевода — …» и кнопка — как в Telegram (прототип v116 `pubPay`).
       head: 'Реквизиты для перевода — организации Организация А',
       copyLabel: 'Скопировать номер телефона',
+      // Реквизит организации, а не сотрудника: «Перевод сотруднику» на странице не пишется (v135).
+      employee: false,
       waiting: null,
     };
     expect(page.pay).toEqual({ tax: card, fee: card });
@@ -489,9 +491,24 @@ describe.skipIf(!databaseAvailable())('Страница контрагента: 
       phone: expect.stringContaining('505'),
     });
     expect(page.org.phone?.digits).toBe('996312900100');
-    // Телефон организации — только в «Контактах» или при «Бухгалтер пока не назначен».
+    // Телефон организации — в «Контактах», при «Бухгалтер пока не назначен» и когда у бухгалтера нет
+    // своего телефона («Позвонить бухгалтеру», прототип v135): у ответственного здесь телефона нет.
     await hide(uks, ['contacts']);
-    expect((await view(uks, uksCookie)).org.phone).toBeNull();
+    const hidden = await view(uks, uksCookie);
+    expect(hidden.accountant?.phone).toBeNull();
+    expect(hidden.org.phone?.digits).toBe('996312900100');
+    // У бухгалтера свой телефон — телефон организации при скрытых «Контактах» не передаётся.
+    await f.t.admin.db
+      .update(schema.employees)
+      .set({ phone: '+996700111222' })
+      .where(eq(schema.employees.id, f.people['acc-a']!.employeeId));
+    const own = await view(uks, uksCookie);
+    expect(own.accountant?.phone?.digits).toBe('996700111222');
+    expect(own.org.phone).toBeNull();
+    await f.t.admin.db
+      .update(schema.employees)
+      .set({ phone: null })
+      .where(eq(schema.employees.id, f.people['acc-a']!.employeeId));
     await hide(uks, []);
     await f.t.admin.db
       .update(schema.organizations)
