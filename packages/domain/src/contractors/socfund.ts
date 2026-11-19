@@ -311,11 +311,21 @@ export function socfundTitle(t: SocfundTariff | null, dict: SocfundDict): string
   return t.id === 'spino' && dict.status ? dict.status.name : socfundShort(t);
 }
 
+/**
+ * Плательщик без пояснения в скобках в конце: «Работодатель (за работника)» → «Работодатель» (прототип
+ * sfRatesTxt, `/\s*\(.*\)$/`). Без регулярного выражения: на длинной строке пробелов оно работало бы
+ * квадратично.
+ */
+function payerName(payer: string): string {
+  const open = payer.indexOf('(');
+  return open >= 0 && payer.endsWith(')') ? payer.slice(0, open).trimEnd() : payer;
+}
+
 /** Ставки одной строкой: «работодатель 2,25 %, работник 10 %; итого 12,25 %» (прототип sfRatesTxt). */
 export function socfundRatesText(x: SocfundTariff | null, t: Translate): string {
   if (!x) return '';
   return [
-    x.parts.map((p) => `${p.payer.replace(/\s*\(.*\)$/, '').toLowerCase()} ${p.rate}`).join(', '),
+    x.parts.map((p) => `${payerName(p.payer).toLowerCase()} ${p.rate}`).join(', '),
     x.total ? t('cp.socfund.rates_total', { total: x.total }) : '',
   ]
     .filter(Boolean)
