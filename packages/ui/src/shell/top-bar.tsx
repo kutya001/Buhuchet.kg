@@ -100,6 +100,7 @@ export function TopBar({
         aria-label={menu.label}
         title={menu.label}
         className={`${iconButtonClass()} ${other} ${menu.dot ? 'relative' : ''} ${menu.panel ? 'md:hidden' : ''}`}
+        data-menu-button=""
       >
         <Icon name="menu" />
         {menu.dot ? (

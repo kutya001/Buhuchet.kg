@@ -384,7 +384,9 @@ export function useTour(o: TourOptions): { controls: TourControls; overlay: Reac
         stepGo: (id) => opts.current.go(id),
         goTarget: (id) => {
           const g = KB_GO[id];
-          return g ? { sel: g.flash, ...(g.phoneFlash ? { phone: g.phoneFlash } : {}) } : null;
+          if (!g) return null;
+          const phone = g.phoneShow ?? g.phoneFlash;
+          return { sel: g.flash, ...(phone ? { phone } : {}) };
         },
       };
       const dom = new TourDom(env, { sid: r.sid, scr: r.scr });
