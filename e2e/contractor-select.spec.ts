@@ -123,7 +123,10 @@ test.describe('Доработки 13.11: список контрагентов �
     const picked = page.getByRole('listbox').getByRole('option', { selected: true });
     await expect(picked).toContainText(`ОсОО «${name}»`);
     await expect(picked).toBeInViewport();
-    await field.click();
+    // На телефоне список — лист снизу (прототип v131) и поле под ним не нажать: лист закрывает Esc,
+    // форма при этом остаётся открытой.
+    if (isMobile) await page.keyboard.press('Escape');
+    else await field.click();
     await expect(page.getByRole('listbox')).toBeHidden();
     await expect(dlg).toBeVisible();
   });

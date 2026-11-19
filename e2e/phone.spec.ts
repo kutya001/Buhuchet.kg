@@ -236,7 +236,9 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       await page.getByRole('button', { name: 'Добавить', exact: true }).click();
       const add = page.getByRole('menu', { name: 'Добавить' });
       await expect(add).toBeVisible();
-      const box = (await add.boundingBox())!;
+      // Лист меню выезжает снизу (прототип v131): пока он едет, его середина ещё за краем экрана, и
+      // касание там закрыло бы меню как нажатие мимо него.
+      const box = await settledBox(add);
       const from = { x: box.x + box.width - 12, y: box.y + box.height / 2 };
       await swipe.drag(from, { x: from.x - pane.width / 2, y: from.y });
       await page.waitForTimeout(400);
