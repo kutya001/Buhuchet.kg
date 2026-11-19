@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, expandCard, newOrgOwner, signIn } from './helpers';
+import { DEMO_PASSWORD, discardChanges, expandCard, newOrgOwner, signIn } from './helpers';
 import { connectAllTypes } from './orgs';
 import { asOwner, manualReport, newContractor, prepay, reportsOf, staffIds } from './reports';
 
@@ -256,6 +256,43 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
     await expect(dialog).toBeHidden();
     await current(card, 'Сдан');
     expect((await cardOf(request, t1)).amount).toBeNull();
+  });
+
+  test('(прототип v131, «Отметить сданным») окно без ввода закрывается сразу; после смены даты сдачи «Отмена» спрашивает «Закрыть без сохранения?», отчёт остаётся несданным', async ({
+    page,
+    request,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    const word = uniqueWord('Вопрос');
+    const name = `ОсОО «${word}»`;
+    const cp = await newContractor(request, origin, { name });
+    const t1 = await manualReport(request, origin, {
+      contractorId: cp.id,
+      reportTypeCode: 't1m',
+      month: '2026-09-01',
+      due: '2030-01-15',
+    });
+
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await openTab(page, isMobile, 'all', word);
+    const card = await openCard(page, t1, name, 'Форма 1-Т — отчёт по труду, месячный');
+    const dialog = page.getByRole('dialog', { name: 'Отметить отчёт сданным' });
+    const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+
+    await card.locator('[data-report-button="submit"]').click();
+    await expect(dialog.locator('[data-report-date]')).toHaveValue(bishkek());
+    await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(ask).toHaveCount(0);
+
+    await card.locator('[data-report-button="submit"]').click();
+    await dialog.locator('[data-report-date]').fill(bishkek(-1));
+    await dialog.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await discardChanges(page);
+    await expect(dialog).toBeHidden();
+    expect((await cardOf(request, t1)).status).not.toBe('submitted');
   });
 
   test('(п. 4, п. 62) бухгалтер отметил просроченный НДС «Сдан»: отчёт ушёл из «Просрочено» и «На неделе», у шага «Сдан» — «Ждёт подтверждения», шага «Принят» нет, отчёт в «Ожидают подтверждения»; главный бухгалтер подтвердил — «Подтверждено» с его именем и датой; «На исправление» без причины невозможно, с причиной — «Требует исправления»; свой сданный отчёт не подтверждается', async ({

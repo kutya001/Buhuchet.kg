@@ -1,5 +1,13 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { cardTab, DEMO_PASSWORD, expandCard, pickContractor, showStats, signIn } from './helpers';
+import {
+  cardTab,
+  DEMO_PASSWORD,
+  discardChanges,
+  expandCard,
+  pickContractor,
+  showStats,
+  signIn,
+} from './helpers';
 import { asOwner, newContractor } from './reports';
 
 // «Проекты контрагентов» (задача 2.26, #82, часть 1) через настоящий сайт. Демо-организация: владелец
@@ -323,6 +331,32 @@ test.describe('Этап 2: проекты контрагентов', () => {
       items: { name: string; status: string }[];
     };
     expect(saved.items).toEqual([expect.objectContaining({ name, status: 'done' })]);
+  });
+
+  test('(прототип v131, окно проекта) «Новый проект» без ввода закрывается сразу; после смены срока «Отмена» спрашивает «Закрыть без сохранения?», проект не создан', async ({
+    page,
+    request,
+    baseURL,
+  }) => {
+    const origin = await asOwner(request, baseURL);
+    await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
+    await page.goto('/app/projects/active');
+    await expect(page.locator('[data-grid]')).toBeVisible();
+    const dlg = page.getByRole('dialog', { name: 'Новый проект' });
+    const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+
+    await add(page);
+    await expect(dlg.locator('[data-pd-to]')).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
+    await dlg.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await expect(dlg).toBeHidden();
+    await expect(ask).toHaveCount(0);
+
+    // Срок — тоже ввод: прежде вопрос задавался только после названия, стоимости, описания и работ.
+    await add(page);
+    await dlg.locator('[data-pd-to]').fill('2031-01-15');
+    await dlg.getByRole('button', { name: 'Отмена', exact: true }).click();
+    await discardChanges(page);
+    await expect(dlg).toBeHidden();
   });
 
   test('(п. 66, транш проекта) транш 50 000 сом, изменённый на 45 000 сом с причиной, уменьшает «получено» проекта; без причины сумма не меняется', async ({

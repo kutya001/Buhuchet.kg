@@ -428,7 +428,15 @@ export function ReportSubmitDialog({
   const [picked, setPicked] = useState<File[]>([]);
   const [errors, setErrors] = useState<AmountErrors & { date?: string; files?: string }>({});
   const [busy, setBusy] = useState(false);
-  const fresh = useFreshCard(initial, (c) => setForm(amountFormOf(c)));
+  // «Закрыть без сохранения?» — после любого ввода (прототип `ui/popups.js`): дата сдачи, «Повторять» и
+  // выручка в строках по ставкам — тоже ввод. Сравнивается с тем, что было при открытии; «Обновить»
+  // после чужой правки заново берёт сумму из отчёта — это не ввод.
+  const [opened, setOpened] = useState(() => ({ date, form, repeat }));
+  const fresh = useFreshCard(initial, (c) => {
+    const next = amountFormOf(c);
+    setForm(next);
+    setOpened((o) => ({ ...o, form: next }));
+  });
   const { card } = fresh;
   const canUpload = useCanUpload(card);
   const withAmount = reportHasAmount(card.act);
@@ -436,10 +444,9 @@ export function ReportSubmitDialog({
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-82 — со строками по ставкам «Дополнительно» раскрыто сразу: итог у
   // такого отчёта только для чтения, и без строк сумму не ввести (в прототипе блок свёрнут всегда).
   const [more, setMore] = useState(() => initial.lineDefs.some((d) => d.kind === 'rate'));
-  // «Закрыть без сохранения?» — после любого ввода (прототип `ui/popups.js`): дата сдачи, «Повторять» и
-  // выручка в строках по ставкам — тоже ввод.
-  const snapshot = JSON.stringify([date, form, repeat]);
-  const [opened] = useState(snapshot);
+  const typed =
+    JSON.stringify([date, form, repeat]) !==
+    JSON.stringify([opened.date, opened.form, opened.repeat]);
   const onAmountForm = (f: AmountForm) => {
     setForm(f);
     setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
@@ -512,7 +519,7 @@ export function ReportSubmitDialog({
       onClose={onClose}
       kind="form"
       size={card.lineDefs.length || (withAmount && tax.wide) ? 'mid' : undefined}
-      dirty={picked.length > 0 || snapshot !== opened}
+      dirty={picked.length > 0 || typed}
       title={t('report.submit.title')}
       sub={reportSub(card, 'full')}
       footer={
