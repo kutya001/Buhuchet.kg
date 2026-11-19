@@ -115,7 +115,9 @@ export function Popover({
       );
     }
   };
-  useEffect(() => () => clearTimeout(timer.current), []);
+  // Открыли или закрыли (нажатием, Esc, «Назад») — отложенное наведение снимается: иначе окошко,
+  // закрытое раньше 300 мс после наведения, открывалось бы снова само.
+  useEffect(() => () => clearTimeout(timer.current), [openBy]);
   useSwipeDown(panel, { enabled: open, onClose: close });
   useFadeAway(panel, open);
 

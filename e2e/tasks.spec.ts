@@ -192,9 +192,13 @@ test.describe('Этап 2: задачи', () => {
     const pending = card.locator('[data-task-pending]');
     await expect(pending).toContainText('Подтверждает Мээрим К.');
     await pending.getByRole('button', { name: 'Кто может подтвердить' }).click();
-    await expect(pending).toContainText(
+    // Пояснение ищем на странице: на телефоне оно — лист снизу в `document.body` (прототип v131).
+    const tip = page.getByRole('dialog', { name: 'Кто может подтвердить' });
+    await expect(tip).toContainText(
       'Подтвердить может постановщик или сотрудник с правом «Подтверждать задачи». Свою задачу подтвердить нельзя.',
     );
+    await page.keyboard.press('Escape');
+    await expect(tip).toHaveCount(0);
     await expect(card.locator('[data-task-button="confirm"]')).toHaveCount(0);
     await page.request.post('/api/auth/logout', { headers: { origin } });
 
@@ -202,14 +206,13 @@ test.describe('Этап 2: задачи', () => {
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/tasks/all');
     const plate = page.locator('[data-plate="pend"]');
-    // На телефоне плашки на виду всегда, без пояснения под числом (прототип v139).
-    // На ПК выбор «Статистики» приходит с сервера: ответ, пришедший после нажатия, снова прячет плашки —
-    // поэтому показ и проверка повторяются вместе.
-    await expect(async () => {
-      await showStats(page);
-      await expect(plate).toContainText('На подтверждении', { timeout: 3_000 });
-      if (!isMobile) await expect(plate).toContainText('можете подтвердить:', { timeout: 3_000 });
-    }).toPass();
+    // На телефоне плашки на виду всегда: кнопки «Статистика» и пояснения под числом нет (прототип v139).
+    // На ПК «Статистику» нажимают сразу, не дожидаясь настроек вида с сервера: их ответ плашки не прячет
+    // (docs/typical-mistakes.md № 65).
+    await showStats(page);
+    await expect(plate).toContainText('На подтверждении');
+    if (isMobile) await expect(page.locator('[data-stats-toggle]')).toBeHidden();
+    else await expect(plate).toContainText('можете подтвердить:');
     card = await openTask(page, isMobile, 'all', title, id);
     await card.locator('[data-task-button="confirm"]').click();
     const confirm = page.getByRole('dialog', { name: 'Подтвердить выполнение' });
