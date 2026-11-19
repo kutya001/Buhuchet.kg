@@ -128,9 +128,6 @@ test.describe('Доработки 13.11: примечание к файлам и
     const title = dlg.getByLabel('Название');
     await expect(title).toHaveValue(`договор-${tag}`);
     await expect(dlg.locator('[data-file-edit-ext]')).toHaveText('.pdf');
-    await expect(dlg).toContainText(
-      'Расширение остаётся прежним; при замене файла — берётся от нового',
-    );
     await expect(dlg.getByLabel('Примечание')).toHaveValue('Черновик');
     await expect(dlg).toContainText(
       'Необязательно. Сейчас: PDF · 2 КБ. Новый файл встанет на место прежнего везде, где он виден; прежний удаляется без возможности вернуть',

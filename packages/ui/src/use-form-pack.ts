@@ -4,6 +4,7 @@ import { useEffect, type RefObject } from 'react';
 import {
   columnWidth,
   FORM_GAP,
+  FIELD_LABEL_SELECTOR,
   KV_GAP,
   PACK_QUERY,
   packFormCells,
@@ -64,7 +65,7 @@ function describeCell(el: HTMLElement): FormCell {
   if (!el.hasAttribute('data-field')) {
     return el.tagName === 'DIV' && el.childNodes.length === 0 && !el.className ? 'spacer' : 'wide';
   }
-  const label = el.querySelector(':scope > label');
+  const label = el.querySelector(FIELD_LABEL_SELECTOR);
   const controls = Array.from(el.querySelectorAll('input, select, [data-segments]')).filter(
     (c) => !c.closest('[data-hint]') && !c.parentElement?.closest('[data-segments]'),
   );

@@ -1,6 +1,9 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
   cardTab,
+  closeWindow,
+  editSection,
+  openStatusLine,
   defaultResponsible,
   DEMO_PASSWORD,
   finger,
@@ -419,8 +422,7 @@ test.describe('Этап 2: контрагенты — список и карто
     });
 
     await test.step('следующая карточка открывается развёрнутой; «Свернуть окно» — снова обычная', async () => {
-      await card.locator('[data-cp-done]').click();
-      await expect(card).toBeHidden();
+      await closeWindow(card);
       await search(page, isMobile, 'Бишкек Стройсервис');
       card = await openCard(page, second);
       await expect(card.getByRole('button', { name: 'Свернуть окно' })).toHaveAttribute(
@@ -582,6 +584,8 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(rows(page).first()).toBeVisible();
     await search(page, isMobile, word);
     const card = await openCard(page, name);
+    // Полная шкала и «История статусов» — под строкой состояния, по нажатию на неё (прототип v137).
+    await openStatusLine(card);
     const scale = card.locator('[data-service-scale]');
     const steps = scale.locator('ol[data-status-scale] > li > button');
     await expect(steps.first()).toBeVisible();
@@ -730,8 +734,7 @@ test.describe('Этап 2: контрагенты — список и карто
     await expect(dialog).toBeHidden();
     await expect(card).toContainText('СПиНО');
     await expect(card).toContainText('письмо ГНС');
-    await card.locator('[data-cp-done]').click();
-    await expect(card).toBeHidden();
+    await closeWindow(card);
 
     const plate = page.locator('[data-plate="sfq"]');
     await expect(plate).toContainText('Тариф под вопросом');
@@ -846,6 +849,9 @@ test.describe('Этап 2: контрагенты — список и карто
       .getByRole('menuitem', { name: 'Изменить' })
       .click();
     const edit = page.getByRole('dialog', { name: 'Изменить контрагента' });
+    await expect(edit.locator('[data-cf-toc]')).toBeVisible({ timeout: 15_000 });
+    // Основания — во втором разделе формы: на телефоне это второй шаг (прототип v137).
+    await editSection(edit, isMobile, 2);
     const property = edit.locator('[data-base="property"]');
     await expect(property).toHaveAttribute('aria-pressed', 'false', { timeout: 15_000 });
     await property.click();

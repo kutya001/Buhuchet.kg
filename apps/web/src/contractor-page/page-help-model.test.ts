@@ -13,16 +13,23 @@ import {
   welcomeSeen,
 } from './page-help-model';
 
-// Правила подсказок открытой страницы контрагента (прототип v120 modules/cp-help.js).
+// Правила подсказок открытой страницы контрагента (прототип v135 modules/cp-help.js).
 
 const t = makeTranslate(defaultUiTexts());
 
 /** Страница с нужными полями: остальное правилам не нужно. */
-const pageOf = (p: Partial<Record<'pay' | 'sent' | 'telegram', unknown>>) =>
-  ({ pay: null, sent: null, telegram: null, ...p }) as unknown as PublicPageBody;
+const pageOf = (p: Partial<Record<'pay' | 'sent' | 'telegram' | 'money' | 'fee', unknown>>) =>
+  ({
+    pay: null,
+    sent: null,
+    telegram: null,
+    money: null,
+    fee: null,
+    ...p,
+  }) as unknown as PublicPageBody;
 
 describe('pageHelpView — что видно на странице (прототип cphVis)', () => {
-  it('карточки «Как оплатить» — только когда раздел показан', () => {
+  it('реквизиты «Оплаты» — только когда раздел показан', () => {
     const page = pageOf({ pay: { tax: {}, fee: null } });
     expect(pageHelpView(page, ['main', 'pay'], { paid: true })).toMatchObject({
       payTax: true,
@@ -33,6 +40,28 @@ describe('pageHelpView — что видно на странице (протот
       payTax: false,
       paid: false,
     });
+  });
+
+  it('реквизит услуг бухгалтера — только при показанной оплате услуг (строка «Услуги бухгалтера»)', () => {
+    const pay = { tax: null, fee: {} };
+    expect(pageHelpView(pageOf({ pay }), ['pay'], { paid: true })).toMatchObject({
+      payFee: false,
+      paid: false,
+    });
+    expect(pageHelpView(pageOf({ pay, fee: {} }), ['pay'], { paid: true })).toMatchObject({
+      payFee: true,
+      paid: true,
+    });
+  });
+
+  it('части «Оплаты» и «Связи» — как свои разделы для вопросов и облачков (v135 cphSec)', () => {
+    const page = pageOf({ money: {}, fee: {}, telegram: { on: 0, wait: 0, full: false } });
+    const secs = pageHelpView(page, ['pay', 'acc'], { paid: false }).sections;
+    expect([...secs].sort()).toEqual(['acc', 'fee', 'money', 'pay', 'tg']);
+    // «Оплаты» на странице нет — нет и её строк; Telegram без раздела в ответе — тоже нет.
+    expect([
+      ...pageHelpView(pageOf({ money: {}, fee: {} }), ['acc'], { paid: false }).sections,
+    ]).toEqual(['acc']);
   });
 
   it('«Отправить файл» — когда бухгалтер принимает файлы и раздел «Файлы» показан', () => {
@@ -60,17 +89,19 @@ describe('pageHelpView — что видно на странице (протот
 });
 
 describe('облачко обзора: что подсвечивать и куда прокрутить (прототип CPH_EL, cphTourShow)', () => {
-  it('строка состояния, «Помощь», раздел; у «Как оплатить» на телефоне — первая карточка', () => {
+  it('«Что нужно сделать», «?» (на телефоне — «Помощь» меню), раздел; у «Оплаты» на телефоне — первая строка', () => {
     expect(tourTargetSelector('state', false)).toBe('[data-pub-state]');
-    expect(tourTargetSelector('help', true)).toBe('[data-pub-help]');
+    expect(tourTargetSelector('help', false)).toBe('[data-pub-help]');
+    expect(tourTargetSelector('help', true)).toBe('[data-pub-nav="help"]');
     expect(tourTargetSelector('reports', true)).toBe('#pub-reports');
     expect(tourTargetSelector('pay', false)).toBe('#pub-pay');
-    expect(tourTargetSelector('pay', true)).toBe('#pub-pay [data-pay]');
+    expect(tourTargetSelector('pay', true)).toBe('#pub-pay [data-po]');
     expect(tourTargetSelector('end', false)).toBeNull();
   });
 
-  it('на телефоне раскрываются только разделы', () => {
+  it('на телефоне раскрываются только сворачиваемые разделы: «Оплата» раскрыта всегда', () => {
     expect(tourUnfolds('files')).toBe(true);
+    expect(tourUnfolds('pay')).toBe(false);
     expect(tourUnfolds('state')).toBe(false);
     expect(tourUnfolds('help')).toBe(false);
     expect(tourUnfolds('end')).toBe(false);

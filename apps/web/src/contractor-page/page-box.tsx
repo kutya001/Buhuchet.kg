@@ -78,7 +78,14 @@ function PageButton({
   );
 }
 
-export function ContractorPageBox({ contractorId }: { contractorId: string }) {
+export function ContractorPageBox({
+  contractorId,
+  bare = false,
+}: {
+  contractorId: string;
+  /** Внутри свёрнутого блока «Страница клиента» карточки (прототип v137): без своей рамки. */
+  bare?: boolean;
+}) {
   const t = useT();
   const toast = useToast();
   const errorText = useErrorText();
@@ -240,6 +247,7 @@ export function ContractorPageBox({ contractorId }: { contractorId: string }) {
 
   return (
     <Box
+      bare={bare}
       title={t('cppage.title')}
       actions={
         page.enabled ? (

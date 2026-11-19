@@ -117,14 +117,14 @@ export async function pagePeople(
   o: { contractorId: string; responsibleId: string | null; orgId: string; contractorPhone: string },
 ): Promise<{
   people: PagePersonRecord[];
-  types: { employeeId: string; short: string }[];
+  types: { employeeId: string; name: string }[];
   orgPhone: PagePhoneText | null;
   contractorPhone: string;
 }> {
   const { contractorId, responsibleId } = o;
   const [asg, org, codes] = await Promise.all([
     tx
-      .select({ employeeId: assignments.responsibleEmployeeId, short: reportTypes.shortName })
+      .select({ employeeId: assignments.responsibleEmployeeId, name: reportTypes.name })
       .from(assignments)
       .innerJoin(reportTypes, eq(reportTypes.code, assignments.reportTypeCode))
       .where(and(eq(assignments.contractorId, contractorId), isNull(assignments.endedOn)))
@@ -162,7 +162,7 @@ export async function pagePeople(
     people,
     types: asg.flatMap((a) => {
       const employeeId = a.employeeId ?? responsibleId;
-      return employeeId ? [{ employeeId, short: a.short }] : [];
+      return employeeId ? [{ employeeId, name: a.name }] : [];
     }),
     orgPhone: phoneOf(org[0]?.phone ?? null, codes),
     contractorPhone: o.contractorPhone ? formatPhone(o.contractorPhone, codes) : '',
@@ -384,14 +384,14 @@ export async function pageFiles(
       projectStart: projects.startsOn,
       kind,
       sourceId: files.sourceId,
-      reportType: reportTypes.shortName,
+      reportType: reportTypes.name,
       reportPeriod: reports.period,
       reportStart: reports.periodStart,
       reportEvent: reports.eventDate,
       opAmount: moneyOperations.amount,
       opTotal: moneyOperations.total,
       opDate: moneyOperations.opDate,
-      payType: payType.shortName,
+      payType: payType.name,
       payPeriod: payReport.period,
       payStart: payReport.periodStart,
       payEvent: payReport.eventDate,

@@ -45,6 +45,15 @@ export interface PlateProps {
   onClick?: () => void;
   /** Недоступная плашка-действие: видна бледной, не нажимается (прототип `disabled`, `opacity:.6`). */
   disabled?: boolean;
+  /**
+   * Маленькая карточка в окне (прототип v142 `.cp-hot .plate`: «что горит» на «Основном» контрагента) —
+   * отступы меньше, число 20 px.
+   */
+  small?: boolean;
+  /** Число красным (прототип `.pl-val.red`: просрочка, долг). */
+  danger?: boolean;
+  /** Подсказка при наведении («Открыть вкладку»). */
+  title?: string;
 }
 
 /**
@@ -63,6 +72,9 @@ export function Plate({
   on = false,
   onClick,
   disabled = false,
+  small = false,
+  danger = false,
+  title,
 }: PlateProps) {
   const content = (
     <>
@@ -81,7 +93,7 @@ export function Plate({
       {value !== undefined && (
         <span
           data-plate-value
-          className={`text-[25px] leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums max-md:text-[21px] max-md:group-data-row/plates:text-[18px] max-md:group-data-static/plates:text-[18px] ${color === 'red' ? 'max-md:group-data-row/plates:text-danger' : ''}`}
+          className={`leading-[1.05] font-[720] tracking-[-0.025em] tabular-nums ${small ? 'text-[20px]' : 'text-[25px] max-md:text-[21px] max-md:group-data-row/plates:text-[18px] max-md:group-data-static/plates:text-[18px]'}${danger ? ' text-danger' : ''}${color === 'red' ? ' max-md:group-data-row/plates:text-danger' : ''}`}
         >
           {value}
           {unit && (
@@ -103,8 +115,7 @@ export function Plate({
   );
   // Телефон, плашки модуля (прототип v139–v141 css/mobile.css): число сверху, подпись под ним, без
   // значка и пояснения; красное число — только у красной плашки (просрочка).
-  const box =
-    'flex min-w-0 flex-col gap-[7px] rounded-xl border border-line bg-raised px-3.5 pt-3 pb-[13px] text-left text-ink max-md:group-data-row/plates:min-w-min max-md:group-data-row/plates:flex-[1_1_0] max-md:group-data-row/plates:flex-col-reverse max-md:group-data-row/plates:justify-end max-md:group-data-row/plates:gap-px max-md:group-data-row/plates:rounded-[10px] max-md:group-data-row/plates:px-[9px] max-md:group-data-row/plates:py-[7px] max-md:group-data-all/plates:basis-[30%] max-md:group-data-static/plates:gap-1 max-md:group-data-static/plates:px-3 max-md:group-data-static/plates:py-2.5';
+  const box = `flex min-w-0 flex-col rounded-xl border border-line bg-raised text-left text-ink max-md:group-data-row/plates:min-w-min max-md:group-data-row/plates:flex-[1_1_0] max-md:group-data-row/plates:flex-col-reverse max-md:group-data-row/plates:justify-end max-md:group-data-row/plates:gap-px max-md:group-data-row/plates:rounded-[10px] max-md:group-data-row/plates:px-[9px] max-md:group-data-row/plates:py-[7px] max-md:group-data-all/plates:basis-[30%] ${small ? 'gap-[5px] px-3 pt-2.5 pb-[11px]' : 'gap-[7px] px-3.5 pt-3 pb-[13px] max-md:group-data-static/plates:gap-1 max-md:group-data-static/plates:px-3 max-md:group-data-static/plates:py-2.5'}`;
   if (disabled) {
     return (
       <button
@@ -129,6 +140,7 @@ export function Plate({
       type="button"
       data-plate={id}
       aria-pressed={on}
+      title={title}
       onClick={onClick}
       className={`${box} cursor-pointer font-[inherit] transition-[transform,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue ${on ? 'shadow-btn-active' : 'hover:-translate-y-px hover:shadow-pane'}`}
     >

@@ -80,8 +80,6 @@ const json = <T>(schema: T) => ({ 'application/json': { schema } });
 
 type Texts = (key: string) => string;
 
-const DAY_MS = 86_400_000;
-
 /** Текст словаря по ключу или запасной: у задачи, добавленной без своих текстов, ключа нет. */
 const textOr = (t: Texts, key: string, fallback: string) => {
   const text = t(key);
@@ -112,6 +110,8 @@ export function everyText(t: Texts, cron: string): string {
 
 const titleOf = (t: Texts, name: string) => textOr(t, jobTitleKey(name), name);
 
+const dayStart = (day: IsoDate): Date => new Date(`${day}T00:00:00+06:00`);
+
 /**
  * Задачи из кода и «сейчас»: в открытую транзакцию идут только они, а не `deps` с пулом соединений
  * (docs/decisions.md п. О-46).
@@ -134,7 +134,8 @@ async function jobData(
   const { now, jobs } = src;
   const names = jobs.map((j) => j.name);
   const states = await jobStates(tx);
-  const facts = await jobRunFacts(tx, names, new Date(now.getTime() - DAY_MS));
+  // «Ошибок за сутки» считает то же, что открывает плашка, — запуски за «Сегодня» по Бишкеку.
+  const facts = await jobRunFacts(tx, names, dayStart(bishkekDate(now)));
   const dayErrors = [...facts.values()].reduce((sum, f) => sum + f.errors, 0);
   const rows = jobs.map((job): JobListRow => {
     const state = states.get(job.name);
@@ -348,8 +349,6 @@ function runTexts(
     done: new Map(list.map((j) => [j.name, j.done])),
   };
 }
-
-const dayStart = (day: IsoDate): Date => new Date(`${day}T00:00:00+06:00`);
 
 /** Период («Сегодня» — с начала дня по Бишкеку, не дольше срока хранения) и «Важные · Все». */
 function runScopeOf(

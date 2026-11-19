@@ -254,7 +254,6 @@ export function PauseServiceDialog(props: ServiceDialogProps) {
           id={`${id}-resume`}
           data="resume"
           label={t('svc.pause.resume')}
-          hint={t('svc.pause.resume_hint')}
           error={s.errors.resume}
           value={resume}
           min={month}

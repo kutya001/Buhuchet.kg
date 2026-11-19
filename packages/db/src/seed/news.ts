@@ -87,16 +87,7 @@ function publishedAt(item: z.infer<typeof NewsSection>[number]): Date {
  * продукт не попали; итог лендинга описывают новости v144–v146 (docs/deviations.md п. И-13).
  */
 // ОТКЛОНЕНИЕ: docs/deviations.md#Т-14
-export const NEWS_NOT_YET: ReadonlySet<string> = new Set([
-  'v107',
-  'v108',
-  'v133',
-  'v135',
-  'v137',
-  'v140',
-  'v142',
-  'v143',
-]);
+export const NEWS_NOT_YET: ReadonlySet<string> = new Set(['v107', 'v108', 'v133', 'v140', 'v143']);
 
 /**
  * Строка новостей v132–v146 «Пока только в прототипе: в рабочую версию — по отдельному слову» — пометка
