@@ -157,7 +157,7 @@ export function PageTelegramBody({
           {t('pub.tg.connect')}
         </button>
       </div>
-      <span className="inline-flex flex-wrap items-center gap-1 text-[11.5px] leading-[1.4] text-faint">
+      <span className="inline-flex flex-wrap items-center gap-1 text-[12px] leading-[1.4] text-muted">
         {t('pub.tg.hint')}
         <PageTip
           label={t('pub.tg.hint_more')}

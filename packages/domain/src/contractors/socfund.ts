@@ -316,8 +316,9 @@ export function socfundTitle(t: SocfundTariff | null, dict: SocfundDict): string
  * sfRatesTxt, `/\s*\(.*\)$/`). Без регулярного выражения: на длинной строке пробелов оно работало бы
  * квадратично.
  */
-function payerName(payer: string): string {
-  const open = payer.indexOf('(');
+export function socfundPayerName(payer: string): string {
+  // Скобка — в последней строке текста: `.` выражения прототипа перенос строки не проходит.
+  const open = payer.indexOf('(', payer.lastIndexOf('\n') + 1);
   return open >= 0 && payer.endsWith(')') ? payer.slice(0, open).trimEnd() : payer;
 }
 
@@ -325,7 +326,7 @@ function payerName(payer: string): string {
 export function socfundRatesText(x: SocfundTariff | null, t: Translate): string {
   if (!x) return '';
   return [
-    x.parts.map((p) => `${payerName(p.payer).toLowerCase()} ${p.rate}`).join(', '),
+    x.parts.map((p) => `${socfundPayerName(p.payer).toLowerCase()} ${p.rate}`).join(', '),
     x.total ? t('cp.socfund.rates_total', { total: x.total }) : '',
   ]
     .filter(Boolean)

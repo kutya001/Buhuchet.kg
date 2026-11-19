@@ -2,6 +2,13 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { Plate, Plates, PlatesLabelsProvider, platesHidden } from './plates';
 
+// «Внутри окна» — из контекста окна (`useWindow`): в тесте окно не рисуется, признак подменяется.
+const inWindow = vi.hoisted(() => ({ inside: false }));
+vi.mock('./modal', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  useWindow: () => ({ close: () => {}, leave: () => {}, inside: inWindow.inside }),
+}));
+
 describe('Статистика модуля — плашки-итоги (прототип `plate`)', () => {
   it('плашка-фильтр — кнопка: значок в цветном кружке, подпись, число, пояснение; нажатая — отмечена', () => {
     const html = renderToStaticMarkup(
@@ -121,6 +128,37 @@ describe('Статистика модуля — плашки-итоги (про�
         </Plates>,
       ),
     ).not.toContain('data-row=');
+  });
+
+  it('(прототип `.page .plates:not(.static)`) обычные плашки внутри окна строкой не становятся: по две в строку, значок и пояснение на месте, «Ещё N» нет', () => {
+    inWindow.inside = true;
+    try {
+      const html = renderToStaticMarkup(
+        <PlatesLabelsProvider labels={{ more: (n) => `Ещё ${n}`, less: 'Свернуть' }}>
+          <Plates>
+            {['a', 'b', 'c', 'd', 'e'].map((id) => (
+              <Plate
+                key={id}
+                id={id}
+                icon="clock"
+                color="gray"
+                label={id}
+                value="1"
+                sub="пояснение"
+              />
+            ))}
+          </Plates>
+        </PlatesLabelsProvider>,
+      );
+      expect(html).not.toContain('data-row=');
+      expect(html).not.toContain('data-all=');
+      expect(html).not.toContain('max-md:flex-nowrap');
+      expect(html).toContain('max-md:grid-cols-2');
+      expect(html).not.toContain('data-plates-more');
+      expect(html.match(/data-plate="/g)).toHaveLength(5);
+    } finally {
+      inWindow.inside = false;
+    }
   });
 
   it('(прототип v139 `plMob`) за «Ещё N» прячутся плашки сверх трёх, когда их больше четырёх', () => {

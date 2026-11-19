@@ -212,7 +212,9 @@ const has = (v: CpHelpView, s: string) => v.sections.has(s);
 /** Подстановки `{имя}` (прототип `cphFill`): неизвестная остаётся как есть. */
 export function cpHelpFill(text: string, vars: Readonly<Record<string, string | number>>): string {
   // Имя — без скобок: на строке из одних «{» выражение с `[^}]+` работало бы квадратично (CodeQL).
-  return text.replace(/\{([^{}]+)\}/g, (m, k: string) => (vars[k] != null ? String(vars[k]) : m));
+  return text.replace(/\{([^{}]+)\}/g, (m, k: string) =>
+    Object.hasOwn(vars, k) && vars[k] != null ? String(vars[k]) : m,
+  );
 }
 
 /** Слово с большой буквы (прототип `cphCap`): заголовок облачка «Словарика». */

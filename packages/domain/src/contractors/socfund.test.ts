@@ -16,6 +16,7 @@ import {
   socfundFlagsOf,
   socfundManualMismatch,
   socfundNeeded,
+  socfundPayerName,
   socfundRatesText,
   socfundShort,
   socfundState,
@@ -174,6 +175,33 @@ describe('Названия, ставки и предельная база тар
     expect(socfundCapHint(x, t)).toBe(
       cap ? `Взносы не начисляются на часть зарплаты выше предельной базы (${cap})` : '',
     );
+  });
+});
+
+describe('Плательщик без пояснения в скобках (прототип sfRatesTxt, `/\\s*\\(.*\\)$/`)', () => {
+  // Эталон — само выражение прототипа: правка без регулярного выражения обязана давать тот же ответ.
+  const proto = (payer: string) => payer.replace(/\s*\(.*\)$/, '');
+
+  it.each([
+    'Работодатель (за работника)',
+    'Работодатель',
+    'ИП (сам) за себя',
+    '(x)',
+    'Работник  \t(из зарплаты)',
+    'А (б) (в)',
+    'А (б\nв)',
+    'А (б\nв (г)',
+    'А\n(б)',
+    'А (б',
+    'А б)',
+    '',
+  ])('%j', (payer) => {
+    expect(socfundPayerName(payer)).toBe(proto(payer));
+  });
+
+  it('длинная строка пробелов разбирается сразу (CodeQL: выражение работало квадратично)', () => {
+    const payer = `А${' '.repeat(200_000)}б`;
+    expect(socfundPayerName(payer)).toBe(payer);
   });
 });
 

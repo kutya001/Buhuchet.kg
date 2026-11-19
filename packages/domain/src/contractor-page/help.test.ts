@@ -201,11 +201,18 @@ describe('«Помощь»: вопросы и кнопки (cphQVis, cphActOn)',
       { label: '', text: 'просто текст' },
       { label: 'А', text: 'б' },
     ]);
+    // Пояснение из одних пробелов — не пара «название — пояснение», а обычная строка.
+    expect(cpLegendRows('«А» —   ')).toEqual([{ label: '', text: '«А» —' }]);
   });
 
   it('подстановки, заглавная буква', () => {
     expect(cpHelpFill(help.hints.emptyReports!, { год: '2026' })).toBe('В 2026 году отчётов нет');
     expect(cpHelpFill('{мб} и {нет}', { мб: 20 })).toBe('20 и {нет}');
+    // Имя подстановки — без скобок: лишняя «{» остаётся текстом, строка из одних «{» разбирается сразу.
+    expect(cpHelpFill('{a{b}', { b: 1 })).toBe('{a1');
+    expect(cpHelpFill('{'.repeat(100_000), { b: 1 })).toHaveLength(100_000);
+    // Подставляются только свои значения: встроенные поля объекта — не подстановки.
+    expect(cpHelpFill('{constructor} {toString}', {})).toBe('{constructor} {toString}');
     expect(cpHelpCap('реквизиты')).toBe('Реквизиты');
     expect(cpHelpCap('')).toBe('');
   });

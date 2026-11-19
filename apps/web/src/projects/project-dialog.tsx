@@ -315,12 +315,22 @@ function ProjectModal({
     toast(message, { bad: true });
   };
 
-  const dirty =
-    name !== (edit?.name ?? '') ||
-    description !== (edit?.description ?? '') ||
-    plan !== (edit?.money?.plan != null ? formatSom(edit.money.plan, 'auto') : '') ||
-    works.length !== (edit?.works.length ?? 0) ||
-    (!edit && !preset && cp !== '');
+  // «Закрыть без сохранения?» — после любого ввода (прототип `ui/popups.js`, `formDirty`): сроки,
+  // ответственные, главный, статус и текст работ — тоже ввод.
+  const snapshot = JSON.stringify([
+    cp,
+    name,
+    from,
+    to,
+    status,
+    plan,
+    members,
+    lead,
+    description,
+    works.map((w) => [w.name, w.executorId, w.due, w.done]),
+  ]);
+  const [opened] = useState(snapshot);
+  const dirty = snapshot !== opened;
 
   const statusPill = edit ? statusPillView(t, 'project', edit.status) : null;
   // «· заполнено N» (прототип `projectDlg`, `n`): стоимость, описание, работы, главный из нескольких.

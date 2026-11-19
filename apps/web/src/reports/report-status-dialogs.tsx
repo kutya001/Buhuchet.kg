@@ -436,6 +436,10 @@ export function ReportSubmitDialog({
   // ОТКЛОНЕНИЕ: docs/deviations.md#О-82 — со строками по ставкам «Дополнительно» раскрыто сразу: итог у
   // такого отчёта только для чтения, и без строк сумму не ввести (в прототипе блок свёрнут всегда).
   const [more, setMore] = useState(() => initial.lineDefs.some((d) => d.kind === 'rate'));
+  // «Закрыть без сохранения?» — после любого ввода (прототип `ui/popups.js`): дата сдачи, «Повторять» и
+  // выручка в строках по ставкам — тоже ввод.
+  const snapshot = JSON.stringify([date, form, repeat]);
+  const [opened] = useState(snapshot);
   const onAmountForm = (f: AmountForm) => {
     setForm(f);
     setErrors((x) => ({ ...x, lines: undefined, amount: undefined }));
@@ -508,7 +512,7 @@ export function ReportSubmitDialog({
       onClose={onClose}
       kind="form"
       size={card.lineDefs.length || (withAmount && tax.wide) ? 'mid' : undefined}
-      dirty={picked.length > 0 || form.amount !== form.initial}
+      dirty={picked.length > 0 || snapshot !== opened}
       title={t('report.submit.title')}
       sub={reportSub(card, 'full')}
       footer={

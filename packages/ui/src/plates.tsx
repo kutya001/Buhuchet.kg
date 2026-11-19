@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { linkButtonClass } from './button';
 import { Icon } from './icon';
+import { useWindow } from './modal';
 import type { IconName } from './icons';
 
 /** Цвет кружка со значком плашки (`.pl-dot.<цвет>` прототипа). */
@@ -185,7 +186,9 @@ const OPENED = new Set<string>();
  * решение заказчика 17.11.2026) — одна строка из трёх чисел с подписями; плашек больше четырёх —
  * «Ещё N» раскрывает остальные, «Свернуть» прячет. Скрыта кнопкой «Статистика» в ряду вкладок
  * (`shown` = false) — ряда нет. `static` — плашки внутри окна (`.plates.static`): на ПК не уже 200 px,
- * на телефоне по две в строку и компактнее — число 18 px, пояснение в две строки.
+ * на телефоне по две в строку и компактнее — число 18 px, пояснение в две строки. Обычные плашки внутри
+ * окна (активность сотрудника, счёт сотрудника) на телефоне остаются по две в строку со значком и
+ * пояснением: одна строка — правило только страницы модуля (прототип `.page .plates:not(.static)`).
  */
 export function Plates({
   shown = true,
@@ -197,17 +200,20 @@ export function Plates({
   children: ReactNode;
 }) {
   const labels = useContext(PlatesLabelsContext);
+  // Одной строкой — только плашки страницы модуля: не `static` и не внутри окна.
+  const { inside } = useWindow();
+  const line = !inWindow && !inside;
   const row = useRef<HTMLDivElement>(null);
   const [count, setCount] = useState(0);
   const [opened, setOpened] = useState(false);
   useLayoutEffect(() => {
-    if (!shown || inWindow) return;
+    if (!shown || !line) return;
     setCount(row.current?.children.length ?? 0);
     setOpened(OPENED.has(window.location.pathname));
-  }, [shown, inWindow, children]);
+  }, [shown, line, children]);
   if (!shown) return null;
   // Без подписей (экран вне оболочки) ряд не сворачивается.
-  const hidden = labels && !inWindow ? platesHidden(count) : 0;
+  const hidden = labels && line ? platesHidden(count) : 0;
   const all = hidden === 0 || opened;
   const toggle = () => {
     const key = window.location.pathname;
@@ -221,9 +227,9 @@ export function Plates({
         ref={row}
         data-plates
         data-static={inWindow ? '' : undefined}
-        data-row={inWindow ? undefined : ''}
-        data-all={!inWindow && all ? '' : undefined}
-        className={`group/plates grid gap-2.5 ${inWindow ? 'grid-cols-[repeat(auto-fit,minmax(200px,1fr))] max-md:grid-cols-2 max-md:gap-2' : 'grid-cols-[repeat(auto-fit,minmax(158px,1fr))] max-md:flex max-md:flex-nowrap max-md:gap-1.5 max-md:data-all:flex-wrap max-md:[&:not([data-all])>:nth-child(n+4)]:hidden'}`}
+        data-row={line ? '' : undefined}
+        data-all={line && all ? '' : undefined}
+        className={`group/plates grid gap-2.5 ${inWindow ? 'grid-cols-[repeat(auto-fit,minmax(200px,1fr))] max-md:grid-cols-2 max-md:gap-2' : line ? 'grid-cols-[repeat(auto-fit,minmax(158px,1fr))] max-md:flex max-md:flex-nowrap max-md:gap-1.5 max-md:data-all:flex-wrap max-md:[&:not([data-all])>:nth-child(n+4)]:hidden' : 'grid-cols-[repeat(auto-fit,minmax(158px,1fr))] max-md:grid-cols-2'}`}
       >
         {children}
       </div>

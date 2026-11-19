@@ -200,6 +200,9 @@ test.describe('Этап 2: задачи', () => {
     await page.keyboard.press('Escape');
     await expect(tip).toHaveCount(0);
     await expect(card.locator('[data-task-button="confirm"]')).toHaveCount(0);
+    // Страница закрывается до смены входа: её запросы вернули бы cookie прежнего сеанса
+    // (docs/typical-mistakes.md № 6).
+    await page.goto('about:blank');
     await page.request.post('/api/auth/logout', { headers: { origin } });
 
     // Владелец (право «Подтверждать задачи») видит ждущую на плашке «На подтверждении» и подтверждает.
@@ -276,6 +279,9 @@ test.describe('Этап 2: задачи', () => {
     };
     expect(back).toMatchObject({ status: 'rework', reworkReason: 'Нет подписи руководителя' });
     await executor.dispose();
+    // Страница закрывается до смены входа: её запросы вернули бы cookie прежнего сеанса
+    // (docs/typical-mistakes.md № 6).
+    await page.goto('about:blank');
     await page.request.post('/api/auth/logout', { headers: { origin } });
     await signIn(page.request, origin, 'alisher', DEMO_PASSWORD);
     const mine = await openTask(page, isMobile, 'mine', title, id);
