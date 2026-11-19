@@ -93,7 +93,7 @@ export function StatusLine({
           id={panel}
           hidden={!open}
           data-status-line-full=""
-          className="-mt-0.5 animate-slide-up motion-reduce:animate-none"
+          className="-mt-0.5 animate-rise motion-reduce:animate-none"
         >
           {full}
         </div>

@@ -14,11 +14,11 @@ export const HOME_TEXTS = {
   // «Сводка»: строка приветствия
   'home.hello.today': { ru: 'Сегодня', section: S },
   'home.hello.date': { ru: '{d} {month}, {dow}', section: S },
-  'home.hello.all': { ru: 'Вы видите всю организацию', section: S },
   'home.hello.own': { ru: 'Вы видите только своих контрагентов и свои отчёты', section: S },
-  'home.hello.week': { ru: 'неделя {from}–{to}', section: S },
-  'home.hello.weekend': {
-    ru: '(сегодня выходной, показана ближайшая рабочая неделя)',
+  'home.hello.own_tag': { ru: 'Только мои', section: S },
+  'home.hello.day_off': { ru: 'выходной', section: S },
+  'home.hello.day_off_tip': {
+    ru: 'Показана ближайшая рабочая неделя: {from}–{to}',
     section: S,
   },
   'home.load_error': { ru: 'Не удалось загрузить сводку', section: S },

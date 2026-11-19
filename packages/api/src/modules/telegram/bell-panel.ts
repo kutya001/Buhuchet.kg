@@ -6,7 +6,7 @@ import {
   bellSeenAll,
   bellSyncLeads,
   bellSyncNews,
-  bellUnseen,
+  bellUnseenCounts,
   contractorScope,
   markNewsRead,
   orgMenuSettings,
@@ -151,10 +151,10 @@ export const bellCountRoute = createRoute({
   path: '/bell/count',
   tags: ['telegram'],
   middleware: [bellUser] as const,
-  summary: 'Колокольчик: сколько строк вошедший ещё не видел (значок)',
+  summary: 'Колокольчик: сколько рабочих уведомлений и новостей вошедший ещё не видел (значок)',
   responses: {
     200: {
-      description: 'Число непросмотренных',
+      description: 'Непросмотренные: рабочие уведомления (unseen) и новости версий (news)',
       content: { 'application/json': { schema: BellCount } },
     },
     ...denied,
@@ -164,12 +164,12 @@ export const bellCountRoute = createRoute({
 export function bellCountHandler(deps: ApiDeps): RouteHandler<typeof bellCountRoute, AppEnv> {
   return async (c) => {
     const t = await serverTexts(deps);
-    const unseen = await asSessionUser(deps, c.get('session')!, async (tx) => {
+    const counts = await asSessionUser(deps, c.get('session')!, async (tx) => {
       const s = await sightOf(c, tx);
       await syncReadTime(deps, c, tx, t('bell.line.lead'), s);
-      return bellUnseen(tx, s);
+      return bellUnseenCounts(tx, s);
     });
-    return c.json({ unseen }, 200);
+    return c.json(counts, 200);
   };
 }
 

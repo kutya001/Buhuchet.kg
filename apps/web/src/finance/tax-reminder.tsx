@@ -192,7 +192,7 @@ function TaxReminderModal({
             className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-pane-alt px-4 py-3"
             data-tax-wa-requisites=""
           >
-            <h3 className="m-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+            <h3 className="m-0 text-[13.5px] font-[650] text-muted">
               {data.to === 'org'
                 ? t('fin.wa.where_org')
                 : t('fin.wa.where_emp', { name: holder?.name ?? '—' })}

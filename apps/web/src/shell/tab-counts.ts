@@ -151,9 +151,12 @@ export function menuDot(others: readonly { title: string; count?: ShellCount | u
   dot?: string;
   dotTone?: 'red' | 'yellow';
 } {
-  const colored = others.find((m) => m.count?.tone && m.count.value);
-  if (colored?.count?.tone) {
-    return { dot: colored.count.title ?? colored.title, dotTone: colored.count.tone };
+  // Серая точка непрочитанных новостей (прототип v138) — не счётчик: у «Меню» она синяя, как «начните».
+  for (const m of others) {
+    const tone = m.count?.tone;
+    if (m.count?.value && (tone === 'red' || tone === 'yellow')) {
+      return { dot: m.count.title ?? m.title, dotTone: tone };
+    }
   }
   const title = others.find((m) => m.count?.dot)?.count?.title;
   return title ? { dot: title } : {};

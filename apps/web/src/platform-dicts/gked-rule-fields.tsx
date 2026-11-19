@@ -207,7 +207,7 @@ export function GkedRuleFields({
                   {t(LABEL[k])}
                 </span>
                 <div className="font-mono text-[12.5px]">{r![k]!.join(', ')}</div>
-                <div className="text-[11.5px] leading-[1.4] text-faint">
+                <div className="text-[12px] leading-[1.4] text-muted">
                   {t(`pdicts.gkr.info_hint.${pluralForm(n)}`, { n })}
                 </div>
               </div>

@@ -164,7 +164,7 @@ export function ContextLine({ ctx, catalog }: { ctx: ReportPickContext; catalog:
         ))}
       </div>
       {first ? null : (
-        <div className="text-[11.5px] leading-[1.4] text-faint">{t('cp.pick.ui.ctx.hint')}</div>
+        <div className="text-[12px] leading-[1.4] text-muted">{t('cp.pick.ui.ctx.hint')}</div>
       )}
     </>
   );
@@ -524,7 +524,7 @@ function PickView({ ctx, catalog, st, set, before, edit, editBases, single }: Pi
         type="button"
         aria-expanded={open}
         onClick={() => toggleGroup(key)}
-        className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[12px] tracking-[.06em] text-muted uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue"
+        className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[13px] text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue"
       >
         <Icon
           name="right"
@@ -560,7 +560,7 @@ function PickView({ ctx, catalog, st, set, before, edit, editBases, single }: Pi
       const title = t(`cp.pick.ui.group.${g}` satisfies `cp.pick.ui.group.${PickSection}`);
       return [
         <section key={g} data-pick-group={g} className="mb-3 flex flex-col gap-1.5">
-          <div className="flex items-center gap-2 px-0.5 pt-0.5 text-[12px] tracking-[.06em] text-faint uppercase">
+          <div className="flex items-center gap-2 px-0.5 pt-0.5 text-[13px] text-muted">
             {fold ? foldHead(g, title, all, open) : groupHead(title, ids.length)}
             <span className="flex-1" />
             {open && edit && !single && ids.some((c) => !on(c)) ? (
@@ -596,7 +596,7 @@ function PickView({ ctx, catalog, st, set, before, edit, editBases, single }: Pi
           />
         )}
         {hidden.length ? (
-          <div className="mt-2 flex items-start gap-1.5 text-[11.5px] leading-[1.4] text-faint">
+          <div className="mt-2 flex items-start gap-1.5 text-[12px] leading-[1.4] text-muted">
             <Icon name="info" size="sm" />
             <span>
               {t('cp.pick.ui.hidden', {
@@ -634,7 +634,7 @@ function PickView({ ctx, catalog, st, set, before, edit, editBases, single }: Pi
         const title = catalog.authority(organ);
         return (
           <section key={key} data-pick-group={key} className="mb-3 flex flex-col gap-1.5">
-            <div className="flex items-center gap-2 px-0.5 pt-0.5 text-[12px] tracking-[.06em] text-faint uppercase">
+            <div className="flex items-center gap-2 px-0.5 pt-0.5 text-[13px] text-muted">
               {fold
                 ? foldHead(
                     key,

@@ -14,8 +14,8 @@ export interface SegmentOption<T extends string> {
 
 /** Размер кнопок: обычный (`.seg`) и маленький (`.seg.sm`, область группы прав). */
 const SEGMENT_SIZES = {
-  md: 'min-h-[26px] px-2.5 py-1 text-[12.5px]',
-  sm: 'min-h-6 px-2 py-[3px] text-[12px]',
+  md: 'min-h-[26px] px-2.5 py-1 text-[12.5px] max-md:min-h-11',
+  sm: 'min-h-6 px-2 py-[3px] text-[12px] max-md:min-h-11',
 } as const;
 
 /**
@@ -57,7 +57,7 @@ export function Segments<T extends string>({
           title={o.title}
           disabled={disabled}
           onClick={() => onChange(o.value)}
-          className={`inline-flex cursor-pointer items-center disabled:cursor-default disabled:opacity-60 gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill === 'wrap' ? 'flex-[1_1_auto] justify-start' : fill ? 'flex-1 justify-center' : 'justify-center'} ${o.value === value ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
+          className={`inline-flex cursor-pointer items-center disabled:cursor-default disabled:opacity-60 gap-1.5 rounded-md border-0 ${SEGMENT_SIZES[size]} font-[550] focus-visible:outline-2 focus-visible:outline-accent ${fill === 'wrap' ? 'flex-[1_1_auto] justify-start' : fill ? 'flex-1 justify-center' : 'justify-center'} ${o.value === value ? 'bg-raised text-ink shadow-flat-strong' : 'bg-transparent text-muted'}`}
         >
           {o.icon ? <Icon name={o.icon} size="sm" /> : null}
           <span>{o.label}</span>

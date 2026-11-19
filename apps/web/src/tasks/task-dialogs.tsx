@@ -314,7 +314,7 @@ function ReasonDialog({
           />
         )}
       </Field>
-      {hint ? <div className="text-[11.5px] leading-[1.4] text-faint">{hint}</div> : null}
+      {hint ? <div className="text-[12px] leading-[1.4] text-muted">{hint}</div> : null}
     </Modal>
   );
 }

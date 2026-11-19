@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, expandCard, showStats, signIn } from './helpers';
+import { DEMO_PASSWORD, expandCard, openColumns, showStats, signIn } from './helpers';
 
 // «Задачи» (задача 2.23, #79) через настоящий сайт: форма «Общая / По контрагенту», подтверждение
 // выполнения, возврат «На доработку», карточка задачи на телефоне. Демо-организация: владелец erkin,
@@ -140,8 +140,7 @@ test.describe('Этап 2: задачи', () => {
 
     await search(page, isMobile, title);
     // «Контрагент» по умолчанию скрыт, как в прототипе (docs/deviations.md п. Б-2): включаем в «Столбцах».
-    await page.getByRole('button', { name: /^Столбцы/ }).click();
-    const panel = page.getByRole('dialog', { name: 'Столбцы' });
+    const panel = await openColumns(page);
     await panel.getByRole('checkbox', { name: 'Контрагент' }).check();
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
@@ -193,9 +192,13 @@ test.describe('Этап 2: задачи', () => {
     const pending = card.locator('[data-task-pending]');
     await expect(pending).toContainText('Подтверждает Мээрим К.');
     await pending.getByRole('button', { name: 'Кто может подтвердить' }).click();
-    await expect(pending).toContainText(
+    // Пояснение ищем на странице: на телефоне оно — лист снизу в `document.body` (прототип v131).
+    const tip = page.getByRole('dialog', { name: 'Кто может подтвердить' });
+    await expect(tip).toContainText(
       'Подтвердить может постановщик или сотрудник с правом «Подтверждать задачи». Свою задачу подтвердить нельзя.',
     );
+    await page.keyboard.press('Escape');
+    await expect(tip).toHaveCount(0);
     await expect(card.locator('[data-task-button="confirm"]')).toHaveCount(0);
     await page.request.post('/api/auth/logout', { headers: { origin } });
 
@@ -203,11 +206,13 @@ test.describe('Этап 2: задачи', () => {
     await signIn(page.request, origin, 'erkin', DEMO_PASSWORD);
     await page.goto('/app/tasks/all');
     const plate = page.locator('[data-plate="pend"]');
-    if (!isMobile) {
-      await showStats(page);
-      await expect(plate).toContainText('На подтверждении');
-      await expect(plate).toContainText('можете подтвердить:');
-    }
+    // На телефоне плашки на виду всегда: кнопки «Статистика» и пояснения под числом нет (прототип v139).
+    // На ПК «Статистику» нажимают сразу, не дожидаясь настроек вида с сервера: их ответ плашки не прячет
+    // (docs/typical-mistakes.md № 65).
+    await showStats(page);
+    await expect(plate).toContainText('На подтверждении');
+    if (isMobile) await expect(page.locator('[data-stats-toggle]')).toBeHidden();
+    else await expect(plate).toContainText('можете подтвердить:');
     card = await openTask(page, isMobile, 'all', title, id);
     await card.locator('[data-task-button="confirm"]').click();
     const confirm = page.getByRole('dialog', { name: 'Подтвердить выполнение' });

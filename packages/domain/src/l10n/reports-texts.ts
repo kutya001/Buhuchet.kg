@@ -97,6 +97,7 @@ export const REPORTS_TEXTS = {
   'report.no_types.pick': { ru: 'Выбрать налоги', section: S },
   'report.no_types.owner': { ru: 'Подключает владелец', section: S },
   'report.due.overdue': { ru: 'Просрочен', section: S },
+  'report.short.due': { ru: 'до {date}', section: S },
   'report.due.moved': { ru: 'перенос', section: S },
   'report.due.moved_title': { ru: 'Перенесён с {date}: {why}', section: S },
   'report.due.weekend': { ru: 'выходной день', section: S },

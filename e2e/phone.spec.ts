@@ -119,7 +119,8 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     await test.step('окно («?»): короткая протяжка за шапку — возвращается, дальше четверти высоты — закрывается, рывок вниз — закрывается', async () => {
       const help = page.getByRole('dialog', { name: 'Отчеты для сдачи' });
       const openHelp = async () => {
-        await page.getByRole('button', { name: 'Помощь' }).click();
+        await page.getByRole('button', { name: 'Что здесь: подсказка по модулю' }).click();
+        await page.getByRole('button', { name: 'Вся инструкция' }).click();
         const box = await settledBox(help);
         // Шторка снизу во всю ширину.
         expect(box.width).toBeCloseTo(390, 0);
@@ -164,16 +165,21 @@ test.describe('Этап 1: оболочка на телефоне', () => {
 
     await test.step('вкладки: медленно на 60 px — страница возвращается, вкладка та же', async () => {
       const firstTab = page.locator('[data-tabrow] [role="tab"]').first();
-      const before = (await firstTab.boundingBox())!;
+      // Место вкладки в ряду — без его прокрутки: с прототипа v138 у открытой вкладки название видно и
+      // при одних значках, ряд длиннее экрана и при листании сам прокручивается к новой вкладке (v73).
+      const place = async () =>
+        (await firstTab.boundingBox())!.x +
+        (await page.locator('[data-tabrow]').evaluate((row) => row.scrollLeft));
+      const before = await place();
       await swipe.drag(left, { x: left.x - 60, y }, async () => {
-        // Прототип v73: рамка-призрак — первым элементом ряда и ровно по размеру вкладки, ряд вкладок
-        // на время листания не съезжает.
+        // Прототип v73: рамка-призрак — первым элементом ряда и ровно по размеру вкладки, вкладки в ряду
+        // на время листания не съезжают.
         const ghost = page.locator('[data-tabrow] > [data-tab-ghost]:first-child');
         await expect(ghost).toHaveCount(1);
         const g = (await ghost.boundingBox())!;
         const t = (await firstTab.boundingBox())!;
         expect(Math.round(g.height)).toBe(Math.round(t.height));
-        expect(Math.round(t.x)).toBe(Math.round(before.x));
+        expect(Math.round(await place())).toBe(Math.round(before));
       });
       await page.waitForTimeout(400);
       await expect(page).toHaveURL(/\/app\/reports\/week$/);
@@ -238,10 +244,10 @@ test.describe('Этап 1: оболочка на телефоне', () => {
       await expect(add).toBeVisible();
       await page.keyboard.press('Escape');
       await expect(add).toBeHidden();
-      // Окошко «ⓘ» в верхней панели: заглушки в истории у него нет, «Назад» закрывает его и уходит на
+      // Окошко «?» в верхней панели: заглушки в истории у него нет, «Назад» закрывает его и уходит на
       // прежнюю страницу (заглушка панели «Меню» уже снята, вкладки после свайпа историю не копят).
-      await page.getByRole('button', { name: 'Описание модуля' }).click();
-      const info = page.getByRole('dialog', { name: 'Описание модуля' });
+      await page.getByRole('button', { name: 'Что здесь: подсказка по модулю' }).click();
+      const info = page.getByRole('dialog', { name: 'Что здесь: подсказка по модулю' });
       await expect(info).toBeVisible();
       await page.evaluate(() => history.back());
       await expect(page).toHaveURL(/\/app\/reports\/week$/);
@@ -322,6 +328,29 @@ test.describe('Этап 1: оболочка на телефоне', () => {
     const add = page.getByRole('button', { name: 'Добавить', exact: true });
     await expect(search).toBeHidden();
     await expect(add).toBeVisible();
+
+    // Прототип v141: при прокрутке списка вниз «+» уезжает и не закрывает записи, вверх — возвращается.
+    const pane = page.locator('main');
+    const holder = page.locator('[data-fab-away]');
+    await expect(page.locator('[data-grid] [data-id]').first()).toBeVisible();
+    const tall = await pane.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(tall).toBeGreaterThan(300);
+    // Видимая прозрачность кнопки — с учётом обёртки, которая её уводит.
+    const shown = () =>
+      add.evaluate((el) => {
+        let opacity = 1;
+        for (let n: Element | null = el; n; n = n.parentElement) {
+          opacity *= Number(getComputedStyle(n).opacity);
+        }
+        return opacity;
+      });
+    await expect(holder).toHaveCount(0);
+    await pane.evaluate((el) => el.scrollTo(0, 300));
+    await expect(holder).toHaveCount(1);
+    await expect.poll(shown).toBe(0);
+    await pane.evaluate((el) => el.scrollTo(0, 0));
+    await expect(holder).toHaveCount(0);
+    await expect.poll(shown).toBe(1);
 
     await page.getByRole('button', { name: 'Поиск', exact: true }).click();
     await expect(search).toBeFocused();

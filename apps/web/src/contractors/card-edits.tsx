@@ -49,7 +49,7 @@ const Faint = ({ children }: { children: ReactNode }) => (
   <span className="text-faint">{children}</span>
 );
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="block text-[11.5px] leading-[1.4] text-faint">{children}</span>
+  <span className="block text-[12px] leading-[1.4] text-muted">{children}</span>
 );
 const linkClass = `${linkButtonClass()} text-[12px]`;
 

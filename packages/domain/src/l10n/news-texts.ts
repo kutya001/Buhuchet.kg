@@ -57,6 +57,7 @@ export const NEWS_TEXTS = {
   'news.admin_md': { ru: 'Для администратора платформы', section: S },
   'news.unread': { ru: 'непрочитанных {n}', section: S },
   'news.badge': { ru: 'Непрочитанные новости', section: S },
+  'news.dot': { ru: 'Непрочитанные новости: {n}', section: S },
   'news.read_all': { ru: 'Отметить все прочитанными', section: S },
   'news.empty': { ru: 'Новостей пока нет', section: S },
   'news.empty_hint': { ru: 'Здесь появятся новости об обновлениях платформы.', section: S },
@@ -72,19 +73,11 @@ export const NEWS_TEXTS = {
   'news.link.in_editor': { ru: 'Ссылка сработает у пользователя после публикации', section: S },
   // «Что нового»
   'news.wn.title': { ru: 'Что нового', section: S },
-  'news.wn.sub.one': { ru: '{n} новость с вашего прошлого входа', section: S },
-  'news.wn.sub.few': { ru: '{n} новости с вашего прошлого входа', section: S },
-  'news.wn.sub.many': { ru: '{n} новостей с вашего прошлого входа', section: S },
-  'news.wn.welcome': {
-    ru: 'Добро пожаловать в Buhuchet.kg: начните с Базы знаний.',
-    section: S,
-  },
-  'news.wn.welcome_text': {
-    ru: 'В «Базе знаний» — уроки по вашим модулям с кнопками «Перейти» и «Показать как», статьи инструкции и ваш уровень знаний. Программа строится из ваших прав: проходите шаги, и уровень вырастет от «Новичка» до «Эксперта».',
-    section: S,
-  },
-  'news.wn.open_kb': { ru: 'Открыть Базу знаний', section: S },
+  'news.wn.last': { ru: 'Последние {shown} из {n}', section: S },
+  'news.wn.welcome': { ru: 'Начните с уроков в «Базе знаний»', section: S },
+  'news.wn.open_kb': { ru: 'Уроки', section: S },
   'news.wn.all': { ru: 'Все новости', section: S },
+  'news.wn.all_n': { ru: 'Все новости · {n}', section: S },
   'news.wn.ok': { ru: 'Понятно', section: S },
   // Админка: список и меню записи
   'news.adm.note': {

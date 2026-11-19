@@ -1,7 +1,7 @@
 'use client';
 
 import type { PageTipId } from '@buhuchet/domain';
-import { Icon, PHONE_QUERY, Popover, iconButtonClass, useMediaQuery } from '@buhuchet/ui';
+import { HelpTip, Icon, PHONE_QUERY, Popover, useMediaQuery } from '@buhuchet/ui';
 import { createContext, useContext, type ReactNode } from 'react';
 
 /*
@@ -23,30 +23,7 @@ export function usePageText(): (id: PageTipId) => string {
 
 /** «?» с пояснением: при наведении на ПК, по нажатию на телефоне (прототип v131 `tipI`). */
 export function PageTip({ label, text }: { label: string; text: string }) {
-  if (!text) return null;
-  return (
-    <Popover
-      label={label}
-      padded
-      hover
-      className="relative inline-flex align-middle"
-      trigger={({ open, toggle, id }) => (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={label}
-          aria-expanded={open}
-          aria-controls={id}
-          data-pub-tip=""
-          className={`${iconButtonClass('sm')} -my-1 h-6 w-6 min-w-6 text-current opacity-80`}
-        >
-          <Icon name="help" size="sm" />
-        </button>
-      )}
-    >
-      {() => <span className="block max-w-[300px] text-[12.5px] whitespace-normal">{text}</span>}
-    </Popover>
-  );
+  return <HelpTip label={label} text={text} tone="current" />;
 }
 
 /**

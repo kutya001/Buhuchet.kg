@@ -138,7 +138,7 @@ function AllValues() {
 /** Заголовок группы (`.dg-gh`): прописными, справа — число и черта до края. */
 function GroupHead({ title, count }: { title: string; count?: number }) {
   return (
-    <h3 className="m-0 mt-1.5 flex items-center gap-2 text-[12px] font-bold tracking-[.06em] text-muted uppercase after:h-px after:flex-1 after:bg-line after:content-['']">
+    <h3 className="m-0 mt-1.5 flex items-center gap-2 text-[13px] font-[650] text-muted after:h-px after:flex-1 after:bg-line after:content-['']">
       {title}
       {count === undefined ? null : <span className="text-faint">{count}</span>}
     </h3>

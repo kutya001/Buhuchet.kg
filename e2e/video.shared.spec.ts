@@ -60,7 +60,7 @@ async function removeVideo(admin: APIRequestContext, origin: string, id: string)
 }
 
 test.describe('Видео платформы (прототип v79)', () => {
-  test('(проверка прототипа v79) видеоинструкция модуля: во вкладке «Видео», первой в окне «?», кнопкой ▶ вверху и по ссылке; «Просмотры видео» у владельца; снятое с публикации пропадает', async ({
+  test('(проверка прототипа v79) видеоинструкция модуля: во вкладке «Видео», первой в окне «Вся инструкция», кнопкой «Видео» у «?» и по ссылке; «Просмотры видео» у владельца; снятое с публикации пропадает', async ({
     page,
     baseURL,
     isMobile,
@@ -74,18 +74,20 @@ test.describe('Видео платформы (прототип v79)', () => {
     try {
       await newOrgOwner(page.request, origin);
 
-      // Кнопка ▶ слева от «?» (на ПК) и первая карточка в окне «?» модуля.
+      // «Видео» в подсказке «?» у названия модуля (прототип v138: отдельной кнопки ▶ вверху нет) и
+      // первая карточка в окне «Вся инструкция».
       await page.goto('/app/cps/all');
-      const top = page.getByRole('button', { name: `Видеоинструкция: ${title}` });
-      if (isMobile) await expect(top).toBeHidden();
-      else {
-        await top.click();
+      const hint = page.getByRole('button', { name: 'Что здесь: подсказка по модулю' });
+      await hint.click();
+      await page.locator('[data-module-help-video]').click();
+      {
         const win = page.getByRole('dialog', { name: title });
         await expect(win).toContainText('Видеоинструкция');
         await page.keyboard.press('Escape');
         await expect(win).toBeHidden();
       }
-      await page.getByRole('button', { name: 'Помощь' }).click();
+      await hint.click();
+      await page.getByRole('button', { name: 'Вся инструкция' }).click();
       const help = page.getByRole('dialog').locator('[data-video-help]');
       await expect(help).toContainText(title);
       await help.locator(`[data-video-open="${video.id}"]`).click();
@@ -130,7 +132,11 @@ test.describe('Видео платформы (прототип v79)', () => {
       ).toBeVisible();
       await expect(page.getByText(title)).toHaveCount(0);
       await Promise.all([page.waitForResponse('**/api/kb/videos/all'), page.goto('/app/cps/all')]);
-      await expect(top).toHaveCount(0);
+      // В окне «Вся инструкция» модуля снятого видео тоже нет.
+      await hint.click();
+      await page.getByRole('button', { name: 'Вся инструкция' }).click();
+      await expect(page.getByRole('dialog', { name: 'Контрагенты' })).toBeVisible();
+      await expect(page.locator(`[data-video-open="${video.id}"]`)).toHaveCount(0);
     } finally {
       await removeVideo(admin, origin, video.id);
       await admin.dispose();

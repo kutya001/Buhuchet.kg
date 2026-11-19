@@ -1,7 +1,7 @@
 'use client';
 
 import type { IndicatorType } from '@buhuchet/domain';
-import { Icon, iconButtonClass, Popover } from '@buhuchet/ui';
+import { HelpTip } from '@buhuchet/ui';
 
 /*
  * Вид таблиц показателей (прототип modules/kpi.js: `.kt`; стили spec/prototype/src/css/popups.css):
@@ -44,28 +44,7 @@ export interface CellChange extends Omit<CellRef, 'type'> {
   prev: number | null;
 }
 
-/** «ⓘ» у названия показателя: описание при наведении (ПК) или по нажатию (прототип `tipI`). */
+/** «?» у названия показателя: описание при наведении (ПК) или по нажатию (прототип v131 `tipI`). */
 export function InfoTip({ label, text }: { label: string; text: string }) {
-  return (
-    <Popover
-      label={label}
-      padded
-      hover
-      className="relative inline-flex align-middle"
-      trigger={({ open, toggle, id }) => (
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={label}
-          aria-expanded={open}
-          aria-controls={id}
-          className={`${iconButtonClass('sm')} -my-1 h-6 w-6 min-w-6 text-faint`}
-        >
-          <Icon name="info" size="sm" />
-        </button>
-      )}
-    >
-      {() => <span className="block max-w-[300px] text-[12.5px] whitespace-normal">{text}</span>}
-    </Popover>
-  );
+  return <HelpTip label={label} text={text} />;
 }

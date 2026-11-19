@@ -330,11 +330,70 @@ export async function finger(page: Page) {
  * доски — сразу «Таблица» (прототип v84, ui/grid.js).
  */
 export async function phoneTableView(page: Page) {
-  const board = page.getByRole('button', { name: 'Вид списка: Доска', exact: true });
-  const table = page.getByRole('button', { name: 'Вид списка: Таблица', exact: true });
-  await expect(board.or(table)).toBeVisible();
-  if (await board.isVisible()) await board.click();
-  await table.click();
+  await phoneListMenu(page, /^Таблица/);
+  await expect(page.locator('[data-grid]')).toHaveAttribute('data-view', 'table');
+}
+
+/** Экран теста — телефон (уже 768 px): панель списка там другая (прототип v139). */
+export const onPhone = (page: Page) => (page.viewportSize()?.width ?? 1280) < 768;
+
+/**
+ * Телефон (прототип v139): пункт меню «⋯» над списком — вид («Таблица», «Карточки», «Доска»),
+ * «Группировка», «Столбцы доски», «Столбцы» или «Поля карточки», «Плотность», «Выбрать несколько»,
+ * «В Excel». У пункта после названия может стоять значение («Столбцы 5 из 9») — имя задаётся началом.
+ */
+export async function phoneListMenu(page: Page, item: RegExp) {
+  await page.locator('[data-grid] [data-grid-phone="more"]').click();
+  await page.getByRole('menu', { name: 'Ещё' }).getByRole('menuitem', { name: item }).click();
+}
+
+/**
+ * Телефон (прототип v139): галочки у записей появляются после «⋯» → «Выбрать несколько» и остаются,
+ * пока что-то отмечено; на ПК они видны всегда. Зовётся перед отметкой записи галочкой.
+ */
+export async function phoneSelectMode(page: Page) {
+  if (!onPhone(page)) return;
+  const rows = page.locator('[data-grid] [data-id]');
+  await expect(rows.first()).toBeVisible();
+  const boxes = rows.getByRole('checkbox');
+  if (await boxes.first().isVisible()) return;
+  await phoneListMenu(page, /^Выбрать несколько/);
+  await expect(boxes.first()).toBeVisible();
+}
+
+/**
+ * Окно фильтра столбца: на ПК — кнопка у заголовка таблицы, на телефоне — «Фильтр» над списком и
+ * столбец в меню (прототип v139: фильтр работает и в плитках).
+ */
+export async function openColumnFilter(page: Page, column: string): Promise<Locator> {
+  if (onPhone(page)) {
+    await page.locator('[data-grid] [data-grid-phone="filter"]').click();
+    await page
+      .getByRole('menu', { name: 'Фильтр' })
+      .getByRole('menuitem', { name: new RegExp(`^${column}`) })
+      .click();
+  } else {
+    await page
+      .locator('[data-grid]')
+      .getByRole('button', { name: `Фильтр: ${column}` })
+      .click();
+  }
+  return page.getByRole('dialog', { name: column });
+}
+
+/** Окно «Столбцы» списка: на ПК — кнопка над списком, на телефоне — пункт «⋯». */
+export async function openColumns(page: Page): Promise<Locator> {
+  // «Столбцы доски» в виде «Доска» — другое окно (поле столбцов), а не список столбцов.
+  if (onPhone(page)) await phoneListMenu(page, /^(Столбцы(?! доски)|Поля карточки)/);
+  else await page.getByRole('button', { name: /^Столбцы/ }).click();
+  return page.getByRole('dialog', { name: 'Столбцы' });
+}
+
+/** Окно «Группировка» списка: на ПК — кнопка над списком, на телефоне — пункт «⋯». */
+export async function openGrouping(page: Page): Promise<Locator> {
+  if (onPhone(page)) await phoneListMenu(page, /^Группировка/);
+  else await page.locator('[data-grid] [data-grid-group-button]').click();
+  return page.getByRole('dialog', { name: 'Группировка' });
 }
 
 /**
@@ -346,6 +405,14 @@ export async function phoneTableView(page: Page) {
 export async function showStats(page: Page) {
   const toggle = page.locator('[data-stats-toggle]');
   const plates = page.locator('[data-plates]').first();
+  // Телефон (прототип v139): кнопки «Статистика» нет, плашки — всегда одной строкой над списком;
+  // плашек больше четырёх — за «Ещё N» спрятаны все после третьей.
+  if (onPhone(page)) {
+    await expect(plates).toBeVisible();
+    const more = page.locator('[data-plates-more][aria-expanded="false"]');
+    if (await more.isVisible()) await more.click();
+    return;
+  }
   await expect(toggle).toBeVisible();
   await expect(async () => {
     if ((await toggle.getAttribute('aria-pressed')) !== 'true') await toggle.click();
@@ -553,4 +620,16 @@ export async function pickContractor(field: Locator, query: string) {
   const list = page.getByRole('listbox');
   await list.getByRole('option').first().click();
   await expect(list).toBeHidden();
+}
+
+/**
+ * Форма с несохранёнными изменениями на «Отмена», крестик, Esc и касание фона спрашивает «Закрыть без
+ * сохранения?» (прототип v131): ответ «Закрыть» — окно закрывается, введённое пропадает. В подвале
+ * вопроса «Закрыть» словом — последняя (крестик в шапке тоже «Закрыть»).
+ */
+export async function discardChanges(page: Page) {
+  const ask = page.getByRole('dialog', { name: 'Закрыть без сохранения?' });
+  await expect(ask).toContainText('Введённое пропадёт.');
+  await ask.getByRole('button', { name: 'Закрыть', exact: true }).last().click();
+  await expect(ask).toBeHidden();
 }

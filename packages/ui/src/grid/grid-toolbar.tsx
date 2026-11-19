@@ -9,9 +9,11 @@ import {
   type GridViewSettings,
   type GroupAggChoice,
 } from '@buhuchet/domain';
+import type { ListSort } from '@buhuchet/domain';
 import { useId, useState, type DragEvent, type ReactNode } from 'react';
-import { ActionList } from '../action-menu';
+import { ActionList, ActionMenu, type ActionEntry } from '../action-menu';
 import { buttonClass, iconButtonClass, TOUCH_AREA } from '../button';
+import { FloatingPanel } from '../floating';
 import { inputClass } from '../form';
 import { Icon } from '../icon';
 import { Popover } from '../popover';
@@ -20,7 +22,6 @@ import {
   gridViews,
   isHidden,
   moveColumn,
-  nextView,
   orderedKeys,
   setColumnVisible,
   setView as withView,
@@ -41,13 +42,17 @@ export interface GridBoardChoice {
 }
 
 /**
- * Кнопка панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`), область
+ * «⋯» панели на телефоне — значок 36 px с подложкой (`.gtools .icon-btn.sm.raised`), область
  * касания — 44 px (`TOUCH_AREA`).
  */
-const PHONE_TOOL = `${TOUCH_AREA} inline-grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:text-ink [&_svg]:h-[17px] [&_svg]:w-[17px]`;
+const PHONE_TOOL = `${TOUCH_AREA} inline-grid h-9 w-9 flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-flat hover:text-ink [&_svg]:h-[17px] [&_svg]:w-[17px]`;
+
+/** «Фильтр» и «Сортировка» на телефоне (прототип v139 `.btn.sm.gt-m`); включённая — с рамкой (`.on`). */
+const phoneButton = (on: boolean) =>
+  `${buttonClass('default', 'sm')} gap-[5px] px-2.5 ${on ? 'text-ink shadow-[inset_0_0_0_1px_var(--bu-border-strong)]' : ''}`;
 
 /** Кнопка «Настройки вида» на ПК (`.icon-btn.sm.raised`). */
-const RAISED_ICON = `${iconButtonClass('sm')} bg-btn! shadow-btn`;
+const RAISED_ICON = `${iconButtonClass('sm')} bg-btn! shadow-flat`;
 
 interface ToolbarProps<Row> {
   columns: readonly GridColumn<Row>[];
@@ -74,7 +79,24 @@ interface ToolbarProps<Row> {
   /** «В Excel»: есть — кнопка на панели; `exporting` — файл собирается. */
   onExport?: () => void;
   exporting?: boolean;
+  /** Телефон: «Фильтр», «Сортировка» и «Выбрать несколько» под «⋯» (прототип v139). */
+  phoneTools?: GridPhoneTools;
   labels: GridLabels;
+}
+
+/** Что панели на телефоне нужно от списка: фильтры столбцов, сортировка и режим выбора строк. */
+export interface GridPhoneTools {
+  /** Столбцы с фильтром: стоит ли он и его значение строкой (как в чипе). */
+  filters?: {
+    active: Readonly<Record<string, string>>;
+    /** Открыть окно фильтра столбца у кнопки панели. */
+    onOpen: (key: string, anchor: HTMLElement) => void;
+    onReset: () => void;
+  };
+  sort: ListSort | null;
+  onSort: (sort: ListSort | null) => void;
+  /** «Выбрать несколько»: галочки у записей видны только в этом режиме; нет массовых действий — нет пункта. */
+  select?: { on: boolean; onToggle: () => void };
 }
 
 /** Все группы свёрнуты (`shut`) — кнопка разворачивает их, иначе сворачивает. */
@@ -121,8 +143,8 @@ export interface GridSelectionBar<Row> {
 
 /**
  * Панель над списком (прототип ui/grid.js, `.gtools`; ТЗ «Панель над списком»): число записей, вид
- * «Таблица / Карточки», «Столбцы (видно / всего)» и «Настройки вида». На телефоне (до 768 px) кнопки —
- * только значками с подсказкой, вид — одна кнопка-переключатель.
+ * «Таблица / Карточки», «Столбцы (видно / всего)» и «Настройки вида». На телефоне (до 768 px) — своя
+ * панель `PhoneTools`: «Фильтр», «Сортировка» и «⋯» (прототип v139).
  */
 export function GridToolbar<Row>({
   columns,
@@ -142,6 +164,7 @@ export function GridToolbar<Row>({
   fold,
   onExport,
   exporting = false,
+  phoneTools,
   labels,
 }: ToolbarProps<Row>) {
   const keys = columns.map((c) => c.key);
@@ -156,47 +179,68 @@ export function GridToolbar<Row>({
   const views = gridViews(!!board);
   const boardName = kanban ? (board.options.find((o) => o.key === board.key)?.label ?? '') : '';
   const boardLabel = labels.boardBy(boardName);
-  // На телефоне у кнопок-значков — полные подписи прототипа: «Столбцы доски: …», «Поля карточки».
-  const boardPhoneLabel = labels.boardByPhone(boardName);
-  const columnsTitle = kanban ? labels.boardFieldsPhone(shown, keys.length) : columnsLabel;
-  const columnsAria = kanban ? labels.boardFieldsName : columnsLabel;
+  const lead =
+    selection && selection.count > 0 ? (
+      <GridBulkBar selection={selection} labels={labels} />
+    ) : (
+      <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
+        {total === null ? null : (caption ?? <span data-grid-count>{labels.count(total)}</span>)}
+      </div>
+    );
+
+  if (phone) {
+    return (
+      <div className="flex min-h-[33px] flex-wrap items-center gap-2" data-grid-tools="phone">
+        {lead}
+        <div className="flex-1" />
+        <PhoneTools
+          columns={columns}
+          defaultVisible={defaultVisible}
+          settings={settings}
+          onSettingsChange={onSettingsChange}
+          onResetView={onResetView}
+          view={view}
+          views={fixedView ? [] : views}
+          board={kanban ? board : undefined}
+          group={group}
+          onGroupChange={onGroupChange}
+          fold={fold}
+          onExport={onExport}
+          exporting={exporting}
+          tools={phoneTools}
+          labels={labels}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[33px] flex-wrap items-center gap-2">
-      {selection && selection.count > 0 ? (
-        <GridBulkBar selection={selection} labels={labels} />
-      ) : (
-        <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted">
-          {total === null ? null : (caption ?? <span data-grid-count>{labels.count(total)}</span>)}
+      {lead}
+      <div className="flex-1" />
+      {!fixedView && (
+        <div
+          role="group"
+          aria-label={labels.view}
+          data-grid-view
+          className="inline-flex gap-0.5 rounded-lg border border-line bg-pane-alt p-[3px]"
+        >
+          {views.map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              data-view={v}
+              title={v === 'kanban' ? labels.kanbanHint : labels[v]}
+              onClick={() => setView(v)}
+              className={`inline-flex min-h-[26px] cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 py-1 text-[12.5px] font-[550] ${view === v ? 'bg-raised text-ink shadow-flat-strong' : 'bg-transparent text-muted'}`}
+            >
+              <Icon name={VIEW_ICON[v]} size="sm" />
+              <span>{labels[v]}</span>
+            </button>
+          ))}
         </div>
       )}
-      <div className="flex-1" />
-      {!fixedView &&
-        (phone ? (
-          <PhoneViewToggle to={nextView(view, !!board)} onChange={setView} labels={labels} />
-        ) : (
-          <div
-            role="group"
-            aria-label={labels.view}
-            data-grid-view
-            className="inline-flex gap-0.5 rounded-lg border border-line bg-pane-alt p-[3px]"
-          >
-            {views.map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={view === v}
-                data-view={v}
-                title={v === 'kanban' ? labels.kanbanHint : labels[v]}
-                onClick={() => setView(v)}
-                className={`inline-flex min-h-[26px] cursor-pointer items-center gap-1.5 rounded-md border-0 px-2.5 py-1 text-[12.5px] font-[550] ${view === v ? 'bg-raised text-ink shadow-btn' : 'bg-transparent text-muted'}`}
-              >
-                <Icon name={VIEW_ICON[v]} size="sm" />
-                <span>{labels[v]}</span>
-              </button>
-            ))}
-          </div>
-        ))}
       {kanban && (
         <Popover
           label={labels.boardByHint}
@@ -210,12 +254,11 @@ export function GridToolbar<Row>({
               aria-controls={id}
               aria-haspopup="menu"
               data-grid-board-by
-              title={phone ? boardPhoneLabel : labels.boardByHint}
-              aria-label={phone ? boardPhoneLabel : undefined}
-              className={phone ? `${PHONE_TOOL} text-ink` : buttonClass('default', 'sm')}
+              title={labels.boardByHint}
+              className={buttonClass('default', 'sm')}
             >
               <Icon name="layers" size="sm" />
-              {!phone && boardLabel}
+              {boardLabel}
             </button>
           )}
         >
@@ -246,24 +289,11 @@ export function GridToolbar<Row>({
               aria-controls={id}
               aria-haspopup="dialog"
               data-grid-group-button
-              title={phone ? groupLabel : labels.groupButtonHint}
-              aria-label={phone ? groupLabel : undefined}
-              className={
-                phone
-                  ? `${PHONE_TOOL} ${group.length ? 'text-ink' : ''}`
-                  : buttonClass('default', 'sm')
-              }
+              title={labels.groupButtonHint}
+              className={buttonClass('default', 'sm')}
             >
               <Icon name="layers" size="sm" />
-              {phone && group.length > 0 && (
-                <span
-                  aria-hidden="true"
-                  className="absolute -top-1 -right-1 h-[15px] min-w-[15px] rounded-lg bg-accent px-[3px] text-center text-[9.5px] leading-[15px] font-bold text-on-accent"
-                >
-                  {group.length}
-                </span>
-              )}
-              {!phone && groupLabel}
+              {groupLabel}
             </button>
           )}
         >
@@ -295,12 +325,11 @@ export function GridToolbar<Row>({
             aria-controls={id}
             aria-haspopup="dialog"
             data-grid-columns-button
-            title={phone ? columnsTitle : kanban ? labels.boardFieldsHint : undefined}
-            aria-label={phone ? columnsAria : undefined}
-            className={phone ? PHONE_TOOL : buttonClass('default', 'sm')}
+            title={kanban ? labels.boardFieldsHint : undefined}
+            className={buttonClass('default', 'sm')}
           >
             <Icon name="columns" size="sm" />
-            {!phone && columnsLabel}
+            {columnsLabel}
           </button>
         )}
       >
@@ -330,7 +359,7 @@ export function GridToolbar<Row>({
               title={labels.viewOptionsHint}
               aria-label={labels.viewOptions}
               data-grid-options-button
-              className={phone ? PHONE_TOOL : RAISED_ICON}
+              className={RAISED_ICON}
             >
               <Icon name="sliders" size="sm" />
             </button>
@@ -339,79 +368,480 @@ export function GridToolbar<Row>({
           {(close) => (
             <ActionList
               onPick={close}
-              items={[
-                {
-                  id: 'normal',
-                  label: labels.densityNormal,
-                  icon: 'list',
-                  on: (settings.density ?? 'normal') === 'normal',
-                  run: () => onSettingsChange({ ...settings, density: 'normal' }),
-                },
-                {
-                  id: 'compact',
-                  label: labels.densityCompact,
-                  icon: 'menu',
-                  on: settings.density === 'compact',
-                  run: () => onSettingsChange({ ...settings, density: 'compact' }),
-                },
-                { id: 'sep1', separator: true },
-                {
-                  id: 'full',
-                  label: labels.widthFull,
-                  icon: 'columns',
-                  on: (settings.width ?? 'full') === 'full',
-                  run: () => onSettingsChange({ ...settings, width: 'full' }),
-                },
-                {
-                  id: 'center',
-                  label: labels.widthCenter,
-                  icon: 'table',
-                  on: settings.width === 'center',
-                  run: () => onSettingsChange({ ...settings, width: 'center' }),
-                },
-                { id: 'sep2', separator: true },
-                {
-                  id: 'reset',
-                  label: labels.resetView,
-                  icon: 'refresh',
-                  sub: labels.resetViewSub,
-                  run: onResetView,
-                },
-              ]}
+              items={viewOptionItems(settings, onSettingsChange, onResetView, labels)}
             />
           )}
         </Popover>
       )}
-      {fold && !phone && <GridFoldButton fold={fold} phone={false} labels={labels} />}
-      {onExport &&
-        (phone ? (
-          <button
-            type="button"
-            onClick={onExport}
-            disabled={exporting}
-            aria-busy={exporting}
-            title={labels.excel}
-            aria-label={labels.excel}
-            data-grid-export
-            className={`${PHONE_TOOL} disabled:cursor-wait disabled:opacity-60`}
-          >
-            <Icon name="download" size="sm" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onExport}
-            disabled={exporting}
-            aria-busy={exporting}
-            title={labels.excelHint}
-            data-grid-export
-            className={buttonClass('default', 'sm')}
-          >
-            <Icon name="download" size="sm" />
-            {labels.excel}
-          </button>
-        ))}
+      {fold && <GridFoldButton fold={fold} phone={false} labels={labels} />}
+      {onExport && (
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={exporting}
+          aria-busy={exporting}
+          title={labels.excelHint}
+          data-grid-export
+          className={buttonClass('default', 'sm')}
+        >
+          <Icon name="download" size="sm" />
+          {labels.excel}
+        </button>
+      )}
     </div>
+  );
+}
+
+/** Пункты «Настроек вида»: плотность, ширина и «Сбросить вид». */
+function viewOptionItems(
+  settings: GridViewSettings,
+  onSettingsChange: (settings: GridViewSettings) => void,
+  onResetView: () => void,
+  labels: GridLabels,
+): ActionEntry[] {
+  return [
+    {
+      id: 'normal',
+      label: labels.densityNormal,
+      icon: 'list',
+      on: (settings.density ?? 'normal') === 'normal',
+      run: () => onSettingsChange({ ...settings, density: 'normal' }),
+    },
+    {
+      id: 'compact',
+      label: labels.densityCompact,
+      icon: 'menu',
+      on: settings.density === 'compact',
+      run: () => onSettingsChange({ ...settings, density: 'compact' }),
+    },
+    { id: 'sep1', separator: true },
+    {
+      id: 'full',
+      label: labels.widthFull,
+      icon: 'columns',
+      on: (settings.width ?? 'full') === 'full',
+      run: () => onSettingsChange({ ...settings, width: 'full' }),
+    },
+    {
+      id: 'center',
+      label: labels.widthCenter,
+      icon: 'table',
+      on: settings.width === 'center',
+      run: () => onSettingsChange({ ...settings, width: 'center' }),
+    },
+    { id: 'sep2', separator: true },
+    {
+      id: 'reset',
+      label: labels.resetView,
+      icon: 'refresh',
+      sub: labels.resetViewSub,
+      run: onResetView,
+    },
+  ];
+}
+
+/** Что открыто у кнопок панели на телефоне. */
+type PhoneOpen = 'filter' | 'sort' | 'more' | 'board' | 'options' | 'group' | 'columns' | null;
+
+/** Сортировка из меню телефона: тот же столбец — в обратную сторону, другой — по возрастанию. */
+export function phoneSort(sort: ListSort | null, key: string): ListSort {
+  return sort?.key === key
+    ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+    : { key, dir: 'asc' };
+}
+
+/** Что открывает пункт «⋯» на телефоне: столбец доски, «Группировка», «Столбцы» или «Плотность». */
+export type PhonePanel = 'board' | 'group' | 'columns' | 'options';
+
+export interface PhoneMenuArgs<Row> {
+  columns: readonly GridColumn<Row>[];
+  defaultVisible: readonly string[];
+  settings: GridViewSettings;
+  onSettingsChange: (settings: GridViewSettings) => void;
+  view: GridViewKind;
+  /** Виды для выбора; пусто — вид закреплён модулем. */
+  views: readonly GridViewKind[];
+  /** Список сейчас в виде «Доска». */
+  board?: GridBoardChoice;
+  group: readonly string[];
+  fold?: GridFold;
+  onExport?: () => void;
+  exporting: boolean;
+  tools?: GridPhoneTools;
+  /** Открыть окно фильтра столбца. */
+  openFilter: (key: string) => void;
+  /** Открыть окно или меню пункта «⋯». */
+  open: (panel: PhonePanel) => void;
+  labels: GridLabels;
+}
+
+/**
+ * Пункты трёх меню панели списка на телефоне (прототип v139 ui/grid.js `mfilt`, `msort`, `mmore`):
+ * «Фильтр» — видимые столбцы с фильтром (у стоящего — его значение) и «Сбросить фильтры»;
+ * «Сортировка» — видимые столбцы (у выбранного — направление) и «Без сортировки»; «⋯» — вид, группировка
+ * или столбец доски, «Свернуть все», столбцы или поля карточки, плотность, «Выбрать несколько», «В Excel».
+ */
+export function phoneMenus<Row>({
+  columns,
+  defaultVisible,
+  settings,
+  onSettingsChange,
+  view,
+  views,
+  board,
+  group,
+  fold,
+  onExport,
+  exporting,
+  tools,
+  openFilter,
+  open,
+  labels,
+}: PhoneMenuArgs<Row>): {
+  filter: readonly ActionEntry[];
+  sort: readonly ActionEntry[];
+  more: readonly ActionEntry[];
+  /** Сколько фильтров стоит — число на кнопке «Фильтр». */
+  filterCount: number;
+} {
+  const keys = columns.map((c) => c.key);
+  const visible = screenVisibleKeys(columns, settings, defaultVisible, true);
+  const shownColumns = visible.map((k) => columns.find((c) => c.key === k)!);
+  const filters = tools?.filters;
+  const filterCount = filters ? Object.keys(filters.active).length : 0;
+  const sort = tools?.sort ?? null;
+  const label = (key: string) => columns.find((c) => c.key === key)?.label ?? '';
+
+  const filterItems: ActionEntry[] = filters
+    ? [
+        ...shownColumns
+          .filter((c) => c.filterable !== false)
+          .map((c) => ({
+            id: c.key,
+            label: c.label,
+            icon: 'filter' as const,
+            on: c.key in filters.active,
+            sub: filters.active[c.key],
+            run: () => openFilter(c.key),
+          })),
+        ...(filterCount
+          ? [
+              { id: 'filter-sep', separator: true as const },
+              {
+                id: 'filter-reset',
+                label: labels.resetFilters,
+                icon: 'x' as const,
+                run: filters.onReset,
+              },
+            ]
+          : []),
+      ]
+    : [];
+  const sortItems: ActionEntry[] = tools
+    ? [
+        ...shownColumns
+          .filter((c) => c.sortable !== false)
+          .map((c) => {
+            const on = sort?.key === c.key;
+            return {
+              id: c.key,
+              label: c.label,
+              icon: on && sort.dir === 'desc' ? ('dn' as const) : ('up' as const),
+              on,
+              sub: on ? (sort.dir === 'asc' ? labels.sortAsc : labels.sortDesc) : undefined,
+              run: () => tools.onSort(phoneSort(sort, c.key)),
+            };
+          }),
+        ...(sort
+          ? [
+              { id: 'sort-sep', separator: true as const },
+              {
+                id: 'sort-none',
+                label: labels.sortNone,
+                icon: 'x' as const,
+                run: () => tools.onSort(null),
+              },
+            ]
+          : []),
+      ]
+    : [];
+  const select = tools?.select;
+  const moreItems: ActionEntry[] = [
+    ...views.map((v) => ({
+      id: `view-${v}`,
+      label: labels[v],
+      icon: VIEW_ICON[v],
+      on: view === v,
+      run: () => onSettingsChange(withView(settings, true, v)),
+    })),
+    ...(views.length ? [{ id: 'more-sep', separator: true as const }] : []),
+    board
+      ? {
+          id: 'board',
+          label: labels.boardColumns,
+          icon: 'layers' as const,
+          sub: label(board.key),
+          run: () => open('board'),
+        }
+      : {
+          id: 'group',
+          label: labels.group,
+          icon: 'layers' as const,
+          sub: group.map(label).join(' → ') || undefined,
+          run: () => open('group'),
+        },
+    ...(fold
+      ? [
+          {
+            id: 'fold',
+            label: fold.shut ? labels.expandAll : labels.collapseAll,
+            icon: fold.shut ? ('unfold' as const) : ('fold' as const),
+            run: fold.onToggle,
+          },
+        ]
+      : []),
+    {
+      id: 'columns',
+      label: board || view === 'cards' ? labels.boardFieldsName : labels.columns,
+      icon: 'columns' as const,
+      sub: labels.shownOf(visible.length, keys.length),
+      run: () => open('columns'),
+    },
+    // На доске плотности и ширины нет — как на ПК.
+    ...(board
+      ? []
+      : [
+          {
+            id: 'options',
+            label: labels.density,
+            icon: 'sliders' as const,
+            run: () => open('options'),
+          },
+        ]),
+    ...(select
+      ? [
+          {
+            id: 'select',
+            label: labels.selectMany,
+            icon: 'check' as const,
+            on: select.on,
+            run: select.onToggle,
+          },
+        ]
+      : []),
+    ...(onExport
+      ? [
+          {
+            id: 'excel',
+            label: labels.excel,
+            icon: 'download' as const,
+            disabled: exporting,
+            run: onExport,
+          },
+        ]
+      : []),
+  ];
+
+  return { filter: filterItems, sort: sortItems, more: moreItems, filterCount };
+}
+
+/**
+ * Панель списка на телефоне (прототип v139 ui/grid.js `mfilt`, `msort`, `mmore`; решение заказчика
+ * 17.11.2026 «Меньше текста»): на виду «Фильтр» с числом фильтров, «Сортировка» и «⋯»; под «⋯» — вид,
+ * группировка (на доске — её столбец), «Свернуть все», столбцы или поля карточки, плотность, «Выбрать
+ * несколько» и «В Excel». Фильтр и сортировка работают и в виде «Карточки». Меню и окна — листами снизу.
+ */
+function PhoneTools<Row>({
+  columns,
+  defaultVisible,
+  settings,
+  onSettingsChange,
+  onResetView,
+  view,
+  views,
+  board,
+  group,
+  onGroupChange,
+  fold,
+  onExport,
+  exporting,
+  tools,
+  labels,
+}: {
+  columns: readonly GridColumn<Row>[];
+  defaultVisible: readonly string[];
+  settings: GridViewSettings;
+  onSettingsChange: (settings: GridViewSettings) => void;
+  onResetView: () => void;
+  view: GridViewKind;
+  /** Виды для выбора; пусто — вид закреплён модулем. */
+  views: readonly GridViewKind[];
+  /** Список сейчас в виде «Доска». */
+  board?: GridBoardChoice;
+  group: readonly string[];
+  onGroupChange: () => void;
+  fold?: GridFold;
+  onExport?: () => void;
+  exporting: boolean;
+  tools?: GridPhoneTools;
+  labels: GridLabels;
+}) {
+  const [open, setOpen] = useState<PhoneOpen>(null);
+  const close = () => setOpen(null);
+  const [filterButton, setFilterButton] = useState<HTMLButtonElement | null>(null);
+  const [sortButton, setSortButton] = useState<HTMLButtonElement | null>(null);
+  const [moreButton, setMoreButton] = useState<HTMLButtonElement | null>(null);
+  const keys = columns.map((c) => c.key);
+  const visible = screenVisibleKeys(columns, settings, defaultVisible, true);
+  const filters = tools?.filters;
+  const sort = tools?.sort ?? null;
+  const {
+    filter: filterItems,
+    sort: sortItems,
+    more: moreItems,
+    filterCount,
+  } = phoneMenus({
+    columns,
+    defaultVisible,
+    settings,
+    onSettingsChange,
+    view,
+    views,
+    board,
+    group,
+    fold,
+    onExport,
+    exporting,
+    tools,
+    openFilter: (key) => {
+      if (filterButton) filters?.onOpen(key, filterButton);
+    },
+    open: setOpen,
+    labels,
+  });
+
+  const menus: Partial<
+    Record<
+      Exclude<PhoneOpen, null>,
+      { items: readonly ActionEntry[]; label: string; at: HTMLElement | null }
+    >
+  > = {
+    filter: { items: filterItems, label: labels.filter, at: filterButton },
+    sort: { items: sortItems, label: labels.sort, at: sortButton },
+    more: { items: moreItems, label: labels.more, at: moreButton },
+    board: {
+      items: (board?.options ?? []).map((o) => ({
+        id: o.key,
+        label: o.label,
+        icon: 'layers' as const,
+        on: o.key === board?.key,
+        run: () => onSettingsChange({ ...settings, kb: o.key }),
+      })),
+      label: labels.boardByHint,
+      at: moreButton,
+    },
+    options: {
+      items: viewOptionItems(settings, onSettingsChange, onResetView, labels),
+      label: labels.viewOptions,
+      at: moreButton,
+    },
+  };
+  const menu = open ? menus[open] : undefined;
+
+  return (
+    <>
+      {filters && (
+        <button
+          ref={setFilterButton}
+          type="button"
+          onClick={() => setOpen('filter')}
+          aria-label={filterCount ? labels.filterN(filterCount) : labels.filter}
+          aria-haspopup="menu"
+          aria-expanded={open === 'filter'}
+          data-grid-phone="filter"
+          className={phoneButton(filterCount > 0)}
+        >
+          <Icon name="filter" size="sm" />
+          <span>{labels.filter}</span>
+          {filterCount > 0 && (
+            <span
+              aria-hidden="true"
+              className="h-4 min-w-4 rounded-lg bg-accent px-1 text-center text-[10.5px] leading-4 text-on-accent"
+            >
+              {filterCount}
+            </span>
+          )}
+        </button>
+      )}
+      {tools && (
+        <button
+          ref={setSortButton}
+          type="button"
+          onClick={() => setOpen('sort')}
+          aria-label={labels.sort}
+          aria-haspopup="menu"
+          aria-expanded={open === 'sort'}
+          data-grid-phone="sort"
+          className={phoneButton(!!sort)}
+        >
+          <Icon name={sort?.dir === 'desc' ? 'dn' : 'up'} size="sm" />
+          <span>{labels.sort}</span>
+        </button>
+      )}
+      <button
+        ref={setMoreButton}
+        type="button"
+        onClick={() => setOpen('more')}
+        aria-label={labels.moreHint}
+        title={labels.more}
+        aria-haspopup="menu"
+        aria-expanded={open === 'more'}
+        data-grid-phone="more"
+        className={PHONE_TOOL}
+      >
+        <Icon name="more" size="sm" />
+      </button>
+      {menu?.at && (
+        <ActionMenu
+          key={open}
+          items={menu.items}
+          place={{ anchor: menu.at }}
+          label={menu.label}
+          onClose={close}
+        />
+      )}
+      {open === 'group' && moreButton && (
+        <FloatingPanel anchor={moreButton} label={labels.group} onClose={close}>
+          <GroupPanel
+            columns={columns}
+            keys={keys}
+            visible={visible}
+            settings={settings}
+            onApply={(next) => {
+              onSettingsChange(next);
+              onGroupChange();
+              close();
+            }}
+            labels={labels}
+          />
+        </FloatingPanel>
+      )}
+      {open === 'columns' && moreButton && (
+        <FloatingPanel
+          anchor={moreButton}
+          label={board ? labels.boardFields : labels.columns}
+          onClose={close}
+        >
+          <ColumnsPanel
+            columns={columns}
+            defaultVisible={defaultVisible}
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+            labels={labels}
+          />
+        </FloatingPanel>
+      )}
+    </>
   );
 }
 
@@ -464,9 +894,7 @@ export function GroupPanel<Row>({
 
   return (
     <>
-      <h4 className="m-0 text-[12px] font-[650] tracking-[0.07em] text-faint uppercase">
-        {labels.group}
-      </h4>
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">{labels.group}</h4>
       <div className={field}>
         <label htmlFor={`${id}-1`} className={caption}>
           {labels.groupLevel1}
@@ -524,7 +952,7 @@ export function GroupPanel<Row>({
           ))}
         </>
       )}
-      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.groupHint}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{labels.groupHint}</div>
       <div className="flex justify-end gap-1.5">
         <button
           type="button"
@@ -566,7 +994,7 @@ export function GridBulkBar<Row>({
       role="toolbar"
       aria-label={labels.selected(selection.count)}
       data-grid-bulk
-      className="flex animate-slide-up flex-wrap items-center gap-1.5 rounded-full border border-line-strong bg-raised py-[3px] pr-1 pl-3 text-[13px] shadow-pane"
+      className="flex animate-rise flex-wrap items-center gap-1.5 rounded-full border border-line-strong bg-raised py-[3px] pr-1 pl-3 text-[13px] shadow-pane"
     >
       <b>{labels.selected(selection.count)}</b>
       {selection.actions.map((a) => (
@@ -590,31 +1018,6 @@ export function GridBulkBar<Row>({
         <Icon name="x" size="sm" />
       </button>
     </div>
-  );
-}
-
-/** Телефон: одна кнопка показывает следующий вид по кругу и включает его. */
-function PhoneViewToggle({
-  to,
-  onChange,
-  labels,
-}: {
-  to: GridViewKind;
-  onChange: (view: GridViewKind) => void;
-  labels: GridLabels;
-}) {
-  return (
-    <button
-      type="button"
-      title={labels[to]}
-      aria-label={labels.viewTo(labels[to])}
-      onClick={() => onChange(to)}
-      data-grid-view
-      data-view={to}
-      className={PHONE_TOOL}
-    >
-      <Icon name={VIEW_ICON[to]} size="sm" />
-    </button>
   );
 }
 
@@ -659,9 +1062,7 @@ export function ColumnsPanel<Row>({
 
   return (
     <>
-      <h4 className="m-0 text-[12px] font-[650] tracking-[0.07em] text-faint uppercase">
-        {labels.columns}
-      </h4>
+      <h4 className="m-0 text-[13.5px] font-[650] text-ink">{labels.columns}</h4>
       <div
         className="flex max-h-[340px] flex-col overflow-auto rounded-lg border border-line p-1"
         data-columns-list
@@ -736,7 +1137,7 @@ export function ColumnsPanel<Row>({
           );
         })}
       </div>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{labels.columnsHint}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{labels.columnsHint}</div>
     </>
   );
 }

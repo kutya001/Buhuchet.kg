@@ -5,7 +5,14 @@ import { cardToneClass } from './card-tone';
 import { aggText, type GroupNode } from './grid-groups';
 import { GroupToggle, RowMenuButton, SELECT_BOX, type GridTableGroups } from './grid-table';
 import type { RowEvents } from './row-events';
-import type { GridColumn, GridLabels, GridRowSelection, GridRowStripe, GridRowTone } from './types';
+import type {
+  GridColumn,
+  GridLabels,
+  GridRowSelection,
+  GridRowStripe,
+  GridRowTone,
+  GridShortCard,
+} from './types';
 
 /**
  * Карточки списка (прототип ui/grid.js, cardsHtml; стили `.gcards`, `.gcard`): заголовок — главный
@@ -14,7 +21,9 @@ import type { GridColumn, GridLabels, GridRowSelection, GridRowStripe, GridRowTo
  * список — заголовки групп с числом записей и итогами (`.gc-grp`), под раскрытой группой — её
  * вложенные группы или карточки. Суммы, которые читаются вместе (`tileLine`), — одной строкой
  * «К уплате 5 000 · Получено 5 000 · Оплачено 3 000». Действия записи — кнопкой «⋯» в заголовке
- * карточки и долгим нажатием, без правого клика; у записи без действий кнопки нет.
+ * карточки и долгим нажатием, без правого клика; у записи без действий кнопки нет. Короткая карточка
+ * телефона (`short`, прототип v141 `mcard`): под заголовком — строка главного, справа — статус, ниже —
+ * только столбцы, которых в них нет.
  */
 export function GridCards<Row>({
   columns,
@@ -31,9 +40,12 @@ export function GridCards<Row>({
   groups,
   labels,
   render,
+  short,
 }: {
   /** Своя карточка (прототип `cardHtml`): обёртка, «⋯» и нажатие — общие. */
   render?: (row: Row) => ReactNode;
+  /** Короткая карточка телефона: что показать под заголовком и справа; второй аргумент — видимые столбцы. */
+  short?: (row: Row, visible: ReadonlySet<string>) => GridShortCard;
   groups?: GridTableGroups<Row>;
   columns: readonly GridColumn<Row>[];
   titleKey?: string;
@@ -60,9 +72,11 @@ export function GridCards<Row>({
   const withTotals = columns.filter((c) => c.total && totals[c.key] !== undefined);
   // Столбцы общей строки плитки стоят одной строкой на месте первого из них (`clineHtml` прототипа).
   const lineColumns = rest.filter((c) => c.tileLine);
-  const firstLine = lineColumns[0];
-  const tileLine = (row: Row): ReactNode => {
-    const parts = lineColumns.filter((c) => c.text(row) !== '');
+  const tileLine = (row: Row, line: readonly GridColumn<Row>[] = lineColumns): ReactNode => {
+    // Прототип v141: у первого столбца строки значение не больше нуля — строки нет.
+    const lead = line[0]?.tileLine?.amount;
+    if (lead && !((lead(row) ?? 0) > 0)) return null;
+    const parts = line.filter((c) => c.text(row) !== '');
     if (!parts.length) return null;
     return (
       <dd
@@ -85,7 +99,9 @@ export function GridCards<Row>({
     );
   };
 
-  const card = (row: Row): ReactNode => (render ? own(row, render) : common(row));
+  const visibleKeys = new Set(columns.map((c) => c.key));
+  const card = (row: Row): ReactNode =>
+    short ? common(row, short(row, visibleKeys)) : render ? own(row, render) : common(row);
   /** Своя карточка во всю ширину, «⋯» — поверх в правом верхнем углу (прототип `.gcard-x .gc-mx`). */
   const own = (row: Row, draw: (row: Row) => ReactNode): ReactNode => {
     const id = rowKey(row);
@@ -108,8 +124,10 @@ export function GridCards<Row>({
     );
   };
 
-  const common = (row: Row): ReactNode => {
+  const common = (row: Row, brief?: GridShortCard): ReactNode => {
     const id = rowKey(row);
+    const pairs = brief ? rest.filter((c) => !brief.keys.includes(c.key)) : rest;
+    const line = pairs.filter((c) => c.tileLine);
     const tone = rowTone?.(row);
     const stripe = rowStripe?.(row);
     const created = auditLine(row, 'created');
@@ -120,9 +138,10 @@ export function GridCards<Row>({
         key={id}
         data-id={id}
         data-tone={tone}
+        data-card-short={brief ? '' : undefined}
         tabIndex={0}
         {...events.handlers(row)}
-        className={`flex min-w-0 flex-col gap-[9px] rounded-xl border pt-[11px] pr-3 pb-3 pl-3.5 transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${cardToneClass(tone, stripe)} ${picked ? 'shadow-btn-active' : ''}`}
+        className={`flex min-w-0 flex-col rounded-xl border ${brief ? 'gap-1.5 py-2.5 pr-2.5 pl-[13px]' : 'gap-[9px] pt-[11px] pr-3 pb-3 pl-3.5'} transition-shadow duration-150 hover:shadow-pane focus-visible:outline-2 focus-visible:outline-brand-blue ${clickable ? 'cursor-pointer' : ''} ${cardToneClass(tone, stripe)} ${picked ? 'shadow-btn-active' : ''}`}
       >
         <div className="flex items-start gap-[9px]">
           {selection && (
@@ -136,15 +155,37 @@ export function GridCards<Row>({
           )}
           <div className="min-w-0 flex-1 leading-[1.35] font-semibold">
             {title.cell ? title.cell(row) : title.text(row)}
+            {brief?.sub ? (
+              <div
+                data-card-sub
+                className="mt-0.5 text-[12.5px] font-medium text-muted [&_*]:inline"
+              >
+                {brief.sub}
+              </div>
+            ) : null}
           </div>
-          {events.hasMenu(row) && (
-            <RowMenuButton row={row} events={events} label={labels.actions} />
-          )}
+          {brief?.right ? (
+            // Справа — статус словом и цветом, без точек шкалы (`.gc-r .scm-d`).
+            <div
+              data-card-right
+              className="max-w-[44%] flex-none pt-px [&_[data-status-dots]]:hidden"
+            >
+              {brief.right}
+            </div>
+          ) : null}
+          {events.hasMenu(row) &&
+            (brief ? (
+              <span className="-mt-1.5 -mr-1 flex-none">
+                <RowMenuButton row={row} events={events} label={labels.actions} />
+              </span>
+            ) : (
+              <RowMenuButton row={row} events={events} label={labels.actions} />
+            ))}
         </div>
-        {rest.length > 0 && (
-          <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-[5px] text-[12.5px]">
-            {rest.map((c) => {
-              if (c.tileLine) return c === firstLine ? tileLine(row) : null;
+        {pairs.length > 0 && (
+          <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-[5px] text-[12.5px] empty:hidden">
+            {pairs.map((c) => {
+              if (c.tileLine) return c === line[0] ? tileLine(row, line) : null;
               const text = c.text(row);
               return (
                 <div key={c.key} className="contents">

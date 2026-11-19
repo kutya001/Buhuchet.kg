@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { DEMO_PASSWORD, signIn } from './helpers';
+import { DEMO_PASSWORD, phoneListMenu, signIn } from './helpers';
 
 // Вид «Доска» списка (прототип v84, ui/grid.js `kanbanHtml`; доска задач — modules/tasks.js
 // `taskKanban`) через настоящий сайт. Вид списка хранится у пользователя, поэтому файл
@@ -81,8 +81,8 @@ test.describe('Этап 3: вид «Доска» в задачах', () => {
       const grid = page.locator('[data-grid]');
       await expect(grid.locator(`[data-id="${id}"]`)).toBeVisible();
 
-      // Вид «Доска»: на ПК — третья кнопка переключателя, на телефоне — кнопка вида по кругу.
-      if (isMobile) await grid.getByRole('button', { name: 'Вид списка: Доска' }).click();
+      // Вид «Доска»: на ПК — третья кнопка переключателя, на телефоне — пункт под «⋯» (прототип v139).
+      if (isMobile) await phoneListMenu(page, /^Доска/);
       else await grid.getByRole('button', { name: 'Доска', exact: true }).click();
       const board = grid.locator('[data-grid-board]');
       await expect(board).toBeVisible();
@@ -102,14 +102,20 @@ test.describe('Этап 3: вид «Доска» в задачах', () => {
         await expect(column(key).locator('header')).toContainText(name);
         await expect(column(key).locator('[data-board-count]')).toHaveText(/^\d+$/);
       }
-      await expect(grid.locator('[data-grid-board-by]')).toBeVisible();
+      // На телефоне поле столбцов доски — под «⋯» (прототип v139), кнопки над списком нет.
+      await expect(grid.locator('[data-grid-board-by]')).toHaveCount(isMobile ? 0 : 1);
       await expect(grid.locator('[data-grid-group-button]')).toHaveCount(0);
-      await expect(grid.locator('[data-grid-footer]')).toContainText(
-        /Столбцов: \d+ · записей: \d+/,
-      );
-      await expect(grid.locator('[data-board-tip]')).toHaveText(
+      // Внизу доски — только «Как перенести» с подсказкой «?» (прототип v139).
+      const tip = grid.locator('[data-board-tip]');
+      await expect(tip).toHaveText('Как перенести');
+      await expect(grid.locator('[data-grid-footer]')).not.toContainText('Столбцов:');
+      await tip.getByRole('button', { name: 'Как перенести' }).click();
+      const how = page.getByRole('dialog', { name: 'Как перенести' });
+      await expect(how).toHaveText(
         isMobile ? 'Перенос — в меню карточки «⋯»' : 'Карточку можно перетащить в другой столбец',
       );
+      await page.keyboard.press('Escape');
+      await expect(how).toBeHidden();
       await expect(column('todo').locator(cardOf)).toBeVisible();
       await expect(card).toContainText(title);
 
@@ -141,7 +147,8 @@ test.describe('Этап 3: вид «Доска» в задачах', () => {
           r.request().method() === 'PUT' &&
           new URL(r.url()).pathname === `/api/view-settings/${GRID_KEY}`,
       );
-      await grid.locator('[data-grid-board-by]').click();
+      if (isMobile) await phoneListMenu(page, /^Столбцы доски/);
+      else await grid.locator('[data-grid-board-by]').click();
       await page.getByRole('menu').getByText('Исполнитель', { exact: true }).click();
       await expect(own.locator('header')).toContainText('Алишер Т.');
       expect((await saved).status()).toBe(200);

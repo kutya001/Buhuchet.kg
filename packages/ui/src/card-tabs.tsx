@@ -135,7 +135,7 @@ export function CardTabs({
                 onClick={() => {
                   if (window.matchMedia(PHONE).matches) toggle();
                 }}
-                className={`${TAB} animate-pop border-transparent bg-raised text-ink shadow-btn max-md:min-h-11 max-md:flex-auto max-md:justify-start max-md:px-3.5 max-md:py-[9px] max-md:text-sm`}
+                className={`${TAB} animate-pop border-transparent bg-raised text-ink shadow-flat-strong max-md:min-h-11 max-md:flex-auto max-md:justify-start max-md:px-3.5 max-md:py-[9px] max-md:text-sm`}
               >
                 {icon}
                 <span>{t.label}</span>

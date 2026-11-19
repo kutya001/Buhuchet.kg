@@ -330,7 +330,7 @@ function KnownRow() {
     <div className="mt-2.5 flex flex-wrap items-center gap-2.5">
       <span className="min-w-[200px] flex-1">
         <b>{t('kb.known.title')}</b>
-        <span className="block text-[11.5px] leading-[1.4] text-faint">
+        <span className="block text-[12px] leading-[1.4] text-muted">
           {t('kb.known.hint_profile')}
         </span>
       </span>

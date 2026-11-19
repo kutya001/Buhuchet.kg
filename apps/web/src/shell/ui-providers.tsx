@@ -1,9 +1,11 @@
 'use client';
 
 import {
+  PlatesLabelsProvider,
   ToastProvider,
   WindowProvider,
   type MaxPrefs,
+  type PlatesLabels,
   type ToastLabels,
   type WindowLabels,
 } from '@buhuchet/ui';
@@ -34,6 +36,7 @@ export function UiProviders({
       discardTitle: t('window.discard_title'),
       discardText: t('window.discard_text'),
       discardOk: t('window.discard_ok'),
+      discardStay: t('window.discard_stay'),
       tabPosition: (n, total) => t('window.tab_position', { n, total }),
     }),
     [t],
@@ -42,9 +45,15 @@ export function UiProviders({
     () => ({ close: t('toast.close'), closeTitle: t('toast.close_title') }),
     [t],
   );
+  const platesLabels = useMemo<PlatesLabels>(
+    () => ({ more: (n) => t('plates.more', { n }), less: t('plates.less') }),
+    [t],
+  );
   return (
     <WindowProvider labels={windowLabels} initialMax={initialMax} onMaxChange={saveMaxPrefs}>
-      <ToastProvider labels={toastLabels}>{children}</ToastProvider>
+      <ToastProvider labels={toastLabels}>
+        <PlatesLabelsProvider labels={platesLabels}>{children}</PlatesLabelsProvider>
+      </ToastProvider>
     </WindowProvider>
   );
 }

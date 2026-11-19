@@ -267,6 +267,9 @@ test.describe('Этап 3: лендинг для гостей (задача #165
       'Заявка отправлена. Подключите Telegram, чтобы узнать решение',
     );
     await expect(sent).not.toContainText('Спасибо!');
+    // Экран «Заявка отправлена» — на виду, а не выше экрана (прототип v133, оставлено в v143): форма была
+    // длинной, после отправки страница встаёт к началу блока заявки.
+    await expect(sent).toBeInViewport();
     const bot = sent.getByRole('link', { name: 'Подключить Telegram' });
     await expect(bot).toHaveAttribute('href', /^https:\/\/t\.me\/[A-Za-z0-9_]+\?start=l_/);
     await expect(bot).toHaveAttribute('target', '_blank');
@@ -407,8 +410,8 @@ test.describe('Этап 3: лендинг для гостей (задача #165
   });
 });
 
-test.describe('Этап 3: лендинг v78 — заставка, линия Бернулли, герб, «Подробнее» (прототип v78)', () => {
-  test('(проверка прототипа v78) заставка при каждом открытии лендинга: знак и BuhUchet.kg, любая клавиша — сразу к странице, знак встаёт в шапку; при новом открытии — снова, по «Войти» — страница входа без неё', async ({
+test.describe('Этап 3: лендинг v78 — заставка, герб, «Подробнее»; спираль на фоне и карточки функций (прототип v78, v144–v146)', () => {
+  test('(проверка прототипа v78 и v143) заставка — один раз за сеанс: знак и BuhUchet.kg, любая клавиша — сразу к странице, знак встаёт в шапку, спираль выходит на фон; при новом открытии в той же вкладке и по «Войти» заставки нет, в новой вкладке — снова', async ({
     page,
   }) => {
     await withIntro(page);
@@ -420,13 +423,14 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(intro).toHaveCount(0, { timeout: 10_000 });
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
     await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
-    // Линия Бернулли со спиралью у заголовка каждого из 9 блоков.
-    await expect(page.locator('#lp-path .lp-knots circle')).toHaveCount(9);
+    // Спираль логотипа вышла из знака на фон (прототип v145): отметки «ещё не видна» больше нет.
+    await expect(page.locator('#lp-bgsp')).not.toHaveClass(/(^| )pre( |$)/);
+    await expect(page.locator('#lp-path')).toHaveCount(0);
 
-    // Новое открытие — снова заставка; без нажатия она уходит сама.
+    // Новое открытие в той же вкладке — без заставки: она одна за сеанс (прототип v133, оставлено в v143).
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(intro).toBeVisible();
-    await expect(intro).toHaveCount(0, { timeout: 10_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
+    await expect(intro).toBeHidden({ timeout: 1_000 });
     await expect(page.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
 
     // «Войти» — страница входа сразу, без заставки.
@@ -435,9 +439,21 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(page.getByRole('heading', { name: 'Вход' })).toBeVisible();
     // Заставка сама ушла бы через 3,5 с — здесь её не должно быть сразу.
     await expect(intro).toBeHidden({ timeout: 1_000 });
+
+    // Новая вкладка — новый сеанс: заставка снова, без нажатия она уходит сама.
+    const other = await page.context().newPage();
+    try {
+      await withIntro(other);
+      await other.goto('/', { waitUntil: 'domcontentloaded' });
+      await expect(other.locator('.lp-intro')).toBeVisible();
+      await expect(other.locator('.lp-intro')).toHaveCount(0, { timeout: 10_000 });
+      await expect(other.locator('.lp-logo .logo')).toHaveCSS('opacity', '1');
+    } finally {
+      await other.close();
+    }
   });
 
-  test('(проверка прототипа v78) заставка при входе: на странице входа и после входа по логину; знак улетает в меню слева, на телефоне меню скрыто — вверх', async ({
+  test('(проверка прототипа v78 и v143) заставка при входе: на странице входа; после входа по логину в той же вкладке её нет — она одна за сеанс; открытие программы в новой вкладке — снова, знак улетает в меню слева, на телефоне меню скрыто — вверх', async ({
     page,
   }, testInfo) => {
     await withIntro(page);
@@ -449,17 +465,29 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
 
     await signInByForm(page, 'erkin', DEMO_PASSWORD);
     await expect(page).toHaveURL(/\/app\//);
-    await expect(intro).toBeVisible();
-    await expect(intro).toContainText('BuhUchet.kg');
-    await expect(intro).toHaveCount(0, { timeout: 10_000 });
-    await expect(page.locator('.bu-intro-tg')).toHaveCount(0);
-    if (!testInfo.project.name.startsWith('mobile')) {
-      // Знак в левой панели — снова на месте.
-      await expect(page.locator('[data-brand-mark]:visible').first()).toHaveCSS('opacity', '1');
+    await expect(page.locator('[data-grid], [data-home-hello]').first()).toBeVisible();
+    await expect(intro).toBeHidden({ timeout: 1_000 });
+
+    // Программа в новой вкладке (вход уже есть) — новый сеанс: заставка, знак улетает в меню слева.
+    const other = await page.context().newPage();
+    try {
+      await withIntro(other);
+      await other.goto('/app/home', { waitUntil: 'domcontentloaded' });
+      const again = other.locator('.lp-intro');
+      await expect(again).toBeVisible();
+      await expect(again).toContainText('BuhUchet.kg');
+      await expect(again).toHaveCount(0, { timeout: 10_000 });
+      await expect(other.locator('.bu-intro-tg')).toHaveCount(0);
+      if (!testInfo.project.name.startsWith('mobile')) {
+        // Знак в левой панели — снова на месте.
+        await expect(other.locator('[data-brand-mark]:visible').first()).toHaveCSS('opacity', '1');
+      }
+    } finally {
+      await other.close();
     }
   });
 
-  test('(проверка прототипа v78) у каждого блока «Подробнее»: подробности раскрываются и сворачиваются; символ герба и плитка «Возможностей» раскрываются нажатием; весы в углу — наверх', async ({
+  test('(проверка прототипа v78 и v144) у каждого блока «Подробнее»: подробности раскрываются и сворачиваются; у «Возможностей» — «Все функции — ещё 8»; символ герба раскрывается нажатием; весы в углу — наверх', async ({
     page,
   }) => {
     // Блоки появляются плавнее (прототип v91): нажатие ждёт, пока кнопка встанет на место, а блоков 8.
@@ -469,7 +497,7 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     const more: [string, string, string][] = [
       ['emb', 'Подробнее', 'Девиз на кольце герба: «Наука, совесть, независимость»'],
       ['who', 'Подробнее', 'Ведёте десятки и сотни клиентов'],
-      ['features', 'Подробнее', 'Отчёты, квитанции и договоры в карточках клиентов'],
+      ['features', 'Все функции — ещё 8', 'Отчёты, квитанции и договоры в карточках клиентов'],
       ['shots', 'Подробнее', 'Все отчёты клиентов со сроками, статусами и суммами'],
       ['start', 'Подробнее', 'Мы свяжемся, покажем программу и создадим вашу организацию'],
       ['security', 'Подробнее', 'Данные каждой фирмы отделены'],
@@ -516,14 +544,17 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     );
     await expect(scales).toHaveAttribute('aria-pressed', 'false');
 
-    // «Возможности»: плитка раскрывается нажатием.
-    // Раскрытая плитка читается вместе с описанием — имя начинается с «Файлы».
-    const tile = page.locator('#lp-features').getByRole('button', { name: /^Файлы/ });
-    await page.locator('#lp-features').getByRole('button', { name: 'Свернуть' }).click();
-    await expect(page.getByText('Отчёты, квитанции и договоры в карточках клиентов')).toBeHidden();
-    await tile.click();
-    await expect(tile).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.getByText('Отчёты, квитанции и договоры в карточках клиентов')).toBeVisible();
+    // «Возможности»: «Свернуть» прячет восемь функций, шесть главных с описаниями остаются на виду, а
+    // кнопка снова зовёт «Все функции».
+    const features = page.locator('#lp-features');
+    await features.getByRole('button', { name: 'Свернуть' }).click();
+    await expect(
+      features.getByText('Отчёты, квитанции и договоры в карточках клиентов'),
+    ).toBeHidden();
+    await expect(
+      features.getByText('Сроки, чеки клиентов и новые задачи — в программе и в Telegram'),
+    ).toBeVisible();
+    await expect(features.locator('.lp-more')).toHaveText('Все функции — ещё 8');
 
     // Весы-значок в углу: после первого экрана; нажатие — в начало страницы.
     await page.locator('#lp-faq h2').scrollIntoViewIfNeeded();
@@ -536,34 +567,53 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     await expect(page.locator('.lp-logo')).toBeFocused();
   });
 
-  test('(проверка прототипа v91) линия идёт из стороны в сторону со спиралями Бернулли; в гербе — спираль; у каждой из 12 возможностей свой значок, он оживает при раскрытии плитки; в подвале — версия платформы без даты', async ({
+  test('(проверка прототипа v91 и v144–v146) на фоне — спираль логотипа, она поворачивается при прокрутке; в гербе — спираль; у каждой из 14 функций своя карточка со значком и примерами, сверху шесть главных; в подвале — версия платформы без даты', async ({
     page,
   }) => {
     await page.goto('/');
-    // Спирали линии — у заголовка каждого из 9 блоков, по очереди у левого и у правого края страницы.
-    const knots = page.locator('#lp-path .lp-knots circle');
-    await expect(knots).toHaveCount(9);
-    const sides = await page.evaluate(() => {
-      const width = document.querySelector('.land')!.clientWidth;
-      return [...document.querySelectorAll('#lp-path .lp-knots circle')].map((c) =>
-        Number(c.getAttribute('cx')) < width / 2 ? 'l' : 'r',
-      );
+    // На фоне — та же спираль, что в знаке шапки (прототип v145): сквозной линии и спирали первого экрана
+    // больше нет. Спираль закреплена на экране, под содержимым блоков, и нажатий не перехватывает.
+    const spiral = page.locator('#lp-bgsp');
+    await expect(spiral).toHaveCount(1);
+    await expect(page.locator('#lp-path, .lp-hb-sp')).toHaveCount(0);
+    await expect(spiral).not.toHaveClass(/(^| )pre( |$)/);
+    await expect(spiral).toHaveCSS('pointer-events', 'none');
+    const same = await page.evaluate(() => {
+      const d = (sel: string) => document.querySelector(sel)?.getAttribute('d');
+      return d('#lp-bgsp .lg-sp') === d('.lp-logo .logo .lg-sp') && !!d('#lp-bgsp .lg-sp');
     });
-    expect(sides).toEqual(['l', 'r', 'l', 'r', 'l', 'r', 'l', 'r', 'l']);
-    // Сама линия проходит и по левому, и по правому полю страницы и не выходит за её края.
-    const span = await page.evaluate(() => {
-      const line = document.querySelector<SVGPathElement>('#lp-path .lp-p1')!;
-      const box = line.getBBox();
-      return {
-        from: box.x,
-        to: box.x + box.width,
-        width: document.querySelector('.land')!.clientWidth,
-      };
-    });
-    expect(span.from).toBeGreaterThanOrEqual(0);
-    expect(span.from).toBeLessThan(span.width * 0.25);
-    expect(span.to).toBeGreaterThan(span.width * 0.75);
-    expect(span.to).toBeLessThanOrEqual(span.width);
+    expect(same).toBe(true);
+    // Спираль шире половины экрана и не вызывает прокрутку вбок. После заставки она две секунды растёт
+    // из знака шапки — размер меряется, когда рост закончился.
+    await expect(spiral).not.toHaveClass(/(^| )(grow0|growing)( |$)/);
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document.querySelector('.lp-bgsp-g')!.getBoundingClientRect().width /
+            document.documentElement.clientWidth,
+        ),
+      )
+      .toBeGreaterThan(0.5);
+    const fit = await page.evaluate(() => ({
+      spiral: document.querySelector('.lp-bgsp-g')!.getBoundingClientRect().width,
+      screen: document.documentElement.clientWidth,
+      page: document.documentElement.scrollWidth,
+    }));
+    expect(fit.spiral).toBeGreaterThan(fit.screen * 0.5);
+    expect(fit.page).toBeLessThanOrEqual(fit.screen);
+    // При прокрутке спираль поворачивается по часовой стрелке и чуть сжимается.
+    const turn = () =>
+      page
+        .locator('.lp-bgsp-s')
+        .evaluate((e) =>
+          Number(/rotate\(([-\d.]+)deg\)/.exec((e as SVGElement).style.transform)?.[1] ?? 0),
+        );
+    expect(await turn()).toBe(0);
+    await page.locator('#lp-who h2').scrollIntoViewIfNeeded();
+    await expect.poll(turn).toBeGreaterThan(5);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect.poll(turn).toBe(0);
 
     // Герб: под весами — спираль Бернулли, у всех трёх символов в списке — значки.
     const emb = page.locator('#lp-emb');
@@ -595,15 +645,46 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
     expect(Math.hypot(mark.ax - 11, mark.ay - 12.6)).toBeLessThan(2.5);
     expect(mark.bx - 11).toBeGreaterThan(5);
 
-    // «Возможности»: 12 плиток, у каждой свой значок; при раскрытии плитки значок оживает.
-    const icons = page.locator('#lp-features .lp-tile .lp-fi');
-    await expect(icons).toHaveCount(12);
+    // «Возможности» (прототип v144): 14 карточек, у каждой свой значок и до трёх примеров; сверху шесть
+    // главных, описание видно сразу, остальные восемь — по «Все функции».
+    const features = page.locator('#lp-features');
+    const icons = features.locator('.lp-fcd .lp-fi');
+    await expect(icons).toHaveCount(14);
     const kinds = await icons.evaluateAll((list) => list.map((x) => x.classList[1]));
-    expect(new Set(kinds).size).toBe(12);
-    const tile = page.locator('#lp-features').getByRole('button', { name: /^Задачи/ });
-    await tile.click();
-    await expect(tile).toHaveAttribute('aria-expanded', 'true');
-    await expect(tile).toHaveClass(/(^| )fx( |$)/);
+    expect(new Set(kinds).size).toBe(14);
+    const top = features.locator('.lp-fgrid:not(.lp-frest) .lp-fcd');
+    await expect(top.locator('h3')).toHaveText([
+      'Отчёты создаются сами',
+      'Сроки по закону',
+      'Уведомления',
+      'Напоминания в Telegram',
+      'Деньги на налоги',
+      'Страница для клиента',
+    ]);
+    await expect(features.locator('.lp-frest .lp-fcd')).toHaveCount(8);
+    const bell = top.filter({ hasText: 'Уведомления' });
+    await bell.scrollIntoViewIfNeeded();
+    await expect(bell.locator('p')).toBeVisible();
+    await expect(bell.locator('.lp-fch i')).toHaveText([
+      'Через 3 дня срок',
+      'Клиент прислал чек',
+      'Новая задача',
+    ]);
+    // Карточка не кнопка: раскрывать нечего, описание на виду.
+    await expect(features.getByRole('button', { name: /^Уведомления/ })).toHaveCount(0);
+    await expect(features.locator('.lp-frest .lp-fcd').first()).toBeHidden();
+    await features.locator('.lp-more').click();
+    await expect(features.locator('.lp-frest .lp-fcd h3').first()).toBeVisible();
+    await expect(features.locator('.lp-frest .lp-fcd h3')).toHaveText([
+      'Подбор налогов',
+      'Задачи',
+      'Плата за обслуживание',
+      'Файлы',
+      'Просмотр файлов',
+      'Показатели клиентов',
+      'Роли и права',
+      'Обучение внутри',
+    ]);
 
     // Подвал: версия платформы — номером, без даты.
     const foot = page.locator('.lp-foot');
@@ -614,7 +695,7 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
   test.describe('«уменьшить движение»', () => {
     test.use({ reducedMotion: 'reduce' });
 
-    test('(проверка прототипа v78) при «уменьшить движение» нет заставки и анимаций: линия Бернулли нарисована целиком, всё видно сразу', async ({
+    test('(проверка прототипа v78 и v146) при «уменьшить движение» нет заставки и анимаций: спираль сразу стоит на фоне и не поворачивается, всё видно сразу', async ({
       page,
     }) => {
       await withIntro(page);
@@ -623,14 +704,20 @@ test.describe('Этап 3: лендинг v78 — заставка, линия �
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(HERO);
       await expect(page.locator('.lp-intro')).toHaveCount(0);
       await expect(page.locator('.land')).not.toHaveClass(/lp-anim/);
-      await expect(page.locator('#lp-path .lp-knots circle.on')).toHaveCount(9);
+      // Спираль сразу на фоне: не растёт из знака и при прокрутке не поворачивается.
+      const spiral = page.locator('#lp-bgsp');
+      await expect(spiral).not.toHaveClass(/(^| )(pre|grow0|growing|over)( |$)/);
+      await page.locator('#lp-who h2').scrollIntoViewIfNeeded();
+      await expect(page.locator('.lp-bgsp-s')).toHaveCSS(
+        'transform',
+        /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/,
+      );
       await expect(page.locator('#lp-who h2')).toHaveCSS('opacity', '1');
       await expect(page.locator('#lp-change .lp-fc').first()).toHaveClass(/now/);
-      // Значок плитки «Возможностей» при раскрытии не оживает.
-      const tile = page.locator('#lp-features').getByRole('button', { name: /^Задачи/ });
-      await tile.click();
-      await expect(tile).toHaveAttribute('aria-expanded', 'true');
-      await expect(page.locator('#lp-features .lp-tile.fx')).toHaveCount(0);
+      // Карточки «Возможностей» не оживают.
+      await page.locator('#lp-features h2').scrollIntoViewIfNeeded();
+      await expect(page.locator('#lp-features .lp-fcd').first()).toBeVisible();
+      await expect(page.locator('#lp-features .lp-fcd.fx')).toHaveCount(0);
     });
   });
 });

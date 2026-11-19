@@ -21,7 +21,8 @@ export function Chip({
   return (
     <span
       data-chip={id ?? ''}
-      className="inline-flex max-w-full items-center gap-1 rounded-full bg-info-bg py-0.5 pr-1 pl-2.5 text-[12.5px] font-[550] text-info"
+      // На телефоне плашка — не ниже 44 px (прототип v131 css/mobile.css `.chip`).
+      className="inline-flex max-w-full items-center gap-1 rounded-full bg-info-bg py-0.5 pr-1 pl-2.5 text-[12.5px] font-[550] text-info max-md:min-h-11"
     >
       <span className="truncate">{children}</span>
       {onClear && (

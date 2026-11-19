@@ -15,7 +15,7 @@ function Chevron() {
 }
 
 /** Содержимое раскрытого блока появляется плавно (прототип `slideUp`), без движения — сразу. */
-const BODY_CLASS = 'animate-slide-up motion-reduce:animate-none';
+const BODY_CLASS = 'animate-rise motion-reduce:animate-none';
 
 /**
  * Свёрнутый блок (решение заказчика 17.11.2026, «Меньше текста, понятнее, плавнее»; прототип v134

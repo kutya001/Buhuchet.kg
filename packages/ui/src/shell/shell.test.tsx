@@ -13,6 +13,7 @@ import { BottomNav, PhoneMenu, SheetAction, type PhoneModule } from './phone-nav
 import { Brand, BrandMark, SideFootButton, SideNav, SideOrg } from './side-nav';
 import { TabPager } from './tab-pager';
 import { TabRow, type AddAction } from './tab-row';
+import { PAGE_SWIPED_ATTR } from './app-frame';
 import { TopBar, type TopBarProps } from './top-bar';
 import type { ShellLinkProps, ShellModule } from './types';
 
@@ -235,19 +236,21 @@ describe('низ левой панели', () => {
 });
 
 const TOP: TopBarProps = {
-  title: 'Отчеты для сдачи',
-  tab: 'На неделе',
+  title: 'Отчёты',
+  fullTitle: 'Отчеты для сдачи · На неделе',
   menu: { label: 'Меню', onClick: () => {} },
-  info: { label: 'Описание модуля', content: <p>Все отчёты</p> },
+  info: {
+    label: 'Что здесь: подсказка по модулю',
+    title: 'Что здесь',
+    content: () => <p>Все отчёты</p>,
+  },
   search: {
     value: 'НДС',
     onChange: () => {},
     placeholder: 'Поиск по текущей вкладке',
-    scope: 'На неделе',
     openLabel: 'Поиск',
   },
   clock: <time>10:33</time>,
-  help: { label: 'Помощь', title: 'Помощь по модулю', onClick: () => {} },
   theme: { label: 'Тема', title: 'Сменить тему', onToggle: () => {} },
 };
 
@@ -279,18 +282,35 @@ describe('TopBar — верхняя панель', () => {
     expect(yellow).toMatch(/title="Срок не прошёл"[^>]*class="[^"]*bg-warn /);
   });
 
-  it('«Меню», модуль и вкладка, поиск по вкладке, время, «?» и тема', () => {
+  it('(прототип v138) «Меню», короткое название с одним «?», поиск по вкладке, время и тема', () => {
     const html = renderToStaticMarkup(<TopBar {...TOP} />);
     expect(html).toContain('<header');
     expect(html).toContain('aria-label="Меню"');
     expect(html).toContain('title="Отчеты для сдачи · На неделе"');
-    expect(html).toMatch(/<b[^>]*>Отчеты для сдачи<\/b>/);
+    // В панели — короткое название; полное и вкладка — только в подсказке.
+    expect(html).toMatch(/<b[^>]*>Отчёты<\/b>/);
+    expect(html).not.toMatch(/<small/);
     expect(html).toContain('role="search"');
     expect(html).toContain('value="НДС"');
     expect(html).toContain('placeholder="Поиск по текущей вкладке"');
     expect(html).toContain('<time>10:33</time>');
-    expect(html).toContain('aria-label="Помощь"');
     expect(html).toContain('aria-label="Тема"');
+    // Одно «?» на модуль — у названия; прежних «ⓘ», значка видео и «?» справа нет.
+    expect(html.match(/data-module-help/g)).toHaveLength(1);
+    expect(html).toMatch(
+      /aria-label="Что здесь: подсказка по модулю" title="Что здесь" aria-expanded="false"/,
+    );
+    expect(html).toContain(ICONS.help);
+    expect(html).not.toContain(ICONS.info);
+    expect(html).not.toContain('data-module-help-video');
+    expect(html.indexOf('data-module-help')).toBeLessThan(html.indexOf('role="search"'));
+  });
+
+  it('(прототип v138) часов и переключателя темы на телефоне нет; поле поиска — 44 px', () => {
+    const html = renderToStaticMarkup(<TopBar {...TOP} />);
+    expect(html).toMatch(/<div class="[^"]*max-md:hidden">\s*<time>10:33<\/time>/);
+    expect(html).toMatch(/data-theme-toggle="true"[^>]*class="[^"]*max-md:hidden"/);
+    expect(html).toMatch(/type="search"[^>]*class="[^"]*max-md:h-11/);
   });
 
   it('на телефоне поиск свёрнут в значок «Поиск», поле скрыто до нажатия', () => {
@@ -338,9 +358,9 @@ describe('TopBar — верхняя панель', () => {
     );
     expect(off).toContain(ICONS.maximize);
     expect(off).not.toContain(ICONS.minimize);
-    // Кнопка стоит после часов и до «?».
+    // Кнопка стоит после часов и до темы.
     expect(off.indexOf('data-wide-toggle')).toBeGreaterThan(off.indexOf('<time>10:33</time>'));
-    expect(off.indexOf('data-wide-toggle')).toBeLessThan(off.indexOf('aria-label="Помощь"'));
+    expect(off.indexOf('data-wide-toggle')).toBeLessThan(off.indexOf('data-theme-toggle'));
     const on = renderToStaticMarkup(
       <TopBar
         {...TOP}
@@ -359,8 +379,8 @@ describe('TopBar — верхняя панель', () => {
     expect(html).toContain(ICONS.sun);
   });
 
-  it('без вкладки — только название модуля; окошки «ⓘ» и «?» закрыты', () => {
-    const html = renderToStaticMarkup(<TopBar {...TOP} tab={null} />);
+  it('без вкладки — в подсказке только название модуля; окошко «?» закрыто', () => {
+    const html = renderToStaticMarkup(<TopBar {...TOP} fullTitle="Отчеты для сдачи" />);
     expect(html).toContain('title="Отчеты для сдачи"');
     expect(html).not.toContain('Все отчёты');
     expect(html).toContain('aria-expanded="false"');
@@ -388,6 +408,25 @@ describe('TabRow — вкладки и «+ Добавить»', () => {
     expect(html).toContain('role="tablist" aria-label="Отчеты"');
     expect(html).toMatch(/href="\/app\/reports\/overdue" role="tab" aria-selected="true"/);
     expect(html).toMatch(/href="\/app\/reports\/week" role="tab" aria-selected="false"/);
+  });
+
+  it('(прототип v141) круглая «+» телефона умеет уезжать при прокрутке: на месте не помечена', () => {
+    const html = renderToStaticMarkup(
+      <TabRow
+        tabs={TABS}
+        activeTab="overdue"
+        label="Отчеты"
+        addActions={[{ id: 'new', label: 'Отчёт', icon: 'plus' }]}
+        addLabel="Добавить"
+        onAdd={() => {}}
+      />,
+    );
+    // Пока список не прокручивали, кнопка на месте; уезжает она по отметке обёртки.
+    expect(html).not.toContain(' data-fab-away=');
+    expect(html).toMatch(/group\/fab contents/);
+    expect(html).toContain('group-data-fab-away/fab:translate-y-24');
+    expect(html).toContain('group-data-fab-away/fab:pointer-events-none');
+    expect(html).toContain('motion-reduce:transition-none');
   });
 
   it('группы вкладок: черта только между группами, подсказка — «Группа · Название»', () => {
@@ -543,7 +582,7 @@ describe('Popover и меню действий', () => {
     );
     expect(open).toContain('aria-expanded="true"');
     expect(open).toMatch(
-      /role="menu" aria-label="Добавить" data-overlay="true" data-popover="true" class="[^"]*right-0/,
+      /role="menu" aria-label="Добавить" data-overlay="true" data-popover="true" data-leave="animate-fade-out max-md:animate-sheet-out" class="[^"]*right-0/,
     );
     expect(open).toContain('<p>текст</p>');
   });
@@ -607,7 +646,6 @@ describe('телефон: нижняя панель и панель «Меню»
   it('«Другие модули» — по два в строку, текущий отмечен; ниже — организация и «Выйти»', () => {
     const html = renderToStaticMarkup(
       <PhoneMenu
-        mode="Business"
         modules={PHONE_MODULES.slice(1)}
         active="cps"
         label="Другие модули"
@@ -615,9 +653,9 @@ describe('телефон: нижняя панель и панель «Меню»
         footer={<span>низ</span>}
       />,
     );
-    expect(html).toContain('Buhuchet.kg');
-    expect(html).toContain('Business');
-    expect(html).toMatch(/<nav aria-label="Другие модули" class="[^"]*grid-cols-2/);
+    // Прототип v138: названия платформы и режима в панели нет.
+    expect(html).not.toContain('Buhuchet.kg');
+    expect(html).toMatch(/^<nav aria-label="Другие модули" class="[^"]*grid-cols-2/);
     expect(html).toMatch(/href="\/app\/cps\/all" aria-current="page"/);
     expect(html).not.toContain('Главная');
     expect(html.indexOf('Задачи')).toBeLessThan(html.indexOf('<span>низ</span>'));
@@ -626,7 +664,6 @@ describe('телефон: нижняя панель и панель «Меню»
   it('нет других модулей — нет и заголовка списка; выбор модуля передаёт модуль', () => {
     const empty = renderToStaticMarkup(
       <PhoneMenu
-        mode="Business"
         modules={[]}
         active={null}
         label="Другие модули"
@@ -639,7 +676,6 @@ describe('телефон: нижняя панель и панель «Меню»
     const Link = (p: ShellLinkProps) => <a {...p} />;
     const [, second] = find<ShellLinkProps>(
       PhoneMenu({
-        mode: 'Business',
         modules: PHONE_MODULES,
         active: null,
         label: 'Другие модули',
@@ -691,7 +727,13 @@ describe('телефон: нижняя панель и панель «Меню»
         {() => <p>пункты</p>}
       </BottomSheet>,
     );
-    expect(closed).toMatch(/<div hidden="" aria-hidden="true" class="fixed inset-0/);
+    // Затемнение закрытой панели невидимо и не нажимается; гаснет и проявляется плавно (прототип v131).
+    expect(closed).toMatch(
+      /<div aria-hidden="true" data-open="false" class="invisible fixed inset-0/,
+    );
+    expect(closed).toContain('opacity-0');
+    expect(closed).toContain('data-[open=true]:opacity-100');
+    expect(closed).toContain('motion-reduce:transition-none');
     expect(closed).toContain('data-open="false"');
     expect(closed).toContain('invisible');
     expect(closed).toContain('translate-y-[110%]');
@@ -704,7 +746,7 @@ describe('телефон: нижняя панель и панель «Меню»
     expect(open).toMatch(
       /role="dialog" aria-modal="true" aria-label="Меню" tabindex="-1" data-open="true"/,
     );
-    expect(open).not.toContain('<div hidden=""');
+    expect(open).toMatch(/<div aria-hidden="true" data-open="true" class="invisible fixed inset-0/);
     expect(open).toContain('data-swipe-handle="true"');
     // Пока панель открыта, вкладки свайпом не листаются; закрытая — не мешает.
     expect(open).toContain('data-overlay="true"');
@@ -789,6 +831,11 @@ describe('AppFrame и значки', () => {
     expect(html).toMatch(/^<div data-nav="hidden"/);
     expect(html).toContain('<main aria-label="Контрагенты"');
     expect(html).toContain('<p>экран</p>');
+    // Страница помечена для свайпа вкладок; при первом показе она на месте — проявляется только при
+    // смене модуля или вкладки (прототип v131).
+    expect(html).toContain('data-page=""');
+    expect(html).not.toContain('animate-fade-in');
+    expect(html).not.toContain(PAGE_SWIPED_ATTR);
     const shown = renderToStaticMarkup(
       <AppFrame navHidden={false} side={null} topBar={null}>
         {null}

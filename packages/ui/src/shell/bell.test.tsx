@@ -7,6 +7,8 @@ import { Bell, bellCountText, bellGroups, type BellProps, type BellRowView } fro
 const labels: BellProps['labels'] = {
   title: 'Уведомления',
   unseen: 'Уведомления: непросмотренных 120',
+  newsDot: 'Уведомления: есть новости',
+  showNews: 'Новости',
   readAll: 'Прочитать все',
   close: 'Закрыть',
   tabs: 'Что показать',
@@ -54,6 +56,17 @@ describe('колокольчик', () => {
     expect(loud).toContain('aria-label="Уведомления: непросмотренных 120"');
     expect(loud).toContain('text-warn');
     expect(loud).toMatch(/data-bell-count=""[^>]*>99\+<\/span>/);
+  });
+
+  it('(прототип v138) только новости версий — серая точка без числа; с рабочими уведомлениями — число', () => {
+    const news = renderToStaticMarkup(<Bell {...props({ news: true })} />);
+    expect(news).toContain('aria-label="Уведомления: есть новости"');
+    expect(news).toMatch(/data-bell-news=""[^>]*class="[^"]*bg-faint/);
+    expect(news).not.toContain('data-bell-count');
+    expect(news).not.toContain('text-warn');
+    const both = renderToStaticMarkup(<Bell {...props({ unseen: 2, news: true })} />);
+    expect(both).toMatch(/data-bell-count=""[^>]*>2<\/span>/);
+    expect(both).not.toContain('data-bell-news');
   });
 
   it('группы «Сегодня / Вчера / Раньше» — подряд по списку', () => {

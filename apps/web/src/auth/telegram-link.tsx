@@ -116,7 +116,7 @@ export function TelegramLinkRow({
           {t('profile.tg_copy')}
         </button>
       </div>
-      <div className="text-[11.5px] leading-[1.4] text-faint">
+      <div className="text-[12px] leading-[1.4] text-muted">
         {t('profile.tg_hint', { minutes: TELEGRAM_LINK_TTL_MINUTES })}
         {previous ? (
           <span data-telegram-previous="">

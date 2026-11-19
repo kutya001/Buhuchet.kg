@@ -10,6 +10,9 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
+import { useFadeAway } from './fade-away';
+import { PHONE_QUERY, useMediaQuery } from './use-media';
 import { useSwipeDown } from './use-swipe-down';
 
 const PLACEMENTS = {
@@ -47,6 +50,18 @@ const HOVER_CLOSE_MS = 220;
 /** Отступ окошка от края экрана (openPop прототипа: `x = max(8, min(x, W - w - 8))`). */
 const EDGE = 8;
 
+/**
+ * На телефоне любое меню и всплывающее окошко — лист снизу (прототип v131, css/mobile.css
+ * `.pop:not(.bell-pop)`; решение заказчика 17.11.2026): во всю ширину, не выше 80 % экрана, с ручкой
+ * сверху и затемнением вокруг; выезжает снизу и уезжает вниз. Место, заданное в `style`, на телефоне не
+ * действует.
+ */
+export const PHONE_SHEET =
+  "max-md:fixed max-md:top-auto! max-md:right-0! max-md:bottom-0! max-md:left-0! max-md:m-0 max-md:w-full max-md:max-w-none max-md:min-w-0 max-md:max-h-[80dvh] max-md:translate-none! max-md:rounded-t-2xl max-md:rounded-b-none max-md:border-b-0 max-md:px-2 max-md:pt-[18px] max-md:pb-[calc(10px+env(safe-area-inset-bottom,0px))] max-md:shadow-[0_0_0_100vmax_var(--bu-cover),var(--bu-shadow-l)] max-md:animate-sheet-in max-md:before:absolute max-md:before:top-[7px] max-md:before:left-1/2 max-md:before:-ml-5 max-md:before:h-1 max-md:before:w-10 max-md:before:rounded max-md:before:bg-line-strong max-md:before:content-['']";
+
+/** Уход меню и окошка: на ПК гаснет, на телефоне лист уезжает вниз (`useFadeAway`). */
+export const POP_LEAVE = 'animate-fade-out max-md:animate-sheet-out';
+
 /** Сдвиг по горизонтали, чтобы окошко `left…right` не выходило за край экрана шириной `width`. */
 export function edgeShift(left: number, right: number, width: number): number {
   if (left < EDGE) return EDGE - left;
@@ -56,7 +71,8 @@ export function edgeShift(left: number, right: number, width: number): number {
 
 /**
  * Всплывающее окошко у кнопки (прототип ui/popups.js, openPop; стиль `.pop`): описание модуля «ⓘ»,
- * «?» и меню «+ Добавить». Закрывается повторным нажатием, клавишей Esc, нажатием вне окошка, кнопкой
+ * «?» и меню «+ Добавить». На телефоне — лист снизу (`PHONE_SHEET`), рисуется в `document.body`: так его
+ * не обрезает и не сдвигает окно или панель, внутри которых стоит кнопка. Закрывается повторным нажатием, клавишей Esc, нажатием вне окошка, кнопкой
  * «Назад» (переход при этом не отменяется) и на телефоне протяжкой вниз; при открытии нажатием фокус
  * переходит в окошко, при закрытии по Esc — обратно на кнопку. Пока окошко открыто, свайп по вкладкам
  * не начинается (`data-overlay`), а Esc внутри окна закрывает сначала окошко (`data-popover`).
@@ -79,6 +95,7 @@ export function Popover({
   const box = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const phone = useMediaQuery(PHONE_QUERY);
   const close = useCallback(() => setOpenBy(null), []);
   // Открытое наведением нажатие оставляет открытым (как в прототипе), открытое нажатием — закрывает.
   const toggle = useCallback(() => setOpenBy((v) => (v === 'click' ? null : 'click')), []);
@@ -98,18 +115,22 @@ export function Popover({
       );
     }
   };
-  useEffect(() => () => clearTimeout(timer.current), []);
+  // Открыли или закрыли (нажатием, Esc, «Назад») — отложенное наведение снимается: иначе окошко,
+  // закрытое раньше 300 мс после наведения, открывалось бы снова само.
+  useEffect(() => () => clearTimeout(timer.current), [openBy]);
   useSwipeDown(panel, { enabled: open, onClose: close });
+  useFadeAway(panel, open);
 
   // Окошко у кнопки посреди ряда (например, «Столбцы» на телефоне) не уходит за край экрана.
   useLayoutEffect(() => {
     const el = panel.current;
     if (!open || !el) return;
     el.style.translate = '';
+    if (phone) return;
     const rect = el.getBoundingClientRect();
     const shift = edgeShift(rect.left, rect.right, document.documentElement.clientWidth);
     if (shift) el.style.translate = `${shift}px 0`;
-  }, [open]);
+  }, [open, phone]);
 
   useEffect(() => {
     if (!openBy) return;
@@ -117,7 +138,10 @@ export function Popover({
       panel.current?.querySelector<HTMLElement>('a[href],button:not([disabled])')?.focus();
     }
     const outside = (e: PointerEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpenBy(null);
+      const target = e.target as Node;
+      // На телефоне лист нарисован вне обёртки кнопки.
+      if (box.current?.contains(target) || panel.current?.contains(target)) return;
+      setOpenBy(null);
     };
     const escape = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -144,19 +168,24 @@ export function Popover({
       onPointerLeave={hover ? pointerLeave : undefined}
     >
       {trigger({ open, toggle, id })}
-      {open && (
-        <div
-          ref={panel}
-          id={id}
-          role={role}
-          aria-label={label}
-          data-overlay
-          data-popover
-          className={`absolute z-[70] max-h-[min(460px,calc(100dvh-24px))] touch-pan-y w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] animate-slide-up overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${PLACEMENTS[placement]} ${padded ? 'flex flex-col gap-2.5 p-3' : 'p-1.5'}`}
-        >
-          {children(close)}
-        </div>
-      )}
+      {open &&
+        (() => {
+          const sheet = (
+            <div
+              ref={panel}
+              id={id}
+              role={role}
+              aria-label={label}
+              data-overlay
+              data-popover
+              data-leave={POP_LEAVE}
+              className={`absolute z-[70] max-h-[min(460px,calc(100dvh-24px))] touch-pan-y w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] animate-rise overflow-auto rounded-xl border border-line-strong bg-raised text-ink shadow-pop ${PLACEMENTS[placement]} ${padded ? 'flex flex-col gap-2.5 p-3' : 'p-1.5'} ${PHONE_SHEET}`}
+            >
+              {children(close)}
+            </div>
+          );
+          return phone ? createPortal(sheet, document.body) : sheet;
+        })()}
     </span>
   );
 }

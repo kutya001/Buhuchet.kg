@@ -921,7 +921,7 @@ function ReceiptModal({
           </Field>
         </FormGrid>
         <section className="flex min-w-0 flex-col gap-2.5" data-receipt-detail="">
-          <h3 className="m-0 flex flex-wrap items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+          <h3 className="m-0 flex flex-wrap items-center gap-2 text-[13.5px] font-[650] text-muted">
             <span className="flex-1">{t('money.in.detail')}</span>
             <button
               type="button"
@@ -1092,7 +1092,7 @@ function ReceiptModal({
               </Pill>
             ) : null}
           </div>
-          <span className="text-[11.5px] leading-[1.4] text-faint">
+          <span className="text-[12px] leading-[1.4] text-muted">
             {t('money.in.hint')}
             {feeRows.length ? ` ${t('fee.receipt.hint')}` : ''}
           </span>

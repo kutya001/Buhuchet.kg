@@ -91,7 +91,7 @@ let chosen: ActivityPeriod | null = null;
 
 /** Кнопка-значок листания (прототип `.icon-btn.sm.raised`). */
 const RAISED_ICON =
-  'inline-grid h-[27px] w-[27px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-45';
+  'inline-grid h-[27px] w-[27px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-flat hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-45';
 
 type Dow = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 type MonthNo = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;

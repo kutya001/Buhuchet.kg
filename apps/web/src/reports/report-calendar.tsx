@@ -35,6 +35,7 @@ import {
   REPORT_AUDIT,
   REPORT_DEFAULT_SORT,
   reportColumns,
+  reportShortCard,
   reportDefaultVisible,
   reportTone,
 } from './report-columns';
@@ -64,7 +65,7 @@ function monthTitle(t: Translate, month: string): string {
 }
 
 const RAISED_ICON =
-  'inline-grid h-[33px] w-[33px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-btn hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
+  'inline-grid h-[33px] w-[33px] flex-none cursor-pointer place-items-center rounded-lg border-0 bg-btn text-muted shadow-flat hover:bg-btn-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 /** День сетки (`.cday`): нерабочий — фоном, чужой месяц — бледно, сегодня — рамкой, выбранный — тенью. */
 function dayClass(d: Day, o: { inMonth: boolean; today: boolean; selected: boolean }): string {
@@ -147,7 +148,7 @@ export function ReportCalendarTab() {
           {t('report.cal.today')}
         </button>
         <div className="flex-1" />
-        <span className="text-[11.5px] leading-[1.4] text-faint">{t('report.cal.hint')}</span>
+        <span className="text-[12px] leading-[1.4] text-muted">{t('report.cal.hint')}</span>
       </div>
       {query.isError && !data ? (
         <Note tone="bad">
@@ -221,14 +222,14 @@ export function ReportCalendarTab() {
       </div>
       {day ? (
         <>
-          <h3 className="m-0 mt-1.5 flex items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+          <h3 className="m-0 mt-1.5 flex items-center gap-2 text-[13.5px] font-[650] text-muted">
             {t('report.cal.list', { date: formatDateRu(day) })}
             {picked?.holiday ? ` · ${picked.holiday}` : ''}
           </h3>
           <ReportDayList key={day} day={day} reports={reports} />
         </>
       ) : (
-        <span className="text-[11.5px] leading-[1.4] text-faint">{t('report.cal.pick')}</span>
+        <span className="text-[12px] leading-[1.4] text-muted">{t('report.cal.pick')}</span>
       )}
       {mass.dialog}
       {reports.dialogs}
@@ -259,6 +260,11 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
         onReceive,
       }),
     [t, access.reportConfirm, summary.data?.waitDays, phone, taxpay, onReceive],
+  );
+  // Телефон (прототип v141): короткая карточка отчёта.
+  const phoneCard = useMemo(
+    () => reportShortCard(t, { confirm: access.reportConfirm }),
+    [t, access.reportConfirm],
   );
   const defaultVisible = useMemo(() => reportDefaultVisible(false, taxpay), [taxpay]);
   const view = useViewSettings('reports.calendar');
@@ -323,6 +329,7 @@ function ReportDayList({ day, reports }: { day: string; reports: ReportActions }
         empty={<EmptyState icon="calendar" title={t('report.cal.empty')} />}
         rowKey={(r) => r.id}
         titleKey="cp"
+        phoneCard={phoneCard}
         kanban={kanban}
         rowTone={reportTone}
         label={t('report.cal.list', { date: formatDateRu(day) })}

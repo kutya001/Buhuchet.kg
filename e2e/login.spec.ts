@@ -561,10 +561,10 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
       await expect(profile.getByText('Текущий пароль неверный')).toBeVisible();
     });
 
-    await test.step('«Назад» с несохранённым паролем спрашивает, «Отмена» оставляет профиль', async () => {
+    await test.step('«Назад» с несохранённым паролем спрашивает, «Остаться» оставляет профиль', async () => {
       await page.evaluate(() => history.back());
       await expect(discard).toBeVisible();
-      await discard.getByRole('button', { name: 'Отмена' }).click();
+      await discard.getByRole('button', { name: 'Остаться' }).click();
       await expect(discard).toBeHidden();
       await expect(profile).toBeVisible();
       await expect(profile.getByLabel('Новый пароль')).toHaveValue('Новый-пароль-e2e-3');
@@ -577,7 +577,7 @@ test.describe('Этап 1: экраны входа и «Мой профиль»'
         const swipe = await finger(page);
         await swipe.drag(head, { x: head.x, y: head.y + Math.min(box.height / 4, 160) + 30 });
         await expect(discard).toBeVisible();
-        await discard.getByRole('button', { name: 'Отмена' }).click();
+        await discard.getByRole('button', { name: 'Остаться' }).click();
         await expect(profile).toBeVisible();
       });
     }

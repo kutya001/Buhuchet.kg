@@ -58,7 +58,7 @@ interface ImportTable {
 const TH =
   'border-b border-line px-2 py-1.5 text-left align-middle text-[11.5px] font-[650] text-faint';
 const TD = 'border-b border-line px-2 py-[7px] align-middle';
-const SEC = 'm-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase';
+const SEC = 'm-0 text-[13.5px] font-[650] text-muted';
 
 const templateQuery = queryOptions({
   queryKey: ['contractors', 'import', 'template'],
@@ -377,7 +377,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
             </table>
           </div>
         </fieldset>
-        <div className="text-[11.5px] leading-[1.4] text-faint">{t('cp.import.table_hint')}</div>
+        <div className="text-[12px] leading-[1.4] text-muted">{t('cp.import.table_hint')}</div>
       </div>
     </Modal>
   );
@@ -453,7 +453,7 @@ function CheckCell({ check }: { check: ContractorImportRow | null }) {
             {t(`cp.import.errors.${pluralForm(n)}`, { n: formatCount(n) })}
           </Pill>
         </span>
-        <div className="max-w-[220px] text-[11.5px] leading-[1.4] whitespace-normal text-faint">
+        <div className="max-w-[220px] text-[12px] leading-[1.4] whitespace-normal text-muted">
           {why}
         </div>
       </div>
@@ -465,7 +465,7 @@ function CheckCell({ check }: { check: ContractorImportRow | null }) {
         {t('cp.import.row_ready')}
       </Pill>
       {check.warnings.length ? (
-        <div className="max-w-[220px] text-[11.5px] leading-[1.4] whitespace-normal text-faint">
+        <div className="max-w-[220px] text-[12px] leading-[1.4] whitespace-normal text-muted">
           {check.warnings.join('; ')}
         </div>
       ) : null}
@@ -624,7 +624,7 @@ function TemplateDialog({
             </table>
           </div>
         </section>
-        <div className="text-[11.5px] leading-[1.4] text-faint">{t('cp.import.tpl.hint')}</div>
+        <div className="text-[12px] leading-[1.4] text-muted">{t('cp.import.tpl.hint')}</div>
       </div>
     </Modal>
   );

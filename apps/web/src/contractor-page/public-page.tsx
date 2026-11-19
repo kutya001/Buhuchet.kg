@@ -139,7 +139,7 @@ function ForgotCode({ slug, inn }: { slug: string; inn: string }) {
         <span
           data-pub-forgot-answer={answer.ok ? 'sent' : ''}
           role="status"
-          className={`text-center text-[11.5px] leading-[1.4] ${answer.ok ? 'text-ok' : 'text-faint'}`}
+          className={`text-center text-[12px] leading-[1.4] ${answer.ok ? 'text-ok' : 'text-muted'}`}
         >
           {answer.text}
         </span>

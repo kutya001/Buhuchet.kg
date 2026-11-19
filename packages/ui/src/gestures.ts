@@ -167,3 +167,17 @@ export function afterTransition(el: HTMLElement, ms: number, done: () => void) {
   el.addEventListener('transitionend', finish);
   setTimeout(finish, ms + 60);
 }
+
+/** «+» телефона: шаг прокрутки меньше этого не считается (прототип v141, ui/shell.js). */
+export const FAB_STEP = 8;
+/** «+» телефона уезжает только ниже этой прокрутки. */
+export const FAB_FROM = 120;
+
+/**
+ * Круглая «+» телефона при прокрутке (прототип v141): вниз и ниже `FAB_FROM` — уезжает (`true`),
+ * вверх — возвращается (`false`); шаг меньше `FAB_STEP` — `null`, положение не меняется.
+ */
+export function fabAway(y: number, last: number): boolean | null {
+  if (Math.abs(y - last) < FAB_STEP) return null;
+  return y > last && y > FAB_FROM;
+}

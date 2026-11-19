@@ -537,7 +537,7 @@ function TemplateTable({ data }: { data: KpiImportTemplatePreview }) {
   const key = `${td} bg-info-bg`;
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="m-0 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+      <h3 className="m-0 text-[13.5px] font-[650] text-muted">
         {t('kpi.import.preview')}
         {data.lines > PREVIEW_ROWS
           ? ` · ${t('kpi.import.preview_first', { shown: PREVIEW_ROWS, n: formatCount(data.lines) })}`

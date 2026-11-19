@@ -365,7 +365,7 @@ function StepRow({ step, next }: { step: KbStep; next: boolean }) {
             {step.title}
           </b>
         </div>
-        <div className="text-[11.5px] leading-[1.4] text-faint">
+        <div className="text-[12px] leading-[1.4] text-muted">
           {step.why}
           {step.articleId ? (
             <>
@@ -493,7 +493,7 @@ function Offers({ state }: { state: KbState }) {
   const canOrg = access.can('org');
   return (
     <Box title={t('kb.offers.title')}>
-      <span className="-mt-1 text-[11.5px] leading-[1.4] text-faint">
+      <span className="-mt-1 text-[12px] leading-[1.4] text-muted">
         {t(canOrg ? 'kb.offers.hint_org' : 'kb.offers.hint')}
       </span>
       <div className="flex flex-col">
@@ -504,7 +504,7 @@ function Offers({ state }: { state: KbState }) {
           >
             <span className="min-w-0 flex-1">
               <b>{t(`org.feature.${o.feature as Feature}`)}</b>
-              <div className="text-[11.5px] leading-[1.4] text-faint">{o.benefit}</div>
+              <div className="text-[12px] leading-[1.4] text-muted">{o.benefit}</div>
             </span>
             {canOrg ? (
               <button

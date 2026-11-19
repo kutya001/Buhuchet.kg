@@ -81,6 +81,7 @@ import {
   REPORT_AUDIT,
   REPORT_DEFAULT_SORT,
   reportColumns,
+  reportShortCard,
   reportDefaultVisible,
   reportTone,
 } from '../reports/report-columns';
@@ -123,7 +124,7 @@ const Faint = ({ children }: { children: ReactNode }) => (
   <span className="text-faint">{children}</span>
 );
 const Hint = ({ children }: { children: ReactNode }) => (
-  <span className="block text-[11.5px] leading-[1.4] text-faint">{children}</span>
+  <span className="block text-[12px] leading-[1.4] text-muted">{children}</span>
 );
 
 export interface ContractorCardProps {
@@ -1314,6 +1315,11 @@ function ReportsListTab({
       }),
     [t, access.reportConfirm, phone, taxpay, onReceive],
   );
+  // Телефон (прототип v141): короткая карточка отчёта.
+  const phoneCard = useMemo(
+    () => reportShortCard(t, { confirm: access.reportConfirm, title: 'type' }),
+    [t, access.reportConfirm],
+  );
   const defaultVisible = useMemo(
     () => reportDefaultVisible(false, taxpay).filter((k) => k !== 'cp'),
     [taxpay],
@@ -1379,6 +1385,7 @@ function ReportsListTab({
         empty={<EmptyState icon="file" title={t('cp.card.reports_empty')} />}
         rowKey={(r) => r.id}
         titleKey="type"
+        phoneCard={phoneCard}
         kanban={kanban}
         rowTone={reportTone}
         label={t('cp.card.tab.reports')}

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { cardTab, DEMO_PASSWORD, signIn } from './helpers';
+import { cardTab, DEMO_PASSWORD, discardChanges, signIn } from './helpers';
 import { newContractor } from './reports';
 
 // Доработки 13.11, задача И4 (прототип v95, modules/files.js `attachDlg`, `fileEditDlg`): необязательное
@@ -191,6 +191,7 @@ test.describe('Доработки 13.11: примечание к файлам и
     await dlg.getByRole('button', { name: 'Сохранить' }).click();
     await expect(dlg.getByText('Файл больше 20 МБ')).toBeVisible();
     await dlg.getByRole('button', { name: 'Отмена' }).click();
+    await discardChanges(page);
   });
 
   test('(проверка прототипа v95) чужой файл без права «Удалять файлы»: название и примечание меняются, «Замена недоступна»; сервер замену не начинает', async ({

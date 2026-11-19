@@ -342,7 +342,7 @@ export function RegdocsDialog({
             <span>
               <b>{t('cp.rd.drop')}</b> {t('cp.rd.drop_or')}
             </span>
-            <span className="text-[11.5px] leading-[1.4] text-faint">{t('cp.rd.drop_hint')}</span>
+            <span className="text-[12px] leading-[1.4] text-muted">{t('cp.rd.drop_hint')}</span>
             <input
               ref={input}
               type="file"
@@ -402,7 +402,7 @@ export function RegdocsDialog({
               </Note>
             </div>
           ) : null}
-          <div className="mt-2.5 text-[11.5px] leading-[1.4] text-faint">{t('cp.rd.hint')}</div>
+          <div className="mt-2.5 text-[12px] leading-[1.4] text-muted">{t('cp.rd.hint')}</div>
         </div>
       </Modal>
       {dup ? (
@@ -538,13 +538,13 @@ export function RegdocsGkedBox({
   const like = !gk.code && !gk.choose.length && gk.like.length > 0 && !current;
   return (
     <div className="col-span-full -mt-1.5 flex min-w-0 flex-col gap-[5px]" data-rd-gk="">
-      <div className="text-[11.5px] leading-[1.4] text-faint">
+      <div className="text-[12px] leading-[1.4] text-muted">
         {src}
         {current && gk.code && current === gk.code ? ` · ${t('cp.rd.gk.found')}` : ''}
       </div>
       {pick ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="text-[11.5px] leading-[1.4] text-faint">
+          <span className="text-[12px] leading-[1.4] text-muted">
             {t('cp.rd.gk.choose', { code: gk.raw })}
           </span>
           {gk.choose.map((c) => (
@@ -564,7 +564,7 @@ export function RegdocsGkedBox({
       ) : null}
       {like ? (
         <div className="mt-1.5">
-          <span className="text-[11.5px] leading-[1.4] text-faint">{t('cp.rd.gk.like')}</span>
+          <span className="text-[12px] leading-[1.4] text-muted">{t('cp.rd.gk.like')}</span>
           <div className="mt-1 flex flex-col">
             {gk.like.map((c) => (
               <button

@@ -44,6 +44,7 @@ import {
   REPORT_AUDIT,
   REPORT_DEFAULT_SORT,
   reportColumns,
+  reportShortCard,
   reportDefaultVisible,
   reportTone,
 } from './report-columns';
@@ -148,7 +149,7 @@ export function NoTypesNote() {
               {t('report.no_types.pick')}
             </button>
           ) : (
-            <span className="shrink-0 text-[11.5px] leading-[1.4] text-faint">
+            <span className="shrink-0 text-[12px] leading-[1.4] text-muted">
               {t('report.no_types.owner')}
             </span>
           )}
@@ -196,6 +197,11 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
         onReceive,
       }),
     [t, waiting, access.reportConfirm, s?.waitDays, phone, taxpay, onReceive],
+  );
+  // Телефон (прототип v141): короткая карточка отчёта.
+  const phoneCard = useMemo(
+    () => reportShortCard(t, { confirm: access.reportConfirm }),
+    [t, access.reportConfirm],
   );
   const defaultVisible = useMemo(() => reportDefaultVisible(waiting, taxpay), [waiting, taxpay]);
   const view = useViewSettings(gridKey);
@@ -400,6 +406,7 @@ export function ReportsList({ tab }: { tab: ReportListTab }) {
         empty={empty}
         rowKey={(r) => r.id}
         titleKey="cp"
+        phoneCard={phoneCard}
         kanban={kanban}
         rowTone={reportTone}
         label={t('nav.reports')}

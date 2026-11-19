@@ -46,9 +46,10 @@ export function MenuItems({
       role="menuitem"
       aria-current={item.id === active ? 'true' : undefined}
       onClick={() => onSelect(item.id)}
-      className={`flex w-full cursor-pointer items-start gap-2.5 rounded-[5px] border-0 px-2.5 py-[7px] text-left text-[13px] leading-[1.35] text-ink ${item.id === active ? 'bg-sel font-semibold' : 'bg-transparent hover:bg-row-hover'}`}
+      // На телефоне пункт меню — не ниже 48 px и крупнее (прототип v131 css/mobile.css `.pop .mi`).
+      className={`flex w-full cursor-pointer items-start gap-2.5 rounded-[5px] border-0 px-2.5 py-[7px] text-left text-[13px] leading-[1.35] text-ink max-md:min-h-12 max-md:items-center max-md:px-3 max-md:py-2 max-md:text-[14px] ${item.id === active ? 'bg-sel font-semibold' : 'bg-transparent hover:bg-row-hover'}`}
     >
-      <Icon name={item.icon} className="mt-px text-muted" />
+      <Icon name={item.icon} className="mt-px text-muted max-md:mt-0" />
       <span>
         {item.label}
         {item.badge && (

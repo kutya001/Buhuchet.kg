@@ -157,7 +157,7 @@ function LevelsBox({
           </tbody>
         </table>
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
-          <span className="flex-1 text-[11.5px] leading-[1.4] text-faint">
+          <span className="flex-1 text-[12px] leading-[1.4] text-muted">
             {t('kbadm.levels.hint')}
           </span>
           <button

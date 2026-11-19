@@ -30,6 +30,8 @@ import {
   CONTRACTOR_AUDIT,
   CONTRACTOR_DEFAULT_SORT,
   CONTRACTOR_DEFAULT_VISIBLE,
+  DEBTORS_DEFAULT_SORT,
+  DEBTORS_DEFAULT_VISIBLE,
   contractorColumns,
   contractorTone,
 } from './contractor-columns';
@@ -117,12 +119,14 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
   // `cpKanban`, `show.resp`).
   const boardStaff = useQuery(boardResponsibleQuery(tab));
   const kanban = contractorKanban<ContractorRow>(t, boardStaff.data ?? [], cps.drop);
+  const defaultVisible = tab === 'debtors' ? DEBTORS_DEFAULT_VISIBLE : CONTRACTOR_DEFAULT_VISIBLE;
+  const defaultSort = tab === 'debtors' ? DEBTORS_DEFAULT_SORT : CONTRACTOR_DEFAULT_SORT;
   const list = useListPage({
     gridKey,
     columns,
-    defaultVisible: CONTRACTOR_DEFAULT_VISIBLE,
+    defaultVisible,
     settings: view.settings,
-    defaultSort: CONTRACTOR_DEFAULT_SORT,
+    defaultSort,
     search,
     enabled: view.ready,
     fetchPage,
@@ -289,7 +293,8 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
       <EmptyState
         icon="building"
         title={t(first ? 'cp.empty.first' : 'cp.empty.all')}
-        text={t(first ? 'cp.empty.first_text' : 'cp.empty.all_text')}
+        // Прототип v139: пояснение — только у первого входа, у пустой вкладки его нет.
+        {...(first ? { text: t('cp.empty.first_text') } : {})}
         {...(emptyActions.length ? { actions: emptyActions } : {})}
       />
     );
@@ -306,8 +311,8 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
       <DataGrid
         columns={columns}
         audit={CONTRACTOR_AUDIT}
-        defaultVisible={CONTRACTOR_DEFAULT_VISIBLE}
-        defaultSort={CONTRACTOR_DEFAULT_SORT}
+        defaultVisible={defaultVisible}
+        defaultSort={defaultSort}
         settings={view.settings}
         onSettingsChange={view.save}
         onResetView={() => void view.reset()}

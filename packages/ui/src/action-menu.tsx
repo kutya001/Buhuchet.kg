@@ -8,8 +8,10 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useFadeAway } from './fade-away';
 import { Icon } from './icon';
 import type { IconName } from './icons';
+import { PHONE_SHEET, POP_LEAVE } from './popover';
 import { useSwipeDown } from './use-swipe-down';
 
 /** Пункт меню действий (прототип ui/popups.js, `menu`: `label`, `icon`, `danger`, `disabled`, `reason`, `on`). */
@@ -78,11 +80,11 @@ export function ActionList({
               onPick();
               item.run();
             }}
-            className={`flex w-full cursor-pointer items-start gap-2.5 rounded-[5px] border-0 px-2.5 py-[7px] text-left text-[13px] leading-[1.35] disabled:cursor-not-allowed disabled:opacity-50 ${item.danger ? 'text-danger' : 'text-ink'} ${item.on ? 'bg-sel font-semibold' : 'bg-transparent enabled:hover:bg-row-hover'}`}
+            className={`flex w-full cursor-pointer items-start gap-2.5 rounded-[5px] border-0 px-2.5 py-[7px] text-left text-[13px] leading-[1.35] max-md:min-h-12 max-md:items-center max-md:px-3 max-md:py-2 max-md:text-[14px] disabled:cursor-not-allowed disabled:opacity-50 ${item.danger ? 'text-danger' : 'text-ink'} ${item.on ? 'bg-sel font-semibold' : 'bg-transparent enabled:hover:bg-row-hover'}`}
           >
             <Icon
               name={item.icon ?? 'right'}
-              className={`mt-px ${item.danger ? 'text-danger' : 'text-muted'}`}
+              className={`mt-px max-md:mt-0 ${item.danger ? 'text-danger' : 'text-muted'}`}
             />
             <span>
               {item.label}
@@ -136,7 +138,8 @@ export function menuPosition(
  * открывается правым кликом или долгим нажатием на строке, кнопкой «⋯» и клавишами ContextMenu или
  * Shift+F10. Рисуется в `document.body`, поэтому не обрезается прокруткой таблицы. Закрывается выбором
  * пункта, Esc (фокус возвращается на элемент), нажатием вне меню, кнопкой «Назад» (переход идёт своим
- * чередом, как у `Popover`) и на телефоне протяжкой вниз (ТЗ «Управление свайпами»).
+ * чередом, как у `Popover`) и на телефоне протяжкой вниз (ТЗ «Управление свайпами»). На телефоне —
+ * лист снизу (`PHONE_SHEET`), пункты не ниже 48 px.
  */
 export function ActionMenu({
   items,
@@ -153,6 +156,7 @@ export function ActionMenu({
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   useSwipeDown(box, { enabled: true, onClose });
+  useFadeAway(box, true);
 
   useLayoutEffect(() => {
     const el = box.current;
@@ -197,8 +201,9 @@ export function ActionMenu({
       aria-label={label}
       data-overlay
       data-popover
+      data-leave={POP_LEAVE}
       style={pos ? { left: pos.x, top: pos.y } : { left: 0, top: 0, visibility: 'hidden' }}
-      className="fixed z-[70] max-h-[min(460px,calc(100dvh-24px))] w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] touch-pan-y animate-slide-up overflow-auto rounded-xl border border-line-strong bg-raised p-1.5 text-ink shadow-pop"
+      className={`fixed z-[70] max-h-[min(460px,calc(100dvh-24px))] w-max max-w-[min(360px,calc(100vw-24px))] min-w-[210px] touch-pan-y animate-rise overflow-auto rounded-xl border border-line-strong bg-raised p-1.5 text-ink shadow-pop ${PHONE_SHEET}`}
     >
       <ActionList items={items} onPick={onClose} />
     </div>,

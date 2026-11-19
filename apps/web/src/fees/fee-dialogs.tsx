@@ -85,7 +85,7 @@ const fieldOf = (details: unknown): string | undefined =>
 /** Подзаголовок раздела окна (прототип `.box.flat h3`). */
 function SectionTitle({ title, actions }: { title: string; actions?: ReactNode }) {
   return (
-    <h3 className="m-0 flex flex-wrap items-center gap-2 text-[11.5px] font-bold tracking-[.08em] text-faint uppercase">
+    <h3 className="m-0 flex flex-wrap items-center gap-2 text-[13.5px] font-[650] text-muted">
       <span className="flex-1">{title}</span>
       {actions}
     </h3>

@@ -1,12 +1,12 @@
 import { BRAND_LOGO } from '@buhuchet/ui';
 import type { CSSProperties, MouseEvent, ReactNode } from 'react';
 import type { Translate } from '../l10n/translate';
-import { DrawMask, LogoBody } from '../shell/brand-intro';
+import { LogoBody } from '../shell/brand-intro';
 import { spiral } from './landing-fx';
 
 /*
  * Рисунки лендинга v78 и v91 (прототип modules/landing.js: landLogo, landHeroBg, landEmblem, lpSpiIc,
- * LP_FI, сквозная линия и весы в landDraw, щит «Безопасности»): только SVG, тексты — из словаря.
+ * LP_FI, спираль на фоне landBgSp, весы в landDraw, щит «Безопасности»): только SVG, тексты — из словаря.
  */
 
 /** Знак в шапке: спираль дорисовывается при открытии и при наведении (прототип landLogo). */
@@ -23,35 +23,29 @@ export function LandLogo() {
   );
 }
 
-/** Фон первого экрана: солнце с лучами справа сверху и большая спираль логотипа (прототип landHeroBg). */
+/** Фон первого экрана: солнце с лучами справа сверху (прототип landHeroBg). */
 export function HeroBg() {
   return (
     <div className="lp-hero-bg" aria-hidden="true">
       <span className="lp-hb-sun" />
-      <svg className="lp-hb-sp" viewBox={BRAND_LOGO.viewBox} focusable="false">
-        <DrawMask id="lp-hbm" />
-        <path className="lg-sp" mask="url(#lp-hbm)" d={BRAND_LOGO.spiral} />
-      </svg>
     </div>
   );
 }
 
-/** Сквозная линия Бернулли с солнцем на конце: путь считает landing-fx (`#lp-path`). */
-export function ScrollPath() {
+/**
+ * Спираль логотипа на фоне страницы (прототип v145, landBgSp; решение заказчика 18.11.2026): та же
+ * спираль, что в знаке. Место и размер, выход из знака в шапке и поворот при прокрутке — landing-fx.
+ * `pre` — пока место не посчитано, спираль не видна.
+ */
+export function BgSpiral() {
   return (
-    <svg className="lp-path" id="lp-path" aria-hidden="true" focusable="false">
-      <path className="lp-p0" />
-      <path className="lp-p1" />
-      <g className="lp-knots" />
-      <g className="lp-psun">
-        <circle className="g" r="15" />
-        <path
-          className="r"
-          d="M0-11V-15M0 11V15M-11 0H-15M11 0H15M-7.8-7.8-10.6-10.6M7.8 7.8 10.6 10.6M-7.8 7.8-10.6 10.6M7.8-7.8 10.6-10.6"
-        />
-        <circle className="c" r="6" />
-      </g>
-    </svg>
+    <div className="lp-bgsp pre" id="lp-bgsp" aria-hidden="true">
+      <div className="lp-bgsp-g">
+        <svg className="lp-bgsp-s" viewBox={BRAND_LOGO.viewBox} focusable="false">
+          <path className="lg-sp" d={BRAND_LOGO.spiral} />
+        </svg>
+      </div>
+    </div>
   );
 }
 
@@ -238,11 +232,12 @@ const turn = (i: number) => ({ '--i': i }) as CSSProperties;
 
 /*
  * «Возможности» (прототип v91, LP_FI): значок каждой функции собран из частей, и у каждого своя анимация
- * (классы f1…f12 в landing.css): 1 — листы отчётов раскладываются веером, 2 — отметка срока прыгает по
+ * (классы f1…f14 в landing.css): 1 — листы отчётов раскладываются веером, 2 — отметка срока прыгает по
  * дням, 3 — лупа проходит по списку и ставит галочку, 4 — самолётик улетает и возвращается, 5 — галочки
  * ставятся по очереди, 6 — монета падает на стопку, 7 — печатается квитанция, 8 — на странице клиента
  * набирается код, 9 — столбики растут, 10 — из папки поднимается лист, 11 — переключатели прав: один
- * включается, второй не поддаётся, 12 — шапочка выпускника подлетает. `bg` — заливка цветом подложки
+ * включается, второй не поддаётся, 12 — шапочка выпускника подлетает, 13 — колокольчик звонит и загорается
+ * точка (v144), 14 — лупа проходит по листу (v144). `bg` — заливка цветом подложки
  * (закрывает то, что позади), `dot` — сплошная точка.
  */
 const FEATURE_PARTS: readonly ReactNode[] = [
@@ -343,6 +338,21 @@ const FEATURE_PARTS: readonly ReactNode[] = [
     <path className="bg" d="M2.5 9.5L12 5l9.5 4.5L12 14Z" />
     <path className="f12-t" d="M21.5 9.5v5.5" />
   </g>,
+  <>
+    <g className="f13-b">
+      <path className="bg" d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.1H4.4Z" />
+      <path d="M10 20.6a2.1 2.1 0 0 0 4 0" />
+    </g>
+    <circle className="f13-d dot" cx="18" cy="5.2" r="2.7" />
+  </>,
+  <>
+    <rect className="bg" x="3.5" y="2.5" width="12.5" height="17" rx="2" />
+    <path d="M6.5 7h6.5M6.5 10.2h6.5M6.5 13.4h3.5" />
+    <g className="f14-m">
+      <circle className="bg" cx="16" cy="16" r="3.7" />
+      <path d="M18.7 18.7l2.6 2.6" />
+    </g>
+  </>,
 ];
 
 /** Значок функции блока «Возможности»: `n` — номер функции с единицы. */

@@ -68,7 +68,7 @@ export function PdictsHead({ tabId }: { tabId: string }) {
       </div>
       {head.about ? <p className="m-0 leading-[1.45]">{head.about}</p> : null}
       {head.usedIn ? (
-        <div className="flex items-start gap-1.5 text-[11.5px] leading-[1.4] text-faint">
+        <div className="flex items-start gap-1.5 text-[12px] leading-[1.4] text-muted">
           <Icon name="info" size="sm" className="mt-px" />
           <span>{t('dicts.platform.used_in', { text: head.usedIn })}</span>
         </div>

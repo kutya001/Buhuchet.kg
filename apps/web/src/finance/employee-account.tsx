@@ -105,7 +105,7 @@ export function EmployeeAccountTab({ employeeId }: { employeeId: string }) {
             },
           }))}
         />
-        <span className="block text-[11.5px] leading-[1.4] text-faint">{t('fin.acc.hint')}</span>
+        <span className="block text-[12px] leading-[1.4] text-muted">{t('fin.acc.hint')}</span>
       </Box>
     </div>
   );

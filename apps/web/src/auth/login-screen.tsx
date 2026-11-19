@@ -185,7 +185,7 @@ function LoginCard({
 
   return (
     <main className="grid min-h-dvh place-items-center overflow-auto bg-frame px-4 py-6">
-      <div className="flex w-[min(400px,100%)] animate-slide-up flex-col gap-3.5 rounded-2xl border border-line bg-pane px-[26px] py-7 shadow-pop">
+      <div className="flex w-[min(400px,100%)] animate-rise flex-col gap-3.5 rounded-2xl border border-line bg-pane px-[26px] py-7 shadow-pop">
         <Brand mode={t('auth.brand_mode')} className="flex-wrap" />
         {body}
       </div>
@@ -496,7 +496,7 @@ function CodeStep({
       <button type="button" className={LINK_LEFT} onClick={onBack}>
         {t('auth.back')}
       </button>
-      <div className="text-[11.5px] leading-[1.4] text-faint">{t('auth.reset_note')}</div>
+      <div className="text-[12px] leading-[1.4] text-muted">{t('auth.reset_note')}</div>
     </form>
   );
 }
