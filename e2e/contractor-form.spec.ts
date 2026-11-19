@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
-import { linkTelegram, newOrgOwner, signIn, uniqueChat, uniqueLogin } from './helpers';
+import { editSection, linkTelegram, newOrgOwner, signIn, uniqueChat, uniqueLogin } from './helpers';
 import { connectAllTypes, orgWithTypes } from './orgs';
 import { asOwner, find, manualReport, newContractor, reportsOf } from './reports';
 
@@ -610,19 +610,23 @@ test.describe('Этап 2: форма контрагента', () => {
     await expect(warn).toContainText('подтвердил');
     await expect(warn).not.toContainText('нужно подтверждение');
 
-    // Дополнительный ГКЭД тоже вне перечня — подтверждение нужно снова.
+    // Дополнительный ГКЭД тоже вне перечня — подтверждение нужно снова. На телефоне «Изменить
+    // контрагента» идёт шагами (прототип v137): ГКЭД — в «Режиме и статусах», форма — в «Основном».
+    await editSection(edit, isMobile, 2);
     await pickGked(page, edit, '64.19.1', true);
     await expect(warn).toContainText('нужно подтверждение');
     await edit.getByRole('button', { name: 'Убрать 64.19.1' }).click();
     await expect(warn).toContainText('подтвердил');
 
     // Другая форма собственности — тоже.
+    await editSection(edit, isMobile, 1);
     await edit.locator('[data-cp-field="form"]').selectOption('ФС-01');
     await expect(warn).toContainText('для организаций — нужно подтверждение');
     await edit.locator('[data-cp-field="form"]').selectOption('ФС-02');
     await expect(warn).toContainText('подтвердил');
 
     // Код из перечня «Для ИП» — предупреждения о патенте нет.
+    await editSection(edit, isMobile, 2);
     await pickGked(page, edit, '96.04.0', true);
     await expect(edit.locator('[data-gked-warn]')).toHaveCount(0);
   });
@@ -705,6 +709,8 @@ test.describe('Этап 2: форма контрагента', () => {
       await expect(page.getByText('Изменений нет', { exact: true })).toBeVisible();
 
       edit = await openEdit();
+      // «Примечание» — в разделе «Договор и обслуживание» (на телефоне — третий шаг, прототип v137).
+      await editSection(edit, isMobile, 3);
       await edit.getByLabel('Примечание', { exact: true }).fill('Договор продлён');
       await edit.locator('[data-cp-save]').click();
       await expect(edit).toBeHidden();
@@ -722,6 +728,7 @@ test.describe('Этап 2: форма контрагента', () => {
         data: { version: now.version, contact: 'Айгуль' },
       });
       expect(other.status(), await other.text()).toBe(200);
+      await editSection(edit, isMobile, 3);
       await edit.getByLabel('Примечание', { exact: true }).fill('Ещё правка');
       await edit.locator('[data-cp-save]').click();
       await expect(edit.getByText('Запись изменена другим пользователем')).toBeVisible();
