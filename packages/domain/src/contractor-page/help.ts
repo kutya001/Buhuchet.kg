@@ -211,7 +211,8 @@ const has = (v: CpHelpView, s: string) => v.sections.has(s);
 
 /** Подстановки `{имя}` (прототип `cphFill`): неизвестная остаётся как есть. */
 export function cpHelpFill(text: string, vars: Readonly<Record<string, string | number>>): string {
-  return text.replace(/\{([^}]+)\}/g, (m, k: string) => (vars[k] != null ? String(vars[k]) : m));
+  // Имя — без скобок: на строке из одних «{» выражение с `[^}]+` работало бы квадратично (CodeQL).
+  return text.replace(/\{([^{}]+)\}/g, (m, k: string) => (vars[k] != null ? String(vars[k]) : m));
 }
 
 /** Слово с большой буквы (прототип `cphCap`): заголовок облачка «Словарика». */
@@ -281,7 +282,8 @@ export function cpAnswerLines(a: string): string[] {
  */
 export function cpLegendRows(a: string): { label: string; text: string }[] {
   return cpAnswerLines(a).map((l) => {
-    const m = /^«([^»]+)»\s*[—–-]\s*(.+)$/.exec(l);
+    // Объяснение начинается не с пробела: `\s*(.+)` на длинной строке пробелов работало бы квадратично.
+    const m = /^«([^»]+)»\s*[—–-]\s*(\S.*)$/.exec(l);
     return m ? { label: m[1]!, text: m[2]! } : { label: '', text: l };
   });
 }
