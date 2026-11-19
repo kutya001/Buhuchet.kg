@@ -201,7 +201,7 @@ test.describe('Этап 2: отчёты — сдача, подтверждени
       history.locator('[data-timeline-item]').filter({ hasText: text });
     await expect(entry(/Сумма к уплате: не указана → 4\s000\sсом/)).toContainText('Эркин С.');
     await expect(
-      entry(new RegExp(`Дата сдачи: — → ${ru(bishkek()).replace(/\./g, '\\.')}`)),
+      entry(new RegExp(`Дата сдачи: — → ${ru(bishkek()).replace(/[.\\]/g, '\\$&')}`)),
     ).toContainText(/Сумма к уплате: 4\s000\sсом → 5\s000\sсом/);
     await expect(entry(/Дата сдачи/)).toContainText(/\d\d:\d\d/);
     await expect(entry(/Дата сдачи/)).toContainText('Эркин С.');

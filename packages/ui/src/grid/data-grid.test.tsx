@@ -577,7 +577,10 @@ describe('UnifiedDataGrid: карточки', () => {
       titleKey: 'name',
       data: { items: people(1), total: 1, page: 1, totals: {} },
     });
-    const line = html.match(/<dd data-tile-line[^>]*>(.*?)<\/dd>/)![1]!.replace(/<[^>]+>/g, '');
+    // Текст строки без разметки: содержимое между «>» и «<» (вырезание тегов заменой неполно — CodeQL).
+    const line = [...html.match(/<dd data-tile-line[^>]*>(.*?)<\/dd>/)![1]!.matchAll(/>([^<>]+)</g)]
+      .map((m) => m[1])
+      .join('');
     // Пустая сумма не показывается; строка стоит на месте первой суммы — выше роли.
     expect(line).toBe('К уплате 5 000·Оплачено 3 000');
     expect(html.indexOf('data-tile-line')).toBeLessThan(html.indexOf('>Роль</dt>'));

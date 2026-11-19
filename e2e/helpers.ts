@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomBytes, randomInt } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 
@@ -9,7 +10,7 @@ export const DEMO_PASSWORD = process.env.DEMO_PASSWORD ?? 'demo';
 
 /** Свой логин на каждый запуск и проект (ПК и телефон): неверные пароли считаются по логину. */
 export const uniqueLogin = (prefix: string) =>
-  `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  `${prefix}-${Date.now().toString(36)}-${randomBytes(4).toString('hex').slice(0, 5)}`;
 
 export async function signIn(
   api: APIRequestContext,
@@ -70,7 +71,7 @@ export const WEBHOOK_SECRET =
   process.env.TELEGRAM_WEBHOOK_SECRET ?? 'local-webhook-secret-change-me';
 
 /** Свой чат Telegram на каждый тест: сообщения бота подделка хранит по чату. */
-export const uniqueChat = () => Date.now() * 1000 + Math.floor(Math.random() * 1000);
+export const uniqueChat = () => Date.now() * 1000 + randomInt(1000);
 
 /** Что бот сайта отправил в чат. */
 export async function botMessages(api: APIRequestContext, chat: number): Promise<string[]> {
@@ -124,12 +125,12 @@ export async function pressBotButton(
   messageId: number,
   data: string,
 ): Promise<string> {
-  const id = `e2e-${chat}-${messageId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const id = `e2e-${chat}-${messageId}-${Date.now()}-${randomInt(1000)}`;
   const res = await api.post('/api/telegram/webhook', {
     headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
     data: {
       // Номер обновления у каждого нажатия свой: повторную доставку Telegram шлёт с тем же номером.
-      update_id: Date.now() * 1000 + Math.floor(Math.random() * 1000),
+      update_id: Date.now() * 1000 + randomInt(1000),
       callback_query: {
         id,
         from: { id: chat, is_bot: false, first_name: 'Сквозной' },
@@ -182,7 +183,7 @@ export async function botFile(
   api: APIRequestContext,
   file: { name: string; content: string | Buffer; tooBig?: boolean },
 ): Promise<string> {
-  const id = `e2e-file-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+  const id = `e2e-file-${Date.now()}-${randomInt(1_000_000)}`;
   const res = await api.post(`${FAKE_TELEGRAM}/files`, {
     data: {
       id,
@@ -210,7 +211,7 @@ export async function sendToBot(
   },
 ) {
   // Номер сообщения — свой у каждого, как у Telegram: одно сообщение бот принимает один раз.
-  const id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  const id = Date.now() * 1000 + randomInt(1000);
   const res = await api.post('/api/telegram/webhook', {
     headers: { 'x-telegram-bot-api-secret-token': WEBHOOK_SECRET },
     data: {
@@ -571,9 +572,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** Свой ИНН (14 цифр) на каждый запуск: второй организации с тем же ИНН быть не может. */
 export const uniqueInn = () =>
-  `9${Date.now().toString().slice(-9)}${Math.floor(Math.random() * 10_000)
-    .toString()
-    .padStart(4, '0')}`;
+  `9${Date.now().toString().slice(-9)}${randomInt(10_000).toString().padStart(4, '0')}`;
 
 /**
  * Новая организация с владельцем (`pnpm db:create-org`, база сайта — та же, что в .env): владелец
