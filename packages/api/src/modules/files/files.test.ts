@@ -401,7 +401,10 @@ describe.skipIf(!databaseAvailable())('Файлы записей: API', () => {
       expect(await storage.exists(key)).toBe(true);
       await f.t.admin.db
         .update(schema.fileTrash)
-        .set({ deletedAt: sql`now() - interval '25 hours'`, eraseAt: sql`now() - interval '1 hour'` })
+        .set({
+          deletedAt: sql`now() - interval '25 hours'`,
+          eraseAt: sql`now() - interval '1 hour'`,
+        })
         .where(eq(schema.fileTrash.id, trash[0]!.id));
       expect(await eraseDeletedFiles(f.deps)).toBe(1);
       expect(await storage.exists(key)).toBe(false);

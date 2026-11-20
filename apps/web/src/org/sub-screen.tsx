@@ -129,9 +129,7 @@ function SubCards({ view }: { view: SubView }) {
   const incMb = p.baseMb + p.seatMb * u.seats;
   // Предела нет только без подписки — тогда, как у прототипа (`subMem`), включённое в цену.
   const limitMb =
-    u.bytesLimit === null
-      ? subscriptionMemLimitMb(p, u.seats, u.extraGb)
-      : bytesMb(u.bytesLimit);
+    u.bytesLimit === null ? subscriptionMemLimitMb(p, u.seats, u.extraGb) : bytesMb(u.bytesLimit);
   const termHint = !sub
     ? t('sub.card.never')
     : left >= 0

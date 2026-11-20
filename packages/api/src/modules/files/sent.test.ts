@@ -1355,7 +1355,10 @@ describe.skipIf(!databaseAvailable())(
       ]);
       await f.t.admin.db
         .update(schema.fileTrash)
-        .set({ deletedAt: sql`now() - interval '25 hours'`, eraseAt: sql`now() - interval '1 hour'` })
+        .set({
+          deletedAt: sql`now() - interval '25 hours'`,
+          eraseAt: sql`now() - interval '1 hour'`,
+        })
         .where(inArray(schema.fileTrash.storageKey, [keys.oldNew!, keys.oldRej!]));
       expect(await eraseDeletedFiles(f.deps)).toBe(2);
       expect(storage.files.has(keys.oldNew!)).toBe(false);
