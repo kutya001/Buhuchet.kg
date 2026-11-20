@@ -15,7 +15,9 @@ describe.skipIf(!databaseAvailable())('Админка → карточка по�
   let f: Fixture;
   let admin: string;
   let owner: string;
-  const today = bishkekDate(new Date());
+  // «Сегодня» «Работы» — по часам тестов API (fixedClock в src/testing.ts), как у карточки организации
+  // и списков самой фирмы; сеансы — по настоящим часам.
+  const today = bishkekDate(new Date('2026-10-18T03:00:00Z'));
   const month = today.slice(0, 7);
   const day = (iso: string, n: number) => {
     const d = new Date(`${iso}T00:00:00Z`);

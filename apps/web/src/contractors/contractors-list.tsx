@@ -14,6 +14,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { api, apiFailure } from '../api-client';
 import { missingSummaryQuery } from '../kpi/kpi-data';
 import { useT } from '../l10n/provider';
+import { contractorsEmptyView } from './contractors-empty';
 import { useListExport } from '../lists/export';
 import { useGridLabels } from '../lists/grid-labels';
 import { useModuleStats } from '../lists/stats';
@@ -260,44 +261,31 @@ export function ContractorsList({ tab }: { tab: ContractorTab }) {
       ]
     : [];
 
-  // Контрагентов нет совсем — пустое состояние первого входа (ТЗ «Пустые состояния», прототип
-  // ui/empty.js `firstEmpty`) на любой вкладке: «Добавить контрагента» и «Загрузить из Excel» — по правам.
+  // Контрагентов нет совсем — первый вход на любой вкладке; есть, а вкладка пуста — по вкладке.
   const first = !!s && s.active + s.archived === 0;
-  const emptyActions = [
-    ...(access.can('createCp')
-      ? [
-          {
-            id: 'add',
-            icon: 'plus' as const,
-            label: t('cp.empty.add'),
-            primary: true,
-            onClick: () => cps.newContractor(),
-          },
-        ]
-      : []),
-    ...(access.can('cpImport')
-      ? [
-          {
-            id: 'import',
-            icon: 'paste' as const,
-            label: t('cp.import.open'),
-            onClick: importer.open,
-          },
-        ]
-      : []),
-  ];
-  const empty =
-    tab === 'mine' && !first ? (
-      <EmptyState icon="building" title={t('cp.empty.mine')} />
-    ) : (
-      <EmptyState
-        icon="building"
-        title={t(first ? 'cp.empty.first' : 'cp.empty.all')}
-        // Прототип v139: пояснение — только у первого входа, у пустой вкладки его нет.
-        {...(first ? { text: t('cp.empty.first_text') } : {})}
-        {...(emptyActions.length ? { actions: emptyActions } : {})}
-      />
-    );
+  const emptyView = contractorsEmptyView(tab, first, {
+    createCp: access.can('createCp'),
+    cpImport: access.can('cpImport'),
+  });
+  const emptyActions = emptyView.actions.map((id) =>
+    id === 'add'
+      ? {
+          id,
+          icon: 'plus' as const,
+          label: t(emptyView.addLabel),
+          primary: true,
+          onClick: () => cps.newContractor(),
+        }
+      : { id, icon: 'paste' as const, label: t('cp.import.open'), onClick: importer.open },
+  );
+  const empty = (
+    <EmptyState
+      icon="building"
+      title={t(emptyView.title)}
+      {...(emptyView.text ? { text: t('cp.empty.first_text') } : {})}
+      {...(emptyActions.length ? { actions: emptyActions } : {})}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-3.5" data-cps-list={tab}>

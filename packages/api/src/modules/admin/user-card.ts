@@ -139,14 +139,17 @@ export function userCardHandler(deps: ApiDeps): RouteHandler<typeof userCardRout
     // Чтение карточки пишет в историю: только запрос своего сайта и предел частоты открытий.
     await guardCardRead(deps, c, refresh);
     const adminId = c.get('session')!.userId;
+    // Сеансы — по настоящим часам (их сроки ставит база); «Работа» — по часам сайта, как карточка
+    // организации и списки самой фирмы: числа сверяются с ними (проверка «Админка на новой организации»).
     const now = new Date();
+    const today = deps.clock.now();
     const found = await withUserContext(deps.db, adminId, (tx) => adminGetUser(tx, id));
     if (!found) throw new RecordNotFoundError('user', id);
     const orgId = found.orgId;
     const card = orgId
       ? await withOrgContext(deps.db, { orgId, userId: adminId }, async (tx) => {
           await logUserCardView(tx, id, refresh);
-          return adminEmployeeCard(tx, { userId: id, orgId, now });
+          return adminEmployeeCard(tx, { userId: id, orgId, now: today });
         })
       : await withUserContext(deps.db, adminId, async (tx) => {
           await logAdminCardView(tx, id, refresh);
