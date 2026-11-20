@@ -47,15 +47,18 @@ export function specKeys(json) {
   return Array.isArray(list) ? list.map((x) => x.key).filter((k) => typeof k === 'string') : [];
 }
 
-/** Строки списка `uiTexts: [ … ]` из retired.ts. */
+/** Строки списка `uiTexts: [ … ]` из retired.ts; закомментированная строка записанной не считается. */
 export function retiredUiTexts(source) {
   const start = source.search(/\buiTexts\s*:\s*\[/);
   if (start < 0) return [];
-  const from = source.indexOf('[', start);
-  const to = source.indexOf(']', from);
+  const list = source
+    .slice(source.indexOf('[', start) + 1)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|\s)\/\/.*$/gm, '$1');
+  const to = list.indexOf(']');
   if (to < 0) return [];
   const keys = [];
-  for (const m of source.slice(from + 1, to).matchAll(/'([^'\n]+)'|"([^"\n]+)"/g)) {
+  for (const m of list.slice(0, to).matchAll(/'([^'\n]+)'|"([^"\n]+)"/g)) {
     keys.push(m[1] ?? m[2]);
   }
   return keys;
@@ -70,8 +73,21 @@ export function missingRetired({ baseKeys, headKeys, retired, stillSeeded = STIL
     .sort();
 }
 
+/**
+ * Окружение для git без `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` и других `GIT_*`: команда работает
+ * с папкой, в которой запущена, а не с репозиторием, который назвал вызвавший (git-хук, другая команда git).
+ */
+export function gitEnv(env = process.env) {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith('GIT_')));
+}
+
 const git = (root, args) =>
-  execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  execFileSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    env: gitEnv(),
+    maxBuffer: 256 * 1024 * 1024,
+  });
 
 const gitOk = (root, args) => {
   try {
@@ -89,13 +105,24 @@ export function resolveBase(root, named, env = process.env) {
       ? ['HEAD^1']
       : [gitOk(root, ['merge-base', 'HEAD', 'origin/main'])];
   for (const ref of candidates) {
-    if (ref && gitOk(root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])) return ref;
+    // Имя с «-» в начале git прочёл бы как свой параметр — такое имя коммитом не считается.
+    if (!ref || ref.startsWith('-')) continue;
+    const commit = `${ref}^{commit}`;
+    if (gitOk(root, ['rev-parse', '--verify', '--quiet', '--end-of-options', commit])) return ref;
   }
   return '';
 }
 
 function keysAt(root, base) {
-  const files = git(root, ['ls-tree', '-r', '--name-only', base, '--', L10N_DIR])
+  const files = git(root, [
+    'ls-tree',
+    '-r',
+    '--name-only',
+    '--end-of-options',
+    base,
+    '--',
+    L10N_DIR,
+  ])
     .split('\n')
     .filter((f) => f && isL10nSource(f));
   const keys = files.flatMap((f) => literalKeys(git(root, ['show', `${base}:${f}`])));
@@ -129,8 +156,13 @@ export function checkRetiredTexts(root, named, env = process.env) {
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { base, removed, missing } = checkRetiredTexts(REPO_ROOT, process.argv[2]);
+  const named = process.argv[2];
+  const { base, removed, missing } = checkRetiredTexts(REPO_ROOT, named);
   if (!base) {
+    if (named) {
+      console.error(`Коммит «${named}» не найден: проверка убранных текстов не прошла.`);
+      process.exit(1);
+    }
     if (process.env.GITHUB_EVENT_NAME === 'pull_request') {
       console.error(
         'Нет коммита main для сравнения (HEAD^1): проверка убранных текстов не прошла.',

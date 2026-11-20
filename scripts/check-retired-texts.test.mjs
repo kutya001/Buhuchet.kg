@@ -10,6 +10,7 @@ import {
   RETIRED_FILE,
   SPEC_REFDB,
   checkRetiredTexts,
+  gitEnv,
   literalKeys,
   missingRetired,
   resolveBase,
@@ -58,6 +59,28 @@ test('список на удаление — строки uiTexts, а не но�
   assert.deepEqual(retiredUiTexts('export const RETIRED = {};'), []);
 });
 
+test('закомментированная строка списка на удаление записанной не считается', () => {
+  const source = [
+    'export const RETIRED = {',
+    '  uiTexts: [',
+    "    'a.listed', // пояснение со скобкой ] и словом 'a.in_comment'",
+    "    // 'b.commented',",
+    "    /* 'c.block',",
+    "       'd.block', */",
+    "    'e.listed',",
+    '  ],',
+    '} as const;',
+  ].join('\n');
+  assert.deepEqual(retiredUiTexts(source), ['a.listed', 'e.listed']);
+});
+
+test('git запускается без GIT_* вызвавшего: работает с папкой, в которой запущен', () => {
+  assert.deepEqual(
+    gitEnv({ PATH: '/usr/bin', GIT_DIR: '/чужой/.git', GIT_WORK_TREE: '/чужой', HOME: '/home/t' }),
+    { PATH: '/usr/bin', HOME: '/home/t' },
+  );
+});
+
 test('убранный ключ без записи в списке — замечание; оставшийся, записанный и собираемый кодом — нет', () => {
   assert.deepEqual(
     missingRetired({
@@ -73,11 +96,18 @@ test('убранный ключ без записи в списке — заме
 // Настоящий репозиторий git во временной папке: ветка убирает текст продукта и текст прототипа.
 const root = mkdtempSync(path.join(tmpdir(), 'retired-'));
 after(() => rmSync(root, { recursive: true, force: true }));
+// Без `GIT_*` вызвавшего и без личных настроек git: иначе при заданном `GIT_DIR` коммиты теста
+// попали бы в настоящий репозиторий, а подпись коммитов или общий хук помешали бы тесту.
 const git = (...args) =>
-  execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', ...args], {
-    cwd: root,
-    encoding: 'utf8',
-  });
+  execFileSync(
+    'git',
+    ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgsign=false', ...args],
+    {
+      cwd: root,
+      encoding: 'utf8',
+      env: { ...gitEnv(), GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' },
+    },
+  );
 const write = (file, text) => {
   mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
   writeFileSync(path.join(root, file), text);
@@ -117,6 +147,10 @@ test('ветка убрала тексты продукта и прототип�
 test('коммит main: названный; у PR в CI — HEAD^1; иначе общий предок с origin/main; нет — пусто', () => {
   assert.equal(resolveBase(root, base, {}), base);
   assert.equal(resolveBase(root, 'нет-такого-коммита', {}), '');
+  // Имя, которое git прочёл бы как параметр, коммитом не считается.
+  for (const name of ['--all', '-h', '--default=HEAD', '--git-dir=/tmp']) {
+    assert.equal(resolveBase(root, name, {}), '');
+  }
   // origin/main в этой папке нет — сравнивать не с чем, проверка ничего не называет.
   assert.equal(resolveBase(root, undefined, {}), '');
   assert.deepEqual(checkRetiredTexts(root, undefined, {}), { base: '', removed: 0, missing: [] });
