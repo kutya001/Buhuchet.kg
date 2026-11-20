@@ -181,6 +181,7 @@ export async function revokeDmToken(tx: Tx, id: string): Promise<boolean> {
  * Перевыпуск: прежний токен помнит новый и работает ещё сутки, но не дольше своего срока. Уже
  * перевыпущенный или отозванный — null.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-25
 export async function replaceDmToken(tx: Tx, oldId: string, newId: string): Promise<Date | null> {
   const rows = await tx.execute<{ grace_until: unknown }>(sql`
     update public.dm_tokens

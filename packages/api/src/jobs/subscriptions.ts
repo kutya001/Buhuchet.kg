@@ -35,7 +35,9 @@ import {
  * пакет 2, блок 3, пункт 6; блок 6, пункт 3; поток Т, этап 1, П13; прототип schedJobs `subs.reminders`,
  * `subs.memory-checks`, `files.storage-reconcile`, `admin/subs-admin.js` `subDaily`). Каждая организация —
  * своей транзакцией в её контексте; повтор запуска ничего не удваивает: ключи сообщений — с днём.
+ * Решение — docs/decisions.md п. Т-18.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-24
 
 /** Одна организация упала — остальные идут дальше, запуск в конце отмечается сбоем. */
 async function eachOrg(

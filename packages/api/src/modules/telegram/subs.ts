@@ -43,7 +43,9 @@ import { botSiteUrl } from './staff-view';
  *   Администраторам платформы — Telegram (`app.platform_notice`, виды `sub_check`, `storage_check`) и
  *   строки колокольчика Админки, которые кладутся при чтении колокольчика (`bellSyncPlatform`), как заявки.
  * Тексты и время читаются до транзакции (`subNoticeContext`): внутри неё — только `tx`.
+ * Решение — docs/decisions.md п. Т-17.
  */
+// ОТКЛОНЕНИЕ: docs/deviations.md#Т-24
 
 /** Тексты, шаблоны, время и ссылка «Подписки» для сообщений — до транзакции. */
 export interface SubNoticeContext {

@@ -85,7 +85,8 @@ import { serverTexts } from '../l10n/texts';
  *   история платформы.
  * Токен — «bk_» и 32 случайных байта; показывается один раз в ответе выпуска, в базе — SHA-256 и
  * начало. Отметки выпуска, отзыва и перевыпуска ставит база «сейчас» по своим часам, по ним же
- * считается состояние. Сам ответ внешней программе по токену — этап 2.
+ * считается состояние. Сам ответ внешней программе по токену — этап 2. Решение — docs/decisions.md
+ * п. Т-19.
  */
 
 type Side = 'org' | 'admin';
@@ -739,6 +740,7 @@ export function tokenHandlers(deps: ApiDeps, side: Side) {
       if (v.fact.replacedBy) apiFail(409, 'dm_token_reissued', tr('err.dm_token_reissued'));
       // Новый токен — только к шаблону, который вошедший может выбрать и сейчас (защита строже
       // прототипа: шаблон выключили или права сотрудника сузились — перевыпуска нет).
+      // ОТКЛОНЕНИЕ: docs/deviations.md#Т-25
       const facts = await issueFacts(tx, side, views, m, sight);
       const tpl = facts.templates.find((t) => t.id === v.fact.templateId);
       if (!tpl) apiFail(409, 'dm_token_template', tr('err.dm_token_template'));
