@@ -15,6 +15,7 @@ import {
   type SubEditValues,
 } from './sub-dialogs';
 import { subPlansQuery, subSettingsQuery } from './subs-data';
+import { subFieldError } from './subs-model';
 
 /*
  * Блок «Подписка» окна «Новая организация» (доработки 20.11.2026, блок 6, пункт 4; прототип
@@ -61,9 +62,9 @@ export function useSubNewOrg() {
 
   /** Отказ сервера по полю блока (`sub_*`, `details.field`) — под поле, как свои проверки. */
   const fail = (field: string | null, message: string): boolean => {
-    if (!state.on || !field || !(field in values)) return false;
-    setErrors({ [field]: message });
-    return true;
+    const next = subFieldError(state.on, values, field, message);
+    if (next) setErrors(next as SubEditErrors);
+    return next !== null;
   };
 
   const node = (

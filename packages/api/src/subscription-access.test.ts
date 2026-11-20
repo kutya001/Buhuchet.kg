@@ -183,6 +183,8 @@ describe.skipIf(!databaseAvailable())('доступ закрыт по подпи
     expect((await errorOf(password)).code).not.toMatch(/^sub_closed/);
     const link = await apiRequest(app, 'POST', '/api/telegram/link', cookie);
     expect(link.status, await link.clone().text()).toBe(200);
+    const plain = await apiRequest(app, 'PUT', '/api/telegram/plain', cookie, { plain: false });
+    expect(plain.status, await plain.clone().text()).toBe(200);
     // Сеанс владельца не закрывается.
     expect((await apiRequest(app, 'GET', '/api/auth/me', cookie)).status).toBe(200);
   });

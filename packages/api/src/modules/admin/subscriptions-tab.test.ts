@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { schema } from '@buhuchet/db';
+import { createOrganization } from '@buhuchet/db/organizations';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
 import {
   AdminSubscriptionCard,
@@ -181,6 +182,24 @@ describe.skipIf(!databaseAvailable())('Админка: «Подписки»', ()
         AdminSubscriptionsSummary.parse(x),
       ),
     ).toMatchObject({ pending: 1, late: 1 });
+    expect((await cardOf(f.b.orgId)).late).toBe(true);
+  });
+
+  it('окно организации без подписки — «из 2 ГБ» (прототип `subMem`), демо — без предела', async () => {
+    const org = await createOrganization(f.t.app.db, {
+      name: 'ОсОО «Без подписки»',
+      inn: '04811201810474',
+      slug: 'subs-tab-none',
+      owner: { fullName: 'Владелец', login: 'subs-tab-none-owner', passwordHash: 'нет пароля' },
+      subscription: null,
+    });
+    const none = await cardOf(org.orgId);
+    expect(none).toMatchObject({ status: 'none', sub: null, bytesLimit: 2_000 * 1024 * 1024 });
+    await f.t.admin.db
+      .update(schema.organizations)
+      .set({ isDemo: true })
+      .where(eq(schema.organizations.id, org.orgId));
+    expect((await cardOf(org.orgId)).bytesLimit).toBeNull();
   });
 
   it('«Подтвердить оплату»: по версии, продление 1–36 месяцев, второй раз — «уже проверили»', async () => {

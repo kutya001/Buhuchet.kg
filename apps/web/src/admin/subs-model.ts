@@ -45,7 +45,20 @@ export function subGb(bytes: number): string {
   return rest ? `${Math.floor(tenths / 10)},${rest}` : String(Math.floor(tenths / 10));
 }
 
-/** Предел памяти: нет предела — «∞» (демо, без подписки). */
+/**
+ * Отказ сервера по полю формы подписки (`sub_*`, `details.field`): ошибка — под этим полем, если блок
+ * включён и такое поле в форме есть; иначе null — отказ показывается уведомлением.
+ */
+export function subFieldError(
+  on: boolean,
+  fields: object,
+  field: string | null,
+  message: string,
+): Record<string, string> | null {
+  return on && field && field in fields ? { [field]: message } : null;
+}
+
+/** Предел памяти: нет предела — «∞» (только демо-организация; без подписки — «из 2 ГБ» с сервера). */
 export const subGbLimit = (bytes: number | null) => (bytes === null ? '∞' : subGb(bytes));
 
 const date = (d: string) => formatDateRu(d as IsoDate);

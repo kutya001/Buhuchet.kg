@@ -2,6 +2,7 @@ import type { ApiApp } from '@buhuchet/api';
 import { ApiError } from '@buhuchet/shared';
 import { hc } from 'hono/client';
 import type { ApiErrorLike } from './l10n/translate';
+import { skipNextIntro } from './shell/brand-intro';
 
 /**
  * Событие окна после удачного сохранения (запрос не GET): «База знаний» сверяет шаги «Сделать» с
@@ -30,10 +31,12 @@ const NOT_SAVES = [
  * 20.11.2026, блок 4, пункт 4) — сразу на страницу входа, где после пароля будет «Доступ закрыт…», а не
  * при следующем переходе. Ответ входа с тем же кодом показывает сама форма входа.
  */
-async function leaveIfClosed(res: Response, path: string): Promise<void> {
+export async function leaveIfClosed(res: Response, path: string): Promise<void> {
   if (path.startsWith('/api/auth/')) return;
   const body = ApiError.safeParse(await res.json().catch(() => null));
-  if (body.success && body.data.error.code === 'sub_closed') window.location.assign('/login');
+  if (!body.success || body.data.error.code !== 'sub_closed') return;
+  skipNextIntro();
+  window.location.assign('/login');
 }
 
 const savingFetch: typeof fetch = async (input, init) => {
