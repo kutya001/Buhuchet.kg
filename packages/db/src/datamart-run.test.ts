@@ -8,7 +8,7 @@ import {
   DM_PLATFORM_TABLES,
   DM_SECRET_COLUMNS,
 } from './datamart-roles';
-import { dmErrorOf, runDmAdmin, runDmOrg, type DmQuery } from './datamart-run';
+import { dmErrorOf, runDmAdmin, runDmOrg, type DmQuery, type DmResult } from './datamart-run';
 import { queryTimedOut } from './errors';
 import { createOrganization, type CreatedOrganization } from './organizations';
 import { users } from './schema';
@@ -34,9 +34,14 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
   let a: CreatedOrganization;
   let b: CreatedOrganization;
   let adminId = '';
-  const inA = (query: DmQuery) =>
-    runDmOrg(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, query);
-  const asAdmin = (query: DmQuery) => runDmAdmin(db.app.db, adminId, query);
+  /** Ответ исполнителя и его строки объектами «столбец → значение» — для проверок. */
+  const withObjs = (r: DmResult) => ({
+    ...r,
+    objs: r.rows.map((v) => Object.fromEntries(r.columns.map((c, i) => [c, v[i]]))),
+  });
+  const inA = async (query: DmQuery) =>
+    withObjs(await runDmOrg(db.app.db, { orgId: a.orgId, userId: a.ownerUserId }, query));
+  const asAdmin = async (query: DmQuery) => withObjs(await runDmAdmin(db.app.db, adminId, query));
   /** Таблицы схемы public: имя, есть ли org_id. */
   let tables: { name: string; hasOrg: boolean }[] = [];
 
@@ -180,23 +185,23 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
         )
         .join(' UNION ALL ');
       const seen = await inA(q(union, [b.orgId]));
-      expect(seen.rows.filter((r) => r.foreign_rows !== 0)).toEqual([]);
+      expect(seen.objs.filter((r) => r.foreign_rows !== 0)).toEqual([]);
       // Проверка не пустая: у организации Б есть строки во многих из этих таблиц, Админка их видит.
       const adm = await asAdmin(q(union, [b.orgId]));
-      const withB = adm.rows.filter((r) => (r.foreign_rows as number) > 0).map((r) => r.t);
+      const withB = adm.objs.filter((r) => (r.foreign_rows as number) > 0).map((r) => r.t);
       expect(withB.length).toBeGreaterThanOrEqual(5);
       expect(withB).toEqual(expect.arrayContaining(['organizations', 'users', 'employees']));
     });
 
     it('организация видит одну свою организацию и справочники платформы; Админка — все организации', async () => {
-      expect((await inA(q('SELECT id FROM organizations'))).rows).toEqual([{ id: a.orgId }]);
+      expect((await inA(q('SELECT id FROM organizations'))).objs).toEqual([{ id: a.orgId }]);
       const adm = await asAdmin(q('SELECT id FROM organizations ORDER BY id'));
-      expect(adm.rows.map((r) => r.id).sort()).toEqual([a.orgId, b.orgId].sort());
+      expect(adm.objs.map((r) => r.id).sort()).toEqual([a.orgId, b.orgId].sort());
       const perms = await inA(q('SELECT count(*)::int AS n FROM permissions'));
-      expect(perms.rows[0]!.n).toBeGreaterThan(0);
+      expect(perms.objs[0]!.n).toBeGreaterThan(0);
       // Администратор платформы (без организации) роли организации не виден.
       expect(
-        (await inA(q('SELECT count(*)::int AS n FROM users WHERE org_id IS NULL'))).rows,
+        (await inA(q('SELECT count(*)::int AS n FROM users WHERE org_id IS NULL'))).objs,
       ).toEqual([{ n: 0 }]);
     });
 
@@ -208,7 +213,7 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
           [b.orgId],
         ),
       );
-      expect(r.rows).toEqual([{ v: b.orgId, n: 0 }]);
+      expect(r.objs).toEqual([{ v: b.orgId, n: 0 }]);
       await expect(inA(q('SELECT app.current_org_id() AS o'))).rejects.toEqual(pgCode('42501'));
     });
   });
@@ -224,7 +229,14 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       ['подписки всех организаций', 'SELECT * FROM org_subscriptions', '42501'],
       ['чтение файла сервера', "SELECT pg_read_file('/etc/passwd')", '42501'],
       ['пользователи базы', 'SELECT * FROM pg_authid', '42501'],
-      ['запись в CTE', 'WITH d AS (DELETE FROM contractors RETURNING id) SELECT * FROM d', '0A000'],
+      ['запись в CTE', 'WITH d AS (DELETE FROM contractors RETURNING id) SELECT * FROM d', '25006'],
+      ['запись с RETURNING', 'DELETE FROM contractors RETURNING id', '25006'],
+      [
+        'обход предела строк скобками',
+        'SELECT g FROM generate_series(1, 100000) g) a) b, (SELECT 1 AS one FROM (SELECT 1',
+        '42601',
+      ],
+      ['одинаковые имена столбцов', 'SELECT 1 AS x, 2 AS x', '42712'],
       ['блокировка строк', 'SELECT id FROM contractors FOR UPDATE', '25006'],
       ['снять «только чтение»', "SELECT set_config('transaction_read_only', 'off', true)", '25001'],
       ['сменить роль', "SELECT set_config('role', 'buhuchet_app', true)", '42501'],
@@ -236,11 +248,7 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       ['начать запуск заново', 'SELECT dm.begin_org()', '42501'],
       ['вызвать исполнителя изнутри', "SELECT dm.run_org('SELECT 1', '[]', 1)", '42501'],
       ['заблокировать запуск', 'SELECT * FROM dm.runs FOR UPDATE', '25006'],
-      [
-        'два оператора подряд',
-        'SELECT 1) dm_q) dm_s; DELETE FROM contractors; SELECT * FROM (SELECT (SELECT 1',
-        '42P11',
-      ],
+      ['два оператора подряд', 'SELECT 1 AS n; DELETE FROM contractors', '42P11'],
     ] as const)('%s', async (_, text, code) => {
       await expect(inA(q(text))).rejects.toEqual(pgCode(code));
     });
@@ -248,6 +256,12 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
     it('запрос не дольше предела времени: дольше — «Запрос выполнялся слишком долго»', async () => {
       const e = await inA({ ...q('SELECT pg_sleep(5) AS s'), timeoutMs: 200 }).catch((x) => x);
       expect(queryTimedOut(e)).toBe(true);
+      // Больше 15 с не попросить.
+      const long = await inA({
+        ...q("SELECT current_setting('statement_timeout') AS t"),
+        timeoutMs: 600_000,
+      });
+      expect(long.rows).toEqual([['15s']]);
     });
 
     it('рекомендательная блокировка запроса снимается, строка запуска не остаётся', async () => {
@@ -265,8 +279,8 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
     });
 
     it('запрос идёт от роли Витрины; в шаблоне Админки — от второй роли', async () => {
-      expect((await inA(q('SELECT current_user AS u'))).rows).toEqual([{ u: 'buhuchet_dm_org' }]);
-      expect((await asAdmin(q('SELECT current_user AS u'))).rows).toEqual([
+      expect((await inA(q('SELECT current_user AS u'))).objs).toEqual([{ u: 'buhuchet_dm_org' }]);
+      expect((await asAdmin(q('SELECT current_user AS u'))).objs).toEqual([
         { u: 'buhuchet_dm_admin' },
       ]);
     });
@@ -302,6 +316,20 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       await expect(runDmAdmin(db.app.db, a.ownerUserId, q('SELECT 1 AS n'))).rejects.toEqual(
         pgCode('42501'),
       );
+      // Администратор платформы в контексте организации шаблон Админки не запускает.
+      await expect(
+        withOrgContext(db.app.db, { orgId: a.orgId, userId: adminId }, (tx) =>
+          tx.execute(sql`select dm.begin_admin()`),
+        ),
+      ).rejects.toEqual(pgCode('42501'));
+      // Предел строк база держит сама, без проверки кода.
+      await expect(
+        withOrgContext(db.app.db, { orgId: a.orgId }, async (tx) => {
+          await tx.execute(sql`select dm.begin_org()`);
+          await tx.execute(sql`select set_config('transaction_read_only', 'on', true)`);
+          return tx.execute(sql`select dm.run_org('SELECT 1', '[]'::jsonb, 50001)`);
+        }),
+      ).rejects.toEqual(pgCode('22023'));
       await expect(
         withUserContext(db.app.db, adminId, (tx) => tx.execute(sql`select dm.begin_org()`)),
       ).rejects.toEqual(pgCode('42501'));
@@ -314,18 +342,89 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
           ['2026-11-20', '7', null, "'; drop table x; --"],
         ),
       );
-      // Столбцы с именами обёртки исполнителя (`s`, `dm_s`) не мешают: в ответе — строки целиком.
-      expect(r.rows).toEqual([
+      // Столбцы с любыми именами (`s`, `dm_s`) не мешают: в ответе — строки целиком.
+      expect(r.objs).toEqual([
         { d: '2026-11-20', n: 7, empty: true, s: "x'; drop table x; --", dm_s: 1 },
       ]);
       expect(r.more).toBe(false);
       expect(r.ms).toBeGreaterThanOrEqual(0);
-      const many = await inA(q('SELECT g FROM generate_series(1, 5) g ORDER BY g', [], 3));
-      expect(many).toMatchObject({ rows: [{ g: 1 }, { g: 2 }, { g: 3 }], more: true });
-      expect((await inA(q('SELECT 1 AS n WHERE false'))).rows).toEqual([]);
+      // Строки — в порядке запроса (не по возрастанию сами по себе).
+      const many = await inA(q('SELECT g FROM generate_series(1, 5) g ORDER BY g DESC', [], 3));
+      expect(many).toMatchObject({ columns: ['g'], rows: [[5], [4], [3]], more: true });
+      expect(await inA(q('SELECT g FROM generate_series(1, 3) g', [], 3))).toMatchObject({
+        rows: [[1], [2], [3]],
+        more: false,
+      });
       await expect(inA(q('SELECT 1', [], 0))).rejects.toThrow(RangeError);
+      await expect(inA(q('SELECT 1', [], 50_001))).rejects.toThrow(RangeError);
       const tooMany = Array.from({ length: 21 }, () => 'x');
       await expect(inA(q('SELECT 1 AS n', tooMany))).rejects.toEqual(pgCode('22023'));
+    });
+
+    it('столбцы — в порядке запроса и у пустого результата; сроки — по Бишкеку', async () => {
+      // Имя-число не встаёт первым (как у объекта JavaScript), пустой результат знает свои столбцы.
+      expect(await inA(q('SELECT 1 AS b, 2 AS "2026", 3 AS a'))).toMatchObject({
+        columns: ['b', '2026', 'a'],
+        rows: [[1, 2, 3]],
+      });
+      expect(await inA(q('SELECT 1 AS n, $1::text AS t WHERE false', ['x']))).toMatchObject({
+        columns: ['n', 't'],
+        rows: [],
+        more: false,
+      });
+      // 19:00 по UTC 20.11 — уже 21.11 в Бишкеке (UTC+6): current_date и ::date считают по Бишкеку.
+      expect(
+        (
+          await inA(
+            q(
+              "SELECT current_setting('TimeZone') AS tz, (timestamptz '2026-11-20 19:00:00+00')::date AS d",
+            ),
+          )
+        ).objs,
+      ).toEqual([{ tz: 'Asia/Bishkek', d: '2026-11-21' }]);
+      // Комментарий в конце запроса не ломает исполнитель.
+      expect((await inA(q('SELECT 1 AS n -- конец'))).rows).toEqual([[1]]);
+    });
+
+    it('политики ролей Витрины смотрят на строку запуска: одна форма на каждый вид таблицы', async () => {
+      const rows = await db.admin.db.execute<{
+        policyname: string;
+        tablename: string;
+        qual: string;
+      }>(
+        sql`select policyname, tablename, qual from pg_policies
+            where schemaname = 'public' and policyname in ('dm_org_read', 'dm_admin_read')`,
+      );
+      const run =
+        /^\(r\.pid = pg_backend_pid\(\)\) AND \(r\.xid = pg_current_xact_id_if_assigned\(\)\)/;
+      const kind = (t: string) =>
+        t === 'organizations'
+          ? 'organizations'
+          : DM_PLATFORM_TABLES.includes(t as never)
+            ? 'platform'
+            : 'org';
+      const forms = new Map<string, Set<string>>();
+      for (const r of rows) {
+        const key = r.policyname === 'dm_admin_read' ? 'admin' : kind(r.tablename);
+        forms.set(key, (forms.get(key) ?? new Set()).add(r.qual));
+      }
+      // У каждого вида — ровно одна форма условия, и в ней — строка запуска этой транзакции.
+      expect([...forms.keys()].sort()).toEqual(['admin', 'org', 'organizations', 'platform']);
+      const only = (k: string) => [...forms.get(k)!][0]!.replace(/\s+/g, ' ');
+      for (const k of forms.keys()) expect(forms.get(k)!.size, k).toBe(1);
+      expect(only('admin')).toMatch(
+        /^\(EXISTS \( SELECT 1 FROM dm\.runs r WHERE \(.*AND r\.admin\)\)\)$/,
+      );
+      expect(only('org')).toMatch(
+        /^\(org_id = \( SELECT r\.org_id FROM dm\.runs r WHERE \(.*\)\)\)$/,
+      );
+      expect(only('organizations')).toMatch(/^\(id = \( SELECT r\.org_id FROM dm\.runs r WHERE /);
+      expect(only('platform')).toMatch(
+        /^\(\( SELECT r\.org_id FROM dm\.runs r WHERE .*\) IS NOT NULL\)$/,
+      );
+      for (const k of forms.keys()) {
+        expect(only(k).replace(/^.*?WHERE \(/, ''), k).toMatch(run);
+      }
     });
 
     it('dmErrorOf отдаёт код и текст базы', async () => {

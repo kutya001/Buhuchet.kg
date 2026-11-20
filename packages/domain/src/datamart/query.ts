@@ -232,9 +232,12 @@ export function dmParamValue(type: DmParamType, raw: string): string | null {
     case 'num':
       return NUM.test(v) ? v : null;
     case 'text':
-      return raw.length <= DM_TEXT_PARAM_MAX ? raw : null;
+      // Знак с кодом 0 база в тексте не принимает (22P05) — это неверный параметр, а не ошибка шаблона.
+      return raw.length <= DM_TEXT_PARAM_MAX && !raw.includes('\u0000') ? raw : null;
     case 'bool':
-      return v === 'true' || v === 'false' ? v : null;
+      // Список «Да / Нет» прототипа отдаёт 1 и 0 (`dmParHtml`), адрес — true и false.
+      if (v === 'true' || v === '1') return 'true';
+      return v === 'false' || v === '0' ? 'false' : null;
     case 'list:cp':
     case 'list:emp':
       return UUID.test(v) ? v.toLowerCase() : null;
@@ -247,13 +250,23 @@ export function dmParamValue(type: DmParamType, raw: string): string | null {
 export type DmBound =
   | { ok: true; text: string; params: (string | null)[] }
   | ({ ok: false; error: 'sql' } & DmSqlProblem)
-  /** «Неверный параметр: <какой>» (блок 6, пункт 5): не подходит по типу или обязательный пуст. */
-  | { ok: false; error: 'param'; param: string; why: 'type' | 'required' };
+  /**
+   * «Неверный параметр: <какой>» (блок 6, пункт 5): не подходит по типу, обязательный пуст или конец
+   * периода раньше начала (прототип `dmParRead`: «По дату» раньше «С даты», «Месяц раньше начального»).
+   */
+  | { ok: false; error: 'param'; param: string; why: 'type' | 'required' | 'range' };
+
+/** Пары «начало — конец» периода (прототип `dmParRead`): конец не раньше начала. */
+const DM_RANGES = [
+  ['date_from', 'date_to'],
+  ['month_from', 'month_to'],
+] as const;
 
 /**
  * Запрос и значения для исполнителя: `input` — что пришло с экрана или из адреса (`?month=2026-11`);
- * параметров, которых нет в шаблоне, исполнитель не получает. Пусто — значение по умолчанию;
- * обязательный без значения — ошибка параметра.
+ * параметров, которых нет в шаблоне, исполнитель не получает. Не передан — значение по умолчанию
+ * (прототип `dmDef`, как в примере адреса `dmHow`); передан пустым — пусто, как форма прототипа
+ * (`dmParRead`: `v || null`); обязательный без значения — ошибка параметра.
  */
 export function dmBind(
   sql: string,
@@ -267,7 +280,7 @@ export function dmBind(
   const values = new Map<string, string | null>();
   for (const d of defs) {
     const given = input[d.k];
-    const raw = given == null || given === '' ? dmParamDefault(d.def, today) : given;
+    const raw = given === undefined ? dmParamDefault(d.def, today) : given;
     if (raw == null || raw === '') {
       if (d.req) return { ok: false, error: 'param', param: d.k, why: 'required' };
       values.set(d.k, null);
@@ -277,12 +290,19 @@ export function dmBind(
     if (v === null) return { ok: false, error: 'param', param: d.k, why: 'type' };
     values.set(d.k, v);
   }
+  for (const [from, to] of DM_RANGES) {
+    const a = values.get(from);
+    const b = values.get(to);
+    if (a && b && a > b) return { ok: false, error: 'param', param: to, why: 'range' };
+  }
   return { ok: true, text: parsed.text, params: parsed.names.map((k) => values.get(k) ?? null) };
 }
 
 /**
  * Значение ячейки во внешнем ответе и в таблице «Вывода» (блок 2, пункт 5): тип «деньги» — тыйыны из
- * базы в сомы числом (125050 → 1250.5); остальное — как ответила база.
+ * базы в сомы числом (125050 → 1250.5); остальное — как ответила база. Пустые деньги остаются пустыми:
+ * на экране — пустая ячейка (прототип `dmNumTxt`); во внешнем ответе прототип даёт 0 (`dmHow`) — это
+ * решает внешний адрес (этап 2).
  */
 export function dmCell(type: string, value: unknown): unknown {
   if (type !== 'money' || value === null || value === undefined) return value;

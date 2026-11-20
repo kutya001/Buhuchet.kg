@@ -161,21 +161,29 @@ CREATE FUNCTION dm.begin_admin()
   END
   $$;--> statement-breakpoint
 -- Выполнить запрос шаблона (блок 8, пункты 1, 4, 5): транзакция только для чтения и начата dm.begin_*;
--- один оператор SELECT (запрос вложен в подзапрос и открывается курсором — курсор не принимает двух
--- операторов, запрос с записью внутри подзапроса база не принимает), не больше p_max строк (на одну
--- больше — чтобы сказать «строк больше»), параметры — $1…$20 текстом (приводит к типу сам запрос,
--- `$1::date`), ответ — JSON-массив строк в порядке запроса (`dm_s.*` — вся строка, даже если в запросе
--- есть столбец с тем же именем). Рекомендательные блокировки, которые запрос мог
--- взять, снимаются: соединение уходит обратно в пул.
+-- запрос открывается курсором как есть — курсор принимает ровно один оператор, а запись, блокировку
+-- строк и смену «только чтения» отклоняет транзакция; строки забираются по одной, не больше p_max + 1
+-- (на одну больше — чтобы сказать «строк больше»), поэтому предел не обойти скобками в тексте запроса.
+-- Параметры — $1…$20 текстом (приводит к типу сам запрос, `$1::date`). Ответ — {columns, rows}: имена
+-- столбцов в порядке запроса (и у пустого результата; одинаковые имена — ошибка) и строки массивами
+-- значений. Сроки — по Бишкеку (`current_date`, `::date`), блокировку таблицы ждём не дольше 3 с.
+-- Рекомендательные блокировки, которые запрос мог взять, снимаются: соединение уходит обратно в пул.
 CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
   RETURNS json
   LANGUAGE plpgsql
   SECURITY DEFINER
   SET search_path = public, pg_temp
+  SET TimeZone TO 'Asia/Bishkek'
+  SET lock_timeout TO '3s'
   AS $$
   DECLARE
     cur refcursor;
-    result json;
+    rec record;
+    got boolean;
+    j json;
+    cols text[];
+    vals json[] := '{}';
+    n integer := 0;
   BEGIN
     IF current_setting('transaction_read_only') <> 'on' THEN
       RAISE EXCEPTION 'dm.run_org: транзакция не только для чтения' USING ERRCODE = '25006';
@@ -191,21 +199,34 @@ CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
       RAISE EXCEPTION 'dm.run_org: параметры — массив до 20 значений' USING ERRCODE = '22023';
     END IF;
     BEGIN
-      OPEN cur FOR EXECUTE format(
-        'SELECT coalesce(json_agg(dm_s.*), ''[]''::json) FROM (SELECT * FROM (%s) dm_q LIMIT %s) dm_s',
-        p_sql, p_max + 1)
+      OPEN cur FOR EXECUTE p_sql
         USING p_params->>0, p_params->>1, p_params->>2, p_params->>3, p_params->>4, p_params->>5,
           p_params->>6, p_params->>7, p_params->>8, p_params->>9, p_params->>10, p_params->>11,
           p_params->>12, p_params->>13, p_params->>14, p_params->>15, p_params->>16, p_params->>17,
           p_params->>18, p_params->>19;
-      FETCH cur INTO result;
+      LOOP
+        FETCH cur INTO rec;
+        got := FOUND;
+        j := row_to_json(rec);
+        IF cols IS NULL THEN
+          cols := ARRAY(SELECT x.k FROM json_object_keys(j) WITH ORDINALITY AS x(k, i) ORDER BY x.i);
+          IF cardinality(cols) <> (SELECT count(DISTINCT c) FROM unnest(cols) c) THEN
+            RAISE EXCEPTION 'dm.run_org: у столбцов одинаковые имена' USING ERRCODE = '42712';
+          END IF;
+        END IF;
+        EXIT WHEN NOT got;
+        vals := vals || (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
+          FROM json_each(j) WITH ORDINALITY AS e(key, value, i));
+        n := n + 1;
+        EXIT WHEN n > p_max;
+      END LOOP;
       CLOSE cur;
     EXCEPTION WHEN query_canceled OR others THEN
       PERFORM pg_advisory_unlock_all();
       RAISE;
     END;
     PERFORM pg_advisory_unlock_all();
-    RETURN result;
+    RETURN json_build_object('columns', to_json(cols), 'rows', array_to_json(vals));
   END
   $$;--> statement-breakpoint
 CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
@@ -213,10 +234,17 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
   LANGUAGE plpgsql
   SECURITY DEFINER
   SET search_path = public, pg_temp
+  SET TimeZone TO 'Asia/Bishkek'
+  SET lock_timeout TO '3s'
   AS $$
   DECLARE
     cur refcursor;
-    result json;
+    rec record;
+    got boolean;
+    j json;
+    cols text[];
+    vals json[] := '{}';
+    n integer := 0;
   BEGIN
     IF current_setting('transaction_read_only') <> 'on' THEN
       RAISE EXCEPTION 'dm.run_admin: транзакция не только для чтения' USING ERRCODE = '25006';
@@ -232,21 +260,34 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
       RAISE EXCEPTION 'dm.run_admin: параметры — массив до 20 значений' USING ERRCODE = '22023';
     END IF;
     BEGIN
-      OPEN cur FOR EXECUTE format(
-        'SELECT coalesce(json_agg(dm_s.*), ''[]''::json) FROM (SELECT * FROM (%s) dm_q LIMIT %s) dm_s',
-        p_sql, p_max + 1)
+      OPEN cur FOR EXECUTE p_sql
         USING p_params->>0, p_params->>1, p_params->>2, p_params->>3, p_params->>4, p_params->>5,
           p_params->>6, p_params->>7, p_params->>8, p_params->>9, p_params->>10, p_params->>11,
           p_params->>12, p_params->>13, p_params->>14, p_params->>15, p_params->>16, p_params->>17,
           p_params->>18, p_params->>19;
-      FETCH cur INTO result;
+      LOOP
+        FETCH cur INTO rec;
+        got := FOUND;
+        j := row_to_json(rec);
+        IF cols IS NULL THEN
+          cols := ARRAY(SELECT x.k FROM json_object_keys(j) WITH ORDINALITY AS x(k, i) ORDER BY x.i);
+          IF cardinality(cols) <> (SELECT count(DISTINCT c) FROM unnest(cols) c) THEN
+            RAISE EXCEPTION 'dm.run_admin: у столбцов одинаковые имена' USING ERRCODE = '42712';
+          END IF;
+        END IF;
+        EXIT WHEN NOT got;
+        vals := vals || (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
+          FROM json_each(j) WITH ORDINALITY AS e(key, value, i));
+        n := n + 1;
+        EXIT WHEN n > p_max;
+      END LOOP;
       CLOSE cur;
     EXCEPTION WHEN query_canceled OR others THEN
       PERFORM pg_advisory_unlock_all();
       RAISE;
     END;
     PERFORM pg_advisory_unlock_all();
-    RETURN result;
+    RETURN json_build_object('columns', to_json(cols), 'rows', array_to_json(vals));
   END
   $$;--> statement-breakpoint
 -- Функции исполнителя выполняются с правами своей роли Витрины: передать их можно, только пока у роли

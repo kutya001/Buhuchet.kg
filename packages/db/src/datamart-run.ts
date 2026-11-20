@@ -11,7 +11,7 @@ import { QUERY_TIMEOUT_MS, withOrgContext } from './context';
  *   2. `dm.begin_org()` / `dm.begin_admin()` записывают запуск этой транзакции;
  *   3. транзакция становится «только чтение», предел времени — не больше 15 с;
  *   4. `dm.run_org` / `dm.run_admin` выполняют запрос от роли Витрины (без секретов, организация видит
- *      только свои строки) и отдают строки JSON-массивом;
+ *      только свои строки, сроки по Бишкеку) и отдают имена столбцов и строки массивами;
  *   5. транзакция всегда откатывается.
  * Запрос и параметры готовит `dmBind` из `@buhuchet/domain` (`:month` → `($1::text)`); проверку шаблона
  * (опубликован, не сломан), право и область, токен, «Внешний доступ по API», частоту и журнал делает
@@ -35,8 +35,13 @@ export interface DmQuery {
 }
 
 export interface DmResult {
-  /** Строки в порядке запроса: столбец → значение, как его отдал `json_agg` (деньги — тыйыны). */
-  rows: Record<string, unknown>[];
+  /**
+   * Имена столбцов в порядке запроса — и у пустого результата («Проверить», блок 2, пункт 5); одинаковых
+   * имён нет (база отклоняет такой запрос).
+   */
+  columns: string[];
+  /** Строки в порядке запроса: значения по порядку `columns`, как их отдал `row_to_json` (деньги — тыйыны). */
+  rows: unknown[][];
   /** Строк больше `maxRows`: отданы первые. */
   more: boolean;
   /** Время выполнения запроса, мс. */
@@ -61,14 +66,19 @@ async function runInTx(tx: Tx, audience: 'org' | 'admin', q: DmQuery): Promise<n
   );
   const params = JSON.stringify(q.params);
   const started = performance.now();
-  const [row] = await tx.execute<{ rows: Record<string, unknown>[] | null }>(
+  const [row] = await tx.execute<{ out: { columns: string[]; rows: unknown[][] } }>(
     audience === 'org'
-      ? sql`select dm.run_org(${q.text}, ${params}::jsonb, ${q.maxRows}) as rows`
-      : sql`select dm.run_admin(${q.text}, ${params}::jsonb, ${q.maxRows}) as rows`,
+      ? sql`select dm.run_org(${q.text}, ${params}::jsonb, ${q.maxRows}) as out`
+      : sql`select dm.run_admin(${q.text}, ${params}::jsonb, ${q.maxRows}) as out`,
   );
   const ms = Math.round(performance.now() - started);
-  const all = row?.rows ?? [];
-  throw new DmRolledBack({ rows: all.slice(0, q.maxRows), more: all.length > q.maxRows, ms });
+  const all = row!.out.rows;
+  throw new DmRolledBack({
+    columns: row!.out.columns,
+    rows: all.slice(0, q.maxRows),
+    more: all.length > q.maxRows,
+    ms,
+  });
 }
 
 async function rolledBack(run: () => Promise<never>): Promise<DmResult> {
