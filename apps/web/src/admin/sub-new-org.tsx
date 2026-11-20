@@ -24,11 +24,12 @@ import { subPlansQuery, subSettingsQuery } from './subs-data';
  */
 
 /** Шаг пакета и порог дополнительной скидки, пока не пришли «Цены и реквизиты» (прототип `SUB_P()`). */
-const PRICES = { seatStep: 10, extraDiscountOver: 50 };
+const PRICES = { seatStep: 10, extraDiscountOver: 150 };
 
 export interface SubNewOrgState {
   on: boolean;
   free: boolean;
+  /** null — поля ещё не правили: значения по умолчанию из видов и цен, даже пришедших позже. */
   values: SubEditValues | null;
 }
 
@@ -97,7 +98,7 @@ function SubNewOrgBlock({
           className={CHECKBOX_CLASS}
           checked={state.on}
           data-new-org-sub-on=""
-          onChange={(e) => onState({ ...state, on: e.target.checked, values })}
+          onChange={(e) => onState({ ...state, on: e.target.checked })}
         />
         <span className="grow">{t('subs.new.on')}</span>
       </label>
@@ -117,7 +118,7 @@ function SubNewOrgBlock({
               className={CHECKBOX_CLASS}
               checked={state.free}
               data-new-org-sub-free=""
-              onChange={(e) => onState({ ...state, free: e.target.checked, values })}
+              onChange={(e) => onState({ ...state, free: e.target.checked })}
             />
             <span className="grow">{t('subs.edit.free')}</span>
           </label>

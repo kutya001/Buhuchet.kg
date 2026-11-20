@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
-import { ownerPassword, platformAdmin, search, uniqueInn } from './admin';
+import { giveSubscription, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { botMessages, sendToBot, signIn, uniqueChat, uniqueLogin } from './helpers';
 import { IP_CERT, leadDocsDraft, leadDocsFields } from './lead-docs';
 
@@ -244,6 +244,10 @@ test('(доработки 14.11.2026, блок 1, пункты 1–3) заявк
   const temporary = (await done.locator('[data-temporary-password]').textContent())!.trim();
   await done.getByRole('button', { name: 'Готово' }).click();
   await expect(done).toBeHidden();
+
+  // «Одобрить» ставит «Нет подписки» (доработки 20.11.2026, блок 6, пункт 4): без подписки владельцу
+  // открыта только «Подписка» — администратор ставит её «Изменить подписку».
+  await giveSubscription(page.request, origin, inn);
 
   // Владелец — в своём браузере: в «Моя организация» данные из документов (ИНН и форма — только для
   // чтения), адрес меняет сам.
