@@ -9,6 +9,7 @@ import {
   FeePaymentForm,
   FeePaymentSaved,
   FeePaymentWindow,
+  FileManagerList,
   FileUploadTicket,
   FinSummary,
   listPageSchema,
@@ -343,6 +344,22 @@ describe.skipIf(!databaseAvailable())(
       );
       expect((await failure(stale)).code).toBe('record_changed');
 
+      // Файл оплаты в «Файловом менеджере» (доработки 20.11.2026, пакет 2, блок 5, пункт 1; п. К-25):
+      // пока оплата не удалена.
+      await expectStatus(
+        await upload(chief, { kind: 'fee_payment', id: saved.id }, 'квитанция.pdf'),
+        200,
+      );
+      const feeFiles = async () =>
+        FileManagerList.parse(
+          await (
+            await expectStatus(await call('GET', '/api/files/manager?size=all', chief), 200)
+          ).json(),
+        )
+          .items.filter((x) => x.name === 'квитанция.pdf')
+          .map((x) => x.kind);
+      expect(await feeFiles()).toEqual(['fee_payment']);
+
       // «Удалить» с причиной: из итогов уходит, видна с «Показать удалённые».
       expect(
         (await call('POST', `/api/fee-payments/${saved.id}/delete`, chief, { reason: '' })).status,
@@ -354,6 +371,7 @@ describe.skipIf(!databaseAvailable())(
         200,
       );
       expect((await journal(chief, '&tab=fee')).items.map((r) => r.id)).not.toContain(saved.id);
+      expect(await feeFiles()).toEqual([]);
       const withDeleted = await journal(chief, '&tab=fee&deleted=1');
       // Меню удалённой строки — без «Изменить» и «Удалить»: замок «Операция удалена».
       expect(withDeleted.items.find((r) => r.id === saved.id)).toMatchObject({
@@ -491,11 +509,27 @@ describe.skipIf(!databaseAvailable())(
       // Бухгалтер видит окно, но «Изменить» у него заперт — прикрепить нельзя; чужая организация — 404.
       expect((await upload(acc, source, 'x.pdf')).status).toBe(403);
       expect((await upload(ownerB, source, 'x.pdf')).status).toBe(404);
-      // В «Файловом менеджере» файлов операций нет — как в прототипе (allFiles).
-      const manager = (await (await call('GET', '/api/files/manager?size=all', owner)).json()) as {
-        items: { name: string }[];
-      };
-      expect(manager.items.map((x) => x.name)).not.toContain('приказ.pdf');
+      // «Файловый менеджер» (доработки 20.11.2026, пакет 2, блок 5, пункт 1; п. К-25): файл операции —
+      // с источником «Финансовая операция» тому, кто видит окно операции; чужой организации и без «Учёта
+      // оплаты налогов» — нет.
+      const inManager = async (cookie: string) =>
+        FileManagerList.parse(
+          await (
+            await expectStatus(await call('GET', '/api/files/manager?size=all', cookie), 200)
+          ).json(),
+        )
+          .items.filter((x) => x.name === 'приказ.pdf')
+          .map((x) => [x.kind, x.source.replace(/\u00a0/g, ' ')]);
+      const fileRow = ['money_operation', 'Списание в бонус 400 сом от 18.10.2026'];
+      expect(await inManager(owner)).toEqual([fileRow]);
+      expect(await inManager(chief)).toEqual([fileRow]);
+      expect(await inManager(ownerB)).toEqual([]);
+      await features(f.a.orgId, { ...ALL_ON, taxpay: false });
+      try {
+        expect(await inManager(owner)).toEqual([]);
+      } finally {
+        await features(f.a.orgId, ALL_ON);
+      }
     });
 
     it('«Списания в бонус» и «Закрыть <месяц>»: только прошлый, один раз; в закрытом месяце операции не изменить, не удалить, не перенести в него и оплату не отменить', async () => {

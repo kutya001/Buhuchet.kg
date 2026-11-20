@@ -25,6 +25,7 @@ import {
 import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import type { Tx } from './client';
+import type { FileListPart } from './files';
 import {
   feeSubject,
   feeToOptions,
@@ -45,6 +46,7 @@ import {
 } from './finance';
 import { monthClosed } from './finance-journal';
 import { writeHistory, type HistoryEntry } from './history';
+import { somUnitText, type ListTexts } from './list';
 import {
   availableOf,
   MoneyRefusedError,
@@ -60,11 +62,13 @@ import {
   employees,
   feeAllocations,
   feePayments,
+  files,
   moneyAllocations,
   moneyOperations,
   orgSettings,
   reports,
 } from './schema';
+import { dictLiteral, textLiteral } from './sql-text';
 
 /*
  * «Изменить» операции и окно оплаты за обслуживание (задача 2.22; ТЗ «Финансовые операции по
@@ -1003,5 +1007,26 @@ export async function operationFileSource(
     opDate: row.opDate,
     cancelled: row.cancelled,
     taxpay: row.taxpay,
+  };
+}
+
+/**
+ * Файлы финансовых операций в «Файловом менеджере» (доработки 20.11.2026, пакет 2, блок 5, пункт 1):
+ * списание, возврат, перевод, обратная запись, возврат по уточнённому (`OPERATION_FILE_KINDS`) — не
+ * отменённые, контрагента в области `scope` группы «Финансовые операции» (над `contractors`); источник —
+ * «Возврат контрагенту 1 500 сом от 20.10.2026». Право и «Учёт оплаты налогов» проверяет вызывающий.
+ */
+// ОТКЛОНЕНИЕ: docs/deviations.md#К-25
+export function operationFilesPart(scope: SQL | undefined, t: ListTexts): FileListPart {
+  const op = sql`(case ${moneyOperations.kind} ${sql.join(
+    OPERATION_FILE_KINDS.map(
+      (k) => sql`when ${textLiteral(k)} then ${dictLiteral(t(`money.op.${k}`))}::text`,
+    ),
+    sql` `,
+  )} end)`;
+  const label = sql`replace(replace(replace(${dictLiteral(t('files.src.money_operation'))}::text, '{op}', ${op}), '{amount}', ${somUnitText(sql`abs(${moneyOperations.amount})`)}), '{date}', to_char(${moneyOperations.opDate}, 'DD.MM.YYYY'))`;
+  return {
+    visible: sql`exists (select 1 from ${moneyOperations} join ${contractors} on ${contractors.id} = ${moneyOperations.contractorId} where ${moneyOperations.id} = ${files.sourceId} and ${inArray(moneyOperations.kind, [...OPERATION_FILE_KINDS])} and ${moneyOperations.cancelledAt} is null and ${scope ?? sql`true`})`,
+    source: sql`(select ${label} from ${moneyOperations} where ${moneyOperations.id} = ${files.sourceId})`,
   };
 }
