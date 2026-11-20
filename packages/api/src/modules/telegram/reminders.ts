@@ -9,6 +9,7 @@ import {
   readTelegramGroup,
   telegramChat,
   telegramDigestOrgs,
+  orgSubscriptionClosed,
   withOrgContext,
   type OutboxMessage,
   type Tx,
@@ -573,6 +574,10 @@ export function telegramRemindersJob(baseUrl: string, pause?: Pause): Job {
         try {
           const n = await withOrgContext(ctx.db, { orgId, kind: 'job' }, async (tx) => {
             if (!(await markDigestDay(tx, day))) return null;
+            // Доступ закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): сотрудникам бот сам не
+            // пишет — ни напоминаний, ни сводки в группу, ни виджетов; день отмечен, поэтому после
+            // оплаты пропущенное задним числом не уходит.
+            if (await orgSubscriptionClosed(tx, day as IsoDate)) return null;
             const messages = await buildDailyReminders(ctx, tx, day as IsoDate, baseUrl);
             return (await enqueueTelegram(tx, messages, ctx.clock.now())).length;
           });

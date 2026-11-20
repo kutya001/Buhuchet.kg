@@ -116,6 +116,127 @@ describe.skipIf(!databaseAvailable())('Админка → «Организаци
     expect(await codeOf({ temporaryPassword: '1234567' })).toEqual([400, 'validation_failed']);
   });
 
+  // Доработки 20.11.2026, блок 6, пункт 4 (прототип subNewOrgHtml, subEditRead, subNewOrgSave).
+  it('блок «Подписка»: без него — «Нет подписки», с ним — подписка от администратора; неверное поле — 400 с полем', async () => {
+    const base = {
+      ownerFullName: 'Подпискова Айгуль',
+      temporaryPassword: 'Bh-7K4M-Q9TX',
+    };
+    const subscriptionOf = async (orgId: string) =>
+      (
+        await f.t.admin.db
+          .select()
+          .from(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, orgId))
+      )[0];
+    const create = async (n: number, subscription?: object) => {
+      const res = await post('/api/admin/organizations', {
+        ...base,
+        name: `ОсОО «Подписка ${n}»`,
+        inn: `0581120181046${n}`,
+        ownerLogin: `subs-owner-${n}`,
+        ...(subscription ? { subscription } : {}),
+      });
+      return res;
+    };
+
+    // Без блока — «Нет подписки»: владелец входит, но видит только «Моя организация».
+    const none = await create(1);
+    expect(none.status).toBe(201);
+    const noneOrg = CreatedOrganization.parse(await none.json()).organization;
+    expect(await subscriptionOf(noneOrg.id)).toBeUndefined();
+    const login = await apiRequest(f.app, 'POST', '/api/auth/login', undefined, {
+      login: 'subs-owner-1',
+      password: 'Bh-7K4M-Q9TX',
+    });
+    expect(login.status).toBe(200);
+    expect(MeResponse.parse(await login.json())).toMatchObject({
+      subClosed: true,
+      modules: ['org'],
+    });
+
+    // С блоком: пакет 160 — больше порога, дополнительная скидка сохраняется; бесплатный период — по
+    // умолчанию, со строкой «Истории оплат» от администратора.
+    const sub = {
+      planId: 'm12',
+      seats: 160,
+      extraGb: 2,
+      paidUntil: '2027-10-18',
+      extraDiscountPct: 5,
+    };
+    const paid = await create(2, sub);
+    expect(paid.status, await paid.clone().text()).toBe(201);
+    const paidOrg = CreatedOrganization.parse(await paid.json()).organization;
+    const [admin] = await f.t.admin.db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.login, 'platform-admin'));
+    expect(await subscriptionOf(paidOrg.id)).toMatchObject({
+      ...sub,
+      free: true,
+      updatedBy: admin!.id,
+    });
+    const pays = await f.t.admin.db
+      .select()
+      .from(schema.subscriptionPayments)
+      .where(eq(schema.subscriptionPayments.orgId, paidOrg.id));
+    expect(pays).toEqual([
+      expect.objectContaining({
+        kind: 'free',
+        reason: 'Бесплатный период при создании организации',
+        createdBy: admin!.id,
+      }),
+    ]);
+    const login2 = await apiRequest(f.app, 'POST', '/api/auth/login', undefined, {
+      login: 'subs-owner-2',
+      password: 'Bh-7K4M-Q9TX',
+    });
+    expect(MeResponse.parse(await login2.json()).subClosed).toBe(false);
+
+    // Без бесплатного периода — без строки «Истории оплат»; пакет не больше порога — скидка 0.
+    const small = await create(3, { ...sub, seats: 150, extraDiscountPct: 30, free: false });
+    expect(small.status).toBe(201);
+    const smallOrg = CreatedOrganization.parse(await small.json()).organization;
+    expect(await subscriptionOf(smallOrg.id)).toMatchObject({
+      seats: 150,
+      extraDiscountPct: 0,
+      free: false,
+    });
+    const history = await f.t.admin.db
+      .select()
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.entityId, smallOrg.id));
+    expect(history.find((h) => h.entity === 'subscription')).toMatchObject({
+      action: 'create',
+      reason: 'Подписка при создании организации',
+      actorUserId: admin!.id,
+    });
+
+    // Неверные поля — 400 с кодом словаря и полем; организация не создаётся.
+    await f.t.admin.db
+      .update(schema.subscriptionPlans)
+      .set({ active: false })
+      .where(eq(schema.subscriptionPlans.id, 'm9'));
+    const fail = async (patch: object) => {
+      const res = await create(4, { ...sub, ...patch });
+      expect(res.status).toBe(400);
+      return ApiError.parse(await res.json()).error;
+    };
+    expect(await fail({ seats: 15 })).toEqual({
+      code: 'sub_seats',
+      message: 'Пакет — число мест с шагом 10: 10, 20, 30…',
+      details: { field: 'seats', step: 10, step2: 20, step3: 30 },
+    });
+    expect((await fail({ planId: 'm9' })).code).toBe('sub_plan');
+    expect((await fail({ planId: 'nope' })).details).toEqual({ field: 'planId' });
+    expect((await fail({ extraDiscountPct: 81 })).code).toBe('sub_discount');
+    expect((await fail({ paidUntil: '2027-02-30' })).code).toBe('validation_failed');
+    const orgs = AdminOrganizationList.parse(
+      await (await get('/api/admin/organizations?size=all')).json(),
+    );
+    expect(orgs.items.some((o) => o.name === 'ОсОО «Подписка 4»')).toBe(false);
+  });
+
   it('блокировка: сотрудники не входят и открытые сеансы отказывают; разблокировка возвращает вход', async () => {
     const accB = await signIn(f.app, 'acc-b', TEST_PASSWORD);
     const list = AdminOrganizationList.parse(

@@ -1,11 +1,18 @@
 import { hashSessionToken } from '@buhuchet/adapters/tokens';
-import { endSession, loadEmployeeAccess, sessionByToken, withOrgContext } from '@buhuchet/db';
+import {
+  endSession,
+  loadEmployeeAccess,
+  orgSubscriptionClosed,
+  sessionByToken,
+  withOrgContext,
+} from '@buhuchet/db';
 import { loginDenial } from '@buhuchet/domain';
 import { createMiddleware } from 'hono/factory';
-import { denialError } from '../auth-errors';
+import { denialError, subClosedError, subClosedOwnerError } from '../auth-errors';
 import type { ApiDeps } from '../deps';
 import type { AppEnv } from '../env';
 import { apiError } from '../errors';
+import { ownerOpenWhenClosed, subscriptionToday } from '../subscription-access';
 import { clearSessionCookie, readSessionToken, writeSessionCookie } from './cookie';
 
 /** Открытые методы: без входа. Все остальные пути API требуют действующий сеанс. */
@@ -58,7 +65,9 @@ const BEFORE_PASSWORD_CHANGE = new Set(['/api/auth/me', '/api/auth/password']);
  * слоем»): cookie → сеанс → организация. Без сеанса — 401; заблокированный пользователь или
  * организация — 403, сеанс закрывается; с временным паролем — только «кто я» и смена пароля. Для
  * сотрудника права и области загружаются в контексте его организации (RLS) и лежат в `access`;
- * право конкретного метода проверяет `requirePermission`.
+ * право конкретного метода проверяет `requirePermission`. Доступ организации закрыт по подписке
+ * (доработки 20.11.2026, блок 4, пункты 4–5) — сеанс сотрудника закрывается (403 `sub_closed`), а
+ * владельцу открыта только «Подписка» (`ownerOpenWhenClosed`, иначе 403 `sub_closed_owner`).
  */
 export function sessionGuard(deps: ApiDeps) {
   return createMiddleware<AppEnv>(async (c, next) => {
@@ -93,12 +102,23 @@ export function sessionGuard(deps: ApiDeps) {
       );
     }
     if (session.orgId && session.employeeId) {
-      const access = await withOrgContext(
+      const today = subscriptionToday(deps);
+      const { access, closed } = await withOrgContext(
         deps.db,
         { orgId: session.orgId, userId: session.userId },
-        (tx) => loadEmployeeAccess(tx, session.employeeId!),
+        async (tx) => ({
+          access: await loadEmployeeAccess(tx, session.employeeId!),
+          closed: await orgSubscriptionClosed(tx, today),
+        }),
       );
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-89
+      if (closed && !access?.subject.isOwner) {
+        await endSession(deps.db, tokenHash, 'blocked');
+        clearSessionCookie(c, deps);
+        return c.json(subClosedError(), 403);
+      }
       c.set('access', access);
+      if (closed && !ownerOpenWhenClosed(c.req.path)) return c.json(subClosedOwnerError(), 403);
     }
     return next();
   });

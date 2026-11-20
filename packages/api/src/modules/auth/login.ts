@@ -16,10 +16,11 @@ import {
   normalizeLogin,
 } from '@buhuchet/domain';
 import { AdminCodeRequiredResponse, ApiError, LoginRequest, MeResponse } from '@buhuchet/shared';
-import { denialError, lockedError } from '../../auth-errors';
+import { denialError, lockedError, subClosedError } from '../../auth-errors';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiError } from '../../errors';
+import { orgClosedNow } from '../../subscription-access';
 import { serverTexts } from '../l10n/texts';
 import { botText } from '../telegram/bot';
 import { ADMIN_CODE_SENT_DESCRIPTION, adminSecondFactorOn, startAdminCode } from './admin-code';
@@ -49,7 +50,7 @@ export const loginRoute = createRoute({
       content: error,
     },
     403: {
-      description: `Пароль верный, но сотрудник, учётная запись или организация заблокированы, или вход закрыт после ${ACCOUNT_LOCK_FAILURES} неверных паролей подряд (\`account_locked\`), или у администратора платформы не привязан Telegram (\`telegram_required\`, в details — ссылка привязки)`,
+      description: `Пароль верный, но сотрудник, учётная запись или организация заблокированы, или вход закрыт после ${ACCOUNT_LOCK_FAILURES} неверных паролей подряд (\`account_locked\`), или доступ организации закрыт по подписке (\`sub_closed\`, кроме владельца), или у администратора платформы не привязан Telegram (\`telegram_required\`, в details — ссылка привязки)`,
       content: error,
     },
     429: {
@@ -103,6 +104,11 @@ export function loginHandler(deps: ApiDeps): RouteHandler<typeof loginRoute, App
     await clearLoginAttempts(deps.db, login);
     const denial = loginDenial(account);
     if (denial) return c.json(denialError(denial, account), 403);
+    // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): сотрудник узнаёт
+    // об этом, как о блокировке, только после верного пароля; владелец входит — к экрану «Подписка».
+    if (account.orgId && !account.isOwner && (await orgClosedNow(deps, account.orgId))) {
+      return c.json(subClosedError(), 403);
+    }
     // Администратору платформы сеанс только после кода из Telegram.
     if (account.isPlatformAdmin && adminSecondFactorOn(deps)) {
       return startAdminCode(c, deps, account);

@@ -20,6 +20,8 @@ export function loginErrorText(
       return t('auth.org_blocked');
     case 'employee_blocked':
       return t('auth.user_blocked');
+    case 'sub_closed':
+      return t('auth.sub_closed');
     case 'user_blocked':
       return variant ? errorText(error) : t('auth.user_blocked');
     default:

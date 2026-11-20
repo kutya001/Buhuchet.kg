@@ -5,6 +5,7 @@ import {
   loadReminderData,
   orgIds,
   productionCalendarEntries,
+  orgSubscriptionClosed,
   withOrgContext,
   type Tx,
 } from '@buhuchet/db';
@@ -81,6 +82,9 @@ export const bellDayJob: Job = {
         put += await withOrgContext(ctx.db, { orgId, kind: 'job' }, async (tx) => {
           const day = cpNoticeDay(await bellDigestTime(tx), slot);
           if (!day) return 0;
+          // Доступ закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): строк дня нет, как и
+          // напоминаний в Telegram; после оплаты задним числом не добавляются.
+          if (await orgSubscriptionClosed(tx, day)) return 0;
           return putBell(tx, await bellDayPuts(tx, day, tr), ctx.clock.now());
         });
       } catch (err) {

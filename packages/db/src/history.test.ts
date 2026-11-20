@@ -100,6 +100,8 @@ describe.skipIf(!databaseAvailable())('история изменений и ве
       'indicator',
       'indicator',
       'indicator',
+      // Подписка новой организации (по умолчанию — бесплатный срок, этап 1, П1).
+      'subscription',
     ]);
     expect(rows.every((r) => r.actorUserId === platformAdminId && r.orgId === a.orgId)).toBe(true);
     // Без администратора (служебная команда без автора) — «Система».

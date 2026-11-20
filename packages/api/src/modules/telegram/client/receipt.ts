@@ -299,6 +299,8 @@ function refusalOf(r: SentFileRefusal, receipt: boolean): Refusal & { close: boo
   switch (r.code) {
     case 'sent_off':
       return { key: 'tgCpFileOff', close: true };
+    case 'sent_mem_full':
+      return { key: 'tgCpFileMem', close: true };
     case 'sent_day_left':
     case 'sent_day_limit':
       return { key: 'tgCpFileLimit', values: { лимит: SENT_FILES_PER_DAY }, close: true };

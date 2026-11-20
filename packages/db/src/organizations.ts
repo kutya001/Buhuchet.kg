@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  addDays,
   bishkekDate,
   DEFAULT_INDICATORS,
   defaultOrgPolicy,
@@ -13,6 +14,8 @@ import {
   shortName,
   SLUG_MESSAGES,
   slugProblem,
+  SUBSCRIPTION_LAUNCH_DAYS,
+  SUBSCRIPTION_NEW_ORG_FREE_REASON,
   type IsoDate,
   type OrgLegalForm,
 } from '@buhuchet/domain';
@@ -34,6 +37,7 @@ import {
   roleTemplates,
   users,
 } from './schema';
+import { startOrgSubscription, type NewOrgSubscription } from './subscriptions';
 
 export interface CreateOrganizationInput {
   /** Номер новой организации: «Одобрить» копирует файлы заявки под её ключ до транзакции. Нет — новый. */
@@ -64,8 +68,18 @@ export interface CreateOrganizationInput {
   } | null;
   /** Администратор платформы, который создаёт организацию. */
   createdBy?: string | null;
-  /** Сегодня по Бишкеку — «Вести с» показателей-примеров; без него — по часам сервера. */
+  /**
+   * Сегодня по Бишкеку — «Вести с» показателей-примеров и начало бесплатного периода; без него — по
+   * часам сервера.
+   */
   today?: IsoDate;
+  /**
+   * Подписка (доработки 20.11.2026, блок 4, пункт 5; блок 6, пункт 4): объект — что поставил
+   * администратор платформы в блоке «Подписка» окна «Новая организация»; null — «Нет подписки»
+   * (Админка без блока и «Одобрить» заявки, как в прототипе: владелец сначала видит экран оплаты); без
+   * поля — бесплатный период на 30 дней с пакетом по шагу (служебная команда `pnpm db:create-org`).
+   */
+  subscription?: NewOrgSubscription | null;
   /**
    * «Создать организацию» по заявке с сайта (прототип addOrgDlg с `lead`): в той же транзакции заявка
    * получает «Подключена» и ссылку на организацию; заявки нет или по ней уже создана организация —
@@ -251,7 +265,8 @@ async function insertOrganization(
     updatedBy: createdBy,
   });
   // Показатели по умолчанию (ТЗ «Показатели контрагентов»): «Вести с» — месяц создания организации.
-  const start = monthOf(input.today ?? bishkekDate(new Date()));
+  const today = input.today ?? bishkekDate(new Date());
+  const start = monthOf(today);
   const samples = await tx
     .insert(indicators)
     .values(
@@ -296,6 +311,17 @@ async function insertOrganization(
       changes: [{ field: 'name', to: i.name }],
     })),
   );
+  // Подписка — после записи «создана организация»: в истории она идёт следом.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-89
+  const subscription =
+    input.subscription === undefined
+      ? {
+          paidUntil: addDays(today, SUBSCRIPTION_LAUNCH_DAYS),
+          free: true,
+          reason: SUBSCRIPTION_NEW_ORG_FREE_REASON,
+        }
+      : input.subscription;
+  if (subscription) await startOrgSubscription(tx, orgId, subscription);
 
   if (input.lead) {
     await connectLeadToOrganization(tx, { ...input.lead, orgId, orgName: input.name });

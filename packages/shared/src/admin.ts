@@ -16,6 +16,7 @@ import {
   type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
+import { NewOrgSubscriptionRequest } from './admin-subscriptions';
 import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
 import { ContractorRow } from './contractors';
 import { KbProgress } from './kb';
@@ -132,6 +133,11 @@ export const CreateOrganizationRequest = z.object({
   temporaryPassword: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
   /** «Создать организацию» по заявке с сайта: заявка получит «Подключена» и ссылку (задача #165). */
   leadId: Uuid.optional(),
+  /**
+   * Блок «Подписка» (доработки 20.11.2026, блок 6, пункт 4): без него у организации «Нет подписки» —
+   * владелец сначала увидит экран оплаты, сотрудники не войдут.
+   */
+  subscription: NewOrgSubscriptionRequest.optional(),
 });
 export type CreateOrganizationRequest = z.infer<typeof CreateOrganizationRequest>;
 

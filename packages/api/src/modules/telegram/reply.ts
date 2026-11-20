@@ -27,6 +27,7 @@ import {
 } from '@buhuchet/domain';
 import { FILE_NOTE_MAX } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
+import { closedBotText, orgClosedNow } from '../../subscription-access';
 import { FILES_SECTION, UPLOAD_RATE_LIMIT } from '../files/files';
 import { botText, sendBotMessage, sendNow } from './bot';
 import { queueTelegramEvents } from './events';
@@ -153,6 +154,11 @@ export async function handleBotReply(deps: ApiDeps, msg: BotIncoming): Promise<b
   const denied = botTargetRefusal(target, action);
   if (denied) {
     await sayKey(denied);
+    return true;
+  }
+  // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4): ответ не принят.
+  if (target.orgId && (await orgClosedNow(deps, target.orgId))) {
+    await say(await closedBotText(deps));
     return true;
   }
   // Бот ждал другое: объясняет и ждёт дальше (прототип: `again`).

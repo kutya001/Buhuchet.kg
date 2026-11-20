@@ -25,6 +25,7 @@ import {
 import { ApiError, MeResponse } from '@buhuchet/shared';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
+import { subscriptionToday } from '../../subscription-access';
 
 interface MeUser {
   userId: string;
@@ -81,12 +82,17 @@ function meBody(
     features: features ?? {},
     reportConfirm: settings?.reportConfirm ?? false,
     payFirst: settings?.payFirst ?? false,
+    // Доступ закрыт по подписке: так входит только владелец, и ему — только «Моя организация» с
+    // «Подпиской» (доработки 20.11.2026, блок 4, пункты 4–5; прототип subLockMods).
     modules: user.isPlatformAdmin
       ? [...ADMIN_MENU_MODULES]
-      : access && features
-        ? menuModules(access.subject, features)
-        : [],
+      : access && subscription?.closed
+        ? ['org']
+        : access && features
+          ? menuModules(access.subject, features)
+          : [],
     subscription,
+    subClosed: subscription?.closed ?? false,
   };
 }
 
@@ -107,7 +113,7 @@ export async function loadMe(
   const previous = telegram ? null : await telegramPreviousChat(deps.db, user.userId);
   if (!user.orgId) return meBody(user, null, null, telegram, previous, null);
   const orgId = user.orgId;
-  const today = deps.clock.today();
+  const today = subscriptionToday(deps);
   const { access, organization, settings, phone, usage } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
@@ -145,7 +151,8 @@ export const meRoute = createRoute({
     },
     401: { description: 'Нет входа', content: { 'application/json': { schema: ApiError } } },
     403: {
-      description: 'Учётная запись или организация заблокирована',
+      description:
+        'Учётная запись или организация заблокирована, или доступ организации закрыт по подписке (`sub_closed`: сеанс сотрудника закрыт)',
       content: { 'application/json': { schema: ApiError } },
     },
   },

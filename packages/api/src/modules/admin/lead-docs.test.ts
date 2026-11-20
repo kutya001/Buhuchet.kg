@@ -600,6 +600,14 @@ describe.skipIf(!databaseAvailable())('Регистрация организац
         .from(schema.users)
         .where(eq(schema.users.id, done.ownerUserId));
       expect(user).toMatchObject({ login: 'azamat.toktogulov', mustChangePassword: false });
+      // «Одобрить» подписку не ставит (прототип ldApproveDlg; доработки 20.11.2026, блок 6, пункт 4):
+      // у организации «Нет подписки», её ставит «Изменить подписку».
+      expect(
+        await f.t.admin.db
+          .select()
+          .from(schema.orgSubscriptions)
+          .where(eq(schema.orgSubscriptions.orgId, done.orgId)),
+      ).toEqual([]);
       // Файлы заявки — в «Файловом менеджере» организации с источником «Заявка на подключение».
       const files = await f.t.admin.db
         .select()

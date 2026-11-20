@@ -40,6 +40,7 @@ import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
 import { orgContextOf, requirePermission } from '../../middleware/access';
+import { requireFreeMemory, subscriptionToday } from '../../subscription-access';
 import { FILES_SECTION, UPLOAD_RATE_LIMIT } from '../files/files';
 import { error, ownEmployeeOf, subjectOf } from './common';
 
@@ -106,6 +107,7 @@ export const regdocsUploadRoute = createRoute({
     400: { description: 'Не PDF, больше 10 МБ или неверное имя файла', content: error },
     401: noAuth,
     403: noRight,
+    409: { description: 'Память организации заполнена (`mem_full`)', content: error },
     429: { description: 'Больше 300 загрузок файлов за час', content: error },
   },
 });
@@ -130,8 +132,11 @@ export function regdocsUploadHandler(
     const slot = await takeRateLimit(deps.db, UPLOAD_RATE_LIMIT, ctx.userId!);
     if (!slot.ok)
       apiFail(429, 'file_upload_limit', 'Слишком много загрузок за час. Попробуйте позже');
-    await withOrgContext(deps.db, ctx, (tx) =>
-      insertPendingFile(tx, {
+    const today = subscriptionToday(deps);
+    await withOrgContext(deps.db, ctx, async (tx) => {
+      // ОТКЛОНЕНИЕ: docs/deviations.md#О-90
+      await requireFreeMemory(tx, today);
+      await insertPendingFile(tx, {
         id,
         sourceKind: 'contractor',
         sourceId: null,
@@ -140,8 +145,8 @@ export function regdocsUploadHandler(
         contentType: 'application/pdf',
         sizeBytes: size,
         storageKey,
-      }),
-    );
+      });
+    });
     // Срок — по настоящим часам: подпись хранилища ставит их же, а не часы демо-стенда (FIXED_NOW).
     const expiresAt = new Date(Date.now() + FILE_UPLOAD_LINK_SECONDS * 1000);
     const upload = await deps.storage.signedUploadUrl(storageKey, {

@@ -1,0 +1,30 @@
+import { MEMORY_FULL_MESSAGE } from '../subscriptions/memory';
+import type { UiTextDefault } from './texts';
+
+const S = 'Подписки';
+
+/**
+ * Подписки организаций (доработки 20.11.2026, блоки 4 и 6): ответы бота сотрудникам при закрытом
+ * доступе, отказы по полям подписки от администратора. Экран «Подписка» владельца и окно оплаты — свои
+ * тексты потока И.
+ */
+export const SUBSCRIPTIONS_TEXTS = {
+  // Кнопки старых сообщений, ответы на просьбы и команды бота сотрудникам, пока доступ организации
+  // закрыт по подписке (блок 4, пункт 4).
+  'subs.tg.closed': { ru: 'Доступ организации закрыт', section: S },
+  // Неверное поле подписки от администратора (блок 6, пункт 4; прототип subEditRead) — те же тексты,
+  // что у сервера (`SUBSCRIPTION_EDIT_MESSAGES`).
+  'err.sub_plan': { ru: 'Выберите действующий вид подписки', section: 'Ошибки' },
+  'err.sub_seats': {
+    ru: 'Пакет — число мест с шагом {step}: {step}, {step2}, {step3}…',
+    section: 'Ошибки',
+  },
+  'err.sub_gb': { ru: 'Целое число ГБ, 0 и больше', section: 'Ошибки' },
+  'err.sub_paid_until': { ru: 'Укажите дату', section: 'Ошибки' },
+  'err.sub_discount': {
+    ru: 'От 0 %; вместе со скидкой за срок — не больше 100 %',
+    section: 'Ошибки',
+  },
+  // Память организации заполнена — загрузка не начинается (блок 2, пункт 5; прототип subMemFullDlg).
+  'err.mem_full': { ru: MEMORY_FULL_MESSAGE, section: 'Ошибки' },
+} as const satisfies Record<string, UiTextDefault>;
