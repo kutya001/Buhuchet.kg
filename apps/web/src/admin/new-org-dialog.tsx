@@ -24,6 +24,7 @@ import { api, callApi } from '../api-client';
 import { fieldError, usePasswordEye } from '../auth/fields';
 import { useErrorText, useT } from '../l10n/provider';
 import { suggestTemporaryPassword } from '../staff/temp-password';
+import { useSubNewOrg } from './sub-new-org';
 
 /** Отказы сервера — ошибка под своим полем. */
 const FIELD_OF: Partial<Record<string, keyof NewOrganizationFormInput>> = {
@@ -89,6 +90,8 @@ export function NewOrganizationDialog({
     resolver: zodResolver(NewOrganizationForm),
     defaultValues: initial,
   });
+  // Блок «Подписка» (доработки 20.11.2026, блок 6, пункт 4): необязательный, под пояснением.
+  const sub = useSubNewOrg();
   // Поля регистрируются по порядку на экране: при ошибках фокус встаёт на первое неверное.
   const fields = {
     name: register('name'),
@@ -100,7 +103,13 @@ export function NewOrganizationDialog({
 
   const submit = (event: FormEvent) =>
     void handleSubmit(async (values) => {
-      const json = lead ? { ...values, leadId: lead.id } : values;
+      const subscription = sub.read();
+      if (subscription === null) return;
+      const json = {
+        ...values,
+        ...(lead ? { leadId: lead.id } : {}),
+        ...(subscription ? { subscription } : {}),
+      };
       const res = await callApi(() => api.api.admin.organizations.$post({ json }));
       if (res.ok) {
         const body = CreatedOrganization.safeParse(res.data);
@@ -130,7 +139,7 @@ export function NewOrganizationDialog({
       size="mid"
       title={t('orgs.new.title')}
       sub={lead ? t('leads.org.sub', { at: formatMomentRu(new Date(lead.at)) }) : t('orgs.new.sub')}
-      dirty={isDirty}
+      dirty={isDirty || sub.dirty}
       footer={
         <>
           <button type="button" className={buttonClass('ghost')} onClick={onClose}>
@@ -210,6 +219,7 @@ export function NewOrganizationDialog({
           </Field>
         </FormGrid>
         <Note icon="info">{t('orgs.new.note')}</Note>
+        {sub.node}
       </form>
     </Modal>
   );

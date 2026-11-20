@@ -74,7 +74,7 @@ export const subscriptionPlans = pgTable(
     check('subscription_plans_name_check', sql`char_length(${t.name}) between 1 and 100`),
     check(
       'subscription_plans_values_check',
-      sql`${t.months} between 1 and 12 and ${t.discountPct} between 0 and 99 and cardinality(${t.perks}) <= 10`,
+      sql`${t.months} between 1 and 36 and ${t.discountPct} between 0 and 99 and cardinality(${t.perks}) <= 10`,
     ),
     pgPolicy('subscription_plans_read', {
       as: 'permissive',

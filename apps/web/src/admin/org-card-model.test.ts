@@ -31,6 +31,22 @@ const entry = (over: Partial<Entry>): Entry => ({
 });
 
 describe('карточка организации: «История»', () => {
+  it('подписка — теми же словами, что в окне «Подписка организации»; вид — названием от сервера', () => {
+    expect(
+      orgHistoryText(
+        t,
+        entry({
+          entity: 'subscription',
+          changes: [
+            { field: 'planId', from: 'Месяц', to: 'Квартал' },
+            { field: 'seats', from: 10, to: 20 },
+          ],
+          reason: 'Оплата наличными',
+        }),
+      ),
+    ).toBe('Подписка изменена: Вид: Месяц → Квартал; Пакет: 10 → 20. Причина: Оплата наличными');
+  });
+
   it('создание и открытие карточки', () => {
     expect(orgHistoryText(t, entry({ action: 'create' }))).toBe(
       'Организация создана вместе с владельцем',

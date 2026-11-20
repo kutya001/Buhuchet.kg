@@ -78,6 +78,38 @@ import {
   runValuesRoute,
 } from './runs';
 import {
+  subscriptionCardHandler,
+  subscriptionCardRoute,
+  subscriptionConfirmHandler,
+  subscriptionConfirmRoute,
+  subscriptionEditHandler,
+  subscriptionEditRoute,
+  subscriptionPlanCreateHandler,
+  subscriptionPlanCreateRoute,
+  subscriptionPlanDeleteHandler,
+  subscriptionPlanDeleteRoute,
+  subscriptionPlansHandler,
+  subscriptionPlansRoute,
+  subscriptionPlanUpdateHandler,
+  subscriptionPlanUpdateRoute,
+  subscriptionReceiptHandler,
+  subscriptionReceiptRoute,
+  subscriptionRejectHandler,
+  subscriptionRejectRoute,
+  subscriptionSettingsHandler,
+  subscriptionSettingsRoute,
+  subscriptionSettingsUpdateHandler,
+  subscriptionSettingsUpdateRoute,
+  subscriptionsExportHandler,
+  subscriptionsExportRoute,
+  subscriptionsListHandler,
+  subscriptionsListRoute,
+  subscriptionsSummaryHandler,
+  subscriptionsSummaryRoute,
+  subscriptionsValuesHandler,
+  subscriptionsValuesRoute,
+} from './subscriptions-tab';
+import {
   telegramBotHandler,
   telegramBotRoute,
   telegramBotViewHandler,
@@ -283,6 +315,22 @@ export function adminModule(deps: ApiDeps) {
       .openapi(deleteLeadRoute, deleteLeadHandler(deps))
       .openapi(approveLeadRoute, approveLeadHandler(deps))
       .openapi(leadDocLinkRoute, leadDocLinkHandler(deps))
+      // «Подписки»: адреса без номера организации — раньше окна `/admin/subscriptions/{orgId}`.
+      .openapi(subscriptionsListRoute, subscriptionsListHandler(deps))
+      .openapi(subscriptionsValuesRoute, subscriptionsValuesHandler(deps))
+      .openapi(subscriptionsExportRoute, subscriptionsExportHandler(deps))
+      .openapi(subscriptionsSummaryRoute, subscriptionsSummaryHandler(deps))
+      .openapi(subscriptionReceiptRoute, subscriptionReceiptHandler(deps))
+      .openapi(subscriptionConfirmRoute, subscriptionConfirmHandler(deps))
+      .openapi(subscriptionRejectRoute, subscriptionRejectHandler(deps))
+      .openapi(subscriptionCardRoute, subscriptionCardHandler(deps))
+      .openapi(subscriptionEditRoute, subscriptionEditHandler(deps))
+      .openapi(subscriptionPlansRoute, subscriptionPlansHandler(deps))
+      .openapi(subscriptionPlanCreateRoute, subscriptionPlanCreateHandler(deps))
+      .openapi(subscriptionPlanUpdateRoute, subscriptionPlanUpdateHandler(deps))
+      .openapi(subscriptionPlanDeleteRoute, subscriptionPlanDeleteHandler(deps))
+      .openapi(subscriptionSettingsRoute, subscriptionSettingsHandler(deps))
+      .openapi(subscriptionSettingsUpdateRoute, subscriptionSettingsUpdateHandler(deps))
       // «Запуски»: задачи по расписанию и журнал их запусков (только чтение).
       .openapi(jobListRoute, jobListHandler(deps))
       .openapi(jobValuesRoute, jobValuesHandler(deps))

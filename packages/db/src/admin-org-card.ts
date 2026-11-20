@@ -49,6 +49,7 @@ import {
   reportTypes,
   rolePermissions,
   roles,
+  subscriptionPlans,
   tasks,
   telegramLinks,
   users,
@@ -204,7 +205,24 @@ const FILE_KIND = sql.raw(
 );
 
 /**
- * Поля организации и роли, чьи значения «было → стало» уходят в «Историю» карточки; у остальных
+ * Поля записей истории подписки со значениями: «Изменить подписку», подтверждение и отклонение чека.
+ * Вид подписки — названием (`planNames`), секретов нет.
+ */
+export const SUBSCRIPTION_HISTORY_VALUE_FIELDS = [
+  'planId',
+  'seats',
+  'extraGb',
+  'paidUntil',
+  'extraDiscountPct',
+  'free',
+  'kind',
+  'amount',
+  'months',
+  'status',
+] as const;
+
+/**
+ * Поля организации, роли и подписки, чьи значения «было → стало» уходят в «Историю» карточки; у остальных
  * (ключ логотипа в хранилище, перечни прав) — только название поля. Настройки (`org_settings`) —
  * значения учётной политики, отдаются целиком: секретов в них нет.
  */
@@ -224,17 +242,47 @@ const HISTORY_VALUE_FIELDS: Readonly<Record<string, ReadonlySet<string>>> = {
     'fromLead',
   ]),
   role: new Set(['name']),
+  // Подписка (доработки 20.11.2026, блок 6; прототип: log('porg') в subPayOk, subPayRej, subSet).
+  subscription: new Set(SUBSCRIPTION_HISTORY_VALUE_FIELDS),
 };
+
+
+/** Названия видов подписки — для «было → стало» вида в истории (удалённый вид — кодом). */
+export async function subscriptionPlanNames(tx: Tx): Promise<ReadonlyMap<string, string>> {
+  const rows = await tx
+    .select({ id: subscriptionPlans.id, name: subscriptionPlans.name })
+    .from(subscriptionPlans);
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+/** Вид подписки в изменениях истории — названием. */
+export function withPlanNames<C extends { field: string; from?: unknown; to?: unknown }>(
+  changes: readonly C[],
+  names: ReadonlyMap<string, string>,
+): C[] {
+  const name = (v: unknown) => (typeof v === 'string' ? (names.get(v) ?? v) : v);
+  return changes.map((c) =>
+    c.field === 'planId'
+      ? { ...c, ...('from' in c ? { from: name(c.from) } : {}), to: name(c.to) }
+      : c,
+  );
+}
 
 function historyChanges(
   entity: string,
   changes: readonly { field: string; from?: unknown; to?: unknown }[],
+  plans: ReadonlyMap<string, string>,
 ): AdminOrgCardRecord['history'][number]['changes'] {
   if (entity === 'org_settings') return changes.map((c) => ({ ...c }));
   const shown = HISTORY_VALUE_FIELDS[entity];
   const scalar = (v: unknown) =>
-    typeof v === 'string' ? v.slice(0, 300) : typeof v === 'boolean' ? v : null;
-  return changes.map((c) =>
+    typeof v === 'string'
+      ? v.slice(0, 300)
+      : typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v))
+        ? v
+        : null;
+  const list = entity === 'subscription' ? withPlanNames(changes, plans) : changes;
+  return list.map((c) =>
     shown?.has(c.field)
       ? { field: c.field, from: scalar(c.from), to: scalar(c.to) }
       : { field: c.field },
@@ -476,7 +524,7 @@ export async function adminOrgCard(
     .orderBy(desc(files.createdAt), desc(files.id))
     .limit(RECENT_FILES);
 
-  // «История»: организация, настройки и роли; автор без сотрудника — администратор платформы.
+  // «История»: организация, настройки, роли и подписка; автор без сотрудника — администратор платформы.
   const historyRows = (where: SQL, limit: number) =>
     tx
       .select({
@@ -500,6 +548,7 @@ export async function adminOrgCard(
       .orderBy(desc(auditLog.at), desc(auditLog.id))
       .limit(limit);
   type HistoryRow = Awaited<ReturnType<typeof historyRows>>[number];
+  const plans = await subscriptionPlanNames(tx);
   const entry = (h: HistoryRow): AdminOrgHistoryEntry => ({
     id: `${h.entity}-${h.id}`,
     at: h.at,
@@ -508,12 +557,17 @@ export async function adminOrgCard(
     entity: h.entity,
     action: h.action,
     subject: h.subject,
-    changes: historyChanges(h.entity, h.changes),
+    changes: historyChanges(h.entity, h.changes, plans),
     reason: h.reason,
   });
   // Открытия карточки — отдельным пределом: частые открытия не вытесняют из «Истории» правки
   // организации, её учётной политики и ролей.
-  const inHistory = inArray(auditLog.entity, ['organization', 'org_settings', 'role']);
+  const inHistory = inArray(auditLog.entity, [
+    'organization',
+    'org_settings',
+    'role',
+    'subscription',
+  ]);
   const isView = and(eq(auditLog.entity, 'organization'), eq(auditLog.action, 'card_view'))!;
   const changed = await historyRows(and(inHistory, not(isView))!, ADMIN_CARD_ROWS);
   const viewed = await historyRows(isView, ADMIN_ORG_VIEW_ROWS);

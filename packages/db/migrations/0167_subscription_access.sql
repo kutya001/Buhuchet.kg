@@ -1,7 +1,10 @@
 -- Закрытие доступа по подписке (доработки 20.11.2026, блок 4, пункты 4–7; этап 1, П1 общего плана;
 -- docs/decisions.md п. О-63): подписка новой организации в транзакции её создания и повтор запуска
--- тарификации в день, когда закрытие начинает работать.
+-- тарификации в день, когда закрытие начинает работать; срок вида подписки до 36 месяцев (этап 1, П3).
 SET LOCAL lock_timeout = '10s';--> statement-breakpoint
+-- «Виды подписок» Админки (блок 6, пункт 5; прототип subKindDlg): срок вида — от 1 до 36 месяцев.
+ALTER TABLE "subscription_plans" DROP CONSTRAINT "subscription_plans_values_check";--> statement-breakpoint
+ALTER TABLE "subscription_plans" ADD CONSTRAINT "subscription_plans_values_check" CHECK ("subscription_plans"."months" between 1 and 36 and "subscription_plans"."discount_pct" between 0 and 99 and cardinality("subscription_plans"."perks") <= 10);--> statement-breakpoint
 -- Подписка новой организации (блок 4, пункт 5; блок 6, пункт 4; прототип subNewOrgSave): только
 -- организации контекста, созданной в этой же транзакции (`created_at` — начало транзакции; столбец роль
 -- приложения не меняет), без подписки и без оплат — так функция не продлит и не поставит подписку

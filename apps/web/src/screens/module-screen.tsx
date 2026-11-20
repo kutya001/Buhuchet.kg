@@ -6,6 +6,7 @@ import { ContractorsList } from '../contractors/contractors-list';
 import { L10nList } from '../admin/l10n-list';
 import { LeadsList } from '../admin/leads-list';
 import { OrgsActivity } from '../admin/orgs-activity';
+import { OrgsSubsTab } from '../admin/subs-tab';
 import { OrgsList } from '../admin/orgs-list';
 import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
@@ -143,6 +144,7 @@ export function ModuleScreen({
   if (moduleId === 'accounts') return <AccountsList />;
   if (moduleId === 'orgs') {
     if (tabId === 'act') return <OrgsActivity />;
+    if (tabId === 'subs') return <OrgsSubsTab />;
     return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   }
   if (moduleId === 'afiles') return <AdminFilesScreen tab={tabId ?? 'store'} />;
@@ -202,6 +204,7 @@ const SCREENS_WITH_PLATES: ReadonlySet<string> = new Set<string>([
   'orgs/',
   'orgs/list',
   'orgs/act',
+  'orgs/subs',
   'l10n/',
   'runs/',
   'runs/jobs',

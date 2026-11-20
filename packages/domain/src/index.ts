@@ -13,6 +13,7 @@ export * from './subscriptions/calc';
 export * from './subscriptions/receipt';
 export * from './subscriptions/edit';
 export * from './subscriptions/memory';
+export * from './subscriptions/admin';
 export * from './onboarding/onboarding';
 export * from './home/home';
 export * from './home/analytics';

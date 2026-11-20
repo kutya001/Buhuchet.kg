@@ -414,6 +414,8 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'list', icon: 'building', label: 'tab.orgs.list' },
       { id: 'act', icon: 'chart', label: 'tab.orgs.act' },
       { id: 'leads', icon: 'send', label: 'tab.orgs.leads' },
+      // «Подписки» — чеков на проверке (доработки 20.11.2026, блок 6; прототип `count: subWaitN()`).
+      { id: 'subs', icon: 'wallet', label: 'tab.orgs.subs' },
     ],
     add: [{ id: 'org', icon: 'building', label: 'add.orgs.org' }],
   },
