@@ -32,6 +32,7 @@ import { MONEY_TEXTS, TAX_MONEY_TEXTS } from './money-texts';
 import { NEWS_TEXTS } from './news-texts';
 import { ONBOARDING_TEXTS } from './onboarding-texts';
 import { ORG_TEXTS } from './org-texts';
+import { SUBSCRIPTION_TEXTS } from './subscription-texts';
 import { PLATFORM_DICTS_TEXTS } from './platform-dicts-texts';
 import { PROJECTS_TEXTS } from './projects-texts';
 import { REPORT_MONTHS_TEXTS } from './report-months-texts';
@@ -113,6 +114,7 @@ export const UI_TEXTS = {
   ...STAFF_TEXTS,
   ...STATUS_TEXTS,
   ...ORG_TEXTS,
+  ...SUBSCRIPTION_TEXTS,
   ...ONBOARDING_TEXTS,
   ...HOME_TEXTS,
   ...CONTRACTORS_TEXTS,

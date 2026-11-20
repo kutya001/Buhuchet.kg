@@ -6,12 +6,13 @@ import {
   RESET_CODE_LENGTH,
   SCOPE_GROUPS,
   SCOPES,
+  SUBSCRIPTION_STATUSES,
   type PermissionId,
   type ScopeGroupId,
   type UiTextKey,
 } from '@buhuchet/domain';
 import { z } from 'zod';
-import { Uuid } from './common';
+import { IsoDate, Uuid } from './common';
 import { FeatureSchema, MenuModuleIdSchema } from './org';
 import { TelegramInfo } from './telegram';
 
@@ -98,6 +99,19 @@ export const MeResponse = z.object({
   /** «Сдача отчёта только после оплаты» действует (при «Учёте оплаты налогов», задача 2.19). */
   payFirst: z.boolean(),
   modules: z.array(MenuModuleIdSchema),
+  /**
+   * Подписка организации (доработки 20.11.2026, блок 4, пункты 3–6): статус, «Оплачено до» и закрыт
+   * ли доступ по подписке — для полосы «Продлите подписку» и экрана «Доступ закрыт»; у администратора
+   * платформы — null.
+   */
+  subscription: z
+    .object({
+      status: z.enum(SUBSCRIPTION_STATUSES),
+      paidUntil: IsoDate.nullable(),
+      closed: z.boolean(),
+    })
+    .nullable()
+    .optional(),
 });
 export type MeResponse = z.infer<typeof MeResponse>;
 

@@ -3,6 +3,7 @@ import {
   currentOrganization,
   loadEmployeeAccess,
   orgMenuSettings,
+  orgUsage,
   phoneCodes,
   telegramChat,
   telegramPlainText,
@@ -45,6 +46,7 @@ function meBody(
     payFirst: boolean;
   } | null,
   phone: string | null = null,
+  subscription: MeResponse['subscription'] = null,
 ): MeResponse {
   const features = settings?.features ?? null;
   return {
@@ -84,6 +86,7 @@ function meBody(
       : access && features
         ? menuModules(access.subject, features)
         : [],
+    subscription,
   };
 }
 
@@ -104,7 +107,8 @@ export async function loadMe(
   const previous = telegram ? null : await telegramPreviousChat(deps.db, user.userId);
   if (!user.orgId) return meBody(user, null, null, telegram, previous, null);
   const orgId = user.orgId;
-  const { access, organization, settings, phone } = await withOrgContext(
+  const today = deps.clock.today();
+  const { access, organization, settings, phone, usage } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
     async (tx) => {
@@ -116,10 +120,17 @@ export async function loadMe(
         settings: await orgMenuSettings(tx, orgId),
         // Телефон в «Мой профиль» — по маске страны из справочника «Коды телефонов».
         phone: access?.phone ? formatPhone(access.phone, await phoneCodes(tx)) : null,
+        // Подписка: полоса «Продлите подписку» и «Доступ закрыт» (блок 4); память не считается.
+        usage: await orgUsage(tx, today, { bytes: false }),
       };
     },
   );
-  return meBody(user, access, organization, telegram, previous, settings, phone);
+  const subscription = usage && {
+    status: usage.status,
+    paidUntil: usage.paidUntil,
+    closed: usage.closed,
+  };
+  return meBody(user, access, organization, telegram, previous, settings, phone, subscription);
 }
 
 export const meRoute = createRoute({

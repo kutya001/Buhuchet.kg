@@ -16,6 +16,7 @@ export * from './report-pick';
 export * from './tasks';
 export * from './roles';
 export * from './org';
+export * from './org-subscription';
 export * from './onboarding';
 export * from './home';
 export * from './kb';
