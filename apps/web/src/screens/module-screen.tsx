@@ -34,6 +34,7 @@ import { KbNewsTab } from '../news/news-tab';
 import { OrgMain } from '../org/org-main';
 import { OrgPolicyTab } from '../org/org-policy';
 import { OrgSettingsTab } from '../org/org-settings';
+import { OrgSubTab } from '../org/sub-screen';
 import { PlatformDictsAdmin } from '../platform-dicts/pdicts-screen';
 import { ProjectsList, type ProjectTab } from '../projects/projects-list';
 import { ReportCalendarTab } from '../reports/report-calendar';
@@ -90,6 +91,7 @@ export function ModuleScreen({
     const tab = tabId ?? 'main';
     if (tab === 'policy') return <OrgPolicyTab />;
     if (tab === 'settings') return <OrgSettingsTab />;
+    if (tab === 'sub') return <OrgSubTab />;
     return <OrgMain />;
   }
   if (moduleId === 'reports') {

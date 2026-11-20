@@ -10,6 +10,13 @@ import type { ApiErrorLike } from './l10n/translate';
 export const SAVED_EVENT = 'buhuchet:saved';
 
 /**
+ * Событие окна: память организации заполнена — сервер не принял загрузку файла (409 `mem_full`,
+ * доработки 20.11.2026, блок 2, пункт 5). Оболочка показывает окно «Память организации заполнена»
+ * (`MemFullHost`), в `detail` — ошибка ответа.
+ */
+export const MEM_FULL_EVENT = 'buhuchet:mem-full';
+
+/**
  * Запросы, после которых сверять шаги незачем: сама «База знаний», отметки прочитанных новостей, вид
  * списков, вход и пароль, страница контрагента без входа, заявка и видео с лендинга, «просмотрено» и
  * «прочитано» колокольчика (новости он обновляет сам).
@@ -66,11 +73,11 @@ export async function callApi(send: () => Promise<ResponseLike>): Promise<ApiRes
   const body: unknown = await res.json().catch(() => null);
   if (res.ok) return { ok: true, status: res.status, data: body };
   const parsed = ApiError.safeParse(body);
-  return {
-    ok: false,
-    status: res.status,
-    error: parsed.success ? parsed.data.error : { code: 'unknown', message: '' },
-  };
+  const error = parsed.success ? parsed.data.error : { code: 'unknown', message: '' };
+  if (error.code === 'mem_full' && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(MEM_FULL_EVENT, { detail: error }));
+  }
+  return { ok: false, status: res.status, error };
 }
 
 /**

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { loginHref, RETURN_HEADER } from '../auth/return-to';
 import { localApi } from '../server-api';
-import { canEnter } from './modules';
+import { canEnter, lockedMe } from './modules';
 
 /**
  * «Кто я» для первого показа страницы за входом — методом `/api/auth/me` через API в том же процессе,
@@ -19,7 +19,8 @@ export const loadMe = cache(async (): Promise<MeResponse | null> => {
   const cookie = (await headers()).get('cookie');
   if (!cookie) return null;
   const res = await localApi.api.auth.me.$get(undefined, { headers: { cookie } });
-  if (res.status === 200) return MeResponse.parse(await res.json());
+  // Доступ закрыт по подписке — у владельца в меню только «Моя организация» (`lockedMe`).
+  if (res.status === 200) return lockedMe(MeResponse.parse(await res.json()));
   if (res.status === 401 || res.status === 403) return null;
   // Других ответов у метода нет; на всякий случай (500) — ошибка страницы.
   throw new Error(`GET /api/auth/me: ${(res as Response).status}`);

@@ -138,7 +138,10 @@ export function fileSizeText(t: Translate, size: number): string {
 }
 
 /** Положить файл в хранилище по подписанной ссылке (мимо API). */
-async function putToStorage(ticket: FileUploadTicket, file: File): Promise<ApiErrorLike | null> {
+export async function putToStorage(
+  ticket: FileUploadTicket,
+  file: File,
+): Promise<ApiErrorLike | null> {
   try {
     const put = await fetch(ticket.upload.url, {
       method: ticket.upload.method,

@@ -59,14 +59,14 @@ export const SUB_PAY_PILL: Record<SubPay['status'], { tone: PillTone; icon: Icon
   rejected: { tone: 'bad', icon: 'ban' },
 };
 
-export const subDays = (t: Translate, n: number): string =>
-  t(`sub.days.${pluralForm(n)}`, { n });
+export const subDays = (t: Translate, n: number): string => t(`sub.days.${pluralForm(n)}`, { n });
 
 export const whatText = (t: Translate, kind: SubPay['kind']): string => t(`sub.what.${kind}`);
 
 /** «Срок» строки «Истории оплат» (прототип `subPayTermOwn`). */
 export function termText(t: Translate, p: Pick<SubPay, 'kind' | 'months' | 'paidUntil'>): string {
-  if (p.kind === 'free') return p.paidUntil ? t('sub.term.until', { date: formatDateRu(p.paidUntil) }) : '—';
+  if (p.kind === 'free')
+    return p.paidUntil ? t('sub.term.until', { date: formatDateRu(p.paidUntil) }) : '—';
   return p.months ? t('sub.term.months', { n: p.months }) : '—';
 }
 
@@ -124,7 +124,11 @@ export function payDefaults(view: SubView, mode: PayMode, pre?: SubPay | null): 
       : view.sub
         ? Math.max(view.sub.seats, min)
         : min;
-  const extraGb = pre ? pre.extraGb : mode === 'mem' ? view.usage.extraGb + 1 : (view.sub?.extraGb ?? 0);
+  const extraGb = pre
+    ? pre.extraGb
+    : mode === 'mem'
+      ? view.usage.extraGb + 1
+      : (view.sub?.extraGb ?? 0);
   const startMode = pre?.startMode === 'next' && view.monthsLeft > 1 ? 'next' : 'now';
   return { planId, seats, extraGb, startMode };
 }

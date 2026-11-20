@@ -12,6 +12,7 @@ import type { MeResponse } from '@buhuchet/shared';
 import { describe, expect, it } from 'vitest';
 import {
   addActions,
+  lockedMe,
   MODULES,
   moduleHref,
   parseAppPath,
@@ -19,6 +20,7 @@ import {
   resolveAppRoute,
   roleEditorOf,
   shellAccess,
+  subLock,
   visibleTabs,
 } from './modules';
 import {
@@ -377,5 +379,68 @@ describe('выбор на устройстве: тема, левая панел�
       'bh_theme=dark; Path=/; Max-Age=31536000; SameSite=Lax',
     );
     expect(prefCookie('bh_tree', 'a.b', true)).toMatch(/^bh_tree=a\.b; .*; Secure$/);
+  });
+});
+
+// «Подписка» и закрытый доступ (доработки 20.11.2026, блок 4, пункты 4–5, блок 5, пункт 1; прототип
+// v154 `orgTabs`, `subLockMods`): вкладку видит только владелец, при закрытом доступе у владельца —
+// только «Моя организация» → «Подписка», у сотрудника — «Доступ закрыт».
+describe('подписка в оболочке', () => {
+  const employee = (isOwner: boolean): MeResponse['employee'] => ({
+    id: '00000000-0000-4000-8000-000000000002',
+    fullName: 'Садыков Эркин',
+    shortName: 'Садыков Э.',
+    phone: null,
+    roleId: '00000000-0000-4000-8000-000000000003',
+    roleName: isOwner ? 'Владелец' : 'Бухгалтер',
+    isOwner,
+  });
+  const sub = (status: 'active' | 'expiring' | 'overdue' | 'none' | 'demo', closed = false) => ({
+    status,
+    paidUntil: status === 'none' ? null : '2026-11-25',
+    closed,
+  });
+  const withSub = (
+    isOwner: boolean,
+    subscription: ReturnType<typeof sub> | null,
+    o: Parameters<typeof me>[0] = {},
+  ): MeResponse => ({
+    ...me({ modules: ['home', 'cps', 'org'], ...o }),
+    employee: employee(isOwner),
+    subscription,
+  });
+  const orgTabs = (m: MeResponse) => ids(visibleTabs('org', shellAccess(m)));
+
+  it('«Подписка» — только владельцу, не в демо-организации и не администратору', () => {
+    expect(orgTabs(withSub(true, sub('active')))).toEqual(['main', 'policy', 'settings', 'sub']);
+    expect(orgTabs(withSub(false, sub('active')))).toEqual(['main', 'policy', 'settings']);
+    expect(orgTabs(withSub(true, sub('demo')))).toEqual(['main', 'policy', 'settings']);
+    expect(orgTabs(withSub(true, null))).toEqual(['main', 'policy', 'settings']);
+    expect(
+      orgTabs({ ...withSub(true, sub('active')), user: { ...me().user, isPlatformAdmin: true } }),
+    ).toEqual(['main', 'policy', 'settings']);
+  });
+
+  it('доступ закрыт: владелец — только «Подписка», сотрудник — «Доступ закрыт»', () => {
+    const owner = withSub(true, sub('overdue', true));
+    expect(subLock(owner)).toBe('owner');
+    const locked = lockedMe(owner);
+    expect(locked.modules).toEqual(['org']);
+    expect(orgTabs(locked)).toEqual(['sub']);
+    expect(resolveAppRoute(locked, 'cps', ['all'])).toEqual({ redirect: '/app/org/sub' });
+    expect(resolveAppRoute(locked, 'org', ['main'])).toEqual({ redirect: '/app/org/sub' });
+    expect(resolveAppRoute(locked, 'org', ['sub'])).toEqual({ moduleId: 'org', tabId: 'sub' });
+
+    const staff = withSub(false, sub('none', true));
+    expect(subLock(staff)).toBe('staff');
+    expect(lockedMe(staff)).toBe(staff);
+  });
+
+  it('открытый доступ и администратор — без замка', () => {
+    expect(subLock(withSub(true, sub('expiring')))).toBeNull();
+    expect(subLock(withSub(false, null))).toBeNull();
+    const admin = { ...withSub(false, sub('overdue', true)), employee: null };
+    expect(subLock(admin)).toBeNull();
+    expect(lockedMe(withSub(true, sub('active'))).modules).toEqual(['home', 'cps', 'org']);
   });
 });

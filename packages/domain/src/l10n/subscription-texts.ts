@@ -140,7 +140,6 @@ export const SUBSCRIPTION_TEXTS = {
     ru: 'Нажмите «Оплатить подписку», выберите вид и пакет и прикрепите чек',
     section: S,
   },
-  'sub.pays.more': { ru: 'Показаны последние {n} оплат', section: S },
   'sub.col.at': { ru: 'Дата', section: S },
   'sub.col.what': { ru: 'Что оплачено', section: S },
   'sub.col.term': { ru: 'Срок', section: S },
@@ -223,6 +222,7 @@ export const SUBSCRIPTION_TEXTS = {
   'sub.pay.s5': { ru: '5. Чек об оплате', section: P },
   'sub.pay.kinds': { ru: 'Вид подписки', section: P },
   'sub.pay.kind_now': { ru: 'сейчас', section: P },
+  'sub.pay.per_seat': { ru: 'сом за контрагента в месяц', section: P },
   'sub.pay.kind_disc': { ru: 'скидка {pct} % · {months} мес.', section: P },
   'sub.pay.kind_nodisc': { ru: 'без скидки за срок · {months} мес.', section: P },
   'sub.pay.sub_line': {
