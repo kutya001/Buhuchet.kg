@@ -10,7 +10,7 @@ import {
   SubscriptionPayDone,
   SubscriptionUploadTicket,
 } from '@buhuchet/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { SUB_RECEIPT_RATE_LIMIT } from './subscription';
@@ -92,7 +92,11 @@ describe.skipIf(!databaseAvailable())('«Подписка» владельца: 
       .from(users)
       .where(eq(users.login, 'platform-admin'));
     adminId = row!.id;
-    // У А — месячная подписка на 10 мест до конца года, первый месяц уже оплачен; у Б подписки нет.
+    // У А — месячная подписка на 10 мест до конца года, первый месяц уже оплачен; у Б подписки нет
+    // (подписку тестовых организаций из `createStaffFixture` убираем: тесту нужны свои условия).
+    const both = [f.a.orgId, f.b.orgId];
+    await f.t.admin.db.delete(subscriptionPayments).where(inArray(subscriptionPayments.orgId, both));
+    await f.t.admin.db.delete(orgSubscriptions).where(inArray(orgSubscriptions.orgId, both));
     await f.t.admin.db.insert(orgSubscriptions).values({
       orgId: f.a.orgId,
       planId: 'm1',
