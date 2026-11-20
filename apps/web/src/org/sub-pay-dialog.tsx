@@ -497,7 +497,7 @@ export function SubPayDialog({
                           : t('sub.pay.kind_nodisc', { months: k.months })}
                       </span>
                       {k.perks.length ? (
-                        <ul className="m-0 mt-1 pl-4 text-[12px] leading-[1.4] text-muted">
+                        <ul className="m-0 mt-1 list-disc pl-4 text-[12px] leading-[1.4] text-muted">
                           {k.perks.map((x) => (
                             <li key={x}>{x}</li>
                           ))}

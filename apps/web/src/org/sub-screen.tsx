@@ -9,6 +9,7 @@ import {
   pluralForm,
   SUBSCRIPTION_GB_MB,
   subscriptionDaysLeft,
+  subscriptionMemLimitMb,
   type IsoDate,
 } from '@buhuchet/domain';
 import {
@@ -126,6 +127,11 @@ function SubCards({ view }: { view: SubView }) {
   const extra = sub && sub.seats > p.extraDiscountOver ? sub.extraDiscountPct : 0;
   const usedGb = gbText(bytesMb(u.bytesUsed));
   const incMb = p.baseMb + p.seatMb * u.seats;
+  // Предела нет только без подписки — тогда, как у прототипа (`subMem`), включённое в цену.
+  const limitMb =
+    u.bytesLimit === null
+      ? subscriptionMemLimitMb(p, u.seats, u.extraGb)
+      : bytesMb(u.bytesLimit);
   const termHint = !sub
     ? t('sub.card.never')
     : left >= 0
@@ -177,13 +183,9 @@ function SubCards({ view }: { view: SubView }) {
         id="mem"
         icon="folder"
         title={t('sub.card.mem')}
-        value={
-          u.bytesLimit === null
-            ? t('sub.card.mem_free', { used: usedGb })
-            : t('sub.card.mem_v', { used: usedGb, limit: gbText(bytesMb(u.bytesLimit)) })
-        }
+        value={t('sub.card.mem_v', { used: usedGb, limit: gbText(limitMb) })}
       >
-        <UsageBar used={u.bytesUsed} limit={u.bytesLimit} label={t('sub.card.mem')} />
+        <UsageBar used={bytesMb(u.bytesUsed)} limit={limitMb} label={t('sub.card.mem')} />
         <span>
           {t('sub.card.mem_inc', {
             inc: gbText(incMb),
@@ -380,7 +382,7 @@ export function SubScreen({ view, admin = false, onOpen, onReceipt }: SubScreenP
                 <Hint>{t('sub.renew_total', { sum: formatSomWithUnit(view.renewTotal) })}</Hint>
               </span>
             ) : (
-              <div className="grow" />
+              <div className="grow max-md:hidden" />
             )}
             {own ? (
               <>

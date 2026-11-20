@@ -93,7 +93,6 @@ export const SUBSCRIPTION_TEXTS = {
   'sub.card.nopack': { ru: 'Пакета нет', section: S },
   'sub.card.mem': { ru: 'Память', section: S },
   'sub.card.mem_v': { ru: 'Занято {used} из {limit} ГБ', section: S },
-  'sub.card.mem_free': { ru: 'Занято {used} ГБ', section: S },
   'sub.card.mem_inc': {
     ru: 'В цену входит {inc} ГБ: {base} ГБ на организацию и {seat} МБ за место пакета',
     section: S,
