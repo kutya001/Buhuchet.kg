@@ -37,9 +37,12 @@ BEGIN
         OR r.rolcreaterole OR r.rolcreatedb))
     OR EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
       WHERE r.rolname IN ('buhuchet_dm_org', 'buhuchet_dm_admin'))
+    -- Член роли Витрины стал бы владельцем функций исполнителя (мог бы снять SECURITY DEFINER): кроме
+    -- владельца схемы (он передаёт функции) и суперпользователей членов быть не должно.
     OR EXISTS (SELECT 1 FROM pg_auth_members m
       JOIN pg_roles g ON g.oid = m.roleid JOIN pg_roles r ON r.oid = m.member
-      WHERE g.rolname IN ('buhuchet_dm_org', 'buhuchet_dm_admin') AND r.rolname = 'buhuchet_app') THEN
+      WHERE g.rolname IN ('buhuchet_dm_org', 'buhuchet_dm_admin') AND r.rolname <> current_user
+        AND NOT r.rolsuper) THEN
     RAISE EXCEPTION 'dm: у роли Витрины лишние свойства или членство' USING ERRCODE = '42501';
   END IF;
 END
@@ -78,6 +81,11 @@ CREATE CONSTRAINT TRIGGER runs_no_commit AFTER INSERT ON dm.runs
 GRANT USAGE ON SCHEMA dm TO buhuchet_app, buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
 GRANT SELECT ON TABLE dm.runs TO buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
 GRANT USAGE ON SCHEMA public TO buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
+-- Права, выданные ролям раньше руками, не остаются: ниже — только то, что в списках.
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
+-- Разбор таблиц ниже — один оператор: пока он идёт, взятые таблицы сайту недоступны, поэтому всё вместе —
+-- не дольше 15 с (ожидание каждой таблицы — не дольше 3 с, но они складываются).
+SET LOCAL statement_timeout = '15s';--> statement-breakpoint
 -- Что видят роли Витрины (блок 8, пункт 3). Списки повторяют DM_CLOSED_TABLES, DM_ADMIN_ONLY_TABLES,
 -- DM_PLATFORM_TABLES и DM_SECRET_COLUMNS в src/datamart-roles.ts — тест сверяет их с правами базы и не
 -- даёт новой таблице остаться неразобранной.
@@ -166,6 +174,7 @@ BEGIN
   END LOOP;
 END
 $$;--> statement-breakpoint
+SET LOCAL statement_timeout TO DEFAULT;--> statement-breakpoint
 -- Начать запуск шаблона организации: организация и сотрудник — из контекста withOrgContext (сеанс или
 -- токен), а не из параметров запроса. Зовёт только роль приложения, до перевода транзакции в «только
 -- чтение».
@@ -222,6 +231,7 @@ CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
     rec record;
     got boolean;
     j json;
+    line json;
     cols text[];
     vals json[] := '{}';
     n integer := 0;
@@ -257,8 +267,10 @@ CREATE FUNCTION dm.run_org(p_sql text, p_params jsonb, p_max integer)
           END IF;
         END IF;
         EXIT WHEN NOT got;
-        vals := vals || (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
+        line := (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
           FROM json_each(j) WITH ORDINALITY AS e(key, value, i));
+        -- array_append дополняет массив на месте; `vals || line` копировал бы его на каждой строке.
+        vals := array_append(vals, line);
         n := n + 1;
         size := size + octet_length(j::text);
         IF size > 33554432 THEN
@@ -288,6 +300,7 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
     rec record;
     got boolean;
     j json;
+    line json;
     cols text[];
     vals json[] := '{}';
     n integer := 0;
@@ -323,8 +336,10 @@ CREATE FUNCTION dm.run_admin(p_sql text, p_params jsonb, p_max integer)
           END IF;
         END IF;
         EXIT WHEN NOT got;
-        vals := vals || (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
+        line := (SELECT coalesce(json_agg(e.value ORDER BY e.i), '[]'::json)
           FROM json_each(j) WITH ORDINALITY AS e(key, value, i));
+        -- array_append дополняет массив на месте; `vals || line` копировал бы его на каждой строке.
+        vals := array_append(vals, line);
         n := n + 1;
         size := size + octet_length(j::text);
         IF size > 33554432 THEN
@@ -351,4 +366,6 @@ REVOKE CREATE ON SCHEMA dm FROM buhuchet_dm_org, buhuchet_dm_admin;--> statement
 REVOKE ALL ON FUNCTION dm.begin_org(), dm.begin_admin(), dm.run_org(text, jsonb, integer),
   dm.run_admin(text, jsonb, integer) FROM PUBLIC, buhuchet_dm_org, buhuchet_dm_admin;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION dm.begin_org(), dm.begin_admin(), dm.run_org(text, jsonb, integer),
-  dm.run_admin(text, jsonb, integer) TO buhuchet_app;
+  dm.run_admin(text, jsonb, integer) TO buhuchet_app;--> statement-breakpoint
+-- Следующие миграции пачки ждут блокировок по своим правилам.
+SET LOCAL lock_timeout TO DEFAULT;

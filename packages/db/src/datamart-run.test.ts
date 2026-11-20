@@ -390,6 +390,15 @@ describe.skipIf(!databaseAvailable())('витрина данных: роли б�
       await expect(inA(q('SELECT 1 AS n', tooMany))).rejects.toEqual(pgCode('22023'));
     });
 
+    it('50 000 строк собираются за доли секунды, а не обрываются пределом времени', async () => {
+      const big = await inA(
+        q("SELECT g, 'строка ' || g AS t FROM generate_series(1, 50001) g", [], 50_000),
+      );
+      expect(big.rows).toHaveLength(50_000);
+      expect(big.rows[49_999]).toEqual([50_000, 'строка 50000']);
+      expect(big.more).toBe(true);
+    });
+
     it('столбцы — в порядке запроса и у пустого результата; сроки — по Бишкеку', async () => {
       // Имя-число не встаёт первым (как у объекта JavaScript), пустой результат знает свои столбцы.
       expect(await inA(q('SELECT 1 AS b, 2 AS "2026", 3 AS a'))).toMatchObject({
