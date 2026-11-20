@@ -169,7 +169,7 @@ describe.skipIf(!databaseAvailable())('витрина данных: API-токе
     expect((await fact()).extApi).toBe(true);
   });
 
-  it('шаблон сменил вид на «Для администратора» — у токена организации доступа нет', async () => {
+  it('шаблон сменил вид на «Для администратора» — для токена организации он отключён', async () => {
     const [t] = await asAdmin((tx) =>
       tx
         .insert(dmTemplates)
@@ -188,14 +188,41 @@ describe.skipIf(!databaseAvailable())('витрина данных: API-токе
     const fact = async () =>
       (await inA((tx) => dmTokenFacts(tx, { since: since(), today: TODAY, id: made.id })))
         .items[0]!;
-    expect((await fact()).templateAccess).toBe(true);
+    expect((await fact()).templateState).toBe('published');
     await asAdmin((tx) =>
       tx
         .update(dmTemplates)
         .set({ audience: 'admin', module: null })
         .where(eq(dmTemplates.id, t!.id)),
     );
-    expect((await fact()).templateAccess).toBe(false);
+    expect((await fact()).templateState).toBe('off');
+    // И наоборот: шаблон Админки перевели «для организаций» — для токена Админки он отключён.
+    const [m] = await asAdmin((tx) =>
+      tx
+        .insert(dmTemplates)
+        .values({
+          code: 'tok-moved-adm',
+          name: 'Шаблон tok-moved-adm',
+          audience: 'admin',
+          state: 'published',
+        })
+        .returning({ id: dmTemplates.id }),
+    );
+    await asAdmin((tx) =>
+      tx.insert(dmTemplateSql).values({ templateId: m!.id, query: 'select 1 as n' }),
+    );
+    const own = await asAdmin((tx) => insertDmToken(tx, issue(m!.id, 'Сменил вид Админки')));
+    const adminFact = async () =>
+      (await asAdmin((tx) => dmTokenFacts(tx, { since: since(), today: TODAY, id: own.id })))
+        .items[0]!;
+    expect((await adminFact()).templateState).toBe('published');
+    await asAdmin((tx) =>
+      tx
+        .update(dmTemplates)
+        .set({ audience: 'org', module: 'reports' })
+        .where(eq(dmTemplates.id, m!.id)),
+    );
+    expect((await adminFact()).templateState).toBe('off');
   });
 
   it('отзыв: сейчас и от своего имени, один раз; администратор отзывает токен организации — организация видит только отметку', async () => {

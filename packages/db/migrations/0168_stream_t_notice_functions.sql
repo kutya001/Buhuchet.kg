@@ -39,8 +39,8 @@ GRANT EXECUTE ON FUNCTION app.platform_notice(text, text, text, timestamptz) TO 
 -- `[{ "k": ключ, "s": байт, "t": когда положен }]`; `p_now` — момент начала чтения списка. Функция
 -- пишет запуск и четыре списка расхождений; сама ничего не удаляет.
 --   missing — файл есть в базе (загружен, отправленный контрагентом загружен и не принят, логотип, чек
---     подписки), а в хранилище его нет; записи моложе часа (у логотипа — организация, изменённая меньше
---     часа назад) не проверяются: объект мог лечь после чтения списка;
+--     подписки), а в хранилище его нет; записи моложе часа (у заменённого файла — с замены, у логотипа —
+--     организация, изменённая меньше часа назад) не проверяются: объект мог лечь после чтения списка;
 --   extra — объект старше суток, о котором база не знает: файл (кроме удалённого), отправленный
 --     контрагентом файл (кроме принятого: его объект после «Принять» удаляется; пока загружается — и его
 --     `.up` и проверочная копия `.chk-…`), логотип, чек подписки, ключ на повторном удалении; ждущие
@@ -108,7 +108,7 @@ CREATE FUNCTION app.storage_check_save(p_objects jsonb, p_now timestamptz, p_err
       SELECT 'missing', x.key, x.size, NULL::timestamptz
       FROM (
         SELECT f.storage_key AS key, f.size_bytes AS size FROM public.files f
-        WHERE f.state = 'ready' AND f.created_at < p_now - interval '1 hour'
+        WHERE f.state = 'ready' AND coalesce(f.replaced_at, f.created_at) < p_now - interval '1 hour'
         UNION ALL SELECT s.storage_key, s.size_bytes FROM public.contractor_sent_files s
         WHERE s.state = 'ready' AND s.status <> 'accepted' AND s.created_at < p_now - interval '1 hour'
         UNION ALL SELECT o.logo_key, NULL::bigint FROM public.organizations o
@@ -243,10 +243,12 @@ CREATE FUNCTION app.dm_token_facts(p_since timestamptz, p_today date, p_id uuid 
       coalesce(u.closed, false),
       d.id,
       d.name,
-      d.state,
-      d.audience = CASE WHEN k.org_id IS NULL THEN 'admin' ELSE 'org' END
-        AND (d.access = 'all' OR (k.org_id IS NOT NULL AND EXISTS (
-          SELECT 1 FROM public.dm_template_orgs a WHERE a.template_id = d.id AND a.org_id = k.org_id))),
+      -- Шаблону сменили вид («Для организаций» ↔ «Для администратора») — для токена прежнего вида он
+      -- отключён: такой токен «Остановлен» («Шаблон отключён»), и организации, и Админки.
+      CASE WHEN d.audience = CASE WHEN k.org_id IS NULL THEN 'admin' ELSE 'org' END
+        THEN d.state ELSE 'off' END,
+      d.access = 'all' OR (k.org_id IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.dm_template_orgs a WHERE a.template_id = d.id AND a.org_id = k.org_id)),
       k.name,
       k.prefix,
       k.created_by,
@@ -287,3 +289,6 @@ GRANT SELECT (org_id, level, updated_at) ON TABLE public.org_memory_notices TO b
 CREATE POLICY dm_admin_read ON public.org_memory_notices AS PERMISSIVE FOR SELECT TO buhuchet_dm_admin
   USING (EXISTS (SELECT 1 FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid() AND
     r.xid = pg_catalog.pg_current_xact_id_if_assigned() AND r.admin));
+--> statement-breakpoint
+-- Следующие миграции пачки ждут блокировок по своим правилам (предел 3 с поставила 0167), как в 0166.
+SET LOCAL lock_timeout TO DEFAULT;

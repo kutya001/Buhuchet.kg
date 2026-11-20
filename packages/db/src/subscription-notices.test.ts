@@ -9,6 +9,7 @@ import {
   contractorSentFiles,
   files,
   fileTrash,
+  organizations,
   orgMemoryNotices,
   orgSubscriptions,
   storageCheckItems,
@@ -357,6 +358,25 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
     };
     const acceptedGone = await accepted();
     const acceptedLeft = await accepted();
+    // Логотип без объекта: у организации, изменённой давно, — «Нет в хранилище»; изменённой меньше часа
+    // назад — ещё не проверяется (логотип мог лечь после чтения списка). Время — от NOW теста; «молодые» —
+    // через полчаса после NOW, чтобы и второй запуск (NOW + 1 час) видел их младше часа.
+    const logoOld = `org/${b.orgId}/logo/${randomUUID()}`;
+    const logoYoung = `org/${a.orgId}/logo/${randomUUID()}`;
+    await db.admin.db
+      .update(organizations)
+      .set({ logoKey: logoOld, updatedAt: ago(48) })
+      .where(eq(organizations.id, b.orgId));
+    await db.admin.db
+      .update(organizations)
+      .set({ logoKey: logoYoung, updatedAt: ago(-0.5) })
+      .where(eq(organizations.id, a.orgId));
+    // Файл заменили меньше часа назад («Изменить файл»): новый ключ, а создан давно — ещё не проверяется.
+    const replaced = await addFile(a.orgId, 'ready', ago(48));
+    await db.admin.db
+      .update(files)
+      .set({ replacedAt: ago(-0.5), replacedBy: a.ownerUserId })
+      .where(eq(files.storageKey, replaced));
     // Ждёт стирания: не лишний; срок прошёл и стереть не удалось — «Не стёрт».
     const trashKey = `org/${a.orgId}/files/${randomUUID()}`;
     await db.admin.db.insert(fileTrash).values({
@@ -396,11 +416,11 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
     expect(first).toMatchObject({
       state: 'done',
       objects: objects.length,
-      missing: 1,
+      missing: 2,
       extra: 3,
       stuck: 1,
       failed: 1,
-      fresh: { missing: 1, extra: 3, stuck: 1, failed: 1 },
+      fresh: { missing: 2, extra: 3, stuck: 1, failed: 1 },
     });
     const items = await db.admin.db
       .select()
@@ -411,7 +431,9 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
         .filter((i) => i.kind === k)
         .map((i) => i.key)
         .sort();
-    expect(byKind('missing')).toEqual([missing]);
+    expect(byKind('missing')).toEqual([missing, logoOld].sort());
+    expect(items.map((i) => i.key)).not.toContain(logoYoung);
+    expect(items.map((i) => i.key)).not.toContain(replaced);
     expect(byKind('extra')).toEqual([deletedKey, extraOld, acceptedLeft].sort());
     expect(items.map((i) => i.key)).not.toContain(acceptedGone);
     expect(byKind('stuck')).toEqual([stuck]);
@@ -427,7 +449,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       inA((tx) => tx.update(storageCheckRuns).set({ state: 'failed' })),
     ).rejects.toThrow();
     expect(await asAdmin((tx) => storageCheckRunsWithNews(tx, ago(24)))).toEqual([
-      { run: first.run, at: NOW, fresh: 6 },
+      { run: first.run, at: NOW, fresh: 7 },
     ]);
 
     // Второй запуск: лишний старый удалили, остальное на месте — новых нет, лишний закрыт.
@@ -437,7 +459,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       new Date(NOW.getTime() + HOUR),
     );
     expect(second).toMatchObject({
-      missing: 1,
+      missing: 2,
       extra: 2,
       stuck: 1,
       failed: 1,
@@ -454,7 +476,7 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       .where(eq(storageCheckItems.key, missing));
     expect(kept).toMatchObject({ firstRunId: first.run, lastRunId: second.run, resolvedAt: null });
     expect(await asAdmin((tx) => storageCheckRunsWithNews(tx, ago(24)))).toEqual([
-      { run: first.run, at: NOW, fresh: 6 },
+      { run: first.run, at: NOW, fresh: 7 },
     ]);
 
     // Список не прочитался: запуск с ошибкой, открытые строки — как были.
@@ -469,6 +491,6 @@ describe.skipIf(!databaseAvailable())('подписки и хранилище: �
       .select({ n: sql<number>`count(*)::integer` })
       .from(storageCheckItems)
       .where(sql`${storageCheckItems.resolvedAt} is null`);
-    expect(open[0]!.n).toBe(5);
+    expect(open[0]!.n).toBe(6);
   });
 });
