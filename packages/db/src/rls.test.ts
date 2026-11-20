@@ -86,14 +86,19 @@ describe.skipIf(!databaseAvailable())('RLS: организации не видя
     expect(owned).toEqual([]);
   });
 
-  it('RLS включён у каждой таблицы public, политики только у роли приложения', async () => {
+  it('RLS включён у каждой таблицы public, политики только у роли приложения и чтение ролей Витрины', async () => {
     const withoutRls = await t.admin.sql<{ relname: string }[]>`
       select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relrowsecurity`;
     expect(withoutRls).toEqual([]);
     const foreign = await t.admin.sql<{ policyname: string }[]>`
       select policyname from pg_policies
-      where schemaname = 'public' and roles <> '{buhuchet_app}'::name[]`;
+      where schemaname = 'public' and roles <> '{buhuchet_app}'::name[]
+        -- Роли «Витрины данных» (миграция 0166, п. О-62): только чтение, по строке запуска dm.runs.
+        and not (policyname = 'dm_org_read' and roles = '{buhuchet_dm_org}'::name[] and cmd = 'SELECT'
+          and permissive = 'PERMISSIVE')
+        and not (policyname = 'dm_admin_read' and roles = '{buhuchet_dm_admin}'::name[] and cmd = 'SELECT'
+          and permissive = 'PERMISSIVE')`;
     expect(foreign).toEqual([]);
   });
 
@@ -113,7 +118,7 @@ describe.skipIf(!databaseAvailable())('RLS: организации не видя
   it('функции SECURITY DEFINER: свой search_path и не исполняются кем угодно', async () => {
     const unsafe = await t.admin.sql<{ proname: string }[]>`
       select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname in ('app', 'public') and p.prosecdef
+      where n.nspname in ('app', 'public', 'dm') and p.prosecdef
         and (not exists (select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%')
              or has_function_privilege('public', p.oid, 'execute'))`;
     expect(unsafe).toEqual([]);
