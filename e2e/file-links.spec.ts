@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { search } from './admin';
-import { DEMO_PASSWORD, hire, pickContractor, signIn, uniqueLogin } from './helpers';
+import { DEMO_PASSWORD, hire, pickContractor, signIn, stillElement, uniqueLogin } from './helpers';
 
 // Один файл — несколько ссылок (доработки 16.11.2026, блок 2; прототип v124 modules/files.js
 // `fPickDlg`, `fPickRow`, `fUnlink`, `fGoActs`, `fDelDlg`): принятый файл контрагента прикрепляется к его
@@ -155,6 +155,21 @@ async function windowSource(page: Page, fileName: string) {
   return window;
 }
 
+/**
+ * Нажать ссылку записи в «Источнике» окна файла: окно файла закрывается. «Источник» стоит под
+ * просмотром файла: когда файл загрузился, заглушка «Открываем файл…» сменяется рамкой просмотра выше
+ * неё, ссылка уезжает вниз, и нажатие, начатое до этого, уходит в рамку и теряется молча
+ * (docs/typical-mistakes.md № 34). Поэтому сначала ждём конец загрузки просмотра (причину сдвига),
+ * потом — что ссылка стоит на месте.
+ */
+async function openLinkFromSource(window: Locator, link: string) {
+  await expect(window.locator('[data-fv-state="loading"]')).toHaveCount(0);
+  const button = window.locator(`[data-file-link-open="${link}"]`);
+  await stillElement(button);
+  await button.click();
+  await expect(window).toBeHidden();
+}
+
 const ddmmyyyy = (iso: string) => iso.split('-').reverse().join('.');
 
 test.describe('Доработки 16.11, блок 2: один файл — несколько ссылок', () => {
@@ -276,8 +291,7 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     const window = await windowSource(page, fileName);
     await expect(window.locator('[data-file-window-src]')).toHaveText(both);
     // Запись в «Источнике» — ссылка на её окно (прототип v124 `data-fol`).
-    await window.locator(`[data-file-link-open="receipt:${receiptId}"]`).click();
-    await expect(window).toBeHidden();
+    await openLinkFromSource(window, `receipt:${receiptId}`);
     await expect(page.locator(`[data-fin-op-window="${receiptId}"]`)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator(`[data-fin-op-window="${receiptId}"]`)).toBeHidden();
@@ -495,7 +509,7 @@ test.describe('Доработки 16.11, блок 2: один файл — не�
     );
     // Ссылка «Оплата за обслуживание …» в «Источнике» открывает окно самой оплаты.
     const feeId = (body as { id?: string }).id!;
-    await window.locator(`[data-file-link-open="fee_payment:${feeId}"]`).click();
+    await openLinkFromSource(window, `fee_payment:${feeId}`);
     await expect(page.locator(`[data-fee-payment-window="${feeId}"]`)).toBeVisible();
   });
 });
