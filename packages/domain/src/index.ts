@@ -121,6 +121,7 @@ export * from './files/sent-files';
 export * from './files/sent';
 export * from './files/view';
 export * from './datamart/datamart';
+export * from './datamart/query';
 export * from './kb/catalog';
 export * from './kb/ready';
 export * from './kb/events';
