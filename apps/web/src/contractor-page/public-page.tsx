@@ -56,6 +56,11 @@ export function PublicPageScreen({
     case 'closed':
       main = <Gate title={t('pub.closed.title')} text={t('pub.closed.text')} />;
       break;
+    // Доступ организации закрыт по подписке (доработки 20.11.2026, блок 4, пункт 4; прототип v152
+    // `pubClosedHtml`): после верного кода — знак платформы и «Страница временно недоступна», данных нет.
+    case 'org_closed':
+      main = <Gate title={t('pub.org_closed.title')} text={t('pub.org_closed.text')} />;
+      break;
     case 'code':
       main = <CodeGate slug={slug} inn={inn} help={state.help} />;
       break;

@@ -550,6 +550,9 @@ export function pageForgotHandler(deps: ApiDeps): RouteHandler<typeof pageForgot
     if (!target) return unavailable();
     const r = await sendPageCode(deps, { ...target, via: 'page' });
     if (r.outcome === 'unavailable') return unavailable();
-    return c.json({ outcome: r.outcome, limit: PAGE_CODE_TG_MAX }, 200);
+    // Доступ организации закрыт по подписке: ответ тот же, что без Telegram, — по ответу не видно, что
+    // подписка фирмы не оплачена (прототип v152 `pubForgot`, п. К-24).
+    const outcome = r.outcome === 'org_closed' ? 'none' : r.outcome;
+    return c.json({ outcome, limit: PAGE_CODE_TG_MAX }, 200);
   };
 }

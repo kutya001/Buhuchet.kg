@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createRoute, type RouteHandler } from '@hono/zod-openapi';
 import {
-  contractorPageState,
   insertPendingSentFiles,
   isStorageRetryKey,
   keptSentFiles,
@@ -39,6 +38,7 @@ import type { Context } from 'hono';
 import type { ApiDeps } from '../../deps';
 import type { AppEnv } from '../../env';
 import { apiFail } from '../../errors';
+import { pageAccess } from '../contractor-page/org-closed';
 import { clientIpHash, pageTokenHash } from '../contractor-page/public';
 import { bellContractor } from '../telegram/bell';
 import { error } from './files';
@@ -100,7 +100,8 @@ export async function openPage(deps: ApiDeps, c: Context<AppEnv>, slug: string, 
   if (!isPageAddress(slug, inn)) return unavailable();
   const grantHash = pageTokenHash(c, deps);
   if (!grantHash) return unavailable();
-  const state = await contractorPageState(deps.db, slug, inn, grantHash);
+  // Доступ организации закрыт по подписке — тоже «Страница недоступна» (п. К-24).
+  const state = await pageAccess(deps, slug, inn, grantHash);
   if (state.state !== 'open') return unavailable();
   return { orgId: state.orgId, contractorId: state.contractorId, grantHash };
 }

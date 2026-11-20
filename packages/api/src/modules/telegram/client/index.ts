@@ -28,6 +28,7 @@ import {
   type TelegramTemplateKey,
 } from '@buhuchet/domain';
 import type { ApiDeps } from '../../../deps';
+import { orgClosedNow } from '../../contractor-page/org-closed';
 import { serverTexts } from '../../l10n/texts';
 import { bellContractor } from '../bell';
 import { botText, sendNow } from '../bot';
@@ -178,6 +179,12 @@ export async function clientStart(
   if (!target) return reply(deps, chat.chatId, 'tgCpLinkBad');
   // Telegram повторил то же сообщение после запроса — второй раз не отвечаем.
   if (target.state === 'repeat') return;
+  // Доступ организации закрыт по подписке: ссылка не тратится, запроса сотрудникам нет (п. К-24).
+  if (await orgClosedNow(deps, target.orgId)) {
+    const t = await serverTexts(deps);
+    await sendNow(deps, chat.chatId, t('cppage.tg.org_closed'), 'cp_telegram');
+    return;
+  }
   const name = cpTgName(chat);
   const res = await withOrgContext(deps.db, { orgId: target.orgId, userId: null }, async (tx) => {
     const r = await startContractorTelegram(tx, { tokenHash, chatId: chat.chatId, name });

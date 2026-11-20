@@ -54,6 +54,7 @@ import {
   type Tyiyn,
 } from '@buhuchet/domain';
 import type { ApiDeps, Job, JobContext } from '../../../deps';
+import { orgAccessClosed } from '../../contractor-page/org-closed';
 import { serverTexts } from '../../l10n/texts';
 import { sendNow } from '../bot';
 import { deliverClientMessages, type PreparedClientMessage } from './pay';
@@ -252,6 +253,9 @@ async function prepareDebt(
   const notices = await cpNoticeSettingsOf(tx, orgId);
   const today = cpNoticeDay(notices.feeAt, slot);
   if (!today) return null;
+  // Доступ организации закрыт по подписке: напоминаний о долге и «Оплата за обслуживание до …» нет
+  // (доработки 20.11.2026, блок 4, пункт 4; п. К-24).
+  if (await orgAccessClosed(tx, today)) return null;
   // День недели — по дню времени отправки, а не по часам запуска: запуск 00:00 отправляет за 23:56–23:59
   // прошлого дня.
   const create = weekdayMondayFirst(today) + 1 === notices.debtWeekDay;
