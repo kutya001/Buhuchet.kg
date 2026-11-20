@@ -44,7 +44,7 @@ const NOW = new Date('2026-11-21T03:30:00Z');
 const ago = (h: number) => new Date(NOW.getTime() - h * HOUR);
 
 // Сообщения о подписке, памяти и сверке хранилища (доработки 20.11.2026; поток Т, этап 1, П12–П13;
-// миграции 0166–0167).
+// миграции 0167–0168).
 describe.skipIf(!databaseAvailable())('подписки и хранилище: сообщения и сверка', () => {
   let db: TestDatabase;
   let a: CreatedOrganization;

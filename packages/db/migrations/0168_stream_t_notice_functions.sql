@@ -308,3 +308,12 @@ CREATE FUNCTION app.dm_token_facts(p_since timestamptz, p_today date, p_id uuid 
 REVOKE ALL ON FUNCTION app.dm_token_facts(timestamptz, date, uuid) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.dm_token_facts(timestamptz, date, uuid) TO buhuchet_app;
+--> statement-breakpoint
+-- «Витрина данных» (0166, docs/decisions.md п. О-62): новая таблица org_memory_notices (0167) — какой порог
+-- памяти уже сообщён владельцам — служебная строка рассылки, видна только роли Админки, как
+-- org_subscriptions (DM_ADMIN_ONLY_TABLES в packages/db/src/datamart-roles.ts).
+GRANT SELECT (org_id, level, updated_at) ON TABLE public.org_memory_notices TO buhuchet_dm_admin;
+--> statement-breakpoint
+CREATE POLICY dm_admin_read ON public.org_memory_notices AS PERMISSIVE FOR SELECT TO buhuchet_dm_admin
+  USING (EXISTS (SELECT 1 FROM dm.runs r WHERE r.pid = pg_catalog.pg_backend_pid() AND
+    r.xid = pg_catalog.pg_current_xact_id_if_assigned() AND r.admin));
