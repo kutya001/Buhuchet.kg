@@ -103,7 +103,8 @@ function pgCodeSend(c,to,via){const p=c.page;if(p.closed)return 'closed';if(pgCo
   p.codeTg.push(Date.now());to.forEach(x=>tgSvc({short:c.name},'Код от страницы',{chat:x.name}));
   HIST.push({at:nowStamp(),who:'client',ent:'cp',id:c.id,cp:c.id,what:`Код страницы контрагента отправлен в Telegram ${to.map(x=>`«${x.name}»`).join(', ')}: ${via==='cmd'?'командой бота «Код от страницы»':'по ссылке «Забыли код?» на странице'}`});dbSoon();return ''}
 // Ссылка со страницы: код уходит во все подключённые Telegram контрагента
-function pubForgot(c){const to=pgCodeTo(c);if(!to.length)return {t:'Спросите код у вашего бухгалтера'};const no=pgCodeSend(c,to,'page');
+// Доступ организации закрыт по подписке — код в Telegram не уходит; ответ тот же, что без Telegram: по ответу не видно, что подписка не оплачена
+function pubForgot(c){const to=pubOrgClosed()?[]:pgCodeTo(c);if(!to.length)return {t:'Спросите код у вашего бухгалтера'};const no=pgCodeSend(c,to,'page');
   return no==='limit'?{t:`Код уже присылали ${PG_CODE_TG} раза за сутки. Спросите код у вашего бухгалтера`}:no==='closed'?{t:'Страница закрыта. Попросите новый код у вашего бухгалтера'}:{t:'Код отправлен вам в Telegram',ok:true,to}}
 // Команда бота: коды всех включённых страниц контрагентов, к которым подключён этот Telegram, — по сообщению на страницу, с названием
 function pgCodeCmd(name){const at=bishkekNow().hm,ls=pgTgAllLinks(name).filter(l=>pgTgOn(l.c));if(!ls.length)return [{t:tplFill('tgCpCodeNone',{}),at}];

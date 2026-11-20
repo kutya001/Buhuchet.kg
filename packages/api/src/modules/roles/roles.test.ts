@@ -64,7 +64,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
   });
 
   describe('список, карточка, справочник прав', () => {
-    it('список ролей: число активных сотрудников и прав, у владельца — все 40', async () => {
+    it('список ролей: число активных сотрудников и прав, у владельца — все 42', async () => {
       const res = await call('GET', '/api/roles', owner);
       expect(res.status).toBe(200);
       const { items } = RoleList.parse(await res.json());
@@ -75,7 +75,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(byName['Владелец организации']).toMatchObject({
         isOwner: true,
         employees: 1,
-        permissionCount: 40,
+        permissionCount: 42,
       });
       expect(byName['Кадры']).toMatchObject({ isOwner: false, employees: 1, permissionCount: 16 });
       expect(byName['Бухгалтер']!.employees).toBe(1);
@@ -128,7 +128,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(res.status).toBe(200);
       const values = ListValues.parse(await res.json());
       expect(values.items.reduce((n, v) => n + v.count, 0)).toBe(5);
-      expect(values.items.map((v) => v.value)).toContain('40');
+      expect(values.items.map((v) => v.value)).toContain('42');
       expect((await call('GET', '/api/roles/values?col=passwordHash', owner)).status).toBe(400);
 
       const params = new URLSearchParams({ cols: 'name,employees,permissionCount' });
@@ -196,7 +196,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(Object.values(accRole.scopes)).toEqual(SCOPE_GROUPS.map(() => 'own'));
     });
 
-    it('справочник прав: 40 прав в порядке формы, группы — как в каталоге системы', async () => {
+    it('справочник прав: 42 права в порядке формы, группы — как в каталоге системы', async () => {
       const res = await call('GET', '/api/permissions', hr);
       expect(res.status).toBe(200);
       const { items } = PermissionCatalog.parse(await res.json());
@@ -251,7 +251,15 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
     it('не владелец не копирует права, которые выдаёт только владелец, и права, которых у него нет', async () => {
       const hrRole = await role(f.roleIds.hr);
       const fromOwner = await newRole('Почти всё', f.a.roles.find((r) => r.isOwner)!.id, hr);
-      for (const p of ['staff', 'rollback', 'archiveRest', 'org', 'viewAll', 'bonus'] as const) {
+      for (const p of [
+        'staff',
+        'rollback',
+        'archiveRest',
+        'dmTokens',
+        'org',
+        'viewAll',
+        'bonus',
+      ] as const) {
         expect(fromOwner.permissions).not.toContain(p);
       }
       // Свои права «Кадров» без «Сотрудники и роли».
@@ -260,7 +268,7 @@ describe.skipIf(!databaseAvailable())('Роли: API', () => {
       expect(fromChief.permissions).not.toContain('viewAll');
       expect(fromChief.permissions.every((p) => hrRole.permissions.includes(p))).toBe(true);
       const byOwner = await newRole('Всё кроме настроек', f.a.roles.find((r) => r.isOwner)!.id);
-      expect(byOwner.permissions).toHaveLength(39);
+      expect(byOwner.permissions).toHaveLength(41);
     });
 
     it('название уникально в организации; образец из чужой организации — 400', async () => {

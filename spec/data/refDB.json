@@ -17022,6 +17022,24 @@
     "faint",
     "ban"
    ]
+  },
+  "dmTemplate": {
+   "Черновик": [
+    "faint",
+    "edit"
+   ],
+   "Опубликован": [
+    "green",
+    "check"
+   ],
+   "Отключён": [
+    "faint",
+    "ban"
+   ],
+   "Сломан": [
+    "red",
+    "alert"
+   ]
   }
  },
  "statusNames": {},
@@ -17310,7 +17328,15 @@
   "tgCpCodeLimit": "Код от страницы «{контрагент}» уже присылали {лимит} раза за сутки. Спросите код у вашего бухгалтера.",
   "tgCpCodeClosed": "Страница «{контрагент}» закрыта после неверных кодов. Попросите новый код у вашего бухгалтера.",
   "tgCmdCpCode": "Код от страницы",
-  "tgCpPagePaidStaff": "{контрагент}: контрагент сообщил на своей странице об оплате {что} — {сумма}. Чек — в «Отправленных файлах» карточки контрагента."
+  "tgCpPagePaidStaff": "{контрагент}: контрагент сообщил на своей странице об оплате {что} — {сумма}. Чек — в «Отправленных файлах» карточки контрагента.",
+  "tgSubSoon": "⏳ Подписка «{организация}» оплачена до {дата}, осталось дней: {дней}. Продлите её, чтобы доступ не закрылся: продление на тот же срок и пакет — {сумма}.",
+  "tgSubOver": "⛔ Подписка «{организация}» не оплачена: срок закончился {дата}. Доступ сотрудников закрыт до оплаты, данные сохранены. Продление — {сумма}: откройте «Подписка» и прикрепите чек.",
+  "tgSubPaid": "✅ Оплата подтверждена: подписка «{организация}» действует до {дата}.",
+  "tgSubRejected": "❌ Чек по подписке «{организация}» отклонён: {причина}. Прикрепите другой чек: «Моя организация» → «Подписка».",
+  "tgSubMem80": "📦 Память «{организация}» заполнена на 80 %: занято {занято} из {лимит} ГБ. Купите память или удалите лишние файлы, чтобы загрузка не остановилась.",
+  "tgSubMemFull": "📦 Память «{организация}» заполнена: занято {занято} из {лимит} ГБ. Новые файлы не загружаются, пока вы не купите память или не удалите лишние файлы.",
+  "tgSubCheckNew": "🧾 Новый чек на проверку: «{организация}», {что}, {сумма}. Проверьте оплату: Админка → «Организации» → «Подписки».",
+  "tgSubCheckWait": "🧾 Чек «{организация}» на {сумма} ждёт проверки дней: {дней}. Админка → «Организации» → «Подписки»."
  },
  "localization": [
   {
@@ -25798,9 +25824,154 @@
   },
   {
    "id": "v151",
-   "t": "Версия 151: план",
+   "t": "Версия 151: подписки — виды, цены и сообщения",
    "type": "Обновление",
    "ver": "151",
+   "date": "2026-11-20",
+   "short": "Основа подписок: виды подписок, цены и реквизиты, 8 новых шаблонов сообщений об оплате, чеках и памяти.",
+   "md": "## Что нового\n- **Основа подписок (доработки 20.11.2026, пакет 2).** В данных прототипа появились виды подписок («Месяц», «3 месяца», «6 месяцев», «9 месяцев», «12 месяцев» со скидкой 0–20 %), цены и реквизиты платформы для оплаты и подписки демо-организаций с историей оплат. Экраны подписок — в следующих версиях.\n- **8 новых шаблонов сообщений.** Справочники платформы → «Шаблоны»: «Telegram: подписка истекает», «Telegram: подписка просрочена», «Telegram: оплата подписки подтверждена», «Telegram: чек отклонён», «Telegram: память заполнена на 80 %», «Telegram: память заполнена», «Telegram: новый чек на проверку», «Telegram: чек ждёт проверки».",
+   "status": "Опубликовано",
+   "aud": "adm",
+   "off": false,
+   "pin": false,
+   "login": true,
+   "link": {
+    "k": "mod",
+    "id": "pdicts"
+   },
+   "hist": [
+    {
+     "at": "2026-11-20 16:30",
+     "to": "Опубликовано",
+     "who": "admin"
+    }
+   ],
+   "_ub": "admin",
+   "_cb": "admin",
+   "_ua": "2026-11-20 16:30",
+   "_ca": "2026-11-20 18:30"
+  },
+  {
+   "id": "v152",
+   "t": "Версия 152: места в пакете и страница контрагента при закрытом доступе",
+   "type": "Обновление",
+   "ver": "152",
+   "date": "2026-11-20",
+   "short": "Нового контрагента нельзя добавить сверх мест в пакете подписки; при закрытом доступе страница контрагента по ссылке недоступна.",
+   "md": "## Что нового\n- **Места в пакете подписки (доработки 20.11.2026, пакет 2).** Добавить контрагента, вернуть его из архива и загрузить список из Excel можно, только пока в пакете есть свободные места. Если мест нет, появляется окно «В пакете нет свободных мест: занято N из M»: владелец сразу переходит к «Расширить пакет», сотрудник видит подсказку обратиться к владельцу.\n- **Загрузка из Excel.** Под таблицей проверки — строка «Свободных мест в пакете: N, новых контрагентов в файле: M». Если мест меньше, чем готовых строк, кнопка «ОК» неактивна, пока мест не хватит на всех.\n- **Страница контрагента при закрытом доступе.** Если подписка организации закончилась и доступ закрыт, после верного кода контрагент видит «Страница временно недоступна. Обратитесь в вашу бухгалтерскую фирму». «Не помню код» в это время не отправляет код ни в Telegram, ни на почту.",
+   "status": "Опубликовано",
+   "aud": "all",
+   "off": false,
+   "pin": false,
+   "login": true,
+   "link": {
+    "k": "mod",
+    "id": "cps"
+   },
+   "hist": [
+    {
+     "at": "2026-11-20 16:20",
+     "to": "Опубликовано",
+     "who": "admin"
+    }
+   ],
+   "_ub": "admin",
+   "_cb": "admin",
+   "_ua": "2026-11-20 16:20",
+   "_ca": "2026-11-20 16:20"
+  },
+  {
+   "id": "v153",
+   "t": "Версия 153: вкладка «Подписки» в Админке",
+   "type": "Обновление",
+   "ver": "153",
+   "date": "2026-11-20",
+   "short": "Организации → «Подписки»: подписки всех организаций, проверка чеков, виды подписок, цены и реквизиты.",
+   "md": "## Что нового\n- **Организации → «Подписки» (доработки 20.11.2026, пакет 2).** Список подписок всех организаций: вид, пакет и занятые места, память, «оплачено до» и статус. Плашки «Ждут подтверждения», «Просрочены», «Скоро истекают», «Активны» отбирают список одним нажатием, счётчик на вкладке — чеки на проверке.\n- **Проверка чека.** В окне подписки организации — чек, расчёт суммы и кнопки «Подтвердить оплату» (срок продлевается, владельцы получают сообщение в Telegram) и «Отклонить» с причиной (доступ снова закрывается, если срок прошёл). Чек, который ждёт больше 3 дней, отмечен красным, администраторам приходит напоминание.\n- **«Изменить подписку».** Вид, пакет, память сверх, «оплачено до», бесплатный период и дополнительная скидка — с обязательной причиной, всё пишется в историю. Блок «Подписка» есть и в окне «Новая организация», вкладка «Подписка» — в карточке организации.\n- **Виды подписок, цены и реквизиты.** Отдельные разделы вкладки: виды (срок, скидка, преимущества, включить или выключить) и цены за контрагента и память, сроки напоминаний и реквизиты для оплаты.\n- **Запуски.** В «Запусках» — новые задачи «Подписки: напоминания об оплате», «Подписки: память и чеки на проверке» и «Файлы: сверка хранилища».",
+   "status": "Опубликовано",
+   "aud": "adm",
+   "off": false,
+   "pin": false,
+   "login": true,
+   "link": {
+    "k": "mod",
+    "id": "orgs"
+   },
+   "hist": [
+    {
+     "at": "2026-11-20 17:30",
+     "to": "Опубликовано",
+     "who": "admin"
+    }
+   ],
+   "_ub": "admin",
+   "_cb": "admin",
+   "_ua": "2026-11-20 17:30",
+   "_ca": "2026-11-20 16:20"
+  },
+  {
+   "id": "v154",
+   "t": "Версия 154: файлы в Админке и экран «Подписка»",
+   "type": "Обновление",
+   "ver": "154",
+   "date": "2026-11-20",
+   "short": "Админка → «Файлы»: всё хранилище, проверка и «Ждут удаления»; у владельца — «Моя организация» → «Подписка» с оплатой по чеку.",
+   "md": "## Что нового\n- **Админка → «Файлы» (доработки 20.11.2026, пакет 2).** «Хранилище» — сколько занято всего и по организациям, плашки «От контрагентов, не принятые», «Заявки с сайта», «Чеки подписок», «Ждут удаления» и график загрузок по месяцам. «Все файлы» — каждый файл платформы: организация, контрагент, откуда он, кто загрузил, размер; файл открывается в окне просмотра. «Проверка хранилища» — итоги ежесуточной сверки базы с хранилищем; лишний файл старше суток можно удалить.\n- **Удалённый файл стирается через сутки.** Файл сразу пропадает из списков организации и из её памяти, а сутки ждёт стирания в «Ждут удаления»: администратор платформы может вернуть его на прежнее место. Так же через сутки стираются прежняя версия после «Изменить файл» и непринятый файл от контрагента. Задача «Файлы: стирание удалённых» — в «Запусках».\n- **Карточка организации → «Файлы».** Полоса памяти «Занято 6,9 из 8 ГБ» (жёлтая с 80 %, красная со 100 %) ведёт на вкладку «Подписка»; ниже — объём по категориям и все файлы организации.\n- **«Моя организация» → «Подписка» — только владельцу.** Вид и статус подписки, «Оплачено до», занятые места пакета и память, скидки и «История оплат» с чеками и причинами отказа.\n- **Окно оплаты.** «Продлить», «Расширить пакет» и «Купить память» — одно окно: вид подписки карточками, пакет и память, расчёт строками, реквизиты с кнопкой «Скопировать» и чек (PDF, JPG или PNG до 20 МБ, тип проверяется по содержимому). После «Отправить на проверку» доступ открыт, пока администратор проверяет оплату; файл чека можно заменить до проверки, к отклонённой оплате — «Прикрепить другой чек».\n- **Срок подходит к концу.** За 7 дней владелец видит сверху полосу «Подписка оплачена до … Продлите её» с кнопкой «Продлить». Срок прошёл — сотрудники видят «Доступ закрыт», владелец — только экран «Подписка». Память заполнена — новые файлы не загружаются, владельцу предлагается «Купить память».",
+   "status": "Опубликовано",
+   "aud": "all",
+   "off": false,
+   "pin": false,
+   "login": true,
+   "link": {
+    "k": "mod",
+    "id": "org"
+   },
+   "hist": [
+    {
+     "at": "2026-11-20 22:40",
+     "to": "Опубликовано",
+     "who": "admin"
+    }
+   ],
+   "_ub": "admin",
+   "_cb": "admin",
+   "_ua": "2026-11-20 22:40",
+   "_ca": "2026-11-20 16:20"
+  },
+  {
+   "id": "v155",
+   "t": "Версия 155: Витрина данных — шаблоны отчётов, вывод как в Excel и API-токены",
+   "type": "Обновление",
+   "ver": "155",
+   "date": "2026-11-20",
+   "short": "Новый модуль «Витрина данных»: 18 готовых отчётов в таблице как в Excel, выдача тех же данных внешним программам по API-токену, шаблоны на SQL в Админке.",
+   "md": "## Что нового\n- **Модуль «Витрина данных» (доработки 20.11.2026: Витрина данных).** В меню — «Витрина», после «Файлового менеджера»; на телефоне — в «≡ Другие модули». Вкладки «Вывод», «Шаблоны» и «API Токены»; в Админке ещё «Журнал запросов».\n- **Вывод.** Выберите отчёт и параметры и нажмите «Показать»: таблица как в Excel только для просмотра — выделение ячеек мышью и с Shift, внизу количество, сумма и среднее, Ctrl+C копирует для вставки в Excel; сортировка, фильтры, итоги и «В Excel». Последние параметры запоминаются.\n- **12 готовых отчётов для организаций** — «Контрагенты», «Отчёты к сдаче», «Просроченные отчёты», «Сдача отчётов по сотрудникам», «К оплате налогов по контрагентам», «Плата за обслуживание», «Должники», «Финансовые операции», «Выручка по контрагентам», «Проекты и разовые услуги», «Показатели контрагентов по месяцам», «Задачи». Сотрудник видит отчёт, если у него есть просмотр его модуля; при «Свои контрагенты» — только строки своих контрагентов.\n- **Шаблоны.** Каталог с описанием, параметрами и столбцами, кнопки «Показать» и «Выпустить токен»; «Попросить шаблон» отправляет запрос администратору платформы, ответ — в «Мои запросы».\n- **API-токены.** Токен даёт Excel, Power BI или 1С результат одного отчёта, только для чтения: срок 7, 30, 90 или 180 дней, показывается один раз, «Перевыпустить» (старый работает ещё 24 часа) и «Отозвать». В окне токена — «Как подключить» и журнал его запросов. Токен останавливается сам, если истёк срок, шаблон отключён, доступ закрыт по подписке или выключен «Внешний доступ по API».\n- **«Внешний доступ по API»** — выключатель в «Моя организация» → «Настройки»; включает владелец.\n- **Права.** Новая группа «Витрина данных»: «Смотреть витрину данных» и «Управлять API-токенами» (выдаёт только владелец); в стандартных ролях обе — только у владельца.\n- **Админка.** Список шаблонов и окно шаблона: запрос на SQL, параметры, столбцы, «Проверить» на выбранной организации, «Опубликовать», «Копировать», «Отключить»; 6 готовых отчётов для администратора; токены всех организаций с «Отозвать» и «Журнал запросов». Прототип SQL не выполняет: готовые отчёты считаются на демо-данных, проверка запроса — на тестовом стенде.",
+   "status": "Опубликовано",
+   "aud": "all",
+   "off": false,
+   "pin": false,
+   "login": true,
+   "link": {
+    "k": "mod",
+    "id": "dm"
+   },
+   "hist": [
+    {
+     "at": "2026-11-20 22:40",
+     "to": "Опубликовано",
+     "who": "admin"
+    }
+   ],
+   "_ub": "admin",
+   "_cb": "admin",
+   "_ua": "2026-11-20 22:40",
+   "_ca": "2026-11-20 22:40"
+  },
+  {
+   "id": "v156",
+   "t": "Версия 156: план",
+   "type": "Обновление",
+   "ver": "156",
    "date": "2026-11-20",
    "short": "Черновик: текст готовится.",
    "md": "## Что нового\n- Черновик: текст готовится",
@@ -25812,15 +25983,15 @@
    "link": null,
    "hist": [
     {
-     "at": "2026-11-20 18:30",
+     "at": "2026-11-20 22:40",
      "to": "Черновик",
      "who": "admin"
     }
    ],
    "_ub": "admin",
    "_cb": "admin",
-   "_ua": "2026-11-20 18:30",
-   "_ca": "2026-11-20 18:30"
+   "_ua": "2026-11-20 22:40",
+   "_ca": "2026-11-20 22:40"
   }
  ],
  "videos": [
@@ -30959,7 +31130,15 @@
   "tgCpCodeLimit": "Telegram контрагента: ответ на команду «Код от страницы», когда код этой страницы за сутки уже присылали 3 раза; {контрагент} — название, {лимит} — 3",
   "tgCpCodeClosed": "Telegram контрагента: ответ на команду «Код от страницы», когда страница закрыта после 5 неверных кодов за сутки; {контрагент} — название",
   "tgCmdCpCode": "Telegram: команда меню бота /code для клиента — код от страниц контрагентов, к которым подключён этот Telegram; не длиннее 40 знаков",
-  "tgCpPagePaidStaff": "сообщение ответственному, когда контрагент нажал «Я оплатил» на своей странице; {контрагент} — название, {что} — «налогов за <месяц>» или «обслуживания», {сумма} — сумма из сообщения"
+  "tgCpPagePaidStaff": "сообщение ответственному, когда контрагент нажал «Я оплатил» на своей странице; {контрагент} — название, {что} — «налогов за <месяц>» или «обслуживания», {сумма} — сумма из сообщения",
+  "tgSubSoon": "Telegram и колокольчик владельцам организации: за 7 дней до «Оплачено до» и каждый день до оплаты; кнопка «Открыть» — экран «Подписка»; {организация} — название, {дата} — «Оплачено до», {дней} — сколько дней осталось, {сумма} — продление на тот же срок и пакет",
+  "tgSubOver": "Telegram и колокольчик владельцам организации: каждый день после «Оплачено до», пока организация не оплатила; {организация} — название, {дата} — «Оплачено до», {сумма} — продление на тот же срок и пакет",
+  "tgSubPaid": "Telegram и колокольчик владельцам организации: администратор платформы подтвердил оплату; {организация} — название, {дата} — новое «Оплачено до»",
+  "tgSubRejected": "Telegram и колокольчик владельцам организации: администратор платформы отклонил чек; {организация} — название, {причина} — причина отклонения",
+  "tgSubMem80": "Telegram и колокольчик владельцам организации: занято 80 % памяти; один раз, пока занятое снова не опустится ниже порога; {занято} и {лимит} — ГБ",
+  "tgSubMemFull": "Telegram и колокольчик владельцам организации: память заполнена на 100 %; один раз, пока занятое снова не опустится ниже порога; {занято} и {лимит} — ГБ",
+  "tgSubCheckNew": "Telegram и колокольчик администраторам платформы: организация прикрепила чек; {организация} — название, {что} — продление, расширение пакета или память сверх, {сумма} — сумма заявки",
+  "tgSubCheckWait": "Telegram и колокольчик администраторам платформы: повтор каждый день в 09:00 по Бишкеку, пока чек не проверен; после 3 дней строка списка «Организации» помечена «Ждёт проверки больше 3 дней»; {дней} — сколько дней чек ждёт"
  },
  "dictGroups": [
   {
@@ -31319,6 +31498,18 @@
    "group": "files",
    "name": "Удалять файлы",
    "desc": "Удалять файлы, загруженные другими сотрудниками (свой файл можно удалить без права в течение суток)."
+  },
+  {
+   "id": "dmView",
+   "group": "dm",
+   "name": "Смотреть витрину данных",
+   "desc": "Видеть модуль «Витрина данных», вкладки «Вывод» и «Шаблоны»; шаблон виден, если есть ещё и право просмотра его модуля."
+  },
+  {
+   "id": "dmTokens",
+   "group": "dm",
+   "name": "Управлять API-токенами",
+   "desc": "Выпускать, отзывать и перевыпускать токены, видеть журнал запросов; выдаёт только владелец."
   },
   {
    "id": "staffView",
@@ -34798,5 +34989,1430 @@
    "spino": null,
    "why": "ст. 419 ч. 2 п. 3, 4; в законе о тарифах не названы; 66.30 и 66.19 не проверяются"
   }
- }
+ },
+ "subKinds": [
+  {
+   "id": "m1",
+   "name": "Месяц",
+   "months": 1,
+   "disc": 0,
+   "perks": [
+    "Без скидки за срок",
+    "Пакет можно менять каждый месяц"
+   ],
+   "order": 1,
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-11-20 09:00",
+   "_ub": "admin",
+   "_ua": "2026-11-20 09:00"
+  },
+  {
+   "id": "m3",
+   "name": "3 месяца",
+   "months": 3,
+   "disc": 5,
+   "perks": [
+    "Скидка 5 % на контрагентов и на память сверх"
+   ],
+   "order": 2,
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-11-20 09:00",
+   "_ub": "admin",
+   "_ua": "2026-11-20 09:00"
+  },
+  {
+   "id": "m6",
+   "name": "6 месяцев",
+   "months": 6,
+   "disc": 10,
+   "perks": [
+    "Скидка 10 % на контрагентов и на память сверх"
+   ],
+   "order": 3,
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-11-20 09:00",
+   "_ub": "admin",
+   "_ua": "2026-11-20 09:00"
+  },
+  {
+   "id": "m9",
+   "name": "9 месяцев",
+   "months": 9,
+   "disc": 15,
+   "perks": [
+    "Скидка 15 % на контрагентов и на память сверх"
+   ],
+   "order": 4,
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-11-20 09:00",
+   "_ub": "admin",
+   "_ua": "2026-11-20 09:00"
+  },
+  {
+   "id": "m12",
+   "name": "12 месяцев",
+   "months": 12,
+   "disc": 20,
+   "perks": [
+    "Скидка 20 % на контрагентов и на память сверх",
+    "Цена не меняется весь год"
+   ],
+   "order": 5,
+   "active": true,
+   "_cb": "admin",
+   "_ca": "2026-11-20 09:00",
+   "_ub": "admin",
+   "_ua": "2026-11-20 09:00"
+  }
+ ],
+ "subPrices": {
+  "cp": 100,
+  "step": 10,
+  "gb": 100,
+  "baseMb": 2000,
+  "cpMb": 200,
+  "first": 50,
+  "extraOver": 150,
+  "remind": 7,
+  "check": 3,
+  "req": {
+   "to": "ОсОО «Бухучет»",
+   "inn": "02011202610018",
+   "bank": "Optima Bank",
+   "bik": "109018",
+   "acc": "1091 8200 0088 4107",
+   "purpose": "Оплата подписки Buhuchet.kg за организацию {организация}, ИНН {ИНН}"
+  },
+  "_cb": "admin",
+  "_ca": "2026-11-20 09:00",
+  "_ub": "admin",
+  "_ua": "2026-11-20 09:00"
+ },
+ "dmTemplates": [
+  {
+   "code": "contractors",
+   "name": "Контрагенты",
+   "desc": "Реквизиты, режим налогообложения, ответственный и обслуживание каждого контрагента, кроме архивных.",
+   "kind": "org",
+   "mod": "cps",
+   "perm": null,
+   "params": [],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "inn",
+     "label": "ИНН",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "form",
+     "label": "Форма",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "regime",
+     "label": "Режим",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "resp",
+     "label": "Ответственный",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "svc",
+     "label": "Обслуживание",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "start",
+     "label": "Начало обслуживания",
+     "type": "date",
+     "total": false
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, c.name AS cp, c.inn, c.form_code AS form, c.regime_code AS regime,\n       e.short_name AS resp,\n       CASE c.service_status WHEN 'active' THEN 'Обслуживается' ELSE 'Приостановлен' END AS svc,\n       c.start_date AS start\nFROM contractors c\nLEFT JOIN employees e ON e.id = c.responsible_employee_id\nWHERE c.service_status <> 'archived'\nORDER BY c.name",
+   "id": "dt01",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "reports-due",
+   "name": "Отчёты к сдаче",
+   "desc": "Отчёты со сроком в выбранном периоде: срок, статус, сумма к уплате и оплачено, ответственный.",
+   "kind": "org",
+   "mod": "reports",
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "month_start"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "month_end"
+    },
+    {
+     "k": "status",
+     "label": "Статус",
+     "type": "list:status",
+     "req": false,
+     "def": null
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "rep",
+     "label": "Отчёт",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "period",
+     "label": "Период",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "due",
+     "label": "Срок",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "status",
+     "label": "Статус",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "sum",
+     "label": "Сумма",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "paid",
+     "label": "Оплачено",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "resp",
+     "label": "Ответственный",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, c.name AS cp, t.short_name AS rep, r.period,\n       r.due_date AS due,\n       CASE r.status WHEN 'todo' THEN 'К сдаче' WHEN 'in_progress' THEN 'В работе' WHEN 'submitted' THEN 'Сдан'\n                     WHEN 'needs_fix' THEN 'Требует исправления' ELSE 'Не требуется' END AS status,\n       r.amount AS sum, r.paid, e.short_name AS resp\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nJOIN report_types t ON t.code = r.report_type_code\nLEFT JOIN employees e ON e.id = r.responsible_employee_id\nWHERE NOT r.superseded\n  AND r.due_date BETWEEN :date_from AND :date_to\n  AND (:status IS NULL OR r.status = :status)\nORDER BY r.due_date, c.name",
+   "id": "dt02",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "reports-overdue",
+   "name": "Просроченные отчёты",
+   "desc": "Несданные отчёты, срок которых прошёл к выбранной дате, и на сколько дней.",
+   "kind": "org",
+   "mod": "reports",
+   "perm": null,
+   "params": [
+    {
+     "k": "date",
+     "label": "На дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "rep",
+     "label": "Отчёт",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "period",
+     "label": "Период",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "due",
+     "label": "Срок",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "days",
+     "label": "Просрочено, дней",
+     "type": "num",
+     "total": false
+    },
+    {
+     "k": "status",
+     "label": "Статус",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "resp",
+     "label": "Ответственный",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, c.name AS cp, t.short_name AS rep, r.period,\n       r.due_date AS due, :date - r.due_date AS days,\n       CASE r.status WHEN 'todo' THEN 'К сдаче' WHEN 'in_progress' THEN 'В работе' WHEN 'submitted' THEN 'Сдан'\n                     WHEN 'needs_fix' THEN 'Требует исправления' ELSE 'Не требуется' END AS status,\n       e.short_name AS resp\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nJOIN report_types t ON t.code = r.report_type_code\nLEFT JOIN employees e ON e.id = r.responsible_employee_id\nWHERE NOT r.superseded\n  AND r.status IN ('todo', 'in_progress', 'needs_fix')\n  AND r.due_date < :date\nORDER BY r.due_date, c.name",
+   "id": "dt03",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "reports-by-staff",
+   "name": "Сдача отчётов по сотрудникам",
+   "desc": "Сколько отчётов со сроком в месяце у каждого сотрудника: сдано, просрочено, осталось.",
+   "kind": "org",
+   "mod": "reports",
+   "perm": null,
+   "params": [
+    {
+     "k": "month",
+     "label": "Месяц",
+     "type": "month",
+     "req": true,
+     "def": "month"
+    }
+   ],
+   "cols": [
+    {
+     "k": "emp",
+     "label": "Сотрудник",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "total",
+     "label": "Отчётов со сроком в месяце",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "done",
+     "label": "Сдано",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "overdue",
+     "label": "Просрочено",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "remaining",
+     "label": "Осталось",
+     "type": "num",
+     "total": true
+    }
+   ],
+   "sql": "SELECT e.short_name AS emp,\n       count(*) AS total,\n       count(*) FILTER (WHERE r.status IN ('submitted', 'not_required')) AS done,\n       count(*) FILTER (WHERE r.status IN ('todo', 'in_progress', 'needs_fix') AND r.due_date < current_date) AS overdue,\n       count(*) FILTER (WHERE r.status IN ('todo', 'in_progress', 'needs_fix') AND r.due_date >= current_date) AS remaining\nFROM reports r\nJOIN employees e ON e.id = r.responsible_employee_id\nWHERE NOT r.superseded\n  AND date_trunc('month', r.due_date) = to_date(:month, 'YYYY-MM')\nGROUP BY e.short_name\nORDER BY e.short_name",
+   "id": "dt04",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "tax-due",
+   "name": "К оплате налогов по контрагентам",
+   "desc": "Сколько налогов каждому контрагенту уплатить в месяце по сроку оплаты, сколько уже оплачено.",
+   "kind": "org",
+   "mod": "reports",
+   "perm": null,
+   "params": [
+    {
+     "k": "month",
+     "label": "Месяц",
+     "type": "month",
+     "req": true,
+     "def": "month"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "sum",
+     "label": "К оплате",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "paid",
+     "label": "Оплачено",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "rest",
+     "label": "Осталось оплатить",
+     "type": "money",
+     "total": true
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, c.name AS cp,\n       sum(r.amount) AS sum, sum(r.paid) AS paid, sum(r.amount - r.paid) AS rest\nFROM reports r\nJOIN contractors c ON c.id = r.contractor_id\nWHERE NOT r.superseded AND r.amount > 0\n  AND date_trunc('month', coalesce(r.pay_due, r.due_date)) = to_date(:month, 'YYYY-MM')\nGROUP BY c.id, c.name\nORDER BY rest DESC, c.name",
+   "id": "dt05",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "service-fee",
+   "name": "Плата за обслуживание",
+   "desc": "Начислено и оплачено за обслуживание за год и долг по каждому контрагенту.",
+   "kind": "org",
+   "mod": "cps",
+   "perm": "fee",
+   "params": [
+    {
+     "k": "year",
+     "label": "Год",
+     "type": "year",
+     "req": true,
+     "def": "year"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "charged",
+     "label": "Начислено",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "paid",
+     "label": "Оплачено",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "debt",
+     "label": "Долг за год",
+     "type": "money",
+     "total": true
+    }
+   ],
+   "sql": "WITH months AS (\n  SELECT generate_series(make_date(:year, 1, 1), make_date(:year, 12, 1), interval '1 month')::date AS m\n), charged AS (\n  SELECT p.contractor_id, sum(t.amount) AS amount\n  FROM months\n  JOIN contractor_service_periods p ON months.m BETWEEN p.from_month AND coalesce(p.to_month, months.m)\n  JOIN LATERAL (\n    SELECT t.amount FROM contractor_tariffs t\n    WHERE t.contractor_id = p.contractor_id AND t.valid_from <= months.m\n    ORDER BY t.valid_from DESC LIMIT 1\n  ) t ON true\n  WHERE months.m <= current_date\n  GROUP BY p.contractor_id\n), paid AS (\n  SELECT fp.contractor_id, sum(fa.amount) AS amount\n  FROM fee_payments fp\n  JOIN fee_allocations fa ON fa.payment_id = fp.id\n  WHERE fp.deleted_at IS NULL AND extract(year FROM fa.month) = :year\n  GROUP BY fp.contractor_id\n)\nSELECT c.id AS contractor_id, c.name AS cp,\n       coalesce(ch.amount, 0) AS charged, coalesce(pd.amount, 0) AS paid,\n       greatest(coalesce(ch.amount, 0) - coalesce(pd.amount, 0), 0) AS debt\nFROM contractors c\nLEFT JOIN charged ch ON ch.contractor_id = c.id\nLEFT JOIN paid pd ON pd.contractor_id = c.id\nWHERE c.kind = 'regular' AND (ch.amount > 0 OR pd.amount > 0)\nORDER BY debt DESC, c.name",
+   "id": "dt06",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "debtors",
+   "name": "Должники",
+   "desc": "Контрагенты с долгом за обслуживание на дату: сумма, сколько месяцев не оплачено, ответственный.",
+   "kind": "org",
+   "mod": "cps",
+   "perm": "fee",
+   "params": [
+    {
+     "k": "date",
+     "label": "На дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "debt",
+     "label": "Долг за обслуживание",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "months",
+     "label": "Месяцев не оплачено",
+     "type": "num",
+     "total": false
+    },
+    {
+     "k": "resp",
+     "label": "Ответственный",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "WITH due AS (\n  SELECT p.contractor_id, m::date AS month,\n         (SELECT t.amount FROM contractor_tariffs t\n          WHERE t.contractor_id = p.contractor_id AND t.valid_from <= m\n          ORDER BY t.valid_from DESC LIMIT 1) AS charge\n  FROM contractor_service_periods p,\n       generate_series(p.from_month, coalesce(p.to_month, date_trunc('month', :date::date)), interval '1 month') m\n), got AS (\n  SELECT fp.contractor_id, fa.month, sum(fa.amount) AS amount\n  FROM fee_payments fp JOIN fee_allocations fa ON fa.payment_id = fp.id\n  WHERE fp.deleted_at IS NULL AND fp.paid_on <= :date\n  GROUP BY fp.contractor_id, fa.month\n), left_to_pay AS (\n  SELECT d.contractor_id, d.charge - coalesce(g.amount, 0) AS rest\n  FROM due d LEFT JOIN got g ON g.contractor_id = d.contractor_id AND g.month = d.month\n  WHERE d.charge - coalesce(g.amount, 0) > 0\n)\nSELECT c.id AS contractor_id, c.name AS cp, sum(l.rest) AS debt, count(*) AS months, e.short_name AS resp\nFROM left_to_pay l\nJOIN contractors c ON c.id = l.contractor_id\nLEFT JOIN employees e ON e.id = c.responsible_employee_id\nGROUP BY c.id, c.name, e.short_name\nORDER BY debt DESC",
+   "id": "dt07",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "money-operations",
+   "name": "Финансовые операции",
+   "desc": "Поступления, оплаты налогов и другие операции по контрагентам за период; оплату за обслуживание не выводит.",
+   "kind": "org",
+   "mod": "fin",
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "month_start"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "month_end"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "date",
+     "label": "Дата",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "kind",
+     "label": "Вид операции",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "amount",
+     "label": "Сумма",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "note",
+     "label": "Комментарий",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, o.op_date AS date, c.name AS cp,\n       CASE o.kind WHEN 'in' THEN 'Поступление' WHEN 'pay' THEN 'Оплата налога' WHEN 'bonus' THEN 'Списание в бонус'\n                   WHEN 'refund' THEN 'Возврат контрагенту' WHEN 'back' THEN 'Возврат по уточнённому'\n                   WHEN 'corr' THEN 'Обратная запись' ELSE 'Перевод на счёт сотрудника' END AS kind,\n       o.amount, o.note\nFROM money_operations o\nJOIN contractors c ON c.id = o.contractor_id\nWHERE o.cancelled_at IS NULL\n  AND o.op_date BETWEEN :date_from AND :date_to\nORDER BY o.op_date, c.name",
+   "id": "dt08",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "revenue",
+   "name": "Выручка по контрагентам",
+   "desc": "Получено за год от каждого контрагента: обслуживание, проекты, разовые услуги и всего, как «Аналитика» на «Главной».",
+   "kind": "org",
+   "mod": "cps",
+   "perm": "fee",
+   "params": [
+    {
+     "k": "year",
+     "label": "Год",
+     "type": "year",
+     "req": true,
+     "def": "year"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "fee",
+     "label": "Обслуживание",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "proj",
+     "label": "Проекты",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "svc",
+     "label": "Разовые услуги",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "total",
+     "label": "Всего",
+     "type": "money",
+     "total": true
+    }
+   ],
+   "sql": "WITH f AS (\n  SELECT contractor_id, sum(amount) AS amount FROM fee_payments\n  WHERE deleted_at IS NULL AND extract(year FROM paid_on) = :year GROUP BY contractor_id\n), p AS (\n  SELECT pr.contractor_id, sum(pp.amount) AS amount\n  FROM project_payments pp JOIN projects pr ON pr.id = pp.project_id\n  WHERE pp.deleted_at IS NULL AND extract(year FROM pp.paid_on) = :year GROUP BY pr.contractor_id\n), s AS (\n  SELECT sv.contractor_id, sum(sp.amount) AS amount\n  FROM one_off_service_payments sp JOIN one_off_services sv ON sv.id = sp.service_id\n  WHERE sp.deleted_at IS NULL AND sv.deleted_at IS NULL AND extract(year FROM sp.paid_on) = :year GROUP BY sv.contractor_id\n)\nSELECT c.id AS contractor_id, c.name AS cp,\n       coalesce(f.amount, 0) AS fee, coalesce(p.amount, 0) AS proj, coalesce(s.amount, 0) AS svc,\n       coalesce(f.amount, 0) + coalesce(p.amount, 0) + coalesce(s.amount, 0) AS total\nFROM contractors c\nLEFT JOIN f ON f.contractor_id = c.id\nLEFT JOIN p ON p.contractor_id = c.id\nLEFT JOIN s ON s.contractor_id = c.id\nWHERE coalesce(f.amount, 0) + coalesce(p.amount, 0) + coalesce(s.amount, 0) > 0\nORDER BY total DESC",
+   "id": "dt09",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "projects-services",
+   "name": "Проекты и разовые услуги",
+   "desc": "Проекты, начатые в периоде, и разовые услуги с датой в периоде: стоимость, оплачено, долг.",
+   "kind": "org",
+   "mod": "projects",
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "month_start"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "month_end"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "kind",
+     "label": "Вид",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "name",
+     "label": "Название",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "date",
+     "label": "Дата",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "cost",
+     "label": "Стоимость",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "paid",
+     "label": "Оплачено",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "debt",
+     "label": "Долг",
+     "type": "money",
+     "total": true
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, 'Проект' AS kind, pr.name, c.name AS cp, pr.starts_on AS date, pr.plan AS cost,\n       coalesce((SELECT sum(amount) FROM project_payments WHERE project_id = pr.id AND deleted_at IS NULL), 0) AS paid,\n       greatest(pr.plan - coalesce((SELECT sum(amount) FROM project_payments WHERE project_id = pr.id AND deleted_at IS NULL), 0), 0) AS debt\nFROM projects pr JOIN contractors c ON c.id = pr.contractor_id\nWHERE pr.starts_on BETWEEN :date_from AND :date_to\nUNION ALL\nSELECT c.id, 'Разовая услуга', sv.name, c.name, sv.service_date, sv.amount,\n       coalesce((SELECT sum(amount) FROM one_off_service_payments WHERE service_id = sv.id AND deleted_at IS NULL), 0),\n       greatest(sv.amount - coalesce((SELECT sum(amount) FROM one_off_service_payments WHERE service_id = sv.id AND deleted_at IS NULL), 0), 0)\nFROM one_off_services sv JOIN contractors c ON c.id = sv.contractor_id\nWHERE sv.deleted_at IS NULL AND sv.service_date BETWEEN :date_from AND :date_to\nORDER BY date",
+   "id": "dt10",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "indicators-by-month",
+   "name": "Показатели контрагентов по месяцам",
+   "desc": "Внесённые значения показателей (выручка, численность и свои) по контрагентам и месяцам периода.",
+   "kind": "org",
+   "mod": "kpi",
+   "perm": null,
+   "params": [
+    {
+     "k": "month_from",
+     "label": "С месяца",
+     "type": "month",
+     "req": true,
+     "def": "month_ago_5"
+    },
+    {
+     "k": "month_to",
+     "label": "По месяц",
+     "type": "month",
+     "req": true,
+     "def": "month"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "ind",
+     "label": "Показатель",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "month",
+     "label": "Месяц",
+     "type": "month",
+     "total": false
+    },
+    {
+     "k": "value",
+     "label": "Значение",
+     "type": "num",
+     "total": false
+    },
+    {
+     "k": "unit",
+     "label": "Единица",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, c.name AS cp, i.name AS ind, v.month,\n       v.value, i.unit\nFROM indicator_values v\nJOIN indicators i ON i.id = v.indicator_id\nJOIN contractors c ON c.id = v.contractor_id\nWHERE v.month BETWEEN :month_from AND :month_to\nORDER BY c.name, i.sort_order, v.month",
+   "id": "dt11",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "tasks",
+   "name": "Задачи",
+   "desc": "Задачи со сроком в периоде: исполнитель, срок, статус и контрагент.",
+   "kind": "org",
+   "mod": "staff",
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "month_start"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "month_end"
+    }
+   ],
+   "cols": [
+    {
+     "k": "contractor_id",
+     "label": "Контрагент (для области «Свои контрагенты»)",
+     "type": "cp",
+     "total": false
+    },
+    {
+     "k": "title",
+     "label": "Задача",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "cp",
+     "label": "Контрагент",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "exec",
+     "label": "Исполнитель",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "due",
+     "label": "Срок",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "status",
+     "label": "Статус",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "SELECT c.id AS contractor_id, t.title, c.name AS cp, e.short_name AS exec, t.due_date AS due,\n       CASE t.status WHEN 'todo' THEN 'К выполнению' WHEN 'in_progress' THEN 'В работе' WHEN 'rework' THEN 'На доработке'\n                     WHEN 'on_confirm' THEN 'На подтверждении' WHEN 'confirmed' THEN 'Подтверждена' WHEN 'done' THEN 'Выполнена'\n                     WHEN 'failed' THEN 'Не выполнена' ELSE 'Отменена' END AS status\nFROM tasks t\nLEFT JOIN contractors c ON c.id = t.contractor_id\nLEFT JOIN employees e ON e.id = t.executor_employee_id\nWHERE t.due_date BETWEEN :date_from AND :date_to\nORDER BY t.due_date",
+   "id": "dt12",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": "contractor_id",
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "orgs",
+   "name": "Организации",
+   "desc": "Все организации платформы: состояние, сотрудники, действующие контрагенты и занятая память.",
+   "kind": "adm",
+   "mod": null,
+   "perm": null,
+   "params": [],
+   "cols": [
+    {
+     "k": "org",
+     "label": "Организация",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "status",
+     "label": "Состояние",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "staff",
+     "label": "Сотрудников",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "cps",
+     "label": "Действующих контрагентов",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "mb",
+     "label": "Занято памяти, МБ",
+     "type": "num",
+     "total": true
+    }
+   ],
+   "sql": "SELECT o.name AS org,\n       CASE o.status WHEN 'active' THEN 'Активна' ELSE 'Заблокирована' END AS status,\n       (SELECT count(*) FROM employees e WHERE e.org_id = o.id AND e.active) AS staff,\n       (SELECT count(*) FROM contractors c WHERE c.org_id = o.id AND c.service_status <> 'archived') AS cps,\n       round(coalesce((SELECT sum(f.size_bytes) FROM files f WHERE f.org_id = o.id AND f.deleted_at IS NULL), 0) / 1048576.0, 1) AS mb\nFROM organizations o\nWHERE NOT o.is_demo\nORDER BY o.name",
+   "id": "dt13",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "org-activity",
+   "name": "Активность организаций по дням",
+   "desc": "Сколько раз в день входили сотрудники каждой организации и сколько разных людей.",
+   "kind": "adm",
+   "mod": null,
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "days_ago_30"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "day",
+     "label": "День",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "org",
+     "label": "Организация",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "logins",
+     "label": "Входов",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "users",
+     "label": "Пользователей",
+     "type": "num",
+     "total": false
+    }
+   ],
+   "sql": "SELECT s.created_at::date AS day, o.name AS org, count(*) AS logins, count(DISTINCT s.user_id) AS users\nFROM sessions s\nJOIN organizations o ON o.id = s.org_id\nWHERE s.created_at::date BETWEEN :date_from AND :date_to\nGROUP BY s.created_at::date, o.name\nORDER BY day DESC, org",
+   "id": "dt14",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "subscriptions",
+   "name": "Подписки и оплаты",
+   "desc": "Оплаты подписок организаций за период: что оплачено, пакет, сумма, состояние проверки и срок.",
+   "kind": "adm",
+   "mod": null,
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "days_ago_30"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "at",
+     "label": "Дата",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "org",
+     "label": "Организация",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "what",
+     "label": "Что",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "pack",
+     "label": "Пакет, мест",
+     "type": "num",
+     "total": false
+    },
+    {
+     "k": "sum",
+     "label": "Сумма",
+     "type": "money",
+     "total": true
+    },
+    {
+     "k": "status",
+     "label": "Состояние",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "paid_to",
+     "label": "Оплачено до",
+     "type": "date",
+     "total": false
+    }
+   ],
+   "sql": "-- таблицы подписок — миграция 0165 (доработки 20.11.2026, пакет 2)\nSELECT p.created_at::date AS at, o.name AS org,\n       CASE p.what WHEN 'renew' THEN 'Продление' WHEN 'grow' THEN 'Расширение пакета' WHEN 'mem' THEN 'Память сверх'\n                   WHEN 'free' THEN 'Бесплатный период' ELSE 'Изменено администратором' END AS what,\n       p.pack, p.amount AS sum,\n       CASE p.status WHEN 'wait' THEN 'Ждёт подтверждения' WHEN 'ok' THEN 'Подтверждена' ELSE 'Отклонена' END AS status,\n       p.paid_to\nFROM subscription_payments p\nJOIN organizations o ON o.id = p.org_id\nWHERE p.created_at::date BETWEEN :date_from AND :date_to\nORDER BY p.created_at DESC",
+   "id": "dt15",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "leads",
+   "name": "Заявки с лендинга",
+   "desc": "Заявки с сайта за период: организация, размер и статус, без телефонов и реквизитов.",
+   "kind": "adm",
+   "mod": null,
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "days_ago_30"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "at",
+     "label": "Дата",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "firm",
+     "label": "Организация",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "size",
+     "label": "Сотрудников",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "status",
+     "label": "Статус",
+     "type": "text",
+     "total": false
+    }
+   ],
+   "sql": "SELECT l.created_at::date AS at, l.firm, l.size,\n       CASE l.status WHEN 'new' THEN 'Новая' WHEN 'in_progress' THEN 'В работе' WHEN 'connected' THEN 'Подключена' ELSE 'Отказ' END AS status\nFROM platform_leads l\nWHERE l.created_at::date BETWEEN :date_from AND :date_to\nORDER BY l.created_at DESC",
+   "id": "dt16",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "bot-messages",
+   "name": "Сообщения бота по дням",
+   "desc": "Сколько сообщений бот отправил за день и сколько не ушло.",
+   "kind": "adm",
+   "mod": null,
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "days_ago_30"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "day",
+     "label": "День",
+     "type": "date",
+     "total": false
+    },
+    {
+     "k": "sent",
+     "label": "Отправлено",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "errors",
+     "label": "Ошибки",
+     "type": "num",
+     "total": true
+    }
+   ],
+   "sql": "SELECT m.created_at::date AS day,\n       count(*) FILTER (WHERE m.status = 'sent') AS sent,\n       count(*) FILTER (WHERE m.status = 'failed') AS errors\nFROM telegram_outbox m\nWHERE m.created_at::date BETWEEN :date_from AND :date_to\nGROUP BY m.created_at::date\nORDER BY day DESC",
+   "id": "dt17",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  },
+  {
+   "code": "scheduler-runs",
+   "name": "Запуски задач по расписанию",
+   "desc": "Сколько раз за период запускалась каждая задача по расписанию, сколько с ошибкой и когда последний раз.",
+   "kind": "adm",
+   "mod": null,
+   "perm": null,
+   "params": [
+    {
+     "k": "date_from",
+     "label": "С даты",
+     "type": "date",
+     "req": true,
+     "def": "days_ago_30"
+    },
+    {
+     "k": "date_to",
+     "label": "По дату",
+     "type": "date",
+     "req": true,
+     "def": "today"
+    }
+   ],
+   "cols": [
+    {
+     "k": "job",
+     "label": "Задача",
+     "type": "text",
+     "total": false
+    },
+    {
+     "k": "runs",
+     "label": "Запусков",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "ok",
+     "label": "Успешно",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "errors",
+     "label": "С ошибкой",
+     "type": "num",
+     "total": true
+    },
+    {
+     "k": "last",
+     "label": "Последний запуск",
+     "type": "datetime",
+     "total": false
+    }
+   ],
+   "sql": "SELECT r.job, count(*) AS runs,\n       count(*) FILTER (WHERE r.ok) AS ok,\n       count(*) FILTER (WHERE NOT r.ok) AS errors,\n       max(r.started_at) AS last\nFROM scheduler_runs r\nWHERE r.started_at::date BETWEEN :date_from AND :date_to\nGROUP BY r.job\nORDER BY errors DESC, r.job",
+   "id": "dt18",
+   "state": "Опубликован",
+   "access": "all",
+   "cpCol": null,
+   "src": "system",
+   "checked": "2026-11-20 03:30",
+   "hist": [
+    {
+     "at": "2026-11-20 03:00",
+     "who": "system",
+     "what": "Готовый шаблон: Опубликован"
+    }
+   ],
+   "_cb": "system",
+   "_ca": "2026-11-20 03:00"
+  }
+ ]
 }

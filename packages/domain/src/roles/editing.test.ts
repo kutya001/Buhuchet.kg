@@ -160,6 +160,12 @@ describe('roleChangeProblem — сохранение роли на сервер�
       permission: 'rollback',
     });
     expect(change(owner, accRole, set(), set('staffView', 'staff', 'rollback'))).toBeNull();
+    // «Управлять API-токенами» выдаёт только владелец (прототип v155, OWNER_GRANTS).
+    expect(change(hr, accRole, set(), set('dmView', 'dmTokens'))).toEqual({
+      lock: 'owner_granted',
+      permission: 'dmTokens',
+    });
+    expect(change(owner, accRole, set(), set('dmView', 'dmTokens'))).toBeNull();
   });
 
   it('роль с правами, которые выдаёт только владелец, меняет только владелец — целиком', () => {
@@ -416,8 +422,8 @@ describe('счётчики роли', () => {
     );
   });
 
-  it('число прав: у владельца все 40', () => {
-    expect(rolePermissionCount({ isOwner: true, permissions: [] })).toBe(40);
+  it('число прав: у владельца все 42', () => {
+    expect(rolePermissionCount({ isOwner: true, permissions: [] })).toBe(42);
     expect(
       rolePermissionCount({ isOwner: false, permissions: ['cpView', 'export', 'cpView'] }),
     ).toBe(2);

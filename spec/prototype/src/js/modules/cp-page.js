@@ -73,6 +73,9 @@ function pubHide(){if(CPHT.on)cphTourEnd(false,true);if(PUB.io){PUB.io.disconnec
 function pubClose(){const b=PUB.back||'#home';pubHide();PUB.back='';if(location.hash!==b)location.hash=b;else route();refreshAll()}
 // Выключенная страница, неизвестный ИНН, архивный контрагент и чужой адрес организации — одна и та же страница без данных
 const pubCp=({slug,inn})=>feat('cppage')&&slug===ORG.slug?CPS.find(c=>c.inn===inn&&pgOn(c))||null:null;
+// Доступ организации закрыт по подписке: страница временно недоступна, сообщения клиенту (код в Telegram) не уходят; логотип и название фирмы не показываются
+const pubOrgClosed=()=>typeof subClosed==='function'&&!!subClosed(ORG.id);
+const pubClosedHtml=()=>`<div class="pub-gate">${pubBrand(null)}<h1>Страница временно недоступна</h1><p class="muted">Обратитесь в вашу бухгалтерскую фирму.</p></div>`;
 // «Забыли код?» (блок 6, пункт 6, cp-paid.js): ответ — строкой под ссылкой
 const pubForgotHtml=()=>`<button type="button" class="linkbtn pub-fg" id="pub-fg">${ic('send','sm')}Забыли код?</button><span class="hint pub-fgm" id="pub-fgm" role="status" hidden></span>`;
 // Над экраном кода — логотип и название бухгалтерской фирмы: клиент знает её, а не платформу; страница без данных — знак платформы
@@ -85,7 +88,9 @@ function pubDraw(keep){const el=$('#pub');if(!el||!PUB.open)return;const o=PUB.o
   if(!c)main=`<div class="pub-gate">${brand}<h1>Страница недоступна</h1><p class="muted">Обратитесь к вашему бухгалтеру.</p></div>`;
   else{const p=c.page,mem=pgMem()[o.slug+'|'+o.inn];
     if(p.closed)main=`<div class="pub-gate">${brand}<h1>Страница закрыта</h1><p class="muted">Было ${PG_DAY} неверных кодов за сутки. Попросите новый код у вашего бухгалтера.</p></div>`;
-    else if(mem&&mem.code===p.code&&mem.until>Date.now()){main=pubBody(c);inside=true}
+    // Доступ организации закрыт по подписке (ТЗ «Доработки 20.11.2026», блок 4, пункт 4): после верного кода — «временно недоступна», данных нет.
+    // Как вход сотрудника, который узнаёт о закрытии только после верного пароля, — по ссылке без кода не видно, что подписка фирмы не оплачена (более строгий вариант)
+    else if(mem&&mem.code===p.code&&mem.until>Date.now()){if(pubOrgClosed())main=pubClosedHtml();else{main=pubBody(c);inside=true}}
     else if(p.lock>Date.now())main=`<div class="pub-gate">${brand}<h1>Ввод кода временно закрыт</h1><p class="muted">Было ${PG_TRY} неверных кодов подряд. Попробуйте снова после ${pgHm(p.lock)} или попросите код у вашего бухгалтера.</p>${pubForgotHtml()}</div>`;
     // Экран кода (17.11.2026, «Меньше текста», п. 6): заголовок, одна строка, поле, «Открыть», «Забыли код?» и «Что это за страница?» — «код запоминается на 1 день» там же
     else main=`<form class="pub-gate" id="pub-f" autocomplete="off">${brand}<h1>Введите код</h1><p class="muted">6 цифр из сообщения бухгалтера</p>${fld('',`<input class="inp mono pub-code" id="pub-k" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-label="Код доступа">`,{id:'pub-k',full:true})}<button type="submit" class="btn cta" id="pub-ok">Открыть</button>${pubForgotHtml()}${cphCodeWhat()}</form>`}

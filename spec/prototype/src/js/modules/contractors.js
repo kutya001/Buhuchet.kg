@@ -6,7 +6,20 @@ function cpsTabs(){const v=visCps(true);const a=v.filter(c=>!c.archived);return 
  {id:'mine',label:'Мои контрагенты',icon:'user',count:CPS.filter(c=>!c.archived&&c.resp===S.me).length},
  feat('fee')&&can('fee')?{id:'debtors',label:'Должники',icon:'coins',count:a.filter(c=>c.feeDebt>0).length,red:true}:null,
 ]}
-function cpsAdd(){return [can('createCp')&&{label:'Контрагент',icon:'building',run:addCpDlg},can('cpImport')&&{label:'Загрузка из Excel',icon:'paste',run:importDlg},can('createCp')&&{label:'Из свидетельства и выписки',icon:'upload',run:regDocsDlg,beta:true,sub:'PDF Минюста или свидетельство ИП: форма заполнится сама'}].filter(Boolean)}
+/* Места в пакете подписки (ТЗ «Доработки 20.11.2026», блок 3, пункт 1; пакет 2, этап 0, поток К): новый активный контрагент — только на свободное место.
+   Где: «+ Добавить», «Из свидетельства и выписки», загрузка из Excel, «Вернуть из архива» (и откат «В архиве» в «Истории статусов»).
+   Занятые места и пакет считает одна функция подписок subSeats (src/js/core/subs.js, поток Т): активные — все, кроме «В архиве», «Приостановлен» и разовые тоже занимают место */
+const seatInfo=()=>typeof subSeats==='function'?subSeats(ORG.id):{pack:Infinity,used:0,free:Infinity};
+const seatMsg=s=>`В пакете нет свободных мест: занято ${s.used} из ${s.pack}. Расширьте пакет или переведите контрагента в архив`;
+// «Расширить пакет» — окно оплаты подписки потока И, открытое сразу на пакете
+const seatGrow=()=>typeof subPayDlg==='function'?subPayDlg('grow'):go('org','sub');
+// Хватает мест на need новых активных — true; нет — окно с причиной и false. У владельца — «Расширить пакет», у сотрудника — «Обратитесь к владельцу организации»
+function seatOk(need=1){const s=seatInfo();if(s.free>=need)return true;seatDlg(s);return false}
+function seatDlg(s){const own=me()&&me().role==='owner';
+  openModal({noMax:true,render:()=>({title:'В пакете нет свободных мест',body:`<p style="margin:0;color:var(--muted);line-height:1.55">${esc(seatMsg(s))}.</p>${own?'':`<div class="note" style="margin-top:12px">${ic('info')}<span>Обратитесь к владельцу организации: пакет расширяет он.</span></div>`}`,
+    foot:own?`<button class="btn ghost" data-close>Закрыть</button><button class="btn cta" id="seat-grow">${ic('plus','sm')}Расширить пакет</button>`:'<button class="btn cta" data-close>Понятно</button>',
+    mount(el,m){const b=$('#seat-grow',el);if(b)b.onclick=()=>{m.close();seatGrow()}}})}).el.classList.add('cfm')}
+function cpsAdd(){return [can('createCp')&&{label:'Контрагент',icon:'building',run:addCpDlg},can('cpImport')&&{label:'Загрузка из Excel',icon:'paste',run:importDlg},can('createCp')&&{label:'Из свидетельства и выписки',icon:'upload',run:()=>{if(seatOk())regDocsDlg()},beta:true,sub:'PDF Минюста или свидетельство ИП: форма заполнится сама'}].filter(Boolean)}
 // Значок «Показатели не заполнены» у контрагента: в подсказке месяцы, красный — есть просроченные
 const cpKpiPill=c=>{const x=kMissOk()&&!c.archived&&kMissCnt().by[c.id];return x?` <span class="pill ${x.over?'red':'yellow'} sm" title="${esc(kMissTip(x))}" aria-label="${esc(kMissTip(x))}">${ic('gauge')}${x.ms.length}</span>`:''};
 function cpCols(){const fee=feat('fee')&&can('fee');return [
@@ -59,7 +72,7 @@ function cpActions(c){const it=[{label:'Открыть карточку',icon:'b
   }else if(can('cpArchive'))it.push({label:'Вернуть из архива',icon:'refresh',run:()=>unarchiveCp(c)});
   if(c._del){it.push({sep:true},c._del);delete c._del}
   return it}
-function unarchiveCp(c){{c.archived=false;const l=lastPeriod(c);if(c.kind!=='oneoff'){if(l&&l.to&&l.to>=ym(TODAY))l.to=null;else c.periods.push({from:ym(TODAY),to:null})}const r=c.kind==='oneoff'?{on:0}:applyService(c);const nw=REPORTS.filter(x=>x.cp===c.id&&OPEN.has(x.status)&&!x.superseded).length;log('cp',c.id,'Возвращён из архива',c.id);refreshAll();toast(c.kind==='oneoff'?'Контрагент возвращён из архива':`Контрагент возвращён из архива, открытых отчётов: ${nw}`)}}
+function unarchiveCp(c){if(!seatOk())return false;{c.archived=false;const l=lastPeriod(c);if(c.kind!=='oneoff'){if(l&&l.to&&l.to>=ym(TODAY))l.to=null;else c.periods.push({from:ym(TODAY),to:null})}const r=c.kind==='oneoff'?{on:0}:applyService(c);const nw=REPORTS.filter(x=>x.cp===c.id&&OPEN.has(x.status)&&!x.superseded).length;log('cp',c.id,'Возвращён из архива',c.id);refreshAll();toast(c.kind==='oneoff'?'Контрагент возвращён из архива':`Контрагент возвращён из архива, открытых отчётов: ${nw}`)}}
 function renderCps(body,tab,fresh){
   const all=visCps(true).filter(c=>!c.archived);
   const noResp=all.filter(c=>!c.resp).length,withOver=all.filter(c=>c.overdue>0).length,deb=all.filter(c=>c.feeDebt>0);

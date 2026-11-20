@@ -195,6 +195,7 @@ export const STAFF_TEXTS = {
   'roles.group.kpi': { ru: 'Показатели контрагентов', section: 'Роли' },
   'roles.group.tasks': { ru: 'Задачи', section: 'Роли' },
   'roles.group.files': { ru: 'Файловый менеджер', section: 'Роли' },
+  'roles.group.dm': { ru: 'Витрина данных', section: 'Роли' },
   'roles.group.staff': { ru: 'Сотрудники', section: 'Роли' },
   'roles.group.dicts': { ru: 'Справочники', section: 'Роли' },
   'roles.group.kb': { ru: 'База знаний', section: 'Роли' },

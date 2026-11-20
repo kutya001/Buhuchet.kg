@@ -48,6 +48,8 @@ const sizeSeg=(id,v)=>`<div class="seg" role="group" aria-label="Размер б
 const basesChips=(id,arr)=>`<div class="chipsel" id="${id}">${(DICT.bases?DICT.bases.items:[]).filter(b=>b.active||arr.includes(b.code)).map(b=>`<button type="button" data-base="${b.code}" class="${arr.includes(b.code)?'on':''}" title="${esc(b.desc||'')}">${arr.includes(b.code)?ic('check','sm'):''}${esc(b.name)}</button>`).join('')}</div>`;
 // pre — создание «Из свидетельства и выписки»: {res, docs, files} — форма заполнена из документов; {manual, files} — пустая форма, файлы прикрепятся
 function addCpDlg(kind,pre){
+  // Места в пакете (ТЗ «Доработки 20.11.2026», блок 3, пункт 1): без свободного места форма не открывается; проверка повторяется при сохранении
+  if(!seatOk())return;
   const st={regime:'Единый налог',regime2:'',ben:[],benD:{},bases:[],size:'small',form:'ОсОО',kind:typeof kind==='string'?kind:'regular',per:'M',sel:new Set(),picked:false,forced:{},rates:{},rateMan:{},gked:'',gked2:[],reg:{},regOpen:!!pre,ugAdd:[],...sfInit(null)};
   if(pre&&pre.res){rdPrefill(st,pre);st.ugAdd=ugAuto(st,st.d.ugns);if(st.ugAdd.length)setTimeout(()=>toast(ugMsg(st.ugAdd)),600)}
   openModal({form:true,size:'mid',state:{step:1},render:m=>{const reg=st.kind==='regular';
@@ -140,13 +142,14 @@ function addCpDlg(kind,pre){
       $('#nc-ok',el).onclick=()=>{if(m.saving)return;if(st.regOpen)snap();const name=val(el,'nc-name'),inn=val(el,'nc-inn'),ph=readPhone(el,'nc-ph'),resp=val(el,'nc-resp');
         const dup=CPS.find(c=>c.inn===inn);const reg=st.kind==='regular';
         const ok=validate(0);
-        if(dup&&dup.archived&&can('createCp')){const e=el.querySelector('[data-f="nc-inn"] .err');if(e){e.insertAdjacentHTML('beforeend',' <button type="button" class="btn xs" id="nc-unarch">Вернуть из архива</button>');$('#nc-unarch',el).onclick=()=>{m.close();unarchiveCp(dup);openCp(dup)}}}
+        if(dup&&dup.archived&&can('createCp')){const e=el.querySelector('[data-f="nc-inn"] .err');if(e){e.insertAdjacentHTML('beforeend',' <button type="button" class="btn xs" id="nc-unarch">Вернуть из архива</button>');$('#nc-unarch',el).onclick=()=>{if(!seatOk())return;m.close();unarchiveCp(dup);openCp(dup)}}}
         if(!ok){const f=el.querySelector('.fld.bad');if(f){const s=f.closest('.cf-sec');if(mob&&s)cfShow(el,m,+s.dataset.sec);f.scrollIntoView({block:'center',behavior:'smooth'})}return}
         if(!sfValid(el,'nc',fake,st)){const f=el.querySelector('.fld.bad');if(f){const s=f.closest('.cf-sec');if(mob&&s)cfShow(el,m,+s.dataset.sec);f.scrollIntoView({block:'center',behavior:'smooth'})}return}
         if(!gkEnOk(fake,st,()=>$('#nc-ok',el).click()))return;
         if(!gkBenOk(fake,st,()=>$('#nc-ok',el).click()))return;
         if(!sfConfirm(fake,st,()=>$('#nc-ok',el).click()))return;
         if(pre&&pre.res&&pre.res.stopped&&!st.stopOk){confirmDlg({title:'Юрлицо прекращено',text:`По данным документа юрлицо прекращено (ликвидировано)${pre.res.status?`, статус «${esc(pre.res.status)}»`:''}. Всё равно создать контрагента?`,ok:'Создать',danger:true,run:()=>{st.stopOk=true;$('#nc-ok',el).click()}});return}
+        if(!seatOk())return;
         m.saving=true;const start=val(el,'nc-start')||TODAY;
         const c={id:CPID++,name,inn,phone:ph.ph,form:st.form,regime:st.regime,regime2:st.regime2,ben:[...st.ben],benDates:JSON.parse(JSON.stringify(st.benD)),bases:[...st.bases],size:st.size,gked:st.gked,gked2:[...st.gked2],resp,head:val(el,'nc-head'),contact:val(el,'nc-contact'),start,contract:(()=>{const cno=val(el,'nc-cno').trim(),cd=val(el,'nc-cdate');return cno||cd?`${cno?'№ '+cno:'Без номера'}${cd?' от '+fmtD(cd):''}`:'—'})(),note:val(el,'nc-note'),paysTo:'emp',archived:false,assign:[],tariffs:[],feeDay:1,feePaid:{},first:$('#nc-first',el)?val(el,'nc-first'):'full',files:[],
           kind:st.kind,ugns:val(el,'nc-ugns')||null,reg:regEmpty(st.reg)?undefined:Object.assign({},st.reg),oneSum:false,needInFile:!!($('#nc-needf',el)&&$('#nc-needf',el).checked),periods:reg?[{from:start.slice(0,7),to:null}]:[]};

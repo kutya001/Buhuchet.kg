@@ -16,6 +16,7 @@ const LG_T={bad:'Неверный логин или пароль',lock:'Вход
 // «Забыли пароль?» (решение заказчика 30.10.2026, п. 9): один код можно ввести не больше 5 раз, дальше он не действует; после 10 неверных кодов за 24 часа восстановление через Telegram по логину закрыто на 24 часа — пароль сбросит владелец. Код запрашивается не больше 3 раз в час на логин: сверх этого код не отправляется, ответ на экране тот же. Счётчики — по логину, в том числе несуществующему; в макете живут до перезагрузки страницы, в продукте их ведёт сервер
 const FG={},FG_TRIES=5,FG_BAD=10,FG_REQ=3,FG_H=3600*1000,FG_DAY=24*FG_H;
 const fgSt=l=>{const st=FG[l]=FG[l]||{req:[],bad:[],tries:0,till:0},now=Date.now();st.req=st.req.filter(t=>now-t<FG_H);st.bad=st.bad.filter(t=>now-t<FG_DAY);if(st.till&&st.till<=now)st.till=0;return st};
+Object.assign(LG_T,{sub:'Доступ закрыт: подписка организации не оплачена. Обратитесь к владельцу организации.'});
 Object.assign(LG_T,{fgDead:'Код больше не действует: его ввели 5 раз. Запросите новый код.',fgLock:'Восстановление через Telegram закрыто на 24 часа: слишком много неверных кодов. Пароль сбросит владелец организации.'});
 const find0=l=>[...EMP,PLATFORM_ADMIN].find(u=>u.login===String(l).trim().toLowerCase());
 // Вход закрыт после 10 неверных паролей подряд (решение заказчика 07.11.2026): счёт ведётся у учётной записи (pwBad) и со временем не забывается, верный пароль обнуляет его; на 10-м подряд вход закрыт (pwLocked), пока не выдадут новый пароль: сотруднику — владелец или администратор платформы, владельцу — администратор платформы. Попытки, отбитые 15-минутным запретом по логину, в счёт не идут. Уже открытые сеансы блокировка не закрывает. У администратора платформы этой блокировки нет. В макете счёт и блокировка хранятся в данных, а 15-минутный запрет — до перезагрузки страницы
@@ -83,10 +84,12 @@ function showLogin(step='login',ctx={}){
       delete LG_FAIL[l];
       // О блокировке сотрудника, организации и о закрытом входе — только после верного пароля и без названия организации; верный пароль обнуляет счёт неверных, если вход не закрыт
       const lk=a=>{if(a.pwLocked){const nm=a.pwLockWhy==='notme';msg(accIsOwner(a)?(nm?LG_T.notMeOwner:LG_T.accOwner):(nm?LG_T.notMe:LG_T.acc));return true}a.pwBad=0;return false};
-      if(ou){const org=ORGS.find(o=>o.id===ou.org);if(org&&org.active===false)return msg(LG_T.org);if(ou.active===false)return msg(LG_T.user);if(lk(ou))return;return msg(LG_T.demo)}
+      if(ou){const org=ORGS.find(o=>o.id===ou.org);if(org&&org.active===false)return msg(LG_T.org);if(ou.active===false)return msg(LG_T.user);if(lk(ou))return;if(!accIsOwner(ou)&&typeof subClosed==='function'&&!SUBS_DEMO&&subClosed(ou.org))return msg(LG_T.sub);return msg(LG_T.demo)}
       if(u.active===false)return msg(LG_T.user);
       if(u.id==='admin')return admStart(l,msg);
       if(lk(u))return;
+      // Подписка не оплачена (доработки 20.11.2026, блок 4, пункты 4–5): сотруднику — «Доступ закрыт» после верного пароля; владелец входит и видит только экран «Подписка»
+      if(u.role!=='owner'&&typeof subClosed==='function'&&!SUBS_DEMO&&subClosed(ORG.id))return msg(LG_T.sub);
       if(u.tmpPass)return showLogin('first',{login:l});
       el.remove();S.loggedIn=true;switchUser(u.id);buIntro()};
     $('#lg-go',el).onclick=go;el.onkeydown=e=>{if(e.key==='Enter')go()};$('#lg-forgot',el).onclick=()=>showLogin('forgot',{login:val(el,'lg-login')});$('#lg-about',el).onclick=()=>{location.hash='#landing'};$('#lg-login',el).focus()}

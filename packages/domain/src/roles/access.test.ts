@@ -39,15 +39,15 @@ function subject(
 }
 
 describe('каталог прав', () => {
-  it('40 прав без повторов, у каждой группы с областью есть право просмотра', () => {
-    expect(PERMISSIONS).toHaveLength(40);
-    expect(new Set(PERMISSION_IDS).size).toBe(40);
+  it('42 права без повторов, у каждой группы с областью есть право просмотра', () => {
+    expect(PERMISSIONS).toHaveLength(42);
+    expect(new Set(PERMISSION_IDS).size).toBe(42);
     expect(SCOPE_GROUPS).toEqual(['cps', 'reports', 'fin', 'projects', 'kpi', 'files']);
   });
 });
 
 describe('hasPermission — как can() прототипа', () => {
-  it('владелец имеет все 40 прав, даже без прав в роли', () => {
+  it('владелец имеет все 42 права, даже без прав в роли', () => {
     const owner = subject({ isOwner: true });
     expect(effectivePermissions(owner)).toEqual([...PERMISSION_IDS]);
     expect(hasPermission(owner, 'org')).toBe(true);

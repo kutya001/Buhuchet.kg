@@ -13,7 +13,7 @@ const sntWho=x=>x.src==='tg'?(x.who||'Telegram'):'Контрагент';
 const sntLeft=x=>x.st==='ok'?null:Math.max(0,SNT_KEEP-diffDays(TODAY,String(x.at).slice(0,10)));
 const sntLeftTxt=x=>{const n=sntLeft(x);return n==null?'':n?`Удалится через ${n} ${plural(n,'день','дня','дней')}`:'Удалится сегодня'};
 // Удаление через 30 дней: строка и сам файл пропадают; запись в историю контрагента — от имени системы
-function sntPurge(){for(let i=SENT.length-1;i>=0;i--){const x=SENT[i];if(x.st==='ok'||diffDays(TODAY,String(x.at).slice(0,10))<SNT_KEEP)continue;SENT.splice(i,1);
+function sntPurge(){for(let i=SENT.length-1;i>=0;i--){const x=SENT[i];if(x.st==='ok'||diffDays(TODAY,String(x.at).slice(0,10))<SNT_KEEP)continue;SENT.splice(i,1);if(typeof ftPush==='function')ftPush({name:x.name,cp:x.cp,size:x.size,why:'auto',src:'От контрагента',loc:null});
   log('cp',x.cp,`Удалён непринятый файл от контрагента «${x.name}»: прошло ${SNT_KEEP} дней после отправки`,x.cp,{who:'system'})}}
 // Видны файлы тех контрагентов, которых сотрудник видит сейчас (область права «Просматривать файлы»)
 function sntRows(cp){sntPurge();if(!feat('files')||!can('filesView'))return [];const vc=new Set(visCps(true,'files').map(c=>c.id));return SENT.filter(x=>vc.has(x.cp)&&(cp==null||x.cp===cp))}

@@ -33,6 +33,9 @@ export const PERMISSION_GROUPS = [
   { id: 'kpi', feature: 'indicators', view: 'kpiView', scope: true },
   { id: 'tasks', feature: 'tasks', view: null, scope: false },
   { id: 'files', feature: 'files', view: 'filesView', scope: true },
+  // «Витрина данных» (прототип v155): без области — строки «Своих контрагентов» отбирает шаблон.
+  // ОТКЛОНЕНИЕ: docs/deviations.md#О-86
+  { id: 'dm', feature: null, view: 'dmView', scope: false },
   { id: 'staff', feature: null, view: 'staffView', scope: false },
   { id: 'dicts', feature: null, view: null, scope: false },
   { id: 'kb', feature: null, view: null, scope: false },
@@ -57,7 +60,7 @@ export const SCOPE_GROUPS = PERMISSION_GROUPS.filter((g) => g.scope).map(
 export const SCOPES = ['own', 'all'] as const;
 export type Scope = (typeof SCOPES)[number];
 
-/** 40 прав: [код, группа]. */
+/** 42 права: [код, группа]. */
 export const PERMISSIONS = [
   ['cpView', 'cps'],
   ['createCp', 'cps'],
@@ -90,6 +93,8 @@ export const PERMISSIONS = [
   ['filesView', 'files'],
   ['filesUpload', 'files'],
   ['filesDelete', 'files'],
+  ['dmView', 'dm'],
+  ['dmTokens', 'dm'],
   ['staffView', 'staff'],
   ['staffStats', 'staff'],
   ['staff', 'staff'],
@@ -131,4 +136,5 @@ export const OWNER_GRANTED_PERMISSIONS: readonly PermissionId[] = [
   'rollback',
   'archiveRest',
   'staff',
+  'dmTokens',
 ];

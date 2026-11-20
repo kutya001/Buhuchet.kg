@@ -53,3 +53,11 @@ table.td-f td:nth-child(5){min-width:220px}
 .ac-pg{display:flex;flex-direction:column;gap:3px;font-size:13px}
 .ac-pg b{font-weight:650}.ac-pg .pill{align-self:flex-start}
 .ac-b .plates [data-cpl]{cursor:pointer}
+/* Память организации (пакет 2, блоки 4–5; экран «Подписка»): полоса «Занято N из M ГБ», 80 % — жёлтая, 100 % — красная */
+.af-mem .bar{margin:8px 0 4px}
+.bar.af-bar.yellow i{background:var(--yellow)}
+.bar.af-bar.red i{background:var(--red)}
+/* Плитки вкладок «Хранилище» и «Проверка хранилища» — содержимое вкладки, а не скрываемая «статистика» модуля */
+.af-pl{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.af-pl .pl-sub{line-height:1.35}
+@media (max-width:767px){.af-pl{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.af-pl .plate{padding:10px 12px;gap:4px}.af-pl .pl-top{font-size:11.5px;gap:6px}.af-pl .pl-dot{width:20px;height:20px}.af-pl .pl-val{font-size:18px}.af-pl .pl-sub{font-size:11px}}

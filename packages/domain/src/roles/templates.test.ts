@@ -87,7 +87,7 @@ describe('rolesForNewOrganization', () => {
     ]);
   });
 
-  it('владелец имеет все 40 прав', () => {
+  it('владелец имеет все 42 права', () => {
     const owner = roles[0]!;
     const all = effectivePermissions({
       employeeId: 'e1',
@@ -95,14 +95,17 @@ describe('rolesForNewOrganization', () => {
       permissions: new Set(owner.permissions),
       scopes: owner.scopes,
     });
-    expect(all).toHaveLength(40);
+    expect(all).toHaveLength(42);
   });
 
-  it('главный бухгалтер — всё, кроме прав владельца, «Сотрудников и ролей», отката и архива; «Все»', () => {
+  it('главный бухгалтер — всё, кроме прав владельца, «Сотрудников и ролей», отката, архива и «Витрины данных»; «Все»', () => {
     const chief = roles[1]!;
+    // «Витрина данных» в стандартных ролях — только у владельца (прототип v155).
     expect(PERMISSION_IDS.filter((p) => !chief.permissions.includes(p))).toEqual([
       'cpArchive',
       'archiveRest',
+      'dmView',
+      'dmTokens',
       'staff',
       'org',
       'rollback',

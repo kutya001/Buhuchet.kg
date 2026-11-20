@@ -1,0 +1,45 @@
+/* Витрина данных: параметры вывода, каталог шаблонов, окно шаблона, токен и «Как подключить» (доработки 20.11.2026, этап 0, П10) */
+.dm-q{display:flex;flex-direction:column;gap:8px}
+.dm-pars{display:flex;flex-wrap:wrap;gap:10px 12px;align-items:flex-end}
+.dm-pars .fld{margin:0;min-width:150px;flex:0 1 auto}
+.dm-pars .fld:first-child{min-width:240px;flex:1 1 280px;max-width:420px}
+.dm-pars .btn{min-height:36px}
+.dm-meta{margin:10px 0 2px}
+.dm-h{margin:18px 0 8px;font-size:15px;display:flex;gap:8px;align-items:baseline}
+.dm-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:12px}
+.dm-card{display:flex;flex-direction:column;gap:8px;margin:0}
+.dm-card details summary{cursor:pointer;color:var(--muted);font-size:13px}
+.dm-cols{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.6}
+.dm-ed{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:16px;align-items:start}
+.dm-ed-l,.dm-ed-r{display:flex;flex-direction:column;gap:10px;min-width:0}
+.dm-ed-r .box{margin:0}
+.dm-ed textarea.dm-sql{min-height:240px;font-size:12.5px;line-height:1.5;tab-size:2;white-space:pre}
+.dm-chkbar{align-items:flex-end;gap:10px}
+.dm-chkbar .fld{margin:0;flex:1 1 220px}
+.dm-orgs{display:flex;flex-direction:column;gap:2px}
+.dm-pt td{padding:4px 6px}
+.dm-pt .inp{min-height:30px;padding:4px 8px;font-size:12.5px}
+.dm-pt select.inp{min-width:108px}
+.dm-pt td.mono{white-space:nowrap;font-size:12px}
+.dm-prev{max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:var(--r-m)}
+.dm-prev td,.dm-prev th{white-space:nowrap}
+.dm-ul{margin:6px 0;padding-left:18px;font-size:13px;line-height:1.6}
+.dm-tables summary{cursor:pointer;font-weight:600}
+.dm-tok{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px;border:1px dashed var(--border);border-radius:var(--r-m);background:var(--pane-alt);margin-bottom:6px}
+.dm-tok code{flex:1 1 280px;word-break:break-all;font-size:13px}
+.dm-how{margin-top:12px}
+.dm-how details{margin:6px 0}
+.dm-how summary{cursor:pointer;font-size:13px;color:var(--muted)}
+.dm-kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:baseline}
+.dm-kv code{word-break:break-all;font-size:12.5px}
+.dm-pre{margin:6px 0 0;padding:10px;background:var(--pane-alt);border:1px solid var(--border);border-radius:var(--r-m);font-size:12px;line-height:1.5;overflow:auto;max-height:280px;white-space:pre}
+.dm-info{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;align-items:baseline;margin-bottom:6px}
+@media (max-width:768px){
+  .dm-ask-note{flex-wrap:wrap}
+  .dm-ask-note>span{flex:1 1 calc(100% - 30px)}
+  .dm-ask-note>.btn{margin-left:28px}
+  .dm-ed{grid-template-columns:minmax(0,1fr)}
+  .dm-pars .fld,.dm-pars .fld:first-child{flex:1 1 100%;max-width:none;min-width:0}
+  .dm-pars .btn{width:100%;justify-content:center}
+  .dm-ed textarea.dm-sql{min-height:180px}
+}

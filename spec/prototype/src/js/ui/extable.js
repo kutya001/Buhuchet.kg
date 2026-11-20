@@ -12,7 +12,8 @@
    o: rows, cols — размеры; get(r,c) → {t: текст для правки и копирования, n: число или null, ed: можно править, why: почему нельзя};
    put([{r,c,t}]) → {bad:[тексты не числом]} записывает (пустой текст — стереть); draw(r,c) перерисовывает ячейку; after(изменённые) — после записи;
    stat — элемент строки состояния (как внизу Excel: количество, сумма, среднее выделенного); hint — её текст без выделения; label(r,c) — имя ячейки для экранного диктора;
-   menu(r,c) → дополнительные пункты меню правой кнопки для текущей ячейки */
+   menu(r,c) → дополнительные пункты меню правой кнопки для текущей ячейки;
+   ro — только просмотр (вывод «Витрины данных»): выделение, строка состояния и Ctrl+C, без ввода, вставки и очистки, в меню — только «Копировать» */
 const exCoarse=()=>matchMedia('(pointer:coarse)').matches;
 function exTable(wrap,o){
   const C=[];$$('td[data-sr]',wrap).forEach(t=>{(C[+t.dataset.sr]=C[+t.dataset.sr]||[])[+t.dataset.sc]=t});
@@ -40,7 +41,7 @@ function exTable(wrap,o){
     paint(true)}
   function pick(a,e){st.a=a;st.e=e||Object.assign({},a);paint(true)}
   // Запись: только в доступные ячейки; отмена — прежние тексты изменённых ячеек
-  function write(L,how){const ok=[],skip=[];L.forEach(x=>{const g=o.get(x.r,x.c);if(g.ed)ok.push(Object.assign({t0:g.t},x));else if(String(x.t).trim()!=='')skip.push(g)});
+  function write(L,how){if(o.ro)return 0;const ok=[],skip=[];L.forEach(x=>{const g=o.get(x.r,x.c);if(g.ed)ok.push(Object.assign({t0:g.t},x));else if(String(x.t).trim()!=='')skip.push(g)});
     const res=ok.length?(o.put(ok)||{}):{};const ch=ok.filter(x=>o.get(x.r,x.c).t!==x.t0);ok.forEach(x=>o.draw(x.r,x.c));
     if(ch.length&&how!=='undo'){st.undo.push(ch.map(x=>({r:x.r,c:x.c,t:x.t0})));if(st.undo.length>100)st.undo.shift()}
     if(ch.length&&o.after)o.after(ch);
@@ -50,7 +51,7 @@ function exTable(wrap,o){
       if(skip.length)m.push(`пропущено ячеек, где ввод недоступен: ${skip.length}`);toast(m.join(', '),bad.length?'alert':how==='clear'?'trash':'check',!!bad.length)}
     paint();return ch.length}
   // Правка ячейки: mode 'enter' — начали печатать (стрелки сохраняют и переходят), 'edit' — F2 или двойной щелчок (стрелки двигают курсор)
-  function edit(mode,init,quiet){if(!st.a)return false;const{r,c}=st.a;const g=o.get(r,c);if(!g.ed){if(!quiet)toast(g.why||'Эту ячейку изменить нельзя','lock',true);return false}
+  function edit(mode,init,quiet){if(!st.a||o.ro)return false;const{r,c}=st.a;const g=o.get(r,c);if(!g.ed){if(!quiet)toast(g.why||'Эту ячейку изменить нельзя','lock',true);return false}
     const t=C[r][c];const inp=document.createElement('input');inp.className='ex-in';inp.setAttribute('inputmode','decimal');inp.setAttribute('enterkeyhint','next');inp.autocomplete='off';inp.size=1;
     t.style.minWidth=t.offsetWidth+'px';inp.value=init!=null?init:g.t;inp.setAttribute('aria-label',o.label?o.label(r,c):'Значение');t.classList.add('ex-e');t.textContent='';t.appendChild(inp);st.ed={r,c,inp,mode,t0:g.t};
     inp.focus({preventScroll:true});const L=inp.value.length;try{if(mode==='edit'&&exCoarse())inp.select();else inp.setSelectionRange(L,L)}catch(e){}
@@ -88,6 +89,7 @@ function exTable(wrap,o){
     if(k==='Home'){e.preventDefault();return ctl?pick({r:0,c:0}):go(0,-1e6,e.shiftKey)}
     if(k==='End'){e.preventDefault();return ctl?pick({r:o.rows-1,c:o.cols-1}):go(0,1e6,e.shiftKey)}
     if(k==='F2'){e.preventDefault();return edit('edit')}
+    if(o.ro&&(k==='Delete'||k==='Backspace'||k==='F2'||(ctl&&/^Key[ZDXV]$/.test(e.code))||(!ctl&&!e.altKey&&k.length===1)))return;
     if(k==='Delete'||k==='Backspace'){e.preventDefault();return clear()}
     if(k==='Escape'&&(st.a.r!==st.e.r||st.a.c!==st.e.c)){e.preventDefault();e.stopPropagation();return pick(st.a)}
     if(ctl&&e.code==='KeyA'){e.preventDefault();st.a={r:0,c:0};st.e={r:o.rows-1,c:o.cols-1};return paint()}
@@ -95,10 +97,10 @@ function exTable(wrap,o){
     if(ctl&&e.code==='KeyD'){e.preventDefault();return fillDown()}
     if(!ctl&&!e.altKey&&k.length===1){e.preventDefault();return edit('enter',k)}});
   // Ввод через метод ввода (IME) и экранную клавиатуру: первый набранный текст начинает правку
-  kb.addEventListener('input',()=>{const v=kb.value.replace(Z,'');arm();if(v&&!st.ed&&st.a)edit('enter',v)});
+  kb.addEventListener('input',()=>{const v=kb.value.replace(Z,'');arm();if(v&&!st.ed&&st.a&&!o.ro)edit('enter',v)});
   kb.addEventListener('copy',e=>{if(!st.a)return;e.preventDefault();e.clipboardData.setData('text/plain',tsv())});
-  kb.addEventListener('cut',e=>{if(!st.a)return;e.preventDefault();e.clipboardData.setData('text/plain',tsv());clear()});
-  kb.addEventListener('paste',e=>{if(!st.a)return;e.preventDefault();paste((e.clipboardData||window.clipboardData).getData('text'))});
+  kb.addEventListener('cut',e=>{if(!st.a)return;e.preventDefault();e.clipboardData.setData('text/plain',tsv());if(!o.ro)clear()});
+  kb.addEventListener('paste',e=>{if(!st.a)return;e.preventDefault();if(o.ro)return;paste((e.clipboardData||window.clipboardData).getData('text'))});
   const cell=e=>{const t=e.target.closest&&e.target.closest('td[data-sr]');return t&&wrap.contains(t)?{r:+t.dataset.sr,c:+t.dataset.sc,t}:null};
   wrap.addEventListener('mousedown',e=>{if(exCoarse()||e.button>2||e.target.closest('.ex-in,button,a,input,select,label'))return;
     const h=e.target.closest('[data-exc],[data-exr]');
@@ -115,6 +117,7 @@ function exTable(wrap,o){
   wrap.addEventListener('click',e=>{if(!exCoarse())return;const p=cell(e);if(!p||e.target.closest('.ex-in'))return;if(st.ed)done(null);st.a={r:p.r,c:p.c};st.e={r:p.r,c:p.c};paint();edit('edit')});
   wrap.addEventListener('contextmenu',e=>{const p=cell(e);if(!p||exCoarse())return;e.preventDefault();if(!inR(p)){st.a={r:p.r,c:p.c};st.e={r:p.r,c:p.c};paint()}kb.focus({preventScroll:true});
     const rd=navigator.clipboard&&navigator.clipboard.readText;
+    if(o.ro)return menu(p.t,[{label:'Копировать',icon:'copy',sub:'Ctrl+C — для вставки в Excel',run:copyOut},...(o.menu?(L=>L.length?[{sep:true},...L]:[])(o.menu(st.a.r,st.a.c)):[])],{x:e.clientX,y:e.clientY});
     menu(p.t,[{label:'Копировать',icon:'copy',sub:'Ctrl+C',run:copyOut},{label:'Вырезать',icon:'x',sub:'Ctrl+X',run:()=>{copyOut();clear()}},
       {label:'Вставить',icon:'paste',sub:'Ctrl+V',run:()=>rd?navigator.clipboard.readText().then(t=>{kb.focus({preventScroll:true});paste(t)},()=>toast('Браузер не дал прочитать буфер обмена: нажмите Ctrl+V','alert',true)):toast('Нажмите Ctrl+V','alert',true)},
       {sep:true},{label:'Заполнить вниз',icon:'down',sub:'Ctrl+D — первой строкой выделения',run:fillDown},{label:'Очистить',icon:'trash',sub:'Delete',run:clear},
