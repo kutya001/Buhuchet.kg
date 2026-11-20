@@ -9,11 +9,9 @@ import {
   formatSom,
   formatSomWithUnit,
   type IsoDate,
-  LEAD_DOC_TEXT_KEYS,
   monthLabel,
   ORG_TIMEZONES,
   type Tyiyn,
-  type UiTextKey,
   weekDayOf,
   type YearMonth,
 } from '@buhuchet/domain';
@@ -26,7 +24,6 @@ import {
   KeyValues,
   linkButtonClass,
   MiniTable,
-  miniWide,
   Modal,
   MONO_CLASS,
   Note,
@@ -44,7 +41,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api, ApiFailure, apiFailure, callApi } from '../api-client';
-import { fileSizeText } from '../files/files-data';
+import { OrgFilesTab } from '../afiles/org-files-tab';
 import { useErrorText, useT } from '../l10n/provider';
 import type { Translate } from '../l10n/translate';
 import { ORG_CARD_KEY } from './org-actions';
@@ -100,6 +97,7 @@ export type OrgCardOwner = NonNullable<AdminOrgCard['owner']>;
 export function OrgCard({
   id,
   initial,
+  tab: firstTab = 'main',
   open,
   onClose,
   actions,
@@ -110,6 +108,8 @@ export function OrgCard({
   id: string;
   /** Строка списка — название окна, пока карточка не загрузилась. */
   initial: AdminOrganization | null;
+  /** С какой вкладки открыть; по умолчанию — «Основное». */
+  tab?: OrgCardTab;
   open: boolean;
   onClose: () => void;
   /** Кнопки шапки (пункты меню строки без «Открыть карточку»). */
@@ -150,7 +150,7 @@ export function OrgCard({
     toast(t('orgs.card.none'), { bad: true });
     onClose();
   }, [missing, toast, t, onClose]);
-  const [tab, setTab] = useState<OrgCardTab>('main');
+  const [tab, setTab] = useState<OrgCardTab>(firstTab);
   // «Подписка» (доработки 20.11.2026, блок 6, пункт 7; прототип `subOrgBody` во вкладке `sub`): статус
   // в шапке ведёт на вкладку, чек на проверке — красная отметка у вкладки.
   const sub = useQuery(subCardQuery(id));
@@ -351,14 +351,7 @@ export function OrgCard({
               <MoneyTab t={t} money={card.money} month={card.summary.month as YearMonth} />
             ) : null}
             {tab === 'set' ? <SettingsTab t={t} settings={card.settings} /> : null}
-            {tab === 'files' ? (
-              <FilesTab
-                t={t}
-                files={card.files}
-                leadFiles={card.leadFiles}
-                bytes={card.summary.files.bytes}
-              />
-            ) : null}
+            {tab === 'files' ? <OrgFilesTab t={t} orgId={id} onSub={() => setTab('sub')} /> : null}
             {tab === 'sub' ? <SubOrgTab orgId={id} act={subs.act} /> : null}
             {subs.nodes}
             {tab === 'hist' ? (
@@ -783,98 +776,5 @@ function SettingsTab({ t, settings }: { t: Translate; settings: AdminOrgCard['se
         />
       </Box>
     </div>
-  );
-}
-
-/**
- * «Файлы» (прототип ocFiles): объём по категориям «Файлового менеджера» и последние загрузки; у
- * организации из заявки с документами — её документы (прототип v114: «Заявка на подключение»).
- */
-function FilesTab({
-  t,
-  files,
-  leadFiles,
-  bytes,
-}: {
-  t: Translate;
-  files: AdminOrgCard['files'];
-  leadFiles: AdminOrgCard['leadFiles'];
-  bytes: number;
-}) {
-  const kind = (k: string) => t(`files.kind.${k}` as UiTextKey);
-  return (
-    <>
-      <Box title={t('orgs.card.files.by_kind', { mb: megabytesText(bytes) })}>
-        <div data-org-file-kinds="">
-          <MiniTable
-            label={t('orgs.card.files.by_kind', { mb: megabytesText(bytes) })}
-            columns={[
-              { key: 'kind', label: t('orgs.card.files.col.kind') },
-              { key: 'count', label: t('orgs.card.files.col.count'), numeric: true },
-              { key: 'mb', label: t('orgs.card.files.col.mb'), numeric: true },
-            ]}
-            rows={files.byKind.map((k) => ({
-              key: k.kind,
-              cells: {
-                kind: kind(k.kind),
-                count: formatCount(k.count),
-                mb: megabytesText(k.bytes),
-              },
-            }))}
-            empty={t('orgs.card.files.none')}
-          />
-        </div>
-      </Box>
-      <Box title={t('orgs.card.files.recent')}>
-        <div data-org-files="">
-          <MiniTable
-            label={t('orgs.card.files.recent')}
-            columns={[
-              { key: 'name', label: t('orgs.card.files.col.name') },
-              { key: 'kind', label: t('orgs.card.files.col.kind') },
-              { key: 'contractor', label: t('orgs.card.files.col.contractor') },
-              { key: 'by', label: t('orgs.card.files.col.by') },
-              { key: 'date', label: t('orgs.card.files.col.date') },
-              { key: 'size', label: t('orgs.card.files.col.size'), numeric: true },
-            ]}
-            rows={files.recent.map((f) => ({
-              key: f.id,
-              cells: {
-                name: f.name,
-                kind: kind(f.kind),
-                contractor: f.contractor ?? '—',
-                by: f.by ?? '—',
-                date: formatDateRu(bishkekDate(new Date(f.at))),
-                size: fileSizeText(t, f.bytes),
-              },
-              wide: miniWide({ name: f.name }),
-              blank: [...(f.contractor ? [] : ['contractor']), ...(f.by ? [] : ['by'])],
-            }))}
-            empty={t('orgs.card.files.none')}
-          />
-        </div>
-      </Box>
-      {leadFiles.length ? (
-        <Box title={t('orgs.card.files.lead')}>
-          <ul data-org-lead-files="" className="m-0 flex list-none flex-col p-0">
-            {leadFiles.map((f, i) => (
-              <li
-                key={`${f.kind}-${i}`}
-                className="flex min-w-0 items-center gap-2.5 border-b border-line px-0.5 py-[9px] last:border-b-0"
-              >
-                <Icon name="file" className="flex-none text-muted" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold text-ink">{f.name}</div>
-                  <div className="truncate text-xs text-faint">
-                    {`${t(LEAD_DOC_TEXT_KEYS[f.kind] as UiTextKey)} · ${fileSizeText(t, f.bytes)} · ${formatMomentRu(new Date(f.at))}`}
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <Hint>{t('orgs.card.files.lead_hint')}</Hint>
-        </Box>
-      ) : null}
-    </>
   );
 }

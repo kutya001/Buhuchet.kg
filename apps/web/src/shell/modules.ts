@@ -26,6 +26,10 @@ export interface ShellAccess {
   payFirst: boolean;
   can: (permission: PermissionId) => boolean;
   feature: (feature: Feature) => boolean;
+  /** Владелец организации: вкладка «Подписка» (доработки 20.11.2026, блок 5, пункт 1). */
+  owner?: boolean;
+  /** Подписка организации из «кто я»; у администратора платформы — null. */
+  subscription?: MeResponse['subscription'];
 }
 
 export function shellAccess(me: MeResponse): ShellAccess {
@@ -36,8 +40,35 @@ export function shellAccess(me: MeResponse): ShellAccess {
     payFirst: me.payFirst,
     can: (p) => permissions.has(p),
     feature: (f) => me.features[f] === true,
+    owner: !me.user.isPlatformAdmin && me.employee?.isOwner === true,
+    subscription: me.subscription ?? null,
   };
 }
+
+/**
+ * «Подписку» видит и оплачивает только владелец (прототип v154 `subMine`): не администратор платформы
+ * и не демо-организация (у демо подписки нет).
+ */
+export const subOwner = (a: ShellAccess): boolean =>
+  !!a.owner && !a.admin && !!a.subscription && a.subscription.status !== 'demo';
+
+/**
+ * Доступ закрыт по подписке (доработки 20.11.2026, блок 4, пункты 4–5; прототип `subLock`,
+ * `subLockMods`): владелец видит только «Моя организация» → «Подписка», остальные сотрудники — экран
+ * «Доступ закрыт». Данные всё равно проверяет API.
+ */
+export function subLock(me: MeResponse): 'owner' | 'staff' | null {
+  const closed = me.subscription?.closed ?? me.subClosed ?? false;
+  if (me.user.isPlatformAdmin || !me.employee || !closed) return null;
+  return me.employee.isOwner ? 'owner' : 'staff';
+}
+
+/** «Кто я» для меню: у владельца при закрытом доступе — только «Моя организация». */
+export function lockedMe(me: MeResponse): MeResponse {
+  return subLock(me) === 'owner' ? { ...me, modules: ['org'] } : me;
+}
+
+const subOpen = (a: ShellAccess): boolean => !(subOwner(a) && a.subscription?.closed === true);
 
 /**
  * Вошедший сотрудник для правил ролей на экране (`roleFormLock`, `roleScopeLock`): своя роль, его
@@ -343,10 +374,12 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     title: 'nav.org',
     short: 'nav.short.org',
     desc: 'nav.desc.org',
+    // «Подписка» — только владельцу; при закрытом доступе у него только она (прототип v154 `orgTabs`).
     tabs: [
-      { id: 'main', icon: 'landmark', label: 'tab.org.main' },
-      { id: 'policy', icon: 'sliders', label: 'tab.org.policy' },
-      { id: 'settings', icon: 'gauge', label: 'tab.org.settings' },
+      { id: 'main', icon: 'landmark', label: 'tab.org.main', when: subOpen },
+      { id: 'policy', icon: 'sliders', label: 'tab.org.policy', when: subOpen },
+      { id: 'settings', icon: 'gauge', label: 'tab.org.settings', when: subOpen },
+      { id: 'sub', icon: 'wallet', label: 'tab.org.sub', when: subOwner },
     ],
   },
   kb: {
@@ -385,6 +418,18 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
       { id: 'subs', icon: 'wallet', label: 'tab.orgs.subs' },
     ],
     add: [{ id: 'org', icon: 'building', label: 'add.orgs.org' }],
+  },
+  // «Файлы» (доработки 20.11.2026, пакет 2, блок 3; прототип v154): хранилище платформы, добавлять нечего.
+  afiles: {
+    icon: 'folder',
+    title: 'nav.afiles',
+    short: 'nav.short.afiles',
+    desc: 'nav.desc.afiles',
+    tabs: [
+      { id: 'store', icon: 'db', label: 'tab.afiles.store' },
+      { id: 'all', icon: 'folder', label: 'tab.afiles.all' },
+      { id: 'check', icon: 'alert', label: 'tab.afiles.check' },
+    ],
   },
   // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).
   pdicts: {

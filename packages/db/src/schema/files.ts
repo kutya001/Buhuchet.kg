@@ -465,6 +465,11 @@ export const fileTrash = pgTable(
      * ON DELETE SET NULL (contractor_id) — в миграции 0165 (Drizzle не умеет SET NULL части ключа).
      */
     contractorId: uuid('contractor_id'),
+    /**
+     * Файл был файлом контрагента (миграция 0168): контрагента потом удалили — ключ стал пустым, и
+     * «Вернуть» такой файл не возвращает (иначе он вернулся бы общим файлом организации).
+     */
+    contractorBound: boolean('contractor_bound').notNull().default(false),
     name: text('name').notNull(),
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     /** Откуда файл — как в «Все файлы»: «Отчёт», «Поступление», «Лишний файл хранилища»… */
@@ -502,6 +507,7 @@ export const fileTrash = pgTable(
       'file_trash_fields_check',
       sql`${t.why} in (${oneOf(FILE_TRASH_REASONS)}) and (${t.why} = 'del') = (${t.fileId} is not null) and (${t.why} = 'extra' or ${t.orgId} is not null) and char_length(${t.name}) between 1 and ${sql.raw(String(FILE_NAME_MAX_LENGTH))} and char_length(${t.storageKey}) between 1 and 300 and (${t.orgId} is null or starts_with(${t.storageKey}, 'org/' || ${t.orgId}::text || '/')) and ${t.storageKey} !~ '(^|/)[.]{1,2}(/|$)' and (${t.why} = 'extra' or ${t.storageKey} ~ ('^org/' || ${t.orgId}::text || '/(files|sent)/${sql.raw(KEY_UUID)}([.]up|[.]chk-${sql.raw(KEY_UUID)})?$')) and (${t.orgId} is not null or ${t.contractorId} is null) and char_length(coalesce(${t.source}, '')) <= 100 and ${t.sizeBytes} >= 0`,
     ),
+    check('file_trash_contractor_check', sql`${t.contractorBound} or ${t.contractorId} is null`),
     check(
       'file_trash_erase_try_check',
       sql`${t.attempts} >= 0 and char_length(coalesce(${t.lastError}, '')) <= 500 and case when jsonb_typeof(${t.links}) = 'array' then jsonb_array_length(${t.links}) <= 500 else false end`,
@@ -523,6 +529,8 @@ export const fileTrash = pgTable(
       .on(t.eraseAt)
       .where(sql`${t.erasedAt} is null and ${t.restoredAt} is null`),
     index('file_trash_org_idx').on(t.orgId, t.deletedAt),
+    // «Проверка хранилища» ищет по ключу и стёртые строки (миграция 0168): строки не удаляются.
+    index('file_trash_key_idx').on(t.storageKey),
     orgIsolation('file_trash_isolation', t.orgId),
     pgPolicy('file_trash_admin', {
       as: 'permissive',

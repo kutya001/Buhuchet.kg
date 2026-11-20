@@ -7,6 +7,7 @@ import {
   dropPendingFile,
   fileFeeLinked,
   getFile,
+  insertFileTrash,
   linkedFiles,
   takeRateLimit,
   insertPendingFile,
@@ -22,6 +23,7 @@ import {
   type Tx,
 } from '@buhuchet/db';
 import {
+  adminFileSrcOf,
   canSeeContractor,
   cleanFileNote,
   FILE_LINK_SOURCE_KINDS,
@@ -290,22 +292,11 @@ function linkedItemBody(
 export const realNow = () => new Date();
 
 /** Удалить файл из хранилища, не роняя метод: запись в базе уже верная, лишний файл не опасен. */
-async function dropObject(
-  deps: ApiDeps,
-  key: string,
-  replaced?: { fileId: string },
-): Promise<void> {
+async function dropObject(deps: ApiDeps, key: string): Promise<void> {
   try {
     await deps.storage.delete(key);
   } catch (err) {
-    if (replaced) {
-      deps.logger.error(
-        { err, fileId: replaced.fileId, key },
-        'файлы: прежний файл после замены не удалён из хранилища',
-      );
-    } else {
-      deps.logger.error({ err }, 'файлы: не удалось удалить файл из хранилища');
-    }
+    deps.logger.error({ err }, 'файлы: не удалось удалить файл из хранилища');
   }
 }
 
@@ -770,7 +761,7 @@ export const deleteFileRoute = createRoute({
 
 /**
  * Удалить файл (прототип: «Удалить файл «…»?» → «Файл удалён»): из записи и из Файлового менеджера; в
- * истории записи — «Удалён файл». Сам файл стирается из хранилища после сохранения.
+ * истории записи — «Удалён файл». Сам файл стирается из хранилища через сутки (`file_trash`).
  */
 export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFileRoute, AppEnv> {
   return async (c) => {
@@ -779,7 +770,7 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
     const ctx = orgContextOf(c);
     const subject = subjectOf(c);
     const now = realNow();
-    const key = await withOrgContext(deps.db, ctx, async (tx) => {
+    await withOrgContext(deps.db, ctx, async (tx) => {
       const file = await getFile(tx, id);
       if (!file || file.state !== 'ready') return notFound();
       await requireFilesFeature(tx, ctx.orgId);
@@ -796,7 +787,8 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
       // «Удалить отовсюду» (доработки 16.11.2026, блок 2; прототип v124 `fDelDlg`): файл пропадает и из
       // записей, к которым прикреплён ссылкой, — в истории каждой «Удалён файл (был прикреплён из файлов
       // контрагента)», и тех, которых удаляющему не видно.
-      for (const link of await dropFileLinks(tx, id)) {
+      const links = await dropFileLinks(tx, id);
+      for (const link of links) {
         const target = await sourceOf(deps, link.kind)?.resolve(
           tx,
           historySubject(subject),
@@ -812,9 +804,27 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
           ],
         });
       }
-      return file.storageKey;
+      // «Ждут удаления» (доработки 20.11.2026, пакет 2, блок 5, пункт 3; прототип `ftPush`): файл сразу
+      // пропал из списков и из памяти организации, из хранилища его сотрёт задача через сутки; до этого
+      // администратор платформы может «Вернуть» его вместе со ссылками.
+      await insertFileTrash(tx, [
+        {
+          why: 'del',
+          fileId: id,
+          storageKey: file.storageKey,
+          contractorId: file.contractorId,
+          name: file.name,
+          sizeBytes: file.sizeBytes,
+          source: adminFileSrcOf(file.sourceKind),
+          links: links.map((l) => ({
+            sourceKind: l.kind,
+            sourceId: l.id,
+            createdBy: l.createdBy,
+            createdAt: l.createdAt.toISOString(),
+          })),
+        },
+      ]);
     });
-    await dropObject(deps, key);
     return c.json({ id }, 200);
   };
 }
@@ -823,7 +833,7 @@ export function deleteFileHandler(deps: ApiDeps): RouteHandler<typeof deleteFile
  * Кто «видит» запись, чтобы найти, куда писать историю удаления файла: все права и области в той же
  * организации (RLS транзакции). Только для `history()` — данные записи отсюда не отдаются.
  */
-function historySubject(subject: AccessSubject): AccessSubject {
+export function historySubject(subject: AccessSubject): AccessSubject {
   return { employeeId: subject.employeeId, isOwner: true, permissions: new Set(), scopes: {} };
 }
 
@@ -988,7 +998,7 @@ export function editFileHandler(deps: ApiDeps): RouteHandler<typeof editFileRout
       }
       await checkStored(deps, ctx, upload);
     }
-    const { body, replacedKey } = await withOrgContext(deps.db, ctx, async (tx) => {
+    const { body } = await withOrgContext(deps.db, ctx, async (tx) => {
       const file = await getFile(tx, id, { lock: true });
       if (!file || file.state !== 'ready') return notFound();
       const features = await requireFilesFeature(tx, ctx.orgId);
@@ -1022,6 +1032,20 @@ export function editFileHandler(deps: ApiDeps): RouteHandler<typeof editFileRout
         note,
         ...(upload ? { replacementId: upload.id } : {}),
       });
+      // Прежняя версия после замены — сутки в «Ждут удаления» (пакет 20.11.2026, блок 5, пункт 3;
+      // прототип `ftPush` с `why: 'rep'`): вернуть её нельзя, но и сразу она не стирается.
+      if (replacedKey) {
+        await insertFileTrash(tx, [
+          {
+            why: 'rep',
+            storageKey: replacedKey,
+            contractorId: file.contractorId,
+            name: file.name,
+            sizeBytes: file.sizeBytes,
+            source: adminFileSrcOf(file.sourceKind),
+          },
+        ]);
+      }
       await writeHistory(tx, {
         ...record.history(id),
         action: 'file_edit',
@@ -1033,9 +1057,6 @@ export function editFileHandler(deps: ApiDeps): RouteHandler<typeof editFileRout
         replacedKey,
       };
     });
-    // Прежний файл стирается из хранилища после сохранения: ссылки на него больше нет. Не удалось —
-    // в журнале остаётся номер файла и ключ объекта, чтобы его можно было найти и стереть.
-    if (replacedKey) await dropObject(deps, replacedKey, { fileId: id });
     return c.json(body, 200);
   };
 }

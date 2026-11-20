@@ -3,7 +3,7 @@ import {
   currentOrganization,
   loadEmployeeAccess,
   orgMenuSettings,
-  orgSubscriptionClosed,
+  orgUsage,
   phoneCodes,
   telegramChat,
   telegramPlainText,
@@ -47,7 +47,7 @@ function meBody(
     payFirst: boolean;
   } | null,
   phone: string | null = null,
-  subClosed = false,
+  subscription: MeResponse['subscription'] = null,
 ): MeResponse {
   const features = settings?.features ?? null;
   return {
@@ -86,12 +86,15 @@ function meBody(
     // «Подпиской» (доработки 20.11.2026, блок 4, пункты 4–5; прототип subLockMods).
     modules: user.isPlatformAdmin
       ? [...ADMIN_MENU_MODULES]
-      : access && subClosed
+      : access && subscription?.closed
         ? ['org']
         : access && features
           ? menuModules(access.subject, features)
           : [],
-    subClosed,
+    // Статус и срок подписки — только владельцу: подписку видит и оплачивает он (блок 5, пункт 1);
+    // остальным — лишь «доступ закрыт» (`subClosed`).
+    subscription: access?.subject.isOwner ? subscription : null,
+    subClosed: subscription?.closed ?? false,
   };
 }
 
@@ -113,7 +116,7 @@ export async function loadMe(
   if (!user.orgId) return meBody(user, null, null, telegram, previous, null);
   const orgId = user.orgId;
   const today = subscriptionToday(deps);
-  const { access, organization, settings, phone, subClosed } = await withOrgContext(
+  const { access, organization, settings, phone, usage } = await withOrgContext(
     deps.db,
     { orgId, userId: user.userId },
     async (tx) => {
@@ -125,11 +128,17 @@ export async function loadMe(
         settings: await orgMenuSettings(tx, orgId),
         // Телефон в «Мой профиль» — по маске страны из справочника «Коды телефонов».
         phone: access?.phone ? formatPhone(access.phone, await phoneCodes(tx)) : null,
-        subClosed: await orgSubscriptionClosed(tx, today),
+        // Подписка: полоса «Продлите подписку» и «Доступ закрыт» (блок 4); память не считается.
+        usage: await orgUsage(tx, today, { bytes: false }),
       };
     },
   );
-  return meBody(user, access, organization, telegram, previous, settings, phone, subClosed);
+  const subscription = usage && {
+    status: usage.status,
+    paidUntil: usage.paidUntil,
+    closed: usage.closed,
+  };
+  return meBody(user, access, organization, telegram, previous, settings, phone, subscription);
 }
 
 export const meRoute = createRoute({

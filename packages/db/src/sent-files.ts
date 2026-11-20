@@ -16,6 +16,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { and, desc, eq, gt, inArray, lt, lte, ne, or, sql, type SQL } from 'drizzle-orm';
 import type { Tx } from './client';
 import { featureSet } from './org';
+import { insertFileTrash } from './file-trash';
 import { writeHistory } from './history';
 import {
   selectListExport,
@@ -515,11 +516,18 @@ export async function staleSentFiles(
 }
 
 /**
- * Удалить строки, файлы которых уже убраны из хранилища (прототип `sntPurge`): у загруженного — запись
- * в историю контрагента от имени системы. Принятый (решение успели принять между выборкой и удалением)
- * и строка, которая сменила состояние после выборки, не удаляются. Ответ — сколько удалено.
+ * Удалить строки непринятых файлов (прототип `sntPurge`): у загруженного — запись в историю контрагента
+ * от имени системы. Принятый (решение успели принять между выборкой и удалением) и строка, которая
+ * сменила состояние после выборки, не удаляются. Ответ — сколько удалено. `trash` (доработки 20.11.2026,
+ * пакет 2, блок 5, пункт 3; прототип `ftPush` с `why: 'auto'`): файл загруженного не стёрт заранее — он
+ * сутки ждёт стирания в «Ждут удаления» (строка `file_trash` в той же транзакции); иначе файлы уже
+ * убраны из хранилища вызывающим.
  */
-export async function dropSentFiles(tx: Tx, stale: readonly StaleSentFile[]): Promise<number> {
+export async function dropSentFiles(
+  tx: Tx,
+  stale: readonly StaleSentFile[],
+  o: { trash?: boolean } = {},
+): Promise<number> {
   if (!stale.length) return 0;
   const inState = (state: SentFileState) => {
     const ids = stale.filter((s) => s.state === state).map((s) => s.id);
@@ -537,7 +545,23 @@ export async function dropSentFiles(tx: Tx, stale: readonly StaleSentFile[]): Pr
       contractorId: contractorSentFiles.contractorId,
       name: contractorSentFiles.name,
       state: contractorSentFiles.state,
+      storageKey: contractorSentFiles.storageKey,
+      sizeBytes: contractorSentFiles.sizeBytes,
     });
+  const ready = gone.filter((row) => row.state === 'ready');
+  if (o.trash && ready.length) {
+    await insertFileTrash(
+      tx,
+      ready.map((row) => ({
+        why: 'auto' as const,
+        storageKey: row.storageKey,
+        contractorId: row.contractorId,
+        name: row.name,
+        sizeBytes: row.sizeBytes,
+        source: 'sent',
+      })),
+    );
+  }
   for (const row of gone) {
     if (row.state !== 'ready') continue;
     await writeHistory(tx, {

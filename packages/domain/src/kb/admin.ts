@@ -56,6 +56,7 @@ export const KB_MODULE_TITLES: Readonly<Record<MenuModuleId, UiTextKey>> = {
   l10n: 'nav.l10n',
   kbadm: 'nav.kb_content',
   tdocs: 'nav.tdocs',
+  afiles: 'nav.afiles',
   runs: 'nav.runs',
   tg: 'nav.telegram',
 };

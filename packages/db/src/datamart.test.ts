@@ -495,7 +495,9 @@ describe.skipIf(!databaseAvailable())('витрина данных и файлы
     );
     // Контрагент — только существующий своей организации (составной внешний ключ).
     await expect(
-      inB((tx) => tx.insert(fileTrash).values({ ...row, contractorId: randomUUID() })),
+      inB((tx) =>
+        tx.insert(fileTrash).values({ ...row, contractorId: randomUUID(), contractorBound: true }),
+      ),
     ).rejects.toEqual(pgError('23503', 'file_trash_contractor_fk'));
     const [t1] = await inB((tx) => tx.insert(fileTrash).values(row).returning());
     expect(t1!.eraseAt.getTime() - t1!.deletedAt.getTime()).toBe(FILE_TRASH_HOURS * HOUR);
@@ -584,6 +586,7 @@ describe.skipIf(!databaseAvailable())('витрина данных и файлы
           why: 'extra',
           storageKey: 'org/x/files/z',
           contractorId: randomUUID(),
+          contractorBound: true,
           name: 'z',
           sizeBytes: 1,
         }),

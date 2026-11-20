@@ -84,8 +84,9 @@ async function ok<T>(res: Response, parse: (body: unknown) => T): Promise<T> {
  * Вид списка карточки (прототип acGrid): без служебных столбцов и общего поиска, страницами по 50
  * (ТЗ «Доработки 20.11.2026, пакет 2», блок 1, пункты 2 и 5), пока пользователь не выбрал другой размер.
  */
-function useCardList<Row>(o: {
-  gridKey: 'orgs.card.staff' | 'orgs.card.cps' | 'orgs.card.rep' | 'orgs.card.repm';
+export function useCardList<Row>(o: {
+  gridKey:
+    'orgs.card.staff' | 'orgs.card.cps' | 'orgs.card.rep' | 'orgs.card.repm' | 'orgs.card.files';
   columns: readonly GridColumn<Row>[];
   defaultVisible: readonly string[];
   defaultSort: ListSort;
