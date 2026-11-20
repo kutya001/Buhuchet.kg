@@ -384,7 +384,7 @@ export function reportListColumns(
       label: 'report.col.due_month',
       value: DUE_MONTH,
       // Как на экране (`monthLabel`, прототип fmtMon): «ноябрь 2026».
-      display: sql`lower(${lt('months')}[extract(month from ${reports.dueDate})::int]) || ' ' || extract(year from ${reports.dueDate})::int::text`,
+      display: sql`lower(${lt('months')}[extract(month from ${reports.dueDate})::int] collate app.ru_natural) || ' ' || extract(year from ${reports.dueDate})::int::text`,
       sort: { value: DUE_MONTH, text: false },
     },
     days: {

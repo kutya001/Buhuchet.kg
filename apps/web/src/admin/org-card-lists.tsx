@@ -566,7 +566,8 @@ export function OrgReportsTab({
 const MONTHS_SORT: ListSort = { key: 'm', dir: 'desc' };
 const MONTHS_KEYS = ['m', 't', 'n', 'done', 'over'];
 /** По месяцам срока (прототип `defGroup:['m']`). */
-const MONTHS_VIEW: GridViewSettings = { group: ['m'] };
+// Страница по 25, как acGrid прототипа без size (grid.js gst: cfg.size || 25).
+const MONTHS_VIEW: GridViewSettings = { group: ['m'], size: 25 };
 
 /** Столбцы «По месяцам и видам отчётов» (прототип ocGrids, oc-rep): ключи — как на сервере. */
 function monthColumns(t: Translate): GridColumn<AdminOrgRepMonthRow>[] {

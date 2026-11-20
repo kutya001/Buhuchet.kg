@@ -116,8 +116,7 @@ export function SocfundPill({ t, s }: { t: Translate; s: NonNullable<ContractorR
   );
 }
 
-/** Компактная шкала обслуживания (прототип `scaleMini('svc', …)`). */
-/** Ячейка «Статус обслуживания»: мини-шкала с тем, кто и когда поставил статус. */
+/** Ячейка «Статус обслуживания»: компактная шкала (прототип `scaleMini('svc', …)`) с тем, кто и когда поставил статус. */
 export function ServiceCell({
   t,
   r,
