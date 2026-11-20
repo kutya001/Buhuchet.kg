@@ -50,6 +50,9 @@ export const HISTORY_ENTITIES = [
   'telegram_broadcast',
   // Админка → «Телеграм» → «Бот платформы» → «Сообщения с таблицами» (поток Т, задача Т1).
   'telegram_bot',
+  // «Витрина данных» → «API Токены» (доработки 20.11.2026: Витрина данных, блок 5): выпуск, перевыпуск,
+  // отзыв токена организации; токены Админки — в истории платформы.
+  'dm_token',
 ] as const;
 export type HistoryEntity = (typeof HISTORY_ENTITIES)[number];
 
@@ -131,6 +134,9 @@ export const HISTORY_ACTIONS = [
   // Справочники платформы: загрузка из Excel и её откат («Загрузки»).
   'import',
   'rollback',
+  // «Витрина данных» → API-токен: перевыпущен (старый работает ещё сутки) и отозван.
+  'dm_reissue',
+  'dm_revoke',
 ] as const;
 export type HistoryAction = (typeof HISTORY_ACTIONS)[number];
 

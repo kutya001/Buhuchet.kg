@@ -10,6 +10,7 @@ import { OrgsList } from '../admin/orgs-list';
 import { TechDocsScreen } from '../admin/techdocs-screen';
 import { PlatformDicts } from '../dicts/platform-tab';
 import { ReportTypesList } from '../dicts/report-types-list';
+import { DmScreen } from '../dm/dm-screen';
 import { FilesScreen } from '../files/files-manager';
 import { StaffBonusTab } from '../finance/staff-bonuses';
 import { FinanceScreen } from '../finance/finance-screen';
@@ -142,6 +143,8 @@ export function ModuleScreen({
     if (tabId === 'act') return <OrgsActivity />;
     return tabId === 'leads' ? <LeadsList /> : <OrgsList />;
   }
+  // Админка → «Витрина данных»: на этапе 1 — только «API Токены» (поток Т, П14).
+  if (moduleId === 'dm') return <DmScreen tab={tabId ?? 'tok'} admin />;
   if (moduleId === 'pdicts') return <PlatformDictsAdmin tabId={tabId ?? 'types'} />;
   if (moduleId === 'l10n') return <L10nList />;
   if (moduleId === 'tdocs') return <TechDocsScreen tab={tabId ?? 'db'} />;

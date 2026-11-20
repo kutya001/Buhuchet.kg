@@ -52,6 +52,7 @@ export const KB_MODULE_TITLES: Readonly<Record<MenuModuleId, UiTextKey>> = {
   kb: 'kb.title',
   accounts: 'nav.accounts',
   orgs: 'nav.organizations',
+  dm: 'nav.dm',
   pdicts: 'nav.platform_dicts',
   l10n: 'nav.l10n',
   kbadm: 'nav.kb_content',

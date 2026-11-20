@@ -82,6 +82,7 @@ describe('модули Админки и общий список модулей'
     expect(ADMIN_MENU_MODULES).toEqual([
       'accounts',
       'orgs',
+      'dm',
       'pdicts',
       'l10n',
       'kb',
@@ -98,6 +99,7 @@ describe('модули Админки и общий список модулей'
       ...MENU_MODULES.map((m) => m.id),
       'accounts',
       'orgs',
+      'dm',
       'pdicts',
       'l10n',
       'kbadm',

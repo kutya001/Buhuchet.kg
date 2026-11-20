@@ -34,6 +34,7 @@ export type BusinessModuleId = (typeof MENU_MODULES)[number]['id'];
 export const ADMIN_MENU_MODULES = [
   'accounts',
   'orgs',
+  'dm',
   'pdicts',
   'l10n',
   'kb',

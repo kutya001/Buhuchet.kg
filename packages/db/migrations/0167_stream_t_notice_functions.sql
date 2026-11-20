@@ -211,3 +211,100 @@ CREATE FUNCTION app.storage_check_save(p_objects jsonb, p_now timestamptz, p_err
 REVOKE ALL ON FUNCTION app.storage_check_save(jsonb, timestamptz, text) FROM PUBLIC;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION app.storage_check_save(jsonb, timestamptz, text) TO buhuchet_app;
+--> statement-breakpoint
+-- API-токены «Витрины данных» для списка и окна токена (доработки 20.11.2026: Витрина данных, блок 5;
+-- поток Т, этап 1, П14; прототип dmTokSt, dmWho, dmN30): всё, от чего зависит состояние токена, одним
+-- запросом — шаблон в любом состоянии (организация по RLS видит только опубликованные и сломанные с
+-- доступом), доступ организации к шаблону, блокировка, «Внешний доступ по API», закрыт ли доступ по
+-- подписке, кто создал и кто отозвал, запросов с p_since. Только токены вошедшего: в контексте
+-- организации — её, вне его — все, и только администратору платформы. Имя администратора,
+-- отозвавшего токен организации, не отдаётся (только отметка), сам токен и его хеш — тоже.
+CREATE FUNCTION app.dm_token_facts(p_since timestamptz, p_today date, p_id uuid DEFAULT NULL)
+  RETURNS TABLE (
+    id uuid,
+    org_id uuid,
+    org_name text,
+    org_blocked boolean,
+    ext_api boolean,
+    sub_closed boolean,
+    template_id uuid,
+    template_name text,
+    template_state text,
+    template_access boolean,
+    name text,
+    prefix text,
+    created_by uuid,
+    created_by_name text,
+    created_by_left boolean,
+    created_by_admin boolean,
+    created_at timestamptz,
+    expires_at timestamptz,
+    revoked_at timestamptz,
+    revoked_by_name text,
+    revoked_by_admin boolean,
+    replaced_by uuid,
+    grace_until timestamptz,
+    prev_prefix text,
+    last_used_at timestamptz,
+    last_ip text,
+    requests integer
+  )
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, pg_temp
+  AS $$
+    WITH ctx AS (
+      SELECT app.current_org_id() AS org, app.current_user_id() AS uid, app.is_platform_admin() AS adm
+    ),
+    k AS (
+      SELECT t.*
+      FROM public.dm_tokens t, ctx
+      WHERE ctx.uid IS NOT NULL
+        AND (p_id IS NULL OR t.id = p_id)
+        AND CASE WHEN ctx.org IS NOT NULL THEN t.org_id = ctx.org ELSE ctx.adm END
+    ),
+    usage AS (
+      SELECT u.org_id, u.closed FROM app.org_usage(p_today, false) u
+    )
+    SELECT
+      k.id,
+      k.org_id,
+      o.name,
+      coalesce(o.status = 'blocked', false),
+      coalesce(s.ext_api, false),
+      coalesce(u.closed, false),
+      d.id,
+      d.name,
+      d.state,
+      d.access = 'all' OR (k.org_id IS NOT NULL AND EXISTS (
+        SELECT 1 FROM public.dm_template_orgs a WHERE a.template_id = d.id AND a.org_id = k.org_id)),
+      k.name,
+      k.prefix,
+      k.created_by,
+      ce.short_name,
+      coalesce(NOT ce.active, false),
+      coalesce(cu.is_platform_admin, false),
+      k.created_at,
+      k.expires_at,
+      k.revoked_at,
+      CASE WHEN coalesce(ru.is_platform_admin, false) THEN NULL ELSE re.short_name END,
+      coalesce(ru.is_platform_admin, false),
+      k.replaced_by,
+      k.grace_until,
+      (SELECT p.prefix FROM public.dm_tokens p WHERE p.replaced_by = k.id LIMIT 1),
+      k.last_used_at,
+      k.last_ip,
+      (SELECT count(*)::integer FROM public.dm_requests r WHERE r.token_id = k.id AND r.at >= p_since)
+    FROM k
+    JOIN public.dm_templates d ON d.id = k.template_id
+    LEFT JOIN public.organizations o ON o.id = k.org_id
+    LEFT JOIN public.org_settings s ON s.org_id = k.org_id
+    LEFT JOIN usage u ON u.org_id = k.org_id
+    LEFT JOIN public.users cu ON cu.id = k.created_by
+    LEFT JOIN public.employees ce ON ce.user_id = k.created_by
+    LEFT JOIN public.users ru ON ru.id = k.revoked_by
+    LEFT JOIN public.employees re ON re.user_id = k.revoked_by
+  $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION app.dm_token_facts(timestamptz, date, uuid) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION app.dm_token_facts(timestamptz, date, uuid) TO buhuchet_app;

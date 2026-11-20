@@ -1,0 +1,81 @@
+import { hasPermission, scopeOf, type AccessSubject } from '../roles/access';
+import {
+  PERMISSION_GROUPS,
+  PERMISSION_IDS,
+  SCOPE_GROUPS,
+  type Feature,
+  type PermissionId,
+  type ScopeGroupId,
+} from '../roles/permissions';
+import type { DM_MODULES, DM_TEMPLATE_STATES } from './datamart';
+
+/*
+ * Кому из сотрудников организации виден шаблон «Витрины данных» (доработки 20.11.2026: Витрина данных,
+ * блок 2, пункт 6) — прототип v155 `modules/vitrina.js` `dmSee`. Доступ организации к шаблону
+ * («Все организации» или «Выбранные») проверяет база (RLS `dm_templates_org_read`), здесь — права
+ * сотрудника. Тем же правилом выбираются шаблоны окна «Новый API-токен».
+ */
+
+export type DmModule = (typeof DM_MODULES)[number];
+export type DmTemplateState = (typeof DM_TEMPLATE_STATES)[number];
+
+/** Что нужно знать о шаблоне для правила видимости. */
+export interface DmTemplateSight {
+  audience: 'org' | 'admin';
+  state: DmTemplateState;
+  module: DmModule | null;
+  /** Ещё одно обязательное право из 40 (`need_permission`). */
+  needPermission: string | null;
+  /** Столбцы шаблона: есть ли «Контрагент» для области «Свои» (`contractor` или вид `cp`). */
+  columns: unknown;
+}
+
+/** Есть ли у шаблона столбец «Контрагент» (прототип `cpCol`). */
+export function dmHasContractorColumn(columns: unknown): boolean {
+  return (
+    Array.isArray(columns) &&
+    columns.some(
+      (c) =>
+        typeof c === 'object' &&
+        c !== null &&
+        ((c as { contractor?: unknown }).contractor === true ||
+          (c as { type?: unknown }).type === 'cp'),
+    )
+  );
+}
+
+const GROUP_OF = new Map<string, (typeof PERMISSION_GROUPS)[number]>(
+  PERMISSION_GROUPS.map((g) => [g.id, g]),
+);
+const isScopeGroup = (id: string): id is ScopeGroupId =>
+  (SCOPE_GROUPS as readonly string[]).includes(id);
+/** Дополнительное право шаблона: неизвестный код не открывает шаблон никому, кроме владельца. */
+const isPermission = (id: string, subject: AccessSubject): boolean =>
+  (PERMISSION_IDS as readonly string[]).includes(id)
+    ? hasPermission(subject, id as PermissionId)
+    : subject.isOwner;
+
+/**
+ * Виден ли шаблон сотруднику (прототип `dmSee`): «Для организаций», не черновик и не выключен; функция
+ * модуля шаблона включена (у «Видеть плату за обслуживание» — ещё функция «Плата за обслуживание»);
+ * есть просмотр модуля и дополнительное право шаблона; шаблон без столбца «Контрагент» (итоги по всей
+ * организации) у модуля с областью — только при «Все контрагенты» в группе прав модуля (владельцу —
+ * всегда).
+ */
+export function dmTemplateSeen(
+  t: DmTemplateSight,
+  subject: AccessSubject,
+  features: Readonly<Partial<Record<Feature, boolean>>>,
+): boolean {
+  if (t.audience !== 'org' || t.state === 'draft' || t.state === 'off' || !t.module) return false;
+  const group = GROUP_OF.get(t.module);
+  if (group?.feature && features[group.feature] !== true) return false;
+  if (t.needPermission === 'fee' && features.fee !== true) return false;
+  if (group?.view && !hasPermission(subject, group.view)) return false;
+  if (t.needPermission && !isPermission(t.needPermission, subject)) return false;
+  return (
+    dmHasContractorColumn(t.columns) ||
+    !isScopeGroup(t.module) ||
+    scopeOf(subject, t.module) === 'all'
+  );
+}

@@ -384,6 +384,16 @@ export const MODULES: Record<MenuModuleId, ModuleDef> = {
     ],
     add: [{ id: 'org', icon: 'building', label: 'add.orgs.org' }],
   },
+  // «Витрина данных» (доработки 20.11.2026: Витрина данных; прототип v155 dmTabs, dmAdd): в Админке на
+  // этапе 1 — только «API Токены» (поток Т); «Вывод», «Шаблоны» и «Журнал запросов» — этап 2.
+  dm: {
+    icon: 'table',
+    title: 'nav.dm',
+    short: 'nav.short.dm',
+    desc: 'nav.desc.dm',
+    tabs: [{ id: 'tok', icon: 'key', label: 'tab.dm.tok' }],
+    add: [{ id: 'tok', icon: 'key', label: 'add.dm.tok' }],
+  },
   // Способы добавления содержимого «Базы знаний» зависят от вкладки — придут с его экраном (поток Д).
   pdicts: {
     icon: 'book',
