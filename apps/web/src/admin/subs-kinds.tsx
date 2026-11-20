@@ -204,10 +204,14 @@ export function SubsKinds() {
   const [del, setDel] = useState<DialogSlot<Plan> | null>(null);
   const all = plans.data?.plans ?? [];
 
-  /** Ответ правки — все виды и история: сразу в кэш, затем перечитать список и окна подписок. */
+  /**
+   * Ответ правки — все виды и история: сразу в кэш, затем перечитать страницу списка (она собрана из
+   * кэша и сама не узнает о правке: «Выключить» не меняет ни поиск, ни сортировку) и окна подписок.
+   */
   const saved = (data: unknown) => {
     const parsed = AdminSubscriptionPlans.safeParse(data);
     if (parsed.success) client.setQueryData(subPlansQuery.queryKey, parsed.data);
+    void client.invalidateQueries({ queryKey: ['list', GRID_KEY] });
     refresh();
   };
 

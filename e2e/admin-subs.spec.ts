@@ -10,7 +10,10 @@ import { cardTab, uniqueLogin } from './helpers';
 
 type Created = { organization: { id: string; slug: string } };
 
-/** Своя организация теста с подпиской «Месяц» на `seats` мест (администратор — в `page.request`). */
+/**
+ * Своя организация теста с оплаченной подпиской «Месяц» на `seats` мест (администратор — в `page.request`):
+ * не бесплатный период — иначе «Вид подписки» в строке — «Бесплатный период».
+ */
 async function newOrg(page: Page, origin: string, name: string, seats: number) {
   const res = await page.request.post('/api/admin/organizations', {
     headers: { origin },
@@ -20,7 +23,7 @@ async function newOrg(page: Page, origin: string, name: string, seats: number) {
       ownerFullName: 'Подпискина Сквозная',
       ownerLogin: uniqueLogin('e2e-sub'),
       temporaryPassword: ownerPassword(),
-      subscription: { ...E2E_SUBSCRIPTION, seats },
+      subscription: { ...E2E_SUBSCRIPTION, seats, free: false },
     },
   });
   expect(res.status(), await res.text()).toBe(201);
