@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { ADMIN_PASSWORD, ownerPassword, platformAdmin, search, uniqueInn } from './admin';
 import { cardTab, showStats, signIn, uniqueLogin } from './helpers';
 
@@ -229,47 +229,54 @@ test.describe('Админка: организации', () => {
     await signIn(page.request, origin, owner, OWNER_PASSWORD);
   });
 
-  test('(доработки 20.11.2026, пакет 2, блок 1; прототип v150) карточка организации: «Отчёты» — плитки-фильтры, поиск и окно «Отчёт» только для просмотра; «Сотрудники» и «Контрагенты» — общий список', async ({
-    page,
-    baseURL,
-    isMobile,
-  }) => {
-    const origin = new URL(baseURL!).origin;
+  // Известные записи наполнения демо-организации (spec/data/demoDB.json): контрагент c2 и сотрудник e1.
+  const DEMO_CP = 'ОсОО «Бишкек Стройсервис»';
+  const DEMO_STAFF = 'Садыков Эркин Маратович';
+
+  /** Карточка демо-организации из списка «Организации»: ждёт ответ карточки. */
+  async function openDemoCard(page: Page, origin: string) {
     await platformAdmin(page.request, origin);
     const orgs = (await (await page.request.get('/api/admin/organizations?size=all')).json()) as {
       items: { id: string; name: string; slug: string; isDemo: boolean }[];
     };
     const demo = orgs.items.find((o) => o.isDemo)!;
-    // Контрагент для поиска — у первого отчёта демо-организации по сроку (список «Все» отчётов).
-    const all = (await (
-      await page.request.get(
-        `/api/admin/organizations/${demo.id}/reports?plate=all&size=25&sort=due.asc`,
-      )
-    ).json()) as { total: number; items: { contractor: { name: string } }[] };
-    expect(all.total).toBeGreaterThan(0);
-    const cp = all.items[0]!.contractor.name;
-    const staff = (await (
-      await page.request.get(`/api/admin/organizations/${demo.id}/staff?size=all`)
-    ).json()) as { total: number; items: { fullName: string }[] };
-    expect(staff.total).toBeGreaterThan(0);
-
+    const loaded = page.waitForResponse(
+      (r) => r.url().includes(`/api/admin/organizations/${demo.id}/card`) && r.ok(),
+    );
     await page.goto(`/app/orgs#orgs/${demo.slug}`);
+    await loaded;
     const card = page.getByRole('dialog', { name: demo.name });
     await expect(card.locator('[data-org-states]')).toBeVisible();
-    const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
+    return { demo, card };
+  }
 
-    // «Сводка»: «Отчёты» — все несданные; нажатие открывает «Отчёты» на плитке «К сдаче».
+  test('(доработки 20.11.2026, пакет 2, блок 1; прототип v150) карточка организации: «Отчёты» — плитки-фильтры, поиск и окно «Отчёт» только для просмотра', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const { card } = await openDemoCard(page, origin);
+    const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
+    const plates = card.locator('[data-org-rep-plates]');
+
+    // «Сводка»: «Просрочено» открывает «Отчёты» на плитке «Просрочено».
     await openTab('Сводка');
     const summary = card.locator('[data-org-summary]');
     await expect(summary.locator('[data-plate="rep"]')).toContainText('в этом месяце');
     await expect(summary.locator('[data-plate="overdue"]')).toContainText('отчётов на сегодня');
+    await summary.locator('[data-plate="overdue"]').click();
+    await expect(card.getByRole('tab', { selected: true })).toContainText('Отчёты');
+    await expect(plates.locator('[data-plate="over"]')).toHaveAttribute('aria-pressed', 'true');
+
+    // «Отчёты» «Сводки» — все несданные: вкладка «Отчёты» на плитке «К сдаче».
+    await openTab('Сводка');
     await summary.locator('[data-plate="rep"]').click();
     await expect(card.getByRole('tab', { selected: true })).toContainText('Отчёты');
-    const plates = card.locator('[data-org-rep-plates]');
     await expect(plates.locator('[data-plate="due"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(plates.locator('[data-plate="due"]')).toContainText('все несданные');
     await expect(plates.locator('[data-plate="over"]')).toContainText('на сегодня');
-    // «По месяцам и видам отчётов» — свёрнутым блоком над списком.
+    // «По месяцам и видам отчётов» — свёрнутым блоком над списком; раскрытый — общий список по месяцам.
     const months = card.locator('[data-org-rep-months]');
     await expect(months).toContainText('6 прошлых месяцев, текущий и 3 следующих');
     await expect(months).not.toHaveAttribute('open');
@@ -280,40 +287,60 @@ test.describe('Админка: организации', () => {
     await expect(plates.locator('[data-plate="all"]')).toHaveAttribute('aria-pressed', 'true');
     const field = card.locator('[data-org-rep-search]');
     await expect(field).toHaveAttribute('placeholder', 'Поиск: контрагент, ИНН, отчёт, период');
-    await field.fill(cp);
+    await field.fill(DEMO_CP);
     const rows = card.locator('[data-org-rep-list] [data-grid] [data-id]');
     await expect
       .poll(async () => {
         const texts = await rows.allTextContents();
-        return texts.length > 0 && texts.every((x) => x.includes(cp));
+        return texts.length > 0 && texts.every((x) => x.includes(DEMO_CP));
       })
       .toBe(true);
 
     // Строка открывает окно «Отчёт» только для просмотра; «Готово» возвращает к тому же списку.
-    await rows.first().getByText(cp).first().click();
     const report = page.locator('[data-org-report]');
-    await expect(report).toContainText(cp);
+    const win = page.getByRole('dialog').filter({ has: report });
+    await rows.first().getByText(DEMO_CP).first().click();
+    await expect(report).toContainText(DEMO_CP);
     await expect(report.locator('[data-org-report-history]')).toBeVisible();
     await expect(report).toContainText('Файлы отчёта ·');
     await expect(report.locator('button')).toHaveCount(0);
-    const win = page.getByRole('dialog').filter({ has: report });
     await expect(win).toContainText('Только просмотр: статус отчёта меняет сама организация');
     await win.getByRole('button', { name: 'Готово' }).click();
     await expect(report).toBeHidden();
     await expect(plates.locator('[data-plate="all"]')).toHaveAttribute('aria-pressed', 'true');
-    await expect(field).toHaveValue(cp);
+    await expect(field).toHaveValue(DEMO_CP);
+    // «Назад» тоже закрывает окно «Отчёт», а не карточку организации.
+    await rows.first().getByText(DEMO_CP).first().click();
+    await expect(report).toContainText(DEMO_CP);
+    await page.goBack();
+    await expect(report).toBeHidden();
+    await expect(card.locator('[data-org-rep-list]')).toBeVisible();
+    await expect(field).toHaveValue(DEMO_CP);
 
-    // «Сотрудники» и «Контрагенты» — общий список с сервера.
+    // Раскрытый блок «По месяцам и видам отчётов» — строки по месяцам срока.
+    await months.locator('summary').click();
+    await expect(months.locator('[data-org-reports] [data-group]').first()).toBeVisible();
+  });
+
+  test('(доработки 20.11.2026, пакет 2, блок 1; прототип v150) карточка организации: «Сотрудники» и «Контрагенты» — общий список; неверная вкладка — первая вкладка модуля', async ({
+    page,
+    baseURL,
+    isMobile,
+  }) => {
+    const origin = new URL(baseURL!).origin;
+    const { card } = await openDemoCard(page, origin);
+    const openTab = (tab: string) => cardTab(page, card, isMobile, tab);
     await openTab('Сотрудники');
-    await expect(card.locator('[data-org-staff] [data-grid]')).toContainText(
-      staff.items[0]!.fullName,
-    );
+    await expect(card.locator('[data-org-staff] [data-grid]')).toContainText(DEMO_STAFF);
     await openTab('Контрагенты');
-    await expect(
-      card.locator('[data-org-contractors] [data-grid] [data-id]').first(),
-    ).toBeVisible();
+    await expect(card.locator('[data-org-contractors] [data-grid]')).toContainText(DEMO_CP);
     await card.getByRole('button', { name: 'Готово' }).click();
     await expect(card).toBeHidden();
+
+    // Неверный адрес вкладки — первая вкладка модуля, а не «экран в разработке» (блок 1, пункт 7).
+    await page.goto('/app/orgs/nope');
+    await expect(page).toHaveURL(/\/app\/orgs\/list$/);
+    await expect(page.locator('[data-grid]').first()).toBeVisible();
   });
 
   test('(приёмка, прототип v83) карточка организации: девять вкладок только для просмотра, кнопки шапки, ссылки на карточку пользователя и #orgs/<адрес>', async ({

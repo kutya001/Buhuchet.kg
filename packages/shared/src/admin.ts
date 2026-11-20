@@ -17,6 +17,7 @@ import {
 } from '@buhuchet/domain';
 import { z } from 'zod';
 import { IsoDate, RecordAudit, RecordVersion, Uuid } from './common';
+import { ContractorRow } from './contractors';
 import { KbProgress } from './kb';
 import { listPageSchema } from './list';
 import { ReportRow } from './reports';
@@ -422,10 +423,6 @@ export const AdminOrgCard = z.object({
     logins30: Count,
   }),
   reports: z.object({
-    /** 6 прошлых месяцев, текущий и 3 следующих. */
-    byMonth: z.array(
-      z.object({ month: Month, type: z.string(), total: Count, submitted: Count, overdue: Count }),
-    ),
     /** Числа плиток-фильтров списка: «К сдаче», «В работе», «Сдано», «Просрочено», «Все». */
     plates: z.object({ due: Count, work: Count, done: Count, over: Count, all: Count }),
     /** Пустая вкладка: контрагентов без архива и у скольких есть действующее назначение. */
@@ -542,6 +539,52 @@ export const AdminOrgStaffRow = z.object({
 });
 export type AdminOrgStaffRow = z.infer<typeof AdminOrgStaffRow>;
 export const AdminOrgStaffList = listPageSchema(AdminOrgStaffRow);
+
+/**
+ * Столбцы «Контрагентов» карточки организации (прототип v150 ocGrids, oc-cps) — ключи общего списка
+ * контрагентов. Фильтр, поиск, сортировка, группировка и «В Excel» — только по ним: телефоны, договоры
+ * и контактные лица клиентов фирмы из Админки не читаются.
+ */
+export const ADMIN_ORG_CONTRACTOR_COLUMNS = [
+  'name',
+  'inn',
+  'form',
+  'regime',
+  'responsible',
+  'kind',
+  'fee',
+  'service',
+] as const;
+
+/** Строка «Контрагентов» карточки организации — только поля столбцов `ADMIN_ORG_CONTRACTOR_COLUMNS`. */
+export const AdminOrgContractorRow = ContractorRow.pick({
+  id: true,
+  name: true,
+  inn: true,
+  form: true,
+  regime: true,
+  responsible: true,
+  kind: true,
+  tariff: true,
+  serviceStatus: true,
+  serviceSince: true,
+});
+export type AdminOrgContractorRow = z.infer<typeof AdminOrgContractorRow>;
+export const AdminOrgContractorList = listPageSchema(AdminOrgContractorRow);
+
+/**
+ * Строка «По месяцам и видам отчётов» карточки организации (прототип v150 ocGrids, oc-rep): месяц срока,
+ * вид отчёта, всего, сдано, просрочено.
+ */
+export const AdminOrgRepMonthRow = z.object({
+  m: Month,
+  t: z.string(),
+  n: Count,
+  done: Count,
+  over: Count,
+});
+export type AdminOrgRepMonthRow = z.infer<typeof AdminOrgRepMonthRow>;
+export const AdminOrgRepMonthList = listPageSchema(AdminOrgRepMonthRow);
 
 /** Плитка-фильтр списка «Отчёты» карточки организации. */
 export const AdminOrgReportPlate = z.object({

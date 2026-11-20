@@ -2,10 +2,14 @@ import { createRoute, z, type RouteHandler } from '@hono/zod-openapi';
 import {
   adminGetOrganization,
   adminReportFiles,
+  exportAdminOrgRepMonths,
   exportAdminOrgStaff,
   exportContractors,
   exportReports,
   getReportCard,
+  ListQueryError,
+  listAdminOrgRepMonthsPage,
+  listAdminOrgRepMonthValues,
   listAdminOrgStaffPage,
   listAdminOrgStaffValues,
   listContractorsPage,
@@ -18,18 +22,22 @@ import {
   withOrgContext,
   withUserContext,
   type ContractorListOptions,
+  type ContractorRow,
   type ListPageResult,
   type ReportListOptions,
   type ReportPlate,
   type Tx,
 } from '@buhuchet/db';
-import { accountStates, RecordNotFoundError } from '@buhuchet/domain';
+import { accountStates, RecordNotFoundError, type ListQuery } from '@buhuchet/domain';
 import {
+  ADMIN_ORG_CONTRACTOR_COLUMNS,
+  AdminOrgContractorList,
   AdminOrgReport,
+  AdminOrgRepMonthList,
   AdminOrgReportPlate,
   AdminOrgStaffList,
+  type AdminOrgContractorRow,
   ApiError,
-  ContractorList,
   ListExportParams,
   ListQueryParams,
   ListValues,
@@ -43,10 +51,10 @@ import type { AppEnv } from '../../env';
 import { listQueryOf, listQueryResponses } from '../../errors';
 import { exportRateResponses, withExportSlot, xlsxContent, xlsxResponse } from '../../lists/export';
 import { requirePlatformAdmin } from '../../middleware/access';
-import { contractorRowBody, contractorRowServices } from '../contractors/list';
 import { todayOf } from '../contractors/common';
 import { serverTexts } from '../l10n/texts';
 import { reportRowBody } from '../reports/list';
+import { guardCardRead } from './card-guard';
 
 /*
  * Списки карточки организации в Админке с сервера страницами (доработки 20.11.2026, пакет 2, блок 1,
@@ -94,6 +102,8 @@ async function exportList(
   title: string,
   read: (tx: Tx, t: Awaited<ReturnType<typeof serverTexts>>) => ReturnType<typeof exportReports>,
 ) {
+  // Выгрузка занимает предел выгрузок администратора: запрос не со своего сайта — отказ, как у карточки.
+  await guardCardRead(deps, c, true);
   return withExportSlot(deps, ctx.userId, async () => {
     const t = await serverTexts(deps);
     const result = await withOrgContext(deps.db, { ...ctx, kind: 'export' }, (tx) => read(tx, t));
@@ -111,23 +121,27 @@ async function exportList(
 
 // ——— «Отчёты» ———
 
+/** Тексты словаря и сегодняшний день — до транзакции: внутри неё только `tx` (п. О-46). */
+async function reportBase(deps: ApiDeps): Promise<Pick<ReportListOptions, 't' | 'today'>> {
+  return { t: await serverTexts(deps), today: todayOf(deps) };
+}
+
 /**
  * Условия списка отчётов организации глазами администратора: вся организация, плитка-фильтр вместо
  * вкладки, «Просрочено» — как во вкладке «Просроченные» фирмы (с оплатой при «Учёте оплаты налогов»).
  */
 async function reportOptions(
-  deps: ApiDeps,
   tx: Tx,
   orgId: string,
   plate: ReportPlate,
+  base: Pick<ReportListOptions, 't' | 'today'>,
 ): Promise<ReportListOptions> {
   const [policy, settings] = await Promise.all([
     reportConfirmPolicy(tx, orgId),
     orgMenuSettings(tx, orgId),
   ]);
   return {
-    t: await serverTexts(deps),
-    today: todayOf(deps),
+    ...base,
     scope: undefined,
     quick: 'all',
     waiting: { confirm: policy.confirm, own: null },
@@ -161,8 +175,9 @@ export function orgReportsHandler(deps: ApiDeps): RouteHandler<typeof orgReports
     const params = c.req.valid('query');
     const query = listQueryOf(params);
     const ctx = await orgOf(deps, c, id);
+    const base = await reportBase(deps);
     const page = await withOrgContext(deps.db, ctx, async (tx) =>
-      listReportsPage(tx, query, await reportOptions(deps, tx, id, params.plate)),
+      listReportsPage(tx, query, await reportOptions(tx, id, params.plate, base)),
     );
     return c.json(pageBody(page, reportRowBody), 200);
   };
@@ -193,8 +208,9 @@ export function orgReportValuesHandler(
     const { id } = c.req.valid('param');
     const { col, q, plate } = c.req.valid('query');
     const ctx = await orgOf(deps, c, id);
+    const base = await reportBase(deps);
     const values = await withOrgContext(deps.db, ctx, async (tx) =>
-      listReportValues(tx, col, await reportOptions(deps, tx, id, plate), q),
+      listReportValues(tx, col, await reportOptions(tx, id, plate, base), q),
     );
     return c.json(values, 200);
   };
@@ -229,8 +245,114 @@ export function orgReportExportHandler(
     const query = listQueryOf(params);
     const keys = [...new Set(params.cols.split(','))];
     const ctx = await orgOf(deps, c, id);
+    const base = await reportBase(deps);
     return exportList(deps, c, ctx, 'orgs.card.tab.rep', async (tx) =>
-      exportReports(tx, query, keys, await reportOptions(deps, tx, id, params.plate)),
+      exportReports(tx, query, keys, await reportOptions(tx, id, params.plate, base)),
+    );
+  };
+}
+
+// ——— «По месяцам и видам отчётов» ———
+
+export const orgRepMonthsRoute = createRoute({
+  method: 'get',
+  path: '/admin/organizations/{id}/reports/months',
+  tags: ['admin'],
+  summary: 'Карточка организации → «Отчёты» → «По месяцам и видам отчётов»: страница списка',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: OrgParam, query: ListQueryParams },
+  responses: {
+    200: {
+      description:
+        'Месяц срока и вид отчёта: всего, сдано, просрочено — 6 прошлых месяцев, текущий и 3 следующих',
+      content: { 'application/json': { schema: AdminOrgRepMonthList } },
+    },
+    ...listQueryResponses,
+    ...denied,
+    ...notFound,
+  },
+});
+
+export function orgRepMonthsHandler(deps: ApiDeps): RouteHandler<typeof orgRepMonthsRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const query = listQueryOf(c.req.valid('query'));
+    const ctx = await orgOf(deps, c, id);
+    const today = todayOf(deps);
+    const page = await withOrgContext(deps.db, ctx, (tx) =>
+      listAdminOrgRepMonthsPage(tx, query, today),
+    );
+    return c.json(
+      pageBody(page, (r) => r),
+      200,
+    );
+  };
+}
+
+export const orgRepMonthValuesRoute = createRoute({
+  method: 'get',
+  path: '/admin/organizations/{id}/reports/months/values',
+  tags: ['admin'],
+  summary: 'Карточка организации → «По месяцам и видам отчётов»: значения столбца для фильтра',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: OrgParam, query: ListValuesQuery },
+  responses: {
+    200: {
+      description: 'Значения столбца с подписью и числом строк',
+      content: { 'application/json': { schema: ListValues } },
+    },
+    ...listQueryResponses,
+    ...denied,
+    ...notFound,
+  },
+});
+
+export function orgRepMonthValuesHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof orgRepMonthValuesRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const { col, q } = c.req.valid('query');
+    const ctx = await orgOf(deps, c, id);
+    const today = todayOf(deps);
+    const values = await withOrgContext(deps.db, ctx, (tx) =>
+      listAdminOrgRepMonthValues(tx, col, today, q),
+    );
+    return c.json(values, 200);
+  };
+}
+
+export const orgRepMonthExportRoute = createRoute({
+  method: 'get',
+  path: '/admin/organizations/{id}/reports/months/export',
+  tags: ['admin'],
+  summary: 'Карточка организации → «По месяцам и видам отчётов» в Excel',
+  middleware: [requirePlatformAdmin] as const,
+  request: { params: OrgParam, query: ListExportParams },
+  responses: {
+    200: {
+      description: 'Файл Excel со строками «По месяцам и видам отчётов»',
+      content: xlsxContent,
+    },
+    ...listQueryResponses,
+    ...exportRateResponses,
+    ...denied,
+    ...notFound,
+  },
+});
+
+export function orgRepMonthExportHandler(
+  deps: ApiDeps,
+): RouteHandler<typeof orgRepMonthExportRoute, AppEnv> {
+  return async (c) => {
+    const { id } = c.req.valid('param');
+    const params = c.req.valid('query');
+    const query = listQueryOf(params);
+    const keys = [...new Set(params.cols.split(','))];
+    const ctx = await orgOf(deps, c, id);
+    const today = todayOf(deps);
+    return exportList(deps, c, ctx, 'orgs.card.rep.months', (tx) =>
+      exportAdminOrgRepMonths(tx, query, keys, today),
     );
   };
 }
@@ -411,6 +533,39 @@ export function orgStaffExportHandler(
 
 // ——— «Контрагенты» ———
 
+const CONTRACTOR_KEYS: ReadonlySet<string> = new Set(ADMIN_ORG_CONTRACTOR_COLUMNS);
+
+/** Столбец не из `ADMIN_ORG_CONTRACTOR_COLUMNS` — 400, как неизвестный столбец списка. */
+function contractorColumn(part: ConstructorParameters<typeof ListQueryError>[0], key: string) {
+  if (!CONTRACTOR_KEYS.has(key)) throw new ListQueryError(part, key);
+}
+
+/** Запрос списка контрагентов карточки — только по столбцам карточки. */
+function contractorQuery(query: ListQuery): ListQuery {
+  if (query.sort) contractorColumn('sort', query.sort.key);
+  for (const key of Object.keys(query.filters)) contractorColumn('filter', key);
+  for (const key of query.search?.keys ?? []) contractorColumn('search', key);
+  for (const key of query.group ?? []) contractorColumn('group', key);
+  for (const key of Object.keys(query.agg ?? {})) contractorColumn('agg', key);
+  return query;
+}
+
+/** Строка «Контрагентов» карточки — только поля её столбцов. */
+function contractorRowOut(r: ContractorRow): AdminOrgContractorRow {
+  return {
+    id: r.id,
+    name: r.name,
+    inn: r.inn,
+    form: r.form,
+    regime: r.regime,
+    responsible: r.responsible,
+    kind: r.kind,
+    tariff: r.tariff,
+    serviceStatus: r.serviceStatus,
+    serviceSince: { at: r.serviceSince.at.toISOString(), by: r.serviceSince.by },
+  };
+}
+
 /**
  * Условия списка контрагентов глазами администратора (прототип v150 ocGrids, oc-cps): вся организация
  * вместе с архивом («В архиве» — в «Статусе обслуживания»), стоимость обслуживания видна.
@@ -439,7 +594,7 @@ export const orgContractorsRoute = createRoute({
     200: {
       description:
         'Все контрагенты организации вместе с архивом: сортировка, фильтры, поиск, группы',
-      content: { 'application/json': { schema: ContractorList } },
+      content: { 'application/json': { schema: AdminOrgContractorList } },
     },
     ...listQueryResponses,
     ...denied,
@@ -452,17 +607,11 @@ export function orgContractorsHandler(
 ): RouteHandler<typeof orgContractorsRoute, AppEnv> {
   return async (c) => {
     const { id } = c.req.valid('param');
-    const query = listQueryOf(c.req.valid('query'));
+    const query = contractorQuery(listQueryOf(c.req.valid('query')));
     const ctx = await orgOf(deps, c, id);
     const o = await contractorOptions(deps);
-    const { page, services } = await withOrgContext(deps.db, ctx, async (tx) => {
-      const page = await listContractorsPage(tx, query, o);
-      return { page, services: await contractorRowServices(tx, page.rows, o.today) };
-    });
-    return c.json(
-      pageBody(page, (r) => contractorRowBody(r, true, services.get(r.id)!)),
-      200,
-    );
+    const page = await withOrgContext(deps.db, ctx, (tx) => listContractorsPage(tx, query, o));
+    return c.json(pageBody(page, contractorRowOut), 200);
   };
 }
 
@@ -490,6 +639,7 @@ export function orgContractorValuesHandler(
   return async (c) => {
     const { id } = c.req.valid('param');
     const { col, q } = c.req.valid('query');
+    contractorColumn('column', col);
     const ctx = await orgOf(deps, c, id);
     const o = await contractorOptions(deps);
     const values = await withOrgContext(deps.db, ctx, (tx) =>
@@ -524,8 +674,9 @@ export function orgContractorExportHandler(
   return async (c) => {
     const { id } = c.req.valid('param');
     const params = c.req.valid('query');
-    const query = listQueryOf(params);
+    const query = contractorQuery(listQueryOf(params));
     const keys = [...new Set(params.cols.split(','))];
+    for (const key of keys) contractorColumn('column', key);
     const ctx = await orgOf(deps, c, id);
     const o = await contractorOptions(deps);
     return exportList(deps, c, ctx, 'orgs.card.tab.cps', (tx) =>

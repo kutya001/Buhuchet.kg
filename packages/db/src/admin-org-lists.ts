@@ -1,5 +1,12 @@
-import { ACCOUNT_LOCK_FAILURES, type ListQuery } from '@buhuchet/domain';
-import { eq, sql } from 'drizzle-orm';
+import {
+  ACCOUNT_LOCK_FAILURES,
+  monthLabel,
+  type IsoDate,
+  type ListQuery,
+  type ListSort,
+} from '@buhuchet/domain';
+import { eq, sql, type SQL } from 'drizzle-orm';
+import { adminRepMonths, adminRepMonthsSource } from './admin-org-card';
 import type { Tx } from './client';
 import { linkedFiles } from './file-links';
 import { listSourceFiles, type FileRecord } from './files';
@@ -178,6 +185,109 @@ export function exportAdminOrgStaff(
     defaultSort: STAFF_SORT,
     scope: undefined,
     from: staffFrom(tx),
+  });
+}
+
+// ——— «По месяцам и видам отчётов» ———
+
+/** Столбец строки источника `adminRepMonthsSource`: ключи — постоянные имена, не ввод пользователя. */
+const field = (key: string) => sql.raw(`"r"."${key}"`);
+
+/** Столбцы «По месяцам и видам отчётов» (прототип v150 ocGrids, oc-rep): ключи — как у экрана. */
+export function adminOrgRepMonthColumns(today: IsoDate): ListColumns {
+  const months = adminRepMonths(today);
+  return {
+    // Месяц словами — как на экране («Ноябрь 2026»): месяцев в блоке всегда десять, подписи — в SQL.
+    m: {
+      type: 'enum',
+      label: 'orgs.card.rep.col.month',
+      value: field('m'),
+      display: sql`case ${field('m')} ${sql.join(
+        months.map((m) => sql`when ${textLiteral(m)} then ${textLiteral(monthLabel(m))}`),
+        sql` `,
+      )} end`,
+      sort: { value: field('m'), text: false },
+    },
+    t: { type: 'enum', label: 'orgs.card.rep.col.type', value: field('t') },
+    n: { type: 'int', label: 'orgs.card.rep.col.total', value: field('n') },
+    done: { type: 'int', label: 'orgs.card.rep.col.done', value: field('done') },
+    over: { type: 'int', label: 'orgs.card.rep.col.overdue', value: field('over') },
+  };
+}
+
+/** Строка «По месяцам и видам отчётов». */
+export interface AdminOrgRepMonthRow {
+  m: string;
+  t: string;
+  n: number;
+  done: number;
+  over: number;
+}
+
+/** Сверху новые месяцы (прототип `sort:{key:'m',dir:-1}`), внутри месяца — по виду отчёта. */
+const MONTHS_SORT: ListSort = { key: 'm', dir: 'desc' };
+const MONTHS_NATURAL = [field('m'), field('t')];
+
+function monthsFrom(tx: Tx, source: SQL): ListFrom {
+  return (f) => tx.select(f).from(source).$dynamic();
+}
+
+/** Страница «По месяцам и видам отчётов» карточки организации. */
+export async function listAdminOrgRepMonthsPage(
+  tx: Tx,
+  query: ListQuery,
+  today: IsoDate,
+): Promise<ListPageResult<AdminOrgRepMonthRow>> {
+  const source = adminRepMonthsSource(today);
+  return selectListPage({
+    query,
+    columns: adminOrgRepMonthColumns(today),
+    natural: MONTHS_NATURAL,
+    defaultSort: MONTHS_SORT,
+    scope: undefined,
+    select: ({ window, where, orderBy, limit, offset }) =>
+      tx
+        .select({
+          m: sql<string>`${field('m')}`,
+          t: sql<string>`${field('t')}`,
+          n: sql<number>`${field('n')}`,
+          done: sql<number>`${field('done')}`,
+          over: sql<number>`${field('over')}`,
+          ...window,
+        })
+        .from(source)
+        .where(where)
+        .orderBy(...orderBy)
+        .limit(limit)
+        .offset(offset),
+    from: monthsFrom(tx, source),
+  });
+}
+
+export function listAdminOrgRepMonthValues(tx: Tx, key: string, today: IsoDate, q?: string) {
+  return selectListValues({
+    columns: adminOrgRepMonthColumns(today),
+    key,
+    scope: undefined,
+    from: monthsFrom(tx, adminRepMonthsSource(today)),
+    q,
+  });
+}
+
+export function exportAdminOrgRepMonths(
+  tx: Tx,
+  query: ListQuery,
+  keys: readonly string[],
+  today: IsoDate,
+) {
+  return selectListExport({
+    query,
+    columns: adminOrgRepMonthColumns(today),
+    keys,
+    natural: MONTHS_NATURAL,
+    defaultSort: MONTHS_SORT,
+    scope: undefined,
+    from: monthsFrom(tx, adminRepMonthsSource(today)),
   });
 }
 

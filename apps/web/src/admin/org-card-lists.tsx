@@ -9,21 +9,25 @@ import {
   monthLabel,
   pluralForm,
   type AccountCardState,
+  type GridViewSettings,
   type ListPageSize,
   type ListSort,
   type UiTextKey,
   type YearMonth,
 } from '@buhuchet/domain';
 import {
+  ADMIN_ORG_CONTRACTOR_COLUMNS,
+  AdminOrgContractorList,
+  AdminOrgRepMonthList,
   AdminOrgReport,
   AdminOrgStaffList,
-  ContractorList,
   ListValues,
   ReportList,
   type AdminOrgCard,
+  type AdminOrgContractorRow,
+  type AdminOrgRepMonthRow,
   type AdminOrgReportPlate,
   type AdminOrgStaffRow,
-  type ContractorRow,
   type ReportRow,
 } from '@buhuchet/shared';
 import {
@@ -36,7 +40,6 @@ import {
   Icon,
   inputClass,
   KeyValues,
-  MiniTable,
   Modal,
   MONO_CLASS,
   Note,
@@ -48,12 +51,11 @@ import {
   useMediaQuery,
   type GridColumn,
   type KeyValueItem,
-  type MiniColumn,
 } from '@buhuchet/ui';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useId, useMemo, useState, type ReactNode } from 'react';
 import { api, apiFailure } from '../api-client';
-import { contractorColumns, contractorTone } from '../contractors/contractor-columns';
+import { contractorTone, ServiceCell } from '../contractors/contractor-columns';
 import { fileSizeText } from '../files/files-data';
 import type { Translate } from '../l10n/translate';
 import { useListExport } from '../lists/export';
@@ -83,10 +85,12 @@ async function ok<T>(res: Response, parse: (body: unknown) => T): Promise<T> {
  * (ТЗ «Доработки 20.11.2026, пакет 2», блок 1, пункты 2 и 5), пока пользователь не выбрал другой размер.
  */
 function useCardList<Row>(o: {
-  gridKey: 'orgs.card.staff' | 'orgs.card.cps' | 'orgs.card.rep';
+  gridKey: 'orgs.card.staff' | 'orgs.card.cps' | 'orgs.card.rep' | 'orgs.card.repm';
   columns: readonly GridColumn<Row>[];
   defaultVisible: readonly string[];
   defaultSort: ListSort;
+  /** Вид, пока пользователь его не настроил (прототип `defGroup`); постоянный объект модуля. */
+  defaultView?: GridViewSettings;
   fetchPage: FetchListPage<Row>;
   sendExport: (query: Record<string, string>) => Promise<Response>;
   search?: string;
@@ -94,10 +98,11 @@ function useCardList<Row>(o: {
   extra?: Readonly<Record<string, string>>;
 }) {
   const view = useViewSettings(o.gridKey);
-  const settings = useMemo(
-    () => (view.settings.size ? view.settings : { ...view.settings, size: CARD_PAGE_SIZE }),
-    [view.settings],
-  );
+  const { defaultView } = o;
+  const settings = useMemo(() => {
+    const base = Object.keys(view.settings).length ? view.settings : { ...defaultView };
+    return base.size ? base : { ...base, size: CARD_PAGE_SIZE };
+  }, [view.settings, defaultView]);
   const list = useListPage({
     gridKey: o.gridKey,
     columns: o.columns,
@@ -247,32 +252,94 @@ export function OrgStaffTab({
 /* ── «Контрагенты» ── */
 
 const CPS_SORT: ListSort = { key: 'name', dir: 'asc' };
-/** Столбцы прототипа ocGrids, oc-cps (ключи — как у общего списка контрагентов). */
-const CPS_KEYS = ['name', 'inn', 'form', 'regime', 'responsible', 'kind', 'fee', 'service'];
-const CPS_LABELS: Readonly<Record<string, UiTextKey>> = {
-  name: 'orgs.card.cps.col.name',
-  inn: 'orgs.card.cps.col.inn',
-  form: 'orgs.card.cps.col.form',
-  regime: 'orgs.card.cps.col.regime',
-  responsible: 'orgs.card.cps.col.responsible',
-  kind: 'orgs.card.cps.col.kind',
-  fee: 'orgs.card.cps.col.fee',
-  service: 'orgs.card.cps.col.state',
-};
+const CPS_KEYS = [...ADMIN_ORG_CONTRACTOR_COLUMNS];
 
-function cpsColumns(t: Translate): GridColumn<ContractorRow>[] {
-  const form: GridColumn<ContractorRow> = {
-    key: 'form',
-    label: '',
-    type: 'enum',
-    width: 100,
-    text: (r) => r.form,
-  };
-  const all = [...contractorColumns(t, { fee: true, kpi: false }), form];
-  return CPS_KEYS.flatMap((key) => {
-    const c = all.find((x) => x.key === key);
-    return c ? [{ ...c, label: t(CPS_LABELS[key]!) }] : [];
-  });
+/**
+ * Столбцы прототипа ocGrids, oc-cps — ключи общего списка контрагентов, подписи карточки. Строка — только
+ * поля этих столбцов (телефоны, договоры и контактные лица клиентов фирмы Админке не отдаются).
+ */
+function cpsColumns(t: Translate): GridColumn<AdminOrgContractorRow>[] {
+  return [
+    {
+      key: 'name',
+      label: t('orgs.card.cps.col.name'),
+      type: 'text',
+      width: 250,
+      text: (r) => r.name,
+      cell: (r) => (
+        <span className="inline-flex flex-wrap items-center gap-1">
+          <span className="font-semibold">{r.name}</span>
+          {!r.responsible && r.serviceStatus !== 'archived' ? (
+            <Pill tone="caution" size="sm" icon="alert">
+              {t('cp.no_responsible')}
+            </Pill>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      key: 'inn',
+      label: t('orgs.card.cps.col.inn'),
+      type: 'text',
+      width: 150,
+      className: MONO_CLASS,
+      text: (r) => r.inn,
+    },
+    {
+      key: 'form',
+      label: t('orgs.card.cps.col.form'),
+      type: 'enum',
+      width: 100,
+      text: (r) => r.form,
+    },
+    {
+      key: 'regime',
+      label: t('orgs.card.cps.col.regime'),
+      type: 'enum',
+      width: 130,
+      text: (r) => r.regime ?? '',
+    },
+    {
+      key: 'responsible',
+      label: t('orgs.card.cps.col.responsible'),
+      type: 'enum',
+      width: 170,
+      text: (r) => r.responsible?.shortName ?? '',
+    },
+    {
+      key: 'kind',
+      label: t('orgs.card.cps.col.kind'),
+      type: 'enum',
+      width: 120,
+      text: (r) => t(r.kind === 'oneoff' ? 'cp.kind.oneoff' : 'cp.kind.regular'),
+    },
+    {
+      key: 'fee',
+      label: t('orgs.card.cps.col.fee'),
+      type: 'money',
+      width: 160,
+      text: (r) => (r.tariff ? formatSom(r.tariff.amount) : ''),
+      cell: (r) =>
+        r.tariff ? (
+          <span>
+            {formatSom(r.tariff.amount)}{' '}
+            <span className="text-faint">
+              {t(r.tariff.period === 'Y' ? 'cp.list.per_year' : 'cp.list.per_month')}
+            </span>
+          </span>
+        ) : (
+          DASH
+        ),
+    },
+    {
+      key: 'service',
+      label: t('orgs.card.cps.col.state'),
+      type: 'enum',
+      width: 170,
+      text: (r) => t(`status.service.${r.serviceStatus}`),
+      cell: (r) => <ServiceCell t={t} r={r} />,
+    },
+  ];
 }
 
 /** «Контрагенты» (прототип ocGrids, oc-cps): все контрагенты организации вместе с архивом. */
@@ -280,9 +347,9 @@ export function OrgContractorsTab({ t, orgId }: { t: Translate; orgId: string })
   const labels = useGridLabels('cp.count');
   const columns = useMemo(() => cpsColumns(t), [t]);
   const cps = api.api.admin.organizations[':id'].contractors;
-  const fetchPage = useCallback<FetchListPage<ContractorRow>>(
+  const fetchPage = useCallback<FetchListPage<AdminOrgContractorRow>>(
     async (query) =>
-      ok(await cps.$get({ param: { id: orgId }, query }), (b) => ContractorList.parse(b)),
+      ok(await cps.$get({ param: { id: orgId }, query }), (b) => AdminOrgContractorList.parse(b)),
     [cps, orgId],
   );
   const loadValues = useCallback(
@@ -449,10 +516,10 @@ export function OrgReportsTab({
         onToggle={(months) => onView({ ...view, months })}
         data-org-rep-months=""
       >
-        <ByMonth t={t} rows={reports.byMonth} />
+        {view.months ? <ByMonth t={t} orgId={orgId} /> : null}
       </Fold>
       <div data-org-rep-plates="">
-        <Plates static>
+        <Plates>
           {PLATES.map((p) => {
             const n = reports.plates[p.id];
             return (
@@ -496,30 +563,77 @@ export function OrgReportsTab({
 }
 
 /** «По месяцам и видам отчётов»: 6 прошлых месяцев, текущий и 3 следующих. */
-function ByMonth({ t, rows }: { t: Translate; rows: AdminOrgCard['reports']['byMonth'] }) {
-  const columns: MiniColumn[] = [
-    { key: 'month', label: t('orgs.card.rep.col.month') },
-    { key: 'type', label: t('orgs.card.rep.col.type') },
-    { key: 'total', label: t('orgs.card.rep.col.total'), numeric: true },
-    { key: 'done', label: t('orgs.card.rep.col.done'), numeric: true },
-    { key: 'overdue', label: t('orgs.card.rep.col.overdue'), numeric: true },
+const MONTHS_SORT: ListSort = { key: 'm', dir: 'desc' };
+const MONTHS_KEYS = ['m', 't', 'n', 'done', 'over'];
+/** По месяцам срока (прототип `defGroup:['m']`). */
+const MONTHS_VIEW: GridViewSettings = { group: ['m'] };
+
+/** Столбцы «По месяцам и видам отчётов» (прототип ocGrids, oc-rep): ключи — как на сервере. */
+function monthColumns(t: Translate): GridColumn<AdminOrgRepMonthRow>[] {
+  const count = (key: 'n' | 'done' | 'over', label: UiTextKey, width: number) =>
+    ({
+      key,
+      label: t(label),
+      type: 'int',
+      width,
+      text: (r: AdminOrgRepMonthRow) => formatCount(r[key]),
+    }) satisfies GridColumn<AdminOrgRepMonthRow>;
+  return [
+    {
+      key: 'm',
+      label: t('orgs.card.rep.col.month'),
+      type: 'enum',
+      width: 160,
+      text: (r) => monthLabel(r.m as YearMonth),
+    },
+    { key: 't', label: t('orgs.card.rep.col.type'), type: 'enum', width: 240, text: (r) => r.t },
+    count('n', 'orgs.card.rep.col.total', 100),
+    count('done', 'orgs.card.rep.col.done', 100),
+    count('over', 'orgs.card.rep.col.overdue', 120),
   ];
+}
+
+/** «По месяцам и видам отчётов»: 6 прошлых месяцев, текущий и 3 следующих — общий список по месяцам. */
+function ByMonth({ t, orgId }: { t: Translate; orgId: string }) {
+  const labels = useGridLabels('orgs.card.repm.count');
+  const columns = useMemo(() => monthColumns(t), [t]);
+  const months = api.api.admin.organizations[':id'].reports.months;
+  const fetchPage = useCallback<FetchListPage<AdminOrgRepMonthRow>>(
+    async (query) =>
+      ok(await months.$get({ param: { id: orgId }, query }), (b) => AdminOrgRepMonthList.parse(b)),
+    [months, orgId],
+  );
+  const loadValues = useCallback(
+    async (col: string, q?: string) =>
+      ok(await months.values.$get({ param: { id: orgId }, query: q ? { col, q } : { col } }), (b) =>
+        ListValues.parse(b),
+      ),
+    [months, orgId],
+  );
+  const sendExport = useCallback(
+    (query: Record<string, string>) =>
+      months.export.$get({ param: { id: orgId }, query: query as { cols: string } }),
+    [months, orgId],
+  );
+  const grid = useCardList({
+    gridKey: 'orgs.card.repm',
+    columns,
+    defaultVisible: MONTHS_KEYS,
+    defaultSort: MONTHS_SORT,
+    defaultView: MONTHS_VIEW,
+    fetchPage,
+    sendExport,
+  });
   return (
     <div data-org-reports="" className="pt-1.5">
-      <MiniTable
-        label={t('orgs.card.rep.by_month')}
-        columns={columns}
-        rows={rows.map((r) => ({
-          key: `${r.month}|${r.type}`,
-          cells: {
-            month: monthLabel(r.month as YearMonth),
-            type: r.type,
-            total: formatCount(r.total),
-            done: formatCount(r.submitted),
-            overdue: formatCount(r.overdue),
-          },
-        }))}
-        empty={t('orgs.card.empty')}
+      <DataGrid
+        {...grid}
+        loadValues={loadValues}
+        empty={<EmptyState icon="file" title={t('orgs.card.empty')} />}
+        rowKey={(r) => `${r.m}|${r.t}`}
+        titleKey="t"
+        label={t('orgs.card.rep.months')}
+        labels={labels}
       />
     </div>
   );

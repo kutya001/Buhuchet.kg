@@ -112,17 +112,6 @@ export interface AdminOrgCardRecord {
     logins30: number;
   };
   reports: {
-    /**
-     * По месяцам срока и видам отчётов: 6 прошлых месяцев, текущий и 3 следующих (доработки 20.11.2026,
-     * пакет 2, блок 1, пункт 2); сверху новые.
-     */
-    byMonth: {
-      month: YearMonth;
-      type: string;
-      total: number;
-      submitted: number;
-      overdue: number;
-    }[];
     /** Числа плиток-фильтров списка «Отчёты» (`reportPlateCounts`). */
     plates: Record<ReportPlate, number>;
     /** Пустая вкладка: контрагентов без архива и у скольких из них есть действующее назначение. */
@@ -266,6 +255,33 @@ function overdueOf(today: IsoDate): SQL {
   )!;
 }
 
+/** Месяцы блока «По месяцам и видам отчётов»: 6 прошлых, текущий и 3 следующих (пакет 2, блок 1, п. 2). */
+export function adminRepMonths(today: IsoDate): YearMonth[] {
+  const month = today.slice(0, 7) as YearMonth;
+  return Array.from({ length: 10 }, (_, i) => addMonths(month, i - 6));
+}
+
+/**
+ * Строки «По месяцам и видам отчётов» карточки (прототип v150 ocGrids, oc-rep): месяц срока `m`, вид
+ * отчёта `t` (краткое название), всего `n`, сданных `done`, просроченных `over` — по месяцам
+ * `adminRepMonths`, без прежних версий уточнённых. Источник `r` для общего слоя списков.
+ */
+export function adminRepMonthsSource(today: IsoDate): SQL {
+  const months = adminRepMonths(today);
+  const lastDay = sql`(${dateLiteral(`${months[months.length - 1]}-01`)} + interval '1 month' - interval '1 day')::date`;
+  return sql`(select to_char(${reports.dueDate}, 'YYYY-MM') as m,
+      coalesce(${reportTypes.shortName}, ${reportTypes.name}, ${reports.reportTypeCode}) as t,
+      count(*)::int as n,
+      (count(*) filter (where ${reports.status} = 'submitted'))::int as done,
+      (count(*) filter (where ${overdueOf(today)}))::int as over
+    from ${reports}
+    inner join ${contractors} on ${contractors.id} = ${reports.contractorId}
+    left join ${reportTypes} on ${reportTypes.code} = ${reports.reportTypeCode}
+    where ${reports.superseded} = false
+      and ${reports.dueDate} between ${dateLiteral(`${months[0]}-01`)} and ${lastDay}
+    group by 1, 2) as r`;
+}
+
 /**
  * Карточка организации — в её контексте от имени администратора платформы: всё, что показывают
  * вкладки, одним ответом. null — организации нет или в контексте не администратор платформы.
@@ -387,28 +403,6 @@ export async function adminOrgCard(
       ),
     );
 
-  // «Отчёты».
-  const firstMonth = addMonths(month, -6);
-  const lastMonth = addMonths(month, 3);
-  const lastDay = sql`(${dateLiteral(`${lastMonth}-01`)} + interval '1 month' - interval '1 day')::date`;
-  const dueMonth = sql<string>`to_char(${reports.dueDate}, 'YYYY-MM')`;
-  const typeName = sql<string>`coalesce(${reportTypes.shortName}, ${reportTypes.name}, ${reports.reportTypeCode})`;
-  const byMonth = await tx
-    .select({
-      month: dueMonth,
-      type: typeName,
-      total: countAll,
-      submitted: sql<number>`(count(*) filter (where ${reports.status} = 'submitted'))::int`,
-      overdue: sql<number>`(count(*) filter (where ${overdueOf(today)}))::int`,
-    })
-    .from(reports)
-    .innerJoin(contractors, eq(contractors.id, reports.contractorId))
-    .leftJoin(reportTypes, eq(reportTypes.code, reports.reportTypeCode))
-    .where(
-      and(live, sql`${reports.dueDate} between ${dateLiteral(`${firstMonth}-01`)} and ${lastDay}`),
-    )
-    .groupBy(dueMonth, typeName)
-    .orderBy(desc(dueMonth), asc(typeName));
   // «Деньги»: итоги без операций (прототип ocMoney).
   const ledgers = await feeLedgers(tx, { scope: undefined, today });
   const feeMonth = { charged: 0, paid: 0 };
@@ -567,7 +561,6 @@ export async function adminOrgCard(
       logins30: loginN.n,
     },
     reports: {
-      byMonth: byMonth.map((r) => ({ ...r, month: r.month as YearMonth })),
       plates: {
         due: plateN.due,
         work: plateN.work,

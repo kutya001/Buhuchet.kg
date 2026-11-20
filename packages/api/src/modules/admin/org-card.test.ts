@@ -1,19 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { ADMIN_ORG_VIEW_ROWS, schema } from '@buhuchet/db';
 import { databaseAvailable, seedAllPlatformDictionaries } from '@buhuchet/db/testing';
-import { bishkekDate } from '@buhuchet/domain';
 import {
   AdminOrgCard,
+  AdminOrgContractorList,
   AdminOrgLookup,
+  AdminOrgRepMonthList,
   AdminOrgReport,
   AdminOrgStaffList,
   ApiError,
-  ContractorList,
   ListValues,
   ReportList,
+  ReportTabCounts,
 } from '@buhuchet/shared';
+import { monthLabel, type YearMonth } from '@buhuchet/domain';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, onTestFinished } from 'vitest';
 import { apiRequest, createStaffFixture, signIn, TEST_PASSWORD } from '../../testing';
 import { ADMIN_CARD_VIEW_RATE_LIMIT } from './card-guard';
 
@@ -25,7 +27,9 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
   let owner: string;
   let bankName: string;
   const ACCOUNT_NO = '1090012345678901';
-  const today = bishkekDate(new Date());
+  // «Сегодня» — по часам тестов API (fixedClock в src/testing.ts): по ним считают и карточка, и списки
+  // под её плитками, и вкладки отчётов самой фирмы.
+  const today = '2026-10-18';
   const month = today.slice(0, 7);
   const day = (iso: string, n: number) => {
     const d = new Date(`${iso}T00:00:00Z`);
@@ -38,12 +42,13 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
   // Срок в следующем месяце: «позже» в плитке «Отчёты» «Сводки».
   const [yy, mm] = month.split('-').map(Number) as [number, number];
   const nextMonth = mm === 12 ? `${yy + 1}-01` : `${yy}-${String(mm + 1).padStart(2, '0')}`;
-  const reportIds: Record<'over' | 'work' | 'done' | 'later' | 'old', string> = {
+  const reportIds: Record<'over' | 'work' | 'done' | 'later' | 'old' | 'foreign', string> = {
     over: '',
     work: '',
     done: '',
     later: '',
     old: '',
+    foreign: '',
   };
   let cpId = '';
 
@@ -78,10 +83,25 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       responsibleEmployeeId: acc.employeeId,
     });
     cpId = cp;
-    await contractor(f.a.orgId, 'ИП Разовый', '03744097401854', { kind: 'oneoff' });
+    const oneoff = await contractor(f.a.orgId, 'ИП Разовый', '03744097401854', { kind: 'oneoff' });
     await contractor(f.a.orgId, 'ОсОО «Пауза»', '03744097401852', { serviceStatus: 'paused' });
-    await contractor(f.a.orgId, 'ОсОО «Архив»', '03744097401853', { serviceStatus: 'archived' });
-    await contractor(f.b.orgId, 'ОсОО «Чужой»', '03744097401855');
+    const archived = await contractor(f.a.orgId, 'ОсОО «Архив»', '03744097401853', {
+      serviceStatus: 'archived',
+    });
+    const foreign = await contractor(f.b.orgId, 'ОсОО «Чужой»', '03744097401855');
+    // Назначения: действующее, снятое и у архивного — «отчёты назначены у 1»; у чужой организации — своё.
+    await f.t.admin.db.insert(schema.assignments).values([
+      { orgId: f.a.orgId, contractorId: cp, reportTypeCode: 't1m', fromMonth: '2026-01-01' },
+      {
+        orgId: f.a.orgId,
+        contractorId: oneoff,
+        reportTypeCode: 't1m',
+        fromMonth: '2026-01-01',
+        endedOn: '2026-06-01',
+      },
+      { orgId: f.a.orgId, contractorId: archived, reportTypeCode: 't1m', fromMonth: '2026-01-01' },
+      { orgId: f.b.orgId, contractorId: foreign, reportTypeCode: 't1m', fromMonth: '2026-01-01' },
+    ]);
     await f.t.admin.db.insert(schema.contractorTariffs).values({
       orgId: f.a.orgId,
       contractorId: cp,
@@ -124,11 +144,20 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       dueBase: `${nextMonth}-15`,
       dueDate: `${nextMonth}-15`,
     });
-    // Давно просроченный: просрочен и по часам теста (списки берут «сегодня» из часов сайта), и сегодня.
+    // Давно просроченный: срок в начале месяца.
     reportIds.old = await report({
       periodStart: '2025-12-01',
       dueBase: '2026-10-01',
       dueDate: '2026-10-01',
+    });
+    // Отчёт чужой организации — просрочен: ни в числах, ни в списках организации А его нет.
+    reportIds.foreign = await report({
+      orgId: f.b.orgId,
+      contractorId: foreign,
+      responsibleEmployeeId: f.people['acc-b']!.employeeId,
+      periodStart: '2026-07-01',
+      dueBase: past,
+      dueDate: past,
     });
     await f.t.admin.db.insert(schema.statusHistory).values({
       orgId: f.a.orgId,
@@ -298,6 +327,12 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       .update(schema.users)
       .set({ mustChangePassword: true })
       .where(eq(schema.users.login, 'chief-a'));
+    onTestFinished(async () => {
+      await f.t.admin.db
+        .update(schema.users)
+        .set({ mustChangePassword: false })
+        .where(eq(schema.users.login, 'chief-a'));
+    });
     const filter = (x: object) => `filters=${encodeURIComponent(JSON.stringify(x))}`;
     const temp = AdminOrgStaffList.parse(
       await (
@@ -314,10 +349,6 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     expect(values.items.map((v) => v.value)).toEqual(
       expect.arrayContaining(['active', 'temp_password']),
     );
-    await f.t.admin.db
-      .update(schema.users)
-      .set({ mustChangePassword: false })
-      .where(eq(schema.users.login, 'chief-a'));
     const xlsx = await get(`${base}/export?cols=fullName,login,state`);
     expect(xlsx.status).toBe(200);
     expect(xlsx.headers.get('content-type')).toContain('spreadsheetml');
@@ -327,8 +358,24 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     const base = `/api/admin/organizations/${f.a.orgId}/contractors`;
     const res = await get(`${base}?size=all`);
     expect(res.status, await res.clone().text()).toBe(200);
-    const list = ContractorList.parse(await res.json());
+    const list = AdminOrgContractorList.parse(await res.json());
     expect(list.total).toBe(4);
+    // Только поля столбцов карточки: телефона, договора и контактных лиц клиентов фирмы в ответе нет.
+    expect(Object.keys(list.items[0]!).sort()).toEqual(
+      [
+        'id',
+        'name',
+        'inn',
+        'form',
+        'regime',
+        'responsible',
+        'kind',
+        'tariff',
+        'serviceStatus',
+        'serviceSince',
+      ].sort(),
+    );
+    expect(JSON.stringify(list)).not.toContain('+996505890076');
     expect(list.items.map((r) => r.name)).not.toContain('ОсОО «Чужой»');
     expect(list.items.find((r) => r.name === 'ОсОО «Ала-Тоо Трейд»')).toMatchObject({
       inn: '03744097401851',
@@ -342,6 +389,18 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
     const values = ListValues.parse(await (await get(`${base}/values?col=service`)).json());
     expect(values.items.map((v) => v.value)).toEqual(expect.arrayContaining(['archived']));
     expect((await get(`${base}/export?cols=name,inn`)).status).toBe(200);
+    // Столбцы общего списка контрагентов вне карточки — 400: ни фильтр, ни поиск, ни выгрузка.
+    const phone = encodeURIComponent(JSON.stringify({ phone: { type: 'text', q: '996' } }));
+    for (const tail of [
+      `?filters=${phone}`,
+      '?sort=phone.asc',
+      '?q=996&qcols=phone',
+      '?group=head',
+      '/values?col=phone',
+      '/export?cols=name,phone,head,contact',
+    ]) {
+      expect((await get(`${base}${tail}`)).status, tail).toBe(400);
+    }
   });
 
   it('«Отчёты»: плитки-фильтры, числа плиток, окно «Отчёт» только для просмотра; «Деньги», «Настройки», «Файлы»', async () => {
@@ -353,31 +412,44 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       over: (firstDay ? 0 : 1) + 1,
       all: 5,
     });
-    expect(c.reports).toMatchObject({ contractors: 3, assigned: 0 });
-    const thisMonth = c.reports.byMonth.filter((r) => r.month === month);
-    expect(thisMonth).toHaveLength(1);
-    expect(thisMonth[0]).toMatchObject({ total: 3, submitted: 1, overdue: firstDay ? 0 : 1 });
-    // «По месяцам»: 6 прошлых месяцев, текущий и 3 следующих.
-    expect(c.reports.byMonth.find((r) => r.month === nextMonth)).toMatchObject({ total: 1 });
+    // Пустая вкладка: контрагентов без архива и у скольких есть действующее назначение.
+    expect(c.reports).toMatchObject({ contractors: 3, assigned: 1 });
 
     const base = `/api/admin/organizations/${f.a.orgId}/reports`;
-    const ids = async (query: string) => {
+    const page = async (query: string) => {
       const res = await get(`${base}?size=all${query}`);
       expect(res.status, await res.clone().text()).toBe(200);
-      return ReportList.parse(await res.json()).items.map((r) => r.id);
+      return ReportList.parse(await res.json());
     };
+    const ids = async (query: string) => (await page(query)).items.map((r) => r.id);
+    // Число на каждой плитке — столько же строк в списке под ней (одни часы у карточки и списка).
+    for (const plate of ['due', 'work', 'done', 'over', 'all'] as const) {
+      expect(await ids(`&plate=${plate}`), plate).toHaveLength(c.reports.plates[plate]);
+    }
     // По умолчанию — «К сдаче»: все несданные.
     expect(new Set(await ids(''))).toEqual(
       new Set([reportIds.over, reportIds.work, reportIds.later, reportIds.old]),
     );
     expect(await ids('&plate=work')).toEqual([reportIds.work]);
     expect(await ids('&plate=done')).toEqual([reportIds.done]);
-    // «Сегодня» списка — по часам сайта (в тестах 18.10.2026): просрочен только давний.
-    expect(await ids('&plate=over')).toEqual([reportIds.old]);
-    expect(await ids('&plate=all')).toHaveLength(5);
+    expect(new Set(await ids('&plate=over'))).toEqual(new Set([reportIds.over, reportIds.old]));
+    expect(await ids('&plate=all')).not.toContain(reportIds.foreign);
     expect((await get(`${base}?plate=nope`)).status).toBe(400);
-    // Поиск — по контрагенту и ИНН, «Месяц срока» — фильтр по месяцу.
+
+    // Числа — как видит сама фирма: «Просрочено» = вкладка «Просроченные» владельца.
+    const counts = ReportTabCounts.parse(
+      await (await get('/api/reports/tab-counts', owner)).json(),
+    );
+    expect(c.summary.reports.overdue).toBe(counts.overdue);
+    expect(c.reports.plates.over).toBe(counts.overdue);
+    const firm = ReportList.parse(
+      await (await get('/api/reports?tab=overdue&size=all', owner)).json(),
+    );
+    expect(new Set(firm.items.map((r) => r.id))).toEqual(new Set(await ids('&plate=over')));
+
+    // Поиск — по контрагенту и ИНН, «Месяц срока» — фильтр и группы с месяцем словами.
     expect(await ids(`&plate=all&q=${encodeURIComponent('Ала-Тоо')}&qcols=cp`)).toHaveLength(5);
+    expect(await ids('&plate=all&q=03744097401851&qcols=inn')).toHaveLength(5);
     const dueMonth = encodeURIComponent(
       JSON.stringify({ dueMonth: { type: 'enum', vals: [nextMonth] } }),
     );
@@ -386,6 +458,52 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
       await (await get(`${base}/values?col=dueMonth&plate=all`)).json(),
     );
     expect(months.items.map((v) => v.value)).toEqual(expect.arrayContaining([month, nextMonth]));
+    expect(months.items.find((v) => v.value === nextMonth)?.label).toBe(
+      monthLabel(nextMonth as YearMonth),
+    );
+    const grouped = await page('&plate=all&group=dueMonth');
+    expect(grouped.groups?.map((g) => [g.key, g.label, g.count])).toEqual(
+      expect.arrayContaining([
+        [month, monthLabel(month as YearMonth), 4],
+        [nextMonth, monthLabel(nextMonth as YearMonth), 1],
+      ]),
+    );
+    // Чужая организация: свои отчёты, в списке и значениях А её контрагента нет.
+    const cps = ListValues.parse(await (await get(`${base}/values?col=cp&plate=all`)).json());
+    expect(cps.items.map((v) => v.label ?? v.value).join(' ')).not.toContain('Чужой');
+    const other = ReportList.parse(
+      await (await get(`/api/admin/organizations/${f.b.orgId}/reports?plate=all&size=all`)).json(),
+    );
+    expect(other.items.map((r) => r.id)).toEqual([reportIds.foreign]);
+
+    // «По месяцам и видам отчётов»: месяц срока и вид — всего, сдано, просрочено; группы по месяцу.
+    const repm = async (query: string) => {
+      const res = await get(`${base}/months?size=all${query}`);
+      expect(res.status, await res.clone().text()).toBe(200);
+      return AdminOrgRepMonthList.parse(await res.json());
+    };
+    const byMonth = await repm('');
+    expect(byMonth.items.filter((r) => r.m === month)).toEqual([
+      expect.objectContaining({ n: 4, done: 1, over: 2 }),
+    ]);
+    expect(byMonth.items.filter((r) => r.m === nextMonth)).toEqual([
+      expect.objectContaining({ n: 1, done: 0, over: 0 }),
+    ]);
+    // Сверху новые месяцы.
+    expect(byMonth.items.map((r) => r.m)).toEqual([nextMonth, month]);
+    const repmGroups = await repm('&group=m');
+    expect(repmGroups.groups?.map((g) => g.label)).toEqual([
+      monthLabel(nextMonth as YearMonth),
+      monthLabel(month as YearMonth),
+    ]);
+    const repmValues = ListValues.parse(await (await get(`${base}/months/values?col=m`)).json());
+    expect(repmValues.items.map((v) => v.value).sort()).toEqual([month, nextMonth].sort());
+    expect((await get(`${base}/months/export?cols=m,t,n,done,over`)).status).toBe(200);
+    expect((await get(`${base}/months?sort=nope.asc`)).status).toBe(400);
+    const otherMonths = AdminOrgRepMonthList.parse(
+      await (await get(`/api/admin/organizations/${f.b.orgId}/reports/months?size=all`)).json(),
+    );
+    expect(otherMonths.items.reduce((n, r) => n + r.n, 0)).toBe(1);
     expect((await get(`${base}/export?cols=cp,type,due&plate=all`)).status).toBe(200);
 
     // Окно «Отчёт»: строка, «История статусов», файлы отчёта — без ключа хранилища.
@@ -442,13 +560,32 @@ describe.skipIf(!databaseAvailable())('Админка → карточка ор�
 
   it('списки карточки: только администратор платформы; нет такой организации — 404', async () => {
     const none = '00000000-0000-4000-8000-000000000000';
-    for (const tail of ['staff', 'contractors', 'reports', `reports/${reportIds.work}`]) {
+    for (const tail of [
+      'staff',
+      'staff/values?col=fullName',
+      'staff/export?cols=fullName',
+      'contractors',
+      'contractors/values?col=name',
+      'contractors/export?cols=name',
+      'reports',
+      'reports/values?col=cp',
+      'reports/export?cols=cp',
+      'reports/months',
+      'reports/months/values?col=m',
+      'reports/months/export?cols=m',
+      `reports/${reportIds.work}`,
+    ]) {
       const path = `/api/admin/organizations/${f.a.orgId}/${tail}`;
       expect((await get(path, owner)).status, tail).toBe(403);
       expect((await apiRequest(f.app, 'GET', path)).status, tail).toBe(401);
       expect((await get(`/api/admin/organizations/${none}/${tail}`)).status, tail).toBe(404);
     }
     expect(cpId).not.toBe('');
+    // Неверный номер, столбец сортировки и столбец значений — 400.
+    const base = `/api/admin/organizations/${f.a.orgId}`;
+    expect((await get(`${base}/reports/not-a-uuid`)).status).toBe(400);
+    expect((await get(`${base}/staff?sort=nope.asc`)).status).toBe(400);
+    expect((await get(`${base}/reports/values?col=nope`)).status).toBe(400);
   });
 
   it('каждое открытие карточки — в истории организации; перечитывание — без новой записи; блокировка видна', async () => {

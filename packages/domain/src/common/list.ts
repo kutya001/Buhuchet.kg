@@ -540,6 +540,7 @@ export const GRID_KEYS = [
   'orgs.card.staff',
   'orgs.card.cps',
   'orgs.card.rep',
+  'orgs.card.repm',
   // Админка → «Организации» → «Заявки» (задача #165).
   'orgs.leads',
   'l10n.list',

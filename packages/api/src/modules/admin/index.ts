@@ -128,6 +128,12 @@ import {
   orgContractorsRoute,
   orgContractorValuesHandler,
   orgContractorValuesRoute,
+  orgRepMonthExportHandler,
+  orgRepMonthExportRoute,
+  orgRepMonthsHandler,
+  orgRepMonthsRoute,
+  orgRepMonthValuesHandler,
+  orgRepMonthValuesRoute,
   orgReportExportHandler,
   orgReportExportRoute,
   orgReportHandler,
@@ -209,6 +215,9 @@ export function adminModule(deps: ApiDeps) {
       .openapi(orgReportsRoute, orgReportsHandler(deps))
       .openapi(orgReportValuesRoute, orgReportValuesHandler(deps))
       .openapi(orgReportExportRoute, orgReportExportHandler(deps))
+      .openapi(orgRepMonthsRoute, orgRepMonthsHandler(deps))
+      .openapi(orgRepMonthValuesRoute, orgRepMonthValuesHandler(deps))
+      .openapi(orgRepMonthExportRoute, orgRepMonthExportHandler(deps))
       .openapi(orgReportRoute, orgReportHandler(deps))
       .openapi(ownerSetupRoute, ownerSetupHandler(deps))
       .openapi(techDocsMetaRoute, techDocsMetaHandler(deps))

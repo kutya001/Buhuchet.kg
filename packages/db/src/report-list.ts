@@ -383,7 +383,8 @@ export function reportListColumns(
       type: 'enum',
       label: 'report.col.due_month',
       value: DUE_MONTH,
-      display: sql`${lt('months')}[extract(month from ${reports.dueDate})::int] || ' ' || extract(year from ${reports.dueDate})::int::text`,
+      // Как на экране (`monthLabel`, прототип fmtMon): «ноябрь 2026».
+      display: sql`lower(${lt('months')}[extract(month from ${reports.dueDate})::int]) || ' ' || extract(year from ${reports.dueDate})::int::text`,
       sort: { value: DUE_MONTH, text: false },
     },
     days: {

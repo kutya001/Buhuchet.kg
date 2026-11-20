@@ -92,7 +92,8 @@ export function orgCardHandler(deps: ApiDeps): RouteHandler<typeof orgCardRoute,
     // Чтение карточки пишет в историю: только запрос своего сайта и предел частоты открытий.
     await guardCardRead(deps, c, refresh);
     const adminId = c.get('session')!.userId;
-    const now = new Date();
+    // «Сегодня» — по часам сайта, как у списков карточки: число плитки = строк в списке под ней.
+    const now = deps.clock.now();
     const found = await withUserContext(deps.db, adminId, (tx) => adminGetOrganization(tx, id));
     if (!found) throw new RecordNotFoundError('organization', id);
     const t = await translateOf(deps);
