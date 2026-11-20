@@ -42,6 +42,12 @@ export const BELL_TARGETS = [
   'employee',
   'news',
   'lead',
+  // Подписки (доработки 20.11.2026, блок 4, пункт 3; блок 6, пункт 3): владельцу — экран «Подписка»
+  // (номер — организация), администратору платформы — окно «Подписка организации» (номер — организация);
+  // сверка хранилища — вкладка «Проверка хранилища» модуля «Файлы» Админки (номер — запуск сверки).
+  'sub',
+  'sub_check',
+  'storage_check',
 ] as const;
 export type BellTarget = (typeof BELL_TARGETS)[number];
 export const BELL_REPORT_TABS = ['week', 'overdue', 'wait'] as const;

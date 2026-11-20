@@ -13,6 +13,7 @@ export * from './file-links';
 export * from './sent-files';
 export * from './storage-retries';
 export * from './subscriptions';
+export * from './subscription-notices';
 export * from './auth';
 export * from './telegram';
 export * from './telegram-bot';

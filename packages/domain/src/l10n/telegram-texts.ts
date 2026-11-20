@@ -118,6 +118,9 @@ export const TELEGRAM_TEXTS = {
   // Доработки 14.11.2026: блок 2, пункт 2.
   'telegram.kind.cp_file': { ru: 'Файл от контрагента', section: S },
   'telegram.kind.setup_link': { ru: 'Ссылка, чтобы задать пароль', section: S },
+  'telegram.kind.sub': { ru: 'Подписка организации', section: S },
+  'telegram.kind.sub_check': { ru: 'Чек подписки на проверку', section: S },
+  'telegram.kind.storage_check': { ru: 'Сверка хранилища', section: S },
   'telegram.notme.event.pass': { ru: 'пароль изменён', section: S },
   'telegram.notme.event.relink': { ru: 'привязан другой Telegram', section: S },
   'telegram.notme.event.unlink': { ru: 'Telegram отвязан', section: S },
